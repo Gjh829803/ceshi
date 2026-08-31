@@ -84,9 +84,9 @@ The representative Case needs a readable central ascent, T-shaped upper platform
 
 ## Semantic JSON
 
-`native-block-authoring.json` is plain JSON data. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. It contains no Subject, Spawn, Camera, Physics, Runtime, input, action, gameplay, Package, Receipt, or admission state.
+`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, and `visualGroups`. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. It contains no Subject, Spawn, Camera, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
 
-`native-resources.json` is plain JSON data with one sorted unique `resourceRefs` array. These refs are optional visual assets only. The model cannot mint locks, publication receipts, or admission evidence.
+`native-resources.json` is plain JSON data with exactly `kind`, `schemaVersion`, and one sorted unique `resourceRefs` array. These refs are optional visual assets only. The model cannot mint locks, publication receipts, or admission evidence.
 
 ## Evidence boundary
 

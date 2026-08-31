@@ -12,7 +12,14 @@ const DECLARED_OUTPUT_PATHS = Object.freeze([
 ]);
 const DECLARED_OUTPUT_SET = new Set(DECLARED_OUTPUT_PATHS);
 const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
+const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
+const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
+const IDENTITY_COLOR_HEX = /^#[0-9A-F]{6}$/;
 const DANGEROUS_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const FORBIDDEN_JSON_FIELD_TOKENS = Object.freeze([
+  "camera", "physics", "subject", "spawn", "runtime", "input", "action",
+  "gameplay", "package", "receipt", "admission",
+]);
 const FORBIDDEN_SOURCE_PATTERNS = Object.freeze([
   /\bnew\s+(?:WebGPUEngine|Engine|NullEngine)\s*\(/,
   /\bnew\s+Scene\s*\(/,
@@ -80,12 +87,28 @@ function parseJsonData(bytes, diagnosticCodes) {
   }
 }
 
+function hasForbiddenAuthorityField(value) {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(hasForbiddenAuthorityField);
+  return Object.entries(value).some(([key, child]) => {
+    const normalizedKey = key.toLowerCase();
+    return FORBIDDEN_JSON_FIELD_TOKENS.some((token) => normalizedKey.includes(token)) ||
+      hasForbiddenAuthorityField(child);
+  });
+}
+
+function hasExactKeys(value, expectedKeys) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const actualKeys = Object.keys(value).sort(stableCompare);
+  const sortedExpectedKeys = [...expectedKeys].sort(stableCompare);
+  return actualKeys.length === sortedExpectedKeys.length &&
+    actualKeys.every((key, index) => key === sortedExpectedKeys[index]);
+}
+
 function validateResourceRefs(value, diagnosticCodes) {
-  if (value === null || typeof value !== "object" || Array.isArray(value) ||
+  if (!hasExactKeys(value, ["kind", "schemaVersion", "resourceRefs"]) ||
       value.kind !== "native-visual-resource-list" || value.schemaVersion !== 1 ||
       !Array.isArray(value.resourceRefs) ||
-      Object.keys(value).sort(stableCompare).join("\0") !==
-        ["kind", "resourceRefs", "schemaVersion"].join("\0") ||
       value.resourceRefs.some((resourceRef) =>
         typeof resourceRef !== "string" || !STABLE_REF.test(resourceRef))) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID");
@@ -101,12 +124,41 @@ function validateResourceRefs(value, diagnosticCodes) {
 }
 
 function validateAuthoring(value, diagnosticCodes) {
-  if (value === null || typeof value !== "object" || Array.isArray(value) ||
+  if (!hasExactKeys(value, [
+    "kind", "schemaVersion", "entryModulePath", "blockProfileRef", "visualGroups",
+  ]) ||
       value.kind !== "native-block-authoring" || value.schemaVersion !== 1 ||
       value.entryModulePath !== "scene.ts" ||
-      typeof value.blockProfileRef !== "string" || !STABLE_REF.test(value.blockProfileRef) ||
+      value.blockProfileRef !== "worldkit://native-block-profile/whitebox.blocks@1" ||
       !Array.isArray(value.visualGroups)) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+    return;
+  }
+  let rowsAreValid = true;
+  for (const visualGroup of value.visualGroups) {
+    if (!hasExactKeys(visualGroup, [
+      "visualGroupId", "acceptanceTargetRef", "semanticClassId", "identityColorHex",
+    ]) || !STABLE_ID.test(visualGroup.visualGroupId) ||
+        !STABLE_REF.test(visualGroup.acceptanceTargetRef) ||
+        !SEMANTIC_CLASS_ID.test(visualGroup.semanticClassId) ||
+        !IDENTITY_COLOR_HEX.test(visualGroup.identityColorHex)) {
+      rowsAreValid = false;
+    }
+  }
+  if (!rowsAreValid) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+    return;
+  }
+  const groupIds = value.visualGroups.map(({ visualGroupId }) => visualGroupId);
+  const sortedGroupIds = [...groupIds].sort(stableCompare);
+  if (groupIds.some((groupId, index) => groupId !== sortedGroupIds[index])) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_UNSORTED");
+  }
+  const targetRefs = value.visualGroups.map(({ acceptanceTargetRef }) =>
+    acceptanceTargetRef);
+  if (new Set(groupIds).size !== groupIds.length ||
+      new Set(targetRefs).size !== targetRefs.length) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE");
   }
 }
 
@@ -165,6 +217,9 @@ export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
     } else {
       const value = parseJsonData(bytes, diagnosticCodes);
       if (value !== undefined) {
+        if (hasForbiddenAuthorityField(value)) {
+          diagnosticCodes.add("NATIVE_BLOCK_BUILDER_JSON_AUTHORITY_FIELD_FORBIDDEN");
+        }
         if (outputPath === "native-resources.json") {
           validateResourceRefs(value, diagnosticCodes);
         } else {

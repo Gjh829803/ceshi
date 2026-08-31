@@ -47,7 +47,7 @@ The module receives one Host Candidate `context.scene`; it must not create or re
 
 Use only `@whitebox-world/native-babylon`, `@whitebox-world/native-babylon-block-profile`, and the exact admitted Babylon subpaths declared by the frozen Native dependency lock. Do not use Three.js, a scene Manifest, Canonical Compiler APIs, Runtime internals, raw Havok, browser APIs, or undeclared dependencies.
 
-## Completion and bounded repair
+## Completion and frozen repair budget
 
 Run the bundled advisory output-shape checker inside this same Builder task:
 
@@ -56,6 +56,6 @@ node .codex/skills/worldkit-native-block-builder/scripts/self-check.mjs \
   --workspace <declared-output-directory>
 ```
 
-The checker verifies only the closed output inventory, file safety, JSON plain-data shape, sorted unique visual resource refs, and obvious forbidden authority tokens. It does not typecheck Babylon, instantiate a Candidate, validate a Layout, infer colliders, produce a Package/Receipt, or grant admission.
+The checker verifies only the closed output inventory, file safety, JSON plain-data shape, sorted unique visual resource refs, and obvious forbidden authority tokens. The self-check reports only; it does not edit generated files, retry the Builder, typecheck Babylon, instantiate a Candidate, validate a Layout, infer colliders, produce a Package/Receipt, or grant admission.
 
-If it fails, repair only the three declared outputs and rerun. Use at most three self-repair cycles in the original task. Every edit invalidates the prior advisory report. Finish only with a passing fresh report; then the trusted Host independently replays output checks and runs `worldkit native check` before any Package or Runtime Candidate exists.
+Obey the frozen Request/Profile `builderSelfRepairAttemptCount`; never invent a retry budget. The representative NBR Case freezes `builderSelfRepairAttemptCount` to `0`, so run this checker once and return its diagnostics without editing or retrying on failure. A future nonzero Host-selected budget still owns the exact attempt count and every new attempt identity. Only a passing fresh report may proceed to trusted Host replay and `worldkit native check`, which run before any Package or Runtime Candidate exists.

@@ -6,6 +6,8 @@ import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import packageJson from "../../package.json";
+
 const execFileAsync = promisify(execFile);
 const CHECKER = path.resolve(
   ".codex/skills/worldkit-native-block-builder/scripts/self-check.mjs",
@@ -36,7 +38,17 @@ export default defineBabylonNativeScene({
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
-      visualGroups: [],
+      visualGroups: [{
+        visualGroupId: "central-gate",
+        acceptanceTargetRef: "worldkit://acceptance-target/central-gate@1",
+        semanticClassId: "worldkit.native-block.group.central-gate",
+        identityColorHex: "#AEB8C4",
+      }, {
+        visualGroupId: "upper-platform",
+        acceptanceTargetRef: "worldkit://acceptance-target/upper-platform@1",
+        semanticClassId: "worldkit.native-block.group.upper-platform",
+        identityColorHex: "#C9A96B",
+      }],
     }, null, 2)}\n`),
     writeFile(path.join(workspace, "native-resources.json"), `${JSON.stringify({
       kind: "native-visual-resource-list",
@@ -99,7 +111,9 @@ describe("Native Block Builder Skill", () => {
     expect(skill).toContain("The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation.");
     expect(skill).toContain("gpt-5.6-sol");
     expect(skill).toContain("xhigh");
-    expect(skill).toContain("at most three self-repair cycles");
+    expect(skill).toContain("builderSelfRepairAttemptCount");
+    expect(skill).toContain("self-check reports only");
+    expect(skill).not.toContain("at most three self-repair cycles");
     expect(skill).toContain("ground-supported Spawn");
     expect(skill).toContain("T-shaped upper platform");
     expect(skill).toContain("no Route/Nav claim");
@@ -115,6 +129,12 @@ describe("Native Block Builder Skill", () => {
     ]) {
       expect(skill).not.toContain(`you may use ${forbidden}`);
     }
+  });
+
+  it("registers the focused root command", () => {
+    expect(packageJson.scripts["check:native-block-builder-skill"]).toBe(
+      "vitest run scripts/agents/native-block-builder-skill.test.ts",
+    );
   });
 
   it("accepts exactly the three non-empty outputs and emits byte-stable canonical evidence", async () => {
@@ -184,6 +204,84 @@ describe("Native Block Builder Skill", () => {
       schemaVersion: 1,
       resourceRefs,
     }));
+    const result = await runSelfCheck(workspace);
+    expect(result.exitCode).toBe(2);
+    expect(result.report.diagnosticCodes).toContain(expectedCode);
+  });
+
+  it.each([
+    ["authoring top-level field", "native-block-authoring.json", {
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [],
+      camera: { mode: "third-person" },
+    }, "NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"],
+    ["resource top-level field", "native-resources.json", {
+      kind: "native-visual-resource-list",
+      schemaVersion: 1,
+      resourceRefs: [],
+      packageReceiptRef: "worldkit://receipt/forbidden@1",
+    }, "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID"],
+    ["visual-group authority field", "native-block-authoring.json", {
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [{
+        visualGroupId: "central-gate",
+        acceptanceTargetRef: "worldkit://acceptance-target/central-gate@1",
+        semanticClassId: "worldkit.native-block.group.central-gate",
+        identityColorHex: "#AEB8C4",
+        physicsBodyId: "forbidden",
+      }],
+    }, "NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"],
+    ["unsorted visual-group IDs", "native-block-authoring.json", {
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [{
+        visualGroupId: "z-group",
+        acceptanceTargetRef: "worldkit://acceptance-target/z@1",
+        semanticClassId: "worldkit.native-block.group.z",
+        identityColorHex: "#AEB8C4",
+      }, {
+        visualGroupId: "a-group",
+        acceptanceTargetRef: "worldkit://acceptance-target/a@1",
+        semanticClassId: "worldkit.native-block.group.a",
+        identityColorHex: "#C9A96B",
+      }],
+    }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_UNSORTED"],
+    ["duplicate visual-group IDs", "native-block-authoring.json", {
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [{
+        visualGroupId: "same-group",
+        acceptanceTargetRef: "worldkit://acceptance-target/a@1",
+        semanticClassId: "worldkit.native-block.group.a",
+        identityColorHex: "#AEB8C4",
+      }, {
+        visualGroupId: "same-group",
+        acceptanceTargetRef: "worldkit://acceptance-target/b@1",
+        semanticClassId: "worldkit.native-block.group.b",
+        identityColorHex: "#C9A96B",
+      }],
+    }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE"],
+    ["forbidden nested gameplay field", "native-block-authoring.json", {
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [],
+      metadata: { gameplayEntityId: "forbidden" },
+    }, "NATIVE_BLOCK_BUILDER_JSON_AUTHORITY_FIELD_FORBIDDEN"],
+  ])("rejects %s", async (_label, outputPath, value, expectedCode) => {
+    const workspace = await createWorkspace();
+    await writeFile(path.join(workspace, outputPath), JSON.stringify(value));
     const result = await runSelfCheck(workspace);
     expect(result.exitCode).toBe(2);
     expect(result.report.diagnosticCodes).toContain(expectedCode);
