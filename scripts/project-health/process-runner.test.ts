@@ -348,7 +348,10 @@ describe("project health process runner", () => {
   it("preserves canonical JSON containing repository-relative POSIX paths", async () => {
     const root = await createRepository();
     const canonicalEvidence = JSON.stringify({
-      rootTestFiles: ["scripts/project-health/cli.test.ts"],
+      rootTestFiles: [
+        "scripts/project-health/cli.test.ts",
+        `scripts/lib${root}-boundary-contract.test.ts`,
+      ],
       package: { id: "@whitebox-world/protocol", rootPath: "packages/protocol" },
     });
     const encodedEvidence = Buffer.from(canonicalEvidence).toString("base64");

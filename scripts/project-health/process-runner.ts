@@ -394,6 +394,13 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function absoluteMachineRootPattern(root: string): RegExp {
+  return new RegExp(
+    `(?<![A-Za-z0-9_.@/\\\\-])${escapeRegExp(root)}(?![A-Za-z0-9_.@-])`,
+    "g",
+  );
+}
+
 function redactOutput(
   input: string,
   machineRoots: readonly string[],
@@ -408,7 +415,7 @@ function redactOutput(
     }
   }
   for (const root of machineRoots) {
-    if (!isEmpty(root)) value = value.replace(new RegExp(escapeRegExp(root), "g"), "[REDACTED_PATH]");
+    if (!isEmpty(root)) value = value.replace(absoluteMachineRootPattern(root), "[REDACTED_PATH]");
   }
   return value.replace(
     /(?:file:\/\/[^\s"']+|[A-Za-z]:\\[^\s"']+|(?<![A-Za-z0-9_.@/\\-])\/(?!\/)(?:(?:[^\s"'\\,\]}]+\/)*[^\s"'\\,\]}]+|(?=$|[\s"'\\,\]}])))/g,

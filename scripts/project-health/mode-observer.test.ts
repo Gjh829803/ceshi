@@ -8,6 +8,7 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { sortBy } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
+import { evaluateTestGateCensusV1 } from "../lib/test-gate-census";
 import { TEST_GATE_MANIFEST_V1 } from "../lib/test-gate-manifest";
 import { parseWorkspaceBoundaryEvidenceV1 } from "../lib/workspace-boundary-contract";
 import {
@@ -168,7 +169,18 @@ describe("project health mode observer", () => {
         descriptor: PROJECT_HEALTH_GATE_REGISTRY_V1[gateId],
       });
       expect(result.evidence.status).toBe("passed");
-      expect(() => JSON.parse(result.evidence.stdout)).not.toThrow();
+      const raw = JSON.parse(result.evidence.stdout) as Record<string, unknown>;
+      if (gateId === "workspace-boundaries") {
+        expect(() => parseWorkspaceBoundaryEvidenceV1(raw)).not.toThrow();
+      } else {
+        expect(() => evaluateTestGateCensusV1({
+          rootTestFiles: raw.rootTestFiles as string[],
+          contractConfigTestFiles: raw.contractTestFiles as string[],
+          resourceHeavyConfigTestFiles: raw.resourceHeavyTestFiles as string[],
+          manifest: TEST_GATE_MANIFEST_V1,
+        })).not.toThrow();
+      }
+      expect(result.evidence.stdout).not.toContain("[REDACTED_PATH]");
     }
   }, 60_000);
 
