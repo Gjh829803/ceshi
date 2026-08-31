@@ -4,6 +4,10 @@ import {
 } from "@whitebox-world/native-babylon";
 import { isNil } from "lodash-es";
 
+import {
+  materializeBabylonNativeBlockReconstructionCorpusCaseV1,
+  type BabylonNativeBlockReconstructionCorpusCaseIdV1,
+} from "./reconstruction-corpus.js";
 import { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 
 const RUNTIME_FIXTURE_BLOCKS = Object.freeze([
@@ -61,6 +65,44 @@ BabylonNativeSceneModuleV1 {
         positionMetersXYZ: Object.freeze([0, 0, 0] as const),
         facingRadians: 0,
       }));
+    },
+  });
+}
+
+const CORPUS_MODULE_CASE_IDS = Object.freeze([
+  "mountain-cliff",
+  "t-shaped-traversal",
+  "ordinary-and-blocked-steps",
+  "building-exterior",
+  "limited-interior",
+  "unsupported-spawn",
+] as const satisfies readonly BabylonNativeBlockReconstructionCorpusCaseIdV1[]);
+
+/** Test-only exact Module for BWB-5 Package/Havok corpus evidence. */
+export function createBabylonNativeBlockReconstructionCorpusModuleV1(
+  input: Readonly<{
+    caseId: (typeof CORPUS_MODULE_CASE_IDS)[number];
+  }>,
+): BabylonNativeSceneModuleV1 {
+  if (!CORPUS_MODULE_CASE_IDS.includes(input.caseId)) {
+    throw new TypeError(
+      `WORLDKIT_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_UNKNOWN: case '${input.caseId}' cannot publish a Runtime Module`,
+    );
+  }
+  return defineBabylonNativeScene({
+    kind: "babylon-native-scene-module",
+    id: "package-fixture-module",
+    build(context): void {
+      const materialization =
+        materializeBabylonNativeBlockReconstructionCorpusCaseV1(
+          context,
+          input.caseId,
+        );
+      if (materialization.outcome !== "finalized") {
+        throw new TypeError(
+          `${materialization.code}: ${materialization.failureMessage}`,
+        );
+      }
     },
   });
 }

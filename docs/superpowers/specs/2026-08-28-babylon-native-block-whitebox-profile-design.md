@@ -443,19 +443,35 @@ proxy、Scene membership 与 Contribution Hash 全部 settlement 后，才构成
 
 ### BWB-5：参考图 Corpus 与分层验收
 
-- 目标与独立交付物：冻结山地/T 字空间/台阶/建筑/有限室内视觉五类正向 Corpus 及断路、假立面、隐藏
-  foundation、视觉/碰撞漂移等负向 Corpus；产出结构、渲染、Collider 和人工通过性证据。
-- `depends_on`：BWB-2、BWB-3、BWB-4、BNA-5、BNA-6。
-- `blocks`：Block Profile Trusted Local Alpha 与 BWB-6 优化基准。
-- 独占所有权：Block Profile Corpus、阈值、evaluation receipt、修复上限和 Build-Epoch-local authoring
-  screenshots；不拥有 BNA-7 formal Capture identity。
-- 输入/输出合同：reference + frozen Scene Brief/Bootstrap/profile/budget -> checked Native Package + layered
-  evidence。
-- 集成点：Native CLI/Studio/Playground/Capture。
-- 验证证据：首轮/修复成功率、profile-local Opening/top-down/侧视 screenshots、BNA-4 Runtime Collider
-  overlay、关键探针、manual movement/jump/camera/reset；不把局部室内实验升级为 Capability，也不把
-  screenshots 写成 formal Capture Receipt。
-- 执行模式：`sequential`。
+- 目标与独立交付物：冻结关闭的 Block Reconstruction Corpus。每个 Case 使用稳定 ID、确定性 seed 和
+  同一 finalized Layout，同时产生 Babylon Native block visual、Opening/top-down/side
+  `BabylonNativeBlockAuthoringCaptureV1`（`scope = build-epoch-local`）、Static Collider
+  Contribution、关闭 `traversalBinding`、BNA-4 Collider overlay、Spawn Support 与真实人物 Havok
+  通过性。负向 Case fail-closed。可执行工作图见
+  [BWB-5 implementation plan](../plans/2026-08-31-bwb5-block-reconstruction-corpus-implementation.md)。
+- `depends_on`：BWB-2、BWB-3、BWB-4、BNA-5。BNA-6 AI 生成/修复评测、WRC-SR-1 scorecard 和 BNA-7
+  formal Capture/Route 仍独立；本任务不得实现或伪称它们。
+- `blocks`：BWB-6 优化基准。不阻塞 WRC-1 其他泳道。
+- 独占所有权：`packages/native-babylon-block-profile/src/reconstruction-corpus.ts`、testing Module
+  factory、`scripts/verification/bwb5-block-reconstruction-corpus.test.ts` 和 corpus evidence index。
+  不拥有 BNA-7 Capture/Route identity、Runtime/Havok/Camera/Input/Tick、Surface Identity 或新
+  Validation DTO。
+- 输入/输出合同：closed case ID + seed + Host Candidate context -> one Session/Layout/Finalize
+  chain -> existing check/capture/contribution types + corpus evidence index。
+- 集成点：现有 Block Session、BWB-3 authoring capture、BNA-4 admission/overlay、BWB-4 Package/Havok
+  fixture。不创建第三条 Scene Source。
+- 关闭 Case ID（current-only，禁止别名）：
+  - 正向：`mountain-cliff`、`t-shaped-traversal`、`ordinary-and-blocked-steps`、
+    `building-exterior`、`limited-interior`
+  - 负向：`overlap-occupancy`、`out-of-budget`、`invalid-traversal-binding`、
+    `unsupported-spawn`、`disconnected-route`、`cleanup-throw-partial`
+- 验证证据：0.25m step 可通过、0.5m blocker 不可通过、ledge departure/support、mountain/T/building/
+  limited-interior 预期通路与阻挡、reset、dispose/cleanup、30/60/120-like cadence 下固定 Tick hash
+  一致、跨实体/跨 Session rebind 不残留 Subject/Collider/Listener/Camera/Input owner。有限室内只证
+  白模视觉、单层静态支撑和人物通过性。
+- 明确非宣称：完整 Room/Visibility、多层 Navigation、洞穴、桥下双层、NPC Nav、`goTo`、formal
+  Capture/Route、BNA-6 成功率、Thin Instance/Chunk/Collider coalescing。
+- 执行模式：Corpus 合同 `sequential`；Havok/cadence/rebind/review `main-agent-only`。
 
 ### BWB-6：Chunk、实例化与 Collider 优化提案
 
