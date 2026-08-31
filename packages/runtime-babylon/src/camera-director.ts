@@ -10,6 +10,7 @@ import {
   type CameraContextProfileV1,
   type CameraContextSampleV2,
   type CameraDiagnosticV1,
+  type CameraGeometryQueryPortV2,
   type CameraRigParametersV1,
   type CameraSelectionDecisionV2,
   type CameraViewPreferenceV1,
@@ -34,7 +35,6 @@ import {
   validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
 import { isEmpty, isNil } from "lodash-es";
-import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 
 import { CameraViewSolverV1 } from "./camera-view-solver";
 import { SpringArmComponentV1 } from "./spring-arm-component";
@@ -61,6 +61,11 @@ export interface CameraDirectorSnapshotV1 {
   isCollisionRetracted?: boolean;
   collisionHitEntityId?: string;
   collisionHitPositionXYZ?: RuntimeVec3V1;
+  collisionHitNormalXYZ?: RuntimeVec3V1;
+  decollisionPhase?: SpringArmSolveTelemetryV1["decollisionPhase"];
+  startedOverlapping?: boolean;
+  penetrationDepthMeters?: number;
+  clearHoldRemainingSeconds?: number;
   positionLagXYZ?: RuntimeVec3V1;
   rotationLagRadiansXYZ?: RuntimeVec3V1;
   recenterRemainingSeconds?: number;
@@ -142,6 +147,7 @@ export interface CameraDirectorTransactionStateV1 {
 
 type CameraContextV1 = RuntimeSubjectCapabilityAssemblyV1["cameraContext"];
 type CameraParametersV1 = RuntimeCameraRigProfileV1["parameters"];
+type SpringArmSolveTelemetryV1 = ReturnType<SpringArmComponentV1["solve"]>;
 
 interface SelectedCameraStateV1 {
   profile: RuntimeCameraRigProfileV1;
@@ -531,6 +537,86 @@ function smoothstep01(value: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
+const COLLISION_COMPOSITION_FOOT_SOCKET_ID = "FootAlignment";
+const COLLISION_COMPOSITION_HEAD_SOCKET_ID = "FirstPersonView";
+const COLLISION_COMPOSITION_START_BODY_HEIGHTS = 3;
+const COLLISION_COMPOSITION_FULL_BODY_HEIGHTS = 0.6;
+const COLLISION_COMPOSITION_CHEST_HEIGHT_RATIO = 0.7;
+const COLLISION_COMPOSITION_MAX_FOV_RADIANS = (80 * Math.PI) / 180;
+const COLLISION_COMPOSITION_SCREEN_HALF_HEIGHT_RATIO = 0.75;
+
+function collisionCompositionV1(input: Readonly<{
+  sample: ViewTargetSampleV1;
+  desiredTarget: Vector3;
+  effectiveArmLengthMeters: number | undefined;
+  isCollisionRetracted: boolean | undefined;
+  baseFovRadians: number;
+}>): Readonly<{
+  target: Vector3;
+  fovRadians: number;
+}> {
+  if (
+    input.isCollisionRetracted !== true ||
+    input.effectiveArmLengthMeters === undefined
+  ) {
+    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
+  }
+  const foot = input.sample.socketPositionsMetersXYZById[
+    COLLISION_COMPOSITION_FOOT_SOCKET_ID
+  ];
+  const head = input.sample.socketPositionsMetersXYZById[
+    COLLISION_COMPOSITION_HEAD_SOCKET_ID
+  ];
+  if (foot === undefined || head === undefined) {
+    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
+  }
+  const bodyHeightMeters = head[1] - foot[1];
+  if (!Number.isFinite(bodyHeightMeters) || bodyHeightMeters <= 0.25) {
+    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
+  }
+
+  const armLengthInBodyHeights = input.effectiveArmLengthMeters /
+    bodyHeightMeters;
+  const compositionBlend = 1 - smoothstep01(
+    (armLengthInBodyHeights - COLLISION_COMPOSITION_FULL_BODY_HEIGHTS) /
+      (COLLISION_COMPOSITION_START_BODY_HEIGHTS -
+        COLLISION_COMPOSITION_FULL_BODY_HEIGHTS),
+  );
+  if (compositionBlend <= 0) {
+    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
+  }
+
+  // Keep animated head sway out of the horizontal aim while using the authored
+  // foot/head span to locate a stable chest target for differently sized Subjects.
+  const chestTarget = new Vector3(
+    foot[0],
+    foot[1] + bodyHeightMeters * COLLISION_COMPOSITION_CHEST_HEIGHT_RATIO,
+    foot[2],
+  );
+  const target = Vector3.Lerp(
+    input.desiredTarget,
+    chestTarget,
+    compositionBlend,
+  );
+  const requiredFovRadians = 2 * Math.atan(
+    (bodyHeightMeters * 0.5) /
+      Math.max(
+        input.effectiveArmLengthMeters *
+          COLLISION_COMPOSITION_SCREEN_HALF_HEIGHT_RATIO,
+        0.01,
+      ),
+  );
+  const collisionFovRadians = Math.max(
+    input.baseFovRadians,
+    Math.min(requiredFovRadians, COLLISION_COMPOSITION_MAX_FOV_RADIANS),
+  );
+  return {
+    target,
+    fovRadians: input.baseFovRadians +
+      (collisionFovRadians - input.baseFovRadians) * compositionBlend,
+  };
+}
+
 export class CameraDirectorV1 {
   private latestCommittedTick: number | undefined;
   private latestCommittedContextIdentity: string | undefined;
@@ -589,7 +675,7 @@ export class CameraDirectorV1 {
     private readonly initialCamera: WorldRuntimeInitialCameraV1,
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
-    private readonly physicsWorldQuery: PhysicsWorldQueryPortV1,
+    private readonly cameraGeometryQuery: CameraGeometryQueryPortV2,
   ) {
     this.activeProfileRef = initialCamera.cameraRigProfileRef;
   }
@@ -1119,7 +1205,7 @@ export class CameraDirectorV1 {
       .add(
         acceleration.scale(parameters.accelerationLookAheadSecondsSquared),
       );
-    let target = this.targetWithDeadZone(rawTarget, parameters);
+    const target = this.targetWithDeadZone(rawTarget, parameters);
     const firstPerson = profile.algorithmRef.endsWith("/socket-first-person@1");
     const view = this.cameraViewSolver.solve({
       algorithmRef: profile.algorithmRef,
@@ -1132,66 +1218,36 @@ export class CameraDirectorV1 {
       viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
       shoulderSide: this.shoulderSide,
     });
-    target = view.desiredTarget;
-    let desiredPosition = view.desiredPosition;
-    let requestedArmLengthMeters = view.requestedArmLengthMeters;
-    let safeArmLengthMeters: number | undefined;
-    let effectiveArmLengthMeters: number | undefined;
-    let isCollisionRetracted: boolean | undefined;
-    let collisionHitEntityId: string | undefined;
-    let collisionHitPositionXYZ: RuntimeVec3V1 | undefined;
-    if (!firstPerson) {
-      let collision: ReturnType<SpringArmComponentV1["solve"]>;
-      try {
-        collision = springArm.solve({
-          subjectEntityId: sample.controlledEntityId,
-          desiredTarget: target,
-          desiredPosition,
-          parameters,
-          deltaSeconds,
-          physicsWorldQuery: this.physicsWorldQuery,
-        });
-      } catch {
-        throw new Error(
-          "3C_CAMERA_QUERY_UNAVAILABLE: Spring Arm physics query failed closed.",
-        );
-      }
-      desiredPosition = collision.position;
-      safeArmLengthMeters = collision.safeArmLengthMeters;
-      effectiveArmLengthMeters = collision.effectiveArmLengthMeters;
-      isCollisionRetracted = collision.isCollisionRetracted;
-      collisionHitEntityId = collision.collisionHitEntityId;
-      collisionHitPositionXYZ = collision.collisionHitPositionXYZ;
+    const resolvedTarget = new Vector3(
+      this.smoothedTarget.x + (view.desiredTarget.x - this.smoothedTarget.x) * yawAlpha,
+      this.smoothedTarget.y + (view.desiredTarget.y - this.smoothedTarget.y) * pitchAlpha,
+      this.smoothedTarget.z + (view.desiredTarget.z - this.smoothedTarget.z) * yawAlpha,
+    );
+    const targetDelta = resolvedTarget.subtract(view.desiredTarget);
+    const idealPosition = firstPerson
+      ? view.desiredPosition
+      : view.desiredPosition.add(targetDelta);
+    const requestedArmLengthMeters = view.requestedArmLengthMeters;
+    let dampedPosition = new Vector3(
+      this.camera.position.x +
+        (idealPosition.x - this.camera.position.x) * horizontalPositionAlpha,
+      this.camera.position.y +
+        (idealPosition.y - this.camera.position.y) * verticalPositionAlpha,
+      this.camera.position.z +
+        (idealPosition.z - this.camera.position.z) * horizontalPositionAlpha,
+    );
+    const positionLag = dampedPosition.subtract(idealPosition);
+    if (
+      positionLag.lengthSquared() >
+        parameters.maximumPositionLagMeters * parameters.maximumPositionLagMeters
+    ) {
+      dampedPosition = parameters.maximumPositionLagMeters <= 0
+        ? idealPosition.clone()
+        : idealPosition.add(
+            positionLag.normalize().scale(parameters.maximumPositionLagMeters),
+          );
     }
 
-    let nextPosition = isCollisionRetracted === true
-      ? desiredPosition.clone()
-      : new Vector3(
-          this.camera.position.x +
-            (desiredPosition.x - this.camera.position.x) * horizontalPositionAlpha,
-          this.camera.position.y +
-            (desiredPosition.y - this.camera.position.y) * verticalPositionAlpha,
-          this.camera.position.z +
-            (desiredPosition.z - this.camera.position.z) * horizontalPositionAlpha,
-        );
-    if (isCollisionRetracted !== true) {
-      const positionLag = nextPosition.subtract(desiredPosition);
-      if (
-        positionLag.lengthSquared() >
-          parameters.maximumPositionLagMeters * parameters.maximumPositionLagMeters
-      ) {
-        nextPosition = parameters.maximumPositionLagMeters <= 0
-          ? desiredPosition.clone()
-          : desiredPosition.add(
-              positionLag.normalize().scale(parameters.maximumPositionLagMeters),
-            );
-      }
-    }
-    const nextTarget = new Vector3(
-      this.smoothedTarget.x + (target.x - this.smoothedTarget.x) * yawAlpha,
-      this.smoothedTarget.y + (target.y - this.smoothedTarget.y) * pitchAlpha,
-      this.smoothedTarget.z + (target.z - this.smoothedTarget.z) * yawAlpha,
-    );
     const extraFov = Math.min(
       parameters.maximumSpeedFovDegrees,
       speed * parameters.speedFovDegreesPerMeterPerSecond,
@@ -1203,6 +1259,9 @@ export class CameraDirectorV1 {
     this.smoothedFovRadians += (targetFov - this.smoothedFovRadians) * fovAlpha;
     const nextFov = this.smoothedFovRadians;
     let profileTransitionProgressRatio = 1;
+    let proposedTarget = resolvedTarget;
+    let proposedPosition = dampedPosition;
+    let proposedFov = nextFov;
     if (
       this.transitionDurationSeconds > 0 &&
       this.transitionElapsedSeconds < this.transitionDurationSeconds
@@ -1211,29 +1270,85 @@ export class CameraDirectorV1 {
         this.transitionElapsedSeconds / this.transitionDurationSeconds,
       );
       profileTransitionProgressRatio = transitionAlpha;
-      this.camera.position.copyFrom(
-        isCollisionRetracted === true
-          ? desiredPosition
-          : Vector3.Lerp(
-              this.transitionStartPosition,
-              nextPosition,
-              transitionAlpha,
-            ),
-      );
-      this.smoothedTarget.copyFrom(Vector3.Lerp(
+      proposedTarget = Vector3.Lerp(
         this.transitionStartTarget,
-        nextTarget,
+        resolvedTarget,
         transitionAlpha,
-      ));
-      this.camera.fov = this.transitionStartFovRadians +
+      );
+      proposedPosition = Vector3.Lerp(
+        this.transitionStartPosition,
+        dampedPosition,
+        transitionAlpha,
+      );
+      proposedFov = this.transitionStartFovRadians +
         (nextFov - this.transitionStartFovRadians) * transitionAlpha;
-    } else {
-      this.camera.position.copyFrom(nextPosition);
-      this.smoothedTarget.copyFrom(nextTarget);
-      this.camera.fov = nextFov;
     }
+    if (!firstPerson && requestedArmLengthMeters !== undefined &&
+      profileTransitionProgressRatio >= 1) {
+      const proposedArm = proposedPosition.subtract(proposedTarget);
+      if (proposedArm.lengthSquared() >
+        requestedArmLengthMeters * requestedArmLengthMeters) {
+        proposedPosition = proposedTarget.add(
+          proposedArm.normalize().scale(requestedArmLengthMeters),
+        );
+      }
+    }
+
+    let finalPosition = proposedPosition;
+    let finalTarget = proposedTarget;
+    let safeArmLengthMeters: number | undefined;
+    let effectiveArmLengthMeters: number | undefined;
+    let isCollisionRetracted: boolean | undefined;
+    let collisionHitEntityId: string | undefined;
+    let collisionHitPositionXYZ: RuntimeVec3V1 | undefined;
+    let collisionHitNormalXYZ: RuntimeVec3V1 | undefined;
+    let decollisionPhase: SpringArmSolveTelemetryV1["decollisionPhase"] | undefined;
+    let startedOverlapping: boolean | undefined;
+    let penetrationDepthMeters: number | undefined;
+    let clearHoldRemainingSeconds: number | undefined;
+    if (!firstPerson) {
+      let collision: ReturnType<SpringArmComponentV1["solve"]>;
+      try {
+        collision = springArm.solve({
+          committedTick: committedContext.committedTick,
+          excludedEntityIds: [sample.controlledEntityId],
+          desiredTarget: proposedTarget,
+          desiredPosition: proposedPosition,
+          currentCommittedPosition: this.camera.position,
+          parameters,
+          deltaSeconds,
+          cameraGeometryQuery: this.cameraGeometryQuery,
+        });
+      } catch {
+        throw new Error(
+          "3C_CAMERA_QUERY_UNAVAILABLE: Spring Arm camera geometry query failed closed.",
+        );
+      }
+      finalPosition = collision.position;
+      finalTarget = collision.resolvedTarget;
+      safeArmLengthMeters = collision.safeArmLengthMeters;
+      effectiveArmLengthMeters = collision.effectiveArmLengthMeters;
+      isCollisionRetracted = collision.isCollisionRetracted;
+      collisionHitEntityId = collision.collisionHitEntityId;
+      collisionHitPositionXYZ = collision.collisionHitPositionXYZ;
+      collisionHitNormalXYZ = collision.collisionHitNormalXYZ;
+      decollisionPhase = collision.decollisionPhase;
+      startedOverlapping = collision.startedOverlapping;
+      penetrationDepthMeters = collision.penetrationDepthMeters;
+      clearHoldRemainingSeconds = collision.clearHoldRemainingSeconds;
+    }
+    const collisionComposition = collisionCompositionV1({
+      sample,
+      desiredTarget: finalTarget,
+      effectiveArmLengthMeters,
+      isCollisionRetracted,
+      baseFovRadians: proposedFov,
+    });
+    this.camera.position.copyFrom(finalPosition);
+    this.smoothedTarget.copyFrom(finalTarget);
+    this.camera.fov = collisionComposition.fovRadians;
     this.transitionElapsedSeconds += Math.max(0, deltaSeconds);
-    this.camera.setTarget(this.smoothedTarget);
+    this.camera.setTarget(collisionComposition.target);
     this.initialized = true;
     this.controlInitialized = true;
     const isTargetSocketFallback =
@@ -1252,8 +1367,8 @@ export class CameraDirectorV1 {
         ? {}
         : { targetSocketPositionMetersXYZ: freezeVec3(socketPosition) }),
       isTargetSocketFallback,
-      desiredTargetPositionMetersXYZ: freezeVec3(target),
-      desiredPositionMetersXYZ: freezeVec3(desiredPosition),
+      desiredTargetPositionMetersXYZ: freezeVec3(finalTarget),
+      desiredPositionMetersXYZ: freezeVec3(proposedPosition),
       actualPositionMetersXYZ: freezeVec3(this.camera.position),
       finalFovDegrees: (this.camera.fov * 180) / Math.PI,
       ...(requestedArmLengthMeters === undefined
@@ -1266,7 +1381,12 @@ export class CameraDirectorV1 {
       ...(isCollisionRetracted === undefined ? {} : { isCollisionRetracted }),
       ...(collisionHitEntityId === undefined ? {} : { collisionHitEntityId }),
       ...(collisionHitPositionXYZ === undefined ? {} : { collisionHitPositionXYZ }),
-      positionLagXYZ: freezeVec3(this.camera.position.subtract(desiredPosition)),
+      ...(collisionHitNormalXYZ === undefined ? {} : { collisionHitNormalXYZ }),
+      ...(decollisionPhase === undefined ? {} : { decollisionPhase }),
+      ...(startedOverlapping === undefined ? {} : { startedOverlapping }),
+      ...(penetrationDepthMeters === undefined ? {} : { penetrationDepthMeters }),
+      ...(clearHoldRemainingSeconds === undefined ? {} : { clearHoldRemainingSeconds }),
+      positionLagXYZ: freezeVec3(this.camera.position.subtract(proposedPosition)),
       rotationLagRadiansXYZ: freezeVec3([
         this.targetPitchOffsetRadians - this.viewPitchOffsetRadians,
         wrapRadians(this.targetYawOffsetRadians - this.viewYawOffsetRadians),

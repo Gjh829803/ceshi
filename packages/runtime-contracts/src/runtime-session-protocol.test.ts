@@ -340,6 +340,11 @@ describe("Runtime Session V1 public DTOs", () => {
           viewYawOffsetRadians: 0,
           viewPitchOffsetRadians: 0,
           viewDistanceOffsetMeters: 0,
+          collisionHitNormalXYZ: [0, 0, -1],
+          decollisionPhase: "constrained",
+          startedOverlapping: false,
+          penetrationDepthMeters: 0,
+          clearHoldRemainingSeconds: 0.12,
           fixedStepDeltaSeconds: 1 / 60,
           selectionDecision: {
             schemaVersion: 2,

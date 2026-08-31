@@ -93,7 +93,7 @@ import {
 import { admitBabylonNativeSurfacesV1 } from
   "./babylon-native-surface-admission";
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
-import { BabylonHavokPhysicsWorldQueryV1 } from "./babylon-physics-world-query";
+import { BabylonHavokCameraGeometryQueryV2 } from "./babylon-camera-geometry-query";
 import { CameraComponentV1 } from "./camera-component";
 import { resolveCameraViewTargetContextV1 } from "./camera-view-target-context";
 import { createWhiteboxMaterials } from "./materials";
@@ -156,6 +156,39 @@ import {
   resolveBabylonRuntimeSubjectsV1,
   type BabylonRuntimeSubjectV1,
 } from "./runtime-subject";
+
+function captureSubjectVisualSocketPositionsV1(
+  visual: SubjectVisual,
+): Readonly<Record<string, RuntimeVec3V1>> {
+  const positions: Record<string, RuntimeVec3V1> = {};
+  visual.root.computeWorldMatrix(true);
+  for (const [socketId, socketNode] of visual.socketNodesById) {
+    socketNode.computeWorldMatrix(true);
+    const position = socketNode.getAbsolutePosition();
+    if (![position.x, position.y, position.z].every(Number.isFinite)) continue;
+    positions[socketId] = canonicalizeVec3([
+      position.x,
+      position.y,
+      position.z,
+    ]);
+  }
+  return positions;
+}
+
+function cameraContextWithSubjectVisualSocketsV1(
+  context: CameraContextSampleV2,
+  visual: SubjectVisual,
+): CameraContextSampleV2 {
+  return parseCameraContextSampleV2({
+    ...context,
+    environment: {
+      ...context.environment,
+      socketPositionsMetersXYZById:
+        captureSubjectVisualSocketPositionsV1(visual),
+    },
+  });
+}
+
 function committedPresentationFromLocomotionMode(
   committedTick: number,
   locomotionMode: LocomotionModeV1 | "suspended",
@@ -936,8 +969,8 @@ export class BabylonWorldRuntime {
         effectiveGravityMetersPerSecondSquaredXYZ,
         options.havokWasmBinary,
       );
-      const physicsWorldQuery = new BabylonHavokPhysicsWorldQueryV1(scene, havokPlugin);
-      ownedDisposers.push(() => physicsWorldQuery.dispose());
+      const cameraGeometryQuery = new BabylonHavokCameraGeometryQueryV2(scene, havokPlugin);
+      ownedDisposers.push(() => cameraGeometryQuery.dispose());
       const entityRegistry = new EntityRegistryV1();
       const materials = createWhiteboxMaterials(scene);
       const aggregates: PhysicsAggregate[] = [];
@@ -1046,7 +1079,7 @@ export class BabylonWorldRuntime {
         effectiveCamera,
         camera,
         scene,
-        physicsWorldQuery,
+        cameraGeometryQuery,
       ));
       let runtime: BabylonWorldRuntime | undefined;
 
@@ -1160,18 +1193,23 @@ export class BabylonWorldRuntime {
                   commit: (): void => {
                     if (state !== "prepared") return;
                     try {
+                      const cameraContext =
+                        cameraContextWithSubjectVisualSocketsV1(
+                          request.cameraContext,
+                          visual,
+                        );
                       if (runtime?.controlledEntityId() === subject.entityId) {
-                        const locomotion = request.cameraContext.locomotion;
+                        const locomotion = cameraContext.locomotion;
                         const velocity = locomotion.status === "active"
                           ? locomotion.linearVelocity
                           : { x: 0, y: 0, z: 0 };
                         const facingYawRadians =
-                          request.cameraContext.subjectPose.facingYawRadians;
+                          cameraContext.subjectPose.facingYawRadians;
                         const sample: ViewTargetSampleV1 = {
                           controlledEntityId: subject.entityId,
                           entityId: subject.entityId,
                           targetPositionMetersXYZ:
-                            request.cameraContext.subjectPose.positionMetersXYZ,
+                            cameraContext.subjectPose.positionMetersXYZ,
                           forwardXYZ: [
                             canonicalizeSignedZero(-Math.sin(facingYawRadians)),
                             0,
@@ -1185,30 +1223,30 @@ export class BabylonWorldRuntime {
                           ],
                           approximateRadiusMeters: subject.collider.radiusMeters,
                           socketPositionsMetersXYZById:
-                            request.cameraContext.environment
+                            cameraContext.environment
                               .socketPositionsMetersXYZById,
                           motionTags: [],
                           movementMedium: locomotion.status === "active"
                             ? locomotion.movementMedium
                             : "ground",
                           relationshipRole:
-                            request.cameraContext.environment.relationshipRole,
+                            cameraContext.environment.relationshipRole,
                           relationshipContexts:
-                            request.cameraContext.environment.relationshipContexts,
+                            cameraContext.environment.relationshipContexts,
                           cameraContextTags:
-                            request.cameraContext.environment.cameraContextTags,
+                            cameraContext.environment.cameraContextTags,
                         };
                         cameraComponent.update(
                           subject.capabilityAssembly.cameraContext,
                           sample,
                           FIXED_TIME_STEP_SECONDS,
-                          request.cameraContext,
+                          cameraContext,
                           runtime.characterFor(subject.entityId).springArm,
                         );
                       }
                       latestGoldenCameraContextsByEntityId.set(
                         subject.entityId,
-                        request.cameraContext,
+                        cameraContext,
                       );
                       state = "committed";
                     } catch (error) {
@@ -1267,7 +1305,7 @@ export class BabylonWorldRuntime {
         // physics-body binding, or Camera construction may still fail first.
         ownedDisposers.push(() => character.entity.dispose());
         characterEntitiesByEntityId.set(subject.entityId, character);
-        physicsWorldQuery.registerEntityPhysicsBody(
+        cameraGeometryQuery.registerEntityPhysicsBody(
           subject.entityId,
           character.movement.physicsBody,
         );
@@ -2791,6 +2829,28 @@ export class BabylonWorldRuntime {
                 cameraDirectorSnapshot.collisionHitPositionXYZ,
               ),
             }),
+        ...(cameraDirectorSnapshot.collisionHitNormalXYZ === undefined
+          ? {}
+          : {
+              collisionHitNormalXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.collisionHitNormalXYZ,
+              ),
+            }),
+        ...(cameraDirectorSnapshot.decollisionPhase === undefined
+          ? {}
+          : { decollisionPhase: cameraDirectorSnapshot.decollisionPhase }),
+        ...(cameraDirectorSnapshot.startedOverlapping === undefined
+          ? {}
+          : { startedOverlapping: cameraDirectorSnapshot.startedOverlapping }),
+        ...(cameraDirectorSnapshot.penetrationDepthMeters === undefined
+          ? {}
+          : { penetrationDepthMeters: cameraDirectorSnapshot.penetrationDepthMeters }),
+        ...(cameraDirectorSnapshot.clearHoldRemainingSeconds === undefined
+          ? {}
+          : {
+              clearHoldRemainingSeconds:
+                cameraDirectorSnapshot.clearHoldRemainingSeconds,
+            }),
         ...(cameraDirectorSnapshot.positionLagXYZ === undefined
           ? {}
           : {
@@ -3249,13 +3309,8 @@ export class BabylonWorldRuntime {
     const origin = controller.subjectOrigin;
     const velocity = controller.velocity;
     const motion = controller.motionSnapshot();
-    const socketPositionsMetersXYZById: Record<string, RuntimeVec3V1> = {};
-    visual.root.computeWorldMatrix(true);
-    for (const [socketId, socketNode] of visual.socketNodesById) {
-      socketNode.computeWorldMatrix(true);
-      const position = socketNode.getAbsolutePosition();
-      socketPositionsMetersXYZById[socketId] = [position.x, position.y, position.z];
-    }
+    const socketPositionsMetersXYZById =
+      captureSubjectVisualSocketPositionsV1(visual);
     const cameraViewTargetContext = resolveCameraViewTargetContextV1(
       subject.entityId,
       Object.values(

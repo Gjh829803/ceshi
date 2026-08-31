@@ -309,6 +309,15 @@ export type WorldRuntimeCameraStateV4 =
       isCollisionRetracted?: boolean;
       collisionHitEntityId?: string;
       collisionHitPositionXYZ?: RuntimeVec3V1;
+      collisionHitNormalXYZ?: RuntimeVec3V1;
+      decollisionPhase?:
+        | "clear"
+        | "constrained"
+        | "recovering"
+        | "emergency-inside";
+      startedOverlapping?: boolean;
+      penetrationDepthMeters?: number;
+      clearHoldRemainingSeconds?: number;
       positionLagXYZ?: RuntimeVec3V1;
       rotationLagRadiansXYZ?: RuntimeVec3V1;
       recenterRemainingSeconds?: number;

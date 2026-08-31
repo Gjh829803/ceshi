@@ -5,13 +5,16 @@ import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Scene } from "@babylonjs/core/scene.js";
-import { parseCameraContextSampleV2 } from "@whitebox-world/camera";
+import {
+  parseCameraContextSampleV2,
+  type CameraGeometryQueryPortV2,
+  type CameraGeometryQueryRequestV2,
+} from "@whitebox-world/camera";
 import {
   createWorldRuntimeBootstrapV1,
   type CanonicalSceneExecutionPlanV1,
   type ViewTargetSampleV1,
 } from "@whitebox-world/runtime-contracts";
-import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 import { describe, expect, it, vi } from "vitest";
 
 // Test-only Registry access via a cross-workspace relative path; production
@@ -56,6 +59,22 @@ const gBotAssetBytes = new Uint8Array(
 const ORBIT_REF = "worldkit://camera-profile/orbit.medium@1";
 const FOLLOW_REF = "worldkit://camera-profile/follow.medium@1";
 const CHASE_REF = "worldkit://camera-profile/chase.surface-fast@1";
+
+function cameraGeometryQuery(
+  query: CameraGeometryQueryPortV2["query"] = () => undefined,
+): CameraGeometryQueryPortV2 {
+  return {
+    capability: {
+      shape: "sphere",
+      maximumHitCount: 1,
+      maximumExcludedEntityCount: 1,
+      reportsContactNormal: true,
+      reportsStartOverlap: true,
+      penetrationDepth: "exact-or-zero",
+    },
+    query,
+  };
+}
 
 function setCameraProfile(runtime: BabylonWorldRuntime, cameraRigProfileRef: string) {
   return runtime.setCameraViewPreference({
@@ -325,7 +344,9 @@ function renderedTransitionProgressRatio(
   );
 }
 
-function expectSafeActualArm(camera: ReturnType<BabylonWorldRuntime["snapshot"]>["camera"]) {
+function expectActualArmWithinReportedSafety(
+  camera: ReturnType<BabylonWorldRuntime["snapshot"]>["camera"],
+) {
   const safeArmLengthMeters = camera.safeArmLengthMeters;
   const actualPositionMetersXYZ = camera.actualPositionMetersXYZ;
   const desiredTargetPositionMetersXYZ = camera.desiredTargetPositionMetersXYZ;
@@ -334,13 +355,17 @@ function expectSafeActualArm(camera: ReturnType<BabylonWorldRuntime["snapshot"]>
     actualPositionMetersXYZ === undefined ||
     desiredTargetPositionMetersXYZ === undefined
   ) {
-    throw new Error("Expected collision-retracted Spring Arm telemetry.");
+    throw new Error("Expected Spring Arm safety telemetry.");
   }
-  expect(camera.isCollisionRetracted).toBe(true);
   expect(distanceMeters(
     actualPositionMetersXYZ,
     desiredTargetPositionMetersXYZ,
   )).toBeLessThanOrEqual(safeArmLengthMeters + 0.000001);
+}
+
+function expectSafeActualArm(camera: ReturnType<BabylonWorldRuntime["snapshot"]>["camera"]) {
+  expect(camera.isCollisionRetracted).toBe(true);
+  expectActualArmWithinReportedSafety(camera);
 }
 
 function subjectStateWithoutLocomotionCommittedTick(input: unknown): unknown {
@@ -459,10 +484,14 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(afterPreview.subjectStatesByEntityId).toEqual(
         beforePreview.subjectStatesByEntityId,
       );
-      expect(afterPreview.camera.selectedTargetSocketId).toBeUndefined();
-      expect(afterPreview.camera.targetSocketPositionMetersXYZ).toBeUndefined();
-      expect(afterPreview.camera.isTargetSocketFallback).toBe(true);
-      expect(afterPreview.camera.selectionDecision?.diagnostics).toContainEqual(
+      expect(afterPreview.camera.selectedTargetSocketId).toBe("FirstPersonView");
+      expect(afterPreview.camera.targetSocketPositionMetersXYZ).toEqual([
+        expect.any(Number),
+        expect.any(Number),
+        expect.any(Number),
+      ]);
+      expect(afterPreview.camera.isTargetSocketFallback).toBe(false);
+      expect(afterPreview.camera.selectionDecision?.diagnostics).not.toContainEqual(
         expect.objectContaining({ code: "CAMERA_REQUIRED_SOCKET_MISSING" }),
       );
       expect(afterPreview.camera).toHaveProperty("finalFovDegrees");
@@ -553,11 +582,24 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(safeArmLengthMeters).toBeGreaterThan(0);
       expect(effectiveArmLengthMeters).toBeLessThan(requestedArmLengthMeters);
       expect(afterPreview.camera.isCollisionRetracted).toBe(true);
+      expect(afterPreview.camera.decollisionPhase).toBe("constrained");
+      expect(afterPreview.camera.collisionHitNormalXYZ).toEqual([0, 0, -1]);
+      expect(afterPreview.camera.startedOverlapping).toBe(false);
+      expect(afterPreview.camera.penetrationDepthMeters).toBe(0);
+      expect(afterPreview.camera.clearHoldRemainingSeconds).toBeCloseTo(0.12, 12);
       const desiredTarget = afterPreview.camera.desiredTargetPositionMetersXYZ;
       const actualPosition = afterPreview.camera.actualPositionMetersXYZ;
       if (actualPosition === undefined || desiredTarget === undefined) {
         throw new Error("Expected actual and desired Camera positions.");
       }
+      const runtimeScene = (runtime as unknown as { readonly scene: Scene }).scene;
+      const renderedCamera = runtimeScene.activeCamera;
+      if (!(renderedCamera instanceof FreeCamera)) {
+        throw new Error("Expected the runtime FreeCamera.");
+      }
+      const renderedTargetHeightMeters = renderedCamera.getTarget().y;
+      expect(renderedTargetHeightMeters).toBeGreaterThan(1.05);
+      expect(renderedTargetHeightMeters).toBeLessThan(desiredTarget[1] - 0.02);
       expect(distanceMeters(actualPosition, desiredTarget)).toBeLessThanOrEqual(
         safeArmLengthMeters + 0.000001,
       );
@@ -567,7 +609,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
-  it("uses physics collision and arm telemetry only for third-person camera poses", async () => {
+  it("uses geometry collision and arm telemetry only for third-person camera poses", async () => {
     const runtime = await createCameraPreviewChannelRuntime({
       blockCameraArm: true,
     });
@@ -696,7 +738,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         ),
         12,
       );
-      expectSafeActualArm(firstTick.camera);
+      expectActualArmWithinReportedSafety(firstTick.camera);
 
       await runtime.runFixedInput({ actions: [], ticks: 120 });
       const settled = runtime.snapshot();
@@ -743,7 +785,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       const firstTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       const firstTarget = smoothedCameraTarget(runtime);
       expect(firstTick.camera.profileTransitionProgressRatio).toBeLessThan(1);
-      expectSafeActualArm(firstTick.camera);
+      expectActualArmWithinReportedSafety(firstTick.camera);
 
       await runtime.runFixedInput({ actions: [], ticks: 120 });
       const settled = runtime.snapshot();
@@ -1328,12 +1370,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const scene = new Scene(engine);
     const camera = new FreeCamera("camera.test", Vector3.Zero(), scene);
     let queryCount = 0;
-    const queryPort: PhysicsWorldQueryPortV1 = {
-      sweepSphere: () => {
+    const queryPort = cameraGeometryQuery(() => {
         queryCount += 1;
         return undefined;
-      },
-    };
+      });
     const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, queryPort);
     const springArm = new SpringArmComponentV1();
     const sample: ViewTargetSampleV1 = {
@@ -1396,6 +1436,186 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         springArm,
       )).toThrow("3C_CAMERA_CONTEXT_UNCOMMITTED");
       expect(queryCount).toBe(1);
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("queries from the final smoothed LookAt target after position damping", () => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = runtimeSubject(executionPlan);
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.smoothed-collision", Vector3.Zero(), scene);
+    const requests: CameraGeometryQueryRequestV2[] = [];
+    const queryPort = cameraGeometryQuery((request) => {
+      requests.push(structuredClone(request));
+      const delta = request.endPositionMetersXYZ.map(
+        (coordinate, index) => coordinate - request.startPositionMetersXYZ[index]!,
+      ) as [number, number, number];
+      const armLengthMeters = Math.hypot(...delta);
+      return {
+        schemaVersion: 2,
+        travelDistanceMeters: armLengthMeters * 0.5,
+        travelFraction: 0.5,
+        hitPointMetersXYZ: [
+          request.startPositionMetersXYZ[0] + delta[0] * 0.5,
+          request.startPositionMetersXYZ[1] + delta[1] * 0.5,
+          request.startPositionMetersXYZ[2] + delta[2] * 0.5,
+        ],
+        hitNormalXYZ: [0, 0, -1],
+        hitEntityId: "wall-primary",
+        startedOverlapping: false,
+        penetrationDepthMeters: 0,
+        obstructionClass: "hard",
+      };
+    });
+    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, queryPort);
+    const springArm = new SpringArmComponentV1();
+    const initialSample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 1, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0],
+      approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {},
+      motionTags: [],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: [],
+    };
+    try {
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        initialSample,
+        1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(initialSample, 1),
+        springArm,
+      );
+      const movedSample = {
+        ...initialSample,
+        targetPositionMetersXYZ: [10, 1, 0] as const,
+      };
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        movedSample,
+        1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(movedSample, 2),
+        springArm,
+      );
+
+      const secondRequest = requests[1];
+      if (secondRequest === undefined) throw new Error("Expected a second geometry query.");
+      expect(secondRequest.startPositionMetersXYZ).toEqual(
+        director.snapshot().desiredTargetPositionMetersXYZ,
+      );
+      expect(secondRequest.startPositionMetersXYZ[0]).toBeGreaterThan(0);
+      expect(secondRequest.startPositionMetersXYZ[0]).toBeLessThan(10);
+      expect(secondRequest.endPositionMetersXYZ[0]).toBeGreaterThan(0);
+      expect(secondRequest.endPositionMetersXYZ[0]).toBeLessThan(
+        secondRequest.startPositionMetersXYZ[0],
+      );
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("recenters collision-compressed third-person framing on the Subject chest", () => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = runtimeSubject(executionPlan);
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.collision-composition", Vector3.Zero(), scene);
+    const queryPort = cameraGeometryQuery((request) => {
+      const delta = request.endPositionMetersXYZ.map(
+        (coordinate, index) => coordinate - request.startPositionMetersXYZ[index]!,
+      ) as [number, number, number];
+      const armLengthMeters = Math.hypot(...delta);
+      const travelFraction = 0.18;
+      return {
+        schemaVersion: 2,
+        travelDistanceMeters: armLengthMeters * travelFraction,
+        travelFraction,
+        hitPointMetersXYZ: [
+          request.startPositionMetersXYZ[0] + delta[0] * travelFraction,
+          request.startPositionMetersXYZ[1] + delta[1] * travelFraction,
+          request.startPositionMetersXYZ[2] + delta[2] * travelFraction,
+        ],
+        hitNormalXYZ: [0, 0, -1],
+        hitEntityId: "wall-primary",
+        startedOverlapping: false,
+        penetrationDepthMeters: 0,
+        obstructionClass: "hard",
+      };
+    });
+    const director = new CameraDirectorV1(
+      initialCamera(executionPlan),
+      camera,
+      scene,
+      queryPort,
+    );
+    const springArm = new SpringArmComponentV1();
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 0, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0],
+      approximateRadiusMeters: 0.35,
+      socketPositionsMetersXYZById: {
+        FootAlignment: [0, 0, 0],
+        FirstPersonView: [0, 1.8, 0],
+        ThirdPersonTarget: [0, 1.25, 0],
+      },
+      motionTags: [],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: [],
+    };
+    try {
+      director.setViewPreference(
+        subject.capabilityAssembly.cameraContext,
+        {
+          mode: "camera-rig-profile",
+          cameraRigProfileRef: ORBIT_REF,
+        },
+      );
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        sample,
+        1 / 60,
+        committedCameraContextFromMotionKernelV1(sample, 1, "idle", 0),
+        springArm,
+      );
+
+      const snapshot = director.snapshot();
+      const desiredTarget = snapshot.desiredTargetPositionMetersXYZ;
+      if (desiredTarget === undefined) throw new Error("Expected desired target telemetry.");
+      camera.getViewMatrix(true);
+      const renderedDirection = camera.getForwardRay().direction;
+      const desiredDirection = new Vector3(...desiredTarget)
+        .subtract(camera.position)
+        .normalize();
+      expect(snapshot.isCollisionRetracted).toBe(true);
+      expect(snapshot.effectiveArmLengthMeters! / snapshot.requestedArmLengthMeters!)
+        .toBeLessThan(0.3);
+      expect(desiredTarget[1]).toBeCloseTo(1.25, 6);
+      expect(camera.getTarget().y).toBeCloseTo(1.26, 2);
+      expect(Math.abs(renderedDirection.y - desiredDirection.y)).toBeLessThan(0.02);
+      expect(snapshot.finalFovDegrees).toBeGreaterThan(58);
     } finally {
       director.dispose();
       engine.dispose();
@@ -1526,9 +1746,12 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
     const camera = new FreeCamera("camera.free-ground", Vector3.Zero(), scene);
-    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, {
-      sweepSphere: () => undefined,
-    });
+    const director = new CameraDirectorV1(
+      initialCamera(executionPlan),
+      camera,
+      scene,
+      cameraGeometryQuery(),
+    );
     const springArm = new SpringArmComponentV1();
     try {
       director.update(
@@ -1683,12 +1906,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const scene = new Scene(engine);
     const camera = new FreeCamera("camera.atomic", Vector3.Zero(), scene);
     let failQuery = false;
-    const queryPort: PhysicsWorldQueryPortV1 = {
-      sweepSphere: () => {
+    const queryPort = cameraGeometryQuery(() => {
         if (failQuery) throw new Error("provider failure");
         return undefined;
-      },
-    };
+      });
     const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, queryPort);
     const springArm = new SpringArmComponentV1();
     const sample: ViewTargetSampleV1 = {
@@ -1749,16 +1970,14 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   });
 
-  it("resets Director state without owning the injected physics port, then closes lifecycle", () => {
+  it("resets Director state without owning the injected geometry port, then closes lifecycle", () => {
     const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
     );
     const engine = new NullEngine();
     const scene = new Scene(engine);
-    const queryPort: PhysicsWorldQueryPortV1 = {
-      sweepSphere: () => undefined,
-    };
+    const queryPort = cameraGeometryQuery();
     const director = new CameraDirectorV1(
       initialCamera(executionPlan),
       new FreeCamera("camera.test", Vector3.Zero(), scene),

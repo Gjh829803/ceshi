@@ -594,6 +594,11 @@ function validateRuntimeCameraStateV4(
     "isCollisionRetracted",
     "collisionHitEntityId",
     "collisionHitPositionXYZ",
+    "collisionHitNormalXYZ",
+    "decollisionPhase",
+    "startedOverlapping",
+    "penetrationDepthMeters",
+    "clearHoldRemainingSeconds",
     "positionLagXYZ",
     "rotationLagRadiansXYZ",
     "recenterRemainingSeconds",
@@ -621,13 +626,18 @@ function validateRuntimeCameraStateV4(
     record.fixedStepDeltaSeconds <= 0
   ) return invalid(schemaName);
   const optionalStrings = ["selectedTargetSocketId", "collisionHitEntityId"];
-  const optionalBooleans = ["isTargetSocketFallback", "isCollisionRetracted"];
+  const optionalBooleans = [
+    "isTargetSocketFallback",
+    "isCollisionRetracted",
+    "startedOverlapping",
+  ];
   const optionalTuples = [
     "targetSocketPositionMetersXYZ",
     "desiredTargetPositionMetersXYZ",
     "desiredPositionMetersXYZ",
     "actualPositionMetersXYZ",
     "collisionHitPositionXYZ",
+    "collisionHitNormalXYZ",
     "positionLagXYZ",
     "rotationLagRadiansXYZ",
     "controlForwardXYZ",
@@ -639,6 +649,8 @@ function validateRuntimeCameraStateV4(
     "safeArmLengthMeters",
     "effectiveArmLengthMeters",
     "recenterRemainingSeconds",
+    "penetrationDepthMeters",
+    "clearHoldRemainingSeconds",
   ];
   if (
     optionalStrings.some((key) =>
@@ -658,7 +670,11 @@ function validateRuntimeCameraStateV4(
       (!isFiniteNumber(record.finalFovDegrees) ||
         record.finalFovDegrees <= 0 || record.finalFovDegrees >= 180)) ||
     (Object.hasOwn(record, "profileTransitionProgressRatio") &&
-      !isFiniteNumberInRange(record.profileTransitionProgressRatio, 0, 1))
+      !isFiniteNumberInRange(record.profileTransitionProgressRatio, 0, 1)) ||
+    (Object.hasOwn(record, "decollisionPhase") &&
+      !["clear", "constrained", "recovering", "emergency-inside"].includes(
+        record.decollisionPhase as string,
+      ))
   ) return invalid(schemaName);
   if (Object.hasOwn(record, "selectionDecision")) {
     validateCameraSelectionDecisionV2(record.selectionDecision);

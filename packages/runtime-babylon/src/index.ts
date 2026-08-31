@@ -27,8 +27,8 @@ export {
   type BabylonCharacterBodyPortOptionsV1,
 } from "./babylon-character-body-port";
 export {
-  BabylonCameraCollisionQueryPortV1,
-} from "./babylon-camera-collision-query-port";
+  BabylonHavokCameraGeometryQueryV2,
+} from "./babylon-camera-geometry-query";
 export * from "./subject-asset-cache";
 export * from "./subject-visual";
 export * from "./world-runtime-snapshot";
