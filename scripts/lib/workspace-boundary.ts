@@ -2,21 +2,9 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import ts from "typescript";
+import type { WorkspaceBoundaryViolationV1 } from "./workspace-boundary-contract";
 
-export interface WorkspaceBoundaryViolationV1 {
-  readonly code:
-    | "WORKSPACE_DIRECT_DEPENDENCY_MISSING"
-    | "WORKSPACE_PRODUCTION_DEPENDENCY_IN_DEV"
-    | "WORKSPACE_EXPORT_NOT_PUBLIC"
-    | "WORKSPACE_PRIVATE_SIBLING_SOURCE"
-    | "WORKSPACE_PRODUCTION_TEST_EXPORT"
-    | "WORKSPACE_DEPENDENCY_CYCLE";
-  readonly importer: string;
-  readonly specifier: string;
-  readonly owner: string;
-  readonly message: string;
-  readonly removalGate: string;
-}
+export type { WorkspaceBoundaryViolationV1 } from "./workspace-boundary-contract";
 
 export interface WorkspaceBoundaryDebtV1 {
   readonly importer: string;

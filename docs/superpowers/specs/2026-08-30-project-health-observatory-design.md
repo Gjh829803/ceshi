@@ -648,7 +648,7 @@ prefix、文件 suffix 和 Workspace Package ID，不接受 glob、regex 或 she
 | `canonical-browser-runtime` | `apps/playground/`、`packages/runtime-contracts/`、`packages/runtime-host/`、Canonical/Capture/Outdoor verifier inputs |
 | `placement-and-subject-runtime` | `packages/layout-solver/`、`packages/authoring/`、`packages/subject-*` 与对应 verifier inputs |
 | `trusted-route-runtime` | `packages/traversal/`、`packages/traversal-recast/`、`packages/validation/` 与 Route verifier inputs |
-| `native-scene-experimental` | `packages/native-babylon/`、`packages/native-babylon-block-profile/`、`apps/native-scene-playground/` |
+| `native-scene-experimental` | `packages/native-babylon/`、`packages/native-babylon-block-profile/`、`apps/native-scene-playground/`、当前真实 Owner `scripts/native-scene/` |
 | `three-c-migration-experimental` | `packages/camera/`、`packages/character-movement/`、`packages/subject-actions/` 与 Runtime Babylon 的 3C adapter inputs |
 | `documentation-only` | `docs/`、`AGENTS.md`；只有 change set 全部命中该 selector 且未命中非文档 capability 时才是 docs-only |
 
