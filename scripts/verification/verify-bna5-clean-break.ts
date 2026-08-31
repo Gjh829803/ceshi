@@ -33,7 +33,6 @@ const AUTHORING_TRUST_PROFILE_REF_PATHS = new Set([
   "apps/playground/public/world-packages/cloud-ridge/authoring/scene-authoring-route-decision.json",
   "packages/scene-authoring-contracts/src/scene-authoring-contracts.ts",
   "packages/world-package/src/test-fixture.ts",
-  "scripts/native-scene/build-cloud-ridge-package.ts",
   "scripts/scenes/record-scene-authoring-attempt.ts",
 ]);
 const UNSAFE_EXECUTION_APIS = Object.freeze([

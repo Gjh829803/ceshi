@@ -108,7 +108,7 @@ export interface NativeBlockGenerationHostClosureV1 {
   readonly initialControlledEntityId: string;
 }
 
-interface ResolvedGenerationResourceV1 {
+export interface ResolvedNativeBlockGenerationResourceV1 {
   readonly kind: "worldkit-resolved-resource";
   readonly schemaVersion: 1;
   readonly resourceKind: "native-scene-api" | "native-scene-profile" | "native-block-profile";
@@ -147,11 +147,11 @@ function exactPlainRecord(
   return record;
 }
 
-function resolvedGenerationResource(
+export function parseResolvedNativeBlockGenerationResourceV1(
   bytes: Uint8Array,
-  resourceKind: ResolvedGenerationResourceV1["resourceKind"],
+  resourceKind: ResolvedNativeBlockGenerationResourceV1["resourceKind"],
   expectedRef: string,
-): ResolvedGenerationResourceV1 {
+): ResolvedNativeBlockGenerationResourceV1 {
   const record = exactPlainRecord(
     JSON.parse(new TextDecoder().decode(bytes)) as unknown,
     ["kind", "schemaVersion", "resourceKind", "resourceRef", "resolvedVersion", "contentHash"],
@@ -480,17 +480,17 @@ export async function prepareNativeBlockGenerationTaskV1(
   ) {
     throw new TypeError("Generation Host owner resources are not admitted by the selected Registry Lock.");
   }
-  const nativeSceneApiResolution = resolvedGenerationResource(
+  const nativeSceneApiResolution = parseResolvedNativeBlockGenerationResourceV1(
     nativeSceneApi.bytes,
     "native-scene-api",
     CURRENT_NATIVE_SCENE_API_REF,
   );
-  const nativeSceneProfileResolution = resolvedGenerationResource(
+  const nativeSceneProfileResolution = parseResolvedNativeBlockGenerationResourceV1(
     nativeSceneProfile.bytes,
     "native-scene-profile",
     CURRENT_NATIVE_SCENE_PROFILE_REF,
   );
-  const blockProfileResolution = resolvedGenerationResource(
+  const blockProfileResolution = parseResolvedNativeBlockGenerationResourceV1(
     blockProfile.bytes,
     "native-block-profile",
     CURRENT_NATIVE_BLOCK_PROFILE_REF,

@@ -25,8 +25,6 @@
     "test:independent:site": "tsx scripts/testing/run-independent-test-gate.ts --lane site",
     "build": "pnpm --filter @whitebox-world/playground build",
     "build:native-scene": "pnpm --filter @whitebox-world/native-scene-playground build",
-    "native:cloud-ridge:package": "tsx scripts/native-scene/build-cloud-ridge-package.ts --write",
-    "native:cloud-ridge:package:check": "tsx scripts/native-scene/build-cloud-ridge-package.ts --check",
     "generate:agent-self-check": "node scripts/agents/build-agent-self-check.mjs",
     "generate:runtime-contract-validators": "tsx scripts/contracts/build-runtime-contract-validators.ts --write",
     "check:runtime-contract-validators": "tsx scripts/contracts/build-runtime-contract-validators.ts",

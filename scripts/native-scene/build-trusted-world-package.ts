@@ -6,6 +6,7 @@ import {
 
 import {
   prepareFrozenBabylonNativeWorldPackageBuildInputV1,
+  type PreparedFrozenBabylonNativeWorldPackageBuildInputV1,
   type PrepareFrozenBabylonNativeWorldPackageBuildInputV1,
 } from "./native-package-input.js";
 
@@ -23,6 +24,17 @@ export async function buildTrustedBabylonNativeWorldPackageV1(
   try {
     const prepared =
       await prepareFrozenBabylonNativeWorldPackageBuildInputV1(input);
+    return buildTrustedBabylonNativeWorldPackageFromPreparedV1(prepared);
+  } catch (error) {
+    if (error instanceof BabylonNativeWorldPackageBuildErrorV1) throw error;
+    throw new BabylonNativeWorldPackageBuildErrorV1(error);
+  }
+}
+
+export function buildTrustedBabylonNativeWorldPackageFromPreparedV1(
+  prepared: PreparedFrozenBabylonNativeWorldPackageBuildInputV1,
+): WorldPackageDirectoryV1 {
+  try {
     const directory = createBabylonNativeWorldPackageV1(
       prepared.frozenInput,
     );
