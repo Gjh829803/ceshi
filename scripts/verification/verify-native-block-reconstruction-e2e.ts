@@ -38,6 +38,7 @@ import {
   type FixedInputV1,
   type FormalMeasuredObservationIdentityV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
+  type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -65,19 +66,14 @@ import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
 import { buildWorldReconstructionEvidenceSetV1 } from
   "../reconstruction/evaluate-evidence-set.js";
 
-export interface NativeBlockReconstructionCommittedSupportV1 {
-  readonly tick: number;
-  readonly mode: "supported" | "unsupported";
-  readonly colliderId?: string;
-}
-
 export interface NativeBlockReconstructionPlayabilitySessionPortV1 {
   awaitReady(): Promise<WorldRuntimeSnapshotV4>;
   resetWithInitialControlBinding(): Promise<WorldRuntimeSnapshotV4>;
   runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4>;
-  readCommittedSupport(
+  readCommittedSubjectSupport(
     subjectEntityId: string,
-  ): Promise<NativeBlockReconstructionCommittedSupportV1>;
+    expectedSimulationTick: number,
+  ): Promise<RuntimeSessionSubjectSupportV1 | undefined>;
   dispose(): Promise<Readonly<{ outcome: "completed" | "failed" }>>;
 }
 
@@ -903,9 +899,15 @@ async function verifyPlayability(input: Readonly<{
     if (settled.world.simulationTick !== reset.world.simulationTick + 1) {
       fail("NBR70_PLAYABILITY_RESET_FAILED");
     }
-    const support = await input.session.readCommittedSupport(input.subjectEntityId);
+    const support = await input.session.readCommittedSubjectSupport(
+      input.subjectEntityId,
+      settled.world.simulationTick,
+    );
     if (
-      support.tick !== settled.world.simulationTick ||
+      support?.runtimeSessionId !== runtimeSessionId ||
+      support.worldSessionId !== settled.worldSessionId ||
+      support.subjectEntityId !== input.subjectEntityId ||
+      support.simulationTick !== settled.world.simulationTick ||
       support.mode !== "supported" ||
       support.colliderId !== input.spawnColliderId ||
       movementMedium(settled, input.subjectEntityId) !== "ground" ||

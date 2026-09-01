@@ -18,10 +18,12 @@ import {
   parseRuntimeSessionEventV1,
   parseRuntimeSessionReceiptV1,
   parseRuntimeSessionRequestV1,
+  parseRuntimeSessionSubjectSupportV1,
   parseWorldRuntimeSnapshotV4,
   type RuntimeSessionEventV1,
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
+  type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
 } from "./index";
 
@@ -163,6 +165,22 @@ function requestFixtures(): readonly RuntimeSessionRequestV1[] {
     {
       kind: "worldkit-runtime-session-request",
       schemaVersion: 1,
+      id: "runtime-request-reset",
+      runtimeSessionId: "runtime-session-primary",
+      type: "session.reset",
+    },
+    {
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: "runtime-request-subject-support",
+      runtimeSessionId: "runtime-session-primary",
+      type: "subject-support.get",
+      subjectEntityId: "player",
+      expectedSimulationTick: 0,
+    },
+    {
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
       id: "runtime-request-close",
       runtimeSessionId: "runtime-session-primary",
       type: "session.close",
@@ -190,6 +208,8 @@ describe("Runtime Session V1 public DTOs", () => {
       "fixed-input.run",
       "snapshot.get",
       "events.get",
+      "session.reset",
+      "subject-support.get",
       "session.close",
     ]);
 
@@ -198,6 +218,40 @@ describe("Runtime Session V1 public DTOs", () => {
       expect(parsed).toEqual(request);
       expect(Object.isFrozen(parsed)).toBe(true);
     }
+  });
+
+  it("parses the canonical committed Subject support DTO and closes its identity", () => {
+    const support = {
+      kind: "worldkit-runtime-session-subject-support",
+      schemaVersion: 1,
+      runtimeSessionId: "runtime-session-primary",
+      worldSessionId: "world-session-primary",
+      subjectEntityId: "player",
+      simulationTick: 0,
+      mode: "supported",
+      sampledControllerCenterMetersXYZ: [0, 1, 0],
+      sampledFootPointMetersXYZ: [0, 0, 0],
+      pointMetersXYZ: [0, 0, 0],
+      normalXYZ: [0, 1, 0],
+      distanceMeters: 0,
+      colliderId: "ground",
+      colliderSubshapeId: "ground.shape",
+      logicalSubshapeId: "ground.logical",
+      traversalSurfaceId: "ground.surface",
+      surfaceEntityId: "ground.entity",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    } as const satisfies RuntimeSessionSubjectSupportV1;
+    expect(parseRuntimeSessionSubjectSupportV1(support)).toEqual(support);
+    expect(Object.isFrozen(parseRuntimeSessionSubjectSupportV1(support))).toBe(true);
+    expect(() => parseRuntimeSessionSubjectSupportV1({
+      ...support,
+      providerHandle: 1,
+    })).toThrow("closed RuntimeSessionSubjectSupportV1 schema");
+    expect(() => parseRuntimeSessionSubjectSupportV1({
+      ...support,
+      simulationTick: -0,
+    })).toThrow("closed RuntimeSessionSubjectSupportV1 schema");
   });
 
   it("hashes the exact canonical Request domain and rejects aliases", () => {
@@ -465,6 +519,87 @@ describe("Runtime Session V1 public DTOs", () => {
         commandHash: HASH_A,
       },
     })).toThrow();
+  });
+
+  it("binds reset and committed Subject support Receipts to their new WorldSession", () => {
+    const resetRequest = requestFixtures()[4]! as Extract<
+      RuntimeSessionRequestV1,
+      { type: "session.reset" }
+    >;
+    const resetSnapshot = {
+      ...snapshotFixture(),
+      worldSessionId: "world-session-after-reset",
+      world: {
+        ...snapshotFixture().world,
+        gameplayInspection: {
+          ...snapshotFixture().world.gameplayInspection,
+          id: "gameplay-inspection:world-session-after-reset:0",
+          worldSessionId: "world-session-after-reset",
+        },
+      },
+    } as const satisfies WorldRuntimeSnapshotV4;
+    const resetBody = {
+      kind: "worldkit-runtime-session-receipt",
+      schemaVersion: 1,
+      requestId: resetRequest.id,
+      requestHash: hashRuntimeSessionRequestV1(resetRequest),
+      runtimeSessionId: resetRequest.runtimeSessionId,
+      worldSessionId: resetSnapshot.worldSessionId,
+      requestType: resetRequest.type,
+      status: "succeeded",
+      snapshot: resetSnapshot,
+    } as const;
+    const resetReceipt = {
+      id: deriveRuntimeSessionReceiptIdV1(resetBody),
+      ...resetBody,
+    } as const satisfies RuntimeSessionReceiptV1;
+    expect(parseRuntimeSessionReceiptV1(resetReceipt)).toEqual(resetReceipt);
+
+    const supportRequest = requestFixtures()[5]! as Extract<
+      RuntimeSessionRequestV1,
+      { type: "subject-support.get" }
+    >;
+    const subjectSupport = {
+      kind: "worldkit-runtime-session-subject-support",
+      schemaVersion: 1,
+      runtimeSessionId: supportRequest.runtimeSessionId,
+      worldSessionId: "world-session-primary",
+      subjectEntityId: supportRequest.subjectEntityId,
+      simulationTick: supportRequest.expectedSimulationTick,
+      mode: "supported",
+      sampledControllerCenterMetersXYZ: [0, 1, 0],
+      sampledFootPointMetersXYZ: [0, 0, 0],
+      pointMetersXYZ: [0, 0, 0],
+      normalXYZ: [0, 1, 0],
+      distanceMeters: 0,
+      colliderId: "ground",
+      colliderSubshapeId: "ground.shape",
+      logicalSubshapeId: "ground.logical",
+      traversalSurfaceId: "ground.surface",
+      surfaceEntityId: "ground.entity",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    } as const satisfies RuntimeSessionSubjectSupportV1;
+    const supportBody = {
+      kind: "worldkit-runtime-session-receipt",
+      schemaVersion: 1,
+      requestId: supportRequest.id,
+      requestHash: hashRuntimeSessionRequestV1(supportRequest),
+      runtimeSessionId: supportRequest.runtimeSessionId,
+      worldSessionId: subjectSupport.worldSessionId,
+      requestType: supportRequest.type,
+      status: "succeeded",
+      subjectSupport,
+    } as const;
+    const supportReceipt = {
+      id: deriveRuntimeSessionReceiptIdV1(supportBody),
+      ...supportBody,
+    } as const satisfies RuntimeSessionReceiptV1;
+    expect(parseRuntimeSessionReceiptV1(supportReceipt)).toEqual(supportReceipt);
+    expect(() => parseRuntimeSessionReceiptV1({
+      ...supportReceipt,
+      subjectSupport: { ...subjectSupport, simulationTick: 1 },
+    })).toThrow("closed RuntimeSessionReceiptV1 schema");
   });
 
   it("parses ready/completed/failed events with derived ids", () => {

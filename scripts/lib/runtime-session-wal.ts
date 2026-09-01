@@ -133,6 +133,25 @@ function isSha256(value: unknown): value is Sha256HashV1 {
     value !== `sha256:${"0".repeat(64)}`;
 }
 
+function receiptPayloadBindsRequestV1(
+  request: RuntimeSessionRequestV1,
+  receipt: RuntimeSessionReceiptV1,
+): boolean {
+  if (receipt.status === "rejected") return true;
+  if (
+    request.type === "session.reset" &&
+    receipt.requestType === "session.reset"
+  ) return receipt.snapshot.world.simulationTick === 0;
+  if (
+    request.type === "subject-support.get" &&
+    receipt.requestType === "subject-support.get"
+  ) {
+    return receipt.subjectSupport.subjectEntityId === request.subjectEntityId &&
+      receipt.subjectSupport.simulationTick === request.expectedSimulationTick;
+  }
+  return true;
+}
+
 function snapshotDataRecord(
   value: unknown,
 ): Record<string, unknown> | undefined {
@@ -603,6 +622,7 @@ function validateTransactionState(
   const readyEvent = transactions[0].readyEvent;
   const committedRequests: RuntimeSessionWalCommittedRequestV1[] = [];
   const requestIds = new Set<string>();
+  let currentWorldSessionId = readyEvent.worldSessionId;
   let finalEvent: RuntimeSessionFinalEventV1 | undefined;
   for (const transaction of transactions.slice(1)) {
     if (!isNil(finalEvent)) {
@@ -615,11 +635,22 @@ function validateTransactionState(
       if (
         transaction.request.runtimeSessionId !== readyEvent.runtimeSessionId ||
         transaction.receipt.runtimeSessionId !== readyEvent.runtimeSessionId ||
-        transaction.receipt.worldSessionId !== readyEvent.worldSessionId ||
+        !receiptPayloadBindsRequestV1(
+          transaction.request,
+          transaction.receipt,
+        ) ||
         requestIds.has(transaction.request.id) ||
         (transaction.request.type === "gameplay-command.execute" &&
-          transaction.request.command.worldSessionId !== readyEvent.worldSessionId)
+          transaction.request.command.worldSessionId !== currentWorldSessionId) ||
+        (transaction.request.type !== "session.reset" &&
+          transaction.receipt.worldSessionId !== currentWorldSessionId) ||
+        (transaction.request.type === "session.reset" &&
+          transaction.receipt.status === "succeeded" &&
+          transaction.receipt.worldSessionId === currentWorldSessionId)
       ) return corrupt("A committed Request is not bound to the opened Session.");
+      if (
+        transaction.request.type === "session.reset"
+      ) currentWorldSessionId = transaction.receipt.worldSessionId;
       requestIds.add(transaction.request.id);
       committedRequests.push(Object.freeze({
         request: transaction.request,
@@ -630,7 +661,7 @@ function validateTransactionState(
     }
     if (
       transaction.finalEvent.runtimeSessionId !== readyEvent.runtimeSessionId ||
-      transaction.finalEvent.worldSessionId !== readyEvent.worldSessionId ||
+      transaction.finalEvent.worldSessionId !== currentWorldSessionId ||
       transaction.finalEvent.sequence !== readyEvent.sequence + 1
     ) return corrupt("The final Event is not bound to the opened Session.");
     finalEvent = transaction.finalEvent;
@@ -829,6 +860,14 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
     const request = parseRuntimeSessionRequestV1(input.request);
     const requestHash = hashRuntimeSessionRequestV1(request);
     const receipt = parseRuntimeSessionReceiptV1(input.receipt);
+    const currentWorldSessionId = this.state.committedRequests.reduce(
+      (worldSessionId, entry) =>
+        entry.request.type === "session.reset" &&
+          entry.receipt.worldSessionId !== worldSessionId
+          ? entry.receipt.worldSessionId
+          : worldSessionId,
+      this.state.readyEvent.worldSessionId,
+    );
     if (this.state.committedRequests.some(
       (entry) => entry.request.id === request.id
     )) {
@@ -841,10 +880,15 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
       receipt.requestId !== request.id ||
       receipt.requestHash !== requestHash ||
       receipt.runtimeSessionId !== request.runtimeSessionId ||
-      receipt.worldSessionId !== this.state.readyEvent.worldSessionId ||
+      !receiptPayloadBindsRequestV1(request, receipt) ||
+      (request.type !== "session.reset" &&
+        receipt.worldSessionId !== currentWorldSessionId) ||
+      (request.type === "session.reset" &&
+        receipt.status === "succeeded" &&
+        receipt.worldSessionId === currentWorldSessionId) ||
       receipt.requestType !== request.type ||
       (request.type === "gameplay-command.execute" &&
-        request.command.worldSessionId !== this.state.readyEvent.worldSessionId)
+        request.command.worldSessionId !== currentWorldSessionId)
     ) {
       throw new Error(
         "RUNTIME_SESSION_WAL_BINDING_INVALID: Request and Receipt do not bind to the opened Session.",
@@ -861,10 +905,18 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
   appendClosed(value: unknown): void {
     this.assertActive();
     const event = parseRuntimeSessionEventV1(value);
+    const currentWorldSessionId = this.state.committedRequests.reduce(
+      (worldSessionId, entry) =>
+        entry.request.type === "session.reset" &&
+          entry.receipt.worldSessionId !== worldSessionId
+          ? entry.receipt.worldSessionId
+          : worldSessionId,
+      this.state.readyEvent.worldSessionId,
+    );
     if (
       event.type === "ready" ||
       event.runtimeSessionId !== this.state.readyEvent.runtimeSessionId ||
-      event.worldSessionId !== this.state.readyEvent.worldSessionId ||
+      event.worldSessionId !== currentWorldSessionId ||
       event.sequence !== this.state.readyEvent.sequence + 1
     ) {
       throw new Error(

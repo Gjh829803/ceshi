@@ -27,6 +27,7 @@ import {
   parseFormalWorldCaptureReceiptV1,
   parseWorldRuntimeSnapshotV4,
   type FixedInputV1,
+  type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -258,6 +259,32 @@ function playabilityPort(options: {
     current = snapshot(runtimeSessionId, `world.${resetCount}`, 0, [0, 0, 0], "ground");
     return current;
   });
+  const readCommittedSubjectSupport = vi.fn(
+    async (
+      subjectEntityId: string,
+      expectedSimulationTick: number,
+    ): Promise<RuntimeSessionSubjectSupportV1> => ({
+      kind: "worldkit-runtime-session-subject-support",
+      schemaVersion: 1,
+      runtimeSessionId,
+      worldSessionId: current.worldSessionId,
+      subjectEntityId,
+      simulationTick: expectedSimulationTick,
+      mode: "supported",
+      sampledControllerCenterMetersXYZ: [0, 0.9, 0],
+      sampledFootPointMetersXYZ: [0, 0, 0],
+      pointMetersXYZ: [0, 0, 0],
+      normalXYZ: [0, 1, 0],
+      distanceMeters: 0,
+      colliderId: "ground",
+      colliderSubshapeId: "ground#shape",
+      logicalSubshapeId: "ground#logical",
+      traversalSurfaceId: "ground#surface",
+      surfaceEntityId: "ground",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/walkable-ground@1",
+    }),
+  );
   const session: NativeBlockReconstructionPlayabilitySessionPortV1 = {
     awaitReady: vi.fn(async () => current),
     resetWithInitialControlBinding,
@@ -287,11 +314,7 @@ function playabilityPort(options: {
       );
       return current;
     }),
-    readCommittedSupport: vi.fn(async () => ({
-      tick: current.world.simulationTick,
-      mode: "supported" as const,
-      colliderId: "ground",
-    })),
+    readCommittedSubjectSupport,
     dispose,
   };
   const launch = vi.fn(async () => session);
@@ -300,6 +323,7 @@ function playabilityPort(options: {
     launch,
     dispose,
     resetWithInitialControlBinding,
+    readCommittedSubjectSupport,
   };
 }
 
@@ -1001,6 +1025,10 @@ describe("Native Block reconstruction E2E verifier", () => {
       expect(playability.launch).toHaveBeenCalledOnce();
       expect(playability.dispose).toHaveBeenCalledOnce();
       expect(playability.resetWithInitialControlBinding).toHaveBeenCalledTimes(9);
+      expect(playability.readCommittedSubjectSupport).toHaveBeenCalledWith(
+        "player",
+        1,
+      );
       expect(playability.port.launch).toHaveBeenCalledWith(expect.objectContaining({
         packageDirectoryPath: path.join(
           fixture.runDirectoryPath,

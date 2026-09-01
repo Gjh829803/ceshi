@@ -20,7 +20,9 @@ import {
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   BabylonWorldRuntime,
+  CommittedSupportSelectionErrorV1,
   createBabylonGameplayWorldPortV1,
+  projectRuntimeSessionSubjectSupportV1,
   projectBabylonWorldRuntimeSnapshotV4,
   type BabylonWorldRuntimeInitializationStageV1,
   type BabylonWorldRuntimeOptions,
@@ -29,6 +31,7 @@ import {
 } from "@whitebox-world/runtime-babylon";
 import type {
   FixedInputV1,
+  RuntimeSessionSubjectSupportV1,
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -174,6 +177,7 @@ export interface HeadlessRuntimeSessionFactoriesV1 {
 export interface HeadlessRuntimeSessionV1 {
   readonly runtimeSessionId: string;
   readonly initialWorldSessionId: string;
+  readonly currentWorldSessionId: string;
   readonly worldPackageRef: WorldPackageRefV1;
   readonly worldPackageRootHash: `sha256:${string}`;
   readonly worldBuildIdentityHash: `sha256:${string}`;
@@ -184,6 +188,11 @@ export interface HeadlessRuntimeSessionV1 {
     command: GameplayCommandV1,
   ): Promise<GameplayCommandReceiptV1>;
   runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4>;
+  resetWithInitialControlBinding(): Promise<WorldRuntimeSnapshotV4>;
+  readCommittedSubjectSupport(
+    subjectEntityId: string,
+    expectedSimulationTick: number,
+  ): RuntimeSessionSubjectSupportV1 | undefined;
   eventsAfter(
     afterEventSequence: number,
     maximumEventCount: number,
@@ -234,11 +243,23 @@ interface HeadlessRuntimeHandleV1 {
   readonly runtime: BabylonWorldRuntime;
   readonly port: GameplayWorldPortV1;
   readonly assetResolver: PackageSubjectAssetResolverV1;
+  readonly registeredColliderIds: ReadonlySet<string>;
 }
 
 interface StagedVerifiedWorldPackageV1 {
   readonly worldConfiguration: CanonicalRuntimeWorldConfigurationV1;
   readonly verifiedDirectory: VerifiedCanonicalWorldPackageDirectoryV1;
+}
+
+function registeredCanonicalColliderIdsV1(
+  configuration: CanonicalRuntimeWorldConfigurationV1,
+): ReadonlySet<string> {
+  return new Set([
+    configuration.sceneSource.executionPlan.terrain.entityId,
+    ...configuration.sceneSource.executionPlan.staticColliders.map(
+      ({ entityId }) => entityId,
+    ),
+  ]);
 }
 
 function cleanupDiagnostic(
@@ -578,7 +599,14 @@ async function createCandidateRuntimeHandleV1(input: {
       assetResolver,
       input.onDisposed,
     );
-    return Object.freeze({ runtime, port, assetResolver });
+    return Object.freeze({
+      runtime,
+      port,
+      assetResolver,
+      registeredColliderIds: registeredCanonicalColliderIdsV1(
+        input.staged.worldConfiguration,
+      ),
+    });
   } catch (error) {
     if (!isNil(rawPort)) {
       await rawPort.dispose().catch(() => undefined);
@@ -701,11 +729,17 @@ class HeadlessRuntimeSession implements HeadlessRuntimePublicationSessionV1 {
       string,
       StagedVerifiedWorldPackageV1
     >,
+    private readonly initialStagedPackage: StagedVerifiedWorldPackageV1,
+    private readonly initialControlledEntityId: string,
     private readonly runtime: BabylonWorldRuntime,
     private readonly gameplayWorldPort: GameplayWorldPortV1,
     private readonly assetResolver: PackageSubjectAssetResolverV1,
     private readonly ledger: HeadlessRuntimeOwnershipLedgerV1,
   ) {}
+
+  get currentWorldSessionId(): string {
+    return this.runtimeHost.currentWorldSessionId;
+  }
 
   get worldPackageRef(): WorldPackageRefV1 {
     return this.runtimeHost.snapshot().worldState.worldPackageRef as WorldPackageRefV1;
@@ -817,6 +851,69 @@ class HeadlessRuntimeSession implements HeadlessRuntimePublicationSessionV1 {
   async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4> {
     await this.runtimeHost.runFixedInput(input);
     return this.snapshot();
+  }
+
+  async resetWithInitialControlBinding(): Promise<WorldRuntimeSnapshotV4> {
+    const executionPlanHash =
+      this.initialStagedPackage.worldConfiguration.sceneSource.executionPlanHash;
+    this.stagedPackagesByExecutionPlanHash.set(
+      executionPlanHash,
+      this.initialStagedPackage,
+    );
+    try {
+      await this.runtimeHost.resetWithInitialControlBinding({
+        controllerEntityId: this.fixedInputControllerEntityId,
+        controlledEntityId: this.initialControlledEntityId,
+      });
+      return this.snapshot();
+    } finally {
+      if (
+        this.stagedPackagesByExecutionPlanHash.get(executionPlanHash) ===
+          this.initialStagedPackage
+      ) this.stagedPackagesByExecutionPlanHash.delete(executionPlanHash);
+    }
+  }
+
+  readCommittedSubjectSupport(
+    subjectEntityId: string,
+    expectedSimulationTick: number,
+  ): RuntimeSessionSubjectSupportV1 | undefined {
+    try {
+      const snapshot = this.snapshot();
+      if (!Object.hasOwn(
+        snapshot.world.subjectStatesByEntityId,
+        subjectEntityId,
+      )) {
+        throw new CommittedSupportSelectionErrorV1(
+          "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_UNJOINABLE",
+        );
+      }
+      if (snapshot.world.simulationTick !== expectedSimulationTick) {
+        throw new CommittedSupportSelectionErrorV1(
+          "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_STALE",
+        );
+      }
+      const handle = this.handles.get(snapshot.worldSessionId);
+      const evidence = handle?.runtime.readCommittedSupportEvidence(
+        subjectEntityId,
+      );
+      if (isNil(handle) || isNil(evidence)) {
+        throw new CommittedSupportSelectionErrorV1(
+          "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_UNJOINABLE",
+        );
+      }
+      return projectRuntimeSessionSubjectSupportV1({
+        evidence,
+        runtimeSessionId: this.runtimeSessionId,
+        worldSessionId: snapshot.worldSessionId,
+        subjectEntityId,
+        expectedSimulationTick,
+        registeredColliderIds: handle.registeredColliderIds,
+      });
+    } catch (error) {
+      if (error instanceof CommittedSupportSelectionErrorV1) return undefined;
+      throw error;
+    }
   }
 
   eventsAfter(
@@ -946,6 +1043,10 @@ async function createHeadlessRuntimeSessionInternalV1(
       string,
       StagedVerifiedWorldPackageV1
     >();
+    const initialStagedPackage = Object.freeze({
+      worldConfiguration: configuration,
+      verifiedDirectory: input.verifiedDirectory,
+    });
     const port = factories.createGameplayWorldPort(
       runtime,
       HEADLESS_FIXED_INPUT_CONTROLLER_ENTITY_ID_V1,
@@ -961,6 +1062,7 @@ async function createHeadlessRuntimeSessionInternalV1(
       runtime,
       port: gameplayWorldPort,
       assetResolver,
+      registeredColliderIds: registeredCanonicalColliderIdsV1(configuration),
     }));
     const adapterFactory: GameplayWorldAdapterFactoryV1 = Object.freeze({
       preflightConcurrentResidency: (
@@ -1156,6 +1258,8 @@ async function createHeadlessRuntimeSessionInternalV1(
       runtimeHost,
       handles,
       stagedPackagesByExecutionPlanHash,
+      initialStagedPackage,
+      configuration.worldRuntimeBootstrap.initialControlledEntityId,
       runtime,
       gameplayWorldPort,
       assetResolver,

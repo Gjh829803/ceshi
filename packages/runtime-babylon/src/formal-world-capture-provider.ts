@@ -61,6 +61,10 @@ import {
   measureFormalWorldCaptureViewV1,
   type FormalWorldCaptureViewMeasurementV1,
 } from "./formal-world-capture-measurement.js";
+import {
+  CommittedSupportSelectionErrorV1,
+  selectUniqueCommittedSupportContactV1,
+} from "./runtime-session-subject-support.js";
 
 export interface FormalHostedWorldCapturePayloadV1 {
   readonly openingPng: Uint8Array;
@@ -483,42 +487,20 @@ export function selectFormalCommittedSupportContactV1(input: Readonly<{
   evidence: BabylonCharacterBodyCommittedSupportEvidenceV1;
   committedTick: number;
 }>): BabylonCharacterBodyCommittedSupportEvidenceV1["contacts"][number] {
-  if (
-    input.evidence.tick !== input.committedTick ||
-    input.evidence.support.mode !== "supported"
-  ) fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_STALE");
-  const contactGroups = new Map<string,
-    BabylonCharacterBodyCommittedSupportEvidenceV1["contacts"]>();
-  if (input.evidence.contacts.length === 0) {
-    fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_UNJOINABLE");
+  try {
+    return selectUniqueCommittedSupportContactV1(input);
+  } catch (error) {
+    if (error instanceof CommittedSupportSelectionErrorV1) {
+      if (error.code === "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_STALE") {
+        fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_STALE");
+      }
+      if (error.code === "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_AMBIGUOUS") {
+        fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_AMBIGUOUS");
+      }
+      fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_UNJOINABLE");
+    }
+    throw error;
   }
-  for (const contact of input.evidence.contacts) {
-    if (
-      contact.colliderId === undefined ||
-      contact.colliderSubshapeId === undefined ||
-      contact.logicalSubshapeId === undefined ||
-      contact.traversalSurfaceId === undefined ||
-      contact.surfaceEntityId === undefined ||
-      contact.traversalSurfaceProfileRef === undefined
-    ) fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_UNJOINABLE");
-    const key = [
-      contact.colliderId,
-      contact.colliderSubshapeId,
-      contact.logicalSubshapeId,
-      contact.traversalSurfaceId,
-      contact.surfaceEntityId,
-      contact.traversalSurfaceProfileRef,
-    ].join("\0");
-    contactGroups.set(key, Object.freeze([
-      ...(contactGroups.get(key) ?? []),
-      contact,
-    ]));
-  }
-  if (contactGroups.size !== 1) {
-    fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_AMBIGUOUS");
-  }
-  return [...[...contactGroups.values()][0]!].sort((left, right) =>
-    left.distanceMeters - right.distanceMeters)[0]!;
 }
 
 export function assertFormalSupportContactContributionIdentityV1(

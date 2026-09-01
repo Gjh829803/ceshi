@@ -521,6 +521,173 @@ describe("Babylon Native isolated Runtime entry", () => {
     });
   });
 
+  it("resets an interactive Session through 25 bounded WorldSessions and reports only committed support", async () => {
+    const input = await entryInput("runtime.hosted.playability-capacity");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    const runtimeSessionId = input.request.runtimeSessionId;
+    let previousWorldSessionId = entry.initialSnapshot().worldSessionId;
+    for (let index = 1; index <= 24; index += 1) {
+      const receipt = await entry.submit(protocolRequest(
+        runtimeSessionId,
+        `request.reset.${index}`,
+        { type: "session.reset" },
+      ));
+      expect(receipt).toMatchObject({
+        status: "succeeded",
+        requestType: "session.reset",
+        runtimeSessionId,
+        snapshot: {
+          runtimeSessionId,
+          world: { simulationTick: 0 },
+        },
+      });
+      if (receipt.status !== "succeeded" ||
+        receipt.requestType !== "session.reset") throw new Error("unreachable");
+      expect(receipt.worldSessionId).toBe(receipt.snapshot.worldSessionId);
+      expect(receipt.worldSessionId).not.toBe(previousWorldSessionId);
+      previousWorldSessionId = receipt.worldSessionId;
+    }
+    const settled = await entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.settle",
+      { type: "fixed-input.run", input: { actions: [], ticks: 1 } },
+    ));
+    if (settled.status !== "succeeded" ||
+      settled.requestType !== "fixed-input.run") throw new Error("unreachable");
+    const subjectEntityId =
+      input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
+    const support = await entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.support",
+      {
+        type: "subject-support.get",
+        subjectEntityId,
+        expectedSimulationTick: settled.snapshot.world.simulationTick,
+      },
+    ));
+    expect(support).toMatchObject({
+      status: "succeeded",
+      requestType: "subject-support.get",
+      worldSessionId: previousWorldSessionId,
+      subjectSupport: {
+        runtimeSessionId,
+        worldSessionId: previousWorldSessionId,
+        subjectEntityId,
+        simulationTick: settled.snapshot.world.simulationTick,
+        mode: "supported",
+      },
+    });
+    if (support.status !== "succeeded" ||
+      support.requestType !== "subject-support.get") throw new Error("unreachable");
+    expect(input.verifiedWorldPackage.nativeSceneContribution.staticColliders
+      .map(({ id }) => id)).toContain(support.subjectSupport.colliderId);
+
+    await expect(entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.support.stale",
+      {
+        type: "subject-support.get",
+        subjectEntityId,
+        expectedSimulationTick: settled.snapshot.world.simulationTick - 1,
+      },
+    ))).resolves.toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_REQUEST_REJECTED" },
+    });
+    await expect(entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.support.unknown-subject",
+      {
+        type: "subject-support.get",
+        subjectEntityId: "unknown-subject",
+        expectedSimulationTick: settled.snapshot.world.simulationTick,
+      },
+    ))).resolves.toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_REQUEST_REJECTED" },
+    });
+    await entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.close.after-reset",
+      { type: "session.close" },
+    ));
+    await expect(entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.reset.after-close",
+      { type: "session.reset" },
+    ))).resolves.toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_NOT_ACTIVE" },
+    });
+  }, 30_000);
+
+  it("rejects the twenty-sixth interactive WorldSession instead of growing without bound", async () => {
+    const input = await entryInput("runtime.hosted.playability-bound");
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
+    const runtimeSessionId = input.request.runtimeSessionId;
+    for (let index = 1; index <= 24; index += 1) {
+      await expect(entry.submit(protocolRequest(
+        runtimeSessionId,
+        `request.bound.reset.${index}`,
+        { type: "session.reset" },
+      ))).resolves.toMatchObject({ status: "succeeded" });
+    }
+    await expect(entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.bound.reset.25",
+      { type: "session.reset" },
+    ))).resolves.toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" },
+    });
+    await expect(entry.submit(protocolRequest(
+      runtimeSessionId,
+      "request.bound.after-limit",
+      { type: "snapshot.get" },
+    ))).resolves.toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_NOT_ACTIVE" },
+    });
+  }, 30_000);
+
+  it("binds a post-swap reset cleanup failure to the committed new World", async () => {
+    const input = await entryInput("runtime.hosted.reset-cleanup-failure");
+    let engineSequence = 0;
+    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
+      ...input,
+      engineFactory: (runtimeSessionId) => {
+        const engine = input.engineFactory(runtimeSessionId);
+        if (engineSequence === 0) {
+          vi.spyOn(engine, "dispose").mockImplementationOnce(() => {
+            throw new Error("old World Engine cleanup failure");
+          });
+        }
+        engineSequence += 1;
+        return engine;
+      },
+    });
+    const initialWorldSessionId = entry.initialSnapshot().worldSessionId;
+    const receipt = await entry.submit(protocolRequest(
+      input.request.runtimeSessionId,
+      "request.reset.cleanup-failure",
+      { type: "session.reset" },
+    ));
+    expect(receipt).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" },
+    });
+    expect(receipt.worldSessionId).not.toBe(initialWorldSessionId);
+    await expect(entry.submit(protocolRequest(
+      input.request.runtimeSessionId,
+      "request.after-reset.cleanup-failure",
+      { type: "snapshot.get" },
+    ))).resolves.toMatchObject({
+      status: "rejected",
+      worldSessionId: receipt.worldSessionId,
+      diagnostic: { code: "RUNTIME_SESSION_NOT_ACTIVE" },
+    });
+  }, 30_000);
+
   it("rejects Package identity or effective-budget escalation before Engine/Havok", async () => {
     const input = await entryInput();
     const engineFactory = vi.fn(input.engineFactory);
