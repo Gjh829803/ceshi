@@ -70,7 +70,8 @@ Capture tests and the mounted verifier. Therefore it is not relabeled as exact-c
   The directly affected Runtime/Camera owner run reached 213/213 passing assertions across 3 files, then the
   local Vitest worker timed out while reporting `onTaskUpdate`; that command is not recorded as exit 0 and is
   not a substitute for the pending clean-environment Cloud aggregate. `pnpm typecheck` and
-  `git diff --check` both pass on the same working tree.
+  `git diff --check` both pass on the same working tree. The real Recast + Babylon/Havok Route Validator
+  regression also passes 1/1 after its trusted Host adopted the same initial Camera publication.
 
 ### First exact-SHA Cloud attempt
 
@@ -216,9 +217,10 @@ second legacy relationship dialect.
   the current Runtime does not publish authoritative matching Camera facts.
 - `renderFrame()` is presentation-only. The sole Tick-zero exception is the explicit Host bootstrap
   publication after committed initial binding; Playground, Native, isolated and Headless candidate readiness
-  all pass the exact `viewStateRevision` before the first render. Reset and replacement repeat that same
-  lifecycle instead of restoring render-time synchronization. The bootstrap operation is idempotent only
-  before first render; render, fixed-Tick or Golden replay activity closes the phase.
+  plus trusted Route validation all pass the exact `viewStateRevision` before their first Camera-dependent
+  operation. Reset and replacement repeat that same lifecycle instead of restoring render-time
+  synchronization. The bootstrap operation is idempotent only before first render; render, fixed-Tick or
+  Golden replay activity closes the phase.
 - A committed bind, Mount or Dismount revision remains pending until the next fixed Tick. Preference,
   orbit, preview, preset tuning, Control Capture and artifact evidence fail closed in that interval, so no
   consumer can combine new Gameplay or geometry with an old Camera epoch.
