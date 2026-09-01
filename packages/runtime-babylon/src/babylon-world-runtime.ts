@@ -103,6 +103,9 @@ import {
   GoldenHumanoidSubjectControllerV1,
   createGoldenHumanoidSubjectControllerV1,
 } from "./character-movement-component";
+import type {
+  BabylonCharacterBodyCommittedSupportEvidenceV1,
+} from "./babylon-character-body-port";
 import { committedCameraContextFromMotionKernelV1 } from "./camera-director";
 import { hasForwardControlIntentV1 } from "./control-profile-runtime";
 import {
@@ -3041,6 +3044,17 @@ export class BabylonWorldRuntime {
     this.renderFrameIndex += 1;
     this.latestRenderReadyReceipt = receipt;
     return receipt;
+  }
+
+  /** @internal Formal evidence from the controlled Body owner's committed Tick. */
+  readCommittedSupportEvidence(
+    subjectEntityId: string,
+  ): BabylonCharacterBodyCommittedSupportEvidenceV1 | undefined {
+    this.assertUsable();
+    const controller = this.controllerFor(subjectEntityId);
+    return isGoldenHumanoidControllerV1(controller)
+      ? controller.readCommittedSupportEvidence()
+      : controller.readCommittedSupportEvidence(this.tick);
   }
 
   /** Provider-internal artifact capture; public Authoring and Browser DTOs stay engine-neutral. */

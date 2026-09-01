@@ -2029,6 +2029,32 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     const plan = withBoundStaticBoxAtStart(fixture, 1);
     const runtime = await createRuntime(plan);
     try {
+      const bound = plan.traversal.surfaces.find(
+        (surface) => surface.kind === "static-collider",
+      )!;
+      const movement = inspectCharacterMovement<{
+        physicsController: {
+          readCurrentContacts(): Array<{
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+            distanceMeters: number;
+            motionType: "static" | "animated" | "dynamic";
+          }>;
+        };
+      }>(runtime, "player");
+      const readCurrentContacts = movement.physicsController.readCurrentContacts
+        .bind(movement.physicsController);
+      vi.spyOn(movement.physicsController, "readCurrentContacts")
+        .mockImplementation(() => readCurrentContacts().map((contact) => ({
+          ...contact,
+          motionType: "static" as const,
+          colliderId: bound.surfaceEntityId,
+          colliderSubshapeId: bound.colliderSubshapeId,
+          logicalSubshapeId: bound.logicalSubshapeId,
+          traversalSurfaceId: bound.traversalSurfaceId,
+          surfaceEntityId: bound.surfaceEntityId,
+          traversalSurfaceProfileRef: bound.traversalSurfaceProfileRef,
+        })));
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
         traversalLockReceipt: fixture.traversalLockReceipt,
@@ -2037,9 +2063,6 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       const evidence = port.resetToStartAnchor({
         startAnchorEntityId: "spawn-main",
       });
-      const bound = plan.traversal.surfaces.find(
-        (surface) => surface.kind === "static-collider",
-      )!;
 
       expect(supportSpy).toHaveBeenCalledTimes(1);
       expect(evidence.characterSupport.supportState).toBe("supported");
@@ -2063,6 +2086,15 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       expect(retained?.supportContacts.some((contact) =>
         Math.abs(contact.pointMetersXYZ[1] - 1) < 0.02
       )).toBe(true);
+      expect(runtime.readCommittedSupportEvidence("player")?.contacts)
+        .toContainEqual(expect.objectContaining({
+          colliderId: bound.surfaceEntityId,
+          colliderSubshapeId: bound.colliderSubshapeId,
+          logicalSubshapeId: bound.logicalSubshapeId,
+          traversalSurfaceId: bound.traversalSurfaceId,
+          surfaceEntityId: bound.surfaceEntityId,
+          traversalSurfaceProfileRef: bound.traversalSurfaceProfileRef,
+        }));
       expectNoExpectedPathSurfaceState(evidence);
     } finally {
       await runtime.dispose();

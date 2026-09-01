@@ -25,7 +25,10 @@ import {
   MotionModeResolverV1,
   type MotionModeFailureCodeV1,
 } from "./motion-mode-resolver";
-import { createGroundAwareControllerInternal } from "./babylon-character-body-port";
+import {
+  createGroundAwareControllerInternal,
+  type BabylonCharacterBodyNativeContactV1,
+} from "./babylon-character-body-port";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 
 export interface MotionKernelSnapshotV1 {
@@ -54,6 +57,41 @@ export interface RetainedCharacterSupportSampleV1 {
 export interface RetainedCharacterSupportContactV1 {
   readonly pointMetersXYZ: RuntimeVec3V1;
   readonly normalXYZ: RuntimeVec3V1;
+  readonly distanceMeters: number;
+  readonly motionType: "static";
+  readonly colliderId?: string;
+  readonly colliderSubshapeId?: string;
+  readonly logicalSubshapeId?: string;
+  readonly traversalSurfaceId?: string;
+  readonly surfaceEntityId?: string;
+  readonly traversalSurfaceProfileRef?: string;
+}
+
+function retainSupportContact(
+  contact: BabylonCharacterBodyNativeContactV1,
+): RetainedCharacterSupportContactV1 {
+  return Object.freeze({
+    pointMetersXYZ: Object.freeze([...contact.pointMetersXYZ]) as RuntimeVec3V1,
+    normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+    distanceMeters: contact.distanceMeters,
+    motionType: "static",
+    ...(isNil(contact.colliderId) ? {} : { colliderId: contact.colliderId }),
+    ...(isNil(contact.colliderSubshapeId)
+      ? {}
+      : { colliderSubshapeId: contact.colliderSubshapeId }),
+    ...(isNil(contact.logicalSubshapeId)
+      ? {}
+      : { logicalSubshapeId: contact.logicalSubshapeId }),
+    ...(isNil(contact.traversalSurfaceId)
+      ? {}
+      : { traversalSurfaceId: contact.traversalSurfaceId }),
+    ...(isNil(contact.surfaceEntityId)
+      ? {}
+      : { surfaceEntityId: contact.surfaceEntityId }),
+    ...(isNil(contact.traversalSurfaceProfileRef)
+      ? {}
+      : { traversalSurfaceProfileRef: contact.traversalSurfaceProfileRef }),
+  });
 }
 
 export interface MotionKernelLiveLockStateV1 {
@@ -374,14 +412,9 @@ export class MotionKernelRuntimeV1 {
       sampledFootPositionMetersXYZ: Object.freeze([
         ...sample.sampledFootPositionMetersXYZ,
       ]) as RuntimeVec3V1,
-      supportContacts: Object.freeze(sample.supportContacts.map((contact) =>
-        Object.freeze({
-          pointMetersXYZ: Object.freeze([
-            ...contact.pointMetersXYZ,
-          ]) as RuntimeVec3V1,
-          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
-        })
-      )),
+      supportContacts: Object.freeze(
+        sample.supportContacts.map(retainSupportContact),
+      ),
     });
   }
 
@@ -689,12 +722,7 @@ export class MotionKernelRuntimeV1 {
           Vector3.Dot(new Vector3(...contact.normalXYZ), this.up) >=
             this.physicsController.maxSlopeCosine
         )
-        .map((contact) => Object.freeze({
-          pointMetersXYZ: Object.freeze([
-            ...contact.pointMetersXYZ,
-          ]) as RuntimeVec3V1,
-          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
-        }));
+        .map(retainSupportContact);
     this.retainedSupportSample = Object.freeze({
       supportState,
       supportNormalWorldXYZ: Object.freeze([
