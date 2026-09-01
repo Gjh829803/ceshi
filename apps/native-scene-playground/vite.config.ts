@@ -29,8 +29,8 @@ const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
 const HOSTED_RUNTIME_OPTIMIZE_DEPENDENCY_IDS = Object.freeze([
   "@babylonjs/core/Maths/math.viewport.js",
   "@babylonjs/core/scene.js",
-  "ajv-formats",
-  "ajv/dist/2020.js",
+  "@whitebox-world/authoring > ajv-formats",
+  "@whitebox-world/authoring > ajv/dist/2020.js",
 ] as const);
 
 interface ExactRuntimeAssetV1 {
