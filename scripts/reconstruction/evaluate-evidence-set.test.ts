@@ -137,6 +137,17 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     expect(Object.isFrozen(evidence)).toBe(true);
   });
 
+  it("accepts the independently reset WorldSession used by scripted traversal", () => {
+    const fixture = createEvidenceSetFixtureInputV1({
+      independentTraversalReset: true,
+    });
+
+    expect(
+      fixture.scriptedTraversalObservation.resetReadySnapshot.worldSessionId,
+    ).not.toBe(fixture.captureReceipt.readySnapshot.worldSessionId);
+    expect(() => buildWorldReconstructionEvidenceSetV1(fixture)).not.toThrow();
+  });
+
   it("derives collider roles from Frozen Contribution traversalBinding, not paletteRole or shape", () => {
     const evidence = buildWorldReconstructionEvidenceSetV1(
       createEvidenceSetFixtureInputV1({ includePaletteTraversalDisagreement: true }),
