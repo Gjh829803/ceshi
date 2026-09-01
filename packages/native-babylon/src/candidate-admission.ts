@@ -820,19 +820,6 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
     if (typeof assetFailure !== "undefined") {
       throw failureFromDiagnostic(assetFailure.diagnostic);
     }
-    let finalizedSettlement: FinalizedBabylonNativeProfileSettlementV1;
-    try {
-      finalizedSettlement = finalizeBabylonNativeProfileSettlementV1(context);
-    } catch (error) {
-      if (error instanceof BabylonNativeProfileSettlementFailureV1) {
-        throw failure(
-          error.code,
-          error.message,
-          error.repairHint,
-        );
-      }
-      throw error;
-    }
     const buildAuthorityDiagnostics = authorityProbe.audit();
     if (moduleDidFail && !isEmpty(buildAuthorityDiagnostics)) {
       const moduleFailure = failure(
@@ -864,6 +851,19 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
         "Register intent through context.registration and return no handle or controller.",
         { stage: "build" },
       );
+    }
+    let finalizedSettlement: FinalizedBabylonNativeProfileSettlementV1;
+    try {
+      finalizedSettlement = finalizeBabylonNativeProfileSettlementV1(context);
+    } catch (error) {
+      if (error instanceof BabylonNativeProfileSettlementFailureV1) {
+        throw failure(
+          error.code,
+          error.message,
+          error.repairHint,
+        );
+      }
+      throw error;
     }
     if (typeof spawnMarker === "undefined") {
       throw failure(
