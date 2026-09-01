@@ -7,6 +7,7 @@ import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -1690,6 +1691,59 @@ async function createRuntimeWithPackageSubject(): Promise<{
 }
 
 describe("BabylonWorldRuntime", () => {
+  it("provides neutral inspection lighting only when a Native scene has no authored light", async () => {
+    const unlitRuntime = await createVerifiedNativeRuntime(
+      packageFixtureNativeModule(),
+    );
+    try {
+      const scene = (unlitRuntime as unknown as { scene: Scene }).scene;
+      expect(scene.lights.map(({ name }) => name).sort()).toEqual([
+        "worldkit.light.ambient",
+        "worldkit.light.sun",
+      ]);
+    } finally {
+      await unlitRuntime.dispose();
+    }
+
+    const authoredRuntime = await createVerifiedNativeRuntime(
+      packageFixtureNativeModule((context) => {
+        new HemisphericLight("native-authored-light", Vector3.Up(), context.scene);
+        const ground = new Mesh("native-package-ground", context.scene);
+        ground.setVerticesData(
+          VertexBuffer.PositionKind,
+          [-5, 0, -5, 5, 0, -5, 0, 0, 5],
+        );
+        ground.setIndices([0, 1, 2]);
+        context.registration.registerSpawnMarker({
+          id: "player-spawn",
+          positionMetersXYZ: [0, 0, 0],
+          facingRadians: 0,
+        });
+        context.registration.registerStaticCollider({
+          id: "ground",
+          mesh: ground,
+          traversalBinding: {
+            kind: "static-surface",
+            surfaceEntityId: "ground-surface",
+            logicalSubshapeId: "top",
+            traversalSurfaceProfileRef:
+              "worldkit://traversal-surface-profile/ground.static@1",
+          },
+          frictionRatio: 0.8,
+          restitutionRatio: 0,
+        });
+      }),
+    );
+    try {
+      const scene = (authoredRuntime as unknown as { scene: Scene }).scene;
+      expect(scene.lights.map(({ name }) => name)).toEqual([
+        "native-authored-light",
+      ]);
+    } finally {
+      await authoredRuntime.dispose();
+    }
+  });
+
   it("attaches exact admitted traversal identity to canonical collision meshes", async () => {
     const base = createV5StaticColliderSupportExecutionPlan();
     const collider = base.staticColliders.find((candidate) =>
