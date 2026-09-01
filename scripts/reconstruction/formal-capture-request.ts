@@ -141,6 +141,12 @@ interface CanonicalRootV1 {
   readonly realPath: string;
 }
 
+interface JoinedPackageIdentityV1 {
+  readonly caseHash: Sha256HashV1;
+  readonly metadataHash: Sha256HashV1;
+  readonly contributionHash: Sha256HashV1;
+}
+
 function writeInvalid(role: string): never {
   throw new Error(`${WRITE_INVALID}: ${role}`);
 }
@@ -386,14 +392,20 @@ function joinAttemptPackage(
   return attemptHash;
 }
 
+function requiredNumber(value: unknown, role: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) writeInvalid(role);
+  return value;
+}
+
+function requiredString(value: unknown, role: string): string {
+  if (typeof value !== "string" || value.length === 0) writeInvalid(role);
+  return value;
+}
+
 function joinCasePackage(
   reconstructionCase: WorldReconstructionCaseV1,
   verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
-): ReturnType<typeof Object.freeze<{
-  caseHash: Sha256HashV1;
-  metadataHash: Sha256HashV1;
-  contributionHash: Sha256HashV1;
-}>> {
+): JoinedPackageIdentityV1 {
   const metadata = verifiedPackage.nativeBlockMaterializerMetadata;
   const source = verifiedPackage.manifest.sceneSource;
   if (
@@ -475,16 +487,25 @@ export async function materializeFormalWorldCaptureRequestV1(
 ): Promise<MaterializedFormalWorldCaptureRequestV1> {
   assertAccessorFree(input, "input");
   const source = exactPlainRecord(input, INPUT_FIELDS, "input");
-  const captureProfile = exactPlainRecord(
+  const captureProfileSource = exactPlainRecord(
     source.captureProfile,
     CAPTURE_PROFILE_FIELDS,
     "captureProfile",
-  ) as FormalWorldCaptureRequestCaptureProfileV1;
-  if (
-    typeof captureProfile.widthPixels !== "number" ||
-    typeof captureProfile.heightPixels !== "number" ||
-    typeof captureProfile.devicePixelRatio !== "number"
-  ) writeInvalid("captureProfile");
+  );
+  const captureProfile: FormalWorldCaptureRequestCaptureProfileV1 = Object.freeze({
+    widthPixels: requiredNumber(
+      captureProfileSource.widthPixels,
+      "captureProfile/widthPixels",
+    ),
+    heightPixels: requiredNumber(
+      captureProfileSource.heightPixels,
+      "captureProfile/heightPixels",
+    ),
+    devicePixelRatio: requiredNumber(
+      captureProfileSource.devicePixelRatio,
+      "captureProfile/devicePixelRatio",
+    ),
+  });
 
   const casePath = exactAbsolutePath(source.casePath, "casePath");
   const evaluationProfilePath = exactAbsolutePath(
@@ -588,11 +609,29 @@ export async function materializeFormalWorldCaptureRequestV1(
     Array.isArray(source.semanticCaptureTargetBindings)
       ? source.semanticCaptureTargetBindings
       : writeInvalid("semanticCaptureTargetBindings")
-  ).map((entry, index) => exactPlainRecord(
-    entry,
-    TARGET_BINDING_FIELDS,
-    `semanticCaptureTargetBindings/${index}`,
-  ) as FormalWorldCaptureRequestTargetBindingV1);
+  ).map((entry, index) => {
+    const pathName = `semanticCaptureTargetBindings/${index}`;
+    const row = exactPlainRecord(entry, TARGET_BINDING_FIELDS, pathName);
+    return Object.freeze({
+      acceptanceTargetRef: requiredString(
+        row.acceptanceTargetRef,
+        `${pathName}/acceptanceTargetRef`,
+      ),
+      compositionTargetRef: requiredString(
+        row.compositionTargetRef,
+        `${pathName}/compositionTargetRef`,
+      ),
+      topologyNodeId: requiredString(row.topologyNodeId, `${pathName}/topologyNodeId`),
+      semanticLayerId: requiredString(
+        row.semanticLayerId,
+        `${pathName}/semanticLayerId`,
+      ),
+      blockVisualGroupId: requiredString(
+        row.blockVisualGroupId,
+        `${pathName}/blockVisualGroupId`,
+      ),
+    });
+  });
   const semanticCaptureMap = bindBlockMaterializerMetadataToSemanticCaptureTargetsV1({
     case: reconstructionCase,
     materializerMetadata: verified.nativeBlockMaterializerMetadata,
