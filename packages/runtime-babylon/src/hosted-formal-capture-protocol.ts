@@ -3,10 +3,11 @@ import {
   parseFormalWorldCaptureRequestV1,
   type FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
+import { isNil } from "lodash-es";
+
 import type {
   FormalHostedWorldCapturePayloadV1,
-} from "@whitebox-world/runtime-babylon";
-import { isNil } from "lodash-es";
+} from "./formal-world-capture-provider.js";
 
 export interface HostedFormalCaptureProtocolBudgetV1 {
   readonly maximumInboundMessageBytes: number;

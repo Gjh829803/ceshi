@@ -1,5 +1,13 @@
 import { EventEmitter } from "node:events";
-import { chmod, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,7 +26,7 @@ import {
 } from
   "@whitebox-world/world-package/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Connect, Plugin, UserConfig } from "vite";
+import { resolveConfig, type Connect, type Plugin, type UserConfig } from "vite";
 
 import { writeWorldPackageDirectoryV1 } from
   "../../../scripts/lib/file-world-package.js";
@@ -267,6 +275,38 @@ describe("Native Playground verified Package Vite seam", () => {
     })).rejects.toThrow(
       "WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES_JSON_INVALID",
     );
+  });
+
+  it("exposes neither ambient VITE values nor .env values to Native client modules", async () => {
+    const ambientName = "VITE_WORLDKIT_HOST_ENV_CANARY";
+    const dotenvName = "VITE_WORLDKIT_DOTENV_CANARY";
+    const previousAmbient = process.env[ambientName];
+    const envRootPath = path.join(testRootPath, "vite-env-root");
+    await mkdir(envRootPath);
+    await writeFile(
+      path.join(envRootPath, ".env"),
+      `${dotenvName}=must-not-cross\n`,
+      "utf8",
+    );
+    process.env[ambientName] = "must-not-cross";
+    const config = await createConfig();
+    try {
+      const resolved = await resolveConfig({
+        ...config,
+        root: envRootPath,
+        configFile: false,
+        logLevel: "silent",
+      }, "serve");
+      expect(resolved.env).not.toHaveProperty(ambientName);
+      expect(resolved.env).not.toHaveProperty(dotenvName);
+    } finally {
+      if (previousAmbient === undefined) delete process.env[ambientName];
+      else process.env[ambientName] = previousAmbient;
+      const closeBundle = nativePackagePlugin(config).closeBundle;
+      if (typeof closeBundle === "function") {
+        await closeBundle.call({} as never);
+      }
+    }
   });
 
   it("rejects a verified non-Native Package before creating the Harness", async () => {

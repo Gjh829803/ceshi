@@ -33,6 +33,18 @@ const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
 const DEFAULT_STARTUP_TIMEOUT_MILLISECONDS = 30_000;
 const DEFAULT_STOP_TIMEOUT_MILLISECONDS = 3_000;
 const AUTOMATIC_PORT_ATTEMPTS = 5;
+const NATIVE_VITE_CHILD_ENVIRONMENT_PASSTHROUGH = Object.freeze([
+  "PATH",
+  "Path",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "SystemRoot",
+  "SYSTEMROOT",
+  "ComSpec",
+  "COMSPEC",
+  "PATHEXT",
+] as const);
 
 export interface WorldkitServerRouteEvidenceV1 {
   readonly publication: WorldkitBrowserRouteEvidencePublicationV2;
@@ -66,6 +78,45 @@ export interface WorldkitServerHandle {
   readonly worldPackageRootHash?: `sha256:${string}`;
   stop(): Promise<void>;
   waitForExit(): Promise<number | null>;
+}
+
+export function createNativeWorldkitServerChildEnvironmentV1(
+  input: Readonly<{
+    ambientEnvironment: NodeJS.ProcessEnv;
+    packageDirectoryPath: string;
+    nonce: string;
+    serverInstanceId: string;
+    viteCacheRootPath: string;
+    serverRole: "shell" | "runtime";
+    shellOrigin: string;
+    runtimeOrigin: string;
+    formalCaptureSdkOwnerIdentities?:
+      readonly FormalWorldCaptureSdkOwnerIdentityV1[];
+  }>,
+): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {};
+  for (const name of NATIVE_VITE_CHILD_ENVIRONMENT_PASSTHROUGH) {
+    const value = input.ambientEnvironment[name];
+    if (value !== undefined) environment[name] = value;
+  }
+  return {
+    ...environment,
+    WORLDKIT_NATIVE_PACKAGE_PATH: input.packageDirectoryPath,
+    WORLDKIT_AUTHORING_SERVER_NONCE: input.nonce,
+    WORLDKIT_NATIVE_SERVER_INSTANCE_ID: input.serverInstanceId,
+    WORLDKIT_NATIVE_VITE_CACHE_ROOT: input.viteCacheRootPath,
+    WORLDKIT_NATIVE_SERVER_ROLE: input.serverRole,
+    WORLDKIT_NATIVE_VERIFIER_PROBE: "disabled",
+    WORLDKIT_HOSTED_SHELL_ORIGIN: input.shellOrigin,
+    WORLDKIT_HOSTED_RUNTIME_ORIGIN: input.runtimeOrigin,
+    ...(input.formalCaptureSdkOwnerIdentities === undefined
+      ? {}
+      : {
+          WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES: JSON.stringify(
+            input.formalCaptureSdkOwnerIdentities,
+          ),
+        }),
+  };
 }
 
 class WorldkitServerStartError extends Error {
@@ -524,23 +575,6 @@ async function startNativeOne(
   const nonce = randomUUID();
   const shellOrigin = `http://127.0.0.1:${shellPort}`;
   const runtimeOrigin = `http://127.0.0.1:${runtimePort}`;
-  const childEnvironment: NodeJS.ProcessEnv = {
-    ...process.env,
-    WORLDKIT_NATIVE_PACKAGE_PATH: path.resolve(
-      options.source.packageDirectoryPath,
-    ),
-    WORLDKIT_AUTHORING_SERVER_NONCE: nonce,
-    WORLDKIT_NATIVE_SERVER_INSTANCE_ID: ownedViteCache.serverInstanceId,
-    WORLDKIT_NATIVE_VITE_CACHE_ROOT: ownedViteCache.rootDirectoryPath,
-    WORLDKIT_NATIVE_VERIFIER_PROBE: "disabled",
-    WORLDKIT_HOSTED_SHELL_ORIGIN: shellOrigin,
-    WORLDKIT_HOSTED_RUNTIME_ORIGIN: runtimeOrigin,
-  };
-  delete childEnvironment.WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES;
-  if (options.formalCaptureSdkOwnerIdentities !== undefined) {
-    childEnvironment.WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES =
-      JSON.stringify(options.formalCaptureSdkOwnerIdentities);
-  }
   const children: ChildProcessWithoutNullStreams[] = [];
   const lifecycles: OwnedChildLifecycle[] = [];
   try {
@@ -551,11 +585,24 @@ async function startNativeOne(
         port,
         refreshDependencies: options.refreshDependencies === true,
         configLoader: "runner",
-        environment: {
-          ...childEnvironment,
-          WORLDKIT_NATIVE_SERVER_ROLE:
-            port === shellPort ? "shell" : "runtime",
-        },
+        environment: createNativeWorldkitServerChildEnvironmentV1({
+          ambientEnvironment: process.env,
+          packageDirectoryPath: path.resolve(
+            options.source.packageDirectoryPath,
+          ),
+          nonce,
+          serverInstanceId: ownedViteCache.serverInstanceId,
+          viteCacheRootPath: ownedViteCache.rootDirectoryPath,
+          serverRole: port === shellPort ? "shell" : "runtime",
+          shellOrigin,
+          runtimeOrigin,
+          ...(options.formalCaptureSdkOwnerIdentities === undefined
+            ? {}
+            : {
+                formalCaptureSdkOwnerIdentities:
+                  options.formalCaptureSdkOwnerIdentities,
+              }),
+        }),
       });
       lifecycles.push(observeOwnedChild(child));
       configureChildOutput(child, options.forwardOutput === true);

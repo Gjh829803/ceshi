@@ -6,8 +6,10 @@ import {
   type FormalWorldCaptureSdkOwnerIdentityV1,
   type FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
-import type {
-  FormalHostedWorldCapturePayloadV1,
+import {
+  HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
+  parseHostedFormalCapturePayloadV1,
+  type FormalHostedWorldCapturePayloadV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
   Browser,
@@ -16,10 +18,6 @@ import type {
   Page,
 } from "playwright";
 
-import {
-  HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
-  parseHostedFormalCapturePayloadV1,
-} from "../../apps/native-scene-playground/src/hosted-formal-capture-protocol.js";
 import { launchChromiumWithSystemFallback } from
   "../lib/playwright-browser-launch.js";
 import {
@@ -31,6 +29,7 @@ import { resolveFormalWorldCaptureSdkOwnerIdentitiesV1 } from
   "./sdk-owner-identities.js";
 
 const DEFAULT_READY_TIMEOUT_MILLISECONDS = 30_000;
+const DEFAULT_CAPTURE_TIMEOUT_MILLISECONDS = 120_000;
 
 export interface CaptureOnlyHostedTransportV1<Payload, Request = unknown> {
   executeFormalCapture(request: Request): Promise<Payload>;
@@ -53,6 +52,7 @@ export interface StartConcreteCaptureOnlyHostedTransportInputV1 {
   readonly request: FormalWorldCaptureRequestV1;
   readonly port?: number;
   readonly readyTimeoutMilliseconds?: number;
+  readonly captureTimeoutMilliseconds?: number;
 }
 
 type ServerPortV1 = Pick<
@@ -262,19 +262,50 @@ export async function startCaptureOnlyHostedTransportV1(
         }
         return capture.executeFormalCapture(request);
       }, { request: parsed });
-      const payload = await Promise.race([
-        browserCapture,
-        fatalSignal.then(() => {
-          throw fatalError ?? transportError("TERMINATED");
-        }),
-      ]);
-      return parseHostedFormalCapturePayloadV1({
-        value: payload,
-        runtimeSessionId,
-        request,
-        formalRequestHash,
-        protocolBudget: HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
+      let captureTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      const captureTimeout = new Promise<never>((_, reject) => {
+        captureTimeoutHandle = setTimeout(() => {
+          reject(transportError("CAPTURE_TIMEOUT"));
+        }, input.captureTimeoutMilliseconds ??
+          DEFAULT_CAPTURE_TIMEOUT_MILLISECONDS);
+        captureTimeoutHandle.unref?.();
       });
+      try {
+        const payload = await Promise.race([
+          browserCapture,
+          fatalSignal.then(() => {
+            throw fatalError ?? transportError("TERMINATED");
+          }),
+          captureTimeout,
+        ]);
+        return parseHostedFormalCapturePayloadV1({
+          value: payload,
+          runtimeSessionId,
+          request,
+          formalRequestHash,
+          protocolBudget: HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
+        });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message ===
+            "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_CAPTURE_TIMEOUT"
+        ) {
+          try {
+            await cleanup();
+          } catch (cleanupError) {
+            throw new AggregateError(
+              [error, cleanupError],
+              error.message,
+            );
+          }
+        }
+        throw error;
+      } finally {
+        if (captureTimeoutHandle !== undefined) {
+          clearTimeout(captureTimeoutHandle);
+        }
+      }
     },
     dispose: cleanup,
   });
@@ -285,6 +316,7 @@ export function createCaptureOnlyHostedTransportStarterV1(
     packageDirectoryPath: string;
     port?: number;
     readyTimeoutMilliseconds?: number;
+    captureTimeoutMilliseconds?: number;
   }>,
   ports: CaptureOnlyHostedTransportPortsV1 = defaultPorts,
 ): StartCaptureOnlyHostedTransportV1<

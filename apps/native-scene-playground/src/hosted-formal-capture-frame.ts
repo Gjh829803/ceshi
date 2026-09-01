@@ -13,7 +13,7 @@ import {
   parseHostedFormalCapturePayloadV1,
   parseHostedFormalCaptureRequestV1,
   type HostedFormalCaptureProtocolBudgetV1,
-} from "./hosted-formal-capture-protocol.js";
+} from "@whitebox-world/runtime-babylon";
 
 export interface FormalCaptureOnlyRuntimeEntryPortV1 {
   executeFormalCapture(

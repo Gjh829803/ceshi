@@ -9,7 +9,7 @@ import {
 import {
   formalCaptureRequestFixtureV1,
   formalHostedPayloadFixtureV1,
-} from "./hosted-formal-capture-test-fixture.js";
+} from "@whitebox-world/runtime-babylon/testing";
 
 const runtimeOrigin = "http://127.0.0.1:5175";
 const runtimeSessionId = "runtime.formal-capture.001";

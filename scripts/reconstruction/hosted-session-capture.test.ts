@@ -13,7 +13,7 @@ import {
 import {
   formalCaptureRequestFixtureV1,
   formalHostedPayloadFixtureV1,
-} from "../../apps/native-scene-playground/src/hosted-formal-capture-test-fixture.js";
+} from "@whitebox-world/runtime-babylon/testing";
 
 class FakeEmitter {
   readonly listeners = new Map<string, Set<(...args: unknown[]) => void>>();
@@ -46,6 +46,7 @@ function deferred<T>() {
 function concreteHarness(options: Readonly<{
   readyFailure?: Error;
   readyPending?: boolean;
+  capturePending?: boolean;
   launchFailure?: Error;
   contextFailure?: Error;
   pageFailure?: Error;
@@ -107,6 +108,7 @@ function concreteHarness(options: Readonly<{
     },
     async evaluate(_callback: unknown, argument: Readonly<{ request: unknown }>) {
       events.push("page.capture");
+      if (options.capturePending === true) await new Promise(() => undefined);
       return formalHostedPayloadFixtureV1({
         request: argument.request as typeof request,
         runtimeSessionId,
@@ -365,6 +367,27 @@ describe("concrete capture-only Hosted transport", () => {
       request: h.request,
       startTransport: starter,
     })).rejects.toThrow(owner === "server" ? "server stop" : `${owner} close`);
+    expect(h.events.slice(-4)).toEqual([
+      "page.close",
+      "context.close",
+      "browser.close",
+      "server.stop",
+    ]);
+  });
+
+  it("forces complete Hosted cleanup when the Capture provider hangs", async () => {
+    const h = concreteHarness({ capturePending: true });
+    const starter = createCaptureOnlyHostedTransportStarterV1({
+      packageDirectoryPath: "/tmp/verified-world-package",
+      captureTimeoutMilliseconds: 10,
+    }, h.ports as never);
+
+    await expect(runCaptureOnlyHostedSessionV1({
+      request: h.request,
+      startTransport: starter,
+    })).rejects.toThrow(
+      "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_CAPTURE_TIMEOUT",
+    );
     expect(h.events.slice(-4)).toEqual([
       "page.close",
       "context.close",

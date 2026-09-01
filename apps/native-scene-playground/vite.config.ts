@@ -487,7 +487,6 @@ export async function createNativeScenePlaygroundViteConfigV1(
       "src/main.ts",
       "src/hosted-formal-capture-bridge.ts",
       "src/hosted-formal-capture-frame.ts",
-      "src/hosted-formal-capture-protocol.ts",
       "src/hosted-formal-capture-route.ts",
       "src/hosted-runtime-bridge.ts",
       "src/hosted-runtime-frame.ts",
@@ -495,6 +494,7 @@ export async function createNativeScenePlaygroundViteConfigV1(
       "src/world-package-loader.ts",
       "package.json",
       "vite.config.ts",
+      "../../packages/runtime-babylon/src/hosted-formal-capture-protocol.ts",
     ] as const);
     const hostedBrowserRunnerDigest = `sha256:${hostedBrowserRunnerSourcePaths
       .reduce((hash, relativePath) => {
@@ -585,6 +585,8 @@ export async function createNativeScenePlaygroundViteConfigV1(
 
     return {
       publicDir: false,
+      envDir: false,
+      envPrefix: [],
       cacheDir: path.join(
         cacheScope.rootDirectoryPath,
         cacheScope.serverInstanceId,

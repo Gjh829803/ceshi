@@ -22,7 +22,7 @@ import {
 import {
   HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
   hostedFormalCaptureErrorV1,
-} from "./hosted-formal-capture-protocol.js";
+} from "@whitebox-world/runtime-babylon";
 import { nativeSceneSubjectAssetResolver } from
   "./subject-asset-resolver.js";
 import { loadVerifiedNativeWorldPackageV1 } from

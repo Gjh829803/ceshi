@@ -1,10 +1,6 @@
 import type {
   FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
-import type {
-  FormalHostedWorldCapturePayloadV1,
-} from "@whitebox-world/runtime-babylon";
-import { isNil } from "lodash-es";
 import {
   assertHostedFormalCaptureWireBudgetV1,
   exactPlainRecordV1,
@@ -14,8 +10,10 @@ import {
   HOSTED_FORMAL_CAPTURE_RESULT_FIELDS_V1,
   parseHostedFormalCapturePayloadV1,
   parseHostedFormalCaptureRequestV1,
+  type FormalHostedWorldCapturePayloadV1,
   type HostedFormalCaptureProtocolBudgetV1,
-} from "./hosted-formal-capture-protocol.js";
+} from "@whitebox-world/runtime-babylon";
+import { isNil } from "lodash-es";
 
 type BridgePhaseV1 =
   | "bootstrapping"

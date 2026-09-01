@@ -3,7 +3,7 @@ import { hashFormalWorldCaptureRequestV1 } from
   "@whitebox-world/runtime-contracts";
 
 import { formalCaptureRequestFixtureV1 } from
-  "./hosted-formal-capture-test-fixture.js";
+  "@whitebox-world/runtime-babylon/testing";
 import { readHostedFormalCaptureRouteIdentityV1 } from
   "./hosted-formal-capture-route.js";
 
