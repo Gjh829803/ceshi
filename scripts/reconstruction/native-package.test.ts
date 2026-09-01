@@ -172,7 +172,7 @@ async function completedAttempt() {
     root,
     casePath,
     attemptDirectoryPath,
-    outputDirectoryPath: path.join(root, "packages", "world"),
+    outputDirectoryPath: path.join(attemptDirectoryPath, "world-package"),
   };
 }
 
@@ -213,6 +213,18 @@ describe("packageNativeBlockAttemptV1", () => {
       fixture.attemptDirectoryPath,
       "native-block-authoring-layout-binding.json",
     ))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(JSON.parse(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "attempt-result.json",
+    ), "utf8"))).toEqual(packaged.sceneAuthoringAttemptResult);
+    expect(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "native-explain.txt",
+    ), "utf8")).toBe("outcome: passed\n");
+    await expect(lstat(path.join(
+      fixture.attemptDirectoryPath,
+      "scene-authoring-attempt-result.json",
+    ))).rejects.toMatchObject({ code: "ENOENT" });
   }, 60_000);
 
   it("rejects a stale Generation Receipt before creating a check or Package output", async () => {
@@ -229,6 +241,31 @@ describe("packageNativeBlockAttemptV1", () => {
       outputDirectoryPath: fixture.outputDirectoryPath,
     })).rejects.toBeInstanceOf(NativeBlockPackageErrorV1);
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("rejects every Package output location except the canonical Attempt child", async () => {
+    const fixture = await completedAttempt();
+    const externalOutputPath = path.join(fixture.root, "packages", "world");
+
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: externalOutputPath,
+    })).rejects.toMatchObject({
+      diagnostics: ["output-location-invalid"],
+    });
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: path.join(fixture.attemptDirectoryPath, "other"),
+    })).rejects.toMatchObject({
+      diagnostics: ["output-location-invalid"],
+    });
+    await expect(lstat(externalOutputPath)).rejects.toMatchObject({
       code: "ENOENT",
     });
   });

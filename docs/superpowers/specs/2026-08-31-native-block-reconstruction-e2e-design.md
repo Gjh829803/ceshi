@@ -340,13 +340,14 @@ The stable surface is:
 worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json
 worldkit native check <world-directory> --json
 worldkit native explain <world-directory> [--json]
-worldkit native package <world-directory> --case <case.json> --output <package-directory> --json
+worldkit native package <attempt-directory> --case <case.json> --json
 worldkit native run <package-directory> [--port <port>] [--refresh-dependencies] --json
 worldkit capture <package-directory> --output <opening.png>
   --triview-output <directory> --json
 ```
 
-`reconstruct run` is source-neutral at the Case/Route layer but `NBR-1` initially implements the admitted
+`native package` derives its sole output as `<attempt-directory>/world-package`;
+callers cannot select a second Package layout. `reconstruct run` is source-neutral at the Case/Route layer but `NBR-1` initially implements the admitted
 Native Block route only; a Canonical decision fails with a stable unsupported-route diagnostic rather
 than silently calling the old Builder. `native package` is the sole generic Native package adapter and
 replaces the Cloud Ridge-specific production script. `native run <package-directory>` is an explicitly
