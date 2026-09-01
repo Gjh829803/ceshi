@@ -20,6 +20,7 @@ import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index
 
 import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import {
   CameraDirectorV1,
   committedCameraContextFromViewTargetV2,
@@ -60,6 +61,17 @@ function setCameraProfile(runtime: BabylonWorldRuntime, cameraRigProfileRef: str
     mode: "camera-rig-profile",
     cameraRigProfileRef,
   });
+}
+
+async function bindAndPublishInitialCamera(
+  runtime: BabylonWorldRuntime,
+  controlledEntityId: string,
+): Promise<void> {
+  await bindRuntimeTestPossession(runtime, controlledEntityId);
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
+  );
 }
 
 function createFlatTerrainCapabilitySpec() {
@@ -245,7 +257,7 @@ async function createCameraPreviewChannelRuntime(options?: {
         lockstepMaxSteps: 4,
       }),
   });
-  await bindRuntimeTestPossession(runtime, controlledEntityId);
+  await bindAndPublishInitialCamera(runtime, controlledEntityId);
   return runtime;
 }
 
@@ -909,7 +921,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         renderCadenceHz: 30 | 60 | 120,
       ) => {
         runtime.reset();
-        await bindRuntimeTestPossession(runtime, "player");
+        await bindAndPublishInitialCamera(runtime, "player");
         setCameraProfile(runtime, ORBIT_REF);
         if (previewEnabled) {
           runtime.applyCameraPreview({
@@ -989,14 +1001,14 @@ describe("camera preview channel stays out of Gameplay truth", () => {
 
       // Same fixed input with and without preview keeps Subject determinism.
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, ORBIT_REF);
       const withoutPreview = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 30,
       });
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -1017,7 +1029,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       const reset = runtime.reset();
       expect(reset.possessionTarget).toEqual({ mode: "unbound" });
       expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       const afterRebindTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterRebindTick.camera.activeCameraProfileRef).toBe(
         automaticProfileRef,
@@ -1046,7 +1058,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       });
 
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {

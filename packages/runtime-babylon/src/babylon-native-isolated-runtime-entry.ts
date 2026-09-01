@@ -521,6 +521,9 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
       ) {
         throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_HANDLE_MISSING");
       }
+      runtime.publishInitialBoundCameraView(
+        gate.publication.viewState.viewStateRevision,
+      );
       await runtime.renderFrameWhenReady();
     },
   });

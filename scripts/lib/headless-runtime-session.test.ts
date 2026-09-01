@@ -122,11 +122,9 @@ function throwingCleanupPort(
   });
 }
 
-function failSecondReadyGate(): () => Promise<void> {
-  let callCount = 0;
+function failCandidateReadyGate(): () => Promise<void> {
   return async () => {
-    callCount += 1;
-    if (callCount === 2) throw new Error("post-bind ready sentinel");
+    throw new Error("candidate ready sentinel");
   };
 }
 
@@ -190,6 +188,10 @@ describe("headless Babylon Runtime Session", () => {
       runtimeSessionId: "runtime-session.basic-ready",
       worldSessionId: "world-session.basic-ready",
       world: { simulationTick: 0 },
+      view: {
+        viewStateRevision: 1,
+        camera: { mode: "tracking", targetEntityId: "player" },
+      },
       runtime: { phase: "ready", fixedTimeStepSeconds: 1 / 60 },
       resources: { phase: "ready" },
     });
@@ -404,19 +406,15 @@ describe("headless Babylon Runtime Session", () => {
         throw new Error("initial ready sentinel");
       },
     });
-    await expectCreationFailure("fail-ready", "HEADLESS_RUNTIME_READY_GATE_FAILED", {
-      awaitReady: failSecondReadyGate(),
-    });
   }, 30_000);
 
-  it("reports throwing cleanup without retaining owners or masking a Ready failure", async () => {
+  it("leaves no retained owner when the Host-owned Candidate readiness gate fails", async () => {
     const loaded = await loadedBasicPackage();
     const ownershipSnapshots: HeadlessRuntimeOwnershipSnapshotV1[] = [];
     const failure = await createHeadlessRuntimeSessionForTestV1(
       inputFor(loaded, "ready-and-cleanup-fail"),
       {
-        createGameplayWorldPort: throwingCleanupPort,
-        awaitReady: failSecondReadyGate(),
+        awaitReady: failCandidateReadyGate(),
         onOwnershipSnapshot: (snapshot) => ownershipSnapshots.push(snapshot),
       },
     ).catch((error) => error as Error & {
@@ -424,8 +422,8 @@ describe("headless Babylon Runtime Session", () => {
       cleanupDiagnostics?: readonly { code: string }[];
     });
     expect(failure).toMatchObject({
-      code: "HEADLESS_RUNTIME_READY_GATE_FAILED",
-      cleanupDiagnostics: [{ code: "HEADLESS_RUNTIME_HOST_DISPOSE_FAILED" }],
+      code: "HEADLESS_RUNTIME_WORLD_SESSION_CREATE_FAILED",
+      cleanupDiagnostics: [],
     });
     expect(finalOwnershipSnapshot(ownershipSnapshots)).toMatchObject({
       phase: "failed",

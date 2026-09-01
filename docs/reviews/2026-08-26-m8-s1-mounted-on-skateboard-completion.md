@@ -3,8 +3,9 @@
 > **Draft / NO-GO.** The current working tree adds a current-only Camera V2 clean break and regenerated
 > contract/package artifacts after historical candidate `7f9abd8bc78010cd0e04df8542d40f18c24bfae4`.
 > It is therefore a new product candidate whose exact pushed SHA and Cloud evidence are still pending.
-> Historical Cloud results remain recorded below without being promoted to the new tree. Final independent
-> Claude and Grok code reviews have not started, so no M8-S1 completion GO is claimed.
+> Historical Cloud and `d6d82c4f7eec054e6051b7a635ef28f78ce790a4` review results remain recorded below
+> without being promoted to the new tree. The final independent Claude and Grok review of the repaired exact
+> SHA has not started, so no M8-S1 completion GO is claimed.
 > This document must not be converted to a completion GO until those results are recorded and every blocking
 > finding is dispositioned against the final candidate.
 
@@ -14,7 +15,7 @@
 | --- | --- |
 | Date | 2026-09-01 |
 | Review mode | Mode B change review plus the complete Runtime deep-review checklist |
-| Runtime/product candidate | Current working tree after `00845340af0e7770ef73e10cb57f28ddb9c6fb32`; exact pushed SHA pending |
+| Runtime/product candidate | Current working tree after `d6d82c4f7eec054e6051b7a635ef28f78ce790a4`; repaired exact pushed SHA pending |
 | Final review tree | Pending product-candidate Cloud closure and exact-SHA Claude/Grok review |
 | Diff base | `df2dcd53434bd26a97dbb3e835fb99ad56eb82a9` |
 | Branch | `codex/m8-s1-completion` |
@@ -27,6 +28,7 @@ Authority was read in this order: repository `AGENTS.md`,
 the [M8-S1 design](../superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md),
 the [latest Camera design](../superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md),
 the [implementation plan](../superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md),
+the [Cursor Cloud full-gates prompt](../superpowers/skills/cursor-cloud/full-gates-prompt.md),
 the [full-dimension review protocol](full-dimension-review-protocol.md), and the
 [Runtime deep-review checklist](runtime-deep-review-checklist.md).
 
@@ -64,6 +66,11 @@ Capture tests and the mounted verifier. Therefore it is not relabeled as exact-c
   platform skips. `pnpm verify:3c-migration` passes all 11 ledger rows with 41 remaining legacy references,
   and `pnpm verify:unreleased-clean-break` passes after removing the retired Viewer query route from active
   example evidence and adding a fail-closed route census.
+- Latest repaired Camera epoch/bootstrap/replay regressions — exit 0; 12/12 targeted Runtime tests passed.
+  The directly affected Runtime/Camera owner run reached 213/213 passing assertions across 3 files, then the
+  local Vitest worker timed out while reporting `onTaskUpdate`; that command is not recorded as exit 0 and is
+  not a substitute for the pending clean-environment Cloud aggregate. `pnpm typecheck` and
+  `git diff --check` both pass on the same working tree.
 
 ### First exact-SHA Cloud attempt
 
@@ -129,6 +136,7 @@ production Camera/Runtime/Registry contracts and generated artifacts, so this li
 | Required lane | Evidence tree | Current status |
 | --- | --- | --- |
 | frozen install, typecheck, root aggregate | new exact product SHA | Pending Cloud run; `7f9abd8` result is historical |
+| generated Planner/Builder bundle parity | new exact product SHA | Pending `pnpm check:agent-self-check`; focused source tests do not replace the final byte-parity gate |
 | build, independent, unreleased clean break | new exact product SHA | Pending Cloud run; `4c7551e` lineage is historical |
 | Control Capture and formal mounted Capture | new exact product SHA | Pending Cloud run because Camera/Viewer/Bootstrap inputs changed |
 | Studio and Canonical/Placement/Rigged/G Bot capability gates | new exact product SHA | Pending Cloud run; `08f8f199` passes remain historical |
@@ -206,10 +214,23 @@ second legacy relationship dialect.
 - Catalog rules use only committed typed facts with authoritative producers. Mounted selection consumes the
   committed `mountedOn` Rider context; the former water, glide and surface-fast rules were removed because
   the current Runtime does not publish authoritative matching Camera facts.
+- `renderFrame()` is presentation-only. The sole Tick-zero exception is the explicit Host bootstrap
+  publication after committed initial binding; Playground, Native, isolated and Headless candidate readiness
+  all pass the exact `viewStateRevision` before the first render. Reset and replacement repeat that same
+  lifecycle instead of restoring render-time synchronization. The bootstrap operation is idempotent only
+  before first render; render, fixed-Tick or Golden replay activity closes the phase.
+- A committed bind, Mount or Dismount revision remains pending until the next fixed Tick. Preference,
+  orbit, preview, preset tuning, Control Capture and artifact evidence fail closed in that interval, so no
+  consumer can combine new Gameplay or geometry with an old Camera epoch.
+- Golden rollback replays one ordered journal of fixed input, possession, Mount, Dismount and committed
+  Camera authoring state. Its Tick-zero checkpoint includes Camera state, committed Context and per-Entity
+  collision filters; Rider masks therefore cannot leak from Mount into support replay.
 - Runtime validators, Planner/Builder self-check bundles, evidence worlds and the Native Cloud Ridge package
-  were regenerated from the current contract. Camera/Registry/Runtime/Viewer focused verification passes
-  14 files / 288 tests; the directly affected self-check suite passes 1 file / 3 tests. Generated Runtime
-  validators, both agent self-check bundles and Native package bytes are current.
+  were regenerated from the current contract. The latest repaired Camera epoch/bootstrap/replay target passes
+  12/12; the directly affected self-check suite passes 1 file / 3 tests. The broader local owner run reached
+  213/213 passing assertions but hit the reporting timeout recorded in §2, so only the pending Cloud aggregate
+  may close the full gate. Generated Runtime validators, both agent self-check bundles and Native package bytes
+  are current.
 - Executable-source census for `CameraContextSampleV1`, `RetainedCharacterSupportSampleV1` and
   `MotionKernelLiveLockStateV1` is zero. The latter two were replaced by the current provider-neutral
   `CharacterSupportProjectionSampleV1` and `CharacterSupportProjectionLockV1`; `BodySampleV1` remains the
@@ -220,13 +241,16 @@ second legacy relationship dialect.
 ## 6. Findings and current blockers
 
 No P0-P2 product finding from the completed local Capture subreview is carried forward. The earlier
-type/boundary/root blockers were closed on `7f9abd8`; the new product tree must prove them again. The overall
-review remains **NO-GO**
+type/boundary/root blockers were closed on `7f9abd8`. Claude reviewed `d6d82c4` as GO, while Grok correctly
+blocked it because render-time synchronization could publish a Mount/Dismount Camera epoch before the next
+fixed Tick. The current working tree removes that path and closes the related bootstrap, replay and pending
+evidence seams, but the repaired exact SHA must prove them again. The overall review remains **NO-GO**
 for these unresolved completion items:
 
 1. The new product tree has not yet been committed, pushed or exercised by the exact-SHA Cloud matrix.
 2. Final exact-SHA Claude and Grok implementation reviews have not started.
-3. The final Cloud run must repeat the current green 3C and Viewer-route clean-break gates on the frozen SHA.
+3. The final Cloud run must repeat `pnpm check:agent-self-check` plus the current green 3C and Viewer-route
+   clean-break gates on the frozen SHA.
 
 The missing retired `verify:outdoor-gameplay` entry is not a finding and must not be repaired.
 
@@ -263,8 +287,9 @@ relationship, Camera or catalog Gameplay compatibility path is required.
 
 ## 9. Remaining closure work
 
-1. Commit and push the new product candidate, then run frozen install, typecheck, root test, build, Studio,
-   independent, clean-break, Canonical capability, Viewer and mounted Capture gates in Cursor Cloud.
+1. Commit and push the new product candidate, then use the shared full-gates prompt and run frozen install,
+   `pnpm check:agent-self-check`, typecheck, root test, build, Studio, independent, clean-break, Canonical
+   capability, Viewer and mounted Capture gates in Cursor Cloud.
 2. Dispatch independent Claude and Grok deep code reviews against the same exact pushed review tree;
    reproduce and disposition every P0/P1 before acceptance and batch/defer non-blocking P2/P3 as the
    protocol permits.

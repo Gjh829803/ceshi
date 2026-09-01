@@ -112,9 +112,7 @@ export type HeadlessRuntimeSessionCreateErrorCodeV1 =
   | "HEADLESS_RUNTIME_HAVOK_INITIALIZATION_FAILED"
   | "HEADLESS_RUNTIME_CREATE_FAILED"
   | "HEADLESS_RUNTIME_GAMEPLAY_PORT_CREATE_FAILED"
-  | "HEADLESS_RUNTIME_WORLD_SESSION_CREATE_FAILED"
-  | "HEADLESS_RUNTIME_INITIAL_CONTROL_BIND_FAILED"
-  | "HEADLESS_RUNTIME_READY_GATE_FAILED";
+  | "HEADLESS_RUNTIME_WORLD_SESSION_CREATE_FAILED";
 
 export class HeadlessRuntimeSessionCreateErrorV1 extends Error {
   readonly name = "HeadlessRuntimeSessionCreateErrorV1";
@@ -1054,6 +1052,9 @@ async function createHeadlessRuntimeSessionInternalV1(
         if (isNil(handle)) {
           throw new Error("HEADLESS_RUNTIME_READY_HANDLE_MISSING");
         }
+        handle.runtime.publishInitialBoundCameraView(
+          gate.publication.viewState.viewStateRevision,
+        );
         await factories.awaitReady(handle.runtime);
       },
     });
@@ -1097,6 +1098,11 @@ async function createHeadlessRuntimeSessionInternalV1(
       })],
       fixedInputControllerEntityId:
         HEADLESS_FIXED_INPUT_CONTROLLER_ENTITY_ID_V1,
+      initialControlBinding: Object.freeze({
+        controllerEntityId: HEADLESS_FIXED_INPUT_CONTROLLER_ENTITY_ID_V1,
+        controlledEntityId:
+          configuration.worldRuntimeBootstrap.initialControlledEntityId,
+      }),
       gameplayModeFactory,
       gameplayFeatureFactories,
       gameplayCapacityBudget,
@@ -1114,25 +1120,6 @@ async function createHeadlessRuntimeSessionInternalV1(
       },
     });
     ledger.acquire("runtime-host");
-
-    failureCode = "HEADLESS_RUNTIME_INITIAL_CONTROL_BIND_FAILED";
-    const bindReceipt = await runtimeHost.executeGameplayCommand({
-      schemaVersion: 1,
-      id: `command.runtime-session.initial-bind.${input.initialWorldSessionId}`,
-      type: "control.bind",
-      runtimeSessionId: input.runtimeSessionId,
-      worldSessionId: input.initialWorldSessionId,
-      controllerEntityId: HEADLESS_FIXED_INPUT_CONTROLLER_ENTITY_ID_V1,
-      controlledEntityId:
-        configuration.worldRuntimeBootstrap.initialControlledEntityId,
-      expectedPossession: Object.freeze({ mode: "unbound" as const }),
-    });
-    if (bindReceipt.status !== "committed") {
-      throw new Error("HEADLESS_RUNTIME_INITIAL_CONTROL_BIND_REJECTED");
-    }
-
-    failureCode = "HEADLESS_RUNTIME_READY_GATE_FAILED";
-    await factories.awaitReady(runtime);
     const publication = runtimeHost.snapshot();
     const runtimeProjection = runtime.snapshot();
     const readySnapshot = projectBabylonWorldRuntimeSnapshotV4({

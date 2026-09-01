@@ -304,6 +304,9 @@ export class NativeRuntimeHostV1 {
         if (isNil(handle)) {
           throw new Error("WORLDKIT_NATIVE_RUNTIME_HANDLE_NOT_FOUND");
         }
+        handle.runtime.publishInitialBoundCameraView(
+          input.publication.viewState.viewStateRevision,
+        );
         await handle.runtime.renderFrameWhenReady();
       },
     });

@@ -76,14 +76,11 @@ const CAMERA_PROFILES = [
     "worldkit://camera-profile/follow.medium@1",
     "worldkit://camera-rig/orbit-follow@1",
   ],
-  [
-    "worldkit://camera-profile/chase.surface-fast@1",
-    "worldkit://camera-rig/velocity-chase@1",
-  ],
-  [
-    "worldkit://camera-profile/flight.glide@1",
-    "worldkit://camera-rig/flight-horizon@1",
-  ],
+] as const;
+
+const UNREACHABLE_CAMERA_PROFILE_REFS = [
+  "worldkit://camera-profile/chase.surface-fast@1",
+  "worldkit://camera-profile/flight.glide@1",
 ] as const;
 
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
@@ -224,12 +221,23 @@ async function createBoundGbotRuntime(
         lockstepMaxSteps: 4,
       }),
   });
-  await bindRuntimeTestPossession(
+  await bindAndPublishInitialCamera(
     runtime,
     runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
       .initialControlledEntityId,
   );
   return runtime;
+}
+
+async function bindAndPublishInitialCamera(
+  runtime: BabylonWorldRuntime,
+  controlledEntityId: string,
+): Promise<void> {
+  await bindRuntimeTestPossession(runtime, controlledEntityId);
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
+  );
 }
 
 describe("capability package runtime smoke tests", () => {
@@ -340,7 +348,10 @@ describe("capability package runtime smoke tests", () => {
           .camera.activeCameraModifierRefs,
       ).not.toContain("worldkit://camera-modifier/sprint-emphasis@1");
       for (const [cameraProfileRef, cameraRigRef] of CAMERA_PROFILES) {
-        setCameraProfile(runtime, cameraProfileRef);
+        expect(
+          () => setCameraProfile(runtime, cameraProfileRef),
+          cameraProfileRef,
+        ).not.toThrow();
         const camera = (await runtime.runFixedInput({ actions: [], ticks: 1 })).camera;
         expect(camera).toMatchObject({
           activeCameraProfileRef: cameraProfileRef,
@@ -348,6 +359,11 @@ describe("capability package runtime smoke tests", () => {
           safeFallbackActive: false,
         });
         expect(camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
+      }
+      for (const cameraProfileRef of UNREACHABLE_CAMERA_PROFILE_REFS) {
+        expect(() => setCameraProfile(runtime, cameraProfileRef)).toThrow(
+          "CAMERA_PREFERENCE_NOT_ALLOWED",
+        );
       }
       setCameraProfile(runtime, "worldkit://camera-profile/first-person.standard@1");
       expect(() => runtime.applyCameraPreview({
@@ -408,7 +424,7 @@ describe("capability package runtime smoke tests", () => {
       runtime.resetCameraView();
       expect(runtime.resetCameraViewPreference().camera).not.toHaveProperty("preference");
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const runRenderedFixedInput = async (
         actions: readonly ("move-left")[],
@@ -438,14 +454,14 @@ describe("capability package runtime smoke tests", () => {
         .toBeGreaterThan(0.9);
 
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const movingNormally = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 60,
       });
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       const movingWhileLookingBack = await runtime.runFixedInput({
         actions: ["move-forward", "camera-look-back"],
@@ -461,7 +477,7 @@ describe("capability package runtime smoke tests", () => {
       ).toBeGreaterThan(0.995);
 
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, "worldkit://camera-profile/orbit.medium@1");
       runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -497,7 +513,7 @@ describe("capability package runtime smoke tests", () => {
       ).toBeLessThan(-0.9);
 
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       const beforeRejectedFeelOverride = runtime.snapshot();
       expect(() =>
         runtime.requestControlFeelProfile(
@@ -529,7 +545,7 @@ describe("capability package runtime smoke tests", () => {
       )).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
 
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       expect(runtime).not.toHaveProperty("setControlFeelTuning");
       expect(runtime).not.toHaveProperty("getControlFeelTuning");
       expect(runtime).not.toHaveProperty("setControlTuning");
@@ -836,7 +852,7 @@ describe("capability package runtime smoke tests", () => {
       expect(orbitPreview.tuningByProfileRef[orbitProfile.resourceRef])
         .toEqual({ targetHeightMeters: 1.4 });
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       const afterReset = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterReset.subjectStatesByEntityId.player!.activeControlFeelProfileRef)
         .toBe(MEDIUM_FEEL_REF);

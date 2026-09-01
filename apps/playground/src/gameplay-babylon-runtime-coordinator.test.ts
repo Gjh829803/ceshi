@@ -117,6 +117,7 @@ function worldProjection(
 
 interface FakeRuntimeV1 {
   readonly canvas: HTMLCanvasElement;
+  readonly publishInitialBoundCameraView: ReturnType<typeof vi.fn>;
   readonly renderFrame: ReturnType<typeof vi.fn>;
   readonly renderFrameWhenReady: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
@@ -126,12 +127,19 @@ interface FakeRuntimeV1 {
 function fakeRuntimeFactory(
   configuration: RuntimeWorldConfigurationV1,
   options: Readonly<{
+    rejectCandidateInitialCameraPublication?: boolean;
     rejectCandidateRender?: boolean;
     usePreparedFixedInput?: boolean;
   }> = {},
 ) {
   const runtimes: FakeRuntimeV1[] = [];
   const commitCountsAtReady: number[] = [];
+  const candidateReadinessSteps: Array<Readonly<{
+    runtimeIndex: number;
+    stage: "camera-publication" | "render";
+    commitCount: number;
+    viewStateRevision?: number;
+  }>> = [];
   const prepareFixedInputTick = vi.fn();
   const legacyFixedInputTick = vi.fn();
   const factory = vi.fn(async ({
@@ -146,6 +154,7 @@ function fakeRuntimeFactory(
     });
     let preparedProjection = worldProjection(configuration);
     let renderFrameIndex = 0;
+    const runtimeIndex = runtimes.length;
     const dispose = vi.fn(async () => undefined);
     const renderFrame = vi.fn(() => {
       if (options.rejectCandidateRender === true && runtimes.length === 2) {
@@ -164,9 +173,29 @@ function fakeRuntimeFactory(
     });
     const runtime: FakeRuntimeV1 = {
       canvas,
+      publishInitialBoundCameraView: vi.fn((viewStateRevision: number) => {
+        candidateReadinessSteps.push({
+          runtimeIndex,
+          stage: "camera-publication",
+          commitCount: harness.commitCount,
+          viewStateRevision,
+        });
+        if (
+          options.rejectCandidateInitialCameraPublication === true &&
+          runtimeIndex === 1
+        ) {
+          throw new Error("candidate initial Camera publication rejected");
+        }
+        return runtime.snapshot();
+      }),
       renderFrame,
       renderFrameWhenReady: vi.fn(async () => {
         commitCountsAtReady.push(harness.commitCount);
+        candidateReadinessSteps.push({
+          runtimeIndex,
+          stage: "render",
+          commitCount: harness.commitCount,
+        });
         return renderFrame();
       }),
       dispose,
@@ -323,6 +352,7 @@ function fakeRuntimeFactory(
     factory,
     runtimes,
     commitCountsAtReady,
+    candidateReadinessSteps,
     prepareFixedInputTick,
     legacyFixedInputTick,
   };
@@ -335,7 +365,10 @@ function fakeDocument(): Pick<Document, "createElement"> {
 }
 
 async function createHarness(
-  options: Readonly<{ rejectCandidateRender?: boolean }> = {},
+  options: Readonly<{
+    rejectCandidateInitialCameraPublication?: boolean;
+    rejectCandidateRender?: boolean;
+  }> = {},
 ) {
   const configuration = await worldConfiguration();
   const runtimeFactory = fakeRuntimeFactory(configuration, options);
@@ -785,12 +818,13 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     await coordinator.dispose();
   }, 30_000);
 
-  it("commits the canonical initial possession and renders before create resolves", async () => {
+  it("publishes the bound initial Camera before the readiness render and create resolution", async () => {
     const {
       configuration,
       coordinator,
       runtimes,
       commitCountsAtReady,
+      candidateReadinessSteps,
     } = await createHarness();
     const publication = coordinator.hostPublication();
 
@@ -804,8 +838,21 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       }),
     ]);
     expect(runtimes).toHaveLength(1);
+    expect(runtimes[0]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
+    expect(runtimes[0]?.publishInitialBoundCameraView).toHaveBeenCalledWith(
+      publication.viewState.viewStateRevision,
+    );
     expect(runtimes[0]?.renderFrame).toHaveBeenCalledOnce();
     expect(commitCountsAtReady).toEqual([1]);
+    expect(candidateReadinessSteps).toEqual([
+      {
+        runtimeIndex: 0,
+        stage: "camera-publication",
+        commitCount: 1,
+        viewStateRevision: publication.viewState.viewStateRevision,
+      },
+      { runtimeIndex: 0, stage: "render", commitCount: 1 },
+    ]);
     expect(coordinator.activeRuntime()).toBe(runtimes[0]);
     expect(coordinator.activeCanvas()).toBe(runtimes[0]?.canvas);
 
@@ -817,6 +864,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       configuration,
       coordinator,
       commitCountsAtReady,
+      candidateReadinessSteps,
       runtimes,
     } = await createHarness();
     const current = coordinator.currentRuntimePublicationIdentity();
@@ -840,7 +888,21 @@ describe("Gameplay Babylon Runtime coordinator", () => {
 
     expect(result.status).toBe("published");
     expect(commitCountsAtReady).toEqual([1, 1]);
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledWith(
+      coordinator.hostPublication().viewState.viewStateRevision,
+    );
     expect(runtimes[1]?.renderFrame).toHaveBeenCalledOnce();
+    expect(candidateReadinessSteps.slice(-2)).toEqual([
+      {
+        runtimeIndex: 1,
+        stage: "camera-publication",
+        commitCount: 1,
+        viewStateRevision:
+          coordinator.hostPublication().viewState.viewStateRevision,
+      },
+      { runtimeIndex: 1, stage: "render", commitCount: 1 },
+    ]);
     expect(Object.values(
       coordinator.hostPublication().gameplayInspection.relationshipStatesById,
     )).toEqual([
@@ -951,8 +1013,39 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     await coordinator.dispose();
   });
 
+  it("keeps the current runtime when candidate initial Camera publication fails before render", async () => {
+    const { coordinator, runtimes, candidateReadinessSteps } =
+      await createHarness({ rejectCandidateInitialCameraPublication: true });
+    const originalWorldSessionId = coordinator.snapshot().worldSessionId;
+
+    await expect(coordinator.resetWithInitialControlBinding()).rejects.toThrow(
+      /WORLD_SESSION_FAILED/,
+    );
+
+    expect(runtimes).toHaveLength(2);
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
+    expect(runtimes[1]?.renderFrameWhenReady).not.toHaveBeenCalled();
+    expect(runtimes[1]?.dispose).toHaveBeenCalledOnce();
+    expect(candidateReadinessSteps.slice(-1)).toEqual([
+      expect.objectContaining({
+        runtimeIndex: 1,
+        stage: "camera-publication",
+        commitCount: 1,
+      }),
+    ]);
+    expect(coordinator.snapshot().worldSessionId).toBe(originalWorldSessionId);
+    expect(coordinator.activeRuntime()).toBe(runtimes[0]);
+
+    await coordinator.dispose();
+  });
+
   it("publishes the rendered bound reset candidate and disposes the replaced owner once", async () => {
-    const { configuration, coordinator, runtimes } = await createHarness();
+    const {
+      configuration,
+      coordinator,
+      runtimes,
+      candidateReadinessSteps,
+    } = await createHarness();
     const previousRuntime = runtimes[0];
     const previousWorldSessionId = coordinator.snapshot().worldSessionId;
 
@@ -970,7 +1063,16 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       }),
     ]);
     expect(runtimes).toHaveLength(2);
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
     expect(runtimes[1]?.renderFrame).toHaveBeenCalledOnce();
+    expect(candidateReadinessSteps.slice(-2)).toEqual([
+      expect.objectContaining({
+        runtimeIndex: 1,
+        stage: "camera-publication",
+        commitCount: 1,
+      }),
+      { runtimeIndex: 1, stage: "render", commitCount: 1 },
+    ]);
     expect(coordinator.activeRuntime()).toBe(runtimes[1]);
     expect(coordinator.activeCanvas()).toBe(runtimes[1]?.canvas);
     expect(previousRuntime?.dispose).toHaveBeenCalledOnce();

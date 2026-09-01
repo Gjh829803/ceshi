@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isNil } from "lodash-es";
@@ -24,6 +24,8 @@ export const CLEAN_BREAK_HISTORICAL_EXCLUSIONS = Object.freeze([
   "docs/superpowers/plans",
   "docs/superpowers/specs",
 ] as const);
+
+const REQUIRED_CLEAN_BREAK_SCAN_ROOTS = Object.freeze(["packages"] as const);
 
 const IGNORED_DIRECTORY_NAMES = new Set([
   ".git",
@@ -229,7 +231,13 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       blocksCompletion: true,
       pathPattern: /^(?:packages|apps|scripts|examples|artifacts|assets|\.codex)\//,
       excludedPathPattern: /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/,
-      pattern: new RegExp(escaped(token(["?", "authoring", "=1"])), "g"),
+      pattern: new RegExp(
+        `(?:${alternatives([
+          token(["?", "authoring", "=1"]),
+          token(["catalog", "-gameplay"]),
+        ])})`,
+        "g",
+      ),
     }),
     Object.freeze({
       familyId: "current-top-level-contracts",
@@ -411,6 +419,21 @@ function groupByPath(matches: readonly MutableMatch[]): readonly CleanBreakPathM
 export async function scanUnreleasedCleanBreak(
   repositoryRoot: string,
 ): Promise<CleanBreakCensusReport> {
+  for (const root of REQUIRED_CLEAN_BREAK_SCAN_ROOTS) {
+    let rootStats;
+    try {
+      rootStats = await stat(path.join(repositoryRoot, root));
+    } catch {
+      throw new Error(
+        `Unreleased clean-break required census root is unavailable: ${root}`,
+      );
+    }
+    if (!rootStats.isDirectory()) {
+      throw new Error(
+        `Unreleased clean-break required census root is not a directory: ${root}`,
+      );
+    }
+  }
   const discovered = new Set<string>();
   for (const root of CLEAN_BREAK_SCAN_ROOTS) {
     for (const file of await discoverFiles(path.join(repositoryRoot, root))) {

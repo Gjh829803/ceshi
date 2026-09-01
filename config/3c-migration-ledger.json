@@ -81,7 +81,8 @@
         "3C-6 Golden CharacterMovementRuntime projections omit the legacy Motion Kernel identity instead of publishing a synthetic authority",
         "dv.commit.12 verifies two Registry G Bots publish Locomotion V2 without activeMotionKernelRef",
         "M8-S1 Camera clean break removes Motion Kernel identity from the public ViewTargetSampleV1 provider shell",
-        "M8-S1 current support projection removes the legacy activeMotionKernelRef spelling and lock type from the traversal boundary while retaining the canonical compiled motionKernelRef; exact executable-source census: 21"
+        "M8-S1 current support projection removes the legacy activeMotionKernelRef spelling and lock type from the traversal boundary while retaining the canonical compiled motionKernelRef; exact executable-source census: 21",
+        "M8-S1 pre-freeze terminology correction supersedes the preceding identity shorthand: Camera and support projections delete only the legacy activeMotionKernelRef field and MotionKernelLiveLockStateV1 type; canonical compiled motionKernelRef remains the current identity"
       ]
     },
     {

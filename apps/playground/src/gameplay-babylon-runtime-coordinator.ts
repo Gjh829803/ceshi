@@ -77,6 +77,7 @@ const MAXIMUM_CONCURRENT_RUNTIME_HANDLE_COUNT_V1 = 2;
  */
 export type GameplayBabylonRuntimeV1 = Pick<
   BabylonWorldRuntime,
+  | "publishInitialBoundCameraView"
   | "renderFrame"
   | "renderFrameWhenReady"
   | "resize"
@@ -430,6 +431,9 @@ export class GameplayBabylonRuntimeCoordinatorV1 {
         if (isNil(handle)) {
           throw new Error("WORLDKIT_RUNTIME_CANDIDATE_HANDLE_NOT_FOUND");
         }
+        handle.runtime.publishInitialBoundCameraView(
+          publication.viewState.viewStateRevision,
+        );
         await handle.runtime.renderFrameWhenReady();
       },
     });

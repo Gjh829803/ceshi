@@ -199,6 +199,15 @@ describe("Babylon Native isolated Runtime entry", () => {
     expect(snapshot.runtimeSessionId).toBe(input.request.runtimeSessionId);
     expect(snapshot.runtime.phase).toBe("ready");
     expect(snapshot.resources.physicsBodyCount).toBe(4);
+    expect(snapshot.view).toMatchObject({
+      viewStateRevision: 1,
+      camera: {
+        mode: "tracking",
+        targetEntityId:
+          input.verifiedWorldPackage.worldRuntimeBootstrap
+            .initialControlledEntityId,
+      },
+    });
     expect(entry.runtimeUsage()).toEqual(expect.objectContaining({
       actualSceneNodeCount: snapshot.resources.meshCount,
       actualPhysicsBodyCount: snapshot.resources.physicsBodyCount,

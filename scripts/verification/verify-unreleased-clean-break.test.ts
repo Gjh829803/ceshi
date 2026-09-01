@@ -117,8 +117,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("groups superseded mechanisms and serialized authoring by family and path", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-groups-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-groups-");
     await mkdir(path.join(fixtureRoot, "apps", "sample"), { recursive: true });
     await mkdir(path.join(fixtureRoot, "examples"), { recursive: true });
     await writeFile(
@@ -321,7 +320,7 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(true);
   });
 
-  it("blocks the retired authoring query route in active packages and examples", async () => {
+  it("blocks every retired Viewer route in unlisted active package and example files", async () => {
     const fixtureRoot = await createFixtureRoot("clean-break-viewer-route-");
     const evidencePath = path.join(
       fixtureRoot,
@@ -339,14 +338,25 @@ describe("verify:unreleased-clean-break", () => {
       mkdir(path.dirname(evidencePath), { recursive: true }),
       mkdir(path.dirname(packagePath), { recursive: true }),
     ]);
-    const retiredRoute = token(["?", "authoring", "=1"]);
+    const retiredAuthoringRoute = token(["?", "authoring", "=1"]);
+    const retiredCatalogGameplayRoute = token(["catalog", "-gameplay"]);
     await Promise.all([
       writeFile(
         evidencePath,
-        JSON.stringify({ browserUrl: `http://127.0.0.1:5173/${retiredRoute}` }),
+        JSON.stringify({
+          browserUrl: `http://127.0.0.1:5173/${retiredAuthoringRoute}`,
+          routeMode: retiredCatalogGameplayRoute,
+        }),
         "utf8",
       ),
-      writeFile(packagePath, `export const route = "${retiredRoute}";\n`, "utf8"),
+      writeFile(
+        packagePath,
+        [
+          `export const route = "${retiredAuthoringRoute}";`,
+          `export const routeMode = "${retiredCatalogGameplayRoute}";`,
+        ].join("\n"),
+        "utf8",
+      ),
     ]);
 
     const report = await scanUnreleasedCleanBreak(fixtureRoot);
@@ -357,14 +367,29 @@ describe("verify:unreleased-clean-break", () => {
     ).matchesByPath).toEqual([
       {
         path: "examples/evidence/legacy-route.json",
-        matches: [{ line: 1, value: retiredRoute }],
+        matches: [
+          { line: 1, value: retiredAuthoringRoute },
+          { line: 1, value: retiredCatalogGameplayRoute },
+        ],
       },
       {
         path: "packages/viewer/legacy-route.ts",
-        matches: [{ line: 1, value: retiredRoute }],
+        matches: [
+          { line: 1, value: retiredAuthoringRoute },
+          { line: 2, value: retiredCatalogGameplayRoute },
+        ],
       },
     ]);
     expect(report.ok).toBe(false);
+  });
+
+  it("fails closed when the required packages census root is absent", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-missing-packages-");
+    await rm(path.join(fixtureRoot, "packages"), { recursive: true });
+
+    await expect(scanUnreleasedCleanBreak(fixtureRoot)).rejects.toThrow(
+      /required census root.*packages/i,
+    );
   });
 
   it("blocks superseded v3 node contracts after authoring v4 became authoritative", async () => {
@@ -416,8 +441,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("blocks superseded protocol names written with spaces in active documentation", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-active-docs-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-active-docs-");
     const quickstartPath = path.join(
       fixtureRoot,
       "docs",
@@ -443,8 +467,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("treats the Gameplay integration contract as active documentation", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-gameplay-doc-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-gameplay-doc-");
     const contractPath = path.join(
       fixtureRoot,
       "docs",
@@ -550,8 +573,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("discovers nested superseded serialized contracts under generated artifacts", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-artifacts-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-artifacts-");
     await mkdir(path.join(fixtureRoot, "artifacts", "generated"), { recursive: true });
     await writeFile(
       path.join(fixtureRoot, "artifacts", "generated", "bundle.json"),
