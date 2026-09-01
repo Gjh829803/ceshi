@@ -23,6 +23,8 @@ import {
   HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
   hostedFormalCaptureErrorV1,
 } from "@whitebox-world/runtime-babylon";
+import { createHostedNativeExecutionBudgetV1 } from
+  "./hosted-native-execution-budget.js";
 import { nativeSceneSubjectAssetResolver } from
   "./subject-asset-resolver.js";
 import { loadVerifiedNativeWorldPackageV1 } from
@@ -121,35 +123,9 @@ export function readHostedFormalCaptureRouteIdentityV1(
 function captureExecutionBudget(
   scene: NativeEffectiveExecutionBudgetV1["scene"],
 ): NativeEffectiveExecutionBudgetV1 {
-  return Object.freeze({
+  return createHostedNativeExecutionBudgetV1({
+    mode: "formal-capture",
     scene,
-    assets: {
-      maximumAssetCount: 64,
-      maximumAssetBytes: 64_000_000,
-      maximumTextureCount: 32,
-      maximumTextureBytes: 64_000_000,
-    },
-    runtime: {
-      maximumSceneNodeCount: 2_000,
-      maximumMaterialCount: 256,
-      maximumShaderCount: 256,
-      maximumPhysicsBodyCount: 256,
-    },
-    process: {
-      maximumWallTimeMilliseconds: 120_000,
-      maximumCpuTimeMilliseconds: 120_000,
-      maximumMemoryBytes: 1_000_000_000,
-      maximumProcessCount: 1,
-    },
-    protocol: {
-      maximumInboundMessageBytes:
-        HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1.maximumInboundMessageBytes,
-      maximumOutboundMessageBytes:
-        HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1.maximumOutboundMessageBytes,
-      maximumReceiptBytes: 16_000_000,
-      maximumDiagnosticCount: 1,
-      maximumLogBytes: 100_000,
-    },
   });
 }
 
