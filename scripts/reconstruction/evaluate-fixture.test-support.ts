@@ -22,6 +22,7 @@ import {
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
   parseWorldRuntimeSnapshotV4,
+  type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   hashSceneAuthoringAttemptResultV1,
@@ -52,6 +53,8 @@ const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
 
 export interface EvidenceSetFixtureOptionsV1 {
   readonly includePaletteTraversalDisagreement?: boolean;
+  readonly traversalCheckExpectation?: "pass" | "block";
+  readonly traversalCheckpointCriteria?: readonly FormalTraversalCheckpointSpatialCriterionV1[];
   readonly traversalCheckpoints?: readonly Readonly<{
     checkpointId: string;
     outcome: "reached" | "passed" | "blocked";
@@ -99,15 +102,26 @@ function snapshotValue() {
           capabilityStatesById: {
             "locomotion:player": {
               id: "locomotion:player",
-              kind: "locomotion-capability-state",
+              kind: "locomotion-capability-state-v2",
               ownerEntityId: "player",
               locomotionCapabilityRef:
                 "worldkit://locomotion-capability/ground.standard@1",
               locomotionCapabilityHash: H("c"),
-              mode: "idle",
-              movementMedium: "ground",
-              facingYawRadians: 0,
-              speedMetersPerSecond: 0,
+              locomotion: {
+                schemaVersion: 2,
+                status: "active",
+                mobilityMode: "grounded",
+                gait: "idle",
+                verticalPhase: "none",
+                supportMode: "supported",
+                movementMedium: "ground",
+                facingYawRadians: 0,
+                linearVelocity: { x: 0, y: 0, z: 0 },
+                horizontalSpeedMetersPerSecond: 0,
+                committedTick: 4,
+                phaseEnteredTick: 0,
+                transitionSequence: 0,
+              },
             },
           },
         },
@@ -148,6 +162,19 @@ function snapshotValue() {
 export function createEvidenceSetFixtureInputV1(
   options: EvidenceSetFixtureOptionsV1 = {},
 ): BuildWorldReconstructionEvidenceSetInputV1 {
+  const traversalCheckExpectation = options.traversalCheckExpectation ?? "pass";
+  const traversalCheckpointCriteria = options.traversalCheckpointCriteria ?? [{
+    kind: "reach-bounds" as const,
+    checkpointId: "ground",
+    expectation: "reach" as const,
+    sourceVisualGroupId: "ground-group",
+    sourceBoundsMeters: {
+      minimumMetersXYZ: [-5, -1, -5] as const,
+      maximumMetersXYZ: [5, 0, 5] as const,
+    },
+    capsuleRadiusMeters: 0.35,
+    toleranceMeters: 0.05,
+  }];
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1({
     kind: "world-reconstruction-evaluation-profile",
     schemaVersion: 1,
@@ -271,8 +298,8 @@ export function createEvidenceSetFixtureInputV1(
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         id: "reach-ground",
         evidenceKind: "scripted-fixed-input",
-        expectation: "pass",
-        checkpointIds: ["ground"],
+        expectation: traversalCheckExpectation,
+        checkpointIds: traversalCheckpointCriteria.map(({ checkpointId }) => checkpointId),
         fixedInputSequence: [{ actions: ["move-forward"], ticks: 1 }],
       }],
       deterministicBuild: {
@@ -489,20 +516,9 @@ export function createEvidenceSetFixtureInputV1(
     traversalCheckBindings: [{
       traversalCheckId: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
-      checkExpectation: "pass" as const,
+      checkExpectation: traversalCheckExpectation,
       fixedInputSequenceHash: sha256CanonicalJson([{ actions: ["move-forward"], ticks: 1 }]),
-      checkpointCriteria: [{
-        kind: "reach-bounds" as const,
-        checkpointId: "ground",
-        expectation: "reach" as const,
-        sourceVisualGroupId: "ground-group",
-        sourceBoundsMeters: {
-          minimumMetersXYZ: [-5, -1, -5] as const,
-          maximumMetersXYZ: [5, 0, 5] as const,
-        },
-        capsuleRadiusMeters: 0.35,
-        toleranceMeters: 0.05,
-      }],
+      checkpointCriteria: traversalCheckpointCriteria,
     }],
   };
   const openingRequest = {
@@ -548,7 +564,7 @@ export function createEvidenceSetFixtureInputV1(
     checks: [{
       id: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
-      checkExpectation: "pass" as const,
+      checkExpectation: traversalCheckExpectation,
       fixedInputSequence,
       fixedInputSequenceHash: sha256CanonicalJson(fixedInputSequence),
       checkpointCriteria,
@@ -702,7 +718,7 @@ export function createEvidenceSetFixtureInputV1(
     checks: [{
       id: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
-      checkExpectation: "pass",
+      checkExpectation: traversalCheckExpectation,
       resetReadySnapshot: snapshot,
       resetReadySnapshotHash: sha256CanonicalJson(snapshot),
       fixedTicks: [{
@@ -715,7 +731,7 @@ export function createEvidenceSetFixtureInputV1(
       checkpoints: options.traversalCheckpoints ?? [
         { checkpointId: "ground", outcome: "reached", observedAtTick: 1 },
       ],
-      outcome: "passed",
+      outcome: traversalCheckExpectation === "pass" ? "passed" : "blocked",
       observedTopologyRelations: [],
     }],
   });
