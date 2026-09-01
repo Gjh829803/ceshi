@@ -43,6 +43,7 @@ import { isEqual, isNil } from "lodash-es";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import {
+  createCaptureOnlyHostedTransportStarterV1,
   runCaptureOnlyHostedSessionV1,
   type StartCaptureOnlyHostedTransportV1,
 } from "./hosted-session-capture.js";
@@ -116,7 +117,8 @@ export interface CaptureHostedWorldPackagePortsV1 {
     packageDirectoryPath: string,
   ) => Promise<WorldPackageDirectoryV1>;
   readonly startTransport?: StartCaptureOnlyHostedTransportV1<
-    FormalHostedWorldCapturePayloadV1
+    FormalHostedWorldCapturePayloadV1,
+    FormalWorldCaptureRequestV1
   >;
 }
 
@@ -439,9 +441,11 @@ export async function captureHostedWorldPackageV1(
         maximumFileCount: MAXIMUM_PACKAGE_FILE_COUNT,
       })),
   );
-  const startTransport = ports.startTransport ?? (async () => {
-    throw new Error("FORMAL_CAPTURE_RUNTIME_PROVIDER_UNAVAILABLE");
-  });
+  const startTransport = ports.startTransport ??
+    createCaptureOnlyHostedTransportStarterV1({
+      packageDirectoryPath,
+      ...(input.port === undefined ? {} : { port: input.port }),
+    });
   const payload = await runCaptureOnlyHostedSessionV1({
     request: joined.request,
     startTransport,

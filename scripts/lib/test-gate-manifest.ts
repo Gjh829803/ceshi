@@ -15,6 +15,9 @@ export interface TestGateManifestEntryV1 {
 
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
   { path: "apps/native-scene-playground/src/cloud-ridge-scene.test.ts", lane: "contract" },
+  { path: "apps/native-scene-playground/src/hosted-formal-capture-bridge.test.ts", lane: "contract" },
+  { path: "apps/native-scene-playground/src/hosted-formal-capture-frame.test.ts", lane: "contract" },
+  { path: "apps/native-scene-playground/src/hosted-formal-capture-route.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/hosted-runtime-bridge.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-package-migration.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-package-vite-seam.test.ts", lane: "contract" },

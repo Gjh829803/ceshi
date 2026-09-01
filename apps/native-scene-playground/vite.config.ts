@@ -457,6 +457,10 @@ export async function createNativeScenePlaygroundViteConfigV1(
 
     const hostedBrowserRunnerSourcePaths = Object.freeze([
       "src/main.ts",
+      "src/hosted-formal-capture-bridge.ts",
+      "src/hosted-formal-capture-frame.ts",
+      "src/hosted-formal-capture-protocol.ts",
+      "src/hosted-formal-capture-route.ts",
       "src/hosted-runtime-bridge.ts",
       "src/hosted-runtime-frame.ts",
       "src/native-runtime-host.ts",
