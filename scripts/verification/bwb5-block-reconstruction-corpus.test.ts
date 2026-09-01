@@ -11,6 +11,11 @@ import {
 } from "@whitebox-world/native-babylon";
 import { createBabylonNativeBlockReconstructionCorpusModuleV1 } from
   "@whitebox-world/native-babylon-block-profile/testing";
+import {
+  createBabylonNativeBlockMaterializerMetadataV1,
+  takeBabylonNativeBlockCheckedEpochEvidenceV1,
+  type BabylonNativeBlockCheckedEpochEvidenceV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 import { admitBabylonNativeSceneCandidateV1 } from
   "@whitebox-world/native-babylon/host";
 import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
@@ -57,10 +62,22 @@ type PassedCandidateAdmission = Extract<
   { readonly outcome: "passed" }
 >;
 
+function checkedLayoutInventoryHash(
+  evidence: BabylonNativeBlockCheckedEpochEvidenceV1,
+): `sha256:${string}` {
+  return sha256CanonicalJson(Object.freeze({
+    kind: "babylon-native-block-checked-layout-inventory",
+    schemaVersion: 1,
+    blocks: evidence.checkedLayout.layout.blocks,
+    visualGroups: evidence.checkedLayout.checkResult.visualGroups,
+  })) as `sha256:${string}`;
+}
+
 async function auditedAdmission(
   module: BabylonNativeSceneModuleV1,
 ): Promise<Readonly<{
   admission: PassedCandidateAdmission;
+  blockEvidence: BabylonNativeBlockCheckedEpochEvidenceV1;
   candidateColliderMeshes: readonly Mesh[];
   candidateScene: Scene;
   candidateEngine: NullEngine;
@@ -71,6 +88,8 @@ async function auditedAdmission(
   const engine = new NullEngine();
   const scene = new Scene(engine);
   let admission: PassedCandidateAdmission | undefined;
+  let blockEvidence: readonly BabylonNativeBlockCheckedEpochEvidenceV1[] =
+    Object.freeze([]);
   let candidateColliderMeshes: readonly Mesh[] = Object.freeze([]);
   try {
     const result = await admitBabylonNativeSceneCandidateV1({
@@ -98,14 +117,19 @@ async function auditedAdmission(
         mesh.name.startsWith("worldkit-block-collider-"),
     ));
   } finally {
+    blockEvidence = takeBabylonNativeBlockCheckedEpochEvidenceV1(scene);
     scene.dispose();
     engine.dispose();
   }
   if (isNil(admission)) {
     throw new Error("BWB-5 corpus admission did not publish a Contribution.");
   }
+  if (blockEvidence.length !== 1) {
+    throw new Error("BWB-5 corpus admission did not publish one Block evidence record.");
+  }
   return Object.freeze({
     admission,
+    blockEvidence: blockEvidence[0]!,
     candidateColliderMeshes,
     candidateScene: scene,
     candidateEngine: engine,
@@ -113,14 +137,51 @@ async function auditedAdmission(
 }
 
 function verifiedPackage(
-  contribution: PassedCandidateAdmission["contribution"],
+  candidate: Awaited<ReturnType<typeof auditedAdmission>>,
 ): VerifiedBabylonNativeWorldPackageDirectoryV1 {
+  const packageInput = createBabylonNativeBlockWorldPackageTestInputV1({
+    resourceBudget: RESOURCE_BUDGET,
+    nativeSceneContribution: candidate.admission.contribution,
+  });
+  const templateMetadata = packageInput.nativeBlockMaterializerMetadata;
+  if (isNil(templateMetadata)) {
+    throw new Error("BWB-5 corpus requires Block materializer metadata.");
+  }
+  const nativeBlockMaterializerMetadata =
+    createBabylonNativeBlockMaterializerMetadataV1({
+      authoringLayoutBinding: Object.freeze({
+        kind: "native-block-authoring-layout-binding",
+        schemaVersion: 1,
+        caseHash: templateMetadata.caseHash,
+        authoringManifestHash: templateMetadata.authoringManifestHash,
+        checkedLayoutInventoryHash: checkedLayoutInventoryHash(
+          candidate.blockEvidence,
+        ),
+        contributionHash: candidate.admission.contributionHash,
+        visualGroups: Object.freeze(
+          candidate.blockEvidence.checkedLayout.checkResult.visualGroups.map(
+            (group, index) => Object.freeze({
+              acceptanceTargetRef:
+                `worldkit://acceptance-target/bwb5-${group.id}@1`,
+              visualGroupId: group.id,
+              semanticClassId: `worldkit.native-block.group.${group.id}`,
+              identityColorHex:
+                `#${(index + 1).toString(16).padStart(6, "0").toUpperCase()}` as `#${string}`,
+              blockIds: group.blockIds,
+              paletteRoles: group.paletteRoles,
+              minimumMetersXYZ: group.minimumMetersXYZ,
+              maximumMetersXYZ: group.maximumMetersXYZ,
+            })),
+          ),
+      }),
+      checkedLayout: candidate.blockEvidence.checkedLayout,
+      colliderInventory: candidate.blockEvidence.colliderInventory,
+      profileInventoryHash: candidate.blockEvidence.profileInventoryHash,
+      contribution: candidate.admission.contribution,
+    });
   const verified = verifyWorldPackageDirectoryV1(
     createBabylonNativeWorldPackageV1(
-      createBabylonNativeBlockWorldPackageTestInputV1({
-        resourceBudget: RESOURCE_BUDGET,
-        nativeSceneContribution: contribution,
-      }),
+      { ...packageInput, nativeBlockMaterializerMetadata },
     ),
   );
   if (verified.kind !== "babylon-native-scene") {
@@ -139,7 +200,7 @@ async function createRuntime(
     caseId,
   });
   const packageAdmission = await auditedAdmission(module);
-  const verified = verifiedPackage(packageAdmission.admission.contribution);
+  const verified = verifiedPackage(packageAdmission);
   const configuration = runtimeWorldConfigurationFromVerifiedWorldPackageV1(
     verified,
   );
