@@ -32,7 +32,6 @@ import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
-import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "../../packages/runtime-babylon/src/gameplay-runtime-internal.js";
 import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
 
 const havokWasmBytes = await readFile(
@@ -225,10 +224,12 @@ describe("Traversal Area Runtime collision separation", () => {
       }),
     });
     try {
-      await bindRuntimeTestPossession(runtime, "player");
+      const initialCameraViewRevision = await bindRuntimeTestPossession(
+        runtime,
+        "player",
+      );
       runtime.publishInitialBoundCameraView(
-        runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
-          .viewStateRevision,
+        initialCameraViewRevision,
       );
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
