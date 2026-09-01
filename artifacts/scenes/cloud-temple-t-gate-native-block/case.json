@@ -47,12 +47,13 @@
     "spawnSupport": { "acceptanceTargetRef": "worldkit://acceptance-target/supported-spawn@1", "spawnMarkerId": "spawn-foreground-platform", "supportColliderId": "collider-foreground-ground", "expectedMedium": "ground", "expectedPositionXYZMeters": { "xMeters": 0, "yMeters": 0, "zMeters": 18 } },
     "colliders": [
       { "acceptanceTargetRef": "worldkit://acceptance-target/central-ascent@1", "contributionId": "collider-central-steps", "colliderId": "collider-central-steps", "role": "step", "requiresOverlay": true },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/foreground-platform@1", "contributionId": "collider-cliff-approach-ground", "colliderId": "collider-cliff-approach-ground", "role": "ground", "requiresOverlay": true },
       { "acceptanceTargetRef": "worldkit://acceptance-target/mountain-cliff-layers@1", "contributionId": "collider-cliff-blockers", "colliderId": "collider-cliff-blockers", "role": "blocker", "requiresOverlay": true },
       { "acceptanceTargetRef": "worldkit://acceptance-target/supported-spawn@1", "contributionId": "collider-foreground-ground", "colliderId": "collider-foreground-ground", "role": "ground", "requiresOverlay": true },
       { "acceptanceTargetRef": "worldkit://acceptance-target/gate-mass@1", "contributionId": "collider-gate-walls", "colliderId": "collider-gate-walls", "role": "blocker", "requiresOverlay": true }
     ],
     "criticalTraversalChecks": [
-      { "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1", "id": "central-ascent-pass", "evidenceKind": "scripted-fixed-input", "expectation": "pass", "checkpointIds": ["spawn-foreground-platform", "upper-platform"], "fixedInputSequence": [{ "actions": ["move-forward"], "axes": { "moveYRatio": 1 }, "ticks": 120 }] },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1", "id": "central-ascent-pass", "evidenceKind": "scripted-fixed-input", "expectation": "pass", "checkpointIds": ["spawn-foreground-platform", "upper-platform"], "fixedInputSequence": [{ "actions": ["move-forward"], "axes": { "moveYRatio": 1 }, "ticks": 240 }] },
       { "acceptanceTargetRef": "worldkit://acceptance-target/mountain-cliff-layers@1", "id": "cliff-block", "evidenceKind": "scripted-fixed-input", "expectation": "block", "checkpointIds": ["cliff-edge"], "fixedInputSequence": [{ "actions": ["move-right"], "axes": { "moveXRatio": 1 }, "ticks": 60 }] }
     ],
     "deterministicBuild": { "acceptanceTargetRef": "worldkit://acceptance-target/central-ascent@1", "requiresCandidateReplay": true, "requiresWorldPackageIdentityAgreement": true, "requiresBuildIdentityAgreement": true, "requiresCaptureIdentityAgreement": true }

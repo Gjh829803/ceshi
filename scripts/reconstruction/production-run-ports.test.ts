@@ -437,6 +437,29 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     )).toEqual(reconstructionCase.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
     ));
+    expect(reconstructionCase.expected.colliders.find(
+      ({ colliderId }) => colliderId === "collider-cliff-approach-ground",
+    )).toEqual({
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/foreground-platform@1",
+      contributionId: "collider-cliff-approach-ground",
+      colliderId: "collider-cliff-approach-ground",
+      role: "ground",
+      requiresOverlay: true,
+    });
+    expect(reconstructionCase.expected.criticalTraversalChecks.find(
+      ({ id }) => id === "central-ascent-pass",
+    )?.fixedInputSequence).toEqual([{
+      actions: ["move-forward"],
+      axes: { moveYRatio: 1 },
+      ticks: 240,
+    }]);
+    expect(await readFile(
+      path.join(caseRoot, "inputs", "task-instruction.md"),
+      "utf8",
+    )).toContain(
+      "walking or falling off an unregistered ledge is not blocker evidence",
+    );
     await expect(createProductionWorldReconstructionRunPortsV1({
       ...value.input,
       repositoryRoot,

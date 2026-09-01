@@ -43,6 +43,7 @@ Do not write logs, screenshots, receipts, locks, generated JavaScript, source ma
 6. Give every selected complete semantic target one explicit `visualGroupId`. Do not split a complete gate, building, mountain mass, or repeated identity into decorative part groups.
 7. Register the Host-declared Spawn Marker explicitly at a ground-supported Spawn with clearance. The marker identifies the support-top position; it does not create a Character or control state.
 8. Select every static collider explicitly during Block Profile finalization. Include the Spawn support, continuous playable corridor, required Case IDs, and necessary blocker walls, but do not register every visual Block. Keep the final selection below the frozen Generation Request Collider budget. Never infer collision from mesh names, tags, materials, or a later scene scan.
+   Every scripted fixed-input check must remain supported for its complete declared approach unless the Case explicitly expects a ledge departure. A blocker check must reach the blocker on registered support; falling from a visual-only platform edge is not evidence that the blocker works.
 9. The first reconstruction Case has no Route/Nav claim. Static traversal intent is only an explicit collider contribution where admitted; do not emit product Route, NavMesh, `goTo`, or reachability evidence.
 
 Before returning, verify this closure:
