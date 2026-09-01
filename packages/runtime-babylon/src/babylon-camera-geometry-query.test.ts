@@ -423,6 +423,117 @@ describe("BabylonHavokCameraGeometryQueryV2", () => {
     }
   });
 
+  it("restores every disabled shape filter and preserves a primary query failure", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const plugin = await enableHavokPhysics(scene, [0, -9.81, 0], havokWasmBinary);
+    const createBody = (entityId: string) => {
+      const mesh = MeshBuilder.CreateBox(entityId, { size: 1 }, scene);
+      mesh.metadata = { worldkitEntityId: entityId };
+      return new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0 }, scene);
+    };
+    const firstRider = createBody("first-rider");
+    const secondRider = createBody("second-rider");
+    const query = new BabylonHavokCameraGeometryQueryV2(scene, plugin);
+    query.registerEntityPhysicsBody("first-rider", firstRider.body);
+    query.registerEntityPhysicsBody("second-rider", secondRider.body);
+    query.setEntityQueryEnabled("first-rider", false);
+    query.setEntityQueryEnabled("second-rider", false);
+    const firstShape = firstRider.body.shape!;
+    const secondShape = secondRider.body.shape!;
+    const firstOriginal = {
+      membershipMask: firstShape.filterMembershipMask,
+      collideMask: firstShape.filterCollideMask,
+    };
+    const secondOriginal = {
+      membershipMask: secondShape.filterMembershipMask,
+      collideMask: secondShape.filterCollideMask,
+    };
+    let firstMembershipMask = firstOriginal.membershipMask;
+    let firstCollideMask = firstOriginal.collideMask;
+    let secondMembershipMask = secondOriginal.membershipMask;
+    let secondCollideMask = secondOriginal.collideMask;
+    let firstMembershipSetCount = 0;
+    let firstCollideSetCount = 0;
+    let secondMembershipSetCount = 0;
+    let secondCollideSetCount = 0;
+    const restorationFailure = new Error("TEST_FILTER_MEMBERSHIP_RESTORE_FAILURE");
+    const primaryQueryFailure = new Error("TEST_CAMERA_QUERY_PRIMARY_FAILURE");
+    Object.defineProperties(firstShape, {
+      filterMembershipMask: {
+        configurable: true,
+        get: () => firstMembershipMask,
+        set: (value: number) => {
+          firstMembershipMask = value;
+          firstMembershipSetCount += 1;
+          if (firstMembershipSetCount === 2) throw restorationFailure;
+        },
+      },
+      filterCollideMask: {
+        configurable: true,
+        get: () => firstCollideMask,
+        set: (value: number) => {
+          firstCollideMask = value;
+          firstCollideSetCount += 1;
+        },
+      },
+    });
+    Object.defineProperties(secondShape, {
+      filterMembershipMask: {
+        configurable: true,
+        get: () => secondMembershipMask,
+        set: (value: number) => {
+          secondMembershipMask = value;
+          secondMembershipSetCount += 1;
+        },
+      },
+      filterCollideMask: {
+        configurable: true,
+        get: () => secondCollideMask,
+        set: (value: number) => {
+          secondCollideMask = value;
+          secondCollideSetCount += 1;
+        },
+      },
+    });
+    vi.spyOn(plugin, "shapeProximity").mockImplementation(() => {
+      throw primaryQueryFailure;
+    });
+
+    try {
+      let thrown: unknown;
+      try {
+        query.query(request());
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(AggregateError);
+      expect((thrown as AggregateError).message)
+        .toBe("CAMERA_GEOMETRY_QUERY_FILTER_RESTORE_FAILED");
+      expect((thrown as AggregateError).errors)
+        .toEqual([primaryQueryFailure, restorationFailure]);
+      expect(firstMembershipSetCount).toBe(2);
+      expect(firstCollideSetCount).toBe(2);
+      expect(secondMembershipSetCount).toBe(2);
+      expect(secondCollideSetCount).toBe(2);
+      expect(firstMembershipMask).toBe(firstOriginal.membershipMask);
+      expect(firstCollideMask).toBe(firstOriginal.collideMask);
+      expect(secondMembershipMask).toBe(secondOriginal.membershipMask);
+      expect(secondCollideMask).toBe(secondOriginal.collideMask);
+    } finally {
+      delete (firstShape as unknown as Record<string, unknown>).filterMembershipMask;
+      delete (firstShape as unknown as Record<string, unknown>).filterCollideMask;
+      delete (secondShape as unknown as Record<string, unknown>).filterMembershipMask;
+      delete (secondShape as unknown as Record<string, unknown>).filterCollideMask;
+      query.dispose();
+      firstRider.dispose();
+      secondRider.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it("rejects duplicate bindings and disposes every cached probe shape", async () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);

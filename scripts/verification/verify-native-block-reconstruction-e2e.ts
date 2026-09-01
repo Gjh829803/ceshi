@@ -849,9 +849,6 @@ async function verifyFinalPromotion(input: Readonly<{
     fail("NBR70_FINAL_LAUNCH_INVALID");
   }
   const caseRefSuffix = "/case.json";
-  if (!input.runReceipt.caseRef.endsWith(caseRefSuffix)) {
-    fail("NBR70_FINAL_LAUNCH_INVALID");
-  }
   exact(
     launch.runReceiptRef,
     `${input.runReceipt.caseRef.slice(0, -caseRefSuffix.length)}/runs/${
@@ -1150,6 +1147,10 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     formalCaptureIntent.id !==
       `${reconstructionCase.id}.formal-world-capture-intent`
   ) fail("NBR70_IDENTITY_MISMATCH");
+  if (
+    runReceipt.caseRef !==
+      `artifact://world-reconstruction-case/${reconstructionCase.id}/case.json`
+  ) fail("NBR70_CASE_REF_INVALID");
   exact(runReceipt.caseHash, hashWorldReconstructionCaseV1(reconstructionCase));
   exact(runReceipt.evaluationProfileRef, reconstructionCase.evaluationProfileRef);
   exact(runReceipt.evaluationProfileHash,

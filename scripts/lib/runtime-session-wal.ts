@@ -166,6 +166,22 @@ function receiptCommitsNewWorldSessionV1(
         "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE");
 }
 
+function isTerminalRejectedReceiptV1(
+  receipt: RuntimeSessionReceiptV1,
+): receipt is Extract<RuntimeSessionReceiptV1, { status: "rejected" }> {
+  return receipt.status === "rejected" &&
+    receipt.diagnostic.code !== "RUNTIME_SESSION_REQUEST_REJECTED";
+}
+
+function finalEventMatchesTerminalReceiptV1(
+  event: RuntimeSessionFinalEventV1,
+  receipt: Extract<RuntimeSessionReceiptV1, { status: "rejected" }>,
+): boolean {
+  return event.type === "failed" &&
+    event.diagnostic.code === receipt.diagnostic.code &&
+    event.diagnostic.message === receipt.diagnostic.message;
+}
+
 function receiptWorldSessionBindsCurrentV1(
   request: RuntimeSessionRequestV1,
   receipt: RuntimeSessionReceiptV1,
@@ -650,6 +666,9 @@ function validateTransactionState(
   const committedRequests: RuntimeSessionWalCommittedRequestV1[] = [];
   const requestIds = new Set<string>();
   let currentWorldSessionId = readyEvent.worldSessionId;
+  let terminalRejectedReceipt:
+    | Extract<RuntimeSessionReceiptV1, { status: "rejected" }>
+    | undefined;
   let finalEvent: RuntimeSessionFinalEventV1 | undefined;
   for (const transaction of transactions.slice(1)) {
     if (!isNil(finalEvent)) {
@@ -659,6 +678,9 @@ function validateTransactionState(
       return corrupt("A WAL may contain exactly one session-opened transaction.");
     }
     if (transaction.type === "request-committed") {
+      if (!isNil(terminalRejectedReceipt)) {
+        return corrupt("No committed Request may follow a terminal rejected Receipt.");
+      }
       if (
         transaction.request.runtimeSessionId !== readyEvent.runtimeSessionId ||
         transaction.receipt.runtimeSessionId !== readyEvent.runtimeSessionId ||
@@ -685,12 +707,20 @@ function validateTransactionState(
         requestHash: transaction.requestHash,
         receipt: transaction.receipt,
       }));
+      if (isTerminalRejectedReceiptV1(transaction.receipt)) {
+        terminalRejectedReceipt = transaction.receipt;
+      }
       continue;
     }
     if (
       transaction.finalEvent.runtimeSessionId !== readyEvent.runtimeSessionId ||
       transaction.finalEvent.worldSessionId !== currentWorldSessionId ||
-      transaction.finalEvent.sequence !== readyEvent.sequence + 1
+      transaction.finalEvent.sequence !== readyEvent.sequence + 1 ||
+      (!isNil(terminalRejectedReceipt) &&
+        !finalEventMatchesTerminalReceiptV1(
+          transaction.finalEvent,
+          terminalRejectedReceipt,
+        ))
     ) return corrupt("The final Event is not bound to the opened Session.");
     finalEvent = transaction.finalEvent;
   }
@@ -922,39 +952,50 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
         "RUNTIME_SESSION_WAL_BINDING_INVALID: Request and Receipt do not bind to the opened Session.",
       );
     }
-    this.append(buildTransaction({
+    const transaction = buildTransaction({
       type: "request-committed",
       request,
       requestHash,
       receipt,
-    }, this.transactions.length + 1, this.lastTransactionHash()));
+    }, this.transactions.length + 1, this.lastTransactionHash());
+    try {
+      validateTransactionState(Object.freeze([
+        ...this.transactions,
+        transaction,
+      ]));
+    } catch (error) {
+      throw new Error(
+        "RUNTIME_SESSION_WAL_BINDING_INVALID: Request and Receipt do not bind to the opened Session.",
+        { cause: error },
+      );
+    }
+    this.append(transaction);
   }
 
   appendClosed(value: unknown): void {
     this.assertActive();
     const event = parseRuntimeSessionEventV1(value);
-    const currentWorldSessionId = this.state.committedRequests.reduce(
-      (worldSessionId, entry) =>
-        receiptCommitsNewWorldSessionV1(entry.request, entry.receipt) &&
-          entry.receipt.worldSessionId !== worldSessionId
-          ? entry.receipt.worldSessionId
-          : worldSessionId,
-      this.state.readyEvent.worldSessionId,
-    );
-    if (
-      event.type === "ready" ||
-      event.runtimeSessionId !== this.state.readyEvent.runtimeSessionId ||
-      event.worldSessionId !== currentWorldSessionId ||
-      event.sequence !== this.state.readyEvent.sequence + 1
-    ) {
+    if (event.type === "ready") {
       throw new Error(
         "RUNTIME_SESSION_WAL_BINDING_INVALID: Final Event does not bind to the opened Session.",
       );
     }
-    this.append(buildTransaction({
+    const transaction = buildTransaction({
       type: "session-closed",
       finalEvent: event,
-    }, this.transactions.length + 1, this.lastTransactionHash()));
+    }, this.transactions.length + 1, this.lastTransactionHash());
+    try {
+      validateTransactionState(Object.freeze([
+        ...this.transactions,
+        transaction,
+      ]));
+    } catch (error) {
+      throw new Error(
+        "RUNTIME_SESSION_WAL_BINDING_INVALID: Final Event does not bind to the opened Session.",
+        { cause: error },
+      );
+    }
+    this.append(transaction);
   }
 
   private assertActive(): void {

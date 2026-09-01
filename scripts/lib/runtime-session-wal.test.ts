@@ -16,6 +16,8 @@ import {
   deriveRuntimeSessionEventIdV1,
   deriveRuntimeSessionReceiptIdV1,
   hashRuntimeSessionRequestV1,
+  parseRuntimeSessionReceiptV1,
+  type RuntimeSessionDiagnosticV1,
   type RuntimeSessionEventV1,
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
@@ -99,10 +101,10 @@ function rejectedReceipt(
       message: "The Runtime Session is not active.",
     },
   } as const;
-  return {
+  return parseRuntimeSessionReceiptV1({
     id: deriveRuntimeSessionReceiptIdV1(body),
     ...body,
-  };
+  }) as Extract<RuntimeSessionReceiptV1, { status: "rejected" }>;
 }
 
 function completedEvent(
@@ -116,6 +118,26 @@ function completedEvent(
     runtimeSessionId: "runtime-session-primary",
     worldSessionId,
     type: "completed",
+  } as const;
+  return {
+    id: deriveRuntimeSessionEventIdV1(body),
+    ...body,
+  };
+}
+
+function failedEvent(
+  diagnostic: RuntimeSessionDiagnosticV1,
+  worldSessionId = WORLD_SESSION_ID,
+): Extract<RuntimeSessionEventV1, { type: "failed" }> {
+  const body = {
+    kind: "worldkit-runtime-session-event",
+    schemaVersion: 1,
+    protocolVersion: 1,
+    sequence: 2,
+    runtimeSessionId: "runtime-session-primary",
+    worldSessionId,
+    type: "failed",
+    diagnostic,
   } as const;
   return {
     id: deriveRuntimeSessionEventIdV1(body),
@@ -357,7 +379,7 @@ describe("file Runtime Session WAL V1", () => {
     expect(wal.snapshot().committedRequests).toEqual([]);
   });
 
-  it("accepts only an explicitly committed reset cleanup failure in the new World", async () => {
+  it("closes a committed reset cleanup failure only with its exact failed Event", async () => {
     const directory = await temporaryDirectory();
     const walFilePath = path.join(
       directory,
@@ -376,15 +398,28 @@ describe("file Runtime Session WAL V1", () => {
       type: "session.reset",
     } as const satisfies RuntimeSessionRequestV1;
 
+    const receipt = rejectedReceipt(
+      resetRequest,
+      RESET_WORLD_SESSION_ID,
+      "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+    );
     wal.appendCommittedRequest({
       request: resetRequest,
-      receipt: rejectedReceipt(
-        resetRequest,
-        RESET_WORLD_SESSION_ID,
-        "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
-      ),
+      receipt,
     });
-    wal.appendClosed(completedEvent(RESET_WORLD_SESSION_ID));
+    expect(() => wal.appendClosed(
+      completedEvent(RESET_WORLD_SESSION_ID),
+    )).toThrow("RUNTIME_SESSION_WAL_BINDING_INVALID");
+    expect(() => wal.appendClosed(failedEvent({
+      code: receipt.diagnostic.code,
+      message: "A different failure message.",
+    }, RESET_WORLD_SESSION_ID))).toThrow(
+      "RUNTIME_SESSION_WAL_BINDING_INVALID",
+    );
+    wal.appendClosed(failedEvent(
+      receipt.diagnostic,
+      RESET_WORLD_SESSION_ID,
+    ));
 
     const reopened = openFileRuntimeSessionWalV1({ walFilePath }).snapshot();
     expect(reopened.committedRequests).toHaveLength(1);
@@ -395,7 +430,86 @@ describe("file Runtime Session WAL V1", () => {
         code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
       },
     });
-    expect(reopened.finalEvent?.worldSessionId).toBe(RESET_WORLD_SESSION_ID);
+    expect(reopened.finalEvent).toEqual(failedEvent(
+      receipt.diagnostic,
+      RESET_WORLD_SESSION_ID,
+    ));
+  });
+
+  it("rejects a completed Event after an ordinary terminal rejected Receipt", async () => {
+    const directory = await temporaryDirectory();
+    const walFilePath = path.join(
+      directory,
+      "session",
+      "runtime-session.wal.ndjson",
+    );
+    const wal = createFileRuntimeSessionWalV1({
+      walFilePath,
+      readyEvent: readyEvent(),
+    });
+    const terminalRequest = request("runtime-request-terminal-failure");
+    const terminalReceipt = rejectedReceipt(terminalRequest);
+    wal.appendCommittedRequest({
+      request: terminalRequest,
+      receipt: terminalReceipt,
+    });
+
+    expect(() => wal.appendClosed(completedEvent())).toThrow(
+      "RUNTIME_SESSION_WAL_BINDING_INVALID",
+    );
+    expect(() => wal.appendCommittedRequest({
+      request: request("runtime-request-after-terminal"),
+      receipt: rejectedReceipt(request("runtime-request-after-terminal")),
+    })).toThrow("RUNTIME_SESSION_WAL_BINDING_INVALID");
+    wal.appendClosed(failedEvent(terminalReceipt.diagnostic));
+  });
+
+  it("fails replay closed when completed follows a terminal rejected Receipt", async () => {
+    const directory = await temporaryDirectory();
+    const walFilePath = path.join(
+      directory,
+      "session",
+      "runtime-session.wal.ndjson",
+    );
+    const wal = createFileRuntimeSessionWalV1({
+      walFilePath,
+      readyEvent: readyEvent(),
+    });
+    const resetRequest = {
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: "runtime-request-reset-cleanup-replay",
+      runtimeSessionId: "runtime-session-primary",
+      type: "session.reset",
+    } as const satisfies RuntimeSessionRequestV1;
+    wal.appendCommittedRequest({
+      request: resetRequest,
+      receipt: rejectedReceipt(
+        resetRequest,
+        RESET_WORLD_SESSION_ID,
+        "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+      ),
+    });
+    const rows = readFileSync(walFilePath, "utf8").trim().split("\n");
+    const committed = JSON.parse(rows.at(-1)!) as {
+      readonly transactionHash: `sha256:${string}`;
+    };
+    const transactionBody = {
+      kind: "worldkit-runtime-session-wal-transaction",
+      schemaVersion: 1,
+      sequence: 3,
+      previousTransactionHash: committed.transactionHash,
+      type: "session-closed",
+      finalEvent: completedEvent(RESET_WORLD_SESSION_ID),
+    } as const;
+    appendFileSync(walFilePath, `${stringifyCanonicalJson({
+      ...transactionBody,
+      transactionHash: sha256CanonicalJson(transactionBody),
+    })}\n`, "utf8");
+
+    expect(() => openFileRuntimeSessionWalV1({ walFilePath })).toThrow(
+      "RUNTIME_SESSION_WAL_CORRUPT",
+    );
   });
 
   it("fails closed when replay contains a rejected reset with a foreign WorldSession", async () => {

@@ -11,6 +11,8 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import {
   canonicalRuntimeSessionReceiptV1,
+  deriveRuntimeSessionReceiptIdV1,
+  hashRuntimeSessionRequestV1,
   type FixedInputV1,
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
@@ -482,6 +484,62 @@ describe("Runtime Session executor V1", () => {
         type: "failed",
         worldSessionId: `${WORLD_SESSION_ID}.reset.1`,
       });
+  });
+
+  it("recovers an unclosed committed reset cleanup failure with the exact failed Event", async () => {
+    const directory = await temporaryDirectory();
+    const input = createInput(directory);
+    const sessions: FakeHeadlessRuntimeSession[] = [];
+    await createRuntimeSessionExecutorForTestV1(
+      input,
+      factories(sessions),
+    );
+    const resetRequest = request({
+      id: "request-reset-cleanup-recovery",
+      type: "session.reset",
+    });
+    const diagnostic = {
+      code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+      message:
+        "The new World was committed before old World cleanup failed and the Session was closed.",
+    } as const;
+    const receiptBody = {
+      kind: "worldkit-runtime-session-receipt",
+      schemaVersion: 1,
+      requestId: resetRequest.id,
+      requestHash: hashRuntimeSessionRequestV1(resetRequest),
+      runtimeSessionId: RUNTIME_SESSION_ID,
+      worldSessionId: `${WORLD_SESSION_ID}.reset.1`,
+      requestType: "session.reset",
+      status: "rejected",
+      diagnostic,
+    } as const;
+    const receipt = {
+      id: deriveRuntimeSessionReceiptIdV1(receiptBody),
+      ...receiptBody,
+    } as const satisfies RuntimeSessionReceiptV1;
+    openFileRuntimeSessionWalV1({
+      walFilePath: input.walFilePath,
+    }).appendCommittedRequest({ request: resetRequest, receipt });
+
+    const resumed = await resumeRuntimeSessionExecutorForTestV1(
+      {
+        packageDirectoryPath: input.packageDirectoryPath,
+        walFilePath: input.walFilePath,
+      },
+      factories(sessions),
+    );
+
+    expect(sessions[1]?.disposeCount).toBe(1);
+    expect(openFileRuntimeSessionWalV1({ walFilePath: input.walFilePath })
+      .snapshot().finalEvent).toMatchObject({
+        type: "failed",
+        worldSessionId: receipt.worldSessionId,
+        diagnostic,
+      });
+    expect(canonicalRuntimeSessionReceiptV1(
+      await resumed.execute(resetRequest),
+    )).toBe(canonicalRuntimeSessionReceiptV1(receipt));
   });
 
   it("durably rejects stale committed support without closing the Session", async () => {

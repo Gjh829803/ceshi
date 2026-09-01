@@ -4,6 +4,7 @@ import {
   type GameplayCommandReceiptV1,
   type GameplayCommandV1,
 } from "@whitebox-world/gameplay-contracts";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -470,8 +471,32 @@ describe("Runtime Session V1 public DTOs", () => {
       ...rejectedBody,
     } as const satisfies RuntimeSessionReceiptV1;
     expect(parseRuntimeSessionReceiptV1(rejected)).toEqual(rejected);
+    const invalidSnapshotCleanupFailureBody = {
+      ...rejectedBody,
+      diagnostic: {
+        code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+        message: "The new World was committed before old World cleanup failed.",
+      },
+    } as const;
+    const invalidSnapshotCleanupFailure = {
+      id: `runtime-session-receipt:${sha256CanonicalJson(
+        invalidSnapshotCleanupFailureBody,
+      ).slice("sha256:".length)}`,
+      ...invalidSnapshotCleanupFailureBody,
+    };
+    expect(() => parseRuntimeSessionReceiptV1(
+      invalidSnapshotCleanupFailure,
+    )).toThrow("closed RuntimeSessionReceiptV1 schema");
+
+    const resetRequest = requestFixtures()[4]! as Extract<
+      RuntimeSessionRequestV1,
+      { type: "session.reset" }
+    >;
     const committedResetCleanupFailureBody = {
       ...rejectedBody,
+      requestId: resetRequest.id,
+      requestHash: hashRuntimeSessionRequestV1(resetRequest),
+      requestType: resetRequest.type,
       diagnostic: {
         code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
         message: "The new World was committed before old World cleanup failed.",
@@ -480,7 +505,7 @@ describe("Runtime Session V1 public DTOs", () => {
     const committedResetCleanupFailure = {
       id: deriveRuntimeSessionReceiptIdV1(committedResetCleanupFailureBody),
       ...committedResetCleanupFailureBody,
-    };
+    } as const satisfies RuntimeSessionReceiptV1;
     expect(parseRuntimeSessionReceiptV1(committedResetCleanupFailure)).toEqual(
       committedResetCleanupFailure,
     );

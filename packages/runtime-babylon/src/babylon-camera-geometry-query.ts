@@ -132,12 +132,18 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
             shape,
             membershipMask: shape.filterMembershipMask,
             collideMask: shape.filterCollideMask,
+            membershipMaskTouched: false,
+            collideMaskTouched: false,
           };
         });
+      let primaryFailure: unknown;
+      let hasPrimaryFailure = false;
       try {
-        for (const { shape } of disabledShapeFilters) {
-          shape.filterMembershipMask = 0;
-          shape.filterCollideMask = 0;
+        for (const filter of disabledShapeFilters) {
+          filter.membershipMaskTouched = true;
+          filter.shape.filterMembershipMask = 0;
+          filter.collideMaskTouched = true;
+          filter.shape.filterCollideMask = 0;
         }
         const probeShape = this.sphereShape(request.radiusMeters);
         const overlapInputResult = new ProximityCastResult();
@@ -213,21 +219,41 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
           penetrationDepthMeters: 0,
           obstructionClass: "hard",
         }, request);
+      } catch (error) {
+        primaryFailure = error;
+        hasPrimaryFailure = true;
+        throw error;
       } finally {
         const restorationFailures: unknown[] = [];
         for (
-          const { shape, membershipMask, collideMask } of disabledShapeFilters
+          const {
+            shape,
+            membershipMask,
+            collideMask,
+            membershipMaskTouched,
+            collideMaskTouched,
+          } of disabledShapeFilters
         ) {
-          try {
-            shape.filterMembershipMask = membershipMask;
-            shape.filterCollideMask = collideMask;
-          } catch (error) {
-            restorationFailures.push(error);
+          if (membershipMaskTouched) {
+            try {
+              shape.filterMembershipMask = membershipMask;
+            } catch (error) {
+              restorationFailures.push(error);
+            }
+          }
+          if (collideMaskTouched) {
+            try {
+              shape.filterCollideMask = collideMask;
+            } catch (error) {
+              restorationFailures.push(error);
+            }
           }
         }
         if (restorationFailures.length > 0) {
           throw new AggregateError(
-            restorationFailures,
+            hasPrimaryFailure
+              ? [primaryFailure, ...restorationFailures]
+              : restorationFailures,
             "CAMERA_GEOMETRY_QUERY_FILTER_RESTORE_FAILED",
           );
         }

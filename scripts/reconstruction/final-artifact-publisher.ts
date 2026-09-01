@@ -476,6 +476,11 @@ async function publish(
     if (runReceipt.outcome !== "passed" || runReceipt.cleanupOutcome !== "completed") {
       invalid("Run Receipt is not a completed passed run");
     }
+    exact(
+      runReceipt.caseRef,
+      `artifact://world-reconstruction-case/${reconstructionCase.id}/case.json`,
+      "Run Receipt Case ref is foreign",
+    );
     exact(runReceipt.caseHash, hashWorldReconstructionCaseV1(reconstructionCase),
       "Run Receipt Case identity is stale");
     const finalAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
@@ -601,9 +606,6 @@ async function publish(
     exact(launch.runReceiptHash, sha256CanonicalJson(runReceipt),
       "launch Run Receipt is stale");
     const caseRefSuffix = "/case.json";
-    if (!runReceipt.caseRef.endsWith(caseRefSuffix)) {
-      invalid("Run Receipt Case ref cannot derive the launch ref");
-    }
     exact(
       launch.runReceiptRef,
       `${runReceipt.caseRef.slice(0, -caseRefSuffix.length)}/runs/${

@@ -23,8 +23,17 @@ import {
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   formalWorldCaptureIntentCanonicalBytesV1,
+  hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
+  hashFormalScriptedTraversalObservationV1,
+  hashFormalSemanticCaptureMapV1,
+  hashFormalSpawnSupportObservationV1,
+  hashFormalWorldCaptureRequestV1,
   hashFormalWorldCaptureReceiptV1,
+  parseFormalColliderOverlayObservationV1,
+  parseFormalOpeningObservationV1,
+  parseFormalScriptedTraversalObservationV1,
+  parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
   parseWorldRuntimeSnapshotV4,
   type FixedInputV1,
@@ -336,9 +345,14 @@ function playabilityPort(options: {
 async function completeRunFixture(
   options: Parameters<typeof createEvidenceSetFixtureInputV1>[0] & Readonly<{
     forgePassedEvaluation?: boolean;
+    caseRefOverride?: string;
   }> = {},
 ) {
-  const { forgePassedEvaluation = false, ...evidenceOptions } = options;
+  const {
+    forgePassedEvaluation = false,
+    caseRefOverride,
+    ...evidenceOptions
+  } = options;
   const caseDirectoryPath = await realpath(
     await mkdtemp(path.join(os.tmpdir(), "nbr70-complete-")),
   );
@@ -348,6 +362,7 @@ async function completeRunFixture(
     ...evidenceOptions,
     allDimensionsPass: true,
   });
+  const caseRef = caseRefOverride ?? fixture.caseRef;
   const verified = fixture.verifiedWorldPackage;
   const attemptDirectoryPath = path.join(runDirectoryPath, "attempts/0");
   const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
@@ -419,8 +434,55 @@ async function completeRunFixture(
   });
 
   const pngHash = sha256Bytes(PNG) as Sha256HashV1;
+  const semanticCaptureMap = {
+    ...fixture.captureReceipt.formalRequest.semanticCaptureMap,
+    caseRef,
+  };
+  const formalRequest = {
+    ...fixture.captureReceipt.formalRequest,
+    caseRef,
+    semanticCaptureMap,
+    semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticCaptureMap),
+  };
+  const formalRequestHash = hashFormalWorldCaptureRequestV1(formalRequest);
+  const openingObservationBase = parseFormalOpeningObservationV1({
+    ...fixture.openingObservation,
+    formalRequest,
+    formalRequestHash,
+    semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+  });
+  const spawnSupportObservation = parseFormalSpawnSupportObservationV1({
+    ...fixture.spawnSupportObservation,
+    formalRequest,
+    formalRequestHash,
+    semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+  });
+  const colliderOverlayObservation = parseFormalColliderOverlayObservationV1({
+    ...fixture.colliderOverlayObservation,
+    formalRequest,
+    formalRequestHash,
+    semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+  });
+  const scriptedTraversalObservation = parseFormalScriptedTraversalObservationV1({
+    ...fixture.scriptedTraversalObservation,
+    formalRequest,
+    formalRequestHash,
+    semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+  });
   const originalCaptureReceipt = parseFormalWorldCaptureReceiptV1({
     ...fixture.captureReceipt,
+    caseRef,
+    formalRequest,
+    formalRequestHash,
+    semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+    openingObservationContentHash:
+      hashFormalOpeningObservationV1(openingObservationBase),
+    spawnSupportObservationContentHash:
+      hashFormalSpawnSupportObservationV1(spawnSupportObservation),
+    colliderOverlayObservationContentHash:
+      hashFormalColliderOverlayObservationV1(colliderOverlayObservation),
+    scriptedTraversalContentHash:
+      hashFormalScriptedTraversalObservationV1(scriptedTraversalObservation),
     views: fixture.captureReceipt.views.map((view) => ({
       ...view,
       pngContentHash: pngHash,
@@ -429,7 +491,12 @@ async function completeRunFixture(
   });
   const originalEvidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
+    caseRef,
     captureReceipt: originalCaptureReceipt,
+    openingObservation: openingObservationBase,
+    spawnSupportObservation,
+    colliderOverlayObservation,
+    scriptedTraversalObservation,
   });
   const originalEvaluation = evaluateWorldReconstructionV1({
     case: fixture.reconstructionCase,
@@ -438,15 +505,15 @@ async function completeRunFixture(
   });
   const openingObservation = forgePassedEvaluation
     ? {
-      ...fixture.openingObservation,
-      visualGroups: fixture.openingObservation.visualGroups.map(
+      ...openingObservationBase,
+      visualGroups: openingObservationBase.visualGroups.map(
         (group, index, groups) => ({
           ...group,
           depthOrder: groups.length - 1 - index,
         }),
       ),
     }
-    : fixture.openingObservation;
+    : openingObservationBase;
   const captureReceipt = forgePassedEvaluation
     ? parseFormalWorldCaptureReceiptV1({
       ...originalCaptureReceipt,
@@ -458,15 +525,19 @@ async function completeRunFixture(
     await writeFile(path.join(captureDirectoryPath, `${name}.png`), PNG);
   }
   await writeJson(path.join(captureDirectoryPath, "opening-observation.json"), openingObservation);
-  await writeJson(path.join(captureDirectoryPath, "spawn-support-observation.json"), fixture.spawnSupportObservation);
-  await writeJson(path.join(captureDirectoryPath, "collider-overlay-observation.json"), fixture.colliderOverlayObservation);
-  await writeJson(path.join(captureDirectoryPath, "scripted-traversal.json"), fixture.scriptedTraversalObservation);
+  await writeJson(path.join(captureDirectoryPath, "spawn-support-observation.json"), spawnSupportObservation);
+  await writeJson(path.join(captureDirectoryPath, "collider-overlay-observation.json"), colliderOverlayObservation);
+  await writeJson(path.join(captureDirectoryPath, "scripted-traversal.json"), scriptedTraversalObservation);
   await writeJson(path.join(captureDirectoryPath, "formal-world-capture-receipt.json"), captureReceipt);
 
   const evidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
+    caseRef,
     captureReceipt,
     openingObservation,
+    spawnSupportObservation,
+    colliderOverlayObservation,
+    scriptedTraversalObservation,
   });
   const evaluated = evaluateWorldReconstructionV1({
     case: fixture.reconstructionCase,
@@ -498,7 +569,7 @@ async function completeRunFixture(
     kind: "world-reconstruction-run-receipt",
     schemaVersion: 1,
     id: "package-fixture.run",
-    caseRef: fixture.caseRef,
+    caseRef,
     caseHash: hashWorldReconstructionCaseV1(fixture.reconstructionCase),
     evaluationProfileRef: fixture.evaluationProfileRef,
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(fixture.evaluationProfile),
@@ -546,8 +617,9 @@ async function finalLaunchFixture(input: Readonly<{
     kind: "native-block-reconstruction-launch" as const,
     schemaVersion: 1 as const,
     caseId: "package-fixture.case",
-    runReceiptRef:
-      "artifact://world-reconstruction-case/package-fixture.case/runs/formal-fixture/run-receipt.json",
+    runReceiptRef: `${runReceipt.caseRef.slice(0, -"/case.json".length)}/runs/${
+      path.basename(input.runDirectoryPath)
+    }/run-receipt.json`,
     runReceiptHash: sha256CanonicalJson(runReceipt) as Sha256HashV1,
     worldPackageRelativePath: "final/world-package" as const,
     worldPackageRef: finalAttempt.worldPackageRef,
@@ -563,6 +635,26 @@ async function finalLaunchFixture(input: Readonly<{
 }
 
 describe("Native Block reconstruction final artifact publisher integration", () => {
+  it("rejects a Run Receipt bound to a foreign Case namespace before publication", async () => {
+    const fixture = await completeRunFixture({
+      caseRefOverride:
+        "artifact://world-reconstruction-case/foreign.case/case.json",
+    });
+    const playability = playabilityPort();
+    try {
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture,
+        launch: await finalLaunchFixture(fixture),
+        playability: playability.port,
+      })).rejects.toThrow(
+        "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID: Run Receipt Case ref is foreign",
+      );
+      expect(playability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("runs the formal Final verifier before publishing the exact staged candidate", async () => {
     const fixture = await completeRunFixture();
     const playability = playabilityPort();
@@ -1053,6 +1145,23 @@ describe("Native Block reconstruction E2E verifier", () => {
       expect(playability.launch).not.toHaveBeenCalled();
     } finally {
       await rm(runDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a consistently rewritten foreign Case namespace", async () => {
+    const fixture = await completeRunFixture({
+      caseRefOverride:
+        "artifact://world-reconstruction-case/foreign.case/case.json",
+    });
+    const playability = playabilityPort();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        playability: playability.port,
+      })).rejects.toThrowError("NBR70_CASE_REF_INVALID");
+      expect(playability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
 

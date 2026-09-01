@@ -162,7 +162,21 @@ export type RuntimeSessionReceiptV1 =
     }>)
   | (RuntimeSessionReceiptBaseV1 & Readonly<{
       status: "rejected";
-      diagnostic: RuntimeSessionDiagnosticV1;
+      diagnostic: Readonly<{
+        readonly code: Exclude<
+          RuntimeSessionDiagnosticCodeV1,
+          "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE"
+        >;
+        readonly message: string;
+      }>;
+    }>)
+  | (RuntimeSessionReceiptBaseV1 & Readonly<{
+      requestType: "session.reset";
+      status: "rejected";
+      diagnostic: Readonly<{
+        readonly code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE";
+        readonly message: string;
+      }>;
     }>);
 
 interface RuntimeSessionEventBaseV1 {
@@ -982,6 +996,13 @@ function parseRuntimeSessionReceiptBodyV1(
   if (record.status === "rejected") {
     if (!hasExactKeys(record, [...common, "diagnostic"]) ||
       isNil(parseRuntimeSessionDiagnosticV1(record.diagnostic))
+    ) return invalid(schemaName);
+    const diagnostic = snapshotDataRecord(record.diagnostic) ??
+      invalid(schemaName);
+    if (
+      diagnostic.code ===
+        "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" &&
+      record.requestType !== "session.reset"
     ) return invalid(schemaName);
     return canonicalClone(record, schemaName) as unknown as Omit<
       RuntimeSessionReceiptV1,
