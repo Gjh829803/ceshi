@@ -126,10 +126,6 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
     !isEqual(explicitTargetGroupPairs, packageTargetGroupPairs) ||
     !isEqual(explicitTargetGroupPairs, caseSilhouettePairs) ||
     !isEqual(
-      semanticCaptureTargetBindings.map(({ acceptanceTargetRef }) => acceptanceTargetRef),
-      [...reconstructionCase.acceptanceTargetRefs].sort(),
-    ) ||
-    !isEqual(
       semanticCaptureTargetBindings.map(({ compositionTargetRef }) => compositionTargetRef)
         .sort(),
       [...reconstructionCase.expected.openingComposition.targetRefs].sort(),

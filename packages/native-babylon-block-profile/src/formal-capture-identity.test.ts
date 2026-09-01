@@ -449,6 +449,43 @@ function bind(overrides: Record<string, unknown> = {}) {
 }
 
 describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
+  it("does not require the Case-only supported-spawn target to have a visual binding", () => {
+    const input = bindInput();
+    const supportedSpawnTarget =
+      "worldkit://acceptance-target/supported-spawn@1";
+    const reconstructionCase = parseWorldReconstructionCaseV1({
+      ...input.case,
+      acceptanceTargetRefs: [
+        input.case.acceptanceTargetRefs[0],
+        supportedSpawnTarget,
+        input.case.acceptanceTargetRefs[1],
+      ],
+      expected: {
+        ...input.case.expected,
+        spawnSupport: {
+          ...input.case.expected.spawnSupport,
+          acceptanceTargetRef: supportedSpawnTarget,
+        },
+        colliders: input.case.expected.colliders.map((collider) => ({
+          ...collider,
+          acceptanceTargetRef: supportedSpawnTarget,
+        })),
+      },
+    });
+    const materializerMetadata =
+      parseBabylonNativeBlockMaterializerMetadataV1({
+        ...input.materializerMetadata,
+        caseHash: hashWorldReconstructionCaseV1(reconstructionCase),
+      });
+
+    expect(() => bind({
+      case: reconstructionCase,
+      materializerMetadata,
+      materializerMetadataHash:
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
+    })).not.toThrow();
+  });
+
   it("consumes the canonical Manifest-to-checked-Layout binding identity", () => {
     const input = bindInput();
     const map = bind();
