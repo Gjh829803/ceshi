@@ -61,47 +61,50 @@ export interface CameraContextSampleV2 {
   }>;
 }
 
-export type CameraCollisionQueryQualityV1 =
-  | "exact-sphere-sweep"
-  | "ray-fan-approximation";
-
-export interface CameraCollisionQueryRequestV1 {
-  readonly schemaVersion: 1;
+export interface CameraGeometryQueryRequestV2 {
+  readonly schemaVersion: 2;
   readonly committedTick: number;
-  readonly fromMetersXYZ: readonly [number, number, number];
-  readonly toMetersXYZ: readonly [number, number, number];
+  readonly startPositionMetersXYZ: readonly [number, number, number];
+  readonly endPositionMetersXYZ: readonly [number, number, number];
   readonly radiusMeters: number;
+  readonly collisionMask: "camera-hard";
   readonly excludedEntityIds: readonly string[];
+  readonly maximumHitCount: 1;
 }
 
-export type CameraCollisionQueryResultV1 =
-  | Readonly<{
-      schemaVersion: 1;
-      quality: CameraCollisionQueryQualityV1;
-      hit: false;
-    }>
-  | Readonly<{
-      schemaVersion: 1;
-      quality: CameraCollisionQueryQualityV1;
-      hit: true;
-      distanceMeters: number;
-      positionMetersXYZ: readonly [number, number, number];
-      /** Absent only when locked provider explicitly reports no contact normal. */
-      normalXYZ?: readonly [number, number, number];
-      hitEntityId: string;
-    }>;
+export interface CameraGeometryHitV2 {
+  readonly schemaVersion: 2;
+  readonly travelDistanceMeters: number;
+  readonly travelFraction: number;
+  readonly hitPointMetersXYZ: readonly [number, number, number];
+  readonly hitNormalXYZ: readonly [number, number, number];
+  readonly hitEntityId?: string;
+  readonly startedOverlapping: boolean;
+  readonly penetrationDepthMeters: number;
+  readonly obstructionClass: "hard";
+}
 
-export interface CameraCollisionQueryPortV1 {
-  query(request: CameraCollisionQueryRequestV1): CameraCollisionQueryResultV1;
+export interface CameraGeometryQueryCapabilityV2 {
+  readonly shape: "sphere";
+  readonly maximumHitCount: 1;
+  readonly maximumExcludedEntityCount: number;
+  readonly reportsContactNormal: true;
+  readonly reportsStartOverlap: true;
+  readonly penetrationDepth: "exact-or-zero";
+}
+
+export interface CameraGeometryQueryPortV2 {
+  readonly capability: CameraGeometryQueryCapabilityV2;
+  query(request: CameraGeometryQueryRequestV2): CameraGeometryHitV2 | undefined;
 }
 
 export const CAMERA_CONTEXT_MAX_ACTIVE_ACTIONS_V2 = 64;
 export const CAMERA_CONTEXT_MAX_RELATIONSHIPS_V2 = 64;
 export const CAMERA_CONTEXT_MAX_SOCKETS_V2 = 256;
 export const CAMERA_CONTEXT_MAX_TAGS_V2 = 64;
-export const CAMERA_QUERY_MAX_EXCLUDED_ENTITIES_V1 = 64;
-export const CAMERA_QUERY_NORMAL_LENGTH_TOLERANCE_V1 = 1e-6;
-export const CAMERA_QUERY_POSITION_TOLERANCE_METERS_V1 = 1e-6;
+export const CAMERA_QUERY_MAX_EXCLUDED_ENTITIES_V2 = 64;
+export const CAMERA_QUERY_NORMAL_LENGTH_TOLERANCE_V2 = 1e-6;
+export const CAMERA_QUERY_POSITION_TOLERANCE_METERS_V2 = 1e-6;
 const CAMERA_TEXT_MAX_CODE_UNITS_V1 = 512;
 
 function cameraWellFormedUnicode(value: string): boolean {
@@ -435,90 +438,107 @@ export function parseCameraContextSampleV2(input: unknown): CameraContextSampleV
   }) as CameraContextSampleV2;
 }
 
-export function parseCameraCollisionQueryRequestV1(
+export function parseCameraGeometryQueryRequestV2(
   input: unknown,
-): CameraCollisionQueryRequestV1 {
-  const schemaName = "CameraCollisionQueryRequestV1";
+): CameraGeometryQueryRequestV2 {
+  const schemaName = "CameraGeometryQueryRequestV2";
   const value = cameraRecord(input) ?? cameraInvalid(schemaName);
   if (!cameraExact(value, [
-    "schemaVersion", "committedTick", "fromMetersXYZ", "toMetersXYZ", "radiusMeters", "excludedEntityIds",
-  ]) || value.schemaVersion !== 1 || !cameraTick(value.committedTick) ||
-    !cameraFinite(value.radiusMeters) || value.radiusMeters <= 0) {
+    "schemaVersion",
+    "committedTick",
+    "startPositionMetersXYZ",
+    "endPositionMetersXYZ",
+    "radiusMeters",
+    "collisionMask",
+    "excludedEntityIds",
+    "maximumHitCount",
+  ]) || value.schemaVersion !== 2 || !cameraTick(value.committedTick) ||
+    !cameraFinite(value.radiusMeters) || value.radiusMeters <= 0 ||
+    value.collisionMask !== "camera-hard" || value.maximumHitCount !== 1) {
     cameraInvalid(schemaName);
   }
-  const fromMetersXYZ = cameraVec3(value.fromMetersXYZ) ?? cameraInvalid(schemaName);
-  const toMetersXYZ = cameraVec3(value.toMetersXYZ) ?? cameraInvalid(schemaName);
+  const startPositionMetersXYZ = cameraVec3(value.startPositionMetersXYZ) ??
+    cameraInvalid(schemaName);
+  const endPositionMetersXYZ = cameraVec3(value.endPositionMetersXYZ) ??
+    cameraInvalid(schemaName);
   const excludedEntityIds = cameraStringArray(
     value.excludedEntityIds,
-    CAMERA_QUERY_MAX_EXCLUDED_ENTITIES_V1,
+    CAMERA_QUERY_MAX_EXCLUDED_ENTITIES_V2,
   ) ?? cameraInvalid(schemaName);
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
     committedTick: value.committedTick,
-    fromMetersXYZ,
-    toMetersXYZ,
+    startPositionMetersXYZ,
+    endPositionMetersXYZ,
     radiusMeters: value.radiusMeters,
+    collisionMask: "camera-hard",
     excludedEntityIds,
+    maximumHitCount: 1,
   });
 }
 
-export function parseCameraCollisionQueryResultV1(
+export function parseCameraGeometryHitV2(
   input: unknown,
-  requestInput?: CameraCollisionQueryRequestV1,
-): CameraCollisionQueryResultV1 {
-  const schemaName = "CameraCollisionQueryResultV1";
-  const record = cameraRecord(input) ?? cameraInvalid(schemaName);
-  if (record.schemaVersion !== 1 || !["exact-sphere-sweep", "ray-fan-approximation"].includes(record.quality as string)) {
+  requestInput?: CameraGeometryQueryRequestV2,
+): CameraGeometryHitV2 {
+  const schemaName = "CameraGeometryHitV2";
+  const value = cameraRecord(input) ?? cameraInvalid(schemaName);
+  const hasHitEntityId = Object.hasOwn(value, "hitEntityId");
+  if (!cameraExactWithOptional(value, [
+    "schemaVersion",
+    "travelDistanceMeters",
+    "travelFraction",
+    "hitPointMetersXYZ",
+    "hitNormalXYZ",
+    "startedOverlapping",
+    "penetrationDepthMeters",
+    "obstructionClass",
+  ], ["hitEntityId"]) || value.schemaVersion !== 2 ||
+    !cameraFinite(value.travelDistanceMeters) || value.travelDistanceMeters < 0 ||
+    !cameraFinite(value.travelFraction) || value.travelFraction < 0 || value.travelFraction > 1 ||
+    typeof value.startedOverlapping !== "boolean" ||
+    !cameraFinite(value.penetrationDepthMeters) || value.penetrationDepthMeters < 0 ||
+    value.obstructionClass !== "hard" ||
+    hasHitEntityId && !cameraString(value.hitEntityId)) {
     cameraInvalid(schemaName);
   }
-  const request = requestInput === undefined
-    ? undefined
-    : parseCameraCollisionQueryRequestV1(requestInput);
-  if (record.hit === false) {
-    if (!cameraExact(record, ["schemaVersion", "quality", "hit"])) cameraInvalid(schemaName);
-    return Object.freeze({ schemaVersion: 1, quality: record.quality, hit: false }) as CameraCollisionQueryResultV1;
-  }
-  const position = cameraVec3(record.positionMetersXYZ) ?? cameraInvalid(schemaName);
-  const hasNormal = Object.hasOwn(record, "normalXYZ");
-  const normal = hasNormal
-    ? cameraVec3(record.normalXYZ) ?? cameraInvalid(schemaName)
-    : undefined;
-  const distanceMeters = record.distanceMeters;
-  if (record.hit !== true || !cameraExact(record, [
-    "schemaVersion", "quality", "hit", "distanceMeters", "positionMetersXYZ",
-    ...(hasNormal ? ["normalXYZ"] : []), "hitEntityId",
-  ]) || !cameraFinite(distanceMeters) || distanceMeters < 0 ||
-    !cameraString(record.hitEntityId) ||
-    normal !== undefined &&
-      Math.abs(Math.hypot(...normal) - 1) > CAMERA_QUERY_NORMAL_LENGTH_TOLERANCE_V1) {
+  const hitPointMetersXYZ = cameraVec3(value.hitPointMetersXYZ) ?? cameraInvalid(schemaName);
+  const hitNormalXYZ = cameraVec3(value.hitNormalXYZ) ?? cameraInvalid(schemaName);
+  if (Math.abs(Math.hypot(...hitNormalXYZ) - 1) >
+    CAMERA_QUERY_NORMAL_LENGTH_TOLERANCE_V2) cameraInvalid(schemaName);
+  if (value.startedOverlapping) {
+    if (value.travelDistanceMeters !== 0 || value.travelFraction !== 0) {
+      cameraInvalid(schemaName);
+    }
+  } else if (value.penetrationDepthMeters !== 0) {
     cameraInvalid(schemaName);
   }
-  if (request !== undefined) {
-    const delta = request.toMetersXYZ.map(
-      (coordinate, index) => coordinate - request.fromMetersXYZ[index]!,
-    ) as [number, number, number];
-    const armLength = Math.hypot(...delta);
-    if (distanceMeters > armLength + CAMERA_QUERY_POSITION_TOLERANCE_METERS_V1 ||
-      request.excludedEntityIds.includes(record.hitEntityId)) cameraInvalid(schemaName);
-    const direction = armLength <= CAMERA_QUERY_POSITION_TOLERANCE_METERS_V1
-      ? [0, 0, 0]
-      : delta.map((coordinate) => coordinate / armLength);
-    const expectedPosition = request.fromMetersXYZ.map(
-      (coordinate, index) => coordinate + direction[index]! * distanceMeters,
+  if (requestInput !== undefined) {
+    const request = parseCameraGeometryQueryRequestV2(requestInput);
+    const armLengthMeters = Math.hypot(
+      request.endPositionMetersXYZ[0] - request.startPositionMetersXYZ[0],
+      request.endPositionMetersXYZ[1] - request.startPositionMetersXYZ[1],
+      request.endPositionMetersXYZ[2] - request.startPositionMetersXYZ[2],
     );
-    if (expectedPosition.some((coordinate, index) =>
-      Math.abs(coordinate - position[index]!) > CAMERA_QUERY_POSITION_TOLERANCE_METERS_V1
-    )) cameraInvalid(schemaName);
+    if (value.travelDistanceMeters > armLengthMeters +
+        CAMERA_QUERY_POSITION_TOLERANCE_METERS_V2 ||
+      Math.abs(value.travelDistanceMeters - armLengthMeters * value.travelFraction) >
+        CAMERA_QUERY_POSITION_TOLERANCE_METERS_V2 ||
+      hasHitEntityId && request.excludedEntityIds.includes(value.hitEntityId as string)) {
+      cameraInvalid(schemaName);
+    }
   }
   return Object.freeze({
-    schemaVersion: 1,
-    quality: record.quality,
-    hit: true,
-    distanceMeters,
-    positionMetersXYZ: position,
-    ...(normal === undefined ? {} : { normalXYZ: normal }),
-    hitEntityId: record.hitEntityId,
-  }) as CameraCollisionQueryResultV1;
+    schemaVersion: 2,
+    travelDistanceMeters: value.travelDistanceMeters,
+    travelFraction: value.travelFraction,
+    hitPointMetersXYZ,
+    hitNormalXYZ,
+    ...(hasHitEntityId ? { hitEntityId: value.hitEntityId as string } : {}),
+    startedOverlapping: value.startedOverlapping,
+    penetrationDepthMeters: value.penetrationDepthMeters,
+    obstructionClass: "hard",
+  });
 }
 
 export type CameraRelationshipConditionV1 =

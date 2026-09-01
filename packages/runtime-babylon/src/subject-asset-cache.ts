@@ -1,4 +1,5 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
+import "@babylonjs/core/Animations/animatable.js";
 import type { AssetContainer, InstantiatedEntries } from "@babylonjs/core/assetContainer.js";
 import type { Skeleton } from "@babylonjs/core/Bones/skeleton.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";

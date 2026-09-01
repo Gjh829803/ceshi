@@ -95,7 +95,7 @@ import {
 import { admitBabylonNativeSurfacesV1 } from
   "./babylon-native-surface-admission";
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
-import { BabylonHavokPhysicsWorldQueryV1 } from "./babylon-physics-world-query";
+import { BabylonHavokCameraGeometryQueryV2 } from "./babylon-camera-geometry-query";
 import { CameraComponentV1 } from "./camera-component";
 import { resolveCameraViewTargetContextV1 } from "./camera-view-target-context";
 import { createWhiteboxMaterials } from "./materials";
@@ -230,13 +230,23 @@ function cameraContextWithLockedLocalSocketsV1(
   subject: BabylonRuntimeSubjectV1,
   context: CameraContextSampleV2,
 ): CameraContextSampleV2 {
+  const centerOffset = subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+  const subjectOriginMetersXYZ = Object.freeze([
+    canonicalizeSignedZero(context.subjectPose.positionMetersXYZ[0] - centerOffset[0]),
+    canonicalizeSignedZero(context.subjectPose.positionMetersXYZ[1] - centerOffset[1]),
+    canonicalizeSignedZero(context.subjectPose.positionMetersXYZ[2] - centerOffset[2]),
+  ]) as RuntimeVec3V1;
   return parseCameraContextSampleV2({
     ...context,
+    subjectPose: {
+      ...context.subjectPose,
+      positionMetersXYZ: subjectOriginMetersXYZ,
+    },
     environment: {
       ...context.environment,
       socketPositionsMetersXYZById: projectLockedLocalCameraSocketsV1(
         subject,
-        context.subjectPose.positionMetersXYZ,
+        subjectOriginMetersXYZ,
         context.subjectPose.facingYawRadians,
       ),
     },
@@ -909,6 +919,7 @@ export class BabylonWorldRuntime {
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
   private readonly camera: FreeCamera;
   private readonly cameraComponent: CameraComponentV1;
+  private readonly cameraGeometryQuery: BabylonHavokCameraGeometryQueryV2;
   private readonly renderLoop: () => void;
   private readonly autoStartRenderLoop: boolean;
   private readonly ownedDisposers: readonly OwnedDisposer[];
@@ -947,6 +958,7 @@ export class BabylonWorldRuntime {
     subjectVisuals: readonly SubjectVisual[],
     camera: FreeCamera,
     cameraComponent: CameraComponentV1,
+    cameraGeometryQuery: BabylonHavokCameraGeometryQueryV2,
     ownedTerrainShape: PhysicsShape | undefined,
     aggregates: PhysicsAggregate[],
     staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[],
@@ -977,6 +989,7 @@ export class BabylonWorldRuntime {
     );
     this.camera = camera;
     this.cameraComponent = cameraComponent;
+    this.cameraGeometryQuery = cameraGeometryQuery;
     this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
     this.staticCollisionMeshes = staticCollisionMeshes;
@@ -1164,8 +1177,8 @@ export class BabylonWorldRuntime {
         effectiveGravityMetersPerSecondSquaredXYZ,
         options.havokWasmBinary,
       );
-      const physicsWorldQuery = new BabylonHavokPhysicsWorldQueryV1(scene, havokPlugin);
-      ownedDisposers.push(() => physicsWorldQuery.dispose());
+      const cameraGeometryQuery = new BabylonHavokCameraGeometryQueryV2(scene, havokPlugin);
+      ownedDisposers.push(() => cameraGeometryQuery.dispose());
       const entityRegistry = new EntityRegistryV1();
       const materials = createWhiteboxMaterials(scene);
       const aggregates: PhysicsAggregate[] = [];
@@ -1316,7 +1329,7 @@ export class BabylonWorldRuntime {
         effectiveCamera,
         camera,
         scene,
-        physicsWorldQuery,
+        cameraGeometryQuery,
       ));
       let runtime: BabylonWorldRuntime | undefined;
 
@@ -1435,6 +1448,7 @@ export class BabylonWorldRuntime {
                         request.cameraContext,
                       );
                       if (runtime?.controlledEntityId() === subject.entityId) {
+                        runtime.synchronizeCameraGeometrySubjectQueryState();
                         const locomotion = cameraContext.locomotion;
                         const velocity = locomotion.status === "active"
                           ? locomotion.linearVelocity
@@ -1539,7 +1553,7 @@ export class BabylonWorldRuntime {
         // physics-body binding, or Camera construction may still fail first.
         ownedDisposers.push(() => character.entity.dispose());
         characterEntitiesByEntityId.set(subject.entityId, character);
-        physicsWorldQuery.registerEntityPhysicsBody(
+        cameraGeometryQuery.registerEntityPhysicsBody(
           subject.entityId,
           character.movement.physicsBody,
         );
@@ -1564,6 +1578,7 @@ export class BabylonWorldRuntime {
         subjectVisuals,
         camera,
         cameraComponent,
+        cameraGeometryQuery,
         terrainShape,
         aggregates,
         staticCollisionMeshes,
@@ -3330,6 +3345,28 @@ export class BabylonWorldRuntime {
                 cameraDirectorSnapshot.collisionHitPositionXYZ,
               ),
             }),
+        ...(cameraDirectorSnapshot.collisionHitNormalXYZ === undefined
+          ? {}
+          : {
+              collisionHitNormalXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.collisionHitNormalXYZ,
+              ),
+            }),
+        ...(cameraDirectorSnapshot.decollisionPhase === undefined
+          ? {}
+          : { decollisionPhase: cameraDirectorSnapshot.decollisionPhase }),
+        ...(cameraDirectorSnapshot.startedOverlapping === undefined
+          ? {}
+          : { startedOverlapping: cameraDirectorSnapshot.startedOverlapping }),
+        ...(cameraDirectorSnapshot.penetrationDepthMeters === undefined
+          ? {}
+          : { penetrationDepthMeters: cameraDirectorSnapshot.penetrationDepthMeters }),
+        ...(cameraDirectorSnapshot.clearHoldRemainingSeconds === undefined
+          ? {}
+          : {
+              clearHoldRemainingSeconds:
+                cameraDirectorSnapshot.clearHoldRemainingSeconds,
+            }),
         ...(cameraDirectorSnapshot.positionLagXYZ === undefined
           ? {}
           : {
@@ -3836,6 +3873,7 @@ export class BabylonWorldRuntime {
     deltaSeconds = FIXED_TIME_STEP_SECONDS,
   ): void {
     this.synchronizeCameraViewSession();
+    this.synchronizeCameraGeometrySubjectQueryState();
     const subject = this.runtimeSubjects.find(
       (candidate) => candidate.entityId === entityId,
     );
@@ -4003,6 +4041,17 @@ export class BabylonWorldRuntime {
       committedCameraContext,
       this.characterFor(subject.entityId).springArm,
     );
+  }
+
+  private synchronizeCameraGeometrySubjectQueryState(): void {
+    for (const runtimeSubject of this.runtimeSubjects) {
+      this.cameraGeometryQuery.setEntityQueryEnabled(
+        runtimeSubject.entityId,
+        this.gameplayPublishedState.mountedRelationshipsByRiderEntityId[
+          runtimeSubject.entityId
+        ] === undefined,
+      );
+    }
   }
 
   setCameraViewPreference(

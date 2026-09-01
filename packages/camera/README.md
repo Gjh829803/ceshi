@@ -32,9 +32,16 @@ Preference intent, selects the Context's locked default Safe View, and sets `fal
 
 Current delivery boundary: Camera Domain consumes only a closed, deeply frozen committed V2 sample.
 Babylon CameraDirector consumes the resulting V2 Selection Decision and delegates collision to the
-provider-neutral query port. The Babylon 9.21.2 adapter currently declares
-`ray-fan-approximation`; it does not claim an exact sphere sweep. Task 6 replaces the isolated live-V1
-WorldRuntime projection seam with the committed CharacterMovement transaction output.
+provider-neutral Camera Geometry Query V2 port. The locked Babylon 9.23.0 / Havok adapter performs
+an exact closest sphere sweep, reports contact normals and start overlap, and truthfully caps exclusion
+at one registered physical body. Task 6 replaces the isolated live-V1 WorldRuntime projection seam
+with the committed CharacterMovement transaction output.
+
+Deep third-person retraction uses one capability-driven composition rule rather than scene labels:
+when the safe arm becomes short relative to the Subject's authored `FootAlignment` to
+`FirstPersonView` span, Babylon gradually aims at that span's visual center and widens the vertical
+FOV only as much as the short arm requires (capped at 80 degrees). The safe collision pose remains
+unchanged, and the composition naturally unwinds at the Spring Arm's bounded recovery rate.
 
 The authoritative ownership and selection rules are in
 [`2026-08-24-context-driven-gameplay-camera-composition-design.md`](../../docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md#51-canonical-package-boundary).

@@ -184,6 +184,25 @@ function cameraProjection(
             ...camera.collisionHitPositionXYZ,
           ]) as readonly [number, number, number],
         }),
+    ...(isNil(camera.collisionHitNormalXYZ)
+      ? {}
+      : {
+          collisionHitNormalXYZ: Object.freeze([
+            ...camera.collisionHitNormalXYZ,
+          ]) as readonly [number, number, number],
+        }),
+    ...(isNil(camera.decollisionPhase)
+      ? {}
+      : { decollisionPhase: camera.decollisionPhase }),
+    ...(isNil(camera.startedOverlapping)
+      ? {}
+      : { startedOverlapping: camera.startedOverlapping }),
+    ...(isNil(camera.penetrationDepthMeters)
+      ? {}
+      : { penetrationDepthMeters: camera.penetrationDepthMeters }),
+    ...(isNil(camera.clearHoldRemainingSeconds)
+      ? {}
+      : { clearHoldRemainingSeconds: camera.clearHoldRemainingSeconds }),
     positionLagXYZ: Object.freeze([...camera.positionLagXYZ]) as
       readonly [number, number, number],
     rotationLagRadiansXYZ: Object.freeze([...camera.rotationLagRadiansXYZ]) as

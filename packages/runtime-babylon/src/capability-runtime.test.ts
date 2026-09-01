@@ -254,7 +254,8 @@ describe("capability package runtime smoke tests", () => {
     expect(cameraViewSolverSource).toContain("export class CameraViewSolverV1");
     expect(cameraViewSolverSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
     expect(springArmComponentSource).toContain("export class SpringArmComponentV1");
-    expect(springArmComponentSource).toContain("sweepSphere");
+    expect(springArmComponentSource).toContain("cameraGeometryQuery.query");
+    expect(springArmComponentSource).toContain("CameraHardDecolliderV1");
     expect(springArmComponentSource).not.toMatch(/FreeCamera|ViewControlFrame|Gameplay/);
   });
 
