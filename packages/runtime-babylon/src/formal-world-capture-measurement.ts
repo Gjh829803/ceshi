@@ -11,6 +11,8 @@ import type {
   FormalWorldCaptureViewIdV1,
 } from "@whitebox-world/runtime-contracts";
 
+import { fitOrthographicBoundsToWorldExtentsV1 } from "./formal-world-camera.js";
+
 export interface FormalWorldCaptureLiveVisualGroupV1 {
   readonly visualGroupId: string;
   readonly meshes: readonly Mesh[];
@@ -292,31 +294,32 @@ function assertWorldViewMatchesLive(
   ) {
     fail("CAMERA_PROJECTION", `${view.viewId} live camera is missing orthographic bounds`);
   }
-  const viewed = boundsCorners(
-    view.worldBoundsMeters.minimumMetersXYZ,
-    view.worldBoundsMeters.maximumMetersXYZ,
-  ).map((corner) => Vector3.TransformCoordinates(corner, pose.viewMatrix));
+  const fitted = fitOrthographicBoundsToWorldExtentsV1(
+    view.worldBoundsMeters,
+    pose.viewMatrix,
+    view.widthPixels / view.heightPixels,
+  );
   assertFiniteClose(
     camera.orthoLeft,
-    Math.min(...viewed.map(({ x }) => x)),
+    fitted.orthoLeft,
     "CAMERA_PROJECTION",
     `${view.viewId} live ortho does not match declared world bounds`,
   );
   assertFiniteClose(
     camera.orthoRight,
-    Math.max(...viewed.map(({ x }) => x)),
+    fitted.orthoRight,
     "CAMERA_PROJECTION",
     `${view.viewId} live ortho does not match declared world bounds`,
   );
   assertFiniteClose(
     camera.orthoBottom,
-    Math.min(...viewed.map(({ y }) => y)),
+    fitted.orthoBottom,
     "CAMERA_PROJECTION",
     `${view.viewId} live ortho does not match declared world bounds`,
   );
   assertFiniteClose(
     camera.orthoTop,
-    Math.max(...viewed.map(({ y }) => y)),
+    fitted.orthoTop,
     "CAMERA_PROJECTION",
     `${view.viewId} live ortho does not match declared world bounds`,
   );

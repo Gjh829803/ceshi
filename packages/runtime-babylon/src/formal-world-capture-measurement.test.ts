@@ -12,6 +12,10 @@ import type {
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  fitOrthographicBoundsToWorldExtentsV1,
+  orientCameraAtExactPose,
+} from "./formal-world-camera.js";
+import {
   measureFormalWorldCaptureViewV1,
   type FormalWorldCaptureMeasurementInputV1,
 } from "./formal-world-capture-measurement.js";
@@ -107,13 +111,53 @@ const openingView = Object.freeze({
   devicePixelRatio: 1,
 } satisfies FormalArtifactViewRequestV1);
 
+const worldSideView = Object.freeze({
+  kind: "formal-artifact-view-request",
+  schemaVersion: 1,
+  viewId: "world-side",
+  projection: "orthographic",
+  widthPixels: 1_024,
+  heightPixels: 1_024,
+  devicePixelRatio: 1,
+  worldBoundsMeters: {
+    minimumMetersXYZ: [-8, -8, -8],
+    maximumMetersXYZ: [8, 8, 8],
+  },
+  cameraPositionMetersXYZ: [16, 0, 0],
+  targetMetersXYZ: [0, 0, 0],
+} satisfies FormalArtifactViewRequestV1);
+
+function isWorldArtifactView(
+  view: FormalArtifactViewRequestV1,
+): view is Extract<FormalArtifactViewRequestV1, { viewId: "world-side" | "world-top-down" }> {
+  return view.viewId === "world-side" || view.viewId === "world-top-down";
+}
+
+function applyFittedWorldOrtho(
+  camera: FreeCamera,
+  view: Extract<FormalArtifactViewRequestV1, { viewId: "world-side" | "world-top-down" }>,
+): void {
+  const fitted = fitOrthographicBoundsToWorldExtentsV1(
+    view.worldBoundsMeters,
+    camera.getViewMatrix(true),
+    view.widthPixels / view.heightPixels,
+  );
+  camera.orthoLeft = fitted.orthoLeft;
+  camera.orthoRight = fitted.orthoRight;
+  camera.orthoBottom = fitted.orthoBottom;
+  camera.orthoTop = fitted.orthoTop;
+}
+
 function createFixture(options: Readonly<{
   groups?: readonly BabylonNativeBlockMaterializerVisualGroupV1[];
   view?: FormalArtifactViewRequestV1;
+  worldCamera?: "default" | "exact-pose" | "set-target-only";
+  worldOrtho?: "default" | "aspect-fit";
 }> = {}) {
+  const view = options.view ?? orthographicView;
   const engine = new NullEngine({
-    renderWidth: 1_024,
-    renderHeight: 1_024,
+    renderWidth: view.widthPixels,
+    renderHeight: view.heightPixels,
     textureSize: 512,
     deterministicLockstep: true,
     lockstepMaxSteps: 4,
@@ -133,6 +177,20 @@ function createFixture(options: Readonly<{
   camera.orthoRight = 8;
   camera.orthoTop = 8;
   camera.orthoBottom = -8;
+  if (isWorldArtifactView(view) && options.worldCamera === "exact-pose") {
+    orientCameraAtExactPose(
+      camera,
+      new Vector3(...view.cameraPositionMetersXYZ),
+      new Vector3(...view.targetMetersXYZ),
+      scene.useRightHandedSystem,
+    );
+  } else if (isWorldArtifactView(view) && options.worldCamera === "set-target-only") {
+    camera.position.copyFromFloats(...view.cameraPositionMetersXYZ);
+    camera.setTarget(new Vector3(...view.targetMetersXYZ));
+  }
+  if (isWorldArtifactView(view) && options.worldOrtho === "aspect-fit") {
+    applyFittedWorldOrtho(camera, view);
+  }
   scene.activeCamera = camera;
 
   const alphaMesh = MeshBuilder.CreateBox("untrusted-alpha-name", {}, scene);
@@ -150,7 +208,7 @@ function createFixture(options: Readonly<{
   MeshBuilder.CreateBox("alpha-group", {}, scene);
 
   const input: FormalWorldCaptureMeasurementInputV1 = {
-    view: options.view ?? orthographicView,
+    view,
     camera,
     materializerMetadata: {
       authoringManifestHash: HASH_A,
@@ -239,24 +297,165 @@ describe("formal world capture projection measurement", () => {
     });
   });
 
-  it.each(["world-side", "world-top-down"] as const)(
-    "measures the explicit %s orthographic camera without creating a replacement camera",
-    (viewId) => {
-      // This catches silently remapping a formal world view to a different
-      // Camera or object-local tri-view before measurement.
-      const view = { ...orthographicView, viewId } as FormalArtifactViewRequestV1;
-      const fixture = createFixture({ view });
+  it("measures the explicit world-top-down orthographic camera without creating a replacement camera", () => {
+    // This catches silently remapping a formal world view to a different
+    // Camera or object-local tri-view before measurement.
+    const fixture = createFixture();
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+    const cameraCount = fixture.scene.cameras.length;
+
+    expect(measureFormalWorldCaptureViewV1(fixture.input).viewId).toBe("world-top-down");
+    expect(fixture.scene.cameras).toHaveLength(cameraCount);
+    expect(fixture.scene.activeCamera).toBe(fixture.camera);
+  });
+
+  it.each([
+    ["wider", 2_048, 1_024],
+    ["taller", 1_024, 2_048],
+  ] as const)("rejects a tight unpadded ortho on a %s formal target", (_name, widthPixels, heightPixels) => {
+    // RED: production pads one axis to preserve the formal aspect. A live
+    // camera that still uses the raw view-space min/max must fail closed.
+    const view = {
+      ...orthographicView,
+      widthPixels,
+      heightPixels,
+    } satisfies FormalArtifactViewRequestV1;
+    const fixture = createFixture({ view });
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(fixture.camera.orthoLeft).toBe(-8);
+    expect(fixture.camera.orthoRight).toBe(8);
+    expect(fixture.camera.orthoBottom).toBe(-8);
+    expect(fixture.camera.orthoTop).toBe(8);
+    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
+      .toThrow(/CAMERA_PROJECTION/);
+  });
+
+  it.each([
+    ["wider", 2_048, 1_024, -16, 16, -8, 8],
+    ["taller", 1_024, 2_048, -8, 8, -16, 16],
+  ] as const)(
+    "accepts the production aspect-fitted ortho for a %s formal target",
+    (_name, widthPixels, heightPixels, orthoLeft, orthoRight, orthoBottom, orthoTop) => {
+      // GREEN: the camera that rendered the formal target is the aspect-fitted
+      // camera. Measurement must derive those same bounds from declared world
+      // extents and view width/height.
+      const view = {
+        ...orthographicView,
+        widthPixels,
+        heightPixels,
+      } satisfies FormalArtifactViewRequestV1;
+      const fixture = createFixture({ view, worldOrtho: "aspect-fit" });
       cleanups.push(() => {
         fixture.scene.dispose();
         fixture.engine.dispose();
       });
-      const cameraCount = fixture.scene.cameras.length;
 
-      expect(measureFormalWorldCaptureViewV1(fixture.input).viewId).toBe(viewId);
-      expect(fixture.scene.cameras).toHaveLength(cameraCount);
-      expect(fixture.scene.activeCamera).toBe(fixture.camera);
+      expect(fixture.camera.orthoLeft).toBeCloseTo(orthoLeft, 10);
+      expect(fixture.camera.orthoRight).toBeCloseTo(orthoRight, 10);
+      expect(fixture.camera.orthoBottom).toBeCloseTo(orthoBottom, 10);
+      expect(fixture.camera.orthoTop).toBeCloseTo(orthoTop, 10);
+      expect(measureFormalWorldCaptureViewV1(fixture.input).viewId)
+        .toBe("world-top-down");
     },
   );
+
+  it("rejects a world-side camera whose live pose was mutated by same-Z setTarget", () => {
+    // Installed Babylon 9.23.0 TargetCamera.setTarget adds Epsilon (0.001)
+    // to position.z when it equals target.z. The 1e-6 identity join must
+    // keep rejecting that mutated live pose.
+    const fixture = createFixture({
+      view: worldSideView,
+      worldCamera: "set-target-only",
+      worldOrtho: "aspect-fit",
+    });
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(fixture.camera.position.x).toBe(16);
+    expect(fixture.camera.position.y).toBe(0);
+    expect(fixture.camera.position.z).not.toBe(0);
+    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
+      .toThrow(/CAMERA_PROJECTION/);
+  });
+
+  it("measures a genuine world-side lateral elevation using the exact orientation path", () => {
+    // world-side is a lateral elevation. Reusing the top-down pose with only
+    // viewId changed does not exercise the same-Z setTarget mutation or the
+    // repository exact orientation path.
+    const fixture = createFixture({
+      view: worldSideView,
+      worldCamera: "exact-pose",
+      worldOrtho: "aspect-fit",
+    });
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+    const cameraCount = fixture.scene.cameras.length;
+
+    expect(fixture.camera.position.asArray()).toEqual([16, 0, 0]);
+    expect(measureFormalWorldCaptureViewV1(fixture.input)).toEqual({
+      viewId: "world-side",
+      visualGroups: [{
+        acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
+        compositionTargetRef: "worldkit://composition-target/alpha@1",
+        topologyNodeId: "alpha-node",
+        semanticLayerId: "route-layer",
+        blockVisualGroupId: "alpha-group",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-2, -2, 2],
+          maximumMetersXYZ: [0, 2, 4],
+        },
+        normalizedBounds: {
+          minXBasisPoints: 2_500,
+          minYBasisPoints: 3_750,
+          maxXBasisPoints: 3_750,
+          maxYBasisPoints: 6_250,
+        },
+        normalizedCenter: {
+          xBasisPoints: 3_125,
+          yBasisPoints: 5_000,
+        },
+        coverageBasisPoints: 312,
+        cameraDepthMeters: 17,
+        depthOrder: 1,
+      }, {
+        acceptanceTargetRef: "worldkit://acceptance-target/zeta@1",
+        compositionTargetRef: "worldkit://composition-target/zeta@1",
+        topologyNodeId: "zeta-node",
+        semanticLayerId: "structure-layer",
+        blockVisualGroupId: "zeta-group",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [2, -1, -4],
+          maximumMetersXYZ: [4, 1, -2],
+        },
+        normalizedBounds: {
+          minXBasisPoints: 6_250,
+          minYBasisPoints: 4_375,
+          maxXBasisPoints: 7_500,
+          maxYBasisPoints: 5_625,
+        },
+        normalizedCenter: {
+          xBasisPoints: 6_875,
+          yBasisPoints: 5_000,
+        },
+        coverageBasisPoints: 156,
+        cameraDepthMeters: 13,
+        depthOrder: 0,
+      }],
+    });
+    expect(fixture.scene.cameras).toHaveLength(cameraCount);
+    expect(fixture.scene.activeCamera).toBe(fixture.camera);
+  });
 
   it("measures the SDK opening perspective camera with a right-handed numeric golden", () => {
     // Production Scene sets useRightHandedSystem. This locks the opening
