@@ -351,7 +351,7 @@ describe("Babylon Native isolated Runtime entry", () => {
       interactiveInput,
     );
     const request = formalRequestFixture(interactiveInput.verifiedWorldPackage);
-    await expect(interactiveEntry.executeFormalCapture(request)).rejects.toThrowError(
+    await expect(interactiveEntry.executeFormalCapture(request, [])).rejects.toThrowError(
       "WORLDKIT_NATIVE_FORMAL_CAPTURE_OPERATION_NOT_AUTHORIZED",
     );
     await interactiveEntry.dispose();
@@ -368,7 +368,7 @@ describe("Babylon Native isolated Runtime entry", () => {
       },
     };
     const captureEntry = await createBabylonNativeIsolatedRuntimeEntryV1(captureInput);
-    await expect(captureEntry.executeFormalCapture(request)).rejects.toThrowError(
+    await expect(captureEntry.executeFormalCapture(request, [])).rejects.toThrowError(
       "WORLDKIT_NATIVE_FORMAL_CAPTURE_REQUEST_HASH_MISMATCH",
     );
     await captureEntry.dispose();

@@ -23,6 +23,7 @@ import {
   type NativeExecutionUsageV1,
   type NativeIsolatedExecutionRequestV1,
   type FormalWorldCaptureRequestV1,
+  type FormalWorldCaptureSdkOwnerIdentityV1,
   type RuntimeSessionDiagnosticV1,
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
@@ -115,6 +116,7 @@ export interface BabylonNativeIsolatedRuntimeEntryV1 {
   resize(): void;
   executeFormalCapture(
     request: FormalWorldCaptureRequestV1,
+    sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
   ): Promise<FormalHostedWorldCapturePayloadV1>;
   submit(payload: RuntimeSessionRequestV1):
     Promise<RuntimeSessionReceiptV1>;
@@ -346,9 +348,10 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
 
   executeFormalCapture(
     request: FormalWorldCaptureRequestV1,
+    sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
   ): Promise<FormalHostedWorldCapturePayloadV1> {
     const operation = this.#tail.then(() =>
-      this.executeFormalCaptureSerialized(request));
+      this.executeFormalCaptureSerialized(request, sdkOwnerIdentities));
     this.#tail = operation.then(() => undefined, () => undefined);
     return operation;
   }
@@ -389,6 +392,7 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
 
   private async executeFormalCaptureSerialized(
     requestInput: FormalWorldCaptureRequestV1,
+    sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
   ): Promise<FormalHostedWorldCapturePayloadV1> {
     if (!this.#isActive) {
       throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_NOT_ACTIVE");
@@ -410,6 +414,7 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
     }
     return executeFormalWorldCaptureProviderV1({
       request,
+      sdkOwnerIdentities,
       verifiedWorldPackage: this.verifiedWorldPackage,
       runtimeSessionId: this.runtimeSessionId,
       ports: {

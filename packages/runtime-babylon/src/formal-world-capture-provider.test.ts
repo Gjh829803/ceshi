@@ -254,15 +254,38 @@ describe("formal world capture provider", () => {
       tick: 11,
       isFinalTick: true,
     })).toEqual({ checkpointId: "blocked-west", outcome: "blocked", observedAtTick: 11 });
+
+    expect(measureFormalTraversalCheckpointV1({
+      criterion: {
+        kind: "block-plane",
+        checkpointId: "blocked-west",
+        expectation: "block",
+        sourceVisualGroupId: "wall",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-6, 0, -1],
+          maximumMetersXYZ: [-4, 2, 1],
+        },
+        colliderId: "west-wall",
+        axis: "x",
+        sourceFace: "minimum",
+        planeMeters: -6,
+        expectedCenterSide: "negative",
+        capsuleRadiusMeters: 0.5,
+        toleranceMeters: 0.1,
+      },
+      positionMetersXYZ: [-6.6, 1, 0],
+      tick: 10,
+      isFinalTick: false,
+    })).toEqual({ checkpointId: "blocked-west", outcome: "passed", observedAtTick: 10 });
   });
 
   it("measures contains and above from Package bounds instead of copying requested relations", () => {
     const bindings = [{
       topologyNodeId: "container",
-      blockVisualGroupId: "container-group",
+      blockVisualGroupId: "decoy-container-group",
     }, {
       topologyNodeId: "inside",
-      blockVisualGroupId: "inside-group",
+      blockVisualGroupId: "decoy-inside-group",
     }, {
       topologyNodeId: "upper",
       blockVisualGroupId: "upper-group",
@@ -277,6 +300,16 @@ describe("formal world capture provider", () => {
         visualGroupId: "inside-group",
         minimumMetersXYZ: [4, 1, -1],
         maximumMetersXYZ: [6, 2, 1],
+      }, {
+        // These decoys overlap, proving Package measurement uses the explicit
+        // relation joins rather than the topology-node display bindings.
+        visualGroupId: "decoy-container-group",
+        minimumMetersXYZ: [-2, 0, -2],
+        maximumMetersXYZ: [2, 3, 2],
+      }, {
+        visualGroupId: "decoy-inside-group",
+        minimumMetersXYZ: [-1, 1, -1],
+        maximumMetersXYZ: [1, 2, 1],
       }, {
         // Horizontally overlaps container and is vertically above it.
         visualGroupId: "upper-group",
@@ -311,6 +344,54 @@ describe("formal world capture provider", () => {
         relation: "above",
         toNodeId: "container",
       }]);
+  });
+
+  it("publishes SDK support and collider relations only after explicit identity joins", () => {
+    const topologyRelations = [{
+      fromNodeId: "subject-node",
+      relation: "above" as const,
+      toNodeId: "ground-node",
+      measurementSource: "sdk-support" as const,
+      subjectEntityId: "player",
+      colliderId: "ground.collider",
+    }, {
+      fromNodeId: "wall-node",
+      relation: "blocks" as const,
+      toNodeId: "route-node",
+      measurementSource: "sdk-collider" as const,
+      colliderId: "wall.collider",
+      sourceVisualGroupId: "wall-group",
+    }, {
+      fromNodeId: "decoy-node",
+      relation: "blocks" as const,
+      toNodeId: "route-node",
+      measurementSource: "sdk-collider" as const,
+      colliderId: "decoy.collider",
+      sourceVisualGroupId: "wall-group",
+    }] as const;
+    const request = {
+      semanticCaptureMap: { topologyRelations },
+    } as unknown as FormalWorldCaptureRequestV1;
+    const metadata = {
+      visualGroups: [{ visualGroupId: "wall-group", blockIds: ["wall-block"] }],
+    } as unknown as BabylonNativeBlockMaterializerMetadataV1;
+    const colliders = [{
+      colliderId: "wall.collider",
+      sourceBlockId: "wall-block",
+      physicsBodyId: "wall.body",
+      colliderSubshapeId: "wall.shape",
+      overlayRecordId: "wall.overlay",
+    }] as const;
+
+    expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .measuredSupportRelations(request, "player", "ground.collider"))
+      .toEqual([{ fromNodeId: "subject-node", relation: "above", toNodeId: "ground-node" }]);
+    expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .measuredSupportRelations(request, "other", "ground.collider"))
+      .toEqual([]);
+    expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .measuredColliderRelations(request, metadata, colliders))
+      .toEqual([{ fromNodeId: "wall-node", relation: "blocks", toNodeId: "route-node" }]);
   });
 
   it("rejects stale and ambiguous committed support evidence", () => {
@@ -358,6 +439,18 @@ describe("formal world capture provider", () => {
       },
       committedTick: 1,
     })).toThrowError(/AMBIGUOUS/);
+    expect(() => selectFormalCommittedSupportContactV1({
+      evidence: {
+        ...evidence,
+        contacts: [contact, {
+          pointMetersXYZ: [0, 0, 0],
+          normalXYZ: [0, 1, 0],
+          distanceMeters: 0.02,
+          motionType: "static",
+        }],
+      },
+      committedTick: 1,
+    })).toThrowError(/UNJOINABLE/);
     expect(selectFormalCommittedSupportContactV1({
       evidence,
       committedTick: 1,

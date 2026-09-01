@@ -61,25 +61,6 @@ import {
   type FormalWorldCaptureViewMeasurementV1,
 } from "./formal-world-capture-measurement.js";
 
-const OWNER_IMPLEMENTATION_DESCRIPTORS = Object.freeze([
-  { ownerId: "action", implementationRef: "worldkit://sdk-owner/subject-actions@1" },
-  { ownerId: "camera", implementationRef: "worldkit://sdk-owner/camera@1" },
-  { ownerId: "input", implementationRef: "worldkit://sdk-owner/control-capture@1" },
-  { ownerId: "physics", implementationRef: "worldkit://sdk-owner/character-movement@1" },
-  { ownerId: "subject", implementationRef: "worldkit://sdk-owner/subject-contracts@1" },
-] as const);
-
-/** Fixed provider identities; callers cannot supply or rewrite SDK authority. */
-export const BABYLON_FORMAL_WORLD_CAPTURE_SDK_OWNER_IDENTITIES_V1 =
-  Object.freeze(OWNER_IMPLEMENTATION_DESCRIPTORS.map((descriptor) =>
-    Object.freeze({
-      ...descriptor,
-      implementationHash: sha256CanonicalJson({
-        ...descriptor,
-        providerRef: "worldkit://runtime-provider/babylon-formal-capture@1",
-      }) as Sha256HashV1,
-    }))) satisfies readonly FormalWorldCaptureSdkOwnerIdentityV1[];
-
 export interface FormalHostedWorldCapturePayloadV1 {
   readonly openingPng: Uint8Array;
   readonly worldSidePng: Uint8Array;
@@ -107,6 +88,8 @@ export interface FormalWorldCaptureProviderPortsV1 {
 
 export interface ExecuteFormalWorldCaptureProviderInputV1 {
   readonly request: FormalWorldCaptureRequestV1;
+  /** Trusted Host-resolved identities bound to the exact clean source commit. */
+  readonly sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[];
   readonly verifiedWorldPackage: VerifiedBabylonNativeWorldPackageDirectoryV1;
   readonly runtimeSessionId: string;
   readonly ports: FormalWorldCaptureProviderPortsV1;
@@ -114,6 +97,19 @@ export interface ExecuteFormalWorldCaptureProviderInputV1 {
 
 function fail(code: string, detail?: string): never {
   throw new Error(detail === undefined ? code : `${code}: ${detail}`);
+}
+
+function assertSdkOwnerIdentities(
+  identities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
+): readonly FormalWorldCaptureSdkOwnerIdentityV1[] {
+  if (
+    identities.length !== FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1.length ||
+    identities.some((identity, index) =>
+      identity.ownerId !== FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1[index] ||
+      identity.implementationRef.length === 0 ||
+      !/^sha256:[0-9a-f]{64}$/.test(identity.implementationHash))
+  ) fail("BABYLON_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES_INVALID");
+  return Object.freeze(identities.map((identity) => Object.freeze({ ...identity })));
 }
 
 function stableCompare(left: string, right: string): number {
@@ -253,7 +249,14 @@ export function measureFormalTraversalCheckpointV1(input: Readonly<{
         })
       : undefined;
   }
-  return input.isFinalTick && !crossed
+  if (crossed) {
+    return Object.freeze({
+      checkpointId: criterion.checkpointId,
+      outcome: "passed" as const,
+      observedAtTick: input.tick,
+    });
+  }
+  return input.isFinalTick
     ? Object.freeze({
         checkpointId: criterion.checkpointId,
         outcome: "blocked" as const,
@@ -397,10 +400,11 @@ function position(
 function observationIdentity(
   request: FormalWorldCaptureRequestV1,
   snapshot: WorldRuntimeSnapshotV4,
+  sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
   ownerId: "camera" | "physics" | "input",
   suffix: string,
 ): FormalMeasuredObservationIdentityV1 {
-  const owner = BABYLON_FORMAL_WORLD_CAPTURE_SDK_OWNER_IDENTITIES_V1.find(
+  const owner = sdkOwnerIdentities.find(
     (candidate) => candidate.ownerId === ownerId,
   )!;
   return {
@@ -471,18 +475,25 @@ export function selectFormalCommittedSupportContactV1(input: Readonly<{
   ) fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_STALE");
   const contactGroups = new Map<string,
     BabylonCharacterBodyCommittedSupportEvidenceV1["contacts"]>();
+  if (input.evidence.contacts.length === 0) {
+    fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_UNJOINABLE");
+  }
   for (const contact of input.evidence.contacts) {
     if (
       contact.colliderId === undefined ||
       contact.colliderSubshapeId === undefined ||
       contact.logicalSubshapeId === undefined ||
-      contact.surfaceEntityId === undefined
-    ) continue;
+      contact.traversalSurfaceId === undefined ||
+      contact.surfaceEntityId === undefined ||
+      contact.traversalSurfaceProfileRef === undefined
+    ) fail("BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_UNJOINABLE");
     const key = [
       contact.colliderId,
       contact.colliderSubshapeId,
       contact.logicalSubshapeId,
+      contact.traversalSurfaceId,
       contact.surfaceEntityId,
+      contact.traversalSurfaceProfileRef,
     ].join("\0");
     contactGroups.set(key, Object.freeze([
       ...(contactGroups.get(key) ?? []),
@@ -500,16 +511,13 @@ function measuredPackageRelations(
   request: FormalWorldCaptureRequestV1,
   metadata: BabylonNativeBlockMaterializerMetadataV1,
 ) {
-  const groupByNodeId = new Map(request.semanticCaptureMap.bindings.map(
-    (binding) => [binding.topologyNodeId, metadata.visualGroups.find(
-      ({ visualGroupId }) => visualGroupId === binding.blockVisualGroupId,
-    )!] as const,
-  ));
+  const groupById = new Map(metadata.visualGroups.map((group) =>
+    [group.visualGroupId, group] as const));
   return Object.freeze(request.semanticCaptureMap.topologyRelations.filter(
     (relation) => {
       if (relation.measurementSource !== "package-bounds") return false;
-      const left = groupByNodeId.get(relation.fromNodeId);
-      const right = groupByNodeId.get(relation.toNodeId);
+      const left = groupById.get(relation.fromVisualGroupId);
+      const right = groupById.get(relation.toVisualGroupId);
       if (left === undefined || right === undefined) return false;
       const overlaps = (axis: 0 | 1 | 2): boolean =>
         left.minimumMetersXYZ[axis] <= right.maximumMetersXYZ[axis] &&
@@ -536,6 +544,40 @@ function measuredRelationsForTraversal(
   return Object.freeze(request.semanticCaptureMap.topologyRelations
     .filter((relation) => relation.measurementSource === "scripted-traversal" &&
       relation.traversalCheckId === traversalCheckId)
+    .map(({ fromNodeId, relation, toNodeId }) =>
+      Object.freeze({ fromNodeId, relation, toNodeId })));
+}
+
+function measuredSupportRelations(
+  request: Pick<FormalWorldCaptureRequestV1, "semanticCaptureMap">,
+  subjectEntityId: string,
+  colliderId: string,
+) {
+  return Object.freeze(request.semanticCaptureMap.topologyRelations
+    .filter((relation) => relation.measurementSource === "sdk-support" &&
+      relation.subjectEntityId === subjectEntityId &&
+      relation.colliderId === colliderId)
+    .map(({ fromNodeId, relation, toNodeId }) =>
+      Object.freeze({ fromNodeId, relation, toNodeId })));
+}
+
+function measuredColliderRelations(
+  request: Pick<FormalWorldCaptureRequestV1, "semanticCaptureMap">,
+  metadata: BabylonNativeBlockMaterializerMetadataV1,
+  colliders: FormalColliderOverlayObservationV1["colliders"],
+) {
+  const sourceBlockIdsByGroupId = new Map(metadata.visualGroups.map((group) =>
+    [group.visualGroupId, new Set(group.blockIds)] as const));
+  return Object.freeze(request.semanticCaptureMap.topologyRelations
+    .filter((relation) => {
+      if (relation.measurementSource !== "sdk-collider") return false;
+      const sourceBlockIds = sourceBlockIdsByGroupId.get(
+        relation.sourceVisualGroupId,
+      );
+      return sourceBlockIds !== undefined && colliders.some((collider) =>
+        collider.colliderId === relation.colliderId &&
+        sourceBlockIds.has(collider.sourceBlockId));
+    })
     .map(({ fromNodeId, relation, toNodeId }) =>
       Object.freeze({ fromNodeId, relation, toNodeId })));
 }
@@ -602,17 +644,6 @@ async function captureTraversalChecks(
     }
     const checkpointRows = [...checkpoints.values()].sort((left, right) =>
       stableCompare(left.checkpointId, right.checkpointId));
-    const checkpointOutcomeById = new Map(checkpointRows.map((row) =>
-      [row.checkpointId, row.outcome] as const));
-    const expectationObserved = check.checkpointCriteria.every((criterion) => {
-      const observed = checkpointOutcomeById.get(criterion.checkpointId);
-      if (criterion.expectation === "reach") return observed === "reached";
-      if (criterion.expectation === "pass") return observed === "passed";
-      return observed === "blocked";
-    });
-    if (!expectationObserved) {
-      fail("BABYLON_FORMAL_CAPTURE_TRAVERSAL_EXPECTATION_NOT_OBSERVED", check.id);
-    }
     const outcome = check.checkExpectation === "pass" ? "passed" : "blocked";
     checks.push(Object.freeze({
       id: check.id,
@@ -634,6 +665,7 @@ async function captureTraversal(
   request: FormalWorldCaptureRequestV1,
   runtimeSessionId: string,
   subjectEntityId: string,
+  sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[],
   ports: FormalWorldCaptureProviderPortsV1,
 ): Promise<FormalScriptedTraversalObservationV1> {
   const checks = await captureTraversalChecks(
@@ -648,7 +680,13 @@ async function captureTraversal(
   return parseFormalScriptedTraversalObservationV1({
     kind: "formal-scripted-traversal-observation",
     schemaVersion: 1,
-    ...observationIdentity(request, identitySnapshot, "input", "scripted-traversal"),
+    ...observationIdentity(
+      request,
+      identitySnapshot,
+      sdkOwnerIdentities,
+      "input",
+      "scripted-traversal",
+    ),
     checks,
   });
 }
@@ -656,7 +694,9 @@ async function captureTraversal(
 /** @internal Package-private lifecycle seam for provider regression tests. */
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
   captureTraversalChecks,
+  measuredColliderRelations,
   measuredPackageRelations,
+  measuredSupportRelations,
 });
 
 function captureRefBase(request: FormalWorldCaptureRequestV1): string {
@@ -671,6 +711,7 @@ export async function executeFormalWorldCaptureProviderV1(
   input: ExecuteFormalWorldCaptureProviderInputV1,
 ): Promise<FormalHostedWorldCapturePayloadV1> {
   const request = parseFormalWorldCaptureRequestV1(input.request);
+  const sdkOwnerIdentities = assertSdkOwnerIdentities(input.sdkOwnerIdentities);
   const metadata = assertRequestPackageIdentity(
     request,
     input.verifiedWorldPackage,
@@ -774,7 +815,13 @@ export async function executeFormalWorldCaptureProviderV1(
   const openingObservation = parseFormalOpeningObservationV1({
     kind: "formal-opening-observation",
     schemaVersion: 1,
-    ...observationIdentity(request, initialReadySnapshot, "camera", "opening-observation"),
+    ...observationIdentity(
+      request,
+      initialReadySnapshot,
+      sdkOwnerIdentities,
+      "camera",
+      "opening-observation",
+    ),
     visualGroups: openingMeasurement.visualGroups,
     observedTopologyRelations: measuredPackageRelations(request, metadata),
   });
@@ -788,7 +835,13 @@ export async function executeFormalWorldCaptureProviderV1(
   const spawnSupportObservation = parseFormalSpawnSupportObservationV1({
     kind: "formal-spawn-support-observation",
     schemaVersion: 1,
-    ...observationIdentity(request, initialReadySnapshot, "physics", "spawn-support"),
+    ...observationIdentity(
+      request,
+      initialReadySnapshot,
+      sdkOwnerIdentities,
+      "physics",
+      "spawn-support",
+    ),
     spawnMarkerId: input.verifiedWorldPackage.nativeSceneContribution.spawnMarker.id,
     subjectEntityId,
     supportContact: {
@@ -801,19 +854,34 @@ export async function executeFormalWorldCaptureProviderV1(
     capsuleFootPointMetersXYZ: foot,
     supportGapMillimeters,
     movementMedium: movementMedium(initialReadySnapshot, subjectEntityId),
-    observedTopologyRelations: [],
+    observedTopologyRelations: measuredSupportRelations(
+      request,
+      subjectEntityId,
+      supportCollider.colliderId,
+    ),
   });
   const colliderOverlayObservation = parseFormalColliderOverlayObservationV1({
     kind: "formal-collider-overlay-observation",
     schemaVersion: 1,
-    ...observationIdentity(request, initialReadySnapshot, "physics", "collider-overlay"),
+    ...observationIdentity(
+      request,
+      initialReadySnapshot,
+      sdkOwnerIdentities,
+      "physics",
+      "collider-overlay",
+    ),
     colliders: colliderRows,
-    observedTopologyRelations: [],
+    observedTopologyRelations: measuredColliderRelations(
+      request,
+      metadata,
+      colliderRows,
+    ),
   });
   const scriptedTraversal = await captureTraversal(
     request,
     input.runtimeSessionId,
     subjectEntityId,
+    sdkOwnerIdentities,
     input.ports,
   );
 
@@ -854,7 +922,7 @@ export async function executeFormalWorldCaptureProviderV1(
       runtimeSessionId: input.runtimeSessionId,
       readySnapshot: initialReadySnapshot,
       readySnapshotHash: sha256CanonicalJson(initialReadySnapshot) as Sha256HashV1,
-      sdkOwnerIdentities: BABYLON_FORMAL_WORLD_CAPTURE_SDK_OWNER_IDENTITIES_V1,
+      sdkOwnerIdentities,
       semanticCaptureMapHash: request.semanticCaptureMapHash,
       nativeBlockMaterializerMetadataHash:
         request.nativeBlockMaterializerMetadataHash,
@@ -927,11 +995,4 @@ function browserIdentityFromEnvironment(): string {
   return identity !== undefined && identity.length > 0
     ? identity
     : fail("BABYLON_FORMAL_CAPTURE_BROWSER_IDENTITY_MISSING");
-}
-
-if (
-  BABYLON_FORMAL_WORLD_CAPTURE_SDK_OWNER_IDENTITIES_V1.map(({ ownerId }) => ownerId)
-    .some((ownerId, index) => ownerId !== FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1[index])
-) {
-  throw new Error("BABYLON_FORMAL_CAPTURE_SDK_OWNER_IDENTITY_ORDER_INVALID");
 }

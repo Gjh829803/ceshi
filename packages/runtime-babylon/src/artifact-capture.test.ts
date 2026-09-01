@@ -28,7 +28,10 @@ class FakeCanvasElement {
 }
 
 describe("Babylon artifact capture", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("renders different entity mask colors when meshes share their beauty material", () => {
     // This catches assigning semantic colors to the shared source material:
@@ -373,6 +376,59 @@ describe("Babylon artifact capture", () => {
       expect(collider.material).toBe(originalMaterial);
       expect(scene.materials).toHaveLength(materialCountBefore);
       expect(scene.activeCamera).toBe(openingCamera);
+      expect(engine.getRenderWidth(true)).toBe(16);
+      expect(engine.getRenderHeight(true)).toBe(9);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("continues restoring the capture transaction when temporary camera disposal throws", () => {
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new FakeCanvasElement(),
+      removeEventListener: vi.fn(),
+    });
+    RegisterAbstractEngineStencil();
+    const engine = new NullEngine({ renderWidth: 16, renderHeight: 9, textureSize: 16 });
+    const scene = new Scene(engine);
+    const openingCamera = new FreeCamera("opening-camera", new Vector3(0, 4, -12), scene);
+    openingCamera.setTarget(Vector3.Zero());
+    scene.activeCamera = openingCamera;
+    const previousClearColor = scene.clearColor.clone();
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(
+      new FakeCanvasElement() as unknown as HTMLCanvasElement,
+    );
+    try {
+      expect(() => captureBabylonArtifactViewV1({
+        scene,
+        engine,
+        camera: openingCamera,
+        request: {
+          kind: "world-side",
+          widthPixels: 8,
+          heightPixels: 4,
+          worldBoundsMeters: {
+            minimumMetersXYZ: [-4, 0, -4],
+            maximumMetersXYZ: [4, 4, 4],
+          },
+          cameraPositionMetersXYZ: [8, 6, 8],
+          targetMetersXYZ: [0, 1, 0],
+          measureAfterRender: ({ camera }) => {
+            const originalDispose = camera.dispose.bind(camera);
+            vi.spyOn(camera, "dispose").mockImplementation(() => {
+              originalDispose();
+              throw new Error("dispose-failed");
+            });
+          },
+        },
+      })).toThrowError("BABYLON_ARTIFACT_CAPTURE_CLEANUP_FAILED");
+
+      expect(scene.activeCamera).toBe(openingCamera);
+      expect(scene.cameras.map(({ name }) => name)).toEqual(["opening-camera"]);
+      expect(scene.clearColor.equals(previousClearColor)).toBe(true);
       expect(engine.getRenderWidth(true)).toBe(16);
       expect(engine.getRenderHeight(true)).toBe(9);
     } finally {

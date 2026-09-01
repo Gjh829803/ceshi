@@ -370,7 +370,9 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     material: Material | null;
   }>>();
   let temporaryCamera: FreeCamera | undefined;
+  let primaryError: unknown;
   try {
+    try {
     if (request.kind === "entity-triview") {
       return renderTriview(scene, engine, request);
     }
@@ -548,19 +550,41 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       ),
       ...(measurement === undefined ? {} : { measurement }),
     };
+    } catch (error) {
+      primaryError = error;
+      throw error;
+    }
   } finally {
-    temporaryCamera?.dispose();
-    for (const [mesh, state] of overlayState) {
+    const cleanupErrors: unknown[] = [];
+    const cleanup = (operation: () => void): void => {
+      try {
+        operation();
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    };
+    cleanup(() => temporaryCamera?.dispose());
+    for (const [mesh, state] of overlayState) cleanup(() => {
       mesh.material = state.material;
       mesh.isVisible = state.isVisible;
+    });
+    for (const [mesh, material] of originalMaterialByMesh) {
+      cleanup(() => { mesh.material = material; });
     }
-    for (const [mesh, material] of originalMaterialByMesh) mesh.material = material;
-    restoreMaterialColors(materialColors);
-    for (const material of temporaryMaterials) material.dispose();
-    for (const texture of temporaryTextures) texture.dispose();
-    scene.activeCamera = previousCamera;
-    scene.clearColor = previousClearColor;
-    engine.setSize(previousWidth, previousHeight, true);
-    if (previousCamera !== null) scene.render();
+    cleanup(() => restoreMaterialColors(materialColors));
+    for (const material of temporaryMaterials) cleanup(() => material.dispose());
+    for (const texture of temporaryTextures) cleanup(() => texture.dispose());
+    cleanup(() => { scene.activeCamera = previousCamera; });
+    cleanup(() => { scene.clearColor = previousClearColor; });
+    cleanup(() => engine.setSize(previousWidth, previousHeight, true));
+    if (previousCamera !== null) cleanup(() => scene.render());
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        primaryError === undefined
+          ? cleanupErrors
+          : [primaryError, ...cleanupErrors],
+        "BABYLON_ARTIFACT_CAPTURE_CLEANUP_FAILED",
+      );
+    }
   }
 }

@@ -459,9 +459,6 @@ importers:
       '@whitebox-world/native-babylon':
         specifier: workspace:*
         version: link:../native-babylon
-      '@whitebox-world/native-babylon-block-profile':
-        specifier: workspace:*
-        version: link:../native-babylon-block-profile
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -510,6 +507,9 @@ importers:
       '@whitebox-world/native-babylon':
         specifier: workspace:*
         version: link:../native-babylon
+      '@whitebox-world/native-babylon-block-profile':
+        specifier: workspace:*
+        version: link:../native-babylon-block-profile
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
