@@ -64,6 +64,7 @@ import {
   buildAndLoadBabylonNativeSceneModuleV1,
 } from "../native-scene/module-bundle.js";
 import {
+  BabylonNativePackageInputErrorV1,
   prepareFrozenBabylonNativeWorldPackageBuildInputV1,
 } from "../native-scene/native-package-input.js";
 import {
@@ -552,6 +553,9 @@ export async function packageNativeBlockAttemptV1(
     });
   } catch (error) {
     if (error instanceof NativeBlockPackageErrorV1) throw error;
+    if (error instanceof BabylonNativePackageInputErrorV1) {
+      return fail(error.diagnostic, error);
+    }
     return fail("native-package-internal-failed", error);
   } finally {
     await rm(checkDirectoryPath, { recursive: true, force: true });
