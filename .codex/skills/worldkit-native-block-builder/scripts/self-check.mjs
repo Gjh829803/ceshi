@@ -12,8 +12,6 @@ const DECLARED_OUTPUT_PATHS = Object.freeze([
 ]);
 const DECLARED_OUTPUT_SET = new Set(DECLARED_OUTPUT_PATHS);
 const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
-const NATIVE_VISUAL_RESOURCE_REF =
-  /^worldkit:\/\/static-geometry-asset\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$/;
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
 const IDENTITY_COLOR_HEX = /^#[0-9A-F]{6}$/;
@@ -35,6 +33,97 @@ const FORBIDDEN_SOURCE_PATTERNS = Object.freeze([
   /\bMath\.random\s*\(/,
   /\bDate\.now\s*\(/,
 ]);
+
+function moduleVariableStatements(source) {
+  const statements = [];
+  let braceDepth = 0;
+  let variableStart = -1;
+  let quote = "";
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  const isIdentifierPart = (value) => value !== undefined && /[A-Za-z0-9_$]/.test(value);
+
+  for (let index = 0; index < source.length; index += 1) {
+    const current = source[index];
+    const next = source[index + 1];
+    if (lineComment) {
+      if (current === "\n") lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      if (current === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (quote !== "") {
+      if (escaped) {
+        escaped = false;
+      } else if (current === "\\") {
+        escaped = true;
+      } else if (current === quote) {
+        quote = "";
+      }
+      continue;
+    }
+    if (current === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (current === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+    if (current === "\"" || current === "'" || current === "`") {
+      quote = current;
+      continue;
+    }
+    if (current === "{") {
+      braceDepth += 1;
+      continue;
+    }
+    if (current === "}") {
+      braceDepth = Math.max(0, braceDepth - 1);
+      continue;
+    }
+    if (braceDepth !== 0) continue;
+    if (variableStart < 0) {
+      for (const keyword of ["const", "let", "var"]) {
+        if (source.startsWith(keyword, index) &&
+            !isIdentifierPart(source[index - 1]) &&
+            !isIdentifierPart(source[index + keyword.length])) {
+          variableStart = index;
+          index += keyword.length - 1;
+          break;
+        }
+      }
+      continue;
+    }
+    if (current === ";") {
+      statements.push(source.slice(variableStart, index + 1));
+      variableStart = -1;
+    }
+  }
+  if (variableStart >= 0) statements.push(source.slice(variableStart));
+  return statements;
+}
+
+function hasForbiddenModuleVariableInitializer(source) {
+  const primitiveLiteral = /^(?:[+\-!~]*(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+\-]?\d+)?|true|false|null|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`[^`$]*`)(?:\s+as\s+const)?$/;
+  return moduleVariableStatements(source).some((statement) => {
+    const kind = /^(const|let|var)\b/.exec(statement.trimStart())?.[1];
+    if (kind !== "const") return true;
+    const initializerIndex = statement.indexOf("=");
+    if (initializerIndex < 0) return true;
+    const initializer = statement.slice(initializerIndex + 1).replace(/;\s*$/, "").trim();
+    return !primitiveLiteral.test(initializer) &&
+      !initializer.startsWith("Object.freeze(");
+  });
+}
 
 function parseOption(arguments_, name) {
   const index = arguments_.indexOf(name);
@@ -111,9 +200,7 @@ function validateResourceRefs(value, diagnosticCodes) {
   if (!hasExactKeys(value, ["kind", "schemaVersion", "resourceRefs"]) ||
       value.kind !== "native-visual-resource-list" || value.schemaVersion !== 1 ||
       !Array.isArray(value.resourceRefs) ||
-      value.resourceRefs.some((resourceRef) =>
-        typeof resourceRef !== "string" || !STABLE_REF.test(resourceRef) ||
-        !NATIVE_VISUAL_RESOURCE_REF.test(resourceRef))) {
+      value.resourceRefs.length !== 0) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID");
     return;
   }
@@ -159,9 +246,14 @@ function validateAuthoring(value, diagnosticCodes) {
   }
   const targetRefs = value.visualGroups.map(({ acceptanceTargetRef }) =>
     acceptanceTargetRef);
+  const identityColors = value.visualGroups.map(({ identityColorHex }) =>
+    identityColorHex);
   if (new Set(groupIds).size !== groupIds.length ||
       new Set(targetRefs).size !== targetRefs.length) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE");
+  }
+  if (new Set(identityColors).size !== identityColors.length) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_IDENTITY_COLORS_DUPLICATE");
   }
 }
 
@@ -216,6 +308,11 @@ export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
       const source = bytes.toString("utf8");
       if (FORBIDDEN_SOURCE_PATTERNS.some((pattern) => pattern.test(source))) {
         diagnosticCodes.add("NATIVE_BLOCK_BUILDER_SOURCE_AUTHORITY_FORBIDDEN");
+      }
+      if (hasForbiddenModuleVariableInitializer(source)) {
+        diagnosticCodes.add(
+          "NATIVE_BLOCK_BUILDER_SOURCE_MODULE_INITIALIZER_FORBIDDEN",
+        );
       }
     } else {
       const value = parseJsonData(bytes, diagnosticCodes);
