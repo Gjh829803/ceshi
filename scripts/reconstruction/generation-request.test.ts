@@ -11,6 +11,7 @@ import { decideSceneAuthoringRouteV1, parseSceneAuthoringRouteDecisionV1, type S
 import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionDiagnosticV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 
 import {
+  decideNativeBlockReconstructionRouteV1,
   deriveNativeBlockGenerationBootstrapV1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
   prepareNativeBlockGenerationTaskV1,
@@ -59,7 +60,7 @@ async function fixture(): Promise<Readonly<{ root: string; inputDirectory: strin
   ]);
   const sceneBriefHash = sha256Bytes(new TextEncoder().encode("# Cloud Temple\n")) as `sha256:${string}`;
   const routeDecision = decideSceneAuthoringRouteV1({
-    id: "cloud-temple-route",
+    id: "cloud-temple-t-gate-native-block-route",
     sceneBriefRef: "scene-brief.md",
     sceneBriefHash,
     trustProfileRef: "worldkit://trust-profile/trusted-local@1",
@@ -109,6 +110,7 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
     gameplayBootstrapPath: path.resolve("apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json"),
     worldRuntimeBootstrapPath: path.resolve("apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json"),
     worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
+    worldBoundsPath: path.join(fixtureValue.inputDirectory, "world-bounds.json"),
     worldBounds: {
       centerMetersXZ: [0, -15],
       sizeMetersXZ: [180, 180],
@@ -129,6 +131,38 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe("prepareNativeBlockGenerationTaskV1", () => {
+  it("resolves the Case-bound Native route through the sole Host policy owner", async () => {
+    const value = await fixture();
+    const preparedInput = input(value);
+
+    expect(decideNativeBlockReconstructionRouteV1(preparedInput.case, {
+      requiredCapabilityRefs: [],
+      requestedSourceKind: "babylon-native",
+      nativeTrustAdmitted: true,
+    })).toEqual(
+      value.routeDecision,
+    );
+  });
+
+  it("returns real Canonical and capability-gap decisions from Host route policy input", async () => {
+    const value = await fixture();
+    const reconstructionCase = input(value).case;
+
+    expect(decideNativeBlockReconstructionRouteV1(reconstructionCase, {
+      requiredCapabilityRefs: [],
+      requestedSourceKind: "canonical",
+      nativeTrustAdmitted: true,
+    }).decision).toMatchObject({ kind: "canonical" });
+    expect(decideNativeBlockReconstructionRouteV1(reconstructionCase, {
+      requiredCapabilityRefs: ["worldkit://capability/route.nav@1"],
+      requestedSourceKind: "babylon-native",
+      nativeTrustAdmitted: true,
+    }).decision).toEqual({
+      kind: "capability-gap",
+      unsupportedCapabilityRefs: ["worldkit://capability/route.nav@1"],
+      reasonCodes: ["requires-canonical-route"],
+    });
+  });
   it("consumes the canonical Runtime Contracts Native Scene Profile owner", async () => {
     const source = await readFile(
       new URL("./generation-request.ts", import.meta.url),

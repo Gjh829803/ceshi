@@ -20,17 +20,20 @@ import {
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
+  formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureReceiptV1,
+  hashFormalWorldCaptureIntentV1,
   hashNativeSceneCheckResultV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
+  parseFormalWorldCaptureIntentV1,
   parseNativeSceneCheckResultV1,
   parseWorldRuntimeSnapshotV4,
   type BabylonNativeBlockMaterializerMetadataV1,
@@ -120,6 +123,50 @@ export interface NativeBlockReconstructionE2EVerificationV1 {
       checkpointIds: readonly string[];
     }>[];
   }>;
+}
+
+export class NativeBlockReconstructionVerificationClosedErrorV1 extends Error {
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed" | "not-started";
+
+  constructor(
+    diagnosticCodes: readonly string[],
+    cleanupOutcome: "completed" | "failed" | "not-started",
+    cause?: unknown,
+  ) {
+    super(
+      cause instanceof Error
+        ? cause.message
+        : diagnosticCodes[0] ?? "NBR70_VERIFICATION_FAILED",
+      { cause },
+    );
+    this.name = "NativeBlockReconstructionVerificationClosedErrorV1";
+    this.diagnosticCodes = Object.freeze([...diagnosticCodes]);
+    this.cleanupOutcome = cleanupOutcome;
+  }
+}
+
+function diagnosticCodesFromVerificationError(
+  error: unknown,
+): readonly string[] {
+  if (error instanceof NativeBlockReconstructionVerificationClosedErrorV1) {
+    return error.diagnosticCodes;
+  }
+  const structuredCodes = error !== null && typeof error === "object" &&
+      "diagnosticCodes" in error && Array.isArray(error.diagnosticCodes)
+    ? error.diagnosticCodes.filter((code): code is string =>
+      typeof code === "string" && code.length > 0)
+    : [];
+  if (structuredCodes.length > 0) {
+    return Object.freeze([...new Set(structuredCodes)]);
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  const matched = message.match(/NBR70_[A-Z0-9_]+/g);
+  return Object.freeze(
+    matched === null || matched.length === 0
+      ? ["NBR70_VERIFICATION_FAILED"]
+      : [...new Set(matched)],
+  );
 }
 
 function fail(code: string): never {
@@ -1052,8 +1099,14 @@ async function verifyPlayability(input: Readonly<{
   });
 }
 
-export async function verifyNativeBlockReconstructionE2EV1(
+interface NativeBlockReconstructionVerificationLifecycleV1 {
+  cleanupOutcome: "completed" | "failed" | "not-started";
+  launchAttempted: boolean;
+}
+
+async function verifyNativeBlockReconstructionE2EUncheckedV1(
   input: VerifyNativeBlockReconstructionE2EInputV1,
+  lifecycle: NativeBlockReconstructionVerificationLifecycleV1,
 ): Promise<NativeBlockReconstructionE2EVerificationV1> {
   const runRoot = await canonicalDirectory(
     input.candidate.runDirectoryPath,
@@ -1080,6 +1133,23 @@ export async function verifyNativeBlockReconstructionE2EV1(
       "NBR70_REQUIRED_ARTIFACT_MISSING",
     ),
   ));
+  const formalCaptureIntentBytes = await requiredFile(
+    runRoot,
+    "inputs/formal-world-capture-intent.json",
+    "NBR70_REQUIRED_ARTIFACT_MISSING",
+  );
+  const formalCaptureIntent = parseFormalWorldCaptureIntentV1(
+    json(formalCaptureIntentBytes),
+  );
+  if (
+    sha256Bytes(formalCaptureIntentBytes) !== sha256Bytes(
+      formalWorldCaptureIntentCanonicalBytesV1(formalCaptureIntent),
+    ) ||
+    hashFormalWorldCaptureIntentV1(formalCaptureIntent) !==
+      reconstructionCase.formalCaptureIntentHash ||
+    formalCaptureIntent.id !==
+      `${reconstructionCase.id}.formal-world-capture-intent`
+  ) fail("NBR70_IDENTITY_MISMATCH");
   exact(runReceipt.caseHash, hashWorldReconstructionCaseV1(reconstructionCase));
   exact(runReceipt.evaluationProfileRef, reconstructionCase.evaluationProfileRef);
   exact(runReceipt.evaluationProfileHash,
@@ -1325,6 +1395,7 @@ export async function verifyNativeBlockReconstructionE2EV1(
   let playability: NativeBlockReconstructionE2EVerificationV1["playability"] | undefined;
   let failure: unknown;
   try {
+    lifecycle.launchAttempted = true;
     session = await input.playability.launch({
       packageDirectoryPath: launchPackageDirectoryPath,
       worldPackageRef: verified.receipt.worldPackageRef,
@@ -1358,9 +1429,13 @@ export async function verifyNativeBlockReconstructionE2EV1(
       try {
         const cleanup = await session.dispose();
         if (cleanup.outcome !== "completed") {
+          lifecycle.cleanupOutcome = "failed";
           failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
+        } else {
+          lifecycle.cleanupOutcome = "completed";
         }
       } catch {
+        lifecycle.cleanupOutcome = "failed";
         failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
       }
     }
@@ -1379,4 +1454,28 @@ export async function verifyNativeBlockReconstructionE2EV1(
     evaluationResultHash,
     playability,
   });
+}
+
+export async function verifyNativeBlockReconstructionE2EV1(
+  input: VerifyNativeBlockReconstructionE2EInputV1,
+): Promise<NativeBlockReconstructionE2EVerificationV1> {
+  const lifecycle: NativeBlockReconstructionVerificationLifecycleV1 = {
+    cleanupOutcome: "not-started",
+    launchAttempted: false,
+  };
+  try {
+    return await verifyNativeBlockReconstructionE2EUncheckedV1(
+      input,
+      lifecycle,
+    );
+  } catch (error) {
+    if (lifecycle.launchAttempted && lifecycle.cleanupOutcome === "not-started") {
+      lifecycle.cleanupOutcome = "failed";
+    }
+    throw new NativeBlockReconstructionVerificationClosedErrorV1(
+      diagnosticCodesFromVerificationError(error),
+      lifecycle.cleanupOutcome,
+      error,
+    );
+  }
 }

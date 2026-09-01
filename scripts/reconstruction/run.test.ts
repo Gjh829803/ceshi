@@ -512,7 +512,7 @@ function runInput(
 }
 
 describe("runWorldReconstructionV1", () => {
-  it("keeps the core unavailable from the CLI until concrete production ports exist", async () => {
+  it("keeps the core private behind the sole production transaction CLI port", async () => {
     const [packageJson, cliSource, runSource, journalSource] = await Promise.all([
       readFile(path.resolve("package.json"), "utf8"),
       readFile(path.resolve("scripts/cli/worldkit.ts"), "utf8"),
@@ -521,7 +521,14 @@ describe("runWorldReconstructionV1", () => {
     ]);
     expect(packageJson).not.toContain('"reconstruct:run"');
     expect(cliSource).not.toContain("runWorldReconstructionV1");
-    expect(cliSource).not.toContain("reconstruct run <case.json>");
+    expect(cliSource).not.toContain("runProductionWorldReconstructionV1");
+    expect(cliSource).toContain("runWorldReconstructionProductionV1");
+    expect(cliSource).not.toContain("WorldReconstructionRunPortsV1");
+    expect(cliSource).not.toContain("createProductionWorldReconstructionRunPortsV1");
+    expect(cliSource).not.toContain("prepareNativeBlockGenerationTaskV1");
+    expect(cliSource).not.toContain("runNativeBlockGenerationV1");
+    expect(cliSource).not.toContain("resolveWorldReconstructionFrozenOwnerIdentitiesV1");
+    expect(cliSource).toContain("reconstruct run <case.json>");
     expect(runSource).not.toContain("mergeReconciledRequest");
     expect(runSource).not.toContain("readonly reconcile:");
     expect(journalSource).not.toContain("WorldReconstructionReconcileResultV1");

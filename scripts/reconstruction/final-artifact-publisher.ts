@@ -54,6 +54,9 @@ const EVALUATION_RELATIVE_PATH = "final/evaluation.json";
 const LAUNCH_COMMAND =
   "pnpm worldkit native run final/world-package --port 5174 --json";
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const PUBLICATION_INVALID_DIAGNOSTIC_CODE =
+  "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID";
+const DIAGNOSTIC_CODE_PATTERN = /[A-Z][A-Z0-9_]{4,}/g;
 
 export interface NativeBlockReconstructionLaunchV1 {
   readonly kind: "native-block-reconstruction-launch";
@@ -86,6 +89,38 @@ export interface NativeBlockFinalArtifactPublicationV1 {
   readonly evaluationHash: Sha256HashV1;
 }
 
+export class NativeBlockFinalArtifactPublicationClosedErrorV1 extends Error {
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed" | "not-started";
+
+  constructor(
+    diagnosticCodes: readonly string[],
+    cleanupOutcome: "completed" | "failed" | "not-started",
+    cause?: unknown,
+  ) {
+    const codes = Object.freeze([
+      PUBLICATION_INVALID_DIAGNOSTIC_CODE,
+      ...diagnosticCodes.filter((code) =>
+        code !== PUBLICATION_INVALID_DIAGNOSTIC_CODE
+      ),
+    ].filter((code, index, values) => values.indexOf(code) === index));
+    const causeMessage = cause instanceof Error ? cause.message : undefined;
+    const detail = causeMessage?.startsWith(PUBLICATION_INVALID_DIAGNOSTIC_CODE)
+      ? causeMessage.slice(PUBLICATION_INVALID_DIAGNOSTIC_CODE.length)
+        .replace(/^:\s*/, "")
+      : causeMessage;
+    super(
+      `${PUBLICATION_INVALID_DIAGNOSTIC_CODE}${
+        detail === undefined || detail.length === 0 ? "" : `: ${detail}`
+      }`,
+      { cause },
+    );
+    this.name = "NativeBlockFinalArtifactPublicationClosedErrorV1";
+    this.diagnosticCodes = codes;
+    this.cleanupOutcome = cleanupOutcome;
+  }
+}
+
 interface PublisherHooksV1 {
   readonly beforeSync?: (
     absolutePath: string,
@@ -103,9 +138,29 @@ interface TreeSnapshotV1 {
 
 function invalid(detail: string, cause?: unknown): never {
   throw new Error(
-    `NBR_FINAL_ARTIFACT_PUBLICATION_INVALID: ${detail}`,
+    `${PUBLICATION_INVALID_DIAGNOSTIC_CODE}: ${detail}`,
     { cause },
   );
+}
+
+function diagnosticCodesFromError(error: unknown): readonly string[] {
+  const diagnosticCodes: string[] = [];
+  const collect = (candidate: unknown): void => {
+    if (candidate instanceof NativeBlockFinalArtifactPublicationClosedErrorV1) {
+      diagnosticCodes.push(...candidate.diagnosticCodes);
+    }
+    if (candidate instanceof AggregateError) {
+      for (const nested of candidate.errors) collect(nested);
+    }
+    if (candidate instanceof Error) {
+      diagnosticCodes.push(...(candidate.message.match(DIAGNOSTIC_CODE_PATTERN) ?? []));
+      collect(candidate.cause);
+    }
+  };
+  collect(error);
+  return Object.freeze(diagnosticCodes.filter(
+    (code, index, values) => values.indexOf(code) === index,
+  ));
 }
 
 function exact(actual: unknown, expected: unknown, detail: string): void {
@@ -362,9 +417,12 @@ async function publish(
   hooks: PublisherHooksV1,
 ): Promise<NativeBlockFinalArtifactPublicationV1> {
   let stagingOwned = false;
+  let finalOwned = false;
   let publicationLockOwned = false;
+  let publicationResourceAllocated = false;
   let publicationLockFilePath: string | undefined;
   let caseDirectoryPath: string | undefined;
+  let finalDirectoryPath: string | undefined;
   let stagingDirectoryPath: string | undefined;
   try {
     caseDirectoryPath = await requireCanonicalDirectory(
@@ -378,7 +436,7 @@ async function publish(
     if (path.dirname(runDirectoryPath) !== path.join(caseDirectoryPath, "runs")) {
       invalid("Run directory must be one direct child of the Case runs directory");
     }
-    const finalDirectoryPath = path.join(caseDirectoryPath, FINAL_DIRECTORY_NAME);
+    finalDirectoryPath = path.join(caseDirectoryPath, FINAL_DIRECTORY_NAME);
     stagingDirectoryPath = path.join(caseDirectoryPath, STAGING_DIRECTORY_NAME);
     publicationLockFilePath = path.join(
       caseDirectoryPath,
@@ -390,6 +448,7 @@ async function publish(
       0o600,
     );
     publicationLockOwned = true;
+    publicationResourceAllocated = true;
     try {
       await publicationLockHandle.sync();
     } finally {
@@ -665,6 +724,7 @@ async function publish(
     }
     await rename(stagingDirectoryPath, finalDirectoryPath);
     stagingOwned = false;
+    finalOwned = true;
     await syncPath(caseDirectoryPath, "publication", hooks);
     await unlink(publicationLockFilePath);
     publicationLockOwned = false;
@@ -678,6 +738,14 @@ async function publish(
     });
   } catch (error) {
     const cleanupErrors: unknown[] = [];
+    if (finalOwned && finalDirectoryPath !== undefined) {
+      try {
+        await rm(finalDirectoryPath, { recursive: true, force: true });
+        finalOwned = false;
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
     if (stagingOwned && stagingDirectoryPath !== undefined) {
       try {
         await rm(stagingDirectoryPath, { recursive: true, force: true });
@@ -693,7 +761,7 @@ async function publish(
         cleanupErrors.push(cleanupError);
       }
     }
-    if (caseDirectoryPath !== undefined && cleanupErrors.length === 0) {
+    if (caseDirectoryPath !== undefined) {
       try {
         await syncPath(caseDirectoryPath, "publication", hooks);
       } catch (cleanupError) {
@@ -701,16 +769,21 @@ async function publish(
       }
     }
     if (cleanupErrors.length > 0) {
-      throw new AggregateError(
+      const cleanupFailure = new AggregateError(
         [error, ...cleanupErrors],
-        "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID: owned cleanup failed",
+        `${PUBLICATION_INVALID_DIAGNOSTIC_CODE}: owned cleanup failed`,
+      );
+      throw new NativeBlockFinalArtifactPublicationClosedErrorV1(
+        diagnosticCodesFromError(cleanupFailure),
+        "failed",
+        cleanupFailure,
       );
     }
-    if (error instanceof Error &&
-        error.message.startsWith("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID")) {
-      throw error;
-    }
-    return invalid("publication failed", error);
+    throw new NativeBlockFinalArtifactPublicationClosedErrorV1(
+      diagnosticCodesFromError(error),
+      publicationResourceAllocated ? "completed" : "not-started",
+      error,
+    );
   }
 }
 

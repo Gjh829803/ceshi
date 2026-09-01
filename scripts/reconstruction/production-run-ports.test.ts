@@ -37,6 +37,8 @@ import {
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
 import { createEvidenceSetFixtureInputV1 } from
   "./evaluate-fixture.test-support.js";
+import { resolveWorldReconstructionFrozenOwnerIdentitiesV1 } from
+  "./generation-request.js";
 
 const H = (character: string): Sha256HashV1 =>
   `sha256:${character.repeat(64)}` as Sha256HashV1;
@@ -68,12 +70,39 @@ async function fixture() {
     "inputs",
     "formal-world-capture-intent.json",
   );
+  const gameplayBootstrapPath = path.join(root, "gameplay.json");
+  const worldRuntimeBootstrapPath = path.join(root, "runtime.json");
+  const worldBoundsPath = path.join(root, "world-bounds.json");
+  const repositoryRoot = path.resolve(import.meta.dirname, "../..");
+  const [gameplayBootstrap, worldRuntimeBootstrap] = await Promise.all([
+    readFile(path.join(
+      repositoryRoot,
+      "apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json",
+    ), "utf8").then((contents) => JSON.parse(contents) as unknown),
+    readFile(path.join(
+      repositoryRoot,
+      "apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json",
+    ), "utf8").then((contents) => JSON.parse(contents) as unknown),
+  ]);
+  const worldBounds = {
+    centerMetersXZ: [0, -15],
+    sizeMetersXZ: [180, 180],
+    heightRangeMeters: [-40, 90],
+  };
   await mkdir(path.dirname(intentPath), { recursive: true, mode: 0o700 });
-  await writeFile(casePath, stringifyCanonicalJson(evidence.reconstructionCase));
-  await writeFile(
-    intentPath,
-    stringifyCanonicalJson(evidence.formalCaptureIntent),
-  );
+  await Promise.all([
+    writeFile(casePath, stringifyCanonicalJson(evidence.reconstructionCase)),
+    writeFile(
+      intentPath,
+      stringifyCanonicalJson(evidence.formalCaptureIntent),
+    ),
+    writeFile(gameplayBootstrapPath, stringifyCanonicalJson(gameplayBootstrap)),
+    writeFile(
+      worldRuntimeBootstrapPath,
+      stringifyCanonicalJson(worldRuntimeBootstrap),
+    ),
+    writeFile(worldBoundsPath, stringifyCanonicalJson(worldBounds)),
+  ]);
   const frozenOwnerIdentities = Object.freeze({
     caseHash: H("1"),
     evaluationProfileHash: H("2"),
@@ -189,9 +218,13 @@ async function fixture() {
     evaluationProfile: evidence.evaluationProfile,
     generationInput: {
       runDirectoryPath,
-      gameplayBootstrapPath: path.join(root, "gameplay.json"),
-      worldRuntimeBootstrapPath: path.join(root, "runtime.json"),
-      worldBounds: {},
+      gameplayBootstrapPath,
+      worldRuntimeBootstrapPath,
+      worldBoundsPath,
+      worldBounds,
+      bootstrapId: "package-fixture.case-native",
+      sceneModuleRef: "worldkit://native-scene/package-fixture.case@1",
+      seed: 20260901,
     },
     formalCaptureIntent: evidence.formalCaptureIntent,
   } as unknown as ProductionWorldReconstructionRunPortsInputV1;
@@ -206,6 +239,12 @@ async function fixture() {
     generationReceipt,
     packageResult,
     input,
+    gameplayBootstrapPath,
+    worldRuntimeBootstrapPath,
+    worldBoundsPath,
+    gameplayBootstrap,
+    worldRuntimeBootstrap,
+    worldBounds,
   };
 }
 
@@ -283,6 +322,75 @@ async function generateAndPackage(
 }
 
 describe("createProductionWorldReconstructionRunPortsV1", () => {
+  it("no-follow rehashes the three Host owner files and re-derives one frozen identity set", async () => {
+    const value = await fixture();
+    const ownerPorts = {
+      ...owners(value, []),
+      resolveFrozenOwnerIdentities: vi.fn(
+        resolveWorldReconstructionFrozenOwnerIdentitiesV1,
+      ),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const ports = await createProductionWorldReconstructionRunPortsV1(
+      value.input,
+      ownerPorts,
+    );
+
+    const baseline = await ports.rehashOwnerIdentities();
+    expect(Object.isFrozen(baseline)).toBe(true);
+    expect(ownerPorts.resolveFrozenOwnerIdentities).toHaveBeenCalledOnce();
+
+    await writeFile(value.worldBoundsPath, stringifyCanonicalJson({
+      ...value.worldBounds,
+      centerMetersXZ: [1, -15],
+    }));
+    const changedBounds = await ports.rehashOwnerIdentities();
+    expect(changedBounds.worldBoundsHash).not.toBe(baseline.worldBoundsHash);
+    expect(changedBounds.bootstrapInputHash).toBe(baseline.bootstrapInputHash);
+
+    await writeFile(
+      value.worldBoundsPath,
+      stringifyCanonicalJson(value.worldBounds),
+    );
+    await writeFile(value.worldRuntimeBootstrapPath, stringifyCanonicalJson({
+      ...(value.worldRuntimeBootstrap as Record<string, unknown>),
+      initialCamera: {
+        ...((value.worldRuntimeBootstrap as Record<string, unknown>)
+          .initialCamera as Record<string, unknown>),
+        distanceMeters: 5.25,
+      },
+    }));
+    await expect(ports.rehashOwnerIdentities()).rejects.toThrow(
+      "WorldRuntimeBootstrapV1 schema",
+    );
+
+    await writeFile(
+      value.worldRuntimeBootstrapPath,
+      stringifyCanonicalJson(value.worldRuntimeBootstrap),
+    );
+    await writeFile(value.gameplayBootstrapPath, stringifyCanonicalJson({
+      ...(value.gameplayBootstrap as Record<string, unknown>),
+      resourceRef: "worldkit://gameplay-bootstrap/foreign-owner@1",
+    }));
+    await expect(ports.rehashOwnerIdentities()).rejects.toThrow(
+      "GameplayBootstrapV1 schema",
+    );
+
+    await writeFile(
+      value.gameplayBootstrapPath,
+      stringifyCanonicalJson(value.gameplayBootstrap),
+    );
+    const linkedBoundsTarget = path.join(value.root, "linked-world-bounds.json");
+    await writeFile(
+      linkedBoundsTarget,
+      stringifyCanonicalJson(value.worldBounds),
+    );
+    await unlink(value.worldBoundsPath);
+    await symlink(linkedBoundsTarget, value.worldBoundsPath);
+    await expect(ports.rehashOwnerIdentities()).rejects.toThrow(
+      "WORLD_RECONSTRUCTION_INPUT_INVALID",
+    );
+  });
+
   it("admits the real Case only through its canonical fixed Intent bytes and complete visual closure", async () => {
     const value = await fixture();
     const repositoryRoot = path.resolve(import.meta.dirname, "../..");

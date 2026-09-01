@@ -406,6 +406,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/reconstruction/production-run-ports.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/repair-request.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/run-journal.test.ts", lane: "contract" },
+  { path: "scripts/reconstruction/run-production.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/run.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/sdk-owner-identities.test.ts", lane: "contract" },
   { path: "scripts/scenes/finalize-scene-terrain.test.ts", lane: "contract" },

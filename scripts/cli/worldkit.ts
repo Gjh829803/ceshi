@@ -121,6 +121,10 @@ import { runRuntimeSessionNdjsonV1 } from "../lib/runtime-session-ndjson";
 import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
 import { checkBabylonNativeSceneWorldDirectoryV1 } from
   "../native-scene/native-scene-check.js";
+import type {
+  WorldReconstructionProductionInputV1,
+  WorldReconstructionProductionResultV1,
+} from "../reconstruction/run-production.js";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
@@ -141,6 +145,7 @@ Usage:
   worldkit native explain <world-directory> [--json]
   worldkit native package <attempt-directory> --case <case.json> --json
   worldkit native run <package-directory> [--port <port>] [--json]
+  worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json
   worldkit capture <file-or-package> --output <png> [--snapshot <json>]
     [--triview-output <directory> [--implementation-map <json>]] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
@@ -186,6 +191,13 @@ export {
 
 export type WorldkitArgs =
   | { command: "help"; json: false }
+  | {
+      command: "reconstruct-run";
+      casePath: string;
+      outputDirectoryPath: string;
+      backend: "cloud" | "local";
+      json: true;
+    }
   | { command: "native-check"; worldDirectoryPath: string; json: true }
   | { command: "native-explain"; worldDirectoryPath: string; json: boolean }
   | {
@@ -433,9 +445,44 @@ type CaptureHostedWorldPackagePortV1 = (
   input: CaptureHostedWorldPackageCliInputV1,
 ) => Promise<CaptureHostedWorldPackageCliResultV1>;
 
+type RunWorldReconstructionProductionPortV1 = (
+  input: Omit<WorldReconstructionProductionInputV1, "repositoryRoot">,
+) => Promise<WorldReconstructionProductionResultV1>;
+
 export interface WorldkitMainPortsV1 {
   readonly packageNativeBlockAttemptV1?: PackageNativeBlockAttemptPortV1;
   readonly captureHostedWorldPackageV1?: CaptureHostedWorldPackagePortV1;
+  readonly runWorldReconstructionProductionV1?:
+    RunWorldReconstructionProductionPortV1;
+}
+
+async function loadRunWorldReconstructionProductionPortV1(): Promise<
+  RunWorldReconstructionProductionPortV1
+> {
+  const moduleSpecifier = new URL(
+    "../reconstruction/run-production.js",
+    import.meta.url,
+  ).href;
+  const loaded = await import(moduleSpecifier) as Readonly<{
+    runWorldReconstructionProductionV1?: unknown;
+  }>;
+  if (typeof loaded.runWorldReconstructionProductionV1 !== "function") {
+    throw new TypeError("WORLD_RECONSTRUCTION_PRODUCTION_ADAPTER_UNAVAILABLE");
+  }
+  return loaded.runWorldReconstructionProductionV1 as
+    RunWorldReconstructionProductionPortV1;
+}
+
+function reconstructionProductionFailureV1(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const diagnosticCodes = message.match(/[A-Z][A-Z0-9_]{4,}/g) ??
+    ["WORLD_RECONSTRUCTION_PRODUCTION_FAILED"];
+  return Object.freeze({
+    kind: "world-reconstruction-production-error",
+    schemaVersion: 1,
+    outcome: "closed",
+    diagnosticCodes: Object.freeze([...new Set(diagnosticCodes)].sort()),
+  });
 }
 
 async function loadPackageNativeBlockAttemptPortV1(): Promise<
@@ -686,6 +733,40 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
       return { command: "native-explain", worldDirectoryPath, json };
     }
     throw new WorldkitUsageError(`Unknown native operation '${operation}'.`);
+  }
+
+  if (command === "reconstruct") {
+    const operation = takeRequiredPositional(tokens, "reconstruct operation");
+    if (operation !== "run") {
+      throw new WorldkitUsageError(
+        `Unknown reconstruct operation '${operation}'.`,
+      );
+    }
+    const casePath = takeRequiredPositional(tokens, "Reconstruction Case file");
+    const outputDirectoryPath = takeOption(tokens, "--output");
+    if (outputDirectoryPath === undefined) {
+      throw new WorldkitUsageError(
+        "reconstruct run requires --output <run-directory>.",
+      );
+    }
+    const backendOption = takeOption(tokens, "--backend");
+    const backend = backendOption ?? "cloud";
+    if (backend !== "cloud" && backend !== "local") {
+      throw new WorldkitUsageError(
+        "reconstruct run --backend must be 'cloud' or 'local'.",
+      );
+    }
+    if (!json) {
+      throw new WorldkitUsageError("reconstruct run requires --json.");
+    }
+    rejectRemaining(tokens, "reconstruct run");
+    return {
+      command: "reconstruct-run",
+      casePath,
+      outputDirectoryPath,
+      backend,
+      json: true,
+    };
   }
 
   if (command === "subject-preset") {
@@ -2575,6 +2656,29 @@ export async function main(
       parsed.port,
       parsed.json,
     );
+  }
+  if (parsed.command === "reconstruct-run") {
+    try {
+      const runProduction = ports.runWorldReconstructionProductionV1 ??
+        await loadRunWorldReconstructionProductionPortV1();
+      const result = await runProduction({
+        casePath: parsed.casePath,
+        outputDirectoryPath: parsed.outputDirectoryPath,
+        backend: parsed.backend,
+        routePolicy: Object.freeze({
+          requiredCapabilityRefs: Object.freeze([]),
+          requestedSourceKind: "babylon-native",
+          nativeTrustAdmitted: true,
+        }),
+      });
+      process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
+      return result.outcome === "published" ? 0 : 1;
+    } catch (error) {
+      process.stdout.write(
+        `${stringifyCanonicalJson(reconstructionProductionFailureV1(error))}\n`,
+      );
+      return 1;
+    }
   }
   if (parsed.command === "run-browser") {
     return runUntilSignal(
