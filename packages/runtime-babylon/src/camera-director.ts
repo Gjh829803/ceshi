@@ -1311,7 +1311,7 @@ export class CameraDirectorV1 {
       try {
         collision = springArm.solve({
           committedTick: committedContext.committedTick,
-          excludedEntityIds: [sample.controlledEntityId],
+          excludedEntityIds: [sample.entityId],
           desiredTarget: proposedTarget,
           desiredPosition: proposedPosition,
           currentCommittedPosition: this.camera.position,

@@ -1891,6 +1891,66 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
   });
 
+  it("excludes the mounted physical ViewTarget from camera geometry queries", () => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = runtimeSubject(executionPlan);
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.mounted-view-target", Vector3.Zero(), scene);
+    const requests: CameraGeometryQueryRequestV2[] = [];
+    const director = new CameraDirectorV1(
+      initialCamera(executionPlan),
+      camera,
+      scene,
+      cameraGeometryQuery((request) => {
+        requests.push(structuredClone(request));
+        return undefined;
+      }),
+    );
+    const springArm = new SpringArmComponentV1();
+    const relationshipId = `mounted-on:sha256:${"ab".repeat(32)}`;
+    const sample: ViewTargetSampleV1 = {
+      controlledEntityId: "rider",
+      entityId: "mount",
+      targetPositionMetersXYZ: [2, 0.2, -1],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0],
+      approximateRadiusMeters: 0.4,
+      socketPositionsMetersXYZById: {},
+      motionTags: [],
+      movementMedium: "ground",
+      relationshipRole: "rider",
+      relationshipContexts: [{
+        id: relationshipId,
+        type: "mountedOn",
+        riderEntityId: "rider",
+        mountEntityId: "mount",
+        mountSlotId: "stand",
+      }],
+      cameraContextTags: [],
+    };
+
+    try {
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        sample,
+        1 / 60,
+        committedCameraContextFromMotionKernelV1(sample, 1, "idle", 0),
+        springArm,
+      );
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]!.excludedEntityIds).toEqual(["mount"]);
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
   it("rolls a failed Tick back atomically and preserves the next Profile transition", () => {
     const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
