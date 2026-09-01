@@ -410,6 +410,7 @@ function bindInput(overrides: Record<string, unknown> = {}) {
       relation: "connects-to",
       toNodeId: "upper-t-junction",
       measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
     }],
     checkpointSpatialCriteria: checkpointSpatialCriteria(),
     ...overrides,
@@ -460,6 +461,7 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       relation: "connects-to",
       toNodeId: "upper-t-junction",
       measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
     }]);
     expect(map.traversalCheckBindings[0]).toMatchObject({
       traversalCheckId: "reach-junction",
@@ -468,6 +470,78 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
     expect(hashFormalSemanticCaptureMapV1(bind())).toBe(
       hashFormalSemanticCaptureMapV1(map),
     );
+  });
+
+  it("preserves the executable proof identity for every topology measurement source", () => {
+    const input = bindInput();
+    const expectedTopologyRelations = [{
+      fromNodeId: "central-ascent",
+      relation: "above",
+      toNodeId: "upper-t-junction",
+    }, {
+      fromNodeId: "central-ascent",
+      relation: "blocks",
+      toNodeId: "upper-t-junction",
+    }, {
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+    }, {
+      fromNodeId: "upper-t-junction",
+      relation: "contains",
+      toNodeId: "central-ascent",
+    }] as const;
+    const topologyRelations = [{
+      fromNodeId: "central-ascent",
+      relation: "above",
+      toNodeId: "upper-t-junction",
+      measurementSource: "package-bounds",
+      fromVisualGroupId: "central-ascent-group",
+      toVisualGroupId: "upper-t-junction-group",
+    }, {
+      fromNodeId: "central-ascent",
+      relation: "blocks",
+      toNodeId: "upper-t-junction",
+      measurementSource: "sdk-collider",
+      colliderId: "spawn-ground",
+      sourceVisualGroupId: "central-ascent-group",
+    }, {
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
+    }, {
+      fromNodeId: "upper-t-junction",
+      relation: "contains",
+      toNodeId: "central-ascent",
+      measurementSource: "sdk-support",
+      subjectEntityId: "player",
+      colliderId: "spawn-ground",
+    }] as const;
+    const reconstructionCase = parseWorldReconstructionCaseV1({
+      ...caseValue(),
+      expected: {
+        ...caseValue().expected,
+        topology: {
+          ...caseValue().expected.topology,
+          relations: expectedTopologyRelations,
+        },
+      },
+    });
+    const materializerMetadata =
+      parseBabylonNativeBlockMaterializerMetadataV1({
+        ...input.materializerMetadata,
+        caseHash: hashWorldReconstructionCaseV1(reconstructionCase),
+      });
+
+    expect(bind({
+      case: reconstructionCase,
+      materializerMetadata,
+      materializerMetadataHash:
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
+      topologyRelations,
+    }).topologyRelations).toEqual(topologyRelations);
   });
 
   it("rejects stale Package materializer identity", () => {
