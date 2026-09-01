@@ -171,6 +171,10 @@ function deterministicTwoBlockEvidence(reverse: boolean): Readonly<{
     string,
     Readonly<{ frictionRatio?: number; restitutionRatio?: number }>
   >>;
+  inventoryRatiosByColliderId: Readonly<Record<
+    string,
+    Readonly<{ frictionRatio?: number; restitutionRatio?: number }>
+  >>;
 }> {
   const engine = new NullEngine();
   const scene = new Scene(engine);
@@ -256,6 +260,16 @@ function deterministicTwoBlockEvidence(reverse: boolean): Readonly<{
       )),
       ratiosByColliderId: Object.freeze(Object.fromEntries(
         registered.map((collider) => [collider.id, Object.freeze({
+          ...(collider.frictionRatio === undefined
+            ? {}
+            : { frictionRatio: collider.frictionRatio }),
+          ...(collider.restitutionRatio === undefined
+            ? {}
+            : { restitutionRatio: collider.restitutionRatio }),
+        })]),
+      )),
+      inventoryRatiosByColliderId: Object.freeze(Object.fromEntries(
+        inventory.map((collider) => [collider.colliderId, Object.freeze({
           ...(collider.frictionRatio === undefined
             ? {}
             : { frictionRatio: collider.frictionRatio }),
@@ -684,6 +698,12 @@ describe("Babylon Native block Collider contribution", () => {
       "collider-a": { frictionRatio: 0.25, restitutionRatio: 0.5 },
       "collider-z": {},
     });
+    expect(first.inventoryRatiosByColliderId).toEqual(
+      first.ratiosByColliderId,
+    );
+    expect(reversed.inventoryRatiosByColliderId).toEqual(
+      first.inventoryRatiosByColliderId,
+    );
   });
 
   it("does not infer collision from palette or visual-group metadata", () => {
