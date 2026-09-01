@@ -591,9 +591,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       }
       renderedCamera.getViewMatrix(true);
       const renderedTargetHeightMeters = renderedCamera.getTarget().y;
-      expect(renderedTargetHeightMeters).toBeGreaterThan(1.05);
-      expect(desiredTarget[1]).toBeLessThan(1.7);
-      expect(renderedTargetHeightMeters).toBeLessThan(desiredTarget[1] - 0.05);
+      expect(renderedTargetHeightMeters).toBeCloseTo(desiredTarget[1], 6);
       expect(distanceMeters(actualPosition, desiredTarget)).toBeLessThanOrEqual(
         safeArmLengthMeters + 0.000001,
       );
@@ -1503,7 +1501,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   });
 
-  it("recenters collision-compressed third-person framing on the Subject chest", () => {
+  it("keeps the rendered target and FOV on the hard-collision-validated pose", () => {
     const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
@@ -1512,7 +1510,9 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
     const camera = new FreeCamera("camera.collision-composition", Vector3.Zero(), scene);
+    const requests: CameraGeometryQueryRequestV2[] = [];
     const queryPort = cameraGeometryQuery((request) => {
+      requests.push(structuredClone(request));
       const delta = request.endPositionMetersXYZ.map(
         (coordinate, index) => coordinate - request.startPositionMetersXYZ[index]!,
       ) as [number, number, number];
@@ -1575,20 +1575,31 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       );
 
       const snapshot = director.snapshot();
-      const desiredTarget = snapshot.desiredTargetPositionMetersXYZ;
-      if (desiredTarget === undefined) throw new Error("Expected desired target telemetry.");
+      const request = requests[0];
+      if (request === undefined) throw new Error("Expected a geometry query.");
+      if (snapshot.resolvedParameters === undefined) {
+        throw new Error("Expected resolved Camera parameters.");
+      }
       camera.getViewMatrix(true);
-      const renderedDirection = camera.getForwardRay().direction;
-      const chestDirection = new Vector3(0, 1.25, 0)
-        .subtract(camera.position)
-        .normalize();
       expect(snapshot.isCollisionRetracted).toBe(true);
       expect(snapshot.effectiveArmLengthMeters! / snapshot.requestedArmLengthMeters!)
         .toBeLessThan(0.3);
-      expect(desiredTarget[1]).toBeCloseTo(1.8, 6);
-      expect(camera.getTarget().y).toBeCloseTo(1.25, 2);
-      expect(Math.abs(renderedDirection.y - chestDirection.y)).toBeLessThan(0.02);
-      expect(snapshot.finalFovDegrees).toBeGreaterThan(58);
+      expect.soft(camera.getTarget().x).toBeCloseTo(
+        request.startPositionMetersXYZ[0],
+        6,
+      );
+      expect.soft(camera.getTarget().y).toBeCloseTo(
+        request.startPositionMetersXYZ[1],
+        6,
+      );
+      expect.soft(camera.getTarget().z).toBeCloseTo(
+        request.startPositionMetersXYZ[2],
+        6,
+      );
+      expect.soft(snapshot.finalFovDegrees).toBeCloseTo(
+        snapshot.resolvedParameters.baseFovDegrees,
+        6,
+      );
     } finally {
       director.dispose();
       engine.dispose();
