@@ -8,13 +8,15 @@ import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson } from "@white
 import { createGameplayBootstrapV1, parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import { createWorldRuntimeBootstrapV1, parseWorldRuntimeBootstrapV1 } from "@whitebox-world/runtime-contracts";
 import { decideSceneAuthoringRouteV1, parseSceneAuthoringRouteDecisionV1, type SceneAuthoringRouteDecisionV1 } from "@whitebox-world/scene-authoring-contracts";
-import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
+import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionDiagnosticV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 
 import {
   deriveNativeBlockGenerationBootstrapV1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
   prepareNativeBlockGenerationTaskV1,
+  resolveWorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
+import { createNativeBlockRepairInstructionV1 } from "./repair-request.js";
 
 const hash = (character: string) => `sha256:${character.repeat(64)}` as `sha256:${string}`;
 const API_HASH = hash("a");
@@ -232,6 +234,27 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           "inputs/registry-lock.json",
         ]),
       );
+      expect(prepared.frozenOwnerIdentities).toEqual(
+        resolveWorldReconstructionFrozenOwnerIdentitiesV1({
+          reconstructionCase: input(value).case,
+          evaluationProfile: input(value).profile,
+          gameplayBootstrap: JSON.parse(new TextDecoder().decode(prepared.gameplayBootstrapBytes)),
+          worldRuntimeBootstrap: JSON.parse(new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes)),
+          worldBounds: JSON.parse(new TextDecoder().decode(prepared.worldBoundsBytes)),
+          bootstrap: prepared.bootstrap,
+        }),
+      );
+      expect(() => resolveWorldReconstructionFrozenOwnerIdentitiesV1({
+        reconstructionCase: input(value).case,
+        evaluationProfile: input(value).profile,
+        gameplayBootstrap: JSON.parse(new TextDecoder().decode(prepared.gameplayBootstrapBytes)),
+        worldRuntimeBootstrap: JSON.parse(new TextDecoder().decode(prepared.worldRuntimeBootstrapBytes)),
+        worldBounds: JSON.parse(new TextDecoder().decode(prepared.worldBoundsBytes)),
+        bootstrap: {
+          ...prepared.bootstrap,
+          gravityMetersPerSecondSquaredXYZ: [0, -1, 0],
+        },
+      })).toThrowError("World reconstruction frozen owner identity closure failed");
       for (const contextInput of prepared.generationRequest.contextInputs) {
         const bytes = await readFile(path.join(prepared.taskWorkspacePath, contextInput.inputRef));
         expect(sha256Bytes(bytes)).toBe(contextInput.contentHash);
@@ -262,6 +285,71 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         expect(descriptor).toMatchObject({ resourceRef: expectedRef, contentHash: expectedHash });
       }
       expect(JSON.parse(await readFile(path.join(attemptRoot, "inputs", "host-closure.json"), "utf8"))).toEqual(hostClosure);
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
+  it("forbids repair context on Attempt 0 and requires a canonical manifest-bound repair instruction on Attempt 1", async () => {
+    const value = await fixture();
+    try {
+      const attempt0 = await prepareNativeBlockGenerationTaskV1(input(value));
+      const repairInstruction = createNativeBlockRepairInstructionV1({
+        diagnostics: [parseWorldReconstructionDiagnosticV1({
+          kind: "world-reconstruction-diagnostic",
+          schemaVersion: 1,
+          id: "diag.collider-missing",
+          code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+          dimensionId: "collider",
+          acceptanceTargetRef: "worldkit://acceptance-target/gate@1",
+          evidenceRefs: ["artifact://run/attempts/0/evidence-set.json"],
+          message: "Collider is missing.",
+          repairAction: { kind: "revise-native-source" },
+        })],
+        priorSourceRef: "artifact://run/attempts/0/source",
+        priorSourceHash: hash("d"),
+        priorEvaluationResultRef: "artifact://run/attempts/0/evaluation.json",
+        priorEvaluationResultHash: hash("e"),
+        priorGenerationRequestRef: "artifact://run/attempts/0/generation-request.json",
+        priorGenerationRequestHash: attempt0.generationRequestHash,
+        frozenOwnerIdentities: attempt0.frozenOwnerIdentities,
+      });
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        runId: "attempt-zero-reject",
+        runDirectoryPath: path.join(value.root, "runs", "attempt-zero-reject"),
+        repairInstruction,
+      })).rejects.toThrowError("Initial generation attempt must not declare a repair instruction");
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        attemptIndex: 1,
+        runId: "attempt-one-missing",
+        runDirectoryPath: path.join(value.root, "runs", "attempt-one-missing"),
+      })).rejects.toThrowError("Repair generation attempt requires one repair instruction");
+
+      const attempt1 = await prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        attemptIndex: 1,
+        repairInstruction,
+      });
+      const repairContext = attempt1.generationRequest.contextInputs.find(
+        ({ inputRef }) => inputRef === "context/repair-instruction.json",
+      );
+      expect(repairContext).toBeDefined();
+      const repairBytes = await readFile(path.join(
+        attempt1.taskWorkspacePath,
+        "context/repair-instruction.json",
+      ));
+      expect(sha256Bytes(repairBytes)).toBe(repairContext?.contentHash);
+      expect(JSON.parse(repairBytes.toString("utf8"))).toEqual(repairInstruction);
+      expect(attempt1.generationRequest.workspaceContextManifestHash).not.toBe(
+        attempt0.generationRequest.workspaceContextManifestHash,
+      );
+      expect(attempt1.routerTaskPayloadHash).not.toBe(attempt0.routerTaskPayloadHash);
+      expect(attempt1.frozenOwnerIdentities).toEqual(attempt0.frozenOwnerIdentities);
+      expect(attempt1.generationRequest.declaredOutputPaths).toEqual([
+        "scene.ts", "native-block-authoring.json", "native-resources.json",
+      ]);
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }

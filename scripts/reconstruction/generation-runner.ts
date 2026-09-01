@@ -95,7 +95,7 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
     try {
       reconciliation = await ports.reconcile(
         input.routerRequestId,
-        input.generationRequestHash as Sha256HashV1,
+        input.routerTaskPayloadHash as Sha256HashV1,
       );
     } catch {
       outcome = "unknown";
@@ -104,7 +104,7 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
     }
     if (reconciliation.outcome !== "missing" &&
         (reconciliation.requestId !== input.routerRequestId ||
-          reconciliation.requestHash !== input.generationRequestHash)) {
+          reconciliation.requestHash !== input.routerTaskPayloadHash)) {
       outcome = "rejected";
       diagnostics = ["duplicate-request-mismatch"];
       return;

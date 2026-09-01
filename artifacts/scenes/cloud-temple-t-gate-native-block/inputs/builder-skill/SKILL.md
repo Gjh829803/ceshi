@@ -7,6 +7,8 @@ description: Build or repair one deterministic Babylon Native Block authoring wo
 
 Create one closed Babylon Native Source workspace. Read the complete frozen inputs before authoring, including the Generation Request, Scene Brief, reference images, API/Profile context, and read-only `native-scene.bootstrap.json`. Do not edit, replace, or derive a second Bootstrap.
 
+Attempt 0 has no repair instruction. Attempt 1 always includes the Host-authored `.task/context/repair-instruction.json`; read it as immutable diagnostic context, preserve every frozen owner identity and prior Attempt artifact, and revise only the same three declared output files.
+
 ## Authority boundary
 
 JSON/Case/Scene Brief owns identity, intent, Subject, Spawn target, budgets, and evidence requirements.
