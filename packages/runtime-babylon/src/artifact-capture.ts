@@ -2,13 +2,18 @@ import { Camera } from "@babylonjs/core/Cameras/camera.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
-import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import type { FormalWorldBoundsMetersV1 } from "@whitebox-world/runtime-contracts";
+
+import {
+  fitOrthographicBoundsToWorldExtentsV1,
+  orientCameraAtExactPose,
+} from "./formal-world-camera.js";
 
 export interface BabylonArtifactProjectedBoundsV1 {
   readonly centerRatioXY: readonly [number, number];
@@ -75,61 +80,20 @@ export type BabylonArtifactCaptureRequestV1 =
       identityColor: string;
     }>;
 
-function worldBoundsCorners(
-  bounds: FormalWorldBoundsMetersV1,
-): readonly Vector3[] {
-  const [minimumX, minimumY, minimumZ] = bounds.minimumMetersXYZ;
-  const [maximumX, maximumY, maximumZ] = bounds.maximumMetersXYZ;
-  return [
-    new Vector3(minimumX, minimumY, minimumZ),
-    new Vector3(maximumX, minimumY, minimumZ),
-    new Vector3(minimumX, maximumY, minimumZ),
-    new Vector3(maximumX, maximumY, minimumZ),
-    new Vector3(minimumX, minimumY, maximumZ),
-    new Vector3(maximumX, minimumY, maximumZ),
-    new Vector3(minimumX, maximumY, maximumZ),
-    new Vector3(maximumX, maximumY, maximumZ),
-  ];
-}
-
 function fitOrthographicCameraToWorldBounds(
   camera: FreeCamera,
   bounds: FormalWorldBoundsMetersV1,
   aspect: number,
 ): void {
-  const view = camera.getViewMatrix(true);
-  const corners = worldBoundsCorners(bounds).map((corner) =>
-    Vector3.TransformCoordinates(corner, view)
+  const fitted = fitOrthographicBoundsToWorldExtentsV1(
+    bounds,
+    camera.getViewMatrix(true),
+    aspect,
   );
-  const minimumX = Math.min(...corners.map(({ x }) => x));
-  const maximumX = Math.max(...corners.map(({ x }) => x));
-  const minimumY = Math.min(...corners.map(({ y }) => y));
-  const maximumY = Math.max(...corners.map(({ y }) => y));
-  const centerX = (minimumX + maximumX) / 2;
-  const centerY = (minimumY + maximumY) / 2;
-  const width = maximumX - minimumX;
-  const height = maximumY - minimumY;
-  const halfWidth = Math.max(width / 2, height * aspect / 2);
-  const halfHeight = Math.max(height / 2, width / aspect / 2);
-  camera.orthoLeft = centerX - halfWidth;
-  camera.orthoRight = centerX + halfWidth;
-  camera.orthoTop = centerY + halfHeight;
-  camera.orthoBottom = centerY - halfHeight;
-}
-
-function orientCameraAtExactPose(
-  camera: FreeCamera,
-  position: Vector3,
-  target: Vector3,
-  useRightHandedSystem: boolean,
-): void {
-  camera.setTarget(target);
-  camera.position.copyFrom(position);
-  const cameraWorld = useRightHandedSystem
-    ? Matrix.LookAtRH(position, target, Vector3.UpReadOnly).invert()
-    : Matrix.LookAtLH(position, target, Vector3.UpReadOnly).invert();
-  Quaternion.FromRotationMatrix(cameraWorld).toEulerAnglesToRef(camera.rotation);
-  camera.rotation.z = 0;
+  camera.orthoLeft = fitted.orthoLeft;
+  camera.orthoRight = fitted.orthoRight;
+  camera.orthoTop = fitted.orthoTop;
+  camera.orthoBottom = fitted.orthoBottom;
 }
 
 function renderingCanvas(engine: AbstractEngine): HTMLCanvasElement {
