@@ -23,6 +23,8 @@ export const WORLD_RECONSTRUCTION_DIMENSION_IDS_V1 = Object.freeze([
 export type WorldReconstructionDimensionIdV1 =
   (typeof WORLD_RECONSTRUCTION_DIMENSION_IDS_V1)[number];
 export type WorldReconstructionOutcomeV1 = "passed" | "failed" | "incomplete";
+export type WorldReconstructionCaseArtifactRefV1 =
+  `artifact://world-reconstruction-case/${string}/case.json`;
 
 export type WorldReconstructionMetricV1 =
   | Readonly<{ kind: "ratio-basis-points"; valueBasisPoints: number }>
@@ -386,6 +388,10 @@ export interface WorldReconstructionRunReceiptV1 {
 
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const WORLD_PACKAGE_REF_PATTERN = /^package:\/\/world-package\/sha256\/([a-f0-9]{64})$/;
+const WORLD_RECONSTRUCTION_CASE_ID_PATTERN =
+  /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+const WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_PATTERN =
+  /^artifact:\/\/world-reconstruction-case\/([a-z0-9]+(?:[.-][a-z0-9]+)*)\/case\.json$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 const CASE_FIELDS = [
   "kind", "schemaVersion", "id", "sceneBriefRef", "sceneBriefHash",
@@ -469,6 +475,39 @@ function text(value: unknown, contract: string, path: string): string {
     fail(contract, path, "expected a non-empty trimmed NFC string");
   }
   return value;
+}
+
+function worldReconstructionCaseId(
+  value: unknown,
+  contract: string,
+  path: string,
+): string {
+  const parsed = text(value, contract, path);
+  if (!WORLD_RECONSTRUCTION_CASE_ID_PATTERN.test(parsed)) {
+    fail(
+      contract,
+      path,
+      "expected a lowercase ASCII Case id with dot or hyphen separators",
+    );
+  }
+  return parsed;
+}
+
+export function parseWorldReconstructionCaseArtifactRefV1(
+  value: unknown,
+): WorldReconstructionCaseArtifactRefV1 {
+  const contract = "WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID";
+  const parsed = text(value, contract, "caseRef");
+  const match = WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_PATTERN.exec(parsed);
+  if (match === null) {
+    fail(
+      contract,
+      "caseRef",
+      "expected artifact://world-reconstruction-case/<case-id>/case.json",
+    );
+  }
+  worldReconstructionCaseId(match[1], contract, "caseRef/caseId");
+  return parsed as WorldReconstructionCaseArtifactRefV1;
 }
 
 function hash(value: unknown, contract: string, path: string): Sha256HashV1 {
@@ -838,7 +877,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   return freeze({
     kind: "world-reconstruction-case",
     schemaVersion: 1,
-    id: text(source.id, contract, "id"),
+    id: worldReconstructionCaseId(source.id, contract, "id"),
     sceneBriefRef: text(source.sceneBriefRef, contract, "sceneBriefRef"),
     sceneBriefHash: hash(source.sceneBriefHash, contract, "sceneBriefHash"),
     referenceInputs: Object.freeze(referenceInputs),

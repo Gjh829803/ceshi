@@ -429,6 +429,9 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
     const input = bindInput();
     const map = bind();
     expect(parseFormalSemanticCaptureMapV1(map)).toEqual(map);
+    expect(map.caseRef).toBe(
+      "artifact://world-reconstruction-case/cloud-temple.case/case.json",
+    );
     expect(map.caseHash).toBe(hashWorldReconstructionCaseV1(input.case));
     expect(map.layoutInventoryHash).toBe(
       input.materializerMetadata.checkedLayoutInventoryHash,

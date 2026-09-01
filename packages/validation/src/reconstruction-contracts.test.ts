@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   hashWorldReconstructionCaseV1,
+  parseWorldReconstructionCaseArtifactRefV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionDiagnosticV1,
   parseWorldReconstructionEvaluationProfileV1,
@@ -174,6 +175,41 @@ const resultValue = () => ({
 });
 
 describe("world reconstruction contracts", () => {
+  it("accepts only the canonical World Reconstruction Case artifact Ref", () => {
+    expect(parseWorldReconstructionCaseArtifactRefV1(
+      "artifact://world-reconstruction-case/cloud-temple.case/case.json",
+    )).toBe(
+      "artifact://world-reconstruction-case/cloud-temple.case/case.json",
+    );
+    for (const invalidRef of [
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+      "artifact://case/cloud-temple.case/case.json",
+      "artifact://user@world-reconstruction-case/cloud-temple.case/case.json",
+      "artifact://world-reconstruction-case:443/cloud-temple.case/case.json",
+      "artifact://world-reconstruction-case/cloud-temple.case/case.json?attempt=0",
+      "artifact://world-reconstruction-case/cloud-temple.case/case.json#case",
+      "artifact://world-reconstruction-case/../cloud-temple.case/case.json",
+      "artifact://world-reconstruction-case/%63loud-temple.case/case.json",
+      "artifact://WORLD-RECONSTRUCTION-CASE/cloud-temple.case/case.json",
+      "artifact://world-reconstruction-case/cafe\u0301/case.json",
+    ]) {
+      expect(() => parseWorldReconstructionCaseArtifactRefV1(invalidRef)).toThrowError(
+        "WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID",
+      );
+    }
+  });
+
+  it.each([
+    "Cloud-temple.case",
+    "cloud_temples.case",
+    "cloud-temple.case/../other.case",
+    "cloud-temple.case?attempt=0",
+    "cafe\u0301.case",
+  ])("rejects non-canonical Case id %j", (id) => {
+    expect(() => parseWorldReconstructionCaseV1({ ...caseValue(), id }))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+  });
+
   it("rejects passed dimensions that declare generic missing or stale evidence", () => {
     for (const code of [
       "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
