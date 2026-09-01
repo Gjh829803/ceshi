@@ -205,8 +205,6 @@ describe("Native Playground verified Package Vite seam", () => {
       include: [
         "@babylonjs/core/Maths/math.viewport.js",
         "@babylonjs/core/scene.js",
-        "@whitebox-world/authoring > ajv-formats",
-        "@whitebox-world/authoring > ajv/dist/2020.js",
       ],
     });
 

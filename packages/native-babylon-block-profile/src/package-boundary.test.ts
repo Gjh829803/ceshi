@@ -104,7 +104,23 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       expect(source, path).not.toMatch(
         /\b(?:window|document|fetch|WebSocket|setTimeout|setInterval)\b|Date\.now\s*\(|performance\.now\s*\(|Math\.random\s*\(/,
       );
+      expect(specifiers, path).not.toContain("@whitebox-world/validation");
     }
+  });
+
+  it("uses the browser-safe reconstruction contract entry without loading Host validators", async () => {
+    const validationManifest = JSON.parse(await readFile(
+      new URL("../validation/package.json", PACKAGE_ROOT),
+      "utf8",
+    )) as Readonly<{ exports?: Readonly<Record<string, string>> }>;
+
+    expect(validationManifest.exports?.["./reconstruction-contracts"]).toBe(
+      "./src/reconstruction-contracts.ts",
+    );
+    const sources = await productionSources();
+    expect(sources.flatMap(({ source }) => importSpecifiers(source))).toContain(
+      "@whitebox-world/validation/reconstruction-contracts",
+    );
   });
 
   it("exports profile facts without a host or runtime surface", async () => {

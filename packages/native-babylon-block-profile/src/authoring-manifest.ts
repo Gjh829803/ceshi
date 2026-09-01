@@ -5,7 +5,7 @@ import {
   hashWorldReconstructionCaseV1,
   parseWorldReconstructionCaseV1,
   type WorldReconstructionCaseV1,
-} from "@whitebox-world/validation";
+} from "@whitebox-world/validation/reconstruction-contracts";
 import { isEqual, isNil } from "lodash-es";
 
 import type {
