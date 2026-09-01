@@ -52,6 +52,12 @@ const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
   "worldkit://traversal-surface-profile/ground.static@1" as const;
 
 export interface EvidenceSetFixtureOptionsV1 {
+  readonly allDimensionsPass?: boolean;
+  readonly attemptIdentity?: Readonly<{
+    readonly attemptIndex: 1;
+    readonly generationRequestRef: string;
+    readonly generationRequestHash: Sha256HashV1;
+  }>;
   readonly includePaletteTraversalDisagreement?: boolean;
   readonly traversalCheckExpectation?: "pass" | "block";
   readonly traversalCheckpointCriteria?: readonly FormalTraversalCheckpointSpatialCriterionV1[];
@@ -71,7 +77,6 @@ const UPPER_COMPOSITION_TARGET_REF =
   "worldkit://composition-target/package-fixture-upper@1";
 const CASE_REF = "artifact://case/package-fixture/case.json";
 const PROFILE_REF = "artifact://case/package-fixture/evaluation-profile.json";
-const CAPTURE_REF = "artifact://case/package-fixture/attempts/0/capture-receipt.json";
 
 function snapshotValue() {
   return parseWorldRuntimeSnapshotV4({
@@ -162,6 +167,9 @@ function snapshotValue() {
 export function createEvidenceSetFixtureInputV1(
   options: EvidenceSetFixtureOptionsV1 = {},
 ): BuildWorldReconstructionEvidenceSetInputV1 {
+  const allDimensionsPass = options.allDimensionsPass === true;
+  const paletteTraversalDisagreement =
+    options.includePaletteTraversalDisagreement === true;
   const traversalCheckExpectation = options.traversalCheckExpectation ?? "pass";
   const traversalCheckpointCriteria = options.traversalCheckpointCriteria ?? [{
     kind: "reach-bounds" as const,
@@ -198,9 +206,21 @@ export function createEvidenceSetFixtureInputV1(
         maximumCoverageDriftBasisPoints: 100,
       }],
       openingComposition: {
-        regions: [{ targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 }],
-        anchors: [{ targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 }],
-        maximumOrderDistanceBasisPoints: 100,
+        regions: [{ targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 },
+          ...allDimensionsPass
+            ? [{
+              targetRef: UPPER_COMPOSITION_TARGET_REF,
+              maximumDriftBasisPoints: 100,
+            }]
+            : []],
+        anchors: [{ targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 },
+          ...allDimensionsPass
+            ? [{
+              targetRef: UPPER_COMPOSITION_TARGET_REF,
+              maximumDriftBasisPoints: 100,
+            }]
+            : []],
+        maximumOrderDistanceBasisPoints: allDimensionsPass ? 300 : 100,
       },
       spawnSupport: {
         maximumPositionDriftMillimeters: 100,
@@ -264,7 +284,8 @@ export function createEvidenceSetFixtureInputV1(
       }],
       openingComposition: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
-        targetRefs: [COMPOSITION_TARGET_REF],
+        targetRefs: [COMPOSITION_TARGET_REF,
+          ...allDimensionsPass ? [UPPER_COMPOSITION_TARGET_REF] : []],
         regions: [{
           targetRef: COMPOSITION_TARGET_REF,
           normalizedBounds: {
@@ -273,12 +294,28 @@ export function createEvidenceSetFixtureInputV1(
             maxXBasisPoints: 900,
             maxYBasisPoints: 800,
           },
-        }],
+        }, ...allDimensionsPass
+          ? [{
+            targetRef: UPPER_COMPOSITION_TARGET_REF,
+            normalizedBounds: {
+              minXBasisPoints: 400,
+              minYBasisPoints: 100,
+              maxXBasisPoints: 600,
+              maxYBasisPoints: 300,
+            },
+          }]
+          : []],
         anchors: [{
           targetRef: COMPOSITION_TARGET_REF,
           normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
-        }],
-        orderedTargetRefs: [COMPOSITION_TARGET_REF],
+        }, ...allDimensionsPass
+          ? [{
+            targetRef: UPPER_COMPOSITION_TARGET_REF,
+            normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
+          }]
+          : []],
+        orderedTargetRefs: [COMPOSITION_TARGET_REF,
+          ...allDimensionsPass ? [UPPER_COMPOSITION_TARGET_REF] : []],
       },
       spawnSupport: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
@@ -293,7 +330,15 @@ export function createEvidenceSetFixtureInputV1(
         colliderId: "ground",
         role: "ground",
         requiresOverlay: true,
-      }],
+      }, ...paletteTraversalDisagreement
+        ? [{
+          acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
+          contributionId: "palette-ground-blocker",
+          colliderId: "palette-ground-blocker",
+          role: "blocker" as const,
+          requiresOverlay: false,
+        }]
+        : []],
       criticalTraversalChecks: [{
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         id: "reach-ground",
@@ -335,7 +380,6 @@ export function createEvidenceSetFixtureInputV1(
     throw new Error("fixture must use Block profile settlement");
   }
   const baseMetadata = packageInput.nativeBlockMaterializerMetadata!;
-  const paletteTraversalDisagreement = options.includePaletteTraversalDisagreement === true;
   const extraColliders = paletteTraversalDisagreement
     ? [
       createBabylonNativeStaticColliderContributionV1({
@@ -393,10 +437,27 @@ export function createEvidenceSetFixtureInputV1(
   };
   const packageSceneAuthoringAttempt = {
     ...packageInput.sceneAuthoringAttempt,
+    ...(options.attemptIdentity === undefined
+      ? {}
+      : {
+        id: "package-fixture.repair",
+        sourceInput: {
+          ...packageInput.sceneAuthoringAttempt.sourceInput,
+          generationRequestRef: options.attemptIdentity.generationRequestRef,
+          generationRequestHash: options.attemptIdentity.generationRequestHash,
+        },
+      }),
     acceptanceTargetRefs: [ACCEPTANCE_TARGET_REF, UPPER_TARGET_REF],
   };
   const packageSceneAuthoringAttemptResult = {
     ...packageInput.sceneAuthoringAttemptResult,
+    ...(options.attemptIdentity === undefined
+      ? {}
+      : {
+        id: "package-fixture.repair.result",
+        sceneAuthoringAttemptRef:
+          "artifact://case/package-fixture/attempts/1/attempt.json",
+      }),
     sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(packageSceneAuthoringAttempt),
   };
   const metadata = parseBabylonNativeBlockMaterializerMetadataV1({
@@ -453,6 +514,12 @@ export function createEvidenceSetFixtureInputV1(
     ...packageInput,
     sceneAuthoringAttempt: packageSceneAuthoringAttempt,
     sceneAuthoringAttemptResult: packageSceneAuthoringAttemptResult,
+    ...(options.attemptIdentity === undefined
+      ? {}
+      : {
+        sceneAuthoringAttemptResultRef:
+          "artifact://case/package-fixture/attempts/1/attempt-result.json",
+      }),
     nativeSceneContribution,
     nativeBlockMaterializerMetadata: metadata,
   });
@@ -462,13 +529,14 @@ export function createEvidenceSetFixtureInputV1(
   }
   const { receipt, sceneAuthoringAttempt, sceneAuthoringAttemptResult } =
     verifiedWorldPackage;
-  const attemptRef = "artifact://case/package-fixture/attempts/0/attempt.json";
+  const attemptIndex = options.attemptIdentity?.attemptIndex ?? 0;
+  const attemptRef = `artifact://case/package-fixture/attempts/${attemptIndex}/attempt.json`;
   const attemptResultRef =
-    "artifact://case/package-fixture/attempts/0/attempt-result.json";
+    `artifact://case/package-fixture/attempts/${attemptIndex}/attempt-result.json`;
   const buildReceiptRef =
-    "artifact://case/package-fixture/attempts/0/world-package-build-receipt.json";
+    `artifact://case/package-fixture/attempts/${attemptIndex}/world-package-build-receipt.json`;
   const buildIdentityRef =
-    "artifact://case/package-fixture/attempts/0/world-build-identity.json";
+    `artifact://case/package-fixture/attempts/${attemptIndex}/world-build-identity.json`;
   const semanticCaptureMap = {
     kind: "formal-semantic-capture-map" as const,
     schemaVersion: 1 as const,
@@ -571,7 +639,7 @@ export function createEvidenceSetFixtureInputV1(
     }],
   };
   const formalRequestRef =
-    "artifact://case/package-fixture/attempts/0/formal-world-capture-request.json";
+    `artifact://case/package-fixture/attempts/${attemptIndex}/formal-world-capture-request.json`;
   const formalRequest = {
     kind: "formal-world-capture-request" as const,
     schemaVersion: 1 as const,
@@ -597,7 +665,7 @@ export function createEvidenceSetFixtureInputV1(
     worldPackageBuildReceiptRef: buildReceiptRef,
     worldPackageBuildReceiptHash: sha256CanonicalJson(receipt),
     semanticCaptureMapRef:
-      "artifact://case/package-fixture/attempts/0/semantic-capture-map.json",
+      `artifact://case/package-fixture/attempts/${attemptIndex}/semantic-capture-map.json`,
     semanticCaptureMap,
     semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticCaptureMap),
     nativeBlockMaterializerMetadataRef:
@@ -803,14 +871,15 @@ export function createEvidenceSetFixtureInputV1(
     cleanupOutcome: "completed",
   });
   return {
-    id: "package-fixture.attempt-0.evidence",
+    id: `package-fixture.attempt-${attemptIndex}.evidence`,
     caseRef: CASE_REF,
     reconstructionCase,
     evaluationProfileRef: PROFILE_REF,
     evaluationProfile,
     authoringManifest,
     verifiedWorldPackage,
-    captureReceiptRef: CAPTURE_REF,
+    captureReceiptRef:
+      `artifact://case/package-fixture/attempts/${attemptIndex}/capture-receipt.json`,
     captureReceipt,
     openingObservation,
     spawnSupportObservation,

@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, mkdir, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdtemp, mkdir, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -11,6 +11,7 @@ import {
   parseNativeBlockGenerationRequestV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import {
+  hashFormalOpeningObservationV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureReceiptV1,
   parseWorldRuntimeSnapshotV4,
@@ -28,6 +29,7 @@ import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvaluationResultV1,
+  hashWorldReconstructionEvidenceSetV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionRunReceiptV1,
 } from "@whitebox-world/validation";
@@ -38,6 +40,7 @@ import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1,
   verifyNativeBlockReconstructionE2EV1,
   type NativeBlockReconstructionPlayabilityLaunchPortV1,
   type NativeBlockReconstructionPlayabilitySessionPortV1,
@@ -68,7 +71,7 @@ const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
     minimumMetersXYZ: [-5, -1, -5] as const,
     maximumMetersXYZ: [5, 1, 5] as const,
   },
-  colliderId: "ground",
+  colliderId: "palette-ground-blocker",
   axis: "z" as const,
   sourceFace: "minimum" as const,
   planeMeters: -5,
@@ -84,7 +87,10 @@ async function writeJson(filePath: string, value: unknown): Promise<void> {
 
 function generationRequestFixture(input: ReturnType<
   typeof createEvidenceSetFixtureInputV1
->) {
+>, options: Readonly<{
+  id?: string;
+  taskInstructionHash?: Sha256HashV1;
+}> = {}) {
   const verified = input.verifiedWorldPackage;
   const attempt = verified.sceneAuthoringAttempt;
   if (attempt.sourceInput.kind !== "babylon-native") throw new Error("fixture source");
@@ -95,7 +101,7 @@ function generationRequestFixture(input: ReturnType<
   return parseNativeBlockGenerationRequestV1({
     kind: "native-block-generation-request",
     schemaVersion: 1,
-    id: "package-fixture.initial",
+    id: options.id ?? "package-fixture.initial",
     routeDecisionRef: attempt.sceneAuthoringRouteDecisionRef,
     routeDecisionHash: attempt.sceneAuthoringRouteDecisionHash,
     sceneBriefRef: attempt.sceneBriefRef,
@@ -104,7 +110,7 @@ function generationRequestFixture(input: ReturnType<
     codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
     codexExecutionProfileHash: H("5"),
     taskInstructionRef: "worldkit://task-instruction/native-block-reconstruction@1",
-    taskInstructionHash: H("6"),
+    taskInstructionHash: options.taskInstructionHash ?? H("6"),
     builderSkillRef: "worldkit://skill/worldkit-native-block-builder@1",
     builderSkillHash: H("7"),
     workspaceContextManifestRef: "worldkit://workspace-context/native-block-builder@1",
@@ -223,6 +229,8 @@ function playabilityPort(options: {
   traversalFails?: boolean;
   crossesBlocker?: boolean;
   cleanupFails?: boolean;
+  wrongDirection?: boolean;
+  jumpNeverAir?: boolean;
 } = {}) {
   const runtimeSessionId = "runtime.nbr70.fixture";
   let resetCount = 0;
@@ -230,33 +238,37 @@ function playabilityPort(options: {
   const dispose = vi.fn(async () => ({
     outcome: options.cleanupFails ? "failed" as const : "completed" as const,
   }));
+  const resetWithInitialControlBinding = vi.fn(async () => {
+    resetCount += 1;
+    current = snapshot(runtimeSessionId, `world.${resetCount}`, 0, [0, 0, 0], "ground");
+    return current;
+  });
   const session: NativeBlockReconstructionPlayabilitySessionPortV1 = {
     awaitReady: vi.fn(async () => current),
-    resetWithInitialControlBinding: vi.fn(async () => {
-      resetCount += 1;
-      current = snapshot(runtimeSessionId, `world.${resetCount}`, 0, [0, 0, 0], "ground");
-      return current;
-    }),
+    resetWithInitialControlBinding,
     runFixedInput: vi.fn(async (input: FixedInputV1) => {
       const [x, y, z] = current.world.subjectStatesByEntityId.player!
         .entityState.positionMetersXYZ;
       const actions = new Set(input.actions);
+      const direction = options.wrongDirection ? -1 : 1;
       const next: [number, number, number] = options.traversalFails &&
           resetCount >= 8 && actions.has("move-forward")
         ? [100, 100, 100]
         : options.crossesBlocker && resetCount >= 8 && actions.has("move-forward")
           ? [0, 0, -100]
         : [
-          x + (actions.has("move-right") ? 1 : 0) - (actions.has("move-left") ? 1 : 0),
+          x + direction * ((actions.has("move-right") ? 1 : 0) -
+            (actions.has("move-left") ? 1 : 0)),
           y + (actions.has("jump") ? 1 : 0),
-          z + (actions.has("move-backward") ? 1 : 0) - (actions.has("move-forward") ? 1 : 0),
+          z + direction * ((actions.has("move-backward") ? 1 : 0) -
+            (actions.has("move-forward") ? 1 : 0)),
         ];
       current = snapshot(
         runtimeSessionId,
         current.worldSessionId,
         current.world.simulationTick + input.ticks,
         next,
-        actions.has("jump") ? "air" : "ground",
+        actions.has("jump") && !options.jumpNeverAir ? "air" : "ground",
       );
       return current;
     }),
@@ -272,16 +284,25 @@ function playabilityPort(options: {
     port: { launch } satisfies NativeBlockReconstructionPlayabilityLaunchPortV1,
     launch,
     dispose,
+    resetWithInitialControlBinding,
   };
 }
 
 async function completeRunFixture(
-  options: Parameters<typeof createEvidenceSetFixtureInputV1>[0] = {},
+  options: Parameters<typeof createEvidenceSetFixtureInputV1>[0] & Readonly<{
+    forgePassedEvaluation?: boolean;
+  }> = {},
 ) {
-  const runDirectoryPath = await realpath(
+  const { forgePassedEvaluation = false, ...evidenceOptions } = options;
+  const caseDirectoryPath = await realpath(
     await mkdtemp(path.join(os.tmpdir(), "nbr70-complete-")),
   );
-  const fixture = createEvidenceSetFixtureInputV1(options);
+  const runDirectoryPath = path.join(caseDirectoryPath, "runs/formal-fixture");
+  await mkdir(runDirectoryPath, { recursive: true });
+  const fixture = createEvidenceSetFixtureInputV1({
+    ...evidenceOptions,
+    allDimensionsPass: true,
+  });
   const verified = fixture.verifiedWorldPackage;
   const attemptDirectoryPath = path.join(runDirectoryPath, "attempts/0");
   const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
@@ -297,7 +318,9 @@ async function completeRunFixture(
     throw new Error("generation fixture identity drift");
   }
   const sourceByPath = new Map([
-    ["native-block-authoring.json", new TextEncoder().encode("{}")],
+    ["native-block-authoring.json", new TextEncoder().encode(
+      `${stringifyCanonicalJson(fixture.authoringManifest)}\n`,
+    )],
     ["native-resources.json", new TextEncoder().encode("[]")],
     ["scene.ts", new TextEncoder().encode("export default {};\n")],
   ] as const);
@@ -346,7 +369,7 @@ async function completeRunFixture(
   });
 
   const pngHash = sha256Bytes(PNG) as Sha256HashV1;
-  const captureReceipt = parseFormalWorldCaptureReceiptV1({
+  const originalCaptureReceipt = parseFormalWorldCaptureReceiptV1({
     ...fixture.captureReceipt,
     views: fixture.captureReceipt.views.map((view) => ({
       ...view,
@@ -354,10 +377,37 @@ async function completeRunFixture(
     })),
     colliderOverlayPngContentHash: pngHash,
   });
+  const originalEvidence = buildWorldReconstructionEvidenceSetV1({
+    ...fixture,
+    captureReceipt: originalCaptureReceipt,
+  });
+  const originalEvaluation = evaluateWorldReconstructionV1({
+    case: fixture.reconstructionCase,
+    profile: fixture.evaluationProfile,
+    evidence: originalEvidence,
+  });
+  const openingObservation = forgePassedEvaluation
+    ? {
+      ...fixture.openingObservation,
+      visualGroups: fixture.openingObservation.visualGroups.map(
+        (group, index, groups) => ({
+          ...group,
+          depthOrder: groups.length - 1 - index,
+        }),
+      ),
+    }
+    : fixture.openingObservation;
+  const captureReceipt = forgePassedEvaluation
+    ? parseFormalWorldCaptureReceiptV1({
+      ...originalCaptureReceipt,
+      openingObservationContentHash:
+        hashFormalOpeningObservationV1(openingObservation),
+    })
+    : originalCaptureReceipt;
   for (const name of ["opening", "world-top-down", "world-side", "collider-overlay"] as const) {
     await writeFile(path.join(captureDirectoryPath, `${name}.png`), PNG);
   }
-  await writeJson(path.join(captureDirectoryPath, "opening-observation.json"), fixture.openingObservation);
+  await writeJson(path.join(captureDirectoryPath, "opening-observation.json"), openingObservation);
   await writeJson(path.join(captureDirectoryPath, "spawn-support-observation.json"), fixture.spawnSupportObservation);
   await writeJson(path.join(captureDirectoryPath, "collider-overlay-observation.json"), fixture.colliderOverlayObservation);
   await writeJson(path.join(captureDirectoryPath, "scripted-traversal.json"), fixture.scriptedTraversalObservation);
@@ -366,23 +416,31 @@ async function completeRunFixture(
   const evidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
     captureReceipt,
+    openingObservation,
   });
   const evaluated = evaluateWorldReconstructionV1({
     case: fixture.reconstructionCase,
     profile: fixture.evaluationProfile,
     evidence,
   });
-  const evaluation = parseWorldReconstructionEvaluationResultV1({
-    ...evaluated,
-    outcome: "passed",
-    diagnostics: [],
-    dimensions: evaluated.dimensions.map((dimension) => ({
-      ...dimension,
-      status: "passed",
-      metrics: [{ kind: "boolean-presence", isPresent: true }],
-      diagnosticIds: [],
-    })),
-  });
+  const evaluation = forgePassedEvaluation
+    ? parseWorldReconstructionEvaluationResultV1({
+      ...originalEvaluation,
+      evidenceSetHash: hashWorldReconstructionEvidenceSetV1(evidence),
+      captureReceiptHash: hashFormalWorldCaptureReceiptV1(captureReceipt),
+      dimensions: originalEvaluation.dimensions.map((dimension) => ({
+        ...dimension,
+        identity: {
+          ...dimension.identity,
+          captureReceiptHash: hashFormalWorldCaptureReceiptV1(captureReceipt),
+        },
+      })),
+    })
+    : parseWorldReconstructionEvaluationResultV1(evaluated);
+  if (!forgePassedEvaluation && evaluation.outcome !== "passed") {
+    throw new Error("fixture evidence must earn a passed evaluation");
+  }
+  await writeJson(path.join(attemptDirectoryPath, "evidence-set.json"), evidence);
   await writeJson(path.join(attemptDirectoryPath, "evaluation.json"), evaluation);
   const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
   const evaluationHash = hashWorldReconstructionEvaluationResultV1(evaluation);
@@ -423,10 +481,284 @@ async function completeRunFixture(
     cleanupOutcome: "completed",
   });
   await writeJson(path.join(runDirectoryPath, "run-receipt.json"), runReceipt);
-  return { runDirectoryPath };
+  return { caseDirectoryPath, runDirectoryPath };
+}
+
+async function createFinalCandidate(input: Readonly<{
+  caseDirectoryPath: string;
+  runDirectoryPath: string;
+}>): Promise<string> {
+  const finalDirectoryPath = path.join(input.caseDirectoryPath, ".final-staging");
+  const attemptRoot = path.join(input.runDirectoryPath, "attempts/0");
+  await mkdir(finalDirectoryPath, { recursive: true });
+  await cp(
+    path.join(attemptRoot, "world-package"),
+    path.join(finalDirectoryPath, "world-package"),
+    { recursive: true },
+  );
+  await cp(
+    path.join(attemptRoot, "capture"),
+    path.join(finalDirectoryPath, "capture"),
+    { recursive: true },
+  );
+  await cp(
+    path.join(attemptRoot, "evaluation.json"),
+    path.join(finalDirectoryPath, "evaluation.json"),
+  );
+  const runReceipt = parseWorldReconstructionRunReceiptV1(JSON.parse(
+    await readFile(path.join(input.runDirectoryPath, "run-receipt.json"), "utf8"),
+  ));
+  const finalAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
+  await writeJson(path.join(finalDirectoryPath, "launch.json"), {
+    kind: "native-block-reconstruction-launch",
+    schemaVersion: 1,
+    caseId: "package-fixture.case",
+    runReceiptRef:
+      "artifact://case/package-fixture/runs/formal-fixture/run-receipt.json",
+    runReceiptHash: sha256CanonicalJson(runReceipt),
+    worldPackageRelativePath: "final/world-package",
+    worldPackageRef: finalAttempt.worldPackageRef,
+    worldPackageRootHash: finalAttempt.worldPackageRootHash,
+    captureReceiptRelativePath:
+      "final/capture/formal-world-capture-receipt.json",
+    captureReceiptHash: finalAttempt.captureReceiptHash,
+    evaluationRelativePath: "final/evaluation.json",
+    evaluationHash: finalAttempt.evaluationResultHash,
+    launchCommand:
+      "pnpm worldkit native run final/world-package --port 5174 --json",
+  });
+  return finalDirectoryPath;
+}
+
+async function addRepairAttempt(input: Readonly<{
+  runDirectoryPath: string;
+}>): Promise<void> {
+  const seedFixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
+  const seedRequest = generationRequestFixture(seedFixture);
+  const generationRequestRef =
+    "artifact://case/package-fixture/attempts/1/generation-request.json";
+  const requestShape = parseNativeBlockGenerationRequestV1({
+    ...seedRequest,
+    id: "package-fixture.repair",
+    taskInstructionHash: H("e"),
+  });
+  const fixture = createEvidenceSetFixtureInputV1({
+    allDimensionsPass: true,
+    attemptIdentity: {
+      attemptIndex: 1,
+      generationRequestRef,
+      generationRequestHash: hashNativeBlockGenerationRequestV1(requestShape),
+    },
+  });
+  const verified = fixture.verifiedWorldPackage;
+  const request = generationRequestFixture(fixture, {
+    id: "package-fixture.repair",
+    taskInstructionHash: H("e"),
+  });
+  if (hashNativeBlockGenerationRequestV1(request) !==
+      hashNativeBlockGenerationRequestV1(requestShape)) {
+    throw new Error("repair generation fixture identity drift");
+  }
+  const attemptRoot = path.join(input.runDirectoryPath, "attempts/1");
+  const captureRoot = path.join(attemptRoot, "capture");
+  await mkdir(captureRoot, { recursive: true });
+  const sourceByPath = new Map([
+    ["native-block-authoring.json", new TextEncoder().encode(
+      `${stringifyCanonicalJson(fixture.authoringManifest)}\n`,
+    )],
+    ["native-resources.json", new TextEncoder().encode("[]")],
+    ["scene.ts", new TextEncoder().encode("export default { repair: true };\n")],
+  ] as const);
+  const generationReceipt = parseNativeBlockGenerationReceiptV1({
+    kind: "native-block-generation-receipt",
+    schemaVersion: 1,
+    id: "package-fixture.repair.receipt",
+    generationRequestRef,
+    generationRequestHash: hashNativeBlockGenerationRequestV1(request),
+    routerTaskPayloadHash: H("f"),
+    taskInstructionHash: request.taskInstructionHash,
+    builderSkillHash: request.builderSkillHash,
+    workspaceContextManifestHash: request.workspaceContextManifestHash,
+    routerRequestId: "package-fixture-repair",
+    backend: "cloud",
+    executionProfile: "formal",
+    resolvedModel: "gpt-5.6-sol",
+    resolvedReasoningEffort: "xhigh",
+    outcome: "completed",
+    outputs: [...sourceByPath].map(([relativePath, bytes]) => ({
+      path: relativePath,
+      contentHash: sha256Bytes(bytes),
+      sizeBytes: bytes.byteLength,
+      mediaType: relativePath === "scene.ts" ? "text/typescript" : "application/json",
+    })),
+    diagnosticCodes: [],
+    cleanupOutcome: "completed",
+  });
+  await writeJson(path.join(attemptRoot, "generation-request.json"), request);
+  await writeJson(path.join(attemptRoot, "generation-receipt.json"), generationReceipt);
+  await writeJson(path.join(attemptRoot, "scene-authoring-route-decision.json"),
+    verified.sceneAuthoringRouteDecision);
+  await writeJson(path.join(attemptRoot, "attempt.json"), verified.sceneAuthoringAttempt);
+  await writeJson(path.join(attemptRoot, "attempt-result.json"),
+    verified.sceneAuthoringAttemptResult);
+  await mkdir(path.join(attemptRoot, "source"), { recursive: true });
+  for (const [relativePath, bytes] of sourceByPath) {
+    await writeFile(path.join(attemptRoot, "source", relativePath), bytes);
+  }
+  await writeJson(path.join(attemptRoot, "native-check-result.json"),
+    verified.nativeSceneCheckResult);
+  await writeFile(path.join(attemptRoot, "native-explain.txt"),
+    explainNativeSceneCheckResultV1(verified.nativeSceneCheckResult));
+  await writeWorldPackageDirectoryV1({
+    outputDirectoryPath: path.join(attemptRoot, "world-package"),
+    directory: verified.directory,
+  });
+  const pngHash = sha256Bytes(PNG) as Sha256HashV1;
+  const captureReceipt = parseFormalWorldCaptureReceiptV1({
+    ...fixture.captureReceipt,
+    views: fixture.captureReceipt.views.map((view) => ({
+      ...view,
+      pngContentHash: pngHash,
+    })),
+    colliderOverlayPngContentHash: pngHash,
+  });
+  for (const name of ["opening", "world-top-down", "world-side", "collider-overlay"] as const) {
+    await writeFile(path.join(captureRoot, `${name}.png`), PNG);
+  }
+  await writeJson(path.join(captureRoot, "opening-observation.json"),
+    fixture.openingObservation);
+  await writeJson(path.join(captureRoot, "spawn-support-observation.json"),
+    fixture.spawnSupportObservation);
+  await writeJson(path.join(captureRoot, "collider-overlay-observation.json"),
+    fixture.colliderOverlayObservation);
+  await writeJson(path.join(captureRoot, "scripted-traversal.json"),
+    fixture.scriptedTraversalObservation);
+  await writeJson(path.join(captureRoot, "formal-world-capture-receipt.json"),
+    captureReceipt);
+  const evidence = buildWorldReconstructionEvidenceSetV1({
+    ...fixture,
+    captureReceipt,
+  });
+  const evaluation = evaluateWorldReconstructionV1({
+    case: fixture.reconstructionCase,
+    profile: fixture.evaluationProfile,
+    evidence,
+  });
+  if (evaluation.outcome !== "passed") throw new Error("repair fixture must pass");
+  await writeJson(path.join(attemptRoot, "evidence-set.json"), evidence);
+  await writeJson(path.join(attemptRoot, "evaluation.json"), evaluation);
+  const receiptPath = path.join(input.runDirectoryPath, "run-receipt.json");
+  const first = parseWorldReconstructionRunReceiptV1(JSON.parse(
+    await readFile(receiptPath, "utf8"),
+  ));
+  const repairAttempt = {
+    attemptIndex: 1,
+    generationRequestRef,
+    generationRequestHash: hashNativeBlockGenerationRequestV1(request),
+    generationReceiptRef:
+      "artifact://case/package-fixture/attempts/1/generation-receipt.json",
+    generationReceiptHash: hashNativeBlockGenerationReceiptV1(generationReceipt),
+    sceneAuthoringAttemptRef: captureReceipt.sceneAuthoringAttemptRef,
+    sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(verified.sceneAuthoringAttempt),
+    sceneAuthoringAttemptResultRef: captureReceipt.sceneAuthoringAttemptResultRef,
+    sceneAuthoringAttemptResultHash:
+      hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
+    worldPackageRef: verified.receipt.worldPackageRef,
+    worldPackageRootHash: verified.receipt.worldPackageRootHash,
+    worldPackageBuildReceiptRef: captureReceipt.worldPackageBuildReceiptRef,
+    worldPackageBuildReceiptHash: sha256CanonicalJson(verified.receipt),
+    worldBuildIdentityRef: captureReceipt.worldBuildIdentityRef,
+    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+    captureReceiptRef: fixture.captureReceiptRef,
+    captureReceiptHash: hashFormalWorldCaptureReceiptV1(captureReceipt),
+    evaluationResultRef:
+      "artifact://case/package-fixture/attempts/1/evaluation.json",
+    evaluationResultHash: hashWorldReconstructionEvaluationResultV1(evaluation),
+    outcome: "passed" as const,
+  };
+  await writeJson(receiptPath, parseWorldReconstructionRunReceiptV1({
+    ...first,
+    attempts: [first.attempts[0], repairAttempt],
+    finalAttemptIndex: 1,
+    finalEvaluationResultRef: repairAttempt.evaluationResultRef,
+    finalEvaluationResultHash: repairAttempt.evaluationResultHash,
+  }));
 }
 
 describe("Native Block reconstruction E2E verifier", () => {
+  it("requires one exact blocker set across Case, formal criteria, Contribution, and materializer", () => {
+    const fixture = createEvidenceSetFixtureInputV1({
+      allDimensionsPass: true,
+      includePaletteTraversalDisagreement: true,
+      traversalCheckExpectation: "block",
+      traversalCheckpointCriteria: MIXED_BLOCK_CHECKPOINT_CRITERIA,
+      traversalCheckpoints: [
+        { checkpointId: "gate-approach", outcome: "reached", observedAtTick: 1 },
+        { checkpointId: "gate-limit", outcome: "blocked", observedAtTick: 1 },
+      ],
+    });
+    const verified = fixture.verifiedWorldPackage;
+    if (verified.kind !== "babylon-native-scene" ||
+        verified.nativeBlockMaterializerMetadata === undefined) {
+      throw new Error("fixture must include trusted Block metadata");
+    }
+    const valid = {
+      caseBlockerColliderIds: ["palette-ground-blocker"],
+      formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
+      contribution: verified.nativeSceneContribution,
+      materializerMetadata: verified.nativeBlockMaterializerMetadata,
+    };
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosure(valid)).not.toThrow();
+    for (const invalid of [
+      { ...valid, caseBlockerColliderIds: [] },
+      { ...valid, caseBlockerColliderIds: ["palette-ground-blocker", "foreign"] },
+      {
+        ...valid,
+        formalChecks: valid.formalChecks.map((check) => ({
+          ...check,
+          checkpointCriteria: [
+            ...check.checkpointCriteria,
+            ...check.checkpointCriteria.filter(({ kind }) => kind === "block-plane"),
+          ],
+        })),
+      },
+      {
+        ...valid,
+        contribution: {
+          ...valid.contribution,
+          staticColliders: valid.contribution.staticColliders.filter(
+            ({ id }) => id !== "palette-ground-blocker",
+          ),
+        },
+      },
+      {
+        ...valid,
+        materializerMetadata: {
+          ...valid.materializerMetadata,
+          colliderJoins: valid.materializerMetadata.colliderJoins.filter(
+            ({ colliderId }) => colliderId !== "palette-ground-blocker",
+          ),
+        },
+      },
+      {
+        ...valid,
+        formalChecks: valid.formalChecks.map((check) => ({
+          ...check,
+          checkpointCriteria: check.checkpointCriteria.map((criterion) =>
+            criterion.kind === "block-plane"
+              ? { ...criterion, sourceVisualGroupId: "upper-group" }
+              : criterion),
+        })),
+      },
+    ]) {
+      expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+        .verifyBlockerEvidenceClosure(invalid)).toThrowError(
+          "NBR70_BLOCKER_IDENTITY_MISMATCH",
+        );
+    }
+  });
+
   it("rejects an empty candidate before launching playability", async () => {
     const runDirectoryPath = await realpath(
       await mkdtemp(path.join(os.tmpdir(), "nbr70-empty-")),
@@ -434,7 +766,7 @@ describe("Native Block reconstruction E2E verifier", () => {
     const playability = playabilityPort();
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
-        runDirectoryPath,
+        candidate: { kind: "run", runDirectoryPath },
         playability: playability.port,
       })).rejects.toThrowError("NBR70_RUN_RECEIPT_MISSING");
       expect(playability.launch).not.toHaveBeenCalled();
@@ -448,7 +780,7 @@ describe("Native Block reconstruction E2E verifier", () => {
     const playability = playabilityPort();
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
-        runDirectoryPath: fixture.runDirectoryPath,
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
         playability: playability.port,
       })).resolves.toMatchObject({
         outcome: "verified",
@@ -463,13 +795,111 @@ describe("Native Block reconstruction E2E verifier", () => {
       });
       expect(playability.launch).toHaveBeenCalledOnce();
       expect(playability.dispose).toHaveBeenCalledOnce();
+      expect(playability.resetWithInitialControlBinding).toHaveBeenCalledTimes(9);
+      expect(playability.port.launch).toHaveBeenCalledWith(expect.objectContaining({
+        packageDirectoryPath: path.join(
+          fixture.runDirectoryPath,
+          "attempts/0/world-package",
+        ),
+      }));
     } finally {
       await rm(fixture.runDirectoryPath, { recursive: true, force: true });
     }
   });
 
+  it("verifies every immutable Attempt before launching the terminal repair", async () => {
+    const fixture = await completeRunFixture();
+    await addRepairAttempt(fixture);
+    const passingPlayability = playabilityPort();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        playability: passingPlayability.port,
+      })).resolves.toMatchObject({ attemptIndex: 1, outcome: "verified" });
+      expect(passingPlayability.launch).toHaveBeenCalledOnce();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+
+    const tampered = await completeRunFixture();
+    await addRepairAttempt(tampered);
+    const rejectingPlayability = playabilityPort();
+    await writeFile(
+      path.join(tampered.runDirectoryPath, "attempts/0/capture/opening.png"),
+      Uint8Array.of(1, 2, 3),
+    );
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: tampered.runDirectoryPath },
+        playability: rejectingPlayability.port,
+      })).rejects.toThrowError("NBR70_CAPTURE_ARTIFACT_HASH_MISMATCH");
+      expect(rejectingPlayability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(tampered.caseDirectoryPath, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it("recomputes the evaluator result from measured Capture evidence", async () => {
+    const fixture = await completeRunFixture({ forgePassedEvaluation: true });
+    const playability = playabilityPort();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        playability: playability.port,
+      })).rejects.toThrowError("NBR70_EVALUATION_EVIDENCE_MISMATCH");
+      expect(playability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("verifies promoted Final bytes and launches the promoted Package", async () => {
+    const fixture = await completeRunFixture();
+    const finalDirectoryPath = await createFinalCandidate(fixture);
+    const playability = playabilityPort();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: {
+          kind: "final",
+          runDirectoryPath: fixture.runDirectoryPath,
+          finalDirectoryPath,
+        },
+        playability: playability.port,
+      })).resolves.toMatchObject({ candidateKind: "final", outcome: "verified" });
+      expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
+        packageDirectoryPath: path.join(finalDirectoryPath, "world-package"),
+      }));
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects promoted Final byte drift before launch", async () => {
+    const fixture = await completeRunFixture();
+    const finalDirectoryPath = await createFinalCandidate(fixture);
+    const playability = playabilityPort();
+    await writeFile(
+      path.join(finalDirectoryPath, "capture/opening.png"),
+      Uint8Array.of(1, 2, 3),
+    );
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: {
+          kind: "final",
+          runDirectoryPath: fixture.runDirectoryPath,
+          finalDirectoryPath,
+        },
+        playability: playability.port,
+      })).rejects.toThrowError("NBR70_FINAL_ARTIFACT_MISMATCH");
+      expect(playability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("proves a mixed approach-plus-blocker check and rejects crossing its frozen plane", async () => {
     const fixtureOptions = {
+      includePaletteTraversalDisagreement: true,
       traversalCheckExpectation: "block" as const,
       traversalCheckpointCriteria: MIXED_BLOCK_CHECKPOINT_CRITERIA,
       traversalCheckpoints: [
@@ -481,7 +911,10 @@ describe("Native Block reconstruction E2E verifier", () => {
     const passingPlayability = playabilityPort();
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
-        runDirectoryPath: passingFixture.runDirectoryPath,
+        candidate: {
+          kind: "run",
+          runDirectoryPath: passingFixture.runDirectoryPath,
+        },
         playability: passingPlayability.port,
       })).resolves.toMatchObject({
         playability: {
@@ -501,7 +934,10 @@ describe("Native Block reconstruction E2E verifier", () => {
     const crossingPlayability = playabilityPort({ crossesBlocker: true });
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
-        runDirectoryPath: crossingFixture.runDirectoryPath,
+        candidate: {
+          kind: "run",
+          runDirectoryPath: crossingFixture.runDirectoryPath,
+        },
         playability: crossingPlayability.port,
       })).rejects.toThrowError("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
       expect(crossingPlayability.dispose).toHaveBeenCalledOnce();
@@ -519,7 +955,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       else await writeFile(openingPath, Uint8Array.of(1, 2, 3));
       try {
         await expect(verifyNativeBlockReconstructionE2EV1({
-          runDirectoryPath: fixture.runDirectoryPath,
+          candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
           playability: playability.port,
         })).rejects.toThrowError(
           mutation === "missing"
@@ -547,7 +983,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       await writeJson(receiptPath, receipt);
       try {
         await expect(verifyNativeBlockReconstructionE2EV1({
-          runDirectoryPath: fixture.runDirectoryPath,
+          candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
           playability: playability.port,
         })).rejects.toThrowError(
           mutation === "identity"
@@ -570,7 +1006,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       });
       try {
         await expect(verifyNativeBlockReconstructionE2EV1({
-          runDirectoryPath: fixture.runDirectoryPath,
+          candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
           playability: playability.port,
         })).rejects.toThrowError(
           mutation === "traversal"
@@ -580,6 +1016,29 @@ describe("Native Block reconstruction E2E verifier", () => {
         expect(playability.dispose).toHaveBeenCalledOnce();
       } finally {
         await rm(fixture.runDirectoryPath, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("rejects reversed movement and a jump without an airborne phase", async () => {
+    for (const mutation of ["direction", "jump"] as const) {
+      const fixture = await completeRunFixture();
+      const playability = playabilityPort({
+        wrongDirection: mutation === "direction",
+        jumpNeverAir: mutation === "jump",
+      });
+      try {
+        await expect(verifyNativeBlockReconstructionE2EV1({
+          candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+          playability: playability.port,
+        })).rejects.toThrowError(
+          mutation === "direction"
+            ? "NBR70_PLAYABILITY_MOVE_FAILED"
+            : "NBR70_PLAYABILITY_JUMP_FAILED",
+        );
+        expect(playability.dispose).toHaveBeenCalledOnce();
+      } finally {
+        await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
       }
     }
   });

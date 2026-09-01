@@ -1,6 +1,9 @@
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  parseNativeBlockAuthoringManifestV1,
+} from "@whitebox-world/native-babylon-block-profile";
 import {
   assertNativeBlockGenerationReceiptMatchesRequestV1,
   assertNativeBlockGenerationRequestMatchesAttemptV1,
@@ -30,6 +33,8 @@ import {
   parseFormalWorldCaptureReceiptV1,
   parseNativeSceneCheckResultV1,
   parseWorldRuntimeSnapshotV4,
+  type BabylonNativeBlockMaterializerMetadataV1,
+  type BabylonNativeSceneContributionV1,
   type FixedInputV1,
   type FormalMeasuredObservationIdentityV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
@@ -42,18 +47,23 @@ import {
 } from "@whitebox-world/protocol";
 import {
   WORLD_RECONSTRUCTION_DIMENSION_IDS_V1,
+  evaluateWorldReconstructionV1,
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvaluationResultV1,
+  hashWorldReconstructionEvidenceSetV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
+  parseWorldReconstructionEvidenceSetV1,
   parseWorldReconstructionRunReceiptV1,
 } from "@whitebox-world/validation";
 import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
+import { buildWorldReconstructionEvidenceSetV1 } from
+  "../reconstruction/evaluate-evidence-set.js";
 
 export interface NativeBlockReconstructionCommittedSupportV1 {
   readonly tick: number;
@@ -81,12 +91,22 @@ export interface NativeBlockReconstructionPlayabilityLaunchPortV1 {
 }
 
 export interface VerifyNativeBlockReconstructionE2EInputV1 {
-  readonly runDirectoryPath: string;
+  readonly candidate:
+    | Readonly<{
+      readonly kind: "run";
+      readonly runDirectoryPath: string;
+    }>
+    | Readonly<{
+      readonly kind: "final";
+      readonly runDirectoryPath: string;
+      readonly finalDirectoryPath: string;
+    }>;
   readonly playability: NativeBlockReconstructionPlayabilityLaunchPortV1;
 }
 
 export interface NativeBlockReconstructionE2EVerificationV1 {
   readonly outcome: "verified";
+  readonly candidateKind: "run" | "final";
   readonly attemptIndex: 0 | 1;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
@@ -114,19 +134,22 @@ function exact(actual: unknown, expected: unknown): void {
   if (actual !== expected) fail("NBR70_IDENTITY_MISMATCH");
 }
 
-async function canonicalRunRoot(runDirectoryPath: string): Promise<string> {
-  if (!path.isAbsolute(runDirectoryPath)) fail("NBR70_RUN_DIRECTORY_INVALID");
+async function canonicalDirectory(
+  directoryPath: string,
+  invalidCode: string,
+): Promise<string> {
+  if (!path.isAbsolute(directoryPath)) fail(invalidCode);
   try {
-    const info = await lstat(runDirectoryPath);
+    const info = await lstat(directoryPath);
     if (!info.isDirectory() || info.isSymbolicLink()) {
-      fail("NBR70_RUN_DIRECTORY_INVALID");
+      fail(invalidCode);
     }
-    const resolved = await realpath(runDirectoryPath);
-    if (resolved !== runDirectoryPath) fail("NBR70_RUN_DIRECTORY_INVALID");
+    const resolved = await realpath(directoryPath);
+    if (resolved !== directoryPath) fail(invalidCode);
     return resolved;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      fail("NBR70_RUN_DIRECTORY_INVALID");
+      fail(invalidCode);
     }
     throw error;
   }
@@ -147,6 +170,53 @@ async function requiredFile(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") fail(missingCode);
     throw error;
+  }
+}
+
+async function regularFileHashes(
+  root: string,
+  relativeDirectory = "",
+): Promise<ReadonlyMap<string, Sha256HashV1>> {
+  const directory = path.join(root, relativeDirectory);
+  const entries = await readdir(directory, { withFileTypes: true });
+  const hashes = new Map<string, Sha256HashV1>();
+  for (const entry of entries) {
+    const relativePath = path.posix.join(relativeDirectory, entry.name);
+    const absolutePath = path.join(root, relativePath);
+    if (entry.isSymbolicLink()) fail("NBR70_ARTIFACT_INVALID");
+    if (entry.isDirectory()) {
+      for (const [childPath, childHash] of await regularFileHashes(
+        root,
+        relativePath,
+      )) hashes.set(childPath, childHash);
+    } else if (entry.isFile()) {
+      hashes.set(
+        relativePath,
+        sha256Bytes(new Uint8Array(await readFile(absolutePath))) as Sha256HashV1,
+      );
+    } else {
+      fail("NBR70_ARTIFACT_INVALID");
+    }
+  }
+  return hashes;
+}
+
+async function assertDirectoriesByteEqual(
+  actualRoot: string,
+  expectedRoot: string,
+): Promise<void> {
+  const actual = await regularFileHashes(actualRoot);
+  const expected = await regularFileHashes(expectedRoot);
+  const actualPaths = [...actual.keys()].sort();
+  const expectedPaths = [...expected.keys()].sort();
+  if (
+    actualPaths.length !== expectedPaths.length ||
+    actualPaths.some((value, index) => value !== expectedPaths[index])
+  ) fail("NBR70_FINAL_ARTIFACT_MISMATCH");
+  for (const relativePath of actualPaths) {
+    if (actual.get(relativePath) !== expected.get(relativePath)) {
+      fail("NBR70_FINAL_ARTIFACT_MISMATCH");
+    }
   }
 }
 
@@ -282,6 +352,527 @@ function measureCheckpoint(
   return isFinalTick && !crossed ? "blocked" : undefined;
 }
 
+function uniqueSortedExactSet(values: readonly string[]): readonly string[] {
+  const sorted = [...values].sort();
+  if (new Set(sorted).size !== sorted.length) {
+    fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
+  }
+  return sorted;
+}
+
+function exactStringSet(
+  actual: readonly string[],
+  expected: readonly string[],
+): void {
+  if (
+    actual.length !== expected.length ||
+    actual.some((value, index) => value !== expected[index])
+  ) fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
+}
+
+function verifyBlockerEvidenceClosure(input: Readonly<{
+  caseBlockerColliderIds: readonly string[];
+  formalChecks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
+  contribution: BabylonNativeSceneContributionV1;
+  materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
+}>): readonly string[] {
+  const caseBlockers = uniqueSortedExactSet(input.caseBlockerColliderIds);
+  const blockCriteria = input.formalChecks.flatMap((check) =>
+    check.checkpointCriteria.filter((criterion) => criterion.kind === "block-plane"));
+  const formalBlockers = uniqueSortedExactSet(
+    blockCriteria.map(({ colliderId }) => colliderId),
+  );
+  const contributionBlockers = uniqueSortedExactSet(
+    input.contribution.staticColliders
+      .filter(({ traversalBinding }) => traversalBinding.kind === "not-traversable")
+      .map(({ id }) => id),
+  );
+  exactStringSet(formalBlockers, caseBlockers);
+  exactStringSet(contributionBlockers, caseBlockers);
+
+  const joinsByColliderId = new Map<string, readonly Readonly<{
+    colliderId: string;
+    blockId: string;
+  }>[]>();
+  for (const colliderId of caseBlockers) {
+    joinsByColliderId.set(
+      colliderId,
+      input.materializerMetadata.colliderJoins.filter(
+        (join) => join.colliderId === colliderId,
+      ),
+    );
+  }
+  for (const criterion of blockCriteria) {
+    const joins = joinsByColliderId.get(criterion.colliderId);
+    if (joins?.length !== 1) fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
+    const block = input.materializerMetadata.blocks.find(
+      ({ blockId }) => blockId === joins[0]!.blockId,
+    );
+    if (block?.visualGroupId !== criterion.sourceVisualGroupId) {
+      fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
+    }
+  }
+  return caseBlockers;
+}
+
+export const NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1 = Object.freeze({
+  verifyBlockerEvidenceClosure,
+});
+
+type ReconstructionRunReceipt = ReturnType<
+  typeof parseWorldReconstructionRunReceiptV1
+>;
+type ReconstructionCase = ReturnType<typeof parseWorldReconstructionCaseV1>;
+type ReconstructionEvaluationProfile = ReturnType<
+  typeof parseWorldReconstructionEvaluationProfileV1
+>;
+type VerifiedNativePackage = Extract<
+  ReturnType<typeof verifyWorldPackageDirectoryV1>,
+  { readonly kind: "babylon-native-scene" }
+>;
+interface VerifiedRunAttemptArtifacts {
+  readonly runAttempt: ReconstructionRunReceipt["attempts"][number];
+  readonly packageDirectoryPath: string;
+  readonly verified: VerifiedNativePackage;
+  readonly captureReceipt: ReturnType<typeof parseFormalWorldCaptureReceiptV1>;
+  readonly evaluation: ReturnType<
+    typeof parseWorldReconstructionEvaluationResultV1
+  >;
+  readonly captureReceiptHash: Sha256HashV1;
+  readonly evaluationResultHash: Sha256HashV1;
+  readonly blockerColliderIds: readonly string[];
+}
+
+async function verifyAllRunAttempts(input: Readonly<{
+  runRoot: string;
+  runReceipt: ReconstructionRunReceipt;
+  reconstructionCase: ReconstructionCase;
+  evaluationProfile: ReconstructionEvaluationProfile;
+}>): Promise<readonly VerifiedRunAttemptArtifacts[]> {
+  let frozenRequest: ReturnType<typeof parseNativeBlockGenerationRequestV1> |
+    undefined;
+  const verifiedAttempts: VerifiedRunAttemptArtifacts[] = [];
+  for (const runAttempt of input.runReceipt.attempts) {
+    const attemptRoot = path.join(
+      input.runRoot,
+      `attempts/${runAttempt.attemptIndex}`,
+    );
+    const generationRequest = parseNativeBlockGenerationRequestV1(json(
+      await requiredFile(
+        attemptRoot,
+        "generation-request.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      ),
+    ));
+    const generationReceipt = parseNativeBlockGenerationReceiptV1(json(
+      await requiredFile(
+        attemptRoot,
+        "generation-receipt.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      ),
+    ));
+    exact(
+      runAttempt.generationRequestHash,
+      hashNativeBlockGenerationRequestV1(generationRequest),
+    );
+    exact(
+      runAttempt.generationReceiptHash,
+      hashNativeBlockGenerationReceiptV1(generationReceipt),
+    );
+    exact(runAttempt.generationRequestRef, generationReceipt.generationRequestRef);
+    if (
+      generationReceipt.outcome !== "completed" ||
+      generationReceipt.cleanupOutcome !== "completed"
+    ) fail("NBR70_CLEANUP_INCOMPLETE");
+    assertNativeBlockGenerationReceiptMatchesRequestV1(
+      generationRequest,
+      generationReceipt,
+    );
+    if (frozenRequest === undefined) {
+      frozenRequest = generationRequest;
+    } else {
+      for (const [actual, expected] of [
+        [generationRequest.routeDecisionHash, frozenRequest.routeDecisionHash],
+        [generationRequest.sceneBriefHash, frozenRequest.sceneBriefHash],
+        [generationRequest.bootstrapInputHash, frozenRequest.bootstrapInputHash],
+        [generationRequest.nativeSceneApiHash, frozenRequest.nativeSceneApiHash],
+        [generationRequest.nativeSceneProfileHash, frozenRequest.nativeSceneProfileHash],
+        [generationRequest.blockProfileHash, frozenRequest.blockProfileHash],
+        [sha256CanonicalJson(generationRequest.referenceInputs),
+          sha256CanonicalJson(frozenRequest.referenceInputs)],
+      ] as const) exact(actual, expected);
+    }
+    for (const output of generationReceipt.outputs) {
+      const bytes = await requiredFile(
+        attemptRoot,
+        `source/${output.path}`,
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      );
+      if (
+        bytes.byteLength !== output.sizeBytes ||
+        sha256Bytes(bytes) !== output.contentHash
+      ) fail("NBR70_IDENTITY_MISMATCH");
+    }
+
+    const routeDecision = parseSceneAuthoringRouteDecisionV1(json(
+      await requiredFile(
+        attemptRoot,
+        "scene-authoring-route-decision.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      ),
+    ));
+    const attempt = parseSceneAuthoringAttemptV1(json(await requiredFile(
+      attemptRoot,
+      "attempt.json",
+      "NBR70_REQUIRED_ARTIFACT_MISSING",
+    )));
+    const attemptResult = parseSceneAuthoringAttemptResultV1(json(
+      await requiredFile(
+        attemptRoot,
+        "attempt-result.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      ),
+    ));
+    if (
+      attempt.sourceInput.kind !== "babylon-native" ||
+      attemptResult.outcome !== "completed"
+    ) fail("NBR70_IDENTITY_MISMATCH");
+    exact(
+      generationRequest.routeDecisionHash,
+      hashSceneAuthoringRouteDecisionV1(routeDecision),
+    );
+    exact(
+      attempt.sceneAuthoringRouteDecisionHash,
+      hashSceneAuthoringRouteDecisionV1(routeDecision),
+    );
+    exact(runAttempt.sceneAuthoringAttemptHash, hashSceneAuthoringAttemptV1(attempt));
+    exact(
+      runAttempt.sceneAuthoringAttemptResultHash,
+      hashSceneAuthoringAttemptResultV1(attemptResult),
+    );
+    assertNativeBlockGenerationRequestMatchesAttemptV1(
+      attempt.sourceInput.generationRequestRef,
+      generationRequest,
+      attempt,
+    );
+
+    const checkResult = parseNativeSceneCheckResultV1(json(await requiredFile(
+      attemptRoot,
+      "native-check-result.json",
+      "NBR70_REQUIRED_ARTIFACT_MISSING",
+    )));
+    if (checkResult.outcome !== "passed") fail("NBR70_IDENTITY_MISMATCH");
+    const explain = new TextDecoder().decode(await requiredFile(
+      attemptRoot,
+      "native-explain.txt",
+      "NBR70_REQUIRED_ARTIFACT_MISSING",
+    ));
+    if (explain !== explainNativeSceneCheckResultV1(checkResult)) {
+      fail("NBR70_IDENTITY_MISMATCH");
+    }
+    const packageDirectoryPath = path.join(attemptRoot, "world-package");
+    const verified = verifyWorldPackageDirectoryV1(
+      await readWorldPackageDirectoryV1({
+        packageDirectoryPath,
+        maximumTotalBytes: 512_000_000,
+        maximumFileCount: 10_000,
+      }),
+    );
+    if (
+      verified.kind !== "babylon-native-scene" ||
+      verified.nativeBlockMaterializerMetadata === undefined
+    ) fail("NBR70_IDENTITY_MISMATCH");
+    exact(runAttempt.worldPackageRef, verified.receipt.worldPackageRef);
+    exact(runAttempt.worldPackageRootHash, verified.receipt.worldPackageRootHash);
+    exact(runAttempt.worldPackageBuildReceiptHash, sha256CanonicalJson(verified.receipt));
+    exact(runAttempt.worldBuildIdentityHash, verified.receipt.worldBuildIdentityHash);
+    exact(
+      hashSceneAuthoringAttemptV1(verified.sceneAuthoringAttempt),
+      hashSceneAuthoringAttemptV1(attempt),
+    );
+    exact(
+      hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
+      hashSceneAuthoringAttemptResultV1(attemptResult),
+    );
+    exact(
+      hashNativeSceneCheckResultV1(verified.nativeSceneCheckResult),
+      hashNativeSceneCheckResultV1(checkResult),
+    );
+
+    const captureRoot = path.join(attemptRoot, "capture");
+    const captureReceipt = parseFormalWorldCaptureReceiptV1(json(
+      await requiredFile(
+        captureRoot,
+        "formal-world-capture-receipt.json",
+        "NBR70_CAPTURE_ARTIFACT_MISSING",
+      ),
+    ));
+    exact(runAttempt.captureReceiptHash, hashFormalWorldCaptureReceiptV1(captureReceipt));
+    exact(captureReceipt.caseRef, input.runReceipt.caseRef);
+    exact(captureReceipt.caseHash, input.runReceipt.caseHash);
+    exact(captureReceipt.evaluationProfileRef, input.runReceipt.evaluationProfileRef);
+    exact(captureReceipt.evaluationProfileHash, input.runReceipt.evaluationProfileHash);
+    exact(captureReceipt.sceneAuthoringAttemptRef, runAttempt.sceneAuthoringAttemptRef);
+    exact(captureReceipt.sceneAuthoringAttemptHash, runAttempt.sceneAuthoringAttemptHash);
+    exact(
+      captureReceipt.sceneAuthoringAttemptResultRef,
+      runAttempt.sceneAuthoringAttemptResultRef,
+    );
+    exact(
+      captureReceipt.sceneAuthoringAttemptResultHash,
+      runAttempt.sceneAuthoringAttemptResultHash,
+    );
+    exact(captureReceipt.worldPackageRef, runAttempt.worldPackageRef);
+    exact(captureReceipt.worldPackageRootHash, runAttempt.worldPackageRootHash);
+    exact(
+      captureReceipt.worldPackageBuildReceiptRef,
+      runAttempt.worldPackageBuildReceiptRef,
+    );
+    exact(
+      captureReceipt.worldPackageBuildReceiptHash,
+      runAttempt.worldPackageBuildReceiptHash,
+    );
+    exact(captureReceipt.worldBuildIdentityRef, runAttempt.worldBuildIdentityRef);
+    exact(captureReceipt.worldBuildIdentityHash, runAttempt.worldBuildIdentityHash);
+    if (
+      captureReceipt.cleanupOutcome !== "completed" ||
+      captureReceipt.cameraRollbackOutcome !== "completed" ||
+      captureReceipt.resetOutcome !== "completed"
+    ) fail("NBR70_CLEANUP_INCOMPLETE");
+    for (const view of captureReceipt.views) {
+      requirePng(
+        await requiredFile(
+          captureRoot,
+          `${view.viewId}.png`,
+          "NBR70_CAPTURE_ARTIFACT_MISSING",
+        ),
+        view.pngContentHash,
+      );
+    }
+    requirePng(
+      await requiredFile(
+        captureRoot,
+        "collider-overlay.png",
+        "NBR70_CAPTURE_ARTIFACT_MISSING",
+      ),
+      captureReceipt.colliderOverlayPngContentHash,
+    );
+    const opening = parseFormalOpeningObservationV1(json(await requiredFile(
+      captureRoot,
+      "opening-observation.json",
+      "NBR70_CAPTURE_ARTIFACT_MISSING",
+    )));
+    const spawn = parseFormalSpawnSupportObservationV1(json(await requiredFile(
+      captureRoot,
+      "spawn-support-observation.json",
+      "NBR70_CAPTURE_ARTIFACT_MISSING",
+    )));
+    const overlay = parseFormalColliderOverlayObservationV1(json(await requiredFile(
+      captureRoot,
+      "collider-overlay-observation.json",
+      "NBR70_CAPTURE_ARTIFACT_MISSING",
+    )));
+    const scripted = parseFormalScriptedTraversalObservationV1(json(
+      await requiredFile(
+        captureRoot,
+        "scripted-traversal.json",
+        "NBR70_CAPTURE_ARTIFACT_MISSING",
+      ),
+    ));
+    for (const observation of [opening, spawn, overlay, scripted]) {
+      assertObservationMatchesCapture(observation, captureReceipt);
+    }
+    const blockerColliderIds = verifyBlockerEvidenceClosure({
+      caseBlockerColliderIds: input.reconstructionCase.expected.colliders
+        .filter(({ role }) => role === "blocker")
+        .map(({ colliderId }) => colliderId),
+      formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
+      contribution: verified.nativeSceneContribution,
+      materializerMetadata: verified.nativeBlockMaterializerMetadata,
+    });
+
+    const authoringManifest = parseNativeBlockAuthoringManifestV1(json(
+      await requiredFile(
+        attemptRoot,
+        "source/native-block-authoring.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      ),
+    ));
+    const storedEvidence = parseWorldReconstructionEvidenceSetV1(json(
+      await requiredFile(
+        attemptRoot,
+        "evidence-set.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      ),
+    ));
+    const recomputedEvidence = buildWorldReconstructionEvidenceSetV1({
+      id: storedEvidence.id,
+      caseRef: input.runReceipt.caseRef,
+      reconstructionCase: input.reconstructionCase,
+      evaluationProfileRef: input.runReceipt.evaluationProfileRef,
+      evaluationProfile: input.evaluationProfile,
+      authoringManifest,
+      verifiedWorldPackage: verified,
+      captureReceiptRef: runAttempt.captureReceiptRef,
+      captureReceipt,
+      openingObservation: opening,
+      spawnSupportObservation: spawn,
+      colliderOverlayObservation: overlay,
+      scriptedTraversalObservation: scripted,
+    });
+    if (
+      hashWorldReconstructionEvidenceSetV1(storedEvidence) !==
+      hashWorldReconstructionEvidenceSetV1(recomputedEvidence)
+    ) fail("NBR70_EVALUATION_EVIDENCE_MISMATCH");
+    const storedEvaluation = parseWorldReconstructionEvaluationResultV1(json(
+      await requiredFile(
+        attemptRoot,
+        "evaluation.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      ),
+    ));
+    const recomputedEvaluation = evaluateWorldReconstructionV1({
+      case: input.reconstructionCase,
+      profile: input.evaluationProfile,
+      evidence: recomputedEvidence,
+    });
+    if (
+      hashWorldReconstructionEvaluationResultV1(storedEvaluation) !==
+      hashWorldReconstructionEvaluationResultV1(recomputedEvaluation)
+    ) fail("NBR70_EVALUATION_EVIDENCE_MISMATCH");
+    exact(
+      runAttempt.evaluationResultHash,
+      hashWorldReconstructionEvaluationResultV1(recomputedEvaluation),
+    );
+    exact(runAttempt.outcome, recomputedEvaluation.outcome);
+    verifiedAttempts.push(Object.freeze({
+      runAttempt,
+      packageDirectoryPath,
+      verified,
+      captureReceipt,
+      evaluation: storedEvaluation,
+      captureReceiptHash: hashFormalWorldCaptureReceiptV1(captureReceipt),
+      evaluationResultHash:
+        hashWorldReconstructionEvaluationResultV1(storedEvaluation),
+      blockerColliderIds,
+    }));
+  }
+  return Object.freeze(verifiedAttempts);
+}
+
+async function verifyFinalPromotion(input: Readonly<{
+  runRoot: string;
+  finalDirectoryPath: string;
+  runReceipt: ReconstructionRunReceipt;
+  reconstructionCase: ReconstructionCase;
+}>): Promise<string> {
+  const runParent = path.dirname(input.runRoot);
+  if (path.basename(runParent) !== "runs") fail("NBR70_FINAL_DIRECTORY_INVALID");
+  const caseRoot = path.dirname(runParent);
+  const finalRoot = await canonicalDirectory(
+    input.finalDirectoryPath,
+    "NBR70_FINAL_DIRECTORY_INVALID",
+  );
+  const acceptedRoots = new Set([
+    path.join(caseRoot, "final"),
+    path.join(caseRoot, ".final-staging"),
+  ]);
+  if (!acceptedRoots.has(finalRoot)) fail("NBR70_FINAL_DIRECTORY_INVALID");
+
+  const launchValue = json(await requiredFile(
+    finalRoot,
+    "launch.json",
+    "NBR70_FINAL_LAUNCH_MISSING",
+  ));
+  if (typeof launchValue !== "object" || launchValue === null ||
+      Array.isArray(launchValue)) fail("NBR70_FINAL_LAUNCH_INVALID");
+  const launch = launchValue as Record<string, unknown>;
+  const fields = [
+    "kind", "schemaVersion", "caseId", "runReceiptRef", "runReceiptHash",
+    "worldPackageRelativePath", "worldPackageRef", "worldPackageRootHash",
+    "captureReceiptRelativePath", "captureReceiptHash",
+    "evaluationRelativePath", "evaluationHash", "launchCommand",
+  ].sort();
+  const actualFields = Object.keys(launch).sort();
+  if (
+    fields.length !== actualFields.length ||
+    fields.some((field, index) => field !== actualFields[index])
+  ) fail("NBR70_FINAL_LAUNCH_INVALID");
+  exact(launch.kind, "native-block-reconstruction-launch");
+  exact(launch.schemaVersion, 1);
+  exact(launch.caseId, input.reconstructionCase.id);
+  exact(launch.runReceiptHash, sha256CanonicalJson(input.runReceipt));
+  if (typeof launch.runReceiptRef !== "string" || launch.runReceiptRef.length === 0) {
+    fail("NBR70_FINAL_LAUNCH_INVALID");
+  }
+  const caseRefSuffix = "/case.json";
+  if (!input.runReceipt.caseRef.endsWith(caseRefSuffix)) {
+    fail("NBR70_FINAL_LAUNCH_INVALID");
+  }
+  exact(
+    launch.runReceiptRef,
+    `${input.runReceipt.caseRef.slice(0, -caseRefSuffix.length)}/runs/${
+      path.basename(input.runRoot)
+    }/run-receipt.json`,
+  );
+  exact(launch.worldPackageRelativePath, "final/world-package");
+  exact(
+    launch.captureReceiptRelativePath,
+    "final/capture/formal-world-capture-receipt.json",
+  );
+  exact(launch.evaluationRelativePath, "final/evaluation.json");
+  exact(
+    launch.launchCommand,
+    "pnpm worldkit native run final/world-package --port 5174 --json",
+  );
+
+  const finalAttempt = input.runReceipt.attempts[input.runReceipt.finalAttemptIndex]!;
+  exact(launch.worldPackageRef, finalAttempt.worldPackageRef);
+  exact(launch.worldPackageRootHash, finalAttempt.worldPackageRootHash);
+  exact(launch.captureReceiptHash, finalAttempt.captureReceiptHash);
+  exact(launch.evaluationHash, finalAttempt.evaluationResultHash);
+  const attemptRoot = path.join(
+    input.runRoot,
+    `attempts/${finalAttempt.attemptIndex}`,
+  );
+  const packageDirectoryPath = path.join(finalRoot, "world-package");
+  const finalVerified = verifyWorldPackageDirectoryV1(
+    await readWorldPackageDirectoryV1({
+      packageDirectoryPath,
+      maximumTotalBytes: 512_000_000,
+      maximumFileCount: 10_000,
+    }),
+  );
+  exact(finalVerified.receipt.worldPackageRef, finalAttempt.worldPackageRef);
+  exact(finalVerified.receipt.worldPackageRootHash, finalAttempt.worldPackageRootHash);
+  await assertDirectoriesByteEqual(
+    packageDirectoryPath,
+    path.join(attemptRoot, "world-package"),
+  );
+  await assertDirectoriesByteEqual(
+    path.join(finalRoot, "capture"),
+    path.join(attemptRoot, "capture"),
+  );
+  const finalEvaluationBytes = await requiredFile(
+    finalRoot,
+    "evaluation.json",
+    "NBR70_FINAL_ARTIFACT_MISSING",
+  );
+  const attemptEvaluationBytes = await requiredFile(
+    attemptRoot,
+    "evaluation.json",
+    "NBR70_REQUIRED_ARTIFACT_MISSING",
+  );
+  if (sha256Bytes(finalEvaluationBytes) !== sha256Bytes(attemptEvaluationBytes)) {
+    fail("NBR70_FINAL_ARTIFACT_MISMATCH");
+  }
+  exact(
+    hashWorldReconstructionEvaluationResultV1(json(finalEvaluationBytes)),
+    finalAttempt.evaluationResultHash,
+  );
+  return packageDirectoryPath;
+}
+
 async function verifyPlayability(input: Readonly<{
   session: NativeBlockReconstructionPlayabilitySessionPortV1;
   subjectEntityId: string;
@@ -325,11 +916,11 @@ async function verifyPlayability(input: Readonly<{
   };
 
   await resetGrounded();
-  for (const action of [
-    "move-forward",
-    "move-left",
-    "move-backward",
-    "move-right",
+  for (const [action, axis, direction] of [
+    ["move-forward", 2, -1],
+    ["move-left", 0, -1],
+    ["move-backward", 2, 1],
+    ["move-right", 0, 1],
   ] as const) {
     const reset = await resetGrounded();
     const moved = assertReadySnapshot(
@@ -339,7 +930,7 @@ async function verifyPlayability(input: Readonly<{
     );
     const before = position(reset, input.subjectEntityId);
     const after = position(moved, input.subjectEntityId);
-    if (Math.hypot(after[0] - before[0], after[2] - before[2]) <= 1e-6) {
+    if ((after[axis] - before[axis]) * direction <= 1e-6) {
       fail("NBR70_PLAYABILITY_MOVE_FAILED");
     }
   }
@@ -350,10 +941,27 @@ async function verifyPlayability(input: Readonly<{
     runtimeSessionId,
     beforeJump.worldSessionId,
   );
+  let highestJumpY = position(jumped, input.subjectEntityId)[1];
+  let observedAir = movementMedium(jumped, input.subjectEntityId) === "air";
+  let landed = movementMedium(jumped, input.subjectEntityId) === "ground";
+  let landingSnapshot = jumped;
+  for (let tick = 0; tick < 180 && !landed; tick += 1) {
+    landingSnapshot = assertReadySnapshot(
+      await input.session.runFixedInput({ actions: [], axes: {}, ticks: 1 }),
+      runtimeSessionId,
+      beforeJump.worldSessionId,
+    );
+    highestJumpY = Math.max(
+      highestJumpY,
+      position(landingSnapshot, input.subjectEntityId)[1],
+    );
+    observedAir ||= movementMedium(landingSnapshot, input.subjectEntityId) === "air";
+    landed = movementMedium(landingSnapshot, input.subjectEntityId) === "ground";
+  }
   if (
-    movementMedium(jumped, input.subjectEntityId) !== "air" &&
-    position(jumped, input.subjectEntityId)[1] <=
-      position(beforeJump, input.subjectEntityId)[1] + 0.05
+    !observedAir ||
+    highestJumpY <= position(beforeJump, input.subjectEntityId)[1] + 0.05 ||
+    !landed
   ) fail("NBR70_PLAYABILITY_JUMP_FAILED");
   await resetGrounded();
 
@@ -432,6 +1040,7 @@ async function verifyPlayability(input: Readonly<{
     !blockerCriteria.includes(colliderId))) {
     fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
   }
+  await resetGrounded();
   return Object.freeze({
     groundedSpawn: true,
     moved: true,
@@ -444,7 +1053,10 @@ async function verifyPlayability(input: Readonly<{
 export async function verifyNativeBlockReconstructionE2EV1(
   input: VerifyNativeBlockReconstructionE2EInputV1,
 ): Promise<NativeBlockReconstructionE2EVerificationV1> {
-  const runRoot = await canonicalRunRoot(input.runDirectoryPath);
+  const runRoot = await canonicalDirectory(
+    input.candidate.runDirectoryPath,
+    "NBR70_RUN_DIRECTORY_INVALID",
+  );
   const runReceiptBytes = await requiredFile(
     runRoot,
     "run-receipt.json",
@@ -472,6 +1084,12 @@ export async function verifyNativeBlockReconstructionE2EV1(
     hashWorldReconstructionEvaluationProfileV1(evaluationProfile));
   exact(reconstructionCase.evaluationProfileHash,
     hashWorldReconstructionEvaluationProfileV1(evaluationProfile));
+  await verifyAllRunAttempts({
+    runRoot,
+    runReceipt,
+    reconstructionCase,
+    evaluationProfile,
+  });
 
   const runAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
   const attemptRoot = path.join(runRoot, `attempts/${runAttempt.attemptIndex}`);
@@ -692,12 +1310,21 @@ export async function verifyNativeBlockReconstructionE2EV1(
       dimension.status !== "passed")
   ) fail("NBR70_EVALUATION_NOT_PASSED");
 
+  const launchPackageDirectoryPath = input.candidate.kind === "final"
+    ? await verifyFinalPromotion({
+      runRoot,
+      finalDirectoryPath: input.candidate.finalDirectoryPath,
+      runReceipt,
+      reconstructionCase,
+    })
+    : packageDirectoryPath;
+
   let session: NativeBlockReconstructionPlayabilitySessionPortV1 | undefined;
   let playability: NativeBlockReconstructionE2EVerificationV1["playability"] | undefined;
   let failure: unknown;
   try {
     session = await input.playability.launch({
-      packageDirectoryPath,
+      packageDirectoryPath: launchPackageDirectoryPath,
       worldPackageRef: verified.receipt.worldPackageRef,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
       worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
@@ -741,6 +1368,7 @@ export async function verifyNativeBlockReconstructionE2EV1(
 
   return Object.freeze({
     outcome: "verified",
+    candidateKind: input.candidate.kind,
     attemptIndex: runAttempt.attemptIndex,
     worldPackageRef: runAttempt.worldPackageRef,
     worldPackageRootHash: runAttempt.worldPackageRootHash,

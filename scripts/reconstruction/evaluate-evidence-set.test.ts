@@ -117,7 +117,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
           `world-package://${checkResultPath}`,
         ].sort(),
         observed: {
-          candidateReplayOutcome: "incomplete",
+          candidateReplayOutcome: "completed",
           worldPackageIdentityMatches: true,
           buildIdentityMatches: true,
           captureIdentityMatches: true,
@@ -267,7 +267,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     });
   });
 
-  it("publishes incomplete Candidate replay when the verified Package Check Result cannot prove runtime-replay", () => {
+  it("publishes completed Candidate replay from the verified Package dual-replay Check Result", () => {
     const fixture = createEvidenceSetFixtureInputV1();
     const evidence = buildWorldReconstructionEvidenceSetV1(fixture);
     const deterministic = observed(evidence, "deterministic-build");
@@ -278,7 +278,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     );
     expect(deterministic.observed).toMatchObject({
       kind: "deterministic-build-observed",
-      candidateReplayOutcome: "incomplete",
+      candidateReplayOutcome: "completed",
       worldPackageIdentityMatches: true,
       buildIdentityMatches: true,
       captureIdentityMatches: true,
