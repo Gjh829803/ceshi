@@ -224,6 +224,14 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       ),
     }),
     Object.freeze({
+      familyId: "WORLDKIT_UNRELEASED_LEGACY_VIEWER_ROUTE",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pathPattern: /^(?:packages|apps|scripts|examples|artifacts|assets|\.codex)\//,
+      excludedPathPattern: /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/,
+      pattern: new RegExp(escaped(token(["?", "authoring", "=1"])), "g"),
+    }),
+    Object.freeze({
       familyId: "current-top-level-contracts",
       classification: "current-authority" as const,
       blocksCompletion: false,

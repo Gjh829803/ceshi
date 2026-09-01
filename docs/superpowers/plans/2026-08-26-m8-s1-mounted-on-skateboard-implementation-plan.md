@@ -10,12 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md`
 
-**Progress (2026-09-01):** Tasks 1-8 are implemented in the working tree after `6948d1a`, including the
+**Progress (2026-09-01):** Tasks 1-8 are implemented in the working tree after `0084534`, including the
 listed Runtime adversarial hardening, retained-support `supportedBy` projection, formal four-phase mounted
 Capture verifier and a stricter current-only Camera V2 clean break. Historical Cloud evidence on `4c7551e`
 and `7f9abd8` is retained but is not promoted across these production Camera/Runtime/Registry and generated-
-artifact changes. Current focused verification passes 14 files / 288 tests plus the 3/3 self-check suite,
-generated-validator, agent-self-check and Native package checks. Task 9 remains open pending a new exact pushed SHA, the Cloud
+artifact changes. Current focused verification passes the prior 14 files / 288 Camera/Runtime/Viewer tests,
+the 3/3 self-check suite and the final support-projection/clean-break matrix of 6 files / 212 tests with 3
+platform skips. The 3C and unreleased clean-break gates pass locally; generated-validator, agent-self-check
+and Native package checks remain current from the preceding candidate. Task 9 remains open pending a new exact pushed SHA, the Cloud
 matrix and final Claude/Grok reviews. No final M8-S1 internal-capability GO is claimed, and Hosted Builder
 production admission remains explicitly closed.
 
@@ -302,16 +304,24 @@ disposed before final implementation review.
   a remote Cloud Agent rather than on the local machine:
 
   ```bash
+  pnpm install --frozen-lockfile
   pnpm typecheck
   pnpm test
   pnpm build
   pnpm test:studio
   pnpm test:independent
   pnpm verify:unreleased-clean-break
+  pnpm verify:3c-migration
+  pnpm check:runtime-contract-validators
+  pnpm check:agent-self-check
   pnpm verify:canonical
+  pnpm verify:control-capture
   pnpm verify:placement-layout
   pnpm verify:rigged-subject
   pnpm verify:g-bot-subject
+  pnpm verify:scene-viewer
+  pnpm verify:mounted-skateboard-capture
+  pnpm native:cloud-ridge:package:check
   ```
 
   The historical catalog `verify:outdoor-gameplay` command is retired together with the deleted catalog

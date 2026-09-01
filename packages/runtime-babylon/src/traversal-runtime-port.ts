@@ -21,12 +21,11 @@ import { isEqual, isNil } from "lodash-es";
 import type { BabylonWorldRuntime } from "./babylon-world-runtime";
 import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
-import type {
-  MotionKernelLiveLockStateV1,
-  RetainedCharacterSupportSampleV1,
-} from "./motion-kernel-runtime";
 import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversal-implementation-identity";
-import { resolveRetainedSupportSurfaceV1 } from "./retained-support-surface-resolver";
+import {
+  resolveRetainedSupportSurfaceV1,
+  type CharacterSupportProjectionLockV1,
+} from "./retained-support-surface-resolver";
 import {
   BABYLON_TRAVERSAL_RUNTIME_INTERNAL,
   type BabylonTraversalRuntimeInternalV1,
@@ -209,7 +208,7 @@ function exactPlanAndReceiptLock(
 }
 
 function liveLockMatches(
-  live: MotionKernelLiveLockStateV1,
+  live: CharacterSupportProjectionLockV1,
   lock: ResolvedTraversalLockV1,
 ): boolean {
   return live.capsuleRadiusMeters === lock.capsuleRadiusMeters &&
@@ -223,13 +222,13 @@ function liveLockMatches(
       live.colliderCenterOffsetMetersXYZ,
       lock.colliderCenterOffsetMetersXYZ,
     ) &&
-    live.activeControlFeelProfileRef === lock.controlFeelProfileRef &&
-    live.activeControlFeelProfileHash === lock.controlFeelProfileHash &&
+    live.controlFeelProfileRef === lock.controlFeelProfileRef &&
+    live.controlFeelProfileHash === lock.controlFeelProfileHash &&
     live.requestedControlFeelProfileRef === lock.controlFeelProfileRef &&
-    live.activeMotionProfileRef === lock.motionProfileRef &&
-    live.activeMotionProfileHash === lock.motionProfileHash &&
+    live.motionProfileRef === lock.motionProfileRef &&
+    live.motionProfileHash === lock.motionProfileHash &&
     live.requestedMotionProfileRef === lock.motionProfileRef &&
-    live.activeMotionKernelRef === lock.motionKernelRef &&
+    live.motionKernelRef === lock.motionKernelRef &&
     live.physicsBodyProfileRef === lock.physicsBodyProfileRef &&
     live.locomotionProfileRef === lock.locomotionProfileRef &&
     live.controlProfileRef === lock.controlProfileRef &&

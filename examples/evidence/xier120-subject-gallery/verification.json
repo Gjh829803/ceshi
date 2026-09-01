@@ -7,39 +7,39 @@
     "supersedesEvidenceCommit": "7695c8f16cd69ed99ae3aff263da73245a0f4776",
     "fixturePath": "examples/authoring/xier120-subject-gallery.json",
     "canonicalCommand": "pnpm worldkit run examples/authoring/xier120-subject-gallery.json --port 5197",
-    "canonicalBrowserUrl": "http://127.0.0.1:5197/?authoring=1"
+    "historicalBrowserOrigin": "http://127.0.0.1:5197/"
   },
   "browser": {
     "automationSurface": "Playwright CLI",
     "npxVersion": "10.9.2",
     "selectionMethod": "Exact temporary fixture variants outside tracked source, each served by worldkit run; no public Schema or query parameter was invented.",
-    "batchBrowserUrls": [
-      "http://127.0.0.1:5230/?authoring=1",
-      "http://127.0.0.1:5231/?authoring=1",
-      "http://127.0.0.1:5232/?authoring=1",
-      "http://127.0.0.1:5233/?authoring=1",
-      "http://127.0.0.1:5234/?authoring=1",
-      "http://127.0.0.1:5235/?authoring=1",
-      "http://127.0.0.1:5236/?authoring=1",
-      "http://127.0.0.1:5237/?authoring=1",
-      "http://127.0.0.1:5238/?authoring=1",
-      "http://127.0.0.1:5239/?authoring=1",
-      "http://127.0.0.1:5240/?authoring=1",
-      "http://127.0.0.1:5241/?authoring=1",
-      "http://127.0.0.1:5242/?authoring=1",
-      "http://127.0.0.1:5243/?authoring=1",
-      "http://127.0.0.1:5244/?authoring=1",
-      "http://127.0.0.1:5245/?authoring=1",
-      "http://127.0.0.1:5246/?authoring=1",
-      "http://127.0.0.1:5247/?authoring=1",
-      "http://127.0.0.1:5248/?authoring=1"
+    "historicalBatchBrowserOrigins": [
+      "http://127.0.0.1:5230/",
+      "http://127.0.0.1:5231/",
+      "http://127.0.0.1:5232/",
+      "http://127.0.0.1:5233/",
+      "http://127.0.0.1:5234/",
+      "http://127.0.0.1:5235/",
+      "http://127.0.0.1:5236/",
+      "http://127.0.0.1:5237/",
+      "http://127.0.0.1:5238/",
+      "http://127.0.0.1:5239/",
+      "http://127.0.0.1:5240/",
+      "http://127.0.0.1:5241/",
+      "http://127.0.0.1:5242/",
+      "http://127.0.0.1:5243/",
+      "http://127.0.0.1:5244/",
+      "http://127.0.0.1:5245/",
+      "http://127.0.0.1:5246/",
+      "http://127.0.0.1:5247/",
+      "http://127.0.0.1:5248/"
     ],
-    "hostInputBrowserUrls": [
-      "http://127.0.0.1:5230/?authoring=1",
-      "http://127.0.0.1:5241/?authoring=1",
-      "http://127.0.0.1:5246/?authoring=1"
+    "historicalHostInputBrowserOrigins": [
+      "http://127.0.0.1:5230/",
+      "http://127.0.0.1:5241/",
+      "http://127.0.0.1:5246/"
     ],
-    "canonicalTwoInstanceBrowserUrl": "http://127.0.0.1:5255/?authoring=1",
+    "historicalTwoInstanceBrowserOrigin": "http://127.0.0.1:5255/",
     "directQueryOverrideProbe": {
       "outcome": "expected-rejection",
       "error": "WorldkitBrowserStartupErrorV1: Route evidence authoringSpecHash does not match the loaded Authoring world.",

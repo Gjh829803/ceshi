@@ -30,9 +30,7 @@ import {
 } from "./control-profile-runtime";
 import {
   MotionKernelRuntimeV1,
-  type MotionKernelLiveLockStateV1,
   type MotionKernelSnapshotV1,
-  type RetainedCharacterSupportSampleV1,
 } from "./motion-kernel-runtime";
 import {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
@@ -50,6 +48,10 @@ import {
   CommittedRenderPoseBufferV1,
   type CommittedRenderPoseV1,
 } from "./committed-render-pose";
+import type {
+  CharacterSupportProjectionLockV1,
+  CharacterSupportProjectionSampleV1,
+} from "./retained-support-surface-resolver";
 
 interface LegacySubjectMotionSampleV1 {
   horizontalSpeedMetersPerSecond: number;
@@ -163,7 +165,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     return this.motionKernel.snapshot();
   }
 
-  retainedCharacterSupportSample(): RetainedCharacterSupportSampleV1 | undefined {
+  retainedCharacterSupportSample(): CharacterSupportProjectionSampleV1 | undefined {
     return this.motionKernel.retainedCharacterSupportSample();
   }
 
@@ -186,7 +188,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
       : [placement.x, placement.y, placement.z];
   }
 
-  liveLockState(): MotionKernelLiveLockStateV1 {
+  liveLockState(): CharacterSupportProjectionLockV1 {
     return this.motionKernel.liveLockState();
   }
 
@@ -451,11 +453,11 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     return this.#latestTickResult;
   }
 
-  retainedCharacterSupportSample(): RetainedCharacterSupportSampleV1 | undefined {
+  retainedCharacterSupportSample(): CharacterSupportProjectionSampleV1 | undefined {
     return this.#requireBodyPort().retainedCharacterSupportSample();
   }
 
-  liveLockState(): MotionKernelLiveLockStateV1 {
+  liveLockState(): CharacterSupportProjectionLockV1 {
     const body = this.#requireBodyPort().readSupportProjectionLock();
     const assembly = this.#subject.capabilityAssembly;
     const motion = assembly.defaultMotionProfile;
@@ -464,13 +466,13 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
       colliderCenterOffsetMetersXYZ: Object.freeze([
         ...this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
       ]) as RuntimeVec3V1,
-      activeControlFeelProfileRef: this.#subject.controlFeel.resourceRef,
-      activeControlFeelProfileHash: this.#subject.controlFeel.contentHash,
+      controlFeelProfileRef: this.#subject.controlFeel.resourceRef,
+      controlFeelProfileHash: this.#subject.controlFeel.contentHash,
       requestedControlFeelProfileRef: this.#subject.controlFeel.resourceRef,
-      activeMotionProfileRef: motion.resourceRef,
-      activeMotionProfileHash: motion.contentHash,
+      motionProfileRef: motion.resourceRef,
+      motionProfileHash: motion.contentHash,
       requestedMotionProfileRef: motion.resourceRef,
-      activeMotionKernelRef: motion.motionKernelRef,
+      motionKernelRef: motion.motionKernelRef,
       physicsBodyProfileRef: this.#subject.physicsBodyProfileRef,
       locomotionProfileRef: this.#subject.locomotionProfileRef,
       controlProfileRef: assembly.controlProfile.resourceRef,

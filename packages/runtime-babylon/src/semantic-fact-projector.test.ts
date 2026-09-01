@@ -5,13 +5,13 @@ import { createValidAuthoringSpecV4 } from "@whitebox-world/authoring/testing";
 import { describe, expect, it } from "vitest";
 
 import type {
-  MotionKernelLiveLockStateV1,
-  RetainedCharacterSupportSampleV1,
-} from "./motion-kernel-runtime";
+  CharacterSupportProjectionLockV1,
+  CharacterSupportProjectionSampleV1,
+} from "./retained-support-surface-resolver";
 import { compileRuntimeTestScenePlanV1 } from "./runtime-test-plan";
 import { projectSemanticFactsV1 } from "./semantic-fact-projector";
 
-const LIVE_LOCK = Object.freeze<MotionKernelLiveLockStateV1>({
+const LIVE_LOCK = Object.freeze<CharacterSupportProjectionLockV1>({
   capsuleRadiusMeters: 0.35,
   capsuleHeightMeters: 1.8,
   footOffsetMeters: 0.9,
@@ -20,13 +20,13 @@ const LIVE_LOCK = Object.freeze<MotionKernelLiveLockStateV1>({
   maxSlopeCosine: Math.cos(42 * Math.PI / 180),
   maxStepHeightMeters: 0.4,
   colliderCenterOffsetMetersXYZ: [0, 0.9, 0],
-  activeControlFeelProfileRef: "feel",
-  activeControlFeelProfileHash: `sha256:${"a".repeat(64)}`,
+  controlFeelProfileRef: "feel",
+  controlFeelProfileHash: `sha256:${"a".repeat(64)}`,
   requestedControlFeelProfileRef: "feel",
-  activeMotionProfileRef: "motion",
-  activeMotionProfileHash: `sha256:${"b".repeat(64)}`,
+  motionProfileRef: "motion",
+  motionProfileHash: `sha256:${"b".repeat(64)}`,
   requestedMotionProfileRef: "motion",
-  activeMotionKernelRef: "kernel",
+  motionKernelRef: "kernel",
   physicsBodyProfileRef: "physics",
   locomotionProfileRef: "locomotion",
   controlProfileRef: "control",
@@ -88,9 +88,9 @@ function supportSample(
       surfaceEntityId?: string;
     }>[];
   }> = {},
-): RetainedCharacterSupportSampleV1 {
+): CharacterSupportProjectionSampleV1 {
   const normalXYZ = options.normalXYZ ?? [0, 1, 0];
-  const sample: RetainedCharacterSupportSampleV1 = {
+  const sample: CharacterSupportProjectionSampleV1 = {
     supportState,
     supportNormalWorldXYZ: options.aggregateSupportNormalXYZ ?? normalXYZ,
     sampledControllerCenterMetersXYZ: [0, 0.9, 0],

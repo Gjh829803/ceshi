@@ -14,13 +14,13 @@
 | --- | --- |
 | Date | 2026-09-01 |
 | Review mode | Mode B change review plus the complete Runtime deep-review checklist |
-| Runtime/product candidate | Current working tree after `6948d1a40322f9057d88c7b0d57d77a21c6e7b01`; exact pushed SHA pending |
+| Runtime/product candidate | Current working tree after `00845340af0e7770ef73e10cb57f28ddb9c6fb32`; exact pushed SHA pending |
 | Final review tree | Pending product-candidate Cloud closure and exact-SHA Claude/Grok review |
 | Diff base | `df2dcd53434bd26a97dbb3e835fb99ad56eb82a9` |
 | Branch | `codex/m8-s1-completion` |
 | Runtime dependencies | Babylon.js `9.23.0`; Havok `1.3.14` |
 | Scope | Strict `mountedOn` contract, atomic Mount/Dismount, possession transfer, Rider projection, safe Dismount, retained-Physics `supportedBy`, narrow mounted Camera seam, complete Capture journal and formal four-phase verifier |
-| Current disposition | **Cloud root gates GO; overall NO-GO pending final exact-SHA Claude/Grok review** |
+| Current disposition | **NO-GO pending the new exact-SHA Cloud matrix and final Claude/Grok review** |
 
 Authority was read in this order: repository `AGENTS.md`,
 [`docs/18-refactor-progress-and-backlog.md`](../18-refactor-progress-and-backlog.md),
@@ -60,6 +60,10 @@ Capture tests and the mounted verifier. Therefore it is not relabeled as exact-c
 - `WORLDKIT_VERIFY_ARTIFACTS_DIR=/var/tmp/worldkit-m8-s1-exact-08f8f19 pnpm verify:mounted-skateboard-capture`
   — exit 0; the four-phase report is
   `/var/tmp/worldkit-m8-s1-exact-08f8f19/mounted-skateboard-capture-report.json`.
+- Current support-projection and clean-break closure — exit 0; 6 focused files, 212 tests passed with 3
+  platform skips. `pnpm verify:3c-migration` passes all 11 ledger rows with 41 remaining legacy references,
+  and `pnpm verify:unreleased-clean-break` passes after removing the retired Viewer query route from active
+  example evidence and adding a fail-closed route census.
 
 ### First exact-SHA Cloud attempt
 
@@ -206,10 +210,12 @@ second legacy relationship dialect.
   were regenerated from the current contract. Camera/Registry/Runtime/Viewer focused verification passes
   14 files / 288 tests; the directly affected self-check suite passes 1 file / 3 tests. Generated Runtime
   validators, both agent self-check bundles and Native package bytes are current.
-- Executable-source census for `CameraContextSampleV1` is zero. Its migration-ledger row remains
-  `migrating`, not `completed`, because the whole `pnpm verify:3c-migration` command is currently blocked by
-  an unrelated pre-existing ledger mismatch for `RetainedCharacterSupportSampleV1` (`20 > 7`). This is a
-  truthful global-gate limitation, not a compatibility path retained by M8.
+- Executable-source census for `CameraContextSampleV1`, `RetainedCharacterSupportSampleV1` and
+  `MotionKernelLiveLockStateV1` is zero. The latter two were replaced by the current provider-neutral
+  `CharacterSupportProjectionSampleV1` and `CharacterSupportProjectionLockV1`; `BodySampleV1` remains the
+  Tick-bound movement authority and the projection does not perform a second support query. Their ledger
+  rows remain `migrating`, not `completed`, until the owning legacy Motion Kernel module itself is removed.
+  The whole `pnpm verify:3c-migration` command now passes locally.
 
 ## 6. Findings and current blockers
 
@@ -220,8 +226,7 @@ for these unresolved completion items:
 
 1. The new product tree has not yet been committed, pushed or exercised by the exact-SHA Cloud matrix.
 2. Final exact-SHA Claude and Grok implementation reviews have not started.
-3. The unrelated whole-ledger `RetainedCharacterSupportSampleV1` mismatch must remain disclosed; M8 must
-   not falsely record a green `verify:3c-migration` result.
+3. The final Cloud run must repeat the current green 3C and Viewer-route clean-break gates on the frozen SHA.
 
 The missing retired `verify:outdoor-gameplay` entry is not a finding and must not be repaired.
 

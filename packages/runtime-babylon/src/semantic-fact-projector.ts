@@ -7,19 +7,17 @@ import {
 import type { CanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 import { orderBy } from "lodash-es";
 
-import type {
-  MotionKernelLiveLockStateV1,
-  RetainedCharacterSupportSampleV1,
-} from "./motion-kernel-runtime";
 import {
   resolveRetainedSupportSurfaceV1,
   retainedContactsAdmittedByPolicyV1,
+  type CharacterSupportProjectionLockV1,
+  type CharacterSupportProjectionSampleV1,
 } from "./retained-support-surface-resolver";
 
 export interface SemanticFactProjectorSubjectInputV1 {
   readonly entityId: string;
-  readonly sample: RetainedCharacterSupportSampleV1 | undefined;
-  readonly live: MotionKernelLiveLockStateV1;
+  readonly sample: CharacterSupportProjectionSampleV1 | undefined;
+  readonly live: CharacterSupportProjectionLockV1;
 }
 
 function canonicalNumber(value: number): number {

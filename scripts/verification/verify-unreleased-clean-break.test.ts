@@ -321,6 +321,52 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(true);
   });
 
+  it("blocks the retired authoring query route in active packages and examples", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-viewer-route-");
+    const evidencePath = path.join(
+      fixtureRoot,
+      "examples",
+      "evidence",
+      "legacy-route.json",
+    );
+    const packagePath = path.join(
+      fixtureRoot,
+      "packages",
+      "viewer",
+      "legacy-route.ts",
+    );
+    await Promise.all([
+      mkdir(path.dirname(evidencePath), { recursive: true }),
+      mkdir(path.dirname(packagePath), { recursive: true }),
+    ]);
+    const retiredRoute = token(["?", "authoring", "=1"]);
+    await Promise.all([
+      writeFile(
+        evidencePath,
+        JSON.stringify({ browserUrl: `http://127.0.0.1:5173/${retiredRoute}` }),
+        "utf8",
+      ),
+      writeFile(packagePath, `export const route = "${retiredRoute}";\n`, "utf8"),
+    ]);
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_VIEWER_ROUTE",
+    ).matchesByPath).toEqual([
+      {
+        path: "examples/evidence/legacy-route.json",
+        matches: [{ line: 1, value: retiredRoute }],
+      },
+      {
+        path: "packages/viewer/legacy-route.ts",
+        matches: [{ line: 1, value: retiredRoute }],
+      },
+    ]);
+    expect(report.ok).toBe(false);
+  });
+
   it("blocks superseded v3 node contracts after authoring v4 became authoritative", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-node-v3-"));
     cleanupPaths.push(fixtureRoot);

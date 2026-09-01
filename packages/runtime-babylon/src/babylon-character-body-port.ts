@@ -29,7 +29,7 @@ import {
   type MovementVec3V1,
 } from "@whitebox-world/character-movement";
 
-import type { RetainedCharacterSupportSampleV1 } from "./motion-kernel-runtime";
+import type { CharacterSupportProjectionSampleV1 } from "./retained-support-surface-resolver";
 
 export const BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1 = Object.freeze({
   babylonJs: "9.23.0",
@@ -1909,9 +1909,9 @@ class BabylonCharacterBodyPortV1
   private serial = 0;
   private beginAttemptEpoch = 0;
   private transaction: BodyTransactionV1 | undefined;
-  private retainedSupportSample: RetainedCharacterSupportSampleV1 | undefined;
+  private retainedSupportSample: CharacterSupportProjectionSampleV1 | undefined;
   private stagedRetainedSupportSample:
-    RetainedCharacterSupportSampleV1 | undefined;
+    CharacterSupportProjectionSampleV1 | undefined;
   private upwardSupportDepartureActive = false;
   private disposed = false;
 
@@ -2233,7 +2233,7 @@ class BabylonCharacterBodyPortV1
     const positionInput = parseVec3(input.positionMetersXYZ);
     const velocityInput = parseVec3(input.linearVelocityMetersPerSecondXYZ);
     const checkpoint = this.driver.captureState();
-    let nextRetainedSupportSample: RetainedCharacterSupportSampleV1;
+    let nextRetainedSupportSample: CharacterSupportProjectionSampleV1;
     try {
       this.driver.setPositionMetersXYZ(positionInput);
       this.driver.setLinearVelocityMetersPerSecondXYZ(velocityInput);
@@ -2275,7 +2275,7 @@ class BabylonCharacterBodyPortV1
   }
 
   retainedCharacterSupportSample():
-    RetainedCharacterSupportSampleV1 | undefined {
+    CharacterSupportProjectionSampleV1 | undefined {
     this.assertLive();
     return this.retainedSupportSample;
   }
@@ -2388,7 +2388,7 @@ class BabylonCharacterBodyPortV1
     support: BodySampleV1["support"],
     controllerCenterMetersXYZ: MovementVec3V1,
     contacts: readonly BabylonCharacterBodyNativeContactV1[],
-  ): RetainedCharacterSupportSampleV1 {
+  ): CharacterSupportProjectionSampleV1 {
     const up = freezeVec3(
       this.configuration.gravityDirectionXYZ.map((value) =>
         value === 0 ? 0 : -value
@@ -2656,7 +2656,7 @@ export interface BabylonCharacterBodyRuntimePortV1
   extends BabylonCharacterBodyTransactionPortV1 {
   readonly physicsBody: PhysicsBody;
   retainedCharacterSupportSample():
-    RetainedCharacterSupportSampleV1 | undefined;
+    CharacterSupportProjectionSampleV1 | undefined;
   readSupportProjectionLock(): BabylonCharacterBodySupportProjectionLockV1;
   collisionFilterMasks(): Readonly<{
     membershipMask: number;
