@@ -61,6 +61,7 @@ declare global {
     __WORLDKIT_NATIVE_SPIKE__?: NativeSceneSpikeProbeV1;
     __WORLDKIT_HOSTED_RUNTIME__?: Readonly<{
       phase(): string;
+      waitUntilReady(): Promise<import("@whitebox-world/runtime-contracts").RuntimeSessionEventV1>;
       submit(request: import("@whitebox-world/runtime-contracts").RuntimeSessionRequestV1): Promise<unknown>;
       frame: HTMLIFrameElement;
     }>;
@@ -394,6 +395,7 @@ async function startHostedShell(): Promise<void> {
   viewport.append(frame);
   window.__WORLDKIT_HOSTED_RUNTIME__ = Object.freeze({
     phase: () => bridge.phase(),
+    waitUntilReady: () => bridge.waitUntilReady(),
     submit: (request) => bridge.submit(request),
     frame,
   });
