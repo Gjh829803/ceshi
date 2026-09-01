@@ -13,11 +13,14 @@ import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCas
 import {
   decideNativeBlockReconstructionRouteV1,
   deriveNativeBlockGenerationBootstrapV1,
+  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
   prepareNativeBlockGenerationTaskV1,
   resolveWorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
 import { createNativeBlockRepairInstructionV1 } from "./repair-request.js";
+import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
+  "../native-scene/admission-budget.js";
 
 const hash = (character: string) => `sha256:${character.repeat(64)}` as `sha256:${string}`;
 const API_HASH = hash("a");
@@ -131,6 +134,17 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe("prepareNativeBlockGenerationTaskV1", () => {
+  it("freezes the same static Collider budget used by Native admission", () => {
+    expect({
+      maximumStaticColliderCount:
+        NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1.maximumStaticColliderCount,
+      maximumStaticColliderVertexCount:
+        NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1.maximumStaticColliderVertexCount,
+      maximumStaticColliderTriangleCount:
+        NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1.maximumStaticColliderTriangleCount,
+    }).toEqual(BNA2_WHITEBOX_ADMISSION_BUDGET_V1);
+  });
+
   it("resolves the Case-bound Native route through the sole Host policy owner", async () => {
     const value = await fixture();
     const preparedInput = input(value);

@@ -7,18 +7,13 @@ import type { BabylonNativeLockedAssetRequestV1 } from
 import {
   createBabylonNativeLockedAssetResolutionFailureV1,
   type BabylonNativeLockedAssetResolverV1,
-  type BabylonNativeSceneAdmissionBudgetV1,
   type BabylonNativeSceneCandidateFactoryV1,
 } from "@whitebox-world/native-babylon/host";
 
+import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
+  "./admission-budget.js";
 import { createNativeWorkspaceDiagnosticV1 } from
   "./authoring-workspace.js";
-
-export const BNA2_WHITEBOX_ADMISSION_BUDGET_V1 = Object.freeze({
-  maximumStaticColliderCount: 256,
-  maximumStaticColliderVertexCount: 65_536,
-  maximumStaticColliderTriangleCount: 131_072,
-} satisfies BabylonNativeSceneAdmissionBudgetV1);
 
 const BNA2_NATIVE_PROFILE_POLICY_BY_REF_V1 = Object.freeze({
   "worldkit://native-scene-profile/whitebox.standard@1":
@@ -30,7 +25,7 @@ const BNA2_NATIVE_PROFILE_POLICY_BY_REF_V1 = Object.freeze({
 export type BabylonNativeCheckPolicyResultV1 =
   | Readonly<{
       outcome: "passed";
-      budget: BabylonNativeSceneAdmissionBudgetV1;
+      budget: typeof BNA2_WHITEBOX_ADMISSION_BUDGET_V1;
     }>
   | Readonly<{
       outcome: "rejected";

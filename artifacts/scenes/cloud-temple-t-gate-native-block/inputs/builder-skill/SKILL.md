@@ -40,7 +40,7 @@ Do not write logs, screenshots, receipts, locks, generated JavaScript, source ma
 5. Give mountains, cliffs, stairs, platforms, and buildings real plan depth, cross-section, support, and rear mass. Small blocks express exposed detail; they do not replace structural volume.
 6. Give every selected complete semantic target one explicit `visualGroupId`. Do not split a complete gate, building, mountain mass, or repeated identity into decorative part groups.
 7. Register the Host-declared Spawn Marker explicitly at a ground-supported Spawn with clearance. The marker identifies the support-top position; it does not create a Character or control state.
-8. Select every static collider explicitly during Block Profile finalization. Include support ground and blocker walls required by the Case. Never infer collision from mesh names, tags, materials, or a later scene scan.
+8. Select every static collider explicitly during Block Profile finalization. Include the Spawn support, continuous playable corridor, required Case IDs, and necessary blocker walls, but do not register every visual Block. Keep the final selection below the frozen Generation Request Collider budget. Never infer collision from mesh names, tags, materials, or a later scene scan.
 9. The first reconstruction Case has no Route/Nav claim. Static traversal intent is only an explicit collider contribution where admitted; do not emit product Route, NavMesh, `goTo`, or reachability evidence.
 
 ## Forbidden ownership
