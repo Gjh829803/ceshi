@@ -5,10 +5,11 @@ import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 export async function bindRuntimeTestPossession(
   runtime: BabylonWorldRuntime,
   controlledEntityId: string,
-): Promise<void> {
+): Promise<number> {
   const prepared = await runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]()
     .preparePossessionTarget({ mode: "possessed", controlledEntityId });
   prepared.commitPrepared();
+  return prepared.projectedViewStateAfter.viewStateRevision;
 }
 
 /** Test-only reset helper that mirrors the Host reset + initial-bind sequence. */

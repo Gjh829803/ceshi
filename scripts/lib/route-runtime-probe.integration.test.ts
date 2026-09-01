@@ -51,7 +51,6 @@ import { isEqual, isNil } from "lodash-es";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
-import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "../../packages/runtime-babylon/src/gameplay-runtime-internal.js";
 import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
 
 const havokWasmBytes = await readFile(
@@ -264,13 +263,12 @@ async function createRuntimeHarness(
   });
   try {
     if (isNil(engine)) throw new Error("NullEngine was not created.");
-    await bindRuntimeTestPossession(
+    const initialCameraViewRevision = await bindRuntimeTestPossession(
       runtime,
       fixture.traversalLockReceipt.lock.subjectEntityId,
     );
     runtime.publishInitialBoundCameraView(
-      runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
-        .viewStateRevision,
+      initialCameraViewRevision,
     );
     const port = createBabylonTraversalRuntimePortV1({
       runtime,
