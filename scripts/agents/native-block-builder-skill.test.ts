@@ -130,6 +130,15 @@ describe("Native Block Builder Skill", () => {
       "`Math.PI / 2` must be computed inside `build()`",
     );
     expect(outputContract).toContain(
+      "The Host typechecks with strict indexed access",
+    );
+    expect(outputContract).toContain(
+      "Prefer `for (const [xMeters, zMeters] of cells)`",
+    );
+    expect(outputContract).toContain(
+      "check the indexed value for `undefined` before destructuring",
+    );
+    expect(outputContract).toContain(
       "center lattice is `[0.25, 0.125, 0.25]` meters",
     );
     expect(outputContract).toContain(
