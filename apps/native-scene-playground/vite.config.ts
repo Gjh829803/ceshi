@@ -26,6 +26,12 @@ const NATIVE_PACKAGE_RECEIPT_PATH =
   `${NATIVE_PACKAGE_PREFIX}world-package-build-receipt.json`;
 const NATIVE_SCENE_MODULE_PATH = "native/scene.mjs";
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
+const HOSTED_RUNTIME_OPTIMIZE_DEPENDENCY_IDS = Object.freeze([
+  "@babylonjs/core/Maths/math.viewport.js",
+  "@babylonjs/core/scene.js",
+  "ajv-formats",
+  "ajv/dist/2020.js",
+] as const);
 
 interface ExactRuntimeAssetV1 {
   readonly bytes: Uint8Array;
@@ -610,6 +616,9 @@ export async function createNativeScenePlaygroundViteConfigV1(
         __WORLDKIT_HOSTED_SHELL_ORIGIN__: JSON.stringify(hostedShellOrigin),
       },
       plugins: [plugin],
+      optimizeDeps: {
+        include: [...HOSTED_RUNTIME_OPTIMIZE_DEPENDENCY_IDS],
+      },
       server: {
         host: "127.0.0.1",
         port: 5174,

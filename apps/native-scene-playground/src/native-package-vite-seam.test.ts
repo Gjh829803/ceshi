@@ -201,6 +201,14 @@ describe("Native Playground verified Package Vite seam", () => {
       SERVER_INSTANCE_ID,
       "runtime",
     ));
+    expect(runtimeConfig.optimizeDeps).toEqual({
+      include: [
+        "@babylonjs/core/Maths/math.viewport.js",
+        "@babylonjs/core/scene.js",
+        "ajv-formats",
+        "ajv/dist/2020.js",
+      ],
+    });
 
     const otherInstanceConfig = await createNativeScenePlaygroundViteConfigV1({
       ...environment,
