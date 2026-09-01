@@ -338,7 +338,7 @@ describe("BabylonHavokCameraGeometryQueryV2", () => {
     }
   });
 
-  it("skips a suspended registered Rider while excluding the mounted ViewTarget", async () => {
+  it("ignores a suspended registered Rider while excluding the mounted ViewTarget", async () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
     const plugin = await enableHavokPhysics(scene, [0, -9.81, 0], havokWasmBinary);
@@ -368,6 +368,51 @@ describe("BabylonHavokCameraGeometryQueryV2", () => {
       });
       expect(hit!.travelDistanceMeters).toBeGreaterThan(0.7);
       expect(hit!.travelDistanceMeters).toBeLessThan(5);
+    } finally {
+      query.dispose();
+      mount.dispose();
+      rider.dispose();
+      wall.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("does not skip a hard wall inside a suspended Rider's bounds", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const plugin = await enableHavokPhysics(scene, [0, -9.81, 0], havokWasmBinary);
+    const createBody = (entityId: string, z: number, size: number) => {
+      const mesh = MeshBuilder.CreateBox(entityId, { size }, scene);
+      mesh.position.z = z;
+      mesh.metadata = { worldkitEntityId: entityId };
+      return new PhysicsAggregate(mesh, PhysicsShapeType.BOX, { mass: 0 }, scene);
+    };
+    const mount = createBody("mount", 0, 1);
+    const rider = createBody("rider", 0, 4);
+    const wall = createBody("wall", 1.5, 0.1);
+    const query = new BabylonHavokCameraGeometryQueryV2(scene, plugin);
+    query.registerEntityPhysicsBody("mount", mount.body);
+    query.registerEntityPhysicsBody("rider", rider.body);
+    query.setEntityQueryEnabled("rider", false);
+    const riderShape = rider.body.shape!;
+    const riderMembershipMask = riderShape.filterMembershipMask;
+    const riderCollideMask = riderShape.filterCollideMask;
+
+    try {
+      const hit = query.query(request({
+        radiusMeters: 0.2,
+        excludedEntityIds: ["mount"],
+      }));
+
+      expect(hit).toMatchObject({
+        hitEntityId: "wall",
+        startedOverlapping: false,
+      });
+      expect(hit!.travelDistanceMeters).toBeGreaterThan(0);
+      expect(hit!.travelDistanceMeters).toBeLessThan(1.5);
+      expect(riderShape.filterMembershipMask).toBe(riderMembershipMask);
+      expect(riderShape.filterCollideMask).toBe(riderCollideMask);
     } finally {
       query.dispose();
       mount.dispose();

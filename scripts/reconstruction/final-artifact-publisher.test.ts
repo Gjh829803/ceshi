@@ -192,7 +192,7 @@ async function createRunFixture() {
     schemaVersion: 1 as const,
     caseId: fixture.reconstructionCase.id,
     runReceiptRef:
-      "artifact://world-reconstruction-case/package-fixture/runs/formal/run-receipt.json",
+      "artifact://world-reconstruction-case/package-fixture.case/runs/formal/run-receipt.json",
     runReceiptHash: sha256CanonicalJson(runReceipt) as Sha256HashV1,
     worldPackageRelativePath: "final/world-package" as const,
     worldPackageRef: verified.receipt.worldPackageRef,

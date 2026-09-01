@@ -22,7 +22,7 @@ import {
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import { deriveWorldStateSnapshotRefV1 } from "@whitebox-world/gameplay-contracts";
-import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import { sha256CanonicalJson, stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -79,6 +79,7 @@ function request(
 
 function rejectedReceipt(
   input: RuntimeSessionRequestV1,
+  worldSessionId = WORLD_SESSION_ID,
 ): Extract<RuntimeSessionReceiptV1, { status: "rejected" }> {
   const body = {
     kind: "worldkit-runtime-session-receipt",
@@ -86,7 +87,7 @@ function rejectedReceipt(
     requestId: input.id,
     requestHash: hashRuntimeSessionRequestV1(input),
     runtimeSessionId: input.runtimeSessionId,
-    worldSessionId: "world-session-primary",
+    worldSessionId,
     requestType: input.type,
     status: "rejected",
     diagnostic: {
@@ -324,6 +325,74 @@ describe("file Runtime Session WAL V1", () => {
       "subject-support.get",
     ]);
     expect(reopened.finalEvent?.worldSessionId).toBe(RESET_WORLD_SESSION_ID);
+  });
+
+  it("rejects a failed reset that claims a foreign WorldSession", async () => {
+    const directory = await temporaryDirectory();
+    const walFilePath = path.join(
+      directory,
+      "session",
+      "runtime-session.wal.ndjson",
+    );
+    const wal = createFileRuntimeSessionWalV1({
+      walFilePath,
+      readyEvent: readyEvent(),
+    });
+    const resetRequest = {
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: "runtime-request-rejected-reset",
+      runtimeSessionId: "runtime-session-primary",
+      type: "session.reset",
+    } as const satisfies RuntimeSessionRequestV1;
+
+    expect(() => wal.appendCommittedRequest({
+      request: resetRequest,
+      receipt: rejectedReceipt(resetRequest, RESET_WORLD_SESSION_ID),
+    })).toThrow("RUNTIME_SESSION_WAL_BINDING_INVALID");
+    expect(wal.snapshot().committedRequests).toEqual([]);
+  });
+
+  it("fails closed when replay contains a rejected reset with a foreign WorldSession", async () => {
+    const directory = await temporaryDirectory();
+    const walFilePath = path.join(
+      directory,
+      "session",
+      "runtime-session.wal.ndjson",
+    );
+    createFileRuntimeSessionWalV1({
+      walFilePath,
+      readyEvent: readyEvent(),
+    });
+    const resetRequest = {
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: "runtime-request-replayed-rejected-reset",
+      runtimeSessionId: "runtime-session-primary",
+      type: "session.reset",
+    } as const satisfies RuntimeSessionRequestV1;
+    const receipt = rejectedReceipt(resetRequest, RESET_WORLD_SESSION_ID);
+    const opened = JSON.parse(
+      readFileSync(walFilePath, "utf8").trim(),
+    ) as { readonly transactionHash: `sha256:${string}` };
+    const transactionBody = {
+      kind: "worldkit-runtime-session-wal-transaction",
+      schemaVersion: 1,
+      sequence: 2,
+      previousTransactionHash: opened.transactionHash,
+      type: "request-committed",
+      request: resetRequest,
+      requestHash: hashRuntimeSessionRequestV1(resetRequest),
+      receipt,
+    } as const;
+    appendFileSync(walFilePath, `${stringifyCanonicalJson({
+      ...transactionBody,
+      transactionHash: sha256CanonicalJson(transactionBody),
+    })}\n`, "utf8");
+
+    expect(() => openFileRuntimeSessionWalV1({ walFilePath })).toThrow(
+      "RUNTIME_SESSION_WAL_CORRUPT",
+    );
   });
 
   it("rejects committed support whose Subject or Tick does not bind to its Request", async () => {

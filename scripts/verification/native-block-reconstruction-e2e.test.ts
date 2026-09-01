@@ -537,7 +537,7 @@ async function finalLaunchFixture(input: Readonly<{
     schemaVersion: 1 as const,
     caseId: "package-fixture.case",
     runReceiptRef:
-      "artifact://world-reconstruction-case/package-fixture/runs/formal-fixture/run-receipt.json",
+      "artifact://world-reconstruction-case/package-fixture.case/runs/formal-fixture/run-receipt.json",
     runReceiptHash: sha256CanonicalJson(runReceipt) as Sha256HashV1,
     worldPackageRelativePath: "final/world-package" as const,
     worldPackageRef: finalAttempt.worldPackageRef,
@@ -743,7 +743,7 @@ async function createFinalCandidate(input: Readonly<{
     schemaVersion: 1,
     caseId: "package-fixture.case",
     runReceiptRef:
-      "artifact://world-reconstruction-case/package-fixture/runs/formal-fixture/run-receipt.json",
+      "artifact://world-reconstruction-case/package-fixture.case/runs/formal-fixture/run-receipt.json",
     runReceiptHash: sha256CanonicalJson(runReceipt),
     worldPackageRelativePath: "final/world-package",
     worldPackageRef: finalAttempt.worldPackageRef,

@@ -152,6 +152,19 @@ function receiptPayloadBindsRequestV1(
   return true;
 }
 
+function receiptWorldSessionBindsCurrentV1(
+  request: RuntimeSessionRequestV1,
+  receipt: RuntimeSessionReceiptV1,
+  currentWorldSessionId: string,
+): boolean {
+  if (request.type !== "session.reset") {
+    return receipt.worldSessionId === currentWorldSessionId;
+  }
+  return receipt.status === "succeeded"
+    ? receipt.worldSessionId !== currentWorldSessionId
+    : receipt.worldSessionId === currentWorldSessionId;
+}
+
 function snapshotDataRecord(
   value: unknown,
 ): Record<string, unknown> | undefined {
@@ -642,14 +655,15 @@ function validateTransactionState(
         requestIds.has(transaction.request.id) ||
         (transaction.request.type === "gameplay-command.execute" &&
           transaction.request.command.worldSessionId !== currentWorldSessionId) ||
-        (transaction.request.type !== "session.reset" &&
-          transaction.receipt.worldSessionId !== currentWorldSessionId) ||
-        (transaction.request.type === "session.reset" &&
-          transaction.receipt.status === "succeeded" &&
-          transaction.receipt.worldSessionId === currentWorldSessionId)
+        !receiptWorldSessionBindsCurrentV1(
+          transaction.request,
+          transaction.receipt,
+          currentWorldSessionId,
+        )
       ) return corrupt("A committed Request is not bound to the opened Session.");
       if (
-        transaction.request.type === "session.reset"
+        transaction.request.type === "session.reset" &&
+        transaction.receipt.status === "succeeded"
       ) currentWorldSessionId = transaction.receipt.worldSessionId;
       requestIds.add(transaction.request.id);
       committedRequests.push(Object.freeze({
@@ -863,6 +877,7 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
     const currentWorldSessionId = this.state.committedRequests.reduce(
       (worldSessionId, entry) =>
         entry.request.type === "session.reset" &&
+          entry.receipt.status === "succeeded" &&
           entry.receipt.worldSessionId !== worldSessionId
           ? entry.receipt.worldSessionId
           : worldSessionId,
@@ -881,11 +896,11 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
       receipt.requestHash !== requestHash ||
       receipt.runtimeSessionId !== request.runtimeSessionId ||
       !receiptPayloadBindsRequestV1(request, receipt) ||
-      (request.type !== "session.reset" &&
-        receipt.worldSessionId !== currentWorldSessionId) ||
-      (request.type === "session.reset" &&
-        receipt.status === "succeeded" &&
-        receipt.worldSessionId === currentWorldSessionId) ||
+      !receiptWorldSessionBindsCurrentV1(
+        request,
+        receipt,
+        currentWorldSessionId,
+      ) ||
       receipt.requestType !== request.type ||
       (request.type === "gameplay-command.execute" &&
         request.command.worldSessionId !== currentWorldSessionId)

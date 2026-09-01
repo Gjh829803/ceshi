@@ -15,7 +15,6 @@ import {
 } from "@whitebox-world/camera";
 
 const QUERY_DISTANCE_TOLERANCE_METERS_V2 = 1e-6;
-const DISABLED_BODY_EXIT_CLEARANCE_METERS_V2 = 1e-4;
 
 const HAVOK_CAMERA_GEOMETRY_CAPABILITY_V2 = Object.freeze({
   shape: "sphere",
@@ -55,38 +54,6 @@ function normalizedHitNormal(value: Vector3): readonly [number, number, number] 
     return queryUnavailable();
   }
   return frozenPosition(value.normalize());
-}
-
-function disabledBodyExitFraction(
-  body: PhysicsBody,
-  start: Vector3,
-  end: Vector3,
-  radiusMeters: number,
-): number | undefined {
-  const bounds = body.getBoundingBox();
-  const padding = radiusMeters + DISABLED_BODY_EXIT_CLEARANCE_METERS_V2;
-  const minimum = bounds.minimumWorld.subtract(new Vector3(padding, padding, padding));
-  const maximum = bounds.maximumWorld.add(new Vector3(padding, padding, padding));
-  if (
-    start.x < minimum.x || start.x > maximum.x ||
-    start.y < minimum.y || start.y > maximum.y ||
-    start.z < minimum.z || start.z > maximum.z
-  ) return undefined;
-
-  const delta = end.subtract(start);
-  let exitFraction = 1;
-  for (const [coordinate, direction, lower, upper] of [
-    [start.x, delta.x, minimum.x, maximum.x],
-    [start.y, delta.y, minimum.y, maximum.y],
-    [start.z, delta.z, minimum.z, maximum.z],
-  ] as const) {
-    if (Math.abs(direction) <= QUERY_DISTANCE_TOLERANCE_METERS_V2) continue;
-    const axisExit = direction > 0
-      ? (upper - coordinate) / direction
-      : (lower - coordinate) / direction;
-    exitFraction = Math.min(exitFraction, axisExit);
-  }
-  return Math.max(0, Math.min(1, exitFraction));
 }
 
 /**
@@ -151,98 +118,120 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
       const originalStart = new Vector3(...request.startPositionMetersXYZ);
       const end = new Vector3(...request.endPositionMetersXYZ);
       const originalArmLengthMeters = Vector3.Distance(originalStart, end);
-      const disabledExitFractions = [...this.disabledEntityIds]
+      // A mounted Subject can own more than the one body supported by Havok's
+      // public ignoreBody option. Mask the Host-selected extra members only for
+      // this synchronous query and always restore them; moving the sweep start
+      // beyond their bounds would also skip unrelated camera-hard geometry.
+      const disabledShapeFilters = [...this.disabledEntityIds]
         .map((entityId) => this.bodiesByEntityId.get(entityId)!)
         .filter((body) => body !== ignoredBody)
-        .map((body) => disabledBodyExitFraction(
-            body,
-            originalStart,
-            end,
-            request.radiusMeters,
-          ))
-        .filter((value): value is number => value !== undefined);
-      const disabledExitFraction = disabledExitFractions.length === 0
-        ? undefined
-        : Math.max(...disabledExitFractions);
-      const skippedFraction = disabledExitFraction === undefined ||
-          originalArmLengthMeters <= QUERY_DISTANCE_TOLERANCE_METERS_V2
-        ? 0
-        : Math.min(
-            1,
-            disabledExitFraction +
-              DISABLED_BODY_EXIT_CLEARANCE_METERS_V2 / originalArmLengthMeters,
-          );
-      const start = Vector3.Lerp(originalStart, end, skippedFraction);
-      const probeShape = this.sphereShape(request.radiusMeters);
-      const overlapInputResult = new ProximityCastResult();
-      const overlapHitResult = new ProximityCastResult();
-      this.havokPlugin.shapeProximity(
-        {
-          shape: probeShape,
-          position: start,
-          rotation: Quaternion.Identity(),
-          maxDistance: 0,
-          shouldHitTriggers: false,
-          ...(ignoredBody === undefined ? {} : { ignoreBody: ignoredBody }),
-        },
-        overlapInputResult,
-        overlapHitResult,
-      );
-      if (overlapHitResult.hasHit) {
-        const hitEntityId = entityIdFromBody(overlapHitResult.body);
+        .map((body) => {
+          const shape = body.shape;
+          if (shape === null) return queryUnavailable();
+          return {
+            shape,
+            membershipMask: shape.filterMembershipMask,
+            collideMask: shape.filterCollideMask,
+          };
+        });
+      try {
+        for (const { shape } of disabledShapeFilters) {
+          shape.filterMembershipMask = 0;
+          shape.filterCollideMask = 0;
+        }
+        const probeShape = this.sphereShape(request.radiusMeters);
+        const overlapInputResult = new ProximityCastResult();
+        const overlapHitResult = new ProximityCastResult();
+        this.havokPlugin.shapeProximity(
+          {
+            shape: probeShape,
+            position: originalStart,
+            rotation: Quaternion.Identity(),
+            maxDistance: 0,
+            shouldHitTriggers: false,
+            ...(ignoredBody === undefined ? {} : { ignoreBody: ignoredBody }),
+          },
+          overlapInputResult,
+          overlapHitResult,
+        );
+        if (overlapHitResult.hasHit) {
+          const hitEntityId = entityIdFromBody(overlapHitResult.body);
+          return parseCameraGeometryHitV2({
+            schemaVersion: 2,
+            travelDistanceMeters: 0,
+            travelFraction: 0,
+            hitPointMetersXYZ: frozenPosition(overlapHitResult.hitPoint),
+            hitNormalXYZ: normalizedHitNormal(overlapHitResult.hitNormal),
+            ...(hitEntityId === undefined ? {} : { hitEntityId }),
+            startedOverlapping: true,
+            penetrationDepthMeters: canonicalNumber(
+              Math.max(0, -overlapHitResult.hitDistance),
+            ),
+            obstructionClass: "hard",
+          }, request);
+        }
+
+        if (originalArmLengthMeters <= QUERY_DISTANCE_TOLERANCE_METERS_V2) {
+          return undefined;
+        }
+        const inputShapeResult = new ShapeCastResult();
+        const hitShapeResult = new ShapeCastResult();
+        this.havokPlugin.shapeCast(
+          {
+            shape: probeShape,
+            rotation: Quaternion.Identity(),
+            startPosition: originalStart,
+            endPosition: end,
+            shouldHitTriggers: false,
+            ...(ignoredBody === undefined ? {} : { ignoreBody: ignoredBody }),
+          },
+          inputShapeResult,
+          hitShapeResult,
+        );
+        if (
+          !hitShapeResult.hasHit ||
+          !Number.isFinite(hitShapeResult.hitFraction)
+        ) {
+          return undefined;
+        }
+        const localTravelFraction = Math.max(
+          0,
+          Math.min(1, hitShapeResult.hitFraction),
+        );
+        const travelFraction = canonicalNumber(localTravelFraction);
+        const hitEntityId = entityIdFromBody(hitShapeResult.body);
         return parseCameraGeometryHitV2({
           schemaVersion: 2,
-          travelDistanceMeters: canonicalNumber(originalArmLengthMeters * skippedFraction),
-          travelFraction: canonicalNumber(skippedFraction),
-          hitPointMetersXYZ: frozenPosition(overlapHitResult.hitPoint),
-          hitNormalXYZ: normalizedHitNormal(overlapHitResult.hitNormal),
+          travelDistanceMeters: canonicalNumber(
+            originalArmLengthMeters * travelFraction,
+          ),
+          travelFraction,
+          hitPointMetersXYZ: frozenPosition(hitShapeResult.hitPoint),
+          hitNormalXYZ: normalizedHitNormal(hitShapeResult.hitNormal),
           ...(hitEntityId === undefined ? {} : { hitEntityId }),
-          startedOverlapping: skippedFraction === 0,
-          penetrationDepthMeters: skippedFraction === 0
-            ? canonicalNumber(Math.max(0, -overlapHitResult.hitDistance))
-            : 0,
+          startedOverlapping: false,
+          penetrationDepthMeters: 0,
           obstructionClass: "hard",
         }, request);
+      } finally {
+        const restorationFailures: unknown[] = [];
+        for (
+          const { shape, membershipMask, collideMask } of disabledShapeFilters
+        ) {
+          try {
+            shape.filterMembershipMask = membershipMask;
+            shape.filterCollideMask = collideMask;
+          } catch (error) {
+            restorationFailures.push(error);
+          }
+        }
+        if (restorationFailures.length > 0) {
+          throw new AggregateError(
+            restorationFailures,
+            "CAMERA_GEOMETRY_QUERY_FILTER_RESTORE_FAILED",
+          );
+        }
       }
-
-      const remainingArmLengthMeters = Vector3.Distance(start, end);
-      if (remainingArmLengthMeters <= QUERY_DISTANCE_TOLERANCE_METERS_V2) return undefined;
-      const inputShapeResult = new ShapeCastResult();
-      const hitShapeResult = new ShapeCastResult();
-      this.havokPlugin.shapeCast(
-        {
-          shape: probeShape,
-          rotation: Quaternion.Identity(),
-          startPosition: start,
-          endPosition: end,
-          shouldHitTriggers: false,
-          ...(ignoredBody === undefined ? {} : { ignoreBody: ignoredBody }),
-        },
-        inputShapeResult,
-        hitShapeResult,
-      );
-      if (!hitShapeResult.hasHit || !Number.isFinite(hitShapeResult.hitFraction)) {
-        return undefined;
-      }
-      const localTravelFraction = Math.max(
-        0,
-        Math.min(1, hitShapeResult.hitFraction),
-      );
-      const travelFraction = canonicalNumber(
-        skippedFraction + (1 - skippedFraction) * localTravelFraction,
-      );
-      const hitEntityId = entityIdFromBody(hitShapeResult.body);
-      return parseCameraGeometryHitV2({
-        schemaVersion: 2,
-        travelDistanceMeters: canonicalNumber(originalArmLengthMeters * travelFraction),
-        travelFraction,
-        hitPointMetersXYZ: frozenPosition(hitShapeResult.hitPoint),
-        hitNormalXYZ: normalizedHitNormal(hitShapeResult.hitNormal),
-        ...(hitEntityId === undefined ? {} : { hitEntityId }),
-        startedOverlapping: false,
-        penetrationDepthMeters: 0,
-        obstructionClass: "hard",
-      }, request);
     } catch (error) {
       if (error instanceof Error && (
         error.message.startsWith("3C_CAMERA_QUERY_UNAVAILABLE") ||
