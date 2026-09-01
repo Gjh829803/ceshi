@@ -17,6 +17,9 @@ export {
 } from "./babylon-native-isolated-runtime-entry";
 export * from "./runtime-projection";
 export * from "./artifact-capture";
+export type {
+  FormalHostedWorldCapturePayloadV1,
+} from "./formal-world-capture-provider";
 export {
   BabylonRuntimeResidencyV1,
   wrapBabylonRuntimeOwnedGameplayWorldPortV1,
