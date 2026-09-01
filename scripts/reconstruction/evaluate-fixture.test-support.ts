@@ -357,7 +357,7 @@ export function createEvidenceSetFixtureInputV1(
     ...packageInput.nativeSceneContribution,
     profileSettlement: {
       ...packageInput.nativeSceneContribution.profileSettlement,
-      targetCount: 2,
+      targetCount: paletteTraversalDisagreement ? 3 : 2,
     },
     staticColliders: [
       ...packageInput.nativeSceneContribution.staticColliders,

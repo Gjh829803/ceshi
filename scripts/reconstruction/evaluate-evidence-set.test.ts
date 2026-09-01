@@ -209,7 +209,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     expect(() => buildWorldReconstructionEvidenceSetV1({
       ...fixture,
       captureReceipt: driftedReceipt,
-    })).toThrowError(/WORLD_RECONSTRUCTION_EVIDENCE_STALE.*Package Root/i);
+    })).toThrowError(/WORLD_RECONSTRUCTION_EVIDENCE_STALE.*Package ref/i);
   });
 
   it("rejects a Capture Receipt whose Build Identity drifted from the verified Package", () => {
