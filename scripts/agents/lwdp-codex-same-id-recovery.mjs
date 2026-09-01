@@ -1,13 +1,15 @@
 import { createHash, randomBytes } from "node:crypto";
+import { constants } from "node:fs";
 import {
+  link,
+  lstat,
   mkdir,
-  readFile,
+  open,
+  realpath,
   rename,
   rm,
-  stat,
-  writeFile,
 } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import {
   assertSuccessfulJob,
@@ -26,13 +28,17 @@ const TERMINAL_STATUSES = new Set([
 ]);
 
 const defaultFileSystem = Object.freeze({
+  link,
+  lstat,
   mkdir,
-  readFile,
+  open,
+  realpath,
   rename,
   rm,
-  stat,
-  writeFile,
 });
+
+const JOURNAL_PHASES = new Set(["prepared", "submission-unknown", "attached"]);
+const SAFE_REQUEST_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 
 function asFileSystem(fileSystem) {
   return {
@@ -72,8 +78,169 @@ function fail(message) {
   throw new Error(message);
 }
 
+function isNotFound(error) {
+  return error?.code === "ENOENT";
+}
+
+function isContained(root, candidate) {
+  const rel = relative(root, candidate);
+  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
+}
+
+function sameInode(left, right) {
+  return left?.dev === right?.dev && left?.ino === right?.ino;
+}
+
+async function syncDirectory(directory, fs) {
+  const handle = await fs.open(
+    directory,
+    constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function resolvedSafeRoot(repoRoot, fs) {
+  const lexicalRoot = resolve(repoRoot);
+  const rootMetadata = await fs.lstat(lexicalRoot);
+  if (rootMetadata.isSymbolicLink() || !rootMetadata.isDirectory()) {
+    fail("LWDP same-request-id recovery containment root is a symlink or not a directory.");
+  }
+  return fs.realpath(lexicalRoot);
+}
+
+async function ensureSafeDirectory(root, parts, fs) {
+  let current = root;
+  for (const part of parts) {
+    if (!part || part === "." || part === ".." || part.includes(sep)) {
+      fail("LWDP same-request-id recovery path containment failed.");
+    }
+    const next = join(current, part);
+    try {
+      await fs.mkdir(next, { mode: 0o700 });
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+    const metadata = await fs.lstat(next);
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+      fail("LWDP same-request-id recovery path contains a symlink or non-directory.");
+    }
+    const real = await fs.realpath(next);
+    if (!isContained(root, real) || real !== next) {
+      fail("LWDP same-request-id recovery path containment failed.");
+    }
+    current = next;
+  }
+  return current;
+}
+
+async function safeJournalDirectory(repoRoot, fs) {
+  const root = await resolvedSafeRoot(repoRoot, fs);
+  const directory = await ensureSafeDirectory(
+    root,
+    [".codex-tmp", "lwdp-codex", "pending"],
+    fs,
+  );
+  return { root, directory, metadata: await fs.lstat(directory) };
+}
+
+export async function createLwdpCodexStagingDirectory(repoRoot, runKey, { fileSystem } = {}) {
+  if (!/^[a-z0-9][a-z0-9-]{2,159}$/.test(runKey ?? "")) {
+    fail("LWDP Codex staging identity is invalid.");
+  }
+  const fs = asFileSystem(fileSystem);
+  const root = await resolvedSafeRoot(repoRoot, fs);
+  return ensureSafeDirectory(root, [".codex-tmp", "lwdp-codex", "staging", runKey], fs);
+}
+
+export async function removeLwdpCodexStagingDirectory(repoRoot, stagingDirectory, {
+  fileSystem,
+} = {}) {
+  const fs = asFileSystem(fileSystem);
+  const root = await resolvedSafeRoot(repoRoot, fs);
+  const stagingRoot = join(root, ".codex-tmp", "lwdp-codex", "staging");
+  const target = resolve(stagingDirectory);
+  if (!isContained(stagingRoot, target) || target === stagingRoot) {
+    fail("LWDP Codex staging path containment failed.");
+  }
+  const metadata = await fs.lstat(target);
+  if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+    fail("LWDP Codex staging path is a symlink or not a directory.");
+  }
+  const real = await fs.realpath(target);
+  if (real !== target || !isContained(stagingRoot, real)) {
+    fail("LWDP Codex staging path containment failed.");
+  }
+  await fs.rm(target, { recursive: true });
+  await syncDirectory(dirname(target), fs);
+}
+
+async function assertDirectoryIdentity(directory, expected, root, fs) {
+  const current = await fs.lstat(directory);
+  if (current.isSymbolicLink() || !current.isDirectory() || !sameInode(current, expected)) {
+    fail("LWDP same-request-id recovery path changed during use.");
+  }
+  const real = await fs.realpath(directory);
+  if (real !== directory || !isContained(root, real)) {
+    fail("LWDP same-request-id recovery path containment failed.");
+  }
+}
+
+async function writeExclusiveDurable(target, contents, directoryState, fs) {
+  await assertDirectoryIdentity(
+    directoryState.directory,
+    directoryState.metadata,
+    directoryState.root,
+    fs,
+  );
+  const handle = await fs.open(
+    target,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
+    0o600,
+  );
+  try {
+    await handle.writeFile(contents, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  await syncDirectory(directoryState.directory, fs);
+}
+
+async function readFileNoFollow(target, directoryState, fs) {
+  await assertDirectoryIdentity(
+    directoryState.directory,
+    directoryState.metadata,
+    directoryState.root,
+    fs,
+  );
+  const handle = await fs.open(target, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) fail("LWDP same-request-id pending journal is not a regular file.");
+    const raw = await handle.readFile("utf8");
+    const after = await handle.stat();
+    const pathMetadata = await fs.lstat(target);
+    if (pathMetadata.isSymbolicLink() || !sameInode(before, after) || !sameInode(after, pathMetadata)) {
+      fail("LWDP same-request-id pending journal changed during read.");
+    }
+    await assertDirectoryIdentity(
+      directoryState.directory,
+      directoryState.metadata,
+      directoryState.root,
+      fs,
+    );
+    return { raw, metadata: after };
+  } finally {
+    await handle.close();
+  }
+}
+
 export function pendingJournalPath(repoRoot, requestId) {
-  if (!isNonEmptyString(requestId)) {
+  if (!SAFE_REQUEST_ID.test(requestId ?? "")) {
     fail("LWDP same-request-id recovery request identity drifted.");
   }
   return resolve(repoRoot, ".codex-tmp", "lwdp-codex", "pending", `${requestId}.json`);
@@ -88,20 +255,15 @@ export function declaredOutputUris(outputS3Prefix, taskId, outputSpecs) {
 }
 
 export function lwdpCodexRequestArgumentFingerprint(input) {
+  if (input?.payload === null || typeof input?.payload !== "object" ||
+      !Array.isArray(input?.localOutputs) || input.localOutputs.length === 0 ||
+      !Array.isArray(input?.inputContents)) {
+    fail("LWDP same-request-id recovery request arguments drifted.");
+  }
   return createHash("sha256").update(canonicalJson({
-    declaredOutputUris: sortedCopy(input.declaredOutputUris),
-    defaults: input.defaults,
-    instructionSha256: input.instructionSha256,
-    outputS3Prefix: normalizePrefix(input.outputS3Prefix),
-    outputs: [...input.outputs]
-      .map((output) => ({
-        contentType: output.contentType,
-        localPath: output.localPath,
-        remotePath: output.remotePath,
-      }))
-      .sort((left, right) => left.remotePath.localeCompare(right.remotePath)),
-    requestId: input.requestId,
-    taskId: input.taskId,
+    payload: input.payload,
+    localOutputs: input.localOutputs,
+    inputContents: input.inputContents,
   })).digest("hex");
 }
 
@@ -128,6 +290,15 @@ export function parsePendingJournal(input) {
   if (input.jobId !== null && input.jobId !== undefined && !isNonEmptyString(input.jobId)) {
     fail("LWDP same-request-id recovery terminal job identity is stale.");
   }
+  if (!JOURNAL_PHASES.has(input.phase) || !isNonEmptyString(input.ownerToken)) {
+    fail("LWDP same-request-id pending journal phase or owner identity is invalid.");
+  }
+  if (input.phase === "attached" && !isNonEmptyString(input.jobId)) {
+    fail("LWDP same-request-id recovery terminal job identity is stale.");
+  }
+  if (input.phase !== "attached" && input.jobId !== null && input.jobId !== undefined) {
+    fail("LWDP same-request-id pending journal phase is inconsistent with its job identity.");
+  }
   return Object.freeze({
     kind: LWDP_CODEX_PENDING_JOURNAL_KIND,
     schemaVersion: 1,
@@ -143,34 +314,100 @@ export function parsePendingJournal(input) {
     requestArgumentFingerprint: input.requestArgumentFingerprint,
     instructionSha256: input.instructionSha256,
     defaults: input.defaults === undefined ? undefined : Object.freeze({ ...input.defaults }),
+    phase: input.phase,
+    ownerToken: input.ownerToken,
     jobId: input.jobId ?? null,
   });
 }
 
-export async function writePendingJournal(journal, { repoRoot, fileSystem } = {}) {
+export async function createPendingJournal(journal, { repoRoot, fileSystem } = {}) {
   const parsed = parsePendingJournal(journal);
+  if (parsed.phase !== "prepared" || parsed.jobId !== null) {
+    fail("LWDP same-request-id pending journal must be created in prepared phase.");
+  }
   const fs = asFileSystem(fileSystem);
-  const target = pendingJournalPath(repoRoot, parsed.requestId);
-  const directory = dirname(target);
-  await fs.mkdir(directory, { recursive: true });
+  const directoryState = await safeJournalDirectory(repoRoot, fs);
+  const target = join(directoryState.directory, `${parsed.requestId}.json`);
+  try {
+    await writeExclusiveDurable(target, `${JSON.stringify(parsed)}\n`, directoryState, fs);
+    return Object.freeze({ created: true, journal: parsed, path: target });
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      const existing = await readPendingJournal(repoRoot, parsed.requestId, { fileSystem: fs });
+      return Object.freeze({ created: false, journal: existing, path: target });
+    }
+    await fs.rm(target, { force: true }).catch(() => undefined);
+    await syncDirectory(directoryState.directory, fs).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function transitionPendingJournal(journal, {
+  repoRoot,
+  expectedPhase,
+  expectedOwnerToken,
+  fileSystem,
+} = {}) {
+  const next = parsePendingJournal(journal);
+  const fs = asFileSystem(fileSystem);
+  const directoryState = await safeJournalDirectory(repoRoot, fs);
+  const target = join(directoryState.directory, `${next.requestId}.json`);
+  const snapshot = await readFileNoFollow(target, directoryState, fs);
+  const current = parsePendingJournal(JSON.parse(snapshot.raw));
+  if (current.phase !== expectedPhase) {
+    fail("LWDP same-request-id pending journal phase drifted.");
+  }
+  if (current.ownerToken !== expectedOwnerToken) {
+    fail("LWDP same-request-id pending journal owner identity drifted.");
+  }
+  if (current.requestArgumentFingerprint !== next.requestArgumentFingerprint ||
+      current.requestId !== next.requestId || current.taskId !== next.taskId) {
+    fail("LWDP same-request-id recovery request arguments drifted.");
+  }
+  const allowed = (current.phase === "prepared" && next.phase === "submission-unknown") ||
+    (current.phase === "submission-unknown" && next.phase === "attached") ||
+    (current.phase === "attached" && next.phase === "attached" && current.jobId === next.jobId);
+  if (!allowed) fail("LWDP same-request-id pending journal phase transition is invalid.");
   const temporaryPath = join(
-    directory,
-    `.${parsed.requestId}.journal-${process.pid}-${randomBytes(4).toString("hex")}.part`,
+    directoryState.directory,
+    `.${next.requestId}.journal-${process.pid}-${randomBytes(8).toString("hex")}.part`,
   );
   try {
-    await fs.writeFile(temporaryPath, `${JSON.stringify(parsed)}\n`);
+    await writeExclusiveDurable(
+      temporaryPath,
+      `${JSON.stringify(next)}\n`,
+      directoryState,
+      fs,
+    );
+    const currentMetadata = await fs.lstat(target);
+    if (currentMetadata.isSymbolicLink() || !sameInode(currentMetadata, snapshot.metadata)) {
+      fail("LWDP same-request-id pending journal changed during transition.");
+    }
+    await assertDirectoryIdentity(
+      directoryState.directory,
+      directoryState.metadata,
+      directoryState.root,
+      fs,
+    );
     await fs.rename(temporaryPath, target);
+    await syncDirectory(directoryState.directory, fs);
+    return next;
   } catch (error) {
     await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
     throw error;
   }
-  return target;
 }
 
 export async function readPendingJournal(repoRoot, requestId, { fileSystem } = {}) {
   const fs = asFileSystem(fileSystem);
-  const raw = await fs.readFile(pendingJournalPath(repoRoot, requestId), "utf8");
-  return parsePendingJournal(JSON.parse(raw));
+  pendingJournalPath(repoRoot, requestId);
+  const directoryState = await safeJournalDirectory(repoRoot, fs);
+  const snapshot = await readFileNoFollow(
+    join(directoryState.directory, `${requestId}.json`),
+    directoryState,
+    fs,
+  );
+  return parsePendingJournal(JSON.parse(snapshot.raw));
 }
 
 export async function readPendingJournalIfExists(repoRoot, requestId, options) {
@@ -185,7 +422,24 @@ export async function readPendingJournalIfExists(repoRoot, requestId, options) {
 export async function removePendingJournal(repoRoot, requestId, { fileSystem } = {}) {
   const fs = asFileSystem(fileSystem);
   try {
-    await fs.rm(pendingJournalPath(repoRoot, requestId));
+    pendingJournalPath(repoRoot, requestId);
+    const directoryState = await safeJournalDirectory(repoRoot, fs);
+    const target = join(directoryState.directory, `${requestId}.json`);
+    const snapshot = await readFileNoFollow(target, directoryState, fs);
+    parsePendingJournal(JSON.parse(snapshot.raw));
+    const metadata = await fs.lstat(target);
+    if (metadata.isSymbolicLink() || !metadata.isFile() ||
+        !sameInode(metadata, snapshot.metadata)) {
+      fail("LWDP same-request-id recovery cleanup refused a non-regular journal.");
+    }
+    await assertDirectoryIdentity(
+      directoryState.directory,
+      directoryState.metadata,
+      directoryState.root,
+      fs,
+    );
+    await fs.rm(target);
+    await syncDirectory(directoryState.directory, fs);
   } catch (error) {
     fail(`LWDP same-request-id recovery cleanup failed: ${error?.message ?? error}`);
   }
@@ -248,10 +502,6 @@ function assertCurrentMatchesJournal(journal, current) {
   }
 }
 
-function jobRequestId(job, fallback) {
-  return job?.request_id ?? fallback;
-}
-
 function unexpectedRemoteOutputs(itemsPayload, taskId, declaredOutputUris) {
   const items = itemsPayload?.items ?? itemsPayload?.data ?? [];
   const matched = Array.isArray(items)
@@ -262,8 +512,70 @@ function unexpectedRemoteOutputs(itemsPayload, taskId, declaredOutputUris) {
   return !sameStringSet(outputUris, declaredOutputUris);
 }
 
+async function prepareOutputDestination(repoRoot, destination, fs) {
+  const root = await resolvedSafeRoot(repoRoot, fs);
+  const lexicalRoot = resolve(repoRoot);
+  const lexicalDestination = resolve(destination);
+  const destinationRelative = relative(lexicalRoot, lexicalDestination);
+  if (destinationRelative === "" || destinationRelative === ".." ||
+      destinationRelative.startsWith(`..${sep}`) || isAbsolute(destinationRelative)) {
+    fail("LWDP same-request-id recovery output path containment failed.");
+  }
+  const absolute = resolve(root, destinationRelative);
+  const parentRelative = relative(root, dirname(absolute));
+  const parts = parentRelative === "" ? [] : parentRelative.split(sep);
+  const directory = await ensureSafeDirectory(root, parts, fs);
+  const directoryMetadata = await fs.lstat(directory);
+  try {
+    await fs.lstat(absolute);
+    fail(`LWDP same-request-id recovery output already exists: ${absolute}`);
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+  return { destination: absolute, root, directory, directoryMetadata };
+}
+
+export async function validateDeclaredOutputDestinations(repoRoot, outputSpecs, { fileSystem } = {}) {
+  if (!Array.isArray(outputSpecs) || outputSpecs.length === 0) {
+    fail("LWDP same-request-id recovery declared output URI set drifted.");
+  }
+  const fs = asFileSystem(fileSystem);
+  const destinations = [];
+  for (const output of outputSpecs) {
+    destinations.push(await prepareOutputDestination(repoRoot, output.localPath, fs));
+  }
+  return Object.freeze(destinations.map(({ destination }) => destination));
+}
+
+async function removeIfSameInode(target, expected, fs) {
+  try {
+    const current = await fs.lstat(target);
+    if (!current.isSymbolicLink() && current.isFile() && sameInode(current, expected)) {
+      await fs.rm(target);
+      return true;
+    }
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+  return false;
+}
+
+async function syncFileNoFollow(target, expected, fs) {
+  const handle = await fs.open(target, constants.O_RDWR | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const current = await handle.stat();
+    if (!current.isFile() || !sameInode(current, expected)) {
+      fail("LWDP same-request-id recovery staged output changed before fsync.");
+    }
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 async function downloadDeclaredOutputs(input) {
   const {
+    repoRoot,
     outputSpecs,
     declaredOutputUris,
     outputS3Prefix,
@@ -274,16 +586,20 @@ async function downloadDeclaredOutputs(input) {
   const fs = fileSystem;
   const expected = new Set(declaredOutputUris);
   const staged = [];
+  const destinations = [];
   try {
     for (const output of outputSpecs) {
-      const destination = output.localPath;
+      destinations.push(await prepareOutputDestination(repoRoot, output.localPath, fs));
+    }
+    for (const output of outputSpecs) {
+      const destinationState = destinations[staged.length];
+      const destination = destinationState.destination;
       const s3Uri = joinS3Uri(outputS3Prefix, "tasks", taskId, output.remotePath);
       if (!expected.has(s3Uri)) {
         fail("LWDP same-request-id recovery observed unexpected outputs.");
       }
-      await fs.mkdir(dirname(destination), { recursive: true });
       const temporaryPath = join(
-        dirname(destination),
+        destinationState.directory,
         `.${basename(destination)}.lwdp-same-id-${process.pid}-${randomBytes(4).toString("hex")}.part`,
       );
       try {
@@ -294,16 +610,23 @@ async function downloadDeclaredOutputs(input) {
       }
       let metadata;
       try {
-        metadata = await fs.stat(temporaryPath);
+        metadata = await fs.lstat(temporaryPath);
       } catch (error) {
         await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
         fail(`LWDP same-request-id recovery download failed: ${error?.message ?? error}`);
       }
-      if (!metadata.isFile() || metadata.size === 0) {
+      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size === 0) {
         await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
         fail("LWDP same-request-id recovery download failed: downloaded output is empty.");
       }
-      staged.push({ temporaryPath, destination, s3Uri });
+      await assertDirectoryIdentity(
+        destinationState.directory,
+        destinationState.directoryMetadata,
+        destinationState.root,
+        fs,
+      );
+      await syncFileNoFollow(temporaryPath, metadata, fs);
+      staged.push({ temporaryPath, destination, s3Uri, metadata, destinationState });
     }
     if (staged.length !== outputSpecs.length || staged.length !== declaredOutputUris.length) {
       fail("LWDP same-request-id recovery observed unexpected outputs.");
@@ -311,14 +634,42 @@ async function downloadDeclaredOutputs(input) {
     const promoted = [];
     try {
       for (const entry of staged) {
-        await fs.rename(entry.temporaryPath, entry.destination);
-        promoted.push(entry.destination);
+        await assertDirectoryIdentity(
+          entry.destinationState.directory,
+          entry.destinationState.directoryMetadata,
+          entry.destinationState.root,
+          fs,
+        );
+        try {
+          await fs.lstat(entry.destination);
+          fail(`LWDP same-request-id recovery output already exists: ${entry.destination}`);
+        } catch (error) {
+          if (!isNotFound(error)) throw error;
+        }
+        await fs.link(entry.temporaryPath, entry.destination);
+        const publishedMetadata = await fs.lstat(entry.destination);
+        if (publishedMetadata.isSymbolicLink() || !sameInode(publishedMetadata, entry.metadata)) {
+          fail("LWDP same-request-id recovery promoted output identity drifted.");
+        }
+        promoted.push({
+          destination: entry.destination,
+          metadata: publishedMetadata,
+          directory: entry.destinationState.directory,
+        });
+        await syncDirectory(entry.destinationState.directory, fs);
       }
     } catch (error) {
-      for (const destination of promoted) {
-        await fs.rm(destination, { force: true }).catch(() => undefined);
+      for (const entry of promoted) {
+        if (await removeIfSameInode(entry.destination, entry.metadata, fs).catch(() => false)) {
+          await syncDirectory(entry.directory, fs).catch(() => undefined);
+        }
       }
       fail(`LWDP same-request-id recovery promotion was partial: ${error?.message ?? error}`);
+    }
+    for (const entry of staged) {
+      if (await removeIfSameInode(entry.temporaryPath, entry.metadata, fs)) {
+        await syncDirectory(entry.destinationState.directory, fs);
+      }
     }
     return staged.map((entry) => ({
       s3Uri: entry.s3Uri,
@@ -326,7 +677,7 @@ async function downloadDeclaredOutputs(input) {
     }));
   } catch (error) {
     for (const entry of staged) {
-      await fs.rm(entry.temporaryPath, { force: true }).catch(() => undefined);
+      await removeIfSameInode(entry.temporaryPath, entry.metadata, fs).catch(() => undefined);
     }
     throw error;
   }
@@ -349,6 +700,9 @@ export async function reconcileLwdpCodexSameRequestId({
   const parsedCurrent = parsePendingJournal(current);
   const journal = await readPendingJournal(repoRoot, parsedCurrent.requestId, { fileSystem: fs });
   assertCurrentMatchesJournal(journal, parsedCurrent);
+  if (journal.phase === "prepared") {
+    fail("LWDP same-request-id pending journal still has an exclusive pre-POST owner.");
+  }
 
   let lookup;
   try {
@@ -368,18 +722,32 @@ export async function reconcileLwdpCodexSameRequestId({
   const attached = attachCanonicalSameRequestIdJob(collectLookupJobs(lookup), {
     requestId: parsedCurrent.requestId,
   });
+  const attachedRequestId = attached?.request_id ?? lookup?.request_id;
+  if (!isNonEmptyString(attachedRequestId)) {
+    fail("LWDP same-request-id recovery remote request identity is missing.");
+  }
+  if (attachedRequestId !== parsedCurrent.requestId) {
+    fail("LWDP same-request-id recovery request identity drifted.");
+  }
   const jobId = submittedJobId({ job: attached, job_id: attached.job_id });
   if (journal.jobId !== null && journal.jobId !== jobId) {
     fail("LWDP same-request-id recovery terminal job identity is stale.");
-  }
-  if (jobRequestId(attached, lookup?.request_id) !== parsedCurrent.requestId) {
-    fail("LWDP same-request-id recovery request identity drifted.");
   }
   if (isNonEmptyString(attached.output_s3_prefix) &&
       normalizePrefix(attached.output_s3_prefix) !== normalizePrefix(parsedCurrent.outputS3Prefix)) {
     fail("LWDP same-request-id recovery request arguments drifted.");
   }
-  await writePendingJournal({ ...journal, jobId }, { repoRoot, fileSystem: fs });
+  if (journal.phase === "submission-unknown") {
+    await transitionPendingJournal(
+      { ...journal, phase: "attached", jobId },
+      {
+        repoRoot,
+        expectedPhase: "submission-unknown",
+        expectedOwnerToken: journal.ownerToken,
+        fileSystem: fs,
+      },
+    );
+  }
 
   let job = attached;
   if (!TERMINAL_STATUSES.has(String(job?.status))) {
@@ -394,8 +762,15 @@ export async function reconcileLwdpCodexSameRequestId({
   if (terminalJobId !== jobId || (journal.jobId !== null && journal.jobId !== terminalJobId)) {
     fail("LWDP same-request-id recovery terminal job identity is stale.");
   }
-  if (jobRequestId(job, parsedCurrent.requestId) !== parsedCurrent.requestId) {
+  if (!isNonEmptyString(job?.request_id)) {
+    fail("LWDP same-request-id recovery remote request identity is missing.");
+  }
+  if (job.request_id !== parsedCurrent.requestId) {
     fail("LWDP same-request-id recovery request identity drifted.");
+  }
+  if (isNonEmptyString(job.output_s3_prefix) &&
+      normalizePrefix(job.output_s3_prefix) !== normalizePrefix(parsedCurrent.outputS3Prefix)) {
+    fail("LWDP same-request-id recovery request arguments drifted.");
   }
 
   const items = await itemsImplementation(jobId, { config, fetchImplementation });
@@ -405,6 +780,7 @@ export async function reconcileLwdpCodexSameRequestId({
   }
 
   const outputs = await downloadDeclaredOutputs({
+    repoRoot,
     outputSpecs: parsedCurrent.outputs,
     declaredOutputUris: parsedCurrent.declaredOutputUris,
     outputS3Prefix: parsedCurrent.outputS3Prefix,
