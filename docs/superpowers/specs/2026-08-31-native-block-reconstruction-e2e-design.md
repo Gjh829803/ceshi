@@ -1,10 +1,14 @@
 # Babylon Native Block Reconstruction End-to-End Design
 
-**Project code:** `NBR-1`  
-**Chinese name:** 新版 Babylon 像素块场景还原纵向闭环  
-**Status:** Approved for implementation; independent review GO with no open P0/P1  
-**Date:** 2026-08-31  
+**Project code:** `NBR-1`
+**Chinese name:** 新版 Babylon 像素块场景还原纵向闭环
+**Status:** Implementation in progress; NBR-45, NBR-50 and NBR-60 are complete, while NBR-20 real formal
+generation, NBR-70, NBR-80, NBR-90 and overall NBR-1 remain incomplete
+**Date:** 2026-08-31
 **Source baseline:** `origin/main@1eec016022d18a0cab1eeed2feaafb62b2e5d155`
+**Implementation checkpoint:** [PR #138](https://github.com/seedleap/agent-whitebox-world-sdk/pull/138)
+merged as `origin/main@04dda773deaea94c1ba9521cb3c13898fbdf8327`; exact-head Cloud evidence passed
+165/165 affected tests, typecheck, the 425-entry test census and the BNA clean-break gate
 **Parent program:** [WRC-1 World Reconstruction & Control Milestone](./2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md)
 
 ## 1. Decision and priority

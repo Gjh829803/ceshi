@@ -1140,17 +1140,24 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 - [x] NBR-30：通过通用 Native Check/Explain 和 Package/Receipt 链，删除 Cloud Ridge 手写生产装配；
 - [x] NBR-40：由保留的 BNA 验证 Harness 调用正式 RuntimeHost 和 SDK-owned
   Havok/Subject/Input/Action/Camera 启动验证后的 Native Package；不修改 Canonical-only Unified Viewer；
-- [ ] NBR-45：从同一 Package/Runtime 发布身份绑定 Opening/top/side Capture 与 Collider overlay；
-- [ ] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
-- [ ] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；
+- [x] NBR-45：从同一 Package/Runtime 发布身份绑定 Opening/top/side Capture 与 Collider overlay；
+- [x] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
+- [x] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
+- [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
+  临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；
 - [ ] NBR-90：focused gates、最终 exact-SHA Cursor Cloud gates 和独立深审无开放 P0/P1。
 
 详细权威为 [NBR-1 纵向闭环设计](superpowers/specs/2026-08-31-native-block-reconstruction-e2e-design.md)。
 以上复选框只按真实代码与证据逐项更新；NBR-1 完成不等于完整 BNA-6/7、WRC-SR 或 WRC-1 完成。
 NBR-30 已由 PR #89/#90 合入通用 Check/Package 与相对路径修复；NBR-40 已由 PR #92 合入
 verified-Package BNA Harness，并在精确候选 SHA 上通过 99 项 focused test、Native build 及两项
-Browser verifier。该证据不提前完成 NBR-45、BNA-7 或产品 Native Viewer。
+Browser verifier。NBR-45、NBR-50 与 NBR-60 的生产集成检查点由
+[PR #138](https://github.com/seedleap/agent-whitebox-world-sdk/pull/138) 合入
+`origin/main@04dda773deaea94c1ba9521cb3c13898fbdf8327`；该精确 HEAD 的 Cloud 证据为
+165/165 affected tests、typecheck、425-entry test census 与 BNA clean-break gate 全部 GO。该证据只关闭
+上述三个 NBR 实施切片，不提前完成 NBR-20 的真实 formal generation、NBR-70/80/90、整体 NBR-1、完整
+BNA-6/7、WRC-SR 或产品 Native Viewer。
 BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8 与 WRC-ACC-1 在本切片期间
 保持延期，不删除也不展开。
 

@@ -12,6 +12,13 @@
 
 **Plan synchronization baseline:** `origin/main@1eec016022d18a0cab1eeed2feaafb62b2e5d155`
 
+**Current implementation checkpoint:** NBR-45, NBR-50 and NBR-60 are complete through
+[PR #138](https://github.com/seedleap/agent-whitebox-world-sdk/pull/138), merged as
+`origin/main@04dda773deaea94c1ba9521cb3c13898fbdf8327`. Exact-head Cloud evidence passed 165/165 affected
+tests, typecheck, the 425-entry test census and the BNA clean-break gate. NBR-20 real formal generation,
+NBR-70, NBR-80, NBR-90 and overall NBR-1 remain incomplete; the unchecked historical steps below must not
+be read as proof of a real Case run.
+
 ## Global Constraints
 
 - `NBR-1` is the only highest-priority WRC-1 slice until the representative Case is runnable end to end; do not expand BWB-6, full PHO-7/8, full Action/Camera/Event, product Route/Nav/`goTo`, full Golden Corpus, BNA-8, or WRC-ACC-1.
@@ -1369,6 +1376,11 @@ git push -u origin HEAD
 Request exact-identity review, close every P0/P1, merge PR F2, and refresh `origin/main`.
 
 ### Task 12: NBR-60 Orchestrate at most one immutable diagnostic-driven repair
+
+**Current status:** Complete on `origin/main@04dda773deaea94c1ba9521cb3c13898fbdf8327` through PR #138.
+This closes the production transaction and injected one-repair proof only; Task 13 still owns the real Case
+execution that must supply NBR-20 real formal-generation evidence, real two-Attempt evidence, final publication
+and manual launch.
 
 **Files:**
 - Modify: `packages/runtime-contracts/src/formal-world-capture.ts`
