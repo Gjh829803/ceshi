@@ -460,6 +460,12 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     )).toContain(
       "walking or falling off an unregistered ledge is not blocker evidence",
     );
+    expect(await readFile(
+      path.join(caseRoot, "inputs", "task-instruction.md"),
+      "utf8",
+    )).toContain(
+      "Do not add `supported-spawn` or any other evidence-only acceptance target to `visualGroups`",
+    );
     await expect(createProductionWorldReconstructionRunPortsV1({
       ...value.input,
       repositoryRoot,
