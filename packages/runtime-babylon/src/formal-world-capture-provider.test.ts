@@ -1,7 +1,11 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
-import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import type {
+  BabylonNativeBlockMaterializerMetadataV1,
+  FormalWorldCaptureRequestV1,
+  WorldRuntimeSnapshotV4,
+} from "@whitebox-world/runtime-contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -250,6 +254,63 @@ describe("formal world capture provider", () => {
       tick: 11,
       isFinalTick: true,
     })).toEqual({ checkpointId: "blocked-west", outcome: "blocked", observedAtTick: 11 });
+  });
+
+  it("measures contains and above from Package bounds instead of copying requested relations", () => {
+    const bindings = [{
+      topologyNodeId: "container",
+      blockVisualGroupId: "container-group",
+    }, {
+      topologyNodeId: "inside",
+      blockVisualGroupId: "inside-group",
+    }, {
+      topologyNodeId: "upper",
+      blockVisualGroupId: "upper-group",
+    }] as const;
+    const metadata = {
+      visualGroups: [{
+        visualGroupId: "container-group",
+        minimumMetersXYZ: [-5, 0, -5],
+        maximumMetersXYZ: [5, 5, 5],
+      }, {
+        // Mere overlap with container, not containment.
+        visualGroupId: "inside-group",
+        minimumMetersXYZ: [4, 1, -1],
+        maximumMetersXYZ: [6, 2, 1],
+      }, {
+        // Horizontally overlaps container and is vertically above it.
+        visualGroupId: "upper-group",
+        minimumMetersXYZ: [-1, 5, -1],
+        maximumMetersXYZ: [1, 7, 1],
+      }],
+    } as unknown as BabylonNativeBlockMaterializerMetadataV1;
+    const request = {
+      semanticCaptureMap: {
+        bindings,
+        topologyRelations: [{
+          fromNodeId: "container",
+          relation: "contains",
+          toNodeId: "inside",
+          measurementSource: "package-bounds",
+          fromVisualGroupId: "container-group",
+          toVisualGroupId: "inside-group",
+        }, {
+          fromNodeId: "upper",
+          relation: "above",
+          toNodeId: "container",
+          measurementSource: "package-bounds",
+          fromVisualGroupId: "upper-group",
+          toVisualGroupId: "container-group",
+        }],
+      },
+    } as unknown as FormalWorldCaptureRequestV1;
+
+    expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .measuredPackageRelations(request, metadata)).toEqual([{
+        fromNodeId: "upper",
+        relation: "above",
+        toNodeId: "container",
+      }]);
   });
 
   it("rejects stale and ambiguous committed support evidence", () => {

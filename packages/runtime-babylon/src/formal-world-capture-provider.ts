@@ -511,9 +511,19 @@ function measuredPackageRelations(
       const left = groupByNodeId.get(relation.fromNodeId);
       const right = groupByNodeId.get(relation.toNodeId);
       if (left === undefined || right === undefined) return false;
-      return [0, 1, 2].every((axis) =>
-        left.minimumMetersXYZ[axis]! <= right.maximumMetersXYZ[axis]! &&
-        right.minimumMetersXYZ[axis]! <= left.maximumMetersXYZ[axis]!);
+      const overlaps = (axis: 0 | 1 | 2): boolean =>
+        left.minimumMetersXYZ[axis] <= right.maximumMetersXYZ[axis] &&
+        right.minimumMetersXYZ[axis] <= left.maximumMetersXYZ[axis];
+      if (relation.relation === "contains") {
+        return ([0, 1, 2] as const).every((axis) =>
+          left.minimumMetersXYZ[axis] <= right.minimumMetersXYZ[axis] &&
+          left.maximumMetersXYZ[axis] >= right.maximumMetersXYZ[axis]);
+      }
+      if (relation.relation === "above") {
+        return overlaps(0) && overlaps(2) &&
+          left.minimumMetersXYZ[1] >= right.maximumMetersXYZ[1];
+      }
+      return ([0, 1, 2] as const).every(overlaps);
     },
   ).map(({ fromNodeId, relation, toNodeId }) =>
     Object.freeze({ fromNodeId, relation, toNodeId })));
@@ -646,6 +656,7 @@ async function captureTraversal(
 /** @internal Package-private lifecycle seam for provider regression tests. */
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
   captureTraversalChecks,
+  measuredPackageRelations,
 });
 
 function captureRefBase(request: FormalWorldCaptureRequestV1): string {
