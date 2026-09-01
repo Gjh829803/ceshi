@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -112,6 +113,21 @@ function capabilityDefinitions(): readonly RegistrySubjectDefinitionV3[] {
 }
 
 describe("capability-driven subject registry", () => {
+  it("uses the Camera package as the sole CameraContextRuleV2 owner", () => {
+    const source = readFileSync(new URL("./types-v3.ts", import.meta.url), "utf8");
+    const packageManifest = JSON.parse(readFileSync(
+      new URL("../package.json", import.meta.url),
+      "utf8",
+    )) as { dependencies?: Record<string, string> };
+
+    expect(source).toMatch(
+      /import type \{ CameraContextRuleV2 \} from "@whitebox-world\/camera";/,
+    );
+    expect(source).not.toMatch(/export interface CameraContextRuleV[12]\s*\{/);
+    expect(packageManifest.dependencies?.["@whitebox-world/camera"])
+      .toBe("workspace:*");
+  });
+
   it("exposes one frozen, sorted, identity-resolving discovery view", () => {
     const registry = builtInSubjectResourceRegistry;
 

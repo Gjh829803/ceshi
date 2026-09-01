@@ -69,6 +69,7 @@ import {
   parseGameplayWorldStateProjectionV1,
   runtimeWorldConfigurationFromVerifiedWorldPackageV1,
   type RuntimeWorldAdapterDescriptorV1,
+  type WorldSessionPublicationV1,
 } from "@whitebox-world/runtime-host";
 import {
   hashRootMotionSourceV1,
@@ -110,6 +111,7 @@ import { resolveBabylonRuntimeSubjectsV1 } from "./runtime-subject";
 import { SubjectAnimationPlayer } from "./subject-animation-player";
 import { createSubjectVisual } from "./subject-visual";
 import { sampleExecutionTerrainHeight } from "./terrain";
+import { projectBabylonWorldRuntimeSnapshotV4 } from "./world-runtime-snapshot";
 
 const loadAssetContainerImplementation = vi
   .mocked(LoadAssetContainerAsync)
@@ -561,8 +563,18 @@ function deferred<T>(): {
 interface RuntimeDebugProbe {
   subjectVisualOrigin(subjectEntityId: string): RuntimeVec3V1;
   controllerCenter(subjectEntityId: string): RuntimeVec3V1;
+  nativeControllerCenter(subjectEntityId: string): RuntimeVec3V1;
   visualPartLocalPosition(subjectEntityId: string, partId: string): RuntimeVec3V1;
   visualRootYawRadians(subjectEntityId: string): number;
+  cameraProjection(): Readonly<{
+    director: ReturnType<CameraComponentV1["snapshot"]>;
+    positionMetersXYZ: RuntimeVec3V1;
+  }>;
+  cameraTransactionState(): ReturnType<CameraComponentV1["captureTransactionState"]>;
+  collisionFilterMasks(subjectEntityId: string): Readonly<{
+    membershipMask: number;
+    collideMask: number;
+  }>;
 }
 
 interface SubjectVisualInternals extends SubjectVisual {
@@ -586,7 +598,16 @@ interface CartesianVector {
 }
 
 interface ControllerProbe {
-  physicsController: { getPosition(): CartesianVector };
+  collisionFilterMasks(): Readonly<{
+    membershipMask: number;
+    collideMask: number;
+  }>;
+  physicsController: {
+    readonly _body: {
+      readonly _pluginData: { readonly hpBodyId: unknown };
+    };
+    getPosition(): CartesianVector;
+  };
   visualRoot: {
     position: CartesianVector;
     rotation: CartesianVector;
@@ -601,6 +622,9 @@ function toVec3(value: CartesianVector): RuntimeVec3V1 {
 
 function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProbe {
   const internals = runtime as unknown as {
+    scene: Scene;
+    camera: CartesianVector;
+    cameraComponent: CameraComponentV1;
     characterEntitiesByEntityId: ReadonlyMap<string, { movement: ControllerProbe }>;
   };
   const controllerFor = (subjectEntityId: string): ControllerProbe => {
@@ -613,6 +637,19 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
       toVec3(controllerFor(subjectEntityId).visualRoot.position),
     controllerCenter: (subjectEntityId) =>
       toVec3(controllerFor(subjectEntityId).physicsController.getPosition()),
+    nativeControllerCenter: (subjectEntityId) => {
+      const bodyId = controllerFor(subjectEntityId).physicsController
+        ._body._pluginData.hpBodyId;
+      const plugin = internals.scene.getPhysicsEngine()!.getPhysicsPlugin() as unknown as {
+        readonly _hknp: {
+          HP_Body_GetQTransform(
+            bodyId: unknown,
+          ): readonly [number, readonly [readonly number[], readonly number[]]];
+        };
+      };
+      const nativePosition = plugin._hknp.HP_Body_GetQTransform(bodyId)[1][0];
+      return [nativePosition[0]!, nativePosition[1]!, nativePosition[2]!];
+    },
     visualPartLocalPosition: (subjectEntityId, partId) => {
       const expectedName = `${subjectEntityId}.${partId}`;
       const mesh = controllerFor(subjectEntityId)
@@ -625,6 +662,14 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
       const visualRoot = controllerFor(subjectEntityId).visualRoot;
       return visualRoot.rotationQuaternion?.toEulerAngles().y ?? visualRoot.rotation.y;
     },
+    cameraProjection: () => ({
+      director: internals.cameraComponent.snapshot(),
+      positionMetersXYZ: toVec3(internals.camera),
+    }),
+    cameraTransactionState: () =>
+      internals.cameraComponent.captureTransactionState(),
+    collisionFilterMasks: (subjectEntityId) =>
+      controllerFor(subjectEntityId).collisionFilterMasks(),
   };
 }
 
@@ -895,6 +940,10 @@ async function createRuntime(
       runtime,
       artifacts.worldRuntimeBootstrap.initialControlledEntityId,
     );
+    runtime.publishInitialBoundCameraView(
+      runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+        .viewStateRevision,
+    );
   }
   return runtime;
 }
@@ -1124,6 +1173,10 @@ async function createVerifiedNativeRuntime(
   await bindRuntimeTestPossession(
     runtime,
     verified.worldRuntimeBootstrap.initialControlledEntityId,
+  );
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
   );
   return runtime;
 }
@@ -1372,6 +1425,51 @@ function createFlatRiggedExecutionPlan(): CanonicalSceneExecutionPlanV1 {
   return compileFlatTerrainExecutionPlan(createValidRiggedPackageSubjectWorldV4());
 }
 
+function createRiggedMountedExecutionPlan(): CanonicalSceneExecutionPlanV1 {
+  const spec = createValidMountedOnAuthoringSpec();
+  const rigged = createValidRiggedPackageSubjectWorldV4();
+  const definition = structuredClone(rigged.resources.subjectDefinitions[0]!);
+  definition.sockets = [
+    ...definition.sockets,
+    {
+      id: "FootAlignment",
+      kind: "local",
+      localTransform: { positionMetersXYZ: [0, 0, 0] },
+      semanticTags: ["rider", "foot-alignment"],
+    },
+    {
+      id: "MountStand",
+      kind: "local",
+      localTransform: { positionMetersXYZ: [0, 0.25, 0] },
+      semanticTags: ["mount", "stand"],
+    },
+  ];
+  definition.mountSlots = [{
+    id: "stand",
+    kind: "mount-slot",
+    mode: "stand",
+    mountSocketId: "MountStand",
+    riderSubjectOriginOffsetMetersXYZ: [0, 0.2, 0],
+    dismountCandidateOffsetsMetersXYZ: [[-4, 0, -5], [4, 0, 5]],
+  }];
+  definition.relationshipCapabilityRefs = [
+    "worldkit://capability/relationship.mounted-on@1",
+  ];
+  spec.resources.subjectDefinitions = [definition];
+  spec.nodes = spec.nodes.filter((node) =>
+    node.id !== "player" && node.id !== "spawn-main"
+  ).map((node) =>
+    node.kind === "subject"
+      ? {
+          ...node,
+          subjectDefinitionRef:
+            "package://subject-definition/rigged-golden-package@1",
+        }
+      : node
+  );
+  return compileFlatTerrainExecutionPlan(spec);
+}
+
 const staticAssetPartLocalTransform = {
   positionMetersXYZ: [1, 2, -3] as const,
   rotationEulerRadiansXYZ: [0, Math.PI / 3, 0] as const,
@@ -1592,6 +1690,70 @@ async function createRuntimeWithPackageSubject(): Promise<{
 }
 
 describe("BabylonWorldRuntime", () => {
+  it("attaches exact admitted traversal identity to canonical collision meshes", async () => {
+    const base = createV5StaticColliderSupportExecutionPlan();
+    const collider = base.staticColliders.find((candidate) =>
+      candidate.entityId === "pedestal"
+    )!;
+    const staticTraversalSurface = Object.freeze({
+      kind: "static-collider" as const,
+      traversalSurfaceId: "traversal-surface:pedestal",
+      surfaceEntityId: collider.entityId,
+      colliderSubshapeId: collider.colliderSubshapeId,
+      resourceRef: "package://traversal-surface/pedestal@1",
+      resolvedVersion: "1",
+      resourceHash: `sha256:${"d".repeat(64)}` as const,
+      logicalSurfaceId: collider.entityId,
+      logicalSubshapeId: collider.logicalSubshapeId,
+      colliderHash: collider.colliderHash,
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceProfileResolvedVersion: "1",
+      traversalSurfaceProfileHash:
+        `sha256:${"e".repeat(64)}` as const,
+    });
+    const executionPlan = Object.freeze({
+      ...base,
+      traversal: Object.freeze({
+        ...base.traversal,
+        surfaces: Object.freeze([
+          ...base.traversal.surfaces,
+          staticTraversalSurface,
+        ]),
+      }),
+    }) satisfies CanonicalSceneExecutionPlanV1;
+    const runtime = await createRuntime(executionPlan);
+    try {
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      const terrainSurface = executionPlan.traversal.surfaces.find(
+        (surface) => surface.kind === "heightfield",
+      )!;
+      expect(scene.getMeshByName(executionPlan.terrain.entityId)?.metadata)
+        .toMatchObject({
+          worldkitEntityId: terrainSurface.surfaceEntityId,
+          colliderSubshapeId: terrainSurface.colliderSubshapeId,
+          worldkitLogicalSubshapeId: "heightfield",
+          worldkitTraversalSurfaceId: terrainSurface.traversalSurfaceId,
+          worldkitSurfaceEntityId: terrainSurface.surfaceEntityId,
+          worldkitTraversalSurfaceProfileRef: terrainSurface.resourceRef,
+        });
+      expect(scene.getMeshByName(
+        `worldkit.static-collider.${collider.colliderSubshapeId}`,
+      )?.metadata).toMatchObject({
+        worldkitEntityId: staticTraversalSurface.surfaceEntityId,
+        colliderSubshapeId: staticTraversalSurface.colliderSubshapeId,
+        worldkitLogicalSubshapeId: staticTraversalSurface.logicalSubshapeId,
+        worldkitTraversalSurfaceId:
+          staticTraversalSurface.traversalSurfaceId,
+        worldkitSurfaceEntityId: staticTraversalSurface.surfaceEntityId,
+        worldkitTraversalSurfaceProfileRef:
+          staticTraversalSurface.traversalSurfaceProfileRef,
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("runs native scene geometry without constructing ExecutionPlan world geometry", async () => {
     const executionPlan = compileFlatTerrainExecutionPlan(
       createValidAuthoringSpecV4(),
@@ -1768,7 +1930,6 @@ describe("BabylonWorldRuntime", () => {
       }),
     );
     try {
-      await bindRuntimeTestPossession(runtime, "player");
       runtime.renderFrame();
       const initial = runtime.snapshot();
       runtime.adjustCameraView({
@@ -1779,6 +1940,10 @@ describe("BabylonWorldRuntime", () => {
 
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
+      runtime.publishInitialBoundCameraView(
+        runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+          .viewStateRevision,
+      );
       runtime.renderFrame();
       const reset = runtime.snapshot();
 
@@ -2779,6 +2944,56 @@ describe("BabylonWorldRuntime", () => {
       }
     });
 
+    it("projects Camera local Sockets from locked Subject data instead of Babylon Nodes", async () => {
+      const basePlan = createStaticAssetSubjectExecutionPlan();
+      const baseSubject = runtimeSubjects(basePlan)[0]!;
+      const executionPlan = overrideRuntimeSubjects(basePlan, [{
+        ...baseSubject,
+        spawnSubjectFacingRadians: Math.PI / 2,
+        sockets: [{
+          id: "ThirdPersonTarget",
+          kind: "local" as const,
+          localTransform: {
+            positionMetersXYZ: [1, 1.5, -2] as const,
+            rotationEulerRadiansXYZ: [0, 0, 0] as const,
+          },
+          semanticTags: ["camera-target"],
+        }],
+      }]);
+      const update = vi.spyOn(CameraComponentV1.prototype, "update");
+      const runtime = await createRuntime(executionPlan, {
+        subjectAssetResolver: createMemoryResolver(staticSubjectAssetBytes),
+      });
+      try {
+        update.mockClear();
+        const presentationSocket = createSubjectVisualProbe(runtime)
+          .visual("player")
+          .socketNodesById.get("ThirdPersonTarget")!;
+        presentationSocket.position.set(500, 600, 700);
+
+        const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+        const committedContext = update.mock.calls.at(-1)?.[3];
+        const subjectOrigin = committedContext?.subjectPose.positionMetersXYZ;
+        const lockedSocket = committedContext?.environment
+          .socketPositionsMetersXYZById.ThirdPersonTarget;
+        expect(subjectOrigin).toBeDefined();
+        expect(lockedSocket).toBeDefined();
+        expect(lockedSocket?.[0]).toBeCloseTo(subjectOrigin![0] - 2, 12);
+        expect(lockedSocket?.[1]).toBeCloseTo(subjectOrigin![1] + 1.5, 12);
+        expect(lockedSocket?.[2]).toBeCloseTo(subjectOrigin![2] - 1, 12);
+        expect(snapshot.camera.selectedTargetSocketId).toBe("ThirdPersonTarget");
+        expect(snapshot.camera.targetSocketPositionMetersXYZ?.[0])
+          .toBeCloseTo(lockedSocket![0], 12);
+        expect(snapshot.camera.targetSocketPositionMetersXYZ?.[1])
+          .toBeCloseTo(lockedSocket![1], 12);
+        expect(snapshot.camera.targetSocketPositionMetersXYZ?.[2])
+          .toBeCloseTo(lockedSocket![2], 12);
+      } finally {
+        await runtime.dispose();
+        update.mockRestore();
+      }
+    });
+
     it("owns one isolated Material across mixed static Asset and Primitive Parts", async () => {
       const runtime = await createRuntime(
         createStaticAssetSubjectExecutionPlan({
@@ -3369,6 +3584,572 @@ describe("BabylonWorldRuntime", () => {
     }
   });
 
+  it("counts every unsuspended Golden controller in Semantic Fact projection capacity", async () => {
+    const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+
+      expect(internal.estimateSemanticFactProjectionCapacity()).toEqual({
+        maximumSemanticFactCountAfterInput: 2,
+        maximumSemanticFactTransitionEventCount: 2,
+      });
+
+      const prepared = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      prepared.commitPrepared();
+      expect(internal.estimateSemanticFactProjectionCapacity()).toEqual({
+        maximumSemanticFactCountAfterInput: 2,
+        maximumSemanticFactTransitionEventCount: 4,
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("rebuilds committed Golden support deterministically across abort replay and reset", async () => {
+    const runtime = await createRiggedRuntime();
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const supportFacts = () => Object.values(
+        internal.readWorldProjection().semanticFactsById,
+      ).filter((fact) => fact.type === "supportedBy");
+      const initial = supportFacts();
+
+      expect(initial).toEqual([]);
+
+      const first = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      first.commitPrepared();
+      const committedAtOne = internal.readWorldProjection().semanticFactsById;
+      expect(Object.values(committedAtOne)[0]).toMatchObject({
+        supportedEntityId: "player",
+        supportSurfaceEntityId: createFlatRiggedExecutionPlan().terrain.entityId,
+        startedSimulationTick: 1,
+      });
+
+      const aborted = await internal.prepareFixedInputTick!(
+        { actions: ["move-right"], ticks: 1 },
+        emptyActionProjection(2),
+      );
+      await aborted.abort();
+      expect(internal.readWorldProjection().semanticFactsById).toEqual(
+        committedAtOne,
+      );
+
+      runtime.reset();
+      const resetFacts = supportFacts();
+      expect(resetFacts).toHaveLength(1);
+      expect(resetFacts[0]).toMatchObject({
+        startedSimulationTick: 0,
+      });
+      expect(resetFacts[0]!.id).not.toBe(Object.values(committedAtOne)[0]!.id);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("excludes a mounted Golden rider and admits it to capacity only after dismount", async () => {
+    const executionPlan = createRiggedMountedExecutionPlan();
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const supportFacts = () => Object.values(
+        internal.readWorldProjection().semanticFactsById,
+      ).filter((fact) => fact.type === "supportedBy");
+      const relationship = runtimeTestWorldArtifactsForPlanV1(executionPlan)
+        .gameplayBootstrap.initialRelationshipStates[0]!;
+      if (relationship.type !== "mountedOn") {
+        throw new Error("Rigged mounted fixture relationship is missing.");
+      }
+
+      expect(internal.estimateSemanticFactProjectionCapacity()).toEqual({
+        maximumSemanticFactCountAfterInput: 1,
+        maximumSemanticFactTransitionEventCount: 1,
+      });
+      await internal.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      expect(supportFacts().map((fact) => fact.supportedEntityId)).toEqual([
+        "pack-animal-b",
+      ]);
+
+      const dismount = await internal.prepareMountedRelationshipTransition({
+        operation: "dismount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-a",
+        },
+      });
+      dismount.commitPrepared();
+      expect(internal.estimateSemanticFactProjectionCapacity()).toEqual({
+        maximumSemanticFactCountAfterInput: 2,
+        maximumSemanticFactTransitionEventCount: 3,
+      });
+      expect(supportFacts().some((fact) =>
+        fact.supportedEntityId === "pack-animal-a"
+      )).toBe(false);
+
+      await internal.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(2),
+      );
+      expect(supportFacts().map((fact) => fact.supportedEntityId).sort())
+        .toEqual(["pack-animal-a", "pack-animal-b"]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("projects committed mounted Camera context through Golden mount, dismount, reset, and rebind ticks", async () => {
+    const basePlan = createRiggedMountedExecutionPlan();
+    const relationship = runtimeTestWorldArtifactsForPlanV1(basePlan)
+      .gameplayBootstrap.initialRelationshipStates[0]!;
+    if (relationship.type !== "mountedOn") {
+      throw new Error("Rigged mounted Camera fixture relationship is missing.");
+    }
+    const subjects = runtimeSubjects(basePlan).map((subject) => ({
+      ...subject,
+      spawnSubjectOriginPositionMetersXYZ:
+        subject.entityId === relationship.riderEntityId
+          ? [3.5, 0, 5] as const
+          : subject.entityId === relationship.mountEntityId
+            ? [4, 0, 5] as const
+            : subject.spawnSubjectOriginPositionMetersXYZ,
+    }));
+    const executionPlan = configureRuntimeTestPlan(basePlan, {
+      initialControlledEntityId: relationship.riderEntityId,
+      initialCameraTargetEntityId: relationship.riderEntityId,
+      initialRelationshipStates: [],
+      subjects,
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const mountedModifierRef =
+        "worldkit://camera-modifier/mounted-framing@1";
+      const expectMountedCamera = (
+        snapshot: ReturnType<BabylonWorldRuntime["snapshot"]>,
+        expected: boolean,
+      ): void => {
+        expect(snapshot.camera.targetEntityId).toBe(
+          expected ? relationship.mountEntityId : relationship.riderEntityId,
+        );
+        expect(snapshot.camera.activeCameraModifierRefs.includes(
+          mountedModifierRef,
+        )).toBe(expected);
+        expect(snapshot.camera.selectionDecision?.matchedCameraContextRuleIds
+          .includes("mounted")).toBe(expected);
+      };
+
+      await bindRuntimeTestPossession(runtime, relationship.riderEntityId);
+      const debug = createRuntimeDebugProbe(runtime);
+      const mount = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: relationship.mountEntityId,
+        },
+      });
+      const cameraBeforeMountPublication = runtime.snapshot().camera;
+      const liveCameraBeforeMountPublication = debug.cameraProjection();
+      const cameraTransactionBeforeMountPublication =
+        debug.cameraTransactionState();
+      mount.commitPrepared();
+      expect(runtime.snapshot().camera).toEqual(cameraBeforeMountPublication);
+      for (let renderIndex = 0; renderIndex < 2; renderIndex += 1) {
+        expect(runtime.renderFrame().simulationTick).toBe(0);
+        expect(debug.cameraProjection()).toEqual(liveCameraBeforeMountPublication);
+        expect(debug.cameraTransactionState()).toEqual(
+          cameraTransactionBeforeMountPublication,
+        );
+        expect(runtime.snapshot().camera).toEqual(cameraBeforeMountPublication);
+      }
+      const mounted = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expectMountedCamera(mounted, true);
+
+      const dismount = await internal.prepareMountedRelationshipTransition({
+        operation: "dismount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: relationship.riderEntityId,
+        },
+      });
+      const cameraBeforeDismountPublication = runtime.snapshot().camera;
+      const liveCameraBeforeDismountPublication = debug.cameraProjection();
+      const cameraTransactionBeforeDismountPublication =
+        debug.cameraTransactionState();
+      dismount.commitPrepared();
+      expect(runtime.snapshot().camera).toEqual(cameraBeforeDismountPublication);
+      for (let renderIndex = 0; renderIndex < 2; renderIndex += 1) {
+        expect(runtime.renderFrame().simulationTick).toBe(1);
+        expect(debug.cameraProjection()).toEqual(liveCameraBeforeDismountPublication);
+        expect(debug.cameraTransactionState()).toEqual(
+          cameraTransactionBeforeDismountPublication,
+        );
+        expect(runtime.snapshot().camera).toEqual(cameraBeforeDismountPublication);
+      }
+      const dismounted = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expectMountedCamera(dismounted, false);
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, relationship.riderEntityId);
+      const remount = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: relationship.mountEntityId,
+        },
+      });
+      remount.commitPrepared();
+      const remounted = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expectMountedCamera(remounted, true);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("replays committed Mount and Dismount transactions before aborting a later Golden Tick", async () => {
+    const basePlan = createRiggedMountedExecutionPlan();
+    const relationship = runtimeTestWorldArtifactsForPlanV1(basePlan)
+      .gameplayBootstrap.initialRelationshipStates[0]!;
+    if (relationship.type !== "mountedOn") {
+      throw new Error("Rigged mounted replay fixture relationship is missing.");
+    }
+    const subjects = runtimeSubjects(basePlan).map((subject) => ({
+      ...subject,
+      spawnSubjectOriginPositionMetersXYZ:
+        subject.entityId === relationship.riderEntityId
+          ? [2.5, 0, 5] as const
+          : subject.entityId === relationship.mountEntityId
+            ? [4, 0, 5] as const
+            : subject.spawnSubjectOriginPositionMetersXYZ,
+    }));
+    const executionPlan = configureRuntimeTestPlan(basePlan, {
+      initialControlledEntityId: relationship.riderEntityId,
+      initialCameraTargetEntityId: relationship.riderEntityId,
+      initialRelationshipStates: [],
+      subjects,
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const debug = createRuntimeDebugProbe(runtime);
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, relationship.riderEntityId);
+      const first = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      first.commitPrepared();
+
+      const mount = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: relationship.mountEntityId,
+        },
+      });
+      mount.commitPrepared();
+      const mountedSnapshot = runtime.snapshot();
+      const mountedWorld = internal.readWorldProjection();
+      const mountedCameraTransaction = debug.cameraTransactionState();
+      const mountedFilters = debug.collisionFilterMasks(
+        relationship.riderEntityId,
+      );
+
+      const abortMountedTick = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(2),
+      );
+      await expect(abortMountedTick.abort()).resolves.toBeUndefined();
+      expect(runtime.snapshot()).toEqual(mountedSnapshot);
+      expect(internal.readWorldProjection()).toEqual(mountedWorld);
+      expect(debug.cameraTransactionState()).toEqual(mountedCameraTransaction);
+      expect(debug.collisionFilterMasks(relationship.riderEntityId)).toEqual(
+        mountedFilters,
+      );
+
+      const commitMountedTick = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(2),
+      );
+      commitMountedTick.commitPrepared();
+      const dismount = await internal.prepareMountedRelationshipTransition({
+        operation: "dismount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: relationship.riderEntityId,
+        },
+      });
+      dismount.commitPrepared();
+      const dismountedSnapshot = runtime.snapshot();
+      const dismountedWorld = internal.readWorldProjection();
+      const dismountedCameraTransaction = debug.cameraTransactionState();
+      const dismountedFilters = debug.collisionFilterMasks(
+        relationship.riderEntityId,
+      );
+
+      const abortDismountedTick = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(3),
+      );
+      await expect(abortDismountedTick.abort()).resolves.toBeUndefined();
+      expect(runtime.snapshot()).toEqual(dismountedSnapshot);
+      expect(internal.readWorldProjection()).toEqual(dismountedWorld);
+      expect(debug.cameraTransactionState()).toEqual(dismountedCameraTransaction);
+      expect(debug.collisionFilterMasks(relationship.riderEntityId)).toEqual(
+        dismountedFilters,
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("replays committed Camera authoring and possession before aborting a later Golden Tick", async () => {
+    const basePlan = createRiggedMountedExecutionPlan();
+    const relationship = runtimeTestWorldArtifactsForPlanV1(basePlan)
+      .gameplayBootstrap.initialRelationshipStates[0]!;
+    if (relationship.type !== "mountedOn") {
+      throw new Error("Rigged Camera replay fixture is missing.");
+    }
+    const executionPlan = configureRuntimeTestPlan(basePlan, {
+      initialControlledEntityId: relationship.riderEntityId,
+      initialCameraTargetEntityId: relationship.riderEntityId,
+      initialRelationshipStates: [],
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, relationship.riderEntityId);
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      runtime.publishInitialBoundCameraView(
+        internal.readViewProjection().viewStateRevision,
+      );
+      const first = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      first.commitPrepared();
+
+      runtime.setCameraViewPreference({
+        mode: "camera-rig-profile",
+        cameraRigProfileRef: "worldkit://camera-profile/orbit.medium@1",
+      });
+      runtime.adjustCameraView({
+        yawDeltaRadians: 0.35,
+        pitchDeltaRadians: 0.1,
+        zoomDeltaMeters: 0.5,
+      });
+      runtime.applyCameraPreview({
+        tuningByProfileRef: {
+          "worldkit://camera-profile/orbit.medium@1": {
+            distanceMeters: 6,
+          },
+        },
+      });
+
+      const possession = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: relationship.mountEntityId,
+      });
+      possession.commitPrepared();
+      const second = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(2),
+      );
+      second.commitPrepared();
+      const beforeAbort = runtime.snapshot();
+      const debug = createRuntimeDebugProbe(runtime);
+      const cameraTransactionBeforeAbort = debug.cameraTransactionState();
+
+      const third = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(3),
+      );
+      await expect(third.abort()).resolves.toBeUndefined();
+      expect(runtime.snapshot()).toEqual(beforeAbort);
+      expect(debug.cameraTransactionState()).toEqual(
+        cameraTransactionBeforeAbort,
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps Camera mutations and evidence capture behind the committed view epoch", async () => {
+    const basePlan = createRiggedMountedExecutionPlan();
+    const relationship = runtimeTestWorldArtifactsForPlanV1(basePlan)
+      .gameplayBootstrap.initialRelationshipStates[0]!;
+    if (relationship.type !== "mountedOn") {
+      throw new Error("Rigged mounted Camera epoch fixture is missing.");
+    }
+    const subjects = runtimeSubjects(basePlan).map((subject) => ({
+      ...subject,
+      spawnSubjectOriginPositionMetersXYZ:
+        subject.entityId === relationship.riderEntityId
+          ? [2.5, 0, 5] as const
+          : subject.entityId === relationship.mountEntityId
+            ? [4, 0, 5] as const
+            : subject.spawnSubjectOriginPositionMetersXYZ,
+    }));
+    const executionPlan = configureRuntimeTestPlan(basePlan, {
+      initialControlledEntityId: relationship.riderEntityId,
+      initialCameraTargetEntityId: relationship.riderEntityId,
+      initialRelationshipStates: [],
+      subjects,
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, relationship.riderEntityId);
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const mount = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: relationship.mountEntityId,
+        },
+      });
+      mount.commitPrepared();
+      const before = runtime.snapshot();
+      const cameraComponent = Reflect.get(runtime, "cameraComponent") as
+        CameraComponentV1;
+      const cameraUpdate = vi.spyOn(cameraComponent, "update");
+      const pendingOperations: readonly (readonly [string, () => unknown])[] = [
+        ["preference set", () => runtime.setCameraViewPreference({ mode: "auto" })],
+        ["preference reset", () => runtime.resetCameraViewPreference()],
+        ["preference prepare", () =>
+          runtime.prepareCameraViewPreference({ mode: "auto" })],
+        ["preference reset prepare", () =>
+          runtime.prepareCameraViewPreferenceReset()],
+        ["orbit adjust", () => runtime.adjustCameraView({ yawDeltaRadians: 0.1 })],
+        ["orbit reset", () => runtime.resetCameraView()],
+        ["preview", () => runtime.applyCameraPreview({} as never)],
+      ];
+      for (const [operation, apply] of pendingOperations) {
+        expect(apply, operation).toThrow(
+          "WORLDKIT_RUNTIME_CAMERA_VIEW_EPOCH_PENDING",
+        );
+        expect(runtime.snapshot(), operation).toEqual(before);
+      }
+      expect(runtime.applySubjectPresetTuning({} as never)).toMatchObject({
+        status: "rejected",
+        diagnostic: {
+          code: "WORLDKIT_RUNTIME_CAMERA_VIEW_EPOCH_PENDING",
+        },
+      });
+      expect(runtime.snapshot()).toEqual(before);
+
+      const pendingRenderReceipt = runtime.renderFrame();
+      expect(() =>
+        runtime.waitForRenderReady(pendingRenderReceipt.simulationTick)
+      ).toThrow("WORLDKIT_RUNTIME_CAMERA_VIEW_EPOCH_PENDING");
+      await expect(runtime.captureControlFrame({
+        captureFrameIndex: 0,
+        expectedSimulationTick: pendingRenderReceipt.simulationTick,
+        renderReadyReceiptId: pendingRenderReceipt.id,
+        widthPixels: 1,
+        heightPixels: 1,
+      })).rejects.toThrow("WORLDKIT_RUNTIME_CAMERA_VIEW_EPOCH_PENDING");
+      expect(cameraUpdate).not.toHaveBeenCalled();
+
+      expect(() => runtime.captureArtifactView({
+        kind: "opening-frame",
+        widthPixels: 1,
+        heightPixels: 1,
+      })).toThrow("WORLDKIT_RUNTIME_CAMERA_VIEW_EPOCH_PENDING");
+      expect(cameraUpdate).not.toHaveBeenCalled();
+      expect(runtime.snapshot()).toEqual(before);
+
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const readyReceipt = runtime.renderFrame();
+      expect(runtime.waitForRenderReady(readyReceipt.simulationTick)).toEqual(
+        readyReceipt,
+      );
+      expect(() =>
+        runtime.adjustCameraView({ yawDeltaRadians: 0.1 })
+      ).not.toThrow();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("fails Golden mounted Camera framing closed for a shared Mount", async () => {
+    const basePlan = createRiggedMountedExecutionPlan();
+    const relationshipA = runtimeTestWorldArtifactsForPlanV1(basePlan)
+      .gameplayBootstrap.initialRelationshipStates[0]!;
+    if (relationshipA.type !== "mountedOn") {
+      throw new Error("Rigged shared Mount fixture relationship is missing.");
+    }
+    const rider = runtimeSubjects(basePlan).find((subject) =>
+      subject.entityId === relationshipA.riderEntityId
+    );
+    if (isNil(rider)) throw new Error("Rigged shared Mount Rider is missing.");
+    const secondRiderEntityId = "pack-animal-c";
+    const subjects = [
+      ...runtimeSubjects(basePlan).map((subject) => ({
+        ...subject,
+        spawnSubjectOriginPositionMetersXYZ:
+          subject.entityId === relationshipA.riderEntityId
+            ? [3.5, 0, 5] as const
+            : subject.entityId === relationshipA.mountEntityId
+              ? [4, 0, 5] as const
+              : subject.spawnSubjectOriginPositionMetersXYZ,
+      })),
+      {
+        ...rider,
+        entityId: secondRiderEntityId,
+        spawnAnchorEntityId: "spawn-pack-animal-c",
+        spawnSubjectOriginPositionMetersXYZ: [4.5, 0, 5] as const,
+      },
+    ];
+    const relationshipB = Object.freeze({
+      ...relationshipA,
+      id: "mounted-on:shared-rider-b",
+      riderEntityId: secondRiderEntityId,
+    });
+    const executionPlan = configureRuntimeTestPlan(basePlan, {
+      initialControlledEntityId: relationshipA.mountEntityId,
+      initialCameraTargetEntityId: relationshipA.mountEntityId,
+      initialRelationshipStates: [relationshipA, relationshipB],
+      subjects,
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    const update = vi.spyOn(CameraComponentV1.prototype, "update");
+    try {
+      await bindRuntimeTestPossession(runtime, relationshipA.mountEntityId);
+      update.mockClear();
+      const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      const committedContext = update.mock.calls.at(-1)?.[3];
+
+      expect(snapshot.camera.targetEntityId).toBe(relationshipA.mountEntityId);
+      expect(committedContext?.environment.relationshipContexts.map(
+        ({ id }) => id,
+      )).toEqual([relationshipB.id, relationshipA.id]);
+      expect(snapshot.camera.activeCameraModifierRefs).not.toContain(
+        "worldkit://camera-modifier/mounted-framing@1",
+      );
+      expect(snapshot.camera.selectionDecision?.matchedCameraContextRuleIds)
+        .not.toContain("mounted");
+    } finally {
+      await runtime.dispose();
+      update.mockRestore();
+    }
+  });
+
   it("restores the exact world checkpoint when Golden prepare fails after an earlier Subject mutates", async () => {
     const runtime = await createRiggedRuntime(createTwoRiggedSubjectExecutionPlan());
     try {
@@ -3507,6 +4288,172 @@ function emptyActionProjection(simulationTick: number) {
     } finally {
       await runtime.dispose();
       update.mockRestore();
+    }
+  });
+
+  it("rebuilds a cached Golden Camera Context from the committed rebind on the next fixed Tick", async () => {
+    const executionPlan = createTwoRiggedSubjectExecutionPlan();
+    const [first, second] = runtimeSubjects(executionPlan);
+    const update = vi.spyOn(CameraComponentV1.prototype, "update");
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      await bindRuntimeTestPossession(runtime, first!.entityId);
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+
+      await bindRuntimeTestPossession(runtime, second!.entityId);
+      update.mockClear();
+      runtime.renderFrame();
+      expect(update).not.toHaveBeenCalled();
+
+      await runtime.runFixedInput({ actions: [], ticks: 1 });
+
+      expect(update.mock.calls.at(-1)?.[3]).toMatchObject({
+        committedTick: 2,
+        controlledEntityId: second!.entityId,
+        targetEntityId: second!.entityId,
+      });
+    } finally {
+      await runtime.dispose();
+      update.mockRestore();
+    }
+  });
+
+  it.each([
+    {
+      name: "target identity",
+      mutate: (projection: ReturnType<BabylonWorldRuntime["snapshot"]>) => ({
+        ...projection,
+        camera: {
+          ...projection.camera,
+          targetEntityId: "hybrid-target",
+        },
+      }),
+    },
+    {
+      name: "committed Tick",
+      mutate: (projection: ReturnType<BabylonWorldRuntime["snapshot"]>) => ({
+        ...projection,
+        camera: {
+          ...projection.camera,
+          selectionDecision: {
+            ...projection.camera.selectionDecision!,
+            committedTick:
+              projection.camera.selectionDecision!.committedTick + 1,
+          },
+        },
+      }),
+    },
+    {
+      name: "selected Camera profile",
+      mutate: (projection: ReturnType<BabylonWorldRuntime["snapshot"]>) => ({
+        ...projection,
+        camera: {
+          ...projection.camera,
+          activeCameraProfileRef: "worldkit://camera-profile/hybrid@1",
+        },
+      }),
+    },
+    {
+      name: "selected Camera modifiers",
+      mutate: (projection: ReturnType<BabylonWorldRuntime["snapshot"]>) => ({
+        ...projection,
+        camera: {
+          ...projection.camera,
+          activeCameraModifierRefs: [
+            ...projection.camera.activeCameraModifierRefs,
+            "worldkit://camera-modifier/hybrid@1",
+          ],
+        },
+      }),
+    },
+    {
+      name: "selected Camera fallback",
+      mutate: (projection: ReturnType<BabylonWorldRuntime["snapshot"]>) => ({
+        ...projection,
+        camera: {
+          ...projection.camera,
+          safeFallbackActive: !projection.camera.safeFallbackActive,
+        },
+      }),
+    },
+  ])("rejects a mixed-epoch Camera $name at the Runtime Snapshot boundary", async ({
+    name,
+    mutate,
+  }) => {
+    const executionPlan = createFlatRiggedExecutionPlan();
+    const controlledEntityId = runtimeSubjects(executionPlan)[0]!.entityId;
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      await bindRuntimeTestPossession(runtime, controlledEntityId);
+      const runtimeProjection = await runtime.runFixedInput({
+        actions: [],
+        ticks: 1,
+      });
+      const publication = {
+        publicationEpoch: 1,
+        worldState: {
+          runtimeSessionId: "runtime-session:camera-snapshot-test",
+          worldSessionId: "world-session:camera-snapshot-test",
+          worldStateHash: `sha256:${"0".repeat(64)}`,
+          simulationTick: runtimeProjection.tick,
+          entityStatesById: {},
+          capabilityStatesById: {},
+        },
+        gameplayInspection: {
+          relationshipStatesById: {
+            "possessed-by:camera-snapshot-test": {
+              id: "possessed-by:camera-snapshot-test",
+              schemaVersion: 1,
+              type: "possessedBy",
+              controllerEntityId: "controller-primary",
+              controlledEntityId,
+              establishedSimulationTick: 0,
+            },
+          },
+        },
+        viewState: { viewStateRevision: 1 },
+      } as unknown as WorldSessionPublicationV1;
+
+      const snapshotInput = {
+        runtimeSessionId: "runtime-session:camera-snapshot-test",
+        fixedInputControllerEntityId: "controller-primary",
+        publication,
+        runtimeProjection,
+        hostPhase: "ready",
+        isPaused: false,
+      } as const;
+      expect(projectBabylonWorldRuntimeSnapshotV4(snapshotInput).view.camera)
+        .toMatchObject({
+          mode: "tracking",
+          targetEntityId: runtimeProjection.camera.targetEntityId,
+        });
+      if (name === "target identity") {
+        const distinctTargetEntityId = "camera-target-distinct";
+        const coherentDistinctTarget = {
+          ...runtimeProjection,
+          camera: {
+            ...runtimeProjection.camera,
+            targetEntityId: distinctTargetEntityId,
+            selectionDecision: {
+              ...runtimeProjection.camera.selectionDecision!,
+              targetEntityId: distinctTargetEntityId,
+            },
+          },
+        };
+        expect(projectBabylonWorldRuntimeSnapshotV4({
+          ...snapshotInput,
+          runtimeProjection: coherentDistinctTarget,
+        }).view.camera).toMatchObject({
+          mode: "tracking",
+          targetEntityId: distinctTargetEntityId,
+        });
+      }
+      expect(() => projectBabylonWorldRuntimeSnapshotV4({
+        ...snapshotInput,
+        runtimeProjection: mutate(runtimeProjection),
+      })).toThrow("WORLDKIT_RUNTIME_CAMERA_STATE_INVALID");
+    } finally {
+      await runtime.dispose();
     }
   });
 
@@ -3845,6 +4792,10 @@ function emptyActionProjection(simulationTick: number) {
     ).toBeGreaterThan(0.999999);
     runtime.reset();
     await bindRuntimeTestPossession(runtime, "player");
+    runtime.publishInitialBoundCameraView(
+      runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+        .viewStateRevision,
+    );
     const strafeCamera = runtime.adjustCameraView({ yawDeltaRadians: Math.PI / 2 });
     const strafeCameraForwardXYZ = strafeCamera.camera.controlForwardXYZ!;
     const strafeCameraRightXZ: readonly [number, number] = [
@@ -3967,7 +4918,6 @@ function emptyActionProjection(simulationTick: number) {
         },
         environment: {
           relationshipContexts: [],
-          relationshipRole: "none",
           socketPositionsMetersXYZById: {},
           cameraContextTags: [],
         },
@@ -3996,7 +4946,6 @@ function emptyActionProjection(simulationTick: number) {
         actionSummary: { status: "available", activeActionRefs: [] },
         environment: {
           relationshipContexts: [],
-          relationshipRole: "none",
           socketPositionsMetersXYZById: {},
           cameraContextTags: [],
         },
@@ -5859,6 +6808,7 @@ function emptyActionProjection(simulationTick: number) {
     mountAnchor.placement.transform.positionMetersXYZ = [5, 0, 5];
     mountAnchor.placement.transform.rotationEulerRadiansXYZ = [0, Math.PI / 2, 0];
     mountSocket.localTransform.positionMetersXYZ = [0.6, 0.25, -0.2];
+    mountSocket.localTransform.rotationEulerRadiansXYZ = [0, Math.PI / 2, 0];
     const mutableMountSlots = definition.mountSlots as unknown as Array<
       (typeof definition.mountSlots)[number]
     >;
@@ -5877,6 +6827,18 @@ function emptyActionProjection(simulationTick: number) {
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
       const debug = createRuntimeDebugProbe(runtime);
+      const presentationMountSocket = createSubjectVisualProbe(runtime)
+        .visual("pack-animal-b")
+        .socketNodesById.get("MountStand");
+      if (isNil(presentationMountSocket)) {
+        throw new Error("Mounted presentation Socket missing.");
+      }
+      presentationMountSocket.position.set(40, 50, 60);
+      presentationMountSocket.rotationQuaternion = Quaternion.FromEulerAngles(
+        0.7,
+        -0.4,
+        0.9,
+      );
       const bind = await internal.preparePossessionTarget({
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
@@ -5891,7 +6853,7 @@ function emptyActionProjection(simulationTick: number) {
         mountSlotId: "stand",
         establishedSimulationTick: 0,
       };
-      const expectedRiderPosition = [5.15, 0.45, 4.25] as const;
+      const expectedRiderPosition = [4.65, 0.45, 4.05] as const;
       const expectedRiderRotation = [
         0,
         Math.sin(Math.PI / 4),
@@ -5954,6 +6916,79 @@ function emptyActionProjection(simulationTick: number) {
           (value) => expect.closeTo(value, 6),
         ),
       );
+
+      const rebound = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      rebound.commitPrepared();
+      presentationMountSocket.position.set(-80, 25, 70);
+      const remounted = await internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship,
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      });
+      expect(remounted.projectedWorldStateAfter.spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ).toEqual(
+        expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
+      );
+      await remounted.abort();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("fails closed when a Mount slot has only a presentation-projected bone Socket", async () => {
+    const basePlan = createRiggedMountedExecutionPlan();
+    const subjects = runtimeSubjects(basePlan).map((subject) => ({
+      ...subject,
+      sockets: subject.sockets.map((socket) =>
+        socket.id === "MountStand" && socket.kind === "local"
+          ? {
+              id: socket.id,
+              kind: "bone" as const,
+              boneId: "hand.right" as const,
+              offsetTransform: socket.localTransform,
+              semanticTags: socket.semanticTags,
+            }
+          : socket
+      ),
+    }));
+    const executionPlan = configureRuntimeTestPlan(basePlan, {
+      initialControlledEntityId: "pack-animal-a",
+      initialCameraTargetEntityId: "pack-animal-a",
+      initialRelationshipStates: [],
+      subjects,
+    });
+    const runtime = await createRiggedRuntime(executionPlan);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const bind = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      bind.commitPrepared();
+
+      await expect(internal.prepareMountedRelationshipTransition({
+        operation: "mount",
+        relationship: {
+          id: "mounted-on:bone-socket",
+          type: "mountedOn",
+          schemaVersion: 1,
+          riderEntityId: "pack-animal-a",
+          mountEntityId: "pack-animal-b",
+          mountSlotId: "stand",
+          establishedSimulationTick: 0,
+        },
+        possessionTarget: {
+          mode: "possessed",
+          controlledEntityId: "pack-animal-b",
+        },
+      })).rejects.toThrow("WORLDKIT_MOUNTED_RELATIONSHIP_UNAVAILABLE");
     } finally {
       await runtime.dispose();
     }
@@ -5988,7 +7023,7 @@ function emptyActionProjection(simulationTick: number) {
           ...mountA,
           entityId: "mount-a",
           spawnAnchorEntityId: "spawn-mount-a",
-          spawnSubjectOriginPositionMetersXYZ: [0.5, 0, 5],
+          spawnSubjectOriginPositionMetersXYZ: [1.8, 0, 5],
         },
         {
           ...riderA,
@@ -6000,7 +7035,7 @@ function emptyActionProjection(simulationTick: number) {
           ...mountA,
           entityId: "mount-b",
           spawnAnchorEntityId: "spawn-mount-b",
-          spawnSubjectOriginPositionMetersXYZ: [10.5, 0, 5],
+          spawnSubjectOriginPositionMetersXYZ: [11.8, 0, 5],
         },
       ],
     });
@@ -6008,6 +7043,33 @@ function emptyActionProjection(simulationTick: number) {
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
       const debug = createRuntimeDebugProbe(runtime);
+      const expectNativeControllerAtLogicalCenter = (
+        subjectEntityId: string,
+      ): void => {
+        expect(debug.nativeControllerCenter(subjectEntityId)).toEqual(
+          debug.controllerCenter(subjectEntityId).map(
+            (value) => expect.closeTo(value, 5),
+          ),
+        );
+      };
+      const expectNativeControllerAt = (
+        subjectEntityId: string,
+        expectedCenter: RuntimeVec3V1,
+      ): void => {
+        expect(debug.nativeControllerCenter(subjectEntityId)).toEqual(
+          expectedCenter.map((value) => expect.closeTo(value, 5)),
+        );
+      };
+      const resetCenter = (subjectEntityId: string): RuntimeVec3V1 => {
+        const subject = runtimeSubjects(executionPlan).find(
+          ({ entityId }) => entityId === subjectEntityId,
+        );
+        if (isNil(subject)) throw new Error(`Missing Subject '${subjectEntityId}'.`);
+        return addVec3(
+          subject.spawnSubjectOriginPositionMetersXYZ,
+          subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+        );
+      };
       const bind = await internal.preparePossessionTarget({
         mode: "possessed",
         controlledEntityId: "rider-a",
@@ -6031,6 +7093,7 @@ function emptyActionProjection(simulationTick: number) {
         mountSlotId: "stand",
         establishedSimulationTick: 0,
       };
+      const riderBNativeBeforeFirst = debug.nativeControllerCenter("rider-b");
 
       const first = await internal.prepareMountedRelationshipTransition({
         operation: "mount",
@@ -6051,6 +7114,8 @@ function emptyActionProjection(simulationTick: number) {
       expect(afterFirst.capabilityStatesById[
         "capability-state:rider-b:locomotion"
       ]).not.toMatchObject({ mode: "suspended" });
+      expectNativeControllerAtLogicalCenter("rider-a");
+      expectNativeControllerAt("rider-b", riderBNativeBeforeFirst);
 
       const abortedSecond = await internal.prepareMountedRelationshipTransition({
         operation: "mount",
@@ -6063,6 +7128,8 @@ function emptyActionProjection(simulationTick: number) {
       expect(internal.readWorldProjection()).toEqual(afterFirst);
       await abortedSecond.abort();
       expect(internal.readWorldProjection()).toEqual(afterFirst);
+      expectNativeControllerAtLogicalCenter("rider-a");
+      expectNativeControllerAt("rider-b", riderBNativeBeforeFirst);
       expect(internal.readPossessionTarget()).toEqual({
         mode: "possessed",
         controlledEntityId: "mount-a",
@@ -6090,13 +7157,15 @@ function emptyActionProjection(simulationTick: number) {
         mode: "suspended",
         suspendedByRelationshipId: relationshipB.id,
       });
+      expectNativeControllerAtLogicalCenter("rider-a");
+      expectNativeControllerAtLogicalCenter("rider-b");
       expect(debug.subjectVisualOrigin("rider-a")).toEqual([
-        expect.closeTo(0.5, 6),
+        expect.closeTo(1.8, 6),
         expect.closeTo(0.45, 6),
         expect.closeTo(5, 6),
       ]);
       expect(debug.subjectVisualOrigin("rider-b")).toEqual([
-        expect.closeTo(10.5, 6),
+        expect.closeTo(11.8, 6),
         expect.closeTo(0.45, 6),
         expect.closeTo(5, 6),
       ]);
@@ -6148,6 +7217,8 @@ function emptyActionProjection(simulationTick: number) {
       ]).not.toMatchObject({ mode: "suspended" });
       expect(debug.subjectVisualOrigin("rider-a")).toEqual([0, 0, 5]);
       expect(debug.subjectVisualOrigin("rider-b")).toEqual([10, 0, 5]);
+      expectNativeControllerAt("rider-a", resetCenter("rider-a"));
+      expectNativeControllerAt("rider-b", resetCenter("rider-b"));
     } finally {
       await runtime.dispose();
     }
@@ -6178,6 +7249,161 @@ function emptyActionProjection(simulationTick: number) {
         .toEqual(initialProjection.spatialEntityStatesById[
           "pack-animal-a"
         ]!.positionMetersXYZ);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("publishes mounted board supportedBy only from retained support across ledge departure, landing, and reset", async () => {
+    const spec = createValidMountedOnAuthoringSpec();
+    const terrainNode = spec.nodes.find((node) => node.kind === "terrain");
+    const riderAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-a"
+    );
+    const mountAnchor = spec.nodes.find((node) =>
+      node.kind === "anchor" && node.id === "spawn-pack-animal-b"
+    );
+    if (
+      terrainNode?.kind !== "terrain" ||
+      riderAnchor?.kind !== "anchor" ||
+      riderAnchor.placement.kind !== "fixed" ||
+      mountAnchor?.kind !== "anchor" ||
+      mountAnchor.placement.kind !== "fixed"
+    ) throw new Error("Mounted support lifecycle fixture is incomplete.");
+    terrainNode.components.terrain.source = { kind: "procedural", relief: "flat" };
+    riderAnchor.placement.transform.positionMetersXYZ = [8, 2, 0];
+    mountAnchor.placement.transform.positionMetersXYZ = [0.5, 2, 0];
+
+    const compiled = compileExecutionPlan(spec);
+    const artifacts = runtimeTestWorldArtifactsForPlanV1(compiled);
+    const platformColliderSubshapeId = "collider:mounted-support-platform:primary";
+    const platformTraversalSurfaceId =
+      "traversal-surface:mounted-support-platform";
+    const supportPlatformPlan = Object.freeze({
+      ...compiled,
+      layout: Object.freeze({
+        ...compiled.layout,
+        layoutAssertions: Object.freeze([]),
+      }),
+      staticColliders: Object.freeze([
+        ...compiled.staticColliders,
+        Object.freeze({
+          entityId: "mounted-support-platform",
+          logicalSubshapeId: "primary",
+          colliderSubshapeId: platformColliderSubshapeId,
+          colliderHash: `sha256:${"c".repeat(64)}` as const,
+          transform: Object.freeze({
+            positionMetersXYZ: Object.freeze([0, 1, 0]) as readonly [number, number, number],
+            rotationEulerRadiansXYZ: Object.freeze([0, 0, 0]) as readonly [number, number, number],
+            scaleXYZ: Object.freeze([1, 1, 1]) as readonly [number, number, number],
+          }),
+          shape: Object.freeze({
+            kind: "box" as const,
+            sizeMetersXYZ: Object.freeze([5, 2, 5]) as readonly [number, number, number],
+          }),
+        }),
+      ]),
+      traversal: Object.freeze({
+        ...compiled.traversal,
+        surfaces: Object.freeze([
+          ...compiled.traversal.surfaces,
+          Object.freeze({
+            kind: "static-collider" as const,
+            traversalSurfaceId: platformTraversalSurfaceId,
+            surfaceEntityId: "mounted-support-platform",
+            colliderSubshapeId: platformColliderSubshapeId,
+            resourceRef:
+              "worldkit://traversal-surface-profile/ground.static@1",
+            resolvedVersion: "1",
+            resourceHash: `sha256:${"d".repeat(64)}` as const,
+            logicalSurfaceId: "mounted-support-platform",
+            logicalSubshapeId: "primary",
+            colliderHash: `sha256:${"c".repeat(64)}` as const,
+            traversalSurfaceProfileRef:
+              "worldkit://traversal-surface-profile/ground.static@1",
+            traversalSurfaceProfileResolvedVersion: "1",
+            traversalSurfaceProfileHash:
+              `sha256:${"d".repeat(64)}` as const,
+          }),
+        ]),
+      }),
+    }) satisfies CanonicalSceneExecutionPlanV1;
+    registerRuntimeTestWorldArtifactsV1({
+      ...artifacts,
+      executionPlan: supportPlatformPlan,
+    });
+    const runtime = await createRuntime(supportPlatformPlan, {}, false);
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const supportFacts = () => Object.values(
+        internal.readWorldProjection().semanticFactsById,
+      ).filter((fact) => fact.type === "supportedBy");
+      const initialBoardSupport = supportFacts().find((fact) =>
+        fact.supportedEntityId === "pack-animal-b"
+      );
+
+      expect(initialBoardSupport).toMatchObject({
+        supportSurfaceEntityId: "mounted-support-platform",
+        supportColliderSubshapeId: platformColliderSubshapeId,
+        supportTraversalSurfaceId: platformTraversalSurfaceId,
+        startedSimulationTick: 0,
+      });
+      expect(supportFacts().some((fact) =>
+        fact.supportedEntityId === "pack-animal-a"
+      )).toBe(false);
+
+      await bindRuntimeTestPossession(runtime, "pack-animal-b");
+
+      let unsupportedTick: number | undefined;
+      for (let index = 0; index < 180; index += 1) {
+        await internal.runFixedInputTick({
+          actions: ["move-right", "run"],
+          ticks: 1,
+        }, emptyActionProjection(
+          internal.readWorldProjection().simulationTick + 1,
+        ));
+        if (!supportFacts().some((fact) =>
+          fact.supportedEntityId === "pack-animal-b"
+        )) {
+          unsupportedTick = internal.readWorldProjection().simulationTick;
+          break;
+        }
+      }
+      expect(unsupportedTick).toBeDefined();
+
+      let landedBoardSupport: (typeof initialBoardSupport) | undefined;
+      for (let index = 0; index < 240; index += 1) {
+        await internal.runFixedInputTick(
+          { actions: [], ticks: 1 },
+          emptyActionProjection(
+            internal.readWorldProjection().simulationTick + 1,
+          ),
+        );
+        landedBoardSupport = supportFacts().find((fact) =>
+          fact.supportedEntityId === "pack-animal-b"
+        );
+        if (!isNil(landedBoardSupport)) break;
+      }
+      expect(landedBoardSupport).toMatchObject({
+        supportSurfaceEntityId: compiled.terrain.entityId,
+      });
+      expect(landedBoardSupport?.id).not.toBe(initialBoardSupport?.id);
+      expect(landedBoardSupport?.startedSimulationTick).toBeGreaterThan(
+        unsupportedTick!,
+      );
+      expect(supportFacts().some((fact) =>
+        fact.supportedEntityId === "pack-animal-a"
+      )).toBe(false);
+
+      runtime.reset();
+      const resetBoardSupport = supportFacts().find((fact) =>
+        fact.supportedEntityId === "pack-animal-b"
+      );
+      expect(resetBoardSupport).toMatchObject({
+        id: initialBoardSupport?.id,
+        supportSurfaceEntityId: "mounted-support-platform",
+        startedSimulationTick: 0,
+      });
     } finally {
       await runtime.dispose();
     }
@@ -6363,6 +7589,16 @@ function emptyActionProjection(simulationTick: number) {
     ), {}, false);
     try {
       const internal = farRuntime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const debug = createRuntimeDebugProbe(farRuntime);
+      const presentationMountSocket = createSubjectVisualProbe(farRuntime)
+        .visual("pack-animal-b")
+        .socketNodesById.get("MountStand");
+      if (isNil(presentationMountSocket)) {
+        throw new Error("Far Mount presentation Socket missing.");
+      }
+      presentationMountSocket.setAbsolutePosition(
+        new Vector3(...debug.subjectVisualOrigin("pack-animal-a")),
+      );
       const bind = await internal.preparePossessionTarget({
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
@@ -6504,7 +7740,7 @@ function emptyActionProjection(simulationTick: number) {
     }
   });
 
-  it("initializes a newly published Camera view on render without advancing fixed Tick", async () => {
+  it("keeps the initial bound Camera pending when render precedes bootstrap publication", async () => {
     const runtime = await createRuntime(
       createV5StaticColliderSupportExecutionPlan(),
       {},
@@ -6525,8 +7761,73 @@ function emptyActionProjection(simulationTick: number) {
       const afterSecondRender = runtime.snapshot();
 
       expect(afterFirstRender.tick).toBe(beforeRender.tick);
-      expect(afterFirstRender.camera.positionMetersXYZ).not.toEqual([0, 0, 0]);
-      expect(afterSecondRender.camera).toEqual(afterFirstRender.camera);
+      expect(afterFirstRender.camera).toEqual(beforeRender.camera);
+      expect(afterSecondRender.camera).toEqual(beforeRender.camera);
+
+      const expectedViewStateRevision =
+        internal.readViewProjection().viewStateRevision;
+      expect(() => runtime.publishInitialBoundCameraView(
+        expectedViewStateRevision,
+      )).toThrow("WORLDKIT_RUNTIME_INITIAL_CAMERA_VIEW_PHASE_INVALID");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("publishes the initial bound Camera only through the explicit bootstrap lifecycle", async () => {
+    const runtime = await createRuntime(
+      createV5StaticColliderSupportExecutionPlan(),
+      {},
+      false,
+    );
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "player",
+      });
+      prepared.commitPrepared();
+      const beforePublication = runtime.snapshot();
+      const expectedViewStateRevision =
+        internal.readViewProjection().viewStateRevision;
+      const initialPublication = runtime.publishInitialBoundCameraView(
+        expectedViewStateRevision,
+      );
+      expect(initialPublication.tick).toBe(0);
+      expect(initialPublication.camera.positionMetersXYZ).not.toEqual([0, 0, 0]);
+      expect(initialPublication.camera.selectionDecision).toBeDefined();
+      expect(initialPublication.camera).not.toEqual(beforePublication.camera);
+      expect(runtime.publishInitialBoundCameraView(expectedViewStateRevision))
+        .toEqual(initialPublication);
+      expect(() => runtime.publishInitialBoundCameraView(
+        expectedViewStateRevision + 1,
+      )).toThrow("WORLDKIT_RUNTIME_INITIAL_CAMERA_VIEW_REVISION_MISMATCH");
+
+      runtime.renderFrame();
+      expect(runtime.snapshot().camera).toEqual(initialPublication.camera);
+      expect(() => runtime.publishInitialBoundCameraView(
+        expectedViewStateRevision,
+      )).toThrow("WORLDKIT_RUNTIME_INITIAL_CAMERA_VIEW_PHASE_INVALID");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("rejects bootstrap Camera publication after Golden fixed-Tick replay begins", async () => {
+    const runtime = await createRiggedRuntime();
+    try {
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const first = await internal.prepareFixedInputTick!(
+        { actions: [], ticks: 1 },
+        emptyActionProjection(1),
+      );
+      await expect(first.abort()).resolves.toBeUndefined();
+
+      expect(() => runtime.publishInitialBoundCameraView(
+        internal.readViewProjection().viewStateRevision,
+      )).toThrow("WORLDKIT_RUNTIME_INITIAL_CAMERA_VIEW_PHASE_INVALID");
     } finally {
       await runtime.dispose();
     }
@@ -6582,13 +7883,13 @@ function emptyActionProjection(simulationTick: number) {
       const packAnimal = runtimeSubjects(executionPlan).find(
         (subject) => subject.entityId === "pack-animal-a",
       )!;
-      expect(
+      expect(() =>
         runtime.setCameraViewPreference({
           mode: "camera-rig-profile",
           cameraRigProfileRef:
           packAnimal.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
-        }).camera.targetEntityId,
-      ).toBe("pack-animal-a");
+        })
+      ).toThrow("WORLDKIT_RUNTIME_CAMERA_VIEW_EPOCH_PENDING");
       const before = internal.readWorldProjection();
       const moved = await internal.runFixedInputTick({
         actions: ["move-right"],
@@ -6596,6 +7897,11 @@ function emptyActionProjection(simulationTick: number) {
       }, emptyActionProjection(
         internal.readWorldProjection().simulationTick + 1,
       ));
+      expect(runtime.setCameraViewPreference({
+        mode: "camera-rig-profile",
+        cameraRigProfileRef:
+          packAnimal.capabilityAssembly.cameraContext.defaultCameraRigProfileRef,
+      }).camera.targetEntityId).toBe("pack-animal-a");
 
       expect(runtime.snapshot().subjectStatesByEntityId.player!.activeActionId)
         .toBe("idle");
@@ -6627,7 +7933,15 @@ function emptyActionProjection(simulationTick: number) {
         mode: "walk",
         movementMedium: "ground",
       });
-      expect(moved.semanticFactsById).toEqual({});
+      const supportedEntityIds = Object.values(moved.semanticFactsById)
+        .filter((fact) => fact.type === "supportedBy")
+        .map((fact) => fact.supportedEntityId)
+        .sort();
+      expect(supportedEntityIds).toEqual([
+        "pack-animal-a",
+        "pack-animal-b",
+        "player",
+      ]);
 
       const cameraBeforeRelease = runtime.snapshot().camera;
       const release = await internal.preparePossessionTarget({ mode: "unbound" });
@@ -6723,7 +8037,6 @@ function emptyActionProjection(simulationTick: number) {
   it("moves along the yaw-only camera frame while Subject facing catches up", async () => {
     const { runtime } = await createRuntimeWithPackageSubject();
     try {
-      await bindRuntimeTestPossession(runtime, "player");
       runtime.adjustCameraView({ yawDeltaRadians: 1.2 });
       await runtime.runFixedInput({ actions: [], ticks: 120 });
 
@@ -6789,7 +8102,6 @@ function emptyActionProjection(simulationTick: number) {
   it("aligns the Golden Subject front with off-axis camera-relative movement", async () => {
     const runtime = await createRiggedRuntime();
     try {
-      await bindRuntimeTestPossession(runtime, "player");
       runtime.setCameraViewPreference({
         mode: "camera-rig-profile",
         cameraRigProfileRef: ORBIT_CAMERA_PROFILE_REF,
@@ -6976,14 +8288,22 @@ function emptyActionProjection(simulationTick: number) {
   });
 
   it("camera follows Subject Origin plus target height", async () => {
-    const { runtime, executionPlan } = await createRuntimeWithPackageSubject();
+    const { runtime } = await createRuntimeWithPackageSubject();
+    const previousCameraPublication = runtime.snapshot().camera;
     const possession = await runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]()
       .preparePossessionTarget({
       mode: "possessed",
       controlledEntityId: "pack-animal-a",
     });
     possession.commitPrepared();
-    const snapshot = runtime.snapshot();
+    const possessionPublication = runtime.snapshot();
+    expect(possessionPublication.possessionTarget).toEqual({
+      mode: "possessed",
+      controlledEntityId: "pack-animal-a",
+    });
+    expect(possessionPublication.camera).toEqual(previousCameraPublication);
+
+    const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
     const state = snapshot.subjectStatesByEntityId["pack-animal-a"]!;
     expect(snapshot.possessionTarget).toEqual({
       mode: "possessed",
@@ -7008,7 +8328,10 @@ function emptyActionProjection(simulationTick: number) {
       pitchDeltaRadians: -runtimeBootstrap(executionPlan).initialCamera.pitchRadians,
       zoomDeltaMeters: 3 - runtimeBootstrap(executionPlan).initialCamera.distanceMeters,
     });
-    const adjusted = runtime.snapshot();
+    expect(runtime.snapshot().camera.positionMetersXYZ).toEqual(
+      before.positionMetersXYZ,
+    );
+    const adjusted = await runtime.runFixedInput({ actions: [], ticks: 1 });
     expect(adjusted.camera.positionMetersXYZ).not.toEqual(before.positionMetersXYZ);
     expect(adjusted.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
     expect(adjusted.camera.viewDistanceOffsetMeters).toBeLessThan(0);

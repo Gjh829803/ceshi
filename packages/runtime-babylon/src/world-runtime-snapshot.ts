@@ -11,7 +11,7 @@ import type {
   RuntimeHostPhaseV1,
   WorldSessionPublicationV1,
 } from "@whitebox-world/runtime-host";
-import { isNil } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 import type { BabylonRuntimeProjectionV1 } from "./runtime-projection";
@@ -57,6 +57,7 @@ function cameraProjection(
     isNil(camera.viewYawOffsetRadians) ||
     isNil(camera.viewPitchOffsetRadians) ||
     isNil(camera.viewDistanceOffsetMeters) ||
+    isNil(camera.targetEntityId) ||
     isNil(camera.selectionDecision) ||
     isNil(camera.isTargetSocketFallback) ||
     isNil(camera.desiredTargetPositionMetersXYZ) ||
@@ -77,10 +78,26 @@ function cameraProjection(
       "WORLDKIT_RUNTIME_CAMERA_STATE_INVALID: Bound camera state is incomplete.",
     );
   }
+  if (
+    camera.targetEntityId !== camera.selectionDecision.targetEntityId ||
+    camera.selectionDecision.committedTick !==
+      publication.worldState.simulationTick ||
+    camera.activeCameraProfileRef !==
+      camera.selectionDecision.activeCameraRigProfileRef ||
+    !isEqual(
+      camera.activeCameraModifierRefs,
+      camera.selectionDecision.activeCameraModifierRefs,
+    ) ||
+    camera.safeFallbackActive !== camera.selectionDecision.fallbackActive
+  ) {
+    throw new Error(
+      "WORLDKIT_RUNTIME_CAMERA_STATE_INVALID: Bound camera publication combines different committed epochs.",
+    );
+  }
   return Object.freeze({
     mode: "tracking",
     id: camera.entityId,
-    targetEntityId: controlledEntityId,
+    targetEntityId: camera.targetEntityId,
     positionMetersXYZ: Object.freeze([...camera.positionMetersXYZ]) as
       readonly [number, number, number],
     activeCameraProfileRef: camera.activeCameraProfileRef,

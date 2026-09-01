@@ -1811,6 +1811,17 @@ describe("GameplaySemanticFactV1", () => {
     expect(reads).toBe(0);
   });
 
+  it("rejects the replaced supportedBy shape without exact traversal identity", () => {
+    const legacyBody = withoutKey(supportedByFact, "supportTraversalSurfaceId");
+    expect(() => deriveGameplaySemanticFactIdV1(legacyBody)).toThrow(
+      "closed GameplaySemanticFactV1 schema",
+    );
+    expect(() => parseGameplaySemanticFactV1({
+      ...legacyBody,
+      id: supportedByFact.id,
+    })).toThrow("closed GameplaySemanticFactV1 schema");
+  });
+
   it.each([
     ["unsorted touching endpoints", {
       ...touchingFact,
@@ -1824,6 +1835,10 @@ describe("GameplaySemanticFactV1", () => {
       ...supportedByFact,
       supportPointMetersXYZ: [0, Infinity, 2],
     }],
+    ["missing exact support traversal identity", withoutKey(
+      supportedByFact,
+      "supportTraversalSurfaceId",
+    )],
     ["unsafe started tick", {
       ...insideVolumeFact,
       startedSimulationTick: Number.MAX_SAFE_INTEGER + 1,

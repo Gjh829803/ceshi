@@ -1,36 +1,41 @@
-import type {
-  CameraRelationshipContextV1,
-  CameraRelationshipRoleV1,
-} from "@whitebox-world/camera";
+import type { CameraRelationshipContextV1 } from "@whitebox-world/camera";
 import type { MountedOnRelationshipStateV1 } from "@whitebox-world/gameplay-contracts";
 
 export interface CameraViewTargetContextV1 {
   readonly controlledEntityId: string;
+  readonly targetEntityId: string;
   readonly relationshipContexts: readonly CameraRelationshipContextV1[];
-  readonly relationshipRole: CameraRelationshipRoleV1;
+}
+
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /**
  * Projects committed Gameplay relationships into Camera Domain context without
- * changing the physical ViewTarget. A unique mounted relationship identifies
- * the local Rider context; an ambiguous shared Mount fails closed.
+ * changing the committed controlled Entity or physical ViewTarget. Unique
+ * Rider resolution and shared-Mount ambiguity are Camera Rule concerns.
  */
 export function resolveCameraViewTargetContextV1(
-  targetEntityId: string,
-  mountedRelationships: readonly MountedOnRelationshipStateV1[],
+  input: Readonly<{
+    controlledEntityId: string;
+    targetEntityId: string;
+    mountedRelationships: readonly MountedOnRelationshipStateV1[];
+  }>,
 ): CameraViewTargetContextV1 {
-  const relevantRelationships = mountedRelationships
+  const relevantEntityIds = new Set([
+    input.controlledEntityId,
+    input.targetEntityId,
+  ]);
+  const relevantRelationships = input.mountedRelationships
     .filter((relationship) =>
-      relationship.riderEntityId === targetEntityId ||
-      relationship.mountEntityId === targetEntityId
+      relevantEntityIds.has(relationship.riderEntityId) ||
+      relevantEntityIds.has(relationship.mountEntityId)
     )
-    .sort((left, right) => left.id.localeCompare(right.id));
-  const unambiguousRelationship = relevantRelationships.length === 1
-    ? relevantRelationships[0]
-    : undefined;
+    .sort((left, right) => compareCodeUnits(left.id, right.id));
   return Object.freeze({
-    controlledEntityId:
-      unambiguousRelationship?.riderEntityId ?? targetEntityId,
+    controlledEntityId: input.controlledEntityId,
+    targetEntityId: input.targetEntityId,
     relationshipContexts: Object.freeze(
       relevantRelationships.map((relationship) => Object.freeze({
         id: relationship.id,
@@ -40,7 +45,5 @@ export function resolveCameraViewTargetContextV1(
         mountSlotId: relationship.mountSlotId,
       })),
     ),
-    relationshipRole:
-      unambiguousRelationship === undefined ? "none" : "rider",
   });
 }

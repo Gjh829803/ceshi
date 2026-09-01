@@ -117,6 +117,7 @@ function worldProjection(
 
 interface FakeRuntimeV1 {
   readonly canvas: HTMLCanvasElement;
+  readonly publishInitialBoundCameraView: ReturnType<typeof vi.fn>;
   readonly renderFrame: ReturnType<typeof vi.fn>;
   readonly renderFrameWhenReady: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
@@ -126,12 +127,19 @@ interface FakeRuntimeV1 {
 function fakeRuntimeFactory(
   configuration: RuntimeWorldConfigurationV1,
   options: Readonly<{
+    rejectCandidateInitialCameraPublication?: boolean;
     rejectCandidateRender?: boolean;
     usePreparedFixedInput?: boolean;
   }> = {},
 ) {
   const runtimes: FakeRuntimeV1[] = [];
   const commitCountsAtReady: number[] = [];
+  const candidateReadinessSteps: Array<Readonly<{
+    runtimeIndex: number;
+    stage: "camera-publication" | "render";
+    commitCount: number;
+    viewStateRevision?: number;
+  }>> = [];
   const prepareFixedInputTick = vi.fn();
   const legacyFixedInputTick = vi.fn();
   const factory = vi.fn(async ({
@@ -145,8 +153,8 @@ function fakeRuntimeFactory(
       ),
     });
     let preparedProjection = worldProjection(configuration);
-    let runtimeTick = preparedProjection.simulationTick;
     let renderFrameIndex = 0;
+    const runtimeIndex = runtimes.length;
     const dispose = vi.fn(async () => undefined);
     const renderFrame = vi.fn(() => {
       if (options.rejectCandidateRender === true && runtimes.length === 2) {
@@ -165,15 +173,37 @@ function fakeRuntimeFactory(
     });
     const runtime: FakeRuntimeV1 = {
       canvas,
+      publishInitialBoundCameraView: vi.fn((viewStateRevision: number) => {
+        candidateReadinessSteps.push({
+          runtimeIndex,
+          stage: "camera-publication",
+          commitCount: harness.commitCount,
+          viewStateRevision,
+        });
+        if (
+          options.rejectCandidateInitialCameraPublication === true &&
+          runtimeIndex === 1
+        ) {
+          throw new Error("candidate initial Camera publication rejected");
+        }
+        return runtime.snapshot();
+      }),
       renderFrame,
       renderFrameWhenReady: vi.fn(async () => {
         commitCountsAtReady.push(harness.commitCount);
+        candidateReadinessSteps.push({
+          runtimeIndex,
+          stage: "render",
+          commitCount: harness.commitCount,
+        });
         return renderFrame();
       }),
       dispose,
       snapshot: (): BabylonRuntimeProjectionV1 => ({
         runtimeBackend: "babylon-havok",
-        tick: runtimeTick,
+        tick: options.usePreparedFixedInput === true
+          ? preparedProjection.simulationTick
+          : harness.publishedWorldProjection.simulationTick,
         ready: true,
         possessionTarget: {
           mode: "possessed",
@@ -186,7 +216,7 @@ function fakeRuntimeFactory(
           targetEntityId:
             configuration.worldRuntimeBootstrap.initialControlledEntityId,
           positionMetersXYZ: [1, 2, 3],
-          activeCameraProfileRef: "worldkit://camera-profile/third-person@1",
+          activeCameraProfileRef: "worldkit://camera-rig/third-person@1",
           activeCameraRigRef: "worldkit://camera-rig/third-person@1",
           activeCameraModifierRefs: [],
           safeFallbackActive: false,
@@ -195,7 +225,9 @@ function fakeRuntimeFactory(
           viewDistanceOffsetMeters: 0,
           selectionDecision: {
             schemaVersion: 2,
-            committedTick: 0,
+            committedTick: options.usePreparedFixedInput === true
+              ? preparedProjection.simulationTick
+              : harness.publishedWorldProjection.simulationTick,
             targetEntityId:
               configuration.worldRuntimeBootstrap.initialControlledEntityId,
             activeCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
@@ -257,7 +289,6 @@ function fakeRuntimeFactory(
         projectedViewStateAfter: Object.freeze({ viewStateRevision: 0 }),
         commitPrepared: () => {
           preparedProjection = projectedWorldStateAfter;
-          runtimeTick = projectedWorldStateAfter.simulationTick;
         },
         abort: async () => undefined,
       });
@@ -321,6 +352,7 @@ function fakeRuntimeFactory(
     factory,
     runtimes,
     commitCountsAtReady,
+    candidateReadinessSteps,
     prepareFixedInputTick,
     legacyFixedInputTick,
   };
@@ -333,7 +365,10 @@ function fakeDocument(): Pick<Document, "createElement"> {
 }
 
 async function createHarness(
-  options: Readonly<{ rejectCandidateRender?: boolean }> = {},
+  options: Readonly<{
+    rejectCandidateInitialCameraPublication?: boolean;
+    rejectCandidateRender?: boolean;
+  }> = {},
 ) {
   const configuration = await worldConfiguration();
   const runtimeFactory = fakeRuntimeFactory(configuration, options);
@@ -446,13 +481,15 @@ describe("Gameplay Babylon Runtime coordinator", () => {
         ),
       });
     };
+    let worldSessionIndex = 0;
     const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: "runtime.mounted-havok",
       initialWorldConfiguration: loaded.runtimeWorldConfiguration,
       gameplayActionRequestResolver: loaded.gameplayActionRequestResolver,
       document: fakeDocument(),
       runtimeBundleFactory,
-      worldSessionIdFactory: () => "world-session.mounted-havok",
+      worldSessionIdFactory: () =>
+        `world-session.mounted-havok.${worldSessionIndex += 1}`,
     });
     const initial = coordinator.snapshot();
     if (initial.view.camera.mode !== "tracking") {
@@ -511,8 +548,36 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       riderEntityId: "player",
       mountEntityId: "skateboard",
     });
+    const cameraImmediatelyAfterMount = coordinator.snapshot().view.camera;
+    expect.soft(cameraImmediatelyAfterMount).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+      selectionDecision: { targetEntityId: "player" },
+    });
+    expect(cameraImmediatelyAfterMount.mode).toBe("tracking");
+    if (cameraImmediatelyAfterMount.mode === "tracking") {
+      expect(cameraImmediatelyAfterMount.requestedArmLengthMeters)
+        .toBeCloseTo(5, 6);
+    }
 
-    const beforeBoardMove = coordinator.snapshot().world
+    const mountedFirstFixedTick = await coordinator.runFixedInput({
+      actions: [],
+      ticks: 1,
+    });
+    expect(mountedFirstFixedTick.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+    });
+    if (mountedFirstFixedTick.view.camera.mode === "tracking") {
+      expect(mountedFirstFixedTick.view.camera.requestedArmLengthMeters)
+        .toBeCloseTo(7, 6);
+    }
+
+    const beforeBoardMove = mountedFirstFixedTick.world
       .subjectStatesByEntityId.skateboard!.entityState.positionMetersXYZ;
     const afterBoardMove = await coordinator.runFixedInput({
       actions: ["move-forward"],
@@ -590,7 +655,36 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       coordinator.getGameplayInspectionSnapshot()
         .relationshipStatesById[MOUNTED_SKATEBOARD_S1_RELATIONSHIP_ID],
     ).toBeUndefined();
-    const riderBeforeIndependentMove = coordinator.snapshot().world
+    const cameraImmediatelyAfterDismount = coordinator.snapshot().view.camera;
+    expect.soft(cameraImmediatelyAfterDismount).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+      selectionDecision: { targetEntityId: "skateboard" },
+    });
+    expect(cameraImmediatelyAfterDismount.mode).toBe("tracking");
+    if (cameraImmediatelyAfterDismount.mode === "tracking") {
+      expect(cameraImmediatelyAfterDismount.requestedArmLengthMeters)
+        .toBeCloseTo(7, 6);
+    }
+
+    const dismountedFirstFixedTick = await coordinator.runFixedInput({
+      actions: [],
+      ticks: 1,
+    });
+    expect(dismountedFirstFixedTick.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+    });
+    if (dismountedFirstFixedTick.view.camera.mode === "tracking") {
+      expect(dismountedFirstFixedTick.view.camera.requestedArmLengthMeters)
+        .toBeCloseTo(5, 6);
+    }
+
+    const riderBeforeIndependentMove = dismountedFirstFixedTick.world
       .subjectStatesByEntityId.player!.entityState.positionMetersXYZ;
     const independentlyMoved = await coordinator.runFixedInput({
       actions: ["move-forward"],
@@ -605,6 +699,55 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       targetEntityId: "player",
       activeCameraModifierRefs: [],
     });
+
+    const resetProbeMount = await coordinator.executeGameplayCommand({
+      schemaVersion: 1,
+      id: `${MOUNTED_SKATEBOARD_S1_MOUNT_COMMAND_ID}.reset-probe`,
+      type: "action.activate",
+      runtimeSessionId: initial.runtimeSessionId,
+      worldSessionId: independentlyMoved.worldSessionId,
+      controllerEntityId: PLAYGROUND_CONTROLLER_ENTITY_ID_V1,
+      expectedPossession: { mode: "possessed", controlledEntityId: "player" },
+      actionExecutionId: "action-execution.mounted-havok.reset-probe",
+      semanticActionRef: MOUNTED_SKATEBOARD_S1_MOUNT_ACTION_REF,
+      actorEntityId: "player",
+      actionRequestRef: MOUNTED_SKATEBOARD_S1_MOUNT_REQUEST_REF,
+      actionRequestHash:
+        sha256CanonicalJson(mountRequest) as `sha256:${string}`,
+    });
+    if (resetProbeMount.status !== "committed") {
+      throw new Error(JSON.stringify(resetProbeMount.diagnostic));
+    }
+    const mountedBeforeReset = await coordinator.runFixedInput({
+      actions: [],
+      ticks: 1,
+    });
+    expect(mountedBeforeReset.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "skateboard",
+      activeCameraModifierRefs: [
+        "worldkit://camera-modifier/mounted-framing@1",
+      ],
+    });
+    if (mountedBeforeReset.view.camera.mode === "tracking") {
+      expect(mountedBeforeReset.view.camera.requestedArmLengthMeters)
+        .toBeCloseTo(7, 6);
+    }
+
+    const reset = await coordinator.resetWithInitialControlBinding();
+    expect(reset.worldSessionId).not.toBe(mountedBeforeReset.worldSessionId);
+    expect(reset.world.simulationTick).toBe(0);
+    expect(Object.values(
+      reset.world.gameplayInspection.relationshipStatesById,
+    ).some((relationship) => relationship.type === "mountedOn")).toBe(false);
+    expect(reset.view.camera).toMatchObject({
+      mode: "tracking",
+      targetEntityId: "player",
+      activeCameraModifierRefs: [],
+    });
+    if (reset.view.camera.mode === "tracking") {
+      expect(reset.view.camera.requestedArmLengthMeters).toBeCloseTo(5, 6);
+    }
 
     await coordinator.dispose();
   }, 30_000);
@@ -675,12 +818,13 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     await coordinator.dispose();
   }, 30_000);
 
-  it("commits the canonical initial possession and renders before create resolves", async () => {
+  it("publishes the bound initial Camera before the readiness render and create resolution", async () => {
     const {
       configuration,
       coordinator,
       runtimes,
       commitCountsAtReady,
+      candidateReadinessSteps,
     } = await createHarness();
     const publication = coordinator.hostPublication();
 
@@ -694,8 +838,21 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       }),
     ]);
     expect(runtimes).toHaveLength(1);
+    expect(runtimes[0]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
+    expect(runtimes[0]?.publishInitialBoundCameraView).toHaveBeenCalledWith(
+      publication.viewState.viewStateRevision,
+    );
     expect(runtimes[0]?.renderFrame).toHaveBeenCalledOnce();
     expect(commitCountsAtReady).toEqual([1]);
+    expect(candidateReadinessSteps).toEqual([
+      {
+        runtimeIndex: 0,
+        stage: "camera-publication",
+        commitCount: 1,
+        viewStateRevision: publication.viewState.viewStateRevision,
+      },
+      { runtimeIndex: 0, stage: "render", commitCount: 1 },
+    ]);
     expect(coordinator.activeRuntime()).toBe(runtimes[0]);
     expect(coordinator.activeCanvas()).toBe(runtimes[0]?.canvas);
 
@@ -707,6 +864,7 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       configuration,
       coordinator,
       commitCountsAtReady,
+      candidateReadinessSteps,
       runtimes,
     } = await createHarness();
     const current = coordinator.currentRuntimePublicationIdentity();
@@ -730,7 +888,21 @@ describe("Gameplay Babylon Runtime coordinator", () => {
 
     expect(result.status).toBe("published");
     expect(commitCountsAtReady).toEqual([1, 1]);
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledWith(
+      coordinator.hostPublication().viewState.viewStateRevision,
+    );
     expect(runtimes[1]?.renderFrame).toHaveBeenCalledOnce();
+    expect(candidateReadinessSteps.slice(-2)).toEqual([
+      {
+        runtimeIndex: 1,
+        stage: "camera-publication",
+        commitCount: 1,
+        viewStateRevision:
+          coordinator.hostPublication().viewState.viewStateRevision,
+      },
+      { runtimeIndex: 1, stage: "render", commitCount: 1 },
+    ]);
     expect(Object.values(
       coordinator.hostPublication().gameplayInspection.relationshipStatesById,
     )).toEqual([
@@ -841,8 +1013,39 @@ describe("Gameplay Babylon Runtime coordinator", () => {
     await coordinator.dispose();
   });
 
+  it("keeps the current runtime when candidate initial Camera publication fails before render", async () => {
+    const { coordinator, runtimes, candidateReadinessSteps } =
+      await createHarness({ rejectCandidateInitialCameraPublication: true });
+    const originalWorldSessionId = coordinator.snapshot().worldSessionId;
+
+    await expect(coordinator.resetWithInitialControlBinding()).rejects.toThrow(
+      /WORLD_SESSION_FAILED/,
+    );
+
+    expect(runtimes).toHaveLength(2);
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
+    expect(runtimes[1]?.renderFrameWhenReady).not.toHaveBeenCalled();
+    expect(runtimes[1]?.dispose).toHaveBeenCalledOnce();
+    expect(candidateReadinessSteps.slice(-1)).toEqual([
+      expect.objectContaining({
+        runtimeIndex: 1,
+        stage: "camera-publication",
+        commitCount: 1,
+      }),
+    ]);
+    expect(coordinator.snapshot().worldSessionId).toBe(originalWorldSessionId);
+    expect(coordinator.activeRuntime()).toBe(runtimes[0]);
+
+    await coordinator.dispose();
+  });
+
   it("publishes the rendered bound reset candidate and disposes the replaced owner once", async () => {
-    const { configuration, coordinator, runtimes } = await createHarness();
+    const {
+      configuration,
+      coordinator,
+      runtimes,
+      candidateReadinessSteps,
+    } = await createHarness();
     const previousRuntime = runtimes[0];
     const previousWorldSessionId = coordinator.snapshot().worldSessionId;
 
@@ -860,7 +1063,16 @@ describe("Gameplay Babylon Runtime coordinator", () => {
       }),
     ]);
     expect(runtimes).toHaveLength(2);
+    expect(runtimes[1]?.publishInitialBoundCameraView).toHaveBeenCalledOnce();
     expect(runtimes[1]?.renderFrame).toHaveBeenCalledOnce();
+    expect(candidateReadinessSteps.slice(-2)).toEqual([
+      expect.objectContaining({
+        runtimeIndex: 1,
+        stage: "camera-publication",
+        commitCount: 1,
+      }),
+      { runtimeIndex: 1, stage: "render", commitCount: 1 },
+    ]);
     expect(coordinator.activeRuntime()).toBe(runtimes[1]);
     expect(coordinator.activeCanvas()).toBe(runtimes[1]?.canvas);
     expect(previousRuntime?.dispose).toHaveBeenCalledOnce();

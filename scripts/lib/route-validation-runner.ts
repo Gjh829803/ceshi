@@ -595,6 +595,9 @@ export async function runTrustedRouteValidationV1(
           }),
         );
         possession.commitPrepared();
+        runtime.publishInitialBoundCameraView(
+          possession.projectedViewStateAfter.viewStateRevision,
+        );
         const providerRuntimePort =
           runtimeBabylon.createBabylonTraversalRuntimePortV1({
             runtime,

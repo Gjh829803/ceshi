@@ -1436,24 +1436,29 @@ interface CameraTransitionSpec {
   easing: "linear" | "ease-in-out";
 }
 
-interface CameraContextBinding {
+interface CameraContextRuleV2 {
   id: string;
-  when: {
-    allTags?: readonly string[];
-    anyTags?: readonly string[];
-    excludedTags?: readonly string[];
-    mountRoles?: readonly ("driver" | "rider" | "passenger")[];
-    locomotionModes?: readonly string[];
-    movementMediums?: readonly ("ground" | "water" | "air")[];
-  };
-  rigRef: ResourceRef;
-  targetPolicy: "controlled-entity" | "rider" | "explicit-entity";
-  explicitTargetEntityId?: EntityId;
   priority: number;
+  when: {
+    allRelationshipConditions?: readonly CameraRelationshipConditionV1[];
+    locomotionStatuses?: readonly ("active" | "suspended")[];
+    mobilityModes?: readonly ("grounded" | "airborne")[];
+    gaits?: readonly ("none" | "idle" | "walk" | "run")[];
+    verticalPhases?: readonly ("none" | "takeoff" | "rising" | "apex" | "falling" | "landing")[];
+    movementMediums?: readonly ("ground" | "air")[];
+    requiredActiveActionRefs?: readonly ResourceRef[];
+    actionInterruptibility?: "interruptible" | "non-interruptible";
+    minimumSpeedMetersPerSecond?: number;
+    maximumSpeedMetersPerSecond?: number;
+    requiredSocketIds?: readonly string[];
+    requiredCameraContextTags?: readonly string[];
+  };
+  cameraRigProfileRef?: ResourceRef;
+  cameraModifierRefs?: readonly ResourceRef[];
 }
 ```
 
-`CameraControlSpec` 只声明世界允许的控制语义、范围和默认行为；鼠标灵敏度、手柄曲线、反转 Y 轴等用户偏好属于 Host/User Settings，不写入 AuthoringSpec。Context Binding 按 priority、条件特异度和稳定 Binding ID 解析；仍然歧义时编译失败，不能按注册顺序选择。
+`CameraControlSpec` 只声明世界允许的控制语义、范围和默认行为；鼠标灵敏度、手柄曲线、反转 Y 轴等用户偏好属于 Host/User Settings，不写入 AuthoringSpec。Camera Rule 只消费同一 committed Tick 的强类型 Gameplay/Locomotion/Action/Relationship 事实；Tag 不能旁路已有的强类型字段或 Ref。规则按 priority 和稳定 Rule ID 解析；同 priority 歧义时 admission 失败，不能按注册顺序选择。完整当前合同以 `2026-08-24-context-driven-gameplay-camera-composition-design.md` 为准。
 
 #### 15.3.1 第一人称
 
@@ -1525,36 +1530,29 @@ camera.third-person.flight@1
   "kind": "camera",
   "components": {
     "cameraRig": {
-      "defaultRigRef": "camera.third-person.standard@1",
+      "defaultRigRef": "worldkit://camera/third-person.standard@1",
       "allowedRigRefs": [
-        "camera.first-person.standard@1",
-        "camera.third-person.standard@1"
+        "worldkit://camera/first-person.standard@1",
+        "worldkit://camera/third-person.standard@1"
       ],
       "target": {
-        "entityId": "player",
-        "socketId": "camera-root"
+        "targetEntityId": "player"
       },
-      "manualSwitchAllowed": true,
-      "contextBindings": [
-        {
-          "id": "on-foot-third-person",
-          "when": { "allTags": ["locomotion.ground"] },
-          "rigRef": "camera.third-person.standard@1",
-          "targetPolicy": "controlled-entity",
-          "priority": 50
-        },
-        {
-          "id": "mounted-flight",
-          "when": { "allTags": ["locomotion.mounted", "locomotion.flight"] },
-          "rigRef": "camera.third-person.flight@1",
-          "targetPolicy": "controlled-entity",
-          "priority": 100
-        }
-      ]
+      "thirdPerson": {
+        "pitchRadians": 0.18,
+        "distanceMeters": 5,
+        "targetHeightMeters": 1.2,
+        "fovDegrees": 56,
+        "aspectRatio": 1.7777777778
+      },
+      "manualSwitchAllowed": true
     }
   }
 }
 ```
+
+AuthoringSpec 只选择允许的初始 Rig；自动上下文规则来自锁定的 Registry Camera Context
+Profile，并使用上面的 `CameraContextRuleV2`，不会在 Camera 节点内复制第二套规则方言。
 
 AI 普通模式仍可以使用：
 

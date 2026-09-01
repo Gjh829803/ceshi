@@ -8,7 +8,10 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import {
@@ -53,6 +56,8 @@ function gameplayBootstrapFor(
     id: "compiler-current-test.gameplay",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/compiler-current-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],
@@ -74,6 +79,8 @@ function projectionGameplayBootstrapFor(
     id: "bna1-v5-projection.gameplay",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/bna1-v5-projection@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],
@@ -807,9 +814,9 @@ describe("compileWorld", () => {
       worldRuntimeBootstrapHash: compiled.worldRuntimeBootstrap.contentHash,
     }).toEqual({
       executionPlanHash:
-        "sha256:64438fe580673eec72a141e1a9035b70ec3e133f4c83eb7c851f975399f138a4",
+        "sha256:57b871b469599ed5afa74fa72ba3721908515553ebc1109ce22afe3086b76c7b",
       worldRuntimeBootstrapHash:
-        "sha256:37221f3063ac420945e37ace24a246fdfb4a20aa09bf24e2bc17290199952d61",
+        "sha256:5c790777655ed534a635fa434c5246b29eada1877d199af861975908608131d6",
     });
   });
 
@@ -1637,6 +1644,8 @@ describe("compileWorld", () => {
           id: `${spec.id}.compile-product-fixture`,
           version: 1,
           resourceRef: `worldkit://gameplay-bootstrap/${spec.id}.compile-product-fixture@1`,
+          semanticFactProjectorProfileResource:
+            RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
           entityDescriptors: [],
           featureResourceLocks: [],
           semanticActionDefinitions: [],

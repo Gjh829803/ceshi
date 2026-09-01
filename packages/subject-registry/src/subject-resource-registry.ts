@@ -1,4 +1,5 @@
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { parseCameraContextRuleV2 } from "@whitebox-world/camera";
 import { isNil } from "lodash-es";
 import {
   applyCameraRigParameterOverridesV1,
@@ -25,6 +26,7 @@ import type {
 } from "./types-v2";
 import type {
   CameraContextProfileV1,
+  CameraContextProfileInputV1,
   CameraModifierProfileInputV1,
   CameraModifierProfileV1,
   CameraRigAlgorithmDefinitionV1,
@@ -834,6 +836,16 @@ function validateCameraModifierProfile(source: CameraModifierProfileInputV1): vo
   }
 }
 
+function validateCameraContextProfile(source: CameraContextProfileInputV1): void {
+  try {
+    for (const rule of source.rules) parseCameraContextRuleV2(rule);
+  } catch {
+    throw new Error(
+      `SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_RULE: '${source.resourceRef}'.`,
+    );
+  }
+}
+
 function validateReferences(resourcesByRef: ReadonlyMap<string, SubjectRegistryResourceV3>): void {
   for (const resource of resourcesByRef.values()) {
     for (const referenceEdge of listSubjectRegistryReferenceEdgesV1(resource)) {
@@ -972,6 +984,7 @@ export function createSubjectResourceRegistry(
     if (source.kind === "medium-profile") validateMediumProfile(source);
     if (source.kind === "camera-rig-profile") validateCameraProfile(source);
     if (source.kind === "camera-modifier-profile") validateCameraModifierProfile(source);
+    if (source.kind === "camera-context-profile") validateCameraContextProfile(source);
     if (source.kind === "subject-definition") {
       const resourceRef = source.resourceRef;
       if (!("schemaVersion" in source) || source.schemaVersion !== 3) {

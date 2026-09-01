@@ -25,11 +25,11 @@
 
 | URL 参数 | 实验内容 | 已证明的能力 | 必须避免的误读 |
 |---|---|---|---|
-| `?scene=grassland` | 640m × 640m base-plain 地形、西北低缓塔岭、大湖和高塔 | relief 预设、显式地貌区域、分块高度场、LakeFeature、复合标志物、第三人称主体；首个完整 WorldSpec/World Plan/Opening Shot/Height-Slope 样例 | 两张生成规划图是空间意图，不是物理真相；本地水面也不是世界模型效果 |
-| `?scene=canyon` | 自定义峡谷、Polygon 河流和石拱 | Coding Agent 可用 BuildContext 定义 SDK 未预置的地貌名词 | 河流没有流体模拟，blocked/swimmable 仍主要是语义契约 |
-| `?scene=azure-bay` | 南侧高地俯瞰海湾、两侧海岸、岛状轮廓、灯塔、村落和帆船 | 单图构图转译、自定义地形、Polygon 水体、初始镜头构图、连续可走下坡 | 岛状轮廓来自同一地形 Feature 的塑形，并非独立 Island Feature；不重建花海、云层和绘画风格 |
-| `?scene=mistbound-rider` | 山谷、道路式区域、废墟、村落、城堡和远景天体 | 更复杂的自由 Feature/标志物组合和语义提示 | 马与骑手是静态几何标志物，不代表骑马主体已实现 |
-| `?scene=sunlit-flower-bay` | 用用户参考图完成 Planner → Raster/Mask Builder → 浏览器构图 QA → Visual Bible 全流程 | 1200m × 1000m 海湾、全局高度 Raster、草地/岩壁/路径 Mask、无缝 tile、路线坡度、语义构图门禁、四类 Prototype 和完整视觉包 | 构图门禁验证空间区域与实例投影，不验证花朵、云、水花等最终画风 |
+| `?scene=grassland&artifact=1` | 640m × 640m base-plain 地形、西北低缓塔岭、大湖和高塔 | relief 预设、显式地貌区域、分块高度场、LakeFeature、复合标志物、第三人称主体；首个完整 WorldSpec/World Plan/Opening Shot/Height-Slope 样例 | 两张生成规划图是空间意图，不是物理真相；本地水面也不是世界模型效果 |
+| `?scene=canyon&artifact=1` | 自定义峡谷、Polygon 河流和石拱 | Coding Agent 可用 BuildContext 定义 SDK 未预置的地貌名词 | 河流没有流体模拟，blocked/swimmable 仍主要是语义契约 |
+| `?scene=azure-bay&artifact=1` | 南侧高地俯瞰海湾、两侧海岸、岛状轮廓、灯塔、村落和帆船 | 单图构图转译、自定义地形、Polygon 水体、初始镜头构图、连续可走下坡 | 岛状轮廓来自同一地形 Feature 的塑形，并非独立 Island Feature；不重建花海、云层和绘画风格 |
+| `?scene=mistbound-rider&artifact=1` | 山谷、道路式区域、废墟、村落、城堡和远景天体 | 更复杂的自由 Feature/标志物组合和语义提示 | 马与骑手是静态几何标志物，不代表骑马主体已实现 |
+| `?scene=sunlit-flower-bay&artifact=1` | 用用户参考图完成 Planner → Raster/Mask Builder → 浏览器构图 QA → Visual Bible 全流程 | 1200m × 1000m 海湾、全局高度 Raster、草地/岩壁/路径 Mask、无缝 tile、路线坡度、语义构图门禁、四类 Prototype 和完整视觉包 | 构图门禁验证空间区域与实例投影，不验证花朵、云、水花等最终画风 |
 
 运行方式：
 
@@ -38,7 +38,8 @@ pnpm install
 pnpm dev
 ```
 
-然后打开 `http://127.0.0.1:5173/?scene=<上表参数>`。
+然后打开 `http://127.0.0.1:5173/?scene=<catalog-id>&artifact=1`。这些是 artifact-only 路由，
+不提供 Gameplay；Gameplay 使用 `worldkit run <world.json>` 或 Viewer allowlisted preset。
 
 ### Canonical Authoring V2 / Package Subject 实验
 

@@ -92,6 +92,38 @@ function whiteboxLightingDiagnostics(authoring: any): SelfCheckDiagnostic[] {
   }];
 }
 
+export function hostedRelationshipAdmissionDiagnostics(authoring: {
+  readonly relationships?: readonly unknown[];
+  readonly resources?: {
+    readonly subjectDefinitions?: readonly {
+      readonly id?: string;
+      readonly relationshipCapabilityRefs?: readonly string[];
+    }[];
+  };
+}): SelfCheckDiagnostic[] {
+  const diagnostics: SelfCheckDiagnostic[] = [];
+  if ((authoring.relationships?.length ?? 0) > 0) {
+    diagnostics.push({
+      code: "HOSTED_RELATIONSHIP_NOT_PRODUCTION_AVAILABLE",
+      message: "Hosted Builder production Authoring must not emit mount, seat, or tether relationships in the current phase.",
+      instancePath: "/relationships",
+    });
+  }
+  authoring.resources?.subjectDefinitions?.forEach((definition, index) => {
+    if ((definition.relationshipCapabilityRefs?.length ?? 0) === 0) return;
+    diagnostics.push({
+      code: "HOSTED_RELATIONSHIP_CAPABILITY_NOT_PRODUCTION_AVAILABLE",
+      message: "Hosted Builder production Subjects must assemble rider, body, and equipment as one Subject instead of declaring a reserved relationship capability.",
+      instancePath: `/resources/subjectDefinitions/${index}/relationshipCapabilityRefs`,
+      details: {
+        subjectDefinitionId: definition.id,
+        relationshipCapabilityRefs: definition.relationshipCapabilityRefs,
+      },
+    });
+  });
+  return diagnostics;
+}
+
 function subjectUsesGroundSupport(
   subject: WorldRuntimeBootstrapV1["subjectRuntimeDescriptors"][number],
 ): boolean {
@@ -277,6 +309,7 @@ export async function runBuilderSelfCheck(options: {
     })));
   } else {
     diagnostics.push(...whiteboxLightingDiagnostics(parsed.value));
+    diagnostics.push(...hostedRelationshipAdmissionDiagnostics(parsed.value));
     const normalized = normalizeAuthoringSpecV4(parsed.value);
     if (!normalized.ok || normalized.value === undefined || normalized.normalizedWorldIrHash === undefined) {
       diagnostics.push(...normalized.diagnostics.map((diagnostic) => ({

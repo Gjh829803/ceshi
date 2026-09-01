@@ -415,6 +415,50 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     );
   });
 
+  it("projects distinct per-Tick committed Camera identities and relationships without retaining them", () => {
+    const camera = new ProjectionPort();
+    const { transaction } = createHarness({ projections: [camera] });
+
+    transaction.runTick({
+      command: command(1),
+      cameraContextAuthority: {
+        controlledEntityId: "controller-primary",
+        targetEntityId: "player",
+        relationshipContexts: [
+          {
+            id: "mounted:a",
+            type: "mountedOn",
+            riderEntityId: "player",
+            mountEntityId: "board-a",
+            mountSlotId: "stand",
+          },
+          {
+            id: "mounted:Z",
+            type: "mountedOn",
+            riderEntityId: "rider-z",
+            mountEntityId: "player",
+            mountSlotId: "stand",
+          },
+        ],
+      },
+    });
+
+    expect(camera.lastInput?.cameraContext).toMatchObject({
+      controlledEntityId: "controller-primary",
+      targetEntityId: "player",
+    });
+    expect(camera.lastInput?.cameraContext.environment.relationshipContexts.map(
+      ({ id }) => id,
+    )).toEqual(["mounted:Z", "mounted:a"]);
+
+    transaction.runTick({ command: command(2) });
+    expect(camera.lastInput?.cameraContext).toMatchObject({
+      controlledEntityId: "player",
+      targetEntityId: "player",
+      environment: { relationshipContexts: [] },
+    });
+  });
+
   it("passes the committed split jump Episode to projections without a provider side channel", () => {
     const projection = new ProjectionPort();
     const base = movementOptions();

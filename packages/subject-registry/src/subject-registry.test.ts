@@ -1166,6 +1166,30 @@ describe("subject resource registry", () => {
     }])).toThrowError(/SUBJECT_REGISTRY_UNKNOWN_CAMERA_PARAMETER/);
   });
 
+  it.each([
+    ["requiredMotionTags", ["legacy"]],
+    ["motionKernelRefs", ["worldkit://motion-kernel/free-ground@1"]],
+    ["movementMediums", ["water"]],
+  ])("rejects retired or unsupported Camera rule input '%s' at Registry admission", (
+    fieldName,
+    fieldValue,
+  ) => {
+    const context = builtInSubjectResourceRegistry
+      .listDiscoverableResources({ kind: "camera-context-profile" })[0]!;
+    const firstRule = context.rules[0]!;
+
+    expect(() => createSubjectResourceRegistry([{
+      ...context,
+      rules: [{
+        ...firstRule,
+        when: {
+          ...firstRule.when,
+          [fieldName]: fieldValue,
+        },
+      }],
+    }])).toThrowError(/SUBJECT_REGISTRY_INVALID_CAMERA_CONTEXT_RULE/);
+  });
+
   it("rejects Camera Profile mode/algorithm mismatches and reserved algorithms", () => {
     const profile = builtInSubjectResourceRegistry.resolveCameraRigProfile(
       "worldkit://camera-profile/orbit.medium@1",

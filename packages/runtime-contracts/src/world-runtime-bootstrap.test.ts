@@ -1,4 +1,5 @@
 import Ajv2020 from "ajv/dist/2020.js";
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   hashRootMotionSourceV1,
@@ -134,35 +135,36 @@ function capabilityAssemblyFixture(): RuntimeSubjectCapabilityAssemblyV1 {
     },
     cameraContext: {
       resourceRef: "worldkit://camera-context/runtime-test@1",
-      defaultCameraRigProfileRef: "worldkit://camera-rig-profile/runtime-test@1",
-      firstPersonCameraRigProfileRef: "worldkit://camera-rig-profile/runtime-first-person@1",
+      defaultCameraRigProfileRef: "worldkit://camera-profile/runtime-test@1",
+      firstPersonCameraRigProfileRef: "worldkit://camera-profile/runtime-first-person@1",
       rules: [{
         id: "running",
         priority: 10,
         when: {
-          relationshipRoles: ["none"],
+          allRelationshipConditions: [{
+            type: "mountedOn",
+            entityRole: "rider",
+          }],
           locomotionStatuses: ["active"],
           mobilityModes: ["grounded"],
           gaits: ["run"],
           verticalPhases: ["none"],
           requiredActiveActionRefs: ["worldkit://semantic-action/run@1"],
           actionInterruptibility: "interruptible",
-          motionKernelRefs: ["worldkit://motion-kernel/runtime-test@1"],
-          requiredMotionTags: ["ground"],
           movementMediums: ["ground"],
           minimumSpeedMetersPerSecond: 1,
           maximumSpeedMetersPerSecond: 8,
           requiredSocketIds: ["camera-target"],
           requiredCameraContextTags: ["follow"],
         },
-        cameraRigProfileRef: "worldkit://camera-rig-profile/runtime-test@1",
+        cameraRigProfileRef: "worldkit://camera-profile/runtime-test@1",
         cameraModifierRefs: ["worldkit://camera-modifier/runtime-test@1"],
       }],
       cameraRigProfiles: [{
-        resourceRef: "worldkit://camera-rig-profile/runtime-test@1",
+        resourceRef: "worldkit://camera-profile/runtime-test@1",
         contentHash: HASH_A,
         baseMode: "stable-follow",
-        algorithmRef: "worldkit://camera-rig-algorithm/stable-follow@1",
+        algorithmRef: "worldkit://camera-rig/stable-follow@1",
         headingSource: "view",
         reverseHeadingPolicy: "preserve-target-forward",
         recenterMode: "forward-motion",
@@ -213,7 +215,7 @@ function bodyFixture(): WorldRuntimeBootstrapBodyV1 {
       mode: "third-person",
       cameraEntityId: "camera-main",
       targetEntityId: "player",
-      cameraRigProfileRef: "worldkit://camera-rig-profile/runtime-test@1",
+      cameraRigProfileRef: "worldkit://camera-profile/runtime-test@1",
       pitchRadians: 0.2,
       distanceMeters: 5,
       targetHeightMeters: 1.5,
@@ -388,6 +390,20 @@ function expectInvalid(input: unknown): void {
 }
 
 describe("WorldRuntimeBootstrapV1", () => {
+  it("uses the Camera package as the sole CameraContextRuleV2 owner", () => {
+    const source = readFileSync(
+      new URL("./world-runtime-bootstrap.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toMatch(
+      /import \{[\s\S]*type CameraContextRuleV2,[\s\S]*\} from "@whitebox-world\/camera";/,
+    );
+    expect(source).not.toMatch(
+      /export interface RuntimeCameraContextRuleV[12]\s*\{/,
+    );
+  });
+
   it("requires one canonical jump variant policy in every runtime control feel", () => {
     const valid = createWorldRuntimeBootstrapV1(bodyFixture());
     expect(valid.subjectRuntimeDescriptors[0]?.controlFeel.jumpVariantPolicy).toEqual({
@@ -558,6 +574,104 @@ describe("WorldRuntimeBootstrapV1", () => {
       ...bodyFixture(),
       gameplayBootstrapRef: "worldkit://gameplay-bootstrap/other@1",
     })).toThrow(/WorldRuntimeBootstrapV1/);
+  });
+
+  it("rejects the removed Camera relationship role condition alias", () => {
+    const body = bodyFixture();
+    const rules = body.subjectRuntimeDescriptors[0]!.capabilityAssembly.cameraContext.rules;
+    const candidate = {
+      ...body,
+      subjectRuntimeDescriptors: [{
+        ...body.subjectRuntimeDescriptors[0]!,
+        capabilityAssembly: {
+          ...body.subjectRuntimeDescriptors[0]!.capabilityAssembly,
+          cameraContext: {
+            ...body.subjectRuntimeDescriptors[0]!.capabilityAssembly.cameraContext,
+            rules: [{
+              ...rules[0]!,
+              when: { relationshipRoles: ["rider"] },
+            }],
+          },
+        },
+      }],
+    };
+
+    expect(() => createWorldRuntimeBootstrapV1(
+      candidate as unknown as WorldRuntimeBootstrapBodyV1,
+    )).toThrow(/WorldRuntimeBootstrapV1/);
+  });
+
+  it.each(["motionKernelRefs", "requiredMotionTags"] as const)(
+    "rejects the removed Camera rule field %s",
+    (fieldName) => {
+      const body = bodyFixture();
+      const descriptor = body.subjectRuntimeDescriptors[0]!;
+      const rule = descriptor.capabilityAssembly.cameraContext.rules[0]!;
+      const candidate = {
+        ...body,
+        subjectRuntimeDescriptors: [{
+          ...descriptor,
+          capabilityAssembly: {
+            ...descriptor.capabilityAssembly,
+            cameraContext: {
+              ...descriptor.capabilityAssembly.cameraContext,
+              rules: [{
+                ...rule,
+                when: {
+                  ...rule.when,
+                  [fieldName]: ["legacy"],
+                },
+              }],
+            },
+          },
+        }],
+      };
+
+      expect(() => createWorldRuntimeBootstrapV1(
+        candidate as unknown as WorldRuntimeBootstrapBodyV1,
+      )).toThrow(/WorldRuntimeBootstrapV1/);
+    },
+  );
+
+  it.each([
+    ["water medium", { movementMediums: ["water"] }],
+    ["unknown mobility mode", { mobilityModes: ["flying"] }],
+    ["duplicate gait", { gaits: ["walk", "walk"] }],
+    ["non-canonical Action ref", { requiredActiveActionRefs: ["action.ride"] }],
+    ["invalid Socket id", { requiredSocketIds: ["camera target"] }],
+    ["invalid Camera tag", { requiredCameraContextTags: ["Aim Mode"] }],
+    ["negative speed", { minimumSpeedMetersPerSecond: -1 }],
+    ["incoherent speed bounds", {
+      minimumSpeedMetersPerSecond: 4,
+      maximumSpeedMetersPerSecond: 3,
+    }],
+    ["oversized condition array", {
+      requiredCameraContextTags: Array.from(
+        { length: 65 },
+        (_, index) => `tag-${index}`,
+      ),
+    }],
+  ])("rejects Camera V2 rule schema drift: %s", (_label, when) => {
+    const body = bodyFixture();
+    const descriptor = body.subjectRuntimeDescriptors[0]!;
+    const rule = descriptor.capabilityAssembly.cameraContext.rules[0]!;
+    const candidate = {
+      ...body,
+      subjectRuntimeDescriptors: [{
+        ...descriptor,
+        capabilityAssembly: {
+          ...descriptor.capabilityAssembly,
+          cameraContext: {
+            ...descriptor.capabilityAssembly.cameraContext,
+            rules: [{ ...rule, when }],
+          },
+        },
+      }],
+    };
+
+    expect(() => createWorldRuntimeBootstrapV1(
+      candidate as unknown as WorldRuntimeBootstrapBodyV1,
+    )).toThrow(/WorldRuntimeBootstrapV1/);
   });
 
   it("rejects stale hashes, noncanonical serialized order, nested unknown fields, and accessors", () => {

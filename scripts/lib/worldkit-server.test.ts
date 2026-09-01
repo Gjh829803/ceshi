@@ -15,6 +15,7 @@ import {
   createGameplayBootstrapResourceLockEntryV1,
   createGameplayBootstrapV1,
   createGameplayFeatureManifestV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
 } from "@whitebox-world/gameplay-contracts";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
@@ -83,6 +84,8 @@ function gameplayBootstrap(
       version: 1,
       resourceRef:
         `worldkit://gameplay-bootstrap/${normalizedWorldIr.id}.${normalizedWorldIr.seed}@1`,
+      semanticFactProjectorProfileResource:
+        RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
       entityDescriptors,
       featureResourceLocks: [{
         resourceRef: coreControlManifest.resourceRef,

@@ -10,7 +10,10 @@ import {
   compileResolvedTraversalLockV1,
   compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   BabylonWorldRuntime,
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
@@ -48,6 +51,7 @@ import { isEqual, isNil } from "lodash-es";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "../../packages/runtime-babylon/src/gameplay-runtime-internal.js";
 import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
 
 const havokWasmBytes = await readFile(
@@ -64,6 +68,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     id: "route-runtime-probe-test.gameplay",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/route-runtime-probe-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],
@@ -261,6 +267,10 @@ async function createRuntimeHarness(
     await bindRuntimeTestPossession(
       runtime,
       fixture.traversalLockReceipt.lock.subjectEntityId,
+    );
+    runtime.publishInitialBoundCameraView(
+      runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+        .viewStateRevision,
     );
     const port = createBabylonTraversalRuntimePortV1({
       runtime,

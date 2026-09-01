@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   ARTIFACT_SCENE_CATALOG_IDS,
   SCENE_VIEWER_PRESET_IDS,
+  artifactSceneCatalogUrl,
+  curatedViewerPresetUrl,
   sceneViewerFailureCount,
-  sceneViewerUrl,
   type SceneViewerVerificationReportV1,
   type VerificationResultV1,
 } from "./verify-scene-viewer.js";
@@ -30,17 +31,21 @@ describe("verify:scene-viewer", () => {
       "mistbound-rider",
       "sunlit-flower-bay",
       "world-08170639-54db",
+      "mounted-skateboard-s1",
     ]);
   });
 
-  it("creates distinct gameplay and artifact-only routes", () => {
-    expect(sceneViewerUrl("http://127.0.0.1:5173", "azure-bay"))
-      .toBe("http://127.0.0.1:5173/?scene=azure-bay");
+  it("creates closed curated-preset and artifact-only routes", () => {
     expect(
-      sceneViewerUrl(
+      curatedViewerPresetUrl(
+        "http://127.0.0.1:5173/?stale=1",
+        "action-lab",
+      ),
+    ).toBe("http://127.0.0.1:5173/?stale=1&scene=action-lab");
+    expect(
+      artifactSceneCatalogUrl(
         "http://127.0.0.1:5173/?stale=1",
         "azure-bay",
-        true,
       ),
     ).toBe(
       "http://127.0.0.1:5173/?stale=1&scene=azure-bay&artifact=1",
@@ -52,9 +57,9 @@ describe("verify:scene-viewer", () => {
       kind: "scene-viewer-browser-verification",
       schemaVersion: 1,
       generatedAt: "2026-08-24T00:00:00.000Z",
-      scenes: [failed("gameplay")],
-      sceneSwitch: failed("scene-switch"),
-      invalidSceneRoute: failed("unknown-scene"),
+      curatedPresets: [failed("gameplay")],
+      presetSwitch: failed("preset-switch"),
+      invalidPresetRoute: failed("unknown-preset"),
       artifacts: [failed("artifact")],
     } satisfies SceneViewerVerificationReportV1;
 

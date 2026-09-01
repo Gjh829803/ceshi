@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isNil } from "lodash-es";
@@ -9,6 +9,8 @@ export const CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "scripts",
   "examples",
   "artifacts",
+  "assets",
+  ".codex",
   "README.md",
   "docs/00-project-overview.md",
   "docs/02-sdk-architecture.md",
@@ -22,6 +24,8 @@ export const CLEAN_BREAK_HISTORICAL_EXCLUSIONS = Object.freeze([
   "docs/superpowers/plans",
   "docs/superpowers/specs",
 ] as const);
+
+const REQUIRED_CLEAN_BREAK_SCAN_ROOTS = Object.freeze(["packages"] as const);
 
 const IGNORED_DIRECTORY_NAMES = new Set([
   ".git",
@@ -67,6 +71,7 @@ interface TextFamilyDefinition {
   readonly blocksCompletion: boolean;
   readonly pattern: RegExp;
   readonly pathPattern?: RegExp;
+  readonly excludedPathPattern?: RegExp;
 }
 
 interface MutableMatch {
@@ -147,6 +152,24 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     "structural",
     "HalfMeterTransition",
   ]);
+  const legacyM8PublicContractSymbols = [
+    token(["Camera", "Relationship", "Role", "V1"]),
+    token(["Camera", "Context", "Rule", "V1"]),
+    token(["Runtime", "Camera", "Context", "Rule", "V1"]),
+    token(["relationship", "Roles"]),
+    token(["relationship", "Role"]),
+    token(["required", "Motion", "Tags"]),
+    token(["minimumContactToAggregateSupportNormal", "DotRatio"]),
+    token(["minimumSupportNormal", "DotRatio"]),
+    token(["CORE_", "SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1"]),
+    token(["CAMERA_", "SEMANTIC_AUTHORITY_UNAVAILABLE"]),
+    token(["semantic", "-authority-unavailable"]),
+  ];
+  const legacySemanticAuthorityUnavailable = [
+    escaped(token(["semantic", "Authority", "Status"])),
+    "[^\\n]{0,120}",
+    escaped(token(["un", "available"])),
+  ].join("");
 
   return Object.freeze([
     Object.freeze({
@@ -189,6 +212,30 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       blocksCompletion: true,
       pattern: new RegExp(
         `(?:${alternatives(legacyNativeBlockGridSymbols)}|${escaped(legacyNativeBlockTransitionPrefix)}(?:Keys|Count)?)`,
+        "g",
+      ),
+    }),
+    Object.freeze({
+      familyId: "WORLDKIT_UNRELEASED_LEGACY_M8_S1_PUBLIC_CONTRACT",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      excludedPathPattern: /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/,
+      pattern: new RegExp(
+        `(?:${alternatives(legacyM8PublicContractSymbols)}|${legacySemanticAuthorityUnavailable})`,
+        "g",
+      ),
+    }),
+    Object.freeze({
+      familyId: "WORLDKIT_UNRELEASED_LEGACY_VIEWER_ROUTE",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pathPattern: /^(?:packages|apps|scripts|examples|artifacts|assets|\.codex)\//,
+      excludedPathPattern: /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/,
+      pattern: new RegExp(
+        `(?:${alternatives([
+          token(["?", "authoring", "=1"]),
+          token(["catalog", "-gameplay"]),
+        ])})`,
         "g",
       ),
     }),
@@ -259,6 +306,10 @@ function collectTextMatches(
   if (definition.pathPattern !== undefined) {
     definition.pathPattern.lastIndex = 0;
     if (!definition.pathPattern.test(relativePath)) return [];
+  }
+  if (definition.excludedPathPattern !== undefined) {
+    definition.excludedPathPattern.lastIndex = 0;
+    if (definition.excludedPathPattern.test(relativePath)) return [];
   }
   const matches: MutableMatch[] = [];
   definition.pattern.lastIndex = 0;
@@ -368,6 +419,21 @@ function groupByPath(matches: readonly MutableMatch[]): readonly CleanBreakPathM
 export async function scanUnreleasedCleanBreak(
   repositoryRoot: string,
 ): Promise<CleanBreakCensusReport> {
+  for (const root of REQUIRED_CLEAN_BREAK_SCAN_ROOTS) {
+    let rootStats;
+    try {
+      rootStats = await stat(path.join(repositoryRoot, root));
+    } catch {
+      throw new Error(
+        `Unreleased clean-break required census root is unavailable: ${root}`,
+      );
+    }
+    if (!rootStats.isDirectory()) {
+      throw new Error(
+        `Unreleased clean-break required census root is not a directory: ${root}`,
+      );
+    }
+  }
   const discovered = new Set<string>();
   for (const root of CLEAN_BREAK_SCAN_ROOTS) {
     for (const file of await discoverFiles(path.join(repositoryRoot, root))) {

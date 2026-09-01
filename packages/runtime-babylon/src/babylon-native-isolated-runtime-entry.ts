@@ -661,6 +661,9 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
         throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_HANDLE_MISSING");
       }
       const handle = residency.active(gate.worldSessionId);
+      handle.runtime.publishInitialBoundCameraView(
+        gate.publication.viewState.viewStateRevision,
+      );
       await handle.runtime.renderFrameWhenReady();
     },
   });

@@ -10,7 +10,10 @@ import {
   compileResolvedTraversalLockV1,
   compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
   BabylonWorldRuntime,
@@ -29,6 +32,7 @@ import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "../../packages/runtime-babylon/src/gameplay-runtime-internal.js";
 import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
 
 const havokWasmBytes = await readFile(
@@ -46,6 +50,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     version: 1,
     resourceRef:
       "worldkit://gameplay-bootstrap/traversal-area-runtime-collision-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],
@@ -220,6 +226,10 @@ describe("Traversal Area Runtime collision separation", () => {
     });
     try {
       await bindRuntimeTestPossession(runtime, "player");
+      runtime.publishInitialBoundCameraView(
+        runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+          .viewStateRevision,
+      );
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
         traversalLockReceipt,

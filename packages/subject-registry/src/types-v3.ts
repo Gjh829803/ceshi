@@ -1,8 +1,8 @@
+import type { CameraContextRuleV2 } from "@whitebox-world/camera";
 import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
   JumpVariantPolicyV1,
-  RuntimeCameraContextRuleV1,
 } from "@whitebox-world/runtime-contracts";
 import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
 
@@ -166,27 +166,12 @@ export interface CameraModifierProfileInputV1
   recenterModeOverride?: CameraRigProfileInputV1["recenterMode"];
 }
 
-export type RelationshipRoleV1 =
-  | "none"
-  | "rider"
-  | "driver"
-  | "passenger"
-  | "tethered";
-
-export interface CameraContextRuleV1 {
-  id: string;
-  priority: number;
-  when: RuntimeCameraContextRuleV1["when"];
-  cameraRigProfileRef?: string;
-  cameraModifierRefs?: readonly string[];
-}
-
 export interface CameraContextProfileInputV1
   extends CapabilityResourceBaseInputV1 {
   kind: "camera-context-profile";
   defaultCameraRigProfileRef: string;
   firstPersonCameraRigProfileRef?: string;
-  rules: readonly CameraContextRuleV1[];
+  rules: readonly CameraContextRuleV2[];
 }
 
 export interface MediumProfileInputV1 extends CapabilityResourceBaseInputV1 {
@@ -257,7 +242,6 @@ export interface RenderBindingProfileInputV1
     | "movementMedium"
     | "activeMotionKernelRef"
     | "activeActionId"
-    | "relationshipRole"
   )[];
 }
 

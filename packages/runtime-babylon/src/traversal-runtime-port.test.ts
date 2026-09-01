@@ -194,6 +194,10 @@ async function createRuntime(
     runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
       .initialControlledEntityId,
   );
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
+  );
   return runtime;
 }
 
@@ -815,6 +819,24 @@ function withBoundCeilingAboveStart(
   };
   return {
     ...plan,
+    layout: {
+      ...plan.layout,
+      layoutAssertions: [],
+      placementsByEntityId: {
+        ...plan.layout.placementsByEntityId,
+        "spawn-main": {
+          ...placement,
+          transform: {
+            ...placement.transform,
+            positionMetersXYZ: [
+              placement.transform.positionMetersXYZ[0],
+              1.1,
+              placement.transform.positionMetersXYZ[2],
+            ],
+          },
+        },
+      },
+    },
     staticColliders: [...plan.staticColliders, ceiling],
     traversal: {
       ...plan.traversal,
@@ -884,8 +906,8 @@ function withCoplanarBoundPlatformsAtStart(
       sizeMetersXYZ: [2, 1, 2] as const,
     },
   });
-  const first = makeBox("coplanar-a", -0.4);
-  const second = makeBox("coplanar-b", 0.4);
+  const first = makeBox("coplanar-a", 0);
+  const second = makeBox("coplanar-b", 3);
   return {
     ...plan,
     layout: {
@@ -1759,11 +1781,8 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("classifies low overlapping unbound support as heightfield-resolved and tall unbound support as unmatched", async () => {
-    for (const [heightMeters, expectedMode] of [
-      [0.1, "resolved"],
-      [1, "unmatched"],
-    ] as const) {
+  it("keeps every unbound physical support unmatched instead of attributing nearby terrain", async () => {
+    for (const heightMeters of [0.1, 1] as const) {
       const fixture = compileFixture();
       const runtime = await createRuntime(withStaticBoxAtStart(
         fixture,
@@ -1779,16 +1798,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         });
 
         expect(evidence.characterSupport.supportState).toBe("supported");
-        expect(evidence.characterSupport.surfaceResolution.mode).toBe(
-          expectedMode,
-        );
+        expect(evidence.characterSupport.surfaceResolution.mode).toBe("unmatched");
       } finally {
         await runtime.dispose();
       }
     }
   }, 30_000);
 
-  it("classifies a bound missing static-collider row as unmatched instead of the heightfield below", async () => {
+  it("ignores an orphaned surface row and resolves the actual terrain contact", async () => {
     const fixture = compileFixture();
     const plan = withBoundMissingStaticColliderSurface(fixture);
     const heightfield = plan.traversal.surfaces.find(
@@ -1817,12 +1834,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       });
 
       expect(evidence.characterSupport.supportState).toBe("supported");
-      expect(evidence.characterSupport.surfaceResolution).not.toMatchObject({
+      expect(evidence.characterSupport.surfaceResolution).toMatchObject({
         mode: "resolved",
         traversalSurfaceId: heightfield.traversalSurfaceId,
-      });
-      expect(evidence.characterSupport.surfaceResolution).toEqual({
-        mode: "unmatched",
       });
     } finally {
       await runtime.dispose();
@@ -2101,6 +2115,91 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
+  it("retains exact static support identity and excludes Babylon side-wall contacts", async () => {
+    const fixture = compileFixture();
+    const runtime = await createRuntime(fixture.executionPlan);
+    try {
+      const surface = fixture.executionPlan.traversal.surfaces.find(
+        (candidate) => candidate.kind === "heightfield",
+      )!;
+      const movement = inspectCharacterMovement<{
+        physicsController: {
+          readCurrentContacts(): readonly Readonly<{
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+            distanceMeters: number;
+            motionType: "static";
+            colliderId: string;
+            colliderSubshapeId: string;
+            logicalSubshapeId: string;
+            traversalSurfaceId: string;
+            surfaceEntityId: string;
+            traversalSurfaceProfileRef: string;
+          }>[];
+        };
+        publishSupport(): void;
+        retainedCharacterSupportSample(): {
+          sampledFootPositionMetersXYZ: readonly [number, number, number];
+          supportContacts: readonly Readonly<{
+            pointMetersXYZ: readonly [number, number, number];
+            normalXYZ: readonly [number, number, number];
+            distanceMeters?: number;
+            motionType?: "static";
+            colliderId?: string;
+            colliderSubshapeId?: string;
+            logicalSubshapeId?: string;
+            traversalSurfaceId?: string;
+            surfaceEntityId?: string;
+            traversalSurfaceProfileRef?: string;
+          }>[];
+        } | undefined;
+      }>(runtime, "player");
+      const foot = movement.retainedCharacterSupportSample()!
+        .sampledFootPositionMetersXYZ;
+      vi.spyOn(movement.physicsController, "readCurrentContacts")
+        .mockReturnValue([{
+          pointMetersXYZ: foot,
+          normalXYZ: [0, 1, 0],
+          distanceMeters: 0,
+          motionType: "static",
+          colliderId: surface.surfaceEntityId,
+          colliderSubshapeId: surface.colliderSubshapeId,
+          logicalSubshapeId: "heightfield",
+          traversalSurfaceId: surface.traversalSurfaceId,
+          surfaceEntityId: surface.surfaceEntityId,
+          traversalSurfaceProfileRef: surface.resourceRef,
+        }, {
+          pointMetersXYZ: foot,
+          normalXYZ: [1, 0, 0],
+          distanceMeters: 0,
+          motionType: "static",
+          colliderId: "wall",
+          colliderSubshapeId: "collider:wall:primary",
+          logicalSubshapeId: "primary",
+          traversalSurfaceId: "surface:wall",
+          surfaceEntityId: "wall",
+          traversalSurfaceProfileRef: surface.resourceRef,
+        }]);
+
+      movement.publishSupport();
+
+      expect(movement.retainedCharacterSupportSample()?.supportContacts).toEqual([{
+        pointMetersXYZ: foot,
+        normalXYZ: [0, 1, 0],
+        distanceMeters: 0,
+        motionType: "static",
+        colliderId: surface.surfaceEntityId,
+        colliderSubshapeId: surface.colliderSubshapeId,
+        logicalSubshapeId: "heightfield",
+        traversalSurfaceId: surface.traversalSurfaceId,
+        surfaceEntityId: surface.surfaceEntityId,
+        traversalSurfaceProfileRef: surface.resourceRef,
+      }]);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
   it("resolves an admitted step edge at the capsule contact instead of the foot-center column", async () => {
     const fixture = compileFixture();
     const plan = withBoundStaticStepEdgeNearStart(fixture);
@@ -2115,12 +2214,18 @@ describe("createBabylonTraversalRuntimePortV1", () => {
           supportContacts: readonly {
             pointMetersXYZ: readonly [number, number, number];
             normalXYZ: readonly [number, number, number];
+            colliderSubshapeId: string;
+            traversalSurfaceId: string;
+            surfaceEntityId: string;
           }[];
           isSupportSurfaceDynamic: boolean;
         } | undefined;
       }>(runtime, "player");
       const [footX, , footZ] = plan.layout
         .placementsByEntityId["spawn-main"]!.transform.positionMetersXYZ;
+      const bound = plan.traversal.surfaces.find(
+        (surface) => surface.surfaceEntityId === "step-edge-support",
+      )!;
       vi.spyOn(movement, "retainedCharacterSupportSample").mockReturnValue({
         supportState: "supported",
         supportNormalWorldXYZ: [-0.6, 0.8, 0],
@@ -2129,6 +2234,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
         supportContacts: [{
           pointMetersXYZ: [footX + 0.21, 0.25, footZ],
           normalXYZ: [0, 1, 0],
+          colliderSubshapeId: bound.colliderSubshapeId,
+          traversalSurfaceId: bound.traversalSurfaceId,
+          surfaceEntityId: bound.surfaceEntityId,
         }],
         isSupportSurfaceDynamic: false,
       });
@@ -2139,10 +2247,6 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       const evidence = port.resetToStartAnchor({
         startAnchorEntityId: "spawn-main",
       });
-      const bound = plan.traversal.surfaces.find(
-        (surface) => surface.surfaceEntityId === "step-edge-support",
-      )!;
-
       expect(evidence.characterSupport.surfaceResolution).toMatchObject({
         mode: "resolved",
         traversalSurfaceId: bound.traversalSurfaceId,
@@ -2371,9 +2475,10 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("classifies coplanar bound platforms as ambiguous", async () => {
+  it("publishes the exact Havok-selected support across coplanar bound platforms", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(withCoplanarBoundPlatformsAtStart(fixture));
+    const plan = withCoplanarBoundPlatformsAtStart(fixture);
+    const runtime = await createRuntime(plan);
     try {
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
@@ -2386,7 +2491,16 @@ describe("createBabylonTraversalRuntimePortV1", () => {
 
       expect(supportSpy).toHaveBeenCalledTimes(1);
       expect(evidence.characterSupport.supportState).toBe("supported");
-      expect(evidence.characterSupport.surfaceResolution.mode).toBe("ambiguous");
+      expect(evidence.characterSupport.surfaceResolution.mode).toBe("resolved");
+      if (evidence.characterSupport.surfaceResolution.mode !== "resolved") {
+        throw new Error("Expected exact coplanar physical support identity.");
+      }
+      expect(plan.traversal.surfaces.filter((surface) =>
+        surface.surfaceEntityId === "coplanar-a" ||
+        surface.surfaceEntityId === "coplanar-b"
+      ).map((surface) => surface.traversalSurfaceId)).toContain(
+        evidence.characterSupport.surfaceResolution.traversalSurfaceId,
+      );
       expectNoExpectedPathSurfaceState(evidence);
     } finally {
       await runtime.dispose();
@@ -2426,9 +2540,10 @@ describe("createBabylonTraversalRuntimePortV1", () => {
     }
   }, 30_000);
 
-  it("rejects a downward bound ceiling and keeps heightfield resolved", async () => {
+  it("publishes an exact upward collider contact without triangle-winding reclassification", async () => {
     const fixture = compileFixture();
-    const runtime = await createRuntime(withBoundCeilingAboveStart(fixture));
+    const plan = withBoundCeilingAboveStart(fixture);
+    const runtime = await createRuntime(plan);
     try {
       const port = createBabylonTraversalRuntimePortV1({
         runtime,
@@ -2438,12 +2553,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       const evidence = port.resetToStartAnchor({
         startAnchorEntityId: "spawn-main",
       });
-      const heightfield = fixture.executionPlan.traversal.surfaces[0]!;
+      const physicalSupport = plan.traversal.surfaces.find(
+        (surface) => surface.surfaceEntityId === "ceiling-slab",
+      )!;
 
       expect(supportSpy).toHaveBeenCalledTimes(1);
       expect(evidence.characterSupport.surfaceResolution).toMatchObject({
         mode: "resolved",
-        traversalSurfaceId: heightfield.traversalSurfaceId,
+        traversalSurfaceId: physicalSupport.traversalSurfaceId,
       });
       expectNoExpectedPathSurfaceState(evidence);
     } finally {
@@ -2537,6 +2654,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       expectRuntimeCode(
         () => port.readLatestTickEvidence(),
         "TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE",
+      );
+      const gameplay = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      await gameplay.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        Object.freeze({
+          simulationTick: gameplay.readWorldProjection().simulationTick + 1,
+          activeActionStatesById: Object.freeze({}),
+        }),
       );
 
       firstSpy.mockClear();

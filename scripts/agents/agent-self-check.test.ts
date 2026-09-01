@@ -7,6 +7,8 @@ import path from "node:path";
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
+import { hostedRelationshipAdmissionDiagnostics } from "./agent-builder-self-check";
+
 function run(command: string, arguments_: readonly string[]) {
   if (process.platform === "win32" && command === "pnpm") {
     const commandPath = execFileSync("where", ["corepack"], { encoding: "utf8" })
@@ -32,6 +34,29 @@ function run(command: string, arguments_: readonly string[]) {
 }
 
 describe("single-job Planner and Builder self-check bundles", () => {
+  it("keeps mount, seat, and tether out of Hosted Builder production Authoring", () => {
+    expect(hostedRelationshipAdmissionDiagnostics({
+      relationships: [{ type: "mountedOn" }],
+      resources: {
+        subjectDefinitions: [{
+          id: "mount",
+          relationshipCapabilityRefs: [
+            "worldkit://capability/relationship.mounted-on@1",
+          ],
+        }],
+      },
+    })).toEqual([
+      expect.objectContaining({
+        code: "HOSTED_RELATIONSHIP_NOT_PRODUCTION_AVAILABLE",
+        instancePath: "/relationships",
+      }),
+      expect.objectContaining({
+        code: "HOSTED_RELATIONSHIP_CAPABILITY_NOT_PRODUCTION_AVAILABLE",
+        instancePath: "/resources/subjectDefinitions/0/relationshipCapabilityRefs",
+      }),
+    ]);
+  });
+
   it("builds Planner and Builder bundles into explicit temporary output without changing tracked bytes", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "worldkit-agent-bundles-"));
     const bundles = [

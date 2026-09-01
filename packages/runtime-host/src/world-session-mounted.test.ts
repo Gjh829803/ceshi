@@ -2,6 +2,7 @@ import {
   createGameplayActionDefinitionV1,
   createGameplayBootstrapV1,
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   type ActionActivateGameplayCommandV1,
   type ControllerEntityStateV1,
   type GameplayParticipantStateV1,
@@ -114,6 +115,8 @@ const gameplayBootstrap = createGameplayBootstrapV1({
   id: "gameplay.mounted",
   version: 1,
   resourceRef: "worldkit://gameplay-bootstrap/mounted@1",
+  semanticFactProjectorProfileResource:
+    RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   entityDescriptors: [
     {
       id: RIDER_ID,

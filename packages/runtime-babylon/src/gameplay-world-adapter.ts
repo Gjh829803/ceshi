@@ -378,12 +378,7 @@ class BabylonGameplayWorldPortV1 implements GameplayWorldPortV1 {
     input: FixedInputOneTickV1,
   ): GameplayFixedInputCapacityEstimateV1 {
     assertSingleFixedTick(input);
-    const projection = this.internal.readWorldProjection();
-    return Object.freeze({
-      maximumSemanticFactCountAfterInput:
-        Object.keys(projection.semanticFactsById).length,
-      maximumSemanticFactTransitionEventCount: 0,
-    });
+    return this.internal.estimateSemanticFactProjectionCapacity();
   }
 
   async runFixedInputTick(

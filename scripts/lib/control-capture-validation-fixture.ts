@@ -14,6 +14,10 @@ import {
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import {
+  buildWorldStateSnapshotV1,
+  deriveWorldStateSnapshotRefV1,
+} from "@whitebox-world/gameplay-contracts";
 
 import {
   createControlCaptureBundleWriterV1,
@@ -22,9 +26,60 @@ import {
 
 const WORLD_HASH = `sha256:${"a".repeat(64)}` as Sha256HashV1;
 
+function worldStateSnapshot(simulationTick: number) {
+  return buildWorldStateSnapshotV1({
+    kind: "worldkit-world-state-snapshot",
+    schemaVersion: 1,
+    runtimeSessionId: "validation-fixture-session",
+    worldSessionId: "validation-fixture-world-session",
+    simulationTick,
+    worldPackageRef: `package://validation-fixture@${WORLD_HASH}`,
+    worldPackageRootHash: WORLD_HASH,
+    worldBuildIdentityHash: `sha256:${"c".repeat(64)}`,
+    entityStatesById: {
+      player: {
+        id: "player",
+        kind: "spatial-entity-state",
+        entityDefinitionRef: "worldkit://subject-definition/player@1",
+        entityDefinitionHash: WORLD_HASH,
+        semanticClassId: "character.humanoid",
+        lifecycleMode: "active",
+        positionMetersXYZ: [0, 0, 0],
+        rotationQuaternionXYZW: [0, 0, 0, 1],
+        scaleRatioXYZ: [1, 1, 1],
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+      "controller-primary": {
+        id: "controller-primary",
+        kind: "controller-entity-state",
+        controllerDefinitionRef: "worldkit://controller/local-player@1",
+        controllerDefinitionHash: WORLD_HASH,
+        participantId: "participant-primary",
+        lifecycleMode: "active",
+        inputMode: "human",
+      },
+    },
+    capabilityStatesById: {},
+    relationshipStatesById: {
+      "possessed-by-primary": {
+        id: "possessed-by-primary",
+        type: "possessedBy",
+        schemaVersion: 1,
+        controlledEntityId: "player",
+        controllerEntityId: "controller-primary",
+        establishedSimulationTick: 0,
+      },
+    },
+    semanticFactsById: {},
+    activeActionStatesById: {},
+    lastEventSequence: 0,
+  });
+}
+
 function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
   const runtimeSessionId = "validation-fixture-session";
   const worldSessionId = "validation-fixture-world-session";
+  const worldState = worldStateSnapshot(simulationTick);
   return {
     kind: "worldkit-runtime-snapshot",
     schemaVersion: 4,
@@ -33,8 +88,12 @@ function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
     world: {
       publicationEpoch: 1,
       simulationTick,
-      worldStateRef: `worldkit://world-state/world-state:${"d".repeat(64)}`,
-      worldStateHash: WORLD_HASH,
+      worldStateRef: deriveWorldStateSnapshotRefV1({
+        runtimeSessionId,
+        worldSessionId,
+        worldStateHash: worldState.worldStateHash,
+      }),
+      worldStateHash: worldState.worldStateHash,
       subjectStatesByEntityId: {},
       gameplayInspection: {
         kind: "worldkit-gameplay-inspection-snapshot",
@@ -62,7 +121,7 @@ function runtimeSnapshot(simulationTick: number): WorldRuntimeSnapshotV4 {
             schemaVersion: 1,
             controlledEntityId: "player",
             controllerEntityId: "controller-primary",
-            establishedSimulationTick: simulationTick,
+            establishedSimulationTick: 0,
           },
         },
         activeActionStatesById: {},
@@ -198,6 +257,7 @@ function frameInput(
       projectionMatrixColumnMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0],
     },
     snapshot: runtimeSnapshot(simulationTick),
+    worldState: worldStateSnapshot(simulationTick),
     passesById: Object.fromEntries(
       CONTROL_CAPTURE_PASS_IDS_V1.map((passId) => [
         passId,

@@ -1,7 +1,11 @@
 # M8-S1 `mountedOn` Progress Record
 
+> **Historical checkpoint.** This record preserves the 2026-08-26 implementation and review history;
+> it is not current completion evidence. The current candidate, Cloud root-gate and final-review status are
+> tracked in [the M8-S1 completion review](./2026-08-26-m8-s1-mounted-on-skateboard-completion.md).
+
 - Date: 2026-08-26
-- Branch: `main`
+- Historical branch: `main`
 - Status: core vertical slice and current-tree base gates implemented; targeted hardening, formal mounted
   Capture evidence and final completion review remain open
 - Authority: [design](../../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md),
@@ -27,7 +31,7 @@
   contacts, searches within the locked Rider step-height window, calls Babylon `checkSupport()` and is
   disposed on every path; it does not resample heightfield or triangle heights.
 - Playground scene `mounted-skateboard-s1` uses separate G Bot Rider and package-local primitive board;
-  Browser Protocol V5 remains the exact existing 39-key surface.
+  Browser Protocol V5 remains the exact existing 38-key surface.
 - The scene now exposes visible Mount/Dismount acceptance controls through a product-layer UI Adapter.
   It submits the existing Browser V5 `action.activate` contract and renders only committed
   Snapshot/Inspection/Camera telemetry; it does not own Relationship, Possession or Camera state.
@@ -50,10 +54,16 @@ Implementation commits already on local `main` after rebasing onto `origin/main@
 - `d0d9c16` progress/backlog synchronization
 - `e90d761` latest-Camera-main integration reconciliation
 
-## Current evidence
+## Historical checkpoint evidence
+
+The commands and counts below describe the then-current checkpoint. They are not evidence for the later
+`08f8f199` candidate. In particular, the former catalog `verify:outdoor-gameplay` gate was subsequently
+retired with the deleted catalog Gameplay route; its historical result is preserved here only as provenance
+and is not a command to restore or run on the current product.
 
 - Review-hardening affected matrix passes 9 files / 496 tests. Fresh `pnpm typecheck`, production
-  `pnpm build`, `verify:unreleased-clean-break` and `verify:outdoor-gameplay` pass; the Outdoor gate
+  `pnpm build`, `verify:unreleased-clean-break` and the then-existing, now-retired
+  `verify:outdoor-gameplay` passed; that historical Outdoor gate
   covers 6/6 Gameplay scenes, unknown-scene fail-closed and 6/6 artifact-only scenes.
 - Fresh root contract lane passes 190 files / 2,057 tests. The 21-file resource-heavy aggregate exposed
   only existing fixed-5-second load sensitivity: its first run passed 20 files / 402 tests and timed out
@@ -68,7 +78,8 @@ Implementation commits already on local `main` after rebasing onto `origin/main@
 - Studio passes 73/73. Independent Node passes 23/23, the two Python lanes pass 11/11 and 6/6, and
   the Site lane passes 1/1 after installing its isolated dependencies from the committed lockfile.
 - `verify:unreleased-clean-break`, `verify:canonical`, `verify:placement-layout`,
-  `verify:rigged-subject`, `verify:g-bot-subject` and `verify:outdoor-gameplay` all pass.
+  `verify:rigged-subject`, `verify:g-bot-subject` and the now-retired `verify:outdoor-gameplay` all passed
+  on that checkpoint.
 - Integration-gate repairs regenerated the Planner/Builder self-check bundles, added the public
   Authoring `/testing` export, reconciled Camera-main `FootAlignment`, removed legacy
   possession-only entry inspection, and canonicalized signed zero only at Runtime Snapshot output.
@@ -117,12 +128,14 @@ fixes changed the reviewed tree, neither original verdict is a final completion 
    no final-tree Cursor GO is claimed.
 5. Only after items 1–4 pass, create the final completion record and mark M8-S1 complete.
 
-## Resolved Camera follow-up outside this slice
+## Historical Camera follow-up absorbed into the completion slice
 
-`CAM-MOUNT-1` is resolved on `codex/camera-development`: Camera projection now separates the Rider
-control context from the physical skateboard ViewTarget, applies the 7m mounted modifier for one
-unambiguous Rider and fails closed for multiple Riders. The visible fixture controls remain only an
-acceptance adapter and do not add scene-specific CameraDirector behavior.
+`CAM-MOUNT-1` was first resolved on `codex/camera-development`. The 2026-08-31 M8 completion amendment
+subsequently made that narrow mounted Camera seam part of M8-S1 itself: Camera projection preserves the
+committed controlled Entity and selected Target, resolves exactly one Rider from typed `mountedOn` Context,
+applies the mounted modifier only for that unambiguous Rider and fails closed for a shared Mount. This does
+not close the broader P2.4/GCC Camera roadmap. The visible fixture controls remain only an acceptance adapter
+and do not add scene-specific CameraDirector behavior.
 
 ## Explicit non-claims
 

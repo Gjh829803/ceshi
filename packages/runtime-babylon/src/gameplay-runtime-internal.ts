@@ -48,6 +48,10 @@ export interface BabylonGameplayRuntimeInternalV1 {
   readViewProjection(): GameplayViewStateProjectionV1;
   hasEntity(entityId: string): boolean;
   isEntityControllable(entityId: string): boolean;
+  estimateSemanticFactProjectionCapacity(): Readonly<{
+    maximumSemanticFactCountAfterInput: number;
+    maximumSemanticFactTransitionEventCount: number;
+  }>;
   hasLockedActionPresentation(
     actorEntityId: string,
     semanticActionRef: string,
