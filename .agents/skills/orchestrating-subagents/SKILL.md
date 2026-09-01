@@ -62,6 +62,11 @@ For qualifying tasks, design first produces this dependency-aware graph:
 
 Keep cross-cutting interfaces main-agent-owned until stable. Do not distort architecture to create agent work.
 
+For a substantial implementation plan, read
+[`references/dependency-aware-handoff.md`](references/dependency-aware-handoff.md) and use its
+copyable task record, readiness rules, return packet, and integration-evidence matrix. The plan is
+the scheduler input, not background prose: every dispatched task must map to one stable task ID.
+
 ## Workflow
 
 1. Consume the handoff or build a dependency graph; identify ready work.
@@ -70,6 +75,10 @@ Keep cross-cutting interfaces main-agent-owned until stable. Do not distort arch
 4. Dispatch tasks with the contract below.
 5. Validate results, update dependencies, and backfill newly ready work.
 6. Integrate and run end-to-end verification.
+
+After any contract, ownership, or shared-resource change, mark affected completed or running tasks
+stale, recompute the ready set, and explicitly repair or redispatch them. Never accept a worker
+result produced against an invalidated input contract.
 
 Never hard-code a worker count. Idle capacity warrants reassessment, not invented work.
 

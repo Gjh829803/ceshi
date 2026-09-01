@@ -1,6 +1,6 @@
 interface:
   display_name: "Orchestrating Subagents"
-  short_description: "Orchestrate complex parallel development work"
+  short_description: "Schedule dependency-aware parallel development"
   icon_small: "assets/icon.svg"
   icon_large: "assets/icon.svg"
 policy:

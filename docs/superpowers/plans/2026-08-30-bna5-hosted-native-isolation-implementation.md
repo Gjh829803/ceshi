@@ -864,7 +864,7 @@ not mutate the frozen product candidate.
 
 - [x] **Step 2: Dispatch separate Cursor Cloud agents**
 
-Use `reviewing-with-cursor` with model `grok-4.6`, `effort=xhigh`, `fast=true`:
+Use `working-with-cursor-cloud` with model `grok-4.6`, `effort=xhigh`, `fast=true`:
 
 - Agent A: read-only exact-SHA full gates: self-check, typecheck, studio/independent/root tests,
   builds, workspace, BNA1/BNA2/BNA5 clean breaks, Package check, Native/Hosted Browser verifiers and
