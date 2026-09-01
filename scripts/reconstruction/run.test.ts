@@ -924,7 +924,7 @@ describe("runWorldReconstructionV1", () => {
     const { ports } = fakePorts({
       captureOutcomeByAttempt: ["failed"],
       captureDiagnosticCodesByAttempt: [[
-        "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID",
+        "FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID",
         "secret-provider-trace-42",
       ]],
     });
@@ -935,7 +935,7 @@ describe("runWorldReconstructionV1", () => {
     )).rejects.toMatchObject({
       diagnosticCodes: [
         "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
-        "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID",
+        "FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID",
       ],
     });
   });

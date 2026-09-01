@@ -1438,10 +1438,13 @@ expect(reconstructionCase.formalCaptureIntentRef)
 ```
 
 Require a closed DTO, positive finite Capture dimensions/DPR, non-empty deterministic binding/relation/
-criterion collections, exact Case acceptance/composition/topology/checkpoint closure, and exact Package group/
-collider/bounds joins. Reject a missing/extra field, non-canonical collection order, duplicate target or
-checkpoint, hash mismatch, wrong fixed ref, wrong Intent ID, symlink/path escape, stale Case/Profile/Package,
-and any criterion whose frozen bounds or collider identity no longer matches verified Package metadata.
+criterion collections, and exact Case acceptance/composition/topology/checkpoint closure. Intent criteria
+author only identities, tolerances, and plane direction; reject legacy `sourceBoundsMeters`/`planeMeters`.
+At materialization, resolve reach/pass bounds from verified visual groups and their selected face, while a
+block criterion must join one exact Frozen Contribution Collider to one Block in the declared visual group
+and derive bounds/plane from that Collider geometry. Reject a missing/extra field, non-canonical collection
+order, duplicate target or checkpoint, hash mismatch, wrong fixed ref, wrong Intent ID, symlink/path escape,
+stale Case/Profile/Package, or any broken Collider -> Block -> visual-group join.
 
 Add a materializer API test proving the final call shape contains only the parsed Intent:
 
@@ -1476,9 +1479,11 @@ reader and representative Intent file do not yet exist.
 - [ ] **Step 0B: Implement Scheme A as one atomic current-only migration**
 
 In `@whitebox-world/runtime-contracts`, define and export only
-`FormalWorldCaptureIntentV1`, `parseFormalWorldCaptureIntentV1()`,
+`FormalWorldCaptureIntentV1`, authored `FormalTraversalCheckpointIntentCriterionV1`,
+`parseFormalWorldCaptureIntentV1()`,
 `formalWorldCaptureIntentCanonicalBytesV1()` and `hashFormalWorldCaptureIntentV1()`. Reuse the existing
-topology-relation and traversal-criterion parsers rather than adding another dialect. In
+topology-relation primitives, but keep authored Intent criteria distinct from resolved Semantic Map/Request
+spatial criteria. In
 `@whitebox-world/validation`, require exactly
 `formalCaptureIntentRef: "inputs/formal-world-capture-intent.json"` and one SHA-256 hash in the Case parser
 and canonical hash.
@@ -1510,8 +1515,9 @@ pnpm typecheck
 git diff --check
 ```
 
-Expected: focused tests/typecheck pass; the real Case ref/hash closes to the canonical Intent bytes; the
-request materializer has one parsed-Intent input; Generation and Package owners have no diff.
+Expected: focused tests/typecheck pass; the real Case ref/hash closes to the canonical authored Intent bytes;
+the request materializer has one parsed-Intent input and freezes Package-resolved spatial criteria; Generation
+and Package schema owners have no diff.
 
 - [ ] **Step 1: Write RED journal state-machine tests**
 

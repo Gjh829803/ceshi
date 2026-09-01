@@ -8,6 +8,8 @@ import {
   parseFormalSemanticCaptureMapV1,
   parseFormalWorldCaptureIntentV1,
   type FormalSemanticCaptureMapV1,
+  type FormalTraversalCheckpointSpatialCriterionV1,
+  type FormalWorldBoundsMetersV1,
   type FormalWorldCaptureIntentV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -70,6 +72,26 @@ function exactInput(value: unknown): Readonly<Record<string, unknown>> {
   const missing = INPUT_FIELDS.find((key) => !Object.hasOwn(value, key));
   if (!isNil(missing)) fail(`/${missing}`, "required field is missing");
   return value as Readonly<Record<string, unknown>>;
+}
+
+function colliderBoundsMeters(
+  worldPositionsMetersXYZ: readonly number[],
+): FormalWorldBoundsMetersV1 {
+  const minimum = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY];
+  const maximum = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY,
+    Number.NEGATIVE_INFINITY];
+  for (let index = 0; index < worldPositionsMetersXYZ.length; index += 3) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = worldPositionsMetersXYZ[index + axis]!;
+      minimum[axis] = Math.min(minimum[axis]!, value);
+      maximum[axis] = Math.max(maximum[axis]!, value);
+    }
+  }
+  return Object.freeze({
+    minimumMetersXYZ: Object.freeze(minimum) as readonly [number, number, number],
+    maximumMetersXYZ: Object.freeze(maximum) as readonly [number, number, number],
+  });
 }
 
 export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
@@ -161,36 +183,70 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
       reconstructionCase.expected.topology.relations,
     )
   ) fail("topologyRelations", "must explicitly bind every Case topology relation once");
-  const checkpointSpatialCriteria = formalCaptureIntent.checkpointSpatialCriteria;
+  const authoredCheckpointCriteria = formalCaptureIntent.checkpointSpatialCriteria;
   const groupById = new Map(metadata.visualGroups.map((group) => [
     group.visualGroupId, group,
   ]));
+  const blockById = new Map(metadata.blocks.map((block) => [block.blockId, block]));
+  const contributionColliderById = new Map(contribution.staticColliders.map(
+    (collider) => [collider.id, collider],
+  ));
+  const checkpointSpatialCriteria = authoredCheckpointCriteria.map((criterion) => {
+    const group = groupById.get(criterion.sourceVisualGroupId);
+    if (isNil(group)) {
+      fail("checkpointSpatialCriteria", "must join a verified Package visual group");
+    }
+    const groupBounds = Object.freeze({
+        minimumMetersXYZ: group.minimumMetersXYZ,
+        maximumMetersXYZ: group.maximumMetersXYZ,
+    });
+    if (criterion.kind === "reach-bounds") {
+      return Object.freeze({
+        ...criterion,
+        sourceBoundsMeters: groupBounds,
+      }) satisfies FormalTraversalCheckpointSpatialCriterionV1;
+    }
+    let sourceBoundsMeters = groupBounds;
+    if (criterion.kind === "block-plane") {
+      const matchingColliderJoins = metadata.colliderJoins.filter(
+        ({ colliderId }) => colliderId === criterion.colliderId,
+      );
+      const collider = contributionColliderById.get(criterion.colliderId);
+      const joinedBlock = matchingColliderJoins.length === 1
+        ? blockById.get(matchingColliderJoins[0]!.blockId)
+        : undefined;
+      if (
+        matchingColliderJoins.length !== 1 ||
+        isNil(collider) ||
+        isNil(joinedBlock) ||
+        joinedBlock.visualGroupId !== criterion.sourceVisualGroupId ||
+        !group.blockIds.includes(joinedBlock.blockId)
+      ) {
+        fail(
+          "checkpointSpatialCriteria",
+          "block-plane must join one frozen Collider to one Block in the declared visual group",
+        );
+      }
+      sourceBoundsMeters = colliderBoundsMeters(collider.worldPositionsMetersXYZ);
+    }
+    const axisIndex = criterion.axis === "x" ? 0 : criterion.axis === "y" ? 1 : 2;
+    const planeMeters = criterion.sourceFace === "minimum"
+      ? sourceBoundsMeters.minimumMetersXYZ[axisIndex]
+      : sourceBoundsMeters.maximumMetersXYZ[axisIndex];
+    return Object.freeze({
+      ...criterion,
+      sourceBoundsMeters,
+      planeMeters,
+    }) satisfies FormalTraversalCheckpointSpatialCriterionV1;
+  });
   const criteriaByCheckpointId = new Map(checkpointSpatialCriteria.map(
     (criterion) => [criterion.checkpointId, criterion],
   ));
-  for (const criterion of checkpointSpatialCriteria) {
-    const group = groupById.get(criterion.sourceVisualGroupId);
-    const matchingColliderJoins = criterion.kind === "block-plane"
-      ? metadata.colliderJoins.filter(
-        ({ colliderId }) => colliderId === criterion.colliderId,
-      )
-      : [];
-    if (
-      isNil(group) ||
-      !isEqual(criterion.sourceBoundsMeters, {
-        minimumMetersXYZ: group.minimumMetersXYZ,
-        maximumMetersXYZ: group.maximumMetersXYZ,
-      }) ||
-      (criterion.kind === "block-plane" &&
-        (matchingColliderJoins.length !== 1 ||
-          !group.blockIds.includes(matchingColliderJoins[0]!.blockId)))
-    ) fail("checkpointSpatialCriteria", "must join verified Package metadata");
-  }
   const expectedCheckpointIds = reconstructionCase.expected
     .criticalTraversalChecks.flatMap(({ checkpointIds }) => checkpointIds)
     .sort();
   if (!isEqual(
-    checkpointSpatialCriteria.map(({ checkpointId }) => checkpointId).sort(),
+    authoredCheckpointCriteria.map(({ checkpointId }) => checkpointId).sort(),
     expectedCheckpointIds,
   )) fail("checkpointSpatialCriteria", "must bind every Case checkpoint exactly once");
   return parseFormalSemanticCaptureMapV1({

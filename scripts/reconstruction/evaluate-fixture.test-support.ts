@@ -25,6 +25,7 @@ import {
   parseFormalWorldCaptureIntentV1,
   parseWorldRuntimeSnapshotV4,
   type FormalWorldCaptureIntentV1,
+  type FormalTraversalCheckpointIntentCriterionV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -81,6 +82,21 @@ const UPPER_COMPOSITION_TARGET_REF =
 const CASE_REF =
   "artifact://world-reconstruction-case/package-fixture.case/case.json";
 const PROFILE_REF = "artifact://case/package-fixture/evaluation-profile.json";
+
+function authoredCheckpointCriterion(
+  criterion: FormalTraversalCheckpointSpatialCriterionV1,
+): FormalTraversalCheckpointIntentCriterionV1 {
+  if (criterion.kind === "reach-bounds") {
+    const { sourceBoundsMeters: _resolvedBounds, ...authored } = criterion;
+    return authored;
+  }
+  const {
+    sourceBoundsMeters: _resolvedBounds,
+    planeMeters: _resolvedPlane,
+    ...authored
+  } = criterion;
+  return authored;
+}
 
 function snapshotValue() {
   return parseWorldRuntimeSnapshotV4({
@@ -284,7 +300,9 @@ export function createEvidenceSetFixtureInputV1(
       measurementSource: "scripted-traversal",
       traversalCheckId: "reach-ground",
     }],
-    checkpointSpatialCriteria: traversalCheckpointCriteria,
+    checkpointSpatialCriteria: traversalCheckpointCriteria.map(
+      authoredCheckpointCriterion,
+    ),
   });
   const reconstructionCase = parseWorldReconstructionCaseV1({
     kind: "world-reconstruction-case",

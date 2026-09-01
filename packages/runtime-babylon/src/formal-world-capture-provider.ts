@@ -235,6 +235,7 @@ function crossedPlane(
 
 export function measureFormalTraversalCheckpointV1(input: Readonly<{
   criterion: FormalTraversalCheckpointSpatialCriterionV1;
+  startPositionMetersXYZ: readonly [number, number, number];
   positionMetersXYZ: readonly [number, number, number];
   tick: number;
   isFinalTick: boolean;
@@ -274,7 +275,37 @@ export function measureFormalTraversalCheckpointV1(input: Readonly<{
       observedAtTick: input.tick,
     });
   }
-  return input.isFinalTick
+  if (!input.isFinalTick) return undefined;
+  const axisIndex = criterion.axis === "x" ? 0 : criterion.axis === "y" ? 1 : 2;
+  const startValue = coordinate(input.startPositionMetersXYZ, criterion.axis);
+  const endValue = coordinate(input.positionMetersXYZ, criterion.axis);
+  const nearDistanceMinimum = Math.max(
+    0,
+    criterion.capsuleRadiusMeters - criterion.toleranceMeters,
+  );
+  const nearDistanceMaximum =
+    criterion.capsuleRadiusMeters + criterion.toleranceMeters;
+  const startsOnApproachSide = criterion.expectedCenterSide === "positive"
+    ? startValue <= criterion.planeMeters - nearDistanceMaximum
+    : startValue >= criterion.planeMeters + nearDistanceMaximum;
+  const approachesPlane = criterion.expectedCenterSide === "positive"
+    ? endValue > startValue
+    : endValue < startValue;
+  const endsNearUncrossedFace = criterion.expectedCenterSide === "positive"
+    ? endValue >= criterion.planeMeters - nearDistanceMaximum &&
+      endValue <= criterion.planeMeters - nearDistanceMinimum
+    : endValue >= criterion.planeMeters + nearDistanceMinimum &&
+      endValue <= criterion.planeMeters + nearDistanceMaximum;
+  const transverseMargin =
+    criterion.capsuleRadiusMeters + criterion.toleranceMeters;
+  const overlapsFace = ([0, 1, 2] as const)
+    .filter((axis) => axis !== axisIndex)
+    .every((axis) =>
+      input.positionMetersXYZ[axis] >=
+        criterion.sourceBoundsMeters.minimumMetersXYZ[axis]! - transverseMargin &&
+      input.positionMetersXYZ[axis] <=
+        criterion.sourceBoundsMeters.maximumMetersXYZ[axis]! + transverseMargin);
+  return startsOnApproachSide && approachesPlane && endsNearUncrossedFace && overlapsFace
     ? Object.freeze({
         checkpointId: criterion.checkpointId,
         outcome: "blocked" as const,
@@ -610,6 +641,7 @@ async function captureTraversalChecks(
   const checks = [] as Array<FormalScriptedTraversalObservationV1["checks"][number]>;
   for (const check of request.scriptedTraversal.checks) {
     const resetReadySnapshot = await resetAndSettle(runtimeSessionId, ports);
+    const startPositionMetersXYZ = position(resetReadySnapshot, subjectEntityId);
     const fixedTicks = [] as Array<
       FormalScriptedTraversalObservationV1["checks"][number]["fixedTicks"][number]
     >;
@@ -645,6 +677,7 @@ async function captureTraversalChecks(
           if (checkpoints.has(criterion.checkpointId)) continue;
           const measured = measureFormalTraversalCheckpointV1({
             criterion,
+            startPositionMetersXYZ,
             positionMetersXYZ: subjectPosition,
             tick: snapshot.world.simulationTick,
             isFinalTick: measuredTickCount === totalTicks,

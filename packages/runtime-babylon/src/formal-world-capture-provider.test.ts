@@ -20,6 +20,7 @@ function traversalSnapshot(
   runtimeSessionId: string,
   worldSessionId: string,
   simulationTick: number,
+  positionMetersXYZ: readonly [number, number, number] = [0, 1, 0],
 ): WorldRuntimeSnapshotV4 {
   return {
     runtimeSessionId,
@@ -30,7 +31,7 @@ function traversalSnapshot(
       simulationTick,
       subjectStatesByEntityId: {
         player: {
-          entityState: { positionMetersXYZ: [0, 1, 0] },
+          entityState: { positionMetersXYZ },
           capabilityStatesById: {
             locomotion: {
               kind: "locomotion-capability-state-v2",
@@ -75,7 +76,11 @@ function traversalRequestFixture() {
   >[0];
 }
 
-function traversalPorts(runtimeSessionId: string, failOnSecondCheck = false) {
+function traversalPorts(
+  runtimeSessionId: string,
+  failOnSecondCheck = false,
+  fixedInputPositionMetersXYZ: readonly [number, number, number] = [0, 1, 0],
+) {
   let resetCount = 0;
   let current = traversalSnapshot(runtimeSessionId, "world.uninitialized", 0);
   const ports: FormalWorldCaptureProviderPortsV1 = {
@@ -93,6 +98,7 @@ function traversalPorts(runtimeSessionId: string, failOnSecondCheck = false) {
         runtimeSessionId,
         current.worldSessionId,
         current.world.simulationTick + input.ticks,
+        input.actions.length === 0 ? [0, 1, 0] : fixedInputPositionMetersXYZ,
       );
       return current;
     }),
@@ -227,6 +233,7 @@ describe("formal world capture provider", () => {
         capsuleRadiusMeters: 0.5,
         toleranceMeters: 0.1,
       },
+      startPositionMetersXYZ: [4, 1, 0],
       positionMetersXYZ: [6.6, 1, 0],
       tick: 7,
       isFinalTick: false,
@@ -250,6 +257,7 @@ describe("formal world capture provider", () => {
         capsuleRadiusMeters: 0.5,
         toleranceMeters: 0.1,
       },
+      startPositionMetersXYZ: [-4, 1, 0],
       positionMetersXYZ: [-5.45, 1, 0],
       tick: 11,
       isFinalTick: true,
@@ -273,10 +281,45 @@ describe("formal world capture provider", () => {
         capsuleRadiusMeters: 0.5,
         toleranceMeters: 0.1,
       },
+      startPositionMetersXYZ: [-4, 1, 0],
       positionMetersXYZ: [-6.6, 1, 0],
       tick: 10,
       isFinalTick: false,
     })).toEqual({ checkpointId: "blocked-west", outcome: "passed", observedAtTick: 10 });
+  });
+
+  it.each([
+    ["never approaches the plane", [-4, 1, 0], [-4, 1, 0]],
+    ["moves away from the plane", [-5.45, 1, 0], [-5.4, 1, 0]],
+    ["starts beyond the blocker", [-6.6, 1, 0], [-5.45, 1, 0]],
+  ] as const)("does not report a Block checkpoint when the subject %s", (
+    _label,
+    startPositionMetersXYZ,
+    positionMetersXYZ,
+  ) => {
+    expect(measureFormalTraversalCheckpointV1({
+      criterion: {
+        kind: "block-plane",
+        checkpointId: "blocked-west",
+        expectation: "block",
+        sourceVisualGroupId: "wall",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-6, 0, -1],
+          maximumMetersXYZ: [-4, 2, 1],
+        },
+        colliderId: "west-wall",
+        axis: "x",
+        sourceFace: "minimum",
+        planeMeters: -6,
+        expectedCenterSide: "negative",
+        capsuleRadiusMeters: 0.5,
+        toleranceMeters: 0.1,
+      },
+      startPositionMetersXYZ,
+      positionMetersXYZ,
+      tick: 11,
+      isFinalTick: true,
+    })).toBeUndefined();
   });
 
   it("measures contains and above from Package bounds instead of copying requested relations", () => {
@@ -515,7 +558,7 @@ describe("formal world capture provider", () => {
 
   it("accepts a mixed block check only when every frozen criterion has its own outcome", async () => {
     const runtimeSessionId = "runtime.formal.provider-mixed-block";
-    const { ports } = traversalPorts(runtimeSessionId);
+    const { ports } = traversalPorts(runtimeSessionId, false, [0, 1, 0.65]);
     const request = {
       semanticCaptureMap: { topologyRelations: [{
         fromNodeId: "route",
@@ -547,13 +590,13 @@ describe("formal world capture provider", () => {
             expectation: "block" as const,
             sourceVisualGroupId: "gate",
             sourceBoundsMeters: {
-              minimumMetersXYZ: [-1, 0, 2] as const,
-              maximumMetersXYZ: [1, 2, 3] as const,
+              minimumMetersXYZ: [-1, 0, 1] as const,
+              maximumMetersXYZ: [1, 2, 2] as const,
             },
             colliderId: "gate.collider",
             axis: "z" as const,
             sourceFace: "minimum" as const,
-            planeMeters: 2,
+            planeMeters: 1,
             expectedCenterSide: "positive" as const,
             capsuleRadiusMeters: 0.35,
             toleranceMeters: 0.05,

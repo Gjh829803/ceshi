@@ -17,6 +17,8 @@ scene.ts owns Babylon Native Block visual construction and explicit registration
 
 The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation.
 
+The Formal Capture Intent remains Capture-only Host input and is not part of the generation context or any Builder output. Do not predict `sourceBoundsMeters` or `planeMeters`; after Package verification, the Host resolves those values from checked visual-group bounds or exact frozen Collider geometry.
+
 This is one of exactly two Scene Sources. Do not emit Canonical geometry, overlay a Canonical world, introduce a third Source, or route Native output through a Manifest or Compiler. The Host-selected route and Bootstrap are immutable. A successful task or Skill self-check is not Native admission.
 
 The formal Builder task uses `gpt-5.6-sol` with reasoning effort `xhigh`. Never downgrade a formal run or describe a smoke run as reconstruction evidence.
@@ -42,6 +44,13 @@ Do not write logs, screenshots, receipts, locks, generated JavaScript, source ma
 7. Register the Host-declared Spawn Marker explicitly at a ground-supported Spawn with clearance. The marker identifies the support-top position; it does not create a Character or control state.
 8. Select every static collider explicitly during Block Profile finalization. Include the Spawn support, continuous playable corridor, required Case IDs, and necessary blocker walls, but do not register every visual Block. Keep the final selection below the frozen Generation Request Collider budget. Never infer collision from mesh names, tags, materials, or a later scene scan.
 9. The first reconstruction Case has no Route/Nav claim. Static traversal intent is only an explicit collider contribution where admitted; do not emit product Route, NavMesh, `goTo`, or reachability evidence.
+
+Before returning, verify this closure:
+
+- every `context/case.json` required Collider ID appears exactly once in `session.finalize().staticColliders`;
+- each required Collider selects one explicit Block in its corresponding acceptance visual group, including Spawn/support, step, and blocker roles;
+- the final Collider rows remain one-row-per-Collider, deterministic, and below the frozen budget; and
+- no Capture bounds, planes, Package fields, receipts, or extra outputs were authored.
 
 ## Forbidden ownership
 

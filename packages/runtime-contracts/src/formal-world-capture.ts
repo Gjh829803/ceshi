@@ -52,6 +52,39 @@ export interface FormalWorldBoundsMetersV1 {
   readonly maximumMetersXYZ: readonly [number, number, number];
 }
 
+export type FormalTraversalCheckpointIntentCriterionV1 =
+  | Readonly<{
+      kind: "reach-bounds";
+      checkpointId: string;
+      expectation: "reach";
+      sourceVisualGroupId: string;
+      capsuleRadiusMeters: number;
+      toleranceMeters: number;
+    }>
+  | Readonly<{
+      kind: "pass-plane";
+      checkpointId: string;
+      expectation: "pass";
+      sourceVisualGroupId: string;
+      axis: "x" | "y" | "z";
+      sourceFace: "minimum" | "maximum";
+      expectedCenterSide: "negative" | "positive";
+      capsuleRadiusMeters: number;
+      toleranceMeters: number;
+    }>
+  | Readonly<{
+      kind: "block-plane";
+      checkpointId: string;
+      expectation: "block";
+      sourceVisualGroupId: string;
+      colliderId: string;
+      axis: "x" | "y" | "z";
+      sourceFace: "minimum" | "maximum";
+      expectedCenterSide: "negative" | "positive";
+      capsuleRadiusMeters: number;
+      toleranceMeters: number;
+    }>;
+
 export type FormalTraversalCheckpointSpatialCriterionV1 =
   | Readonly<{
       kind: "reach-bounds";
@@ -109,7 +142,7 @@ export interface FormalWorldCaptureIntentV1 {
   readonly topologyRelations:
     readonly FormalSemanticTopologyRelationBindingV1[];
   readonly checkpointSpatialCriteria:
-    readonly FormalTraversalCheckpointSpatialCriterionV1[];
+    readonly FormalTraversalCheckpointIntentCriterionV1[];
 }
 
 export type FormalArtifactViewRequestV1 =
@@ -586,6 +619,24 @@ const PASS_PLANE_CRITERION_FIELDS = [
 ] as const;
 const BLOCK_PLANE_CRITERION_FIELDS = [
   ...PASS_PLANE_CRITERION_FIELDS,
+  "colliderId",
+] as const;
+const INTENT_REACH_CRITERION_FIELDS = [
+  "kind",
+  "checkpointId",
+  "expectation",
+  "sourceVisualGroupId",
+  "capsuleRadiusMeters",
+  "toleranceMeters",
+] as const;
+const INTENT_PASS_PLANE_CRITERION_FIELDS = [
+  ...INTENT_REACH_CRITERION_FIELDS,
+  "axis",
+  "sourceFace",
+  "expectedCenterSide",
+] as const;
+const INTENT_BLOCK_PLANE_CRITERION_FIELDS = [
+  ...INTENT_PASS_PLANE_CRITERION_FIELDS,
   "colliderId",
 ] as const;
 const FORMAL_REQUEST_FIELDS = [
@@ -1193,6 +1244,78 @@ function parseCapsuleTolerance(
   return Object.freeze({ capsuleRadiusMeters, toleranceMeters });
 }
 
+function parseTraversalCheckpointIntentCriterion(
+  value: unknown,
+  contract: string,
+  path: string,
+): FormalTraversalCheckpointIntentCriterionV1 {
+  assertAccessorFree(value, contract, path);
+  const source = object(value, contract, path);
+  const kind = source.kind;
+  if (kind === "reach-bounds") {
+    exactFields(source, INTENT_REACH_CRITERION_FIELDS, contract, path);
+    if (source.expectation !== "reach") {
+      fail(contract, `${path}/expectation`, "reach-bounds must expect reach");
+    }
+    return freeze({
+      kind,
+      checkpointId: text(source.checkpointId, contract, `${path}/checkpointId`),
+      expectation: "reach" as const,
+      sourceVisualGroupId: text(
+        source.sourceVisualGroupId,
+        contract,
+        `${path}/sourceVisualGroupId`,
+      ),
+      ...parseCapsuleTolerance(source, contract, path),
+    });
+  }
+  if (kind !== "pass-plane" && kind !== "block-plane") {
+    fail(contract, `${path}/kind`, "expected reach-bounds, pass-plane, or block-plane");
+  }
+  exactFields(
+    source,
+    kind === "block-plane"
+      ? INTENT_BLOCK_PLANE_CRITERION_FIELDS
+      : INTENT_PASS_PLANE_CRITERION_FIELDS,
+    contract,
+    path,
+  );
+  const expectation = kind === "pass-plane" ? "pass" : "block";
+  if (source.expectation !== expectation) {
+    fail(contract, `${path}/expectation`, `${kind} must expect ${expectation}`);
+  }
+  const shared = {
+    checkpointId: text(source.checkpointId, contract, `${path}/checkpointId`),
+    sourceVisualGroupId: text(
+      source.sourceVisualGroupId,
+      contract,
+      `${path}/sourceVisualGroupId`,
+    ),
+    axis: enumValue(source.axis, ["x", "y", "z"] as const, contract, `${path}/axis`),
+    sourceFace: enumValue(
+      source.sourceFace,
+      ["minimum", "maximum"] as const,
+      contract,
+      `${path}/sourceFace`,
+    ),
+    expectedCenterSide: enumValue(
+      source.expectedCenterSide,
+      ["negative", "positive"] as const,
+      contract,
+      `${path}/expectedCenterSide`,
+    ),
+    ...parseCapsuleTolerance(source, contract, path),
+  };
+  return kind === "pass-plane"
+    ? freeze({ kind, expectation: "pass" as const, ...shared })
+    : freeze({
+        kind,
+        expectation: "block" as const,
+        colliderId: text(source.colliderId, contract, `${path}/colliderId`),
+        ...shared,
+      });
+}
+
 function parseTraversalCheckpointSpatialCriterion(
   value: unknown,
   contract = "FORMAL_TRAVERSAL_CHECKPOINT_SPATIAL_CRITERION_INVALID",
@@ -1316,6 +1439,23 @@ function parseCheckpointCriteria(
     criteria.some((criterion, index) =>
       index > 0 && criteria[index - 1]!.checkpointId >= criterion.checkpointId)
   ) {
+    fail(contract, path, "checkpoint criteria must be unique and sorted by checkpointId");
+  }
+  return Object.freeze(criteria);
+}
+
+function parseIntentCheckpointCriteria(
+  value: unknown,
+  contract: string,
+  path: string,
+): readonly FormalTraversalCheckpointIntentCriterionV1[] {
+  const criteria = array(value, contract, path).map((entry, index) =>
+    parseTraversalCheckpointIntentCriterion(entry, contract, `${path}/${index}`));
+  if (isEmpty(criteria)) {
+    fail(contract, path, "must contain one authored criterion per checkpoint");
+  }
+  if (criteria.some((criterion, index) =>
+    index > 0 && criteria[index - 1]!.checkpointId >= criterion.checkpointId)) {
     fail(contract, path, "checkpoint criteria must be unique and sorted by checkpointId");
   }
   return Object.freeze(criteria);
@@ -1736,7 +1876,7 @@ export function parseFormalWorldCaptureIntentV1(
       "relation proof must reference a bound visual group",
     );
   }
-  const checkpointSpatialCriteria = parseCheckpointCriteria(
+  const checkpointSpatialCriteria = parseIntentCheckpointCriteria(
     source.checkpointSpatialCriteria,
     contract,
     "checkpointSpatialCriteria",

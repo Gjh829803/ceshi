@@ -427,9 +427,19 @@ interface FormalWorldCaptureIntentV1 {
     blockVisualGroupId: string;
   }>[];
   readonly topologyRelations: readonly FormalSemanticTopologyRelationBindingV1[];
-  readonly checkpointSpatialCriteria: readonly FormalTraversalCheckpointSpatialCriterionV1[];
+  readonly checkpointSpatialCriteria: readonly FormalTraversalCheckpointIntentCriterionV1[];
 }
 ```
+
+Intent checkpoint criteria are authored identities and tolerances, not Package measurements. They contain
+the checkpoint/group identity and, for plane criteria, axis, source face, expected side and optional exact
+Collider ID; `sourceBoundsMeters` and `planeMeters` are forbidden legacy fields. During request
+materialization the Block semantic binder freezes resolved `FormalTraversalCheckpointSpatialCriterionV1`
+rows into the sole Semantic Map and Request. Reach/pass criteria use verified checked visual-group bounds,
+with pass planes derived from the selected group face. A block plane must join exactly
+Collider -> Block -> declared visual group and derives its bounds and face from the verified Frozen
+Contribution Collider geometry, never the whole visual-group AABB. The resolved criteria and their hashes
+remain formal Capture evidence.
 
 The Case hash binds the Intent ref/hash. The production transaction resolves the fixed ref beneath the
 canonical Case root, rejects symbolic links and path escape, reads the bytes once, parses them through
@@ -516,7 +526,10 @@ collider-overlay PNG:
 - `collider-overlay-observation.json`: every Frozen Contribution collider joined to the SDK-owned live Havok
   body/subshape and overlay record, with no Native registry or Scene scan;
 - `scripted-traversal.json`: ordered fixed-input ticks, committed Snapshot hashes/positions/media and measured
-  checkpoint outcomes after an independent Host reset/bind for each check.
+  checkpoint outcomes after an independent Host reset/bind for each check. A block checkpoint is observed
+  only when the reset-ready start is on the approach side, committed motion advances along the selected axis
+  toward the plane, and the final capsule is near the Collider face without crossing it; ending anywhere on
+  the pre-crossing side is not blocker evidence.
 
 The formal Capture provider computes those observations inside the admitted Runtime. NBR-50B only verifies
 their bytes and identity joins and projects them into the existing evaluator DTO; it must never recompute them
