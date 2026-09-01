@@ -3,6 +3,34 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import type {
+  BabylonNativeBlockReconstructionCorpusCaseIdV1 as TestingCorpusCaseIdV1,
+  BabylonNativeBlockReconstructionCorpusCaseV1 as TestingCorpusCaseV1,
+  BabylonNativeBlockReconstructionCorpusEvidenceIndexV1 as TestingCorpusEvidenceIndexV1,
+  BabylonNativeBlockReconstructionCorpusMaterializationV1 as TestingCorpusMaterializationV1,
+} from "./testing.js";
+// @ts-expect-error Reconstruction Corpus types are testing-subpath-only.
+import type { BabylonNativeBlockReconstructionCorpusCaseIdV1 as ProductionCorpusCaseIdV1 } from "./index.js";
+// @ts-expect-error Reconstruction Corpus types are testing-subpath-only.
+import type { BabylonNativeBlockReconstructionCorpusCaseV1 as ProductionCorpusCaseV1 } from "./index.js";
+// @ts-expect-error Reconstruction Corpus types are testing-subpath-only.
+import type { BabylonNativeBlockReconstructionCorpusEvidenceIndexV1 as ProductionCorpusEvidenceIndexV1 } from "./index.js";
+// @ts-expect-error Reconstruction Corpus types are testing-subpath-only.
+import type { BabylonNativeBlockReconstructionCorpusMaterializationV1 as ProductionCorpusMaterializationV1 } from "./index.js";
+
+type TestingCorpusTypesMustRemainAvailable = readonly [
+  TestingCorpusCaseIdV1,
+  TestingCorpusCaseV1,
+  TestingCorpusEvidenceIndexV1,
+  TestingCorpusMaterializationV1,
+];
+type ProductionCorpusTypesMustRemainAbsent = readonly [
+  ProductionCorpusCaseIdV1,
+  ProductionCorpusCaseV1,
+  ProductionCorpusEvidenceIndexV1,
+  ProductionCorpusMaterializationV1,
+];
+
 const PACKAGE_ROOT = new URL("../", import.meta.url);
 const SOURCE_ROOT = new URL("./", import.meta.url);
 
@@ -147,19 +175,15 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1",
       "BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1",
       "BABYLON_NATIVE_BLOCK_PROFILE_REF_V1",
-      "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
       "BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1",
       "assessBabylonNativeBlockOptimizationV1",
       "bindBlockMaterializerMetadataToSemanticCaptureTargetsV1",
       "bindNativeBlockAuthoringManifestToCheckedLayoutV1",
       "createBabylonNativeBlockAuthoringCaptureV1",
       "createBabylonNativeBlockProfileSessionV1",
-      "createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1",
       "hashBabylonNativeBlockCheckedLayoutInventoryV1",
       "hashNativeBlockAuthoringManifestV1",
       "hashNativeBlockVisualResourceListV1",
-      "inspectBabylonNativeBlockReconstructionCorpusCaseV1",
-      "materializeBabylonNativeBlockReconstructionCorpusCaseV1",
       "parseNativeBlockAuthoringManifestV1",
       "parseNativeBlockVisualResourceListV1",
     ]);
@@ -176,13 +200,20 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     ]);
   });
 
-  it("keeps the real-runtime fixture behind one exact testing-only export", async () => {
+  it("keeps Reconstruction Corpus and real-runtime fixtures behind the exact testing-only export", async () => {
     const modulePath = ["./", "testing.js"].join("");
     const testing = await import(modulePath) as Record<string, unknown>;
 
-    expect(Object.keys(testing)).toEqual([
+    const testingCaseId: TestingCorpusCaseIdV1 = "mountain-cliff";
+    expect(testingCaseId).toBe("mountain-cliff");
+
+    expect(Object.keys(testing).sort()).toEqual([
+      "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
       "createBabylonNativeBlockColliderRuntimeFixtureModuleV1",
+      "createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1",
       "createBabylonNativeBlockReconstructionCorpusModuleV1",
-    ]);
+      "inspectBabylonNativeBlockReconstructionCorpusCaseV1",
+      "materializeBabylonNativeBlockReconstructionCorpusCaseV1",
+    ].sort());
   });
 });
