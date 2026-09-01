@@ -644,44 +644,34 @@ describe("runWorldReconstructionV1", () => {
     expect(calls.generate).toEqual([0]);
   });
 
-  it("rejects a requested third attempt", async () => {
+  it("fails closed when a generation response pairs its request with another attempt's hash", async () => {
     const outputDirectoryPath = await outputRoot();
-    const { ports } = fakePorts({
-      evaluationByAttempt: [
-        evaluationResult({
-          attemptIndex: 0,
-          outcome: "failed",
-          diagnostics: [diagnostic({
-            id: "diag.collider-missing",
-            code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
-            dimensionId: "collider",
-          })],
-        }),
-        evaluationResult({
-          attemptIndex: 1,
-          outcome: "failed",
-          diagnostics: [diagnostic({
-            id: "diag.collider-missing-2",
-            code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
-            dimensionId: "collider",
-          })],
-        }),
+    const { ports, calls } = fakePorts({
+      evaluationByAttempt: [evaluationResult({
+        attemptIndex: 0,
+        outcome: "failed",
+        diagnostics: [diagnostic({
+          id: "diag.collider-missing",
+          code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+          dimensionId: "collider",
+        })],
+      })],
+      generateHashOverrideByAttempt: [
+        undefined,
+        identities(0).routerTaskPayloadHash,
       ],
     });
-    const receipt = await runWorldReconstructionV1(
+
+    await expect(runWorldReconstructionV1(
       runInput(outputDirectoryPath),
       ports,
-    );
-    expect(receipt.attempts).toHaveLength(2);
-    expect(receipt.outcome).toBe("failed");
-    await expect(runWorldReconstructionV1({
-      ...runInput(outputDirectoryPath),
-      forceAttemptIndex: 2,
-    }, ports)).rejects.toMatchObject({
-      diagnosticCodes: expect.arrayContaining([
-        "WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED",
-      ]),
+    )).rejects.toMatchObject({
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH"],
     });
+    expect(calls.generate).toEqual([0, 1]);
+    expect(calls.package).toEqual([0]);
+    expect(calls.capture).toEqual([0]);
+    expect(calls.evaluate).toEqual([0]);
   });
 
   it("fails closed on stale Case/Profile/Gameplay/World Runtime/Bounds/Bootstrap before submission", async () => {

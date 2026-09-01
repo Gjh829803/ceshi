@@ -140,11 +140,14 @@ describe("world reconstruction run journal", () => {
     expect(journal.rows()[0]).toBe(first);
   });
 
-  it("attaches the same request ID and hash and rejects a same-ID hash mismatch", async () => {
+  it("keeps an exact one-to-one request ID and hash binding", async () => {
     const journal = await openJournal(await journalRoot());
     expect(journal.attachOrRejectRequest("req-a", H("a"))).toBe("accepted");
     expect(journal.attachOrRejectRequest("req-a", H("a"))).toBe("attached");
     expect(() => journal.attachOrRejectRequest("req-a", H("b"))).toThrowError(
+      "WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH",
+    );
+    expect(() => journal.attachOrRejectRequest("req-b", H("a"))).toThrowError(
       "WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH",
     );
     const recorded = journal.recordedRequest("req-a");

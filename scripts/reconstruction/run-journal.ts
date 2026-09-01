@@ -208,6 +208,7 @@ export async function createWorldReconstructionRunJournalV1(input: CreateWorldRe
     if (row.requestId !== undefined && row.requestHash !== undefined) {
       const existing = requests.get(row.requestId);
       if (existing !== undefined && existing.requestHash !== row.requestHash) fail("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
+      if ([...requests.values()].some((request) => request.requestId !== row.requestId && request.requestHash === row.requestHash)) fail("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
       requests.set(row.requestId, Object.freeze({ requestId: row.requestId, requestHash: row.requestHash, outcome: row.boundary === "after" ? "completed" : existing?.outcome ?? "accepted" }));
     }
     if (row.state === "cleanup-joined" && row.boundary === "after" && row.cleanupOutcomes !== undefined) cleanup = row.cleanupOutcomes;
@@ -251,7 +252,11 @@ export async function createWorldReconstructionRunJournalV1(input: CreateWorldRe
     },
     attachOrRejectRequest: (requestId, requestHash) => {
       const existing = requests.get(requestId);
-      if (existing === undefined) { requests.set(requestId, Object.freeze({ requestId, requestHash, outcome: "accepted" })); return "accepted"; }
+      if (existing === undefined) {
+        if ([...requests.values()].some((request) => request.requestHash === requestHash)) fail("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
+        requests.set(requestId, Object.freeze({ requestId, requestHash, outcome: "accepted" }));
+        return "accepted";
+      }
       if (existing.requestHash !== requestHash) fail("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
       return "attached";
     },

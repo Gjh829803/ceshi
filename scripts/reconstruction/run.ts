@@ -137,7 +137,6 @@ export interface WorldReconstructionRunInputV1 {
   readonly reconstructionCase: WorldReconstructionCaseV1 | unknown;
   readonly evaluationProfile: WorldReconstructionEvaluationProfileV1 | unknown;
   readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
-  readonly forceAttemptIndex?: number;
 }
 
 export class WorldReconstructionRunClosedErrorV1 extends Error {
@@ -527,14 +526,6 @@ export async function runWorldReconstructionV1(
   input: WorldReconstructionRunInputV1,
   ports: WorldReconstructionRunPortsV1,
 ): Promise<WorldReconstructionRunReceiptV1> {
-  if (!isNil(input.forceAttemptIndex) && input.forceAttemptIndex > 1) {
-    const cleanup = await ports.cleanup();
-    throw new WorldReconstructionRunClosedErrorV1(
-      ["WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED"],
-      cleanupStatus(cleanup),
-    );
-  }
-
   const reconstructionCase = parseWorldReconstructionCaseV1(
     input.reconstructionCase,
   );
