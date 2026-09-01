@@ -324,6 +324,78 @@ describe("formal world capture provider", () => {
     expect(ports.awaitRenderReady).toHaveBeenCalledTimes(4);
   });
 
+  it("accepts a mixed block check only when every frozen criterion has its own outcome", async () => {
+    const runtimeSessionId = "runtime.formal.provider-mixed-block";
+    const { ports } = traversalPorts(runtimeSessionId);
+    const request = {
+      semanticCaptureMap: { topologyRelations: [] },
+      scriptedTraversal: {
+        checks: [{
+          id: "blocked-gate",
+          acceptanceTargetRef: "worldkit://acceptance-target/blocked-gate@1",
+          checkExpectation: "block" as const,
+          fixedInputSequence: [{ actions: ["move-forward" as const], ticks: 1 }],
+          checkpointCriteria: [{
+            kind: "reach-bounds" as const,
+            checkpointId: "approach",
+            expectation: "reach" as const,
+            sourceVisualGroupId: "route",
+            sourceBoundsMeters: {
+              minimumMetersXYZ: [-1, 0, -1] as const,
+              maximumMetersXYZ: [1, 2, 1] as const,
+            },
+            capsuleRadiusMeters: 0.35,
+            toleranceMeters: 0.05,
+          }, {
+            kind: "block-plane" as const,
+            checkpointId: "gate",
+            expectation: "block" as const,
+            sourceVisualGroupId: "gate",
+            sourceBoundsMeters: {
+              minimumMetersXYZ: [-1, 0, 2] as const,
+              maximumMetersXYZ: [1, 2, 3] as const,
+            },
+            colliderId: "gate.collider",
+            axis: "z" as const,
+            sourceFace: "minimum" as const,
+            planeMeters: 2,
+            expectedCenterSide: "positive" as const,
+            capsuleRadiusMeters: 0.35,
+            toleranceMeters: 0.05,
+          }, {
+            kind: "pass-plane" as const,
+            checkpointId: "threshold",
+            expectation: "pass" as const,
+            sourceVisualGroupId: "route",
+            sourceBoundsMeters: {
+              minimumMetersXYZ: [-1, 0, -2] as const,
+              maximumMetersXYZ: [1, 2, -1] as const,
+            },
+            axis: "z" as const,
+            sourceFace: "maximum" as const,
+            planeMeters: -1,
+            expectedCenterSide: "positive" as const,
+            capsuleRadiusMeters: 0.35,
+            toleranceMeters: 0.05,
+          }],
+        }],
+      },
+    } as unknown as Parameters<
+      typeof FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureTraversalChecks
+    >[0];
+
+    const checks = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .captureTraversalChecks(request, runtimeSessionId, "player", ports);
+
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.outcome).toBe("blocked");
+    expect(checks[0]?.checkpoints).toEqual([
+      { checkpointId: "approach", outcome: "reached", observedAtTick: 2 },
+      { checkpointId: "gate", outcome: "blocked", observedAtTick: 2 },
+      { checkpointId: "threshold", outcome: "passed", observedAtTick: 2 },
+    ]);
+  });
+
   it("rejects a partial scripted run without exposing successful check payload", async () => {
     const runtimeSessionId = "runtime.formal.provider-partial-failure";
     const { ports, resetCount } = traversalPorts(runtimeSessionId, true);

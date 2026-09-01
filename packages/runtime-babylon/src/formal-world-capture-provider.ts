@@ -592,13 +592,18 @@ async function captureTraversalChecks(
     }
     const checkpointRows = [...checkpoints.values()].sort((left, right) =>
       stableCompare(left.checkpointId, right.checkpointId));
-    const outcome = check.checkExpectation === "pass" &&
-        checkpointRows.every(({ outcome }) => outcome !== "blocked")
-      ? "passed"
-      : check.checkExpectation === "block" &&
-          checkpointRows.every(({ outcome }) => outcome === "blocked")
-      ? "blocked"
-      : fail("BABYLON_FORMAL_CAPTURE_TRAVERSAL_EXPECTATION_NOT_OBSERVED", check.id);
+    const checkpointOutcomeById = new Map(checkpointRows.map((row) =>
+      [row.checkpointId, row.outcome] as const));
+    const expectationObserved = check.checkpointCriteria.every((criterion) => {
+      const observed = checkpointOutcomeById.get(criterion.checkpointId);
+      if (criterion.expectation === "reach") return observed === "reached";
+      if (criterion.expectation === "pass") return observed === "passed";
+      return observed === "blocked";
+    });
+    if (!expectationObserved) {
+      fail("BABYLON_FORMAL_CAPTURE_TRAVERSAL_EXPECTATION_NOT_OBSERVED", check.id);
+    }
+    const outcome = check.checkExpectation === "pass" ? "passed" : "blocked";
     checks.push(Object.freeze({
       id: check.id,
       acceptanceTargetRef: check.acceptanceTargetRef,
