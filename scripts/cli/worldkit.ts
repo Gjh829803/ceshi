@@ -139,7 +139,7 @@ Usage:
     --session-directory <absolute-directory> [--resume]
   worldkit native check <world-directory> --json
   worldkit native explain <world-directory> [--json]
-  worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json
+  worldkit native package <attempt-directory> --case <case.json> --json
   worldkit native run <package-directory> [--port <port>] [--json]
   worldkit capture <file-or-package> --output <png> [--snapshot <json>]
     [--triview-output <directory> [--implementation-map <json>]] [--port <port>] [--json]
@@ -192,7 +192,6 @@ export type WorldkitArgs =
       command: "native-package";
       attemptDirectoryPath: string;
       casePath: string;
-      outputPath: string;
       json: true;
     }
   | {
@@ -477,11 +476,12 @@ async function runNativePackageCommandV1(
 ): Promise<Readonly<Record<string, unknown>>> {
   const packageAttempt = packageNativeBlockAttemptV1 ??
     await loadPackageNativeBlockAttemptPortV1();
+  const attemptDirectoryPath = path.resolve(parsed.attemptDirectoryPath);
   const packaged = await packageAttempt({
     repositoryRoot: REPOSITORY_ROOT,
-    attemptDirectoryPath: path.resolve(parsed.attemptDirectoryPath),
+    attemptDirectoryPath,
     casePath: path.resolve(parsed.casePath),
-    outputDirectoryPath: path.resolve(parsed.outputPath),
+    outputDirectoryPath: path.join(attemptDirectoryPath, "world-package"),
   });
   return Object.freeze({
     outcome: "completed",
@@ -654,42 +654,19 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
         "Native attempt directory",
       );
       const casePath = takeOption(tokens, "--case");
-      const outputPath = takeOption(tokens, "--output");
       if (casePath === undefined) {
         throw new WorldkitUsageError(
           "native package requires --case <case.json>.",
         );
       }
-      if (outputPath === undefined) {
-        throw new WorldkitUsageError(
-          "native package requires --output <package-directory>.",
-        );
-      }
       if (!json) {
         throw new WorldkitUsageError("native package requires --json.");
-      }
-      const relativeOutputPath = path.relative(
-        path.resolve(attemptDirectoryPath),
-        path.resolve(outputPath),
-      );
-      if (
-        relativeOutputPath === "" ||
-        (
-          relativeOutputPath !== ".." &&
-          !relativeOutputPath.startsWith(`..${path.sep}`) &&
-          !path.isAbsolute(relativeOutputPath)
-        )
-      ) {
-        throw new WorldkitUsageError(
-          "native package output must be outside the immutable attempt directory.",
-        );
       }
       rejectRemaining(tokens, "native package");
       return {
         command: "native-package",
         attemptDirectoryPath,
         casePath,
-        outputPath,
         json: true,
       };
     }

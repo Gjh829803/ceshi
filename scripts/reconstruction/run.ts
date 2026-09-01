@@ -54,8 +54,6 @@ export interface WorldReconstructionGeneratePortResultV1 {
   readonly generationReceiptHash: Sha256HashV1;
   readonly sceneAuthoringAttemptRef: string;
   readonly sceneAuthoringAttemptHash: Sha256HashV1;
-  readonly authoredSourceRef?: string;
-  readonly authoredSourceHash?: Sha256HashV1;
   readonly diagnosticCodes: readonly string[];
 }
 
@@ -68,10 +66,12 @@ export interface WorldReconstructionGeneratePortInputV1 {
   readonly repairInstruction?: NativeBlockRepairInstructionV1;
 }
 
-export interface WorldReconstructionPackagePortResultV1 {
-  readonly outcome: "completed" | "check-failed" | "package-failed";
+export interface CompletedWorldReconstructionPackagePortResultV1 {
+  readonly outcome: "completed";
   readonly sceneAuthoringAttemptResultRef: string;
   readonly sceneAuthoringAttemptResultHash: Sha256HashV1;
+  readonly authoredSourceRef: string;
+  readonly authoredSourceHash: Sha256HashV1;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly worldPackagePath: string;
@@ -82,14 +82,33 @@ export interface WorldReconstructionPackagePortResultV1 {
   readonly diagnosticCodes: readonly string[];
 }
 
-export interface WorldReconstructionCapturePortResultV1 {
-  readonly outcome: "completed" | "failed" | "camera-rollback-failed";
+export interface FailedWorldReconstructionPackagePortResultV1 {
+  readonly outcome: "check-failed" | "package-failed";
+  readonly diagnosticCodes: readonly string[];
+}
+
+export type WorldReconstructionPackagePortResultV1 =
+  | CompletedWorldReconstructionPackagePortResultV1
+  | FailedWorldReconstructionPackagePortResultV1;
+
+export interface CompletedWorldReconstructionCapturePortResultV1 {
+  readonly outcome: "completed";
   readonly captureReceiptRef: string;
   readonly captureReceiptHash: Sha256HashV1;
   readonly captureReceiptPath: string;
+  readonly cameraRollbackOutcome: "completed";
+  readonly diagnosticCodes: readonly string[];
+}
+
+export interface FailedWorldReconstructionCapturePortResultV1 {
+  readonly outcome: "failed" | "camera-rollback-failed";
   readonly cameraRollbackOutcome: "completed" | "failed";
   readonly diagnosticCodes: readonly string[];
 }
+
+export type WorldReconstructionCapturePortResultV1 =
+  | CompletedWorldReconstructionCapturePortResultV1
+  | FailedWorldReconstructionCapturePortResultV1;
 
 export interface WorldReconstructionEvaluatePortResultV1 {
   readonly outcome: WorldReconstructionOutcomeV1;
@@ -99,10 +118,7 @@ export interface WorldReconstructionEvaluatePortResultV1 {
   readonly diagnosticCodes: readonly string[];
 }
 
-/**
- * Core-only orchestration ports. The production entry and concrete adapters are
- * intentionally not exposed until their complete identity joins are wired.
- */
+/** Core orchestration contract; concrete composition remains script-local. */
 export interface WorldReconstructionRunPortsV1 {
   readonly generate: (
     input: WorldReconstructionGeneratePortInputV1,
@@ -163,8 +179,8 @@ export class WorldReconstructionRunClosedErrorV1 extends Error {
 interface CompletedAttemptRecordV1 {
   readonly attemptIndex: 0 | 1;
   readonly generate: WorldReconstructionGeneratePortResultV1;
-  readonly packaged: WorldReconstructionPackagePortResultV1;
-  readonly captured: WorldReconstructionCapturePortResultV1;
+  readonly packaged: CompletedWorldReconstructionPackagePortResultV1;
+  readonly captured: CompletedWorldReconstructionCapturePortResultV1;
   readonly evaluated: WorldReconstructionEvaluatePortResultV1;
 }
 
@@ -400,7 +416,7 @@ async function runAttempt(
     generate,
   });
   if (packaged.outcome !== "completed") {
-    await failClosed(journal, ports, [packageFailureCode(packaged.outcome)]);
+    return failClosed(journal, ports, [packageFailureCode(packaged.outcome)]);
   }
   await journal.recordBoundary({
     state: stages.package,
@@ -416,12 +432,12 @@ async function runAttempt(
   const captured = await ports.capture({ attemptIndex, packaged });
   if (captured.outcome === "camera-rollback-failed" ||
     captured.cameraRollbackOutcome === "failed") {
-    await failClosed(journal, ports, [
+    return failClosed(journal, ports, [
       "WORLD_RECONSTRUCTION_CAMERA_ROLLBACK_FAILED",
     ]);
   }
   if (captured.outcome !== "completed") {
-    await failClosed(journal, ports, ["WORLD_RECONSTRUCTION_CAPTURE_FAILED"]);
+    return failClosed(journal, ports, ["WORLD_RECONSTRUCTION_CAPTURE_FAILED"]);
   }
   await journal.recordBoundary({
     state: stages.capture,
@@ -611,10 +627,8 @@ export async function runWorldReconstructionV1(
     journal.assertOwnerIdentities(await ports.rehashOwnerIdentities());
     const repairInstruction = createNativeBlockRepairInstructionV1({
       diagnostics: attempt0.evaluated.evaluation.diagnostics,
-      priorSourceRef: attempt0.generate.authoredSourceRef ??
-        attempt0.generate.generationRequestRef,
-      priorSourceHash: attempt0.generate.authoredSourceHash ??
-        attempt0.generate.generationRequestHash,
+      priorSourceRef: attempt0.packaged.authoredSourceRef,
+      priorSourceHash: attempt0.packaged.authoredSourceHash,
       priorEvaluationResultRef: attempt0.evaluated.evaluation.id,
       priorEvaluationResultHash: attempt0.evaluated.evaluationHash,
       priorGenerationRequestRef: attempt0.generate.generationRequestRef,

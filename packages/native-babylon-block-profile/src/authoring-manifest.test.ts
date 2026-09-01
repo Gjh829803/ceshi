@@ -51,6 +51,8 @@ function reconstructionCaseValue() {
     evaluationProfileRef:
       "worldkit://reconstruction-evaluation-profile/cloud-temple@1",
     evaluationProfileHash: H("c"),
+    formalCaptureIntentRef: "inputs/formal-world-capture-intent.json",
+    formalCaptureIntentHash: H("d"),
     acceptanceTargetRefs: [
       "worldkit://acceptance-target/central-ascent@1",
       "worldkit://acceptance-target/upper-t-junction@1",

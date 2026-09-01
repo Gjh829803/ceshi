@@ -69,6 +69,7 @@ import {
 import {
   checkBabylonNativeSceneWorldDirectoryV1,
 } from "../native-scene/native-scene-check.js";
+import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
 import { admitBabylonNativeSourceGraphV1 } from
   "../native-scene/source-admission.js";
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
@@ -202,6 +203,16 @@ async function writeCanonicalJsonFresh(
   }
 }
 
+async function writeTextFresh(outputPath: string, value: string): Promise<void> {
+  const stagingPath = `${outputPath}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(stagingPath, value, { flag: "wx", mode: 0o600 });
+    await rename(stagingPath, outputPath);
+  } finally {
+    await rm(stagingPath, { force: true });
+  }
+}
+
 export async function packageNativeBlockAttemptV1(
   input: PackageNativeBlockAttemptInputV1,
 ): Promise<PackagedNativeBlockAttemptV1> {
@@ -215,10 +226,9 @@ export async function packageNativeBlockAttemptV1(
     input.outputDirectoryPath,
     "output-directory",
   );
-  if (
-    outputDirectoryPath === attemptDirectoryPath ||
-    outputDirectoryPath.startsWith(`${attemptDirectoryPath}${path.sep}`)
-  ) return fail("output-inside-attempt");
+  if (outputDirectoryPath !== path.join(attemptDirectoryPath, "world-package")) {
+    return fail("output-location-invalid");
+  }
   if (await realpath(attemptDirectoryPath) !== attemptDirectoryPath) {
     return fail("attempt-directory-invalid");
   }
@@ -515,8 +525,14 @@ export async function packageNativeBlockAttemptV1(
       outputDirectoryPath,
       directory,
     });
+    // attempt-result.json is the commit marker for the complete verifier-owned
+    // Attempt output pair, so publish the deterministic explanation first.
+    await writeTextFresh(
+      path.join(attemptDirectoryPath, "native-explain.txt"),
+      explainNativeSceneCheckResultV1(formalCheck),
+    );
     await writeCanonicalJsonFresh(
-      path.join(attemptDirectoryPath, "scene-authoring-attempt-result.json"),
+      path.join(attemptDirectoryPath, "attempt-result.json"),
       attemptResult,
     );
     const receipt = verified.receipt;

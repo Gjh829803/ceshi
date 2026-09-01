@@ -14,6 +14,7 @@ import {
   hashFormalScriptedTraversalRequestV1,
   hashFormalSemanticCaptureMapV1,
   hashFormalSpawnSupportObservationV1,
+  hashFormalWorldCaptureIntentV1,
   hashFormalWorldCaptureRequestV1,
   parseBabylonNativeBlockMaterializerMetadataV1,
   parseFormalColliderOverlayObservationV1,
@@ -21,7 +22,9 @@ import {
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
+  parseFormalWorldCaptureIntentV1,
   parseWorldRuntimeSnapshotV4,
+  type FormalWorldCaptureIntentV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -75,7 +78,8 @@ const COMPOSITION_TARGET_REF =
   "worldkit://composition-target/package-fixture-opening@1";
 const UPPER_COMPOSITION_TARGET_REF =
   "worldkit://composition-target/package-fixture-upper@1";
-const CASE_REF = "artifact://world-reconstruction-case/package-fixture/case.json";
+const CASE_REF =
+  "artifact://world-reconstruction-case/package-fixture.case/case.json";
 const PROFILE_REF = "artifact://case/package-fixture/evaluation-profile.json";
 
 function snapshotValue() {
@@ -166,7 +170,9 @@ function snapshotValue() {
 
 export function createEvidenceSetFixtureInputV1(
   options: EvidenceSetFixtureOptionsV1 = {},
-): BuildWorldReconstructionEvidenceSetInputV1 {
+): BuildWorldReconstructionEvidenceSetInputV1 & Readonly<{
+  formalCaptureIntent: FormalWorldCaptureIntentV1;
+}> {
   const allDimensionsPass = options.allDimensionsPass === true;
   const paletteTraversalDisagreement =
     options.includePaletteTraversalDisagreement === true;
@@ -204,7 +210,14 @@ export function createEvidenceSetFixtureInputV1(
         maximumBoundsDriftBasisPoints: 100,
         maximumCenterDriftBasisPoints: 100,
         maximumCoverageDriftBasisPoints: 100,
-      }],
+      }, ...allDimensionsPass
+        ? [{
+          acceptanceTargetRef: UPPER_TARGET_REF,
+          maximumBoundsDriftBasisPoints: 100,
+          maximumCenterDriftBasisPoints: 100,
+          maximumCoverageDriftBasisPoints: 100,
+        }]
+        : []],
       openingComposition: {
         regions: [{ targetRef: COMPOSITION_TARGET_REF, maximumDriftBasisPoints: 100 },
           ...allDimensionsPass
@@ -242,6 +255,37 @@ export function createEvidenceSetFixtureInputV1(
   });
   const evaluationProfileHash =
     hashWorldReconstructionEvaluationProfileV1(evaluationProfile);
+  const formalCaptureIntent = parseFormalWorldCaptureIntentV1({
+    kind: "formal-world-capture-intent",
+    schemaVersion: 1,
+    id: "package-fixture.case.formal-world-capture-intent",
+    captureProfile: {
+      widthPixels: 320,
+      heightPixels: 180,
+      devicePixelRatio: 1,
+    },
+    semanticCaptureTargetBindings: [{
+      acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
+      compositionTargetRef: COMPOSITION_TARGET_REF,
+      topologyNodeId: "ground",
+      semanticLayerId: "ground",
+      blockVisualGroupId: "ground-group",
+    }, {
+      acceptanceTargetRef: UPPER_TARGET_REF,
+      compositionTargetRef: UPPER_COMPOSITION_TARGET_REF,
+      topologyNodeId: "upper",
+      semanticLayerId: "ground",
+      blockVisualGroupId: "upper-group",
+    }],
+    topologyRelations: [{
+      fromNodeId: "ground",
+      relation: "connects-to",
+      toNodeId: "upper",
+      measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-ground",
+    }],
+    checkpointSpatialCriteria: traversalCheckpointCriteria,
+  });
   const reconstructionCase = parseWorldReconstructionCaseV1({
     kind: "world-reconstruction-case",
     schemaVersion: 1,
@@ -255,6 +299,8 @@ export function createEvidenceSetFixtureInputV1(
     }],
     evaluationProfileRef: PROFILE_REF,
     evaluationProfileHash,
+    formalCaptureIntentRef: "inputs/formal-world-capture-intent.json",
+    formalCaptureIntentHash: hashFormalWorldCaptureIntentV1(formalCaptureIntent),
     acceptanceTargetRefs: [ACCEPTANCE_TARGET_REF, UPPER_TARGET_REF],
     requiredEvidenceProfileRefs: evaluationProfile.requiredEvidenceByDimension
       .flatMap((entry) => entry.evidenceProfileRefs),
@@ -280,7 +326,20 @@ export function createEvidenceSetFixtureInputV1(
         },
         normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 },
         coverageBasisPoints: 4_800,
-      }],
+      }, ...allDimensionsPass
+        ? [{
+          acceptanceTargetRef: UPPER_TARGET_REF,
+          visualGroupId: "upper-group",
+          normalizedBounds: {
+            minXBasisPoints: 400,
+            minYBasisPoints: 100,
+            maxXBasisPoints: 600,
+            maxYBasisPoints: 300,
+          },
+          normalizedCenter: { xBasisPoints: 500, yBasisPoints: 200 },
+          coverageBasisPoints: 400,
+        }]
+        : []],
       openingComposition: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
         targetRefs: [COMPOSITION_TARGET_REF,
@@ -873,6 +932,7 @@ export function createEvidenceSetFixtureInputV1(
     id: `package-fixture.attempt-${attemptIndex}.evidence`,
     caseRef: CASE_REF,
     reconstructionCase,
+    formalCaptureIntent,
     evaluationProfileRef: PROFILE_REF,
     evaluationProfile,
     authoringManifest,

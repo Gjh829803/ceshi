@@ -302,19 +302,16 @@ describe("worldkit CLI", () => {
       "artifacts/scenes/case-a/runs/run-a/attempts/0",
       "--case",
       "artifacts/scenes/case-a/case.json",
-      "--output",
-      "artifacts/scenes/case-a/packages/run-a-attempt-0",
       "--json",
     ])).toEqual({
       command: "native-package",
       attemptDirectoryPath:
         "artifacts/scenes/case-a/runs/run-a/attempts/0",
       casePath: "artifacts/scenes/case-a/case.json",
-      outputPath: "artifacts/scenes/case-a/packages/run-a-attempt-0",
       json: true,
     });
     expect(HELP).toContain(
-      "worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json",
+      "worldkit native package <attempt-directory> --case <case.json> --json",
     );
   });
 
@@ -343,7 +340,7 @@ describe("worldkit CLI", () => {
     ])).toThrow("Unknown native operation 'run-cloud-ridge'.");
   });
 
-  it("rejects incomplete, mutable-output, and legacy Native package argv", () => {
+  it("rejects incomplete and legacy Native package argv", () => {
     expect(() => parseWorldkitArgs([
       "native",
       "package",
@@ -355,23 +352,13 @@ describe("worldkit CLI", () => {
     expect(() => parseWorldkitArgs([
       "native",
       "package",
-      "attempts/0",
-      "--case",
-      "case.json",
-      "--json",
-    ])).toThrow("native package requires --output <package-directory>.");
-    expect(() => parseWorldkitArgs([
-      "native",
-      "package",
       "artifacts/case-a/attempts/0",
       "--case",
       "artifacts/case-a/case.json",
       "--output",
       "artifacts/case-a/attempts/0/world-package",
       "--json",
-    ])).toThrow(
-      "native package output must be outside the immutable attempt directory.",
-    );
+    ])).toThrow("Unknown native package option '--output'.");
     expect(() => parseWorldkitArgs([
       "native",
       "package-cloud-ridge",
@@ -406,8 +393,6 @@ describe("worldkit CLI", () => {
         "attempts/0",
         "--case",
         "case.json",
-        "--output",
-        "packages/attempt-0",
         "--json",
       ], {
         packageNativeBlockAttemptV1: async (input: unknown) => {
@@ -423,7 +408,9 @@ describe("worldkit CLI", () => {
               },
             },
             buildReceiptHash: `sha256:${"3".repeat(64)}`,
-            outputDirectoryPath: "/published/packages/attempt-0",
+            outputDirectoryPath: path.resolve(
+              "attempts/0/world-package",
+            ),
             diagnostics: [],
           };
         },
@@ -436,7 +423,7 @@ describe("worldkit CLI", () => {
       repositoryRoot: path.resolve(import.meta.dirname, "../.."),
       attemptDirectoryPath: path.resolve("attempts/0"),
       casePath: path.resolve("case.json"),
-      outputDirectoryPath: path.resolve("packages/attempt-0"),
+      outputDirectoryPath: path.resolve("attempts/0/world-package"),
     }]);
     expect(stdout).toHaveLength(1);
     expect(JSON.parse(stdout[0]!)).toEqual({
@@ -446,7 +433,7 @@ describe("worldkit CLI", () => {
       worldPackageRootHash: `sha256:${"1".repeat(64)}`,
       worldBuildIdentityHash: `sha256:${"2".repeat(64)}`,
       buildReceiptHash: `sha256:${"3".repeat(64)}`,
-      outputDirectoryPath: "/published/packages/attempt-0",
+      outputDirectoryPath: path.resolve("attempts/0/world-package"),
       diagnostics: [],
     });
   });
@@ -473,8 +460,6 @@ describe("worldkit CLI", () => {
         "attempts/0/source",
         "--case",
         "case.json",
-        "--output",
-        "packages/attempt-0",
         "--json",
       ], {
         packageNativeBlockAttemptV1: async () => {

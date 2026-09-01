@@ -11,11 +11,11 @@ import {
   hashBabylonNativeBlockMaterializerMetadataV1,
   hashBabylonNativeSceneContributionV1,
   hashFormalSemanticCaptureMapV1,
+  hashFormalWorldCaptureIntentV1,
   hashFormalWorldCaptureRequestV1,
-  parseFormalTraversalCheckpointSpatialCriteriaV1,
+  parseFormalWorldCaptureIntentV1,
   parseFormalWorldCaptureRequestV1,
-  type FormalSemanticTopologyRelationBindingV1,
-  type FormalTraversalCheckpointSpatialCriterionV1,
+  type FormalWorldCaptureIntentV1,
   type FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -72,39 +72,8 @@ const INPUT_FIELDS = [
   "sceneAuthoringAttemptPath",
   "packageDirectoryPath",
   "outputPath",
-  "captureProfile",
-  "semanticCaptureTargetBindings",
-  "topologyRelations",
-  "checkpointSpatialCriteria",
+  "formalCaptureIntent",
 ] as const;
-
-const CAPTURE_PROFILE_FIELDS = [
-  "widthPixels",
-  "heightPixels",
-  "devicePixelRatio",
-] as const;
-
-const TARGET_BINDING_FIELDS = [
-  "acceptanceTargetRef",
-  "compositionTargetRef",
-  "topologyNodeId",
-  "semanticLayerId",
-  "blockVisualGroupId",
-] as const;
-
-export interface FormalWorldCaptureRequestCaptureProfileV1 {
-  readonly widthPixels: number;
-  readonly heightPixels: number;
-  readonly devicePixelRatio: number;
-}
-
-export interface FormalWorldCaptureRequestTargetBindingV1 {
-  readonly acceptanceTargetRef: string;
-  readonly compositionTargetRef: string;
-  readonly topologyNodeId: string;
-  readonly semanticLayerId: string;
-  readonly blockVisualGroupId: string;
-}
 
 export interface MaterializeFormalWorldCaptureRequestInputV1 {
   readonly casePath: string;
@@ -112,10 +81,7 @@ export interface MaterializeFormalWorldCaptureRequestInputV1 {
   readonly sceneAuthoringAttemptPath: string;
   readonly packageDirectoryPath: string;
   readonly outputPath: string;
-  readonly captureProfile: FormalWorldCaptureRequestCaptureProfileV1;
-  readonly semanticCaptureTargetBindings: readonly FormalWorldCaptureRequestTargetBindingV1[];
-  readonly topologyRelations: readonly FormalSemanticTopologyRelationBindingV1[];
-  readonly checkpointSpatialCriteria: readonly FormalTraversalCheckpointSpatialCriterionV1[];
+  readonly formalCaptureIntent: FormalWorldCaptureIntentV1;
 }
 
 export interface MaterializeFormalWorldCaptureRequestPortsV1 {
@@ -388,16 +354,6 @@ function joinAttemptPackage(
   return attemptHash;
 }
 
-function requiredNumber(value: unknown, role: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) writeInvalid(role);
-  return value;
-}
-
-function requiredString(value: unknown, role: string): string {
-  if (typeof value !== "string" || value.length === 0) writeInvalid(role);
-  return value;
-}
-
 function joinCasePackage(
   reconstructionCase: WorldReconstructionCaseV1,
   verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
@@ -424,7 +380,7 @@ function joinCasePackage(
 }
 
 function deriveViews(
-  captureProfile: FormalWorldCaptureRequestCaptureProfileV1,
+  captureProfile: FormalWorldCaptureIntentV1["captureProfile"],
   verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
 ): FormalWorldCaptureRequestV1["views"] {
   const bounds = worldBounds(verifiedPackage);
@@ -483,25 +439,9 @@ export async function materializeFormalWorldCaptureRequestV1(
 ): Promise<MaterializedFormalWorldCaptureRequestV1> {
   assertAccessorFree(input, "input");
   const source = exactPlainRecord(input, INPUT_FIELDS, "input");
-  const captureProfileSource = exactPlainRecord(
-    source.captureProfile,
-    CAPTURE_PROFILE_FIELDS,
-    "captureProfile",
+  const formalCaptureIntent = parseFormalWorldCaptureIntentV1(
+    source.formalCaptureIntent,
   );
-  const captureProfile: FormalWorldCaptureRequestCaptureProfileV1 = Object.freeze({
-    widthPixels: requiredNumber(
-      captureProfileSource.widthPixels,
-      "captureProfile/widthPixels",
-    ),
-    heightPixels: requiredNumber(
-      captureProfileSource.heightPixels,
-      "captureProfile/heightPixels",
-    ),
-    devicePixelRatio: requiredNumber(
-      captureProfileSource.devicePixelRatio,
-      "captureProfile/devicePixelRatio",
-    ),
-  });
 
   const casePath = exactAbsolutePath(source.casePath, "casePath");
   const evaluationProfilePath = exactAbsolutePath(
@@ -586,6 +526,12 @@ export async function materializeFormalWorldCaptureRequestV1(
     profile,
     evaluationProfilePath,
   );
+  if (
+    reconstructionCase.formalCaptureIntentHash !==
+      hashFormalWorldCaptureIntentV1(formalCaptureIntent) ||
+    formalCaptureIntent.id !==
+      `${reconstructionCase.id}.formal-world-capture-intent`
+  ) identityMismatch("formalCaptureIntent");
   joinAttemptCase(attempt, reconstructionCase);
 
   const directory = await (ports.readPackage ?? (async (directoryPath) =>
@@ -601,44 +547,12 @@ export async function materializeFormalWorldCaptureRequestV1(
   const packageIdentity = joinCasePackage(reconstructionCase, verified);
   joinAttemptPackage(attempt, verified);
 
-  const semanticCaptureTargetBindings = (
-    Array.isArray(source.semanticCaptureTargetBindings)
-      ? source.semanticCaptureTargetBindings
-      : writeInvalid("semanticCaptureTargetBindings")
-  ).map((entry, index) => {
-    const pathName = `semanticCaptureTargetBindings/${index}`;
-    const row = exactPlainRecord(entry, TARGET_BINDING_FIELDS, pathName);
-    return Object.freeze({
-      acceptanceTargetRef: requiredString(
-        row.acceptanceTargetRef,
-        `${pathName}/acceptanceTargetRef`,
-      ),
-      compositionTargetRef: requiredString(
-        row.compositionTargetRef,
-        `${pathName}/compositionTargetRef`,
-      ),
-      topologyNodeId: requiredString(row.topologyNodeId, `${pathName}/topologyNodeId`),
-      semanticLayerId: requiredString(
-        row.semanticLayerId,
-        `${pathName}/semanticLayerId`,
-      ),
-      blockVisualGroupId: requiredString(
-        row.blockVisualGroupId,
-        `${pathName}/blockVisualGroupId`,
-      ),
-    });
-  });
   const semanticCaptureMap = bindBlockMaterializerMetadataToSemanticCaptureTargetsV1({
     case: reconstructionCase,
     materializerMetadata: verified.nativeBlockMaterializerMetadata,
     materializerMetadataHash: packageIdentity.metadataHash,
     contribution: verified.nativeSceneContribution,
-    semanticCaptureTargetBindings,
-    topologyRelations: source.topologyRelations as
-      MaterializeFormalWorldCaptureRequestInputV1["topologyRelations"],
-    checkpointSpatialCriteria: parseFormalTraversalCheckpointSpatialCriteriaV1(
-      source.checkpointSpatialCriteria,
-    ),
+    formalCaptureIntent,
   });
   const semanticCaptureMapHash = hashFormalSemanticCaptureMapV1(semanticCaptureMap);
   const relativeOutput = relativeWithin(caseRoot.requestedPath, outputPath, "outputPath");
@@ -677,7 +591,7 @@ export async function materializeFormalWorldCaptureRequestV1(
     semanticCaptureMapHash,
     nativeBlockMaterializerMetadataRef: MATERIALIZER_METADATA_REF,
     nativeBlockMaterializerMetadataHash: packageIdentity.metadataHash,
-    views: deriveViews(captureProfile, verified),
+    views: deriveViews(formalCaptureIntent.captureProfile, verified),
     colliderOverlay: {
       kind: "formal-collider-overlay-request",
       schemaVersion: 1,

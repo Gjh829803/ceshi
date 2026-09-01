@@ -471,6 +471,9 @@ importers:
       '@whitebox-world/validation':
         specifier: workspace:*
         version: link:../validation
+      '@whitebox-world/world-identity':
+        specifier: workspace:*
+        version: link:../world-identity
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1

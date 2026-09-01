@@ -95,7 +95,7 @@ function identities(attemptIndex: 0 | 1) {
     authoredSourceHash: taggedHash(`${prefix}src`),
     worldPackageRef: packageRef(worldPackageRootHash),
     worldPackageRootHash,
-    worldPackagePath: `/published/attempts/${attemptIndex}/world-package`,
+    worldPackagePath: `/attempts/${attemptIndex}/world-package`,
     worldPackageBuildReceiptRef:
       `artifact://run/attempts/${attemptIndex}/build-receipt.json`,
     worldPackageBuildReceiptHash: taggedHash(`${prefix}brc`),
@@ -104,9 +104,9 @@ function identities(attemptIndex: 0 | 1) {
     worldBuildIdentityHash: taggedHash(`${prefix}bid`),
     captureReceiptRef: `artifact://run/attempts/${attemptIndex}/capture-receipt.json`,
     captureReceiptHash: taggedHash(`${prefix}cap`),
-    captureReceiptPath: `/published/attempts/${attemptIndex}/capture-receipt.json`,
+    captureReceiptPath: `/attempts/${attemptIndex}/capture-receipt.json`,
     evaluationResultRef: `artifact://run/attempts/${attemptIndex}/evaluation.json`,
-    evaluationPath: `/published/attempts/${attemptIndex}/evaluation.json`,
+    evaluationPath: `/attempts/${attemptIndex}/evaluation.json`,
   });
 }
 
@@ -162,6 +162,8 @@ function reconstructionCase() {
     }],
     evaluationProfileRef: "evaluation-profile.json",
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile()),
+    formalCaptureIntentRef: "inputs/formal-world-capture-intent.json" as const,
+    formalCaptureIntentHash: H("c"),
     acceptanceTargetRefs: [
       "worldkit://acceptance-target/central-ascent@1",
       "worldkit://acceptance-target/upper-t-junction@1",
@@ -368,8 +370,6 @@ function generateResult(
     generationReceiptHash: ids.generationReceiptHash,
     sceneAuthoringAttemptRef: ids.sceneAuthoringAttemptRef,
     sceneAuthoringAttemptHash: ids.sceneAuthoringAttemptHash,
-    authoredSourceRef: ids.authoredSourceRef,
-    authoredSourceHash: ids.authoredSourceHash,
     diagnosticCodes: outcome === "completed" ? [] : [outcome],
   });
 }
@@ -430,6 +430,8 @@ function fakePorts(options: FakePortOptions = {}) {
         outcome,
         sceneAuthoringAttemptResultRef: ids.sceneAuthoringAttemptResultRef,
         sceneAuthoringAttemptResultHash: ids.sceneAuthoringAttemptResultHash,
+        authoredSourceRef: ids.authoredSourceRef,
+        authoredSourceHash: ids.authoredSourceHash,
         worldPackageRef: ids.worldPackageRef,
         worldPackageRootHash: ids.worldPackageRootHash,
         worldPackagePath: ids.worldPackagePath,
@@ -445,15 +447,22 @@ function fakePorts(options: FakePortOptions = {}) {
       const ids = identities(input.attemptIndex);
       const outcome = options.captureOutcomeByAttempt?.[input.attemptIndex] ??
         "completed";
+      if (outcome === "completed") {
+        return Object.freeze({
+          outcome,
+          captureReceiptRef: ids.captureReceiptRef,
+          captureReceiptHash: ids.captureReceiptHash,
+          captureReceiptPath: ids.captureReceiptPath,
+          cameraRollbackOutcome: "completed" as const,
+          diagnosticCodes: Object.freeze([]),
+        });
+      }
       return Object.freeze({
         outcome,
-        captureReceiptRef: ids.captureReceiptRef,
-        captureReceiptHash: ids.captureReceiptHash,
-        captureReceiptPath: ids.captureReceiptPath,
         cameraRollbackOutcome: outcome === "camera-rollback-failed"
           ? "failed" as const
           : "completed" as const,
-        diagnosticCodes: outcome === "completed" ? [] : [outcome],
+        diagnosticCodes: Object.freeze([outcome]),
       });
     },
     evaluate: async (input) => {
@@ -568,6 +577,8 @@ describe("runWorldReconstructionV1", () => {
     expect(calls.generateInputs[1]?.frozenOwnerIdentities).toEqual(OWNER);
     expect(calls.generateInputs[1]?.repairInstruction).toEqual(
       expect.objectContaining({
+        priorSourceRef: identities(0).authoredSourceRef,
+        priorSourceHash: identities(0).authoredSourceHash,
         declaredWritableOutputPaths: [
           "scene.ts",
           "native-block-authoring.json",

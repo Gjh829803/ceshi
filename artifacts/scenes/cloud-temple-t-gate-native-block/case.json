@@ -7,6 +7,8 @@
   "referenceInputs": [{ "inputRef": "reference-0.png", "contentHash": "sha256:3ee88950b9d03733cf0743058a5418d78e7c99f0e222a1038c65cab8977309e0", "mediaType": "image/png" }],
   "evaluationProfileRef": "evaluation-profile.json",
   "evaluationProfileHash": "sha256:190972cf5a3ee2bd491751340aa5b0a9c2530b0888ce8219cc57e43184439fe2",
+  "formalCaptureIntentRef": "inputs/formal-world-capture-intent.json",
+  "formalCaptureIntentHash": "sha256:00429add6dc3e686530369dc3ea76a989fad683a9ce40d9bf196c3fcd37e97fe",
   "acceptanceTargetRefs": ["worldkit://acceptance-target/central-ascent@1", "worldkit://acceptance-target/foreground-platform@1", "worldkit://acceptance-target/gate-mass@1", "worldkit://acceptance-target/mountain-cliff-layers@1", "worldkit://acceptance-target/supported-spawn@1", "worldkit://acceptance-target/upper-t-junction@1"],
   "requiredEvidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1", "worldkit://evidence-profile/native-block-determinism@1", "worldkit://evidence-profile/native-block-opening@1", "worldkit://evidence-profile/native-block-silhouette@1", "worldkit://evidence-profile/native-block-spawn@1", "worldkit://evidence-profile/native-block-topology@1", "worldkit://evidence-profile/native-block-traversal@1"],
   "expected": {

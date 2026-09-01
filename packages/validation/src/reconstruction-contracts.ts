@@ -93,6 +93,8 @@ export interface WorldReconstructionCaseV1 {
   }>[];
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
+  readonly formalCaptureIntentRef: "inputs/formal-world-capture-intent.json";
+  readonly formalCaptureIntentHash: Sha256HashV1;
   readonly acceptanceTargetRefs: readonly string[];
   readonly requiredEvidenceProfileRefs: readonly string[];
   readonly expected: WorldReconstructionExpectedV1;
@@ -401,6 +403,7 @@ const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 const CASE_FIELDS = [
   "kind", "schemaVersion", "id", "sceneBriefRef", "sceneBriefHash",
   "referenceInputs", "evaluationProfileRef", "evaluationProfileHash",
+  "formalCaptureIntentRef", "formalCaptureIntentHash",
   "acceptanceTargetRefs", "requiredEvidenceProfileRefs", "expected",
 ] as const;
 const PROFILE_FIELDS = [
@@ -871,6 +874,17 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
     referenceInputs: Object.freeze(referenceInputs),
     evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"),
     evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"),
+    formalCaptureIntentRef: enumValue(
+      source.formalCaptureIntentRef,
+      ["inputs/formal-world-capture-intent.json"] as const,
+      contract,
+      "formalCaptureIntentRef",
+    ),
+    formalCaptureIntentHash: hash(
+      source.formalCaptureIntentHash,
+      contract,
+      "formalCaptureIntentHash",
+    ),
     acceptanceTargetRefs,
     requiredEvidenceProfileRefs: sortedStrings(source.requiredEvidenceProfileRefs, contract, "requiredEvidenceProfileRefs"),
     expected: Object.freeze({

@@ -2,7 +2,9 @@ import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import {
   formalWorldCaptureRequestCanonicalBytesV1,
   hashBabylonNativeSceneContributionV1,
+  hashFormalWorldCaptureIntentV1,
   hashFormalWorldCaptureRequestV1,
+  parseFormalWorldCaptureIntentV1,
   parseFormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -145,6 +147,52 @@ async function fixture(): Promise<Readonly<{
     .sort();
   const baseInput = createBabylonNativeBlockWorldPackageTestInputV1();
   const baseMetadata = baseInput.nativeBlockMaterializerMetadata!;
+  const baseOpeningGroup = baseMetadata.visualGroups.find(
+    (group) => group.visualGroupId === "ground-group",
+  )!;
+  const formalCaptureIntent = parseFormalWorldCaptureIntentV1({
+    kind: "formal-world-capture-intent",
+    schemaVersion: 1,
+    id: "package-fixture.case.formal-world-capture-intent",
+    captureProfile: {
+      widthPixels: 320,
+      heightPixels: 180,
+      devicePixelRatio: 1,
+    },
+    semanticCaptureTargetBindings: [{
+      acceptanceTargetRef: OPENING_TARGET,
+      compositionTargetRef: OPENING_COMPOSITION,
+      topologyNodeId: "package-fixture-opening",
+      semanticLayerId: "ground",
+      blockVisualGroupId: "ground-group",
+    }, {
+      acceptanceTargetRef: SECONDARY_TARGET,
+      compositionTargetRef: SECONDARY_COMPOSITION,
+      topologyNodeId: "package-fixture-secondary",
+      semanticLayerId: "upper",
+      blockVisualGroupId: "ridge-group",
+    }],
+    topologyRelations: [{
+      fromNodeId: "package-fixture-opening",
+      relation: "connects-to",
+      toNodeId: "package-fixture-secondary",
+      measurementSource: "package-bounds",
+      fromVisualGroupId: "ground-group",
+      toVisualGroupId: "ridge-group",
+    }],
+    checkpointSpatialCriteria: [{
+      kind: "reach-bounds",
+      checkpointId: "ground-checkpoint",
+      expectation: "reach",
+      sourceVisualGroupId: "ground-group",
+      sourceBoundsMeters: {
+        minimumMetersXYZ: baseOpeningGroup.minimumMetersXYZ,
+        maximumMetersXYZ: baseOpeningGroup.maximumMetersXYZ,
+      },
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    }],
+  });
   const nativeSceneContribution = {
     ...baseInput.nativeSceneContribution,
     profileSettlement: {
@@ -165,6 +213,8 @@ async function fixture(): Promise<Readonly<{
     }],
     evaluationProfileRef: "evaluation-profile.json",
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile),
+    formalCaptureIntentRef: "inputs/formal-world-capture-intent.json",
+    formalCaptureIntentHash: hashFormalWorldCaptureIntentV1(formalCaptureIntent),
     acceptanceTargetRefs: [OPENING_TARGET, SECONDARY_TARGET],
     requiredEvidenceProfileRefs,
     expected: {
@@ -309,9 +359,6 @@ async function fixture(): Promise<Readonly<{
     throw new Error("expected Native Package fixture");
   }
   const metadata = verifiedPackage.nativeBlockMaterializerMetadata!;
-  const openingGroup = metadata.visualGroups.find(
-    (group) => group.visualGroupId === "ground-group",
-  )!;
   await mkdir(attemptDirectoryPath, { recursive: true, mode: 0o700 });
   await writeWorldPackageDirectoryV1({
     outputDirectoryPath: packageDirectoryPath,
@@ -341,44 +388,7 @@ async function fixture(): Promise<Readonly<{
       sceneAuthoringAttemptPath: path.join(attemptDirectoryPath, "attempt.json"),
       packageDirectoryPath,
       outputPath,
-      captureProfile: Object.freeze({
-        widthPixels: 320,
-        heightPixels: 180,
-        devicePixelRatio: 1,
-      }),
-      semanticCaptureTargetBindings: Object.freeze([{
-        acceptanceTargetRef: OPENING_TARGET,
-        compositionTargetRef: OPENING_COMPOSITION,
-        topologyNodeId: "package-fixture-opening",
-        semanticLayerId: "ground",
-        blockVisualGroupId: "ground-group",
-      }, {
-        acceptanceTargetRef: SECONDARY_TARGET,
-        compositionTargetRef: SECONDARY_COMPOSITION,
-        topologyNodeId: "package-fixture-secondary",
-        semanticLayerId: "upper",
-        blockVisualGroupId: "ridge-group",
-      }]),
-      topologyRelations: Object.freeze([{
-        fromNodeId: "package-fixture-opening",
-        relation: "connects-to" as const,
-        toNodeId: "package-fixture-secondary",
-        measurementSource: "package-bounds" as const,
-        fromVisualGroupId: "ground-group",
-        toVisualGroupId: "ridge-group",
-      }]),
-      checkpointSpatialCriteria: Object.freeze([{
-        kind: "reach-bounds" as const,
-        checkpointId: "ground-checkpoint",
-        expectation: "reach" as const,
-        sourceVisualGroupId: "ground-group",
-        sourceBoundsMeters: {
-          minimumMetersXYZ: openingGroup.minimumMetersXYZ,
-          maximumMetersXYZ: openingGroup.maximumMetersXYZ,
-        },
-        capsuleRadiusMeters: 0.35,
-        toleranceMeters: 0.05,
-      }]),
+      formalCaptureIntent,
     }),
   });
 }
@@ -476,7 +486,7 @@ describe("materializeFormalWorldCaptureRequestV1", () => {
       }),
     );
     await expect(materializeFormalWorldCaptureRequestV1(input)).rejects.toThrow(
-      "FORMAL_WORLD_CAPTURE_REQUEST_IDENTITY_MISMATCH: caseHash",
+      "FORMAL_WORLD_CAPTURE_REQUEST_IDENTITY_MISMATCH: formalCaptureIntent",
     );
     await expect(readdir(input.outputPath)).rejects.toMatchObject({
       code: "ENOENT",

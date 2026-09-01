@@ -46,6 +46,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
         "@whitebox-world/protocol": "workspace:*",
         "@whitebox-world/runtime-contracts": "workspace:*",
         "@whitebox-world/validation": "workspace:*",
+        "@whitebox-world/world-identity": "workspace:*",
         "lodash-es": "^4.18.1",
       },
     });
@@ -55,6 +56,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "@whitebox-world/protocol",
       "@whitebox-world/runtime-contracts",
       "@whitebox-world/validation",
+      "@whitebox-world/world-identity",
       "lodash-es",
     ]);
     expect(Object.keys(manifest.exports as object)).toEqual([

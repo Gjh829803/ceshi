@@ -707,10 +707,12 @@ Use an injected formal Runtime Candidate allocation observer. Test a source-only
 Require exactly:
 
 ```text
-worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json
+worldkit native package <attempt-directory> --case <case.json> --json
 ```
 
-Reject missing `--case`, missing `--output`, output inside the immutable attempt source, a raw source directory without Host identity files, and legacy Case-specific build commands.
+Derive the only Package output as `<attempt-directory>/world-package`. Reject
+missing `--case`, any legacy `--output`, a raw source directory without Host
+identity files, and legacy Case-specific build commands.
 
 - [ ] **Step 3: Run RED package tests**
 

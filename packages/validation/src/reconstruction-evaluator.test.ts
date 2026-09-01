@@ -43,6 +43,8 @@ const caseValue = () => ({
   ],
   evaluationProfileRef: "worldkit://reconstruction-evaluation-profile/cloud-temple@1",
   evaluationProfileHash: H("c"),
+  formalCaptureIntentRef: "inputs/formal-world-capture-intent.json" as const,
+  formalCaptureIntentHash: H("d"),
   acceptanceTargetRefs: [
     CENTRAL_ASCENT_TARGET_REF,
     WEST_GATE_BLOCKER_TARGET_REF,

@@ -39,6 +39,8 @@ const caseValue = () => ({
   ],
   evaluationProfileRef: "worldkit://reconstruction-evaluation-profile/cloud-temple@1",
   evaluationProfileHash: H("c"),
+  formalCaptureIntentRef: "inputs/formal-world-capture-intent.json",
+  formalCaptureIntentHash: H("d"),
   acceptanceTargetRefs: [
     "worldkit://acceptance-target/central-ascent@1",
     "worldkit://acceptance-target/upper-t-junction@1",
@@ -353,6 +355,19 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionCaseV1({ ...caseValue(), legacyAlias: true })).toThrowError(
       "WORLD_RECONSTRUCTION_CASE_INVALID",
     );
+    const missingIntentRef = { ...caseValue() } as Record<string, unknown>;
+    delete missingIntentRef.formalCaptureIntentRef;
+    expect(() => parseWorldReconstructionCaseV1(missingIntentRef)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+    expect(() => parseWorldReconstructionCaseV1({
+      ...caseValue(),
+      formalCaptureIntentRef: "formal-world-capture-intent.json",
+    })).toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+    expect(hashWorldReconstructionCaseV1({
+      ...caseValue(),
+      formalCaptureIntentHash: H("e"),
+    })).not.toBe(hashWorldReconstructionCaseV1(caseValue()));
   });
 
   it("requires non-empty acceptance/evidence targets and scripted fixed-input semantics", () => {
