@@ -798,15 +798,17 @@ export async function createProductionWorldReconstructionRunPortsV1(
     },
 
     rehashOwnerIdentities: async () => {
-      const [gameplayBootstrap, worldRuntimeBootstrap] = await Promise.all([
-        readJsonNoFollow(input.generationInput.gameplayBootstrapPath),
-        readJsonNoFollow(input.generationInput.worldRuntimeBootstrapPath),
-      ]);
+      const [gameplayBootstrap, worldRuntimeBootstrap, worldBounds] =
+        await Promise.all([
+          readJsonNoFollow(input.generationInput.gameplayBootstrapPath),
+          readJsonNoFollow(input.generationInput.worldRuntimeBootstrapPath),
+          readJsonNoFollow(input.generationInput.worldBoundsPath),
+        ]);
       const derived = deriveNativeBlockGenerationBootstrapV1({
         reconstructionCase: input.reconstructionCase,
         gameplayBootstrap,
         worldRuntimeBootstrap,
-        worldBounds: input.generationInput.worldBounds,
+        worldBounds,
         bootstrapId: input.generationInput.bootstrapId,
         sceneModuleRef: input.generationInput.sceneModuleRef,
         nativeSceneApiRef: NATIVE_SCENE_API_REF,

@@ -27,6 +27,7 @@ import {
 } from "@whitebox-world/gameplay";
 import { GROUND_HUMANOID_ACTION_IDS_V1 } from "@whitebox-world/subject-contracts";
 import { XIER120_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
 import { loadWorldkitRoutePipeline } from "../lib/worldkit-pipeline";
 import { loadAuthoringScene } from "../../apps/playground/src/authoring-loader";
@@ -338,6 +339,277 @@ describe("worldkit CLI", () => {
       "run-cloud-ridge",
       "packages/cloud-ridge",
     ])).toThrow("Unknown native operation 'run-cloud-ridge'.");
+  });
+
+  it("parses the sole reconstruction production transaction command", () => {
+    expect(parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "artifacts/scenes/case-a/case.json",
+      "--output",
+      "artifacts/scenes/case-a/runs/run-a",
+      "--json",
+    ])).toEqual({
+      command: "reconstruct-run",
+      casePath: "artifacts/scenes/case-a/case.json",
+      outputDirectoryPath: "artifacts/scenes/case-a/runs/run-a",
+      backend: "cloud",
+      json: true,
+    });
+    expect(parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "artifacts/scenes/case-a/case.json",
+      "--output",
+      "artifacts/scenes/case-a/runs/run-local",
+      "--backend",
+      "local",
+      "--json",
+    ])).toEqual({
+      command: "reconstruct-run",
+      casePath: "artifacts/scenes/case-a/case.json",
+      outputDirectoryPath: "artifacts/scenes/case-a/runs/run-local",
+      backend: "local",
+      json: true,
+    });
+    expect(HELP).toContain(
+      "worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json",
+    );
+  });
+
+  it("rejects open, incomplete, duplicate, or non-JSON reconstruction argv", () => {
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "case.json",
+      "--json",
+    ])).toThrow("reconstruct run requires --output <run-directory>.");
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "case.json",
+      "--output",
+      "runs/run-a",
+    ])).toThrow("reconstruct run requires --json.");
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "case.json",
+      "--output",
+      "runs/run-a",
+      "--backend",
+      "remote",
+      "--json",
+    ])).toThrow("reconstruct run --backend must be 'cloud' or 'local'.");
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "case.json",
+      "--output",
+      "runs/run-a",
+      "--output",
+      "runs/run-b",
+      "--json",
+    ])).toThrow("--output may be provided only once.");
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "case.json",
+      "--output",
+      "runs/run-a",
+      "--backend",
+      "cloud",
+      "--backend",
+      "local",
+      "--json",
+    ])).toThrow("--backend may be provided only once.");
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "case.json",
+      "--output",
+      "runs/run-a",
+      "--json",
+      "--json",
+    ])).toThrow("--json may be provided only once.");
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "run",
+      "case.json",
+      "--output",
+      "runs/run-a",
+      "--unknown",
+      "--json",
+    ])).toThrow("Unknown reconstruct run option '--unknown'.");
+    expect(() => parseWorldkitArgs([
+      "reconstruct",
+      "build",
+      "case.json",
+      "--output",
+      "runs/run-a",
+      "--json",
+    ])).toThrow("Unknown reconstruct operation 'build'.");
+  });
+
+  it("delegates reconstruct run once to one transaction port and prints canonical JSON", async () => {
+    const calls: unknown[] = [];
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout += String(chunk);
+        return true;
+      },
+    );
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(
+      (chunk) => {
+        stderr += String(chunk);
+        return true;
+      },
+    );
+    const result = Object.freeze({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: "cloud-temple-t-gate-native-block",
+      caseRef:
+        "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
+      runId: "run-a",
+      outcome: "published",
+      attemptCount: 2,
+      finalWorldPackagePath: "/case/final/world-package",
+      finalWorldPackageRef:
+        `package://world-package/sha256/${"1".repeat(64)}`,
+      finalWorldPackageRootHash: `sha256:${"1".repeat(64)}`,
+      finalCaptureReceiptPath:
+        "/case/final/capture/formal-world-capture-receipt.json",
+      finalCaptureReceiptHash: `sha256:${"2".repeat(64)}`,
+      finalEvaluationPath: "/case/final/evaluation.json",
+      finalEvaluationHash: `sha256:${"3".repeat(64)}`,
+      runReceiptPath: "/case/runs/run-a/run-receipt.json",
+      runReceiptRef:
+        "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/runs/run-a/run-receipt.json",
+      runReceiptHash: `sha256:${"4".repeat(64)}`,
+      finalDirectoryPath: "/case/final",
+    });
+
+    try {
+      await expect(main([
+        "reconstruct",
+        "run",
+        "artifacts/scenes/case-a/case.json",
+        "--output",
+        "artifacts/scenes/case-a/runs/run-a",
+        "--backend",
+        "local",
+        "--json",
+      ], {
+        runWorldReconstructionProductionV1: async (input: unknown) => {
+          calls.push(input);
+          return result;
+        },
+      })).resolves.toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+
+    expect(calls).toEqual([{
+      casePath: "artifacts/scenes/case-a/case.json",
+      outputDirectoryPath: "artifacts/scenes/case-a/runs/run-a",
+      backend: "local",
+      routePolicy: {
+        requiredCapabilityRefs: [],
+        requestedSourceKind: "babylon-native",
+        nativeTrustAdmitted: true,
+      },
+    }]);
+    expect(stdout).toBe(`${stringifyCanonicalJson(result)}\n`);
+    expect(stderr).toBe("");
+  });
+
+  it("prints one stable reconstruction diagnostic without leaking a thrown cause", async () => {
+    let stdout = "";
+    let stderr = "";
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout += String(chunk);
+        return true;
+      },
+    );
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(
+      (chunk) => {
+        stderr += String(chunk);
+        return true;
+      },
+    );
+    try {
+      await expect(main([
+        "reconstruct",
+        "run",
+        "case.json",
+        "--output",
+        "runs/run-a",
+        "--json",
+      ], {
+        runWorldReconstructionProductionV1: async () => {
+          throw new Error(
+            "WORLD_RECONSTRUCTION_STALE_CASE: /private/secret/case.json",
+          );
+        },
+      })).resolves.toBe(1);
+    } finally {
+      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
+    }
+    expect(JSON.parse(stdout)).toEqual({
+      kind: "world-reconstruction-production-error",
+      schemaVersion: 1,
+      outcome: "closed",
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_STALE_CASE"],
+    });
+    expect(stdout).not.toContain("/private/secret");
+    expect(stderr).toBe("");
+  });
+
+  it("passes through a transaction-owned cleanup failure without reclassifying it", async () => {
+    let stdout = "";
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout += String(chunk);
+        return true;
+      },
+    );
+    const result = Object.freeze({
+      kind: "world-reconstruction-production-result" as const,
+      schemaVersion: 1 as const,
+      caseId: "case-a",
+      caseRef: "artifact://world-reconstruction-case/case-a/case.json",
+      runId: "run-a",
+      outcome: "closed" as const,
+      runOutcome: "passed" as const,
+      attemptCount: 1 as const,
+      diagnosticCodes: Object.freeze(["NBR70_PLAYABILITY_CLEANUP_FAILED"]),
+      cleanupOutcome: "failed" as const,
+    });
+    try {
+      await expect(main([
+        "reconstruct",
+        "run",
+        "case.json",
+        "--output",
+        "runs/run-a",
+        "--json",
+      ], {
+        runWorldReconstructionProductionV1: async () => result,
+      })).resolves.toBe(1);
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toEqual(result);
+    expect(parsed).not.toHaveProperty("runReceiptPath");
+    expect(parsed).not.toHaveProperty("runReceiptRef");
+    expect(parsed).not.toHaveProperty("runReceiptHash");
   });
 
   it("rejects incomplete and legacy Native package argv", () => {

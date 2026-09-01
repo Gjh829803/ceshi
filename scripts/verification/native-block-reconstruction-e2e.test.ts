@@ -22,6 +22,7 @@ import {
   parseNativeBlockGenerationRequestV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import {
+  formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalOpeningObservationV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureReceiptV1,
@@ -57,6 +58,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1,
+  NativeBlockReconstructionVerificationClosedErrorV1,
   verifyNativeBlockReconstructionE2EV1,
   type NativeBlockReconstructionPlayabilityLaunchPortV1,
   type NativeBlockReconstructionPlayabilitySessionPortV1,
@@ -245,15 +247,19 @@ function playabilityPort(options: {
   traversalFails?: boolean;
   crossesBlocker?: boolean;
   cleanupFails?: boolean;
+  cleanupThrows?: boolean;
   wrongDirection?: boolean;
   jumpNeverAir?: boolean;
 } = {}) {
   const runtimeSessionId = "runtime.nbr70.fixture";
   let resetCount = 0;
   let current = snapshot(runtimeSessionId, "world.ready", 0, [0, 0, 0], "ground");
-  const dispose = vi.fn(async () => ({
-    outcome: options.cleanupFails ? "failed" as const : "completed" as const,
-  }));
+  const dispose = vi.fn(async () => {
+    if (options.cleanupThrows) throw new Error("fixture dispose failed");
+    return {
+      outcome: options.cleanupFails ? "failed" as const : "completed" as const,
+    };
+  });
   const resetWithInitialControlBinding = vi.fn(async () => {
     resetCount += 1;
     current = snapshot(runtimeSessionId, `world.${resetCount}`, 0, [0, 0, 0], "ground");
@@ -350,6 +356,10 @@ async function completeRunFixture(
   await writeJson(path.join(caseDirectoryPath, "case.json"), fixture.reconstructionCase);
   await writeJson(path.join(runDirectoryPath, "inputs/case.json"), fixture.reconstructionCase);
   await writeJson(path.join(runDirectoryPath, "inputs/evaluation-profile.json"), fixture.evaluationProfile);
+  await writeFile(
+    path.join(runDirectoryPath, "inputs/formal-world-capture-intent.json"),
+    formalWorldCaptureIntentCanonicalBytesV1(fixture.formalCaptureIntent),
+  );
 
   const request = generationRequestFixture(fixture);
   if (verified.sceneAuthoringAttempt.sourceInput.kind !== "babylon-native" ||
@@ -914,7 +924,44 @@ async function addRepairAttempt(input: Readonly<{
   }));
 }
 
+async function expectVerificationClosed(
+  verification: Promise<unknown>,
+  diagnosticCodes: readonly string[],
+  cleanupOutcome: "completed" | "failed" | "not-started",
+): Promise<NativeBlockReconstructionVerificationClosedErrorV1> {
+  try {
+    await verification;
+  } catch (error) {
+    expect(error).toBeInstanceOf(
+      NativeBlockReconstructionVerificationClosedErrorV1,
+    );
+    expect(error).toMatchObject({ diagnosticCodes, cleanupOutcome });
+    return error as NativeBlockReconstructionVerificationClosedErrorV1;
+  }
+  throw new Error("expected Native Block verification to close");
+}
+
 describe("Native Block reconstruction E2E verifier", () => {
+  it("rejects a missing run-owned Formal Capture Intent before playability", async () => {
+    const fixture = await completeRunFixture();
+    const playability = playabilityPort();
+    await unlink(path.join(
+      fixture.runDirectoryPath,
+      "inputs/formal-world-capture-intent.json",
+    ));
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: {
+          kind: "run",
+          runDirectoryPath: fixture.runDirectoryPath,
+        },
+        playability: playability.port,
+      })).rejects.toThrow("NBR70_REQUIRED_ARTIFACT_MISSING");
+      expect(playability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
   it("requires one exact blocker set across Case, formal criteria, Contribution, and materializer", () => {
     const fixture = createEvidenceSetFixtureInputV1({
       allDimensionsPass: true,
@@ -994,10 +1041,15 @@ describe("Native Block reconstruction E2E verifier", () => {
     );
     const playability = playabilityPort();
     try {
-      await expect(verifyNativeBlockReconstructionE2EV1({
-        candidate: { kind: "run", runDirectoryPath },
-        playability: playability.port,
-      })).rejects.toThrowError("NBR70_RUN_RECEIPT_MISSING");
+      const error = await expectVerificationClosed(
+        verifyNativeBlockReconstructionE2EV1({
+          candidate: { kind: "run", runDirectoryPath },
+          playability: playability.port,
+        }),
+        ["NBR70_RUN_RECEIPT_MISSING"],
+        "not-started",
+      );
+      expect(error.message).toBe("NBR70_RUN_RECEIPT_MISSING");
       expect(playability.launch).not.toHaveBeenCalled();
     } finally {
       await rm(runDirectoryPath, { recursive: true, force: true });
@@ -1238,18 +1290,73 @@ describe("Native Block reconstruction E2E verifier", () => {
         cleanupFails: mutation === "dispose",
       });
       try {
-        await expect(verifyNativeBlockReconstructionE2EV1({
-          candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
-          playability: playability.port,
-        })).rejects.toThrowError(
-          mutation === "traversal"
-            ? "NBR70_PLAYABILITY_TRAVERSAL_FAILED"
-            : "NBR70_PLAYABILITY_CLEANUP_FAILED",
+        const diagnosticCode = mutation === "traversal"
+          ? "NBR70_PLAYABILITY_TRAVERSAL_FAILED"
+          : "NBR70_PLAYABILITY_CLEANUP_FAILED";
+        const error = await expectVerificationClosed(
+          verifyNativeBlockReconstructionE2EV1({
+            candidate: {
+              kind: "run",
+              runDirectoryPath: fixture.runDirectoryPath,
+            },
+            playability: playability.port,
+          }),
+          [diagnosticCode],
+          mutation === "traversal" ? "completed" : "failed",
         );
+        expect(error.message).toBe(diagnosticCode);
         expect(playability.dispose).toHaveBeenCalledOnce();
       } finally {
         await rm(fixture.runDirectoryPath, { recursive: true, force: true });
       }
+    }
+  });
+
+  it("reports failed cleanup when playability launch throws without a session", async () => {
+    const fixture = await completeRunFixture();
+    const launch = vi.fn(async () => {
+      throw new NativeBlockReconstructionVerificationClosedErrorV1(
+        ["NBR70_PLAYABILITY_LAUNCH_FAILED"],
+        "completed",
+      );
+    });
+    try {
+      const error = await expectVerificationClosed(
+        verifyNativeBlockReconstructionE2EV1({
+          candidate: {
+            kind: "run",
+            runDirectoryPath: fixture.runDirectoryPath,
+          },
+          playability: { launch },
+        }),
+        ["NBR70_PLAYABILITY_LAUNCH_FAILED"],
+        "failed",
+      );
+      expect(error.message).toBe("NBR70_PLAYABILITY_LAUNCH_FAILED");
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("reports failed cleanup when playability disposal throws", async () => {
+    const fixture = await completeRunFixture();
+    const playability = playabilityPort({ cleanupThrows: true });
+    try {
+      const error = await expectVerificationClosed(
+        verifyNativeBlockReconstructionE2EV1({
+          candidate: {
+            kind: "run",
+            runDirectoryPath: fixture.runDirectoryPath,
+          },
+          playability: playability.port,
+        }),
+        ["NBR70_PLAYABILITY_CLEANUP_FAILED"],
+        "failed",
+      );
+      expect(error.message).toBe("NBR70_PLAYABILITY_CLEANUP_FAILED");
+      expect(playability.dispose).toHaveBeenCalledOnce();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
 

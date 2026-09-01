@@ -121,6 +121,7 @@ async function completedAttempt() {
     gameplayBootstrapPath: path.join(HOST_CLOSURE_ROOT, "gameplay/bootstrap.json"),
     worldRuntimeBootstrapPath: path.join(HOST_CLOSURE_ROOT, "runtime/world-runtime-bootstrap.json"),
     worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
+    worldBoundsPath: path.join(inputDirectoryPath, "world-bounds.json"),
     worldBounds: parseWorldPackageWorldBoundsV1(boundsValue),
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,

@@ -42,6 +42,16 @@ import {
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
+export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 = Object.freeze({
+  maximumBlockCount: 2_000,
+  maximumStaticColliderCount: 500,
+  maximumStaticColliderVertexCount: 200_000,
+  maximumStaticColliderTriangleCount: 100_000,
+  maximumOutputBytes: 4_000_000,
+  timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
+} satisfies NativeBlockGenerationBudgetV1);
+export const NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1 =
+  "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CURRENT_NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
@@ -51,6 +61,34 @@ const CURRENT_NATIVE_TRUST_PROFILE_HASH = sha256CanonicalJson({
   id: "trusted-local",
   version: 1,
 }) as Sha256HashV1;
+
+export interface WorldReconstructionHostRoutePolicyV1 {
+  readonly requiredCapabilityRefs: readonly string[];
+  readonly requestedSourceKind: "canonical" | "babylon-native";
+  readonly nativeTrustAdmitted: boolean;
+}
+
+export function decideNativeBlockReconstructionRouteV1(
+  reconstructionCaseInput: unknown,
+  routePolicy: WorldReconstructionHostRoutePolicyV1,
+): SceneAuthoringRouteDecisionV1 {
+  const reconstructionCase = parseWorldReconstructionCaseV1(
+    reconstructionCaseInput,
+  );
+  return decideSceneAuthoringRouteV1({
+    id: `${reconstructionCase.id}-route`,
+    sceneBriefRef: reconstructionCase.sceneBriefRef,
+    sceneBriefHash: reconstructionCase.sceneBriefHash,
+    trustProfileRef: CURRENT_NATIVE_TRUST_PROFILE_REF,
+    trustProfileHash: CURRENT_NATIVE_TRUST_PROFILE_HASH,
+    requiredCapabilityRefs: routePolicy.requiredCapabilityRefs,
+    requestedSourceKind: routePolicy.requestedSourceKind,
+    nativeTrustAdmitted: routePolicy.nativeTrustAdmitted,
+    referenceDrivenDistinctiveSilhouette:
+      reconstructionCase.referenceInputs.length > 0 &&
+      reconstructionCase.expected.semanticSilhouetteTargets.length > 0,
+  });
+}
 
 export interface PrepareNativeBlockGenerationTaskV1Input {
   readonly case: WorldReconstructionCaseV1;
@@ -71,6 +109,7 @@ export interface PrepareNativeBlockGenerationTaskV1Input {
   readonly gameplayBootstrapPath: string;
   readonly worldRuntimeBootstrapPath: string;
   readonly worldRuntimeBootstrapRef: string;
+  readonly worldBoundsPath: string;
   readonly worldBounds: WorldPackageWorldBoundsV1;
   readonly bootstrapId: string;
   readonly sceneModuleRef: string;
@@ -490,17 +529,14 @@ export async function prepareNativeBlockGenerationTaskV1(
     suppliedRouteDecision.sceneBriefRef !== reconstructionCase.sceneBriefRef ||
     suppliedRouteDecision.sceneBriefHash !== reconstructionCase.sceneBriefHash
   ) throw new TypeError("Route Decision and Case Scene Brief identity closure failed.");
-  const routeDecision = decideSceneAuthoringRouteV1({
-    id: suppliedRouteDecision.id,
-    sceneBriefRef: reconstructionCase.sceneBriefRef,
-    sceneBriefHash: reconstructionCase.sceneBriefHash,
-    trustProfileRef: CURRENT_NATIVE_TRUST_PROFILE_REF,
-    trustProfileHash: CURRENT_NATIVE_TRUST_PROFILE_HASH,
-    requiredCapabilityRefs: [],
-    requestedSourceKind: "babylon-native",
-    nativeTrustAdmitted: true,
-    referenceDrivenDistinctiveSilhouette: true,
-  });
+  const routeDecision = decideNativeBlockReconstructionRouteV1(
+    reconstructionCase,
+    {
+      requiredCapabilityRefs: suppliedRouteDecision.requiredCapabilityRefs,
+      requestedSourceKind: "babylon-native",
+      nativeTrustAdmitted: true,
+    },
+  );
   if (
     routeDecision.decision.kind !== "babylon-native" ||
     !isEqual(routeDecision, suppliedRouteDecision)

@@ -8,7 +8,8 @@ import { hashWorldReconstructionCaseV1, hashWorldReconstructionEvaluationProfile
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 
 import {
-  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
+  NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
+  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   prepareNativeBlockGenerationTaskV1,
 } from "./generation-request.js";
 import { runNativeBlockGenerationV1 } from "./generation-runner.js";
@@ -16,8 +17,6 @@ import {
   createCodexTaskProcessPortV1,
   reconcileCodexTaskCreationV1,
 } from "./codex-task-process-port.js";
-
-const DEFAULT_LWDP_S3_ROOT = "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk";
 
 function option(tokens: readonly string[], name: string): string {
   const index = tokens.indexOf(name);
@@ -64,7 +63,8 @@ async function main(): Promise<void> {
     }, profile, routeDecision, runId, attemptIndex: 0, backend, runDirectoryPath: outputPath, inputDirectoryPath,
     ...(backend === "cloud" ? {
       cloudOutputS3Root: String(
-        process.env.WORLDKIT_LWDP_S3_ROOT || DEFAULT_LWDP_S3_ROOT,
+        process.env.WORLDKIT_LWDP_S3_ROOT ||
+          NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
       ).replace(/\/+$/, ""),
     } : {}),
     taskInstructionPath: path.join(inputDirectoryPath, "task-instruction.md"), builderSkillPath: path.join(inputDirectoryPath, "builder-skill", "SKILL.md"),
@@ -73,10 +73,11 @@ async function main(): Promise<void> {
     gameplayBootstrapPath: path.join(hostClosureRootPath, "gameplay", "bootstrap.json"),
     worldRuntimeBootstrapPath: path.join(hostClosureRootPath, "runtime", "world-runtime-bootstrap.json"),
     worldRuntimeBootstrapRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
+    worldBoundsPath: path.join(inputDirectoryPath, "world-bounds.json"),
     worldBounds,
     bootstrapId: `${reconstructionCase.id}-native`,
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
-    seed, budgets: { maximumBlockCount: 2000, maximumStaticColliderCount: 500, maximumStaticColliderVertexCount: 200000, maximumStaticColliderTriangleCount: 100000, maximumOutputBytes: 4000000, timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 },
+    seed, budgets: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   });
   const checker = path.join(prepared.taskWorkspacePath, "inputs", "builder-skill", "scripts", "self-check.mjs");
   const result = await runNativeBlockGenerationV1(prepared, {
