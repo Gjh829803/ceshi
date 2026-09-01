@@ -34,89 +34,6 @@ const FORBIDDEN_SOURCE_PATTERNS = Object.freeze([
   /\bDate\.now\s*\(/,
 ]);
 
-function moduleVariableStatements(source) {
-  const statements = [];
-  let braceDepth = 0;
-  let variableStart = -1;
-  let quote = "";
-  let escaped = false;
-  let lineComment = false;
-  let blockComment = false;
-  const isIdentifierPart = (value) => value !== undefined && /[A-Za-z0-9_$]/.test(value);
-
-  for (let index = 0; index < source.length; index += 1) {
-    const current = source[index];
-    const next = source[index + 1];
-    if (lineComment) {
-      if (current === "\n") lineComment = false;
-      continue;
-    }
-    if (blockComment) {
-      if (current === "*" && next === "/") {
-        blockComment = false;
-        index += 1;
-      }
-      continue;
-    }
-    if (quote !== "") {
-      if (escaped) {
-        escaped = false;
-      } else if (current === "\\") {
-        escaped = true;
-      } else if (current === quote) {
-        quote = "";
-      }
-      continue;
-    }
-    if (current === "/" && next === "/") {
-      lineComment = true;
-      index += 1;
-      continue;
-    }
-    if (current === "/" && next === "*") {
-      blockComment = true;
-      index += 1;
-      continue;
-    }
-    if (current === "\"" || current === "'" || current === "`") {
-      quote = current;
-      continue;
-    }
-    if (current === "{") {
-      braceDepth += 1;
-      continue;
-    }
-    if (current === "}") {
-      braceDepth = Math.max(0, braceDepth - 1);
-      continue;
-    }
-    if (braceDepth !== 0) continue;
-    if (variableStart < 0) {
-      for (const keyword of ["const", "let", "var"]) {
-        if (source.startsWith(keyword, index) &&
-            !isIdentifierPart(source[index - 1]) &&
-            !isIdentifierPart(source[index + keyword.length])) {
-          variableStart = index;
-          index += keyword.length - 1;
-          break;
-        }
-      }
-      continue;
-    }
-    if (current === ";") {
-      statements.push(source.slice(variableStart, index + 1));
-      variableStart = -1;
-    }
-  }
-  if (variableStart >= 0) statements.push(source.slice(variableStart));
-  return statements;
-}
-
-function hasForbiddenModuleVariableInitializer(source) {
-  return moduleVariableStatements(source).some((statement) =>
-    /\bMath\.PI\s*\/\s*2\b/.test(statement));
-}
-
 function parseOption(arguments_, name) {
   const index = arguments_.indexOf(name);
   const value = index < 0 ? undefined : arguments_[index + 1];
@@ -300,11 +217,6 @@ export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
       const source = bytes.toString("utf8");
       if (FORBIDDEN_SOURCE_PATTERNS.some((pattern) => pattern.test(source))) {
         diagnosticCodes.add("NATIVE_BLOCK_BUILDER_SOURCE_AUTHORITY_FORBIDDEN");
-      }
-      if (hasForbiddenModuleVariableInitializer(source)) {
-        diagnosticCodes.add(
-          "NATIVE_BLOCK_BUILDER_SOURCE_MODULE_INITIALIZER_FORBIDDEN",
-        );
       }
     } else {
       const value = parseJsonData(bytes, diagnosticCodes);

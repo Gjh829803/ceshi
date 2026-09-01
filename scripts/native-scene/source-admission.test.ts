@@ -2088,6 +2088,33 @@ describe("Babylon Native Source Admission", () => {
     `)).outcome).toBe("passed");
   }, 30_000);
 
+  it("rejects a computed module constant while allowing the same build-local value", async () => {
+    expect(await admittedCode(`
+      import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+      const QUARTER_TURN_RADIANS = Math.PI / 2;
+      export default defineBabylonNativeScene({
+        kind: "babylon-native-scene-module",
+        id: "native-source-test",
+        build() { void QUARTER_TURN_RADIANS; },
+      });
+    `)).toMatchObject({
+      outcome: "rejected",
+      code: "WORLDKIT_NATIVE_SCENE_SOURCE_MODULE_STATE_FORBIDDEN",
+    });
+
+    expect((await admittedCode(`
+      import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
+      export default defineBabylonNativeScene({
+        kind: "babylon-native-scene-module",
+        id: "native-source-test",
+        build() {
+          const quarterTurnRadians = Math.PI / 2;
+          void quarterTurnRadians;
+        },
+      });
+    `)).outcome).toBe("passed");
+  }, 30_000);
+
   it("allows an ordinary local constructor to receive a false third argument", async () => {
     expect((await admittedCode(`
       import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";

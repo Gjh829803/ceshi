@@ -386,48 +386,4 @@ describe("Native Block Builder Skill", () => {
     expect(result.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_SOURCE_AUTHORITY_FORBIDDEN");
   });
 
-  it("rejects a computed module-scope constant before Host source admission", async () => {
-    const workspace = await createWorkspace();
-    const sourcePath = path.join(workspace, "scene.ts");
-    const source = await readFile(sourcePath, "utf8");
-    await writeFile(sourcePath, `const QUARTER_TURN_RADIANS = Math.PI / 2;\n${source}`);
-
-    const result = await runSelfCheck(workspace);
-
-    expect(result.exitCode).toBe(2);
-    expect(result.report.diagnosticCodes).toContain(
-      "NATIVE_BLOCK_BUILDER_SOURCE_MODULE_INITIALIZER_FORBIDDEN",
-    );
-  });
-
-  it("allows the same computed constant inside build", async () => {
-    const workspace = await createWorkspace();
-    const sourcePath = path.join(workspace, "scene.ts");
-    const source = await readFile(sourcePath, "utf8");
-    await writeFile(sourcePath, source.replace(
-      "  build(context) {",
-      "  build(context) {\n    const quarterTurnRadians = Math.PI / 2;\n    void quarterTurnRadians;",
-    ));
-
-    const result = await runSelfCheck(workspace);
-
-    expect(result).toMatchObject({ exitCode: 0, report: { ok: true } });
-  });
-
-  it("allows admitted module literals and frozen literal tables", async () => {
-    const workspace = await createWorkspace();
-    const sourcePath = path.join(workspace, "scene.ts");
-    const source = await readFile(sourcePath, "utf8");
-    await writeFile(sourcePath, [
-      "const PROFILE_REF = \"worldkit://native-block-profile/whitebox.blocks@1\";",
-      "const NEGATIVE_ONE = (-1);",
-      "const TYPED_ONE = 1 as number;",
-      "const TABLE = Object.freeze({ values: Object.freeze([1, 2, 3] as const) });",
-      source,
-    ].join("\n"));
-
-    const result = await runSelfCheck(workspace);
-
-    expect(result).toMatchObject({ exitCode: 0, report: { ok: true } });
-  });
 });
