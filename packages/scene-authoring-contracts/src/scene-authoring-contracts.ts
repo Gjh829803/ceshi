@@ -847,6 +847,16 @@ export function parseNativeBlockGenerationReceiptV1(
   const outputs = parseGenerationOutputs(record.outputs);
   const diagnosticCodes = parseGenerationDiagnosticCodes(record.diagnosticCodes);
   const hasTaskTimeout = diagnosticCodes.includes("task-timeout");
+  const hasDefinitiveTaskTimeout =
+    record.outcome === "rejected" &&
+    diagnosticCodes.length === 1 &&
+    record.cleanupOutcome === "completed";
+  const hasTaskTimeoutWithCleanupFailure =
+    record.outcome === "tool-error" &&
+    diagnosticCodes.length === 2 &&
+    diagnosticCodes[0] === "cleanup-failed" &&
+    diagnosticCodes[1] === "task-timeout" &&
+    record.cleanupOutcome === "failed";
   if (
     (record.outcome === "completed" &&
       (!hasExactOrder(outputs.map(({ path }) => path), SORTED_GENERATION_OUTPUT_PATHS) ||
@@ -854,10 +864,8 @@ export function parseNativeBlockGenerationReceiptV1(
         record.cleanupOutcome !== "completed")) ||
     (record.outcome !== "completed" && diagnosticCodes.length === 0) ||
     (hasTaskTimeout &&
-      (record.outcome !== "rejected" ||
-        outputs.length !== 0 ||
-        diagnosticCodes.length !== 1 ||
-        record.cleanupOutcome !== "completed"))
+      (outputs.length !== 0 ||
+        (!hasDefinitiveTaskTimeout && !hasTaskTimeoutWithCleanupFailure)))
   ) {
     return invalidContract("generation-receipt");
   }

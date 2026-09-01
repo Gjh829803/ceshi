@@ -218,6 +218,182 @@ function packageFailureCode(
     : "WORLD_RECONSTRUCTION_PACKAGE_FAILED";
 }
 
+const STABLE_LOWERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
+  "cleanup-failed",
+  "creation-outcome-unknown",
+  "duplicate-request-mismatch",
+  "output-hash-mismatch",
+  "output-missing",
+  "output-unexpected",
+  "self-check-failed",
+  "stale-output",
+  "task-rejected",
+  "task-timeout",
+  "task-tool-error",
+  "attempt-directory-invalid",
+  "attempt-invalid",
+  "attempt-result-invalid",
+  "authoring-manifest-invalid",
+  "bootstrap-invalid",
+  "case-invalid",
+  "case-path-invalid",
+  "gameplay-invalid",
+  "generation-output-stale",
+  "generation-receipt-invalid",
+  "generation-receipt-stale",
+  "generation-request-invalid",
+  "host-identity-closure-mismatch",
+  "host-closure-invalid",
+  "input-file-invalid",
+  "input-path-escaped",
+  "native-check-rejected",
+  "native-package-internal-failed",
+  "native-resources-invalid",
+  "native-visual-resource-unresolved",
+  "output-directory-invalid",
+  "output-location-invalid",
+  "registry-lock-invalid",
+  "registry-runtime-closure-mismatch",
+  "repository-root-invalid",
+  "route-invalid",
+  "runtime-invalid",
+  "source-admission-stale",
+  "source-bundle-stale",
+  "source-directory-invalid",
+  "source-inventory-invalid",
+  "world-bounds-invalid",
+  "world-package-kind-mismatch",
+]);
+const STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
+  "FORMAL_CAPTURE_ARTIFACT_BUDGET_INVALID",
+  "FORMAL_CAPTURE_JSON_BUDGET_EXCEEDED",
+  "FORMAL_CAPTURE_NATIVE_PACKAGE_REQUIRED",
+  "FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS",
+  "FORMAL_CAPTURE_OUTPUT_DIRECTORY_INVALID",
+  "FORMAL_CAPTURE_OUTPUT_TOPOLOGY_INVALID",
+  "FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH",
+  "FORMAL_CAPTURE_PATH_INVALID",
+  "FORMAL_CAPTURE_PNG_BUDGET_EXCEEDED",
+  "FORMAL_CAPTURE_PNG_INVALID",
+  "FORMAL_CAPTURE_REQUEST_FILE_INVALID",
+  "FORMAL_WORLD_CAPTURE_INTENT_INVALID",
+  "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
+  "FORMAL_WORLD_CAPTURE_REQUEST_IDENTITY_MISMATCH",
+  "FORMAL_WORLD_CAPTURE_REQUEST_INVALID",
+  "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_BROWSER_EXITED",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_CAPTURE_TIMEOUT",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_DUPLICATE_REQUEST",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_FRAME_NAVIGATED",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_FRAME_REMOVED",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_NOT_ACTIVE",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_PAGE_CLOSED",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_REQUEST_IDENTITY_MISMATCH",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_SERVER_EXITED",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_SERVER_PACKAGE_IDENTITY_MISMATCH",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_SHELL_ORIGIN_INVALID",
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_TERMINATED",
+  "WORLDKIT_HOSTED_FORMAL_CAPTURE_ROUTE_UNAVAILABLE",
+  "WORLD_RECONSTRUCTION_ARTIFACT_PATH_INVALID",
+  "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
+  "WORLD_RECONSTRUCTION_CAMERA_ROLLBACK_FAILED",
+  "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+  "WORLD_RECONSTRUCTION_CAPTURE_IDENTITY_MISMATCH",
+  "WORLD_RECONSTRUCTION_CAPTURE_STAGE_INVALID",
+  "WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID",
+  "WORLD_RECONSTRUCTION_CASE_INVALID",
+  "WORLD_RECONSTRUCTION_CASE_PATH_INVALID",
+  "WORLD_RECONSTRUCTION_CASE_REF_INVALID",
+  "WORLD_RECONSTRUCTION_CHECK_FAILED",
+  "WORLD_RECONSTRUCTION_CLEANUP_FAILED",
+  "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+  "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
+  "WORLD_RECONSTRUCTION_CORE_FAILED",
+  "WORLD_RECONSTRUCTION_CREATION_OUTCOME_UNKNOWN",
+  "WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID",
+  "WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH",
+  "WORLD_RECONSTRUCTION_EMPTY_OUTPUT",
+  "WORLD_RECONSTRUCTION_EVALUATION_FAILED",
+  "WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID",
+  "WORLD_RECONSTRUCTION_EVALUATION_PUBLICATION_INVALID",
+  "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
+  "WORLD_RECONSTRUCTION_EVALUATION_STAGE_INVALID",
+  "WORLD_RECONSTRUCTION_EVIDENCE_SET_INVALID",
+  "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+  "WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS",
+  "WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID",
+  "WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID",
+  "WORLD_RECONSTRUCTION_FROZEN_OWNER_INVALID",
+  "WORLD_RECONSTRUCTION_HOST_CLOSURE_INVALID",
+  "WORLD_RECONSTRUCTION_IMMUTABLE_ARTIFACT_MISMATCH",
+  "WORLD_RECONSTRUCTION_INCOMPLETE",
+  "WORLD_RECONSTRUCTION_INPUT_FREEZE_FAILED",
+  "WORLD_RECONSTRUCTION_INPUT_INVALID",
+  "WORLD_RECONSTRUCTION_JOURNAL_CORRUPT",
+  "WORLD_RECONSTRUCTION_JOURNAL_IDENTITY_MISMATCH",
+  "WORLD_RECONSTRUCTION_JOURNAL_PATH_UNSAFE",
+  "WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID",
+  "WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED",
+  "WORLD_RECONSTRUCTION_NON_REPAIRABLE",
+  "WORLD_RECONSTRUCTION_NO_OUTPUT",
+  "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+  "WORLD_RECONSTRUCTION_OUTPUT_ALREADY_EXISTS",
+  "WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID",
+  "WORLD_RECONSTRUCTION_PACKAGE_FAILED",
+  "WORLD_RECONSTRUCTION_PACKAGE_STAGE_INVALID",
+  "WORLD_RECONSTRUCTION_PRODUCTION_ADAPTER_UNAVAILABLE",
+  "WORLD_RECONSTRUCTION_PRODUCTION_FAILED",
+  "WORLD_RECONSTRUCTION_PRODUCTION_PORTS_FAILED",
+  "WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID",
+  "WORLD_RECONSTRUCTION_REPOSITORY_ROOT_INVALID",
+  "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE",
+  "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
+  "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+  "WORLD_RECONSTRUCTION_ROUTE_UNSUPPORTED",
+  "WORLD_RECONSTRUCTION_RUN_CLOSED",
+  "WORLD_RECONSTRUCTION_RUN_DIRECTORY_INVALID",
+  "WORLD_RECONSTRUCTION_RUN_FAILED",
+  "WORLD_RECONSTRUCTION_RUN_INCOMPLETE",
+  "WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID",
+  "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+  "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
+  "WORLD_RECONSTRUCTION_STALE_BOOTSTRAP",
+  "WORLD_RECONSTRUCTION_STALE_CASE",
+  "WORLD_RECONSTRUCTION_STALE_FORMAL_CAPTURE_INTENT",
+  "WORLD_RECONSTRUCTION_STALE_GAMEPLAY_BOOTSTRAP",
+  "WORLD_RECONSTRUCTION_STALE_PROFILE",
+  "WORLD_RECONSTRUCTION_STALE_WORLD_BOUNDS",
+  "WORLD_RECONSTRUCTION_STALE_WORLD_RUNTIME_BOOTSTRAP",
+  "WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING",
+  "WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING",
+  "WORLD_RECONSTRUCTION_WORLD_BOUNDS_INVALID",
+]);
+
+function allowlistedOwnerDiagnosticCodes(
+  diagnosticCodes: readonly string[],
+): readonly string[] {
+  const stableCodes = [...new Set(diagnosticCodes.filter((code) =>
+    STABLE_LOWERCASE_OWNER_DIAGNOSTIC_CODES.has(code) ||
+    STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES.has(code)
+  ))];
+  return Object.freeze([
+    ...stableCodes.filter((code) => code !== "cleanup-failed"),
+    ...stableCodes.filter((code) => code === "cleanup-failed"),
+  ]);
+}
+
+function stageDiagnosticCodes(
+  stageCode: string,
+  ownerDiagnosticCodes: readonly string[],
+): readonly string[] {
+  return Object.freeze([
+    stageCode,
+    ...allowlistedOwnerDiagnosticCodes(ownerDiagnosticCodes).filter((code) =>
+      code !== stageCode
+    ),
+  ]);
+}
+
 function cleanupStatus(
   outcomes: WorldReconstructionCleanupOutcomesV1,
 ): "completed" | "failed" {
@@ -232,18 +408,39 @@ function cleanupStatus(
   return owners.some((outcome) => outcome === "failed") ? "failed" : "completed";
 }
 
-const CLOSED_DIAGNOSTIC_CODE_PATTERN = /WORLD_RECONSTRUCTION_[A-Z0-9_]+/g;
+const DIAGNOSTIC_CODE_PATTERN = /[A-Z][A-Z0-9_]{4,}/g;
+
+function ownerDiagnosticCodesFromUnknown(error: unknown): readonly string[] {
+  const candidates: string[] = [];
+  const collect = (value: unknown): void => {
+    if (value instanceof AggregateError) {
+      for (const nested of value.errors) collect(nested);
+    }
+    if (value instanceof Error) {
+      candidates.push(...(value.message.match(DIAGNOSTIC_CODE_PATTERN) ?? []));
+      collect(value.cause);
+    }
+    if (typeof value === "object" && value !== null &&
+        "diagnosticCodes" in value &&
+        Array.isArray(value.diagnosticCodes)) {
+      candidates.push(...value.diagnosticCodes.filter(
+        (code): code is string => typeof code === "string",
+      ));
+    }
+  };
+  collect(error);
+  return allowlistedOwnerDiagnosticCodes(candidates);
+}
 
 function diagnosticCodesFromUnknown(error: unknown): readonly string[] {
   if (error instanceof WorldReconstructionRunClosedErrorV1) {
     return error.diagnosticCodes;
   }
-  const message = error instanceof Error ? error.message : String(error);
-  const matched = message.match(CLOSED_DIAGNOSTIC_CODE_PATTERN);
-  if (isNil(matched) || isEmpty(matched)) {
+  const diagnosticCodes = ownerDiagnosticCodesFromUnknown(error);
+  if (isEmpty(diagnosticCodes)) {
     return ["WORLD_RECONSTRUCTION_INCOMPLETE"];
   }
-  return Object.freeze([...new Set(matched)]);
+  return diagnosticCodes;
 }
 
 function requestIdFor(
@@ -395,7 +592,18 @@ async function runAttempt(
   }
   journal.attachOrRejectRequest(generate.requestId, generate.requestHash);
   if (generate.outcome !== "completed") {
-    await failClosed(journal, ports, [generateFailureCode(generate.outcome)]);
+    const ownerDiagnosticCodes = allowlistedOwnerDiagnosticCodes(
+      generate.diagnosticCodes,
+    );
+    await failClosed(
+      journal,
+      ports,
+      generate.outcome === "rejected" || generate.outcome === "failed"
+        ? ownerDiagnosticCodes.length === 0
+          ? [generateFailureCode(generate.outcome)]
+          : ownerDiagnosticCodes
+        : [generateFailureCode(generate.outcome)],
+    );
   }
   await journal.recordBoundary({
     state: stages.generate,
@@ -416,7 +624,14 @@ async function runAttempt(
     generate,
   });
   if (packaged.outcome !== "completed") {
-    return failClosed(journal, ports, [packageFailureCode(packaged.outcome)]);
+    return failClosed(
+      journal,
+      ports,
+      stageDiagnosticCodes(
+        packageFailureCode(packaged.outcome),
+        packaged.diagnosticCodes,
+      ),
+    );
   }
   await journal.recordBoundary({
     state: stages.package,
@@ -432,12 +647,24 @@ async function runAttempt(
   const captured = await ports.capture({ attemptIndex, packaged });
   if (captured.outcome === "camera-rollback-failed" ||
     captured.cameraRollbackOutcome === "failed") {
-    return failClosed(journal, ports, [
-      "WORLD_RECONSTRUCTION_CAMERA_ROLLBACK_FAILED",
-    ]);
+    return failClosed(
+      journal,
+      ports,
+      stageDiagnosticCodes(
+        "WORLD_RECONSTRUCTION_CAMERA_ROLLBACK_FAILED",
+        captured.diagnosticCodes,
+      ),
+    );
   }
   if (captured.outcome !== "completed") {
-    return failClosed(journal, ports, ["WORLD_RECONSTRUCTION_CAPTURE_FAILED"]);
+    return failClosed(
+      journal,
+      ports,
+      stageDiagnosticCodes(
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        captured.diagnosticCodes,
+      ),
+    );
   }
   await journal.recordBoundary({
     state: stages.capture,
@@ -454,14 +681,15 @@ async function runAttempt(
     attemptIndex,
     packaged,
     captured,
-  }).catch(async (error: unknown) =>
-    failClosed(
-      journal,
-      ports,
-      ["WORLD_RECONSTRUCTION_EVALUATION_FAILED"],
-      error,
-    )
-  );
+  }).catch(async (error: unknown) => failClosed(
+    journal,
+    ports,
+    stageDiagnosticCodes(
+      "WORLD_RECONSTRUCTION_EVALUATION_FAILED",
+      ownerDiagnosticCodesFromUnknown(error),
+    ),
+    error,
+  ));
   await journal.recordBoundary({
     state: stages.evaluate,
     boundary: "after",

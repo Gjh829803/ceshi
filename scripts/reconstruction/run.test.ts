@@ -377,12 +377,16 @@ function generateResult(
 interface FakePortOptions {
   readonly generateOutcomeByAttempt?:
     readonly WorldReconstructionGeneratePortResultV1["outcome"][];
+  readonly generateDiagnosticCodesByAttempt?: readonly (readonly string[])[];
   readonly generateHashOverrideByAttempt?: readonly (Sha256HashV1 | undefined)[];
   readonly packageOutcomeByAttempt?: readonly ("completed" | "check-failed" | "package-failed")[];
+  readonly packageDiagnosticCodesByAttempt?: readonly (readonly string[])[];
   readonly captureOutcomeByAttempt?:
     readonly ("completed" | "failed" | "camera-rollback-failed")[];
+  readonly captureDiagnosticCodesByAttempt?: readonly (readonly string[])[];
   readonly evaluationByAttempt?: readonly WorldReconstructionEvaluationResultV1[];
   readonly evaluateThrows?: boolean;
+  readonly evaluationError?: unknown;
   readonly cleanup?: WorldReconstructionRunPortsV1["cleanup"];
   readonly rehash?: WorldReconstructionRunPortsV1["rehashOwnerIdentities"];
 }
@@ -417,9 +421,17 @@ function fakePorts(options: FakePortOptions = {}) {
         options.generateOutcomeByAttempt?.[input.attemptIndex] ?? "completed",
       );
       const override = options.generateHashOverrideByAttempt?.[input.attemptIndex];
-      return isNil(override)
-        ? result
-        : Object.freeze({ ...result, requestHash: override });
+      return Object.freeze({
+        ...result,
+        ...(isNil(override) ? {} : { requestHash: override }),
+        ...(options.generateDiagnosticCodesByAttempt?.[input.attemptIndex] ===
+            undefined
+          ? {}
+          : {
+            diagnosticCodes:
+              options.generateDiagnosticCodesByAttempt[input.attemptIndex],
+          }),
+      });
     },
     package: async (input) => {
       calls.package.push(input.attemptIndex);
@@ -439,7 +451,9 @@ function fakePorts(options: FakePortOptions = {}) {
         worldPackageBuildReceiptHash: ids.worldPackageBuildReceiptHash,
         worldBuildIdentityRef: ids.worldBuildIdentityRef,
         worldBuildIdentityHash: ids.worldBuildIdentityHash,
-        diagnosticCodes: outcome === "completed" ? [] : [outcome],
+        diagnosticCodes:
+          options.packageDiagnosticCodesByAttempt?.[input.attemptIndex] ??
+          (outcome === "completed" ? [] : [outcome]),
       });
     },
     capture: async (input) => {
@@ -462,11 +476,17 @@ function fakePorts(options: FakePortOptions = {}) {
         cameraRollbackOutcome: outcome === "camera-rollback-failed"
           ? "failed" as const
           : "completed" as const,
-        diagnosticCodes: Object.freeze([outcome]),
+        diagnosticCodes: Object.freeze([
+          ...(options.captureDiagnosticCodesByAttempt?.[input.attemptIndex] ??
+            [outcome]),
+        ]),
       });
     },
     evaluate: async (input) => {
       calls.evaluate.push(input.attemptIndex);
+      if (options.evaluationError !== undefined) {
+        throw options.evaluationError;
+      }
       if (options.evaluateThrows === true) {
         throw new Error("WORLD_RECONSTRUCTION_EVALUATION_FAILED");
       }
@@ -813,6 +833,60 @@ describe("runWorldReconstructionV1", () => {
   });
 
   it.each([
+    ["task-timeout"],
+    ["self-check-failed"],
+  ] as const)(
+    "preserves the allowlisted generation diagnostic %s",
+    async (diagnosticCode) => {
+      const { ports } = fakePorts({
+        generateOutcomeByAttempt: ["rejected"],
+        generateDiagnosticCodesByAttempt: [[
+          diagnosticCode,
+          "secret-provider-trace-42",
+        ]],
+      });
+
+      await expect(runWorldReconstructionV1(
+        runInput(await outputRoot()),
+        ports,
+      )).rejects.toMatchObject({ diagnosticCodes: [diagnosticCode] });
+    },
+  );
+
+  it.each([
+    ["task-timeout"],
+    ["self-check-failed"],
+  ] as const)(
+    "keeps %s primary when the generation owner also reports cleanup-failed",
+    async (diagnosticCode) => {
+      const { ports } = fakePorts({
+        generateOutcomeByAttempt: ["failed"],
+        generateDiagnosticCodesByAttempt: [[
+          "cleanup-failed",
+          diagnosticCode,
+        ]],
+        cleanup: async () => Object.freeze({
+          providerTask: "failed" as const,
+          candidate: "completed" as const,
+          hostedBrowserSession: "completed" as const,
+          viteServer: "completed" as const,
+          temporaryDirectories: "completed" as const,
+          outputPromotion: "completed" as const,
+        }),
+      });
+
+      await expect(runWorldReconstructionV1(
+        runInput(await outputRoot()),
+        ports,
+      )).rejects.toMatchObject({
+        message: diagnosticCode,
+        diagnosticCodes: [diagnosticCode, "cleanup-failed"],
+        cleanupOutcome: "failed",
+      });
+    },
+  );
+
+  it.each([
     ["check-failed", "WORLD_RECONSTRUCTION_CHECK_FAILED"],
     ["package-failed", "WORLD_RECONSTRUCTION_PACKAGE_FAILED"],
   ] as const)("fails closed on %s", async (outcome, code) => {
@@ -824,6 +898,87 @@ describe("runWorldReconstructionV1", () => {
       ports,
     )).rejects.toMatchObject({ diagnosticCodes: [code] });
     expect(calls.capture).toEqual([]);
+  });
+
+  it("preserves allowlisted Package diagnostics beside the stage code", async () => {
+    const { ports } = fakePorts({
+      packageOutcomeByAttempt: ["check-failed"],
+      packageDiagnosticCodesByAttempt: [[
+        "native-check-rejected",
+        "secret-provider-trace-42",
+      ]],
+    });
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_CHECK_FAILED",
+        "native-check-rejected",
+      ],
+    });
+  });
+
+  it("preserves allowlisted Capture diagnostics beside the stage code", async () => {
+    const { ports } = fakePorts({
+      captureOutcomeByAttempt: ["failed"],
+      captureDiagnosticCodesByAttempt: [[
+        "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID",
+        "secret-provider-trace-42",
+      ]],
+    });
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID",
+      ],
+    });
+  });
+
+  it("preserves allowlisted Evaluation diagnostics without provider detail", async () => {
+    const { ports } = fakePorts({
+      evaluationError: Object.assign(
+        new Error("secret-provider-trace-42"),
+        {
+          diagnosticCodes: [
+            "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+            "secret-provider-trace-42",
+          ],
+        },
+      ),
+    });
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_EVALUATION_FAILED",
+        "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+      ],
+    });
+  });
+
+  it("rejects namespace-shaped provider detail from Evaluation diagnostics", async () => {
+    const providerDetail = "WORLD_RECONSTRUCTION_PROVIDER_TRACE_SECRET_42";
+    const { ports } = fakePorts({
+      evaluationError: Object.assign(new Error(providerDetail), {
+        diagnosticCodes: [providerDetail],
+      }),
+    });
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      message: "WORLD_RECONSTRUCTION_EVALUATION_FAILED",
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_EVALUATION_FAILED"],
+    });
   });
 
   it("fails closed on capture, evaluation, and camera rollback", async () => {

@@ -191,6 +191,77 @@ process.exit(1);
     }
   });
 
+  it("appends cleanup-failed without replacing task-timeout", async () => {
+    const prepared = await preparedFixture();
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => ({
+            exitCode: 1,
+            stdout: "",
+            stderr: "secret-provider-trace-42",
+            taskOutcome: {
+              kind: "worldkit-codex-task-outcome",
+              schemaVersion: 1,
+              requestId: prepared.routerRequestId,
+              outcome: "task-timeout",
+            },
+          }),
+        },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
+        reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => ({ outcome: "failed" }),
+      });
+
+      expect(result.receipt.outcome).toBe("tool-error");
+      expect(result.receipt.cleanupOutcome).toBe("failed");
+      expect(result.receipt.diagnosticCodes).toEqual([
+        "cleanup-failed",
+        "task-timeout",
+      ]);
+      expect(JSON.stringify(result.receipt)).not.toContain(
+        "secret-provider-trace-42",
+      );
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
+  it("appends cleanup-failed without replacing a self-check failure", async () => {
+    const prepared = await preparedFixture();
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => {
+            await writeOutputs(prepared.stagingDirectoryPath);
+            return {
+              exitCode: 0,
+              stdout:
+                "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n",
+              stderr: "",
+              taskOutcome: completedTaskOutcome,
+            };
+          },
+        },
+        selfCheck: async () => ({
+          ok: false,
+          diagnosticCodes: ["self-check-failed"],
+        }),
+        reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => ({ outcome: "failed" }),
+      });
+
+      expect(result.receipt.outcome).toBe("tool-error");
+      expect(result.receipt.cleanupOutcome).toBe("failed");
+      expect(result.receipt.diagnosticCodes).toEqual([
+        "cleanup-failed",
+        "self-check-failed",
+      ]);
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
   it("routes an adapter creation uncertainty through GET-only reconciliation", async () => {
     const prepared = await preparedFixture();
     let reconciliations = 0;

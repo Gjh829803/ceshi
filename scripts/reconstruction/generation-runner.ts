@@ -59,6 +59,14 @@ function receipt(input: PreparedInput, outcome: NativeBlockGenerationReceiptV1["
   };
 }
 
+function appendDiagnostic(
+  diagnostics: NativeBlockGenerationReceiptV1["diagnosticCodes"],
+  diagnostic: NativeBlockGenerationReceiptV1["diagnosticCodes"][number],
+): NativeBlockGenerationReceiptV1["diagnosticCodes"] {
+  return [...new Set([...diagnostics, diagnostic])].sort() as
+    NativeBlockGenerationReceiptV1["diagnosticCodes"];
+}
+
 async function inspectOutputs(input: PreparedInput): Promise<NativeBlockGenerationReceiptV1["outputs"]> {
   const entries = await readdir(input.stagingDirectoryPath);
   if (entries.length !== OUTPUTS.length || entries.some((entry) => !OUTPUTS.includes(entry as OutputPath))) throw new TypeError("output-unexpected");
@@ -155,7 +163,10 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
   }
   if (!cleanupCalled) {
     try { const cleanup = await ports.cleanup(); cleanupOutcome = cleanup.outcome; } catch { cleanupOutcome = "failed"; }
-    if (cleanupOutcome !== "completed") { outcome = "tool-error"; diagnostics = ["cleanup-failed"]; }
+    if (cleanupOutcome !== "completed") {
+      outcome = "tool-error";
+      diagnostics = appendDiagnostic(diagnostics, "cleanup-failed");
+    }
   }
   if (outcome !== "completed") {
     await rm(input.stagingDirectoryPath, { recursive: true, force: true });

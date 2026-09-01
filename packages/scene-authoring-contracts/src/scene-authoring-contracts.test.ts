@@ -355,7 +355,24 @@ describe("Native Block generation identity", () => {
     expect(receipt.outputs).toEqual([]);
   });
 
-  it("rejects task-timeout outside its sole rejected and cleaned-up branch", () => {
+  it("retains task-timeout when cleanup also fails", () => {
+    const request = generationRequest();
+    const receipt = parseNativeBlockGenerationReceiptV1({
+      ...generationReceipt(request),
+      outcome: "tool-error",
+      outputs: [],
+      diagnosticCodes: ["cleanup-failed", "task-timeout"],
+      cleanupOutcome: "failed",
+    });
+
+    expect(receipt.diagnosticCodes).toEqual([
+      "cleanup-failed",
+      "task-timeout",
+    ]);
+    expect(receipt.cleanupOutcome).toBe("failed");
+  });
+
+  it("rejects task-timeout outside its definitive or cleanup-failed branches", () => {
     const request = generationRequest();
     const completed = generationReceipt(request);
     for (const invalid of [
