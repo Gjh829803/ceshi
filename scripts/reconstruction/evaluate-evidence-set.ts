@@ -103,7 +103,7 @@ function roleFromTraversalBinding(
   stale("Contribution traversalBinding does not admit a blocker or ground collider role");
 }
 
-function projectMeasuredTraversalCheck(
+export function projectMeasuredTraversalCheck(
   measured: readonly Readonly<{
     checkpointId: string;
     outcome: "reached" | "passed" | "blocked";
@@ -117,7 +117,9 @@ function projectMeasuredTraversalCheck(
   const checkpointIds = uniqueSorted(
     measured.map(({ checkpointId }) => checkpointId),
   );
-  const requiredCheckpointIds = criteria.map(({ checkpointId }) => checkpointId);
+  const requiredCheckpointIds = uniqueSorted(
+    criteria.map(({ checkpointId }) => checkpointId),
+  );
   if (
     checkpointIds.length !== requiredCheckpointIds.length ||
     checkpointIds.some((id, index) => id !== requiredCheckpointIds[index])

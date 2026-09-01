@@ -9,7 +9,10 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import { describe, expect, it } from "vitest";
 
-import { buildWorldReconstructionEvidenceSetV1 } from "./evaluate-evidence-set.js";
+import {
+  buildWorldReconstructionEvidenceSetV1,
+  projectMeasuredTraversalCheck,
+} from "./evaluate-evidence-set.js";
 import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
@@ -71,6 +74,23 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("projects a complete frozen criterion set independently of criterion order", () => {
+    const criteria = Object.freeze([
+      MIXED_BLOCK_CHECKPOINT_CRITERIA[2],
+      MIXED_BLOCK_CHECKPOINT_CRITERIA[0],
+      MIXED_BLOCK_CHECKPOINT_CRITERIA[1],
+    ]);
+
+    expect(projectMeasuredTraversalCheck([
+      { checkpointId: "approach", outcome: "reached" },
+      { checkpointId: "gate", outcome: "blocked" },
+      { checkpointId: "threshold", outcome: "passed" },
+    ], criteria, "block")).toEqual({
+      outcome: "blocked",
+      checkpointIds: ["approach", "gate", "threshold"],
+    });
+  });
+
   it("joins trusted Package, Formal Capture, Snapshot, overlay, and scripted traversal identities", () => {
     const fixture = createEvidenceSetFixtureInputV1();
     const evidence = buildWorldReconstructionEvidenceSetV1(fixture);
