@@ -592,13 +592,34 @@ artifacts/scenes/cloud-temple-t-gate-native-block/runs/<run-id>/
   inputs/
   attempts/0/
   attempts/1/                 # only when repair runs
-  final/world-package/
-  final/capture/
-  final/evaluation.json
   run-receipt.json
 ```
 
-The command returns the exact final Package path. The user launches that path with `worldkit native run`;
+The single published result lives outside every immutable Run:
+
+```text
+artifacts/scenes/cloud-temple-t-gate-native-block/
+  final/
+    world-package/
+    capture/
+    evaluation.json
+    launch.json
+```
+
+`runs/<run-id>/final` is not a supported alias or fallback. Publication copies the verified
+terminal Attempt into the Case-root sibling `.final-staging`, verifies those copied bytes again,
+then atomically renames that directory to `final`. Attempt artifacts remain immutable. A verifier
+must distinguish the immutable Run candidate from the promoted `final` candidate and must verify
+both against the same terminal Attempt and Run Receipt identities; validating the Attempt path a
+second time is not promoted-byte evidence.
+
+`final/launch.json` is the sole launch descriptor. Its closed current contract contains exactly
+`kind: "native-block-reconstruction-launch"`, `schemaVersion: 1`, `caseId`, `runReceiptRef`,
+`runReceiptHash`, `worldPackageRelativePath`, `worldPackageRef`, `worldPackageRootHash`,
+`captureReceiptRelativePath`, `captureReceiptHash`, `evaluationRelativePath`, `evaluationHash`,
+and `launchCommand`. Paths are Case-root-relative,
+must stay inside `final`, and must not be symlinks. The command returns the exact final Package
+path. The user launches that path with `worldkit native run`;
 this is a BNA verification experience, not current Native Viewer support.
 
 ## 11. Delete ledger
