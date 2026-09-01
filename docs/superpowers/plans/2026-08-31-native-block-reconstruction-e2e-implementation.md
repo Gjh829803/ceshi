@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-31-native-block-reconstruction-e2e-design.md`
 
+**Plan synchronization baseline:** `origin/main@1eec016022d18a0cab1eeed2feaafb62b2e5d155`
+
 ## Global Constraints
 
 - `NBR-1` is the only highest-priority WRC-1 slice until the representative Case is runnable end to end; do not expand BWB-6, full PHO-7/8, full Action/Camera/Event, product Route/Nav/`goTo`, full Golden Corpus, BNA-8, or WRC-ACC-1.
@@ -19,6 +21,11 @@
 - The formal model/profile is `gpt-5.6-sol` with reasoning effort `xhigh`; smoke profiles never count as BNA-6 evidence.
 - All model work goes through `scripts/agents/run-codex-task.mjs`; creation submits exactly once and uncertain outcomes reconcile by request ID.
 - Use current-only clean breaks: one public name, parser, entry point, and state owner; delete replaced fields, aliases, fallbacks, duplicate DTOs, and Case-specific production adapters.
+- Formal Capture Intent uses approved Scheme A only: the Case requires
+  `formalCaptureIntentRef: "inputs/formal-world-capture-intent.json"` and
+  `formalCaptureIntentHash`; `@whitebox-world/runtime-contracts` owns the sole
+  `FormalWorldCaptureIntentV1` parser/canonical-bytes/hash implementation; production receives no scattered
+  Capture Intent arguments or inferred/default fallback.
 - Checker success precedes Package build; verified Package plus Host admission precede Runtime Candidate allocation.
 - For Native generation, `BabylonNativeSceneBootstrapV1` is only the Host-derived read-only startup projection. `GameplayBootstrapV1`, `WorldRuntimeBootstrapV1`, and validated `WorldPackageWorldBoundsV1` remain the canonical owners whose identities the Request context binds.
 - Static collision comes only from explicit Frozen Contributions; SDK remains sole owner of Havok, Character Capsule, support, Input, Fixed Tick, Action, Camera, Reset, and lifecycle.
@@ -47,9 +54,9 @@
 | 9 | NBR-45B | Hosted same-session opening/top/world-side/overlay/traversal Capture | 6, 7, 8 | 11, 13 | main-agent-only; Runtime/Capture bridge | PR E2 |
 | 10 | NBR-50A | Pure dimensioned evaluator and stable diagnostics | 2 | 11 | parallel-safe; validation evaluator only | PR F1 |
 | 11 | NBR-50B | Formal Capture/runtime evidence adapter | 9, 10 | 12, 13 | main-agent-only; evaluation adapter only | PR F2 |
-| 12 | NBR-60 | At-most-one immutable repair journal | 4, 5, 11 | 13 | main-agent-only; run journal/orchestrator | PR G |
-| 13 | NBR-70 | Real `cloud-temple-t-gate-native-block` Case, artifacts, and local launch | 6, 9, 11, 12 | 14 | main-agent-only; one Case artifact root | PR H |
-| 14 | NBR-80 | Delete replaced/duplicate experimental production paths | 13 | 15 | main-agent-only; deletion ledger | PR H |
+| 12 | NBR-60 | Atomic Case-bound Formal Capture Intent cutover, production ports, and at-most-one immutable repair journal | 4, 5, 9, 11 | 13 | main-agent-only; temporary exclusive ownership of shared Intent/Case/materializer seams plus run production integration | PR G |
+| 13 | NBR-70 | Real `cloud-temple-t-gate-native-block` Case/Intent, artifacts, and local launch | 6, 9, 11, 12 | 14 | main-agent-only; one Case artifact root | PR H |
+| 14 | NBR-80 | Delete replaced/duplicate experimental production and scattered Capture Intent paths | 13 | 15 | main-agent-only; deletion ledger | PR H |
 | 15 | NBR-90 | Exact-SHA gates, independent review, docs truth, final merge | 14 | later WRC | main-agent-only | final PR/merge |
 
 After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequential Task 3/4 or Task 8/NBR-45A because their file ownership does not overlap. In execution order, Task 8/NBR-45A lands before Task 7/NBR-45P, then Task 9/NBR-45B. Shared exports, `scripts/cli/worldkit.ts`, Vite configuration, Runtime ownership, Package identity, run journal, and final artifacts remain with the main agent. Every work item has exactly one execution mode.
@@ -57,7 +64,10 @@ After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequent
 ## File ownership map
 
 - `packages/scene-authoring-contracts/src/scene-authoring-contracts.ts`: Route, Attempt, Attempt Result, generation Request/Receipt parsers and hashes.
-- `packages/validation/src/reconstruction-contracts.ts`: source-neutral Case/Profile/Evidence/Result/Diagnostic/Run Receipt contracts and canonical hashes.
+- `packages/validation/src/reconstruction-contracts.ts`: source-neutral
+  Case/Profile/Evidence/Result/Diagnostic/Run Receipt contracts and canonical hashes, including the Case's
+  required `formalCaptureIntentRef/formalCaptureIntentHash` fields and fixed-ref validation; it does not
+  parse Formal Capture Intent bytes.
 - `packages/validation/src/reconstruction-evaluator.ts`: pure evaluator only; no file/model/runtime access.
 - `packages/world-package/src/package-build.ts`: NBR-10 clean-break generation-request/source-closure join; NBR-45P modifies the same Package identity seam sequentially only after PR A is merged.
 - `packages/world-package/src/package-contract.ts`: NBR-10 verified Package membership closure; NBR-45P extends the same verifier sequentially only after PR A is merged.
@@ -66,11 +76,19 @@ After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequent
 - `scripts/reconstruction/generation-request.ts`: trusted Request/Attempt materialization and declared output inventory.
 - `scripts/reconstruction/generation-runner.ts`: the only reconstruction caller of `run-codex-task.mjs` and atomic output promotion.
 - `scripts/reconstruction/native-package.ts`: generic checked-workspace-to-WorldPackage adapter.
+- `packages/runtime-contracts/src/formal-world-capture.ts`: sole owner of
+  `FormalWorldCaptureIntentV1`, its parser/canonical bytes/hash, and the source-neutral formal
+  Capture/Traversal Request/Receipt contracts.
+- `scripts/reconstruction/formal-capture-request.ts`: materializes a formal Request from one already parsed
+  Intent plus parsed Case and verified Package metadata; it owns no Intent parser, defaults or inference.
 - `scripts/reconstruction/formal-capture.ts`: Package/Runtime/Capture orchestration and Receipt publication.
 - `scripts/reconstruction/evaluate.ts`: filesystem adapter that loads verified evidence and calls the pure validation evaluator.
 - `scripts/reconstruction/run-journal.ts`: immutable initial/repair Attempt state machine and cleanup join.
-- `scripts/reconstruction/run.ts`: `worldkit reconstruct run` facade over the above owners.
-- `packages/runtime-contracts/src/formal-world-capture.ts`: source-neutral formal Capture/Traversal Receipt contracts.
+- `scripts/reconstruction/run.ts`: core at-most-two-Attempt state machine over injected ports; it is not a
+  production adapter.
+- `scripts/reconstruction/run-production.ts`: sole production transaction that materializes Case/Profile/Intent
+  inputs, constructs the existing generation/package/capture/evaluate/cleanup ports, calls the core, then
+  invokes the existing run verifier/final publisher owners.
 - `scripts/lib/world-package-browser-transport.ts`: exact receipt-listed Package files exposed only to the BNA verification Browser process.
 - `apps/native-scene-playground/src/world-package-loader.ts`: generalize the existing fixed Package loader to a verified Package input; no Source-specific fallback or repository scan.
 - `apps/native-scene-playground/src/native-runtime-host.ts`: retained generic consumer of existing RuntimeHost/Runtime Babylon owners; it does not become a product Viewer owner.
@@ -1103,8 +1121,8 @@ Request contract review, close every P0/P1, merge PR E0, and refresh `origin/mai
 
 Extend the existing `FormalSemanticCaptureMapV1`, rather than creating another inventory, so every Package
 visual group has an explicit acceptance-target, composition-target, topology-node and layer binding. The
-mapping input is explicit Case-specific Capture intent; validators require complete one-to-one target coverage
-and reject suffix/name/bounds inference. Topology relations remain requested measurements and are emitted as
+mapping input is the parsed Case-bound `FormalWorldCaptureIntentV1`; validators require complete one-to-one
+target coverage and reject suffix/name/bounds inference. Topology relations remain requested measurements and are emitted as
 observed only when Package bounds, SDK support/collider evidence or scripted traversal proves them.
 
 Current-only replace the Receipt's ambiguous overlay/traversal hash fields with explicit artifact ref/hash
@@ -1351,19 +1369,135 @@ Request exact-identity review, close every P0/P1, merge PR F2, and refresh `orig
 ### Task 12: NBR-60 Orchestrate at most one immutable diagnostic-driven repair
 
 **Files:**
+- Modify: `packages/runtime-contracts/src/formal-world-capture.ts`
+- Modify: `packages/runtime-contracts/src/formal-world-capture.test.ts`
+- Modify: `packages/validation/src/reconstruction-contracts.ts`
+- Modify: `packages/validation/src/reconstruction-contracts.test.ts`
+- Modify: `packages/native-babylon-block-profile/src/formal-capture-identity.ts`
+- Modify: `packages/native-babylon-block-profile/src/formal-capture-identity.test.ts`
+- Modify: `scripts/reconstruction/formal-capture-request.ts`
+- Modify: `scripts/reconstruction/formal-capture-request.test.ts`
 - Create: `scripts/reconstruction/repair-request.ts`
 - Create: `scripts/reconstruction/repair-request.test.ts`
 - Create: `scripts/reconstruction/run-journal.ts`
 - Create: `scripts/reconstruction/run-journal.test.ts`
 - Create: `scripts/reconstruction/run.ts`
 - Create: `scripts/reconstruction/run.test.ts`
+- Create: `scripts/reconstruction/run-production.ts`
+- Create: `scripts/reconstruction/run-production.test.ts`
 - Modify: `scripts/cli/worldkit.ts`
 - Modify: `scripts/cli/worldkit.test.ts`
+- Modify: `artifacts/scenes/cloud-temple-t-gate-native-block/case.json`
+- Create: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json`
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: frozen Case/Profile, canonical Gameplay/World Runtime/Bounds owner inputs, derived Bootstrap, Attempt 0 evaluation, stable diagnostics, and the generation/package/capture/evaluation owners from Tasks 4/5/9/11.
-- Produces: `runWorldReconstructionV1(input, ports): Promise<WorldReconstructionRunReceiptV1>` with Attempt 0 and at most Attempt 1; every Attempt owns different Request/Attempt/source/Package/Capture identities.
+- Consumes: frozen Case/Profile, the Case-bound parsed `FormalWorldCaptureIntentV1`, canonical
+  Gameplay/World Runtime/Bounds owner inputs, derived Bootstrap, Attempt 0 evaluation, stable diagnostics,
+  the unchanged generation/package and existing capture/evaluation owners from Tasks 4/5/9/11, plus the
+  already-present `final-artifact-publisher.ts` and NBR-70 verifier owners on the synchronization baseline.
+  Task 13 supplies their real-Case acceptance evidence; it does not add a second publisher or verifier.
+- Produces: the sole `FormalWorldCaptureIntentV1` parser/hash owner, Case
+  `formalCaptureIntentRef/formalCaptureIntentHash` closure, a request materializer that accepts one parsed
+  Intent, `runWorldReconstructionV1(input, ports): Promise<WorldReconstructionRunReceiptV1>` with Attempt 0
+  and at most Attempt 1, and one production transaction used by `worldkit reconstruct run`; every Attempt
+  owns different Request/Attempt/source/Package/Capture identities while reusing the same frozen Case/Intent.
+
+- [ ] **Step 0: Write RED Case-bound Formal Capture Intent contract and cutover tests**
+
+Define the expected current-only surface in tests before changing implementation:
+
+```ts
+const intent = parseFormalWorldCaptureIntentV1({
+  kind: "formal-world-capture-intent",
+  schemaVersion: 1,
+  id: "cloud-temple-t-gate-native-block.formal-world-capture-intent",
+  captureProfile,
+  semanticCaptureTargetBindings,
+  topologyRelations,
+  checkpointSpatialCriteria,
+});
+expect(hashFormalWorldCaptureIntentV1(intent))
+  .toBe(reconstructionCase.formalCaptureIntentHash);
+expect(reconstructionCase.formalCaptureIntentRef)
+  .toBe("inputs/formal-world-capture-intent.json");
+```
+
+Require a closed DTO, positive finite Capture dimensions/DPR, non-empty deterministic binding/relation/
+criterion collections, exact Case acceptance/composition/topology/checkpoint closure, and exact Package group/
+collider/bounds joins. Reject a missing/extra field, non-canonical collection order, duplicate target or
+checkpoint, hash mismatch, wrong fixed ref, wrong Intent ID, symlink/path escape, stale Case/Profile/Package,
+and any criterion whose frozen bounds or collider identity no longer matches verified Package metadata.
+
+Add a materializer API test proving the final call shape contains only the parsed Intent:
+
+```ts
+await materializeFormalWorldCaptureRequestV1({
+  casePath,
+  evaluationProfilePath,
+  sceneAuthoringAttemptPath,
+  packageDirectoryPath,
+  outputPath,
+  formalCaptureIntent: intent,
+});
+```
+
+The test compilation/runtime fixtures must reject the old four top-level arguments and must not load a
+default file or derive bindings from Case ID, refs, expected rectangles, group names, Mesh metadata or tags.
+
+- [ ] **Step 0A: Run the focused RED Intent tests**
+
+```bash
+pnpm exec vitest run \
+  packages/runtime-contracts/src/formal-world-capture.test.ts \
+  packages/validation/src/reconstruction-contracts.test.ts \
+  packages/native-babylon-block-profile/src/formal-capture-identity.test.ts \
+  scripts/reconstruction/formal-capture-request.test.ts \
+  scripts/reconstruction/run-production.test.ts
+```
+
+Expected: FAIL because the Case fields, Intent parser/hash, parsed-Intent materializer call shape, production
+reader and representative Intent file do not yet exist.
+
+- [ ] **Step 0B: Implement Scheme A as one atomic current-only migration**
+
+In `@whitebox-world/runtime-contracts`, define and export only
+`FormalWorldCaptureIntentV1`, `parseFormalWorldCaptureIntentV1()`,
+`formalWorldCaptureIntentCanonicalBytesV1()` and `hashFormalWorldCaptureIntentV1()`. Reuse the existing
+topology-relation and traversal-criterion parsers rather than adding another dialect. In
+`@whitebox-world/validation`, require exactly
+`formalCaptureIntentRef: "inputs/formal-world-capture-intent.json"` and one SHA-256 hash in the Case parser
+and canonical hash.
+
+`run-production.ts` resolves that ref beneath the canonical Case root, rejects symlinks/path escape, reads
+the bytes once, verifies canonical bytes/hash and Case/Intent ID closure, and passes the parsed object to
+`materializeFormalWorldCaptureRequestV1()`. The materializer and Block semantic binder consume
+`formalCaptureIntent`; delete their local Capture Profile/target-binding DTOs and the four scattered input
+fields. Update every fixture and the real Case atomically. Do not add optional fields, aliases, fallback
+filenames, default Intent data, slug maps or inference.
+
+Do not modify the Native generation Request/Receipt, its three declared output paths, Native authoring
+Manifest, Bundle, Package membership/parser/hash, Build Identity or Build Receipt. Verify this with a scoped
+diff and existing generation/Package contract fixtures rather than introducing a second projection.
+
+- [ ] **Step 0C: Run GREEN Intent cutover gates**
+
+```bash
+pnpm exec vitest run \
+  packages/runtime-contracts/src/formal-world-capture.test.ts \
+  packages/validation/src/reconstruction-contracts.test.ts \
+  packages/native-babylon-block-profile/src/formal-capture-identity.test.ts \
+  scripts/reconstruction/formal-capture-request.test.ts \
+  scripts/reconstruction/formal-capture.test.ts \
+  scripts/reconstruction/run-production.test.ts
+if rg -n 'FormalWorldCaptureRequest(CaptureProfile|TargetBinding)V1|readonly (captureProfile|semanticCaptureTargetBindings|topologyRelations|checkpointSpatialCriteria):' scripts/reconstruction/formal-capture-request.ts; then exit 1; fi
+git diff --exit-code -- packages/scene-authoring-contracts packages/world-package scripts/reconstruction/generation-request.ts scripts/reconstruction/generation-runner.ts
+pnpm typecheck
+git diff --check
+```
+
+Expected: focused tests/typecheck pass; the real Case ref/hash closes to the canonical Intent bytes; the
+request materializer has one parsed-Intent input; Generation and Package owners have no diff.
 
 - [ ] **Step 1: Write RED journal state-machine tests**
 
@@ -1409,14 +1543,27 @@ Parse exactly:
 worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json
 ```
 
-The command resolves the Profile ref from the Case, executes the state machine, and returns Case ID, run ID, outcome, Attempt count, final WorldPackage path/ref/root, final Capture Receipt path/hash, final Evaluation path/hash, and Run Receipt path/hash. A Canonical/capability-gap decision returns one stable unsupported-route diagnostic; it never calls the old Builder.
+The CLI injects only one transaction-level production port. That transaction canonicalizes the Case and
+output roots; resolves and hashes the Profile and fixed Formal Capture Intent refs from the Case; freezes
+verified `runs/<run-id>/inputs/case.json`, `evaluation-profile.json` and
+`formal-world-capture-intent.json`; constructs the
+existing generation/package/capture/evaluate/rehash/cleanup ports; calls the core state machine once; and,
+only for a passed terminal Receipt, invokes the same run verifier and final-artifact publisher/verifier
+owners used by Task 13. The CLI must not know or inject the six core ports and must not build a second
+receipt/result parser.
+
+The command returns Case ID/ref, run ID, outcome, Attempt count, final WorldPackage path/ref/root, final
+Capture Receipt path/hash, final Evaluation path/hash, Run Receipt path/hash, and final directory only after
+verified atomic publication. A Canonical/capability-gap decision returns one stable unsupported-route
+diagnostic; it never calls the old Builder. A Case/Intent ref, byte, hash, target-closure or Package-join
+mismatch fails before Hosted Runtime/Capture allocation and cannot publish `final`.
 
 - [ ] **Step 6: Run GREEN repair tests including a full injected two-Attempt proof**
 
 Use fake router/Package/Hosted Capture ports that still emit correctly parsed identities. Attempt 0 must fail `WORLD_RECONSTRUCTION_COLLIDER_MISSING`; Attempt 1 must pass and own a different source graph, Package Root, Capture hash, and evaluation hash.
 
 ```bash
-pnpm exec vitest run scripts/reconstruction/repair-request.test.ts scripts/reconstruction/run-journal.test.ts scripts/reconstruction/run.test.ts scripts/cli/worldkit.test.ts
+pnpm exec vitest run scripts/reconstruction/repair-request.test.ts scripts/reconstruction/run-journal.test.ts scripts/reconstruction/run.test.ts scripts/reconstruction/run-production.test.ts scripts/reconstruction/formal-capture-request.test.ts scripts/cli/worldkit.test.ts
 pnpm typecheck
 git diff --check
 ```
@@ -1426,7 +1573,7 @@ Expected: focused tests/typecheck pass; attempts length is exactly 2 and a reque
 - [ ] **Step 7: Commit and merge repair checkpoint PR G**
 
 ```bash
-git add scripts/reconstruction scripts/cli package.json
+git add packages/runtime-contracts packages/validation packages/native-babylon-block-profile scripts/reconstruction scripts/cli artifacts/scenes/cloud-temple-t-gate-native-block/case.json artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json package.json
 git commit -m "feat: repair native reconstructions with immutable attempts"
 git push -u origin HEAD
 ```
@@ -1436,22 +1583,28 @@ Request orchestration/idempotency/cleanup review, close every P0/P1, merge, and 
 ### Task 13: NBR-70 Run and publish the real Cloud Temple T-Gate Case
 
 **Files:**
-- Create: `scripts/verification/verify-native-block-reconstruction-e2e.ts`
-- Create: `scripts/verification/native-block-reconstruction-e2e.test.ts`
+- Modify: `scripts/verification/verify-native-block-reconstruction-e2e.ts`
+- Modify: `scripts/verification/native-block-reconstruction-e2e.test.ts`
+- Modify: `scripts/reconstruction/final-artifact-publisher.ts`
+- Modify: `scripts/reconstruction/final-artifact-publisher.test.ts`
 - Modify: `package.json`
+- Verify unchanged frozen inputs: `artifacts/scenes/cloud-temple-t-gate-native-block/case.json`
+- Verify unchanged frozen inputs: `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json`
 - Add generated immutable evidence under: `artifacts/scenes/cloud-temple-t-gate-native-block/runs/<run-id>/`
 - Add final promoted artifacts under: `artifacts/scenes/cloud-temple-t-gate-native-block/final/`
 
 **Interfaces:**
-- Consumes: the frozen Case/Profile/reference/Scene Brief/Bootstrap and all merged NBR owners.
+- Consumes: the frozen Case/Profile/reference/Scene Brief/Bootstrap, the Case-bound parsed Formal Capture
+  Intent from Task 12, and all merged NBR owners.
 - Produces: one real formal run with AI-generated source, formal Check/Package/Runtime/Capture/Evaluation, one real bounded repair when the initial evaluation has a repairable failure, and a directly runnable final Package.
 
-- [ ] **Step 1: Write the RED artifact verifier against an empty candidate root**
+- [ ] **Step 1: Extend the RED artifact verifier with Case/Intent closure**
 
 The verifier requires and cross-checks:
 
 ```text
 generation request/receipt + route/attempt/result
+Case + Formal Capture Intent ref/hash/canonical bytes
 native check/explain
 trusted Block materializer metadata
 verified Package + Root + Build Identity + Build Receipt
@@ -1474,18 +1627,26 @@ It launches the final Package through `worldkit native run`, waits for the admit
 pnpm exec vitest run scripts/verification/native-block-reconstruction-e2e.test.ts
 ```
 
-Expected: FAIL with missing Run Receipt/final Package/Capture.
+Expected: FAIL for an empty root and for a fixture whose Case Intent ref/hash, canonical bytes or materialized
+Request values disagree, before any playability launch.
 
 - [ ] **Step 3: Execute the real formal reconstruction run**
 
 ```bash
 pnpm worldkit reconstruct run \
   artifacts/scenes/cloud-temple-t-gate-native-block/case.json \
-  --output artifacts/scenes/cloud-temple-t-gate-native-block/runs/formal-20260831 \
+  --output artifacts/scenes/cloud-temple-t-gate-native-block/runs/f-20260831 \
   --backend cloud --json
 ```
 
-Expected: the router reports `gpt-5.6-sol`/`xhigh`; Host-frozen Bootstrap and canonical Gameplay/World Runtime/Bounds hashes are identical in every Attempt; AI writes only the three declared authoring outputs; Check precedes Package; Runtime/Capture use one admitted Hosted Session per Attempt; task cleanup retains durable Attempt inputs; and all terminal resources clean up.
+Expected: before any Hosted Runtime allocation, the production transaction proves the fixed Intent ref stays
+under the Case root, Intent canonical bytes hash to `formalCaptureIntentHash`, Intent ID/targets/topology/
+checkpoints close to the same parsed Case and verified Package, and the materialized formal Request embeds
+exactly those parsed values. The router then reports `gpt-5.6-sol`/`xhigh`; Host-frozen Bootstrap and canonical
+Gameplay/World Runtime/Bounds hashes are identical in every Attempt; AI writes only the three declared
+authoring outputs; Check precedes Package; Runtime/Capture use one admitted Hosted Session per Attempt; task
+cleanup retains durable Attempt inputs; and all terminal resources clean up. The short `f-20260831` run ID
+keeps the derived router request ID within its frozen 80-character contract.
 
 If initial evaluation has a repairable failure, the command must execute exactly one diagnostic-driven repair and publish a distinct second Package/Capture identity. The NBR-1 acceptance run must contain a real two-Attempt proof; if this initial result has no repairable failure, keep it immutable and run another independently identified initial Case execution under the same already-frozen Case/Profile until a genuine repairable diagnostic occurs. Do not alter thresholds, inject fake evidence, or corrupt a passed Package to manufacture repair.
 
@@ -1493,10 +1654,14 @@ If initial evaluation has a repairable failure, the command must execute exactly
 
 ```bash
 pnpm verify:native-block-reconstruction-e2e -- \
-  --run artifacts/scenes/cloud-temple-t-gate-native-block/runs/formal-20260831
+  --run artifacts/scenes/cloud-temple-t-gate-native-block/runs/f-20260831
 ```
 
-Expected: all identity joins pass; final evaluation passes every required dimension; Subject spawns grounded, moves, jumps, resets, cannot cross required wall/gate blockers, and reaches the upper platform/T branch. Opening/top/world-side visibly show foreground, central ascent, mountain layers, T junction, and gate mass.
+Expected: the verifier re-reads the Case and Intent canonical bytes, re-hashes them, joins the formal Request's
+profile/bindings/relations/criteria to that exact Intent and rejects any scattered/default/inferred value. All
+remaining identity joins pass; final evaluation passes every required dimension; Subject spawns grounded,
+moves, jumps, resets, cannot cross required wall/gate blockers, and reaches the upper platform/T branch.
+Opening/top/world-side visibly show foreground, central ascent, mountain layers, T junction, and gate mass.
 
 - [ ] **Step 5: Promote final artifacts atomically**
 
@@ -1510,7 +1675,8 @@ the closed fields `kind: "native-block-reconstruction-launch"`, `schemaVersion: 
 `worldPackageRootHash`, `captureReceiptRelativePath`, `captureReceiptHash`,
 `evaluationRelativePath`, `evaluationHash`, and `launchCommand`. Every relative path is
 Case-root-relative, remains under `final`, and is joined to
-the copied bytes. Do not write or accept `runs/<run-id>/final`.
+the copied bytes. Final verification also reuses the same Case/Intent identity closure; the final publisher
+does not author or copy an alternative Intent. Do not write or accept `runs/<run-id>/final`.
 
 - [ ] **Step 6: Manually launch and inspect the final world**
 
@@ -1539,6 +1705,8 @@ Do not yet claim full BNA-6, BNA-7, WRC-SR, BNA-8, or WRC-1 completion.
 - Modify: `packages/native-babylon-block-profile/src/package-boundary.test.ts`
 - Modify: `apps/native-scene-playground/` only to remove the fixed Cloud Ridge loader and duplicate Case-specific startup after the generic admitted-Package Harness is green
 - Retain: `scripts/verification/verify-native-scene-playground.ts` and identity-bound Harness fixtures until the separate BNA owner disposition permits deletion
+- Modify: `scripts/reconstruction/formal-capture-request.ts`
+- Modify: `scripts/reconstruction/formal-capture-request.test.ts`
 - Modify: root `package.json`
 - Modify: all residual callers discovered by the censuses below
 
@@ -1558,16 +1726,27 @@ Once the final Package runs through the generic BNA verification Harness, delete
 
 Remove `reconstruct:native-block:generate` and any Case-specific package/capture root scripts after `worldkit reconstruct run`, `worldkit native package`, `worldkit native run`, and `worldkit capture` are green. Keep the stable generic commands only.
 
+In the same clean-break census, delete any residual
+`FormalWorldCaptureRequestCaptureProfileV1`, `FormalWorldCaptureRequestTargetBindingV1`, materializer input
+fields that accept the four Intent groups separately, duplicate caller-owned Intent fixture factory, optional
+`formalCaptureIntentRef/formalCaptureIntentHash`, fallback filename, default Intent, Case-ID slug map or
+Case-specific production constant. This is verification of the atomic Task 12 cutover, not a compatibility
+window: Task 12 must already have removed the old call shape before merge.
+
 - [ ] **Step 4: Run the clean-break censuses**
 
 ```bash
 if rg -n 'moduleGenerationInput(Ref|Hash)|buildCloudRidgePackage|__WORLDKIT_NATIVE_SPIKE__|virtual:worldkit-cloud-ridge-native-scene' packages scripts apps package.json; then exit 1; fi
 if rg -n 'createBabylonNativeBlockReconstructionCorpus|inspectBabylonNativeBlockReconstructionCorpus|materializeBabylonNativeBlockReconstructionCorpus' packages/native-babylon-block-profile/src/index.ts; then exit 1; fi
 if rg -n 'overlay.*canonical|canonical.*overlay|shadow.?plan|three\.js|mesh.*scan|tag.*collider|name.*collider' scripts/reconstruction apps/native-scene-playground/src; then exit 1; fi
+if rg -n 'FormalWorldCaptureRequest(CaptureProfile|TargetBinding)V1|readonly (captureProfile|semanticCaptureTargetBindings|topologyRelations|checkpointSpatialCriteria):' scripts/reconstruction/formal-capture-request.ts; then exit 1; fi
 if git diff origin/main -- apps/playground | grep -q .; then echo 'NBR-1 must not change the Canonical Unified Viewer'; exit 1; fi
 ```
 
-Expected: all three negated censuses pass. Inspect any match manually before deletion when it appears only in an explicit negative test.
+Expected: all four negated source censuses plus the Unified Viewer diff guard pass. The four Intent field names
+remain valid only inside the sole `FormalWorldCaptureIntentV1` contract and parsed object access; they must not
+reappear as a second materializer input DTO. Inspect any match manually before deletion when it appears only
+in an explicit negative test.
 
 - [ ] **Step 5: Run focused post-deletion gates and commit PR H**
 
@@ -1603,7 +1782,7 @@ git fetch origin main
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 test -z "$(git status --porcelain)"
 pnpm verify:native-block-reconstruction-e2e -- \
-  --run artifacts/scenes/cloud-temple-t-gate-native-block/runs/formal-20260831
+  --run artifacts/scenes/cloud-temple-t-gate-native-block/runs/f-20260831
 pnpm typecheck
 pnpm --filter @whitebox-world/playground build
 git diff --check
@@ -1670,6 +1849,9 @@ Show the Capture images and state exact gates/review SHA. Say only “NBR-1 vert
 - [ ] Every shared contract lands before its producer/consumer integration.
 - [ ] Every work item has exactly one execution mode and an exclusive file owner.
 - [ ] The Generation Request binds instruction, Skill, canonical context manifest/input hashes, API/Profile/Block Profile content hashes, and frozen Bootstrap; only the Generation Receipt binds `routerTaskPayloadHash`.
+- [ ] The Case requires exactly `formalCaptureIntentRef: "inputs/formal-world-capture-intent.json"` plus
+  `formalCaptureIntentHash`; `@whitebox-world/runtime-contracts` is the sole Intent parser/hash owner; the
+  request materializer accepts one parsed Intent and no scattered/default/inferred alternative remains.
 - [ ] The Host derives the Native Bootstrap from Case Spawn/seed, Gameplay Bootstrap, World Runtime Bootstrap and Host-selected refs; WorldBounds remains Package-owned, Subject/Camera resource closure remains WRT-owned, and task cleanup retains the durable Attempt input.
 - [ ] AI writes `scene.ts`, `native-block-authoring.json`, and `native-resources.json`; it never writes the frozen Bootstrap.
 - [ ] NBR-45P binds complete trusted Block materializer metadata and profile settlement fingerprints into Package Root/Receipt before NBR-45B Capture.

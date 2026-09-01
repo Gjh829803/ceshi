@@ -4,7 +4,7 @@
 **Chinese name:** 新版 Babylon 像素块场景还原纵向闭环  
 **Status:** Approved for implementation; independent review GO with no open P0/P1  
 **Date:** 2026-08-31  
-**Source baseline:** `origin/main@e44a41d906b38e35bd5774f0fb129564540c93c0`  
+**Source baseline:** `origin/main@1eec016022d18a0cab1eeed2feaafb62b2e5d155`
 **Parent program:** [WRC-1 World Reconstruction & Control Milestone](./2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md)
 
 ## 1. Decision and priority
@@ -13,7 +13,7 @@
 Native Block world runs end to end through the formal production-shaped chain:
 
 ```text
-reference image + Scene Brief + reconstruction Case/Profile
+reference image + Scene Brief + reconstruction Case/Profile + Case-bound Formal Capture Intent
   -> source-neutral SceneAuthoringRouteDecisionV1
   -> one formal Codex task through scripts/agents/run-codex-task.mjs
   -> Babylon Native Block source workspace
@@ -70,7 +70,7 @@ third adapter.
 
 | Fact or operation | Sole owner | Forbidden alternative |
 |---|---|---|
-| Scene intent, reference identity, acceptance targets and budgets | `WorldReconstructionCaseV1` + Scene Brief | Native Module private metadata |
+| Scene intent, reference identity, acceptance targets, budgets and Formal Capture Intent identity | `WorldReconstructionCaseV1` + Scene Brief + Case-bound `FormalWorldCaptureIntentV1` | Native Module private metadata or production-adapter constants |
 | Source route | source-neutral route decision owner in `scene-authoring-contracts` Host adapter | model-selected hidden route |
 | AI execution backend | `scripts/agents/run-codex-task.mjs` | direct LWDP/Codex call from reconstruction code |
 | Native visual construction | admitted Native Module using `@whitebox-world/native-babylon` and Block Profile | JSON geometry DSL or Canonical overlay |
@@ -87,7 +87,7 @@ No new Native-specific Runtime, Gameplay, Camera, Physics, Package, or Browser p
 allowed. The permitted durable extensions stay in three existing owners:
 
 - `@whitebox-world/scene-authoring-contracts`: Native generation identity;
-- `@whitebox-world/runtime-contracts`: formal Capture request/receipt and Block capture inventory;
+- `@whitebox-world/runtime-contracts`: Formal Capture Intent/request/receipt and Block capture inventory;
 - `@whitebox-world/validation`: reconstruction Case/Profile/evaluation/repair receipt.
 
 ### 3.3 Native Module authority restrictions
@@ -391,6 +391,71 @@ seam: Block meshes lack admitted Runtime capture identities, artifact capture la
 request, and the hosted isolated session exposes no Capture transaction. NBR-45 must close those gaps;
 they are not treated as already implemented.
 
+### 7.1 Approved Scheme A: one Case-bound Formal Capture Intent
+
+`WorldReconstructionCaseV1` gains exactly two required current fields:
+
+```ts
+readonly formalCaptureIntentRef: "inputs/formal-world-capture-intent.json";
+readonly formalCaptureIntentHash: Sha256HashV1;
+```
+
+The fixed Case-root file `inputs/formal-world-capture-intent.json` is the only durable authored Capture
+intent. `@whitebox-world/runtime-contracts` is the sole parser, canonical-bytes and hash owner for its closed
+DTO:
+
+```ts
+interface FormalWorldCaptureIntentV1 {
+  readonly kind: "formal-world-capture-intent";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly captureProfile: Readonly<{
+    widthPixels: number;
+    heightPixels: number;
+    devicePixelRatio: number;
+  }>;
+  readonly semanticCaptureTargetBindings: readonly Readonly<{
+    acceptanceTargetRef: string;
+    compositionTargetRef: string;
+    topologyNodeId: string;
+    semanticLayerId: string;
+    blockVisualGroupId: string;
+  }>[];
+  readonly topologyRelations: readonly FormalSemanticTopologyRelationBindingV1[];
+  readonly checkpointSpatialCriteria: readonly FormalTraversalCheckpointSpatialCriterionV1[];
+}
+```
+
+The Case hash binds the Intent ref/hash. The production transaction resolves the fixed ref beneath the
+canonical Case root, rejects symbolic links and path escape, reads the bytes once, parses them through
+`parseFormalWorldCaptureIntentV1()`, requires the stored bytes to equal the parser's canonical bytes, compares
+their canonical hash with `formalCaptureIntentHash`, and verifies the Intent ID and complete
+target/topology/checkpoint closure against the parsed Case before any Runtime or
+Capture allocation. The representative Case uses the ID
+`cloud-temple-t-gate-native-block.formal-world-capture-intent`; no consumer derives that identity from an
+output directory or a bare slug.
+
+`materializeFormalWorldCaptureRequestV1()` receives one already parsed `FormalWorldCaptureIntentV1`. It no
+longer accepts `captureProfile`, `semanticCaptureTargetBindings`, `topologyRelations`, or
+`checkpointSpatialCriteria` as four caller-supplied parameter groups. The materializer joins the parsed
+Intent with the parsed Case and verified Package metadata to build the sole `FormalSemanticCaptureMapV1`
+and `FormalWorldCaptureRequestV1`; it does not reparse or reinterpret Intent bytes.
+
+This is a current-only atomic migration. The Case fields, runtime-contract parser/hash exports, Case fixture,
+Formal Capture request materializer, Block semantic binder, production transaction and all focused fixtures
+change together. The scattered parameter types/fields and every old call site are deleted in the same
+accepted tree. There is no optional field, compatibility alias, fallback file, default Intent, Case-ID slug
+mapping, expected-bounds inference, Block/group-name inference, Mesh metadata lookup, tag scan or
+`scene.meshes` scan.
+
+The Intent is Capture-only Host input. It does not add a model output, generation context field, authoring
+Manifest field, Package member, Package parser, Package hash projection, Bundle input or Build Receipt field.
+The Native generation declared outputs remain exactly `scene.ts`, `native-block-authoring.json` and
+`native-resources.json`; BNA-3 Package creation/verification remains unchanged. Package metadata supplies
+verified observed identities for the Intent join, never a replacement or inferred copy of the Intent.
+
+### 7.2 Request materialization and Runtime evidence
+
 `FormalWorldCaptureRequestV1` and `FormalWorldCaptureReceiptV1` are owned solely by
 `@whitebox-world/runtime-contracts`. The checked `native-block-authoring.json`, checked Layout, Frozen
 Contribution and profile settlement create one `BabylonNativeBlockMaterializerMetadataV1`. Its complete
@@ -484,9 +549,10 @@ sole evaluator:
 - `WorldReconstructionDiagnosticV1`;
 - `WorldReconstructionRunReceiptV1`.
 
-The Case binds real Scene Brief/reference/opening-target hashes, acceptance target refs, expected topology,
-visual groups, normalized composition regions/anchors, Spawn/Support requirements, collider requirements,
-and scripted traversal checks. Each scripted traversal check binds checkpoint sampling identities plus a
+The Case binds real Scene Brief/reference/opening-target hashes, the sole
+`formalCaptureIntentRef/formalCaptureIntentHash`, acceptance target refs, expected topology, visual groups,
+normalized composition regions/anchors, Spawn/Support requirements, collider requirements, and scripted
+traversal checks. Each scripted traversal check binds checkpoint sampling identities plus a
 non-empty, execution-ordered `fixedInputSequence` of runtime `FixedInputV1` steps into the Case canonical
 hash; the Case never relies on an implicit Route, NavMesh, planner, or `goTo` route. Attempt `acceptanceTargetRefs` and
 `requiredEvidenceProfileRefs` must reference the Case/Profile; empty placeholder arrays are rejected.
@@ -588,12 +654,20 @@ Required checks:
 Run artifacts live under:
 
 ```text
-artifacts/scenes/cloud-temple-t-gate-native-block/runs/<run-id>/
+artifacts/scenes/cloud-temple-t-gate-native-block/
+  case.json
   inputs/
-  attempts/0/
-  attempts/1/                 # only when repair runs
-  run-receipt.json
+    formal-world-capture-intent.json
+  runs/<run-id>/
+    inputs/
+    attempts/0/
+    attempts/1/                 # only when repair runs
+    run-receipt.json
 ```
+
+The Case file stores the exact fixed Intent ref and canonical content hash. Every Attempt reuses that frozen
+Case/Intent identity. The production transaction may materialize verified copies into run-owned evidence,
+but no run or Attempt may author, default or mutate the Case-level Intent.
 
 The single published result lives outside every immutable Run:
 
@@ -641,7 +715,10 @@ No `NBR-1` checkpoint is accepted while both old and new production paths remain
    NBR-1 does not authorize Native Viewer cutover or Native Web UI deletion;
 7. delete Case-specific root scripts once stable `worldkit reconstruct`, `worldkit native package`,
    `worldkit native run` and `worldkit capture` commands replace them;
-8. never add alias DTOs, migration adapters, shadow Plan, third Source, Mesh scan, or Runtime fallback.
+8. delete the four scattered Formal Capture materializer parameters and every caller-owned duplicate
+   Capture Intent fixture once the Case-bound `FormalWorldCaptureIntentV1` cutover is green; retain no
+   optional Case fields, alias DTO, fallback filename, default Intent or production constants;
+9. never add alias DTOs, migration adapters, shadow Plan, third Source, Mesh scan, or Runtime fallback.
 
 ## 12. Dependency-aware work graph
 
@@ -657,14 +734,17 @@ No `NBR-1` checkpoint is accepted while both old and new production paths remain
 | NBR-45B | Integrate world-side and hosted same-session Capture | NBR-40, NBR-45P | NBR-50B, NBR-70 | runtime-babylon/isolated bridge/Capture CLI only | semantic pass, PNG identity, Camera rollback, cleanup | main-agent-only |
 | NBR-50A | Implement pure dimensioned evaluator | NBR-10 | NBR-50B | `validation/reconstruction-evaluator*` only | asymmetric/negative/missing evidence/no pixel-only GO | parallel-safe |
 | NBR-50B | Adapt formal Capture/runtime evidence to evaluator | NBR-45B, NBR-50A | NBR-60, NBR-70 | `scripts/reconstruction/evaluate*` only | identity/stale/traversal evidence joins | main-agent-only |
-| NBR-60 | Add one-repair journal/orchestrator | NBR-20, NBR-30, NBR-50B | NBR-70 | `scripts/reconstruction/run-*` only | max-one/stale/unknown/no-output/cleanup | main-agent-only |
-| NBR-70 | Run real Case and publish runnable artifacts | NBR-40, NBR-45B, NBR-50B, NBR-60 | NBR-90 | one Case artifact root only | real AI/Package/Runtime/Capture/score/repair/manual launch | main-agent-only |
-| NBR-90 | Exact-SHA closure and docs truth | NBR-70 | later WRC work | review/evidence/docs only | Cloud gates, Mode B + runtime-deep, no P0/P1 | main-agent-only |
+| NBR-60 | Atomically cut over the Case-bound Formal Capture Intent, wire production ports, and add the one-repair journal/orchestrator | NBR-20, NBR-30, NBR-45B, NBR-50B | NBR-70 | temporary exclusive integration ownership of `runtime-contracts` Intent, `validation` Case fields, `formal-capture-request*`, production run ports and run journal; parsed Case/Intent/Package -> immutable run | Intent parser/hash and Case-closure RED/GREEN, no scattered args, max-one/stale/unknown/no-output/cleanup | main-agent-only |
+| NBR-70 | Run the real Case with its frozen Formal Capture Intent and publish runnable artifacts | NBR-40, NBR-45B, NBR-50B, NBR-60 | NBR-80 | one Case artifact root only | real Intent hash/closure plus AI/Package/Runtime/Capture/score/repair/manual launch | main-agent-only |
+| NBR-80 | Delete replaced/duplicate production and scattered Capture Intent paths | NBR-70 | NBR-90 | package exports, fixed Harness loader, root scripts and obsolete materializer call shape only | clean-break censuses, generic commands and final Package still green | main-agent-only |
+| NBR-90 | Exact-SHA closure and docs truth | NBR-80 | later WRC work | review/evidence/docs only | Cloud gates, Mode B + runtime-deep, no P0/P1 | main-agent-only |
 
 NBR-10 contracts are shared seams and land before parallel work. NBR-20, NBR-45A and NBR-50A may overlap
 only after those contracts freeze and they own the non-overlapping files shown above. Runtime, Browser
-lifecycle, shared exports, CLI dispatch, package manifests and final integration remain main-agent-only. Every worker uses an
-isolated worktree, runs `pnpm install --frozen-lockfile`, and owns exact non-overlapping files.
+lifecycle, shared exports, CLI dispatch, package manifests and final integration remain main-agent-only.
+NBR-60 is the one explicit sequential integration cutover across the already-landed Case and Capture seams;
+no NBR-45 or NBR-50 worker may change those files concurrently. Every worker uses an isolated worktree, runs
+`pnpm install --frozen-lockfile`, and owns exact non-overlapping files.
 
 ## 13. Incremental integration checkpoints
 
@@ -676,8 +756,9 @@ The work does not wait for the full slice before merging:
 4. generic playable Runtime checkpoint;
 5. formal Capture checkpoint;
 6. evaluation checkpoint;
-7. one-repair checkpoint;
-8. real Case/final exact-SHA checkpoint.
+7. Case-bound Formal Capture Intent plus production one-repair checkpoint;
+8. real Case/final and current-only deletion checkpoint;
+9. final exact-SHA review/docs-truth checkpoint.
 
 Each checkpoint runs focused RED/GREEN and necessary typecheck only. The final candidate receives Cursor
 Cloud exact-SHA affected/full gates and a separate Mode B + runtime-deep review. GitHub CI queue state does
@@ -692,6 +773,8 @@ not block independent downstream work when equivalent exact-SHA Cloud evidence e
 - formal checker, Package and Receipt accept the generated output before Runtime Candidate allocation;
 - the existing RuntimeHost loads it and SDK-owned Havok/Subject/Input/Action/Camera make it playable;
 - formal identity-bound opening/top/side Capture and collider/runtime evidence are published;
+- the Case-bound `formal-world-capture-intent.json` bytes/hash close exactly to the Case, parsed Request and
+  measured semantic/traversal evidence, with no scattered caller parameters or inferred fallback;
 - the evaluator emits stable per-dimension results and explainable diagnostics;
 - at least one bounded diagnostic-driven repair produces a new audited Package/Capture identity;
 - `cloud-temple-t-gate-native-block` launches locally, spawns/grounds/moves, blocks walls and passes the
