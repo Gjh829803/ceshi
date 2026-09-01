@@ -5,6 +5,9 @@ import { randomUUID } from "node:crypto";
 import { isEmpty, isNil } from "lodash-es";
 import { type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
+  parseWorldReconstructionCaseArtifactRefV1,
+} from "@whitebox-world/world-identity";
+import {
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionRunReceiptV1,
@@ -163,29 +166,6 @@ interface CompletedAttemptRecordV1 {
   readonly packaged: WorldReconstructionPackagePortResultV1;
   readonly captured: WorldReconstructionCapturePortResultV1;
   readonly evaluated: WorldReconstructionEvaluatePortResultV1;
-}
-
-function isCanonicalCaseArtifactRef(input: unknown): input is string {
-  if (
-    typeof input !== "string" ||
-    input.length === 0 ||
-    input.trim() !== input ||
-    input.normalize("NFC") !== input
-  ) return false;
-  try {
-    const parsed = new URL(input);
-    return parsed.protocol === "artifact:" &&
-      parsed.hostname.length > 0 &&
-      parsed.username.length === 0 &&
-      parsed.password.length === 0 &&
-      parsed.port.length === 0 &&
-      parsed.search.length === 0 &&
-      parsed.hash.length === 0 &&
-      parsed.pathname.endsWith("/case.json") &&
-      parsed.href === input;
-  } catch {
-    return false;
-  }
 }
 
 const STAGE_BY_ATTEMPT = Object.freeze({
@@ -550,7 +530,10 @@ export async function runWorldReconstructionV1(
   input: WorldReconstructionRunInputV1,
   ports: WorldReconstructionRunPortsV1,
 ): Promise<WorldReconstructionRunReceiptV1> {
-  if (!isCanonicalCaseArtifactRef(input.caseRef)) {
+  let caseRef;
+  try {
+    caseRef = parseWorldReconstructionCaseArtifactRefV1(input.caseRef);
+  } catch {
     const cleanup = await ports.cleanup();
     throw new WorldReconstructionRunClosedErrorV1(
       ["WORLD_RECONSTRUCTION_CASE_REF_INVALID"],
@@ -560,6 +543,16 @@ export async function runWorldReconstructionV1(
   const reconstructionCase = parseWorldReconstructionCaseV1(
     input.reconstructionCase,
   );
+  if (
+    caseRef !==
+      `artifact://world-reconstruction-case/${reconstructionCase.id}/case.json`
+  ) {
+    const cleanup = await ports.cleanup();
+    throw new WorldReconstructionRunClosedErrorV1(
+      ["WORLD_RECONSTRUCTION_CASE_REF_INVALID"],
+      cleanupStatus(cleanup),
+    );
+  }
   const profile = parseWorldReconstructionEvaluationProfileV1(
     input.evaluationProfile,
   );

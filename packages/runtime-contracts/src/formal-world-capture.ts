@@ -3,6 +3,10 @@ import {
   sha256CanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
+import {
+  parseWorldReconstructionCaseArtifactRefV1,
+  type WorldReconstructionCaseArtifactRefV1,
+} from "@whitebox-world/world-identity";
 import { isEmpty, isNil } from "lodash-es";
 
 import { parseWorldRuntimeSnapshotV4 } from "./runtime-session-protocol.js";
@@ -195,7 +199,7 @@ export interface FormalSemanticCaptureMapV1 {
   readonly kind: "formal-semantic-capture-map";
   readonly schemaVersion: 1;
   readonly id: string;
-  readonly caseRef: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
   readonly caseHash: Sha256HashV1;
   readonly authoringManifestHash: Sha256HashV1;
   readonly layoutInventoryHash: Sha256HashV1;
@@ -232,7 +236,7 @@ export interface FormalWorldCaptureRequestV1 {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly formalRequestRef: string;
-  readonly caseRef: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
@@ -387,7 +391,7 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly formalRequestRef: string;
   readonly formalRequest: FormalWorldCaptureRequestV1;
   readonly formalRequestHash: Sha256HashV1;
-  readonly caseRef: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
@@ -1690,7 +1694,7 @@ export function parseFormalSemanticCaptureMapV1(
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
     id: text(source.id, contract, "id"),
-    caseRef: text(source.caseRef, contract, "caseRef"),
+    caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef),
     caseHash: hash(source.caseHash, contract, "caseHash"),
     authoringManifestHash,
     layoutInventoryHash,
@@ -1939,7 +1943,7 @@ export function parseFormalWorldCaptureRequestV1(
   if (source.kind !== "formal-world-capture-request" || source.schemaVersion !== 1) {
     fail(contract, "", "unexpected kind or schemaVersion");
   }
-  const caseRef = text(source.caseRef, contract, "caseRef");
+  const caseRef = parseWorldReconstructionCaseArtifactRefV1(source.caseRef);
   const caseHash = hash(source.caseHash, contract, "caseHash");
   const worldPackageRootHash = hash(
     source.worldPackageRootHash,

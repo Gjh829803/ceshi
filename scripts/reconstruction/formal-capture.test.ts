@@ -131,7 +131,7 @@ function packageAndRequest(): Readonly<{
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
     id: "package-fixture.semantic-capture-map",
-    caseRef: "worldkit://world-reconstruction-case/package-fixture@1",
+    caseRef: "artifact://world-reconstruction-case/package-fixture/case.json",
     caseHash: metadata.caseHash,
     authoringManifestHash: metadata.authoringManifestHash,
     layoutInventoryHash: metadata.checkedLayoutInventoryHash,

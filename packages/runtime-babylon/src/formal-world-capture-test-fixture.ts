@@ -32,7 +32,7 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
     id: "fixture.semantic-capture-map",
-    caseRef: "worldkit://world-reconstruction-case/fixture@1",
+    caseRef: "artifact://world-reconstruction-case/fixture/case.json",
     caseHash: hash("a"),
     authoringManifestHash: hash("b"),
     layoutInventoryHash: hash("c"),

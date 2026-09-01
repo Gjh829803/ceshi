@@ -1,4 +1,13 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
+import {
+  parseWorldReconstructionCaseArtifactRefV1,
+  type WorldReconstructionCaseArtifactRefV1,
+} from "@whitebox-world/world-identity";
+
+export {
+  parseWorldReconstructionCaseArtifactRefV1,
+  type WorldReconstructionCaseArtifactRefV1,
+} from "@whitebox-world/world-identity";
 
 import {
   canonicalJsonBytes,
@@ -23,8 +32,6 @@ export const WORLD_RECONSTRUCTION_DIMENSION_IDS_V1 = Object.freeze([
 export type WorldReconstructionDimensionIdV1 =
   (typeof WORLD_RECONSTRUCTION_DIMENSION_IDS_V1)[number];
 export type WorldReconstructionOutcomeV1 = "passed" | "failed" | "incomplete";
-export type WorldReconstructionCaseArtifactRefV1 =
-  `artifact://world-reconstruction-case/${string}/case.json`;
 
 export type WorldReconstructionMetricV1 =
   | Readonly<{ kind: "ratio-basis-points"; valueBasisPoints: number }>
@@ -178,7 +185,7 @@ export interface WorldReconstructionEvidenceSetV1 {
   readonly kind: "world-reconstruction-evidence-set";
   readonly schemaVersion: 1;
   readonly id: string;
-  readonly caseRef: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
@@ -288,7 +295,7 @@ export interface WorldReconstructionEvaluationResultV1 {
   readonly kind: "world-reconstruction-evaluation-result";
   readonly schemaVersion: 1;
   readonly id: string;
-  readonly caseRef: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
@@ -353,7 +360,7 @@ export interface WorldReconstructionRunReceiptV1 {
   readonly kind: "world-reconstruction-run-receipt";
   readonly schemaVersion: 1;
   readonly id: string;
-  readonly caseRef: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
@@ -390,8 +397,6 @@ const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const WORLD_PACKAGE_REF_PATTERN = /^package:\/\/world-package\/sha256\/([a-f0-9]{64})$/;
 const WORLD_RECONSTRUCTION_CASE_ID_PATTERN =
   /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
-const WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_PATTERN =
-  /^artifact:\/\/world-reconstruction-case\/([a-z0-9]+(?:[.-][a-z0-9]+)*)\/case\.json$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 const CASE_FIELDS = [
   "kind", "schemaVersion", "id", "sceneBriefRef", "sceneBriefHash",
@@ -491,23 +496,6 @@ function worldReconstructionCaseId(
     );
   }
   return parsed;
-}
-
-export function parseWorldReconstructionCaseArtifactRefV1(
-  value: unknown,
-): WorldReconstructionCaseArtifactRefV1 {
-  const contract = "WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID";
-  const parsed = text(value, contract, "caseRef");
-  const match = WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_PATTERN.exec(parsed);
-  if (match === null) {
-    fail(
-      contract,
-      "caseRef",
-      "expected artifact://world-reconstruction-case/<case-id>/case.json",
-    );
-  }
-  worldReconstructionCaseId(match[1], contract, "caseRef/caseId");
-  return parsed as WorldReconstructionCaseArtifactRefV1;
 }
 
 function hash(value: unknown, contract: string, path: string): Sha256HashV1 {
@@ -1007,7 +995,7 @@ export function parseWorldReconstructionEvidenceSetV1(value: unknown): WorldReco
   if (advisoryPixelMetrics.some(({ kind }) => kind !== "ratio-basis-points" && kind !== "normalized-distance-basis-points")) fail(contract, "advisoryPixelMetrics", "only advisory ratio or normalized-distance metrics are allowed");
   return freeze({
     kind: "world-reconstruction-evidence-set", schemaVersion: 1,
-    id: text(source.id, contract, "id"), caseRef: text(source.caseRef, contract, "caseRef"), caseHash: hash(source.caseHash, contract, "caseHash"),
+    id: text(source.id, contract, "id"), caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef), caseHash: hash(source.caseHash, contract, "caseHash"),
     evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"),
     attemptRef, attemptHash, sceneAuthoringAttemptResultRef,
     sceneAuthoringAttemptResultHash, worldPackageRef, worldPackageRootHash,
@@ -1087,7 +1075,7 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
   if (outcome !== expectedOutcome) fail(contract, "outcome", "must be derived from independent dimension outcomes");
   return freeze({
     kind: "world-reconstruction-evaluation-result", schemaVersion: 1, id: text(source.id, contract, "id"),
-    caseRef: text(source.caseRef, contract, "caseRef"), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"),
+    caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"),
     evidenceSetRef: text(source.evidenceSetRef, contract, "evidenceSetRef"), evidenceSetHash: hash(source.evidenceSetHash, contract, "evidenceSetHash"),
     attemptRef: text(source.attemptRef, contract, "attemptRef"), attemptHash, worldPackageRef, worldPackageRootHash, worldBuildIdentityRef: text(source.worldBuildIdentityRef, contract, "worldBuildIdentityRef"), worldBuildIdentityHash,
     captureReceiptRef: text(source.captureReceiptRef, contract, "captureReceiptRef"), captureReceiptHash, outcome, diagnostics: Object.freeze(diagnostics), dimensions: Object.freeze(dimensions),
@@ -1176,7 +1164,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   const cleanupOutcome = enumValue(source.cleanupOutcome, ["completed", "failed"] as const, contract, "cleanupOutcome");
   const expectedOutcome = cleanupOutcome === "failed" ? "incomplete" : final.outcome;
   if (outcome !== expectedOutcome) fail(contract, "outcome", "must match final result and fail closed on cleanup");
-  return freeze({ kind: "world-reconstruction-run-receipt", schemaVersion: 1, id: text(source.id, contract, "id"), caseRef: text(source.caseRef, contract, "caseRef"), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"), outcome, attempts: Object.freeze(attempts), finalAttemptIndex, finalEvaluationResultRef, finalEvaluationResultHash, cleanupOutcome });
+  return freeze({ kind: "world-reconstruction-run-receipt", schemaVersion: 1, id: text(source.id, contract, "id"), caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"), outcome, attempts: Object.freeze(attempts), finalAttemptIndex, finalEvaluationResultRef, finalEvaluationResultHash, cleanupOutcome });
 }
 
 type Parser<T> = (value: unknown) => T;

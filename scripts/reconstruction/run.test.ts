@@ -39,7 +39,7 @@ const DIMENSIONS = [
   "topology",
 ] as const;
 
-const CASE_REF = "artifact://case/cloud-temple/case.json";
+const CASE_REF = "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json";
 
 const OWNER = Object.freeze({
   caseHash: hashWorldReconstructionCaseV1(reconstructionCase()),
@@ -308,7 +308,7 @@ function evaluationResult(input: {
     kind: "world-reconstruction-evaluation-result",
     schemaVersion: 1,
     id: `cloud-temple.attempt-${input.attemptIndex}.result`,
-    caseRef: "artifact://case/cloud-temple/case.json",
+    caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
     caseHash: H("d"),
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
     evaluationProfileHash: H("e"),
@@ -610,7 +610,7 @@ describe("runWorldReconstructionV1", () => {
         path.basename(outputDirectoryPath)
       }/run-receipt.json`,
     ).toBe(
-      `artifact://case/cloud-temple/runs/${
+      `artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/runs/${
         path.basename(outputDirectoryPath)
       }/run-receipt.json`,
     );
@@ -622,7 +622,7 @@ describe("runWorldReconstructionV1", () => {
     "worldkit://world-reconstruction-case/cloud-temple@1/case.json",
     "artifact:///case.json",
     "artifact://case/cloud-temple/not-case.json",
-    " artifact://case/cloud-temple/case.json",
+    " artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
     "artifact://case/cloud-temple/../case.json",
   ])("rejects non-canonical Case artifact Ref %j before any stage", async (caseRef) => {
     const { ports, calls } = fakePorts();

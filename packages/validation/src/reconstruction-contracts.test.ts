@@ -101,7 +101,7 @@ const evidenceValue = () => ({
   kind: "world-reconstruction-evidence-set",
   schemaVersion: 1,
   id: "cloud-temple.attempt-0.evidence",
-  caseRef: "artifact://case/cloud-temple/case.json",
+  caseRef: "artifact://world-reconstruction-case/cloud-temple.case/case.json",
   caseHash: H("d"),
   evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
   evaluationProfileHash: H("e"),
@@ -143,7 +143,7 @@ const resultValue = () => ({
   kind: "world-reconstruction-evaluation-result",
   schemaVersion: 1,
   id: "cloud-temple.attempt-0.result",
-  caseRef: "artifact://case/cloud-temple/case.json",
+  caseRef: "artifact://world-reconstruction-case/cloud-temple.case/case.json",
   caseHash: H("d"),
   evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
   evaluationProfileHash: H("e"),
@@ -208,6 +208,38 @@ describe("world reconstruction contracts", () => {
   ])("rejects non-canonical Case id %j", (id) => {
     expect(() => parseWorldReconstructionCaseV1({ ...caseValue(), id }))
       .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+  });
+
+  it("rejects old Case Ref dialects in Evidence and Result admission", () => {
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseWorldReconstructionEvidenceSetV1({
+        ...evidenceValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+      expect(() => parseWorldReconstructionEvaluationResultV1({
+        ...resultValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
+  });
+
+  it("rejects old Case Ref dialects in Evidence and Result admission", () => {
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseWorldReconstructionEvidenceSetV1({
+        ...evidenceValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+      expect(() => parseWorldReconstructionEvaluationResultV1({
+        ...resultValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
   });
 
   it("rejects passed dimensions that declare generic missing or stale evidence", () => {
@@ -600,7 +632,7 @@ describe("world reconstruction contracts", () => {
       kind: "world-reconstruction-run-receipt",
       schemaVersion: 1,
       id: "cloud-temple.run",
-      caseRef: "artifact://case/cloud-temple/case.json",
+      caseRef: "artifact://world-reconstruction-case/cloud-temple.case/case.json",
       caseHash: H("d"),
       evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
       evaluationProfileHash: H("e"),
@@ -659,6 +691,24 @@ describe("world reconstruction contracts", () => {
     const run = parseWorldReconstructionRunReceiptV1(runValue);
     expect(run.attempts).toHaveLength(2);
     expect(run.finalAttemptIndex).toBe(1);
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseWorldReconstructionRunReceiptV1({
+        ...runValue,
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseWorldReconstructionRunReceiptV1({
+        ...runValue,
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
 
     expect(() => parseWorldReconstructionRunReceiptV1({
       ...runValue,

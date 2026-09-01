@@ -275,6 +275,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/validation/src/world-package-validation-subject.test.ts", lane: "contract" },
   { path: "packages/world-identity/src/package-boundary.test.ts", lane: "contract" },
   { path: "packages/world-identity/src/world-build-identity.test.ts", lane: "contract" },
+  { path: "packages/world-identity/src/world-reconstruction-case-artifact-ref.test.ts", lane: "contract" },
   { path: "packages/world-package/src/package-build.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
   { path: "packages/world-package/src/package-contract.test.ts", lane: "contract" },
   { path: "packages/world-package/src/package-directory.test.ts", lane: "contract" },

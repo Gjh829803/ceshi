@@ -319,7 +319,7 @@ function semanticMapValue() {
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
     id: "cloud-temple.case.semantic-capture-map",
-    caseRef: "worldkit://world-reconstruction-case/cloud-temple.case",
+    caseRef: "artifact://world-reconstruction-case/cloud-temple.case/case.json",
     caseHash: H("c"),
     authoringManifestHash: H("d"),
     layoutInventoryHash: H("e"),
@@ -401,7 +401,7 @@ function formalRequestValue() {
     id: "cloud-temple.attempt-0.formal-capture-request",
     formalRequestRef:
       "artifact://case/cloud-temple/attempts/0/formal-world-capture-request.json",
-    caseRef: "worldkit://world-reconstruction-case/cloud-temple.case",
+    caseRef: "artifact://world-reconstruction-case/cloud-temple.case/case.json",
     caseHash: H("c"),
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
     evaluationProfileHash: H("9"),
@@ -527,6 +527,30 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
 }
 
 describe("FormalWorldCaptureRequestV1", () => {
+  it("rejects old Case Ref dialects", () => {
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseFormalWorldCaptureRequestV1({
+        ...formalRequestValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
+  });
+
+  it("rejects old Case Ref dialects", () => {
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseFormalWorldCaptureRequestV1({
+        ...formalRequestValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
+  });
+
   it("freezes one Package-bound Capture transaction with one materializer inventory authority", () => {
     const request = parseFormalWorldCaptureRequestV1(formalRequestValue());
     expect(request.formalRequestRef).toBe(
@@ -732,6 +756,30 @@ describe("FormalArtifactViewRequestV1", () => {
 });
 
 describe("FormalSemanticCaptureMapV1", () => {
+  it("rejects old Case Ref dialects", () => {
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseFormalSemanticCaptureMapV1({
+        ...semanticMapValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
+  });
+
+  it("rejects old Case Ref dialects", () => {
+    for (const caseRef of [
+      "artifact://case/cloud-temple.case/case.json",
+      "worldkit://world-reconstruction-case/cloud-temple.case",
+    ]) {
+      expect(() => parseFormalSemanticCaptureMapV1({
+        ...semanticMapValue(),
+        caseRef,
+      })).toThrowError("WORLD_RECONSTRUCTION_CASE_ARTIFACT_REF_INVALID");
+    }
+  });
+
   it("parses a hashable closed Case-to-group map", () => {
     const parsed = parseFormalSemanticCaptureMapV1(semanticMapValue());
     expect(parsed.bindings.map(({ acceptanceTargetRef }) => acceptanceTargetRef))

@@ -140,7 +140,7 @@ const evidenceValue = () => ({
   kind: "world-reconstruction-evidence-set" as const,
   schemaVersion: 1 as const,
   id: "cloud-temple.attempt-0.evidence",
-  caseRef: "artifact://case/cloud-temple/case.json",
+  caseRef: "artifact://world-reconstruction-case/cloud-temple.case/case.json",
   caseHash: H("d"),
   evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
   evaluationProfileHash: H("e"),
