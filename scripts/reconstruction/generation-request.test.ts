@@ -76,6 +76,45 @@ async function fixture(): Promise<Readonly<{ root: string; inputDirectory: strin
   return { root, inputDirectory, routeDecision };
 }
 
+async function writePriorRepairContext(
+  priorAttemptRoot: string,
+  input: Readonly<{
+    sceneAuthoringAttemptRef: string;
+    sceneAuthoringAttemptHash: `sha256:${string}`;
+    priorSourceRef: string;
+    priorSourceHash: `sha256:${string}`;
+    evaluationText: string;
+  }>,
+): Promise<void> {
+  await Promise.all([
+    mkdir(path.join(priorAttemptRoot, "source"), { recursive: true }),
+    mkdir(path.join(priorAttemptRoot, "capture"), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(priorAttemptRoot, "source", "scene.ts"), "export default {}\n"),
+    writeFile(path.join(priorAttemptRoot, "source", "native-block-authoring.json"), "{}"),
+    writeFile(path.join(priorAttemptRoot, "source", "native-resources.json"), "{}"),
+    writeFile(path.join(priorAttemptRoot, "attempt-result.json"), stringifyCanonicalJson({
+      kind: "scene-authoring-attempt-result",
+      schemaVersion: 1,
+      id: "cloud-temple-t-gate-native-block-attempt-0-result",
+      sceneAuthoringAttemptRef: input.sceneAuthoringAttemptRef,
+      sceneAuthoringAttemptHash: input.sceneAuthoringAttemptHash,
+      outcome: "completed",
+      authoredSourceRef: input.priorSourceRef,
+      authoredSourceHash: input.priorSourceHash,
+      evidenceRefs: ["worldkit://native-scene-check-result/cloud-temple@1"],
+    })),
+    writeFile(path.join(priorAttemptRoot, "evaluation.json"), input.evaluationText),
+    writeFile(path.join(priorAttemptRoot, "capture", "opening.png"), "opening"),
+    writeFile(path.join(priorAttemptRoot, "capture", "opening-observation.json"), "{}"),
+    writeFile(path.join(priorAttemptRoot, "capture", "collider-overlay.png"), "collider"),
+    writeFile(path.join(priorAttemptRoot, "capture", "collider-overlay-observation.json"), "{}"),
+    writeFile(path.join(priorAttemptRoot, "capture", "spawn-support-observation.json"), "{}"),
+    writeFile(path.join(priorAttemptRoot, "capture", "scripted-traversal.json"), "{}"),
+  ]);
+}
+
 function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
   const profile = parseWorldReconstructionEvaluationProfileV1({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: "cloud-temple-profile", dimensionIds: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"], maximumRepairAttemptCount: 1, builderSelfRepairAttemptCount: 0, thresholds: { semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }], openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], maximumOrderDistanceBasisPoints: 100 }, spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 } }, requiredEvidenceByDimension: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"].map((dimensionId) => ({ dimensionId, evidenceProfileRefs: [`worldkit://evidence/${dimensionId}@1`] })) });
   const requiredEvidenceProfileRefs = profile.requiredEvidenceByDimension
@@ -357,7 +396,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         priorSourceRef: "artifact://run/attempts/0/source",
         priorSourceHash: hash("d"),
         priorEvaluationResultRef: "artifact://run/attempts/0/evaluation.json",
-        priorEvaluationResultHash: hash("e"),
+        priorEvaluationResultHash: sha256Bytes(new TextEncoder().encode("{}")),
         priorGenerationRequestRef: "artifact://run/attempts/0/generation-request.json",
         priorGenerationRequestHash: attempt0.generationRequestHash,
         frozenOwnerIdentities: attempt0.frozenOwnerIdentities,
@@ -375,6 +414,37 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         runDirectoryPath: path.join(value.root, "runs", "attempt-one-missing"),
       })).rejects.toThrowError("Repair generation attempt requires one repair instruction");
 
+      const priorAttemptRoot = path.join(value.root, "runs", "initial", "attempts", "0");
+      await writePriorRepairContext(priorAttemptRoot, {
+        sceneAuthoringAttemptRef: `worldkit://scene-authoring-attempt/${attempt0.attempt.id}@1`,
+        sceneAuthoringAttemptHash: attempt0.attemptHash,
+        priorSourceRef: repairInstruction.priorSourceRef,
+        priorSourceHash: repairInstruction.priorSourceHash,
+        evaluationText: "{}",
+      });
+
+      const priorEvaluationPath = path.join(priorAttemptRoot, "evaluation.json");
+      await writeFile(priorEvaluationPath, '{"forged":true}');
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        attemptIndex: 1,
+        repairInstruction,
+      })).rejects.toThrowError("Repair prior evaluation identity closure failed");
+      await writeFile(priorEvaluationPath, "{}");
+
+      const priorAttemptResultPath = path.join(priorAttemptRoot, "attempt-result.json");
+      const priorAttemptResult = JSON.parse(await readFile(priorAttemptResultPath, "utf8"));
+      await writeFile(priorAttemptResultPath, stringifyCanonicalJson({
+        ...priorAttemptResult,
+        authoredSourceHash: hash("f"),
+      }));
+      await expect(prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        attemptIndex: 1,
+        repairInstruction,
+      })).rejects.toThrowError("Repair prior source identity closure failed");
+      await writeFile(priorAttemptResultPath, stringifyCanonicalJson(priorAttemptResult));
+
       const attempt1 = await prepareNativeBlockGenerationTaskV1({
         ...input(value),
         attemptIndex: 1,
@@ -390,6 +460,41 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       ));
       expect(sha256Bytes(repairBytes)).toBe(repairContext?.contentHash);
       expect(JSON.parse(repairBytes.toString("utf8"))).toEqual(repairInstruction);
+      const repairInputRefs = [
+        "inputs/attempts/0/source/scene.ts",
+        "inputs/attempts/0/source/native-block-authoring.json",
+        "inputs/attempts/0/source/native-resources.json",
+        "inputs/attempts/0/generation-request.json",
+        "inputs/attempts/0/attempt-result.json",
+        "inputs/attempts/0/evaluation.json",
+        "inputs/attempts/0/capture/opening.png",
+        "inputs/attempts/0/capture/opening-observation.json",
+        "inputs/attempts/0/capture/collider-overlay.png",
+        "inputs/attempts/0/capture/collider-overlay-observation.json",
+        "inputs/attempts/0/capture/spawn-support-observation.json",
+        "inputs/attempts/0/capture/scripted-traversal.json",
+      ];
+      expect(attempt1.generationRequest.contextInputs.map(({ inputRef }) => inputRef)).toEqual(
+        expect.arrayContaining(repairInputRefs),
+      );
+      for (const inputRef of repairInputRefs) {
+        const contextEntry = attempt1.generationRequest.contextInputs.find(
+          (entry) => entry.inputRef === inputRef,
+        );
+        expect(contextEntry).toBeDefined();
+        const bytes = await readFile(path.join(attempt1.taskWorkspacePath, inputRef));
+        expect(sha256Bytes(bytes)).toBe(contextEntry?.contentHash);
+      }
+      const repairTaskInstruction = await readFile(
+        path.join(attempt1.taskWorkspacePath, attempt1.generationRequest.taskInstructionRef),
+        "utf8",
+      );
+      expect(repairTaskInstruction).toContain("inputs/attempts/0/source/scene.ts");
+      expect(repairTaskInstruction).toContain("inputs/attempts/0/evaluation.json");
+      expect(repairTaskInstruction).toContain("inputs/attempts/0/capture/opening.png");
+      expect(sha256Bytes(new TextEncoder().encode(repairTaskInstruction))).toBe(
+        attempt1.generationRequest.taskInstructionHash,
+      );
       expect(attempt1.generationRequest.workspaceContextManifestHash).not.toBe(
         attempt0.generationRequest.workspaceContextManifestHash,
       );
