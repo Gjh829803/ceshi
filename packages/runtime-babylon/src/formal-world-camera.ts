@@ -57,12 +57,13 @@ export function orientCameraAtExactPose(
   position: Vector3,
   target: Vector3,
   useRightHandedSystem: boolean,
+  up = Vector3.UpReadOnly,
 ): void {
   camera.setTarget(target);
   camera.position.copyFrom(position);
   const cameraWorld = useRightHandedSystem
-    ? Matrix.LookAtRH(position, target, Vector3.UpReadOnly).invert()
-    : Matrix.LookAtLH(position, target, Vector3.UpReadOnly).invert();
+    ? Matrix.LookAtRH(position, target, up).invert()
+    : Matrix.LookAtLH(position, target, up).invert();
   Quaternion.FromRotationMatrix(cameraWorld).toEulerAnglesToRef(camera.rotation);
   camera.rotation.z = 0;
 }
