@@ -23,7 +23,10 @@ import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { nativeSceneSubjectAssetResolver } from
   "./subject-asset-resolver.js";
 import { createHostedRuntimeBridgeV1 } from "./hosted-runtime-bridge.js";
-import { startHostedRuntimeFrameV1 } from "./hosted-runtime-frame.js";
+import {
+  prepareHostedRuntimeFrameDocumentV1,
+  startHostedRuntimeFrameV1,
+} from "./hosted-runtime-frame.js";
 import {
   startHostedFormalCaptureFrameRouteV1,
   startHostedFormalCaptureShellRouteV1,
@@ -405,6 +408,7 @@ async function startHostedShell(): Promise<void> {
 }
 
 async function startHostedFrame(): Promise<void> {
+  prepareHostedRuntimeFrameDocumentV1(document);
   const query = new URLSearchParams(location.search);
   const shellOrigin = __WORLDKIT_HOSTED_SHELL_ORIGIN__;
   const runtimeSessionId = query.get("runtimeSessionId");

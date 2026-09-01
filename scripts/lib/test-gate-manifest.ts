@@ -19,6 +19,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "apps/native-scene-playground/src/hosted-formal-capture-frame.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/hosted-formal-capture-route.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/hosted-runtime-bridge.test.ts", lane: "contract" },
+  { path: "apps/native-scene-playground/src/hosted-runtime-frame.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-package-migration.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-package-vite-seam.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-runtime-host-module-loader.test.ts", lane: "contract" },
