@@ -814,9 +814,9 @@ describe("compileWorld", () => {
       worldRuntimeBootstrapHash: compiled.worldRuntimeBootstrap.contentHash,
     }).toEqual({
       executionPlanHash:
-        "sha256:57b871b469599ed5afa74fa72ba3721908515553ebc1109ce22afe3086b76c7b",
+        "sha256:0b57400aff8d6a082fb8780de0c27243d86590a284c7d9acc047da39dde6669f",
       worldRuntimeBootstrapHash:
-        "sha256:5c790777655ed534a635fa434c5246b29eada1877d199af861975908608131d6",
+        "sha256:ef2a6a1d0219d4b721d432eeae7c6ff4e499c1db80e8626f12bbddae9c1ea651",
     });
   });
 

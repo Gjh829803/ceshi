@@ -9,8 +9,8 @@
     "worldRuntimeBootstrapRef": "worldkit://world-runtime-bootstrap/bna1-v5-projection@1"
   },
   "sourceExecutionPlanHash": "sha256:1f4e8f3b6e5d12bf1ec05b61494a0012a6f81d6523922080d6a1d6f56d7615dd",
-  "projectedExecutionPlanHash": "sha256:782c72043cec08f564f117e4f06f269acf4124a22112ed58d2cefe9e3b8ae514",
-  "worldRuntimeBootstrapHash": "sha256:a47186ed9191d9aeed80df03ad4aa4be978727ff54113405edd79fd50bc34000",
+  "projectedExecutionPlanHash": "sha256:930ea471bd1691916f512792c5b2314a50627680bef372b0f2701eb5083ba5ee",
+  "worldRuntimeBootstrapHash": "sha256:d1c3bd265eccb08a4381531aa1c5e0d795242ecd9fee39126b84894947123d22",
   "gameplayBootstrapHash": "sha256:f2b6d926bdeb08e1cbe3c48bd10f653baca87fac3ca426d40502a7f551e27356",
   "fieldAccounting": [
     {
@@ -393,16 +393,11 @@
       "worldkit://camera-modifier/mounted-framing@1",
       "worldkit://camera-modifier/reverse-stability@1",
       "worldkit://camera-modifier/sprint-emphasis@1",
-      "worldkit://camera-modifier/water-stability@1",
-      "worldkit://camera-profile/chase.surface-fast@1",
       "worldkit://camera-profile/first-person.standard@1",
-      "worldkit://camera-profile/flight.glide@1",
       "worldkit://camera-profile/follow.medium@1",
       "worldkit://camera-profile/orbit.medium@1",
-      "worldkit://camera-rig/flight-horizon@1",
       "worldkit://camera-rig/orbit-follow@1",
       "worldkit://camera-rig/socket-first-person@1",
-      "worldkit://camera-rig/velocity-chase@1",
       "worldkit://capability/locomotion.ground@1",
       "worldkit://collider-derivation-profile/vertical-character-capsule@1",
       "worldkit://collider-profile/humanoid.medium-capsule@1",
