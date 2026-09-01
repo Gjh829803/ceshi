@@ -39,7 +39,7 @@ async function journalRoot(): Promise<string> {
 async function openJournal(root: string) {
   return createWorldReconstructionRunJournalV1({
     runId: "formal-20260831",
-    caseRef: "artifact://case/cloud-temple/case.json",
+    caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
     frozenOwnerIdentities: OWNER,
     outputDirectoryPath: root,
@@ -213,14 +213,14 @@ describe("world reconstruction run journal", () => {
     await openJournal(root);
     await expect(createWorldReconstructionRunJournalV1({
       runId: "different-run",
-      caseRef: "artifact://case/cloud-temple/case.json",
+      caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
       evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
       frozenOwnerIdentities: OWNER,
       outputDirectoryPath: root,
     })).rejects.toThrowError("WORLD_RECONSTRUCTION_JOURNAL_IDENTITY_MISMATCH");
     await expect(createWorldReconstructionRunJournalV1({
       runId: "formal-20260831",
-      caseRef: "artifact://case/cloud-temple/case.json",
+      caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
       evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
       frozenOwnerIdentities: { ...OWNER, caseHash: H("9") },
       outputDirectoryPath: root,

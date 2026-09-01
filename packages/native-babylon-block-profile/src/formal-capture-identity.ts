@@ -12,6 +12,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import {
   hashWorldReconstructionCaseV1,
+  parseWorldReconstructionCaseArtifactRefV1,
   parseWorldReconstructionCaseV1,
   type WorldReconstructionCaseV1,
 } from "@whitebox-world/validation";
@@ -368,7 +369,9 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
     id: `${reconstructionCase.id}.semantic-capture-map`,
-    caseRef: `worldkit://world-reconstruction-case/${reconstructionCase.id}`,
+    caseRef: parseWorldReconstructionCaseArtifactRefV1(
+      `artifact://world-reconstruction-case/${reconstructionCase.id}/case.json`,
+    ),
     caseHash: metadata.caseHash,
     authoringManifestHash: metadata.authoringManifestHash,
     layoutInventoryHash: metadata.checkedLayoutInventoryHash,

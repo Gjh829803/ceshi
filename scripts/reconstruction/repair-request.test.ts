@@ -99,7 +99,7 @@ function evaluation(input: {
     kind: "world-reconstruction-evaluation-result",
     schemaVersion: 1,
     id: "cloud-temple.attempt-0.result",
-    caseRef: "artifact://case/cloud-temple/case.json",
+    caseRef: "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
     caseHash: H("d"),
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
     evaluationProfileHash: H("e"),

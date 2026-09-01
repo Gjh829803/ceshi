@@ -586,6 +586,9 @@ importers:
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../traversal
+      '@whitebox-world/world-identity':
+        specifier: workspace:*
+        version: link:../world-identity
       ajv:
         specifier: ^8.17.1
         version: 8.20.0
@@ -773,6 +776,9 @@ importers:
       '@whitebox-world/traversal':
         specifier: workspace:*
         version: link:../traversal
+      '@whitebox-world/world-identity':
+        specifier: workspace:*
+        version: link:../world-identity
       '@whitebox-world/world-package':
         specifier: workspace:*
         version: link:../world-package

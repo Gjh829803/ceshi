@@ -9,6 +9,7 @@ import {
 import {
   hashFormalSemanticCaptureMapV1,
   hashNativeEffectiveExecutionBudgetV1,
+  parseFormalWorldCaptureRequestV1,
   type FormalWorldCaptureRequestV1,
   type NativeEffectiveExecutionBudgetV1,
   type NativeIsolatedExecutionRequestV1,
@@ -220,7 +221,7 @@ function formalRequestFixture(
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
     id: "capture.map",
-    caseRef: "worldkit://world-reconstruction-case/test@1",
+    caseRef: "artifact://world-reconstruction-case/test/case.json",
     caseHash: hash("a"),
     authoringManifestHash: hash("b"),
     layoutInventoryHash: hash("c"),
@@ -277,7 +278,7 @@ function formalRequestFixture(
     heightPixels: 360,
     devicePixelRatio: 1,
   } as const;
-  return {
+  return parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
     schemaVersion: 1,
     id: "formal.capture.request",
@@ -341,7 +342,7 @@ function formalRequestFixture(
         checkpointCriteria: [criterion],
       }],
     },
-  };
+  });
 }
 
 describe("Babylon Native isolated Runtime entry", () => {

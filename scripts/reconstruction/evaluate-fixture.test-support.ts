@@ -75,7 +75,7 @@ const COMPOSITION_TARGET_REF =
   "worldkit://composition-target/package-fixture-opening@1";
 const UPPER_COMPOSITION_TARGET_REF =
   "worldkit://composition-target/package-fixture-upper@1";
-const CASE_REF = "artifact://case/package-fixture/case.json";
+const CASE_REF = "artifact://world-reconstruction-case/package-fixture/case.json";
 const PROFILE_REF = "artifact://case/package-fixture/evaluation-profile.json";
 
 function snapshotValue() {
