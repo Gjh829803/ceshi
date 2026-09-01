@@ -1,9 +1,11 @@
+import { isNil } from "lodash-es";
+
 export function presentPageFailureV1(
   pageDocument: Document,
   error: unknown,
 ): void {
   const panel = pageDocument.querySelector<HTMLElement>("[data-error]");
-  if (panel === null) {
+  if (isNil(panel)) {
     throw new Error("Missing page element '[data-error]'.");
   }
   panel.hidden = false;
@@ -12,5 +14,5 @@ export function presentPageFailureV1(
     : String(error);
 
   const stateElement = pageDocument.querySelector<HTMLElement>("[data-state]");
-  if (stateElement !== null) stateElement.textContent = "FAILED";
+  if (!isNil(stateElement)) stateElement.textContent = "FAILED";
 }

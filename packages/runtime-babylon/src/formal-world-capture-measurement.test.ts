@@ -522,6 +522,70 @@ describe("formal world capture projection measurement", () => {
     });
   });
 
+  it("clips an opening AABB that crosses the perspective near plane", () => {
+    // The foreground platform may legitimately extend behind the third-person
+    // camera. Keeping only the corners beyond the near plane would understate
+    // its visible footprint, so the AABB edges must be clipped at that plane.
+    const foregroundGroup = {
+      ...alphaGroup,
+      minimumMetersXYZ: [-1, -1, -20],
+      maximumMetersXYZ: [1, 1, -15.8],
+    } satisfies BabylonNativeBlockMaterializerVisualGroupV1;
+    const fixture = createFixture({ view: openingView, groups: [foregroundGroup] });
+    fixture.camera.mode = FreeCamera.PERSPECTIVE_CAMERA;
+    fixture.camera.fov = Math.PI / 2;
+    fixture.camera.minZ = 0.05;
+    fixture.input = {
+      ...fixture.input,
+      semanticCaptureMap: { bindings: [bindings[0]!] },
+      liveHandleRegistry: {
+        visualGroups: [fixture.input.liveHandleRegistry.visualGroups[1]!],
+      },
+    };
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0])
+      .toMatchObject({
+        normalizedBounds: {
+          minXBasisPoints: 0,
+          minYBasisPoints: 0,
+          maxXBasisPoints: 10_000,
+          maxYBasisPoints: 10_000,
+        },
+        cameraDepthMeters: 0.05,
+      });
+  });
+
+  it("uses the canonical formal Capture diagnostic when an opening AABB is fully behind the near plane", () => {
+    const behindGroup = {
+      ...alphaGroup,
+      minimumMetersXYZ: [-1, -1, -20],
+      maximumMetersXYZ: [1, 1, -18],
+    } satisfies BabylonNativeBlockMaterializerVisualGroupV1;
+    const fixture = createFixture({ view: openingView, groups: [behindGroup] });
+    fixture.camera.mode = FreeCamera.PERSPECTIVE_CAMERA;
+    fixture.camera.fov = Math.PI / 2;
+    fixture.camera.minZ = 0.05;
+    fixture.input = {
+      ...fixture.input,
+      semanticCaptureMap: { bindings: [bindings[0]!] },
+      liveHandleRegistry: {
+        visualGroups: [fixture.input.liveHandleRegistry.visualGroups[1]!],
+      },
+    };
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(() => measureFormalWorldCaptureViewV1(fixture.input)).toThrow(
+      /^BABYLON_FORMAL_CAPTURE_MEASUREMENT_INVALID: PROJECTION:/,
+    );
+  });
+
   it("uses the camera viewport and conservative floor/ceil basis-point bounds", () => {
     // This catches normalizing as if every Camera owns the full render target
     // and catches rounding inward at measured AABB boundaries.

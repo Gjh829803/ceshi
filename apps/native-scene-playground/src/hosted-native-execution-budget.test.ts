@@ -1,3 +1,7 @@
+import { HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1 } from
+  "@whitebox-world/runtime-babylon";
+import { parseNativeEffectiveExecutionBudgetV1 } from
+  "@whitebox-world/runtime-contracts";
 import { describe, expect, it } from "vitest";
 
 import { createHostedNativeExecutionBudgetV1 } from
@@ -10,37 +14,60 @@ const sceneBudget = Object.freeze({
 });
 
 describe("Hosted Native execution budget", () => {
-  it.each(["interactive-session", "formal-capture"] as const)(
-    "keeps one Host-owned Runtime cap for %s",
-    (mode) => {
-      const budget = createHostedNativeExecutionBudgetV1({
-        mode,
+  it.each([
+    ["interactive-session", {
+      maximumInboundMessageBytes: 2_000_000,
+      maximumOutboundMessageBytes: 2_000_000,
+      maximumReceiptBytes: 2_000_000,
+      maximumDiagnosticCount: 64,
+      maximumLogBytes: 100_000,
+    }],
+    ["formal-capture", {
+      maximumInboundMessageBytes:
+        HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1.maximumInboundMessageBytes,
+      maximumOutboundMessageBytes:
+        HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1.maximumOutboundMessageBytes,
+      maximumReceiptBytes: 16_000_000,
+      maximumDiagnosticCount: 1,
+      maximumLogBytes: 100_000,
+    }],
+  ] as const)(
+    "locks the complete Host-owned %s budget",
+    (mode, protocol) => {
+      expect(parseNativeEffectiveExecutionBudgetV1(
+        createHostedNativeExecutionBudgetV1({ mode, scene: sceneBudget }),
+      )).toEqual({
         scene: sceneBudget,
-      });
-
-      expect(budget.scene).toEqual(sceneBudget);
-      expect(budget.runtime).toEqual({
-        maximumSceneNodeCount: 4_096,
-        maximumMaterialCount: 512,
-        maximumShaderCount: 512,
-        maximumPhysicsBodyCount: 256,
+        assets: {
+          maximumAssetCount: 64,
+          maximumAssetBytes: 64_000_000,
+          maximumTextureCount: 32,
+          maximumTextureBytes: 64_000_000,
+        },
+        runtime: {
+          maximumSceneNodeCount: 4_096,
+          maximumMaterialCount: 512,
+          maximumShaderCount: 512,
+          maximumPhysicsBodyCount: 257,
+        },
+        process: {
+          maximumWallTimeMilliseconds: 120_000,
+          maximumCpuTimeMilliseconds: 120_000,
+          maximumMemoryBytes: 1_000_000_000,
+          maximumProcessCount: 1,
+        },
+        protocol,
       });
     },
   );
 
-  it("keeps the formal Capture transport capacity separate", () => {
-    const interactive = createHostedNativeExecutionBudgetV1({
+  it("reserves one SDK-controlled Subject body above the admitted Collider maximum", () => {
+    const budget = createHostedNativeExecutionBudgetV1({
       mode: "interactive-session",
       scene: sceneBudget,
     });
-    const capture = createHostedNativeExecutionBudgetV1({
-      mode: "formal-capture",
-      scene: sceneBudget,
-    });
 
-    expect(capture.protocol.maximumInboundMessageBytes)
-      .toBeGreaterThan(interactive.protocol.maximumInboundMessageBytes);
-    expect(capture.protocol.maximumOutboundMessageBytes)
-      .toBeGreaterThan(interactive.protocol.maximumOutboundMessageBytes);
+    expect(budget.runtime.maximumPhysicsBodyCount)
+      .toBe(sceneBudget.maximumColliders + 1);
   });
 });

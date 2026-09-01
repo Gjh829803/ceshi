@@ -24,7 +24,7 @@ export function createHostedNativeExecutionBudgetV1(input: Readonly<{
       maximumSceneNodeCount: 4_096,
       maximumMaterialCount: 512,
       maximumShaderCount: 512,
-      maximumPhysicsBodyCount: 256,
+      maximumPhysicsBodyCount: 257,
     }),
     process: Object.freeze({
       maximumWallTimeMilliseconds: 120_000,
