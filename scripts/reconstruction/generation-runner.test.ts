@@ -140,14 +140,20 @@ process.exit(1);
   it("reconciles an unknown create outcome using the same request identity without a second submission", async () => {
     const prepared = await preparedFixture();
     let runs = 0;
+    let reconciledHash: string | undefined;
     try {
       const result = await runNativeBlockGenerationV1(prepared, {
         process: { run: async () => { runs += 1; throw new Error("create timeout"); } },
         selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
-        reconcile: async (requestId, requestHash) => ({ outcome: "unknown", requestId, requestHash }),
+        reconcile: async (requestId, requestHash) => {
+          reconciledHash = requestHash;
+          return { outcome: "unknown", requestId, requestHash };
+        },
         cleanup: async () => ({ outcome: "completed" }),
       });
       expect(runs).toBe(1);
+      expect(reconciledHash).toBe(prepared.routerTaskPayloadHash);
+      expect(reconciledHash).not.toBe(prepared.generationRequestHash);
       expect(result.receipt.outcome).toBe("unknown");
       expect(result.receipt.diagnosticCodes).toContain("creation-outcome-unknown");
     } finally { await rm(prepared.root, { recursive: true, force: true }); }

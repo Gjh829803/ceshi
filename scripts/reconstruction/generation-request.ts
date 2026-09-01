@@ -17,7 +17,7 @@ import {
   parseGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
-import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, worldReconstructionEvidenceProfileClosureMatchesV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
+import { hashWorldReconstructionCaseV1, hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, worldReconstructionEvidenceProfileClosureMatchesV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeSceneBootstrapV1,
@@ -33,6 +33,11 @@ import {
   type WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil, sortBy } from "lodash-es";
+
+import {
+  parseNativeBlockRepairInstructionV1,
+  type NativeBlockRepairInstructionV1,
+} from "./repair-request.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
@@ -71,6 +76,7 @@ export interface PrepareNativeBlockGenerationTaskV1Input {
   readonly sceneModuleRef: string;
   readonly seed: number;
   readonly budgets: NativeBlockGenerationBudgetV1;
+  readonly repairInstruction?: NativeBlockRepairInstructionV1;
 }
 
 export interface PreparedNativeBlockGenerationTaskV1 {
@@ -94,6 +100,62 @@ export interface PreparedNativeBlockGenerationTaskV1 {
   readonly worldBoundsBytes: Uint8Array;
   readonly hostClosure: NativeBlockGenerationHostClosureV1;
   readonly hostClosureBytes: Uint8Array;
+  readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
+}
+
+export interface WorldReconstructionFrozenOwnerIdentitiesV1 {
+  readonly caseHash: Sha256HashV1;
+  readonly evaluationProfileHash: Sha256HashV1;
+  readonly gameplayBootstrapHash: Sha256HashV1;
+  readonly worldRuntimeBootstrapHash: Sha256HashV1;
+  readonly worldBoundsHash: Sha256HashV1;
+  readonly bootstrapInputHash: Sha256HashV1;
+}
+
+export function resolveWorldReconstructionFrozenOwnerIdentitiesV1(input: Readonly<{
+  reconstructionCase: unknown;
+  evaluationProfile: unknown;
+  gameplayBootstrap: unknown;
+  worldRuntimeBootstrap: unknown;
+  worldBounds: unknown;
+  bootstrap: unknown;
+}>): WorldReconstructionFrozenOwnerIdentitiesV1 {
+  const reconstructionCase = parseWorldReconstructionCaseV1(input.reconstructionCase);
+  const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(input.evaluationProfile);
+  const gameplayBootstrap = parseGameplayBootstrapV1(input.gameplayBootstrap);
+  const worldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(input.worldRuntimeBootstrap);
+  const worldBounds = parseWorldPackageWorldBoundsV1(input.worldBounds);
+  const bootstrap = parseBabylonNativeSceneBootstrapV1(input.bootstrap);
+  const evaluationProfileHash = hashWorldReconstructionEvaluationProfileV1(evaluationProfile);
+  if (
+    reconstructionCase.evaluationProfileHash !== evaluationProfileHash ||
+    !worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, evaluationProfile) ||
+    worldRuntimeBootstrap.gameplayBootstrapRef !== gameplayBootstrap.resourceRef ||
+    worldRuntimeBootstrap.gameplayBootstrapHash !== gameplayBootstrap.contentHash ||
+    bootstrap.gameplayBootstrapRef !== gameplayBootstrap.resourceRef ||
+    bootstrap.initialControlledEntityId !== worldRuntimeBootstrap.initialControlledEntityId ||
+    !isEqual(
+      bootstrap.gravityMetersPerSecondSquaredXYZ,
+      worldRuntimeBootstrap.gravityMetersPerSecondSquaredXYZ,
+    ) ||
+    !isEqual(bootstrap.initialCamera, {
+      mode: worldRuntimeBootstrap.initialCamera.mode,
+      pitchRadians: worldRuntimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters: worldRuntimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: worldRuntimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters: worldRuntimeBootstrap.initialCamera.targetHeightMeters,
+    })
+  ) {
+    throw new TypeError("World reconstruction frozen owner identity closure failed.");
+  }
+  return Object.freeze({
+    caseHash: hashWorldReconstructionCaseV1(reconstructionCase),
+    evaluationProfileHash,
+    gameplayBootstrapHash: gameplayBootstrap.contentHash,
+    worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
+    worldBoundsHash: hashWorldPackageWorldBoundsV1(worldBounds),
+    bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(bootstrap),
+  });
 }
 
 export interface NativeBlockGenerationHostClosureV1 {
@@ -408,6 +470,15 @@ export async function prepareNativeBlockGenerationTaskV1(
   }
   if (reconstructionCase.referenceInputs.some((reference) => reference.mediaType === "application/json")) throw new TypeError("Native generation references must be images.");
   if (input.attemptIndex !== 0 && input.attemptIndex !== 1) throw new TypeError("Native generation supports only initial attempt 0 or repair attempt 1.");
+  if (input.attemptIndex === 0 && input.repairInstruction !== undefined) {
+    throw new TypeError("Initial generation attempt must not declare a repair instruction.");
+  }
+  if (input.attemptIndex === 1 && input.repairInstruction === undefined) {
+    throw new TypeError("Repair generation attempt requires one repair instruction.");
+  }
+  const repairInstruction = input.repairInstruction === undefined
+    ? undefined
+    : parseNativeBlockRepairInstructionV1(input.repairInstruction);
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.runId)) {
     throw new TypeError("Generation runId must be one stable lowercase identity part.");
   }
@@ -544,6 +615,20 @@ export async function prepareNativeBlockGenerationTaskV1(
     "host-closure.json",
     new TextEncoder().encode(stringifyCanonicalJson(hostClosure)),
   );
+  const frozenOwnerIdentities = resolveWorldReconstructionFrozenOwnerIdentitiesV1({
+    reconstructionCase,
+    evaluationProfile: profile,
+    gameplayBootstrap,
+    worldRuntimeBootstrap,
+    worldBounds: derived.worldBounds,
+    bootstrap: derived.bootstrap,
+  });
+  if (
+    repairInstruction !== undefined &&
+    !isEqual(repairInstruction.frozenOwnerIdentities, frozenOwnerIdentities)
+  ) {
+    throw new TypeError("Repair instruction frozen owner identity closure failed.");
+  }
   for (let index = 0; index < references.length; index += 1) {
     if (references[index]!.hash !== reconstructionCase.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");
   }
@@ -553,12 +638,21 @@ export async function prepareNativeBlockGenerationTaskV1(
   ]) : [];
   const taskInputFiles = [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, ...builderBundle, ...references];
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
+  const repairInstructionFile = repairInstruction === undefined
+    ? undefined
+    : frozenCanonicalFile(
+      "repair-instruction.json",
+      new TextEncoder().encode(stringifyCanonicalJson(repairInstruction)),
+    );
   const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, builderSkill, ...builderBundle]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
     .concat([
       { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
       { inputRef: "context/evaluation-profile.json", contentHash: hashWorldReconstructionEvaluationProfileV1(profile) },
       { inputRef: "context/scene-authoring-route-decision.json", contentHash: routeDecisionHash },
+      ...(repairInstructionFile === undefined
+        ? []
+        : [{ inputRef: "context/repair-instruction.json", contentHash: repairInstructionFile.hash }]),
     ]), ({ inputRef }) => inputRef);
   const workspaceContextManifest = { kind: "native-block-generation-context", schemaVersion: 1, inputs: contextInputs };
   const workspaceContextManifestHash = sha256CanonicalJson(workspaceContextManifest) as Sha256HashV1;
@@ -588,12 +682,15 @@ export async function prepareNativeBlockGenerationTaskV1(
     selectedAssetResources: [], seed: input.seed, authoringProfileRef: routeDecision.decision.authoringProfileRef,
     acceptanceTargetRefs: reconstructionCase.acceptanceTargetRefs, requiredEvidenceProfileRefs: reconstructionCase.requiredEvidenceProfileRefs,
   };
-  const contextFiles = [
+  const contextFiles: readonly (readonly [string, unknown])[] = [
     ["case.json", reconstructionCase],
     ["evaluation-profile.json", profile],
     ["scene-authoring-route-decision.json", routeDecision],
     ["generation-request.json", generationRequest],
     ["attempt.json", attempt],
+    ...(repairInstruction === undefined
+      ? []
+      : [["repair-instruction.json", repairInstruction] as const]),
     ["workspace-context-manifest.json", workspaceContextManifest],
   ] as const;
   const routerRequestId = `native-block-generation-${reconstructionCase.id}-${input.runId}-attempt-${input.attemptIndex}`;
@@ -699,5 +796,6 @@ export async function prepareNativeBlockGenerationTaskV1(
     worldBoundsBytes: worldBounds.bytes,
     hostClosure,
     hostClosureBytes: hostClosureFile.bytes,
+    frozenOwnerIdentities,
   });
 }
