@@ -28,6 +28,7 @@ import {
   createValidPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversal-implementation-identity";
@@ -336,6 +337,10 @@ async function createRuntime(
     runtime,
     runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
       .initialControlledEntityId,
+  );
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
   );
   return runtime;
 }
