@@ -2,7 +2,6 @@ import {
   lstat,
   mkdtemp,
   mkdir,
-  readFile,
   realpath,
   rm,
   symlink,
@@ -42,7 +41,6 @@ import { buildWorldReconstructionEvidenceSetV1 } from
 import { createEvidenceSetFixtureInputV1 } from
   "./evaluate-fixture.test-support.js";
 import {
-  createNativeBlockFinalArtifactPublisherTestAdapterV1,
   publishNativeBlockReconstructionFinalV1,
 } from "./final-artifact-publisher.js";
 
@@ -52,6 +50,11 @@ const PNG = Uint8Array.from(Buffer.from(
 ));
 const H = (character: string) =>
   `sha256:${character.repeat(64)}` as Sha256HashV1;
+const UNREACHABLE_PLAYABILITY = {
+  async launch(): Promise<never> {
+    throw new Error("playability must not launch for rejected publication input");
+  },
+};
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -212,52 +215,6 @@ async function createRunFixture() {
 }
 
 describe("Native reconstruction final artifact publisher", () => {
-  it("publishes the terminal Attempt through fsynced staging and atomic rename", async () => {
-    const fixture = await createRunFixture();
-    const events: string[] = [];
-    const publish = createNativeBlockFinalArtifactPublisherTestAdapterV1({
-      beforeSync(absolutePath, phase) {
-        events.push(`sync:${phase}:${path.basename(absolutePath)}`);
-      },
-      beforeRename(from, to) {
-        events.push(`rename:${path.basename(from)}:${path.basename(to)}`);
-      },
-    });
-    const runReceiptBefore = sha256Bytes(await readFile(
-      path.join(fixture.runDirectoryPath, "run-receipt.json"),
-    ));
-    try {
-      await expect(publish({
-        caseDirectoryPath: fixture.caseDirectoryPath,
-        runDirectoryPath: fixture.runDirectoryPath,
-        launch: fixture.launch,
-        verifyStagedFinalArtifacts(stagingDirectoryPath) {
-          events.push(`verify:${path.basename(stagingDirectoryPath)}`);
-        },
-      })).resolves.toMatchObject({
-        outcome: "published",
-        finalDirectoryPath: path.join(fixture.caseDirectoryPath, "final"),
-      });
-      expect(await missing(path.join(fixture.caseDirectoryPath, ".final-staging")))
-        .toBe(true);
-      expect(await missing(path.join(fixture.caseDirectoryPath, "final"))).toBe(false);
-      expect(sha256Bytes(await readFile(
-        path.join(fixture.runDirectoryPath, "run-receipt.json"),
-      ))).toBe(runReceiptBefore);
-      const renameIndex = events.findIndex((event) => event.startsWith("rename:"));
-      const verifyIndex = events.findIndex((event) => event.startsWith("verify:"));
-      expect(verifyIndex).toBeGreaterThan(-1);
-      expect(verifyIndex).toBeLessThan(renameIndex);
-      expect(events.slice(0, renameIndex).some((event) =>
-        event.startsWith("sync:staging:"))).toBe(true);
-      expect(events.slice(renameIndex + 1).some((event) =>
-        event === `sync:publication:${path.basename(fixture.caseDirectoryPath)}`))
-        .toBe(true);
-    } finally {
-      await rm(fixture.root, { recursive: true, force: true });
-    }
-  });
-
   it("rejects stale launch identity and partial Capture before staging", async () => {
     for (const mutation of ["stale", "partial"] as const) {
       const fixture = await createRunFixture();
@@ -271,7 +228,7 @@ describe("Native reconstruction final artifact publisher", () => {
           launch: mutation === "stale"
             ? { ...fixture.launch, captureReceiptHash: H("f") }
             : fixture.launch,
-          verifyStagedFinalArtifacts() {},
+          playability: UNREACHABLE_PLAYABILITY,
         })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
         expect(await missing(path.join(fixture.caseDirectoryPath, ".final-staging")))
           .toBe(true);
@@ -282,8 +239,8 @@ describe("Native reconstruction final artifact publisher", () => {
     }
   });
 
-  it("rejects symlinks, run-local final aliases, and an existing final", async () => {
-    for (const mutation of ["symlink", "run-final", "existing"] as const) {
+  it("rejects symlinks, run-local final aliases, existing final, and residual lock", async () => {
+    for (const mutation of ["symlink", "run-final", "existing", "lock"] as const) {
       const fixture = await createRunFixture();
       let runDirectoryPath = fixture.runDirectoryPath;
       if (mutation === "symlink") {
@@ -293,76 +250,28 @@ describe("Native reconstruction final artifact publisher", () => {
       } else if (mutation === "run-final") {
         runDirectoryPath = path.join(fixture.runDirectoryPath, "final");
         await mkdir(runDirectoryPath);
-      } else {
+      } else if (mutation === "existing") {
         await mkdir(path.join(fixture.caseDirectoryPath, "final"));
+      } else if (mutation === "lock") {
+        await writeFile(path.join(fixture.caseDirectoryPath, ".final-publish.lock"), "");
       }
       try {
         await expect(publishNativeBlockReconstructionFinalV1({
           caseDirectoryPath: fixture.caseDirectoryPath,
           runDirectoryPath,
           launch: fixture.launch,
-          verifyStagedFinalArtifacts() {},
+          playability: UNREACHABLE_PLAYABILITY,
         })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
+        if (mutation === "lock") {
+          expect(await missing(path.join(
+            fixture.caseDirectoryPath,
+            ".final-publish.lock",
+          ))).toBe(false);
+        }
       } finally {
         await rm(fixture.root, { recursive: true, force: true });
       }
     }
-  });
+  }, 15_000);
 
-  it("cleans owned staging after a pre-rename failure without mutating the Run", async () => {
-    const fixture = await createRunFixture();
-    const runReceiptBefore = await readFile(
-      path.join(fixture.runDirectoryPath, "run-receipt.json"),
-    );
-    const publish = createNativeBlockFinalArtifactPublisherTestAdapterV1({
-      beforeRename() {
-        throw new Error("injected publication failure");
-      },
-    });
-    try {
-      await expect(publish({
-        caseDirectoryPath: fixture.caseDirectoryPath,
-        runDirectoryPath: fixture.runDirectoryPath,
-        launch: fixture.launch,
-        verifyStagedFinalArtifacts() {},
-      })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
-      expect(await missing(path.join(fixture.caseDirectoryPath, ".final-staging")))
-        .toBe(true);
-      expect(await missing(path.join(fixture.caseDirectoryPath, "final"))).toBe(true);
-      expect(await readFile(path.join(fixture.runDirectoryPath, "run-receipt.json")))
-        .toEqual(runReceiptBefore);
-    } finally {
-      await rm(fixture.root, { recursive: true, force: true });
-    }
-  });
-
-  it("rejects a staging verifier failure and verifier-side byte mutation", async () => {
-    for (const mutation of ["reject", "mutate"] as const) {
-      const fixture = await createRunFixture();
-      const runReceiptBefore = await readFile(
-        path.join(fixture.runDirectoryPath, "run-receipt.json"),
-      );
-      try {
-        await expect(publishNativeBlockReconstructionFinalV1({
-          caseDirectoryPath: fixture.caseDirectoryPath,
-          runDirectoryPath: fixture.runDirectoryPath,
-          launch: fixture.launch,
-          async verifyStagedFinalArtifacts(stagingDirectoryPath) {
-            if (mutation === "reject") throw new Error("Final verification failed");
-            await writeFile(
-              path.join(stagingDirectoryPath, "launch.json"),
-              "{}\n",
-            );
-          },
-        })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
-        expect(await missing(path.join(fixture.caseDirectoryPath, ".final-staging")))
-          .toBe(true);
-        expect(await missing(path.join(fixture.caseDirectoryPath, "final"))).toBe(true);
-        expect(await readFile(path.join(fixture.runDirectoryPath, "run-receipt.json")))
-          .toEqual(runReceiptBefore);
-      } finally {
-        await rm(fixture.root, { recursive: true, force: true });
-      }
-    }
-  });
 });

@@ -1,4 +1,15 @@
-import { chmod, cp, mkdtemp, mkdir, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  cp,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -36,6 +47,10 @@ import {
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { buildWorldReconstructionEvidenceSetV1 } from "../reconstruction/evaluate-evidence-set.js";
 import { createEvidenceSetFixtureInputV1 } from "../reconstruction/evaluate-fixture.test-support.js";
+import {
+  createNativeBlockFinalArtifactPublisherTestAdapterV1,
+  publishNativeBlockReconstructionFinalV1,
+} from "../reconstruction/final-artifact-publisher.js";
 import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
 import { describe, expect, it, vi } from "vitest";
 
@@ -308,6 +323,7 @@ async function completeRunFixture(
   const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
   await mkdir(captureDirectoryPath, { recursive: true });
   await chmod(attemptDirectoryPath, 0o700);
+  await writeJson(path.join(caseDirectoryPath, "case.json"), fixture.reconstructionCase);
   await writeJson(path.join(runDirectoryPath, "inputs/case.json"), fixture.reconstructionCase);
   await writeJson(path.join(runDirectoryPath, "inputs/evaluation-profile.json"), fixture.evaluationProfile);
 
@@ -483,6 +499,195 @@ async function completeRunFixture(
   await writeJson(path.join(runDirectoryPath, "run-receipt.json"), runReceipt);
   return { caseDirectoryPath, runDirectoryPath };
 }
+
+async function finalLaunchFixture(input: Readonly<{
+  caseDirectoryPath: string;
+  runDirectoryPath: string;
+}>) {
+  const runReceipt = parseWorldReconstructionRunReceiptV1(JSON.parse(
+    await readFile(path.join(input.runDirectoryPath, "run-receipt.json"), "utf8"),
+  ));
+  const finalAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
+  return {
+    kind: "native-block-reconstruction-launch" as const,
+    schemaVersion: 1 as const,
+    caseId: "package-fixture.case",
+    runReceiptRef:
+      "artifact://case/package-fixture/runs/formal-fixture/run-receipt.json",
+    runReceiptHash: sha256CanonicalJson(runReceipt) as Sha256HashV1,
+    worldPackageRelativePath: "final/world-package" as const,
+    worldPackageRef: finalAttempt.worldPackageRef,
+    worldPackageRootHash: finalAttempt.worldPackageRootHash,
+    captureReceiptRelativePath:
+      "final/capture/formal-world-capture-receipt.json" as const,
+    captureReceiptHash: finalAttempt.captureReceiptHash,
+    evaluationRelativePath: "final/evaluation.json" as const,
+    evaluationHash: finalAttempt.evaluationResultHash,
+    launchCommand:
+      "pnpm worldkit native run final/world-package --port 5174 --json" as const,
+  };
+}
+
+describe("Native Block reconstruction final artifact publisher integration", () => {
+  it("runs the formal Final verifier before publishing the exact staged candidate", async () => {
+    const fixture = await completeRunFixture();
+    const playability = playabilityPort();
+    try {
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture,
+        launch: await finalLaunchFixture(fixture),
+        playability: playability.port,
+      })).resolves.toMatchObject({ outcome: "published" });
+      expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
+        packageDirectoryPath: path.join(
+          fixture.caseDirectoryPath,
+          ".final-staging/world-package",
+        ),
+      }));
+      await expect(readFile(path.join(
+        fixture.caseDirectoryPath,
+        "final/launch.json",
+      ))).resolves.toBeInstanceOf(Buffer);
+      await expect(readFile(path.join(
+        fixture.caseDirectoryPath,
+        ".final-publish.lock",
+      ))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it("rejects an empty final created immediately before the final existence check", async () => {
+    const fixture = await completeRunFixture();
+    const playability = playabilityPort();
+    const publish = createNativeBlockFinalArtifactPublisherTestAdapterV1({
+      async beforeFinalExistenceCheck(finalDirectoryPath) {
+        await mkdir(finalDirectoryPath);
+      },
+    });
+    try {
+      await expect(publish({
+        ...fixture,
+        launch: await finalLaunchFixture(fixture),
+        playability: playability.port,
+      })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
+      await expect(readFile(path.join(
+        fixture.caseDirectoryPath,
+        ".final-staging/launch.json",
+      ))).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(path.join(
+        fixture.caseDirectoryPath,
+        ".final-publish.lock",
+      ))).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readdir(path.join(
+        fixture.caseDirectoryPath,
+        "final",
+      ))).resolves.toEqual([]);
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it("rejects a verifier-side empty directory and Run source mutation", async () => {
+    for (const mutation of ["staging-directory", "run-source"] as const) {
+      const fixture = await completeRunFixture();
+      const playability = playabilityPort();
+      const mutatingPlayability: NativeBlockReconstructionPlayabilityLaunchPortV1 = {
+        async launch(input) {
+          if (mutation === "staging-directory") {
+            await mkdir(path.join(
+              path.dirname(input.packageDirectoryPath),
+              "foreign-empty-directory",
+            ));
+          } else {
+            await writeFile(
+              path.join(fixture.runDirectoryPath, "run-receipt.json"),
+              "{}\n",
+            );
+          }
+          return (playability.port as NativeBlockReconstructionPlayabilityLaunchPortV1)
+            .launch(input);
+        },
+      };
+      try {
+        await expect(publishNativeBlockReconstructionFinalV1({
+          ...fixture,
+          launch: await finalLaunchFixture(fixture),
+          playability: mutatingPlayability,
+        })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
+      } finally {
+        await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+      }
+    }
+  }, 15_000);
+
+  it("serializes official publishers with one Case-scoped lock", async () => {
+    const fixture = await completeRunFixture();
+    const playability = playabilityPort();
+    let announceLaunch!: () => void;
+    let releaseLaunch!: () => void;
+    const launchStarted = new Promise<void>((resolve) => {
+      announceLaunch = resolve;
+    });
+    const launchReleased = new Promise<void>((resolve) => {
+      releaseLaunch = resolve;
+    });
+    const blockingPlayability: NativeBlockReconstructionPlayabilityLaunchPortV1 = {
+      async launch(input) {
+        announceLaunch();
+        await launchReleased;
+        return (playability.port as NativeBlockReconstructionPlayabilityLaunchPortV1)
+          .launch(input);
+      },
+    };
+    const launch = await finalLaunchFixture(fixture);
+    const firstPublication = publishNativeBlockReconstructionFinalV1({
+      ...fixture,
+      launch,
+      playability: blockingPlayability,
+    });
+    try {
+      await launchStarted;
+      await expect(readFile(path.join(
+        fixture.caseDirectoryPath,
+        ".final-publish.lock",
+      ))).resolves.toBeInstanceOf(Buffer);
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture,
+        launch,
+        playability: playability.port,
+      })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
+      releaseLaunch();
+      await expect(firstPublication).resolves.toMatchObject({ outcome: "published" });
+    } finally {
+      releaseLaunch();
+      await firstPublication.catch(() => undefined);
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  }, 15_000);
+
+  it("cleans owned staging and lock when the formal Final verifier rejects", async () => {
+    const fixture = await completeRunFixture();
+    const rejectingPlayability = playabilityPort({ jumpNeverAir: true });
+    try {
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture,
+        launch: await finalLaunchFixture(fixture),
+        playability: rejectingPlayability.port,
+      })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
+      for (const relativePath of [
+        ".final-staging",
+        ".final-publish.lock",
+        "final",
+      ]) {
+        await expect(readFile(path.join(fixture.caseDirectoryPath, relativePath)))
+          .rejects.toMatchObject({ code: "ENOENT" });
+      }
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  }, 15_000);
+});
 
 async function createFinalCandidate(input: Readonly<{
   caseDirectoryPath: string;

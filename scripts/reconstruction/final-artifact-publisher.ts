@@ -7,6 +7,7 @@ import {
   realpath,
   rename,
   rm,
+  unlink,
 } from "node:fs/promises";
 import path from "node:path";
 
@@ -38,9 +39,14 @@ import {
 import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import {
+  verifyNativeBlockReconstructionE2EV1,
+  type NativeBlockReconstructionPlayabilityLaunchPortV1,
+} from "../verification/verify-native-block-reconstruction-e2e.js";
 
 const FINAL_DIRECTORY_NAME = "final";
 const STAGING_DIRECTORY_NAME = ".final-staging";
+const PUBLICATION_LOCK_FILE_NAME = ".final-publish.lock";
 const WORLD_PACKAGE_RELATIVE_PATH = "final/world-package";
 const CAPTURE_RECEIPT_RELATIVE_PATH =
   "final/capture/formal-world-capture-receipt.json";
@@ -69,9 +75,7 @@ export interface PublishNativeBlockReconstructionFinalInputV1 {
   readonly caseDirectoryPath: string;
   readonly runDirectoryPath: string;
   readonly launch: NativeBlockReconstructionLaunchV1;
-  readonly verifyStagedFinalArtifacts: (
-    stagingDirectoryPath: string,
-  ) => void | Promise<void>;
+  readonly playability: NativeBlockReconstructionPlayabilityLaunchPortV1;
 }
 
 export interface NativeBlockFinalArtifactPublicationV1 {
@@ -87,8 +91,7 @@ interface PublisherHooksV1 {
     absolutePath: string,
     phase: "staging" | "publication",
   ) => void | Promise<void>;
-  readonly beforeRename?: (
-    stagingDirectoryPath: string,
+  readonly beforeFinalExistenceCheck?: (
     finalDirectoryPath: string,
   ) => void | Promise<void>;
 }
@@ -253,7 +256,12 @@ function assertTreeEqual(
 ): void {
   const actualPaths = [...actual.filesByRelativePath.keys()].sort();
   const expectedPaths = [...expected.filesByRelativePath.keys()].sort();
+  const actualDirectories = [...actual.directoryPaths].sort();
+  const expectedDirectories = [...expected.directoryPaths].sort();
   if (
+    actualDirectories.length !== expectedDirectories.length ||
+    actualDirectories.some((value, index) =>
+      value !== expectedDirectories[index]) ||
     actualPaths.length !== expectedPaths.length ||
     actualPaths.some((value, index) => value !== expectedPaths[index]) ||
     actualPaths.some((value) =>
@@ -354,9 +362,12 @@ async function publish(
   hooks: PublisherHooksV1,
 ): Promise<NativeBlockFinalArtifactPublicationV1> {
   let stagingOwned = false;
+  let publicationLockOwned = false;
+  let publicationLockFilePath: string | undefined;
+  let caseDirectoryPath: string | undefined;
   let stagingDirectoryPath: string | undefined;
   try {
-    const caseDirectoryPath = await requireCanonicalDirectory(
+    caseDirectoryPath = await requireCanonicalDirectory(
       rawInput.caseDirectoryPath,
       "Case directory",
     );
@@ -369,10 +380,27 @@ async function publish(
     }
     const finalDirectoryPath = path.join(caseDirectoryPath, FINAL_DIRECTORY_NAME);
     stagingDirectoryPath = path.join(caseDirectoryPath, STAGING_DIRECTORY_NAME);
+    publicationLockFilePath = path.join(
+      caseDirectoryPath,
+      PUBLICATION_LOCK_FILE_NAME,
+    );
+    const publicationLockHandle = await open(
+      publicationLockFilePath,
+      "wx",
+      0o600,
+    );
+    publicationLockOwned = true;
+    try {
+      await publicationLockHandle.sync();
+    } finally {
+      await publicationLockHandle.close();
+    }
+    await syncPath(caseDirectoryPath, "publication", hooks);
     if (
       await lstatOrMissing(finalDirectoryPath) !== undefined ||
       await lstatOrMissing(stagingDirectoryPath) !== undefined
     ) invalid("final or staging already exists");
+    const runSnapshot = await snapshotTree(runDirectoryPath);
 
     const reconstructionCase = parseWorldReconstructionCaseV1(parseJson(
       await requiredRegularFile(caseDirectoryPath, "case.json"),
@@ -589,7 +617,32 @@ async function publish(
     );
     await syncTree(stagingDirectoryPath, hooks);
     const stagedSnapshot = await snapshotTree(stagingDirectoryPath);
-    await rawInput.verifyStagedFinalArtifacts(stagingDirectoryPath);
+    const formalVerification = await verifyNativeBlockReconstructionE2EV1({
+      candidate: {
+        kind: "final",
+        runDirectoryPath,
+        finalDirectoryPath: stagingDirectoryPath,
+      },
+      playability: rawInput.playability,
+    });
+    exact(formalVerification.outcome, "verified",
+      "formal Final verification did not pass");
+    exact(formalVerification.candidateKind, "final",
+      "formal verifier used the wrong candidate mode");
+    exact(formalVerification.attemptIndex, finalAttempt.attemptIndex,
+      "formal verifier selected a stale Attempt");
+    exact(formalVerification.worldPackageRef, finalAttempt.worldPackageRef,
+      "formal verifier selected a foreign Package");
+    exact(formalVerification.worldPackageRootHash, finalAttempt.worldPackageRootHash,
+      "formal verifier selected a stale Package Root");
+    exact(formalVerification.worldBuildIdentityHash,
+      finalAttempt.worldBuildIdentityHash,
+      "formal verifier selected a stale World Build identity");
+    exact(formalVerification.captureReceiptHash, finalAttempt.captureReceiptHash,
+      "formal verifier selected a stale Capture");
+    exact(formalVerification.evaluationResultHash,
+      finalAttempt.evaluationResultHash,
+      "formal verifier selected a stale Evaluation");
     assertTreeEqual(
       await snapshotTree(stagingDirectoryPath),
       stagedSnapshot,
@@ -600,12 +653,21 @@ async function publish(
       sha256Bytes(evaluationBytes),
       "terminal Evaluation source changed during publication",
     );
+    assertTreeEqual(
+      await snapshotTree(runDirectoryPath),
+      runSnapshot,
+      "immutable Run source",
+    );
+    await syncTree(stagingDirectoryPath, hooks);
+    await hooks.beforeFinalExistenceCheck?.(finalDirectoryPath);
     if (await lstatOrMissing(finalDirectoryPath) !== undefined) {
       invalid("final appeared during publication");
     }
-    await hooks.beforeRename?.(stagingDirectoryPath, finalDirectoryPath);
     await rename(stagingDirectoryPath, finalDirectoryPath);
     stagingOwned = false;
+    await syncPath(caseDirectoryPath, "publication", hooks);
+    await unlink(publicationLockFilePath);
+    publicationLockOwned = false;
     await syncPath(caseDirectoryPath, "publication", hooks);
     return Object.freeze({
       outcome: "published",
@@ -615,15 +677,34 @@ async function publish(
       evaluationHash,
     });
   } catch (error) {
+    const cleanupErrors: unknown[] = [];
     if (stagingOwned && stagingDirectoryPath !== undefined) {
       try {
         await rm(stagingDirectoryPath, { recursive: true, force: true });
       } catch (cleanupError) {
-        throw new AggregateError(
-          [error, cleanupError],
-          "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID: staging cleanup failed",
-        );
+        cleanupErrors.push(cleanupError);
       }
+    }
+    if (publicationLockOwned && publicationLockFilePath !== undefined) {
+      try {
+        await unlink(publicationLockFilePath);
+        publicationLockOwned = false;
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+    if (caseDirectoryPath !== undefined && cleanupErrors.length === 0) {
+      try {
+        await syncPath(caseDirectoryPath, "publication", hooks);
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID: owned cleanup failed",
+      );
     }
     if (error instanceof Error &&
         error.message.startsWith("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID")) {
