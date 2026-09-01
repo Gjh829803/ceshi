@@ -38,6 +38,8 @@ function readyEvent(): RuntimeSessionEventV1 {
       "fixed-input.run",
       "snapshot.get",
       "events.get",
+      "session.reset",
+      "subject-support.get",
       "session.close",
     ],
   } as const;

@@ -44,6 +44,8 @@ export const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
   "fixed-input.run",
   "snapshot.get",
   "events.get",
+  "session.reset",
+  "subject-support.get",
   "session.close",
 ] as const);
 
@@ -75,8 +77,37 @@ export type RuntimeSessionRequestV1 =
       query: GameplayEventsQueryV1;
     }>)
   | (RuntimeSessionRequestBaseV1 & Readonly<{
+      type: "session.reset";
+    }>)
+  | (RuntimeSessionRequestBaseV1 & Readonly<{
+      type: "subject-support.get";
+      subjectEntityId: string;
+      expectedSimulationTick: number;
+    }>)
+  | (RuntimeSessionRequestBaseV1 & Readonly<{
       type: "session.close";
     }>);
+
+export interface RuntimeSessionSubjectSupportV1 {
+  readonly kind: "worldkit-runtime-session-subject-support";
+  readonly schemaVersion: 1;
+  readonly runtimeSessionId: string;
+  readonly worldSessionId: string;
+  readonly subjectEntityId: string;
+  readonly simulationTick: number;
+  readonly mode: "supported";
+  readonly sampledControllerCenterMetersXYZ: readonly [number, number, number];
+  readonly sampledFootPointMetersXYZ: readonly [number, number, number];
+  readonly pointMetersXYZ: readonly [number, number, number];
+  readonly normalXYZ: readonly [number, number, number];
+  readonly distanceMeters: number;
+  readonly colliderId: string;
+  readonly colliderSubshapeId: string;
+  readonly logicalSubshapeId: string;
+  readonly traversalSurfaceId: string;
+  readonly surfaceEntityId: string;
+  readonly traversalSurfaceProfileRef: string;
+}
 
 export type RuntimeSessionDiagnosticCodeV1 =
   | "RUNTIME_SESSION_REQUEST_ID_CONFLICT"
@@ -109,7 +140,7 @@ export type RuntimeSessionReceiptV1 =
       gameplayCommandReceipt: GameplayCommandReceiptV1;
     }>)
   | (RuntimeSessionReceiptBaseV1 & Readonly<{
-      requestType: "fixed-input.run" | "snapshot.get";
+      requestType: "fixed-input.run" | "snapshot.get" | "session.reset";
       status: "succeeded";
       snapshot: WorldRuntimeSnapshotV4;
     }>)
@@ -117,6 +148,11 @@ export type RuntimeSessionReceiptV1 =
       requestType: "events.get";
       status: "succeeded";
       gameplayEvents: GameplayEventsQueryResultV1;
+    }>)
+  | (RuntimeSessionReceiptBaseV1 & Readonly<{
+      requestType: "subject-support.get";
+      status: "succeeded";
+      subjectSupport: RuntimeSessionSubjectSupportV1;
     }>)
   | (RuntimeSessionReceiptBaseV1 & Readonly<{
       requestType: "session.close";
@@ -764,6 +800,55 @@ function parseGameplayEventsQueryV1(value: unknown): GameplayEventsQueryV1 {
   });
 }
 
+export function parseRuntimeSessionSubjectSupportV1(
+  value: unknown,
+): RuntimeSessionSubjectSupportV1 {
+  const schemaName = "RuntimeSessionSubjectSupportV1";
+  const record = snapshotDataRecord(value) ?? invalid(schemaName);
+  if (
+    !hasExactKeys(record, [
+      "kind",
+      "schemaVersion",
+      "runtimeSessionId",
+      "worldSessionId",
+      "subjectEntityId",
+      "simulationTick",
+      "mode",
+      "sampledControllerCenterMetersXYZ",
+      "sampledFootPointMetersXYZ",
+      "pointMetersXYZ",
+      "normalXYZ",
+      "distanceMeters",
+      "colliderId",
+      "colliderSubshapeId",
+      "logicalSubshapeId",
+      "traversalSurfaceId",
+      "surfaceEntityId",
+      "traversalSurfaceProfileRef",
+    ]) ||
+    record.kind !== "worldkit-runtime-session-subject-support" ||
+    record.schemaVersion !== 1 ||
+    !isNonEmptyString(record.runtimeSessionId) ||
+    !isNonEmptyString(record.worldSessionId) ||
+    !isNonEmptyString(record.subjectEntityId) ||
+    !isSafeNonNegativeInteger(record.simulationTick) ||
+    record.mode !== "supported" ||
+    isNil(finiteTuple(record.sampledControllerCenterMetersXYZ, 3)) ||
+    isNil(finiteTuple(record.sampledFootPointMetersXYZ, 3)) ||
+    isNil(finiteTuple(record.pointMetersXYZ, 3)) ||
+    isNil(finiteTuple(record.normalXYZ, 3)) ||
+    !isFiniteNumber(record.distanceMeters) ||
+    !isNonEmptyString(record.colliderId) ||
+    !isNonEmptyString(record.colliderSubshapeId) ||
+    !isNonEmptyString(record.logicalSubshapeId) ||
+    !isNonEmptyString(record.traversalSurfaceId) ||
+    !isNonEmptyString(record.surfaceEntityId) ||
+    !isNonEmptyString(record.traversalSurfaceProfileRef)
+  ) return invalid(schemaName);
+  return canonicalClone(record, schemaName) as unknown as
+    RuntimeSessionSubjectSupportV1;
+}
+
 export function parseRuntimeSessionRequestV1(
   value: unknown,
 ): RuntimeSessionRequestV1 {
@@ -790,6 +875,15 @@ export function parseRuntimeSessionRequestV1(
   } else if (record.type === "events.get") {
     if (!hasExactKeys(record, [...common, "query"])) return invalid(schemaName);
     parseGameplayEventsQueryV1(record.query);
+  } else if (record.type === "subject-support.get") {
+    if (!hasExactKeys(record, [
+      ...common,
+      "subjectEntityId",
+      "expectedSimulationTick",
+    ]) ||
+      !isNonEmptyString(record.subjectEntityId) ||
+      !isSafeNonNegativeInteger(record.expectedSimulationTick)
+    ) return invalid(schemaName);
   } else if (!hasExactKeys(record, common)) {
     return invalid(schemaName);
   }
@@ -887,7 +981,8 @@ function parseRuntimeSessionReceiptBodyV1(
     ) return invalid(schemaName);
   } else if (
     record.requestType === "fixed-input.run" ||
-    record.requestType === "snapshot.get"
+    record.requestType === "snapshot.get" ||
+    record.requestType === "session.reset"
   ) {
     if (!hasExactKeys(record, [...common, "snapshot"])) return invalid(schemaName);
     const snapshot = parseWorldRuntimeSnapshotV4(record.snapshot);
@@ -904,6 +999,15 @@ function parseRuntimeSessionReceiptBodyV1(
       record.runtimeSessionId,
       record.worldSessionId,
     );
+  } else if (record.requestType === "subject-support.get") {
+    if (!hasExactKeys(record, [...common, "subjectSupport"])) {
+      return invalid(schemaName);
+    }
+    const support = parseRuntimeSessionSubjectSupportV1(record.subjectSupport);
+    if (
+      support.runtimeSessionId !== record.runtimeSessionId ||
+      support.worldSessionId !== record.worldSessionId
+    ) return invalid(schemaName);
   } else {
     if (!hasExactKeys(record, [...common, "closeResult"])) {
       return invalid(schemaName);

@@ -193,6 +193,7 @@ function readyEvent(
 
 function finalEvent(
   ready: RuntimeSessionReadyEventV1,
+  worldSessionId: string,
   type: "completed" | "failed",
   diagnostic?: RuntimeSessionDiagnosticV1,
 ): RuntimeSessionFinalEventV1 {
@@ -202,7 +203,7 @@ function finalEvent(
     protocolVersion: WORLDKIT_RUNTIME_SESSION_PROTOCOL_VERSION,
     sequence: ready.sequence + 1,
     runtimeSessionId: ready.runtimeSessionId,
-    worldSessionId: ready.worldSessionId,
+    worldSessionId,
     type,
     ...(isNil(diagnostic) ? {} : { diagnostic }),
   }) as RuntimeSessionFinalEventV1;
@@ -286,6 +287,7 @@ function assertPackageBinding(
 function isReplayMutation(request: RuntimeSessionRequestV1): boolean {
   return request.type === "gameplay-command.execute" ||
     request.type === "fixed-input.run" ||
+    request.type === "session.reset" ||
     request.type === "session.close";
 }
 
@@ -297,6 +299,7 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
     private readonly wal: FileRuntimeSessionWalV1,
     private readonly session: HeadlessRuntimeSessionV1 | undefined,
     private state: ExecutorStateV1,
+    private currentWorldSessionId: string,
     private readonly hooks: Pick<
       RuntimeSessionExecutorFactoriesV1,
       "afterRuntimeResult" | "afterCommittedRequest"
@@ -333,7 +336,7 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
   private async executeSerialized(value: unknown): Promise<RuntimeSessionReceiptV1> {
     const request = parseRuntimeSessionRequestV1(value);
     if (request.runtimeSessionId !== this.readyEvent.runtimeSessionId) {
-      return rejectedReceipt(request, this.readyEvent.worldSessionId, {
+      return rejectedReceipt(request, this.currentWorldSessionId, {
         code: "RUNTIME_SESSION_NOT_ACTIVE",
         message: "The Request belongs to another Runtime Session.",
       });
@@ -342,13 +345,13 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
     const lookup = this.wal.lookupRequest(request);
     if (lookup.status === "replay") return lookup.receipt;
     if (lookup.status === "conflict") {
-      return rejectedReceipt(request, this.readyEvent.worldSessionId, {
+      return rejectedReceipt(request, this.currentWorldSessionId, {
         code: "RUNTIME_SESSION_REQUEST_ID_CONFLICT",
         message: "The Request ID is already committed with different content.",
       });
     }
     if (this.state !== "active" || isNil(this.session)) {
-      return rejectedReceipt(request, this.readyEvent.worldSessionId, {
+      return rejectedReceipt(request, this.currentWorldSessionId, {
         code: "RUNTIME_SESSION_NOT_ACTIVE",
         message: "The Runtime Session is not active.",
       });
@@ -388,7 +391,11 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
 
     if (request.type === "session.close") {
       this.state = "closed";
-      this.wal.appendClosed(finalEvent(this.readyEvent, "completed"));
+      this.wal.appendClosed(finalEvent(
+        this.readyEvent,
+        this.currentWorldSessionId,
+        "completed",
+      ));
     }
     return receipt;
   }
@@ -406,8 +413,13 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
       finalDiagnostic ??= INTERNAL_FAILURE_DIAGNOSTIC;
     }
     const event = isNil(finalDiagnostic)
-      ? finalEvent(this.readyEvent, "completed")
-      : finalEvent(this.readyEvent, "failed", finalDiagnostic);
+      ? finalEvent(this.readyEvent, this.currentWorldSessionId, "completed")
+      : finalEvent(
+        this.readyEvent,
+        this.currentWorldSessionId,
+        "failed",
+        finalDiagnostic,
+      );
     this.state = event.type === "completed" ? "closed" : "failed";
     this.wal.appendClosed(event);
     return event;
@@ -433,18 +445,18 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
           throw new Error("RUNTIME_SESSION_PUBLICATION_RECEIPT_MISMATCH");
         }
       }
-      return succeededReceipt(request, this.readyEvent.worldSessionId, {
+      return succeededReceipt(request, this.currentWorldSessionId, {
         gameplayCommandReceipt,
       });
     }
     if (request.type === "fixed-input.run") {
       const snapshot = await session.runFixedInput(request.input);
-      return succeededReceipt(request, this.readyEvent.worldSessionId, {
+      return succeededReceipt(request, this.currentWorldSessionId, {
         snapshot,
       });
     }
     if (request.type === "snapshot.get") {
-      return succeededReceipt(request, this.readyEvent.worldSessionId, {
+      return succeededReceipt(request, this.currentWorldSessionId, {
         snapshot: session.snapshot(),
       });
     }
@@ -456,7 +468,7 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
       );
       const events = Object.freeze(candidates.slice(0, requestedCount));
       const last = events.at(-1);
-      return succeededReceipt(request, this.readyEvent.worldSessionId, {
+      return succeededReceipt(request, this.currentWorldSessionId, {
         gameplayEvents: Object.freeze({
           events,
           nextAfterEventSequence: isNil(last)
@@ -467,8 +479,46 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
       });
     }
 
+    if (request.type === "session.reset") {
+      const previousWorldSessionId = this.currentWorldSessionId;
+      const snapshot = await session.resetWithInitialControlBinding();
+      if (
+        snapshot.runtimeSessionId !== this.readyEvent.runtimeSessionId ||
+        snapshot.worldSessionId === previousWorldSessionId ||
+        snapshot.world.simulationTick !== 0
+      ) throw new Error("RUNTIME_SESSION_RESET_IDENTITY_MISMATCH");
+      this.currentWorldSessionId = snapshot.worldSessionId;
+      return succeededReceipt(request, this.currentWorldSessionId, {
+        snapshot,
+      });
+    }
+
+    if (request.type === "subject-support.get") {
+      const subjectSupport = session.readCommittedSubjectSupport(
+        request.subjectEntityId,
+        request.expectedSimulationTick,
+      );
+      if (isNil(subjectSupport)) {
+        return rejectedReceipt(request, this.currentWorldSessionId, {
+          code: "RUNTIME_SESSION_REQUEST_REJECTED",
+          message:
+            "Committed Subject support is stale, missing, ambiguous, or unregistered.",
+        });
+      }
+      if (
+        subjectSupport.runtimeSessionId !== this.readyEvent.runtimeSessionId ||
+        subjectSupport.worldSessionId !== this.currentWorldSessionId ||
+        subjectSupport.subjectEntityId !== request.subjectEntityId ||
+        subjectSupport.simulationTick !== request.expectedSimulationTick
+      ) throw new Error("RUNTIME_SESSION_SUBJECT_SUPPORT_IDENTITY_MISMATCH");
+      return succeededReceipt(request, this.currentWorldSessionId, {
+        subjectSupport,
+      });
+    }
+
+    const closingWorldSessionId = this.currentWorldSessionId;
     await session.dispose();
-    return succeededReceipt(request, this.readyEvent.worldSessionId, {
+    return succeededReceipt(request, closingWorldSessionId, {
       closeResult: Object.freeze({ mode: "closed" as const }),
     });
   }
@@ -477,15 +527,19 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
     request: RuntimeSessionRequestV1,
   ): Promise<RuntimeSessionReceiptV1> {
     this.state = "failed";
+    if (!isNil(this.session)) {
+      this.currentWorldSessionId = this.session.currentWorldSessionId;
+    }
     await this.disposeIgnoringFailure();
     const receipt = rejectedReceipt(
       request,
-      this.readyEvent.worldSessionId,
+      this.currentWorldSessionId,
       INTERNAL_FAILURE_DIAGNOSTIC,
     );
     this.wal.appendCommittedRequest({ request, receipt });
     this.wal.appendClosed(finalEvent(
       this.readyEvent,
+      this.currentWorldSessionId,
       "failed",
       INTERNAL_FAILURE_DIAGNOSTIC,
     ));
@@ -526,7 +580,14 @@ async function createExecutor(
       walFilePath: input.walFilePath,
       readyEvent: ready,
     });
-    return new RuntimeSessionExecutor(ready, wal, session, "active", factories);
+    return new RuntimeSessionExecutor(
+      ready,
+      wal,
+      session,
+      "active",
+      ready.worldSessionId,
+      factories,
+    );
   } catch (error) {
     try {
       await session.dispose();
@@ -543,13 +604,25 @@ async function recoveryDiverged(
   session: HeadlessRuntimeSessionV1,
   cause: unknown,
 ): Promise<never> {
+  const currentWorldSessionId = wal.snapshot().committedRequests.reduce(
+    (worldSessionId, entry) =>
+      entry.request.type === "session.reset"
+        ? entry.receipt.worldSessionId
+        : worldSessionId,
+    ready.worldSessionId,
+  );
   try {
     await session.dispose();
   } catch {
     // Recovery remains failed closed even when provider cleanup also throws.
   }
   try {
-    wal.appendClosed(finalEvent(ready, "failed", RECOVERY_DIVERGED_DIAGNOSTIC));
+    wal.appendClosed(finalEvent(
+      ready,
+      currentWorldSessionId,
+      "failed",
+      RECOVERY_DIVERGED_DIAGNOSTIC,
+    ));
   } catch {
     // Preserve the replay divergence as the primary diagnostic.
   }
@@ -576,6 +649,7 @@ async function resumeExecutor(
       wal,
       undefined,
       durable.finalEvent.type === "completed" ? "closed" : "failed",
+      durable.finalEvent.worldSessionId,
       factories,
     );
   }
@@ -594,13 +668,17 @@ async function resumeExecutor(
     wal,
     session,
     "active",
+    durable.readyEvent.worldSessionId,
     factories,
   );
 
   for (const [index, entry] of durable.committedRequests.entries()) {
     const isLastCommittedRequest =
       index === durable.committedRequests.length - 1;
-    if (entry.receipt.status === "rejected") {
+    if (
+      entry.receipt.status === "rejected" &&
+      entry.receipt.diagnostic.code !== "RUNTIME_SESSION_REQUEST_REJECTED"
+    ) {
       if (!isLastCommittedRequest) {
         return recoveryDiverged(
           durable.readyEvent,
@@ -612,6 +690,7 @@ async function resumeExecutor(
       await session.dispose().catch(() => undefined);
       wal.appendClosed(finalEvent(
         durable.readyEvent,
+        entry.receipt.worldSessionId,
         "failed",
         entry.receipt.diagnostic,
       ));
@@ -620,6 +699,7 @@ async function resumeExecutor(
         wal,
         undefined,
         "failed",
+        entry.receipt.worldSessionId,
         factories,
       );
     }
@@ -650,12 +730,17 @@ async function resumeExecutor(
       );
     }
     if (entry.request.type === "session.close") {
-      wal.appendClosed(finalEvent(durable.readyEvent, "completed"));
+      wal.appendClosed(finalEvent(
+        durable.readyEvent,
+        entry.receipt.worldSessionId,
+        "completed",
+      ));
       return new RuntimeSessionExecutor(
         durable.readyEvent,
         wal,
         undefined,
         "closed",
+        entry.receipt.worldSessionId,
         factories,
       );
     }

@@ -243,6 +243,48 @@ describe("headless Babylon Runtime Session", () => {
     }
   }, 30_000);
 
+  it("resets with the initial control binding and reads only the committed support sample", async () => {
+    const session = await loadHeadlessWorldPackageV1({
+      packageDirectoryPath: basicPackagePath,
+      runtimeSessionId: "runtime-session.reset-support",
+      initialWorldSessionId: "world-session.reset-support",
+    });
+    try {
+      const initial = session.snapshot();
+      await session.runFixedInput({ actions: ["move-forward"], ticks: 2 });
+      const reset = await session.resetWithInitialControlBinding();
+      expect(reset).toMatchObject({
+        runtimeSessionId: initial.runtimeSessionId,
+        world: { simulationTick: 0 },
+        view: { camera: { mode: "tracking", targetEntityId: "player" } },
+      });
+      expect(reset.worldSessionId).not.toBe(initial.worldSessionId);
+      const settled = await session.runFixedInput({ actions: [], ticks: 1 });
+      const support = session.readCommittedSubjectSupport(
+        "player",
+        settled.world.simulationTick,
+      );
+      expect(support).toMatchObject({
+        runtimeSessionId: initial.runtimeSessionId,
+        worldSessionId: reset.worldSessionId,
+        subjectEntityId: "player",
+        simulationTick: settled.world.simulationTick,
+        mode: "supported",
+        colliderId: expect.any(String),
+      });
+      expect(session.readCommittedSubjectSupport(
+        "player",
+        settled.world.simulationTick - 1,
+      )).toBeUndefined();
+      expect(session.readCommittedSubjectSupport(
+        "unknown-subject",
+        settled.world.simulationTick,
+      )).toBeUndefined();
+    } finally {
+      await session.dispose();
+    }
+  }, 30_000);
+
   it("publishes a staged verified Package through RuntimeHost and snapshots only the new tick-zero Runtime", async () => {
     const initial = await loadedBasicPackage();
     const candidate = await loadRuntimeWorldConfigurationFromPackageDirectoryV1({

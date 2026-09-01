@@ -21,6 +21,12 @@ export type {
   FormalHostedWorldCapturePayloadV1,
 } from "./formal-world-capture-provider";
 export {
+  CommittedSupportSelectionErrorV1,
+  projectRuntimeSessionSubjectSupportV1,
+  selectUniqueCommittedSupportContactV1,
+  type CommittedSupportSelectionErrorCodeV1,
+} from "./runtime-session-subject-support";
+export {
   assertHostedFormalCaptureWireBudgetV1,
   exactPlainRecordV1,
   hostedFormalCaptureErrorV1,

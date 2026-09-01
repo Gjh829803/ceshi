@@ -65,6 +65,10 @@ import {
   freezeFormalWorldCaptureSdkOwnerIdentitiesV1,
   type FormalHostedWorldCapturePayloadV1,
 } from "./formal-world-capture-provider.js";
+import {
+  CommittedSupportSelectionErrorV1,
+  projectRuntimeSessionSubjectSupportV1,
+} from "./runtime-session-subject-support.js";
 
 const PARTICIPANT_ID = "native-isolation-participant";
 const CONTROLLER_ENTITY_ID = "native-isolation-controller";
@@ -79,8 +83,9 @@ const CONTROLLER_DEFINITION_HASH = sha256CanonicalJson({
 });
 const GAMEPLAY_MODE_REF =
   "worldkit://gameplay-mode/native-isolation.exploration@1";
-const MAXIMUM_FORMAL_CAPTURE_WORLD_SESSION_COUNT =
+const MAXIMUM_CAPTURE_WORLD_SESSION_COUNT =
   MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1 + 2;
+const MAXIMUM_INTERACTIVE_PLAYABILITY_WORLD_SESSION_COUNT = 25;
 
 export type BabylonNativeIsolatedRuntimeEntryErrorCodeV1 =
   | "WORLDKIT_NATIVE_ISOLATION_IDENTITY_MISMATCH"
@@ -473,11 +478,12 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
 
     let receipt: RuntimeSessionReceiptV1;
     try {
-      receipt = await this.invoke(request, worldSessionId);
+      receipt = await this.invoke(request);
     } catch {
+      const failureWorldSessionId = this.host.currentWorldSessionId;
       this.#isActive = false;
       await this.host.dispose().catch(() => undefined);
-      receipt = rejectedReceipt(request, worldSessionId, {
+      receipt = rejectedReceipt(request, failureWorldSessionId, {
         code: "RUNTIME_SESSION_INTERNAL_FAILURE",
         message: "Runtime Session operation failed and the Session was closed.",
       });
@@ -491,24 +497,24 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
 
   private async invoke(
     request: RuntimeSessionRequestV1,
-    worldSessionId: string,
   ): Promise<RuntimeSessionReceiptV1> {
+    const currentWorldSessionId = () => this.host.currentWorldSessionId;
     if (request.type === "gameplay-command.execute") {
       const gameplayCommandReceipt = await this.host.executeGameplayCommand(
         request.command,
       );
-      return succeededReceipt(request, worldSessionId, {
+      return succeededReceipt(request, currentWorldSessionId(), {
         gameplayCommandReceipt,
       });
     }
     if (request.type === "fixed-input.run") {
       await this.host.runFixedInput(request.input);
-      return succeededReceipt(request, worldSessionId, {
+      return succeededReceipt(request, currentWorldSessionId(), {
         snapshot: this.initialSnapshot(),
       });
     }
     if (request.type === "snapshot.get") {
-      return succeededReceipt(request, worldSessionId, {
+      return succeededReceipt(request, currentWorldSessionId(), {
         snapshot: this.initialSnapshot(),
       });
     }
@@ -520,7 +526,7 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
       ).filter((event) => "kind" in event);
       const events = Object.freeze(candidates.slice(0, requestedCount));
       const last = events.at(-1);
-      return succeededReceipt(request, worldSessionId, {
+      return succeededReceipt(request, currentWorldSessionId(), {
         gameplayEvents: Object.freeze({
           events,
           nextAfterEventSequence: isNil(last)
@@ -530,10 +536,62 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
         }),
       });
     }
+    if (request.type === "session.reset") {
+      const snapshot = await this.resetSerialized();
+      return succeededReceipt(request, snapshot.worldSessionId, { snapshot });
+    }
+    if (request.type === "subject-support.get") {
+      const snapshot = this.initialSnapshot();
+      try {
+        if (!Object.hasOwn(
+          snapshot.world.subjectStatesByEntityId,
+          request.subjectEntityId,
+        )) {
+          throw new CommittedSupportSelectionErrorV1(
+            "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_UNJOINABLE",
+          );
+        }
+        if (snapshot.world.simulationTick !== request.expectedSimulationTick) {
+          throw new CommittedSupportSelectionErrorV1(
+            "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_STALE",
+          );
+        }
+        const evidence = this.activeHandle().runtime
+          .readCommittedSupportEvidence(request.subjectEntityId);
+        if (isNil(evidence)) {
+          throw new CommittedSupportSelectionErrorV1(
+            "WORLDKIT_RUNTIME_COMMITTED_SUPPORT_UNJOINABLE",
+          );
+        }
+        const subjectSupport = projectRuntimeSessionSubjectSupportV1({
+          evidence,
+          runtimeSessionId: this.runtimeSessionId,
+          worldSessionId: snapshot.worldSessionId,
+          subjectEntityId: request.subjectEntityId,
+          expectedSimulationTick: request.expectedSimulationTick,
+          registeredColliderIds: new Set(
+            this.verifiedWorldPackage.nativeSceneContribution.staticColliders
+              .map(({ id }) => id),
+          ),
+        });
+        return succeededReceipt(request, snapshot.worldSessionId, {
+          subjectSupport,
+        });
+      } catch (error) {
+        if (error instanceof CommittedSupportSelectionErrorV1) {
+          return rejectedReceipt(request, snapshot.worldSessionId, {
+            code: "RUNTIME_SESSION_REQUEST_REJECTED",
+            message: "Committed Subject support is stale, missing, ambiguous, or unregistered.",
+          });
+        }
+        throw error;
+      }
+    }
 
     this.#isActive = false;
+    const closingWorldSessionId = currentWorldSessionId();
     await this.host.dispose();
-    return succeededReceipt(request, worldSessionId, {
+    return succeededReceipt(request, closingWorldSessionId, {
       closeResult: Object.freeze({ mode: "closed" as const }),
     });
   }
@@ -704,9 +762,13 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
         ),
       },
       runtimeHostCapacityBudget: {
-        maximumWorldSessionCount: MAXIMUM_FORMAL_CAPTURE_WORLD_SESSION_COUNT,
+        maximumWorldSessionCount: request.requestedOperation.mode === "capture"
+          ? MAXIMUM_CAPTURE_WORLD_SESSION_COUNT
+          : MAXIMUM_INTERACTIVE_PLAYABILITY_WORLD_SESSION_COUNT,
         maximumRuntimeActivityRecordCount:
-          MAXIMUM_FORMAL_CAPTURE_WORLD_SESSION_COUNT,
+          request.requestedOperation.mode === "capture"
+            ? MAXIMUM_CAPTURE_WORLD_SESSION_COUNT
+            : MAXIMUM_INTERACTIVE_PLAYABILITY_WORLD_SESSION_COUNT,
       },
       initialControlBinding: {
         controllerEntityId: CONTROLLER_ENTITY_ID,

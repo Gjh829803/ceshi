@@ -14,6 +14,7 @@ import {
   type FixedInputV1,
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
+  type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it } from "vitest";
@@ -44,12 +45,15 @@ async function temporaryDirectory(): Promise<string> {
   return directory;
 }
 
-function snapshotFixture(tick = 0): WorldRuntimeSnapshotV4 {
+function snapshotFixture(
+  tick = 0,
+  worldSessionId = WORLD_SESSION_ID,
+): WorldRuntimeSnapshotV4 {
   return {
     kind: "worldkit-runtime-snapshot",
     schemaVersion: 4,
     runtimeSessionId: RUNTIME_SESSION_ID,
-    worldSessionId: WORLD_SESSION_ID,
+    worldSessionId,
     world: {
       publicationEpoch: 0,
       simulationTick: tick,
@@ -81,9 +85,9 @@ function snapshotFixture(tick = 0): WorldRuntimeSnapshotV4 {
         kind: "worldkit-gameplay-inspection-snapshot",
         schemaVersion: 1,
         projection: "inspection",
-        id: `gameplay-inspection:${WORLD_SESSION_ID}:${tick}`,
+        id: `gameplay-inspection:${worldSessionId}:${tick}`,
         runtimeSessionId: RUNTIME_SESSION_ID,
-        worldSessionId: WORLD_SESSION_ID,
+        worldSessionId,
         gameplayModeRef: "worldkit://gameplay-mode/outdoor.default@1",
         phase: "ready",
         simulationTick: tick,
@@ -129,12 +133,13 @@ const gameplayCommand = {
 function gameplayReceipt(
   command: GameplayCommandV1,
   tick: number,
+  worldSessionId = WORLD_SESSION_ID,
 ): GameplayCommandReceiptV1 {
   const body = {
     kind: "worldkit-gameplay-command-receipt",
     schemaVersion: 1,
     runtimeSessionId: RUNTIME_SESSION_ID,
-    worldSessionId: WORLD_SESSION_ID,
+    worldSessionId,
     commandId: command.id,
     commandHash: deriveGameplayCommandHashV1(command),
     commandType: command.type,
@@ -143,7 +148,7 @@ function gameplayReceipt(
     eventIds: [],
     worldStateAfterRef: deriveWorldStateSnapshotRefV1({
       runtimeSessionId: RUNTIME_SESSION_ID,
-      worldSessionId: WORLD_SESSION_ID,
+      worldSessionId,
       worldStateHash: HASH_A,
     }),
     worldStateAfterHash: HASH_A,
@@ -168,11 +173,21 @@ class FakeHeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
   tick = 0;
   failFixedInput = false;
   divergentFixedInput = false;
+  failReset = false;
+  failResetAfterSwap = false;
+  failSupport = false;
   fixedInputBarrier: Promise<void> | undefined;
+  worldSessionIndex = 0;
+
+  get currentWorldSessionId(): string {
+    return this.worldSessionIndex === 0
+      ? WORLD_SESSION_ID
+      : `${WORLD_SESSION_ID}.reset.${this.worldSessionIndex}`;
+  }
 
   snapshot(): WorldRuntimeSnapshotV4 {
     this.calls.push("snapshot");
-    return snapshotFixture(this.tick);
+    return snapshotFixture(this.tick, this.currentWorldSessionId);
   }
 
   async executeGameplayCommand(
@@ -180,7 +195,7 @@ class FakeHeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
   ): Promise<GameplayCommandReceiptV1> {
     this.calls.push(`command:${command.id}`);
     this.tick += 1;
-    return gameplayReceipt(command, this.tick);
+    return gameplayReceipt(command, this.tick, this.currentWorldSessionId);
   }
 
   async runFixedInput(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4> {
@@ -194,7 +209,7 @@ class FakeHeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
       if (this.failFixedInput) throw new Error("fixed-input sentinel");
       await this.fixedInputBarrier;
       this.tick += input.ticks + (this.divergentFixedInput ? 1 : 0);
-      return snapshotFixture(this.tick);
+      return snapshotFixture(this.tick, this.currentWorldSessionId);
     } finally {
       this.activeOperations -= 1;
     }
@@ -203,6 +218,44 @@ class FakeHeadlessRuntimeSession implements HeadlessRuntimeSessionV1 {
   eventsAfter(afterEventSequence: number, maximumEventCount: number) {
     this.calls.push(`events:${afterEventSequence}:${maximumEventCount}`);
     return [];
+  }
+
+  async resetWithInitialControlBinding(): Promise<WorldRuntimeSnapshotV4> {
+    this.calls.push("reset");
+    if (this.failReset) throw new Error("reset sentinel");
+    this.worldSessionIndex += 1;
+    this.tick = 0;
+    if (this.failResetAfterSwap) throw new Error("reset cleanup sentinel");
+    return this.snapshot();
+  }
+
+  readCommittedSubjectSupport(
+    subjectEntityId: string,
+    expectedSimulationTick: number,
+  ): RuntimeSessionSubjectSupportV1 | undefined {
+    this.calls.push(`support:${subjectEntityId}:${expectedSimulationTick}`);
+    if (this.failSupport) return undefined;
+    return {
+      kind: "worldkit-runtime-session-subject-support",
+      schemaVersion: 1,
+      runtimeSessionId: this.runtimeSessionId,
+      worldSessionId: this.currentWorldSessionId,
+      subjectEntityId,
+      simulationTick: expectedSimulationTick,
+      mode: "supported",
+      sampledControllerCenterMetersXYZ: [0, 1, 0],
+      sampledFootPointMetersXYZ: [0, 0, 0],
+      pointMetersXYZ: [0, 0, 0],
+      normalXYZ: [0, 1, 0],
+      distanceMeters: 0,
+      colliderId: "ground",
+      colliderSubshapeId: "ground.shape",
+      logicalSubshapeId: "ground.logical",
+      traversalSurfaceId: "ground.surface",
+      surfaceEntityId: "ground.entity",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    };
   }
 
   resolvedSubjectAssetRefs(): readonly string[] {
@@ -302,6 +355,13 @@ describe("Runtime Session executor V1", () => {
       request({ id: "request-input", type: "fixed-input.run", input: { actions: ["move-forward"], ticks: 2 } }),
       request({ id: "request-snapshot", type: "snapshot.get" }),
       request({ id: "request-events", type: "events.get", query: { afterEventSequence: 0, maximumEventCount: 4 } }),
+      request({ id: "request-reset", type: "session.reset" }),
+      request({
+        id: "request-support",
+        type: "subject-support.get",
+        subjectEntityId: "player",
+        expectedSimulationTick: 0,
+      }),
       request({ id: "request-close", type: "session.close" }),
     ] as const;
     const receipts: RuntimeSessionReceiptV1[] = [];
@@ -312,6 +372,8 @@ describe("Runtime Session executor V1", () => {
       ["fixed-input.run", "succeeded"],
       ["snapshot.get", "succeeded"],
       ["events.get", "succeeded"],
+      ["session.reset", "succeeded"],
+      ["subject-support.get", "succeeded"],
       ["session.close", "succeeded"],
     ]);
     expect(sessions[0]?.calls).toEqual([
@@ -320,12 +382,133 @@ describe("Runtime Session executor V1", () => {
       "input:2",
       "snapshot",
       "events:0:5",
+      "reset",
+      "snapshot",
+      "support:player:0",
       "dispose",
     ]);
     expect(sessions[0]?.disposeCount).toBe(1);
     const wal = openFileRuntimeSessionWalV1({ walFilePath: input.walFilePath });
-    expect(wal.snapshot().committedRequests).toHaveLength(5);
+    expect(wal.snapshot().committedRequests).toHaveLength(7);
     expect(wal.snapshot().finalEvent?.type).toBe("completed");
+    expect(wal.snapshot().finalEvent?.worldSessionId).toBe(
+      `${WORLD_SESSION_ID}.reset.1`,
+    );
+  });
+
+  it("replays reset exactly once across a fresh process and keeps observations non-mutating", async () => {
+    const directory = await temporaryDirectory();
+    const input = createInput(directory);
+    const sessions: FakeHeadlessRuntimeSession[] = [];
+    const reset = request({ id: "request-reset-replay", type: "session.reset" });
+    const support = request({
+      id: "request-support-replay",
+      type: "subject-support.get",
+      subjectEntityId: "player",
+      expectedSimulationTick: 0,
+    });
+    const crashed = await createRuntimeSessionExecutorForTestV1(
+      input,
+      factories(sessions, undefined, {
+        afterCommittedRequest: ({ request: committed }) => {
+          if (committed.id === support.id) throw new Error("post-support crash");
+        },
+      }),
+    );
+    const resetReceipt = await crashed.execute(reset);
+    await expect(crashed.execute(support)).rejects.toThrow("post-support crash");
+
+    const resumed = await resumeRuntimeSessionExecutorForTestV1(
+      { packageDirectoryPath: input.packageDirectoryPath, walFilePath: input.walFilePath },
+      factories(sessions),
+    );
+    expect(sessions[1]?.calls).toEqual(["reset", "snapshot"]);
+    expect(canonicalRuntimeSessionReceiptV1(await resumed.execute(reset))).toBe(
+      canonicalRuntimeSessionReceiptV1(resetReceipt),
+    );
+    expect(await resumed.execute(support)).toMatchObject({
+      status: "succeeded",
+      requestType: "subject-support.get",
+      worldSessionId: `${WORLD_SESSION_ID}.reset.1`,
+    });
+    expect(sessions[1]?.calls).toEqual(["reset", "snapshot"]);
+  });
+
+  it("fails closed and disposes when reset throws", async () => {
+    const directory = await temporaryDirectory();
+    const input = createInput(directory);
+    const sessions: FakeHeadlessRuntimeSession[] = [];
+    const executor = await createRuntimeSessionExecutorForTestV1(
+      input,
+      factories(sessions, (session) => {
+        session.failReset = true;
+      }),
+    );
+    expect(await executor.execute(request({
+      id: "request-reset-failed",
+      type: "session.reset",
+    }))).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" },
+    });
+    expect(sessions[0]?.disposeCount).toBe(1);
+    expect(openFileRuntimeSessionWalV1({ walFilePath: input.walFilePath })
+      .snapshot().finalEvent).toMatchObject({ type: "failed" });
+  });
+
+  it("binds a post-swap reset cleanup failure to the committed new World", async () => {
+    const directory = await temporaryDirectory();
+    const input = createInput(directory);
+    const sessions: FakeHeadlessRuntimeSession[] = [];
+    const executor = await createRuntimeSessionExecutorForTestV1(
+      input,
+      factories(sessions, (session) => {
+        session.failResetAfterSwap = true;
+      }),
+    );
+    const receipt = await executor.execute(request({
+      id: "request-reset-cleanup-failed",
+      type: "session.reset",
+    }));
+    expect(receipt).toMatchObject({
+      status: "rejected",
+      worldSessionId: `${WORLD_SESSION_ID}.reset.1`,
+      diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" },
+    });
+    expect(openFileRuntimeSessionWalV1({ walFilePath: input.walFilePath })
+      .snapshot().finalEvent).toMatchObject({
+        type: "failed",
+        worldSessionId: `${WORLD_SESSION_ID}.reset.1`,
+      });
+  });
+
+  it("durably rejects stale committed support without closing the Session", async () => {
+    const directory = await temporaryDirectory();
+    const input = createInput(directory);
+    const sessions: FakeHeadlessRuntimeSession[] = [];
+    const executor = await createRuntimeSessionExecutorForTestV1(
+      input,
+      factories(sessions, (session) => {
+        session.failSupport = true;
+      }),
+    );
+    const rejected = await executor.execute(request({
+      id: "request-support-stale",
+      type: "subject-support.get",
+      subjectEntityId: "player",
+      expectedSimulationTick: 0,
+    }));
+    expect(rejected).toMatchObject({
+      status: "rejected",
+      diagnostic: { code: "RUNTIME_SESSION_REQUEST_REJECTED" },
+    });
+    expect(executor.terminalEvent()).toBeUndefined();
+    expect(await executor.execute(request({
+      id: "request-after-support-rejection",
+      type: "snapshot.get",
+    }))).toMatchObject({ status: "succeeded" });
+    expect(openFileRuntimeSessionWalV1({ walFilePath: input.walFilePath })
+      .snapshot().committedRequests).toHaveLength(2);
   });
 
   it("serializes concurrent requests and never overlaps Runtime mutation", async () => {
