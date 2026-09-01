@@ -84,7 +84,15 @@ Use only shapes `full`, `half`, `quarter`, `small`, and `step`. Their unrotated 
 - `small`: `[0.5, 0.5, 0.5]`
 - `step`: `[1, 0.25, 1]`
 
-The center lattice is `[0.25, 0.125, 0.25]` meters and the occupancy grid is `[0.5, 0.25, 0.5]` meters. A center must satisfy both the center lattice and the selected shape's bounds on the occupancy grid. A Y quarter turn swaps the effective X/Z dimensions for `quarter`; it does not change the lattice. Do not scale generated meshes, replace their geometry/material, use arbitrary rotation, or assume that one block is 2 meters.
+The center lattice is `[0.25, 0.125, 0.25]` meters and the occupancy grid is `[0.5, 0.25, 0.5]` meters. A center must satisfy both the center lattice and the selected shape's bounds on the occupancy grid. Apply these shape-specific center residues before writing coordinates:
+
+- `full` and `half`: X/Z are multiples of `0.5`; Y is a multiple of `0.25`.
+- `step`: X/Z are multiples of `0.5`; Y is `0.125 + 0.25 * n`.
+- unrotated `quarter`: X is `0.25 + 0.5 * n`, Z is a multiple of `0.5`, and Y is a multiple of `0.25`.
+- Y-quarter-turned `quarter`: X is a multiple of `0.5`, Z is `0.25 + 0.5 * n`, and Y is a multiple of `0.25`.
+- `small`: X/Z are both `0.25 + 0.5 * n`; Y is a multiple of `0.25`. Therefore a `small` block centered at integer X or integer Z is invalid even though the integer lies on the broad center lattice.
+
+Here `n` is any integer, including negative values. A Y quarter turn swaps the effective X/Z dimensions for `quarter`; it does not change the lattice. Prefer `full`, `half`, and `step` when decorative quarter-cell detail is not required. Do not scale generated meshes, replace their geometry/material, use arbitrary rotation, or assume that one block is 2 meters.
 
 Profile meshes remain direct, unparented members of the Host Candidate Scene. Keep them enabled, visible, non-instanced, non-thin-instanced, and physics-free. Do not attach parents, bake/replace geometry, or create an alternate visual/collider mesh for a Block.
 
