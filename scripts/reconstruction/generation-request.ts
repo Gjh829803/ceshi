@@ -17,7 +17,7 @@ import {
   parseGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
-import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
+import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, worldReconstructionEvidenceProfileClosureMatchesV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeSceneBootstrapV1,
@@ -32,7 +32,7 @@ import {
   parseWorldPackageWorldBoundsV1,
   type WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package";
-import { isEqual, isNil, sortBy, uniq } from "lodash-es";
+import { isEqual, isNil, sortBy } from "lodash-es";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
@@ -403,10 +403,7 @@ export async function prepareNativeBlockGenerationTaskV1(
   const reconstructionCase = parseWorldReconstructionCaseV1(input.case);
   const profile = parseWorldReconstructionEvaluationProfileV1(input.profile);
   if (reconstructionCase.evaluationProfileRef !== "evaluation-profile.json" || reconstructionCase.evaluationProfileHash !== hashWorldReconstructionEvaluationProfileV1(profile)) throw new TypeError("Case/Profile identity closure failed.");
-  const profileRequiredEvidenceRefs = sortBy(uniq(
-    profile.requiredEvidenceByDimension.flatMap((entry) => entry.evidenceProfileRefs),
-  ));
-  if (!isEqual(reconstructionCase.requiredEvidenceProfileRefs, profileRequiredEvidenceRefs)) {
+  if (!worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, profile)) {
     throw new TypeError("Case/Evaluation Profile required Evidence Profile closure failed.");
   }
   if (reconstructionCase.referenceInputs.some((reference) => reference.mediaType === "application/json")) throw new TypeError("Native generation references must be images.");
