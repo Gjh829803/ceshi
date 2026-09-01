@@ -7,7 +7,7 @@ import {
   parseFormalSemanticCaptureMapV1,
   parseFormalTraversalCheckpointSpatialCriteriaV1,
   type FormalSemanticCaptureMapV1,
-  type FormalSemanticTopologyMeasurementSourceV1,
+  type FormalSemanticTopologyRelationBindingV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -29,12 +29,8 @@ export interface BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1 {
     semanticLayerId: string;
     blockVisualGroupId: string;
   }>[];
-  readonly topologyRelations: readonly Readonly<{
-    fromNodeId: string;
-    relation: "connects-to" | "contains" | "above" | "blocks";
-    toNodeId: string;
-    measurementSource: FormalSemanticTopologyMeasurementSourceV1;
-  }>[];
+  readonly topologyRelations:
+    readonly FormalSemanticTopologyRelationBindingV1[];
   readonly checkpointSpatialCriteria:
     readonly FormalTraversalCheckpointSpatialCriterionV1[];
 }
@@ -50,6 +46,18 @@ const TARGET_BINDING_FIELDS = [
 ] as const;
 const TOPOLOGY_RELATION_FIELDS = [
   "fromNodeId", "relation", "toNodeId", "measurementSource",
+] as const;
+const PACKAGE_BOUNDS_TOPOLOGY_RELATION_FIELDS = [
+  ...TOPOLOGY_RELATION_FIELDS, "fromVisualGroupId", "toVisualGroupId",
+] as const;
+const SDK_SUPPORT_TOPOLOGY_RELATION_FIELDS = [
+  ...TOPOLOGY_RELATION_FIELDS, "subjectEntityId", "colliderId",
+] as const;
+const SDK_COLLIDER_TOPOLOGY_RELATION_FIELDS = [
+  ...TOPOLOGY_RELATION_FIELDS, "colliderId", "sourceVisualGroupId",
+] as const;
+const SCRIPTED_TRAVERSAL_TOPOLOGY_RELATION_FIELDS = [
+  ...TOPOLOGY_RELATION_FIELDS, "traversalCheckId",
 ] as const;
 
 function fail(path: string, message: string): never {
@@ -94,6 +102,84 @@ function plainObject(
   const missing = fields.find((key) => !Object.hasOwn(source, key));
   if (!isNil(missing)) fail(`${path}/${missing}`, "required field is missing");
   return source;
+}
+
+function topologyRelationBinding(
+  value: unknown,
+  path: string,
+): FormalSemanticTopologyRelationBindingV1 {
+  if (
+    isNil(value) || typeof value !== "object" || Array.isArray(value) ||
+    Reflect.getPrototypeOf(value) !== Object.prototype
+  ) fail(path, "expected an ordinary plain object");
+  const candidate = value as Readonly<Record<string, unknown>>;
+  const measurementSource = stringField(
+    candidate.measurementSource,
+    `${path}/measurementSource`,
+  );
+  const fields = measurementSource === "package-bounds"
+    ? PACKAGE_BOUNDS_TOPOLOGY_RELATION_FIELDS
+    : measurementSource === "sdk-support"
+      ? SDK_SUPPORT_TOPOLOGY_RELATION_FIELDS
+      : measurementSource === "sdk-collider"
+        ? SDK_COLLIDER_TOPOLOGY_RELATION_FIELDS
+        : measurementSource === "scripted-traversal"
+          ? SCRIPTED_TRAVERSAL_TOPOLOGY_RELATION_FIELDS
+          : fail(`${path}/measurementSource`, "unexpected measurement source");
+  const row = plainObject(candidate, path, fields);
+  const relation = row.relation;
+  if (![
+    "connects-to", "contains", "above", "blocks",
+  ].includes(relation as string)) fail(`${path}/relation`, "unexpected relation");
+  const base = {
+    fromNodeId: stringField(row.fromNodeId, `${path}/fromNodeId`),
+    relation: relation as "connects-to" | "contains" | "above" | "blocks",
+    toNodeId: stringField(row.toNodeId, `${path}/toNodeId`),
+  } as const;
+  if (measurementSource === "package-bounds") {
+    return Object.freeze({
+      ...base,
+      measurementSource,
+      fromVisualGroupId: stringField(
+        row.fromVisualGroupId,
+        `${path}/fromVisualGroupId`,
+      ),
+      toVisualGroupId: stringField(
+        row.toVisualGroupId,
+        `${path}/toVisualGroupId`,
+      ),
+    });
+  }
+  if (measurementSource === "sdk-support") {
+    return Object.freeze({
+      ...base,
+      measurementSource,
+      subjectEntityId: stringField(
+        row.subjectEntityId,
+        `${path}/subjectEntityId`,
+      ),
+      colliderId: stringField(row.colliderId, `${path}/colliderId`),
+    });
+  }
+  if (measurementSource === "sdk-collider") {
+    return Object.freeze({
+      ...base,
+      measurementSource,
+      colliderId: stringField(row.colliderId, `${path}/colliderId`),
+      sourceVisualGroupId: stringField(
+        row.sourceVisualGroupId,
+        `${path}/sourceVisualGroupId`,
+      ),
+    });
+  }
+  return Object.freeze({
+    ...base,
+    measurementSource: measurementSource as "scripted-traversal",
+    traversalCheckId: stringField(
+      row.traversalCheckId,
+      `${path}/traversalCheckId`,
+    ),
+  });
 }
 
 function plainArray(value: unknown, path: string): readonly unknown[] {
@@ -225,34 +311,21 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
     );
   }
   const topologyRelations = plainArray(source.topologyRelations, "topologyRelations")
-    .map((entry, index) => {
-      const path = `topologyRelations/${index}`;
-      const row = plainObject(entry, path, TOPOLOGY_RELATION_FIELDS);
-      const relation = row.relation;
-      if (![
-        "connects-to", "contains", "above", "blocks",
-      ].includes(relation as string)) fail(`${path}/relation`, "unexpected relation");
-      const measurementSource = row.measurementSource;
-      if (![
-        "package-bounds", "sdk-support", "sdk-collider", "scripted-traversal",
-      ].includes(measurementSource as string)) {
-        fail(`${path}/measurementSource`, "unexpected measurement source");
-      }
-      return Object.freeze({
-        fromNodeId: stringField(row.fromNodeId, `${path}/fromNodeId`),
-        relation: relation as "connects-to" | "contains" | "above" | "blocks",
-        toNodeId: stringField(row.toNodeId, `${path}/toNodeId`),
-        measurementSource:
-          measurementSource as FormalSemanticTopologyMeasurementSourceV1,
-      });
-    });
+    .map((entry, index) => topologyRelationBinding(
+      entry,
+      `topologyRelations/${index}`,
+    ));
   const relationKeys = topologyRelations.map(({ fromNodeId, relation, toNodeId }) =>
     `${fromNodeId}\0${relation}\0${toNodeId}`);
   if (
     topologyRelations.length === 0 ||
     relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key) ||
     !isEqual(
-      topologyRelations.map(({ measurementSource: _measurementSource, ...row }) => row),
+      topologyRelations.map(({ fromNodeId, relation, toNodeId }) => ({
+        fromNodeId,
+        relation,
+        toNodeId,
+      })),
       reconstructionCase.expected.topology.relations,
     )
   ) fail("topologyRelations", "must explicitly bind every Case topology relation once");
