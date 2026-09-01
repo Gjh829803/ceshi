@@ -461,22 +461,31 @@ Camera Entity、ControllerEntity 和 Subject Entity 是三个独立对象：
 - 产品文档中的 Camera Ownership 表示默认跟随策略，不表示 Camera 与控制器合并为一个对象。
 
 ```ts
-interface CameraContextBinding {
+interface CameraContextRuleV2 {
   id: string;
-  when: {
-    mountRoles?: readonly ("driver" | "rider" | "passenger")[];
-    locomotionModes?: readonly string[];
-    movementMediums?: readonly ("ground" | "water" | "air")[];
-    allTags?: readonly string[];
-    anyTags?: readonly string[];
-    excludedTags?: readonly string[];
-  };
-  rigRef: ResourceRef;
-  targetPolicy: "controlled-entity" | "rider" | "explicit-entity";
-  explicitTargetEntityId?: EntityId;
   priority: number;
+  when: {
+    allRelationshipConditions?: readonly CameraRelationshipConditionV1[];
+    locomotionStatuses?: readonly ("active" | "suspended")[];
+    mobilityModes?: readonly ("grounded" | "airborne")[];
+    gaits?: readonly ("none" | "idle" | "walk" | "run")[];
+    verticalPhases?: readonly ("none" | "takeoff" | "rising" | "apex" | "falling" | "landing")[];
+    movementMediums?: readonly ("ground" | "air")[];
+    requiredActiveActionRefs?: readonly ResourceRef[];
+    actionInterruptibility?: "interruptible" | "non-interruptible";
+    minimumSpeedMetersPerSecond?: number;
+    maximumSpeedMetersPerSecond?: number;
+    requiredSocketIds?: readonly string[];
+    requiredCameraContextTags?: readonly string[];
+  };
+  cameraRigProfileRef?: ResourceRef;
+  cameraModifierRefs?: readonly ResourceRef[];
 }
 ```
+
+Camera Rule 只消费同一 committed Tick 的强类型 Gameplay/Locomotion/Action/
+Relationship 事实；`requiredCameraContextTags` 仅承载尚无强类型字段的声明式上下文，不能把
+Motion Profile、Motion Kernel 或其 tags 重新包装成 Camera 权威。
 
 人物自由移动时可使用 Human First Person 或 Human Third Person；骑乘后，Mount Transaction 先提交新的控制权和运动状态，Camera Director 再选择被控制对象的 Mounted/Vehicle/Flight Profile。乘坐家具时可以继续跟随人物。一个 Session 同时控制多个人时，可以只观察一个目标，也可以显式创建多个 View。
 

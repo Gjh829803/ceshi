@@ -10,14 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md`
 
-**Progress (2026-09-01):** Tasks 1-8 are implemented on current candidate
-`7f9abd8bc78010cd0e04df8542d40f18c24bfae4`, including the listed Runtime adversarial hardening,
-retained-support `supportedBy` projection, latest Camera contract clean break and formal four-phase mounted
-Capture verifier. Historical local affected evidence passes on `08f8f199`; a fresh-install Cloud run on
-Runtime-equivalent `4c7551e` passes build, independent, clean-break and both Capture verifiers, while the
-exact-`7f9abd8` Cloud install, typecheck and root aggregate are GO. Task 9 remains open because final Claude/Grok code reviews have not
-started. No final M8-S1 production GO is claimed. The latest approved Camera contract remains
-authoritative; no legacy relationship alias or Babylon Node-derived Camera Context may remain.
+**Progress (2026-09-01):** Tasks 1-8 are implemented in the working tree after `6948d1a`, including the
+listed Runtime adversarial hardening, retained-support `supportedBy` projection, formal four-phase mounted
+Capture verifier and a stricter current-only Camera V2 clean break. Historical Cloud evidence on `4c7551e`
+and `7f9abd8` is retained but is not promoted across these production Camera/Runtime/Registry and generated-
+artifact changes. Current focused verification passes 14 files / 288 tests plus the 3/3 self-check suite,
+generated-validator, agent-self-check and Native package checks. Task 9 remains open pending a new exact pushed SHA, the Cloud
+matrix and final Claude/Grok reviews. No final M8-S1 internal-capability GO is claimed, and Hosted Builder
+production admission remains explicitly closed.
 
 ## Global constraints
 
@@ -26,6 +26,8 @@ authoritative; no legacy relationship alias or Babylon Node-derived Camera Conte
 - Use one canonical public term: `mountedOn`; delete the unreleased `mount` dialect.
 - Do not infer `supportedBy` from `mountedOn` and do not call `checkSupport()` outside MotionKernel.
 - Do not add wheel physics, tricks, vehicle movement, new camera ownership or dynamic Route claims.
+- Keep `mountedOn.stand-ground@1` internal to Host-fixed Canonical acceptance. Hosted Builder production
+  self-check must reject non-empty Relationships and package-local Relationship Capability Refs.
 - Camera remains the sole View owner and consumes only committed fixed-tick truth. Use only
   `relationshipContexts` / `allRelationshipConditions`; delete `relationshipRole(s)` and the Task-6
   semantic-authority fallback rather than retaining compatibility.
@@ -240,7 +242,8 @@ already committed Physics support result.
 - [x] Keep Browser V5 at exactly 38 keys and Snapshot V4 unchanged in shape.
 - [x] Regenerate all owning schemas/catalog bundles/artifacts and retain focused clean-break regressions for
   every deleted field/helper/path.
-- [ ] Run `pnpm verify:unreleased-clean-break` in the exact-candidate Cloud gate matrix.
+- [ ] Run `pnpm verify:unreleased-clean-break` on the new exact product candidate in Cloud. Historical
+  exact `4c7551e` passed 1,519 scanned / 0 forbidden but predates the current Camera V2 clean break.
 
 The design amendment and deletion graph are main-agent-owned. Before Task 6B can be considered accepted,
 the main agent self-reviews the document and sends the exact pushed design SHA to an independent deep-review
@@ -283,7 +286,8 @@ disposed before final implementation review.
   sequence order, including fixed-Tick Semantic Fact and Camera Events.
 - [x] Extend validation to cross-check every reference described in spec section 10; keep bundle schemaVersion 1 because paths and frame refs already reserve these tracks.
 - [x] Capture frames before Mount, after Mount movement, after Dismount movement and after Reset.
-- [x] Focused bundle suite and formal mounted fixture Capture verifier pass on the exact product candidate.
+- [ ] Rerun the formal mounted fixture Capture verifier on the new exact product candidate in Cloud. The
+  historical Runtime-equivalent `4c7551e` pass predates changed Camera inputs.
 
 ## Task 9: Integration and completion evidence
 
@@ -312,7 +316,8 @@ disposed before final implementation review.
 
   The historical catalog `verify:outdoor-gameplay` command is retired together with the deleted catalog
   Gameplay route. Do not restore that route or command for M8; the formal mounted verifier below plus the
-  current Canonical capability gates are the production evidence.
+  current Canonical capability gates are the internal acceptance evidence. Hosted Builder production
+  admission remains closed and is guarded by its self-check.
 
   Previous checkpoint evidence is historical only and does not prove the amended contract or final SHA.
   Record the cloud agent identity, exact commit, command exit codes, test counts and artifacts.
@@ -324,20 +329,20 @@ disposed before final implementation review.
   unreleased-clean-break and the listed current Canonical capability gates passed. This remains historical
   first-attempt evidence; the type/boundary/root blockers were later closed by the current run below.
 
-  Current root closure: Cursor Cloud agent `bc-94b2272e-38ea-4525-971c-a817000e9cec`, run
+  Historical root closure: Cursor Cloud agent `bc-94b2272e-38ea-4525-971c-a817000e9cec`, run
   `run-512cffea-279d-45fd-ae83-9457ee381c26`, exact candidate
   `7f9abd8bc78010cd0e04df8542d40f18c24bfae4`. Install and typecheck passed. Root test passed:
   workspace boundaries 49 debt / 1,760 public symbols; census 386 = 347 contract + 39 resource-heavy;
   contract 347 files / 4,150 passed / 3 platform skips / 0 failed; resource-heavy 39 files / 613 passed /
   0 failed. This closes the root checkbox's install/typecheck/test portion, but the matrix checkbox remains
-  open because final dual review and any D6-selected exact-current non-root evidence are not yet recorded.
+  open because the later Camera V2 clean break changes product and generated-artifact inputs.
 
   D6 non-root lineage: Cursor Cloud agent `bc-74b5577c-59da-4b4e-b2a0-3103f602894f`, run
   `run-08af7359-9330-42ea-ae84-2b52dc2e182f`, exact `4c7551e3cee123df3767bda21e1cf72665dca457`,
   passed frozen install, typecheck, build, independent 23/23 + 1/1, unreleased clean break 1,519/0,
   Control Capture 2/2 and the formal mounted verifier. The only failure was the new semantic-fact projector
-  test missing from the fail-closed census. Later commits classify that test and align test-only expectations;
-  they do not alter the production or verifier inputs covered by those passing non-root gates.
+  test missing from the fail-closed census. The D6 lineage reaches `7f9abd8` only; it does not cover the
+  current Camera V2 clean break. A new exact-SHA Cloud run is required.
 
 - [x] Run the new mounted-skateboard Browser/Capture verifier. Record command, test count, artifact paths and warnings.
 - [x] Inspect the real rendered surface for Rider/board separation, slot alignment, Mount movement, Dismount placement and Reset. Record that the retained-frame inspection is rendered evidence, not manual input.

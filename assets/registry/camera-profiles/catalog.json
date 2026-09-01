@@ -878,34 +878,15 @@
           "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"]
         },
         {
-          "id": "glide",
-          "priority": 90,
-          "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] },
-          "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1"
-        },
-        {
-          "id": "water-surface",
-          "priority": 80,
-          "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] },
-          "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1",
-          "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"]
-        },
-        {
           "id": "sprint",
           "priority": 65,
           "when": { "requiredCameraContextTags": ["sprint"] },
           "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"]
         },
         {
-          "id": "surface-fast",
-          "priority": 70,
-          "when": { "requiredMotionTags": ["surface-fast"] },
-          "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1"
-        },
-        {
           "id": "free-ground",
           "priority": 60,
-          "when": { "requiredMotionTags": ["free-ground"] },
+          "when": { "mobilityModes": ["grounded"] },
           "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1"
         }
       ],
@@ -927,11 +908,8 @@
         { "id": "aim", "priority": 110, "when": { "requiredCameraContextTags": ["aim"] }, "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"] },
         { "id": "mounted", "priority": 100, "when": { "allRelationshipConditions": [{ "type": "mountedOn", "entityRole": "rider" }] }, "cameraModifierRefs": ["worldkit://camera-modifier/mounted-framing@1"] },
         { "id": "reverse", "priority": 95, "when": { "requiredCameraContextTags": ["reverse"] }, "cameraModifierRefs": ["worldkit://camera-modifier/reverse-stability@1"] },
-        { "id": "glide", "priority": 90, "when": { "requiredMotionTags": ["glide"], "movementMediums": ["air"] }, "cameraRigProfileRef": "worldkit://camera-profile/flight.glide@1" },
-        { "id": "water-surface", "priority": 80, "when": { "requiredMotionTags": ["water"], "movementMediums": ["water"] }, "cameraRigProfileRef": "worldkit://camera-profile/follow.medium@1", "cameraModifierRefs": ["worldkit://camera-modifier/water-stability@1"] },
         { "id": "sprint", "priority": 65, "when": { "requiredCameraContextTags": ["sprint"] }, "cameraModifierRefs": ["worldkit://camera-modifier/sprint-emphasis@1"] },
-        { "id": "surface-fast", "priority": 70, "when": { "requiredMotionTags": ["surface-fast"] }, "cameraRigProfileRef": "worldkit://camera-profile/chase.surface-fast@1" },
-        { "id": "free-ground", "priority": 60, "when": { "requiredMotionTags": ["free-ground"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }
+        { "id": "free-ground", "priority": 60, "when": { "mobilityModes": ["grounded"] }, "cameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1" }
       ],
       "aiMetadata": {
         "displayName": "Quadruped Official Camera Context",

@@ -235,6 +235,9 @@ describe("verify:unreleased-clean-break", () => {
       packagePath,
       [
         `export type LegacyRole = ${token(["Camera", "Relationship", "Role", "V1"])};`,
+        `export type LegacyRule = ${token(["Camera", "Context", "Rule", "V1"])};`,
+        `export type LegacyRuntimeRule = ${token(["Runtime", "Camera", "Context", "Rule", "V1"])};`,
+        `const legacyRule = { ${token(["required", "Motion", "Tags"])}: ["ground"] };`,
         `const sample = { semanticAuthorityStatus: "${token(["un", "available"])}" };`,
       ].join("\n"),
       "utf8",
@@ -265,7 +268,7 @@ describe("verify:unreleased-clean-break", () => {
       "WORLDKIT_UNRELEASED_LEGACY_M8_S1_PUBLIC_CONTRACT",
     );
 
-    expect(legacyM8.matchCount).toBe(7);
+    expect(legacyM8.matchCount).toBe(10);
     expect(legacyM8.matchesByPath.map((entry) => entry.path)).toEqual([
       ".codex/skills/worldkit-canonical-builder/scripts/self-check.mjs",
       "assets/registry/camera-profiles/catalog.json",
@@ -296,6 +299,9 @@ describe("verify:unreleased-clean-break", () => {
     const historicalTerms = [
       token(["relationship", "Roles"]),
       token(["relationship", "Role"]),
+      token(["Camera", "Context", "Rule", "V1"]),
+      token(["Runtime", "Camera", "Context", "Rule", "V1"]),
+      token(["required", "Motion", "Tags"]),
       token(["minimumContactToAggregateSupportNormal", "DotRatio"]),
       token(["minimumSupportNormal", "DotRatio"]),
       token(["CORE_", "SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1"]),

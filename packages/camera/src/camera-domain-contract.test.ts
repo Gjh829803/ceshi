@@ -40,6 +40,7 @@ describe("@whitebox-world/camera public domain contract", () => {
 
     expect(cameraDomain).toMatchObject({
       parseCameraContextSampleV2: expect.any(Function),
+      parseCameraContextRuleV2: expect.any(Function),
       parseCameraCollisionQueryResultV1: expect.any(Function),
       parseCameraViewPreferenceV1: expect.any(Function),
     });

@@ -74,12 +74,13 @@
       "deletionCondition": "Golden Runtime, projections, generated checks and Camera no longer publish or consume Motion Kernel identity as authority.",
       "state": "live",
       "baselineSourceReferenceCount": 32,
-      "currentSourceReferenceCeiling": 27,
+      "currentSourceReferenceCeiling": 25,
       "evidence": [
         "6d9e030 expanded executable-source census: 32",
         "3C-5 removed Camera Domain V1 Motion Kernel authority fields; Task6 owns the remaining live Runtime seam",
         "3C-6 Golden CharacterMovementRuntime projections omit the legacy Motion Kernel identity instead of publishing a synthetic authority",
-        "dv.commit.12 verifies two Registry G Bots publish Locomotion V2 without activeMotionKernelRef"
+        "dv.commit.12 verifies two Registry G Bots publish Locomotion V2 without activeMotionKernelRef",
+        "M8-S1 Camera clean break removes Motion Kernel identity from the public ViewTargetSampleV1 provider shell"
       ]
     },
     {
@@ -95,7 +96,8 @@
       "evidence": [
         "6d9e030 expanded executable-source census: 7",
         "3C-5 production Camera selection consumes CameraContextSampleV2; Task6 replaces the isolated legacy ViewTarget projection seam",
-        "dv.commit.12 initializes and reuses committed CameraContextSampleV2 for every rigged controlled Subject"
+        "dv.commit.12 initializes and reuses committed CameraContextSampleV2 for every rigged controlled Subject",
+        "M8-S1 removes the final executable CameraContextSampleV1 reference; completion remains gated on a green whole-ledger verifier"
       ]
     },
     {

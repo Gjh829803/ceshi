@@ -120,15 +120,15 @@ describe("capability-driven Subject compilation", () => {
           (kernel) => kernel.resourceRef === defaultMotionKernelRef,
         )?.commandKind,
       ).toBe(assembly.controlProfile.commandKind);
-      expect(assembly.cameraContext.cameraRigProfiles).toHaveLength(5);
-      expect(assembly.cameraContext.cameraModifierProfiles).toHaveLength(5);
+      expect(assembly.cameraContext.cameraRigProfiles).toHaveLength(3);
+      expect(assembly.cameraContext.cameraModifierProfiles).toHaveLength(4);
       expect(
         new Set(
           assembly.cameraContext.cameraRigProfiles.map(
             (profile) => profile.algorithmRef,
           ),
         ).size,
-      ).toBe(4);
+      ).toBe(2);
       expect(assembly.requiredHarnessCheckIds).toEqual([
         "H01",
         "H02",

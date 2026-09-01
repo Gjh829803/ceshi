@@ -152,8 +152,11 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
   ]);
   const legacyM8PublicContractSymbols = [
     token(["Camera", "Relationship", "Role", "V1"]),
+    token(["Camera", "Context", "Rule", "V1"]),
+    token(["Runtime", "Camera", "Context", "Rule", "V1"]),
     token(["relationship", "Roles"]),
     token(["relationship", "Role"]),
+    token(["required", "Motion", "Tags"]),
     token(["minimumContactToAggregateSupportNormal", "DotRatio"]),
     token(["minimumSupportNormal", "DotRatio"]),
     token(["CORE_", "SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1"]),

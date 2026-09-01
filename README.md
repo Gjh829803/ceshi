@@ -563,7 +563,7 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/subject-registry/` | 精确版本的 Subject Definition、Capability Assembly、Profile 与 Asset Inventory | 当前 Registry 资源入口，不回退到旧 Definition | 保存会话状态或未版本化数字 overlay |
 | `packages/subject-composition/` | Primitive Bounds、Collider 推导、角色胶囊和资源成本 | 内部可复用 LEGO 几何合同 | 依赖 Babylon Mesh 或场景层级 |
 | `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
-| `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同；Runtime/Browser 基础接线与 M8 `mountedOn` 窄 seam 已交付，广义 Equipment/Flight/多 Rig 组合仍开放 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把窄 seam 误写成广义组合已交付 |
+| `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同与 Runtime/Browser 基础接线；M8 `mountedOn` 内部窄 seam 处于最终候选且 Hosted admission 关闭，广义 Equipment/Flight/多 Rig 组合仍开放 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把内部窄 seam 误写成生产组合已交付 |
 | `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support、Surface Query 与 Spawn Safety | Traversal/Runtime 内部几何合同与生产空间不变量 | 把单一 Heightfield 冒充全部空间拓扑 |
 | `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
 | `packages/traversal-recast/` | Recast/Detour Graph Build、Query 与 Route Evidence Provider Adapter | 不直接面向 AI | 让 Provider 名称或 Handle 进入 Canonical 协议 |
@@ -625,7 +625,7 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 - [未发布协议兼容层 Clean Break 设计](docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
 - [历史命名与兼容路径清理专项计划](docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)
 - [Gameplay RuntimeHost G19-3 审查处置](docs/reviews/2026-08-24-gameplay-runtime-host-g19-3-review.md)
-- [上下文驱动 Gameplay 与 Camera 组合设计](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Camera 领域包已实现，Gameplay/Browser/Runtime 集成仍按 Backlog 推进。
+- [上下文驱动 Gameplay 与 Camera 组合设计](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Camera 领域包与 Gameplay/Browser/Runtime 基础接线已实现；M8 `mountedOn` 内部窄 seam 已进入最终候选但尚未 GO，Hosted Builder admission 仍关闭；广义 Equipment/Flight/多 Rig 组合仍按 Backlog 推进。
 - [Babylon-only Runtime 收口实施计划](docs/superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [Hybrid Terrain 与非 Heightfield 特殊地形设计](docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
@@ -686,9 +686,10 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 ## Catalog 场景与创作制品
 
 Plan-first 多 Agent 场景流程、Creator Studio 和已验证 catalog 场景继续作为创作、
-视觉回归与产品 Fixture。Gameplay、Opening Composition、规划捕获和 SDK-derived tri-view
-都由 Babylon-backed Playground 承载；World Plan、Opening Shot、plan lock、白膜三视图和
-Visual Bible 工件合同不因 Runtime 收口而改变。
+视觉回归与 artifact-only Fixture。Catalog 不再提供 Gameplay route；Gameplay 只从 Host-fixed
+Canonical Authoring JSON 经 `worldkit run` 或受控 preset 启动。Opening Composition、规划捕获和
+SDK-derived tri-view 仍由 Babylon-backed Playground 的 artifact 路径承载；World Plan、Opening
+Shot、plan lock、白膜三视图和 Visual Bible 工件合同不因 Runtime 收口而改变。
 
 ```bash
 pnpm dev
@@ -698,6 +699,8 @@ pnpm studio
 `pnpm dev` 用于统一 Babylon/Havok Viewer，默认加载 G Bot 并可通过页面选择器切换
 allowlisted Canonical 调试预设。固定外部程序使用 `worldkit run`、Canonical Authoring V4
 和 Browser Protocol V5。Camera 的命名 Profile/Context、Preference、
-纯 Selection/Explain 已在 `@whitebox-world/camera` 实现；committed Gameplay Context
-Projection、Browser 命令、Registry Lock 和 Babylon CameraDirector 消费 Selection Decision
-仍未交付，详见[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p24-多-controller相机模式与受控操作)。
+纯 Selection/Explain 已在 `@whitebox-world/camera` 实现；Browser View Preference 命令、
+CameraDirector 消费 Selection Decision，以及 committed `possessedBy` Context 已交付；M8
+`mountedOn` 内部窄 Context Projection 已进入最终候选但尚未 GO。广义 Equipment/Flight Context、
+完整 Registry Lock 与多 Rig Fixture 仍未交付，
+详见[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p24-多-controller相机模式与受控操作)。

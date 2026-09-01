@@ -254,9 +254,6 @@ export interface ViewTargetSampleV1 {
   velocityMetersPerSecondXYZ: RuntimeVec3V1;
   approximateRadiusMeters: number;
   socketPositionsMetersXYZById: Readonly<Record<string, RuntimeVec3V1>>;
-  /** Legacy-only authority identity; CharacterMovementRuntime-backed Subjects omit it. */
-  activeMotionKernelRef?: string;
-  motionTags: readonly string[];
   movementMedium: PublishedMovementMediumV1;
   relationshipContexts: readonly CameraRelationshipContextV1[];
   cameraContextTags: readonly string[];

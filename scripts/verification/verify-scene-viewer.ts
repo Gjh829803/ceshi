@@ -33,6 +33,7 @@ export const ARTIFACT_SCENE_CATALOG_IDS = [
   "mistbound-rider",
   "sunlit-flower-bay",
   "world-08170639-54db",
+  "mounted-skateboard-s1",
 ] as const;
 
 interface CuratedViewerServerHandleV1 {
@@ -145,8 +146,8 @@ interface RouteQueryEvidenceV1 {
   }[];
 }
 
-export interface SceneBrowserEvidenceV1 {
-  readonly catalogId: string;
+export interface CuratedPresetBrowserEvidenceV1 {
+  readonly presetId: string;
   readonly adapterName: string;
   readonly selectorSceneIds: readonly string[];
   readonly browserProtocolVersion: 5;
@@ -167,9 +168,9 @@ export interface SceneBrowserEvidenceV1 {
   readonly screenshotPath: string;
 }
 
-export interface SceneSwitchEvidenceV1 {
-  readonly fromSceneId: "feel-flat";
-  readonly toSceneId: "action-lab";
+export interface PresetSwitchEvidenceV1 {
+  readonly fromPresetId: "feel-flat";
+  readonly toPresetId: "action-lab";
   readonly fromRuntimeSessionId: string;
   readonly toRuntimeSessionId: string;
   readonly controlledSubjectDefinitionRef: typeof G_BOT_SUBJECT_DEFINITION_REF;
@@ -183,8 +184,8 @@ export interface ArtifactBrowserEvidenceV1 {
   readonly screenshotPath: string;
 }
 
-export interface InvalidSceneEvidenceV1 {
-  readonly sceneCatalogId: string;
+export interface InvalidPresetEvidenceV1 {
+  readonly presetId: string;
   readonly diagnosticCode: "WORLDKIT_RUNTIME_INITIALIZATION_FAILED";
   readonly sourceErrorCode: "VIEWER_BOOTSTRAP_HTTP_404";
   readonly runtimeReadyRejected: true;
@@ -204,20 +205,28 @@ export interface SceneViewerVerificationReportV1 {
   readonly kind: "scene-viewer-browser-verification";
   readonly schemaVersion: 1;
   readonly generatedAt: string;
-  readonly scenes: readonly VerificationResultV1<SceneBrowserEvidenceV1>[];
-  readonly sceneSwitch: VerificationResultV1<SceneSwitchEvidenceV1>;
-  readonly invalidSceneRoute: VerificationResultV1<InvalidSceneEvidenceV1>;
+  readonly curatedPresets: readonly VerificationResultV1<CuratedPresetBrowserEvidenceV1>[];
+  readonly presetSwitch: VerificationResultV1<PresetSwitchEvidenceV1>;
+  readonly invalidPresetRoute: VerificationResultV1<InvalidPresetEvidenceV1>;
   readonly artifacts: readonly VerificationResultV1<ArtifactBrowserEvidenceV1>[];
 }
 
-export function sceneViewerUrl(
+export function curatedViewerPresetUrl(
   origin: string,
-  catalogId: string,
-  artifact = false,
+  presetId: (typeof SCENE_VIEWER_PRESET_IDS)[number],
+): string {
+  const url = new URL(origin);
+  url.searchParams.set("scene", presetId);
+  return url.toString();
+}
+
+export function artifactSceneCatalogUrl(
+  origin: string,
+  catalogId: (typeof ARTIFACT_SCENE_CATALOG_IDS)[number],
 ): string {
   const url = new URL(origin);
   url.searchParams.set("scene", catalogId);
-  if (artifact) url.searchParams.set("artifact", "1");
+  url.searchParams.set("artifact", "1");
   return url.toString();
 }
 
@@ -320,25 +329,25 @@ function deterministicResetProjection(
   };
 }
 
-async function verifyScene(
+async function verifyCuratedPreset(
   options: Readonly<{
     page: Page;
     origin: string;
     outputDirectory: string;
-    catalogId: string;
+    presetId: (typeof SCENE_VIEWER_PRESET_IDS)[number];
   }>,
-): Promise<SceneBrowserEvidenceV1> {
-  const { page, origin, outputDirectory, catalogId } = options;
+): Promise<CuratedPresetBrowserEvidenceV1> {
+  const { page, origin, outputDirectory, presetId } = options;
   const screenshotPath = path.join(
     outputDirectory,
-    `${catalogId}-gameplay.png`,
+    `${presetId}-curated-preset.png`,
   );
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
-  await page.goto(sceneViewerUrl(origin, catalogId), {
+  await page.goto(curatedViewerPresetUrl(origin, presetId), {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
@@ -359,7 +368,7 @@ async function verifyScene(
   assert.equal(
     initialControlled.entityState.entityDefinitionRef,
     G_BOT_SUBJECT_DEFINITION_REF,
-    `${catalogId}: controlled Subject is not G Bot.`,
+    `${presetId}: controlled Subject is not G Bot.`,
   );
   const viewerIdentity = await page.evaluate(() => ({
     adapterName: document.querySelector("#adapter-name")?.textContent ?? "",
@@ -369,21 +378,21 @@ async function verifyScene(
       ...(document.querySelector<HTMLSelectElement>("#scene-select")?.options ?? []),
     ].map((option) => option.value),
   }));
-  assert.equal(viewerIdentity.adapterName, `babylon-havok/${catalogId}`);
-  assert.equal(viewerIdentity.selectedSceneId, catalogId);
+  assert.equal(viewerIdentity.adapterName, `babylon-havok/${presetId}`);
+  assert.equal(viewerIdentity.selectedSceneId, presetId);
   assert.deepEqual(
     viewerIdentity.selectorSceneIds,
     [...SCENE_VIEWER_PRESET_IDS],
   );
 
   const routeQuery = await page.evaluate(
-    ({ catalogId: sceneCatalogId }) => {
+    ({ presetId: currentPresetId }) => {
       const api = window.__WORLDKIT__!;
       api.setPaused(true);
       const before = api.getSnapshot();
       const selector = {
-        constraintId: `g19-7-read-only:${sceneCatalogId}`,
-        routeId: `g19-7-read-only:${sceneCatalogId}`,
+        constraintId: `g19-7-read-only:${currentPresetId}`,
+        routeId: `g19-7-read-only:${currentPresetId}`,
       };
       const queried = [
         {
@@ -417,12 +426,12 @@ async function verifyScene(
         })),
       };
     },
-    { catalogId },
+    { presetId },
   );
   assert.deepEqual(
     routeQuery.after,
     routeQuery.before,
-    `${catalogId}: read-only Route evidence queries changed the active World or Tick.`,
+    `${presetId}: read-only Route evidence queries changed the active World or Tick.`,
   );
   assert.equal(routeQuery.results.length, 4);
   assert.ok(
@@ -433,7 +442,7 @@ async function verifyScene(
         result.unavailableReason === "route-not-found" ||
         result.unavailableReason === "evidence-not-published",
     ),
-    `${catalogId}: Route evidence query returned an invalid availability result.`,
+    `${presetId}: Route evidence query returned an invalid availability result.`,
   );
 
   const movement = await page.evaluate(async (fixedInputTicks) => {
@@ -460,7 +469,7 @@ async function verifyScene(
   );
   assert.ok(
     movedMeters > 0.05,
-    `${catalogId}: fixed input did not move the possessed Subject.`,
+    `${presetId}: fixed input did not move the possessed Subject.`,
   );
   const unchangedSubjectEntityIds = Object.keys(
     movement.before.world.subjectStatesByEntityId,
@@ -478,7 +487,7 @@ async function verifyScene(
     );
     assert.ok(
       driftMeters <= MAXIMUM_STATIC_SUBJECT_DRIFT_METERS,
-      `${catalogId}: uncontrolled Subject '${entityId}' moved ${driftMeters}m.`,
+      `${presetId}: uncontrolled Subject '${entityId}' moved ${driftMeters}m.`,
     );
   }
 
@@ -497,7 +506,7 @@ async function verifyScene(
   assert.ok(jumpedControlled !== undefined && jumpedFrom !== undefined);
   const jumpedMeters = jumpedControlled.entityState.positionMetersXYZ[1] -
     jumpedFrom.entityState.positionMetersXYZ[1];
-  assert.ok(jumpedMeters > 0.01, `${catalogId}: jump input did not lift G Bot.`);
+  assert.ok(jumpedMeters > 0.01, `${presetId}: jump input did not lift G Bot.`);
 
   const resets = await page.evaluate(async () => {
     const api = window.__WORLDKIT__!;
@@ -516,7 +525,7 @@ async function verifyScene(
   assert.deepEqual(
     deterministicResetProjection(resets.second),
     deterministicResetProjection(resets.first),
-    `${catalogId}: consecutive resets did not restore the same canonical Gameplay state.`,
+    `${presetId}: consecutive resets did not restore the same canonical Gameplay state.`,
   );
 
   const tuningDraftUpdated = await page.evaluate(() => {
@@ -532,7 +541,7 @@ async function verifyScene(
     return document.querySelector("#tuning-save-status")?.textContent
       ?.includes("只保存为草稿") === true;
   });
-  assert.equal(tuningDraftUpdated, true, `${catalogId}: tuning draft did not update.`);
+  assert.equal(tuningDraftUpdated, true, `${presetId}: tuning draft did not update.`);
 
   const canvas = await page.locator("canvas.world-canvas").boundingBox();
   assert.ok(canvas !== null && canvas.width > 0 && canvas.height > 0);
@@ -540,11 +549,11 @@ async function verifyScene(
   assert.deepEqual(
     consoleErrors,
     [],
-    `${catalogId}: browser console errors detected.`,
+    `${presetId}: browser console errors detected.`,
   );
 
   return {
-    catalogId,
+    presetId,
     adapterName: viewerIdentity.adapterName,
     selectorSceneIds: viewerIdentity.selectorSceneIds,
     browserProtocolVersion: 5,
@@ -576,7 +585,7 @@ async function verifyArtifactRoute(
     page: Page;
     origin: string;
     outputDirectory: string;
-    catalogId: string;
+    catalogId: (typeof ARTIFACT_SCENE_CATALOG_IDS)[number];
   }>,
 ): Promise<ArtifactBrowserEvidenceV1> {
   const { page, origin, outputDirectory, catalogId } = options;
@@ -589,7 +598,7 @@ async function verifyArtifactRoute(
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
-  await page.goto(sceneViewerUrl(origin, catalogId, true), {
+  await page.goto(artifactSceneCatalogUrl(origin, catalogId), {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
@@ -644,11 +653,11 @@ async function verifyArtifactRoute(
   };
 }
 
-async function verifySceneSwitch(
+async function verifyPresetSwitch(
   page: Page,
   origin: string,
-): Promise<SceneSwitchEvidenceV1> {
-  await page.goto(sceneViewerUrl(origin, "feel-flat"), {
+): Promise<PresetSwitchEvidenceV1> {
+  await page.goto(curatedViewerPresetUrl(origin, "feel-flat"), {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
@@ -676,25 +685,27 @@ async function verifySceneSwitch(
     "babylon-havok/action-lab",
   );
   return {
-    fromSceneId: "feel-flat",
-    toSceneId: "action-lab",
+    fromPresetId: "feel-flat",
+    toPresetId: "action-lab",
     fromRuntimeSessionId: before.runtimeSessionId,
     toRuntimeSessionId: after.runtimeSessionId,
     controlledSubjectDefinitionRef: G_BOT_SUBJECT_DEFINITION_REF,
   };
 }
 
-async function verifyInvalidSceneRoute(
+async function verifyInvalidPresetRoute(
   page: Page,
   origin: string,
-): Promise<InvalidSceneEvidenceV1> {
-  const sceneCatalogId = "does-not-exist";
+): Promise<InvalidPresetEvidenceV1> {
+  const presetId = "does-not-exist";
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
-  await page.goto(sceneViewerUrl(origin, sceneCatalogId), {
+  const url = new URL(origin);
+  url.searchParams.set("scene", presetId);
+  await page.goto(url.toString(), {
     waitUntil: "domcontentloaded",
     timeout: 30_000,
   });
@@ -717,7 +728,7 @@ async function verifyInvalidSceneRoute(
   assert.equal(consoleErrors.length, 1);
   assert.match(consoleErrors[0] ?? "", /404 \(Not Found\)/);
   return {
-    sceneCatalogId,
+    presetId,
     diagnosticCode: "WORLDKIT_RUNTIME_INITIALIZATION_FAILED",
     sourceErrorCode: "VIEWER_BOOTSTRAP_HTTP_404",
     runtimeReadyRejected: true,
@@ -798,44 +809,44 @@ async function main(): Promise<void> {
     });
     const origin = new URL(server.url).origin;
 
-    const scenes: VerificationResultV1<SceneBrowserEvidenceV1>[] = [];
-    for (const catalogId of SCENE_VIEWER_PRESET_IDS) {
+    const curatedPresets: VerificationResultV1<CuratedPresetBrowserEvidenceV1>[] = [];
+    for (const presetId of SCENE_VIEWER_PRESET_IDS) {
       const result = await runWithFailureEvidence({
         context,
         screenshotPath: path.join(
           outputDirectory,
-          `${catalogId}-gameplay-failed.png`,
+          `${presetId}-curated-preset-failed.png`,
         ),
         run: async (page) =>
-          verifyScene({
+          verifyCuratedPreset({
             page,
             origin,
             outputDirectory,
-            catalogId,
+            presetId,
           }),
       });
-      scenes.push(result);
+      curatedPresets.push(result);
       process.stdout.write(
-        `${result.status === "passed" ? "PASS" : "FAIL"}: ${catalogId} Gameplay browser gate.\n`,
+        `${result.status === "passed" ? "PASS" : "FAIL"}: ${presetId} curated Gameplay preset gate.\n`,
       );
     }
 
-    const sceneSwitch = await runWithFailureEvidence({
+    const presetSwitch = await runWithFailureEvidence({
       context,
-      screenshotPath: path.join(outputDirectory, "scene-switch-failed.png"),
-      run: async (page) => verifySceneSwitch(page, origin),
+      screenshotPath: path.join(outputDirectory, "preset-switch-failed.png"),
+      run: async (page) => verifyPresetSwitch(page, origin),
     });
     process.stdout.write(
-      `${sceneSwitch.status === "passed" ? "PASS" : "FAIL"}: Viewer scene switch creates a fresh RuntimeHost session.\n`,
+      `${presetSwitch.status === "passed" ? "PASS" : "FAIL"}: Viewer preset switch creates a fresh RuntimeHost session.\n`,
     );
 
-    const invalidSceneRoute = await runWithFailureEvidence({
+    const invalidPresetRoute = await runWithFailureEvidence({
       context,
-      screenshotPath: path.join(outputDirectory, "unknown-scene-failed.png"),
-      run: async (page) => verifyInvalidSceneRoute(page, origin),
+      screenshotPath: path.join(outputDirectory, "unknown-preset-failed.png"),
+      run: async (page) => verifyInvalidPresetRoute(page, origin),
     });
     process.stdout.write(
-      `${invalidSceneRoute.status === "passed" ? "PASS" : "FAIL"}: unknown scene fails closed.\n`,
+      `${invalidPresetRoute.status === "passed" ? "PASS" : "FAIL"}: unknown preset fails closed.\n`,
     );
 
     const artifacts: VerificationResultV1<ArtifactBrowserEvidenceV1>[] = [];
@@ -864,9 +875,9 @@ async function main(): Promise<void> {
       kind: "scene-viewer-browser-verification",
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      scenes,
-      sceneSwitch,
-      invalidSceneRoute,
+      curatedPresets,
+      presetSwitch,
+      invalidPresetRoute,
       artifacts,
     };
     const reportPath = path.join(outputDirectory, "verification.json");
@@ -889,9 +900,9 @@ export function sceneViewerFailureCount(
   report: SceneViewerVerificationReportV1,
 ): number {
   return [
-    ...report.scenes,
-    report.sceneSwitch,
-    report.invalidSceneRoute,
+    ...report.curatedPresets,
+    report.presetSwitch,
+    report.invalidPresetRoute,
     ...report.artifacts,
   ].filter((result) => result.status === "failed").length;
 }

@@ -147,7 +147,7 @@ Normalizer/Compiler、Runtime、CLI/Browser 和对应 Conformance Gate 的纵向
 | Subject LEGO 组装体系 | 15% | 45% | 6.75% | S0、S1a、Golden 与首个产品 G Bot 可视切片已完成；S1b 后续、S2、S3、S4 尚未完成 |
 | Terrain、Region 与 Placement | 12% | 74% | 8.88% | Alpha 地形和 Placement Solver S1 已运行；Route R0、R1 Heightfield 与 R1b Static Platform 已审查/门禁关闭；通用 Terrain Mask、更多 Constraint 与完整 P0.1 未完成 |
 | CLI、Browser Protocol 与自动化 | 10% | 90% | 9.0% | 已交付 Take/Capture、`verify capture|explain`、完整 Package `build/inspect/load` 与持久 headless Runtime Session；Route `verify route`、R1 Golden Fixture、可信 Host Evidence Transport、Browser V5 clean break 已完成；compare、Capture Resume 和多人 Session 未完成 |
-| Semantic Action、动画与 Gameplay | 8% | 80% | 6.4% | Golden 与 G Bot `idle/walk/run/jump` 已交付；G19-2 至 G19-8 的 Command/Receipt/Event/State、RuntimeHost、Babylon/Browser、Outdoor 生命周期及 current-only clean break 已完成；姿态、装备、关系与规则仍未交付 |
+| Semantic Action、动画与 Gameplay | 8% | 80% | 6.4% | Golden 与 G Bot `idle/walk/run/jump`、G19-2 至 G19-8 底座已交付；M8 `mountedOn` stand-ground 内部验收切片已实现、最终 GO pending，Hosted Builder production admission 仍关闭；姿态、装备、seat/tether/dragging 与通用关系规则仍未交付 |
 | Simulation Take、控制通道与视频接入 | 10% | 70% | 7.0% | V1 Take、五 Pass、Bundle 和真实浏览器 Gate 已交付，Capture/Integrity 已进入统一 Report；完整 Replay/Resume 与模型 Adapter 未交付 |
 | 生产 Gate、默认切换与旧实现退出 | 7% | 95% | 6.65% | Canonical/资产/Placement/Capture/Route/Outdoor Gate 全绿；未发布旧路径已清理，clean-break census 为 632/0/489；HNC-F1 作为首次 Alpha 前的新一轮全面审计保留 |
 | **合计** | **100%** |  | **约 77%** | 对外按通用 Terrain、完整统一生产 Gate、WorldPackage 与视频闭环的不确定性保守报告 **约 68%** |
@@ -530,8 +530,8 @@ placement-layout / rigged-subject / g-bot-subject）；专项规格见
   1. [x] 相机数字 overlay 已在 Browser V5 基线上完成并达到 Final GO：删除 `setCameraTuning`、
      `applySubjectPresetTuning.cameraOverridesByProfileRef` 与 Snapshot `camera.tuning` / 旧
      `camera.preference`；数字 tuning 只走显式非 Gameplay 的 preview 通道
-     （`getCameraPreviewState` / `applyCameraPreview`）。`requestCameraProfile` /
-     `resetCameraProfile` 只是 P1.5 尚未发布的过渡协议；GCC-3 必须 clean break 为唯一
+     （`getCameraPreviewState` / `applyCameraPreview`）。P1.5 尚未发布的 `requestCameraProfile` /
+     `resetCameraProfile` 过渡协议已由 GCC-3 clean break 删除；当前唯一合同是
      `cameraViewPreference` 与 `view.camera-preference.set/reset`，不保留 alias。Preview 不属于
      Take 输入或 Gameplay Subject truth，但会改变 rendered Camera、Capture Matrix/Pixels 和
      Control Capture `frameHash`。最终 10 files / 190 tests 相机矩阵、Browser V5 / Route V2、
@@ -731,6 +731,10 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 
 #### P2.1 Subject S2：类型化 Relationship Framework
 
+以下勾选表示内部 Canonical/Runtime 切片已实现，不表示 Hosted Builder 可以生成关系型
+AuthoringSpec；M8-S1 的全门禁与双审仍 pending，Hosted self-check 继续拒绝 Relationship 和
+package-local Relationship Capability Ref。
+
 - [x] 按 [Canonical Runtime State 与 Semantic Projection 设计](../docs/superpowers/specs/2026-08-22-canonical-runtime-state-and-semantic-projection-design.md) 冻结 World State、View State、Runtime Status 与 Transition Log 四个公共投影；不扩充现有 `SubjectRuntimeStateV3` 大对象。
 - [x] 增加由 ExecutionPlan Resource Lock 约束的 `capabilityStatesById`，使用关闭 Capability State Schema，禁止自由 `state: Record<string, unknown>` 袋。
 - [x] 首个 Relationship Manifest Registry 与角色化 `riderEntityId` / `mountEntityId` / `mountSlotId` 端点；seat/tether 仍保留。
@@ -765,13 +769,14 @@ Incremental Hot Apply，以及哪些 Runtime 状态被保留、重置或替换�
 #### P2.4 多 Controller、相机模式与受控操作
 
 - [x] 完成并评审 [上下文驱动 Gameplay 与 Camera 组合设计](../docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)；接受 Kit → committed state → Camera Context → CameraDirector 单向链路、唯一 View Preference 和代表性 Fixture。
-- [x] `@whitebox-world/camera` 已 clean-break 为 provider-neutral Domain，交付关闭的命名
-  Rig/Modifier/Context Profile、`CameraContextSampleV1`、`CameraViewPreferenceV1`、Context/
-  Preference admission、纯 `selectCameraViewV1`、fallback diagnostic 与 explain。
+- [x] `@whitebox-world/camera` 当前候选已 clean-break 为 provider-neutral Domain，实现关闭的命名
+  Rig/Modifier/Context Profile、`CameraContextSampleV2`、`CameraViewPreferenceV1`、Context/
+  Preference admission、纯 `selectCameraViewV2`、fallback diagnostic 与 explain。
 - [x] GCC-0B/GCC-0C：package API/dependency DAG 与 provider-negative 边界测试已建立；Camera
   Domain 不拥有 renderer、physics、Browser、Runtime Session 或 Gameplay State。
-- [ ] GCC-0/GCC-0A/GCC-1：冻结 Browser V5/View clean break 与 committed Gameplay →
-  `CameraContextSampleV1` Projection；不得保留旧命令 alias 或从 Render Pose 反推 Context。
+- [ ] GCC-0/GCC-0A/GCC-1：Browser V5/View clean break 已完成；M8 当前候选已实现 committed
+  `possessedBy`/`mountedOn` → `CameraContextSampleV2` 窄 Projection。广义 Equipment/Flight
+  Projection 仍待完成；不得保留旧命令 alias 或从 Render Pose 反推 Context。
 - [x] GCC-3：唯一 `cameraViewPreference` Command/Receipt/View State 已接入 RuntimeHost；
   Camera 命令幂等重放、冲突拒绝、统一 Event Sequence、Context/Modifier/Target/fallback 自动变化
   事件以及 Browser V5 consumer clean break 已闭环。GCC-2 的 Registry Lock 完整覆盖仍单独推进。
@@ -805,7 +810,7 @@ Target 与类型化 `relationshipContexts`。唯一 Rider 命中 7m mounted modi
 歧义 fail closed，Dismount 后下一 Camera 固定更新撤销 modifier。该窄修复属于 M8-S1，
 不代表上面的广义 GCC-4/5/6/7/8 已完成。
 真实 Havok 集成回归确认 Mount/移动/Dismount 全链路、请求臂长 7m 且有效臂长大于 6m；
-Legacy Playground 的 `mounted-skateboard-s1` 已增加场景专用 Mount/Dismount 验收控件；控件只提交
+Playground M8 acceptance fixture `mounted-skateboard-s1` 已增加场景专用 Mount/Dismount 验收控件；控件只提交
 Browser V5 `action.activate` 并从 Snapshot/Inspection/Camera Telemetry 显示结果，不成为第二状态权威。
 真实浏览器验收确认 Mount 后 `skateboard / skateboard / mounted-framing / 7m`，Dismount 后恢复
 `player / player / none / 5m`，Reset 后可重复单周期验收；正式四阶段 Capture Bundle verifier
@@ -1289,9 +1294,9 @@ Placement S1、Simulation Take / Control Capture V1 与 Validation Capture/Integ
 | G19-8 | **已完成并合入 `main`，Final GO** | 未发布协议 clean break、历史命名/兼容路径专项清理、零消费者 census、G19 整体全量验证、主 Agent深审与最终 disposition | G19-7 | 候选 `99fb822`；178 files / 2,172 tests、全部专项 Gate、632/0/489 census；与 `main@134592e` Camera 边界文档语义融合；无 open confirmed P0/P1/适用 P2 |
 | HNC-F1 | Alpha 前强制执行 | 对当时全部公共命名、exports、parser、Browser/CLI、生成资产和隐式 fallback 再做一次全面兼容性清理；同时关闭 `SCENE-ORIGIN-1` | Scene spawn-origin 与 collider-derived placement 合同 | 最新 clean-break machine gate + 人工语义分类；Scene 固定 0.9m bridge 删除；场景/Outdoor/Plan gates 全绿 |
 | WS-07B | **待开始；结构治理后续 1** | 按 public contract family 扩展唯一 source/generated parity；每次只迁一个领域 | `ARC-INT` 已完成 / 阻塞相关 Schema release | 正负 parity、unknown-key、round-trip、tracked bytes；禁止用私有 deep import 换取小 bundle |
-| WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减当前 52 条 exact workspace boundary debt；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
+| WS-05B/C | **待开始；结构治理后续 2** | 按 owner 批次消减 workspace boundary debt；`7f9abd8` 历史 checkpoint 为 49 条，当前候选待 Cloud 重测；补必要 `/testing` exports、direct deps 与 per-package tsconfig | `ARC-INT` 已完成 / 阻塞 `WS-08` 的相关 package extraction | debt count 单调下降、zero stale/new、zero cycles、无 wildcard |
 | WS-08 | **待开始；结构治理后续 3** | 稳定 Host primitives 后拆分 Host/Studio/CLI composition package，不改变 Runtime/Camera/Capture authority | public contracts 稳定且相关 `WS-05B/C` debt 已清 / 无 | CLI snapshots、readiness/shutdown lifecycle、build graph、Studio E2E |
-| M8-S1 | 当前候选 `7f9abd8b` 的 Cloud 根门禁 GO；最终双审 pending | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、retained-Physics `supportedBy`、最新 Camera 合同窄 seam、Playground 与严格 Journal/Snapshot Capture；[专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [completion draft](reviews/2026-08-26-m8-s1-mounted-on-skateboard-completion.md) | G19 已完成 | `08f8f199` 首轮 Cloud 历史 NO-GO 保留。Runtime-equivalent `4c7551e` 的 fresh-install Cloud 已通过 build、independent 23/23 + 1/1、clean-break 1,519/0、Control Capture 2/2 与正式 mounted verifier；其唯一阻断是新测试未登记 census。exact `7f9abd8b` 的 install/typecheck/root test 随后 GO：workspace 49 debt / 1,760 symbols；census 386 = 347 + 39；contract 347 files / 4,150 pass / 3 platform skip / 0 fail；resource-heavy 39 files / 613 pass / 0 fail。Claude/Grok exact-SHA 终审尚未开始；不得把门禁 GO 写成最终 completion GO。历史 catalog `verify:outdoor-gameplay` 已随 Gameplay route 删除，不得恢复。`CAM-MOUNT-1` 的窄修复归 M8；广义 P2.4/GCC 仍开放。 |
+| M8-S1 | 新产品候选尚未冻结；内部 Canonical capability completion 与双审 pending，Hosted Builder production admission 关闭 | `mountedOn` 合同、编译、Action effect、Gameplay/Host 原子事务、Babylon Rider 投影、retained-Physics `supportedBy`、最新 Camera V2 clean break、Playground 与严格 Journal/Snapshot Capture；[专项设计](../docs/superpowers/specs/2026-08-26-m8-s1-mounted-on-skateboard-design.md) / [实施计划](../docs/superpowers/plans/2026-08-26-m8-s1-mounted-on-skateboard-implementation-plan.md) / [completion draft](reviews/2026-08-26-m8-s1-mounted-on-skateboard-completion.md) | G19 已完成 | `08f8f199`、`4c7551e`、`7f9abd8b` 的 Cloud 结果均保留为 pre-Camera-V2-clean-break 历史证据。当前树新增 Camera/Runtime/Registry strict admission、生成物更新和 Hosted relationship self-check hard gate，因此必须冻结新 exact SHA 后重新跑一次 Cloud 全矩阵，再做 Claude/Grok exact-tree 终审。不得把内部 Fixture 解释为自动场景生产支持；历史 catalog `verify:outdoor-gameplay` 不得恢复。 |
 
 结构治理固定按 `WS-07B → WS-05B/C → WS-08` 推荐；`M8-S1` 仍是产品能力主线，两条 lane 不得
 因表格相邻而被解释为可以共享 owner 或跳过各自依赖。上述 WS 项的范围、延期理由、ownership、
@@ -1378,7 +1383,7 @@ S1b Golden、
    完成 clean break 接线，旧 Profile 请求表面已删除；作者面板
    Feel 范围与 session 数字袋类型已在 Preset 语义合同修复中收口，
    M7 不标记完成；
-8. **M8（当前候选 Cloud 根门禁 GO，最终双审 pending）：Canonical World State + Typed Relationship
+8. **M8（新产品候选尚未冻结，内部能力全门禁与双审 pending）：Canonical World State + Typed Relationship
    人—滑板窄可视切片**：G19-2/G19-4 已交付 Canonical Gameplay 合同、provider-neutral
    RuntimeHost staging 和 WorldPackage membership；G19-6 至 G19-8 已完成并通过 Final GO。
    当前已按
@@ -1387,14 +1392,17 @@ S1b Golden、
    实现 `mountedOn` 权威关系、Mount/Dismount Action、Receipt/Event、Babylon 投影、
    Safe Dismount、Browser Fixture 与严格 Capture Track validator；候选 `08f8f199` 完成 retained
    Physics `supportedBy`、Golden/non-Golden 共用投影、最新 Camera 合同的窄 mounted seam、完整
-   Journal segment 与四阶段 retained Capture。当前本地影响面和 Capture 子审已通过；
+   Journal segment 与四阶段 retained Capture。该能力只用于 Host-fixed Canonical acceptance；Hosted
+   Builder self-check 继续拒绝 Relationship 与 package-local Relationship Capability Ref，不宣称自动
+   场景生产支持。历史本地影响面和 Capture 子审已通过；
    Cloud 首轮 exact-SHA gate 已完成 NO-GO：`typecheck` 有 28 errors / 4 files，root test 在
    workspace-boundary preflight 阻断；其余 build、Studio、independent、clean-break 与四项现行
-   Canonical capability gates 通过；这些通过项仍只属于该历史 SHA。修复后的当前候选
+   Canonical capability gates 通过；这些通过项仍只属于该历史 SHA。后续历史 checkpoint
    `7f9abd8bc78010cd0e04df8542d40f18c24bfae4` 已由 Cloud 完成 install/typecheck/root aggregate：
    workspace 49 debt / 1,760 symbols，census 386 = 347 + 39，contract 347 files / 4,150 pass /
-   3 platform skip / 0 fail，resource-heavy 39 files / 613 pass / 0 fail。根门禁 GO；Claude/Grok
-   exact-SHA 双审仍 pending，因此 M8 不标记最终完成。
+   3 platform skip / 0 fail，resource-heavy 39 files / 613 pass / 0 fail。当前树又修改了生产
+   Camera/Runtime/Registry 和生成物输入，因此该结果不能升级为当前 GO；必须冻结新 exact SHA、
+   完成 Cloud 全矩阵与 Claude/Grok exact-tree 双审后，M8 才能标记内部能力完成。
    历史 catalog `verify:outdoor-gameplay` 已随 Gameplay route 删除，不能作为待恢复 Gate；正式
    mounted verifier 与现行 Canonical capability gates 才是当前证据。`CAM-MOUNT-1` 的窄修复归
    M8，广义 P2.4/GCC 仍开放；不向 `SubjectRuntimeStateV3` 追加字段，也不先铺开 seat/tether、

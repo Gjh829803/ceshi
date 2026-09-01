@@ -26,7 +26,8 @@
 
 This amendment is authoritative for the remaining M8-S1 work. It does not broaden the product claim to
 wheel dynamics, generic vehicles, seat/tether, hosted Builder support, dynamic Route certification, or a
-second Camera system. It closes the exact production seams exercised by the human/skateboard slice.
+second Camera system. It closes the exact internal Canonical acceptance seams exercised by the
+human/skateboard slice without opening automatic scene production admission.
 
 The final accepted tree has one path for each concept:
 
@@ -51,7 +52,12 @@ compatibility feature.
 
 ## 1. Outcome
 
-M8-S1 adds the first production typed Relationship beyond `possessedBy`: one human Rider can stand on one skateboard Mount through `mountedOn`. Mount and Dismount remain Semantic Actions submitted through the existing `action.activate` command. Each accepted Action atomically changes Action state, `mountedOn`, `possessedBy`, runtime projection, Event, Receipt and Capture evidence at one fixed simulation Tick.
+M8-S1 adds the first internally implemented typed Relationship beyond `possessedBy`: one human Rider can
+stand on one skateboard Mount through `mountedOn` in a Host-fixed Canonical acceptance fixture. Mount and
+Dismount remain Semantic Actions submitted through the existing `action.activate` command. Each accepted
+Action atomically changes Action state, `mountedOn`, `possessedBy`, runtime projection, Event, Receipt and
+Capture evidence at one fixed simulation Tick. This implementation is not Hosted Builder production
+admission and must not be advertised as an automatically generated scene capability.
 
 The fixture deliberately uses two independent Entities:
 
@@ -552,13 +558,20 @@ Architecture, shared contract decisions, final diff review and integration remai
 workers may implement only rows whose inputs and file ownership are already frozen. A worker report is not
 integration evidence.
 
-## 9. Authoring, Compiler and production availability
+## 9. Internal Authoring acceptance and Hosted production exclusion
 
-Authoring V4 accepts only the exact `mountedOn` relationship shape. Validation resolves both Entities, the Mount slot, sockets and implemented Relationship Profile. Unknown Relationship types, unknown fields, duplicate Rider occupancy, duplicate slot occupancy and wrong role kinds fail closed.
+Authoring V4 retains the exact `mountedOn` shape only for trusted internal Canonical acceptance input.
+Validation resolves both Entities, the Mount slot, sockets and the `internal` Relationship Profile. Unknown
+Relationship types, unknown fields, duplicate Rider occupancy, duplicate slot occupancy and wrong role kinds
+fail closed. This parser support does not make the relationship AI-recommended, public production Authoring,
+or Hosted Builder output.
 
 Compiler V5 emits typed initial `mountedOn` state only when the profile is exactly implemented and all closure resources are locked. Initial mounted scenes must also contain a matching initial possession of the Mount; contradictory Rider possession is rejected. The dynamic fixture starts unmounted so it exercises both transaction directions.
 
-The hosted Scene Brief/Builder workflow continues to omit or reject mount relationships until its capability policy is deliberately reopened after M8 completion. M8 does not silently change automatic generation behavior.
+The hosted Scene Brief/Builder workflow rejects non-empty `relationships` and every package-local
+`relationshipCapabilityRefs` entry with stable self-check diagnostics. It continues to assemble rider,
+body and equipment into one Subject until a later reviewed design deliberately reopens production
+admission. M8 does not silently change automatic generation behavior.
 
 Browser Protocol V5 adds no keys. Existing gameplay submission, receipts, events, WorldState and inspection methods expose the new union member through their current return values. The exact 38-key protocol census must remain unchanged.
 

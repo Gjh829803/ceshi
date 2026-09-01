@@ -33,7 +33,7 @@ import {
   applyCameraRigParameterOverridesV1,
   validateCameraTuningV1,
 } from "@whitebox-world/runtime-contracts";
-import { isEmpty, isNil } from "lodash-es";
+import { isNil } from "lodash-es";
 import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework";
 
 import { CameraViewSolverV1 } from "./camera-view-solver";
@@ -209,36 +209,10 @@ function cameraContextProfileFromExecution(
     ...(context.firstPersonCameraRigProfileRef === undefined
       ? {}
       : { firstPersonCameraRigProfileRef: context.firstPersonCameraRigProfileRef }),
-    rules: context.rules.flatMap((rule) => {
-      const movementMediums = rule.when.movementMediums?.filter(
-        (movementMedium): movementMedium is "ground" | "air" =>
-          movementMedium === "ground" || movementMedium === "air",
-      );
-      // P1.5 has no water runtime sample. A water-only execution rule must be
-      // unavailable rather than becoming an unconditional Camera Domain rule.
-      if (
-        rule.when.motionKernelRefs !== undefined ||
-        rule.when.movementMediums !== undefined &&
-        movementMediums?.length === 0
-      ) return [];
-      const requiredMotionTags = rule.when.requiredMotionTags ?? [];
-      const leftoverMotionTags = requiredMotionTags.filter(
-        (tag) => tag !== "free-ground",
-      );
-      const requiredCameraContextTags = [
-        ...leftoverMotionTags,
-        ...(rule.when.requiredCameraContextTags ?? []),
-      ];
-      const mobilityModes = [
-        ...(rule.when.mobilityModes ?? []),
-        ...(requiredMotionTags.includes("free-ground")
-          ? (["grounded"] as const)
-          : []),
-      ].filter((mode, index, modes) => modes.indexOf(mode) === index);
-      return {
-        id: rule.id,
-        priority: rule.priority,
-        when: {
+    rules: context.rules.map((rule) => ({
+      id: rule.id,
+      priority: rule.priority,
+      when: {
         ...(rule.when.allRelationshipConditions === undefined
           ? {}
           : {
@@ -248,7 +222,9 @@ function cameraContextProfileFromExecution(
         ...(rule.when.locomotionStatuses === undefined
           ? {}
           : { locomotionStatuses: rule.when.locomotionStatuses }),
-        ...(isEmpty(mobilityModes) ? {} : { mobilityModes }),
+        ...(rule.when.mobilityModes === undefined
+          ? {}
+          : { mobilityModes: rule.when.mobilityModes }),
         ...(rule.when.gaits === undefined
           ? {}
           : { gaits: rule.when.gaits }),
@@ -261,9 +237,9 @@ function cameraContextProfileFromExecution(
         ...(rule.when.actionInterruptibility === undefined
           ? {}
           : { actionInterruptibility: rule.when.actionInterruptibility }),
-        ...(movementMediums === undefined
+        ...(rule.when.movementMediums === undefined
           ? {}
-          : { movementMediums }),
+          : { movementMediums: rule.when.movementMediums }),
         ...(rule.when.minimumSpeedMetersPerSecond === undefined
           ? {}
           : { minimumSpeedMetersPerSecond: rule.when.minimumSpeedMetersPerSecond }),
@@ -273,18 +249,17 @@ function cameraContextProfileFromExecution(
         ...(rule.when.requiredSocketIds === undefined
           ? {}
           : { requiredSocketIds: rule.when.requiredSocketIds }),
-        ...(isEmpty(requiredCameraContextTags)
+        ...(rule.when.requiredCameraContextTags === undefined
           ? {}
-          : { requiredCameraContextTags }),
-        },
-        ...(rule.cameraRigProfileRef === undefined
-          ? {}
-          : { cameraRigProfileRef: rule.cameraRigProfileRef }),
-        ...(rule.cameraModifierRefs === undefined
-          ? {}
-          : { cameraModifierRefs: rule.cameraModifierRefs }),
-      };
-    }),
+          : { requiredCameraContextTags: rule.when.requiredCameraContextTags }),
+      },
+      ...(rule.cameraRigProfileRef === undefined
+        ? {}
+        : { cameraRigProfileRef: rule.cameraRigProfileRef }),
+      ...(rule.cameraModifierRefs === undefined
+        ? {}
+        : { cameraModifierRefs: rule.cameraModifierRefs }),
+    })),
     cameraRigProfiles: context.cameraRigProfiles.map((profile) => ({
       cameraRigProfileRef: profile.resourceRef,
       algorithmRef: profile.algorithmRef,
@@ -327,10 +302,10 @@ type CameraDirectorTelemetryV1 = Omit<
 >;
 
 /**
- * Live Motion Kernel subjects still own support and locomotion. Publish those
- * committed facts as Camera Context V2 so automatic Rules can select a view.
+ * Publish committed non-Golden locomotion facts as Camera Context V2 so
+ * automatic Rules consume the same current Camera contract.
  */
-export function committedCameraContextFromMotionKernelV1(
+export function committedCameraContextFromViewTargetV2(
   sample: ViewTargetSampleV1,
   committedTick: number,
   locomotionMode: LocomotionModeV1,
@@ -433,8 +408,6 @@ function viewTargetFromCommittedCameraContextV2(
       : [0, 0, 0],
     approximateRadiusMeters: viewTargetSample.approximateRadiusMeters,
     socketPositionsMetersXYZById: context.environment.socketPositionsMetersXYZById,
-    // Motion identity is already represented by committed Camera Context facts.
-    motionTags: [],
     movementMedium: locomotion.status === "active"
       ? locomotion.movementMedium
       : "ground",

@@ -207,6 +207,8 @@ const AIM_RULE: CameraContextRuleV2 = {
 describe("Camera Context admission", () => {
   it.each([
     ["legacy Motion Kernel condition", { motionKernelRefs: ["worldkit://motion-kernel/legacy@1"] }],
+    ["legacy Motion tag condition", { requiredMotionTags: ["legacy"] }],
+    ["unsupported water medium", { movementMediums: ["water"] }],
     ["unknown gait", { gaits: ["teleport"] }],
     ["duplicate phase", { verticalPhases: ["falling", "falling"] }],
     ["ill-formed Action ref", { requiredActiveActionRefs: ["bad\ud800ref"] }],

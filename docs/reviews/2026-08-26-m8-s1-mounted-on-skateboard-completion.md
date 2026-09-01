@@ -1,9 +1,10 @@
 # M8-S1 `mountedOn` Human-Skateboard Completion Review
 
-> **Draft / NO-GO.** Current candidate `7f9abd8bc78010cd0e04df8542d40f18c24bfae4` has an exact-SHA
-> Cloud **GO** for install, typecheck and the complete root test aggregate. The first `08f8f199` attempt and
-> its failure remain recorded below as history. Final independent Claude and Grok code reviews have not
-> started, so no M8-S1 completion GO is claimed.
+> **Draft / NO-GO.** The current working tree adds a current-only Camera V2 clean break and regenerated
+> contract/package artifacts after historical candidate `7f9abd8bc78010cd0e04df8542d40f18c24bfae4`.
+> It is therefore a new product candidate whose exact pushed SHA and Cloud evidence are still pending.
+> Historical Cloud results remain recorded below without being promoted to the new tree. Final independent
+> Claude and Grok code reviews have not started, so no M8-S1 completion GO is claimed.
 > This document must not be converted to a completion GO until those results are recorded and every blocking
 > finding is dispositioned against the final candidate.
 
@@ -13,7 +14,8 @@
 | --- | --- |
 | Date | 2026-09-01 |
 | Review mode | Mode B change review plus the complete Runtime deep-review checklist |
-| Product candidate | `7f9abd8bc78010cd0e04df8542d40f18c24bfae4` |
+| Runtime/product candidate | Current working tree after `6948d1a40322f9057d88c7b0d57d77a21c6e7b01`; exact pushed SHA pending |
+| Final review tree | Pending product-candidate Cloud closure and exact-SHA Claude/Grok review |
 | Diff base | `df2dcd53434bd26a97dbb3e835fb99ad56eb82a9` |
 | Branch | `codex/m8-s1-completion` |
 | Runtime dependencies | Babylon.js `9.23.0`; Havok `1.3.14` |
@@ -33,7 +35,7 @@ the [full-dimension review protocol](full-dimension-review-protocol.md), and the
 | Layer | Current evidence | Status |
 | --- | --- | --- |
 | `static-read` | Candidate diff, authority map, clean-break and Capture subreviews | Scoped reviews complete on their recorded inputs; final exact-SHA Claude/Grok review pending |
-| `automated-contract` | Historical local affected evidence, fresh-install `4c7551e` non-root closure and exact-`7f9abd8` root closure | Current affected gates are closed through the D6 lineage below; final review pending |
+| `automated-contract` | Historical Cloud evidence plus current focused local Camera/Registry/Runtime/Viewer checks | New product candidate requires a fresh exact-SHA Cloud matrix before GO |
 | `rendered-visual` | Four retained neutral-color frames from the formal mounted verifier | Inspected on the Runtime-equivalent `4c7551e` tree; see §4 |
 | `manual-interaction` | No keyboard/mouse playtest performed | Not claimed and not required for the deterministic S1 completion claim |
 
@@ -79,7 +81,7 @@ These results are preserved as historical first-attempt evidence. They do not es
 tree. In particular, their build and capability results remain scoped to `08f8f199`; later changes touched
 some of those inputs, so they are not silently promoted to `7f9abd8` evidence.
 
-### Current exact-SHA Cloud root closure
+### Historical exact-SHA Cloud root closure
 
 - Cursor Cloud agent: `bc-94b2272e-38ea-4525-971c-a817000e9cec`.
 - Run: `run-512cffea-279d-45fd-ae83-9457ee381c26`.
@@ -92,8 +94,8 @@ some of those inputs, so they are not silently promoted to `7f9abd8` evidence.
   - contract lane: 347 files, 4,150 passed, 3 platform skips, 0 failed;
   - resource-heavy lane: 39 files, 613 passed, 0 failed.
 
-This is an exact-SHA GO for dependency installation, TypeScript and the root aggregate. It closes the first
-attempt's type/boundary/root blockers.
+This was an exact-SHA GO for dependency installation, TypeScript and the root aggregate on `7f9abd8`. It
+closed the first attempt's type/boundary/root blockers, but it does not cover the later Camera V2 clean break.
 
 ### Fresh-install non-root Cloud closure and D6 lineage
 
@@ -110,14 +112,23 @@ Cursor Cloud agent `bc-74b5577c-59da-4b4e-b2a0-3103f602894f`, run
 - root `pnpm test`: exit 1 only because the newly added semantic-fact projector test was absent from the
   fail-closed census, so contract/resource-heavy execution did not start.
 
-The two commits after `4c7551e` are documentation plus test-only census/fixture corrections:
+The two commits from `4c7551e` to historical candidate `7f9abd8` are test-only census/fixture corrections:
 `94d415796992ceb6144860af34f0c99f05a4e869` classifies the semantic-fact projector test, and
 `7f9abd8bc78010cd0e04df8542d40f18c24bfae4` aligns test expectations with the already-current Camera epoch
 and regenerated Registry closure. They do not change production Runtime, Compiler, Registry, Capture,
 build/dependency inputs or the formal verifier. Under the review protocol's D6 invalidation rule, the
 `4c7551e` build, independent, clean-break and Capture results therefore remain applicable to the current
-product tree, while the exact-`7f9abd8` root run proves the changed census and fixtures. This is an explicit
-input analysis, not a claim that every command ran at `7f9abd8`.
+historical product tree, while the exact-`7f9abd8` root run proves the changed census and fixtures. This is
+an explicit input analysis, not a claim that every command ran at `7f9abd8`. The current working tree changes
+production Camera/Runtime/Registry contracts and generated artifacts, so this lineage stops at `7f9abd8`.
+
+| Required lane | Evidence tree | Current status |
+| --- | --- | --- |
+| frozen install, typecheck, root aggregate | new exact product SHA | Pending Cloud run; `7f9abd8` result is historical |
+| build, independent, unreleased clean break | new exact product SHA | Pending Cloud run; `4c7551e` lineage is historical |
+| Control Capture and formal mounted Capture | new exact product SHA | Pending Cloud run because Camera/Viewer/Bootstrap inputs changed |
+| Studio and Canonical/Placement/Rigged/G Bot capability gates | new exact product SHA | Pending Cloud run; `08f8f199` passes remain historical |
+| documentation truth and final static review | final pushed review tree | Pending exact-SHA Claude/Grok reviews |
 
 The historical `pnpm verify:outdoor-gameplay` command is intentionally absent. Its catalog Gameplay route was
 deleted; current Gameplay runs only from Canonical Authoring JSON through `worldkit run`. The retired command
@@ -136,10 +147,10 @@ is superseded by the formal mounted verifier and current Canonical capability ga
 
 The design review used Claude agent `bc-ca733a91-a88d-437b-9545-0b34243f1964`, run
 `run-9c2604f7-e87f-4c36-8177-01a17314b684`, against exact design SHA
-`0f57d5c09b5ec93c6baab239ae318319b134dd96` and returned GO with no P0-P2 findings. A separate Capture
-subreview returned GO with no P0-P3 findings, passed its 23/23 focused and tamper matrix, and confirmed full
-journal-segment, Snapshot/WorldState/inspection cross-binding and reset isolation. Those are useful scoped
-reviews; neither substitutes for the pending final exact-SHA Claude/Grok implementation reviews.
+`0f57d5c09b5ec93c6baab239ae318319b134dd96` and returned GO with no P0-P2 findings. An in-session Capture
+subreview also informed the fixes, but has no durable external run identity and is treated only as advisory;
+the formal Cloud verifier and tests above carry the Capture evidence weight. Neither substitutes for the
+pending final exact-SHA Claude/Grok implementation reviews.
 
 ## 4. Formal Capture and rendered evidence
 
@@ -171,7 +182,7 @@ rendered-visual inspection, not manual interaction or a subjective control-feel 
 | Relationship truth | GameplayState `relationshipStatesById` | Runtime projection, Browser, inspection, Capture | Typed committed state and journal; reset removes prior-session rows |
 | Possession/control | GameplayState `possessedBy` | Input controlled Entity; Camera control context | WorldState/Receipt/Event agree atomically |
 | Rider mounted pose | Committed Mount transform plus locked slot | Babylon Rider body/visual projection | Deterministic projection; no mesh-derived authority |
-| Ground support | Mount MotionKernel `checkSupport()` result | Ground mode and retained `supportedBy` projector | Reset/rollback clear stale fact episodes; no height-query fallback |
+| Ground support | Each independently simulated Ground Subject's MotionKernel `checkSupport()` result | Board while mounted; Rider only after Dismount resumes its own Body tick; retained `supportedBy` projector | Reset/rollback clear stale fact episodes; no height-query fallback |
 | Rider support while mounted | No independent support query | Suspended Rider projection | No fabricated Rider-board `supportedBy` fact |
 | Active Action | Core Semantic Action plus trusted effect plan | Event/Receipt and immediate transition | Fixed-tick journal; no second Mount command handler |
 | Camera | Camera Director | Same-epoch controlled Entity, selected Target and typed Relationship Context | Previous epoch remains coherent until next fixed-tick Camera publication |
@@ -182,15 +193,35 @@ The reviewed architecture therefore keeps one owner per Gameplay, Physics, Camer
 does not infer Physics support from `mountedOn`, use Babylon Nodes to decide Camera Context, or retain a
 second legacy relationship dialect.
 
+### Camera V2 current-only clean break
+
+- `@whitebox-world/camera` is the sole public owner and parser of `CameraContextRuleV2`; Runtime Contracts
+  and Subject Registry import that contract directly and both reject malformed or legacy rule shapes.
+- The unreleased `motionKernelRefs` and `requiredMotionTags` rule fields were deleted rather than translated
+  into Camera tags. The public ViewTarget provider shell no longer carries Motion Kernel identity or tags.
+- Catalog rules use only committed typed facts with authoritative producers. Mounted selection consumes the
+  committed `mountedOn` Rider context; the former water, glide and surface-fast rules were removed because
+  the current Runtime does not publish authoritative matching Camera facts.
+- Runtime validators, Planner/Builder self-check bundles, evidence worlds and the Native Cloud Ridge package
+  were regenerated from the current contract. Camera/Registry/Runtime/Viewer focused verification passes
+  14 files / 288 tests; the directly affected self-check suite passes 1 file / 3 tests. Generated Runtime
+  validators, both agent self-check bundles and Native package bytes are current.
+- Executable-source census for `CameraContextSampleV1` is zero. Its migration-ledger row remains
+  `migrating`, not `completed`, because the whole `pnpm verify:3c-migration` command is currently blocked by
+  an unrelated pre-existing ledger mismatch for `RetainedCharacterSupportSampleV1` (`20 > 7`). This is a
+  truthful global-gate limitation, not a compatibility path retained by M8.
+
 ## 6. Findings and current blockers
 
 No P0-P2 product finding from the completed local Capture subreview is carried forward. The earlier
-type/boundary/root blockers are closed by the exact-`7f9abd8` Cloud run. The overall review remains **NO-GO**
+type/boundary/root blockers were closed on `7f9abd8`; the new product tree must prove them again. The overall
+review remains **NO-GO**
 for these unresolved completion items:
 
-1. Final exact-SHA Claude and Grok implementation reviews have not started.
-2. The final reviewers must validate the D6 lineage above, including that `94d4157` and `7f9abd8` are
-   test/documentation-only for the reused `4c7551e` build, clean-break and Capture inputs.
+1. The new product tree has not yet been committed, pushed or exercised by the exact-SHA Cloud matrix.
+2. Final exact-SHA Claude and Grok implementation reviews have not started.
+3. The unrelated whole-ledger `RetainedCharacterSupportSampleV1` mismatch must remain disclosed; M8 must
+   not falsely record a green `verify:3c-migration` result.
 
 The missing retired `verify:outdoor-gameplay` entry is not a finding and must not be repaired.
 
@@ -198,14 +229,15 @@ The missing retired `verify:outdoor-gameplay` entry is not a finding and must no
 
 | Acceptance claim | Current evidence | Status |
 | --- | --- | --- |
-| One canonical `mountedOn` schema/registry/compiler/runtime dialect | Focused contract/clean-break tests and scoped review | Root aggregate passes on `7f9abd8`; Runtime-equivalent `4c7551e` clean-break is 1,519/0 |
+| One canonical `mountedOn` schema/registry/compiler/runtime dialect | Focused contract/clean-break tests and scoped review | Current focused matrix passes; exact-product Cloud clean-break pending |
 | Atomic Mount/Dismount, possession, Event, Receipt and WorldState | Runtime/Host focused matrix and Capture cross-binding | Locally supported |
-| Board-only Physics authority and retained-support `supportedBy` | Runtime/Havok focused matrix | Locally supported |
+| Per-active-body Physics authority and retained-support `supportedBy` | Runtime/Havok focused matrix | Board while mounted; Rider may start a new real support episode after Dismount |
 | Deterministic safe Dismount and cleanup | Adversarial Runtime matrix | Locally supported |
 | Latest same-epoch Camera contract and mounted modifier | Camera matrix plus committed Capture source | Locally supported; final review pending |
-| Browser V5 remains exactly 38 keys | Focused contract matrix plus root aggregate | Root aggregate passes on `7f9abd8` |
-| Four-phase retained Capture and reset isolation | Formal verifier, report hashes and rendered frames | Runtime-equivalent `4c7551e` verifier and D6 lineage pass; final review pending |
-| Production completion | Whole gates plus exact-SHA dual review | **Pending / NO-GO** |
+| Browser V5 remains exactly 38 keys | Focused contract matrix plus historical root aggregate | Current exact-product Cloud aggregate pending |
+| Four-phase retained Capture and reset isolation | Historical formal verifier, report hashes and rendered frames | New exact-product Cloud verifier pending because Camera inputs changed |
+| Internal Canonical capability completion | Whole gates plus exact-SHA dual review | **Pending / NO-GO** |
+| Hosted Builder production exclusion | Builder self-check rejects relationships and package-local relationship capability refs | Focused RED→GREEN passes; bundled checker regenerated; Cloud aggregate pending |
 
 | Dimension | Coverage | Evidence/status |
 | --- | --- | --- |
@@ -213,8 +245,8 @@ The missing retired `verify:outdoor-gameplay` entry is not a finding and must no
 | D2 Schema and AI-friendliness | Checked | One typed public term and role-qualified endpoints; final exact-SHA review pending |
 | D3 claims versus implementation | Checked | README/spec/backlog/plan reconciled; root GO kept distinct from completion GO |
 | D4 single authority | Checked | Authority map above and scoped Runtime/Capture review |
-| D5 engineering quality | Checked | Determinism, adversarial transitions, isolation and cleanup covered; exact-`7f9abd8` root aggregate GO |
-| D6 gates and evidence layers | Partially closed | Exact-`7f9abd8` root GO plus explicit `4c7551e` unaffected-input lineage; final dual review pending |
+| D5 engineering quality | Checked | Determinism, adversarial transitions, isolation and cleanup covered locally; new Cloud aggregate pending |
+| D6 gates and evidence layers | Open | Historical evidence is retained but not promoted across the production Camera clean break |
 
 ## 8. Explicit non-claims
 
@@ -226,9 +258,11 @@ relationship, Camera or catalog Gameplay compatibility path is required.
 
 ## 9. Remaining closure work
 
-1. Dispatch independent Claude and Grok deep code reviews against exact candidate
-   `7f9abd8bc78010cd0e04df8542d40f18c24bfae4`; reproduce and
-   disposition every P0/P1 before acceptance and batch/defer non-blocking P2/P3 as the protocol permits.
-2. Disposition review findings, update the final evidence and only then mark the M8 backlog row
+1. Commit and push the new product candidate, then run frozen install, typecheck, root test, build, Studio,
+   independent, clean-break, Canonical capability, Viewer and mounted Capture gates in Cursor Cloud.
+2. Dispatch independent Claude and Grok deep code reviews against the same exact pushed review tree;
+   reproduce and disposition every P0/P1 before acceptance and batch/defer non-blocking P2/P3 as the
+   protocol permits.
+3. Disposition review findings, update the final evidence and only then mark the M8 backlog row
    complete. Later documentation-only truth corrections require diff/link checks, not Runtime or whole-suite
    replay.

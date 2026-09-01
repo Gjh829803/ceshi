@@ -94,21 +94,6 @@ describe("subject preset resource closure", () => {
         version: 1,
       }),
       expect.objectContaining({
-        resourceRef: "worldkit://camera-profile/flight.glide@1",
-        resourceKind: "camera-rig-profile",
-        version: 1,
-      }),
-      expect.objectContaining({
-        resourceRef: "worldkit://camera-rig/flight-horizon@1",
-        resourceKind: "camera-rig-algorithm",
-        version: 1,
-      }),
-      expect.objectContaining({
-        resourceRef: "worldkit://camera-modifier/water-stability@1",
-        resourceKind: "camera-modifier-profile",
-        version: 1,
-      }),
-      expect.objectContaining({
         resourceRef: "worldkit://medium-profile/ground-air.standard@1",
         resourceKind: "medium-profile",
         version: 1,

@@ -646,6 +646,9 @@ importers:
 
   packages/subject-registry:
     dependencies:
+      '@whitebox-world/camera':
+        specifier: workspace:*
+        version: link:../camera
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol

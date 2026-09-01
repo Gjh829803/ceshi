@@ -1,7 +1,7 @@
 "use strict";
 export const validate = validate20;
 export default validate20;
-const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://worldkit.dev/schemas/world-runtime-bootstrap-v1.schema.json","title":"WorldRuntimeBootstrapV1","type":"object","additionalProperties":false,"required":["kind","schemaVersion","id","gameplayBootstrapRef","gameplayBootstrapHash","initialControlledEntityId","gravityMetersPerSecondSquaredXYZ","initialCamera","subjectAssets","rigProfiles","animationSets","colliderProfiles","actionPresentationRegistry","subjectRuntimeDescriptors","runtimeResourceLockEntries","contentHash"],"properties":{"kind":{"const":"world-runtime-bootstrap"},"schemaVersion":{"const":1},"id":{"$ref":"#/$defs/nonEmptyString"},"gameplayBootstrapRef":{"$ref":"#/$defs/nonEmptyString"},"gameplayBootstrapHash":{"$ref":"#/$defs/hash"},"initialControlledEntityId":{"$ref":"#/$defs/nonEmptyString"},"gravityMetersPerSecondSquaredXYZ":{"$ref":"#/$defs/vec3"},"initialCamera":{"$ref":"#/$defs/initialCamera"},"subjectAssets":{"type":"array","items":{"$ref":"#/$defs/subjectAsset"}},"rigProfiles":{"type":"array","items":{"$ref":"#/$defs/rigProfile"}},"animationSets":{"type":"array","items":{"$ref":"#/$defs/animationSet"}},"colliderProfiles":{"type":"array","items":{"$ref":"#/$defs/colliderProfile"}},"actionPresentationRegistry":{"$ref":"#/$defs/actionPresentationRegistry"},"subjectRuntimeDescriptors":{"type":"array","items":{"$ref":"#/$defs/subjectDescriptor"}},"runtimeResourceLockEntries":{"type":"array","items":{"$ref":"#/$defs/resourceLockEntry"}},"contentHash":{"$ref":"#/$defs/hash"}},"$defs":{"nonEmptyString":{"type":"string","minLength":1},"hash":{"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"stringArray":{"type":"array","items":{"$ref":"#/$defs/nonEmptyString"}},"initialCamera":{"type":"object","additionalProperties":false,"required":["mode","cameraEntityId","targetEntityId","cameraRigProfileRef","pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","manualSwitchAllowed"],"properties":{"mode":{"const":"third-person"},"cameraEntityId":{"$ref":"#/$defs/nonEmptyString"},"targetEntityId":{"$ref":"#/$defs/nonEmptyString"},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"pitchRadians":{"type":"number"},"distanceMeters":{"type":"number","exclusiveMinimum":0},"targetHeightMeters":{"type":"number"},"fovDegrees":{"type":"number","exclusiveMinimum":0,"exclusiveMaximum":180},"manualSwitchAllowed":{"type":"boolean"}}},"subjectAssetInventory":{"type":"object","additionalProperties":false,"required":["meshCount","vertexCount","triangleCount","skeletonCount","boneCount","animationClipNames"],"properties":{"meshCount":{"type":"integer","minimum":0},"vertexCount":{"type":"integer","minimum":0},"triangleCount":{"type":"integer","minimum":0},"skeletonCount":{"type":"integer","minimum":0},"boneCount":{"type":"integer","minimum":0},"animationClipNames":{"$ref":"#/$defs/stringArray"}}},"subjectAsset":{"type":"object","additionalProperties":false,"required":["subjectAssetRef","artifactContentHash","byteLength","mediaType","format","inventory"],"properties":{"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"artifactContentHash":{"$ref":"#/$defs/hash"},"byteLength":{"type":"integer","minimum":0},"mediaType":{"const":"model/gltf-binary"},"format":{"const":"glb"},"inventory":{"$ref":"#/$defs/subjectAssetInventory"}}},"rigProfile":{"type":"object","additionalProperties":false,"required":["rigProfileRef","bodyTopology","skeletonRootBoneName","requiredBoneIds","sourceNodeNameByBoneId"],"properties":{"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"bodyTopology":{"const":"biped"},"skeletonRootBoneName":{"$ref":"#/$defs/nonEmptyString"},"requiredBoneIds":{"$ref":"#/$defs/stringArray"},"sourceNodeNameByBoneId":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"$ref":"#/$defs/nonEmptyString"}}}},"animationBinding":{"type":"object","additionalProperties":false,"required":["actionId","sourceClipName","semanticFamily","automaticPresentationKeys","loopMode","playbackSpeedRatio","blendDurationSeconds","rootMotionMode"],"properties":{"actionId":{"$ref":"#/$defs/nonEmptyString"},"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"semanticFamily":{"enum":["ground","airborne","flight","water","posture","combat","emote","dance"]},"automaticPresentationKeys":{"$ref":"#/$defs/stringArray"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationSeconds":{"type":"number"},"rootMotionMode":{"const":"in-place"}}},"animationSet":{"type":"object","additionalProperties":false,"required":["animationSetRef","subjectAssetRef","rigProfileRef","defaultActionId","requiredActionIds","animationBindings"],"properties":{"animationSetRef":{"$ref":"#/$defs/nonEmptyString"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultActionId":{"$ref":"#/$defs/nonEmptyString"},"requiredActionIds":{"$ref":"#/$defs/stringArray"},"animationBindings":{"type":"array","items":{"$ref":"#/$defs/animationBinding"}}}},"subjectCapsule":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"}}},"colliderProfile":{"type":"object","additionalProperties":false,"required":["colliderProfileRef","supportedBodyTopologies","collider"],"properties":{"colliderProfileRef":{"$ref":"#/$defs/nonEmptyString"},"supportedBodyTopologies":{"$ref":"#/$defs/stringArray"},"collider":{"$ref":"#/$defs/subjectCapsule"}}},"primitiveShape":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","sizeMetersXYZ"],"properties":{"kind":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/vec3"}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters"],"properties":{"kind":{"const":"sphere"},"radiusMeters":{"type":"number","exclusiveMinimum":0}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters"],"properties":{"kind":{"enum":["cylinder","capsule"]},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0}}}]},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"}}},"subjectVisualPart":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","shape","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"primitive"},"shape":{"$ref":"#/$defs/primitiveShape"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","subjectAssetRef","localTransform","appearance","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"asset"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ","scaleXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/vec3"}}},"appearance":{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"whitebox-neutral"}}},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"subjectSocket":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"local"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","boneId","offsetTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"bone"},"boneId":{"$ref":"#/$defs/nonEmptyString"},"offsetTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"mountSlot":{"type":"object","additionalProperties":false,"required":["id","kind","mode","mountSocketId","riderSubjectOriginOffsetMetersXYZ","dismountCandidateOffsetsMetersXYZ"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"mount-slot"},"mode":{"const":"stand"},"mountSocketId":{"$ref":"#/$defs/nonEmptyString"},"riderSubjectOriginOffsetMetersXYZ":{"$ref":"#/$defs/vec3"},"dismountCandidateOffsetsMetersXYZ":{"type":"array","items":{"$ref":"#/$defs/vec3"}}}},"subjectCollider":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ","massKilograms","maxSlopeDegrees","maxStepHeightMeters"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"},"massKilograms":{"type":"number","exclusiveMinimum":0},"maxSlopeDegrees":{"type":"number","minimum":0},"maxStepHeightMeters":{"type":"number","minimum":0}}},"controlFeel":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","jumpVariantPolicy","walkSpeedMetersPerSecond","runSpeedMetersPerSecond","jumpSpeedMetersPerSecond","accelerationMetersPerSecondSquared","decelerationMetersPerSecondSquared","turnRateRadiansPerSecond","moveResponseExponent","airControlRatio","coyoteTimeSeconds","jumpBufferSeconds","variableJumpHoldSeconds","jumpHoldGravityRatio","jumpReleaseGravityRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"jumpVariantPolicy":{"$ref":"#/$defs/jumpVariantPolicy"},"walkSpeedMetersPerSecond":{"type":"number"},"runSpeedMetersPerSecond":{"type":"number"},"jumpSpeedMetersPerSecond":{"type":"number"},"accelerationMetersPerSecondSquared":{"type":"number"},"decelerationMetersPerSecondSquared":{"type":"number"},"turnRateRadiansPerSecond":{"type":"number"},"moveResponseExponent":{"type":"number"},"airControlRatio":{"type":"number"},"coyoteTimeSeconds":{"type":"number"},"jumpBufferSeconds":{"type":"number"},"variableJumpHoldSeconds":{"type":"number"},"jumpHoldGravityRatio":{"type":"number"},"jumpReleaseGravityRatio":{"type":"number"}}},"jumpVariantPolicy":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"hold-height"}}},{"type":"object","additionalProperties":false,"required":["mode","smallAnticipationSeconds","largeAnticipationSeconds"],"properties":{"mode":{"const":"run-selects-variant"},"smallAnticipationSeconds":{"type":"number","minimum":0,"maximum":1.5},"largeAnticipationSeconds":{"type":"number","minimum":0,"maximum":1.5}}}]},"motionProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","motionKernelRef","motionTags"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"motionKernelRef":{"$ref":"#/$defs/nonEmptyString"},"motionTags":{"$ref":"#/$defs/stringArray"}}},"motionKernel":{"type":"object","additionalProperties":false,"required":["resourceRef","implementationId","commandKind","supportedMediums","fallbackMotionProfileRef","deterministic"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"implementationId":{"enum":["free-ground","forward-steer","wheeled-arcade","surface-slide","water-surface","unpowered-glide"]},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"supportedMediums":{"type":"array","items":{"enum":["ground","water","air"]}},"fallbackMotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"deterministic":{"const":true}}},"motionCommandKind":{"enum":["planar-vector","throttle-steer","flight-attitude","none"]},"controlProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","commandKind","inputSpace","facingPolicy","lateralMovementPolicy","moveDeadzoneRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"inputSpace":{"enum":["camera-relative","subject-local","flight-frame","none"]},"facingPolicy":{"enum":["align-to-move","align-to-view","steering-derived","flight-derived","fixed"]},"lateralMovementPolicy":{"enum":["allowed","forbidden"]},"moveDeadzoneRatio":{"type":"number"}}},"cameraParameters":{"type":"object","additionalProperties":false,"required":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"],"properties":{"distanceMeters":{"type":"number"},"minimumDistanceMeters":{"type":"number"},"maximumDistanceMeters":{"type":"number"},"targetHeightMeters":{"type":"number"},"shoulderOffsetMeters":{"type":"number"},"pitchRadians":{"type":"number"},"minimumPitchRadians":{"type":"number"},"maximumPitchRadians":{"type":"number"},"positionDampingPerSecond":{"type":"number"},"horizontalPositionDampingPerSecond":{"type":"number"},"verticalPositionDampingPerSecond":{"type":"number"},"maximumPositionLagMeters":{"type":"number"},"rotationDampingPerSecond":{"type":"number"},"yawDampingPerSecond":{"type":"number"},"pitchDampingPerSecond":{"type":"number"},"collisionRadiusMeters":{"type":"number"},"collisionRetractionMetersPerSecond":{"type":"number"},"collisionRecoveryMetersPerSecond":{"type":"number"},"baseFovDegrees":{"type":"number"},"speedFovDegreesPerMeterPerSecond":{"type":"number"},"maximumSpeedFovDegrees":{"type":"number"},"lookAheadSeconds":{"type":"number"},"accelerationLookAheadSecondsSquared":{"type":"number"},"transitionSeconds":{"type":"number"},"minimumHeadingSpeedMetersPerSecond":{"type":"number"},"velocityHeadingDampingPerSecond":{"type":"number"},"fovDampingPerSecond":{"type":"number"},"horizontalDeadZoneRatio":{"type":"number"},"verticalDeadZoneRatio":{"type":"number"},"recenterDelaySeconds":{"type":"number"},"recenterDurationSeconds":{"type":"number"},"recenterMinimumSpeedMetersPerSecond":{"type":"number"},"teleportSnapDistanceMeters":{"type":"number"},"lookSensitivityXRatio":{"type":"number"},"lookSensitivityYRatio":{"type":"number"}}},"cameraRigProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","baseMode","algorithmRef","headingSource","reverseHeadingPolicy","recenterMode","preferredSocketIds","parameters"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"baseMode":{"enum":["first-person","free-orbit","stable-follow","speed-chase","flight-horizon"]},"algorithmRef":{"$ref":"#/$defs/nonEmptyString"},"headingSource":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicy":{"enum":["follow-velocity","preserve-target-forward"]},"recenterMode":{"enum":["off","forward-motion","always"]},"preferredSocketIds":{"$ref":"#/$defs/stringArray"},"parameters":{"$ref":"#/$defs/cameraParameters"},"authoringRanges":{"type":"object","propertyNames":{"enum":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"]},"additionalProperties":{"type":"object","additionalProperties":false,"required":["minimum","maximum","step"],"properties":{"minimum":{"type":"number"},"maximum":{"type":"number"},"step":{"type":"number"}}}}}},"cameraModifierProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","parameterOverrides"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"parameterOverrides":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"type":"number"}},"headingSourceOverride":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicyOverride":{"enum":["follow-velocity","preserve-target-forward"]},"recenterModeOverride":{"enum":["off","forward-motion","always"]}}},"cameraRelationshipCondition":{"oneOf":[{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"possessedBy"},"entityRole":{"enum":["controlled","controller"]}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"mountedOn"},"entityRole":{"const":"rider"}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"equippedAt"},"entityRole":{"enum":["item","wearer"]}}}]},"cameraContextRule":{"type":"object","additionalProperties":false,"required":["id","priority","when"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"priority":{"type":"number"},"when":{"type":"object","additionalProperties":false,"properties":{"allRelationshipConditions":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraRelationshipCondition"}},"locomotionStatuses":{"$ref":"#/$defs/stringArray"},"mobilityModes":{"$ref":"#/$defs/stringArray"},"gaits":{"$ref":"#/$defs/stringArray"},"verticalPhases":{"$ref":"#/$defs/stringArray"},"requiredActiveActionRefs":{"$ref":"#/$defs/stringArray"},"actionInterruptibility":{"enum":["interruptible","non-interruptible"]},"motionKernelRefs":{"$ref":"#/$defs/stringArray"},"requiredMotionTags":{"$ref":"#/$defs/stringArray"},"movementMediums":{"$ref":"#/$defs/stringArray"},"minimumSpeedMetersPerSecond":{"type":"number"},"maximumSpeedMetersPerSecond":{"type":"number"},"requiredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredCameraContextTags":{"$ref":"#/$defs/stringArray"}}},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"cameraModifierRefs":{"$ref":"#/$defs/stringArray"}}},"relationshipProfile":{"oneOf":[{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredRiderSocketIds","requiredMountSocketIds","controlTransferMode","cameraTargetRole"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"mountedOn"},"requiredRiderSocketIds":{"$ref":"#/$defs/stringArray"},"requiredMountSocketIds":{"$ref":"#/$defs/stringArray"},"controlTransferMode":{"enum":["keep-rider","to-mount","none"]},"cameraTargetRole":{"enum":["controlled-entity","rider","mount"]},"maximumMountDistanceMeters":{"type":"number"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredOccupantSocketIds","requiredSeatSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"seat"},"requiredOccupantSocketIds":{"$ref":"#/$defs/stringArray"},"requiredSeatSocketIds":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredTetheredSocketIds","requiredTetherAnchorSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"tether"},"requiredTetheredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredTetherAnchorSocketIds":{"$ref":"#/$defs/stringArray"}}}]},"capabilityAssembly":{"type":"object","additionalProperties":false,"required":["authoringAvailability","physicsBodyProfileRef","locomotionProfileRef","defaultMotionProfile","optionalMotionProfiles","fallbackMotionProfile","motionKernels","controlProfile","cameraContext","mediumProfile","relationshipProfiles","harnessProfileRef","requiredHarnessCheckIds","actionOrPoseSetRef","renderBindingProfileRef"],"properties":{"authoringAvailability":{"enum":["recommended","advanced","experimental"]},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultMotionProfile":{"$ref":"#/$defs/motionProfile"},"optionalMotionProfiles":{"type":"array","items":{"$ref":"#/$defs/motionProfile"}},"fallbackMotionProfile":{"$ref":"#/$defs/motionProfile"},"motionKernels":{"type":"array","items":{"$ref":"#/$defs/motionKernel"}},"controlProfile":{"$ref":"#/$defs/controlProfile"},"cameraContext":{"type":"object","additionalProperties":false,"required":["resourceRef","defaultCameraRigProfileRef","rules","cameraRigProfiles","cameraModifierProfiles"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"defaultCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"firstPersonCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"rules":{"type":"array","items":{"$ref":"#/$defs/cameraContextRule"}},"cameraRigProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraRigProfile"}},"cameraModifierProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraModifierProfile"}}}},"mediumProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","air"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"air":{"type":"object","additionalProperties":false,"required":["gravityRatio","linearDragPerSecond"],"properties":{"gravityRatio":{"type":"number"},"linearDragPerSecond":{"type":"number"}}}}},"relationshipProfiles":{"type":"array","items":{"$ref":"#/$defs/relationshipProfile"}},"harnessProfileRef":{"$ref":"#/$defs/nonEmptyString"},"requiredHarnessCheckIds":{"$ref":"#/$defs/stringArray"},"actionOrPoseSetRef":{"$ref":"#/$defs/nonEmptyString"},"renderBindingProfileRef":{"$ref":"#/$defs/nonEmptyString"}}},"subjectDescriptor":{"type":"object","additionalProperties":false,"required":["entityId","subjectDefinitionRef","subjectDefinitionHash","bodyTopology","semanticClassId","forwardDirection","visualParts","visualBinding","sockets","mountSlots","collider","locomotion","locomotionCapabilityRef","locomotionCapabilityHash","physicsBodyProfileRef","locomotionProfileRef","controlFeel","availableControlFeels","capabilityAssembly"],"properties":{"entityId":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionRef":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionHash":{"$ref":"#/$defs/hash"},"bodyTopology":{"enum":["biped","quadruped","four-wheel","surface-craft","watercraft","glider","composite","custom"]},"semanticClassId":{"$ref":"#/$defs/nonEmptyString"},"forwardDirection":{"const":"-z"},"visualParts":{"type":"array","items":{"$ref":"#/$defs/subjectVisualPart"}},"visualBinding":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"static"}}},{"type":"object","additionalProperties":false,"required":["mode","rigProfileRef","animationSetRef"],"properties":{"mode":{"const":"rigged"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"animationSetRef":{"$ref":"#/$defs/nonEmptyString"}}}]},"sockets":{"type":"array","items":{"$ref":"#/$defs/subjectSocket"}},"mountSlots":{"type":"array","items":{"$ref":"#/$defs/mountSlot"}},"collider":{"$ref":"#/$defs/subjectCollider"},"locomotion":{"type":"object","additionalProperties":false,"required":["allowWalk","allowRun","allowJump"],"properties":{"allowWalk":{"type":"boolean"},"allowRun":{"type":"boolean"},"allowJump":{"type":"boolean"}}},"locomotionCapabilityRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionCapabilityHash":{"$ref":"#/$defs/hash"},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"controlFeel":{"$ref":"#/$defs/controlFeel"},"availableControlFeels":{"type":"array","items":{"$ref":"#/$defs/controlFeel"}},"capabilityAssembly":{"$ref":"#/$defs/capabilityAssembly"}}},"actionPresentationRegistry":{"type":"object","additionalProperties":false,"required":["schemaVersion","bindings","rootMotionSources"],"properties":{"schemaVersion":{"const":1},"bindings":{"type":"array","items":{"$ref":"#/$defs/actionPresentationBinding"}},"rootMotionSources":{"type":"array","items":{"$ref":"#/$defs/rootMotionSource"}}}},"actionPresentationBinding":{"type":"object","additionalProperties":false,"required":["kind","schemaVersion","resourceRef","presentationKey","semanticActionRef","semanticActionHash","isInterruptible","clip","rootMotion","contentHash"],"properties":{"kind":{"const":"action-presentation-binding"},"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"presentationKey":{"type":"string","pattern":"^action\\..+$"},"semanticActionRef":{"$ref":"#/$defs/nonEmptyString"},"semanticActionHash":{"$ref":"#/$defs/hash"},"isInterruptible":{"type":"boolean"},"clip":{"type":"object","additionalProperties":false,"required":["sourceClipName","loopMode","playbackSpeedRatio","blendDurationTicks"],"properties":{"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationTicks":{"type":"integer","minimum":0}}},"rootMotion":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"none"}}},{"type":"object","additionalProperties":false,"required":["mode","rootMotionSourceRef","rootMotionSourceHash","priority"],"properties":{"mode":{"const":"locked"},"rootMotionSourceRef":{"$ref":"#/$defs/nonEmptyString"},"rootMotionSourceHash":{"$ref":"#/$defs/hash"},"priority":{"type":"number"}}}]},"contentHash":{"$ref":"#/$defs/hash"}}},"rootMotionSource":{"type":"object","additionalProperties":false,"required":["schemaVersion","resourceRef","fixedDeltaSeconds","samples","contentHash"],"properties":{"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"fixedDeltaSeconds":{"type":"number","exclusiveMinimum":0},"samples":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["translationDeltaMetersXYZ","facingYawDeltaRadians"],"properties":{"translationDeltaMetersXYZ":{"$ref":"#/$defs/vec3"},"facingYawDeltaRadians":{"type":"number"}}}},"contentHash":{"$ref":"#/$defs/hash"}}},"resourceLockEntry":{"type":"object","additionalProperties":false,"required":["resourceRef","resourceKind","resolvedVersion","contentHash"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"resourceKind":{"enum":["subject-definition","subject-asset","rig-profile","animation-set","collider-profile","capability","physics-body-profile","locomotion-profile","control-feel-profile","collider-derivation-profile","motion-kernel","motion-profile","control-profile","camera-rig-algorithm","camera-rig-profile","camera-modifier-profile","camera-context-profile","medium-profile","relationship-profile","harness-profile","pose-set-profile","render-binding-profile","ai-schema-projection-profile","gameplay-bootstrap"]},"resolvedVersion":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"}}}}};
+const schema31 = {"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://worldkit.dev/schemas/world-runtime-bootstrap-v1.schema.json","title":"WorldRuntimeBootstrapV1","type":"object","additionalProperties":false,"required":["kind","schemaVersion","id","gameplayBootstrapRef","gameplayBootstrapHash","initialControlledEntityId","gravityMetersPerSecondSquaredXYZ","initialCamera","subjectAssets","rigProfiles","animationSets","colliderProfiles","actionPresentationRegistry","subjectRuntimeDescriptors","runtimeResourceLockEntries","contentHash"],"properties":{"kind":{"const":"world-runtime-bootstrap"},"schemaVersion":{"const":1},"id":{"$ref":"#/$defs/nonEmptyString"},"gameplayBootstrapRef":{"$ref":"#/$defs/nonEmptyString"},"gameplayBootstrapHash":{"$ref":"#/$defs/hash"},"initialControlledEntityId":{"$ref":"#/$defs/nonEmptyString"},"gravityMetersPerSecondSquaredXYZ":{"$ref":"#/$defs/vec3"},"initialCamera":{"$ref":"#/$defs/initialCamera"},"subjectAssets":{"type":"array","items":{"$ref":"#/$defs/subjectAsset"}},"rigProfiles":{"type":"array","items":{"$ref":"#/$defs/rigProfile"}},"animationSets":{"type":"array","items":{"$ref":"#/$defs/animationSet"}},"colliderProfiles":{"type":"array","items":{"$ref":"#/$defs/colliderProfile"}},"actionPresentationRegistry":{"$ref":"#/$defs/actionPresentationRegistry"},"subjectRuntimeDescriptors":{"type":"array","items":{"$ref":"#/$defs/subjectDescriptor"}},"runtimeResourceLockEntries":{"type":"array","items":{"$ref":"#/$defs/resourceLockEntry"}},"contentHash":{"$ref":"#/$defs/hash"}},"$defs":{"nonEmptyString":{"type":"string","minLength":1},"hash":{"type":"string","pattern":"^sha256:[a-f0-9]{64}$"},"vec3":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3},"stringArray":{"type":"array","items":{"$ref":"#/$defs/nonEmptyString"}},"cameraActionRef":{"type":"string","pattern":"^worldkit://semantic-action/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$","maxLength":128},"cameraModifierRef":{"type":"string","pattern":"^worldkit://camera-modifier/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$","maxLength":128},"cameraProfileRef":{"type":"string","pattern":"^worldkit://camera-profile/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$","maxLength":128},"initialCamera":{"type":"object","additionalProperties":false,"required":["mode","cameraEntityId","targetEntityId","cameraRigProfileRef","pitchRadians","distanceMeters","targetHeightMeters","fovDegrees","manualSwitchAllowed"],"properties":{"mode":{"const":"third-person"},"cameraEntityId":{"$ref":"#/$defs/nonEmptyString"},"targetEntityId":{"$ref":"#/$defs/nonEmptyString"},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"pitchRadians":{"type":"number"},"distanceMeters":{"type":"number","exclusiveMinimum":0},"targetHeightMeters":{"type":"number"},"fovDegrees":{"type":"number","exclusiveMinimum":0,"exclusiveMaximum":180},"manualSwitchAllowed":{"type":"boolean"}}},"subjectAssetInventory":{"type":"object","additionalProperties":false,"required":["meshCount","vertexCount","triangleCount","skeletonCount","boneCount","animationClipNames"],"properties":{"meshCount":{"type":"integer","minimum":0},"vertexCount":{"type":"integer","minimum":0},"triangleCount":{"type":"integer","minimum":0},"skeletonCount":{"type":"integer","minimum":0},"boneCount":{"type":"integer","minimum":0},"animationClipNames":{"$ref":"#/$defs/stringArray"}}},"subjectAsset":{"type":"object","additionalProperties":false,"required":["subjectAssetRef","artifactContentHash","byteLength","mediaType","format","inventory"],"properties":{"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"artifactContentHash":{"$ref":"#/$defs/hash"},"byteLength":{"type":"integer","minimum":0},"mediaType":{"const":"model/gltf-binary"},"format":{"const":"glb"},"inventory":{"$ref":"#/$defs/subjectAssetInventory"}}},"rigProfile":{"type":"object","additionalProperties":false,"required":["rigProfileRef","bodyTopology","skeletonRootBoneName","requiredBoneIds","sourceNodeNameByBoneId"],"properties":{"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"bodyTopology":{"const":"biped"},"skeletonRootBoneName":{"$ref":"#/$defs/nonEmptyString"},"requiredBoneIds":{"$ref":"#/$defs/stringArray"},"sourceNodeNameByBoneId":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"$ref":"#/$defs/nonEmptyString"}}}},"animationBinding":{"type":"object","additionalProperties":false,"required":["actionId","sourceClipName","semanticFamily","automaticPresentationKeys","loopMode","playbackSpeedRatio","blendDurationSeconds","rootMotionMode"],"properties":{"actionId":{"$ref":"#/$defs/nonEmptyString"},"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"semanticFamily":{"enum":["ground","airborne","flight","water","posture","combat","emote","dance"]},"automaticPresentationKeys":{"$ref":"#/$defs/stringArray"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationSeconds":{"type":"number"},"rootMotionMode":{"const":"in-place"}}},"animationSet":{"type":"object","additionalProperties":false,"required":["animationSetRef","subjectAssetRef","rigProfileRef","defaultActionId","requiredActionIds","animationBindings"],"properties":{"animationSetRef":{"$ref":"#/$defs/nonEmptyString"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultActionId":{"$ref":"#/$defs/nonEmptyString"},"requiredActionIds":{"$ref":"#/$defs/stringArray"},"animationBindings":{"type":"array","items":{"$ref":"#/$defs/animationBinding"}}}},"subjectCapsule":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"}}},"colliderProfile":{"type":"object","additionalProperties":false,"required":["colliderProfileRef","supportedBodyTopologies","collider"],"properties":{"colliderProfileRef":{"$ref":"#/$defs/nonEmptyString"},"supportedBodyTopologies":{"$ref":"#/$defs/stringArray"},"collider":{"$ref":"#/$defs/subjectCapsule"}}},"primitiveShape":{"oneOf":[{"type":"object","additionalProperties":false,"required":["kind","sizeMetersXYZ"],"properties":{"kind":{"const":"box"},"sizeMetersXYZ":{"$ref":"#/$defs/vec3"}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters"],"properties":{"kind":{"const":"sphere"},"radiusMeters":{"type":"number","exclusiveMinimum":0}}},{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters"],"properties":{"kind":{"enum":["cylinder","capsule"]},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0}}}]},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"}}},"subjectVisualPart":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","shape","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"primitive"},"shape":{"$ref":"#/$defs/primitiveShape"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","subjectAssetRef","localTransform","appearance","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"asset"},"subjectAssetRef":{"$ref":"#/$defs/nonEmptyString"},"localTransform":{"type":"object","additionalProperties":false,"required":["positionMetersXYZ","rotationEulerRadiansXYZ","scaleXYZ"],"properties":{"positionMetersXYZ":{"$ref":"#/$defs/vec3"},"rotationEulerRadiansXYZ":{"$ref":"#/$defs/vec3"},"scaleXYZ":{"$ref":"#/$defs/vec3"}}},"appearance":{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"whitebox-neutral"}}},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"subjectSocket":{"oneOf":[{"type":"object","additionalProperties":false,"required":["id","kind","localTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"local"},"localTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["id","kind","boneId","offsetTransform","semanticTags"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"bone"},"boneId":{"$ref":"#/$defs/nonEmptyString"},"offsetTransform":{"$ref":"#/$defs/localTransform"},"semanticTags":{"$ref":"#/$defs/stringArray"}}}]},"mountSlot":{"type":"object","additionalProperties":false,"required":["id","kind","mode","mountSocketId","riderSubjectOriginOffsetMetersXYZ","dismountCandidateOffsetsMetersXYZ"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"kind":{"const":"mount-slot"},"mode":{"const":"stand"},"mountSocketId":{"$ref":"#/$defs/nonEmptyString"},"riderSubjectOriginOffsetMetersXYZ":{"$ref":"#/$defs/vec3"},"dismountCandidateOffsetsMetersXYZ":{"type":"array","items":{"$ref":"#/$defs/vec3"}}}},"subjectCollider":{"type":"object","additionalProperties":false,"required":["kind","radiusMeters","heightMeters","centerOffsetFromSubjectOriginMetersXYZ","massKilograms","maxSlopeDegrees","maxStepHeightMeters"],"properties":{"kind":{"const":"capsule"},"radiusMeters":{"type":"number","exclusiveMinimum":0},"heightMeters":{"type":"number","exclusiveMinimum":0},"centerOffsetFromSubjectOriginMetersXYZ":{"$ref":"#/$defs/vec3"},"massKilograms":{"type":"number","exclusiveMinimum":0},"maxSlopeDegrees":{"type":"number","minimum":0},"maxStepHeightMeters":{"type":"number","minimum":0}}},"controlFeel":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","jumpVariantPolicy","walkSpeedMetersPerSecond","runSpeedMetersPerSecond","jumpSpeedMetersPerSecond","accelerationMetersPerSecondSquared","decelerationMetersPerSecondSquared","turnRateRadiansPerSecond","moveResponseExponent","airControlRatio","coyoteTimeSeconds","jumpBufferSeconds","variableJumpHoldSeconds","jumpHoldGravityRatio","jumpReleaseGravityRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"jumpVariantPolicy":{"$ref":"#/$defs/jumpVariantPolicy"},"walkSpeedMetersPerSecond":{"type":"number"},"runSpeedMetersPerSecond":{"type":"number"},"jumpSpeedMetersPerSecond":{"type":"number"},"accelerationMetersPerSecondSquared":{"type":"number"},"decelerationMetersPerSecondSquared":{"type":"number"},"turnRateRadiansPerSecond":{"type":"number"},"moveResponseExponent":{"type":"number"},"airControlRatio":{"type":"number"},"coyoteTimeSeconds":{"type":"number"},"jumpBufferSeconds":{"type":"number"},"variableJumpHoldSeconds":{"type":"number"},"jumpHoldGravityRatio":{"type":"number"},"jumpReleaseGravityRatio":{"type":"number"}}},"jumpVariantPolicy":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"hold-height"}}},{"type":"object","additionalProperties":false,"required":["mode","smallAnticipationSeconds","largeAnticipationSeconds"],"properties":{"mode":{"const":"run-selects-variant"},"smallAnticipationSeconds":{"type":"number","minimum":0,"maximum":1.5},"largeAnticipationSeconds":{"type":"number","minimum":0,"maximum":1.5}}}]},"motionProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","motionKernelRef","motionTags"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"motionKernelRef":{"$ref":"#/$defs/nonEmptyString"},"motionTags":{"$ref":"#/$defs/stringArray"}}},"motionKernel":{"type":"object","additionalProperties":false,"required":["resourceRef","implementationId","commandKind","supportedMediums","fallbackMotionProfileRef","deterministic"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"implementationId":{"enum":["free-ground","forward-steer","wheeled-arcade","surface-slide","water-surface","unpowered-glide"]},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"supportedMediums":{"type":"array","items":{"enum":["ground","water","air"]}},"fallbackMotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"deterministic":{"const":true}}},"motionCommandKind":{"enum":["planar-vector","throttle-steer","flight-attitude","none"]},"controlProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","commandKind","inputSpace","facingPolicy","lateralMovementPolicy","moveDeadzoneRatio"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"commandKind":{"$ref":"#/$defs/motionCommandKind"},"inputSpace":{"enum":["camera-relative","subject-local","flight-frame","none"]},"facingPolicy":{"enum":["align-to-move","align-to-view","steering-derived","flight-derived","fixed"]},"lateralMovementPolicy":{"enum":["allowed","forbidden"]},"moveDeadzoneRatio":{"type":"number"}}},"cameraParameters":{"type":"object","additionalProperties":false,"required":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"],"properties":{"distanceMeters":{"type":"number"},"minimumDistanceMeters":{"type":"number"},"maximumDistanceMeters":{"type":"number"},"targetHeightMeters":{"type":"number"},"shoulderOffsetMeters":{"type":"number"},"pitchRadians":{"type":"number"},"minimumPitchRadians":{"type":"number"},"maximumPitchRadians":{"type":"number"},"positionDampingPerSecond":{"type":"number"},"horizontalPositionDampingPerSecond":{"type":"number"},"verticalPositionDampingPerSecond":{"type":"number"},"maximumPositionLagMeters":{"type":"number"},"rotationDampingPerSecond":{"type":"number"},"yawDampingPerSecond":{"type":"number"},"pitchDampingPerSecond":{"type":"number"},"collisionRadiusMeters":{"type":"number"},"collisionRetractionMetersPerSecond":{"type":"number"},"collisionRecoveryMetersPerSecond":{"type":"number"},"baseFovDegrees":{"type":"number"},"speedFovDegreesPerMeterPerSecond":{"type":"number"},"maximumSpeedFovDegrees":{"type":"number"},"lookAheadSeconds":{"type":"number"},"accelerationLookAheadSecondsSquared":{"type":"number"},"transitionSeconds":{"type":"number"},"minimumHeadingSpeedMetersPerSecond":{"type":"number"},"velocityHeadingDampingPerSecond":{"type":"number"},"fovDampingPerSecond":{"type":"number"},"horizontalDeadZoneRatio":{"type":"number"},"verticalDeadZoneRatio":{"type":"number"},"recenterDelaySeconds":{"type":"number"},"recenterDurationSeconds":{"type":"number"},"recenterMinimumSpeedMetersPerSecond":{"type":"number"},"teleportSnapDistanceMeters":{"type":"number"},"lookSensitivityXRatio":{"type":"number"},"lookSensitivityYRatio":{"type":"number"}}},"cameraRigProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","baseMode","algorithmRef","headingSource","reverseHeadingPolicy","recenterMode","preferredSocketIds","parameters"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"baseMode":{"enum":["first-person","free-orbit","stable-follow","speed-chase","flight-horizon"]},"algorithmRef":{"$ref":"#/$defs/nonEmptyString"},"headingSource":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicy":{"enum":["follow-velocity","preserve-target-forward"]},"recenterMode":{"enum":["off","forward-motion","always"]},"preferredSocketIds":{"$ref":"#/$defs/stringArray"},"parameters":{"$ref":"#/$defs/cameraParameters"},"authoringRanges":{"type":"object","propertyNames":{"enum":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"]},"additionalProperties":{"type":"object","additionalProperties":false,"required":["minimum","maximum","step"],"properties":{"minimum":{"type":"number"},"maximum":{"type":"number"},"step":{"type":"number"}}}}}},"cameraModifierProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","parameterOverrides"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"parameterOverrides":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"type":"number"}},"headingSourceOverride":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicyOverride":{"enum":["follow-velocity","preserve-target-forward"]},"recenterModeOverride":{"enum":["off","forward-motion","always"]}}},"cameraRelationshipCondition":{"oneOf":[{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"possessedBy"},"entityRole":{"enum":["controlled","controller"]}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"mountedOn"},"entityRole":{"const":"rider"}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"equippedAt"},"entityRole":{"enum":["item","wearer"]}}}]},"cameraContextRule":{"type":"object","additionalProperties":false,"required":["id","priority","when"],"properties":{"id":{"type":"string","minLength":1,"maxLength":256},"priority":{"type":"integer"},"when":{"type":"object","additionalProperties":false,"properties":{"allRelationshipConditions":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraRelationshipCondition"}},"locomotionStatuses":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["active","suspended"]}},"mobilityModes":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["grounded","airborne"]}},"gaits":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["none","idle","walk","run"]}},"verticalPhases":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["none","takeoff","rising","apex","falling","landing"]}},"requiredActiveActionRefs":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraActionRef"}},"actionInterruptibility":{"enum":["interruptible","non-interruptible"]},"movementMediums":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["ground","air"]}},"minimumSpeedMetersPerSecond":{"type":"number","minimum":0},"maximumSpeedMetersPerSecond":{"type":"number","minimum":0},"requiredSocketIds":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128,"pattern":"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"}},"requiredCameraContextTags":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128,"pattern":"^[a-z0-9]+(?:[.-][a-z0-9]+)*$"}}}},"cameraRigProfileRef":{"$ref":"#/$defs/cameraProfileRef"},"cameraModifierRefs":{"type":"array","maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraModifierRef"}}}},"relationshipProfile":{"oneOf":[{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredRiderSocketIds","requiredMountSocketIds","controlTransferMode","cameraTargetRole"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"mountedOn"},"requiredRiderSocketIds":{"$ref":"#/$defs/stringArray"},"requiredMountSocketIds":{"$ref":"#/$defs/stringArray"},"controlTransferMode":{"enum":["keep-rider","to-mount","none"]},"cameraTargetRole":{"enum":["controlled-entity","rider","mount"]},"maximumMountDistanceMeters":{"type":"number"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredOccupantSocketIds","requiredSeatSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"seat"},"requiredOccupantSocketIds":{"$ref":"#/$defs/stringArray"},"requiredSeatSocketIds":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredTetheredSocketIds","requiredTetherAnchorSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"tether"},"requiredTetheredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredTetherAnchorSocketIds":{"$ref":"#/$defs/stringArray"}}}]},"capabilityAssembly":{"type":"object","additionalProperties":false,"required":["authoringAvailability","physicsBodyProfileRef","locomotionProfileRef","defaultMotionProfile","optionalMotionProfiles","fallbackMotionProfile","motionKernels","controlProfile","cameraContext","mediumProfile","relationshipProfiles","harnessProfileRef","requiredHarnessCheckIds","actionOrPoseSetRef","renderBindingProfileRef"],"properties":{"authoringAvailability":{"enum":["recommended","advanced","experimental"]},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"defaultMotionProfile":{"$ref":"#/$defs/motionProfile"},"optionalMotionProfiles":{"type":"array","items":{"$ref":"#/$defs/motionProfile"}},"fallbackMotionProfile":{"$ref":"#/$defs/motionProfile"},"motionKernels":{"type":"array","items":{"$ref":"#/$defs/motionKernel"}},"controlProfile":{"$ref":"#/$defs/controlProfile"},"cameraContext":{"type":"object","additionalProperties":false,"required":["resourceRef","defaultCameraRigProfileRef","rules","cameraRigProfiles","cameraModifierProfiles"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"defaultCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"firstPersonCameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"rules":{"type":"array","items":{"$ref":"#/$defs/cameraContextRule"}},"cameraRigProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraRigProfile"}},"cameraModifierProfiles":{"type":"array","items":{"$ref":"#/$defs/cameraModifierProfile"}}}},"mediumProfile":{"type":"object","additionalProperties":false,"required":["resourceRef","air"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"air":{"type":"object","additionalProperties":false,"required":["gravityRatio","linearDragPerSecond"],"properties":{"gravityRatio":{"type":"number"},"linearDragPerSecond":{"type":"number"}}}}},"relationshipProfiles":{"type":"array","items":{"$ref":"#/$defs/relationshipProfile"}},"harnessProfileRef":{"$ref":"#/$defs/nonEmptyString"},"requiredHarnessCheckIds":{"$ref":"#/$defs/stringArray"},"actionOrPoseSetRef":{"$ref":"#/$defs/nonEmptyString"},"renderBindingProfileRef":{"$ref":"#/$defs/nonEmptyString"}}},"subjectDescriptor":{"type":"object","additionalProperties":false,"required":["entityId","subjectDefinitionRef","subjectDefinitionHash","bodyTopology","semanticClassId","forwardDirection","visualParts","visualBinding","sockets","mountSlots","collider","locomotion","locomotionCapabilityRef","locomotionCapabilityHash","physicsBodyProfileRef","locomotionProfileRef","controlFeel","availableControlFeels","capabilityAssembly"],"properties":{"entityId":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionRef":{"$ref":"#/$defs/nonEmptyString"},"subjectDefinitionHash":{"$ref":"#/$defs/hash"},"bodyTopology":{"enum":["biped","quadruped","four-wheel","surface-craft","watercraft","glider","composite","custom"]},"semanticClassId":{"$ref":"#/$defs/nonEmptyString"},"forwardDirection":{"const":"-z"},"visualParts":{"type":"array","items":{"$ref":"#/$defs/subjectVisualPart"}},"visualBinding":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"static"}}},{"type":"object","additionalProperties":false,"required":["mode","rigProfileRef","animationSetRef"],"properties":{"mode":{"const":"rigged"},"rigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"animationSetRef":{"$ref":"#/$defs/nonEmptyString"}}}]},"sockets":{"type":"array","items":{"$ref":"#/$defs/subjectSocket"}},"mountSlots":{"type":"array","items":{"$ref":"#/$defs/mountSlot"}},"collider":{"$ref":"#/$defs/subjectCollider"},"locomotion":{"type":"object","additionalProperties":false,"required":["allowWalk","allowRun","allowJump"],"properties":{"allowWalk":{"type":"boolean"},"allowRun":{"type":"boolean"},"allowJump":{"type":"boolean"}}},"locomotionCapabilityRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionCapabilityHash":{"$ref":"#/$defs/hash"},"physicsBodyProfileRef":{"$ref":"#/$defs/nonEmptyString"},"locomotionProfileRef":{"$ref":"#/$defs/nonEmptyString"},"controlFeel":{"$ref":"#/$defs/controlFeel"},"availableControlFeels":{"type":"array","items":{"$ref":"#/$defs/controlFeel"}},"capabilityAssembly":{"$ref":"#/$defs/capabilityAssembly"}}},"actionPresentationRegistry":{"type":"object","additionalProperties":false,"required":["schemaVersion","bindings","rootMotionSources"],"properties":{"schemaVersion":{"const":1},"bindings":{"type":"array","items":{"$ref":"#/$defs/actionPresentationBinding"}},"rootMotionSources":{"type":"array","items":{"$ref":"#/$defs/rootMotionSource"}}}},"actionPresentationBinding":{"type":"object","additionalProperties":false,"required":["kind","schemaVersion","resourceRef","presentationKey","semanticActionRef","semanticActionHash","isInterruptible","clip","rootMotion","contentHash"],"properties":{"kind":{"const":"action-presentation-binding"},"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"presentationKey":{"type":"string","pattern":"^action\\..+$"},"semanticActionRef":{"$ref":"#/$defs/nonEmptyString"},"semanticActionHash":{"$ref":"#/$defs/hash"},"isInterruptible":{"type":"boolean"},"clip":{"type":"object","additionalProperties":false,"required":["sourceClipName","loopMode","playbackSpeedRatio","blendDurationTicks"],"properties":{"sourceClipName":{"$ref":"#/$defs/nonEmptyString"},"loopMode":{"enum":["repeat","once"]},"playbackSpeedRatio":{"type":"number"},"blendDurationTicks":{"type":"integer","minimum":0}}},"rootMotion":{"oneOf":[{"type":"object","additionalProperties":false,"required":["mode"],"properties":{"mode":{"const":"none"}}},{"type":"object","additionalProperties":false,"required":["mode","rootMotionSourceRef","rootMotionSourceHash","priority"],"properties":{"mode":{"const":"locked"},"rootMotionSourceRef":{"$ref":"#/$defs/nonEmptyString"},"rootMotionSourceHash":{"$ref":"#/$defs/hash"},"priority":{"type":"number"}}}]},"contentHash":{"$ref":"#/$defs/hash"}}},"rootMotionSource":{"type":"object","additionalProperties":false,"required":["schemaVersion","resourceRef","fixedDeltaSeconds","samples","contentHash"],"properties":{"schemaVersion":{"const":1},"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"fixedDeltaSeconds":{"type":"number","exclusiveMinimum":0},"samples":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["translationDeltaMetersXYZ","facingYawDeltaRadians"],"properties":{"translationDeltaMetersXYZ":{"$ref":"#/$defs/vec3"},"facingYawDeltaRadians":{"type":"number"}}}},"contentHash":{"$ref":"#/$defs/hash"}}},"resourceLockEntry":{"type":"object","additionalProperties":false,"required":["resourceRef","resourceKind","resolvedVersion","contentHash"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"resourceKind":{"enum":["subject-definition","subject-asset","rig-profile","animation-set","collider-profile","capability","physics-body-profile","locomotion-profile","control-feel-profile","collider-derivation-profile","motion-kernel","motion-profile","control-profile","camera-rig-algorithm","camera-rig-profile","camera-modifier-profile","camera-context-profile","medium-profile","relationship-profile","harness-profile","pose-set-profile","render-binding-profile","ai-schema-projection-profile","gameplay-bootstrap"]},"resolvedVersion":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"}}}}};
 const schema32 = {"type":"string","minLength":1};
 const schema34 = {"type":"string","pattern":"^sha256:[a-f0-9]{64}$"};
 const schema36 = {"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false,"minItems":3,"maxItems":3};
@@ -6661,10 +6661,18 @@ return errors === 0;
 }
 validate79.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-const schema133 = {"type":"object","additionalProperties":false,"required":["id","priority","when"],"properties":{"id":{"$ref":"#/$defs/nonEmptyString"},"priority":{"type":"number"},"when":{"type":"object","additionalProperties":false,"properties":{"allRelationshipConditions":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraRelationshipCondition"}},"locomotionStatuses":{"$ref":"#/$defs/stringArray"},"mobilityModes":{"$ref":"#/$defs/stringArray"},"gaits":{"$ref":"#/$defs/stringArray"},"verticalPhases":{"$ref":"#/$defs/stringArray"},"requiredActiveActionRefs":{"$ref":"#/$defs/stringArray"},"actionInterruptibility":{"enum":["interruptible","non-interruptible"]},"motionKernelRefs":{"$ref":"#/$defs/stringArray"},"requiredMotionTags":{"$ref":"#/$defs/stringArray"},"movementMediums":{"$ref":"#/$defs/stringArray"},"minimumSpeedMetersPerSecond":{"type":"number"},"maximumSpeedMetersPerSecond":{"type":"number"},"requiredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredCameraContextTags":{"$ref":"#/$defs/stringArray"}}},"cameraRigProfileRef":{"$ref":"#/$defs/nonEmptyString"},"cameraModifierRefs":{"$ref":"#/$defs/stringArray"}}};
-const schema135 = {"oneOf":[{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"possessedBy"},"entityRole":{"enum":["controlled","controller"]}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"mountedOn"},"entityRole":{"const":"rider"}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"equippedAt"},"entityRole":{"enum":["item","wearer"]}}}]};
+const schema133 = {"type":"object","additionalProperties":false,"required":["id","priority","when"],"properties":{"id":{"type":"string","minLength":1,"maxLength":256},"priority":{"type":"integer"},"when":{"type":"object","additionalProperties":false,"properties":{"allRelationshipConditions":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraRelationshipCondition"}},"locomotionStatuses":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["active","suspended"]}},"mobilityModes":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["grounded","airborne"]}},"gaits":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["none","idle","walk","run"]}},"verticalPhases":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["none","takeoff","rising","apex","falling","landing"]}},"requiredActiveActionRefs":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraActionRef"}},"actionInterruptibility":{"enum":["interruptible","non-interruptible"]},"movementMediums":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"enum":["ground","air"]}},"minimumSpeedMetersPerSecond":{"type":"number","minimum":0},"maximumSpeedMetersPerSecond":{"type":"number","minimum":0},"requiredSocketIds":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128,"pattern":"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"}},"requiredCameraContextTags":{"type":"array","minItems":1,"maxItems":64,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":128,"pattern":"^[a-z0-9]+(?:[.-][a-z0-9]+)*$"}}}},"cameraRigProfileRef":{"$ref":"#/$defs/cameraProfileRef"},"cameraModifierRefs":{"type":"array","maxItems":64,"uniqueItems":true,"items":{"$ref":"#/$defs/cameraModifierRef"}}}};
+const schema134 = {"oneOf":[{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"possessedBy"},"entityRole":{"enum":["controlled","controller"]}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"mountedOn"},"entityRole":{"const":"rider"}}},{"type":"object","additionalProperties":false,"required":["type","entityRole"],"properties":{"type":{"const":"equippedAt"},"entityRole":{"enum":["item","wearer"]}}}]};
+const schema135 = {"type":"string","pattern":"^worldkit://semantic-action/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$","maxLength":128};
+const schema136 = {"type":"string","pattern":"^worldkit://camera-profile/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$","maxLength":128};
+const schema137 = {"type":"string","pattern":"^worldkit://camera-modifier/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$","maxLength":128};
 import func0Module from "ajv/dist/runtime/equal.js";
 const func0 = typeof func0Module === "function" ? func0Module : func0Module.default;
+const pattern16 = new RegExp("^worldkit://semantic-action/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$", "u");
+const pattern17 = new RegExp("^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$", "u");
+const pattern18 = new RegExp("^[a-z0-9]+(?:[.-][a-z0-9]+)*$", "u");
+const pattern19 = new RegExp("^worldkit://camera-profile/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$", "u");
+const pattern20 = new RegExp("^worldkit://camera-modifier/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$", "u");
 
 function validate81(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
@@ -6722,8 +6730,8 @@ errors++;
 if(data.id !== undefined){
 let data0 = data.id;
 if(typeof data0 === "string"){
-if(func2(data0) < 1){
-const err4 = {instancePath:instancePath+"/id",schemaPath:"#/$defs/nonEmptyString/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+if(func2(data0) > 256){
+const err4 = {instancePath:instancePath+"/id",schemaPath:"#/properties/id/maxLength",keyword:"maxLength",params:{limit: 256},message:"must NOT have more than 256 characters"};
 if(vErrors === null){
 vErrors = [err4];
 }
@@ -6732,9 +6740,8 @@ vErrors.push(err4);
 }
 errors++;
 }
-}
-else {
-const err5 = {instancePath:instancePath+"/id",schemaPath:"#/$defs/nonEmptyString/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(func2(data0) < 1){
+const err5 = {instancePath:instancePath+"/id",schemaPath:"#/properties/id/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
 if(vErrors === null){
 vErrors = [err5];
 }
@@ -6744,10 +6751,8 @@ vErrors.push(err5);
 errors++;
 }
 }
-if(data.priority !== undefined){
-let data1 = data.priority;
-if(!((typeof data1 == "number") && (isFinite(data1)))){
-const err6 = {instancePath:instancePath+"/priority",schemaPath:"#/properties/priority/type",keyword:"type",params:{type: "number"},message:"must be number"};
+else {
+const err6 = {instancePath:instancePath+"/id",schemaPath:"#/properties/id/type",keyword:"type",params:{type: "string"},message:"must be string"};
 if(vErrors === null){
 vErrors = [err6];
 }
@@ -6757,12 +6762,10 @@ vErrors.push(err6);
 errors++;
 }
 }
-if(data.when !== undefined){
-let data2 = data.when;
-if(data2 && typeof data2 == "object" && !Array.isArray(data2)){
-for(const key1 in data2){
-if(!(func1.call(schema133.properties.when.properties, key1))){
-const err7 = {instancePath:instancePath+"/when",schemaPath:"#/properties/when/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
+if(data.priority !== undefined){
+let data1 = data.priority;
+if(!(((typeof data1 == "number") && (!(data1 % 1) && !isNaN(data1))) && (isFinite(data1)))){
+const err7 = {instancePath:instancePath+"/priority",schemaPath:"#/properties/priority/type",keyword:"type",params:{type: "integer"},message:"must be integer"};
 if(vErrors === null){
 vErrors = [err7];
 }
@@ -6772,11 +6775,12 @@ vErrors.push(err7);
 errors++;
 }
 }
-if(data2.allRelationshipConditions !== undefined){
-let data3 = data2.allRelationshipConditions;
-if(Array.isArray(data3)){
-if(data3.length > 64){
-const err8 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(data.when !== undefined){
+let data2 = data.when;
+if(data2 && typeof data2 == "object" && !Array.isArray(data2)){
+for(const key1 in data2){
+if(!(func1.call(schema133.properties.when.properties, key1))){
+const err8 = {instancePath:instancePath+"/when",schemaPath:"#/properties/when/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err8];
 }
@@ -6785,8 +6789,12 @@ vErrors.push(err8);
 }
 errors++;
 }
-if(data3.length < 1){
-const err9 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+}
+if(data2.allRelationshipConditions !== undefined){
+let data3 = data2.allRelationshipConditions;
+if(Array.isArray(data3)){
+if(data3.length > 64){
+const err9 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
 if(vErrors === null){
 vErrors = [err9];
 }
@@ -6795,16 +6803,8 @@ vErrors.push(err9);
 }
 errors++;
 }
-const len0 = data3.length;
-for(let i0=0; i0<len0; i0++){
-let data4 = data3[i0];
-const _errs14 = errors;
-let valid6 = false;
-let passing0 = null;
-const _errs15 = errors;
-if(data4 && typeof data4 == "object" && !Array.isArray(data4)){
-if(data4.type === undefined){
-const err10 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/required",keyword:"required",params:{missingProperty: "type"},message:"must have required property '"+"type"+"'"};
+if(data3.length < 1){
+const err10 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
 if(vErrors === null){
 vErrors = [err10];
 }
@@ -6813,8 +6813,16 @@ vErrors.push(err10);
 }
 errors++;
 }
-if(data4.entityRole === undefined){
-const err11 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/required",keyword:"required",params:{missingProperty: "entityRole"},message:"must have required property '"+"entityRole"+"'"};
+const len0 = data3.length;
+for(let i0=0; i0<len0; i0++){
+let data4 = data3[i0];
+const _errs13 = errors;
+let valid5 = false;
+let passing0 = null;
+const _errs14 = errors;
+if(data4 && typeof data4 == "object" && !Array.isArray(data4)){
+if(data4.type === undefined){
+const err11 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/required",keyword:"required",params:{missingProperty: "type"},message:"must have required property '"+"type"+"'"};
 if(vErrors === null){
 vErrors = [err11];
 }
@@ -6823,9 +6831,8 @@ vErrors.push(err11);
 }
 errors++;
 }
-for(const key2 in data4){
-if(!((key2 === "type") || (key2 === "entityRole"))){
-const err12 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"};
+if(data4.entityRole === undefined){
+const err12 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/required",keyword:"required",params:{missingProperty: "entityRole"},message:"must have required property '"+"entityRole"+"'"};
 if(vErrors === null){
 vErrors = [err12];
 }
@@ -6834,10 +6841,9 @@ vErrors.push(err12);
 }
 errors++;
 }
-}
-if(data4.type !== undefined){
-if("possessedBy" !== data4.type){
-const err13 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/type",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/properties/type/const",keyword:"const",params:{allowedValue: "possessedBy"},message:"must be equal to constant"};
+for(const key2 in data4){
+if(!((key2 === "type") || (key2 === "entityRole"))){
+const err13 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err13];
 }
@@ -6847,10 +6853,9 @@ vErrors.push(err13);
 errors++;
 }
 }
-if(data4.entityRole !== undefined){
-let data6 = data4.entityRole;
-if(!((data6 === "controlled") || (data6 === "controller"))){
-const err14 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/entityRole",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/properties/entityRole/enum",keyword:"enum",params:{allowedValues: schema135.oneOf[0].properties.entityRole.enum},message:"must be equal to one of the allowed values"};
+if(data4.type !== undefined){
+if("possessedBy" !== data4.type){
+const err14 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/type",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/properties/type/const",keyword:"const",params:{allowedValue: "possessedBy"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err14];
 }
@@ -6860,9 +6865,10 @@ vErrors.push(err14);
 errors++;
 }
 }
-}
-else {
-const err15 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(data4.entityRole !== undefined){
+let data6 = data4.entityRole;
+if(!((data6 === "controlled") || (data6 === "controller"))){
+const err15 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/entityRole",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/properties/entityRole/enum",keyword:"enum",params:{allowedValues: schema134.oneOf[0].properties.entityRole.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err15];
 }
@@ -6871,16 +6877,10 @@ vErrors.push(err15);
 }
 errors++;
 }
-var _valid0 = _errs15 === errors;
-if(_valid0){
-valid6 = true;
-passing0 = 0;
-var props0 = true;
 }
-const _errs20 = errors;
-if(data4 && typeof data4 == "object" && !Array.isArray(data4)){
-if(data4.type === undefined){
-const err16 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/required",keyword:"required",params:{missingProperty: "type"},message:"must have required property '"+"type"+"'"};
+}
+else {
+const err16 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/0/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err16];
 }
@@ -6889,8 +6889,16 @@ vErrors.push(err16);
 }
 errors++;
 }
-if(data4.entityRole === undefined){
-const err17 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/required",keyword:"required",params:{missingProperty: "entityRole"},message:"must have required property '"+"entityRole"+"'"};
+var _valid0 = _errs14 === errors;
+if(_valid0){
+valid5 = true;
+passing0 = 0;
+var props0 = true;
+}
+const _errs19 = errors;
+if(data4 && typeof data4 == "object" && !Array.isArray(data4)){
+if(data4.type === undefined){
+const err17 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/required",keyword:"required",params:{missingProperty: "type"},message:"must have required property '"+"type"+"'"};
 if(vErrors === null){
 vErrors = [err17];
 }
@@ -6899,9 +6907,8 @@ vErrors.push(err17);
 }
 errors++;
 }
-for(const key3 in data4){
-if(!((key3 === "type") || (key3 === "entityRole"))){
-const err18 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"};
+if(data4.entityRole === undefined){
+const err18 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/required",keyword:"required",params:{missingProperty: "entityRole"},message:"must have required property '"+"entityRole"+"'"};
 if(vErrors === null){
 vErrors = [err18];
 }
@@ -6910,10 +6917,9 @@ vErrors.push(err18);
 }
 errors++;
 }
-}
-if(data4.type !== undefined){
-if("mountedOn" !== data4.type){
-const err19 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/type",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/properties/type/const",keyword:"const",params:{allowedValue: "mountedOn"},message:"must be equal to constant"};
+for(const key3 in data4){
+if(!((key3 === "type") || (key3 === "entityRole"))){
+const err19 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key3},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err19];
 }
@@ -6923,9 +6929,9 @@ vErrors.push(err19);
 errors++;
 }
 }
-if(data4.entityRole !== undefined){
-if("rider" !== data4.entityRole){
-const err20 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/entityRole",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/properties/entityRole/const",keyword:"const",params:{allowedValue: "rider"},message:"must be equal to constant"};
+if(data4.type !== undefined){
+if("mountedOn" !== data4.type){
+const err20 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/type",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/properties/type/const",keyword:"const",params:{allowedValue: "mountedOn"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err20];
 }
@@ -6935,9 +6941,9 @@ vErrors.push(err20);
 errors++;
 }
 }
-}
-else {
-const err21 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(data4.entityRole !== undefined){
+if("rider" !== data4.entityRole){
+const err21 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/entityRole",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/properties/entityRole/const",keyword:"const",params:{allowedValue: "rider"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err21];
 }
@@ -6946,23 +6952,10 @@ vErrors.push(err21);
 }
 errors++;
 }
-var _valid0 = _errs20 === errors;
-if(_valid0 && valid6){
-valid6 = false;
-passing0 = [passing0, 1];
+}
 }
 else {
-if(_valid0){
-valid6 = true;
-passing0 = 1;
-if(props0 !== true){
-props0 = true;
-}
-}
-const _errs25 = errors;
-if(data4 && typeof data4 == "object" && !Array.isArray(data4)){
-if(data4.type === undefined){
-const err22 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/required",keyword:"required",params:{missingProperty: "type"},message:"must have required property '"+"type"+"'"};
+const err22 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/1/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err22];
 }
@@ -6971,8 +6964,23 @@ vErrors.push(err22);
 }
 errors++;
 }
-if(data4.entityRole === undefined){
-const err23 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/required",keyword:"required",params:{missingProperty: "entityRole"},message:"must have required property '"+"entityRole"+"'"};
+var _valid0 = _errs19 === errors;
+if(_valid0 && valid5){
+valid5 = false;
+passing0 = [passing0, 1];
+}
+else {
+if(_valid0){
+valid5 = true;
+passing0 = 1;
+if(props0 !== true){
+props0 = true;
+}
+}
+const _errs24 = errors;
+if(data4 && typeof data4 == "object" && !Array.isArray(data4)){
+if(data4.type === undefined){
+const err23 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/required",keyword:"required",params:{missingProperty: "type"},message:"must have required property '"+"type"+"'"};
 if(vErrors === null){
 vErrors = [err23];
 }
@@ -6981,9 +6989,8 @@ vErrors.push(err23);
 }
 errors++;
 }
-for(const key4 in data4){
-if(!((key4 === "type") || (key4 === "entityRole"))){
-const err24 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"};
+if(data4.entityRole === undefined){
+const err24 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/required",keyword:"required",params:{missingProperty: "entityRole"},message:"must have required property '"+"entityRole"+"'"};
 if(vErrors === null){
 vErrors = [err24];
 }
@@ -6992,10 +6999,9 @@ vErrors.push(err24);
 }
 errors++;
 }
-}
-if(data4.type !== undefined){
-if("equippedAt" !== data4.type){
-const err25 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/type",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/properties/type/const",keyword:"const",params:{allowedValue: "equippedAt"},message:"must be equal to constant"};
+for(const key4 in data4){
+if(!((key4 === "type") || (key4 === "entityRole"))){
+const err25 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key4},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err25];
 }
@@ -7005,10 +7011,9 @@ vErrors.push(err25);
 errors++;
 }
 }
-if(data4.entityRole !== undefined){
-let data10 = data4.entityRole;
-if(!((data10 === "item") || (data10 === "wearer"))){
-const err26 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/entityRole",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/properties/entityRole/enum",keyword:"enum",params:{allowedValues: schema135.oneOf[2].properties.entityRole.enum},message:"must be equal to one of the allowed values"};
+if(data4.type !== undefined){
+if("equippedAt" !== data4.type){
+const err26 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/type",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/properties/type/const",keyword:"const",params:{allowedValue: "equippedAt"},message:"must be equal to constant"};
 if(vErrors === null){
 vErrors = [err26];
 }
@@ -7018,9 +7023,10 @@ vErrors.push(err26);
 errors++;
 }
 }
-}
-else {
-const err27 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(data4.entityRole !== undefined){
+let data10 = data4.entityRole;
+if(!((data10 === "item") || (data10 === "wearer"))){
+const err27 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0+"/entityRole",schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/properties/entityRole/enum",keyword:"enum",params:{allowedValues: schema134.oneOf[2].properties.entityRole.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err27];
 }
@@ -7029,23 +7035,10 @@ vErrors.push(err27);
 }
 errors++;
 }
-var _valid0 = _errs25 === errors;
-if(_valid0 && valid6){
-valid6 = false;
-passing0 = [passing0, 2];
+}
 }
 else {
-if(_valid0){
-valid6 = true;
-passing0 = 2;
-if(props0 !== true){
-props0 = true;
-}
-}
-}
-}
-if(!valid6){
-const err28 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf",keyword:"oneOf",params:{passingSchemas: passing0},message:"must match exactly one schema in oneOf"};
+const err28 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf/2/type",keyword:"type",params:{type: "object"},message:"must be object"};
 if(vErrors === null){
 vErrors = [err28];
 }
@@ -7054,11 +7047,36 @@ vErrors.push(err28);
 }
 errors++;
 }
+var _valid0 = _errs24 === errors;
+if(_valid0 && valid5){
+valid5 = false;
+passing0 = [passing0, 2];
+}
 else {
-errors = _errs14;
+if(_valid0){
+valid5 = true;
+passing0 = 2;
+if(props0 !== true){
+props0 = true;
+}
+}
+}
+}
+if(!valid5){
+const err29 = {instancePath:instancePath+"/when/allRelationshipConditions/" + i0,schemaPath:"#/$defs/cameraRelationshipCondition/oneOf",keyword:"oneOf",params:{passingSchemas: passing0},message:"must match exactly one schema in oneOf"};
+if(vErrors === null){
+vErrors = [err29];
+}
+else {
+vErrors.push(err29);
+}
+errors++;
+}
+else {
+errors = _errs13;
 if(vErrors !== null){
-if(_errs14){
-vErrors.length = _errs14;
+if(_errs13){
+vErrors.length = _errs13;
 }
 else {
 vErrors = null;
@@ -7073,12 +7091,12 @@ outer0:
 for(;i1--;){
 for(j0 = i1; j0--;){
 if(func0(data3[i1], data3[j0])){
-const err29 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/uniqueItems",keyword:"uniqueItems",params:{i: i1, j: j0},message:"must NOT have duplicate items (items ## "+j0+" and "+i1+" are identical)"};
+const err30 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/uniqueItems",keyword:"uniqueItems",params:{i: i1, j: j0},message:"must NOT have duplicate items (items ## "+j0+" and "+i1+" are identical)"};
 if(vErrors === null){
-vErrors = [err29];
+vErrors = [err30];
 }
 else {
-vErrors.push(err29);
+vErrors.push(err30);
 }
 errors++;
 break outer0;
@@ -7088,50 +7106,7 @@ break outer0;
 }
 }
 else {
-const err30 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/type",keyword:"type",params:{type: "array"},message:"must be array"};
-if(vErrors === null){
-vErrors = [err30];
-}
-else {
-vErrors.push(err30);
-}
-errors++;
-}
-}
-if(data2.locomotionStatuses !== undefined){
-if(!(validate25(data2.locomotionStatuses, {instancePath:instancePath+"/when/locomotionStatuses",parentData:data2,parentDataProperty:"locomotionStatuses",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.mobilityModes !== undefined){
-if(!(validate25(data2.mobilityModes, {instancePath:instancePath+"/when/mobilityModes",parentData:data2,parentDataProperty:"mobilityModes",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.gaits !== undefined){
-if(!(validate25(data2.gaits, {instancePath:instancePath+"/when/gaits",parentData:data2,parentDataProperty:"gaits",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.verticalPhases !== undefined){
-if(!(validate25(data2.verticalPhases, {instancePath:instancePath+"/when/verticalPhases",parentData:data2,parentDataProperty:"verticalPhases",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.requiredActiveActionRefs !== undefined){
-if(!(validate25(data2.requiredActiveActionRefs, {instancePath:instancePath+"/when/requiredActiveActionRefs",parentData:data2,parentDataProperty:"requiredActiveActionRefs",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.actionInterruptibility !== undefined){
-let data16 = data2.actionInterruptibility;
-if(!((data16 === "interruptible") || (data16 === "non-interruptible"))){
-const err31 = {instancePath:instancePath+"/when/actionInterruptibility",schemaPath:"#/properties/when/properties/actionInterruptibility/enum",keyword:"enum",params:{allowedValues: schema133.properties.when.properties.actionInterruptibility.enum},message:"must be equal to one of the allowed values"};
+const err31 = {instancePath:instancePath+"/when/allRelationshipConditions",schemaPath:"#/properties/when/properties/allRelationshipConditions/type",keyword:"type",params:{type: "array"},message:"must be array"};
 if(vErrors === null){
 vErrors = [err31];
 }
@@ -7141,28 +7116,11 @@ vErrors.push(err31);
 errors++;
 }
 }
-if(data2.motionKernelRefs !== undefined){
-if(!(validate25(data2.motionKernelRefs, {instancePath:instancePath+"/when/motionKernelRefs",parentData:data2,parentDataProperty:"motionKernelRefs",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.requiredMotionTags !== undefined){
-if(!(validate25(data2.requiredMotionTags, {instancePath:instancePath+"/when/requiredMotionTags",parentData:data2,parentDataProperty:"requiredMotionTags",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.movementMediums !== undefined){
-if(!(validate25(data2.movementMediums, {instancePath:instancePath+"/when/movementMediums",parentData:data2,parentDataProperty:"movementMediums",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.minimumSpeedMetersPerSecond !== undefined){
-let data20 = data2.minimumSpeedMetersPerSecond;
-if(!((typeof data20 == "number") && (isFinite(data20)))){
-const err32 = {instancePath:instancePath+"/when/minimumSpeedMetersPerSecond",schemaPath:"#/properties/when/properties/minimumSpeedMetersPerSecond/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data2.locomotionStatuses !== undefined){
+let data11 = data2.locomotionStatuses;
+if(Array.isArray(data11)){
+if(data11.length > 64){
+const err32 = {instancePath:instancePath+"/when/locomotionStatuses",schemaPath:"#/properties/when/properties/locomotionStatuses/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
 if(vErrors === null){
 vErrors = [err32];
 }
@@ -7171,11 +7129,8 @@ vErrors.push(err32);
 }
 errors++;
 }
-}
-if(data2.maximumSpeedMetersPerSecond !== undefined){
-let data21 = data2.maximumSpeedMetersPerSecond;
-if(!((typeof data21 == "number") && (isFinite(data21)))){
-const err33 = {instancePath:instancePath+"/when/maximumSpeedMetersPerSecond",schemaPath:"#/properties/when/properties/maximumSpeedMetersPerSecond/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(data11.length < 1){
+const err33 = {instancePath:instancePath+"/when/locomotionStatuses",schemaPath:"#/properties/when/properties/locomotionStatuses/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
 if(vErrors === null){
 vErrors = [err33];
 }
@@ -7184,22 +7139,11 @@ vErrors.push(err33);
 }
 errors++;
 }
-}
-if(data2.requiredSocketIds !== undefined){
-if(!(validate25(data2.requiredSocketIds, {instancePath:instancePath+"/when/requiredSocketIds",parentData:data2,parentDataProperty:"requiredSocketIds",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-if(data2.requiredCameraContextTags !== undefined){
-if(!(validate25(data2.requiredCameraContextTags, {instancePath:instancePath+"/when/requiredCameraContextTags",parentData:data2,parentDataProperty:"requiredCameraContextTags",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-}
-else {
-const err34 = {instancePath:instancePath+"/when",schemaPath:"#/properties/when/type",keyword:"type",params:{type: "object"},message:"must be object"};
+const len1 = data11.length;
+for(let i2=0; i2<len1; i2++){
+let data12 = data11[i2];
+if(!((data12 === "active") || (data12 === "suspended"))){
+const err34 = {instancePath:instancePath+"/when/locomotionStatuses/" + i2,schemaPath:"#/properties/when/properties/locomotionStatuses/items/enum",keyword:"enum",params:{allowedValues: schema133.properties.when.properties.locomotionStatuses.items.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err34];
 }
@@ -7209,11 +7153,14 @@ vErrors.push(err34);
 errors++;
 }
 }
-if(data.cameraRigProfileRef !== undefined){
-let data24 = data.cameraRigProfileRef;
-if(typeof data24 === "string"){
-if(func2(data24) < 1){
-const err35 = {instancePath:instancePath+"/cameraRigProfileRef",schemaPath:"#/$defs/nonEmptyString/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+let i3 = data11.length;
+let j1;
+if(i3 > 1){
+outer1:
+for(;i3--;){
+for(j1 = i3; j1--;){
+if(func0(data11[i3], data11[j1])){
+const err35 = {instancePath:instancePath+"/when/locomotionStatuses",schemaPath:"#/properties/when/properties/locomotionStatuses/uniqueItems",keyword:"uniqueItems",params:{i: i3, j: j1},message:"must NOT have duplicate items (items ## "+j1+" and "+i3+" are identical)"};
 if(vErrors === null){
 vErrors = [err35];
 }
@@ -7221,10 +7168,14 @@ else {
 vErrors.push(err35);
 }
 errors++;
+break outer1;
+}
+}
+}
 }
 }
 else {
-const err36 = {instancePath:instancePath+"/cameraRigProfileRef",schemaPath:"#/$defs/nonEmptyString/type",keyword:"type",params:{type: "string"},message:"must be string"};
+const err36 = {instancePath:instancePath+"/when/locomotionStatuses",schemaPath:"#/properties/when/properties/locomotionStatuses/type",keyword:"type",params:{type: "array"},message:"must be array"};
 if(vErrors === null){
 vErrors = [err36];
 }
@@ -7234,15 +7185,11 @@ vErrors.push(err36);
 errors++;
 }
 }
-if(data.cameraModifierRefs !== undefined){
-if(!(validate25(data.cameraModifierRefs, {instancePath:instancePath+"/cameraModifierRefs",parentData:data,parentDataProperty:"cameraModifierRefs",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate25.errors : vErrors.concat(validate25.errors);
-errors = vErrors.length;
-}
-}
-}
-else {
-const err37 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(data2.mobilityModes !== undefined){
+let data13 = data2.mobilityModes;
+if(Array.isArray(data13)){
+if(data13.length > 64){
+const err37 = {instancePath:instancePath+"/when/mobilityModes",schemaPath:"#/properties/when/properties/mobilityModes/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
 if(vErrors === null){
 vErrors = [err37];
 }
@@ -7251,18 +7198,784 @@ vErrors.push(err37);
 }
 errors++;
 }
+if(data13.length < 1){
+const err38 = {instancePath:instancePath+"/when/mobilityModes",schemaPath:"#/properties/when/properties/mobilityModes/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+if(vErrors === null){
+vErrors = [err38];
+}
+else {
+vErrors.push(err38);
+}
+errors++;
+}
+const len2 = data13.length;
+for(let i4=0; i4<len2; i4++){
+let data14 = data13[i4];
+if(!((data14 === "grounded") || (data14 === "airborne"))){
+const err39 = {instancePath:instancePath+"/when/mobilityModes/" + i4,schemaPath:"#/properties/when/properties/mobilityModes/items/enum",keyword:"enum",params:{allowedValues: schema133.properties.when.properties.mobilityModes.items.enum},message:"must be equal to one of the allowed values"};
+if(vErrors === null){
+vErrors = [err39];
+}
+else {
+vErrors.push(err39);
+}
+errors++;
+}
+}
+let i5 = data13.length;
+let j2;
+if(i5 > 1){
+outer2:
+for(;i5--;){
+for(j2 = i5; j2--;){
+if(func0(data13[i5], data13[j2])){
+const err40 = {instancePath:instancePath+"/when/mobilityModes",schemaPath:"#/properties/when/properties/mobilityModes/uniqueItems",keyword:"uniqueItems",params:{i: i5, j: j2},message:"must NOT have duplicate items (items ## "+j2+" and "+i5+" are identical)"};
+if(vErrors === null){
+vErrors = [err40];
+}
+else {
+vErrors.push(err40);
+}
+errors++;
+break outer2;
+}
+}
+}
+}
+}
+else {
+const err41 = {instancePath:instancePath+"/when/mobilityModes",schemaPath:"#/properties/when/properties/mobilityModes/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err41];
+}
+else {
+vErrors.push(err41);
+}
+errors++;
+}
+}
+if(data2.gaits !== undefined){
+let data15 = data2.gaits;
+if(Array.isArray(data15)){
+if(data15.length > 64){
+const err42 = {instancePath:instancePath+"/when/gaits",schemaPath:"#/properties/when/properties/gaits/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(vErrors === null){
+vErrors = [err42];
+}
+else {
+vErrors.push(err42);
+}
+errors++;
+}
+if(data15.length < 1){
+const err43 = {instancePath:instancePath+"/when/gaits",schemaPath:"#/properties/when/properties/gaits/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+if(vErrors === null){
+vErrors = [err43];
+}
+else {
+vErrors.push(err43);
+}
+errors++;
+}
+const len3 = data15.length;
+for(let i6=0; i6<len3; i6++){
+let data16 = data15[i6];
+if(!((((data16 === "none") || (data16 === "idle")) || (data16 === "walk")) || (data16 === "run"))){
+const err44 = {instancePath:instancePath+"/when/gaits/" + i6,schemaPath:"#/properties/when/properties/gaits/items/enum",keyword:"enum",params:{allowedValues: schema133.properties.when.properties.gaits.items.enum},message:"must be equal to one of the allowed values"};
+if(vErrors === null){
+vErrors = [err44];
+}
+else {
+vErrors.push(err44);
+}
+errors++;
+}
+}
+let i7 = data15.length;
+let j3;
+if(i7 > 1){
+outer3:
+for(;i7--;){
+for(j3 = i7; j3--;){
+if(func0(data15[i7], data15[j3])){
+const err45 = {instancePath:instancePath+"/when/gaits",schemaPath:"#/properties/when/properties/gaits/uniqueItems",keyword:"uniqueItems",params:{i: i7, j: j3},message:"must NOT have duplicate items (items ## "+j3+" and "+i7+" are identical)"};
+if(vErrors === null){
+vErrors = [err45];
+}
+else {
+vErrors.push(err45);
+}
+errors++;
+break outer3;
+}
+}
+}
+}
+}
+else {
+const err46 = {instancePath:instancePath+"/when/gaits",schemaPath:"#/properties/when/properties/gaits/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err46];
+}
+else {
+vErrors.push(err46);
+}
+errors++;
+}
+}
+if(data2.verticalPhases !== undefined){
+let data17 = data2.verticalPhases;
+if(Array.isArray(data17)){
+if(data17.length > 64){
+const err47 = {instancePath:instancePath+"/when/verticalPhases",schemaPath:"#/properties/when/properties/verticalPhases/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(vErrors === null){
+vErrors = [err47];
+}
+else {
+vErrors.push(err47);
+}
+errors++;
+}
+if(data17.length < 1){
+const err48 = {instancePath:instancePath+"/when/verticalPhases",schemaPath:"#/properties/when/properties/verticalPhases/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+if(vErrors === null){
+vErrors = [err48];
+}
+else {
+vErrors.push(err48);
+}
+errors++;
+}
+const len4 = data17.length;
+for(let i8=0; i8<len4; i8++){
+let data18 = data17[i8];
+if(!((((((data18 === "none") || (data18 === "takeoff")) || (data18 === "rising")) || (data18 === "apex")) || (data18 === "falling")) || (data18 === "landing"))){
+const err49 = {instancePath:instancePath+"/when/verticalPhases/" + i8,schemaPath:"#/properties/when/properties/verticalPhases/items/enum",keyword:"enum",params:{allowedValues: schema133.properties.when.properties.verticalPhases.items.enum},message:"must be equal to one of the allowed values"};
+if(vErrors === null){
+vErrors = [err49];
+}
+else {
+vErrors.push(err49);
+}
+errors++;
+}
+}
+let i9 = data17.length;
+let j4;
+if(i9 > 1){
+outer4:
+for(;i9--;){
+for(j4 = i9; j4--;){
+if(func0(data17[i9], data17[j4])){
+const err50 = {instancePath:instancePath+"/when/verticalPhases",schemaPath:"#/properties/when/properties/verticalPhases/uniqueItems",keyword:"uniqueItems",params:{i: i9, j: j4},message:"must NOT have duplicate items (items ## "+j4+" and "+i9+" are identical)"};
+if(vErrors === null){
+vErrors = [err50];
+}
+else {
+vErrors.push(err50);
+}
+errors++;
+break outer4;
+}
+}
+}
+}
+}
+else {
+const err51 = {instancePath:instancePath+"/when/verticalPhases",schemaPath:"#/properties/when/properties/verticalPhases/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err51];
+}
+else {
+vErrors.push(err51);
+}
+errors++;
+}
+}
+if(data2.requiredActiveActionRefs !== undefined){
+let data19 = data2.requiredActiveActionRefs;
+if(Array.isArray(data19)){
+if(data19.length > 64){
+const err52 = {instancePath:instancePath+"/when/requiredActiveActionRefs",schemaPath:"#/properties/when/properties/requiredActiveActionRefs/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(vErrors === null){
+vErrors = [err52];
+}
+else {
+vErrors.push(err52);
+}
+errors++;
+}
+if(data19.length < 1){
+const err53 = {instancePath:instancePath+"/when/requiredActiveActionRefs",schemaPath:"#/properties/when/properties/requiredActiveActionRefs/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+if(vErrors === null){
+vErrors = [err53];
+}
+else {
+vErrors.push(err53);
+}
+errors++;
+}
+const len5 = data19.length;
+for(let i10=0; i10<len5; i10++){
+let data20 = data19[i10];
+if(typeof data20 === "string"){
+if(func2(data20) > 128){
+const err54 = {instancePath:instancePath+"/when/requiredActiveActionRefs/" + i10,schemaPath:"#/$defs/cameraActionRef/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"};
+if(vErrors === null){
+vErrors = [err54];
+}
+else {
+vErrors.push(err54);
+}
+errors++;
+}
+if(!pattern16.test(data20)){
+const err55 = {instancePath:instancePath+"/when/requiredActiveActionRefs/" + i10,schemaPath:"#/$defs/cameraActionRef/pattern",keyword:"pattern",params:{pattern: "^worldkit://semantic-action/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$"},message:"must match pattern \""+"^worldkit://semantic-action/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$"+"\""};
+if(vErrors === null){
+vErrors = [err55];
+}
+else {
+vErrors.push(err55);
+}
+errors++;
+}
+}
+else {
+const err56 = {instancePath:instancePath+"/when/requiredActiveActionRefs/" + i10,schemaPath:"#/$defs/cameraActionRef/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err56];
+}
+else {
+vErrors.push(err56);
+}
+errors++;
+}
+}
+let i11 = data19.length;
+let j5;
+if(i11 > 1){
+outer5:
+for(;i11--;){
+for(j5 = i11; j5--;){
+if(func0(data19[i11], data19[j5])){
+const err57 = {instancePath:instancePath+"/when/requiredActiveActionRefs",schemaPath:"#/properties/when/properties/requiredActiveActionRefs/uniqueItems",keyword:"uniqueItems",params:{i: i11, j: j5},message:"must NOT have duplicate items (items ## "+j5+" and "+i11+" are identical)"};
+if(vErrors === null){
+vErrors = [err57];
+}
+else {
+vErrors.push(err57);
+}
+errors++;
+break outer5;
+}
+}
+}
+}
+}
+else {
+const err58 = {instancePath:instancePath+"/when/requiredActiveActionRefs",schemaPath:"#/properties/when/properties/requiredActiveActionRefs/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err58];
+}
+else {
+vErrors.push(err58);
+}
+errors++;
+}
+}
+if(data2.actionInterruptibility !== undefined){
+let data21 = data2.actionInterruptibility;
+if(!((data21 === "interruptible") || (data21 === "non-interruptible"))){
+const err59 = {instancePath:instancePath+"/when/actionInterruptibility",schemaPath:"#/properties/when/properties/actionInterruptibility/enum",keyword:"enum",params:{allowedValues: schema133.properties.when.properties.actionInterruptibility.enum},message:"must be equal to one of the allowed values"};
+if(vErrors === null){
+vErrors = [err59];
+}
+else {
+vErrors.push(err59);
+}
+errors++;
+}
+}
+if(data2.movementMediums !== undefined){
+let data22 = data2.movementMediums;
+if(Array.isArray(data22)){
+if(data22.length > 64){
+const err60 = {instancePath:instancePath+"/when/movementMediums",schemaPath:"#/properties/when/properties/movementMediums/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(vErrors === null){
+vErrors = [err60];
+}
+else {
+vErrors.push(err60);
+}
+errors++;
+}
+if(data22.length < 1){
+const err61 = {instancePath:instancePath+"/when/movementMediums",schemaPath:"#/properties/when/properties/movementMediums/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+if(vErrors === null){
+vErrors = [err61];
+}
+else {
+vErrors.push(err61);
+}
+errors++;
+}
+const len6 = data22.length;
+for(let i12=0; i12<len6; i12++){
+let data23 = data22[i12];
+if(!((data23 === "ground") || (data23 === "air"))){
+const err62 = {instancePath:instancePath+"/when/movementMediums/" + i12,schemaPath:"#/properties/when/properties/movementMediums/items/enum",keyword:"enum",params:{allowedValues: schema133.properties.when.properties.movementMediums.items.enum},message:"must be equal to one of the allowed values"};
+if(vErrors === null){
+vErrors = [err62];
+}
+else {
+vErrors.push(err62);
+}
+errors++;
+}
+}
+let i13 = data22.length;
+let j6;
+if(i13 > 1){
+outer6:
+for(;i13--;){
+for(j6 = i13; j6--;){
+if(func0(data22[i13], data22[j6])){
+const err63 = {instancePath:instancePath+"/when/movementMediums",schemaPath:"#/properties/when/properties/movementMediums/uniqueItems",keyword:"uniqueItems",params:{i: i13, j: j6},message:"must NOT have duplicate items (items ## "+j6+" and "+i13+" are identical)"};
+if(vErrors === null){
+vErrors = [err63];
+}
+else {
+vErrors.push(err63);
+}
+errors++;
+break outer6;
+}
+}
+}
+}
+}
+else {
+const err64 = {instancePath:instancePath+"/when/movementMediums",schemaPath:"#/properties/when/properties/movementMediums/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err64];
+}
+else {
+vErrors.push(err64);
+}
+errors++;
+}
+}
+if(data2.minimumSpeedMetersPerSecond !== undefined){
+let data24 = data2.minimumSpeedMetersPerSecond;
+if((typeof data24 == "number") && (isFinite(data24))){
+if(data24 < 0 || isNaN(data24)){
+const err65 = {instancePath:instancePath+"/when/minimumSpeedMetersPerSecond",schemaPath:"#/properties/when/properties/minimumSpeedMetersPerSecond/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(vErrors === null){
+vErrors = [err65];
+}
+else {
+vErrors.push(err65);
+}
+errors++;
+}
+}
+else {
+const err66 = {instancePath:instancePath+"/when/minimumSpeedMetersPerSecond",schemaPath:"#/properties/when/properties/minimumSpeedMetersPerSecond/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err66];
+}
+else {
+vErrors.push(err66);
+}
+errors++;
+}
+}
+if(data2.maximumSpeedMetersPerSecond !== undefined){
+let data25 = data2.maximumSpeedMetersPerSecond;
+if((typeof data25 == "number") && (isFinite(data25))){
+if(data25 < 0 || isNaN(data25)){
+const err67 = {instancePath:instancePath+"/when/maximumSpeedMetersPerSecond",schemaPath:"#/properties/when/properties/maximumSpeedMetersPerSecond/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"};
+if(vErrors === null){
+vErrors = [err67];
+}
+else {
+vErrors.push(err67);
+}
+errors++;
+}
+}
+else {
+const err68 = {instancePath:instancePath+"/when/maximumSpeedMetersPerSecond",schemaPath:"#/properties/when/properties/maximumSpeedMetersPerSecond/type",keyword:"type",params:{type: "number"},message:"must be number"};
+if(vErrors === null){
+vErrors = [err68];
+}
+else {
+vErrors.push(err68);
+}
+errors++;
+}
+}
+if(data2.requiredSocketIds !== undefined){
+let data26 = data2.requiredSocketIds;
+if(Array.isArray(data26)){
+if(data26.length > 64){
+const err69 = {instancePath:instancePath+"/when/requiredSocketIds",schemaPath:"#/properties/when/properties/requiredSocketIds/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(vErrors === null){
+vErrors = [err69];
+}
+else {
+vErrors.push(err69);
+}
+errors++;
+}
+if(data26.length < 1){
+const err70 = {instancePath:instancePath+"/when/requiredSocketIds",schemaPath:"#/properties/when/properties/requiredSocketIds/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+if(vErrors === null){
+vErrors = [err70];
+}
+else {
+vErrors.push(err70);
+}
+errors++;
+}
+const len7 = data26.length;
+for(let i14=0; i14<len7; i14++){
+let data27 = data26[i14];
+if(typeof data27 === "string"){
+if(func2(data27) > 128){
+const err71 = {instancePath:instancePath+"/when/requiredSocketIds/" + i14,schemaPath:"#/properties/when/properties/requiredSocketIds/items/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"};
+if(vErrors === null){
+vErrors = [err71];
+}
+else {
+vErrors.push(err71);
+}
+errors++;
+}
+if(func2(data27) < 1){
+const err72 = {instancePath:instancePath+"/when/requiredSocketIds/" + i14,schemaPath:"#/properties/when/properties/requiredSocketIds/items/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+if(vErrors === null){
+vErrors = [err72];
+}
+else {
+vErrors.push(err72);
+}
+errors++;
+}
+if(!pattern17.test(data27)){
+const err73 = {instancePath:instancePath+"/when/requiredSocketIds/" + i14,schemaPath:"#/properties/when/properties/requiredSocketIds/items/pattern",keyword:"pattern",params:{pattern: "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"},message:"must match pattern \""+"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"+"\""};
+if(vErrors === null){
+vErrors = [err73];
+}
+else {
+vErrors.push(err73);
+}
+errors++;
+}
+}
+else {
+const err74 = {instancePath:instancePath+"/when/requiredSocketIds/" + i14,schemaPath:"#/properties/when/properties/requiredSocketIds/items/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err74];
+}
+else {
+vErrors.push(err74);
+}
+errors++;
+}
+}
+let i15 = data26.length;
+let j7;
+if(i15 > 1){
+const indices0 = {};
+for(;i15--;){
+let item0 = data26[i15];
+if(typeof item0 !== "string"){
+continue;
+}
+if(typeof indices0[item0] == "number"){
+j7 = indices0[item0];
+const err75 = {instancePath:instancePath+"/when/requiredSocketIds",schemaPath:"#/properties/when/properties/requiredSocketIds/uniqueItems",keyword:"uniqueItems",params:{i: i15, j: j7},message:"must NOT have duplicate items (items ## "+j7+" and "+i15+" are identical)"};
+if(vErrors === null){
+vErrors = [err75];
+}
+else {
+vErrors.push(err75);
+}
+errors++;
+break;
+}
+indices0[item0] = i15;
+}
+}
+}
+else {
+const err76 = {instancePath:instancePath+"/when/requiredSocketIds",schemaPath:"#/properties/when/properties/requiredSocketIds/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err76];
+}
+else {
+vErrors.push(err76);
+}
+errors++;
+}
+}
+if(data2.requiredCameraContextTags !== undefined){
+let data28 = data2.requiredCameraContextTags;
+if(Array.isArray(data28)){
+if(data28.length > 64){
+const err77 = {instancePath:instancePath+"/when/requiredCameraContextTags",schemaPath:"#/properties/when/properties/requiredCameraContextTags/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(vErrors === null){
+vErrors = [err77];
+}
+else {
+vErrors.push(err77);
+}
+errors++;
+}
+if(data28.length < 1){
+const err78 = {instancePath:instancePath+"/when/requiredCameraContextTags",schemaPath:"#/properties/when/properties/requiredCameraContextTags/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"};
+if(vErrors === null){
+vErrors = [err78];
+}
+else {
+vErrors.push(err78);
+}
+errors++;
+}
+const len8 = data28.length;
+for(let i16=0; i16<len8; i16++){
+let data29 = data28[i16];
+if(typeof data29 === "string"){
+if(func2(data29) > 128){
+const err79 = {instancePath:instancePath+"/when/requiredCameraContextTags/" + i16,schemaPath:"#/properties/when/properties/requiredCameraContextTags/items/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"};
+if(vErrors === null){
+vErrors = [err79];
+}
+else {
+vErrors.push(err79);
+}
+errors++;
+}
+if(func2(data29) < 1){
+const err80 = {instancePath:instancePath+"/when/requiredCameraContextTags/" + i16,schemaPath:"#/properties/when/properties/requiredCameraContextTags/items/minLength",keyword:"minLength",params:{limit: 1},message:"must NOT have fewer than 1 characters"};
+if(vErrors === null){
+vErrors = [err80];
+}
+else {
+vErrors.push(err80);
+}
+errors++;
+}
+if(!pattern18.test(data29)){
+const err81 = {instancePath:instancePath+"/when/requiredCameraContextTags/" + i16,schemaPath:"#/properties/when/properties/requiredCameraContextTags/items/pattern",keyword:"pattern",params:{pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"},message:"must match pattern \""+"^[a-z0-9]+(?:[.-][a-z0-9]+)*$"+"\""};
+if(vErrors === null){
+vErrors = [err81];
+}
+else {
+vErrors.push(err81);
+}
+errors++;
+}
+}
+else {
+const err82 = {instancePath:instancePath+"/when/requiredCameraContextTags/" + i16,schemaPath:"#/properties/when/properties/requiredCameraContextTags/items/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err82];
+}
+else {
+vErrors.push(err82);
+}
+errors++;
+}
+}
+let i17 = data28.length;
+let j8;
+if(i17 > 1){
+const indices1 = {};
+for(;i17--;){
+let item1 = data28[i17];
+if(typeof item1 !== "string"){
+continue;
+}
+if(typeof indices1[item1] == "number"){
+j8 = indices1[item1];
+const err83 = {instancePath:instancePath+"/when/requiredCameraContextTags",schemaPath:"#/properties/when/properties/requiredCameraContextTags/uniqueItems",keyword:"uniqueItems",params:{i: i17, j: j8},message:"must NOT have duplicate items (items ## "+j8+" and "+i17+" are identical)"};
+if(vErrors === null){
+vErrors = [err83];
+}
+else {
+vErrors.push(err83);
+}
+errors++;
+break;
+}
+indices1[item1] = i17;
+}
+}
+}
+else {
+const err84 = {instancePath:instancePath+"/when/requiredCameraContextTags",schemaPath:"#/properties/when/properties/requiredCameraContextTags/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err84];
+}
+else {
+vErrors.push(err84);
+}
+errors++;
+}
+}
+}
+else {
+const err85 = {instancePath:instancePath+"/when",schemaPath:"#/properties/when/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err85];
+}
+else {
+vErrors.push(err85);
+}
+errors++;
+}
+}
+if(data.cameraRigProfileRef !== undefined){
+let data30 = data.cameraRigProfileRef;
+if(typeof data30 === "string"){
+if(func2(data30) > 128){
+const err86 = {instancePath:instancePath+"/cameraRigProfileRef",schemaPath:"#/$defs/cameraProfileRef/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"};
+if(vErrors === null){
+vErrors = [err86];
+}
+else {
+vErrors.push(err86);
+}
+errors++;
+}
+if(!pattern19.test(data30)){
+const err87 = {instancePath:instancePath+"/cameraRigProfileRef",schemaPath:"#/$defs/cameraProfileRef/pattern",keyword:"pattern",params:{pattern: "^worldkit://camera-profile/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$"},message:"must match pattern \""+"^worldkit://camera-profile/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$"+"\""};
+if(vErrors === null){
+vErrors = [err87];
+}
+else {
+vErrors.push(err87);
+}
+errors++;
+}
+}
+else {
+const err88 = {instancePath:instancePath+"/cameraRigProfileRef",schemaPath:"#/$defs/cameraProfileRef/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err88];
+}
+else {
+vErrors.push(err88);
+}
+errors++;
+}
+}
+if(data.cameraModifierRefs !== undefined){
+let data31 = data.cameraModifierRefs;
+if(Array.isArray(data31)){
+if(data31.length > 64){
+const err89 = {instancePath:instancePath+"/cameraModifierRefs",schemaPath:"#/properties/cameraModifierRefs/maxItems",keyword:"maxItems",params:{limit: 64},message:"must NOT have more than 64 items"};
+if(vErrors === null){
+vErrors = [err89];
+}
+else {
+vErrors.push(err89);
+}
+errors++;
+}
+const len9 = data31.length;
+for(let i18=0; i18<len9; i18++){
+let data32 = data31[i18];
+if(typeof data32 === "string"){
+if(func2(data32) > 128){
+const err90 = {instancePath:instancePath+"/cameraModifierRefs/" + i18,schemaPath:"#/$defs/cameraModifierRef/maxLength",keyword:"maxLength",params:{limit: 128},message:"must NOT have more than 128 characters"};
+if(vErrors === null){
+vErrors = [err90];
+}
+else {
+vErrors.push(err90);
+}
+errors++;
+}
+if(!pattern20.test(data32)){
+const err91 = {instancePath:instancePath+"/cameraModifierRefs/" + i18,schemaPath:"#/$defs/cameraModifierRef/pattern",keyword:"pattern",params:{pattern: "^worldkit://camera-modifier/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$"},message:"must match pattern \""+"^worldkit://camera-modifier/[a-z0-9]+(?:[.-][a-z0-9]+)*@[1-9][0-9]*$"+"\""};
+if(vErrors === null){
+vErrors = [err91];
+}
+else {
+vErrors.push(err91);
+}
+errors++;
+}
+}
+else {
+const err92 = {instancePath:instancePath+"/cameraModifierRefs/" + i18,schemaPath:"#/$defs/cameraModifierRef/type",keyword:"type",params:{type: "string"},message:"must be string"};
+if(vErrors === null){
+vErrors = [err92];
+}
+else {
+vErrors.push(err92);
+}
+errors++;
+}
+}
+let i19 = data31.length;
+let j9;
+if(i19 > 1){
+outer7:
+for(;i19--;){
+for(j9 = i19; j9--;){
+if(func0(data31[i19], data31[j9])){
+const err93 = {instancePath:instancePath+"/cameraModifierRefs",schemaPath:"#/properties/cameraModifierRefs/uniqueItems",keyword:"uniqueItems",params:{i: i19, j: j9},message:"must NOT have duplicate items (items ## "+j9+" and "+i19+" are identical)"};
+if(vErrors === null){
+vErrors = [err93];
+}
+else {
+vErrors.push(err93);
+}
+errors++;
+break outer7;
+}
+}
+}
+}
+}
+else {
+const err94 = {instancePath:instancePath+"/cameraModifierRefs",schemaPath:"#/properties/cameraModifierRefs/type",keyword:"type",params:{type: "array"},message:"must be array"};
+if(vErrors === null){
+vErrors = [err94];
+}
+else {
+vErrors.push(err94);
+}
+errors++;
+}
+}
+}
+else {
+const err95 = {instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"};
+if(vErrors === null){
+vErrors = [err95];
+}
+else {
+vErrors.push(err95);
+}
+errors++;
+}
 validate81.errors = vErrors;
 return errors === 0;
 }
 validate81.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-const schema137 = {"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","baseMode","algorithmRef","headingSource","reverseHeadingPolicy","recenterMode","preferredSocketIds","parameters"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"baseMode":{"enum":["first-person","free-orbit","stable-follow","speed-chase","flight-horizon"]},"algorithmRef":{"$ref":"#/$defs/nonEmptyString"},"headingSource":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicy":{"enum":["follow-velocity","preserve-target-forward"]},"recenterMode":{"enum":["off","forward-motion","always"]},"preferredSocketIds":{"$ref":"#/$defs/stringArray"},"parameters":{"$ref":"#/$defs/cameraParameters"},"authoringRanges":{"type":"object","propertyNames":{"enum":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"]},"additionalProperties":{"type":"object","additionalProperties":false,"required":["minimum","maximum","step"],"properties":{"minimum":{"type":"number"},"maximum":{"type":"number"},"step":{"type":"number"}}}}}};
-const schema141 = {"type":"object","additionalProperties":false,"required":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"],"properties":{"distanceMeters":{"type":"number"},"minimumDistanceMeters":{"type":"number"},"maximumDistanceMeters":{"type":"number"},"targetHeightMeters":{"type":"number"},"shoulderOffsetMeters":{"type":"number"},"pitchRadians":{"type":"number"},"minimumPitchRadians":{"type":"number"},"maximumPitchRadians":{"type":"number"},"positionDampingPerSecond":{"type":"number"},"horizontalPositionDampingPerSecond":{"type":"number"},"verticalPositionDampingPerSecond":{"type":"number"},"maximumPositionLagMeters":{"type":"number"},"rotationDampingPerSecond":{"type":"number"},"yawDampingPerSecond":{"type":"number"},"pitchDampingPerSecond":{"type":"number"},"collisionRadiusMeters":{"type":"number"},"collisionRetractionMetersPerSecond":{"type":"number"},"collisionRecoveryMetersPerSecond":{"type":"number"},"baseFovDegrees":{"type":"number"},"speedFovDegreesPerMeterPerSecond":{"type":"number"},"maximumSpeedFovDegrees":{"type":"number"},"lookAheadSeconds":{"type":"number"},"accelerationLookAheadSecondsSquared":{"type":"number"},"transitionSeconds":{"type":"number"},"minimumHeadingSpeedMetersPerSecond":{"type":"number"},"velocityHeadingDampingPerSecond":{"type":"number"},"fovDampingPerSecond":{"type":"number"},"horizontalDeadZoneRatio":{"type":"number"},"verticalDeadZoneRatio":{"type":"number"},"recenterDelaySeconds":{"type":"number"},"recenterDurationSeconds":{"type":"number"},"recenterMinimumSpeedMetersPerSecond":{"type":"number"},"teleportSnapDistanceMeters":{"type":"number"},"lookSensitivityXRatio":{"type":"number"},"lookSensitivityYRatio":{"type":"number"}}};
+const schema138 = {"type":"object","additionalProperties":false,"required":["resourceRef","contentHash","baseMode","algorithmRef","headingSource","reverseHeadingPolicy","recenterMode","preferredSocketIds","parameters"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"},"baseMode":{"enum":["first-person","free-orbit","stable-follow","speed-chase","flight-horizon"]},"algorithmRef":{"$ref":"#/$defs/nonEmptyString"},"headingSource":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicy":{"enum":["follow-velocity","preserve-target-forward"]},"recenterMode":{"enum":["off","forward-motion","always"]},"preferredSocketIds":{"$ref":"#/$defs/stringArray"},"parameters":{"$ref":"#/$defs/cameraParameters"},"authoringRanges":{"type":"object","propertyNames":{"enum":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"]},"additionalProperties":{"type":"object","additionalProperties":false,"required":["minimum","maximum","step"],"properties":{"minimum":{"type":"number"},"maximum":{"type":"number"},"step":{"type":"number"}}}}}};
+const schema142 = {"type":"object","additionalProperties":false,"required":["distanceMeters","minimumDistanceMeters","maximumDistanceMeters","targetHeightMeters","shoulderOffsetMeters","pitchRadians","minimumPitchRadians","maximumPitchRadians","positionDampingPerSecond","horizontalPositionDampingPerSecond","verticalPositionDampingPerSecond","maximumPositionLagMeters","rotationDampingPerSecond","yawDampingPerSecond","pitchDampingPerSecond","collisionRadiusMeters","collisionRetractionMetersPerSecond","collisionRecoveryMetersPerSecond","baseFovDegrees","speedFovDegreesPerMeterPerSecond","maximumSpeedFovDegrees","lookAheadSeconds","accelerationLookAheadSecondsSquared","transitionSeconds","minimumHeadingSpeedMetersPerSecond","velocityHeadingDampingPerSecond","fovDampingPerSecond","horizontalDeadZoneRatio","verticalDeadZoneRatio","recenterDelaySeconds","recenterDurationSeconds","recenterMinimumSpeedMetersPerSecond","teleportSnapDistanceMeters","lookSensitivityXRatio","lookSensitivityYRatio"],"properties":{"distanceMeters":{"type":"number"},"minimumDistanceMeters":{"type":"number"},"maximumDistanceMeters":{"type":"number"},"targetHeightMeters":{"type":"number"},"shoulderOffsetMeters":{"type":"number"},"pitchRadians":{"type":"number"},"minimumPitchRadians":{"type":"number"},"maximumPitchRadians":{"type":"number"},"positionDampingPerSecond":{"type":"number"},"horizontalPositionDampingPerSecond":{"type":"number"},"verticalPositionDampingPerSecond":{"type":"number"},"maximumPositionLagMeters":{"type":"number"},"rotationDampingPerSecond":{"type":"number"},"yawDampingPerSecond":{"type":"number"},"pitchDampingPerSecond":{"type":"number"},"collisionRadiusMeters":{"type":"number"},"collisionRetractionMetersPerSecond":{"type":"number"},"collisionRecoveryMetersPerSecond":{"type":"number"},"baseFovDegrees":{"type":"number"},"speedFovDegreesPerMeterPerSecond":{"type":"number"},"maximumSpeedFovDegrees":{"type":"number"},"lookAheadSeconds":{"type":"number"},"accelerationLookAheadSecondsSquared":{"type":"number"},"transitionSeconds":{"type":"number"},"minimumHeadingSpeedMetersPerSecond":{"type":"number"},"velocityHeadingDampingPerSecond":{"type":"number"},"fovDampingPerSecond":{"type":"number"},"horizontalDeadZoneRatio":{"type":"number"},"verticalDeadZoneRatio":{"type":"number"},"recenterDelaySeconds":{"type":"number"},"recenterDurationSeconds":{"type":"number"},"recenterMinimumSpeedMetersPerSecond":{"type":"number"},"teleportSnapDistanceMeters":{"type":"number"},"lookSensitivityXRatio":{"type":"number"},"lookSensitivityYRatio":{"type":"number"}}};
 
-function validate94(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate83(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate94.evaluated;
+const evaluated0 = validate83.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -7361,7 +8074,7 @@ vErrors.push(err8);
 errors++;
 }
 for(const key0 in data){
-if(!(func1.call(schema137.properties, key0))){
+if(!(func1.call(schema138.properties, key0))){
 const err9 = {instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err9];
@@ -7425,7 +8138,7 @@ errors++;
 if(data.baseMode !== undefined){
 let data2 = data.baseMode;
 if(!(((((data2 === "first-person") || (data2 === "free-orbit")) || (data2 === "stable-follow")) || (data2 === "speed-chase")) || (data2 === "flight-horizon"))){
-const err14 = {instancePath:instancePath+"/baseMode",schemaPath:"#/properties/baseMode/enum",keyword:"enum",params:{allowedValues: schema137.properties.baseMode.enum},message:"must be equal to one of the allowed values"};
+const err14 = {instancePath:instancePath+"/baseMode",schemaPath:"#/properties/baseMode/enum",keyword:"enum",params:{allowedValues: schema138.properties.baseMode.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err14];
 }
@@ -7463,7 +8176,7 @@ errors++;
 if(data.headingSource !== undefined){
 let data4 = data.headingSource;
 if(!(((data4 === "view") || (data4 === "target-forward")) || (data4 === "target-velocity"))){
-const err17 = {instancePath:instancePath+"/headingSource",schemaPath:"#/properties/headingSource/enum",keyword:"enum",params:{allowedValues: schema137.properties.headingSource.enum},message:"must be equal to one of the allowed values"};
+const err17 = {instancePath:instancePath+"/headingSource",schemaPath:"#/properties/headingSource/enum",keyword:"enum",params:{allowedValues: schema138.properties.headingSource.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err17];
 }
@@ -7476,7 +8189,7 @@ errors++;
 if(data.reverseHeadingPolicy !== undefined){
 let data5 = data.reverseHeadingPolicy;
 if(!((data5 === "follow-velocity") || (data5 === "preserve-target-forward"))){
-const err18 = {instancePath:instancePath+"/reverseHeadingPolicy",schemaPath:"#/properties/reverseHeadingPolicy/enum",keyword:"enum",params:{allowedValues: schema137.properties.reverseHeadingPolicy.enum},message:"must be equal to one of the allowed values"};
+const err18 = {instancePath:instancePath+"/reverseHeadingPolicy",schemaPath:"#/properties/reverseHeadingPolicy/enum",keyword:"enum",params:{allowedValues: schema138.properties.reverseHeadingPolicy.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err18];
 }
@@ -7489,7 +8202,7 @@ errors++;
 if(data.recenterMode !== undefined){
 let data6 = data.recenterMode;
 if(!(((data6 === "off") || (data6 === "forward-motion")) || (data6 === "always"))){
-const err19 = {instancePath:instancePath+"/recenterMode",schemaPath:"#/properties/recenterMode/enum",keyword:"enum",params:{allowedValues: schema137.properties.recenterMode.enum},message:"must be equal to one of the allowed values"};
+const err19 = {instancePath:instancePath+"/recenterMode",schemaPath:"#/properties/recenterMode/enum",keyword:"enum",params:{allowedValues: schema138.properties.recenterMode.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err19];
 }
@@ -7859,7 +8572,7 @@ vErrors.push(err54);
 errors++;
 }
 for(const key1 in data8){
-if(!(func1.call(schema141.properties, key1))){
+if(!(func1.call(schema142.properties, key1))){
 const err55 = {instancePath:instancePath+"/parameters",schemaPath:"#/$defs/cameraParameters/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"};
 if(vErrors === null){
 vErrors = [err55];
@@ -8343,7 +9056,7 @@ if(data44 && typeof data44 == "object" && !Array.isArray(data44)){
 for(const key2 in data44){
 const _errs92 = errors;
 if(!(((((((((((((((((((((((((((((((((((key2 === "distanceMeters") || (key2 === "minimumDistanceMeters")) || (key2 === "maximumDistanceMeters")) || (key2 === "targetHeightMeters")) || (key2 === "shoulderOffsetMeters")) || (key2 === "pitchRadians")) || (key2 === "minimumPitchRadians")) || (key2 === "maximumPitchRadians")) || (key2 === "positionDampingPerSecond")) || (key2 === "horizontalPositionDampingPerSecond")) || (key2 === "verticalPositionDampingPerSecond")) || (key2 === "maximumPositionLagMeters")) || (key2 === "rotationDampingPerSecond")) || (key2 === "yawDampingPerSecond")) || (key2 === "pitchDampingPerSecond")) || (key2 === "collisionRadiusMeters")) || (key2 === "collisionRetractionMetersPerSecond")) || (key2 === "collisionRecoveryMetersPerSecond")) || (key2 === "baseFovDegrees")) || (key2 === "speedFovDegreesPerMeterPerSecond")) || (key2 === "maximumSpeedFovDegrees")) || (key2 === "lookAheadSeconds")) || (key2 === "accelerationLookAheadSecondsSquared")) || (key2 === "transitionSeconds")) || (key2 === "minimumHeadingSpeedMetersPerSecond")) || (key2 === "velocityHeadingDampingPerSecond")) || (key2 === "fovDampingPerSecond")) || (key2 === "horizontalDeadZoneRatio")) || (key2 === "verticalDeadZoneRatio")) || (key2 === "recenterDelaySeconds")) || (key2 === "recenterDurationSeconds")) || (key2 === "recenterMinimumSpeedMetersPerSecond")) || (key2 === "teleportSnapDistanceMeters")) || (key2 === "lookSensitivityXRatio")) || (key2 === "lookSensitivityYRatio"))){
-const err92 = {instancePath:instancePath+"/authoringRanges",schemaPath:"#/properties/authoringRanges/propertyNames/enum",keyword:"enum",params:{allowedValues: schema137.properties.authoringRanges.propertyNames.enum},message:"must be equal to one of the allowed values",propertyName:key2};
+const err92 = {instancePath:instancePath+"/authoringRanges",schemaPath:"#/properties/authoringRanges/propertyNames/enum",keyword:"enum",params:{allowedValues: schema138.properties.authoringRanges.propertyNames.enum},message:"must be equal to one of the allowed values",propertyName:key2};
 if(vErrors === null){
 vErrors = [err92];
 }
@@ -8483,17 +9196,17 @@ vErrors.push(err103);
 }
 errors++;
 }
-validate94.errors = vErrors;
+validate83.errors = vErrors;
 return errors === 0;
 }
-validate94.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate83.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-const schema142 = {"type":"object","additionalProperties":false,"required":["resourceRef","parameterOverrides"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"parameterOverrides":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"type":"number"}},"headingSourceOverride":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicyOverride":{"enum":["follow-velocity","preserve-target-forward"]},"recenterModeOverride":{"enum":["off","forward-motion","always"]}}};
+const schema143 = {"type":"object","additionalProperties":false,"required":["resourceRef","parameterOverrides"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"parameterOverrides":{"type":"object","propertyNames":{"$ref":"#/$defs/nonEmptyString"},"additionalProperties":{"type":"number"}},"headingSourceOverride":{"enum":["view","target-forward","target-velocity"]},"reverseHeadingPolicyOverride":{"enum":["follow-velocity","preserve-target-forward"]},"recenterModeOverride":{"enum":["off","forward-motion","always"]}}};
 
-function validate97(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate86(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate97.evaluated;
+const evaluated0 = validate86.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -8625,7 +9338,7 @@ errors++;
 if(data.headingSourceOverride !== undefined){
 let data3 = data.headingSourceOverride;
 if(!(((data3 === "view") || (data3 === "target-forward")) || (data3 === "target-velocity"))){
-const err10 = {instancePath:instancePath+"/headingSourceOverride",schemaPath:"#/properties/headingSourceOverride/enum",keyword:"enum",params:{allowedValues: schema142.properties.headingSourceOverride.enum},message:"must be equal to one of the allowed values"};
+const err10 = {instancePath:instancePath+"/headingSourceOverride",schemaPath:"#/properties/headingSourceOverride/enum",keyword:"enum",params:{allowedValues: schema143.properties.headingSourceOverride.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err10];
 }
@@ -8638,7 +9351,7 @@ errors++;
 if(data.reverseHeadingPolicyOverride !== undefined){
 let data4 = data.reverseHeadingPolicyOverride;
 if(!((data4 === "follow-velocity") || (data4 === "preserve-target-forward"))){
-const err11 = {instancePath:instancePath+"/reverseHeadingPolicyOverride",schemaPath:"#/properties/reverseHeadingPolicyOverride/enum",keyword:"enum",params:{allowedValues: schema142.properties.reverseHeadingPolicyOverride.enum},message:"must be equal to one of the allowed values"};
+const err11 = {instancePath:instancePath+"/reverseHeadingPolicyOverride",schemaPath:"#/properties/reverseHeadingPolicyOverride/enum",keyword:"enum",params:{allowedValues: schema143.properties.reverseHeadingPolicyOverride.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err11];
 }
@@ -8651,7 +9364,7 @@ errors++;
 if(data.recenterModeOverride !== undefined){
 let data5 = data.recenterModeOverride;
 if(!(((data5 === "off") || (data5 === "forward-motion")) || (data5 === "always"))){
-const err12 = {instancePath:instancePath+"/recenterModeOverride",schemaPath:"#/properties/recenterModeOverride/enum",keyword:"enum",params:{allowedValues: schema142.properties.recenterModeOverride.enum},message:"must be equal to one of the allowed values"};
+const err12 = {instancePath:instancePath+"/recenterModeOverride",schemaPath:"#/properties/recenterModeOverride/enum",keyword:"enum",params:{allowedValues: schema143.properties.recenterModeOverride.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err12];
 }
@@ -8672,17 +9385,17 @@ vErrors.push(err13);
 }
 errors++;
 }
-validate97.errors = vErrors;
+validate86.errors = vErrors;
 return errors === 0;
 }
-validate97.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate86.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-const schema146 = {"oneOf":[{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredRiderSocketIds","requiredMountSocketIds","controlTransferMode","cameraTargetRole"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"mountedOn"},"requiredRiderSocketIds":{"$ref":"#/$defs/stringArray"},"requiredMountSocketIds":{"$ref":"#/$defs/stringArray"},"controlTransferMode":{"enum":["keep-rider","to-mount","none"]},"cameraTargetRole":{"enum":["controlled-entity","rider","mount"]},"maximumMountDistanceMeters":{"type":"number"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredOccupantSocketIds","requiredSeatSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"seat"},"requiredOccupantSocketIds":{"$ref":"#/$defs/stringArray"},"requiredSeatSocketIds":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredTetheredSocketIds","requiredTetherAnchorSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"tether"},"requiredTetheredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredTetherAnchorSocketIds":{"$ref":"#/$defs/stringArray"}}}]};
+const schema147 = {"oneOf":[{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredRiderSocketIds","requiredMountSocketIds","controlTransferMode","cameraTargetRole"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"mountedOn"},"requiredRiderSocketIds":{"$ref":"#/$defs/stringArray"},"requiredMountSocketIds":{"$ref":"#/$defs/stringArray"},"controlTransferMode":{"enum":["keep-rider","to-mount","none"]},"cameraTargetRole":{"enum":["controlled-entity","rider","mount"]},"maximumMountDistanceMeters":{"type":"number"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredOccupantSocketIds","requiredSeatSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"seat"},"requiredOccupantSocketIds":{"$ref":"#/$defs/stringArray"},"requiredSeatSocketIds":{"$ref":"#/$defs/stringArray"}}},{"type":"object","additionalProperties":false,"required":["resourceRef","relationshipType","requiredTetheredSocketIds","requiredTetherAnchorSocketIds"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"relationshipType":{"const":"tether"},"requiredTetheredSocketIds":{"$ref":"#/$defs/stringArray"},"requiredTetherAnchorSocketIds":{"$ref":"#/$defs/stringArray"}}}]};
 
-function validate99(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate88(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate99.evaluated;
+const evaluated0 = validate88.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -8818,7 +9531,7 @@ errors = vErrors.length;
 if(data.controlTransferMode !== undefined){
 let data4 = data.controlTransferMode;
 if(!(((data4 === "keep-rider") || (data4 === "to-mount")) || (data4 === "none"))){
-const err10 = {instancePath:instancePath+"/controlTransferMode",schemaPath:"#/oneOf/0/properties/controlTransferMode/enum",keyword:"enum",params:{allowedValues: schema146.oneOf[0].properties.controlTransferMode.enum},message:"must be equal to one of the allowed values"};
+const err10 = {instancePath:instancePath+"/controlTransferMode",schemaPath:"#/oneOf/0/properties/controlTransferMode/enum",keyword:"enum",params:{allowedValues: schema147.oneOf[0].properties.controlTransferMode.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err10];
 }
@@ -8831,7 +9544,7 @@ errors++;
 if(data.cameraTargetRole !== undefined){
 let data5 = data.cameraTargetRole;
 if(!(((data5 === "controlled-entity") || (data5 === "rider")) || (data5 === "mount"))){
-const err11 = {instancePath:instancePath+"/cameraTargetRole",schemaPath:"#/oneOf/0/properties/cameraTargetRole/enum",keyword:"enum",params:{allowedValues: schema146.oneOf[0].properties.cameraTargetRole.enum},message:"must be equal to one of the allowed values"};
+const err11 = {instancePath:instancePath+"/cameraTargetRole",schemaPath:"#/oneOf/0/properties/cameraTargetRole/enum",keyword:"enum",params:{allowedValues: schema147.oneOf[0].properties.cameraTargetRole.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err11];
 }
@@ -9148,11 +9861,11 @@ vErrors = null;
 }
 }
 }
-validate99.errors = vErrors;
+validate88.errors = vErrors;
 evaluated0.props = props0;
 return errors === 0;
 }
-validate99.evaluated = {"dynamicProps":true,"dynamicItems":false};
+validate88.evaluated = {"dynamicProps":true,"dynamicItems":false};
 
 
 function validate71(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
@@ -9620,8 +10333,8 @@ let data16 = data10.cameraRigProfiles;
 if(Array.isArray(data16)){
 const len3 = data16.length;
 for(let i3=0; i3<len3; i3++){
-if(!(validate94(data16[i3], {instancePath:instancePath+"/cameraContext/cameraRigProfiles/" + i3,parentData:data16,parentDataProperty:i3,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate94.errors : vErrors.concat(validate94.errors);
+if(!(validate83(data16[i3], {instancePath:instancePath+"/cameraContext/cameraRigProfiles/" + i3,parentData:data16,parentDataProperty:i3,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate83.errors : vErrors.concat(validate83.errors);
 errors = vErrors.length;
 }
 }
@@ -9642,8 +10355,8 @@ let data18 = data10.cameraModifierProfiles;
 if(Array.isArray(data18)){
 const len4 = data18.length;
 for(let i4=0; i4<len4; i4++){
-if(!(validate97(data18[i4], {instancePath:instancePath+"/cameraContext/cameraModifierProfiles/" + i4,parentData:data18,parentDataProperty:i4,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate97.errors : vErrors.concat(validate97.errors);
+if(!(validate86(data18[i4], {instancePath:instancePath+"/cameraContext/cameraModifierProfiles/" + i4,parentData:data18,parentDataProperty:i4,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate86.errors : vErrors.concat(validate86.errors);
 errors = vErrors.length;
 }
 }
@@ -9821,8 +10534,8 @@ let data25 = data.relationshipProfiles;
 if(Array.isArray(data25)){
 const len5 = data25.length;
 for(let i5=0; i5<len5; i5++){
-if(!(validate99(data25[i5], {instancePath:instancePath+"/relationshipProfiles/" + i5,parentData:data25,parentDataProperty:i5,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate99.errors : vErrors.concat(validate99.errors);
+if(!(validate88(data25[i5], {instancePath:instancePath+"/relationshipProfiles/" + i5,parentData:data25,parentDataProperty:i5,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate88.errors : vErrors.concat(validate88.errors);
 errors = vErrors.length;
 }
 }
@@ -10800,12 +11513,12 @@ return errors === 0;
 }
 validate49.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-const schema153 = {"type":"object","additionalProperties":false,"required":["resourceRef","resourceKind","resolvedVersion","contentHash"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"resourceKind":{"enum":["subject-definition","subject-asset","rig-profile","animation-set","collider-profile","capability","physics-body-profile","locomotion-profile","control-feel-profile","collider-derivation-profile","motion-kernel","motion-profile","control-profile","camera-rig-algorithm","camera-rig-profile","camera-modifier-profile","camera-context-profile","medium-profile","relationship-profile","harness-profile","pose-set-profile","render-binding-profile","ai-schema-projection-profile","gameplay-bootstrap"]},"resolvedVersion":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"}}};
+const schema154 = {"type":"object","additionalProperties":false,"required":["resourceRef","resourceKind","resolvedVersion","contentHash"],"properties":{"resourceRef":{"$ref":"#/$defs/nonEmptyString"},"resourceKind":{"enum":["subject-definition","subject-asset","rig-profile","animation-set","collider-profile","capability","physics-body-profile","locomotion-profile","control-feel-profile","collider-derivation-profile","motion-kernel","motion-profile","control-profile","camera-rig-algorithm","camera-rig-profile","camera-modifier-profile","camera-context-profile","medium-profile","relationship-profile","harness-profile","pose-set-profile","render-binding-profile","ai-schema-projection-profile","gameplay-bootstrap"]},"resolvedVersion":{"$ref":"#/$defs/nonEmptyString"},"contentHash":{"$ref":"#/$defs/hash"}}};
 
-function validate110(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate99(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate110.evaluated;
+const evaluated0 = validate99.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -10893,7 +11606,7 @@ errors++;
 if(data.resourceKind !== undefined){
 let data1 = data.resourceKind;
 if(!((((((((((((((((((((((((data1 === "subject-definition") || (data1 === "subject-asset")) || (data1 === "rig-profile")) || (data1 === "animation-set")) || (data1 === "collider-profile")) || (data1 === "capability")) || (data1 === "physics-body-profile")) || (data1 === "locomotion-profile")) || (data1 === "control-feel-profile")) || (data1 === "collider-derivation-profile")) || (data1 === "motion-kernel")) || (data1 === "motion-profile")) || (data1 === "control-profile")) || (data1 === "camera-rig-algorithm")) || (data1 === "camera-rig-profile")) || (data1 === "camera-modifier-profile")) || (data1 === "camera-context-profile")) || (data1 === "medium-profile")) || (data1 === "relationship-profile")) || (data1 === "harness-profile")) || (data1 === "pose-set-profile")) || (data1 === "render-binding-profile")) || (data1 === "ai-schema-projection-profile")) || (data1 === "gameplay-bootstrap"))){
-const err7 = {instancePath:instancePath+"/resourceKind",schemaPath:"#/properties/resourceKind/enum",keyword:"enum",params:{allowedValues: schema153.properties.resourceKind.enum},message:"must be equal to one of the allowed values"};
+const err7 = {instancePath:instancePath+"/resourceKind",schemaPath:"#/properties/resourceKind/enum",keyword:"enum",params:{allowedValues: schema154.properties.resourceKind.enum},message:"must be equal to one of the allowed values"};
 if(vErrors === null){
 vErrors = [err7];
 }
@@ -10964,10 +11677,10 @@ vErrors.push(err12);
 }
 errors++;
 }
-validate110.errors = vErrors;
+validate99.errors = vErrors;
 return errors === 0;
 }
-validate110.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate99.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 
 function validate20(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
@@ -11491,8 +12204,8 @@ let data22 = data.runtimeResourceLockEntries;
 if(Array.isArray(data22)){
 const len7 = data22.length;
 for(let i5=0; i5<len7; i5++){
-if(!(validate110(data22[i5], {instancePath:instancePath+"/runtimeResourceLockEntries/" + i5,parentData:data22,parentDataProperty:i5,rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate110.errors : vErrors.concat(validate110.errors);
+if(!(validate99(data22[i5], {instancePath:instancePath+"/runtimeResourceLockEntries/" + i5,parentData:data22,parentDataProperty:i5,rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate99.errors : vErrors.concat(validate99.errors);
 errors = vErrors.length;
 }
 }

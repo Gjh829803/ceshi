@@ -106,7 +106,7 @@ import {
   createGoldenHumanoidSubjectControllerV1,
 } from "./character-movement-component";
 import {
-  committedCameraContextFromMotionKernelV1,
+  committedCameraContextFromViewTargetV2,
   type CameraDirectorSnapshotV1,
 } from "./camera-director";
 import { hasForwardControlIntentV1 } from "./control-profile-runtime";
@@ -1357,7 +1357,6 @@ export class BabylonWorldRuntime {
                           socketPositionsMetersXYZById:
                             cameraContext.environment
                               .socketPositionsMetersXYZById,
-                          motionTags: [],
                           movementMedium: locomotion.status === "active"
                             ? locomotion.movementMedium
                             : "ground",
@@ -3549,7 +3548,6 @@ export class BabylonWorldRuntime {
         approximateRadiusMeters: subject.collider.radiusMeters,
         socketPositionsMetersXYZById:
           context.environment.socketPositionsMetersXYZById,
-        motionTags: [],
         movementMedium: locomotion.status === "active"
           ? locomotion.movementMedium
           : "ground",
@@ -3589,8 +3587,6 @@ export class BabylonWorldRuntime {
       velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
       approximateRadiusMeters: subject.collider.radiusMeters,
       socketPositionsMetersXYZById,
-      activeMotionKernelRef: motion.activeMotionKernelRef,
-      motionTags: motion.motionTags,
       movementMedium: this.detectMovementMedium(controller),
       relationshipContexts: cameraViewTargetContext.relationshipContexts,
       cameraContextTags: [
@@ -3615,7 +3611,7 @@ export class BabylonWorldRuntime {
     let committedCameraContext =
       this.latestLegacyCameraContextsByEntityId.get(subject.entityId);
     if (committedCameraContext?.committedTick !== this.tick) {
-      committedCameraContext = committedCameraContextFromMotionKernelV1(
+      committedCameraContext = committedCameraContextFromViewTargetV2(
         sample,
         this.tick,
         motion.locomotionMode,

@@ -770,7 +770,7 @@ function cameraEnumArray<T extends string>(
   return Object.freeze([...values]) as readonly T[];
 }
 
-function parseCameraContextRuleV2(
+function parseCameraContextRuleValueV2(
   input: unknown,
   schemaName: string,
 ): CameraContextRuleV2 {
@@ -911,6 +911,11 @@ function parseCameraContextRuleV2(
   });
 }
 
+/** Strict, exact-key, snapshot-once admission parser for one V2 Camera Rule. */
+export function parseCameraContextRuleV2(input: unknown): CameraContextRuleV2 {
+  return parseCameraContextRuleValueV2(input, "CameraContextRuleV2");
+}
+
 function parseCameraRigProfileV2(
   input: unknown,
   schemaName: string,
@@ -1016,7 +1021,7 @@ export function parseCameraContextProfileV2(input: unknown): CameraContextProfil
       )) cameraInvalid(schemaName);
   const rules = Object.freeze((
     cameraArraySnapshot(value.rules, CAMERA_PROFILE_MAX_RULES_V2) ?? cameraInvalid(schemaName)
-  ).map((rule) => parseCameraContextRuleV2(rule, schemaName)));
+  ).map((rule) => parseCameraContextRuleValueV2(rule, schemaName)));
   const cameraRigProfiles = Object.freeze((
     cameraArraySnapshot(value.cameraRigProfiles, CAMERA_PROFILE_MAX_RIGS_V2) ?? cameraInvalid(schemaName)
   ).map((profile) => parseCameraRigProfileV2(profile, schemaName)));
