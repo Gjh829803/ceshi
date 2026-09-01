@@ -256,9 +256,8 @@ export function createEvidenceSetFixtureInputV1(
     evaluationProfileRef: PROFILE_REF,
     evaluationProfileHash,
     acceptanceTargetRefs: [ACCEPTANCE_TARGET_REF, UPPER_TARGET_REF],
-    requiredEvidenceProfileRefs: [
-      "worldkit://evidence-profile/native-block-formal-capture@1",
-    ],
+    requiredEvidenceProfileRefs: evaluationProfile.requiredEvidenceByDimension
+      .flatMap((entry) => entry.evidenceProfileRefs),
     expected: {
       topology: {
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
