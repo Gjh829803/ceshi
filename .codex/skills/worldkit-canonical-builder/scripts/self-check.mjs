@@ -2656,6 +2656,8 @@ const WORLDKIT_RUNTIME_SESSION_REQUEST_TYPES_V1 = Object.freeze([
   "fixed-input.run",
   "snapshot.get",
   "events.get",
+  "session.reset",
+  "subject-support.get",
   "session.close"
 ]);
 new Set(
