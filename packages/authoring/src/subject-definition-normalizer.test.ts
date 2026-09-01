@@ -441,16 +441,11 @@ describe("Package Subject Definition normalization", () => {
       "worldkit://camera-modifier/mounted-framing@1",
       "worldkit://camera-modifier/reverse-stability@1",
       "worldkit://camera-modifier/sprint-emphasis@1",
-      "worldkit://camera-modifier/water-stability@1",
-      "worldkit://camera-profile/chase.surface-fast@1",
       "worldkit://camera-profile/first-person.standard@1",
-      "worldkit://camera-profile/flight.glide@1",
       "worldkit://camera-profile/follow.medium@1",
       "worldkit://camera-profile/orbit.medium@1",
-      "worldkit://camera-rig/flight-horizon@1",
       "worldkit://camera-rig/orbit-follow@1",
       "worldkit://camera-rig/socket-first-person@1",
-      "worldkit://camera-rig/velocity-chase@1",
       "worldkit://capability/locomotion.ground@1",
       COLLIDER_PROFILE_REF,
       "worldkit://control-feel-profile/humanoid.heavy-ground@1",
@@ -483,11 +478,11 @@ describe("Package Subject Definition normalization", () => {
       normalizedWorldIrHash: result.normalizedWorldIrHash,
     }).toEqual({
       packageDefinitionHash:
-        "sha256:ef62665127677a0a337dd8f0f8eae8a9c91abaa5200852f67a606e020f358709",
+        "sha256:7de41da990346ae411b0cfcd9860b1cd17ff69ade1df740b62e59fa81a0c9a7e",
       resourceLockHash:
-        "sha256:726403f0cfebff46361074db737bcfaea06726f7f223c1c86750d3f870be7ae0",
+        "sha256:37a91e76bff74792e8f0945ef4002c8ea152b62c0ea3fa9f95b217c4f866cfac",
       normalizedWorldIrHash:
-        "sha256:c6fecfe77d9fa55453ba9d40745ba3b7b40efecf884ff12264bd583ed7fd8b20",
+        "sha256:d7e9a179fb64f091c30f7dd03422d7ad3127d2828505b5853c2f2b1cb7c237b1",
     });
   });
 
@@ -1277,16 +1272,11 @@ describe("Package Subject Definition normalization", () => {
       "worldkit://camera-modifier/mounted-framing@1",
       "worldkit://camera-modifier/reverse-stability@1",
       "worldkit://camera-modifier/sprint-emphasis@1",
-      "worldkit://camera-modifier/water-stability@1",
-      "worldkit://camera-profile/chase.surface-fast@1",
       "worldkit://camera-profile/first-person.standard@1",
-      "worldkit://camera-profile/flight.glide@1",
       "worldkit://camera-profile/follow.medium@1",
       "worldkit://camera-profile/orbit.medium@1",
-      "worldkit://camera-rig/flight-horizon@1",
       "worldkit://camera-rig/orbit-follow@1",
       "worldkit://camera-rig/socket-first-person@1",
-      "worldkit://camera-rig/velocity-chase@1",
       "worldkit://capability/locomotion.ground@1",
       "worldkit://collider-derivation-profile/vertical-character-capsule@1",
       "worldkit://collider-profile/humanoid.medium-capsule@1",
