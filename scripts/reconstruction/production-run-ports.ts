@@ -163,9 +163,16 @@ function diagnosticCodes(error: unknown, fallback: string): readonly string[] {
   if (error instanceof NativeBlockPackageErrorV1) {
     return error.diagnostics;
   }
-  const message = error instanceof Error ? error.message : String(error);
-  const codes = message.match(/[A-Z][A-Z0-9_]{4,}/g);
-  return Object.freeze(codes === null || codes.length === 0
+  const codes: string[] = [];
+  const visited = new Set<Error>();
+  const collect = (candidate: unknown): void => {
+    if (!(candidate instanceof Error) || visited.has(candidate)) return;
+    visited.add(candidate);
+    codes.push(...(candidate.message.match(/[A-Z][A-Z0-9_]{4,}/g) ?? []));
+    collect(candidate.cause);
+  };
+  collect(error);
+  return Object.freeze(codes.length === 0
     ? [fallback]
     : [...new Set(codes)].sort());
 }

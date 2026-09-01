@@ -35,6 +35,8 @@ import {
   type ProductionWorldReconstructionRunPortsInputV1,
 } from "./production-run-ports.js";
 import { FormalCaptureCommandClosedErrorV1 } from "./formal-capture.js";
+import { CaptureOnlyHostedSessionClosedErrorV1 } from
+  "./hosted-session-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
 import { createEvidenceSetFixtureInputV1 } from
   "./evaluate-fixture.test-support.js";
@@ -774,6 +776,45 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       }));
     },
   );
+
+  it("preserves a stable capture diagnostic from nested closure causes", async () => {
+    const value = await fixture();
+    const events: string[] = [];
+    const ownerPorts = {
+      ...owners(value, events),
+      capturePackage: vi.fn(async () => {
+        const providerFailure = new Error(
+          "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+        );
+        const transportFailure = new Error("hosted bridge rejected", {
+          cause: providerFailure,
+        });
+        throw new FormalCaptureCommandClosedErrorV1({
+          stage: "hosted-session",
+          cleanupOutcomes: {
+            hostedBrowserSession: "completed",
+            viteServer: "completed",
+          },
+          cause: new CaptureOnlyHostedSessionClosedErrorV1(
+            transportFailure,
+            {
+              hostedBrowserSession: "completed",
+              viteServer: "completed",
+            },
+          ),
+        });
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+
+    expect(await ports.capture({ attemptIndex: 0, packaged })).toEqual({
+      outcome: "failed",
+      cameraRollbackOutcome: "completed",
+      diagnosticCodes: [
+        "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+      ],
+    });
+  });
 
   it("never allocates Browser when the verified-Package capture request writer rejects", async () => {
     const value = await fixture();
