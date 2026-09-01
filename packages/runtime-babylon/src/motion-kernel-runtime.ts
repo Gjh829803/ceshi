@@ -355,15 +355,33 @@ export class MotionKernelRuntimeV1 {
             ...contact.pointMetersXYZ,
           ]) as RuntimeVec3V1,
           normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+          ...(isNil(contact.distanceMeters)
+            ? {}
+            : { distanceMeters: contact.distanceMeters }),
+          ...(isNil(contact.motionType)
+            ? {}
+            : { motionType: contact.motionType }),
+          ...(isNil(contact.colliderId)
+            ? {}
+            : { colliderId: contact.colliderId }),
           ...(isNil(contact.colliderSubshapeId)
             ? {}
             : { colliderSubshapeId: contact.colliderSubshapeId }),
+          ...(isNil(contact.logicalSubshapeId)
+            ? {}
+            : { logicalSubshapeId: contact.logicalSubshapeId }),
           ...(isNil(contact.traversalSurfaceId)
             ? {}
             : { traversalSurfaceId: contact.traversalSurfaceId }),
           ...(isNil(contact.surfaceEntityId)
             ? {}
             : { surfaceEntityId: contact.surfaceEntityId }),
+          ...(isNil(contact.traversalSurfaceProfileRef)
+            ? {}
+            : {
+                traversalSurfaceProfileRef:
+                  contact.traversalSurfaceProfileRef,
+              }),
         })
       )),
     });
@@ -680,15 +698,29 @@ export class MotionKernelRuntimeV1 {
             ...contact.pointMetersXYZ,
           ]) as RuntimeVec3V1,
           normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+          distanceMeters: contact.distanceMeters,
+          motionType: "static" as const,
+          ...(isNil(contact.colliderId)
+            ? {}
+            : { colliderId: contact.colliderId }),
           ...(isNil(contact.colliderSubshapeId)
             ? {}
             : { colliderSubshapeId: contact.colliderSubshapeId }),
+          ...(isNil(contact.logicalSubshapeId)
+            ? {}
+            : { logicalSubshapeId: contact.logicalSubshapeId }),
           ...(isNil(contact.traversalSurfaceId)
             ? {}
             : { traversalSurfaceId: contact.traversalSurfaceId }),
           ...(isNil(contact.surfaceEntityId)
             ? {}
             : { surfaceEntityId: contact.surfaceEntityId }),
+          ...(isNil(contact.traversalSurfaceProfileRef)
+            ? {}
+            : {
+                traversalSurfaceProfileRef:
+                  contact.traversalSurfaceProfileRef,
+              }),
         }));
     this.retainedSupportSample = Object.freeze({
       supportState,

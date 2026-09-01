@@ -10,9 +10,14 @@ import type {
 export interface CharacterSupportProjectionContactV1 {
   readonly pointMetersXYZ: RuntimeVec3V1;
   readonly normalXYZ: RuntimeVec3V1;
+  readonly distanceMeters?: number;
+  readonly motionType?: "static";
+  readonly colliderId?: string;
   readonly colliderSubshapeId?: string;
+  readonly logicalSubshapeId?: string;
   readonly traversalSurfaceId?: string;
   readonly surfaceEntityId?: string;
+  readonly traversalSurfaceProfileRef?: string;
 }
 
 export interface CharacterSupportProjectionSampleV1 {

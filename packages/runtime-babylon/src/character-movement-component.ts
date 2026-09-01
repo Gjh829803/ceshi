@@ -36,6 +36,7 @@ import {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
   createBabylonCharacterBodyPortV1,
   type BabylonCharacterBodyCommittedSupportEvidenceV1,
+  type BabylonCharacterBodyNativeContactV1,
   type BabylonCharacterBodyRuntimePortV1,
 } from "./babylon-character-body-port";
 import {
@@ -172,6 +173,48 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
 
   clearRetainedCharacterSupportSample(): void {
     this.motionKernel.clearRetainedCharacterSupportSample();
+  }
+
+  /** @internal Formal evidence projected from the same committed support sample. */
+  readCommittedSupportEvidence(
+    tick: number,
+  ): BabylonCharacterBodyCommittedSupportEvidenceV1 | undefined {
+    const sample = this.motionKernel.retainedCharacterSupportSample();
+    if (sample === undefined) return undefined;
+    const contacts = sample.supportContacts.flatMap(
+      (contact): readonly BabylonCharacterBodyNativeContactV1[] =>
+        contact.distanceMeters === undefined || contact.motionType !== "static"
+          ? []
+          : [Object.freeze({
+              ...contact,
+              distanceMeters: contact.distanceMeters,
+              motionType: contact.motionType,
+            })],
+    );
+    const pointMetersXYZ = contacts.length === 0
+      ? sample.sampledFootPositionMetersXYZ
+      : Object.freeze([0, 1, 2].map((axis) =>
+          contacts.reduce(
+            (sum, contact) => sum + contact.pointMetersXYZ[axis]!,
+            0,
+          ) / contacts.length
+        )) as RuntimeVec3V1;
+    return Object.freeze({
+      schemaVersion: 1,
+      tick,
+      sampledControllerCenterMetersXYZ:
+        sample.sampledControllerCenterMetersXYZ,
+      sampledFootPointMetersXYZ: sample.sampledFootPositionMetersXYZ,
+      support: sample.supportState === "unsupported"
+        ? Object.freeze({ mode: "unsupported" })
+        : Object.freeze({
+            mode: sample.supportState,
+            pointMetersXYZ,
+            normalXYZ: sample.supportNormalWorldXYZ,
+            isDynamic: sample.isSupportSurfaceDynamic,
+          }),
+      contacts: Object.freeze(contacts),
+    });
   }
 
   probeGroundPlacementAt(

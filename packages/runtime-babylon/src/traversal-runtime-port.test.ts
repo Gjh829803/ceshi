@@ -194,6 +194,10 @@ async function createRuntime(
     runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
       .initialControlledEntityId,
   );
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
+  );
   return runtime;
 }
 
@@ -2125,7 +2129,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
             normalXYZ: readonly [number, number, number];
             distanceMeters: number;
             motionType: "static";
+            colliderId: string;
             colliderSubshapeId: string;
+            logicalSubshapeId: string;
             traversalSurfaceId: string;
             surfaceEntityId: string;
             traversalSurfaceProfileRef: string;
@@ -2137,9 +2143,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
           supportContacts: readonly Readonly<{
             pointMetersXYZ: readonly [number, number, number];
             normalXYZ: readonly [number, number, number];
+            distanceMeters?: number;
+            motionType?: "static";
+            colliderId?: string;
             colliderSubshapeId?: string;
+            logicalSubshapeId?: string;
             traversalSurfaceId?: string;
             surfaceEntityId?: string;
+            traversalSurfaceProfileRef?: string;
           }>[];
         } | undefined;
       }>(runtime, "player");
@@ -2151,7 +2162,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
           normalXYZ: [0, 1, 0],
           distanceMeters: 0,
           motionType: "static",
+          colliderId: surface.surfaceEntityId,
           colliderSubshapeId: surface.colliderSubshapeId,
+          logicalSubshapeId: "heightfield",
           traversalSurfaceId: surface.traversalSurfaceId,
           surfaceEntityId: surface.surfaceEntityId,
           traversalSurfaceProfileRef: surface.resourceRef,
@@ -2160,7 +2173,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
           normalXYZ: [1, 0, 0],
           distanceMeters: 0,
           motionType: "static",
+          colliderId: "wall",
           colliderSubshapeId: "collider:wall:primary",
+          logicalSubshapeId: "primary",
           traversalSurfaceId: "surface:wall",
           surfaceEntityId: "wall",
           traversalSurfaceProfileRef: surface.resourceRef,
@@ -2171,9 +2186,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       expect(movement.retainedCharacterSupportSample()?.supportContacts).toEqual([{
         pointMetersXYZ: foot,
         normalXYZ: [0, 1, 0],
+        distanceMeters: 0,
+        motionType: "static",
+        colliderId: surface.surfaceEntityId,
         colliderSubshapeId: surface.colliderSubshapeId,
+        logicalSubshapeId: "heightfield",
         traversalSurfaceId: surface.traversalSurfaceId,
         surfaceEntityId: surface.surfaceEntityId,
+        traversalSurfaceProfileRef: surface.resourceRef,
       }]);
     } finally {
       await runtime.dispose();
@@ -2634,6 +2654,14 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       expectRuntimeCode(
         () => port.readLatestTickEvidence(),
         "TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE",
+      );
+      const gameplay = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      await gameplay.runFixedInputTick(
+        { actions: [], ticks: 1 },
+        Object.freeze({
+          simulationTick: gameplay.readWorldProjection().simulationTick + 1,
+          activeActionStatesById: Object.freeze({}),
+        }),
       );
 
       firstSpy.mockClear();

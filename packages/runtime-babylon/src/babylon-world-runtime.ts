@@ -3641,7 +3641,7 @@ export class BabylonWorldRuntime {
     const controller = this.controllerFor(subjectEntityId);
     return isGoldenHumanoidControllerV1(controller)
       ? controller.readCommittedSupportEvidence()
-      : undefined;
+      : controller.readCommittedSupportEvidence(this.tick);
   }
 
   /** Provider-internal artifact capture; public Authoring and Browser DTOs stay engine-neutral. */

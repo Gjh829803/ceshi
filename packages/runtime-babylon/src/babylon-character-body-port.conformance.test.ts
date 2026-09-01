@@ -283,8 +283,11 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
       {
         worldkitEntityId: "canonical-ground",
         colliderSubshapeId: "collider-subshape:canonical-ground",
+        worldkitLogicalSubshapeId: "primary",
         worldkitTraversalSurfaceId: "traversal-surface:canonical-ground",
         worldkitSurfaceEntityId: "canonical-ground",
+        worldkitTraversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
       },
     );
     const controller = new GroundAwarePhysicsCharacterController(
@@ -302,9 +305,13 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
     );
 
     expect(contact).toMatchObject({
+      colliderId: "canonical-ground",
       colliderSubshapeId: "collider-subshape:canonical-ground",
+      logicalSubshapeId: "primary",
       traversalSurfaceId: "traversal-surface:canonical-ground",
       surfaceEntityId: "canonical-ground",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
     });
   }, 30_000);
 
