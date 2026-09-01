@@ -405,6 +405,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/verification/bwb5-block-reconstruction-corpus.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "scripts/verification/hosted-native-isolation-evidence.test.ts", lane: "contract" },
   { path: "scripts/verification/locomotion-capability-state.test.ts", lane: "contract" },
+  { path: "scripts/verification/native-block-reconstruction-e2e.test.ts", lane: "contract" },
   { path: "scripts/verification/native-live-collider-registry.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "scripts/verification/verification-browser-launch.test.ts", lane: "contract" },
   { path: "scripts/verification/verify-3c-migration.test.ts", lane: "contract" },
