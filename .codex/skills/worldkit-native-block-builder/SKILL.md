@@ -46,6 +46,8 @@ Do not write logs, screenshots, receipts, locks, generated JavaScript, source ma
    Every scripted fixed-input check must remain supported for its complete declared approach unless the Case explicitly expects a ledge departure. Before placing its geometry, read the exact actions, axes, and Tick count from `context/case.json`, then resolve the controlled Subject's forward direction, walk/run speeds, acceleration, Capsule, step, and slope limits from `inputs/world-runtime-bootstrap.json`. The formal Runtime advances at exactly 60 fixed Ticks per second. Treat `speed * ticks / 60` only as a theoretical flat-ground ceiling: leave material reserve for acceleration, stairs, slopes, support contacts, and Capsule entry into the Host-resolved checkpoint bounds. A pass check must enter its final checkpoint before the last Tick using only its declared inputs; if the sequence has no turn, lateral, jump, or run action, the route must not require one. A blocker check must reach the blocker on registered support; falling from a visual-only platform edge is not evidence that the blocker works.
 9. The first reconstruction Case has no Route/Nav claim. Static traversal intent is only an explicit collider contribution where admitted; do not emit product Route, NavMesh, `goTo`, or reachability evidence.
 
+Host TypeScript checking is strict. When an `as const` tuple supplies a mutable numeric loop bound, explicitly widen the loop variable to `number`; otherwise literal-union inference can make later valid numeric comparisons fail admission.
+
 Before returning, verify this closure:
 
 - every `context/case.json` required Collider ID appears exactly once in `session.finalize().staticColliders`;
