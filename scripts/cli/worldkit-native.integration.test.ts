@@ -91,10 +91,6 @@ describe("worldkit native CLI process contract", () => {
       ],
       [
         "native", "package", "attempts/0",
-        "--case", "case.json", "--json",
-      ],
-      [
-        "native", "package", "attempts/0",
         "--case", "case.json",
         "--output", "attempts/0/world-package", "--json",
       ],
@@ -110,6 +106,18 @@ describe("worldkit native CLI process contract", () => {
         diagnostics: [],
       });
     }
+
+    const validArgvWithMissingInputs = await runCli([
+      "native", "package", "attempts/0",
+      "--case", "case.json", "--json",
+    ]);
+    expect(validArgvWithMissingInputs.exitCode).toBe(2);
+    expect(validArgvWithMissingInputs.stderr).toBe("");
+    expect(JSON.parse(validArgvWithMissingInputs.stdout)).toEqual({
+      outcome: "tool-error",
+      code: "WORLDKIT_NATIVE_PACKAGE_TOOL_ERROR",
+      diagnostics: [],
+    });
   }, 30_000);
 
   it("keeps legacy Case-specific Native package operations closed", async () => {
