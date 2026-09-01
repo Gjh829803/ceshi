@@ -7,11 +7,14 @@ import {
   type BabylonNativeSceneModuleV1,
 } from "@whitebox-world/native-babylon";
 import {
+  hashFormalSemanticCaptureMapV1,
   hashNativeEffectiveExecutionBudgetV1,
+  type FormalWorldCaptureRequestV1,
   type NativeEffectiveExecutionBudgetV1,
   type NativeIsolatedExecutionRequestV1,
   type RuntimeSessionRequestV1,
 } from "@whitebox-world/runtime-contracts";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   assembleWorldPackageDirectoryV1,
   assertWorldPackageBuildReceiptV1,
@@ -190,7 +193,187 @@ function protocolRequest(
   } as RuntimeSessionRequestV1;
 }
 
+function formalRequestFixture(
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+): FormalWorldCaptureRequestV1 {
+  const hash = (byte: string) => `sha256:${byte.repeat(64)}` as const;
+  const fixedInputSequence = [{ actions: ["move-forward"], ticks: 1 }] as const;
+  const fixedInputSequenceHash = sha256CanonicalJson(fixedInputSequence) as
+    `sha256:${string}`;
+  const bounds = {
+    minimumMetersXYZ: [-8, -2, -8],
+    maximumMetersXYZ: [8, 6, 8],
+  } as const;
+  const criterion = {
+    kind: "reach-bounds",
+    checkpointId: "checkpoint",
+    expectation: "reach",
+    sourceVisualGroupId: "route",
+    sourceBoundsMeters: {
+      minimumMetersXYZ: [-1, 0, -1],
+      maximumMetersXYZ: [1, 2, 1],
+    },
+    capsuleRadiusMeters: 0.35,
+    toleranceMeters: 0.05,
+  } as const;
+  const semanticCaptureMap = {
+    kind: "formal-semantic-capture-map",
+    schemaVersion: 1,
+    id: "capture.map",
+    caseRef: "worldkit://world-reconstruction-case/test@1",
+    caseHash: hash("a"),
+    authoringManifestHash: hash("b"),
+    layoutInventoryHash: hash("c"),
+    contributionHash: hash("d"),
+    bindings: [
+      {
+        acceptanceTargetRef: "worldkit://acceptance-target/goal@1",
+        compositionTargetRef: "worldkit://composition-target/goal@1",
+        topologyNodeId: "goal",
+        semanticLayerId: "upper",
+        blockVisualGroupId: "goal",
+        semanticClassId: "worldkit.native-block.group.goal",
+        identityColor: "#112233",
+        projectedBoundsSource: "checked-layout-visual-group",
+        requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
+        authoringManifestHash: hash("b"),
+        layoutInventoryHash: hash("c"),
+        contributionHash: hash("d"),
+      },
+      {
+        acceptanceTargetRef: "worldkit://acceptance-target/route@1",
+        compositionTargetRef: "worldkit://composition-target/route@1",
+        topologyNodeId: "route",
+        semanticLayerId: "ground",
+        blockVisualGroupId: "route",
+        semanticClassId: "worldkit.native-block.group.route",
+        identityColor: "#AABBCC",
+        projectedBoundsSource: "checked-layout-visual-group",
+        requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
+        authoringManifestHash: hash("b"),
+        layoutInventoryHash: hash("c"),
+        contributionHash: hash("d"),
+      },
+    ],
+    topologyRelations: [{
+      fromNodeId: "goal",
+      relation: "connects-to",
+      toNodeId: "route",
+      measurementSource: "scripted-traversal",
+      traversalCheckId: "check",
+    }],
+    traversalCheckBindings: [{
+      traversalCheckId: "check",
+      acceptanceTargetRef: "worldkit://acceptance-target/route@1",
+      checkExpectation: "pass",
+      fixedInputSequenceHash,
+      checkpointCriteria: [criterion],
+    }],
+  } as const;
+  const viewBase = {
+    kind: "formal-artifact-view-request",
+    schemaVersion: 1,
+    widthPixels: 640,
+    heightPixels: 360,
+    devicePixelRatio: 1,
+  } as const;
+  return {
+    kind: "formal-world-capture-request",
+    schemaVersion: 1,
+    id: "formal.capture.request",
+    formalRequestRef: "artifact://case/test/formal-world-capture-request.json",
+    caseRef: semanticCaptureMap.caseRef,
+    caseHash: semanticCaptureMap.caseHash,
+    evaluationProfileRef: "artifact://case/test/evaluation-profile.json",
+    evaluationProfileHash: hash("e"),
+    sceneAuthoringRouteDecisionRef: "artifact://case/test/route.json",
+    sceneAuthoringRouteDecisionHash: hash("f"),
+    sceneAuthoringAttemptRef: "artifact://case/test/attempt.json",
+    sceneAuthoringAttemptHash: hash("1"),
+    sceneAuthoringAttemptResultRef: "artifact://case/test/result.json",
+    sceneAuthoringAttemptResultHash: hash("2"),
+    worldPackageRef: verified.receipt.worldPackageRef,
+    worldPackageRootHash: verified.receipt.worldPackageRootHash,
+    worldBuildIdentityRef: "artifact://case/test/world-build-identity.json",
+    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+    worldPackageBuildReceiptRef: "artifact://case/test/package-receipt.json",
+    worldPackageBuildReceiptHash: hash("3"),
+    semanticCaptureMapRef: "artifact://case/test/semantic-map.json",
+    semanticCaptureMap,
+    semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticCaptureMap),
+    nativeBlockMaterializerMetadataRef:
+      "world-package://native/block-materializer-metadata.json",
+    nativeBlockMaterializerMetadataHash: hash("4"),
+    views: [
+      { ...viewBase, viewId: "opening", projection: "perspective" },
+      {
+        ...viewBase,
+        viewId: "world-side",
+        projection: "orthographic",
+        worldBoundsMeters: bounds,
+        cameraPositionMetersXYZ: [20, 2, 0],
+        targetMetersXYZ: [0, 2, 0],
+      },
+      {
+        ...viewBase,
+        viewId: "world-top-down",
+        projection: "orthographic",
+        worldBoundsMeters: bounds,
+        cameraPositionMetersXYZ: [0, 20, 0],
+        targetMetersXYZ: [0, 2, 0],
+      },
+    ],
+    colliderOverlay: {
+      kind: "formal-collider-overlay-request",
+      schemaVersion: 1,
+      isRequired: true,
+      contributionHash: semanticCaptureMap.contributionHash,
+    },
+    scriptedTraversal: {
+      kind: "formal-scripted-traversal-request",
+      schemaVersion: 1,
+      checks: [{
+        id: "check",
+        acceptanceTargetRef: "worldkit://acceptance-target/route@1",
+        checkExpectation: "pass",
+        fixedInputSequence,
+        fixedInputSequenceHash,
+        checkpointCriteria: [criterion],
+      }],
+    },
+  };
+}
+
 describe("Babylon Native isolated Runtime entry", () => {
+  it("rejects formal capture unless the isolated operation and exact request hash authorize it", async () => {
+    const interactiveInput = await entryInput("runtime.hosted.capture-operation-mismatch");
+    const interactiveEntry = await createBabylonNativeIsolatedRuntimeEntryV1(
+      interactiveInput,
+    );
+    const request = formalRequestFixture(interactiveInput.verifiedWorldPackage);
+    await expect(interactiveEntry.executeFormalCapture(request)).rejects.toThrowError(
+      "WORLDKIT_NATIVE_FORMAL_CAPTURE_OPERATION_NOT_AUTHORIZED",
+    );
+    await interactiveEntry.dispose();
+
+    const captureBase = await entryInput("runtime.hosted.capture-hash-mismatch");
+    const captureInput = {
+      ...captureBase,
+      request: {
+        ...captureBase.request,
+        requestedOperation: {
+          mode: "capture" as const,
+          captureRequestHash: `sha256:${"9".repeat(64)}` as const,
+        },
+      },
+    };
+    const captureEntry = await createBabylonNativeIsolatedRuntimeEntryV1(captureInput);
+    await expect(captureEntry.executeFormalCapture(request)).rejects.toThrowError(
+      "WORLDKIT_NATIVE_FORMAL_CAPTURE_REQUEST_HASH_MISMATCH",
+    );
+    await captureEntry.dispose();
+  });
+
   it("publishes one initially possessed RuntimeHost session inside the enclave", async () => {
     const input = await entryInput();
     const entry = await createBabylonNativeIsolatedRuntimeEntryV1(input);
@@ -216,175 +399,6 @@ describe("Babylon Native isolated Runtime entry", () => {
       }),
     ]);
     await entry.dispose();
-  });
-
-  it("resets through the same RuntimeHost session and atomically replaces the provider handle", async () => {
-    const input = await entryInput("runtime.hosted.capture-reset");
-    const engines: NullEngine[] = [];
-    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
-      ...input,
-      engineFactory: () => {
-        const engine = new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        });
-        engines.push(engine);
-        return engine;
-      },
-    });
-    const before = entry.initialSnapshot();
-
-    const after = await entry.resetForFormalCapture();
-
-    expect(after.runtimeSessionId).toBe(before.runtimeSessionId);
-    expect(after.worldSessionId).toBe(
-      `${input.request.runtimeSessionId}.world.2`,
-    );
-    expect(after.worldSessionId).not.toBe(before.worldSessionId);
-    expect(after.world.simulationTick).toBe(0);
-    expect(after.runtime.phase).toBe("ready");
-    expect(Object.values(
-      after.world.gameplayInspection.relationshipStatesById,
-    )).toEqual([
-      expect.objectContaining({
-        controlledEntityId:
-          input.verifiedWorldPackage.worldRuntimeBootstrap
-            .initialControlledEntityId,
-      }),
-    ]);
-    expect(engines).toHaveLength(2);
-    expect(engines[0]?.isDisposed).toBe(true);
-    expect(engines[1]?.isDisposed).toBe(false);
-
-    await entry.dispose();
-    expect(engines[1]?.isDisposed).toBe(true);
-  });
-
-  it("keeps the published world active when the reset Candidate cannot allocate an Engine", async () => {
-    const input = await entryInput("runtime.hosted.capture-reset-failure");
-    const initialEngine = new NullEngine({
-      renderWidth: 640,
-      renderHeight: 360,
-      textureSize: 512,
-      deterministicLockstep: true,
-      lockstepMaxSteps: 4,
-    });
-    let engineRequestCount = 0;
-    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
-      ...input,
-      engineFactory: () => {
-        engineRequestCount += 1;
-        if (engineRequestCount === 1) return initialEngine;
-        throw new Error("candidate engine unavailable");
-      },
-    });
-    const before = entry.initialSnapshot();
-
-    await expect(entry.resetForFormalCapture()).rejects.toThrow();
-
-    const after = entry.initialSnapshot();
-    expect(after.worldSessionId).toBe(before.worldSessionId);
-    expect(after.runtime.phase).toBe("ready");
-    expect(initialEngine.isDisposed).toBe(false);
-    expect(entry.renderFrame().runtimeSessionId).toBe(before.runtimeSessionId);
-    await entry.dispose();
-    expect(initialEngine.isDisposed).toBe(true);
-  });
-
-  it("releases a retained Candidate after readiness fails and permits a retry", async () => {
-    const input = await entryInput("runtime.hosted.capture-reset-readiness-failure");
-    const engines: NullEngine[] = [];
-    let shouldRejectCandidateReadiness = true;
-    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
-      ...input,
-      engineFactory: () => {
-        const engine = new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        });
-        engines.push(engine);
-        return engine;
-      },
-      onInitializationStage(stage) {
-        if (
-          stage === "ready" && engines.length === 2 &&
-          shouldRejectCandidateReadiness
-        ) {
-          shouldRejectCandidateReadiness = false;
-          const candidateScene = engines[1]?.scenes[0];
-          if (candidateScene === undefined) throw new Error("candidate scene missing");
-          vi.spyOn(candidateScene, "whenReadyAsync").mockRejectedValueOnce(
-            new Error("candidate readiness unavailable"),
-          );
-        }
-      },
-    });
-    const before = entry.initialSnapshot();
-
-    await expect(entry.resetForFormalCapture()).rejects.toThrow();
-
-    expect(entry.initialSnapshot().worldSessionId).toBe(before.worldSessionId);
-    expect(engines).toHaveLength(2);
-    expect(engines[0]?.isDisposed).toBe(false);
-    expect(engines[1]?.isDisposed).toBe(true);
-
-    const afterRetry = await entry.resetForFormalCapture();
-    expect(afterRetry.worldSessionId).toBe(
-      `${input.request.runtimeSessionId}.world.3`,
-    );
-    expect(engines).toHaveLength(3);
-    expect(engines[0]?.isDisposed).toBe(true);
-    expect(engines[2]?.isDisposed).toBe(false);
-    await entry.dispose();
-    expect(engines[2]?.isDisposed).toBe(true);
-  });
-
-  it("keeps the newly published world authoritative when old cleanup reports failure", async () => {
-    const input = await entryInput("runtime.hosted.capture-reset-old-cleanup-failure");
-    const engines: NullEngine[] = [];
-    const entry = await createBabylonNativeIsolatedRuntimeEntryV1({
-      ...input,
-      engineFactory: () => {
-        const engine = new NullEngine({
-          renderWidth: 640,
-          renderHeight: 360,
-          textureSize: 512,
-          deterministicLockstep: true,
-          lockstepMaxSteps: 4,
-        });
-        engines.push(engine);
-        return engine;
-      },
-    });
-    const oldEngine = engines[0];
-    if (oldEngine === undefined) throw new Error("old engine missing");
-    const disposeOldEngine = oldEngine.dispose.bind(oldEngine);
-    vi.spyOn(oldEngine, "dispose").mockImplementation(() => {
-      disposeOldEngine();
-      throw new Error("old engine cleanup reported failure");
-    });
-
-    await expect(entry.resetForFormalCapture()).rejects.toThrow();
-
-    const after = entry.initialSnapshot();
-    expect(after.worldSessionId).toBe(
-      `${input.request.runtimeSessionId}.world.2`,
-    );
-    expect(after.runtime.phase).toBe("ready");
-    expect(engines).toHaveLength(2);
-    expect(oldEngine.isDisposed).toBe(true);
-    expect(engines[1]?.isDisposed).toBe(false);
-    expect(entry.renderFrame().runtimeSessionId).toBe(
-      input.request.runtimeSessionId,
-    );
-    await entry.dispose();
-    expect(engines[1]?.isDisposed).toBe(true);
   });
 
   it("keeps display rendering and resize inside BabylonWorldRuntime authority", async () => {

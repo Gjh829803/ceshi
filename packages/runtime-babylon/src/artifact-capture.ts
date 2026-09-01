@@ -5,6 +5,7 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import type { Material } from "@babylonjs/core/Materials/material.js";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
@@ -28,6 +29,22 @@ export interface BabylonArtifactCaptureResultV1 {
   readonly projectedBoundsByEntityId: Readonly<
     Record<string, BabylonArtifactProjectedBoundsV1>
   >;
+  /** @internal Measured inside the exact rendered Camera transaction. */
+  readonly measurement?: unknown;
+}
+
+export interface BabylonArtifactCaptureMeasurementContextV1 {
+  readonly scene: Scene;
+  readonly engine: AbstractEngine;
+  readonly camera: Camera;
+  readonly widthPixels: number;
+  readonly heightPixels: number;
+}
+
+interface BabylonArtifactMeasuredRequestV1 {
+  readonly measureAfterRender?: (
+    context: BabylonArtifactCaptureMeasurementContextV1,
+  ) => unknown;
 }
 
 export interface BabylonArtifactCameraPoseV1 {
@@ -39,7 +56,7 @@ export interface BabylonArtifactCameraPoseV1 {
   readonly fovDegrees: number;
 }
 
-export type BabylonArtifactCaptureRequestV1 =
+export type BabylonArtifactCaptureRequestV1 = (
   | Readonly<{
       kind: "opening-frame";
       widthPixels: number;
@@ -73,12 +90,27 @@ export type BabylonArtifactCaptureRequestV1 =
       targetMetersXYZ: readonly [number, number, number];
     }>
   | Readonly<{
+      kind: "formal-world-top-down";
+      widthPixels: number;
+      heightPixels: number;
+      worldBoundsMeters: FormalWorldBoundsMetersV1;
+      cameraPositionMetersXYZ: readonly [number, number, number];
+      targetMetersXYZ: readonly [number, number, number];
+    }>
+  | Readonly<{
       kind: "entity-triview";
       widthPixels: number;
       heightPixels: number;
       entityIds: readonly string[];
       identityColor: string;
-    }>;
+    }>
+  | Readonly<{
+      kind: "explicit-collider-overlay";
+      widthPixels: number;
+      heightPixels: number;
+      colliderMeshes: readonly AbstractMesh[];
+      overlayColor: string;
+    }>) & BabylonArtifactMeasuredRequestV1;
 
 function fitOrthographicCameraToWorldBounds(
   camera: FreeCamera,
@@ -333,22 +365,35 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
   const originalMaterialByMesh = new Map<AbstractMesh, Material>();
   const temporaryMaterials = new Set<Material>();
   const temporaryTextures = new Set<BaseTexture>();
+  const overlayState = new Map<AbstractMesh, Readonly<{
+    isVisible: boolean;
+    material: Material | null;
+  }>>();
   let temporaryCamera: FreeCamera | undefined;
   try {
     if (request.kind === "entity-triview") {
       return renderTriview(scene, engine, request);
     }
     engine.setSize(request.widthPixels, request.heightPixels, true);
-    if (request.kind === "world-side") {
+    if (
+      request.kind === "world-side" ||
+      request.kind === "formal-world-top-down"
+    ) {
       const cameraPosition = new Vector3(...request.cameraPositionMetersXYZ);
       temporaryCamera = new FreeCamera(
-        "worldkit.artifact.world-side",
+        request.kind === "world-side"
+          ? "worldkit.artifact.world-side"
+          : "worldkit.artifact.world-top-down",
         cameraPosition.clone(),
         scene,
       );
       temporaryCamera.mode = Camera.ORTHOGRAPHIC_CAMERA;
       temporaryCamera.minZ = 0.01;
-      temporaryCamera.upVector.copyFromFloats(0, 1, 0);
+      temporaryCamera.upVector.copyFromFloats(
+        0,
+        request.kind === "world-side" ? 1 : 0,
+        request.kind === "world-side" ? 0 : -1,
+      );
       // Babylon 9.23 TargetCamera.setTarget nudges position.z by Epsilon when
       // position.z equals target.z. Reapply the exact formal pose through the
       // installed Babylon look-at and quaternion math after it initializes the
@@ -358,6 +403,7 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
         cameraPosition,
         new Vector3(...request.targetMetersXYZ),
         scene.useRightHandedSystem,
+        temporaryCamera.upVector,
       );
       fitOrthographicCameraToWorldBounds(
         temporaryCamera,
@@ -395,7 +441,10 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
         request.centerMetersXZ[1],
       ));
       scene.activeCamera = temporaryCamera;
-    } else if (request.cameraPose !== undefined) {
+    } else if (
+      (request.kind === "opening-frame" || request.kind === "composition-mask") &&
+      request.cameraPose !== undefined
+    ) {
       const pose = request.cameraPose;
       const focus = new Vector3(
         pose.targetPositionMetersXYZ[0],
@@ -419,7 +468,29 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     } else {
       scene.activeCamera = camera;
     }
-    if (request.kind === "composition-mask") {
+    if (request.kind === "explicit-collider-overlay") {
+      const overlayColor = Color3.FromHexString(request.overlayColor);
+      for (const [index, mesh] of request.colliderMeshes.entries()) {
+        if (mesh.isDisposed() || mesh.getScene() !== scene) {
+          throw new Error("BABYLON_ARTIFACT_COLLIDER_HANDLE_INVALID");
+        }
+        overlayState.set(mesh, {
+          isVisible: mesh.isVisible,
+          material: mesh.material,
+        });
+        const material = new StandardMaterial(
+          `worldkit.artifact.collider-overlay.${index}`,
+          scene,
+        );
+        material.disableLighting = true;
+        material.emissiveColor.copyFrom(overlayColor);
+        material.diffuseColor.copyFrom(Color3.Black());
+        material.alpha = 1;
+        temporaryMaterials.add(material);
+        mesh.material = material;
+        mesh.isVisible = true;
+      }
+    } else if (request.kind === "composition-mask") {
       scene.clearColor = Color4.FromHexString(`${request.backgroundColor}FF`);
       for (const mesh of scene.meshes) {
         if (!mesh.isVisible || mesh.material === null) continue;
@@ -459,6 +530,13 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       : request.kind === "composition-mask"
         ? request.projectedEntityIds
         : [];
+    const measurement = request.measureAfterRender?.({
+      scene,
+      engine,
+      camera: scene.activeCamera!,
+      widthPixels: request.widthPixels,
+      heightPixels: request.heightPixels,
+    });
     return {
       ...captured,
       projectedBoundsByEntityId: projectedBounds(
@@ -468,9 +546,14 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
         request.widthPixels,
         request.heightPixels,
       ),
+      ...(measurement === undefined ? {} : { measurement }),
     };
   } finally {
     temporaryCamera?.dispose();
+    for (const [mesh, state] of overlayState) {
+      mesh.material = state.material;
+      mesh.isVisible = state.isVisible;
+    }
     for (const [mesh, material] of originalMaterialByMesh) mesh.material = material;
     restoreMaterialColors(materialColors);
     for (const material of temporaryMaterials) material.dispose();

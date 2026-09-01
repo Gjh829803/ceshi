@@ -17,6 +17,7 @@
     "@whitebox-world/gameplay": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/native-babylon": "workspace:*",
+    "@whitebox-world/native-babylon-block-profile": "workspace:*",
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/runtime-framework": "workspace:*",

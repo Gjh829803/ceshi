@@ -13,13 +13,16 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1,
   deriveRuntimeSessionReceiptIdV1,
+  hashFormalWorldCaptureRequestV1,
   hashRuntimeSessionRequestV1,
+  parseFormalWorldCaptureRequestV1,
   parseNativeIsolatedExecutionRequestV1,
   parseRuntimeSessionReceiptV1,
   parseRuntimeSessionRequestV1,
   type NativeEffectiveExecutionBudgetV1,
   type NativeExecutionUsageV1,
   type NativeIsolatedExecutionRequestV1,
+  type FormalWorldCaptureRequestV1,
   type RuntimeSessionDiagnosticV1,
   type RuntimeSessionReceiptV1,
   type RuntimeSessionRequestV1,
@@ -56,6 +59,10 @@ import { createBabylonGameplayWorldPortV1 } from
 import { projectBabylonWorldRuntimeSnapshotV4 } from
   "./world-runtime-snapshot";
 import type { SubjectAssetResolverV1 } from "./subject-asset-cache";
+import {
+  executeFormalWorldCaptureProviderV1,
+  type FormalHostedWorldCapturePayloadV1,
+} from "./formal-world-capture-provider.js";
 
 const PARTICIPANT_ID = "native-isolation-participant";
 const CONTROLLER_ENTITY_ID = "native-isolation-controller";
@@ -106,7 +113,9 @@ export interface BabylonNativeIsolatedRuntimeEntryV1 {
   runtimeUsage(): NativeExecutionUsageV1["runtime"];
   renderFrame(): RenderReadyReceiptV1;
   resize(): void;
-  resetForFormalCapture(): Promise<WorldRuntimeSnapshotV4>;
+  executeFormalCapture(
+    request: FormalWorldCaptureRequestV1,
+  ): Promise<FormalHostedWorldCapturePayloadV1>;
   submit(payload: RuntimeSessionRequestV1):
     Promise<RuntimeSessionReceiptV1>;
   dispose(): Promise<void>;
@@ -304,6 +313,9 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
     private readonly residency:
       BabylonRuntimeResidencyV1<BabylonNativeIsolatedRuntimeHandleV1>,
     private readonly initialControlledEntityId: string,
+    private readonly verifiedWorldPackage:
+      VerifiedBabylonNativeWorldPackageDirectoryV1,
+    private readonly isolationRequest: NativeIsolatedExecutionRequestV1,
   ) {
     this.runtimeSessionId = host.runtimeSessionId;
   }
@@ -332,8 +344,11 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
     this.activeHandle().runtime.resize();
   }
 
-  resetForFormalCapture(): Promise<WorldRuntimeSnapshotV4> {
-    const operation = this.#tail.then(() => this.resetSerialized());
+  executeFormalCapture(
+    request: FormalWorldCaptureRequestV1,
+  ): Promise<FormalHostedWorldCapturePayloadV1> {
+    const operation = this.#tail.then(() =>
+      this.executeFormalCaptureSerialized(request));
     this.#tail = operation.then(() => undefined, () => undefined);
     return operation;
   }
@@ -348,9 +363,12 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
   dispose(): Promise<void> {
     if (!isNil(this.#disposePromise)) return this.#disposePromise;
     this.#isActive = false;
-    this.#disposePromise = this.host.dispose().finally(() => {
-      this.residency.clear();
-    });
+    this.#disposePromise = this.#tail
+      .catch(() => undefined)
+      .then(() => this.host.dispose())
+      .finally(() => {
+        this.residency.clear();
+      });
     return this.#disposePromise;
   }
 
@@ -367,6 +385,51 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
       controlledEntityId: this.initialControlledEntityId,
     });
     return this.initialSnapshot();
+  }
+
+  private async executeFormalCaptureSerialized(
+    requestInput: FormalWorldCaptureRequestV1,
+  ): Promise<FormalHostedWorldCapturePayloadV1> {
+    if (!this.#isActive) {
+      throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_NOT_ACTIVE");
+    }
+    if (this.isolationRequest.requestedOperation.mode !== "capture") {
+      throw new Error("WORLDKIT_NATIVE_FORMAL_CAPTURE_OPERATION_NOT_AUTHORIZED");
+    }
+    let request: FormalWorldCaptureRequestV1;
+    try {
+      request = parseFormalWorldCaptureRequestV1(requestInput);
+    } catch {
+      throw new Error("WORLDKIT_NATIVE_FORMAL_CAPTURE_REQUEST_INVALID");
+    }
+    if (
+      hashFormalWorldCaptureRequestV1(request) !==
+        this.isolationRequest.requestedOperation.captureRequestHash
+    ) {
+      throw new Error("WORLDKIT_NATIVE_FORMAL_CAPTURE_REQUEST_HASH_MISMATCH");
+    }
+    return executeFormalWorldCaptureProviderV1({
+      request,
+      verifiedWorldPackage: this.verifiedWorldPackage,
+      runtimeSessionId: this.runtimeSessionId,
+      ports: {
+        resetWithInitialControlBinding: () => this.resetSerialized(),
+        awaitRenderReady: async () => {
+          await this.activeHandle().runtime.renderFrameWhenReady();
+        },
+        runFixedInput: async (input) => {
+          await this.host.runFixedInput(input);
+          return this.initialSnapshot();
+        },
+        snapshot: () => this.initialSnapshot(),
+        captureArtifactView: (artifactRequest) =>
+          this.activeHandle().runtime.captureArtifactView(artifactRequest),
+        readCommittedSupportEvidence: (subjectEntityId) =>
+          this.activeHandle().runtime.readCommittedSupportEvidence(
+            subjectEntityId,
+          ),
+      },
+    });
   }
 
   private async submitSerialized(
@@ -652,5 +715,7 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
     host,
     residency,
     initialWorld.worldRuntimeBootstrap.initialControlledEntityId,
+    verified,
+    request,
   ));
 }

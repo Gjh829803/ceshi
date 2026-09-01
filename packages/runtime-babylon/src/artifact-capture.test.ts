@@ -251,4 +251,133 @@ describe("Babylon artifact capture", () => {
       engine.dispose();
     }
   });
+
+  it("measures with the exact rendered world-side camera and render size", () => {
+    // This catches measuring after artifact capture has already restored the
+    // SDK camera or the previous engine dimensions.
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new FakeCanvasElement(),
+      removeEventListener: vi.fn(),
+    });
+    RegisterAbstractEngineStencil();
+    const engine = new NullEngine({
+      renderWidth: 16,
+      renderHeight: 9,
+      textureSize: 16,
+      deterministicLockstep: true,
+      lockstepMaxSteps: 4,
+    });
+    const scene = new Scene(engine);
+    const openingCamera = new FreeCamera(
+      "opening-camera",
+      new Vector3(0, 4, -12),
+      scene,
+    );
+    openingCamera.setTarget(Vector3.Zero());
+    scene.activeCamera = openingCamera;
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(
+      new FakeCanvasElement() as unknown as HTMLCanvasElement,
+    );
+
+    try {
+      const result = captureBabylonArtifactViewV1({
+        scene,
+        engine,
+        camera: openingCamera,
+        request: {
+          kind: "world-side",
+          widthPixels: 8,
+          heightPixels: 4,
+          worldBoundsMeters: {
+            minimumMetersXYZ: [-20, -2, -5],
+            maximumMetersXYZ: [20, 8, 5],
+          },
+          cameraPositionMetersXYZ: [60, 3, 0],
+          targetMetersXYZ: [0, 3, 0],
+          measureAfterRender: ({ camera, heightPixels, widthPixels }) => ({
+            cameraName: camera.name,
+            mode: camera.mode,
+            size: [widthPixels, heightPixels],
+          }),
+        },
+      });
+
+      expect(result.measurement).toEqual({
+        cameraName: "worldkit.artifact.world-side",
+        mode: 1,
+        size: [8, 4],
+      });
+      expect(scene.activeCamera).toBe(openingCamera);
+      expect(engine.getRenderWidth(true)).toBe(16);
+      expect(engine.getRenderHeight(true)).toBe(9);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("restores explicit collider overlay resources when measurement throws", () => {
+    // This catches leaking an overlay material or leaving a collision-only
+    // mesh visible after a failed formal capture transaction.
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new FakeCanvasElement(),
+      removeEventListener: vi.fn(),
+    });
+    RegisterAbstractEngineStencil();
+    const engine = new NullEngine({
+      renderWidth: 16,
+      renderHeight: 9,
+      textureSize: 16,
+      deterministicLockstep: true,
+      lockstepMaxSteps: 4,
+    });
+    const scene = new Scene(engine);
+    const openingCamera = new FreeCamera(
+      "opening-camera",
+      new Vector3(0, 4, -12),
+      scene,
+    );
+    openingCamera.setTarget(Vector3.Zero());
+    scene.activeCamera = openingCamera;
+    const collider = MeshBuilder.CreateBox("explicit-collider", {}, scene);
+    const originalMaterial = new StandardMaterial("collider-source", scene);
+    collider.material = originalMaterial;
+    collider.isVisible = false;
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(
+      new FakeCanvasElement() as unknown as HTMLCanvasElement,
+    );
+    const materialCountBefore = scene.materials.length;
+
+    try {
+      expect(() => captureBabylonArtifactViewV1({
+        scene,
+        engine,
+        camera: openingCamera,
+        request: {
+          kind: "explicit-collider-overlay",
+          widthPixels: 8,
+          heightPixels: 4,
+          colliderMeshes: [collider],
+          overlayColor: "#FF00FF",
+          measureAfterRender: () => {
+            throw new Error("measurement failed");
+          },
+        },
+      })).toThrowError("measurement failed");
+
+      expect(collider.isVisible).toBe(false);
+      expect(collider.material).toBe(originalMaterial);
+      expect(scene.materials).toHaveLength(materialCountBefore);
+      expect(scene.activeCamera).toBe(openingCamera);
+      expect(engine.getRenderWidth(true)).toBe(16);
+      expect(engine.getRenderHeight(true)).toBe(9);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
 });

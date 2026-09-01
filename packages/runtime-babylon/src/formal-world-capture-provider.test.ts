@@ -1,0 +1,347 @@
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { Scene } from "@babylonjs/core/scene.pure.js";
+import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  assertFormalCaptureLiveVisualRegistryV1,
+  FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1,
+  measureFormalTraversalCheckpointV1,
+  selectFormalCommittedSupportContactV1,
+  type FormalWorldCaptureProviderPortsV1,
+} from "./formal-world-capture-provider.js";
+
+function traversalSnapshot(
+  runtimeSessionId: string,
+  worldSessionId: string,
+  simulationTick: number,
+): WorldRuntimeSnapshotV4 {
+  return {
+    runtimeSessionId,
+    worldSessionId,
+    runtime: { phase: "ready" },
+    resources: { phase: "ready" },
+    world: {
+      simulationTick,
+      subjectStatesByEntityId: {
+        player: {
+          entityState: { positionMetersXYZ: [0, 1, 0] },
+          capabilityStatesById: {
+            locomotion: {
+              kind: "locomotion-capability-state-v2",
+              locomotion: {
+                status: "active",
+                movementMedium: "ground",
+              },
+            },
+          },
+        },
+      },
+    },
+  } as unknown as WorldRuntimeSnapshotV4;
+}
+
+function traversalRequestFixture() {
+  const criterion = {
+    kind: "reach-bounds" as const,
+    checkpointId: "spawn",
+    expectation: "reach" as const,
+    sourceVisualGroupId: "ground",
+    sourceBoundsMeters: {
+      minimumMetersXYZ: [-1, 0, -1] as const,
+      maximumMetersXYZ: [1, 2, 1] as const,
+    },
+    capsuleRadiusMeters: 0.35,
+    toleranceMeters: 0.05,
+  };
+  return {
+    semanticCaptureMap: { topologyRelations: [] },
+    scriptedTraversal: {
+      checks: ["first", "second"].map((id) => ({
+        id,
+        acceptanceTargetRef: `worldkit://acceptance-target/${id}@1`,
+        checkExpectation: "pass" as const,
+        fixedInputSequence: [{ actions: ["move-forward" as const], ticks: 1 }],
+        checkpointCriteria: [criterion],
+      })),
+    },
+  } as unknown as Parameters<
+    typeof FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureTraversalChecks
+  >[0];
+}
+
+function traversalPorts(runtimeSessionId: string, failOnSecondCheck = false) {
+  let resetCount = 0;
+  let current = traversalSnapshot(runtimeSessionId, "world.uninitialized", 0);
+  const ports: FormalWorldCaptureProviderPortsV1 = {
+    resetWithInitialControlBinding: vi.fn(async () => {
+      resetCount += 1;
+      current = traversalSnapshot(runtimeSessionId, `world.${resetCount}`, 0);
+      return current;
+    }),
+    awaitRenderReady: vi.fn(async () => {}),
+    runFixedInput: vi.fn(async (input) => {
+      if (failOnSecondCheck && resetCount === 2 && input.actions.length > 0) {
+        throw new Error("injected traversal failure");
+      }
+      current = traversalSnapshot(
+        runtimeSessionId,
+        current.worldSessionId,
+        current.world.simulationTick + input.ticks,
+      );
+      return current;
+    }),
+    snapshot: vi.fn(() => current),
+    captureArtifactView: vi.fn(),
+    readCommittedSupportEvidence: vi.fn(),
+  };
+  return { ports, resetCount: () => resetCount };
+}
+
+describe("formal world capture provider", () => {
+  it("fails closed on missing, extra, foreign, or disposed visual handles without reading Mesh metadata", () => {
+    // This catches a fallback to Scene/Mesh name, tag, or metadata inference
+    // when the trusted profile registry is incomplete.
+    const firstEngine = new NullEngine();
+    const firstScene = new Scene(firstEngine);
+    const secondEngine = new NullEngine();
+    const secondScene = new Scene(secondEngine);
+    const first = MeshBuilder.CreateBox("first", {}, firstScene);
+    const second = MeshBuilder.CreateBox("second", {}, firstScene);
+    const foreign = MeshBuilder.CreateBox("foreign", {}, secondScene);
+    let metadataReadCount = 0;
+    Object.defineProperty(first, "metadata", {
+      configurable: true,
+      get() {
+        metadataReadCount += 1;
+        throw new Error("metadata must not be read");
+      },
+      set() {},
+    });
+    const metadata = {
+      blocks: [
+        {
+          blockId: "first",
+          runtimeEntityId: "native-block:first",
+          semanticCaptureClassId: "worldkit.native-block.group.route",
+          visualGroupId: "route",
+        },
+        {
+          blockId: "second",
+          runtimeEntityId: "native-block:second",
+          semanticCaptureClassId: "worldkit.native-block.group.route",
+          visualGroupId: "route",
+        },
+      ],
+      visualGroups: [{ visualGroupId: "route", blockIds: ["first", "second"] }],
+    } as const;
+    const valid = {
+      kind: "babylon-native-block-live-handle-registry",
+      schemaVersion: 1,
+      blocks: [
+        {
+          runtimeEntityId: "native-block:first",
+          semanticCaptureClassId: "worldkit.native-block.group.route",
+          mesh: first,
+        },
+        {
+          runtimeEntityId: "native-block:second",
+          semanticCaptureClassId: "worldkit.native-block.group.route",
+          mesh: second,
+        },
+      ],
+      visualGroups: [{ visualGroupId: "route", meshes: [first, second] }],
+    } as const;
+
+    try {
+      expect(() => assertFormalCaptureLiveVisualRegistryV1({
+        scene: firstScene,
+        materializerMetadata: metadata,
+        liveHandleRegistry: valid,
+      })).not.toThrow();
+      expect(metadataReadCount).toBe(0);
+
+      expect(() => assertFormalCaptureLiveVisualRegistryV1({
+        scene: firstScene,
+        materializerMetadata: metadata,
+        liveHandleRegistry: { ...valid, blocks: valid.blocks.slice(0, 1) },
+      })).toThrowError(/LIVE_VISUAL/);
+      expect(() => assertFormalCaptureLiveVisualRegistryV1({
+        scene: firstScene,
+        materializerMetadata: metadata,
+        liveHandleRegistry: {
+          ...valid,
+          blocks: [...valid.blocks, {
+            runtimeEntityId: "native-block:extra",
+            semanticCaptureClassId: "worldkit.native-block.group.route",
+            mesh: second,
+          }],
+        },
+      })).toThrowError(/LIVE_VISUAL/);
+      expect(() => assertFormalCaptureLiveVisualRegistryV1({
+        scene: firstScene,
+        materializerMetadata: metadata,
+        liveHandleRegistry: {
+          ...valid,
+          blocks: [valid.blocks[0], { ...valid.blocks[1], mesh: foreign }],
+          visualGroups: [{ visualGroupId: "route", meshes: [first, foreign] }],
+        },
+      })).toThrowError(/LIVE_VISUAL/);
+      second.dispose();
+      expect(() => assertFormalCaptureLiveVisualRegistryV1({
+        scene: firstScene,
+        materializerMetadata: metadata,
+        liveHandleRegistry: valid,
+      })).toThrowError(/LIVE_VISUAL/);
+      expect(metadataReadCount).toBe(0);
+    } finally {
+      firstScene.dispose();
+      firstEngine.dispose();
+      secondScene.dispose();
+      secondEngine.dispose();
+    }
+  });
+
+  it("derives asymmetric pass and block checkpoints only from frozen spatial criteria", () => {
+    // This catches treating one sign convention as symmetric or copying a
+    // Case expectation into the observed outcome.
+    expect(measureFormalTraversalCheckpointV1({
+      criterion: {
+        kind: "pass-plane",
+        checkpointId: "passed-east",
+        expectation: "pass",
+        sourceVisualGroupId: "gate",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [4, 0, -1],
+          maximumMetersXYZ: [6, 2, 1],
+        },
+        axis: "x",
+        sourceFace: "maximum",
+        planeMeters: 6,
+        expectedCenterSide: "positive",
+        capsuleRadiusMeters: 0.5,
+        toleranceMeters: 0.1,
+      },
+      positionMetersXYZ: [6.6, 1, 0],
+      tick: 7,
+      isFinalTick: false,
+    })).toEqual({ checkpointId: "passed-east", outcome: "passed", observedAtTick: 7 });
+
+    expect(measureFormalTraversalCheckpointV1({
+      criterion: {
+        kind: "block-plane",
+        checkpointId: "blocked-west",
+        expectation: "block",
+        sourceVisualGroupId: "wall",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-6, 0, -1],
+          maximumMetersXYZ: [-4, 2, 1],
+        },
+        colliderId: "west-wall",
+        axis: "x",
+        sourceFace: "minimum",
+        planeMeters: -6,
+        expectedCenterSide: "negative",
+        capsuleRadiusMeters: 0.5,
+        toleranceMeters: 0.1,
+      },
+      positionMetersXYZ: [-5.45, 1, 0],
+      tick: 11,
+      isFinalTick: true,
+    })).toEqual({ checkpointId: "blocked-west", outcome: "blocked", observedAtTick: 11 });
+  });
+
+  it("rejects stale and ambiguous committed support evidence", () => {
+    // This catches accepting a support sample from before the neutral settling
+    // Tick or arbitrarily choosing one of two supporting collider identities.
+    const contact = {
+      pointMetersXYZ: [0, 0, 0] as const,
+      normalXYZ: [0, 1, 0] as const,
+      distanceMeters: 0.01,
+      motionType: "static" as const,
+      colliderId: "ground",
+      colliderSubshapeId: "ground.shape",
+      logicalSubshapeId: "ground.surface",
+      traversalSurfaceId: "ground.traversal",
+      surfaceEntityId: "ground.entity",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    };
+    const evidence = {
+      schemaVersion: 1 as const,
+      tick: 1,
+      sampledControllerCenterMetersXYZ: [0, 1, 0] as const,
+      sampledFootPointMetersXYZ: [0, 0.01, 0] as const,
+      support: {
+        mode: "supported" as const,
+        pointMetersXYZ: [0, 0, 0] as const,
+        normalXYZ: [0, 1, 0] as const,
+        isDynamic: false,
+      },
+      contacts: [contact],
+    };
+
+    expect(() => selectFormalCommittedSupportContactV1({
+      evidence,
+      committedTick: 2,
+    })).toThrowError(/STALE/);
+    expect(() => selectFormalCommittedSupportContactV1({
+      evidence: {
+        ...evidence,
+        contacts: [contact, {
+          ...contact,
+          colliderId: "other-ground",
+          colliderSubshapeId: "other-ground.shape",
+        }],
+      },
+      committedTick: 1,
+    })).toThrowError(/AMBIGUOUS/);
+    expect(selectFormalCommittedSupportContactV1({
+      evidence,
+      committedTick: 1,
+    })).toEqual(contact);
+  });
+
+  it("uses a fresh settled world session for every scripted check", async () => {
+    const runtimeSessionId = "runtime.formal.provider-test";
+    const { ports, resetCount } = traversalPorts(runtimeSessionId);
+
+    const checks = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .captureTraversalChecks(
+        traversalRequestFixture(),
+        runtimeSessionId,
+        "player",
+        ports,
+      );
+
+    expect(checks.map(({ resetReadySnapshot }) =>
+      resetReadySnapshot.worldSessionId)).toEqual(["world.1", "world.2"]);
+    expect(checks.map(({ resetReadySnapshot }) =>
+      resetReadySnapshot.world.simulationTick)).toEqual([1, 1]);
+    expect(checks.map(({ fixedTicks }) => fixedTicks[0]?.tick)).toEqual([2, 2]);
+    expect(resetCount()).toBe(2);
+    expect(ports.awaitRenderReady).toHaveBeenCalledTimes(4);
+  });
+
+  it("rejects a partial scripted run without exposing successful check payload", async () => {
+    const runtimeSessionId = "runtime.formal.provider-partial-failure";
+    const { ports, resetCount } = traversalPorts(runtimeSessionId, true);
+    let payload: unknown;
+
+    try {
+      payload = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+        .captureTraversalChecks(
+          traversalRequestFixture(),
+          runtimeSessionId,
+          "player",
+          ports,
+        );
+    } catch (error) {
+      expect(error).toEqual(new Error("injected traversal failure"));
+    }
+
+    expect(payload).toBeUndefined();
+    expect(resetCount()).toBe(2);
+  });
+});
