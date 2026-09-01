@@ -2,11 +2,11 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   lstat,
+  link,
   mkdir,
   open,
   readFile,
   realpath,
-  rename,
   rm,
   unlink,
 } from "node:fs/promises";
@@ -21,13 +21,19 @@ import {
   hashNativeBlockGenerationReceiptV1,
   hashSceneAuthoringAttemptResultV1,
 } from "@whitebox-world/scene-authoring-contracts";
+import { parseWorldReconstructionCaseArtifactRefV1 } from
+  "@whitebox-world/world-identity";
 import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   parseFormalColliderOverlayObservationV1,
+  formalWorldCaptureIntentCanonicalBytesV1,
+  hashFormalWorldCaptureIntentV1,
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
+  parseFormalWorldCaptureIntentV1,
+  type FormalWorldCaptureIntentV1,
 } from "@whitebox-world/runtime-contracts";
 import { parseNativeBlockAuthoringManifestV1 } from
   "@whitebox-world/native-babylon-block-profile";
@@ -62,21 +68,14 @@ import {
 import {
   FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1,
   materializeFormalWorldCaptureRequestV1,
-  type FormalWorldCaptureRequestCaptureProfileV1,
-  type FormalWorldCaptureRequestTargetBindingV1,
 } from "./formal-capture-request.js";
 import { captureHostedWorldPackageV1 } from "./formal-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
-import type {
-  FormalSemanticTopologyRelationBindingV1,
-  FormalTraversalCheckpointSpatialCriterionV1,
-} from "@whitebox-world/runtime-contracts";
 import type {
   WorldReconstructionCleanupOutcomesV1,
   WorldReconstructionCleanupOwnerOutcomeV1,
 } from "./run-journal.js";
 import {
-  isCanonicalWorldReconstructionCaseArtifactRefV1,
   type WorldReconstructionGenerateOutcomeV1,
   type WorldReconstructionGeneratePortResultV1,
   type WorldReconstructionPackagePortResultV1,
@@ -106,14 +105,7 @@ export interface ProductionWorldReconstructionRunPortsInputV1 {
   readonly reconstructionCase: WorldReconstructionCaseV1;
   readonly evaluationProfile: WorldReconstructionEvaluationProfileV1;
   readonly generationInput: FrozenGenerationInputV1;
-  readonly captureRequest: Readonly<{
-    captureProfile: FormalWorldCaptureRequestCaptureProfileV1;
-    semanticCaptureTargetBindings:
-      readonly FormalWorldCaptureRequestTargetBindingV1[];
-    topologyRelations: readonly FormalSemanticTopologyRelationBindingV1[];
-    checkpointSpatialCriteria:
-      readonly FormalTraversalCheckpointSpatialCriterionV1[];
-  }>;
+  readonly formalCaptureIntent: FormalWorldCaptureIntentV1;
 }
 
 export interface ProductionWorldReconstructionRunPortOwnersV1 {
@@ -186,29 +178,51 @@ function generationOutcome(
   return "failed";
 }
 
-function canonicalCaseArtifactRoot(caseRef: string): string {
-  if (!isCanonicalWorldReconstructionCaseArtifactRefV1(caseRef)) {
+function canonicalCaseArtifactRoot(caseRef: string, caseId: string): string {
+  let parsedCaseRef: string;
+  try {
+    parsedCaseRef = parseWorldReconstructionCaseArtifactRefV1(caseRef);
+  } catch {
     throw new TypeError("WORLD_RECONSTRUCTION_CASE_REF_INVALID");
   }
-  return caseRef.slice(0, -"/case.json".length);
+  if (
+    parsedCaseRef !==
+      `artifact://world-reconstruction-case/${caseId}/case.json`
+  ) throw new TypeError("WORLD_RECONSTRUCTION_CASE_REF_INVALID");
+  return parsedCaseRef.slice(0, -"/case.json".length);
 }
 
 function caseArtifactRefForPath(
   caseArtifactRoot: string,
+  caseRootPath: string,
   runDirectoryPath: string,
   artifactPath: string,
 ): string {
-  const relativePath = path.relative(path.dirname(runDirectoryPath), artifactPath)
+  const relativeToRun = path.relative(runDirectoryPath, artifactPath);
+  if (
+    relativeToRun.length === 0 ||
+    relativeToRun.startsWith("..") ||
+    path.isAbsolute(relativeToRun)
+  ) throw new TypeError("WORLD_RECONSTRUCTION_ARTIFACT_PATH_INVALID");
+  const relativePath = path.relative(caseRootPath, artifactPath)
     .split(path.sep)
     .join("/");
+  if (
+    relativePath.length === 0 ||
+    relativePath.startsWith("../") ||
+    path.posix.isAbsolute(relativePath)
+  ) throw new TypeError("WORLD_RECONSTRUCTION_ARTIFACT_PATH_INVALID");
   return `${caseArtifactRoot}/${relativePath}`;
 }
 
-async function publishCanonicalJsonFresh(
+async function publishCanonicalJsonImmutable(
   outputPath: string,
   value: unknown,
 ): Promise<void> {
   await mkdir(path.dirname(outputPath), { recursive: true, mode: 0o700 });
+  const outputBytes = new TextEncoder().encode(
+    `${stringifyCanonicalJson(value)}\n`,
+  );
   const temporaryPath = path.join(
     path.dirname(outputPath),
     `.${path.basename(outputPath)}.${randomUUID()}.tmp`,
@@ -216,11 +230,30 @@ async function publishCanonicalJsonFresh(
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
     handle = await open(temporaryPath, "wx", 0o600);
-    await handle.writeFile(`${stringifyCanonicalJson(value)}\n`);
+    await handle.writeFile(outputBytes);
     await handle.sync();
     await handle.close();
     handle = undefined;
-    await rename(temporaryPath, outputPath);
+    try {
+      await link(temporaryPath, outputPath);
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "EEXIST"
+      ) throw error;
+      const existingMetadata = await lstat(outputPath);
+      if (
+        !existingMetadata.isFile() ||
+        existingMetadata.isSymbolicLink() ||
+        await realpath(outputPath) !== outputPath
+      ) throw new Error("WORLD_RECONSTRUCTION_IMMUTABLE_ARTIFACT_MISMATCH");
+      const existingBytes = new Uint8Array(await readFile(outputPath));
+      if (!isEqual(existingBytes, outputBytes)) {
+        throw new Error("WORLD_RECONSTRUCTION_IMMUTABLE_ARTIFACT_MISMATCH");
+      }
+    }
+    await unlink(temporaryPath);
     const parent = await open(path.dirname(outputPath), "r");
     try {
       await parent.sync();
@@ -232,6 +265,84 @@ async function publishCanonicalJsonFresh(
     await unlink(temporaryPath).catch(() => undefined);
     throw error;
   }
+}
+
+async function verifyCaseBoundFormalCaptureIntentV1(
+  input: ProductionWorldReconstructionRunPortsInputV1,
+): Promise<FormalWorldCaptureIntentV1> {
+  const caseRootPath = path.dirname(input.casePath);
+  const intentPath = path.resolve(
+    caseRootPath,
+    input.reconstructionCase.formalCaptureIntentRef,
+  );
+  if (
+    intentPath !== path.join(
+      caseRootPath,
+      "inputs",
+      "formal-world-capture-intent.json",
+    )
+  ) throw new TypeError("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+  const metadata = await lstat(intentPath);
+  if (
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    await realpath(intentPath) !== intentPath
+  ) throw new TypeError("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+  const storedBytes = new Uint8Array(await readFile(intentPath));
+  let parsed: FormalWorldCaptureIntentV1;
+  try {
+    parsed = parseFormalWorldCaptureIntentV1(JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(storedBytes),
+    ));
+  } catch {
+    throw new TypeError("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+  }
+  if (
+    !isEqual(storedBytes, formalWorldCaptureIntentCanonicalBytesV1(parsed)) ||
+    hashFormalWorldCaptureIntentV1(parsed) !==
+      input.reconstructionCase.formalCaptureIntentHash ||
+    parsed.id !== `${input.reconstructionCase.id}.formal-world-capture-intent` ||
+    !isEqual(parsed, input.formalCaptureIntent)
+  ) throw new TypeError("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+  const bindings = parsed.semanticCaptureTargetBindings;
+  const checkpointIds = parsed.checkpointSpatialCriteria
+    .map(({ checkpointId }) => checkpointId)
+    .slice()
+    .sort();
+  const expectedCheckpointIds = input.reconstructionCase.expected
+    .criticalTraversalChecks
+    .flatMap(({ checkpointIds: ids }) => ids)
+    .slice()
+    .sort();
+  if (
+    !isEqual(
+      bindings.map(({ acceptanceTargetRef }) => acceptanceTargetRef),
+      input.reconstructionCase.expected.semanticSilhouetteTargets
+        .map(({ acceptanceTargetRef }) => acceptanceTargetRef),
+    ) ||
+    !isEqual(
+      bindings.map(({ compositionTargetRef }) => compositionTargetRef).sort(),
+      [...input.reconstructionCase.expected.openingComposition.targetRefs].sort(),
+    ) ||
+    !isEqual(
+      bindings.map(({ topologyNodeId }) => topologyNodeId).sort(),
+      [...input.reconstructionCase.expected.topology.nodeIds].sort(),
+    ) ||
+    !isEqual(
+      [...new Set(bindings.map(({ semanticLayerId }) => semanticLayerId))].sort(),
+      [...input.reconstructionCase.expected.topology.layerIds].sort(),
+    ) ||
+    !isEqual(
+      parsed.topologyRelations.map(({ fromNodeId, relation, toNodeId }) => ({
+        fromNodeId,
+        relation,
+        toNodeId,
+      })),
+      input.reconstructionCase.expected.topology.relations,
+    ) ||
+    !isEqual(checkpointIds, expectedCheckpointIds)
+  ) throw new TypeError("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+  return parsed;
 }
 
 async function readJsonNoFollow(filePath: string): Promise<unknown> {
@@ -277,11 +388,25 @@ function runBuilderSelfCheckV1(
   });
 }
 
-export function createProductionWorldReconstructionRunPortsV1(
+export async function createProductionWorldReconstructionRunPortsV1(
   input: ProductionWorldReconstructionRunPortsInputV1,
   owners: ProductionWorldReconstructionRunPortOwnersV1 = defaultOwners(),
-): WorldReconstructionRunPortsV1 {
-  const caseArtifactRoot = canonicalCaseArtifactRoot(input.caseRef);
+): Promise<WorldReconstructionRunPortsV1> {
+  const caseArtifactRoot = canonicalCaseArtifactRoot(
+    input.caseRef,
+    input.reconstructionCase.id,
+  );
+  const caseRootPath = path.dirname(input.casePath);
+  const runRelativePath = path.relative(
+    caseRootPath,
+    input.generationInput.runDirectoryPath,
+  );
+  if (
+    !runRelativePath.startsWith(`runs${path.sep}`) ||
+    runRelativePath.split(path.sep).length !== 2 ||
+    path.isAbsolute(runRelativePath)
+  ) throw new TypeError("WORLD_RECONSTRUCTION_RUN_DIRECTORY_INVALID");
+  const formalCaptureIntent = await verifyCaseBoundFormalCaptureIntentV1(input);
   const checkpoints = new Map<0 | 1, AttemptCheckpointV1>();
   const cleanupState: Record<CleanupKeyV1, WorldReconstructionCleanupOwnerOutcomeV1> = {
     providerTask: "pending",
@@ -373,7 +498,7 @@ export function createProductionWorldReconstructionRunPortsV1(
         String(stageInput.attemptIndex),
         "generation-receipt.json",
       );
-      await publishCanonicalJsonFresh(receiptPath, generation.receipt);
+      await publishCanonicalJsonImmutable(receiptPath, generation.receipt);
       const outcome = generationOutcome(generation.receipt);
       setCleanup(
         ["providerTask", "temporaryDirectories"],
@@ -389,6 +514,7 @@ export function createProductionWorldReconstructionRunPortsV1(
         requestHash: prepared.routerTaskPayloadHash,
         generationRequestRef: caseArtifactRefForPath(
           caseArtifactRoot,
+          caseRootPath,
           input.generationInput.runDirectoryPath,
           path.join(
             input.generationInput.runDirectoryPath,
@@ -400,6 +526,7 @@ export function createProductionWorldReconstructionRunPortsV1(
         generationRequestHash: prepared.generationRequestHash,
         generationReceiptRef: caseArtifactRefForPath(
           caseArtifactRoot,
+          caseRootPath,
           input.generationInput.runDirectoryPath,
           receiptPath,
         ),
@@ -408,6 +535,7 @@ export function createProductionWorldReconstructionRunPortsV1(
         ),
         sceneAuthoringAttemptRef: caseArtifactRefForPath(
           caseArtifactRoot,
+          caseRootPath,
           input.generationInput.runDirectoryPath,
           path.join(
             input.generationInput.runDirectoryPath,
@@ -456,6 +584,7 @@ export function createProductionWorldReconstructionRunPortsV1(
           outcome: "completed" as const,
           sceneAuthoringAttemptResultRef: caseArtifactRefForPath(
             caseArtifactRoot,
+            caseRootPath,
             input.generationInput.runDirectoryPath,
             path.join(
               input.generationInput.runDirectoryPath,
@@ -528,7 +657,7 @@ export function createProductionWorldReconstructionRunPortsV1(
           sceneAuthoringAttemptPath: path.join(attemptDirectoryPath, "attempt.json"),
           packageDirectoryPath: state.packaged.worldPackagePath,
           outputPath: requestPath,
-          ...input.captureRequest,
+          formalCaptureIntent,
         });
         browserAllocated = true;
         const captured = await owners.capturePackage({
@@ -553,6 +682,7 @@ export function createProductionWorldReconstructionRunPortsV1(
           outcome: "completed" as const,
           captureReceiptRef: caseArtifactRefForPath(
             caseArtifactRoot,
+            caseRootPath,
             input.generationInput.runDirectoryPath,
             captureReceiptPath,
           ),

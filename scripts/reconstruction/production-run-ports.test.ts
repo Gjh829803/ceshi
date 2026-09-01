@@ -4,6 +4,8 @@ import {
   readFile,
   realpath,
   rm,
+  symlink,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,8 +18,15 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
+  formalWorldCaptureIntentCanonicalBytesV1,
+  hashFormalWorldCaptureIntentV1,
   hashFormalWorldCaptureReceiptV1,
+  parseFormalWorldCaptureIntentV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  parseWorldReconstructionCaseV1,
+  parseWorldReconstructionEvaluationProfileV1,
+} from "@whitebox-world/validation";
 import { hashWorldBuildIdentityV1 } from "@whitebox-world/world-identity";
 
 import {
@@ -45,13 +54,26 @@ async function fixture() {
     path.join(tmpdir(), "nbr-production-ports-"),
   ));
   temporaryDirectories.push(root);
-  const runDirectoryPath = path.join(root, RUN_ID);
+  const runDirectoryPath = path.join(root, "runs", RUN_ID);
   const attemptDirectoryPath = path.join(runDirectoryPath, "attempts", "0");
   const packageDirectoryPath = path.join(
     attemptDirectoryPath,
     "world-package",
   );
   const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
+  const evidence = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
+  const casePath = path.join(root, "case.json");
+  const intentPath = path.join(
+    root,
+    "inputs",
+    "formal-world-capture-intent.json",
+  );
+  await mkdir(path.dirname(intentPath), { recursive: true, mode: 0o700 });
+  await writeFile(casePath, stringifyCanonicalJson(evidence.reconstructionCase));
+  await writeFile(
+    intentPath,
+    stringifyCanonicalJson(evidence.formalCaptureIntent),
+  );
   const frozenOwnerIdentities = Object.freeze({
     caseHash: H("1"),
     evaluationProfileHash: H("2"),
@@ -159,27 +181,19 @@ async function fixture() {
   });
   const input = {
     repositoryRoot: "/repo",
-    casePath: path.join(root, "case.json"),
-    caseRef: "artifact://world-reconstruction-case/case/case.json",
+    casePath,
+    caseRef:
+      `artifact://world-reconstruction-case/${evidence.reconstructionCase.id}/case.json`,
     evaluationProfilePath: path.join(root, "evaluation-profile.json"),
-    reconstructionCase: { id: "case" },
-    evaluationProfile: { id: "profile" },
+    reconstructionCase: evidence.reconstructionCase,
+    evaluationProfile: evidence.evaluationProfile,
     generationInput: {
       runDirectoryPath,
       gameplayBootstrapPath: path.join(root, "gameplay.json"),
       worldRuntimeBootstrapPath: path.join(root, "runtime.json"),
       worldBounds: {},
     },
-    captureRequest: {
-      captureProfile: {
-        widthPixels: 1280,
-        heightPixels: 720,
-        devicePixelRatio: 1,
-      },
-      semanticCaptureTargetBindings: [],
-      topologyRelations: [],
-      checkpointSpatialCriteria: [],
-    },
+    formalCaptureIntent: evidence.formalCaptureIntent,
   } as unknown as ProductionWorldReconstructionRunPortsInputV1;
   return {
     root,
@@ -249,7 +263,7 @@ async function generateAndPackage(
   value: Awaited<ReturnType<typeof fixture>>,
   ownerPorts: ProductionWorldReconstructionRunPortOwnersV1,
 ) {
-  const ports = createProductionWorldReconstructionRunPortsV1(
+  const ports = await createProductionWorldReconstructionRunPortsV1(
     value.input,
     ownerPorts,
   );
@@ -269,19 +283,76 @@ async function generateAndPackage(
 }
 
 describe("createProductionWorldReconstructionRunPortsV1", () => {
+  it("admits the real Case only through its canonical fixed Intent bytes and complete visual closure", async () => {
+    const value = await fixture();
+    const repositoryRoot = path.resolve(import.meta.dirname, "../..");
+    const caseRoot = path.join(
+      repositoryRoot,
+      "artifacts",
+      "scenes",
+      "cloud-temple-t-gate-native-block",
+    );
+    const casePath = path.join(caseRoot, "case.json");
+    const intentPath = path.join(
+      caseRoot,
+      "inputs",
+      "formal-world-capture-intent.json",
+    );
+    const intentBytes = new Uint8Array(await readFile(intentPath));
+    const formalCaptureIntent = parseFormalWorldCaptureIntentV1(
+      JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(intentBytes)),
+    );
+    const reconstructionCase = parseWorldReconstructionCaseV1(
+      JSON.parse(await readFile(casePath, "utf8")),
+    );
+    const evaluationProfilePath = path.join(
+      caseRoot,
+      "evaluation-profile.json",
+    );
+    const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(
+      JSON.parse(await readFile(evaluationProfilePath, "utf8")),
+    );
+    expect(intentBytes).toEqual(
+      formalWorldCaptureIntentCanonicalBytesV1(formalCaptureIntent),
+    );
+    expect(hashFormalWorldCaptureIntentV1(formalCaptureIntent)).toBe(
+      reconstructionCase.formalCaptureIntentHash,
+    );
+    expect(formalCaptureIntent.semanticCaptureTargetBindings.map(
+      ({ acceptanceTargetRef }) => acceptanceTargetRef,
+    )).toEqual(reconstructionCase.expected.semanticSilhouetteTargets.map(
+      ({ acceptanceTargetRef }) => acceptanceTargetRef,
+    ));
+    await expect(createProductionWorldReconstructionRunPortsV1({
+      ...value.input,
+      repositoryRoot,
+      casePath,
+      caseRef:
+        `artifact://world-reconstruction-case/${reconstructionCase.id}/case.json`,
+      evaluationProfilePath,
+      reconstructionCase,
+      evaluationProfile,
+      formalCaptureIntent,
+      generationInput: {
+        ...value.input.generationInput,
+        runDirectoryPath: path.join(caseRoot, "runs", RUN_ID),
+      },
+    })).resolves.toBeDefined();
+  });
+
   it("rejects a non-canonical Case artifact ref before exposing ports", async () => {
     const value = await fixture();
-    expect(() => createProductionWorldReconstructionRunPortsV1({
+    await expect(createProductionWorldReconstructionRunPortsV1({
       ...value.input,
       caseRef: "artifact://world-reconstruction-case/case",
-    })).toThrow("WORLD_RECONSTRUCTION_CASE_REF_INVALID");
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_CASE_REF_INVALID");
   });
 
   it("uses the prepared router payload hash as the sole generation request identity", async () => {
     const value = await fixture();
     const events: string[] = [];
     const ownerPorts = owners(value, events);
-    const ports = createProductionWorldReconstructionRunPortsV1(
+    const ports = await createProductionWorldReconstructionRunPortsV1(
       value.input,
       ownerPorts,
     );
@@ -296,6 +367,9 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
 
     expect(generated.outcome).toBe("completed");
     expect(generated.requestHash).toBe(value.prepared.routerTaskPayloadHash);
+    expect(generated.generationReceiptRef).toBe(
+      `artifact://world-reconstruction-case/package-fixture.case/runs/${RUN_ID}/attempts/0/generation-receipt.json`,
+    );
     expect(ownerPorts.reconcileGeneration).toHaveBeenCalledWith({
       executablePath: value.prepared.routerExecutablePath,
       backend: "local",
@@ -306,6 +380,127 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       path.join(value.attemptDirectoryPath, "generation-receipt.json"),
       "utf8",
     ))).toEqual(value.generationReceipt);
+  });
+
+  it("rejects stale, non-canonical, and symlinked Case-bound Intent bytes before exposing ports", async () => {
+    const stale = await fixture();
+    await expect(createProductionWorldReconstructionRunPortsV1({
+      ...stale.input,
+      reconstructionCase: {
+        ...stale.input.reconstructionCase,
+        formalCaptureIntentHash: H("0"),
+      },
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+
+    const nonCanonical = await fixture();
+    const intentPath = path.join(
+      nonCanonical.root,
+      "inputs",
+      "formal-world-capture-intent.json",
+    );
+    await writeFile(
+      intentPath,
+      `${stringifyCanonicalJson(nonCanonical.input.formalCaptureIntent)}\n`,
+    );
+    await expect(createProductionWorldReconstructionRunPortsV1(
+      nonCanonical.input,
+    )).rejects.toThrow("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+
+    const linked = await fixture();
+    const linkedIntentPath = path.join(
+      linked.root,
+      "inputs",
+      "formal-world-capture-intent.json",
+    );
+    const targetPath = path.join(linked.root, "intent-target.json");
+    await writeFile(
+      targetPath,
+      stringifyCanonicalJson(linked.input.formalCaptureIntent),
+    );
+    await unlink(linkedIntentPath);
+    await symlink(targetPath, linkedIntentPath);
+    await expect(createProductionWorldReconstructionRunPortsV1(
+      linked.input,
+    )).rejects.toThrow("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
+  });
+
+  it("publishes immutable generation evidence with same-byte replay and rejects clobber or escaped roots", async () => {
+    const value = await fixture();
+    const firstOwners = owners(value, []);
+    const firstPorts = await createProductionWorldReconstructionRunPortsV1(
+      value.input,
+      firstOwners,
+    );
+    await firstPorts.generate({
+      attemptIndex: 0,
+      backend: "local",
+      runId: RUN_ID,
+      requestId: value.prepared.routerRequestId,
+      frozenOwnerIdentities: value.frozenOwnerIdentities,
+    });
+
+    const replayOwners = owners(value, []);
+    const replayPorts = await createProductionWorldReconstructionRunPortsV1(
+      value.input,
+      replayOwners,
+    );
+    await expect(replayPorts.generate({
+      attemptIndex: 0,
+      backend: "local",
+      runId: RUN_ID,
+      requestId: value.prepared.routerRequestId,
+      frozenOwnerIdentities: value.frozenOwnerIdentities,
+    })).resolves.toMatchObject({ outcome: "completed" });
+
+    const changedOwners = {
+      ...owners(value, []),
+      runGeneration: vi.fn(async () => ({
+        receipt: { ...value.generationReceipt, id: "different.receipt" } as never,
+      })),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const changedPorts = await createProductionWorldReconstructionRunPortsV1(
+      value.input,
+      changedOwners,
+    );
+    await expect(changedPorts.generate({
+      attemptIndex: 0,
+      backend: "local",
+      runId: RUN_ID,
+      requestId: value.prepared.routerRequestId,
+      frozenOwnerIdentities: value.frozenOwnerIdentities,
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_IMMUTABLE_ARTIFACT_MISMATCH");
+
+    const linkedOutput = await fixture();
+    const linkedReceiptPath = path.join(
+      linkedOutput.attemptDirectoryPath,
+      "generation-receipt.json",
+    );
+    const linkedReceiptTarget = path.join(linkedOutput.root, "receipt-target.json");
+    await mkdir(path.dirname(linkedReceiptPath), { recursive: true });
+    await writeFile(
+      linkedReceiptTarget,
+      `${stringifyCanonicalJson(linkedOutput.generationReceipt)}\n`,
+    );
+    await symlink(linkedReceiptTarget, linkedReceiptPath);
+    const linkedOutputPorts = await createProductionWorldReconstructionRunPortsV1(
+      linkedOutput.input,
+      owners(linkedOutput, []),
+    );
+    await expect(linkedOutputPorts.generate({
+      attemptIndex: 0,
+      backend: "local",
+      runId: RUN_ID,
+      requestId: linkedOutput.prepared.routerRequestId,
+      frozenOwnerIdentities: linkedOutput.frozenOwnerIdentities,
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_IMMUTABLE_ARTIFACT_MISMATCH");
+
+    await expect(createProductionWorldReconstructionRunPortsV1({
+      ...value.input,
+      generationInput: {
+        ...value.input.generationInput,
+        runDirectoryPath: path.join(value.root, "outside"),
+      },
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_RUN_DIRECTORY_INVALID");
   });
 
   it("maps only a completed generation with declared output missing to no-output", async () => {
@@ -323,7 +518,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         } as never,
       })),
     } as ProductionWorldReconstructionRunPortOwnersV1;
-    const ports = createProductionWorldReconstructionRunPortsV1(
+    const ports = await createProductionWorldReconstructionRunPortsV1(
       value.input,
       ownerPorts,
     );
@@ -417,7 +612,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
 
   it("joins only the canonical capture artifacts into the existing evaluator owner", async () => {
     const value = await fixture();
-    const evidence = createEvidenceSetFixtureInputV1();
+    const evidence = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
     const events: string[] = [];
     const baseOwners = owners(value, events);
     const verified = evidence.verifiedWorldPackage;
@@ -437,9 +632,11 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     };
     const input = {
       ...value.input,
-      caseRef: evidence.captureReceipt.caseRef,
+      caseRef:
+        `artifact://world-reconstruction-case/${evidence.reconstructionCase.id}/case.json`,
       reconstructionCase: evidence.reconstructionCase,
       evaluationProfile: evidence.evaluationProfile,
+      formalCaptureIntent: evidence.formalCaptureIntent,
     } as ProductionWorldReconstructionRunPortsInputV1;
     const evaluateAttempt = vi.fn(evaluateNativeBlockAttemptV1);
     const ownerPorts = {
@@ -500,7 +697,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     });
 
     expect(evaluateAttempt).toHaveBeenCalledOnce();
-    expect(evaluated.outcome).toBe("failed");
+    expect(evaluated.outcome).toBe("passed");
     expect(evaluated.evaluation.worldPackageRootHash).toBe(
       verified.receipt.worldPackageRootHash,
     );

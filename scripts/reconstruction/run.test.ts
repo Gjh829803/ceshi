@@ -162,6 +162,8 @@ function reconstructionCase() {
     }],
     evaluationProfileRef: "evaluation-profile.json",
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile()),
+    formalCaptureIntentRef: "inputs/formal-world-capture-intent.json" as const,
+    formalCaptureIntentHash: H("c"),
     acceptanceTargetRefs: [
       "worldkit://acceptance-target/central-ascent@1",
       "worldkit://acceptance-target/upper-t-junction@1",

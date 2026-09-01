@@ -2,9 +2,11 @@ import {
   createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
   hashBabylonNativeBlockMaterializerMetadataV1,
+  hashFormalWorldCaptureIntentV1,
   hashFormalSemanticCaptureMapV1,
   parseBabylonNativeBlockMaterializerMetadataV1,
   parseFormalSemanticCaptureMapV1,
+  parseFormalWorldCaptureIntentV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   hashWorldReconstructionCaseV1,
@@ -40,6 +42,8 @@ function caseValue() {
     evaluationProfileRef:
       "worldkit://reconstruction-evaluation-profile/cloud-temple@1",
     evaluationProfileHash: H("c"),
+    formalCaptureIntentRef: "inputs/formal-world-capture-intent.json",
+    formalCaptureIntentHash: H("d"),
     acceptanceTargetRefs: [
       "worldkit://acceptance-target/central-ascent@1",
       "worldkit://acceptance-target/upper-t-junction@1",
@@ -294,6 +298,45 @@ function checkpointSpatialCriteria() {
   }] as const;
 }
 
+function formalCaptureIntentValue(overrides: Record<string, unknown> = {}) {
+  return parseFormalWorldCaptureIntentV1({
+    kind: "formal-world-capture-intent",
+    schemaVersion: 1,
+    id: "cloud-temple.case.formal-world-capture-intent",
+    captureProfile: {
+      widthPixels: 1280,
+      heightPixels: 720,
+      devicePixelRatio: 1,
+    },
+    semanticCaptureTargetBindings: [{
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/central-ascent@1",
+      compositionTargetRef:
+        "worldkit://composition-target/central-ascent@1",
+      topologyNodeId: "central-ascent",
+      semanticLayerId: "ground",
+      blockVisualGroupId: "central-ascent-group",
+    }, {
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/upper-t-junction@1",
+      compositionTargetRef:
+        "worldkit://composition-target/upper-t-junction@1",
+      topologyNodeId: "upper-t-junction",
+      semanticLayerId: "upper",
+      blockVisualGroupId: "upper-t-junction-group",
+    }],
+    topologyRelations: [{
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
+    }],
+    checkpointSpatialCriteria: checkpointSpatialCriteria(),
+    ...overrides,
+  });
+}
+
 function contribution() {
   return {
     kind: "babylon-native-scene-contribution",
@@ -331,7 +374,12 @@ function contribution() {
 }
 
 function bindInput(overrides: Record<string, unknown> = {}) {
-  const reconstructionCase = parseWorldReconstructionCaseV1(caseValue());
+  const formalCaptureIntent = formalCaptureIntentValue();
+  const reconstructionCase = parseWorldReconstructionCaseV1({
+    ...caseValue(),
+    formalCaptureIntentHash:
+      hashFormalWorldCaptureIntentV1(formalCaptureIntent),
+  });
   const authoringManifest = parseNativeBlockAuthoringManifestV1(
     authoringManifestValue(),
   );
@@ -388,31 +436,7 @@ function bindInput(overrides: Record<string, unknown> = {}) {
     materializerMetadataHash:
       hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
     contribution: frozenContribution,
-    semanticCaptureTargetBindings: [{
-      acceptanceTargetRef:
-        "worldkit://acceptance-target/central-ascent@1",
-      compositionTargetRef:
-        "worldkit://composition-target/central-ascent@1",
-      topologyNodeId: "central-ascent",
-      semanticLayerId: "ground",
-      blockVisualGroupId: "central-ascent-group",
-    }, {
-      acceptanceTargetRef:
-        "worldkit://acceptance-target/upper-t-junction@1",
-      compositionTargetRef:
-        "worldkit://composition-target/upper-t-junction@1",
-      topologyNodeId: "upper-t-junction",
-      semanticLayerId: "upper",
-      blockVisualGroupId: "upper-t-junction-group",
-    }],
-    topologyRelations: [{
-      fromNodeId: "central-ascent",
-      relation: "connects-to",
-      toNodeId: "upper-t-junction",
-      measurementSource: "scripted-traversal",
-      traversalCheckId: "reach-junction",
-    }],
-    checkpointSpatialCriteria: checkpointSpatialCriteria(),
+    formalCaptureIntent,
     ...overrides,
   };
 }
@@ -522,8 +546,11 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       subjectEntityId: "player",
       colliderId: "spawn-ground",
     }] as const;
+    const formalCaptureIntent = formalCaptureIntentValue({ topologyRelations });
     const reconstructionCase = parseWorldReconstructionCaseV1({
       ...caseValue(),
+      formalCaptureIntentHash:
+        hashFormalWorldCaptureIntentV1(formalCaptureIntent),
       expected: {
         ...caseValue().expected,
         topology: {
@@ -543,7 +570,7 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       materializerMetadata,
       materializerMetadataHash:
         hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
-      topologyRelations,
+      formalCaptureIntent,
     }).topologyRelations).toEqual(topologyRelations);
   });
 
@@ -563,9 +590,38 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
             },
           }
         : criterion);
-    expect(() => bind({ checkpointSpatialCriteria: staleBounds }))
+    expect(() => bind({
+      formalCaptureIntent: formalCaptureIntentValue({
+        checkpointSpatialCriteria: staleBounds,
+      }),
+    }))
       .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
     expect(() => bind({
+      formalCaptureIntent: formalCaptureIntentValue({
+        checkpointSpatialCriteria: [{
+          kind: "block-plane",
+          checkpointId: "junction",
+          expectation: "block",
+          sourceVisualGroupId: "upper-t-junction-group",
+          sourceBoundsMeters: {
+            minimumMetersXYZ: [-0.5, 1, -2.5],
+            maximumMetersXYZ: [0.5, 2, -1.5],
+          },
+          colliderId: "missing-wall",
+          axis: "x",
+          sourceFace: "minimum",
+          planeMeters: -0.5,
+          expectedCenterSide: "negative",
+          capsuleRadiusMeters: 0.35,
+          toleranceMeters: 0.05,
+        }, checkpointSpatialCriteria()[1]],
+      }),
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
+  it("rejects a Block plane collider joined to a different visual group", () => {
+    const input = bindInput();
+    const blockedIntent = formalCaptureIntentValue({
       checkpointSpatialCriteria: [{
         kind: "block-plane",
         checkpointId: "junction",
@@ -575,7 +631,7 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
           minimumMetersXYZ: [-0.5, 1, -2.5],
           maximumMetersXYZ: [0.5, 2, -1.5],
         },
-        colliderId: "missing-wall",
+        colliderId: "spawn-ground",
         axis: "x",
         sourceFace: "minimum",
         planeMeters: -0.5,
@@ -583,13 +639,10 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
       }, checkpointSpatialCriteria()[1]],
-    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
-  });
-
-  it("rejects a Block plane collider joined to a different visual group", () => {
-    const input = bindInput();
+    });
     const blockedCase = parseWorldReconstructionCaseV1({
       ...caseValue(),
+      formalCaptureIntentHash: hashFormalWorldCaptureIntentV1(blockedIntent),
       expected: {
         ...caseValue().expected,
         criticalTraversalChecks: [{
@@ -608,23 +661,7 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       materializerMetadata,
       materializerMetadataHash:
         hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
-      checkpointSpatialCriteria: [{
-        kind: "block-plane",
-        checkpointId: "junction",
-        expectation: "block",
-        sourceVisualGroupId: "upper-t-junction-group",
-        sourceBoundsMeters: {
-          minimumMetersXYZ: [-0.5, 1, -2.5],
-          maximumMetersXYZ: [0.5, 2, -1.5],
-        },
-        colliderId: "spawn-ground",
-        axis: "x",
-        sourceFace: "minimum",
-        planeMeters: -0.5,
-        expectedCenterSide: "negative",
-        capsuleRadiusMeters: 0.35,
-        toleranceMeters: 0.05,
-      }, checkpointSpatialCriteria()[1]],
+      formalCaptureIntent: blockedIntent,
     })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
@@ -639,27 +676,37 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
   it("requires an explicit complete one-to-one Case and Package semantic mapping", () => {
     const input = bindInput();
     const missing = { ...input } as Record<string, unknown>;
-    delete missing.semanticCaptureTargetBindings;
+    delete missing.formalCaptureIntent;
     expect(() => bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
       missing as unknown as BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1,
     )).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
     expect(() => bind({
-      semanticCaptureTargetBindings:
-        input.semanticCaptureTargetBindings.slice(0, 1),
+      formalCaptureIntent: {
+        ...input.formalCaptureIntent,
+        semanticCaptureTargetBindings:
+          input.formalCaptureIntent.semanticCaptureTargetBindings.slice(0, 1),
+      },
     })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
     expect(() => bind({
-      semanticCaptureTargetBindings: input.semanticCaptureTargetBindings.map(
-        (binding, index) => index === 1
-          ? { ...binding, compositionTargetRef:
-              "worldkit://composition-target/central-ascent@1" }
-          : binding,
-      ),
+      formalCaptureIntent: {
+        ...input.formalCaptureIntent,
+        semanticCaptureTargetBindings:
+          input.formalCaptureIntent.semanticCaptureTargetBindings.map(
+            (binding, index) => index === 1
+              ? { ...binding, compositionTargetRef:
+                  "worldkit://composition-target/central-ascent@1" }
+              : binding,
+          ),
+      },
     })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
     expect(() => bind({
-      topologyRelations: [{
-        ...input.topologyRelations[0],
-        toNodeId: "central-ascent",
-      }],
+      formalCaptureIntent: {
+        ...input.formalCaptureIntent,
+        topologyRelations: [{
+          ...input.formalCaptureIntent.topologyRelations[0],
+          toNodeId: "central-ascent",
+        }],
+      },
     })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 });
