@@ -66,6 +66,11 @@ const STATIC_SURFACE = Object.freeze({
     "worldkit://traversal-surface-profile/ground.static@1",
 });
 
+const STATIC_SURFACE_OTHER = Object.freeze({
+  ...STATIC_SURFACE,
+  surfaceEntityId: "other-route-surface",
+});
+
 function context(scene: Scene): BabylonNativeSceneBuildContextV1 {
   return Object.freeze({
     scene,
@@ -364,6 +369,8 @@ describe("BWB-6 profile optimization contract", () => {
         visualGroupId: "mass-group" }),
       Object.freeze({ id: "negative", centerMetersXYZ: [-1, 0.5, 0] as const,
         visualGroupId: "mass-group" }),
+      Object.freeze({ id: "boundary", centerMetersXYZ: [3.5, 0.5, 2] as const,
+        visualGroupId: "mass-group" }),
     ]);
     const fixture = createEpoch(blocks, [
       selection("collider-l-a", "l-a"),
@@ -372,6 +379,7 @@ describe("BWB-6 profile optimization contract", () => {
       selection("collider-ratio", "ratio-split", NOT_TRAVERSABLE,
         { frictionRatio: 0.4 }),
       selection("collider-negative", "negative"),
+      selection("collider-boundary", "boundary"),
     ]);
     try {
       const assessment = assessBabylonNativeBlockOptimizationV1({
@@ -384,18 +392,66 @@ describe("BWB-6 profile optimization contract", () => {
           chunkIndexXZ: [-1, 0],
           blockIds: ["negative"],
         }),
+        expect.objectContaining({
+          kind: "boundary-block",
+          id: "boundary-block-boundary",
+          blockIds: ["boundary"],
+        }),
       ]));
       expect(assessment.colliderCoalescingGroups).toEqual([]);
       expect(assessment.independentColliderIds).toEqual([
+        "collider-boundary",
         "collider-l-a",
         "collider-l-b",
         "collider-l-c",
         "collider-negative",
         "collider-ratio",
       ]);
-      expect(assessment.independentVisualBlockIds).toEqual(["negative"]);
+      expect(assessment.independentVisualBlockIds).toEqual([
+        "boundary",
+        "negative",
+      ]);
     } finally {
       fixture.dispose();
+    }
+  });
+
+  it("splits traversal, visual-group, and gapped Collider candidates", () => {
+    const fixtures = [
+      createEpoch([
+        { id: "traversal-a", centerMetersXYZ: [0, 0.5, 0] as const },
+        { id: "traversal-b", centerMetersXYZ: [1, 0.5, 0] as const },
+      ], [
+        selection("collider-traversal-a", "traversal-a", STATIC_SURFACE),
+        selection("collider-traversal-b", "traversal-b", STATIC_SURFACE_OTHER),
+      ]),
+      createEpoch([
+        { id: "visual-a", centerMetersXYZ: [0, 0.5, 0] as const,
+          paletteRole: "structure", visualGroupId: "visual-group-a" },
+        { id: "visual-b", centerMetersXYZ: [1, 0.5, 0] as const,
+          paletteRole: "structure", visualGroupId: "visual-group-b" },
+      ], [
+        selection("collider-visual-a", "visual-a"),
+        selection("collider-visual-b", "visual-b"),
+      ]),
+      createEpoch([
+        { id: "gap-a", centerMetersXYZ: [0, 0.5, 0] as const },
+        { id: "gap-b", centerMetersXYZ: [2, 0.5, 0] as const },
+      ], [
+        selection("collider-gap-a", "gap-a"),
+        selection("collider-gap-b", "gap-b"),
+      ]),
+    ];
+    try {
+      for (const fixture of fixtures) {
+        const assessment = assessBabylonNativeBlockOptimizationV1({
+          finalizedEpoch: fixture.epoch,
+        });
+        expect(assessment.colliderCoalescingGroups).toEqual([]);
+        expect(assessment.independentColliderIds).toHaveLength(2);
+      }
+    } finally {
+      for (const fixture of fixtures) fixture.dispose();
     }
   });
 
@@ -409,6 +465,18 @@ describe("BWB-6 profile optimization contract", () => {
         finalizedEpoch: Object.freeze({
           ...fixture.epoch,
           profileInventoryHash: "not-a-hash" as `sha256:${string}`,
+        }),
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_OPTIMIZATION_INPUT_INVALID/);
+      expect(() => assessBabylonNativeBlockOptimizationV1({
+        finalizedEpoch: Object.freeze({
+          ...fixture.epoch,
+          checkedLayout: Object.freeze({
+            ...fixture.epoch.checkedLayout,
+            checkResult: Object.freeze({
+              ...fixture.epoch.checkedLayout.checkResult,
+              outcome: "rejected" as const,
+            }),
+          }),
         }),
       })).toThrow(/WORLDKIT_NATIVE_BLOCK_OPTIMIZATION_INPUT_INVALID/);
       expect(() => assessBabylonNativeBlockOptimizationV1({

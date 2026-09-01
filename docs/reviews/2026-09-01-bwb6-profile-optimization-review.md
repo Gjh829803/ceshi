@@ -28,8 +28,8 @@ Actual execution remains a separately approved BNA-owned task.
   already accepted and registered by the existing Profile finalization path. Absence is distinct from
   an explicit number; no Runtime default is inferred.
 - The fixed XZ policy is `[4, 4]m` from `[-0.5, -0.5]m`, with half-open center ownership and stable
-  signed IDs. Current admitted Profile shapes align to those boundaries; boundary-singleton behavior
-  is therefore a fail-closed future-shape rule, not a fabricated current benchmark result.
+  signed IDs. A current full Block centered at `3.5m` can cross the center-owned boundary and is
+  covered as an independent singleton.
 - Thin eligibility requires exact residency, fixed shape, palette role, and semantic capture class.
   Rotation/translation stay per-block data and every Block ID remains represented.
 - Collider eligibility additionally requires exact traversal binding, ratio presence/value, visual
@@ -86,6 +86,21 @@ That test-infrastructure-only follow-up did not invalidate the passing Profile s
 The Profile suite ran on `7d5a35aa`; `c46bd74f` changes only the test-gate manifest. Typecheck and
 census ran on the final product tree. No repository-wide test suite, Runtime/Havok test, Browser,
 port, rendered capture, or manual interaction was run because BWB-6 changes no execution behavior.
+
+## Independent review advisory disposition
+
+The independent Cursor Cloud read-only review of PR head
+`adb081f602f8989088f7678c275940b9876fe7e6` returned **GO, P0 = 0, P1 = 0**, plus two P2 and one P3.
+They were batched without changing production code:
+
+- corrected the false statement that boundary singletons were unreachable and added the current
+  `3.5m` full-Block boundary fixture;
+- added independent traversal-binding, visual-group, and gapped-component split fixtures;
+- added the rejected-check forged-epoch fixture.
+
+The remediation changed only this BWB-6 spec/plan/review and the focused contract test. The smallest
+invalidated evidence passed: 6 focused tests, typecheck, test census, and diff-check. The earlier
+complete Profile suite remains valid because no production source or existing test input changed.
 
 ## BNA-owned execution proposal
 

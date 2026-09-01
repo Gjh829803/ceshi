@@ -106,10 +106,9 @@ The assessment uses one non-configurable XZ grid:
 - a block is a normal Chunk member only when its complete XZ bounds fit inside the selected Chunk;
 - a block crossing either boundary becomes one stable singleton boundary residency group.
 
-The current BWB-3 lattice and fixed shapes align their admitted bounds to this grid, so a
-boundary-crossing block is not currently constructible. The singleton rule remains fail-closed policy
-for any future admitted shape or lattice revision and must not be presented as a measured current
-corpus outcome.
+The current BWB-3 lattice permits a full Block centered on a Chunk boundary, such as `X = 3.5m`,
+whose bounds cross the center-owned Chunk. Such a Block is therefore a current, reachable singleton
+case and must remain ineligible for Thin grouping or Collider coalescing across that boundary.
 
 The `-0.5m` origin aligns ordinary one-meter Block faces with four-meter boundaries. The policy is a
 Profile assessment rule, not a Runtime streaming promise. Every block appears in exactly one
@@ -204,8 +203,7 @@ Focused RED to GREEN must cover:
 
 - Collider friction/restitution preservation;
 - exact semantic splits for traversal, ratios, visual group, gaps, and non-rectangular unions;
-- asymmetric and negative Chunk indices; the boundary-crossing singleton policy remains a
-  fail-closed future-shape rule because current admitted bounds align to Chunk boundaries;
+- asymmetric and negative Chunk indices plus a current boundary-crossing singleton;
 - creation-order determinism and stable assessment hash;
 - exact Block/Collider coverage and deep freezing;
 - literal BWB-5 baseline resource counts;

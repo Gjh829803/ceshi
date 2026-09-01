@@ -97,9 +97,7 @@ baseline/projected counts, complete coverage, and a SHA-256 assessment hash.
 
 Use literal fixtures proving different traversal identity, explicit material ratio, visual group,
 non-rectangular occupied union never enter the same eligibility group. Include a negative-coordinate
-Chunk fixture and reversed creation order. Current Profile lattice bounds align to the frozen Chunk
-grid, so retain boundary singleton behavior as an explicit fail-closed future-shape rule rather than
-fabricating a currently admitted boundary-crossing fixture.
+Chunk fixture, a current full Block centered on the `3.5m` boundary, and reversed creation order.
 
 - [ ] **Step 3: Add rejection and deep-freeze RED cases**
 
