@@ -94,6 +94,8 @@ For this production reconstruction Case, every non-root structural or playable b
 
 All `route` blocks must form one edge-adjacent component. Neighboring route tops may differ by at most `0.25` meters. A safe quarter-meter stair column starts with a `full` ground block centered at `y=-0.5`; for a tread top at `0.25 * n`, stack `n` `step` blocks at the same XZ center with Y centers `0.125 + 0.25 * j` for `j=0..n-1`, and expose/collide only the top tread as appropriate. Put successive tread columns exactly one meter apart along X or Z so their route blocks touch at an edge without overlap. Never fill through a `step` using a `full` block whose volume reaches into the tread.
 
+Treat `budgets.maximumStaticColliderCount` as a hard ceiling shared by generation, Native admission, and Package closure. In the Block Profile, one `staticColliders` row selects one Block and consumes one Collider. Do not register every visible or supporting Block. Register the exact Case-required Collider IDs, the Spawn support, the continuous playable corridor, and only the blocker faces needed to prevent traversal; keep background mass and non-playable support visual-only. Count the final array before returning and leave margin below the frozen ceiling. Never assume that many visual Blocks will be coalesced into one proxy.
+
 Use deterministic seeded construction. Iterate arrays in explicit stable order, sort semantic inventories before emission, and use `context.random` for any allowed variation. Do not call `Math.random`, `Date.now`, timers, locale-sensitive sort, or remote services.
 
 ## Volumetric reconstruction

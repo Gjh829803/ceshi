@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BNA2_WHITEBOX_ADMISSION_BUDGET_V1,
   createBabylonNativeAssetFreeResolverV1,
   resolveBabylonNativeCheckPolicyV1,
 } from "./check-policy.js";
+import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
+  "./admission-budget.js";
 import { VALID_NATIVE_SCENE_BOOTSTRAP_FIXTURE_V1 } from "./test-support.js";
 
 describe("BNA2 Native check policy", () => {

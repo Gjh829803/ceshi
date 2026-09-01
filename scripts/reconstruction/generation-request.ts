@@ -38,15 +38,15 @@ import {
   parseNativeBlockRepairInstructionV1,
   type NativeBlockRepairInstructionV1,
 } from "./repair-request.js";
+import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
+  "../native-scene/admission-budget.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 = Object.freeze({
   maximumBlockCount: 2_000,
-  maximumStaticColliderCount: 500,
-  maximumStaticColliderVertexCount: 200_000,
-  maximumStaticColliderTriangleCount: 100_000,
+  ...BNA2_WHITEBOX_ADMISSION_BUDGET_V1,
   maximumOutputBytes: 4_000_000,
   timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
 } satisfies NativeBlockGenerationBudgetV1);

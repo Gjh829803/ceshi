@@ -139,6 +139,15 @@ describe("Native Block Builder Skill", () => {
       "check the indexed value for `undefined` before destructuring",
     );
     expect(outputContract).toContain(
+      "Treat `budgets.maximumStaticColliderCount` as a hard ceiling",
+    );
+    expect(outputContract).toContain(
+      "one `staticColliders` row selects one Block and consumes one Collider",
+    );
+    expect(outputContract).toContain(
+      "Do not register every visible or supporting Block",
+    );
+    expect(outputContract).toContain(
       "center lattice is `[0.25, 0.125, 0.25]` meters",
     );
     expect(outputContract).toContain(
