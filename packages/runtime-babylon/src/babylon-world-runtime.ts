@@ -159,6 +159,13 @@ import {
   resolveBabylonRuntimeSubjectsV1,
   type BabylonRuntimeSubjectV1,
 } from "./runtime-subject";
+import {
+  createBabylonNativeLiveColliderRegistryV1,
+  registerBabylonNativeLiveColliderRegistryV1,
+  unregisterBabylonNativeLiveColliderRegistryV1,
+  type BabylonNativeLiveColliderHandleV1,
+} from "./babylon-native-live-collider-registry";
+
 function committedPresentationFromLocomotionMode(
   committedTick: number,
   locomotionMode: LocomotionModeV1 | "suspended",
@@ -944,6 +951,7 @@ export class BabylonWorldRuntime {
       const entityRegistry = new EntityRegistryV1();
       const materials = createWhiteboxMaterials(scene);
       const aggregates: PhysicsAggregate[] = [];
+      const nativeColliderHandles: BabylonNativeLiveColliderHandleV1[] = [];
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
@@ -1015,6 +1023,12 @@ export class BabylonWorldRuntime {
             "WORLDKIT_NATIVE_SCENE_CONTRIBUTION_MISSING: Native Scene Contribution must pass before physics attachment.",
           );
         }
+        const sourceBlockIdByColliderId = new Map(
+          preparedNativeScene?.verifiedWorldPackage
+            .nativeBlockMaterializerMetadata?.colliderJoins.map(
+              ({ blockId, colliderId }) => [colliderId, blockId] as const,
+            ) ?? [],
+        );
         for (const collider of nativeContribution.staticColliders) {
           const collisionMesh = createOwnedNativeCollisionMesh(collider, scene);
           ownedDisposers.push(() => collisionMesh.dispose());
@@ -1032,7 +1046,30 @@ export class BabylonWorldRuntime {
           );
           aggregates.push(aggregate);
           ownedDisposers.push(() => aggregate.dispose());
+          const sourceBlockId = sourceBlockIdByColliderId.get(collider.id);
+          nativeColliderHandles.push(Object.freeze({
+            colliderId: collider.id,
+            colliderSubshapeId: collider.colliderSubshapeId,
+            ...(isNil(sourceBlockId) ? {} : { sourceBlockId }),
+            physicsBodyId: `physics-body:${collider.id}`,
+            overlayRecordId: `overlay:${collider.id}`,
+            mesh: collisionMesh,
+            aggregate,
+            body: aggregate.body,
+            shape: aggregate.shape,
+          }));
         }
+        const nativeColliderRegistry =
+          createBabylonNativeLiveColliderRegistryV1(nativeColliderHandles);
+        registerBabylonNativeLiveColliderRegistryV1(
+          scene,
+          nativeColliderRegistry,
+        );
+        ownedDisposers.push(() =>
+          unregisterBabylonNativeLiveColliderRegistryV1(
+            scene,
+            nativeColliderRegistry,
+          ));
       }
 
       options.onInitializationStage?.("camera");
