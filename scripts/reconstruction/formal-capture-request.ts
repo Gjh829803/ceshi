@@ -28,6 +28,7 @@ import {
   hashWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
+  worldReconstructionEvidenceProfileClosureMatchesV1,
   type WorldReconstructionCaseV1,
   type WorldReconstructionEvaluationProfileV1,
 } from "@whitebox-world/validation";
@@ -36,7 +37,7 @@ import {
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
   type WorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
-import { isEqual, isNil, sortBy, uniq } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 import {
   lstat,
   mkdir,
@@ -347,14 +348,9 @@ function joinCaseProfile(
       return identityMismatch("evaluationProfileRef");
     }
   }
-  const profileRequiredEvidenceRefs = sortBy(uniq(
-    profile.requiredEvidenceByDimension.flatMap(
-      (entry) => entry.evidenceProfileRefs,
-    ),
-  ));
-  if (!isEqual(
-    reconstructionCase.requiredEvidenceProfileRefs,
-    profileRequiredEvidenceRefs,
+  if (!worldReconstructionEvidenceProfileClosureMatchesV1(
+    reconstructionCase,
+    profile,
   )) return identityMismatch("requiredEvidenceProfileRefs");
   return evaluationProfileHash;
 }
