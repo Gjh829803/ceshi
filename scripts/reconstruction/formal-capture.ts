@@ -46,6 +46,7 @@ import { isEqual, isNil } from "lodash-es";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import {
+  CaptureOnlyHostedSessionClosedErrorV1,
   createCaptureOnlyHostedTransportStarterV1,
   runCaptureOnlyHostedSessionV1,
   type StartCaptureOnlyHostedTransportV1,
@@ -116,11 +117,53 @@ export interface CaptureHostedWorldPackagePortsV1 {
 
 export interface FormalCaptureCommandResultV1 {
   readonly outcome: "completed";
+  readonly stage: "published";
+  readonly cleanupOutcomes: FormalCaptureCommandCleanupOutcomesV1;
   readonly outputDirectoryPath: string;
   readonly openingOutputPath: string;
   readonly formalRequestHash: Sha256HashV1;
   readonly formalCaptureReceiptHash: Sha256HashV1;
   readonly worldPackageRootHash: Sha256HashV1;
+}
+
+export type FormalCaptureCommandCleanupOutcomeV1 =
+  | "not-started"
+  | "completed"
+  | "failed";
+
+export interface FormalCaptureCommandCleanupOutcomesV1 {
+  readonly hostedBrowserSession: FormalCaptureCommandCleanupOutcomeV1;
+  readonly viteServer: FormalCaptureCommandCleanupOutcomeV1;
+}
+
+export class FormalCaptureCommandClosedErrorV1 extends Error {
+  readonly stage: "pre-launch" | "hosted-session" | "post-dispose" | "publication";
+  readonly cleanupOutcomes: FormalCaptureCommandCleanupOutcomesV1;
+
+  constructor(input: Readonly<{
+    stage: FormalCaptureCommandClosedErrorV1["stage"];
+    cleanupOutcomes: FormalCaptureCommandCleanupOutcomesV1;
+    cause: unknown;
+  }>) {
+    super(input.cause instanceof Error
+      ? input.cause.message
+      : "FORMAL_CAPTURE_FAILED", { cause: input.cause });
+    this.name = "FormalCaptureCommandClosedErrorV1";
+    this.stage = input.stage;
+    this.cleanupOutcomes = Object.freeze({ ...input.cleanupOutcomes });
+  }
+}
+
+function captureClosed(
+  stage: FormalCaptureCommandClosedErrorV1["stage"],
+  cleanupOutcomes: FormalCaptureCommandCleanupOutcomesV1,
+  cause: unknown,
+): never {
+  throw new FormalCaptureCommandClosedErrorV1({
+    stage,
+    cleanupOutcomes,
+    cause,
+  });
 }
 
 function mismatch(pathName: string): never {
@@ -406,52 +449,94 @@ export async function captureHostedWorldPackageV1(
   input: CaptureHostedWorldPackageInputV1,
   ports: CaptureHostedWorldPackagePortsV1 = {},
 ): Promise<FormalCaptureCommandResultV1> {
-  const packageDirectoryPath = exactAbsolutePath(
-    input.packageDirectoryPath,
-    "packageDirectoryPath",
-  );
-  const outputPath = exactAbsolutePath(input.outputPath, "outputPath");
-  const triviewOutputPath = exactAbsolutePath(
-    input.triviewOutputPath,
-    "triviewOutputPath",
-  );
-  if (outputPath !== path.join(triviewOutputPath, "opening.png")) {
-    throw new Error("FORMAL_CAPTURE_OUTPUT_TOPOLOGY_INVALID");
-  }
-  if (!(await missing(triviewOutputPath))) {
-    throw new Error("FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS");
-  }
+  let packageDirectoryPath: string;
+  let outputPath: string;
+  let triviewOutputPath: string;
+  let joined: JoinedFormalCapturePackageRequestV1;
+  try {
+    packageDirectoryPath = exactAbsolutePath(
+      input.packageDirectoryPath,
+      "packageDirectoryPath",
+    );
+    outputPath = exactAbsolutePath(input.outputPath, "outputPath");
+    triviewOutputPath = exactAbsolutePath(
+      input.triviewOutputPath,
+      "triviewOutputPath",
+    );
+    if (outputPath !== path.join(triviewOutputPath, "opening.png")) {
+      throw new Error("FORMAL_CAPTURE_OUTPUT_TOPOLOGY_INVALID");
+    }
+    if (!(await missing(triviewOutputPath))) {
+      throw new Error("FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS");
+    }
 
-  // The verified Package + parsed formal Request join is complete before the
-  // capture-only transport can allocate a server, Browser, or Runtime session.
-  const joined = await readAndJoinPackageRequest(
-    packageDirectoryPath,
-    ports.readPackage ?? (async (directoryPath) =>
-      readWorldPackageDirectoryV1({
-        packageDirectoryPath: directoryPath,
-        maximumTotalBytes: MAXIMUM_PACKAGE_BYTES,
-        maximumFileCount: MAXIMUM_PACKAGE_FILE_COUNT,
-      })),
-  );
+    // The verified Package + parsed formal Request join is complete before the
+    // capture-only transport can allocate a server, Browser, or Runtime session.
+    joined = await readAndJoinPackageRequest(
+      packageDirectoryPath,
+      ports.readPackage ?? (async (directoryPath) =>
+        readWorldPackageDirectoryV1({
+          packageDirectoryPath: directoryPath,
+          maximumTotalBytes: MAXIMUM_PACKAGE_BYTES,
+          maximumFileCount: MAXIMUM_PACKAGE_FILE_COUNT,
+        })),
+    );
+  } catch (error) {
+    captureClosed("pre-launch", {
+      hostedBrowserSession: "not-started",
+      viteServer: "not-started",
+    }, error);
+  }
   const startTransport = ports.startTransport ??
     createCaptureOnlyHostedTransportStarterV1({
       packageDirectoryPath,
       ...(input.port === undefined ? {} : { port: input.port }),
     });
-  const payload = await runCaptureOnlyHostedSessionV1({
-    request: joined.request,
-    startTransport,
-  });
+  let payload: FormalHostedWorldCapturePayloadV1;
+  try {
+    payload = await runCaptureOnlyHostedSessionV1({
+      request: joined.request,
+      startTransport,
+    });
+  } catch (error) {
+    captureClosed(
+      "hosted-session",
+      error instanceof CaptureOnlyHostedSessionClosedErrorV1
+        ? error.cleanupOutcomes
+        : { hostedBrowserSession: "failed", viteServer: "failed" },
+      error,
+    );
+  }
   // runCaptureOnlyHostedSessionV1 returns only after complete Host cleanup.
-  const validated = validateHostedPayload(payload, joined);
-  await publishFormalCaptureDirectoryV1({
-    outputDirectoryPath: triviewOutputPath,
-    artifacts: validated.artifacts,
-    receiptJson: validated.receiptJson,
-    budget: input.budget ?? defaultBudget(),
-  });
+  let validated: ReturnType<typeof validateHostedPayload>;
+  try {
+    validated = validateHostedPayload(payload, joined);
+  } catch (error) {
+    captureClosed("post-dispose", {
+      hostedBrowserSession: "completed",
+      viteServer: "completed",
+    }, error);
+  }
+  try {
+    await publishFormalCaptureDirectoryV1({
+      outputDirectoryPath: triviewOutputPath,
+      artifacts: validated.artifacts,
+      receiptJson: validated.receiptJson,
+      budget: input.budget ?? defaultBudget(),
+    });
+  } catch (error) {
+    captureClosed("publication", {
+      hostedBrowserSession: "completed",
+      viteServer: "completed",
+    }, error);
+  }
   return Object.freeze({
     outcome: "completed",
+    stage: "published",
+    cleanupOutcomes: Object.freeze({
+      hostedBrowserSession: "completed",
+      viteServer: "completed",
+    }),
     outputDirectoryPath: triviewOutputPath,
     openingOutputPath: outputPath,
     formalRequestHash: joined.formalRequestHash,

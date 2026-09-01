@@ -855,6 +855,8 @@ describe("runWorldReconstructionV1", () => {
     )).rejects.toMatchObject({
       diagnosticCodes: ["WORLD_RECONSTRUCTION_EVALUATION_FAILED"],
     });
+    expect(evaluation.calls.generate).toEqual([0]);
+    expect(evaluation.calls.generateInputs[0]?.repairInstruction).toBeUndefined();
   });
 
   it("publishes an incomplete receipt when cleanup fails after evaluation", async () => {

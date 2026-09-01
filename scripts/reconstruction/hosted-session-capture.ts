@@ -34,7 +34,7 @@ const DEFAULT_CAPTURE_TIMEOUT_MILLISECONDS = 120_000;
 export interface CaptureOnlyHostedTransportV1<Payload, Request = unknown> {
   executeFormalCapture(request: Request): Promise<Payload>;
   /** Resolves only after session, Browser, server, and temporary resources close. */
-  dispose(): Promise<void>;
+  dispose(): Promise<CaptureOnlyHostedCleanupOutcomesV1>;
 }
 
 export type StartCaptureOnlyHostedTransportV1<Payload, Request = unknown> = (
@@ -45,6 +45,26 @@ export interface RunCaptureOnlyHostedSessionInputV1<Payload, Request = unknown> 
   readonly request: Request;
   /** A rejected start must clean every partially-created owned resource first. */
   readonly startTransport: StartCaptureOnlyHostedTransportV1<Payload, Request>;
+}
+
+export interface CaptureOnlyHostedCleanupOutcomesV1 {
+  readonly hostedBrowserSession: "completed" | "failed";
+  readonly viteServer: "completed" | "failed";
+}
+
+export class CaptureOnlyHostedSessionClosedErrorV1 extends Error {
+  readonly cleanupOutcomes: CaptureOnlyHostedCleanupOutcomesV1;
+
+  constructor(
+    cause: unknown,
+    cleanupOutcomes: CaptureOnlyHostedCleanupOutcomesV1,
+  ) {
+    super(cause instanceof Error
+      ? cause.message
+      : "WORLDKIT_CAPTURE_ONLY_HOSTED_SESSION_FAILED", { cause });
+    this.name = "CaptureOnlyHostedSessionClosedErrorV1";
+    this.cleanupOutcomes = Object.freeze({ ...cleanupOutcomes });
+  }
 }
 
 export interface StartConcreteCaptureOnlyHostedTransportInputV1 {
@@ -88,22 +108,29 @@ async function cleanupOwnedResources(input: Readonly<{
   context?: Pick<BrowserContext, "close">;
   browser?: Pick<Browser, "close">;
   server?: Pick<ServerPortV1, "stop">;
-}>): Promise<void> {
-  let firstFailure: unknown;
+}>): Promise<CaptureOnlyHostedCleanupOutcomesV1> {
+  let hostedBrowserSession: "completed" | "failed" = "completed";
   for (const close of [
     input.page === undefined ? undefined : () => input.page!.close(),
     input.context === undefined ? undefined : () => input.context!.close(),
     input.browser === undefined ? undefined : () => input.browser!.close(),
-    input.server === undefined ? undefined : () => input.server!.stop(),
   ]) {
     if (close === undefined) continue;
     try {
       await close();
-    } catch (error) {
-      firstFailure ??= error;
+    } catch {
+      hostedBrowserSession = "failed";
     }
   }
-  if (firstFailure !== undefined) throw firstFailure;
+  let viteServer: "completed" | "failed" = "completed";
+  if (input.server !== undefined) {
+    try {
+      await input.server.stop();
+    } catch {
+      viteServer = "failed";
+    }
+  }
+  return Object.freeze({ hostedBrowserSession, viteServer });
 }
 
 function captureRouteUrl(input: Readonly<{
@@ -145,7 +172,7 @@ export async function startCaptureOnlyHostedTransportV1(
   let context: BrowserContext | undefined;
   let page: Page | undefined;
   let isDisposing = false;
-  let disposePromise: Promise<void> | undefined;
+  let disposePromise: Promise<CaptureOnlyHostedCleanupOutcomesV1> | undefined;
   let hasExecuted = false;
   let fatalError: Error | undefined;
   let signalFatal!: () => void;
@@ -165,7 +192,7 @@ export async function startCaptureOnlyHostedTransportV1(
   const onFrameNavigated = (frame: Frame) => {
     if (page !== undefined && frame !== page.mainFrame()) fail("FRAME_NAVIGATED");
   };
-  const cleanup = (): Promise<void> => {
+  const cleanup = (): Promise<CaptureOnlyHostedCleanupOutcomesV1> => {
     if (disposePromise !== undefined) return disposePromise;
     isDisposing = true;
     browser?.off("disconnected", onBrowserDisconnected);
@@ -230,12 +257,7 @@ export async function startCaptureOnlyHostedTransportV1(
     page.on("framenavigated", onFrameNavigated);
     if (fatalError !== undefined) throw fatalError;
   } catch (error) {
-    try {
-      await cleanup();
-    } catch {
-      // Startup failure remains primary; every later owner was still attempted.
-    }
-    throw error;
+    throw new CaptureOnlyHostedSessionClosedErrorV1(error, await cleanup());
   }
 
   return Object.freeze({
@@ -291,14 +313,7 @@ export async function startCaptureOnlyHostedTransportV1(
           error.message ===
             "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_CAPTURE_TIMEOUT"
         ) {
-          try {
-            await cleanup();
-          } catch (cleanupError) {
-            throw new AggregateError(
-              [error, cleanupError],
-              error.message,
-            );
-          }
+          await cleanup();
         }
         throw error;
       } finally {
@@ -332,7 +347,16 @@ export function createCaptureOnlyHostedTransportStarterV1(
 export async function runCaptureOnlyHostedSessionV1<Payload, Request = unknown>(
   input: RunCaptureOnlyHostedSessionInputV1<Payload, Request>,
 ): Promise<Payload> {
-  const transport = await input.startTransport(input.request);
+  let transport: CaptureOnlyHostedTransportV1<Payload, Request>;
+  try {
+    transport = await input.startTransport(input.request);
+  } catch (error) {
+    if (error instanceof CaptureOnlyHostedSessionClosedErrorV1) throw error;
+    throw new CaptureOnlyHostedSessionClosedErrorV1(error, {
+      hostedBrowserSession: "failed",
+      viteServer: "failed",
+    });
+  }
   let payload: Payload | undefined;
   let captureFailure: unknown;
   try {
@@ -341,12 +365,25 @@ export async function runCaptureOnlyHostedSessionV1<Payload, Request = unknown>(
     captureFailure = error;
   }
 
+  let cleanupOutcomes: CaptureOnlyHostedCleanupOutcomesV1;
   try {
-    await transport.dispose();
-  } catch (cleanupFailure) {
-    if (captureFailure === undefined) throw cleanupFailure;
+    cleanupOutcomes = await transport.dispose();
+  } catch (error) {
+    throw new CaptureOnlyHostedSessionClosedErrorV1(
+      captureFailure ?? error,
+      { hostedBrowserSession: "failed", viteServer: "failed" },
+    );
   }
 
-  if (captureFailure !== undefined) throw captureFailure;
+  if (
+    captureFailure !== undefined ||
+    cleanupOutcomes.hostedBrowserSession === "failed" ||
+    cleanupOutcomes.viteServer === "failed"
+  ) {
+    throw new CaptureOnlyHostedSessionClosedErrorV1(
+      captureFailure ?? transportError("CLEANUP_FAILED"),
+      cleanupOutcomes,
+    );
+  }
   return payload as Payload;
 }

@@ -34,6 +34,7 @@ import {
   type ProductionWorldReconstructionRunPortOwnersV1,
   type ProductionWorldReconstructionRunPortsInputV1,
 } from "./production-run-ports.js";
+import { FormalCaptureCommandClosedErrorV1 } from "./formal-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
 import { createEvidenceSetFixtureInputV1 } from
   "./evaluate-fixture.test-support.js";
@@ -284,6 +285,11 @@ function owners(
       events.push("capture-browser");
       return {
         outcome: "completed" as const,
+        stage: "published" as const,
+        cleanupOutcomes: {
+          hostedBrowserSession: "completed" as const,
+          viteServer: "completed" as const,
+        },
         outputDirectoryPath: value.captureDirectoryPath,
         openingOutputPath: path.join(value.captureDirectoryPath, "opening.png"),
         formalRequestHash: H("a"),
@@ -694,6 +700,52 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     }));
   });
 
+  it.each([
+    ["pre-launch", "not-started", "not-started", "completed", "completed", "completed"],
+    ["post-dispose", "completed", "completed", "completed", "completed", "completed"],
+    ["hosted-session", "failed", "completed", "failed", "completed", "completed"],
+    ["hosted-session", "completed", "failed", "completed", "failed", "completed"],
+    ["publication", "completed", "completed", "completed", "completed", "failed"],
+  ] as const)(
+    "consumes the formal capture owner's %s Browser=%s Vite=%s cleanup truth",
+    async (
+      stage,
+      hostedOutcome,
+      viteOutcome,
+      expectedHostedOutcome,
+      expectedViteOutcome,
+      expectedOutputPromotion,
+    ) => {
+      const value = await fixture();
+      const events: string[] = [];
+      const ownerPorts = {
+        ...owners(value, events),
+        capturePackage: vi.fn(async () => {
+          throw new FormalCaptureCommandClosedErrorV1({
+            stage,
+            cleanupOutcomes: {
+              hostedBrowserSession: hostedOutcome,
+              viteServer: viteOutcome,
+            },
+            cause: new Error("FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH"),
+          });
+        }),
+      } as ProductionWorldReconstructionRunPortOwnersV1;
+      const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+
+      expect(await ports.capture({ attemptIndex: 0, packaged })).toEqual({
+        outcome: "failed",
+        cameraRollbackOutcome: "completed",
+        diagnosticCodes: ["FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH"],
+      });
+      expect(await ports.cleanup()).toEqual(expect.objectContaining({
+        hostedBrowserSession: expectedHostedOutcome,
+        viteServer: expectedViteOutcome,
+        outputPromotion: expectedOutputPromotion,
+      }));
+    },
+  );
+
   it("never allocates Browser when the verified-Package capture request writer rejects", async () => {
     const value = await fixture();
     const events: string[] = [];
@@ -770,6 +822,11 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         )));
         return {
           outcome: "completed" as const,
+          stage: "published" as const,
+          cleanupOutcomes: {
+            hostedBrowserSession: "completed" as const,
+            viteServer: "completed" as const,
+          },
           outputDirectoryPath: value.captureDirectoryPath,
           openingOutputPath: path.join(value.captureDirectoryPath, "opening.png"),
           formalRequestHash: evidence.captureReceipt.formalRequestHash,
@@ -812,5 +869,20 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     expect(evaluated.evaluation.captureReceiptHash).toBe(
       hashFormalWorldCaptureReceiptV1(evidence.captureReceipt),
     );
+
+    evaluateAttempt.mockClear();
+    await writeFile(
+      path.join(value.captureDirectoryPath, "formal-world-capture-receipt.json"),
+      `${stringifyCanonicalJson({
+        ...evidence.captureReceipt,
+        rendererIdentity: `${evidence.captureReceipt.rendererIdentity}.stale`,
+      })}\n`,
+    );
+    await expect(ports.evaluate({
+      attemptIndex: 0,
+      packaged,
+      captured,
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_CAPTURE_IDENTITY_MISMATCH");
+    expect(evaluateAttempt).not.toHaveBeenCalled();
   });
 });

@@ -167,6 +167,10 @@ describe("capture-only Hosted session transaction", () => {
       }),
       dispose: vi.fn(async () => {
         events.push("cleanup");
+        return {
+          hostedBrowserSession: "completed" as const,
+          viteServer: "completed" as const,
+        };
       }),
     };
 
@@ -185,7 +189,10 @@ describe("capture-only Hosted session transaction", () => {
 
   it("cleans up after Capture rejection and preserves the Capture failure", async () => {
     const captureFailure = new Error("capture failed");
-    const dispose = vi.fn(async () => undefined);
+    const dispose = vi.fn(async () => ({
+      hostedBrowserSession: "completed" as const,
+      viteServer: "completed" as const,
+    }));
 
     await expect(runCaptureOnlyHostedSessionV1({
       request: Object.freeze({ id: "request.002" }),
@@ -195,7 +202,14 @@ describe("capture-only Hosted session transaction", () => {
         },
         dispose,
       }),
-    })).rejects.toBe(captureFailure);
+    })).rejects.toMatchObject({
+      name: "CaptureOnlyHostedSessionClosedErrorV1",
+      cleanupOutcomes: {
+        hostedBrowserSession: "completed",
+        viteServer: "completed",
+      },
+      cause: captureFailure,
+    });
     expect(dispose).toHaveBeenCalledOnce();
   });
 
@@ -210,7 +224,14 @@ describe("capture-only Hosted session transaction", () => {
           throw cleanupFailure;
         },
       }),
-    })).rejects.toBe(cleanupFailure);
+    })).rejects.toMatchObject({
+      name: "CaptureOnlyHostedSessionClosedErrorV1",
+      cleanupOutcomes: {
+        hostedBrowserSession: "failed",
+        viteServer: "failed",
+      },
+      cause: cleanupFailure,
+    });
   });
 
   it("retains the primary Capture failure when cleanup also fails", async () => {
@@ -226,7 +247,14 @@ describe("capture-only Hosted session transaction", () => {
           throw new Error("cleanup also failed");
         },
       }),
-    })).rejects.toBe(captureFailure);
+    })).rejects.toMatchObject({
+      name: "CaptureOnlyHostedSessionClosedErrorV1",
+      cleanupOutcomes: {
+        hostedBrowserSession: "failed",
+        viteServer: "failed",
+      },
+      cause: captureFailure,
+    });
   });
 });
 
@@ -349,7 +377,10 @@ describe("concrete capture-only Hosted transport", () => {
       h.page.emit("framedetached", { id: "capture-frame" });
     }
     await expect(transport.executeFormalCapture(h.request)).rejects.toThrow();
-    await expect(transport.dispose()).resolves.toBeUndefined();
+    await expect(transport.dispose()).resolves.toEqual({
+      hostedBrowserSession: "completed",
+      viteServer: "completed",
+    });
     expect(h.events.at(-1)).toBe("server.stop");
   });
 
@@ -366,7 +397,11 @@ describe("concrete capture-only Hosted transport", () => {
     await expect(runCaptureOnlyHostedSessionV1({
       request: h.request,
       startTransport: starter,
-    })).rejects.toThrow(owner === "server" ? "server stop" : `${owner} close`);
+    })).rejects.toMatchObject({
+      cleanupOutcomes: owner === "server"
+        ? { hostedBrowserSession: "completed", viteServer: "failed" }
+        : { hostedBrowserSession: "failed", viteServer: "completed" },
+    });
     expect(h.events.slice(-4)).toEqual([
       "page.close",
       "context.close",

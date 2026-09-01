@@ -279,6 +279,24 @@ function packageAndRequest(): Readonly<{
 }
 
 describe("formal Package Capture preflight join", () => {
+  it("reports invalid output topology as pre-launch with no Hosted cleanup", async () => {
+    const startTransport = vi.fn();
+
+    await expect(captureHostedWorldPackageV1({
+      packageDirectoryPath: "/tmp/formal-capture-package",
+      outputPath: "/tmp/opening.png",
+      triviewOutputPath: "/tmp/formal-capture-output",
+    }, { startTransport })).rejects.toMatchObject({
+      name: "FormalCaptureCommandClosedErrorV1",
+      stage: "pre-launch",
+      cleanupOutcomes: {
+        hostedBrowserSession: "not-started",
+        viteServer: "not-started",
+      },
+    });
+    expect(startTransport).not.toHaveBeenCalled();
+  });
+
   it("joins the complete parsed request to one verified block Package", () => {
     const { verifiedPackage, request } = packageAndRequest();
     expect(assertFormalCaptureRequestMatchesVerifiedPackageV1({
@@ -358,9 +376,14 @@ describe("formal Package Capture preflight join", () => {
       packageDirectoryPath,
       outputPath: path.join(outputDirectoryPath, "opening.png"),
       triviewOutputPath: outputDirectoryPath,
-    }, { startTransport })).rejects.toThrow(
-      "FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH",
-    );
+    }, { startTransport })).rejects.toMatchObject({
+      name: "FormalCaptureCommandClosedErrorV1",
+      stage: "pre-launch",
+      cleanupOutcomes: {
+        hostedBrowserSession: "not-started",
+        viteServer: "not-started",
+      },
+    });
     expect(startTransport).not.toHaveBeenCalled();
     await expect(readdir(outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
@@ -389,7 +412,10 @@ describe("formal Package Capture preflight join", () => {
       stringifyCanonicalJson(request),
       "utf8",
     );
-    const cleanup = vi.fn(async () => undefined);
+    const cleanup = vi.fn(async () => ({
+      hostedBrowserSession: "completed" as const,
+      viteServer: "completed" as const,
+    }));
 
     await expect(captureHostedWorldPackageV1({
       packageDirectoryPath,
@@ -400,7 +426,14 @@ describe("formal Package Capture preflight join", () => {
         executeFormalCapture: async () => Object.freeze({}) as never,
         dispose: cleanup,
       }),
-    })).rejects.toThrow();
+    })).rejects.toMatchObject({
+      name: "FormalCaptureCommandClosedErrorV1",
+      stage: "post-dispose",
+      cleanupOutcomes: {
+        hostedBrowserSession: "completed",
+        viteServer: "completed",
+      },
+    });
     expect(cleanup).toHaveBeenCalledOnce();
     await expect(readdir(outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
@@ -439,7 +472,15 @@ describe("formal Package Capture preflight join", () => {
       outputPath: path.join(outputDirectoryPath, "opening.png"),
       triviewOutputPath: outputDirectoryPath,
       port: 6_123,
-    })).rejects.toBe(sentinel);
+    })).rejects.toMatchObject({
+      name: "FormalCaptureCommandClosedErrorV1",
+      stage: "hosted-session",
+      cleanupOutcomes: {
+        hostedBrowserSession: "failed",
+        viteServer: "failed",
+      },
+      cause: expect.objectContaining({ cause: sentinel }),
+    });
     expect(createDefaultTransportStarter).toHaveBeenCalledWith({
       packageDirectoryPath,
       port: 6_123,

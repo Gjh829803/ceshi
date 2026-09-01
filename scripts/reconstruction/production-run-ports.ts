@@ -31,6 +31,7 @@ import {
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
+  hashFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureIntentV1,
   type FormalWorldCaptureIntentV1,
@@ -69,7 +70,11 @@ import {
   FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1,
   materializeFormalWorldCaptureRequestV1,
 } from "./formal-capture-request.js";
-import { captureHostedWorldPackageV1 } from "./formal-capture.js";
+import {
+  captureHostedWorldPackageV1,
+  FormalCaptureCommandClosedErrorV1,
+  type FormalCaptureCommandCleanupOutcomesV1,
+} from "./formal-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
 import type {
   WorldReconstructionCleanupOutcomesV1,
@@ -422,6 +427,15 @@ export async function createProductionWorldReconstructionRunPortsV1(
   ) => keys.forEach((key) => {
     cleanupState[key] = outcome;
   });
+  const applyCaptureCleanup = (
+    outcomes: FormalCaptureCommandCleanupOutcomesV1,
+  ): void => {
+    cleanupState.hostedBrowserSession =
+      outcomes.hostedBrowserSession === "failed" ? "failed" : "completed";
+    cleanupState.viteServer = outcomes.viteServer === "failed"
+      ? "failed"
+      : "completed";
+  };
   const checkpoint = (attemptIndex: 0 | 1): AttemptCheckpointV1 => {
     const existing = checkpoints.get(attemptIndex);
     if (existing !== undefined) return existing;
@@ -638,7 +652,6 @@ export async function createProductionWorldReconstructionRunPortsV1(
         !isEqual(state.packaged, stageInput.packaged) ||
         state.captureDirectoryPath !== undefined
       ) throw new Error("WORLD_RECONSTRUCTION_CAPTURE_STAGE_INVALID");
-      setCleanup(["hostedBrowserSession", "viteServer"], "failed");
       const attemptDirectoryPath = path.join(
         input.generationInput.runDirectoryPath,
         "attempts",
@@ -649,7 +662,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
         FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1,
       );
       const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
-      let browserAllocated = false;
+      let captureOwnerStarted = false;
       try {
         const materialized = await owners.materializeCaptureRequest({
           casePath: input.casePath,
@@ -659,20 +672,20 @@ export async function createProductionWorldReconstructionRunPortsV1(
           outputPath: requestPath,
           formalCaptureIntent,
         });
-        browserAllocated = true;
+        captureOwnerStarted = true;
         const captured = await owners.capturePackage({
           packageDirectoryPath: state.packaged.worldPackagePath,
           outputPath: path.join(captureDirectoryPath, "opening.png"),
           triviewOutputPath: captureDirectoryPath,
         });
+        applyCaptureCleanup(captured.cleanupOutcomes);
+        cleanupState.outputPromotion = "completed";
         if (
           captured.formalRequestHash !== materialized.formalRequestHash ||
           captured.worldPackageRootHash !== state.packaged.worldPackageRootHash
         ) {
           throw new Error("WORLD_RECONSTRUCTION_CAPTURE_IDENTITY_MISMATCH");
         }
-        setCleanup(["hostedBrowserSession", "viteServer"], "completed");
-        cleanupState.outputPromotion = "completed";
         state.captureDirectoryPath = captureDirectoryPath;
         const captureReceiptPath = path.join(
           captureDirectoryPath,
@@ -692,11 +705,18 @@ export async function createProductionWorldReconstructionRunPortsV1(
           diagnosticCodes: Object.freeze([]),
         });
       } catch (error) {
-        setCleanup(
-          ["hostedBrowserSession", "viteServer"],
-          browserAllocated ? "failed" : "completed",
-        );
-        cleanupState.outputPromotion = browserAllocated ? "failed" : "completed";
+        if (error instanceof FormalCaptureCommandClosedErrorV1) {
+          applyCaptureCleanup(error.cleanupOutcomes);
+          cleanupState.outputPromotion = error.stage === "publication"
+            ? "failed"
+            : "completed";
+        } else if (!captureOwnerStarted) {
+          setCleanup(["hostedBrowserSession", "viteServer"], "completed");
+          cleanupState.outputPromotion = "completed";
+        } else {
+          setCleanup(["hostedBrowserSession", "viteServer"], "failed");
+          cleanupState.outputPromotion = "failed";
+        }
         const codes = diagnosticCodes(
           error,
           "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
@@ -754,7 +774,11 @@ export async function createProductionWorldReconstructionRunPortsV1(
           readJsonNoFollow(path.join(captureDirectoryPath, "scripted-traversal.json"))
             .then(parseFormalScriptedTraversalObservationV1),
         ]);
-        if (captureReceipt.caseRef !== input.caseRef) {
+        if (
+          captureReceipt.caseRef !== input.caseRef ||
+          hashFormalWorldCaptureReceiptV1(captureReceipt) !==
+            stageInput.captured.captureReceiptHash
+        ) {
           throw new Error("WORLD_RECONSTRUCTION_CAPTURE_IDENTITY_MISMATCH");
         }
         const published = await owners.evaluateAttempt({
