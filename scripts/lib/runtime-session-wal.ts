@@ -156,7 +156,7 @@ function receiptPayloadBindsRequestV1(
   return true;
 }
 
-function receiptCommitsNewWorldSessionV1(
+export function receiptCommitsNewWorldSessionV1(
   request: RuntimeSessionRequestV1,
   receipt: RuntimeSessionReceiptV1,
 ): boolean {

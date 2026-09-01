@@ -25,6 +25,7 @@ import {
 import {
   createFileRuntimeSessionWalV1,
   openFileRuntimeSessionWalV1,
+  receiptCommitsNewWorldSessionV1,
   type FileRuntimeSessionWalV1,
   type RuntimeSessionWalCommittedRequestV1,
 } from "./runtime-session-wal";
@@ -617,7 +618,7 @@ async function recoveryDiverged(
 ): Promise<never> {
   const currentWorldSessionId = wal.snapshot().committedRequests.reduce(
     (worldSessionId, entry) =>
-      entry.request.type === "session.reset"
+      receiptCommitsNewWorldSessionV1(entry.request, entry.receipt)
         ? entry.receipt.worldSessionId
         : worldSessionId,
     ready.worldSessionId,
@@ -690,14 +691,6 @@ async function resumeExecutor(
       entry.receipt.status === "rejected" &&
       entry.receipt.diagnostic.code !== "RUNTIME_SESSION_REQUEST_REJECTED"
     ) {
-      if (!isLastCommittedRequest) {
-        return recoveryDiverged(
-          durable.readyEvent,
-          wal,
-          session,
-          new Error("A terminal rejected Request is not the final commit."),
-        );
-      }
       await session.dispose().catch(() => undefined);
       wal.appendClosed(finalEvent(
         durable.readyEvent,
