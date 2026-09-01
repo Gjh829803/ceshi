@@ -12,8 +12,6 @@ const DECLARED_OUTPUT_PATHS = Object.freeze([
 ]);
 const DECLARED_OUTPUT_SET = new Set(DECLARED_OUTPUT_PATHS);
 const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
-const NATIVE_VISUAL_RESOURCE_REF =
-  /^worldkit:\/\/static-geometry-asset\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$/;
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
 const IDENTITY_COLOR_HEX = /^#[0-9A-F]{6}$/;
@@ -111,9 +109,7 @@ function validateResourceRefs(value, diagnosticCodes) {
   if (!hasExactKeys(value, ["kind", "schemaVersion", "resourceRefs"]) ||
       value.kind !== "native-visual-resource-list" || value.schemaVersion !== 1 ||
       !Array.isArray(value.resourceRefs) ||
-      value.resourceRefs.some((resourceRef) =>
-        typeof resourceRef !== "string" || !STABLE_REF.test(resourceRef) ||
-        !NATIVE_VISUAL_RESOURCE_REF.test(resourceRef))) {
+      value.resourceRefs.length !== 0) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID");
     return;
   }
@@ -159,9 +155,14 @@ function validateAuthoring(value, diagnosticCodes) {
   }
   const targetRefs = value.visualGroups.map(({ acceptanceTargetRef }) =>
     acceptanceTargetRef);
+  const identityColors = value.visualGroups.map(({ identityColorHex }) =>
+    identityColorHex);
   if (new Set(groupIds).size !== groupIds.length ||
       new Set(targetRefs).size !== targetRefs.length) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE");
+  }
+  if (new Set(identityColors).size !== identityColors.length) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_IDENTITY_COLORS_DUPLICATE");
   }
 }
 

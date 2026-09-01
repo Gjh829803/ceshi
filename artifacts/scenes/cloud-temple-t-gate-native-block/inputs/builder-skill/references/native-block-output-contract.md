@@ -10,13 +10,13 @@ Write only:
 
 1. `scene.ts`: the Babylon Native Scene Module.
 2. `native-block-authoring.json`: entry-module and semantic visual-group declarations only.
-3. `native-resources.json`: optional Native visual Registry refs, sorted lexicographically and unique.
+3. `native-resources.json`: the closed, currently asset-free Native visual resource list.
 
-The first representative Case is asset-free, so its `resourceRefs` array is empty.
+The current production reconstruction lane has no Native visual asset resolver. Its `resourceRefs` must be exactly `[]`; a syntactically valid asset ref is still unresolved and must fail closed.
 
 ## Module boundary
 
-Import the closed module definition from `@whitebox-world/native-babylon` and create the Block session with `@whitebox-world/native-babylon-block-profile`. The intended shape is:
+Import only `@whitebox-world/native-babylon` and `@whitebox-world/native-babylon-block-profile`; this Block Profile does not need direct Babylon imports. Import the closed module definition from the first package and create the Block session with the second. Do not use namespace, dynamic, CommonJS, root Babylon, or undeclared imports. The intended shape is:
 
 ```ts
 import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
@@ -66,9 +66,31 @@ export default defineBabylonNativeScene({
 
 This is explicit visual construction with explicit visual groups, explicit Spawn registration, and explicit collider contribution. `session.finalize()` registers selected collider candidates through the Host-provided boundary; generated code never creates Havok objects.
 
+### Source-admission-safe module structure
+
+Module-scope variable declarations permit only primitive literal constants or recursively `Object.freeze`d literal tables. Imports, pure function declarations, type declarations, and the one direct default Module definition remain separate admitted forms. A deterministic expression is not automatically a permitted variable initializer. Property reads, binary expressions, helper calls, aliases, mutable arrays/objects, classes, enums, `let`, and `var` are rejected at module scope. In particular, `Math.PI / 2` must be computed inside `build()` (or replaced with a direct numeric literal); do not retain Babylon handles or Build Context state outside `build()`.
+
+Keep coordinate helpers, computed constants, collider arrays, loops, and all changing values inside `build()`. A top-level string or number literal is allowed, but moving ordinary authoring helpers into `build()` is the least surprising pattern. The trusted Host source-admission checker remains authoritative and runs before bundle/load/replay.
+
 ## Fixed Block Profile
 
-Use only shapes `full`, `half`, `quarter`, `small`, and `step`. Use only palette roles `ground`, `route`, `structure`, `hazard`, `water-like-visual`, and `background-mass`. Do not scale generated meshes or replace their geometry/material. Position centers on the Profile lattice, use only Y-axis quarter rotations, and use stable lowercase IDs.
+Use only shapes `full`, `half`, `quarter`, `small`, and `step`. Their unrotated `[x, y, z]` sizes in meters are:
+
+- `full`: `[1, 1, 1]`
+- `half`: `[1, 0.5, 1]`
+- `quarter`: `[0.5, 0.5, 1]`
+- `small`: `[0.5, 0.5, 0.5]`
+- `step`: `[1, 0.25, 1]`
+
+The center lattice is `[0.25, 0.125, 0.25]` meters and the occupancy grid is `[0.5, 0.25, 0.5]` meters. A center must satisfy both the center lattice and the selected shape's bounds on the occupancy grid. A Y quarter turn swaps the effective X/Z dimensions for `quarter`; it does not change the lattice. Do not scale generated meshes, replace their geometry/material, use arbitrary rotation, or assume that one block is 2 meters.
+
+Profile meshes remain direct, unparented members of the Host Candidate Scene. Keep them enabled, visible, non-instanced, non-thin-instanced, and physics-free. Do not attach parents, bake/replace geometry, or create an alternate visual/collider mesh for a Block.
+
+Use only palette roles `ground`, `route`, `structure`, `hazard`, `water-like-visual`, and `background-mass`. Stable lowercase IDs are mandatory. Blocks may touch at faces but their occupied volumes must never overlap. Never place a support block through the occupied volume of the block it supports.
+
+For this production reconstruction Case, every non-root structural or playable block needs a face-contact support chain to the lowest occupied stratum. The root stratum is global: if one decorative cliff block extends below the rest of the world, every raised surface must still have continuous visible support down to that same lowest stratum. Prefer one shared root bottom and build upward. The Host Profile reports unsupported blocks as warnings because other Native worlds may intentionally contain explicit floating visual mass, but this Case must not use that advisory allowance to fake cliffs, route support, gate mass, or platforms.
+
+All `route` blocks must form one edge-adjacent component. Neighboring route tops may differ by at most `0.25` meters. A safe quarter-meter stair column starts with a `full` ground block centered at `y=-0.5`; for a tread top at `0.25 * n`, stack `n` `step` blocks at the same XZ center with Y centers `0.125 + 0.25 * j` for `j=0..n-1`, and expose/collide only the top tread as appropriate. Put successive tread columns exactly one meter apart along X or Z so their route blocks touch at an edge without overlap. Never fill through a `step` using a `full` block whose volume reaches into the tread.
 
 Use deterministic seeded construction. Iterate arrays in explicit stable order, sort semantic inventories before emission, and use `context.random` for any allowed variation. Do not call `Math.random`, `Date.now`, timers, locale-sensitive sort, or remote services.
 
@@ -84,9 +106,9 @@ The representative Case needs a readable central ascent, T-shaped upper platform
 
 ## Semantic JSON
 
-`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, and `visualGroups`. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. It contains no Subject, Spawn, Camera, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
+`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, and `visualGroups`. Copy the Case's acceptance-target-to-visual-group mapping exactly: do not omit, invent, merge, or rename a target/group. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. It contains no Subject, Spawn, Camera, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
 
-`native-resources.json` is plain JSON data with exactly `kind`, `schemaVersion`, and one sorted unique `resourceRefs` array. These refs are optional visual assets only. The model cannot mint locks, publication receipts, or admission evidence.
+`native-resources.json` is plain JSON data with exactly `kind`, `schemaVersion`, and `resourceRefs: []`. Non-empty visual refs remain outside the current production reconstruction lane until the Host implements and freezes their Package resource closure. The model cannot mint locks, publication receipts, admission evidence, or future support by writing a well-formed ref.
 
 ## Evidence boundary
 

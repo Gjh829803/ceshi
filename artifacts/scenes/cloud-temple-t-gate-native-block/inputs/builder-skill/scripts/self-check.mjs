@@ -109,8 +109,7 @@ function validateResourceRefs(value, diagnosticCodes) {
   if (!hasExactKeys(value, ["kind", "schemaVersion", "resourceRefs"]) ||
       value.kind !== "native-visual-resource-list" || value.schemaVersion !== 1 ||
       !Array.isArray(value.resourceRefs) ||
-      value.resourceRefs.some((resourceRef) =>
-        typeof resourceRef !== "string" || !STABLE_REF.test(resourceRef))) {
+      value.resourceRefs.length !== 0) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID");
     return;
   }
@@ -156,9 +155,14 @@ function validateAuthoring(value, diagnosticCodes) {
   }
   const targetRefs = value.visualGroups.map(({ acceptanceTargetRef }) =>
     acceptanceTargetRef);
+  const identityColors = value.visualGroups.map(({ identityColorHex }) =>
+    identityColorHex);
   if (new Set(groupIds).size !== groupIds.length ||
       new Set(targetRefs).size !== targetRefs.length) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE");
+  }
+  if (new Set(identityColors).size !== identityColors.length) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_IDENTITY_COLORS_DUPLICATE");
   }
 }
 
