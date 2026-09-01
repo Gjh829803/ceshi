@@ -10,6 +10,9 @@ import {
   type UserConfig,
   type ViteDevServer,
 } from "vite";
+import type {
+  FormalWorldCaptureSdkOwnerIdentityV1,
+} from "@whitebox-world/runtime-contracts";
 
 import { createWorldPackageBrowserTransportV1 } from
   "../../scripts/lib/world-package-browser-transport.js";
@@ -130,6 +133,29 @@ function requiredPackagePath(
     );
   }
   return path.normalize(value);
+}
+
+function formalCaptureSdkOwnerIdentitiesLiteral(
+  environment: NativeScenePlaygroundEnvironmentV1,
+): string {
+  const serialized =
+    environment.WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES ?? "[]";
+  let value: unknown;
+  try {
+    value = JSON.parse(serialized);
+  } catch {
+    throw new Error(
+      "WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES_JSON_INVALID",
+    );
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(
+      "WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES_ARRAY_REQUIRED",
+    );
+  }
+  return JSON.stringify(
+    value as readonly FormalWorldCaptureSdkOwnerIdentityV1[],
+  );
 }
 
 function requiredServerNonce(
@@ -393,6 +419,8 @@ export async function createNativeScenePlaygroundViteConfigV1(
   const serverRole = requiredServerRole(environment);
   const cacheScope = requiredCacheScope(environment);
   const isVerifierProbeEnabled = verifierProbeEnabled(environment);
+  const formalCaptureSdkOwnerIdentities =
+    formalCaptureSdkOwnerIdentitiesLiteral(environment);
   const hostedRuntimeOrigin = configuredOrigin(
     environment,
     "WORLDKIT_HOSTED_RUNTIME_ORIGIN",
@@ -563,6 +591,8 @@ export async function createNativeScenePlaygroundViteConfigV1(
         serverRole,
       ),
       define: {
+        __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__:
+          formalCaptureSdkOwnerIdentities,
         __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: JSON.stringify(
           isVerifierProbeEnabled,
         ),

@@ -9,6 +9,7 @@ import {
 import type {
   BabylonNativeSceneBootstrapV1,
   FixedInputV1,
+  FormalWorldCaptureSdkOwnerIdentityV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -36,6 +37,8 @@ declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_RUNTIME_ORIGIN__: string;
 declare const __WORLDKIT_HOSTED_SHELL_ORIGIN__: string;
+declare const __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__:
+  readonly FormalWorldCaptureSdkOwnerIdentityV1[];
 declare const __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: boolean;
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
@@ -559,6 +562,7 @@ const hostedFormalCaptureConstants = Object.freeze({
   hostedBrowserPolicyHash: __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__,
   runtimeOrigin: __WORLDKIT_HOSTED_RUNTIME_ORIGIN__,
   shellOrigin: __WORLDKIT_HOSTED_SHELL_ORIGIN__,
+  sdkOwnerIdentities: __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__,
 });
 void (mode.has("hosted-formal-capture-frame")
   ? startHostedFormalCaptureFrameRouteV1({

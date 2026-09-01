@@ -3,8 +3,12 @@ import { randomUUID } from "node:crypto";
 import {
   hashFormalWorldCaptureRequestV1,
   parseFormalWorldCaptureRequestV1,
+  type FormalWorldCaptureSdkOwnerIdentityV1,
   type FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  FormalHostedWorldCapturePayloadV1,
+} from "@whitebox-world/runtime-babylon";
 import type {
   Browser,
   BrowserContext,
@@ -23,9 +27,8 @@ import {
   type StartWorldkitServerOptions,
   type WorldkitServerHandle,
 } from "../lib/worldkit-server.js";
-import type {
-  FormalHostedWorldCapturePayloadV1,
-} from "./formal-capture.js";
+import { resolveFormalWorldCaptureSdkOwnerIdentitiesV1 } from
+  "./sdk-owner-identities.js";
 
 const DEFAULT_READY_TIMEOUT_MILLISECONDS = 30_000;
 
@@ -60,6 +63,9 @@ type ServerPortV1 = Pick<
 
 export interface CaptureOnlyHostedTransportPortsV1 {
   readonly randomUUID: () => string;
+  readonly resolveSdkOwnerIdentities: () => Promise<
+    readonly FormalWorldCaptureSdkOwnerIdentityV1[]
+  >;
   readonly startServer: (
     options: StartWorldkitServerOptions,
   ) => Promise<ServerPortV1>;
@@ -68,6 +74,7 @@ export interface CaptureOnlyHostedTransportPortsV1 {
 
 const defaultPorts: CaptureOnlyHostedTransportPortsV1 = Object.freeze({
   randomUUID,
+  resolveSdkOwnerIdentities: resolveFormalWorldCaptureSdkOwnerIdentitiesV1,
   startServer: startWorldkitServer,
   launchBrowser: launchChromiumWithSystemFallback,
 });
@@ -175,11 +182,13 @@ export async function startCaptureOnlyHostedTransportV1(
   };
 
   try {
+    const sdkOwnerIdentities = await ports.resolveSdkOwnerIdentities();
     server = await ports.startServer({
       source: {
         kind: "world-package",
         packageDirectoryPath: input.packageDirectoryPath,
       },
+      formalCaptureSdkOwnerIdentities: sdkOwnerIdentities,
       ...(input.port === undefined ? {} : { port: input.port }),
       forwardOutput: false,
     });

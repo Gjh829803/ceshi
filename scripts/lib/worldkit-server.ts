@@ -9,6 +9,7 @@ import path from "node:path";
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
+  type FormalWorldCaptureSdkOwnerIdentityV1,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
 import type { OwnedNativeViteCacheV1 } from
@@ -53,6 +54,8 @@ export interface StartWorldkitServerOptions {
   startupTimeoutMilliseconds?: number;
   stopTimeoutMilliseconds?: number;
   routeEvidence?: WorldkitServerRouteEvidenceV1;
+  /** Trusted capture construction input; never serialized into Runtime requests. */
+  formalCaptureSdkOwnerIdentities?: readonly FormalWorldCaptureSdkOwnerIdentityV1[];
 }
 
 export interface WorldkitServerHandle {
@@ -533,6 +536,11 @@ async function startNativeOne(
     WORLDKIT_HOSTED_SHELL_ORIGIN: shellOrigin,
     WORLDKIT_HOSTED_RUNTIME_ORIGIN: runtimeOrigin,
   };
+  delete childEnvironment.WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES;
+  if (options.formalCaptureSdkOwnerIdentities !== undefined) {
+    childEnvironment.WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES =
+      JSON.stringify(options.formalCaptureSdkOwnerIdentities);
+  }
   const children: ChildProcessWithoutNullStreams[] = [];
   const lifecycles: OwnedChildLifecycle[] = [];
   try {
@@ -618,6 +626,14 @@ export async function startWorldkitServer(
     options.routeEvidence !== undefined
   ) {
     throw new Error("WORLDKIT_NATIVE_HARNESS_ROUTE_EVIDENCE_UNSUPPORTED");
+  }
+  if (
+    options.source.kind !== "world-package" &&
+    options.formalCaptureSdkOwnerIdentities !== undefined
+  ) {
+    throw new Error(
+      "WORLDKIT_CANONICAL_FORMAL_CAPTURE_CONSTRUCTION_UNSUPPORTED",
+    );
   }
   if (options.port !== undefined) {
     await assertPortAvailable(options.port);

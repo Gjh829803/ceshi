@@ -1,17 +1,16 @@
 import { Engine } from "@babylonjs/core/Engines/engine.js";
 import {
   createBabylonNativeIsolatedRuntimeEntryV1,
+  type FormalHostedWorldCapturePayloadV1,
 } from "@whitebox-world/runtime-babylon";
 import type {
   NativeEffectiveExecutionBudgetV1,
+  FormalWorldCaptureSdkOwnerIdentityV1,
   FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
 import { admitHostedNativeExecutionRequestV1 } from
   "@whitebox-world/runtime-host";
 
-import type {
-  FormalHostedWorldCapturePayloadV1,
-} from "../../../scripts/reconstruction/formal-capture.js";
 import {
   createHostedFormalCaptureBridgeV1,
   type HostedFormalCaptureBridgeV1,
@@ -41,6 +40,8 @@ export interface HostedFormalCaptureRouteConstantsV1 {
   readonly hostedBrowserPolicyHash: `sha256:${string}`;
   readonly runtimeOrigin: string;
   readonly shellOrigin: string;
+  readonly sdkOwnerIdentities:
+    readonly FormalWorldCaptureSdkOwnerIdentityV1[];
 }
 
 declare global {
@@ -192,23 +193,13 @@ export async function startHostedFormalCaptureShellRouteV1(input: Readonly<{
   return bridge;
 }
 
-function requireCaptureOnlyEntry(
+function captureOnlyEntryPort(
   value: Awaited<ReturnType<typeof createBabylonNativeIsolatedRuntimeEntryV1>>,
 ): FormalCaptureOnlyRuntimeEntryPortV1 {
-  const candidate = value as unknown as Readonly<{
-    executeFormalCapture?: FormalCaptureOnlyRuntimeEntryPortV1[
-      "executeFormalCapture"
-    ];
-    dispose(): Promise<void>;
-  }>;
-  if (typeof candidate.executeFormalCapture !== "function") {
-    void candidate.dispose().catch(() => undefined);
-    throw hostedFormalCaptureErrorV1("RUNTIME_PROVIDER_UNAVAILABLE");
-  }
   return Object.freeze({
     executeFormalCapture: (request: FormalWorldCaptureRequestV1) =>
-      candidate.executeFormalCapture!.call(value, request),
-    dispose: () => candidate.dispose.call(value),
+      value.executeFormalCapture(request),
+    dispose: () => value.dispose(),
   });
 }
 
@@ -260,8 +251,9 @@ export async function startHostedFormalCaptureFrameRouteV1(input: Readonly<{
       stencil: true,
     }),
     subjectAssetResolver: nativeSceneSubjectAssetResolver,
+    sdkOwnerIdentities: input.constants.sdkOwnerIdentities,
   });
-  const captureEntry = requireCaptureOnlyEntry(entry);
+  const captureEntry = captureOnlyEntryPort(entry);
   const hostedFrame = startHostedFormalCaptureFrameV1({
     entry: captureEntry,
     shellOrigin,

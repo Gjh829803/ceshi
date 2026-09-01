@@ -4,11 +4,10 @@ import {
   parseFormalWorldCaptureRequestV1,
   type FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
-
 import type {
   FormalHostedWorldCapturePayloadV1,
-} from "../../../scripts/reconstruction/formal-capture.js";
+} from "@whitebox-world/runtime-babylon";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 const hash = (character: string) =>
   `sha256:${character.repeat(64)}` as `sha256:${string}`;

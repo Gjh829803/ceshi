@@ -10,6 +10,9 @@ import {
 } from
   "@whitebox-world/world-package";
 import {
+  FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1,
+} from "@whitebox-world/runtime-contracts";
+import {
   createBabylonNativeWorldPackageTestInputV1,
   createWorldPackageTestInputV1,
 } from
@@ -219,6 +222,51 @@ describe("Native Playground verified Package Vite seam", () => {
     expect(verifierConfig.define).toMatchObject({
       __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: "true",
     });
+  });
+
+  it("injects only explicit trusted formal Capture construction identities", async () => {
+    const implementationRefByOwnerId = {
+      action: "worldkit://sdk-owner/subject-actions@1",
+      camera: "worldkit://sdk-owner/camera@1",
+      input: "worldkit://sdk-owner/control-capture@1",
+      physics: "worldkit://sdk-owner/character-movement@1",
+      subject: "worldkit://sdk-owner/subject-contracts@1",
+    } as const;
+    const sdkOwnerIdentities = FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1.map(
+      (ownerId, index) => ({
+        ownerId,
+        implementationRef: implementationRefByOwnerId[ownerId],
+        implementationHash: `sha256:${String(index + 1).repeat(64)}`,
+      }),
+    );
+    const config = await createNativeScenePlaygroundViteConfigV1({
+      WORLDKIT_NATIVE_PACKAGE_PATH: packageDirectoryPath,
+      WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
+      WORLDKIT_NATIVE_SERVER_ROLE: "runtime",
+      WORLDKIT_NATIVE_SERVER_INSTANCE_ID: SERVER_INSTANCE_ID,
+      WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
+      WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
+      WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
+      WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES:
+        JSON.stringify(sdkOwnerIdentities),
+    });
+    expect(config.define).toMatchObject({
+      __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__:
+        JSON.stringify(sdkOwnerIdentities),
+    });
+
+    await expect(createNativeScenePlaygroundViteConfigV1({
+      WORLDKIT_NATIVE_PACKAGE_PATH: packageDirectoryPath,
+      WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
+      WORLDKIT_NATIVE_SERVER_ROLE: "runtime",
+      WORLDKIT_NATIVE_SERVER_INSTANCE_ID: SERVER_INSTANCE_ID,
+      WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
+      WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
+      WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
+      WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES: "not-json",
+    })).rejects.toThrow(
+      "WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES_JSON_INVALID",
+    );
   });
 
   it("rejects a verified non-Native Package before creating the Harness", async () => {

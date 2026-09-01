@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1,
+  type FormalWorldCaptureSdkOwnerIdentityV1,
+} from "@whitebox-world/runtime-contracts";
 
 import {
   createCaptureOnlyHostedTransportStarterV1,
@@ -74,6 +78,22 @@ function concreteHarness(options: Readonly<{
     },
   });
   const request = formalCaptureRequestFixtureV1();
+  const implementationRefByOwnerId = {
+    action: "worldkit://sdk-owner/subject-actions@1",
+    camera: "worldkit://sdk-owner/camera@1",
+    input: "worldkit://sdk-owner/control-capture@1",
+    physics: "worldkit://sdk-owner/character-movement@1",
+    subject: "worldkit://sdk-owner/subject-contracts@1",
+  } as const;
+  const sdkOwnerIdentities = Object.freeze(
+    FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1.map((ownerId, index) =>
+      Object.freeze({
+        ownerId,
+        implementationRef: implementationRefByOwnerId[ownerId],
+        implementationHash:
+          `sha256:${String(index + 1).repeat(64)}` as const,
+      })) satisfies readonly FormalWorldCaptureSdkOwnerIdentityV1[],
+  );
   const runtimeSessionId = "runtime.formal-capture.capture-transport.001";
   Object.assign(page, {
     mainFrame: () => ({ id: "main-frame" }),
@@ -113,6 +133,7 @@ function concreteHarness(options: Readonly<{
     randomUUID: vi.fn()
       .mockReturnValueOnce("capture-transport.001")
       .mockReturnValueOnce("capture-transport-nonce-001"),
+    resolveSdkOwnerIdentities: vi.fn(async () => sdkOwnerIdentities),
     startServer: vi.fn(async () => server),
     launchBrowser: vi.fn(async () => {
       events.push("browser.launch");
@@ -120,7 +141,17 @@ function concreteHarness(options: Readonly<{
       return browser;
     }),
   };
-  return { request, runtimeSessionId, events, serverExit, server, browser, page, ports };
+  return {
+    request,
+    runtimeSessionId,
+    sdkOwnerIdentities,
+    events,
+    serverExit,
+    server,
+    browser,
+    page,
+    ports,
+  };
 }
 
 describe("capture-only Hosted session transaction", () => {
@@ -215,7 +246,9 @@ describe("concrete capture-only Hosted transport", () => {
         kind: "world-package",
         packageDirectoryPath: "/tmp/verified-world-package",
       },
+      formalCaptureSdkOwnerIdentities: h.sdkOwnerIdentities,
     }));
+    expect(h.ports.resolveSdkOwnerIdentities).toHaveBeenCalledOnce();
     expect(h.events.filter((event) => event.startsWith("page.goto:"))[0])
       .toContain("hosted-formal-capture=1");
     expect(h.events.slice(-4)).toEqual([
@@ -234,6 +267,19 @@ describe("concrete capture-only Hosted transport", () => {
     const transport = await start(h.request);
     await transport.dispose();
     expect(h.ports.startServer).toHaveBeenCalledOnce();
+  });
+
+  it("fails before resource construction when trusted owner resolution rejects", async () => {
+    const h = concreteHarness();
+    h.ports.resolveSdkOwnerIdentities.mockRejectedValueOnce(
+      new Error("trusted source state unavailable"),
+    );
+    await expect(startCaptureOnlyHostedTransportV1({
+      packageDirectoryPath: "/tmp/verified-world-package",
+      request: h.request,
+    }, h.ports as never)).rejects.toThrow("trusted source state unavailable");
+    expect(h.ports.startServer).not.toHaveBeenCalled();
+    expect(h.events).toEqual([]);
   });
 
   it.each([

@@ -1,11 +1,10 @@
 import type {
   FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
-import { isNil } from "lodash-es";
-
 import type {
   FormalHostedWorldCapturePayloadV1,
-} from "../../../scripts/reconstruction/formal-capture.js";
+} from "@whitebox-world/runtime-babylon";
+import { isNil } from "lodash-es";
 import {
   assertHostedFormalCaptureWireBudgetV1,
   exactPlainRecordV1,

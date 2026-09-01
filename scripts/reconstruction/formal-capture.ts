@@ -24,6 +24,9 @@ import {
   sha256CanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
+import type {
+  FormalHostedWorldCapturePayloadV1,
+} from "@whitebox-world/runtime-babylon";
 import {
   verifyWorldPackageDirectoryV1,
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
@@ -89,20 +92,9 @@ export interface PublishFormalCaptureDirectoryInputV1 {
   readonly hooks?: FormalCapturePublicationHooksV1;
 }
 
-export interface FormalHostedWorldCapturePayloadV1 {
-  readonly openingPng: Uint8Array;
-  readonly worldSidePng: Uint8Array;
-  readonly worldTopDownPng: Uint8Array;
-  readonly colliderOverlayPng: Uint8Array;
-  readonly openingObservation: FormalOpeningObservationV1;
-  readonly spawnSupportObservation: FormalSpawnSupportObservationV1;
-  readonly colliderOverlayObservation: FormalColliderOverlayObservationV1;
-  readonly scriptedTraversal: FormalScriptedTraversalObservationV1;
-  readonly receiptWithoutCleanup: Omit<
-    FormalWorldCaptureReceiptV1,
-    "cleanupOutcome"
-  >;
-}
+export type {
+  FormalHostedWorldCapturePayloadV1,
+} from "@whitebox-world/runtime-babylon";
 
 export interface CaptureHostedWorldPackageInputV1 {
   readonly packageDirectoryPath: string;
