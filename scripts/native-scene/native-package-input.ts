@@ -3,6 +3,18 @@ import {
   type BabylonNativeSceneCandidateFactoryV1,
 } from "@whitebox-world/native-babylon/host";
 import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  bindNativeBlockAuthoringManifestToCheckedLayoutV1,
+  hashBabylonNativeBlockCheckedLayoutInventoryV1,
+  hashNativeBlockAuthoringManifestV1,
+  type NativeBlockAuthoringManifestV1,
+} from "@whitebox-world/native-babylon-block-profile";
+import {
+  createBabylonNativeBlockMaterializerMetadataV1,
+  takeBabylonNativeBlockCheckedEpochEvidenceV1,
+  type BabylonNativeBlockCheckedEpochEvidenceV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
+import {
   parseGameplayBootstrapV1,
   type GameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
@@ -39,6 +51,7 @@ import type {
   WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
+import type { WorldReconstructionCaseV1 } from "@whitebox-world/validation";
 
 import {
   createBabylonNativeReplayAssetLedgerV1,
@@ -79,6 +92,10 @@ export interface PrepareFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly worldRuntimeBootstrapRef: string;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
+  readonly nativeBlockAuthoring?: Readonly<{
+    readonly reconstructionCase: WorldReconstructionCaseV1;
+    readonly authoringManifest: NativeBlockAuthoringManifestV1;
+  }>;
 }
 
 export interface PreparedFrozenBabylonNativeWorldPackageBuildInputV1 {
@@ -234,7 +251,19 @@ function assertAuthoringClosure(
     bootstrap.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapHash !== gameplay.contentHash ||
-    runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId
+    runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId ||
+    !isEqual(
+      runtime.gravityMetersPerSecondSquaredXYZ,
+      bootstrap.gravityMetersPerSecondSquaredXYZ,
+    ) ||
+    runtime.initialCamera.mode !== bootstrap.initialCamera.mode ||
+    runtime.initialCamera.pitchRadians !==
+      bootstrap.initialCamera.pitchRadians ||
+    runtime.initialCamera.distanceMeters !==
+      bootstrap.initialCamera.distanceMeters ||
+    runtime.initialCamera.fovDegrees !== bootstrap.initialCamera.fovDegrees ||
+    runtime.initialCamera.targetHeightMeters !==
+      bootstrap.initialCamera.targetHeightMeters
   ) return fail();
 }
 
@@ -404,12 +433,26 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
 
     const ledger = createBabylonNativeReplayAssetLedgerV1(assets.assetResolver);
     let replayIndex = 0;
+    const evidenceByReplay:
+      BabylonNativeBlockCheckedEpochEvidenceV1[][] = [];
     const candidateFactory: BabylonNativeSceneCandidateFactoryV1 = Object.freeze({
       async createCandidate() {
         if (replayIndex > 1) return fail();
         ledger.beginReplay(replayIndex as 0 | 1);
         replayIndex += 1;
-        return input.candidateFactory.createCandidate();
+        const lease = await input.candidateFactory.createCandidate();
+        const evidence: BabylonNativeBlockCheckedEpochEvidenceV1[] = [];
+        evidenceByReplay.push(evidence);
+        return Object.freeze({
+          engine: lease.engine,
+          scene: lease.scene,
+          async dispose() {
+            evidence.push(
+              ...takeBabylonNativeBlockCheckedEpochEvidenceV1(lease.scene),
+            );
+            await lease.dispose();
+          },
+        });
       },
     });
     const replay = await replayBabylonNativeSceneModuleV1({
@@ -423,15 +466,25 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
         maximumStaticColliderTriangleCount: resourceBudget.maximumTriangles,
       },
     });
+    const requiresBlockEvidence = bootstrap.nativeSceneProfileRef ===
+      BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
     if (
       replay.checkResult.outcome !== "passed" ||
       !("contribution" in replay) ||
-      replayIndex !== 2
+      replayIndex !== 2 ||
+      evidenceByReplay.length !== 2 ||
+      evidenceByReplay[0]!.length !== (requiresBlockEvidence ? 1 : 0) ||
+      evidenceByReplay[1]!.length !== (requiresBlockEvidence ? 1 : 0)
     ) return fail();
+    if (requiresBlockEvidence !== !isNil(input.nativeBlockAuthoring)) {
+      return fail();
+    }
     const checkResult = parseNativeSceneCheckResultV1(replay.checkResult);
     const contribution = parseBabylonNativeSceneContributionV1(
       replay.contribution,
     );
+    const firstBlockEvidence = evidenceByReplay[0]![0];
+    const secondBlockEvidence = evidenceByReplay[1]![0];
     if (
       checkResult.checkedInput.kind !== "native-scene-module" ||
       checkResult.checkedInput.sceneModuleRef !== bootstrap.sceneModuleRef ||
@@ -439,8 +492,55 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       contribution.profileSettlement.profileRef !==
         bootstrap.nativeSceneProfileRef ||
       replay.contributionHash !==
-        hashBabylonNativeSceneContributionV1(contribution)
+        hashBabylonNativeSceneContributionV1(contribution) ||
+      (requiresBlockEvidence && (
+        isNil(firstBlockEvidence) ||
+        isNil(secondBlockEvidence) ||
+        !isEqual(firstBlockEvidence, secondBlockEvidence) ||
+        hashBabylonNativeBlockCheckedLayoutInventoryV1(
+          firstBlockEvidence.checkedLayout,
+        ) !== hashBabylonNativeBlockCheckedLayoutInventoryV1(
+          secondBlockEvidence.checkedLayout,
+        ) ||
+        contribution.profileSettlement.kind !== "host-snapshot" ||
+        firstBlockEvidence.profileInventoryHash !==
+          contribution.profileSettlement.profileInventoryHash
+      ))
     ) return fail();
+    const nativeBlockMaterializerMetadata = requiresBlockEvidence
+      ? (() => {
+        if (
+          isNil(firstBlockEvidence) ||
+          isNil(input.nativeBlockAuthoring)
+        ) return fail();
+        const checkedLayoutInventoryHash =
+          hashBabylonNativeBlockCheckedLayoutInventoryV1(
+            firstBlockEvidence.checkedLayout,
+          );
+        const contributionHash =
+          hashBabylonNativeSceneContributionV1(contribution);
+        const authoringLayoutBinding =
+          bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+            reconstructionCase:
+              input.nativeBlockAuthoring.reconstructionCase,
+            authoringManifest: input.nativeBlockAuthoring.authoringManifest,
+            authoringManifestHash: hashNativeBlockAuthoringManifestV1(
+              input.nativeBlockAuthoring.authoringManifest,
+            ),
+            checkedLayout: firstBlockEvidence.checkedLayout,
+            checkedLayoutInventoryHash,
+            contributionHash,
+            frozenContributionHash: contributionHash,
+          });
+        return createBabylonNativeBlockMaterializerMetadataV1({
+          authoringLayoutBinding,
+          checkedLayout: firstBlockEvidence.checkedLayout,
+          colliderInventory: firstBlockEvidence.colliderInventory,
+          profileInventoryHash: firstBlockEvidence.profileInventoryHash,
+          contribution,
+        });
+      })()
+      : undefined;
     const assetReplayLedgers = ledger.snapshot();
     const expectedAssetRefs = assets.assetLock.entries.map((entry) =>
       entry.assetResourceRef);
@@ -484,6 +584,9 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       sceneAuthoringAttemptResult: attemptResult,
       nativeSceneCheckResult: checkResult,
       nativeSceneContribution: contribution,
+      ...(isNil(nativeBlockMaterializerMetadata)
+        ? {}
+        : { nativeBlockMaterializerMetadata }),
       gameplayBootstrap: gameplay,
       worldRuntimeBootstrap: runtime,
       registryLock,

@@ -12,6 +12,8 @@ export * from "./world-resource-lock";
 export * from "./canonical-scene-execution-plan";
 export * from "./browser-route-evidence";
 export * from "./capture-targets";
+export * from "./formal-world-capture";
+export * from "./native-block-materializer-metadata";
 export * from "./control-feel-parameter-contract";
 export * from "./runtime-session";
 export * from "./runtime-session-protocol";

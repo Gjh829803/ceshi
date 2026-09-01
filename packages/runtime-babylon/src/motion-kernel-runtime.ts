@@ -25,7 +25,10 @@ import {
   MotionModeResolverV1,
   type MotionModeFailureCodeV1,
 } from "./motion-mode-resolver";
-import { createGroundAwareControllerInternal } from "./babylon-character-body-port";
+import {
+  createGroundAwareControllerInternal,
+  type BabylonCharacterBodyNativeContactV1,
+} from "./babylon-character-body-port";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 import type {
   CharacterSupportProjectionLockV1,

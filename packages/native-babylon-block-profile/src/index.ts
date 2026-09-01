@@ -16,6 +16,21 @@ export type {
   BabylonNativeBlockReconstructionCorpusMaterializationV1,
 } from "./reconstruction-corpus.js";
 export type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
+export {
+  BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+  bindNativeBlockAuthoringManifestToCheckedLayoutV1,
+  hashBabylonNativeBlockCheckedLayoutInventoryV1,
+  hashNativeBlockAuthoringManifestV1,
+  hashNativeBlockVisualResourceListV1,
+  parseNativeBlockAuthoringManifestV1,
+  parseNativeBlockVisualResourceListV1,
+} from "./authoring-manifest.js";
+export type {
+  NativeBlockAuthoringLayoutBindingV1,
+  NativeBlockAuthoringManifestV1,
+  NativeBlockAuthoringVisualGroupV1,
+  NativeBlockVisualResourceListV1,
+} from "./authoring-manifest.js";
 export type {
   BabylonNativeBlockProfileCheckResultV1,
   BabylonNativeBlockProfileDiagnosticLocationV1,
@@ -38,6 +53,8 @@ export type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
   BabylonNativeBlockStaticColliderSelectionV1,
 } from "./collider-contribution.js";
+export { bindBlockMaterializerMetadataToSemanticCaptureTargetsV1 } from "./formal-capture-identity.js";
+export type { BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1 } from "./formal-capture-identity.js";
 export { createBabylonNativeBlockAuthoringCaptureV1 } from "./authoring-capture.js";
 export type {
   BabylonNativeBlockAuthoringCaptureV1,

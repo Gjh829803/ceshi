@@ -9,6 +9,8 @@ import {
   hashBabylonNativeDependencyLockV1,
   hashBabylonNativeSceneBootstrapV1,
   hashBabylonNativeSceneContributionV1,
+  hashBabylonNativeBlockMaterializerMetadataV1,
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashNativeSceneCheckResultV1,
   nativeSceneModuleBundleRefFromHashV1,
   worldResourceLockEntriesV1,
@@ -35,6 +37,7 @@ import type {
   WorldPackageHostPolicyV1,
   WorldPackageManifestV1,
   WorldPackageSignatureEnvelopeV1,
+  WorldPackageWorldBoundsV1,
 } from "./package-types.js";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -62,7 +65,8 @@ const NATIVE_SCENE_SOURCE_FIELDS = Object.freeze([
   "nativeSceneContributionHash", "dependencyLockHash", "assetLockHash",
   "nativeSceneCheckResultHash", "sceneAuthoringRouteDecisionHash",
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
-  "sceneAuthoringAttemptResultHash", "nativeSceneBootstrapPath",
+  "sceneAuthoringAttemptResultHash", "nativeMaterializer",
+  "nativeSceneBootstrapPath",
   "sceneModuleBundleManifestPath", "sceneModuleBundlePath", "dependencyLockPath",
   "assetLockPath", "nativeSceneContributionPath", "nativeSceneCheckResultPath",
   "sceneAuthoringRouteDecisionPath", "sceneAuthoringAttemptPath",
@@ -82,6 +86,7 @@ const PACKAGE_OWNED_RESOURCE_PATHS = new Set([
   "native/dependency-lock.json",
   "native/asset-lock.json",
   "native/contribution.json",
+  "native/block-materializer-metadata.json",
   "native/check-result.json",
   "authoring/scene-authoring-route-decision.json",
   "authoring/scene-authoring-attempt.json",
@@ -90,6 +95,56 @@ const PACKAGE_OWNED_RESOURCE_PATHS = new Set([
 
 function fail(code: string, message: string): never {
   throw new Error(`${code}: ${message}`);
+}
+
+function parseWorldBounds(
+  input: unknown,
+  code: string,
+): WorldPackageWorldBoundsV1 {
+  const value = exactRecord(
+    snapshot(input, code),
+    ["centerMetersXZ", "sizeMetersXZ", "heightRangeMeters"],
+    code,
+  );
+  const tuples = {
+    centerMetersXZ: value.centerMetersXZ,
+    sizeMetersXZ: value.sizeMetersXZ,
+    heightRangeMeters: value.heightRangeMeters,
+  };
+  for (const [label, tuple] of Object.entries(tuples)) {
+    if (!Array.isArray(tuple) || tuple.length !== 2) {
+      fail(code, `${label} must have two numbers`);
+    }
+    tuple.forEach((entry, index) => requireFiniteNumber(
+      entry,
+      `${label}/${index}`,
+      code,
+    ));
+  }
+  const centerMetersXZ = tuples.centerMetersXZ as readonly [number, number];
+  const sizeMetersXZ = tuples.sizeMetersXZ as readonly [number, number];
+  const heightRangeMeters = tuples.heightRangeMeters as readonly [number, number];
+  if (
+    sizeMetersXZ.some((size) => size <= 0) ||
+    heightRangeMeters[0] >= heightRangeMeters[1]
+  ) fail(code, "world bounds invalid");
+  return Object.freeze({
+    centerMetersXZ: Object.freeze([...centerMetersXZ]) as readonly [number, number],
+    sizeMetersXZ: Object.freeze([...sizeMetersXZ]) as readonly [number, number],
+    heightRangeMeters: Object.freeze([...heightRangeMeters]) as readonly [number, number],
+  });
+}
+
+export function parseWorldPackageWorldBoundsV1(
+  input: unknown,
+): WorldPackageWorldBoundsV1 {
+  return parseWorldBounds(input, "WORLD_PACKAGE_WORLD_BOUNDS_INVALID");
+}
+
+export function hashWorldPackageWorldBoundsV1(
+  input: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(parseWorldPackageWorldBoundsV1(input)) as Sha256HashV1;
 }
 
 function snapshot(value: unknown, code: string, seen = new WeakSet<object>()): unknown {
@@ -298,31 +353,7 @@ export function canonicalizeWorldPackageManifestV1(
   if (!Number.isSafeInteger(value.seed) || value.seed < 0 || value.seed > 0xffff_ffff) {
     fail("WORLD_PACKAGE_MANIFEST_INVALID", "seed invalid");
   }
-  const worldBounds = exactRecord(
-    value.worldBounds,
-    ["centerMetersXZ", "sizeMetersXZ", "heightRangeMeters"],
-    "WORLD_PACKAGE_MANIFEST_INVALID",
-  );
-  for (const [label, tuple] of Object.entries({
-    centerMetersXZ: worldBounds.centerMetersXZ,
-    sizeMetersXZ: worldBounds.sizeMetersXZ,
-    heightRangeMeters: worldBounds.heightRangeMeters,
-  })) {
-    if (!Array.isArray(tuple) || tuple.length !== 2) {
-      fail("WORLD_PACKAGE_MANIFEST_INVALID", `${label} must have two numbers`);
-    }
-    tuple.forEach((entry, index) =>
-      requireFiniteNumber(
-        entry,
-        `${label}/${index}`,
-        "WORLD_PACKAGE_MANIFEST_INVALID",
-      ));
-  }
-  if (
-    (worldBounds.sizeMetersXZ as readonly number[]).some((size) => size <= 0) ||
-    (worldBounds.heightRangeMeters as readonly number[])[0]! >
-      (worldBounds.heightRangeMeters as readonly number[])[1]!
-  ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "world bounds invalid");
+  parseWorldBounds(value.worldBounds, "WORLD_PACKAGE_MANIFEST_INVALID");
   const budget = exactRecord(
     value.resourceBudget,
     ["maximumVertices", "maximumTriangles", "maximumColliders"],
@@ -378,6 +409,26 @@ export function canonicalizeWorldPackageManifestV1(
       NATIVE_SCENE_SOURCE_FIELDS,
       "WORLD_PACKAGE_MANIFEST_INVALID",
     );
+    const nativeMaterializer = exactRecord(
+      value.sceneSource.nativeMaterializer,
+      value.sceneSource.nativeMaterializer?.kind === "none"
+        ? ["kind"]
+        : ["kind", "metadataPath", "metadataHash"],
+      "WORLD_PACKAGE_MANIFEST_INVALID",
+    );
+    if (
+      nativeMaterializer.kind !== "none" &&
+      (nativeMaterializer.kind !== "babylon-native-block" ||
+        nativeMaterializer.metadataPath !==
+          "native/block-materializer-metadata.json")
+    ) fail("WORLD_PACKAGE_MANIFEST_INVALID", "Native materializer invalid");
+    if (nativeMaterializer.kind === "babylon-native-block") {
+      requireHash(
+        nativeMaterializer.metadataHash,
+        "nativeMaterializer.metadataHash",
+        "WORLD_PACKAGE_MANIFEST_INVALID",
+      );
+    }
     if (
       value.sceneSource.nativeSceneBootstrapPath !== "native/bootstrap.json" ||
       value.sceneSource.sceneModuleBundleManifestPath !== "native/module-bundle.json" ||
@@ -639,10 +690,23 @@ export function assertBabylonNativeWorldPackageMembershipV1(
   const contribution = input.nativeSceneContribution;
   const gameplay = input.gameplayBootstrap;
   const runtime = input.worldRuntimeBootstrap;
+  const materializerMetadata = input.nativeBlockMaterializerMetadata;
+  const isBlockProfile = bundle.nativeSceneProfile.resourceRef ===
+    BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
+  const hostProfileSettlement = contribution.profileSettlement.kind ===
+      "host-snapshot"
+    ? contribution.profileSettlement
+    : undefined;
   const selectedAssetRefs = attempt.selectedAssetResources.map((entry) =>
     entry.assetResourceRef).sort();
   const lockedAssetRefs = input.assetLock.entries.map((entry) =>
     entry.assetResourceRef).sort();
+  const contributionColliderIds = contribution.staticColliders
+    .map(({ id }) => id)
+    .sort();
+  const materializerColliderIds = materializerMetadata?.colliderJoins
+    .map(({ colliderId }) => colliderId)
+    .sort();
   if (
     hashBabylonNativeSceneBootstrapV1(bootstrap) !==
       source.nativeSceneBootstrapHash ||
@@ -697,6 +761,29 @@ export function assertBabylonNativeWorldPackageMembershipV1(
     receipt.manifest.seed !== bootstrap.seed ||
     receipt.manifest.gameplayBootstrapHash !== gameplay.contentHash ||
     receipt.manifest.worldRuntimeBootstrapHash !== runtime.contentHash ||
+    isBlockProfile !== !isNil(materializerMetadata) ||
+    isBlockProfile !==
+      (source.nativeMaterializer.kind === "babylon-native-block") ||
+    (
+      source.nativeMaterializer.kind === "babylon-native-block" &&
+      (
+        isNil(materializerMetadata) ||
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata) !==
+          source.nativeMaterializer.metadataHash ||
+        materializerMetadata.nativeSceneProfileRef !==
+          bundle.nativeSceneProfile.resourceRef ||
+        isNil(hostProfileSettlement) ||
+        materializerMetadata.contributionHash !==
+          hashBabylonNativeSceneContributionV1(contribution) ||
+        materializerMetadata.profileInventoryHash !==
+          hostProfileSettlement.profileInventoryHash ||
+        materializerMetadata.settledVisualHash !==
+          hostProfileSettlement.settledVisualHash ||
+        materializerMetadata.blocks.length !==
+          hostProfileSettlement.targetCount ||
+        !isEqual(materializerColliderIds, contributionColliderIds)
+      )
+    ) ||
     !isEqual(selectedAssetRefs, lockedAssetRefs)
   ) fail("WORLD_PACKAGE_NATIVE_MEMBERSHIP_INVALID", "component closure mismatch");
 }

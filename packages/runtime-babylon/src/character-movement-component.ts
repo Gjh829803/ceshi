@@ -35,6 +35,7 @@ import {
 import {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
   createBabylonCharacterBodyPortV1,
+  type BabylonCharacterBodyCommittedSupportEvidenceV1,
   type BabylonCharacterBodyRuntimePortV1,
 } from "./babylon-character-body-port";
 import {
@@ -786,6 +787,13 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
       );
     }
     return this.#bodyPort;
+  }
+
+  /** @internal Formal evidence from the BodyPort's last committed Tick. */
+  readCommittedSupportEvidence():
+    | BabylonCharacterBodyCommittedSupportEvidenceV1
+    | undefined {
+    return this.#requireBodyPort().readCommittedSupportEvidence();
   }
 }
 

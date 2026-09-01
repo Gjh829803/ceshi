@@ -1,0 +1,543 @@
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { Scene } from "@babylonjs/core/scene.pure.js";
+import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+  parseNativeBlockAuthoringManifestV1,
+  parseNativeBlockVisualResourceListV1,
+} from "@whitebox-world/native-babylon-block-profile";
+import {
+  sha256Bytes,
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
+import {
+  hashBabylonNativeSceneBootstrapV1,
+  parseBabylonNativeSceneBootstrapV1,
+  parseWorldRuntimeBootstrapV1,
+  worldResourceLockEntriesV1,
+  type BabylonNativeSceneResolvedProfileV1,
+} from "@whitebox-world/runtime-contracts";
+import {
+  assertNativeBlockGenerationRequestMatchesAttemptV1,
+  hashNativeBlockGenerationRequestV1,
+  hashSceneAuthoringAttemptV1,
+  parseNativeBlockGenerationReceiptV1,
+  parseNativeBlockGenerationRequestV1,
+  parseSceneAuthoringAttemptResultV1,
+  parseSceneAuthoringAttemptV1,
+  parseSceneAuthoringRouteDecisionV1,
+  type SceneAuthoringAttemptResultV1,
+} from "@whitebox-world/scene-authoring-contracts";
+import {
+  hashWorldReconstructionCaseV1,
+  parseWorldReconstructionCaseV1,
+} from "@whitebox-world/validation";
+import {
+  BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
+  hashWorldPackageWorldBoundsV1,
+  parseWorldPackageWorldBoundsV1,
+  verifyWorldPackageDirectoryV1,
+  type VerifiedBabylonNativeWorldPackageDirectoryV1,
+} from "@whitebox-world/world-package";
+import { hashWorldBuildIdentityV1 } from "@whitebox-world/world-identity";
+import { randomUUID } from "node:crypto";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
+import { isEqual, isNil } from "lodash-es";
+
+import {
+  buildTrustedBabylonNativeWorldPackageFromPreparedV1,
+} from "../native-scene/build-trusted-world-package.js";
+import {
+  buildAndLoadBabylonNativeSceneModuleV1,
+} from "../native-scene/module-bundle.js";
+import {
+  prepareFrozenBabylonNativeWorldPackageBuildInputV1,
+} from "../native-scene/native-package-input.js";
+import {
+  checkBabylonNativeSceneWorldDirectoryV1,
+} from "../native-scene/native-scene-check.js";
+import { admitBabylonNativeSourceGraphV1 } from
+  "../native-scene/source-admission.js";
+import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import {
+  parseNativeBlockGenerationHostClosureV1,
+  parseResolvedNativeBlockGenerationResourceV1,
+} from "./generation-request.js";
+
+const SOURCE_FILES = Object.freeze([
+  "native-block-authoring.json",
+  "native-resources.json",
+  "scene.ts",
+] as const);
+
+export interface PackageNativeBlockAttemptInputV1 {
+  readonly repositoryRoot: string;
+  readonly attemptDirectoryPath: string;
+  readonly casePath: string;
+  readonly outputDirectoryPath: string;
+}
+
+export interface PackagedNativeBlockAttemptV1 {
+  readonly outcome: "completed";
+  readonly checkResult:
+    VerifiedBabylonNativeWorldPackageDirectoryV1["nativeSceneCheckResult"];
+  readonly sceneAuthoringAttemptResult: Extract<
+    SceneAuthoringAttemptResultV1,
+    { readonly outcome: "completed" }
+  >;
+  readonly verifiedWorldPackage: VerifiedBabylonNativeWorldPackageDirectoryV1;
+  readonly worldPackageRef:
+    VerifiedBabylonNativeWorldPackageDirectoryV1["receipt"]["worldPackageRef"];
+  readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
+  readonly buildReceiptHash: Sha256HashV1;
+  readonly outputDirectoryPath: string;
+  readonly diagnostics: readonly string[];
+}
+
+export class NativeBlockPackageErrorV1 extends Error {
+  readonly code = "WORLDKIT_NATIVE_BLOCK_PACKAGE_FAILED";
+  readonly diagnostics: readonly string[];
+
+  constructor(diagnostics: readonly string[], cause?: unknown) {
+    super("WORLDKIT_NATIVE_BLOCK_PACKAGE_FAILED", { cause });
+    this.diagnostics = Object.freeze([...diagnostics].sort());
+  }
+}
+
+function fail(diagnostic: string, cause?: unknown): never {
+  throw new NativeBlockPackageErrorV1([diagnostic], cause);
+}
+
+function canonicalAbsolute(value: string, name: string): string {
+  if (!path.isAbsolute(value) || path.normalize(value) !== value) {
+    return fail(`${name}-invalid`);
+  }
+  return value;
+}
+
+async function readFileNoFollow(root: string, relativePath: string): Promise<Uint8Array> {
+  const absolutePath = path.join(root, ...relativePath.split("/"));
+  const info = await lstat(absolutePath);
+  if (info.isSymbolicLink() || !info.isFile()) return fail("input-file-invalid");
+  const resolved = await realpath(absolutePath);
+  if (resolved !== absolutePath || path.relative(root, resolved).startsWith("..")) {
+    return fail("input-path-escaped");
+  }
+  return new Uint8Array(await readFile(absolutePath));
+}
+
+async function readAbsoluteFileNoFollow(
+  absolutePath: string,
+  diagnostic: string,
+): Promise<Uint8Array> {
+  const info = await lstat(absolutePath);
+  if (info.isSymbolicLink() || !info.isFile()) return fail(diagnostic);
+  if (await realpath(absolutePath) !== absolutePath) return fail(diagnostic);
+  return new Uint8Array(await readFile(absolutePath));
+}
+
+function json(bytes: Uint8Array, diagnostic: string): unknown {
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (error) {
+    return fail(diagnostic, error);
+  }
+}
+
+function contentHash(bytes: Uint8Array): Sha256HashV1 {
+  return sha256Bytes(bytes) as Sha256HashV1;
+}
+
+function candidateFactory() {
+  return Object.freeze({
+    createCandidate() {
+      const engine = new NullEngine({
+        renderWidth: 64,
+        renderHeight: 64,
+        textureSize: 32,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      });
+      const scene = new Scene(engine);
+      return Object.freeze({
+        engine,
+        scene,
+        dispose() {
+          scene.dispose();
+          engine.dispose();
+        },
+      });
+    },
+  });
+}
+
+async function writeCanonicalJsonFresh(
+  outputPath: string,
+  value: unknown,
+): Promise<void> {
+  const stagingPath = `${outputPath}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(
+      stagingPath,
+      `${stringifyCanonicalJson(value)}\n`,
+      { flag: "wx", mode: 0o600 },
+    );
+    await rename(stagingPath, outputPath);
+  } finally {
+    await rm(stagingPath, { force: true });
+  }
+}
+
+export async function packageNativeBlockAttemptV1(
+  input: PackageNativeBlockAttemptInputV1,
+): Promise<PackagedNativeBlockAttemptV1> {
+  const repositoryRoot = canonicalAbsolute(input.repositoryRoot, "repository-root");
+  const attemptDirectoryPath = canonicalAbsolute(
+    input.attemptDirectoryPath,
+    "attempt-directory",
+  );
+  const casePath = canonicalAbsolute(input.casePath, "case-path");
+  const outputDirectoryPath = canonicalAbsolute(
+    input.outputDirectoryPath,
+    "output-directory",
+  );
+  if (
+    outputDirectoryPath === attemptDirectoryPath ||
+    outputDirectoryPath.startsWith(`${attemptDirectoryPath}${path.sep}`)
+  ) return fail("output-inside-attempt");
+  if (await realpath(attemptDirectoryPath) !== attemptDirectoryPath) {
+    return fail("attempt-directory-invalid");
+  }
+  const sourceDirectoryPath = path.join(attemptDirectoryPath, "source");
+  if (await realpath(sourceDirectoryPath) !== sourceDirectoryPath) {
+    return fail("source-directory-invalid");
+  }
+  const sourceEntries = (await readdir(sourceDirectoryPath)).sort();
+  if (!isEqual(sourceEntries, SOURCE_FILES)) return fail("source-inventory-invalid");
+
+  const [
+    caseBytes,
+    routeBytes,
+    requestBytes,
+    attemptBytes,
+    generationReceiptBytes,
+    bootstrapBytes,
+    gameplayBytes,
+    runtimeBytes,
+    boundsBytes,
+    hostClosureBytes,
+    registryLockBytes,
+    nativeSceneApiBytes,
+    nativeSceneProfileBytes,
+    blockProfileBytes,
+    authoringManifestBytes,
+    resourcesBytes,
+    sceneBytes,
+  ] = await Promise.all([
+    readAbsoluteFileNoFollow(casePath, "case-path-invalid"),
+    readFileNoFollow(attemptDirectoryPath, "scene-authoring-route-decision.json"),
+    readFileNoFollow(attemptDirectoryPath, "generation-request.json"),
+    readFileNoFollow(attemptDirectoryPath, "attempt.json"),
+    readFileNoFollow(attemptDirectoryPath, "generation-receipt.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/native-scene.bootstrap.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/gameplay-bootstrap.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/world-runtime-bootstrap.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/world-bounds.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/host-closure.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/registry-lock.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/native-scene-api.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/native-scene-profile.json"),
+    readFileNoFollow(attemptDirectoryPath, "inputs/block-profile.json"),
+    readFileNoFollow(sourceDirectoryPath, "native-block-authoring.json"),
+    readFileNoFollow(sourceDirectoryPath, "native-resources.json"),
+    readFileNoFollow(sourceDirectoryPath, "scene.ts"),
+  ]);
+
+  const reconstructionCase = parseWorldReconstructionCaseV1(
+    json(caseBytes, "case-invalid"),
+  );
+  const route = parseSceneAuthoringRouteDecisionV1(
+    json(routeBytes, "route-invalid"),
+  );
+  const generationRequest = parseNativeBlockGenerationRequestV1(
+    json(requestBytes, "generation-request-invalid"),
+  );
+  const attempt = parseSceneAuthoringAttemptV1(
+    json(attemptBytes, "attempt-invalid"),
+  );
+  const generationReceipt = parseNativeBlockGenerationReceiptV1(
+    json(generationReceiptBytes, "generation-receipt-invalid"),
+  );
+  const bootstrap = parseBabylonNativeSceneBootstrapV1(
+    json(bootstrapBytes, "bootstrap-invalid"),
+  );
+  const gameplay = parseGameplayBootstrapV1(
+    json(gameplayBytes, "gameplay-invalid"),
+  );
+  const runtime = parseWorldRuntimeBootstrapV1(
+    json(runtimeBytes, "runtime-invalid"),
+  );
+  const bounds = parseWorldPackageWorldBoundsV1(
+    json(boundsBytes, "world-bounds-invalid"),
+  );
+  const hostClosure = parseNativeBlockGenerationHostClosureV1(
+    json(hostClosureBytes, "host-closure-invalid"),
+  );
+  const registryOwner = worldResourceLockEntriesV1(
+    json(registryLockBytes, "registry-lock-invalid") as never,
+  );
+  const authoringManifest = parseNativeBlockAuthoringManifestV1(
+    json(authoringManifestBytes, "authoring-manifest-invalid"),
+  );
+  const visualResources = parseNativeBlockVisualResourceListV1(
+    json(resourcesBytes, "native-resources-invalid"),
+  );
+  if (visualResources.resourceRefs.length !== 0) {
+    return fail("native-visual-resource-unresolved");
+  }
+  if (
+    generationReceipt.outcome !== "completed" ||
+    generationReceipt.generationRequestRef !== "generation-request.json" ||
+    generationReceipt.generationRequestHash !==
+      hashNativeBlockGenerationRequestV1(generationRequest)
+  ) return fail("generation-receipt-stale");
+  assertNativeBlockGenerationRequestMatchesAttemptV1(
+    "generation-request.json",
+    generationRequest,
+    attempt,
+  );
+  const sourceBytesByPath = new Map([
+    ["native-block-authoring.json", authoringManifestBytes],
+    ["native-resources.json", resourcesBytes],
+    ["scene.ts", sceneBytes],
+  ] as const);
+  if (
+    generationReceipt.outputs.length !== SOURCE_FILES.length ||
+    generationReceipt.outputs.some((output) => {
+      const bytes = sourceBytesByPath.get(output.path as typeof SOURCE_FILES[number]);
+      return isNil(bytes) ||
+        output.contentHash !== contentHash(bytes) ||
+        output.sizeBytes !== bytes.byteLength;
+    })
+  ) return fail("generation-output-stale");
+  const nativeSceneApi = parseResolvedNativeBlockGenerationResourceV1(
+    nativeSceneApiBytes,
+    "native-scene-api",
+    generationRequest.nativeSceneApiRef,
+  );
+  const nativeSceneProfile = parseResolvedNativeBlockGenerationResourceV1(
+    nativeSceneProfileBytes,
+    "native-scene-profile",
+    generationRequest.nativeSceneProfileRef,
+  );
+  const blockProfile = parseResolvedNativeBlockGenerationResourceV1(
+    blockProfileBytes,
+    "native-block-profile",
+    generationRequest.blockProfileRef,
+  );
+  if (
+    blockProfile.resourceRef !== BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1 ||
+    authoringManifest.blockProfileRef !== blockProfile.resourceRef ||
+    generationRequest.bootstrapInputHash !==
+      hashBabylonNativeSceneBootstrapV1(bootstrap) ||
+    hostClosure.gameplayBootstrapRef !== gameplay.resourceRef ||
+    hostClosure.gameplayBootstrapHash !== gameplay.contentHash ||
+    hostClosure.worldRuntimeBootstrapHash !== runtime.contentHash ||
+    hostClosure.worldBoundsHash !== hashWorldPackageWorldBoundsV1(bounds) ||
+    hostClosure.initialControlledEntityId !== runtime.initialControlledEntityId
+  ) return fail("host-identity-closure-mismatch");
+
+  const parentDirectoryPath = path.dirname(outputDirectoryPath);
+  await mkdir(parentDirectoryPath, { recursive: true });
+  const checkDirectoryPath = await mkdtemp(
+    path.join(parentDirectoryPath, ".native-block-check-"),
+  );
+  try {
+    await Promise.all([
+      writeFile(path.join(checkDirectoryPath, "native-scene.bootstrap.json"), bootstrapBytes, { flag: "wx" }),
+      ...SOURCE_FILES.map((name) => writeFile(
+        path.join(checkDirectoryPath, name),
+        sourceBytesByPath.get(name)!,
+        { flag: "wx" },
+      )),
+    ]);
+    const formalCheck = await checkBabylonNativeSceneWorldDirectoryV1(
+      checkDirectoryPath,
+    );
+    await writeCanonicalJsonFresh(
+      path.join(attemptDirectoryPath, "native-check-result.json"),
+      formalCheck,
+    );
+    if (formalCheck.outcome !== "passed") {
+      return fail(...["native-check-rejected"]);
+    }
+    const admitted = await admitBabylonNativeSourceGraphV1(checkDirectoryPath);
+    if (admitted.outcome !== "passed") return fail("source-admission-stale");
+    const bundled = await buildAndLoadBabylonNativeSceneModuleV1(
+      admitted.sourceGraph,
+    );
+    if (bundled.outcome !== "passed") return fail("source-bundle-stale");
+    const sceneAuthoringAttemptRef =
+      `worldkit://scene-authoring-attempt/${attempt.id}@1`;
+    const sceneAuthoringAttemptResultRef =
+      `worldkit://scene-authoring-attempt-result/${attempt.id}@1`;
+    const attemptResult = parseSceneAuthoringAttemptResultV1({
+      kind: "scene-authoring-attempt-result",
+      schemaVersion: 1,
+      id: `${attempt.id}.result`,
+      sceneAuthoringAttemptRef,
+      sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(attempt),
+      outcome: "completed",
+      authoredSourceRef: bootstrap.sceneModuleRef,
+      authoredSourceHash: bundled.bundleArtifact.sourceGraphHash,
+      evidenceRefs: [
+        `worldkit://native-scene-check-result/${bootstrap.id}@1`,
+      ],
+    });
+    if (attemptResult.outcome !== "completed") {
+      return fail("attempt-result-invalid");
+    }
+    const runtimeOwnerEntries = runtime.runtimeResourceLockEntries;
+    if (runtimeOwnerEntries.some((entry) =>
+      !registryOwner.some((ownerEntry) => isEqual(ownerEntry, entry)))) {
+      return fail("registry-runtime-closure-mismatch");
+    }
+    const registryLock = worldResourceLockEntriesV1([
+      ...runtimeOwnerEntries,
+      {
+        resourceKind: "world-runtime-bootstrap",
+        resourceRef: hostClosure.worldRuntimeBootstrapRef,
+        resolvedVersion: hostClosure.worldRuntimeBootstrapResolvedVersion,
+        contentHash: runtime.contentHash,
+      },
+      {
+        resourceKind: "native-scene",
+        resourceRef: bootstrap.sceneModuleRef,
+        resolvedVersion: bootstrap.sceneModuleRef.split("@").at(-1)!,
+        contentHash: bundled.bundleArtifact.sourceGraphHash,
+      },
+      {
+        resourceKind: "native-scene-api",
+        resourceRef: nativeSceneApi.resourceRef,
+        resolvedVersion: nativeSceneApi.resolvedVersion,
+        contentHash: nativeSceneApi.contentHash,
+      },
+      {
+        resourceKind: "native-scene-profile",
+        resourceRef: nativeSceneProfile.resourceRef,
+        resolvedVersion: nativeSceneProfile.resolvedVersion,
+        contentHash: nativeSceneProfile.contentHash,
+      },
+      ...registryOwner.filter(({ resourceKind }) =>
+        resourceKind === "traversal-surface-profile"),
+    ]);
+    const profile = (resolution: typeof nativeSceneApi): BabylonNativeSceneResolvedProfileV1 =>
+      Object.freeze({
+        resourceRef: resolution.resourceRef,
+        resolvedVersion: resolution.resolvedVersion,
+        contentHash: resolution.contentHash,
+      });
+    const prepared = await prepareFrozenBabylonNativeWorldPackageBuildInputV1({
+      repositoryRoot,
+      worldDirectoryPath: checkDirectoryPath,
+      candidateFactory: candidateFactory(),
+      shared: {
+        title: reconstructionCase.id,
+        sdkVersion: "0.0.0",
+        distributionPolicy: "internal-only",
+        hostCompatibility: BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
+        generatedResourceProvenance: {
+          licenseDocumentId: "project-owned",
+          licenseSpdxExpression: "LicenseRef-Project-Owned",
+          redistributionPolicy: "allowed",
+          author: "Agent Whitebox World SDK",
+        },
+        licenseDocuments: [{
+          id: "project-owned",
+          spdxLicenseExpression: "LicenseRef-Project-Owned",
+          path: "LICENSES/project-owned.txt",
+          text: `Project-owned ${reconstructionCase.id} Native whitebox source. Redistribution allowed.\n`,
+        }],
+        noticeText: `${reconstructionCase.id}\nSee LICENSES/project-owned.txt.\n`,
+      },
+      packageId: `${reconstructionCase.id}.native.package`,
+      worldId: reconstructionCase.id,
+      worldBounds: bounds,
+      resourceBudget: {
+        maximumVertices: generationRequest.budgets.maximumStaticColliderVertexCount,
+        maximumTriangles: generationRequest.budgets.maximumStaticColliderTriangleCount,
+        maximumColliders: generationRequest.budgets.maximumStaticColliderCount,
+      },
+      nativeSceneBootstrap: bootstrap,
+      nativeSceneBootstrapInputRef: generationRequest.bootstrapInputRef,
+      generationRequestRef: "generation-request.json",
+      generationRequestHash: hashNativeBlockGenerationRequestV1(generationRequest),
+      nativeSceneApi: profile(nativeSceneApi),
+      nativeSceneProfile: profile(nativeSceneProfile),
+      publishedAssets: [],
+      sceneAuthoringRouteDecisionRef: attempt.sceneAuthoringRouteDecisionRef,
+      sceneAuthoringRouteDecision: route,
+      sceneAuthoringAttemptRef,
+      sceneAuthoringAttempt: attempt,
+      sceneAuthoringAttemptResultRef,
+      sceneAuthoringAttemptResult: attemptResult,
+      gameplayBootstrap: gameplay,
+      worldRuntimeBootstrapRef: hostClosure.worldRuntimeBootstrapRef,
+      worldRuntimeBootstrap: runtime,
+      registryLock,
+      nativeBlockAuthoring: {
+        reconstructionCase,
+        authoringManifest,
+      },
+    });
+    const directory = buildTrustedBabylonNativeWorldPackageFromPreparedV1(
+      prepared,
+    );
+    const verified = verifyWorldPackageDirectoryV1(directory);
+    if (verified.kind !== "babylon-native-scene") {
+      return fail("world-package-kind-mismatch");
+    }
+    await writeWorldPackageDirectoryV1({
+      outputDirectoryPath,
+      directory,
+    });
+    await writeCanonicalJsonFresh(
+      path.join(attemptDirectoryPath, "scene-authoring-attempt-result.json"),
+      attemptResult,
+    );
+    const receipt = verified.receipt;
+    return Object.freeze({
+      outcome: "completed",
+      checkResult: verified.nativeSceneCheckResult,
+      sceneAuthoringAttemptResult: attemptResult,
+      verifiedWorldPackage: verified,
+      worldPackageRef: receipt.worldPackageRef,
+      worldPackageRootHash: receipt.worldPackageRootHash,
+      worldBuildIdentityHash: hashWorldBuildIdentityV1(
+        receipt.worldBuildIdentity,
+      ),
+      buildReceiptHash: sha256CanonicalJson(receipt) as Sha256HashV1,
+      outputDirectoryPath,
+      diagnostics: Object.freeze([]),
+    });
+  } catch (error) {
+    if (error instanceof NativeBlockPackageErrorV1) throw error;
+    return fail("native-package-internal-failed", error);
+  } finally {
+    await rm(checkDirectoryPath, { recursive: true, force: true });
+  }
+}

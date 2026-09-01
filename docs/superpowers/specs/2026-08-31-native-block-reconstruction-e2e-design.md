@@ -249,29 +249,80 @@ Generation Request; putting it inside that Request would create a circular ident
 identity is a canonical sorted path/content-hash inventory, never gzip bytes, mtime or
 an absolute host path. It contains no credentials, provider payload, or mutable output directory.
 Creation submission remains exactly once; an uncertain create outcome is reconciled by request ID.
+The representative Native Block formal run freezes a 1,800-second task timeout. A provider-confirmed
+task timeout is recorded only as the provider-neutral `task-timeout` diagnostic in the durable Generation
+Receipt; provider stderr, payloads, credentials and trace details are never serialized. Submission
+transport uncertainty remains the separate `creation-outcome-unknown` state and never permits a second
+creation submission. Both Codex adapters project their private state into one request-ID-bound,
+machine-readable `worldkit-codex-task-outcome` envelope. The Host process port consumes only that closed
+envelope; it never classifies stderr. Local timeout is definitive only when the adapter's own frozen timer
+expires. Cloud timeout is definitive only from a structured provider error code. An uncertain create
+outcome reaches the Runner's reconciliation port, which invokes the same router in GET-only recovery mode;
+it never repeats the creation POST. The durable Receipt permits `task-timeout` only as the sole diagnostic
+of a rejected, output-empty attempt whose cleanup completed.
+
+The representative `whitebox.blocks@1` Bootstrap uses the stable hyphen identity
+`cloud-temple-t-gate-native-block-native`. Dotted Bootstrap identities are rejected before task creation
+because that identity becomes the Block build epoch and Collider contribution owner during formal Check.
+
+The Host accepts Native API, Native Scene Profile and Block Profile only through exact resolved-resource
+descriptors containing `resourceKind`, canonical Registry `resourceRef`, `resolvedVersion`, and the resolved
+resource `contentHash`. The Request's `...Ref/...Hash` fields bind that Registry resource identity; the
+descriptor file path and descriptor-byte hash remain separate `contextInputs` and never replace it. The
+current Case uses only `worldkit://native-scene-api/babylon@1`. The Host also reparses and recomputes the
+Case-level Route Decision from the complete Case Scene Brief closure, rejects a caller-supplied shadow
+decision, and durably publishes the exact Route bytes beside the Request and Attempt.
 
 The formal profile uses `gpt-5.6-sol` with `xhigh`, as required by repository policy. Smoke profiles are
 not valid BNA-6 evidence.
 
 ### 5.4 AI output workspace
 
-Before task creation, the Host derives `native-scene.bootstrap.json` from the parsed Case/Profile and
-freezes its bytes as `bootstrapInputRef/Hash`. It is a read-only task input and the sole owner of world
-bounds, seed, Gameplay Bootstrap ref, controlled Subject, Camera resource refs and Spawn Marker identity.
-The model cannot rewrite it. This makes Route, Generation Request and Attempt identities fully knowable
-before submission and prevents the generated source from becoming a hidden Gameplay control plane.
+Before task creation, the Host derives `BabylonNativeSceneBootstrapV1` as a read-only Native startup
+projection from the Case-bound Spawn identity and seed, parsed `GameplayBootstrapV1`, parsed
+`WorldRuntimeBootstrapV1`, and Host-selected Scene Module/API/Profile refs. The projection copies only the
+startup values required by the closed Native Bootstrap contract: Gameplay Bootstrap ref, controlled entity
+ID, gravity, numeric opening-camera values, seed and Spawn Marker ID. It does not become the owner of those
+upstream facts.
+
+`WorldPackageWorldBoundsV1` remains owned by the WorldPackage manifest boundary and is not added to the
+Native Bootstrap. Subject closure, Camera resource refs, runtime resource locks and their canonical identity
+remain owned by `WorldRuntimeBootstrapV1`; the Native Bootstrap contains no second Subject or Camera
+resource closure. The Host must reject cross-wired Gameplay/World Runtime links, a controlled Subject not
+closed by the World Runtime Bootstrap, a Case Spawn mismatch, or non-finite/invalid bounds before task
+creation.
+
+The Host canonicalizes and identity-binds the parsed Gameplay Bootstrap, World Runtime Bootstrap and
+validated WorldPackage Bounds in the Generation Request context, then canonical-materializes
+`native-scene.bootstrap.json` and freezes its bytes as `bootstrapInputRef/Hash`. The Builder receives that
+file read-only and cannot rewrite it. The materialized file is a durable Attempt input: it is promoted out of
+task staging before submission and is retained with the Attempt/Generation Receipt even after the isolated
+task workspace is cleaned. This makes Route, Generation Request and Attempt identities fully knowable before
+submission and prevents generated source from becoming a hidden Gameplay control plane.
+
+The durable Attempt additionally retains the exact API/Profile/Block resolution descriptors and a typed
+Host-closure descriptor. That descriptor binds the admitted World Runtime Bootstrap Registry ref, resolved
+version and `contentHash` to the parsed Bootstrap's own `contentHash`, plus Gameplay Bootstrap, World Bounds
+and initial controlled-entity identities. The complete Attempt directory is published from one sibling
+staging directory by atomic rename; an existing Attempt or task root is rejected rather than overwritten.
+Input and output ancestor chains must resolve without symbolic links. Generation Request, Attempt, router
+request and cloud prefix identities include the stable run ID, while the immutable Case-level Route identity
+does not change between runs.
 
 The task writes only:
 
 - `scene.ts`: a closed Native Module using Native API + Block Profile;
 - `native-block-authoring.json`: entry module, Block Profile ref, visual target/group mappings and their
   semantic class/identity color; it contains no Gameplay, Camera, Physics, Subject or Spawn state;
-- `native-resources.json`: a closed sorted list of optional Native visual Registry resource refs.
+- `native-resources.json`: a closed sorted list of optional Native visual Registry refs using the
+  existing `worldkit://static-geometry-asset/<name>@<version>` Asset Lock dialect. Subject, Camera,
+  Gameplay and Runtime refs are Host-owned and invalid in this list.
 
 The checker must join every declared visual group to the checked Layout inventory and reject missing,
 duplicate, unbound or undeclared groups. The first Case is asset-free, so `native-resources.json` is an
-empty declared set; Gameplay/Subject/Camera Registry closure comes only from the Host-frozen Bootstrap,
-never an implicit default or this resource list. The model cannot mint Resource publication/admission
+empty declared set; Gameplay/Subject/Camera Registry closure comes only from the Host-bound
+`GameplayBootstrapV1` and `WorldRuntimeBootstrapV1`, never an implicit default, the Native Bootstrap, or
+this resource list. The model cannot mint Resource publication/admission
 receipts or Asset Locks. The Host resolves declared refs, creates selected asset rows and locks, and
 rejects unknown or unadmitted resources.
 
@@ -341,18 +392,26 @@ request, and the hosted isolated session exposes no Capture transaction. NBR-45 
 they are not treated as already implemented.
 
 `FormalWorldCaptureRequestV1` and `FormalWorldCaptureReceiptV1` are owned solely by
-`@whitebox-world/runtime-contracts`. The checked `native-block-authoring.json` plus checked Layout create a
-`NativeBlockCaptureIdentityInventoryV1`, whose complete bytes and hash are frozen into the
-Bundle/WorldPackage and verified by its parser, Root and Build Receipt. It explicitly maps accepted block
-IDs to Host-defined Runtime entity IDs and accepted visual groups to semantic class, identity color and
-acceptance target. The trusted Block visual materializer deterministically writes a Host-defined
-`native-block:<blockId>` entity identity and group-derived semantic capture class while creating each Mesh
-from the checked block/group ID; the admitted inventory separately maps that group to the Case's semantic
-class, identity color and acceptance target. The profile settlement fingerprint
-includes the exact identity and rejects post-finalize mutation; checker replay verifies that the authored
-manifest, checked Layout, materialized Mesh identities and frozen inventory agree. No later Runtime Host
-tries to recover Module-local Session records, and Capture never scans names, tags or the Scene to discover
-membership.
+`@whitebox-world/runtime-contracts`. The checked `native-block-authoring.json`, checked Layout, Frozen
+Contribution and profile settlement create one `BabylonNativeBlockMaterializerMetadataV1`. Its complete
+bytes and hash are frozen into the WorldPackage Root and Build Receipt and verified by one parser. There is
+no second Capture identity inventory. The metadata maps every accepted Block to the Host-derived
+`runtimeEntityId` (`native-block:<blockId>`) and semantic capture class, every accepted visual group to its
+Case target/class/identity color/bounds, and every Collider to its source Block. The metadata carries one
+`nativeSceneProfileRef` bound to the selected Native Scene Profile; `blockProfileRef` remains solely the
+authoring Manifest's Native Block Profile ref and is never an alias for the scene profile. The materializer
+creates a Host-private explicit `runtimeEntityId -> Mesh` and `visualGroupId -> Mesh[]` live-handle registry
+from the same checked records. NBR-45B may consume only those handles plus verified Package metadata; it
+never scans Mesh metadata, names, tags or `scene.meshes`. `FormalSemanticCaptureMapV1` remains the sole
+Case-to-Capture semantic mapping. It consumes verified Package metadata rather than raw Manifest or Layout
+inputs and explicitly binds each accepted visual group to its Case acceptance target, opening-composition
+target, topology node and semantic layer. Those bindings are authored Capture intent and are checked against
+the complete Case target sets and Package metadata; no binding may be inferred from a URI suffix, Block/group
+name, expected screen rectangle, Mesh metadata, tag or Scene scan. The map also freezes the topology relations
+that Capture must verify from measured Package bounds, SDK support/collider state or scripted traversal. A
+relation that the current Capture profile cannot measure is missing evidence rather than a copy of Case
+expectations. This extends the existing semantic map; it is not a second Package identity inventory and does
+not change the AI generation request already in flight.
 
 The current trusted artifact `worldkit capture` evidence command is extended source-neutrally to accept a
 verified WorldPackage directory. It starts the same admitted BNA Runtime session through the verification
@@ -366,21 +425,47 @@ Harness/isolated port, not the product Viewer shell, waits for Browser/Runtime r
 
 The source-neutral artifact request union gains an explicit `world-side` orthographic pose. The hosted
 isolated Runtime session gains one bounded Capture transaction that accepts only a parsed formal request,
-executes opening/top-down/world-side/control/overlay capture against the same verified Package/session,
-and returns content bytes plus identity metadata. It cannot expose a general Camera or Scene handle.
+executes ready, Host reset/rebind, render-ready, opening/top-down/world-side/overlay/support/traversal and
+Camera rollback against the same admitted Package and Runtime session, and returns content bytes plus measured
+identity data. Reset keeps `runtimeSessionId` stable, allocates a fresh `worldSessionId` through the existing
+`RuntimeHost`, atomically publishes the reset Candidate and disposes the previous world only after publication.
+The retained isolated Runtime entry may own at most the current and one reset Candidate handle while the swap
+is in flight; it must not create a second RuntimeHost, Gameplay owner, Camera owner, Physics owner or product
+Browser protocol. The transaction cannot expose a general Camera, Scene, Engine or input handle.
 
 The Host capture transaction may temporarily request artifact-view Camera poses, but the Native Module
 never owns a Camera. Capture rollback restores the SDK Camera state before session disposal.
+
+The transaction publishes four immutable measured evidence documents in addition to the three view PNGs and
+collider-overlay PNG:
+
+- `opening-observation.json`: Package-frozen visual-group bounds projected through the SDK opening Camera,
+  including normalized bounds/centres, coverage and Camera-depth order for every explicit semantic mapping;
+- `spawn-support-observation.json`: the reset Snapshot plus the SDK `checkSupport()` contact identity/point,
+  its unique Frozen Contribution collider join, capsule foot point and measured support gap;
+- `collider-overlay-observation.json`: every Frozen Contribution collider joined to the SDK-owned live Havok
+  body/subshape and overlay record, with no Native registry or Scene scan;
+- `scripted-traversal.json`: ordered fixed-input ticks, committed Snapshot hashes/positions/media and measured
+  checkpoint outcomes after an independent Host reset/bind for each check.
+
+The formal Capture provider computes those observations inside the admitted Runtime. NBR-50B only verifies
+their bytes and identity joins and projects them into the existing evaluator DTO; it must never recompute them
+from PNG pixels, copy Case expectations, guess ref suffixes or scan Babylon objects.
 
 `FormalWorldCaptureReceiptV1` binds:
 
 - Case/Profile, Attempt/Result, WorldPackage Ref/Root, WorldBuildIdentity and Build Receipt hashes;
 - Runtime session identity, ready Snapshot hash and SDK owner version identities;
-- formal request hash and frozen Native Block Capture Identity Inventory hash;
-- view IDs, viewport/DPR, Camera input, renderer/browser identity and PNG content hashes;
-- collider overlay hash when requested;
-- scripted traversal evidence hash;
+- formal request hash, semantic Capture map hash and Package-frozen Native Block materializer metadata hash;
+- view IDs, explicit artifact refs, viewport/DPR, Camera input, renderer/browser identity and PNG hashes;
+- opening/support/overlay/traversal observation artifact refs and content hashes;
+- collider-overlay PNG artifact ref and content hash;
 - Reset/Camera rollback and final cleanup outcomes.
+
+The Receipt is written last after every referenced artifact has been hashed and re-read. The Node orchestrator
+owns final browser/server/session/temporary-resource cleanup and may publish `cleanupOutcome: "completed"` only
+after all resources close. The Browser transaction reports rollback/reset results but cannot claim Host-process
+cleanup.
 
 BWB-3 `scope: "build-epoch-local"` screenshots remain authoring evidence only and cannot satisfy this
 Receipt.

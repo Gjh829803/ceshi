@@ -63,6 +63,17 @@ const groundContact = (
   motionType: "static",
 });
 
+const identifiedGroundContact = (): BabylonCharacterBodyNativeContactV1 => ({
+  ...groundContact(),
+  colliderId: "ground-collider",
+  colliderSubshapeId: "ground-collider#top",
+  logicalSubshapeId: "top",
+  traversalSurfaceId: "ground-surface",
+  surfaceEntityId: "ground-entity",
+  traversalSurfaceProfileRef:
+    "worldkit://traversal-surface-profile/ground.static@1",
+});
+
 interface FakeSnapshot {
   readonly position: Vec3;
   readonly velocity: Vec3;
@@ -482,9 +493,13 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
   it("retains reset contacts only inside the character-body vertical band", () => {
     const { driver, port } = createPort();
     const exactIdentity = {
+      colliderId: "collider:ground",
       colliderSubshapeId: "collider:ground:primary",
+      logicalSubshapeId: "primary",
       traversalSurfaceId: "traversal-surface:ground",
       surfaceEntityId: "ground",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
     } as const;
     driver.contacts = [{
       ...groundContact(),
@@ -509,7 +524,9 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     expect(retainedSupport(port)?.supportContacts).toEqual([{
       pointMetersXYZ: [0, 0.15, 0],
       normalXYZ: [0, 1, 0],
-      ...exactIdentity,
+      colliderSubshapeId: exactIdentity.colliderSubshapeId,
+      traversalSurfaceId: exactIdentity.traversalSurfaceId,
+      surfaceEntityId: exactIdentity.surfaceEntityId,
     }]);
     port.dispose();
   });
@@ -517,9 +534,13 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
   it("restores the committed retained contact band after abort", () => {
     const { driver, port } = createPort();
     const exactIdentity = {
+      colliderId: "collider:ground",
       colliderSubshapeId: "collider:ground:primary",
+      logicalSubshapeId: "primary",
       traversalSurfaceId: "traversal-surface:ground",
       surfaceEntityId: "ground",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
     } as const;
     driver.contacts = [{
       ...groundContact(),
@@ -1467,6 +1488,49 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     expect(second.driver.position).toEqual([0, 1, 0]);
     expect(() => first.port.commitTick(firstToken)).toThrow("3C_BODY_RESOLUTION_DUPLICATE");
     expect(() => second.port.commitTick(secondToken)).toThrow("3C_TICK_TOKEN_STALE");
+  });
+
+  it("publishes only the identified support contacts used by a committed support sample", () => {
+    const { driver, port } = createPort();
+    driver.contacts = [
+      identifiedGroundContact(),
+      { ...groundContact([1, 0, 0]), distanceMeters: 0.01 },
+    ];
+    const { token } = beginAndResolve(port, 7, [0, 0, 0]);
+
+    expect(port.readCommittedSupportEvidence()).toBeUndefined();
+    port.commitTick(token);
+
+    expect(port.readCommittedSupportEvidence()).toEqual({
+      schemaVersion: 1,
+      tick: 7,
+      sampledControllerCenterMetersXYZ: [0, 1, 0],
+      sampledFootPointMetersXYZ: [0, 0.09999999999999998, 0],
+      support: {
+        mode: "supported",
+        pointMetersXYZ: [0, 0, 0],
+        normalXYZ: [0, 1, 0],
+        isDynamic: false,
+      },
+      contacts: [identifiedGroundContact()],
+    });
+    port.dispose();
+  });
+
+  it("publishes implicit commits, preserves prior evidence on abort, and clears it on reset", () => {
+    const { driver, port } = createPort();
+    driver.contacts = [identifiedGroundContact()];
+    beginAndResolve(port, 3, [0, 0, 0]);
+
+    const nextToken = createMovementTickTokenV1();
+    port.beginTick({ token: nextToken, tick: 4 });
+    expect(port.readCommittedSupportEvidence()?.tick).toBe(3);
+    port.abortTick(nextToken);
+    expect(port.readCommittedSupportEvidence()?.tick).toBe(3);
+
+    port.reset();
+    expect(port.readCommittedSupportEvidence()).toBeUndefined();
+    port.dispose();
   });
 
   it("dispose attempts the owned driver once, preserves its error, and stays idempotent", () => {

@@ -90,8 +90,8 @@ export const RUNTIME_PROBE_REGISTRY_V1: readonly RuntimeProbeRegistrationV1[] = 
     id: "fixed-cadence",
     kind: "cadence",
     requiredness: "required",
-    gateId: "scene-viewer",
-    ownerCommandId: "verify-scene-viewer",
+    gateId: "route-r1-heightfield",
+    ownerCommandId: "verify-route-r1-heightfield",
   },
   {
     id: "bna-candidate-determinism",

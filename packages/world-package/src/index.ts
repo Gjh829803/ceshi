@@ -9,6 +9,8 @@ export {
   canonicalizeWorldPackageSignatureEnvelopeV1,
   equalWorldPackageHostCompatibilityV1,
   hashWorldPackageManifestV1,
+  hashWorldPackageWorldBoundsV1,
+  parseWorldPackageWorldBoundsV1,
   hashWorldPackageRootV1,
   worldPackageSignatureEnvelopeBytesV1,
 } from "./package-contract.js";

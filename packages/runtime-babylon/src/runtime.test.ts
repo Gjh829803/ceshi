@@ -1730,14 +1730,19 @@ describe("BabylonWorldRuntime", () => {
       )!;
       expect(scene.getMeshByName(executionPlan.terrain.entityId)?.metadata)
         .toMatchObject({
+          worldkitEntityId: terrainSurface.surfaceEntityId,
           colliderSubshapeId: terrainSurface.colliderSubshapeId,
+          worldkitLogicalSubshapeId: "heightfield",
           worldkitTraversalSurfaceId: terrainSurface.traversalSurfaceId,
           worldkitSurfaceEntityId: terrainSurface.surfaceEntityId,
+          worldkitTraversalSurfaceProfileRef: terrainSurface.resourceRef,
         });
       expect(scene.getMeshByName(
         `worldkit.static-collider.${collider.colliderSubshapeId}`,
       )?.metadata).toMatchObject({
+        worldkitEntityId: staticTraversalSurface.surfaceEntityId,
         colliderSubshapeId: staticTraversalSurface.colliderSubshapeId,
+        worldkitLogicalSubshapeId: staticTraversalSurface.logicalSubshapeId,
         worldkitTraversalSurfaceId:
           staticTraversalSurface.traversalSurfaceId,
         worldkitSurfaceEntityId: staticTraversalSurface.surfaceEntityId,

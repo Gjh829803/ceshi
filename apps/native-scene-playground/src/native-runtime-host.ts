@@ -14,8 +14,10 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
+  BabylonRuntimeResidencyV1,
   BabylonWorldRuntime,
   createBabylonGameplayWorldPortV1,
+  wrapBabylonRuntimeOwnedGameplayWorldPortV1,
   type BabylonNativeSceneModuleLoaderV1,
   type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeInitializationStageV1,
@@ -24,11 +26,8 @@ import {
 import {
   RuntimeHost,
   runtimeWorldConfigurationFromVerifiedWorldPackageV1,
-  type FixedInputOneTickV1,
-  type GameplayFixedTickActionProjectionV1,
   type GameplayWorldAdapterFactoryV1,
   type GameplayWorldPortV1,
-  type GameplayWorldTransactionV1,
   type RuntimeCandidatePublicationGateInputV1,
   type RuntimeWorldAdapterDescriptorV1,
 } from "@whitebox-world/runtime-host";
@@ -100,52 +99,6 @@ function diagnostic(
   return Object.freeze({ code, message });
 }
 
-function wrapOwnedPort(
-  port: GameplayWorldPortV1,
-  onDisposed: () => void,
-): GameplayWorldPortV1 {
-  type PreparedPortV1 = GameplayWorldPortV1 & Readonly<{
-    prepareFixedInputTick?: (
-      input: FixedInputOneTickV1,
-      actionProjection: GameplayFixedTickActionProjectionV1,
-    ) => Promise<GameplayWorldTransactionV1>;
-  }>;
-  const preparedPort = port as PreparedPortV1;
-  const prepareFixedInputTick = preparedPort.prepareFixedInputTick;
-  let disposePromise: Promise<void> | undefined;
-  const owned: PreparedPortV1 = {
-    initialize: () => port.initialize(),
-    hasEntity: (entityId) => port.hasEntity(entityId),
-    isEntityControllable: (entityId) => port.isEntityControllable(entityId),
-    isActionAvailable: (actorEntityId, semanticActionRef, transition) =>
-      port.isActionAvailable(actorEntityId, semanticActionRef, transition),
-    prepareGameplayTransition: (transition) =>
-      port.prepareGameplayTransition(transition),
-    estimateFixedInputTickCapacity: (input) =>
-      port.estimateFixedInputTickCapacity(input),
-    runFixedInputTick: (input, actionProjection) =>
-      port.runFixedInputTick(input, actionProjection),
-    snapshot: () => port.snapshot(),
-    dispose: () => {
-      if (!isNil(disposePromise)) return disposePromise;
-      disposePromise = Promise.resolve(port.dispose()).finally(onDisposed);
-      return disposePromise;
-    },
-  };
-  if (typeof prepareFixedInputTick === "function") {
-    Object.defineProperty(owned, "prepareFixedInputTick", {
-      enumerable: false,
-      configurable: false,
-      writable: false,
-      value: (
-        input: FixedInputOneTickV1,
-        projection: GameplayFixedTickActionProjectionV1,
-      ) => Reflect.apply(prepareFixedInputTick, port, [input, projection]),
-    });
-  }
-  return Object.freeze(owned);
-}
-
 function exactModuleLoader(
   verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
   module: BabylonNativeSceneModuleV1,
@@ -175,7 +128,7 @@ function exactModuleLoader(
 export class NativeRuntimeHostV1 {
   private constructor(
     private readonly host: RuntimeHost,
-    private readonly handles: Map<string, RuntimeHandleV1>,
+    private readonly handles: BabylonRuntimeResidencyV1<RuntimeHandleV1>,
     private readonly lifecycleEvidence: NativeRuntimeLifecycleEvidenceV1,
     readonly controlledEntityId: string,
   ) {}
@@ -195,7 +148,7 @@ export class NativeRuntimeHostV1 {
     const packageByRef = new Map([
       [initialWorld.worldBuildIdentity.worldPackageRef, verified] as const,
     ]);
-    const handles = new Map<string, RuntimeHandleV1>();
+    const handles = new BabylonRuntimeResidencyV1<RuntimeHandleV1>();
     const lifecycleEvidence: NativeRuntimeLifecycleEvidenceV1 = {
       successfulRuntimeCreateCount: 0,
     };
@@ -209,11 +162,10 @@ export class NativeRuntimeHostV1 {
         current: RuntimeWorldAdapterDescriptorV1,
         candidate: RuntimeWorldAdapterDescriptorV1,
       ) {
-        if (
-          !handles.has(current.worldSessionId) ||
-          handles.has(candidate.worldSessionId) ||
-          handles.size >= 2
-        ) {
+        if (!handles.canRetainCandidate(
+          current.worldSessionId,
+          candidate.worldSessionId,
+        )) {
           return Object.freeze({
             status: "rejected" as const,
             diagnostic: diagnostic(
@@ -236,7 +188,7 @@ export class NativeRuntimeHostV1 {
         );
         canvas.setAttribute(
           "aria-label",
-          "Cloud Ridge Babylon Native scene",
+          "Babylon Native Package scene",
         );
         canvas.tabIndex = 0;
         canvas.hidden = handles.size > 0;
@@ -272,23 +224,22 @@ export class NativeRuntimeHostV1 {
           if (isNil(nativeAdmission)) {
             throw new Error("WORLDKIT_NATIVE_SCENE_ADMISSION_AUDIT_UNAVAILABLE");
           }
-          let ownedPort: GameplayWorldPortV1;
-          ownedPort = wrapOwnedPort(
+          let handle: RuntimeHandleV1;
+          const ownedPort = wrapBabylonRuntimeOwnedGameplayWorldPortV1(
             createBabylonGameplayWorldPortV1(runtime, CONTROLLER_ENTITY_ID),
             () => {
-              const retained = handles.get(descriptor.worldSessionId);
-              if (retained?.port === ownedPort) {
-                handles.delete(descriptor.worldSessionId);
-                retained.canvas.remove();
+              if (handles.release(descriptor.worldSessionId, handle)) {
+                handle.canvas.remove();
               }
             },
           );
-          handles.set(descriptor.worldSessionId, Object.freeze({
+          handle = Object.freeze({
             canvas,
             runtime,
             port: ownedPort,
             nativeAdmission,
-          }));
+          });
+          handles.retain(descriptor.worldSessionId, handle);
           lifecycleEvidence.successfulRuntimeCreateCount += 1;
           return ownedPort;
         } catch (error) {
@@ -427,11 +378,7 @@ export class NativeRuntimeHostV1 {
   }
 
   private activeHandle(): RuntimeHandleV1 {
-    const handle = this.handles.get(this.host.currentWorldSessionId);
-    if (isNil(handle)) {
-      throw new Error("WORLDKIT_NATIVE_RUNTIME_HANDLE_UNAVAILABLE");
-    }
-    return handle;
+    return this.handles.active(this.host.currentWorldSessionId);
   }
 
   private activateCurrentCanvas(): void {

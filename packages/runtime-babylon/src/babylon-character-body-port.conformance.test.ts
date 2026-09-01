@@ -263,9 +263,11 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
       contact.motionType === "static" && contact.normalXYZ[1] > 0.9
     );
     expect(supportContact).toMatchObject({
+      colliderId: "native-ground",
       traversalSurfaceId: "traversal-surface:native-ground-top",
       surfaceEntityId: "native-ground-surface",
       colliderSubshapeId: "collider-subshape:native-ground-top",
+      logicalSubshapeId: "top",
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
     });

@@ -465,6 +465,12 @@ importers:
       '@whitebox-world/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../runtime-contracts
+      '@whitebox-world/validation':
+        specifier: workspace:*
+        version: link:../validation
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1

@@ -10,6 +10,8 @@ import {
   canonicalizeWorldPackageManifestV1,
   hashWorldPackageManifestV1,
   hashWorldPackageRootV1,
+  hashWorldPackageWorldBoundsV1,
+  parseWorldPackageWorldBoundsV1,
   type WorldPackageBuildReceiptV1,
   type WorldPackageManifestV1,
 } from "./index.js";
@@ -77,6 +79,7 @@ function nativeManifestFixture(): WorldPackageManifestV1 {
       sceneAuthoringAttemptHash: HASH_D,
       sceneAuthoringAttemptResultRef: "worldkit://scene-authoring-attempt-result/fixture@1",
       sceneAuthoringAttemptResultHash: HASH_A,
+      nativeMaterializer: { kind: "none" },
       nativeSceneBootstrapPath: "native/bootstrap.json",
       sceneModuleBundleManifestPath: "native/module-bundle.json",
       sceneModuleBundlePath: "native/scene.mjs",
@@ -126,6 +129,30 @@ function receiptFixture(): WorldPackageBuildReceiptV1 {
 }
 
 describe("current WorldPackage contract", () => {
+  it("parses one exact frozen world-bounds owner projection", () => {
+    const parsed = parseWorldPackageWorldBoundsV1({
+      centerMetersXZ: [0, -15],
+      sizeMetersXZ: [180, 180],
+      heightRangeMeters: [-40, 100],
+    });
+    expect(parsed).toEqual({
+      centerMetersXZ: [0, -15],
+      sizeMetersXZ: [180, 180],
+      heightRangeMeters: [-40, 100],
+    });
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.centerMetersXZ)).toBe(true);
+    expect(hashWorldPackageWorldBoundsV1(parsed)).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(() => parseWorldPackageWorldBoundsV1({
+      ...parsed,
+      units: "meters",
+    })).toThrow("WORLD_PACKAGE_WORLD_BOUNDS_INVALID");
+    expect(() => parseWorldPackageWorldBoundsV1({
+      ...parsed,
+      heightRangeMeters: [1, 1],
+    })).toThrow("WORLD_PACKAGE_WORLD_BOUNDS_INVALID");
+  });
+
   it("has one exact current manifest shell and one Canonical scene source", () => {
     const manifest = manifestFixture();
     expect(manifest.schemaVersion).toBe(1);

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -293,6 +293,208 @@ describe("worldkit CLI", () => {
     ])).toThrow("Unknown native explain option '--unknown'");
     expect(HELP).toContain("worldkit native check <world-directory> --json");
     expect(HELP).toContain("worldkit native explain <world-directory> [--json]");
+  });
+
+  it("parses the sole generic Native package command", () => {
+    expect(parseWorldkitArgs([
+      "native",
+      "package",
+      "artifacts/scenes/case-a/runs/run-a/attempts/0",
+      "--case",
+      "artifacts/scenes/case-a/case.json",
+      "--output",
+      "artifacts/scenes/case-a/packages/run-a-attempt-0",
+      "--json",
+    ])).toEqual({
+      command: "native-package",
+      attemptDirectoryPath:
+        "artifacts/scenes/case-a/runs/run-a/attempts/0",
+      casePath: "artifacts/scenes/case-a/case.json",
+      outputPath: "artifacts/scenes/case-a/packages/run-a-attempt-0",
+      json: true,
+    });
+    expect(HELP).toContain(
+      "worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json",
+    );
+  });
+
+  it("parses the sole BNA verification Harness run command", () => {
+    expect(parseWorldkitArgs([
+      "native",
+      "run",
+      "artifacts/scenes/case-a/packages/run-a-attempt-0",
+      "--port",
+      "5174",
+      "--json",
+    ])).toEqual({
+      command: "native-run",
+      packageDirectoryPath:
+        "artifacts/scenes/case-a/packages/run-a-attempt-0",
+      port: 5174,
+      json: true,
+    });
+    expect(HELP).toContain(
+      "worldkit native run <package-directory> [--port <port>] [--json]",
+    );
+    expect(() => parseWorldkitArgs([
+      "native",
+      "run-cloud-ridge",
+      "packages/cloud-ridge",
+    ])).toThrow("Unknown native operation 'run-cloud-ridge'.");
+  });
+
+  it("rejects incomplete, mutable-output, and legacy Native package argv", () => {
+    expect(() => parseWorldkitArgs([
+      "native",
+      "package",
+      "attempts/0",
+      "--output",
+      "packages/attempt-0",
+      "--json",
+    ])).toThrow("native package requires --case <case.json>.");
+    expect(() => parseWorldkitArgs([
+      "native",
+      "package",
+      "attempts/0",
+      "--case",
+      "case.json",
+      "--json",
+    ])).toThrow("native package requires --output <package-directory>.");
+    expect(() => parseWorldkitArgs([
+      "native",
+      "package",
+      "artifacts/case-a/attempts/0",
+      "--case",
+      "artifacts/case-a/case.json",
+      "--output",
+      "artifacts/case-a/attempts/0/world-package",
+      "--json",
+    ])).toThrow(
+      "native package output must be outside the immutable attempt directory.",
+    );
+    expect(() => parseWorldkitArgs([
+      "native",
+      "package-cloud-ridge",
+      "attempts/0",
+      "--json",
+    ])).toThrow("Unknown native operation 'package-cloud-ridge'.");
+    expect(() => parseWorldkitArgs([
+      "native",
+      "build-cloud-ridge",
+      "attempts/0",
+      "--json",
+    ])).toThrow("Unknown native operation 'build-cloud-ridge'.");
+  });
+
+  it("resolves relative Native package paths before dispatch without owning build policy", async () => {
+    const adapterInputs: unknown[] = [];
+    const stdout: string[] = [];
+    const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(String(chunk));
+      return true;
+    });
+    const attemptResult = {
+      kind: "scene-authoring-attempt-result",
+      schemaVersion: 1,
+      id: "attempt-result-a",
+    };
+
+    try {
+      await expect(main([
+        "native",
+        "package",
+        "attempts/0",
+        "--case",
+        "case.json",
+        "--output",
+        "packages/attempt-0",
+        "--json",
+      ], {
+        packageNativeBlockAttemptV1: async (input: unknown) => {
+          adapterInputs.push(input);
+          return {
+            sceneAuthoringAttemptResult: attemptResult,
+            verifiedWorldPackage: {
+              receipt: {
+                worldPackageRef:
+                  `package://world-package/sha256/${"1".repeat(64)}`,
+                worldPackageRootHash: `sha256:${"1".repeat(64)}`,
+                worldBuildIdentityHash: `sha256:${"2".repeat(64)}`,
+              },
+            },
+            buildReceiptHash: `sha256:${"3".repeat(64)}`,
+            outputDirectoryPath: "/published/packages/attempt-0",
+            diagnostics: [],
+          };
+        },
+      })).resolves.toBe(0);
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(adapterInputs).toEqual([{
+      repositoryRoot: path.resolve(import.meta.dirname, "../.."),
+      attemptDirectoryPath: path.resolve("attempts/0"),
+      casePath: path.resolve("case.json"),
+      outputDirectoryPath: path.resolve("packages/attempt-0"),
+    }]);
+    expect(stdout).toHaveLength(1);
+    expect(JSON.parse(stdout[0]!)).toEqual({
+      outcome: "completed",
+      sceneAuthoringAttemptResult: attemptResult,
+      worldPackageRef: `package://world-package/sha256/${"1".repeat(64)}`,
+      worldPackageRootHash: `sha256:${"1".repeat(64)}`,
+      worldBuildIdentityHash: `sha256:${"2".repeat(64)}`,
+      buildReceiptHash: `sha256:${"3".repeat(64)}`,
+      outputDirectoryPath: "/published/packages/attempt-0",
+      diagnostics: [],
+    });
+  });
+
+  it("preserves the adapter rejection for a raw source directory", async () => {
+    const stdout: string[] = [];
+    const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(String(chunk));
+      return true;
+    });
+    const diagnostic = {
+      kind: "native-block-package-diagnostic",
+      schemaVersion: 1,
+      code: "WORLDKIT_NATIVE_PACKAGE_ATTEMPT_IDENTITY_MISSING",
+      severity: "error",
+      instancePath: "/attemptDirectoryPath",
+      message: "The attempt directory does not contain frozen Host identity.",
+    };
+
+    try {
+      await expect(main([
+        "native",
+        "package",
+        "attempts/0/source",
+        "--case",
+        "case.json",
+        "--output",
+        "packages/attempt-0",
+        "--json",
+      ], {
+        packageNativeBlockAttemptV1: async () => {
+          throw Object.freeze({
+            name: "NativeBlockPackageErrorV1",
+            code: diagnostic.code,
+            diagnostics: Object.freeze([Object.freeze(diagnostic)]),
+          });
+        },
+      })).resolves.toBe(1);
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(stdout).toHaveLength(1);
+    expect(JSON.parse(stdout[0]!)).toEqual({
+      outcome: "failed",
+      code: diagnostic.code,
+      diagnostics: [diagnostic],
+    });
   });
 
   it("retries background-only browser captures and stops at the first visible world", async () => {
@@ -611,6 +813,78 @@ describe("worldkit CLI", () => {
     });
   });
 
+  it("parses verified Package Capture without a Canonical implementation map", () => {
+    expect(parseWorldkitArgs([
+      "capture",
+      "attempts/0/world-package",
+      "--output",
+      "attempts/0/capture/opening.png",
+      "--triview-output",
+      "attempts/0/capture",
+      "--json",
+    ])).toEqual({
+      command: "capture",
+      inputPath: "attempts/0/world-package",
+      outputPath: "attempts/0/capture/opening.png",
+      triviewOutputPath: "attempts/0/capture",
+      json: true,
+    });
+  });
+
+  it("dispatches a directory input to the capture-only Hosted Package adapter", async () => {
+    const root = await createTemporaryDirectory();
+    const packageDirectoryPath = path.join(root, "world-package");
+    const captureDirectoryPath = path.join(root, "capture");
+    const openingOutputPath = path.join(captureDirectoryPath, "opening.png");
+    await mkdir(packageDirectoryPath);
+    const calls: unknown[] = [];
+    const stdout: string[] = [];
+    const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(String(chunk));
+      return true;
+    });
+    try {
+      await expect(main([
+        "capture",
+        packageDirectoryPath,
+        "--output",
+        openingOutputPath,
+        "--triview-output",
+        captureDirectoryPath,
+        "--json",
+      ], {
+        captureHostedWorldPackageV1: async (input: unknown) => {
+          calls.push(input);
+          return {
+            outcome: "completed",
+            outputDirectoryPath: captureDirectoryPath,
+            openingOutputPath,
+            formalRequestHash: `sha256:${"1".repeat(64)}`,
+            formalCaptureReceiptHash: `sha256:${"2".repeat(64)}`,
+            worldPackageRootHash: `sha256:${"3".repeat(64)}`,
+          };
+        },
+      })).resolves.toBe(0);
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(calls).toEqual([{
+      packageDirectoryPath,
+      outputPath: openingOutputPath,
+      triviewOutputPath: captureDirectoryPath,
+    }]);
+    expect(JSON.parse(stdout.join(""))).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      outputPath: openingOutputPath,
+      triviewOutputPath: captureDirectoryPath,
+      formalRequestHash: `sha256:${"1".repeat(64)}`,
+      formalCaptureReceiptHash: `sha256:${"2".repeat(64)}`,
+      worldPackageRootHash: `sha256:${"3".repeat(64)}`,
+    });
+  });
+
   it("validates a lightweight Scene Brief through the CLI boundary", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = path.join(directory, "scene-brief.md");
@@ -783,9 +1057,6 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs(["layout", "solve", "world.json"]),
     ).toThrow("layout solve requires --output <directory>");
-    expect(() => parseWorldkitArgs([
-      "capture", "world.json", "--output", "frame.png", "--triview-output", "triviews",
-    ])).toThrow("--triview-output and --implementation-map together");
     expect(() =>
       parseWorldkitArgs(["take", "run", "opening.take.json", "--world", "world.json"]),
     ).toThrow("take run requires --output <directory>");

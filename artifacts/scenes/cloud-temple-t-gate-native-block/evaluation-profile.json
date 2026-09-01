@@ -1,0 +1,44 @@
+{
+  "kind": "world-reconstruction-evaluation-profile",
+  "schemaVersion": 1,
+  "id": "cloud-temple-t-gate-native-block-profile",
+  "dimensionIds": ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"],
+  "maximumRepairAttemptCount": 1,
+  "builderSelfRepairAttemptCount": 0,
+  "thresholds": {
+    "semanticSilhouetteTargets": [
+      { "acceptanceTargetRef": "worldkit://acceptance-target/central-ascent@1", "maximumBoundsDriftBasisPoints": 1200, "maximumCenterDriftBasisPoints": 900, "maximumCoverageDriftBasisPoints": 1200 },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/foreground-platform@1", "maximumBoundsDriftBasisPoints": 1200, "maximumCenterDriftBasisPoints": 900, "maximumCoverageDriftBasisPoints": 1200 },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/gate-mass@1", "maximumBoundsDriftBasisPoints": 1200, "maximumCenterDriftBasisPoints": 900, "maximumCoverageDriftBasisPoints": 1200 },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/mountain-cliff-layers@1", "maximumBoundsDriftBasisPoints": 1500, "maximumCenterDriftBasisPoints": 1200, "maximumCoverageDriftBasisPoints": 1500 },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1", "maximumBoundsDriftBasisPoints": 1200, "maximumCenterDriftBasisPoints": 900, "maximumCoverageDriftBasisPoints": 1200 }
+    ],
+    "openingComposition": {
+      "regions": [
+        { "targetRef": "worldkit://composition-target/central-ascent@1", "maximumDriftBasisPoints": 1000 },
+        { "targetRef": "worldkit://composition-target/foreground-platform@1", "maximumDriftBasisPoints": 1000 },
+        { "targetRef": "worldkit://composition-target/gate-mass@1", "maximumDriftBasisPoints": 1000 },
+        { "targetRef": "worldkit://composition-target/mountain-cliff-layers@1", "maximumDriftBasisPoints": 1200 },
+        { "targetRef": "worldkit://composition-target/upper-t-junction@1", "maximumDriftBasisPoints": 1000 }
+      ],
+      "anchors": [
+        { "targetRef": "worldkit://composition-target/central-ascent@1", "maximumDriftBasisPoints": 800 },
+        { "targetRef": "worldkit://composition-target/foreground-platform@1", "maximumDriftBasisPoints": 800 },
+        { "targetRef": "worldkit://composition-target/gate-mass@1", "maximumDriftBasisPoints": 800 },
+        { "targetRef": "worldkit://composition-target/mountain-cliff-layers@1", "maximumDriftBasisPoints": 1000 },
+        { "targetRef": "worldkit://composition-target/upper-t-junction@1", "maximumDriftBasisPoints": 800 }
+      ],
+      "maximumOrderDistanceBasisPoints": 1000
+    },
+    "spawnSupport": { "maximumPositionDriftMillimeters": 250, "maximumSupportGapMillimeters": 50 }
+  },
+  "requiredEvidenceByDimension": [
+    { "dimensionId": "collider", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1"] },
+    { "dimensionId": "critical-traversal", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-traversal@1"] },
+    { "dimensionId": "deterministic-build", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-determinism@1"] },
+    { "dimensionId": "opening-composition", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-opening@1"] },
+    { "dimensionId": "semantic-silhouette", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-silhouette@1"] },
+    { "dimensionId": "spawn-support", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-spawn@1"] },
+    { "dimensionId": "topology", "evidenceProfileRefs": ["worldkit://evidence-profile/native-block-topology@1"] }
+  ]
+}

@@ -12,6 +12,11 @@ import {
 } from "@whitebox-world/native-babylon";
 import { createBabylonNativeBlockColliderRuntimeFixtureModuleV1 } from
   "@whitebox-world/native-babylon-block-profile/testing";
+import {
+  createBabylonNativeBlockMaterializerMetadataV1,
+  takeBabylonNativeBlockCheckedEpochEvidenceV1,
+  type BabylonNativeBlockCheckedEpochEvidenceV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 import { admitBabylonNativeSceneCandidateV1 } from
   "@whitebox-world/native-babylon/host";
 import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
@@ -263,6 +268,7 @@ async function auditedAdmission(
   module: BabylonNativeSceneModuleV1,
 ): Promise<Readonly<{
   admission: PassedCandidateAdmission;
+  blockEvidence: BabylonNativeBlockCheckedEpochEvidenceV1;
   candidateColliderMeshes: readonly Mesh[];
   candidateScene: Scene;
   candidateEngine: NullEngine;
@@ -273,6 +279,8 @@ async function auditedAdmission(
   const engine = new NullEngine();
   const scene = new Scene(engine);
   let admission: PassedCandidateAdmission | undefined;
+  let blockEvidence: readonly BabylonNativeBlockCheckedEpochEvidenceV1[] =
+    Object.freeze([]);
   let candidateColliderMeshes: readonly Mesh[] = Object.freeze([]);
   try {
     const result = await admitBabylonNativeSceneCandidateV1({
@@ -300,14 +308,19 @@ async function auditedAdmission(
       mesh.name.startsWith("worldkit-block-collider-"),
     ));
   } finally {
+    blockEvidence = takeBabylonNativeBlockCheckedEpochEvidenceV1(scene);
     scene.dispose();
     engine.dispose();
   }
   if (isNil(admission)) {
     throw new Error("BWB-4 fixture admission did not publish a Contribution.");
   }
+  if (blockEvidence.length !== 1) {
+    throw new Error("BWB-4 fixture admission did not publish one Block evidence record.");
+  }
   return Object.freeze({
     admission,
+    blockEvidence: blockEvidence[0]!,
     candidateColliderMeshes,
     candidateScene: scene,
     candidateEngine: engine,
@@ -315,14 +328,44 @@ async function auditedAdmission(
 }
 
 function verifiedPackage(
-  contribution: PassedCandidateAdmission["contribution"],
+  candidate: Awaited<ReturnType<typeof auditedAdmission>>,
 ): VerifiedBabylonNativeWorldPackageDirectoryV1 {
+  const packageInput = createBabylonNativeBlockWorldPackageTestInputV1({
+    resourceBudget: RESOURCE_BUDGET,
+    nativeSceneContribution: candidate.admission.contribution,
+  });
+  const templateMetadata = packageInput.nativeBlockMaterializerMetadata;
+  if (isNil(templateMetadata)) {
+    throw new Error("BWB-4 fixture requires Block materializer metadata.");
+  }
+  if (
+    candidate.blockEvidence.checkedLayout.checkResult.visualGroups.length !== 0
+  ) {
+    throw new Error("BWB-4 collider fixture must remain an ungrouped Block layout.");
+  }
+  const nativeBlockMaterializerMetadata =
+    createBabylonNativeBlockMaterializerMetadataV1({
+      authoringLayoutBinding: Object.freeze({
+        kind: "native-block-authoring-layout-binding",
+        schemaVersion: 1,
+        caseHash: templateMetadata.caseHash,
+        authoringManifestHash: templateMetadata.authoringManifestHash,
+        checkedLayoutInventoryHash:
+          templateMetadata.checkedLayoutInventoryHash,
+        contributionHash: candidate.admission.contributionHash,
+        visualGroups: Object.freeze([]),
+      }),
+      checkedLayout: candidate.blockEvidence.checkedLayout,
+      colliderInventory: candidate.blockEvidence.colliderInventory,
+      profileInventoryHash: candidate.blockEvidence.profileInventoryHash,
+      contribution: candidate.admission.contribution,
+    });
   const verified = verifyWorldPackageDirectoryV1(
     createBabylonNativeWorldPackageV1(
-      createBabylonNativeBlockWorldPackageTestInputV1({
-        resourceBudget: RESOURCE_BUDGET,
-        nativeSceneContribution: contribution,
-      }),
+      {
+        ...packageInput,
+        nativeBlockMaterializerMetadata,
+      },
     ),
   );
   if (verified.kind !== "babylon-native-scene") {
@@ -347,7 +390,7 @@ async function createRuntime(input: Readonly<{
     ? packageModule
     : input.runtimeModule;
   const packageAdmission = await auditedAdmission(packageModule);
-  const verified = verifiedPackage(packageAdmission.admission.contribution);
+  const verified = verifiedPackage(packageAdmission);
   const configuration = runtimeWorldConfigurationFromVerifiedWorldPackageV1(
     verified,
   );
@@ -433,8 +476,8 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       expect(candidate.candidateEngine.isDisposed).toBe(true);
     }
 
-    const firstPackage = verifiedPackage(first.admission.contribution);
-    const secondPackage = verifiedPackage(second.admission.contribution);
+    const firstPackage = verifiedPackage(first);
+    const secondPackage = verifiedPackage(second);
     expect(secondPackage.receipt.worldPackageRootHash).toBe(
       firstPackage.receipt.worldPackageRootHash,
     );

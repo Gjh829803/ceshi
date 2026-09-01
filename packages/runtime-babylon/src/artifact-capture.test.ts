@@ -160,4 +160,95 @@ describe("Babylon artifact capture", () => {
       engine.dispose();
     }
   });
+
+  it("captures a world-scale lateral elevation with one bounded orthographic camera", () => {
+    // This catches mapping world-side to the current opening camera or to one
+    // panel of the object-local entity triview instead of fitting world bounds.
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new FakeCanvasElement(),
+      removeEventListener: vi.fn(),
+    });
+    RegisterAbstractEngineStencil();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const openingCamera = new FreeCamera(
+      "opening-camera",
+      new Vector3(0, 4, -12),
+      scene,
+    );
+    openingCamera.setTarget(Vector3.Zero());
+    scene.activeCamera = openingCamera;
+    const previousWidth = engine.getRenderWidth(true);
+    const previousHeight = engine.getRenderHeight(true);
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(
+      new FakeCanvasElement() as unknown as HTMLCanvasElement,
+    );
+    const renderedCameras: Array<Readonly<{
+      mode: number;
+      name: string;
+      orthoBottom: number | null;
+      orthoLeft: number | null;
+      orthoRight: number | null;
+      orthoTop: number | null;
+      position: readonly number[];
+      target: readonly number[];
+    }>> = [];
+    scene.onBeforeRenderObservable.add(() => {
+      const activeCamera = scene.activeCamera as FreeCamera;
+      renderedCameras.push({
+        mode: activeCamera.mode,
+        name: activeCamera.name,
+        orthoBottom: activeCamera.orthoBottom,
+        orthoLeft: activeCamera.orthoLeft,
+        orthoRight: activeCamera.orthoRight,
+        orthoTop: activeCamera.orthoTop,
+        position: activeCamera.position.asArray(),
+        target: activeCamera.getTarget().asArray(),
+      });
+    });
+
+    try {
+      captureBabylonArtifactViewV1({
+        scene,
+        engine,
+        camera: openingCamera,
+        request: {
+          kind: "world-side",
+          widthPixels: 8,
+          heightPixels: 4,
+          worldBoundsMeters: {
+            minimumMetersXYZ: [-20, -2, -5],
+            maximumMetersXYZ: [20, 8, 5],
+          },
+          cameraPositionMetersXYZ: [60, 3, 0],
+          targetMetersXYZ: [0, 3, 0],
+        },
+      });
+
+      expect(renderedCameras).toHaveLength(3);
+      for (const renderedCamera of renderedCameras.slice(0, 2)) {
+        expect(renderedCamera).toMatchObject({
+          mode: 1,
+          name: "worldkit.artifact.world-side",
+          position: [60, 3, 0],
+        });
+        expect(renderedCamera.orthoBottom).toBeCloseTo(-5, 8);
+        expect(renderedCamera.orthoLeft).toBeCloseTo(-10, 8);
+        expect(renderedCamera.orthoRight).toBeCloseTo(10, 8);
+        expect(renderedCamera.orthoTop).toBeCloseTo(5, 8);
+        expect(renderedCamera.target[0]).toBeCloseTo(0, 6);
+        expect(renderedCamera.target[1]).toBeCloseTo(3, 6);
+        expect(renderedCamera.target[2]).toBeCloseTo(0, 6);
+      }
+      expect(scene.activeCamera).toBe(openingCamera);
+      expect(engine.getRenderWidth(true)).toBe(previousWidth);
+      expect(engine.getRenderHeight(true)).toBe(previousHeight);
+      expect(scene.cameras.map(({ name }) => name)).toEqual(["opening-camera"]);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
 });

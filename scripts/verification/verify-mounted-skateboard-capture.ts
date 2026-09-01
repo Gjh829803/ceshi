@@ -760,7 +760,9 @@ async function run(): Promise<void> {
       `${stringifyCanonicalJson(fixedSource)}\n`,
       "utf8",
     );
-    server = await startWorldkitServer({ inputPath: sourcePath });
+    server = await startWorldkitServer({
+      source: { kind: "canonical-file", inputPath: sourcePath },
+    });
     browser = await launchChromiumWithSystemFallback();
     context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await context.newPage();
