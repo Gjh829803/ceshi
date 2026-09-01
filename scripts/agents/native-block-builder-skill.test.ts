@@ -420,6 +420,8 @@ describe("Native Block Builder Skill", () => {
     const source = await readFile(sourcePath, "utf8");
     await writeFile(sourcePath, [
       "const PROFILE_REF = \"worldkit://native-block-profile/whitebox.blocks@1\";",
+      "const NEGATIVE_ONE = (-1);",
+      "const TYPED_ONE = 1 as number;",
       "const TABLE = Object.freeze({ values: Object.freeze([1, 2, 3] as const) });",
       source,
     ].join("\n"));

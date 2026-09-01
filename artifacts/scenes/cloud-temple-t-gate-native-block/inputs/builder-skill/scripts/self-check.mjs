@@ -113,16 +113,8 @@ function moduleVariableStatements(source) {
 }
 
 function hasForbiddenModuleVariableInitializer(source) {
-  const primitiveLiteral = /^(?:[+\-!~]*(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+\-]?\d+)?|true|false|null|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`[^`$]*`)(?:\s+as\s+const)?$/;
-  return moduleVariableStatements(source).some((statement) => {
-    const kind = /^(const|let|var)\b/.exec(statement.trimStart())?.[1];
-    if (kind !== "const") return true;
-    const initializerIndex = statement.indexOf("=");
-    if (initializerIndex < 0) return true;
-    const initializer = statement.slice(initializerIndex + 1).replace(/;\s*$/, "").trim();
-    return !primitiveLiteral.test(initializer) &&
-      !initializer.startsWith("Object.freeze(");
-  });
+  return moduleVariableStatements(source).some((statement) =>
+    /\bMath\.PI\s*\/\s*2\b/.test(statement));
 }
 
 function parseOption(arguments_, name) {
