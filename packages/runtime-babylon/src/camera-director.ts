@@ -465,87 +465,6 @@ function smoothstep01(value: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
-const COLLISION_COMPOSITION_FOOT_SOCKET_ID = "FootAlignment";
-const COLLISION_COMPOSITION_HEAD_SOCKET_ID = "FirstPersonView";
-const COLLISION_COMPOSITION_START_ARM_RATIO = 0.75;
-const COLLISION_COMPOSITION_FULL_ARM_RATIO = 0.25;
-const COLLISION_COMPOSITION_MAX_FOV_RADIANS = (80 * Math.PI) / 180;
-const COLLISION_COMPOSITION_SCREEN_HALF_HEIGHT_RATIO = 0.75;
-
-function collisionCompositionV1(input: Readonly<{
-  sample: ViewTargetSampleV1;
-  desiredTarget: Vector3;
-  requestedArmLengthMeters: number | undefined;
-  effectiveArmLengthMeters: number | undefined;
-  isCollisionRetracted: boolean | undefined;
-  targetHeightMeters: number;
-  baseFovRadians: number;
-}>): Readonly<{
-  target: Vector3;
-  fovRadians: number;
-}> {
-  if (
-    input.isCollisionRetracted !== true ||
-    input.requestedArmLengthMeters === undefined ||
-    input.requestedArmLengthMeters <= 0 ||
-    input.effectiveArmLengthMeters === undefined
-  ) {
-    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
-  }
-  const foot = input.sample.socketPositionsMetersXYZById[
-    COLLISION_COMPOSITION_FOOT_SOCKET_ID
-  ];
-  const head = input.sample.socketPositionsMetersXYZById[
-    COLLISION_COMPOSITION_HEAD_SOCKET_ID
-  ];
-  const armRatio = input.effectiveArmLengthMeters / input.requestedArmLengthMeters;
-  const compositionBlend = 1 - smoothstep01(
-    (armRatio - COLLISION_COMPOSITION_FULL_ARM_RATIO) /
-      (COLLISION_COMPOSITION_START_ARM_RATIO -
-        COLLISION_COMPOSITION_FULL_ARM_RATIO),
-  );
-  if (compositionBlend <= 0) {
-    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
-  }
-
-  // The rig's authored target height is the stable chest framing contract. A
-  // preferred Socket may sit at the head, so blend back to that authored height
-  // as collision compresses the arm instead of leaving the Subject below frame.
-  const chestTarget = new Vector3(
-    input.sample.targetPositionMetersXYZ[0],
-    input.sample.targetPositionMetersXYZ[1] + input.targetHeightMeters,
-    input.sample.targetPositionMetersXYZ[2],
-  );
-  const target = Vector3.Lerp(
-    input.desiredTarget,
-    chestTarget,
-    compositionBlend,
-  );
-  const bodyHeightMeters = foot === undefined || head === undefined
-    ? undefined
-    : head[1] - foot[1];
-  const requiredFovRadians = bodyHeightMeters === undefined ||
-      !Number.isFinite(bodyHeightMeters) || bodyHeightMeters <= 0.25
-    ? input.baseFovRadians
-    : 2 * Math.atan(
-        (bodyHeightMeters * 0.5) /
-          Math.max(
-            input.effectiveArmLengthMeters *
-              COLLISION_COMPOSITION_SCREEN_HALF_HEIGHT_RATIO,
-            0.01,
-          ),
-      );
-  const collisionFovRadians = Math.max(
-    input.baseFovRadians,
-    Math.min(requiredFovRadians, COLLISION_COMPOSITION_MAX_FOV_RADIANS),
-  );
-  return {
-    target,
-    fovRadians: input.baseFovRadians +
-      (collisionFovRadians - input.baseFovRadians) * compositionBlend,
-  };
-}
-
 export class CameraDirectorV1 {
   private latestCommittedTick: number | undefined;
   private latestCommittedContextIdentity: string | undefined;
@@ -1286,20 +1205,11 @@ export class CameraDirectorV1 {
       penetrationDepthMeters = collision.penetrationDepthMeters;
       clearHoldRemainingSeconds = collision.clearHoldRemainingSeconds;
     }
-    const collisionComposition = collisionCompositionV1({
-      sample,
-      desiredTarget: finalTarget,
-      requestedArmLengthMeters,
-      effectiveArmLengthMeters,
-      isCollisionRetracted,
-      targetHeightMeters: parameters.targetHeightMeters,
-      baseFovRadians: proposedFov,
-    });
     this.camera.position.copyFrom(finalPosition);
     this.smoothedTarget.copyFrom(finalTarget);
-    this.camera.fov = collisionComposition.fovRadians;
+    this.camera.fov = proposedFov;
     this.transitionElapsedSeconds += Math.max(0, deltaSeconds);
-    this.camera.setTarget(collisionComposition.target);
+    this.camera.setTarget(finalTarget);
     this.initialized = true;
     this.controlInitialized = true;
     this.activeTargetEntityId = sample.entityId;
