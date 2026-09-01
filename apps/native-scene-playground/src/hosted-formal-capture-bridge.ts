@@ -261,12 +261,22 @@ class HostedFormalCaptureBridge implements HostedFormalCaptureBridgeV1 {
         result.messageSequence !== 2
       ) throw hostedFormalCaptureErrorV1("RESULT_IDENTITY_INVALID");
       if (result.kind === "worldkit-hosted-formal-capture-failure") {
+        const providerDiagnosticCode = result.diagnosticCode;
         if (
-          result.diagnosticCode !==
-            "WORLDKIT_HOSTED_FORMAL_CAPTURE_PROVIDER_REJECTED"
+          typeof providerDiagnosticCode !== "string" ||
+          (
+            providerDiagnosticCode !==
+              "WORLDKIT_HOSTED_FORMAL_CAPTURE_PROVIDER_REJECTED" &&
+            !/^BABYLON_FORMAL_CAPTURE_[A-Z0-9_]+$/.test(
+              providerDiagnosticCode,
+            )
+          )
         ) throw hostedFormalCaptureErrorV1("RESULT_DIAGNOSTIC_INVALID");
         this.#phase = "completed";
-        this.#rejectCapture(this.error("PROVIDER_REJECTED"));
+        this.#rejectCapture(providerDiagnosticCode ===
+            "WORLDKIT_HOSTED_FORMAL_CAPTURE_PROVIDER_REJECTED"
+          ? this.error("PROVIDER_REJECTED")
+          : new Error(providerDiagnosticCode));
         return;
       }
       if (result.kind !== "worldkit-hosted-formal-capture-result") {
