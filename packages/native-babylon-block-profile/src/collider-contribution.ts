@@ -23,6 +23,8 @@ export interface BabylonNativeBlockColliderCandidateInventoryEntryV1 {
   readonly visualGroupIds: readonly string[];
   readonly proxyKind: "layout-block-volume";
   readonly traversalBinding: BabylonNativeTraversalBindingV1;
+  readonly frictionRatio?: number;
+  readonly restitutionRatio?: number;
 }
 
 export interface MaterializedBabylonNativeBlockColliderCandidatesV1 {
@@ -270,6 +272,12 @@ export function materializeBabylonNativeBlockColliderCandidatesV1(
         ),
         proxyKind: "layout-block-volume" as const,
         traversalBinding: selection.traversalBinding,
+        ...(!Object.hasOwn(selection, "frictionRatio")
+          ? {}
+          : { frictionRatio: selection.frictionRatio }),
+        ...(!Object.hasOwn(selection, "restitutionRatio")
+          ? {}
+          : { restitutionRatio: selection.restitutionRatio }),
       }));
     }
   } catch (error) {

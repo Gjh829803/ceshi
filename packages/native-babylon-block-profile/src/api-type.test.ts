@@ -1,11 +1,13 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import type {
+  BabylonNativeBlockOptimizationAssessmentV1,
   BabylonNativeBlockCreateInputV1,
   BabylonNativeBlockFinalizedEpochV1,
   BabylonNativeBlockProfileFinalizeInputV1,
   BabylonNativeBlockProfileSessionV1,
 } from "./index.js";
+import { assessBabylonNativeBlockOptimizationV1 } from "./index.js";
 
 describe("Babylon Native block profile public types", () => {
   it("names the ephemeral helper argument as a create input", () => {
@@ -33,5 +35,16 @@ describe("Babylon Native block profile public types", () => {
     expectTypeOf<BabylonNativeBlockProfileSessionV1["dispose"]>()
       .returns
       .toEqualTypeOf<void>();
+  });
+
+  it("exposes one finalized-epoch optimization assessment", () => {
+    expectTypeOf(assessBabylonNativeBlockOptimizationV1)
+      .parameter(0)
+      .toEqualTypeOf<Readonly<{
+        finalizedEpoch: BabylonNativeBlockFinalizedEpochV1;
+      }>>();
+    expectTypeOf(assessBabylonNativeBlockOptimizationV1)
+      .returns
+      .toEqualTypeOf<BabylonNativeBlockOptimizationAssessmentV1>();
   });
 });
