@@ -157,6 +157,7 @@ export function projectMeasuredTraversalCheck(
 function candidateReplayOutcomeFromCheckResult(
   checkResult: NativeSceneCheckResultV1,
 ): "completed" | "failed" | "incomplete" {
+  if (checkResult.outcome === "passed") return "completed";
   if (
     checkResult.diagnostics.some((diagnostic) =>
       diagnostic.stage === "runtime-replay" && diagnostic.severity === "error"

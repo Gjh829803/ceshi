@@ -58,14 +58,14 @@ describe("evaluateNativeBlockAttemptV1", () => {
     expect(second).toEqual(first);
     expect(await readFile(second.evidenceSetPath)).toEqual(firstEvidenceBytes);
     expect(await readFile(second.evaluationPath)).toEqual(firstEvaluationBytes);
-    expect(first.evaluation.outcome).toBe("incomplete");
+    expect(first.evaluation.outcome).toBe("failed");
     expect(first.evaluation.dimensions.map(({ dimensionId, status }) => [
       dimensionId,
       status,
     ])).toEqual([
       ["collider", "passed"],
       ["critical-traversal", "passed"],
-      ["deterministic-build", "incomplete"],
+      ["deterministic-build", "passed"],
       ["opening-composition", "failed"],
       ["semantic-silhouette", "passed"],
       ["spawn-support", "passed"],
@@ -73,20 +73,14 @@ describe("evaluateNativeBlockAttemptV1", () => {
     ]);
     expect(first.evaluation.diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
-        dimensionId: "deterministic-build",
-        evidenceRefs: expect.arrayContaining([
-          `world-package://${evidenceInput.verifiedWorldPackage.manifest.sceneSource.nativeSceneCheckResultPath}`,
-        ]),
-        message: "Required evidence is missing for deterministic-build.",
-        repairAction: { kind: "revise-native-source" },
+        code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+        dimensionId: "opening-composition",
       }),
     ]));
     expect(first.evaluation.diagnostics.every((diagnostic) =>
       diagnostic.evidenceRefs.length > 0 && diagnostic.message.length > 0
     )).toBe(true);
-    expect(dimension(first.evaluation, "deterministic-build").diagnosticIds.length)
-      .toBeGreaterThan(0);
+    expect(dimension(first.evaluation, "deterministic-build").diagnosticIds).toEqual([]);
   });
 
   it("publishes blocked traversal when measured checkpoints disagree with a passed check-level outcome", async () => {
@@ -96,7 +90,7 @@ describe("evaluateNativeBlockAttemptV1", () => {
       ],
     }));
 
-    expect(published.evaluation.outcome).toBe("incomplete");
+    expect(published.evaluation.outcome).toBe("failed");
     expect(dimension(published.evaluation, "critical-traversal")).toMatchObject({
       status: "failed",
     });
@@ -106,10 +100,6 @@ describe("evaluateNativeBlockAttemptV1", () => {
         dimensionId: "critical-traversal",
         message: "Required traversal reach-ground was blocked.",
         repairAction: { kind: "revise-native-source" },
-      }),
-      expect.objectContaining({
-        code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
-        dimensionId: "deterministic-build",
       }),
     ]));
     expect(published.evidenceSet.observedDimensions.find((row) =>
@@ -157,7 +147,7 @@ describe("evaluateNativeBlockAttemptV1", () => {
     });
     expect(dimension(published.evaluation, "collider").status).toBe("passed");
     expect(dimension(published.evaluation, "deterministic-build").status)
-      .toBe("incomplete");
-    expect(published.evaluation.outcome).toBe("incomplete");
+      .toBe("passed");
+    expect(published.evaluation.outcome).toBe("failed");
   });
 });
