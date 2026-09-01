@@ -48,7 +48,9 @@ const caseValue = () => ({
     WEST_GATE_BLOCKER_TARGET_REF,
   ],
   requiredEvidenceProfileRefs: [
-    "worldkit://evidence-profile/native-block-formal-capture@1",
+    ...DIMENSIONS.map((dimensionId) =>
+      `worldkit://evidence-profile/${dimensionId}@1`
+    ),
   ],
   expected: {
     topology: {
@@ -666,6 +668,19 @@ describe("evaluateWorldReconstructionV1", () => {
     expect(result.diagnostics.every(({ code }) => code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE")).toBe(true);
     expect(result.diagnostics.map(({ dimensionId }) => dimensionId)).toEqual([...DIMENSIONS]);
     expect(parseWorldReconstructionEvaluationResultV1(result).outcome).toBe("incomplete");
+  });
+
+  it("rejects a Case whose Evidence Profile requirements do not close its bound Profile", () => {
+    const result = evaluateBound({
+      case: (draft) => {
+        draft.requiredEvidenceProfileRefs = draft.requiredEvidenceProfileRefs.slice(1);
+      },
+    });
+    expect(result.outcome).toBe("incomplete");
+    expect(result.dimensions.every(({ status }) => status === "incomplete")).toBe(true);
+    expect(result.diagnostics.every(({ code }) =>
+      code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
+    )).toBe(true);
   });
 
   it("never lets advisory pixel similarity produce a GO on a failed required metric", () => {
