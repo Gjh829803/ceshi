@@ -8,7 +8,7 @@
   "evaluationProfileRef": "evaluation-profile.json",
   "evaluationProfileHash": "sha256:190972cf5a3ee2bd491751340aa5b0a9c2530b0888ce8219cc57e43184439fe2",
   "acceptanceTargetRefs": ["worldkit://acceptance-target/central-ascent@1", "worldkit://acceptance-target/foreground-platform@1", "worldkit://acceptance-target/gate-mass@1", "worldkit://acceptance-target/mountain-cliff-layers@1", "worldkit://acceptance-target/supported-spawn@1", "worldkit://acceptance-target/upper-t-junction@1"],
-  "requiredEvidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1", "worldkit://evidence-profile/native-block-opening@1", "worldkit://evidence-profile/native-block-topology@1", "worldkit://evidence-profile/native-block-traversal@1"],
+  "requiredEvidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1", "worldkit://evidence-profile/native-block-determinism@1", "worldkit://evidence-profile/native-block-opening@1", "worldkit://evidence-profile/native-block-silhouette@1", "worldkit://evidence-profile/native-block-spawn@1", "worldkit://evidence-profile/native-block-topology@1", "worldkit://evidence-profile/native-block-traversal@1"],
   "expected": {
     "topology": {
       "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1",

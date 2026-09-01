@@ -32,7 +32,7 @@ import {
   parseWorldPackageWorldBoundsV1,
   type WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package";
-import { isEqual, isNil, sortBy } from "lodash-es";
+import { isEqual, isNil, sortBy, uniq } from "lodash-es";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 
@@ -403,6 +403,12 @@ export async function prepareNativeBlockGenerationTaskV1(
   const reconstructionCase = parseWorldReconstructionCaseV1(input.case);
   const profile = parseWorldReconstructionEvaluationProfileV1(input.profile);
   if (reconstructionCase.evaluationProfileRef !== "evaluation-profile.json" || reconstructionCase.evaluationProfileHash !== hashWorldReconstructionEvaluationProfileV1(profile)) throw new TypeError("Case/Profile identity closure failed.");
+  const profileRequiredEvidenceRefs = sortBy(uniq(
+    profile.requiredEvidenceByDimension.flatMap((entry) => entry.evidenceProfileRefs),
+  ));
+  if (!isEqual(reconstructionCase.requiredEvidenceProfileRefs, profileRequiredEvidenceRefs)) {
+    throw new TypeError("Case/Evaluation Profile required Evidence Profile closure failed.");
+  }
   if (reconstructionCase.referenceInputs.some((reference) => reference.mediaType === "application/json")) throw new TypeError("Native generation references must be images.");
   if (input.attemptIndex !== 0 && input.attemptIndex !== 1) throw new TypeError("Native generation supports only initial attempt 0 or repair attempt 1.");
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.runId)) {
