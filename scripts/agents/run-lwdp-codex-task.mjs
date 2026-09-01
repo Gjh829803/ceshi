@@ -21,6 +21,15 @@ import {
   serializeCodexTaskOutcomeEnvelopeV1,
 } from "../lib/codex-task-outcome.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
+import {
+  LWDP_CODEX_PENDING_JOURNAL_KIND,
+  declaredOutputUris,
+  lwdpCodexRequestArgumentFingerprint,
+  readPendingJournalIfExists,
+  reconcileLwdpCodexSameRequestId,
+  removePendingJournal,
+  writePendingJournal,
+} from "./lwdp-codex-same-id-recovery.mjs";
 
 function parseArguments(argv) {
   const result = { contexts: [], assets: [], outputs: [] };
@@ -93,7 +102,10 @@ const emitOutcome = (outcome) => {
   }));
 };
 
-if (args.reconcileOnly) {
+const canFullyRecover = Boolean(
+  args.outputS3Prefix && args.instructionFile && args.outputs.length > 0,
+);
+if (args.reconcileOnly && !canFullyRecover) {
   try {
     const config = await loadLwdpGenerationConfig();
     const recovered = await findGenerationJobByRequestId(requestId, {
@@ -122,8 +134,65 @@ if (!args.outputS3Prefix) throw new Error("--output-s3-prefix is required.");
 if (!args.instructionFile) throw new Error("--instruction-file is required.");
 if (args.outputs.length === 0) throw new Error("At least one --output is required.");
 
+const outputSpecs = args.outputs.map((rawOutput) => {
+  const [remotePath, localPath, contentType = "application/octet-stream"] =
+    splitSpec(rawOutput, 2, "--output");
+  if (!remotePath || remotePath.startsWith("/") || remotePath.split("/").includes("..")) {
+    throw new Error(`Unsafe remote output path: ${remotePath}`);
+  }
+  return { remotePath, localPath: resolve(localPath), contentType };
+});
+const callerInstruction = await readFile(resolve(args.instructionFile), "utf8");
+const instructionSha256 = createHash("sha256").update(callerInstruction).digest("hex");
+const outputUriSet = declaredOutputUris(args.outputS3Prefix, taskId, outputSpecs);
+const pendingDefaults = {
+  model: executionProfile.model,
+  reasoning_effort: executionProfile.reasoningEffort,
+  sandbox: "workspace-write",
+  timeout_seconds: Number(args.timeoutSeconds || 1_800),
+};
+const pendingJournal = {
+  kind: LWDP_CODEX_PENDING_JOURNAL_KIND,
+  schemaVersion: 1,
+  requestId,
+  taskId,
+  outputS3Prefix: args.outputS3Prefix,
+  declaredOutputUris: outputUriSet,
+  outputs: outputSpecs,
+  requestArgumentFingerprint: lwdpCodexRequestArgumentFingerprint({
+    requestId,
+    taskId,
+    outputS3Prefix: args.outputS3Prefix,
+    declaredOutputUris: outputUriSet,
+    outputs: outputSpecs,
+    instructionSha256,
+    defaults: pendingDefaults,
+  }),
+  instructionSha256,
+  defaults: pendingDefaults,
+  jobId: null,
+};
+
 const stagingRoot = resolve(repoRoot, ".codex-tmp", "lwdp-codex", `${taskId}-${runToken}`);
 const smokeMode = process.env.WORLDKIT_LWDP_CLIENT_SMOKE === "1";
+if (!smokeMode) {
+  const existingJournal = await readPendingJournalIfExists(repoRoot, requestId);
+  if (existingJournal !== null || args.reconcileOnly) {
+    if (existingJournal === null) {
+      throw new Error("LWDP same-request-id recovery pending journal is missing.");
+    }
+    const config = await loadLwdpGenerationConfig();
+    await reconcileLwdpCodexSameRequestId({
+      repoRoot,
+      current: pendingJournal,
+      config,
+    });
+    process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
+    emitOutcome("completed");
+    process.exit(0);
+  }
+  await writePendingJournal(pendingJournal, { repoRoot });
+}
 await mkdir(stagingRoot, { recursive: true });
 
 try {
@@ -159,16 +228,6 @@ try {
     taskAssets.push({ id, name: `${id}${suffix}`, s3_uri: s3Uri, media_type: mediaType, attach_as: attachAs });
   }
 
-  const outputSpecs = args.outputs.map((rawOutput) => {
-    const [remotePath, localPath, contentType = "application/octet-stream"] =
-      splitSpec(rawOutput, 2, "--output");
-    if (!remotePath || remotePath.startsWith("/") || remotePath.split("/").includes("..")) {
-      throw new Error(`Unsafe remote output path: ${remotePath}`);
-    }
-    return { remotePath, localPath: resolve(localPath), contentType };
-  });
-
-  const callerInstruction = await readFile(resolve(args.instructionFile), "utf8");
   const workspaceProtocol = args.contexts.length > 0
     ? `\n\nCloud workspace protocol:\n- Locate the input asset named workspace-context.tar.gz in the host-provided Input assets list and extract it into the current task working directory before reading project paths.\n- Treat extracted files and other attached inputs as read-only context.\n- Write only the host-declared output files at their exact Declared outputs paths.\n- Do not access credentials, unrelated directories, or external services. Host-provided built-in tools explicitly required by the caller instruction, such as image generation, are allowed.\n- The trusted local host performs contract validation after delivery; do not claim validation you did not run.`
     : "";
@@ -176,12 +235,7 @@ try {
     job_name: args.jobName || `worldkit ${taskId}`,
     request_id: requestId,
     output_s3_prefix: args.outputS3Prefix,
-    defaults: {
-      model: executionProfile.model,
-      reasoning_effort: executionProfile.reasoningEffort,
-      sandbox: "workspace-write",
-      timeout_seconds: Number(args.timeoutSeconds || 1_800),
-    },
+    defaults: pendingDefaults,
     tasks: [{
       id: taskId,
       instruction: `${callerInstruction}${workspaceProtocol}`,
@@ -213,34 +267,50 @@ try {
   }
 
   const config = await loadLwdpGenerationConfig();
-  const submitted = await submitCodexGenerationJob(payload, { config });
-  const jobId = submittedJobId(submitted);
-  if (submitted.recovered_by_request_id === true) {
-    process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
-  }
-  process.stdout.write(
-    `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
-  );
-  if (args.dryRun) {
-    process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
-    emitOutcome("completed");
-    process.exit(0);
-  }
-  const job = await pollGenerationJob(jobId, {
-    config,
-    onProgress: (current) => process.stdout.write(
-      `WORLDKIT_LWDP_PROGRESS ${taskId} ${current.status} ${JSON.stringify(current.counters || {})}\n`,
-    ),
-  });
-  const items = await fetchGenerationItems(jobId, { config });
-  assertSuccessfulJob(job, items, [taskId]);
-  for (const output of outputSpecs) {
-    await downloadS3FileAtomic(
-      joinS3Uri(args.outputS3Prefix, "tasks", taskId, output.remotePath),
-      output.localPath,
+  try {
+    const submitted = await submitCodexGenerationJob(payload, { config });
+    const jobId = submittedJobId(submitted);
+    await writePendingJournal({ ...pendingJournal, jobId }, { repoRoot });
+    if (submitted.recovered_by_request_id === true) {
+      process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+    }
+    process.stdout.write(
+      `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
     );
+    if (args.dryRun) {
+      process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
+      await removePendingJournal(repoRoot, requestId);
+      emitOutcome("completed");
+      process.exit(0);
+    }
+    const job = await pollGenerationJob(jobId, {
+      config,
+      onProgress: (current) => process.stdout.write(
+        `WORLDKIT_LWDP_PROGRESS ${taskId} ${current.status} ${JSON.stringify(current.counters || {})}\n`,
+      ),
+    });
+    const items = await fetchGenerationItems(jobId, { config });
+    assertSuccessfulJob(job, items, [taskId]);
+    for (const output of outputSpecs) {
+      await downloadS3FileAtomic(
+        joinS3Uri(args.outputS3Prefix, "tasks", taskId, output.remotePath),
+        output.localPath,
+      );
+    }
+    await removePendingJournal(repoRoot, requestId);
+    process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
+  } catch (error) {
+    if (error instanceof CodexTaskOutcomeError && error.outcomeCode === "creation-outcome-unknown") {
+      await reconcileLwdpCodexSameRequestId({
+        repoRoot,
+        current: pendingJournal,
+        config,
+      });
+      process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
+    } else {
+      throw error;
+    }
   }
-  process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
   } finally {
     await rm(stagingRoot, { recursive: true, force: true });
   }

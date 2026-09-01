@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -802,8 +802,8 @@ test("cloud Codex runner persists a pending journal and uses GET-only recovery a
   assert.match(runner, /writePendingJournal/);
   assert.match(runner, /reconcileLwdpCodexSameRequestId/);
   assert.match(runner, /readPendingJournal/);
-  const submitIndex = runner.indexOf("submitCodexGenerationJob");
-  const journalIndex = runner.indexOf("writePendingJournal");
+  const submitIndex = runner.indexOf("await submitCodexGenerationJob");
+  const journalIndex = runner.indexOf("await writePendingJournal");
   const recoverIndex = runner.lastIndexOf("reconcileLwdpCodexSameRequestId");
   assert.equal(submitIndex > 0 && journalIndex > 0 && recoverIndex > 0, true);
   assert.equal(journalIndex < submitIndex, true);
