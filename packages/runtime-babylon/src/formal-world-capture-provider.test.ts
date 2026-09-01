@@ -455,6 +455,41 @@ describe("formal world capture provider", () => {
       evidence,
       committedTick: 1,
     })).toEqual(contact);
+
+    const contribution = {
+      id: "ground",
+      colliderSubshapeId: "ground.shape",
+      geometryHash: `sha256:${"b".repeat(64)}`,
+      worldPositionsMetersXYZ: [0, 0, 0],
+      triangleIndices: [0, 0, 0],
+      vertexCount: 1,
+      triangleCount: 1,
+      frictionRatio: 0.5,
+      restitutionRatio: 0,
+      traversalBinding: {
+        kind: "static-surface" as const,
+        logicalSubshapeId: "ground.surface",
+        traversalSurfaceId: "ground.traversal",
+        surfaceEntityId: "ground.entity",
+        traversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
+      },
+    } as const;
+    expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .assertFormalSupportContactContributionIdentityV1(
+        contact,
+        contribution,
+      )).not.toThrow();
+    expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .assertFormalSupportContactContributionIdentityV1(
+        { ...contact, traversalSurfaceId: "drifted" },
+        contribution,
+      )).toThrowError(/IDENTITY_MISMATCH/);
+    expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .assertFormalSupportContactContributionIdentityV1(
+        { ...contact, traversalSurfaceProfileRef: "worldkit://drifted@1" },
+        contribution,
+      )).toThrowError(/IDENTITY_MISMATCH/);
   });
 
   it("uses a fresh settled world session for every scripted check", async () => {
@@ -482,7 +517,13 @@ describe("formal world capture provider", () => {
     const runtimeSessionId = "runtime.formal.provider-mixed-block";
     const { ports } = traversalPorts(runtimeSessionId);
     const request = {
-      semanticCaptureMap: { topologyRelations: [] },
+      semanticCaptureMap: { topologyRelations: [{
+        fromNodeId: "route",
+        relation: "blocks" as const,
+        toNodeId: "gate",
+        measurementSource: "scripted-traversal" as const,
+        traversalCheckId: "blocked-gate",
+      }] },
       scriptedTraversal: {
         checks: [{
           id: "blocked-gate",
@@ -548,6 +589,11 @@ describe("formal world capture provider", () => {
       { checkpointId: "gate", outcome: "blocked", observedAtTick: 2 },
       { checkpointId: "threshold", outcome: "passed", observedAtTick: 2 },
     ]);
+    expect(checks[0]?.observedTopologyRelations).toEqual([{
+      fromNodeId: "route",
+      relation: "blocks",
+      toNodeId: "gate",
+    }]);
   });
 
   it("rejects a partial scripted run without exposing successful check payload", async () => {

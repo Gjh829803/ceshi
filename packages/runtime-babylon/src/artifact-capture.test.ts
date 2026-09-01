@@ -392,7 +392,13 @@ describe("Babylon artifact capture", () => {
       removeEventListener: vi.fn(),
     });
     RegisterAbstractEngineStencil();
-    const engine = new NullEngine({ renderWidth: 16, renderHeight: 9, textureSize: 16 });
+    const engine = new NullEngine({
+      renderWidth: 16,
+      renderHeight: 9,
+      textureSize: 16,
+      deterministicLockstep: true,
+      lockstepMaxSteps: 4,
+    });
     const scene = new Scene(engine);
     const openingCamera = new FreeCamera("opening-camera", new Vector3(0, 4, -12), scene);
     openingCamera.setTarget(Vector3.Zero());
