@@ -14,6 +14,7 @@
     "@whitebox-world/protocol": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
     "@whitebox-world/validation": "workspace:*",
+    "@whitebox-world/world-identity": "workspace:*",
     "lodash-es": "^4.18.1"
   }
 }
