@@ -659,4 +659,35 @@ describe("formal world capture provider", () => {
     expect(payload).toBeUndefined();
     expect(resetCount()).toBe(2);
   });
+
+  it.each([
+    ["pass", "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED"],
+    ["block", "BABYLON_FORMAL_CAPTURE_BLOCK_CHECKPOINT_UNMEASURED"],
+  ] as const)("reports which %s evidence class failed to measure", async (
+    checkExpectation,
+    diagnosticCode,
+  ) => {
+    const runtimeSessionId = `runtime.formal.provider-unmeasured.${checkExpectation}`;
+    const { ports } = traversalPorts(
+      runtimeSessionId,
+      false,
+      [5, 1, 5],
+    );
+    const fixture = traversalRequestFixture();
+    const request = {
+      ...fixture,
+      scriptedTraversal: {
+        checks: [{
+          ...fixture.scriptedTraversal.checks[0]!,
+          checkExpectation,
+        }],
+      },
+    } as Parameters<
+      typeof FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureTraversalChecks
+    >[0];
+
+    await expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .captureTraversalChecks(request, runtimeSessionId, "player", ports))
+      .rejects.toThrow(diagnosticCode);
+  });
 });

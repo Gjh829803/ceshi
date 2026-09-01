@@ -687,7 +687,12 @@ async function captureTraversalChecks(
       }
     }
     if (checkpoints.size !== check.checkpointCriteria.length) {
-      fail("BABYLON_FORMAL_CAPTURE_TRAVERSAL_CHECKPOINT_UNMEASURED", check.id);
+      fail(
+        check.checkExpectation === "pass"
+          ? "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED"
+          : "BABYLON_FORMAL_CAPTURE_BLOCK_CHECKPOINT_UNMEASURED",
+        check.id,
+      );
     }
     const checkpointRows = [...checkpoints.values()].sort((left, right) =>
       stableCompare(left.checkpointId, right.checkpointId));
