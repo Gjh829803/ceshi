@@ -677,6 +677,7 @@ describe("formal world capture provider", () => {
     const request = {
       ...fixture,
       scriptedTraversal: {
+        ...fixture.scriptedTraversal,
         checks: [{
           ...fixture.scriptedTraversal.checks[0]!,
           checkExpectation,

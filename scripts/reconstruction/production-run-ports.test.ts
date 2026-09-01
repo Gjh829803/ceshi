@@ -452,7 +452,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     )?.fixedInputSequence).toEqual([{
       actions: ["move-forward"],
       axes: { moveYRatio: 1 },
-      ticks: 240,
+      ticks: 300,
     }]);
     expect(await readFile(
       path.join(caseRoot, "inputs", "task-instruction.md"),
