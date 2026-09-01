@@ -1062,9 +1062,11 @@ focused 验证并合入 `main@d1ba942`，BWB-5 参考场景 Corpus 已完成；f
   Havok 阻挡，绑定冻结 Contribution 近面、capsule radius 与 ground medium；未扩 Corpus。单
   Subject、无 Browser FeelReview 是已登记的非阻塞债务，不伪称跨实体
   rebind、formal Capture/Route 或生产 disposition；
-- [ ] BWB-6：BWB-5 正确性成立后评估 Thin Instance、Chunk、Collider coalescing，交付 Profile-side
-  eligibility/grouping、等价 fixture、资源 benchmark 和 BNA-4 优化提案；不直接修改 Runtime/Havok，
-  不改变 AI-facing Schema 或 Contribution 语义。
+- [x] BWB-6：PR #149 已合入 `main@18ad6979`，交付 current-only Profile-side Chunk、Thin Instance
+  与 Collider coalescing eligibility/grouping、等价 fixture、五类正向 Corpus 的确定性资源计数 benchmark
+  和 BNA-owned 执行提案。基线 48 个视觉 draw/geometry drivers 与 48 个 Collider proxies 的提案值为
+  25 与 40；这不是 CPU/GPU/Havok 实测。实现未修改 Runtime/Havok、AI-facing Schema 或 Contribution
+  语义，完整证据见 [BWB-6 Profile Optimization Review](reviews/2026-09-01-bwb6-profile-optimization-review.md)。
 
 #### P3.7 Project Health Observatory
 
