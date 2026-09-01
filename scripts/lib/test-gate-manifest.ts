@@ -132,6 +132,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-babylon/src/babylon-native-package-runtime.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/babylon-native-surface-admission.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/babylon-physics-world-query.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
+  { path: "packages/runtime-babylon/src/babylon-runtime-residency.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/babylon-shader-bootstrap.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/camera-preview-channel.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/camera-view-target-context.test.ts", lane: "contract" },
