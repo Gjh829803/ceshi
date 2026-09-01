@@ -1,4 +1,8 @@
-import { sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import {
+  canonicalJsonBytes,
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,6 +11,7 @@ import {
   MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1,
   formalArtifactViewRequestCanonicalBytesV1,
   formalSemanticCaptureMapCanonicalBytesV1,
+  formalWorldCaptureIntentCanonicalBytesV1,
   formalWorldCaptureRequestCanonicalBytesV1,
   formalWorldCaptureReceiptCanonicalBytesV1,
   hashFormalArtifactViewRequestV1,
@@ -17,6 +22,7 @@ import {
   hashFormalScriptedTraversalRequestV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalSpawnSupportObservationV1,
+  hashFormalWorldCaptureIntentV1,
   hashFormalWorldCaptureRequestV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalArtifactViewRequestV1,
@@ -26,6 +32,7 @@ import {
   parseFormalScriptedTraversalRequestV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
+  parseFormalWorldCaptureIntentV1,
   parseFormalWorldCaptureRequestV1,
   parseFormalWorldCaptureReceiptV1,
 } from "./formal-world-capture.js";
@@ -373,6 +380,61 @@ function semanticMapValue() {
   };
 }
 
+function formalCaptureIntentValue() {
+  return {
+    kind: "formal-world-capture-intent",
+    schemaVersion: 1,
+    id: "cloud-temple-t-gate-native-block.formal-world-capture-intent",
+    captureProfile: {
+      widthPixels: 1280,
+      heightPixels: 720,
+      devicePixelRatio: 1,
+    },
+    semanticCaptureTargetBindings: [{
+      acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+      compositionTargetRef: "worldkit://composition-target/central-ascent@1",
+      topologyNodeId: "central-ascent",
+      semanticLayerId: "ground",
+      blockVisualGroupId: "central-ascent-group",
+    }, {
+      acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+      compositionTargetRef: "worldkit://composition-target/upper-t-junction@1",
+      topologyNodeId: "upper-t-junction",
+      semanticLayerId: "upper",
+      blockVisualGroupId: "upper-t-junction-group",
+    }],
+    topologyRelations: [{
+      fromNodeId: "central-ascent",
+      relation: "above",
+      toNodeId: "upper-t-junction",
+      measurementSource: "package-bounds",
+      fromVisualGroupId: "central-ascent-group",
+      toVisualGroupId: "upper-t-junction-group",
+    }, {
+      fromNodeId: "central-ascent",
+      relation: "blocks",
+      toNodeId: "upper-t-junction",
+      measurementSource: "sdk-collider",
+      colliderId: "west-wall",
+      sourceVisualGroupId: "central-ascent-group",
+    }, {
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
+    }, {
+      fromNodeId: "upper-t-junction",
+      relation: "contains",
+      toNodeId: "central-ascent",
+      measurementSource: "sdk-support",
+      subjectEntityId: "player",
+      colliderId: "spawn-ground",
+    }],
+    checkpointSpatialCriteria: traversalCheckpointCriteria(),
+  } as const;
+}
+
 function formalRequestValue() {
   const semanticCaptureMap = semanticMapValue();
   const colliderOverlay = {
@@ -525,6 +587,121 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
     cleanupOutcome: "completed",
   };
 }
+
+describe("FormalWorldCaptureIntentV1", () => {
+  it("parses, freezes, canonicalizes, and hashes one closed Scheme A intent", () => {
+    const intent = parseFormalWorldCaptureIntentV1(formalCaptureIntentValue());
+
+    expect(Object.isFrozen(intent)).toBe(true);
+    expect(Object.isFrozen(intent.captureProfile)).toBe(true);
+    expect(Object.isFrozen(intent.semanticCaptureTargetBindings)).toBe(true);
+    expect(Object.isFrozen(intent.topologyRelations)).toBe(true);
+    expect(Object.isFrozen(intent.checkpointSpatialCriteria)).toBe(true);
+    expect(intent.topologyRelations).toEqual(
+      formalCaptureIntentValue().topologyRelations,
+    );
+    expect(formalWorldCaptureIntentCanonicalBytesV1(
+      formalCaptureIntentValue(),
+    )).toEqual(canonicalJsonBytes(intent));
+    expect(hashFormalWorldCaptureIntentV1(intent))
+      .toBe(sha256CanonicalJson(intent));
+    expect(hashFormalWorldCaptureIntentV1({
+      ...formalCaptureIntentValue(),
+      captureProfile: {
+        ...formalCaptureIntentValue().captureProfile,
+        widthPixels: 1281,
+      },
+    })).not.toBe(hashFormalWorldCaptureIntentV1(intent));
+  });
+
+  it("rejects missing, extra, and alias fields instead of defaulting", () => {
+    const missing = { ...formalCaptureIntentValue() } as Record<string, unknown>;
+    delete missing.captureProfile;
+    expect(() => parseFormalWorldCaptureIntentV1(missing))
+      .toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+    expect(() => parseFormalWorldCaptureIntentV1({
+      ...formalCaptureIntentValue(),
+      captureProfileAlias: formalCaptureIntentValue().captureProfile,
+    })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+    expect(() => parseFormalWorldCaptureIntentV1({
+      ...formalCaptureIntentValue(),
+      captureProfile: {
+        ...formalCaptureIntentValue().captureProfile,
+        viewportWidthPixels: 1280,
+      },
+    })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+  });
+
+  it.each([
+    { widthPixels: 0 },
+    { widthPixels: 1.5 },
+    { widthPixels: Number.POSITIVE_INFINITY },
+    { heightPixels: 0 },
+    { devicePixelRatio: 0 },
+    { devicePixelRatio: Number.NaN },
+  ])("rejects a non-positive or non-finite Capture profile %j", (override) => {
+    expect(() => parseFormalWorldCaptureIntentV1({
+      ...formalCaptureIntentValue(),
+      captureProfile: {
+        ...formalCaptureIntentValue().captureProfile,
+        ...override,
+      },
+    })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+  });
+
+  it("requires non-empty, unique, canonical collection order", () => {
+    const intent = formalCaptureIntentValue();
+    for (const invalid of [{
+      ...intent,
+      semanticCaptureTargetBindings: [],
+    }, {
+      ...intent,
+      semanticCaptureTargetBindings: [...intent.semanticCaptureTargetBindings]
+        .reverse(),
+    }, {
+      ...intent,
+      semanticCaptureTargetBindings: intent.semanticCaptureTargetBindings.map(
+        (binding, index) => index === 1
+          ? { ...binding, blockVisualGroupId: "central-ascent-group" }
+          : binding,
+      ),
+    }, {
+      ...intent,
+      topologyRelations: [],
+    }, {
+      ...intent,
+      topologyRelations: [...intent.topologyRelations].reverse(),
+    }, {
+      ...intent,
+      checkpointSpatialCriteria: [],
+    }, {
+      ...intent,
+      checkpointSpatialCriteria: [...intent.checkpointSpatialCriteria].reverse(),
+    }]) {
+      expect(() => parseFormalWorldCaptureIntentV1(invalid))
+        .toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+    }
+  });
+
+  it("rejects relation and checkpoint proof identities outside bound targets", () => {
+    const intent = formalCaptureIntentValue();
+    expect(() => parseFormalWorldCaptureIntentV1({
+      ...intent,
+      topologyRelations: intent.topologyRelations.map((relation, index) =>
+        index === 0
+          ? { ...relation, fromVisualGroupId: "foreign-group" }
+          : relation),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+    expect(() => parseFormalWorldCaptureIntentV1({
+      ...intent,
+      checkpointSpatialCriteria: intent.checkpointSpatialCriteria.map(
+        (criterion, index) => index === 0
+          ? { ...criterion, sourceVisualGroupId: "foreign-group" }
+          : criterion,
+      ),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+  });
+});
 
 describe("FormalWorldCaptureRequestV1", () => {
   it("rejects old Case Ref dialects", () => {

@@ -90,6 +90,28 @@ export type FormalTraversalCheckpointSpatialCriterionV1 =
       toleranceMeters: number;
     }>;
 
+export interface FormalWorldCaptureIntentV1 {
+  readonly kind: "formal-world-capture-intent";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly captureProfile: Readonly<{
+    widthPixels: number;
+    heightPixels: number;
+    devicePixelRatio: number;
+  }>;
+  readonly semanticCaptureTargetBindings: readonly Readonly<{
+    acceptanceTargetRef: string;
+    compositionTargetRef: string;
+    topologyNodeId: string;
+    semanticLayerId: string;
+    blockVisualGroupId: string;
+  }>[];
+  readonly topologyRelations:
+    readonly FormalSemanticTopologyRelationBindingV1[];
+  readonly checkpointSpatialCriteria:
+    readonly FormalTraversalCheckpointSpatialCriterionV1[];
+}
+
 export type FormalArtifactViewRequestV1 =
   | Readonly<{
       kind: "formal-artifact-view-request";
@@ -460,6 +482,27 @@ const WORLD_REQUEST_FIELDS = [
   "worldBoundsMeters",
   "cameraPositionMetersXYZ",
   "targetMetersXYZ",
+] as const;
+const FORMAL_CAPTURE_INTENT_FIELDS = [
+  "kind",
+  "schemaVersion",
+  "id",
+  "captureProfile",
+  "semanticCaptureTargetBindings",
+  "topologyRelations",
+  "checkpointSpatialCriteria",
+] as const;
+const FORMAL_CAPTURE_INTENT_PROFILE_FIELDS = [
+  "widthPixels",
+  "heightPixels",
+  "devicePixelRatio",
+] as const;
+const FORMAL_CAPTURE_INTENT_TARGET_BINDING_FIELDS = [
+  "acceptanceTargetRef",
+  "compositionTargetRef",
+  "topologyNodeId",
+  "semanticLayerId",
+  "blockVisualGroupId",
 ] as const;
 const MAP_FIELDS = [
   "kind",
@@ -989,32 +1032,36 @@ function dominantLookAxis(
 function parsePixelDimensions(
   source: Readonly<Record<string, unknown>>,
   contract: string,
+  path = "",
 ): Readonly<{
   widthPixels: number;
   heightPixels: number;
   devicePixelRatio: number;
 }> {
+  const fieldPath = (field: string) => path.length === 0
+    ? field
+    : `${path}/${field}`;
   return {
     widthPixels: integer(
       source.widthPixels,
       1,
       MAXIMUM_CAPTURE_DIMENSION_PIXELS,
       contract,
-      "widthPixels",
+      fieldPath("widthPixels"),
     ),
     heightPixels: integer(
       source.heightPixels,
       1,
       MAXIMUM_CAPTURE_DIMENSION_PIXELS,
       contract,
-      "heightPixels",
+      fieldPath("heightPixels"),
     ),
     devicePixelRatio: finiteNumber(
       source.devicePixelRatio,
       0.5,
       8,
       contract,
-      "devicePixelRatio",
+      fieldPath("devicePixelRatio"),
     ),
   };
 }
@@ -1554,6 +1601,179 @@ function parseTopologyRelationBindings(
     fail(contract, path, "must be non-empty, unique, and strictly sorted");
   }
   return Object.freeze(rows);
+}
+
+function parseFormalCaptureIntentTargetBinding(
+  value: unknown,
+  contract: string,
+  path: string,
+): FormalWorldCaptureIntentV1["semanticCaptureTargetBindings"][number] {
+  const source = object(value, contract, path);
+  exactFields(
+    source,
+    FORMAL_CAPTURE_INTENT_TARGET_BINDING_FIELDS,
+    contract,
+    path,
+  );
+  return Object.freeze({
+    acceptanceTargetRef: text(
+      source.acceptanceTargetRef,
+      contract,
+      `${path}/acceptanceTargetRef`,
+    ),
+    compositionTargetRef: text(
+      source.compositionTargetRef,
+      contract,
+      `${path}/compositionTargetRef`,
+    ),
+    topologyNodeId: text(
+      source.topologyNodeId,
+      contract,
+      `${path}/topologyNodeId`,
+    ),
+    semanticLayerId: text(
+      source.semanticLayerId,
+      contract,
+      `${path}/semanticLayerId`,
+    ),
+    blockVisualGroupId: text(
+      source.blockVisualGroupId,
+      contract,
+      `${path}/blockVisualGroupId`,
+    ),
+  });
+}
+
+export function parseFormalWorldCaptureIntentV1(
+  value: unknown,
+): FormalWorldCaptureIntentV1 {
+  const contract = "FORMAL_WORLD_CAPTURE_INTENT_INVALID";
+  const source = begin(value, contract, FORMAL_CAPTURE_INTENT_FIELDS);
+  if (
+    source.kind !== "formal-world-capture-intent" ||
+    source.schemaVersion !== 1
+  ) {
+    fail(contract, "", "unexpected kind or schemaVersion");
+  }
+  const captureProfileSource = object(
+    source.captureProfile,
+    contract,
+    "captureProfile",
+  );
+  exactFields(
+    captureProfileSource,
+    FORMAL_CAPTURE_INTENT_PROFILE_FIELDS,
+    contract,
+    "captureProfile",
+  );
+  const captureProfile = Object.freeze(parsePixelDimensions(
+    captureProfileSource,
+    contract,
+    "captureProfile",
+  ));
+  const semanticCaptureTargetBindings = array(
+    source.semanticCaptureTargetBindings,
+    contract,
+    "semanticCaptureTargetBindings",
+  ).map((entry, index) => parseFormalCaptureIntentTargetBinding(
+    entry,
+    contract,
+    `semanticCaptureTargetBindings/${index}`,
+  ));
+  const acceptanceTargetRefs = semanticCaptureTargetBindings.map(
+    ({ acceptanceTargetRef }) => acceptanceTargetRef,
+  );
+  if (
+    isEmpty(semanticCaptureTargetBindings) ||
+    acceptanceTargetRefs.some((entry, index) =>
+      index > 0 && acceptanceTargetRefs[index - 1]! >= entry)
+  ) {
+    fail(
+      contract,
+      "semanticCaptureTargetBindings",
+      "must be non-empty, unique, and sorted by acceptanceTargetRef",
+    );
+  }
+  const compositionTargetRefs = semanticCaptureTargetBindings.map(
+    ({ compositionTargetRef }) => compositionTargetRef,
+  );
+  const topologyNodeIds = semanticCaptureTargetBindings.map(
+    ({ topologyNodeId }) => topologyNodeId,
+  );
+  const blockVisualGroupIds = semanticCaptureTargetBindings.map(
+    ({ blockVisualGroupId }) => blockVisualGroupId,
+  );
+  if (
+    new Set(compositionTargetRefs).size !== compositionTargetRefs.length ||
+    new Set(topologyNodeIds).size !== topologyNodeIds.length ||
+    new Set(blockVisualGroupIds).size !== blockVisualGroupIds.length
+  ) {
+    fail(
+      contract,
+      "semanticCaptureTargetBindings",
+      "composition targets, topology nodes, and visual groups must map one-to-one",
+    );
+  }
+  const topologyRelations = parseTopologyRelationBindings(
+    source.topologyRelations,
+    contract,
+    "topologyRelations",
+    new Set(topologyNodeIds),
+  );
+  const boundGroupIds = new Set(blockVisualGroupIds);
+  const unknownRelationGroup = topologyRelations.find((relation) =>
+    relation.measurementSource === "package-bounds"
+      ? !boundGroupIds.has(relation.fromVisualGroupId) ||
+        !boundGroupIds.has(relation.toVisualGroupId)
+      : relation.measurementSource === "sdk-collider"
+        ? !boundGroupIds.has(relation.sourceVisualGroupId)
+        : false
+  );
+  if (!isNil(unknownRelationGroup)) {
+    fail(
+      contract,
+      "topologyRelations",
+      "relation proof must reference a bound visual group",
+    );
+  }
+  const checkpointSpatialCriteria = parseCheckpointCriteria(
+    source.checkpointSpatialCriteria,
+    contract,
+    "checkpointSpatialCriteria",
+  );
+  if (checkpointSpatialCriteria.some(
+    ({ sourceVisualGroupId }) => !boundGroupIds.has(sourceVisualGroupId),
+  )) {
+    fail(
+      contract,
+      "checkpointSpatialCriteria",
+      "criterion proof must reference a bound visual group",
+    );
+  }
+  return freeze({
+    kind: "formal-world-capture-intent",
+    schemaVersion: 1,
+    id: text(source.id, contract, "id"),
+    captureProfile,
+    semanticCaptureTargetBindings:
+      Object.freeze(semanticCaptureTargetBindings),
+    topologyRelations,
+    checkpointSpatialCriteria,
+  });
+}
+
+export function formalWorldCaptureIntentCanonicalBytesV1(
+  value: unknown,
+): Uint8Array {
+  return canonicalJsonBytes(parseFormalWorldCaptureIntentV1(value));
+}
+
+export function hashFormalWorldCaptureIntentV1(
+  value: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseFormalWorldCaptureIntentV1(value),
+  ) as Sha256HashV1;
 }
 
 export function parseFormalSemanticCaptureMapV1(
