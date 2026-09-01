@@ -1,7 +1,9 @@
 import {
   createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
+  hashBabylonNativeBlockMaterializerMetadataV1,
   hashFormalSemanticCaptureMapV1,
+  parseBabylonNativeBlockMaterializerMetadataV1,
   parseFormalSemanticCaptureMapV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -11,13 +13,14 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  bindNativeBlockAuthoringManifestToCheckedLayoutV1,
   hashBabylonNativeBlockCheckedLayoutInventoryV1,
   hashNativeBlockAuthoringManifestV1,
   parseNativeBlockAuthoringManifestV1,
 } from "./authoring-manifest.js";
 import {
-  bindBlockVisualGroupsToSemanticCaptureTargetsV1,
-  type BindBlockVisualGroupsToSemanticCaptureTargetsInputV1,
+  bindBlockMaterializerMetadataToSemanticCaptureTargetsV1,
+  type BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1,
 } from "./formal-capture-identity.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
@@ -84,21 +87,38 @@ function caseValue() {
       openingComposition: {
         acceptanceTargetRef:
           "worldkit://acceptance-target/central-ascent@1",
-        targetRefs: ["worldkit://composition-target/opening@1"],
+        targetRefs: [
+          "worldkit://composition-target/central-ascent@1",
+          "worldkit://composition-target/upper-t-junction@1",
+        ],
         regions: [{
-          targetRef: "worldkit://composition-target/opening@1",
+          targetRef: "worldkit://composition-target/central-ascent@1",
           normalizedBounds: {
             minXBasisPoints: 100,
             minYBasisPoints: 200,
             maxXBasisPoints: 500,
             maxYBasisPoints: 800,
           },
+        }, {
+          targetRef: "worldkit://composition-target/upper-t-junction@1",
+          normalizedBounds: {
+            minXBasisPoints: 600,
+            minYBasisPoints: 100,
+            maxXBasisPoints: 900,
+            maxYBasisPoints: 400,
+          },
         }],
         anchors: [{
-          targetRef: "worldkit://composition-target/opening@1",
+          targetRef: "worldkit://composition-target/central-ascent@1",
           normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+        }, {
+          targetRef: "worldkit://composition-target/upper-t-junction@1",
+          normalizedCenter: { xBasisPoints: 750, yBasisPoints: 250 },
         }],
-        orderedTargetRefs: ["worldkit://composition-target/opening@1"],
+        orderedTargetRefs: [
+          "worldkit://composition-target/central-ascent@1",
+          "worldkit://composition-target/upper-t-junction@1",
+        ],
       },
       spawnSupport: {
         acceptanceTargetRef:
@@ -317,36 +337,101 @@ function bindInput(overrides: Record<string, unknown> = {}) {
   );
   const checkedLayout = checkedLayoutValue();
   const frozenContribution = contribution();
+  const contributionHash = hashBabylonNativeSceneContributionV1(
+    frozenContribution,
+  );
+  const authoringManifestHash =
+    hashNativeBlockAuthoringManifestV1(authoringManifest);
+  const checkedLayoutInventoryHash =
+    hashBabylonNativeBlockCheckedLayoutInventoryV1(checkedLayout);
+  const binding = bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+    reconstructionCase,
+    authoringManifest,
+    authoringManifestHash,
+    checkedLayout,
+    checkedLayoutInventoryHash,
+    contributionHash,
+    frozenContributionHash: contributionHash,
+  });
+  const materializerMetadata =
+    parseBabylonNativeBlockMaterializerMetadataV1({
+      kind: "babylon-native-block-materializer-metadata",
+      schemaVersion: 1,
+      nativeSceneProfileRef:
+        "worldkit://native-scene-profile/whitebox.blocks@1",
+      caseHash: binding.caseHash,
+      authoringManifestHash,
+      checkedLayoutInventoryHash,
+      contributionHash,
+      profileInventoryHash: frozenContribution.profileSettlement.profileInventoryHash,
+      settledVisualHash: frozenContribution.profileSettlement.settledVisualHash,
+      blocks: checkedLayout.layout.blocks.map((block) => ({
+        blockId: block.id,
+        runtimeEntityId: `native-block:${block.id}`,
+        semanticCaptureClassId:
+          `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
+        shape: block.shape,
+        paletteRole: block.paletteRole,
+        ...(block.visualGroupId === undefined
+          ? {}
+          : { visualGroupId: block.visualGroupId }),
+        centerMetersXYZ: block.centerMetersXYZ,
+        rotationQuarterTurnsY: block.rotationQuarterTurnsY,
+        sizeMetersXYZ: block.sizeMetersXYZ,
+      })),
+      visualGroups: binding.visualGroups,
+      colliderJoins: [{ blockId: checkedLayout.layout.blocks[0]!.id, colliderId: "spawn-ground" }],
+    });
   return {
     case: reconstructionCase,
-    authoringManifest,
-    authoringManifestHash:
-      hashNativeBlockAuthoringManifestV1(authoringManifest),
-    checkedLayout,
-    checkedLayoutInventoryHash:
-      hashBabylonNativeBlockCheckedLayoutInventoryV1(checkedLayout),
+    materializerMetadata,
+    materializerMetadataHash:
+      hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
     contribution: frozenContribution,
-    contributionHash:
-      hashBabylonNativeSceneContributionV1(frozenContribution),
+    semanticCaptureTargetBindings: [{
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/central-ascent@1",
+      compositionTargetRef:
+        "worldkit://composition-target/central-ascent@1",
+      topologyNodeId: "central-ascent",
+      semanticLayerId: "ground",
+      blockVisualGroupId: "central-ascent-group",
+    }, {
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/upper-t-junction@1",
+      compositionTargetRef:
+        "worldkit://composition-target/upper-t-junction@1",
+      topologyNodeId: "upper-t-junction",
+      semanticLayerId: "upper",
+      blockVisualGroupId: "upper-t-junction-group",
+    }],
+    topologyRelations: [{
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+    }],
     checkpointSpatialCriteria: checkpointSpatialCriteria(),
     ...overrides,
   };
 }
 
 function bind(overrides: Record<string, unknown> = {}) {
-  return bindBlockVisualGroupsToSemanticCaptureTargetsV1(
+  return bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
     bindInput(overrides) as unknown as
-      BindBlockVisualGroupsToSemanticCaptureTargetsInputV1,
+      BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1,
   );
 }
 
-describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
+describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
   it("consumes the canonical Manifest-to-checked-Layout binding identity", () => {
     const input = bindInput();
     const map = bind();
     expect(parseFormalSemanticCaptureMapV1(map)).toEqual(map);
     expect(map.caseHash).toBe(hashWorldReconstructionCaseV1(input.case));
-    expect(map.layoutInventoryHash).toBe(input.checkedLayoutInventoryHash);
+    expect(map.layoutInventoryHash).toBe(
+      input.materializerMetadata.checkedLayoutInventoryHash,
+    );
     expect(map.bindings.map(({ acceptanceTargetRef, blockVisualGroupId }) => ({
       acceptanceTargetRef,
       blockVisualGroupId,
@@ -360,12 +445,22 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
       blockVisualGroupId: "upper-t-junction-group",
     }]);
     expect(map.bindings[0]).toMatchObject({
+      compositionTargetRef:
+        "worldkit://composition-target/central-ascent@1",
+      topologyNodeId: "central-ascent",
+      semanticLayerId: "ground",
       semanticClassId: "worldkit.native-block.group.central-ascent",
       identityColor: "#AEB8C4",
-      authoringManifestHash: input.authoringManifestHash,
-      layoutInventoryHash: input.checkedLayoutInventoryHash,
-      contributionHash: input.contributionHash,
+      authoringManifestHash: input.materializerMetadata.authoringManifestHash,
+      layoutInventoryHash: input.materializerMetadata.checkedLayoutInventoryHash,
+      contributionHash: input.materializerMetadata.contributionHash,
     });
+    expect(map.topologyRelations).toEqual([{
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+    }]);
     expect(map.traversalCheckBindings[0]).toMatchObject({
       traversalCheckId: "reach-junction",
       checkpointCriteria: checkpointSpatialCriteria(),
@@ -375,38 +470,9 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
     );
   });
 
-  it("rejects the obsolete lowercase Manifest dialect instead of translating it", () => {
-    const lowercaseManifest = {
-      ...authoringManifestValue(),
-      visualGroups: authoringManifestValue().visualGroups.map((group) => ({
-        ...group,
-        identityColorHex: group.identityColorHex.toLowerCase(),
-      })),
-    };
-    expect(() => bind({
-      authoringManifest: lowercaseManifest,
-      authoringManifestHash: H("9"),
-    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
-  });
-
-  it("rejects stale formal Manifest, full checked Layout, or Contribution identity", () => {
-    expect(() => bind({ authoringManifestHash: H("9") }))
+  it("rejects stale Package materializer identity", () => {
+    expect(() => bind({ materializerMetadataHash: H("9") }))
       .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
-    expect(() => bind({ checkedLayoutInventoryHash: H("9") }))
-      .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
-    expect(() => bind({ contributionHash: H("9") }))
-      .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
-  });
-
-  it("rejects a checked Layout group omitted from the formal Manifest binding", () => {
-    const manifest = authoringManifestValue();
-    expect(() => bind({
-      authoringManifest: {
-        ...manifest,
-        visualGroups: [manifest.visualGroups[0]],
-      },
-      authoringManifestHash: H("9"),
-    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
   it("rejects checkpoint criteria stale against full Layout bounds or Contribution colliders", () => {
@@ -443,11 +509,80 @@ describe("bindBlockVisualGroupsToSemanticCaptureTargetsV1", () => {
     })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
+  it("rejects a Block plane collider joined to a different visual group", () => {
+    const input = bindInput();
+    const blockedCase = parseWorldReconstructionCaseV1({
+      ...caseValue(),
+      expected: {
+        ...caseValue().expected,
+        criticalTraversalChecks: [{
+          ...caseValue().expected.criticalTraversalChecks[0],
+          expectation: "block",
+        }],
+      },
+    });
+    const materializerMetadata =
+      parseBabylonNativeBlockMaterializerMetadataV1({
+        ...input.materializerMetadata,
+        caseHash: hashWorldReconstructionCaseV1(blockedCase),
+      });
+    expect(() => bind({
+      case: blockedCase,
+      materializerMetadata,
+      materializerMetadataHash:
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
+      checkpointSpatialCriteria: [{
+        kind: "block-plane",
+        checkpointId: "junction",
+        expectation: "block",
+        sourceVisualGroupId: "upper-t-junction-group",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-0.5, 1, -2.5],
+          maximumMetersXYZ: [0.5, 2, -1.5],
+        },
+        colliderId: "spawn-ground",
+        axis: "x",
+        sourceFace: "minimum",
+        planeMeters: -0.5,
+        expectedCenterSide: "negative",
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
+      }, checkpointSpatialCriteria()[1]],
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
   it("rejects Mesh/tag/name inference fields at the Capture boundary", () => {
-    expect(() => bindBlockVisualGroupsToSemanticCaptureTargetsV1({
+    expect(() => bindBlockMaterializerMetadataToSemanticCaptureTargetsV1({
       ...bindInput(),
       meshNameByGroupId: { "central-ascent-group": "AscentMesh" },
-    } as unknown as BindBlockVisualGroupsToSemanticCaptureTargetsInputV1))
+    } as unknown as BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1))
       .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
+  it("requires an explicit complete one-to-one Case and Package semantic mapping", () => {
+    const input = bindInput();
+    const missing = { ...input } as Record<string, unknown>;
+    delete missing.semanticCaptureTargetBindings;
+    expect(() => bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
+      missing as unknown as BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1,
+    )).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+    expect(() => bind({
+      semanticCaptureTargetBindings:
+        input.semanticCaptureTargetBindings.slice(0, 1),
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+    expect(() => bind({
+      semanticCaptureTargetBindings: input.semanticCaptureTargetBindings.map(
+        (binding, index) => index === 1
+          ? { ...binding, compositionTargetRef:
+              "worldkit://composition-target/central-ascent@1" }
+          : binding,
+      ),
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+    expect(() => bind({
+      topologyRelations: [{
+        ...input.topologyRelations[0],
+        toNodeId: "central-ascent",
+      }],
+    })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 });

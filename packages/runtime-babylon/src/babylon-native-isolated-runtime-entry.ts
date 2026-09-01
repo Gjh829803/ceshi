@@ -11,6 +11,7 @@ import {
 } from "@whitebox-world/gameplay-contracts";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
+  MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1,
   deriveRuntimeSessionReceiptIdV1,
   hashRuntimeSessionRequestV1,
   parseNativeIsolatedExecutionRequestV1,
@@ -43,6 +44,10 @@ import {
   type BabylonWorldRuntimeInitializationStageV1,
 } from "./babylon-world-runtime";
 import {
+  BabylonRuntimeResidencyV1,
+  wrapBabylonRuntimeOwnedGameplayWorldPortV1,
+} from "./babylon-runtime-residency.js";
+import {
   prepareBabylonNativeRuntimePackageV1,
   type BabylonNativeSceneModuleLoaderV1,
 } from "./babylon-native-package-runtime";
@@ -65,6 +70,8 @@ const CONTROLLER_DEFINITION_HASH = sha256CanonicalJson({
 });
 const GAMEPLAY_MODE_REF =
   "worldkit://gameplay-mode/native-isolation.exploration@1";
+const MAXIMUM_FORMAL_CAPTURE_WORLD_SESSION_COUNT =
+  MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1 + 2;
 
 export type BabylonNativeIsolatedRuntimeEntryErrorCodeV1 =
   | "WORLDKIT_NATIVE_ISOLATION_IDENTITY_MISMATCH"
@@ -86,7 +93,7 @@ export interface CreateBabylonNativeIsolatedRuntimeEntryInputV1 {
   readonly moduleLoader: BabylonNativeSceneModuleLoaderV1;
   /** Required by headless Node hosts; browser hosts use Babylon's same-origin loader. */
   readonly havokWasmBinary?: ArrayBuffer;
-  readonly engineFactory: () => AbstractEngine;
+  readonly engineFactory: (worldSessionId: string) => AbstractEngine;
   readonly subjectAssetResolver?: SubjectAssetResolverV1;
   readonly onInitializationStage?: (
     stage: BabylonWorldRuntimeInitializationStageV1,
@@ -99,6 +106,7 @@ export interface BabylonNativeIsolatedRuntimeEntryV1 {
   runtimeUsage(): NativeExecutionUsageV1["runtime"];
   renderFrame(): RenderReadyReceiptV1;
   resize(): void;
+  resetForFormalCapture(): Promise<WorldRuntimeSnapshotV4>;
   submit(payload: RuntimeSessionRequestV1):
     Promise<RuntimeSessionReceiptV1>;
   dispose(): Promise<void>;
@@ -120,8 +128,13 @@ function gameplayModeFactory(): GameplayModeV1 {
 function replacementRejectedDiagnostic(): GameplayDiagnosticV1 {
   return Object.freeze({
     code: "WORLD_REPLACEMENT_CAPACITY_EXCEEDED",
-    message: "The isolated Native Runtime admits exactly one WorldSession.",
+    message: "The isolated Native Runtime cannot retain another Candidate.",
   });
+}
+
+interface BabylonNativeIsolatedRuntimeHandleV1 {
+  readonly runtime: BabylonWorldRuntime;
+  readonly engine: AbstractEngine;
 }
 
 function assertRequestIdentity(
@@ -288,8 +301,9 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
 
   constructor(
     private readonly host: RuntimeHost,
-    private readonly runtime: BabylonWorldRuntime,
-    private readonly engine: AbstractEngine,
+    private readonly residency:
+      BabylonRuntimeResidencyV1<BabylonNativeIsolatedRuntimeHandleV1>,
+    private readonly initialControlledEntityId: string,
   ) {
     this.runtimeSessionId = host.runtimeSessionId;
   }
@@ -299,22 +313,29 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
       runtimeSessionId: this.runtimeSessionId,
       fixedInputControllerEntityId: CONTROLLER_ENTITY_ID,
       publication: this.host.snapshot(),
-      runtimeProjection: this.runtime.snapshot(),
+      runtimeProjection: this.activeHandle().runtime.snapshot(),
       hostPhase: this.host.phase,
       isPaused: false,
     });
   }
 
   runtimeUsage(): NativeExecutionUsageV1["runtime"] {
-    return observeRuntimeUsage(this.runtime.snapshot(), this.engine);
+    const handle = this.activeHandle();
+    return observeRuntimeUsage(handle.runtime.snapshot(), handle.engine);
   }
 
   renderFrame(): RenderReadyReceiptV1 {
-    return this.runtime.renderFrame();
+    return this.activeHandle().runtime.renderFrame();
   }
 
   resize(): void {
-    this.runtime.resize();
+    this.activeHandle().runtime.resize();
+  }
+
+  resetForFormalCapture(): Promise<WorldRuntimeSnapshotV4> {
+    const operation = this.#tail.then(() => this.resetSerialized());
+    this.#tail = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   submit(payload: RuntimeSessionRequestV1):
@@ -327,8 +348,25 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
   dispose(): Promise<void> {
     if (!isNil(this.#disposePromise)) return this.#disposePromise;
     this.#isActive = false;
-    this.#disposePromise = this.host.dispose();
+    this.#disposePromise = this.host.dispose().finally(() => {
+      this.residency.clear();
+    });
     return this.#disposePromise;
+  }
+
+  private activeHandle(): BabylonNativeIsolatedRuntimeHandleV1 {
+    return this.residency.active(this.host.currentWorldSessionId);
+  }
+
+  private async resetSerialized(): Promise<WorldRuntimeSnapshotV4> {
+    if (!this.#isActive) {
+      throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_NOT_ACTIVE");
+    }
+    await this.host.resetWithInitialControlBinding({
+      controllerEntityId: CONTROLLER_ENTITY_ID,
+      controlledEntityId: this.initialControlledEntityId,
+    });
+    return this.initialSnapshot();
   }
 
   private async submitSerialized(
@@ -451,20 +489,32 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
   });
   const preparedModuleLoader: BabylonNativeSceneModuleLoaderV1 =
     Object.freeze({ load: async () => prepared.module });
-  let runtime: BabylonWorldRuntime | undefined;
-  let runtimeEngine: AbstractEngine | undefined;
+  const residency =
+    new BabylonRuntimeResidencyV1<BabylonNativeIsolatedRuntimeHandleV1>();
   const adapterFactory: GameplayWorldAdapterFactoryV1 = Object.freeze({
-    preflightConcurrentResidency() {
-      return Object.freeze({
-        status: "rejected" as const,
-        diagnostic: replacementRejectedDiagnostic(),
-      });
+    preflightConcurrentResidency(
+      current: RuntimeWorldAdapterDescriptorV1,
+      candidate: RuntimeWorldAdapterDescriptorV1,
+    ) {
+      if (
+        !residency.canRetainCandidate(
+          current.worldSessionId,
+          candidate.worldSessionId,
+        )
+      ) {
+        return Object.freeze({
+          status: "rejected" as const,
+          diagnostic: replacementRejectedDiagnostic(),
+        });
+      }
+      return Object.freeze({ status: "accepted" as const });
     },
     async create(candidate: RuntimeWorldAdapterDescriptorV1) {
-      if (!isNil(runtime)) {
+      if (residency.has(candidate.worldSessionId)) {
         throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_ALREADY_CREATED");
       }
       let created: BabylonWorldRuntime | undefined;
+      let createdEngine: AbstractEngine | undefined;
       try {
         created = await BabylonWorldRuntime.create({
           worldRuntimeBootstrap: candidate.worldRuntimeBootstrap,
@@ -477,9 +527,13 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
           },
           runtimeSessionId: request.runtimeSessionId,
           engineFactory: () => {
-            const engine = input.engineFactory();
-            runtimeEngine = engine;
-            return engine;
+            if (!isNil(createdEngine)) {
+              throw new Error(
+                "WORLDKIT_NATIVE_ISOLATION_ENGINE_ALREADY_CREATED",
+              );
+            }
+            createdEngine = input.engineFactory(candidate.worldSessionId);
+            return createdEngine;
           },
           ...(isNil(input.havokWasmBinary)
             ? {}
@@ -492,20 +546,30 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
             ? {}
             : { onInitializationStage: input.onInitializationStage }),
         });
-        if (isNil(runtimeEngine)) {
+        if (isNil(createdEngine)) {
           throw new Error("WORLDKIT_NATIVE_ISOLATION_ENGINE_HANDLE_MISSING");
         }
         assertRuntimeBudget(
           created.snapshot(),
-          runtimeEngine,
+          createdEngine,
           request.effectiveBudget,
         );
         const port = createBabylonGameplayWorldPortV1(
           created,
           CONTROLLER_ENTITY_ID,
         );
-        runtime = created;
-        return port;
+        const handle = Object.freeze({
+          runtime: created,
+          engine: createdEngine,
+        });
+        const ownedPort = wrapBabylonRuntimeOwnedGameplayWorldPortV1(
+          port,
+          () => {
+            residency.release(candidate.worldSessionId, handle);
+          },
+        );
+        residency.retain(candidate.worldSessionId, handle);
+        return ownedPort;
       } catch (error) {
         await created?.dispose().catch(() => undefined);
         throw error;
@@ -514,14 +578,11 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
     async awaitCandidatePublicationReady(
       gate: RuntimeCandidatePublicationGateInputV1,
     ) {
-      if (
-        gate.runtimeSessionId !== request.runtimeSessionId ||
-        gate.worldSessionId !== initialWorldSessionId ||
-        isNil(runtime)
-      ) {
+      if (gate.runtimeSessionId !== request.runtimeSessionId) {
         throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_HANDLE_MISSING");
       }
-      await runtime.renderFrameWhenReady();
+      const handle = residency.active(gate.worldSessionId);
+      await handle.runtime.renderFrameWhenReady();
     },
   });
   const featureFactories = [
@@ -534,6 +595,7 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
     )
   );
 
+  let worldSessionIndex = 0;
   let host: RuntimeHost;
   try {
     host = await RuntimeHost.create({
@@ -560,8 +622,9 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
         ),
       },
       runtimeHostCapacityBudget: {
-        maximumWorldSessionCount: 1,
-        maximumRuntimeActivityRecordCount: 1,
+        maximumWorldSessionCount: MAXIMUM_FORMAL_CAPTURE_WORLD_SESSION_COUNT,
+        maximumRuntimeActivityRecordCount:
+          MAXIMUM_FORMAL_CAPTURE_WORLD_SESSION_COUNT,
       },
       initialControlBinding: {
         controllerEntityId: CONTROLLER_ENTITY_ID,
@@ -569,23 +632,25 @@ export async function createBabylonNativeIsolatedRuntimeEntryV1(
           initialWorld.worldRuntimeBootstrap.initialControlledEntityId,
       },
       adapterFactory,
-      worldSessionIdFactory: () => initialWorldSessionId,
+      worldSessionIdFactory: () =>
+        `${request.runtimeSessionId}.world.${worldSessionIndex += 1}`,
     });
   } catch (error) {
-    await runtime?.dispose().catch(() => undefined);
+    await Promise.allSettled(
+      [...residency.values()].map(({ runtime }) =>
+        runtime.dispose()
+      ),
+    );
     throw error;
   }
-  if (isNil(runtime)) {
+  const initialHandle = residency.get(initialWorldSessionId);
+  if (isNil(initialHandle)) {
     await host.dispose().catch(() => undefined);
     throw new Error("WORLDKIT_NATIVE_ISOLATION_RUNTIME_HANDLE_MISSING");
   }
-  if (isNil(runtimeEngine)) {
-    await host.dispose().catch(() => undefined);
-    throw new Error("WORLDKIT_NATIVE_ISOLATION_ENGINE_HANDLE_MISSING");
-  }
   return Object.freeze(new BabylonNativeIsolatedRuntimeEntry(
     host,
-    runtime,
-    runtimeEngine,
+    residency,
+    initialWorld.worldRuntimeBootstrap.initialControlledEntityId,
   ));
 }

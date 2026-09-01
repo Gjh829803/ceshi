@@ -124,6 +124,18 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe("prepareNativeBlockGenerationTaskV1", () => {
+  it("consumes the canonical Runtime Contracts Native Scene Profile owner", async () => {
+    const source = await readFile(
+      new URL("./generation-request.ts", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("BABYLON_NATIVE_BLOCK_PROFILE_REF_V1");
+    expect(source).not.toContain("const CURRENT_NATIVE_SCENE_PROFILE_REF");
+    expect(source).not.toContain(
+      '"worldkit://native-scene-profile/whitebox.blocks@1"',
+    );
+  });
+
   it("keeps the committed reconstruction Case and resource descriptors consumable", async () => {
     const caseRoot = path.resolve(
       "artifacts/scenes/cloud-temple-t-gate-native-block",

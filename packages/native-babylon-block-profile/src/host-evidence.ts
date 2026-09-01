@@ -2,6 +2,9 @@ import type { Scene } from "@babylonjs/core/scene.js";
 
 import type { BabylonNativeBlockProfileCheckResultV1 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
+import type {
+  BabylonNativeBlockColliderCandidateInventoryEntryV1,
+} from "./collider-contribution.js";
 
 export interface BabylonNativeBlockCheckedEpochEvidenceV1 {
   readonly kind: "babylon-native-block-checked-epoch-evidence";
@@ -13,6 +16,8 @@ export interface BabylonNativeBlockCheckedEpochEvidenceV1 {
     readonly checkResult: BabylonNativeBlockProfileCheckResultV1;
   }>;
   readonly profileInventoryHash: `sha256:${string}`;
+  readonly colliderInventory:
+    readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
 }
 
 const EVIDENCE_BY_SCENE = new WeakMap<

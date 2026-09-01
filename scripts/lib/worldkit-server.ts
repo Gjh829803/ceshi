@@ -11,6 +11,8 @@ import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidencePublicationV2,
 } from "@whitebox-world/runtime-contracts";
+import type { OwnedNativeViteCacheV1 } from
+  "../native-scene/owned-native-vite-cache.js";
 
 import { resolveTrustedSourceCommit } from "./worldkit-source-commit";
 import { WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1 } from
@@ -18,8 +20,14 @@ import { WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1 } from
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PLAYGROUND_ROOT = path.join(REPOSITORY_ROOT, "apps/playground");
+const NATIVE_PLAYGROUND_ROOT = path.join(
+  REPOSITORY_ROOT,
+  "apps/native-scene-playground",
+);
 const VITE_CLI_PATH = path.join(REPOSITORY_ROOT, "node_modules/vite/bin/vite.js");
 const AUTHORING_ENDPOINT = "/__worldkit/authoring-spec";
+const NATIVE_PACKAGE_RECEIPT_ENDPOINT =
+  "/__worldkit/native-package/world-package-build-receipt.json";
 const SERVER_NONCE_HEADER = "x-worldkit-server-nonce";
 const DEFAULT_STARTUP_TIMEOUT_MILLISECONDS = 30_000;
 const DEFAULT_STOP_TIMEOUT_MILLISECONDS = 3_000;
@@ -30,8 +38,15 @@ export interface WorldkitServerRouteEvidenceV1 {
   readonly canonicalBytes: Uint8Array;
 }
 
+export type WorldkitServerSourceV1 =
+  | Readonly<{ kind: "canonical-file"; inputPath: string }>
+  | Readonly<{
+      kind: "world-package";
+      packageDirectoryPath: string;
+    }>;
+
 export interface StartWorldkitServerOptions {
-  inputPath: string;
+  source: WorldkitServerSourceV1;
   port?: number;
   forwardOutput?: boolean;
   refreshDependencies?: boolean;
@@ -44,6 +59,8 @@ export interface WorldkitServerHandle {
   readonly url: string;
   readonly port: number;
   readonly process: ChildProcessWithoutNullStreams;
+  readonly sceneSourceKind: "canonical-execution-plan" | "babylon-native-scene";
+  readonly worldPackageRootHash?: `sha256:${string}`;
   stop(): Promise<void>;
   waitForExit(): Promise<number | null>;
 }
@@ -187,6 +204,19 @@ async function allocateAvailablePort(): Promise<number> {
   });
 }
 
+async function allocateDistinctAvailablePort(
+  excludedPort: number,
+): Promise<number> {
+  for (let attempt = 0; attempt < AUTOMATIC_PORT_ATTEMPTS; attempt += 1) {
+    const candidate = await allocateAvailablePort();
+    if (candidate !== excludedPort) return candidate;
+  }
+  throw new WorldkitServerStartError(
+    "WORLDKIT_SERVER_PORT_UNAVAILABLE",
+    "Unable to allocate a distinct Native Runtime origin port.",
+  );
+}
+
 async function assertPortAvailable(port: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const probe = net.createServer();
@@ -212,19 +242,50 @@ function signalOwnedProcess(
     if (process.platform === "win32") child.kill(signal);
     else process.kill(-child.pid, signal);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ESRCH") return;
+    if (code !== "EPERM" || process.platform === "win32") throw error;
+    try {
+      child.kill(signal);
+    } catch (fallbackError) {
+      if ((fallbackError as NodeJS.ErrnoException).code !== "ESRCH") {
+        throw fallbackError;
+      }
+    }
   }
+}
+
+export async function terminateOwnedWorldkitServerChildrenV1(
+  input: Readonly<{
+    children: readonly ChildProcessWithoutNullStreams[];
+    exitPromise: Promise<unknown>;
+    stopTimeoutMilliseconds: number;
+  }>,
+): Promise<void> {
+  for (const child of input.children) signalOwnedProcess(child, "SIGTERM");
+  const exited = await Promise.race([
+    input.exitPromise.then(() => true),
+    delay(input.stopTimeoutMilliseconds).then(() => false),
+  ]);
+  if (exited) return;
+  for (const child of input.children) signalOwnedProcess(child, "SIGKILL");
+  await input.exitPromise;
 }
 
 function createHandle(options: {
   child: ChildProcessWithoutNullStreams;
+  children?: readonly ChildProcessWithoutNullStreams[];
   lifecycle: OwnedChildLifecycle;
   port: number;
   stopTimeoutMilliseconds: number;
   cleanupOwnedState?: () => Promise<void>;
+  sceneSourceKind: WorldkitServerHandle["sceneSourceKind"];
+  worldPackageRootHash?: `sha256:${string}`;
+  urlSearch?: string;
 }): WorldkitServerHandle {
   const {
     child,
+    children = [child],
     lifecycle,
     port,
     stopTimeoutMilliseconds,
@@ -236,28 +297,30 @@ function createHandle(options: {
   let stopPromise: Promise<void> | undefined;
   const stop = (): Promise<void> => {
     stopPromise ??= (async () => {
-      if (child.exitCode !== null || child.signalCode !== null) {
+      if (children.every((ownedChild) =>
+        ownedChild.exitCode !== null || ownedChild.signalCode !== null
+      )) {
         await exitPromise;
         await cleanupPromise;
         return;
       }
-      signalOwnedProcess(child, "SIGTERM");
-      const exited = await Promise.race([
-        exitPromise.then(() => true),
-        delay(stopTimeoutMilliseconds).then(() => false),
-      ]);
-      if (!exited) {
-        signalOwnedProcess(child, "SIGKILL");
-        await exitPromise;
-      }
+      await terminateOwnedWorldkitServerChildrenV1({
+        children,
+        exitPromise,
+        stopTimeoutMilliseconds,
+      });
       await cleanupPromise;
     })();
     return stopPromise;
   };
   return {
-    url: `http://127.0.0.1:${port}/`,
+    url: `http://127.0.0.1:${port}/${options.urlSearch ?? ""}`,
     port,
     process: child,
+    sceneSourceKind: options.sceneSourceKind,
+    ...(options.worldPackageRootHash === undefined
+      ? {}
+      : { worldPackageRootHash: options.worldPackageRootHash }),
     stop,
     waitForExit: () => exitPromise,
   };
@@ -313,7 +376,59 @@ async function waitUntilReady(options: {
   }
 }
 
-async function startOne(options: StartWorldkitServerOptions, port: number): Promise<WorldkitServerHandle> {
+function spawnVite(options: {
+  rootPath: string;
+  configPath: string;
+  port: number;
+  refreshDependencies: boolean;
+  configLoader?: "runner";
+  environment: NodeJS.ProcessEnv;
+}): ChildProcessWithoutNullStreams {
+  return spawn(
+    process.execPath,
+    [
+      VITE_CLI_PATH,
+      "--config",
+      options.configPath,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(options.port),
+      "--strictPort",
+      ...(options.configLoader === undefined
+        ? []
+        : ["--configLoader", options.configLoader]),
+      ...(options.refreshDependencies ? ["--force"] : []),
+    ],
+    {
+      cwd: options.rootPath,
+      detached: process.platform !== "win32",
+      env: options.environment,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
+}
+
+function configureChildOutput(
+  child: ChildProcessWithoutNullStreams,
+  forwardOutput: boolean,
+): void {
+  child.stdin.end();
+  if (forwardOutput) {
+    child.stdout.pipe(process.stdout);
+    child.stderr.pipe(process.stderr);
+  } else {
+    child.stdout.resume();
+    child.stderr.resume();
+  }
+}
+
+async function startCanonicalOne(
+  options: StartWorldkitServerOptions & Readonly<{
+    source: Extract<WorldkitServerSourceV1, { kind: "canonical-file" }>;
+  }>,
+  port: number,
+): Promise<WorldkitServerHandle> {
   const nonce = randomUUID();
   const ownedRouteEvidence = await createOwnedRouteEvidenceFile(
     options.routeEvidence,
@@ -326,47 +441,27 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
   delete childEnvironment.WORLDKIT_ROUTE_EVIDENCE_PATH;
   let child: ChildProcessWithoutNullStreams;
   try {
-    child = spawn(
-      process.execPath,
-      [
-        VITE_CLI_PATH,
-        "--config",
-        path.join(PLAYGROUND_ROOT, "vite.config.mjs"),
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(port),
-        "--strictPort",
-        ...(options.refreshDependencies === true ? ["--force"] : []),
-      ],
-      {
-        cwd: PLAYGROUND_ROOT,
-        detached: process.platform !== "win32",
-        env: {
+    child = spawnVite({
+      rootPath: PLAYGROUND_ROOT,
+      configPath: path.join(PLAYGROUND_ROOT, "vite.config.mjs"),
+      port,
+      refreshDependencies: options.refreshDependencies === true,
+      environment: {
           ...childEnvironment,
-          WORLDKIT_AUTHORING_SPEC_PATH: path.resolve(options.inputPath),
+          WORLDKIT_AUTHORING_SPEC_PATH: path.resolve(options.source.inputPath),
           WORLDKIT_AUTHORING_SERVER_NONCE: nonce,
           ...(ownedRouteEvidence === undefined
             ? {}
             : { WORLDKIT_ROUTE_EVIDENCE_PATH: ownedRouteEvidence.path }),
           ...(sourceCommit === undefined ? {} : { WORLDKIT_SOURCE_COMMIT: sourceCommit }),
-        },
-        stdio: ["pipe", "pipe", "pipe"],
       },
-    );
+    });
   } catch (error) {
     await ownedRouteEvidence?.cleanup();
     throw error;
   }
   const lifecycle = observeOwnedChild(child);
-  child.stdin.end();
-  if (options.forwardOutput === true) {
-    child.stdout.pipe(process.stdout);
-    child.stderr.pipe(process.stderr);
-  } else {
-    child.stdout.resume();
-    child.stderr.resume();
-  }
+  configureChildOutput(child, options.forwardOutput === true);
   const handle = createHandle({
     child,
     lifecycle,
@@ -376,6 +471,7 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
     ...(ownedRouteEvidence === undefined
       ? {}
       : { cleanupOwnedState: ownedRouteEvidence.cleanup }),
+    sceneSourceKind: "canonical-execution-plan",
   });
   try {
     await waitUntilReady({
@@ -392,18 +488,150 @@ async function startOne(options: StartWorldkitServerOptions, port: number): Prom
   }
 }
 
+async function startNativeOne(
+  options: StartWorldkitServerOptions & Readonly<{
+    source: Extract<WorldkitServerSourceV1, { kind: "world-package" }>;
+  }>,
+  shellPort: number,
+): Promise<WorldkitServerHandle> {
+  const { createWorldPackageBrowserTransportV1 } = await import(
+    "./world-package-browser-transport.js"
+  );
+  const transport = await createWorldPackageBrowserTransportV1({
+    packageDirectoryPath: options.source.packageDirectoryPath,
+  });
+  if (transport.sceneSourceKind !== "babylon-native-scene") {
+    transport.dispose();
+    throw new Error(
+      "WORLDKIT_NATIVE_HARNESS_SCENE_SOURCE_KIND_UNSUPPORTED",
+    );
+  }
+  let runtimePort: number;
+  let ownedViteCache: OwnedNativeViteCacheV1;
+  try {
+    runtimePort = await allocateDistinctAvailablePort(shellPort);
+    const { createOwnedNativeViteCacheV1 } = await import(
+      "../native-scene/owned-native-vite-cache.js"
+    );
+    ownedViteCache = await createOwnedNativeViteCacheV1();
+  } catch (error) {
+    transport.dispose();
+    throw error;
+  }
+  const nonce = randomUUID();
+  const shellOrigin = `http://127.0.0.1:${shellPort}`;
+  const runtimeOrigin = `http://127.0.0.1:${runtimePort}`;
+  const childEnvironment: NodeJS.ProcessEnv = {
+    ...process.env,
+    WORLDKIT_NATIVE_PACKAGE_PATH: path.resolve(
+      options.source.packageDirectoryPath,
+    ),
+    WORLDKIT_AUTHORING_SERVER_NONCE: nonce,
+    WORLDKIT_NATIVE_SERVER_INSTANCE_ID: ownedViteCache.serverInstanceId,
+    WORLDKIT_NATIVE_VITE_CACHE_ROOT: ownedViteCache.rootDirectoryPath,
+    WORLDKIT_NATIVE_VERIFIER_PROBE: "disabled",
+    WORLDKIT_HOSTED_SHELL_ORIGIN: shellOrigin,
+    WORLDKIT_HOSTED_RUNTIME_ORIGIN: runtimeOrigin,
+  };
+  const children: ChildProcessWithoutNullStreams[] = [];
+  const lifecycles: OwnedChildLifecycle[] = [];
+  try {
+    for (const port of [shellPort, runtimePort]) {
+      const child = spawnVite({
+        rootPath: NATIVE_PLAYGROUND_ROOT,
+        configPath: path.join(NATIVE_PLAYGROUND_ROOT, "vite.config.ts"),
+        port,
+        refreshDependencies: options.refreshDependencies === true,
+        configLoader: "runner",
+        environment: {
+          ...childEnvironment,
+          WORLDKIT_NATIVE_SERVER_ROLE:
+            port === shellPort ? "shell" : "runtime",
+        },
+      });
+      lifecycles.push(observeOwnedChild(child));
+      configureChildOutput(child, options.forwardOutput === true);
+      children.push(child);
+    }
+  } catch (error) {
+    await terminateOwnedWorldkitServerChildrenV1({
+      children,
+      exitPromise: Promise.all(lifecycles.map((entry) => entry.exitPromise)),
+      stopTimeoutMilliseconds:
+        options.stopTimeoutMilliseconds ?? DEFAULT_STOP_TIMEOUT_MILLISECONDS,
+    });
+    transport.dispose();
+    await ownedViteCache.dispose();
+    throw error;
+  }
+  const lifecycle: OwnedChildLifecycle = {
+    exitPromise: Promise.all(lifecycles.map((entry) => entry.exitPromise))
+      .then((codes) => codes[0] ?? null),
+    processErrorPromise: Promise.race(
+      lifecycles.map((entry) => entry.processErrorPromise),
+    ),
+  };
+  const handle = createHandle({
+    child: children[0]!,
+    children,
+    lifecycle,
+    port: shellPort,
+    stopTimeoutMilliseconds:
+      options.stopTimeoutMilliseconds ?? DEFAULT_STOP_TIMEOUT_MILLISECONDS,
+    cleanupOwnedState: async () => {
+      transport.dispose();
+      await ownedViteCache.dispose();
+    },
+    sceneSourceKind: "babylon-native-scene",
+    worldPackageRootHash: transport.worldPackageRootHash,
+    urlSearch: "?hosted=1",
+  });
+  try {
+    await Promise.all([
+      waitUntilReady({
+        lifecycle: lifecycles[0]!,
+        endpoint: `${shellOrigin}${NATIVE_PACKAGE_RECEIPT_ENDPOINT}`,
+        nonce,
+        timeoutMilliseconds:
+          options.startupTimeoutMilliseconds ?? DEFAULT_STARTUP_TIMEOUT_MILLISECONDS,
+      }),
+      waitUntilReady({
+        lifecycle: lifecycles[1]!,
+        endpoint: `${runtimeOrigin}${NATIVE_PACKAGE_RECEIPT_ENDPOINT}`,
+        nonce,
+        timeoutMilliseconds:
+          options.startupTimeoutMilliseconds ?? DEFAULT_STARTUP_TIMEOUT_MILLISECONDS,
+      }),
+    ]);
+    return handle;
+  } catch (error) {
+    await handle.stop();
+    throw error;
+  }
+}
+
 export async function startWorldkitServer(
   options: StartWorldkitServerOptions,
 ): Promise<WorldkitServerHandle> {
+  if (
+    options.source.kind === "world-package" &&
+    options.routeEvidence !== undefined
+  ) {
+    throw new Error("WORLDKIT_NATIVE_HARNESS_ROUTE_EVIDENCE_UNSUPPORTED");
+  }
   if (options.port !== undefined) {
     await assertPortAvailable(options.port);
-    return startOne(options, options.port);
+    return options.source.kind === "canonical-file"
+      ? startCanonicalOne({ ...options, source: options.source }, options.port)
+      : startNativeOne({ ...options, source: options.source }, options.port);
   }
   let lastError: unknown;
   for (let attempt = 0; attempt < AUTOMATIC_PORT_ATTEMPTS; attempt += 1) {
     const port = await allocateAvailablePort();
     try {
-      return await startOne(options, port);
+      return await (options.source.kind === "canonical-file"
+        ? startCanonicalOne({ ...options, source: options.source }, port)
+        : startNativeOne({ ...options, source: options.source }, port));
     } catch (error) {
       lastError = error;
       if (!(error instanceof WorldkitServerStartError) ||

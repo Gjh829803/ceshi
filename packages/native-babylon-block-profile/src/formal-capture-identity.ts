@@ -1,11 +1,13 @@
 import { sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
+  hashBabylonNativeBlockMaterializerMetadataV1,
   hashBabylonNativeSceneContributionV1,
+  parseBabylonNativeBlockMaterializerMetadataV1,
   parseBabylonNativeSceneContributionV1,
   parseFormalSemanticCaptureMapV1,
   parseFormalTraversalCheckpointSpatialCriteriaV1,
-  type BabylonNativeSceneContributionV1,
   type FormalSemanticCaptureMapV1,
+  type FormalSemanticTopologyMeasurementSourceV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -15,71 +17,106 @@ import {
 } from "@whitebox-world/validation";
 import { isEqual, isNil } from "lodash-es";
 
-import {
-  bindNativeBlockAuthoringManifestToCheckedLayoutV1,
-  parseNativeBlockAuthoringManifestV1,
-  type NativeBlockAuthoringLayoutBindingV1,
-  type NativeBlockAuthoringManifestV1,
-} from "./authoring-manifest.js";
-import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
-
-export interface BindBlockVisualGroupsToSemanticCaptureTargetsInputV1 {
+export interface BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1 {
   readonly case: WorldReconstructionCaseV1;
-  readonly authoringManifest: NativeBlockAuthoringManifestV1;
-  readonly authoringManifestHash: Sha256HashV1;
-  readonly checkedLayout: Pick<
-    BabylonNativeBlockCheckedLayoutV1,
-    "kind" | "schemaVersion" | "layout" | "checkResult"
-  >;
-  readonly checkedLayoutInventoryHash: Sha256HashV1;
+  readonly materializerMetadata: unknown;
+  readonly materializerMetadataHash: Sha256HashV1;
   readonly contribution: unknown;
-  readonly contributionHash: Sha256HashV1;
+  readonly semanticCaptureTargetBindings: readonly Readonly<{
+    acceptanceTargetRef: string;
+    compositionTargetRef: string;
+    topologyNodeId: string;
+    semanticLayerId: string;
+    blockVisualGroupId: string;
+  }>[];
+  readonly topologyRelations: readonly Readonly<{
+    fromNodeId: string;
+    relation: "connects-to" | "contains" | "above" | "blocks";
+    toNodeId: string;
+    measurementSource: FormalSemanticTopologyMeasurementSourceV1;
+  }>[];
   readonly checkpointSpatialCriteria:
     readonly FormalTraversalCheckpointSpatialCriterionV1[];
 }
 
 const CONTRACT = "FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID";
 const INPUT_FIELDS = [
-  "case",
-  "authoringManifest",
-  "authoringManifestHash",
-  "checkedLayout",
-  "checkedLayoutInventoryHash",
-  "contribution",
-  "contributionHash",
-  "checkpointSpatialCriteria",
+  "case", "materializerMetadata", "materializerMetadataHash", "contribution",
+  "semanticCaptureTargetBindings", "topologyRelations", "checkpointSpatialCriteria",
+] as const;
+const TARGET_BINDING_FIELDS = [
+  "acceptanceTargetRef", "compositionTargetRef", "topologyNodeId",
+  "semanticLayerId", "blockVisualGroupId",
+] as const;
+const TOPOLOGY_RELATION_FIELDS = [
+  "fromNodeId", "relation", "toNodeId", "measurementSource",
 ] as const;
 
 function fail(path: string, message: string): never {
   throw new Error(`${CONTRACT}:${path.length === 0 ? "" : ` ${path}:`} ${message}`);
 }
 
-function assertAccessorFree(
-  value: unknown,
-  path = "",
-  seen = new Set<object>(),
-): void {
-  if (value === null || typeof value !== "object" || seen.has(value)) return;
+function assertAccessorFree(value: unknown, path = "", seen = new Set<object>()): void {
+  if (value === null || typeof value !== "object") return;
+  if (seen.has(value)) fail(path, "must be acyclic plain data");
   seen.add(value);
+  const prototype = Reflect.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== Array.prototype) {
+    fail(path, "must use ordinary object and array prototypes");
+  }
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== "string") fail(path, "symbol keys are forbidden");
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!isNil(descriptor?.get) || !isNil(descriptor?.set)) {
       fail(`${path}/${key}`, "accessors are forbidden");
     }
+    if (key !== "length" && descriptor?.enumerable !== true) {
+      fail(`${path}/${key}`, "data fields must be enumerable");
+    }
     assertAccessorFree(descriptor?.value, `${path}/${key}`, seen);
   }
+  seen.delete(value);
+}
+
+function plainObject(
+  value: unknown,
+  path: string,
+  fields: readonly string[],
+): Readonly<Record<string, unknown>> {
+  if (
+    isNil(value) || typeof value !== "object" || Array.isArray(value) ||
+    Reflect.getPrototypeOf(value) !== Object.prototype
+  ) fail(path, "expected an ordinary plain object");
+  const source = value as Readonly<Record<string, unknown>>;
+  const allowed = new Set(fields);
+  const unknown = Object.keys(source).find((key) => !allowed.has(key));
+  if (!isNil(unknown)) fail(`${path}/${unknown}`, "unknown field");
+  const missing = fields.find((key) => !Object.hasOwn(source, key));
+  if (!isNil(missing)) fail(`${path}/${missing}`, "required field is missing");
+  return source;
+}
+
+function plainArray(value: unknown, path: string): readonly unknown[] {
+  if (
+    !Array.isArray(value) || Reflect.getPrototypeOf(value) !== Array.prototype ||
+    Object.getOwnPropertyNames(value).length !== value.length + 1
+  ) fail(path, "expected an ordinary dense array");
+  return value;
+}
+
+function stringField(value: unknown, path: string): string {
+  if (
+    typeof value !== "string" || value.length === 0 || value.trim() !== value ||
+    value.normalize("NFC") !== value
+  ) fail(path, "expected a non-empty trimmed NFC string");
+  return value;
 }
 
 function exactInput(value: unknown): Readonly<Record<string, unknown>> {
   if (
-    isNil(value) ||
-    typeof value !== "object" ||
-    Array.isArray(value) ||
+    isNil(value) || typeof value !== "object" || Array.isArray(value) ||
     Reflect.getPrototypeOf(value) !== Object.prototype
-  ) {
-    fail("", "expected an ordinary plain object");
-  }
+  ) fail("", "expected an ordinary plain object");
   const allowed = new Set<string>(INPUT_FIELDS);
   const unknown = Object.keys(value).find((key) => !allowed.has(key));
   if (!isNil(unknown)) fail(`/${unknown}`, "unknown field");
@@ -88,168 +125,210 @@ function exactInput(value: unknown): Readonly<Record<string, unknown>> {
   return value as Readonly<Record<string, unknown>>;
 }
 
-function parseCase(value: unknown): WorldReconstructionCaseV1 {
-  try {
-    return parseWorldReconstructionCaseV1(value);
-  } catch {
-    fail("case", "must be a closed WorldReconstructionCaseV1");
-  }
-}
-
-function parseContribution(value: unknown): BabylonNativeSceneContributionV1 {
-  try {
-    return parseBabylonNativeSceneContributionV1(value);
-  } catch {
-    fail("contribution", "must be a closed BabylonNativeSceneContributionV1");
-  }
-}
-
-function parseCheckpointSpatialCriteria(
-  value: unknown,
-): readonly FormalTraversalCheckpointSpatialCriterionV1[] {
-  try {
-    return parseFormalTraversalCheckpointSpatialCriteriaV1(value);
-  } catch {
-    fail(
-      "checkpointSpatialCriteria",
-      "must be closed package-derived spatial criteria",
-    );
-  }
-}
-
-export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(
-  input: BindBlockVisualGroupsToSemanticCaptureTargetsInputV1,
+export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
+  input: BindBlockMaterializerMetadataToSemanticCaptureTargetsInputV1,
 ): FormalSemanticCaptureMapV1 {
   assertAccessorFree(input);
   const source = exactInput(input);
-  const reconstructionCase = parseCase(source.case);
-  const contribution = parseContribution(source.contribution);
-  const frozenContributionHash = hashBabylonNativeSceneContributionV1(
-    contribution,
+  const reconstructionCase = parseWorldReconstructionCaseV1(source.case);
+  const metadata = parseBabylonNativeBlockMaterializerMetadataV1(
+    source.materializerMetadata,
   );
-  let authoringManifest: NativeBlockAuthoringManifestV1;
-  try {
-    authoringManifest = parseNativeBlockAuthoringManifestV1(
-      source.authoringManifest,
-    );
-  } catch {
+  const contribution = parseBabylonNativeSceneContributionV1(source.contribution);
+  if (
+    hashBabylonNativeBlockMaterializerMetadataV1(metadata) !==
+      source.materializerMetadataHash ||
+    metadata.caseHash !== hashWorldReconstructionCaseV1(reconstructionCase) ||
+    metadata.contributionHash !== hashBabylonNativeSceneContributionV1(contribution)
+  ) fail("materializerMetadata", "must match the verified Package identity closure");
+  const semanticCaptureTargetBindings = plainArray(
+    source.semanticCaptureTargetBindings,
+    "semanticCaptureTargetBindings",
+  ).map((entry, index) => {
+    const path = `semanticCaptureTargetBindings/${index}`;
+    const row = plainObject(entry, path, TARGET_BINDING_FIELDS);
+    return Object.freeze({
+      acceptanceTargetRef: stringField(
+        row.acceptanceTargetRef,
+        `${path}/acceptanceTargetRef`,
+      ),
+      compositionTargetRef: stringField(
+        row.compositionTargetRef,
+        `${path}/compositionTargetRef`,
+      ),
+      topologyNodeId: stringField(row.topologyNodeId, `${path}/topologyNodeId`),
+      semanticLayerId: stringField(row.semanticLayerId, `${path}/semanticLayerId`),
+      blockVisualGroupId: stringField(
+        row.blockVisualGroupId,
+        `${path}/blockVisualGroupId`,
+      ),
+    });
+  });
+  if (
+    semanticCaptureTargetBindings.length === 0 ||
+    semanticCaptureTargetBindings.some((row, index) => index > 0 &&
+      semanticCaptureTargetBindings[index - 1]!.acceptanceTargetRef >=
+        row.acceptanceTargetRef)
+  ) fail("semanticCaptureTargetBindings", "must be non-empty, unique, and acceptance-target sorted");
+  for (const key of [
+    "compositionTargetRef", "topologyNodeId", "blockVisualGroupId",
+  ] as const) {
+    if (
+      new Set(semanticCaptureTargetBindings.map((row) => row[key])).size !==
+        semanticCaptureTargetBindings.length
+    ) fail("semanticCaptureTargetBindings", `${key} must map one-to-one`);
+  }
+  const packageTargetGroupPairs = metadata.visualGroups
+    .map(({ acceptanceTargetRef, visualGroupId }) => ({
+      acceptanceTargetRef,
+      blockVisualGroupId: visualGroupId,
+    }))
+    .sort((left, right) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
+  const caseSilhouettePairs = reconstructionCase.expected.semanticSilhouetteTargets
+    .map(({ acceptanceTargetRef, visualGroupId }) => ({
+      acceptanceTargetRef,
+      blockVisualGroupId: visualGroupId,
+    }))
+    .sort((left, right) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
+  const explicitTargetGroupPairs = semanticCaptureTargetBindings.map(
+    ({ acceptanceTargetRef, blockVisualGroupId }) => ({
+      acceptanceTargetRef,
+      blockVisualGroupId,
+    }),
+  );
+  if (
+    !isEqual(explicitTargetGroupPairs, packageTargetGroupPairs) ||
+    !isEqual(explicitTargetGroupPairs, caseSilhouettePairs) ||
+    !isEqual(
+      semanticCaptureTargetBindings.map(({ acceptanceTargetRef }) => acceptanceTargetRef),
+      [...reconstructionCase.acceptanceTargetRefs].sort(),
+    ) ||
+    !isEqual(
+      semanticCaptureTargetBindings.map(({ compositionTargetRef }) => compositionTargetRef)
+        .sort(),
+      [...reconstructionCase.expected.openingComposition.targetRefs].sort(),
+    ) ||
+    !isEqual(
+      semanticCaptureTargetBindings.map(({ topologyNodeId }) => topologyNodeId).sort(),
+      [...reconstructionCase.expected.topology.nodeIds].sort(),
+    ) ||
+    !isEqual(
+      [...new Set(semanticCaptureTargetBindings.map(
+        ({ semanticLayerId }) => semanticLayerId,
+      ))].sort(),
+      [...new Set(reconstructionCase.expected.topology.layerIds)].sort(),
+    )
+  ) {
     fail(
-      "authoringManifest",
-      "must satisfy the canonical Native Block Authoring Manifest parser",
+      "semanticCaptureTargetBindings",
+      "must explicitly cover every Case target and Package visual group exactly once",
     );
   }
-  let authoringLayoutBinding: NativeBlockAuthoringLayoutBindingV1;
-  try {
-    authoringLayoutBinding =
-      bindNativeBlockAuthoringManifestToCheckedLayoutV1({
-        reconstructionCase,
-        authoringManifest,
-        authoringManifestHash: source.authoringManifestHash as Sha256HashV1,
-        checkedLayout: source.checkedLayout as
-          BindBlockVisualGroupsToSemanticCaptureTargetsInputV1["checkedLayout"],
-        checkedLayoutInventoryHash:
-          source.checkedLayoutInventoryHash as Sha256HashV1,
-        contributionHash: source.contributionHash as Sha256HashV1,
-        frozenContributionHash,
+  const topologyRelations = plainArray(source.topologyRelations, "topologyRelations")
+    .map((entry, index) => {
+      const path = `topologyRelations/${index}`;
+      const row = plainObject(entry, path, TOPOLOGY_RELATION_FIELDS);
+      const relation = row.relation;
+      if (![
+        "connects-to", "contains", "above", "blocks",
+      ].includes(relation as string)) fail(`${path}/relation`, "unexpected relation");
+      const measurementSource = row.measurementSource;
+      if (![
+        "package-bounds", "sdk-support", "sdk-collider", "scripted-traversal",
+      ].includes(measurementSource as string)) {
+        fail(`${path}/measurementSource`, "unexpected measurement source");
+      }
+      return Object.freeze({
+        fromNodeId: stringField(row.fromNodeId, `${path}/fromNodeId`),
+        relation: relation as "connects-to" | "contains" | "above" | "blocks",
+        toNodeId: stringField(row.toNodeId, `${path}/toNodeId`),
+        measurementSource:
+          measurementSource as FormalSemanticTopologyMeasurementSourceV1,
       });
-  } catch {
-    fail(
-      "authoringLayoutBinding",
-      "must satisfy the canonical Manifest-to-checked-Layout binding",
+    });
+  const relationKeys = topologyRelations.map(({ fromNodeId, relation, toNodeId }) =>
+    `${fromNodeId}\0${relation}\0${toNodeId}`);
+  if (
+    topologyRelations.length === 0 ||
+    relationKeys.some((key, index) => index > 0 && relationKeys[index - 1]! >= key) ||
+    !isEqual(
+      topologyRelations.map(({ measurementSource: _measurementSource, ...row }) => row),
+      reconstructionCase.expected.topology.relations,
+    )
+  ) fail("topologyRelations", "must explicitly bind every Case topology relation once");
+  const checkpointSpatialCriteria =
+    parseFormalTraversalCheckpointSpatialCriteriaV1(
+      source.checkpointSpatialCriteria,
     );
-  }
-  const groupById = new Map(
-    authoringLayoutBinding.visualGroups.map((group) => [
-      group.visualGroupId,
-      group,
-    ]),
-  );
-  const checkpointSpatialCriteria = parseCheckpointSpatialCriteria(
-    source.checkpointSpatialCriteria,
-  );
-  const criteriaByCheckpointId = new Map(
-    checkpointSpatialCriteria.map((criterion) => [
-      criterion.checkpointId,
-      criterion,
-    ]),
-  );
+  const groupById = new Map(metadata.visualGroups.map((group) => [
+    group.visualGroupId, group,
+  ]));
+  const criteriaByCheckpointId = new Map(checkpointSpatialCriteria.map(
+    (criterion) => [criterion.checkpointId, criterion],
+  ));
   for (const criterion of checkpointSpatialCriteria) {
     const group = groupById.get(criterion.sourceVisualGroupId);
-    if (isNil(group)) {
-      fail(
-        "checkpointSpatialCriteria",
-        "criterion references a visual group outside the formal Layout binding",
-      );
-    }
-    if (!isEqual(criterion.sourceBoundsMeters, {
-      minimumMetersXYZ: group.minimumMetersXYZ,
-      maximumMetersXYZ: group.maximumMetersXYZ,
-    })) {
-      fail(
-        "checkpointSpatialCriteria",
-        "criterion bounds must equal the formal checked Layout group bounds",
-      );
-    }
+    const matchingColliderJoins = criterion.kind === "block-plane"
+      ? metadata.colliderJoins.filter(
+        ({ colliderId }) => colliderId === criterion.colliderId,
+      )
+      : [];
     if (
-      criterion.kind === "block-plane" &&
-      !contribution.staticColliders.some(({ id }) => id === criterion.colliderId)
-    ) {
-      fail(
-        "checkpointSpatialCriteria",
-        "block criterion colliderId must exist in the frozen Contribution",
-      );
-    }
+      isNil(group) ||
+      !isEqual(criterion.sourceBoundsMeters, {
+        minimumMetersXYZ: group.minimumMetersXYZ,
+        maximumMetersXYZ: group.maximumMetersXYZ,
+      }) ||
+      (criterion.kind === "block-plane" &&
+        (matchingColliderJoins.length !== 1 ||
+          !group.blockIds.includes(matchingColliderJoins[0]!.blockId)))
+    ) fail("checkpointSpatialCriteria", "must join verified Package metadata");
   }
-  const expectedCheckpointIds = reconstructionCase.expected.criticalTraversalChecks
-    .flatMap(({ checkpointIds }) => checkpointIds)
+  const expectedCheckpointIds = reconstructionCase.expected
+    .criticalTraversalChecks.flatMap(({ checkpointIds }) => checkpointIds)
     .sort();
-  const criterionCheckpointIds = checkpointSpatialCriteria
-    .map(({ checkpointId }) => checkpointId)
-    .sort();
-  if (!isEqual(criterionCheckpointIds, expectedCheckpointIds)) {
-    fail(
-      "checkpointSpatialCriteria",
-      "must bind every Case checkpoint exactly once without extras",
-    );
-  }
-  const bindings = Object.freeze(authoringLayoutBinding.visualGroups.map(
-    (group) => Object.freeze({
-      acceptanceTargetRef: group.acceptanceTargetRef,
-      blockVisualGroupId: group.visualGroupId,
-      semanticClassId: group.semanticClassId,
-      identityColor: group.identityColorHex,
-      projectedBoundsSource: "checked-layout-visual-group" as const,
-      requiredWorldViewIds:
-        ["opening", "world-side", "world-top-down"] as const,
-      authoringManifestHash: authoringLayoutBinding.authoringManifestHash,
-      layoutInventoryHash: authoringLayoutBinding.checkedLayoutInventoryHash,
-      contributionHash: authoringLayoutBinding.contributionHash,
-    })),
-  );
-  const traversalCheckBindings = Object.freeze(
-    reconstructionCase.expected.criticalTraversalChecks.map((check) =>
-      Object.freeze({
+  if (!isEqual(
+    checkpointSpatialCriteria.map(({ checkpointId }) => checkpointId).sort(),
+    expectedCheckpointIds,
+  )) fail("checkpointSpatialCriteria", "must bind every Case checkpoint exactly once");
+  return parseFormalSemanticCaptureMapV1({
+    kind: "formal-semantic-capture-map",
+    schemaVersion: 1,
+    id: `${reconstructionCase.id}.semantic-capture-map`,
+    caseRef: `worldkit://world-reconstruction-case/${reconstructionCase.id}`,
+    caseHash: metadata.caseHash,
+    authoringManifestHash: metadata.authoringManifestHash,
+    layoutInventoryHash: metadata.checkedLayoutInventoryHash,
+    contributionHash: metadata.contributionHash,
+    bindings: semanticCaptureTargetBindings.map((semanticBinding) => {
+      const group = groupById.get(semanticBinding.blockVisualGroupId)!;
+      return {
+        acceptanceTargetRef: semanticBinding.acceptanceTargetRef,
+        compositionTargetRef: semanticBinding.compositionTargetRef,
+        topologyNodeId: semanticBinding.topologyNodeId,
+        semanticLayerId: semanticBinding.semanticLayerId,
+        blockVisualGroupId: semanticBinding.blockVisualGroupId,
+        semanticClassId: group.semanticClassId,
+        identityColor: group.identityColorHex,
+        projectedBoundsSource: "checked-layout-visual-group",
+        requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
+        authoringManifestHash: metadata.authoringManifestHash,
+        layoutInventoryHash: metadata.checkedLayoutInventoryHash,
+        contributionHash: metadata.contributionHash,
+      };
+    }),
+    topologyRelations,
+    traversalCheckBindings: reconstructionCase.expected.criticalTraversalChecks
+      .map((check) => ({
         traversalCheckId: check.id,
         acceptanceTargetRef: check.acceptanceTargetRef,
         checkExpectation: check.expectation,
         fixedInputSequenceHash: sha256CanonicalJson(
           check.fixedInputSequence,
         ) as Sha256HashV1,
-        checkpointCriteria: Object.freeze(check.checkpointIds.map(
+        checkpointCriteria: check.checkpointIds.map(
           (checkpointId) => criteriaByCheckpointId.get(checkpointId)!,
-        )),
+        ),
       })),
-  );
-  return parseFormalSemanticCaptureMapV1({
-    kind: "formal-semantic-capture-map",
-    schemaVersion: 1,
-    id: `${reconstructionCase.id}.semantic-capture-map`,
-    caseRef: `worldkit://world-reconstruction-case/${reconstructionCase.id}`,
-    caseHash: hashWorldReconstructionCaseV1(reconstructionCase),
-    authoringManifestHash: authoringLayoutBinding.authoringManifestHash,
-    layoutInventoryHash: authoringLayoutBinding.checkedLayoutInventoryHash,
-    contributionHash: authoringLayoutBinding.contributionHash,
-    bindings,
-    traversalCheckBindings,
   });
 }

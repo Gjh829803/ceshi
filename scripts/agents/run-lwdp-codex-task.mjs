@@ -2,16 +2,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { basename, dirname, extname, isAbsolute, relative, resolve } from "node:path";
-import { mkdir, readFile, rm, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import {
-  assertSuccessfulJob,
-  downloadS3FileAtomic,
-  fetchGenerationItems,
   findGenerationJobByRequestId,
   joinS3Uri,
   loadLwdpGenerationConfig,
-  pollGenerationJob,
   submitCodexGenerationJob,
   submittedJobId,
   uploadS3File,
@@ -21,6 +17,18 @@ import {
   serializeCodexTaskOutcomeEnvelopeV1,
 } from "../lib/codex-task-outcome.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
+import {
+  LWDP_CODEX_PENDING_JOURNAL_KIND,
+  createLwdpCodexStagingDirectory,
+  createPendingJournal,
+  declaredOutputUris,
+  lwdpCodexRequestArgumentFingerprint,
+  reconcileLwdpCodexSameRequestId,
+  removeLwdpCodexStagingDirectory,
+  removePendingJournal,
+  transitionPendingJournal,
+  validateDeclaredOutputDestinations,
+} from "./lwdp-codex-same-id-recovery.mjs";
 
 function parseArguments(argv) {
   const result = { contexts: [], assets: [], outputs: [] };
@@ -93,7 +101,10 @@ const emitOutcome = (outcome) => {
   }));
 };
 
-if (args.reconcileOnly) {
+const canFullyRecover = Boolean(
+  args.outputS3Prefix && args.instructionFile && args.outputs.length > 0,
+);
+if (args.reconcileOnly && !canFullyRecover) {
   try {
     const config = await loadLwdpGenerationConfig();
     const recovered = await findGenerationJobByRequestId(requestId, {
@@ -122,19 +133,47 @@ if (!args.outputS3Prefix) throw new Error("--output-s3-prefix is required.");
 if (!args.instructionFile) throw new Error("--instruction-file is required.");
 if (args.outputs.length === 0) throw new Error("At least one --output is required.");
 
-const stagingRoot = resolve(repoRoot, ".codex-tmp", "lwdp-codex", `${taskId}-${runToken}`);
+const outputSpecs = args.outputs.map((rawOutput) => {
+  const [remotePath, localPath, contentType = "application/octet-stream"] =
+    splitSpec(rawOutput, 2, "--output");
+  if (!remotePath || remotePath.startsWith("/") || remotePath.split("/").includes("..")) {
+    throw new Error(`Unsafe remote output path: ${remotePath}`);
+  }
+  return { remotePath, localPath: resolve(localPath), contentType };
+});
+const callerInstruction = await readFile(resolve(args.instructionFile), "utf8");
+const instructionSha256 = createHash("sha256").update(callerInstruction).digest("hex");
+const outputUriSet = declaredOutputUris(args.outputS3Prefix, taskId, outputSpecs);
+const pendingDefaults = {
+  model: executionProfile.model,
+  reasoning_effort: executionProfile.reasoningEffort,
+  sandbox: "workspace-write",
+  timeout_seconds: Number(args.timeoutSeconds || 1_800),
+};
+const stagingRoot = await createLwdpCodexStagingDirectory(repoRoot, `${taskId}-${runToken}`);
 const smokeMode = process.env.WORLDKIT_LWDP_CLIENT_SMOKE === "1";
-await mkdir(stagingRoot, { recursive: true });
+let stagingRemoved = false;
+const cleanupStaging = async () => {
+  if (stagingRemoved) return;
+  await removeLwdpCodexStagingDirectory(repoRoot, stagingRoot);
+  stagingRemoved = true;
+};
 
 try {
-  try {
   const taskAssets = [];
+  const pendingUploads = [];
+  const inputContents = [];
+  if (!smokeMode) {
+    await validateDeclaredOutputDestinations(repoRoot, outputSpecs);
+  }
   if (args.contexts.length > 0) {
     const contextPaths = args.contexts.map((item) => safeContextPath(repoRoot, item));
     const archivePath = resolve(stagingRoot, "workspace-context.tar.gz");
     await execFilePromise("tar", ["-czf", archivePath, "-C", repoRoot, ...contextPaths], repoRoot);
+    const contextSha256 = createHash("sha256").update(await readFile(archivePath)).digest("hex");
     const contextUri = joinS3Uri(args.outputS3Prefix, "inputs", taskId, "workspace-context.tar.gz");
-    if (!smokeMode) await uploadS3File(archivePath, contextUri);
+    if (!smokeMode) pendingUploads.push({ localPath: archivePath, s3Uri: contextUri });
+    inputContents.push({ id: "workspace-context", sha256: contextSha256 });
     taskAssets.push({
       id: "workspace-context",
       name: "workspace-context.tar.gz",
@@ -152,23 +191,15 @@ try {
     const absolutePath = resolve(localPath);
     const metadata = await stat(absolutePath);
     if (!metadata.isFile() || metadata.size === 0) throw new Error(`Asset is not a non-empty file: ${localPath}`);
-    const digest = createHash("sha256").update(await readFile(absolutePath)).digest("hex").slice(0, 16);
+    const contentSha256 = createHash("sha256").update(await readFile(absolutePath)).digest("hex");
+    const digest = contentSha256.slice(0, 16);
     const suffix = extname(absolutePath).toLowerCase();
     const s3Uri = joinS3Uri(args.outputS3Prefix, "inputs", taskId, `${id}-${digest}${suffix}`);
-    if (!smokeMode) await uploadS3File(absolutePath, s3Uri);
+    if (!smokeMode) pendingUploads.push({ localPath: absolutePath, s3Uri });
+    inputContents.push({ id, sha256: contentSha256 });
     taskAssets.push({ id, name: `${id}${suffix}`, s3_uri: s3Uri, media_type: mediaType, attach_as: attachAs });
   }
 
-  const outputSpecs = args.outputs.map((rawOutput) => {
-    const [remotePath, localPath, contentType = "application/octet-stream"] =
-      splitSpec(rawOutput, 2, "--output");
-    if (!remotePath || remotePath.startsWith("/") || remotePath.split("/").includes("..")) {
-      throw new Error(`Unsafe remote output path: ${remotePath}`);
-    }
-    return { remotePath, localPath: resolve(localPath), contentType };
-  });
-
-  const callerInstruction = await readFile(resolve(args.instructionFile), "utf8");
   const workspaceProtocol = args.contexts.length > 0
     ? `\n\nCloud workspace protocol:\n- Locate the input asset named workspace-context.tar.gz in the host-provided Input assets list and extract it into the current task working directory before reading project paths.\n- Treat extracted files and other attached inputs as read-only context.\n- Write only the host-declared output files at their exact Declared outputs paths.\n- Do not access credentials, unrelated directories, or external services. Host-provided built-in tools explicitly required by the caller instruction, such as image generation, are allowed.\n- The trusted local host performs contract validation after delivery; do not claim validation you did not run.`
     : "";
@@ -176,12 +207,7 @@ try {
     job_name: args.jobName || `worldkit ${taskId}`,
     request_id: requestId,
     output_s3_prefix: args.outputS3Prefix,
-    defaults: {
-      model: executionProfile.model,
-      reasoning_effort: executionProfile.reasoningEffort,
-      sandbox: "workspace-write",
-      timeout_seconds: Number(args.timeoutSeconds || 1_800),
-    },
+    defaults: pendingDefaults,
     tasks: [{
       id: taskId,
       instruction: `${callerInstruction}${workspaceProtocol}`,
@@ -193,6 +219,26 @@ try {
       })),
     }],
     dry_run: Boolean(args.dryRun),
+  };
+  const ownerToken = randomBytes(16).toString("hex");
+  const pendingJournal = {
+    kind: LWDP_CODEX_PENDING_JOURNAL_KIND,
+    schemaVersion: 1,
+    requestId,
+    taskId,
+    outputS3Prefix: args.outputS3Prefix,
+    declaredOutputUris: outputUriSet,
+    outputs: outputSpecs,
+    requestArgumentFingerprint: lwdpCodexRequestArgumentFingerprint({
+      payload,
+      localOutputs: outputSpecs,
+      inputContents,
+    }),
+    instructionSha256,
+    defaults: pendingDefaults,
+    phase: "prepared",
+    ownerToken,
+    jobId: null,
   };
 
   const defaultSubmitAttempts = 1;
@@ -208,46 +254,97 @@ try {
     process.stdout.write(
       `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} dispatch=single-task-fast-path tasks=1 profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} assets=${taskAssets.length} outputs=${outputSpecs.length}\n`,
     );
+    await cleanupStaging();
     emitOutcome("completed");
     process.exit(0);
   }
 
   const config = await loadLwdpGenerationConfig();
-  const submitted = await submitCodexGenerationJob(payload, { config });
-  const jobId = submittedJobId(submitted);
-  if (submitted.recovered_by_request_id === true) {
-    process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
-  }
-  process.stdout.write(
-    `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
-  );
-  if (args.dryRun) {
-    process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
+  const ownership = await createPendingJournal(pendingJournal, { repoRoot });
+  if (!ownership.created || args.reconcileOnly) {
+    if (ownership.created && args.reconcileOnly) {
+      await removePendingJournal(repoRoot, requestId);
+      throw new Error("LWDP same-request-id recovery pending journal is missing.");
+    }
+    await reconcileLwdpCodexSameRequestId({
+      repoRoot,
+      current: pendingJournal,
+      config,
+    });
+    process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
+    await cleanupStaging();
     emitOutcome("completed");
     process.exit(0);
   }
-  const job = await pollGenerationJob(jobId, {
-    config,
-    onProgress: (current) => process.stdout.write(
-      `WORLDKIT_LWDP_PROGRESS ${taskId} ${current.status} ${JSON.stringify(current.counters || {})}\n`,
-    ),
-  });
-  const items = await fetchGenerationItems(jobId, { config });
-  assertSuccessfulJob(job, items, [taskId]);
-  for (const output of outputSpecs) {
-    await downloadS3FileAtomic(
-      joinS3Uri(args.outputS3Prefix, "tasks", taskId, output.remotePath),
-      output.localPath,
+
+  try {
+    for (const upload of pendingUploads) {
+      await uploadS3File(upload.localPath, upload.s3Uri);
+    }
+  } catch (error) {
+    await removePendingJournal(repoRoot, requestId);
+    throw error;
+  }
+
+  let submissionUnknownJournal;
+  try {
+    submissionUnknownJournal = await transitionPendingJournal(
+      { ...pendingJournal, phase: "submission-unknown" },
+      {
+        repoRoot,
+        expectedPhase: "prepared",
+        expectedOwnerToken: ownerToken,
+      },
     );
+  } catch (error) {
+    await removePendingJournal(repoRoot, requestId);
+    throw error;
   }
+
+  try {
+    // The durable unknown phase is intentionally the final local operation before the one POST.
+    const submitted = await submitCodexGenerationJob(payload, { config });
+    const jobId = submittedJobId(submitted);
+    await transitionPendingJournal(
+      { ...submissionUnknownJournal, phase: "attached", jobId },
+      {
+        repoRoot,
+        expectedPhase: "submission-unknown",
+        expectedOwnerToken: ownerToken,
+      },
+    );
+    if (submitted.recovered_by_request_id === true) {
+      process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+    }
+    process.stdout.write(
+      `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
+    );
+    if (args.dryRun) {
+      process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
+      await removePendingJournal(repoRoot, requestId);
+      await cleanupStaging();
+      emitOutcome("completed");
+      process.exit(0);
+    }
+  } catch (error) {
+    if (!(error instanceof CodexTaskOutcomeError) || error.outcomeCode !== "creation-outcome-unknown") {
+      throw error;
+    }
+  }
+
+  await reconcileLwdpCodexSameRequestId({
+    repoRoot,
+    current: pendingJournal,
+    config,
+  });
   process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
-  } finally {
-    await rm(stagingRoot, { recursive: true, force: true });
-  }
+  await cleanupStaging();
   emitOutcome("completed");
 } catch (error) {
   emitOutcome(error instanceof CodexTaskOutcomeError
     ? error.outcomeCode
     : "task-rejected");
   throw error;
+} finally {
+  await cleanupStaging();
 }

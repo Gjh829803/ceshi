@@ -898,6 +898,9 @@ Request Runtime deep review against the exact commit, fix P0/P1 with focused gat
 - Modify: `packages/native-babylon-block-profile/src/profile-settlement.test.ts`
 - Modify: `packages/native-babylon-block-profile/src/babylon-visual-adapter.ts`
 - Modify: `packages/native-babylon-block-profile/src/babylon-visual-adapter.test.ts`
+- Create: `packages/native-babylon-block-profile/src/materializer-metadata.ts`
+- Create: `packages/native-babylon-block-profile/src/live-handle-registry.ts`
+- Modify: `packages/native-babylon-block-profile/src/host-evidence.ts`
 - Modify: `scripts/native-scene/native-package-input.ts`
 - Modify: `scripts/native-scene/native-package-input.test.ts`
 - Modify: `packages/world-package/src/package-build.ts`
@@ -920,7 +923,11 @@ Require complete materializer output rather than the current opaque fingerprint 
 const metadata = parseBabylonNativeBlockMaterializerMetadataV1({
   kind: "babylon-native-block-materializer-metadata",
   schemaVersion: 1,
-  blockProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  caseHash,
+  authoringManifestHash,
+  checkedLayoutInventoryHash,
+  contributionHash,
   profileInventoryHash,
   settledVisualHash,
   blocks: sortedBlocks,
@@ -947,26 +954,27 @@ Expected: FAIL because the complete trusted inventory is not a Package member.
 
 - [ ] **Step 4: Emit metadata from the trusted materializer and join BNA-3**
 
-The trusted Block visual adapter writes immutable capture metadata while materializing each checked Block:
+The trusted Block visual adapter publishes Host-private live handles while materializing each checked
+Block:
 
 ```ts
-mesh.metadata = Object.freeze({
-  ...mesh.metadata,
-  worldkitEntityId: `native-block:${block.id}`,
-  semanticClassId: `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
+liveHandles.register({
+  runtimeEntityId: `native-block:${block.id}`,
+  semanticCaptureClassId: `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
+  mesh,
 });
 ```
 
 These values are Host/Profile-defined from checked IDs, not copied from arbitrary Module Mesh metadata.
-The profile settlement fingerprint includes both fields and rejects any mutation before Candidate
-publication/replay. Change the Block profile settlement owner to return both that committed fingerprint
-and immutable metadata:
+The same checked records create immutable serialized metadata; the live registry remains Host-private and
+is never serialized. NBR-45B consumes only this explicit registry and verified Package metadata, never
+`scene.meshes`, Mesh name/tag/metadata, or a raw authoring Layout. Change the Block profile settlement
+owner to expose its committed fingerprint and immutable metadata assembly inputs:
 
 ```ts
 export interface SettledBabylonNativeBlockProfileV1 {
   readonly profileInventoryHash: Sha256HashV1;
-  readonly metadata: BabylonNativeBlockMaterializerMetadataV1;
-  readonly metadataHash: Sha256HashV1;
+  readonly colliderInventory: readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
 }
 ```
 
@@ -1000,8 +1008,8 @@ Request BNA-3 identity/tamper review, close every P0/P1, merge PR E1, and refres
 - Modify: `packages/native-babylon-block-profile/src/index.ts`
 
 **Interfaces:**
-- Consumes: the parsed Case, the NBR-30-owned `NativeBlockAuthoringLayoutBindingV1`, and the frozen Contribution identity. NBR-45A must not parse `native-block-authoring.json` again or define a second Layout-inventory hash.
-- Produces: parsed/hashable `FormalSemanticCaptureMapV1`, `FormalArtifactViewRequestV1`, `FormalWorldCaptureReceiptV1`, and `bindBlockVisualGroupsToSemanticCaptureTargetsV1()`; no Browser or Runtime operation.
+- Consumes: the parsed Case, verified Package-owned `BabylonNativeBlockMaterializerMetadataV1`, and the frozen Contribution identity. NBR-45A must not parse `native-block-authoring.json` or checked Layout again, nor define a second identity inventory.
+- Produces: parsed/hashable `FormalSemanticCaptureMapV1`, `FormalArtifactViewRequestV1`, `FormalWorldCaptureReceiptV1`, and `bindBlockMaterializerMetadataToSemanticCaptureTargetsV1()`; no Browser or Runtime operation.
 
 - [ ] **Step 1: Write RED formal Capture contract tests**
 
@@ -1023,14 +1031,19 @@ Reject BWB `scope: "build-epoch-local"`, a mismatched Package/Attempt/Capture ha
 Do not treat Block group IDs as sufficient formal evidence. Define:
 
 ```ts
-export function bindBlockVisualGroupsToSemanticCaptureTargetsV1(input: Readonly<{
+export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(input: Readonly<{
   case: WorldReconstructionCaseV1;
-  authoringLayoutBinding: NativeBlockAuthoringLayoutBindingV1;
+  materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
+  materializerMetadataHash: Sha256HashV1;
   contribution: BabylonNativeSceneContributionV1;
 }>): FormalSemanticCaptureMapV1;
 ```
 
-The NBR-30 binding is the sole parser/hash owner for the uppercase `#RRGGBB` identity-color dialect, authoring Manifest identity, checked Layout inventory identity and Case target-to-group join. Its `caseHash` binds that verified join to the exact parsed Case; NBR-45A compares this field with its parsed Case rather than introducing another authoring or Layout hash. The output carries those already-verified facts into formal Capture and adds projected-bounds source plus required world views. Test stale binding/Contribution, extra target and deterministic sort order. No mapping may be inferred from Mesh/tag/name, and this task must not duplicate the NBR-30 parser or hash only a reduced visual-group array.
+The NBR-45P materializer metadata parser is the sole identity owner for the uppercase `#RRGGBB`
+identity-color dialect, authoring Manifest hash, checked Layout inventory hash, Case target-to-group join,
+runtime entity IDs and Collider joins. NBR-45A compares its `caseHash` and `contributionHash` with the parsed
+Case and Frozen Contribution rather than introducing another inventory. Test stale metadata/Contribution,
+extra target and deterministic sort order. No mapping may be inferred from Mesh/tag/name.
 
 - [ ] **Step 3: Run RED contract tests**
 
@@ -1044,7 +1057,9 @@ Expected: FAIL because the formal contracts and Block semantic identity join do 
 
 `FormalWorldCaptureReceiptV1` binds Case/Profile, Route/Attempt/Result, WorldPackage Ref/Root, WorldBuildIdentity, Build Receipt, Runtime session/ready Snapshot, SDK owner version identities, semantic capture map hash, view Camera inputs, viewport/DPR, renderer/browser identity, PNG hashes, collider overlay hash, scripted traversal hash, Camera rollback, Reset, and cleanup.
 
-`bindBlockVisualGroupsToSemanticCaptureTargetsV1()` reparses the exact Case and the frozen Contribution, then consumes the NBR-30-owned `NativeBlockAuthoringLayoutBindingV1` without redefining its Manifest, uppercase identity-color or Layout-inventory hash rules. Formal evidence uses semantic target refs from this map; raw Block group IDs remain source evidence only.
+`bindBlockMaterializerMetadataToSemanticCaptureTargetsV1()` reparses the exact Case, verified Package
+metadata and Frozen Contribution. Formal evidence uses semantic target refs from this map; raw authoring
+Manifest/Layout inputs and Block group IDs are not a second Capture authority.
 
 - [ ] **Step 5: Run GREEN contract tests and commit PR E0**
 
@@ -1069,30 +1084,54 @@ Request contract review, close every P0/P1, merge PR E0, and refresh `origin/mai
 - Modify: `apps/native-scene-playground/src/hosted-runtime-bridge.ts`
 - Modify: `apps/native-scene-playground/src/hosted-runtime-bridge.test.ts`
 - Modify: `apps/native-scene-playground/src/hosted-runtime-frame.ts`
+- Create: `packages/runtime-babylon/src/formal-world-capture-provider.ts`
+- Create: `packages/runtime-babylon/src/formal-world-capture-provider.test.ts`
+- Modify: `packages/runtime-babylon/src/babylon-native-isolated-runtime-entry.ts`
+- Modify: `packages/runtime-babylon/src/babylon-native-isolated-runtime-entry.test.ts`
+- Modify: `packages/runtime-contracts/src/formal-world-capture.ts`
+- Modify: `packages/runtime-contracts/src/formal-world-capture.test.ts`
+- Modify: `packages/native-babylon-block-profile/src/formal-capture-identity.ts`
+- Modify: `packages/native-babylon-block-profile/src/formal-capture-identity.test.ts`
 - Modify: `scripts/cli/worldkit.ts`
 - Modify: `scripts/cli/worldkit.test.ts`
 
 **Interfaces:**
 - Consumes: one verified Package, completed Attempt/Result, `FormalSemanticCaptureMapV1`, frozen Collider Contribution, and one BNA-5 admitted Hosted Runtime Session.
-- Produces: opening PNG, world top-down PNG, world side PNG, collider-overlay PNG, scripted traversal evidence, and `FormalWorldCaptureReceiptV1` bound to one Package/Runtime session.
+- Produces: opening PNG, world top-down PNG, world side PNG, collider-overlay PNG, four measured observation documents, and `FormalWorldCaptureReceiptV1` bound to one Package/Runtime session.
+
+- [ ] **Step 0: Close the measured-evidence contract before Runtime implementation**
+
+Extend the existing `FormalSemanticCaptureMapV1`, rather than creating another inventory, so every Package
+visual group has an explicit acceptance-target, composition-target, topology-node and layer binding. The
+mapping input is explicit Case-specific Capture intent; validators require complete one-to-one target coverage
+and reject suffix/name/bounds inference. Topology relations remain requested measurements and are emitted as
+observed only when Package bounds, SDK support/collider evidence or scripted traversal proves them.
+
+Current-only replace the Receipt's ambiguous overlay/traversal hash fields with explicit artifact ref/hash
+pairs. Every view gains a PNG artifact ref. Add refs/hashes for `opening-observation.json`,
+`spawn-support-observation.json`, `collider-overlay.png`, `collider-overlay-observation.json` and
+`scripted-traversal.json`. Each JSON artifact binds Package Root, Build Identity, formal request, stable Runtime
+session, reset-ready Snapshot and its domain owner identity. Do not retain aliases or a second identity parser.
 
 - [ ] **Step 1: Write RED Hosted Session capture tests**
 
-The command must capture through the BNA-5 admitted Hosted Session transport, not by importing a Native Module directly into the CLI process. Inject this port:
+The command must capture through the BNA-5 admitted Hosted Session transport, not by importing a Native Module
+directly into the CLI process. The bridge exposes one bounded internal transaction, not a bag of general
+Runtime/Camera/Input methods:
 
 ```ts
 export interface HostedWorldCaptureSessionPortV1 {
-  ready(): Promise<WorldRuntimeSnapshotV4>;
-  reset(): Promise<WorldRuntimeSnapshotV4>;
-  runFixedInput(frames: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
-  captureScreenshot(): Promise<string>;
-  captureArtifactView(request: FormalArtifactViewRequestV1): Promise<string>;
-  colliderInventory(): Promise<FrozenColliderCaptureInventoryV1>;
+  executeFormalCapture(
+    request: FormalWorldCaptureRequestV1,
+  ): Promise<FormalHostedWorldCapturePayloadV1>;
   dispose(): Promise<void>;
 }
 ```
 
-Test session-origin mismatch, ready timeout, stale Snapshot after reset, world-side request accidentally mapped to right-side object tri-view, screenshot before render-ready, Camera rollback failure, Browser exit, Server exit, and disposal failure.
+Test session-origin mismatch, ready timeout, stale Snapshot after reset, reset Candidate publication failure,
+world-side request accidentally mapped to right-side object tri-view, capture before render-ready, missing/extra
+live visual group, unresolved/ambiguous support collider, missing live Havok body/overlay, unmeasured traversal
+checkpoint, Camera rollback failure, Browser exit, Server exit, partial Candidate cleanup and disposal failure.
 
 - [ ] **Step 2: Run RED Hosted Capture tests**
 
@@ -1104,7 +1143,10 @@ Expected: FAIL because the Hosted same-session capture command does not exist.
 
 - [ ] **Step 3: Implement Hosted Session capture orchestration including world side view**
 
-`captureHostedWorldPackageV1()` starts the admitted Native Package through the retained BNA verification Harness/Hosted Session, waits for the existing verification bridge to report ready, resets, waits for render readiness, and captures:
+`captureHostedWorldPackageV1()` starts the admitted Native Package through the retained BNA verification
+Harness/Hosted Session and asks that one session to execute a single parsed Capture transaction. The existing
+isolated entry uses its existing `RuntimeHost.resetWithInitialControlBinding()` path, keeps the Runtime session
+identity stable, publishes a fresh WorldSession Candidate, waits for render readiness, and captures:
 
 1. `opening`: SDK opening Camera state;
 2. `world-top-down`: bounded orthographic/Host artifact pose covering Case world bounds;
@@ -1113,16 +1155,30 @@ Expected: FAIL because the Hosted same-session capture command does not exist.
 
 Artifact Camera transactions save the committed SDK Camera state and restore it before session cleanup. Fixed-input traversal checkpoints execute in the same session and record committed Snapshot hashes, positions, movement medium, pass/block outcomes, and exact input ticks. They do not publish Route Graph, NavMesh, path planning, or `goTo` evidence.
 
+The provider also emits the four measured observation documents defined in the design. Opening projections
+come from Package-frozen group AABBs plus the SDK Camera and verified live-handle registry; support comes from
+the one SDK support path; collider evidence comes from Frozen Contribution plus the SDK-owned Havok registry;
+traversal comes from committed fixed-tick Snapshots. Case expected values never enter measurement. Each
+traversal check starts from its own Host reset/bind Snapshot. The Node orchestrator hashes and atomically
+publishes artifacts, closes Browser/server/session/temporary resources in reverse order, then writes the
+Receipt last.
+
 This trusted artifact renderer/Capture path is an evidence tool, not a product Viewer. It must not register the Package in the Unified Viewer Catalog, add a Native branch to `apps/playground`, or change Studio/`worldkit run` source selection.
 
 - [ ] **Step 4: Extend `worldkit capture` for verified Package directories**
 
-The existing `capture` parser accepts the Package directory and requires `--triview-output`; for Package input, that directory contains `world-top-down.png`, `world-side.png`, `collider-overlay.png`, `scripted-traversal.json`, and `formal-world-capture-receipt.json`. `--output` remains the opening PNG. Canonical file Capture remains its existing source form; there is one command and one input-kind switch after verification, not `native capture`.
+The existing `capture` parser accepts the Package directory and requires `--triview-output`; for Package input,
+that directory contains `world-top-down.png`, `world-side.png`, `opening-observation.json`,
+`spawn-support-observation.json`, `collider-overlay.png`, `collider-overlay-observation.json`,
+`scripted-traversal.json`, and `formal-world-capture-receipt.json`. `--output` remains the opening PNG. Canonical
+file Capture remains its existing source form; there is one command and one input-kind switch after
+verification, not `native capture`.
 
 - [ ] **Step 5: Run GREEN Capture/runtime tests**
 
 ```bash
 pnpm exec vitest run scripts/reconstruction/hosted-session-capture.test.ts scripts/reconstruction/formal-capture.test.ts apps/native-scene-playground/src/hosted-runtime-bridge.test.ts scripts/cli/worldkit.test.ts
+pnpm exec vitest run packages/runtime-contracts/src/formal-world-capture.test.ts packages/native-babylon-block-profile/src/formal-capture-identity.test.ts packages/runtime-babylon/src/formal-world-capture-provider.test.ts packages/runtime-babylon/src/babylon-native-isolated-runtime-entry.test.ts
 pnpm typecheck
 pnpm build:native-scene
 git diff --check

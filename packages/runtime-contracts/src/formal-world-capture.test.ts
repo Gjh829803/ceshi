@@ -2,18 +2,30 @@ import { sha256CanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol
 import { describe, expect, it } from "vitest";
 
 import {
+  MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1,
+  MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1,
+  MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1,
   formalArtifactViewRequestCanonicalBytesV1,
   formalSemanticCaptureMapCanonicalBytesV1,
   formalWorldCaptureRequestCanonicalBytesV1,
   formalWorldCaptureReceiptCanonicalBytesV1,
   hashFormalArtifactViewRequestV1,
   hashFormalColliderOverlayRequestV1,
+  hashFormalColliderOverlayObservationV1,
+  hashFormalOpeningObservationV1,
   hashFormalSemanticCaptureMapV1,
   hashFormalScriptedTraversalRequestV1,
+  hashFormalScriptedTraversalObservationV1,
+  hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureRequestV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalArtifactViewRequestV1,
+  parseFormalColliderOverlayObservationV1,
+  parseFormalOpeningObservationV1,
   parseFormalSemanticCaptureMapV1,
+  parseFormalScriptedTraversalRequestV1,
+  parseFormalScriptedTraversalObservationV1,
+  parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureRequestV1,
   parseFormalWorldCaptureReceiptV1,
 } from "./formal-world-capture.js";
@@ -55,15 +67,26 @@ function snapshotFixture(
           capabilityStatesById: {
             "locomotion:player": {
               id: "locomotion:player",
-              kind: "locomotion-capability-state",
+              kind: "locomotion-capability-state-v2",
               ownerEntityId: "player",
               locomotionCapabilityRef:
                 "worldkit://locomotion-capability/ground.standard@1",
               locomotionCapabilityHash: H("a"),
-              mode: "idle",
-              movementMedium: "ground",
-              facingYawRadians: 0,
-              speedMetersPerSecond: 0,
+              locomotion: {
+                schemaVersion: 2,
+                status: "active",
+                mobilityMode: "grounded",
+                gait: "idle",
+                verticalPhase: "none",
+                supportMode: "supported",
+                movementMedium: "ground",
+                facingYawRadians: 0,
+                linearVelocity: { x: 0, y: 0, z: 0 },
+                horizontalSpeedMetersPerSecond: 0,
+                committedTick: 4,
+                phaseEnteredTick: 0,
+                transitionSequence: 0,
+              },
             },
           },
         },
@@ -111,6 +134,38 @@ function snapshotFixture(
   };
 }
 
+function legacyLocomotionSnapshotFixture(): WorldRuntimeSnapshotV4 {
+  const snapshot = snapshotFixture();
+  const player = snapshot.world.subjectStatesByEntityId.player!;
+  return parseWorldRuntimeSnapshotV4({
+    ...snapshot,
+    world: {
+      ...snapshot.world,
+      subjectStatesByEntityId: {
+        ...snapshot.world.subjectStatesByEntityId,
+        player: {
+          ...player,
+          capabilityStatesById: {
+            ...player.capabilityStatesById,
+            "locomotion:player": {
+              id: "locomotion:player",
+              kind: "locomotion-capability-state",
+              ownerEntityId: "player",
+              locomotionCapabilityRef:
+                "worldkit://locomotion-capability/ground.standard@1",
+              locomotionCapabilityHash: H("a"),
+              mode: "idle",
+              movementMedium: "ground",
+              facingYawRadians: 0,
+              speedMetersPerSecond: 0,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 const WORLD_BOUNDS = {
   minimumMetersXYZ: [-40, 0, -40],
   maximumMetersXYZ: [40, 24, 40],
@@ -133,6 +188,13 @@ const FIXED_INPUT_SEQUENCE = [
 ] as const;
 
 const FIXED_INPUT_SEQUENCE_HASH = sha256CanonicalJson(FIXED_INPUT_SEQUENCE);
+const MINIMAL_FIXED_INPUT_SEQUENCE = [{
+  actions: ["move-forward"],
+  ticks: 1,
+}] as const;
+const MINIMAL_FIXED_INPUT_SEQUENCE_HASH = sha256CanonicalJson(
+  MINIMAL_FIXED_INPUT_SEQUENCE,
+);
 
 function traversalCheckpointCriteria() {
   return [
@@ -217,6 +279,7 @@ function viewRecord(
     viewId: request.viewId,
     request,
     requestHash: hashFormalArtifactViewRequestV1(request),
+    pngArtifactRef: `artifact://case/cloud-temple/capture/${request.viewId}.png`,
     pngContentHash: Hx(pngByte),
   };
 }
@@ -264,6 +327,9 @@ function semanticMapValue() {
     bindings: [
       {
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+        compositionTargetRef: "worldkit://composition-target/central-ascent@1",
+        topologyNodeId: "central-ascent",
+        semanticLayerId: "ground",
         blockVisualGroupId: "central-ascent-group",
         semanticClassId: "worldkit.native-block.group.central-ascent-group",
         identityColor: "#C9A96B",
@@ -275,6 +341,9 @@ function semanticMapValue() {
       },
       {
         acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+        compositionTargetRef: "worldkit://composition-target/upper-t-junction@1",
+        topologyNodeId: "upper-t-junction",
+        semanticLayerId: "upper",
         blockVisualGroupId: "upper-t-junction-group",
         semanticClassId: "worldkit.native-block.group.upper-t-junction-group",
         identityColor: "#AEB8C4",
@@ -285,6 +354,13 @@ function semanticMapValue() {
         contributionHash: H("f"),
       },
     ],
+    topologyRelations: [{
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
+    }],
     traversalCheckBindings: [
       {
         traversalCheckId: "reach-junction",
@@ -323,6 +399,8 @@ function formalRequestValue() {
     kind: "formal-world-capture-request",
     schemaVersion: 1,
     id: "cloud-temple.attempt-0.formal-capture-request",
+    formalRequestRef:
+      "artifact://case/cloud-temple/attempts/0/formal-world-capture-request.json",
     caseRef: "worldkit://world-reconstruction-case/cloud-temple.case",
     caseHash: H("c"),
     evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
@@ -347,15 +425,35 @@ function formalRequestValue() {
       "artifact://case/cloud-temple/attempts/0/semantic-capture-map.json",
     semanticCaptureMap,
     semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticCaptureMap),
-    nativeBlockCaptureIdentityInventoryRef:
-      "world-package://native/block-capture-identity-inventory.json",
-    nativeBlockCaptureIdentityInventoryHash: H("6"),
     nativeBlockMaterializerMetadataRef:
       "world-package://native/block-materializer-metadata.json",
     nativeBlockMaterializerMetadataHash: H("7"),
     views: [openingRequest(), worldSideRequest(), worldTopDownRequest()],
     colliderOverlay,
     scriptedTraversal,
+  } as const;
+}
+
+function minimalScriptedTraversalRequest(checkCount: number) {
+  return {
+    kind: "formal-scripted-traversal-request",
+    schemaVersion: 1,
+    checks: Array.from({ length: checkCount }, (_unused, index) => ({
+      id: `check-${String(index).padStart(2, "0")}`,
+      acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+      checkExpectation: "pass",
+      fixedInputSequence: MINIMAL_FIXED_INPUT_SEQUENCE,
+      fixedInputSequenceHash: MINIMAL_FIXED_INPUT_SEQUENCE_HASH,
+      checkpointCriteria: [{
+        kind: "reach-bounds",
+        checkpointId: "checkpoint",
+        expectation: "reach",
+        sourceVisualGroupId: "central-ascent-group",
+        sourceBoundsMeters: CENTRAL_ASCENT_BOUNDS,
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
+      }],
+    })),
   } as const;
 }
 
@@ -391,8 +489,6 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
     readySnapshotHash: sha256CanonicalJson(readySnapshot),
     sdkOwnerIdentities: sdkOwnerIdentities(),
     semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
-    nativeBlockCaptureIdentityInventoryHash:
-      formalRequest.nativeBlockCaptureIdentityInventoryHash,
     nativeBlockMaterializerMetadataHash:
       formalRequest.nativeBlockMaterializerMetadataHash,
     colliderOverlayRequestHash:
@@ -409,8 +505,21 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
       viewRecord(worldSideRequest(), "b2"),
       viewRecord(worldTopDownRequest(), "c3"),
     ],
-    colliderOverlayHash: Hx("d4"),
-    scriptedTraversalHash: Hx("e5"),
+    openingObservationArtifactRef:
+      "artifact://case/cloud-temple/capture/opening-observation.json",
+    openingObservationContentHash: Hx("d4"),
+    spawnSupportObservationArtifactRef:
+      "artifact://case/cloud-temple/capture/spawn-support-observation.json",
+    spawnSupportObservationContentHash: Hx("e5"),
+    colliderOverlayPngArtifactRef:
+      "artifact://case/cloud-temple/capture/collider-overlay.png",
+    colliderOverlayPngContentHash: Hx("f6"),
+    colliderOverlayObservationArtifactRef:
+      "artifact://case/cloud-temple/capture/collider-overlay-observation.json",
+    colliderOverlayObservationContentHash: Hx("a7"),
+    scriptedTraversalArtifactRef:
+      "artifact://case/cloud-temple/capture/scripted-traversal.json",
+    scriptedTraversalContentHash: Hx("b8"),
     cameraRollbackOutcome: "completed",
     resetOutcome: "completed",
     cleanupOutcome: "completed",
@@ -418,8 +527,11 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
 }
 
 describe("FormalWorldCaptureRequestV1", () => {
-  it("freezes one Package-bound Capture transaction including semantic, inventory, overlay, and traversal identities", () => {
+  it("freezes one Package-bound Capture transaction with one materializer inventory authority", () => {
     const request = parseFormalWorldCaptureRequestV1(formalRequestValue());
+    expect(request.formalRequestRef).toBe(
+      "artifact://case/cloud-temple/attempts/0/formal-world-capture-request.json",
+    );
     expect(request.worldPackageRootHash).toBe(PACKAGE_ROOT);
     expect(request.semanticCaptureMap.caseHash).toBe(request.caseHash);
     expect(request.scriptedTraversal.checks[0]?.checkpointCriteria.map(
@@ -431,6 +543,22 @@ describe("FormalWorldCaptureRequestV1", () => {
     expect(formalWorldCaptureRequestCanonicalBytesV1(request)).toEqual(
       formalWorldCaptureRequestCanonicalBytesV1(formalRequestValue()),
     );
+  });
+
+  it("requires the Request to carry its own stable artifact identity", () => {
+    const { formalRequestRef: _removed, ...request } = formalRequestValue();
+    expect(() => parseFormalWorldCaptureRequestV1(request)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_REQUEST_INVALID",
+    );
+  });
+
+  it("rejects the removed shadow capture identity inventory fields", () => {
+    expect(() => parseFormalWorldCaptureRequestV1({
+      ...formalRequestValue(),
+      nativeBlockCaptureIdentityInventoryRef:
+        "world-package://native/block-capture-identity-inventory.json",
+      nativeBlockCaptureIdentityInventoryHash: H("6"),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_REQUEST_INVALID");
   });
 
   it("rejects checkpoint strings without package-derived spatial criteria", () => {
@@ -488,6 +616,46 @@ describe("FormalWorldCaptureRequestV1", () => {
     expect(hashFormalWorldCaptureRequestV1(changedRequest)).not.toBe(
       hashFormalWorldCaptureRequestV1(original),
     );
+  });
+});
+
+describe("FormalScriptedTraversalRequestV1", () => {
+  it("accepts the frozen maximum of 16 minimal checks", () => {
+    expect(MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1).toBe(16);
+    expect(parseFormalScriptedTraversalRequestV1(
+      minimalScriptedTraversalRequest(16),
+    ).checks).toHaveLength(16);
+  });
+
+  it("rejects 17 checks before RuntimeHost reset budgeting", () => {
+    expect(() => parseFormalScriptedTraversalRequestV1(
+      minimalScriptedTraversalRequest(17),
+    )).toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
+  });
+
+  it("rejects zero-tick checks and bounds both per-check and transaction ticks", () => {
+    expect(MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1).toBe(1_200);
+    expect(MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1).toBe(7_200);
+    const withTicks = (checkCount: number, ticks: number) => {
+      const request = minimalScriptedTraversalRequest(checkCount);
+      return {
+        ...request,
+        checks: request.checks.map((check) => {
+          const fixedInputSequence = [{ actions: ["move-forward"], ticks }];
+          return {
+            ...check,
+            fixedInputSequence,
+            fixedInputSequenceHash: sha256CanonicalJson(fixedInputSequence),
+          };
+        }),
+      };
+    };
+    expect(() => parseFormalScriptedTraversalRequestV1(withTicks(1, 0)))
+      .toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
+    expect(() => parseFormalScriptedTraversalRequestV1(withTicks(1, 1_201)))
+      .toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
+    expect(() => parseFormalScriptedTraversalRequestV1(withTicks(7, 1_200)))
+      .toThrowError("FORMAL_SCRIPTED_TRAVERSAL_REQUEST_INVALID");
   });
 });
 
@@ -571,6 +739,26 @@ describe("FormalSemanticCaptureMapV1", () => {
         "worldkit://acceptance-target/central-ascent@1",
         "worldkit://acceptance-target/upper-t-junction@1",
       ]);
+    expect(parsed.bindings.map(({ compositionTargetRef, topologyNodeId, semanticLayerId }) => ({
+      compositionTargetRef,
+      topologyNodeId,
+      semanticLayerId,
+    }))).toEqual([{
+      compositionTargetRef: "worldkit://composition-target/central-ascent@1",
+      topologyNodeId: "central-ascent",
+      semanticLayerId: "ground",
+    }, {
+      compositionTargetRef: "worldkit://composition-target/upper-t-junction@1",
+      topologyNodeId: "upper-t-junction",
+      semanticLayerId: "upper",
+    }]);
+    expect(parsed.topologyRelations).toEqual([{
+      fromNodeId: "central-ascent",
+      relation: "connects-to",
+      toNodeId: "upper-t-junction",
+      measurementSource: "scripted-traversal",
+      traversalCheckId: "reach-junction",
+    }]);
     expect(hashFormalSemanticCaptureMapV1(parsed)).toBe(
       hashFormalSemanticCaptureMapV1(semanticMapValue()),
     );
@@ -600,6 +788,311 @@ describe("FormalSemanticCaptureMapV1", () => {
       meshName: "ascent-mesh",
     })).toThrowError("FORMAL_SEMANTIC_CAPTURE_MAP_INVALID");
   });
+
+  it("rejects incomplete or inferred semantic mapping fields", () => {
+    const missing = structuredClone(semanticMapValue()) as Record<string, unknown>;
+    delete (missing.bindings as Array<Record<string, unknown>>)[0]!.compositionTargetRef;
+    expect(() => parseFormalSemanticCaptureMapV1(missing)).toThrowError(
+      "FORMAL_SEMANTIC_CAPTURE_MAP_INVALID",
+    );
+    expect(() => parseFormalSemanticCaptureMapV1({
+      ...semanticMapValue(),
+      inferredCompositionTargetBySlug: true,
+    })).toThrowError("FORMAL_SEMANTIC_CAPTURE_MAP_INVALID");
+    const missingProof = structuredClone(semanticMapValue());
+    delete (missingProof.topologyRelations[0] as Record<string, unknown>)
+      .traversalCheckId;
+    expect(() => parseFormalSemanticCaptureMapV1(missingProof)).toThrowError(
+      "FORMAL_SEMANTIC_CAPTURE_MAP_INVALID",
+    );
+  });
+
+  it("closes every topology measurement source over an executable proof binding", () => {
+    const relations = [
+      {
+        fromNodeId: "central-ascent",
+        relation: "above",
+        toNodeId: "upper-t-junction",
+        measurementSource: "package-bounds",
+        fromVisualGroupId: "central-ascent-group",
+        toVisualGroupId: "upper-t-junction-group",
+      },
+      {
+        fromNodeId: "central-ascent",
+        relation: "above",
+        toNodeId: "upper-t-junction",
+        measurementSource: "sdk-support",
+        subjectEntityId: "player",
+        colliderId: "spawn-ground",
+      },
+      {
+        fromNodeId: "central-ascent",
+        relation: "blocks",
+        toNodeId: "upper-t-junction",
+        measurementSource: "sdk-collider",
+        colliderId: "t-west-wall",
+        sourceVisualGroupId: "upper-t-junction-group",
+      },
+    ] as const;
+    for (const relation of relations) {
+      const parsed = parseFormalSemanticCaptureMapV1({
+        ...semanticMapValue(),
+        topologyRelations: [relation],
+      });
+      expect(parsed.topologyRelations[0]).toEqual(relation);
+    }
+  });
+});
+
+function observationIdentity(
+  kind: string,
+  ownerId: "camera" | "physics" | "input",
+  resetReadySnapshot = snapshotFixture(),
+) {
+  const formalRequest = formalRequestValue();
+  return {
+    kind,
+    schemaVersion: 1,
+    id: `cloud-temple.${kind}`,
+    worldPackageRef: WORLD_PACKAGE_REF,
+    worldPackageRootHash: PACKAGE_ROOT,
+    worldBuildIdentityRef:
+      "artifact://case/cloud-temple/attempts/0/world-build-identity.json",
+    worldBuildIdentityHash: H("2"),
+    formalRequestRef:
+      "artifact://case/cloud-temple/attempts/0/formal-world-capture-request.json",
+    formalRequest,
+    formalRequestHash: hashFormalWorldCaptureRequestV1(formalRequest),
+    semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticMapValue()),
+    runtimeSessionId: resetReadySnapshot.runtimeSessionId,
+    resetReadySnapshot,
+    resetReadySnapshotHash: sha256CanonicalJson(resetReadySnapshot),
+    domainOwnerIdentity: sdkOwnerIdentities().find((owner) => owner.ownerId === ownerId)!,
+  };
+}
+
+function openingObservationVisualGroups() {
+  return [{
+    acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+    compositionTargetRef: "worldkit://composition-target/central-ascent@1",
+    topologyNodeId: "central-ascent",
+    semanticLayerId: "ground",
+    blockVisualGroupId: "central-ascent-group",
+    sourceBoundsMeters: CENTRAL_ASCENT_BOUNDS,
+    normalizedBounds: {
+      minXBasisPoints: 100,
+      minYBasisPoints: 200,
+      maxXBasisPoints: 500,
+      maxYBasisPoints: 800,
+    },
+    normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+    coverageBasisPoints: 2_400,
+    cameraDepthMeters: 12.5,
+    depthOrder: 1,
+  }, {
+    acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+    compositionTargetRef: "worldkit://composition-target/upper-t-junction@1",
+    topologyNodeId: "upper-t-junction",
+    semanticLayerId: "upper",
+    blockVisualGroupId: "upper-t-junction-group",
+    sourceBoundsMeters: UPPER_T_JUNCTION_BOUNDS,
+    normalizedBounds: {
+      minXBasisPoints: 600,
+      minYBasisPoints: 100,
+      maxXBasisPoints: 900,
+      maxYBasisPoints: 400,
+    },
+    normalizedCenter: { xBasisPoints: 750, yBasisPoints: 250 },
+    coverageBasisPoints: 900,
+    cameraDepthMeters: 8,
+    depthOrder: 0,
+  }];
+}
+
+describe("formal measured observation documents", () => {
+  it("parses and hashes opening projection measurements without Case expected pixels", () => {
+    const value = {
+      ...observationIdentity("formal-opening-observation", "camera"),
+      visualGroups: openingObservationVisualGroups(),
+      observedTopologyRelations: [],
+    };
+    const parsed = parseFormalOpeningObservationV1(value);
+    expect(parsed.visualGroups[0]?.blockVisualGroupId).toBe("central-ascent-group");
+    expect(hashFormalOpeningObservationV1(parsed)).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(() => parseFormalOpeningObservationV1({
+      ...value,
+      observedTopologyRelations: [{
+        fromNodeId: "central-ascent",
+        relation: "connects-to",
+        toNodeId: "upper-t-junction",
+      }],
+    })).toThrowError("FORMAL_OPENING_OBSERVATION_INVALID");
+  });
+
+  it("parses measured support and rejects a stale reset Snapshot join", () => {
+    const value = {
+      ...observationIdentity("formal-spawn-support-observation", "physics"),
+      spawnMarkerId: "player-spawn",
+      subjectEntityId: "player",
+      supportContact: {
+        colliderId: "spawn-ground",
+        sourceBlockId: "central-ascent-block",
+        surfaceEntityId: "spawn-ground",
+        logicalSubshapeId: "primary",
+        pointMetersXYZ: [0, 0, 2],
+      },
+      capsuleFootPointMetersXYZ: [0, 0.02, 2],
+      supportGapMillimeters: 20,
+      movementMedium: "ground",
+      observedTopologyRelations: [],
+    };
+    const parsed = parseFormalSpawnSupportObservationV1(value);
+    expect(parsed.supportContact.colliderId).toBe("spawn-ground");
+    expect(hashFormalSpawnSupportObservationV1(parsed)).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(() => parseFormalSpawnSupportObservationV1({
+      ...value,
+      resetReadySnapshotHash: H("9"),
+    })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+  });
+
+  it("rejects legacy flat locomotion support state even when the medium agrees", () => {
+    const resetReadySnapshot = legacyLocomotionSnapshotFixture();
+    expect(() => parseFormalSpawnSupportObservationV1({
+      ...observationIdentity(
+        "formal-spawn-support-observation",
+        "physics",
+        resetReadySnapshot,
+      ),
+      spawnMarkerId: "player-spawn",
+      subjectEntityId: "player",
+      supportContact: {
+        colliderId: "spawn-ground",
+        sourceBlockId: "central-ascent-block",
+        surfaceEntityId: "spawn-ground",
+        logicalSubshapeId: "primary",
+        pointMetersXYZ: [0, 0, 2],
+      },
+      capsuleFootPointMetersXYZ: [0, 0.02, 2],
+      supportGapMillimeters: 20,
+      movementMedium: "ground",
+      observedTopologyRelations: [],
+    })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+  });
+
+  it("rejects support evidence that disagrees with nested committed movement medium", () => {
+    expect(() => parseFormalSpawnSupportObservationV1({
+      ...observationIdentity("formal-spawn-support-observation", "physics"),
+      spawnMarkerId: "player-spawn",
+      subjectEntityId: "player",
+      supportContact: {
+        colliderId: "spawn-ground",
+        sourceBlockId: "central-ascent-block",
+        surfaceEntityId: "spawn-ground",
+        logicalSubshapeId: "primary",
+        pointMetersXYZ: [0, 0, 2],
+      },
+      capsuleFootPointMetersXYZ: [0, 0.02, 2],
+      supportGapMillimeters: 20,
+      movementMedium: "air",
+      observedTopologyRelations: [],
+    })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+  });
+
+  it("parses complete frozen-collider overlay joins", () => {
+    const value = {
+      ...observationIdentity("formal-collider-overlay-observation", "physics"),
+      colliders: [{
+        colliderId: "spawn-ground",
+        sourceBlockId: "central-ascent-block",
+        physicsBodyId: "physics-body:spawn-ground",
+        colliderSubshapeId: "collider-subshape:spawn-ground",
+        overlayRecordId: "overlay:spawn-ground",
+      }],
+      observedTopologyRelations: [],
+    };
+    const parsed = parseFormalColliderOverlayObservationV1(value);
+    expect(parsed.colliders).toHaveLength(1);
+    expect(hashFormalColliderOverlayObservationV1(parsed)).toMatch(
+      /^sha256:[a-f0-9]{64}$/,
+    );
+    expect(() => parseFormalColliderOverlayObservationV1({
+      ...value,
+      colliders: [{
+        ...value.colliders[0],
+        colliderSubshapeId: undefined,
+        logicalSubshapeId: "primary",
+      }],
+    })).toThrowError("FORMAL_COLLIDER_OVERLAY_OBSERVATION_INVALID");
+  });
+
+  it("parses independent-reset traversal ticks and measured checkpoints", () => {
+    const checkResetReadySnapshot = snapshotFixture();
+    const value = {
+      ...observationIdentity("formal-scripted-traversal-observation", "input"),
+      checks: [{
+        id: "reach-junction",
+        acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+        checkExpectation: "pass",
+        resetReadySnapshot: checkResetReadySnapshot,
+        resetReadySnapshotHash: sha256CanonicalJson(checkResetReadySnapshot),
+        fixedTicks: [{
+          tick: 1,
+          fixedInputStepIndex: 0,
+          committedSnapshotHash: H("8"),
+          positionMetersXYZ: [0, 1, 1.5],
+          movementMedium: "ground",
+        }],
+        checkpoints: [{
+          checkpointId: "junction",
+          outcome: "reached",
+          observedAtTick: 1,
+        }],
+        outcome: "passed",
+        observedTopologyRelations: [{
+          fromNodeId: "central-ascent",
+          relation: "connects-to",
+          toNodeId: "upper-t-junction",
+        }],
+      }],
+    };
+    const parsed = parseFormalScriptedTraversalObservationV1(value);
+    expect(parsed.checks[0]?.fixedTicks[0]?.tick).toBe(1);
+    expect(hashFormalScriptedTraversalObservationV1(parsed)).toMatch(
+      /^sha256:[a-f0-9]{64}$/,
+    );
+  });
+
+  it("rejects accessors and unknown fields in every measured observation parser", () => {
+    const value = {
+      ...observationIdentity("formal-opening-observation", "camera"),
+      visualGroups: [],
+      observedTopologyRelations: [],
+    };
+    Object.defineProperty(value, "guessedBounds", { get: () => [0, 1] });
+    expect(() => parseFormalOpeningObservationV1(value)).toThrowError(
+      "FORMAL_OPENING_OBSERVATION_INVALID",
+    );
+  });
+
+  it("joins every observation Package and Build identity to its embedded Request", () => {
+    const value = {
+      ...observationIdentity("formal-opening-observation", "camera"),
+      visualGroups: openingObservationVisualGroups(),
+      observedTopologyRelations: [],
+    };
+    expect(() => parseFormalOpeningObservationV1({
+      ...value,
+      worldBuildIdentityHash: H("9"),
+    })).toThrowError("FORMAL_OPENING_OBSERVATION_INVALID");
+    expect(() => parseFormalOpeningObservationV1({
+      ...value,
+      semanticCaptureMapHash: H("9"),
+    })).toThrowError("FORMAL_OPENING_OBSERVATION_INVALID");
+    expect(() => parseFormalOpeningObservationV1({
+      ...value,
+      formalRequestRef: "artifact://case/cloud-temple/attempts/0/stale-request.json",
+    })).toThrowError("FORMAL_OPENING_OBSERVATION_INVALID");
+  });
 });
 
 describe("FormalWorldCaptureReceiptV1", () => {
@@ -610,6 +1103,11 @@ describe("FormalWorldCaptureReceiptV1", () => {
       "opening",
       "world-side",
       "world-top-down",
+    ]);
+    expect(receipt.views.map(({ pngArtifactRef }) => pngArtifactRef)).toEqual([
+      "artifact://case/cloud-temple/capture/opening.png",
+      "artifact://case/cloud-temple/capture/world-side.png",
+      "artifact://case/cloud-temple/capture/world-top-down.png",
     ]);
     expect(receipt.worldPackageRootHash).toBe(PACKAGE_ROOT);
     expect(receipt.runtimeSessionId).toBe(runtimeSnapshot.runtimeSessionId);
@@ -671,9 +1169,15 @@ describe("FormalWorldCaptureReceiptV1", () => {
     expect(() => parseFormalWorldCaptureReceiptV1(staleRequest)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
     );
-    const staleInventory = receiptValue();
-    staleInventory.nativeBlockCaptureIdentityInventoryHash = H("0");
-    expect(() => parseFormalWorldCaptureReceiptV1(staleInventory)).toThrowError(
+    const staleMaterializer = receiptValue();
+    staleMaterializer.nativeBlockMaterializerMetadataHash = H("0");
+    expect(() => parseFormalWorldCaptureReceiptV1(staleMaterializer)).toThrowError(
+      "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
+    );
+    const staleRequestRef = receiptValue();
+    staleRequestRef.formalRequestRef =
+      "artifact://case/cloud-temple/attempts/0/stale-request.json";
+    expect(() => parseFormalWorldCaptureReceiptV1(staleRequestRef)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
     );
   });
@@ -724,13 +1228,24 @@ describe("FormalWorldCaptureReceiptV1", () => {
   it("rejects an absent collider overlay when formal overlay evidence is required", () => {
     expect(() => parseFormalWorldCaptureReceiptV1({
       ...receiptValue(),
-      colliderOverlayHash: `sha256:${"0".repeat(64)}`,
+      colliderOverlayPngContentHash: `sha256:${"0".repeat(64)}`,
     })).toThrowError("FORMAL_WORLD_CAPTURE_RECEIPT_INVALID");
     const missing = receiptValue() as Record<string, unknown>;
-    delete missing.colliderOverlayHash;
+    delete missing.colliderOverlayPngArtifactRef;
     expect(() => parseFormalWorldCaptureReceiptV1(missing)).toThrowError(
       "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
     );
+  });
+
+  it("rejects removed ambiguous overlay and traversal hash aliases", () => {
+    expect(() => parseFormalWorldCaptureReceiptV1({
+      ...receiptValue(),
+      colliderOverlayHash: H("4"),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_RECEIPT_INVALID");
+    expect(() => parseFormalWorldCaptureReceiptV1({
+      ...receiptValue(),
+      scriptedTraversalHash: H("5"),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_RECEIPT_INVALID");
   });
 
   it("rejects failed Camera rollback, Reset, or cleanup", () => {
@@ -757,6 +1272,7 @@ describe("FormalWorldCaptureReceiptV1", () => {
         viewId: "right",
       } as unknown as ReturnType<typeof worldSideRequest>,
       requestHash: H("q"),
+      pngArtifactRef: "artifact://case/cloud-temple/capture/right.png",
       pngContentHash: H("q"),
     };
     expect(() => parseFormalWorldCaptureReceiptV1(receipt)).toThrowError(

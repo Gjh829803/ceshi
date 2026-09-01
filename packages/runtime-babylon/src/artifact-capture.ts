@@ -8,6 +8,12 @@ import type { Material } from "@babylonjs/core/Materials/material.js";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
+import type { FormalWorldBoundsMetersV1 } from "@whitebox-world/runtime-contracts";
+
+import {
+  fitOrthographicBoundsToWorldExtentsV1,
+  orientCameraAtExactPose,
+} from "./formal-world-camera.js";
 
 export interface BabylonArtifactProjectedBoundsV1 {
   readonly centerRatioXY: readonly [number, number];
@@ -59,12 +65,36 @@ export type BabylonArtifactCaptureRequestV1 =
       maximumHeightMeters: number;
     }>
   | Readonly<{
+      kind: "world-side";
+      widthPixels: number;
+      heightPixels: number;
+      worldBoundsMeters: FormalWorldBoundsMetersV1;
+      cameraPositionMetersXYZ: readonly [number, number, number];
+      targetMetersXYZ: readonly [number, number, number];
+    }>
+  | Readonly<{
       kind: "entity-triview";
       widthPixels: number;
       heightPixels: number;
       entityIds: readonly string[];
       identityColor: string;
     }>;
+
+function fitOrthographicCameraToWorldBounds(
+  camera: FreeCamera,
+  bounds: FormalWorldBoundsMetersV1,
+  aspect: number,
+): void {
+  const fitted = fitOrthographicBoundsToWorldExtentsV1(
+    bounds,
+    camera.getViewMatrix(true),
+    aspect,
+  );
+  camera.orthoLeft = fitted.orthoLeft;
+  camera.orthoRight = fitted.orthoRight;
+  camera.orthoTop = fitted.orthoTop;
+  camera.orthoBottom = fitted.orthoBottom;
+}
 
 function renderingCanvas(engine: AbstractEngine): HTMLCanvasElement {
   const canvas = engine.getRenderingCanvas();
@@ -309,7 +339,33 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       return renderTriview(scene, engine, request);
     }
     engine.setSize(request.widthPixels, request.heightPixels, true);
-    if (request.kind === "top-down") {
+    if (request.kind === "world-side") {
+      const cameraPosition = new Vector3(...request.cameraPositionMetersXYZ);
+      temporaryCamera = new FreeCamera(
+        "worldkit.artifact.world-side",
+        cameraPosition.clone(),
+        scene,
+      );
+      temporaryCamera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+      temporaryCamera.minZ = 0.01;
+      temporaryCamera.upVector.copyFromFloats(0, 1, 0);
+      // Babylon 9.23 TargetCamera.setTarget nudges position.z by Epsilon when
+      // position.z equals target.z. Reapply the exact formal pose through the
+      // installed Babylon look-at and quaternion math after it initializes the
+      // TargetCamera focal distance.
+      orientCameraAtExactPose(
+        temporaryCamera,
+        cameraPosition,
+        new Vector3(...request.targetMetersXYZ),
+        scene.useRightHandedSystem,
+      );
+      fitOrthographicCameraToWorldBounds(
+        temporaryCamera,
+        request.worldBoundsMeters,
+        request.widthPixels / request.heightPixels,
+      );
+      scene.activeCamera = temporaryCamera;
+    } else if (request.kind === "top-down") {
       const aspect = request.widthPixels / request.heightPixels;
       const worldAspect = request.sizeMetersXZ[0] / request.sizeMetersXZ[1];
       const halfWidth = worldAspect > aspect

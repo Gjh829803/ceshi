@@ -7,6 +7,11 @@ import { isNil } from "lodash-es";
 
 // Persistent, Babylon-free contributions are owned by Runtime Contracts.
 
+const STANDARD_NATIVE_SCENE_PROFILE_REF =
+  "worldkit://native-scene-profile/whitebox.standard@1" as const;
+export const BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 =
+  "worldkit://native-scene-profile/whitebox.blocks@1" as const;
+
 export type BabylonNativeTraversalBindingInputV1 =
   | Readonly<{ kind: "not-traversable" }>
   | Readonly<{
@@ -48,11 +53,11 @@ export interface BabylonNativeStaticColliderContributionV1 {
 export type BabylonNativeProfileSettlementReceiptV1 =
   | Readonly<{
       kind: "none";
-      profileRef: "worldkit://native-scene-profile/whitebox.standard@1";
+      profileRef: typeof STANDARD_NATIVE_SCENE_PROFILE_REF;
     }>
   | Readonly<{
       kind: "host-snapshot";
-      profileRef: "worldkit://native-scene-profile/whitebox.blocks@1";
+      profileRef: typeof BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
       targetCount: number;
       profileInventoryHash: `sha256:${string}`;
       settledVisualHash: `sha256:${string}`;
@@ -111,11 +116,6 @@ const NATIVE_SCENE_REF_PATTERN =
 const TRAVERSAL_PROFILE_REF_PATTERN =
   /^worldkit:\/\/traversal-surface-profile\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$/;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const STANDARD_NATIVE_SCENE_PROFILE_REF =
-  "worldkit://native-scene-profile/whitebox.standard@1";
-const BLOCK_NATIVE_SCENE_PROFILE_REF =
-  "worldkit://native-scene-profile/whitebox.blocks@1";
-
 function invalidContribution(): never {
   throw new TypeError(
     "Value must match the closed BabylonNativeSceneContributionV1 schema.",
@@ -468,7 +468,7 @@ export function parseBabylonNativeProfileSettlementReceiptV1(
       "settledVisualHash",
     ]);
     if (
-      record.profileRef !== BLOCK_NATIVE_SCENE_PROFILE_REF ||
+      record.profileRef !== BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 ||
       typeof record.targetCount !== "number" ||
       !Number.isSafeInteger(record.targetCount) ||
       record.targetCount < 0 ||
@@ -479,7 +479,7 @@ export function parseBabylonNativeProfileSettlementReceiptV1(
     ) return invalidContribution();
     return Object.freeze({
       kind: "host-snapshot",
-      profileRef: BLOCK_NATIVE_SCENE_PROFILE_REF,
+      profileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
       targetCount: record.targetCount,
       profileInventoryHash: record.profileInventoryHash as `sha256:${string}`,
       settledVisualHash: record.settledVisualHash as `sha256:${string}`,

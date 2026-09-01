@@ -17,6 +17,7 @@ import {
   hashBabylonNativeAssetLockV1,
   hashBabylonNativeDependencyLockV1,
   hashBabylonNativeSceneContributionV1,
+  hashBabylonNativeBlockMaterializerMetadataV1,
   hashBabylonNativeSceneBootstrapV1,
   hashNativeSceneCheckResultV1,
   nativeSceneModuleBundleRefFromHashV1,
@@ -24,6 +25,7 @@ import {
   parseBabylonNativeDependencyLockV1,
   parseBabylonNativeSceneBootstrapV1,
   parseBabylonNativeSceneContributionV1,
+  parseBabylonNativeBlockMaterializerMetadataV1,
   parseBabylonNativeSceneModuleBundleManifestV1,
   parseNativeSceneCheckResultV1,
   worldResourceLockEntriesV1,
@@ -34,6 +36,7 @@ import {
   type BabylonNativeDependencyLockV1,
   type BabylonNativeSceneBootstrapV1,
   type BabylonNativeSceneContributionV1,
+  type BabylonNativeBlockMaterializerMetadataV1,
   type BabylonNativeSceneModuleBundleManifestV1,
   type NativeSceneCheckResultV1,
   type NativeSceneModuleBundleRefV1,
@@ -125,6 +128,8 @@ export interface VerifiedBabylonNativeWorldPackageDirectoryV1 {
     readonly outcome: "passed";
   };
   readonly nativeSceneContribution: BabylonNativeSceneContributionV1;
+  readonly nativeBlockMaterializerMetadata?:
+    BabylonNativeBlockMaterializerMetadataV1;
   readonly gameplayBootstrap: GameplayBootstrapV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
@@ -333,6 +338,9 @@ function verifyNativeDirectory(
     manifest.legal.noticePath,
     ...manifest.legal.licenseDocuments.map(({ path }) => path),
     ...manifest.resources.map(({ packagePath }) => packagePath),
+    ...(source.nativeMaterializer.kind === "babylon-native-block"
+      ? [source.nativeMaterializer.metadataPath]
+      : []),
   ]);
   assertExactRootPaths(receipt, fixedPaths);
 
@@ -378,6 +386,15 @@ function verifyNativeDirectory(
   const nativeSceneContribution = parseBabylonNativeSceneContributionV1(
     parseCanonicalJson(requireFile(filesByPath, source.nativeSceneContributionPath)),
   );
+  const nativeBlockMaterializerMetadata =
+    source.nativeMaterializer.kind === "babylon-native-block"
+      ? parseBabylonNativeBlockMaterializerMetadataV1(
+        parseCanonicalJson(requireFile(
+          filesByPath,
+          source.nativeMaterializer.metadataPath,
+        )),
+      )
+      : undefined;
   const gameplayBootstrap = parseGameplayBootstrapV1(
     parseCanonicalJson(requireFile(
       filesByPath,
@@ -422,6 +439,16 @@ function verifyNativeDirectory(
     !isEqual(registryLock, manifest.lockedResources)
   ) invalid("manifest.json", "Native component hashes do not match parsed files");
 
+  if (
+    source.nativeMaterializer.kind === "babylon-native-block" &&
+    (
+      isNil(nativeBlockMaterializerMetadata) ||
+      hashBabylonNativeBlockMaterializerMetadataV1(
+        nativeBlockMaterializerMetadata,
+      ) !== source.nativeMaterializer.metadataHash
+    )
+  ) invalid("manifest.json", "Native Block materializer metadata hash mismatch");
+
   assertBabylonNativeWorldPackageMembershipV1({
     nativeSceneBootstrap,
     sceneModuleBundleManifest,
@@ -432,6 +459,9 @@ function verifyNativeDirectory(
     sceneAuthoringAttemptResult,
     nativeSceneCheckResult,
     nativeSceneContribution,
+    ...(isNil(nativeBlockMaterializerMetadata)
+      ? {}
+      : { nativeBlockMaterializerMetadata }),
     gameplayBootstrap,
     worldRuntimeBootstrap,
     worldPackageBuildReceipt: receipt,
@@ -549,6 +579,9 @@ function verifyNativeDirectory(
     sceneAuthoringAttemptResult: completedAttemptResult,
     nativeSceneCheckResult: passedCheckResult,
     nativeSceneContribution,
+    ...(isNil(nativeBlockMaterializerMetadata)
+      ? {}
+      : { nativeBlockMaterializerMetadata }),
     gameplayBootstrap,
     worldRuntimeBootstrap,
     registryLock,

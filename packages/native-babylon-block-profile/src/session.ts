@@ -486,6 +486,7 @@ export function createBabylonNativeBlockProfileSessionV1(
             checkResult: checkedLayout.checkResult,
           },
           profileInventoryHash,
+          colliderInventory: colliders.inventory,
         });
         recordsById.clear();
         state = "finalized";

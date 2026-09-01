@@ -32,6 +32,12 @@ export const FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1 = Object.freeze([
 export type FormalWorldCaptureSdkOwnerIdV1 =
   (typeof FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1)[number];
 
+export const MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1 = 16 as const;
+export const MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1 =
+  1_200 as const;
+export const MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1 =
+  7_200 as const;
+
 export const FORMAL_SEMANTIC_CAPTURE_PROJECTED_BOUNDS_SOURCE_V1 =
   "checked-layout-visual-group" as const;
 
@@ -117,6 +123,9 @@ export type FormalArtifactViewRequestV1 =
 
 export interface FormalSemanticCaptureTargetBindingV1 {
   readonly acceptanceTargetRef: string;
+  readonly compositionTargetRef: string;
+  readonly topologyNodeId: string;
+  readonly semanticLayerId: string;
   readonly blockVisualGroupId: string;
   readonly semanticClassId: string;
   readonly identityColor: `#${string}`;
@@ -129,6 +138,49 @@ export interface FormalSemanticCaptureTargetBindingV1 {
   readonly authoringManifestHash: Sha256HashV1;
   readonly layoutInventoryHash: Sha256HashV1;
   readonly contributionHash: Sha256HashV1;
+}
+
+export const FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1 = Object.freeze([
+  "package-bounds",
+  "sdk-support",
+  "sdk-collider",
+  "scripted-traversal",
+] as const);
+
+export type FormalSemanticTopologyMeasurementSourceV1 =
+  (typeof FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1)[number];
+
+interface FormalSemanticTopologyRelationBindingBaseV1 {
+  readonly fromNodeId: string;
+  readonly relation: "connects-to" | "contains" | "above" | "blocks";
+  readonly toNodeId: string;
+}
+
+export type FormalSemanticTopologyRelationBindingV1 =
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "package-bounds";
+      fromVisualGroupId: string;
+      toVisualGroupId: string;
+    }>)
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "sdk-support";
+      subjectEntityId: string;
+      colliderId: string;
+    }>)
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "sdk-collider";
+      colliderId: string;
+      sourceVisualGroupId: string;
+    }>)
+  | (FormalSemanticTopologyRelationBindingBaseV1 & Readonly<{
+      measurementSource: "scripted-traversal";
+      traversalCheckId: string;
+    }>);
+
+export interface FormalObservedTopologyRelationV1 {
+  readonly fromNodeId: string;
+  readonly relation: "connects-to" | "contains" | "above" | "blocks";
+  readonly toNodeId: string;
 }
 
 export interface FormalSemanticTraversalCheckBindingV1 {
@@ -149,6 +201,7 @@ export interface FormalSemanticCaptureMapV1 {
   readonly layoutInventoryHash: Sha256HashV1;
   readonly contributionHash: Sha256HashV1;
   readonly bindings: readonly FormalSemanticCaptureTargetBindingV1[];
+  readonly topologyRelations: readonly FormalSemanticTopologyRelationBindingV1[];
   readonly traversalCheckBindings: readonly FormalSemanticTraversalCheckBindingV1[];
 }
 
@@ -178,6 +231,7 @@ export interface FormalWorldCaptureRequestV1 {
   readonly kind: "formal-world-capture-request";
   readonly schemaVersion: 1;
   readonly id: string;
+  readonly formalRequestRef: string;
   readonly caseRef: string;
   readonly caseHash: Sha256HashV1;
   readonly evaluationProfileRef: string;
@@ -197,8 +251,6 @@ export interface FormalWorldCaptureRequestV1 {
   readonly semanticCaptureMapRef: string;
   readonly semanticCaptureMap: FormalSemanticCaptureMapV1;
   readonly semanticCaptureMapHash: Sha256HashV1;
-  readonly nativeBlockCaptureIdentityInventoryRef: string;
-  readonly nativeBlockCaptureIdentityInventoryHash: Sha256HashV1;
   readonly nativeBlockMaterializerMetadataRef: string;
   readonly nativeBlockMaterializerMetadataHash: Sha256HashV1;
   readonly views: readonly [
@@ -220,7 +272,112 @@ export interface FormalWorldCaptureViewRecordV1 {
   readonly viewId: FormalWorldCaptureViewIdV1;
   readonly request: FormalArtifactViewRequestV1;
   readonly requestHash: Sha256HashV1;
+  readonly pngArtifactRef: string;
   readonly pngContentHash: Sha256HashV1;
+}
+
+export interface FormalMeasuredObservationIdentityV1 {
+  readonly id: string;
+  readonly worldPackageRef: string;
+  readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityRef: string;
+  readonly worldBuildIdentityHash: Sha256HashV1;
+  readonly formalRequestRef: string;
+  readonly formalRequest: FormalWorldCaptureRequestV1;
+  readonly formalRequestHash: Sha256HashV1;
+  readonly semanticCaptureMapHash: Sha256HashV1;
+  readonly runtimeSessionId: string;
+  readonly resetReadySnapshot: WorldRuntimeSnapshotV4;
+  readonly resetReadySnapshotHash: Sha256HashV1;
+  readonly domainOwnerIdentity: FormalWorldCaptureSdkOwnerIdentityV1;
+}
+
+export interface FormalOpeningObservationV1
+  extends FormalMeasuredObservationIdentityV1 {
+  readonly kind: "formal-opening-observation";
+  readonly schemaVersion: 1;
+  readonly visualGroups: readonly Readonly<{
+    acceptanceTargetRef: string;
+    compositionTargetRef: string;
+    topologyNodeId: string;
+    semanticLayerId: string;
+    blockVisualGroupId: string;
+    sourceBoundsMeters: FormalWorldBoundsMetersV1;
+    normalizedBounds: Readonly<{
+      minXBasisPoints: number;
+      minYBasisPoints: number;
+      maxXBasisPoints: number;
+      maxYBasisPoints: number;
+    }>;
+    normalizedCenter: Readonly<{
+      xBasisPoints: number;
+      yBasisPoints: number;
+    }>;
+    coverageBasisPoints: number;
+    cameraDepthMeters: number;
+    depthOrder: number;
+  }>[];
+  readonly observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
+}
+
+export interface FormalSpawnSupportObservationV1
+  extends FormalMeasuredObservationIdentityV1 {
+  readonly kind: "formal-spawn-support-observation";
+  readonly schemaVersion: 1;
+  readonly spawnMarkerId: string;
+  readonly subjectEntityId: string;
+  readonly supportContact: Readonly<{
+    colliderId: string;
+    sourceBlockId: string;
+    surfaceEntityId: string;
+    logicalSubshapeId: string;
+    pointMetersXYZ: readonly [number, number, number];
+  }>;
+  readonly capsuleFootPointMetersXYZ: readonly [number, number, number];
+  readonly supportGapMillimeters: number;
+  readonly movementMedium: "ground" | "air";
+  readonly observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
+}
+
+export interface FormalColliderOverlayObservationV1
+  extends FormalMeasuredObservationIdentityV1 {
+  readonly kind: "formal-collider-overlay-observation";
+  readonly schemaVersion: 1;
+  readonly colliders: readonly Readonly<{
+    colliderId: string;
+    sourceBlockId: string;
+    physicsBodyId: string;
+    colliderSubshapeId: string;
+    overlayRecordId: string;
+  }>[];
+  readonly observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
+}
+
+export interface FormalScriptedTraversalObservationV1
+  extends FormalMeasuredObservationIdentityV1 {
+  readonly kind: "formal-scripted-traversal-observation";
+  readonly schemaVersion: 1;
+  readonly checks: readonly Readonly<{
+    id: string;
+    acceptanceTargetRef: string;
+    checkExpectation: "pass" | "block";
+    resetReadySnapshot: WorldRuntimeSnapshotV4;
+    resetReadySnapshotHash: Sha256HashV1;
+    fixedTicks: readonly Readonly<{
+      tick: number;
+      fixedInputStepIndex: number;
+      committedSnapshotHash: Sha256HashV1;
+      positionMetersXYZ: readonly [number, number, number];
+      movementMedium: "ground" | "air";
+    }>[];
+    checkpoints: readonly Readonly<{
+      checkpointId: string;
+      outcome: "reached" | "passed" | "blocked";
+      observedAtTick: number;
+    }>[];
+    outcome: "passed" | "blocked";
+    observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
+  }>[];
 }
 
 export interface FormalWorldCaptureReceiptV1 {
@@ -251,7 +408,6 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly readySnapshotHash: Sha256HashV1;
   readonly sdkOwnerIdentities: readonly FormalWorldCaptureSdkOwnerIdentityV1[];
   readonly semanticCaptureMapHash: Sha256HashV1;
-  readonly nativeBlockCaptureIdentityInventoryHash: Sha256HashV1;
   readonly nativeBlockMaterializerMetadataHash: Sha256HashV1;
   readonly colliderOverlayRequestHash: Sha256HashV1;
   readonly scriptedTraversalRequestHash: Sha256HashV1;
@@ -261,8 +417,16 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly rendererIdentity: string;
   readonly browserIdentity: string;
   readonly views: readonly FormalWorldCaptureViewRecordV1[];
-  readonly colliderOverlayHash: Sha256HashV1;
-  readonly scriptedTraversalHash: Sha256HashV1;
+  readonly openingObservationArtifactRef: string;
+  readonly openingObservationContentHash: Sha256HashV1;
+  readonly spawnSupportObservationArtifactRef: string;
+  readonly spawnSupportObservationContentHash: Sha256HashV1;
+  readonly colliderOverlayPngArtifactRef: string;
+  readonly colliderOverlayPngContentHash: Sha256HashV1;
+  readonly colliderOverlayObservationArtifactRef: string;
+  readonly colliderOverlayObservationContentHash: Sha256HashV1;
+  readonly scriptedTraversalArtifactRef: string;
+  readonly scriptedTraversalContentHash: Sha256HashV1;
   readonly cameraRollbackOutcome: "completed";
   readonly resetOutcome: "completed";
   readonly cleanupOutcome: "completed";
@@ -303,10 +467,14 @@ const MAP_FIELDS = [
   "layoutInventoryHash",
   "contributionHash",
   "bindings",
+  "topologyRelations",
   "traversalCheckBindings",
 ] as const;
 const BINDING_FIELDS = [
   "acceptanceTargetRef",
+  "compositionTargetRef",
+  "topologyNodeId",
+  "semanticLayerId",
   "blockVisualGroupId",
   "semanticClassId",
   "identityColor",
@@ -315,6 +483,36 @@ const BINDING_FIELDS = [
   "authoringManifestHash",
   "layoutInventoryHash",
   "contributionHash",
+] as const;
+const TOPOLOGY_RELATION_BINDING_FIELDS = [
+  "fromNodeId",
+  "relation",
+  "toNodeId",
+  "measurementSource",
+] as const;
+const PACKAGE_BOUNDS_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "fromVisualGroupId",
+  "toVisualGroupId",
+] as const;
+const SDK_SUPPORT_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "subjectEntityId",
+  "colliderId",
+] as const;
+const SDK_COLLIDER_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "colliderId",
+  "sourceVisualGroupId",
+] as const;
+const SCRIPTED_TRAVERSAL_TOPOLOGY_RELATION_BINDING_FIELDS = [
+  ...TOPOLOGY_RELATION_BINDING_FIELDS,
+  "traversalCheckId",
+] as const;
+const OBSERVED_TOPOLOGY_RELATION_FIELDS = [
+  "fromNodeId",
+  "relation",
+  "toNodeId",
 ] as const;
 const TRAVERSAL_BINDING_FIELDS = [
   "traversalCheckId",
@@ -347,6 +545,7 @@ const FORMAL_REQUEST_FIELDS = [
   "kind",
   "schemaVersion",
   "id",
+  "formalRequestRef",
   "caseRef",
   "caseHash",
   "evaluationProfileRef",
@@ -366,8 +565,6 @@ const FORMAL_REQUEST_FIELDS = [
   "semanticCaptureMapRef",
   "semanticCaptureMap",
   "semanticCaptureMapHash",
-  "nativeBlockCaptureIdentityInventoryRef",
-  "nativeBlockCaptureIdentityInventoryHash",
   "nativeBlockMaterializerMetadataRef",
   "nativeBlockMaterializerMetadataHash",
   "views",
@@ -421,7 +618,6 @@ const RECEIPT_FIELDS = [
   "readySnapshotHash",
   "sdkOwnerIdentities",
   "semanticCaptureMapHash",
-  "nativeBlockCaptureIdentityInventoryHash",
   "nativeBlockMaterializerMetadataHash",
   "colliderOverlayRequestHash",
   "scriptedTraversalRequestHash",
@@ -431,8 +627,16 @@ const RECEIPT_FIELDS = [
   "rendererIdentity",
   "browserIdentity",
   "views",
-  "colliderOverlayHash",
-  "scriptedTraversalHash",
+  "openingObservationArtifactRef",
+  "openingObservationContentHash",
+  "spawnSupportObservationArtifactRef",
+  "spawnSupportObservationContentHash",
+  "colliderOverlayPngArtifactRef",
+  "colliderOverlayPngContentHash",
+  "colliderOverlayObservationArtifactRef",
+  "colliderOverlayObservationContentHash",
+  "scriptedTraversalArtifactRef",
+  "scriptedTraversalContentHash",
   "cameraRollbackOutcome",
   "resetOutcome",
   "cleanupOutcome",
@@ -441,6 +645,7 @@ const VIEW_RECORD_FIELDS = [
   "viewId",
   "request",
   "requestHash",
+  "pngArtifactRef",
   "pngContentHash",
 ] as const;
 const SDK_OWNER_FIELDS = [
@@ -449,6 +654,56 @@ const SDK_OWNER_FIELDS = [
   "implementationHash",
 ] as const;
 const BOUNDS_FIELDS = ["minimumMetersXYZ", "maximumMetersXYZ"] as const;
+const OBSERVATION_IDENTITY_FIELDS = [
+  "kind", "schemaVersion", "id", "worldPackageRef", "worldPackageRootHash",
+  "worldBuildIdentityRef", "worldBuildIdentityHash", "formalRequestRef",
+  "formalRequest", "formalRequestHash", "semanticCaptureMapHash", "runtimeSessionId",
+  "resetReadySnapshot", "resetReadySnapshotHash", "domainOwnerIdentity",
+] as const;
+const OPENING_OBSERVATION_FIELDS = [
+  ...OBSERVATION_IDENTITY_FIELDS, "visualGroups", "observedTopologyRelations",
+] as const;
+const OPENING_VISUAL_GROUP_FIELDS = [
+  "acceptanceTargetRef", "compositionTargetRef", "topologyNodeId",
+  "semanticLayerId", "blockVisualGroupId", "normalizedBounds",
+  "sourceBoundsMeters", "normalizedCenter", "coverageBasisPoints",
+  "cameraDepthMeters", "depthOrder",
+] as const;
+const NORMALIZED_BOUNDS_FIELDS = [
+  "minXBasisPoints", "minYBasisPoints", "maxXBasisPoints", "maxYBasisPoints",
+] as const;
+const NORMALIZED_CENTER_FIELDS = ["xBasisPoints", "yBasisPoints"] as const;
+const SPAWN_SUPPORT_OBSERVATION_FIELDS = [
+  ...OBSERVATION_IDENTITY_FIELDS, "spawnMarkerId", "subjectEntityId",
+  "supportContact", "capsuleFootPointMetersXYZ", "supportGapMillimeters",
+  "movementMedium", "observedTopologyRelations",
+] as const;
+const SUPPORT_CONTACT_FIELDS = [
+  "colliderId", "sourceBlockId", "surfaceEntityId", "logicalSubshapeId",
+  "pointMetersXYZ",
+] as const;
+const COLLIDER_OVERLAY_OBSERVATION_FIELDS = [
+  ...OBSERVATION_IDENTITY_FIELDS, "colliders", "observedTopologyRelations",
+] as const;
+const COLLIDER_OBSERVATION_FIELDS = [
+  "colliderId", "sourceBlockId", "physicsBodyId", "colliderSubshapeId",
+  "overlayRecordId",
+] as const;
+const SCRIPTED_TRAVERSAL_OBSERVATION_FIELDS = [
+  ...OBSERVATION_IDENTITY_FIELDS, "checks",
+] as const;
+const TRAVERSAL_OBSERVATION_CHECK_FIELDS = [
+  "id", "acceptanceTargetRef", "checkExpectation", "resetReadySnapshot",
+  "resetReadySnapshotHash", "fixedTicks", "checkpoints", "outcome",
+  "observedTopologyRelations",
+] as const;
+const TRAVERSAL_FIXED_TICK_FIELDS = [
+  "tick", "fixedInputStepIndex", "committedSnapshotHash", "positionMetersXYZ",
+  "movementMedium",
+] as const;
+const TRAVERSAL_CHECKPOINT_OBSERVATION_FIELDS = [
+  "checkpointId", "outcome", "observedAtTick",
+] as const;
 
 function fail(contract: string, path: string, message: string): never {
   throw new Error(
@@ -462,16 +717,25 @@ function assertAccessorFree(
   path = "",
   seen = new Set<object>(),
 ): void {
-  if (value === null || typeof value !== "object" || seen.has(value)) return;
+  if (value === null || typeof value !== "object") return;
+  if (seen.has(value)) fail(contract, path, "must be acyclic plain data");
   seen.add(value);
+  const prototype = Reflect.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== Array.prototype) {
+    fail(contract, path, "must use ordinary object and array prototypes");
+  }
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== "string") fail(contract, path, "symbol keys are forbidden");
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!isNil(descriptor?.get) || !isNil(descriptor?.set)) {
       fail(contract, `${path}/${key}`, "accessors are forbidden");
     }
+    if (key !== "length" && descriptor?.enumerable !== true) {
+      fail(contract, `${path}/${key}`, "data fields must be enumerable");
+    }
     assertAccessorFree(descriptor?.value, contract, `${path}/${key}`, seen);
   }
+  seen.delete(value);
 }
 
 function object(
@@ -1111,6 +1375,21 @@ function parseBinding(
       contract,
       `${path}/acceptanceTargetRef`,
     ),
+    compositionTargetRef: text(
+      source.compositionTargetRef,
+      contract,
+      `${path}/compositionTargetRef`,
+    ),
+    topologyNodeId: text(
+      source.topologyNodeId,
+      contract,
+      `${path}/topologyNodeId`,
+    ),
+    semanticLayerId: text(
+      source.semanticLayerId,
+      contract,
+      `${path}/semanticLayerId`,
+    ),
     blockVisualGroupId: text(
       source.blockVisualGroupId,
       contract,
@@ -1137,6 +1416,140 @@ function parseBinding(
     layoutInventoryHash,
     contributionHash,
   });
+}
+
+function parseObservedTopologyRelation(
+  value: unknown,
+  contract: string,
+  path: string,
+): FormalObservedTopologyRelationV1 {
+  const source = object(value, contract, path);
+  exactFields(source, OBSERVED_TOPOLOGY_RELATION_FIELDS, contract, path);
+  const fromNodeId = text(source.fromNodeId, contract, `${path}/fromNodeId`);
+  const toNodeId = text(source.toNodeId, contract, `${path}/toNodeId`);
+  if (fromNodeId === toNodeId) {
+    fail(contract, path, "topology relation endpoints must be distinct");
+  }
+  return Object.freeze({
+    fromNodeId,
+    relation: enumValue(
+      source.relation,
+      ["connects-to", "contains", "above", "blocks"] as const,
+      contract,
+      `${path}/relation`,
+    ),
+    toNodeId,
+  });
+}
+
+function parseObservedTopologyRelations(
+  value: unknown,
+  contract: string,
+  path: string,
+): readonly FormalObservedTopologyRelationV1[] {
+  const relations = array(value, contract, path).map((entry, index) =>
+    parseObservedTopologyRelation(entry, contract, `${path}/${index}`));
+  const keys = relations.map(({ fromNodeId, relation, toNodeId }) =>
+    `${fromNodeId}\0${relation}\0${toNodeId}`);
+  if (keys.some((key, index) => index > 0 && keys[index - 1]! >= key)) {
+    fail(contract, path, "must be unique and strictly sorted");
+  }
+  return Object.freeze(relations);
+}
+
+function parseTopologyRelationBindings(
+  value: unknown,
+  contract: string,
+  path: string,
+  topologyNodeIds: ReadonlySet<string>,
+): readonly FormalSemanticTopologyRelationBindingV1[] {
+  const rows = array(value, contract, path).map((entry, index) => {
+    const itemPath = `${path}/${index}`;
+    const source = object(entry, contract, itemPath);
+    const measurementSource = enumValue(
+      source.measurementSource,
+      FORMAL_SEMANTIC_TOPOLOGY_MEASUREMENT_SOURCES_V1,
+      contract,
+      `${itemPath}/measurementSource`,
+    );
+    const fields = measurementSource === "package-bounds"
+      ? PACKAGE_BOUNDS_TOPOLOGY_RELATION_BINDING_FIELDS
+      : measurementSource === "sdk-support"
+        ? SDK_SUPPORT_TOPOLOGY_RELATION_BINDING_FIELDS
+        : measurementSource === "sdk-collider"
+          ? SDK_COLLIDER_TOPOLOGY_RELATION_BINDING_FIELDS
+          : SCRIPTED_TRAVERSAL_TOPOLOGY_RELATION_BINDING_FIELDS;
+    exactFields(source, fields, contract, itemPath);
+    const observed = parseObservedTopologyRelation({
+      fromNodeId: source.fromNodeId,
+      relation: source.relation,
+      toNodeId: source.toNodeId,
+    }, contract, itemPath);
+    if (
+      !topologyNodeIds.has(observed.fromNodeId) ||
+      !topologyNodeIds.has(observed.toNodeId)
+    ) {
+      fail(contract, itemPath, "relation endpoints must name bound topology nodes");
+    }
+    if (measurementSource === "package-bounds") {
+      return Object.freeze({
+        ...observed,
+        measurementSource,
+        fromVisualGroupId: text(
+          source.fromVisualGroupId,
+          contract,
+          `${itemPath}/fromVisualGroupId`,
+        ),
+        toVisualGroupId: text(
+          source.toVisualGroupId,
+          contract,
+          `${itemPath}/toVisualGroupId`,
+        ),
+      });
+    }
+    if (measurementSource === "sdk-support") {
+      return Object.freeze({
+        ...observed,
+        measurementSource,
+        subjectEntityId: text(
+          source.subjectEntityId,
+          contract,
+          `${itemPath}/subjectEntityId`,
+        ),
+        colliderId: text(source.colliderId, contract, `${itemPath}/colliderId`),
+      });
+    }
+    if (measurementSource === "sdk-collider") {
+      return Object.freeze({
+        ...observed,
+        measurementSource,
+        colliderId: text(source.colliderId, contract, `${itemPath}/colliderId`),
+        sourceVisualGroupId: text(
+          source.sourceVisualGroupId,
+          contract,
+          `${itemPath}/sourceVisualGroupId`,
+        ),
+      });
+    }
+    return Object.freeze({
+      ...observed,
+      measurementSource,
+      traversalCheckId: text(
+        source.traversalCheckId,
+        contract,
+        `${itemPath}/traversalCheckId`,
+      ),
+    });
+  });
+  const keys = rows.map(({ fromNodeId, relation, toNodeId }) =>
+    `${fromNodeId}\0${relation}\0${toNodeId}`);
+  if (
+    isEmpty(rows) ||
+    keys.some((key, index) => index > 0 && keys[index - 1]! >= key)
+  ) {
+    fail(contract, path, "must be non-empty, unique, and strictly sorted");
+  }
+  return Object.freeze(rows);
 }
 
 export function parseFormalSemanticCaptureMapV1(
@@ -1172,6 +1585,8 @@ export function parseFormalSemanticCaptureMapV1(
   );
   if (isEmpty(bindings)) fail(contract, "bindings", "must not be empty");
   const targetRefs = bindings.map((row) => row.acceptanceTargetRef);
+  const compositionTargetRefs = bindings.map((row) => row.compositionTargetRef);
+  const topologyNodeIds = bindings.map((row) => row.topologyNodeId);
   const groupIds = bindings.map((row) => row.blockVisualGroupId);
   const colors = bindings.map((row) => row.identityColor);
   if (targetRefs.some((entry, index) => index > 0 && targetRefs[index - 1]! >= entry)) {
@@ -1183,6 +1598,22 @@ export function parseFormalSemanticCaptureMapV1(
   if (new Set(colors).size !== colors.length) {
     fail(contract, "bindings", "identity colors must be unique");
   }
+  if (
+    new Set(compositionTargetRefs).size !== compositionTargetRefs.length ||
+    new Set(topologyNodeIds).size !== topologyNodeIds.length
+  ) {
+    fail(
+      contract,
+      "bindings",
+      "composition targets and topology nodes must each map one-to-one",
+    );
+  }
+  const topologyRelations = parseTopologyRelationBindings(
+    source.topologyRelations,
+    contract,
+    "topologyRelations",
+    new Set(topologyNodeIds),
+  );
   const traversalCheckBindings = array(
     source.traversalCheckBindings,
     contract,
@@ -1226,6 +1657,35 @@ export function parseFormalSemanticCaptureMapV1(
       "checkpoint criterion must reference a bound visual group",
     );
   }
+  const traversalCheckIds = new Set(
+    traversalCheckBindings.map(({ traversalCheckId }) => traversalCheckId),
+  );
+  const unknownRelationProof = topologyRelations.find((relation) =>
+    relation.measurementSource === "scripted-traversal" &&
+    !traversalCheckIds.has(relation.traversalCheckId)
+  );
+  if (!isNil(unknownRelationProof)) {
+    fail(
+      contract,
+      "topologyRelations",
+      "scripted traversal relation must reference a bound traversal check",
+    );
+  }
+  const unknownRelationGroup = topologyRelations.find((relation) =>
+    relation.measurementSource === "package-bounds"
+      ? !boundGroupIds.has(relation.fromVisualGroupId) ||
+        !boundGroupIds.has(relation.toVisualGroupId)
+      : relation.measurementSource === "sdk-collider"
+        ? !boundGroupIds.has(relation.sourceVisualGroupId)
+        : false
+  );
+  if (!isNil(unknownRelationGroup)) {
+    fail(
+      contract,
+      "topologyRelations",
+      "relation proof must reference a bound visual group",
+    );
+  }
   return freeze({
     kind: "formal-semantic-capture-map",
     schemaVersion: 1,
@@ -1236,6 +1696,7 @@ export function parseFormalSemanticCaptureMapV1(
     layoutInventoryHash,
     contributionHash,
     bindings: Object.freeze(bindings),
+    topologyRelations,
     traversalCheckBindings: Object.freeze(traversalCheckBindings),
   });
 }
@@ -1322,6 +1783,20 @@ function parseScriptedTraversalCheck(
     contract,
     `${path}/fixedInputSequence`,
   );
+  const fixedTickCount = fixedInputSequence.reduce(
+    (total, input) => total + input.ticks,
+    0,
+  );
+  if (
+    fixedTickCount < 1 ||
+    fixedTickCount > MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1
+  ) {
+    fail(
+      contract,
+      `${path}/fixedInputSequence`,
+      `must contain 1 through ${MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TICK_COUNT_PER_CHECK_V1} total ticks`,
+    );
+  }
   const fixedInputSequenceHash = hash(
     source.fixedInputSequenceHash,
     contract,
@@ -1382,13 +1857,35 @@ export function parseFormalScriptedTraversalRequestV1(
   ) {
     fail(contract, "", "unexpected kind or schemaVersion");
   }
-  const checks = array(source.checks, contract, "checks").map((entry, index) =>
+  const rawChecks = array(source.checks, contract, "checks");
+  if (rawChecks.length > MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1) {
+    fail(
+      contract,
+      "checks",
+      `must contain at most ${MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_CHECK_COUNT_V1} checks`,
+    );
+  }
+  const checks = rawChecks.map((entry, index) =>
     parseScriptedTraversalCheck(entry, contract, `checks/${index}`));
   if (
     isEmpty(checks) ||
     checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id)
   ) {
     fail(contract, "checks", "must be non-empty, unique, and sorted by id");
+  }
+  const totalTickCount = checks.reduce(
+    (total, check) => total + check.fixedInputSequence.reduce(
+      (checkTotal, input) => checkTotal + input.ticks,
+      0,
+    ),
+    0,
+  );
+  if (totalTickCount > MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1) {
+    fail(
+      contract,
+      "checks",
+      `must contain at most ${MAXIMUM_FORMAL_SCRIPTED_TRAVERSAL_TOTAL_TICK_COUNT_V1} total ticks`,
+    );
   }
   return freeze({
     kind: "formal-scripted-traversal-request",
@@ -1525,6 +2022,11 @@ export function parseFormalWorldCaptureRequestV1(
     kind: "formal-world-capture-request",
     schemaVersion: 1,
     id: text(source.id, contract, "id"),
+    formalRequestRef: text(
+      source.formalRequestRef,
+      contract,
+      "formalRequestRef",
+    ),
     caseRef,
     caseHash,
     evaluationProfileRef: text(
@@ -1601,16 +2103,6 @@ export function parseFormalWorldCaptureRequestV1(
     ),
     semanticCaptureMap,
     semanticCaptureMapHash,
-    nativeBlockCaptureIdentityInventoryRef: text(
-      source.nativeBlockCaptureIdentityInventoryRef,
-      contract,
-      "nativeBlockCaptureIdentityInventoryRef",
-    ),
-    nativeBlockCaptureIdentityInventoryHash: hash(
-      source.nativeBlockCaptureIdentityInventoryHash,
-      contract,
-      "nativeBlockCaptureIdentityInventoryHash",
-    ),
     nativeBlockMaterializerMetadataRef: text(
       source.nativeBlockMaterializerMetadataRef,
       contract,
@@ -1666,29 +2158,8 @@ function parseSdkOwnerIdentities(
   contract: string,
   path: string,
 ): readonly FormalWorldCaptureSdkOwnerIdentityV1[] {
-  const rows = array(value, contract, path).map((entry, index) => {
-    const itemPath = `${path}/${index}`;
-    const source = object(entry, contract, itemPath);
-    exactFields(source, SDK_OWNER_FIELDS, contract, itemPath);
-    return Object.freeze({
-      ownerId: enumValue(
-        source.ownerId,
-        FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1,
-        contract,
-        `${itemPath}/ownerId`,
-      ),
-      implementationRef: text(
-        source.implementationRef,
-        contract,
-        `${itemPath}/implementationRef`,
-      ),
-      implementationHash: hash(
-        source.implementationHash,
-        contract,
-        `${itemPath}/implementationHash`,
-      ),
-    });
-  });
+  const rows = array(value, contract, path).map((entry, index) =>
+    parseSdkOwnerIdentity(entry, contract, `${path}/${index}`));
   if (
     rows.length !== FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1.length ||
     rows.some((row, index) => row.ownerId !== FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1[index])
@@ -1696,6 +2167,685 @@ function parseSdkOwnerIdentities(
     fail(contract, path, "must contain the five SDK owners in canonical order");
   }
   return Object.freeze(rows);
+}
+
+function parseSdkOwnerIdentity(
+  value: unknown,
+  contract: string,
+  path: string,
+): FormalWorldCaptureSdkOwnerIdentityV1 {
+  const source = object(value, contract, path);
+  exactFields(source, SDK_OWNER_FIELDS, contract, path);
+  return Object.freeze({
+    ownerId: enumValue(
+      source.ownerId,
+      FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1,
+      contract,
+      `${path}/ownerId`,
+    ),
+    implementationRef: text(
+      source.implementationRef,
+      contract,
+      `${path}/implementationRef`,
+    ),
+    implementationHash: hash(
+      source.implementationHash,
+      contract,
+      `${path}/implementationHash`,
+    ),
+  });
+}
+
+function parseObservationSnapshot(
+  value: unknown,
+  runtimeSessionId: string,
+  expectedHash: Sha256HashV1,
+  contract: string,
+  path: string,
+): WorldRuntimeSnapshotV4 {
+  let snapshot: WorldRuntimeSnapshotV4;
+  try {
+    snapshot = parseWorldRuntimeSnapshotV4(value);
+  } catch {
+    fail(contract, path, "must be a closed WorldRuntimeSnapshotV4");
+  }
+  if (
+    snapshot.runtime.phase !== "ready" ||
+    snapshot.runtimeSessionId !== runtimeSessionId
+  ) {
+    fail(contract, path, "must be a ready Snapshot from the stable Runtime session");
+  }
+  if (sha256CanonicalJson(snapshot) !== expectedHash) {
+    fail(contract, `${path}Hash`, "must match the parsed reset-ready Snapshot bytes");
+  }
+  return snapshot;
+}
+
+function parseObservationIdentity(
+  source: Readonly<Record<string, unknown>>,
+  contract: string,
+  expectedOwnerId: FormalWorldCaptureSdkOwnerIdV1,
+): FormalMeasuredObservationIdentityV1 {
+  const worldPackageRootHash = hash(
+    source.worldPackageRootHash,
+    contract,
+    "worldPackageRootHash",
+  );
+  const runtimeSessionId = text(
+    source.runtimeSessionId,
+    contract,
+    "runtimeSessionId",
+  );
+  const resetReadySnapshotHash = hash(
+    source.resetReadySnapshotHash,
+    contract,
+    "resetReadySnapshotHash",
+  );
+  const resetReadySnapshot = parseObservationSnapshot(
+    source.resetReadySnapshot,
+    runtimeSessionId,
+    resetReadySnapshotHash,
+    contract,
+    "resetReadySnapshot",
+  );
+  const domainOwnerIdentity = parseSdkOwnerIdentity(
+    source.domainOwnerIdentity,
+    contract,
+    "domainOwnerIdentity",
+  );
+  if (domainOwnerIdentity.ownerId !== expectedOwnerId) {
+    fail(
+      contract,
+      "domainOwnerIdentity/ownerId",
+      `expected the ${expectedOwnerId} domain owner`,
+    );
+  }
+  let formalRequest: FormalWorldCaptureRequestV1;
+  try {
+    formalRequest = parseFormalWorldCaptureRequestV1(source.formalRequest);
+  } catch {
+    fail(contract, "formalRequest", "must be a closed FormalWorldCaptureRequestV1");
+  }
+  const formalRequestHash = hash(
+    source.formalRequestHash,
+    contract,
+    "formalRequestHash",
+  );
+  if (hashFormalWorldCaptureRequestV1(formalRequest) !== formalRequestHash) {
+    fail(contract, "formalRequestHash", "must match the embedded formal Request bytes");
+  }
+  const worldPackageRef = formalWorldPackageRef(
+    source.worldPackageRef,
+    worldPackageRootHash,
+    contract,
+    "worldPackageRef",
+  );
+  const worldBuildIdentityRef = text(
+    source.worldBuildIdentityRef,
+    contract,
+    "worldBuildIdentityRef",
+  );
+  const worldBuildIdentityHash = hash(
+    source.worldBuildIdentityHash,
+    contract,
+    "worldBuildIdentityHash",
+  );
+  const semanticCaptureMapHash = hash(
+    source.semanticCaptureMapHash,
+    contract,
+    "semanticCaptureMapHash",
+  );
+  if (
+    worldPackageRef !== formalRequest.worldPackageRef ||
+    worldPackageRootHash !== formalRequest.worldPackageRootHash ||
+    worldBuildIdentityRef !== formalRequest.worldBuildIdentityRef ||
+    worldBuildIdentityHash !== formalRequest.worldBuildIdentityHash ||
+    semanticCaptureMapHash !== formalRequest.semanticCaptureMapHash
+  ) {
+    fail(contract, "formalRequest", "Package, Build, and semantic map identities must join");
+  }
+  const formalRequestRef = text(
+    source.formalRequestRef,
+    contract,
+    "formalRequestRef",
+  );
+  if (formalRequestRef !== formalRequest.formalRequestRef) {
+    fail(
+      contract,
+      "formalRequestRef",
+      "must match the embedded formal Request identity",
+    );
+  }
+  return freeze({
+    id: text(source.id, contract, "id"),
+    worldPackageRef,
+    worldPackageRootHash,
+    worldBuildIdentityRef,
+    worldBuildIdentityHash,
+    formalRequestRef,
+    formalRequest,
+    formalRequestHash,
+    semanticCaptureMapHash,
+    runtimeSessionId,
+    resetReadySnapshot,
+    resetReadySnapshotHash,
+    domainOwnerIdentity,
+  });
+}
+
+function parseMeasuredTopologyRelations(
+  value: unknown,
+  identity: FormalMeasuredObservationIdentityV1 & Readonly<{
+    formalRequest: FormalWorldCaptureRequestV1;
+  }>,
+  measurementSource: FormalSemanticTopologyMeasurementSourceV1,
+  contract: string,
+  path: string,
+): readonly FormalObservedTopologyRelationV1[] {
+  const observed = parseObservedTopologyRelations(value, contract, path);
+  const allowedKeys = new Set(
+    identity.formalRequest.semanticCaptureMap.topologyRelations
+      .filter((relation) => relation.measurementSource === measurementSource)
+      .map(({ fromNodeId, relation, toNodeId }) =>
+        `${fromNodeId}\0${relation}\0${toNodeId}`),
+  );
+  const unrequested = observed.find(({ fromNodeId, relation, toNodeId }) =>
+    !allowedKeys.has(`${fromNodeId}\0${relation}\0${toNodeId}`));
+  if (!isNil(unrequested)) {
+    fail(
+      contract,
+      path,
+      `may emit only ${measurementSource} relations requested by the semantic map`,
+    );
+  }
+  return observed;
+}
+
+function parseNormalizedBounds(
+  value: unknown,
+  contract: string,
+  path: string,
+) {
+  const source = object(value, contract, path);
+  exactFields(source, NORMALIZED_BOUNDS_FIELDS, contract, path);
+  const minXBasisPoints = integer(
+    source.minXBasisPoints, 0, 10_000, contract, `${path}/minXBasisPoints`,
+  );
+  const minYBasisPoints = integer(
+    source.minYBasisPoints, 0, 10_000, contract, `${path}/minYBasisPoints`,
+  );
+  const maxXBasisPoints = integer(
+    source.maxXBasisPoints, 0, 10_000, contract, `${path}/maxXBasisPoints`,
+  );
+  const maxYBasisPoints = integer(
+    source.maxYBasisPoints, 0, 10_000, contract, `${path}/maxYBasisPoints`,
+  );
+  if (minXBasisPoints >= maxXBasisPoints || minYBasisPoints >= maxYBasisPoints) {
+    fail(contract, path, "normalized bounds must have positive area");
+  }
+  return Object.freeze({
+    minXBasisPoints, minYBasisPoints, maxXBasisPoints, maxYBasisPoints,
+  });
+}
+
+function parseNormalizedCenter(
+  value: unknown,
+  bounds: ReturnType<typeof parseNormalizedBounds>,
+  contract: string,
+  path: string,
+) {
+  const source = object(value, contract, path);
+  exactFields(source, NORMALIZED_CENTER_FIELDS, contract, path);
+  const xBasisPoints = integer(
+    source.xBasisPoints, 0, 10_000, contract, `${path}/xBasisPoints`,
+  );
+  const yBasisPoints = integer(
+    source.yBasisPoints, 0, 10_000, contract, `${path}/yBasisPoints`,
+  );
+  if (
+    xBasisPoints < bounds.minXBasisPoints ||
+    xBasisPoints > bounds.maxXBasisPoints ||
+    yBasisPoints < bounds.minYBasisPoints ||
+    yBasisPoints > bounds.maxYBasisPoints
+  ) {
+    fail(contract, path, "normalized center must lie within measured bounds");
+  }
+  return Object.freeze({ xBasisPoints, yBasisPoints });
+}
+
+export function parseFormalOpeningObservationV1(
+  value: unknown,
+): FormalOpeningObservationV1 {
+  const contract = "FORMAL_OPENING_OBSERVATION_INVALID";
+  const source = begin(value, contract, OPENING_OBSERVATION_FIELDS);
+  if (source.kind !== "formal-opening-observation" || source.schemaVersion !== 1) {
+    fail(contract, "", "unexpected kind or schemaVersion");
+  }
+  const identity = parseObservationIdentity(source, contract, "camera");
+  const visualGroups = array(source.visualGroups, contract, "visualGroups")
+    .map((entry, index) => {
+      const path = `visualGroups/${index}`;
+      const row = object(entry, contract, path);
+      exactFields(row, OPENING_VISUAL_GROUP_FIELDS, contract, path);
+      const normalizedBounds = parseNormalizedBounds(
+        row.normalizedBounds,
+        contract,
+        `${path}/normalizedBounds`,
+      );
+      return Object.freeze({
+        acceptanceTargetRef: text(
+          row.acceptanceTargetRef, contract, `${path}/acceptanceTargetRef`,
+        ),
+        compositionTargetRef: text(
+          row.compositionTargetRef, contract, `${path}/compositionTargetRef`,
+        ),
+        topologyNodeId: text(row.topologyNodeId, contract, `${path}/topologyNodeId`),
+        semanticLayerId: text(
+          row.semanticLayerId, contract, `${path}/semanticLayerId`,
+        ),
+        blockVisualGroupId: text(
+          row.blockVisualGroupId, contract, `${path}/blockVisualGroupId`,
+        ),
+        sourceBoundsMeters: parseSpatialBounds(
+          row.sourceBoundsMeters,
+          contract,
+          `${path}/sourceBoundsMeters`,
+        ),
+        normalizedBounds,
+        normalizedCenter: parseNormalizedCenter(
+          row.normalizedCenter,
+          normalizedBounds,
+          contract,
+          `${path}/normalizedCenter`,
+        ),
+        coverageBasisPoints: integer(
+          row.coverageBasisPoints, 1, 10_000, contract, `${path}/coverageBasisPoints`,
+        ),
+        cameraDepthMeters: finiteNumber(
+          row.cameraDepthMeters, 0, 1_000_000, contract, `${path}/cameraDepthMeters`,
+        ),
+        depthOrder: integer(row.depthOrder, 0, 100_000, contract, `${path}/depthOrder`),
+      });
+    });
+  if (
+    isEmpty(visualGroups) ||
+    visualGroups.some((row, index) =>
+      index > 0 && visualGroups[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef) ||
+    new Set(visualGroups.map(({ depthOrder }) => depthOrder)).size !==
+      visualGroups.length ||
+    visualGroups.some(({ depthOrder }) => depthOrder >= visualGroups.length)
+  ) {
+    fail(contract, "visualGroups", "must be non-empty, target-sorted, and depth-ranked");
+  }
+  for (const key of [
+    "compositionTargetRef", "topologyNodeId", "blockVisualGroupId",
+  ] as const) {
+    if (new Set(visualGroups.map((row) => row[key])).size !== visualGroups.length) {
+      fail(contract, "visualGroups", `${key} must be one-to-one`);
+    }
+  }
+  const measuredBindingIdentity = visualGroups.map((row) => ({
+    acceptanceTargetRef: row.acceptanceTargetRef,
+    compositionTargetRef: row.compositionTargetRef,
+    topologyNodeId: row.topologyNodeId,
+    semanticLayerId: row.semanticLayerId,
+    blockVisualGroupId: row.blockVisualGroupId,
+  }));
+  const requestedBindingIdentity = identity.formalRequest.semanticCaptureMap.bindings
+    .map((row) => ({
+      acceptanceTargetRef: row.acceptanceTargetRef,
+      compositionTargetRef: row.compositionTargetRef,
+      topologyNodeId: row.topologyNodeId,
+      semanticLayerId: row.semanticLayerId,
+      blockVisualGroupId: row.blockVisualGroupId,
+    }));
+  if (sha256CanonicalJson(measuredBindingIdentity) !==
+      sha256CanonicalJson(requestedBindingIdentity)) {
+    fail(contract, "visualGroups", "must measure every explicit semantic mapping once");
+  }
+  return freeze({
+    kind: "formal-opening-observation",
+    schemaVersion: 1,
+    ...identity,
+    visualGroups: Object.freeze(visualGroups),
+    observedTopologyRelations: parseMeasuredTopologyRelations(
+      source.observedTopologyRelations,
+      identity,
+      "package-bounds",
+      contract,
+      "observedTopologyRelations",
+    ),
+  });
+}
+
+export function hashFormalOpeningObservationV1(value: unknown): Sha256HashV1 {
+  return sha256CanonicalJson(parseFormalOpeningObservationV1(value)) as Sha256HashV1;
+}
+
+export function parseFormalSpawnSupportObservationV1(
+  value: unknown,
+): FormalSpawnSupportObservationV1 {
+  const contract = "FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID";
+  const source = begin(value, contract, SPAWN_SUPPORT_OBSERVATION_FIELDS);
+  if (
+    source.kind !== "formal-spawn-support-observation" ||
+    source.schemaVersion !== 1
+  ) fail(contract, "", "unexpected kind or schemaVersion");
+  const identity = parseObservationIdentity(source, contract, "physics");
+  const subjectEntityId = text(
+    source.subjectEntityId,
+    contract,
+    "subjectEntityId",
+  );
+  const subjectState = identity.resetReadySnapshot.world.subjectStatesByEntityId[
+    subjectEntityId
+  ];
+  if (isNil(subjectState)) {
+    fail(contract, "subjectEntityId", "must name the reset-ready controlled Subject");
+  }
+  const movementMedium = enumValue(
+    source.movementMedium,
+    ["ground", "air"] as const,
+    contract,
+    "movementMedium",
+  );
+  const locomotionState = Object.values(subjectState.capabilityStatesById).find(
+    (state) => state.kind === "locomotion-capability-state-v2",
+  );
+  if (
+    isNil(locomotionState) ||
+    locomotionState.locomotion.status !== "active" ||
+    locomotionState.locomotion.movementMedium !== movementMedium
+  ) {
+    fail(contract, "movementMedium", "must match committed reset-ready Subject state");
+  }
+  const contact = object(source.supportContact, contract, "supportContact");
+  exactFields(contact, SUPPORT_CONTACT_FIELDS, contract, "supportContact");
+  return freeze({
+    kind: "formal-spawn-support-observation",
+    schemaVersion: 1,
+    ...identity,
+    spawnMarkerId: text(source.spawnMarkerId, contract, "spawnMarkerId"),
+    subjectEntityId,
+    supportContact: Object.freeze({
+      colliderId: text(contact.colliderId, contract, "supportContact/colliderId"),
+      sourceBlockId: text(
+        contact.sourceBlockId, contract, "supportContact/sourceBlockId",
+      ),
+      surfaceEntityId: text(
+        contact.surfaceEntityId, contract, "supportContact/surfaceEntityId",
+      ),
+      logicalSubshapeId: text(
+        contact.logicalSubshapeId, contract, "supportContact/logicalSubshapeId",
+      ),
+      pointMetersXYZ: metersXYZ(
+        contact.pointMetersXYZ, contract, "supportContact/pointMetersXYZ",
+      ),
+    }),
+    capsuleFootPointMetersXYZ: metersXYZ(
+      source.capsuleFootPointMetersXYZ,
+      contract,
+      "capsuleFootPointMetersXYZ",
+    ),
+    supportGapMillimeters: integer(
+      source.supportGapMillimeters,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      contract,
+      "supportGapMillimeters",
+    ),
+    movementMedium,
+    observedTopologyRelations: parseMeasuredTopologyRelations(
+      source.observedTopologyRelations,
+      identity,
+      "sdk-support",
+      contract,
+      "observedTopologyRelations",
+    ),
+  });
+}
+
+export function hashFormalSpawnSupportObservationV1(
+  value: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseFormalSpawnSupportObservationV1(value),
+  ) as Sha256HashV1;
+}
+
+export function parseFormalColliderOverlayObservationV1(
+  value: unknown,
+): FormalColliderOverlayObservationV1 {
+  const contract = "FORMAL_COLLIDER_OVERLAY_OBSERVATION_INVALID";
+  const source = begin(value, contract, COLLIDER_OVERLAY_OBSERVATION_FIELDS);
+  if (
+    source.kind !== "formal-collider-overlay-observation" ||
+    source.schemaVersion !== 1
+  ) fail(contract, "", "unexpected kind or schemaVersion");
+  const identity = parseObservationIdentity(source, contract, "physics");
+  const colliders = array(source.colliders, contract, "colliders").map(
+    (entry, index) => {
+      const path = `colliders/${index}`;
+      const row = object(entry, contract, path);
+      exactFields(row, COLLIDER_OBSERVATION_FIELDS, contract, path);
+      return Object.freeze({
+        colliderId: text(row.colliderId, contract, `${path}/colliderId`),
+        sourceBlockId: text(row.sourceBlockId, contract, `${path}/sourceBlockId`),
+        physicsBodyId: text(row.physicsBodyId, contract, `${path}/physicsBodyId`),
+        colliderSubshapeId: text(
+          row.colliderSubshapeId, contract, `${path}/colliderSubshapeId`,
+        ),
+        overlayRecordId: text(
+          row.overlayRecordId, contract, `${path}/overlayRecordId`,
+        ),
+      });
+    },
+  );
+  if (
+    isEmpty(colliders) ||
+    colliders.some((row, index) =>
+      index > 0 && colliders[index - 1]!.colliderId >= row.colliderId)
+  ) fail(contract, "colliders", "must be non-empty, unique, and collider-sorted");
+  for (const key of ["physicsBodyId", "overlayRecordId"] as const) {
+    if (new Set(colliders.map((row) => row[key])).size !== colliders.length) {
+      fail(contract, "colliders", `${key} must be unique`);
+    }
+  }
+  return freeze({
+    kind: "formal-collider-overlay-observation",
+    schemaVersion: 1,
+    ...identity,
+    colliders: Object.freeze(colliders),
+    observedTopologyRelations: parseMeasuredTopologyRelations(
+      source.observedTopologyRelations,
+      identity,
+      "sdk-collider",
+      contract,
+      "observedTopologyRelations",
+    ),
+  });
+}
+
+export function hashFormalColliderOverlayObservationV1(
+  value: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseFormalColliderOverlayObservationV1(value),
+  ) as Sha256HashV1;
+}
+
+export function parseFormalScriptedTraversalObservationV1(
+  value: unknown,
+): FormalScriptedTraversalObservationV1 {
+  const contract = "FORMAL_SCRIPTED_TRAVERSAL_OBSERVATION_INVALID";
+  const source = begin(value, contract, SCRIPTED_TRAVERSAL_OBSERVATION_FIELDS);
+  if (
+    source.kind !== "formal-scripted-traversal-observation" ||
+    source.schemaVersion !== 1
+  ) fail(contract, "", "unexpected kind or schemaVersion");
+  const identity = parseObservationIdentity(source, contract, "input");
+  const checks = array(source.checks, contract, "checks").map((entry, index) => {
+    const path = `checks/${index}`;
+    const row = object(entry, contract, path);
+    exactFields(row, TRAVERSAL_OBSERVATION_CHECK_FIELDS, contract, path);
+    const resetReadySnapshotHash = hash(
+      row.resetReadySnapshotHash,
+      contract,
+      `${path}/resetReadySnapshotHash`,
+    );
+    const resetReadySnapshot = parseObservationSnapshot(
+      row.resetReadySnapshot,
+      identity.runtimeSessionId,
+      resetReadySnapshotHash,
+      contract,
+      `${path}/resetReadySnapshot`,
+    );
+    const fixedTicks = array(row.fixedTicks, contract, `${path}/fixedTicks`).map(
+      (entry, tickIndex) => {
+        const tickPath = `${path}/fixedTicks/${tickIndex}`;
+        const tick = object(entry, contract, tickPath);
+        exactFields(tick, TRAVERSAL_FIXED_TICK_FIELDS, contract, tickPath);
+        return Object.freeze({
+          tick: integer(tick.tick, 1, Number.MAX_SAFE_INTEGER, contract, `${tickPath}/tick`),
+          fixedInputStepIndex: integer(
+            tick.fixedInputStepIndex,
+            0,
+            Number.MAX_SAFE_INTEGER,
+            contract,
+            `${tickPath}/fixedInputStepIndex`,
+          ),
+          committedSnapshotHash: hash(
+            tick.committedSnapshotHash, contract, `${tickPath}/committedSnapshotHash`,
+          ),
+          positionMetersXYZ: metersXYZ(
+            tick.positionMetersXYZ, contract, `${tickPath}/positionMetersXYZ`,
+          ),
+          movementMedium: enumValue(
+            tick.movementMedium,
+            ["ground", "air"] as const,
+            contract,
+            `${tickPath}/movementMedium`,
+          ),
+        });
+      },
+    );
+    if (
+      isEmpty(fixedTicks) ||
+      fixedTicks.some((tick, tickIndex) =>
+        tickIndex > 0 && fixedTicks[tickIndex - 1]!.tick >= tick.tick)
+    ) fail(contract, `${path}/fixedTicks`, "must be non-empty and tick-ordered");
+    const tickIds = new Set(fixedTicks.map(({ tick }) => tick));
+    const checkpoints = array(row.checkpoints, contract, `${path}/checkpoints`).map(
+      (entry, checkpointIndex) => {
+        const checkpointPath = `${path}/checkpoints/${checkpointIndex}`;
+        const checkpoint = object(entry, contract, checkpointPath);
+        exactFields(
+          checkpoint,
+          TRAVERSAL_CHECKPOINT_OBSERVATION_FIELDS,
+          contract,
+          checkpointPath,
+        );
+        const observedAtTick = integer(
+          checkpoint.observedAtTick,
+          1,
+          Number.MAX_SAFE_INTEGER,
+          contract,
+          `${checkpointPath}/observedAtTick`,
+        );
+        if (!tickIds.has(observedAtTick)) {
+          fail(contract, `${checkpointPath}/observedAtTick`, "must name a measured tick");
+        }
+        return Object.freeze({
+          checkpointId: text(
+            checkpoint.checkpointId, contract, `${checkpointPath}/checkpointId`,
+          ),
+          outcome: enumValue(
+            checkpoint.outcome,
+            ["reached", "passed", "blocked"] as const,
+            contract,
+            `${checkpointPath}/outcome`,
+          ),
+          observedAtTick,
+        });
+      },
+    );
+    if (
+      isEmpty(checkpoints) ||
+      checkpoints.some((checkpoint, checkpointIndex) => checkpointIndex > 0 &&
+        checkpoints[checkpointIndex - 1]!.checkpointId >= checkpoint.checkpointId)
+    ) fail(contract, `${path}/checkpoints`, "must be non-empty, unique, and sorted");
+    const checkExpectation = enumValue(
+      row.checkExpectation,
+      ["pass", "block"] as const,
+      contract,
+      `${path}/checkExpectation`,
+    );
+    const outcome = enumValue(
+      row.outcome,
+      ["passed", "blocked"] as const,
+      contract,
+      `${path}/outcome`,
+    );
+    if (
+      (checkExpectation === "pass" && outcome !== "passed") ||
+      (checkExpectation === "block" && outcome !== "blocked")
+    ) fail(contract, `${path}/outcome`, "must satisfy the requested measured outcome");
+    return freeze({
+      id: text(row.id, contract, `${path}/id`),
+      acceptanceTargetRef: text(
+        row.acceptanceTargetRef, contract, `${path}/acceptanceTargetRef`,
+      ),
+      checkExpectation,
+      resetReadySnapshot,
+      resetReadySnapshotHash,
+      fixedTicks: Object.freeze(fixedTicks),
+      checkpoints: Object.freeze(checkpoints),
+      outcome,
+      observedTopologyRelations: parseMeasuredTopologyRelations(
+        row.observedTopologyRelations,
+        identity,
+        "scripted-traversal",
+        contract,
+        `${path}/observedTopologyRelations`,
+      ),
+    });
+  });
+  if (
+    isEmpty(checks) ||
+    checks.some((check, index) => index > 0 && checks[index - 1]!.id >= check.id) ||
+    new Set(checks.map(({ resetReadySnapshot }) => resetReadySnapshot.worldSessionId))
+      .size !== checks.length
+  ) fail(contract, "checks", "must be non-empty, id-sorted, and independently reset");
+  const measuredCheckIdentity = checks.map(({ id, acceptanceTargetRef, checkExpectation }) => ({
+    id,
+    acceptanceTargetRef,
+    checkExpectation,
+  }));
+  const requestedCheckIdentity = identity.formalRequest.scriptedTraversal.checks.map(
+    ({ id, acceptanceTargetRef, checkExpectation }) => ({
+      id,
+      acceptanceTargetRef,
+      checkExpectation,
+    }),
+  );
+  if (sha256CanonicalJson(measuredCheckIdentity) !==
+      sha256CanonicalJson(requestedCheckIdentity)) {
+    fail(contract, "checks", "must measure every scripted traversal check once");
+  }
+  return freeze({
+    kind: "formal-scripted-traversal-observation",
+    schemaVersion: 1,
+    ...identity,
+    checks: Object.freeze(checks),
+  });
+}
+
+export function hashFormalScriptedTraversalObservationV1(
+  value: unknown,
+): Sha256HashV1 {
+  return sha256CanonicalJson(
+    parseFormalScriptedTraversalObservationV1(value),
+  ) as Sha256HashV1;
 }
 
 function parseViewRecord(
@@ -1739,6 +2889,11 @@ function parseViewRecord(
     viewId,
     request,
     requestHash,
+    pngArtifactRef: text(
+      source.pngArtifactRef,
+      contract,
+      `${path}/pngArtifactRef`,
+    ),
     pngContentHash: hash(source.pngContentHash, contract, `${path}/pngContentHash`),
   });
 }
@@ -1763,6 +2918,13 @@ export function parseFormalWorldCaptureReceiptV1(
     fail(contract, "formalRequestHash", "must match the embedded formal Request bytes");
   }
   const formalRequestRef = text(source.formalRequestRef, contract, "formalRequestRef");
+  if (formalRequestRef !== formalRequest.formalRequestRef) {
+    fail(
+      contract,
+      "formalRequestRef",
+      "must match the embedded formal Request identity",
+    );
+  }
   const worldPackageRootHash = hash(
     source.worldPackageRootHash,
     contract,
@@ -1887,21 +3049,69 @@ export function parseFormalWorldCaptureReceiptV1(
     contract,
     "semanticCaptureMapHash",
   );
-  const colliderOverlayHash = hash(
-    source.colliderOverlayHash,
-    contract,
-    "colliderOverlayHash",
-  );
-  const scriptedTraversalHash = hash(
-    source.scriptedTraversalHash,
-    contract,
-    "scriptedTraversalHash",
-  );
-  const nativeBlockCaptureIdentityInventoryHash = hash(
-    source.nativeBlockCaptureIdentityInventoryHash,
-    contract,
-    "nativeBlockCaptureIdentityInventoryHash",
-  );
+  const artifactBindings = {
+    openingObservationArtifactRef: text(
+      source.openingObservationArtifactRef,
+      contract,
+      "openingObservationArtifactRef",
+    ),
+    openingObservationContentHash: hash(
+      source.openingObservationContentHash,
+      contract,
+      "openingObservationContentHash",
+    ),
+    spawnSupportObservationArtifactRef: text(
+      source.spawnSupportObservationArtifactRef,
+      contract,
+      "spawnSupportObservationArtifactRef",
+    ),
+    spawnSupportObservationContentHash: hash(
+      source.spawnSupportObservationContentHash,
+      contract,
+      "spawnSupportObservationContentHash",
+    ),
+    colliderOverlayPngArtifactRef: text(
+      source.colliderOverlayPngArtifactRef,
+      contract,
+      "colliderOverlayPngArtifactRef",
+    ),
+    colliderOverlayPngContentHash: hash(
+      source.colliderOverlayPngContentHash,
+      contract,
+      "colliderOverlayPngContentHash",
+    ),
+    colliderOverlayObservationArtifactRef: text(
+      source.colliderOverlayObservationArtifactRef,
+      contract,
+      "colliderOverlayObservationArtifactRef",
+    ),
+    colliderOverlayObservationContentHash: hash(
+      source.colliderOverlayObservationContentHash,
+      contract,
+      "colliderOverlayObservationContentHash",
+    ),
+    scriptedTraversalArtifactRef: text(
+      source.scriptedTraversalArtifactRef,
+      contract,
+      "scriptedTraversalArtifactRef",
+    ),
+    scriptedTraversalContentHash: hash(
+      source.scriptedTraversalContentHash,
+      contract,
+      "scriptedTraversalContentHash",
+    ),
+  };
+  const artifactRefs = [
+    ...parsedViews.map(({ pngArtifactRef }) => pngArtifactRef),
+    artifactBindings.openingObservationArtifactRef,
+    artifactBindings.spawnSupportObservationArtifactRef,
+    artifactBindings.colliderOverlayPngArtifactRef,
+    artifactBindings.colliderOverlayObservationArtifactRef,
+    artifactBindings.scriptedTraversalArtifactRef,
+  ];
+  if (new Set(artifactRefs).size !== artifactRefs.length) {
+    fail(contract, "views", "every formal artifact role requires a unique ref");
+  }
   const nativeBlockMaterializerMetadataHash = hash(
     source.nativeBlockMaterializerMetadataHash,
     contract,
@@ -1935,7 +3145,6 @@ export function parseFormalWorldCaptureReceiptV1(
     [text(source.worldPackageBuildReceiptRef, contract, "worldPackageBuildReceiptRef"), formalRequest.worldPackageBuildReceiptRef, "worldPackageBuildReceiptRef"],
     [worldPackageBuildReceiptHash, formalRequest.worldPackageBuildReceiptHash, "worldPackageBuildReceiptHash"],
     [semanticCaptureMapHash, formalRequest.semanticCaptureMapHash, "semanticCaptureMapHash"],
-    [nativeBlockCaptureIdentityInventoryHash, formalRequest.nativeBlockCaptureIdentityInventoryHash, "nativeBlockCaptureIdentityInventoryHash"],
     [nativeBlockMaterializerMetadataHash, formalRequest.nativeBlockMaterializerMetadataHash, "nativeBlockMaterializerMetadataHash"],
     [colliderOverlayRequestHash, hashFormalColliderOverlayRequestV1(formalRequest.colliderOverlay), "colliderOverlayRequestHash"],
     [scriptedTraversalRequestHash, hashFormalScriptedTraversalRequestV1(formalRequest.scriptedTraversal), "scriptedTraversalRequestHash"],
@@ -1971,7 +3180,6 @@ export function parseFormalWorldCaptureReceiptV1(
     readySnapshotHash,
     sdkOwnerIdentities,
     semanticCaptureMapHash,
-    nativeBlockCaptureIdentityInventoryHash,
     nativeBlockMaterializerMetadataHash,
     colliderOverlayRequestHash,
     scriptedTraversalRequestHash,
@@ -1981,8 +3189,7 @@ export function parseFormalWorldCaptureReceiptV1(
     rendererIdentity: text(source.rendererIdentity, contract, "rendererIdentity"),
     browserIdentity: text(source.browserIdentity, contract, "browserIdentity"),
     views: Object.freeze(parsedViews),
-    colliderOverlayHash,
-    scriptedTraversalHash,
+    ...artifactBindings,
     cameraRollbackOutcome,
     resetOutcome,
     cleanupOutcome,

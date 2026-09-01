@@ -17,6 +17,11 @@ import type {
   BabylonNativeBlockSessionRecordV1,
 } from "./session.js";
 import { BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 } from "./shapes.js";
+import {
+  registerBabylonNativeBlockLiveHandleRegistryV1,
+  unregisterBabylonNativeBlockLiveHandleRegistryV1,
+  type BabylonNativeBlockLiveHandleRegistryV1,
+} from "./live-handle-registry.js";
 
 export interface BabylonNativeBlockVisualNodeV1 {
   readonly blockId: string;
@@ -31,6 +36,7 @@ export interface BabylonNativeBlockVisualsV1 {
   readonly buildEpochId: string;
   readonly nodes: readonly BabylonNativeBlockVisualNodeV1[];
   readonly visualGroups: readonly BabylonNativeBlockVisualGroupInventoryV1[];
+  readonly liveHandles: BabylonNativeBlockLiveHandleRegistryV1;
   dispose(): void;
 }
 
@@ -310,15 +316,43 @@ export function createBabylonNativeBlockVisualsV1(
   }
 
   let isDisposed = false;
+  const liveHandles = Object.freeze({
+    kind: "babylon-native-block-live-handle-registry" as const,
+    schemaVersion: 1 as const,
+    blocks: Object.freeze(nodes.map((node) => Object.freeze({
+      runtimeEntityId: `native-block:${node.blockId}`,
+      semanticCaptureClassId:
+        `worldkit.native-block.group.${node.visualGroupId ?? "ungrouped"}`,
+      mesh: node.mesh,
+    }))),
+    visualGroups: Object.freeze(input.checkedLayout.checkResult.visualGroups.map(
+      (group) => Object.freeze({
+        visualGroupId: group.id,
+        meshes: Object.freeze(group.blockIds.map((blockId) =>
+          nodes.find((node) => node.blockId === blockId)!.mesh)),
+      }),
+    )),
+  });
+  try {
+    registerBabylonNativeBlockLiveHandleRegistryV1(input.scene, liveHandles);
+  } catch (error) {
+    disposeVisualResources(nodes, materials);
+    throw error;
+  }
   return Object.freeze({
     kind: "babylon-native-block-visuals",
     schemaVersion: 1,
     buildEpochId: input.buildEpochId,
     nodes: Object.freeze(nodes),
     visualGroups: input.checkedLayout.checkResult.visualGroups,
+    liveHandles,
     dispose(): void {
       if (isDisposed) return;
       isDisposed = true;
+      unregisterBabylonNativeBlockLiveHandleRegistryV1(
+        input.scene,
+        liveHandles,
+      );
       const cleanup = disposeVisualResources(nodes, materials);
       materialsByRole.clear();
       if (cleanup.didFail) throw cleanup.error;

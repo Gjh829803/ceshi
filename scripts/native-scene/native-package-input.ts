@@ -4,9 +4,13 @@ import {
 } from "@whitebox-world/native-babylon/host";
 import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  bindNativeBlockAuthoringManifestToCheckedLayoutV1,
   hashBabylonNativeBlockCheckedLayoutInventoryV1,
+  hashNativeBlockAuthoringManifestV1,
+  type NativeBlockAuthoringManifestV1,
 } from "@whitebox-world/native-babylon-block-profile";
 import {
+  createBabylonNativeBlockMaterializerMetadataV1,
   takeBabylonNativeBlockCheckedEpochEvidenceV1,
   type BabylonNativeBlockCheckedEpochEvidenceV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
@@ -47,6 +51,7 @@ import type {
   WorldPackageWorldBoundsV1,
 } from "@whitebox-world/world-package";
 import { isEqual, isNil } from "lodash-es";
+import type { WorldReconstructionCaseV1 } from "@whitebox-world/validation";
 
 import {
   createBabylonNativeReplayAssetLedgerV1,
@@ -87,6 +92,10 @@ export interface PrepareFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly worldRuntimeBootstrapRef: string;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
+  readonly nativeBlockAuthoring?: Readonly<{
+    readonly reconstructionCase: WorldReconstructionCaseV1;
+    readonly authoringManifest: NativeBlockAuthoringManifestV1;
+  }>;
 }
 
 export interface PreparedFrozenBabylonNativeWorldPackageBuildInputV1 {
@@ -96,8 +105,6 @@ export interface PreparedFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly sceneModuleBundleManifestHash: Sha256HashV1;
   readonly dependencyLockHash: Sha256HashV1;
   readonly assetLockHash: Sha256HashV1;
-  readonly blockCheckedEpochEvidence?:
-    BabylonNativeBlockCheckedEpochEvidenceV1;
 }
 
 export class BabylonNativePackageInputErrorV1 extends Error {
@@ -469,6 +476,9 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       evidenceByReplay[0]!.length !== (requiresBlockEvidence ? 1 : 0) ||
       evidenceByReplay[1]!.length !== (requiresBlockEvidence ? 1 : 0)
     ) return fail();
+    if (requiresBlockEvidence !== !isNil(input.nativeBlockAuthoring)) {
+      return fail();
+    }
     const checkResult = parseNativeSceneCheckResultV1(replay.checkResult);
     const contribution = parseBabylonNativeSceneContributionV1(
       replay.contribution,
@@ -497,6 +507,40 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
           contribution.profileSettlement.profileInventoryHash
       ))
     ) return fail();
+    const nativeBlockMaterializerMetadata = requiresBlockEvidence
+      ? (() => {
+        if (
+          isNil(firstBlockEvidence) ||
+          isNil(input.nativeBlockAuthoring)
+        ) return fail();
+        const checkedLayoutInventoryHash =
+          hashBabylonNativeBlockCheckedLayoutInventoryV1(
+            firstBlockEvidence.checkedLayout,
+          );
+        const contributionHash =
+          hashBabylonNativeSceneContributionV1(contribution);
+        const authoringLayoutBinding =
+          bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+            reconstructionCase:
+              input.nativeBlockAuthoring.reconstructionCase,
+            authoringManifest: input.nativeBlockAuthoring.authoringManifest,
+            authoringManifestHash: hashNativeBlockAuthoringManifestV1(
+              input.nativeBlockAuthoring.authoringManifest,
+            ),
+            checkedLayout: firstBlockEvidence.checkedLayout,
+            checkedLayoutInventoryHash,
+            contributionHash,
+            frozenContributionHash: contributionHash,
+          });
+        return createBabylonNativeBlockMaterializerMetadataV1({
+          authoringLayoutBinding,
+          checkedLayout: firstBlockEvidence.checkedLayout,
+          colliderInventory: firstBlockEvidence.colliderInventory,
+          profileInventoryHash: firstBlockEvidence.profileInventoryHash,
+          contribution,
+        });
+      })()
+      : undefined;
     const assetReplayLedgers = ledger.snapshot();
     const expectedAssetRefs = assets.assetLock.entries.map((entry) =>
       entry.assetResourceRef);
@@ -540,6 +584,9 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       sceneAuthoringAttemptResult: attemptResult,
       nativeSceneCheckResult: checkResult,
       nativeSceneContribution: contribution,
+      ...(isNil(nativeBlockMaterializerMetadata)
+        ? {}
+        : { nativeBlockMaterializerMetadata }),
       gameplayBootstrap: gameplay,
       worldRuntimeBootstrap: runtime,
       registryLock,
@@ -551,9 +598,6 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       sceneModuleBundleManifestHash: finalizedBundle.manifestHash,
       dependencyLockHash: dependency.dependencyLockHash,
       assetLockHash: assets.assetLockHash,
-      ...(isNil(firstBlockEvidence)
-        ? {}
-        : { blockCheckedEpochEvidence: firstBlockEvidence }),
     });
   } catch (error) {
     if (error instanceof BabylonNativePackageInputErrorV1) throw error;

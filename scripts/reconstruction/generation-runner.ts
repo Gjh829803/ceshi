@@ -40,7 +40,7 @@ function hasTrustedRouterMarker(stdout: string, backend: "cloud" | "local", requ
   const lines = stdout.split(/\r?\n/).filter((line) => line.startsWith(`${marker} `));
   if (lines.length !== 1) return false;
   const expression = backend === "cloud"
-    ? /^WORLDKIT_LWDP_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) ([a-zA-Z0-9-]+) dispatch=[a-z0-9-]+ profile=formal model=gpt-5\.6-sol reasoning=xhigh$/
+    ? /^WORLDKIT_LWDP_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) ([a-zA-Z0-9][a-zA-Z0-9_-]*) dispatch=[a-z0-9-]+ profile=formal model=gpt-5\.6-sol reasoning=xhigh$/
     : /^WORLDKIT_LOCAL_CODEX_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) pid=[1-9][0-9]* profile=formal model=gpt-5\.6-sol reasoning=xhigh$/;
   const match = expression.exec(lines[0]!);
   return match !== null && match[1] === requestId;

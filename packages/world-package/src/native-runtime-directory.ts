@@ -9,18 +9,21 @@ import {
   hashBabylonNativeDependencyLockV1,
   hashBabylonNativeSceneBootstrapV1,
   hashBabylonNativeSceneContributionV1,
+  hashBabylonNativeBlockMaterializerMetadataV1,
   hashNativeSceneCheckResultV1,
   nativeSceneModuleBundleRefFromHashV1,
   parseBabylonNativeAssetLockV1,
   parseBabylonNativeDependencyLockV1,
   parseBabylonNativeSceneBootstrapV1,
   parseBabylonNativeSceneContributionV1,
+  parseBabylonNativeBlockMaterializerMetadataV1,
   parseBabylonNativeSceneModuleBundleManifestV1,
   parseNativeSceneCheckResultV1,
   parseWorldRuntimeBootstrapV1,
   worldResourceLockEntriesV1,
   type BabylonNativeSceneBootstrapV1,
   type BabylonNativeSceneContributionV1,
+  type BabylonNativeBlockMaterializerMetadataV1,
   type NativeSceneCheckResultV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -334,6 +337,9 @@ function verifyNativeComponents(
     manifest.legal.noticePath,
     ...manifest.legal.licenseDocuments.map(({ path }) => path),
     ...manifest.resources.map(({ packagePath }) => packagePath),
+    ...(source.nativeMaterializer.kind === "babylon-native-block"
+      ? [source.nativeMaterializer.metadataPath]
+      : []),
   ]));
   const bootstrap = parseBabylonNativeSceneBootstrapV1(parseCanonicalJson(
     requireFile(filesByPath, source.nativeSceneBootstrapPath),
@@ -364,6 +370,13 @@ function verifyNativeComponents(
   const contribution = parseBabylonNativeSceneContributionV1(parseCanonicalJson(
     requireFile(filesByPath, source.nativeSceneContributionPath),
   ));
+  const nativeBlockMaterializerMetadata:
+    BabylonNativeBlockMaterializerMetadataV1 | undefined =
+    source.nativeMaterializer.kind === "babylon-native-block"
+      ? parseBabylonNativeBlockMaterializerMetadataV1(parseCanonicalJson(
+        requireFile(filesByPath, source.nativeMaterializer.metadataPath),
+      ))
+      : undefined;
   const gameplayBootstrap = parseGameplayBootstrapV1(parseCanonicalJson(
     requireFile(filesByPath, manifest.entryPoint.gameplayBootstrapPath),
   ));
@@ -396,6 +409,15 @@ function verifyNativeComponents(
     sha256CanonicalJson(registryLock) !== manifest.registryLockHash ||
     !isEqual(registryLock, manifest.lockedResources)
   ) invalid("manifest.json", "Native component hashes do not match parsed files");
+  if (
+    source.nativeMaterializer.kind === "babylon-native-block" &&
+    (
+      isNil(nativeBlockMaterializerMetadata) ||
+      hashBabylonNativeBlockMaterializerMetadataV1(
+        nativeBlockMaterializerMetadata,
+      ) !== source.nativeMaterializer.metadataHash
+    )
+  ) invalid("manifest.json", "Native Block materializer metadata hash mismatch");
   assertBabylonNativeWorldPackageMembershipV1({
     nativeSceneBootstrap: bootstrap,
     sceneModuleBundleManifest: bundleManifest,
@@ -406,6 +428,9 @@ function verifyNativeComponents(
     sceneAuthoringAttemptResult: attemptResult,
     nativeSceneCheckResult: checkResult,
     nativeSceneContribution: contribution,
+    ...(isNil(nativeBlockMaterializerMetadata)
+      ? {}
+      : { nativeBlockMaterializerMetadata }),
     gameplayBootstrap,
     worldRuntimeBootstrap,
     worldPackageBuildReceipt: receipt,
@@ -510,6 +535,9 @@ function verifyNativeComponents(
       readonly outcome: "passed";
     },
     nativeSceneContribution: contribution,
+    ...(isNil(nativeBlockMaterializerMetadata)
+      ? {}
+      : { nativeBlockMaterializerMetadata }),
     gameplayBootstrap,
     worldRuntimeBootstrap,
     registryLock,

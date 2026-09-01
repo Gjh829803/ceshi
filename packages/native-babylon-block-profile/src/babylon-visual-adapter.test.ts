@@ -12,6 +12,8 @@ import type {
   BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
 import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
+import { peekBabylonNativeBlockLiveHandleRegistryV1 } from
+  "./live-handle-registry.js";
 import type {
   BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockSessionRecordV1,
@@ -40,6 +42,17 @@ interface VisualAdapterModule {
       minimumMetersXYZ: readonly [number, number, number];
       maximumMetersXYZ: readonly [number, number, number];
     }>[];
+    liveHandles: Readonly<{
+      blocks: readonly Readonly<{
+        runtimeEntityId: string;
+        semanticCaptureClassId: string;
+        mesh: Mesh;
+      }>[];
+      visualGroups: readonly Readonly<{
+        visualGroupId: string;
+        meshes: readonly Mesh[];
+      }>[];
+    }>;
     dispose(): void;
   }>;
 }
@@ -272,6 +285,24 @@ describe("Babylon Native block visual adapter", () => {
       expect(scene.getPhysicsEngine()).toBe(physicsEngineBefore);
       expect(Object.isFrozen(visuals.nodes)).toBe(true);
       expect(Object.isFrozen(visuals.visualGroups)).toBe(true);
+      expect(visuals.liveHandles.blocks.map((entry) => ({
+        runtimeEntityId: entry.runtimeEntityId,
+        semanticCaptureClassId: entry.semanticCaptureClassId,
+      }))).toEqual([{
+        runtimeEntityId: "native-block:gate-cap",
+        semanticCaptureClassId: "worldkit.native-block.group.ridge-gate",
+      }, {
+        runtimeEntityId: "native-block:gate-quarter",
+        semanticCaptureClassId: "worldkit.native-block.group.ridge-gate",
+      }, {
+        runtimeEntityId: "native-block:route-block",
+        semanticCaptureClassId: "worldkit.native-block.group.ungrouped",
+      }]);
+      expect(visuals.liveHandles.visualGroups[0]?.meshes).toEqual([
+        meshByBlockId.get("gate-cap"),
+        meshByBlockId.get("gate-quarter"),
+      ]);
+      expect(Object.isFrozen(visuals.liveHandles)).toBe(true);
     });
   });
 
@@ -297,10 +328,15 @@ describe("Babylon Native block visual adapter", () => {
       expect(first.nodes[0]?.mesh.material).not.toBe(
         second.nodes[0]?.mesh.material,
       );
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(firstScene)).toBe(
+        first.liveHandles,
+      );
 
       const firstMaterial = first.nodes[0]?.mesh.material;
       first.dispose();
       first.dispose();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(firstScene))
+        .toBeUndefined();
 
       expect(first.nodes.every(({ mesh }) => !mesh.isDisposed())).toBe(true);
       expect(first.nodes.every(({ mesh }) => mesh.material === null)).toBe(true);
@@ -314,6 +350,63 @@ describe("Babylon Native block visual adapter", () => {
       firstEngine.dispose();
       secondEngine.dispose();
     }
+  });
+
+  it("fails closed when two live registries share one Candidate Scene", async () => {
+    const { createBabylonNativeBlockVisualsV1 } = await loadVisualAdapter();
+
+    withScene((scene) => {
+      const first = createBabylonNativeBlockVisualsV1({
+        scene,
+        buildEpochId: "candidate-epoch-first",
+        checkedLayout: checkedLayoutFixture(scene),
+      });
+      const second = createBabylonNativeBlockVisualsV1({
+        scene,
+        buildEpochId: "candidate-epoch-second",
+        checkedLayout: checkedLayoutFixture(scene),
+      });
+
+      expect(() => peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+        .toThrow("WORLDKIT_NATIVE_BLOCK_LIVE_HANDLE_REGISTRY_AMBIGUOUS");
+      first.dispose();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
+        second.liveHandles,
+      );
+      second.dispose();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+        .toBeUndefined();
+    });
+  });
+
+  it("unregisters live handles before throwing material cleanup", async () => {
+    const { createBabylonNativeBlockVisualsV1 } = await loadVisualAdapter();
+
+    withScene((scene) => {
+      const visuals = createBabylonNativeBlockVisualsV1({
+        scene,
+        buildEpochId: "candidate-epoch-cleanup",
+        checkedLayout: checkedLayoutFixture(scene),
+      });
+      const material = visuals.nodes[0]?.mesh.material;
+      expect(material).toBeInstanceOf(StandardMaterial);
+      if (!(material instanceof StandardMaterial)) {
+        throw new TypeError("expected one Babylon StandardMaterial");
+      }
+      const originalDispose = material.dispose.bind(material);
+      material.dispose = () => {
+        expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+          .toBeUndefined();
+        throw new Error("expected material cleanup failure");
+      };
+
+      expect(() => visuals.dispose())
+        .toThrow("expected material cleanup failure");
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene))
+        .toBeUndefined();
+      material.dispose = originalDispose;
+      originalDispose();
+    });
   });
 
   it("rejects an unpassed or mismatched check before publishing visual nodes", async () => {
