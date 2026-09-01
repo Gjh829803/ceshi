@@ -92,11 +92,13 @@ Import `assessBabylonNativeBlockOptimizationV1` from `./index.js` and assert a s
 epoch with a rectangular two-block pair emits one Thin Instance group, one coalescing group, exact
 baseline/projected counts, complete coverage, and a SHA-256 assessment hash.
 
-- [ ] **Step 2: Add semantic-split and boundary RED cases**
+- [ ] **Step 2: Add semantic-split and negative-Chunk RED cases**
 
 Use literal fixtures proving different traversal identity, explicit material ratio, visual group,
-non-rectangular occupied union, and boundary-crossing Block never enter the same eligibility group.
-Include a negative-coordinate Chunk fixture and reversed creation order.
+non-rectangular occupied union never enter the same eligibility group. Include a negative-coordinate
+Chunk fixture and reversed creation order. Current Profile lattice bounds align to the frozen Chunk
+grid, so retain boundary singleton behavior as an explicit fail-closed future-shape rule rather than
+fabricating a currently admitted boundary-crossing fixture.
 
 - [ ] **Step 3: Add rejection and deep-freeze RED cases**
 

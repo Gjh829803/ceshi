@@ -73,3 +73,14 @@ export type {
   BabylonNativeBlockPositionMetersXYZV1,
   BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
+export { assessBabylonNativeBlockOptimizationV1 } from "./optimization.js";
+export type {
+  BabylonNativeBlockColliderCoalescingGroupV1,
+  BabylonNativeBlockOptimizationAssessmentV1,
+  BabylonNativeBlockOptimizationBaselineResourcesV1,
+  BabylonNativeBlockOptimizationChunkPolicyV1,
+  BabylonNativeBlockOptimizationEquivalenceV1,
+  BabylonNativeBlockOptimizationProjectedResourcesV1,
+  BabylonNativeBlockOptimizationResidencyGroupV1,
+  BabylonNativeBlockThinInstanceGroupV1,
+} from "./optimization.js";
