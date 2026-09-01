@@ -16,8 +16,9 @@ resource and equivalence evidence; it never mutates Babylon or BNA contributions
 
 ## Global Constraints
 
-- Modify only `packages/native-babylon-block-profile/**` and BWB-6-focused specs, plans, reviews, and
-  live backlog status after merge.
+- Modify only `packages/native-babylon-block-profile/**`, the single contract-lane entry in
+  `scripts/lib/test-gate-manifest.ts`, and BWB-6-focused specs, plans, reviews, and live backlog
+  status after merge.
 - Do not modify Runtime, Havok, Camera, Input, Browser, ports, AI Schema, BNA Registration, or
   Contribution semantics.
 - Keep exactly one new package-root callable entry and no compatibility alias.
