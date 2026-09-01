@@ -141,7 +141,8 @@ Usage:
   worldkit native explain <world-directory> [--json]
   worldkit native package <attempt-directory> --case <case.json> --output <package-directory> --json
   worldkit native run <package-directory> [--port <port>] [--json]
-  worldkit capture <file> --output <png> [--snapshot <json>] [--triview-output <directory> --implementation-map <json>] [--port <port>] [--json]
+  worldkit capture <file-or-package> --output <png> [--snapshot <json>]
+    [--triview-output <directory> [--implementation-map <json>]] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
   worldkit registry describe --resource-ref <ref> [--json]
   worldkit registry search --lock <registry-lock.json> --kind <resource-kind>
@@ -383,6 +384,9 @@ export interface WorldkitCommandResult {
   triviewOutputPath?: string;
   url?: string;
   renderEnvironment?: RenderEnvironmentReceiptV1;
+  formalRequestHash?: string;
+  formalCaptureReceiptHash?: string;
+  worldPackageRootHash?: string;
 }
 
 interface PackageNativeBlockAttemptInputV1 {
@@ -410,8 +414,29 @@ type PackageNativeBlockAttemptPortV1 = (
   input: PackageNativeBlockAttemptInputV1,
 ) => Promise<PackagedNativeBlockAttemptCliSourceV1>;
 
+interface CaptureHostedWorldPackageCliInputV1 {
+  readonly packageDirectoryPath: string;
+  readonly outputPath: string;
+  readonly triviewOutputPath: string;
+  readonly port?: number;
+}
+
+interface CaptureHostedWorldPackageCliResultV1 {
+  readonly outcome: "completed";
+  readonly outputDirectoryPath: string;
+  readonly openingOutputPath: string;
+  readonly formalRequestHash: string;
+  readonly formalCaptureReceiptHash: string;
+  readonly worldPackageRootHash: string;
+}
+
+type CaptureHostedWorldPackagePortV1 = (
+  input: CaptureHostedWorldPackageCliInputV1,
+) => Promise<CaptureHostedWorldPackageCliResultV1>;
+
 export interface WorldkitMainPortsV1 {
   readonly packageNativeBlockAttemptV1?: PackageNativeBlockAttemptPortV1;
+  readonly captureHostedWorldPackageV1?: CaptureHostedWorldPackagePortV1;
 }
 
 async function loadPackageNativeBlockAttemptPortV1(): Promise<
@@ -428,6 +453,22 @@ async function loadPackageNativeBlockAttemptPortV1(): Promise<
     throw new TypeError("WORLDKIT_NATIVE_PACKAGE_ADAPTER_UNAVAILABLE");
   }
   return loaded.packageNativeBlockAttemptV1 as PackageNativeBlockAttemptPortV1;
+}
+
+async function loadCaptureHostedWorldPackagePortV1(): Promise<
+  CaptureHostedWorldPackagePortV1
+> {
+  const moduleSpecifier = new URL(
+    "../reconstruction/formal-capture.js",
+    import.meta.url,
+  ).href;
+  const loaded = await import(moduleSpecifier) as Readonly<{
+    captureHostedWorldPackageV1?: unknown;
+  }>;
+  if (typeof loaded.captureHostedWorldPackageV1 !== "function") {
+    throw new TypeError("WORLDKIT_FORMAL_CAPTURE_ADAPTER_UNAVAILABLE");
+  }
+  return loaded.captureHostedWorldPackageV1 as CaptureHostedWorldPackagePortV1;
 }
 
 async function runNativePackageCommandV1(
@@ -1202,11 +1243,6 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     if (outputPath === undefined) {
       throw new WorldkitUsageError("capture requires --output <png>.");
     }
-    if ((triviewOutputPath === undefined) !== (implementationMapPath === undefined)) {
-      throw new WorldkitUsageError(
-        "capture requires --triview-output and --implementation-map together.",
-      );
-    }
     rejectRemaining(tokens, "capture");
     return {
       command,
@@ -1892,6 +1928,75 @@ export async function captureFile(
   }
 }
 
+async function capturePackageDirectory(
+  parsed: Extract<WorldkitArgs, { command: "capture" }>,
+  captureHostedWorldPackageV1?: CaptureHostedWorldPackagePortV1,
+): Promise<WorldkitCommandResult> {
+  if (
+    parsed.triviewOutputPath === undefined ||
+    parsed.snapshotPath !== undefined ||
+    parsed.implementationMapPath !== undefined
+  ) {
+    return cliFailure(
+      "CLI_FORMAL_CAPTURE_OPTIONS_INVALID",
+      "Package Capture requires --triview-output and forbids Canonical snapshot or implementation-map options.",
+    );
+  }
+  try {
+    const adapter = captureHostedWorldPackageV1 ??
+      await loadCaptureHostedWorldPackagePortV1();
+    const captured = await adapter({
+      packageDirectoryPath: path.resolve(parsed.inputPath),
+      outputPath: path.resolve(parsed.outputPath),
+      triviewOutputPath: path.resolve(parsed.triviewOutputPath),
+      ...(parsed.port === undefined ? {} : { port: parsed.port }),
+    });
+    return {
+      ok: true,
+      exitCode: 0,
+      diagnostics: [],
+      outputPath: captured.openingOutputPath,
+      triviewOutputPath: captured.outputDirectoryPath,
+      formalRequestHash: captured.formalRequestHash,
+      formalCaptureReceiptHash: captured.formalCaptureReceiptHash,
+      worldPackageRootHash: captured.worldPackageRootHash,
+    };
+  } catch (error) {
+    return cliFailure(
+      "CLI_FORMAL_CAPTURE_FAILED",
+      "Unable to capture the verified WorldPackage.",
+      { cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
+}
+
+async function captureInput(
+  parsed: Extract<WorldkitArgs, { command: "capture" }>,
+  captureHostedWorldPackageV1?: CaptureHostedWorldPackagePortV1,
+): Promise<WorldkitCommandResult> {
+  let inputIsDirectory = false;
+  try {
+    inputIsDirectory = (await stat(path.resolve(parsed.inputPath))).isDirectory();
+  } catch {
+    // Canonical capture owns its existing unavailable-file diagnostic.
+  }
+  if (inputIsDirectory) {
+    return capturePackageDirectory(parsed, captureHostedWorldPackageV1);
+  }
+  return captureFile(parsed.inputPath, parsed.outputPath, {
+    ...(parsed.snapshotPath === undefined
+      ? {}
+      : { snapshotPath: parsed.snapshotPath }),
+    ...(parsed.triviewOutputPath === undefined
+      ? {}
+      : { triviewOutputPath: parsed.triviewOutputPath }),
+    ...(parsed.implementationMapPath === undefined
+      ? {}
+      : { implementationMapPath: parsed.implementationMapPath }),
+    ...(parsed.port === undefined ? {} : { port: parsed.port }),
+  });
+}
+
 function subjectPresetCliFailure(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const code = /^([A-Z][A-Z0-9_]+):/.exec(message)?.[1] ??
@@ -2017,6 +2122,9 @@ type PrintableResult = {
   explain?: AuthoringEditCliResultV1["explain"];
   diff?: AuthoringEditCliResultV1["diff"];
   cleanupReport?: AuthoringEditCliResultV1["cleanupReport"];
+  formalRequestHash?: string;
+  formalCaptureReceiptHash?: string;
+  worldPackageRootHash?: string;
 };
 
 function printResult(result: PrintableResult, json: boolean): void {
@@ -2696,18 +2804,10 @@ export async function main(
       : parsed.command === "build"
         ? await buildFile(parsed.inputPath, parsed.outputPath)
         : parsed.command === "capture"
-          ? await captureFile(parsed.inputPath, parsed.outputPath, {
-              ...(parsed.snapshotPath === undefined
-                ? {}
-                : { snapshotPath: parsed.snapshotPath }),
-              ...(parsed.triviewOutputPath === undefined
-                ? {}
-                : { triviewOutputPath: parsed.triviewOutputPath }),
-              ...(parsed.implementationMapPath === undefined
-                ? {}
-                : { implementationMapPath: parsed.implementationMapPath }),
-              ...(parsed.port === undefined ? {} : { port: parsed.port }),
-            })
+          ? await captureInput(
+              parsed,
+              ports.captureHostedWorldPackageV1,
+            )
           : parsed.command === "registry-list"
             ? listRegistryResources(parsed.resourceKind)
             : parsed.command === "registry-describe"

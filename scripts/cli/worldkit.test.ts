@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -813,6 +813,78 @@ describe("worldkit CLI", () => {
     });
   });
 
+  it("parses verified Package Capture without a Canonical implementation map", () => {
+    expect(parseWorldkitArgs([
+      "capture",
+      "attempts/0/world-package",
+      "--output",
+      "attempts/0/capture/opening.png",
+      "--triview-output",
+      "attempts/0/capture",
+      "--json",
+    ])).toEqual({
+      command: "capture",
+      inputPath: "attempts/0/world-package",
+      outputPath: "attempts/0/capture/opening.png",
+      triviewOutputPath: "attempts/0/capture",
+      json: true,
+    });
+  });
+
+  it("dispatches a directory input to the capture-only Hosted Package adapter", async () => {
+    const root = await createTemporaryDirectory();
+    const packageDirectoryPath = path.join(root, "world-package");
+    const captureDirectoryPath = path.join(root, "capture");
+    const openingOutputPath = path.join(captureDirectoryPath, "opening.png");
+    await mkdir(packageDirectoryPath);
+    const calls: unknown[] = [];
+    const stdout: string[] = [];
+    const write = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(String(chunk));
+      return true;
+    });
+    try {
+      await expect(main([
+        "capture",
+        packageDirectoryPath,
+        "--output",
+        openingOutputPath,
+        "--triview-output",
+        captureDirectoryPath,
+        "--json",
+      ], {
+        captureHostedWorldPackageV1: async (input: unknown) => {
+          calls.push(input);
+          return {
+            outcome: "completed",
+            outputDirectoryPath: captureDirectoryPath,
+            openingOutputPath,
+            formalRequestHash: `sha256:${"1".repeat(64)}`,
+            formalCaptureReceiptHash: `sha256:${"2".repeat(64)}`,
+            worldPackageRootHash: `sha256:${"3".repeat(64)}`,
+          };
+        },
+      })).resolves.toBe(0);
+    } finally {
+      write.mockRestore();
+    }
+
+    expect(calls).toEqual([{
+      packageDirectoryPath,
+      outputPath: openingOutputPath,
+      triviewOutputPath: captureDirectoryPath,
+    }]);
+    expect(JSON.parse(stdout.join(""))).toMatchObject({
+      ok: true,
+      exitCode: 0,
+      outputPath: openingOutputPath,
+      triviewOutputPath: captureDirectoryPath,
+      formalRequestHash: `sha256:${"1".repeat(64)}`,
+      formalCaptureReceiptHash: `sha256:${"2".repeat(64)}`,
+      worldPackageRootHash: `sha256:${"3".repeat(64)}`,
+    });
+  });
+
   it("validates a lightweight Scene Brief through the CLI boundary", async () => {
     const directory = await createTemporaryDirectory();
     const inputPath = path.join(directory, "scene-brief.md");
@@ -985,9 +1057,6 @@ describe("worldkit CLI", () => {
     expect(() =>
       parseWorldkitArgs(["layout", "solve", "world.json"]),
     ).toThrow("layout solve requires --output <directory>");
-    expect(() => parseWorldkitArgs([
-      "capture", "world.json", "--output", "frame.png", "--triview-output", "triviews",
-    ])).toThrow("--triview-output and --implementation-map together");
     expect(() =>
       parseWorldkitArgs(["take", "run", "opening.take.json", "--world", "world.json"]),
     ).toThrow("take run requires --output <directory>");
