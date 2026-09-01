@@ -1,7 +1,7 @@
 # P2.2-S1 Seated `mountedOn` Control Context Design
 
 **Project code:** `P22-S1`
-**Status:** Design correction after independent review; implementation intentionally deferred
+**Status:** Reviewed and frozen; implementation intentionally deferred
 **Date:** 2026-09-01
 **Source baseline:** `origin/main@62db83fc3a894d99f5168a8b1f312b1070c94603`
 **Parent roadmap:** P2.2 Subject S3: Mount, Tow and Control Context
@@ -166,7 +166,9 @@ P22-S1 Mount Slots are declared only by a package-local `PackageSubjectDefinitio
 Definition V3 has no `mountSlots` field and is not extended in this slice. The acceptance quadruped is
 therefore a package-local Subject Definition; it may reuse registered assets and Profiles, but it does
 not treat `animal.quadruped.forward-steer@2` as directly mountable merely because that Registry resource
-contains a `MountSeat` Socket.
+contains a `MountSeat` Socket. `MountSeat` remains because it is the canonical reusable quadruped seat
+anchor; unlike the deleted `DriverSeat` from the reserved seat dialect, it does not by itself claim
+Relationship admission or a Mount Slot.
 
 The Mount Socket owns local position and rotation. P22-S1 supports ground seats whose Socket local
 pitch and roll are zero. Admission rejects non-finite transforms and non-zero pitch/roll for this
@@ -354,9 +356,10 @@ P22-S1 reuses the current Camera collision implementation and must not add a sec
 Hard `camera-hard` safety, complete Subject Physics Group exclusion, atomic Camera rollback and
 collision-filter restoration remain mandatory. Camera target exclusion and mounted Rider exclusion are
 distinct existing projections: the query's single excluded target Entity covers the committed controlled
-Mount and its complete Physics Shape Group, while the mounted Rider's query participation is disabled by
-a full recomputation from committed `mountedOn` relationships. Neither mechanism creates Gameplay truth
-or a second retained relationship map. The latest Camera design's Final Frustum/Near Plane
+Mount and its complete Physics Shape Group; the current query contract admits at most one excluded target
+Entity. The mounted Rider's query participation is disabled separately by a full recomputation from
+committed `mountedOn` relationships. Neither mechanism creates Gameplay truth or a second retained
+relationship map. The latest Camera design's Final Frustum/Near Plane
 Validator is a separate existing CAM-5 completion dependency: P22-S1 must not claim that complete Camera
 production milestone or weaken its future integration seam.
 
@@ -441,7 +444,7 @@ Passing unit tests do not claim visual fidelity. Rendered evidence does not repl
 | P22S1-C1 | Current-only Slot/Profile contracts and Registry resources | P22S1-D0 | P22S1-C2, P22S1-G1 | `packages/subject-registry`, `assets/registry/relationship-profiles/catalog.json`, `assets/registry/subject-definitions/catalog.json`, Registry edges/indexes/hashes and direct tests | parser/hash/order/unknown rejection, exact four-subject reserved-capability cleanup, no Capability-to-Profile map | sequential |
 | P22S1-C2 | Authoring/Compiler/Runtime Bootstrap closure | P22S1-C1 | P22S1-C3, P22S1-R1 | authoring Schema/normalizer, Compiler projection, runtime-contracts Schema/generator; exclusive ownership of generated validators during this row | Slot-owned Profile closure, mode/socket parity, generated parity and tamper tests | parallel-safe with G1 only |
 | P22S1-G1 | Gameplay/RuntimeHost cardinality and transaction invariants | P22S1-C1 | P22S1-R1, P22S1-F1 | mounted trusted-effect planner, GameplayState and WorldSession tests; no Registry/Schema/generated files | exact three-change plan, Rider/Slot cardinality, idempotency, capacity, Snapshot/Hash/Event/Receipt | parallel-safe with C2 only |
-| P22S1-C3 | Browser canonical projection and tracked generated-artifact migration | P22S1-C2 | P22S1-F1 | `apps/playground/src/worldkit-browser-api.ts`, Browser tests and tracked artifacts that embed Slot/Profile/catalog hashes, including `artifacts/bna-1/execution-plan-v5-projection-receipt.json` | no Browser mapping copy, exact generated hash/resource census and stale-artifact rejection | sequential |
+| P22S1-C3 | Browser, Skill-checker and tracked generated-artifact migration | P22S1-C2 | P22S1-F1 | `apps/playground/src/worldkit-browser-api.ts`, Browser tests, `.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs`, `.codex/skills/worldkit-canonical-builder/scripts/self-check.mjs`, and tracked artifacts that embed Slot/Profile/catalog hashes, including `artifacts/bna-1/execution-plan-v5-projection-receipt.json` | no Browser/Skill mapping copy, source-equivalent checker parity, exact generated hash/resource census and stale-artifact rejection | sequential |
 | P22S1-R1 | Babylon seated projection, body-owned clearance and Camera revision lifecycle | P22S1-C2, P22S1-G1 | P22S1-F1 | runtime-babylon mounted transaction, Character Body placement owner and Camera-query projection | asymmetric Socket, real Physics clearance/support, masks, safe exit, controlled Camera reset, throwing cleanup, reset/replay | main-agent-only |
 | P22S1-F1 | Human-quadruped fixture, Capture and Browser evidence | P22S1-C3, P22S1-R1 | P22S1-V1 | package-local fixture/controls/verifier/Capture files; no Hosted Builder reopening | real Havok, same/next Tick boundaries, rendered and manual evidence | sequential |
 | P22S1-V1 | Frozen exact-SHA integration and truthful status | P22S1-F1 | P22-S2 design | main agent; integration, review and status docs | focused local gates, one Cloud full affected matrix, Grok code review, no P0/P1 | main-agent-only |
@@ -462,7 +465,8 @@ The accepted P22-S1 tree must contain none of the following:
 - the reserved seat/tether Capability refs and obsolete Sockets on
   `glider.paraglider.unpowered@1`, `surface-craft.ice-skimmer@1`,
   `vehicle.four-wheel.arcade@1` and `watercraft.kayak.surface@1`, plus their old content hashes;
-- any hard-coded Capability-to-Profile map in the Normalizer, Registry reference edges or Browser;
+- any hard-coded Capability-to-Profile map in the Normalizer, Registry reference edges, Browser or
+  bundled Planner/Builder self-check snapshots;
 - Mount Slot without `relationshipProfileRef`;
 - seat/stand inference from Slot ID, Socket name, Subject kind or renderer metadata;
 - the old optional `maximumMountDistanceMeters` path and the removed `controlTransferMode` /
