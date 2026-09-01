@@ -5,6 +5,7 @@ import {
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
   hashBabylonNativeSceneContributionV1,
+  createBabylonNativeStaticColliderContributionV1,
   hashFormalArtifactViewRequestV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalColliderOverlayRequestV1,
@@ -46,6 +47,17 @@ import {
 import type { BuildWorldReconstructionEvidenceSetInputV1 } from "./evaluate-evidence-set.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
+const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
+  "worldkit://traversal-surface-profile/ground.static@1" as const;
+
+export interface EvidenceSetFixtureOptionsV1 {
+  readonly includePaletteTraversalDisagreement?: boolean;
+  readonly traversalCheckpoints?: readonly Readonly<{
+    checkpointId: string;
+    outcome: "reached" | "passed" | "blocked";
+    observedAtTick: number;
+  }>[];
+}
 const ACCEPTANCE_TARGET_REF =
   "worldkit://acceptance-target/package-fixture-opening@1";
 const UPPER_TARGET_REF =
@@ -133,7 +145,9 @@ function snapshotValue() {
   });
 }
 
-export function createEvidenceSetFixtureInputV1(): BuildWorldReconstructionEvidenceSetInputV1 {
+export function createEvidenceSetFixtureInputV1(
+  options: EvidenceSetFixtureOptionsV1 = {},
+): BuildWorldReconstructionEvidenceSetInputV1 {
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1({
     kind: "world-reconstruction-evaluation-profile",
     schemaVersion: 1,
@@ -293,12 +307,62 @@ export function createEvidenceSetFixtureInputV1(): BuildWorldReconstructionEvide
   if (packageInput.nativeSceneContribution.profileSettlement.kind !== "host-snapshot") {
     throw new Error("fixture must use Block profile settlement");
   }
+  const baseMetadata = packageInput.nativeBlockMaterializerMetadata!;
+  const paletteTraversalDisagreement = options.includePaletteTraversalDisagreement === true;
+  const extraColliders = paletteTraversalDisagreement
+    ? [
+      createBabylonNativeStaticColliderContributionV1({
+        id: "palette-ground-blocker",
+        worldPositionsMetersXYZ: [1.5, 0, 1.5, 2.5, 0, 1.5, 2, 0, 2.5],
+        triangleIndices: [0, 1, 2],
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
+        traversalBinding: { kind: "not-traversable" },
+      }),
+      createBabylonNativeStaticColliderContributionV1({
+        id: "structure-painted-ground",
+        worldPositionsMetersXYZ: [-1, 1, -4, 1, 1, -4, 0, 1, -2],
+        triangleIndices: [0, 1, 2],
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
+        traversalBinding: {
+          kind: "static-surface",
+          surfaceEntityId: "upper-surface",
+          logicalSubshapeId: "top",
+          traversalSurfaceProfileRef: GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
+        },
+      }),
+    ]
+    : [];
+  const extraBlocks = paletteTraversalDisagreement
+    ? [{
+      blockId: "step-shaped-ground-block",
+      runtimeEntityId: "native-block:step-shaped-ground-block",
+      semanticCaptureClassId: "worldkit.native-block.group.ground-group",
+      shape: "step" as const,
+      paletteRole: "ground" as const,
+      visualGroupId: "ground-group",
+      centerMetersXYZ: [2, -0.5, 2] as const,
+      rotationQuarterTurnsY: 0 as const,
+      sizeMetersXYZ: [1, 1, 1] as const,
+    }]
+    : [];
+  const extraJoins = paletteTraversalDisagreement
+    ? [
+      { blockId: "step-shaped-ground-block", colliderId: "palette-ground-blocker" },
+      { blockId: "upper-block", colliderId: "structure-painted-ground" },
+    ]
+    : [];
   const nativeSceneContribution = {
     ...packageInput.nativeSceneContribution,
     profileSettlement: {
       ...packageInput.nativeSceneContribution.profileSettlement,
       targetCount: 2,
     },
+    staticColliders: [
+      ...packageInput.nativeSceneContribution.staticColliders,
+      ...extraColliders,
+    ].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
   };
   const packageSceneAuthoringAttempt = {
     ...packageInput.sceneAuthoringAttempt,
@@ -309,12 +373,13 @@ export function createEvidenceSetFixtureInputV1(): BuildWorldReconstructionEvide
     sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(packageSceneAuthoringAttempt),
   };
   const metadata = parseBabylonNativeBlockMaterializerMetadataV1({
-    ...packageInput.nativeBlockMaterializerMetadata!,
+    ...baseMetadata,
     caseHash,
     authoringManifestHash,
     contributionHash: hashBabylonNativeSceneContributionV1(nativeSceneContribution),
     blocks: [
-      ...packageInput.nativeBlockMaterializerMetadata!.blocks,
+      ...baseMetadata.blocks,
+      ...extraBlocks,
       {
         blockId: "upper-block",
         runtimeEntityId: "native-block:upper-block",
@@ -326,9 +391,17 @@ export function createEvidenceSetFixtureInputV1(): BuildWorldReconstructionEvide
         rotationQuarterTurnsY: 0,
         sizeMetersXYZ: [2, 2, 2],
       },
-    ],
+    ].sort((left, right) =>
+      left.blockId < right.blockId ? -1 : left.blockId > right.blockId ? 1 : 0),
     visualGroups: [
-      ...packageInput.nativeBlockMaterializerMetadata!.visualGroups,
+      ...baseMetadata.visualGroups.map((group) =>
+        group.visualGroupId === "ground-group" && extraBlocks.length > 0
+          ? {
+            ...group,
+            blockIds: [...group.blockIds, ...extraBlocks.map(({ blockId }) => blockId)]
+              .sort((left, right) => left < right ? -1 : left > right ? 1 : 0),
+          }
+          : group),
       {
         visualGroupId: "upper-group",
         acceptanceTargetRef: UPPER_TARGET_REF,
@@ -340,6 +413,14 @@ export function createEvidenceSetFixtureInputV1(): BuildWorldReconstructionEvide
         maximumMetersXYZ: [1, 2, -2],
       },
     ],
+    colliderJoins: [
+      ...baseMetadata.colliderJoins,
+      ...extraJoins,
+    ].sort((left, right) => {
+      const leftKey = `${left.blockId}\u0000${left.colliderId}`;
+      const rightKey = `${right.blockId}\u0000${right.colliderId}`;
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    }),
   });
   const directory = createBabylonNativeWorldPackageV1({
     ...packageInput,
@@ -631,7 +712,9 @@ export function createEvidenceSetFixtureInputV1(): BuildWorldReconstructionEvide
         positionMetersXYZ: [0, 0, 0],
         movementMedium: "ground",
       }],
-      checkpoints: [{ checkpointId: "ground", outcome: "reached", observedAtTick: 1 }],
+      checkpoints: options.traversalCheckpoints ?? [
+        { checkpointId: "ground", outcome: "reached", observedAtTick: 1 },
+      ],
       outcome: "passed",
       observedTopologyRelations: [],
     }],

@@ -7,16 +7,19 @@ import {
   hashFormalScriptedTraversalObservationV1,
   hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureReceiptV1,
+  hashNativeSceneCheckResultV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
+  type BabylonNativeContributionTraversalBindingV1,
   type FormalColliderOverlayObservationV1,
   type FormalOpeningObservationV1,
   type FormalScriptedTraversalObservationV1,
   type FormalSpawnSupportObservationV1,
   type FormalWorldCaptureReceiptV1,
+  type NativeSceneCheckResultV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   hashSceneAuthoringAttemptResultV1,
@@ -82,14 +85,67 @@ function relationKey(value: WorldReconstructionTopologyRelationV1): string {
   return `${value.fromNodeId}\u0000${value.relation}\u0000${value.toNodeId}`;
 }
 
-function roleForBlock(
-  block: Readonly<{ shape: string; paletteRole: string }>,
-): "ground" | "blocker" | "step" {
-  if (block.shape === "step") return "step";
-  if (block.paletteRole === "structure" || block.paletteRole === "hazard") {
-    return "blocker";
+const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
+  "worldkit://traversal-surface-profile/ground.static@1" as const;
+
+function roleFromTraversalBinding(
+  binding: BabylonNativeContributionTraversalBindingV1,
+): "ground" | "blocker" {
+  if (binding.kind === "not-traversable") return "blocker";
+  if (
+    binding.kind === "static-surface" &&
+    binding.traversalSurfaceProfileRef ===
+      GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF
+  ) {
+    return "ground";
   }
-  return "ground";
+  stale("Contribution traversalBinding does not admit a blocker or ground collider role");
+}
+
+function projectMeasuredTraversalCheck(
+  measured: readonly Readonly<{
+    checkpointId: string;
+    outcome: "reached" | "passed" | "blocked";
+  }>[],
+  requiredCheckpointIds: readonly string[],
+): Readonly<{
+  outcome: "reached" | "blocked" | "incomplete";
+  checkpointIds: readonly string[];
+}> {
+  const checkpointIds = uniqueSorted(
+    measured.map(({ checkpointId }) => checkpointId),
+  );
+  const measuredById = new Map(
+    measured.map((row) => [row.checkpointId, row.outcome]),
+  );
+  if (requiredCheckpointIds.some((id) => !measuredById.has(id))) {
+    return { outcome: "incomplete", checkpointIds };
+  }
+  if ([...measuredById.values()].some((outcome) => outcome === "blocked")) {
+    return { outcome: "blocked", checkpointIds };
+  }
+  if (
+    requiredCheckpointIds.every((id) => {
+      const outcome = measuredById.get(id);
+      return outcome === "reached" || outcome === "passed";
+    })
+  ) {
+    return { outcome: "reached", checkpointIds };
+  }
+  return { outcome: "incomplete", checkpointIds };
+}
+
+function candidateReplayOutcomeFromCheckResult(
+  checkResult: NativeSceneCheckResultV1,
+): "completed" | "failed" | "incomplete" {
+  if (
+    checkResult.diagnostics.some((diagnostic) =>
+      diagnostic.stage === "runtime-replay" && diagnostic.severity === "error"
+    )
+  ) {
+    return "failed";
+  }
+  return "incomplete";
 }
 
 function assertObservationIdentity(
@@ -389,22 +445,43 @@ export function buildWorldReconstructionEvidenceSetV1(
     .map((collider) => {
       const blockId = colliderJoins.get(collider.id);
       if (blockId === undefined) stale("Contribution collider is absent from trusted Block metadata");
-      const block = metadataBlocks.get(blockId);
-      if (block === undefined) stale("Contribution collider Block is absent from trusted Block metadata");
+      if (!metadataBlocks.has(blockId)) {
+        stale("Contribution collider Block is absent from trusted Block metadata");
+      }
       return {
         contributionId: collider.id,
         colliderId: collider.id,
-        role: roleForBlock(block),
+        role: roleFromTraversalBinding(collider.traversalBinding),
         hasOverlay: overlayColliderIds.has(collider.id),
       };
     });
   const observedTraversalChecks = [...traversal.checks]
     .sort((left, right) => compareText(left.id, right.id))
-    .map((check) => ({
-      id: check.id,
-      outcome: check.outcome === "passed" ? "reached" as const : "blocked" as const,
-      checkpointIds: uniqueSorted(check.checkpoints.map(({ checkpointId }) => checkpointId)),
-    }));
+    .map((check) => {
+      const expected = expectedChecks.get(check.id);
+      if (expected === undefined) stale("traversal check is absent from Case or formal Request");
+      return {
+        id: check.id,
+        ...projectMeasuredTraversalCheck(check.checkpoints, expected.checkpointIds),
+      };
+    });
+  const nativeSceneCheckResultRef =
+    `world-package://${verified.manifest.sceneSource.nativeSceneCheckResultPath}`;
+  exact(
+    verified.manifest.sceneSource.nativeSceneCheckResultHash,
+    hashNativeSceneCheckResultV1(verified.nativeSceneCheckResult),
+    "verified Package Check Result hash does not match official Check Result bytes",
+  );
+  const worldPackageIdentityMatches =
+    captureReceipt.worldPackageRef === verified.receipt.worldPackageRef &&
+    captureReceipt.worldPackageRootHash === verified.receipt.worldPackageRootHash;
+  const buildIdentityMatches =
+    captureReceipt.worldBuildIdentityHash === verified.receipt.worldBuildIdentityHash;
+  const captureIdentityMatches =
+    captureReceipt.worldPackageBuildReceiptHash === buildReceiptHash &&
+    captureReceipt.worldPackageRef === verified.receipt.worldPackageRef &&
+    captureReceipt.worldPackageRootHash === verified.receipt.worldPackageRootHash &&
+    captureReceipt.worldBuildIdentityHash === verified.receipt.worldBuildIdentityHash;
   const topologyRelations = uniqueSorted(observedRelationRows.map(relationKey)).map((key) => {
     const relation = observedRelationRows.find((candidate) => relationKey(candidate) === key);
     if (relation === undefined) stale("topology relation canonicalization failed");
@@ -452,17 +529,20 @@ export function buildWorldReconstructionEvidenceSetV1(
       },
       {
         dimensionId: "deterministic-build",
-        evidenceRefs: [
+        evidenceRefs: uniqueSorted([
+          nativeSceneCheckResultRef,
           captureReceipt.worldPackageBuildReceiptRef,
           captureReceipt.worldBuildIdentityRef,
           rawInput.captureReceiptRef,
-        ].sort(compareText),
+        ]),
         observed: {
           kind: "deterministic-build-observed",
-          candidateReplayOutcome: "completed",
-          worldPackageIdentityMatches: true,
-          buildIdentityMatches: true,
-          captureIdentityMatches: true,
+          candidateReplayOutcome: candidateReplayOutcomeFromCheckResult(
+            verified.nativeSceneCheckResult,
+          ),
+          worldPackageIdentityMatches,
+          buildIdentityMatches,
+          captureIdentityMatches,
         },
       },
       {

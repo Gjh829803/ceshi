@@ -382,6 +382,8 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/project-health/sensors/visual-evidence.test.ts", lane: "contract" },
   { path: "scripts/project-health/sensors/workspace-boundary.test.ts", lane: "contract" },
   { path: "scripts/project-health/workspace-boundary-adapter.test.ts", lane: "contract" },
+  { path: "scripts/reconstruction/evaluate-evidence-set.test.ts", lane: "contract" },
+  { path: "scripts/reconstruction/evaluate.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/generation-request.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/generation-runner.test.ts", lane: "contract" },
   { path: "scripts/reconstruction/native-package.test.ts", lane: "resource-heavy", reasonCodes: ["measured-duration"] },
