@@ -396,7 +396,9 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         priorSourceRef: "artifact://run/attempts/0/source",
         priorSourceHash: hash("d"),
         priorEvaluationResultRef: "artifact://run/attempts/0/evaluation.json",
-        priorEvaluationResultHash: sha256Bytes(new TextEncoder().encode("{}")),
+        priorEvaluationResultHash: sha256Bytes(
+          new TextEncoder().encode("{}"),
+        ) as `sha256:${string}`,
         priorGenerationRequestRef: "artifact://run/attempts/0/generation-request.json",
         priorGenerationRequestHash: attempt0.generationRequestHash,
         frozenOwnerIdentities: attempt0.frozenOwnerIdentities,
