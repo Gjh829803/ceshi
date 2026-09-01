@@ -18,6 +18,7 @@ import {
   type FormalOpeningObservationV1,
   type FormalScriptedTraversalObservationV1,
   type FormalSpawnSupportObservationV1,
+  type FormalTraversalCheckpointSpatialCriterionV1,
   type FormalWorldCaptureReceiptV1,
   type NativeSceneCheckResultV1,
 } from "@whitebox-world/runtime-contracts";
@@ -107,7 +108,8 @@ function projectMeasuredTraversalCheck(
     checkpointId: string;
     outcome: "reached" | "passed" | "blocked";
   }>[],
-  requiredCheckpointIds: readonly string[],
+  criteria: readonly FormalTraversalCheckpointSpatialCriterionV1[],
+  checkExpectation: "pass" | "block",
 ): Readonly<{
   outcome: "reached" | "blocked" | "incomplete";
   checkpointIds: readonly string[];
@@ -115,24 +117,39 @@ function projectMeasuredTraversalCheck(
   const checkpointIds = uniqueSorted(
     measured.map(({ checkpointId }) => checkpointId),
   );
+  const requiredCheckpointIds = criteria.map(({ checkpointId }) => checkpointId);
+  if (
+    checkpointIds.length !== requiredCheckpointIds.length ||
+    checkpointIds.some((id, index) => id !== requiredCheckpointIds[index])
+  ) {
+    return { outcome: "incomplete", checkpointIds };
+  }
   const measuredById = new Map(
     measured.map((row) => [row.checkpointId, row.outcome]),
   );
-  if (requiredCheckpointIds.some((id) => !measuredById.has(id))) {
-    return { outcome: "incomplete", checkpointIds };
-  }
-  if ([...measuredById.values()].some((outcome) => outcome === "blocked")) {
-    return { outcome: "blocked", checkpointIds };
-  }
+  const criterionIsSatisfied = (
+    criterion: FormalTraversalCheckpointSpatialCriterionV1,
+  ): boolean => {
+    const outcome = measuredById.get(criterion.checkpointId);
+    if (criterion.expectation === "reach") return outcome === "reached";
+    if (criterion.expectation === "pass") return outcome === "passed";
+    return outcome === "blocked";
+  };
   if (
-    requiredCheckpointIds.every((id) => {
-      const outcome = measuredById.get(id);
-      return outcome === "reached" || outcome === "passed";
-    })
+    criteria.some((criterion) =>
+      criterion.expectation === "block" && !criterionIsSatisfied(criterion)
+    )
   ) {
     return { outcome: "reached", checkpointIds };
   }
-  return { outcome: "incomplete", checkpointIds };
+  if (checkExpectation === "block") {
+    return criteria.every(criterionIsSatisfied)
+      ? { outcome: "blocked", checkpointIds }
+      : { outcome: "incomplete", checkpointIds };
+  }
+  return criteria.every(criterionIsSatisfied)
+    ? { outcome: "reached", checkpointIds }
+    : { outcome: "blocked", checkpointIds };
 }
 
 function candidateReplayOutcomeFromCheckResult(
@@ -459,10 +476,17 @@ export function buildWorldReconstructionEvidenceSetV1(
     .sort((left, right) => compareText(left.id, right.id))
     .map((check) => {
       const expected = expectedChecks.get(check.id);
-      if (expected === undefined) stale("traversal check is absent from Case or formal Request");
+      const request = requestChecks.get(check.id);
+      if (expected === undefined || request === undefined) {
+        stale("traversal check is absent from Case or formal Request");
+      }
       return {
         id: check.id,
-        ...projectMeasuredTraversalCheck(check.checkpoints, expected.checkpointIds),
+        ...projectMeasuredTraversalCheck(
+          check.checkpoints,
+          request.checkpointCriteria,
+          request.checkExpectation,
+        ),
       };
     });
   const nativeSceneCheckResultRef =
