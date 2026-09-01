@@ -2550,9 +2550,13 @@ export function parseFormalSpawnSupportObservationV1(
     "movementMedium",
   );
   const locomotionState = Object.values(subjectState.capabilityStatesById).find(
-    (state) => state.kind === "locomotion-capability-state",
+    (state) => state.kind === "locomotion-capability-state-v2",
   );
-  if (isNil(locomotionState) || locomotionState.movementMedium !== movementMedium) {
+  if (
+    isNil(locomotionState) ||
+    locomotionState.locomotion.status !== "active" ||
+    locomotionState.locomotion.movementMedium !== movementMedium
+  ) {
     fail(contract, "movementMedium", "must match committed reset-ready Subject state");
   }
   const contact = object(source.supportContact, contract, "supportContact");

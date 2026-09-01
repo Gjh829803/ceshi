@@ -67,15 +67,26 @@ function snapshotFixture(
           capabilityStatesById: {
             "locomotion:player": {
               id: "locomotion:player",
-              kind: "locomotion-capability-state",
+              kind: "locomotion-capability-state-v2",
               ownerEntityId: "player",
               locomotionCapabilityRef:
                 "worldkit://locomotion-capability/ground.standard@1",
               locomotionCapabilityHash: H("a"),
-              mode: "idle",
-              movementMedium: "ground",
-              facingYawRadians: 0,
-              speedMetersPerSecond: 0,
+              locomotion: {
+                schemaVersion: 2,
+                status: "active",
+                mobilityMode: "grounded",
+                gait: "idle",
+                verticalPhase: "none",
+                supportMode: "supported",
+                movementMedium: "ground",
+                facingYawRadians: 0,
+                linearVelocity: { x: 0, y: 0, z: 0 },
+                horizontalSpeedMetersPerSecond: 0,
+                committedTick: 4,
+                phaseEnteredTick: 0,
+                transitionSequence: 0,
+              },
             },
           },
         },
@@ -121,6 +132,38 @@ function snapshotFixture(
       terrainSampleCount: 4,
     },
   };
+}
+
+function legacyLocomotionSnapshotFixture(): WorldRuntimeSnapshotV4 {
+  const snapshot = snapshotFixture();
+  const player = snapshot.world.subjectStatesByEntityId.player!;
+  return parseWorldRuntimeSnapshotV4({
+    ...snapshot,
+    world: {
+      ...snapshot.world,
+      subjectStatesByEntityId: {
+        ...snapshot.world.subjectStatesByEntityId,
+        player: {
+          ...player,
+          capabilityStatesById: {
+            ...player.capabilityStatesById,
+            "locomotion:player": {
+              id: "locomotion:player",
+              kind: "locomotion-capability-state",
+              ownerEntityId: "player",
+              locomotionCapabilityRef:
+                "worldkit://locomotion-capability/ground.standard@1",
+              locomotionCapabilityHash: H("a"),
+              mode: "idle",
+              movementMedium: "ground",
+              facingYawRadians: 0,
+              speedMetersPerSecond: 0,
+            },
+          },
+        },
+      },
+    },
+  });
 }
 
 const WORLD_BOUNDS = {
@@ -801,8 +844,11 @@ describe("FormalSemanticCaptureMapV1", () => {
   });
 });
 
-function observationIdentity(kind: string, ownerId: "camera" | "physics" | "input") {
-  const resetReadySnapshot = snapshotFixture();
+function observationIdentity(
+  kind: string,
+  ownerId: "camera" | "physics" | "input",
+  resetReadySnapshot = snapshotFixture(),
+) {
   const formalRequest = formalRequestValue();
   return {
     kind,
@@ -906,6 +952,49 @@ describe("formal measured observation documents", () => {
     expect(() => parseFormalSpawnSupportObservationV1({
       ...value,
       resetReadySnapshotHash: H("9"),
+    })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+  });
+
+  it("rejects legacy flat locomotion support state even when the medium agrees", () => {
+    const resetReadySnapshot = legacyLocomotionSnapshotFixture();
+    expect(() => parseFormalSpawnSupportObservationV1({
+      ...observationIdentity(
+        "formal-spawn-support-observation",
+        "physics",
+        resetReadySnapshot,
+      ),
+      spawnMarkerId: "player-spawn",
+      subjectEntityId: "player",
+      supportContact: {
+        colliderId: "spawn-ground",
+        sourceBlockId: "central-ascent-block",
+        surfaceEntityId: "spawn-ground",
+        logicalSubshapeId: "primary",
+        pointMetersXYZ: [0, 0, 2],
+      },
+      capsuleFootPointMetersXYZ: [0, 0.02, 2],
+      supportGapMillimeters: 20,
+      movementMedium: "ground",
+      observedTopologyRelations: [],
+    })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
+  });
+
+  it("rejects support evidence that disagrees with nested committed movement medium", () => {
+    expect(() => parseFormalSpawnSupportObservationV1({
+      ...observationIdentity("formal-spawn-support-observation", "physics"),
+      spawnMarkerId: "player-spawn",
+      subjectEntityId: "player",
+      supportContact: {
+        colliderId: "spawn-ground",
+        sourceBlockId: "central-ascent-block",
+        surfaceEntityId: "spawn-ground",
+        logicalSubshapeId: "primary",
+        pointMetersXYZ: [0, 0, 2],
+      },
+      capsuleFootPointMetersXYZ: [0, 0.02, 2],
+      supportGapMillimeters: 20,
+      movementMedium: "air",
+      observedTopologyRelations: [],
     })).toThrowError("FORMAL_SPAWN_SUPPORT_OBSERVATION_INVALID");
   });
 
