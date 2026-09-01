@@ -459,6 +459,62 @@ describe("Native Block authoring to checked Layout binding", () => {
       .toEqual(source.acceptanceTargetRefs);
   });
 
+  it("binds a passed checked Layout with advisory Profile warnings", () => {
+    const input = bindingInput();
+    const checkedLayout = ordinaryCopy(input.checkedLayout) as unknown as {
+      layout: { unsupportedBlockIds: string[] };
+      checkResult: {
+        diagnostics: unknown[];
+        metrics: { unsupportedBlockCount: number };
+      };
+    };
+    checkedLayout.layout.unsupportedBlockIds = ["upper-t-junction-block"];
+    checkedLayout.checkResult.metrics.unsupportedBlockCount = 1;
+    checkedLayout.checkResult.diagnostics = [{
+      kind: "babylon-native-block-profile-diagnostic",
+      schemaVersion: 1,
+      id: "native-block-diagnostic-0000",
+      severity: "warning",
+      code: "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
+      location: {
+        kind: "block",
+        blockId: "upper-t-junction-block",
+      },
+      message: "The lintel is explicit floating visual intent.",
+      repairHint: "Add vertical support when the block is not an overhang.",
+    }];
+    const typedCheckedLayout = checkedLayout as unknown as
+      typeof input.checkedLayout;
+
+    expect(bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+      ...input,
+      checkedLayout: typedCheckedLayout,
+      checkedLayoutInventoryHash:
+        hashBabylonNativeBlockCheckedLayoutInventoryV1(typedCheckedLayout),
+    }).visualGroups).toHaveLength(2);
+  });
+
+  it("rejects a passed checked Layout carrying an error diagnostic", () => {
+    const input = bindingInput();
+    const checkedLayout = ordinaryCopy(input.checkedLayout) as unknown as {
+      checkResult: { diagnostics: unknown[] };
+    };
+    checkedLayout.checkResult.diagnostics = [{
+      kind: "babylon-native-block-profile-diagnostic",
+      schemaVersion: 1,
+      id: "native-block-diagnostic-0000",
+      severity: "error",
+      code: "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+      location: { kind: "block", blockId: "upper-t-junction-block" },
+      message: "Blocks overlap.",
+      repairHint: "Separate the occupied volumes.",
+    }];
+
+    expect(() => hashBabylonNativeBlockCheckedLayoutInventoryV1(
+      checkedLayout as unknown as typeof input.checkedLayout,
+    )).toThrowError(/WORLDKIT_NATIVE_BLOCK_CHECKED_LAYOUT_INVENTORY_INVALID/);
+  });
+
   it.each([
     ["missing target", () => ({ ...bindingInput(), reconstructionCase: { ...reconstructionCaseValue(), acceptanceTargetRefs: [reconstructionCaseValue().acceptanceTargetRefs[0]] } })],
     ["extra target", () => ({ ...bindingInput(), reconstructionCase: { ...reconstructionCaseValue(), acceptanceTargetRefs: [...reconstructionCaseValue().acceptanceTargetRefs, "worldkit://acceptance-target/unused@1"] } })],

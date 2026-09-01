@@ -398,7 +398,7 @@ function checkedLayoutInventory(
     input.checkResult.kind !== "babylon-native-block-profile-check-result" ||
     input.checkResult.schemaVersion !== 1 ||
     input.checkResult.outcome !== "passed" ||
-    input.checkResult.diagnostics.length !== 0 ||
+    input.checkResult.diagnostics.some(({ severity }) => severity !== "warning") ||
     input.layout.issues.length !== 0
   ) return fail(code, "Layout must be the passed checked Profile Layout");
   requireStrictlySortedUnique(
