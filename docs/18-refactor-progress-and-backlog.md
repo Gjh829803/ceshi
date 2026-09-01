@@ -753,6 +753,15 @@ package-local Relationship Capability Ref。
 
 #### P2.2 Subject S3：骑乘、拖拽与控制上下文
 
+当前实施暂停，优先级待重新排序。已冻结的下一窄切片是
+[P22-S1 Seated `mountedOn` Control Context Design](superpowers/specs/2026-09-01-p22-seated-mounted-control-context-design.md)：
+先交付 package-local 人—四足坐骑的 `seat` Mount Slot、控制权、真实 Physics Safe Exit 与最新
+Camera 合同闭环；`towedBy`、Joint 和马车/拖车留给独立 P22-S2 设计。任务恢复时必须从该设计的
+依赖图和删除台账创建实施计划，不得从旧 `seat`/`tether` reserved 方言继续。
+
+- [ ] P22-S1：按上述冻结设计完成 package-local 人—四足坐骑 seated `mountedOn`；设计已完成，
+  实施暂停。
+- [ ] P22-S2：在独立设计冻结后实现 `towedBy`、Joint、Detach 与马车/拖车 Fixture。
 - [ ] Mount/Seat/Stand/Tow Binding Profile。
 - [ ] Socket Alignment、Physics Joint 与 Collider Group。
 - [ ] Possession、Locomotion、Action 和 Camera Context 原子切换。
