@@ -97,6 +97,16 @@ const orthographicView = Object.freeze({
   targetMetersXYZ: [0, 0, 0],
 } satisfies FormalArtifactViewRequestV1);
 
+const openingView = Object.freeze({
+  kind: "formal-artifact-view-request",
+  schemaVersion: 1,
+  viewId: "opening",
+  projection: "perspective",
+  widthPixels: 1_024,
+  heightPixels: 1_024,
+  devicePixelRatio: 1,
+} satisfies FormalArtifactViewRequestV1);
+
 function createFixture(options: Readonly<{
   groups?: readonly BabylonNativeBlockMaterializerVisualGroupV1[];
   view?: FormalArtifactViewRequestV1;
@@ -109,6 +119,7 @@ function createFixture(options: Readonly<{
     lockstepMaxSteps: 4,
   });
   const scene = new Scene(engine);
+  scene.useRightHandedSystem = true;
   const camera = new FreeCamera(
     "sdk-camera",
     new Vector3(0, 0, -16),
@@ -245,30 +256,69 @@ describe("formal world capture projection measurement", () => {
     },
   );
 
-  it("measures the SDK opening perspective camera", () => {
-    // This catches treating opening as an orthographic artifact view.
-    const view = {
-      kind: "formal-artifact-view-request",
-      schemaVersion: 1,
-      viewId: "opening",
-      projection: "perspective",
-      widthPixels: 1_024,
-      heightPixels: 1_024,
-      devicePixelRatio: 1,
-    } satisfies FormalArtifactViewRequestV1;
-    const fixture = createFixture({ view });
+  it("measures the SDK opening perspective camera with a right-handed numeric golden", () => {
+    // Production Scene sets useRightHandedSystem. This locks the opening
+    // perspective projection through that same Camera contract, not an
+    // orthographic artifact pose.
+    const fixture = createFixture({ view: openingView });
     fixture.camera.mode = FreeCamera.PERSPECTIVE_CAMERA;
     fixture.camera.fov = Math.PI / 2;
+    fixture.camera.minZ = 0.05;
     cleanups.push(() => {
       fixture.scene.dispose();
       fixture.engine.dispose();
     });
 
-    const measured = measureFormalWorldCaptureViewV1(fixture.input);
-
-    expect(measured.viewId).toBe("opening");
-    expect(measured.visualGroups.map(({ blockVisualGroupId }) =>
-      blockVisualGroupId)).toEqual(["alpha-group", "zeta-group"]);
+    expect(measureFormalWorldCaptureViewV1(fixture.input)).toEqual({
+      viewId: "opening",
+      visualGroups: [{
+        acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
+        compositionTargetRef: "worldkit://composition-target/alpha@1",
+        topologyNodeId: "alpha-node",
+        semanticLayerId: "route-layer",
+        blockVisualGroupId: "alpha-group",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-2, -2, 2],
+          maximumMetersXYZ: [0, 2, 4],
+        },
+        normalizedBounds: {
+          minXBasisPoints: 4_444,
+          minYBasisPoints: 4_444,
+          maxXBasisPoints: 5_000,
+          maxYBasisPoints: 5_556,
+        },
+        normalizedCenter: {
+          xBasisPoints: 4_722,
+          yBasisPoints: 5_000,
+        },
+        coverageBasisPoints: 61,
+        cameraDepthMeters: 19,
+        depthOrder: 1,
+      }, {
+        acceptanceTargetRef: "worldkit://acceptance-target/zeta@1",
+        compositionTargetRef: "worldkit://composition-target/zeta@1",
+        topologyNodeId: "zeta-node",
+        semanticLayerId: "structure-layer",
+        blockVisualGroupId: "zeta-group",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [2, -1, -4],
+          maximumMetersXYZ: [4, 1, -2],
+        },
+        normalizedBounds: {
+          minXBasisPoints: 5_714,
+          minYBasisPoints: 4_583,
+          maxXBasisPoints: 6_667,
+          maxYBasisPoints: 5_417,
+        },
+        normalizedCenter: {
+          xBasisPoints: 6_190,
+          yBasisPoints: 5_000,
+        },
+        coverageBasisPoints: 79,
+        cameraDepthMeters: 13,
+        depthOrder: 0,
+      }],
+    });
   });
 
   it("uses the camera viewport and conservative floor/ceil basis-point bounds", () => {
@@ -410,6 +460,16 @@ describe("formal world capture projection measurement", () => {
       minimumMetersXYZ: [-1, -1, -20],
       maximumMetersXYZ: [1, 1, -18],
     }],
+    ["far-clipped", {
+      ...alphaGroup,
+      minimumMetersXYZ: [-1, -1, 120],
+      maximumMetersXYZ: [1, 1, 130],
+    }],
+    ["far-crossing", {
+      ...alphaGroup,
+      minimumMetersXYZ: [-1, -1, 100],
+      maximumMetersXYZ: [1, 1, 120],
+    }],
     ["outside viewport", {
       ...alphaGroup,
       minimumMetersXYZ: [20, -1, 0],
@@ -465,16 +525,7 @@ describe("formal world capture projection measurement", () => {
 
   it("rejects a camera projection mode that does not match the formal view", () => {
     // This catches measuring opening through an artifact orthographic Camera.
-    const view = {
-      kind: "formal-artifact-view-request",
-      schemaVersion: 1,
-      viewId: "opening",
-      projection: "perspective",
-      widthPixels: 1_024,
-      heightPixels: 1_024,
-      devicePixelRatio: 1,
-    } satisfies FormalArtifactViewRequestV1;
-    const fixture = createFixture({ view });
+    const fixture = createFixture({ view: openingView });
     cleanups.push(() => {
       fixture.scene.dispose();
       fixture.engine.dispose();
@@ -482,5 +533,148 @@ describe("formal world capture projection measurement", () => {
 
     expect(() => measureFormalWorldCaptureViewV1(fixture.input))
       .toThrow(/CAMERA_PROJECTION/);
+  });
+
+  it("clamps a partially visible AABB to the live viewport", () => {
+    // Opening and world views must measure the visible rectangle. A group
+    // that crosses the frustum edge is kept; only the on-screen bounds count.
+    const partialGroup = {
+      ...alphaGroup,
+      minimumMetersXYZ: [6, -1, 0],
+      maximumMetersXYZ: [12, 1, 2],
+    } satisfies BabylonNativeBlockMaterializerVisualGroupV1;
+    const fixture = createFixture({ groups: [partialGroup] });
+    fixture.input = {
+      ...fixture.input,
+      semanticCaptureMap: { bindings: [bindings[0]!] },
+      liveHandleRegistry: {
+        visualGroups: [fixture.input.liveHandleRegistry.visualGroups[1]!],
+      },
+    };
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0])
+      .toMatchObject({
+        normalizedBounds: {
+          minXBasisPoints: 8_750,
+          minYBasisPoints: 4_375,
+          maxXBasisPoints: 10_000,
+          maxYBasisPoints: 5_625,
+        },
+        normalizedCenter: {
+          xBasisPoints: 9_375,
+          yBasisPoints: 5_000,
+        },
+        coverageBasisPoints: 156,
+        cameraDepthMeters: 17,
+      });
+  });
+
+  it("rejects an empty visual inventory", () => {
+    // An empty Package/semantic/live join used to measure as an empty success.
+    const fixture = createFixture();
+    fixture.input = {
+      ...fixture.input,
+      materializerMetadata: {
+        ...fixture.input.materializerMetadata,
+        visualGroups: [],
+      },
+      semanticCaptureMap: { bindings: [] },
+      liveHandleRegistry: { visualGroups: [] },
+    };
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
+      .toThrow(/VISUAL_INVENTORY/);
+  });
+
+  it.each([
+    ["camera position", (input: FormalWorldCaptureMeasurementInputV1) => {
+      input.camera.position.x = 1;
+      return input;
+    }],
+    ["camera target", (input: FormalWorldCaptureMeasurementInputV1) => ({
+      ...input,
+      view: {
+        ...orthographicView,
+        targetMetersXYZ: [1, 0, 0],
+      } satisfies FormalArtifactViewRequestV1,
+    })],
+    ["world bounds", (input: FormalWorldCaptureMeasurementInputV1) => ({
+      ...input,
+      view: {
+        ...orthographicView,
+        worldBoundsMeters: {
+          minimumMetersXYZ: [-7, -7, -7],
+          maximumMetersXYZ: [7, 7, 7],
+        },
+      } satisfies FormalArtifactViewRequestV1,
+    })],
+    ["devicePixelRatio", (input: FormalWorldCaptureMeasurementInputV1) => ({
+      ...input,
+      view: {
+        ...orthographicView,
+        devicePixelRatio: 2,
+      } satisfies FormalArtifactViewRequestV1,
+    })],
+  ] as const)("rejects a world view whose declared %s drifts from the live camera", (
+    _name,
+    mutate,
+  ) => {
+    const fixture = createFixture();
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(() => measureFormalWorldCaptureViewV1(mutate(fixture.input)))
+      .toThrow(/CAMERA_PROJECTION/);
+  });
+
+  it("does not mutate gameplay camera cache flags while measuring", () => {
+    // Installed Babylon 9.23.0 Camera.getViewMatrix(true) sets hasMoved and
+    // getProjectionMatrix rewrites minZ when it is non-positive. Measurement
+    // must use the non-mutating Matrix APIs instead of those Camera getters.
+    const proof = createFixture();
+    const fixture = createFixture();
+    cleanups.push(() => {
+      proof.scene.dispose();
+      proof.engine.dispose();
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+    expect(proof.camera.hasMoved).toBe(false);
+    proof.camera.getViewMatrix(true);
+    expect(proof.camera.hasMoved).toBe(true);
+    const minZ = fixture.camera.minZ;
+    const maxZ = fixture.camera.maxZ;
+
+    expect(measureFormalWorldCaptureViewV1(fixture.input).viewId)
+      .toBe("world-top-down");
+    expect(fixture.camera.hasMoved).toBe(false);
+    expect(fixture.camera.minZ).toBe(minZ);
+    expect(fixture.camera.maxZ).toBe(maxZ);
+  });
+
+  it("rejects a non-positive near plane without rewriting the live camera", () => {
+    const fixture = createFixture({ view: openingView });
+    fixture.camera.mode = FreeCamera.PERSPECTIVE_CAMERA;
+    fixture.camera.fov = Math.PI / 2;
+    fixture.camera.minZ = 0;
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
+      .toThrow(/CAMERA_PROJECTION/);
+    expect(fixture.camera.minZ).toBe(0);
+    expect(fixture.camera.hasMoved).toBe(false);
   });
 });

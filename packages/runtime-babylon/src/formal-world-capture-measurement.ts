@@ -1,6 +1,9 @@
 import { Camera } from "@babylonjs/core/Cameras/camera.js";
+import { TargetCamera } from "@babylonjs/core/Cameras/targetCamera.js";
+import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import type { Scene } from "@babylonjs/core/scene.js";
 import type {
   BabylonNativeBlockMaterializerMetadataV1,
   FormalArtifactViewRequestV1,
@@ -36,6 +39,18 @@ export interface FormalWorldCaptureViewMeasurementV1 {
 }
 
 type MeasuredVisualGroupV1 = FormalOpeningObservationV1["visualGroups"][number];
+type FormalWorldArtifactViewRequestV1 = Extract<
+  FormalArtifactViewRequestV1,
+  { viewId: "world-side" | "world-top-down" }
+>;
+
+const LIVE_CAMERA_ALIGNMENT_TOLERANCE = 1e-6;
+
+interface LiveCameraPoseV1 {
+  readonly position: Vector3;
+  readonly forward: Vector3;
+  readonly viewMatrix: Matrix;
+}
 
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -79,10 +94,37 @@ function assertExactIds(
   }
 }
 
+function assertFiniteClose(
+  actual: number,
+  expected: number,
+  section: string,
+  message: string,
+): void {
+  if (
+    !Number.isFinite(actual) ||
+    !Number.isFinite(expected) ||
+    Math.abs(actual - expected) > LIVE_CAMERA_ALIGNMENT_TOLERANCE
+  ) {
+    fail(section, message);
+  }
+}
+
+function assertEmptyVisualInventory(
+  input: FormalWorldCaptureMeasurementInputV1,
+): void {
+  if (
+    input.materializerMetadata.visualGroups.length === 0 ||
+    input.semanticCaptureMap.bindings.length === 0 ||
+    input.liveHandleRegistry.visualGroups.length === 0
+  ) {
+    fail("VISUAL_INVENTORY", "visual inventory is empty");
+  }
+}
+
 function assertCameraProjection(
   view: FormalArtifactViewRequestV1,
   camera: Camera,
-): void {
+): AbstractEngine {
   const expectedMode = view.projection === "perspective"
     ? Camera.PERSPECTIVE_CAMERA
     : Camera.ORTHOGRAPHIC_CAMERA;
@@ -99,6 +141,237 @@ function assertCameraProjection(
   ) {
     fail("CAMERA_PROJECTION", "render target dimensions do not match the formal view");
   }
+  const hardwareScalingLevel = engine.getHardwareScalingLevel();
+  if (!Number.isFinite(hardwareScalingLevel) || hardwareScalingLevel <= 0) {
+    fail("CAMERA_PROJECTION", "engine hardwareScalingLevel must be a positive finite value");
+  }
+  assertFiniteClose(
+    1 / hardwareScalingLevel,
+    view.devicePixelRatio,
+    "CAMERA_PROJECTION",
+    "devicePixelRatio does not match the live engine",
+  );
+  return engine;
+}
+
+function isWorldArtifactView(
+  view: FormalArtifactViewRequestV1,
+): view is FormalWorldArtifactViewRequestV1 {
+  return view.viewId === "world-side" || view.viewId === "world-top-down";
+}
+
+function cameraRotationMatrix(camera: TargetCamera): Matrix {
+  const rotation = new Matrix();
+  if (camera.rotationQuaternion != null) {
+    camera.rotationQuaternion.toRotationMatrix(rotation);
+  } else {
+    Matrix.RotationYawPitchRollToRef(
+      camera.rotation.y,
+      camera.rotation.x,
+      camera.rotation.z,
+      rotation,
+    );
+  }
+  return rotation;
+}
+
+function liveCameraPose(camera: Camera, scene: Scene): LiveCameraPoseV1 {
+  // Babylon 9.23.0 Camera.getViewMatrix(true) always sets _hasMoved, bumps
+  // _childUpdateId, marks _refreshFrustumPlanes, notifies observers, and
+  // rewrites _globalPosition. getDirection() goes through getWorldMatrix()
+  // and therefore the same path. Camera has no public compute-to-ref API, so
+  // measurement rebuilds the view with the same LookAt* helpers Camera uses.
+  if (!(camera instanceof TargetCamera) || camera.parent !== null) {
+    fail("CAMERA_PROJECTION", "measurement requires an unparented TargetCamera");
+  }
+  const rotation = cameraRotationMatrix(camera);
+  const forward = Vector3.TransformNormal(
+    scene.useRightHandedSystem
+      ? Vector3.RightHandedForwardReadOnly
+      : Vector3.LeftHandedForwardReadOnly,
+    rotation,
+  );
+  if (
+    ![camera.position.x, camera.position.y, camera.position.z,
+      forward.x, forward.y, forward.z].every(Number.isFinite) ||
+    forward.lengthSquared() === 0
+  ) fail("CAMERA_PROJECTION", "camera position or forward direction is invalid");
+  forward.normalize();
+  const viewMatrix = new Matrix();
+  const target = camera.position.add(forward);
+  if (scene.useRightHandedSystem) {
+    Matrix.LookAtRHToRef(camera.position, target, camera.upVector, viewMatrix);
+  } else {
+    Matrix.LookAtLHToRef(camera.position, target, camera.upVector, viewMatrix);
+  }
+  if (!viewMatrix.asArray().every(Number.isFinite)) {
+    fail("CAMERA_PROJECTION", "camera view matrix is non-finite");
+  }
+  return Object.freeze({
+    position: camera.position.clone(),
+    forward,
+    viewMatrix,
+  });
+}
+
+function liveProjectionMatrix(
+  camera: Camera,
+  engine: AbstractEngine,
+  scene: Scene,
+): Matrix {
+  // Babylon 9.23.0 Camera.getProjectionMatrix uses minZ/maxZ as znear/zfar
+  // (swapped when reverse-depth; ignoreCameraMaxZ substitutes 0 for an
+  // infinite far plane). It also mutates minZ to 0.1 when minZ <= 0. Rebuild
+  // the same matrix locally and reject a non-positive near plane instead.
+  if (camera.oblique !== null) {
+    fail("CAMERA_PROJECTION", "oblique projection is not admitted for formal measurement");
+  }
+  if (!Number.isFinite(camera.minZ) || camera.minZ <= 0) {
+    fail("CAMERA_PROJECTION", "minZ must be a positive finite near plane");
+  }
+  const maxZ = camera.ignoreCameraMaxZ ? 0 : camera.maxZ;
+  if (!camera.ignoreCameraMaxZ && (!Number.isFinite(camera.maxZ) || camera.maxZ <= camera.minZ)) {
+    fail("CAMERA_PROJECTION", "maxZ must be a finite far plane beyond minZ");
+  }
+  const reverseDepth = engine.useReverseDepthBuffer;
+  const znear = reverseDepth ? maxZ : camera.minZ;
+  const zfar = reverseDepth ? camera.minZ : maxZ;
+  const result = new Matrix();
+  if (camera.mode === Camera.PERSPECTIVE_CAMERA) {
+    const perspective = scene.useRightHandedSystem
+      ? Matrix.PerspectiveFovRHToRef
+      : Matrix.PerspectiveFovLHToRef;
+    perspective(
+      camera.fov,
+      engine.getAspectRatio(camera),
+      znear,
+      zfar,
+      result,
+      camera.fovMode === Camera.FOVMODE_VERTICAL_FIXED,
+      engine.isNDCHalfZRange,
+      camera.projectionPlaneTilt,
+      reverseDepth,
+    );
+  } else {
+    if (
+      camera.orthoLeft === null ||
+      camera.orthoRight === null ||
+      camera.orthoBottom === null ||
+      camera.orthoTop === null
+    ) {
+      fail("CAMERA_PROJECTION", "orthographic camera must declare a finite frustum");
+    }
+    const ortho = scene.useRightHandedSystem
+      ? Matrix.OrthoOffCenterRHToRef
+      : Matrix.OrthoOffCenterLHToRef;
+    ortho(
+      camera.orthoLeft,
+      camera.orthoRight,
+      camera.orthoBottom,
+      camera.orthoTop,
+      znear,
+      zfar,
+      result,
+      engine.isNDCHalfZRange,
+    );
+  }
+  if (!result.asArray().every(Number.isFinite)) {
+    fail("CAMERA_PROJECTION", "camera projection matrix is non-finite");
+  }
+  return result;
+}
+
+function assertWorldViewMatchesLive(
+  view: FormalWorldArtifactViewRequestV1,
+  camera: Camera,
+  pose: LiveCameraPoseV1,
+): void {
+  assertFiniteClose(
+    pose.position.x,
+    view.cameraPositionMetersXYZ[0],
+    "CAMERA_PROJECTION",
+    `${view.viewId} live camera position does not match the formal request`,
+  );
+  assertFiniteClose(
+    pose.position.y,
+    view.cameraPositionMetersXYZ[1],
+    "CAMERA_PROJECTION",
+    `${view.viewId} live camera position does not match the formal request`,
+  );
+  assertFiniteClose(
+    pose.position.z,
+    view.cameraPositionMetersXYZ[2],
+    "CAMERA_PROJECTION",
+    `${view.viewId} live camera position does not match the formal request`,
+  );
+
+  const declaredForward = new Vector3(
+    view.targetMetersXYZ[0] - view.cameraPositionMetersXYZ[0],
+    view.targetMetersXYZ[1] - view.cameraPositionMetersXYZ[1],
+    view.targetMetersXYZ[2] - view.cameraPositionMetersXYZ[2],
+  );
+  if (declaredForward.lengthSquared() === 0) {
+    fail(
+      "CAMERA_PROJECTION",
+      `${view.viewId} declared camera target is coincident with position`,
+    );
+  }
+  declaredForward.normalize();
+  assertFiniteClose(
+    pose.forward.x,
+    declaredForward.x,
+    "CAMERA_PROJECTION",
+    `${view.viewId} live camera target does not match the formal request`,
+  );
+  assertFiniteClose(
+    pose.forward.y,
+    declaredForward.y,
+    "CAMERA_PROJECTION",
+    `${view.viewId} live camera target does not match the formal request`,
+  );
+  assertFiniteClose(
+    pose.forward.z,
+    declaredForward.z,
+    "CAMERA_PROJECTION",
+    `${view.viewId} live camera target does not match the formal request`,
+  );
+
+  if (
+    camera.orthoLeft === null ||
+    camera.orthoRight === null ||
+    camera.orthoBottom === null ||
+    camera.orthoTop === null
+  ) {
+    fail("CAMERA_PROJECTION", `${view.viewId} live camera is missing orthographic bounds`);
+  }
+  const viewed = boundsCorners(
+    view.worldBoundsMeters.minimumMetersXYZ,
+    view.worldBoundsMeters.maximumMetersXYZ,
+  ).map((corner) => Vector3.TransformCoordinates(corner, pose.viewMatrix));
+  assertFiniteClose(
+    camera.orthoLeft,
+    Math.min(...viewed.map(({ x }) => x)),
+    "CAMERA_PROJECTION",
+    `${view.viewId} live ortho does not match declared world bounds`,
+  );
+  assertFiniteClose(
+    camera.orthoRight,
+    Math.max(...viewed.map(({ x }) => x)),
+    "CAMERA_PROJECTION",
+    `${view.viewId} live ortho does not match declared world bounds`,
+  );
+  assertFiniteClose(
+    camera.orthoBottom,
+    Math.min(...viewed.map(({ y }) => y)),
+    "CAMERA_PROJECTION",
+    `${view.viewId} live ortho does not match declared world bounds`,
+  );
+  assertFiniteClose(
+    camera.orthoTop,
+    Math.max(...viewed.map(({ y }) => y)),
+    "CAMERA_PROJECTION",
+    `${view.viewId} live ortho does not match declared world bounds`,
+  );
 }
 
 function boundsCorners(
@@ -124,6 +397,10 @@ function boundsCorners(
   ]);
 }
 
+function farClipMeters(camera: Camera): number {
+  return camera.ignoreCameraMaxZ ? Number.POSITIVE_INFINITY : camera.maxZ;
+}
+
 function projectGroup(
   input: FormalWorldCaptureMeasurementInputV1,
   binding: FormalSemanticCaptureMapV1["bindings"][number],
@@ -144,11 +421,15 @@ function projectGroup(
     center.subtract(cameraPosition),
     cameraForward,
   );
+  const farPlaneMeters = farClipMeters(input.camera);
   if (
     !Number.isFinite(cameraDepthMeters) ||
     cameraDepthMeters <= input.camera.minZ
   ) {
     fail("PROJECTION", `${binding.blockVisualGroupId} center is behind the near plane`);
+  }
+  if (cameraDepthMeters >= farPlaneMeters) {
+    fail("PROJECTION", `${binding.blockVisualGroupId} center is beyond the far plane`);
   }
 
   const viewport = input.camera.viewport.toGlobal(
@@ -180,6 +461,12 @@ function projectGroup(
         `${binding.blockVisualGroupId} crosses or is behind the near plane`,
       );
     }
+    if (cornerDepthMeters >= farPlaneMeters) {
+      fail(
+        "PROJECTION",
+        `${binding.blockVisualGroupId} crosses or is beyond the far plane`,
+      );
+    }
     const point = Vector3.Project(
       corner,
       Matrix.IdentityReadOnly,
@@ -189,23 +476,34 @@ function projectGroup(
     if (![point.x, point.y, point.z].every(Number.isFinite)) {
       fail("PROJECTION", `${binding.blockVisualGroupId} produced non-finite screen coordinates`);
     }
-    if (
-      point.x < viewport.x ||
-      point.x > viewport.x + viewport.width ||
-      point.y < viewport.y ||
-      point.y > viewport.y + viewport.height
-    ) fail("PROJECTION", `${binding.blockVisualGroupId} is outside the camera viewport`);
     return point;
   });
 
-  const minimumX = Math.min(...projected.map(({ x }) => x)) /
-    input.view.widthPixels;
-  const maximumX = Math.max(...projected.map(({ x }) => x)) /
-    input.view.widthPixels;
-  const minimumY = Math.min(...projected.map(({ y }) => y)) /
-    input.view.heightPixels;
-  const maximumY = Math.max(...projected.map(({ y }) => y)) /
-    input.view.heightPixels;
+  const viewportMinX = viewport.x;
+  const viewportMaxX = viewport.x + viewport.width;
+  const viewportMinY = viewport.y;
+  const viewportMaxY = viewport.y + viewport.height;
+  const projectedMinX = Math.min(...projected.map(({ x }) => x));
+  const projectedMaxX = Math.max(...projected.map(({ x }) => x));
+  const projectedMinY = Math.min(...projected.map(({ y }) => y));
+  const projectedMaxY = Math.max(...projected.map(({ y }) => y));
+  if (
+    projectedMaxX <= viewportMinX ||
+    projectedMinX >= viewportMaxX ||
+    projectedMaxY <= viewportMinY ||
+    projectedMinY >= viewportMaxY
+  ) {
+    fail("PROJECTION", `${binding.blockVisualGroupId} is outside the camera viewport`);
+  }
+
+  const visibleMinX = Math.max(projectedMinX, viewportMinX);
+  const visibleMaxX = Math.min(projectedMaxX, viewportMaxX);
+  const visibleMinY = Math.max(projectedMinY, viewportMinY);
+  const visibleMaxY = Math.min(projectedMaxY, viewportMaxY);
+  const minimumX = visibleMinX / input.view.widthPixels;
+  const maximumX = visibleMaxX / input.view.widthPixels;
+  const minimumY = visibleMinY / input.view.heightPixels;
+  const maximumY = visibleMaxY / input.view.heightPixels;
   const width = maximumX - minimumX;
   const height = maximumY - minimumY;
   if (
@@ -266,7 +564,8 @@ function projectGroup(
 export function measureFormalWorldCaptureViewV1(
   input: FormalWorldCaptureMeasurementInputV1,
 ): FormalWorldCaptureViewMeasurementV1 {
-  assertCameraProjection(input.view, input.camera);
+  const engine = assertCameraProjection(input.view, input.camera);
+  assertEmptyVisualInventory(input);
 
   const materializedById = uniqueById(
     input.materializerMetadata.visualGroups,
@@ -312,29 +611,21 @@ export function measureFormalWorldCaptureViewV1(
     ) fail("PACKAGE_BINDING", `${binding.blockVisualGroupId} identity does not match the Package`);
   }
 
-  const viewMatrix = input.camera.getViewMatrix(true);
-  const projectionMatrix = input.camera.getProjectionMatrix(true);
-  const transform = viewMatrix.multiply(projectionMatrix);
-  const cameraPosition = input.camera.globalPosition.clone();
-  const cameraForward = input.camera.getDirection(
-    scene.useRightHandedSystem
-      ? Vector3.RightHandedForwardReadOnly
-      : Vector3.LeftHandedForwardReadOnly,
+  const pose = liveCameraPose(input.camera, scene);
+  if (isWorldArtifactView(input.view)) {
+    assertWorldViewMatchesLive(input.view, input.camera, pose);
+  }
+  const transform = pose.viewMatrix.multiply(
+    liveProjectionMatrix(input.camera, engine, scene),
   );
-  if (
-    ![cameraPosition.x, cameraPosition.y, cameraPosition.z,
-      cameraForward.x, cameraForward.y, cameraForward.z].every(Number.isFinite) ||
-    cameraForward.lengthSquared() === 0
-  ) fail("CAMERA_PROJECTION", "camera position or forward direction is invalid");
-  cameraForward.normalize();
 
   const measuredWithoutOrder = input.semanticCaptureMap.bindings.map((binding) =>
     projectGroup(
       input,
       binding,
       materializedById.get(binding.blockVisualGroupId)!,
-      cameraPosition,
-      cameraForward,
+      pose.position,
+      pose.forward,
       transform,
     ));
   const depthRankByTargetRef = new Map(
