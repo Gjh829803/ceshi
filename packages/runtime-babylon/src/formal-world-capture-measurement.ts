@@ -1,6 +1,5 @@
 import { Camera } from "@babylonjs/core/Cameras/camera.js";
 import { TargetCamera } from "@babylonjs/core/Cameras/targetCamera.js";
-import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
@@ -50,6 +49,7 @@ interface LiveCameraPoseV1 {
   readonly position: Vector3;
   readonly forward: Vector3;
   readonly viewMatrix: Matrix;
+  readonly transform: Matrix;
 }
 
 function stableCompare(left: string, right: string): number {
@@ -124,7 +124,7 @@ function assertEmptyVisualInventory(
 function assertCameraProjection(
   view: FormalArtifactViewRequestV1,
   camera: Camera,
-): AbstractEngine {
+): void {
   const expectedMode = view.projection === "perspective"
     ? Camera.PERSPECTIVE_CAMERA
     : Camera.ORTHOGRAPHIC_CAMERA;
@@ -151,7 +151,6 @@ function assertCameraProjection(
     "CAMERA_PROJECTION",
     "devicePixelRatio does not match the live engine",
   );
-  return engine;
 }
 
 function isWorldArtifactView(
@@ -160,7 +159,31 @@ function isWorldArtifactView(
   return view.viewId === "world-side" || view.viewId === "world-top-down";
 }
 
-function cameraRotationMatrix(camera: TargetCamera): Matrix {
+function liveCameraPose(
+  camera: Camera,
+  scene: Scene,
+): LiveCameraPoseV1 {
+  // Babylon 9.23.0 Camera.getViewMatrix(true) always sets _hasMoved, bumps
+  // _childUpdateId, marks _refreshFrustumPlanes, notifies observers, and
+  // rewrites _globalPosition. getDirection() goes through getWorldMatrix()
+  // and the same path. There is no public view compute-to-ref API, so
+  // rebuild the view with the same LookAt* helpers Camera uses.
+  // getProjectionMatrix() without force is the non-mutating read when the
+  // matrix is frozen or already synced, and it is the only public way to
+  // honor freezeProjectionMatrix. Reject minZ <= 0 first: the installed
+  // getter would otherwise rewrite minZ to 0.1.
+  if (!(camera instanceof TargetCamera) || camera.parent !== null) {
+    fail("CAMERA_PROJECTION", "measurement requires an unparented TargetCamera");
+  }
+  if (camera.oblique !== null) {
+    fail("CAMERA_PROJECTION", "oblique projection is not admitted for formal measurement");
+  }
+  if (!Number.isFinite(camera.minZ) || camera.minZ <= 0) {
+    fail("CAMERA_PROJECTION", "minZ must be a positive finite near plane");
+  }
+  if (!camera.ignoreCameraMaxZ && (!Number.isFinite(camera.maxZ) || camera.maxZ <= camera.minZ)) {
+    fail("CAMERA_PROJECTION", "maxZ must be a finite far plane beyond minZ");
+  }
   const rotation = new Matrix();
   if (camera.rotationQuaternion != null) {
     camera.rotationQuaternion.toRotationMatrix(rotation);
@@ -172,19 +195,6 @@ function cameraRotationMatrix(camera: TargetCamera): Matrix {
       rotation,
     );
   }
-  return rotation;
-}
-
-function liveCameraPose(camera: Camera, scene: Scene): LiveCameraPoseV1 {
-  // Babylon 9.23.0 Camera.getViewMatrix(true) always sets _hasMoved, bumps
-  // _childUpdateId, marks _refreshFrustumPlanes, notifies observers, and
-  // rewrites _globalPosition. getDirection() goes through getWorldMatrix()
-  // and therefore the same path. Camera has no public compute-to-ref API, so
-  // measurement rebuilds the view with the same LookAt* helpers Camera uses.
-  if (!(camera instanceof TargetCamera) || camera.parent !== null) {
-    fail("CAMERA_PROJECTION", "measurement requires an unparented TargetCamera");
-  }
-  const rotation = cameraRotationMatrix(camera);
   const forward = Vector3.TransformNormal(
     scene.useRightHandedSystem
       ? Vector3.RightHandedForwardReadOnly
@@ -204,81 +214,19 @@ function liveCameraPose(camera: Camera, scene: Scene): LiveCameraPoseV1 {
   } else {
     Matrix.LookAtLHToRef(camera.position, target, camera.upVector, viewMatrix);
   }
-  if (!viewMatrix.asArray().every(Number.isFinite)) {
-    fail("CAMERA_PROJECTION", "camera view matrix is non-finite");
+  const projectionMatrix = camera.getProjectionMatrix();
+  if (
+    !viewMatrix.asArray().every(Number.isFinite) ||
+    !projectionMatrix.asArray().every(Number.isFinite)
+  ) {
+    fail("CAMERA_PROJECTION", "camera view or projection matrix is non-finite");
   }
   return Object.freeze({
     position: camera.position.clone(),
     forward,
     viewMatrix,
+    transform: viewMatrix.multiply(projectionMatrix),
   });
-}
-
-function liveProjectionMatrix(
-  camera: Camera,
-  engine: AbstractEngine,
-  scene: Scene,
-): Matrix {
-  // Babylon 9.23.0 Camera.getProjectionMatrix uses minZ/maxZ as znear/zfar
-  // (swapped when reverse-depth; ignoreCameraMaxZ substitutes 0 for an
-  // infinite far plane). It also mutates minZ to 0.1 when minZ <= 0. Rebuild
-  // the same matrix locally and reject a non-positive near plane instead.
-  if (camera.oblique !== null) {
-    fail("CAMERA_PROJECTION", "oblique projection is not admitted for formal measurement");
-  }
-  if (!Number.isFinite(camera.minZ) || camera.minZ <= 0) {
-    fail("CAMERA_PROJECTION", "minZ must be a positive finite near plane");
-  }
-  const maxZ = camera.ignoreCameraMaxZ ? 0 : camera.maxZ;
-  if (!camera.ignoreCameraMaxZ && (!Number.isFinite(camera.maxZ) || camera.maxZ <= camera.minZ)) {
-    fail("CAMERA_PROJECTION", "maxZ must be a finite far plane beyond minZ");
-  }
-  const reverseDepth = engine.useReverseDepthBuffer;
-  const znear = reverseDepth ? maxZ : camera.minZ;
-  const zfar = reverseDepth ? camera.minZ : maxZ;
-  const result = new Matrix();
-  if (camera.mode === Camera.PERSPECTIVE_CAMERA) {
-    const perspective = scene.useRightHandedSystem
-      ? Matrix.PerspectiveFovRHToRef
-      : Matrix.PerspectiveFovLHToRef;
-    perspective(
-      camera.fov,
-      engine.getAspectRatio(camera),
-      znear,
-      zfar,
-      result,
-      camera.fovMode === Camera.FOVMODE_VERTICAL_FIXED,
-      engine.isNDCHalfZRange,
-      camera.projectionPlaneTilt,
-      reverseDepth,
-    );
-  } else {
-    if (
-      camera.orthoLeft === null ||
-      camera.orthoRight === null ||
-      camera.orthoBottom === null ||
-      camera.orthoTop === null
-    ) {
-      fail("CAMERA_PROJECTION", "orthographic camera must declare a finite frustum");
-    }
-    const ortho = scene.useRightHandedSystem
-      ? Matrix.OrthoOffCenterRHToRef
-      : Matrix.OrthoOffCenterLHToRef;
-    ortho(
-      camera.orthoLeft,
-      camera.orthoRight,
-      camera.orthoBottom,
-      camera.orthoTop,
-      znear,
-      zfar,
-      result,
-      engine.isNDCHalfZRange,
-    );
-  }
-  if (!result.asArray().every(Number.isFinite)) {
-    fail("CAMERA_PROJECTION", "camera projection matrix is non-finite");
-  }
-  return result;
 }
 
 function assertWorldViewMatchesLive(
@@ -564,7 +512,7 @@ function projectGroup(
 export function measureFormalWorldCaptureViewV1(
   input: FormalWorldCaptureMeasurementInputV1,
 ): FormalWorldCaptureViewMeasurementV1 {
-  const engine = assertCameraProjection(input.view, input.camera);
+  assertCameraProjection(input.view, input.camera);
   assertEmptyVisualInventory(input);
 
   const materializedById = uniqueById(
@@ -615,9 +563,6 @@ export function measureFormalWorldCaptureViewV1(
   if (isWorldArtifactView(input.view)) {
     assertWorldViewMatchesLive(input.view, input.camera, pose);
   }
-  const transform = pose.viewMatrix.multiply(
-    liveProjectionMatrix(input.camera, engine, scene),
-  );
 
   const measuredWithoutOrder = input.semanticCaptureMap.bindings.map((binding) =>
     projectGroup(
@@ -626,7 +571,7 @@ export function measureFormalWorldCaptureViewV1(
       materializedById.get(binding.blockVisualGroupId)!,
       pose.position,
       pose.forward,
-      transform,
+      pose.transform,
     ));
   const depthRankByTargetRef = new Map(
     [...measuredWithoutOrder]

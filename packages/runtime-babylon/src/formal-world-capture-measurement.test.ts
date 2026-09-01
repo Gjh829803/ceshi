@@ -179,6 +179,8 @@ describe("formal world capture projection measurement", () => {
   it("projects Package-frozen AABBs through the explicit camera and target-sorts independently of registry order", () => {
     // This catches using live Mesh bounds or registry/Scene order instead of
     // the Package-frozen group bounds and deterministic formal identities.
+    // Production Scene is right-handed; X is mirrored versus a left-handed
+    // default NullEngine Scene.
     const fixture = createFixture();
     cleanups.push(() => {
       fixture.scene.dispose();
@@ -198,13 +200,13 @@ describe("formal world capture projection measurement", () => {
           maximumMetersXYZ: [0, 2, 4],
         },
         normalizedBounds: {
-          minXBasisPoints: 3_750,
+          minXBasisPoints: 4_999,
           minYBasisPoints: 3_750,
-          maxXBasisPoints: 5_000,
+          maxXBasisPoints: 6_250,
           maxYBasisPoints: 6_250,
         },
         normalizedCenter: {
-          xBasisPoints: 4_375,
+          xBasisPoints: 5_625,
           yBasisPoints: 5_000,
         },
         coverageBasisPoints: 312,
@@ -221,13 +223,13 @@ describe("formal world capture projection measurement", () => {
           maximumMetersXYZ: [4, 1, -2],
         },
         normalizedBounds: {
-          minXBasisPoints: 6_250,
+          minXBasisPoints: 2_500,
           minYBasisPoints: 4_375,
-          maxXBasisPoints: 7_500,
+          maxXBasisPoints: 3_750,
           maxYBasisPoints: 5_625,
         },
         normalizedCenter: {
-          xBasisPoints: 6_875,
+          xBasisPoints: 3_125,
           yBasisPoints: 5_000,
         },
         coverageBasisPoints: 156,
@@ -282,13 +284,13 @@ describe("formal world capture projection measurement", () => {
           maximumMetersXYZ: [0, 2, 4],
         },
         normalizedBounds: {
-          minXBasisPoints: 4_444,
+          minXBasisPoints: 5_000,
           minYBasisPoints: 4_444,
-          maxXBasisPoints: 5_000,
+          maxXBasisPoints: 5_556,
           maxYBasisPoints: 5_556,
         },
         normalizedCenter: {
-          xBasisPoints: 4_722,
+          xBasisPoints: 5_278,
           yBasisPoints: 5_000,
         },
         coverageBasisPoints: 61,
@@ -305,13 +307,13 @@ describe("formal world capture projection measurement", () => {
           maximumMetersXYZ: [4, 1, -2],
         },
         normalizedBounds: {
-          minXBasisPoints: 5_714,
+          minXBasisPoints: 3_333,
           minYBasisPoints: 4_583,
-          maxXBasisPoints: 6_667,
+          maxXBasisPoints: 4_286,
           maxYBasisPoints: 5_417,
         },
         normalizedCenter: {
-          xBasisPoints: 6_190,
+          xBasisPoints: 3_810,
           yBasisPoints: 5_000,
         },
         coverageBasisPoints: 79,
@@ -341,13 +343,13 @@ describe("formal world capture projection measurement", () => {
     expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0])
       .toMatchObject({
         normalizedBounds: {
-          minXBasisPoints: 4_375,
+          minXBasisPoints: 5_000,
           minYBasisPoints: 4_375,
-          maxXBasisPoints: 5_000,
+          maxXBasisPoints: 5_625,
           maxYBasisPoints: 5_625,
         },
         normalizedCenter: {
-          xBasisPoints: 4_688,
+          xBasisPoints: 5_313,
           yBasisPoints: 5_000,
         },
         coverageBasisPoints: 78,
@@ -535,6 +537,77 @@ describe("formal world capture projection measurement", () => {
       .toThrow(/CAMERA_PROJECTION/);
   });
 
+  it.each([
+    ["far-clipped", {
+      ...alphaGroup,
+      minimumMetersXYZ: [-1, -1, 120],
+      maximumMetersXYZ: [1, 1, 130],
+    }],
+    ["outside viewport", {
+      ...alphaGroup,
+      minimumMetersXYZ: [20, -1, 2],
+      maximumMetersXYZ: [22, 1, 4],
+    }],
+  ] as const)("fails closed when an opening AABB is %s", (_name, group) => {
+    const fixture = createFixture({ view: openingView, groups: [group] });
+    fixture.camera.mode = FreeCamera.PERSPECTIVE_CAMERA;
+    fixture.camera.fov = Math.PI / 2;
+    fixture.camera.minZ = 0.05;
+    fixture.input = {
+      ...fixture.input,
+      semanticCaptureMap: { bindings: [bindings[0]!] },
+      liveHandleRegistry: {
+        visualGroups: [fixture.input.liveHandleRegistry.visualGroups[1]!],
+      },
+    };
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
+      .toThrow(/PROJECTION/);
+  });
+
+  it("clamps a partially visible opening AABB to the live viewport", () => {
+    const partialGroup = {
+      ...alphaGroup,
+      minimumMetersXYZ: [10, -1, 2],
+      maximumMetersXYZ: [20, 1, 4],
+    } satisfies BabylonNativeBlockMaterializerVisualGroupV1;
+    const fixture = createFixture({ view: openingView, groups: [partialGroup] });
+    fixture.camera.mode = FreeCamera.PERSPECTIVE_CAMERA;
+    fixture.camera.fov = Math.PI / 2;
+    fixture.camera.minZ = 0.05;
+    fixture.input = {
+      ...fixture.input,
+      semanticCaptureMap: { bindings: [bindings[0]!] },
+      liveHandleRegistry: {
+        visualGroups: [fixture.input.liveHandleRegistry.visualGroups[1]!],
+      },
+    };
+    cleanups.push(() => {
+      fixture.scene.dispose();
+      fixture.engine.dispose();
+    });
+
+    const measured = measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0];
+    expect(measured).toMatchObject({
+      normalizedBounds: {
+        minXBasisPoints: 0,
+        minYBasisPoints: 4_722,
+        maxXBasisPoints: 2_500,
+        maxYBasisPoints: 5_278,
+      },
+      normalizedCenter: {
+        xBasisPoints: 1_250,
+        yBasisPoints: 5_000,
+      },
+      coverageBasisPoints: 138,
+    });
+    expect(measured?.cameraDepthMeters).toBeCloseTo(19, 10);
+  });
+
   it("clamps a partially visible AABB to the live viewport", () => {
     // Opening and world views must measure the visible rectangle. A group
     // that crosses the frustum edge is kept; only the on-screen bounds count.
@@ -559,13 +632,13 @@ describe("formal world capture projection measurement", () => {
     expect(measureFormalWorldCaptureViewV1(fixture.input).visualGroups[0])
       .toMatchObject({
         normalizedBounds: {
-          minXBasisPoints: 8_750,
+          minXBasisPoints: 0,
           minYBasisPoints: 4_375,
-          maxXBasisPoints: 10_000,
+          maxXBasisPoints: 1_250,
           maxYBasisPoints: 5_625,
         },
         normalizedCenter: {
-          xBasisPoints: 9_375,
+          xBasisPoints: 625,
           yBasisPoints: 5_000,
         },
         coverageBasisPoints: 156,
