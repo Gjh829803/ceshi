@@ -159,6 +159,24 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     );
   });
 
+  it("sanitizes a blocks build failure before settlement finalization", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild(() => {
+        throw new Error("private blocks build sentinel");
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
+    );
+    expect(rejectedStage(result)).toBe("build");
+    expect(JSON.stringify(result)).not.toContain("private blocks build sentinel");
+  });
+
   it("publishes one blocks snapshot for exact visual and Collider inventory", async () => {
     const scene = createScene();
     const result = await buildCandidate(
