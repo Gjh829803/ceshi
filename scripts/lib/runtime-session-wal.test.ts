@@ -80,6 +80,10 @@ function request(
 function rejectedReceipt(
   input: RuntimeSessionRequestV1,
   worldSessionId = WORLD_SESSION_ID,
+  diagnosticCode:
+    | "RUNTIME_SESSION_NOT_ACTIVE"
+    | "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" =
+      "RUNTIME_SESSION_NOT_ACTIVE",
 ): Extract<RuntimeSessionReceiptV1, { status: "rejected" }> {
   const body = {
     kind: "worldkit-runtime-session-receipt",
@@ -91,7 +95,7 @@ function rejectedReceipt(
     requestType: input.type,
     status: "rejected",
     diagnostic: {
-      code: "RUNTIME_SESSION_NOT_ACTIVE",
+      code: diagnosticCode,
       message: "The Runtime Session is not active.",
     },
   } as const;
@@ -351,6 +355,47 @@ describe("file Runtime Session WAL V1", () => {
       receipt: rejectedReceipt(resetRequest, RESET_WORLD_SESSION_ID),
     })).toThrow("RUNTIME_SESSION_WAL_BINDING_INVALID");
     expect(wal.snapshot().committedRequests).toEqual([]);
+  });
+
+  it("accepts only an explicitly committed reset cleanup failure in the new World", async () => {
+    const directory = await temporaryDirectory();
+    const walFilePath = path.join(
+      directory,
+      "session",
+      "runtime-session.wal.ndjson",
+    );
+    const wal = createFileRuntimeSessionWalV1({
+      walFilePath,
+      readyEvent: readyEvent(),
+    });
+    const resetRequest = {
+      kind: "worldkit-runtime-session-request",
+      schemaVersion: 1,
+      id: "runtime-request-reset-cleanup-failure",
+      runtimeSessionId: "runtime-session-primary",
+      type: "session.reset",
+    } as const satisfies RuntimeSessionRequestV1;
+
+    wal.appendCommittedRequest({
+      request: resetRequest,
+      receipt: rejectedReceipt(
+        resetRequest,
+        RESET_WORLD_SESSION_ID,
+        "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+      ),
+    });
+    wal.appendClosed(completedEvent(RESET_WORLD_SESSION_ID));
+
+    const reopened = openFileRuntimeSessionWalV1({ walFilePath }).snapshot();
+    expect(reopened.committedRequests).toHaveLength(1);
+    expect(reopened.committedRequests[0]?.receipt).toMatchObject({
+      status: "rejected",
+      worldSessionId: RESET_WORLD_SESSION_ID,
+      diagnostic: {
+        code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+      },
+    });
+    expect(reopened.finalEvent?.worldSessionId).toBe(RESET_WORLD_SESSION_ID);
   });
 
   it("fails closed when replay contains a rejected reset with a foreign WorldSession", async () => {

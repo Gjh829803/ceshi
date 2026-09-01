@@ -137,7 +137,11 @@ function receiptPayloadBindsRequestV1(
   request: RuntimeSessionRequestV1,
   receipt: RuntimeSessionReceiptV1,
 ): boolean {
-  if (receipt.status === "rejected") return true;
+  if (receipt.status === "rejected") {
+    return receipt.diagnostic.code !==
+        "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" ||
+      request.type === "session.reset";
+  }
   if (
     request.type === "session.reset" &&
     receipt.requestType === "session.reset"
@@ -152,6 +156,16 @@ function receiptPayloadBindsRequestV1(
   return true;
 }
 
+function receiptCommitsNewWorldSessionV1(
+  request: RuntimeSessionRequestV1,
+  receipt: RuntimeSessionReceiptV1,
+): boolean {
+  return request.type === "session.reset" &&
+    (receipt.status === "succeeded" ||
+      receipt.diagnostic.code ===
+        "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE");
+}
+
 function receiptWorldSessionBindsCurrentV1(
   request: RuntimeSessionRequestV1,
   receipt: RuntimeSessionReceiptV1,
@@ -160,7 +174,7 @@ function receiptWorldSessionBindsCurrentV1(
   if (request.type !== "session.reset") {
     return receipt.worldSessionId === currentWorldSessionId;
   }
-  return receipt.status === "succeeded"
+  return receiptCommitsNewWorldSessionV1(request, receipt)
     ? receipt.worldSessionId !== currentWorldSessionId
     : receipt.worldSessionId === currentWorldSessionId;
 }
@@ -661,10 +675,10 @@ function validateTransactionState(
           currentWorldSessionId,
         )
       ) return corrupt("A committed Request is not bound to the opened Session.");
-      if (
-        transaction.request.type === "session.reset" &&
-        transaction.receipt.status === "succeeded"
-      ) currentWorldSessionId = transaction.receipt.worldSessionId;
+      if (receiptCommitsNewWorldSessionV1(
+        transaction.request,
+        transaction.receipt,
+      )) currentWorldSessionId = transaction.receipt.worldSessionId;
       requestIds.add(transaction.request.id);
       committedRequests.push(Object.freeze({
         request: transaction.request,
@@ -876,8 +890,7 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
     const receipt = parseRuntimeSessionReceiptV1(input.receipt);
     const currentWorldSessionId = this.state.committedRequests.reduce(
       (worldSessionId, entry) =>
-        entry.request.type === "session.reset" &&
-          entry.receipt.status === "succeeded" &&
+        receiptCommitsNewWorldSessionV1(entry.request, entry.receipt) &&
           entry.receipt.worldSessionId !== worldSessionId
           ? entry.receipt.worldSessionId
           : worldSessionId,
@@ -922,7 +935,7 @@ class FileRuntimeSessionWal implements FileRuntimeSessionWalV1 {
     const event = parseRuntimeSessionEventV1(value);
     const currentWorldSessionId = this.state.committedRequests.reduce(
       (worldSessionId, entry) =>
-        entry.request.type === "session.reset" &&
+        receiptCommitsNewWorldSessionV1(entry.request, entry.receipt) &&
           entry.receipt.worldSessionId !== worldSessionId
           ? entry.receipt.worldSessionId
           : worldSessionId,

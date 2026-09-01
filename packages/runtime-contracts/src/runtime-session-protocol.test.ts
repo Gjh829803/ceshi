@@ -470,6 +470,20 @@ describe("Runtime Session V1 public DTOs", () => {
       ...rejectedBody,
     } as const satisfies RuntimeSessionReceiptV1;
     expect(parseRuntimeSessionReceiptV1(rejected)).toEqual(rejected);
+    const committedResetCleanupFailureBody = {
+      ...rejectedBody,
+      diagnostic: {
+        code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+        message: "The new World was committed before old World cleanup failed.",
+      },
+    } as const;
+    const committedResetCleanupFailure = {
+      id: deriveRuntimeSessionReceiptIdV1(committedResetCleanupFailureBody),
+      ...committedResetCleanupFailureBody,
+    };
+    expect(parseRuntimeSessionReceiptV1(committedResetCleanupFailure)).toEqual(
+      committedResetCleanupFailure,
+    );
     expect(() => parseRuntimeSessionReceiptV1({
       ...succeeded,
       id: "runtime-session-receipt:wrong",

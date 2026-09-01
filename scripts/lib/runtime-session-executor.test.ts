@@ -473,7 +473,9 @@ describe("Runtime Session executor V1", () => {
     expect(receipt).toMatchObject({
       status: "rejected",
       worldSessionId: `${WORLD_SESSION_ID}.reset.1`,
-      diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" },
+      diagnostic: {
+        code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+      },
     });
     expect(openFileRuntimeSessionWalV1({ walFilePath: input.walFilePath })
       .snapshot().finalEvent).toMatchObject({

@@ -674,7 +674,9 @@ describe("Babylon Native isolated Runtime entry", () => {
     ));
     expect(receipt).toMatchObject({
       status: "rejected",
-      diagnostic: { code: "RUNTIME_SESSION_INTERNAL_FAILURE" },
+      diagnostic: {
+        code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE",
+      },
     });
     expect(receipt.worldSessionId).not.toBe(initialWorldSessionId);
     await expect(entry.submit(protocolRequest(

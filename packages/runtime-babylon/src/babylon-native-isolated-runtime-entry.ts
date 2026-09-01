@@ -484,8 +484,19 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
       this.#isActive = false;
       await this.host.dispose().catch(() => undefined);
       receipt = rejectedReceipt(request, failureWorldSessionId, {
-        code: "RUNTIME_SESSION_INTERNAL_FAILURE",
-        message: "Runtime Session operation failed and the Session was closed.",
+        ...(request.type === "session.reset" &&
+            failureWorldSessionId !== worldSessionId
+          ? {
+              code:
+                "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" as const,
+              message:
+                "The new World was committed before old World cleanup failed and the Session was closed.",
+            }
+          : {
+              code: "RUNTIME_SESSION_INTERNAL_FAILURE" as const,
+              message:
+                "Runtime Session operation failed and the Session was closed.",
+            }),
       });
     }
     this.#receiptsByRequestId.set(request.id, Object.freeze({

@@ -99,6 +99,12 @@ const INTERNAL_FAILURE_DIAGNOSTIC = Object.freeze({
   message: "Runtime Session operation failed and the Session was closed.",
 });
 
+const RESET_COMMITTED_CLEANUP_FAILURE_DIAGNOSTIC = Object.freeze({
+  code: "RUNTIME_SESSION_RESET_COMMITTED_CLEANUP_FAILURE" as const,
+  message:
+    "The new World was committed before old World cleanup failed and the Session was closed.",
+});
+
 const RECOVERY_DIVERGED_DIAGNOSTIC = Object.freeze({
   code: "RUNTIME_SESSION_RECOVERY_DIVERGED" as const,
   message: "Committed Runtime Session replay diverged from its durable Receipt.",
@@ -527,21 +533,26 @@ class RuntimeSessionExecutor implements RuntimeSessionExecutorV1 {
     request: RuntimeSessionRequestV1,
   ): Promise<RuntimeSessionReceiptV1> {
     this.state = "failed";
+    const previousWorldSessionId = this.currentWorldSessionId;
     if (!isNil(this.session)) {
       this.currentWorldSessionId = this.session.currentWorldSessionId;
     }
+    const diagnostic = request.type === "session.reset" &&
+        this.currentWorldSessionId !== previousWorldSessionId
+      ? RESET_COMMITTED_CLEANUP_FAILURE_DIAGNOSTIC
+      : INTERNAL_FAILURE_DIAGNOSTIC;
     await this.disposeIgnoringFailure();
     const receipt = rejectedReceipt(
       request,
       this.currentWorldSessionId,
-      INTERNAL_FAILURE_DIAGNOSTIC,
+      diagnostic,
     );
     this.wal.appendCommittedRequest({ request, receipt });
     this.wal.appendClosed(finalEvent(
       this.readyEvent,
       this.currentWorldSessionId,
       "failed",
-      INTERNAL_FAILURE_DIAGNOSTIC,
+      diagnostic,
     ));
     return receipt;
   }
