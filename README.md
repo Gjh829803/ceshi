@@ -236,15 +236,15 @@ Socket 和类型化关系表达。
 | 地形 | 室外 Heightfield、基础 Relief、静态障碍、水域和物理查询 | Canonical Raster/Mask/Region Pipeline；已设计但未实现的 Hybrid Terrain、洞穴、Overhang、多层可行走表面和完整室内 |
 | 主体 | Primitive 人形/四足代理；Golden 与首个产品 G Bot 的 GLB、Rig/Animation/Collider Profile、多实例与独立控制 | 更多产品资产、Compound Collider、LOD、更多拓扑和独立动画资产 |
 | 关系 | `possessedBy`；严格 Authoring/Compiler `mountedOn`；Mount/Dismount 原子事务、站位投影、Rider locomotion 暂停与安全下车 | seat/tether、Joint、装备、拖拽、完整坐骑/车辆动力学与 Hosted Builder admission |
-| 运动与相机 | 地面移动、跳跃、第三人称跟随；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、Camera Director 和多 Rig 切换 |
+| 运动与相机 | 地面移动、跳跃、第三人称跟随；Camera Director 的 M8 `mountedOn` 窄 seam；WaterBody 可查询/可渲染，主体介质只发布 `ground / air` | 游泳与 `movementMedium: water`、第一人称、飞行、车辆、广义上下文相机组合和多 Rig 切换 |
 | 自动化 | validate/build/inspect/load/run/capture、Registry Discovery、Definition Validate、Subject Explain、`verify route`、Browser Protocol V5、Take Driver、Control Capture Gate，以及 canonical NDJSON 持久 headless Runtime Session | Capture 恢复续拍、多人同时控制、跨 Host Session 迁移 |
-| Capture | 单帧截图、World Runtime Snapshot V4、Simulation Take V1、五 Pass、原子 Bundle；Action/Event/Relationship Track 写入与交叉校验已实现 | mounted fixture 的正式多阶段 Bundle verifier、Motion Vector、完整 Replay/Resume 与视频 Adapter |
+| Capture | 单帧截图、World Runtime Snapshot V4、Simulation Take V1、五 Pass、原子 Bundle；Action/Event/Relationship Track 写入与交叉校验，以及 mounted fixture 的正式 before-Mount / after-Mount-movement / after-Dismount-movement / after-Reset verifier 已实现 | Motion Vector、完整 Replay/Resume 与视频 Adapter |
 | Validation | Canonical Browser Gate、现有物理/构图检查；Capture/Integrity V1；Route 双 Blocking Gate、R1 Heightfield Golden Fixture；R1b 的 11 个 Fixture、完整验证矩阵、Canonical Evidence/Report 与可信 Host 只读投影 | Placement/Physics/Composition/Replay/Performance 接入统一 Report、Profile 组合、compare 与完整生产 Policy |
 | Gameplay | 基础固定输入、`possessedBy` 权威控制权、Golden/G Bot `idle/walk/run/jump`，以及 `mountedOn` S1 的 Mount/Dismount Action/Event/Receipt；Browser 不提供旁路 `bindControl` | 完整 Action Presentation、姿态、游泳、装备、NPC、导航、任务、战斗、联网 |
 | 最终视觉 | 本地白模渲染 | Render Bridge、实时世界模型和生产 Video Model Adapter |
 
 当前 Route 能力只承诺室外 Heightfield 与普通静态平台地面通行。不要把 H1/H2/H3
-桥下双层/洞口/洞穴、动态平台、NPC 或公开 `goTo`、车辆、坐骑、飞行、室内、联网
+桥下双层/洞口/洞穴、动态平台、NPC 或公开 `goTo`、通用车辆/坐骑动力学、飞行、室内、联网
 或视频模型接入当作已经存在的生产能力。
 
 ## 快速开始
@@ -563,7 +563,7 @@ Validation 词汇。它不构建 Traversal Graph，不跑 Character Controller�
 | `packages/subject-registry/` | 精确版本的 Subject Definition、Capability Assembly、Profile 与 Asset Inventory | 当前 Registry 资源入口，不回退到旧 Definition | 保存会话状态或未版本化数字 overlay |
 | `packages/subject-composition/` | Primitive Bounds、Collider 推导、角色胶囊和资源成本 | 内部可复用 LEGO 几何合同 | 依赖 Babylon Mesh 或场景层级 |
 | `packages/subject-actions/` | Character State、Ground Humanoid Action 与动作解析 | 引擎无关动作语义 | 直接播放 AnimationGroup 或控制输入设备 |
-| `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同；Runtime/Browser 接线尚未完成 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把纯选择误写成已交付 Runtime selector |
+| `packages/camera/` | Provider-neutral 命名 Camera Rig/Modifier/Context Profile、View Preference、纯 Selection/Explain | Camera 领域合同与 Runtime/Browser 基础接线；M8 `mountedOn` 内部窄 seam 处于最终候选且 Hosted admission 关闭，广义 Equipment/Flight/多 Rig 组合仍开放 | 创建渲染相机、执行碰撞查询、拥有 Gameplay State，或把内部窄 seam 误写成生产组合已交付 |
 | `packages/terrain-surface/` | Heightfield、Triangle Mesh、Collider Support、Surface Query 与 Spawn Safety | Traversal/Runtime 内部几何合同与生产空间不变量 | 把单一 Heightfield 冒充全部空间拓扑 |
 | `packages/traversal/` | Traversal Surface、Lock、Capability Envelope、Graph/Path/Probe Receipt 与 Route Overlay | Provider-neutral Route 合同 | 暴露 Recast 数据或替代 Runtime 支撑事实 |
 | `packages/traversal-recast/` | Recast/Detour Graph Build、Query 与 Route Evidence Provider Adapter | 不直接面向 AI | 让 Provider 名称或 Handle 进入 Canonical 协议 |
@@ -625,7 +625,7 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 - [未发布协议兼容层 Clean Break 设计](docs/superpowers/specs/2026-08-24-unreleased-compatibility-clean-break-design.md)
 - [历史命名与兼容路径清理专项计划](docs/superpowers/plans/2026-08-25-historical-naming-and-compatibility-path-cleanup-plan.md)
 - [Gameplay RuntimeHost G19-3 审查处置](docs/reviews/2026-08-24-gameplay-runtime-host-g19-3-review.md)
-- [上下文驱动 Gameplay 与 Camera 组合设计](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Camera 领域包已实现，Gameplay/Browser/Runtime 集成仍按 Backlog 推进。
+- [上下文驱动 Gameplay 与 Camera 组合设计](docs/superpowers/specs/2026-08-24-context-driven-gameplay-camera-composition-design.md)：Camera 领域包与 Gameplay/Browser/Runtime 基础接线已实现；M8 `mountedOn` 内部窄 seam 已进入最终候选但尚未 GO，Hosted Builder admission 仍关闭；广义 Equipment/Flight/多 Rig 组合仍按 Backlog 推进。
 - [Babylon-only Runtime 收口实施计划](docs/superpowers/plans/2026-08-25-babylon-only-threejs-retirement.md)
 - [AI-first Terrain Authoring Pipeline 设计](docs/superpowers/specs/2026-08-17-terrain-authoring-pipeline-design.md)
 - [Hybrid Terrain 与非 Heightfield 特殊地形设计](docs/superpowers/specs/2026-08-21-hybrid-terrain-and-non-heightfield-topology-design.md)
@@ -686,9 +686,10 @@ Browser、示例和门禁。若本轮确实无法删除某个旧路径，技术�
 ## Catalog 场景与创作制品
 
 Plan-first 多 Agent 场景流程、Creator Studio 和已验证 catalog 场景继续作为创作、
-视觉回归与产品 Fixture。Gameplay、Opening Composition、规划捕获和 SDK-derived tri-view
-都由 Babylon-backed Playground 承载；World Plan、Opening Shot、plan lock、白膜三视图和
-Visual Bible 工件合同不因 Runtime 收口而改变。
+视觉回归与 artifact-only Fixture。Catalog 不再提供 Gameplay route；Gameplay 只从 Host-fixed
+Canonical Authoring JSON 经 `worldkit run` 或受控 preset 启动。Opening Composition、规划捕获和
+SDK-derived tri-view 仍由 Babylon-backed Playground 的 artifact 路径承载；World Plan、Opening
+Shot、plan lock、白膜三视图和 Visual Bible 工件合同不因 Runtime 收口而改变。
 
 ```bash
 pnpm dev
@@ -698,6 +699,8 @@ pnpm studio
 `pnpm dev` 用于统一 Babylon/Havok Viewer，默认加载 G Bot 并可通过页面选择器切换
 allowlisted Canonical 调试预设。固定外部程序使用 `worldkit run`、Canonical Authoring V4
 和 Browser Protocol V5。Camera 的命名 Profile/Context、Preference、
-纯 Selection/Explain 已在 `@whitebox-world/camera` 实现；committed Gameplay Context
-Projection、Browser 命令、Registry Lock 和 Babylon CameraDirector 消费 Selection Decision
-仍未交付，详见[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p24-多-controller相机模式与受控操作)。
+纯 Selection/Explain 已在 `@whitebox-world/camera` 实现；Browser View Preference 命令、
+CameraDirector 消费 Selection Decision，以及 committed `possessedBy` Context 已交付；M8
+`mountedOn` 内部窄 Context Projection 已进入最终候选但尚未 GO。广义 Equipment/Flight Context、
+完整 Registry Lock 与多 Rig Fixture 仍未交付，
+详见[重构总进度与 Backlog](docs/18-refactor-progress-and-backlog.md#p24-多-controller相机模式与受控操作)。

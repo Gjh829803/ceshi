@@ -15,6 +15,7 @@ import {
 } from "@whitebox-world/camera";
 
 const QUERY_DISTANCE_TOLERANCE_METERS_V2 = 1e-6;
+const DISABLED_BODY_EXIT_CLEARANCE_METERS_V2 = 1e-4;
 
 const HAVOK_CAMERA_GEOMETRY_CAPABILITY_V2 = Object.freeze({
   shape: "sphere",
@@ -56,6 +57,38 @@ function normalizedHitNormal(value: Vector3): readonly [number, number, number] 
   return frozenPosition(value.normalize());
 }
 
+function disabledBodyExitFraction(
+  body: PhysicsBody,
+  start: Vector3,
+  end: Vector3,
+  radiusMeters: number,
+): number | undefined {
+  const bounds = body.getBoundingBox();
+  const padding = radiusMeters + DISABLED_BODY_EXIT_CLEARANCE_METERS_V2;
+  const minimum = bounds.minimumWorld.subtract(new Vector3(padding, padding, padding));
+  const maximum = bounds.maximumWorld.add(new Vector3(padding, padding, padding));
+  if (
+    start.x < minimum.x || start.x > maximum.x ||
+    start.y < minimum.y || start.y > maximum.y ||
+    start.z < minimum.z || start.z > maximum.z
+  ) return undefined;
+
+  const delta = end.subtract(start);
+  let exitFraction = 1;
+  for (const [coordinate, direction, lower, upper] of [
+    [start.x, delta.x, minimum.x, maximum.x],
+    [start.y, delta.y, minimum.y, maximum.y],
+    [start.z, delta.z, minimum.z, maximum.z],
+  ] as const) {
+    if (Math.abs(direction) <= QUERY_DISTANCE_TOLERANCE_METERS_V2) continue;
+    const axisExit = direction > 0
+      ? (upper - coordinate) / direction
+      : (lower - coordinate) / direction;
+    exitFraction = Math.min(exitFraction, axisExit);
+  }
+  return Math.max(0, Math.min(1, exitFraction));
+}
+
 /**
  * Exact Babylon 9.23.0 / Havok 1.3.14 Camera sphere-query adapter.
  *
@@ -67,6 +100,7 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
   readonly capability = HAVOK_CAMERA_GEOMETRY_CAPABILITY_V2;
 
   private readonly bodiesByEntityId = new Map<string, PhysicsBody>();
+  private readonly disabledEntityIds = new Set<string>();
   private readonly sphereShapesByRadiusMeters = new Map<number, PhysicsShapeSphere>();
   private disposed = false;
 
@@ -84,6 +118,15 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
       throw new Error(`CAMERA_GEOMETRY_QUERY_ENTITY_DUPLICATE: ${entityId}`);
     }
     this.bodiesByEntityId.set(entityId, body);
+  }
+
+  setEntityQueryEnabled(entityId: string, enabled: boolean): void {
+    if (this.disposed) throw new Error("CAMERA_GEOMETRY_QUERY_DISPOSED");
+    if (!this.bodiesByEntityId.has(entityId)) {
+      throw new Error(`CAMERA_GEOMETRY_QUERY_ENTITY_UNKNOWN: ${entityId}`);
+    }
+    if (enabled) this.disabledEntityIds.delete(entityId);
+    else this.disabledEntityIds.add(entityId);
   }
 
   query(input: CameraGeometryQueryRequestV2): CameraGeometryHitV2 | undefined {
@@ -105,8 +148,31 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
     }
 
     try {
-      const start = new Vector3(...request.startPositionMetersXYZ);
+      const originalStart = new Vector3(...request.startPositionMetersXYZ);
       const end = new Vector3(...request.endPositionMetersXYZ);
+      const originalArmLengthMeters = Vector3.Distance(originalStart, end);
+      const disabledExitFractions = [...this.disabledEntityIds]
+        .map((entityId) => this.bodiesByEntityId.get(entityId)!)
+        .filter((body) => body !== ignoredBody)
+        .map((body) => disabledBodyExitFraction(
+            body,
+            originalStart,
+            end,
+            request.radiusMeters,
+          ))
+        .filter((value): value is number => value !== undefined);
+      const disabledExitFraction = disabledExitFractions.length === 0
+        ? undefined
+        : Math.max(...disabledExitFractions);
+      const skippedFraction = disabledExitFraction === undefined ||
+          originalArmLengthMeters <= QUERY_DISTANCE_TOLERANCE_METERS_V2
+        ? 0
+        : Math.min(
+            1,
+            disabledExitFraction +
+              DISABLED_BODY_EXIT_CLEARANCE_METERS_V2 / originalArmLengthMeters,
+          );
+      const start = Vector3.Lerp(originalStart, end, skippedFraction);
       const probeShape = this.sphereShape(request.radiusMeters);
       const overlapInputResult = new ProximityCastResult();
       const overlapHitResult = new ProximityCastResult();
@@ -126,22 +192,21 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
         const hitEntityId = entityIdFromBody(overlapHitResult.body);
         return parseCameraGeometryHitV2({
           schemaVersion: 2,
-          travelDistanceMeters: 0,
-          travelFraction: 0,
+          travelDistanceMeters: canonicalNumber(originalArmLengthMeters * skippedFraction),
+          travelFraction: canonicalNumber(skippedFraction),
           hitPointMetersXYZ: frozenPosition(overlapHitResult.hitPoint),
           hitNormalXYZ: normalizedHitNormal(overlapHitResult.hitNormal),
           ...(hitEntityId === undefined ? {} : { hitEntityId }),
-          startedOverlapping: true,
-          penetrationDepthMeters: canonicalNumber(Math.max(
-            0,
-            -overlapHitResult.hitDistance,
-          )),
+          startedOverlapping: skippedFraction === 0,
+          penetrationDepthMeters: skippedFraction === 0
+            ? canonicalNumber(Math.max(0, -overlapHitResult.hitDistance))
+            : 0,
           obstructionClass: "hard",
         }, request);
       }
 
-      const armLengthMeters = Vector3.Distance(start, end);
-      if (armLengthMeters <= QUERY_DISTANCE_TOLERANCE_METERS_V2) return undefined;
+      const remainingArmLengthMeters = Vector3.Distance(start, end);
+      if (remainingArmLengthMeters <= QUERY_DISTANCE_TOLERANCE_METERS_V2) return undefined;
       const inputShapeResult = new ShapeCastResult();
       const hitShapeResult = new ShapeCastResult();
       this.havokPlugin.shapeCast(
@@ -159,14 +224,17 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
       if (!hitShapeResult.hasHit || !Number.isFinite(hitShapeResult.hitFraction)) {
         return undefined;
       }
-      const travelFraction = canonicalNumber(Math.max(
+      const localTravelFraction = Math.max(
         0,
         Math.min(1, hitShapeResult.hitFraction),
-      ));
+      );
+      const travelFraction = canonicalNumber(
+        skippedFraction + (1 - skippedFraction) * localTravelFraction,
+      );
       const hitEntityId = entityIdFromBody(hitShapeResult.body);
       return parseCameraGeometryHitV2({
         schemaVersion: 2,
-        travelDistanceMeters: canonicalNumber(armLengthMeters * travelFraction),
+        travelDistanceMeters: canonicalNumber(originalArmLengthMeters * travelFraction),
         travelFraction,
         hitPointMetersXYZ: frozenPosition(hitShapeResult.hitPoint),
         hitNormalXYZ: normalizedHitNormal(hitShapeResult.hitNormal),
@@ -196,6 +264,7 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
       }
     }
     this.sphereShapesByRadiusMeters.clear();
+    this.disabledEntityIds.clear();
     this.bodiesByEntityId.clear();
     if (failures.length > 0) {
       throw new AggregateError(

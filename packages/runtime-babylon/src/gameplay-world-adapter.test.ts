@@ -189,6 +189,11 @@ function runtimeHarness(
       Object.hasOwn(projection.spatialEntityStatesById, entityId),
     isEntityControllable: (entityId) =>
       Object.hasOwn(projection.spatialEntityStatesById, entityId),
+    estimateSemanticFactProjectionCapacity: () => Object.freeze({
+      maximumSemanticFactCountAfterInput:
+        Object.keys(projection.semanticFactsById).length,
+      maximumSemanticFactTransitionEventCount: 0,
+    }),
     hasLockedActionPresentation: (actorEntityId, semanticActionRef) =>
       lockedActionPresentationKeys.has(`${actorEntityId}\u0000${semanticActionRef}`),
     preparePossessionTarget: async (nextTarget) => {

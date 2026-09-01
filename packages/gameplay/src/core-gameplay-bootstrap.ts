@@ -1,5 +1,6 @@
 import {
   createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   type GameplayBootstrapV1,
   type GameplayEntityDescriptorV1,
   type GameplayRelationshipStateV1,
@@ -10,7 +11,6 @@ import {
   CONTROL_TRANSITION_CAPABILITY_REF,
   createCoreControlFeatureFactoryV1,
 } from "./core-control-feature";
-
 export interface CoreGameplayBootstrapInputV1 {
   readonly worldId: string;
   readonly worldSeed: number;
@@ -33,6 +33,8 @@ export function createCoreGameplayBootstrapV1(
     version: 1,
     resourceRef:
       `worldkit://gameplay-bootstrap/${input.worldId}.${input.worldSeed}@1`,
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: input.entityDescriptors,
     featureResourceLocks: [{
       resourceRef: coreControlManifest.resourceRef,

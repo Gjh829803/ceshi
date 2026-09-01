@@ -30,18 +30,18 @@ import {
 } from "./control-profile-runtime";
 import {
   MotionKernelRuntimeV1,
-  type MotionKernelLiveLockStateV1,
   type MotionKernelSnapshotV1,
-  type RetainedCharacterSupportSampleV1,
 } from "./motion-kernel-runtime";
 import {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
   createBabylonCharacterBodyPortV1,
   type BabylonCharacterBodyCommittedSupportEvidenceV1,
+  type BabylonCharacterBodyNativeContactV1,
   type BabylonCharacterBodyRuntimePortV1,
 } from "./babylon-character-body-port";
 import {
   GoldenHumanoid3CVNextTransactionV1,
+  type GoldenHumanoidCameraContextAuthorityV1,
   type GoldenHumanoidProjectionPortV1,
   type GoldenHumanoidTickResultV1,
 } from "./golden-humanoid-3c-vnext";
@@ -50,6 +50,10 @@ import {
   CommittedRenderPoseBufferV1,
   type CommittedRenderPoseV1,
 } from "./committed-render-pose";
+import type {
+  CharacterSupportProjectionLockV1,
+  CharacterSupportProjectionSampleV1,
+} from "./retained-support-surface-resolver";
 
 interface LegacySubjectMotionSampleV1 {
   horizontalSpeedMetersPerSecond: number;
@@ -163,7 +167,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     return this.motionKernel.snapshot();
   }
 
-  retainedCharacterSupportSample(): RetainedCharacterSupportSampleV1 | undefined {
+  retainedCharacterSupportSample(): CharacterSupportProjectionSampleV1 | undefined {
     return this.motionKernel.retainedCharacterSupportSample();
   }
 
@@ -171,13 +175,22 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     this.motionKernel.clearRetainedCharacterSupportSample();
   }
 
-  /** @internal Formal evidence from the legacy kernel's committed support state. */
+  /** @internal Formal evidence projected from the same committed support sample. */
   readCommittedSupportEvidence(
     tick: number,
   ): BabylonCharacterBodyCommittedSupportEvidenceV1 | undefined {
     const sample = this.motionKernel.retainedCharacterSupportSample();
     if (sample === undefined) return undefined;
-    const contacts = sample.supportContacts;
+    const contacts = sample.supportContacts.flatMap(
+      (contact): readonly BabylonCharacterBodyNativeContactV1[] =>
+        contact.distanceMeters === undefined || contact.motionType !== "static"
+          ? []
+          : [Object.freeze({
+              ...contact,
+              distanceMeters: contact.distanceMeters,
+              motionType: contact.motionType,
+            })],
+    );
     const pointMetersXYZ = contacts.length === 0
       ? sample.sampledFootPositionMetersXYZ
       : Object.freeze([0, 1, 2].map((axis) =>
@@ -200,7 +213,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
             normalXYZ: sample.supportNormalWorldXYZ,
             isDynamic: sample.isSupportSurfaceDynamic,
           }),
-      contacts,
+      contacts: Object.freeze(contacts),
     });
   }
 
@@ -219,7 +232,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
       : [placement.x, placement.y, placement.z];
   }
 
-  liveLockState(): MotionKernelLiveLockStateV1 {
+  liveLockState(): CharacterSupportProjectionLockV1 {
     return this.motionKernel.liveLockState();
   }
 
@@ -385,6 +398,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     },
     axes: Readonly<ControlInputAxesV2> = {},
     activeActionState?: GameplayActionStateV1,
+    cameraContextAuthority?: GoldenHumanoidCameraContextAuthorityV1,
   ): GoldenHumanoidTickResultV1 {
     this.#assertLive();
     const before = this.movementSnapshot();
@@ -443,7 +457,11 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
       viewYawRadians: 0,
       layeredMoves: [],
     };
-    const result = this.runCommand(command, activeActionState);
+    const result = this.runCommand(
+      command,
+      activeActionState,
+      cameraContextAuthority,
+    );
     this.#jumpWasHeld = jumpHeld;
     return result;
   }
@@ -451,11 +469,15 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   runCommand(
     command: CharacterMovementCommandV1,
     activeActionState?: GameplayActionStateV1,
+    cameraContextAuthority?: GoldenHumanoidCameraContextAuthorityV1,
   ): GoldenHumanoidTickResultV1 {
     this.#assertLive();
     const result = this.#transaction.runTick({
       command,
       ...(activeActionState === undefined ? {} : { activeActionState }),
+      ...(cameraContextAuthority === undefined
+        ? {}
+        : { cameraContextAuthority }),
     });
     this.#latestTickResult = result;
     return result;
@@ -473,6 +495,34 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   latestTickResult(): GoldenHumanoidTickResultV1 | undefined {
     this.#assertLive();
     return this.#latestTickResult;
+  }
+
+  retainedCharacterSupportSample(): CharacterSupportProjectionSampleV1 | undefined {
+    return this.#requireBodyPort().retainedCharacterSupportSample();
+  }
+
+  liveLockState(): CharacterSupportProjectionLockV1 {
+    const body = this.#requireBodyPort().readSupportProjectionLock();
+    const assembly = this.#subject.capabilityAssembly;
+    const motion = assembly.defaultMotionProfile;
+    return Object.freeze({
+      ...body,
+      colliderCenterOffsetMetersXYZ: Object.freeze([
+        ...this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+      ]) as RuntimeVec3V1,
+      controlFeelProfileRef: this.#subject.controlFeel.resourceRef,
+      controlFeelProfileHash: this.#subject.controlFeel.contentHash,
+      requestedControlFeelProfileRef: this.#subject.controlFeel.resourceRef,
+      motionProfileRef: motion.resourceRef,
+      motionProfileHash: motion.contentHash,
+      requestedMotionProfileRef: motion.resourceRef,
+      motionKernelRef: motion.motionKernelRef,
+      physicsBodyProfileRef: this.#subject.physicsBodyProfileRef,
+      locomotionProfileRef: this.#subject.locomotionProfileRef,
+      controlProfileRef: assembly.controlProfile.resourceRef,
+      controlProfileHash: assembly.controlProfile.contentHash,
+      mediumProfileRef: assembly.mediumProfile.resourceRef,
+    });
   }
 
   synchronizeVisual(): void {

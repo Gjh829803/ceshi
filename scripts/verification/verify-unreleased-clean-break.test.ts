@@ -117,8 +117,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("groups superseded mechanisms and serialized authoring by family and path", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-groups-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-groups-");
     await mkdir(path.join(fixtureRoot, "apps", "sample"), { recursive: true });
     await mkdir(path.join(fixtureRoot, "examples"), { recursive: true });
     await writeFile(
@@ -203,6 +202,196 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(false);
   });
 
+  it("blocks retired M8-S1 public contract dialects in packages, Registry assets, and Agent bundles", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-m8-s1-");
+    const packagePath = path.join(
+      fixtureRoot,
+      "packages",
+      "runtime",
+      "legacy-camera.ts",
+    );
+    const registryPath = path.join(
+      fixtureRoot,
+      "assets",
+      "registry",
+      "camera-profiles",
+      "catalog.json",
+    );
+    const bundlePath = path.join(
+      fixtureRoot,
+      ".codex",
+      "skills",
+      "worldkit-canonical-builder",
+      "scripts",
+      "self-check.mjs",
+    );
+    await Promise.all([
+      mkdir(path.dirname(packagePath), { recursive: true }),
+      mkdir(path.dirname(registryPath), { recursive: true }),
+      mkdir(path.dirname(bundlePath), { recursive: true }),
+    ]);
+    await writeFile(
+      packagePath,
+      [
+        `export type LegacyRole = ${token(["Camera", "Relationship", "Role", "V1"])};`,
+        `export type LegacyRule = ${token(["Camera", "Context", "Rule", "V1"])};`,
+        `export type LegacyRuntimeRule = ${token(["Runtime", "Camera", "Context", "Rule", "V1"])};`,
+        `const legacyRule = { ${token(["required", "Motion", "Tags"])}: ["ground"] };`,
+        `const sample = { semanticAuthorityStatus: "${token(["un", "available"])}" };`,
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      registryPath,
+      JSON.stringify({
+        when: {
+          [token(["relationship", "Roles"])]: ["rider"],
+        },
+      }, null, 2),
+      "utf8",
+    );
+    await writeFile(
+      bundlePath,
+      [
+        `const role = input.${token(["relationship", "Role"])};`,
+        `const threshold = input.${token(["minimumContactToAggregateSupportNormal", "DotRatio"])};`,
+        `const fallback = input.${token(["minimumSupportNormal", "DotRatio"])};`,
+        `export const ${token(["CORE_", "SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1"])} = {};`,
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+    const legacyM8 = family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_M8_S1_PUBLIC_CONTRACT",
+    );
+
+    expect(legacyM8.matchCount).toBe(10);
+    expect(legacyM8.matchesByPath.map((entry) => entry.path)).toEqual([
+      ".codex/skills/worldkit-canonical-builder/scripts/self-check.mjs",
+      "assets/registry/camera-profiles/catalog.json",
+      "packages/runtime/legacy-camera.ts",
+    ]);
+    expect(report.ok).toBe(false);
+  });
+
+  it("allows negative alias-rejection tests and historical Superpowers records", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-m8-s1-history-");
+    const negativeTestPath = path.join(
+      fixtureRoot,
+      "packages",
+      "camera",
+      "camera-domain.test.ts",
+    );
+    const historicalSpecPath = path.join(
+      fixtureRoot,
+      "docs",
+      "superpowers",
+      "specs",
+      "historical-camera.md",
+    );
+    await Promise.all([
+      mkdir(path.dirname(negativeTestPath), { recursive: true }),
+      mkdir(path.dirname(historicalSpecPath), { recursive: true }),
+    ]);
+    const historicalTerms = [
+      token(["relationship", "Roles"]),
+      token(["relationship", "Role"]),
+      token(["Camera", "Context", "Rule", "V1"]),
+      token(["Runtime", "Camera", "Context", "Rule", "V1"]),
+      token(["required", "Motion", "Tags"]),
+      token(["minimumContactToAggregateSupportNormal", "DotRatio"]),
+      token(["minimumSupportNormal", "DotRatio"]),
+      token(["CORE_", "SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1"]),
+      `semanticAuthorityStatus: "${token(["un", "available"])}"`,
+    ].join("\n");
+    await Promise.all([
+      writeFile(negativeTestPath, historicalTerms, "utf8"),
+      writeFile(historicalSpecPath, historicalTerms, "utf8"),
+    ]);
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_M8_S1_PUBLIC_CONTRACT",
+    ).matchCount).toBe(0);
+    expect(report.ok).toBe(true);
+  });
+
+  it("blocks every retired Viewer route in unlisted active package and example files", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-viewer-route-");
+    const evidencePath = path.join(
+      fixtureRoot,
+      "examples",
+      "evidence",
+      "legacy-route.json",
+    );
+    const packagePath = path.join(
+      fixtureRoot,
+      "packages",
+      "viewer",
+      "legacy-route.ts",
+    );
+    await Promise.all([
+      mkdir(path.dirname(evidencePath), { recursive: true }),
+      mkdir(path.dirname(packagePath), { recursive: true }),
+    ]);
+    const retiredAuthoringRoute = token(["?", "authoring", "=1"]);
+    const retiredCatalogGameplayRoute = token(["catalog", "-gameplay"]);
+    await Promise.all([
+      writeFile(
+        evidencePath,
+        JSON.stringify({
+          browserUrl: `http://127.0.0.1:5173/${retiredAuthoringRoute}`,
+          routeMode: retiredCatalogGameplayRoute,
+        }),
+        "utf8",
+      ),
+      writeFile(
+        packagePath,
+        [
+          `export const route = "${retiredAuthoringRoute}";`,
+          `export const routeMode = "${retiredCatalogGameplayRoute}";`,
+        ].join("\n"),
+        "utf8",
+      ),
+    ]);
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_VIEWER_ROUTE",
+    ).matchesByPath).toEqual([
+      {
+        path: "examples/evidence/legacy-route.json",
+        matches: [
+          { line: 1, value: retiredAuthoringRoute },
+          { line: 1, value: retiredCatalogGameplayRoute },
+        ],
+      },
+      {
+        path: "packages/viewer/legacy-route.ts",
+        matches: [
+          { line: 1, value: retiredAuthoringRoute },
+          { line: 2, value: retiredCatalogGameplayRoute },
+        ],
+      },
+    ]);
+    expect(report.ok).toBe(false);
+  });
+
+  it("fails closed when the required packages census root is absent", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-missing-packages-");
+    await rm(path.join(fixtureRoot, "packages"), { recursive: true });
+
+    await expect(scanUnreleasedCleanBreak(fixtureRoot)).rejects.toThrow(
+      /required census root.*packages/i,
+    );
+  });
+
   it("blocks superseded v3 node contracts after authoring v4 became authoritative", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-node-v3-"));
     cleanupPaths.push(fixtureRoot);
@@ -252,8 +441,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("blocks superseded protocol names written with spaces in active documentation", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-active-docs-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-active-docs-");
     const quickstartPath = path.join(
       fixtureRoot,
       "docs",
@@ -279,8 +467,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("treats the Gameplay integration contract as active documentation", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-gameplay-doc-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-gameplay-doc-");
     const contractPath = path.join(
       fixtureRoot,
       "docs",
@@ -386,8 +573,7 @@ describe("verify:unreleased-clean-break", () => {
   });
 
   it("discovers nested superseded serialized contracts under generated artifacts", async () => {
-    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-artifacts-"));
-    cleanupPaths.push(fixtureRoot);
+    const fixtureRoot = await createFixtureRoot("clean-break-artifacts-");
     await mkdir(path.join(fixtureRoot, "artifacts", "generated"), { recursive: true });
     await writeFile(
       path.join(fixtureRoot, "artifacts", "generated", "bundle.json"),

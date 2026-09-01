@@ -191,15 +191,18 @@ export const sceneCatalog = {
 浏览器打开：
 
 ```text
-http://127.0.0.1:5173/?scene=myScene
+http://127.0.0.1:5173/?scene=myScene&artifact=1
 ```
 
 当前示例：
 
-- `?scene=grassland`：640m × 640m 起伏草地、湖泊和高塔。
-- `?scene=canyon`：Agent 自定义分块峡谷、Polygon 河流和石拱。
-- `?scene=azure-bay`：前景高地、中央海湾、两侧海岸、远处岛屿和灯塔的图片构图实验。
-- `?scene=mistbound-rider`：山谷、村落、城堡和远景组合实验；其中马/骑手只是静态标志物，不代表骑乘主体已实现。
+- `?scene=grassland&artifact=1`：640m × 640m 起伏草地、湖泊和高塔。
+- `?scene=canyon&artifact=1`：Agent 自定义分块峡谷、Polygon 河流和石拱。
+- `?scene=azure-bay&artifact=1`：前景高地、中央海湾、两侧海岸、远处岛屿和灯塔的图片构图实验。
+- `?scene=mistbound-rider&artifact=1`：山谷、村落、城堡和远景组合实验；其中马/骑手只是静态标志物，不代表骑乘主体已实现。
+
+这些 Catalog URL 仅用于 artifact/planning 检查，不暴露 Browser Gameplay。Gameplay 必须从
+Host-fixed Canonical Authoring JSON 经 `worldkit run` 或受控 preset 启动。
 
 ## Agent 验收门禁
 

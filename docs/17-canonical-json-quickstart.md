@@ -526,8 +526,9 @@ Screen Region、八种关闭 Constraint、Required/Preferred 与锁定 Profile/S
 - `mountedOn` 关闭结构之外的非空 `relationships`、非空 `rules` 和运行时动态 Spawn。
 
 `MountStand` 可用于当前 `mountedOn` S1；`seat.mount` 仍只是可验证、可解释的 Socket
-数据，不代表 seated riding 已实现。当前 Playground 代表场景为
-`?scene=mounted-skateboard-s1`。
+数据，不代表 seated riding 已实现。正式 Gameplay/Capture 验收运行
+`pnpm verify:mounted-skateboard-capture`，它创建 Host-fixed Canonical Authoring JSON source。
+`?scene=mounted-skateboard-s1&artifact=1` 只显示 catalog 白膜制品，不暴露 Browser Gameplay。
 
 Rigged Subject 最小接入/验证流程：
 

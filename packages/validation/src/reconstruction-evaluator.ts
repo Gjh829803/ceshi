@@ -8,6 +8,7 @@ import {
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionEvidenceSetV1,
+  worldReconstructionEvidenceProfileClosureMatchesV1,
   WORLD_RECONSTRUCTION_DIMENSION_IDS_V1,
   type WorldReconstructionCaseV1,
   type WorldReconstructionDiagnosticCodeV1,
@@ -266,7 +267,8 @@ function identitiesAreStale(
   const profileHash = hashWorldReconstructionEvaluationProfileV1(profile);
   return caseHash !== evidence.caseHash
     || profileHash !== evidence.evaluationProfileHash
-    || reconstructionCase.evaluationProfileHash !== profileHash;
+    || reconstructionCase.evaluationProfileHash !== profileHash
+    || !worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, profile);
 }
 
 function evaluateTopology(

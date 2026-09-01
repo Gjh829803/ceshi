@@ -2,6 +2,7 @@ import {
   createGameplayBootstrapV1,
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
   deriveGameplaySemanticFactIdV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   type ControlBindGameplayCommandV1,
   type ControllerEntityStateV1,
   type GameplayParticipantStateV1,
@@ -79,6 +80,8 @@ const gameplayBootstrap = createGameplayBootstrapV1({
   id: "gameplay.test",
   version: 1,
   resourceRef: "worldkit://gameplay-bootstrap/test@1",
+  semanticFactProjectorProfileResource:
+    RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   entityDescriptors: [{
     id: heroState.id,
     entityDefinitionRef: heroState.entityDefinitionRef,

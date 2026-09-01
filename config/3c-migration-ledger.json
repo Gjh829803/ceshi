@@ -74,12 +74,15 @@
       "deletionCondition": "Golden Runtime, projections, generated checks and Camera no longer publish or consume Motion Kernel identity as authority.",
       "state": "live",
       "baselineSourceReferenceCount": 32,
-      "currentSourceReferenceCeiling": 27,
+      "currentSourceReferenceCeiling": 21,
       "evidence": [
         "6d9e030 expanded executable-source census: 32",
         "3C-5 removed Camera Domain V1 Motion Kernel authority fields; Task6 owns the remaining live Runtime seam",
         "3C-6 Golden CharacterMovementRuntime projections omit the legacy Motion Kernel identity instead of publishing a synthetic authority",
-        "dv.commit.12 verifies two Registry G Bots publish Locomotion V2 without activeMotionKernelRef"
+        "dv.commit.12 verifies two Registry G Bots publish Locomotion V2 without activeMotionKernelRef",
+        "M8-S1 Camera clean break removes Motion Kernel identity from the public ViewTargetSampleV1 provider shell",
+        "M8-S1 current support projection removes the legacy activeMotionKernelRef spelling and lock type from the traversal boundary while retaining the canonical compiled motionKernelRef; exact executable-source census: 21",
+        "M8-S1 pre-freeze terminology correction supersedes the preceding identity shorthand: Camera and support projections delete only the legacy activeMotionKernelRef field and MotionKernelLiveLockStateV1 type; canonical compiled motionKernelRef remains the current identity"
       ]
     },
     {
@@ -95,7 +98,8 @@
       "evidence": [
         "6d9e030 expanded executable-source census: 7",
         "3C-5 production Camera selection consumes CameraContextSampleV2; Task6 replaces the isolated legacy ViewTarget projection seam",
-        "dv.commit.12 initializes and reuses committed CameraContextSampleV2 for every rigged controlled Subject"
+        "dv.commit.12 initializes and reuses committed CameraContextSampleV2 for every rigged controlled Subject",
+        "M8-S1 removes the final executable CameraContextSampleV1 reference; completion remains gated on a green whole-ledger verifier"
       ]
     },
     {
@@ -132,10 +136,13 @@
       "targetOwner": "@whitebox-world/runtime-babylon",
       "dependsOn": ["3C-3", "3C-6"],
       "deletionCondition": "BodySampleV1 bound to a movement Tick token is the only retained Golden support sample.",
-      "state": "live",
+      "state": "migrating",
       "baselineSourceReferenceCount": 7,
-      "currentSourceReferenceCeiling": 7,
-      "evidence": ["6d9e030 expanded executable-source census: 7"]
+      "currentSourceReferenceCeiling": 0,
+      "evidence": [
+        "6d9e030 expanded executable-source census: 7",
+        "M8-S1 deletes the legacy retained-support symbol and uses CharacterSupportProjectionSampleV1 across legacy and Golden providers; exact executable-source census: 0"
+      ]
     },
     {
       "id": "3C-legacy-motion-kernel-lock-state",
@@ -144,10 +151,13 @@
       "targetOwner": "@whitebox-world/character-movement",
       "dependsOn": ["3C-2", "3C-6"],
       "deletionCondition": "Golden movement lock identity is represented by provider-neutral compiled inputs without a Motion Kernel facade.",
-      "state": "live",
+      "state": "migrating",
       "baselineSourceReferenceCount": 7,
-      "currentSourceReferenceCeiling": 7,
-      "evidence": ["6d9e030 expanded executable-source census: 7"]
+      "currentSourceReferenceCeiling": 0,
+      "evidence": [
+        "6d9e030 expanded executable-source census: 7",
+        "M8-S1 deletes the legacy lock symbol and uses CharacterSupportProjectionLockV1 for exact traversal lock verification; exact executable-source census: 0"
+      ]
     },
     {
       "id": "3C-legacy-subject-motion-sample",

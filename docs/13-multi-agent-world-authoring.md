@@ -109,7 +109,7 @@ pnpm agent:plan -- --scene-id coastal-world \
 pnpm agent:build -- --scene-id coastal-world
 
 pnpm dev
-# 打开 ?scene=coastal-world，验收并导出白膜三视图
+# 打开 ?scene=coastal-world&artifact=1，验收并导出白膜三视图；该路由不提供 Gameplay
 
 pnpm visual:inputs -- --scene coastal-world
 pnpm agent:visual -- --scene-id coastal-world

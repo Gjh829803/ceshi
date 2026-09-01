@@ -5,7 +5,10 @@ import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   createCanonicalSceneExecutionPlanV1,
   createWorldRuntimeBootstrapV1,
@@ -34,6 +37,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     id: "compile-traversal-lock-test.gameplay",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/compile-traversal-lock-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],

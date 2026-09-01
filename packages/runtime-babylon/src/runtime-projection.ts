@@ -76,12 +76,6 @@ export interface BabylonRuntimeSubjectProjectionV1 {
   readonly motionTags: readonly string[];
   /** Present for CharacterMovementRuntime-backed Golden Subjects. */
   readonly locomotion?: LocomotionCapabilityStateV2;
-  readonly relationshipRole:
-    | "none"
-    | "rider"
-    | "driver"
-    | "passenger"
-    | "tethered";
   readonly safeFallbackActive: boolean;
   readonly motionFailureCode?: string;
 }

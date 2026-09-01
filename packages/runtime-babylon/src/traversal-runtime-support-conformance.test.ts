@@ -12,7 +12,10 @@ import {
   compileResolvedTraversalLockV1,
   compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import type { CanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 import type {
   ResolvedTraversalLockReceiptV1,
@@ -25,6 +28,7 @@ import {
   createValidPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
 import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversal-implementation-identity";
@@ -51,6 +55,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     version: 1,
     resourceRef:
       "worldkit://gameplay-bootstrap/traversal-runtime-support-conformance-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],
@@ -331,6 +337,10 @@ async function createRuntime(
     runtime,
     runtimeTestWorldArtifactsForPlanV1(executionPlan).worldRuntimeBootstrap
       .initialControlledEntityId,
+  );
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
   );
   return runtime;
 }

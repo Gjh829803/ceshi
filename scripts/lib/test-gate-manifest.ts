@@ -153,6 +153,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-babylon/src/polygon-triangulation.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/runtime-clean-break.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/runtime.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
+  { path: "packages/runtime-babylon/src/semantic-fact-projector.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/spring-arm-component.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/subject-animation-player-vnext.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/subject-asset-animation-bootstrap.test.ts", lane: "contract" },

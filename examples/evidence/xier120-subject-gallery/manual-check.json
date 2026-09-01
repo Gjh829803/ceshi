@@ -6,7 +6,7 @@
     "commit": "f22ab9b9992084072141be17b40c86450fb3c017",
     "supersedesEvidenceCommit": "7695c8f16cd69ed99ae3aff263da73245a0f4776",
     "canonicalCommand": "pnpm worldkit run examples/authoring/xier120-subject-gallery.json --port 5197",
-    "canonicalBrowserUrl": "http://127.0.0.1:5197/?authoring=1"
+    "historicalBrowserOrigin": "http://127.0.0.1:5197/"
   },
   "redEvidenceGap": {
     "outcome": "confirmed",
@@ -138,7 +138,7 @@
         "role": "animal",
         "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
         "assetHash": "sha256:70c16cd59ba37ec17ddb5481aa92f9442f54d250c885ffdf778313e5f10f206b",
-        "browserUrl": "http://127.0.0.1:5211/?authoring=1",
+        "historicalBrowserOrigin": "http://127.0.0.1:5211/",
         "resources": {
           "meshCount": 20,
           "physicsBodyCount": 2
@@ -241,7 +241,7 @@
         "role": "vehicle",
         "definitionRef": "worldkit://subject-definition/xier120.tracked@1",
         "assetHash": "sha256:c0c3e762f956a9cbcfe00fe760c765c220e4b12be1eaafa93696f7cc97652acd",
-        "browserUrl": "http://127.0.0.1:5212/?authoring=1",
+        "historicalBrowserOrigin": "http://127.0.0.1:5212/",
         "resources": {
           "meshCount": 8,
           "physicsBodyCount": 2
@@ -346,7 +346,7 @@
         "role": "composition",
         "definitionRef": "worldkit://subject-definition/xier120.aerial-cockpit@1",
         "assetHash": "sha256:b2416d0ee1ce33ac33878850e8f77362f06986dba2c03ca195636f82eed7e341",
-        "browserUrl": "http://127.0.0.1:5213/?authoring=1",
+        "historicalBrowserOrigin": "http://127.0.0.1:5213/",
         "resources": {
           "meshCount": 8,
           "physicsBodyCount": 2
@@ -452,7 +452,7 @@
       "tracking": "temporary-untracked",
       "pathDuringCapture": "output/playwright/xier120-round1/two-quadruped.json",
       "schemaVersion": 4,
-      "browserUrl": "http://127.0.0.1:5214/?authoring=1",
+      "historicalBrowserOrigin": "http://127.0.0.1:5214/",
       "definitionRef": "worldkit://subject-definition/xier120.quadruped-animal@1",
       "definitionHash": "sha256:9296e43b249a68cd7993caeef19dbba951ed3822d97b2ab3467f4213ec108818"
     },

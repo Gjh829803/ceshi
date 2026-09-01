@@ -162,13 +162,6 @@ export function listSubjectRegistryReferenceEdgesV1(
         ));
       }
       resource.rules.forEach((rule, ruleIndex) => {
-        edges.push(...edgesForRefs(
-          sourceResourceRef,
-          `/rules/${ruleIndex}/when/motionKernelRefs`,
-          rule.when.motionKernelRefs ?? [],
-          ["motion-kernel"],
-          "metadata",
-        ));
         if (rule.cameraRigProfileRef !== undefined) {
           edges.push(edge(
             sourceResourceRef,

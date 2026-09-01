@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizeAuthoringSpecV4 } from "@whitebox-world/authoring";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   sha256CanonicalJson,
   type Sha256HashV1,
@@ -19,6 +22,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     id: "capability-compile-test.gameplay",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/capability-compile-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],
@@ -115,15 +120,15 @@ describe("capability-driven Subject compilation", () => {
           (kernel) => kernel.resourceRef === defaultMotionKernelRef,
         )?.commandKind,
       ).toBe(assembly.controlProfile.commandKind);
-      expect(assembly.cameraContext.cameraRigProfiles).toHaveLength(5);
-      expect(assembly.cameraContext.cameraModifierProfiles).toHaveLength(5);
+      expect(assembly.cameraContext.cameraRigProfiles).toHaveLength(3);
+      expect(assembly.cameraContext.cameraModifierProfiles).toHaveLength(4);
       expect(
         new Set(
           assembly.cameraContext.cameraRigProfiles.map(
             (profile) => profile.algorithmRef,
           ),
         ).size,
-      ).toBe(4);
+      ).toBe(2);
       expect(assembly.requiredHarnessCheckIds).toEqual([
         "H01",
         "H02",

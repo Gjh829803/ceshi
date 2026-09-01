@@ -3,7 +3,11 @@
 ## 1. 文档状态
 
 - 状态：**Reviewed / Approved（2026-08-24）**；
-  **Camera Domain boundary implemented，Runtime integration pending（2026-08-25）**。
+  **Camera Domain boundary implemented；M8-S1 所需的 `mountedOn` 窄 Runtime seam 已在
+  新产品工作树中实现并完成 Camera V2 current-only 清理（2026-09-01），新 exact SHA 尚待
+  冻结，Cloud 全矩阵与 Claude/Grok 独立终审 pending；该 seam 仅为 Host-fixed Canonical
+  internal acceptance，Hosted Builder production admission 仍关闭；
+  广义 GCC Runtime/Kit/Fixture 路线仍 pending**。
 - 适用里程碑：P2.2 骑乘与控制上下文、P2.3 装备/飞行/动作变体、P2.4 多相机模式。
 - 当前实现基线：已合入 `main` 的 G19 Gameplay/Browser V5 底座、
   `RuntimeHost` / `WorldSession`、`CameraDirectorV1`、`camera-rig-profile`、
@@ -19,10 +23,12 @@
 - 实施入口：[SDK 重构进度与 Backlog](../../18-refactor-progress-and-backlog.md) 的 P2.2–P2.4。
 
 本文补齐“人物/坐骑/装备/运动/动作与镜头怎样组合成可复用体验”的端到端合同。
-它不替换上位规格，也不声明飞行、骑乘、装备或第一人称已经生产可用。本文已经完成
+它不替换上位规格，也不声明飞行、通用骑乘、装备或第一人称已经生产可用。本文已经完成
 人工设计评审。Canonical Camera 包边界、Profile/Context/Preference/Decision/Explain
-领域合同和纯选择函数已经实现；committed Gameplay Context Projection、Registry Lock、
-Browser Preference 协议和 Babylon `CameraDirectorV1` 接线仍按 §15 与权威 Backlog 推进。
+领域合同和纯选择函数已经实现；M8-S1 当前候选只实现了 stand-ground `mountedOn` 所需的 committed
+Relationship Context、锁定 Socket 投影和同 epoch Camera publication。广义 Registry Lock、
+Equipment/Flight Context、Kit、Browser/CLI/Take Golden Fixture 与 GCC 最终生产验收仍按 §15
+与权威 Backlog 推进。
 
 ## 2. 决策摘要
 
@@ -82,16 +88,16 @@ CameraDirector
   Glide/Mounted 仍为实验能力；
 - Subject Definition 到 `cameraContextProfileRef` 的锁定与编译。
 - 独立 `@whitebox-world/camera` 包中的命名 Profile、Context Sample、View Preference、
-  Admission、确定性 `selectCameraViewV1`、Decision、Explain 与 Diagnostic。
+  Admission、确定性 `selectCameraViewV2`、Decision、Explain 与 Diagnostic。
 
 这些能力说明底层方向已经成立，但不能据此宣称完整组合已经交付。
 
-### 3.2 仍缺少的合同
+### 3.2 M8-S1 后仍缺少的合同
 
-- Relationship Runtime 尚未把 `mountedOn`、`equippedAt`、`possessedBy` 的提交结果稳定
-  投影到 Camera Context；当前 `relationshipRole` 仍固定为 `none`。
-- 单值 `relationshipRole` 无法表达一个 Entity 同时被控制、骑乘/被骑乘、装备物品和受约束；
-  后续必须从类型化 Relationship State 投影多关系上下文，不能继续扩充单值枚举。
+- M8-S1 已把 committed `possessedBy` 与 `mountedOn` 投影为类型化多关系 Camera Context，
+  并删除单值 `relationshipRole(s)` 方言；`equippedAt` 及未来 seat/tether 尚未交付。
+- 类型化 Relationship Context 已允许同一受控 Entity/Target 保留多条角色化关系；后续关系
+  必须扩展关闭 Union 和对应 projector，不能恢复单值枚举或自由参数袋。
 - 通用 Semantic Action / Equipment State 尚未成为 Camera Context 的权威输入。
 - `cameraContextTags` 仍主要由当前输入动作临时生成，缺少 Registry 声明、来源审计和
   Canonical Projection 合同。
@@ -111,21 +117,21 @@ Runtime/Camera 方言。当前主干是本文的直接实现底座：
 | --- | --- | --- |
 | RuntimeHost、RuntimeSession、WorldSession 和唯一 fixed-tick publication barrier | Camera Context 只消费同一已提交 epoch | 第二个 Session/时钟/发布 barrier |
 | Gameplay Command、Receipt、Event、Snapshot 与 retained artifact | Mount/Equipment/Action 的 Camera 变化引用相同 Receipt/Event 因果链 | Camera 私有 Gameplay journal |
-| `GameplayWorldPortV1` 与 staged `projectedViewStateAfter` | Possession 与 Camera Target 在同一事务准备并原子发布；后续关系复用同一端口 | Camera 提前读取 prepare 态或事后补写 |
+| `GameplayWorldPortV1` 与 staged `projectedViewStateAfter` | Gameplay 事务先原子提交 Possession/Relationship；Camera 在下一 fixed-tick phase 消费 committed projection 并原子替换完整 Camera publication | Camera 提前读取 prepare 态、混合两个 epoch 或回滚已提交 Gameplay |
 | `possessedBy` 唯一控制权真相 | 决定 Camera 的受控 Entity 与 Rebind | Camera/Controller 保存竞争 target |
 | Semantic Action State/Definition | 投影 Action Camera Tag 和 Modifier 条件 | 从 Animation Clip 重算 Action |
 | Browser Protocol V5、Runtime Snapshot V4 与 Runtime Activity | 在唯一 V5 facade 上 clean break `cameraViewPreference` | 第二套 Browser API、旧命令 alias 或 Camera 私有 Activity |
 | Camera/View 独立 Owner 与锁定 Profile 边界 | 继续由 CameraDirector 决定最终 View | Gameplay State 保存 Camera 数值 |
 
-当前 `GameplayRelationshipStateV1` 仍是关闭 Union，首批只包含
-`possessedBy`。因此 `mountedOn` 与 `equippedAt` 必须在后续 P2.2/P2.3 中通过显式版本演进、
-Parser/Canonicalizer/Hash/Receipt/Event/Gate 一起增加；不得塞进自由 Relationship 袋，也不得
-让 Camera Context 先用临时 Tag 模拟已提交关系。
+当前 `GameplayRelationshipStateV1` 是只包含 `possessedBy` 与 `mountedOn` 的关闭 Union。
+`mountedOn` 已随 M8-S1 一次性更新 Parser/Canonicalizer/Hash/Receipt/Event/Gate；`equippedAt`
+及未来 seat/tether 必须按同一 current-only clean-break 纪律增加，不得塞进自由 Relationship 袋，
+也不得让 Camera Context 先用临时 Tag 模拟未提交关系。
 
-G19-6 已经发布 Browser V5 的当前 Camera Preview/Profile 过渡面，因此 GCC-0A 不再修改
-历史 G19 计划，而是对拍当前源码、Browser exact-key contract、Snapshot V4 和本文 §6.4，
-列出一次 clean break 的删除/新增集合。现有 `requestCameraProfile`、`resetCameraProfile`
-继续只被视为未发布的过渡协议；不得把它们与 `cameraViewPreference` 永久并存。
+G19-6 曾发布 Browser V5 的 Camera Preview/Profile 过渡面；当前 clean break 已删除
+`requestCameraProfile`、`resetCameraProfile` 及其别名，只保留 `cameraViewPreference` 当前合同。
+GCC-0A 不再修改历史 G19 计划，而是以当前 Browser exact-key contract、Snapshot V4 和本文
+§6.4 为权威；不得恢复已删除的过渡协议。
 
 更新后的实施顺序为：
 
@@ -135,13 +141,13 @@ G19-6 已经发布 Browser V5 的当前 Camera Preview/Profile 过渡面，因�
   → GCC-0A 对拍当前 V5/View 合同，不回写历史 G19 任务
   → GCC-1/GCC-2/GCC-3 冻结 Context、Profile 与唯一 View Preference 公共合同
   → GCC-4 让 CameraDirector 消费纯确定性 Selection Decision
-  → G19-7 只完成 Outdoor/catalog lifecycle，不发布第二套 Camera 方言
-  → 本文扩展 mountedOn/equippedAt/flight 与两个组合 Fixture
+  → G19-7 的历史 Outdoor/catalog lifecycle 已完成且现行 catalog Gameplay route 已删除
+  → M8-S1 已交付 mountedOn 窄 seam；本文后续扩展 equippedAt/flight 与两个组合 Fixture
 ```
 
 `possessedBy → Camera Target` 的最小链路已经由 G19-5 交付；Rig/Modifier/Preference
 选择仍属于本文 GCC-2/GCC-3/GCC-4。完整御剑/滑翔体验继续依赖 P2.2/P2.3 的正式
-Relationship/Flight Runtime。Camera 工作与 G19-7 不能各自维护一份
+Relationship/Flight Runtime。Camera 工作与已完成的 G19-7 历史链路不能各自维护一份
 `GameplayViewStateProjection`、Camera transaction、选择命令或 Browser 方言。
 
 ## 4. 方案选择
@@ -203,7 +209,7 @@ provider-neutral 的领域语义，首个实施切片必须将它们收敛到唯
 | `packages/authoring` / `packages/compiler` | Schema、Resource Lock、Context 闭包与 ExecutionPlan 投影 | 已解析 Registry 资源和 Authoring 意图 | 锁定的 IR / ExecutionPlan Camera 描述 | 在编译期执行 Runtime Selection 或读取 Session 状态 |
 | `packages/gameplay-contracts` / `packages/gameplay` | `possessedBy`、`mountedOn`、`equippedAt`、Action、Motion、Medium 等世界真相 | Gameplay Command 与 fixed-tick state | committed Gameplay State/Event/Receipt | 保存 Camera 数值、最终 Rig 或 Babylon Target |
 | `packages/runtime-contracts` | ExecutionPlan、Camera Command/Event/View State、Browser/CLI DTO | Camera Domain 值对象与 Runtime publication | provider-neutral 公共协议 | 实现 Camera Selection 或复制 Profile 定义 |
-| `packages/runtime-host` | 从同一 committed epoch 投影 Camera Context，拥有 View publication 与生命周期协调 | committed Gameplay State、locked resources、View Preference | `CameraContextSampleV1`、staged/published View revision | 再推导 Gameplay 真相或计算 Babylon Pose |
+| `packages/runtime-host` | 从同一 committed epoch 投影 Camera Context，拥有 View publication 与生命周期协调 | committed Gameplay State、locked resources、View Preference | `CameraContextSampleV2`、staged/published View revision | 再推导 Gameplay 真相或计算 Babylon Pose |
 | `packages/runtime-babylon` | `CameraDirectorV1`、Babylon Camera、Pose、碰撞、平滑、Blend 与资源释放 | `CameraSelectionDecisionV1`、target/socket sample、render delta | 最终 View、Capture Matrix、Runtime inspection | 定义公共 Schema、查询 Registry 或修改 Gameplay State |
 | `apps/playground` / `scripts` / `packages/control-capture` | Authoring Preview、Browser/CLI/Take 转接与证据 | 公共协议和 Registry AI Metadata | UI、命令、Capture/Validation Evidence | 保存第二份 Profile 语义字典或直接操作 Camera Owner |
 
@@ -318,11 +324,11 @@ interface ResetCameraViewPreferenceCommandV1 {
 - `camera-rig-profile` 是显式的锁定 Profile 意图，但只在当前 Context 允许时生效；
 - Preference 是 View State，不进入 World State，不改变 Possession、Motion 或 Action。
 
-当前 `cameraPreference: "auto" | "first-person" | string`、历史 G19 草案中的
+历史 `cameraPreference: "auto" | "first-person" | string`、G19 草案中的
 `requestCameraProfile/resetCameraProfile`，以及长期总规格中的 `view.set-mode/view.set-rig`
-不得同时成为公开协议。项目尚未发布，实施时执行一次 clean break：Schema、CLI、Browser、
-generated types、examples、Snapshot/Event 和测试同步切换到上述命名，不保留 alias。内部
-Authoring Workbench 可以迁移自己的草稿格式，但不能把旧方言继续暴露给 Runtime。
+均已从当前公开协议删除。项目尚未发布，Schema、CLI、Browser、generated types、examples、
+Snapshot/Event 和测试已一次性 clean break 到上述唯一命名，不保留 alias。内部 Authoring
+Workbench 即使读取自己的历史草稿，也不能把旧方言重新暴露给 Runtime。
 
 `runtimeSessionId` 与 `worldSessionId` 沿用当前 RuntimeHost/Canonical Runtime State；不新增
 `viewSessionId`。多 View 使用 `cameraEntityId` 区分，而不是创建第三种 Session 身份。
@@ -336,7 +342,8 @@ Camera Context Projector 每个已提交 fixed tick 读取：
 - 从当前 committed `possessedBy` 投影解析的 `controlledEntityId`，以及当前 Camera Entity 的
   `cameraViewPreference`；Runtime/World Session 本身不保存竞争的受控目标；
 - `possessedBy`、`mountedOn`、`equippedAt` 等已提交 Relationship；
-- Motion Kernel Ref、Motion Tags、速度和 Movement Medium；
+- committed `LocomotionCapabilityStateV2`，包含 status、mobility mode、gait、vertical phase、
+  movement medium 和速度；
 - 当前 Action Ref/Phase 及其 Registry 声明的 Camera Tags；
 - 当前主体、坐骑和装备的已锁 Socket；
 - Relationship Profile 的 Camera Target Policy。
@@ -344,8 +351,8 @@ Camera Context Projector 每个已提交 fixed tick 读取：
 它不读取 Babylon Node、Animation Clip 名、Render Parent、Mesh Metadata、Havok Handle 或
 未提交的事务准备态。
 
-长期 Context 输入使用 provider-neutral、关闭结构；不扩充当前单值
-`ViewTargetSampleV1.relationshipRole`：
+当前 Context 输入使用 provider-neutral、关闭结构；历史单值
+`ViewTargetSampleV1.relationshipRole` 已删除，唯一关系输入如下：
 
 ```ts
 type CameraRelationshipContextV1 =
@@ -370,26 +377,34 @@ type CameraRelationshipContextV1 =
       equipmentSlotId: string;
     };
 
-interface CameraContextSampleV1 {
-  simulationTick: number;
+interface CameraContextSampleV2 {
+  schemaVersion: 2;
+  semanticAuthorityStatus: "available";
+  committedTick: number;
   controlledEntityId: string;
   targetEntityId: string;
-  movementMedium: "ground" | "air";
-  activeMotionProfileRef: string;
-  activeMotionKernelRef: string;
-  motionTags: readonly string[];
-  activeActionRefs: readonly string[];
-  relationshipContexts: readonly CameraRelationshipContextV1[];
-  velocityMetersPerSecondXYZ: readonly [number, number, number];
-  socketPositionsMetersXYZById: Readonly<
-    Record<string, readonly [number, number, number]>
-  >;
-  cameraContextTags: readonly string[];
+  subjectPose: {
+    positionMetersXYZ: readonly [number, number, number];
+    facingYawRadians: number;
+  };
+  locomotion: LocomotionCapabilityStateV2;
+  actionSummary:
+    | { status: "available"; activeActionRefs: readonly string[]; isInterruptible: boolean }
+    | { status: "unavailable" };
+  environment: {
+    relationshipContexts: readonly CameraRelationshipContextV1[];
+    socketPositionsMetersXYZById: Readonly<
+      Record<string, readonly [number, number, number]>
+    >;
+    cameraContextTags: readonly string[];
+  };
 }
 
 type CameraRelationshipConditionV1 =
   | { type: "possessedBy"; entityRole: "controlled" | "controller" }
-  | { type: "mountedOn"; entityRole: "rider" | "mount" }
+  // `rider` names the resolved subject role. The controlled/target Entity may be
+  // either endpoint of the one relevant mountedOn Relationship.
+  | { type: "mountedOn"; entityRole: "rider" }
   | { type: "equippedAt"; entityRole: "item" | "wearer" };
 
 interface CameraContextRuleV2 {
@@ -397,10 +412,13 @@ interface CameraContextRuleV2 {
   priority: number;
   when: {
     allRelationshipConditions?: readonly CameraRelationshipConditionV1[];
-    motionProfileRefs?: readonly string[];
-    motionKernelRefs?: readonly string[];
+    locomotionStatuses?: readonly ("active" | "suspended")[];
+    mobilityModes?: readonly MobilityModeV2[];
+    gaits?: readonly GaitV2[];
+    verticalPhases?: readonly VerticalPhaseV2[];
     movementMediums?: readonly ("ground" | "air")[];
     requiredActiveActionRefs?: readonly string[];
+    actionInterruptibility?: "interruptible" | "non-interruptible";
     minimumSpeedMetersPerSecond?: number;
     maximumSpeedMetersPerSecond?: number;
     requiredSocketIds?: readonly string[];
@@ -414,19 +432,23 @@ interface CameraContextRuleV2 {
 `relationshipContexts` 必须由当前 WorldSession 同一 committed epoch 的正式 Relationship State
 投影，并按 `type`、Relationship ID 的 Canonical code-unit 顺序稳定生成。每条上下文携带
 已提交 Relationship 的 `id`，供 Explain/Event 关联。Camera Rule 的
-`allRelationshipConditions` 逐条匹配当前
-`controlledEntityId` 或 `targetEntityId` 在角色化端点中的位置，不能使用通用
+`allRelationshipConditions` 逐条匹配 committed `controlledEntityId` 与 `targetEntityId`。对
+`possessedBy` 和 `equippedAt`，匹配它们在角色化端点中的位置；对 `mountedOn` Rider 条件，必须
+恰好存在一条以 controlled/target 为 Rider 或 Mount 端点的相关 Relationship，从而解析出唯一
+Rider。共享 Mount 上存在多条相关 Relationship 时必须 fail closed，且不得为此改写
+`controlledEntityId` 或 `targetEntityId`。任何条件都不能使用通用
 `sourceEntityId/targetEntityId/params`。
 
 首个版本仍只发布 `ground/air`；Water 等 Medium 必须在 P2.5 自己的 Canonical Medium 合同
 完成后按版本演进，不能为了 Camera 示例提前加入。
 
-`CameraContextRuleV2` 是对当前未发布 `CameraContextRuleV1.relationshipRoles` 的 clean break，
-不是并存方言。实施时同步删除单值 Sample 和旧 Rule 字段，更新 Registry Catalog、Normalizer、
-ExecutionPlan、CameraDirector、Discovery 和 Fixture；不保留 V1 alias。
+`CameraContextRuleV2` 已对未发布的 `CameraContextRuleV1.relationshipRoles` 完成 clean break，
+不是并存方言。M8-S1 已同步删除单值 Sample 和旧 Rule 字段，并更新 Registry Catalog、
+Normalizer、ExecutionPlan、CameraDirector、Discovery 和 Fixture；当前树不保留 V1 alias。
 
-`motionProfileRefs`、`motionKernelRefs` 和 `movementMediums` 分别是对单个活动值的允许集合；
-三者之间为 AND。`allRelationshipConditions`、`requiredActiveActionRefs`、
+`locomotionStatuses`、`mobilityModes`、`gaits`、`verticalPhases` 和 `movementMediums` 分别约束
+committed `LocomotionCapabilityStateV2`；多个字段同时存在时为 AND。
+`allRelationshipConditions`、`requiredActiveActionRefs`、
 `requiredSocketIds` 和 `requiredCameraContextTags` 要求集合内全部命中。空数组在 Admission
 拒绝，避免“空 all 条件恒真”的隐含规则。
 
@@ -447,20 +469,21 @@ ExecutionPlan、CameraDirector、Discovery 和 Fixture；不保留 V1 alias。
 不得用 Tag 重复已经有强类型字段的事实。例如 `movementMedium = "air"` 不能再依赖
 `cameraContextTags = ["air"]` 才生效；规则应优先使用强类型 Medium 条件。
 
-Relationship 条件同样优先使用类型化投影。Context Sample 必须能同时携带当前 Entity 参与的
-多条 Relationship 及其角色化端点；Camera Context Rule 以 `mountedOn` 的 Rider/Mount、
-`equippedAt` 的 Item/Wearer、`possessedBy` 的 Controlled/Controller 等关闭条件匹配。现有
-单值 `ViewTargetSampleV1.relationshipRole` 只能保留在当前窄切片，不能成为长期合同；升级时
-同步演进 Registry Rule、ExecutionPlan、Runtime DTO 和测试，不保留同义 alias。
+Relationship 条件同样优先使用类型化投影。Context Sample 能同时携带当前 Entity 参与的
+多条 Relationship 及其角色化端点；Camera Context Rule 以 `mountedOn` 的唯一 Rider 关联、
+`equippedAt` 的 Item/Wearer、`possessedBy` 的 Controlled/Controller 等关闭条件匹配。单值
+`ViewTargetSampleV1.relationshipRole` 过渡 seam 已删除，当前 Registry Rule、ExecutionPlan、
+Runtime DTO 和测试只使用类型化条件，不保留同义 alias。
 
 “优先”不表示可以旁路：只要某个选择条件已有强类型字段或 Ref，Tag 就不得作为该事实的
-充分条件。Ground/Air 使用 `movementMedium`，Motion 使用已提交 Motion Profile/Kernel Ref，
-Mount/Equipment/Possession 使用 `allRelationshipConditions`，Action 使用已提交 Action Ref。
+充分条件。Ground/Air 使用 `movementMediums`，移动状态使用已提交的 status/mobility/gait/
+vertical phase，Mount/Equipment/Possession 使用 `allRelationshipConditions`，Action 使用已提交
+Action Ref 与 interruptibility。
 Tag 只补充 `aim`、`sprint`、`reverse` 等没有独立强类型状态的有限 Presentation 语义。
 
 Camera 不重复执行 Gameplay 准入。例如 Glide Action/Capability 如果要求已装备滑翔翼，
 Equipment/Action Runtime 必须在进入 Glide Motion 前验证 `equippedAt`；Camera 只消费已经提交的
-Glide Motion Ref。测试必须先证明“没有 Equipment Relationship 就不能提交该 Glide Motion”，
+Glide locomotion state。测试必须先证明“没有 Equipment Relationship 就不能提交该 Glide 状态”，
 再证明 Camera 不会从伪造 Tag 进入 Glide Rig，而不是让 Camera 再实现一遍装备规则。
 
 ### 7.3 Target 解析
@@ -468,8 +491,8 @@ Glide Motion Ref。测试必须先证明“没有 Equipment Relationship 就不�
 Target 按以下顺序解析：
 
 1. `possessedBy` 决定受控 Entity；
-2. 已提交 Relationship Profile 可以把 Camera Target 映射为受控 Entity、Rider、Source
-   或 Target Entity；
+2. 已提交 Relationship Profile 可以把 Camera Target 映射为受控 Entity，或映射为该
+   Relationship 类型声明的角色化端点，例如 `mountedOn` 的 Rider 或 Mount；
 3. Camera Rig 从目标主体的已锁 Socket 列表选择首个兼容 Socket；
 4. Admission 时缺少必需 Socket 则稳定失败；已提交 Rebind 后目标缺少 Socket 时进入当前
    Context 的 Safe View 或显式 unbound View，不能继续跟随旧 Entity；
@@ -558,7 +581,8 @@ Camera view preference: { mode: "auto" }
 - Rider 与 Flying Sword 保持独立 Entity ID；
 - Flying Sword 拥有 Flight Locomotion/Motion、Physics、Mount Slot 和 Camera Target Socket；
 - Rider 使用 `ride/stand-flight` Action Variant；
-- `mountedOn`、Collider Mode、Possession 和 Camera Target Policy 通过事务原子提交；
+- `mountedOn`、Collider Mode 和 Possession 通过 Gameplay 事务原子提交；Camera Target/Context
+  在下一 fixed-tick Camera phase 从 committed 输入形成一份相干 publication；
 - Camera Context 从 `mountedOn(rider, flying-sword)`、转移后的 `possessedBy`、Medium `air`
   和 Flight Motion Tag 命中第三人称 Flight Rig，并叠加 Mounted Modifier；
 - 解除关系后，Possession 原子返回 Rider，Runtime 恢复 Rider 的 Ground Motion、Action 与
@@ -723,8 +747,9 @@ Camera Tag 不能再改变当前 View。
 ### 14.2 Runtime
 
 - Ground → Takeoff → Flight → Landing 只在 fixed-tick commit 后切 Context；
-- Mount/Unmount 同时提交 Relationship、Possession、Collider、Action 与 Camera Target，失败
-  全部回滚；
+- Mount/Unmount 的 Gameplay 事务同时提交 Relationship、Possession、Collider 与 Action；失败
+  时这些 Gameplay 状态全部回滚。成功后 Camera 在下一 fixed tick 原子发布 Target、Decision、
+  Rig、Modifier、Pose 与 Telemetry；Camera 失败保持上一相干 Camera publication，不能回滚 Gameplay；
 - 空手/持剑、普通移动/攻击只改变声明的 Action/Modifier，不复制 Subject；
 - 显式第一人称、自动第三人称、Reset、Rebind 和 Entity Dispose 均无旧目标残留；
 - 暂停时镜头冻结；30/60/120 Hz-like 显示节奏的选择结果一致；
@@ -758,18 +783,19 @@ interaction。截图不能代替 Relationship/State Gate，单元测试也不能
 | GCC-0A | 将旧 G19 依赖改为 current-main reconciliation，冻结唯一 Browser V5/View clean break | GCC-0、当前 `main` G19-6 | GCC-1/3 | 主 Agent；`gameplay-framework-r1b` spec/plan、Browser exact-key contract、本文；不改 Runtime | 当前 V5 keys/DTO/owner map → 删除/新增集合与无别名合同 | spec/plan/source 三方对拍 | main-agent-only |
 | GCC-0B | 冻结 Canonical Camera package API 与单向 dependency DAG | GCC-0 | GCC-0C/1/2/3/4 | 主 Agent；`packages/camera` exports、workspace package map、实施计划 | §5.1 ownership → package manifest、public symbol list、dependency rules | package graph negative checks | main-agent-only |
 | GCC-0C | **已实现**：删除旧 Provider Rig/Runtime，并 clean-break 建立 provider-neutral `@whitebox-world/camera` | GCC-0B | GCC-1/2/3/4 | `packages/camera` 独占；Runtime Provider 不得反向进入 Domain | GCC-0B symbol list → Canonical Domain、纯 Selection/Explain、无旧 alias | package boundary、scene/artifact/build、dependency census | sequential |
-| GCC-1 | Relationship/Action/Equipment 到 Context 的 provider-neutral Projection 合同 | GCC-0A/0B/0C、当前 Gameplay State、P2.1 状态合同 | GCC-4/5 | `gameplay-contracts` + `runtime-contracts` DTO、`runtime-host` projector integration；不选择 Rig | committed epoch + relationship/action/motion/medium → ordered `CameraContextSampleV1` | contract/hash/multi-instance tests | sequential |
+| GCC-1 | Relationship/Action/Equipment 到 Context 的 provider-neutral Projection 合同；M8 已完成 `possessedBy` + `mountedOn` 窄 seam | GCC-0A/0B/0C、当前 Gameplay State、P2.1 状态合同 | GCC-4/5 | `gameplay-contracts` + `runtime-contracts` DTO、`runtime-host` projector integration；不选择 Rig | committed epoch + relationship/action/motion/medium → ordered `CameraContextSampleV2` | contract/hash/multi-instance tests | sequential |
 | GCC-2 | Camera Profile/Context Admission、确定性 Selection 与 Explain | GCC-0B/0C | GCC-4/6 | `packages/camera` 纯函数 + `subject-registry` Envelope/loader + `authoring/compiler` lock projection | locked profiles + sample + preference → decision/explain 或稳定拒绝 | ambiguity/unknown-ref/order negative fixtures | parallel-safe |
 | GCC-3 | Camera View Preference、View State、Selection Event/Explain 公共协议 | GCC-0A/0B/0C、Canonical Runtime State | GCC-4/7 | `runtime-contracts` Command/Event/Snapshot + Browser/CLI generated surface；值对象从 `camera` 导入 | V5 session identity + preference command → receipt/view revision/event | schema/exact-key/protocol tests | parallel-safe |
 | GCC-4 | CameraDirector 执行 committed Selection Decision、Target、Pose 与回退 | GCC-1/2/3、当前 G19-5 target projection | GCC-6/7 | `runtime-babylon` CameraDirector/adapter only；纯选择由 `camera` 拥有 | `CameraSelectionDecisionV1` + target/socket + render delta → Babylon View/Capture Matrix | 30/60/120、pause/reset/rebind/collision tests | sequential |
-| GCC-5 | Mount/Equipment/Flight 事务提供 Camera 输入，不直接控制镜头 | GCC-1、G19-7、P2.2/P2.3 | GCC-6 | relationship/action/capability runtime；复用当前 WorldSession barrier | typed transaction → committed facts/receipt/event 或全量 rollback | rollback/rebind/dispose tests | sequential |
+| GCC-5 | Mount/Equipment/Flight 事务提供 committed Camera 输入，不直接控制镜头；M8 已完成 stand-ground Mount 窄 seam | GCC-1、已完成的 G19-7 历史底座、P2.2/P2.3 | GCC-6 | relationship/action/capability runtime；复用当前 WorldSession barrier | typed Gameplay transaction → committed facts/receipt/event 或 Gameplay rollback；Camera 后续独立发布 | rollback/rebind/dispose tests | sequential |
 | GCC-6 | 两个代表性 Kit 与 Registry Lock | GCC-2/4/5 | GCC-7 | Registry assets/examples；不得改 Runtime | frozen Kit recipes + profiles → locked expansion/explain | expand/validate/explain | sequential |
-| GCC-7 | Browser/CLI/Take 与两个 Golden Fixture | GCC-3/4/6、G19-7 lifecycle | GCC-8 | apps/scripts/control-capture/fixtures；不新增协议字段 | public commands + locked worlds → automated/numeric/rendered/manual 四类证据 | real Chromium + Havok | sequential |
+| GCC-7 | Browser/CLI/Take 与两个 Golden Fixture | GCC-3/4/6、现行 Canonical Viewer/Host/Browser lifecycle；G19-7 仅为历史 provenance | GCC-8 | apps/scripts/control-capture/fixtures；不新增协议字段 | public commands + locked worlds → automated/numeric/rendered/manual 四类证据 | real Chromium + Havok | sequential |
 | GCC-8 | 全门禁、Provider 边界审计、文档状态与生产声明 | GCC-7 | 无 | 主 Agent 集成；README/AGENTS/Backlog/Review | integrated HEAD + evidence → GO/NO-GO 与准确 production/experimental 声明 | full gates + final review | main-agent-only |
 
 GCC-1、GCC-2、GCC-3 只有在 GCC-0A～0C 完成且文件所有权不重叠时才可并行。GCC-4 以后
-进入 Runtime 权威集成，必须顺序推进。G19-6 已完成，不能被本文反向改成待办；G19-7 只
-作为 Outdoor/catalog lifecycle 依赖。Worker 报告不是集成证据，主 Agent 必须审查真实 diff
+进入 Runtime 权威集成，必须顺序推进。G19-6/G19-7 已完成，不能被本文反向改成待办；
+G19-7 只作为历史 Outdoor/catalog lifecycle 底座，现行 catalog Gameplay route 不得恢复。
+Worker 报告不是集成证据，主 Agent 必须审查真实 diff
 并运行端到端门禁。
 
 ## 16. 明确的阶段边界

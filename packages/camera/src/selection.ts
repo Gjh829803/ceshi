@@ -31,8 +31,7 @@ function diagnostic(
   options: { cameraContextRuleId?: string; resourceRef?: string } = {},
 ): CameraDiagnosticV1 {
   return {
-    severity: code === "CAMERA_PREFERENCE_CONTEXT_INCOMPATIBLE" ||
-      code === "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE"
+    severity: code === "CAMERA_PREFERENCE_CONTEXT_INCOMPATIBLE"
       ? "warning"
       : "error",
     code,
@@ -434,6 +433,17 @@ function relationshipConditionMatches(
     sample.controlledEntityId,
     sample.targetEntityId,
   ]);
+  if (condition.type === "mountedOn") {
+    const relevantMountedRelationships =
+      sample.environment.relationshipContexts.filter((relationship) =>
+        relationship.type === "mountedOn" &&
+        (
+          relevantEntityIds.has(relationship.riderEntityId) ||
+          relevantEntityIds.has(relationship.mountEntityId)
+        )
+      );
+    return relevantMountedRelationships.length === 1;
+  }
   return sample.environment.relationshipContexts.some((relationship) => {
     if (relationship.type !== condition.type) return false;
     switch (relationship.type) {
@@ -442,12 +452,6 @@ function relationshipConditionMatches(
           condition.entityRole === "controlled"
             ? relationship.controlledEntityId
             : relationship.controllerEntityId,
-        );
-      case "mountedOn":
-        return relevantEntityIds.has(
-          condition.entityRole === "rider"
-            ? relationship.riderEntityId
-            : relationship.mountEntityId,
         );
       case "equippedAt":
         return relevantEntityIds.has(
@@ -469,10 +473,6 @@ function ruleExplain(
       (condition) => !relationshipConditionMatches(condition, sample),
     )
   ) unmatchedReasons.push("relationship-condition-not-met");
-  if (
-    rule.when.relationshipRoles !== undefined &&
-    !rule.when.relationshipRoles.includes(sample.environment.relationshipRole)
-  ) unmatchedReasons.push("relationship-role-not-matched");
   if (
     rule.when.locomotionStatuses !== undefined &&
     !rule.when.locomotionStatuses.includes(sample.locomotion.status)
@@ -598,16 +598,9 @@ export function selectCameraViewV2(
   }
 
   const rules = sortedRules(cameraContextProfile.rules);
-  const semanticAuthorityUnavailable =
-    cameraContextSample.semanticAuthorityStatus === "unavailable";
-  const cameraContextRules = semanticAuthorityUnavailable
-    ? rules.map((rule) => ({
-        cameraContextRuleId: rule.id,
-        priority: rule.priority,
-        matched: false,
-        unmatchedReasons: ["semantic-authority-unavailable"],
-      }))
-    : rules.map((rule) => ruleExplain(rule, cameraContextSample));
+  const cameraContextRules = rules.map((rule) =>
+    ruleExplain(rule, cameraContextSample)
+  );
   const matchedRuleIds = new Set(
     cameraContextRules
       .filter((candidate) => candidate.matched)
@@ -615,14 +608,7 @@ export function selectCameraViewV2(
   );
   const matchedRules = rules.filter((rule) => matchedRuleIds.has(rule.id));
   const diagnostics: CameraDiagnosticV1[] = [];
-  if (semanticAuthorityUnavailable) {
-    diagnostics.push(diagnostic(
-      cameraContextProfile,
-      "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE",
-      "Committed semantic Camera authority is unavailable; automatic Camera Rules are bypassed and the locked default Safe View is active unless an explicit locked View preference is admitted.",
-    ));
-  }
-  let fallbackActive = semanticAuthorityUnavailable && preference.mode === "auto";
+  let fallbackActive = false;
   let activeCameraRigProfileRef = cameraContextProfile.defaultCameraRigProfileRef;
 
   switch (preference.mode) {

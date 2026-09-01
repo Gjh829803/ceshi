@@ -30,6 +30,10 @@ import {
   type BabylonCharacterBodyNativeContactV1,
 } from "./babylon-character-body-port";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
+import type {
+  CharacterSupportProjectionLockV1,
+  CharacterSupportProjectionSampleV1,
+} from "./retained-support-surface-resolver";
 
 export interface MotionKernelSnapshotV1 {
   activeMotionProfileRef: string;
@@ -45,77 +49,10 @@ export interface MotionKernelSnapshotV1 {
   lastFailureCode?: "MOTION_PARAMETER_INVALID" | "MOTION_NON_FINITE_STATE";
 }
 
-export interface RetainedCharacterSupportSampleV1 {
-  readonly supportState: CharacterSupportStateV1;
-  readonly supportNormalWorldXYZ: RuntimeVec3V1;
-  readonly sampledControllerCenterMetersXYZ: RuntimeVec3V1;
-  readonly sampledFootPositionMetersXYZ: RuntimeVec3V1;
-  readonly supportContacts: readonly RetainedCharacterSupportContactV1[];
-  readonly isSupportSurfaceDynamic: boolean;
-}
-
-export interface RetainedCharacterSupportContactV1 {
-  readonly pointMetersXYZ: RuntimeVec3V1;
-  readonly normalXYZ: RuntimeVec3V1;
-  readonly distanceMeters: number;
-  readonly motionType: "static";
-  readonly colliderId?: string;
-  readonly colliderSubshapeId?: string;
-  readonly logicalSubshapeId?: string;
-  readonly traversalSurfaceId?: string;
-  readonly surfaceEntityId?: string;
-  readonly traversalSurfaceProfileRef?: string;
-}
-
-function retainSupportContact(
-  contact: BabylonCharacterBodyNativeContactV1,
-): RetainedCharacterSupportContactV1 {
-  return Object.freeze({
-    pointMetersXYZ: Object.freeze([...contact.pointMetersXYZ]) as RuntimeVec3V1,
-    normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
-    distanceMeters: contact.distanceMeters,
-    motionType: "static",
-    ...(isNil(contact.colliderId) ? {} : { colliderId: contact.colliderId }),
-    ...(isNil(contact.colliderSubshapeId)
-      ? {}
-      : { colliderSubshapeId: contact.colliderSubshapeId }),
-    ...(isNil(contact.logicalSubshapeId)
-      ? {}
-      : { logicalSubshapeId: contact.logicalSubshapeId }),
-    ...(isNil(contact.traversalSurfaceId)
-      ? {}
-      : { traversalSurfaceId: contact.traversalSurfaceId }),
-    ...(isNil(contact.surfaceEntityId)
-      ? {}
-      : { surfaceEntityId: contact.surfaceEntityId }),
-    ...(isNil(contact.traversalSurfaceProfileRef)
-      ? {}
-      : { traversalSurfaceProfileRef: contact.traversalSurfaceProfileRef }),
-  });
-}
-
-export interface MotionKernelLiveLockStateV1 {
-  readonly capsuleRadiusMeters: number;
-  readonly capsuleHeightMeters: number;
-  readonly footOffsetMeters: number;
-  readonly keepDistanceMeters: number;
-  readonly keepContactToleranceMeters: number;
-  readonly maxSlopeCosine: number;
-  readonly maxStepHeightMeters: number;
-  readonly colliderCenterOffsetMetersXYZ: RuntimeVec3V1;
-  readonly activeControlFeelProfileRef: string;
-  readonly activeControlFeelProfileHash: string;
-  readonly requestedControlFeelProfileRef: string;
-  readonly activeMotionProfileRef: string;
-  readonly activeMotionProfileHash: string;
-  readonly requestedMotionProfileRef: string;
-  readonly activeMotionKernelRef: string;
-  readonly physicsBodyProfileRef: string;
-  readonly locomotionProfileRef: string;
-  readonly controlProfileRef: string;
-  readonly controlProfileHash: string;
-  readonly mediumProfileRef: string;
-}
+// Babylon 9.23.0 checkSupportToRef admits supporting constraints only when
+// contact.normal.dot(gravityDirection) < -0.08. With canonical -Y gravity,
+// this is the exact equivalent upward-normal threshold.
+const BABYLON_SUPPORTING_CONTACT_MINIMUM_UPWARD_NORMAL_Y = 0.08;
 
 type ControlFeelSurfaceV1 = BabylonRuntimeSubjectV1["controlFeel"];
 
@@ -280,7 +217,7 @@ export class MotionKernelRuntimeV1 {
   private lastRequestedControlFeelRef: string;
   private lastRequestedMotionProfileRef: string;
   private resolvedState: SubjectResolvedStateV1 | undefined;
-  private retainedSupportSample: RetainedCharacterSupportSampleV1 | undefined;
+  private retainedSupportSample: CharacterSupportProjectionSampleV1 | undefined;
   private yawRadians: number;
   private forwardSpeedMetersPerSecond = 0;
   private planarVelocity = Vector3.Zero();
@@ -400,7 +337,7 @@ export class MotionKernelRuntimeV1 {
     return this.controlFeel;
   }
 
-  retainedCharacterSupportSample(): RetainedCharacterSupportSampleV1 | undefined {
+  retainedCharacterSupportSample(): CharacterSupportProjectionSampleV1 | undefined {
     const sample = this.retainedSupportSample;
     if (isNil(sample)) return undefined;
     return Object.freeze({
@@ -412,9 +349,41 @@ export class MotionKernelRuntimeV1 {
       sampledFootPositionMetersXYZ: Object.freeze([
         ...sample.sampledFootPositionMetersXYZ,
       ]) as RuntimeVec3V1,
-      supportContacts: Object.freeze(
-        sample.supportContacts.map(retainSupportContact),
-      ),
+      supportContacts: Object.freeze(sample.supportContacts.map((contact) =>
+        Object.freeze({
+          pointMetersXYZ: Object.freeze([
+            ...contact.pointMetersXYZ,
+          ]) as RuntimeVec3V1,
+          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+          ...(isNil(contact.distanceMeters)
+            ? {}
+            : { distanceMeters: contact.distanceMeters }),
+          ...(isNil(contact.motionType)
+            ? {}
+            : { motionType: contact.motionType }),
+          ...(isNil(contact.colliderId)
+            ? {}
+            : { colliderId: contact.colliderId }),
+          ...(isNil(contact.colliderSubshapeId)
+            ? {}
+            : { colliderSubshapeId: contact.colliderSubshapeId }),
+          ...(isNil(contact.logicalSubshapeId)
+            ? {}
+            : { logicalSubshapeId: contact.logicalSubshapeId }),
+          ...(isNil(contact.traversalSurfaceId)
+            ? {}
+            : { traversalSurfaceId: contact.traversalSurfaceId }),
+          ...(isNil(contact.surfaceEntityId)
+            ? {}
+            : { surfaceEntityId: contact.surfaceEntityId }),
+          ...(isNil(contact.traversalSurfaceProfileRef)
+            ? {}
+            : {
+                traversalSurfaceProfileRef:
+                  contact.traversalSurfaceProfileRef,
+              }),
+        })
+      )),
     });
   }
 
@@ -455,7 +424,7 @@ export class MotionKernelRuntimeV1 {
     }
   }
 
-  liveLockState(): MotionKernelLiveLockStateV1 {
+  liveLockState(): CharacterSupportProjectionLockV1 {
     const shape = this.physicsController.shapeOptions;
     const activeMotionProfile = this.motionModeResolver.currentProfile;
     const assembly = this.subject.capabilityAssembly;
@@ -473,14 +442,14 @@ export class MotionKernelRuntimeV1 {
         this.colliderCenterOffset.y,
         this.colliderCenterOffset.z,
       ]) as RuntimeVec3V1,
-      activeControlFeelProfileRef: this.controlFeel.resourceRef,
-      activeControlFeelProfileHash: this.controlFeel.contentHash,
+      controlFeelProfileRef: this.controlFeel.resourceRef,
+      controlFeelProfileHash: this.controlFeel.contentHash,
       requestedControlFeelProfileRef:
         this.pendingControlFeel?.resourceRef ?? this.lastRequestedControlFeelRef,
-      activeMotionProfileRef: activeMotionProfile.resourceRef,
-      activeMotionProfileHash: activeMotionProfile.contentHash,
+      motionProfileRef: activeMotionProfile.resourceRef,
+      motionProfileHash: activeMotionProfile.contentHash,
       requestedMotionProfileRef: this.motionModeResolver.requestedProfileRef,
-      activeMotionKernelRef: activeMotionProfile.motionKernelRef,
+      motionKernelRef: activeMotionProfile.motionKernelRef,
       physicsBodyProfileRef: this.subject.physicsBodyProfileRef,
       locomotionProfileRef: this.subject.locomotionProfileRef,
       controlProfileRef: assembly.controlProfile.resourceRef,
@@ -590,6 +559,7 @@ export class MotionKernelRuntimeV1 {
   resetAt(subjectOrigin: Vector3, facingYawRadians: number): void {
     this.physicsController.setPosition(subjectOrigin.add(this.colliderCenterOffset));
     this.physicsController.setVelocity(Vector3.Zero());
+    this.physicsController.synchronizeAfterTeleport();
     this.motionModeResolver.reset();
     this.motionModeResolver.request(this.lastRequestedMotionProfileRef);
     this.motionModeResolver.commitTickBoundary();
@@ -626,6 +596,7 @@ export class MotionKernelRuntimeV1 {
   projectSuspendedAt(subjectOrigin: Vector3, facingYawRadians: number): void {
     this.stop();
     this.physicsController.setPosition(subjectOrigin.add(this.colliderCenterOffset));
+    this.physicsController.synchronizeAfterTeleport();
     this.yawRadians = facingYawRadians;
     this.retainedSupportSample = undefined;
     this.syncVisual(subjectOrigin);
@@ -719,10 +690,38 @@ export class MotionKernelRuntimeV1 {
             new Vector3(...contact.pointMetersXYZ).subtract(sampledFoot),
             this.up,
           )) <= supportContactBandMeters &&
-          Vector3.Dot(new Vector3(...contact.normalXYZ), this.up) >=
-            this.physicsController.maxSlopeCosine
+          Vector3.Dot(new Vector3(...contact.normalXYZ), this.up) >
+            BABYLON_SUPPORTING_CONTACT_MINIMUM_UPWARD_NORMAL_Y
         )
-        .map(retainSupportContact);
+        .map((contact) => Object.freeze({
+          pointMetersXYZ: Object.freeze([
+            ...contact.pointMetersXYZ,
+          ]) as RuntimeVec3V1,
+          normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
+          distanceMeters: contact.distanceMeters,
+          motionType: "static" as const,
+          ...(isNil(contact.colliderId)
+            ? {}
+            : { colliderId: contact.colliderId }),
+          ...(isNil(contact.colliderSubshapeId)
+            ? {}
+            : { colliderSubshapeId: contact.colliderSubshapeId }),
+          ...(isNil(contact.logicalSubshapeId)
+            ? {}
+            : { logicalSubshapeId: contact.logicalSubshapeId }),
+          ...(isNil(contact.traversalSurfaceId)
+            ? {}
+            : { traversalSurfaceId: contact.traversalSurfaceId }),
+          ...(isNil(contact.surfaceEntityId)
+            ? {}
+            : { surfaceEntityId: contact.surfaceEntityId }),
+          ...(isNil(contact.traversalSurfaceProfileRef)
+            ? {}
+            : {
+                traversalSurfaceProfileRef:
+                  contact.traversalSurfaceProfileRef,
+              }),
+        }));
     this.retainedSupportSample = Object.freeze({
       supportState,
       supportNormalWorldXYZ: Object.freeze([

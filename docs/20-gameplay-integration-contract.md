@@ -259,8 +259,9 @@ Host 配置的 `fixedInputControllerEntityId` 是物理固定输入的唯一权�
 
 - `control.bind`、A 到 B rebind、`control.release`；
 - Command Receipt、Event journal、Gameplay Inspection、可寻址 World State；
-- `mountedOn` stand-ground 的 Mount/Dismount Semantic Action、原子 possession 切换、
-  Runtime 投影、安全下车与 Reset；
+- Host-fixed Canonical internal acceptance 中的 `mountedOn` stand-ground Mount/Dismount Semantic
+  Action、原子 possession 切换、Runtime 投影、安全下车与 Reset；Hosted Builder 生产输出仍禁止
+  Relationship，并将 rider/body/equipment 组装成一个 Subject；
 - fixed Tick 输入、Reset/Session 隔离、Runtime Activity；
 - Snapshot V4、Browser V5、Control Capture Action/Event/Relationship Track 与当前 Route
   Evidence 合同。

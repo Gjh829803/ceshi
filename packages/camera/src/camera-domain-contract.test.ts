@@ -40,6 +40,7 @@ describe("@whitebox-world/camera public domain contract", () => {
       parseCameraContextSampleV2: expect.any(Function),
       parseCameraGeometryHitV2: expect.any(Function),
       parseCameraGeometryQueryRequestV2: expect.any(Function),
+      parseCameraContextRuleV2: expect.any(Function),
       parseCameraViewPreferenceV1: expect.any(Function),
     });
   });
@@ -75,7 +76,6 @@ const committedCameraContextV2 = {
     isInterruptible: true,
   },
   environment: {
-    relationshipRole: "none",
     relationshipContexts: [],
     socketPositionsMetersXYZById: {
       head: [1, 3.5, 3],
@@ -103,7 +103,6 @@ describe("CameraContextSampleV2", () => {
     const parsed = parseCameraContextSampleV2({
       ...committedCameraContextV2,
       environment: {
-        relationshipRole: "rider",
         relationshipContexts: [{
           id: relationshipId,
           type: "mountedOn",
@@ -123,6 +122,53 @@ describe("CameraContextSampleV2", () => {
       mountEntityId: "skateboard",
       mountSlotId: "stand",
     }]);
+  });
+
+  it("canonicalizes Relationship contexts by type then id using raw UTF-16 code units", () => {
+    const parsed = parseCameraContextSampleV2({
+      ...committedCameraContextV2,
+      environment: {
+        ...committedCameraContextV2.environment,
+        relationshipContexts: [
+          {
+            id: "mounted:a",
+            type: "mountedOn",
+            riderEntityId: "rider-a",
+            mountEntityId: "mount-a",
+            mountSlotId: "stand",
+          },
+          {
+            id: "possessed:Z",
+            type: "possessedBy",
+            controlledEntityId: "g-bot-primary",
+            controllerEntityId: "controller-primary",
+          },
+          {
+            id: "mounted:Z",
+            type: "mountedOn",
+            riderEntityId: "rider-z",
+            mountEntityId: "mount-z",
+            mountSlotId: "stand",
+          },
+          {
+            id: "equipped:a",
+            type: "equippedAt",
+            itemEntityId: "item-primary",
+            wearerEntityId: "g-bot-primary",
+            equipmentSlotId: "hand",
+          },
+        ],
+      },
+    });
+
+    expect(parsed.environment.relationshipContexts.map(({ type, id }) =>
+      `${type}:${id}`
+    )).toEqual([
+      "equippedAt:equipped:a",
+      "mountedOn:mounted:Z",
+      "mountedOn:mounted:a",
+      "possessedBy:possessed:Z",
+    ]);
   });
 
   it("accepts a canonical Gameplay Relationship ID as suspended authority", () => {
@@ -381,7 +427,6 @@ describe("CameraContextSampleV2", () => {
       ...committedCameraContextV2,
       environment: {
         ...committedCameraContextV2.environment,
-        relationshipRole: "rider",
         relationshipContexts: [{
           id: relationshipId,
           type: "mountedOn",
@@ -392,7 +437,6 @@ describe("CameraContextSampleV2", () => {
       },
     });
 
-    expect(parsed.environment.relationshipRole).toBe("rider");
     expect(parsed.environment.relationshipContexts).toEqual([{
       id: relationshipId,
       type: "mountedOn",
@@ -448,8 +492,8 @@ describe("CameraContextSampleV2", () => {
     expect(parsed.actionSummary).toEqual({ status: "unavailable" });
   });
 
-  it("admits only an explicitly unavailable neutral transitional authority sample", () => {
-    const parsed = parseCameraContextSampleV2({
+  it("rejects the removed transitional semantic-authority seam", () => {
+    expect(() => parseCameraContextSampleV2({
       ...committedCameraContextV2,
       semanticAuthorityStatus: "unavailable",
       locomotion: {
@@ -461,21 +505,11 @@ describe("CameraContextSampleV2", () => {
       },
       actionSummary: { status: "unavailable" },
       environment: {
-        relationshipRole: "none",
         relationshipContexts: [],
         socketPositionsMetersXYZById: {},
         cameraContextTags: [],
       },
-    });
-
-    expect(parsed.semanticAuthorityStatus).toBe("unavailable");
-    expect(parsed.environment).toEqual({
-      relationshipRole: "none",
-      relationshipContexts: [],
-      socketPositionsMetersXYZById: {},
-      cameraContextTags: [],
-    });
-    expect(Object.isFrozen(parsed)).toBe(true);
+    })).toThrow("closed CameraContextSampleV2 schema");
   });
 
   it.each([
@@ -483,96 +517,11 @@ describe("CameraContextSampleV2", () => {
       ...committedCameraContextV2,
       semanticAuthorityStatus: "legacy",
     }],
-    ["active unavailable locomotion", {
+    ["removed relationship role alias", {
       ...committedCameraContextV2,
-      semanticAuthorityStatus: "unavailable",
-    }],
-    ["available unavailable Action", {
-      ...committedCameraContextV2,
-      semanticAuthorityStatus: "unavailable",
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId: "3c-task6-authority-unavailable",
-        committedTick: 41,
-        transitionSequence: 0,
-      },
-    }],
-    ["relationship role in unavailable authority", {
-      ...committedCameraContextV2,
-      semanticAuthorityStatus: "unavailable",
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId: "3c-task6-authority-unavailable",
-        committedTick: 41,
-        transitionSequence: 0,
-      },
-      actionSummary: { status: "unavailable" },
       environment: {
+        ...committedCameraContextV2.environment,
         relationshipRole: "rider",
-        relationshipContexts: [],
-        socketPositionsMetersXYZById: {},
-        cameraContextTags: [],
-      },
-    }],
-    ["relationship Context in unavailable authority", {
-      ...committedCameraContextV2,
-      semanticAuthorityStatus: "unavailable",
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId: "3c-task6-authority-unavailable",
-        committedTick: 41,
-        transitionSequence: 0,
-      },
-      actionSummary: { status: "unavailable" },
-      environment: {
-        relationshipRole: "none",
-        relationshipContexts: [{
-          id: "possession-primary",
-          type: "possessedBy",
-          controlledEntityId: "g-bot-primary",
-          controllerEntityId: "controller-primary",
-        }],
-        socketPositionsMetersXYZById: {},
-        cameraContextTags: [],
-      },
-    }],
-    ["Socket in unavailable authority", {
-      ...committedCameraContextV2,
-      semanticAuthorityStatus: "unavailable",
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId: "3c-task6-authority-unavailable",
-        committedTick: 41,
-        transitionSequence: 0,
-      },
-      actionSummary: { status: "unavailable" },
-      environment: {
-        relationshipRole: "none",
-        relationshipContexts: [],
-        socketPositionsMetersXYZById: { head: [1, 2, 3] },
-        cameraContextTags: [],
-      },
-    }],
-    ["tag in unavailable authority", {
-      ...committedCameraContextV2,
-      semanticAuthorityStatus: "unavailable",
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId: "3c-task6-authority-unavailable",
-        committedTick: 41,
-        transitionSequence: 0,
-      },
-      actionSummary: { status: "unavailable" },
-      environment: {
-        relationshipRole: "none",
-        relationshipContexts: [],
-        socketPositionsMetersXYZById: {},
-        cameraContextTags: ["sprint"],
       },
     }],
   ])("rejects %s", (_label, input) => {

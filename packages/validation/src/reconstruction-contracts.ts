@@ -8,7 +8,7 @@ import {
   parseFixedInputV1,
   type FixedInputV1,
 } from "@whitebox-world/runtime-contracts";
-import { isPlainObject } from "lodash-es";
+import { isEqual, isPlainObject, sortBy, uniq } from "lodash-es";
 
 export const WORLD_RECONSTRUCTION_DIMENSION_IDS_V1 = Object.freeze([
   "collider",
@@ -900,6 +900,16 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
   });
   if (requiredEvidenceByDimension.length !== 7) fail(contract, "requiredEvidenceByDimension", "must cover all seven dimensions");
   return freeze({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: text(source.id, contract, "id"), dimensionIds, maximumRepairAttemptCount: 1, builderSelfRepairAttemptCount: 0, thresholds, requiredEvidenceByDimension: Object.freeze(requiredEvidenceByDimension) });
+}
+
+export function worldReconstructionEvidenceProfileClosureMatchesV1(
+  reconstructionCase: WorldReconstructionCaseV1,
+  profile: WorldReconstructionEvaluationProfileV1,
+): boolean {
+  const requiredProfileRefs = sortBy(uniq(
+    profile.requiredEvidenceByDimension.flatMap((entry) => entry.evidenceProfileRefs),
+  ));
+  return isEqual(reconstructionCase.requiredEvidenceProfileRefs, requiredProfileRefs);
 }
 
 export function parseWorldReconstructionEvidenceSetV1(value: unknown): WorldReconstructionEvidenceSetV1 {

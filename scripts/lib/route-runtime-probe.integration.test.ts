@@ -10,7 +10,10 @@ import {
   compileResolvedTraversalLockV1,
   compileCanonicalWorldV1,
 } from "@whitebox-world/compiler";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   BabylonWorldRuntime,
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
@@ -64,6 +67,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
     id: "route-runtime-probe-test.gameplay",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/route-runtime-probe-test@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: [],
     featureResourceLocks: [],
     semanticActionDefinitions: [],
@@ -258,9 +263,12 @@ async function createRuntimeHarness(
   });
   try {
     if (isNil(engine)) throw new Error("NullEngine was not created.");
-    await bindRuntimeTestPossession(
+    const initialCameraViewRevision = await bindRuntimeTestPossession(
       runtime,
       fixture.traversalLockReceipt.lock.subjectEntityId,
+    );
+    runtime.publishInitialBoundCameraView(
+      initialCameraViewRevision,
     );
     const port = createBabylonTraversalRuntimePortV1({
       runtime,

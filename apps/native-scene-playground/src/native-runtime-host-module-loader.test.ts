@@ -6,10 +6,15 @@ import {
   assertWorldPackageBuildReceiptV1,
   verifyWorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
+import {
+  RuntimeHost,
+  type RuntimeHostCreateOptionsV1,
+} from "@whitebox-world/runtime-host";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtimeSpies = vi.hoisted(() => ({
   create: vi.fn(),
+  createGameplayWorldPort: vi.fn(),
   dispose: vi.fn(),
 }));
 
@@ -22,6 +27,8 @@ vi.mock("@whitebox-world/runtime-babylon", async (importOriginal) => {
     BabylonWorldRuntime: {
       create: runtimeSpies.create,
     },
+    createBabylonGameplayWorldPortV1:
+      runtimeSpies.createGameplayWorldPort,
   };
 });
 
@@ -60,7 +67,80 @@ async function verifiedCloudRidgePackage() {
 describe("Native Playground exact linked Module loader", () => {
   beforeEach(() => {
     runtimeSpies.create.mockReset();
+    runtimeSpies.createGameplayWorldPort.mockReset();
     runtimeSpies.dispose.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it("publishes the exact initial View revision before the Native candidate readiness render", async () => {
+    const verifiedWorldPackage = await verifiedCloudRidgePackage();
+    const loadedSceneModule = defineBabylonNativeScene({
+      kind: "babylon-native-scene-module",
+      id: "candidate-camera-ready-module",
+      build() {},
+    });
+    const events: string[] = [];
+    const runtime = {
+      publishInitialBoundCameraView(viewStateRevision: number) {
+        events.push(`publish:${viewStateRevision}`);
+      },
+      async renderFrameWhenReady() {
+        events.push("render");
+      },
+      dispose: runtimeSpies.dispose,
+    };
+    runtimeSpies.create.mockImplementation(async (options) => {
+      options.onNativeSceneAdmission?.({} as never);
+      return runtime;
+    });
+    runtimeSpies.createGameplayWorldPort.mockReturnValue(Object.freeze({
+      dispose: async () => undefined,
+    }));
+    vi.spyOn(RuntimeHost, "create").mockImplementationOnce(async (options) => {
+      const createOptions = options as RuntimeHostCreateOptionsV1;
+      const worldSessionId = createOptions.worldSessionIdFactory();
+      await createOptions.adapterFactory.create({
+        runtimeSessionId: createOptions.runtimeSessionId,
+        worldSessionId,
+        worldBuildIdentity: createOptions.initialWorld.worldBuildIdentity,
+        gameplayBootstrap: createOptions.initialWorld.gameplayBootstrap,
+        worldRuntimeBootstrap: createOptions.initialWorld.worldRuntimeBootstrap,
+        sceneSource: createOptions.initialWorld.sceneSource,
+      });
+      await createOptions.adapterFactory.awaitCandidatePublicationReady({
+        runtimeSessionId: createOptions.runtimeSessionId,
+        worldSessionId,
+        publication: {
+          viewState: { viewStateRevision: 7 },
+        } as never,
+      });
+      throw new Error("native candidate ready sentinel");
+    });
+    const candidateCanvas = {
+      hidden: false,
+      tabIndex: 0,
+      setAttribute() {},
+      remove() {},
+    } as unknown as HTMLCanvasElement;
+
+    await expect(NativeRuntimeHostV1.create({
+      runtimeSessionId: "native-candidate-camera-ready",
+      canvasHost: {
+        ownerDocument: { createElement: () => candidateCanvas },
+        prepend() {},
+      } as unknown as HTMLElement,
+      verifiedWorldPackage,
+      loadedSceneModule,
+      loadedSceneModuleBundleContentHash:
+        verifiedWorldPackage.sceneModuleBundleManifest.bundleContentHash,
+      subjectAssetResolver: Object.freeze({
+        async resolveSubjectAsset() {
+          throw new Error("Asset resolution is not expected in this test.");
+        },
+      }),
+    })).rejects.toThrow("native candidate ready sentinel");
+
+    expect(events).toEqual(["publish:7", "render"]);
   });
 
   it("rejects a linked Module whose build-time Bundle hash differs from the verified Package", async () => {

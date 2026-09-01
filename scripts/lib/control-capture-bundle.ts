@@ -25,7 +25,12 @@ import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
-import type { WorldRuntimeSnapshotV4 } from "@whitebox-world/runtime-contracts";
+import {
+  parseCameraViewEventV1,
+  parseWorldRuntimeSnapshotV4,
+  type WorldRuntimeSnapshotV4,
+  type WorldSessionEventV1,
+} from "@whitebox-world/runtime-contracts";
 import {
   deriveGameplayCommandHashV1,
   deriveWorldStateSnapshotRefV1,
@@ -41,6 +46,23 @@ import {
   type WorldStateSnapshotV1,
 } from "@whitebox-world/gameplay-contracts";
 import { isEqual, isPlainObject } from "lodash-es";
+
+function parseWorldSessionEventV1(input: unknown): WorldSessionEventV1 {
+  const type = isPlainObject(input)
+    ? (input as Record<string, unknown>).type
+    : undefined;
+  return type === "camera.selection.changed" || type === "camera.target.unbound"
+    ? parseCameraViewEventV1(input)
+    : parseGameplayEventV1(input);
+}
+
+function hasExactOwnKeys(
+  input: Readonly<Record<string, unknown>>,
+  expectedKeys: readonly string[],
+): boolean {
+  const actualKeys = Object.keys(input).sort();
+  return isEqual(actualKeys, [...expectedKeys].sort());
+}
 
 const PASS_FILE_NAMES: Readonly<Record<ControlCapturePassIdV1, string>> = {
   "neutral-color": "neutral-color.png",
@@ -116,6 +138,7 @@ export interface ControlCaptureFrameInputV1 {
   readonly heightPixels: number;
   readonly camera: ControlCaptureCameraV1;
   readonly snapshot: WorldRuntimeSnapshotV4;
+  readonly worldState: WorldStateSnapshotV1;
   readonly passesById: Readonly<Record<string, ControlCapturePassBytesV1>>;
 }
 
@@ -153,18 +176,39 @@ export interface ControlCaptureBundleByteEvidenceV1 {
 
 export interface ControlCaptureBundleWriterV1 {
   appendFrame(frame: ControlCaptureFrameInputV1): Promise<void>;
-  appendGameplayTransition(
-    transition: ControlCaptureGameplayTransitionInputV1,
+  appendRuntimeHostJournalTransition(
+    transition: ControlCaptureRuntimeHostJournalTransitionInputV1,
+  ): void;
+  appendRuntimeHostFixedTickJournal(
+    transition: ControlCaptureRuntimeHostFixedTickJournalInputV1,
   ): void;
   finalize(): Promise<FinalizedControlCaptureBundleV1>;
   abort(): Promise<void>;
 }
 
-export interface ControlCaptureGameplayTransitionInputV1 {
+interface VerifiedRuntimeHostGameplayTransitionInputV1 {
   readonly captureFrameIndexAfter: number;
   readonly command: GameplayCommandV1;
   readonly receipt: GameplayCommandReceiptV1;
   readonly events: readonly GameplayEventV1[];
+  readonly worldStateAfter: WorldStateSnapshotV1;
+  readonly gameplayInspectionAfter: GameplayInspectionSnapshotV1;
+}
+
+type GameplaySemanticFactEventV1 = Extract<
+  GameplayEventV1,
+  { readonly type: "semantic-fact.started" | "semantic-fact.ended" }
+>;
+
+export interface ControlCaptureRuntimeHostJournalTransitionInputV1
+  extends Omit<VerifiedRuntimeHostGameplayTransitionInputV1, "events"> {
+  readonly worldSessionEvents: readonly WorldSessionEventV1[];
+}
+
+export interface ControlCaptureRuntimeHostFixedTickJournalInputV1 {
+  readonly captureFrameIndexAfter: number;
+  readonly afterEventSequenceExclusive: number;
+  readonly worldSessionEvents: readonly WorldSessionEventV1[];
   readonly worldStateAfter: WorldStateSnapshotV1;
   readonly gameplayInspectionAfter: GameplayInspectionSnapshotV1;
 }
@@ -237,12 +281,62 @@ function passMediaType(passId: ControlCapturePassIdV1): string {
   return CONTROL_CAPTURE_PROFILE_V1.encodingProfile.passesById[passId].mediaType;
 }
 
+function capturedWorldStateClosureMatches(
+  snapshot: WorldRuntimeSnapshotV4,
+  worldState: WorldStateSnapshotV1,
+): boolean {
+  return snapshot.runtimeSessionId === worldState.runtimeSessionId &&
+    snapshot.worldSessionId === worldState.worldSessionId &&
+    snapshot.world.simulationTick === worldState.simulationTick &&
+    snapshot.world.worldStateRef === deriveWorldStateSnapshotRefV1({
+      runtimeSessionId: worldState.runtimeSessionId,
+      worldSessionId: worldState.worldSessionId,
+      worldStateHash: worldState.worldStateHash,
+    }) &&
+    snapshot.world.worldStateHash === worldState.worldStateHash &&
+    snapshot.world.gameplayInspection.runtimeSessionId ===
+      worldState.runtimeSessionId &&
+    snapshot.world.gameplayInspection.worldSessionId ===
+      worldState.worldSessionId &&
+    snapshot.world.gameplayInspection.simulationTick ===
+      worldState.simulationTick &&
+    isEqual(
+      snapshot.world.gameplayInspection.relationshipStatesById,
+      worldState.relationshipStatesById,
+    ) &&
+    isEqual(
+      snapshot.world.gameplayInspection.activeActionStatesById,
+      worldState.activeActionStatesById,
+    ) &&
+    snapshot.world.gameplayInspection.lastEventSequence ===
+      worldState.lastEventSequence;
+}
+
 function assertFrameShape(
   frame: ControlCaptureFrameInputV1,
   options: CreateControlCaptureBundleWriterOptionsV1,
   expectedCaptureFrameIndex: number,
   previousSimulationTick: number | undefined,
 ): void {
+  if (frame.runtimeSessionId !== options.runtimeSessionId) {
+    throw new Error("CAPTURE_SESSION_MISMATCH: Frame belongs to another Runtime Session.");
+  }
+  if (frame.snapshot.runtimeSessionId !== frame.runtimeSessionId) {
+    throw new Error("CAPTURE_SESSION_MISMATCH: Snapshot belongs to another Runtime Session.");
+  }
+  if (frame.snapshot.worldSessionId !== options.worldSessionId) {
+    throw new Error("CAPTURE_SESSION_MISMATCH: Snapshot belongs to another World Session.");
+  }
+  let snapshot: WorldRuntimeSnapshotV4;
+  let worldState: WorldStateSnapshotV1;
+  try {
+    snapshot = parseWorldRuntimeSnapshotV4(frame.snapshot);
+    worldState = parseWorldStateSnapshotV1(frame.worldState);
+  } catch {
+    throw new Error(
+      "CAPTURE_GAMEPLAY_TRACK_INVALID: Frame Snapshot or World State is non-canonical.",
+    );
+  }
   const expectedScheduleEntry =
     options.compiledTake.captureSchedulePlan.entries[expectedCaptureFrameIndex];
   if (expectedScheduleEntry === undefined) {
@@ -258,17 +352,13 @@ function assertFrameShape(
   if (frame.simulationTick !== expectedScheduleEntry.simulationTick) {
     throw new Error("CAPTURE_FRAME_TICK_INVALID: Frame does not match the compiled Capture Schedule.");
   }
-  if (frame.runtimeSessionId !== options.runtimeSessionId) {
-    throw new Error("CAPTURE_SESSION_MISMATCH: Frame belongs to another Runtime Session.");
-  }
-  if (frame.snapshot.runtimeSessionId !== frame.runtimeSessionId) {
-    throw new Error("CAPTURE_SESSION_MISMATCH: Snapshot belongs to another Runtime Session.");
-  }
-  if (frame.snapshot.worldSessionId !== options.worldSessionId) {
-    throw new Error("CAPTURE_SESSION_MISMATCH: Snapshot belongs to another World Session.");
-  }
-  if (frame.snapshot.world.simulationTick !== frame.simulationTick) {
+  if (snapshot.world.simulationTick !== frame.simulationTick) {
     throw new Error("CAPTURE_FRAME_TICK_INVALID: Snapshot tick does not match captured simulation tick.");
+  }
+  if (!capturedWorldStateClosureMatches(snapshot, worldState)) {
+    throw new Error(
+      "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: Frame Snapshot and World State identities disagree.",
+    );
   }
   if (!Number.isSafeInteger(frame.widthPixels) || frame.widthPixels < 1 ||
     !Number.isSafeInteger(frame.heightPixels) || frame.heightPixels < 1) {
@@ -386,92 +476,247 @@ export async function createControlCaptureBundleWriterV1(
     throw error;
   };
 
+  const appendVerifiedGameplayTransition = (
+    input: VerifiedRuntimeHostGameplayTransitionInputV1,
+  ): void => {
+    if (closed) throw new Error("CAPTURE_WRITER_CLOSED");
+    if (
+      !Number.isSafeInteger(input.captureFrameIndexAfter) ||
+      input.captureFrameIndexAfter < 0 ||
+      input.captureFrameIndexAfter >=
+        options.compiledTake.captureSchedulePlan.entries.length
+    ) {
+      throw new Error("CAPTURE_GAMEPLAY_TRACK_INVALID: Frame binding is invalid.");
+    }
+    let command: GameplayCommandV1;
+    let receipt: GameplayCommandReceiptV1;
+    let events: readonly GameplayEventV1[];
+    let worldStateAfter: WorldStateSnapshotV1;
+    let gameplayInspectionAfter: GameplayInspectionSnapshotV1;
+    try {
+      command = parseGameplayCommandV1(input.command);
+      receipt = parseGameplayCommandReceiptV1(input.receipt);
+      events = input.events.map(parseGameplayEventV1);
+      worldStateAfter = parseWorldStateSnapshotV1(input.worldStateAfter);
+      gameplayInspectionAfter = parseGameplayInspectionSnapshotV1(
+        input.gameplayInspectionAfter,
+      );
+    } catch {
+      throw new Error("CAPTURE_GAMEPLAY_TRACK_INVALID: Evidence is non-canonical.");
+    }
+    if (
+      receipt.status !== "committed" ||
+      receipt.commandId !== command.id ||
+      receipt.commandHash !== deriveGameplayCommandHashV1(command) ||
+      receipt.commandType !== command.type ||
+      receipt.runtimeSessionId !== options.runtimeSessionId ||
+      receipt.worldSessionId !== options.worldSessionId ||
+      command.runtimeSessionId !== options.runtimeSessionId ||
+      command.worldSessionId !== options.worldSessionId ||
+      worldStateAfter.runtimeSessionId !== options.runtimeSessionId ||
+      worldStateAfter.worldSessionId !== options.worldSessionId ||
+      gameplayInspectionAfter.runtimeSessionId !== options.runtimeSessionId ||
+      gameplayInspectionAfter.worldSessionId !== options.worldSessionId ||
+      receipt.worldStateAfterRef !== deriveWorldStateSnapshotRefV1({
+        runtimeSessionId: worldStateAfter.runtimeSessionId,
+        worldSessionId: worldStateAfter.worldSessionId,
+        worldStateHash: worldStateAfter.worldStateHash,
+      }) ||
+      receipt.worldStateAfterHash !== worldStateAfter.worldStateHash ||
+      !isEqual(receipt.eventIds, events.map(({ id }) => id)) ||
+      events.some((event) =>
+        event.runtimeSessionId !== options.runtimeSessionId ||
+        event.worldSessionId !== options.worldSessionId ||
+        event.simulationTick !== receipt.simulationTick ||
+        ("commandId" in event && event.commandId !== command.id)
+      )
+    ) {
+      throw new Error(
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: Evidence identities disagree.",
+      );
+    }
+    const baseRow = {
+      captureFrameIndexAfter: input.captureFrameIndexAfter,
+      simulationTick: receipt.simulationTick,
+      receipt,
+      worldStateAfterRef: receipt.worldStateAfterRef,
+      worldStateAfterHash: receipt.worldStateAfterHash,
+      worldStateAfter,
+      gameplayInspectionAfter,
+    };
+    actionRows.push({ ...baseRow, command });
+    for (const event of events) {
+      eventRows.push({
+        captureFrameIndexAfter: input.captureFrameIndexAfter,
+        source: { kind: "command-receipt", receiptId: receipt.id },
+        event,
+      });
+      if (
+        event.type === "relationship.committed" ||
+        event.type === "relationship.removed"
+      ) {
+        relationshipRows.push({
+          captureFrameIndexAfter: input.captureFrameIndexAfter,
+          source: { kind: "command-receipt", receiptId: receipt.id },
+          eventId: event.id,
+          operation: event.type === "relationship.committed" ? "add" : "remove",
+          relationship: event.relationship,
+        });
+      }
+    }
+  };
+
   return {
-    appendGameplayTransition(input): void {
+    appendRuntimeHostJournalTransition(input): void {
+      const eventsById = new Map(
+        input.worldSessionEvents.map((event) => [event.id, event] as const),
+      );
+      const events = input.receipt.eventIds.map((eventId) => {
+        const event = eventsById.get(eventId);
+        if (event === undefined) {
+          throw new Error(
+            "CAPTURE_GAMEPLAY_TRACK_INVALID: Receipt Event is absent from the RuntimeHost journal.",
+          );
+        }
+        try {
+          return parseGameplayEventV1(event);
+        } catch {
+          throw new Error(
+            "CAPTURE_GAMEPLAY_TRACK_INVALID: Receipt references a non-Gameplay RuntimeHost Event.",
+          );
+        }
+      });
+      appendVerifiedGameplayTransition({
+        captureFrameIndexAfter: input.captureFrameIndexAfter,
+        command: input.command,
+        receipt: input.receipt,
+        events,
+        worldStateAfter: input.worldStateAfter,
+        gameplayInspectionAfter: input.gameplayInspectionAfter,
+      });
+    },
+
+    appendRuntimeHostFixedTickJournal(input): void {
       if (closed) throw new Error("CAPTURE_WRITER_CLOSED");
       if (
         !Number.isSafeInteger(input.captureFrameIndexAfter) ||
         input.captureFrameIndexAfter < 0 ||
         input.captureFrameIndexAfter >=
-          options.compiledTake.captureSchedulePlan.entries.length
+          options.compiledTake.captureSchedulePlan.entries.length ||
+        !Number.isSafeInteger(input.afterEventSequenceExclusive) ||
+        input.afterEventSequenceExclusive < 0
       ) {
-        throw new Error("CAPTURE_GAMEPLAY_TRACK_INVALID: Frame binding is invalid.");
+        throw new Error(
+          "CAPTURE_GAMEPLAY_TRACK_INVALID: Fixed-Tick journal binding is invalid.",
+        );
       }
-      let command: GameplayCommandV1;
-      let receipt: GameplayCommandReceiptV1;
-      let events: readonly GameplayEventV1[];
       let worldStateAfter: WorldStateSnapshotV1;
       let gameplayInspectionAfter: GameplayInspectionSnapshotV1;
       try {
-        command = parseGameplayCommandV1(input.command);
-        receipt = parseGameplayCommandReceiptV1(input.receipt);
-        events = input.events.map(parseGameplayEventV1);
         worldStateAfter = parseWorldStateSnapshotV1(input.worldStateAfter);
         gameplayInspectionAfter = parseGameplayInspectionSnapshotV1(
           input.gameplayInspectionAfter,
         );
       } catch {
-        throw new Error("CAPTURE_GAMEPLAY_TRACK_INVALID: Evidence is non-canonical.");
+        throw new Error(
+          "CAPTURE_GAMEPLAY_TRACK_INVALID: Fixed-Tick evidence is non-canonical.",
+        );
       }
       if (
-        receipt.status !== "committed" ||
-        receipt.commandId !== command.id ||
-        receipt.commandHash !== deriveGameplayCommandHashV1(command) ||
-        receipt.commandType !== command.type ||
-        receipt.runtimeSessionId !== options.runtimeSessionId ||
-        receipt.worldSessionId !== options.worldSessionId ||
-        command.runtimeSessionId !== options.runtimeSessionId ||
-        command.worldSessionId !== options.worldSessionId ||
         worldStateAfter.runtimeSessionId !== options.runtimeSessionId ||
         worldStateAfter.worldSessionId !== options.worldSessionId ||
         gameplayInspectionAfter.runtimeSessionId !== options.runtimeSessionId ||
         gameplayInspectionAfter.worldSessionId !== options.worldSessionId ||
-        receipt.worldStateAfterRef !== deriveWorldStateSnapshotRefV1({
-          runtimeSessionId: worldStateAfter.runtimeSessionId,
-          worldSessionId: worldStateAfter.worldSessionId,
-          worldStateHash: worldStateAfter.worldStateHash,
-        }) ||
-        receipt.worldStateAfterHash !== worldStateAfter.worldStateHash ||
-        !isEqual(receipt.eventIds, events.map(({ id }) => id)) ||
-        events.some((event) =>
-          event.runtimeSessionId !== options.runtimeSessionId ||
-          event.worldSessionId !== options.worldSessionId ||
-          event.simulationTick !== receipt.simulationTick ||
-          ("commandId" in event && event.commandId !== command.id)
-        )
+        gameplayInspectionAfter.simulationTick !== worldStateAfter.simulationTick ||
+        gameplayInspectionAfter.lastEventSequence !==
+          worldStateAfter.lastEventSequence ||
+        !isEqual(
+          gameplayInspectionAfter.relationshipStatesById,
+          worldStateAfter.relationshipStatesById,
+        ) ||
+        !isEqual(
+          gameplayInspectionAfter.activeActionStatesById,
+          worldStateAfter.activeActionStatesById,
+        ) ||
+        input.afterEventSequenceExclusive > worldStateAfter.lastEventSequence
       ) {
         throw new Error(
-          "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: Evidence identities disagree.",
+          "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: Fixed-Tick evidence identities disagree.",
         );
       }
-      const baseRow = {
-        captureFrameIndexAfter: input.captureFrameIndexAfter,
-        simulationTick: receipt.simulationTick,
-        receipt,
-        worldStateAfterRef: receipt.worldStateAfterRef,
-        worldStateAfterHash: receipt.worldStateAfterHash,
-      };
-      if (command.type === "action.activate" || command.type === "action.cancel") {
-        actionRows.push({ ...baseRow, command });
+      const eventsBySequence = new Map<number, WorldSessionEventV1>();
+      for (const event of input.worldSessionEvents) {
+        if (
+          event.runtimeSessionId !== options.runtimeSessionId ||
+          event.worldSessionId !== options.worldSessionId ||
+          eventsBySequence.has(event.sequence)
+        ) {
+          throw new Error(
+            "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: RuntimeHost journal identity or sequence is invalid.",
+          );
+        }
+        eventsBySequence.set(event.sequence, event);
       }
-      for (const event of events) {
+      const journalRange: WorldSessionEventV1[] = [];
+      for (
+        let sequence = input.afterEventSequenceExclusive + 1;
+        sequence <= worldStateAfter.lastEventSequence;
+        sequence += 1
+      ) {
+        const event = eventsBySequence.get(sequence);
+        if (event === undefined) {
+          throw new Error(
+            "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: RuntimeHost journal range is incomplete.",
+          );
+        }
+        journalRange.push(event);
+      }
+      const capturedEvents: WorldSessionEventV1[] = [];
+      for (const eventInput of journalRange) {
+        let event: WorldSessionEventV1;
+        try {
+          event = parseWorldSessionEventV1(eventInput);
+        } catch {
+          throw new Error(
+            "CAPTURE_GAMEPLAY_TRACK_INVALID: Fixed-Tick journal contains a non-canonical WorldSession Event.",
+          );
+        }
+        if (
+          ("commandId" in event) ||
+          event.simulationTick > worldStateAfter.simulationTick
+        ) {
+          throw new Error(
+            "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: Fixed-Tick Event ownership or Tick is invalid.",
+          );
+        }
+        capturedEvents.push(event);
+      }
+      const lastFactEventById = new Map<string, GameplaySemanticFactEventV1>();
+      for (const event of capturedEvents) {
+        if (
+          event.type === "semantic-fact.started" ||
+          event.type === "semantic-fact.ended"
+        ) {
+          lastFactEventById.set(event.semanticFact.id, event);
+        }
+      }
+      for (const event of lastFactEventById.values()) {
+        const finalFact = worldStateAfter.semanticFactsById[event.semanticFact.id];
+        if (
+          (event.type === "semantic-fact.started" && finalFact === undefined) ||
+          (event.type === "semantic-fact.ended" && finalFact !== undefined)
+        ) {
+          throw new Error(
+            "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH: Final semantic Fact transition disagrees with the post-Tick World State.",
+          );
+        }
+      }
+      for (const event of capturedEvents) {
         eventRows.push({
           captureFrameIndexAfter: input.captureFrameIndexAfter,
-          receiptId: receipt.id,
+          source: { kind: "fixed-tick" },
           event,
         });
-        if (
-          event.type === "relationship.committed" ||
-          event.type === "relationship.removed"
-        ) {
-          relationshipRows.push({
-            captureFrameIndexAfter: input.captureFrameIndexAfter,
-            receiptId: receipt.id,
-            eventId: event.id,
-            operation: event.type === "relationship.committed" ? "add" : "remove",
-            relationship: event.relationship,
-          });
-        }
       }
     },
 
@@ -527,6 +772,7 @@ export async function createControlCaptureBundleWriterV1(
           captureFrameIndex: frame.captureFrameIndex,
           simulationTick: frame.simulationTick,
           snapshot: frame.snapshot,
+          worldState: frame.worldState,
         });
         cameraRows.push({
           captureFrameIndex: frame.captureFrameIndex,
@@ -1011,6 +1257,12 @@ export async function validateControlCaptureBundleV1(
     addValidationDiagnostic(diagnostics, "CAPTURE_MANIFEST_HASH_MISMATCH", "bundle.json", "Bundle manifest hash is invalid.");
   }
   const frames = Array.isArray(manifest.frames) ? manifest.frames : [];
+  const manifestFrameCount =
+    typeof manifest.frameCount === "number" &&
+      Number.isSafeInteger(manifest.frameCount) &&
+      manifest.frameCount >= 0
+      ? manifest.frameCount
+      : undefined;
   if (
     compiledTake !== undefined &&
     frames.length !== compiledTake.captureSchedulePlan.entries.length
@@ -1116,44 +1368,81 @@ export async function validateControlCaptureBundleV1(
       }
     }
   }
-  if (manifest.frameCount !== frames.length) {
+  if (manifestFrameCount === undefined || manifestFrameCount !== frames.length) {
     addValidationDiagnostic(diagnostics, "CAPTURE_FRAME_INDEX_INVALID", "bundle.json/frameCount", "Frame count does not match frame manifests.");
   }
+  if (
+    manifestFrameCount === undefined ||
+    snapshotTrackRows.length !== manifestFrameCount
+  ) {
+    addValidationDiagnostic(
+      diagnostics,
+      "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+      "tracks/snapshots.ndjson",
+      "Snapshot track must contain exactly one row for every captured frame.",
+    );
+  }
   const snapshotByFrameIndex = new Map<number, WorldRuntimeSnapshotV4>();
+  const worldStateByFrameIndex = new Map<number, WorldStateSnapshotV1>();
   let trackWorldSessionId: string | undefined;
   for (const [index, row] of snapshotTrackRows.entries()) {
     if (!isPlainObject(row)) continue;
     const record = row as Record<string, unknown>;
     const captureFrameIndex = record.captureFrameIndex;
-    const snapshot = record.snapshot as WorldRuntimeSnapshotV4 | undefined;
-    if (
-      snapshot === undefined ||
-      !Number.isSafeInteger(captureFrameIndex) ||
-      captureFrameIndex !== index ||
-      snapshot?.runtimeSessionId !== manifest.runtimeSessionId ||
-      typeof snapshot.worldSessionId !== "string" ||
-      (trackWorldSessionId !== undefined &&
-        snapshot.worldSessionId !== trackWorldSessionId)
-    ) {
+    let snapshot: WorldRuntimeSnapshotV4;
+    let worldState: WorldStateSnapshotV1;
+    try {
+      snapshot = parseWorldRuntimeSnapshotV4(record.snapshot);
+      worldState = parseWorldStateSnapshotV1(record.worldState);
+    } catch {
       addValidationDiagnostic(
         diagnostics,
         "CAPTURE_GAMEPLAY_TRACK_INVALID",
         `tracks/snapshots.ndjson/${index}`,
-        "Snapshot track row has invalid frame or Session ownership.",
+        "Snapshot track row contains a non-canonical Snapshot or World State.",
+      );
+      continue;
+    }
+    if (
+      !hasExactOwnKeys(record, [
+        "captureFrameIndex",
+        "simulationTick",
+        "snapshot",
+        "worldState",
+      ]) ||
+      !Number.isSafeInteger(captureFrameIndex) ||
+      captureFrameIndex !== index ||
+      snapshot.runtimeSessionId !== manifest.runtimeSessionId ||
+      typeof snapshot.worldSessionId !== "string" ||
+      (trackWorldSessionId !== undefined &&
+        snapshot.worldSessionId !== trackWorldSessionId) ||
+      record.simulationTick !== snapshot.world.simulationTick ||
+      !capturedWorldStateClosureMatches(snapshot, worldState)
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/snapshots.ndjson/${index}`,
+        "Frame, Snapshot, and World State identities disagree.",
       );
       continue;
     }
     trackWorldSessionId ??= snapshot.worldSessionId;
     snapshotByFrameIndex.set(captureFrameIndex as number, snapshot);
+    worldStateByFrameIndex.set(captureFrameIndex as number, worldState);
   }
-  const eventsById = new Map<string, GameplayEventV1>();
+  const eventsById = new Map<string, WorldSessionEventV1>();
   const eventIdsByReceiptId = new Map<string, string[]>();
+  const worldSessionEventsByFrameIndex = new Map<number, WorldSessionEventV1[]>();
+  const fixedTickEventsByFrameIndex = new Map<number, GameplayEventV1[]>();
+  let previousEventTrackFrameIndex = -1;
+  let previousEventTrackSequence = -1;
   for (const [index, row] of eventTrackRows.entries()) {
     if (!isPlainObject(row)) continue;
     const record = row as Record<string, unknown>;
-    let event: GameplayEventV1;
+    let event: WorldSessionEventV1;
     try {
-      event = parseGameplayEventV1(record.event);
+      event = parseWorldSessionEventV1(record.event);
     } catch {
       addValidationDiagnostic(
         diagnostics,
@@ -1163,9 +1452,32 @@ export async function validateControlCaptureBundleV1(
       );
       continue;
     }
+    const source = isPlainObject(record.source)
+      ? record.source as Record<string, unknown>
+      : undefined;
+    const frameIndex = record.captureFrameIndexAfter;
+    const snapshot = Number.isSafeInteger(frameIndex)
+      ? snapshotByFrameIndex.get(frameIndex as number)
+      : undefined;
+    const worldState = Number.isSafeInteger(frameIndex)
+      ? worldStateByFrameIndex.get(frameIndex as number)
+      : undefined;
     if (
-      typeof record.receiptId !== "string" ||
+      !hasExactOwnKeys(record, [
+        "captureFrameIndexAfter",
+        "source",
+        "event",
+      ]) ||
+      source === undefined ||
+      (source.kind !== "command-receipt" && source.kind !== "fixed-tick") ||
+      (source.kind === "command-receipt" &&
+        !hasExactOwnKeys(source, ["kind", "receiptId"])) ||
+      (source.kind === "fixed-tick" && !hasExactOwnKeys(source, ["kind"])) ||
       event.runtimeSessionId !== manifest.runtimeSessionId ||
+      event.worldSessionId !== snapshot?.worldSessionId ||
+      event.simulationTick > (snapshot?.world.simulationTick ?? -1) ||
+      event.sequence >
+        (snapshot?.world.gameplayInspection.lastEventSequence ?? -1) ||
       eventsById.has(event.id)
     ) {
       addValidationDiagnostic(
@@ -1177,24 +1489,227 @@ export async function validateControlCaptureBundleV1(
       continue;
     }
     eventsById.set(event.id, event);
-    const ids = eventIdsByReceiptId.get(record.receiptId) ?? [];
-    ids.push(event.id);
-    eventIdsByReceiptId.set(record.receiptId, ids);
+    if (
+      (frameIndex as number) < previousEventTrackFrameIndex ||
+      event.sequence <= previousEventTrackSequence
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/events.ndjson/${index}`,
+        "WorldSession Event rows must remain in canonical frame and journal sequence order.",
+      );
+    }
+    previousEventTrackFrameIndex = frameIndex as number;
+    previousEventTrackSequence = event.sequence;
+    const frameEvents = worldSessionEventsByFrameIndex.get(frameIndex as number) ?? [];
+    frameEvents.push(event);
+    worldSessionEventsByFrameIndex.set(frameIndex as number, frameEvents);
+    if (source.kind === "command-receipt") {
+      let gameplayEvent: GameplayEventV1;
+      try {
+        gameplayEvent = parseGameplayEventV1(event);
+      } catch {
+        addValidationDiagnostic(
+          diagnostics,
+          "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+          `tracks/events.ndjson/${index}`,
+          "Gameplay Command Receipt references a non-Gameplay Event.",
+        );
+        continue;
+      }
+      if (typeof source.receiptId !== "string") {
+        addValidationDiagnostic(
+          diagnostics,
+          "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+          `tracks/events.ndjson/${index}`,
+          "Command Event source has no Receipt identity.",
+        );
+        continue;
+      }
+      const ids = eventIdsByReceiptId.get(source.receiptId) ?? [];
+      ids.push(gameplayEvent.id);
+      eventIdsByReceiptId.set(source.receiptId, ids);
+      continue;
+    }
+    if (
+      "commandId" in event ||
+      worldState === undefined ||
+      !Number.isSafeInteger(frameIndex)
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/events.ndjson/${index}`,
+        "Fixed-Tick Event disagrees with its bound post-Tick World State.",
+      );
+      continue;
+    }
+    const fixedEvents = fixedTickEventsByFrameIndex.get(frameIndex as number) ?? [];
+    try {
+      fixedEvents.push(parseGameplayEventV1(event));
+      fixedTickEventsByFrameIndex.set(frameIndex as number, fixedEvents);
+    } catch {
+      // Camera Events are part of the exact WorldSession journal segment but
+      // do not participate in Gameplay Fact terminal-state validation.
+    }
   }
+  for (const [frameIndex, events] of fixedTickEventsByFrameIndex) {
+    const worldState = worldStateByFrameIndex.get(frameIndex);
+    const lastFactEventById = new Map<string, GameplaySemanticFactEventV1>();
+    for (const event of events) {
+      if (
+        event.type === "semantic-fact.started" ||
+        event.type === "semantic-fact.ended"
+      ) {
+        lastFactEventById.set(event.semanticFact.id, event);
+      }
+    }
+    for (const event of lastFactEventById.values()) {
+      const finalFact = worldState?.semanticFactsById[event.semanticFact.id];
+      if (
+        worldState === undefined ||
+        (event.type === "semantic-fact.started" && finalFact === undefined) ||
+        (event.type === "semantic-fact.ended" && finalFact !== undefined)
+      ) {
+        addValidationDiagnostic(
+          diagnostics,
+          "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+          `tracks/events.ndjson/fixed-tick-frame-${frameIndex}`,
+          "Final semantic Fact transition disagrees with the bound post-Tick World State.",
+        );
+      }
+    }
+  }
+  for (
+    let frameIndex = 0;
+    frameIndex < (manifestFrameCount ?? 0);
+    frameIndex += 1
+  ) {
+    const events = [...(worldSessionEventsByFrameIndex.get(frameIndex) ?? [])];
+    const worldState = worldStateByFrameIndex.get(frameIndex);
+    if (frameIndex === 0) {
+      if (events.length > 0) {
+        addValidationDiagnostic(
+          diagnostics,
+          "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+          "tracks/events.ndjson/frame-0",
+          "The first captured World State is the journal baseline and cannot own Event rows.",
+        );
+      }
+      continue;
+    }
+    const previousWorldState = worldStateByFrameIndex.get(frameIndex - 1);
+    if (worldState === undefined || previousWorldState === undefined) continue;
+    const expectedFirstSequence = previousWorldState.lastEventSequence + 1;
+    const expectedEventCount =
+      worldState.lastEventSequence - previousWorldState.lastEventSequence;
+    if (
+      expectedEventCount < 0 ||
+      events.length !== expectedEventCount ||
+      events.some((event, index) =>
+        event.sequence !== expectedFirstSequence + index
+      )
+    ) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/events.ndjson/journal-segment-frame-${frameIndex}`,
+        "Event rows must exactly cover the RuntimeHost journal sequence segment between adjacent captured World States.",
+      );
+    }
+
+    const gameplayEvents = events.flatMap((event) => {
+      try {
+        return [parseGameplayEventV1(event)];
+      } catch {
+        return [];
+      }
+    });
+    const previousFacts = previousWorldState.semanticFactsById;
+    const currentFacts = worldState.semanticFactsById;
+    const changedFactIds = new Set([
+      ...Object.keys(previousFacts),
+      ...Object.keys(currentFacts),
+    ]);
+    const factTransitionsValid = [...changedFactIds].every((factId) => {
+      const before = previousFacts[factId];
+      const after = currentFacts[factId];
+      if (before !== undefined && after !== undefined) return true;
+      const expectedType = before === undefined
+        ? "semantic-fact.started"
+        : "semantic-fact.ended";
+      return gameplayEvents.filter((event) =>
+        event.type === expectedType && event.semanticFact.id === factId
+      ).length === 1;
+    });
+    if (!factTransitionsValid) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/events.ndjson/fact-transitions-frame-${frameIndex}`,
+        "Semantic Fact episode changes must have one exact started or ended Event in the bound journal segment.",
+      );
+    }
+
+    const previousRelationships = previousWorldState.relationshipStatesById;
+    const currentRelationships = worldState.relationshipStatesById;
+    const changedRelationshipIds = new Set([
+      ...Object.keys(previousRelationships),
+      ...Object.keys(currentRelationships),
+    ]);
+    const relationshipTransitionsValid = [...changedRelationshipIds]
+      .every((relationshipId) => {
+        const before = previousRelationships[relationshipId];
+        const after = currentRelationships[relationshipId];
+        if (isEqual(before, after)) return true;
+        const removedCount = before === undefined
+          ? 0
+          : gameplayEvents.filter((event) =>
+              event.type === "relationship.removed" &&
+              event.relationship.id === relationshipId &&
+              isEqual(event.relationship, before)
+            ).length;
+        const committedCount = after === undefined
+          ? 0
+          : gameplayEvents.filter((event) =>
+              event.type === "relationship.committed" &&
+              event.relationship.id === relationshipId &&
+              isEqual(event.relationship, after)
+            ).length;
+        return removedCount === (before === undefined ? 0 : 1) &&
+          committedCount === (after === undefined ? 0 : 1);
+      });
+    if (!relationshipTransitionsValid) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/events.ndjson/relationship-transitions-frame-${frameIndex}`,
+        "Relationship changes must have exact committed or removed Events in the bound journal segment.",
+      );
+    }
+  }
+  const retainedReceiptRowCountById = new Map<string, number>();
   for (const [index, row] of actionTrackRows.entries()) {
     if (!isPlainObject(row)) continue;
     const record = row as Record<string, unknown>;
     let command: GameplayCommandV1;
     let receipt: GameplayCommandReceiptV1;
+    let worldStateAfter: WorldStateSnapshotV1;
+    let gameplayInspectionAfter: GameplayInspectionSnapshotV1;
     try {
       command = parseGameplayCommandV1(record.command);
       receipt = parseGameplayCommandReceiptV1(record.receipt);
+      worldStateAfter = parseWorldStateSnapshotV1(record.worldStateAfter);
+      gameplayInspectionAfter = parseGameplayInspectionSnapshotV1(
+        record.gameplayInspectionAfter,
+      );
     } catch {
       addValidationDiagnostic(
         diagnostics,
         "CAPTURE_GAMEPLAY_TRACK_INVALID",
         `tracks/actions.ndjson/${index}`,
-        "Action row contains an invalid Command or Receipt.",
+        "Action row contains an invalid Command, Receipt, World State, or inspection Snapshot.",
       );
       continue;
     }
@@ -1203,6 +1718,16 @@ export async function validateControlCaptureBundleV1(
       ? snapshotByFrameIndex.get(frameIndex as number)
       : undefined;
     if (
+      !hasExactOwnKeys(record, [
+        "captureFrameIndexAfter",
+        "simulationTick",
+        "receipt",
+        "worldStateAfterRef",
+        "worldStateAfterHash",
+        "worldStateAfter",
+        "gameplayInspectionAfter",
+        "command",
+      ]) ||
       receipt.status !== "committed" ||
       command.id !== receipt.commandId ||
       receipt.commandHash !== deriveGameplayCommandHashV1(command) ||
@@ -1211,8 +1736,30 @@ export async function validateControlCaptureBundleV1(
       command.worldSessionId !== snapshot?.worldSessionId ||
       receipt.runtimeSessionId !== manifest.runtimeSessionId ||
       receipt.worldSessionId !== snapshot?.worldSessionId ||
-      receipt.worldStateAfterRef !== snapshot?.world.worldStateRef ||
-      receipt.worldStateAfterHash !== snapshot.world.worldStateHash ||
+      worldStateAfter.runtimeSessionId !== receipt.runtimeSessionId ||
+      worldStateAfter.worldSessionId !== receipt.worldSessionId ||
+      worldStateAfter.simulationTick !== receipt.simulationTick ||
+      gameplayInspectionAfter.runtimeSessionId !== receipt.runtimeSessionId ||
+      gameplayInspectionAfter.worldSessionId !== receipt.worldSessionId ||
+      gameplayInspectionAfter.simulationTick !== receipt.simulationTick ||
+      receipt.worldStateAfterRef !== deriveWorldStateSnapshotRefV1({
+        runtimeSessionId: worldStateAfter.runtimeSessionId,
+        worldSessionId: worldStateAfter.worldSessionId,
+        worldStateHash: worldStateAfter.worldStateHash,
+      }) ||
+      receipt.worldStateAfterHash !== worldStateAfter.worldStateHash ||
+      record.worldStateAfterRef !== receipt.worldStateAfterRef ||
+      record.worldStateAfterHash !== receipt.worldStateAfterHash ||
+      !isEqual(
+        gameplayInspectionAfter.relationshipStatesById,
+        worldStateAfter.relationshipStatesById,
+      ) ||
+      !isEqual(
+        gameplayInspectionAfter.activeActionStatesById,
+        worldStateAfter.activeActionStatesById,
+      ) ||
+      gameplayInspectionAfter.lastEventSequence !==
+        worldStateAfter.lastEventSequence ||
       !isEqual(receipt.eventIds, eventIdsByReceiptId.get(receipt.id) ?? []) ||
       snapshot.world.simulationTick < receipt.simulationTick ||
       receipt.eventIds.some((eventId) => {
@@ -1229,6 +1776,21 @@ export async function validateControlCaptureBundleV1(
         "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
         `tracks/actions.ndjson/${index}`,
         "Action, Receipt, Event, Snapshot, or World State identities disagree.",
+      );
+    } else {
+      retainedReceiptRowCountById.set(
+        receipt.id,
+        (retainedReceiptRowCountById.get(receipt.id) ?? 0) + 1,
+      );
+    }
+  }
+  for (const receiptId of eventIdsByReceiptId.keys()) {
+    if (retainedReceiptRowCountById.get(receiptId) !== 1) {
+      addValidationDiagnostic(
+        diagnostics,
+        "CAPTURE_GAMEPLAY_REFERENCE_MISMATCH",
+        `tracks/events.ndjson/receipt-${receiptId}`,
+        "Command Event source does not resolve to one retained Command Receipt row.",
       );
     }
   }
@@ -1247,7 +1809,7 @@ export async function validateControlCaptureBundleV1(
     ) return [];
     return [{
       captureFrameIndexAfter: record.captureFrameIndexAfter,
-      receiptId: record.receiptId,
+      source: record.source,
       eventId: event.id,
       operation: event.type === "relationship.committed" ? "add" : "remove",
       relationship: event.relationship,

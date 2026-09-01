@@ -1223,7 +1223,7 @@ export interface SupportedByFactV1 {
   readonly supportedEntityId: string;
   readonly supportSurfaceEntityId: string;
   readonly supportColliderSubshapeId: string;
-  readonly supportTraversalSurfaceId?: string;
+  readonly supportTraversalSurfaceId: string;
   readonly supportPointMetersXYZ: readonly [number, number, number];
   readonly supportNormalXYZ: readonly [number, number, number];
   readonly startedSimulationTick: number;
@@ -1625,18 +1625,15 @@ function semanticFactIdentityDomainV1(input: unknown): unknown {
       "supportedEntityId",
       "supportSurfaceEntityId",
       "supportColliderSubshapeId",
+      "supportTraversalSurfaceId",
       "supportPointMetersXYZ",
       "supportNormalXYZ",
     ] as const;
-    if (!hasOnlyKnownKeys(record, requiredKeys, [
-      "id",
-      "supportTraversalSurfaceId",
-    ]) ||
+    if (!hasOnlyKnownKeys(record, requiredKeys, ["id"]) ||
       !isNonEmptyString(record.supportedEntityId) ||
       !isNonEmptyString(record.supportSurfaceEntityId) ||
       !isNonEmptyString(record.supportColliderSubshapeId) ||
-      (Object.hasOwn(record, "supportTraversalSurfaceId") &&
-        !isNonEmptyString(record.supportTraversalSurfaceId)) ||
+      !isNonEmptyString(record.supportTraversalSurfaceId) ||
       isNil(parseFiniteTuple(record.supportPointMetersXYZ, 3)) ||
       isNil(parseFiniteTuple(record.supportNormalXYZ, 3))
     ) return invalid(schemaName);
@@ -1645,9 +1642,7 @@ function semanticFactIdentityDomainV1(input: unknown): unknown {
       supportedEntityId: record.supportedEntityId,
       supportSurfaceEntityId: record.supportSurfaceEntityId,
       supportColliderSubshapeId: record.supportColliderSubshapeId,
-      ...(Object.hasOwn(record, "supportTraversalSurfaceId")
-        ? { supportTraversalSurfaceId: record.supportTraversalSurfaceId }
-        : {}),
+      supportTraversalSurfaceId: record.supportTraversalSurfaceId,
       startedSimulationTick: record.startedSimulationTick,
       semanticFactProjectorProfileRef: record.semanticFactProjectorProfileRef,
       semanticFactProjectorProfileHash: record.semanticFactProjectorProfileHash,
@@ -1714,24 +1709,21 @@ function parseSupportedByFactV1(
     "supportedEntityId",
     "supportSurfaceEntityId",
     "supportColliderSubshapeId",
+    "supportTraversalSurfaceId",
     "supportPointMetersXYZ",
     "supportNormalXYZ",
     "startedSimulationTick",
     "semanticFactProjectorProfileRef",
     "semanticFactProjectorProfileHash",
   ] as const;
-  const hasTraversalSurface = hasExactKeys(record, [
-    ...baseKeys,
-    "supportTraversalSurfaceId",
-  ]);
-  if ((!hasExactKeys(record, baseKeys) && !hasTraversalSurface) ||
+  if (!hasExactKeys(record, baseKeys) ||
     record.type !== "supportedBy" ||
     record.schemaVersion !== 1 ||
     !isNonEmptyString(record.id) ||
     !isNonEmptyString(record.supportedEntityId) ||
     !isNonEmptyString(record.supportSurfaceEntityId) ||
     !isNonEmptyString(record.supportColliderSubshapeId) ||
-    (hasTraversalSurface && !isNonEmptyString(record.supportTraversalSurfaceId)) ||
+    !isNonEmptyString(record.supportTraversalSurfaceId) ||
     !isSafeNonNegativeInteger(record.startedSimulationTick) ||
     !isNonEmptyString(record.semanticFactProjectorProfileRef) ||
     !isSha256(record.semanticFactProjectorProfileHash)
@@ -1748,9 +1740,7 @@ function parseSupportedByFactV1(
     supportedEntityId: record.supportedEntityId,
     supportSurfaceEntityId: record.supportSurfaceEntityId,
     supportColliderSubshapeId: record.supportColliderSubshapeId,
-    ...(hasTraversalSurface
-      ? { supportTraversalSurfaceId: record.supportTraversalSurfaceId as string }
-      : {}),
+    supportTraversalSurfaceId: record.supportTraversalSurfaceId,
     supportPointMetersXYZ: supportPointMetersXYZ as readonly [number, number, number],
     supportNormalXYZ: supportNormalXYZ as readonly [number, number, number],
     startedSimulationTick: record.startedSimulationTick,

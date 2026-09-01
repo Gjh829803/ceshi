@@ -1,6 +1,7 @@
 import {
   createGameplayBootstrapV1,
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   type ControllerEntityStateV1,
   type GameplayParticipantStateV1,
   type SpatialEntityStateV1,
@@ -59,6 +60,8 @@ const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({
   id: "gameplay.character-movement-transaction",
   version: 1,
   resourceRef: "worldkit://gameplay-bootstrap/character-movement-transaction@1",
+  semanticFactProjectorProfileResource:
+    RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   entityDescriptors: [{
     id: HERO.id,
     entityDefinitionRef: HERO.entityDefinitionRef,

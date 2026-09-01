@@ -14,13 +14,6 @@ export type CameraViewPreferenceV1 =
       readonly cameraRigProfileRef: string;
     };
 
-export type CameraRelationshipRoleV1 =
-  | "none"
-  | "rider"
-  | "driver"
-  | "passenger"
-  | "tethered";
-
 export type CameraRelationshipContextV1 =
   | {
       readonly id: string;
@@ -45,12 +38,7 @@ export type CameraRelationshipContextV1 =
 
 export interface CameraContextSampleV2 {
   readonly schemaVersion: 2;
-  /**
-   * Whether committed CharacterMovement/Action/environment semantic facts are
-   * available for automatic Camera Rule selection. `unavailable` is the
-   * closed Task-6 migration seam and carries only a neutral environment.
-   */
-  readonly semanticAuthorityStatus: "available" | "unavailable";
+  readonly semanticAuthorityStatus: "available";
   readonly committedTick: number;
   readonly controlledEntityId: string;
   readonly targetEntityId: string;
@@ -67,7 +55,6 @@ export interface CameraContextSampleV2 {
       }>
     | Readonly<{ status: "unavailable" }>;
   readonly environment: Readonly<{
-    relationshipRole: CameraRelationshipRoleV1;
     relationshipContexts: readonly CameraRelationshipContextV1[];
     socketPositionsMetersXYZById: Readonly<Record<string, readonly [number, number, number]>>;
     cameraContextTags: readonly string[];
@@ -333,6 +320,10 @@ function parseCameraRelationshipContextV1(
   return cameraInvalid(schemaName);
 }
 
+function compareCameraCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function cameraInvalid(schemaName: string): never {
   throw new RangeError(`Value must match the closed ${schemaName} schema.`);
 }
@@ -350,7 +341,7 @@ export function parseCameraContextSampleV2(input: unknown): CameraContextSampleV
     "schemaVersion", "semanticAuthorityStatus", "committedTick", "controlledEntityId", "targetEntityId",
     "subjectPose", "locomotion", "actionSummary", "environment",
   ]) || record.schemaVersion !== 2 || !cameraTick(record.committedTick) ||
-    !["available", "unavailable"].includes(record.semanticAuthorityStatus as string) ||
+    record.semanticAuthorityStatus !== "available" ||
     !cameraEntityIdV2(record.controlledEntityId) || !cameraEntityIdV2(record.targetEntityId)) {
     cameraInvalid(schemaName);
   }
@@ -402,7 +393,11 @@ export function parseCameraContextSampleV2(input: unknown): CameraContextSampleV
   const relationshipContexts = relationshipContextValues
     .map((context) =>
         parseCameraRelationshipContextV1(context, schemaName)
-      );
+      )
+    .sort((left, right) =>
+      compareCameraCodeUnits(left.type, right.type) ||
+      compareCameraCodeUnits(left.id, right.id)
+    );
   if (new Set(relationshipContexts.map((context) => context.id)).size !== relationshipContexts.length) {
     cameraInvalid(schemaName);
   }
@@ -422,15 +417,10 @@ export function parseCameraContextSampleV2(input: unknown): CameraContextSampleV
     cameraContextTagV2,
   ) ?? cameraInvalid(schemaName);
   if (!cameraExact(environment, [
-    "relationshipRole", "relationshipContexts", "socketPositionsMetersXYZById", "cameraContextTags",
-  ]) || !["none", "rider", "driver", "passenger", "tethered"].includes(environment.relationshipRole as string)) {
+    "relationshipContexts", "socketPositionsMetersXYZById", "cameraContextTags",
+  ])) {
     cameraInvalid(schemaName);
   }
-  if (record.semanticAuthorityStatus === "unavailable" && (
-    locomotion.status !== "suspended" || actionSummary.status !== "unavailable" ||
-    environment.relationshipRole !== "none" || relationshipContexts.length !== 0 ||
-    socketEntries.length !== 0 || tags.length !== 0
-  )) cameraInvalid(schemaName);
   return Object.freeze({
     schemaVersion: 2,
     semanticAuthorityStatus: record.semanticAuthorityStatus,
@@ -441,7 +431,6 @@ export function parseCameraContextSampleV2(input: unknown): CameraContextSampleV
     locomotion,
     actionSummary,
     environment: Object.freeze({
-      relationshipRole: environment.relationshipRole,
       relationshipContexts: Object.freeze(relationshipContexts) as readonly CameraRelationshipContextV1[],
       socketPositionsMetersXYZById: Object.freeze(Object.fromEntries(socketEntries)),
       cameraContextTags: tags,
@@ -554,7 +543,7 @@ export function parseCameraGeometryHitV2(
 
 export type CameraRelationshipConditionV1 =
   | { type: "possessedBy"; entityRole: "controlled" | "controller" }
-  | { type: "mountedOn"; entityRole: "rider" | "mount" }
+  | { type: "mountedOn"; entityRole: "rider" }
   | { type: "equippedAt"; entityRole: "item" | "wearer" };
 
 export const CAMERA_RIG_PARAMETER_NAMES_V1 = [
@@ -648,7 +637,6 @@ export interface CameraContextRuleV2 {
   readonly id: string;
   readonly priority: number;
   readonly when: {
-    readonly relationshipRoles?: readonly CameraRelationshipRoleV1[];
     readonly allRelationshipConditions?: readonly CameraRelationshipConditionV1[];
     readonly locomotionStatuses?: readonly ("active" | "suspended")[];
     readonly mobilityModes?: readonly MobilityModeV2[];
@@ -708,7 +696,6 @@ export type CameraDiagnosticCodeV1 =
   | "CAMERA_PREFERENCE_NOT_ALLOWED"
   | "CAMERA_FIRST_PERSON_UNAVAILABLE"
   | "CAMERA_REQUIRED_SOCKET_MISSING"
-  | "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE"
   | "CAMERA_PREFERENCE_CONTEXT_INCOMPATIBLE";
 
 export interface CameraDiagnosticV1 {
@@ -781,9 +768,8 @@ function parseCameraRelationshipConditionV2(
     (value.entityRole === "controlled" || value.entityRole === "controller")) {
     return Object.freeze({ type: "possessedBy", entityRole: value.entityRole });
   }
-  if (value.type === "mountedOn" &&
-    (value.entityRole === "rider" || value.entityRole === "mount")) {
-    return Object.freeze({ type: "mountedOn", entityRole: value.entityRole });
+  if (value.type === "mountedOn" && value.entityRole === "rider") {
+    return Object.freeze({ type: "mountedOn", entityRole: "rider" });
   }
   if (value.type === "equippedAt" &&
     (value.entityRole === "item" || value.entityRole === "wearer")) {
@@ -804,7 +790,7 @@ function cameraEnumArray<T extends string>(
   return Object.freeze([...values]) as readonly T[];
 }
 
-function parseCameraContextRuleV2(
+function parseCameraContextRuleValueV2(
   input: unknown,
   schemaName: string,
 ): CameraContextRuleV2 {
@@ -817,7 +803,6 @@ function parseCameraContextRuleV2(
     !Number.isSafeInteger(value.priority)) cameraInvalid(schemaName);
   const when = cameraRecord(value.when) ?? cameraInvalid(schemaName);
   if (!cameraExactWithOptional(when, [], [
-    "relationshipRoles",
     "allRelationshipConditions",
     "locomotionStatuses",
     "mobilityModes",
@@ -843,13 +828,6 @@ function parseCameraContextRuleV2(
       relationshipConditions.length) cameraInvalid(schemaName);
 
   const parsedWhen: CameraContextRuleV2["when"] = Object.freeze({
-    ...(when.relationshipRoles === undefined ? {} : {
-      relationshipRoles: cameraEnumArray<CameraRelationshipRoleV1>(
-        when.relationshipRoles,
-        new Set(["none", "rider", "driver", "passenger", "tethered"]),
-        CAMERA_RULE_MAX_CONDITIONS_V2,
-      ) ?? cameraInvalid(schemaName),
-    }),
     ...(relationshipConditions === undefined ? {} : { allRelationshipConditions: relationshipConditions }),
     ...(when.locomotionStatuses === undefined ? {} : {
       locomotionStatuses: cameraEnumArray<"active" | "suspended">(
@@ -951,6 +929,11 @@ function parseCameraContextRuleV2(
     ...(cameraRigProfileRef === undefined ? {} : { cameraRigProfileRef }),
     ...(cameraModifierRefs === undefined ? {} : { cameraModifierRefs }),
   });
+}
+
+/** Strict, exact-key, snapshot-once admission parser for one V2 Camera Rule. */
+export function parseCameraContextRuleV2(input: unknown): CameraContextRuleV2 {
+  return parseCameraContextRuleValueV2(input, "CameraContextRuleV2");
 }
 
 function parseCameraRigProfileV2(
@@ -1058,7 +1041,7 @@ export function parseCameraContextProfileV2(input: unknown): CameraContextProfil
       )) cameraInvalid(schemaName);
   const rules = Object.freeze((
     cameraArraySnapshot(value.rules, CAMERA_PROFILE_MAX_RULES_V2) ?? cameraInvalid(schemaName)
-  ).map((rule) => parseCameraContextRuleV2(rule, schemaName)));
+  ).map((rule) => parseCameraContextRuleValueV2(rule, schemaName)));
   const cameraRigProfiles = Object.freeze((
     cameraArraySnapshot(value.cameraRigProfiles, CAMERA_PROFILE_MAX_RIGS_V2) ?? cameraInvalid(schemaName)
   ).map((profile) => parseCameraRigProfileV2(profile, schemaName)));

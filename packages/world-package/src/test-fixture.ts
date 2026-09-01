@@ -1,6 +1,9 @@
 import { normalizeAuthoringSpecV4, validateAuthoringSpecV4, type AuthoringSpecV4 } from "@whitebox-world/authoring";
 import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
-import { createGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
+import {
+  createGameplayBootstrapV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
+} from "@whitebox-world/gameplay-contracts";
 import {
   sha256Bytes,
   sha256CanonicalJson,
@@ -54,6 +57,8 @@ export function createWorldPackageTestInputV1(
     id: `${authoringSpec.id}.gameplay`,
     version: 1,
     resourceRef: `worldkit://gameplay-bootstrap/${authoringSpec.id}@1`,
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: normalized.value.nodes.filter((node) => node.kind === "subject").map((node) => {
       const definition = normalized.value!.resources.subjectDefinitions.find((candidate) => candidate.subjectDefinitionRef === node.subjectDefinitionRef);
       if (isNil(definition)) throw new Error("test Subject Definition missing");

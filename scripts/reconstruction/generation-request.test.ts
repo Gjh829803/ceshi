@@ -72,9 +72,12 @@ async function fixture(): Promise<Readonly<{ root: string; inputDirectory: strin
 
 function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
   const profile = parseWorldReconstructionEvaluationProfileV1({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: "cloud-temple-profile", dimensionIds: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"], maximumRepairAttemptCount: 1, builderSelfRepairAttemptCount: 0, thresholds: { semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }], openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], maximumOrderDistanceBasisPoints: 100 }, spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 } }, requiredEvidenceByDimension: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"].map((dimensionId) => ({ dimensionId, evidenceProfileRefs: [`worldkit://evidence/${dimensionId}@1`] })) });
+  const requiredEvidenceProfileRefs = profile.requiredEvidenceByDimension
+    .flatMap((entry) => entry.evidenceProfileRefs)
+    .sort();
   const reconstructionCase = parseWorldReconstructionCaseV1({
     kind: "world-reconstruction-case", schemaVersion: 1, id: "cloud-temple-t-gate-native-block", sceneBriefRef: "scene-brief.md", sceneBriefHash: fixtureValue.routeDecision.sceneBriefHash,
-    referenceInputs: [{ inputRef: "reference-0.png", contentHash: sha256Bytes(new TextEncoder().encode("reference")), mediaType: "image/png" }], evaluationProfileRef: "evaluation-profile.json", evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile), acceptanceTargetRefs: ["worldkit://acceptance-target/gate@1"], requiredEvidenceProfileRefs: ["worldkit://evidence-profile/native-block@1"],
+    referenceInputs: [{ inputRef: "reference-0.png", contentHash: sha256Bytes(new TextEncoder().encode("reference")), mediaType: "image/png" }], evaluationProfileRef: "evaluation-profile.json", evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile), acceptanceTargetRefs: ["worldkit://acceptance-target/gate@1"], requiredEvidenceProfileRefs,
     expected: {
       topology: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", nodeIds: ["gate", "spawn"], relations: [{ fromNodeId: "gate", relation: "connects-to", toNodeId: "spawn" }], layerIds: ["main"] },
       semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", visualGroupId: "gate", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 100, maxXBasisPoints: 900, maxYBasisPoints: 900 }, normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 }, coverageBasisPoints: 5_000 }],
@@ -165,6 +168,22 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(descriptorText).toBe(
         stringifyCanonicalJson(JSON.parse(descriptorText)),
       );
+    }
+  });
+
+  it("rejects a Case whose required Evidence Profiles do not exactly close the Evaluation Profile", async () => {
+    const value = await fixture();
+    try {
+      const preparedInput = input(value);
+      preparedInput.case = parseWorldReconstructionCaseV1({
+        ...preparedInput.case,
+        requiredEvidenceProfileRefs: preparedInput.case.requiredEvidenceProfileRefs.slice(1),
+      });
+      await expect(prepareNativeBlockGenerationTaskV1(preparedInput)).rejects.toThrow(
+        /evidence profile closure/i,
+      );
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
     }
   });
 

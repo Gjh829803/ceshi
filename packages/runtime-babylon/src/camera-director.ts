@@ -117,6 +117,7 @@ export interface CameraDirectorTransactionStateV1 {
     latestTelemetry: CameraDirectorV1["latestTelemetry"];
     latestCommittedTick: number | undefined;
     latestCommittedContextIdentity: string | undefined;
+    activeTargetEntityId: string | undefined;
     latestUpdateFailed: boolean;
   }>;
   readonly vectors: Readonly<{
@@ -215,43 +216,22 @@ function cameraContextProfileFromExecution(
     ...(context.firstPersonCameraRigProfileRef === undefined
       ? {}
       : { firstPersonCameraRigProfileRef: context.firstPersonCameraRigProfileRef }),
-    rules: context.rules.flatMap((rule) => {
-      const movementMediums = rule.when.movementMediums?.filter(
-        (movementMedium): movementMedium is "ground" | "air" =>
-          movementMedium === "ground" || movementMedium === "air",
-      );
-      // P1.5 has no water runtime sample. A water-only execution rule must be
-      // unavailable rather than becoming an unconditional Camera Domain rule.
-      if (
-        rule.when.motionKernelRefs !== undefined ||
-        rule.when.movementMediums !== undefined &&
-        movementMediums?.length === 0
-      ) return [];
-      const requiredMotionTags = rule.when.requiredMotionTags ?? [];
-      const leftoverMotionTags = requiredMotionTags.filter(
-        (tag) => tag !== "free-ground",
-      );
-      const requiredCameraContextTags = [
-        ...leftoverMotionTags,
-        ...(rule.when.requiredCameraContextTags ?? []),
-      ];
-      const mobilityModes = [
-        ...(rule.when.mobilityModes ?? []),
-        ...(requiredMotionTags.includes("free-ground")
-          ? (["grounded"] as const)
-          : []),
-      ].filter((mode, index, modes) => modes.indexOf(mode) === index);
-      return {
-        id: rule.id,
-        priority: rule.priority,
-        when: {
-        ...(rule.when.relationshipRoles === undefined
+    rules: context.rules.map((rule) => ({
+      id: rule.id,
+      priority: rule.priority,
+      when: {
+        ...(rule.when.allRelationshipConditions === undefined
           ? {}
-          : { relationshipRoles: rule.when.relationshipRoles }),
+          : {
+              allRelationshipConditions:
+                rule.when.allRelationshipConditions,
+            }),
         ...(rule.when.locomotionStatuses === undefined
           ? {}
           : { locomotionStatuses: rule.when.locomotionStatuses }),
-        ...(isEmpty(mobilityModes) ? {} : { mobilityModes }),
+        ...(rule.when.mobilityModes === undefined
+          ? {}
+          : { mobilityModes: rule.when.mobilityModes }),
         ...(rule.when.gaits === undefined
           ? {}
           : { gaits: rule.when.gaits }),
@@ -264,9 +244,9 @@ function cameraContextProfileFromExecution(
         ...(rule.when.actionInterruptibility === undefined
           ? {}
           : { actionInterruptibility: rule.when.actionInterruptibility }),
-        ...(movementMediums === undefined
+        ...(rule.when.movementMediums === undefined
           ? {}
-          : { movementMediums }),
+          : { movementMediums: rule.when.movementMediums }),
         ...(rule.when.minimumSpeedMetersPerSecond === undefined
           ? {}
           : { minimumSpeedMetersPerSecond: rule.when.minimumSpeedMetersPerSecond }),
@@ -276,18 +256,17 @@ function cameraContextProfileFromExecution(
         ...(rule.when.requiredSocketIds === undefined
           ? {}
           : { requiredSocketIds: rule.when.requiredSocketIds }),
-        ...(isEmpty(requiredCameraContextTags)
+        ...(rule.when.requiredCameraContextTags === undefined
           ? {}
-          : { requiredCameraContextTags }),
-        },
-        ...(rule.cameraRigProfileRef === undefined
-          ? {}
-          : { cameraRigProfileRef: rule.cameraRigProfileRef }),
-        ...(rule.cameraModifierRefs === undefined
-          ? {}
-          : { cameraModifierRefs: rule.cameraModifierRefs }),
-      };
-    }),
+          : { requiredCameraContextTags: rule.when.requiredCameraContextTags }),
+      },
+      ...(rule.cameraRigProfileRef === undefined
+        ? {}
+        : { cameraRigProfileRef: rule.cameraRigProfileRef }),
+      ...(rule.cameraModifierRefs === undefined
+        ? {}
+        : { cameraModifierRefs: rule.cameraModifierRefs }),
+    })),
     cameraRigProfiles: context.cameraRigProfiles.map((profile) => ({
       cameraRigProfileRef: profile.resourceRef,
       algorithmRef: profile.algorithmRef,
@@ -330,56 +309,10 @@ type CameraDirectorTelemetryV1 = Omit<
 >;
 
 /**
- * Task 5 isolation seam for the live V1 WorldRuntime. Task 6 replaces this
- * projection with the committed CharacterMovement transaction output.
- * It never infers gait/phase from velocity, Motion Kernel or animation.
+ * Publish committed non-Golden locomotion facts as Camera Context V2 so
+ * automatic Rules consume the same current Camera contract.
  */
-export function legacyViewTargetToCommittedCameraContextV2ForTask6(
-  sample: ViewTargetSampleV1,
-  committedTick: number,
-): CameraContextSampleV2 {
-  const facingYawRadians = canonicalCameraNumber(Math.atan2(
-    -sample.forwardXYZ[0],
-    -sample.forwardXYZ[2],
-  ));
-  return {
-    schemaVersion: 2,
-    semanticAuthorityStatus: "unavailable",
-    committedTick,
-    controlledEntityId: sample.controlledEntityId,
-    targetEntityId: sample.entityId,
-    subjectPose: {
-      positionMetersXYZ: [
-        canonicalCameraNumber(sample.targetPositionMetersXYZ[0]),
-        canonicalCameraNumber(sample.targetPositionMetersXYZ[1]),
-        canonicalCameraNumber(sample.targetPositionMetersXYZ[2]),
-      ],
-      facingYawRadians,
-    },
-    locomotion: {
-      schemaVersion: 2,
-      status: "suspended",
-      suspendedByRelationshipId: "3c-task6-authority-unavailable",
-      committedTick,
-      transitionSequence: 0,
-    },
-    actionSummary: { status: "unavailable" },
-    environment: {
-      relationshipContexts: [],
-      relationshipRole: "none",
-      socketPositionsMetersXYZById: {},
-      cameraContextTags: [],
-    },
-  };
-}
-
-/**
- * Live Motion Kernel subjects still own support and locomotion. Publish those
- * committed facts as Camera Context V2 so automatic Rules can select a view.
- * Do not reuse the Task-6 unavailable seam: that seam must not invent gait or
- * phase, and it bypasses every auto Rule including free-ground → orbit.
- */
-export function committedCameraContextFromMotionKernelV1(
+export function committedCameraContextFromViewTargetV2(
   sample: ViewTargetSampleV1,
   committedTick: number,
   locomotionMode: LocomotionModeV1,
@@ -450,7 +383,6 @@ export function committedCameraContextFromMotionKernelV1(
       isInterruptible: true,
     },
     environment: {
-      relationshipRole: sample.relationshipRole,
       relationshipContexts: sample.relationshipContexts,
       socketPositionsMetersXYZById: sample.socketPositionsMetersXYZById,
       cameraContextTags: [...sample.cameraContextTags],
@@ -459,7 +391,7 @@ export function committedCameraContextFromMotionKernelV1(
 }
 
 function viewTargetFromCommittedCameraContextV2(
-  legacySample: ViewTargetSampleV1,
+  viewTargetSample: ViewTargetSampleV1,
   context: CameraContextSampleV2,
 ): ViewTargetSampleV1 {
   const locomotion = context.locomotion;
@@ -481,16 +413,12 @@ function viewTargetFromCommittedCameraContextV2(
           locomotion.linearVelocity.z,
         ]
       : [0, 0, 0],
-    approximateRadiusMeters: legacySample.approximateRadiusMeters,
+    approximateRadiusMeters: viewTargetSample.approximateRadiusMeters,
     socketPositionsMetersXYZById: context.environment.socketPositionsMetersXYZById,
-    // Legacy-only motion identity is intentionally not projected. Camera
-    // Domain consumes the committed Context V2 facts above.
-    motionTags: [],
     movementMedium: locomotion.status === "active"
       ? locomotion.movementMedium
       : "ground",
     relationshipContexts: context.environment.relationshipContexts,
-    relationshipRole: context.environment.relationshipRole,
     cameraContextTags: context.environment.cameraContextTags,
   };
 }
@@ -539,17 +467,18 @@ function smoothstep01(value: number): number {
 
 const COLLISION_COMPOSITION_FOOT_SOCKET_ID = "FootAlignment";
 const COLLISION_COMPOSITION_HEAD_SOCKET_ID = "FirstPersonView";
-const COLLISION_COMPOSITION_START_BODY_HEIGHTS = 3;
-const COLLISION_COMPOSITION_FULL_BODY_HEIGHTS = 0.6;
-const COLLISION_COMPOSITION_CHEST_HEIGHT_RATIO = 0.7;
+const COLLISION_COMPOSITION_START_ARM_RATIO = 0.75;
+const COLLISION_COMPOSITION_FULL_ARM_RATIO = 0.25;
 const COLLISION_COMPOSITION_MAX_FOV_RADIANS = (80 * Math.PI) / 180;
 const COLLISION_COMPOSITION_SCREEN_HALF_HEIGHT_RATIO = 0.75;
 
 function collisionCompositionV1(input: Readonly<{
   sample: ViewTargetSampleV1;
   desiredTarget: Vector3;
+  requestedArmLengthMeters: number | undefined;
   effectiveArmLengthMeters: number | undefined;
   isCollisionRetracted: boolean | undefined;
+  targetHeightMeters: number;
   baseFovRadians: number;
 }>): Readonly<{
   target: Vector3;
@@ -557,6 +486,8 @@ function collisionCompositionV1(input: Readonly<{
 }> {
   if (
     input.isCollisionRetracted !== true ||
+    input.requestedArmLengthMeters === undefined ||
+    input.requestedArmLengthMeters <= 0 ||
     input.effectiveArmLengthMeters === undefined
   ) {
     return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
@@ -567,45 +498,43 @@ function collisionCompositionV1(input: Readonly<{
   const head = input.sample.socketPositionsMetersXYZById[
     COLLISION_COMPOSITION_HEAD_SOCKET_ID
   ];
-  if (foot === undefined || head === undefined) {
-    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
-  }
-  const bodyHeightMeters = head[1] - foot[1];
-  if (!Number.isFinite(bodyHeightMeters) || bodyHeightMeters <= 0.25) {
-    return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
-  }
-
-  const armLengthInBodyHeights = input.effectiveArmLengthMeters /
-    bodyHeightMeters;
+  const armRatio = input.effectiveArmLengthMeters / input.requestedArmLengthMeters;
   const compositionBlend = 1 - smoothstep01(
-    (armLengthInBodyHeights - COLLISION_COMPOSITION_FULL_BODY_HEIGHTS) /
-      (COLLISION_COMPOSITION_START_BODY_HEIGHTS -
-        COLLISION_COMPOSITION_FULL_BODY_HEIGHTS),
+    (armRatio - COLLISION_COMPOSITION_FULL_ARM_RATIO) /
+      (COLLISION_COMPOSITION_START_ARM_RATIO -
+        COLLISION_COMPOSITION_FULL_ARM_RATIO),
   );
   if (compositionBlend <= 0) {
     return { target: input.desiredTarget, fovRadians: input.baseFovRadians };
   }
 
-  // Keep animated head sway out of the horizontal aim while using the authored
-  // foot/head span to locate a stable chest target for differently sized Subjects.
+  // The rig's authored target height is the stable chest framing contract. A
+  // preferred Socket may sit at the head, so blend back to that authored height
+  // as collision compresses the arm instead of leaving the Subject below frame.
   const chestTarget = new Vector3(
-    foot[0],
-    foot[1] + bodyHeightMeters * COLLISION_COMPOSITION_CHEST_HEIGHT_RATIO,
-    foot[2],
+    input.sample.targetPositionMetersXYZ[0],
+    input.sample.targetPositionMetersXYZ[1] + input.targetHeightMeters,
+    input.sample.targetPositionMetersXYZ[2],
   );
   const target = Vector3.Lerp(
     input.desiredTarget,
     chestTarget,
     compositionBlend,
   );
-  const requiredFovRadians = 2 * Math.atan(
-    (bodyHeightMeters * 0.5) /
-      Math.max(
-        input.effectiveArmLengthMeters *
-          COLLISION_COMPOSITION_SCREEN_HALF_HEIGHT_RATIO,
-        0.01,
-      ),
-  );
+  const bodyHeightMeters = foot === undefined || head === undefined
+    ? undefined
+    : head[1] - foot[1];
+  const requiredFovRadians = bodyHeightMeters === undefined ||
+      !Number.isFinite(bodyHeightMeters) || bodyHeightMeters <= 0.25
+    ? input.baseFovRadians
+    : 2 * Math.atan(
+        (bodyHeightMeters * 0.5) /
+          Math.max(
+            input.effectiveArmLengthMeters *
+              COLLISION_COMPOSITION_SCREEN_HALF_HEIGHT_RATIO,
+            0.01,
+          ),
+      );
   const collisionFovRadians = Math.max(
     input.baseFovRadians,
     Math.min(requiredFovRadians, COLLISION_COMPOSITION_MAX_FOV_RADIANS),
@@ -620,6 +549,7 @@ function collisionCompositionV1(input: Readonly<{
 export class CameraDirectorV1 {
   private latestCommittedTick: number | undefined;
   private latestCommittedContextIdentity: string | undefined;
+  private activeTargetEntityId: string | undefined;
   private latestUpdateFailed = false;
   private disposed = false;
   private initialized = false;
@@ -745,6 +675,7 @@ export class CameraDirectorV1 {
         latestTelemetry: this.latestTelemetry,
         latestCommittedTick: this.latestCommittedTick,
         latestCommittedContextIdentity: this.latestCommittedContextIdentity,
+        activeTargetEntityId: this.activeTargetEntityId,
         latestUpdateFailed: this.latestUpdateFailed,
       },
       vectors: {
@@ -961,7 +892,7 @@ export class CameraDirectorV1 {
 
   update(
     cameraContext: CameraContextV1,
-    legacySample: ViewTargetSampleV1,
+    viewTargetSample: ViewTargetSampleV1,
     deltaSeconds: number,
     cameraContextSample: CameraContextSampleV2,
     springArm: SpringArmComponentV1,
@@ -1001,7 +932,7 @@ export class CameraDirectorV1 {
     const beforeSpringArmTransaction = springArm.captureTransactionState();
     try {
     const sample = viewTargetFromCommittedCameraContextV2(
-      legacySample,
+      viewTargetSample,
       committedContext,
     );
     const selected = this.selectProfile(cameraContext, committedContext);
@@ -1051,6 +982,9 @@ export class CameraDirectorV1 {
 
     const previousProfileRef = this.activeProfileRef;
     const nextModifierRefs = selected.modifiers.map((modifier) => modifier.resourceRef);
+    const targetIdentityChanged = this.initialized &&
+      this.activeTargetEntityId !== undefined &&
+      this.activeTargetEntityId !== sample.entityId;
     const selectionChanged = this.initialized && (
       previousProfileRef !== profile.resourceRef ||
       nextModifierRefs.join("|") !== this.activeModifierRefs.join("|")
@@ -1064,7 +998,7 @@ export class CameraDirectorV1 {
       this.activeHeadingSource !== profile.headingSource ||
       this.activeReverseHeadingPolicy !== profile.reverseHeadingPolicy
     );
-    if (springArmBasisChanged) springArm.reset();
+    if (springArmBasisChanged || targetIdentityChanged) springArm.reset();
     if (selectionChanged) {
       this.transitionElapsedSeconds = 0;
       this.transitionStartPosition.copyFrom(this.camera.position);
@@ -1205,7 +1139,9 @@ export class CameraDirectorV1 {
       .add(
         acceleration.scale(parameters.accelerationLookAheadSecondsSquared),
       );
-    const target = this.targetWithDeadZone(rawTarget, parameters);
+    const target = targetIdentityChanged
+      ? rawTarget
+      : this.targetWithDeadZone(rawTarget, parameters);
     const firstPerson = profile.algorithmRef.endsWith("/socket-first-person@1");
     const view = this.cameraViewSolver.solve({
       algorithmRef: profile.algorithmRef,
@@ -1218,11 +1154,16 @@ export class CameraDirectorV1 {
       viewDistanceOffsetMeters: this.viewDistanceOffsetMeters,
       shoulderSide: this.shoulderSide,
     });
-    const resolvedTarget = new Vector3(
-      this.smoothedTarget.x + (view.desiredTarget.x - this.smoothedTarget.x) * yawAlpha,
-      this.smoothedTarget.y + (view.desiredTarget.y - this.smoothedTarget.y) * pitchAlpha,
-      this.smoothedTarget.z + (view.desiredTarget.z - this.smoothedTarget.z) * yawAlpha,
-    );
+    const resolvedTarget = targetIdentityChanged
+      ? view.desiredTarget.clone()
+      : new Vector3(
+          this.smoothedTarget.x +
+            (view.desiredTarget.x - this.smoothedTarget.x) * yawAlpha,
+          this.smoothedTarget.y +
+            (view.desiredTarget.y - this.smoothedTarget.y) * pitchAlpha,
+          this.smoothedTarget.z +
+            (view.desiredTarget.z - this.smoothedTarget.z) * yawAlpha,
+        );
     const targetDelta = resolvedTarget.subtract(view.desiredTarget);
     const idealPosition = firstPerson
       ? view.desiredPosition
@@ -1283,6 +1224,7 @@ export class CameraDirectorV1 {
       proposedFov = this.transitionStartFovRadians +
         (nextFov - this.transitionStartFovRadians) * transitionAlpha;
     }
+    if (targetIdentityChanged) proposedTarget = resolvedTarget;
     if (!firstPerson && requestedArmLengthMeters !== undefined &&
       profileTransitionProgressRatio >= 1) {
       const proposedArm = proposedPosition.subtract(proposedTarget);
@@ -1314,7 +1256,14 @@ export class CameraDirectorV1 {
           excludedEntityIds: [sample.entityId],
           desiredTarget: proposedTarget,
           desiredPosition: proposedPosition,
-          currentCommittedPosition: this.camera.position,
+          // Before the Director has published a pose, Babylon's FreeCamera is
+          // still at its construction origin. Treat the proposed first pose as
+          // the emergency candidate and let SpringArm's second geometry query
+          // validate it; using the unrelated world origin can make an otherwise
+          // valid runtime fail closed when the LookAt probe starts overlapping.
+          currentCommittedPosition: this.initialized
+            ? this.camera.position
+            : proposedPosition,
           parameters,
           deltaSeconds,
           cameraGeometryQuery: this.cameraGeometryQuery,
@@ -1340,8 +1289,10 @@ export class CameraDirectorV1 {
     const collisionComposition = collisionCompositionV1({
       sample,
       desiredTarget: finalTarget,
+      requestedArmLengthMeters,
       effectiveArmLengthMeters,
       isCollisionRetracted,
+      targetHeightMeters: parameters.targetHeightMeters,
       baseFovRadians: proposedFov,
     });
     this.camera.position.copyFrom(finalPosition);
@@ -1351,6 +1302,7 @@ export class CameraDirectorV1 {
     this.camera.setTarget(collisionComposition.target);
     this.initialized = true;
     this.controlInitialized = true;
+    this.activeTargetEntityId = sample.entityId;
     const isTargetSocketFallback =
       profile.preferredSocketIds.length > 0 && selectedTargetSocketId === undefined;
     this.latestTelemetry = {
@@ -1457,6 +1409,7 @@ export class CameraDirectorV1 {
     this.lastBaseTarget = undefined;
     this.latestCommittedTick = undefined;
     this.latestCommittedContextIdentity = undefined;
+    this.activeTargetEntityId = undefined;
     this.latestUpdateFailed = false;
     this.smoothedFovRadians = Math.PI / 3;
     this.activeParameters = undefined;

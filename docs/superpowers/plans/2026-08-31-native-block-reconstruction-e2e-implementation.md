@@ -1461,6 +1461,11 @@ seven-dimension evaluation
 run receipt + cleanup outcomes
 ```
 
+It has one implementation and two explicit candidate modes: Run mode verifies the immutable
+terminal Attempt selected by `run-receipt.json`; Final mode verifies the Case-root `final/` bytes
+and `launch.json` against that same terminal Attempt and Receipt. These are verification phases,
+not two artifact layouts or compatibility parsers. `runs/<run-id>/final` must be rejected.
+
 It launches the final Package through `worldkit native run`, waits for the admitted BNA Runtime session to become ready, resets, verifies ground medium/support, applies fixed W/A/S/D and Jump sequences, proves gate/side blocker limits, proves the central route reaches the upper platform and at least one T arm, resets again, and disposes. It labels this scripted traversal, never Route/Nav/`goTo` or a Native Viewer contract.
 
 - [ ] **Step 2: Run RED verifier test**
@@ -1495,7 +1500,17 @@ Expected: all identity joins pass; final evaluation passes every required dimens
 
 - [ ] **Step 5: Promote final artifacts atomically**
 
-Copy the verified terminal Package/Capture/Evaluation into a sibling `.final-staging`, verify again, then rename to `artifacts/scenes/cloud-temple-t-gate-native-block/final`. Do not use symlinks or mutate Attempt artifacts. Write a small canonical `launch.json` containing Case ID, Run Receipt hash, final Package relative path/ref/root, Capture Receipt relative path/hash, and the stable launch command.
+Copy the verified terminal Package/Capture/Evaluation into the Case-root sibling
+`artifacts/scenes/cloud-temple-t-gate-native-block/.final-staging`, write the canonical
+`launch.json`, run the same verifier in Final mode against those copied bytes, then atomically
+rename the staging directory to `artifacts/scenes/cloud-temple-t-gate-native-block/final`.
+Reject an existing/symlinked staging path and never mutate Attempt artifacts. `launch.json` uses
+the closed fields `kind: "native-block-reconstruction-launch"`, `schemaVersion: 1`, `caseId`,
+`runReceiptRef`, `runReceiptHash`, `worldPackageRelativePath`, `worldPackageRef`,
+`worldPackageRootHash`, `captureReceiptRelativePath`, `captureReceiptHash`,
+`evaluationRelativePath`, `evaluationHash`, and `launchCommand`. Every relative path is
+Case-root-relative, remains under `final`, and is joined to
+the copied bytes. Do not write or accept `runs/<run-id>/final`.
 
 - [ ] **Step 6: Manually launch and inspect the final world**
 

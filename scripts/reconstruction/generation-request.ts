@@ -17,7 +17,7 @@ import {
   parseGameplayBootstrapV1,
 } from "@whitebox-world/gameplay-contracts";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
-import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
+import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, worldReconstructionEvidenceProfileClosureMatchesV1, type WorldReconstructionCaseV1, type WorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeSceneBootstrapV1,
@@ -403,6 +403,9 @@ export async function prepareNativeBlockGenerationTaskV1(
   const reconstructionCase = parseWorldReconstructionCaseV1(input.case);
   const profile = parseWorldReconstructionEvaluationProfileV1(input.profile);
   if (reconstructionCase.evaluationProfileRef !== "evaluation-profile.json" || reconstructionCase.evaluationProfileHash !== hashWorldReconstructionEvaluationProfileV1(profile)) throw new TypeError("Case/Profile identity closure failed.");
+  if (!worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, profile)) {
+    throw new TypeError("Case/Evaluation Profile required Evidence Profile closure failed.");
+  }
   if (reconstructionCase.referenceInputs.some((reference) => reference.mediaType === "application/json")) throw new TypeError("Native generation references must be images.");
   if (input.attemptIndex !== 0 && input.attemptIndex !== 1) throw new TypeError("Native generation supports only initial attempt 0 or repair attempt 1.");
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.runId)) {

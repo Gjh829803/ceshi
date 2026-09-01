@@ -23,10 +23,10 @@ import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index
 
 import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import {
   CameraDirectorV1,
-  committedCameraContextFromMotionKernelV1,
-  legacyViewTargetToCommittedCameraContextV2ForTask6,
+  committedCameraContextFromViewTargetV2,
 } from "./camera-director";
 import { SpringArmComponentV1 } from "./spring-arm-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
@@ -58,7 +58,6 @@ const gBotAssetBytes = new Uint8Array(
 
 const ORBIT_REF = "worldkit://camera-profile/orbit.medium@1";
 const FOLLOW_REF = "worldkit://camera-profile/follow.medium@1";
-const CHASE_REF = "worldkit://camera-profile/chase.surface-fast@1";
 
 function cameraGeometryQuery(
   query: CameraGeometryQueryPortV2["query"] = () => undefined,
@@ -81,6 +80,17 @@ function setCameraProfile(runtime: BabylonWorldRuntime, cameraRigProfileRef: str
     mode: "camera-rig-profile",
     cameraRigProfileRef,
   });
+}
+
+async function bindAndPublishInitialCamera(
+  runtime: BabylonWorldRuntime,
+  controlledEntityId: string,
+): Promise<void> {
+  await bindRuntimeTestPossession(runtime, controlledEntityId);
+  runtime.publishInitialBoundCameraView(
+    runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]().readViewProjection()
+      .viewStateRevision,
+  );
 }
 
 function createFlatTerrainCapabilitySpec() {
@@ -117,7 +127,6 @@ async function createCameraPreviewChannelRuntime(options?: {
   readonly invalidCombinedCameraModifiers?: boolean;
   readonly omitFirstPersonSocket?: boolean;
   readonly previewCompositionModifier?: "reachable" | "unreferenced";
-  readonly waterOnlyCameraRule?: boolean;
 }) {
   const subjectDefinitionRef = "worldkit://subject-definition/humanoid.g-bot@2";
   const spec = createFlatTerrainCapabilitySpec();
@@ -168,18 +177,6 @@ async function createCameraPreviewChannelRuntime(options?: {
       throw new Error("Camera preview fixture first-person profile is missing.");
     }
     firstPersonProfile.preferredSocketIds = ["missing-first-person-socket"];
-  }
-  if (options?.waterOnlyCameraRule === true) {
-    const cameraContext = controlledSubject.capabilityAssembly.cameraContext;
-    cameraContext.rules = [
-      ...cameraContext.rules,
-      {
-        id: "water-only-p1-5",
-        priority: 1000,
-        when: { movementMediums: ["water"] },
-        cameraModifierRefs: ["worldkit://camera-modifier/mounted-framing@1"],
-      },
-    ];
   }
   if (options?.invalidCombinedCameraModifiers === true) {
     const cameraContext = controlledSubject.capabilityAssembly.cameraContext;
@@ -279,7 +276,7 @@ async function createCameraPreviewChannelRuntime(options?: {
         lockstepMaxSteps: 4,
       }),
   });
-  await bindRuntimeTestPossession(runtime, controlledEntityId);
+  await bindAndPublishInitialCamera(runtime, controlledEntityId);
   return runtime;
 }
 
@@ -480,18 +477,13 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         },
       })).toThrow(/SUBJECT_PRESET_INVALID_CAMERA_TUNING/);
       const afterPreview = runtime.snapshot();
-
       expect(afterPreview.subjectStatesByEntityId).toEqual(
         beforePreview.subjectStatesByEntityId,
       );
-      expect(afterPreview.camera.selectedTargetSocketId).toBe("FirstPersonView");
-      expect(afterPreview.camera.targetSocketPositionMetersXYZ).toEqual([
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(Number),
-      ]);
-      expect(afterPreview.camera.isTargetSocketFallback).toBe(false);
-      expect(afterPreview.camera.selectionDecision?.diagnostics).not.toContainEqual(
+      expect(afterPreview.camera.selectedTargetSocketId).toBeUndefined();
+      expect(afterPreview.camera.targetSocketPositionMetersXYZ).toBeUndefined();
+      expect(afterPreview.camera.isTargetSocketFallback).toBe(true);
+      expect(afterPreview.camera.selectionDecision?.diagnostics).toContainEqual(
         expect.objectContaining({ code: "CAMERA_REQUIRED_SOCKET_MISSING" }),
       );
       expect(afterPreview.camera).toHaveProperty("finalFovDegrees");
@@ -597,9 +589,11 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       if (!(renderedCamera instanceof FreeCamera)) {
         throw new Error("Expected the runtime FreeCamera.");
       }
+      renderedCamera.getViewMatrix(true);
       const renderedTargetHeightMeters = renderedCamera.getTarget().y;
       expect(renderedTargetHeightMeters).toBeGreaterThan(1.05);
-      expect(renderedTargetHeightMeters).toBeLessThan(desiredTarget[1] - 0.02);
+      expect(desiredTarget[1]).toBeLessThan(1.7);
+      expect(renderedTargetHeightMeters).toBeLessThan(desiredTarget[1] - 0.05);
       expect(distanceMeters(actualPosition, desiredTarget)).toBeLessThanOrEqual(
         safeArmLengthMeters + 0.000001,
       );
@@ -702,18 +696,18 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
-  it("keeps an obstructed existing chase pose to orbit transition safe without snapping its target or FOV", async () => {
+  it("keeps an obstructed existing follow pose to orbit transition safe without snapping its target or FOV", async () => {
     const runtime = await createCameraPreviewChannelRuntime({
       blockCameraArm: true,
       cameraBlockerZMeters: 31,
     });
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
-      setCameraProfile(runtime, CHASE_REF);
+      setCameraProfile(runtime, FOLLOW_REF);
       await runtime.runFixedInput({ actions: [], ticks: 120 });
       runtime.applyCameraPreview({
         tuningByProfileRef: {
-          [CHASE_REF]: { targetHeightMeters: 1, baseFovDegrees: 70 },
+          [FOLLOW_REF]: { targetHeightMeters: 1, baseFovDegrees: 70 },
           [ORBIT_REF]: {
             distanceMeters: 6,
             targetHeightMeters: 3,
@@ -895,7 +889,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   }, 15_000);
 
-  it("does not apply mounted framing when the Runtime publishes relationshipRole none", async () => {
+  it("does not apply mounted framing without a committed mountedOn Rider context", async () => {
     const runtime = await createCameraPreviewChannelRuntime();
     try {
       await runtime.runFixedInput({ actions: [], ticks: 4 });
@@ -906,25 +900,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(snapshot.camera.activeCameraModifierRefs).not.toContain(
         "worldkit://camera-modifier/mounted-framing@1",
       );
-    } finally {
-      await runtime.dispose();
-    }
-  }, 15_000);
-
-  it("keeps water-only execution Camera rules unavailable at the frozen P1.5 boundary", async () => {
-    const runtime = await createCameraPreviewChannelRuntime({
-      waterOnlyCameraRule: true,
-    });
-    try {
-      const snapshot = await runtime.runFixedInput({ actions: [], ticks: 4 });
-      const decision = snapshot.camera.selectionDecision;
-      if (decision === undefined) {
-        throw new Error("Expected Camera selection telemetry.");
-      }
-
-      expect(decision.explain.cameraContextRules.map(
-        (rule) => rule.cameraContextRuleId,
-      )).not.toContain("water-only-p1-5");
     } finally {
       await runtime.dispose();
     }
@@ -985,7 +960,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         renderCadenceHz: 30 | 60 | 120,
       ) => {
         runtime.reset();
-        await bindRuntimeTestPossession(runtime, "player");
+        await bindAndPublishInitialCamera(runtime, "player");
         setCameraProfile(runtime, ORBIT_REF);
         if (previewEnabled) {
           runtime.applyCameraPreview({
@@ -1065,14 +1040,14 @@ describe("camera preview channel stays out of Gameplay truth", () => {
 
       // Same fixed input with and without preview keeps Subject determinism.
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, ORBIT_REF);
       const withoutPreview = await runtime.runFixedInput({
         actions: ["move-forward"],
         ticks: 30,
       });
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -1093,7 +1068,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       const reset = runtime.reset();
       expect(reset.possessionTarget).toEqual({ mode: "unbound" });
       expect(runtime.getCameraPreviewState().tuningByProfileRef).toEqual({});
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       const afterRebindTick = await runtime.runFixedInput({ actions: [], ticks: 1 });
       expect(afterRebindTick.camera.activeCameraProfileRef).toBe(
         automaticProfileRef,
@@ -1122,7 +1097,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       });
 
       runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
+      await bindAndPublishInitialCamera(runtime, "player");
       setCameraProfile(runtime, ORBIT_REF);
       runtime.applyCameraPreview({
         tuningByProfileRef: {
@@ -1231,7 +1206,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       });
       expect(() => runtime.prepareCameraViewPreference({
         mode: "camera-rig-profile",
-        cameraRigProfileRef: CHASE_REF,
+        cameraRigProfileRef: FOLLOW_REF,
       })).toThrow("forced update failure after preference mutation");
       expect(runtime.snapshot().camera).toEqual(before);
       updateSpy.mockRestore();
@@ -1385,15 +1360,17 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       velocityMetersPerSecondXYZ: [0, 0, 0],
       approximateRadiusMeters: 0.5,
       socketPositionsMetersXYZById: {},
-      activeMotionKernelRef: "worldkit://motion-kernel/test@1",
-      motionTags: [],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     try {
-      const context = legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 7);
+      const context = committedCameraContextFromViewTargetV2(
+        sample,
+        7,
+        "idle",
+        0,
+      );
       director.update(
         subject.capabilityAssembly.cameraContext,
         sample,
@@ -1405,7 +1382,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       director.adjustView({ yawDeltaRadians: 0.5 });
       director.update(
         subject.capabilityAssembly.cameraContext,
-        // This legacy placeholder is not a solver authority input.
+        // This provider shell is not a solver authority input.
         { ...sample, approximateRadiusMeters: 99 },
         1 / 60,
         structuredClone(context),
@@ -1432,7 +1409,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         subject.capabilityAssembly.cameraContext,
         sample,
         1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 6),
+        committedCameraContextFromViewTargetV2(sample, 6, "idle", 0),
         springArm,
       )).toThrow("3C_CAMERA_CONTEXT_UNCOMMITTED");
       expect(queryCount).toBe(1);
@@ -1485,10 +1462,8 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       velocityMetersPerSecondXYZ: [0, 0, 0],
       approximateRadiusMeters: 0.5,
       socketPositionsMetersXYZById: {},
-      motionTags: [],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     try {
@@ -1496,7 +1471,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         subject.capabilityAssembly.cameraContext,
         initialSample,
         1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(initialSample, 1),
+        committedCameraContextFromViewTargetV2(initialSample, 1, "idle", 0),
         springArm,
       );
       const movedSample = {
@@ -1507,7 +1482,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         subject.capabilityAssembly.cameraContext,
         movedSample,
         1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(movedSample, 2),
+        committedCameraContextFromViewTargetV2(movedSample, 2, "idle", 0),
         springArm,
       );
 
@@ -1577,12 +1552,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       socketPositionsMetersXYZById: {
         FootAlignment: [0, 0, 0],
         FirstPersonView: [0, 1.8, 0],
-        ThirdPersonTarget: [0, 1.25, 0],
+        ThirdPersonTarget: [0, 1.8, 0],
       },
-      motionTags: [],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     try {
@@ -1597,7 +1570,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         subject.capabilityAssembly.cameraContext,
         sample,
         1 / 60,
-        committedCameraContextFromMotionKernelV1(sample, 1, "idle", 0),
+        committedCameraContextFromViewTargetV2(sample, 1, "idle", 0),
         springArm,
       );
 
@@ -1606,15 +1579,15 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       if (desiredTarget === undefined) throw new Error("Expected desired target telemetry.");
       camera.getViewMatrix(true);
       const renderedDirection = camera.getForwardRay().direction;
-      const desiredDirection = new Vector3(...desiredTarget)
+      const chestDirection = new Vector3(0, 1.25, 0)
         .subtract(camera.position)
         .normalize();
       expect(snapshot.isCollisionRetracted).toBe(true);
       expect(snapshot.effectiveArmLengthMeters! / snapshot.requestedArmLengthMeters!)
         .toBeLessThan(0.3);
-      expect(desiredTarget[1]).toBeCloseTo(1.25, 6);
-      expect(camera.getTarget().y).toBeCloseTo(1.26, 2);
-      expect(Math.abs(renderedDirection.y - desiredDirection.y)).toBeLessThan(0.02);
+      expect(desiredTarget[1]).toBeCloseTo(1.8, 6);
+      expect(camera.getTarget().y).toBeCloseTo(1.25, 2);
+      expect(Math.abs(renderedDirection.y - chestDirection.y)).toBeLessThan(0.02);
       expect(snapshot.finalFovDegrees).toBeGreaterThan(58);
     } finally {
       director.dispose();
@@ -1622,70 +1595,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   });
 
-  it("publishes the legacy seam as explicitly unavailable with neutral semantic environment", () => {
-    const executionPlan = compileRuntimeTestScenePlanV1(
-      createFlatTerrainCapabilitySpec(),
-      { subjectResourceRegistry: builtInSubjectResourceRegistry },
-    );
-    const subject = runtimeSubject(executionPlan);
-    const sample: ViewTargetSampleV1 = {
-      controlledEntityId: subject.entityId,
-      entityId: subject.entityId,
-      targetPositionMetersXYZ: [0, 1, 0],
-      forwardXYZ: [0, 0, -1],
-      upXYZ: [0, 1, 0],
-      velocityMetersPerSecondXYZ: [4, 10, 0],
-      approximateRadiusMeters: 0.5,
-      socketPositionsMetersXYZById: { head: [0, 2, 0] },
-      activeMotionKernelRef: "worldkit://motion-kernel/legacy@1",
-      motionTags: ["sprint"],
-      movementMedium: "air",
-      relationshipContexts: [],
-      relationshipRole: "rider",
-      cameraContextTags: ["legacy-context", "sprint"],
-    };
-
-    const context = legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 17);
-    const movingGroundContext = legacyViewTargetToCommittedCameraContextV2ForTask6({
-      ...sample,
-      velocityMetersPerSecondXYZ: [8, 0, 0],
-      movementMedium: "ground",
-      motionTags: ["run", "sprint"],
-    }, 18);
-
-    expect(context.locomotion).toEqual({
-      schemaVersion: 2,
-      status: "suspended",
-      suspendedByRelationshipId: "3c-task6-authority-unavailable",
-      committedTick: 17,
-      transitionSequence: 0,
-    });
-    expect(context.semanticAuthorityStatus).toBe("unavailable");
-    expect(context.actionSummary).toEqual({ status: "unavailable" });
-    expect(context.environment).toEqual({
-      relationshipRole: "none",
-      relationshipContexts: [],
-      socketPositionsMetersXYZById: {},
-      cameraContextTags: [],
-    });
-    expect(movingGroundContext.locomotion).toEqual({
-      schemaVersion: 2,
-      status: "suspended",
-      suspendedByRelationshipId: "3c-task6-authority-unavailable",
-      committedTick: 18,
-      transitionSequence: 0,
-    });
-    expect(movingGroundContext.semanticAuthorityStatus).toBe("unavailable");
-    expect(movingGroundContext.actionSummary).toEqual({ status: "unavailable" });
-    expect(movingGroundContext.environment).toEqual({
-      relationshipRole: "none",
-      relationshipContexts: [],
-      socketPositionsMetersXYZById: {},
-      cameraContextTags: [],
-    });
-  });
-
-  it("maps leftover free-ground motion tags to grounded mobility so auto view selects orbit.medium", () => {
+  it("selects orbit.medium from committed grounded Camera Context V2", () => {
     const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),
       { subjectResourceRegistry: builtInSubjectResourceRegistry },
@@ -1700,10 +1610,8 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       velocityMetersPerSecondXYZ: [0.4, 0, 0],
       approximateRadiusMeters: 0.5,
       socketPositionsMetersXYZById: {},
-      motionTags: ["free-ground"],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     const groundedContext = parseCameraContextSampleV2({
@@ -1737,7 +1645,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         isInterruptible: true,
       },
       environment: {
-        relationshipRole: "none",
         relationshipContexts: [],
         socketPositionsMetersXYZById: {},
         cameraContextTags: [],
@@ -1770,7 +1677,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   });
 
-  it("publishes Motion Kernel locomotion as available Camera Context V2", () => {
+  it("publishes non-Golden committed locomotion as available Camera Context V2", () => {
     const sample: ViewTargetSampleV1 = {
       controlledEntityId: "player",
       entityId: "player",
@@ -1780,14 +1687,12 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       velocityMetersPerSecondXYZ: [1.2, 0, 0],
       approximateRadiusMeters: 0.35,
       socketPositionsMetersXYZById: {},
-      motionTags: ["free-ground", "ground", "jump"],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: ["forward-intent"],
     };
 
-    const grounded = committedCameraContextFromMotionKernelV1(
+    const grounded = committedCameraContextFromViewTargetV2(
       sample,
       9,
       "walk",
@@ -1803,7 +1708,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     expect(grounded.environment.cameraContextTags).toEqual(["forward-intent"]);
 
-    const airborne = committedCameraContextFromMotionKernelV1(
+    const airborne = committedCameraContextFromViewTargetV2(
       {
         ...sample,
         movementMedium: "air",
@@ -1824,7 +1729,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       committedTick: 10,
     });
 
-    const signedZero = committedCameraContextFromMotionKernelV1(
+    const signedZero = committedCameraContextFromViewTargetV2(
       {
         ...sample,
         targetPositionMetersXYZ: [0, 0.56, -0],
@@ -1846,7 +1751,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
   });
 
-  it("publishes Motion Kernel mounted Gameplay relationship ids as Camera Context V2", () => {
+  it("publishes non-Golden mounted Gameplay relationship ids as Camera Context V2", () => {
     const relationshipId = `mounted-on:sha256:${"ef".repeat(32)}`;
     const sample: ViewTargetSampleV1 = {
       controlledEntityId: "player",
@@ -1857,9 +1762,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       velocityMetersPerSecondXYZ: [0, 0, -1.5],
       approximateRadiusMeters: 0.4,
       socketPositionsMetersXYZById: {},
-      motionTags: ["free-ground"],
       movementMedium: "ground",
-      relationshipRole: "rider",
       relationshipContexts: [{
         id: relationshipId,
         type: "mountedOn",
@@ -1870,7 +1773,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       cameraContextTags: ["forward-intent"],
     };
 
-    const context = committedCameraContextFromMotionKernelV1(
+    const context = committedCameraContextFromViewTargetV2(
       sample,
       12,
       "idle",
@@ -1880,7 +1783,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     expect(context.controlledEntityId).toBe("player");
     expect(context.targetEntityId).toBe("skateboard");
     expect(context.environment).toMatchObject({
-      relationshipRole: "rider",
       relationshipContexts: [{
         id: relationshipId,
         type: "mountedOn",
@@ -1921,9 +1823,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       velocityMetersPerSecondXYZ: [0, 0, 0],
       approximateRadiusMeters: 0.4,
       socketPositionsMetersXYZById: {},
-      motionTags: [],
       movementMedium: "ground",
-      relationshipRole: "rider",
       relationshipContexts: [{
         id: relationshipId,
         type: "mountedOn",
@@ -1939,7 +1839,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         subject.capabilityAssembly.cameraContext,
         sample,
         1 / 60,
-        committedCameraContextFromMotionKernelV1(sample, 1, "idle", 0),
+        committedCameraContextFromViewTargetV2(sample, 1, "idle", 0),
         springArm,
       );
 
@@ -1958,10 +1858,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     );
     const subject = runtimeSubject(executionPlan);
     const cameraContext = subject.capabilityAssembly.cameraContext;
-    const alternateProfileRef = cameraContext.rules
-      .flatMap((rule) => rule.cameraRigProfileRef === undefined ? [] : [rule.cameraRigProfileRef])
-      .find((ref) => ref !== cameraContext.defaultCameraRigProfileRef);
-    if (alternateProfileRef === undefined) throw new Error("Alternate Camera Profile missing.");
+    const alternateProfileRef = cameraContext.defaultCameraRigProfileRef;
     const engine = new NullEngine();
     const scene = new Scene(engine);
     const camera = new FreeCamera("camera.atomic", Vector3.Zero(), scene);
@@ -1981,11 +1878,8 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       velocityMetersPerSecondXYZ: [0, 0, 0],
       approximateRadiusMeters: 0.5,
       socketPositionsMetersXYZById: {},
-      activeMotionKernelRef: "worldkit://motion-kernel/test@1",
-      motionTags: [],
       movementMedium: "ground",
       relationshipContexts: [],
-      relationshipRole: "none",
       cameraContextTags: [],
     };
     const poseBytes = () => JSON.stringify({
@@ -2000,7 +1894,7 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     });
     try {
       director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 1), springArm);
+        committedCameraContextFromViewTargetV2(sample, 1, "idle", 0), springArm);
       expect(director.setViewPreference(cameraContext, {
         mode: "camera-rig-profile",
         cameraRigProfileRef: alternateProfileRef,
@@ -2009,17 +1903,17 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       const beforePose = poseBytes();
       failQuery = true;
       expect(() => director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 2), springArm))
+        committedCameraContextFromViewTargetV2(sample, 2, "idle", 0), springArm))
         .toThrow("3C_CAMERA_QUERY_UNAVAILABLE");
       expect(JSON.stringify(director.snapshot())).toBe(beforeSnapshot);
       expect(poseBytes()).toBe(beforePose);
       expect(() => director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 2), springArm))
+        committedCameraContextFromViewTargetV2(sample, 2, "idle", 0), springArm))
         .toThrow("3C_CAMERA_QUERY_UNAVAILABLE");
 
       failQuery = false;
       director.update(cameraContext, sample, 1 / 60,
-        legacyViewTargetToCommittedCameraContextV2ForTask6(sample, 3), springArm);
+        committedCameraContextFromViewTargetV2(sample, 3, "idle", 0), springArm);
       expect(director.snapshot()).toMatchObject({
         activeCameraProfileRef: alternateProfileRef,
         profileTransitionProgressRatio: 0,

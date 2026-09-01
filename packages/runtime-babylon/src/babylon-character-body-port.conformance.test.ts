@@ -119,6 +119,9 @@ function sceneInventory(scene: Scene): Readonly<{ nodes: number; bodies: number 
 interface HavokQueryApiProbe {
   HP_QueryCollector_Create(maxHits: number): readonly [number, unknown];
   HP_QueryCollector_Release(handle: unknown): unknown;
+  HP_Body_GetQTransform(
+    bodyId: unknown,
+  ): readonly [number, readonly [readonly number[], readonly number[]]];
 }
 
 function havokProbe(scene: Scene): Readonly<{
@@ -128,6 +131,17 @@ function havokProbe(scene: Scene): Readonly<{
   const plugin = scene.getPhysicsEngine()!.getPhysicsPlugin() as unknown as
     Record<string, (...args: never[]) => unknown> & { _hknp: HavokQueryApiProbe };
   return { plugin, query: plugin._hknp };
+}
+
+function nativeControllerPosition(
+  scene: Scene,
+  controller: GroundAwarePhysicsCharacterController,
+): readonly number[] {
+  const body = (controller as unknown as { readonly _body: PhysicsBody })._body;
+  const bodyId = (body as unknown as {
+    readonly _pluginData: { readonly hpBodyId: unknown };
+  })._pluginData.hpBodyId;
+  return havokProbe(scene).query.HP_Body_GetQTransform(bodyId)[1][0];
 }
 
 function constructionSurfaces(scene: Scene) {
@@ -257,6 +271,131 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
     });
+  }, 30_000);
+
+  it("retains canonical collider identity from real Havok contact metadata", async () => {
+    const { scene } = await realScene();
+    addStaticBox(
+      scene,
+      "canonical-support",
+      new Vector3(0, -0.1, 0),
+      new Vector3(10, 0.2, 10),
+      {
+        worldkitEntityId: "canonical-ground",
+        colliderSubshapeId: "collider-subshape:canonical-ground",
+        worldkitLogicalSubshapeId: "primary",
+        worldkitTraversalSurfaceId: "traversal-surface:canonical-ground",
+        worldkitSurfaceEntityId: "canonical-ground",
+        worldkitTraversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
+      },
+    );
+    const controller = new GroundAwarePhysicsCharacterController(
+      new Vector3(0, 0.95, 0),
+      { capsuleHeight: 1.8, capsuleRadius: 0.35 },
+      scene,
+    );
+    controller.keepDistance = 0.05;
+    controller.keepContactTolerance = 0.1;
+    disposals.push(() => controller.dispose());
+
+    controller.refreshCurrentManifold();
+    const contact = controller.readCurrentContacts().find((candidate) =>
+      candidate.motionType === "static" && candidate.normalXYZ[1] > 0.9
+    );
+
+    expect(contact).toMatchObject({
+      colliderId: "canonical-ground",
+      colliderSubshapeId: "collider-subshape:canonical-ground",
+      logicalSubshapeId: "primary",
+      traversalSurfaceId: "traversal-surface:canonical-ground",
+      surfaceEntityId: "canonical-ground",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    });
+  }, 30_000);
+
+  it("removes a teleported animated Body from its previous collision position before a peer Tick", async () => {
+    const { scene } = await realScene();
+    addStaticBox(
+      scene,
+      "floor",
+      new Vector3(0, -0.1, 0),
+      new Vector3(20, 0.2, 20),
+    );
+    const mountedPosition = [4, 0.95, 5] as const;
+    const rider = createBabylonCharacterBodyPortV1({
+      ...realPortOptions(scene),
+      resetState: {
+        positionMetersXYZ: mountedPosition,
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+    });
+    disposals.push(() => rider.dispose());
+    rider.setCollisionFilterMasks(0, 0);
+    const mount = createBabylonCharacterBodyPortV1({
+      ...realPortOptions(scene),
+      resetState: {
+        positionMetersXYZ: mountedPosition,
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+    });
+    disposals.push(() => mount.dispose());
+
+    rider.setCollisionFilterMasks(-1, -1);
+    rider.resetToState({
+      positionMetersXYZ: [0, 0.95, 0],
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+    });
+
+    const token = createMovementTickTokenV1();
+    expect(mount.beginTick({ token, tick: 1 }).support.mode).toBe("supported");
+    const resolution = mount.resolve({
+      token,
+      proposal: {
+        schemaVersion: 1,
+        token,
+        tick: 1,
+        translationDeltaMetersXYZ: [0, 0, 0],
+        proposedLinearVelocityMetersPerSecondXYZ: [0, 0, 0],
+        proposedFacingYawRadians: 0,
+        layeredMoves: [],
+      },
+    });
+
+    expect(resolution.appliedTranslationMetersXYZ).toEqual([0, 0, 0]);
+  }, 30_000);
+
+  it("restores the animated Body native position with its teleport transaction snapshot", async () => {
+    const { scene } = await realScene();
+    const initialPosition = new Vector3(0, 0.95, 0);
+    const controller = new GroundAwarePhysicsCharacterController(
+      initialPosition,
+      { capsuleHeight: 1.8, capsuleRadius: 0.35 },
+      scene,
+    );
+    disposals.push(() => controller.dispose());
+    const snapshot = controller.captureTransactionalState();
+    const attemptedPosition = new Vector3(4.1, 0.95, 5);
+
+    controller.setPosition(attemptedPosition);
+    controller.synchronizeAfterTeleport();
+    for (const [axis, value] of nativeControllerPosition(
+      scene,
+      controller,
+    ).entries()) {
+      expect(value).toBeCloseTo(attemptedPosition.asArray()[axis]!, 5);
+    }
+
+    controller.restoreTransactionalState(snapshot);
+
+    expect(controller.getPosition().asArray()).toEqual(initialPosition.asArray());
+    for (const [axis, value] of nativeControllerPosition(
+      scene,
+      controller,
+    ).entries()) {
+      expect(value).toBeCloseTo(initialPosition.asArray()[axis]!, 5);
+    }
   }, 30_000);
 
   it.each([1, 2])(

@@ -73,9 +73,17 @@ export interface GoldenHumanoidProjectionPortV1 {
   ): GoldenHumanoidPreparedProjectionV1;
 }
 
+export interface GoldenHumanoidCameraContextAuthorityV1 {
+  readonly controlledEntityId: string;
+  readonly targetEntityId: string;
+  readonly relationshipContexts:
+    CameraContextSampleV2["environment"]["relationshipContexts"];
+}
+
 export interface GoldenHumanoidTickInputV1 {
   readonly command: CharacterMovementCommandV1;
   readonly activeActionState?: GameplayActionStateV1;
+  readonly cameraContextAuthority?: GoldenHumanoidCameraContextAuthorityV1;
 }
 
 export interface GoldenHumanoidTickResultV1 {
@@ -97,17 +105,21 @@ export interface GoldenHumanoid3CVNextTransactionOptionsV1 {
   readonly movementRuntime: CharacterMovementRuntimeV1;
   readonly bodyPort: GoldenCharacterBodyTransactionPortV1;
   readonly actionPresentationRegistry: ActionPresentationRegistryV1;
-  readonly cameraContextEnvironment?: CameraContextSampleV2["environment"];
-  readonly targetEntityId?: string;
   readonly projectionPorts?: readonly GoldenHumanoidProjectionPortV1[];
   readonly onStage?: (stage: GoldenHumanoidTickStageV1) => void;
 }
 
 function availableCameraContext(
   options: GoldenHumanoid3CVNextTransactionOptionsV1,
+  authority: GoldenHumanoidCameraContextAuthorityV1 | undefined,
   commit: MovementCommitV1,
   action: GameplayActionStateV1 | undefined,
 ): CameraContextSampleV2 {
+  const resolvedAuthority = authority ?? {
+    controlledEntityId: options.subjectEntityId,
+    targetEntityId: options.subjectEntityId,
+    relationshipContexts: [],
+  };
   const actionBinding = action === undefined
     ? undefined
     : options.actionPresentationRegistry.resolveAction(
@@ -118,8 +130,8 @@ function availableCameraContext(
     schemaVersion: 2,
     semanticAuthorityStatus: "available",
     committedTick: commit.tick,
-    controlledEntityId: options.subjectEntityId,
-    targetEntityId: options.targetEntityId ?? options.subjectEntityId,
+    controlledEntityId: resolvedAuthority.controlledEntityId,
+    targetEntityId: resolvedAuthority.targetEntityId,
     subjectPose: {
       positionMetersXYZ: commit.positionMetersXYZ,
       facingYawRadians: commit.facingYawRadians,
@@ -130,9 +142,8 @@ function availableCameraContext(
       activeActionRefs: action === undefined ? [] : [action.semanticActionRef],
       isInterruptible: actionBinding?.isInterruptible ?? true,
     },
-    environment: options.cameraContextEnvironment ?? {
-      relationshipRole: "none",
-      relationshipContexts: [],
+    environment: {
+      relationshipContexts: resolvedAuthority.relationshipContexts,
       socketPositionsMetersXYZById: {},
       cameraContextTags: [],
     },
@@ -327,6 +338,7 @@ export class GoldenHumanoid3CVNextTransactionV1 {
         presentation,
         cameraContext: availableCameraContext(
           this.options,
+          input.cameraContextAuthority,
           commit,
           committedActionState,
         ),

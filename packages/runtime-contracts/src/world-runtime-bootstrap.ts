@@ -17,11 +17,6 @@ import {
   type HumanoidAnimationSemanticFamilyV1,
   type SubjectBodyTopologyV2,
 } from "@whitebox-world/subject-contracts";
-import type {
-  GaitV2,
-  MobilityModeV2,
-  VerticalPhaseV2,
-} from "@whitebox-world/gameplay-contracts";
 import {
   createActionPresentationRegistryV1,
   type ActionPresentationBindingV1,
@@ -30,6 +25,10 @@ import {
   parseJumpVariantPolicyV1,
   type LockedRootMotionSourceV1,
 } from "@whitebox-world/character-movement";
+import {
+  parseCameraContextRuleV2,
+  type CameraContextRuleV2,
+} from "@whitebox-world/camera";
 import { isNil } from "lodash-es";
 
 import {
@@ -245,29 +244,6 @@ export interface RuntimeCameraModifierProfileV1 {
   readonly recenterModeOverride?: RuntimeCameraRigProfileV1["recenterMode"];
 }
 
-export interface RuntimeCameraContextRuleV1 {
-  readonly id: string;
-  readonly priority: number;
-  readonly when: Readonly<{
-    relationshipRoles?: readonly ("none" | "rider" | "driver" | "passenger" | "tethered")[];
-    locomotionStatuses?: readonly ("active" | "suspended")[];
-    mobilityModes?: readonly MobilityModeV2[];
-    gaits?: readonly GaitV2[];
-    verticalPhases?: readonly VerticalPhaseV2[];
-    requiredActiveActionRefs?: readonly string[];
-    actionInterruptibility?: "interruptible" | "non-interruptible";
-    motionKernelRefs?: readonly string[];
-    requiredMotionTags?: readonly string[];
-    movementMediums?: readonly RuntimeMovementMediumV1[];
-    minimumSpeedMetersPerSecond?: number;
-    maximumSpeedMetersPerSecond?: number;
-    requiredSocketIds?: readonly string[];
-    requiredCameraContextTags?: readonly string[];
-  }>;
-  readonly cameraRigProfileRef?: string;
-  readonly cameraModifierRefs?: readonly string[];
-}
-
 export interface RuntimeSubjectCapabilityAssemblyV1 {
   authoringAvailability: "recommended" | "advanced" | "experimental";
   physicsBodyProfileRef: string;
@@ -281,7 +257,7 @@ export interface RuntimeSubjectCapabilityAssemblyV1 {
     resourceRef: string;
     defaultCameraRigProfileRef: string;
     firstPersonCameraRigProfileRef?: string;
-    rules: readonly RuntimeCameraContextRuleV1[];
+    rules: readonly CameraContextRuleV2[];
     cameraRigProfiles: readonly RuntimeCameraRigProfileV1[];
     cameraModifierProfiles: readonly RuntimeCameraModifierProfileV1[];
   };
@@ -566,6 +542,13 @@ function validateRuntimeVocabularies(
     parseJumpVariantPolicyV1(subject.controlFeel.jumpVariantPolicy);
     for (const controlFeel of subject.availableControlFeels) {
       parseJumpVariantPolicyV1(controlFeel.jumpVariantPolicy);
+    }
+    try {
+      for (const rule of subject.capabilityAssembly.cameraContext.rules) {
+        parseCameraContextRuleV2(rule);
+      }
+    } catch {
+      invalid();
     }
     for (const modifier of subject.capabilityAssembly.cameraContext
       .cameraModifierProfiles) {

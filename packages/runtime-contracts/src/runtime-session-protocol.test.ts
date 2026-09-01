@@ -318,9 +318,9 @@ describe("Runtime Session V1 public DTOs", () => {
         cameraContextProfileRef,
       },
       {
-        severity: "warning" as const,
-        code: "CAMERA_SEMANTIC_AUTHORITY_UNAVAILABLE" as const,
-        message: "Committed Camera semantic authority is unavailable.",
+        severity: "error" as const,
+        code: "CAMERA_REQUIRED_SOCKET_MISSING" as const,
+        message: "The required Camera Socket is missing.",
         cameraContextProfileRef,
       },
     ];

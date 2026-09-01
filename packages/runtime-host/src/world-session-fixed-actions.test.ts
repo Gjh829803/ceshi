@@ -3,6 +3,7 @@ import {
   createGameplayBootstrapV1,
   DEFAULT_GAMEPLAY_CAPACITY_BUDGET_V1,
   deriveGameplaySemanticFactIdV1,
+  RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
   type ActionActivateGameplayCommandV1,
   type ControllerEntityStateV1,
   type GameplayActionDefinitionV1,
@@ -146,6 +147,8 @@ function createHarnessAndOptions(input: Readonly<{
     id: "gameplay.fixed-actions",
     version: 1,
     resourceRef: "worldkit://gameplay-bootstrap/fixed-actions@1",
+    semanticFactProjectorProfileResource:
+      RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
     entityDescriptors: heroIds.map((id) => ({
       id,
       entityDefinitionRef: HERO_DEFINITION_REF,
