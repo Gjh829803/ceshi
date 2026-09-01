@@ -29,6 +29,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const { createDefaultTransportStarter } = vi.hoisted(() => ({
+  createDefaultTransportStarter: vi.fn(),
+}));
+
+vi.mock("./hosted-session-capture.js", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("./hosted-session-capture.js")
+  >();
+  return {
+    ...actual,
+    createCaptureOnlyHostedTransportStarterV1: createDefaultTransportStarter,
+  };
+});
+
 import {
   assertFormalCaptureRequestMatchesVerifiedPackageV1,
   captureHostedWorldPackageV1,
@@ -40,6 +54,7 @@ const temporaryRoots: string[] = [];
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
 afterEach(async () => {
+  createDefaultTransportStarter.mockReset();
   await Promise.all(temporaryRoots.splice(0).map((root) =>
     rm(root, { recursive: true, force: true })));
 });
@@ -387,6 +402,48 @@ describe("formal Package Capture preflight join", () => {
       }),
     })).rejects.toThrow();
     expect(cleanup).toHaveBeenCalledOnce();
+    await expect(readdir(outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("uses the concrete capture-only Hosted starter by default", async () => {
+    const root = await realpath(
+      await mkdtemp(path.join(tmpdir(), "formal-capture-test-")),
+    );
+    temporaryRoots.push(root);
+    const attemptDirectoryPath = path.join(root, "attempt");
+    const packageDirectoryPath = path.join(
+      attemptDirectoryPath,
+      "world-package",
+    );
+    const outputDirectoryPath = path.join(attemptDirectoryPath, "capture");
+    const { verifiedPackage, request } = packageAndRequest();
+    await mkdir(attemptDirectoryPath, { mode: 0o700 });
+    await writeWorldPackageDirectoryV1({
+      outputDirectoryPath: packageDirectoryPath,
+      directory: verifiedPackage.directory,
+    });
+    await writeFile(
+      path.join(attemptDirectoryPath, "formal-world-capture-request.json"),
+      stringifyCanonicalJson(request),
+      "utf8",
+    );
+    const sentinel = new Error("concrete starter reached");
+    createDefaultTransportStarter.mockReturnValueOnce(async () => {
+      throw sentinel;
+    });
+
+    await expect(captureHostedWorldPackageV1({
+      packageDirectoryPath,
+      outputPath: path.join(outputDirectoryPath, "opening.png"),
+      triviewOutputPath: outputDirectoryPath,
+      port: 6_123,
+    })).rejects.toBe(sentinel);
+    expect(createDefaultTransportStarter).toHaveBeenCalledWith({
+      packageDirectoryPath,
+      port: 6_123,
+    });
     await expect(readdir(outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
     });

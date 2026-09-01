@@ -34,6 +34,7 @@ import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixt
 import { launchChromiumWithSystemFallback } from "./playwright-browser-launch";
 import { writeWorldPackageDirectoryV1 } from "./file-world-package";
 import {
+  createNativeWorldkitServerChildEnvironmentV1,
   startWorldkitServer,
   terminateOwnedWorldkitServerChildrenV1,
   type WorldkitServerHandle,
@@ -228,6 +229,38 @@ afterEach(async () => {
 });
 
 describe("startWorldkitServer", () => {
+  it("passes only the explicit minimum environment to a Native Vite child", () => {
+    expect(createNativeWorldkitServerChildEnvironmentV1({
+      ambientEnvironment: {
+        PATH: "/trusted/bin",
+        TMPDIR: "/trusted/tmp",
+        HOME: "/host/home/canary",
+        WORLDKIT_HOST_SECRET_CANARY: "must-not-cross",
+        VITE_WORLDKIT_SECRET_CANARY: "must-not-cross",
+        LWDP_GENERATION_API_TOKEN: "must-not-cross",
+      },
+      packageDirectoryPath: "/verified/package",
+      nonce: "server-nonce",
+      serverInstanceId: "00000000-0000-4000-8000-000000000001",
+      viteCacheRootPath: "/owned/vite-cache",
+      serverRole: "runtime",
+      shellOrigin: "http://127.0.0.1:35174",
+      runtimeOrigin: "http://127.0.0.1:35175",
+    })).toEqual({
+      PATH: "/trusted/bin",
+      TMPDIR: "/trusted/tmp",
+      WORLDKIT_NATIVE_PACKAGE_PATH: "/verified/package",
+      WORLDKIT_AUTHORING_SERVER_NONCE: "server-nonce",
+      WORLDKIT_NATIVE_SERVER_INSTANCE_ID:
+        "00000000-0000-4000-8000-000000000001",
+      WORLDKIT_NATIVE_VITE_CACHE_ROOT: "/owned/vite-cache",
+      WORLDKIT_NATIVE_SERVER_ROLE: "runtime",
+      WORLDKIT_NATIVE_VERIFIER_PROBE: "disabled",
+      WORLDKIT_HOSTED_SHELL_ORIGIN: "http://127.0.0.1:35174",
+      WORLDKIT_HOSTED_RUNTIME_ORIGIN: "http://127.0.0.1:35175",
+    });
+  });
+
   it.skipIf(process.platform === "win32")(
     "bounds cleanup when an owned child ignores SIGTERM",
     async () => {

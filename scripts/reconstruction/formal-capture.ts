@@ -24,6 +24,9 @@ import {
   sha256CanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
+import type {
+  FormalHostedWorldCapturePayloadV1,
+} from "@whitebox-world/runtime-babylon";
 import {
   verifyWorldPackageDirectoryV1,
   type VerifiedBabylonNativeWorldPackageDirectoryV1,
@@ -43,6 +46,7 @@ import { isEqual, isNil } from "lodash-es";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import {
+  createCaptureOnlyHostedTransportStarterV1,
   runCaptureOnlyHostedSessionV1,
   type StartCaptureOnlyHostedTransportV1,
 } from "./hosted-session-capture.js";
@@ -88,20 +92,9 @@ export interface PublishFormalCaptureDirectoryInputV1 {
   readonly hooks?: FormalCapturePublicationHooksV1;
 }
 
-export interface FormalHostedWorldCapturePayloadV1 {
-  readonly openingPng: Uint8Array;
-  readonly worldSidePng: Uint8Array;
-  readonly worldTopDownPng: Uint8Array;
-  readonly colliderOverlayPng: Uint8Array;
-  readonly openingObservation: FormalOpeningObservationV1;
-  readonly spawnSupportObservation: FormalSpawnSupportObservationV1;
-  readonly colliderOverlayObservation: FormalColliderOverlayObservationV1;
-  readonly scriptedTraversal: FormalScriptedTraversalObservationV1;
-  readonly receiptWithoutCleanup: Omit<
-    FormalWorldCaptureReceiptV1,
-    "cleanupOutcome"
-  >;
-}
+export type {
+  FormalHostedWorldCapturePayloadV1,
+} from "@whitebox-world/runtime-babylon";
 
 export interface CaptureHostedWorldPackageInputV1 {
   readonly packageDirectoryPath: string;
@@ -116,7 +109,8 @@ export interface CaptureHostedWorldPackagePortsV1 {
     packageDirectoryPath: string,
   ) => Promise<WorldPackageDirectoryV1>;
   readonly startTransport?: StartCaptureOnlyHostedTransportV1<
-    FormalHostedWorldCapturePayloadV1
+    FormalHostedWorldCapturePayloadV1,
+    FormalWorldCaptureRequestV1
   >;
 }
 
@@ -439,9 +433,11 @@ export async function captureHostedWorldPackageV1(
         maximumFileCount: MAXIMUM_PACKAGE_FILE_COUNT,
       })),
   );
-  const startTransport = ports.startTransport ?? (async () => {
-    throw new Error("FORMAL_CAPTURE_RUNTIME_PROVIDER_UNAVAILABLE");
-  });
+  const startTransport = ports.startTransport ??
+    createCaptureOnlyHostedTransportStarterV1({
+      packageDirectoryPath,
+      ...(input.port === undefined ? {} : { port: input.port }),
+    });
   const payload = await runCaptureOnlyHostedSessionV1({
     request: joined.request,
     startTransport,

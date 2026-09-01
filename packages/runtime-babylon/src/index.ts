@@ -21,6 +21,19 @@ export type {
   FormalHostedWorldCapturePayloadV1,
 } from "./formal-world-capture-provider";
 export {
+  assertHostedFormalCaptureWireBudgetV1,
+  exactPlainRecordV1,
+  hostedFormalCaptureErrorV1,
+  hostedFormalCaptureWireByteLengthV1,
+  HOSTED_FORMAL_CAPTURE_BOOTSTRAP_FIELDS_V1,
+  HOSTED_FORMAL_CAPTURE_FAILURE_FIELDS_V1,
+  HOSTED_FORMAL_CAPTURE_PROTOCOL_BUDGET_V1,
+  HOSTED_FORMAL_CAPTURE_RESULT_FIELDS_V1,
+  parseHostedFormalCapturePayloadV1,
+  parseHostedFormalCaptureRequestV1,
+  type HostedFormalCaptureProtocolBudgetV1,
+} from "./hosted-formal-capture-protocol.js";
+export {
   BabylonRuntimeResidencyV1,
   wrapBabylonRuntimeOwnedGameplayWorldPortV1,
 } from "./babylon-runtime-residency.js";

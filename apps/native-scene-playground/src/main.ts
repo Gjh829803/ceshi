@@ -9,6 +9,7 @@ import {
 import type {
   BabylonNativeSceneBootstrapV1,
   FixedInputV1,
+  FormalWorldCaptureSdkOwnerIdentityV1,
   SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -23,6 +24,10 @@ import { nativeSceneSubjectAssetResolver } from
   "./subject-asset-resolver.js";
 import { createHostedRuntimeBridgeV1 } from "./hosted-runtime-bridge.js";
 import { startHostedRuntimeFrameV1 } from "./hosted-runtime-frame.js";
+import {
+  startHostedFormalCaptureFrameRouteV1,
+  startHostedFormalCaptureShellRouteV1,
+} from "./hosted-formal-capture-route.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
 import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
@@ -32,6 +37,8 @@ declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_RUNTIME_ORIGIN__: string;
 declare const __WORLDKIT_HOSTED_SHELL_ORIGIN__: string;
+declare const __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__:
+  readonly FormalWorldCaptureSdkOwnerIdentityV1[];
 declare const __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: boolean;
 interface NativeSceneSpikeProbeV1 {
   readonly ready: true;
@@ -550,14 +557,33 @@ async function startHostedFrame(): Promise<void> {
 }
 
 const mode = new URLSearchParams(location.search);
-void (mode.has("hosted-runtime-frame")
-  ? startHostedFrame()
-  : mode.has("hosted")
-    ? startHostedShell()
-    : __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__ &&
-        mode.size === 1 &&
-        mode.get("verifier-native-spike") === "1"
-      ? startVerifierProbe()
-      : Promise.reject(new Error(
-          "WORLDKIT_NATIVE_HARNESS_MODE_REQUIRED",
-        ))).catch(showFailure);
+const hostedFormalCaptureConstants = Object.freeze({
+  hostedBrowserRunnerDigest: __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__,
+  hostedBrowserPolicyHash: __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__,
+  runtimeOrigin: __WORLDKIT_HOSTED_RUNTIME_ORIGIN__,
+  shellOrigin: __WORLDKIT_HOSTED_SHELL_ORIGIN__,
+  sdkOwnerIdentities: __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__,
+});
+void (mode.has("hosted-formal-capture-frame")
+  ? startHostedFormalCaptureFrameRouteV1({
+      constants: hostedFormalCaptureConstants,
+      viewport: requiredElement<HTMLElement>("[data-viewport]"),
+      search: location.search,
+    })
+  : mode.has("hosted-formal-capture")
+    ? startHostedFormalCaptureShellRouteV1({
+        constants: hostedFormalCaptureConstants,
+        viewport: requiredElement<HTMLElement>("[data-viewport]"),
+        search: location.search,
+      }).then(() => undefined)
+    : mode.has("hosted-runtime-frame")
+      ? startHostedFrame()
+      : mode.has("hosted")
+        ? startHostedShell()
+        : __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__ &&
+            mode.size === 1 &&
+            mode.get("verifier-native-spike") === "1"
+          ? startVerifierProbe()
+          : Promise.reject(new Error(
+              "WORLDKIT_NATIVE_HARNESS_MODE_REQUIRED",
+            ))).catch(showFailure);
