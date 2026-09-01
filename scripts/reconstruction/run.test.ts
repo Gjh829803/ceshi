@@ -39,6 +39,8 @@ const DIMENSIONS = [
   "topology",
 ] as const;
 
+const CASE_REF = "artifact://case/cloud-temple/case.json";
+
 const OWNER = Object.freeze({
   caseHash: hashWorldReconstructionCaseV1(reconstructionCase()),
   evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile()),
@@ -487,12 +489,13 @@ function fakePorts(options: FakePortOptions = {}) {
 
 function runInput(
   outputDirectoryPath: string,
-  options: FakePortOptions = {},
+  caseRef = CASE_REF,
 ) {
   return {
     runId: "formal-20260831",
     backend: "local" as const,
     outputDirectoryPath,
+    caseRef,
     reconstructionCase: reconstructionCase(),
     evaluationProfile: profile(),
     frozenOwnerIdentities: OWNER,
@@ -577,6 +580,64 @@ describe("runWorldReconstructionV1", () => {
     expect(calls.generateInputs[0]?.requestId).not.toBe(
       calls.generateInputs[1]?.requestId,
     );
+  });
+
+  it("preserves the canonical Case artifact Ref through the journal and terminal receipt so Final can derive its run receipt Ref", async () => {
+    const outputDirectoryPath = await outputRoot();
+    const { ports } = fakePorts({
+      evaluationByAttempt: [
+        evaluationResult({ attemptIndex: 0, outcome: "passed" }),
+      ],
+    });
+
+    const receipt = await runWorldReconstructionV1(
+      runInput(outputDirectoryPath),
+      ports,
+    );
+    const publishedReceipt = parseWorldReconstructionRunReceiptV1(JSON.parse(
+      await readFile(path.join(outputDirectoryPath, "run-receipt.json"), "utf8"),
+    ));
+    const journalRows = (await readFile(
+      path.join(outputDirectoryPath, "journal.jsonl"),
+      "utf8",
+    )).trim().split("\n").map((line) => JSON.parse(line) as { caseRef: string });
+
+    expect(receipt.caseRef).toBe(CASE_REF);
+    expect(publishedReceipt.caseRef).toBe(CASE_REF);
+    expect(journalRows.every(({ caseRef }) => caseRef === CASE_REF)).toBe(true);
+    expect(
+      `${receipt.caseRef.slice(0, -"/case.json".length)}/runs/${
+        path.basename(outputDirectoryPath)
+      }/run-receipt.json`,
+    ).toBe(
+      `artifact://case/cloud-temple/runs/${
+        path.basename(outputDirectoryPath)
+      }/run-receipt.json`,
+    );
+  });
+
+  it.each([
+    "",
+    "cloud-temple-t-gate-native-block",
+    "worldkit://world-reconstruction-case/cloud-temple@1/case.json",
+    "artifact:///case.json",
+    "artifact://case/cloud-temple/not-case.json",
+    " artifact://case/cloud-temple/case.json",
+    "artifact://case/cloud-temple/../case.json",
+  ])("rejects non-canonical Case artifact Ref %j before any stage", async (caseRef) => {
+    const { ports, calls } = fakePorts();
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot(), caseRef),
+      ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_CASE_REF_INVALID"],
+    });
+    expect(calls.cleanup).toBe(1);
+    expect(calls.generate).toEqual([]);
+    expect(calls.package).toEqual([]);
+    expect(calls.capture).toEqual([]);
+    expect(calls.evaluate).toEqual([]);
   });
 
   it("skips repair when Attempt 0 passes", async () => {

@@ -134,6 +134,7 @@ export interface WorldReconstructionRunInputV1 {
   readonly runId: string;
   readonly backend: "cloud" | "local";
   readonly outputDirectoryPath: string;
+  readonly caseRef: string;
   readonly reconstructionCase: WorldReconstructionCaseV1 | unknown;
   readonly evaluationProfile: WorldReconstructionEvaluationProfileV1 | unknown;
   readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
@@ -162,6 +163,29 @@ interface CompletedAttemptRecordV1 {
   readonly packaged: WorldReconstructionPackagePortResultV1;
   readonly captured: WorldReconstructionCapturePortResultV1;
   readonly evaluated: WorldReconstructionEvaluatePortResultV1;
+}
+
+function isCanonicalCaseArtifactRef(input: unknown): input is string {
+  if (
+    typeof input !== "string" ||
+    input.length === 0 ||
+    input.trim() !== input ||
+    input.normalize("NFC") !== input
+  ) return false;
+  try {
+    const parsed = new URL(input);
+    return parsed.protocol === "artifact:" &&
+      parsed.hostname.length > 0 &&
+      parsed.username.length === 0 &&
+      parsed.password.length === 0 &&
+      parsed.port.length === 0 &&
+      parsed.search.length === 0 &&
+      parsed.hash.length === 0 &&
+      parsed.pathname.endsWith("/case.json") &&
+      parsed.href === input;
+  } catch {
+    return false;
+  }
 }
 
 const STAGE_BY_ATTEMPT = Object.freeze({
@@ -488,7 +512,7 @@ async function publishCompletedReceipt(
     kind: "world-reconstruction-run-receipt",
     schemaVersion: 1,
     id: `${reconstructionCase.id}.${input.runId}`,
-    caseRef: reconstructionCase.id,
+    caseRef: input.caseRef,
     caseHash: input.frozenOwnerIdentities.caseHash,
     evaluationProfileRef: reconstructionCase.evaluationProfileRef,
     evaluationProfileHash: input.frozenOwnerIdentities.evaluationProfileHash,
@@ -526,6 +550,13 @@ export async function runWorldReconstructionV1(
   input: WorldReconstructionRunInputV1,
   ports: WorldReconstructionRunPortsV1,
 ): Promise<WorldReconstructionRunReceiptV1> {
+  if (!isCanonicalCaseArtifactRef(input.caseRef)) {
+    const cleanup = await ports.cleanup();
+    throw new WorldReconstructionRunClosedErrorV1(
+      ["WORLD_RECONSTRUCTION_CASE_REF_INVALID"],
+      cleanupStatus(cleanup),
+    );
+  }
   const reconstructionCase = parseWorldReconstructionCaseV1(
     input.reconstructionCase,
   );
@@ -549,7 +580,7 @@ export async function runWorldReconstructionV1(
   }
   const journal = await createWorldReconstructionRunJournalV1({
     runId: input.runId,
-    caseRef: reconstructionCase.id,
+    caseRef: input.caseRef,
     evaluationProfileRef: reconstructionCase.evaluationProfileRef,
     frozenOwnerIdentities: input.frozenOwnerIdentities,
     outputDirectoryPath: input.outputDirectoryPath,
