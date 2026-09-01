@@ -72,6 +72,8 @@ Module-scope variable declarations permit only primitive literal constants or re
 
 Keep coordinate helpers, computed constants, collider arrays, loops, and all changing values inside `build()`. A top-level string or number literal is allowed, but moving ordinary authoring helpers into `build()` is the least surprising pattern. The trusted Host source-admission checker remains authoritative and runs before bundle/load/replay.
 
+The Host typechecks with strict indexed access. An expression such as `cells[index]` therefore has an `undefined` possibility even when the loop bounds appear correct. Prefer `for (const [xMeters, zMeters] of cells)` when every row is consumed. When numeric indexing is required, assign the row first and check the indexed value for `undefined` before destructuring it. Do not use an unchecked tuple destructure from `array[index]`, and do not suppress the check with a type assertion merely to pass admission.
+
 ## Fixed Block Profile
 
 Use only shapes `full`, `half`, `quarter`, `small`, and `step`. Their unrotated `[x, y, z]` sizes in meters are:
