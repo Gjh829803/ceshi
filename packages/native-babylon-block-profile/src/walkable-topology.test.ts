@@ -38,6 +38,21 @@ interface GroupFixture {
   readonly traversal: "surface" | "solid";
   readonly sourceBlockIds?: readonly string[];
   readonly visualGroupIds?: readonly string[];
+  readonly surfaceEntityId?: string;
+  readonly logicalSubshapeId?: string;
+  readonly traversalSurfaceProfileRef?: string;
+}
+
+function surfaceBinding(fixture: GroupFixture) {
+  return Object.freeze({
+    ...STATIC_SURFACE,
+    surfaceEntityId: fixture.surfaceEntityId ??
+      `${fixture.colliderId}-surface`,
+    logicalSubshapeId: fixture.logicalSubshapeId ??
+      `${fixture.colliderId}-top`,
+    traversalSurfaceProfileRef: fixture.traversalSurfaceProfileRef ??
+      STATIC_SURFACE.traversalSurfaceProfileRef,
+  });
 }
 
 function coordinates(cellKey: string): readonly [number, number, number] {
@@ -46,6 +61,12 @@ function coordinates(cellKey: string): readonly [number, number, number] {
 
 function model(fixtures: readonly GroupFixture[]):
 BabylonNativeBlockLogicalGroundModelV1 {
+  const supportedTraversalSurfaceProfileRefs = Object.freeze([
+    STATIC_SURFACE.traversalSurfaceProfileRef,
+  ]);
+  const supportedTraversalSurfaceProfileRefSet = new Set<string>(
+    supportedTraversalSurfaceProfileRefs,
+  );
   const groups: BabylonNativeBlockLogicalColliderGroupV1[] = fixtures.map(
     (fixture) => Object.freeze({
       colliderId: fixture.colliderId,
@@ -60,7 +81,7 @@ BabylonNativeBlockLogicalGroundModelV1 {
         `${fixture.colliderId}-visual`,
       ])]),
       traversalBinding: fixture.traversal === "surface"
-        ? STATIC_SURFACE
+        ? surfaceBinding(fixture)
         : NOT_TRAVERSABLE,
       exposedEdgePolicy: "none" as const,
       occupiedMicroCellKeys: Object.freeze([...fixture.cells].sort()),
@@ -80,14 +101,19 @@ BabylonNativeBlockLogicalGroundModelV1 {
           `${fixture.colliderId}-visual`,
         ])[0]!,
         traversalBinding: fixture.traversal === "surface"
-          ? STATIC_SURFACE
+          ? surfaceBinding(fixture)
           : NOT_TRAVERSABLE,
       }))).sort((left, right) =>
       left.cellKey.localeCompare(right.cellKey) ||
       left.colliderId.localeCompare(right.colliderId));
   const exposedSupportTopCells: BabylonNativeBlockLogicalSupportTopCellV1[] =
     fixtures.flatMap((fixture) => {
-      if (fixture.traversal !== "surface") return [];
+      if (
+        fixture.traversal !== "surface" ||
+        !supportedTraversalSurfaceProfileRefSet.has(
+          surfaceBinding(fixture).traversalSurfaceProfileRef,
+        )
+      ) return [];
       return fixture.cells.flatMap((sourceOccupiedCellKey, index) => {
         const [x, y, z] = coordinates(sourceOccupiedCellKey);
         const topCellKey = `${x},${y + 1},${z}`;
@@ -103,7 +129,7 @@ BabylonNativeBlockLogicalGroundModelV1 {
           visualGroupId: (fixture.visualGroupIds ?? [
             `${fixture.colliderId}-visual`,
           ])[0]!,
-          traversalBinding: STATIC_SURFACE,
+          traversalBinding: surfaceBinding(fixture),
         })];
       });
     }).sort((left, right) =>
@@ -120,9 +146,7 @@ BabylonNativeBlockLogicalGroundModelV1 {
       traversalCapabilityEnvelopeHash: H("4"),
       caseHash: H("5"),
     }),
-    supportedTraversalSurfaceProfileRefs: Object.freeze([
-      STATIC_SURFACE.traversalSurfaceProfileRef,
-    ]),
+    supportedTraversalSurfaceProfileRefs,
     colliderGroups: Object.freeze(groups),
     solidOccupancyCells: Object.freeze(solidOccupancyCells),
     exposedSupportTopCells: Object.freeze(exposedSupportTopCells),
@@ -184,6 +208,44 @@ describe("Babylon Native Block walkable topology", () => {
       [0, 0.375, 0],
       [0, 0.375, 0.5],
     ]);
+  });
+
+  it("keeps unsupported static surfaces as exact solid collision", () => {
+    const groundModel = model([{
+      colliderId: "ice-collider",
+      cells: ["0,0,0"],
+      traversal: "surface",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ice.static@1",
+    }]);
+    const result = topology(groundModel);
+
+    expect(result.walkableGeometries).toHaveLength(0);
+    expect(result.solidGeometries).toHaveLength(1);
+    expect(result.solidGeometries[0]).toMatchObject({
+      logicalColliderId: "ice-collider",
+      proxyKind: "exact-solid-union",
+      triangleCount: 12,
+    });
+  });
+
+  it("does not drop a supported static surface covered by another group", () => {
+    const result = topology(model([
+      {
+        colliderId: "covered-floor",
+        cells: ["0,0,0"],
+        traversal: "surface",
+      },
+      {
+        colliderId: "cover-mass",
+        cells: ["0,1,0"],
+        traversal: "solid",
+      },
+    ]));
+
+    expect(result.walkableGeometries).toHaveLength(0);
+    expect(result.solidGeometries.map(({ logicalColliderId }) =>
+      logicalColliderId)).toEqual(["cover-mass", "covered-floor"]);
   });
 
   it("keeps collision and visible overlay byte-related by Y epsilon only", () => {

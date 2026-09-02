@@ -94,7 +94,7 @@ interface SupportCell {
   readonly x: number;
   readonly y: number;
   readonly z: number;
-  readonly bindingKey: string;
+  readonly traversalSurfaceProfileRef: string;
 }
 
 function stableCompare(left: string, right: string): number {
@@ -397,7 +397,8 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
         x,
         y,
         z,
-        bindingKey: traversalBindingKey(source.traversalBinding),
+        traversalSurfaceProfileRef:
+          source.traversalBinding.traversalSurfaceProfileRef,
       });
     })
     .sort((left, right) =>
@@ -417,7 +418,8 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
       [cell.x + 1, cell.z + 1],
       [cell.x, cell.z + 1],
     ] as const) {
-      const key = `${cell.bindingKey}:${cornerX},${cornerZ}`;
+      const key =
+        `${cell.traversalSurfaceProfileRef}:${cornerX},${cornerZ}`;
       const heights = cornerHeightsByKey.get(key) ?? [];
       heights.push(cell.y * GRID[1]);
       cornerHeightsByKey.set(key, heights);
@@ -430,7 +432,7 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
     cornerZ: number,
   ): number => {
     const heights = cornerHeightsByKey.get(
-      `${cell.bindingKey}:${cornerX},${cornerZ}`,
+      `${cell.traversalSurfaceProfileRef}:${cornerX},${cornerZ}`,
     ) ?? [cell.y * GRID[1]];
     const minimum = Math.min(...heights);
     const maximum = Math.max(...heights);
@@ -473,6 +475,7 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
     solidByCellKey.set(solid.cellKey, solid);
   }
   const solidByColliderId = new Map<string, GeometryAccumulator>();
+  const walkableColliderIds = new Set(walkableByColliderId.keys());
   let removedInternalFaceCount = 0;
   for (const solid of solidByCellKey.values()) {
     const [x, y, z] = cellCoordinates(solid.cellKey);
@@ -491,7 +494,7 @@ export function buildBabylonNativeBlockWalkableTopologyV1(
   for (const solid of [...solidByCellKey.values()].sort((left, right) =>
     stableCompare(left.cellKey, right.cellKey))) {
     const group = groupByColliderId.get(solid.colliderId)!;
-    if (group.traversalBinding.kind === "static-surface") continue;
+    if (walkableColliderIds.has(group.colliderId)) continue;
     let accumulator = solidByColliderId.get(group.colliderId);
     if (isNil(accumulator)) {
       accumulator = createAccumulator(group, "exact-solid-union");
