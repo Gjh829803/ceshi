@@ -196,9 +196,13 @@ export async function pollGenerationJob(jobId, {
   fetchImplementation = fetch,
   intervalMs = Number(process.env.WORLDKIT_LWDP_POLL_INTERVAL_MS || 10_000),
   timeoutMs = Number(process.env.WORLDKIT_LWDP_JOB_TIMEOUT_MS || 3_600_000),
+  queueTimeoutMs = Number(
+    process.env.WORLDKIT_LWDP_QUEUE_TIMEOUT_MS || 21_600_000,
+  ),
   onProgress = () => undefined,
 } = {}) {
   const startedAt = Date.now();
+  let executionStartedAt;
   let lastSignature = "";
   for (;;) {
     const payload = await lwdpRequest(`/api/v1/generation/jobs/${encodeURIComponent(jobId)}`, {
@@ -212,10 +216,29 @@ export async function pollGenerationJob(jobId, {
       onProgress(job);
     }
     if (terminalStatuses.has(String(job?.status))) return job;
-    if (Date.now() - startedAt >= timeoutMs) {
+    const counters = job?.counters;
+    const isProviderQueued = ["submitted", "queued", "pending"].includes(
+      String(job?.status),
+    ) || (
+      Number(counters?.queued ?? 0) > 0 &&
+      Number(counters?.running ?? 0) === 0 &&
+      Number(counters?.succeeded ?? 0) === 0 &&
+      Number(counters?.failed ?? 0) === 0
+    );
+    const now = Date.now();
+    if (executionStartedAt === undefined && !isProviderQueued) {
+      executionStartedAt = now;
+    }
+    if (executionStartedAt === undefined && now - startedAt >= queueTimeoutMs) {
       throw new CodexTaskOutcomeError(
         "creation-outcome-unknown",
-        `LWDP job ${jobId} polling outcome is unknown after ${timeoutMs}ms.`,
+        `LWDP job ${jobId} remains queued after ${queueTimeoutMs}ms; the same request_id remains recoverable.`,
+      );
+    }
+    if (executionStartedAt !== undefined && now - executionStartedAt >= timeoutMs) {
+      throw new CodexTaskOutcomeError(
+        "creation-outcome-unknown",
+        `LWDP job ${jobId} polling outcome is unknown after ${timeoutMs}ms of execution.`,
       );
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, Math.max(100, intervalMs)));
