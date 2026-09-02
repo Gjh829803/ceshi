@@ -22,6 +22,7 @@ import {
   parseSceneAuthoringAttemptResultV1,
   parseSceneAuthoringAttemptV1,
   parseSceneAuthoringRouteDecisionV1,
+  parseWorldGenerationSceneSourceKindV1,
   sceneAuthoringAttemptCanonicalBytesV1,
   sceneAuthoringAttemptResultCanonicalBytesV1,
   sceneAuthoringRouteDecisionCanonicalBytesV1,
@@ -41,6 +42,40 @@ const HASH_D = `sha256:${"4".repeat(64)}` as Sha256HashV1;
 const HASH_E = `sha256:${"5".repeat(64)}` as Sha256HashV1;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 
+describe("world generation Scene Source selection", () => {
+  it("defaults an omitted Source to Babylon Native and accepts only the two current Sources", () => {
+    expect(parseWorldGenerationSceneSourceKindV1(undefined))
+      .toBe("babylon-native");
+    expect(parseWorldGenerationSceneSourceKindV1("babylon-native"))
+      .toBe("babylon-native");
+    expect(parseWorldGenerationSceneSourceKindV1("canonical"))
+      .toBe("canonical");
+    for (const invalid of [null, "native", "canonical-default", "", 1]) {
+      expect(() => parseWorldGenerationSceneSourceKindV1(invalid)).toThrow(
+        "WORLD_GENERATION_SCENE_SOURCE_INVALID",
+      );
+    }
+  });
+
+  it("records Canonical as an explicit selection rather than a default", () => {
+    const decision = decideSceneAuthoringRouteV1({
+      id: "explicit-canonical",
+      sceneBriefRef: "worldkit://scene-brief/explicit-canonical@1",
+      sceneBriefHash: HASH_A,
+      trustProfileRef: "worldkit://trust-profile/trusted-local@1",
+      trustProfileHash: HASH_B,
+      requiredCapabilityRefs: [],
+      requestedSourceKind: "canonical",
+      nativeTrustAdmitted: true,
+      referenceDrivenDistinctiveSilhouette: false,
+    });
+    expect(decision.decision).toMatchObject({
+      kind: "canonical",
+      reasonCodes: ["user-selected-canonical"],
+    });
+  });
+});
+
 function canonicalRoute(): SceneAuthoringRouteDecisionV1 {
   return {
     kind: "scene-authoring-route-decision",
@@ -57,7 +92,7 @@ function canonicalRoute(): SceneAuthoringRouteDecisionV1 {
     decision: {
       kind: "canonical",
       authoringProfileRef: "worldkit://authoring-profile/canonical-outdoor@1",
-      reasonCodes: ["canonical-default", "requires-canonical-route"],
+      reasonCodes: ["requires-canonical-route", "user-selected-canonical"],
     },
   };
 }
@@ -570,7 +605,7 @@ describe("SceneAuthoringRouteDecisionV1", () => {
     }).decision).toEqual({
       kind: "canonical",
       authoringProfileRef: "worldkit://authoring-profile/canonical-outdoor@1",
-      reasonCodes: ["canonical-default"],
+      reasonCodes: ["user-selected-canonical"],
     });
     expect(() => decideSceneAuthoringRouteV1({
       ...routeInput(),
@@ -635,7 +670,7 @@ describe("SceneAuthoringRouteDecisionV1", () => {
         ...canonicalRoute(),
         decision: {
           ...canonicalRoute().decision,
-          reasonCodes: ["canonical-default", "canonical-default"],
+          reasonCodes: ["user-selected-canonical", "user-selected-canonical"],
         },
       },
       { ...canonicalRoute(), sceneBriefHash: ZERO_HASH },

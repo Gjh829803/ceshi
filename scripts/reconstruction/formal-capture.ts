@@ -33,6 +33,12 @@ import {
   type WorldPackageDirectoryV1,
 } from "@whitebox-world/world-package";
 import {
+  hashWorldReconstructionCaseV1,
+  hashWorldReconstructionEvaluationProfileV1,
+  type WorldReconstructionCaseV1,
+  type WorldReconstructionEvaluationProfileV1,
+} from "@whitebox-world/validation";
+import {
   lstat,
   mkdir,
   mkdtemp,
@@ -51,6 +57,8 @@ import {
   runCaptureOnlyHostedSessionV1,
   type StartCaptureOnlyHostedTransportV1,
 } from "./hosted-session-capture.js";
+import { assertOpeningCompositionHostGateV1 } from
+  "./opening-composition-host-gate.js";
 
 const MATERIALIZER_METADATA_REF =
   "world-package://native/block-materializer-metadata.json";
@@ -103,6 +111,18 @@ export interface CaptureHostedWorldPackageInputV1 {
   readonly triviewOutputPath: string;
   readonly port?: number;
   readonly budget?: FormalCaptureArtifactBudgetV1;
+  /** Required by the production reconstruction owner; omitted only by low-level transport tests. */
+  readonly openingGate?: Readonly<{
+    readonly reconstructionCase: WorldReconstructionCaseV1;
+    readonly evaluationProfile: WorldReconstructionEvaluationProfileV1;
+  }>;
+}
+
+export interface CaptureProductionHostedWorldPackageInputV1
+  extends CaptureHostedWorldPackageInputV1 {
+  readonly openingGate: NonNullable<
+    CaptureHostedWorldPackageInputV1["openingGate"]
+  >;
 }
 
 export interface CaptureHostedWorldPackagePortsV1 {
@@ -124,6 +144,14 @@ export interface FormalCaptureCommandResultV1 {
   readonly formalRequestHash: Sha256HashV1;
   readonly formalCaptureReceiptHash: Sha256HashV1;
   readonly worldPackageRootHash: Sha256HashV1;
+}
+
+/** Production reconstruction entry; the low-level transport remains independently testable. */
+export function captureProductionHostedWorldPackageV1(
+  input: CaptureProductionHostedWorldPackageInputV1,
+  ports: CaptureHostedWorldPackagePortsV1 = {},
+): Promise<FormalCaptureCommandResultV1> {
+  return captureHostedWorldPackageV1(input, ports);
 }
 
 export type FormalCaptureCommandCleanupOutcomeV1 =
@@ -511,6 +539,24 @@ export async function captureHostedWorldPackageV1(
   let validated: ReturnType<typeof validateHostedPayload>;
   try {
     validated = validateHostedPayload(payload, joined);
+    if (!isNil(input.openingGate)) {
+      if (
+        hashWorldReconstructionCaseV1(
+          input.openingGate.reconstructionCase,
+        ) !== joined.request.caseHash ||
+        input.openingGate.reconstructionCase.evaluationProfileHash !==
+          joined.request.evaluationProfileHash ||
+        hashWorldReconstructionEvaluationProfileV1(
+          input.openingGate.evaluationProfile,
+        ) !== joined.request.evaluationProfileHash
+      ) mismatch("openingGate/identity");
+      assertOpeningCompositionHostGateV1({
+        reconstructionCase: input.openingGate.reconstructionCase,
+        evaluationProfile: input.openingGate.evaluationProfile,
+        openingObservation: payload.openingObservation,
+        expectedCamera: joined.verifiedPackage.bootstrap.initialCamera,
+      });
+    }
   } catch (error) {
     captureClosed("post-dispose", {
       hostedBrowserSession: "completed",

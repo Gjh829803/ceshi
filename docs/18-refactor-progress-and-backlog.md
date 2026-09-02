@@ -1174,6 +1174,13 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 
 #### NBR-1 当前唯一最高优先级纵向切片
 
+后续 current-only 入口与构图门禁切换由
+[Native-default World Generation and Opening Gate Design](superpowers/specs/2026-09-02-native-default-world-generation-and-opening-gate-design.md)
+约束：所有新任务省略 Source 时默认 `babylon-native`，Canonical 仅显式选择；Studio/CLI 共用一个
+Source parser；选中 Lane 后仅由该 Lane 的可信 Host owner 生成 Route；正式 Capture Receipt 发布前必须通过
+source-neutral Opening Composition Host Gate。
+该切换不新增 WRC 工作包、Scene Source、Runtime、Viewer、Physics 或 Camera owner。
+
 - [x] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
 - [x] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
 - [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；
@@ -1203,6 +1210,21 @@ Browser verifier。NBR-45、NBR-50 与 NBR-60 的生产集成检查点由
 BNA-6/7、WRC-SR 或产品 Native Viewer。
 BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8 与 WRC-ACC-1 在本切片期间
 保持延期，不删除也不展开。
+
+#### CAST 组件观察研究关联（非 WRC / NBR 关键路径）
+
+- [ ] `CAST-R0`：在 NBR-1 收口后完成组件级 Reconstruction Observation 技术探针。`depends_on`：
+  `NBR-70`、`NBR-80`、`NBR-90`；不 `blocks` NBR-1、BNA-6/7 或 WRC-1。独占 Owner 为参考图分析到
+  Generation Request 之前的 authoring research boundary；不得修改 Runtime、Scene Source、Canonical
+  Schema、WorldPackage、Gameplay Relationship、Havok 或 `checkSupport()`。稳定输入为冻结参考图、
+  Scene Brief、Case/Profile 和现有 Capture；交付物为不可信组件观察候选合同、5--10 个真实 Case 的
+  mask/相对深度/遮挡/关系证据、组件级修复对照结果和 GO/NO-GO 研究收据。验收必须证明首次生成或
+  一次修复有跨 Case 收益，ambiguous relation fail closed，且每次修复仍产生新的 Candidate、Package、
+  Receipt 与 Capture。执行模式：`sequential`；详细外部依据与拒绝项见
+  [开源设计借鉴与验证台账的 CAST 条目](21-open-source-design-reference-ledger.md#41-cast--hyper3d-worldgen组件观察与关系约束)。
+
+`CAST-R0` 是后续可检索的研究任务，不计入 WRC-1 的 33 个工作包，也不提高任何当前完成度。未完成
+该探针前，不新增正式 Observation Graph Schema、第二 Planner/Builder Job、SDF Optimizer 或生产依赖。
 
 #### Unified Scene Viewer 下游开发工具关联（非 WRC 关键路径）
 

@@ -7,7 +7,7 @@ import {
 import { isNil, sortBy } from "lodash-es";
 
 export type SceneAuthoringRouteReasonCodeV1 =
-  | "canonical-default"
+  | "user-selected-canonical"
   | "native-production-not-released"
   | "hosted-native-not-admitted"
   | "requires-canonical-route"
@@ -17,6 +17,18 @@ export type SceneAuthoringRouteReasonCodeV1 =
   | "unsupported-enclosed-topology"
   | "unsupported-dynamic-multilayer-surface"
   | "user-selected-supported-lane";
+
+export type WorldGenerationSceneSourceKindV1 =
+  | "canonical"
+  | "babylon-native";
+
+export function parseWorldGenerationSceneSourceKindV1(
+  input: unknown,
+): WorldGenerationSceneSourceKindV1 {
+  if (input === undefined) return "babylon-native";
+  if (input === "canonical" || input === "babylon-native") return input;
+  throw new TypeError("WORLD_GENERATION_SCENE_SOURCE_INVALID");
+}
 
 export interface SceneAuthoringRouteDecisionV1 {
   readonly kind: "scene-authoring-route-decision";
@@ -364,7 +376,7 @@ const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 const UINT32_MAX = 4_294_967_295;
 const ROUTE_REASON_CODES = Object.freeze([
-  "canonical-default",
+  "user-selected-canonical",
   "hosted-native-not-admitted",
   "native-production-not-released",
   "reference-driven-distinctive-silhouette",
@@ -1115,7 +1127,7 @@ export function decideSceneAuthoringRouteV1(
         kind: "canonical",
         authoringProfileRef:
           "worldkit://authoring-profile/canonical-outdoor@1",
-        reasonCodes: ["canonical-default"],
+        reasonCodes: ["user-selected-canonical"],
       },
     });
   }

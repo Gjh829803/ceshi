@@ -390,6 +390,7 @@ async function resetAndSettle(
 
 function openingArtifactRequest(
   view: Extract<FormalArtifactViewRequestV1, { viewId: "opening" }>,
+  subjectEntityId: string,
   measureAfterRender: NonNullable<
     BabylonArtifactCaptureRequestV1["measureAfterRender"]
   >,
@@ -398,9 +399,35 @@ function openingArtifactRequest(
     kind: "opening-frame",
     widthPixels: view.widthPixels,
     heightPixels: view.heightPixels,
-    projectedEntityIds: [],
+    projectedEntityIds: [subjectEntityId],
     measureAfterRender,
   };
+}
+
+function controlledSubjectProjection(
+  capture: BabylonArtifactCaptureResultV1,
+  subjectEntityId: string,
+) {
+  const bounds = capture.projectedBoundsByEntityId[subjectEntityId] ?? fail(
+    "BABYLON_FORMAL_CAPTURE_CONTROLLED_SUBJECT_PROJECTION_MISSING",
+  );
+  const [centerXRatio, centerYRatio] = bounds.centerRatioXY;
+  const [widthRatio, heightRatio] = bounds.sizeRatioXY;
+  if (
+    ![centerXRatio, centerYRatio, widthRatio, heightRatio].every(Number.isFinite) ||
+    widthRatio <= 0 || heightRatio <= 0
+  ) fail("BABYLON_FORMAL_CAPTURE_CONTROLLED_SUBJECT_PROJECTION_INVALID");
+  return Object.freeze({
+    subjectEntityId,
+    centerXBasisPoints: Math.round(centerXRatio * 10_000),
+    centerYBasisPoints: Math.round(centerYRatio * 10_000),
+    widthBasisPoints: Math.max(1, Math.round(widthRatio * 10_000)),
+    heightBasisPoints: Math.max(1, Math.round(heightRatio * 10_000)),
+    coverageBasisPoints: Math.max(
+      1,
+      Math.round(widthRatio * heightRatio * 10_000),
+    ),
+  });
 }
 
 function worldArtifactRequest(
@@ -771,6 +798,7 @@ async function captureTraversal(
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
   assertFormalSupportContactContributionIdentityV1,
   captureTraversalChecks,
+  controlledSubjectProjection,
   measuredColliderRelations,
   measuredPackageRelations,
   measuredSupportRelations,
@@ -805,8 +833,11 @@ export async function executeFormalWorldCaptureProviderV1(
   let rendererIdentity = "";
   let browserIdentity = "";
   const openingView = request.views[0];
+  const subjectEntityId =
+    input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
   const openingCapture = input.ports.captureArtifactView(openingArtifactRequest(
     openingView,
+    subjectEntityId,
     ({ camera, engine, scene }) => {
       visualRegistry = peekBabylonNativeBlockLiveHandleRegistryV1(scene) ?? fail(
         "BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_REGISTRY_MISSING",
@@ -868,8 +899,6 @@ export async function executeFormalWorldCaptureProviderV1(
     sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore
   ) fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
 
-  const subjectEntityId =
-    input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
   const support = input.ports.readCommittedSupportEvidence(subjectEntityId) ?? fail(
     "BABYLON_FORMAL_CAPTURE_COMMITTED_SUPPORT_MISSING",
   );
@@ -896,6 +925,10 @@ export async function executeFormalWorldCaptureProviderV1(
       sdkOwnerIdentities,
       "camera",
       "opening-observation",
+    ),
+    controlledSubjectProjection: controlledSubjectProjection(
+      openingCapture,
+      subjectEntityId,
     ),
     visualGroups: openingMeasurement.visualGroups,
     observedTopologyRelations: measuredPackageRelations(request, metadata),

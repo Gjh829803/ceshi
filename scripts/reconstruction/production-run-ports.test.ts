@@ -283,8 +283,12 @@ function owners(
         requestBytes: new Uint8Array(),
       } as never;
     }),
-    capturePackage: vi.fn(async () => {
+    capturePackage: vi.fn(async (input) => {
       events.push("capture-browser");
+      expect(input.openingGate).toEqual({
+        reconstructionCase: value.input.reconstructionCase,
+        evaluationProfile: value.input.evaluationProfile,
+      });
       return {
         outcome: "completed" as const,
         stage: "published" as const,

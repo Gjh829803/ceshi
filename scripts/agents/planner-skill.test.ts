@@ -27,7 +27,7 @@ describe("Unified WorldKit Planner skill", () => {
 
   it("routes Planner creation and in-job self-repair through the dedicated skill", async () => {
     const [launcher, skill, router, cloudRunner, localRunner] = await Promise.all([
-      readFile(path.resolve("scripts/agents/run-spatial-world-agent.sh"), "utf8"),
+      readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8"),
       readFile(path.resolve(".codex/skills/worldkit-spatial-planner/SKILL.md"), "utf8"),
       readFile(path.resolve("scripts/agents/run-codex-task.mjs"), "utf8"),
       readFile(path.resolve("scripts/agents/run-lwdp-codex-task.mjs"), "utf8"),

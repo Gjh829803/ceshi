@@ -355,6 +355,14 @@ export interface FormalOpeningObservationV1
   extends FormalMeasuredObservationIdentityV1 {
   readonly kind: "formal-opening-observation";
   readonly schemaVersion: 1;
+  readonly controlledSubjectProjection: Readonly<{
+    subjectEntityId: string;
+    centerXBasisPoints: number;
+    centerYBasisPoints: number;
+    widthBasisPoints: number;
+    heightBasisPoints: number;
+    coverageBasisPoints: number;
+  }>;
   readonly visualGroups: readonly Readonly<{
     acceptanceTargetRef: string;
     compositionTargetRef: string;
@@ -759,7 +767,12 @@ const OBSERVATION_IDENTITY_FIELDS = [
   "resetReadySnapshot", "resetReadySnapshotHash", "domainOwnerIdentity",
 ] as const;
 const OPENING_OBSERVATION_FIELDS = [
-  ...OBSERVATION_IDENTITY_FIELDS, "visualGroups", "observedTopologyRelations",
+  ...OBSERVATION_IDENTITY_FIELDS, "controlledSubjectProjection", "visualGroups",
+  "observedTopologyRelations",
+] as const;
+const CONTROLLED_SUBJECT_PROJECTION_FIELDS = [
+  "subjectEntityId", "centerXBasisPoints", "centerYBasisPoints",
+  "widthBasisPoints", "heightBasisPoints", "coverageBasisPoints",
 ] as const;
 const OPENING_VISUAL_GROUP_FIELDS = [
   "acceptanceTargetRef", "compositionTargetRef", "topologyNodeId",
@@ -2786,6 +2799,59 @@ export function parseFormalOpeningObservationV1(
     fail(contract, "", "unexpected kind or schemaVersion");
   }
   const identity = parseObservationIdentity(source, contract, "camera");
+  const controlledSubjectSource = object(
+    source.controlledSubjectProjection,
+    contract,
+    "controlledSubjectProjection",
+  );
+  exactFields(
+    controlledSubjectSource,
+    CONTROLLED_SUBJECT_PROJECTION_FIELDS,
+    contract,
+    "controlledSubjectProjection",
+  );
+  const controlledSubjectProjection = Object.freeze({
+    subjectEntityId: text(
+      controlledSubjectSource.subjectEntityId,
+      contract,
+      "controlledSubjectProjection/subjectEntityId",
+    ),
+    centerXBasisPoints: integer(
+      controlledSubjectSource.centerXBasisPoints,
+      -100_000,
+      100_000,
+      contract,
+      "controlledSubjectProjection/centerXBasisPoints",
+    ),
+    centerYBasisPoints: integer(
+      controlledSubjectSource.centerYBasisPoints,
+      -100_000,
+      100_000,
+      contract,
+      "controlledSubjectProjection/centerYBasisPoints",
+    ),
+    widthBasisPoints: integer(
+      controlledSubjectSource.widthBasisPoints,
+      1,
+      100_000,
+      contract,
+      "controlledSubjectProjection/widthBasisPoints",
+    ),
+    heightBasisPoints: integer(
+      controlledSubjectSource.heightBasisPoints,
+      1,
+      100_000,
+      contract,
+      "controlledSubjectProjection/heightBasisPoints",
+    ),
+    coverageBasisPoints: integer(
+      controlledSubjectSource.coverageBasisPoints,
+      1,
+      100_000,
+      contract,
+      "controlledSubjectProjection/coverageBasisPoints",
+    ),
+  });
   const visualGroups = array(source.visualGroups, contract, "visualGroups")
     .map((entry, index) => {
       const path = `visualGroups/${index}`;
@@ -2871,6 +2937,7 @@ export function parseFormalOpeningObservationV1(
     kind: "formal-opening-observation",
     schemaVersion: 1,
     ...identity,
+    controlledSubjectProjection,
     visualGroups: Object.freeze(visualGroups),
     observedTopologyRelations: parseMeasuredTopologyRelations(
       source.observedTopologyRelations,

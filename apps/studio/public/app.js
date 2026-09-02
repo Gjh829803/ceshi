@@ -84,6 +84,7 @@ const historyStats = document.querySelector("#history-stats");
 const runtimeState = document.querySelector("#runtime-state");
 const codexBackendButtons = [...document.querySelectorAll("[data-codex-backend]")];
 const codexBackendNote = document.querySelector("#codex-backend-note");
+const sceneSourceInput = document.querySelector("#world-scene-source");
 const submitBackendEyebrow = document.querySelector("#submit-backend-eyebrow");
 const historyKicker = document.querySelector("#history-kicker");
 const subjectCatalog = document.querySelector("#subject-catalog");
@@ -1651,6 +1652,7 @@ form.addEventListener("submit", async (event) => {
         title: titleInput.value,
         prompt: promptInput.value,
         image: state.image,
+        sceneSourceKind: sceneSourceInput.value,
       }),
     });
     const payload = await response.json();

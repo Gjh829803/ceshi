@@ -38,7 +38,7 @@ if [[ ! "$scene_id" =~ ^[a-z0-9][a-z0-9-]{2,79}$ ]]; then
   exit 2
 fi
 if [[ ( "$mode" == "full" || "$mode" == "plan" ) && ${#prompt_parts[@]} -eq 0 ]]; then
-  echo 'Usage: pnpm agent:world -- --scene-id <id> [--image <file>] "<world request>"' >&2
+  echo 'Usage: pnpm agent:world -- --scene-source canonical --scene-id <id> [--image <file>] "<world request>"' >&2
   exit 2
 fi
 if [[ "$mode" == "build" && ${#image_sources[@]} -gt 0 ]]; then
@@ -207,6 +207,17 @@ if [[ "$mode" == "build" ]]; then
   }
 fi
 
+authoring_attempt_root="$artifact_root/scene-authoring-attempts/$codex_run_nonce"
+authoring_route_decision_path="$authoring_attempt_root/route-decision.json"
+authoring_attempt_path="$authoring_attempt_root/attempt.json"
+authoring_attempt_result_path="$authoring_attempt_root/result.json"
+"$pnpm_bin" exec tsx scripts/scenes/world-generation-route.ts \
+  --scene-source canonical \
+  --scene-id "$scene_id" \
+  --run-id "$codex_run_nonce" \
+  --brief "$artifact_root/scene-brief.md" \
+  --output "$authoring_route_decision_path"
+
 echo "WORLDKIT_STAGE coding-agent"
 [[ -s "$artifact_root/scene-brief.md" ]] || { echo "Scene Brief is missing." >&2; exit 3; }
 [[ -s "$artifact_root/visual-identity-palette.json" ]] || { echo "Visual identity palette is missing." >&2; exit 3; }
@@ -253,16 +264,12 @@ builder_host_receipt="$task_tmp/builder-self-check.host.json"
   exit 2
 }
 
-authoring_attempt_root="$artifact_root/scene-authoring-attempts/$codex_run_nonce"
-authoring_route_decision_path="$authoring_attempt_root/route-decision.json"
-authoring_attempt_path="$authoring_attempt_root/attempt.json"
-authoring_attempt_result_path="$authoring_attempt_root/result.json"
 "$pnpm_bin" exec tsx scripts/scenes/record-scene-authoring-attempt.ts begin \
   --scene-id "$scene_id" \
   --run-id "$codex_run_nonce" \
   --brief "$artifact_root/scene-brief.md" \
   --authoring-input "$artifact_root/authoring.builder.json" \
-  --route-decision-output "$authoring_route_decision_path" \
+  --route-decision "$authoring_route_decision_path" \
   --attempt-output "$authoring_attempt_path"
 authoring_attempt_started=true
 

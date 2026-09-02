@@ -514,7 +514,7 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
           kind: "canonical",
           authoringProfileRef:
             "worldkit://authoring-profile/canonical-outdoor@1",
-          reasonCodes: ["canonical-default"],
+          reasonCodes: ["user-selected-canonical"],
         },
       },
     })).rejects.toThrow(/WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID/);

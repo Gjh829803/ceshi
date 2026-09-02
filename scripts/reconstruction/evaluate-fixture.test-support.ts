@@ -798,6 +798,14 @@ export function createEvidenceSetFixtureInputV1(
   });
   const openingObservation = parseFormalOpeningObservationV1({
     ...observationIdentity("formal-opening-observation", "camera"),
+    controlledSubjectProjection: {
+      subjectEntityId: "player",
+      centerXBasisPoints: 5_000,
+      centerYBasisPoints: 5_000,
+      widthBasisPoints: 1_500,
+      heightBasisPoints: 4_000,
+      coverageBasisPoints: 600,
+    },
     visualGroups: [{
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       compositionTargetRef: COMPOSITION_TARGET_REF,

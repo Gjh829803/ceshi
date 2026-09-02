@@ -386,7 +386,12 @@ delegates to the existing isolated runtime entry/`prepareBabylonNativeRuntimePac
 `RuntimeHost`; it does not copy Gameplay, Physics, Camera or lifecycle ownership. Browser ready, Reset,
 disposal and page exit remain owned by the existing Runtime/lifecycle modules. Cloud Ridge becomes a Case
 consumer and its fixed loader is removed after the generic Harness route is accepted. The Canonical-only
-`apps/playground` Viewer, its Catalog, Studio source selection and `worldkit run` remain unchanged.
+`apps/playground` Catalog and `worldkit run` contract remain unchanged. New world-generation jobs follow
+the later current-only
+[Native-default generation design](./2026-09-02-native-default-world-generation-and-opening-gate-design.md):
+Studio and `agent:world` default to the existing Native reconstruction transaction, while Canonical
+generation requires an explicit source selection. This changes authoring dispatch, not Viewer Runtime
+admission.
 
 ## 7. Formal Capture core slice
 

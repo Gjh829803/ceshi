@@ -1182,6 +1182,14 @@ describe("formal measured observation documents", () => {
   it("parses and hashes opening projection measurements without Case expected pixels", () => {
     const value = {
       ...observationIdentity("formal-opening-observation", "camera"),
+      controlledSubjectProjection: {
+        subjectEntityId: "player",
+        centerXBasisPoints: 5_000,
+        centerYBasisPoints: 5_000,
+        widthBasisPoints: 1_500,
+        heightBasisPoints: 4_000,
+        coverageBasisPoints: 600,
+      },
       visualGroups: openingObservationVisualGroups(),
       observedTopologyRelations: [],
     };

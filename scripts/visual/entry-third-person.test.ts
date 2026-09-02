@@ -25,6 +25,12 @@ function snapshotV4(): any {
         targetEntityId: "player",
         positionMetersXYZ: [0, 3, 5],
         viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        requestedArmLengthMeters: 5,
+        effectiveArmLengthMeters: 5,
+        isCollisionRetracted: false,
+        finalFovDegrees: 60,
+        resolvedParameters: { distanceMeters: 5, baseFovDegrees: 60 },
       },
     },
     world: {
@@ -137,8 +143,29 @@ describe("strict centered rear-third-person entry gate", () => {
       .toContain("ENTRY_CAMERA_NOT_DIRECTLY_BEHIND");
   });
 
+  it("fails for unsafe Subject scale and excessive near-field camera retraction", async () => {
+    const oversized = path.join(root, "oversized.png");
+    const imageFixture = spawnSync(pythonExecutable, ["-c", [
+      "from PIL import Image, ImageDraw",
+      "import sys",
+      "image=Image.new('RGB',(100,100),'white')",
+      "ImageDraw.Draw(image).rectangle((10,5,89,94),fill='#E85D5D')",
+      "image.save(sys.argv[1])",
+    ].join("\n"), oversized], { encoding: "utf8" });
+    expect(imageFixture.status, imageFixture.stderr).toBe(0);
+    expect(diagnosticCodes(run(["--image", oversized])))
+      .toContain("ENTRY_SUBJECT_SCALE_INVALID");
+
+    const snapshot = snapshotV4();
+    snapshot.view.camera.isCollisionRetracted = true;
+    snapshot.view.camera.effectiveArmLengthMeters = 2;
+    await writeFile(snapshotPath, JSON.stringify(snapshot));
+    expect(diagnosticCodes(run(["--image", centered, "--snapshot", snapshotPath])))
+      .toContain("ENTRY_CAMERA_RETRACTED");
+  });
+
   it("persists the validation report through the exact main pipeline shell invocation", async () => {
-    const launcher = await readFile(path.resolve("scripts/agents/run-spatial-world-agent.sh"), "utf8");
+    const launcher = await readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8");
     const invocation = launcher.match(
       /python3 "\$project_root\/scripts\/visual\/validate-entry-third-person\.py" \\\r?\n\s+--image "\$artifact_root\/opening-frame\.png" \\\r?\n\s+--snapshot "\$artifact_root\/runtime-snapshot\.json" \\\r?\n\s+--output "\$artifact_root\/entry-third-person-validation\.json"/,
     )?.[0];

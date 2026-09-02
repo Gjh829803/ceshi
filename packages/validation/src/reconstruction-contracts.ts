@@ -1075,8 +1075,8 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
       mediaType: enumValue(row.mediaType, ["image/png", "image/jpeg", "application/json"] as const, contract, `${path}/mediaType`),
     });
   });
-  if (referenceInputs.length === 0 || referenceInputs.some((row, index) => index > 0 && referenceInputs[index - 1]!.inputRef >= row.inputRef)) {
-    fail(contract, "referenceInputs", "must be non-empty, unique, and sorted by inputRef");
+  if (referenceInputs.some((row, index) => index > 0 && referenceInputs[index - 1]!.inputRef >= row.inputRef)) {
+    fail(contract, "referenceInputs", "must be unique and sorted by inputRef");
   }
 
   const expectedSource = object(source.expected, contract, "expected");

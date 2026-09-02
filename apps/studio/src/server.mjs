@@ -9,6 +9,7 @@ import {
   readFile,
   readdir,
   rename,
+  rm,
   stat,
   unlink,
   writeFile,
@@ -38,8 +39,9 @@ const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
 // The Studio workflow is unreleased and intentionally has one current contract.
 // Bump this only when the persisted Studio record shape changes; do not keep
 // parallel historical workflow implementations in the runtime.
-export const workflowPolicyVersion = 4;
+export const workflowPolicyVersion = 5;
 const codexBackendValues = new Set(["cloud", "local"]);
+const sceneSourceKindValues = new Set(["babylon-native", "canonical"]);
 const trustedTerrainCompilerVersions = new Set([
   "terrain-height-intent-compiler@1",
   "terrain-height-intent-compiler@2",
@@ -592,6 +594,12 @@ function normalizedCodexBackend(value, fallback = null) {
   return typeof value === "string" && codexBackendValues.has(value) ? value : fallback;
 }
 
+function normalizedSceneSourceKind(value, fallback = null) {
+  return typeof value === "string" && sceneSourceKindValues.has(value)
+    ? value
+    : fallback;
+}
+
 export function isAllowedSceneAsset(relativePath) {
   if (allowedRootSceneAssets.has(relativePath)) return true;
   if (/^reference-[0-9]+\.(?:png|jpe?g|webp)$/.test(relativePath)) return true;
@@ -672,6 +680,14 @@ export function createStudio(options = {}) {
 
   function effectiveCodexBackend(record) {
     return normalizedCodexBackend(record?.codexBackend, "cloud");
+  }
+
+  function effectiveSceneSourceKind(record) {
+    const sceneSourceKind = normalizedSceneSourceKind(record?.sceneSourceKind);
+    if (sceneSourceKind === null) {
+      throw new Error("STUDIO_SCENE_SOURCE_IDENTITY_INVALID");
+    }
+    return sceneSourceKind;
   }
 
   async function codexBackendAvailability() {
@@ -814,7 +830,23 @@ export function createStudio(options = {}) {
       "implementation-map": [path.join(artifactRoot, "scene-implementation-map.json")],
       "execution-plan": [path.join(artifactRoot, "world.build.json")],
       "route-validation-manifest": [path.join(artifactRoot, "route-validation-manifest.json")],
-      "opening-frame": [path.join(artifactRoot, "opening-frame.png")],
+      "opening-frame": effectiveSceneSourceKind(record) === "babylon-native"
+        ? [path.join(artifactRoot, "final", "capture", "opening.png")]
+        : [path.join(artifactRoot, "opening-frame.png")],
+      "world-package-build-receipt": [path.join(
+        artifactRoot,
+        "final",
+        "world-package",
+        "world-package-build-receipt.json",
+      )],
+      "formal-world-capture-receipt": [path.join(
+        artifactRoot,
+        "final",
+        "capture",
+        "formal-world-capture-receipt.json",
+      )],
+      "native-evaluation": [path.join(artifactRoot, "final", "evaluation.json")],
+      "native-launch": [path.join(artifactRoot, "final", "launch.json")],
       "runtime-snapshot": [path.join(artifactRoot, "runtime-snapshot.json")],
       "whitebox-triview-manifest": [path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")],
       "entry-third-person-validation": [path.join(artifactRoot, "entry-third-person-validation.json")],
@@ -1418,6 +1450,7 @@ export function createStudio(options = {}) {
           stage: "ready",
           attempt: 1,
           origin: "existing-scene-brief-world",
+          sceneSourceKind: "canonical",
           workflowPolicyVersion,
           captureRequired: false,
           captureStatus: "passed",
@@ -1445,9 +1478,12 @@ export function createStudio(options = {}) {
       "opening-shot.png",
       "world-plan.png",
     ];
-    const canonicalOpeningFrameAvailable = await fileExists(
-      path.join(repoRoot, "artifacts/scenes", record.sceneId, "opening-frame.png"),
-    );
+    const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const sceneSourceKind = effectiveSceneSourceKind(record);
+    const openingFramePath = sceneSourceKind === "babylon-native"
+      ? path.join(artifactRoot, "final", "capture", "opening.png")
+      : path.join(artifactRoot, "opening-frame.png");
+    const canonicalOpeningFrameAvailable = await fileExists(openingFramePath);
     const canonicalAuthoringAvailable = await fileExists(
       path.join(repoRoot, "artifacts/scenes", record.sceneId, "authoring.json"),
     );
@@ -1465,12 +1501,13 @@ export function createStudio(options = {}) {
     return {
       ...record,
       codexBackend: effectiveCodexBackend(record),
+      sceneSourceKind,
       coverUrl,
       referenceUrl: record.referenceImage ? `/api/worlds/${record.id}/reference` : null,
       whiteboxOpeningFrameUrl: whiteboxOpeningFrameAvailable
         ? `/scene-assets/${record.sceneId}/whitebox-opening-frame.png`
         : null,
-      previewUrl: canonicalAuthoringAvailable && (record.captureStatus === "passed" || record.status === "ready")
+      previewUrl: sceneSourceKind === "canonical" && canonicalAuthoringAvailable && (record.captureStatus === "passed" || record.status === "ready")
         ? `/play/${encodeURIComponent(record.id)}`
         : null,
       queuePosition: record.status === "queued"
@@ -1531,7 +1568,54 @@ export function createStudio(options = {}) {
   }
 
   async function collectDeliverables(record) {
-    const definitions = [
+    const nativeDefinitions = [
+      {
+        id: "scene-brief", phase: "native-case-planning", title: "Native Scene Brief",
+        description: "参考输入的可玩空间、构图和语义目标；不拥有 Runtime、物理或质量阈值。",
+        owner: "Native Case Planner", format: "Markdown",
+      },
+      {
+        id: "world-package-build-receipt", phase: "native-package", title: "WorldPackage Build Receipt",
+        description: "绑定已审计 Native Module、Frozen Contributions 和完整 Package identity。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
+        id: "opening-frame", phase: "runtime-capture", title: "正式 Opening Capture",
+        description: "正式 RuntimeHost 与 SDK-owned Camera/Havok 生成的身份绑定首帧。",
+        owner: "Babylon Runtime", format: "PNG",
+      },
+      {
+        id: "formal-world-capture-receipt", phase: "runtime-capture", title: "Formal Capture Receipt",
+        description: "仅在 Opening Composition Host Gate 通过后发布。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
+        id: "native-evaluation", phase: "evaluation", title: "七维场景评测",
+        description: "拓扑、轮廓、构图、Spawn、Collider、通过性和确定性诊断。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
+        id: "native-launch", phase: "final-publication", title: "本地启动说明",
+        description: "绑定最终 Package 的稳定 worldkit native run 命令。",
+        owner: "Trusted Host", format: "JSON",
+      },
+      {
+        id: "evaluation-report", phase: "evaluation", title: "Studio 运行结果",
+        description: "Studio 对正式 Native 产物闭包和任务结果的判定。",
+        owner: "Creator Studio", format: "JSON",
+      },
+      {
+        id: "agent-log", phase: "native-generation", title: "Agent / 工具日志",
+        description: "完整流水线标准输出和错误输出。",
+        owner: "Creator Studio", format: "LOG",
+      },
+      {
+        id: "trajectory-events", phase: "native-generation", title: "阶段事件流",
+        description: "可恢复的阶段、重试和结果记录。",
+        owner: "Creator Studio", format: "JSONL", optional: true,
+      },
+    ];
+    const canonicalDefinitions = [
       {
         id: "scene-brief", phase: "planner", title: "Scene Brief（非权威意图摘要）",
         description: "参考图驱动的意图摘要；它不替代 WorldSpec、plan-lock 或 Canonical AuthoringSpec。",
@@ -1685,6 +1769,9 @@ export function createStudio(options = {}) {
         owner: "Creator Studio", format: "JSONL", optional: true,
       },
     ];
+    const definitions = effectiveSceneSourceKind(record) === "babylon-native"
+      ? nativeDefinitions
+      : canonicalDefinitions;
     const deliverables = [];
     if (record.referenceImage) {
       deliverables.push({
@@ -1717,6 +1804,7 @@ export function createStudio(options = {}) {
   async function collectWorldMedia(record) {
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
+    const sceneSourceKind = effectiveSceneSourceKind(record);
     const [sceneBrief, captureManifest] = await Promise.all([
       readFile(path.join(artifactRoot, "scene-brief.md"), "utf8").catch(() => null),
       readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
@@ -1744,7 +1832,9 @@ export function createStudio(options = {}) {
     ]) {
       const [kind, title, description, fileName, url] = item;
       const filePath = ["opening-frame", "styled-opening-frame"].includes(kind)
-        ? path.join(artifactRoot, fileName)
+        ? kind === "opening-frame" && sceneSourceKind === "babylon-native"
+          ? path.join(artifactRoot, "final", "capture", "opening.png")
+          : path.join(artifactRoot, fileName)
         : path.join(planRoot, fileName);
       const available = await fileExists(filePath);
       planning.push({ kind, title, description, prompt: null, url: available ? url : null, available });
@@ -1962,9 +2052,12 @@ export function createStudio(options = {}) {
     const record = await readRecord(id);
     if (!record || shuttingDown || stoppingJobs.has(id)) return;
     const codexBackend = effectiveCodexBackend(record);
+    const sceneSourceKind = effectiveSceneSourceKind(record);
     const attempt = (record.attempt ?? 0) + 1;
-    const styledOpeningFrameRequired = record.referenceImage !== null;
-    const styledTriviewsRequired = record.referenceImage !== null;
+    const styledOpeningFrameRequired = sceneSourceKind === "canonical" &&
+      record.referenceImage !== null;
+    const styledTriviewsRequired = sceneSourceKind === "canonical" &&
+      record.referenceImage !== null;
     await writeFile(logPath(id), `WorldKit Creator Studio\nscene=${record.sceneId}\nattempt=${attempt}\n\n`, "utf8");
     if (shuttingDown || stoppingJobs.has(id)) return;
     const startedAt = new Date().toISOString();
@@ -1995,7 +2088,27 @@ export function createStudio(options = {}) {
     );
 
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
-    await mkdir(artifactRoot, { recursive: true });
+    if (sceneSourceKind === "babylon-native") {
+      try {
+        const existingEntries = await readdir(artifactRoot, {
+          withFileTypes: true,
+        });
+        const studioEvidenceOnly = existingEntries.length > 0 &&
+          existingEntries.every((entry) =>
+            entry.isFile() && [
+              "evaluation-run.json",
+              "evaluation-report.json",
+            ].includes(entry.name)
+          );
+        if (studioEvidenceOnly) {
+          await rm(artifactRoot, { recursive: true, force: true });
+        }
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    } else {
+      await mkdir(artifactRoot, { recursive: true });
+    }
     const sourceRevision = spawnSync("git", ["rev-parse", "HEAD"], {
       cwd: repoRoot, encoding: "utf8",
     }).stdout.trim() || "unknown";
@@ -2003,9 +2116,10 @@ export function createStudio(options = {}) {
       prompt: record.prompt,
       referenceImageHash: record.referenceImage?.contentSha256 ?? null,
       codexBackend,
+      sceneSourceKind,
       workflowPolicyVersion,
     })).digest("hex")}`;
-    await writeJsonAtomic(path.join(artifactRoot, "evaluation-run.json"), {
+    const evaluationRun = {
       kind: "worldkit-evaluation-run",
       schemaVersion: 1,
       caseId: record.id,
@@ -2020,15 +2134,28 @@ export function createStudio(options = {}) {
       batchId: record.batchId ?? null,
       codexBackend,
       startedAt,
-    });
+    };
+    if (sceneSourceKind === "canonical") {
+      await writeJsonAtomic(
+        path.join(artifactRoot, "evaluation-run.json"),
+        evaluationRun,
+      );
+    }
 
-    const args = ["agent:world", "--", "--scene-id", record.sceneId];
+    const args = [
+      "agent:world",
+      "--",
+      "--scene-source",
+      sceneSourceKind,
+      "--scene-id",
+      record.sceneId,
+    ];
     if (record.referenceImage) args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
     args.push(record.prompt);
 
     await appendJobLog(
       id,
-      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex: hosted Planner (Brief + built-in imagegen) → Canonical Builder; trusted Host validates Authoring V4 / IR V4 / Canonical Scene Plan V1 and performs Babylon capture; configured visual adapters may generate optional styled outputs.\n`,
+      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex through ${sceneSourceKind === "babylon-native" ? "Babylon Native Block" : "explicit Canonical Heightfield"} authoring; the trusted Host owns admission, Package, Runtime, Capture, and evidence.\n`,
     );
     await beforeWorldSpawn(id);
     if (shuttingDown || stoppingJobs.has(id)) return;
@@ -2075,7 +2202,24 @@ export function createStudio(options = {}) {
       return;
     }
 
-    const requiredArtifacts = [
+    if (sceneSourceKind === "babylon-native") {
+      await writeJsonAtomic(
+        path.join(artifactRoot, "evaluation-run.json"),
+        evaluationRun,
+      );
+    }
+
+    const requiredArtifacts = sceneSourceKind === "babylon-native" ? [
+      "native-world-input.json",
+      "scene-brief.md",
+      "case.json",
+      "evaluation-profile.json",
+      path.join("final", "world-package", "world-package-build-receipt.json"),
+      path.join("final", "capture", "opening.png"),
+      path.join("final", "capture", "formal-world-capture-receipt.json"),
+      path.join("final", "evaluation.json"),
+      path.join("final", "launch.json"),
+    ] : [
       "scene-brief.md",
       "planner-self-check.json",
       "visual-identity-palette.json",
@@ -2094,10 +2238,10 @@ export function createStudio(options = {}) {
       path.join("triviews", "whitebox-triview-manifest.json"),
       "entry-third-person-validation.json",
     ];
-    if (styledOpeningFrameRequired) {
+    if (sceneSourceKind === "canonical" && styledOpeningFrameRequired) {
       requiredArtifacts.push("visual-generation-prompts.json", "styled-opening-frame.png");
     }
-    if (styledTriviewsRequired) {
+    if (sceneSourceKind === "canonical" && styledTriviewsRequired) {
       requiredArtifacts.push("styled-triviews-manifest.json", "styled-triviews-report.json");
       const captureManifest = await readJsonIfPresent(
         path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"),
@@ -2117,15 +2261,17 @@ export function createStudio(options = {}) {
         return [relativePath, false];
       }
     })));
-    artifactGates["terrain-height-intent.png"] = await nonemptyArtifact(
-      path.join(
-        repoRoot,
-        "apps/playground/public/scene-plans",
-        record.sceneId,
-        "terrain-height-intent.png",
-      ),
-      freshnessFloor,
-    );
+    if (sceneSourceKind === "canonical") {
+      artifactGates["terrain-height-intent.png"] = await nonemptyArtifact(
+        path.join(
+          repoRoot,
+          "apps/playground/public/scene-plans",
+          record.sceneId,
+          "terrain-height-intent.png",
+        ),
+        freshnessFloor,
+      );
+    }
     const artifactsComplete = Object.values(artifactGates).every(Boolean);
     const finishedAt = new Date().toISOString();
     if (exit.code === 0 && artifactsComplete) {
@@ -2190,7 +2336,12 @@ export function createStudio(options = {}) {
       failedStage: latestRecord?.stage ?? "preparing",
       finishedAt,
       error: reason,
-      captureStatus: artifactGates["opening-frame.png"] && artifactGates[path.join("triviews", "whitebox-triview-manifest.json")]
+      captureStatus: sceneSourceKind === "babylon-native"
+        ? artifactGates[path.join("final", "capture", "opening.png")] &&
+            artifactGates[path.join("final", "capture", "formal-world-capture-receipt.json")]
+          ? "passed"
+          : "failed"
+        : artifactGates["opening-frame.png"] && artifactGates[path.join("triviews", "whitebox-triview-manifest.json")]
         ? "passed"
         : "failed",
       outcome: "failed",
@@ -2327,6 +2478,7 @@ export function createStudio(options = {}) {
     testSetImageId = null,
     batchId = null,
     codexBackend = selectedCodexBackend,
+    sceneSourceKind = "babylon-native",
   }, existingIds) {
     const ids = existingIds ?? new Set((await listRecords()).map((record) => record.id));
     const id = createSceneId(title, ids);
@@ -2355,6 +2507,7 @@ export function createStudio(options = {}) {
       status: "queued",
       stage: "queued",
       codexBackend,
+      sceneSourceKind,
       attempt: 0,
       origin,
       ...(testSetId === null ? {} : { testSetId }),
@@ -2368,10 +2521,10 @@ export function createStudio(options = {}) {
       captureRequired: true,
       captureStatus: "pending",
       outcome: null,
-      styledOpeningFrameRequired: referenceImage !== null,
-      styledOpeningFrameStatus: referenceImage === null ? "not-required" : "pending",
-      styledTriviewsRequired: referenceImage !== null,
-      styledTriviewsStatus: referenceImage === null ? "not-required" : "pending",
+      styledOpeningFrameRequired: sceneSourceKind === "canonical" && referenceImage !== null,
+      styledOpeningFrameStatus: sceneSourceKind !== "canonical" || referenceImage === null ? "not-required" : "pending",
+      styledTriviewsRequired: sceneSourceKind === "canonical" && referenceImage !== null,
+      styledTriviewsStatus: sceneSourceKind !== "canonical" || referenceImage === null ? "not-required" : "pending",
       workflowPolicyVersion,
     };
     await writeRecord(record);
@@ -2777,6 +2930,9 @@ export function createStudio(options = {}) {
       }
       const batchId = `batch-${Date.now().toString(36)}-${randomBytes(2).toString("hex")}`;
       const batchCodexBackend = selectedCodexBackend;
+      if (selectedImages.some((image) => image.mimeType === "image/webp")) {
+        throw new InputError("Babylon Native 参考图当前只接受 PNG 或 JPEG；请先转换 WebP。");
+      }
       const existingIds = new Set((await listRecords()).map((world) => world.id));
       const worlds = [];
       for (const image of selectedImages) {
@@ -2824,7 +2980,23 @@ export function createStudio(options = {}) {
       const prompt = normalizePrompt(body.prompt);
       const title = normalizeTitle(body.title, prompt);
       const image = decodeImagePayload(body.image);
-      const record = await createQueuedWorld({ title, prompt, image });
+      const sceneSourceKind = body.sceneSourceKind === undefined
+        ? "babylon-native"
+        : normalizedSceneSourceKind(body.sceneSourceKind);
+      if (sceneSourceKind === null) {
+        throw new InputError(
+          "sceneSourceKind 必须是 babylon-native 或 canonical。",
+        );
+      }
+      if (sceneSourceKind === "babylon-native" && image?.mimeType === "image/webp") {
+        throw new InputError("Babylon Native 参考图当前只接受 PNG 或 JPEG；请先转换 WebP。");
+      }
+      const record = await createQueuedWorld({
+        title,
+        prompt,
+        image,
+        sceneSourceKind,
+      });
       sendJson(response, 202, { world: await enrichRecord(record) });
       return true;
     }
@@ -2903,6 +3075,13 @@ export function createStudio(options = {}) {
         sendJson(response, 404, {
           code: "STUDIO_PREVIEW_NOT_FOUND",
           error: "没有找到这个世界。",
+        });
+        return true;
+      }
+      if (effectiveSceneSourceKind(recordBefore) === "babylon-native") {
+        sendJson(response, 409, {
+          code: "STUDIO_PREVIEW_NATIVE_USE_FINAL_LAUNCH",
+          error: "Babylon Native 世界必须使用身份绑定的 final/launch.json 启动，不能回落到 Canonical Preview。",
         });
         return true;
       }
@@ -2986,8 +3165,11 @@ export function createStudio(options = {}) {
       if (wasActive) terminateChild(activeChildren.get(record.id));
 
       const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
-      const capturePassed = await fileExists(path.join(artifactRoot, "opening-frame.png")) &&
-        await fileExists(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"));
+      const capturePassed = effectiveSceneSourceKind(record) === "babylon-native"
+        ? await fileExists(path.join(artifactRoot, "final", "capture", "opening.png")) &&
+          await fileExists(path.join(artifactRoot, "final", "capture", "formal-world-capture-receipt.json"))
+        : await fileExists(path.join(artifactRoot, "opening-frame.png")) &&
+          await fileExists(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"));
       const stopped = await updateRecord(record.id, {
         status: "interrupted",
         stage: "interrupted",
@@ -3028,6 +3210,9 @@ export function createStudio(options = {}) {
         sendError(response, 409, "只有失败或中断的任务可以重试。");
         return true;
       }
+      const sceneSourceKind = effectiveSceneSourceKind(record);
+      const styledOutputsRequired = sceneSourceKind === "canonical" &&
+        record.referenceImage !== null;
       await updateRecord(record.id, {
         status: "queued",
         stage: "queued",
@@ -3036,9 +3221,10 @@ export function createStudio(options = {}) {
         captureRequired: true,
         captureStatus: "pending",
         outcome: null,
-        styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
-        styledTriviewsRequired: Boolean(record.referenceImage),
-        styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+        styledOpeningFrameRequired: styledOutputsRequired,
+        styledOpeningFrameStatus: styledOutputsRequired ? "pending" : "not-required",
+        styledTriviewsRequired: styledOutputsRequired,
+        styledTriviewsStatus: styledOutputsRequired ? "pending" : "not-required",
       });
       await appendTrajectoryEvent(record.id, "queued", "用户发起重试，任务重新进入队列。", { kind: "queued" });
       enqueue(record.id, effectiveCodexBackend(record));

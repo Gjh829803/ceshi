@@ -16,6 +16,8 @@ import {
   completeHostedCanonicalSceneAuthoringAttemptV1,
   rejectHostedCanonicalSceneAuthoringAttemptV1,
 } from "./record-scene-authoring-attempt";
+import { writeHostedCanonicalWorldGenerationRouteDecisionV1 } from
+  "./world-generation-route.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -69,15 +71,28 @@ async function fixture(): Promise<{
   };
 }
 
+async function freezeCanonicalRoute(
+  files: Awaited<ReturnType<typeof fixture>>,
+  runId: string,
+): Promise<void> {
+  await writeHostedCanonicalWorldGenerationRouteDecisionV1({
+    sceneId: "hosted-attempt-test",
+    runId,
+    sceneBriefPath: files.briefPath,
+    outputPath: files.routeDecisionPath,
+  });
+}
+
 describe("hosted Canonical Scene Authoring orchestration records", () => {
   it("publishes one closed Route Decision and Attempt before trusted Host finalization", async () => {
     const files = await fixture();
+    await freezeCanonicalRoute(files, "run-001");
     const created = await beginHostedCanonicalSceneAuthoringAttemptV1({
       sceneId: "hosted-attempt-test",
       runId: "run-001",
       sceneBriefPath: files.briefPath,
       authoringInputPath: files.authoringInputPath,
-      routeDecisionOutputPath: files.routeDecisionPath,
+      routeDecisionPath: files.routeDecisionPath,
       attemptOutputPath: files.attemptPath,
     });
 
@@ -91,7 +106,7 @@ describe("hosted Canonical Scene Authoring orchestration records", () => {
     expect(routeDecision.decision).toEqual({
       kind: "canonical",
       authoringProfileRef: "worldkit://authoring-profile/canonical-outdoor@1",
-      reasonCodes: ["canonical-default"],
+      reasonCodes: ["user-selected-canonical"],
     });
     expect(attempt.sceneAuthoringRouteDecisionHash).toBe(
       hashSceneAuthoringRouteDecisionV1(routeDecision),
@@ -107,12 +122,13 @@ describe("hosted Canonical Scene Authoring orchestration records", () => {
 
   it("publishes a completed Result bound to the final Canonical source and evidence", async () => {
     const files = await fixture();
+    await freezeCanonicalRoute(files, "run-002");
     const { attempt } = await beginHostedCanonicalSceneAuthoringAttemptV1({
       sceneId: "hosted-attempt-test",
       runId: "run-002",
       sceneBriefPath: files.briefPath,
       authoringInputPath: files.authoringInputPath,
-      routeDecisionOutputPath: files.routeDecisionPath,
+      routeDecisionPath: files.routeDecisionPath,
       attemptOutputPath: files.attemptPath,
     });
     const result = await completeHostedCanonicalSceneAuthoringAttemptV1({
@@ -141,12 +157,13 @@ describe("hosted Canonical Scene Authoring orchestration records", () => {
 
   it("publishes a rejected Result without any authored source identity", async () => {
     const files = await fixture();
+    await freezeCanonicalRoute(files, "run-003");
     await beginHostedCanonicalSceneAuthoringAttemptV1({
       sceneId: "hosted-attempt-test",
       runId: "run-003",
       sceneBriefPath: files.briefPath,
       authoringInputPath: files.authoringInputPath,
-      routeDecisionOutputPath: files.routeDecisionPath,
+      routeDecisionPath: files.routeDecisionPath,
       attemptOutputPath: files.attemptPath,
     });
     const result = await rejectHostedCanonicalSceneAuthoringAttemptV1({
@@ -168,12 +185,13 @@ describe("hosted Canonical Scene Authoring orchestration records", () => {
 
   it("rejects a mismatched scene rather than publishing an ambiguous Attempt", async () => {
     const files = await fixture();
+    await freezeCanonicalRoute(files, "run-004");
     await expect(beginHostedCanonicalSceneAuthoringAttemptV1({
       sceneId: "different-scene",
       runId: "run-004",
       sceneBriefPath: files.briefPath,
       authoringInputPath: files.authoringInputPath,
-      routeDecisionOutputPath: files.routeDecisionPath,
+      routeDecisionPath: files.routeDecisionPath,
       attemptOutputPath: files.attemptPath,
     })).rejects.toThrow("SCENE_AUTHORING_INPUT_SCENE_ID_MISMATCH");
   });
