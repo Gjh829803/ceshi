@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isNil } from "lodash-es";
+import ts from "typescript";
 
 export const CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "packages",
@@ -155,13 +156,6 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     token(["block", "-world", "-compiler"]),
     token(["hidden", "Foundation"]),
   ];
-  const retiredNativeBlockColliderSelection = [
-    "\\bstaticColliders\\s*:\\s*",
-    "(?:Object\\.freeze\\s*\\(\\s*)?\\[\\s*",
-    "(?:Object\\.freeze\\s*\\(\\s*)?\\{",
-    "(?:(?!colliderGeometrySource)[\\s\\S]){0,320}?",
-    "\\bblockId\\s*:",
-  ].join("");
   const legacyNativeBlockTransitionPrefix = token([
     "structural",
     "HalfMeterTransition",
@@ -236,9 +230,18 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       pathPattern: /^(?:packages|apps|scripts|examples|artifacts|assets|\.codex)\//,
       excludedPathPattern: /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/,
       pattern: new RegExp(
-        `(?:${alternatives(legacyNativeBlockMechanisms)}|${retiredNativeBlockColliderSelection})`,
+        `(?:${alternatives(legacyNativeBlockMechanisms)})`,
         "g",
       ),
+    }),
+    Object.freeze({
+      familyId: "WORLDKIT_NATIVE_BLOCK_SCENE_SCAN_COLLIDER_INFERENCE",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pathPattern: /^packages\/native-babylon-block-profile\/src\//,
+      excludedPathPattern:
+        /(?:^|\/)(?:session|[^/]+\.(?:test|spec))\.[cm]?[jt]sx?$/,
+      pattern: /(?:\b(?:scene|context\.scene)\.meshes\b|\bgetMeshesByTags\b|\bTags\.(?:MatchesQuery|AddTagsTo)\b|\bmesh\.(?:name|metadata)\b)/g,
     }),
     Object.freeze({
       familyId: "WORLDKIT_UNRELEASED_LEGACY_M8_S1_PUBLIC_CONTRACT",
@@ -345,6 +348,76 @@ function collectTextMatches(
       value: match[0],
     });
   }
+  return matches;
+}
+
+function staticPropertyName(node: ts.PropertyName): string | undefined {
+  return ts.isIdentifier(node) || ts.isStringLiteralLike(node) ||
+      ts.isNumericLiteral(node)
+    ? node.text
+    : undefined;
+}
+
+function unwrapExpression(node: ts.Expression): ts.Expression {
+  let current = node;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) current = current.expression;
+  if (
+    ts.isCallExpression(current) &&
+    current.arguments.length === 1 &&
+    ts.isPropertyAccessExpression(current.expression) &&
+    ts.isIdentifier(current.expression.expression) &&
+    current.expression.expression.text === "Object" &&
+    current.expression.name.text === "freeze"
+  ) return unwrapExpression(current.arguments[0]!);
+  return current;
+}
+
+function retiredNativeBlockColliderSelectionMatches(
+  source: string,
+  relativePath: string,
+): readonly MutableMatch[] {
+  if (!/\.[cm]?[jt]sx?$/.test(relativePath) ||
+      /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relativePath)) {
+    return [];
+  }
+  const sourceFile = ts.createSourceFile(
+    relativePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const matches: MutableMatch[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      staticPropertyName(node.name) === "staticColliders"
+    ) {
+      const array = unwrapExpression(node.initializer);
+      if (ts.isArrayLiteralExpression(array)) {
+        for (const element of array.elements) {
+          const candidate = unwrapExpression(element as ts.Expression);
+          if (!ts.isObjectLiteralExpression(candidate)) continue;
+          const blockId = candidate.properties.find((property) =>
+            ts.isPropertyAssignment(property) &&
+            staticPropertyName(property.name) === "blockId");
+          if (isNil(blockId)) continue;
+          matches.push({
+            path: relativePath,
+            line: sourceFile.getLineAndCharacterOfPosition(blockId.getStart(sourceFile)).line + 1,
+            value: "staticColliders[].blockId",
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
   return matches;
 }
 
@@ -482,6 +555,12 @@ export async function scanUnreleasedCleanBreak(
         ...collectTextMatches(source, relativePath, definition),
       );
     }
+    matchesByFamily.get(
+      "WORLDKIT_UNRELEASED_LEGACY_NATIVE_BLOCK_AUTHORING",
+    )!.push(...retiredNativeBlockColliderSelectionMatches(
+      source,
+      relativePath,
+    ));
     matchesByFamily.get("superseded-serialized-contracts")!.push(
       ...serializedContractMatches(source, relativePath),
     );

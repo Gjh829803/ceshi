@@ -585,8 +585,13 @@ describe("verify:unreleased-clean-break", () => {
         `import "${token(["block", "-world", "-three"])}";`,
         `const manifest: ${token(["Block", "World", "Manifest", "V2"])} = value;`,
         "session.finalize({ staticColliders: [{",
-        '  id: "ground-collider",',
-        '  blockId: "ground-block",',
+        '  id: "current-collider",',
+        '  colliderGeometrySource: { kind: "block", blockId: "current-block" },',
+        '  traversalBinding: { kind: "not-traversable" },',
+        '  exposedEdgePolicy: "none",',
+        "}, {",
+        '  id: "retired-collider",',
+        '  blockId: "retired-block",',
         '  traversalBinding: { kind: "not-traversable" },',
         "}] });",
       ].join("\n"),
@@ -601,6 +606,38 @@ describe("verify:unreleased-clean-break", () => {
     expect(result.matchCount).toBe(3);
     expect(result.matchesByPath.map(({ path: matchedPath }) => matchedPath))
       .toEqual(["packages/native-block-authoring.ts"]);
+    expect(report.ok).toBe(false);
+  });
+
+  it("blocks Native Block collision inference from Scene, Mesh name, tags, or metadata", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-native-block-scene-scan-");
+    const fixturePath = path.join(
+      fixtureRoot,
+      "packages",
+      "native-babylon-block-profile",
+      "src",
+      "infer-colliders.ts",
+    );
+    await mkdir(path.dirname(fixturePath), { recursive: true });
+    await writeFile(
+      fixturePath,
+      [
+        "const candidates = context.scene.meshes;",
+        'const inferred = mesh.name === "ground";',
+        "const metadata = mesh.metadata;",
+        'const tagged = Tags.MatchesQuery(mesh, "collider");',
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+    const result = family(
+      report,
+      "WORLDKIT_NATIVE_BLOCK_SCENE_SCAN_COLLIDER_INFERENCE",
+    );
+    expect(result.matchCount).toBe(4);
+    expect(result.matchesByPath.map(({ path: matchedPath }) => matchedPath))
+      .toEqual(["packages/native-babylon-block-profile/src/infer-colliders.ts"]);
     expect(report.ok).toBe(false);
   });
 
