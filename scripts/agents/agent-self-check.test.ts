@@ -115,6 +115,7 @@ describe("single-job Planner and Builder self-check bundles", () => {
       const world = JSON.parse(
         await readFile("examples/authoring/basic-world.json", "utf8"),
       );
+      world.id = "self-check-scene";
       world.schemaVersion = 4;
       world.spatial.traversalAreas = [];
       world.constraints.connectivity = [];
@@ -142,7 +143,7 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
           kind: "worldkit-scene-brief-implementation-map-draft",
           schemaVersion: 1,
           sceneId: "self-check-scene",
-          authoringSpecId: "basic-world",
+          authoringSpecId: "self-check-scene",
           visualTargetMappings: [
             { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
             { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
@@ -199,11 +200,46 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
         routeBuildWindowEvidence: [],
       });
 
+      world.id = "self-check-scene-authoring";
+      await Promise.all([
+        writeFile(worldPath, JSON.stringify(world)),
+        writeFile(mapPath, JSON.stringify({
+          kind: "worldkit-scene-brief-implementation-map-draft",
+          schemaVersion: 1,
+          sceneId: "self-check-scene",
+          authoringSpecId: "self-check-scene-authoring",
+          visualTargetMappings: [
+            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
+            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+          ],
+        })),
+      ]);
+      const mismatchedHostReport = path.join(root, "builder-host-scene-id-mismatch.json");
+      const mismatchedAgentReport = path.join(root, "builder-agent-scene-id-mismatch.json");
+      const mismatchedHost = run("pnpm", ["exec", "tsx", "scripts/agents/agent-builder-self-check.ts", ...common, "--report", mismatchedHostReport]);
+      const mismatchedAgent = run("node", [".codex/skills/worldkit-canonical-builder/scripts/self-check.mjs", ...common, "--report", mismatchedAgentReport]);
+      expect(mismatchedHost.status).toBe(2);
+      expect(mismatchedAgent.status).toBe(2);
+      expect(await readFile(mismatchedAgentReport, "utf8")).toBe(
+        await readFile(mismatchedHostReport, "utf8"),
+      );
+      expect(JSON.parse(await readFile(mismatchedHostReport, "utf8"))).toMatchObject({
+        status: "failed",
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            code: "AUTHORING_SPEC_SCENE_ID_MISMATCH",
+            instancePath: "/id",
+          }),
+        ]),
+      });
+      world.id = "self-check-scene";
+      await writeFile(worldPath, JSON.stringify(world));
+
       await writeFile(mapPath, JSON.stringify({
         kind: "worldkit-scene-brief-implementation-map",
         schemaVersion: 1,
         sceneId: "self-check-scene",
-        authoringSpecId: "basic-world",
+        authoringSpecId: "self-check-scene",
         mappings: [
           { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
           { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
@@ -223,7 +259,7 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
         kind: "worldkit-scene-brief-implementation-map-draft",
         schemaVersion: 1,
         sceneId: "self-check-scene",
-        authoringSpecId: "basic-world",
+        authoringSpecId: "self-check-scene",
         visualTargetMappings: [
           { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
           { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },

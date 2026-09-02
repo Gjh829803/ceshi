@@ -36025,6 +36025,17 @@ async function runBuilderSelfCheck(options) {
       details: diagnostic2.details
     })));
   } else {
+    if (parsed.value.id !== options.sceneId) {
+      diagnostics.push({
+        code: "AUTHORING_SPEC_SCENE_ID_MISMATCH",
+        message: "AuthoringSpec id must exactly equal the Host-provided scene id.",
+        instancePath: "/id",
+        details: {
+          actualAuthoringSpecId: parsed.value.id,
+          expectedSceneId: options.sceneId
+        }
+      });
+    }
     diagnostics.push(...whiteboxLightingDiagnostics(parsed.value));
     diagnostics.push(...hostedRelationshipAdmissionDiagnostics(parsed.value));
     const normalized = normalizeAuthoringSpecV4(parsed.value);
