@@ -79,4 +79,7 @@ files, media or other outputs, and do not delegate or create another task.
 When the Host provides an executed capture-quality report, treat it as a repair
 request. Preserve every passing segment unless its start must change for uniqueness;
 replace each failing segment's start, facing, route and input timing so its known
-stationary window cannot recur. The repaired plan must still satisfy every rule above.
+stationary window cannot recur. When the Host also provides capture repair evidence,
+use its exact stalled world position, active keys, velocity and sampled approach trace
+to route away from the observed blocker instead of repeating the same approach. The
+repaired plan must still satisfy every rule above.

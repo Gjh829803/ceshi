@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validatePlaythroughCaptureHealth } from "./playthrough-capture-health.mjs";
+import {
+  buildPlaythroughRepairEvidence,
+  validatePlaythroughCaptureHealth,
+} from "./playthrough-capture-health.mjs";
 
 function samples({ stationary = false, stalled = false } = {}) {
   return Array.from({ length: 241 }, (_, index) => ({
@@ -113,4 +116,37 @@ test("does not classify intentional air movement as a ground fall", () => {
     })),
   });
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+});
+
+test("summarizes the failed stationary window for the repair Agent", () => {
+  const telemetrySamples = samplesWithStationaryWindow({
+    startSeconds: 2,
+    endSeconds: 8,
+  }).map((sample) => ({
+    ...sample,
+    activeKeys: ["W", "D"],
+    subject: {
+      ...sample.subject,
+      velocityMetersPerSecondXYZ: [0, 0, 0],
+      locomotion: { supportMode: "supported" },
+    },
+  }));
+  const quality = validatePlaythroughCaptureHealth({ telemetrySamples });
+  const evidence = buildPlaythroughRepairEvidence({
+    sceneId: "scene-repair",
+    planHash: `sha256:${"a".repeat(64)}`,
+    captures: [{ telemetrySamples }],
+    segmentQualities: [{
+      segmentId: "segment-00",
+      passed: quality.ok,
+      diagnostics: quality.diagnostics,
+      metrics: quality.metrics,
+    }],
+  });
+  assert.equal(evidence.failedSegments.length, 1);
+  assert.equal(evidence.failedSegments[0].segmentId, "segment-00");
+  assert.ok(evidence.failedSegments[0].stallDurationSeconds > 5);
+  assert.deepEqual(evidence.failedSegments[0].activeKeysAtStall, ["W", "D"]);
+  assert.ok(evidence.failedSegments[0].evidenceSamples.length <= 33);
+  assert.ok(evidence.failedSegments[0].stalledPositionMetersXYZ);
 });

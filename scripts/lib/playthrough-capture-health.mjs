@@ -200,3 +200,74 @@ export function validatePlaythroughCaptureHealth(input) {
     ? { ok: true, diagnostics: [], metrics }
     : { ok: false, diagnostics, metrics };
 }
+
+function repairSample(sample) {
+  return {
+    actualSeconds: sample.actualSeconds,
+    simulationTick: sample.simulationTick,
+    activeKeys: Array.isArray(sample.activeKeys) ? [...sample.activeKeys] : [],
+    positionMetersXYZ: finitePosition(sample?.subject?.positionMetersXYZ),
+    velocityMetersPerSecondXYZ:
+      finitePosition(sample?.subject?.velocityMetersPerSecondXYZ),
+    supportMode: sample?.subject?.locomotion?.supportMode ?? null,
+  };
+}
+
+export function buildPlaythroughRepairEvidence({
+  sceneId,
+  planHash,
+  captures,
+  segmentQualities,
+}) {
+  const failedSegments = segmentQualities.flatMap((quality, index) => {
+    if (quality?.passed) return [];
+    const samples = Array.isArray(captures?.[index]?.telemetrySamples)
+      ? captures[index].telemetrySamples
+        .filter((sample) => Number.isFinite(sample?.actualSeconds))
+        .sort((left, right) => left.actualSeconds - right.actualSeconds)
+      : [];
+    const stallStartSeconds = Number(
+      quality?.metrics?.maximumSubjectStationaryStartedAtSeconds,
+    );
+    const stallDurationSeconds = Number(
+      quality?.metrics?.maximumSubjectStationarySeconds,
+    );
+    const stallEndSeconds = stallStartSeconds >= 0 && stallDurationSeconds >= 0
+      ? stallStartSeconds + stallDurationSeconds
+      : -1;
+    const localEvidence = stallStartSeconds >= 0
+      ? samples.filter((sample) =>
+        sample.actualSeconds >= stallStartSeconds - 2 &&
+        sample.actualSeconds <= stallEndSeconds + 1)
+      : samples;
+    const stride = Math.max(1, Math.ceil(localEvidence.length / 32));
+    const evidenceSamples = localEvidence.filter((_, sampleIndex) =>
+      sampleIndex % stride === 0 || sampleIndex === localEvidence.length - 1);
+    const stalledSample = samples.reduce((closest, sample) => {
+      if (stallStartSeconds < 0) return closest;
+      return closest === null ||
+          Math.abs(sample.actualSeconds - stallStartSeconds) <
+            Math.abs(closest.actualSeconds - stallStartSeconds)
+        ? sample : closest;
+    }, null);
+    return [{
+      segmentId: quality.segmentId,
+      diagnostics: quality.diagnostics,
+      stallStartSeconds,
+      stallEndSeconds,
+      stallDurationSeconds,
+      stalledPositionMetersXYZ:
+        finitePosition(stalledSample?.subject?.positionMetersXYZ),
+      activeKeysAtStall: Array.isArray(stalledSample?.activeKeys)
+        ? [...stalledSample.activeKeys] : [],
+      evidenceSamples: evidenceSamples.map(repairSample),
+    }];
+  });
+  return {
+    kind: "worldkit-playthrough-capture-repair-evidence",
+    schemaVersion: 1,
+    sceneId,
+    planHash,
+    failedSegments,
+  };
+}

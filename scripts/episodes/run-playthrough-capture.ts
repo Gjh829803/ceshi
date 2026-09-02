@@ -18,6 +18,7 @@ import {
 } from "../lib/playthrough-dataset.mjs";
 import {
   PLAYTHROUGH_CAPTURE_HEALTH_POLICY,
+  buildPlaythroughRepairEvidence,
   validatePlaythroughCaptureHealth,
 } from "../lib/playthrough-capture-health.mjs";
 import { validatePlaythroughPlanStructure } from "../lib/playthrough-plan-structure.mjs";
@@ -286,6 +287,15 @@ async function main(): Promise<void> {
       },
     );
     if (!qualityPassed) {
+      await writeJsonAtomic(
+        path.join(options.output, "executed-playthrough-repair-evidence.json"),
+        buildPlaythroughRepairEvidence({
+          sceneId: options.sceneId,
+          planHash: sha256Canonical(plan),
+          captures,
+          segmentQualities,
+        }),
+      );
       throw new Error(
         `EPISODE_MINIMUM_CAPTURE_HEALTH_FAILED ${JSON.stringify(segmentQualities)}`,
       );

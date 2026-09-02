@@ -72,9 +72,22 @@ if [[ -n "$repair_report" ]]; then
     echo "Capture repair report must be inside the repository." >&2
     exit 3
   }
-  repair_identity="$(shasum -a 256 "$repair_report" | cut -d ' ' -f 1 | cut -c1-20)"
+  repair_evidence="$(dirname "$repair_report")/executed-playthrough-repair-evidence.json"
+  repair_hash_inputs=("$repair_report")
+  repair_evidence_instruction=""
+  if [[ -f "$repair_evidence" && -s "$repair_evidence" && ! -L "$repair_evidence" ]]; then
+    relative_repair_evidence="${repair_evidence#"$project_root"/}"
+    [[ "$relative_repair_evidence" != "$repair_evidence" ]] || {
+      echo "Capture repair evidence must be inside the repository." >&2
+      exit 3
+    }
+    repair_hash_inputs+=("$repair_evidence")
+    repair_context+=(--context "$relative_repair_evidence")
+    repair_evidence_instruction=" and $relative_repair_evidence, including the exact stalled world position, active keys, velocity and sampled approach trace"
+  fi
+  repair_identity="$(shasum -a 256 "${repair_hash_inputs[@]}" | shasum -a 256 | cut -d ' ' -f 1 | cut -c1-20)"
   repair_instruction="
-This is capture repair attempt $attempt. Read the prior plan supplied as repair input and $relative_repair_report. Keep passing segments stable. For every failing segment, use its measured stationary start and route outcome to replace the start/facing/waypoints and raw input timing with a clearly different, Host-admitted path that continues moving for the full 30 seconds. Do not merely rename ids or retry the same controls."
+This is capture repair attempt $attempt. Read the prior plan supplied as repair input, $relative_repair_report$repair_evidence_instruction. Keep passing segments stable. For every failing segment, use its measured stationary start, stalled position, active keys and route outcome to replace the start/facing/waypoints and raw input timing with a clearly different, Host-admitted path that continues moving for the full 30 seconds. Move away from the observed blocked position instead of repeating the same approach. Do not merely rename ids or retry the same controls."
 fi
 
 unset LWDP_GENERATION_API_TOKEN LWDP_API_BASE LWDP_USER_ID
