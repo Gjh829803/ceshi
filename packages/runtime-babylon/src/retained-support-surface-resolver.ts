@@ -1,3 +1,4 @@
+import { countBy } from "lodash-es";
 import type {
   CanonicalSceneExecutionPlanV1,
   RuntimeVec3V1,
@@ -71,6 +72,13 @@ function normalizedDot(
   ) / (leftLength * rightLength);
 }
 
+// Route-walkable admission stays maxSlopeCosine. This tighter cosine is only
+// used to unique-resolve a multi-surface manifold onto the checkSupport()
+// normal: slope-legal lip/corner contacts drop out. If several interiors still
+// match, the surface with the unique maximum aligned-contact count wins;
+// a tied dual-layer pair stays fail-closed ambiguous.
+const ROUTE_WALKABLE_CHECK_SUPPORT_ALIGNMENT_COSINE_V1 = 0.95;
+
 function contactMatchesPolicy(
   contact: CharacterSupportProjectionContactV1,
   sample: CharacterSupportProjectionSampleV1,
@@ -82,6 +90,52 @@ function contactMatchesPolicy(
   }
   return normalizedDot(contact.normalXYZ, sample.supportNormalWorldXYZ) >=
     policy.minimumContactToAggregateSupportNormalCosine;
+}
+
+function resolvedFromSurface(
+  surface: CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+): CharacterSupportSurfaceResolutionV1 {
+  return {
+    mode: "resolved",
+    traversalSurfaceId: surface.traversalSurfaceId,
+    surfaceEntityId: surface.surfaceEntityId,
+    colliderSubshapeId: surface.colliderSubshapeId,
+    resourceRef: surface.resourceRef,
+    resolvedVersion: surface.resolvedVersion,
+    resourceHash: surface.resourceHash,
+  };
+}
+
+function uniqueCheckSupportAlignedSurface(
+  contacts: readonly CharacterSupportProjectionContactV1[],
+  resolvedSurfaces: readonly CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number][],
+  supportNormalWorldXYZ: RuntimeVec3V1,
+): CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number] | undefined {
+  const alignedSurfaces = resolvedSurfaces.filter((_, index) =>
+    normalizedDot(
+      contacts[index]!.normalXYZ,
+      supportNormalWorldXYZ,
+    ) >= ROUTE_WALKABLE_CHECK_SUPPORT_ALIGNMENT_COSINE_V1
+  );
+  if (alignedSurfaces.length === 0) return undefined;
+  const alignedCountById = countBy(
+    alignedSurfaces,
+    (surface) => surface.traversalSurfaceId,
+  );
+  let winningId: string | undefined;
+  let winningCount = 0;
+  let winningIdIsTied = false;
+  for (const [traversalSurfaceId, alignedCount] of Object.entries(alignedCountById)) {
+    if (alignedCount > winningCount) {
+      winningId = traversalSurfaceId;
+      winningCount = alignedCount;
+      winningIdIsTied = false;
+      continue;
+    }
+    if (alignedCount === winningCount) winningIdIsTied = true;
+  }
+  if (winningIdIsTied || winningId === undefined) return undefined;
+  return alignedSurfaces.find((surface) => surface.traversalSurfaceId === winningId);
 }
 
 export function retainedContactsAdmittedByPolicyV1(input: Readonly<{
@@ -137,15 +191,18 @@ export function resolveRetainedSupportSurfaceV1(input: Readonly<{
   const traversalSurfaceIds = new Set(
     resolvedSurfaces.map((surface) => surface.traversalSurfaceId),
   );
-  if (traversalSurfaceIds.size !== 1) return { mode: "ambiguous" };
-  const surface = resolvedSurfaces[0]!;
-  return {
-    mode: "resolved",
-    traversalSurfaceId: surface.traversalSurfaceId,
-    surfaceEntityId: surface.surfaceEntityId,
-    colliderSubshapeId: surface.colliderSubshapeId,
-    resourceRef: surface.resourceRef,
-    resolvedVersion: surface.resolvedVersion,
-    resourceHash: surface.resourceHash,
-  };
+  if (traversalSurfaceIds.size !== 1) {
+    const checkSupportSurface = policy.mode === "route-walkable"
+      ? uniqueCheckSupportAlignedSurface(
+        contacts,
+        resolvedSurfaces,
+        sample.supportNormalWorldXYZ,
+      )
+      : undefined;
+    if (checkSupportSurface !== undefined) {
+      return resolvedFromSurface(checkSupportSurface);
+    }
+    return { mode: "ambiguous" };
+  }
+  return resolvedFromSurface(resolvedSurfaces[0]!);
 }

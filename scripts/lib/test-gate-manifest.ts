@@ -158,6 +158,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/runtime-babylon/src/p15-conformance.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/p15-runtime-debt-repro.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "packages/runtime-babylon/src/polygon-triangulation.test.ts", lane: "contract" },
+  { path: "packages/runtime-babylon/src/retained-support-surface-resolver.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/runtime-clean-break.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/runtime-session-subject-support.test.ts", lane: "contract" },
   { path: "packages/runtime-babylon/src/runtime.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },

@@ -63,6 +63,12 @@ describe("scene terrain finalizer", { timeout: 30_000 }, () => {
         signedIntentPng(),
       ]);
     const builderAuthoring = JSON.parse(originalAuthoringSource);
+    const mapDraft = JSON.parse(mapDraftSource);
+    // Copied WRC receipts still use a historical `-authoring` suffix. The
+    // current Host contract requires AuthoringSpec id, map sceneId, and map
+    // authoringSpecId to equal the Host scene id on this working copy.
+    builderAuthoring.id = SCENE_ID;
+    mapDraft.authoringSpecId = SCENE_ID;
     for (const definition of builderAuthoring.resources.subjectDefinitions) {
       definition.allowedOverridePaths = [];
     }
@@ -72,11 +78,12 @@ describe("scene terrain finalizer", { timeout: 30_000 }, () => {
     terrain.components.terrain.grid.resolutionCellsXZ = [33, 33];
     delete terrain.components.terrain.grid.heightSamplesMeters;
     const authoringSource = `${stringifyCanonicalJson(builderAuthoring)}\n`;
+    const mapDraftCanonical = `${stringifyCanonicalJson(mapDraft)}\n`;
     const terrainPrompt = "# Terrain Height Intent\n\nEncoding profile: signed-diverging-blue-gray-orange@1.\n";
     await Promise.all([
       writeFile(briefPath, briefSource),
       writeFile(builderAuthoringPath, authoringSource),
-      writeFile(mapDraftPath, mapDraftSource),
+      writeFile(mapDraftPath, mapDraftCanonical),
       writeFile(terrainPromptPath, terrainPrompt),
       writeFile(terrainIntentPath, terrainBytes),
     ]);
