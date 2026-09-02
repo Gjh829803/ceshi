@@ -1150,10 +1150,10 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   });
   if (attempts.length < 1 || attempts.length > 2) fail(contract, "attempts", "expected one initial and at most one repair attempt");
   if (attempts.length === 2) {
-    const identityRefs = (attempt: (typeof attempts)[number]) => [
+    const runScopedIdentityRefs = (attempt: (typeof attempts)[number]) => [
       attempt.generationRequestRef, attempt.generationReceiptRef,
       attempt.sceneAuthoringAttemptRef, attempt.sceneAuthoringAttemptResultRef,
-      attempt.worldPackageRef, attempt.worldPackageBuildReceiptRef, attempt.worldBuildIdentityRef,
+      attempt.worldPackageRef,
       attempt.captureReceiptRef, attempt.evaluationResultRef,
     ];
     const identityHashes = (attempt: (typeof attempts)[number]) => [
@@ -1162,9 +1162,9 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       attempt.worldPackageRootHash, attempt.worldPackageBuildReceiptHash, attempt.worldBuildIdentityHash,
       attempt.captureReceiptHash, attempt.evaluationResultHash,
     ];
-    const firstRefs = new Set(identityRefs(attempts[0]!));
+    const firstRefs = new Set(runScopedIdentityRefs(attempts[0]!));
     const firstHashes = new Set(identityHashes(attempts[0]!));
-    if (identityRefs(attempts[1]!).some((identity) => firstRefs.has(identity)) ||
+    if (runScopedIdentityRefs(attempts[1]!).some((identity) => firstRefs.has(identity)) ||
         identityHashes(attempts[1]!).some((identity) => firstHashes.has(identity))) {
       fail(contract, "attempts/1", "stage identities must not be reused across attempts");
     }
