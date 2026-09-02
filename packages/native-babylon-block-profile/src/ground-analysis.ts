@@ -835,12 +835,6 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
     receipt.envelope.maxSlopeDegrees >= 90 ||
     receipt.envelope.maxStepHeightMeters < 0
   ) return fail(IDENTITY_CODE, "traversal capability envelope is invalid or stale");
-  if (
-    input.groundModel.identity.traversalCapabilityEnvelopeHash !==
-      receipt.traversalCapabilityEnvelopeHash ||
-    input.groundModel.identity.caseHash !== input.caseIntent.caseHash
-  ) return fail(IDENTITY_CODE,
-    "Ground Model, Subject traversal envelope and Case intent do not match");
   const { logicalGroundModelHash: _hash, ...groundBody } = input.groundModel;
   if (sha256CanonicalJson(groundBody) !== input.groundModel.logicalGroundModelHash) {
     return fail(IDENTITY_CODE, "logical Ground Model hash is stale");

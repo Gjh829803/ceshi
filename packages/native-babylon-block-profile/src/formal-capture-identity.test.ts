@@ -455,7 +455,17 @@ function bindInput(overrides: Record<string, unknown> = {}) {
         sizeMetersXYZ: block.sizeMetersXYZ,
       })),
       visualGroups: binding.visualGroups,
-      colliderJoins: [{ blockId: checkedLayout.layout.blocks[0]!.id, colliderId: "spawn-ground" }],
+      colliderJoins: [{
+        colliderId: "spawn-ground",
+        sourceBlockIds: [checkedLayout.layout.blocks[0]!.id],
+        visualGroupIds: ["central-ascent-group"],
+        proxyKind: "continuous-walkable-surface",
+        minimumMetersXYZ: [0, 0, 0],
+        maximumMetersXYZ: [2, 2, 2],
+        vertexCount: 4,
+        triangleCount: 4,
+        topologyHash: H("9"),
+      }],
     });
   return {
     case: reconstructionCase,

@@ -702,6 +702,7 @@ export function assertBabylonNativeWorldPackageMembershipV1(
   const lockedAssetRefs = input.assetLock.entries.map((entry) =>
     entry.assetResourceRef).sort();
   const contributionColliderIds = contribution.staticColliders
+    .filter(({ runtimeRole }) => runtimeRole === "scene-static-collider")
     .map(({ id }) => id)
     .sort();
   const materializerColliderIds = materializerMetadata?.colliderJoins
@@ -779,7 +780,9 @@ export function assertBabylonNativeWorldPackageMembershipV1(
           hostProfileSettlement.profileInventoryHash ||
         materializerMetadata.settledVisualHash !==
           hostProfileSettlement.settledVisualHash ||
-        materializerMetadata.blocks.length !==
+        materializerMetadata.blocks.length +
+          materializerMetadata.colliderJoins.filter(({ proxyKind }) =>
+            proxyKind === "continuous-walkable-surface").length !==
           hostProfileSettlement.targetCount ||
         !isEqual(materializerColliderIds, contributionColliderIds)
       )

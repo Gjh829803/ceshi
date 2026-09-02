@@ -39,9 +39,7 @@ function deckGroundModel(): BabylonNativeBlockLogicalGroundModelV1 {
       buildEpochId: "collision-partition-fixture",
       checkedLayoutInventoryHash: HASH("1"),
       profileInventoryHash: HASH("2"),
-      worldRuntimeBootstrapHash: HASH("3"),
-      traversalCapabilityEnvelopeHash: HASH("4"),
-      caseHash: HASH("5"),
+      nativeSceneBootstrapHash: HASH("3"),
     }),
     supportedTraversalSurfaceProfileRefs: Object.freeze([
       STATIC_SURFACE.traversalSurfaceProfileRef,

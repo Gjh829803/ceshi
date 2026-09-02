@@ -162,14 +162,20 @@ model from explicit Collider Groups:
 3. derive globally exposed support-top cells only from groups whose binding is `static-surface` and
    whose locked traversal profile supports the controlled Subject;
 4. derive solid occupancy from every selected static group, including blockers;
-5. bind the model to the Build Epoch, Profile inventory hash, Bootstrap/Subject envelope and Case
-   intent hash;
+5. bind the source/profile topology identity to the Build Epoch, checked Layout inventory hash,
+   Profile inventory hash and Native Scene Bootstrap hash;
 6. sort every inventory and diagnostic by stable identity before hashing.
 
 This model is trusted derived evidence, not Agent JSON and not Runtime state. It is the single input to
 standability, continuous surface construction, exposed-edge derivation, collision aggregation and
 optimization realization. Those consumers must not independently rescan meshes or reconstruct a
 second cell map.
+
+The logical model deliberately does not contain the Subject traversal envelope, Case hash, Package
+root or Runtime Session identity. Those values are unavailable or mutable at this source/profile
+topology boundary and would create a circular identity dependency. The trusted Ground Analysis
+Report is the later join point: it binds this logical-ground hash to the resolved Subject traversal
+envelope, Case intent and frozen Package root before any admission claim is accepted.
 
 ## 6. Subject-relative standability and connectivity
 

@@ -104,7 +104,6 @@ export type {
 } from "./logical-ground-model.js";
 export { assessBabylonNativeBlockOptimizationV1 } from "./optimization.js";
 export type {
-  BabylonNativeBlockColliderCoalescingGroupV1,
   BabylonNativeBlockOptimizationAssessmentV1,
   BabylonNativeBlockOptimizationBaselineResourcesV1,
   BabylonNativeBlockOptimizationEquivalenceV1,

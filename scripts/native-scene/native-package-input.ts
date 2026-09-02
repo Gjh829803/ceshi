@@ -488,7 +488,7 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
       return fail();
     }
     const checkResult = parseNativeSceneCheckResultV1(replay.checkResult);
-    const contribution = parseBabylonNativeSceneContributionV1(
+    const replayContribution = parseBabylonNativeSceneContributionV1(
       replay.contribution,
     );
     const firstBlockEvidence = evidenceByReplay[0]![0];
@@ -496,11 +496,11 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
     if (
       checkResult.checkedInput.kind !== "native-scene-module" ||
       checkResult.checkedInput.sceneModuleRef !== bootstrap.sceneModuleRef ||
-      contribution.sceneModuleRef !== bootstrap.sceneModuleRef ||
-      contribution.profileSettlement.profileRef !==
+      replayContribution.sceneModuleRef !== bootstrap.sceneModuleRef ||
+      replayContribution.profileSettlement.profileRef !==
         bootstrap.nativeSceneProfileRef ||
       replay.contributionHash !==
-        hashBabylonNativeSceneContributionV1(contribution) ||
+        hashBabylonNativeSceneContributionV1(replayContribution) ||
       (requiresBlockEvidence && (
         isNil(firstBlockEvidence) ||
         isNil(secondBlockEvidence) ||
@@ -510,11 +510,21 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
         ) !== hashBabylonNativeBlockCheckedLayoutInventoryV1(
           secondBlockEvidence.checkedLayout,
         ) ||
-        contribution.profileSettlement.kind !== "host-snapshot" ||
+        replayContribution.profileSettlement.kind !== "host-snapshot" ||
         firstBlockEvidence.profileInventoryHash !==
-          contribution.profileSettlement.profileInventoryHash
+          replayContribution.profileSettlement.profileInventoryHash
       ))
     ) return fail();
+    const contribution = requiresBlockEvidence &&
+        !isNil(firstBlockEvidence?.groundBoundaryContribution)
+      ? parseBabylonNativeSceneContributionV1({
+          ...replayContribution,
+          staticColliders: [
+            ...replayContribution.staticColliders,
+            firstBlockEvidence.groundBoundaryContribution,
+          ].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+        })
+      : replayContribution;
     const nativeBlockMaterializerMetadata = requiresBlockEvidence
       ? (() => {
         if (

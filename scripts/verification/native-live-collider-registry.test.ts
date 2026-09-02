@@ -159,8 +159,15 @@ function packageFixture(
       })),
       visualGroups: [],
       colliderJoins: evidence.colliderInventory.map((entry) => ({
-        blockId: entry.sourceBlockIds[0],
         colliderId: entry.colliderId,
+        sourceBlockIds: entry.sourceBlockIds,
+        visualGroupIds: entry.visualGroupIds,
+        proxyKind: entry.proxyKind,
+        minimumMetersXYZ: entry.minimumMetersXYZ,
+        maximumMetersXYZ: entry.maximumMetersXYZ,
+        vertexCount: entry.vertexCount,
+        triangleCount: entry.triangleCount,
+        topologyHash: entry.topologyHash,
       })),
     });
   const verified = verifyWorldPackageDirectoryV1(
@@ -254,7 +261,7 @@ describe("SDK-owned Native live collider registry", () => {
         colliderId: "ground",
         chunkPartId: "ground-grid-chunk-xp0-zp0",
         chunkResidencyGroupId: "grid-chunk-xp0-zp0",
-        sourceBlockId: "ground-block",
+        sourceBlockIds: ["ground-block"],
         physicsBodyId: "physics-body:ground-grid-chunk-xp0-zp0",
         overlayRecordId: "overlay:ground-grid-chunk-xp0-zp0",
       });

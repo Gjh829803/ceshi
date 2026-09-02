@@ -345,7 +345,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
         kind: "host-snapshot" as const,
         profileRef:
           "worldkit://native-scene-profile/whitebox.blocks@1" as const,
-        targetCount: 1,
+        targetCount: 2,
         profileInventoryHash: `sha256:${"1".repeat(64)}` as Sha256HashV1,
         settledVisualHash: `sha256:${"2".repeat(64)}` as Sha256HashV1,
       })
@@ -419,7 +419,17 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
         minimumMetersXYZ: [-5, -1, -5],
         maximumMetersXYZ: [5, 0, 5],
       }],
-      colliderJoins: [{ blockId: "ground-block", colliderId: "ground" }],
+      colliderJoins: [{
+        colliderId: "ground",
+        sourceBlockIds: ["ground-block"],
+        visualGroupIds: ["ground-group"],
+        proxyKind: "continuous-walkable-surface",
+        minimumMetersXYZ: [-5, 0, -5],
+        maximumMetersXYZ: [5, 0, 5],
+        vertexCount: 3,
+        triangleCount: 1,
+        topologyHash: `sha256:${"a".repeat(64)}`,
+      }],
     })
     : undefined;
   const worldRuntimeBootstrapRef =

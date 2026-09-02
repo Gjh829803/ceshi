@@ -6,6 +6,8 @@ import type {
   BabylonNativeSceneBuildContextV1,
   BabylonNativeTraversalBindingV1,
 } from "@whitebox-world/native-babylon";
+import { hashBabylonNativeSceneBootstrapV1 } from
+  "@whitebox-world/runtime-contracts";
 import { isEqual, isNil } from "lodash-es";
 
 import {
@@ -21,11 +23,14 @@ import {
   type BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
 import {
-  materializeBabylonNativeBlockColliderCandidatesV1,
   type BabylonNativeBlockColliderGeometrySourceV1,
   type BabylonNativeBlockColliderCandidateInventoryEntryV1,
   type BabylonNativeBlockStaticColliderSelectionV1,
 } from "./collider-contribution.js";
+import {
+  buildBabylonNativeBlockGroundBoundaryV1,
+  createBabylonNativeBlockGroundBoundaryContributionV1,
+} from "./ground-boundary.js";
 import {
   deriveBabylonNativeBlockLayoutV1,
   type BabylonNativeBlockLayoutV1,
@@ -35,7 +40,16 @@ import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   type BabylonNativeBlockPaletteRoleV1,
 } from "./profile.js";
+import {
+  createBabylonNativeBlockProfileInventoryIdentityFromSelectionsV1,
+} from "./profile-inventory.js";
 import { settleBabylonNativeBlockProfileV1 } from "./profile-settlement.js";
+import { freezeBabylonNativeBlockLogicalGroundModelV1 } from
+  "./logical-ground-model.js";
+import { buildBabylonNativeBlockWalkableTopologyV1 } from
+  "./walkable-topology.js";
+import { materializeBabylonNativeBlockWalkableTopologyV1 } from
+  "./walkable-topology-materializer.js";
 import {
   BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1,
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1,
@@ -137,6 +151,25 @@ const QUARTER_TURNS = new Set<number>(
   BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1,
 );
 const DEFAULT_DISPLAY_GAP_METERS = 0.04;
+const WALKABLE_TOPOLOGY_POLICY = Object.freeze({
+  kind: "babylon-native-block-walkable-topology-policy" as const,
+  schemaVersion: 1 as const,
+  maximumAutoSmoothHeightDeltaMeters: 0.3,
+  visualOverlayOffsetMeters: 0.004,
+  maximumLogicalColliderCount: 4_096,
+  maximumColliderVertexCount: 1_048_576,
+  maximumColliderTriangleCount: 2_097_152,
+});
+const GROUND_BOUNDARY_POLICY = Object.freeze({
+  kind: "babylon-native-block-ground-boundary-policy" as const,
+  schemaVersion: 1 as const,
+  heightAboveSurfaceMeters: 4,
+  depthBelowSurfaceMeters: 0.2,
+  maximumSourceSegmentCount: 262_144,
+  maximumMergedSegmentCount: 131_072,
+  maximumBoundaryVertexCount: 524_288,
+  maximumBoundaryTriangleCount: 262_144,
+});
 
 function exactPlainRecord(
   input: unknown,
@@ -485,12 +518,6 @@ function parseSelection(input: unknown): BabylonNativeBlockStaticColliderSelecti
     return fail(code,
       "protect-ground-subject requires a static-surface traversal binding");
   }
-  if (record.exposedEdgePolicy === "protect-ground-subject") {
-    return fail(
-      "WORLDKIT_NATIVE_BLOCK_GROUND_BOUNDARY_PUBLICATION_UNAVAILABLE",
-      "protect-ground-subject is unavailable until the trusted Host publishes the derived boundary Contribution",
-    );
-  }
   return Object.freeze({
     id,
     colliderGeometrySource: parseColliderGeometrySource(
@@ -800,12 +827,31 @@ export function createBabylonNativeBlockProfileSessionV1(
           parsedInput.displayGapMeters,
           "WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID",
         );
-        const colliders = materializeBabylonNativeBlockColliderCandidatesV1({
-          context,
-          checkedLayout,
-          selections: parsedInput.staticColliders,
+        const profileInventory =
+          createBabylonNativeBlockProfileInventoryIdentityFromSelectionsV1({
+            checkedLayout,
+            displayGapMeters: parsedInput.displayGapMeters,
+            selections: parsedInput.staticColliders,
+          });
+        const logicalGroundModel =
+          freezeBabylonNativeBlockLogicalGroundModelV1({
+            buildEpochId: context.bootstrap.id,
+            checkedLayout,
+            profileInventoryHash: profileInventory.profileInventoryHash,
+            nativeSceneBootstrapHash:
+              hashBabylonNativeSceneBootstrapV1(context.bootstrap),
+            supportedTraversalSurfaceProfileRefs: Object.freeze([
+              ...new Set(parsedInput.staticColliders.flatMap((selection) =>
+                selection.traversalBinding.kind === "static-surface"
+                  ? [selection.traversalBinding.traversalSurfaceProfileRef]
+                  : [])),
+            ].sort(stableCompare)),
+            selections: parsedInput.staticColliders,
+          });
+        const topology = buildBabylonNativeBlockWalkableTopologyV1({
+          groundModel: logicalGroundModel,
+          policy: WALKABLE_TOPOLOGY_POLICY,
         });
-        acquisitions.push(() => colliders.dispose());
         const visuals = createBabylonNativeBlockVisualsV1({
           scene: context.scene,
           buildEpochId: context.bootstrap.id,
@@ -813,19 +859,35 @@ export function createBabylonNativeBlockProfileSessionV1(
           displayGapMeters: parsedInput.displayGapMeters,
         });
         acquisitions.push(() => visuals.dispose());
+        const colliders = materializeBabylonNativeBlockWalkableTopologyV1({
+          context,
+          topology,
+          liveHandles: visuals.liveHandles,
+        });
+        acquisitions.push(() => colliders.dispose());
+        const groundBoundary = buildBabylonNativeBlockGroundBoundaryV1({
+          topology,
+          policy: GROUND_BOUNDARY_POLICY,
+        });
+        const groundBoundaryContribution = groundBoundary.triangleCount === 0
+          ? undefined
+          : createBabylonNativeBlockGroundBoundaryContributionV1(
+              groundBoundary,
+            );
         const profileInventoryHash = settleBabylonNativeBlockProfileV1({
           context,
           checkedLayout,
           displayGapMeters: parsedInput.displayGapMeters,
-          colliderInventory: colliders.inventory,
-          walkableOverlays: Object.freeze([]),
+          colliderInventory: colliders.colliderInventory,
+          walkableOverlays: colliders.walkableOverlays,
+          expectedProfileInventoryHash: profileInventory.profileInventoryHash,
         });
         finalizedResult = Object.freeze({
           kind: "babylon-native-block-finalized-epoch",
           schemaVersion: 1,
           checkedLayout,
           visualGroups: checkedLayout.checkResult.visualGroups,
-          colliderInventory: colliders.inventory,
+          colliderInventory: colliders.colliderInventory,
           profileInventoryHash,
         });
         recordBabylonNativeBlockCheckedEpochEvidenceV1(context.scene, {
@@ -838,7 +900,13 @@ export function createBabylonNativeBlockProfileSessionV1(
             checkResult: checkedLayout.checkResult,
           },
           profileInventoryHash,
-          colliderInventory: colliders.inventory,
+          colliderInventory: colliders.colliderInventory,
+          logicalGroundModel,
+          topology,
+          groundBoundary,
+          ...(isNil(groundBoundaryContribution)
+            ? {}
+            : { groundBoundaryContribution }),
         });
         recordsById.clear();
         blockIdByMicroCellKey.clear();

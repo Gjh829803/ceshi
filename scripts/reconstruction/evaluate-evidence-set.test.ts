@@ -448,7 +448,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       ...fixture.colliderOverlayObservation,
       colliders: fixture.colliderOverlayObservation.colliders.map((collider) => ({
         ...collider,
-        sourceBlockId: "shadow-ground-block",
+        sourceBlockIds: ["shadow-ground-block"],
       })),
     });
     const forgedReceipt = parseFormalWorldCaptureReceiptV1({

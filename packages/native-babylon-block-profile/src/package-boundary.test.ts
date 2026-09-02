@@ -272,7 +272,6 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
   it("routes build-path failures through the Host-issued channel", async () => {
     const buildPathFiles = new Set([
       "babylon-visual-adapter.ts",
-      "collider-contribution.ts",
       "logical-ground-model.ts",
       "ground-analysis.ts",
       "ground-boundary.ts",

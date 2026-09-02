@@ -45,8 +45,10 @@ Focused evidence: Profile API/type/session tests, Skill source/copy tests and cl
 3. Record sorted source Block, Collider Group, visual group, traversal binding and cell identities.
 4. Derive global exposed support tops and solid occupancy once; every later ground consumer receives
    this frozen model.
-5. Bind canonical bytes and hash to Build Epoch, Profile inventory, Bootstrap/Subject envelope and
-   Case intent.
+5. Bind canonical bytes and hash to Build Epoch, checked Layout inventory, Profile inventory and
+   Native Scene Bootstrap. Join the Subject traversal envelope, Case intent and Package root only in
+   the later Ground Analysis Report, so source/profile topology identity has no circular Runtime or
+   Package dependency.
 6. Reject empty/duplicate groups, one Block in multiple Collider Groups, mixed incompatible binding,
    cross-Session membership, missing source identities and accessor-bearing input.
 
@@ -64,7 +66,8 @@ Focused evidence: pure ground-model tests, session rollback, Host evidence hash 
    not a false rejection.
 5. Map every failure to the current actionable diagnostic DTO with actual/expected/limit/delta,
    direction, source IDs and one bounded geometry repair action.
-6. Bind the report to the same ground-model and Package identity used by materialization.
+6. Bind the report to the same ground-model used by materialization and to the resolved Subject
+   traversal envelope, Case intent and frozen Package-root identity used by admission.
 
 Focused evidence: pure graph fixtures covering narrow footprint, low overhead, asymmetric step limits,
 detours outside a band, disconnected islands, duplicate targets and stable diagnostic ordering.

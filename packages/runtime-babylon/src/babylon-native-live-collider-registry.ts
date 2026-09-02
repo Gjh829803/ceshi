@@ -9,6 +9,7 @@ import type { Scene } from "@babylonjs/core/scene.js";
 import type {
   BabylonNativeStaticColliderRuntimeRoleV1,
 } from "@whitebox-world/runtime-contracts";
+import { isEmpty } from "lodash-es";
 
 export interface BabylonNativeColliderChunkPartInventoryV1 {
   readonly colliderId: string;
@@ -16,7 +17,7 @@ export interface BabylonNativeColliderChunkPartInventoryV1 {
   readonly chunkResidencyGroupId: string;
   readonly runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1;
   readonly colliderSubshapeId: string;
-  readonly sourceBlockId?: string;
+  readonly sourceBlockIds: readonly string[];
   readonly overlayRecordId: string;
   readonly worldPositionsMetersXYZ: readonly number[];
   readonly triangleIndices: readonly number[];
@@ -31,7 +32,7 @@ export interface BabylonNativeLiveColliderHandleV1 {
   readonly chunkResidencyGroupId: string;
   readonly runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1;
   readonly colliderSubshapeId: string;
-  readonly sourceBlockId?: string;
+  readonly sourceBlockIds: readonly string[];
   readonly physicsBodyId: string;
   readonly overlayRecordId: string;
   readonly mesh: Mesh;
@@ -86,6 +87,13 @@ function assertLiveHandle(
   }
 }
 
+function hasCanonicalSourceBlockIds(sourceBlockIds: readonly string[]): boolean {
+  return !isEmpty(sourceBlockIds) && sourceBlockIds.every((sourceBlockId, index) =>
+    sourceBlockId.length > 0 &&
+    (index === 0 || stableCompare(sourceBlockIds[index - 1]!, sourceBlockId) < 0)
+  );
+}
+
 export function createBabylonNativeLiveColliderRegistryV1(
   input: Readonly<{
     handles: readonly BabylonNativeLiveColliderHandleV1[];
@@ -97,7 +105,15 @@ export function createBabylonNativeLiveColliderRegistryV1(
     .sort((left, right) => stableCompare(left.chunkPartId, right.chunkPartId))
     .map((handle) => {
       assertLiveHandle(handle);
-      return Object.freeze({ ...handle });
+      if (!hasCanonicalSourceBlockIds(handle.sourceBlockIds)) {
+        throw new TypeError(
+          "WORLDKIT_NATIVE_LIVE_COLLIDER_REGISTRY_INVALID: sourceBlockIds must be sorted and unique",
+        );
+      }
+      return Object.freeze({
+        ...handle,
+        sourceBlockIds: Object.freeze([...handle.sourceBlockIds]),
+      });
     });
   for (const key of [
     "chunkPartId",
@@ -114,6 +130,7 @@ export function createBabylonNativeLiveColliderRegistryV1(
     .sort((left, right) => stableCompare(left.chunkPartId, right.chunkPartId))
     .map((part) => Object.freeze({
       ...part,
+      sourceBlockIds: Object.freeze([...part.sourceBlockIds]),
       worldPositionsMetersXYZ: Object.freeze([
         ...part.worldPositionsMetersXYZ,
       ]),
@@ -126,6 +143,7 @@ export function createBabylonNativeLiveColliderRegistryV1(
       parts.length ||
     parts.some((part) =>
       !SHA256.test(part.partHash) ||
+      !hasCanonicalSourceBlockIds(part.sourceBlockIds) ||
       part.worldPositionsMetersXYZ.length < 9 ||
       part.worldPositionsMetersXYZ.length % 3 !== 0 ||
       part.triangleIndices.length === 0 ||
@@ -148,7 +166,9 @@ export function createBabylonNativeLiveColliderRegistryV1(
       part.chunkResidencyGroupId !== handle.chunkResidencyGroupId ||
       part.runtimeRole !== handle.runtimeRole ||
       part.colliderSubshapeId !== handle.colliderSubshapeId ||
-      part.sourceBlockId !== handle.sourceBlockId ||
+      part.sourceBlockIds.length !== handle.sourceBlockIds.length ||
+      part.sourceBlockIds.some((sourceBlockId, index) =>
+        sourceBlockId !== handle.sourceBlockIds[index]) ||
       part.overlayRecordId !== handle.overlayRecordId;
   })) {
     throw new TypeError(
@@ -187,16 +207,18 @@ export function replaceBabylonNativeLiveColliderRegistryV1(
   replacement: BabylonNativeLiveColliderRegistryV1,
 ): void {
   const registries = REGISTRY_BY_SCENE.get(scene);
+  const expectedIndex = registries?.indexOf(expected) ?? -1;
   if (
     registries === undefined ||
-    registries.length !== 1 ||
-    registries[0] !== expected
+    expectedIndex < 0 ||
+    registries.lastIndexOf(expected) !== expectedIndex ||
+    registries.includes(replacement)
   ) {
     throw new TypeError(
       "WORLDKIT_NATIVE_LIVE_COLLIDER_REGISTRY_REPLACEMENT_INVALID",
     );
   }
-  registries[0] = replacement;
+  registries[expectedIndex] = replacement;
 }
 
 export function registerBabylonNativeLiveColliderRegistryV1(

@@ -137,8 +137,8 @@ async function admitCase(
     }),
     budget: Object.freeze({
       maximumStaticColliderCount: 24,
-      maximumStaticColliderVertexCount: 256,
-      maximumStaticColliderTriangleCount: 288,
+      maximumStaticColliderVertexCount: 1_024,
+      maximumStaticColliderTriangleCount: 1_024,
     }),
   });
   if (admission.outcome !== "passed") {
@@ -194,15 +194,19 @@ describe("BWB-5 reconstruction corpus contract", () => {
         expect(epoch.checkedLayout.checkResult.outcome).toBe("passed");
         expect(isEmpty(epoch.checkedLayout.layout.blocks)).toBe(false);
         expect(isEmpty(epoch.colliderInventory)).toBe(false);
-        expect(epoch.colliderInventory).toHaveLength(
-          epoch.checkedLayout.layout.blocks.length,
-        );
+        expect(new Set(epoch.colliderInventory.flatMap(
+          ({ sourceBlockIds }) => sourceBlockIds,
+        ))).toEqual(new Set(epoch.checkedLayout.layout.blocks.map(({ id }) => id)));
         expect(new Set(scene.meshes.filter((mesh) =>
           mesh.name.startsWith("worldkit-block-visual-") ||
           mesh.name === mesh.id
         ).map((mesh) => mesh.id)).size).toBeGreaterThan(0);
         for (const entry of epoch.colliderInventory) {
-          expect(entry.proxyKind).toBe("layout-block-volume");
+          expect([
+            "continuous-walkable-surface",
+            "exact-solid-union",
+          ]).toContain(entry.proxyKind);
+          expect(entry.topologyHash).toMatch(/^sha256:[0-9a-f]{64}$/);
           expect(
             entry.traversalBinding.kind === "static-surface" ||
             entry.traversalBinding.kind === "not-traversable",

@@ -11,6 +11,9 @@ import {
 } from "@whitebox-world/native-babylon";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { takeBabylonNativeBlockCheckedEpochEvidenceV1 } from
+  "./host-evidence.js";
+
 const commitProfileSettlement = vi.hoisted(() => vi.fn());
 vi.mock("@whitebox-world/native-babylon/host", () => ({
   commitBabylonNativeProfileSettlementV1: commitProfileSettlement,
@@ -904,7 +907,7 @@ describe("Babylon Native block profile session", () => {
     }
   });
 
-  it("fails closed when ground protection has no trusted Host publication path", async () => {
+  it("publishes ground protection only through trusted Host evidence", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -943,15 +946,21 @@ describe("Babylon Native block profile session", () => {
           }),
           exposedEdgePolicy: "protect-ground-subject" as const,
         })],
-      } as never)).toThrow(
-        /WORLDKIT_NATIVE_BLOCK_GROUND_BOUNDARY_PUBLICATION_UNAVAILABLE/,
-      );
-      expect(registeredColliders).toEqual([]);
-      expect(commitProfileSettlement).not.toHaveBeenCalled();
+      } as never)).not.toThrow();
+      expect(registeredColliders.map(({ id }) => id)).toEqual([
+        "ground-collider",
+      ]);
+      const evidence = takeBabylonNativeBlockCheckedEpochEvidenceV1(scene);
+      expect(evidence).toHaveLength(1);
+      expect(evidence[0]?.groundBoundaryContribution).toMatchObject({
+        runtimeRole: "ground-safety-boundary",
+        traversalBinding: { kind: "not-traversable" },
+      });
+      expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
     });
   });
 
-  it("accepts the closed Collider Group source but fails before realization until its materializer lands", async () => {
+  it("realizes a closed Collider Group as one continuous topology Collider", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
@@ -991,12 +1000,11 @@ describe("Babylon Native block profile session", () => {
           }),
           exposedEdgePolicy: "none" as const,
         })],
-      } as never)).toThrow(
-        /WORLDKIT_NATIVE_BLOCK_COLLIDER_GROUP_MATERIALIZATION_UNAVAILABLE/,
-      );
-      expect(registeredColliders).toEqual([]);
-      expect(commitProfileSettlement).not.toHaveBeenCalled();
-      expect(scene.meshes).toEqual([]);
+      } as never)).not.toThrow();
+      expect(registeredColliders.map(({ id }) => id)).toEqual([
+        "ground-collider",
+      ]);
+      expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
       expect(() => session.createBlock({
         id: "late-block",
         shape: "full",
@@ -1458,10 +1466,10 @@ describe("Babylon Native block profile session", () => {
         ]),
       }))).toThrow(/late Host commit failed/);
       expect(cleanupOrder).toEqual([
-        "visual:second-block",
-        "visual:first-block",
         "proxy:second-collider",
         "proxy:first-collider",
+        "visual:second-block",
+        "visual:first-block",
         "source:second-block",
         "source:first-block",
       ]);

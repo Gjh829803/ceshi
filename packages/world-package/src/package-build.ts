@@ -674,22 +674,35 @@ function createBabylonNativeWorldPackageV1Internal(
     runtime.gameplayBootstrapRef !== gameplay.resourceRef ||
     runtime.gameplayBootstrapHash !== gameplay.contentHash ||
     runtime.initialControlledEntityId !== bootstrap.initialControlledEntityId
-    || (requiresBlockMetadata !== !isNil(blockMetadata))
-    || (!isNil(blockMetadata) && (
+  ) invalid("closure", "Native artifacts do not form one world");
+  if (requiresBlockMetadata !== !isNil(blockMetadata)) {
+    invalid("closure", "Native Block metadata presence does not match the profile");
+  }
+  if (!isNil(blockMetadata)) {
+    if (
       contribution.profileSettlement.kind !== "host-snapshot" ||
       blockMetadata.nativeSceneProfileRef !== bootstrap.nativeSceneProfileRef ||
       blockMetadata.profileInventoryHash !==
         contribution.profileSettlement.profileInventoryHash ||
       blockMetadata.settledVisualHash !==
         contribution.profileSettlement.settledVisualHash ||
-      blockMetadata.contributionHash !== contributionHash ||
-      blockMetadata.blocks.length !== contribution.profileSettlement.targetCount ||
-      !isEqual(
-        blockMetadata.colliderJoins.map(({ colliderId }) => colliderId).sort(),
-        contribution.staticColliders.map(({ id }) => id).sort(),
-      )
-    ))
-  ) invalid("closure", "Native artifacts do not form one world");
+      blockMetadata.contributionHash !== contributionHash
+    ) invalid("closure", "Native Block metadata identity does not match the Contribution");
+    const expectedSettlementTargetCount = blockMetadata.blocks.length +
+      blockMetadata.colliderJoins.filter(({ proxyKind }) =>
+        proxyKind === "continuous-walkable-surface").length;
+    if (
+      expectedSettlementTargetCount !==
+        contribution.profileSettlement.targetCount
+    ) invalid("closure", "Native Block metadata inventory count does not match settlement");
+    if (!isEqual(
+      blockMetadata.colliderJoins.map(({ colliderId }) => colliderId).sort(),
+      contribution.staticColliders
+        .filter(({ runtimeRole }) => runtimeRole === "scene-static-collider")
+        .map(({ id }) => id)
+        .sort(),
+    )) invalid("closure", "Native Block metadata Collider joins do not match scene topology");
+  }
   assertNativeWorldFacts(contribution, bootstrap, bounds, budget);
   const lockedResources = nativeRegistryLock(
     input,

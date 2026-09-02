@@ -147,7 +147,7 @@ async function createFixture(input: Readonly<{
     scene,
     chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
     colliders: input.colliders ?? [deckCollider(input.quadCount ?? 200)],
-    sourceBlockIdByColliderId: new Map([["deck", "deck-block"]]),
+    sourceBlockIdsByColliderId: new Map([["deck", ["deck-block"]]]),
     cameraGeometryQuery: cameraOwner,
     applyColliderMetadata: (): void => {
       metadataCalls += 1;
@@ -363,7 +363,7 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
     expect(new Set(handles.map(({ physicsBodyId }) => physicsBodyId)).size)
       .toBe(handles.length);
     for (const handle of handles) {
-      expect(handle.sourceBlockId).toBe("deck-block");
+      expect(handle.sourceBlockIds).toEqual(["deck-block"]);
       expect(handle.chunkPartId).toContain("deck-grid-chunk-");
     }
   });
@@ -422,7 +422,7 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
       scene,
       chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
       colliders: [deckCollider(8)],
-      sourceBlockIdByColliderId: new Map(),
+      sourceBlockIdsByColliderId: new Map(),
       cameraGeometryQuery: cameraOwner,
       policy: Object.freeze({
         ...BABYLON_NATIVE_COLLIDER_RESIDENCY_POLICY_V1,

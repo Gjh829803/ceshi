@@ -20,9 +20,7 @@ export interface BabylonNativeBlockLogicalGroundIdentityV1 {
   readonly buildEpochId: string;
   readonly checkedLayoutInventoryHash: Sha256HashV1;
   readonly profileInventoryHash: Sha256HashV1;
-  readonly worldRuntimeBootstrapHash: Sha256HashV1;
-  readonly traversalCapabilityEnvelopeHash: Sha256HashV1;
-  readonly caseHash: Sha256HashV1;
+  readonly nativeSceneBootstrapHash: Sha256HashV1;
 }
 
 export interface BabylonNativeBlockLogicalColliderGroupV1 {
@@ -80,9 +78,7 @@ export interface FreezeBabylonNativeBlockLogicalGroundModelInputV1 {
     "kind" | "schemaVersion" | "layout" | "checkResult"
   >;
   readonly profileInventoryHash: Sha256HashV1;
-  readonly worldRuntimeBootstrapHash: Sha256HashV1;
-  readonly traversalCapabilityEnvelopeHash: Sha256HashV1;
-  readonly caseHash: Sha256HashV1;
+  readonly nativeSceneBootstrapHash: Sha256HashV1;
   readonly supportedTraversalSurfaceProfileRefs: readonly string[];
   readonly selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
 }
@@ -321,30 +317,52 @@ function groupRow(
 }
 
 export function freezeBabylonNativeBlockLogicalGroundModelV1(
-  rawInput: FreezeBabylonNativeBlockLogicalGroundModelInputV1,
+  suppliedInput: FreezeBabylonNativeBlockLogicalGroundModelInputV1,
 ): BabylonNativeBlockLogicalGroundModelV1 {
-  assertAcyclicPlainData(rawInput);
-  requireClosedKeys(rawInput, [
+  requireClosedKeys(suppliedInput, [
     "buildEpochId",
     "checkedLayout",
     "profileInventoryHash",
-    "worldRuntimeBootstrapHash",
-    "traversalCapabilityEnvelopeHash",
-    "caseHash",
+    "nativeSceneBootstrapHash",
     "supportedTraversalSurfaceProfileRefs",
     "selections",
   ], [], "input");
+  const inputDescriptors = Object.getOwnPropertyDescriptors(suppliedInput);
+  if (Object.values(inputDescriptors).some((descriptor) =>
+    !descriptor.enumerable || !("value" in descriptor)
+  )) return fail(INPUT_CODE, "input must contain only enumerable data fields.");
+  const rawInput = Object.freeze(Object.fromEntries(
+    Object.entries(inputDescriptors).map(([key, descriptor]) => [
+      key,
+      (descriptor as PropertyDescriptor & { value: unknown }).value,
+    ]),
+  )) as unknown as FreezeBabylonNativeBlockLogicalGroundModelInputV1;
+  const checkedLayout = rawInput.checkedLayout;
+  if (
+    typeof checkedLayout !== "object" ||
+    isNil(checkedLayout) ||
+    Array.isArray(checkedLayout)
+  ) return fail(INPUT_CODE, "input.checkedLayout must be one record.");
+  const checkedDescriptors = Object.getOwnPropertyDescriptors(checkedLayout);
+  const checkedFields = ["kind", "schemaVersion", "layout", "checkResult"];
+  if (checkedFields.some((key) => {
+    const descriptor = checkedDescriptors[key];
+    return isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor);
+  })) return fail(INPUT_CODE,
+    "input.checkedLayout must expose the current data fields.");
+  assertAcyclicPlainData({
+    ...rawInput,
+    checkedLayout: Object.fromEntries(checkedFields.map((key) => [
+      key,
+      (checkedDescriptors[key] as PropertyDescriptor & { value: unknown }).value,
+    ])),
+  });
   requireStableId(rawInput.buildEpochId, "input.buildEpochId");
   requireHash(rawInput.profileInventoryHash, "input.profileInventoryHash");
   requireHash(
-    rawInput.worldRuntimeBootstrapHash,
-    "input.worldRuntimeBootstrapHash",
+    rawInput.nativeSceneBootstrapHash,
+    "input.nativeSceneBootstrapHash",
   );
-  requireHash(
-    rawInput.traversalCapabilityEnvelopeHash,
-    "input.traversalCapabilityEnvelopeHash",
-  );
-  requireHash(rawInput.caseHash, "input.caseHash");
   if (
     rawInput.checkedLayout.checkResult.id !==
       `${rawInput.buildEpochId}.whitebox-blocks-check`
@@ -488,10 +506,7 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
     buildEpochId: rawInput.buildEpochId,
     checkedLayoutInventoryHash,
     profileInventoryHash: rawInput.profileInventoryHash,
-    worldRuntimeBootstrapHash: rawInput.worldRuntimeBootstrapHash,
-    traversalCapabilityEnvelopeHash:
-      rawInput.traversalCapabilityEnvelopeHash,
-    caseHash: rawInput.caseHash,
+    nativeSceneBootstrapHash: rawInput.nativeSceneBootstrapHash,
   });
   const body = deepFreezePlainData({
     kind: "babylon-native-block-logical-ground-model" as const,

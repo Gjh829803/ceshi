@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import { hashBabylonNativeSceneContributionV1 } from "@whitebox-world/runtime-contracts";
 import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
 import { parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
@@ -43,7 +44,7 @@ export default defineBabylonNativeScene({
     session.finalize({ staticColliders: [
       { id: "collider-central-steps", colliderGeometrySource: { kind: "block", blockId: "central" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "central-surface", logicalSubshapeId: "central-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
       { id: "collider-cliff-blockers", colliderGeometrySource: { kind: "block", blockId: "mountain" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
-      { id: "collider-foreground-ground", colliderGeometrySource: { kind: "block", blockId: "foreground" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "foreground-surface", logicalSubshapeId: "foreground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
+      { id: "collider-foreground-ground", colliderGeometrySource: { kind: "block", blockId: "foreground" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "foreground-surface", logicalSubshapeId: "foreground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "protect-ground-subject" },
       { id: "collider-gate-walls", colliderGeometrySource: { kind: "block", blockId: "gate" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
     ] });
     context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, 18], facingRadians: 0 });
@@ -240,7 +241,11 @@ describe("packageNativeBlockAttemptV1", () => {
         fixture.attemptDirectoryPath,
         "native-check-result.json",
       ), "utf8");
-      throw new Error(`${String(error)}\n${check}`);
+      const cause = error instanceof Error ? error.cause : undefined;
+      const nestedCause = cause instanceof Error ? cause.cause : undefined;
+      throw new Error(
+        [error, cause, nestedCause, check].map(String).join("\n"),
+      );
     });
 
     expect(packaged.checkResult.outcome).toBe("passed");
@@ -252,6 +257,25 @@ describe("packageNativeBlockAttemptV1", () => {
       packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata
         ?.visualGroups,
     ).toHaveLength(5);
+    const contribution = packaged.verifiedWorldPackage.nativeSceneContribution;
+    const groundBoundary = contribution.staticColliders.find(
+      ({ runtimeRole }) => runtimeRole === "ground-safety-boundary",
+    );
+    expect(groundBoundary).toMatchObject({
+      runtimeRole: "ground-safety-boundary",
+      traversalBinding: { kind: "not-traversable" },
+    });
+    expect(
+      packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata
+        ?.colliderJoins.some(({ colliderId }) => colliderId === groundBoundary?.id),
+    ).toBe(false);
+    expect(packaged.verifiedWorldPackage.receipt.manifest.sceneSource).toEqual(
+      expect.objectContaining({
+        kind: "babylon-native-scene",
+        nativeSceneContributionHash:
+          hashBabylonNativeSceneContributionV1(contribution),
+      }),
+    );
     expect(packaged.worldPackageRef).toBe(
       packaged.verifiedWorldPackage.receipt.worldPackageRef,
     );
@@ -329,7 +353,7 @@ describe("packageNativeBlockAttemptV1", () => {
       fixture.attemptDirectoryPath,
       "native-check-result.json",
     ), "utf8");
-    expect(checkResult).toContain("WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_MISSING");
+    expect(checkResult).toContain("WORLDKIT_NATIVE_BLOCK_COLLIDER_SOURCE_MISSING");
     expect(checkResult).not.toContain("WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED");
     expect(checkResult).not.toMatch(/(?:Error:|\n\s+at\s)/);
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({

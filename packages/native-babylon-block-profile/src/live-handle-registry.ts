@@ -128,14 +128,16 @@ export function replaceBabylonNativeBlockLiveHandleRegistryV1(
   replacement: BabylonNativeBlockLiveHandleRegistryV1,
 ): void {
   const registries = REGISTRY_BY_SCENE.get(scene);
+  const expectedIndex = registries?.indexOf(expected) ?? -1;
   if (
     registries === undefined ||
-    registries.length !== 1 ||
-    registries[0] !== expected
+    expectedIndex < 0 ||
+    registries.lastIndexOf(expected) !== expectedIndex ||
+    registries.includes(replacement)
   ) {
     throw new TypeError(
       "WORLDKIT_NATIVE_BLOCK_LIVE_HANDLE_REGISTRY_REPLACEMENT_INVALID",
     );
   }
-  registries[0] = replacement;
+  registries[expectedIndex] = replacement;
 }

@@ -51,9 +51,7 @@ function groundModel(): BabylonNativeBlockLogicalGroundModelV1 {
       buildEpochId: "topology-materializer-epoch",
       checkedLayoutInventoryHash: H("1"),
       profileInventoryHash: H("2"),
-      worldRuntimeBootstrapHash: H("3"),
-      traversalCapabilityEnvelopeHash: H("4"),
-      caseHash: H("5"),
+      nativeSceneBootstrapHash: H("3"),
     }),
     supportedTraversalSurfaceProfileRefs: Object.freeze([
       STATIC_SURFACE.traversalSurfaceProfileRef,

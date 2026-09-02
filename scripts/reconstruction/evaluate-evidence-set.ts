@@ -435,13 +435,14 @@ export function buildWorldReconstructionEvidenceSetV1(
   const metadataBlocks = new Map(metadata.blocks.map((block) => [block.blockId, block]));
   const colliderJoins = new Map(metadata.colliderJoins.map((join) => [
     join.colliderId,
-    join.blockId,
+    join.sourceBlockIds,
   ]));
   for (const collider of overlay.colliders) {
-    if (!metadataBlocks.has(collider.sourceBlockId)) {
+    if (collider.sourceBlockIds.some((sourceBlockId) =>
+      !metadataBlocks.has(sourceBlockId))) {
       stale("overlay source Block is absent from trusted Block metadata");
     }
-    exact(colliderJoins.get(collider.colliderId), collider.sourceBlockId,
+    sameCanonical(colliderJoins.get(collider.colliderId), collider.sourceBlockIds,
       "overlay collider join does not match trusted Block metadata");
   }
   exact(spawn.spawnMarkerId, verified.nativeSceneContribution.spawnMarker.id,
@@ -449,9 +450,9 @@ export function buildWorldReconstructionEvidenceSetV1(
   if (!metadataBlocks.has(spawn.supportContact.sourceBlockId)) {
     stale("spawn support Block is absent from trusted Block metadata");
   }
-  exact(colliderJoins.get(spawn.supportContact.colliderId),
+  if (!colliderJoins.get(spawn.supportContact.colliderId)?.includes(
     spawn.supportContact.sourceBlockId,
-    "spawn support collider join does not match trusted Block metadata");
+  )) stale("spawn support collider join does not match trusted Block metadata");
 
   const expectedChecks = new Map(
     reconstructionCase.expected.criticalTraversalChecks.map((check) => [check.id, check]),
@@ -497,11 +498,14 @@ export function buildWorldReconstructionEvidenceSetV1(
   const distances = projectOpeningCompositionDistancesV1(opening.visualGroups);
   const overlayColliderIds = new Set(overlay.colliders.map(({ colliderId }) => colliderId));
   const colliderContributions = [...verified.nativeSceneContribution.staticColliders]
+    .filter(({ runtimeRole }) => runtimeRole === "scene-static-collider")
     .sort((left, right) => compareText(left.id, right.id))
     .map((collider) => {
-      const blockId = colliderJoins.get(collider.id);
-      if (blockId === undefined) stale("Contribution collider is absent from trusted Block metadata");
-      const sourceBlock = metadataBlocks.get(blockId);
+      const sourceBlockIds = colliderJoins.get(collider.id);
+      if (sourceBlockIds === undefined || sourceBlockIds.length === 0) {
+        stale("Contribution collider is absent from trusted Block metadata");
+      }
+      const sourceBlock = metadataBlocks.get(sourceBlockIds[0]!);
       if (sourceBlock === undefined) {
         stale("Contribution collider Block is absent from trusted Block metadata");
       }

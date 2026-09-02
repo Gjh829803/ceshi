@@ -157,9 +157,7 @@ function freeze(input: Readonly<{
     buildEpochId,
     checkedLayout: checkedLayout(input.blocks, buildEpochId),
     profileInventoryHash: H("1"),
-    worldRuntimeBootstrapHash: H("2"),
-    traversalCapabilityEnvelopeHash: H("3"),
-    caseHash: H("4"),
+    nativeSceneBootstrapHash: H("2"),
     supportedTraversalSurfaceProfileRefs: Object.freeze([
       STATIC_SURFACE.traversalSurfaceProfileRef,
     ]),
@@ -205,9 +203,7 @@ describe("Babylon Native Block logical ground model", () => {
       buildEpochId: "logical-ground-epoch",
       checkedLayoutInventoryHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       profileInventoryHash: H("1"),
-      worldRuntimeBootstrapHash: H("2"),
-      traversalCapabilityEnvelopeHash: H("3"),
-      caseHash: H("4"),
+      nativeSceneBootstrapHash: H("2"),
     });
     expect(model.colliderGroups.map(({ colliderId, sourceBlockIds }) => ({
       colliderId,
@@ -276,9 +272,7 @@ describe("Babylon Native Block logical ground model", () => {
         block({ id: "ground-block", cells: ["0,0,0"] }),
       ], "unsupported-surface-epoch"),
       profileInventoryHash: H("1"),
-      worldRuntimeBootstrapHash: H("2"),
-      traversalCapabilityEnvelopeHash: H("3"),
-      caseHash: H("4"),
+      nativeSceneBootstrapHash: H("2"),
       supportedTraversalSurfaceProfileRefs: Object.freeze([]),
       selections: Object.freeze([selection({ id: "ground", source: {
         kind: "block", blockId: "ground-block",
@@ -331,9 +325,7 @@ describe("Babylon Native Block logical ground model", () => {
         block({ id: "ground-block", cells: ["0,0,0"] }),
       ], "foreign-epoch"),
       profileInventoryHash: H("1"),
-      worldRuntimeBootstrapHash: H("2"),
-      traversalCapabilityEnvelopeHash: H("3"),
-      caseHash: H("4"),
+      nativeSceneBootstrapHash: H("2"),
       supportedTraversalSurfaceProfileRefs: Object.freeze([
         STATIC_SURFACE.traversalSurfaceProfileRef,
       ]),
@@ -368,9 +360,7 @@ describe("Babylon Native Block logical ground model", () => {
       buildEpochId: "logical-ground-epoch",
       checkedLayout: checkedLayout(blocks),
       profileInventoryHash: H("1"),
-      worldRuntimeBootstrapHash: H("2"),
-      traversalCapabilityEnvelopeHash: H("3"),
-      caseHash: H("4"),
+      nativeSceneBootstrapHash: H("2"),
       supportedTraversalSurfaceProfileRefs: Object.freeze([
         STATIC_SURFACE.traversalSurfaceProfileRef,
       ]),
@@ -380,9 +370,7 @@ describe("Babylon Native Block logical ground model", () => {
 
     for (const [key, value] of [
       ["profileInventoryHash", H("5")],
-      ["worldRuntimeBootstrapHash", H("6")],
-      ["traversalCapabilityEnvelopeHash", H("7")],
-      ["caseHash", H("8")],
+      ["nativeSceneBootstrapHash", H("6")],
     ] as const) {
       const changed = freezeBabylonNativeBlockLogicalGroundModelV1({
         ...base,

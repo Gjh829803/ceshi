@@ -212,19 +212,25 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
         ({ colliderId }) => colliderId === criterion.colliderId,
       );
       const collider = contributionColliderById.get(criterion.colliderId);
-      const joinedBlock = matchingColliderJoins.length === 1
-        ? blockById.get(matchingColliderJoins[0]!.blockId)
-        : undefined;
+      const joinedBlocks = matchingColliderJoins.length === 1
+        ? matchingColliderJoins[0]!.sourceBlockIds.map((blockId) =>
+            blockById.get(blockId))
+        : [];
       if (
         matchingColliderJoins.length !== 1 ||
         isNil(collider) ||
-        isNil(joinedBlock) ||
-        joinedBlock.visualGroupId !== criterion.sourceVisualGroupId ||
-        !group.blockIds.includes(joinedBlock.blockId)
+        joinedBlocks.length === 0 ||
+        joinedBlocks.some(isNil) ||
+        !matchingColliderJoins[0]!.visualGroupIds.includes(
+          criterion.sourceVisualGroupId,
+        ) ||
+        !joinedBlocks.some((block) =>
+          block?.visualGroupId === criterion.sourceVisualGroupId &&
+          group.blockIds.includes(block.blockId))
       ) {
         fail(
           "checkpointSpatialCriteria",
-          "block-plane must join one frozen Collider to one Block in the declared visual group",
+          "block-plane must join one frozen Collider to the declared visual group",
         );
       }
       sourceBoundsMeters = colliderBoundsMeters(collider.worldPositionsMetersXYZ);
