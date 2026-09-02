@@ -1,5 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.js";
@@ -227,6 +228,30 @@ describe("Babylon Native block profile session", () => {
           sizeMetersXYZ: [0.5, 0.5, 1],
         }),
       ]);
+    });
+  });
+
+  it("canonicalizes an accepted near-lattice center before creation and finalization", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      const mesh = session.createBlock({
+        id: "near-lattice-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0.5000000001, 0.5, 0.5],
+      });
+
+      expect(mesh.position.asArray()).toEqual([0.5, 0.5, 0.5]);
+      expect(session.finalize({ staticColliders: [] })
+        .checkedLayout.layout.blocks[0]).toEqual(expect.objectContaining({
+        id: "near-lattice-block",
+        centerMetersXYZ: [0.5, 0.5, 0.5],
+      }));
     });
   });
 
@@ -795,8 +820,16 @@ describe("Babylon Native block profile session", () => {
         shape: "full",
         paletteRole: "ground",
         minimumCenterMetersXYZ: [0, 0.5, 0],
-        repeatCountXYZ: [5, 1, 1],
-      })).toThrow(/WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED/);
+        repeatCountXYZ: [1, 1, 1],
+      })).toThrow(
+        /WORLDKIT_NATIVE_BLOCK_GRID_CREATE_INPUT_INVALID: derived Block id/,
+      );
+      expect(() => session.createBlockGrid({
+        ...base,
+        repeatCountXYZ: [1, 1] as never,
+      })).toThrow(
+        /WORLDKIT_NATIVE_BLOCK_GRID_CREATE_INPUT_INVALID: repeatCountXYZ must be one ordinary dense XYZ tuple/,
+      );
       expect(scene.meshes).toHaveLength(initialMeshCount);
     });
   });
@@ -921,6 +954,45 @@ describe("Babylon Native block profile session", () => {
         paletteRole: "ground",
         centerMetersXYZ: [2, 0.5, 0],
       })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
+    });
+  });
+
+  it("removes a Mesh when Babylon construction throws after Scene registration", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 2 },
+      );
+      const initialMeshCount = scene.meshes.length;
+      const createBox = MeshBuilder.CreateBox;
+      const createBoxSpy = vi.spyOn(MeshBuilder, "CreateBox")
+        .mockImplementationOnce((...arguments_) => {
+          createBox(...arguments_);
+          throw new Error("construction failed after Scene registration");
+        });
+
+      try {
+        expect(() => session.createBlock({
+          id: "registered-then-failed",
+          shape: "full",
+          paletteRole: "ground",
+          centerMetersXYZ: [0, 0.5, 0],
+        })).toThrow(/construction failed after Scene registration/);
+        expect(scene.meshes).toHaveLength(initialMeshCount);
+        expect(() => session.createBlock({
+          id: "retry-after-cleanup",
+          shape: "full",
+          paletteRole: "ground",
+          centerMetersXYZ: [2, 0.5, 0],
+        })).not.toThrow();
+      } finally {
+        createBoxSpy.mockRestore();
+        for (const mesh of [...scene.meshes]) {
+          if (mesh.name === "registered-then-failed") mesh.dispose();
+        }
+      }
     });
   });
 

@@ -5,12 +5,11 @@ import { isNil } from "lodash-es";
 
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 import {
-  BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1,
   BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1,
   babylonNativeBlockBoundsFromCenterV1,
   babylonNativeBlockCenterAlignsToGridV1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
-  canonicalizeBabylonNativeBlockEvidenceNumberV1,
+  canonicalizeBabylonNativeBlockCenterToGridV1,
   effectiveBabylonNativeBlockSizeMetersXYZV1,
   type BabylonNativeBlockBoundsMetersV1,
   type BabylonNativeBlockPositionMetersXYZV1,
@@ -110,12 +109,11 @@ function canonicalCenter(
   center: Vector3,
 ): BabylonNativeBlockPositionMetersXYZV1 | undefined {
   if (![center.x, center.y, center.z].every(Number.isFinite)) return undefined;
-  return Object.freeze([center.x, center.y, center.z].map((value, axis) => {
-    const lattice = BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1[axis]!;
-    return canonicalizeBabylonNativeBlockEvidenceNumberV1(
-      Math.round(value / lattice) * lattice,
-    );
-  }) as [number, number, number]);
+  return canonicalizeBabylonNativeBlockCenterToGridV1([
+    center.x,
+    center.y,
+    center.z,
+  ]);
 }
 
 function hasFixedLocalGeometry(

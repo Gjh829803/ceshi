@@ -1,6 +1,6 @@
 # Agent-friendly Babylon Native Block Drawing API Design
 
-- Status: Accepted design checkpoint; implementation has not started
+- Status: Implemented current-only cutover; delivery and remaining WRC-API-90 evidence are tracked only by the live backlog
 - Date: 2026-09-02
 - Milestone owner: WRC-1 / BWB authoring profile
 - Parent architecture:
@@ -134,6 +134,8 @@ The old input without `centerMetersXYZ` is invalid and has no overload, alias, a
 - `centerMetersXYZ` and `minimumCenterMetersXYZ` name Block centers, not minimum corners.
 - Rotation is only around world Y and is exactly `rotationQuarterTurnsY * Math.PI / 2`.
 - All numeric inputs must be finite and must not preserve negative zero in evidence.
+- A center accepted within the Profile alignment epsilon is canonicalized to the exact center lattice before
+  Mesh allocation, occupancy accounting, Finalize comparison, and evidence hashing.
 - A center must satisfy both the broad center lattice and the selected rotated shape's occupancy bounds.
 - `repeatCountXYZ` contains positive safe integers and is validated before any Mesh is allocated.
 - Grid spacing is the selected shape's effective rotated size on each axis. There is no stride, scale,

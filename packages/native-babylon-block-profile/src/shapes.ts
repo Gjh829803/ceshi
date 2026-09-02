@@ -69,6 +69,17 @@ export function canonicalizeBabylonNativeBlockEvidenceNumberV1(
   return Object.is(value, -0) ? 0 : value;
 }
 
+export function canonicalizeBabylonNativeBlockCenterToGridV1(
+  centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1,
+): BabylonNativeBlockPositionMetersXYZV1 {
+  return Object.freeze(centerMetersXYZ.map((value, axis) => {
+    const lattice = BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1[axis]!;
+    return canonicalizeBabylonNativeBlockEvidenceNumberV1(
+      Math.round(value / lattice) * lattice,
+    );
+  }) as [number, number, number]);
+}
+
 export function effectiveBabylonNativeBlockSizeMetersXYZV1(
   shape: BabylonNativeBlockShapeKindV1,
   rotationQuarterTurnsY: number,

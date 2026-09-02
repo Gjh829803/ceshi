@@ -37,6 +37,7 @@ import {
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1,
   babylonNativeBlockCenterAlignsToGridV1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
+  canonicalizeBabylonNativeBlockCenterToGridV1,
   canonicalizeBabylonNativeBlockEvidenceNumberV1,
   effectiveBabylonNativeBlockSizeMetersXYZV1,
   type BabylonNativeBlockPositionMetersXYZV1,
@@ -219,15 +220,16 @@ function parseBudget(
   return Object.freeze({ maximumBlockCount: record.maximumBlockCount });
 }
 
-function parsePositionMetersXYZ(
+function parseFiniteNumberTupleXYZ(
   input: unknown,
   code: string,
+  fieldName: string,
 ): BabylonNativeBlockPositionMetersXYZV1 {
   if (!Array.isArray(input) ||
       Reflect.getPrototypeOf(input) !== Array.prototype ||
       input.length !== 3 ||
       Object.getOwnPropertyNames(input).length !== 4) {
-    return fail(code, "positions must be one ordinary dense XYZ tuple");
+    return fail(code, `${fieldName} must be one ordinary dense XYZ tuple`);
   }
   const values: number[] = [];
   for (let axis = 0; axis < 3; axis += 1) {
@@ -235,7 +237,7 @@ function parsePositionMetersXYZ(
     if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor) ||
         typeof descriptor.value !== "number" ||
         !Number.isFinite(descriptor.value)) {
-      return fail(code, "positions must hold three finite plain numbers");
+      return fail(code, `${fieldName} must hold three finite plain numbers`);
     }
     values.push(canonicalizeBabylonNativeBlockEvidenceNumberV1(descriptor.value));
   }
@@ -272,16 +274,23 @@ function parseCreateInput(
       "id, shape, paletteRole, or visualGroupId is outside the closed Profile");
   }
   const shape = record.shape as BabylonNativeBlockShapeKindV1;
-  const centerMetersXYZ = parsePositionMetersXYZ(record.centerMetersXYZ, code);
+  const declaredCenterMetersXYZ = parseFiniteNumberTupleXYZ(
+    record.centerMetersXYZ,
+    code,
+    "centerMetersXYZ",
+  );
   const rotationQuarterTurnsY = parseQuarterTurns(record, code);
   if (!babylonNativeBlockCenterAlignsToGridV1({
     shape,
-    centerMetersXYZ,
+    centerMetersXYZ: declaredCenterMetersXYZ,
     rotationQuarterTurnsY,
   })) {
     return fail(code,
-      `center ${JSON.stringify(centerMetersXYZ)} is off the '${shape}' occupancy grid`);
+      `center ${JSON.stringify(declaredCenterMetersXYZ)} is off the '${shape}' occupancy grid`);
   }
+  const centerMetersXYZ = canonicalizeBabylonNativeBlockCenterToGridV1(
+    declaredCenterMetersXYZ,
+  );
   return Object.freeze({
     id,
     shape,
@@ -314,11 +323,15 @@ function parseGridCreateInput(
   }
   const shape = record.shape as BabylonNativeBlockShapeKindV1;
   const paletteRole = record.paletteRole as BabylonNativeBlockPaletteRoleV1;
-  const minimumCenterMetersXYZ = parsePositionMetersXYZ(
-    record.minimumCenterMetersXYZ, code,
+  const minimumCenterMetersXYZ = parseFiniteNumberTupleXYZ(
+    record.minimumCenterMetersXYZ, code, "minimumCenterMetersXYZ",
   );
   const rotationQuarterTurnsY = parseQuarterTurns(record, code);
-  const repeatCountXYZ = parsePositionMetersXYZ(record.repeatCountXYZ, code);
+  const repeatCountXYZ = parseFiniteNumberTupleXYZ(
+    record.repeatCountXYZ,
+    code,
+    "repeatCountXYZ",
+  );
   if (!repeatCountXYZ.every((count) =>
     Number.isSafeInteger(count) && count > 0)) {
     return fail(code, "repeatCountXYZ must hold three positive safe integers");
@@ -338,8 +351,13 @@ function parseGridCreateInput(
   for (let yIndex = 0; yIndex < repeatCountXYZ[1]; yIndex += 1) {
     for (let zIndex = 0; zIndex < repeatCountXYZ[2]; zIndex += 1) {
       for (let xIndex = 0; xIndex < repeatCountXYZ[0]; xIndex += 1) {
+        const id = `${idPrefix}-x${xIndex}-y${yIndex}-z${zIndex}`;
+        if (isNil(canonicalId(id))) {
+          return fail(code,
+            `derived Block id '${id}' is outside the stable ID contract`);
+        }
         inputs.push(parseCreateInput(Object.freeze({
-          id: `${idPrefix}-x${xIndex}-y${yIndex}-z${zIndex}`,
+          id,
           shape,
           paletteRole,
           centerMetersXYZ: Object.freeze([
@@ -565,9 +583,11 @@ export function createBabylonNativeBlockProfileSessionV1(
     const size = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[
       parsedInput.shape
     ];
-    const mesh = MeshBuilder.CreateBox(parsedInput.id,
-      { width: size[0], height: size[1], depth: size[2] }, context.scene);
+    const sceneMeshesBefore = new Set(context.scene.meshes);
+    let mesh: Mesh | undefined;
     try {
+      mesh = MeshBuilder.CreateBox(parsedInput.id,
+        { width: size[0], height: size[1], depth: size[2] }, context.scene);
       mesh.position.set(
         parsedInput.centerMetersXYZ[0],
         parsedInput.centerMetersXYZ[1],
@@ -590,7 +610,21 @@ export function createBabylonNativeBlockProfileSessionV1(
       }));
     } catch (error) {
       let cleanupDidFail = false;
-      try { mesh.dispose(); } catch { cleanupDidFail = true; }
+      const uncommittedMeshes = context.scene.meshes.filter(
+        (candidate) => !sceneMeshesBefore.has(candidate),
+      );
+      if (!isNil(mesh) && !uncommittedMeshes.includes(mesh)) {
+        uncommittedMeshes.push(mesh);
+      }
+      for (let index = uncommittedMeshes.length - 1; index >= 0; index -= 1) {
+        const candidate = uncommittedMeshes[index]!;
+        try {
+          candidate.dispose();
+        } catch {
+          cleanupDidFail = true;
+          try { context.scene.removeMesh(candidate); } catch { /* failed */ }
+        }
+      }
       throw new AllocationFailure(error, cleanupDidFail);
     }
     for (const key of microCellKeys) {
