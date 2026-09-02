@@ -322,7 +322,7 @@ only as a later Profile authoring enhancement.
 Update `docs/18` with exact merged evidence. Do not add a 34th WRC-1 work package and do not mark BNA-6,
 BNA-7, NBR-1 or WRC-1 complete from this helper alone.
 
-- [ ] **Step 3: Run focused final gates once**
+- [x] **Step 3: Run focused final gates once**
 
 ```bash
 pnpm exec vitest run packages/native-babylon-block-profile
