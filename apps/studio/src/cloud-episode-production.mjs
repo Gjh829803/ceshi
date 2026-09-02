@@ -20,6 +20,21 @@ import { CLOUD_EPISODE_PART_BY_STAGE_ID } from
 
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
+function validNodeSelector(value) {
+  return value && typeof value === "object" && !Array.isArray(value) &&
+    Object.entries(value).every(([key, item]) =>
+      typeof key === "string" && key.length > 0 &&
+      typeof item === "string" && item.length > 0);
+}
+
+function validTolerations(value) {
+  return Array.isArray(value) && value.every((item) =>
+    item && typeof item === "object" && !Array.isArray(item) &&
+    typeof item.key === "string" && item.key.length > 0 &&
+    ["Equal", "Exists"].includes(item.operator) &&
+    ["NoSchedule", "PreferNoSchedule", "NoExecute"].includes(item.effect));
+}
+
 export async function loadCloudEpisodeProductionConfig(repoRoot, {
   configPath = path.join(repoRoot, "config", "cloud-episode-production.json"),
   environment = process.env,
@@ -36,21 +51,13 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     throw new Error("Enabled Cloud Episode production requires a digest-pinned Worker image.");
   }
   const nodeSelector = value.nodeSelector ?? {};
-  if (
-    !nodeSelector ||
-    typeof nodeSelector !== "object" ||
-    Array.isArray(nodeSelector) ||
-    Object.entries(nodeSelector).some(([key, item]) =>
-      typeof key !== "string" || key.length === 0 ||
-      typeof item !== "string" || item.length === 0)
-  ) throw new Error("Cloud Episode nodeSelector must contain non-empty string labels.");
+  if (!validNodeSelector(nodeSelector)) {
+    throw new Error("Cloud Episode nodeSelector must contain non-empty string labels.");
+  }
   const tolerations = value.tolerations ?? [];
-  if (!Array.isArray(tolerations) || tolerations.some((item) =>
-    !item || typeof item !== "object" || Array.isArray(item) ||
-    typeof item.key !== "string" || item.key.length === 0 ||
-    !["Equal", "Exists"].includes(item.operator) ||
-    !["NoSchedule", "PreferNoSchedule", "NoExecute"].includes(item.effect)
-  )) throw new Error("Cloud Episode tolerations are invalid.");
+  if (!validTolerations(tolerations)) {
+    throw new Error("Cloud Episode tolerations are invalid.");
+  }
   const gpuBatch = value.gpuBatch;
   if (
     !Number.isSafeInteger(gpuBatch?.minimumBatchSize) ||
@@ -72,11 +79,6 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     }
   }
   const cpuWorker = value.cpuWorker;
-  for (const [key, item] of Object.entries(cpuWorker ?? {})) {
-    if (typeof item !== "string" || item.length === 0) {
-      throw new Error(`Cloud Episode CPU Worker config is invalid: ${key}`);
-    }
-  }
   for (const key of [
     "cpuRequest", "cpuLimit", "memoryRequest", "memoryLimit",
     "ephemeralStorageRequest", "ephemeralStorageLimit",
@@ -84,6 +86,14 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     if (typeof cpuWorker?.[key] !== "string" || cpuWorker[key].length === 0) {
       throw new Error(`Cloud Episode CPU Worker config is missing: ${key}`);
     }
+  }
+  const cpuNodeSelector = cpuWorker.nodeSelector ?? {};
+  if (!validNodeSelector(cpuNodeSelector)) {
+    throw new Error("Cloud Episode CPU Worker nodeSelector is invalid.");
+  }
+  const cpuTolerations = cpuWorker.tolerations ?? [];
+  if (!validTolerations(cpuTolerations)) {
+    throw new Error("Cloud Episode CPU Worker tolerations are invalid.");
   }
   return Object.freeze({
     workerImage,
@@ -102,7 +112,12 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
       ephemeralStorageRequest: gpuBatch.ephemeralStorageRequest,
       ephemeralStorageLimit: gpuBatch.ephemeralStorageLimit,
     }),
-    cpuWorker: Object.freeze({ ...cpuWorker }),
+    cpuWorker: Object.freeze({
+      ...cpuWorker,
+      nodeSelector: Object.freeze({ ...cpuNodeSelector }),
+      tolerations: Object.freeze(cpuTolerations.map((item) =>
+        Object.freeze({ ...item }))),
+    }),
     nodeSelector,
     tolerations,
   });
