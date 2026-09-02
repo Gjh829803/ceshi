@@ -1,4 +1,9 @@
-import { countBy } from "lodash-es";
+import {
+  emitTransformedStaticColliderTriangleMeshV1,
+  emitTriangleHeightfieldSurfaceV1,
+  queryCanonicalTraversalSurfaceHitsV1,
+  type CanonicalTraversalSurfaceTriangleSourceV1,
+} from "@whitebox-world/terrain-surface";
 import type {
   CanonicalSceneExecutionPlanV1,
   RuntimeVec3V1,
@@ -72,13 +77,6 @@ function normalizedDot(
   ) / (leftLength * rightLength);
 }
 
-// Route-walkable admission stays maxSlopeCosine. This tighter cosine is only
-// used to unique-resolve a multi-surface manifold onto the checkSupport()
-// normal: slope-legal lip/corner contacts drop out. If several interiors still
-// match, the surface with the unique maximum aligned-contact count wins;
-// a tied dual-layer pair stays fail-closed ambiguous.
-const ROUTE_WALKABLE_CHECK_SUPPORT_ALIGNMENT_COSINE_V1 = 0.95;
-
 function contactMatchesPolicy(
   contact: CharacterSupportProjectionContactV1,
   sample: CharacterSupportProjectionSampleV1,
@@ -106,36 +104,105 @@ function resolvedFromSurface(
   };
 }
 
-function uniqueCheckSupportAlignedSurface(
-  contacts: readonly CharacterSupportProjectionContactV1[],
-  resolvedSurfaces: readonly CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number][],
-  supportNormalWorldXYZ: RuntimeVec3V1,
-): CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number] | undefined {
-  const alignedSurfaces = resolvedSurfaces.filter((_, index) =>
-    normalizedDot(
-      contacts[index]!.normalXYZ,
-      supportNormalWorldXYZ,
-    ) >= ROUTE_WALKABLE_CHECK_SUPPORT_ALIGNMENT_COSINE_V1
-  );
-  if (alignedSurfaces.length === 0) return undefined;
-  const alignedCountById = countBy(
-    alignedSurfaces,
-    (surface) => surface.traversalSurfaceId,
-  );
-  let winningId: string | undefined;
-  let winningCount = 0;
-  let winningIdIsTied = false;
-  for (const [traversalSurfaceId, alignedCount] of Object.entries(alignedCountById)) {
-    if (alignedCount > winningCount) {
-      winningId = traversalSurfaceId;
-      winningCount = alignedCount;
-      winningIdIsTied = false;
+const canonicalSourcesByPlan = new WeakMap<
+  CanonicalSceneExecutionPlanV1,
+  ReadonlyMap<string, CanonicalTraversalSurfaceTriangleSourceV1>
+>();
+
+function canonicalTraversalSurfaceSourcesV1(
+  plan: CanonicalSceneExecutionPlanV1,
+): ReadonlyMap<string, CanonicalTraversalSurfaceTriangleSourceV1> {
+  const cached = canonicalSourcesByPlan.get(plan);
+  if (cached !== undefined) return cached;
+  const sources = new Map<string, CanonicalTraversalSurfaceTriangleSourceV1>();
+  for (const surface of plan.traversal.surfaces) {
+    if (surface.kind === "heightfield") {
+      if (surface.surfaceEntityId !== plan.terrain.entityId) continue;
+      const topology = emitTriangleHeightfieldSurfaceV1({
+        centerMetersXZ: plan.terrain.centerMetersXZ,
+        sizeMetersXZ: plan.terrain.sizeMetersXZ,
+        resolutionVerticesXZ: plan.terrain.resolutionCellsXZ,
+        heightSamplesMeters: plan.terrain.heightSamplesMeters,
+      });
+      const [originX, originY, originZ] = topology.originMetersXYZ;
+      const local = topology.localPositionsMetersXYZ;
+      const worldPositionsMetersXYZ: number[] = [];
+      for (let index = 0; index < local.length; index += 3) {
+        worldPositionsMetersXYZ.push(
+          local[index]! + originX,
+          local[index + 1]! + originY,
+          local[index + 2]! + originZ,
+        );
+      }
+      sources.set(surface.traversalSurfaceId, Object.freeze({
+        traversalSurfaceId: surface.traversalSurfaceId,
+        worldPositionsMetersXYZ: Object.freeze(worldPositionsMetersXYZ),
+        triangleIndices: Object.freeze([...topology.triangleIndices]),
+      }));
       continue;
     }
-    if (alignedCount === winningCount) winningIdIsTied = true;
+    const collider = plan.staticColliders.find((candidate) =>
+      candidate.entityId === surface.surfaceEntityId &&
+      candidate.colliderSubshapeId === surface.colliderSubshapeId
+    );
+    if (collider === undefined) continue;
+    const world = emitTransformedStaticColliderTriangleMeshV1(
+      collider.shape,
+      collider.transform,
+    );
+    sources.set(surface.traversalSurfaceId, Object.freeze({
+      traversalSurfaceId: surface.traversalSurfaceId,
+      worldPositionsMetersXYZ: Object.freeze([...world.worldPositionsMetersXYZ]),
+      triangleIndices: Object.freeze([...world.triangleIndices]),
+    }));
   }
-  if (winningIdIsTied || winningId === undefined) return undefined;
-  return alignedSurfaces.find((surface) => surface.traversalSurfaceId === winningId);
+  const frozen: ReadonlyMap<
+    string,
+    CanonicalTraversalSurfaceTriangleSourceV1
+  > = sources;
+  canonicalSourcesByPlan.set(plan, frozen);
+  return frozen;
+}
+
+// R1b design section 9.1 makes queryCanonicalTraversalSurfaceHitsV1() the one
+// owner resolution shared by Graph and Runtime. Havok reports every capsule
+// contact, so a coplanar seam admits both surfaces; the canonical query decides
+// the owner from a single retained foot point instead.
+function canonicalOwnerSurfaceV1(
+  plan: CanonicalSceneExecutionPlanV1,
+  sample: CharacterSupportProjectionSampleV1,
+  live: CharacterSupportProjectionLockV1,
+  candidates: readonly CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number][],
+): CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number] | undefined {
+  if (Math.hypot(...sample.supportNormalWorldXYZ) === 0) return undefined;
+  const sourcesById = canonicalTraversalSurfaceSourcesV1(plan);
+  const sources: CanonicalTraversalSurfaceTriangleSourceV1[] = [];
+  for (const traversalSurfaceId of new Set(
+    candidates.map((surface) => surface.traversalSurfaceId),
+  )) {
+    const source = sourcesById.get(traversalSurfaceId);
+    if (source === undefined) return undefined;
+    sources.push(source);
+  }
+  const [footXMeters, footYMeters, footZMeters] =
+    sample.sampledFootPositionMetersXYZ;
+  const resolution = queryCanonicalTraversalSurfaceHitsV1({
+    sources,
+    pointMetersXZ: [footXMeters, footZMeters],
+    referenceHeightMeters: footYMeters,
+    maximumReferenceHeightDifferenceMeters:
+      live.keepDistanceMeters + live.keepContactToleranceMeters,
+    normalAdmission: {
+      mode: "retained-support",
+      minimumUpwardNormalYRatio: live.maxSlopeCosine,
+      referenceNormalXYZ: sample.supportNormalWorldXYZ,
+      minimumReferenceNormalDotRatio: live.maxSlopeCosine,
+    },
+  });
+  if (resolution.mode !== "resolved") return undefined;
+  return candidates.find((surface) =>
+    surface.traversalSurfaceId === resolution.hit.traversalSurfaceId
+  );
 }
 
 export function retainedContactsAdmittedByPolicyV1(input: Readonly<{
@@ -192,16 +259,10 @@ export function resolveRetainedSupportSurfaceV1(input: Readonly<{
     resolvedSurfaces.map((surface) => surface.traversalSurfaceId),
   );
   if (traversalSurfaceIds.size !== 1) {
-    const checkSupportSurface = policy.mode === "route-walkable"
-      ? uniqueCheckSupportAlignedSurface(
-        contacts,
-        resolvedSurfaces,
-        sample.supportNormalWorldXYZ,
-      )
+    const canonicalOwner = policy.mode === "route-walkable"
+      ? canonicalOwnerSurfaceV1(plan, sample, live, resolvedSurfaces)
       : undefined;
-    if (checkSupportSurface !== undefined) {
-      return resolvedFromSurface(checkSupportSurface);
-    }
+    if (canonicalOwner !== undefined) return resolvedFromSurface(canonicalOwner);
     return { mode: "ambiguous" };
   }
   return resolvedFromSurface(resolvedSurfaces[0]!);

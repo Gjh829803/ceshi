@@ -67,6 +67,74 @@ const OVERLAP = Object.freeze({
   resourceHash: `sha256:${"5".repeat(64)}` as const,
 });
 
+const EXIT_PLATFORM = Object.freeze({
+  ...STEP,
+  traversalSurfaceId: "traversal-surface:exit-platform",
+  surfaceEntityId: "exit-platform",
+  colliderSubshapeId: "collider-subshape:exit-platform",
+  resourceRef: "package://traversal-surface/exit-platform.primary@1",
+  resourceHash: `sha256:${"6".repeat(64)}` as const,
+});
+
+// A flat y=0 heightfield spanning x in [-10, 30] and z in [-20, 20].
+const TERRAIN_GEOMETRY = Object.freeze({
+  entityId: "terrain-main",
+  centerMetersXZ: [10, 0] as const,
+  sizeMetersXZ: [40, 40] as const,
+  resolutionCellsXZ: [5, 5] as const,
+  heightSamplesMeters: Object.freeze(new Array<number>(25).fill(0)),
+  heightSamplesHash: `sha256:${"7".repeat(64)}` as const,
+  minimumHeightMeters: 0,
+  maximumHeightMeters: 0,
+  semanticClassId: "terrain",
+});
+
+function boxCollider(
+  surface: typeof STEP | typeof OVERLAP | typeof EXIT_PLATFORM,
+  input: Readonly<{
+    positionMetersXYZ: readonly [number, number, number];
+    sizeMetersXYZ: readonly [number, number, number];
+  }>,
+) {
+  return Object.freeze({
+    entityId: surface.surfaceEntityId,
+    logicalSubshapeId: surface.logicalSubshapeId,
+    colliderSubshapeId: surface.colliderSubshapeId,
+    transform: Object.freeze({
+      positionMetersXYZ: input.positionMetersXYZ,
+      rotationEulerRadiansXYZ: [0, 0, 0] as const,
+      scaleXYZ: [1, 1, 1] as const,
+    }),
+    shape: Object.freeze({ kind: "box" as const, sizeMetersXYZ: input.sizeMetersXYZ }),
+    colliderHash: surface.colliderHash,
+  });
+}
+
+// A 0.5m step whose top sits well above the retained foot, occupying x in
+// [4, 5]; the walked terrain in front of it stays the only canonical interior.
+const STEP_COLLIDER = boxCollider(STEP, {
+  positionMetersXYZ: [4.5, 0.25, 3],
+  sizeMetersXYZ: [1, 0.5, 4],
+});
+
+// A platform whose top is coplanar with the terrain and starts exactly at
+// x = 17, so the retained foot at x < 17 stays outside its footprint.
+const EXIT_PLATFORM_COLLIDER = boxCollider(EXIT_PLATFORM, {
+  positionMetersXYZ: [18.5, 0.025, 3],
+  sizeMetersXYZ: [3, 0.05, 4],
+});
+
+// A thin sheet stacked directly over the walked terrain: both surfaces are
+// admitted interiors at the same retained foot point.
+const OVERLAP_COLLIDER = boxCollider(OVERLAP, {
+  positionMetersXYZ: [4, 0.01, 5],
+  sizeMetersXYZ: [2, 0.02, 2],
+});
+
+// Strictly inside one terrain triangle and one sheet triangle, so both hits are
+// admitted interiors rather than boundary-only edge contacts.
+const STACKED_FOOT_METERS_XYZ = [4.3, 0, 5.2] as const;
+
 const ROUTE_WALKABLE = Object.freeze({ mode: "route-walkable" as const });
 
 const STEP_FACE_LIP_NORMAL = Object.freeze(
@@ -76,10 +144,23 @@ const STEP_FACE_LIP_NORMAL = Object.freeze(
 function planWithSurfaces(
   surfaces: CanonicalSceneExecutionPlanV1["traversal"]["surfaces"],
 ): CanonicalSceneExecutionPlanV1 {
-  return { traversal: { surfaces } } as CanonicalSceneExecutionPlanV1;
+  const staticColliders = [
+    STEP_COLLIDER,
+    EXIT_PLATFORM_COLLIDER,
+    OVERLAP_COLLIDER,
+  ].filter((collider) =>
+    surfaces.some((surface) => surface.surfaceEntityId === collider.entityId)
+  );
+  return {
+    terrain: TERRAIN_GEOMETRY,
+    traversal: { surfaces },
+    staticColliders,
+  } as unknown as CanonicalSceneExecutionPlanV1;
 }
 
-function identity(surface: typeof TERRAIN | typeof STEP | typeof OVERLAP) {
+function identity(
+  surface: typeof TERRAIN | typeof STEP | typeof OVERLAP | typeof EXIT_PLATFORM,
+) {
   return {
     colliderSubshapeId: surface.colliderSubshapeId,
     traversalSurfaceId: surface.traversalSurfaceId,
@@ -88,7 +169,7 @@ function identity(surface: typeof TERRAIN | typeof STEP | typeof OVERLAP) {
 }
 
 function contact(
-  surface: typeof TERRAIN | typeof STEP | typeof OVERLAP,
+  surface: typeof TERRAIN | typeof STEP | typeof OVERLAP | typeof EXIT_PLATFORM,
   input: Readonly<{
     pointMetersXYZ: readonly [number, number, number];
     normalXYZ: readonly [number, number, number];
@@ -162,7 +243,6 @@ describe("resolveRetainedSupportSurfaceV1 route-walkable", () => {
     });
 
     expect(lip.normalXYZ[1]).toBeGreaterThanOrEqual(LIVE_LOCK.maxSlopeCosine);
-    expect(lip.normalXYZ[1]).toBeLessThan(0.95);
 
     expect(resolveRouteWalkable([floor, lip], {
       footMetersXYZ: [3.719568350724153, 0.037552517441315825, 3.025694086633965],
@@ -216,21 +296,22 @@ describe("resolveRetainedSupportSurfaceV1 route-walkable", () => {
   it("keeps dual-layer stacked interiors fail-closed ambiguous", () => {
     expect(resolveRouteWalkable([
       contact(TERRAIN, {
-        pointMetersXYZ: [0, 0, 0],
+        pointMetersXYZ: STACKED_FOOT_METERS_XYZ,
         normalXYZ: [0, 1, 0],
         distanceMeters: 0.02,
       }),
       contact(OVERLAP, {
-        pointMetersXYZ: [0, 0.02, 0],
+        pointMetersXYZ: [4.3, 0.02, 5.2],
         normalXYZ: [0, 1, 0],
         distanceMeters: 0.0,
       }),
     ], {
       surfaces: [TERRAIN, OVERLAP],
+      footMetersXYZ: STACKED_FOOT_METERS_XYZ,
     })).toEqual({ mode: "ambiguous" });
   });
 
-  it("uniquely resolves a coplanar exit manifold to the majority checkSupport floor", () => {
+  it("resolves a coplanar exit manifold to the canonical interior owner", () => {
     const floorPoint = [16.971040725708008, 0, 3.0124549865722656] as const;
     expect(resolveRouteWalkable([
       contact(TERRAIN, {
@@ -253,12 +334,13 @@ describe("resolveRetainedSupportSurfaceV1 route-walkable", () => {
         normalXYZ: [0, 0.9994339346885681, 0.03364307060837746],
         distanceMeters: 0.05020958185195923,
       }),
-      contact(STEP, {
+      contact(EXIT_PLATFORM, {
         pointMetersXYZ: floorPoint,
         normalXYZ: [0, 1, 0],
         distanceMeters: 0.050000011920928955,
       }),
     ], {
+      surfaces: [TERRAIN, EXIT_PLATFORM],
       footMetersXYZ: [16.971040369420383, 0.05000001590091063, 3.0124549855969365],
     })).toMatchObject({
       mode: "resolved",
