@@ -124,7 +124,7 @@ const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
 
 export function projectColliderEvidenceRoleV1(
   binding: BabylonNativeContributionTraversalBindingV1,
-  sourceBlockShape: BabylonNativeBlockMaterializerShapeV1,
+  sourceBlockShapes: readonly BabylonNativeBlockMaterializerShapeV1[],
 ): "ground" | "blocker" | "step" {
   if (binding.kind === "not-traversable") return "blocker";
   if (
@@ -132,7 +132,9 @@ export function projectColliderEvidenceRoleV1(
     binding.traversalSurfaceProfileRef ===
       GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF
   ) {
-    return sourceBlockShape === "step" ? "step" : "ground";
+    return sourceBlockShapes.length === 1 && sourceBlockShapes[0] === "step"
+      ? "step"
+      : "ground";
   }
   stale("Contribution traversalBinding does not admit a blocker or ground collider role");
 }
@@ -505,16 +507,19 @@ export function buildWorldReconstructionEvidenceSetV1(
       if (sourceBlockIds === undefined || sourceBlockIds.length === 0) {
         stale("Contribution collider is absent from trusted Block metadata");
       }
-      const sourceBlock = metadataBlocks.get(sourceBlockIds[0]!);
-      if (sourceBlock === undefined) {
-        stale("Contribution collider Block is absent from trusted Block metadata");
-      }
+      const sourceBlockShapes = sourceBlockIds.map((sourceBlockId) => {
+        const sourceBlock = metadataBlocks.get(sourceBlockId);
+        if (sourceBlock === undefined) {
+          stale("Contribution collider Block is absent from trusted Block metadata");
+        }
+        return sourceBlock.shape;
+      });
       return {
         contributionId: collider.id,
         colliderId: collider.id,
         role: projectColliderEvidenceRoleV1(
           collider.traversalBinding,
-          sourceBlock.shape,
+          sourceBlockShapes,
         ),
         hasOverlay: overlayColliderIds.has(collider.id),
       };

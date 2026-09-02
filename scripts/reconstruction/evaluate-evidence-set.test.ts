@@ -85,7 +85,15 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
       traversalSurfaceId: "traversal-surface:step-surface:step-top",
-    }, "step")).toBe("step");
+    }, ["step"])).toBe("step");
+    expect(projectColliderEvidenceRoleV1({
+      kind: "static-surface",
+      surfaceEntityId: "group-surface",
+      logicalSubshapeId: "group-top",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceId: "traversal-surface:group-surface:group-top",
+    }, ["step", "full"])).toBe("ground");
   });
 
   it("canonicalizes adjacent opening distance pairs independently of depth order", () => {
