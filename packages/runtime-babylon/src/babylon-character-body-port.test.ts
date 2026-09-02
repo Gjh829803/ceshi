@@ -817,11 +817,11 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
-  it("accepts accumulated micro-correction from the four-plane Babylon simplex", () => {
+  it("accepts accumulated micro-correction across Babylon cast/solve passes", () => {
     const { driver, port } = createPort();
-    driver.maximumSolverCorrectionMeters = 4e-4;
+    driver.maximumSolverCorrectionMeters = 4e-3;
     driver.onIntegrate = () => {
-      driver.position = [0.01028878930937703, 1, 0];
+      driver.position = [0.0138, 1, 0];
       driver.velocity = [0.6, 0, 0];
     };
     const token = createMovementTickTokenV1();
@@ -834,9 +834,76 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
-  it("rejects a provider correction receipt beyond the four-plane simplex bound", () => {
+  it("accepts a bounded airborne deflection from an active static contact", () => {
     const { driver, port } = createPort();
-    driver.maximumSolverCorrectionMeters = 4.01e-4;
+    const proposed = [
+      -0.010099171710933821,
+      -0.019075,
+      0.03302392232373322,
+    ] as Vec3;
+    driver.support = unsupportedSupport();
+    driver.contacts = [];
+    driver.maximumSolverCorrectionMeters = 4e-4;
+    driver.onIntegrate = (request) => {
+      driver.position = [
+        -0.0007144899269446725,
+        1 - 0.012336501323616744,
+        0.035550859063036455,
+      ];
+      driver.velocity = cloneVec3(request.driverVelocityMetersPerSecondXYZ);
+      driver.contacts = [{
+        ...groundContact([
+          0.7935329890528299,
+          0.5697818124767572,
+          0.21366815732715821,
+        ]),
+        distanceMeters: 0.1,
+      }];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, proposed, [
+        proposed[0] * 60,
+        proposed[1] * 60,
+        proposed[2] * 60,
+      ]),
+    })).not.toThrow();
+    port.dispose();
+  });
+
+  it("does not trust a distant contact to explain airborne deflection", () => {
+    const { driver, port } = createPort();
+    const proposed = [-0.01, -0.02, 0.03] as Vec3;
+    driver.support = unsupportedSupport();
+    driver.contacts = [];
+    driver.onIntegrate = (request) => {
+      driver.position = [0, 0.99, 0.04];
+      driver.velocity = cloneVec3(request.driverVelocityMetersPerSecondXYZ);
+      driver.contacts = [{
+        ...groundContact([0.8, 0.55, 0.24]),
+        distanceMeters: 0.2,
+      }];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, proposed, [
+        proposed[0] * 60,
+        proposed[1] * 60,
+        proposed[2] * 60,
+      ]),
+    })).toThrow("3C_INPUT_INVALID");
+    port.dispose();
+  });
+
+  it("rejects a provider correction receipt beyond the complete cast/solve bound", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 4.01e-3;
     const token = createMovementTickTokenV1();
     port.beginTick({ token, tick: 1 });
 

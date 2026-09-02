@@ -236,12 +236,17 @@ const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
 const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
 const BLOCK_WORLD_MAXIMUM_CONTINUOUS_SNAP_METERS = 0.002;
 // Babylon's Character Controller simplex solver uses a 1e-4 collision epsilon.
-// Its 3D simplex can accumulate that correction across at most four active
-// planes. Keep this provider-only envelope local to the adapter; protocol and
-// published-state coherence continue to use the stricter SDK tolerance.
+// One solve can accumulate the correction across four active planes, and one
+// integrate can run up to ten cast/solve passes. Keep that complete provider
+// envelope local to the adapter; protocol and published-state coherence keep
+// using the stricter SDK tolerance.
 const BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1 = 1e-4;
+const BABYLON_CHARACTER_CONTROLLER_MAXIMUM_SIMPLEX_PLANES_V1 = 4;
+const BABYLON_CHARACTER_CONTROLLER_MAXIMUM_CAST_ITERATIONS_V1 = 10;
 const BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1 =
-  4 * BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1;
+  BABYLON_CHARACTER_CONTROLLER_MAXIMUM_SIMPLEX_PLANES_V1 *
+  BABYLON_CHARACTER_CONTROLLER_MAXIMUM_CAST_ITERATIONS_V1 *
+  BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1;
 
 type CharacterCastHit = NonNullable<
   ReturnType<PhysicsCharacterController["_getClosestCastHit"]>
@@ -1533,6 +1538,54 @@ function removeBoundedSupportTranslation(
   ));
 }
 
+function removeBoundedContactDeflection(
+  applied: MovementVec3V1,
+  proposed: MovementVec3V1,
+  up: MovementVec3V1,
+  contacts: readonly BabylonCharacterBodyNativeContactV1[],
+  maximumActiveContactDistanceMeters: number,
+  maxSlopeCosine: number,
+): MovementVec3V1 {
+  let projectedProposal = proposed;
+  let guardApplied = applied;
+  for (const contact of contacts) {
+    if (contact.motionType === "dynamic" ||
+        dot(contact.normalXYZ, up) >= maxSlopeCosine ||
+        contact.distanceMeters > maximumActiveContactDistanceMeters) continue;
+    const inwardDistance = dot(projectedProposal, contact.normalXYZ);
+    if (!(inwardDistance < 0)) continue;
+    const deflection = freezeVec3(contact.normalXYZ.map((component) =>
+      component * -inwardDistance
+    ));
+    const deflectionVertical = dot(deflection, up);
+    const horizontalDeflection = freezeVec3(deflection.map(
+      (component, axis) => component - up[axis]! * deflectionVertical,
+    ));
+    const maximumContributionSquared = dot(horizontalDeflection, horizontalDeflection);
+    if (maximumContributionSquared > 0) {
+      const guardVertical = dot(guardApplied, up);
+      const proposedVertical = dot(proposed, up);
+      const unexplainedHorizontal = freezeVec3(guardApplied.map(
+        (component, axis) => component - up[axis]! * guardVertical -
+          (proposed[axis]! - up[axis]! * proposedVertical),
+      ));
+      const acceptedRatio = Math.min(1, Math.max(
+        0,
+        dot(unexplainedHorizontal, horizontalDeflection) /
+          maximumContributionSquared,
+      ));
+      guardApplied = freezeVec3(guardApplied.map(
+        (component, axis) => component -
+          horizontalDeflection[axis]! * acceptedRatio,
+      ));
+    }
+    projectedProposal = freezeVec3(projectedProposal.map(
+      (component, axis) => component + deflection[axis]!,
+    ));
+  }
+  return guardApplied;
+}
+
 function assertProposalWasNotAmplified(
   applied: MovementVec3V1,
   proposed: MovementVec3V1,
@@ -1556,7 +1609,17 @@ function assertProposalWasNotAmplified(
     proposed,
     supportDelta,
   );
-  const up = freezeVec3(gravityDirection.map((component) => component === 0 ? 0 : -component));
+  const up = freezeVec3(
+    gravityDirection.map((component) => component === 0 ? 0 : -component),
+  );
+  const contactAdjustedApplied = removeBoundedContactDeflection(
+    supportAdjustedApplied,
+    proposed,
+    up,
+    contacts,
+    maximumActiveContactDistanceMeters,
+    maxSlopeCosine,
+  );
   const projectionNormal = support.mode === "unsupported"
     ? (() => {
       const activeWalkableContacts = contacts.filter((contact) =>
@@ -1572,9 +1635,9 @@ function assertProposalWasNotAmplified(
     })()
     : support.averageSurfaceNormalXYZ;
   const horizontalGuardApplied = projectionNormal === undefined
-    ? supportAdjustedApplied
+    ? contactAdjustedApplied
     : removeBoundedDownhillProjection(
-      supportAdjustedApplied,
+      contactAdjustedApplied,
       proposed,
       up,
       projectionNormal,
@@ -1597,7 +1660,10 @@ function assertProposalWasNotAmplified(
     invalid(
       "native collision resolution amplified horizontal proposal progress " +
       `(applied=${progress.applied}, proposed=${progress.proposedMagnitude}, ` +
-      `solverCorrection=${maximumSolverCorrectionMeters}).`,
+      `solverCorrection=${maximumSolverCorrectionMeters}, ` +
+      `appliedTranslation=${JSON.stringify(applied)}, ` +
+      `proposal=${JSON.stringify(proposed)}, support=${support.mode}, ` +
+      `contacts=${JSON.stringify(contacts)}).`,
     );
   }
   const stepHeightAllowanceMeters = support.mode === "unsupported"
@@ -1641,7 +1707,14 @@ function assertProposalWasNotAmplified(
   if (appliedHorizontalMagnitude > proposedHorizontalMagnitude +
     maximumSolverCorrectionMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
-    invalid("native collision resolution amplified horizontal proposal magnitude.");
+    invalid(
+      "native collision resolution amplified horizontal proposal magnitude " +
+      `(applied=${appliedHorizontalMagnitude}, proposed=${proposedHorizontalMagnitude}, ` +
+      `solverCorrection=${maximumSolverCorrectionMeters}, ` +
+      `appliedTranslation=${JSON.stringify(applied)}, ` +
+      `proposal=${JSON.stringify(proposed)}, support=${support.mode}, ` +
+      `contacts=${JSON.stringify(contacts)}).`,
+    );
   }
 }
 
@@ -1744,6 +1817,8 @@ class BabylonPhysicsCharacterControllerDriverV1
     this.controller.keepDistance = configuration.controller.keepDistanceMeters;
     this.controller.keepContactTolerance =
       configuration.controller.keepContactToleranceMeters;
+    this.controller.maxCastIterations =
+      BABYLON_CHARACTER_CONTROLLER_MAXIMUM_CAST_ITERATIONS_V1;
     this.controller.maxSlopeCosine = configuration.maxSlopeCosine;
     this.controller.maxStepHeight = configuration.controller.maxStepHeightMeters;
     this.controller.characterMass = configuration.controller.characterMassKilograms;

@@ -349,6 +349,7 @@ export async function captureDeterministicPlaythrough(
   } catch (error) {
     encoder.stdin.destroy();
     encoder.kill("SIGTERM");
+    await encoderClosed.catch(() => undefined);
     throw error;
   }
   const finished = await options.page.evaluate(() =>
