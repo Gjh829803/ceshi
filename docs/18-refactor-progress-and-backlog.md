@@ -1166,6 +1166,13 @@ Cursor Cloud 针对精确 SHA 执行，禁止无输入变化时反复重跑。
 
 #### NBR-1 当前唯一最高优先级纵向切片
 
+后续 current-only 入口与构图门禁切换由
+[Native-default World Generation and Opening Gate Design](superpowers/specs/2026-09-02-native-default-world-generation-and-opening-gate-design.md)
+约束：所有新任务省略 Source 时默认 `babylon-native`，Canonical 仅显式选择；Studio/CLI 共用一个
+Source parser；选中 Lane 后仅由该 Lane 的可信 Host owner 生成 Route；正式 Capture Receipt 发布前必须通过
+source-neutral Opening Composition Host Gate。
+该切换不新增 WRC 工作包、Scene Source、Runtime、Viewer、Physics 或 Camera owner。
+
 - [x] NBR-00：合入详细设计、实施计划、WRC 优先级和 current-only 删除清单；
 - [x] NBR-10：冻结 Route、真实 Generation Request/Receipt、Case/Profile 和修正后的 Attempt 身份；
 - [ ] NBR-20：通过统一 Codex task router 从真实参考输入生成闭合 Native Block workspace；

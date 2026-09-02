@@ -765,4 +765,29 @@ describe("formal world capture provider", () => {
       .captureTraversalChecks(request, runtimeSessionId, "player", ports))
       .rejects.toThrow("BABYLON_FORMAL_CAPTURE_BLOCK_CHECKPOINT_UNMEASURED");
   });
+
+  it("freezes the rendered controlled Subject projection for the opening gate", () => {
+    const projected = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .controlledSubjectProjection({
+        projectedBoundsByEntityId: {
+          player: {
+            centerRatioXY: [0.5, 0.48],
+            sizeRatioXY: [0.15, 0.4],
+          },
+        },
+      } as never, "player");
+
+    expect(projected).toEqual({
+      subjectEntityId: "player",
+      centerXBasisPoints: 5_000,
+      centerYBasisPoints: 4_800,
+      widthBasisPoints: 1_500,
+      heightBasisPoints: 4_000,
+      coverageBasisPoints: 600,
+    });
+    expect(Object.isFrozen(projected)).toBe(true);
+    expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .controlledSubjectProjection({ projectedBoundsByEntityId: {} } as never, "player"))
+      .toThrow("BABYLON_FORMAL_CAPTURE_CONTROLLED_SUBJECT_PROJECTION_MISSING");
+  });
 });

@@ -375,6 +375,14 @@ describe("world reconstruction contracts", () => {
     })).not.toBe(hashWorldReconstructionCaseV1(caseValue()));
   });
 
+  it("allows a text-only Native reconstruction Case with no image reference", () => {
+    const parsed = parseWorldReconstructionCaseV1({
+      ...caseValue(),
+      referenceInputs: [],
+    });
+    expect(parsed.referenceInputs).toEqual([]);
+  });
+
   it("requires non-empty acceptance/evidence targets and scripted fixed-input semantics", () => {
     expect(() => parseWorldReconstructionCaseV1({ ...caseValue(), acceptanceTargetRefs: [] })).toThrowError(
       "WORLD_RECONSTRUCTION_CASE_INVALID",

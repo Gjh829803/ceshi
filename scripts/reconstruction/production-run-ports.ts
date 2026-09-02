@@ -71,7 +71,7 @@ import {
   materializeFormalWorldCaptureRequestV1,
 } from "./formal-capture-request.js";
 import {
-  captureHostedWorldPackageV1,
+  captureProductionHostedWorldPackageV1,
   FormalCaptureCommandClosedErrorV1,
   type FormalCaptureCommandCleanupOutcomesV1,
 } from "./formal-capture.js";
@@ -125,7 +125,7 @@ export interface ProductionWorldReconstructionRunPortOwnersV1 {
   readonly packageAttempt: typeof packageNativeBlockAttemptV1;
   readonly materializeCaptureRequest:
     typeof materializeFormalWorldCaptureRequestV1;
-  readonly capturePackage: typeof captureHostedWorldPackageV1;
+  readonly capturePackage: typeof captureProductionHostedWorldPackageV1;
   readonly evaluateAttempt: typeof evaluateNativeBlockAttemptV1;
   readonly resolveFrozenOwnerIdentities:
     typeof resolveWorldReconstructionFrozenOwnerIdentitiesV1;
@@ -152,7 +152,7 @@ function defaultOwners(): ProductionWorldReconstructionRunPortOwnersV1 {
     runSelfCheck: runBuilderSelfCheckV1,
     packageAttempt: packageNativeBlockAttemptV1,
     materializeCaptureRequest: materializeFormalWorldCaptureRequestV1,
-    capturePackage: captureHostedWorldPackageV1,
+    capturePackage: captureProductionHostedWorldPackageV1,
     evaluateAttempt: evaluateNativeBlockAttemptV1,
     resolveFrozenOwnerIdentities:
       resolveWorldReconstructionFrozenOwnerIdentitiesV1,
@@ -684,6 +684,10 @@ export async function createProductionWorldReconstructionRunPortsV1(
           packageDirectoryPath: state.packaged.worldPackagePath,
           outputPath: path.join(captureDirectoryPath, "opening.png"),
           triviewOutputPath: captureDirectoryPath,
+          openingGate: {
+            reconstructionCase: input.reconstructionCase,
+            evaluationProfile: input.evaluationProfile,
+          },
         });
         applyCaptureCleanup(captured.cleanupOutcomes);
         cleanupState.outputPromotion = "completed";

@@ -79,8 +79,7 @@ The formal production authoring lane remains outdoor heightfield worlds with cur
 pnpm generate:agent-self-check
 pnpm check:agent-self-check
 pnpm agent:world -- --scene-id <scene-id> --image /absolute/reference.png "<request>"
-pnpm agent:world:plan -- --scene-id <scene-id> --image /absolute/reference.png "<request>"
-pnpm agent:world:build -- --scene-id <scene-id>
+pnpm agent:world -- --scene-source canonical --scene-id <scene-id> --image /absolute/reference.png "<request>"
 pnpm studio
 ```
 

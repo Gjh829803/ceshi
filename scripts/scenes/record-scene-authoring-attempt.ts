@@ -22,18 +22,6 @@ import {
   type SceneAuthoringRouteDecisionV1,
 } from "@whitebox-world/scene-authoring-contracts";
 
-const HOSTED_CANONICAL_TRUST_PROFILE_V1 = Object.freeze({
-  kind: "worldkit-scene-authoring-trust-profile",
-  schemaVersion: 1,
-  id: "hosted-canonical",
-  lane: "canonical",
-  authoringInputTrust: "untrusted",
-  publicationOwner: "trusted-host",
-  nativeProductionAdmission: "rejected",
-});
-
-const HOSTED_CANONICAL_TRUST_PROFILE_REF =
-  "worldkit://trust-profile/hosted-canonical@1";
 const HOSTED_CANONICAL_AUTHORING_PROFILE_REF =
   "worldkit://authoring-profile/canonical-outdoor@1";
 
@@ -80,7 +68,7 @@ export async function beginHostedCanonicalSceneAuthoringAttemptV1(options: {
   runId: string;
   sceneBriefPath: string;
   authoringInputPath: string;
-  routeDecisionOutputPath: string;
+  routeDecisionPath: string;
   attemptOutputPath: string;
 }): Promise<{
   routeDecision: SceneAuthoringRouteDecisionV1;
@@ -88,9 +76,10 @@ export async function beginHostedCanonicalSceneAuthoringAttemptV1(options: {
 }> {
   const sceneId = validateIdentityPart(options.sceneId, "sceneId");
   const runId = validateIdentityPart(options.runId, "runId");
-  const [briefText, authoringInput] = await Promise.all([
+  const [briefText, authoringInput, routeDecisionValue] = await Promise.all([
     readFile(options.sceneBriefPath, "utf8"),
     readCanonicalAuthoringSpec(options.authoringInputPath),
+    readFile(options.routeDecisionPath, "utf8").then(JSON.parse),
   ]);
   const brief = parseSceneBriefV1(briefText);
   if (!brief.ok) {
@@ -102,26 +91,15 @@ export async function beginHostedCanonicalSceneAuthoringAttemptV1(options: {
   const sceneBriefRef = `worldkit://scene-brief/${sceneId}@1`;
   const routeDecisionRef =
     `worldkit://scene-authoring-route-decision/${sceneId}/${runId}@1`;
-  const routeDecision = parseSceneAuthoringRouteDecisionV1({
-    kind: "scene-authoring-route-decision",
-    schemaVersion: 1,
-    id: `route-${sceneId}-${runId}`,
-    sceneBriefRef,
-    sceneBriefHash: brief.sceneBriefHash,
-    trustProfileRef: HOSTED_CANONICAL_TRUST_PROFILE_REF,
-    trustProfileHash: sha256CanonicalJson(
-      HOSTED_CANONICAL_TRUST_PROFILE_V1,
-    ),
-    requiredCapabilityRefs: [
-      "worldkit://capability/canonical-authoring@1",
-      "worldkit://capability/trusted-host-publication@1",
-    ],
-    decision: {
-      kind: "canonical",
-      authoringProfileRef: HOSTED_CANONICAL_AUTHORING_PROFILE_REF,
-      reasonCodes: ["canonical-default"],
-    },
-  });
+  const routeDecision = parseSceneAuthoringRouteDecisionV1(routeDecisionValue);
+  if (
+    routeDecision.id !== `route-${sceneId}-${runId}` ||
+    routeDecision.sceneBriefRef !== sceneBriefRef ||
+    routeDecision.sceneBriefHash !== brief.sceneBriefHash ||
+    routeDecision.decision.kind !== "canonical" ||
+    routeDecision.decision.authoringProfileRef !==
+      HOSTED_CANONICAL_AUTHORING_PROFILE_REF
+  ) throw new Error("SCENE_AUTHORING_ROUTE_IDENTITY_MISMATCH");
   const attempt = parseSceneAuthoringAttemptV1({
     kind: "scene-authoring-attempt",
     schemaVersion: 1,
@@ -148,9 +126,6 @@ export async function beginHostedCanonicalSceneAuthoringAttemptV1(options: {
       "worldkit://evidence-profile/whitebox-triview@1",
     ],
   });
-  // Publish the dependency first so an interrupted run can never expose an
-  // Attempt whose referenced Route Decision is absent.
-  await writeCanonicalJsonAtomic(options.routeDecisionOutputPath, routeDecision);
   await writeCanonicalJsonAtomic(options.attemptOutputPath, attempt);
   return { routeDecision, attempt };
 }
@@ -257,7 +232,7 @@ export async function main(
       runId,
       sceneBriefPath: option(arguments_, "--brief"),
       authoringInputPath: option(arguments_, "--authoring-input"),
-      routeDecisionOutputPath: option(arguments_, "--route-decision-output"),
+      routeDecisionPath: option(arguments_, "--route-decision"),
       attemptOutputPath: option(arguments_, "--attempt-output"),
     });
   } else if (action === "complete") {

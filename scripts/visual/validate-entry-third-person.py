@@ -22,8 +22,16 @@ from PIL import Image
 
 PRIMARY_SUBJECT_COLOR = "#E85D5D"
 MAXIMUM_CENTER_ERROR_RATIO = 0.015
+MINIMUM_SUBJECT_COVERAGE_RATIO = 0.005
+MAXIMUM_SUBJECT_COVERAGE_RATIO = 0.25
+MINIMUM_SUBJECT_HEIGHT_RATIO = 0.12
+MAXIMUM_SUBJECT_HEIGHT_RATIO = 0.9
 MAXIMUM_REAR_ALIGNMENT_DEGREES = 1.0
 MAXIMUM_VIEW_YAW_OFFSET_RADIANS = 1e-6
+MAXIMUM_CAMERA_RETRACTION_METERS = 0.75
+MAXIMUM_CAMERA_RETRACTION_RATIO = 0.2
+MAXIMUM_FOV_DRIFT_DEGREES = 3.0
+MAXIMUM_PITCH_DRIFT_RADIANS = 0.15
 
 
 def _hue_distance_degrees(left: float, right: float) -> float:
@@ -49,6 +57,8 @@ def measure_subject_center(image_path: Path) -> dict[str, float | int]:
         raise ValueError("Entry image is too small to validate.")
     x_total = 0
     pixel_count = 0
+    minimum_y = height
+    maximum_y = -1
     for y in range(height):
         for x in range(width):
             red, green, blue = image.getpixel((x, y))
@@ -65,12 +75,16 @@ def measure_subject_center(image_path: Path) -> dict[str, float | int]:
             ):
                 x_total += x
                 pixel_count += 1
+                minimum_y = min(minimum_y, y)
+                maximum_y = max(maximum_y, y)
     minimum_pixels = max(64, round(width * height * 0.001))
     if pixel_count < minimum_pixels:
         raise ValueError(
             f"Primary-subject identity mask is missing or too small ({pixel_count} pixels)."
         )
     center_x_ratio = (x_total / pixel_count + 0.5) / width
+    coverage_ratio = pixel_count / (width * height)
+    height_ratio = (maximum_y - minimum_y + 1) / height
     return {
         "widthPixels": width,
         "heightPixels": height,
@@ -78,6 +92,12 @@ def measure_subject_center(image_path: Path) -> dict[str, float | int]:
         "subjectCenterXRatio": center_x_ratio,
         "subjectCenterErrorRatio": abs(center_x_ratio - 0.5),
         "maximumCenterErrorRatio": MAXIMUM_CENTER_ERROR_RATIO,
+        "subjectCoverageRatio": coverage_ratio,
+        "minimumSubjectCoverageRatio": MINIMUM_SUBJECT_COVERAGE_RATIO,
+        "maximumSubjectCoverageRatio": MAXIMUM_SUBJECT_COVERAGE_RATIO,
+        "subjectHeightRatio": height_ratio,
+        "minimumSubjectHeightRatio": MINIMUM_SUBJECT_HEIGHT_RATIO,
+        "maximumSubjectHeightRatio": MAXIMUM_SUBJECT_HEIGHT_RATIO,
     }
 
 
@@ -175,6 +195,24 @@ def measure_runtime_rear_alignment(snapshot_path: Path) -> dict[str, float | boo
     yaw_offset = camera.get("viewYawOffsetRadians", 0)
     if not isinstance(yaw_offset, (int, float)) or not math.isfinite(yaw_offset):
         raise ValueError("Runtime camera yaw offset is invalid.")
+    resolved_parameters = camera.get("resolvedParameters")
+    if not isinstance(resolved_parameters, dict):
+        raise ValueError("Runtime camera resolved parameters are missing.")
+    requested_arm = camera.get("requestedArmLengthMeters", resolved_parameters.get("distanceMeters"))
+    effective_arm = camera.get("effectiveArmLengthMeters", requested_arm)
+    base_fov = resolved_parameters.get("baseFovDegrees")
+    final_fov = camera.get("finalFovDegrees", base_fov)
+    pitch_offset = camera.get("viewPitchOffsetRadians")
+    if not all(
+        isinstance(value, (int, float)) and math.isfinite(value)
+        for value in (requested_arm, effective_arm, base_fov, final_fov, pitch_offset)
+    ) or requested_arm <= 0 or effective_arm <= 0:
+        raise ValueError("Runtime camera arm, FOV, or pitch measurements are invalid.")
+    retraction_meters = max(0.0, requested_arm - effective_arm)
+    maximum_retraction_meters = min(
+        MAXIMUM_CAMERA_RETRACTION_METERS,
+        requested_arm * MAXIMUM_CAMERA_RETRACTION_RATIO,
+    )
     return {
         "controlledEntityId": controlled_id,
         "cameraTargetEntityId": str(camera.get("targetEntityId", "")),
@@ -183,6 +221,12 @@ def measure_runtime_rear_alignment(snapshot_path: Path) -> dict[str, float | boo
         "maximumRearAlignmentDegrees": MAXIMUM_REAR_ALIGNMENT_DEGREES,
         "viewYawOffsetRadians": abs(yaw_offset),
         "maximumViewYawOffsetRadians": MAXIMUM_VIEW_YAW_OFFSET_RADIANS,
+        "cameraRetractionMeters": retraction_meters,
+        "maximumCameraRetractionMeters": maximum_retraction_meters,
+        "fovDriftDegrees": abs(final_fov - base_fov),
+        "maximumFovDriftDegrees": MAXIMUM_FOV_DRIFT_DEGREES,
+        "pitchDriftRadians": abs(pitch_offset),
+        "maximumPitchDriftRadians": MAXIMUM_PITCH_DRIFT_RADIANS,
     }
 
 
@@ -207,6 +251,16 @@ def validate(image_path: Path, snapshot_path: Path | None = None) -> dict[str, A
                 f"midline (x={image_measurements['subjectCenterXRatio']:.4f}, required 0.5000±"
                 f"{MAXIMUM_CENTER_ERROR_RATIO:.4f})."
             ),
+        })
+    if image_measurements and (
+        image_measurements["subjectCoverageRatio"] < MINIMUM_SUBJECT_COVERAGE_RATIO
+        or image_measurements["subjectCoverageRatio"] > MAXIMUM_SUBJECT_COVERAGE_RATIO
+        or image_measurements["subjectHeightRatio"] < MINIMUM_SUBJECT_HEIGHT_RATIO
+        or image_measurements["subjectHeightRatio"] > MAXIMUM_SUBJECT_HEIGHT_RATIO
+    ):
+        diagnostics.append({
+            "code": "ENTRY_SUBJECT_SCALE_INVALID",
+            "message": "The complete primary Subject occupies an unsafe opening-frame proportion.",
         })
     runtime_measurements: dict[str, float | bool | str] | None = None
     if snapshot_path is not None:
@@ -236,6 +290,21 @@ def validate(image_path: Path, snapshot_path: Path | None = None) -> dict[str, A
                 diagnostics.append({
                     "code": "ENTRY_CAMERA_YAW_OFFSET",
                     "message": "The opening camera must have zero yaw/orbit offset.",
+                })
+            if runtime_measurements["cameraRetractionMeters"] > runtime_measurements["maximumCameraRetractionMeters"]:
+                diagnostics.append({
+                    "code": "ENTRY_CAMERA_RETRACTED",
+                    "message": "Near-field geometry retracted the opening camera beyond the Host limit.",
+                })
+            if runtime_measurements["fovDriftDegrees"] > MAXIMUM_FOV_DRIFT_DEGREES:
+                diagnostics.append({
+                    "code": "ENTRY_CAMERA_FOV_DRIFT",
+                    "message": "The opening FOV drifted beyond the Host limit.",
+                })
+            if runtime_measurements["pitchDriftRadians"] > MAXIMUM_PITCH_DRIFT_RADIANS:
+                diagnostics.append({
+                    "code": "ENTRY_CAMERA_PITCH_DRIFT",
+                    "message": "The opening pitch offset drifted beyond the Host limit.",
                 })
     return {
         "kind": "worldkit-entry-third-person-validation",

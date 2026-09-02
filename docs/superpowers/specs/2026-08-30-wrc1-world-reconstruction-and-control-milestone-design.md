@@ -77,8 +77,11 @@ Viewer support or authorize deletion of WRC/NBR evidence and Harnesses.
 Native Package playability remains owned by BNA/NBR Runtime and verification Harnesses. It must not add a
 Native member to the accepted Canonical-only Viewer target Catalog/bootstrap, route a Native Package through
 the Viewer-target `worldkit run` source-selection contract, or use Viewer work as a BNA production/admission gate.
-Native Viewer support requires the applicable BNA production/admission disposition and a later separate
-current-only change that atomically updates the Viewer Host and every consumer.
+The later
+[Native-default generation design](./2026-09-02-native-default-world-generation-and-opening-gate-design.md)
+changes Studio and `agent:world` authoring dispatch only: newly created jobs default to the existing admitted
+Native reconstruction transaction, while the Unified Viewer remains Canonical-only until its own applicable
+BNA disposition and atomic Host/consumer migration.
 
 | Viewer relationship | WRC/BNA owner retained | Viewer may consume | Viewer must not own |
 |---|---|---|---|

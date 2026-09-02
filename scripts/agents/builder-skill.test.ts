@@ -116,7 +116,7 @@ describe("Canonical Builder skill", () => {
       readFile(path.resolve(
         ".codex/skills/worldkit-canonical-builder/references/modular-subjects.md",
       ), "utf8"),
-      readFile(path.resolve("scripts/agents/run-spatial-world-agent.sh"), "utf8"),
+      readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8"),
     ]);
     expect(skill).toContain("brief's explicit movement mode");
     expect(skill).toContain("A named Registry Subject is a shortcut, not a whitelist");

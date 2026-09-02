@@ -54,6 +54,12 @@
 
             <label class="field-label" for="world-prompt">世界描述</label>
             <textarea id="world-prompt" name="prompt" required minlength="4" maxlength="8000" placeholder="描述玩家进入后看见什么、可以向哪里移动，以及必须保留的主体、地形和标志物。"></textarea>
+
+            <label class="field-label" for="world-scene-source">场景生成方式</label>
+            <select id="world-scene-source" name="sceneSourceKind">
+              <option value="babylon-native" selected>Babylon Native 像素块（默认）</option>
+              <option value="canonical">Canonical Heightfield（明确选择）</option>
+            </select>
           </div>
           <div class="create-reference">
             <label class="field-label">参考图片 <span>可选 · PNG / JPEG / WebP</span></label>
@@ -81,7 +87,7 @@
             <summary>查看生成流程</summary>
             <div class="generation-contract">
               <div><span>01</span><p><b>WorldKit Planner</b>区分用户事实、可见证据、工程推断与视觉设想，生成托管式意图摘要和规划图</p></div>
-              <div><span>02</span><p><b>Canonical Builder</b>在同一 Codex Job 内运行 main Schema、布局、编译与探索容量自检，Host 只复验一次后捕获白膜</p></div>
+              <div><span>02</span><p><b>Babylon Native Block Builder</b>默认重建完整像素块空间；只有明确选择 Canonical 时才进入 Heightfield Builder</p></div>
               <div><span>03</span><p><b>Visual Provider Adapter</b>可选地合成共享视觉约束、新首帧 prompt 和全部三视图 prompt</p></div>
               <div><span>04</span><p><b>Direct ImageGen</b>同时生成标准第三人称背影新首帧与全部渲染后三视图</p></div>
               <div><span>05</span><p><b>Ready</b>新首帧和渲染后三视图完成即可查看详情并进入白膜世界，无需试玩</p></div>

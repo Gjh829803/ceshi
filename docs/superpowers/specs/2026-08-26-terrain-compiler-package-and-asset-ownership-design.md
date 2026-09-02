@@ -470,9 +470,9 @@ downstream gates. No downstream command consumes `authoring.builder.json` or the
 
 - `pnpm agent:world` generates, compiles, validates, builds, and captures the terrain by
   default for new hosted outdoor worlds.
-- `pnpm agent:world:plan` now finishes only after the Height Intent prompt, PNG, and
+- `pnpm agent:world -- --scene-source canonical` finishes only after the Height Intent prompt, PNG, and
   updated Planner receipt are complete.
-- `pnpm agent:world:build` consumes those frozen Planner outputs and fails clearly when
+- the same explicit Canonical generation transaction consumes those frozen Planner outputs and fails clearly when
   they are absent or stale.
 - Existing development CLI behavior remains under `pnpm terrain:intent:compile`.
 - The hosted workflow is private and unreleased, so it uses a clean Planner receipt

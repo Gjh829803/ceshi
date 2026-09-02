@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import test from "node:test";
@@ -333,8 +333,135 @@ test.afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-test("uses one current switchable Codex backend workflow contract", () => {
-  assert.equal(workflowPolicyVersion, 4);
+test("uses one current Native-default world-generation workflow contract", () => {
+  assert.equal(workflowPolicyVersion, 5);
+});
+
+test("freezes Babylon Native by default and permits only explicit Canonical opt-in", async () => {
+  const dataRoot = await temporaryRoot(".scene-source-binding-");
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  const origin = await listen(studio);
+  try {
+    const nativeResponse = await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Native default",
+        prompt: "Build a block world.",
+      }),
+    });
+    assert.equal(nativeResponse.status, 202);
+    assert.equal((await nativeResponse.json()).world.sceneSourceKind, "babylon-native");
+
+    const canonicalResponse = await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Canonical opt in",
+        prompt: "Build a heightfield world.",
+        sceneSourceKind: "canonical",
+      }),
+    });
+    assert.equal(canonicalResponse.status, 202);
+    assert.equal((await canonicalResponse.json()).world.sceneSourceKind, "canonical");
+
+    const invalidResponse = await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Invalid alias",
+        prompt: "Do not accept an alias.",
+        sceneSourceKind: "native",
+      }),
+    });
+    assert.equal(invalidResponse.status, 400);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("imports retained Canonical artifacts with an explicit Canonical source identity", async () => {
+  const dataRoot = await temporaryRoot(".canonical-import-data-");
+  const fakeRepoRoot = await temporaryRoot(".canonical-import-repo-");
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, "retained-canonical-world");
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  const origin = await listen(studio);
+  try {
+    const payload = await (await fetch(`${origin}/api/worlds`)).json();
+    const imported = payload.worlds.find(({ id }) =>
+      id === "retained-canonical-world"
+    );
+    assert.equal(imported.sceneSourceKind, "canonical");
+    assert.equal(imported.previewUrl, "/play/retained-canonical-world");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("surfaces the formal Native Package, Capture, evaluation, and launch closure", async () => {
+  const dataRoot = await temporaryRoot(".native-closure-data-");
+  const fakeRepoRoot = await temporaryRoot(".native-closure-repo-");
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Native Closure", prompt: "Build a block ridge." }),
+    })).json()).world;
+    const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId);
+    await Promise.all([
+      mkdir(path.join(artifactRoot, "final", "world-package"), { recursive: true }),
+      mkdir(path.join(artifactRoot, "final", "capture"), { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(path.join(artifactRoot, "scene-brief.md"), "# Native Closure\n"),
+      writeFile(path.join(artifactRoot, "final", "world-package", "world-package-build-receipt.json"), "{}"),
+      writeFile(path.join(artifactRoot, "final", "capture", "opening.png"), Buffer.from("89504e470d0a1a0a", "hex")),
+      writeFile(path.join(artifactRoot, "final", "capture", "formal-world-capture-receipt.json"), "{}"),
+      writeFile(path.join(artifactRoot, "final", "evaluation.json"), "{}"),
+      writeFile(path.join(artifactRoot, "final", "launch.json"), "{}"),
+    ]);
+    const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
+    const record = JSON.parse(await readFile(recordPath, "utf8"));
+    await writeFile(recordPath, JSON.stringify({
+      ...record,
+      status: "ready",
+      stage: "ready",
+      attempt: 1,
+      startedAt: "2026-09-02T00:00:00.000Z",
+      finishedAt: "2026-09-02T00:01:00.000Z",
+      captureStatus: "passed",
+      outcome: "passed",
+    }));
+    const detail = await fetch(`${origin}/api/worlds/${created.id}`).then((response) => response.json());
+    assert.equal(detail.world.coverUrl, `/api/worlds/${created.id}/deliverables/opening-frame`);
+    assert.equal(detail.world.previewUrl, null);
+    assert.ok(detail.media.deliverables.some(({ id, status }) =>
+      id === "native-launch" && status === "available"));
+    assert.ok(detail.media.deliverables.some(({ id, status }) =>
+      id === "formal-world-capture-receipt" && status === "available"));
+  } finally {
+    await studio.shutdown();
+  }
 });
 
 test("passes the frozen backend to world jobs and records local Codex markers without provider details", async () => {
@@ -343,6 +470,78 @@ test("passes the frozen backend to world jobs and records local Codex markers wi
   assert.match(source, /WORLDKIT_LOCAL_CODEX_JOB \(\[a-z-\]\+\) \(\[a-zA-Z0-9\._:-\]\+\)/);
   assert.match(source, /kind: "local-job", taskId: localCodexJob\[2\]/);
   assert.doesNotMatch(source, /kind: "local-job"[^\n]+(?:credential|token|CODEX_HOME)/i);
+});
+
+test("does not precreate the Native Case root before the atomic Host runner starts", async () => {
+  const dataRoot = await temporaryRoot(".native-atomic-root-data-");
+  const fakeRepoRoot = await temporaryRoot(".native-atomic-root-repo-");
+  const rootWasAbsentAtSpawn = [];
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    beforeWorldSpawn: async (id) => {
+      rootWasAbsentAtSpawn.push(await lstat(path.join(
+        fakeRepoRoot,
+        "artifacts/scenes",
+        id,
+      )).then(() => false, (error) => {
+        assert.equal(error?.code, "ENOENT");
+        return true;
+      }));
+    },
+    worldSpawnImplementation: (_command, _arguments, options) => spawn(
+      process.execPath,
+      ["-e", "process.exit(1)"],
+      options,
+    ),
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Atomic Native root",
+        prompt: "Build a Native block world.",
+      }),
+    })).json()).world;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const current = await fetch(`${origin}/api/worlds/${created.id}`)
+        .then((response) => response.json());
+      if (current.world.status === "failed") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(rootWasAbsentAtSpawn, [true]);
+    assert.ok(await readFile(path.join(
+      fakeRepoRoot,
+      "artifacts/scenes",
+      created.id,
+      "evaluation-run.json",
+    ), "utf8"));
+    const retry = await fetch(`${origin}/api/worlds/${created.id}/retry`, {
+      method: "POST",
+    });
+    assert.equal(retry.status, 202);
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const current = await fetch(`${origin}/api/worlds/${created.id}`)
+        .then((response) => response.json());
+      if (current.world.status === "failed" && rootWasAbsentAtSpawn.length === 2) {
+        assert.equal(current.world.sceneSourceKind, "babylon-native");
+        assert.equal(current.world.styledOpeningFrameRequired, false);
+        assert.equal(current.world.styledTriviewsRequired, false);
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(rootWasAbsentAtSpawn, [true, true]);
+  } finally {
+    await studio.shutdown();
+  }
 });
 
 test("keeps concurrent atomic writes isolated and serializes same-record mutations", async () => {
@@ -388,7 +587,7 @@ test("keeps concurrent atomic writes isolated and serializes same-record mutatio
 test("assembles the new agent pipeline without executing prompt text", () => {
   const result = spawnSync(
     "bash",
-    [path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"), "--", "--scene-id", "prompt-smoke", "$(touch should-not-run)"],
+    [path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"), "--", "--scene-id", "prompt-smoke", "$(touch should-not-run)"],
     { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -403,7 +602,7 @@ test("build-only accepts an empty reference-image list before validating frozen 
     const result = spawnSync(
       "bash",
       [
-        path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"),
+        path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"),
         "--build-only",
         "--",
         "--scene-id",
@@ -428,7 +627,7 @@ test("build-only accepts an empty reference-image list before validating frozen 
 
 test("routes Planner and Builder through the selected Codex backend while keeping post-whitebox visuals on Gemini", async () => {
   const [scripts, codexRouter] = await Promise.all([Promise.all([
-    "scripts/agents/run-spatial-world-agent.sh",
+    "scripts/agents/run-canonical-world-agent.sh",
     "scripts/visual/run-styled-opening-frame-agent.sh",
     "scripts/visual/run-styled-triviews-agent.sh",
     "scripts/visual/run-visual-reconstruction-agent.sh",
@@ -452,7 +651,7 @@ test("routes Planner and Builder through the selected Codex backend while keepin
 
 test("keeps lightweight Planner prose and Builder implementation authority separate", async () => {
   const [launcher, plannerSkill, plannerTemplate, builderSkill, resourceCatalog, controlledSubjects, terrainStructures] = await Promise.all([
-    readFile(path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"), "utf8"),
+    readFile(path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"), "utf8"),
     readFile(path.join(repoRoot, ".codex/skills/worldkit-spatial-planner/SKILL.md"), "utf8"),
     readFile(path.join(repoRoot, ".codex/skills/worldkit-spatial-planner/references/scene-brief-template.md"), "utf8"),
     readFile(path.join(repoRoot, ".codex/skills/worldkit-canonical-builder/SKILL.md"), "utf8"),
@@ -528,7 +727,7 @@ test("synthesizes prompts then directly generates the opening and tri-views conc
   assert.equal(triViewSmoke.status, 0, triViewSmoke.stderr || triViewSmoke.stdout);
   assert.match(triViewSmoke.stdout, /WORLDKIT_STYLED_TRIVIEWS_SMOKE_OK styled-opening-frame whitebox-triviews no-playtest/);
   const [worldRunner, firstFrameRunner, styledTriviewRunner, visualPipeline, server] = await Promise.all([
-    readFile(path.join(repoRoot, "scripts/agents/run-spatial-world-agent.sh"), "utf8"),
+    readFile(path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"), "utf8"),
     readFile(path.join(repoRoot, "scripts/visual/run-styled-opening-frame-agent.sh"), "utf8"),
     readFile(path.join(repoRoot, "scripts/visual/run-styled-triviews-agent.sh"), "utf8"),
     readFile(path.join(repoRoot, "scripts/visual/run-gemini-visual-pipeline.py"), "utf8"),
@@ -848,47 +1047,6 @@ test("rejects an unavailable backend without changing the selected or persisted 
     assert.equal(health.codexAvailable, true);
     const persisted = JSON.parse(await readFile(path.join(dataRoot, "runtime-settings.json"), "utf8"));
     assert.equal(persisted.codexBackend, "cloud");
-  } finally {
-    await studio.shutdown();
-  }
-});
-
-test("defaults legacy records without a frozen backend to cloud", async () => {
-  const dataRoot = await temporaryRoot(".codex-backend-legacy-");
-  const legacyId = "legacy-queued-world";
-  const legacyRoot = path.join(dataRoot, "worlds", legacyId);
-  await mkdir(legacyRoot, { recursive: true });
-  await writeFile(path.join(legacyRoot, "record.json"), JSON.stringify({
-    id: legacyId,
-    sceneId: legacyId,
-    title: "Legacy queued world",
-    prompt: "Build the legacy queued world.",
-    referenceImage: null,
-    status: "queued",
-    stage: "queued",
-    attempt: 0,
-    origin: "creator-studio",
-    createdAt: "2026-08-20T00:00:00.000Z",
-    updatedAt: "2026-08-20T00:00:00.000Z",
-    workflowPolicyVersion: 23,
-  }));
-  const studio = createStudio({
-    repoRoot,
-    dataRoot,
-    autoRunJobs: false,
-    importExistingArtifacts: false,
-    importBuiltinTestSets: false,
-    importBuiltinResults: false,
-    initialCodexBackend: "local",
-    lwdpConfigured: true,
-    codexSpawnSync: () => ({ status: 0 }),
-  });
-  const origin = await listen(studio);
-  try {
-    const world = await fetch(`${origin}/api/worlds/${legacyId}`).then((response) => response.json());
-    assert.equal(world.world.codexBackend, "cloud");
-    const health = await fetch(`${origin}/api/health`).then((response) => response.json());
-    assert.equal(health.codexBackend, "local");
   } finally {
     await studio.shutdown();
   }
@@ -1346,10 +1504,11 @@ test("persists image test sets, rejects duplicate bytes, and queues selected cas
     assert.equal(payload.worlds.length, 1);
     assert.equal(payload.worlds[0].workflowPolicyVersion, workflowPolicyVersion);
     assert.equal(payload.worlds[0].captureStatus, "pending");
-    assert.equal(payload.worlds[0].styledOpeningFrameRequired, true);
-    assert.equal(payload.worlds[0].styledOpeningFrameStatus, "pending");
-    assert.equal(payload.worlds[0].styledTriviewsRequired, true);
-    assert.equal(payload.worlds[0].styledTriviewsStatus, "pending");
+    assert.equal(payload.worlds[0].sceneSourceKind, "babylon-native");
+    assert.equal(payload.worlds[0].styledOpeningFrameRequired, false);
+    assert.equal(payload.worlds[0].styledOpeningFrameStatus, "not-required");
+    assert.equal(payload.worlds[0].styledTriviewsRequired, false);
+    assert.equal(payload.worlds[0].styledTriviewsStatus, "not-required");
   } finally {
     await studio.shutdown();
   }
@@ -1447,6 +1606,7 @@ test("does not recover an explicitly failed visual run from leftover output file
     body: JSON.stringify({
       title: "Recover Styled Frame",
       prompt: "Create a playable third-person world.",
+      sceneSourceKind: "canonical",
       image: { name: "reference.png", dataUrl: `data:image/png;base64,${png.toString("base64")}` },
     }),
   })).json()).world;
@@ -1748,7 +1908,11 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
     const createResponse = await fetch(`${origin}/api/worlds`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "Layered City", prompt: "Create bridges, towers, terrain and a continuous route." }),
+      body: JSON.stringify({
+        title: "Layered City",
+        prompt: "Create bridges, towers, terrain and a continuous route.",
+        sceneSourceKind: "canonical",
+      }),
     });
     const created = (await createResponse.json()).world;
     const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId);
@@ -1822,7 +1986,11 @@ test("serves one atomic Preview bootstrap and removes split Preview authority ro
     const created = (await (await fetch(`${origin}/api/worlds`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "Atomic Preview", prompt: "Create one closed Preview world." }),
+      body: JSON.stringify({
+        title: "Atomic Preview",
+        prompt: "Create one closed Preview world.",
+        sceneSourceKind: "canonical",
+      }),
     })).json()).world;
     const startedAt = "2026-08-25T09:00:00.000Z";
     const authoringSpec = {

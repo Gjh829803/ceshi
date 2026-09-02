@@ -1,0 +1,319 @@
+import { spawn } from "node:child_process";
+import {
+  constants,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  sha256Bytes,
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";
+import { isEqual } from "lodash-es";
+
+import { parseWorldAgentArgumentsV1 } from "../agents/run-world-agent.js";
+import { prepareNativeWorldCaseV1 } from "./native-world-case-preparation.js";
+
+function run(
+  command: string,
+  arguments_: readonly string[],
+  cwd: string,
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, arguments_, {
+      cwd,
+      env: process.env,
+      shell: false,
+      stdio: "inherit",
+    });
+    child.once("error", reject);
+    child.once("close", (exitCode, signal) => {
+      if (signal !== null) {
+        reject(new Error(`NATIVE_WORLD_CHILD_SIGNAL:${signal}`));
+        return;
+      }
+      resolve(exitCode ?? 1);
+    });
+  });
+}
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    return (await stat(filePath)).isFile();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await lstat(filePath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function caseMappingInstruction(sceneId: string, prompt: string): string {
+  return `You are the WorldKit Native Reconstruction Case Mapper for '${sceneId}'.
+
+User request:
+${prompt}
+
+Read the frozen scene-brief.md created by the unified WorldKit Planner and the attached planning/reference images. Do not rewrite or reinterpret the Planner's provenance sections. Produce exactly one output, native-case-proposal.json, using this closed top-level shape:
+{
+  "kind": "native-world-case-proposal",
+  "schemaVersion": 1,
+  "sceneId": "${sceneId}",
+  "expected": <WorldReconstructionExpectedV1>,
+  "formalCaptureIntent": <FormalWorldCaptureIntentV1 with id '${sceneId}.formal-world-capture-intent'>,
+  "worldBounds": <WorldPackageWorldBoundsV1>
+}
+
+Use the current contracts supplied in repository context. The proposal owns semantic topology and measurable intent, not quality thresholds or hashes. Use 3-7 complete visual groups with stable lowercase IDs. Every visual group must have one semantic silhouette target and one Formal Capture semantic binding. Keep target, region, anchor, node, collider, checkpoint, and acceptance identities bijective and internally closed. Include a ground/step Collider for Spawn support. Every pass/block traversal check must have a physically reachable supported approach using only its declared fixed input. Formal Capture topology relations must use package-bounds or scripted-traversal exactly as the contract permits. Use a 1280x720 capture profile. Sort every collection where the parser requires stable order.
+
+The Host will reject malformed output and will add hashes, fixed cross-case quality thresholds, resource identities, and all Runtime owners. Never copy the sample scene's geometry or target names; use it only to understand the current contract shape. Do not create or modify Scene Brief, Babylon code, physics, Package, Receipt, Runtime, Capture, or any Planner image.`;
+}
+
+async function main(): Promise<void> {
+  const request = parseWorldAgentArgumentsV1(process.argv.slice(2));
+  if (request.sceneSourceKind !== "babylon-native") {
+    throw new TypeError("NATIVE_WORLD_AGENT_SOURCE_INVALID");
+  }
+  if (process.env.WORLDKIT_PROMPT_SMOKE === "1") {
+    process.stdout.write(
+      "WORLDKIT_NATIVE_WORLD_SMOKE_OK unified-planning native-case-mapping native-generation native-check package runtime capture evaluation repair final-publication\n",
+    );
+    return;
+  }
+  const backend = process.env.WORLDKIT_CODEX_BACKEND ?? "cloud";
+  if (backend !== "cloud" && backend !== "local") {
+    throw new TypeError("WORLDKIT_CODEX_BACKEND must be cloud or local.");
+  }
+  const repositoryRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../..",
+  );
+  const artifactRoot = path.join(repositoryRoot, "artifacts/scenes", request.sceneId);
+  const publicPlanRoot = path.join(
+    repositoryRoot,
+    "apps/playground/public/scene-plans",
+    request.sceneId,
+  );
+  const casePath = path.join(artifactRoot, "case.json");
+  const temporaryRoot = path.join(repositoryRoot, ".codex-tmp");
+  await mkdir(temporaryRoot, { recursive: true });
+  const taskRoot = await mkdtemp(path.join(temporaryRoot, "native-world-agent."));
+  let stagedCaseRoot: string | undefined;
+  let ownsPlannerOutputs = false;
+  try {
+    const references = await Promise.all(request.imagePaths.map(
+      async (sourcePath, index) => {
+        const extension = path.extname(sourcePath).toLowerCase();
+        if (extension !== ".png" && extension !== ".jpg" &&
+          extension !== ".jpeg") {
+          throw new TypeError("NATIVE_WORLD_REFERENCE_MEDIA_TYPE_INVALID");
+        }
+        const bytes = await readFile(sourcePath);
+        return Object.freeze({
+          sourcePath,
+          bytes,
+          inputRef: `reference-${index}${extension === ".jpeg" ? ".jpg" : extension}`,
+          contentHash: sha256Bytes(bytes),
+        });
+      },
+    ));
+    const inputIdentity = Object.freeze({
+      kind: "native-world-generation-input",
+      schemaVersion: 1,
+      sceneId: request.sceneId,
+      sceneSourceKind: "babylon-native",
+      prompt: request.prompt,
+      references: references.map(({ inputRef, contentHash }) => ({
+        inputRef,
+        contentHash,
+      })),
+    });
+    const inputIdentityPath = path.join(artifactRoot, "native-world-input.json");
+    if (await exists(casePath)) {
+      let frozenIdentity: unknown;
+      try {
+        frozenIdentity = JSON.parse(await readFile(inputIdentityPath, "utf8"));
+      } catch {
+        throw new Error("NATIVE_WORLD_CASE_INPUT_IDENTITY_MISSING");
+      }
+      if (!isEqual(frozenIdentity, inputIdentity)) {
+        throw new Error("NATIVE_WORLD_CASE_INPUT_IDENTITY_MISMATCH");
+      }
+    } else {
+      if (await pathExists(artifactRoot) || await pathExists(publicPlanRoot)) {
+        throw new Error("NATIVE_WORLD_CASE_PARTIAL_EXISTS");
+      }
+      const artifactParent = path.dirname(artifactRoot);
+      await mkdir(artifactParent, { recursive: true });
+      stagedCaseRoot = await mkdtemp(path.join(
+        artifactParent,
+        `.${request.sceneId}.native-case-`,
+      ));
+      ownsPlannerOutputs = true;
+      const plannerArguments = [
+        "scripts/agents/run-canonical-world-agent.sh",
+        "--plan-only",
+        "--",
+        "--scene-id",
+        request.sceneId,
+      ];
+      for (const sourcePath of request.imagePaths) {
+        plannerArguments.push("--image", sourcePath);
+      }
+      plannerArguments.push(request.prompt);
+      const plannerExit = await run("bash", plannerArguments, repositoryRoot);
+      if (plannerExit !== 0) {
+        throw new Error(`NATIVE_WORLD_UNIFIED_PLANNING_FAILED:${plannerExit}`);
+      }
+
+      const briefPath = path.join(artifactRoot, "scene-brief.md");
+      const worldPlanPath = path.join(publicPlanRoot, "world-plan.png");
+      const entryTargetPath = path.join(
+        publicPlanRoot,
+        "entry-whitebox-target.png",
+      );
+      const instructionPath = path.join(taskRoot, "native-case-mapping.md");
+      await writeFile(
+        instructionPath,
+        caseMappingInstruction(request.sceneId, request.prompt),
+        "utf8",
+      );
+      const stagedReferences = await Promise.all(references.map(
+        async ({ bytes, inputRef }) => {
+          const stagedPath = path.join(
+            taskRoot,
+            inputRef,
+          );
+          await writeFile(stagedPath, bytes, { flag: "wx" });
+          return stagedPath;
+        },
+      ));
+      const proposalPath = path.join(stagedCaseRoot, "native-case-proposal.json");
+      const identitySuffix = sha256CanonicalJson(inputIdentity).slice(-12);
+      const mappingTaskId =
+        `native-case-map-${request.sceneId.slice(0, 40)}-${identitySuffix}`;
+      const outputArguments = [
+        "--backend", backend,
+        "--repo-root", repositoryRoot,
+        "--task-id", mappingTaskId,
+        "--stage", "native-case-mapping",
+        "--job-name", `Native Case Mapping ${request.sceneId}`,
+        "--request-id", mappingTaskId,
+        "--execution-profile", "formal",
+        "--submit-attempts", "1",
+        "--instruction-file", instructionPath,
+        "--context", `artifacts/scenes/${request.sceneId}/scene-brief.md`,
+        "--context", "packages/validation/src/reconstruction-contracts.ts",
+        "--context", "packages/runtime-contracts/src/formal-world-capture.ts",
+        "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/case.json",
+        "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json",
+        "--asset", `world-plan::${worldPlanPath}::image::image/png`,
+        "--asset", `entry-whitebox-target::${entryTargetPath}::image::image/png`,
+        ...stagedReferences.flatMap((referencePath, index) => [
+          "--asset",
+          `reference-${index}::${referencePath}::image::${path.extname(referencePath) === ".png" ? "image/png" : "image/jpeg"}`,
+        ]),
+        "--output", `native-case-proposal.json::${proposalPath}::application/json`,
+      ];
+      const mappingExit = await run(
+        process.execPath,
+        ["scripts/agents/run-codex-task.mjs", ...outputArguments],
+        repositoryRoot,
+      );
+      if (mappingExit !== 0) {
+        throw new Error(`NATIVE_WORLD_CASE_MAPPING_FAILED:${mappingExit}`);
+      }
+      await prepareNativeWorldCaseV1({
+        repositoryRoot,
+        sceneId: request.sceneId,
+        proposalPath,
+        sceneBriefPath: briefPath,
+        referenceImagePaths: stagedReferences,
+        outputCaseRoot: stagedCaseRoot,
+      });
+      for (const fileName of [
+        "scene-brief.md",
+        "planner-self-check.json",
+        "terrain-height-intent-prompt.md",
+        "visual-identity-palette.json",
+      ]) {
+        await copyFile(
+          path.join(artifactRoot, fileName),
+          path.join(stagedCaseRoot, fileName),
+          constants.COPYFILE_EXCL,
+        );
+      }
+      await writeFile(
+        path.join(stagedCaseRoot, "native-world-input.json"),
+        stringifyCanonicalJson(inputIdentity),
+        { encoding: "utf8", flag: "wx", mode: 0o600 },
+      );
+      await rm(artifactRoot, { recursive: true, force: true });
+      await rename(stagedCaseRoot, artifactRoot);
+      stagedCaseRoot = undefined;
+      ownsPlannerOutputs = false;
+    }
+
+    const runId = `run-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}-${process.pid}`;
+    const outputDirectoryPath = path.join(artifactRoot, "runs", runId);
+    const exitCode = await run(
+      "pnpm",
+      [
+        "worldkit",
+        "reconstruct",
+        "run",
+        casePath,
+        "--output",
+        outputDirectoryPath,
+        "--backend",
+        backend,
+        "--json",
+      ],
+      repositoryRoot,
+    );
+    if (exitCode !== 0) process.exitCode = exitCode;
+    process.stdout.write(`${stringifyCanonicalJson({
+      kind: "native-world-agent-result",
+      schemaVersion: 1,
+      sceneId: request.sceneId,
+      sceneSourceKind: "babylon-native",
+      casePath,
+      outputDirectoryPath,
+      exitCode,
+    })}\n`);
+  } finally {
+    if (stagedCaseRoot !== undefined) {
+      await rm(stagedCaseRoot, { recursive: true, force: true });
+    }
+    if (ownsPlannerOutputs) {
+      await Promise.all([
+        rm(artifactRoot, { recursive: true, force: true }),
+        rm(publicPlanRoot, { recursive: true, force: true }),
+      ]);
+    }
+    await rm(taskRoot, { recursive: true, force: true });
+  }
+}
+
+void main().catch((error: unknown) => {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 2;
+});
