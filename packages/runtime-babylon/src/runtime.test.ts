@@ -2315,10 +2315,75 @@ describe("BabylonWorldRuntime", () => {
         excludedEntityIds: ["player"],
         maximumHitCount: 1,
       })).toBeUndefined();
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      await runtime.runFixedInput({ actions: [], ticks: 5 });
+      const jumping = await runtime.runFixedInput({
+        actions: ["jump", "move-forward"],
+        ticks: 30,
+      });
+      expect(jumping.subjectStatesByEntityId.player!.movementMedium).toBe(
+        "air",
+      );
+      expect(jumping.subjectStatesByEntityId.player!.positionMetersXYZ[2])
+        .toBeGreaterThan(-1.45);
+      expect(
+        debug.collisionFilterMasks("player").collideMask &
+          GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
+      ).not.toBe(0);
     } finally {
       await runtime.dispose();
     }
   }, 15_000);
+
+  it("isolates and completely cleans ground safety boundary resources", async () => {
+    const [first, second] = await Promise.all([
+      createVerifiedNativeRuntime(nativeStepModule(), {
+        worldPackageInput: nativeGroundBoundaryWorldPackageInput(),
+      }),
+      createVerifiedNativeRuntime(nativeStepModule(), {
+        worldPackageInput: nativeGroundBoundaryWorldPackageInput(),
+      }),
+    ]);
+    const secondDebug = createRuntimeDebugProbe(second);
+    try {
+      const firstBlocked = await first.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 120,
+      });
+      const secondBlocked = await second.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 120,
+      });
+      expect(secondBlocked.subjectStatesByEntityId.player!.positionMetersXYZ)
+        .toEqual(firstBlocked.subjectStatesByEntityId.player!.positionMetersXYZ);
+
+      const firstScene = (first as unknown as { scene: Scene }).scene;
+      const firstEngine = firstScene.getEngine();
+      const boundary = firstScene.getMeshByName(
+        "worldkit.native-collider.ground-safety-boundary",
+      )!;
+      const nativeDispose = boundary.dispose.bind(boundary);
+      vi.spyOn(boundary, "dispose").mockImplementation((...args) => {
+        nativeDispose(...args);
+        throw new Error("BABYLON_PROVIDER_PRIVATE_BOUNDARY_DISPOSE_FAILURE");
+      });
+      await expect(first.dispose()).rejects.toMatchObject({
+        code: "WORLDKIT_RUNTIME_DISPOSE_FAILED",
+      });
+      expect(firstScene.isDisposed).toBe(true);
+      expect(firstEngine.isDisposed).toBe(true);
+      expect(
+        secondDebug.collisionFilterMasks("player").collideMask &
+          GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
+      ).not.toBe(0);
+      await second.runFixedInput({ actions: [], ticks: 1 });
+    } finally {
+      await first.dispose();
+      await second.dispose();
+    }
+  }, 20_000);
 
   it("rejects a floating Native spawn before Havok and disposes the Candidate", async () => {
     const base = createBabylonNativeWorldPackageTestInputV1();
