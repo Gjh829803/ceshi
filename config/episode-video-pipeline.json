@@ -16,7 +16,7 @@
     "pollPathTemplate": "/v1/jobs/{taskId}",
     "pollIntervalSeconds": 8,
     "timeoutSeconds": 7200,
-    "maxConcurrentJobs": 3,
+    "maxConcurrentJobs": 10,
     "maxTerminalAttempts": 2
   },
   "seedance": {

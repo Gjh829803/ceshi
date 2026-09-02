@@ -45,7 +45,7 @@ class Seedance25ContractTest(unittest.TestCase):
             config["seedanceProvider"]["credentialFile"],
             ".codex-tmp/runtime-config/infinite-canvas.key",
         )
-        self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 3)
+        self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 10)
         self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 2)
 
     def test_idempotency_header_is_kept_separate_from_bearer_key(self) -> None:
