@@ -1085,9 +1085,14 @@ Finalize Contribution 登记。
   预检后再分配、失败逆序回滚，Finalize 复验 declared placement 并把事后 transform 判为篡改；
 - [x] WRC-API-40：一次迁移全部活跃消费者、Fixture 与 Native Builder Skill，删除旧 placement dialect
   与仅负责 create-then-position 的本地 helper，并加入 package 普查断言防止旧方言复活；
-- [ ] WRC-API-50：由现有生产 Owner 刷新代表性 authored source、Candidate、Package 与 Receipt 身份；
-  不伪称 API 源码会自动改变已发布 Profile descriptor hash，也不改历史 Package/Receipt；
-- [ ] WRC-API-90：完成 focused/affected gates、exact-SHA Cloud review 与真实生产 Package/Receipt 证据。
+- [x] WRC-API-50：唯一仍教旧 placement 方言的活跃生成输入是代表性 Case 的冻结 Builder Skill 副本
+  `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/builder-skill/`，已刷新为与 live Skill 逐字节
+  一致，并加入防漂移断言；`packageNativeBlockAttemptV1` 现有证据显示 create-then-mutate 生成模块被
+  Host typecheck 以 `native-check-rejected` 拒绝且不产生 Package 输出，而重新生成的当前 API 源码得到
+  新的 `authoredSourceHash`、`worldPackageRootHash` 与 Build Receipt 身份；已发布历史 Package 的
+  `authoredSourceHash` 未被改写，也未伪称 TypeScript API 变更会改变已发布 Profile descriptor hash；
+- [ ] WRC-API-90：focused gates 已在候选树通过，exact-SHA Cloud full gates 与独立深审仍未执行，
+  真实生产 Package/Receipt 证据仍由 NBR 生产链路拥有，因此本项保持开放。
 
 以上状态只按真实合入代码和证据更新。本增强本身不完成 NBR-20/70/80/90、BNA-6/7、WRC-SR 或
 WRC-1；当前 NBR 生产链路仍可在旧 Profile 合同上继续收口，不得被未实施的新 API 伪装为已迁移。

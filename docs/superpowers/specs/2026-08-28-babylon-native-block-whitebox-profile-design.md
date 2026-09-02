@@ -5,11 +5,16 @@
 - 目标仓库：`agent-whitebox-world-sdk`
 - 上位架构：[AI 友好的 Babylon Native 世界创作长期设计](./2026-08-28-ai-friendly-babylon-native-world-authoring-design.md)
 - 决策记录：[ADR-0007](../../decisions/0007-canonical-and-babylon-native-authoring-lanes.md)
-- 借鉴基线：[`codex/block-world-sdk-v2@618d96b`](https://github.com/seedleap/agent-whitebox-world-sdk/tree/618d96b4e297d90d13ee6d1bf9be1e0b83423dbe)
+- 历史设计证据：[`codex/block-world-sdk-v2@618d96b`](https://github.com/seedleap/agent-whitebox-world-sdk/tree/618d96b4e297d90d13ee6d1bf9be1e0b83423dbe)；
+  它是本文成文时的固定实验基线，不是当前迁移源。
+- 当前唯一 v2 迁移源：`origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`。
 - 当前实施真相：[SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md)
 - Mode A 审查：[Block Whitebox Profile 设计审查](../../reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)
 - BWB-3/4 集成施工：
   [Block Settlement 与真实台阶闭环](./2026-08-31-babylon-block-settlement-and-step-closure-design.md)
+- 后续创作增强：
+  [Agent 友好的 Block 绘制 API](./2026-09-02-agent-friendly-babylon-native-block-drawing-api-design.md)；
+  它在已完成的 BWB-6 之后扩展同一 Profile Session，不重开 BWB 工作包，也不新增 WRC-1 工作包。
 
 > 本文定义 Babylon Native Lane 的首个参考图白膜创作 Profile。它继承 Block World 实验中有效的
 > 场景构造方法、度量体系和验收思想，但明确替换其 Three.js、持久 Block Manifest、Compiler 和旧
