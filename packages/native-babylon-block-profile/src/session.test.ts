@@ -789,6 +789,15 @@ describe("Babylon Native block profile session", () => {
         expect(scene.meshes, JSON.stringify(override))
           .toHaveLength(initialMeshCount);
       }
+
+      expect(() => session.createBlockGrid({
+        idPrefix: "a".repeat(80),
+        shape: "full",
+        paletteRole: "ground",
+        minimumCenterMetersXYZ: [0, 0.5, 0],
+        repeatCountXYZ: [5, 1, 1],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED/);
+      expect(scene.meshes).toHaveLength(initialMeshCount);
     });
   });
 
@@ -876,6 +885,87 @@ describe("Babylon Native block profile session", () => {
         minimumCenterMetersXYZ: [0, 0.5, 0],
         repeatCountXYZ: [2, 1, 1],
       })).not.toThrow();
+    });
+  });
+
+  it("fails the Session when disposal of the newly failing Mesh throws", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 2 },
+      );
+      const initialMeshCount = scene.meshes.length;
+      const addMesh = scene.addMesh.bind(scene);
+      scene.addMesh = (mesh, recursive) => {
+        mesh.getVerticesData = () => null;
+        const dispose = mesh.dispose.bind(mesh);
+        mesh.dispose = (...arguments_) => {
+          dispose(...arguments_);
+          throw new Error("new Mesh cleanup failed");
+        };
+        return addMesh(mesh, recursive);
+      };
+
+      expect(() => session.createBlock({
+        id: "failing-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
+      expect(scene.meshes).toHaveLength(initialMeshCount);
+      expect(() => session.createBlock({
+        id: "late-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [2, 0.5, 0],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
+    });
+  });
+
+  it("continues reverse rollback after one committed Mesh disposer throws", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 4 },
+      );
+      const initialMeshCount = scene.meshes.length;
+      const disposalOrder: string[] = [];
+      let createdCount = 0;
+      const addMesh = scene.addMesh.bind(scene);
+      scene.addMesh = (mesh, recursive) => {
+        createdCount += 1;
+        if (createdCount === 3) mesh.getVerticesData = () => null;
+        const dispose = mesh.dispose.bind(mesh);
+        mesh.dispose = (...arguments_) => {
+          disposalOrder.push(mesh.name);
+          dispose(...arguments_);
+          if (mesh.name === "rollback-grid-x2-y0-z0" ||
+              mesh.name === "rollback-grid-x1-y0-z0") {
+            throw new Error("committed Mesh cleanup failed");
+          }
+        };
+        return addMesh(mesh, recursive);
+      };
+
+      expect(() => session.createBlockGrid({
+        idPrefix: "rollback-grid",
+        shape: "full",
+        paletteRole: "ground",
+        minimumCenterMetersXYZ: [0, 0.5, 0],
+        repeatCountXYZ: [3, 1, 1],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
+      expect(disposalOrder).toEqual([
+        "rollback-grid-x2-y0-z0",
+        "rollback-grid-x1-y0-z0",
+        "rollback-grid-x0-y0-z0",
+      ]);
+      expect(scene.meshes).toHaveLength(initialMeshCount);
+      expect(() => session.finalize({ staticColliders: [] }))
+        .toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
     });
   });
 

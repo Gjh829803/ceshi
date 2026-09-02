@@ -294,6 +294,7 @@ function parseCreateInput(
 
 function parseGridCreateInput(
   input: Readonly<BabylonNativeBlockGridCreateInputV1>,
+  remainingBlockCount: number,
 ): readonly Readonly<BabylonNativeBlockCreateInputV1>[] {
   const code = "WORLDKIT_NATIVE_BLOCK_GRID_CREATE_INPUT_INVALID";
   const record = exactPlainRecord(input,
@@ -325,6 +326,10 @@ function parseGridCreateInput(
   const totalCount = repeatCountXYZ[0] * repeatCountXYZ[1] * repeatCountXYZ[2];
   if (!Number.isSafeInteger(totalCount)) {
     return fail(code, "repeatCountXYZ product exceeds the safe integer range");
+  }
+  if (totalCount > remainingBlockCount) {
+    return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
+      "block creation exceeds the caller-authorized hard cap");
   }
   const spacing = effectiveBabylonNativeBlockSizeMetersXYZV1(
     shape, rotationQuarterTurnsY,
@@ -511,6 +516,13 @@ export function createBabylonNativeBlockProfileSessionV1(
   const blockIdByMicroCellKey = new Map<string, string>();
   const acquisitions: (() => void)[] = [];
 
+  class AllocationFailure {
+    constructor(
+      readonly primaryError: unknown,
+      readonly cleanupDidFail: boolean,
+    ) {}
+  }
+
   function reserve(
     parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
   ): readonly (readonly string[])[] {
@@ -577,8 +589,9 @@ export function createBabylonNativeBlockProfileSessionV1(
         }),
       }));
     } catch (error) {
-      try { mesh.dispose(); } catch { /* retain the primary failure */ }
-      throw error;
+      let cleanupDidFail = false;
+      try { mesh.dispose(); } catch { cleanupDidFail = true; }
+      throw new AllocationFailure(error, cleanupDidFail);
     }
     for (const key of microCellKeys) {
       blockIdByMicroCellKey.set(key, parsedInput.id);
@@ -591,7 +604,8 @@ export function createBabylonNativeBlockProfileSessionV1(
     parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
     microCellKeysByInput: readonly (readonly string[])[],
     committedCount: number,
-  ): void {
+  ): boolean {
+    let cleanupDidFail = false;
     for (let index = committedCount - 1; index >= 0; index -= 1) {
       const parsedInput = parsedInputs[index]!;
       recordsById.delete(parsedInput.id);
@@ -599,8 +613,11 @@ export function createBabylonNativeBlockProfileSessionV1(
         blockIdByMicroCellKey.delete(key);
       }
       const dispose = acquisitions.pop();
-      if (!isNil(dispose)) dispose();
+      if (!isNil(dispose)) {
+        try { dispose(); } catch { cleanupDidFail = true; }
+      }
     }
+    return cleanupDidFail;
   }
 
   function createBatch(
@@ -613,12 +630,18 @@ export function createBabylonNativeBlockProfileSessionV1(
         meshes.push(allocate(parsedInput, microCellKeysByInput[index]!));
       }
     } catch (error) {
-      try {
-        release(parsedInputs, microCellKeysByInput, meshes.length);
-      } catch {
-        state = "failed";
-      }
-      throw error;
+      const primaryError = error instanceof AllocationFailure
+        ? error.primaryError
+        : error;
+      const batchCleanupDidFail = release(
+        parsedInputs,
+        microCellKeysByInput,
+        meshes.length,
+      );
+      const cleanupDidFail = (error instanceof AllocationFailure &&
+        error.cleanupDidFail) || batchCleanupDidFail;
+      if (cleanupDidFail) state = "failed";
+      throw primaryError;
     }
     return Object.freeze(meshes);
   }
@@ -638,7 +661,10 @@ export function createBabylonNativeBlockProfileSessionV1(
         return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
           "createBlockGrid is unavailable after finalization begins");
       }
-      return createBatch(parseGridCreateInput(input));
+      return createBatch(parseGridCreateInput(
+        input,
+        budget.maximumBlockCount - recordsById.size,
+      ));
     },
     finalize(
       input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,
