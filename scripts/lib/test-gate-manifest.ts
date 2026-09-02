@@ -135,6 +135,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/native-babylon-block-profile/src/visual-batch-materializer.test.ts", lane: "contract" },
   { path: "packages/native-babylon-block-profile/src/walkable-topology-materializer.test.ts", lane: "contract" },
   { path: "packages/native-babylon-block-profile/src/walkable-topology.test.ts", lane: "contract" },
+  { path: "packages/native-babylon-block-profile/src/whitebox-display.test.ts", lane: "contract" },
   { path: "packages/native-babylon/src/authority-audit.test.ts", lane: "contract" },
   { path: "packages/native-babylon/src/candidate-admission.test.ts", lane: "contract" },
   { path: "packages/native-babylon/src/import-profile.test.ts", lane: "contract" },

@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 import { runNativeBlockGenerationV1 } from "./generation-runner.js";
 import {
+  assertNativeBlockProductionSourceImportsV1,
   NativeBlockPackageErrorV1,
   packageNativeBlockAttemptV1,
 } from "./native-package.js";
@@ -211,6 +212,22 @@ async function completedAttempt(options: Readonly<{
 }
 
 describe("packageNativeBlockAttemptV1", () => {
+  it("keeps Runtime as the sole light owner for Block production Modules", () => {
+    expect(() => assertNativeBlockProductionSourceImportsV1([
+      "@whitebox-world/native-babylon",
+      "@whitebox-world/native-babylon-block-profile",
+      "@babylonjs/core/Materials/standardMaterial.js",
+    ])).not.toThrow();
+    expect(() => assertNativeBlockProductionSourceImportsV1([
+      "@babylonjs/core/Lights/hemisphericLight.js",
+      "@babylonjs/core/Lights/directionalLight.js",
+    ])).toThrowError(expect.objectContaining({
+      diagnostics: [
+        "production-native-light-import-forbidden:@babylonjs/core/Lights/directionalLight.js,@babylonjs/core/Lights/hemisphericLight.js",
+      ],
+    }));
+  });
+
   it("checks and binds the generated Layout before atomically publishing one verified Package", async () => {
     const fixture = await completedAttempt();
     const packaged = await packageNativeBlockAttemptV1({

@@ -85,6 +85,24 @@ const SOURCE_FILES = Object.freeze([
   "scene.ts",
 ] as const);
 
+const NATIVE_BLOCK_PRODUCTION_FORBIDDEN_LIGHT_IMPORTS_V1 = new Set([
+  "@babylonjs/core/Lights/directionalLight.js",
+  "@babylonjs/core/Lights/hemisphericLight.js",
+  "@babylonjs/core/Lights/pointLight.js",
+]);
+
+export function assertNativeBlockProductionSourceImportsV1(
+  externalImportSpecifiers: readonly string[],
+): void {
+  const forbidden = externalImportSpecifiers.filter((specifier) =>
+    NATIVE_BLOCK_PRODUCTION_FORBIDDEN_LIGHT_IMPORTS_V1.has(specifier));
+  if (forbidden.length > 0) {
+    return fail(
+      `production-native-light-import-forbidden:${forbidden.sort().join(",")}`,
+    );
+  }
+}
+
 export interface PackageNativeBlockAttemptInputV1 {
   readonly repositoryRoot: string;
   readonly attemptDirectoryPath: string;
@@ -386,6 +404,14 @@ export async function packageNativeBlockAttemptV1(
         { flag: "wx" },
       )),
     ]);
+    // The Block production profile is stricter than generic Native authoring:
+    // reject Module-owned lights before Candidate allocation so Runtime remains
+    // the sole neutral inspection-light owner.
+    const admitted = await admitBabylonNativeSourceGraphV1(checkDirectoryPath);
+    if (admitted.outcome !== "passed") return fail("source-admission-stale");
+    assertNativeBlockProductionSourceImportsV1(
+      admitted.sourceGraph.externalImportSpecifiers,
+    );
     const formalCheck = await checkBabylonNativeSceneWorldDirectoryV1(
       checkDirectoryPath,
     );
@@ -396,8 +422,6 @@ export async function packageNativeBlockAttemptV1(
     if (formalCheck.outcome !== "passed") {
       return fail(...["native-check-rejected"]);
     }
-    const admitted = await admitBabylonNativeSourceGraphV1(checkDirectoryPath);
-    if (admitted.outcome !== "passed") return fail("source-admission-stale");
     const bundled = await buildAndLoadBabylonNativeSceneModuleV1(
       admitted.sourceGraph,
     );

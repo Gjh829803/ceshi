@@ -217,6 +217,9 @@ describe("NBR-65F formal Capture target isolation", () => {
     const priorBatchMaterial = fixture.batchMesh.material;
     const priorIndependentMaterial = fixture.independentMesh.material;
     const materialCountBefore = fixture.scene.materials.length;
+    expect(fixture.batchMesh.isVerticesDataPresent(
+      VertexBuffer.ColorInstanceKind,
+    )).toBe(true);
     const isolation = applyBabylonNativeBlockCaptureIsolationV1({
       registry: fixture.registry,
       targetBlockIds: ["route-0", "wall-single"],
@@ -228,6 +231,9 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(fixture.batchMesh.material?.name).toBe("capture-tint");
     expect(fixture.independentMesh.material?.name).toBe("capture-tint");
     expect(fixture.batchMesh.material).toBe(fixture.independentMesh.material);
+    expect(fixture.batchMesh.isVerticesDataPresent(
+      VertexBuffer.ColorInstanceKind,
+    )).toBe(false);
 
     isolation.restore();
     isolation.restore();
@@ -235,6 +241,9 @@ describe("NBR-65F formal Capture target isolation", () => {
     expect(fixture.batchMesh.material).toBe(priorBatchMaterial);
     expect(fixture.independentMesh.material).toBe(priorIndependentMaterial);
     expect(fixture.scene.materials.length).toBe(materialCountBefore);
+    expect(fixture.batchMesh.isVerticesDataPresent(
+      VertexBuffer.ColorInstanceKind,
+    )).toBe(true);
   });
 
   it("keeps every Block addressable and rejects an unknown target", () => {
