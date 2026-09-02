@@ -115,7 +115,8 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
 
     for (const { path, source } of sources) {
       const specifiers = importSpecifiers(source);
-      const isSettlementBoundary = path.endsWith("/profile-settlement.ts");
+      const isHostBoundary = ["build-failure.ts", "profile-settlement.ts"]
+        .some((name) => path.endsWith(`/${name}`));
       expect(specifiers, path).not.toContain("@babylonjs/core");
       expect(source, path).not.toMatch(/import\s+\*\s+as/);
       expect(source, path).not.toMatch(
@@ -123,7 +124,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       );
       for (const specifier of specifiers) {
         if (specifier === "@whitebox-world/native-babylon/host") {
-          expect(isSettlementBoundary, path).toBe(true);
+          expect(isHostBoundary, path).toBe(true);
         } else {
           expect(specifier, path).not.toMatch(
             /native-babylon\/host|runtime-babylon|@babylonjs\/havok|three|@whitebox-world\/(?:authoring|compiler|runtime-host|world)(?:\/|$)|^babylonjs$|^node:|^(?:fs|path|http|https|net|tls|dgram|dns)$/,
@@ -134,7 +135,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
         specifiers.filter((specifier) =>
           specifier === "@whitebox-world/native-babylon/host").length,
         path,
-      ).toBe(isSettlementBoundary ? 1 : 0);
+      ).toBe(isHostBoundary ? 1 : 0);
       expect(source, path).not.toMatch(
         /\b(?:window|document|fetch|WebSocket|setTimeout|setInterval)\b|Date\.now\s*\(|performance\.now\s*\(|Math\.random\s*\(/,
       );
@@ -236,11 +237,38 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
 
     expect(Object.keys(testing).sort()).toEqual([
       "BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1",
+      "babylonNativeBlockCenterAlignsToGridV1",
+      "babylonNativeBlockOccupiedMicroCellKeysV1",
       "createBabylonNativeBlockColliderRuntimeFixtureModuleV1",
       "createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1",
       "createBabylonNativeBlockReconstructionCorpusModuleV1",
       "inspectBabylonNativeBlockReconstructionCorpusCaseV1",
       "materializeBabylonNativeBlockReconstructionCorpusCaseV1",
     ].sort());
+  });
+
+  it("routes build-path failures through the Host-issued channel", async () => {
+    const buildPathFiles = new Set([
+      "babylon-visual-adapter.ts",
+      "collider-contribution.ts",
+      "profile-settlement.ts",
+      "session.ts",
+    ]);
+    const sources = await productionSources();
+    const matched = sources.filter((entry) =>
+      buildPathFiles.has(entry.path.split("/").at(-1)!));
+    expect(matched.map((entry) => entry.path.split("/").at(-1)!).sort())
+      .toEqual([...buildPathFiles].sort());
+    for (const { path, source } of matched) {
+      expect(source, path).toContain(
+        "failBabylonNativeBlockProfileBuildV1 as fail",
+      );
+      expect(source, path).not.toMatch(/function fail\(|throw new TypeError/);
+    }
+    const failureBoundary = sources.find(({ path }) =>
+      path.endsWith("/build-failure.ts"));
+    expect(failureBoundary?.source).toContain(
+      "createBabylonNativeBlockProfileBuildFailureV1",
+    );
   });
 });

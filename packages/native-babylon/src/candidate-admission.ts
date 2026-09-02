@@ -3,6 +3,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
   parseBabylonNativeSceneBootstrapV1,
@@ -48,6 +49,7 @@ import {
   beginBabylonNativeProfileSettlementRecorderV1,
   closeBabylonNativeProfileSettlementRecorderV1,
   finalizeBabylonNativeProfileSettlementV1,
+  isBabylonNativeBlockProfileBuildFailureV1,
   type FinalizedBabylonNativeProfileSettlementV1,
   unbindBabylonNativeProfileSettlementRecorderV1,
 } from "./profile-settlement.js";
@@ -363,6 +365,34 @@ function diagnosticFromFailure(
   });
 }
 
+function opaqueModuleBuildFailure(): NativeSceneAdmissionFailure {
+  return failure(
+    "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
+    "Native Scene Module build() failed.",
+    "Repair the Module exception; raw provider errors are not public diagnostics.",
+    { stage: "build" },
+  );
+}
+
+function publishedNativeBlockBuildFailure(
+  bootstrap: BabylonNativeSceneBootstrapV1,
+  error: unknown,
+): NativeSceneAdmissionFailure | undefined {
+  if (
+    bootstrap.nativeSceneProfileRef !== BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 ||
+    !isBabylonNativeBlockProfileBuildFailureV1(error) ||
+    error.profileRef !== bootstrap.nativeSceneProfileRef
+  ) {
+    return undefined;
+  }
+  return failure(
+    error.code,
+    error.detail,
+    error.repairHint,
+    { stage: "build" },
+  );
+}
+
 function compareDiagnostics(
   left: NativeSceneDiagnosticV1,
   right: NativeSceneDiagnosticV1,
@@ -558,6 +588,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
     let spawnMarker: BabylonNativeSceneContributionV1["spawnMarker"] | undefined;
     let firstRegistrationFailure: NativeSceneAdmissionFailure | undefined;
     let moduleDidFail = false;
+    let buildException: unknown;
     let totalVertexCount = 0;
     let totalTriangleCount = 0;
     const registrationIds = new Set<string>();
@@ -807,8 +838,9 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
     let buildResult: unknown;
     try {
       buildResult = await module.build(context);
-    } catch {
+    } catch (error) {
       moduleDidFail = true;
+      buildException = error;
     } finally {
       acceptingRegistrations = false;
       closeBabylonNativeProfileSettlementRecorderV1(context);
@@ -822,27 +854,17 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
     }
     const buildAuthorityDiagnostics = authorityProbe.audit();
     if (moduleDidFail && !isEmpty(buildAuthorityDiagnostics)) {
-      const moduleFailure = failure(
-        "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
-        "Native Scene Module build() failed.",
-        "Repair the Module exception; raw provider errors are not public diagnostics.",
-        { stage: "build" },
-      );
       return rejectedDiagnosticsResult([
         ...buildAuthorityDiagnostics,
-        diagnosticFromFailure(bootstrap, moduleFailure),
+        diagnosticFromFailure(bootstrap, opaqueModuleBuildFailure()),
       ]);
     }
     if (!isEmpty(buildAuthorityDiagnostics)) {
       throw failureFromDiagnostic(buildAuthorityDiagnostics[0]!);
     }
     if (moduleDidFail) {
-      throw failure(
-        "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
-        "Native Scene Module build() failed.",
-        "Repair the Module exception; raw provider errors are not public diagnostics.",
-        { stage: "build" },
-      );
+      throw publishedNativeBlockBuildFailure(bootstrap, buildException) ??
+        opaqueModuleBuildFailure();
     }
     if (typeof buildResult !== "undefined") {
       throw failure(

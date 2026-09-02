@@ -7,6 +7,9 @@ import type {
 } from "@whitebox-world/native-babylon";
 import { isNil } from "lodash-es";
 
+import {
+  failBabylonNativeBlockProfileBuildV1 as fail,
+} from "./build-failure.js";
 import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
 
 export interface BabylonNativeBlockStaticColliderSelectionV1 {
@@ -81,10 +84,6 @@ function isClosedFrozenSelection(
 
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function fail(code: string, message: string): never {
-  throw new TypeError(`${code}: ${message}`);
 }
 
 function createExactBoxProxy(

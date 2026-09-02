@@ -25,6 +25,7 @@ export type {
   BabylonNativeProfileSettlementTargetV1,
 } from "./profile-settlement.js";
 export {
+  createBabylonNativeBlockProfileBuildFailureV1,
   commitBabylonNativeProfileSettlementV1,
 } from "./profile-settlement.js";
 export type {

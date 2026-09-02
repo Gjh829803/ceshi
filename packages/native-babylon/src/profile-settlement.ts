@@ -11,6 +11,72 @@ import { isEqual, isNil } from "lodash-es";
 import type { BabylonNativeSceneBuildContextV1 } from "./module.js";
 
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const BLOCK_PROFILE_BUILD_FAILURE_CODE = /^WORLDKIT_NATIVE_BLOCK_[A-Z0-9_]+$/;
+const ISSUED_BLOCK_PROFILE_BUILD_FAILURES = new WeakSet<object>();
+
+export interface BabylonNativeBlockProfileBuildFailureV1 extends TypeError {
+  readonly profileRef: typeof BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
+  readonly code: string;
+  readonly detail: string;
+  readonly repairHint: string;
+}
+
+class IssuedBabylonNativeBlockProfileBuildFailureV1 extends TypeError
+  implements BabylonNativeBlockProfileBuildFailureV1 {
+  readonly profileRef = BABYLON_NATIVE_BLOCK_PROFILE_REF_V1;
+
+  constructor(
+    readonly code: string,
+    readonly detail: string,
+    readonly repairHint: string,
+  ) {
+    super(`${code}: ${detail}`);
+  }
+}
+
+function canonicalSingleLineText(value: string): boolean {
+  return value.length > 0 &&
+    value.trim() === value &&
+    value.normalize("NFC") === value &&
+    !/[\r\n]/.test(value);
+}
+
+function detailLeaksFilesystemPath(detail: string): boolean {
+  return /(?:^|[\s"'`=(])(?:\/|\.\.\/)/.test(detail) ||
+    detail.includes("\\");
+}
+
+export function createBabylonNativeBlockProfileBuildFailureV1(
+  code: string,
+  detail: string,
+  repairHint: string,
+): BabylonNativeBlockProfileBuildFailureV1 {
+  if (
+    !BLOCK_PROFILE_BUILD_FAILURE_CODE.test(code) ||
+    !canonicalSingleLineText(detail) ||
+    !canonicalSingleLineText(repairHint) ||
+    detail.includes("Error:") ||
+    /\bat\s+\S+\s+\(/.test(detail) ||
+    detailLeaksFilesystemPath(detail)
+  ) {
+    throw new TypeError("Block Profile build failure input is invalid.");
+  }
+  const failure = new IssuedBabylonNativeBlockProfileBuildFailureV1(
+    code,
+    detail,
+    repairHint,
+  );
+  ISSUED_BLOCK_PROFILE_BUILD_FAILURES.add(failure);
+  return Object.freeze(failure);
+}
+
+export function isBabylonNativeBlockProfileBuildFailureV1(
+  value: unknown,
+): value is BabylonNativeBlockProfileBuildFailureV1 {
+  return typeof value === "object" &&
+    !isNil(value) &&
+    ISSUED_BLOCK_PROFILE_BUILD_FAILURES.has(value);
+}
 
 export type BabylonNativeProfileSettlementCollisionBindingV1 =
   | Readonly<{ kind: "none" }>

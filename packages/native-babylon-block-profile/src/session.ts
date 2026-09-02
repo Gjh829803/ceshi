@@ -13,6 +13,9 @@ import {
   validateBabylonNativeBlockDisplayGapV1,
 } from "./babylon-visual-adapter.js";
 import {
+  failBabylonNativeBlockProfileBuildV1 as fail,
+} from "./build-failure.js";
+import {
   createBabylonNativeBlockProfileCheckResultV1,
   type BabylonNativeBlockProfileCheckResultV1,
   type BabylonNativeBlockVisualGroupInventoryV1,
@@ -131,10 +134,6 @@ const QUARTER_TURNS = new Set<number>(
   BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1,
 );
 const DEFAULT_DISPLAY_GAP_METERS = 0.04;
-
-function fail(code: string, message: string): never {
-  throw new TypeError(`${code}: ${message}`);
-}
 
 function exactPlainRecord(
   input: unknown,

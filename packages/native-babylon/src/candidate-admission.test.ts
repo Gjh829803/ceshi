@@ -5,6 +5,7 @@ import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import {
+  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
   hashBabylonNativeSceneContributionV1,
   parseBabylonNativeSceneBootstrapV1,
   parseNativeSceneDiagnosticV1,
@@ -21,6 +22,7 @@ import {
 import {
   admitBabylonNativeSceneCandidateV1,
   commitBabylonNativeProfileSettlementV1,
+  createBabylonNativeBlockProfileBuildFailureV1,
   createBabylonNativeLockedAssetResolutionFailureV1,
   type BabylonNativeSceneAdmissionBudgetV1,
   type BabylonNativeSceneCandidateAdmissionResultV1,
@@ -51,7 +53,7 @@ const BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
 const BLOCK_BOOTSTRAP = parseBabylonNativeSceneBootstrapV1({
   ...BOOTSTRAP,
   id: "cloud-ridge-native-blocks",
-  nativeSceneProfileRef: "worldkit://native-scene-profile/whitebox.blocks@1",
+  nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 });
 
 const ASSETS: BabylonNativeLockedAssetResolverV1 = Object.freeze({
@@ -175,6 +177,128 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     );
     expect(rejectedStage(result)).toBe("build");
     expect(JSON.stringify(result)).not.toContain("private blocks build sentinel");
+  });
+
+  it("keeps a module-spoofed Block Profile code opaque", async () => {
+    const result = await buildCandidate(
+      createScene(),
+      moduleWithBuild(() => {
+        throw new TypeError(
+          "WORLDKIT_NATIVE_BLOCK_FAKE: module-controlled diagnostic detail",
+        );
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
+    );
+    expect(JSON.stringify(result)).not.toContain("WORLDKIT_NATIVE_BLOCK_FAKE");
+    expect(JSON.stringify(result)).not.toContain("module-controlled diagnostic detail");
+  });
+
+  it("publishes a closed Block Profile build code without provider traces", async () => {
+    const scene = createScene();
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild(() => {
+        throw createBabylonNativeBlockProfileBuildFailureV1(
+          "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+          "block 'ground-b' overlaps 'ground-a' at cell 0,-2,0",
+          "Repair the Block occupancy, lattice, IDs, or Collider selection.",
+        );
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(result.outcome).toBe("rejected");
+    expect(rejectedCode(result)).toBe("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP");
+    expect(rejectedStage(result)).toBe("build");
+    expect(result.outcome === "rejected" && result.diagnostics[0]).toMatchObject({
+      message:
+        "block 'ground-b' overlaps 'ground-a' at cell 0,-2,0",
+      repairHint:
+        "Repair the Block occupancy, lattice, IDs, or Collider selection.",
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toMatch(/(?:Error:|\n\s+at\s)/);
+    expect(serialized).not.toContain("TypeError");
+  });
+
+  it("does not publish a Block Profile code from the standard Profile", async () => {
+    const result = await buildCandidate(
+      createScene(),
+      moduleWithBuild(() => {
+        throw createBabylonNativeBlockProfileBuildFailureV1(
+          "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+          "occupied volume already claimed",
+          "Repair the Block occupancy, lattice, IDs, or Collider selection.",
+        );
+      }),
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
+    );
+    expect(JSON.stringify(result)).not.toContain(
+      "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+    );
+  });
+
+  it.each([
+    ["unix path leakage", "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID: see /tmp/secret"],
+    ["windows path leakage", "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID: see C:\\secret"],
+    ["stack leakage", "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID: failed\n    at build (scene.ts:1:1)"],
+    ["provider wrapper", "Error: WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP: occupied volume already claimed"],
+  ] as const)(
+    "keeps a blocks build failure opaque when the thrown text has %s",
+    async (_label, message) => {
+      const result = await buildCandidate(
+        createScene(),
+        moduleWithBuild(() => {
+          const [code, ...detailParts] = message.split(": ");
+          throw createBabylonNativeBlockProfileBuildFailureV1(
+            code!,
+            detailParts.join(": "),
+            "Repair the Block occupancy, lattice, IDs, or Collider selection.",
+          );
+        }),
+        DEFAULT_BUDGET,
+        BLOCK_BOOTSTRAP,
+      );
+
+      expect(rejectedCode(result)).toBe(
+        "WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED",
+      );
+      expect(JSON.stringify(result)).not.toContain("/tmp/secret");
+      expect(JSON.stringify(result)).not.toContain("secret");
+      expect(JSON.stringify(result)).not.toContain("scene.ts");
+    },
+  );
+
+  it("publishes a Block Profile detail that names a worldkit URI", async () => {
+    const result = await buildCandidate(
+      createScene(),
+      moduleWithBuild(() => {
+        throw createBabylonNativeBlockProfileBuildFailureV1(
+          "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
+          "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED uses worldkit://traversal-surface-profile/ground.static@1",
+          "Repair the Block occupancy, lattice, IDs, or Collider selection.",
+        );
+      }),
+      DEFAULT_BUDGET,
+      BLOCK_BOOTSTRAP,
+    );
+
+    expect(rejectedCode(result)).toBe(
+      "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
+    );
+    expect(result.outcome === "rejected" && result.diagnostics[0]).toMatchObject({
+      message:
+        "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED uses worldkit://traversal-surface-profile/ground.static@1",
+    });
   });
 
   it("publishes one blocks snapshot for exact visual and Collider inventory", async () => {

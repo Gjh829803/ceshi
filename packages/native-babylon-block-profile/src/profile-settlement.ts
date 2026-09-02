@@ -6,6 +6,9 @@ import {
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
+import {
+  failBabylonNativeBlockProfileBuildV1 as fail,
+} from "./build-failure.js";
 import type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
 } from "./collider-contribution.js";
@@ -16,10 +19,6 @@ import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
 
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function fail(code: string, message: string): never {
-  throw new TypeError(`${code}: ${message}`);
 }
 
 export function settleBabylonNativeBlockProfileV1(input: Readonly<{
