@@ -949,6 +949,13 @@ describe("Babylon Native block profile session", () => {
       );
       expect(registeredColliders).toEqual([]);
       expect(commitProfileSettlement).not.toHaveBeenCalled();
+      expect(scene.meshes).toEqual([]);
+      expect(() => session.createBlock({
+        id: "late-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED/);
     });
   });
 

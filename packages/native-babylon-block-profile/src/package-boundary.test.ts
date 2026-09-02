@@ -225,6 +225,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "takeBabylonNativeBlockCheckedEpochEvidenceV1",
       "createBabylonNativeBlockMaterializerMetadataV1",
       "peekBabylonNativeBlockLiveHandleRegistryV1",
+      "freezeBabylonNativeBlockLogicalGroundModelV1",
     ]);
   });
 
@@ -251,6 +252,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     const buildPathFiles = new Set([
       "babylon-visual-adapter.ts",
       "collider-contribution.ts",
+      "logical-ground-model.ts",
       "profile-settlement.ts",
       "session.ts",
     ]);
