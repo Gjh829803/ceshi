@@ -26,5 +26,45 @@ test("creates one long-lived GPU Job for a pre-admitted one-hundred-task Batch",
     queueS3Prefix: "s3://bucket/queue",
     taskCount: 99,
     image: `registry.example/worldkit@sha256:${"b".repeat(64)}`,
-  }), /at least 100/);
+  }), /capacity threshold or valid closed-producer tail evidence/);
+});
+
+test("creates one GPU Job for a hash-admitted closed-producer tail", () => {
+  const job = cloudGpuCaptureBatchJob({
+    batchId: `gpu-capture-${"c".repeat(24)}`,
+    batchManifestS3Uri: "s3://bucket/queue/batches/tail/manifest.json",
+    queueS3Prefix: "s3://bucket/queue",
+    taskCount: 20,
+    minimumBatchSize: 100,
+    dispatchReason: "producer-drained",
+    drainEvidence: {
+      observedAt: "2026-09-02T00:05:00.000Z",
+      newestReadyAt: "2026-09-02T00:02:00.000Z",
+      tailIdleSeconds: 120,
+      readyRecordCount: 20,
+      inFlightPrepareCount: 0,
+    },
+    image: `registry.example/worldkit@sha256:${"d".repeat(64)}`,
+  });
+  assert.equal(job.metadata.labels["worldkit.seedleap.dev/task-count"], "20");
+  assert.equal(
+    job.metadata.labels["worldkit.seedleap.dev/dispatch-reason"],
+    "producer-drained",
+  );
+  assert.throws(() => cloudGpuCaptureBatchJob({
+    batchId: `gpu-capture-${"c".repeat(24)}`,
+    batchManifestS3Uri: "s3://bucket/queue/batches/tail/manifest.json",
+    queueS3Prefix: "s3://bucket/queue",
+    taskCount: 20,
+    minimumBatchSize: 100,
+    dispatchReason: "producer-drained",
+    drainEvidence: {
+      observedAt: "2026-09-02T00:05:00.000Z",
+      newestReadyAt: "2026-09-02T00:02:00.000Z",
+      tailIdleSeconds: 120,
+      readyRecordCount: 20,
+      inFlightPrepareCount: 1,
+    },
+    image: `registry.example/worldkit@sha256:${"d".repeat(64)}`,
+  }), /valid closed-producer tail evidence/);
 });

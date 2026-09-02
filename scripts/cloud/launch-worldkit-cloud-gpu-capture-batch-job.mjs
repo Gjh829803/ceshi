@@ -29,6 +29,9 @@ export function cloudGpuCaptureBatchJob({
   batchManifestS3Uri,
   queueS3Prefix,
   taskCount,
+  minimumBatchSize = 100,
+  dispatchReason = "capacity-threshold",
+  drainEvidence = null,
   image,
   namespace = "lwdp",
   serviceAccountName = "lwdp-be",
@@ -48,8 +51,26 @@ export function cloudGpuCaptureBatchJob({
   if (!/^gpu-capture-[a-f0-9]{24}$/.test(batchId ?? "")) {
     throw new Error("batchId is invalid.");
   }
-  if (!Number.isSafeInteger(taskCount) || taskCount < 100) {
-    throw new Error("GPU Batch Job requires at least 100 admitted tasks.");
+  const tailAdmissionValid = dispatchReason === "producer-drained" &&
+    Number.isSafeInteger(taskCount) && taskCount >= 1 &&
+    Number.isSafeInteger(minimumBatchSize) && minimumBatchSize >= 100 &&
+    taskCount < minimumBatchSize &&
+    drainEvidence?.inFlightPrepareCount === 0 &&
+    drainEvidence?.readyRecordCount === taskCount &&
+    Number.isSafeInteger(drainEvidence?.tailIdleSeconds) &&
+    drainEvidence.tailIdleSeconds >= 60 &&
+    Number.isFinite(Date.parse(drainEvidence?.observedAt ?? "")) &&
+    Number.isFinite(Date.parse(drainEvidence?.newestReadyAt ?? "")) &&
+    Date.parse(drainEvidence.observedAt) - Date.parse(drainEvidence.newestReadyAt) >=
+      drainEvidence.tailIdleSeconds * 1_000;
+  const thresholdAdmissionValid = dispatchReason === "capacity-threshold" &&
+    Number.isSafeInteger(taskCount) &&
+    Number.isSafeInteger(minimumBatchSize) && minimumBatchSize >= 100 &&
+    taskCount >= minimumBatchSize;
+  if (!thresholdAdmissionValid && !tailAdmissionValid) {
+    throw new Error(
+      "GPU Batch Job requires the capacity threshold or valid closed-producer tail evidence.",
+    );
   }
   required(batchManifestS3Uri, "batchManifestS3Uri");
   required(queueS3Prefix, "queueS3Prefix");
@@ -71,6 +92,7 @@ export function cloudGpuCaptureBatchJob({
         app: "worldkit-gpu-capture-batch",
         "worldkit.seedleap.dev/gpu-batch-id": batchId,
         "worldkit.seedleap.dev/task-count": String(taskCount),
+        "worldkit.seedleap.dev/dispatch-reason": dispatchReason,
       },
     },
     spec: {
@@ -164,6 +186,8 @@ async function main() {
     batchManifestS3Uri: options["batch-manifest-s3-uri"],
     queueS3Prefix: options["queue-s3-prefix"],
     taskCount: Number(options["task-count"]),
+    minimumBatchSize: Number(options["minimum-batch-size"] ?? 100),
+    dispatchReason: options["dispatch-reason"] ?? "capacity-threshold",
     image: options.image,
     namespace: options.namespace ?? "lwdp",
     userId: options["user-id"] ?? "worldkit-studio",
