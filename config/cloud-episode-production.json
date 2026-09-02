@@ -13,7 +13,7 @@
     "minimumBatchSize": 100,
     "maximumBatchSize": 128,
     "tailFlushIdleSeconds": 120,
-    "taskLeaseSeconds": 43200,
+    "taskLeaseSeconds": 3600,
     "dispatcherIntervalSeconds": 60,
     "ephemeralStorageRequest": "32Gi",
     "ephemeralStorageLimit": "64Gi"

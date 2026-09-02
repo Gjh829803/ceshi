@@ -172,9 +172,9 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const batchManifestS3Uri = options["batch-manifest-s3-uri"];
   const queueS3Prefix = options["queue-s3-prefix"];
-  const taskLeaseSeconds = Number(options["task-lease-seconds"] ?? 43_200);
-  if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900) {
-    throw new Error("task-lease-seconds must be at least 900.");
+  const taskLeaseSeconds = Number(options["task-lease-seconds"] ?? 3_600);
+  if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900 || taskLeaseSeconds > 3_600) {
+    throw new Error("task-lease-seconds must be between 900 and 3600.");
   }
   const temporaryRoot = await mkdtemp(join(tmpdir(), "worldkit-gpu-capture-batch-main-"));
   try {

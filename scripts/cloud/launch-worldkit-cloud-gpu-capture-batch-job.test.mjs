@@ -18,7 +18,7 @@ test("creates one long-lived GPU Job for a pre-admitted one-hundred-task Batch",
   assert.equal(job.spec.activeDeadlineSeconds, 86_400);
   assert.equal(container.resources.requests["nvidia.com/gpu"], 1);
   assert.equal(container.resources.requests["ephemeral-storage"], "32Gi");
-  assert.match(container.args.join(" "), /task-lease-seconds 43200/);
+  assert.match(container.args.join(" "), /task-lease-seconds 3600/);
   assert.equal(job.spec.template.spec.restartPolicy, "Never");
   assert.throws(() => cloudGpuCaptureBatchJob({
     batchId: `gpu-capture-${"a".repeat(24)}`,
@@ -27,6 +27,14 @@ test("creates one long-lived GPU Job for a pre-admitted one-hundred-task Batch",
     taskCount: 99,
     image: `registry.example/worldkit@sha256:${"b".repeat(64)}`,
   }), /capacity threshold or valid closed-producer tail evidence/);
+  assert.throws(() => cloudGpuCaptureBatchJob({
+    batchId: `gpu-capture-${"a".repeat(24)}`,
+    batchManifestS3Uri: "s3://bucket/queue/batches/a/manifest.json",
+    queueS3Prefix: "s3://bucket/queue",
+    taskCount: 100,
+    taskLeaseSeconds: 3_601,
+    image: `registry.example/worldkit@sha256:${"b".repeat(64)}`,
+  }), /between 900 and 3600/);
 });
 
 test("creates one GPU Job for a hash-admitted closed-producer tail", () => {

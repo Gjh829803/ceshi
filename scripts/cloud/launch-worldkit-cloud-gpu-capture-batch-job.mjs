@@ -44,7 +44,7 @@ export function cloudGpuCaptureBatchJob({
   gpuCount = 1,
   nodeSelector = {},
   tolerations = [],
-  taskLeaseSeconds = 43_200,
+  taskLeaseSeconds = 3_600,
   ephemeralStorageRequest = "32Gi",
   ephemeralStorageLimit = "64Gi",
 }) {
@@ -78,8 +78,8 @@ export function cloudGpuCaptureBatchJob({
   if (!Number.isSafeInteger(gpuCount) || gpuCount < 1) {
     throw new Error("gpuCount must be a positive integer.");
   }
-  if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900) {
-    throw new Error("taskLeaseSeconds must be at least 900.");
+  if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900 || taskLeaseSeconds > 3_600) {
+    throw new Error("taskLeaseSeconds must be between 900 and 3600.");
   }
   const name = `worldkit-${batchId}`.slice(0, 63).replace(/-$/, "");
   return {
@@ -193,7 +193,7 @@ async function main() {
     userId: options["user-id"] ?? "worldkit-studio",
     gpuResourceName: options["gpu-resource-name"] ?? "nvidia.com/gpu",
     gpuCount: Number(options["gpu-count"] ?? 1),
-    taskLeaseSeconds: Number(options["task-lease-seconds"] ?? 43_200),
+    taskLeaseSeconds: Number(options["task-lease-seconds"] ?? 3_600),
     ephemeralStorageRequest: options["ephemeral-storage-request"] ?? "32Gi",
     ephemeralStorageLimit: options["ephemeral-storage-limit"] ?? "64Gi",
   });

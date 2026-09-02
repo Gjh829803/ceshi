@@ -40,7 +40,7 @@ test("one GPU lifecycle isolates a failed task and continues the remaining Batch
   const result = await runGpuCaptureBatch({
     manifest: batch,
     queueS3Prefix: "s3://bucket/queue",
-    taskLeaseSeconds: 43_200,
+    taskLeaseSeconds: 3_600,
     temporaryRoot: "/unused-test-root",
     runCaptureImplementation: async (task) => {
       captures.push(task.executionId);
@@ -78,7 +78,7 @@ test("replayed GPU Batch skips tasks with an uploaded success receipt", async ()
   const result = await runGpuCaptureBatch({
     manifest: batch,
     queueS3Prefix: "s3://bucket/queue",
-    taskLeaseSeconds: 43_200,
+    taskLeaseSeconds: 3_600,
     temporaryRoot: "/unused-test-root",
     priorReceipts: new Map([[prior.executionId, prior]]),
     runCaptureImplementation: async () => { captureCount += 1; },

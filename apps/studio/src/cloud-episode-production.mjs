@@ -62,6 +62,7 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     gpuBatch.tailFlushIdleSeconds > 3_600 ||
     !Number.isSafeInteger(gpuBatch?.taskLeaseSeconds) ||
     gpuBatch.taskLeaseSeconds < 900 ||
+    gpuBatch.taskLeaseSeconds > 3_600 ||
     !Number.isSafeInteger(gpuBatch?.dispatcherIntervalSeconds) ||
     gpuBatch.dispatcherIntervalSeconds < 10
   ) throw new Error("Cloud Episode GPU Batch config is invalid.");
