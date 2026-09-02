@@ -196,12 +196,14 @@ describe("Babylon Native block profile session", () => {
         id: "unrotated-quarter",
         shape: "quarter",
         paletteRole: "structure",
+        visualGroupId: "ridge",
         centerMetersXYZ: [-0.25, 0.25, 0],
       });
       const rotated = session.createBlock({
         id: "rotated-quarter",
         shape: "quarter",
         paletteRole: "structure",
+        visualGroupId: "ridge",
         centerMetersXYZ: [0.5, 0.25, 0.25],
         rotationQuarterTurnsY: 1,
       });

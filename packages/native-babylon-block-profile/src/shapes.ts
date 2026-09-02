@@ -23,6 +23,12 @@ export type BabylonNativeBlockPositionMetersXYZV1 = readonly [
   zMeters: number,
 ];
 
+export type BabylonNativeBlockRotationQuarterTurnsYV1 = 0 | 1 | 2 | 3;
+
+export const BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1 = Object.freeze([
+  0, 1, 2, 3,
+] as const);
+
 export const BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 = Object.freeze({
   full: Object.freeze([1, 1, 1]) as readonly [1, 1, 1],
   half: Object.freeze([1, 0.5, 1]) as readonly [1, 0.5, 1],

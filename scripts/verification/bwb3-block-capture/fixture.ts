@@ -55,21 +55,14 @@ const BOOTSTRAP = Object.freeze({
       spawnMarkerId: "capture-spawn",
     });
 
-function block(
-  session: BabylonNativeBlockProfileSessionV1,
-  input: Parameters<BabylonNativeBlockProfileSessionV1["createBlock"]>[0],
-  positionMetersXYZ: readonly [number, number, number],
-): void {
-  session.createBlock(input).position.set(...positionMetersXYZ);
-}
-
 function buildFixture(session: BabylonNativeBlockProfileSessionV1): void {
   for (const xMeters of [-2, -1, 1, 2]) {
-    block(session, {
+    session.createBlock({
       id: `foreground-${xMeters < 0 ? "west" : "east"}-${Math.abs(xMeters)}`,
       shape: "full",
       paletteRole: "ground",
-    }, [xMeters, 0.5, 2]);
+      centerMetersXYZ: [xMeters, 0.5, 2],
+    });
   }
   for (const [id, xMeters, zMeters] of [
     ["route-entry", 0, 2],
@@ -82,12 +75,13 @@ function buildFixture(session: BabylonNativeBlockProfileSessionV1): void {
     ["route-arm-east-1", 1, -2],
     ["route-arm-east-2", 2, -2],
   ] as const) {
-    block(session, {
+    session.createBlock({
       id,
       shape: "full",
       paletteRole: "route",
       visualGroupId: "route-spine",
-    }, [xMeters, 0.5, zMeters]);
+      centerMetersXYZ: [xMeters, 0.5, zMeters],
+    });
   }
   for (const [id, xMeters, yMeters] of [
     ["gate-west-lower", -1, 0.5],
@@ -98,26 +92,22 @@ function buildFixture(session: BabylonNativeBlockProfileSessionV1): void {
     ["gate-east-middle", 1, 1.5],
     ["gate-east-upper", 1, 2.5],
   ] as const) {
-    block(session, {
+    session.createBlock({
       id,
       shape: "full",
       paletteRole: "structure",
       visualGroupId: "ridge-gate",
-    }, [xMeters, yMeters, -3]);
+      centerMetersXYZ: [xMeters, yMeters, -3],
+    });
   }
-  for (const [id, xMeters, yMeters, zMeters] of [
-    ["cliff-west-lower", -3, 0.5, -1],
-    ["cliff-west-upper", -3, 1.5, -1],
-    ["cliff-north-lower", -3, 0.5, -2],
-    ["cliff-north-upper", -3, 1.5, -2],
-  ] as const) {
-    block(session, {
-      id,
-      shape: "full",
-      paletteRole: "background-mass",
-      visualGroupId: "cliff-mass",
-    }, [xMeters, yMeters, zMeters]);
-  }
+  session.createBlockGrid({
+    idPrefix: "cliff-mass",
+    shape: "full",
+    paletteRole: "background-mass",
+    visualGroupId: "cliff-mass",
+    minimumCenterMetersXYZ: [-3, 0.5, -2],
+    repeatCountXYZ: [1, 2, 2],
+  });
 }
 
 async function start(): Promise<void> {

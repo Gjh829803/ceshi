@@ -479,12 +479,9 @@ function placeBlock(
     id: spec.id,
     shape: spec.shape,
     paletteRole: spec.paletteRole,
+    centerMetersXYZ: spec.centerMetersXYZ,
     ...(isNil(spec.visualGroupId) ? {} : { visualGroupId: spec.visualGroupId }),
-  }).position.set(
-    spec.centerMetersXYZ[0],
-    spec.centerMetersXYZ[1],
-    spec.centerMetersXYZ[2],
-  );
+  });
 }
 
 function traversalBindingFor(

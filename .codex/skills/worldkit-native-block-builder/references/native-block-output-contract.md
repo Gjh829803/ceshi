@@ -32,19 +32,30 @@ export default defineBabylonNativeScene({
       maximumBlockCount: 512,
     });
 
-    const ground = session.createBlock({
-      id: "entry-ground",
+    session.createBlockGrid({
+      idPrefix: "entry-ground",
       shape: "full",
       paletteRole: "ground",
       visualGroupId: "entry-ground-group",
+      minimumCenterMetersXYZ: [-1, -0.5, 0],
+      repeatCountXYZ: [3, 1, 1],
     });
-    ground.position.set(0, -0.5, 0);
+
+    for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
+      session.createBlock({
+        id: `central-step-${stepIndex}`,
+        shape: "step",
+        paletteRole: "route",
+        visualGroupId: "central-ascent-group",
+        centerMetersXYZ: [0, 0.125 + stepIndex * 0.25, -1 - stepIndex],
+      });
+    }
 
     session.finalize({
       displayGapMeters: 0.04,
       staticColliders: [{
         id: "entry-ground-collider",
-        blockId: "entry-ground",
+        blockId: "entry-ground-x1-y0-z0",
         traversalBinding: {
           kind: "static-surface",
           surfaceEntityId: "entry-ground-surface",

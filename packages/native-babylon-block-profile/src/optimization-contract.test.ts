@@ -128,6 +128,8 @@ function record(scene: Scene, fixture: BlockFixture): BabylonNativeBlockSessionR
       id: fixture.id,
       shape,
       paletteRole: fixture.paletteRole ?? "ground",
+      centerMetersXYZ: fixture.centerMetersXYZ,
+      rotationQuarterTurnsY: fixture.rotationQuarterTurnsY ?? 0,
       ...(fixture.visualGroupId === undefined
         ? {}
         : { visualGroupId: fixture.visualGroupId }),

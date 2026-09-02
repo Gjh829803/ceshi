@@ -50,10 +50,11 @@ BabylonNativeSceneModuleV1 {
           id: block.id,
           shape: block.shape,
           paletteRole,
+          centerMetersXYZ: block.center,
           ...(paletteRole === "structure"
             ? { visualGroupId: "runtime-fixture-structure" }
             : {}),
-        }).position.set(block.center[0], block.center[1], block.center[2]);
+        });
       }
       const traversalSurfaceProfileRef =
         "worldkit://traversal-surface-profile/ground.static@1";
