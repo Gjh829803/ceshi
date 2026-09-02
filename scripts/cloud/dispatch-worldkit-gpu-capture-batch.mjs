@@ -248,6 +248,12 @@ async function main() {
   if (config?.schemaVersion !== 2 || config?.executionProfile !== "cpu-gpu-batch-cpu@1") {
     throw new Error("GPU dispatcher requires Cloud Episode production config v2.");
   }
+  if (process.env.WORLDKIT_CLOUD_WORKER_IMAGE) {
+    config.workerImage = process.env.WORLDKIT_CLOUD_WORKER_IMAGE;
+  }
+  if (!/^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(config.workerImage ?? "")) {
+    throw new Error("GPU dispatcher requires one digest-pinned Worker image.");
+  }
   const queueS3Prefix = config.gpuBatch.queueS3Prefix;
   const cloudConfig = await materializeCloudWorkerLwdpConfig({
     repoRoot,

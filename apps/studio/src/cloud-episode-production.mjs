@@ -22,6 +22,7 @@ const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
 export async function loadCloudEpisodeProductionConfig(repoRoot, {
   configPath = path.join(repoRoot, "config", "cloud-episode-production.json"),
+  environment = process.env,
 } = {}) {
   const value = JSON.parse(await readFile(configPath, "utf8"));
   if (
@@ -30,7 +31,8 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     value?.executionProfile !== "cpu-gpu-batch-cpu@1"
   ) throw new Error("Cloud Episode production config identity is invalid.");
   if (value.enabled !== true) return null;
-  if (!DIGEST_IMAGE.test(String(value.workerImage ?? ""))) {
+  const workerImage = environment.WORLDKIT_CLOUD_WORKER_IMAGE || value.workerImage;
+  if (!DIGEST_IMAGE.test(String(workerImage ?? ""))) {
     throw new Error("Enabled Cloud Episode production requires a digest-pinned Worker image.");
   }
   const nodeSelector = value.nodeSelector ?? {};
@@ -80,7 +82,7 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     }
   }
   return Object.freeze({
-    workerImage: value.workerImage,
+    workerImage,
     outputS3Root: assertS3Uri(value.outputS3Root),
     namespace: value.namespace ?? "lwdp",
     gpuResourceName: value.gpuResourceName ?? "nvidia.com/gpu",

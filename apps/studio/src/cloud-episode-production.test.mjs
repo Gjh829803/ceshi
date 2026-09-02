@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   cloudEpisodeInternalStage,
@@ -11,6 +12,16 @@ import {
   recoverStudioCloudEpisode,
   retryStudioCloudEpisode,
 } from "./cloud-episode-production.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+
+test("uses the deployment-owned Worker digest over the image-baked config", async () => {
+  const workerImage = `worker@sha256:${"f".repeat(64)}`;
+  const config = await loadCloudEpisodeProductionConfig(repoRoot, {
+    environment: { WORLDKIT_CLOUD_WORKER_IMAGE: workerImage },
+  });
+  assert.equal(config.workerImage, workerImage);
+});
 
 test("keeps Cloud Episode disabled until a digest-pinned GPU image is deployed", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "worldkit-cloud-episode-config-"));

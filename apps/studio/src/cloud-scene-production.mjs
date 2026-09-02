@@ -19,15 +19,17 @@ const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
 export async function loadCloudSceneProductionConfig(repoRoot, {
   configPath = path.join(repoRoot, "config", "cloud-scene-production.json"),
+  environment = process.env,
 } = {}) {
   const value = JSON.parse(await readFile(configPath, "utf8"));
+  const workerImage = environment.WORLDKIT_CLOUD_WORKER_IMAGE || value.workerImage;
   if (
     value?.kind !== "worldkit-cloud-scene-production-config" ||
     value?.schemaVersion !== 1 ||
-    !DIGEST_IMAGE.test(String(value.workerImage ?? ""))
+    !DIGEST_IMAGE.test(String(workerImage ?? ""))
   ) throw new Error("Cloud Scene production config must use one digest-pinned Worker image.");
   return Object.freeze({
-    workerImage: value.workerImage,
+    workerImage,
     outputS3Root: assertS3Uri(value.outputS3Root),
     namespace: value.namespace ?? "lwdp",
   });

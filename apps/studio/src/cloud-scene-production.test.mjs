@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   cloudArtifactManifestS3Uri,
   executeStudioCloudScene,
   launchStudioCloudSceneWorker,
+  loadCloudSceneProductionConfig,
   resumeStudioCloudSceneBuilder,
   resumeStudioCloudSceneHost,
 } from "./cloud-scene-production.mjs";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+
+test("uses the deployment-owned Scene Worker digest over the image-baked config", async () => {
+  const workerImage = `worker@sha256:${"e".repeat(64)}`;
+  const config = await loadCloudSceneProductionConfig(repoRoot, {
+    environment: { WORLDKIT_CLOUD_WORKER_IMAGE: workerImage },
+  });
+  assert.equal(config.workerImage, workerImage);
+});
 
 test("extracts the exact Cloud artifact manifest from stage authority", () => {
   assert.equal(cloudArtifactManifestS3Uri(

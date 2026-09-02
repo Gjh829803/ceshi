@@ -71,6 +71,7 @@ export function cloudControlPlaneResources({
               { name: "WORLDKIT_STUDIO_HOST", value: "0.0.0.0" },
               { name: "WORLDKIT_STUDIO_DATA_ROOT", value: "/var/run/worldkit-studio" },
               { name: "WORLDKIT_CLOUD_CONTROL_PLANE", value: "1" },
+              { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
               { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
               { name: "LWDP_API_BASE", value: apiBase },
               { name: "LWDP_USER_ID", value: userId },
