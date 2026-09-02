@@ -16,6 +16,25 @@ describe("Native-default world agent Host route", () => {
     expect(source).not.toContain("Produce exactly two outputs");
   });
 
+  it("closes the WorldPackage world-bounds contract in Mapper inputs", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      '"centerMetersXZ": [<finite x meters>, <finite z meters>]',
+    );
+    expect(source).toContain(
+      '"sizeMetersXZ": [<positive width meters>, <positive depth meters>]',
+    );
+    expect(source).toContain(
+      '"heightRangeMeters": [<finite minimum y meters>, <finite maximum y meters>]',
+    );
+    expect(source).toContain(
+      '"--context", "packages/world-package/src/package-contract.ts"',
+    );
+  });
+
   it("assembles Case planning and the formal reconstruction transaction", () => {
     const result = spawnSync(
       "pnpm",
