@@ -12,7 +12,8 @@ const idPattern = /^[a-z0-9][a-z0-9-]{2,119}$/;
 export function failedEpisodeStageId(execution) {
   const stages = Array.isArray(execution?.stages) ? execution.stages : [];
   const failed = stages.find((stage) =>
-    stage && typeof stage === "object" && stage.status === "failed" &&
+    stage && typeof stage === "object" &&
+    ["failed", "interrupted"].includes(stage.status) &&
     typeof stage.stage_id === "string" && stage.stage_id.length > 0);
   return failed?.stage_id ?? null;
 }

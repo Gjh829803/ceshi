@@ -23,6 +23,13 @@ test("retries the failed Episode stage instead of the next queued stage", () => 
     ],
   }), "whitebox-capture");
   assert.equal(failedEpisodeStageId({ stages: [] }), null);
+  assert.equal(failedEpisodeStageId({
+    current_stage_id: "whitebox-capture",
+    stages: [
+      { stage_id: "episode-prepare", status: "interrupted" },
+      { stage_id: "whitebox-capture", status: "queued" },
+    ],
+  }), "episode-prepare");
 });
 
 test("destroys an artifact stream when the browser aborts a video request", async () => {
