@@ -30,6 +30,7 @@ import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionRunReceiptV1,
+  getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionRunReceiptV1,
@@ -193,6 +194,7 @@ async function receiptFor(
       hashWorldReconstructionEvaluationProfileV1(evaluationProfile),
     outcome: terminalOutcome,
     attempts: [{
+      kind: "evaluated",
       attemptIndex: 0,
       generationRequestRef:
         `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/generation-request.json`,
@@ -290,7 +292,7 @@ function ownersFor(
         },
         playability,
       });
-      const terminal = receipt.attempts[receipt.finalAttemptIndex]!;
+      const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
       return Object.freeze({
         outcome: "verified" as const,
         candidateKind: "run" as const,
@@ -314,7 +316,7 @@ function ownersFor(
       expect(input.caseDirectoryPath).toBe(value.caseRoot);
       expect(input.runDirectoryPath).toBe(value.outputDirectoryPath);
       expect(input.playability).toBe(playability);
-      const terminal = receipt.attempts[receipt.finalAttemptIndex]!;
+      const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
       expect(input.launch).toEqual({
         kind: "native-block-reconstruction-launch",
         schemaVersion: 1,
@@ -339,11 +341,14 @@ function ownersFor(
         outcome: "published" as const,
         finalDirectoryPath,
         worldPackageRootHash:
-          receipt.attempts[receipt.finalAttemptIndex]!.worldPackageRootHash,
+          getWorldReconstructionFinalEvaluatedAttemptV1(receipt)
+            .worldPackageRootHash,
         captureReceiptHash:
-          receipt.attempts[receipt.finalAttemptIndex]!.captureReceiptHash,
+          getWorldReconstructionFinalEvaluatedAttemptV1(receipt)
+            .captureReceiptHash,
         evaluationHash:
-          receipt.attempts[receipt.finalAttemptIndex]!.evaluationResultHash,
+          getWorldReconstructionFinalEvaluatedAttemptV1(receipt)
+            .evaluationResultHash,
       });
     }),
     playability,
@@ -479,7 +484,7 @@ describe("runWorldReconstructionProductionV1", () => {
       "publish-final",
     ]);
 
-    const terminal = receipt.attempts[0]!;
+    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
     expect(result).toEqual({
       kind: "world-reconstruction-production-result",
       schemaVersion: 1,
@@ -1054,7 +1059,7 @@ describe("runWorldReconstructionProductionV1", () => {
       "formal-world-capture-intent.json",
     );
     const defaults = ownersFor(value, receipt);
-    const terminal = receipt.attempts[0]!;
+    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
     vi.mocked(defaults.owners.verifyRun).mockImplementationOnce(async () => {
       const intent = JSON.parse(await readFile(intentPath, "utf8"));
       await writeFile(intentPath, JSON.stringify({

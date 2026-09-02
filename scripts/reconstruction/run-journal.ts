@@ -60,7 +60,11 @@ const NEXT_STATES = Object.freeze({
   created: Object.freeze(["initial-generating", "cleanup-joined"] as const),
   "initial-generating": Object.freeze(["initial-packaged", "cleanup-joined"] as const),
   "initial-packaged": Object.freeze(["initial-captured", "cleanup-joined"] as const),
-  "initial-captured": Object.freeze(["initial-evaluated", "cleanup-joined"] as const),
+  "initial-captured": Object.freeze([
+    "initial-evaluated",
+    "repair-generating",
+    "cleanup-joined",
+  ] as const),
   "initial-evaluated": Object.freeze(["repair-generating", "cleanup-joined"] as const),
   "repair-generating": Object.freeze(["repair-packaged", "cleanup-joined"] as const),
   "repair-packaged": Object.freeze(["repair-captured", "cleanup-joined"] as const),

@@ -43,12 +43,14 @@ import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
   "../native-scene/admission-budget.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
-const REPAIR_CONTEXT_RELATIVE_PATHS = Object.freeze([
+const REPAIR_COMMON_CONTEXT_RELATIVE_PATHS = Object.freeze([
   "attempts/0/source/scene.ts",
   "attempts/0/source/native-block-authoring.json",
   "attempts/0/source/native-resources.json",
   "attempts/0/generation-request.json",
   "attempts/0/attempt-result.json",
+] as const);
+const REPAIR_EVALUATION_CONTEXT_RELATIVE_PATHS = Object.freeze([
   "attempts/0/evaluation.json",
   "attempts/0/capture/opening.png",
   "attempts/0/capture/opening-observation.json",
@@ -57,11 +59,22 @@ const REPAIR_CONTEXT_RELATIVE_PATHS = Object.freeze([
   "attempts/0/capture/spawn-support-observation.json",
   "attempts/0/capture/scripted-traversal.json",
 ] as const);
+const REPAIR_OPENING_GATE_CONTEXT_RELATIVE_PATHS = Object.freeze([
+  "attempts/0/rejected-capture/opening-composition-gate-result.json",
+  "attempts/0/rejected-capture/opening.png",
+  "attempts/0/rejected-capture/opening-observation.json",
+  "attempts/0/rejected-capture/world-side.png",
+  "attempts/0/rejected-capture/world-top-down.png",
+  "attempts/0/rejected-capture/collider-overlay.png",
+  "attempts/0/rejected-capture/collider-overlay-observation.json",
+  "attempts/0/rejected-capture/spawn-support-observation.json",
+  "attempts/0/rejected-capture/scripted-traversal.json",
+] as const);
 const REPAIR_TASK_PROTOCOL = `Repair attempt protocol:
 - Begin from the immutable prior source at inputs/attempts/0/source/scene.ts, inputs/attempts/0/source/native-block-authoring.json, and inputs/attempts/0/source/native-resources.json.
 - Read context/repair-instruction.json first. For every diagnostic, execute its repairAction.instruction against the declared targetId and operation; do not substitute a change to names, tags, materials, or logical subshape ids unless that exact action requests it.
-- Read inputs/attempts/0/evaluation.json and the identity-bound evidence under inputs/attempts/0/capture/ before editing.
-- Inspect inputs/attempts/0/capture/opening.png and inputs/attempts/0/capture/collider-overlay.png for the visual and collider diagnostics.
+- Use priorEvidence.kind to select exactly one evidence source. For evaluation-result, read inputs/attempts/0/evaluation.json and inputs/attempts/0/capture/. For opening-composition-gate-result, read inputs/attempts/0/rejected-capture/opening-composition-gate-result.json and inputs/attempts/0/rejected-capture/.
+- Inspect the selected evidence directory's opening.png and collider-overlay.png before editing.
 - A visual repair must produce a visible geometry change in the evidence view named by the diagnostic. Move, add, or remove actual Blocks in the declared target while preserving its semantic identity; a metadata-only change is not a repair.
 - Do not reassign an existing Block's visualGroupId merely to change measured group bounds, ordering, or coverage. Keep prior group membership stable unless the diagnostic explicitly reports a missing or incorrect semantic binding; names, group ids, identity colors, and bindings are not substitutes for visible geometry.
 - Do not change the Case, Profile, or acceptance thresholds. The diagnostic expected value, actual value, allowed threshold, exceeded amount, and correction direction are frozen evidence, not authoring suggestions.
@@ -606,7 +619,14 @@ export async function prepareNativeBlockGenerationTaskV1(
         requestedRunDirectoryPath,
         "Generation repair run root",
       );
-      return Promise.all(REPAIR_CONTEXT_RELATIVE_PATHS.map((relativePath) =>
+      const evidencePaths = repairInstruction.priorEvidence.kind ===
+          "evaluation-result"
+        ? REPAIR_EVALUATION_CONTEXT_RELATIVE_PATHS
+        : REPAIR_OPENING_GATE_CONTEXT_RELATIVE_PATHS;
+      return Promise.all([
+        ...REPAIR_COMMON_CONTEXT_RELATIVE_PATHS,
+        ...evidencePaths,
+      ].map((relativePath) =>
         freezeFile(runRoot, path.join(runRoot.requestedPath, relativePath))
       ));
     })();
@@ -614,9 +634,11 @@ export async function prepareNativeBlockGenerationTaskV1(
     const repairContextByPath = new Map(
       repairContextFiles.map((file) => [file.relativePath, file] as const),
     );
-    const priorEvaluation = repairContextByPath.get(
-      "attempts/0/evaluation.json",
-    );
+    const priorEvidenceRelativePath = repairInstruction.priorEvidence.kind ===
+        "evaluation-result"
+      ? "attempts/0/evaluation.json"
+      : "attempts/0/rejected-capture/opening-composition-gate-result.json";
+    const priorEvidence = repairContextByPath.get(priorEvidenceRelativePath);
     const priorGenerationRequest = repairContextByPath.get(
       "attempts/0/generation-request.json",
     );
@@ -624,9 +646,12 @@ export async function prepareNativeBlockGenerationTaskV1(
       "attempts/0/attempt-result.json",
     );
     if (
-      priorEvaluation?.hash !== repairInstruction.priorEvaluationResultHash
+      priorEvidence?.hash !== repairInstruction.priorEvidence.resultHash ||
+      !repairInstruction.priorEvidence.resultRef.endsWith(
+        `/${priorEvidenceRelativePath}`,
+      )
     ) {
-      throw new TypeError("Repair prior evaluation identity closure failed.");
+      throw new TypeError("Repair prior evidence identity closure failed.");
     }
     if (
       priorGenerationRequest?.hash !== repairInstruction.priorGenerationRequestHash

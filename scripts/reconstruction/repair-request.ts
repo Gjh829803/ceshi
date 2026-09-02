@@ -33,6 +33,18 @@ export const NATIVE_BLOCK_REPAIR_FORBIDDEN_MUTATION_TARGETS_V1 = Object.freeze([
 import type { WorldReconstructionFrozenOwnerIdentitiesV1 } from "./generation-request.js";
 export type { WorldReconstructionFrozenOwnerIdentitiesV1 } from "./generation-request.js";
 
+export type NativeBlockRepairEvidenceV1 =
+  | Readonly<{
+      readonly kind: "evaluation-result";
+      readonly resultRef: string;
+      readonly resultHash: Sha256HashV1;
+    }>
+  | Readonly<{
+      readonly kind: "opening-composition-gate-result";
+      readonly resultRef: string;
+      readonly resultHash: Sha256HashV1;
+    }>;
+
 export interface NativeBlockRepairInstructionV1 {
   readonly kind: "native-block-repair-instruction";
   readonly schemaVersion: 1;
@@ -42,8 +54,7 @@ export interface NativeBlockRepairInstructionV1 {
   readonly diagnostics: readonly WorldReconstructionDiagnosticV1[];
   readonly priorSourceRef: string;
   readonly priorSourceHash: Sha256HashV1;
-  readonly priorEvaluationResultRef: string;
-  readonly priorEvaluationResultHash: Sha256HashV1;
+  readonly priorEvidence: NativeBlockRepairEvidenceV1;
   readonly priorGenerationRequestRef: string;
   readonly priorGenerationRequestHash: Sha256HashV1;
   readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
@@ -57,14 +68,39 @@ export interface CreateNativeBlockRepairInstructionInputV1 {
   readonly diagnostics: readonly WorldReconstructionDiagnosticV1[];
   readonly priorSourceRef: string;
   readonly priorSourceHash: Sha256HashV1;
-  readonly priorEvaluationResultRef: string;
-  readonly priorEvaluationResultHash: Sha256HashV1;
+  readonly priorEvidence: NativeBlockRepairEvidenceV1;
   readonly priorGenerationRequestRef: string;
   readonly priorGenerationRequestHash: Sha256HashV1;
   readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
 }
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
+
+function parseRepairEvidence(input: unknown): NativeBlockRepairEvidenceV1 {
+  if (
+    typeof input !== "object" ||
+    isNil(input) ||
+    Array.isArray(input) ||
+    Reflect.getPrototypeOf(input) !== Object.prototype
+  ) fail("WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID", "prior evidence");
+  const value = input as Record<string, unknown>;
+  if (
+    Object.keys(value).length !== 3 ||
+    Object.keys(value).some((key) =>
+      !["kind", "resultRef", "resultHash"].includes(key)
+    ) ||
+    (value.kind !== "evaluation-result" &&
+      value.kind !== "opening-composition-gate-result") ||
+    typeof value.resultRef !== "string" ||
+    typeof value.resultHash !== "string" ||
+    !SHA256_PATTERN.test(value.resultHash)
+  ) fail("WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID", "prior evidence");
+  return Object.freeze({
+    kind: value.kind,
+    resultRef: value.resultRef,
+    resultHash: value.resultHash as Sha256HashV1,
+  });
+}
 
 export function parseNativeBlockRepairInstructionV1(
   input: unknown,
@@ -75,8 +111,8 @@ export function parseNativeBlockRepairInstructionV1(
   const value = input as Record<string, unknown>;
   const expectedKeys = [
     "kind", "schemaVersion", "id", "priorAttemptIndex", "nextAttemptIndex",
-    "diagnostics", "priorSourceRef", "priorSourceHash", "priorEvaluationResultRef",
-    "priorEvaluationResultHash", "priorGenerationRequestRef", "priorGenerationRequestHash",
+    "diagnostics", "priorSourceRef", "priorSourceHash", "priorEvidence",
+    "priorGenerationRequestRef", "priorGenerationRequestHash",
     "frozenOwnerIdentities", "declaredWritableOutputPaths", "forbiddenMutationTargets",
   ];
   if (Object.keys(value).length !== expectedKeys.length || Object.keys(value).some((key) => !expectedKeys.includes(key))) {
@@ -86,14 +122,15 @@ export function parseNativeBlockRepairInstructionV1(
     value.kind !== "native-block-repair-instruction" || value.schemaVersion !== 1 ||
     typeof value.id !== "string" || value.priorAttemptIndex !== 0 || value.nextAttemptIndex !== 1 ||
     !Array.isArray(value.diagnostics) || value.diagnostics.length === 0 ||
-    typeof value.priorSourceRef !== "string" || typeof value.priorEvaluationResultRef !== "string" ||
+    typeof value.priorSourceRef !== "string" ||
     typeof value.priorGenerationRequestRef !== "string" ||
-    ![value.priorSourceHash, value.priorEvaluationResultHash, value.priorGenerationRequestHash].every((hash) => typeof hash === "string" && SHA256_PATTERN.test(hash)) ||
+    ![value.priorSourceHash, value.priorGenerationRequestHash].every((hash) => typeof hash === "string" && SHA256_PATTERN.test(hash)) ||
     !isEqual(value.declaredWritableOutputPaths, NATIVE_BLOCK_REPAIR_WRITABLE_OUTPUT_PATHS_V1) ||
     !isEqual(value.forbiddenMutationTargets, NATIVE_BLOCK_REPAIR_FORBIDDEN_MUTATION_TARGETS_V1)
   ) {
     fail("WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID", "closed fields");
   }
+  const priorEvidence = parseRepairEvidence(value.priorEvidence);
   const owner = value.frozenOwnerIdentities as Record<string, unknown>;
   const ownerKeys = ["caseHash", "evaluationProfileHash", "gameplayBootstrapHash", "worldRuntimeBootstrapHash", "worldBoundsHash", "bootstrapInputHash"];
   if (typeof owner !== "object" || isNil(owner) || Array.isArray(owner) || Object.keys(owner).length !== ownerKeys.length || ownerKeys.some((key) => typeof owner[key] !== "string" || !SHA256_PATTERN.test(owner[key] as string))) {
@@ -105,8 +142,7 @@ export function parseNativeBlockRepairInstructionV1(
     ),
     priorSourceRef: value.priorSourceRef,
     priorSourceHash: value.priorSourceHash as Sha256HashV1,
-    priorEvaluationResultRef: value.priorEvaluationResultRef,
-    priorEvaluationResultHash: value.priorEvaluationResultHash as Sha256HashV1,
+    priorEvidence,
     priorGenerationRequestRef: value.priorGenerationRequestRef,
     priorGenerationRequestHash: value.priorGenerationRequestHash as Sha256HashV1,
     frozenOwnerIdentities: owner as unknown as WorldReconstructionFrozenOwnerIdentitiesV1,
@@ -161,14 +197,13 @@ export function createNativeBlockRepairInstructionV1(
   return Object.freeze({
     kind: "native-block-repair-instruction",
     schemaVersion: 1,
-    id: `native-block-repair:${input.priorEvaluationResultHash}`,
+    id: `native-block-repair:${input.priorEvidence.resultHash}`,
     priorAttemptIndex: 0,
     nextAttemptIndex: 1,
     diagnostics: Object.freeze([...input.diagnostics]),
     priorSourceRef: input.priorSourceRef,
     priorSourceHash: input.priorSourceHash,
-    priorEvaluationResultRef: input.priorEvaluationResultRef,
-    priorEvaluationResultHash: input.priorEvaluationResultHash,
+    priorEvidence: Object.freeze({ ...input.priorEvidence }),
     priorGenerationRequestRef: input.priorGenerationRequestRef,
     priorGenerationRequestHash: input.priorGenerationRequestHash,
     frozenOwnerIdentities: Object.freeze({ ...input.frozenOwnerIdentities }),

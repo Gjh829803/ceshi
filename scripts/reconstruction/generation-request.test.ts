@@ -442,10 +442,13 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         })],
         priorSourceRef: "artifact://run/attempts/0/source",
         priorSourceHash: hash("d"),
-        priorEvaluationResultRef: "artifact://run/attempts/0/evaluation.json",
-        priorEvaluationResultHash: sha256Bytes(
-          new TextEncoder().encode("{}"),
-        ) as `sha256:${string}`,
+        priorEvidence: {
+          kind: "evaluation-result",
+          resultRef: "artifact://run/attempts/0/evaluation.json",
+          resultHash: sha256Bytes(
+            new TextEncoder().encode("{}"),
+          ) as `sha256:${string}`,
+        },
         priorGenerationRequestRef: "artifact://run/attempts/0/generation-request.json",
         priorGenerationRequestHash: attempt0.generationRequestHash,
         frozenOwnerIdentities: attempt0.frozenOwnerIdentities,
@@ -478,7 +481,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         ...input(value),
         attemptIndex: 1,
         repairInstruction,
-      })).rejects.toThrowError("Repair prior evaluation identity closure failed");
+      })).rejects.toThrowError("Repair prior evidence identity closure failed");
       await writeFile(priorEvaluationPath, "{}");
 
       const priorAttemptResultPath = path.join(priorAttemptRoot, "attempt-result.json");
@@ -543,7 +546,12 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(repairTaskInstruction).toContain("repairAction.instruction");
       expect(repairTaskInstruction).toContain("Do not change the Case, Profile, or acceptance thresholds");
       expect(repairTaskInstruction).toContain("inputs/attempts/0/evaluation.json");
-      expect(repairTaskInstruction).toContain("inputs/attempts/0/capture/opening.png");
+      expect(repairTaskInstruction).toContain(
+        "read inputs/attempts/0/evaluation.json and inputs/attempts/0/capture/",
+      );
+      expect(repairTaskInstruction).toContain(
+        "read inputs/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      );
       expect(repairTaskInstruction).toContain(
         "Do not reassign an existing Block's visualGroupId",
       );

@@ -3,7 +3,10 @@ import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
 
 import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support.js";
-import { evaluateOpeningCompositionHostGateV1 } from "./opening-composition-host-gate.js";
+import {
+  createOpeningCompositionRepairDiagnosticsV1,
+  evaluateOpeningCompositionHostGateV1,
+} from "./opening-composition-host-gate.js";
 
 function trackingObservation() {
   const fixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
@@ -280,6 +283,55 @@ describe("identity-bound Opening Composition Host Gate", () => {
         allowedDeviation: expect.any(Number),
         exceededBy: expect.any(Number),
         correctionDirection: expect.stringMatching(/^(increase|decrease)$/),
+      }),
+    ]));
+  });
+
+  it("converts source-owned visual drift into executable repair diagnostics", () => {
+    const { fixture, openingObservation } = trackingObservation();
+    const shifted = parseFormalOpeningObservationV1({
+      ...openingObservation,
+      visualGroups: openingObservation.visualGroups.map((group, index) =>
+        index === 0
+          ? {
+              ...group,
+              normalizedBounds: {
+                ...group.normalizedBounds,
+                minXBasisPoints: group.normalizedBounds.minXBasisPoints + 500,
+                maxXBasisPoints: group.normalizedBounds.maxXBasisPoints + 500,
+              },
+              normalizedCenter: {
+                ...group.normalizedCenter,
+                xBasisPoints: group.normalizedCenter.xBasisPoints + 500,
+              },
+            }
+          : group),
+    });
+    const gateResult = evaluateOpeningCompositionHostGateV1({
+      reconstructionCase: fixture.reconstructionCase,
+      evaluationProfile: fixture.evaluationProfile,
+      openingObservation: shifted,
+      expectedCamera: expectedCamera(),
+    });
+
+    const diagnostics = createOpeningCompositionRepairDiagnosticsV1({
+      gateResult,
+      reconstructionCase: fixture.reconstructionCase,
+      evidenceRef:
+        "artifact://case/package-fixture/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      semanticCaptureTargetBindings:
+        fixture.formalCaptureIntent.semanticCaptureTargetBindings,
+    });
+
+    expect(gateResult.status).toBe("failed");
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+        targetId: "ground-group",
+        repairAction: expect.objectContaining({
+          kind: "revise-native-source",
+        }),
       }),
     ]));
   });

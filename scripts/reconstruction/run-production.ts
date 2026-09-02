@@ -25,6 +25,7 @@ import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionRunReceiptV1,
+  getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionRunReceiptV1,
@@ -1054,7 +1055,7 @@ export async function runWorldReconstructionProductionV1(
       cleanupOutcome,
     });
   }
-  const terminal = receipt.attempts[receipt.finalAttemptIndex]!;
+  const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
   if (
     verification.attemptIndex !== receipt.finalAttemptIndex ||
     verification.worldPackageRef !== terminal.worldPackageRef ||

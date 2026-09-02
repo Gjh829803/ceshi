@@ -761,6 +761,14 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
               "opening-composition-gate-result.json",
             ),
             openingGateResultHash: gateResultHash,
+            openingGateResult: {
+              kind: "worldkit-opening-composition-host-gate",
+              schemaVersion: 1,
+              status: "failed",
+              diagnostics: [{
+                code: "WORLDKIT_OPENING_GATE_CAMERA_UNBOUND",
+              }],
+            },
           },
         });
       }),

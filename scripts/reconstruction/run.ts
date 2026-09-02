@@ -17,6 +17,7 @@ import {
   worldReconstructionRunReceiptCanonicalBytesV1,
   type WorldReconstructionCaseV1,
   type WorldReconstructionEvaluationProfileV1,
+  type WorldReconstructionDiagnosticV1,
   type WorldReconstructionEvaluationResultV1,
   type WorldReconstructionOutcomeV1,
   type WorldReconstructionRunReceiptV1,
@@ -121,6 +122,7 @@ export interface RejectedWorldReconstructionCapturePortResultV1 {
   readonly openingGateResultPath: string;
   readonly openingGateResultRef: string;
   readonly openingGateResultHash: Sha256HashV1;
+  readonly repairDiagnostics: readonly WorldReconstructionDiagnosticV1[];
 }
 
 export type WorldReconstructionCapturePortResultV1 =
@@ -130,7 +132,8 @@ export type WorldReconstructionCapturePortResultV1 =
 
 export type WorldReconstructionRejectedCaptureEvidenceV1 = Omit<
   RejectedWorldReconstructionCapturePortResultV1,
-  "outcome" | "cameraRollbackOutcome" | "diagnosticCodes"
+  "outcome" | "cameraRollbackOutcome" | "diagnosticCodes" |
+    "repairDiagnostics"
 >;
 
 export interface WorldReconstructionEvaluatePortResultV1 {
@@ -207,12 +210,24 @@ export class WorldReconstructionRunClosedErrorV1 extends Error {
 }
 
 interface CompletedAttemptRecordV1 {
+  readonly outcome: "completed";
   readonly attemptIndex: 0 | 1;
   readonly generate: WorldReconstructionGeneratePortResultV1;
   readonly packaged: CompletedWorldReconstructionPackagePortResultV1;
   readonly captured: CompletedWorldReconstructionCapturePortResultV1;
   readonly evaluated: WorldReconstructionEvaluatePortResultV1;
 }
+
+interface RejectedCaptureAttemptRecordV1 {
+  readonly outcome: "capture-rejected";
+  readonly attemptIndex: 0;
+  readonly generate: WorldReconstructionGeneratePortResultV1;
+  readonly packaged: CompletedWorldReconstructionPackagePortResultV1;
+  readonly captured: RejectedWorldReconstructionCapturePortResultV1;
+}
+
+type AttemptRecordV1 = CompletedAttemptRecordV1 |
+  RejectedCaptureAttemptRecordV1;
 
 const STAGE_BY_ATTEMPT = Object.freeze({
   0: Object.freeze({
@@ -501,8 +516,8 @@ function requestIdFor(
   });
 }
 
-function attemptReceiptRow(record: CompletedAttemptRecordV1) {
-  return Object.freeze({
+function attemptReceiptRow(record: AttemptRecordV1) {
+  const common = {
     attemptIndex: record.attemptIndex,
     generationRequestRef: record.generate.generationRequestRef,
     generationRequestHash: record.generate.generationRequestHash,
@@ -519,6 +534,20 @@ function attemptReceiptRow(record: CompletedAttemptRecordV1) {
     worldPackageBuildReceiptHash: record.packaged.worldPackageBuildReceiptHash,
     worldBuildIdentityRef: record.packaged.worldBuildIdentityRef,
     worldBuildIdentityHash: record.packaged.worldBuildIdentityHash,
+  };
+  if (record.outcome === "capture-rejected") {
+    return Object.freeze({
+      kind: "capture-rejected" as const,
+      ...common,
+      attemptIndex: 0 as const,
+      openingGateResultRef: record.captured.openingGateResultRef,
+      openingGateResultHash: record.captured.openingGateResultHash,
+      outcome: "failed" as const,
+    });
+  }
+  return Object.freeze({
+    kind: "evaluated" as const,
+    ...common,
     captureReceiptRef: record.captured.captureReceiptRef,
     captureReceiptHash: record.captured.captureReceiptHash,
     evaluationResultRef: record.evaluated.evaluation.id,
@@ -619,7 +648,7 @@ async function runAttempt(
   journal: WorldReconstructionRunJournalV1,
   ports: WorldReconstructionRunPortsV1,
   repairInstruction: NativeBlockRepairInstructionV1 | undefined,
-): Promise<CompletedAttemptRecordV1> {
+): Promise<AttemptRecordV1> {
   const stages = STAGE_BY_ATTEMPT[attemptIndex];
   journal.beginAttempt(attemptIndex);
   journal.assertOwnerIdentities(await ports.rehashOwnerIdentities());
@@ -708,7 +737,36 @@ async function runAttempt(
       ),
     );
   }
-  if (captured.outcome !== "completed") {
+  if (captured.outcome === "rejected") {
+    await journal.recordBoundary({
+      state: stages.capture,
+      boundary: "after",
+      operation: stages.capture,
+      diagnosticCodes: stageDiagnosticCodes(
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        captured.diagnosticCodes,
+      ),
+    });
+    const rejectedEvidence = {
+      rejectedWorldPackagePath: captured.rejectedWorldPackagePath,
+      rejectedWorldPackageRef: captured.rejectedWorldPackageRef,
+      rejectedWorldPackageRootHash: captured.rejectedWorldPackageRootHash,
+      rejectedCaptureDirectoryPath: captured.rejectedCaptureDirectoryPath,
+      rejectedOpeningPath: captured.rejectedOpeningPath,
+      rejectedOpeningRef: captured.rejectedOpeningRef,
+      openingGateResultPath: captured.openingGateResultPath,
+      openingGateResultRef: captured.openingGateResultRef,
+      openingGateResultHash: captured.openingGateResultHash,
+    } satisfies WorldReconstructionRejectedCaptureEvidenceV1;
+    if (attemptIndex === 0 && !isEmpty(captured.repairDiagnostics)) {
+      return Object.freeze({
+        outcome: "capture-rejected" as const,
+        attemptIndex,
+        generate,
+        packaged,
+        captured,
+      });
+    }
     return failClosed(
       journal,
       ports,
@@ -717,21 +775,17 @@ async function runAttempt(
         captured.diagnosticCodes,
       ),
       undefined,
-      captured.outcome === "rejected"
-        ? {
-          rejectedWorldPackagePath: captured.rejectedWorldPackagePath,
-          rejectedWorldPackageRef: captured.rejectedWorldPackageRef,
-          rejectedWorldPackageRootHash:
-            captured.rejectedWorldPackageRootHash,
-          rejectedCaptureDirectoryPath:
-            captured.rejectedCaptureDirectoryPath,
-          rejectedOpeningPath: captured.rejectedOpeningPath,
-          rejectedOpeningRef: captured.rejectedOpeningRef,
-          openingGateResultPath: captured.openingGateResultPath,
-          openingGateResultRef: captured.openingGateResultRef,
-          openingGateResultHash: captured.openingGateResultHash,
-        }
-        : undefined,
+      rejectedEvidence,
+    );
+  }
+  if (captured.outcome !== "completed") {
+    return failClosed(
+      journal,
+      ports,
+      stageDiagnosticCodes(
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        captured.diagnosticCodes,
+      ),
     );
   }
   await journal.recordBoundary({
@@ -766,6 +820,7 @@ async function runAttempt(
   });
 
   return Object.freeze({
+    outcome: "completed" as const,
     attemptIndex,
     generate,
     packaged,
@@ -780,7 +835,7 @@ async function publishCompletedReceipt(
   profile: WorldReconstructionEvaluationProfileV1,
   journal: WorldReconstructionRunJournalV1,
   ports: WorldReconstructionRunPortsV1,
-  attempts: readonly CompletedAttemptRecordV1[],
+  attempts: readonly AttemptRecordV1[],
 ): Promise<WorldReconstructionRunReceiptV1> {
   journal.assertOwnerIdentities(await ports.rehashOwnerIdentities());
   const cleanupOutcome = await joinCleanup(journal, ports);
@@ -791,7 +846,7 @@ async function publishCompletedReceipt(
     );
   }
   const final = attempts.at(-1);
-  if (isNil(final) || isEmpty(attempts)) {
+  if (isNil(final) || isEmpty(attempts) || final.outcome !== "completed") {
     throw new WorldReconstructionRunClosedErrorV1(
       ["WORLD_RECONSTRUCTION_INCOMPLETE"],
       cleanupOutcome,
@@ -901,6 +956,70 @@ export async function runWorldReconstructionV1(
       ports,
       undefined,
     );
+    if (attempt0.outcome === "capture-rejected") {
+      if (profile.maximumRepairAttemptCount < 1) {
+        await failClosed(
+          journal,
+          ports,
+          stageDiagnosticCodes(
+            "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+            attempt0.captured.diagnosticCodes,
+          ),
+          undefined,
+          {
+            rejectedWorldPackagePath:
+              attempt0.captured.rejectedWorldPackagePath,
+            rejectedWorldPackageRef:
+              attempt0.captured.rejectedWorldPackageRef,
+            rejectedWorldPackageRootHash:
+              attempt0.captured.rejectedWorldPackageRootHash,
+            rejectedCaptureDirectoryPath:
+              attempt0.captured.rejectedCaptureDirectoryPath,
+            rejectedOpeningPath: attempt0.captured.rejectedOpeningPath,
+            rejectedOpeningRef: attempt0.captured.rejectedOpeningRef,
+            openingGateResultPath:
+              attempt0.captured.openingGateResultPath,
+            openingGateResultRef:
+              attempt0.captured.openingGateResultRef,
+            openingGateResultHash:
+              attempt0.captured.openingGateResultHash,
+          },
+        );
+      }
+      journal.assertOwnerIdentities(await ports.rehashOwnerIdentities());
+      const repairInstruction = createNativeBlockRepairInstructionV1({
+        diagnostics: attempt0.captured.repairDiagnostics,
+        priorSourceRef: attempt0.packaged.authoredSourceRef,
+        priorSourceHash: attempt0.packaged.authoredSourceHash,
+        priorEvidence: {
+          kind: "opening-composition-gate-result",
+          resultRef: attempt0.captured.openingGateResultRef,
+          resultHash: attempt0.captured.openingGateResultHash,
+        },
+        priorGenerationRequestRef: attempt0.generate.generationRequestRef,
+        priorGenerationRequestHash: attempt0.generate.generationRequestHash,
+        frozenOwnerIdentities: input.frozenOwnerIdentities,
+      });
+      const attempt1 = await runAttempt(
+        1,
+        input,
+        reconstructionCase,
+        journal,
+        ports,
+        repairInstruction,
+      );
+      if (attempt1.outcome !== "completed") {
+        throw new Error("WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED");
+      }
+      return await publishCompletedReceipt(
+        input,
+        reconstructionCase,
+        profile,
+        journal,
+        ports,
+        [attempt0, attempt1],
+      );
+    }
     if (
       attempt0.evaluated.outcome === "passed" ||
       attempt0.evaluated.outcome === "incomplete" ||
@@ -925,8 +1044,11 @@ export async function runWorldReconstructionV1(
       diagnostics: attempt0.evaluated.evaluation.diagnostics,
       priorSourceRef: attempt0.packaged.authoredSourceRef,
       priorSourceHash: attempt0.packaged.authoredSourceHash,
-      priorEvaluationResultRef: attempt0.evaluated.evaluation.id,
-      priorEvaluationResultHash: attempt0.evaluated.evaluationHash,
+      priorEvidence: {
+        kind: "evaluation-result",
+        resultRef: attempt0.evaluated.evaluation.id,
+        resultHash: attempt0.evaluated.evaluationHash,
+      },
       priorGenerationRequestRef: attempt0.generate.generationRequestRef,
       priorGenerationRequestHash: attempt0.generate.generationRequestHash,
       frozenOwnerIdentities: input.frozenOwnerIdentities,
@@ -939,6 +1061,9 @@ export async function runWorldReconstructionV1(
       ports,
       repairInstruction,
     );
+    if (attempt1.outcome !== "completed") {
+      throw new Error("WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED");
+    }
     return await publishCompletedReceipt(
       input,
       reconstructionCase,

@@ -76,6 +76,8 @@ import {
   type FormalCaptureCommandCleanupOutcomesV1,
 } from "./formal-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
+import { createOpeningCompositionRepairDiagnosticsV1 } from
+  "./opening-composition-host-gate.js";
 import type {
   WorldReconstructionCleanupOutcomesV1,
   WorldReconstructionCleanupOwnerOutcomeV1,
@@ -760,6 +762,14 @@ export async function createProductionWorldReconstructionRunPortsV1(
               input.generationInput.runDirectoryPath,
               rejectedEvidence.openingGateResultPath,
             );
+            const repairDiagnostics =
+              createOpeningCompositionRepairDiagnosticsV1({
+                gateResult: rejectedEvidence.openingGateResult,
+                reconstructionCase: input.reconstructionCase,
+                evidenceRef: openingGateResultRef,
+                semanticCaptureTargetBindings:
+                  formalCaptureIntent.semanticCaptureTargetBindings,
+              });
             return Object.freeze({
               outcome: "rejected" as const,
               cameraRollbackOutcome: "completed" as const,
@@ -777,6 +787,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
               openingGateResultPath: rejectedEvidence.openingGateResultPath,
               openingGateResultRef,
               openingGateResultHash: rejectedEvidence.openingGateResultHash,
+              repairDiagnostics,
             });
           }
         } else if (!captureOwnerStarted) {

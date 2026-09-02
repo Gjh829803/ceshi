@@ -166,9 +166,11 @@ describe("createNativeBlockRepairInstructionV1", () => {
       diagnostics: [diagnostic],
       priorSourceRef: "artifact://case/cloud-temple/attempts/0/source",
       priorSourceHash: H("a"),
-      priorEvaluationResultRef:
-        "artifact://case/cloud-temple/attempts/0/evaluation.json",
-      priorEvaluationResultHash: H("b"),
+      priorEvidence: {
+        kind: "evaluation-result",
+        resultRef: "artifact://case/cloud-temple/attempts/0/evaluation.json",
+        resultHash: H("b"),
+      },
       priorGenerationRequestRef:
         "artifact://case/cloud-temple/attempts/0/generation-request.json",
       priorGenerationRequestHash: H("c"),
@@ -224,9 +226,11 @@ describe("createNativeBlockRepairInstructionV1", () => {
       diagnostics: [],
       priorSourceRef: "artifact://case/cloud-temple/attempts/0/source",
       priorSourceHash: H("a"),
-      priorEvaluationResultRef:
-        "artifact://case/cloud-temple/attempts/0/evaluation.json",
-      priorEvaluationResultHash: H("b"),
+      priorEvidence: {
+        kind: "evaluation-result",
+        resultRef: "artifact://case/cloud-temple/attempts/0/evaluation.json",
+        resultHash: H("b"),
+      },
       priorGenerationRequestRef:
         "artifact://case/cloud-temple/attempts/0/generation-request.json",
       priorGenerationRequestHash: H("c"),
@@ -256,9 +260,11 @@ describe("createNativeBlockRepairInstructionV1", () => {
       diagnostics: [stale],
       priorSourceRef: "artifact://case/cloud-temple/attempts/0/source",
       priorSourceHash: H("a"),
-      priorEvaluationResultRef:
-        "artifact://case/cloud-temple/attempts/0/evaluation.json",
-      priorEvaluationResultHash: H("b"),
+      priorEvidence: {
+        kind: "evaluation-result",
+        resultRef: "artifact://case/cloud-temple/attempts/0/evaluation.json",
+        resultHash: H("b"),
+      },
       priorGenerationRequestRef:
         "artifact://case/cloud-temple/attempts/0/generation-request.json",
       priorGenerationRequestHash: H("c"),

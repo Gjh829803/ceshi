@@ -631,6 +631,56 @@ export function isWorldReconstructionRepairableDiagnosticCodeV1(
   );
 }
 
+export type WorldReconstructionEvaluatedRunAttemptV1 = Readonly<{
+  kind: "evaluated";
+  attemptIndex: 0 | 1;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+  generationReceiptRef: string;
+  generationReceiptHash: Sha256HashV1;
+  sceneAuthoringAttemptRef: string;
+  sceneAuthoringAttemptHash: Sha256HashV1;
+  sceneAuthoringAttemptResultRef: string;
+  sceneAuthoringAttemptResultHash: Sha256HashV1;
+  worldPackageRef: string;
+  worldPackageRootHash: Sha256HashV1;
+  worldPackageBuildReceiptRef: string;
+  worldPackageBuildReceiptHash: Sha256HashV1;
+  worldBuildIdentityRef: string;
+  worldBuildIdentityHash: Sha256HashV1;
+  captureReceiptRef: string;
+  captureReceiptHash: Sha256HashV1;
+  evaluationResultRef: string;
+  evaluationResultHash: Sha256HashV1;
+  outcome: WorldReconstructionOutcomeV1;
+}>;
+
+export type WorldReconstructionCaptureRejectedRunAttemptV1 = Readonly<{
+  kind: "capture-rejected";
+  attemptIndex: 0;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+  generationReceiptRef: string;
+  generationReceiptHash: Sha256HashV1;
+  sceneAuthoringAttemptRef: string;
+  sceneAuthoringAttemptHash: Sha256HashV1;
+  sceneAuthoringAttemptResultRef: string;
+  sceneAuthoringAttemptResultHash: Sha256HashV1;
+  worldPackageRef: string;
+  worldPackageRootHash: Sha256HashV1;
+  worldPackageBuildReceiptRef: string;
+  worldPackageBuildReceiptHash: Sha256HashV1;
+  worldBuildIdentityRef: string;
+  worldBuildIdentityHash: Sha256HashV1;
+  openingGateResultRef: string;
+  openingGateResultHash: Sha256HashV1;
+  outcome: "failed";
+}>;
+
+export type WorldReconstructionRunAttemptV1 =
+  | WorldReconstructionEvaluatedRunAttemptV1
+  | WorldReconstructionCaptureRejectedRunAttemptV1;
+
 export interface WorldReconstructionRunReceiptV1 {
   readonly kind: "world-reconstruction-run-receipt";
   readonly schemaVersion: 1;
@@ -640,32 +690,25 @@ export interface WorldReconstructionRunReceiptV1 {
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
   readonly outcome: WorldReconstructionOutcomeV1;
-  readonly attempts: readonly Readonly<{
-    attemptIndex: 0 | 1;
-    generationRequestRef: string;
-    generationRequestHash: Sha256HashV1;
-    generationReceiptRef: string;
-    generationReceiptHash: Sha256HashV1;
-    sceneAuthoringAttemptRef: string;
-    sceneAuthoringAttemptHash: Sha256HashV1;
-    sceneAuthoringAttemptResultRef: string;
-    sceneAuthoringAttemptResultHash: Sha256HashV1;
-    worldPackageRef: string;
-    worldPackageRootHash: Sha256HashV1;
-    worldPackageBuildReceiptRef: string;
-    worldPackageBuildReceiptHash: Sha256HashV1;
-    worldBuildIdentityRef: string;
-    worldBuildIdentityHash: Sha256HashV1;
-    captureReceiptRef: string;
-    captureReceiptHash: Sha256HashV1;
-    evaluationResultRef: string;
-    evaluationResultHash: Sha256HashV1;
-    outcome: WorldReconstructionOutcomeV1;
-  }>[];
+  readonly attempts: readonly WorldReconstructionRunAttemptV1[];
   readonly finalAttemptIndex: 0 | 1;
   readonly finalEvaluationResultRef: string;
   readonly finalEvaluationResultHash: Sha256HashV1;
   readonly cleanupOutcome: "completed" | "failed";
+}
+
+export function getWorldReconstructionFinalEvaluatedAttemptV1(
+  receipt: WorldReconstructionRunReceiptV1,
+): WorldReconstructionEvaluatedRunAttemptV1 {
+  const finalAttempt = receipt.attempts.find(
+    ({ attemptIndex }) => attemptIndex === receipt.finalAttemptIndex,
+  );
+  if (isNil(finalAttempt) || finalAttempt.kind !== "evaluated") {
+    throw new Error(
+      "WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID: final Attempt is not evaluated",
+    );
+  }
+  return finalAttempt;
 }
 
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -713,13 +756,22 @@ const RUN_FIELDS = [
   "finalEvaluationResultRef", "finalEvaluationResultHash", "cleanupOutcome",
 ] as const;
 const RUN_ATTEMPT_FIELDS = [
-  "attemptIndex", "generationRequestRef", "generationRequestHash",
+  "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
   "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
   "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash", "worldBuildIdentityRef", "worldBuildIdentityHash",
   "captureReceiptRef", "captureReceiptHash", "evaluationResultRef",
   "evaluationResultHash", "outcome",
+] as const;
+const RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS = [
+  "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
+  "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
+  "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
+  "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
+  "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash",
+  "worldBuildIdentityRef", "worldBuildIdentityHash", "openingGateResultRef",
+  "openingGateResultHash", "outcome",
 ] as const;
 
 function fail(contract: string, path: string, message: string): never {
@@ -1728,9 +1780,22 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   const attempts = array(source.attempts, contract, "attempts").map((entry, index) => {
     const path = `attempts/${index}`;
     const row = object(entry, contract, path);
-    exactFields(row, RUN_ATTEMPT_FIELDS, contract, path);
+    const attemptKind = enumValue(
+      row.kind,
+      ["evaluated", "capture-rejected"] as const,
+      contract,
+      `${path}/kind`,
+    );
+    exactFields(
+      row,
+      attemptKind === "evaluated"
+        ? RUN_ATTEMPT_FIELDS
+        : RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS,
+      contract,
+      path,
+    );
     if (index > 1 || row.attemptIndex !== index) fail(contract, `${path}/attemptIndex`, "attempts must be contiguous 0 then optional 1");
-    return Object.freeze({
+    const common = {
       attemptIndex: index as 0 | 1,
       generationRequestRef: text(row.generationRequestRef, contract, `${path}/generationRequestRef`),
       generationRequestHash: hash(row.generationRequestHash, contract, `${path}/generationRequestHash`),
@@ -1746,6 +1811,23 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       worldPackageBuildReceiptHash: hash(row.worldPackageBuildReceiptHash, contract, `${path}/worldPackageBuildReceiptHash`),
       worldBuildIdentityRef: text(row.worldBuildIdentityRef, contract, `${path}/worldBuildIdentityRef`),
       worldBuildIdentityHash: hash(row.worldBuildIdentityHash, contract, `${path}/worldBuildIdentityHash`),
+    };
+    if (attemptKind === "capture-rejected") {
+      if (index !== 0 || row.outcome !== "failed") {
+        fail(contract, path, "only the initial Attempt may be capture-rejected");
+      }
+      return Object.freeze({
+        kind: attemptKind,
+        ...common,
+        attemptIndex: 0 as const,
+        openingGateResultRef: text(row.openingGateResultRef, contract, `${path}/openingGateResultRef`),
+        openingGateResultHash: hash(row.openingGateResultHash, contract, `${path}/openingGateResultHash`),
+        outcome: "failed" as const,
+      });
+    }
+    return Object.freeze({
+      kind: attemptKind,
+      ...common,
       captureReceiptRef: text(row.captureReceiptRef, contract, `${path}/captureReceiptRef`),
       captureReceiptHash: hash(row.captureReceiptHash, contract, `${path}/captureReceiptHash`),
       evaluationResultRef: text(row.evaluationResultRef, contract, `${path}/evaluationResultRef`),
@@ -1759,13 +1841,17 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       attempt.generationRequestRef, attempt.generationReceiptRef,
       attempt.sceneAuthoringAttemptRef, attempt.sceneAuthoringAttemptResultRef,
       attempt.worldPackageRef,
-      attempt.captureReceiptRef, attempt.evaluationResultRef,
+      ...(attempt.kind === "evaluated"
+        ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
+        : [attempt.openingGateResultRef]),
     ];
     const identityHashes = (attempt: (typeof attempts)[number]) => [
       attempt.generationRequestHash, attempt.generationReceiptHash,
       attempt.sceneAuthoringAttemptHash, attempt.sceneAuthoringAttemptResultHash,
       attempt.worldPackageRootHash, attempt.worldPackageBuildReceiptHash, attempt.worldBuildIdentityHash,
-      attempt.captureReceiptHash, attempt.evaluationResultHash,
+      ...(attempt.kind === "evaluated"
+        ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
+        : [attempt.openingGateResultHash]),
     ];
     const firstRefs = new Set(runScopedIdentityRefs(attempts[0]!));
     const firstHashes = new Set(identityHashes(attempts[0]!));
@@ -1778,7 +1864,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   const finalAttemptIndex = integer(source.finalAttemptIndex, 0, 1, contract, "finalAttemptIndex") as 0 | 1;
   const finalEvaluationResultRef = text(source.finalEvaluationResultRef, contract, "finalEvaluationResultRef");
   const finalEvaluationResultHash = hash(source.finalEvaluationResultHash, contract, "finalEvaluationResultHash");
-  if (final.attemptIndex !== finalAttemptIndex || final.evaluationResultRef !== finalEvaluationResultRef || final.evaluationResultHash !== finalEvaluationResultHash) fail(contract, "finalAttemptIndex", "final identity must identify the last Attempt evaluation result");
+  if (final.kind !== "evaluated" || final.attemptIndex !== finalAttemptIndex || final.evaluationResultRef !== finalEvaluationResultRef || final.evaluationResultHash !== finalEvaluationResultHash) fail(contract, "finalAttemptIndex", "final identity must identify the last evaluated Attempt result");
   const outcome = enumValue(source.outcome, ["passed", "failed", "incomplete"] as const, contract, "outcome");
   const cleanupOutcome = enumValue(source.cleanupOutcome, ["completed", "failed"] as const, contract, "cleanupOutcome");
   const expectedOutcome = cleanupOutcome === "failed" ? "incomplete" : final.outcome;

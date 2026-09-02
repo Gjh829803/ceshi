@@ -801,6 +801,7 @@ describe("world reconstruction contracts", () => {
       outcome: "passed",
       attempts: [
         {
+          kind: "evaluated",
           attemptIndex: 0,
           generationRequestRef: "artifact://case/cloud-temple/attempts/0/generation-request.json",
           generationRequestHash: H("6"),
@@ -823,6 +824,7 @@ describe("world reconstruction contracts", () => {
           outcome: "failed",
         },
         {
+          kind: "evaluated",
           attemptIndex: 1,
           generationRequestRef: "artifact://case/cloud-temple/attempts/1/generation-request.json",
           generationRequestHash: H("d"),
@@ -853,6 +855,26 @@ describe("world reconstruction contracts", () => {
     const run = parseWorldReconstructionRunReceiptV1(runValue);
     expect(run.attempts).toHaveLength(2);
     expect(run.finalAttemptIndex).toBe(1);
+    const {
+      captureReceiptRef: _captureReceiptRef,
+      captureReceiptHash: _captureReceiptHash,
+      evaluationResultRef: _evaluationResultRef,
+      evaluationResultHash: _evaluationResultHash,
+      ...initialPackageIdentity
+    } = runValue.attempts[0];
+    const repairedAfterOpeningRejection = parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      attempts: [{
+        ...initialPackageIdentity,
+        kind: "capture-rejected",
+        openingGateResultRef:
+          "artifact://case/cloud-temple/attempts/0/rejected-capture/opening-composition-gate-result.json",
+        openingGateResultHash: `sha256:${"10".repeat(32)}`,
+        outcome: "failed",
+      }, runValue.attempts[1]],
+    });
+    expect(repairedAfterOpeningRejection.attempts.map(({ kind }) => kind))
+      .toEqual(["capture-rejected", "evaluated"]);
     const packageScopedRefs = parseWorldReconstructionRunReceiptV1({
       ...runValue,
       attempts: [runValue.attempts[0], {

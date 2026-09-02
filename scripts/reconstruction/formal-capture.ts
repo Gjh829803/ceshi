@@ -186,6 +186,7 @@ export class FormalCaptureCommandClosedErrorV1 extends Error {
     readonly openingOutputPath: string;
     readonly openingGateResultPath: string;
     readonly openingGateResultHash: Sha256HashV1;
+    readonly openingGateResult: OpeningCompositionHostGateResultV1;
   }>;
 
   constructor(input: Readonly<{
@@ -636,6 +637,7 @@ export async function captureHostedWorldPackageV1(
               "opening-composition-gate-result.json",
             ),
             openingGateResultHash,
+            openingGateResult,
           },
         });
       }

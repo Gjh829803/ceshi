@@ -4,8 +4,10 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import type {
   WorldReconstructionCaseV1,
+  WorldReconstructionDiagnosticV1,
   WorldReconstructionEvaluationProfileV1,
 } from "@whitebox-world/validation";
+import { parseWorldReconstructionDiagnosticV1 } from "@whitebox-world/validation";
 import { isNil } from "lodash-es";
 
 export const OPENING_COMPOSITION_HOST_GATE_DIAGNOSTIC_CODES_V1 = Object.freeze([
@@ -37,6 +39,8 @@ export interface OpeningCompositionHostGateDiagnosticV1 {
   readonly allowedDeviation?: number;
   readonly exceededBy?: number;
   readonly correctionDirection?: "increase" | "decrease" | "restore" | "reorder";
+  readonly expectedValues?: readonly string[];
+  readonly actualValues?: readonly string[];
 }
 
 export interface OpeningCompositionHostGateResultV1 {
@@ -89,10 +93,10 @@ function centerDrift(
   expected: Readonly<{ xBasisPoints: number; yBasisPoints: number }>,
   observed: Readonly<{ xBasisPoints: number; yBasisPoints: number }>,
 ): number {
-  return Math.round(Math.hypot(
-    expected.xBasisPoints - observed.xBasisPoints,
-    expected.yBasisPoints - observed.yBasisPoints,
-  ));
+  return Math.max(
+    Math.abs(expected.xBasisPoints - observed.xBasisPoints),
+    Math.abs(expected.yBasisPoints - observed.yBasisPoints),
+  );
 }
 
 function cameraDiagnostics(
@@ -296,6 +300,8 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
       diagnostics.push({
         code: "WORLDKIT_OPENING_GATE_TARGET_MISSING",
         targetRef: region.targetRef,
+        metricId: "normalizedBounds.presence",
+        correctionDirection: "restore",
       });
       continue;
     }
@@ -321,6 +327,8 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
       diagnostics.push({
         code: "WORLDKIT_OPENING_GATE_TARGET_MISSING",
         targetRef: anchor.targetRef,
+        metricId: "normalizedCenter.presence",
+        correctionDirection: "restore",
       });
       continue;
     }
@@ -364,6 +372,8 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
       code: "WORLDKIT_OPENING_GATE_DEPTH_ORDER_DRIFT",
       metricId: "visualGroups.depthOrder",
       correctionDirection: "reorder",
+      expectedValues: Object.freeze([...expected.orderedTargetRefs]),
+      actualValues: Object.freeze([...observedOrder]),
     });
   }
   return Object.freeze({
@@ -374,6 +384,165 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
       Object.freeze({ ...diagnostic })
     )),
   });
+}
+
+const OPENING_REGION_METRIC_ID_BY_GATE_METRIC_ID = Object.freeze({
+  "normalizedBounds.minXBasisPoints": "opening-region-min-x-basis-points",
+  "normalizedBounds.minYBasisPoints": "opening-region-min-y-basis-points",
+  "normalizedBounds.maxXBasisPoints": "opening-region-max-x-basis-points",
+  "normalizedBounds.maxYBasisPoints": "opening-region-max-y-basis-points",
+} as const);
+
+/**
+ * Converts only source-repairable Opening Gate failures into the stable WRC
+ * diagnostic contract. An empty result means the whole rejection must remain
+ * fail-closed; partial repair instructions are never emitted.
+ */
+export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
+  gateResult: OpeningCompositionHostGateResultV1;
+  reconstructionCase: WorldReconstructionCaseV1;
+  evidenceRef: string;
+  semanticCaptureTargetBindings: readonly Readonly<{
+    acceptanceTargetRef: string;
+    compositionTargetRef: string;
+    blockVisualGroupId: string;
+  }>[];
+}>): readonly WorldReconstructionDiagnosticV1[] {
+  if (input.gateResult.status !== "failed") return Object.freeze([]);
+  const bindingByTargetRef = new Map(
+    input.semanticCaptureTargetBindings.map((binding) =>
+      [binding.compositionTargetRef, binding] as const),
+  );
+  const converted: WorldReconstructionDiagnosticV1[] = [];
+  for (const [index, diagnostic] of input.gateResult.diagnostics.entries()) {
+    if (diagnostic.code === "WORLDKIT_OPENING_GATE_DEPTH_ORDER_DRIFT") {
+      if (
+        isNil(diagnostic.expectedValues) ||
+        isNil(diagnostic.actualValues)
+      ) return Object.freeze([]);
+      converted.push(parseWorldReconstructionDiagnosticV1({
+        kind: "world-reconstruction-diagnostic",
+        schemaVersion: 1,
+        id: `opening-gate-${index}-target-order`,
+        code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+        dimensionId: "opening-composition",
+        acceptanceTargetRef:
+          input.reconstructionCase.expected.openingComposition
+            .acceptanceTargetRef,
+        targetRef:
+          input.reconstructionCase.expected.openingComposition
+            .acceptanceTargetRef,
+        targetId: "opening-composition",
+        metricId: "opening-target-order",
+        details: {
+          kind: "sequence-mismatch",
+          expectedValues: diagnostic.expectedValues,
+          actualValues: diagnostic.actualValues,
+          correctionDirection: "reorder",
+        },
+        evidenceRefs: [input.evidenceRef],
+        message: "Opening composition target depth order does not match the frozen Case.",
+        repairAction: {
+          kind: "revise-native-source",
+          targetKind: "composition-target",
+          targetId: "opening-composition",
+          operation: "reorder",
+          instruction: "Move the actual Blocks of the named visual groups forward or backward until their observed depth order matches expectedValues; do not relabel unchanged geometry or edit thresholds.",
+        },
+      }));
+      continue;
+    }
+    if (isNil(diagnostic.targetRef)) return Object.freeze([]);
+    const binding = bindingByTargetRef.get(diagnostic.targetRef);
+    if (isNil(binding)) return Object.freeze([]);
+    if (diagnostic.code === "WORLDKIT_OPENING_GATE_TARGET_MISSING") {
+      const metricId = diagnostic.metricId === "normalizedBounds.presence"
+        ? "opening-region-presence"
+        : diagnostic.metricId === "normalizedCenter.presence"
+          ? "opening-anchor-presence"
+          : undefined;
+      if (isNil(metricId)) return Object.freeze([]);
+      converted.push(parseWorldReconstructionDiagnosticV1({
+        kind: "world-reconstruction-diagnostic",
+        schemaVersion: 1,
+        id: `opening-gate-${index}-${metricId}-${binding.blockVisualGroupId}`,
+        code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+        dimensionId: "opening-composition",
+        acceptanceTargetRef: binding.acceptanceTargetRef,
+        targetRef: binding.compositionTargetRef,
+        targetId: binding.blockVisualGroupId,
+        metricId,
+        details: {
+          kind: "presence-mismatch",
+          expectedValue: "present",
+          actualValue: "missing",
+          correctionDirection: "add",
+        },
+        evidenceRefs: [input.evidenceRef],
+        message: `Opening composition target ${binding.compositionTargetRef} is missing from the captured view.`,
+        repairAction: {
+          kind: "revise-native-source",
+          targetKind: "composition-target",
+          targetId: binding.blockVisualGroupId,
+          operation: "add",
+          instruction: `Add visible Blocks to visual group ${binding.blockVisualGroupId} so ${binding.compositionTargetRef} appears in the opening view; do not edit thresholds or substitute metadata.`,
+        },
+      }));
+      continue;
+    }
+    const metricId = diagnostic.code === "WORLDKIT_OPENING_GATE_REGION_DRIFT"
+      ? OPENING_REGION_METRIC_ID_BY_GATE_METRIC_ID[
+        diagnostic.metricId as keyof typeof OPENING_REGION_METRIC_ID_BY_GATE_METRIC_ID
+      ]
+      : diagnostic.code === "WORLDKIT_OPENING_GATE_ANCHOR_DRIFT"
+        ? diagnostic.metricId === "normalizedCenter.xBasisPoints"
+          ? "opening-anchor-x-basis-points"
+          : diagnostic.metricId === "normalizedCenter.yBasisPoints"
+            ? "opening-anchor-y-basis-points"
+            : undefined
+        : undefined;
+    if (
+      isNil(metricId) ||
+      isNil(diagnostic.expectedValue) ||
+      isNil(diagnostic.actualValue) ||
+      isNil(diagnostic.allowedDeviation) ||
+      isNil(diagnostic.exceededBy) ||
+      (diagnostic.correctionDirection !== "increase" &&
+        diagnostic.correctionDirection !== "decrease")
+    ) return Object.freeze([]);
+    const operation = diagnostic.code === "WORLDKIT_OPENING_GATE_REGION_DRIFT"
+      ? "resize" as const
+      : "move" as const;
+    converted.push(parseWorldReconstructionDiagnosticV1({
+      kind: "world-reconstruction-diagnostic",
+      schemaVersion: 1,
+      id: `opening-gate-${index}-${metricId}-${binding.blockVisualGroupId}`,
+      code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+      dimensionId: "opening-composition",
+      acceptanceTargetRef: binding.acceptanceTargetRef,
+      targetRef: binding.compositionTargetRef,
+      targetId: binding.blockVisualGroupId,
+      metricId,
+      details: {
+        kind: "basis-points-threshold",
+        expectedBasisPoints: diagnostic.expectedValue,
+        actualBasisPoints: diagnostic.actualValue,
+        maximumAllowedDriftBasisPoints: diagnostic.allowedDeviation,
+        exceededByBasisPoints: diagnostic.exceededBy,
+        correctionDirection: diagnostic.correctionDirection,
+      },
+      evidenceRefs: [input.evidenceRef],
+      message: `${binding.compositionTargetRef} ${metricId} is ${diagnostic.actualValue}; target ${diagnostic.expectedValue}, allowed drift ${diagnostic.allowedDeviation}, exceeded by ${diagnostic.exceededBy}.`,
+      repairAction: {
+        kind: "revise-native-source",
+        targetKind: "composition-target",
+        targetId: binding.blockVisualGroupId,
+        operation,
+        instruction: `${diagnostic.correctionDirection === "increase" ? "Increase" : "Decrease"} ${metricId} for the actual Blocks in visual group ${binding.blockVisualGroupId} toward ${diagnostic.expectedValue}; keep drift within ${diagnostic.allowedDeviation}, do not relabel unchanged geometry, and do not edit thresholds.`,
+      },
+    }));
+  }
+  return Object.freeze(converted);
 }
 
 export function assertOpeningCompositionHostGateV1(input: Parameters<
