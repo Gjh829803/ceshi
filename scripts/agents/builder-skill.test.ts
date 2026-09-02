@@ -163,7 +163,15 @@ describe("Canonical Builder skill", () => {
     expect(skill).toContain("terrain-height-intent-prompt.md");
     expect(skill).toContain("must not decode, resample, normalize, or edit its pixels");
     expect(skill).toContain("authoring.builder.json");
+    expect(skill).toContain(
+      "AuthoringSpec `id`, implementation-map `sceneId`, and implementation-map `authoringSpecId` must all exactly equal the Host-provided `--scene-id`",
+    );
+    expect(skill).toContain("Never append `-authoring`");
     expect(template).toContain('"schemaVersion": 4');
+    expect(template).toContain('"id": "scene-id"');
+    expect(template).toContain('"sceneId": "scene-id"');
+    expect(template).toContain('"authoringSpecId": "scene-id"');
+    expect(template).not.toContain("scene-id-authoring");
     expect(template).toContain('"preset": "clear-day"');
     expect(template).toContain('"kind": "supported-by"');
     expect(template).toContain('"kind": "within-slope-limit"');

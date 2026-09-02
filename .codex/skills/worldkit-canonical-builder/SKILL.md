@@ -18,6 +18,8 @@ Create the declared scene outputs:
 - `artifacts/scenes/<scene-id>/authoring.builder.json`
 - `artifacts/scenes/<scene-id>/implementation-map.draft.json`
 
+AuthoringSpec `id`, implementation-map `sceneId`, and implementation-map `authoringSpecId` must all exactly equal the Host-provided `--scene-id`. Never append `-authoring` or any other suffix to one of these identity fields. They identify the same scene across Builder output, Host compilation, Package, and receipts.
+
 Do not edit the Scene Brief, palette, terrain prompt, or planner images. Do not add Babylon, Havok, Three.js, mesh, GLB URL, bone, clip, collider-handle, compiler, or runtime implementation fields to Canonical JSON.
 
 ## Required references
