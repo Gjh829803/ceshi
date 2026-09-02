@@ -86,11 +86,13 @@ export function cloudControlPlaneResources({
             readinessProbe: {
               httpGet: { path: "/api/health", port: "http" },
               initialDelaySeconds: 5,
+              timeoutSeconds: 10,
               periodSeconds: 10,
             },
             livenessProbe: {
               httpGet: { path: "/api/health", port: "http" },
-              initialDelaySeconds: 30,
+              initialDelaySeconds: 120,
+              timeoutSeconds: 10,
               periodSeconds: 20,
             },
             resources: {
