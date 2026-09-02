@@ -626,6 +626,21 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       this.coordinator.setPaused(true);
       snapshot = this.coordinator.snapshot();
       for (const step of steps) snapshot = await this.coordinator.runFixedInput(step);
+    } catch (error) {
+      const initialFailure = immutableRuntimeFailureAttempt(
+        this.activeRuntime().consumeFixedInputFailureDiagnostic?.(),
+      );
+      if (initialFailure !== null) {
+        this.runtimeFailureDiagnostic = Object.freeze({
+          initial: initialFailure,
+          recovery: null,
+        });
+        console.error(
+          "WORLDKIT_RUNTIME_FIXED_INPUT_FAILED",
+          JSON.stringify(initialFailure),
+        );
+      }
+      throw error;
     } finally {
       this.paused = wasPaused;
       this.coordinator.setPaused(wasPaused);

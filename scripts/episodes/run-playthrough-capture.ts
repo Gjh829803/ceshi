@@ -163,7 +163,11 @@ async function main(): Promise<void> {
   page.on("console", (message) => {
     if (message.type() === "error" &&
         !message.text().includes("WebSocket connection")) {
-      consoleErrors.push(message.text().slice(0, 1_000));
+      const text = message.text().slice(0, 4_000);
+      consoleErrors.push(text);
+      if (text.startsWith("WORLDKIT_RUNTIME_FIXED_INPUT_FAILED")) {
+        process.stderr.write(`${text}\n`);
+      }
     }
   });
   try {

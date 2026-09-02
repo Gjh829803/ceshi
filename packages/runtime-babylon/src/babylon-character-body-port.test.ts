@@ -817,6 +817,36 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it("accepts accumulated micro-correction from the four-plane Babylon simplex", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 4e-4;
+    driver.onIntegrate = () => {
+      driver.position = [0.01028878930937703, 1, 0];
+      driver.velocity = [0.6, 0, 0];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).not.toThrow();
+    port.dispose();
+  });
+
+  it("rejects a provider correction receipt beyond the four-plane simplex bound", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 4.01e-4;
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).toThrow("native collision solver correction receipt is invalid");
+    port.dispose();
+  });
+
   it("rejects padded step-up progress beyond the exact horizontal proposal", () => {
     const { driver, port } = createPort();
     driver.didStepUpDuringIntegrate = true;

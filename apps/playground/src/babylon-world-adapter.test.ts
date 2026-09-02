@@ -1178,6 +1178,33 @@ describe("BabylonWorldAdapter frame loop", () => {
     },
   );
 
+  it("retains and logs the trusted Runtime diagnostic for Browser Fixed Input failures", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    runtime.runFixedInput.mockRejectedValueOnce(new Error("fixed input failed"));
+    runtime.consumeFixedInputFailureDiagnostic.mockReturnValueOnce({
+      schemaVersion: 1,
+      stage: "prepare",
+      tick: 77,
+      actions: ["jump"],
+      errorName: "RangeError",
+      errorCode: "3C_INPUT_INVALID",
+      errorMessage: "trusted runtime diagnostic",
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(adapter.runWorldkitFixedInput([{
+      actions: ["jump"],
+      ticks: 1,
+    }])).rejects.toThrow("fixed input failed");
+
+    expect(adapter.getRuntimeLoopDiagnosticSnapshot().runtimeFailure?.initial)
+      .toMatchObject({ tick: 77, errorCode: "3C_INPUT_INVALID" });
+    expect(consoleError).toHaveBeenCalledWith(
+      "WORLDKIT_RUNTIME_FIXED_INPUT_FAILED",
+      expect.stringContaining('"errorCode":"3C_INPUT_INVALID"'),
+    );
+  });
+
   it("restores pause state when the initial Browser Fixed Input snapshot fails", async () => {
     const { adapter, coordinatorSnapshot, setCoordinatorPaused } = createAdapterProbe();
     coordinatorSnapshot.mockImplementationOnce(() => {

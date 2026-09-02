@@ -236,9 +236,12 @@ const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
 const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
 const BLOCK_WORLD_MAXIMUM_CONTINUOUS_SNAP_METERS = 0.002;
 // Babylon's Character Controller simplex solver uses a 1e-4 collision epsilon.
-// Keep provider resolution tolerance local to this adapter; protocol and
+// Its 3D simplex can accumulate that correction across at most four active
+// planes. Keep this provider-only envelope local to the adapter; protocol and
 // published-state coherence continue to use the stricter SDK tolerance.
 const BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1 = 1e-4;
+const BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1 =
+  4 * BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1;
 
 type CharacterCastHit = NonNullable<
   ReturnType<PhysicsCharacterController["_getClosestCastHit"]>
@@ -1580,7 +1583,7 @@ function assertProposalWasNotAmplified(
   const appliedVertical = dot(supportAdjustedApplied, up);
   if (!finite(maximumSolverCorrectionMeters) || maximumSolverCorrectionMeters < 0 ||
     maximumSolverCorrectionMeters >
-      BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1) {
+      BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1) {
     invalid("native collision solver correction receipt is invalid.");
   }
   const progress = horizontalProgressAlongProposal(
@@ -1591,7 +1594,11 @@ function assertProposalWasNotAmplified(
   if (progress.applied > progress.proposedMagnitude +
     maximumSolverCorrectionMeters +
       BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1) {
-    invalid("native collision resolution amplified horizontal proposal progress.");
+    invalid(
+      "native collision resolution amplified horizontal proposal progress " +
+      `(applied=${progress.applied}, proposed=${progress.proposedMagnitude}, ` +
+      `solverCorrection=${maximumSolverCorrectionMeters}).`,
+    );
   }
   const stepHeightAllowanceMeters = support.mode === "unsupported"
     ? 0
@@ -1845,7 +1852,7 @@ class BabylonPhysicsCharacterControllerDriverV1
     return Object.freeze({
       didStepUp: this.controller.didStepUpDuringLastIntegrate(),
       maximumSolverCorrectionMeters:
-        BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1,
+        BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1,
     });
   }
 
