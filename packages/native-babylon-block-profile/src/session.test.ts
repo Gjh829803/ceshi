@@ -1,7 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
@@ -840,32 +839,30 @@ describe("Babylon Native block profile session", () => {
       const initialMeshCount = scene.meshes.length;
       const disposalOrder: string[] = [];
       let createdCount = 0;
-      const createBox = MeshBuilder.CreateBox;
-      const spy = vi.spyOn(MeshBuilder, "CreateBox").mockImplementation(
-        ((name: string, options: never, target: never) => {
-          createdCount += 1;
-          if (createdCount === 3) throw new Error("mid-batch mesh failure");
-          const mesh = createBox(name, options, target);
+      // Scene-scoped seam: this Session owns the Scene, so the injected
+      // failure cannot leak into another Session or test.
+      const addMesh = scene.addMesh.bind(scene);
+      scene.addMesh = (mesh, recursive) => {
+        createdCount += 1;
+        if (createdCount === 3) {
+          mesh.getVerticesData = () => null;
+        } else {
           const dispose = mesh.dispose.bind(mesh);
           mesh.dispose = (...arguments_) => {
-            disposalOrder.push(name);
+            disposalOrder.push(mesh.name);
             return dispose(...arguments_);
           };
-          return mesh;
-        }) as never,
-      );
+        }
+        return addMesh(mesh, recursive);
+      };
 
-      try {
-        expect(() => session.createBlockGrid({
-          idPrefix: "entry-ground",
-          shape: "full",
-          paletteRole: "ground",
-          minimumCenterMetersXYZ: [0, 0.5, 0],
-          repeatCountXYZ: [4, 1, 1],
-        })).toThrow(/mid-batch mesh failure/);
-      } finally {
-        spy.mockRestore();
-      }
+      expect(() => session.createBlockGrid({
+        idPrefix: "entry-ground",
+        shape: "full",
+        paletteRole: "ground",
+        minimumCenterMetersXYZ: [0, 0.5, 0],
+        repeatCountXYZ: [4, 1, 1],
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID/);
 
       expect(disposalOrder).toEqual([
         "entry-ground-x1-y0-z0",

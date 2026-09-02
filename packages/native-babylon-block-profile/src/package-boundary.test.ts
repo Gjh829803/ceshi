@@ -191,6 +191,26 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       /host|runtime|collider|traversal|compiler/i.test(name))).toBe(false);
   });
 
+  it("keeps one current Block placement dialect across the package", async () => {
+    const names = (await readdir(SOURCE_ROOT)).filter((name) =>
+      name.endsWith(".ts")).sort();
+    const sources = await Promise.all(names.map(async (name) => Object.freeze({
+      path: fileURLToPath(new URL(name, SOURCE_ROOT)),
+      source: await readFile(new URL(name, SOURCE_ROOT), "utf8"),
+    })));
+    expect(sources).not.toHaveLength(0);
+
+    for (const { path, source } of sources) {
+      for (const [, call] of source.matchAll(/createBlock\((\{[\s\S]*?\n\s*\})\)/g)) {
+        expect(call, path).toContain("centerMetersXYZ");
+      }
+      expect(source, path).not.toMatch(
+        /createBlock\([^)]*\)\s*\.\s*position/,
+      );
+      expect(source, path).not.toMatch(/\bplaceBlock\b|\baddBlock\b|createBlocks\(/);
+    }
+  });
+
   it("keeps checked-epoch transport behind the exact Host-only export", async () => {
     const host = await import("./host.js") as Record<string, unknown>;
     expect(Object.keys(host)).toEqual([

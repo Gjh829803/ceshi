@@ -34,16 +34,11 @@ export default defineBabylonNativeScene({
   id: "cloud-temple-test",
   build(context) {
     const session = createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 16 });
-    const central = session.createBlock({ id: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group" });
-    central.position.set(0, -0.5, 10);
-    const foreground = session.createBlock({ id: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group" });
-    foreground.position.set(0, -0.5, 18);
-    const gate = session.createBlock({ id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group" });
-    gate.position.set(4, -0.5, 2);
-    const mountain = session.createBlock({ id: "mountain", shape: "full", paletteRole: "background-mass", visualGroupId: "mountain-cliff-layers-group" });
-    mountain.position.set(-4, -0.5, 2);
-    const upper = session.createBlock({ id: "upper", shape: "full", paletteRole: "structure", visualGroupId: "upper-t-junction-group" });
-    upper.position.set(0, -0.5, 2);
+    session.createBlock({id: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", centerMetersXYZ: [0, -0.5, 10] });
+    session.createBlock({id: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", centerMetersXYZ: [0, -0.5, 18] });
+    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });
+    session.createBlock({id: "mountain", shape: "full", paletteRole: "background-mass", visualGroupId: "mountain-cliff-layers-group", centerMetersXYZ: [-4, -0.5, 2] });
+    session.createBlock({id: "upper", shape: "full", paletteRole: "structure", visualGroupId: "upper-t-junction-group", centerMetersXYZ: [0, -0.5, 2] });
     session.finalize({ staticColliders: [
       { id: "collider-central-steps", blockId: "central", traversalBinding: { kind: "static-surface", surfaceEntityId: "central-surface", logicalSubshapeId: "central-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" } },
       { id: "collider-cliff-blockers", blockId: "mountain", traversalBinding: { kind: "not-traversable" } },
@@ -70,10 +65,9 @@ const AUTHORING = {
 } as const;
 
 const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
-  "    const upper = session.createBlock",
-  `    const supportedSpawn = session.createBlock({ id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group" });
-    supportedSpawn.position.set(8, -0.5, 2);
-    const upper = session.createBlock`,
+  `    session.createBlock({id: "upper",`,
+  `    session.createBlock({id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group", centerMetersXYZ: [8, -0.5, 2] });
+    session.createBlock({id: "upper",`,
 );
 
 const EXTRA_VISUAL_GROUP_AUTHORING = {

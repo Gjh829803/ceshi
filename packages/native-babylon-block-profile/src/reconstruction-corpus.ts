@@ -471,7 +471,7 @@ function requireRecord(
   return found;
 }
 
-function placeBlock(
+function createCorpusBlock(
   session: BabylonNativeBlockProfileSessionV1,
   spec: CorpusBlockSpecV1,
 ): void {
@@ -560,10 +560,10 @@ export function materializeBabylonNativeBlockReconstructionCorpusCaseV1(
   });
   try {
     for (const spec of recordValue.blocks) {
-      placeBlock(session, spec);
+      createCorpusBlock(session, spec);
     }
     if (!isNil(recordValue.extraBlock)) {
-      placeBlock(session, recordValue.extraBlock);
+      createCorpusBlock(session, recordValue.extraBlock);
     }
     const epoch = recordValue.colliderMode === "invalid-binding"
       ? session.finalize(Object.freeze({
