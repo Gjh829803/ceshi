@@ -5,15 +5,15 @@ import { isNil } from "lodash-es";
 
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 import {
-  BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1,
   BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1,
   babylonNativeBlockBoundsFromCenterV1,
   babylonNativeBlockCenterAlignsToGridV1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
-  canonicalizeBabylonNativeBlockEvidenceNumberV1,
+  canonicalizeBabylonNativeBlockCenterToGridV1,
   effectiveBabylonNativeBlockSizeMetersXYZV1,
   type BabylonNativeBlockBoundsMetersV1,
   type BabylonNativeBlockPositionMetersXYZV1,
+  type BabylonNativeBlockRotationQuarterTurnsYV1,
   type BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
 import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
@@ -40,7 +40,7 @@ export interface BabylonNativeBlockLayoutEntryV1
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly visualGroupId?: string;
   readonly centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
-  readonly rotationQuarterTurnsY: number;
+  readonly rotationQuarterTurnsY: BabylonNativeBlockRotationQuarterTurnsYV1;
   readonly sizeMetersXYZ: readonly [number, number, number];
   readonly occupiedMicroCellKeys: readonly string[];
 }
@@ -109,12 +109,11 @@ function canonicalCenter(
   center: Vector3,
 ): BabylonNativeBlockPositionMetersXYZV1 | undefined {
   if (![center.x, center.y, center.z].every(Number.isFinite)) return undefined;
-  return Object.freeze([center.x, center.y, center.z].map((value, axis) => {
-    const lattice = BABYLON_NATIVE_BLOCK_CENTER_LATTICE_METERS_XYZ_V1[axis]!;
-    return canonicalizeBabylonNativeBlockEvidenceNumberV1(
-      Math.round(value / lattice) * lattice,
-    );
-  }) as [number, number, number]);
+  return canonicalizeBabylonNativeBlockCenterToGridV1([
+    center.x,
+    center.y,
+    center.z,
+  ]);
 }
 
 function hasFixedLocalGeometry(
@@ -178,7 +177,7 @@ function deriveEntry(
       vectorMatches(xAxis, basis.x) &&
       vectorMatches(yAxis, basis.y) &&
       vectorMatches(zAxis, basis.z),
-    );
+    ) as -1 | BabylonNativeBlockRotationQuarterTurnsYV1;
     if (
       rotationQuarterTurnsY < 0 ||
       !close(matrix.determinant(), 1)
@@ -210,6 +209,20 @@ function deriveEntry(
       centerMetersXYZ,
       rotationQuarterTurnsY,
     });
+    // Placement is declared once at creation. A later transform is tampering,
+    // not a second supported placement dialect.
+    if (
+      rotationQuarterTurnsY !== (record.input.rotationQuarterTurnsY ?? 0) ||
+      centerMetersXYZ.some((value, axis) =>
+        !Object.is(value, record.input.centerMetersXYZ[axis]))
+    ) {
+      return Object.freeze({
+        issue: Object.freeze({
+          code: "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
+          blockId: record.input.id,
+        }),
+      });
+    }
     if (!babylonNativeBlockCenterAlignsToGridV1(placement)) {
       return Object.freeze({
         issue: Object.freeze({

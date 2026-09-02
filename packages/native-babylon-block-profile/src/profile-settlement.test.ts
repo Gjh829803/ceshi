@@ -32,7 +32,10 @@ interface FinalizedEpoch {
 }
 interface Session {
   createBlock(input: Readonly<{ id: string; shape: Shape;
-    paletteRole: PaletteRole; visualGroupId?: string }>): Mesh;
+    paletteRole: PaletteRole;
+    centerMetersXYZ: readonly [number, number, number];
+    rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
+    visualGroupId?: string }>): Mesh;
   finalize(input: Readonly<{ displayGapMeters?: number;
     staticColliders: readonly FinalizeSelection[] }>): FinalizedEpoch;
   dispose(): void;
@@ -152,15 +155,14 @@ async function buildProfileInventoryHash(
       for (const definition of variant.reverseCreation
         ? [...definitions].reverse()
         : definitions) {
-        const mesh = session.createBlock({
+        session.createBlock({
           id: definition.id,
           shape: definition.shape,
           paletteRole: definition.paletteRole,
+          centerMetersXYZ: definition.center,
           ...(definition.visualGroupId === undefined
             ? {} : { visualGroupId: definition.visualGroupId }),
         });
-        mesh.position.set(definition.center[0], definition.center[1],
-          definition.center[2]);
       }
       epoch = session.finalize(Object.freeze({
         displayGapMeters: variant.displayGapMeters ?? 0.04,
@@ -194,12 +196,12 @@ describe("Babylon Native block Profile settlement", () => {
         (context) => {
           session = createBabylonNativeBlockProfileSessionV1(
             context, { maximumBlockCount: 2 });
-          const route = session.createBlock({ id: "route-block", shape: "full",
-            paletteRole: "route", visualGroupId: "route-group" });
-          route.position.set(0, 0.5, 0);
+          session.createBlock({ id: "route-block", shape: "full",
+            paletteRole: "route", visualGroupId: "route-group",
+            centerMetersXYZ: [0, 0.5, 0] });
           session.createBlock({ id: "structure-block", shape: "small",
-            paletteRole: "structure", visualGroupId: "structure-group" })
-            .position.set(1.25, 0.25, 0.25);
+            paletteRole: "structure", visualGroupId: "structure-group",
+            centerMetersXYZ: [1.25, 0.25, 0.25] });
           epoch = session.finalize(Object.freeze({ displayGapMeters: 0.04,
             staticColliders: Object.freeze([frozenSelection()]) }));
           repeated = session.finalize(Object.freeze({ displayGapMeters: 0.04,
@@ -271,7 +273,7 @@ describe("Babylon Native block Profile settlement", () => {
           session = createBabylonNativeBlockProfileSessionV1(
             context, { maximumBlockCount: 1 });
           session.createBlock({ id: "route-block", shape: "full",
-            paletteRole: "route" }).position.set(0, 0.5, 0);
+            paletteRole: "route", centerMetersXYZ: [0, 0.5, 0] });
           try { session.finalize(invalidInput as never); }
           catch (error) { finalizeError = error; }
         });

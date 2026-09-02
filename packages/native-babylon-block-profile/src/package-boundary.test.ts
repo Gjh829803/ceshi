@@ -53,6 +53,12 @@ function importSpecifiers(source: string): readonly string[] {
   )].map((match) => match[1]!).sort();
 }
 
+function createBlockObjectLiteralCalls(source: string): readonly string[] {
+  return [...source.matchAll(
+    /\bcreateBlock\s*\(\s*(\{[^;]*?\})\s*\)/gs,
+  )].map((match) => match[1]!);
+}
+
 describe("@whitebox-world/native-babylon-block-profile package boundary", () => {
   it("has one optional root with only its declared direct dependencies", async () => {
     const manifest = JSON.parse(
@@ -189,6 +195,27 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
     ]);
     expect(Object.keys(profile).some((name) =>
       /host|runtime|collider|traversal|compiler/i.test(name))).toBe(false);
+  });
+
+  it("keeps one current Block placement dialect across the package", async () => {
+    const sources = await productionSources();
+    expect(sources).not.toHaveLength(0);
+    expect(createBlockObjectLiteralCalls([
+      "session.",
+      "createBlock({ id: 'inline-block', centerMetersXYZ: [0, 0.5, 0] })",
+    ].join(""))).toEqual([
+      "{ id: 'inline-block', centerMetersXYZ: [0, 0.5, 0] }",
+    ]);
+
+    for (const { path, source } of sources) {
+      for (const call of createBlockObjectLiteralCalls(source)) {
+        expect(call, path).toContain("centerMetersXYZ");
+      }
+      expect(source, path).not.toMatch(
+        /createBlock\([^)]*\)\s*\.\s*position/,
+      );
+      expect(source, path).not.toMatch(/\bplaceBlock\b|\baddBlock\b|createBlocks\(/);
+    }
   });
 
   it("keeps checked-epoch transport behind the exact Host-only export", async () => {

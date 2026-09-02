@@ -1172,8 +1172,9 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-1：Runtime Scene Source 与 Bootstrap 合同
 
-- 状态：**已完成（2026-08-29）**。完成仅指合同、Canonical identity migration、实验 shadow Plan
-  删除和分配前 Native rejection；不表示 Native 生产准入。
+- 状态：live status 只以 [SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md) 为权威。
+  本包的完成口径仅指合同、Canonical identity migration、实验 shadow Plan 删除和分配前 Native
+  rejection；不表示 Native 生产准入。
 
 - 目标与独立交付物：冻结闭合 `sceneSource` Union、Native Bootstrap Schema、Plan-independent
   `WorldRuntimeBootstrap` 与 source-neutral `WorldBuildIdentity`；移除 Native 对影子 ExecutionPlan 的
@@ -1206,10 +1207,10 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-2：独立 Babylon Native Authoring 包
 
-- 状态：**Trusted Local 工程闭合已通过 exact-SHA Cloud gate 与独立 Mode B + runtime-deep 审查**。
-  闭合包括 Source Admission、Candidate Authority Audit、双 Candidate Replay、稳定 checker/explain CLI
-  和 current-only consumer 迁移；不包含 BNA-3 Package/Receipt、BNA-4 正式 RuntimeHost/Havok 或 BNA-5+
-  Hosted/评测/Capture 能力。
+- 状态：live status 只以 [SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md) 为权威。
+  本包的闭合口径仅包括 Source Admission、Candidate Authority Audit、双 Candidate Replay、稳定
+  checker/explain CLI 和 current-only consumer 迁移；不包含 BNA-3 Package/Receipt、BNA-4 正式
+  RuntimeHost/Havok 或 BNA-5+ Hosted/评测/Capture 能力。
 - 后续生产闭环的专项实施权威为
   [`2026-08-29-babylon-native-authoring-production-closure-design.md`](./2026-08-29-babylon-native-authoring-production-closure-design.md)。
 - 目标与独立交付物：创建 `@whitebox-world/native-babylon`、`defineBabylonNativeScene`、BuildContext、
@@ -1232,8 +1233,10 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-3：Native Bundle、资源锁、Package 与 Receipt
 
-- 当前状态（2026-08-30）：本地实现候选已闭合 BNA3-00..60，等待同一精确 SHA 的 Cloud 全量门禁、
-  独立深审、PR 合入和 `origin/main` 祖先证明；在此之前仍视为开放。
+- 状态：live status 只以 [SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md) 为权威。
+  本包的完成口径仅指 Module Bundle、依赖/资产锁、Bootstrap/Contribution Hash 与正式 Package/Build
+  Receipt；不表示 BNA-4 正式 RuntimeHost/Havok、BNA-6/7 生成评测与正式 Capture/Route，或 BNA-8 最终
+  disposition。
 
 - 目标与独立交付物：建立 Module Bundle、依赖/资产锁、Bootstrap/Contribution Hash 和正式 Package/
   Build Receipt 变体，并按第 10 节顺序在 Package Root 计算后派生、绑定 BNA-1 `WorldBuildIdentity`；
@@ -1279,9 +1282,9 @@ RuntimeWorldConfiguration V1 -> Babylon/Havok。
 
 ### BNA-5：Hosted 隔离、Tenant Hard Cap 与 Trust Profile
 
-- 状态：**实现与 scoped security/runtime review 已完成**。产品 SHA `2f46b3c9` 通过 capable-runner
-  11-case hostile/matching-deadline evidence、exact-SHA Cloud full gates 和独立 Mode B + security +
-  runtime-deep 审查，开放 P0/P1/P2 = 0；这不等于 BNA-8 production vendor deployment GO。
+- 状态：live status 只以 [SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md) 为权威。
+  本包的完成口径仅指 Hosted 隔离、Tenant Hard Cap 与 Trust Profile 的实现及 scoped security/runtime
+  review；这不等于 BNA-8 production vendor deployment GO。
 
 - 目标与独立交付物：消费 BNA-2 已冻结的 PRNG、依赖 allowlist、Source/Authority Admission、Profile
   Registry、CLI Diagnostics 与本地结构 cap；增加 Hosted Worker/Origin 强制隔离、timeout/kill、凭据与

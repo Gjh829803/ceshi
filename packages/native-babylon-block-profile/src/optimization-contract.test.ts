@@ -45,7 +45,7 @@ interface BlockFixture {
   readonly paletteRole?: PaletteRole;
   readonly visualGroupId?: string;
   readonly centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
-  readonly rotationQuarterTurnsY?: number;
+  readonly rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
 }
 
 interface EpochFixture {
@@ -128,6 +128,8 @@ function record(scene: Scene, fixture: BlockFixture): BabylonNativeBlockSessionR
       id: fixture.id,
       shape,
       paletteRole: fixture.paletteRole ?? "ground",
+      centerMetersXYZ: fixture.centerMetersXYZ,
+      rotationQuarterTurnsY: fixture.rotationQuarterTurnsY ?? 0,
       ...(fixture.visualGroupId === undefined
         ? {}
         : { visualGroupId: fixture.visualGroupId }),

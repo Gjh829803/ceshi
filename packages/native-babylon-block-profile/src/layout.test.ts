@@ -49,6 +49,8 @@ function record(
     shape?: "full" | "half" | "quarter" | "small" | "step";
     paletteRole?: "ground" | "route" | "structure";
     visualGroupId?: string;
+    declaredCenterMetersXYZ?: readonly [number, number, number];
+    declaredRotationQuarterTurnsY?: 0 | 1 | 2 | 3;
   }>,
 ): BabylonNativeBlockSessionRecordV1 {
   const shape = input.shape ?? "full";
@@ -64,6 +66,10 @@ function record(
     height: size[1],
     depth: size[2],
   }, scene);
+  const centerMetersXYZ = input.declaredCenterMetersXYZ ?? ([0, 0, 0] as const);
+  const rotationQuarterTurnsY = input.declaredRotationQuarterTurnsY ?? 0;
+  mesh.position.set(...centerMetersXYZ);
+  mesh.rotation.y = rotationQuarterTurnsY * Math.PI / 2;
   const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
   const indices = mesh.getIndices()!;
   return Object.freeze({
@@ -71,6 +77,8 @@ function record(
       id: input.id,
       shape,
       paletteRole: input.paletteRole ?? "ground",
+      centerMetersXYZ,
+      rotationQuarterTurnsY,
       ...(input.visualGroupId === undefined
         ? {}
         : { visualGroupId: input.visualGroupId }),
@@ -107,9 +115,12 @@ describe("Babylon Native block profile layout", () => {
         shape: "quarter",
         paletteRole: "structure",
         visualGroupId: "ridge",
+        declaredCenterMetersXYZ: [1.5, 0.25, -0.25],
+        declaredRotationQuarterTurnsY: 1,
       });
       entry.mesh.parent = root;
       entry.mesh.position.set(0.25, 0.25, 0.5);
+      entry.mesh.rotation.y = 0;
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, [entry]);
 
@@ -135,10 +146,16 @@ describe("Babylon Native block profile layout", () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
-      const west = record(scene, { id: "west-block", shape: "small" });
-      west.mesh.position.set(-0.25, 0.25, -0.25);
-      const east = record(scene, { id: "east-block", shape: "small" });
-      east.mesh.position.set(0.25, 0.25, -0.25);
+      const west = record(scene, {
+        id: "west-block",
+        shape: "small",
+        declaredCenterMetersXYZ: [-0.25, 0.25, -0.25],
+      });
+      const east = record(scene, {
+        id: "east-block",
+        shape: "small",
+        declaredCenterMetersXYZ: [0.25, 0.25, -0.25],
+      });
 
       const forward = deriveBabylonNativeBlockLayoutV1(scene, [west, east]);
       const reversed = deriveBabylonNativeBlockLayoutV1(scene, [east, west]);
@@ -171,6 +188,11 @@ describe("Babylon Native block profile layout", () => {
       diagonal.mesh.rotation.y = Math.PI / 4;
       const offGrid = record(scene, { id: "off-grid-block" });
       offGrid.mesh.position.set(0.1, 0, 0);
+      const drifted = record(scene, {
+        id: "drifted-block",
+        declaredCenterMetersXYZ: [0, 0.5, 0],
+      });
+      drifted.mesh.position.set(2, 0.5, 0);
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, [
         disposed,
@@ -179,6 +201,7 @@ describe("Babylon Native block profile layout", () => {
         tilted,
         diagonal,
         offGrid,
+        drifted,
       ]);
 
       expect(layout.blocks).toEqual([]);
@@ -186,6 +209,7 @@ describe("Babylon Native block profile layout", () => {
         .toEqual([
           ["diagonal-block", "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"],
           ["disposed-block", "WORLDKIT_NATIVE_BLOCK_MESH_DISPOSED"],
+          ["drifted-block", "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"],
           ["foreign-block", "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH"],
           ["off-grid-block", "WORLDKIT_NATIVE_BLOCK_GRID_ALIGNMENT_INVALID"],
           ["scaled-block", "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID"],
@@ -202,14 +226,22 @@ describe("Babylon Native block profile layout", () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
-      const left = record(scene, { id: "left-block" });
-      left.mesh.position.set(0, 0.5, 0);
-      const right = record(scene, { id: "right-block" });
-      right.mesh.position.set(1, 0.5, 0);
-      const top = record(scene, { id: "top-block" });
-      top.mesh.position.set(0, 1.5, 0);
-      const overlap = record(scene, { id: "overlap-block" });
-      overlap.mesh.position.set(0, 0.5, 0);
+      const left = record(scene, {
+        id: "left-block",
+        declaredCenterMetersXYZ: [0, 0.5, 0],
+      });
+      const right = record(scene, {
+        id: "right-block",
+        declaredCenterMetersXYZ: [1, 0.5, 0],
+      });
+      const top = record(scene, {
+        id: "top-block",
+        declaredCenterMetersXYZ: [0, 1.5, 0],
+      });
+      const overlap = record(scene, {
+        id: "overlap-block",
+        declaredCenterMetersXYZ: [0, 0.5, 0],
+      });
 
       const withoutOverlap = deriveBabylonNativeBlockLayoutV1(
         scene,
@@ -240,10 +272,15 @@ describe("Babylon Native block profile layout", () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
-      const base = record(scene, { id: "base-block" });
-      base.mesh.position.set(0, 0.5, 0);
-      const floating = record(scene, { id: "floating-block", shape: "small" });
-      floating.mesh.position.set(2.25, 2.25, 0.25);
+      const base = record(scene, {
+        id: "base-block",
+        declaredCenterMetersXYZ: [0, 0.5, 0],
+      });
+      const floating = record(scene, {
+        id: "floating-block",
+        shape: "small",
+        declaredCenterMetersXYZ: [2.25, 2.25, 0.25],
+      });
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, [floating, base]);
 
@@ -260,11 +297,10 @@ describe("Babylon Native block profile layout", () => {
         ["north-east", 0.5, -0.5],
         ["south-west", -0.5, 0.5],
         ["south-east", 0.5, 0.5],
-      ].map(([id, x, z]) => {
-        const entry = record(scene, { id: String(id) });
-        entry.mesh.position.set(Number(x), 0.5, Number(z));
-        return entry;
-      });
+      ].map(([id, x, z]) => record(scene, {
+        id: String(id),
+        declaredCenterMetersXYZ: [Number(x), 0.5, Number(z)],
+      }));
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, entries);
 
@@ -282,26 +318,26 @@ describe("Babylon Native block profile layout", () => {
         id: "low-step",
         shape: "step",
         paletteRole: "route",
+        declaredCenterMetersXYZ: [0, 0.125, 0],
       });
-      lowStep.mesh.position.set(0, 0.125, 0);
       const highStep = record(scene, {
         id: "high-step",
         shape: "step",
         paletteRole: "route",
+        declaredCenterMetersXYZ: [1, 0.375, 0],
       });
-      highStep.mesh.position.set(1, 0.375, 0);
       const oneMeterHigh = record(scene, {
         id: "one-meter-high",
         shape: "full",
         paletteRole: "route",
+        declaredCenterMetersXYZ: [3, 1.5, 0],
       });
-      oneMeterHigh.mesh.position.set(3, 1.5, 0);
       const oneMeterLow = record(scene, {
         id: "one-meter-low",
         shape: "full",
         paletteRole: "route",
+        declaredCenterMetersXYZ: [2, 0.5, 0],
       });
-      oneMeterLow.mesh.position.set(2, 0.5, 0);
 
       const stepLayout = deriveBabylonNativeBlockLayoutV1(
         scene,
@@ -326,10 +362,16 @@ describe("Babylon Native block profile layout", () => {
     const { deriveBabylonNativeBlockLayoutV1 } = await loadLayout();
 
     withScene((scene) => {
-      const base = record(scene, { id: "base-step", shape: "step" });
-      base.mesh.position.set(0, 0.125, 0);
-      const top = record(scene, { id: "top-step", shape: "step" });
-      top.mesh.position.set(0, 0.375, 0);
+      const base = record(scene, {
+        id: "base-step",
+        shape: "step",
+        declaredCenterMetersXYZ: [0, 0.125, 0],
+      });
+      const top = record(scene, {
+        id: "top-step",
+        shape: "step",
+        declaredCenterMetersXYZ: [0, 0.375, 0],
+      });
 
       const layout = deriveBabylonNativeBlockLayoutV1(scene, [top, base]);
 

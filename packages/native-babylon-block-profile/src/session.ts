@@ -33,7 +33,15 @@ import {
 } from "./profile.js";
 import { settleBabylonNativeBlockProfileV1 } from "./profile-settlement.js";
 import {
+  BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1,
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1,
+  babylonNativeBlockCenterAlignsToGridV1,
+  babylonNativeBlockOccupiedMicroCellKeysV1,
+  canonicalizeBabylonNativeBlockCenterToGridV1,
+  canonicalizeBabylonNativeBlockEvidenceNumberV1,
+  effectiveBabylonNativeBlockSizeMetersXYZV1,
+  type BabylonNativeBlockPositionMetersXYZV1,
+  type BabylonNativeBlockRotationQuarterTurnsYV1,
   type BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
 import {
@@ -48,6 +56,22 @@ export interface BabylonNativeBlockCreateInputV1 {
   readonly id: string;
   readonly shape: BabylonNativeBlockShapeKindV1;
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
+  readonly centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
+  readonly rotationQuarterTurnsY?: BabylonNativeBlockRotationQuarterTurnsYV1;
+  readonly visualGroupId?: string;
+}
+
+export interface BabylonNativeBlockGridCreateInputV1 {
+  readonly idPrefix: string;
+  readonly shape: BabylonNativeBlockShapeKindV1;
+  readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
+  readonly minimumCenterMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
+  readonly repeatCountXYZ: readonly [
+    xCount: number,
+    yCount: number,
+    zCount: number,
+  ];
+  readonly rotationQuarterTurnsY?: BabylonNativeBlockRotationQuarterTurnsYV1;
   readonly visualGroupId?: string;
 }
 
@@ -59,6 +83,9 @@ export interface BabylonNativeBlockProfileFinalizeInputV1 {
 
 export interface BabylonNativeBlockProfileSessionV1 {
   createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh;
+  createBlockGrid(
+    input: Readonly<BabylonNativeBlockGridCreateInputV1>,
+  ): readonly Mesh[];
   finalize(
     input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,
   ): BabylonNativeBlockFinalizedEpochV1;
@@ -99,6 +126,9 @@ const SHAPES = new Set<BabylonNativeBlockShapeKindV1>([
 ]);
 const PALETTE_ROLES = new Set<BabylonNativeBlockPaletteRoleV1>(
   BABYLON_NATIVE_BLOCK_PALETTE_ROLES_V1,
+);
+const QUARTER_TURNS = new Set<number>(
+  BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1,
 );
 const DEFAULT_DISPLAY_GAP_METERS = 0.04;
 
@@ -190,12 +220,48 @@ function parseBudget(
   return Object.freeze({ maximumBlockCount: record.maximumBlockCount });
 }
 
+function parseFiniteNumberTupleXYZ(
+  input: unknown,
+  code: string,
+  fieldName: string,
+): BabylonNativeBlockPositionMetersXYZV1 {
+  if (!Array.isArray(input) ||
+      Reflect.getPrototypeOf(input) !== Array.prototype ||
+      input.length !== 3 ||
+      Object.getOwnPropertyNames(input).length !== 4) {
+    return fail(code, `${fieldName} must be one ordinary dense XYZ tuple`);
+  }
+  const values: number[] = [];
+  for (let axis = 0; axis < 3; axis += 1) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(input, String(axis));
+    if (isNil(descriptor) || !descriptor.enumerable || !("value" in descriptor) ||
+        typeof descriptor.value !== "number" ||
+        !Number.isFinite(descriptor.value)) {
+      return fail(code, `${fieldName} must hold three finite plain numbers`);
+    }
+    values.push(canonicalizeBabylonNativeBlockEvidenceNumberV1(descriptor.value));
+  }
+  return Object.freeze(values as [number, number, number]);
+}
+
+function parseQuarterTurns(
+  record: Record<string, unknown>,
+  code: string,
+): BabylonNativeBlockRotationQuarterTurnsYV1 {
+  if (!Object.hasOwn(record, "rotationQuarterTurnsY")) return 0;
+  if (!QUARTER_TURNS.has(record.rotationQuarterTurnsY as number)) {
+    return fail(code, "rotationQuarterTurnsY must be exactly 0, 1, 2, or 3");
+  }
+  return record.rotationQuarterTurnsY as BabylonNativeBlockRotationQuarterTurnsYV1;
+}
+
 function parseCreateInput(
   input: Readonly<BabylonNativeBlockCreateInputV1>,
 ): Readonly<BabylonNativeBlockCreateInputV1> {
   const code = "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID";
-  const record = exactPlainRecord(input, ["id", "shape", "paletteRole"],
-    ["visualGroupId"], code);
+  const record = exactPlainRecord(input,
+    ["id", "shape", "paletteRole", "centerMetersXYZ"],
+    ["rotationQuarterTurnsY", "visualGroupId"], code);
   const id = canonicalId(record.id);
   const hasVisualGroupId = Object.hasOwn(record, "visualGroupId");
   const visualGroupId = hasVisualGroupId
@@ -207,12 +273,105 @@ function parseCreateInput(
     return fail(code,
       "id, shape, paletteRole, or visualGroupId is outside the closed Profile");
   }
+  const shape = record.shape as BabylonNativeBlockShapeKindV1;
+  const declaredCenterMetersXYZ = parseFiniteNumberTupleXYZ(
+    record.centerMetersXYZ,
+    code,
+    "centerMetersXYZ",
+  );
+  const rotationQuarterTurnsY = parseQuarterTurns(record, code);
+  if (!babylonNativeBlockCenterAlignsToGridV1({
+    shape,
+    centerMetersXYZ: declaredCenterMetersXYZ,
+    rotationQuarterTurnsY,
+  })) {
+    return fail(code,
+      `center ${JSON.stringify(declaredCenterMetersXYZ)} is off the '${shape}' occupancy grid`);
+  }
+  const centerMetersXYZ = canonicalizeBabylonNativeBlockCenterToGridV1(
+    declaredCenterMetersXYZ,
+  );
   return Object.freeze({
     id,
-    shape: record.shape as BabylonNativeBlockShapeKindV1,
+    shape,
     paletteRole: record.paletteRole as BabylonNativeBlockPaletteRoleV1,
+    centerMetersXYZ,
+    rotationQuarterTurnsY,
     ...(isNil(visualGroupId) ? {} : { visualGroupId }),
   });
+}
+
+function parseGridCreateInput(
+  input: Readonly<BabylonNativeBlockGridCreateInputV1>,
+  remainingBlockCount: number,
+): readonly Readonly<BabylonNativeBlockCreateInputV1>[] {
+  const code = "WORLDKIT_NATIVE_BLOCK_GRID_CREATE_INPUT_INVALID";
+  const record = exactPlainRecord(input,
+    ["idPrefix", "shape", "paletteRole", "minimumCenterMetersXYZ",
+      "repeatCountXYZ"],
+    ["rotationQuarterTurnsY", "visualGroupId"], code);
+  const idPrefix = canonicalId(record.idPrefix);
+  const hasVisualGroupId = Object.hasOwn(record, "visualGroupId");
+  const visualGroupId = hasVisualGroupId
+    ? canonicalId(record.visualGroupId) : undefined;
+  if (isNil(idPrefix) ||
+      !SHAPES.has(record.shape as BabylonNativeBlockShapeKindV1) ||
+      !PALETTE_ROLES.has(record.paletteRole as BabylonNativeBlockPaletteRoleV1) ||
+      (hasVisualGroupId && isNil(visualGroupId))) {
+    return fail(code,
+      "idPrefix, shape, paletteRole, or visualGroupId is outside the closed Profile");
+  }
+  const shape = record.shape as BabylonNativeBlockShapeKindV1;
+  const paletteRole = record.paletteRole as BabylonNativeBlockPaletteRoleV1;
+  const minimumCenterMetersXYZ = parseFiniteNumberTupleXYZ(
+    record.minimumCenterMetersXYZ, code, "minimumCenterMetersXYZ",
+  );
+  const rotationQuarterTurnsY = parseQuarterTurns(record, code);
+  const repeatCountXYZ = parseFiniteNumberTupleXYZ(
+    record.repeatCountXYZ,
+    code,
+    "repeatCountXYZ",
+  );
+  if (!repeatCountXYZ.every((count) =>
+    Number.isSafeInteger(count) && count > 0)) {
+    return fail(code, "repeatCountXYZ must hold three positive safe integers");
+  }
+  const totalCount = repeatCountXYZ[0] * repeatCountXYZ[1] * repeatCountXYZ[2];
+  if (!Number.isSafeInteger(totalCount)) {
+    return fail(code, "repeatCountXYZ product exceeds the safe integer range");
+  }
+  if (totalCount > remainingBlockCount) {
+    return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
+      "block creation exceeds the caller-authorized hard cap");
+  }
+  const spacing = effectiveBabylonNativeBlockSizeMetersXYZV1(
+    shape, rotationQuarterTurnsY,
+  );
+  const inputs: Readonly<BabylonNativeBlockCreateInputV1>[] = [];
+  for (let yIndex = 0; yIndex < repeatCountXYZ[1]; yIndex += 1) {
+    for (let zIndex = 0; zIndex < repeatCountXYZ[2]; zIndex += 1) {
+      for (let xIndex = 0; xIndex < repeatCountXYZ[0]; xIndex += 1) {
+        const id = `${idPrefix}-x${xIndex}-y${yIndex}-z${zIndex}`;
+        if (isNil(canonicalId(id))) {
+          return fail(code,
+            `derived Block id '${id}' is outside the stable ID contract`);
+        }
+        inputs.push(parseCreateInput(Object.freeze({
+          id,
+          shape,
+          paletteRole,
+          centerMetersXYZ: Object.freeze([
+            minimumCenterMetersXYZ[0] + xIndex * spacing[0]!,
+            minimumCenterMetersXYZ[1] + yIndex * spacing[1]!,
+            minimumCenterMetersXYZ[2] + zIndex * spacing[2]!,
+          ] as [number, number, number]),
+          rotationQuarterTurnsY,
+          ...(isNil(visualGroupId) ? {} : { visualGroupId }),
+        })));
+      }
+    }
+  }
+  return Object.freeze(inputs);
 }
 
 function parseTraversalBinding(
@@ -372,32 +531,72 @@ export function createBabylonNativeBlockProfileSessionV1(
   let finalizedResult: BabylonNativeBlockFinalizedEpochV1 | undefined;
   let finalizedInput: ReturnType<typeof parseFinalizeInput> | undefined;
   const recordsById = new Map<string, BabylonNativeBlockSessionRecordV1>();
+  const blockIdByMicroCellKey = new Map<string, string>();
   const acquisitions: (() => void)[] = [];
 
-  return Object.freeze({
-    createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh {
-      if (state !== "open") {
-        return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
-          "createBlock is unavailable after finalization begins");
-      }
-      const parsedInput = parseCreateInput(input);
-      if (recordsById.has(parsedInput.id)) {
+  class AllocationFailure {
+    constructor(
+      readonly primaryError: unknown,
+      readonly cleanupDidFail: boolean,
+    ) {}
+  }
+
+  function reserve(
+    parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
+  ): readonly (readonly string[])[] {
+    if (recordsById.size + parsedInputs.length > budget.maximumBlockCount) {
+      return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
+        "block creation exceeds the caller-authorized hard cap");
+    }
+    const proposedIds = new Set<string>();
+    const proposedCells = new Map<string, string>();
+    const microCellKeysByInput: (readonly string[])[] = [];
+    for (const parsedInput of parsedInputs) {
+      if (recordsById.has(parsedInput.id) || proposedIds.has(parsedInput.id)) {
         return fail("WORLDKIT_NATIVE_BLOCK_ID_DUPLICATE",
           `block id '${parsedInput.id}' is already used in this session`);
       }
-      if (recordsById.size >= budget.maximumBlockCount) {
-        return fail("WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
-          "block creation exceeds the caller-authorized hard cap");
+      proposedIds.add(parsedInput.id);
+      const microCellKeys = babylonNativeBlockOccupiedMicroCellKeysV1({
+        shape: parsedInput.shape,
+        centerMetersXYZ: parsedInput.centerMetersXYZ,
+        rotationQuarterTurnsY: parsedInput.rotationQuarterTurnsY ?? 0,
+      });
+      for (const key of microCellKeys) {
+        const occupantId = blockIdByMicroCellKey.get(key) ??
+          proposedCells.get(key);
+        if (!isNil(occupantId)) {
+          return fail("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+            `block '${parsedInput.id}' overlaps '${occupantId}' at cell ${key}`);
+        }
+        proposedCells.set(key, parsedInput.id);
       }
-      const size = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[
-        parsedInput.shape
-      ];
-      const mesh = MeshBuilder.CreateBox(parsedInput.id,
+      microCellKeysByInput.push(microCellKeys);
+    }
+    return Object.freeze(microCellKeysByInput);
+  }
+
+  function allocate(
+    parsedInput: Readonly<BabylonNativeBlockCreateInputV1>,
+    microCellKeys: readonly string[],
+  ): Mesh {
+    const size = BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1[
+      parsedInput.shape
+    ];
+    const sceneMeshesBefore = new Set(context.scene.meshes);
+    let mesh: Mesh | undefined;
+    try {
+      mesh = MeshBuilder.CreateBox(parsedInput.id,
         { width: size[0], height: size[1], depth: size[2] }, context.scene);
+      mesh.position.set(
+        parsedInput.centerMetersXYZ[0],
+        parsedInput.centerMetersXYZ[1],
+        parsedInput.centerMetersXYZ[2],
+      );
+      mesh.rotation.y = (parsedInput.rotationQuarterTurnsY ?? 0) * Math.PI / 2;
       const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
       const indices = mesh.getIndices();
       if (isNil(positions) || isNil(indices)) {
-        try { mesh.dispose(); } catch { /* retain stable geometry failure */ }
         return fail("WORLDKIT_NATIVE_BLOCK_MESH_GEOMETRY_INVALID",
           "the fixed block helper did not produce indexed position geometry");
       }
@@ -409,8 +608,97 @@ export function createBabylonNativeBlockProfileSessionV1(
           indices: Object.freeze(Array.from(indices)),
         }),
       }));
-      acquisitions.push(() => mesh.dispose());
-      return mesh;
+    } catch (error) {
+      let cleanupDidFail = false;
+      const uncommittedMeshes = context.scene.meshes.filter(
+        (candidate) => !sceneMeshesBefore.has(candidate),
+      );
+      if (!isNil(mesh) && !uncommittedMeshes.includes(mesh)) {
+        uncommittedMeshes.push(mesh);
+      }
+      for (let index = uncommittedMeshes.length - 1; index >= 0; index -= 1) {
+        const candidate = uncommittedMeshes[index]!;
+        try {
+          candidate.dispose();
+        } catch {
+          cleanupDidFail = true;
+          try { context.scene.removeMesh(candidate); } catch { /* failed */ }
+        }
+      }
+      throw new AllocationFailure(error, cleanupDidFail);
+    }
+    for (const key of microCellKeys) {
+      blockIdByMicroCellKey.set(key, parsedInput.id);
+    }
+    acquisitions.push(() => mesh.dispose());
+    return mesh;
+  }
+
+  function release(
+    parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
+    microCellKeysByInput: readonly (readonly string[])[],
+    committedCount: number,
+  ): boolean {
+    let cleanupDidFail = false;
+    for (let index = committedCount - 1; index >= 0; index -= 1) {
+      const parsedInput = parsedInputs[index]!;
+      recordsById.delete(parsedInput.id);
+      for (const key of microCellKeysByInput[index]!) {
+        blockIdByMicroCellKey.delete(key);
+      }
+      const dispose = acquisitions.pop();
+      if (!isNil(dispose)) {
+        try { dispose(); } catch { cleanupDidFail = true; }
+      }
+    }
+    return cleanupDidFail;
+  }
+
+  function createBatch(
+    parsedInputs: readonly Readonly<BabylonNativeBlockCreateInputV1>[],
+  ): readonly Mesh[] {
+    const microCellKeysByInput = reserve(parsedInputs);
+    const meshes: Mesh[] = [];
+    try {
+      for (const [index, parsedInput] of parsedInputs.entries()) {
+        meshes.push(allocate(parsedInput, microCellKeysByInput[index]!));
+      }
+    } catch (error) {
+      const primaryError = error instanceof AllocationFailure
+        ? error.primaryError
+        : error;
+      const batchCleanupDidFail = release(
+        parsedInputs,
+        microCellKeysByInput,
+        meshes.length,
+      );
+      const cleanupDidFail = (error instanceof AllocationFailure &&
+        error.cleanupDidFail) || batchCleanupDidFail;
+      if (cleanupDidFail) state = "failed";
+      throw primaryError;
+    }
+    return Object.freeze(meshes);
+  }
+
+  return Object.freeze({
+    createBlock(input: Readonly<BabylonNativeBlockCreateInputV1>): Mesh {
+      if (state !== "open") {
+        return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
+          "createBlock is unavailable after finalization begins");
+      }
+      return createBatch([parseCreateInput(input)])[0]!;
+    },
+    createBlockGrid(
+      input: Readonly<BabylonNativeBlockGridCreateInputV1>,
+    ): readonly Mesh[] {
+      if (state !== "open") {
+        return fail("WORLDKIT_NATIVE_BLOCK_SESSION_CLOSED",
+          "createBlockGrid is unavailable after finalization begins");
+      }
+      return createBatch(parseGridCreateInput(
+        input,
+        budget.maximumBlockCount - recordsById.size,
+      ));
     },
     finalize(
       input: Readonly<BabylonNativeBlockProfileFinalizeInputV1>,
@@ -489,11 +777,13 @@ export function createBabylonNativeBlockProfileSessionV1(
           colliderInventory: colliders.inventory,
         });
         recordsById.clear();
+        blockIdByMicroCellKey.clear();
         state = "finalized";
         return finalizedResult;
       } catch (error) {
         state = "failed";
         recordsById.clear();
+        blockIdByMicroCellKey.clear();
         disposeAcquisitions(acquisitions);
         acquisitions.length = 0;
         throw error;
@@ -503,6 +793,7 @@ export function createBabylonNativeBlockProfileSessionV1(
       if (state === "disposed") return;
       state = "disposed";
       recordsById.clear();
+      blockIdByMicroCellKey.clear();
       const cleanup = disposeAcquisitions(acquisitions);
       acquisitions.length = 0;
       if (cleanup.didFail) throw cleanup.error;

@@ -471,7 +471,7 @@ function requireRecord(
   return found;
 }
 
-function placeBlock(
+function createCorpusBlock(
   session: BabylonNativeBlockProfileSessionV1,
   spec: CorpusBlockSpecV1,
 ): void {
@@ -479,12 +479,9 @@ function placeBlock(
     id: spec.id,
     shape: spec.shape,
     paletteRole: spec.paletteRole,
+    centerMetersXYZ: spec.centerMetersXYZ,
     ...(isNil(spec.visualGroupId) ? {} : { visualGroupId: spec.visualGroupId }),
-  }).position.set(
-    spec.centerMetersXYZ[0],
-    spec.centerMetersXYZ[1],
-    spec.centerMetersXYZ[2],
-  );
+  });
 }
 
 function traversalBindingFor(
@@ -563,10 +560,10 @@ export function materializeBabylonNativeBlockReconstructionCorpusCaseV1(
   });
   try {
     for (const spec of recordValue.blocks) {
-      placeBlock(session, spec);
+      createCorpusBlock(session, spec);
     }
     if (!isNil(recordValue.extraBlock)) {
-      placeBlock(session, recordValue.extraBlock);
+      createCorpusBlock(session, recordValue.extraBlock);
     }
     const epoch = recordValue.colliderMode === "invalid-binding"
       ? session.finalize(Object.freeze({

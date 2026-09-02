@@ -35,7 +35,7 @@
 - Consumes: existing `BabylonNativeBlockShapeKindV1`, `BabylonNativeBlockPaletteRoleV1`, `BabylonNativeBlockPositionMetersXYZV1`.
 - Produces: `BabylonNativeBlockRotationQuarterTurnsYV1`, required positioned `BabylonNativeBlockCreateInputV1`, `BabylonNativeBlockGridCreateInputV1`, and `BabylonNativeBlockProfileSessionV1.createBlockGrid()`.
 
-- [ ] **Step 1: Write compile-time RED assertions for the exact interfaces**
+- [x] **Step 1: Write compile-time RED assertions for the exact interfaces**
 
 ```ts
 expectTypeOf<BabylonNativeBlockCreateInputV1>().toEqualTypeOf<Readonly<{
@@ -52,13 +52,13 @@ expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlockGrid"]>()
   .toEqualTypeOf<Readonly<BabylonNativeBlockGridCreateInputV1>>();
 ```
 
-- [ ] **Step 2: Add runtime RED cases proving closed input and pre-allocation rejection**
+- [x] **Step 2: Add runtime RED cases proving closed input and pre-allocation rejection**
 
 Cover missing position, unknown fields, sparse tuples, accessor fields, NaN/Infinity, invalid quarter-turn,
 shape-specific residue, duplicate ID, occupied cell and budget overflow. Assert the Candidate Scene Mesh count
 does not increase for every rejected preflight.
 
-- [ ] **Step 3: Run the RED tests**
+- [x] **Step 3: Run the RED tests**
 
 Run:
 
@@ -71,7 +71,7 @@ pnpm exec vitest run \
 
 Expected: fail because the required placement fields and Grid method do not exist.
 
-- [ ] **Step 4: Commit the RED contract checkpoint**
+- [x] **Step 4: Commit the RED contract checkpoint**
 
 ```bash
 git add packages/native-babylon-block-profile/src/api-type.test.ts \
@@ -94,29 +94,29 @@ git commit -m "test(block-profile): freeze atomic drawing api"
 - Consumes: Task 1 public types and existing shape/grid functions.
 - Produces: an atomic `createBlock(input)` that applies and records exact center and quarter-turn before returning one `Mesh`.
 
-- [ ] **Step 1: Add the closed rotation type and placement parser**
+- [x] **Step 1: Add the closed rotation type and placement parser**
 
 Export `BabylonNativeBlockRotationQuarterTurnsYV1 = 0 | 1 | 2 | 3`. Parse an ordinary dense
 `centerMetersXYZ`, canonicalize negative zero, default an absent `rotationQuarterTurnsY` to `0`, and call
 `babylonNativeBlockCenterAlignsToGridV1()` before allocation.
 
-- [ ] **Step 2: Reserve ID, budget and occupied cells before Mesh allocation**
+- [x] **Step 2: Reserve ID, budget and occupied cells before Mesh allocation**
 
 Use `babylonNativeBlockOccupiedMicroCellKeysV1()` to reject conflicts against Session-owned cells. Do not
 create a second Layout DTO; store the canonical create input with the existing Session record.
 
-- [ ] **Step 3: Apply the declared transform and make acquisition rollback atomic**
+- [x] **Step 3: Apply the declared transform and make acquisition rollback atomic**
 
 Set `mesh.position` from `centerMetersXYZ` and `mesh.rotation.y` from the quarter-turn. If geometry snapshot
 or record publication fails, dispose the Mesh and release the proposed ID/cells. A cleanup throw moves the
 Session to `failed`.
 
-- [ ] **Step 4: Verify Finalize rejects transform drift**
+- [x] **Step 4: Verify Finalize rejects transform drift**
 
 Extend Layout/Session checks so a caller changing position, rotation, scale, parent, enabled state or geometry
 after `createBlock()` cannot silently create a second placement dialect.
 
-- [ ] **Step 5: Run focused GREEN tests**
+- [x] **Step 5: Run focused GREEN tests**
 
 ```bash
 pnpm exec vitest run \
@@ -128,7 +128,7 @@ pnpm exec vitest run \
 
 Expected: positioned creation, asymmetric rotated quarter, rollback and tamper cases pass.
 
-- [ ] **Step 6: Commit positioned creation**
+- [x] **Step 6: Commit positioned creation**
 
 ```bash
 git add packages/native-babylon-block-profile/src/{shapes,session,layout,index}.ts \
@@ -148,37 +148,37 @@ git commit -m "feat(block-profile): create blocks at declared transforms"
 - Consumes: atomic internal Block creation from Task 2.
 - Produces: `createBlockGrid(input): readonly Mesh[]` with complete preflight and reverse rollback.
 
-- [ ] **Step 1: Add RED cases for deterministic derivation**
+- [x] **Step 1: Add RED cases for deterministic derivation**
 
 Assert IDs use `<idPrefix>-x0-y0-z0`, positions use effective rotated shape size, order is Y/Z/X, and a
 rotated `quarter` swaps X/Z spacing. Add count multiplication overflow, whole-batch budget, existing ID/cell
 conflict, internal conflict, mid-batch Mesh failure, rollback cleanup failure, Finalize-closed and Dispose-closed
 cases.
 
-- [ ] **Step 2: Implement whole-Grid preflight without calling public `createBlock()` in a partial loop**
+- [x] **Step 2: Implement whole-Grid preflight without calling public `createBlock()` in a partial loop**
 
 Derive canonical child inputs first, check every ID/cell and the aggregate budget, then allocate. The public
 method must create zero Meshes for any preflight rejection.
 
-- [ ] **Step 3: Implement batch commit and reverse rollback**
+- [x] **Step 3: Implement batch commit and reverse rollback**
 
 Commit all child records only after successful construction. On a later allocation failure, dispose created
 Meshes in reverse order and release all batch-owned identity/occupancy state. Leave Session `open` only when
 cleanup succeeds.
 
-- [ ] **Step 4: Prove one-cell equivalence**
+- [x] **Step 4: Prove one-cell equivalence**
 
 Create equivalent Sessions using `createBlock()` and a one-cell `createBlockGrid()`. Finalize both and assert
 equal canonical Layout/Contribution identity after normalizing the intentionally different Block ID.
 
-- [ ] **Step 5: Run focused GREEN tests**
+- [x] **Step 5: Run focused GREEN tests**
 
 ```bash
 pnpm exec vitest run packages/native-babylon-block-profile/src/session.test.ts \
   packages/native-babylon-block-profile/src/api-type.test.ts
 ```
 
-- [ ] **Step 6: Commit Grid creation**
+- [x] **Step 6: Commit Grid creation**
 
 ```bash
 git add packages/native-babylon-block-profile/src/session.ts \
@@ -206,7 +206,7 @@ anchors, not an exhaustive replacement for that census.
 - Consumes: Tasks 2 and 3 public API.
 - Produces: one active Profile placement dialect across examples, fixtures, Corpus and generated-module instructions.
 
-- [ ] **Step 1: Inventory every active create-then-position/rotation site**
+- [x] **Step 1: Inventory every active create-then-position/rotation site**
 
 ```bash
 rg -n 'createBlock\\(|\.position\.(?:set|copyFrom)|\.rotation\.y' \
@@ -216,25 +216,25 @@ rg -n 'createBlock\\(|\.position\.(?:set|copyFrom)|\.rotation\.y' \
 
 Classify each result as Profile Block placement, later visual-only Babylon mutation, or unrelated code.
 
-- [ ] **Step 2: Migrate Profile consumers atomically**
+- [x] **Step 2: Migrate Profile consumers atomically**
 
 Put `centerMetersXYZ` and optional `rotationQuarterTurnsY` into each `createBlock()` call. Replace only dense
 same-shape/same-role rectangular repetition with `createBlockGrid()`; retain semantic topology loops as plain
 TypeScript. Delete local helpers whose only responsibility was create-then-position/quarter-turn.
 
-- [ ] **Step 3: Replace the Builder Skill example and hand-calculation placement dialect**
+- [x] **Step 3: Replace the Builder Skill example and hand-calculation placement dialect**
 
 Keep the shape table, volumetric reconstruction rules, collision budget, scripted traversal envelope and
 forbidden ownership. Replace create-then-mutate examples with the exact new API. Explain Grid only as dense
 mechanical repetition; continue prohibiting semantic recipes and automatic Collider inference.
 
-- [ ] **Step 4: Add a clean-break census assertion**
+- [x] **Step 4: Add a clean-break census assertion**
 
 Extend the Skill/package tests to reject Profile examples or fixtures that call `createBlock()` without
 `centerMetersXYZ`, or mutate the returned Profile Mesh position/Y rotation for initial placement. Do not
 globally ban ordinary Babylon Mesh transforms.
 
-- [ ] **Step 5: Run consumer and Skill gates**
+- [x] **Step 5: Run consumer and Skill gates**
 
 ```bash
 pnpm exec vitest run packages/native-babylon-block-profile
@@ -246,7 +246,7 @@ pnpm exec vitest run \
 pnpm typecheck
 ```
 
-- [ ] **Step 6: Commit the clean break**
+- [x] **Step 6: Commit the clean break**
 
 ```bash
 git add packages scripts apps .codex/skills/worldkit-native-block-builder
@@ -266,30 +266,30 @@ git commit -m "refactor(block-profile): cut over drawing consumers"
 - Produces: a new `authoredSourceHash` and therefore new Candidate, Package and Receipt identity through
   the existing production route. The published Profile descriptor hash is unchanged by this slice.
 
-- [ ] **Step 1: Locate every active generated-source fixture using the old dialect**
+- [x] **Step 1: Locate every active generated-source fixture using the old dialect**
 
 Search source-admission, module-bundle, reconstruction and representative E2E fixtures. Record which inputs
 embed generated Native Module source and distinguish them from immutable completed run artifacts.
 
-- [ ] **Step 2: Add RED source and identity-closure coverage**
+- [x] **Step 2: Add RED source and identity-closure coverage**
 
 Prove a generated module using the replaced create-then-mutate dialect is rejected, while regenerated source
 using the current API passes admission and produces a different `authoredSourceHash` and downstream Package
 identity. Do not claim that TypeScript API source automatically changes the published Profile descriptor hash.
 
-- [ ] **Step 3: Regenerate only active generated-source fixtures**
+- [x] **Step 3: Regenerate only active generated-source fixtures**
 
 Use the existing source-admission and production Package owners. Do not edit `authoredSourceHash`, Package or
 Receipt hashes by hand, do not rewrite historical Attempts, and do not add an alias accepting the old dialect.
 
-- [ ] **Step 4: Run the production-focused closure**
+- [x] **Step 4: Run the production-focused closure**
 
 ```bash
 pnpm exec vitest run scripts/reconstruction/native-package.test.ts
 pnpm exec vitest run scripts/verification/native-block-reconstruction-e2e.test.ts
 ```
 
-- [ ] **Step 5: Commit the identity checkpoint**
+- [x] **Step 5: Commit the identity checkpoint**
 
 ```bash
 git add scripts/reconstruction/native-package.test.ts \
@@ -310,19 +310,19 @@ git commit -m "chore(block-profile): refresh drawing source identity"
 - Consumes: Tasks 1-5 exact implementation and evidence.
 - Produces: one truthful WRC/BWB documentation state and final merge candidate.
 
-- [ ] **Step 1: Repair documentation truth without changing WRC-1 package count**
+- [x] **Step 1: Repair documentation truth without changing WRC-1 package count**
 
 Freeze `3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05` as the sole v2 migration source, retain `618d96b4`
 as historical design evidence, and replace copied live status in the Native design with a link to `docs/18`.
 BWB-6 is already closed on `main`; keep its historical implementation plan unchanged and register this work
 only as a later Profile authoring enhancement.
 
-- [ ] **Step 2: Record this feature as a BWB Profile enhancement**
+- [x] **Step 2: Record this feature as a BWB Profile enhancement**
 
 Update `docs/18` with exact merged evidence. Do not add a 34th WRC-1 work package and do not mark BNA-6,
 BNA-7, NBR-1 or WRC-1 complete from this helper alone.
 
-- [ ] **Step 3: Run focused final gates once**
+- [x] **Step 3: Run focused final gates once**
 
 ```bash
 pnpm exec vitest run packages/native-babylon-block-profile

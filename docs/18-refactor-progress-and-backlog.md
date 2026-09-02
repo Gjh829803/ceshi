@@ -1079,15 +1079,26 @@ Gameplay 或 Camera owner。目标是用一个 current-only clean break 将 Prof
 纳入原子 `createBlock()`，并增加只负责机械密集重复的 `createBlockGrid()`；Collider 仍只由显式
 Finalize Contribution 登记。
 
-- [x] WRC-API-00：冻结设计、唯一 v2 迁移 SHA、clean-break ledger 和独立 exact-SHA 文档审查；
-- [ ] WRC-API-10/20/30：冻结 RED 类型合同，实现原子 positioned Block 与确定性 dense Grid；
-- [ ] WRC-API-40：一次迁移全部活跃消费者、Fixture 与 Native Builder Skill，删除旧 placement dialect；
-- [ ] WRC-API-50：由现有生产 Owner 刷新代表性 authored source、Candidate、Package 与 Receipt 身份；
-  不伪称 API 源码会自动改变已发布 Profile descriptor hash，也不改历史 Package/Receipt；
-- [ ] WRC-API-90：完成 focused/affected gates、exact-SHA Cloud review 与真实生产 Package/Receipt 证据。
+- [x] WRC-API-00：冻结设计、唯一 v2 迁移 SHA、clean-break ledger 和
+  [独立 exact-SHA Mode B 审查](reviews/2026-09-02-agent-friendly-babylon-native-block-drawing-api-change-review.md)；
+- [x] WRC-API-10/20/30：冻结 RED 类型合同，实现原子 positioned Block 与确定性 dense Grid；
+  `createBlock()` 必填 `centerMetersXYZ` 与 closed `rotationQuarterTurnsY`，`createBlockGrid()` 整批
+  预检后再分配、失败逆序回滚，Finalize 复验 declared placement 并把事后 transform 判为篡改；
+- [x] WRC-API-40：一次迁移全部活跃消费者、Fixture 与 Native Builder Skill，删除旧 placement dialect
+  与仅负责 create-then-position 的本地 helper，并加入 package 普查断言防止旧方言复活；
+- [x] WRC-API-50：此前唯一仍教旧 placement 方言的活跃生成输入——代表性 Case 的冻结 Builder Skill 副本
+  `artifacts/scenes/cloud-temple-t-gate-native-block/inputs/builder-skill/`——已刷新为与 live Skill 逐字节
+  一致，并加入防漂移断言；`packageNativeBlockAttemptV1` 现有证据显示 create-then-mutate 生成模块被
+  Host typecheck 以 `native-check-rejected` 拒绝且不产生 Package 输出，而重新生成的当前 API 源码得到
+  新的 `authoredSourceHash`、`worldPackageRootHash` 与 Build Receipt 身份；已发布历史 Package 的
+  `authoredSourceHash` 未被改写，也未伪称 TypeScript API 变更会改变已发布 Profile descriptor hash；
+- [ ] WRC-API-90：focused gates 与 Codex exact-SHA follow-up review 已在变更树通过；Cloud full gates
+  尚未形成最终收据，真实生产 Package/Receipt 证据仍由 NBR 生产链路拥有，因此本项保持开放。
 
-以上状态只按真实合入代码和证据更新。本增强本身不完成 NBR-20/70/80/90、BNA-6/7、WRC-SR 或
-WRC-1；当前 NBR 生产链路仍可在旧 Profile 合同上继续收口，不得被未实施的新 API 伪装为已迁移。
+以上勾选项记录包含 PR #162 实现提交的目标树上已有的代码和 focused 证据；只有实际包含这些提交的
+目标树才可表述为已交付。
+本增强本身不完成 NBR-20/70/80/90、BNA-6/7、WRC-SR 或 WRC-1；生产链路只有在该 current-only
+cutover 合入后才能使用新 Profile 合同，不得保留旧 placement dialect、兼容 overload 或 fallback。
 
 #### P3.7 Project Health Observatory
 

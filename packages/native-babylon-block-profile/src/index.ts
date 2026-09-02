@@ -33,6 +33,7 @@ export type {
   BabylonNativeBlockCheckedLayoutV1,
   BabylonNativeBlockCreateInputV1,
   BabylonNativeBlockFinalizedEpochV1,
+  BabylonNativeBlockGridCreateInputV1,
   BabylonNativeBlockProfileBudgetV1,
   BabylonNativeBlockProfileFinalizeInputV1,
   BabylonNativeBlockProfileSessionV1,
@@ -59,6 +60,7 @@ export {
 } from "./shapes.js";
 export type {
   BabylonNativeBlockPositionMetersXYZV1,
+  BabylonNativeBlockRotationQuarterTurnsYV1,
   BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
 export { assessBabylonNativeBlockOptimizationV1 } from "./optimization.js";

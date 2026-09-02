@@ -32,19 +32,30 @@ export default defineBabylonNativeScene({
       maximumBlockCount: 512,
     });
 
-    const ground = session.createBlock({
-      id: "entry-ground",
+    session.createBlockGrid({
+      idPrefix: "entry-ground",
       shape: "full",
       paletteRole: "ground",
       visualGroupId: "entry-ground-group",
+      minimumCenterMetersXYZ: [-1, -0.5, 0],
+      repeatCountXYZ: [3, 1, 1],
     });
-    ground.position.set(0, -0.5, 0);
+
+    for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
+      session.createBlock({
+        id: `central-step-${stepIndex}`,
+        shape: "step",
+        paletteRole: "route",
+        visualGroupId: "central-ascent-group",
+        centerMetersXYZ: [0, 0.125 + stepIndex * 0.25, -1 - stepIndex],
+      });
+    }
 
     session.finalize({
       displayGapMeters: 0.04,
       staticColliders: [{
         id: "entry-ground-collider",
-        blockId: "entry-ground",
+        blockId: "entry-ground-x1-y0-z0",
         traversalBinding: {
           kind: "static-surface",
           surfaceEntityId: "entry-ground-surface",
@@ -65,6 +76,12 @@ export default defineBabylonNativeScene({
 ```
 
 This is explicit visual construction with explicit visual groups, explicit Spawn registration, and explicit collider contribution. `session.finalize()` registers selected collider candidates through the Host-provided boundary; generated code never creates Havok objects.
+
+### Block placement
+
+`createBlock()` requires `centerMetersXYZ` and accepts an optional `rotationQuarterTurnsY` of exactly `0`, `1`, `2`, or `3`. Placement is declared once, at creation. Never create a Block and then assign `position`, `rotation.y`, or `scaling` for its initial placement: the Session validates the shape-specific lattice, occupancy and budget before allocating a Mesh, and Finalize rejects any later transform as tampering.
+
+`createBlockGrid()` is dense mechanical repetition of one shape and palette role only. It takes `idPrefix`, `minimumCenterMetersXYZ`, and a positive `repeatCountXYZ`, spaces cells by the selected shape's effective rotated size, iterates Y outermost then Z then X, and names children `<idPrefix>-x<i>-y<j>-z<k>` with zero-based unpadded indices. It has no stride, gap, mask, or callback, and it never creates Collider intent. Use it for ground slabs, wall runs, and solid mass; keep stairs, gates, buildings, and any semantic topology as ordinary TypeScript loops over `createBlock()`.
 
 ### Source-admission-safe module structure
 
