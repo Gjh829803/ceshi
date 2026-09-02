@@ -607,8 +607,8 @@ describe("evaluateWorldReconstructionV1", () => {
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
       dimensionId: "deterministic-build",
-      repairAction: { kind: "revise-native-source" },
     }));
+    expect(result.diagnostics[0]).not.toHaveProperty("repairAction");
   });
 
   it("fails deterministic build on Package or Capture identity mismatch", () => {
@@ -624,6 +624,7 @@ describe("evaluateWorldReconstructionV1", () => {
       expect(result.diagnostics[0]).toMatchObject({
         code: "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
       });
+      expect(result.diagnostics[0]).not.toHaveProperty("repairAction");
     }
   });
 
@@ -646,8 +647,8 @@ describe("evaluateWorldReconstructionV1", () => {
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
       dimensionId: "collider",
-      repairAction: { kind: "revise-native-source" },
     }));
+    expect(result.diagnostics[0]).not.toHaveProperty("repairAction");
     expect(isEmpty(dimension(result, "collider").metrics.filter((metric) =>
       metric.kind === "ratio-basis-points" && metric.valueBasisPoints === 0,
     ))).toBe(true);
@@ -668,6 +669,7 @@ describe("evaluateWorldReconstructionV1", () => {
     expect(result.outcome).toBe("incomplete");
     expect(result.dimensions.every(({ status }) => status === "incomplete")).toBe(true);
     expect(result.diagnostics.every(({ code }) => code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE")).toBe(true);
+    expect(result.diagnostics.every((diagnostic) => !("repairAction" in diagnostic))).toBe(true);
     expect(result.diagnostics.map(({ dimensionId }) => dimensionId)).toEqual([...DIMENSIONS]);
     expect(parseWorldReconstructionEvaluationResultV1(result).outcome).toBe("incomplete");
   });
@@ -721,7 +723,10 @@ describe("evaluateWorldReconstructionV1", () => {
       "collider:WORLD_RECONSTRUCTION_COLLIDER_MISSING",
       "topology:WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING",
     ]);
-    expect(result.diagnostics.every(({ repairAction }) => repairAction.kind === "revise-native-source")).toBe(true);
+    expect(result.diagnostics.every((diagnostic) =>
+      "repairAction" in diagnostic &&
+      diagnostic.repairAction.kind === "revise-native-source"
+    )).toBe(true);
     expect(dimension(result, "collider").diagnosticIds).toEqual([result.diagnostics[0]!.id]);
     expect(dimension(result, "topology").diagnosticIds).toEqual([result.diagnostics[1]!.id]);
   });

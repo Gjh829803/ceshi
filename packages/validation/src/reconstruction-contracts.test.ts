@@ -10,6 +10,7 @@ import {
   parseWorldReconstructionEvidenceSetV1,
   parseWorldReconstructionRunReceiptV1,
   worldReconstructionCaseCanonicalBytesV1,
+  worldReconstructionDiagnosticCanonicalBytesV1,
   worldReconstructionEvidenceProfileClosureMatchesV1,
 } from "./reconstruction-contracts.js";
 
@@ -258,7 +259,9 @@ describe("world reconstruction contracts", () => {
         id: "diag.generic-evidence", code, dimensionId: "collider",
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
         evidenceRefs: [], message: "Evidence cannot support a pass.",
-        repairAction: { kind: "revise-native-source" },
+        ...(code === "WORLD_RECONSTRUCTION_COLLIDER_MISSING"
+          ? { repairAction: { kind: "revise-native-source" } }
+          : {}),
       }];
       expect(() => parseWorldReconstructionEvaluationResultV1(result)).toThrowError(
         "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
@@ -276,7 +279,7 @@ describe("world reconstruction contracts", () => {
       kind: "world-reconstruction-diagnostic", schemaVersion: 1, id: "diag.spawn-missing",
       code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING", dimensionId: "spawn-support",
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", evidenceRefs: [],
-      message: "Spawn support evidence is absent.", repairAction: { kind: "revise-native-source" },
+      message: "Spawn support evidence is absent.",
     }];
     incomplete.outcome = "incomplete";
     expect(parseWorldReconstructionEvaluationResultV1(incomplete).dimensions[5]!.status).toBe("incomplete");
@@ -296,6 +299,7 @@ describe("world reconstruction contracts", () => {
     const wrongSpecificDimension = structuredClone(incomplete);
     wrongSpecificDimension.diagnostics[0]!.code = "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING";
     wrongSpecificDimension.diagnostics[0]!.dimensionId = "collider";
+    wrongSpecificDimension.diagnostics[0]!.repairAction = { kind: "revise-native-source" };
     expect(() => parseWorldReconstructionEvaluationResultV1(wrongSpecificDimension)).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
     );
@@ -695,6 +699,8 @@ describe("world reconstruction contracts", () => {
         kind: "revise-native-source",
       },
     });
+    expect("repairAction" in diagnostic).toBe(true);
+    if (!("repairAction" in diagnostic)) throw new Error("repair action missing");
     expect(Object.isFrozen(diagnostic.repairAction)).toBe(true);
 
     const runValue = {
@@ -836,5 +842,62 @@ describe("world reconstruction contracts", () => {
       cleanupOutcome: "failed",
     });
     expect(incomplete.outcome).toBe("incomplete");
+  });
+
+  it("omits repairAction from non-repairable diagnostics and their canonical bytes", () => {
+    for (const code of [
+      "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+      "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
+      "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
+    ] as const) {
+      const diagnostic = parseWorldReconstructionDiagnosticV1({
+        kind: "world-reconstruction-diagnostic",
+        schemaVersion: 1,
+        id: `diag.${code.toLowerCase()}`,
+        code,
+        dimensionId: "deterministic-build",
+        acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+        evidenceRefs: [],
+        message: "Host-owned evidence cannot be repaired by revising Native source.",
+      });
+      expect(diagnostic).not.toHaveProperty("repairAction");
+      expect(new TextDecoder().decode(
+        worldReconstructionDiagnosticCanonicalBytesV1(diagnostic),
+      )).not.toContain("repairAction");
+    }
+  });
+
+  it("requires exactly revise-native-source only for repairable diagnostics", () => {
+    const repairable = {
+      kind: "world-reconstruction-diagnostic",
+      schemaVersion: 1,
+      id: "diag.collider",
+      code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+      dimensionId: "collider",
+      acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+      evidenceRefs: ["artifact://case/cloud-temple/evidence/collider.json"],
+      message: "Required west wall collider is missing.",
+    };
+    expect(() => parseWorldReconstructionDiagnosticV1(repairable)).toThrowError(
+      "WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID",
+    );
+    expect(() => parseWorldReconstructionDiagnosticV1({
+      ...repairable,
+      repairAction: {
+        kind: "select-native-resource",
+        resourceRef: "worldkit://native-resource/west-wall@1",
+      },
+    })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
+
+    const nonRepairable = {
+      ...repairable,
+      id: "diag.stale",
+      code: "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+      evidenceRefs: [],
+    };
+    expect(() => parseWorldReconstructionDiagnosticV1({
+      ...nonRepairable,
+      repairAction: { kind: "revise-native-source" },
+    })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
   });
 });

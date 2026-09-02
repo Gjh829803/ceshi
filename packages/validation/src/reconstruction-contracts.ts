@@ -330,32 +330,57 @@ export interface WorldReconstructionDimensionResultV1 {
   }>;
 }
 
-export type WorldReconstructionDiagnosticCodeV1 =
-  | "WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING"
-  | "WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING"
-  | "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT"
-  | "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT"
-  | "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING"
-  | "WORLD_RECONSTRUCTION_COLLIDER_MISSING"
-  | "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH"
-  | "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED"
-  | "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE"
-  | "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC"
-  | "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
-  | "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING";
+export const WORLD_RECONSTRUCTION_REPAIRABLE_DIAGNOSTIC_CODES_V1 = Object.freeze([
+  "WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING",
+  "WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING",
+  "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+  "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+  "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
+  "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+  "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
+  "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+  "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE",
+] as const);
 
-export interface WorldReconstructionDiagnosticV1 {
+export const WORLD_RECONSTRUCTION_NON_REPAIRABLE_DIAGNOSTIC_CODES_V1 = Object.freeze([
+  "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
+  "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+  "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
+] as const);
+
+export type WorldReconstructionRepairableDiagnosticCodeV1 =
+  (typeof WORLD_RECONSTRUCTION_REPAIRABLE_DIAGNOSTIC_CODES_V1)[number];
+export type WorldReconstructionNonRepairableDiagnosticCodeV1 =
+  (typeof WORLD_RECONSTRUCTION_NON_REPAIRABLE_DIAGNOSTIC_CODES_V1)[number];
+export type WorldReconstructionDiagnosticCodeV1 =
+  | WorldReconstructionRepairableDiagnosticCodeV1
+  | WorldReconstructionNonRepairableDiagnosticCodeV1;
+
+interface WorldReconstructionDiagnosticBaseV1 {
   readonly kind: "world-reconstruction-diagnostic";
   readonly schemaVersion: 1;
   readonly id: string;
-  readonly code: WorldReconstructionDiagnosticCodeV1;
   readonly dimensionId: WorldReconstructionDimensionIdV1;
   readonly acceptanceTargetRef: string;
   readonly evidenceRefs: readonly string[];
   readonly message: string;
-  readonly repairAction:
-    | Readonly<{ kind: "revise-native-source" }>
-    | Readonly<{ kind: "select-native-resource"; resourceRef: string }>;
+}
+
+export type WorldReconstructionDiagnosticV1 =
+  | Readonly<WorldReconstructionDiagnosticBaseV1 & {
+      readonly code: WorldReconstructionRepairableDiagnosticCodeV1;
+      readonly repairAction: Readonly<{ kind: "revise-native-source" }>;
+    }>
+  | Readonly<WorldReconstructionDiagnosticBaseV1 & {
+      readonly code: WorldReconstructionNonRepairableDiagnosticCodeV1;
+    }>;
+
+export function isWorldReconstructionRepairableDiagnosticCodeV1(
+  code: WorldReconstructionDiagnosticCodeV1,
+): code is WorldReconstructionRepairableDiagnosticCodeV1 {
+  return WORLD_RECONSTRUCTION_REPAIRABLE_DIAGNOSTIC_CODES_V1.some(
+    (candidate) => candidate === code,
+  );
 }
 
 export interface WorldReconstructionRunReceiptV1 {
@@ -427,6 +452,10 @@ const RESULT_FIELDS = [
 const DIAGNOSTIC_FIELDS = [
   "kind", "schemaVersion", "id", "code", "dimensionId",
   "acceptanceTargetRef", "evidenceRefs", "message", "repairAction",
+] as const;
+const NON_REPAIRABLE_DIAGNOSTIC_FIELDS = [
+  "kind", "schemaVersion", "id", "code", "dimensionId",
+  "acceptanceTargetRef", "evidenceRefs", "message",
 ] as const;
 const RUN_FIELDS = [
   "kind", "schemaVersion", "id", "caseRef", "caseHash", "evaluationProfileRef",
@@ -1132,20 +1161,31 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
 
 export function parseWorldReconstructionDiagnosticV1(value: unknown): WorldReconstructionDiagnosticV1 {
   const contract = "WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID";
-  const source = begin(value, contract, DIAGNOSTIC_FIELDS);
+  assertAccessorFree(value, contract);
+  const source = object(value, contract, "");
   if (source.kind !== "world-reconstruction-diagnostic") fail(contract, "kind", "unexpected kind");
   exactInteger(source.schemaVersion, 1, contract, "schemaVersion");
-  const repairAction = object(source.repairAction, contract, "repairAction");
-  const repairKind = enumValue(repairAction.kind, ["revise-native-source", "select-native-resource"] as const, contract, "repairAction/kind");
-  exactFields(repairAction, repairKind === "revise-native-source" ? ["kind"] : ["kind", "resourceRef"], contract, "repairAction");
-  return freeze({
+  const code = enumValue(source.code, [
+    ...WORLD_RECONSTRUCTION_REPAIRABLE_DIAGNOSTIC_CODES_V1,
+    ...WORLD_RECONSTRUCTION_NON_REPAIRABLE_DIAGNOSTIC_CODES_V1,
+  ] as const, contract, "code");
+  const common = {
     kind: "world-reconstruction-diagnostic", schemaVersion: 1, id: text(source.id, contract, "id"),
-    code: enumValue(source.code, ["WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING", "WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING", "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT", "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT", "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING", "WORLD_RECONSTRUCTION_COLLIDER_MISSING", "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH", "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED", "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE", "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC", "WORLD_RECONSTRUCTION_EVIDENCE_STALE", "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"] as const, contract, "code"),
     dimensionId: enumValue(source.dimensionId, WORLD_RECONSTRUCTION_DIMENSION_IDS_V1, contract, "dimensionId"),
     acceptanceTargetRef: text(source.acceptanceTargetRef, contract, "acceptanceTargetRef"), evidenceRefs: sortedStrings(source.evidenceRefs, contract, "evidenceRefs", true), message: text(source.message, contract, "message"),
-    repairAction: repairKind === "revise-native-source"
-      ? Object.freeze({ kind: repairKind })
-      : Object.freeze({ kind: repairKind, resourceRef: text(repairAction.resourceRef, contract, "repairAction/resourceRef") }),
+  } as const;
+  if (!isWorldReconstructionRepairableDiagnosticCodeV1(code)) {
+    exactFields(source, NON_REPAIRABLE_DIAGNOSTIC_FIELDS, contract, "");
+    return freeze({ ...common, code });
+  }
+  exactFields(source, DIAGNOSTIC_FIELDS, contract, "");
+  const repairAction = object(source.repairAction, contract, "repairAction");
+  exactFields(repairAction, ["kind"], contract, "repairAction");
+  const repairKind = enumValue(repairAction.kind, ["revise-native-source"] as const, contract, "repairAction/kind");
+  return freeze({
+    ...common,
+    code,
+    repairAction: Object.freeze({ kind: repairKind }),
   });
 }
 

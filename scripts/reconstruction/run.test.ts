@@ -8,6 +8,7 @@ import {
   hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
+  isWorldReconstructionRepairableDiagnosticCodeV1,
   parseWorldReconstructionDiagnosticV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
@@ -275,7 +276,9 @@ function diagnostic(input: {
       ? []
       : [`artifact://case/cloud-temple/evidence/${input.dimensionId}.json`],
     message: `${input.code} on ${input.dimensionId}.`,
-    repairAction: { kind: "revise-native-source" },
+    ...(isWorldReconstructionRepairableDiagnosticCodeV1(input.code)
+      ? { repairAction: { kind: "revise-native-source" } }
+      : {}),
   });
 }
 

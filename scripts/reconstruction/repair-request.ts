@@ -30,12 +30,6 @@ export const NATIVE_BLOCK_REPAIR_FORBIDDEN_MUTATION_TARGETS_V1 = Object.freeze([
   "prior-durable-attempt-inputs",
 ] as const);
 
-const NON_REPAIRABLE_DIAGNOSTIC_CODES = Object.freeze([
-  "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
-  "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
-  "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
-] as const);
-
 import type { WorldReconstructionFrozenOwnerIdentitiesV1 } from "./generation-request.js";
 export type { WorldReconstructionFrozenOwnerIdentitiesV1 } from "./generation-request.js";
 
@@ -128,13 +122,8 @@ function fail(code: string, detail: string): never {
 export function isRepairableWorldReconstructionDiagnosticV1(
   diagnostic: WorldReconstructionDiagnosticV1,
 ): boolean {
-  if (
-    NON_REPAIRABLE_DIAGNOSTIC_CODES.some((code) => code === diagnostic.code)
-  ) {
-    return false;
-  }
-  return diagnostic.repairAction.kind === "revise-native-source" ||
-    diagnostic.repairAction.kind === "select-native-resource";
+  return "repairAction" in diagnostic &&
+    diagnostic.repairAction.kind === "revise-native-source";
 }
 
 export function isRepairableWorldReconstructionEvaluationV1(
@@ -166,7 +155,7 @@ export function createNativeBlockRepairInstructionV1(
   ) {
     fail(
       "WORLD_RECONSTRUCTION_NON_REPAIRABLE",
-      "diagnostics are not source-or-resource repairable",
+      "diagnostics are not source repairable",
     );
   }
   return Object.freeze({

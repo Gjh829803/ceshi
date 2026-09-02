@@ -227,7 +227,6 @@ describe("createNativeBlockRepairInstructionV1", () => {
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
       evidenceRefs: [],
       message: "Capture identity is stale.",
-      repairAction: { kind: "revise-native-source" },
     });
     expect(() => createNativeBlockRepairInstructionV1({
       diagnostics: [stale],
@@ -245,7 +244,7 @@ describe("createNativeBlockRepairInstructionV1", () => {
 });
 
 describe("isRepairableWorldReconstructionEvaluationV1", () => {
-  it("repairs only a failed evaluation with source-or-resource diagnostics and remaining budget", () => {
+  it("repairs only a failed evaluation with source diagnostics and remaining budget", () => {
     const failed = evaluation({
       outcome: "failed",
       diagnostics: [colliderMissingDiagnostic()],
@@ -274,7 +273,6 @@ describe("isRepairableWorldReconstructionEvaluationV1", () => {
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
         evidenceRefs: [],
         message: "Spawn support evidence is absent.",
-        repairAction: { kind: "revise-native-source" },
       })],
     });
     expect(
