@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { kubectlApply } from "./launch-worldkit-cloud-episode-worker-job.mjs";
 import { worldkitJobControllerRbac } from "./launch-worldkit-cloud-control-plane.mjs";
+import { loadLwdpGenerationConfig } from "../lib/lwdp-generation-client.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
@@ -89,13 +90,16 @@ export async function launchGpuBatchDispatcherCronJob(options) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const config = JSON.parse(await readFile(
-    join(repoRoot, "config", "cloud-episode-production.json"),
-    "utf8",
-  ));
+  const [config, lwdpConfig] = await Promise.all([
+    readFile(join(repoRoot, "config", "cloud-episode-production.json"), "utf8")
+      .then(JSON.parse),
+    loadLwdpGenerationConfig(process.env),
+  ]);
   launchGpuBatchDispatcherCronJob({
     image: config.workerImage,
     namespace: config.namespace,
+    apiBase: lwdpConfig.baseUrl,
+    userId: lwdpConfig.userId,
   }).then((result) => {
     process.stdout.write(`${JSON.stringify(result)}\n`);
   }).catch((error) => {

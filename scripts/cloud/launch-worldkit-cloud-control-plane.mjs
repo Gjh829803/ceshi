@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { kubectlApply } from "./launch-worldkit-cloud-episode-worker-job.mjs";
+import { loadLwdpGenerationConfig } from "../lib/lwdp-generation-client.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
@@ -127,11 +128,17 @@ export async function launchCloudControlPlane(options) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const config = JSON.parse(await readFile(
-    join(repoRoot, "config", "cloud-episode-production.json"),
-    "utf8",
-  ));
-  launchCloudControlPlane({ image: config.workerImage, namespace: config.namespace })
+  const [config, lwdpConfig] = await Promise.all([
+    readFile(join(repoRoot, "config", "cloud-episode-production.json"), "utf8")
+      .then(JSON.parse),
+    loadLwdpGenerationConfig(process.env),
+  ]);
+  launchCloudControlPlane({
+    image: config.workerImage,
+    namespace: config.namespace,
+    apiBase: lwdpConfig.baseUrl,
+    userId: lwdpConfig.userId,
+  })
     .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
     .catch((error) => {
       process.stderr.write(`${error.stack || error.message}\n`);
