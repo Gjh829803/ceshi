@@ -111,8 +111,8 @@ export function cloudEpisodeWorkerJob({
         metadata: { labels: { app: "worldkit-cloud-episode-worker" } },
         spec: {
           serviceAccountName,
-          ...(gpuRequired && Object.keys(nodeSelector).length > 0 ? { nodeSelector } : {}),
-          ...(gpuRequired && tolerations.length > 0 ? { tolerations } : {}),
+          ...(Object.keys(nodeSelector).length > 0 ? { nodeSelector } : {}),
+          ...(tolerations.length > 0 ? { tolerations } : {}),
           restartPolicy: "Never",
           terminationGracePeriodSeconds: 90,
           containers: [{

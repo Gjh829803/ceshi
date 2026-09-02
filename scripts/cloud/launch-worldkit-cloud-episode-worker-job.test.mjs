@@ -47,10 +47,25 @@ test("creates one GPU Episode worker with project-local runtime Secret material"
     outputS3Prefix: "s3://bucket/episode",
     image: `worldkit-cloud-worker@sha256:${"a".repeat(64)}`,
     gpuRequired: false,
+    nodeSelector: { "workload-type": "ray-cpu" },
+    tolerations: [{
+      key: "ray.io/node-type",
+      operator: "Equal",
+      value: "worker",
+      effect: "NoSchedule",
+    }],
   });
   const cpuContainer = cpuPrepare.spec.template.spec.containers[0];
   assert.equal(cpuContainer.resources.requests["nvidia.com/gpu"], undefined);
   assert.equal(cpuContainer.resources.requests["ephemeral-storage"], "16Gi");
-  assert.equal(cpuPrepare.spec.template.spec.nodeSelector, undefined);
+  assert.deepEqual(cpuPrepare.spec.template.spec.nodeSelector, {
+    "workload-type": "ray-cpu",
+  });
+  assert.deepEqual(cpuPrepare.spec.template.spec.tolerations, [{
+    key: "ray.io/node-type",
+    operator: "Equal",
+    value: "worker",
+    effect: "NoSchedule",
+  }]);
   assert.ok(cpuContainer.args.includes("prepare"));
 });

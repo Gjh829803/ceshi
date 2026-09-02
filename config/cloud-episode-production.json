@@ -24,7 +24,18 @@
     "memoryRequest": "4Gi",
     "memoryLimit": "16Gi",
     "ephemeralStorageRequest": "16Gi",
-    "ephemeralStorageLimit": "32Gi"
+    "ephemeralStorageLimit": "32Gi",
+    "nodeSelector": {
+      "workload-type": "ray-cpu"
+    },
+    "tolerations": [
+      {
+        "key": "ray.io/node-type",
+        "operator": "Equal",
+        "value": "worker",
+        "effect": "NoSchedule"
+      }
+    ]
   },
   "nodeSelector": {},
   "tolerations": [
