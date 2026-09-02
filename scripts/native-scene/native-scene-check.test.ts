@@ -145,7 +145,7 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
     [
       "missing Grid child Collider",
       groundGridBody("entry-ground"),
-      "WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_MISSING",
+      "WORLDKIT_NATIVE_BLOCK_COLLIDER_SOURCE_MISSING",
     ],
     [
       "occupancy overlap",
