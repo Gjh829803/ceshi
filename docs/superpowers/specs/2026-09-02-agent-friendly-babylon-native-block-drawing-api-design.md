@@ -1,6 +1,6 @@
 # Agent-friendly Babylon Native Block Drawing API Design
 
-- Status: Proposed; implementation is blocked until this spec receives an independent exact-SHA review
+- Status: Accepted design checkpoint; implementation has not started
 - Date: 2026-09-02
 - Milestone owner: WRC-1 / BWB authoring profile
 - Parent architecture:
@@ -286,7 +286,7 @@ The accepted implementation checkpoint deletes or replaces all of the following 
 2. every Profile consumer that calls `createBlock()` and then mutates `position` or Y rotation for placement;
 3. package/fixture-local helpers whose only job is create-then-position/quarter-turn;
 4. Builder Skill examples and instructions teaching create-then-mutate placement;
-5. active generation inputs bound to the replaced Block Profile resource content hash.
+5. active generated modules, fixtures and Skill examples that still use the replaced placement dialect.
 
 The checkpoint must not add `placeBlock`, `addBlock`, `createBlocks`, or legacy overload aliases. Existing
 immutable completed Attempts, Packages, Receipts and Captures keep their original hashes and bytes; the Host
@@ -309,7 +309,8 @@ Focused RED/GREEN evidence must cover:
 - duplicate ID and occupied-cell conflicts with zero new Meshes;
 - mid-batch construction failure with reverse cleanup and reusable open Session;
 - cleanup failure moving the Session to `failed`;
-- single Block and one-cell Grid producing equivalent checked layout identity;
+- single Block and one-cell Grid producing equivalent checked layout identity after normalizing their
+  intentionally different Block IDs;
 - post-create transform/scale/parent/geometry mutation rejected by Finalize;
 - explicit Collider selection unchanged and Grid never creating one;
 - Finalize/dispose idempotency and throwing cleanup;
@@ -328,7 +329,7 @@ runtime-deep review. Development iterations run focused tests and typecheck only
 | WRC-API-20 | Implement atomic positioned `createBlock()` | 10 | 30, 40 | shapes/session/layout | focused Session/Layout GREEN | sequential |
 | WRC-API-30 | Implement preflighted atomic `createBlockGrid()` | 20 | 40 | session + tests | ID/order/budget/rollback GREEN | sequential |
 | WRC-API-40 | Atomically migrate package, fixtures and Builder Skill | 20, 30 | 50 | consumers + Skill | no create-then-position census; Skill gate | main-agent-only |
-| WRC-API-50 | Refresh Block Profile identity and representative generation inputs | 40 | 90 | resource/Case owner only | new Candidate/Package/Receipt identity | main-agent-only |
+| WRC-API-50 | Regenerate representative authored-source and Package identity | 40 | 90 | active fixture/Case owner only | new authoredSourceHash, Candidate, Package and Receipt | main-agent-only |
 | WRC-API-90 | Final affected gates, exact-SHA Cloud review and backlog truth | 50 | none | integration/docs | zero open P0/P1; clean tree | main-agent-only |
 
 No implementation task may begin until WRC-API-00 is accepted. The public interface switch is one atomic
@@ -340,7 +341,8 @@ This slice is complete only when:
 
 - the Profile root exposes one placement dialect with `createBlock()` and `createBlockGrid()`;
 - every active consumer and Builder example uses it;
-- no old overload, alias, fallback, local create-then-position helper, or active old resource identity remains;
+- no old overload, alias, fallback, local create-then-position helper, or active generated source using the
+  replaced placement dialect remains;
 - Finalize still freezes one checked Layout and explicit Collider Contribution without another Runtime owner;
 - the representative Native reconstruction Case produces a new checked Package/Receipt through the normal
   production route;

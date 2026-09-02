@@ -18,7 +18,8 @@
 - `createBlockGrid()` is dense mechanical repetition only; no semantic mountain/building/stair/level recipes.
 - Grid never creates Collider intent; `finalize().staticColliders` remains explicit.
 - Do not scan Scene/Mesh names, tags, materials or colors for collision or semantic identity.
-- Preserve immutable historical Packages/Receipts; new runs receive a new Block Profile resource identity.
+- Preserve immutable historical Packages/Receipts; regenerated source receives new authored-source,
+  Attempt, Package and Receipt identities through existing owners.
 - Development runs focused RED/GREEN plus typecheck. Run heavy exact-SHA gates once at WRC-API-90.
 
 ---
@@ -198,6 +199,9 @@ git commit -m "feat(block-profile): add atomic dense block grids"
 - Test: `scripts/native-scene/module-bundle.test.ts`
 - Test: `scripts/reconstruction/native-package.test.ts`
 
+The fresh `rg` result is the authoritative consumer set. The explicit files below are named integration
+anchors, not an exhaustive replacement for that census.
+
 **Interfaces:**
 - Consumes: Tasks 2 and 3 public API.
 - Produces: one active Profile placement dialect across examples, fixtures, Corpus and generated-module instructions.
@@ -249,32 +253,34 @@ git add packages scripts apps .codex/skills/worldkit-native-block-builder
 git commit -m "refactor(block-profile): cut over drawing consumers"
 ```
 
-### Task 5: Refresh Profile resource identity and production fixture closure
+### Task 5: Refresh authored-source identity and production fixture closure
 
 **Files:**
-- Modify: the Registry/Profile resource owner resolved by `rg -n 'whitebox.blocks@1|native-babylon-block-profile' packages scripts artifacts -g '*.ts' -g '*.json'`
-- Modify: active representative Case/Profile inputs only when their current resource closure requires it
+- Modify: active representative generated-module fixtures and Case inputs only where they teach or embed
+  the replaced placement dialect
 - Test: `scripts/reconstruction/native-package.test.ts`
 - Test: `scripts/verification/native-block-reconstruction-e2e.test.ts`
 
 **Interfaces:**
 - Consumes: the fully migrated API and Skill.
-- Produces: a new Block Profile content identity used by new Attempts, Packages and Receipts.
+- Produces: a new `authoredSourceHash` and therefore new Candidate, Package and Receipt identity through
+  the existing production route. The published Profile descriptor hash is unchanged by this slice.
 
-- [ ] **Step 1: Locate the sole Block Profile resource hash owner**
+- [ ] **Step 1: Locate every active generated-source fixture using the old dialect**
 
-Use Registry/resource derivation code, not a manually invented hash. Record which active generation request
-inputs consume that identity. Do not modify historical completed run artifacts.
+Search source-admission, module-bundle, reconstruction and representative E2E fixtures. Record which inputs
+embed generated Native Module source and distinguish them from immutable completed run artifacts.
 
-- [ ] **Step 2: Add RED identity-closure coverage**
+- [ ] **Step 2: Add RED source and identity-closure coverage**
 
-Prove an active fixture bound to the previous Profile content identity is rejected after the API clean break,
-while a regenerated current fixture packages successfully.
+Prove a generated module using the replaced create-then-mutate dialect is rejected, while regenerated source
+using the current API passes admission and produces a different `authoredSourceHash` and downstream Package
+identity. Do not claim that TypeScript API source automatically changes the published Profile descriptor hash.
 
-- [ ] **Step 3: Regenerate only active trusted inputs**
+- [ ] **Step 3: Regenerate only active generated-source fixtures**
 
-Use the repository owner command or derivation function that already publishes Profile identity. Do not edit
-Package/Receipt hashes by hand and do not add an alias accepting the previous identity.
+Use the existing source-admission and production Package owners. Do not edit `authoredSourceHash`, Package or
+Receipt hashes by hand, do not rewrite historical Attempts, and do not add an alias accepting the old dialect.
 
 - [ ] **Step 4: Run the production-focused closure**
 
@@ -286,8 +292,10 @@ pnpm exec vitest run scripts/verification/native-block-reconstruction-e2e.test.t
 - [ ] **Step 5: Commit the identity checkpoint**
 
 ```bash
-git add packages scripts artifacts
-git commit -m "chore(block-profile): refresh drawing api identity"
+git add scripts/reconstruction/native-package.test.ts \
+  scripts/verification/native-block-reconstruction-e2e.test.ts \
+  <resolved-active-generated-source-fixture-paths>
+git commit -m "chore(block-profile): refresh drawing source identity"
 ```
 
 ### Task 6: Final design truth, verification and integration

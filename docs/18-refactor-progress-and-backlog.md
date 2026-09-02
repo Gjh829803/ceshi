@@ -1079,10 +1079,11 @@ Gameplay 或 Camera owner。目标是用一个 current-only clean break 将 Prof
 纳入原子 `createBlock()`，并增加只负责机械密集重复的 `createBlockGrid()`；Collider 仍只由显式
 Finalize Contribution 登记。
 
-- [ ] WRC-API-00：冻结设计、唯一 v2 迁移 SHA、clean-break ledger 和独立 exact-SHA 文档审查；
+- [x] WRC-API-00：冻结设计、唯一 v2 迁移 SHA、clean-break ledger 和独立 exact-SHA 文档审查；
 - [ ] WRC-API-10/20/30：冻结 RED 类型合同，实现原子 positioned Block 与确定性 dense Grid；
 - [ ] WRC-API-40：一次迁移全部活跃消费者、Fixture 与 Native Builder Skill，删除旧 placement dialect；
-- [ ] WRC-API-50：由现有资源 Owner 刷新 Block Profile 身份和代表性生产输入，不改历史 Package/Receipt；
+- [ ] WRC-API-50：由现有生产 Owner 刷新代表性 authored source、Candidate、Package 与 Receipt 身份；
+  不伪称 API 源码会自动改变已发布 Profile descriptor hash，也不改历史 Package/Receipt；
 - [ ] WRC-API-90：完成 focused/affected gates、exact-SHA Cloud review 与真实生产 Package/Receipt 证据。
 
 以上状态只按真实合入代码和证据更新。本增强本身不完成 NBR-20/70/80/90、BNA-6/7、WRC-SR 或
