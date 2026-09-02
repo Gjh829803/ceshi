@@ -19,10 +19,26 @@ import {
   sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
-import { isEqual } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 import { parseWorldAgentArgumentsV1 } from "../agents/run-world-agent.js";
+import {
+  NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
+} from "./generation-request.js";
 import { prepareNativeWorldCaseV1 } from "./native-world-case-preparation.js";
+
+export function resolveNativeCaseMappingCloudOutputS3PrefixV1(input: Readonly<{
+  backend: "cloud" | "local";
+  sceneId: string;
+  mappingTaskId: string;
+  environment?: NodeJS.ProcessEnv;
+}>): string | undefined {
+  if (input.backend === "local") return undefined;
+  const environment = input.environment ?? process.env;
+  const root = (environment.WORLDKIT_LWDP_S3_ROOT ??
+    NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1).replace(/\/+$/, "");
+  return `${root}/${input.sceneId}/${input.mappingTaskId}/native-case-mapping`;
+}
 
 function run(
   command: string,
@@ -216,6 +232,12 @@ async function main(): Promise<void> {
       const identitySuffix = sha256CanonicalJson(inputIdentity).slice(-12);
       const mappingTaskId =
         `native-case-map-${request.sceneId.slice(0, 40)}-${identitySuffix}`;
+      const mappingOutputS3Prefix =
+        resolveNativeCaseMappingCloudOutputS3PrefixV1({
+          backend,
+          sceneId: request.sceneId,
+          mappingTaskId,
+        });
       const outputArguments = [
         "--backend", backend,
         "--repo-root", repositoryRoot,
@@ -240,6 +262,10 @@ async function main(): Promise<void> {
           `reference-${index}::${referencePath}::image::${path.extname(referencePath) === ".png" ? "image/png" : "image/jpeg"}`,
         ]),
         "--output", `native-case-proposal.json::${proposalPath}::application/json`,
+        ...(isNil(mappingOutputS3Prefix) ? [] : [
+          "--output-s3-prefix",
+          mappingOutputS3Prefix,
+        ]),
       ];
       const mappingExit = await run(
         process.execPath,
@@ -320,7 +346,10 @@ async function main(): Promise<void> {
   }
 }
 
-void main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 2;
-});
+if (!isNil(process.argv[1]) &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  void main().catch((error: unknown) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 2;
+  });
+}

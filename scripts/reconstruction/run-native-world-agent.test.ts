@@ -4,7 +4,33 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  resolveNativeCaseMappingCloudOutputS3PrefixV1,
+} from "./run-native-world-agent.js";
+
 describe("Native-default world agent Host route", () => {
+  it("gives only Cloud mapping tasks one stable scene/run/stage S3 prefix", () => {
+    expect(resolveNativeCaseMappingCloudOutputS3PrefixV1({
+      backend: "cloud",
+      sceneId: "native-prompt-smoke",
+      mappingTaskId: "native-case-map-native-prompt-smoke-123456789abc",
+      environment: {
+        WORLDKIT_LWDP_S3_ROOT: "s3://bucket/worldkit///",
+      },
+    })).toBe(
+      "s3://bucket/worldkit/native-prompt-smoke/" +
+      "native-case-map-native-prompt-smoke-123456789abc/native-case-mapping",
+    );
+    expect(resolveNativeCaseMappingCloudOutputS3PrefixV1({
+      backend: "local",
+      sceneId: "native-prompt-smoke",
+      mappingTaskId: "native-case-map-native-prompt-smoke-123456789abc",
+      environment: {
+        WORLDKIT_LWDP_S3_ROOT: "s3://must-not-cross/local",
+      },
+    })).toBeUndefined();
+  });
+
   it("reuses the unified Planner before the Native Case proposal stage", () => {
     const source = readFileSync(
       "scripts/reconstruction/run-native-world-agent.ts",
