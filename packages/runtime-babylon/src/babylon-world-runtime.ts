@@ -96,6 +96,7 @@ import {
   createGoldenHumanoidSubjectControllerV1,
 } from "./character-movement-component";
 import { committedCameraContextFromMotionKernelV1 } from "./camera-director";
+import { goldenSubjectOriginFromColliderCenterV1 } from "./golden-humanoid-3c-vnext";
 import { hasForwardControlIntentV1 } from "./control-profile-runtime";
 import {
   isSubjectAssetRuntimeErrorV1,
@@ -1213,6 +1214,8 @@ export class BabylonWorldRuntime {
           }> | undefined;
           const projection = new GoldenHumanoidPresentationContextProjectionV1({
             actionPresentationRegistry,
+            colliderCenterOffsetFromSubjectOriginMetersXYZ:
+              subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
             animationProjectionPort: {
               prepareCommittedAnimation: (request) => {
                 const previous = latestAnimation;
@@ -2846,11 +2849,11 @@ export class BabylonWorldRuntime {
       ({ entityId }) => entityId === subjectEntityId,
     );
     if (subject === undefined) return;
-    const activeMotionKernelRef = isGoldenHumanoidControllerV1(controller)
+    const motionKernelRef = isGoldenHumanoidControllerV1(controller)
       ? subject.capabilityAssembly.defaultMotionProfile.motionKernelRef
       : controller.motionSnapshot().activeMotionKernelRef;
     const implementationId = subject.capabilityAssembly.motionKernels.find(
-      ({ resourceRef }) => resourceRef === activeMotionKernelRef,
+      ({ resourceRef }) => resourceRef === motionKernelRef,
     )?.implementationId;
     if (implementationId === undefined) return;
     const filters = controller.collisionFilterMasks();
@@ -3383,7 +3386,10 @@ export class BabylonWorldRuntime {
       this.controllerFor(subject.entityId).renderVisual(interpolationAlphaRatio);
     }
     for (const visual of this.subjectVisuals) visual.applyAnimationPose();
-    this.scene.render();
+    this.cameraComponent.render(
+      interpolationAlphaRatio,
+      () => this.scene.render(),
+    );
     const receipt: RenderReadyReceiptV1 = {
       kind: "worldkit-render-ready-receipt",
       schemaVersion: 1,
@@ -3554,7 +3560,10 @@ export class BabylonWorldRuntime {
           controlledEntityId: subject.entityId,
           targetEntityId: subject.entityId,
           subjectPose: {
-            positionMetersXYZ: committed.positionMetersXYZ,
+            positionMetersXYZ: goldenSubjectOriginFromColliderCenterV1(
+              committed.positionMetersXYZ,
+              subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+            ),
             facingYawRadians: committed.facingYawRadians,
           },
           locomotion: committed.locomotion,

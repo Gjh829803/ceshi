@@ -107,8 +107,9 @@ pnpm cloud:episode:apply-runtime-secret -- --namespace lwdp
 ```
 
 Episode capture is scheduled on a GPU worker pool and requests
-`nvidia.com/gpu: 1` once per 100–128 task Batch. There is no production timeout
-flush below 100. The image bakes a static Playground with the
+`nvidia.com/gpu: 1` once per full 100–128 task Batch, or once for the final
+closed-producer tail after its queue has remained stable for the configured
+interval. Elapsed time alone never flushes an open producer set below 100. The image bakes a static Playground with the
 worker-local `5297` asset origin; Studio listens only on loopback `4297` inside
 the disposable pod. Large videos and the ZIP are served to Studio through
 short-lived S3 URLs so Browser Range playback never hydrates them locally.

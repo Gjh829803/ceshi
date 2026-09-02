@@ -304,6 +304,69 @@ describe("Babylon artifact capture", () => {
     }
   });
 
+  it("preserves the Runtime-lit material while rendering a review tri-view", () => {
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      createElement: () => new FakeCanvasElement(),
+      removeEventListener: vi.fn(),
+    });
+    RegisterAbstractEngineStencil();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const gameplayCamera = new FreeCamera("gameplay-camera", new Vector3(0, 2, -8), scene);
+    gameplayCamera.setTarget(Vector3.Zero());
+    scene.activeCamera = gameplayCamera;
+    const material = new StandardMaterial("runtime-lit-whitebox", scene);
+    material.diffuseColor = new Color3(0.82, 0.86, 0.9);
+    material.emissiveColor = new Color3(0.01, 0.02, 0.03);
+    const target = MeshBuilder.CreateBox("review-target", {}, scene);
+    target.material = material;
+    target.metadata = { worldkitEntityId: "review-entity" };
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(
+      new FakeCanvasElement() as unknown as HTMLCanvasElement,
+    );
+    const renderedMaterialColors: Array<Readonly<{
+      diffuse: readonly number[];
+      emissive: readonly number[];
+    }>> = [];
+    scene.onBeforeRenderObservable.add(() => renderedMaterialColors.push({
+      diffuse: material.diffuseColor.asArray(),
+      emissive: material.emissiveColor.asArray(),
+    }));
+    vi.spyOn(scene, "render").mockImplementation(() => {
+      scene.onBeforeRenderObservable.notifyObservers(scene);
+    });
+
+    try {
+      captureBabylonArtifactViewV1({
+        scene,
+        engine,
+        camera: gameplayCamera,
+        request: {
+          kind: "entity-triview",
+          widthPixels: 9,
+          heightPixels: 8,
+          entityIds: ["review-entity"],
+          identityColor: "#E85D5D",
+          frontDirectionWorldXZ: [0, -1],
+          renderStyle: "runtime-lit-review",
+        },
+      });
+
+      expect(renderedMaterialColors.length).toBeGreaterThanOrEqual(24);
+      expect(renderedMaterialColors.every(({ diffuse, emissive }) =>
+        diffuse.join(",") === "0.82,0.86,0.9" &&
+        emissive.join(",") === "0.01,0.02,0.03")).toBe(true);
+      expect(material.diffuseColor.asArray()).toEqual([0.82, 0.86, 0.9]);
+      expect(material.emissiveColor.asArray()).toEqual([0.01, 0.02, 0.03]);
+      expect(scene.activeCamera).toBe(gameplayCamera);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it("uses target-local Front/Right/Back directions with one shared orthographic scale", () => {
     const projection = deriveBabylonTriviewProjectionV1({
       sizeMetersXYZ: [5, 4, 2],

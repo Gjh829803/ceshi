@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  BNA1_CLEAN_BREAK_SCAN_ROOTS,
   scanBna1CleanBreak,
   type Bna1CleanBreakScanOptions,
 } from "./verify-bna1-clean-break";
@@ -102,6 +103,13 @@ async function fixture(options: {
 }
 
 describe("BNA-1 clean-break verifier", () => {
+  it("scans only tracked Scene evidence instead of mutable generated Scene directories", () => {
+    expect(BNA1_CLEAN_BREAK_SCAN_ROOTS).not.toContain("artifacts/scenes");
+    expect(BNA1_CLEAN_BREAK_SCAN_ROOTS.filter((entry) =>
+      entry.startsWith("artifacts/scenes/")
+    )).not.toHaveLength(0);
+  });
+
   it("passes one exact Plan allowlist, one negative fixture, and guarded formal Native rejection", async () => {
     const value = await fixture();
     const report = await scanBna1CleanBreak(value.root, value.scanOptions);

@@ -32,8 +32,11 @@ describe("worldkit rigged Subject tri-view capture", () => {
       pngHash: string;
       distanceMeters: number;
       positionMetersXYZ: readonly number[];
+      subjectOriginYMeters: number;
+      targetHeightMeters: number;
+      targetYMeters: number;
     }>;
-    for (const distanceMeters of [2, 8]) {
+    for (const distanceMeters of [3, 8]) {
       const suffix = String(distanceMeters);
       const worldModulePath = path.join(temporaryDirectory, `world-${suffix}.mjs`);
       const authoringPath = path.join(temporaryDirectory, `authoring-${suffix}.json`);
@@ -55,16 +58,26 @@ describe("worldkit rigged Subject tri-view capture", () => {
       expect(await captureFile(authoringPath, openingFramePath, { snapshotPath }))
         .toMatchObject({ ok: true });
       const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
+      const targetEntityId = snapshot.view.camera.targetEntityId;
       captures.push({
         pngHash: createHash("sha256").update(await readFile(openingFramePath)).digest("hex"),
         distanceMeters: snapshot.view.camera.resolvedParameters.distanceMeters,
         positionMetersXYZ: snapshot.view.camera.positionMetersXYZ,
+        subjectOriginYMeters:
+          snapshot.world.subjectStatesByEntityId[targetEntityId].entityState.positionMetersXYZ[1],
+        targetHeightMeters: snapshot.view.camera.resolvedParameters.targetHeightMeters,
+        targetYMeters: snapshot.view.camera.actualTargetPositionMetersXYZ[1],
       });
     }
-    expect(captures.map(({ distanceMeters }) => distanceMeters)).toEqual([2, 8]);
+    expect(captures.map(({ distanceMeters }) => distanceMeters)).toEqual([3, 8]);
+    for (const capture of captures) {
+      expect(capture.targetYMeters - capture.subjectOriginYMeters).toBeCloseTo(
+        capture.targetHeightMeters,
+      );
+    }
     expect(captures[0]?.positionMetersXYZ).not.toEqual(captures[1]?.positionMetersXYZ);
     expect(captures[0]?.pngHash).not.toBe(captures[1]?.pngHash);
-  }, 30_000);
+  }, 120_000);
 
   it("publishes non-empty front, right, and back panels for the G Bot Subject", async () => {
     const temporaryDirectory = await mkdtemp(

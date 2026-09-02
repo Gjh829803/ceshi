@@ -259,25 +259,25 @@ export class PhysicalKeyboardActionTracker {
     return Object.freeze([...this.#pressedCodes].sort());
   }
 
-  actions(activeMotionKernelRef = "worldkit://motion-kernel/free-ground@1"):
+  actions(motionKernelRef = "worldkit://motion-kernel/free-ground@1"):
     readonly SemanticInputActionV1[] {
     const active = new Set<SemanticInputActionV1>();
     for (const code of this.#pressedCodes) {
       for (const action of KEY_ACTION_MAP[code] ?? []) active.add(action);
       if (code === "ShiftLeft" || code === "ShiftRight") {
         active.add(
-          activeMotionKernelRef.endsWith("/free-ground@1") ||
-              activeMotionKernelRef.endsWith("/forward-steer@1")
+          motionKernelRef.endsWith("/free-ground@1") ||
+              motionKernelRef.endsWith("/forward-steer@1")
             ? "run"
             : "boost",
         );
       }
       if (code === "Space") {
         if (
-          activeMotionKernelRef.endsWith("/free-ground@1") ||
-          activeMotionKernelRef.endsWith("/forward-steer@1")
+          motionKernelRef.endsWith("/free-ground@1") ||
+          motionKernelRef.endsWith("/forward-steer@1")
         ) active.add("jump");
-        else if (activeMotionKernelRef.endsWith("/unpowered-glide@1")) {
+        else if (motionKernelRef.endsWith("/unpowered-glide@1")) {
           active.add("primary-action");
         } else active.add("brake");
       }
@@ -949,6 +949,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       entityIds: target.runtimeEntityIds,
       identityColor: target.identityColor,
       frontDirectionWorldXZ: target.frontDirectionWorldXZ,
+      renderStyle: "runtime-lit-review",
     });
     return {
       kind: "worldkit-whitebox-triview-capture",
@@ -1085,6 +1086,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       ),
       identityColor: prototype.instanceColor,
       frontDirectionWorldXZ: [0, -1],
+      renderStyle: "runtime-lit-review",
     }).dataUrl;
   }
 

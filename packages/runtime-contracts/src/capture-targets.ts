@@ -1,8 +1,8 @@
 export type WhiteboxCaptureViewV1 = "front" | "right" | "back";
 
 export const MAXIMUM_VISUAL_CAPTURE_GROUPS_V1 = 5 as const;
-export const WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1 = "#F1F1ED" as const;
-export const WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1 = [241, 241, 237] as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1 = "#DDE8EE" as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1 = [221, 232, 238] as const;
 export const WHITEBOX_TRIVIEW_BACKGROUND_TOLERANCE_V1 = 12 as const;
 
 export type VisualCaptureGroupRoleV1 =
@@ -82,9 +82,10 @@ export interface WhiteboxTriviewViewInspectionV1 {
 }
 
 /**
- * Measures actual semantic-mask coverage instead of sampling a few RGB values.
- * The fixed tolerance excludes antialiasing noise and the effectively invisible
- * dependency meshes retained by the Babylon tri-view renderer.
+ * Measures actual target coverage against the fixed review background instead
+ * of sampling a few RGB values. The fixed tolerance excludes antialiasing noise
+ * and the effectively invisible dependency meshes retained by the Babylon
+ * tri-view renderer.
  */
 export function inspectWhiteboxTriviewPixelsV1(
   pixelsRgba: Uint8ClampedArray,

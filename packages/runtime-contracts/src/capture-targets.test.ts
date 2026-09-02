@@ -101,7 +101,7 @@ describe("hosted visual capture contracts", () => {
 
     for (let y = 0; y < 9; y += 1) {
       for (let x = 0; x < 3; x += 1) {
-        pixels.set([241, 241, 237, 255], (y * 9 + x) * 4);
+        pixels.set([221, 232, 238, 255], (y * 9 + x) * 4);
       }
     }
     expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toMatchObject({
@@ -114,9 +114,9 @@ describe("hosted visual capture contracts", () => {
     });
 
     for (let pixel = 0; pixel < 81; pixel += 1) {
-      pixels[pixel * 4 + 2] = 237;
-      pixels[pixel * 4] = 241;
-      pixels[pixel * 4 + 1] = 241;
+      pixels[pixel * 4] = 221;
+      pixels[pixel * 4 + 1] = 232;
+      pixels[pixel * 4 + 2] = 238;
       pixels[pixel * 4 + 3] = 255;
     }
     expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toMatchObject({

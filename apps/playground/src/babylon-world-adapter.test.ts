@@ -514,6 +514,7 @@ describe("BabylonWorldAdapter frame loop", () => {
       entityIds: ["player"],
       identityColor: "#E85D5D",
       frontDirectionWorldXZ: [0, -1],
+      renderStyle: "runtime-lit-review",
     });
   });
 

@@ -105,7 +105,9 @@ Director LLM → Render Directive SDK ────────────┘
 - 可追踪的 `WorldFeature`：稳定 ID、schema、seed、依赖、资源所有权、预算、诊断、重建和清理。
 - `defineOutdoorScene` 场景 DSL、场景目录、Playground、检查器和固定输入 Smoke API。
 - `OutdoorWorldSpec`、WorldPrompt、Entity Catalog、两张 Codex imagegen 规划图、冻结锁、SDK 派生的俯视/高度坡度工件，以及规划和白膜的一致性检查。
-- SDK 从真实实体导出的唯一颜色白膜三视图，以及 Visual Bible 输入/最终包门禁。
+- SDK 从真实 Runtime 实体导出的可审阅白膜三视图：保留方块材质、统一白天光照、
+  Front / Right / Back 方位和轻微俯视体积信息，并由固定背景检查与 Host receipt
+  继续约束 Visual Bible 输入和最终包。
 - 三个创作 Agent 的 workspace 隔离入口，以及仅向 Planner 开放的受控图片输入入口。
 
 当前的“自由创造”严格指室外高度场白膜世界，不等于任意 3D 游戏类型。

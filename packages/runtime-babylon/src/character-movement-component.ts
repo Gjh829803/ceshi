@@ -872,6 +872,8 @@ export function createGoldenHumanoidSubjectControllerV1(
     });
     const transaction = new GoldenHumanoid3CVNextTransactionV1({
       subjectEntityId: subject.entityId,
+      colliderCenterOffsetFromSubjectOriginMetersXYZ:
+        subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
       fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
       movementRuntime,
       bodyPort,

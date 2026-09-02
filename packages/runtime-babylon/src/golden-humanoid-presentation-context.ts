@@ -8,16 +8,18 @@ import {
 } from "@whitebox-world/camera";
 import type { GameplayActionStateV1 } from "@whitebox-world/gameplay-contracts";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import type { RuntimeVec3V1 } from "@whitebox-world/runtime-contracts";
 import {
   verifyResolvedActionPresentationV1,
   type ActionPresentationRegistryV1,
   type ResolvedActionPresentationV1,
 } from "@whitebox-world/subject-actions";
 
-import type {
-  GoldenHumanoidPreparedProjectionV1,
-  GoldenHumanoidProjectionInputV1,
-  GoldenHumanoidProjectionPortV1,
+import {
+  goldenSubjectOriginFromColliderCenterV1,
+  type GoldenHumanoidPreparedProjectionV1,
+  type GoldenHumanoidProjectionInputV1,
+  type GoldenHumanoidProjectionPortV1,
 } from "./golden-humanoid-3c-vnext.js";
 import type {
   BabylonCommittedAnimationProjectionPortV1,
@@ -31,6 +33,7 @@ export interface GoldenHumanoidPresentationContextProjectionOptionsV1 {
   readonly actionPresentationRegistry: ActionPresentationRegistryV1;
   readonly animationProjectionPort: BabylonCommittedAnimationProjectionPortV1;
   readonly cameraDirectorProjectionPort: BabylonPreparedCameraDirectorProjectionPortV1;
+  readonly colliderCenterOffsetFromSubjectOriginMetersXYZ: RuntimeVec3V1;
 }
 
 interface AdmittedGoldenPresentationContextV1 {
@@ -122,6 +125,7 @@ function cameraContextFromCommittedFacts(
   admittedContext: CameraContextSampleV2,
   action: GameplayActionStateV1 | undefined,
   registry: ActionPresentationRegistryV1,
+  colliderCenterOffsetFromSubjectOriginMetersXYZ: RuntimeVec3V1,
 ): CameraContextSampleV2 {
   if (admittedContext.semanticAuthorityStatus !== "available") {
     throw failure(
@@ -145,7 +149,10 @@ function cameraContextFromCommittedFacts(
     controlledEntityId: admittedContext.controlledEntityId,
     targetEntityId: admittedContext.targetEntityId,
     subjectPose: {
-      positionMetersXYZ: commit.positionMetersXYZ,
+      positionMetersXYZ: goldenSubjectOriginFromColliderCenterV1(
+        commit.positionMetersXYZ,
+        colliderCenterOffsetFromSubjectOriginMetersXYZ,
+      ),
       facingYawRadians: commit.facingYawRadians,
     },
     locomotion: commit.locomotion,
@@ -161,6 +168,7 @@ function cameraContextFromCommittedFacts(
 function admitProjectionInput(
   input: GoldenHumanoidProjectionInputV1,
   registry: ActionPresentationRegistryV1,
+  colliderCenterOffsetFromSubjectOriginMetersXYZ: RuntimeVec3V1,
 ): AdmittedGoldenPresentationContextV1 {
   if (typeof input !== "object" || input === null || !exactProjectionInput(input) ||
     !isRecursivelyFrozenData(input)) {
@@ -202,6 +210,7 @@ function admitProjectionInput(
     admittedContext,
     action,
     registry,
+    colliderCenterOffsetFromSubjectOriginMetersXYZ,
   );
   if (stringifyCanonicalJson(cameraContext) !== stringifyCanonicalJson(admittedContext)) {
     throw failure(
@@ -247,14 +256,30 @@ implements GoldenHumanoidProjectionPortV1 {
 
   constructor(
     readonly options: GoldenHumanoidPresentationContextProjectionOptionsV1,
-  ) {}
+  ) {
+    if (!Array.isArray(options.colliderCenterOffsetFromSubjectOriginMetersXYZ) ||
+      options.colliderCenterOffsetFromSubjectOriginMetersXYZ.length !== 3) {
+      throw failure(
+        "3C_INPUT_INVALID",
+        "Golden Subject collider center offset must contain three coordinates.",
+      );
+    }
+    goldenSubjectOriginFromColliderCenterV1(
+      [0, 0, 0],
+      options.colliderCenterOffsetFromSubjectOriginMetersXYZ,
+    );
+  }
 
   prepare(input: GoldenHumanoidProjectionInputV1): GoldenHumanoidPreparedProjectionV1 {
     this.#assertLive();
     if (this.#inFlight) {
       throw failure("3C_TICK_TOKEN_STALE", "a Golden projection Tick is already prepared.");
     }
-    const admitted = admitProjectionInput(input, this.options.actionPresentationRegistry);
+    const admitted = admitProjectionInput(
+      input,
+      this.options.actionPresentationRegistry,
+      this.options.colliderCenterOffsetFromSubjectOriginMetersXYZ,
+    );
     if (this.#latestConsumedTick !== undefined && admitted.tick <= this.#latestConsumedTick) {
       throw failure("3C_TICK_TOKEN_STALE", "Golden projection Tick is old or replayed.");
     }

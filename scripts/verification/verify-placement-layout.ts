@@ -463,6 +463,7 @@ async function captureBrowserEvidence(): Promise<BrowserEvidenceV1> {
       "listSubjectDefinitions",
       "ready",
       "releaseRuntimeActivity",
+      "relocateControlledSubjectForCapture",
       "reset",
       "resetCameraView",
       "runFixedInput",

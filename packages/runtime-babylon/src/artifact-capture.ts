@@ -24,6 +24,7 @@ import {
 // keeps that graph alive without producing visible pixels in the PNG artifact.
 const TRIVIEW_NON_TARGET_VISIBILITY = 1e-6;
 const TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW = 8;
+const REVIEW_TRIVIEW_ELEVATION_RADIANS_V1 = 10 * Math.PI / 180;
 
 function panelHasRenderableForeground(
   context: CanvasRenderingContext2D,
@@ -94,6 +95,8 @@ export type BabylonArtifactCaptureRequestV1 =
       entityIds: readonly string[];
       identityColor: string;
       frontDirectionWorldXZ: readonly [number, number];
+      /** `runtime-lit-review` is the formal human-review whitebox output. */
+      renderStyle?: "semantic-mask" | "runtime-lit-review";
     }>;
 
 export interface BabylonTriviewProjectionV1 {
@@ -302,9 +305,10 @@ function renderTriview(
   );
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
   const identityColor = Color3.FromHexString(request.identityColor);
+  const isRuntimeLitReview = request.renderStyle === "runtime-lit-review";
   for (const mesh of scene.meshes) {
     mesh.visibility = targetSet.has(mesh) ? 1 : TRIVIEW_NON_TARGET_VISIBILITY;
-    if (targetSet.has(mesh) && mesh.material !== null) {
+    if (!isRuntimeLitReview && targetSet.has(mesh) && mesh.material !== null) {
       tintMaterial(mesh.material, identityColor, materialColors);
     }
   }
@@ -349,7 +353,18 @@ function renderTriview(
   scene.activeCamera = camera;
   try {
     for (let index = 0; index < views.length; index += 1) {
-      const viewDirection = views[index]!;
+      const canonicalViewDirection = views[index]!;
+      // A strict horizontal orthographic view intentionally removes depth.
+      // The review-only capture keeps the same Front/Right/Back azimuth while
+      // revealing a small amount of the top faces so voxel scale and volume
+      // remain legible to a human reviewer.
+      const viewDirection = isRuntimeLitReview
+        ? new Vector3(
+            canonicalViewDirection.x * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+            Math.sin(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+            canonicalViewDirection.z * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+          )
+        : canonicalViewDirection;
       const halfHeight = projection.halfHeightMeters;
       camera.orthoLeft = -halfHeight * panelAspect;
       camera.orthoRight = halfHeight * panelAspect;

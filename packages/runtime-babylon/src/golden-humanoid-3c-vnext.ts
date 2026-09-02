@@ -16,6 +16,7 @@ import {
   type CameraContextSampleV2,
 } from "@whitebox-world/camera";
 import type { GameplayActionStateV1 } from "@whitebox-world/gameplay-contracts";
+import type { RuntimeVec3V1 } from "@whitebox-world/runtime-contracts";
 import {
   resolveActionPresentationV1,
   verifyResolvedActionPresentationV1,
@@ -92,6 +93,7 @@ export interface GoldenHumanoidBodyDiagnosticV1 {
 
 export interface GoldenHumanoid3CVNextTransactionOptionsV1 {
   readonly subjectEntityId: string;
+  readonly colliderCenterOffsetFromSubjectOriginMetersXYZ: RuntimeVec3V1;
   readonly fixedDeltaSeconds: number;
   readonly movementRuntime: CharacterMovementRuntimeV1;
   readonly bodyPort: GoldenCharacterBodyTransactionPortV1;
@@ -100,6 +102,27 @@ export interface GoldenHumanoid3CVNextTransactionOptionsV1 {
   readonly targetEntityId?: string;
   readonly projectionPorts?: readonly GoldenHumanoidProjectionPortV1[];
   readonly onStage?: (stage: GoldenHumanoidTickStageV1) => void;
+}
+
+export function goldenSubjectOriginFromColliderCenterV1(
+  colliderCenterPositionMetersXYZ: readonly [number, number, number],
+  colliderCenterOffsetFromSubjectOriginMetersXYZ: readonly [number, number, number],
+): RuntimeVec3V1 {
+  if (![...colliderCenterPositionMetersXYZ,
+    ...colliderCenterOffsetFromSubjectOriginMetersXYZ].every(Number.isFinite)) {
+    throw failure(
+      "3C_INPUT_INVALID",
+      "Golden Subject collider center and origin offset must be finite.",
+    );
+  }
+  return Object.freeze([
+    colliderCenterPositionMetersXYZ[0] -
+      colliderCenterOffsetFromSubjectOriginMetersXYZ[0],
+    colliderCenterPositionMetersXYZ[1] -
+      colliderCenterOffsetFromSubjectOriginMetersXYZ[1],
+    colliderCenterPositionMetersXYZ[2] -
+      colliderCenterOffsetFromSubjectOriginMetersXYZ[2],
+  ]) as RuntimeVec3V1;
 }
 
 function availableCameraContext(
@@ -120,7 +143,10 @@ function availableCameraContext(
     controlledEntityId: options.subjectEntityId,
     targetEntityId: options.targetEntityId ?? options.subjectEntityId,
     subjectPose: {
-      positionMetersXYZ: commit.positionMetersXYZ,
+      positionMetersXYZ: goldenSubjectOriginFromColliderCenterV1(
+        commit.positionMetersXYZ,
+        options.colliderCenterOffsetFromSubjectOriginMetersXYZ,
+      ),
       facingYawRadians: commit.facingYawRadians,
     },
     locomotion: commit.locomotion,
@@ -209,6 +235,9 @@ export class GoldenHumanoid3CVNextTransactionV1 {
   ) {
     if (
       options.subjectEntityId.length === 0 ||
+      !Array.isArray(options.colliderCenterOffsetFromSubjectOriginMetersXYZ) ||
+      options.colliderCenterOffsetFromSubjectOriginMetersXYZ.length !== 3 ||
+      !options.colliderCenterOffsetFromSubjectOriginMetersXYZ.every(Number.isFinite) ||
       !Number.isFinite(options.fixedDeltaSeconds) ||
       options.fixedDeltaSeconds <= 0
     ) {

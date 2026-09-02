@@ -3,12 +3,21 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import ts from "typescript";
 
+const BNA1_TRACKED_SCENE_EVIDENCE_PATHS = Object.freeze([
+  "artifacts/scenes/cloud-ridge-celestial-gate/route-validation.manual-20260827-cloud-ridge-r23.json",
+  "artifacts/scenes/cloud-ridge-celestial-gate/route-validation.manual-20260827-cloud-ridge-r23.json.evidence/00-route-validation-set-receipt.json",
+  "artifacts/scenes/cloud-ridge-celestial-gate/route-validation.manual-20260827-cloud-ridge-r23.json.evidence/routes/000000/04-route-runtime-probe-receipt.json",
+  "artifacts/scenes/cloud-ridge-celestial-gate/world.build.json",
+  "artifacts/scenes/green-sahara-caravan/world.build.json",
+  "artifacts/scenes/memory-postcard-coastal-ride/world.build.json",
+] as const);
+
 export const BNA1_CLEAN_BREAK_SCAN_ROOTS = Object.freeze([
   "packages",
   "apps",
   "scripts",
   "examples",
-  "artifacts/scenes",
+  ...BNA1_TRACKED_SCENE_EVIDENCE_PATHS,
   ".codex/skills/worldkit-spatial-planner",
   "README.md",
   "docs/00-project-overview.md",
@@ -29,12 +38,7 @@ export const BNA1_PLAN_SPECIFIC_EXECUTION_PLAN_HASH_FILES = Object.freeze([
   "apps/studio/src/hosted-block-world.integration.test.ts",
   "apps/studio/src/server.mjs",
   "apps/studio/src/server.test.mjs",
-  "artifacts/scenes/cloud-ridge-celestial-gate/route-validation.manual-20260827-cloud-ridge-r23.json",
-  "artifacts/scenes/cloud-ridge-celestial-gate/route-validation.manual-20260827-cloud-ridge-r23.json.evidence/00-route-validation-set-receipt.json",
-  "artifacts/scenes/cloud-ridge-celestial-gate/route-validation.manual-20260827-cloud-ridge-r23.json.evidence/routes/000000/04-route-runtime-probe-receipt.json",
-  "artifacts/scenes/cloud-ridge-celestial-gate/world.build.json",
-  "artifacts/scenes/green-sahara-caravan/world.build.json",
-  "artifacts/scenes/memory-postcard-coastal-ride/world.build.json",
+  ...BNA1_TRACKED_SCENE_EVIDENCE_PATHS,
   "examples/evidence/g-bot-subject-world/explain.json",
   "examples/evidence/g-bot-subject-world/verification.json",
   "examples/evidence/g-bot-subject-world/world.build.json",

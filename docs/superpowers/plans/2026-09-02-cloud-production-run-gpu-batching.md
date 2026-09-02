@@ -15,10 +15,13 @@ model, authored output, Runtime behavior, or media contract:
    existing visual reconstruction, Gemini, Seedance, conformance, and publication
    behavior.
 
-Every GPU Batch contains at least 100 distinct ready Episode capture stages.
-Production has no below-threshold timeout flush. One GPU Pod processes the whole
-batch in one lifecycle and isolates each Episode workspace and outcome. A failed
-Episode never terminates the remaining batch.
+Every normal GPU Batch contains 100–128 distinct ready Episode capture stages.
+After every same-image registered producer has reached capture-ready, no producer
+or queue publication remains in flight, and the queue has stayed stable for the
+configured interval, one final smaller tail Batch is allowed. Elapsed time alone
+never flushes an open producer set below 100. One GPU Pod processes the whole
+Batch in one lifecycle and isolates each Episode workspace and outcome. A failed
+Episode never terminates the remaining Batch.
 
 ## Durable boundaries
 
@@ -41,9 +44,11 @@ uploaded and before it reports success. The entry freezes the execution ID,
 Episode ID, request URI, upstream manifest URI and hash, output prefix, Worker
 image digest, and requested capture stage.
 
-The cloud dispatcher starts no GPU when fewer than 100 eligible entries exist.
-When the threshold is met it selects 100–128 entries in stable creation order,
-writes one immutable Batch manifest, and creates one digest-pinned GPU Job. The
+The cloud dispatcher starts no GPU when fewer than 100 eligible entries exist
+while any compatible producer remains open. When the threshold is met it selects
+100–128 entries in stable creation order; when the producer set is closed it may
+select the stable final tail. In either case it writes one immutable Batch manifest
+and creates one digest-pinned GPU Job. The
 Batch Worker claims each `whitebox-capture` stage through the existing LWDP
 atomic worker-lease endpoint immediately before execution. Entries already
 claimed, cancelled, stale, or no longer ready are recorded as skipped; the
@@ -61,7 +66,7 @@ blindly duplicated.
 | --- | --- | --- | --- | --- | --- | --- |
 | `CP-01` | Versioned Production Run, phase checkpoint, Provider Journal, queue-entry, and GPU Batch contracts | — | `CP-02`, `CP-03`, `CP-04` | new cloud-production contract modules and configs | parser/adversarial tests | main-agent-only |
 | `CP-02` | Execute the unchanged Episode workflow as CPU prepare, GPU capture, or CPU render | `CP-01` | `CP-03`, `CP-04` | `run-episode-workflow.mjs`, Episode Worker | phase-resume and source-identity tests | sequential |
-| `CP-03` | Enforce the 100-entry production floor and process one isolated long-lived GPU Batch | `CP-01`, `CP-02` | `CP-05` | queue, dispatcher, Batch Worker, K8s manifests | 99-does-not-launch, 100-launches, partial-failure tests | sequential |
+| `CP-03` | Enforce the 100-entry production floor while producers are open, drain one closed stable tail, and process one isolated long-lived GPU Batch | `CP-01`, `CP-02` | `CP-05` | queue, dispatcher, Batch Worker, K8s manifests | open 99 does not launch, 100 launches, closed stable tail launches, partial-failure tests | sequential |
 | `CP-04` | Persist stage checkpoints and provider identities outside disposable Worker storage | `CP-01`, `CP-02` | `CP-05` | S3 checkpoint and Provider Journal adapter | hard-exit/lost-response recovery tests | sequential |
 | `CP-05` | Project Studio state from LWDP/S3 and launch CPU continuation after Batch capture | `CP-03`, `CP-04` | `CP-06` | Studio cloud adapter and remote artifact projection | restart/recovery tests | sequential |
 | `CP-06` | Unify status, capacity, timing, cancellation, and publication around the versioned pipeline profile | `CP-05` | `CP-07` | Studio API/UI and documentation | Studio contract tests | sequential |
@@ -71,6 +76,7 @@ blindly duplicated.
 
 No real Case is submitted by this implementation task. A later user-authorized
 canary must first prove: Studio restart recovery, GPU Pod loss recovery, no GPU
-launch at 99 entries, one launch at 100 entries, no duplicate provider Job after
+launch at 99 entries while a producer remains open, one launch at 100 entries,
+one launch for a stable closed-producer tail, no duplicate provider Job after
 lost response, per-task Batch failure isolation, exact six-video media closure,
 and zero required durable media on the initiating machine.

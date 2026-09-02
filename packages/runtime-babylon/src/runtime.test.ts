@@ -2056,6 +2056,23 @@ describe("BabylonWorldRuntime", () => {
       relocated.camera.positionMetersXYZ[0] - startPosition[0],
       relocated.camera.positionMetersXYZ[2] - startPosition[2],
     )).toBeLessThan(10);
+    const runtimeRenderInternals = runtime as unknown as {
+      camera: { position: CartesianVector };
+      scene: Scene;
+    };
+    let renderedCameraPosition: RuntimeVec3V1 | undefined;
+    const renderedCameraObserver =
+      runtimeRenderInternals.scene.onBeforeRenderObservable.add(() => {
+        renderedCameraPosition = toVec3(runtimeRenderInternals.camera.position);
+      });
+    runtime.renderFrame(0.5);
+    runtimeRenderInternals.scene.onBeforeRenderObservable.remove(
+      renderedCameraObserver,
+    );
+    expect(renderedCameraPosition).toEqual(
+      relocated.camera.positionMetersXYZ,
+    );
+    expect(runtime.snapshot()).toEqual(relocated);
     await runtime.dispose();
   });
 
@@ -3193,6 +3210,7 @@ function emptyActionProjection(simulationTick: number) {
     ).toBeUndefined();
     const adjustedCamera = runtime.adjustCameraView({ yawDeltaRadians: Math.PI / 2 });
     const cameraForwardXYZ = adjustedCamera.camera.controlForwardXYZ!;
+    const initialCameraPosition = adjustedCamera.camera.positionMetersXYZ;
     const cameraRelativeStep = await runtime.runFixedInput({
       actions: ["move-forward", "run"],
       ticks: 1,
@@ -3208,7 +3226,19 @@ function emptyActionProjection(simulationTick: number) {
     expect(() => runtime.renderFrame(1.01)).toThrow(
       "3C_RENDER_INTERPOLATION_INVALID",
     );
+    const runtimeRenderInternals = runtime as unknown as {
+      camera: { position: CartesianVector };
+      scene: Scene;
+    };
+    let renderedCameraPosition: RuntimeVec3V1 | undefined;
+    const renderedCameraObserver =
+      runtimeRenderInternals.scene.onBeforeRenderObservable.add(() => {
+        renderedCameraPosition = toVec3(runtimeRenderInternals.camera.position);
+      });
     runtime.renderFrame(0.5);
+    runtimeRenderInternals.scene.onBeforeRenderObservable.remove(
+      renderedCameraObserver,
+    );
     const committedPosition = cameraRelativeStep.subjectStatesByEntityId.player!
       .positionMetersXYZ;
     expect(visual.root.position.x).toBeCloseTo(
@@ -3223,6 +3253,14 @@ function emptyActionProjection(simulationTick: number) {
       (initialCommittedPosition[2] + committedPosition[2]) / 2,
       8,
     );
+    expect(renderedCameraPosition).toBeDefined();
+    for (const axis of [0, 1, 2] as const) {
+      expect(renderedCameraPosition![axis]).toBeCloseTo(
+        (initialCameraPosition[axis] +
+          cameraRelativeStep.camera.positionMetersXYZ[axis]) / 2,
+        8,
+      );
+    }
     expect(runtime.snapshot()).toEqual(cameraRelativeStep);
     runtime.renderFrame();
     const horizontalSpeed = Math.hypot(cameraRelativeVelocity[0], cameraRelativeVelocity[2]);

@@ -243,6 +243,7 @@ function harness() {
     actionPresentationRegistry: registry,
     animationProjectionPort: animation,
     cameraDirectorProjectionPort: camera,
+    colliderCenterOffsetFromSubjectOriginMetersXYZ: [0, 0, 0],
   });
   return { animation, camera, port };
 }

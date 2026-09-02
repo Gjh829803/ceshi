@@ -258,6 +258,7 @@ function createHarness(input: Readonly<{
   projections?: readonly GoldenHumanoidProjectionPortV1[];
   stages?: GoldenHumanoidTickStageV1[];
   initialPositionMetersXYZ?: readonly [number, number, number];
+  colliderCenterOffsetFromSubjectOriginMetersXYZ?: readonly [number, number, number];
 }> = {}) {
   const options = movementOptions();
   const initialPositionMetersXYZ = input.initialPositionMetersXYZ ??
@@ -271,15 +272,18 @@ function createHarness(input: Readonly<{
   });
   const body = new TransactionBodyPort();
   body.position = [...initialPositionMetersXYZ];
-  const transaction = new GoldenHumanoid3CVNextTransactionV1({
+  const transactionOptions = {
     subjectEntityId: "player",
     fixedDeltaSeconds: 1 / 60,
     movementRuntime: movement,
     bodyPort: body,
     actionPresentationRegistry: input.registry ?? emptyRegistry(),
+    colliderCenterOffsetFromSubjectOriginMetersXYZ:
+      input.colliderCenterOffsetFromSubjectOriginMetersXYZ ?? [0, 0, 0],
     projectionPorts: input.projections ?? [],
-    onStage: (stage) => input.stages?.push(stage),
-  });
+    onStage: (stage: GoldenHumanoidTickStageV1) => input.stages?.push(stage),
+  } as const;
+  const transaction = new GoldenHumanoid3CVNextTransactionV1(transactionOptions);
   return { body, movement, transaction };
 }
 
@@ -411,6 +415,23 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     expect(animation.lastInput?.presentation.committedTick).toBe(
       animation.lastInput?.commit.tick,
     );
+  });
+
+  it("publishes Camera Context from the Subject origin rather than the collider center", () => {
+    const camera = new ProjectionPort();
+    const { transaction } = createHarness({
+      projections: [camera],
+      initialPositionMetersXYZ: [4, 1.4, -2],
+      colliderCenterOffsetFromSubjectOriginMetersXYZ: [0, 0.9, 0],
+    });
+
+    transaction.runTick({ command: command(1) });
+
+    const subjectOrigin =
+      camera.lastInput?.cameraContext.subjectPose.positionMetersXYZ;
+    expect(subjectOrigin?.[0]).toBeCloseTo(4);
+    expect(subjectOrigin?.[1]).toBeCloseTo(0.5);
+    expect(subjectOrigin?.[2]).toBeCloseTo(-2);
   });
 
   it.each(["begin", "resolve"] as const)(
@@ -547,6 +568,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     const body = new TransactionBodyPort();
     const transaction = new GoldenHumanoid3CVNextTransactionV1({
       subjectEntityId: "player",
+      colliderCenterOffsetFromSubjectOriginMetersXYZ: [0, 0, 0],
       fixedDeltaSeconds: 1 / 60,
       movementRuntime: movement,
       bodyPort: body,
@@ -618,6 +640,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     body.resolutionSupport = UNSUPPORTED;
     const transaction = new GoldenHumanoid3CVNextTransactionV1({
       subjectEntityId: "player",
+      colliderCenterOffsetFromSubjectOriginMetersXYZ: [0, 0, 0],
       fixedDeltaSeconds: 1 / 60,
       movementRuntime: movement,
       bodyPort: body,

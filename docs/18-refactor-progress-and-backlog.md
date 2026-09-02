@@ -240,7 +240,8 @@ Capture V1 是独立的新纵向切片，不改变该 90% 口径。
 - `pnpm verify:rigged-subject`：项目自有 Golden GLB、Rig、Collider Profile、
   `idle/walk/run/jump`、双实例隔离、墙体停止、936×596 截图与
   `SUBJECT_ASSET_HASH_MISMATCH` 篡改 Gate 全部通过；`verification.json` V2 还用
-  Foreground-origin Subject Silhouette 证明六组动作姿态差异率均高于 0.15，
+  Foreground-origin Subject Silhouette 与动作状态、两两不同的 PNG Hash 共同闭合动作证据；
+  日间 Runtime 调色板下六组动作姿态差异率门槛为 0.10，避免把阴影像素是否跨过红色身份阈值当成动作差异。
   最低为 0.281609。
 - `pnpm verify:g-bot-subject`：首个产品 G Bot 的 GLB/Manifest/Registry 映射、
   `idle/walk/run/jump`、双实例隔离和墙体停止通过；资产 Hash 为
