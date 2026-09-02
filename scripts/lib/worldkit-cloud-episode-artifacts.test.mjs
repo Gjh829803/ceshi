@@ -28,6 +28,49 @@ function sharedEpisodeFiles() {
   ];
 }
 
+test("publishes independently complete CPU prepare and GPU capture checkpoints", async () => {
+  const root = await mkdtemp(join(tmpdir(), "worldkit-cloud-episode-phases-"));
+  const episodeId = "episode-scene-cloud-001-phases";
+  try {
+    const prepareFiles = sharedEpisodeFiles().slice(0, 5);
+    for (const relativePath of prepareFiles) {
+      const filePath = join(root, relativePath);
+      await mkdir(join(filePath, ".."), { recursive: true });
+      await writeFile(filePath, `bytes:${relativePath}`);
+    }
+    const prepare = await buildCloudEpisodeArtifactManifest({
+      sceneId: "scene-cloud-001",
+      episodeId,
+      executionId: "exec-episode-phases",
+      stageId: "episode-prepare",
+      executionPart: "prepare",
+      stageOutputS3Prefix: "s3://bucket/episode/stages/episode-prepare/attempt-1",
+      episodeRoot: root,
+    });
+    assert.equal(prepare.executionPart, "prepare");
+    assert.equal(prepare.artifacts.filter((artifact) => artifact.required).length, 5);
+
+    for (const relativePath of sharedEpisodeFiles().slice(5)) {
+      const filePath = join(root, relativePath);
+      await mkdir(join(filePath, ".."), { recursive: true });
+      await writeFile(filePath, `bytes:${relativePath}`);
+    }
+    const capture = await buildCloudEpisodeArtifactManifest({
+      sceneId: "scene-cloud-001",
+      episodeId,
+      executionId: "exec-episode-phases",
+      stageId: "whitebox-capture",
+      executionPart: "capture",
+      stageOutputS3Prefix: "s3://bucket/episode/stages/whitebox-capture/attempt-1",
+      episodeRoot: root,
+    });
+    assert.equal(capture.executionPart, "capture");
+    assert.equal(capture.artifacts.filter((artifact) => artifact.required).length, 21);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("builds a hash-closed Episode manifest with only episode-relative paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "worldkit-cloud-episode-artifacts-"));
   try {
@@ -130,6 +173,8 @@ test("requires every reviewed Style Variant video while storing shared whitebox 
     "style-variants/style-variant-plan.json",
     "style-variants/style-variant-plan-report.json",
     "style-variants/style-variant-manifest.json",
+    "style-variants/diversity-review.json",
+    "style-variants/diversity-review-report.json",
     ...variantIds.flatMap((styleVariantId) => [
       `style-variants/${styleVariantId}/style-variant.json`,
       `style-variants/${styleVariantId}/visual/visual-manifest.json`,
@@ -160,7 +205,7 @@ test("requires every reviewed Style Variant video while storing shared whitebox 
     });
     assert.equal(
       cloudManifest.artifacts.filter((artifact) => artifact.required).length,
-      195,
+      197,
     );
     assert.equal(
       cloudManifest.artifacts.filter((artifact) =>
@@ -197,6 +242,8 @@ test("publishes a reviewed ten-style visual sample without Gemini, Seedance, or 
     "style-variants/style-variant-plan.json",
     "style-variants/style-variant-plan-report.json",
     "style-variants/style-variant-manifest.json",
+    "style-variants/diversity-review.json",
+    "style-variants/diversity-review-report.json",
     ...variantIds.flatMap((styleVariantId) => [
       `style-variants/${styleVariantId}/style-variant.json`,
       `style-variants/${styleVariantId}/visual/visual-manifest.json`,
@@ -225,7 +272,7 @@ test("publishes a reviewed ten-style visual sample without Gemini, Seedance, or 
       stageOutputS3Prefix: "s3://bucket/episode/stages/episode-production",
       episodeRoot: root,
     });
-    assert.equal(cloudManifest.artifacts.filter((artifact) => artifact.required).length, 124);
+    assert.equal(cloudManifest.artifacts.filter((artifact) => artifact.required).length, 126);
     assert.equal(cloudManifest.artifacts.some((artifact) =>
       artifact.path.includes("/prompts/visual-events.json")), false);
     assert.equal(cloudManifest.artifacts.some((artifact) =>

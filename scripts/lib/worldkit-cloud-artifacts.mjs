@@ -133,7 +133,11 @@ export async function buildCloudEpisodeArtifactManifest({
   workerImage = null,
   sourceRevision = null,
   requireComplete = true,
+  executionPart = "full",
 }) {
+  if (!["full", "prepare", "capture", "render"].includes(executionPart)) {
+    throw new Error("Cloud Episode executionPart is invalid.");
+  }
   const resolvedPrefix = assertS3Uri(stageOutputS3Prefix);
   const root = resolve(episodeRoot);
   const [episodeRecord, styleVariantManifest] = await Promise.all([
@@ -144,12 +148,15 @@ export async function buildCloudEpisodeArtifactManifest({
     ).then(JSON.parse).catch(() => null),
   ]);
   const visualSample = episodeRecord?.productionScope === "visual-sample";
-  const sharedRequiredPaths = [
+  const prepareRequiredPaths = [
     "episode/episode-record.json",
     "episode/episode-source-receipt.json",
     "episode/planning/reconnaissance/reconnaissance-report.json",
     "episode/planning/navigation-evidence.json",
     "episode/planning/playthrough-plan.json",
+  ];
+  const captureRequiredPaths = [
+    ...prepareRequiredPaths,
     "episode/whitebox/episode-180s.mp4",
     "episode/whitebox/executed-playthrough-raw-trace.json",
     "episode/whitebox/executed-playthrough-trace.json",
@@ -158,7 +165,6 @@ export async function buildCloudEpisodeArtifactManifest({
       `episode/whitebox/segment-0${index}.mp4`,
       `episode/whitebox/segment-0${index}-first-frame.png`,
     ]).flat(),
-    ...(visualSample ? [] : [`episode/bundle/${episodeId}-seedance-review.zip`]),
   ];
   const styleVariantRequiredPaths = styleVariantManifest?.kind ===
       "worldkit-episode-style-variant-manifest"
@@ -166,6 +172,8 @@ export async function buildCloudEpisodeArtifactManifest({
         "episode/style-variants/style-variant-plan.json",
         "episode/style-variants/style-variant-plan-report.json",
         "episode/style-variants/style-variant-manifest.json",
+        "episode/style-variants/diversity-review.json",
+        "episode/style-variants/diversity-review-report.json",
         ...styleVariantManifest.variants.flatMap((variant) => [
           `episode/style-variants/${variant.id}/style-variant.json`,
           `episode/style-variants/${variant.id}/visual/visual-manifest.json`,
@@ -193,10 +201,15 @@ export async function buildCloudEpisodeArtifactManifest({
           `episode/video/segment-0${index}/final-1280x720-24fps-720f.mp4`,
         ]).flat(),
       ];
-  const requiredPaths = new Set([
-    ...sharedRequiredPaths,
-    ...styleVariantRequiredPaths,
-  ]);
+  const requiredPaths = new Set(executionPart === "prepare"
+    ? prepareRequiredPaths
+    : executionPart === "capture"
+      ? captureRequiredPaths
+      : [
+          ...captureRequiredPaths,
+          ...(visualSample ? [] : [`episode/bundle/${episodeId}-seedance-review.zip`]),
+          ...styleVariantRequiredPaths,
+        ]);
   const artifacts = [];
   for (const filePath of await walkFiles(root)) {
     const metadata = await stat(filePath);
@@ -228,6 +241,7 @@ export async function buildCloudEpisodeArtifactManifest({
     episodeId,
     executionId,
     stageId,
+    executionPart,
     workerImage,
     sourceRevision,
     generatedAt: new Date().toISOString(),

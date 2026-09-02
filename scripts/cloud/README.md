@@ -5,14 +5,14 @@ changing the Scene production behavior. The worker calls the existing
 `pnpm agent:world` command; its Planner, Builder, Host replay, Runtime capture,
 and Visual Reconstructor remain authoritative and unchanged.
 
-Episode production uses the same boundary. Studio submits one custom
-`episode-production` worker stage rather than the service's built-in fine-grained
-Episode template. The worker hydrates one already-admitted Scene manifest into an
-ephemeral workspace, runs the unchanged `pnpm episode:run` workflow, builds the
-portable review ZIP, uploads the complete Episode tree plus a hash-closed manifest
-to S3, and destroys the workspace. Planner, six independent captures, one-call
-Gemini events, direct Seedance 2.5 720p, conformance, and their retry behavior
-stay inside the existing workflow.
+Episode production uses one custom three-stage DAG:
+`episode-prepare -> whitebox-capture -> episode-render`. These are compute and
+checkpoint boundaries, not new Agent boundaries. The middle stage is never
+launched per Episode. CPU prepare publishes a queue entry; the cloud dispatcher
+waits for at least 100 compatible ready entries, then one GPU Pod processes a
+100–128 task Batch in one lifecycle. CPU render resumes each admitted capture
+and runs the unchanged visual, Gemini, direct Seedance 2.5 720p, conformance and
+bundle behavior.
 
 ## Production boundary
 
@@ -30,9 +30,17 @@ stay inside the existing workflow.
 - `monitor-worldkit-cloud-scene-batch.mjs` polls the exact execution IDs from
   that manifest. It never relies on a collection listing or rediscovers work.
 - `submit-worldkit-cloud-episode.mjs` binds one Episode request to an admitted
-  Scene execution and creates exactly one `episode-production` worker stage.
-- `run-worldkit-cloud-episode-worker.mjs` owns GPU Babylon capture, the complete
-  downstream Episode workflow, S3 publication, heartbeats and cancellation.
+  Scene execution and creates the three coarse worker stages.
+- `run-worldkit-cloud-episode-worker.mjs` runs exactly one CPU prepare, GPU
+  capture, or CPU render part and publishes a phase manifest.
+- `dispatch-worldkit-gpu-capture-batch.mjs` is the singleton cloud reconciler.
+  It restores lost CPU launches and refuses to start GPU below 100 ready tasks.
+- `run-worldkit-cloud-gpu-capture-batch-worker.mjs` reuses one GPU for the full
+  Batch, isolates task failures, uploads per-task receipts, and resumes completed
+  receipts after infrastructure restart.
+- `cloud-production-run-index.mjs` projects Scene and Episode control records to
+  S3. A cloud Studio uses workload identity and treats local files only as an
+  ephemeral compatibility cache.
 
 The ten-style worker stage has a twelve-hour deadline. Infrastructure retry uses the same
 immutable request ID and source hashes. A new Planner or Builder result is never
@@ -80,7 +88,8 @@ The worker Job expects the following in namespace `lwdp`:
 - Secret `worldkit-cloud-capture-signing`, key `private.pem`.
 - Episode workers additionally require Secret `worldkit-episode-runtime`, with
   keys `infinite-canvas.key`, `gemini.env`,
-  `google-service-account.json`, `aws-credentials`, and `aws-config`.
+  and `google-service-account.json`. Cloud S3 access uses the Kubernetes
+  ServiceAccount workload identity; AWS key files are never mounted into a Pod.
 
 The Worker `LWDP_USER_ID` must always be copied from the same project-local LWDP
 config used to create the Cloud Execution. LWDP isolates executions by tenant;
@@ -95,7 +104,8 @@ pnpm cloud:episode:apply-runtime-secret -- --namespace lwdp
 ```
 
 Episode capture is scheduled on a GPU worker pool and requests
-`nvidia.com/gpu: 1` by default. The image bakes a static Playground with the
+`nvidia.com/gpu: 1` once per 100–128 task Batch. There is no production timeout
+flush below 100. The image bakes a static Playground with the
 worker-local `5297` asset origin; Studio listens only on loopback `4297` inside
 the disposable pod. Large videos and the ZIP are served to Studio through
 short-lived S3 URLs so Browser Range playback never hydrates them locally.
@@ -110,9 +120,22 @@ Worker manifest.
 
 `config/cloud-episode-production.json` is enabled only with a built and pushed
 digest-pinned image. The image contains Chromium/Playwright, ffmpeg, Python
-provider clients, AWS tooling and `zip`, because the portable bundle is built
-inside the disposable Worker. A mutable tag or an image that predates the
-Episode worker is invalid.
+provider clients, AWS tooling, `kubectl`, and `zip`, because capture, cloud
+reconciliation and the portable bundle run inside disposable Workers. A mutable
+tag or an image that predates the three-stage request, GPU dispatcher, or Batch
+Worker is invalid.
+
+Deploying the code does not submit a Case. After publishing a new digest-pinned
+image, install the CPU dispatcher and optional cloud Studio control plane with:
+
+```bash
+pnpm cloud:episode:deploy-gpu-dispatcher
+pnpm cloud:control-plane:deploy
+```
+
+Both commands mutate Kubernetes and require an authorized rollout. The
+dispatcher itself starts no GPU until the queue contains at least 100 admitted
+tasks.
 
 The corresponding capture public key is a trust root owned outside the
 artifact bundle. Do not copy the private key into the repository, S3 inputs,
@@ -128,5 +151,6 @@ pnpm test:cloud-orchestration
 pnpm typecheck
 ```
 
-One real cloud smoke must reach `succeeded` and publish
-`cloud-artifact-manifest.json` before starting a 20-case batch.
+Contract tests submit no real Case. A separately authorized canary must prove
+the three phase manifests and the 99/100 GPU threshold before a production
+batch is released.

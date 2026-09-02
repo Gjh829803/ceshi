@@ -40,16 +40,22 @@ function stagesFromPayload(payload) {
   return [];
 }
 
-export function cloudArtifactManifestS3Uri(execution, stagesPayload) {
+export function cloudArtifactManifestS3Uri(execution, stagesPayload, preferredStageId = null) {
   const stages = stagesFromPayload(stagesPayload);
   const artifacts = [
     ...(Array.isArray(execution?.artifacts) ? execution.artifacts : []),
     ...stages.flatMap((stage) => Array.isArray(stage?.artifacts) ? stage.artifacts : []),
   ];
   const declared = artifacts.find((artifact) =>
+    (preferredStageId === null || artifact?.stage_id === preferredStageId) &&
     artifact?.role === "worldkit-cloud-artifact-manifest" &&
-    typeof (artifact.s3_uri ?? artifact.s3Uri) === "string");
-  const diagnosticUri = stages
+    typeof (artifact.s3_uri ?? artifact.s3Uri) === "string") ?? artifacts.find((artifact) =>
+      artifact?.role === "worldkit-cloud-artifact-manifest" &&
+      typeof (artifact.s3_uri ?? artifact.s3Uri) === "string");
+  const preferredStages = preferredStageId === null
+    ? stages
+    : stages.filter((stage) => stage?.stage_id === preferredStageId);
+  const diagnosticUri = preferredStages
     .map((stage) => stage?.diagnostics?.manifest_s3_uri)
     .find((value) => typeof value === "string") ??
     execution?.diagnostics?.manifest_s3_uri;

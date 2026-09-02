@@ -12,6 +12,10 @@ test("cloud Episode worker defaults to the platform fetch implementation", async
   assert.match(source, /fetchImplementation = fetch,/);
   assert.match(source, /request\.styleVariantMode === "ten-style" \? "1" : "0"/);
   assert.match(source, /attempt-\$\{cloudStageAttempt\}/);
+  assert.match(source, /--execution-part", executionPart/);
+  assert.match(source, /WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX/);
+  assert.match(source, /worldkit-gpu-capture-queue-entry/);
+  assert.match(source, /worldkit-cloud-checkpoint-manifest/);
 });
 
 test("materializes Episode provider Secrets only inside the ephemeral project workspace", async () => {
@@ -23,8 +27,6 @@ test("materializes Episode provider Secrets only inside the ephemeral project wo
     "infinite-canvas.key",
     "gemini.env",
     "google-service-account.json",
-    "aws-credentials",
-    "aws-config",
   ]) await writeFile(path.join(secretRoot, fileName), `fake-${fileName}\n`);
   try {
     const runtimeRoot = await materializeEpisodeRuntimeConfig({

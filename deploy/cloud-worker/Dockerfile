@@ -6,9 +6,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/pnpm:$PATH
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg python3-pip zip \
+    && apt-get install -y --no-install-recommends curl ffmpeg python3-pip zip \
     && python3 -m pip install --break-system-packages --no-cache-dir awscli pillow requests google-genai \
     && rm -rf /var/lib/apt/lists/*
+
+ARG KUBECTL_VERSION=v1.33.4
+RUN curl -fsSLo /usr/local/bin/kubectl \
+      "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && curl -fsSLo /tmp/kubectl.sha256 \
+      "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256" \
+    && echo "$(cat /tmp/kubectl.sha256)  /usr/local/bin/kubectl" | sha256sum --check \
+    && chmod 0755 /usr/local/bin/kubectl \
+    && rm /tmp/kubectl.sha256
 
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 

@@ -1,8 +1,15 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import path from "node:path";
 
 import { assertS3Uri } from "../../../scripts/lib/lwdp-generation-client.mjs";
+import {
+  projectAwsEnvironment,
+  readRemoteS3Artifact,
+} from "../../../scripts/lib/cloud-s3-runtime.mjs";
+export {
+  projectAwsEnvironment,
+  readRemoteS3Artifact,
+} from "../../../scripts/lib/cloud-s3-runtime.mjs";
 
 const HASH = /^sha256:[a-f0-9]{64}$/;
 const MAXIMUM_MANIFEST_BYTES = 5 * 1024 * 1024;
@@ -13,25 +20,6 @@ const MAXIMUM_EPISODE_DECLARED_BYTES = 16 * 1024 * 1024 * 1024;
 
 function portableArtifactPath(value) {
   return String(value ?? "").replaceAll("\\", "/");
-}
-
-export function projectAwsEnvironment(repoRoot, environment = process.env) {
-  const runtimeRoot = path.join(repoRoot, ".codex-tmp", "runtime-config");
-  const next = { ...environment };
-  for (const key of [
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-    "AWS_PROFILE",
-    "AWS_DEFAULT_PROFILE",
-    "AWS_WEB_IDENTITY_TOKEN_FILE",
-    "AWS_ROLE_ARN",
-  ]) delete next[key];
-  next.AWS_SHARED_CREDENTIALS_FILE = path.join(runtimeRoot, "aws-credentials");
-  next.AWS_CONFIG_FILE = path.join(runtimeRoot, "aws-config");
-  next.AWS_REGION = "us-east-2";
-  next.AWS_DEFAULT_REGION = "us-east-2";
-  return next;
 }
 
 export function validateCloudArtifactManifest(value, {
@@ -59,6 +47,10 @@ export function validateCloudArtifactManifest(value, {
     (expectedEpisodeId !== undefined && value.episodeId !== expectedEpisodeId) ||
     (expectedExecutionId !== undefined && value.executionId !== expectedExecutionId)
   ) throw new Error("Cloud artifact manifest identity is invalid.");
+  if (episodeManifest && value.executionPart !== undefined &&
+      !["full", "prepare", "capture", "render"].includes(value.executionPart)) {
+    throw new Error("Cloud Episode artifact execution part is invalid.");
+  }
 
   let declaredBytes = 0;
   const seen = new Set();
@@ -104,49 +96,12 @@ export function validateCloudArtifactManifest(value, {
     episodeId: episodeManifest ? value.episodeId : null,
     executionId: value.executionId,
     stageId: value.stageId,
+    executionPart: episodeManifest ? value.executionPart ?? "full" : null,
     workerImage: value.workerImage ?? null,
     sourceRevision: value.sourceRevision ?? null,
     generatedAt: value.generatedAt ?? null,
     artifacts: Object.freeze(artifacts),
   });
-}
-
-function execFileBuffer(command, arguments_, options) {
-  return new Promise((resolvePromise, reject) => {
-    execFile(command, arguments_, {
-      ...options,
-      encoding: "buffer",
-      maxBuffer: options.maxBuffer,
-    }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(`${command} failed: ${Buffer.from(stderr ?? "").toString("utf8").trim() || error.message}`));
-        return;
-      }
-      resolvePromise(Buffer.from(stdout));
-    });
-  });
-}
-
-export async function readRemoteS3Artifact(s3Uri, {
-  repoRoot,
-  maximumBytes = 16 * 1024 * 1024,
-  execFileImplementation = execFileBuffer,
-} = {}) {
-  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
-    throw new Error("maximumBytes must be a positive safe integer.");
-  }
-  const bytes = await execFileImplementation(
-    "aws",
-    ["s3", "cp", "--only-show-errors", assertS3Uri(s3Uri), "-"],
-    {
-      env: projectAwsEnvironment(repoRoot),
-      maxBuffer: maximumBytes,
-    },
-  );
-  if (!Buffer.isBuffer(bytes) || bytes.length < 1 || bytes.length > maximumBytes) {
-    throw new Error(`Remote S3 artifact is empty or exceeds ${maximumBytes} bytes.`);
-  }
-  return bytes;
 }
 
 export async function readCloudArtifactManifest(manifestS3Uri, options = {}) {

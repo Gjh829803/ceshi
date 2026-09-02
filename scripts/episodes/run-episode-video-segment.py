@@ -64,6 +64,28 @@ def write_json_atomic(path: Path, value: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
+def persist_provider_record(path: Path, value: dict[str, Any]) -> None:
+    """Persist locally and, in cloud mode, immediately checkpoint the provider journal."""
+    write_json_atomic(path, value)
+    prefix = os.environ.get("WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX", "").rstrip("/")
+    if not prefix:
+        return
+    if not prefix.startswith("s3://"):
+        raise EpisodeVideoError("WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX must be an S3 URI")
+    episode_id = safe_id(value.get("episodeId"), "provider journal episodeId")
+    segment_id = safe_id(value.get("segmentId"), "provider journal segmentId")
+    destination = f"{prefix}/{episode_id}/{segment_id}/provider-run.json"
+    subprocess.run(
+        ["aws", "s3", "cp", "--only-show-errors", str(path), destination],
+        check=True,
+        timeout=120,
+    )
+    print(
+        f"WORLDKIT_PROVIDER_JOURNAL_CHECKPOINT {segment_id} {value.get('status')}",
+        flush=True,
+    )
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -453,7 +475,7 @@ def main() -> None:
                     "images": image_urls,
                     "videos": [video_url],
                 }
-                write_json_atomic(result_path, {
+                persist_provider_record(result_path, {
                     "kind": "worldkit-episode-video-provider-run",
                     "schemaVersion": 3,
                     "sceneId": scene_id,
@@ -475,7 +497,7 @@ def main() -> None:
                 idempotency_key=idempotency_key,
                 payload=payload,
             )
-            write_json_atomic(result_path, {
+            persist_provider_record(result_path, {
                 "kind": "worldkit-episode-video-provider-run",
                 "schemaVersion": 3,
                 "sceneId": scene_id,
@@ -511,7 +533,7 @@ def main() -> None:
                 "error": error.detail,
             })
             record.pop("providerRequest", None)
-            write_json_atomic(result_path, record)
+            persist_provider_record(result_path, record)
             raise
         download(result_url, raw_output)
         raw_media = probe(raw_output)
@@ -543,7 +565,7 @@ def main() -> None:
             "updatedAt": utc_now(),
         })
         record.pop("providerRequest", None)
-        write_json_atomic(result_path, record)
+        persist_provider_record(result_path, record)
         return
 
     media = conform(raw_output, final_output)
@@ -572,7 +594,7 @@ def main() -> None:
         },
     })
     record.pop("providerRequest", None)
-    write_json_atomic(result_path, record)
+    persist_provider_record(result_path, record)
     print("WORLDKIT_EPISODE_VIDEO_SEGMENT_READY", flush=True)
 
 

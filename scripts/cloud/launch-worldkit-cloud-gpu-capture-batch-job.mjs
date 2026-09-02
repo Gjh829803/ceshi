@@ -1,0 +1,184 @@
+#!/usr/bin/env node
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { kubectlApply } from "./launch-worldkit-cloud-episode-worker-job.mjs";
+
+const IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
+
+function required(value, label) {
+  if (typeof value !== "string" || value.length === 0) throw new Error(`${label} is required.`);
+  return value;
+}
+
+function parseArgs(argv) {
+  const options = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (!argument.startsWith("--")) throw new Error(`Unexpected argument: ${argument}`);
+    const value = argv[index + 1];
+    if (!value || value.startsWith("--")) throw new Error(`Missing value after ${argument}.`);
+    options[argument.slice(2)] = value;
+    index += 1;
+  }
+  return options;
+}
+
+export function cloudGpuCaptureBatchJob({
+  batchId,
+  batchManifestS3Uri,
+  queueS3Prefix,
+  taskCount,
+  image,
+  namespace = "lwdp",
+  serviceAccountName = "lwdp-be",
+  generationTokenSecretName = "lwdp-generation-token",
+  episodeRuntimeSecretName = "worldkit-episode-runtime",
+  captureSigningSecretName = "worldkit-cloud-capture-signing",
+  apiBase = "https://lwdp.loopit.me",
+  userId = "worldkit-studio",
+  gpuResourceName = "nvidia.com/gpu",
+  gpuCount = 1,
+  nodeSelector = {},
+  tolerations = [],
+  taskLeaseSeconds = 43_200,
+  ephemeralStorageRequest = "32Gi",
+  ephemeralStorageLimit = "64Gi",
+}) {
+  if (!/^gpu-capture-[a-f0-9]{24}$/.test(batchId ?? "")) {
+    throw new Error("batchId is invalid.");
+  }
+  if (!Number.isSafeInteger(taskCount) || taskCount < 100) {
+    throw new Error("GPU Batch Job requires at least 100 admitted tasks.");
+  }
+  required(batchManifestS3Uri, "batchManifestS3Uri");
+  required(queueS3Prefix, "queueS3Prefix");
+  if (!IMAGE.test(image ?? "")) throw new Error("image must be digest-pinned.");
+  if (!Number.isSafeInteger(gpuCount) || gpuCount < 1) {
+    throw new Error("gpuCount must be a positive integer.");
+  }
+  if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900) {
+    throw new Error("taskLeaseSeconds must be at least 900.");
+  }
+  const name = `worldkit-${batchId}`.slice(0, 63).replace(/-$/, "");
+  return {
+    apiVersion: "batch/v1",
+    kind: "Job",
+    metadata: {
+      name,
+      namespace,
+      labels: {
+        app: "worldkit-gpu-capture-batch",
+        "worldkit.seedleap.dev/gpu-batch-id": batchId,
+        "worldkit.seedleap.dev/task-count": String(taskCount),
+      },
+    },
+    spec: {
+      backoffLimit: 2,
+      activeDeadlineSeconds: 86_400,
+      ttlSecondsAfterFinished: 86_400,
+      template: {
+        metadata: { labels: { app: "worldkit-gpu-capture-batch" } },
+        spec: {
+          serviceAccountName,
+          ...(Object.keys(nodeSelector).length > 0 ? { nodeSelector } : {}),
+          ...(tolerations.length > 0 ? { tolerations } : {}),
+          restartPolicy: "Never",
+          terminationGracePeriodSeconds: 120,
+          containers: [{
+            name: "gpu-capture-batch-worker",
+            image,
+            imagePullPolicy: "IfNotPresent",
+            command: ["node", "scripts/cloud/run-worldkit-cloud-gpu-capture-batch-worker.mjs"],
+            args: [
+              "--batch-manifest-s3-uri", batchManifestS3Uri,
+              "--queue-s3-prefix", queueS3Prefix,
+              "--task-lease-seconds", String(taskLeaseSeconds),
+            ],
+            env: [
+              { name: "LWDP_API_BASE", value: apiBase },
+              { name: "LWDP_USER_ID", value: userId },
+              { name: "AWS_REGION", value: "us-east-2" },
+              { name: "AWS_DEFAULT_REGION", value: "us-east-2" },
+              { name: "PLAYWRIGHT_BROWSERS_PATH", value: "/ms-playwright" },
+              { name: "NODE_OPTIONS", value: "--max-old-space-size=12288" },
+              { name: "WORLDKIT_CODEX_BACKEND", value: "cloud" },
+              { name: "WORLDKIT_CAPTURE_GPU", value: "1" },
+              { name: "WORLDKIT_CAPTURE_HEADLESS", value: "1" },
+              { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
+              { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
+              {
+                name: "LWDP_GENERATION_API_TOKEN",
+                valueFrom: { secretKeyRef: { name: generationTokenSecretName, key: "token" } },
+              },
+              {
+                name: "WORLDKIT_CAPTURE_TRUSTED_PUBLIC_KEY_PATH",
+                value: "/var/run/worldkit-host-trust/public.pem",
+              },
+            ],
+            volumeMounts: [
+              { name: "episode-runtime", mountPath: "/var/run/worldkit-episode-runtime", readOnly: true },
+              { name: "capture-signing-key", mountPath: "/var/run/worldkit-host-trust", readOnly: true },
+            ],
+            resources: {
+              requests: {
+                cpu: "4",
+                memory: "8Gi",
+                "ephemeral-storage": required(ephemeralStorageRequest, "ephemeralStorageRequest"),
+                [gpuResourceName]: gpuCount,
+              },
+              limits: {
+                cpu: "8",
+                memory: "16Gi",
+                "ephemeral-storage": required(ephemeralStorageLimit, "ephemeralStorageLimit"),
+                [gpuResourceName]: gpuCount,
+              },
+            },
+          }],
+          volumes: [
+            { name: "episode-runtime", secret: { secretName: episodeRuntimeSecretName } },
+            {
+              name: "capture-signing-key",
+              secret: {
+                secretName: captureSigningSecretName,
+                items: [{ key: "public.pem", path: "public.pem", mode: 0o444 }],
+              },
+            },
+          ],
+        },
+      },
+    },
+  };
+}
+
+export async function launchCloudGpuCaptureBatchJob(options) {
+  const manifest = cloudGpuCaptureBatchJob(options);
+  const output = await kubectlApply(manifest, options);
+  return { jobName: manifest.metadata.name, namespace: manifest.metadata.namespace, output };
+}
+
+async function main() {
+  const options = parseArgs(process.argv.slice(2));
+  const result = await launchCloudGpuCaptureBatchJob({
+    batchId: options["batch-id"],
+    batchManifestS3Uri: options["batch-manifest-s3-uri"],
+    queueS3Prefix: options["queue-s3-prefix"],
+    taskCount: Number(options["task-count"]),
+    image: options.image,
+    namespace: options.namespace ?? "lwdp",
+    userId: options["user-id"] ?? "worldkit-studio",
+    gpuResourceName: options["gpu-resource-name"] ?? "nvidia.com/gpu",
+    gpuCount: Number(options["gpu-count"] ?? 1),
+    taskLeaseSeconds: Number(options["task-lease-seconds"] ?? 43_200),
+    ephemeralStorageRequest: options["ephemeral-storage-request"] ?? "32Gi",
+    ephemeralStorageLimit: options["ephemeral-storage-limit"] ?? "64Gi",
+  });
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    process.stderr.write(`${error.stack || error.message}\n`);
+    process.exitCode = 1;
+  });
+}

@@ -18,14 +18,16 @@ test("keeps Cloud Episode disabled until a digest-pinned GPU image is deployed",
   try {
     await writeFile(configPath, JSON.stringify({
       kind: "worldkit-cloud-episode-production-config",
-      schemaVersion: 1,
+      schemaVersion: 2,
+      executionProfile: "cpu-gpu-batch-cpu@1",
       enabled: false,
       workerImage: null,
     }));
     assert.equal(await loadCloudEpisodeProductionConfig(root, { configPath }), null);
     await writeFile(configPath, JSON.stringify({
       kind: "worldkit-cloud-episode-production-config",
-      schemaVersion: 1,
+      schemaVersion: 2,
+      executionProfile: "cpu-gpu-batch-cpu@1",
       enabled: true,
       workerImage: "worldkit:latest",
       outputS3Root: "s3://bucket/episodes",
@@ -39,7 +41,7 @@ test("keeps Cloud Episode disabled until a digest-pinned GPU image is deployed",
   }
 });
 
-test("retries only the coarse Episode stage and launches a new worker attempt", async () => {
+test("retries one CPU Episode stage and launches only its new worker attempt", async () => {
   const calls = [];
   const result = await retryStudioCloudEpisode({
     executionId: "exec-episode-001",
@@ -47,12 +49,14 @@ test("retries only the coarse Episode stage and launches a new worker attempt", 
     outputS3Prefix: "s3://bucket/episode",
     retryRequestId: "episode-retry-2",
     attempt: 2,
+    stageId: "episode-render",
     workerImage: `worker@sha256:${"c".repeat(64)}`,
     config: {
       workerImage: `worker@sha256:${"c".repeat(64)}`,
       namespace: "lwdp",
       gpuResourceName: "nvidia.com/gpu",
       gpuCount: 1,
+      cpuWorker: {},
     },
     cloudConfig: { userId: "partner_codex" },
     retryImplementation: async (_executionId, input) => {
@@ -69,13 +73,13 @@ test("retries only the coarse Episode stage and launches a new worker attempt", 
     stagesImplementation: async () => ({ stages: [] }),
   });
   assert.deepEqual(calls, [
-    ["retry", "episode-production", "episode-retry-2"],
+    ["retry", "episode-render", "episode-retry-2"],
     ["launch", "retry-2", "partner_codex", `worker@sha256:${"c".repeat(64)}`],
   ]);
   assert.equal(result.manifestS3Uri, "s3://bucket/episode/retry-manifest.json");
 });
 
-test("submits, launches and polls one coarse Episode execution", async () => {
+test("submits the three-stage Episode execution and launches CPU prepare only", async () => {
   const calls = [];
   const result = await executeStudioCloudEpisode({
     sceneId: "scene-cloud-001",
@@ -92,6 +96,12 @@ test("submits, launches and polls one coarse Episode execution", async () => {
       namespace: "lwdp",
       gpuResourceName: "nvidia.com/gpu",
       gpuCount: 1,
+      gpuBatch: {
+        queueS3Prefix: "s3://bucket/gpu-queue",
+        minimumBatchSize: 100,
+        maximumBatchSize: 128,
+      },
+      cpuWorker: {},
     },
     cloudConfig: { userId: "partner_codex" },
     submitImplementation: async (input) => {
@@ -109,7 +119,7 @@ test("submits, launches and polls one coarse Episode execution", async () => {
       };
     },
     launchImplementation: async (input) => {
-      calls.push(["launch", input.gpuCount, input.userId]);
+      calls.push(["launch", input.stageId, input.executionPart, input.gpuRequired, input.userId]);
     },
     pollImplementation: async () => ({
       execution_id: "exec-episode-001",
@@ -126,7 +136,7 @@ test("submits, launches and polls one coarse Episode execution", async () => {
       "legacy",
       `worker@sha256:${"a".repeat(64)}`,
     ],
-    ["launch", 1, "partner_codex"],
+    ["launch", "episode-prepare", "prepare", false, "partner_codex"],
   ]);
   assert.equal(result.execution.status, "succeeded");
   assert.equal(result.manifestS3Uri, "s3://bucket/episode/manifest.json");
@@ -140,6 +150,7 @@ test("recovers an existing Cloud Episode without launching a duplicate worker", 
     getImplementation: async () => ({
       execution_id: "exec-episode-existing",
       status: "running",
+      current_stage_id: "episode-render",
     }),
     pollImplementation: async () => {
       pollCount += 1;
@@ -182,11 +193,13 @@ test("re-applies the deterministic Worker Job before polling a non-terminal exec
       gpuCount: 1,
       nodeSelector: {},
       tolerations: [],
+      cpuWorker: {},
     },
     cloudConfig: { userId: "worldkit-studio" },
     getImplementation: async () => ({
       execution_id: "exec-episode-recoverable",
       status: "running",
+      current_stage_id: "episode-render",
     }),
     launchImplementation: async (input) => launches.push(input),
     pollImplementation: async () => ({
@@ -199,5 +212,7 @@ test("re-applies the deterministic Worker Job before polling a non-terminal exec
   assert.equal(recovered.execution.status, "succeeded");
   assert.equal(launches.length, 1);
   assert.equal(launches[0].image, workerImage);
+  assert.equal(launches[0].stageId, "episode-render");
+  assert.equal(launches[0].gpuRequired, false);
   assert.equal(launches[0].jobSuffix, "retry-2");
 });

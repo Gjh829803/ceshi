@@ -73,6 +73,14 @@ import {
   streamCloudArtifact,
   redirectToPresignedCloudArtifact,
 } from "./remote-cloud-artifacts.mjs";
+import {
+  listCloudSceneRunIndexRecords,
+  listCloudEpisodeRunIndexRecords,
+  readCloudSceneRunIndexRecord,
+  readCloudEpisodeRunIndexRecord,
+  writeCloudSceneRunIndexRecord,
+  writeCloudEpisodeRunIndexRecord,
+} from "../../../scripts/lib/cloud-production-run-index.mjs";
 
 const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const studioRoot = path.resolve(studioSourceRoot, "..");
@@ -1161,6 +1169,8 @@ export function createStudio(options = {}) {
     "runtime-config",
     "lwdp.env",
   );
+  const cloudControlPlane = options.cloudControlPlane ??
+    process.env.WORLDKIT_CLOUD_CONTROL_PLANE === "1";
   const cloudSceneExecutionEnabled = options.cloudSceneExecutionEnabled ?? true;
   const loadCloudSceneProductionConfigImplementation =
     options.loadCloudSceneProductionConfigImplementation ??
@@ -1572,6 +1582,30 @@ export function createStudio(options = {}) {
         repoRoot,
         ...streamOptions,
       }),
+    persistCloudEpisodeRecord: async (record) => {
+      const productionConfig = await cloudEpisodeProductionConfig();
+      if (productionConfig === null) return null;
+      return writeCloudEpisodeRunIndexRecord(record, {
+        repoRoot,
+        outputS3Root: productionConfig.outputS3Root,
+      });
+    },
+    readCloudEpisodeRecord: async (episodeId) => {
+      const productionConfig = await cloudEpisodeProductionConfig();
+      if (productionConfig === null) return null;
+      return readCloudEpisodeRunIndexRecord(episodeId, {
+        repoRoot,
+        outputS3Root: productionConfig.outputS3Root,
+      });
+    },
+    listCloudEpisodeRecords: async () => {
+      const productionConfig = await cloudEpisodeProductionConfig();
+      if (productionConfig === null) return [];
+      return listCloudEpisodeRunIndexRecords({
+        repoRoot,
+        outputS3Root: productionConfig.outputS3Root,
+      });
+    },
   });
 
   const recordPath = (id) => path.join(worldsRoot, id, "record.json");
@@ -1754,10 +1788,25 @@ export function createStudio(options = {}) {
 
   async function readRecord(id) {
     if (!idPattern.test(id)) return null;
+    let local = null;
     try {
-      return JSON.parse(await readFile(recordPath(id), "utf8"));
+      local = JSON.parse(await readFile(recordPath(id), "utf8"));
+    } catch {}
+    if (!cloudControlPlane) return local;
+    try {
+      const productionConfig = await cloudSceneProductionConfig();
+      if (productionConfig === null) return local;
+      const remote = await readCloudSceneRunIndexRecord(id, {
+        repoRoot,
+        outputS3Root: productionConfig.outputS3Root,
+      });
+      if (!local) return remote;
+      if (!remote) return local;
+      return Number(remote.recordRevision ?? 0) > Number(local.recordRevision ?? 0)
+        ? remote
+        : local;
     } catch {
-      return null;
+      return local;
     }
   }
 
@@ -1767,6 +1816,15 @@ export function createStudio(options = {}) {
       ? record.recordRevision + 1
       : 1;
     record.updatedAt = new Date().toISOString();
+    if (cloudControlPlane && record.codexBackend === "cloud") {
+      const productionConfig = await cloudSceneProductionConfig();
+      if (productionConfig !== null) {
+        await writeCloudSceneRunIndexRecord(record, {
+          repoRoot,
+          outputS3Root: productionConfig.outputS3Root,
+        });
+      }
+    }
     await writeJsonAtomic(recordPath(record.id), record);
     worldListRevision += 1;
     enrichedWorldListCache = null;
@@ -1947,9 +2005,26 @@ export function createStudio(options = {}) {
   async function listRecords() {
     await mkdir(worldsRoot, { recursive: true });
     const entries = await readdir(worldsRoot, { withFileTypes: true });
-    const records = (
+    let records = (
       await Promise.all(entries.filter((entry) => entry.isDirectory()).map((entry) => readRecord(entry.name)))
     ).filter(Boolean);
+    if (cloudControlPlane) {
+      const productionConfig = await cloudSceneProductionConfig();
+      if (productionConfig !== null) {
+        const remoteRecords = await listCloudSceneRunIndexRecords({
+          repoRoot,
+          outputS3Root: productionConfig.outputS3Root,
+        }).catch(() => []);
+        const byId = new Map(records.map((record) => [record.id, record]));
+        for (const remoteRecord of remoteRecords) {
+          const local = byId.get(remoteRecord.id);
+          if (!local || Number(remoteRecord.recordRevision ?? 0) > Number(local.recordRevision ?? 0)) {
+            byId.set(remoteRecord.id, remoteRecord);
+          }
+        }
+        records = [...byId.values()];
+      }
+    }
     return records.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 

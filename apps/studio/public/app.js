@@ -1110,10 +1110,14 @@ function renderCompositionStatus(media) {
 }
 
 const episodeStageLabels = {
+  "episode-prepare": "云端 CPU 准备",
+  "episode-render": "云端 CPU 视觉与视频生成",
   reconnaissance: "Runtime 侦察",
+  "navigation-evidence": "探索导航证据",
   "playthrough-plan": "六起点玩家操作剧本",
   "whitebox-capture": "白膜录制与切分",
   "visual-reconstruction": "样式首帧与三视图",
+  "visual-events": "Gemini 场景事件",
   "style-variant-production": "十种风格视觉生产",
   "style-variant-plan": "十种独立风格规划",
   "style-variant-visual-review": "Codex 构图与三视图质检",
@@ -1460,8 +1464,14 @@ function renderEpisodeWorkflows(media, world) {
     const supplementalArtifacts = episode.playbackComparisons?.length
       ? artifacts.filter((artifact) => !isComparisonVideoArtifact(artifact))
       : artifacts;
+    const gpuBatchNote = episode.gpuBatchStatus === "waiting-for-batch"
+      ? `<p class="media-empty">GPU 捕获正在云端汇集：达到至少 ${escapeHtml(episode.gpuBatchMinimumSize ?? 100)} 个就绪任务后，才会启动一台 GPU 连续处理整批；当前不会临时拉起 GPU。</p>`
+      : episode.gpuBatchStatus === "capturing"
+        ? `<p class="media-empty">已进入共享 GPU Batch，正在连续录制六段白膜视频。</p>`
+        : "";
     return `<section class="episode-run" data-episode-id="${escapeHtml(episode.episodeId)}">
       <header class="episode-run-heading"><div><small>${escapeHtml(episode.episodeId)}</small><h4>${episode.status === "succeeded" ? "完整链路已交付" : episode.status === "failed" ? "链路需要处理" : "链路正在运行"}</h4></div><span data-status="${escapeHtml(episode.status)}">${escapeHtml(episode.currentStage ? episodeStageLabels[episode.currentStage] ?? episode.currentStage : episode.status)}</span></header>
+      ${gpuBatchNote}
       <ol class="episode-stages">${(episode.stages ?? []).map((stage, index) => `<li data-status="${escapeHtml(stage.status)}"><b>${String(index + 1).padStart(2, "0")}</b><span>${escapeHtml(stage.title ?? episodeStageLabels[stage.id] ?? stage.id)}</span><small>${escapeHtml(stage.status)}</small></li>`).join("")}</ol>
       ${episode.error ? `<p class="episode-error">${escapeHtml(episode.error)}</p>` : ""}
       ${episode.running ? `<button type="button" class="text-button" data-stop-episode="${escapeHtml(episode.episodeId)}">停止这条数据任务</button>` : ""}

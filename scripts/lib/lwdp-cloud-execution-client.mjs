@@ -174,7 +174,7 @@ export async function pollCloudExecution(executionId, {
     });
     if (signature !== lastSignature) {
       lastSignature = signature;
-      onProgress(execution);
+      await onProgress(execution);
     }
     if (TERMINAL_EXECUTION_STATUSES.has(String(execution.status))) return execution;
     if (Date.now() - startedAt >= timeoutMs) {

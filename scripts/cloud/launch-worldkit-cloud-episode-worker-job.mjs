@@ -32,6 +32,8 @@ function jobName(executionId, jobSuffix = "") {
 
 export function cloudEpisodeWorkerJob({
   executionId,
+  stageId = "episode-production",
+  executionPart = "full",
   requestS3Uri,
   outputS3Prefix,
   image,
@@ -44,25 +46,51 @@ export function cloudEpisodeWorkerJob({
   userId = "worldkit-studio",
   gpuResourceName = "nvidia.com/gpu",
   gpuCount = 1,
+  gpuRequired = true,
+  cpuRequest = gpuRequired ? "4" : "2",
+  cpuLimit = "8",
+  memoryRequest = gpuRequired ? "8Gi" : "4Gi",
+  memoryLimit = "16Gi",
+  ephemeralStorageRequest = gpuRequired ? "32Gi" : "16Gi",
+  ephemeralStorageLimit = gpuRequired ? "64Gi" : "32Gi",
   nodeSelector = {},
   tolerations = [],
   jobSuffix = "",
 }) {
   required(executionId, "execution_id");
+  required(stageId, "stage_id");
+  if (!["full", "prepare", "capture", "render"].includes(executionPart)) {
+    throw new Error("execution_part is invalid.");
+  }
   required(requestS3Uri, "request_s3_uri");
   required(outputS3Prefix, "output_s3_prefix");
   required(image, "image");
   if (!/@sha256:[a-f0-9]{64}$/.test(image)) {
     throw new Error("image must be pinned by an immutable sha256 digest.");
   }
-  if (!Number.isSafeInteger(gpuCount) || gpuCount < 1) {
-    throw new Error("gpu_count must be a positive integer.");
+  if (gpuRequired && (!Number.isSafeInteger(gpuCount) || gpuCount < 1)) {
+    throw new Error("gpu_count must be a positive integer when GPU is required.");
   }
   if (!nodeSelector || typeof nodeSelector !== "object" || Array.isArray(nodeSelector)) {
     throw new Error("node_selector must be an object.");
   }
   if (!Array.isArray(tolerations)) throw new Error("tolerations must be an array.");
-  const name = jobName(executionId, jobSuffix);
+  const name = jobName(
+    executionId,
+    stageId === "episode-production" ? jobSuffix : `${stageId}-${jobSuffix}`,
+  );
+  const resourceRequests = {
+    cpu: required(cpuRequest, "cpu_request"),
+    memory: required(memoryRequest, "memory_request"),
+    "ephemeral-storage": required(ephemeralStorageRequest, "ephemeral_storage_request"),
+    ...(gpuRequired ? { [gpuResourceName]: gpuCount } : {}),
+  };
+  const resourceLimits = {
+    cpu: required(cpuLimit, "cpu_limit"),
+    memory: required(memoryLimit, "memory_limit"),
+    "ephemeral-storage": required(ephemeralStorageLimit, "ephemeral_storage_limit"),
+    ...(gpuRequired ? { [gpuResourceName]: gpuCount } : {}),
+  };
   return {
     apiVersion: "batch/v1",
     kind: "Job",
@@ -72,6 +100,7 @@ export function cloudEpisodeWorkerJob({
       labels: {
         app: "worldkit-cloud-episode-worker",
         "worldkit.seedleap.dev/execution-id": executionId,
+        "worldkit.seedleap.dev/stage-id": stageId,
       },
     },
     spec: {
@@ -82,8 +111,8 @@ export function cloudEpisodeWorkerJob({
         metadata: { labels: { app: "worldkit-cloud-episode-worker" } },
         spec: {
           serviceAccountName,
-          ...(Object.keys(nodeSelector).length > 0 ? { nodeSelector } : {}),
-          ...(tolerations.length > 0 ? { tolerations } : {}),
+          ...(gpuRequired && Object.keys(nodeSelector).length > 0 ? { nodeSelector } : {}),
+          ...(gpuRequired && tolerations.length > 0 ? { tolerations } : {}),
           restartPolicy: "Never",
           terminationGracePeriodSeconds: 90,
           containers: [{
@@ -93,7 +122,8 @@ export function cloudEpisodeWorkerJob({
             command: ["node", "scripts/cloud/run-worldkit-cloud-episode-worker.mjs"],
             args: [
               "--execution-id", executionId,
-              "--stage-id", "episode-production",
+              "--stage-id", stageId,
+              "--execution-part", executionPart,
               "--request-s3-uri", requestS3Uri,
               "--output-s3-prefix", outputS3Prefix,
             ],
@@ -109,6 +139,7 @@ export function cloudEpisodeWorkerJob({
               { name: "WORLDKIT_CAPTURE_HEADLESS", value: "1" },
               { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
               { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
+              { name: "WORLDKIT_CLOUD_EXECUTION_PART", value: executionPart },
               {
                 name: "LWDP_GENERATION_API_TOKEN",
                 valueFrom: {
@@ -133,8 +164,8 @@ export function cloudEpisodeWorkerJob({
               },
             ],
             resources: {
-              requests: { cpu: "4", memory: "8Gi", [gpuResourceName]: gpuCount },
-              limits: { cpu: "8", memory: "16Gi", [gpuResourceName]: gpuCount },
+              requests: resourceRequests,
+              limits: resourceLimits,
             },
           }],
           volumes: [
@@ -158,7 +189,7 @@ export function cloudEpisodeWorkerJob({
   };
 }
 
-function kubectlApply(manifest, { spawnImplementation = spawn } = {}) {
+export function kubectlApply(manifest, { spawnImplementation = spawn } = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawnImplementation("kubectl", ["apply", "-f", "-"], {
       stdio: ["pipe", "pipe", "pipe"],
@@ -188,6 +219,8 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const result = await launchCloudEpisodeWorkerJob({
     executionId: options["execution-id"],
+    stageId: options["stage-id"] ?? "episode-production",
+    executionPart: options["execution-part"] ?? "full",
     requestS3Uri: options["request-s3-uri"],
     outputS3Prefix: options["output-s3-prefix"],
     image: options.image,
@@ -195,6 +228,13 @@ async function main() {
     userId: options["user-id"] ?? "worldkit-studio",
     gpuResourceName: options["gpu-resource-name"] ?? "nvidia.com/gpu",
     gpuCount: Number(options["gpu-count"] ?? 1),
+    gpuRequired: options["gpu-required"] !== "false",
+    cpuRequest: options["cpu-request"],
+    cpuLimit: options["cpu-limit"],
+    memoryRequest: options["memory-request"],
+    memoryLimit: options["memory-limit"],
+    ephemeralStorageRequest: options["ephemeral-storage-request"],
+    ephemeralStorageLimit: options["ephemeral-storage-limit"],
     nodeSelector: options["gpu-nodegroup-name"]
       ? { "alpha.eksctl.io/nodegroup-name": options["gpu-nodegroup-name"] }
       : {},

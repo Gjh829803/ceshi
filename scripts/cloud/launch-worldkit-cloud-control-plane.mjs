@@ -1,0 +1,140 @@
+#!/usr/bin/env node
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { kubectlApply } from "./launch-worldkit-cloud-episode-worker-job.mjs";
+
+const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
+
+export function worldkitJobControllerRbac({
+  namespace = "lwdp",
+  serviceAccountName = "lwdp-be",
+} = {}) {
+  const roleName = "worldkit-cloud-job-controller";
+  return [{
+    apiVersion: "rbac.authorization.k8s.io/v1",
+    kind: "Role",
+    metadata: { name: roleName, namespace },
+    rules: [{
+      apiGroups: ["batch"],
+      resources: ["jobs"],
+      verbs: ["get", "list", "watch", "create", "update", "patch"],
+    }],
+  }, {
+    apiVersion: "rbac.authorization.k8s.io/v1",
+    kind: "RoleBinding",
+    metadata: { name: roleName, namespace },
+    subjects: [{ kind: "ServiceAccount", name: serviceAccountName, namespace }],
+    roleRef: {
+      apiGroup: "rbac.authorization.k8s.io",
+      kind: "Role",
+      name: roleName,
+    },
+  }];
+}
+
+export function cloudControlPlaneResources({
+  image,
+  namespace = "lwdp",
+  serviceAccountName = "lwdp-be",
+  generationTokenSecretName = "lwdp-generation-token",
+  apiBase = "https://lwdp.loopit.me",
+  userId = "worldkit-studio",
+  port = 4197,
+}) {
+  if (!IMAGE.test(image ?? "")) throw new Error("Control-plane image must be digest-pinned.");
+  const labels = { app: "worldkit-cloud-control-plane" };
+  const deployment = {
+    apiVersion: "apps/v1",
+    kind: "Deployment",
+    metadata: { name: "worldkit-cloud-control-plane", namespace },
+    spec: {
+      replicas: 1,
+      strategy: { type: "Recreate" },
+      selector: { matchLabels: labels },
+      template: {
+        metadata: { labels },
+        spec: {
+          serviceAccountName,
+          terminationGracePeriodSeconds: 60,
+          containers: [{
+            name: "studio-control-plane",
+            image,
+            imagePullPolicy: "IfNotPresent",
+            command: ["node", "scripts/cloud/run-worldkit-cloud-control-plane.mjs"],
+            ports: [{ name: "http", containerPort: port }],
+            env: [
+              { name: "WORLDKIT_STUDIO_PORT", value: String(port) },
+              { name: "WORLDKIT_STUDIO_DATA_ROOT", value: "/var/run/worldkit-studio" },
+              { name: "WORLDKIT_CLOUD_CONTROL_PLANE", value: "1" },
+              { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
+              { name: "LWDP_API_BASE", value: apiBase },
+              { name: "LWDP_USER_ID", value: userId },
+              { name: "AWS_REGION", value: "us-east-2" },
+              { name: "AWS_DEFAULT_REGION", value: "us-east-2" },
+              {
+                name: "LWDP_GENERATION_API_TOKEN",
+                valueFrom: {
+                  secretKeyRef: { name: generationTokenSecretName, key: "token" },
+                },
+              },
+            ],
+            readinessProbe: {
+              httpGet: { path: "/api/health", port: "http" },
+              initialDelaySeconds: 5,
+              periodSeconds: 10,
+            },
+            livenessProbe: {
+              httpGet: { path: "/api/health", port: "http" },
+              initialDelaySeconds: 30,
+              periodSeconds: 20,
+            },
+            resources: {
+              requests: { cpu: "1", memory: "2Gi", "ephemeral-storage": "2Gi" },
+              limits: { cpu: "4", memory: "8Gi", "ephemeral-storage": "8Gi" },
+            },
+            volumeMounts: [{ name: "ephemeral-data", mountPath: "/var/run/worldkit-studio" }],
+          }],
+          volumes: [{ name: "ephemeral-data", emptyDir: { sizeLimit: "8Gi" } }],
+        },
+      },
+    },
+  };
+  const service = {
+    apiVersion: "v1",
+    kind: "Service",
+    metadata: { name: "worldkit-cloud-control-plane", namespace },
+    spec: {
+      type: "ClusterIP",
+      selector: labels,
+      ports: [{ name: "http", port, targetPort: "http" }],
+    },
+  };
+  return Object.freeze([
+    ...worldkitJobControllerRbac({ namespace, serviceAccountName }),
+    deployment,
+    service,
+  ]);
+}
+
+export async function launchCloudControlPlane(options) {
+  const resources = cloudControlPlaneResources(options);
+  const outputs = [];
+  for (const resource of resources) outputs.push(await kubectlApply(resource, options));
+  return { resources: resources.map((resource) => `${resource.kind}/${resource.metadata.name}`), outputs };
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const config = JSON.parse(await readFile(
+    join(repoRoot, "config", "cloud-episode-production.json"),
+    "utf8",
+  ));
+  launchCloudControlPlane({ image: config.workerImage, namespace: config.namespace })
+    .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
+    .catch((error) => {
+      process.stderr.write(`${error.stack || error.message}\n`);
+      process.exitCode = 1;
+    });
+}

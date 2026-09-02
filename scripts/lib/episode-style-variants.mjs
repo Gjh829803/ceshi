@@ -106,7 +106,9 @@ export function validateEpisodeStyleVariantPlan(value, {
   value.variants.forEach((variant, index) => {
     const base = `/variants/${index}`;
     if (!object(variant) || variant.id !== expectedIds[index] ||
-        !text(variant.name, 4) || !text(variant.concept, 80) ||
+        !text(variant.name, 4) || !text(variant.styleFamily, 12) ||
+        !text(variant.worldIdentity, 24) || !text(variant.subjectIdentity, 24) ||
+        !text(variant.diversityRationale, 60) || !text(variant.concept, 80) ||
         !text(variant.visualPrompt, 300) ||
         !text(variant.geminiEventPrompt, 200) ||
         !text(variant.negativeConstraints, 120)) {
@@ -132,11 +134,16 @@ export function validateEpisodeStyleVariantPlan(value, {
   });
   const concepts = value.variants.map((variant) =>
     String(variant?.concept ?? "").trim().toLocaleLowerCase());
-  if (new Set(concepts).size !== concepts.length) {
+  const semanticFields = ["styleFamily", "worldIdentity", "subjectIdentity"];
+  if (new Set(concepts).size !== concepts.length || semanticFields.some((field) => {
+    const values = value.variants.map((variant) =>
+      String(variant?.[field] ?? "").trim().toLocaleLowerCase());
+    return new Set(values).size !== values.length;
+  })) {
     diagnostics.push(diagnostic(
       "STYLE_VARIANT_CONCEPTS_DUPLICATED",
       "/variants",
-      "Every style variant needs an independent concept.",
+      "Every style variant needs independent Subject, world, style and concept identities.",
     ));
   }
   return diagnostics.length === 0
@@ -219,6 +226,91 @@ export function validateStyleVariantVisualReview(value, {
 
 export function styleVariantPassedReview(value) {
   return value?.kind === "worldkit-style-variant-visual-review" &&
+    value?.schemaVersion === 1 && value?.reviewer === "lwdp-codex" &&
+    value?.verdict === "passed";
+}
+
+export function validateStyleVariantDiversityReview(value, {
+  sceneId,
+  episodeId,
+  inputIdentity,
+} = {}) {
+  const diagnostics = [];
+  const expectedIds = episodeStyleVariantIds();
+  if (!object(value) ||
+      value.kind !== "worldkit-style-variant-diversity-review" ||
+      value.schemaVersion !== 1 || value.reviewer !== "lwdp-codex" ||
+      value.sceneId !== sceneId || value.episodeId !== episodeId ||
+      !["passed", "needs-repair"].includes(value.verdict)) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_DIVERSITY_REVIEW_IDENTITY_INVALID",
+      "",
+      "Diversity Review identity or verdict is invalid.",
+    ));
+    return { ok: false, diagnostics };
+  }
+  if (!isDeepStrictEqual(value.inputIdentity, inputIdentity)) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_DIVERSITY_REVIEW_INPUT_STALE",
+      "/inputIdentity",
+      "Diversity Review does not bind the current ten visual variants.",
+    ));
+  }
+  const dimensions = [
+    "spatial-registration", "subjects", "environments", "landmarks", "overall-read",
+  ];
+  if (!Array.isArray(value.dimensionReviews) ||
+      value.dimensionReviews.length !== dimensions.length ||
+      value.dimensionReviews.some((review, index) =>
+        review?.dimension !== dimensions[index] ||
+        !["passed", "needs-repair"].includes(review?.verdict) ||
+        !text(review?.observations, 40))) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_DIVERSITY_DIMENSIONS_INVALID",
+      "/dimensionReviews",
+      "Diversity Reviewer must inspect all four ordered visual dimensions.",
+    ));
+  }
+  if (!Array.isArray(value.variantReviews) ||
+      value.variantReviews.length !== expectedIds.length ||
+      value.variantReviews.some((review, index) =>
+        review?.styleVariantId !== expectedIds[index] ||
+        !["passed", "needs-repair"].includes(review?.verdict) ||
+        !Array.isArray(review?.confusableWith) ||
+        review.confusableWith.some((id) => !expectedIds.includes(id) || id === review.styleVariantId) ||
+        !text(review?.observations, 40) ||
+        (review.verdict === "needs-repair" && !text(review?.repairInstructions, 60)))) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_DIVERSITY_VARIANTS_INVALID",
+      "/variantReviews",
+      "Diversity Reviewer must inspect all ten ordered variants with actionable findings.",
+    ));
+  }
+  const childVerdicts = [
+    ...(value.dimensionReviews ?? []),
+    ...(value.variantReviews ?? []),
+  ].map((review) => review?.verdict);
+  const expectedVerdict = childVerdicts.every((verdict) => verdict === "passed")
+    ? "passed"
+    : "needs-repair";
+  const namedRepairCount = (value.variantReviews ?? [])
+    .filter((review) => review?.verdict === "needs-repair").length;
+  if (value.verdict !== expectedVerdict || !text(value.summary, 60) ||
+      (value.verdict === "needs-repair" &&
+        (!text(value.repairInstructions, 100) || namedRepairCount < 1))) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_DIVERSITY_VERDICT_INCOHERENT",
+      "/verdict",
+      "Aggregate diversity verdict must match all dimension and variant findings.",
+    ));
+  }
+  return diagnostics.length === 0
+    ? { ok: true, diagnostics: [] }
+    : { ok: false, diagnostics };
+}
+
+export function styleVariantPassedDiversityReview(value) {
+  return value?.kind === "worldkit-style-variant-diversity-review" &&
     value?.schemaVersion === 1 && value?.reviewer === "lwdp-codex" &&
     value?.verdict === "passed";
 }

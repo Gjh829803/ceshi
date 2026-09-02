@@ -5,23 +5,39 @@ description: Plan exactly ten independent visual-world interpretations for one c
 
 # WorldKit Style Variant Director
 
-Create one `worldkit-episode-style-variant-plan` containing exactly ten genuinely
-different appearance interpretations of the same completed whitebox world.
+Create one `worldkit-episode-style-variant-plan` containing exactly ten unmistakably
+different semantic worlds reconstructed inside the same completed whitebox staging.
 
-The whitebox opening, Segment first frames, tri-views, Scene Brief, and visual target
-manifest own spatial facts. Do not change camera, crop, Subject registration, target
-centers, approximate occupancy, visible fraction, depth, occlusion, openings, route,
-or movement clearance.
+Only the attached whitebox opening frames and whitebox tri-views own visual-spatial
+facts. Do not infer or preserve an original styled world. Target names and kinds are
+mapping hints, not appearance identities. Do not change camera, crop, Subject
+registration, target centers, approximate occupancy, visible fraction, depth,
+occlusion, openings, route, or movement clearance.
 
-Each variant owns appearance and semantic reconstruction. A registered landmark may
-become a radically different coherent concept when it remains inside the same macro
-occupancy envelope and preserves apparent proximity and crop. Do not merely change
-palette, weather, rendering medium, or adjectives. Vary the world premise, landmark
-identity, shape language, materials, atmosphere, and lighting together.
+Each variant owns the complete semantic and appearance reconstruction. Reinterpret
+the Subject, the environment, and every declared target together. Preserve their
+registered pose and occupancy, not their former identity. A humanoid proxy may become
+a visibly different character with a different silhouette, costume, material and
+color language while retaining the same pose and movement compatibility. A landmark
+proxy may become any coherent object that fits its macro envelope: its previous class
+is not protected.
 
-Do not copy examples from the request as a required list. Infer ten scene-specific,
-human-legible concepts. Avoid abstract filler such as particles, energy rings, generic
-portals, or unexplained geometry.
+The ten variants must be distinguishable without labels when viewed as thumbnails.
+No two variants may reuse the same world premise, Subject identity or costume family,
+primary-landmark class, dominant shape language, material system, palette, or lighting
+premise. Changing only biome, historical period, profession, weather, color, surface
+material, ornament, or rendering medium is not a new world. Do not produce ten
+versions of the source scene such as ten coasts, ten towers, or ten field travelers.
+
+Do not copy examples from the request as a required list. Infer ten concrete,
+human-legible concepts whose semantic substitutions fit the visible whitebox masses.
+Avoid abstract filler such as particles, energy rings, generic portals, or unexplained
+geometry.
+
+Before writing the plan, compare all ten proposals as one set. Replace any proposal
+whose Subject, environment, or primary landmark could be mistaken for another
+proposal after names and prose are hidden. This is a semantic judgment, not a keyword
+exercise.
 
 For every variant write a standalone `visualPrompt` and standalone
 `geminiEventPrompt`. The Gemini prompt must describe what kinds of large, coherent,
@@ -59,6 +75,10 @@ Use this exact shape and preserve Host input order:
   "variants": [{
     "id": "style-00",
     "name": "<human-readable name>",
+    "styleFamily": "<unique visual and material language>",
+    "worldIdentity": "<concrete environment identity unique in the set>",
+    "subjectIdentity": "<concrete Subject identity unique in the set>",
+    "diversityRationale": "<why Subject, world and landmarks cannot be confused with any other variant>",
     "concept": "<complete world premise>",
     "visualPrompt": "<standalone appearance prompt>",
     "geminiEventPrompt": "<standalone event-direction prompt>",

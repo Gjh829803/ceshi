@@ -12,7 +12,7 @@ const config = {
   userId: "worldkit-studio",
 };
 
-test("submits one coarse Episode worker stage bound to an admitted Scene manifest", async () => {
+test("submits one three-stage Episode DAG bound to an admitted Scene manifest", async () => {
   const root = await mkdtemp(join(tmpdir(), "worldkit-cloud-episode-submit-"));
   const requestPath = join(root, "request.json");
   const uploads = [];
@@ -33,6 +33,11 @@ test("submits one coarse Episode worker stage bound to an admitted Scene manifes
       productionScope: "visual-sample",
       styleVariantMode: "legacy",
       workerImage: `worker@sha256:${"d".repeat(64)}`,
+      gpuBatch: {
+        queueS3Prefix: "s3://bucket/gpu-capture-queue",
+        minimumBatchSize: 100,
+        maximumBatchSize: 128,
+      },
       resumeEpisodeManifest: {
         executionId: "exec-episode-prior",
         s3Uri: "s3://bucket/episodes/prior/cloud-artifact-manifest.json",
@@ -61,6 +66,9 @@ test("submits one coarse Episode worker stage bound to an admitted Scene manifes
     assert.equal(uploads.length, 1);
     const request = JSON.parse(await readFile(requestPath, "utf8"));
     assert.equal(request.kind, "worldkit-cloud-episode-request");
+    assert.equal(request.schemaVersion, 2);
+    assert.equal(request.executionProfile, "cpu-gpu-batch-cpu@1");
+    assert.equal(request.gpuBatch.minimumBatchSize, 100);
     assert.equal(request.sceneExecutionId, "exec-scene-001");
     assert.equal(request.pipeline.command, "episode:run");
     assert.equal(request.productionScope, "visual-sample");
@@ -68,12 +76,13 @@ test("submits one coarse Episode worker stage bound to an admitted Scene manifes
     assert.equal(request.workerImage, `worker@sha256:${"d".repeat(64)}`);
     assert.equal(request.resumeEpisodeManifest.executionId, "exec-episode-prior");
     assert.equal(requests[0].body.kind, "episode");
-    assert.deepEqual(requests[0].body.stages, [{
-      stage_id: "episode-production",
-      executor: "worker",
-      max_attempts: 3,
-      timeout_seconds: 43_200,
-    }]);
+    assert.deepEqual(requests[0].body.stages.map((stage) => stage.stage_id), [
+      "episode-prepare",
+      "whitebox-capture",
+      "episode-render",
+    ]);
+    assert.deepEqual(requests[0].body.stages[1].depends_on, ["episode-prepare"]);
+    assert.deepEqual(requests[0].body.stages[2].depends_on, ["whitebox-capture"]);
     assert.ok(requests[0].body.inputs.some((input) =>
       input.role === "trusted-scene-artifact-manifest"));
     assert.ok(requests[0].body.inputs.some((input) =>

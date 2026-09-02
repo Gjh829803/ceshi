@@ -8,6 +8,7 @@ import {
   createJsonAtomicWriter,
   episodeStyleVariantIds,
   validateEpisodeStyleVariantPlan,
+  validateStyleVariantDiversityReview,
   validateStyleVariantVisualReview,
 } from "./episode-style-variants.mjs";
 import { validateStyleVariantDirectorOutput } from
@@ -33,6 +34,10 @@ function plan() {
     variants: episodeStyleVariantIds().map((id, index) => ({
       id,
       name: `完整风格 ${index}`,
+      styleFamily: `第 ${index} 套完全独立的造型、材质与光照体系`,
+      worldIdentity: `第 ${index} 个独立环境世界身份、空间叙事、生态结构与建筑体系`,
+      subjectIdentity: `第 ${index} 个独立主体身份、身体轮廓、服装体系、材质与主配色`,
+      diversityRationale: `第 ${index} 个方案的主体、环境和主要标志物使用独立语义、轮廓、材质、配色及照明，因此隐藏标题后仍不会与其余九个方案混淆，并能在缩略图中立即识别。`,
       concept: `这是第 ${index} 个完全独立的世界概念，拥有清晰的地点、核心标志物、材料体系、照明逻辑和气氛变化，同时保持白膜世界的空间关系、镜头构图、可见裁切与运动区域。`.repeat(2),
       visualPrompt: `第 ${index} 个视觉提示。`.repeat(80),
       geminiEventPrompt: `第 ${index} 个 Gemini 事件提示，要求创作符合当前世界语义的大型可见变化，同时不改变空间结构、镜头、动作、路径和时序。`.repeat(20),
@@ -149,4 +154,74 @@ test("requires an independent Codex review bound to exact image hashes", () => {
     targetIds,
     inputIdentity,
   }).ok, false);
+});
+
+test("requires a joint Codex diversity review bound to all ten visual sets", () => {
+  const inputIdentity = {
+    kind: "worldkit-style-variant-diversity-review-input",
+    schemaVersion: 1,
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    planHash: HASH,
+    variants: episodeStyleVariantIds().map((styleVariantId) => ({
+      styleVariantId,
+      styleVariantHash: HASH,
+      visualManifestHash: HASH,
+      primaryOpeningHash: HASH,
+      targetTriviewHashes: targetIds.map((visualTargetId) => ({
+        visualTargetId,
+        contentHash: HASH,
+      })),
+    })),
+  };
+  const review = {
+    kind: "worldkit-style-variant-diversity-review",
+    schemaVersion: 1,
+    reviewer: "lwdp-codex",
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    inputIdentity,
+    verdict: "passed",
+    summary: "十个方案在主体轮廓、环境世界观、主要标志物身份、材质与照明上均可在隐藏标题后清晰区分，同时每个方案内部保持统一视觉语言。",
+    repairInstructions: "",
+    dimensionReviews: [
+      "spatial-registration", "subjects", "environments", "landmarks", "overall-read",
+    ]
+      .map((dimension) => ({
+        dimension,
+        verdict: "passed",
+        observations: "十张图在这个维度上使用清楚且互不混淆的视觉身份，并且实际图像支持方案文本中的差异。",
+      })),
+    variantReviews: episodeStyleVariantIds().map((styleVariantId) => ({
+      styleVariantId,
+      verdict: "passed",
+      confusableWith: [],
+      observations: "该方案的主体、环境和标志物形成独特组合，在隐藏标题的缩略图状态下也不会被误认为其他方案，图像证据清晰可见。",
+      repairInstructions: "",
+    })),
+  };
+  const result = validateStyleVariantDiversityReview(review, {
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    inputIdentity,
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  review.inputIdentity = { ...inputIdentity, planHash: `sha256:${"b".repeat(64)}` };
+  assert.equal(validateStyleVariantDiversityReview(review, {
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    inputIdentity,
+  }).ok, false);
+});
+
+test("style visual generation exposes no original styled reference or Scene prose", async () => {
+  const runner = await readFile(
+    path.resolve("scripts/agents/run-lwdp-style-variant-visual-agent.sh"),
+    "utf8",
+  );
+  assert.equal(runner.includes("source-reference"), false);
+  assert.equal(runner.includes("reference-0"), false);
+  assert.equal(runner.includes("scene-brief.md"), false);
+  assert.match(runner, /segment-00-whitebox/);
+  assert.match(runner, /whitebox-triview-/);
 });

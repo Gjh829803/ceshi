@@ -15,6 +15,7 @@ import {
   joinS3Uri,
   uploadS3File,
 } from "../lib/lwdp-generation-client.mjs";
+import { CLOUD_EPISODE_STAGE_PROFILE_V2 } from "../lib/cloud-production-run.mjs";
 
 const ID = /^[a-z0-9][a-z0-9-]{2,119}$/;
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
@@ -44,8 +45,9 @@ function required(value, label) {
 
 export function parseCloudEpisodeRequest(value) {
   const request = typeof value === "string" ? JSON.parse(value) : value;
-  if (request?.kind !== "worldkit-cloud-episode-request" || request?.schemaVersion !== 1) {
-    throw new Error("Cloud Episode request must use schemaVersion 1.");
+  if (request?.kind !== "worldkit-cloud-episode-request" ||
+      ![1, 2].includes(request?.schemaVersion)) {
+    throw new Error("Cloud Episode request must use schemaVersion 1 or 2.");
   }
   if (!ID.test(request.sceneId ?? "") || !ID.test(request.episodeId ?? "")) {
     throw new Error("Cloud Episode sceneId or episodeId is invalid.");
@@ -60,6 +62,16 @@ export function parseCloudEpisodeRequest(value) {
   }
   if (!DIGEST_IMAGE.test(String(request.workerImage ?? ""))) {
     throw new Error("Cloud Episode workerImage must be digest-pinned.");
+  }
+  if (request.schemaVersion === 2) {
+    if (
+      request.executionProfile !== "cpu-gpu-batch-cpu@1" ||
+      !Number.isSafeInteger(request.gpuBatch?.minimumBatchSize) ||
+      request.gpuBatch.minimumBatchSize < 100 ||
+      !Number.isSafeInteger(request.gpuBatch?.maximumBatchSize) ||
+      request.gpuBatch.maximumBatchSize < request.gpuBatch.minimumBatchSize
+    ) throw new Error("Cloud Episode GPU Batch profile is invalid.");
+    assertS3Uri(request.gpuBatch.queueS3Prefix);
   }
   if (
     request.sceneRecord?.sceneId !== request.sceneId ||
@@ -83,6 +95,7 @@ export async function submitCloudEpisode({
   productionScope = "full",
   styleVariantMode = "legacy",
   workerImage,
+  gpuBatch,
   resumeEpisodeManifest = undefined,
   requestId,
   outputS3Prefix,
@@ -100,7 +113,7 @@ export async function submitCloudEpisode({
   const resolvedOutputPrefix = assertS3Uri(outputS3Prefix);
   const request = parseCloudEpisodeRequest({
     kind: "worldkit-cloud-episode-request",
-    schemaVersion: 1,
+    schemaVersion: 2,
     sceneId,
     episodeId,
     sceneExecutionId,
@@ -109,10 +122,16 @@ export async function submitCloudEpisode({
     productionScope,
     styleVariantMode,
     workerImage,
+    executionProfile: "cpu-gpu-batch-cpu@1",
+    gpuBatch: {
+      queueS3Prefix: assertS3Uri(gpuBatch?.queueS3Prefix),
+      minimumBatchSize: Number(gpuBatch?.minimumBatchSize),
+      maximumBatchSize: Number(gpuBatch?.maximumBatchSize),
+    },
     pipeline: {
       command: "episode:run",
       backend: "cloud",
-      stageId: "episode-production",
+      stageIds: CLOUD_EPISODE_STAGE_PROFILE_V2.map((stage) => stage.stage_id),
       styleVariantMode,
     },
     ...(resumeEpisodeManifest ? { resumeEpisodeManifest } : {}),
@@ -152,12 +171,10 @@ export async function submitCloudEpisode({
         content_type: "application/json",
       },
     ],
-    stages: [{
-      stage_id: "episode-production",
-      executor: "worker",
-      max_attempts: 3,
-      timeout_seconds: 43_200,
-    }],
+    stages: CLOUD_EPISODE_STAGE_PROFILE_V2.map((stage) => ({
+      ...stage,
+      ...(stage.depends_on ? { depends_on: [...stage.depends_on] } : {}),
+    })),
   };
   let execution;
   try {
@@ -184,6 +201,8 @@ export async function submitCloudEpisode({
     outputS3Prefix: resolvedOutputPrefix,
     status: execution.status,
     workerImage,
+    executionProfile: request.executionProfile,
+    gpuBatch: request.gpuBatch,
   };
 }
 
@@ -199,6 +218,11 @@ async function main() {
     productionScope: options["production-scope"] ?? "full",
     styleVariantMode: options["style-variant-mode"] ?? "legacy",
     workerImage: options["worker-image"],
+    gpuBatch: {
+      queueS3Prefix: options["gpu-batch-queue-s3-prefix"],
+      minimumBatchSize: Number(options["gpu-batch-minimum-size"] ?? 100),
+      maximumBatchSize: Number(options["gpu-batch-maximum-size"] ?? 128),
+    },
     requestId: options["request-id"],
     outputS3Prefix: options["output-s3-prefix"],
     autoDispatch: options.dispatch !== false,

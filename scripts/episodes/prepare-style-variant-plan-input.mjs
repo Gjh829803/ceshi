@@ -26,8 +26,6 @@ const whiteboxManifest = JSON.parse(await readFile(
 const targets = (whiteboxManifest.whiteboxTriviews ?? []).map((target) => ({
   visualTargetId: target.visualTargetId,
   targetKind: target.targetKind ?? "complete-target",
-  name: target.name ?? target.visualTargetId,
-  description: target.description ?? "",
 }));
 if (targets.length < 1 || targets.length > 5 ||
     new Set(targets.map(({ visualTargetId }) => visualTargetId)).size !== targets.length) {

@@ -32,7 +32,9 @@ if (styleVariant?.sceneId !== sceneId || styleVariant?.episodeId !== episodeId |
     styleVariant?.id !== styleVariantId ||
     prompts?.kind !== "worldkit-style-variant-visual-prompts" ||
     prompts?.schemaVersion !== 1 || prompts?.sceneId !== sceneId ||
-    prompts?.episodeId !== episodeId || prompts?.styleVariantId !== styleVariantId) {
+    prompts?.episodeId !== episodeId || prompts?.styleVariantId !== styleVariantId ||
+    prompts?.referencePolicy !== "whitebox-only" ||
+    prompts?.appearanceAnchorSegmentId !== "segment-00") {
   throw new Error("Style Variant visual identity is invalid.");
 }
 const targetIds = (whiteboxManifest.whiteboxTriviews ?? [])

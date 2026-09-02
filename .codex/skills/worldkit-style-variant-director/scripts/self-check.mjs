@@ -27,6 +27,8 @@ export function validateStyleVariantDirectorOutput(input, plan) {
     const base = `/variants/${index}`;
     const expectedId = `style-${String(index).padStart(2, "0")}`;
     if (!object(variant) || variant.id !== expectedId || !text(variant.name, 4) ||
+        !text(variant.styleFamily, 12) || !text(variant.worldIdentity, 24) ||
+        !text(variant.subjectIdentity, 24) || !text(variant.diversityRationale, 60) ||
         !text(variant.concept, 80) || !text(variant.visualPrompt, 300) ||
         !text(variant.geminiEventPrompt, 200) || !text(variant.negativeConstraints, 120)) {
       diagnostics.push({ code: "VARIANT_DEFINITION_INVALID", path: base, message: `${expectedId} is incomplete.` });
@@ -46,8 +48,13 @@ export function validateStyleVariantDirectorOutput(input, plan) {
     }
   }
   const concepts = plan.variants.map((variant) => String(variant?.concept ?? "").trim().toLowerCase());
-  if (new Set(concepts).size !== concepts.length) {
-    diagnostics.push({ code: "CONCEPTS_DUPLICATED", path: "/variants", message: "Every concept must be independently authored." });
+  const semanticFields = ["styleFamily", "worldIdentity", "subjectIdentity"];
+  if (new Set(concepts).size !== concepts.length || semanticFields.some((field) => {
+    const values = plan.variants.map((variant) =>
+      String(variant?.[field] ?? "").trim().toLowerCase());
+    return new Set(values).size !== values.length;
+  })) {
+    diagnostics.push({ code: "CONCEPTS_DUPLICATED", path: "/variants", message: "Every concept, Subject, world and style identity must be independently authored." });
   }
   return diagnostics;
 }

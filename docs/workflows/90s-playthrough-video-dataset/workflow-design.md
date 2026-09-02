@@ -2,13 +2,11 @@
 
 ```text
 Admitted Scene manifest
-  → Runtime reconnaissance + navigation context
-  → one Playthrough Planner Codex Job
-  → six independent 30s deterministic captures
-  → one Episode Visual Reconstructor Codex Job
-  → one Gemini call: 3 videos @ 0.25fps + 3 styled frames → 5 events
-  → six detailed Seedance prompts + all styled tri-views
-  → six direct seedance-2.5 720p Jobs
+  → CPU episode-prepare: reconnaissance + navigation + one Planner Codex Job
+  → S3 GPU queue (hard floor: 100 ready Episodes)
+  → one shared GPU Batch Pod: six independent 30s captures per Episode
+  → CPU episode-render: Visual Codex + one Gemini five-event call
+  → six detailed prompts + six direct seedance-2.5 720p Jobs
   → exact media conformance + S3 manifest + review ZIP
 ```
 
@@ -55,5 +53,7 @@ attempt-specific S3 prefix. `episode-source-receipt.json` binds the Episode to t
 Seedance raw checkpoints carry their own content hash and provider result URL; a corrupt checkpoint
 is downloaded again from the same provider Job instead of creating a replacement Job.
 
-Cloud production remains one coarse `episode-production` Worker stage. Large artifacts stay in S3;
-the Studio streams them through signed URLs and never needs a persistent local media copy.
+Cloud production keeps one parent LWDP execution but uses three coarse compute stages. This releases
+GPU capacity immediately after deterministic capture while preserving every model and content
+boundary. Large artifacts stay in S3; Studio streams them through signed URLs and never needs a
+persistent local media copy.

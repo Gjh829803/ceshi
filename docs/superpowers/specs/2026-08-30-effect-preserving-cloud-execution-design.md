@@ -88,22 +88,24 @@ token and Host capture key; neither secret is part of the artifact bundle.
 
 ## Episode production slice
 
-Episode production also uses one coarse worker stage. It deliberately does not
-use the backend's built-in fine-grained Episode template because that template
-omits the current Gemini visual-event stage and names the retired CF upscale
-stage. Studio submits one custom `episode-production` worker bound to an already
-admitted Scene execution and immutable Scene artifact manifest.
+Episode production uses one LWDP execution with three coarse engineering stages:
+`episode-prepare -> whitebox-capture -> episode-render`. This split does not
+change an Agent or prompt boundary. CPU prepare runs the existing reconnaissance,
+navigation and Playthrough Planner; shared GPU capture runs the exact six
+independent deterministic 30-second captures; CPU render resumes those bytes and
+runs the existing visual reconstruction, one Gemini five-event call, six direct
+Seedance 2.5 720p Jobs, conformance and portable ZIP publication.
 
-The worker hydrates the Scene into an ephemeral workspace, verifies the signed
-whitebox authority, starts a loopback static Playground and Studio, and invokes
-the unchanged `episode:run` command. Its internal reconnaissance, Planner,
-four-Segment capture, visual reconstruction, Gemini events, Seedance, MediaKit
-enhancement, conformance and portable ZIP steps are progress markers rather than
-new retry boundaries. A stage retry reuses the exact request and Scene manifest,
-launches a new GPU worker attempt, and never reruns Scene Planner or Builder.
+`episode-prepare` uploads its hash-closed checkpoint and one immutable GPU queue
+entry. The production dispatcher does not create a GPU Job below 100 compatible
+ready entries. At 100–128 it starts one digest-pinned GPU Pod, which processes the
+whole Batch sequentially and publishes an isolated receipt for every Episode.
+One task failure never terminates the remaining Batch. The Pod is reused for the
+entire Batch rather than created once per Episode.
 
-All Episode media, JSON, images, logs and the portable ZIP are uploaded under
-`stages/episode-production/episode/**` and closed by SHA-256. Studio keeps only
-the Episode record, bounded JSON metadata and the remote artifact index. Video
-and ZIP requests redirect to short-lived S3 URLs so Browser Range playback and
-downloads never persist large media locally.
+Every stage attempt writes to its own S3 prefix. Provider request payload and
+idempotency identity are additionally checkpointed immediately around Seedance
+submission, so a hard Worker loss can resume the same provider Job. Studio
+projects run state from LWDP and the S3 Run Index; local Episode files are a
+compatibility cache, not production authority. Video and ZIP requests redirect
+to short-lived S3 URLs and do not require durable local media.

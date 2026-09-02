@@ -25,9 +25,8 @@ scene_root="$project_root/artifacts/scenes/$scene_id"
 variant_root="$episode_root/style-variants/$style_variant_id"
 visual_root="$variant_root/visual"
 whitebox_root="$episode_root/whitebox"
-public_root="$project_root/apps/playground/public/scene-plans/$scene_id"
 mkdir -p "$visual_root"
-for required in "$variant_root/style-variant.json" "$scene_root/triviews/whitebox-triview-manifest.json" "$public_root/reference-0.png"; do
+for required in "$variant_root/style-variant.json" "$scene_root/triviews/whitebox-triview-manifest.json"; do
   [[ -f "$required" && -s "$required" && ! -L "$required" ]] || { echo "Missing Style Variant visual input: $required" >&2; exit 3; }
 done
 for index in 0 1 2 3 4 5; do
@@ -42,7 +41,7 @@ while IFS=$'\t' read -r visual_target_id whitebox_path _ target_kind target_name
   target_asset_args+=(--asset "$asset_id::$whitebox_path::image::image/png")
   output_path="$visual_root/triviews/$visual_target_id/styled-triview.png"
   target_output_args+=(--output "${output_path#"$project_root"/}::$output_path::image/png")
-  target_table+="- asset=$asset_id; visualTargetId=$visual_target_id; kind=${target_kind:-unknown}; name=${target_name:-$visual_target_id}; description=${target_description:-none}"$'\n'
+  target_table+="- asset=$asset_id; visualTargetId=$visual_target_id; kind=${target_kind:-unknown}"$'\n'
 done < <(node scripts/visual/list-visual-triview-inputs.mjs --scene-root "$scene_root" --format tsv --limit 5)
 [[ "$target_count" -ge 1 && "$target_count" -le 5 ]] || exit 3
 temporary_root="$project_root/.codex-tmp"; mkdir -p "$temporary_root"
@@ -61,7 +60,9 @@ instruction="Use .codex/skills/worldkit-style-variant-visual-reconstructor/SKILL
 
 Generate one complete visual set for '$style_variant_id', scene '$scene_id', episode '$episode_id'. $repair_instruction
 
-Attached image roles are six ordered Segment whitebox first frames, the original user reference as optional quality context, then the declared whitebox target sheets. The selected style-variant document is the final appearance authority.
+Attached image roles are six ordered Segment whitebox first frames followed by the declared whitebox target sheets. They are the only initial image references. The selected style-variant document is the complete intended appearance authority. Reconstruct the Subject, environment and every target as visibly different identities; preserve only the whitebox spatial registration.
+
+Enforce the Skill dependency order inside this one task: generate, inspect and accept segment-00 first; then include that newly generated segment-00 styled opening as an image reference in every tri-view generation call together with the matching whitebox tri-view; also include it when generating Segments 01-05 together with each Segment's whitebox. Never generate tri-views directly from text plus whitebox alone.
 
 Declared targets:
 $target_table
@@ -81,8 +82,6 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --output-s3-prefix "${WORLDKIT_LWDP_S3_ROOT:-s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk}/episodes/$episode_id/$style_variant_id/visual-$input_hash$attempt_suffix" \
   --instruction-file "$instruction_file" --execution-profile formal --timeout-seconds 1800 \
   --context ".codex/skills/worldkit-style-variant-visual-reconstructor" \
-  --context "artifacts/scenes/$scene_id/scene-brief.md" \
-  --context "artifacts/scenes/$scene_id/triviews/whitebox-triview-manifest.json" \
   --asset "style-variant::$variant_root/style-variant.json::file::application/json" \
   --asset "segment-00-whitebox::$whitebox_root/segment-00-first-frame.png::image::image/png" \
   --asset "segment-01-whitebox::$whitebox_root/segment-01-first-frame.png::image::image/png" \
@@ -90,7 +89,6 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --asset "segment-03-whitebox::$whitebox_root/segment-03-first-frame.png::image::image/png" \
   --asset "segment-04-whitebox::$whitebox_root/segment-04-first-frame.png::image::image/png" \
   --asset "segment-05-whitebox::$whitebox_root/segment-05-first-frame.png::image::image/png" \
-  --asset "source-reference::$public_root/reference-0.png::image::image/png" \
   "${target_asset_args[@]}" "${review_args[@]}" \
   --output "${visual_root#"$project_root"/}/visual-prompts.json::$visual_root/visual-prompts.json::application/json" \
   --output "${visual_root#"$project_root"/}/segment-00-styled-opening-frame.png::$visual_root/segment-00-styled-opening-frame.png::image/png" \

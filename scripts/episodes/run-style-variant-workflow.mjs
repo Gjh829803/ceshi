@@ -11,6 +11,7 @@ import {
   episodeStyleVariantIds,
   loadEpisodeStyleVariantConfig,
   sha256File,
+  styleVariantPassedDiversityReview,
   styleVariantPassedReview,
   writeJsonAtomic,
 } from "../lib/episode-style-variants.mjs";
@@ -218,6 +219,30 @@ async function reviewIsCurrent(styleVariantId) {
   }
 }
 
+async function diversityReviewIsCurrent() {
+  const reviewPath = path.join(styleRoot, "diversity-review.json");
+  const reportPath = path.join(styleRoot, "diversity-review-report.json");
+  const currentInputPath = path.join(styleRoot, "diversity-review-input-current.json");
+  const [review, report] = await Promise.all([
+    readJson(reviewPath),
+    readJson(reportPath),
+  ]);
+  if (!styleVariantPassedDiversityReview(review) || report?.passed !== true ||
+      !String(report?.reviewerTaskId ?? "").startsWith("style-diversity-review-")) {
+    return false;
+  }
+  try {
+    await run("node", [
+      "scripts/episodes/prepare-style-variant-diversity-review-input.mjs",
+      "--scene-id", sceneId, "--episode-id", episodeId,
+      "--episode-root", episodeRoot, "--output", currentInputPath,
+    ]);
+    return isDeepStrictEqual(review.inputIdentity, await readJson(currentInputPath));
+  } catch {
+    return false;
+  }
+}
+
 async function eventsAreCurrent(styleVariantId) {
   const variantRoot = path.join(styleRoot, styleVariantId);
   const [eventPlan, styleHash, reviewHash, reviewReportHash] = await Promise.all([
@@ -361,9 +386,39 @@ try {
       error: item.error ?? "Visual review did not pass within the repair budget.",
     });
   }
-  const passedVariantIds = record.variants
+  let passedVariantIds = record.variants
     .filter(({ status }) => status === "visual-passed")
     .map(({ id }) => id);
+
+  if (passedVariantIds.length === variantIds.length) {
+    await stage("style-variant-diversity-review", async () => {
+      if (await diversityReviewIsCurrent()) return;
+      const review = await run("bash", [
+        "scripts/agents/run-lwdp-style-variant-diversity-reviewer-agent.sh",
+        "--scene-id", sceneId, "--episode-id", episodeId,
+        "--episode-root", episodeRoot, "--backend", backend, "--attempt", "1",
+      ], { accept: [0, 10] });
+      if (review.code === 0 && await diversityReviewIsCurrent()) return;
+      const diversityReview = await readJson(path.join(styleRoot, "diversity-review.json"));
+      const failedIds = new Set((diversityReview?.variantReviews ?? [])
+        .filter(({ verdict }) => verdict === "needs-repair")
+        .map(({ styleVariantId }) => styleVariantId));
+      for (const styleVariantId of variantIds) {
+        if (!failedIds.has(styleVariantId)) continue;
+        const finding = diversityReview.variantReviews.find(
+          (item) => item.styleVariantId === styleVariantId,
+        );
+        await updateVariant(styleVariantId, {
+          status: "visual-diversity-failed",
+          currentStage: null,
+          error: finding?.repairInstructions ?? "Joint Codex diversity review requested repair.",
+        });
+      }
+    });
+    passedVariantIds = record.variants
+      .filter(({ status }) => status === "visual-passed")
+      .map(({ id }) => id);
+  }
 
   if (until === "full") {
     await stage("style-variant-gemini-events", async () => {
@@ -510,6 +565,14 @@ try {
     sceneId,
     episodeId,
     sourceWhiteboxIdentity: plan.sourceWhiteboxIdentity,
+    diversityReviewPath: "style-variants/diversity-review.json",
+    diversityReviewHash: await sha256File(path.join(
+      styleRoot, "diversity-review.json",
+    )).catch(() => null),
+    diversityReviewReportPath: "style-variants/diversity-review-report.json",
+    diversityReviewReportHash: await sha256File(path.join(
+      styleRoot, "diversity-review-report.json",
+    )).catch(() => null),
     productionScope: until === "visual-review" ? "visual-sample" : "full",
     variantCount: variants.length,
     succeededCount,

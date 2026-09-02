@@ -10,8 +10,6 @@ const files = [
   "infinite-canvas.key",
   "gemini.env",
   "google-service-account.json",
-  "aws-credentials",
-  "aws-config",
 ];
 
 function run(command, arguments_, { input = null } = {}) {

@@ -26,15 +26,19 @@ a new blocker is a defect.
 
 Also require all six openings to share one coherent variant identity and to contain no
 premature Prompt Event, Block World residue, technical helper, UI, label, or watermark.
+The Subject, environment and every visible declared target must clearly realize the
+selected variant rather than retain a generic or source-scene identity.
 
 ## Tri-view review
 
 For every declared target require exactly three comparable views of the same final
 identity on a neutral background: left Front, center anatomical Right facing the image
 right edge, right Back. Require comparable scale and baseline, directionally coherent
-features, and identity consistent with the styled openings. Reject swapped directions,
-independent zoom, inconsistent body size, extra views, environment, labels, dividers,
-or unrelated targets.
+features, and identity consistent specifically with the accepted Segment-00 styled
+opening. Compare realized Subject/landmark silhouette language, materials, palette and
+recognizable detail rather than accepting agreement with prompt prose alone. Reject
+swapped directions, independent zoom, inconsistent body size, extra views, environment,
+labels, dividers, or unrelated targets.
 
 ## Verdict
 

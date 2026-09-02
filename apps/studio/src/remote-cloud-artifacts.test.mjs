@@ -82,6 +82,20 @@ test("forces AWS reads through project-local credential files", () => {
   );
 });
 
+test("cloud control plane uses workload identity without project-local AWS files", () => {
+  const environment = projectAwsEnvironment("/repo/worldkit", {
+    WORLDKIT_CLOUD_CONTROL_PLANE: "1",
+    AWS_WEB_IDENTITY_TOKEN_FILE: "/var/run/secrets/eks/token",
+    AWS_ROLE_ARN: "arn:aws:iam::123456789012:role/worldkit-control",
+    AWS_ACCESS_KEY_ID: "must-not-survive",
+  });
+  assert.equal(environment.AWS_ACCESS_KEY_ID, undefined);
+  assert.equal(environment.AWS_SHARED_CREDENTIALS_FILE, undefined);
+  assert.equal(environment.AWS_WEB_IDENTITY_TOKEN_FILE, "/var/run/secrets/eks/token");
+  assert.equal(environment.AWS_ROLE_ARN,
+    "arn:aws:iam::123456789012:role/worldkit-control");
+});
+
 test("admits Episode manifests only inside the episode namespace", () => {
   const manifest = validateCloudArtifactManifest({
     kind: "worldkit-cloud-artifact-manifest",

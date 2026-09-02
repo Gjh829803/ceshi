@@ -15,6 +15,8 @@ import { submitCloudEpisode } from
 import { assertS3Uri, joinS3Uri } from
   "../../../scripts/lib/lwdp-generation-client.mjs";
 import { cloudArtifactManifestS3Uri } from "./cloud-scene-production.mjs";
+import { CLOUD_EPISODE_PART_BY_STAGE_ID } from
+  "../../../scripts/lib/cloud-production-run.mjs";
 
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
@@ -24,7 +26,8 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
   const value = JSON.parse(await readFile(configPath, "utf8"));
   if (
     value?.kind !== "worldkit-cloud-episode-production-config" ||
-    value?.schemaVersion !== 1
+    value?.schemaVersion !== 2 ||
+    value?.executionProfile !== "cpu-gpu-batch-cpu@1"
   ) throw new Error("Cloud Episode production config identity is invalid.");
   if (value.enabled !== true) return null;
   if (!DIGEST_IMAGE.test(String(value.workerImage ?? ""))) {
@@ -46,12 +49,53 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     !["Equal", "Exists"].includes(item.operator) ||
     !["NoSchedule", "PreferNoSchedule", "NoExecute"].includes(item.effect)
   )) throw new Error("Cloud Episode tolerations are invalid.");
+  const gpuBatch = value.gpuBatch;
+  if (
+    !Number.isSafeInteger(gpuBatch?.minimumBatchSize) ||
+    gpuBatch.minimumBatchSize < 100 ||
+    !Number.isSafeInteger(gpuBatch?.maximumBatchSize) ||
+    gpuBatch.maximumBatchSize < gpuBatch.minimumBatchSize ||
+    !Number.isSafeInteger(gpuBatch?.taskLeaseSeconds) ||
+    gpuBatch.taskLeaseSeconds < 900 ||
+    !Number.isSafeInteger(gpuBatch?.dispatcherIntervalSeconds) ||
+    gpuBatch.dispatcherIntervalSeconds < 10
+  ) throw new Error("Cloud Episode GPU Batch config is invalid.");
+  for (const key of ["ephemeralStorageRequest", "ephemeralStorageLimit"]) {
+    if (typeof gpuBatch[key] !== "string" || !/^[1-9][0-9]*(?:Mi|Gi)$/.test(gpuBatch[key])) {
+      throw new Error(`Cloud Episode GPU Batch storage config is invalid: ${key}`);
+    }
+  }
+  const cpuWorker = value.cpuWorker;
+  for (const [key, item] of Object.entries(cpuWorker ?? {})) {
+    if (typeof item !== "string" || item.length === 0) {
+      throw new Error(`Cloud Episode CPU Worker config is invalid: ${key}`);
+    }
+  }
+  for (const key of [
+    "cpuRequest", "cpuLimit", "memoryRequest", "memoryLimit",
+    "ephemeralStorageRequest", "ephemeralStorageLimit",
+  ]) {
+    if (typeof cpuWorker?.[key] !== "string" || cpuWorker[key].length === 0) {
+      throw new Error(`Cloud Episode CPU Worker config is missing: ${key}`);
+    }
+  }
   return Object.freeze({
     workerImage: value.workerImage,
     outputS3Root: assertS3Uri(value.outputS3Root),
     namespace: value.namespace ?? "lwdp",
     gpuResourceName: value.gpuResourceName ?? "nvidia.com/gpu",
     gpuCount: Number(value.gpuCount ?? 1),
+    executionProfile: value.executionProfile,
+    gpuBatch: Object.freeze({
+      queueS3Prefix: assertS3Uri(gpuBatch.queueS3Prefix),
+      minimumBatchSize: gpuBatch.minimumBatchSize,
+      maximumBatchSize: gpuBatch.maximumBatchSize,
+      taskLeaseSeconds: gpuBatch.taskLeaseSeconds,
+      dispatcherIntervalSeconds: gpuBatch.dispatcherIntervalSeconds,
+      ephemeralStorageRequest: gpuBatch.ephemeralStorageRequest,
+      ephemeralStorageLimit: gpuBatch.ephemeralStorageLimit,
+    }),
+    cpuWorker: Object.freeze({ ...cpuWorker }),
     nodeSelector,
     tolerations,
   });
@@ -59,12 +103,65 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
 
 export function cloudEpisodeInternalStage(execution) {
   const active = Array.isArray(execution?.stages)
-    ? execution.stages.find((stage) => stage?.stage_id === "episode-production")
+    ? execution.stages.find((stage) =>
+      stage?.stage_id === execution?.current_stage_id) ??
+      execution.stages.find((stage) => stage?.status === "running")
     : null;
   return active?.diagnostics?.internal_stage ??
     execution?.diagnostics?.internal_stage ??
     execution?.current_stage_id ??
     "episode-production";
+}
+
+async function launchEpisodeStageWorker({
+  stageId,
+  executionId,
+  requestS3Uri,
+  outputS3Prefix,
+  workerImage,
+  config,
+  cloudConfig,
+  attempt = 1,
+  launchImplementation,
+}) {
+  if (stageId === "whitebox-capture") {
+    return { awaitingGpuBatch: true, stageId };
+  }
+  const executionPart = stageId === "episode-production"
+    ? "full"
+    : CLOUD_EPISODE_PART_BY_STAGE_ID[stageId];
+  if (!executionPart) throw new Error(`Unsupported Cloud Episode stage: ${stageId}`);
+  return launchImplementation({
+    executionId,
+    stageId,
+    executionPart,
+    requestS3Uri,
+    outputS3Prefix,
+    image: workerImage,
+    namespace: config.namespace,
+    userId: cloudConfig.userId,
+    ...(stageId === "episode-production"
+      ? {
+          gpuResourceName: config.gpuResourceName,
+          gpuCount: config.gpuCount,
+          nodeSelector: config.nodeSelector,
+          tolerations: config.tolerations,
+          gpuRequired: true,
+        }
+      : { gpuRequired: false, ...config.cpuWorker }),
+    jobSuffix: attempt > 1 ? `retry-${attempt}` : "",
+  });
+}
+
+async function launchReadyCpuStage(execution, options) {
+  const stageId = execution?.current_stage_id;
+  const stage = execution?.stages?.find?.((item) => item?.stage_id === stageId);
+  if (!stage || stage.status !== "ready" || stageId === "whitebox-capture") return null;
+  return launchEpisodeStageWorker({
+    ...options,
+    stageId,
+    attempt: Number(stage.current_attempt ?? 1),
+  });
 }
 
 export async function executeStudioCloudEpisode({
@@ -99,6 +196,7 @@ export async function executeStudioCloudEpisode({
     sceneRecord,
     productionScope,
     styleVariantMode,
+    gpuBatch: config.gpuBatch,
     workerImage: config.workerImage,
     requestId,
     outputS3Prefix,
@@ -106,24 +204,34 @@ export async function executeStudioCloudEpisode({
     fetchImplementation,
   });
   await onSubmitted({ ...submitted, outputS3Prefix });
-  await launchImplementation({
+  await launchEpisodeStageWorker({
+    stageId: "episode-prepare",
     executionId: submitted.executionId,
     requestS3Uri: submitted.requestS3Uri,
     outputS3Prefix,
-    image: submitted.workerImage,
-    namespace: config.namespace,
-    userId: cloudConfig.userId,
-    gpuResourceName: config.gpuResourceName,
-    gpuCount: config.gpuCount,
-    nodeSelector: config.nodeSelector,
-    tolerations: config.tolerations,
+    workerImage: submitted.workerImage,
+    config,
+    cloudConfig,
+    launchImplementation,
   });
   const execution = cloudExecutionRecord(await pollImplementation(
     submitted.executionId,
     {
       config: cloudConfig,
       fetchImplementation,
-      onProgress: (current) => void onProgress(cloudExecutionRecord(current)),
+      onProgress: async (current) => {
+        const value = cloudExecutionRecord(current);
+        await launchReadyCpuStage(value, {
+          executionId: submitted.executionId,
+          requestS3Uri: submitted.requestS3Uri,
+          outputS3Prefix,
+          workerImage: submitted.workerImage,
+          config,
+          cloudConfig,
+          launchImplementation,
+        });
+        await onProgress(value);
+      },
     },
   ));
   const stages = await stagesImplementation(submitted.executionId, {
@@ -133,7 +241,7 @@ export async function executeStudioCloudEpisode({
   return {
     execution,
     stages,
-    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages),
+    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages, "episode-render"),
     outputS3Prefix,
     submitted,
   };
@@ -145,6 +253,7 @@ export async function retryStudioCloudEpisode({
   outputS3Prefix,
   retryRequestId,
   attempt,
+  stageId = "episode-render",
   workerImage,
   config,
   cloudConfig,
@@ -156,30 +265,40 @@ export async function retryStudioCloudEpisode({
   stagesImplementation = getCloudExecutionStages,
 }) {
   await retryImplementation(executionId, {
-    stage_id: "episode-production",
+    stage_id: stageId,
     retry_request_id: retryRequestId,
     reason: "Studio requested Episode stage retry",
   }, {
     config: cloudConfig,
     fetchImplementation,
   });
-  await launchImplementation({
+  const launch = await launchEpisodeStageWorker({
+    stageId,
     executionId,
     requestS3Uri,
     outputS3Prefix,
-    image: workerImage,
-    namespace: config.namespace,
-    userId: cloudConfig.userId,
-    gpuResourceName: config.gpuResourceName,
-    gpuCount: config.gpuCount,
-    nodeSelector: config.nodeSelector,
-    tolerations: config.tolerations,
-    jobSuffix: `retry-${attempt}`,
+    workerImage,
+    config,
+    cloudConfig,
+    attempt,
+    launchImplementation,
   });
   const execution = cloudExecutionRecord(await pollImplementation(executionId, {
     config: cloudConfig,
     fetchImplementation,
-    onProgress: (current) => void onProgress(cloudExecutionRecord(current)),
+    onProgress: async (current) => {
+      const value = cloudExecutionRecord(current);
+      await launchReadyCpuStage(value, {
+        executionId,
+        requestS3Uri,
+        outputS3Prefix,
+        workerImage,
+        config,
+        cloudConfig,
+        launchImplementation,
+      });
+      await onProgress(value);
+    },
   }));
   const stages = await stagesImplementation(executionId, {
     config: cloudConfig,
@@ -188,8 +307,9 @@ export async function retryStudioCloudEpisode({
   return {
     execution,
     stages,
-    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages),
+    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages, "episode-render"),
     outputS3Prefix,
+    awaitingGpuBatch: launch?.awaitingGpuBatch === true,
   };
 }
 
@@ -220,24 +340,34 @@ export async function recoverStudioCloudEpisode({
   }
   if (execution.status !== "succeeded") {
     if (requestS3Uri && outputS3Prefix && workerImage && config) {
-      await launchImplementation({
+      await launchEpisodeStageWorker({
+        stageId: execution.current_stage_id ?? "episode-prepare",
         executionId,
         requestS3Uri,
         outputS3Prefix,
-        image: workerImage,
-        namespace: config.namespace,
-        userId: cloudConfig.userId,
-        gpuResourceName: config.gpuResourceName,
-        gpuCount: config.gpuCount,
-        nodeSelector: config.nodeSelector,
-        tolerations: config.tolerations,
-        jobSuffix: attempt > 1 ? `retry-${attempt}` : "",
+        workerImage,
+        config,
+        cloudConfig,
+        attempt,
+        launchImplementation,
       });
     }
     execution = cloudExecutionRecord(await pollImplementation(executionId, {
       config: cloudConfig,
       fetchImplementation,
-      onProgress: (current) => void onProgress(cloudExecutionRecord(current)),
+      onProgress: async (current) => {
+        const value = cloudExecutionRecord(current);
+        await launchReadyCpuStage(value, {
+          executionId,
+          requestS3Uri,
+          outputS3Prefix,
+          workerImage,
+          config,
+          cloudConfig,
+          launchImplementation,
+        });
+        await onProgress(value);
+      },
     }));
   }
   const stages = await stagesImplementation(executionId, {
@@ -249,6 +379,6 @@ export async function recoverStudioCloudEpisode({
     stages,
     retryRequired: ["failed", "interrupted"].includes(String(execution.status)),
     cancelled: execution.status === "cancelled",
-    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages),
+    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages, "episode-render"),
   };
 }

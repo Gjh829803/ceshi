@@ -38,7 +38,7 @@ while IFS=$'\t' read -r visual_target_id whitebox_path _ target_kind target_name
     --asset "whitebox-triview-$target_count::$whitebox_path::image::image/png"
     --asset "styled-triview-$target_count::$variant_root/visual/triviews/$visual_target_id/styled-triview.png::image::image/png"
   )
-  target_table+="- pair=$target_count; visualTargetId=$visual_target_id; kind=${target_kind:-unknown}; name=${target_name:-$visual_target_id}; description=${target_description:-none}"$'\n'
+  target_table+="- pair=$target_count; visualTargetId=$visual_target_id; kind=${target_kind:-unknown}"$'\n'
 done < <(node scripts/visual/list-visual-triview-inputs.mjs --scene-root "$scene_root" --format tsv --limit 5)
 [[ "$target_count" -ge 1 && "$target_count" -le 5 ]] || exit 3
 temporary_root="$project_root/.codex-tmp"; mkdir -p "$temporary_root"
@@ -68,8 +68,6 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --output-s3-prefix "${WORLDKIT_LWDP_S3_ROOT:-s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk}/episodes/$episode_id/$style_variant_id/review-$input_hash" \
   --instruction-file "$instruction_file" --execution-profile formal --timeout-seconds 1200 \
   --context ".codex/skills/worldkit-style-variant-visual-reviewer" \
-  --context "artifacts/scenes/$scene_id/scene-brief.md" \
-  --context "artifacts/scenes/$scene_id/triviews/whitebox-triview-manifest.json" \
   --asset "style-variant::$variant_root/style-variant.json::file::application/json" \
   --asset "review-input-identity::$input_path::file::application/json" \
   --asset "segment-00-whitebox::$episode_root/whitebox/segment-00-first-frame.png::image::image/png" \

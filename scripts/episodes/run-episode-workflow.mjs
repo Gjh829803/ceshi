@@ -29,6 +29,11 @@ import {
   buildEpisodeVisualEventInputIdentity,
   buildEpisodeVisualInputIdentity,
 } from "../lib/episode-input-identity.mjs";
+import {
+  buildCloudEpisodeArtifactManifest,
+  uploadCloudArtifactManifest,
+} from "../lib/worldkit-cloud-artifacts.mjs";
+import { joinS3Uri } from "../lib/lwdp-generation-client.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
@@ -45,9 +50,11 @@ const sceneId = value("--scene-id");
 const episodeId = value("--episode-id", `episode-${sceneId}-${Date.now().toString(36)}`);
 const origin = value("--origin", process.env.WORLDKIT_STUDIO_ORIGIN || "http://127.0.0.1:4297");
 const backend = value("--backend", "cloud");
+const executionPart = value("--execution-part", "full");
 if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(sceneId) ||
     !/^[a-z0-9][a-z0-9-]{2,119}$/.test(episodeId) ||
-    !["cloud", "local"].includes(backend)) {
+    !["cloud", "local"].includes(backend) ||
+    !["full", "prepare", "capture", "render"].includes(executionPart)) {
   throw new Error("Invalid workflow identity or backend.");
 }
 const sceneRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
@@ -159,6 +166,7 @@ let record = {
         `style-${String(index).padStart(2, "0")}`)
     : [],
   productionScope,
+  lastExecutionPart: executionPart,
   status: "running",
   currentStage: null,
   createdAt: new Date().toISOString(),
@@ -187,6 +195,7 @@ try {
           `style-${String(index).padStart(2, "0")}`)
         : [],
       productionScope,
+      lastExecutionPart: executionPart,
       status: "running",
       error: null,
       updatedAt: new Date().toISOString(),
@@ -207,6 +216,62 @@ try {
 async function persist() {
   record.updatedAt = new Date().toISOString();
   await writeJsonAtomic(recordPath, record);
+}
+const cloudCheckpointStages = new Set([
+  "visual-reconstruction",
+  "visual-events",
+  "seedance-prompts",
+  "seedance-generation",
+]);
+async function publishCloudStageCheckpoint(stageId) {
+  const outputS3Prefix = process.env.WORLDKIT_CLOUD_OUTPUT_S3_PREFIX;
+  const cloudExecutionId = process.env.WORLDKIT_CLOUD_EXECUTION_ID;
+  const cloudStageId = process.env.WORLDKIT_CLOUD_EXECUTION_STAGE_ID;
+  const cloudStageAttempt = Number(process.env.WORLDKIT_CLOUD_STAGE_ATTEMPT ?? 1);
+  if (
+    executionPart !== "render" ||
+    !cloudCheckpointStages.has(stageId) ||
+    typeof outputS3Prefix !== "string" ||
+    typeof cloudExecutionId !== "string" ||
+    typeof cloudStageId !== "string" ||
+    !Number.isSafeInteger(cloudStageAttempt) || cloudStageAttempt < 1
+  ) return;
+  const checkpointRoot = path.join(
+    repoRoot,
+    ".codex-tmp",
+    "episode-checkpoints",
+    episodeId,
+  );
+  await mkdir(checkpointRoot, { recursive: true });
+  const manifestPath = path.join(checkpointRoot, `${stageId}.json`);
+  const checkpointS3Prefix = joinS3Uri(
+    outputS3Prefix,
+    "stages",
+    cloudStageId,
+    `attempt-${cloudStageAttempt}`,
+    "checkpoints",
+    stageId,
+  );
+  const manifest = await buildCloudEpisodeArtifactManifest({
+    sceneId,
+    episodeId,
+    executionId: cloudExecutionId,
+    stageId: cloudStageId,
+    stageOutputS3Prefix: checkpointS3Prefix,
+    episodeRoot,
+    workerImage: process.env.WORLDKIT_CLOUD_WORKER_IMAGE ?? null,
+    sourceRevision: process.env.WORLDKIT_SOURCE_REVISION ?? null,
+    requireComplete: false,
+    executionPart,
+  });
+  const uploaded = await uploadCloudArtifactManifest(manifest, manifestPath, {
+    stageOutputS3Prefix: checkpointS3Prefix,
+  });
+  await rm(manifestPath, { force: true });
+  writeOutput(
+    `WORLDKIT_EPISODE_CLOUD_CHECKPOINT ${stageId} ` +
+      `${uploaded.cloudExecutionArtifacts[0].s3_uri}\n`,
+  );
 }
 async function exists(filePath) {
   try { return (await stat(filePath)).size > 0; } catch { return false; }
@@ -628,6 +693,7 @@ async function stage(id, skipWhen, operation) {
   item.status = "complete";
   item.finishedAt = new Date().toISOString();
   await persist();
+  await publishCloudStageCheckpoint(id);
   writeOutput(`WORLDKIT_EPISODE_WORKFLOW_STAGE ${id} complete\n`);
 }
 
@@ -635,55 +701,71 @@ try {
   await access(path.join(sceneRoot, "world.mjs"));
   const reconRoot = path.join(episodeRoot, "planning/reconnaissance");
   const reconnaissancePath = path.join(reconRoot, "reconnaissance-report.json");
-  const sceneRuntimeIdentity = await buildEpisodeSceneRuntimeIdentity({
-    sceneRoot,
-    scenePlanRoot: path.join(repoRoot, "apps/playground/public/scene-plans", sceneId),
-    episodeSourceReceiptPath: await exists(path.join(
-      episodeRoot,
-      "episode-source-receipt.json",
-    )) ? path.join(episodeRoot, "episode-source-receipt.json") : null,
-  });
-  await stage("reconnaissance",
-    () => reconnaissanceIsCurrent(
-      reconnaissancePath,
-      sceneRuntimeIdentity.identityHash,
-    ),
-    () => withRuntimeSlot(`reconnaissance:${episodeId}`, () =>
-      run("pnpm", ["exec", "tsx", "scripts/episodes/inspect-playthrough-world.ts",
-        "--scene-id", sceneId, "--origin", origin, "--play-path", "/play",
-        "--output", reconRoot,
-        "--source-identity-hash", sceneRuntimeIdentity.identityHash])));
   const navigationPath = path.join(episodeRoot, "planning/navigation-evidence.json");
   const worldModulePath = path.join(sceneRoot, "world.mjs");
-  await stage("navigation-evidence",
-    () => navigationEvidenceIsCurrent(
-      navigationPath,
-      worldModulePath,
-      reconnaissancePath,
-    ),
-    () => run("pnpm", ["exec", "tsx", "scripts/episodes/build-exploration-navigation-evidence.ts",
-      "--scene-id", sceneId, "--world", worldModulePath,
-      "--reconnaissance", reconnaissancePath,
-      "--output", navigationPath]));
   const planPath = path.join(episodeRoot, "planning/playthrough-plan.json");
-  await stage("playthrough-plan",
-    () => planIsCurrent(planPath, navigationPath),
-    () => run("bash", ["scripts/agents/run-lwdp-playthrough-planner-agent.sh",
-      "--scene-id", sceneId, "--episode-id", episodeId, "--episode-root", episodeRoot,
-      "--recon-root", reconRoot, "--backend", backend]));
   const whiteboxRoot = path.join(episodeRoot, "whitebox");
-  await stage("whitebox-capture",
-    () => hasCompleteWhiteboxCapture(whiteboxRoot, planPath),
-    () => withRuntimeSlot(`whitebox-capture:${episodeId}`, () =>
-      retryOperation("whitebox-capture", 3, async () => {
-        await run("pnpm", ["exec", "tsx", "scripts/episodes/run-playthrough-capture.ts",
+  if (executionPart === "full" || executionPart === "prepare") {
+    const sceneRuntimeIdentity = await buildEpisodeSceneRuntimeIdentity({
+      sceneRoot,
+      scenePlanRoot: path.join(repoRoot, "apps/playground/public/scene-plans", sceneId),
+      episodeSourceReceiptPath: await exists(path.join(
+        episodeRoot,
+        "episode-source-receipt.json",
+      )) ? path.join(episodeRoot, "episode-source-receipt.json") : null,
+    });
+    await stage("reconnaissance",
+      () => reconnaissanceIsCurrent(
+        reconnaissancePath,
+        sceneRuntimeIdentity.identityHash,
+      ),
+      () => withRuntimeSlot(`reconnaissance:${episodeId}`, () =>
+        run("pnpm", ["exec", "tsx", "scripts/episodes/inspect-playthrough-world.ts",
           "--scene-id", sceneId, "--origin", origin, "--play-path", "/play",
-          "--plan", planPath, "--navigation-evidence", navigationPath,
-          "--output", whiteboxRoot]);
-        if (!await hasCompleteWhiteboxCapture(whiteboxRoot, planPath)) {
-          throw new Error("EPISODE_WHITEBOX_CAPTURE_CLOSURE_FAILED");
-        }
-      })));
+          "--output", reconRoot,
+          "--source-identity-hash", sceneRuntimeIdentity.identityHash])));
+    await stage("navigation-evidence",
+      () => navigationEvidenceIsCurrent(
+        navigationPath,
+        worldModulePath,
+        reconnaissancePath,
+      ),
+      () => run("pnpm", ["exec", "tsx", "scripts/episodes/build-exploration-navigation-evidence.ts",
+        "--scene-id", sceneId, "--world", worldModulePath,
+        "--reconnaissance", reconnaissancePath,
+        "--output", navigationPath]));
+    await stage("playthrough-plan",
+      () => planIsCurrent(planPath, navigationPath),
+      () => run("bash", ["scripts/agents/run-lwdp-playthrough-planner-agent.sh",
+        "--scene-id", sceneId, "--episode-id", episodeId, "--episode-root", episodeRoot,
+        "--recon-root", reconRoot, "--backend", backend]));
+  } else if (!await navigationEvidenceIsCurrent(
+    navigationPath,
+    worldModulePath,
+    reconnaissancePath,
+  ) || !await planIsCurrent(planPath, navigationPath)) {
+    throw new Error("EPISODE_PREPARE_CHECKPOINT_REQUIRED");
+  }
+
+  if (executionPart === "full" || executionPart === "capture") {
+    await stage("whitebox-capture",
+      () => hasCompleteWhiteboxCapture(whiteboxRoot, planPath),
+      () => withRuntimeSlot(`whitebox-capture:${episodeId}`, () =>
+        retryOperation("whitebox-capture", 3, async () => {
+          await run("pnpm", ["exec", "tsx", "scripts/episodes/run-playthrough-capture.ts",
+            "--scene-id", sceneId, "--origin", origin, "--play-path", "/play",
+            "--plan", planPath, "--navigation-evidence", navigationPath,
+            "--output", whiteboxRoot]);
+          if (!await hasCompleteWhiteboxCapture(whiteboxRoot, planPath)) {
+            throw new Error("EPISODE_WHITEBOX_CAPTURE_CLOSURE_FAILED");
+          }
+        })));
+  } else if (executionPart === "render" &&
+      !await hasCompleteWhiteboxCapture(whiteboxRoot, planPath)) {
+    throw new Error("EPISODE_WHITEBOX_CAPTURE_CHECKPOINT_REQUIRED");
+  }
+
+  if (executionPart === "full" || executionPart === "render") {
   if (styleVariantConfig.enabled) {
     await stage("style-variant-production", hasCompleteStyleVariantProduction,
       () => run("node", [
@@ -751,19 +833,25 @@ try {
         ]));
     });
   }
-  record.status = "succeeded";
+  }
+  record.status = executionPart === "prepare"
+    ? "awaiting-capture"
+    : executionPart === "capture" ? "captured" : "succeeded";
   record.currentStage = null;
-  record.finishedAt = new Date().toISOString();
+  record.finishedAt = record.status === "succeeded" ? new Date().toISOString() : null;
   record.error = null;
   await persist();
-  if (styleVariantConfig.enabled && productionScope === "full") {
+  if (record.status === "succeeded" &&
+      styleVariantConfig.enabled && productionScope === "full") {
     await run("node", [
       "scripts/episodes/build-style-variant-bundle.mjs",
       "--episode-id", episodeId,
       "--episode-root", episodeRoot,
     ]);
   }
-  writeOutput(`WORLDKIT_EPISODE_WORKFLOW_READY ${episodeId}\n`);
+  writeOutput(record.status === "succeeded"
+    ? `WORLDKIT_EPISODE_WORKFLOW_READY ${episodeId}\n`
+    : `WORLDKIT_EPISODE_WORKFLOW_CHECKPOINT ${executionPart} ${episodeId}\n`);
 } catch (error) {
   const item = record.stages.find((candidate) => candidate.id === record.currentStage);
   if (item) {

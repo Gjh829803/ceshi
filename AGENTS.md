@@ -93,6 +93,8 @@ The Playground Recording Workbench is a separate manual post-workflow tool. A us
 - Automatic capture advances Runtime at 60Hz and submits one real rendered screenshot for every 24fps output frame. It never duplicates, interpolates, pads or synthesizes missing frames.
 - The Episode Host validates only executable structure, exact membership of six distinct starts in the Host-derived collision-clear stand-position catalog, Runtime Tick health, non-stationary Subject motion, absence of prolonged unsupported ground falling, and exact media dimensions/frame rate/frame count. It does not reject destination misses, route choices, key counts, opposite-key transitions, camera style, or exploration quality; those remain model output for human review.
 - I/J/K/L are the canonical Episode camera keys: I up, K down, J left, L right. Legacy Arrow-key traces may be normalized only at the Studio read boundary and are never produced by new capture.
+- Formal cloud Episodes use one `episode-prepare -> whitebox-capture -> episode-render` LWDP execution. The middle stage is admitted only through the shared GPU Batch queue: fewer than 100 compatible ready Episodes must never start a GPU; one GPU Pod processes a 100–128 task Batch in one lifecycle. This scheduling split must not change Agent prompts, capture bytes, camera, Runtime, Gemini, Seedance, or conformance behavior.
+- Each coarse stage uploads a hash-closed S3 checkpoint. Seedance request and Job identity are checkpointed immediately around provider submission. Local Studio files are compatibility caches; LWDP execution state, S3 Run Index, phase manifests, provider journals, and final releases are the cloud production authority.
 
 ## Project-local provider credentials
 

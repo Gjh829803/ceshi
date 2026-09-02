@@ -610,6 +610,9 @@ export function createEpisodeWorkflowService(options) {
   const readVerifiedRemoteArtifact = options.readVerifiedRemoteArtifact ?? null;
   const streamRemoteArtifact = options.streamRemoteArtifact ?? null;
   const redirectRemoteArtifact = options.redirectRemoteArtifact ?? null;
+  const persistCloudEpisodeRecord = options.persistCloudEpisodeRecord ?? null;
+  const readCloudEpisodeRecord = options.readCloudEpisodeRecord ?? null;
+  const listCloudEpisodeRecords = options.listCloudEpisodeRecords ?? null;
   const loadStyleVariantConfig = options.loadEpisodeStyleVariantConfig ??
     (() => loadEpisodeStyleVariantConfig(repoRoot));
 
@@ -1088,6 +1091,30 @@ export function createEpisodeWorkflowService(options) {
       }))).some(Boolean);
       return hasFinalVideo ? record : null;
     }))).filter(Boolean);
+    if (typeof listCloudEpisodeRecords === "function") {
+      const remoteRecords = await listCloudEpisodeRecords().catch(() => []);
+      const byEpisodeId = new Map(records.map((record) => [record.episodeId, record]));
+      for (const remoteRecord of remoteRecords) {
+        if (!remoteRecord || !idPattern.test(remoteRecord.episodeId ?? "") ||
+            !idPattern.test(remoteRecord.sceneId ?? "") ||
+            (sceneId && remoteRecord.sceneId !== sceneId)) continue;
+        if (requireFinalVideo) {
+          const expectedSegments = seedanceSegmentIdsForRecord(remoteRecord);
+          const paths = new Set((remoteRecord.remoteArtifacts ?? []).map((artifact) => artifact.path));
+          if (!expectedSegments.every((segmentId) =>
+            paths.has(`episode/video/${segmentId}/final-1280x720-24fps-720f.mp4`) ||
+            (remoteRecord.styleVariantIds ?? []).some((styleVariantId) =>
+              paths.has(`episode/style-variants/${styleVariantId}/video/${segmentId}/final-1280x720-24fps-720f.mp4`)))) {
+            continue;
+          }
+        }
+        const local = byEpisodeId.get(remoteRecord.episodeId);
+        if (!local || Number(remoteRecord.recordRevision ?? 0) > Number(local.recordRevision ?? 0)) {
+          byEpisodeId.set(remoteRecord.episodeId, remoteRecord);
+        }
+      }
+      records = [...byEpisodeId.values()];
+    }
     records.sort((left, right) => String(right.updatedAt ?? right.createdAt)
       .localeCompare(String(left.updatedAt ?? left.createdAt)));
     if (latestPerScene) {
@@ -1104,14 +1131,34 @@ export function createEpisodeWorkflowService(options) {
 
   async function persistEpisodeRecord(record) {
     const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
+    record.recordRevision = Number.isSafeInteger(record.recordRevision) && record.recordRevision >= 0
+      ? record.recordRevision + 1
+      : 1;
+    record.updatedAt = new Date().toISOString();
+    if (record.backend === "cloud" && typeof persistCloudEpisodeRecord === "function") {
+      // S3 is the durable authority for the cloud lane. Publish it before the
+      // disposable local compatibility cache so a local disk write can never
+      // make an uncommitted control-plane transition look durable.
+      await persistCloudEpisodeRecord(record);
+    }
     await mkdir(path.dirname(recordPath), { recursive: true });
     const temporaryPath = `${recordPath}.${process.pid}.tmp`;
-    await writeFile(temporaryPath, `${JSON.stringify({
-      ...record,
-      updatedAt: new Date().toISOString(),
-    }, null, 2)}\n`, "utf8");
+    await writeFile(temporaryPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
     await rename(temporaryPath, recordPath);
     listAllCache.clear();
+  }
+
+  async function readEpisodeRecordById(episodeId) {
+    const local = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
+    const remote = typeof readCloudEpisodeRecord === "function"
+      ? readCloudEpisodeRecord(episodeId)
+      : null;
+    const resolvedRemote = await remote;
+    if (!local) return resolvedRemote;
+    if (!resolvedRemote) return local;
+    return Number(resolvedRemote.recordRevision ?? 0) > Number(local.recordRevision ?? 0)
+      ? resolvedRemote
+      : local;
   }
 
   async function hydrateCloudEpisodeMetadata(record) {
@@ -1172,6 +1219,10 @@ export function createEpisodeWorkflowService(options) {
       expectedSceneId: record.sceneId,
       expectedEpisodeId: record.episodeId,
     });
+    if (record.remoteExecutionProfile === "cpu-gpu-batch-cpu@1" &&
+        (manifest.stageId !== "episode-render" || manifest.executionPart !== "render")) {
+      throw new Error("Cloud Episode final admission requires the episode-render manifest.");
+    }
     if (typeof record.remoteWorkerImage !== "string" ||
         manifest.workerImage !== record.remoteWorkerImage) {
       throw new Error("Cloud Episode manifest Worker image does not match the frozen request digest.");
@@ -1320,11 +1371,15 @@ export function createEpisodeWorkflowService(options) {
           record = {
             ...record,
             remoteExecutionId: submitted.executionId,
-            remoteStageId: "episode-production",
+            remoteStageId: "episode-prepare",
             remoteRequestId: requestId,
             remoteOutputS3Prefix: submitted.outputS3Prefix,
             remoteRequestS3Uri: submitted.requestS3Uri,
             remoteWorkerImage: submitted.workerImage,
+            remoteExecutionProfile: submitted.executionProfile ?? "legacy-coarse@1",
+            gpuBatchMinimumSize: submitted.gpuBatch?.minimumBatchSize ?? 100,
+            gpuBatchMaximumSize: submitted.gpuBatch?.maximumBatchSize ?? 128,
+            gpuBatchStatus: "preparing",
             sourceSceneExecutionId: scene.sceneExecutionId,
             sourceSceneManifestS3Uri: scene.sceneManifestS3Uri,
             cloudAttempt: 1,
@@ -1333,14 +1388,20 @@ export function createEpisodeWorkflowService(options) {
         },
         onProgress: async (execution) => {
           record = await readJson(recordPath) ?? record;
-          const internalStage = execution?.stages?.find?.((stage) =>
-            stage?.stage_id === "episode-production")?.diagnostics?.internal_stage ??
+          const remoteStage = execution?.stages?.find?.((stage) =>
+            stage?.stage_id === execution?.current_stage_id);
+          const internalStage = remoteStage?.diagnostics?.internal_stage ??
             execution?.diagnostics?.internal_stage ?? record.currentStage;
           const stageIndex = record.stages.findIndex((stage) => stage.id === internalStage);
+          const gpuBatchStatus = execution.current_stage_id === "whitebox-capture"
+            ? remoteStage?.status === "running" ? "capturing" : "waiting-for-batch"
+            : execution.current_stage_id === "episode-render" ? "capture-complete" : "preparing";
           record = {
             ...record,
             status: "running",
             currentStage: internalStage,
+            remoteStageId: execution.current_stage_id ?? record.remoteStageId,
+            gpuBatchStatus,
             cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
             stages: record.stages.map((stage, index) => ({
               ...stage,
@@ -1372,6 +1433,7 @@ export function createEpisodeWorkflowService(options) {
   async function runCloudEpisodeRetry(record) {
     const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
     const attempt = Number(record.cloudAttempt ?? 1) + 1;
+    const retryStageId = record.remoteStageId ?? "episode-render";
     try {
       if (
         typeof retryCloudEpisode !== "function" ||
@@ -1380,6 +1442,9 @@ export function createEpisodeWorkflowService(options) {
         typeof record.remoteRequestS3Uri !== "string" ||
         typeof record.remoteOutputS3Prefix !== "string"
       ) throw new Error("Cloud Episode retry identity is incomplete.");
+      const prepareStageIds = new Set([
+        "reconnaissance", "navigation-evidence", "playthrough-plan",
+      ]);
       record = {
         ...record,
         status: "running",
@@ -1389,12 +1454,19 @@ export function createEpisodeWorkflowService(options) {
         cloudAttempt: attempt,
         remoteArtifactAdmission: null,
         remoteArtifacts: [],
-        stages: record.stages.map((stage) => ({
-          ...stage,
-          status: "pending",
-          startedAt: null,
-          finishedAt: null,
-        })),
+        stages: record.stages.map((stage) => {
+          const preserve = retryStageId === "whitebox-capture"
+            ? prepareStageIds.has(stage.id)
+            : retryStageId === "episode-render"
+              ? prepareStageIds.has(stage.id) || stage.id === "whitebox-capture"
+              : false;
+          return preserve ? stage : {
+            ...stage,
+            status: "pending",
+            startedAt: null,
+            finishedAt: null,
+          };
+        }),
       };
       await persistEpisodeRecord(record);
       const result = await retryCloudEpisode({
@@ -1403,13 +1475,23 @@ export function createEpisodeWorkflowService(options) {
         outputS3Prefix: record.remoteOutputS3Prefix,
         retryRequestId: `${record.episodeId}-retry-${attempt}`,
         attempt,
+        stageId: retryStageId,
         workerImage: record.remoteWorkerImage,
         onProgress: async (execution) => {
           record = await readJson(recordPath) ?? record;
-          const internalStage = execution?.stages?.find?.((stage) =>
-            stage?.stage_id === "episode-production")?.diagnostics?.internal_stage ??
+          const remoteStage = execution?.stages?.find?.((stage) =>
+            stage?.stage_id === execution?.current_stage_id);
+          const internalStage = remoteStage?.diagnostics?.internal_stage ??
             execution?.diagnostics?.internal_stage ?? record.currentStage;
-          record = { ...record, currentStage: internalStage };
+          record = {
+            ...record,
+            currentStage: internalStage,
+            remoteStageId: execution.current_stage_id ?? record.remoteStageId,
+            gpuBatchStatus: execution.current_stage_id === "whitebox-capture"
+              ? remoteStage?.status === "running" ? "capturing" : "waiting-for-batch"
+              : execution.current_stage_id === "episode-render"
+                ? "capture-complete" : record.gpuBatchStatus,
+          };
           await persistEpisodeRecord(record);
         },
       });
@@ -1444,13 +1526,19 @@ export function createEpisodeWorkflowService(options) {
         attempt: Number(record.cloudAttempt ?? 1),
         onProgress: async (execution) => {
           record = await readJson(recordPath) ?? record;
-          const internalStage = execution?.stages?.find?.((stage) =>
-            stage?.stage_id === "episode-production")?.diagnostics?.internal_stage ??
+          const remoteStage = execution?.stages?.find?.((stage) =>
+            stage?.stage_id === execution?.current_stage_id);
+          const internalStage = remoteStage?.diagnostics?.internal_stage ??
             execution?.diagnostics?.internal_stage ?? record.currentStage;
           await persistEpisodeRecord({
             ...record,
             status: "running",
             currentStage: internalStage,
+            remoteStageId: execution.current_stage_id ?? record.remoteStageId,
+            gpuBatchStatus: execution.current_stage_id === "whitebox-capture"
+              ? remoteStage?.status === "running" ? "capturing" : "waiting-for-batch"
+              : execution.current_stage_id === "episode-render"
+                ? "capture-complete" : record.gpuBatchStatus,
             cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
             finishedAt: null,
             error: null,
@@ -1506,7 +1594,7 @@ export function createEpisodeWorkflowService(options) {
     record = {
       ...record,
       remoteExecutionId: executionId,
-      remoteStageId: "episode-production",
+      remoteStageId: result.execution.current_stage_id ?? "episode-render",
       remoteArtifactManifestS3Uri: result.manifestS3Uri,
     };
     await persistEpisodeRecord(record);
@@ -1555,7 +1643,11 @@ export function createEpisodeWorkflowService(options) {
         finishedAt: null,
         error: null,
         remoteExecutionId: null,
-        remoteStageId: "episode-production",
+        remoteStageId: "episode-prepare",
+        remoteExecutionProfile: "cpu-gpu-batch-cpu@1",
+        gpuBatchMinimumSize: 100,
+        gpuBatchMaximumSize: 128,
+        gpuBatchStatus: "preparing",
         remoteRequestId: `${episodeId}-cloud-run-1`,
         remoteArtifactManifestS3Uri: null,
         remoteArtifactAdmission: null,
@@ -1596,7 +1688,7 @@ export function createEpisodeWorkflowService(options) {
     if (activeChildren.has(episodeId) || activeCloudExecutions.has(episodeId)) {
       return { episodeId, reused: true, resumed: true };
     }
-    const record = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
+    const record = await readEpisodeRecordById(episodeId);
     if (!record || record.episodeId !== episodeId || !idPattern.test(record.sceneId) ||
         !["cloud", "local"].includes(record.backend)) {
       throw new Error("Episode is not resumable.");
@@ -1642,7 +1734,7 @@ export function createEpisodeWorkflowService(options) {
     }
     const detail = /^\/api\/episode-workflows\/([a-z0-9-]+)$/.exec(url.pathname);
     if (request.method === "GET" && detail) {
-      const record = await readJson(path.join(episodesRoot, detail[1], "episode-record.json"));
+      const record = await readEpisodeRecordById(detail[1]);
       if (!record) { sendJson(response, 404, { error: "Episode not found." }); return true; }
       sendJson(response, 200, { episode: await enrich(record) });
       return true;
@@ -1651,7 +1743,7 @@ export function createEpisodeWorkflowService(options) {
     if (request.method === "POST" && stop) {
       const child = activeChildren.get(stop[1]);
       if (child && !child.killed) child.kill("SIGTERM");
-      const record = await readJson(path.join(episodesRoot, stop[1], "episode-record.json"));
+      const record = await readEpisodeRecordById(stop[1]);
       let cloudStopped = false;
       if (record?.backend === "cloud" && record.remoteExecutionId &&
           typeof cancelCloudEpisode === "function") {
@@ -1687,7 +1779,7 @@ export function createEpisodeWorkflowService(options) {
     const interactionTimelineMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/interaction-timeline$/.exec(url.pathname);
     if (request.method === "GET" && interactionTimelineMatch) {
       const episodeId = interactionTimelineMatch[1];
-      const record = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
+      const record = await readEpisodeRecordById(episodeId);
       if (!record || record.episodeId !== episodeId) {
         sendJson(response, 404, { error: "Episode not found." });
         return true;
@@ -1711,7 +1803,7 @@ export function createEpisodeWorkflowService(options) {
     const bundleMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/bundle$/.exec(url.pathname);
     if (request.method === "GET" && bundleMatch) {
       const episodeId = bundleMatch[1];
-      const record = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
+      const record = await readEpisodeRecordById(episodeId);
       if (!record || record.episodeId !== episodeId) {
         sendJson(response, 404, { error: "Episode not found." });
         return true;
@@ -1766,7 +1858,7 @@ export function createEpisodeWorkflowService(options) {
     const sceneAssetMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/scene-assets\/([a-z0-9-]+)$/.exec(url.pathname);
     if (["GET", "HEAD"].includes(request.method) && sceneAssetMatch) {
       const [, episodeId, assetId] = sceneAssetMatch;
-      const record = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
+      const record = await readEpisodeRecordById(episodeId);
       if (!record || record.episodeId !== episodeId) {
         sendJson(response, 404, { error: "Episode not found." });
         return true;

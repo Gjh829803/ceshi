@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -126,6 +127,25 @@ class Seedance25ContractTest(unittest.TestCase):
                 self.assertTrue(MODULE.raw_checkpoint_is_valid(raw, receipt))
                 raw.write_bytes(b"corrupt")
                 self.assertFalse(MODULE.raw_checkpoint_is_valid(raw, receipt))
+
+    def test_cloud_provider_journal_is_uploaded_immediately_after_local_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            result = Path(root) / "provider-run.json"
+            record = {
+                "episodeId": "episode-scene-001",
+                "segmentId": "segment-00",
+                "status": "seedance-submitted",
+                "providerJobId": "provider-job-001",
+            }
+            with patch.dict(os.environ, {
+                "WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX": "s3://bucket/provider-journals",
+            }, clear=False), patch.object(MODULE.subprocess, "run") as run:
+                MODULE.persist_provider_record(result, record)
+            self.assertEqual(json.loads(result.read_text(encoding="utf-8")), record)
+            self.assertEqual(run.call_args.args[0], [
+                "aws", "s3", "cp", "--only-show-errors", str(result),
+                "s3://bucket/provider-journals/episode-scene-001/segment-00/provider-run.json",
+            ])
 
 
 if __name__ == "__main__":
