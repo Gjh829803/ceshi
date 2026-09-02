@@ -82,6 +82,38 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+type OpeningDistanceGroupV1 = Readonly<Pick<
+  FormalOpeningObservationV1["visualGroups"][number],
+  "compositionTargetRef" | "normalizedCenter" | "depthOrder"
+>>;
+
+export function projectOpeningCompositionDistancesV1(
+  visualGroups: readonly OpeningDistanceGroupV1[],
+) {
+  const depthOrderedGroups = [...visualGroups].sort((left, right) =>
+    left.depthOrder - right.depthOrder ||
+    compareText(left.compositionTargetRef, right.compositionTargetRef));
+  return depthOrderedGroups.slice(1)
+    .map((group, index) => {
+      const previous = depthOrderedGroups[index]!;
+      const [fromTargetRef, toTargetRef] =
+        compareText(previous.compositionTargetRef, group.compositionTargetRef) < 0
+          ? [previous.compositionTargetRef, group.compositionTargetRef]
+          : [group.compositionTargetRef, previous.compositionTargetRef];
+      return {
+        fromTargetRef,
+        toTargetRef,
+        distanceBasisPoints: Math.round(Math.hypot(
+          group.normalizedCenter.xBasisPoints - previous.normalizedCenter.xBasisPoints,
+          group.normalizedCenter.yBasisPoints - previous.normalizedCenter.yBasisPoints,
+        )),
+      };
+    })
+    .sort((left, right) =>
+      compareText(left.fromTargetRef, right.fromTargetRef) ||
+      compareText(left.toTargetRef, right.toTargetRef));
+}
+
 function relationKey(value: WorldReconstructionTopologyRelationV1): string {
   return `${value.fromNodeId}\u0000${value.relation}\u0000${value.toNodeId}`;
 }
@@ -466,21 +498,7 @@ export function buildWorldReconstructionEvidenceSetV1(
   const depthOrderedGroups = [...opening.visualGroups].sort((left, right) =>
     left.depthOrder - right.depthOrder ||
     compareText(left.compositionTargetRef, right.compositionTargetRef));
-  const distances = depthOrderedGroups.slice(1).map((group, index) => {
-    const previous = depthOrderedGroups[index]!;
-    const [fromTargetRef, toTargetRef] =
-      compareText(previous.compositionTargetRef, group.compositionTargetRef) < 0
-        ? [previous.compositionTargetRef, group.compositionTargetRef]
-        : [group.compositionTargetRef, previous.compositionTargetRef];
-    return {
-      fromTargetRef,
-      toTargetRef,
-      distanceBasisPoints: Math.round(Math.hypot(
-        group.normalizedCenter.xBasisPoints - previous.normalizedCenter.xBasisPoints,
-        group.normalizedCenter.yBasisPoints - previous.normalizedCenter.yBasisPoints,
-      )),
-    };
-  });
+  const distances = projectOpeningCompositionDistancesV1(opening.visualGroups);
   const overlayColliderIds = new Set(overlay.colliders.map(({ colliderId }) => colliderId));
   const colliderContributions = [...verified.nativeSceneContribution.staticColliders]
     .sort((left, right) => compareText(left.id, right.id))
