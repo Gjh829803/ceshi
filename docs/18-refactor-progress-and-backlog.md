@@ -1068,6 +1068,27 @@ focused 验证并合入 `main@d1ba942`，BWB-5 参考场景 Corpus 已完成；f
   25 与 40；这不是 CPU/GPU/Havok 实测。实现未修改 Runtime/Havok、AI-facing Schema 或 Contribution
   语义，完整证据见 [BWB-6 Profile Optimization Review](reviews/2026-09-01-bwb6-profile-optimization-review.md)。
 
+##### Agent-friendly Block Drawing API（BWB Profile 增强）
+
+后续 AI 友好绘制能力由
+[设计](superpowers/specs/2026-09-02-agent-friendly-babylon-native-block-drawing-api-design.md)和
+[实施计划](superpowers/plans/2026-09-02-agent-friendly-babylon-native-block-drawing-api-implementation.md)
+约束。它在已完成 BWB-6 之后扩展同一个 `@whitebox-world/native-babylon-block-profile`，不重开
+BWB-6、不增加 WRC-1 第 34 个工作包，也不新增 Package、Scene Source、Compiler、Runtime、Physics、
+Gameplay 或 Camera owner。目标是用一个 current-only clean break 将 Profile Block 初始位置/四分之一转
+纳入原子 `createBlock()`，并增加只负责机械密集重复的 `createBlockGrid()`；Collider 仍只由显式
+Finalize Contribution 登记。
+
+- [x] WRC-API-00：冻结设计、唯一 v2 迁移 SHA、clean-break ledger 和独立 exact-SHA 文档审查；
+- [ ] WRC-API-10/20/30：冻结 RED 类型合同，实现原子 positioned Block 与确定性 dense Grid；
+- [ ] WRC-API-40：一次迁移全部活跃消费者、Fixture 与 Native Builder Skill，删除旧 placement dialect；
+- [ ] WRC-API-50：由现有生产 Owner 刷新代表性 authored source、Candidate、Package 与 Receipt 身份；
+  不伪称 API 源码会自动改变已发布 Profile descriptor hash，也不改历史 Package/Receipt；
+- [ ] WRC-API-90：完成 focused/affected gates、exact-SHA Cloud review 与真实生产 Package/Receipt 证据。
+
+以上状态只按真实合入代码和证据更新。本增强本身不完成 NBR-20/70/80/90、BNA-6/7、WRC-SR 或
+WRC-1；当前 NBR 生产链路仍可在旧 Profile 合同上继续收口，不得被未实施的新 API 伪装为已迁移。
+
 #### P3.7 Project Health Observatory
 
 详细权威为
