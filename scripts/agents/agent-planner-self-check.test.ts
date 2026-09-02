@@ -196,6 +196,7 @@ function expectedReceipt(
     schemaVersion: 1,
     validatorVersion: PLANNER_VERSION,
     sceneId: "planner-parity-scene",
+    sceneSourceKind: "canonical",
     status: scenario.expectedStatus,
     inputs: {
       sceneBriefHash: hash(scenario.brief),
@@ -255,6 +256,7 @@ function plannerArguments(
   reportPath: string,
 ): readonly string[] {
   return [
+    "--scene-source", "canonical",
     "--scene-id", "planner-parity-scene",
     "--brief", inputs.briefPath,
     "--world-plan", inputs.worldPlanPath,
@@ -265,7 +267,70 @@ function plannerArguments(
   ];
 }
 
+function nativePlannerArguments(
+  inputs: Awaited<ReturnType<typeof writePlannerInputs>>,
+  reportPath: string,
+): readonly string[] {
+  return [
+    "--scene-source", "babylon-native",
+    "--scene-id", "planner-parity-scene",
+    "--brief", inputs.briefPath,
+    "--world-plan", inputs.worldPlanPath,
+    "--entry", inputs.entryPath,
+    "--report", reportPath,
+  ];
+}
+
 describe("source-generated Planner self-check parity", { timeout: 30_000 }, () => {
+  it("validates the Native closed profile without Height Intent inputs", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-parity-"));
+    try {
+      const inputs = await writePlannerInputs(root, VALID_BRIEF);
+      await rm(inputs.terrainPromptPath);
+      await rm(inputs.terrainIntentPath);
+      const sourceReportPath = path.join(root, "source-report.json");
+      const bundledReportPath = path.join(root, "bundled-report.json");
+      const source = run("pnpm", [
+        "exec", "tsx", "scripts/agents/agent-planner-self-check.ts",
+        ...nativePlannerArguments(inputs, sourceReportPath),
+      ]);
+      const bundled = run(process.execPath, [
+        ".codex/skills/worldkit-spatial-planner/scripts/self-check.mjs",
+        ...nativePlannerArguments(inputs, bundledReportPath),
+      ]);
+
+      expect(source.status, source.stderr || source.stdout).toBe(0);
+      expect(bundled.status, bundled.stderr || bundled.stdout).toBe(0);
+      expect(await readFile(sourceReportPath)).toEqual(
+        await readFile(bundledReportPath),
+      );
+      expect(JSON.parse(await readFile(sourceReportPath, "utf8"))).toEqual({
+        kind: "worldkit-planner-self-check",
+        schemaVersion: 1,
+        validatorVersion: PLANNER_VERSION,
+        sceneId: "planner-parity-scene",
+        sceneSourceKind: "babylon-native",
+        status: "passed",
+        inputs: {
+          sceneBriefHash: hash(VALID_BRIEF),
+          worldPlanHash: FIXED_PNG_HASH,
+          entryWhiteboxTargetHash: FIXED_PNG_HASH,
+        },
+        imageMeasurements: {
+          widthPixels: 8,
+          heightPixels: 8,
+          subjectMaskPixelCount: 64,
+          subjectCenterXRatio: 0.5,
+          subjectCenterErrorRatio: 0,
+          maximumCenterErrorRatio: 0.015,
+        },
+        diagnostics: [],
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   for (const scenario of SCENARIOS) {
     it(`emits exact source and bundled receipts for ${scenario.name}`, async () => {
       const root = await mkdtemp(path.join(tmpdir(), "worldkit-planner-parity-"));

@@ -169,6 +169,7 @@ async function writeTrustedWhiteboxArtifacts(
     schemaVersion: 1,
     validatorVersion: "worldkit-planner-self-check-v3",
     sceneId,
+    sceneSourceKind: "canonical",
     status: "passed",
     inputs: {
       sceneBriefHash: hash(brief),
@@ -587,7 +588,7 @@ test("keeps concurrent atomic writes isolated and serializes same-record mutatio
 test("assembles the new agent pipeline without executing prompt text", () => {
   const result = spawnSync(
     "bash",
-    [path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"), "--", "--scene-id", "prompt-smoke", "$(touch should-not-run)"],
+    [path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"), "--scene-source", "canonical", "--", "--scene-id", "prompt-smoke", "$(touch should-not-run)"],
     { cwd: repoRoot, env: { ...process.env, WORLDKIT_PROMPT_SMOKE: "1" }, encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -603,6 +604,8 @@ test("build-only accepts an empty reference-image list before validating frozen 
       "bash",
       [
         path.join(repoRoot, "scripts/agents/run-canonical-world-agent.sh"),
+        "--scene-source",
+        "canonical",
         "--build-only",
         "--",
         "--scene-id",

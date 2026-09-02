@@ -55,8 +55,14 @@ Studio or CLI request
 ```
 
 Native preparation first reuses the existing unified Planner task and bundled
-self-check for the Scene Brief and planning/reference evidence, but never invokes
-the Canonical Builder or Height Intent Compiler. A following Native Case Mapper
+self-check through the `babylon-native` closed output profile. That profile creates
+only the Scene Brief, complete top-down World Plan, entry composition target and
+their identity-bound receipt. It does not request, generate, validate, copy or retain
+a Height Intent prompt/raster because block geometry—not a Heightfield—is the Native
+terrain representation. The mutually exclusive `canonical` Planner profile retains
+its Height Intent outputs and compiler path. The receipt binds `sceneSourceKind`, and
+the Canonical terrain finalizer rejects a Native receipt. Native preparation never
+invokes the Canonical Builder or Height Intent Compiler. A following Native Case Mapper
 task may propose only the closed semantic Case fields from those frozen Planner
 outputs. A trusted Host adapter derives and validates one Case, evaluation profile,
 Capture intent, Gameplay Bootstrap, World Runtime Bootstrap, Bounds, and Native

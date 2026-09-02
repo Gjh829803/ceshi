@@ -35,6 +35,7 @@ interface ReceiptEnvelope {
   kind?: unknown;
   validatorVersion?: unknown;
   sceneId?: unknown;
+  sceneSourceKind?: unknown;
   status?: unknown;
   inputs?: Record<string, unknown>;
 }
@@ -102,6 +103,11 @@ function verifyPlannerReceipt(input: {
     input.receipt.sceneId,
     input.sceneId,
     "PLANNER_RECEIPT_SCENE_ID_MISMATCH",
+  );
+  expectReceiptField(
+    input.receipt.sceneSourceKind,
+    "canonical",
+    "PLANNER_RECEIPT_SCENE_SOURCE_INVALID",
   );
   expectReceiptField(
     input.receipt.status,

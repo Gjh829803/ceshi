@@ -12,8 +12,11 @@ describe("Native-default world agent Host route", () => {
     );
     expect(source).toContain("scripts/agents/run-canonical-world-agent.sh");
     expect(source).toContain('"--plan-only"');
+    expect(source).toContain('"--scene-source"');
+    expect(source).toContain('"babylon-native"');
     expect(source).toContain("native-case-proposal.json");
     expect(source).not.toContain("Produce exactly two outputs");
+    expect(source).not.toContain('"terrain-height-intent-prompt.md",');
   });
 
   it("closes the WorldPackage world-bounds contract in Mapper inputs", () => {

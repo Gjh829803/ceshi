@@ -1,11 +1,13 @@
 ---
 name: worldkit-spatial-planner
-description: Use when a hosted WorldKit outdoor scene needs a Scene Brief, top-down world plan, entry composition target, and signed Height Intent raster from a user request and reference images. Use only for planning; do not author Canonical JSON, implementation resources, or runtime details.
+description: Use when a hosted WorldKit scene needs a Scene Brief, top-down world plan, and entry composition target from a user request and reference images. Canonical terrain planning additionally produces signed Height Intent; Babylon Native planning does not. Use only for planning; do not author geometry, implementation resources, or runtime details.
 ---
 
 # WorldKit Unified Planner
 
-Create exactly five semantic output files:
+The Host selects exactly one closed output profile. Never infer, combine, or extend profiles.
+
+**Canonical Source** creates exactly five semantic output files:
 
 - `artifacts/scenes/<scene-id>/scene-brief.md`
 - `artifacts/scenes/<scene-id>/terrain-height-intent-prompt.md`
@@ -13,11 +15,21 @@ Create exactly five semantic output files:
 - `apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png`
 - `apps/playground/public/scene-plans/<scene-id>/terrain-height-intent.png`
 
-Use this skill for the optional hosted preview-planning stage. It does not replace the formal World Planner's WorldSpec, World Plan, Opening Shot or trusted plan-lock boundary. Write the Scene Brief first, then call Codex's built-in image generation tool inside the same task to create both PNG files from the same decisions and reference evidence. Do not delegate the PNGs to another Image Planner or create a separate T2I job.
+**Babylon Native Source** creates exactly three semantic output files:
+
+- `artifacts/scenes/<scene-id>/scene-brief.md`
+- `apps/playground/public/scene-plans/<scene-id>/world-plan.png`
+- `apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png`
+
+The Babylon Native profile must not create Height Intent, a Height Intent prompt, terrain samples,
+or another terrain proposal. Native block geometry is a later Builder responsibility. Both profiles
+also produce `planner-self-check.json`, which is a receipt rather than a semantic Planner output.
+
+Use this skill for the optional hosted preview-planning stage. It does not replace the formal World Planner's WorldSpec, World Plan, Opening Shot or trusted plan-lock boundary. Write the Scene Brief first, then call Codex's built-in image generation tool inside the same task to create every PNG declared by the selected profile from the same decisions and reference evidence. Do not delegate the PNGs to another Image Planner or create a separate T2I job.
 
 Use the reference images as primary visual evidence and the user request as primary intent. Write concise natural language using [references/scene-brief-template.md](references/scene-brief-template.md). Do not create a Spatial Plan, JSON spec, dimensions, coordinates, route nodes, support-surface tables, camera numbers, Registry refs, primitive decomposition, colliders, or implementation mappings.
 
-For Height Intent, read
+For the Canonical Source Height Intent only, read
 [references/terrain-height-intent-prompt.md](references/terrain-height-intent-prompt.md), write the
 fully expanded scene prompt to the declared Markdown path, then generate exactly one raster from
 that prompt in this same task. `world-plan.png owns orientation and complete-world extent`; the
@@ -118,9 +130,10 @@ For open ground, shade the entire collision-free walkable area instead of invent
 
 Remove every other overlay or annotation: no identity colors, target highlighting, labels, title, legend, scale, elevation values, dimensions, coordinates, grid, camera cone, route nodes, arrows, callouts, UI, logo, or watermark.
 
-## Terrain Height Intent
+## Canonical Source Terrain Height Intent
 
-After the Brief and World Plan exist, expand every required input in the maintained Height Intent
+Skip this entire section for the Babylon Native Source. For the Canonical Source, after the Brief
+and World Plan exist, expand every required input in the maintained Height Intent
 prompt reference. Preserve the World Plan's orientation, extent, adjacency, containment, open
 connections, and major continuous terrain masses. A user image remains visible evidence; the
 World Plan is the canonical top-down coordinate frame for this output.
@@ -150,10 +163,14 @@ All terrain, support surfaces, structures, and unselected components are neutral
 
 ## Completion
 
-Before finishing, confirm all five semantic output files exist and run the bundled portable checker:
+Before finishing, confirm the selected profile's semantic outputs exist and run the bundled portable
+checker with the same required Scene Source discriminator.
+
+Canonical Source:
 
 ```bash
 node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
+  --scene-source canonical \
   --scene-id <scene-id> \
   --brief artifacts/scenes/<scene-id>/scene-brief.md \
   --world-plan apps/playground/public/scene-plans/<scene-id>/world-plan.png \
@@ -163,6 +180,18 @@ node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
   --report artifacts/scenes/<scene-id>/planner-self-check.json
 ```
 
-If it fails, read the JSON diagnostics, repair the Brief or scene prompt, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes all five semantic outputs, so any edit after a passing check requires another check. Inspect the entry target as well: the primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
+Babylon Native Source:
+
+```bash
+node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
+  --scene-source babylon-native \
+  --scene-id <scene-id> \
+  --brief artifacts/scenes/<scene-id>/scene-brief.md \
+  --world-plan apps/playground/public/scene-plans/<scene-id>/world-plan.png \
+  --entry apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png \
+  --report artifacts/scenes/<scene-id>/planner-self-check.json
+```
+
+If it fails, read the JSON diagnostics, repair the selected profile's outputs, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes every semantic output in the selected closed profile, so any edit after a passing check requires another check. Inspect the entry target as well: the primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
 
 The trusted Host replays this same checker and the canonical Brief parser once after delivery. It never starts a separate Planner Repair Agent. The Builder owns all subsequent technical spatialization.

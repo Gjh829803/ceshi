@@ -174,6 +174,8 @@ async function main(): Promise<void> {
       ownsPlannerOutputs = true;
       const plannerArguments = [
         "scripts/agents/run-canonical-world-agent.sh",
+        "--scene-source",
+        "babylon-native",
         "--plan-only",
         "--",
         "--scene-id",
@@ -257,7 +259,6 @@ async function main(): Promise<void> {
       for (const fileName of [
         "scene-brief.md",
         "planner-self-check.json",
-        "terrain-height-intent-prompt.md",
         "visual-identity-palette.json",
       ]) {
         await copyFile(

@@ -21,9 +21,9 @@ Create playable outdoor whitebox scenes through a gated multi-agent workflow. Pl
   imported as `@whitebox-world/terrain-compiler`.
 - The stable developer command is `pnpm terrain:intent:compile`; package-private
   projection, filtering, constraint, and CLI files are not public subpath APIs.
-- Planner image semantics are owned by
+- Canonical Planner Height Intent semantics are owned by
   `.codex/skills/worldkit-spatial-planner/references/terrain-height-intent-prompt.md`.
-- Accepted family-specific prompt references are indexed by
+- Canonical accepted family-specific prompt references are indexed by
   `assets/terrain-height-intent/golden-exemplars.json`; never select an exemplar from an
   incompatible terrain family or treat it as a spatial authority.
 - Development evidence belongs under `artifacts/terrain-experiments/<case-id>/` and is

@@ -118,7 +118,11 @@ export function resolveWorldAgentInvocationV1(
     });
   }
 
-  const canonicalArguments = ["scripts/agents/run-canonical-world-agent.sh"];
+  const canonicalArguments = [
+    "scripts/agents/run-canonical-world-agent.sh",
+    "--scene-source",
+    "canonical",
+  ];
   if (request.mode === "plan") canonicalArguments.push("--plan-only");
   if (request.mode === "build") canonicalArguments.push("--build-only");
   canonicalArguments.push("--", ...commonArguments);

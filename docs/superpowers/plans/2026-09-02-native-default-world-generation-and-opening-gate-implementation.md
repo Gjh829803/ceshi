@@ -57,11 +57,13 @@ NDG-40 + OCG-20
 
 **Owned files:** `scripts/reconstruction/run-native-world-agent.ts` and `scripts/reconstruction/native-world-case-preparation.ts`.
 
-**Deliverable:** prompt/reference input first runs the unified Planner task and self-check, then one Native Case Mapper creates a closed proposal through the unified Codex task router. The Host binds fixed cross-Case thresholds, admitted resource descriptors, Case/Profile/Capture intent, bootstrap and bounds, publishes the Case atomically, then invokes `worldkit reconstruct run`.
+**Deliverable:** prompt/reference input first runs the unified Planner task and self-check through a source-discriminated closed output profile, then one Native Case Mapper creates a closed proposal through the unified Codex task router. Native planning produces only the Scene Brief, World Plan and entry target; it never creates or retains Canonical Height Intent artifacts. The Host binds fixed cross-Case thresholds, admitted resource descriptors, Case/Profile/Capture intent, bootstrap and bounds, publishes the Case atomically, then invokes `worldkit reconstruct run`.
 
 - [x] Support prompt-only and PNG/JPEG reference input.
 - [x] Reject unsupported media, changed input identity and partial Case roots.
-- [x] Keep the unified Planner output unchanged and limit the following Native Case Mapper to one closed semantic proposal.
+- [x] Keep one unified Planner while selecting a required `sceneSourceKind` output profile: Canonical retains Height Intent; Native has exactly three semantic outputs and no Height Intent.
+- [x] Bind the selected Scene Source in `planner-self-check.json`, replay the same route-aware checker in the Host, and reject Native receipts in the Canonical terrain finalizer.
+- [x] Limit the following Native Case Mapper to one closed semantic proposal.
 - [x] Copy admitted descriptors and Skill/checker closure from repository-owned frozen resources.
 - [x] Clean temporary task and staged Case roots on every failure path.
 - [x] Invoke the existing Check/Package/Runtime/Capture/Evaluation/repair transaction without a Canonical fallback.

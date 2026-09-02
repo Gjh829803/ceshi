@@ -5,12 +5,18 @@ project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [[ "${1:-}" == "--" ]]; then shift; fi
 
 scene_id=""
+scene_source=""
 mode="full"
 mode_was_set=false
 image_sources=()
 prompt_parts=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --scene-source)
+      shift
+      [[ $# -gt 0 ]] || { echo "Missing value after --scene-source." >&2; exit 2; }
+      scene_source="$1"
+      ;;
     --scene-id)
       shift
       [[ $# -gt 0 ]] || { echo "Missing value after --scene-id." >&2; exit 2; }
@@ -33,8 +39,16 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+if [[ "$scene_source" != "canonical" && "$scene_source" != "babylon-native" ]]; then
+  echo "--scene-source must be canonical or babylon-native." >&2
+  exit 2
+fi
 if [[ ! "$scene_id" =~ ^[a-z0-9][a-z0-9-]{2,79}$ ]]; then
   echo "--scene-id must be 3-80 lowercase letters, numbers, or hyphens." >&2
+  exit 2
+fi
+if [[ "$scene_source" == "babylon-native" && "$mode" != "plan" ]]; then
+  echo "Babylon Native may use this internal Planner launcher only with --plan-only." >&2
   exit 2
 fi
 if [[ ( "$mode" == "full" || "$mode" == "plan" ) && ${#prompt_parts[@]} -eq 0 ]]; then
@@ -119,13 +133,28 @@ run_codex() {
 
 planner_prompt="$user_prompt
 
-You are the unified WorldKit Planner for world '$scene_id'. In this one Codex task, create exactly five semantic outputs: artifacts/scenes/$scene_id/scene-brief.md, artifacts/scenes/$scene_id/terrain-height-intent-prompt.md, apps/playground/public/scene-plans/$scene_id/world-plan.png, apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png, and apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png. Write the Brief and World Plan first, expand and save the exact terrain prompt from the Skill reference, then use Codex's built-in image generation tool to generate all three PNGs from those same decisions and the attached user reference images. Do not delegate to another Image Planner or external API. Do not create JSON, coordinates, dimensions, geometry, route graphs, or AuthoringSpec.
+You are the unified WorldKit Planner for world '$scene_id'. The Host selected the '$scene_source' closed output profile. Use .codex/skills/worldkit-spatial-planner/SKILL.md as the hosted preview-planning guide. Keep user facts, visible reference evidence, inferred continuation, and render-only ideas in the four separate provenance sections required by current main. Name exactly one standard or custom movement mode, but describe the complete controlled shape and movement behavior only in plain language: Planner does not select Subject Definitions, Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources. Treat the opening frame only as an entry slice and describe entry, middle, remote, and off-camera exploration areas appropriate to the request without empty map padding; do not use a fixed play-time or perimeter target. Define 1-5 visual targets as whole targets beginning with the complete controlled subject; never pad or split targets. The top-down image must show the complete reference-consistent world geography, the initial-subject marker, and the traversable domain/path, not merely the entry-frame crop. The entry target is non-authoritative composition intent, not runtime whitebox evidence. The complete red primary Subject, its main body/pilot, and visual mass center are exactly on the 50% image-width vertical centerline. Near-center, any slight left/right bias, diagonal rear, three-quarter rear, shoulder, or side composition is invalid. Use the same bright neutral clear daytime inspection lighting for every case and neutralize everything except the skill's fixed target-order identity colors. Do not delegate to another Image Planner or external API. Do not create JSON, coordinates, dimensions, geometry, route graphs, or AuthoringSpec."
 
-Use .codex/skills/worldkit-spatial-planner/SKILL.md as the hosted preview-planning guide and read its template and Height Intent prompt references. Keep user facts, visible reference evidence, inferred continuation, and render-only ideas in the four separate provenance sections required by current main. Name exactly one standard or custom movement mode, but describe the complete controlled shape and movement behavior only in plain language: Planner does not select Subject Definitions, Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources. Treat the opening frame only as an entry slice and describe entry, middle, remote, and off-camera exploration areas appropriate to the request without empty map padding; do not use a fixed play-time or perimeter target. Define 1-5 visual targets as whole targets beginning with the complete controlled subject; never pad or split targets. The top-down image must show the complete reference-consistent world geography, the initial-subject marker, and the traversable domain/path, not merely the entry-frame crop. The entry target is non-authoritative composition intent, not runtime whitebox evidence. The complete red primary Subject, its main body/pilot, and visual mass center are exactly on the 50% image-width vertical centerline. Near-center, any slight left/right bias, diagonal rear, three-quarter rear, shoulder, or side composition is invalid. Use the same bright neutral clear daytime inspection lighting for every case and neutralize everything except the skill's fixed target-order identity colors. Height Intent uses the World Plan as its orientation and complete-world coordinate frame, and may use only a compatible accepted exemplar as encoding-style-only reference.
+if [[ "$scene_source" == "canonical" ]]; then
+  planner_prompt="$planner_prompt
+
+Create exactly five semantic outputs: artifacts/scenes/$scene_id/scene-brief.md, artifacts/scenes/$scene_id/terrain-height-intent-prompt.md, apps/playground/public/scene-plans/$scene_id/world-plan.png, apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png, and apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png. Write the Brief and World Plan first, expand and save the exact terrain prompt from the Skill reference, then use Codex's built-in image generation tool to generate all three PNGs from those same decisions and the attached user reference images. Height Intent uses the World Plan as its orientation and complete-world coordinate frame, and may use only a compatible accepted exemplar as encoding-style-only reference.
 
 Before finishing, run this bundled self-check from the extracted workspace:
-node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs --scene-id '$scene_id' --brief artifacts/scenes/$scene_id/scene-brief.md --world-plan apps/playground/public/scene-plans/$scene_id/world-plan.png --entry apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png --terrain-prompt artifacts/scenes/$scene_id/terrain-height-intent-prompt.md --terrain-intent apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png --report artifacts/scenes/$scene_id/planner-self-check.json
-If it exits nonzero, read its JSON diagnostics, repair the five semantic Planner outputs inside this same task, and run it again. Use at most three self-repair cycles. Finish only when planner-self-check.json has status 'passed'. The trusted Host only replays the same check once after delivery; it does not start a separate Repair Agent."
+node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs --scene-source canonical --scene-id '$scene_id' --brief artifacts/scenes/$scene_id/scene-brief.md --world-plan apps/playground/public/scene-plans/$scene_id/world-plan.png --entry apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png --terrain-prompt artifacts/scenes/$scene_id/terrain-height-intent-prompt.md --terrain-intent apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png --report artifacts/scenes/$scene_id/planner-self-check.json
+If it exits nonzero, read its JSON diagnostics, repair the five semantic Planner outputs inside this same task, and run it again."
+else
+  planner_prompt="$planner_prompt
+
+Create exactly three semantic outputs: artifacts/scenes/$scene_id/scene-brief.md, apps/playground/public/scene-plans/$scene_id/world-plan.png, and apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png. Write the Brief and World Plan first, then use Codex's built-in image generation tool to generate the two PNGs from those same decisions and the attached user reference images. This Babylon Native Source profile must not create Height Intent, a Height Intent prompt, terrain samples, or another terrain proposal; the Native Builder owns block geometry after planning.
+
+Before finishing, run this bundled self-check from the extracted workspace:
+node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs --scene-source babylon-native --scene-id '$scene_id' --brief artifacts/scenes/$scene_id/scene-brief.md --world-plan apps/playground/public/scene-plans/$scene_id/world-plan.png --entry apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png --report artifacts/scenes/$scene_id/planner-self-check.json
+If it exits nonzero, read its JSON diagnostics, repair the three semantic Planner outputs inside this same task, and run it again."
+fi
+
+planner_prompt="$planner_prompt
+Use at most three self-repair cycles. Finish only when planner-self-check.json has status 'passed'. The trusted Host only replays the same check once after delivery; it does not start a separate Repair Agent."
 
 builder_prompt="You are the Canonical World Builder for '$scene_id'. Read artifacts/scenes/$scene_id/scene-brief.md, artifacts/scenes/$scene_id/visual-identity-palette.json, artifacts/scenes/$scene_id/terrain-height-intent-prompt.md, and the three planner images. Convert their intent into pre-terrain Canonical AuthoringSpec V4 at artifacts/scenes/$scene_id/authoring.builder.json. Also create artifacts/scenes/$scene_id/implementation-map.draft.json. Inspect Height Intent for topology and choose coherent bounds, grid resolution, height range, baseHeightMeters datum, placements, and constraints, but do not decode, resample, normalize, or edit its pixels; the trusted Host owns that compilation into final authoring.json.
 
@@ -145,6 +174,20 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
   planner_prompt_file="$task_tmp/planner.prompt.txt"
   printf '%s\n' "$planner_prompt" > "$planner_prompt_file"
   planner_task_id="planner-$codex_run_nonce"
+  planner_context_args=(--context ".codex/skills/worldkit-spatial-planner")
+  planner_output_args=(
+    --output "artifacts/scenes/$scene_id/scene-brief.md::$artifact_root/scene-brief.md::text/markdown"
+    --output "artifacts/scenes/$scene_id/planner-self-check.json::$artifact_root/planner-self-check.json::application/json"
+    --output "apps/playground/public/scene-plans/$scene_id/world-plan.png::$public_plan_root/world-plan.png::image/png"
+    --output "apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png::$public_plan_root/entry-whitebox-target.png::image/png"
+  )
+  if [[ "$scene_source" == "canonical" ]]; then
+    planner_context_args+=(--context "assets/terrain-height-intent")
+    planner_output_args+=(
+      --output "artifacts/scenes/$scene_id/terrain-height-intent-prompt.md::$artifact_root/terrain-height-intent-prompt.md::text/markdown"
+      --output "apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png::$public_plan_root/terrain-height-intent.png::image/png"
+    )
+  fi
   run_codex \
     --task-id "$planner_task_id" \
     --stage planner \
@@ -152,26 +195,27 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
     --request-id "$scene_id-planner-$codex_run_nonce" \
     --output-s3-prefix "$codex_output_prefix/planner" \
     --instruction-file "$planner_prompt_file" \
-    --context ".codex/skills/worldkit-spatial-planner" \
-    --context "assets/terrain-height-intent" \
+    "${planner_context_args[@]}" \
     "${reference_asset_args[@]+"${reference_asset_args[@]}"}" \
-    --output "artifacts/scenes/$scene_id/scene-brief.md::$artifact_root/scene-brief.md::text/markdown" \
-    --output "artifacts/scenes/$scene_id/planner-self-check.json::$artifact_root/planner-self-check.json::application/json" \
-    --output "artifacts/scenes/$scene_id/terrain-height-intent-prompt.md::$artifact_root/terrain-height-intent-prompt.md::text/markdown" \
-    --output "apps/playground/public/scene-plans/$scene_id/world-plan.png::$public_plan_root/world-plan.png::image/png" \
-    --output "apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png::$public_plan_root/entry-whitebox-target.png::image/png" \
-    --output "apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png::$public_plan_root/terrain-height-intent.png::image/png" \
+    "${planner_output_args[@]}" \
     2>&1 | /usr/bin/tee "$planner_log"
   "$pnpm_bin" worldkit brief validate "$artifact_root/scene-brief.md" --json
   planner_host_receipt="$task_tmp/planner-self-check.host.json"
-  node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs" \
-    --scene-id "$scene_id" \
-    --brief "$artifact_root/scene-brief.md" \
-    --world-plan "$public_plan_root/world-plan.png" \
-    --entry "$public_plan_root/entry-whitebox-target.png" \
-    --terrain-prompt "$artifact_root/terrain-height-intent-prompt.md" \
-    --terrain-intent "$public_plan_root/terrain-height-intent.png" \
+  planner_check_args=(
+    --scene-source "$scene_source"
+    --scene-id "$scene_id"
+    --brief "$artifact_root/scene-brief.md"
+    --world-plan "$public_plan_root/world-plan.png"
+    --entry "$public_plan_root/entry-whitebox-target.png"
     --report "$planner_host_receipt"
+  )
+  if [[ "$scene_source" == "canonical" ]]; then
+    planner_check_args+=(
+      --terrain-prompt "$artifact_root/terrain-height-intent-prompt.md"
+      --terrain-intent "$public_plan_root/terrain-height-intent.png"
+    )
+  fi
+  node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs" "${planner_check_args[@]}"
   /usr/bin/cmp -s "$planner_host_receipt" "$artifact_root/planner-self-check.json" || {
     echo "Planner self-check receipt does not match trusted Host replay." >&2
     exit 2
@@ -182,9 +226,14 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
     --scene-id "$scene_id" \
     --brief "$artifact_root/scene-brief.md" \
     --output "$visual_identity_palette"
-  [[ -s "$artifact_root/terrain-height-intent-prompt.md" && -s "$public_plan_root/world-plan.png" && -s "$public_plan_root/entry-whitebox-target.png" && -s "$public_plan_root/terrain-height-intent.png" ]] || {
+  [[ -s "$public_plan_root/world-plan.png" && -s "$public_plan_root/entry-whitebox-target.png" ]] || {
     echo "Unified Planner image delivery is incomplete." >&2; exit 5;
   }
+  if [[ "$scene_source" == "canonical" ]]; then
+    [[ -s "$artifact_root/terrain-height-intent-prompt.md" && -s "$public_plan_root/terrain-height-intent.png" ]] || {
+      echo "Canonical Planner Height Intent delivery is incomplete." >&2; exit 5;
+    }
+  fi
   if [[ "$mode" == "plan" ]]; then
     echo "WORLDKIT_STAGE plan-ready"
     exit 0
@@ -194,6 +243,7 @@ fi
 if [[ "$mode" == "build" ]]; then
   planner_host_receipt="$task_tmp/planner-self-check.host.json"
   node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs" \
+    --scene-source canonical \
     --scene-id "$scene_id" \
     --brief "$artifact_root/scene-brief.md" \
     --world-plan "$public_plan_root/world-plan.png" \
