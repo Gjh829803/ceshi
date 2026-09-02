@@ -11,13 +11,15 @@ import { isEmpty, isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import {
-  BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1,
   createBabylonNativeBlockAuthoringCaptureV1,
+} from "./index.js";
+import {
+  BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1,
   createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1,
   inspectBabylonNativeBlockReconstructionCorpusCaseV1,
   materializeBabylonNativeBlockReconstructionCorpusCaseV1,
   type BabylonNativeBlockReconstructionCorpusCaseIdV1,
-} from "./index.js";
+} from "./testing.js";
 
 const POSITIVE_IDS = Object.freeze([
   "mountain-cliff",

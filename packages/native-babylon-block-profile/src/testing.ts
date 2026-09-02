@@ -10,6 +10,19 @@ import {
 } from "./reconstruction-corpus.js";
 import { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 
+export {
+  BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1,
+  createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1,
+  inspectBabylonNativeBlockReconstructionCorpusCaseV1,
+  materializeBabylonNativeBlockReconstructionCorpusCaseV1,
+} from "./reconstruction-corpus.js";
+export type {
+  BabylonNativeBlockReconstructionCorpusCaseIdV1,
+  BabylonNativeBlockReconstructionCorpusCaseV1,
+  BabylonNativeBlockReconstructionCorpusEvidenceIndexV1,
+  BabylonNativeBlockReconstructionCorpusMaterializationV1,
+} from "./reconstruction-corpus.js";
+
 const RUNTIME_FIXTURE_BLOCKS = Object.freeze([
   Object.freeze({ id: "ground-positive-one", shape: "full" as const, center: [0, -0.5, 1] as const }),
   Object.freeze({ id: "ground-zero", shape: "full" as const, center: [0, -0.5, 0] as const }),

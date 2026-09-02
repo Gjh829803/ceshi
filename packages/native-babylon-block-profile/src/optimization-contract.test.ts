@@ -20,9 +20,11 @@ import {
 } from "./collider-contribution.js";
 import {
   assessBabylonNativeBlockOptimizationV1,
+} from "./index.js";
+import {
   materializeBabylonNativeBlockReconstructionCorpusCaseV1,
   type BabylonNativeBlockReconstructionCorpusCaseIdV1,
-} from "./index.js";
+} from "./testing.js";
 import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
 import type {
   BabylonNativeBlockCheckedLayoutV1,
