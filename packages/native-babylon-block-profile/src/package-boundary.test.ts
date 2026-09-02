@@ -79,6 +79,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
         "@whitebox-world/native-babylon": "workspace:*",
         "@whitebox-world/protocol": "workspace:*",
         "@whitebox-world/runtime-contracts": "workspace:*",
+        "@whitebox-world/traversal": "workspace:*",
         "@whitebox-world/validation": "workspace:*",
         "@whitebox-world/world-identity": "workspace:*",
         "lodash-es": "^4.18.1",
@@ -89,6 +90,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "@whitebox-world/native-babylon",
       "@whitebox-world/protocol",
       "@whitebox-world/runtime-contracts",
+      "@whitebox-world/traversal",
       "@whitebox-world/validation",
       "@whitebox-world/world-identity",
       "lodash-es",
@@ -226,6 +228,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "createBabylonNativeBlockMaterializerMetadataV1",
       "peekBabylonNativeBlockLiveHandleRegistryV1",
       "freezeBabylonNativeBlockLogicalGroundModelV1",
+      "analyzeBabylonNativeBlockGroundV1",
     ]);
   });
 
@@ -253,6 +256,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "babylon-visual-adapter.ts",
       "collider-contribution.ts",
       "logical-ground-model.ts",
+      "ground-analysis.ts",
       "profile-settlement.ts",
       "session.ts",
     ]);

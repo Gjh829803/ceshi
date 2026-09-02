@@ -468,6 +468,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/traversal':
+        specifier: workspace:*
+        version: link:../traversal
       '@whitebox-world/validation':
         specifier: workspace:*
         version: link:../validation
