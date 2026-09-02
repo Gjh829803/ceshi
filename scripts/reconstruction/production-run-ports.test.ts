@@ -934,6 +934,12 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         verified.receipt.worldBuildIdentity,
       ),
       buildReceiptHash: sha256CanonicalJson(verified.receipt) as Sha256HashV1,
+      groundAnalysisReport: {} as never,
+      groundAnalysisReportHash: H("7"),
+      groundAnalysisReportPath: path.join(
+        value.attemptDirectoryPath,
+        "ground-analysis-report.json",
+      ),
       outputDirectoryPath: value.packageDirectoryPath,
       diagnostics: [],
     };

@@ -35,16 +35,17 @@ export default defineBabylonNativeScene({
   kind: "babylon-native-scene-module",
   id: "cloud-temple-test",
   build(context) {
-    const session = createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 16 });
-    session.createBlock({id: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", centerMetersXYZ: [0, -0.5, 10] });
-    session.createBlock({id: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", centerMetersXYZ: [0, -0.5, 18] });
+    const session = createBabylonNativeBlockProfileSessionV1(context, { maximumBlockCount: 64 });
+    session.createBlockGrid({idPrefix: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 11], repeatCountXYZ: [3, 1, 8] });
+    session.createBlockGrid({idPrefix: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 4], repeatCountXYZ: [3, 1, 7] });
     session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });
     session.createBlock({id: "mountain", shape: "full", paletteRole: "background-mass", visualGroupId: "mountain-cliff-layers-group", centerMetersXYZ: [-4, -0.5, 2] });
-    session.createBlock({id: "upper", shape: "full", paletteRole: "structure", visualGroupId: "upper-t-junction-group", centerMetersXYZ: [0, -0.5, 2] });
+    session.createBlockGrid({idPrefix: "upper", shape: "full", paletteRole: "structure", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 1], repeatCountXYZ: [3, 1, 3] });
     session.finalize({ staticColliders: [
-      { id: "collider-central-steps", colliderGeometrySource: { kind: "block", blockId: "central" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "central-surface", logicalSubshapeId: "central-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
+      { id: "collider-central-steps", colliderGeometrySource: { kind: "block-group", colliderGroupId: "central-ground-group" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "central-surface", logicalSubshapeId: "central-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
       { id: "collider-cliff-blockers", colliderGeometrySource: { kind: "block", blockId: "mountain" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
-      { id: "collider-foreground-ground", colliderGeometrySource: { kind: "block", blockId: "foreground" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "foreground-surface", logicalSubshapeId: "foreground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "protect-ground-subject" },
+      { id: "collider-foreground-ground", colliderGeometrySource: { kind: "block-group", colliderGroupId: "foreground-ground-group" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "foreground-surface", logicalSubshapeId: "foreground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "protect-ground-subject" },
+      { id: "collider-upper-ground", colliderGeometrySource: { kind: "block-group", colliderGroupId: "upper-ground-group" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "upper-surface", logicalSubshapeId: "upper-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
       { id: "collider-gate-walls", colliderGeometrySource: { kind: "block", blockId: "gate" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
     ] });
     context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, 18], facingRadians: 0 });
@@ -67,27 +68,31 @@ const AUTHORING = {
 } as const;
 
 const REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlock({id: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", centerMetersXYZ: [0, -0.5, 10] });`,
-  `    const central = session.createBlock({id: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group" });
-    central.position.set(0, -0.5, 10);`,
+  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+  `    const gate = session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group" });
+    gate.position.set(4, -0.5, 2);`,
 );
 
 const REGENERATED_GRID_SCENE_SOURCE = SCENE_SOURCE
   .replace(
-    `    session.createBlock({id: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", centerMetersXYZ: [0, -0.5, 18] });`,
-    `    session.createBlockGrid({idPrefix: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", minimumCenterMetersXYZ: [-1, -0.5, 18], repeatCountXYZ: [3, 1, 1] });`,
-  )
-  .replace(`blockId: "foreground"`, `blockId: "foreground-x1-y0-z0"`);
+    `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+    `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [5, -0.5, 2] });`,
+  );
 
 const MISSING_GRID_CHILD_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlock({id: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", centerMetersXYZ: [0, -0.5, 18] });`,
-  `    session.createBlockGrid({idPrefix: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", minimumCenterMetersXYZ: [-1, -0.5, 18], repeatCountXYZ: [3, 1, 1] });`,
+  `{ kind: "block-group", colliderGroupId: "foreground-ground-group" }`,
+  `{ kind: "block", blockId: "foreground" }`,
+);
+
+const NARROW_SPAWN_GROUND_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `minimumCenterMetersXYZ: [-1, -0.5, 11], repeatCountXYZ: [3, 1, 8]`,
+  `minimumCenterMetersXYZ: [0, -0.5, 11], repeatCountXYZ: [1, 1, 8]`,
 );
 
 const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `    session.createBlock({id: "upper",`,
+  `    session.createBlockGrid({idPrefix: "upper",`,
   `    session.createBlock({id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group", centerMetersXYZ: [8, -0.5, 2] });
-    session.createBlock({id: "upper",`,
+    session.createBlockGrid({idPrefix: "upper",`,
 );
 
 const EXTRA_VISUAL_GROUP_AUTHORING = {
@@ -162,7 +167,7 @@ async function completedAttempt(options: Readonly<{
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     seed: 19,
     budgets: {
-      maximumBlockCount: 16,
+      maximumBlockCount: 64,
       maximumStaticColliderCount: 8,
       maximumStaticColliderVertexCount: 1024,
       maximumStaticColliderTriangleCount: 1024,
@@ -241,10 +246,23 @@ describe("packageNativeBlockAttemptV1", () => {
         fixture.attemptDirectoryPath,
         "native-check-result.json",
       ), "utf8");
+      const groundReport = await readFile(path.join(
+        fixture.attemptDirectoryPath,
+        "ground-analysis-report.json",
+      ), "utf8").catch(() => "ground report not written");
       const cause = error instanceof Error ? error.cause : undefined;
       const nestedCause = cause instanceof Error ? cause.cause : undefined;
       throw new Error(
-        [error, cause, nestedCause, check].map(String).join("\n"),
+        [
+          error,
+          error instanceof NativeBlockPackageErrorV1
+            ? JSON.stringify(error.diagnostics)
+            : "",
+          cause,
+          nestedCause,
+          check,
+          groundReport,
+        ].map(String).join("\n"),
       );
     });
 
@@ -279,6 +297,28 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(packaged.worldPackageRef).toBe(
       packaged.verifiedWorldPackage.receipt.worldPackageRef,
     );
+    expect(packaged.groundAnalysisReport).toMatchObject({
+      kind: "babylon-native-block-ground-analysis-report",
+      admissionOutcome: "passed",
+      identity: {
+        worldPackageRootHash: packaged.worldPackageRootHash,
+      },
+    });
+    expect(packaged.groundAnalysisReportHash).toBe(
+      packaged.groundAnalysisReport.groundAnalysisReportHash,
+    );
+    expect(JSON.parse(await readFile(
+      packaged.groundAnalysisReportPath,
+      "utf8",
+    ))).toEqual(packaged.groundAnalysisReport);
+    await expect(lstat(path.join(
+      fixture.attemptDirectoryPath,
+      "logical-ground-model.json",
+    ))).resolves.toBeDefined();
+    await expect(lstat(path.join(
+      fixture.attemptDirectoryPath,
+      "ground-analysis-diagnostics.json",
+    ))).resolves.toBeDefined();
     await expect(lstat(path.join(
       fixture.outputDirectoryPath,
       "native",
@@ -315,6 +355,41 @@ describe("packageNativeBlockAttemptV1", () => {
       outputDirectoryPath: fixture.outputDirectoryPath,
     })).rejects.toMatchObject({
       diagnostics: ["native-block-authoring-layout-binding-invalid"],
+    });
+  }, 60_000);
+
+  it("fails closed before Package publication when the Spawn Capsule footprint is not fully supported", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: NARROW_SPAWN_GROUND_SCENE_SOURCE,
+    });
+
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({
+      diagnostics: [
+        "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+        "native-ground-analysis-rejected",
+      ],
+    });
+    const report = JSON.parse(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "ground-analysis-report.json",
+    ), "utf8"));
+    expect(report).toMatchObject({
+      kind: "babylon-native-block-ground-analysis-report",
+      admissionOutcome: "failed",
+    });
+    expect(report.failureFacts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        metricId: "ground-support-coverage-basis-points",
+        targetId: "spawn-foreground-platform",
+      }),
+    ]));
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
     });
   }, 60_000);
 

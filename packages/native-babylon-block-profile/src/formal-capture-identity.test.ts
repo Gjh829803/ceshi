@@ -678,7 +678,7 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
     })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
-  it("resolves a Block plane from exact frozen Collider geometry, not its visual-group AABB", () => {
+  it("resolves a Block plane from the declared visual-group Blocks inside a multi-group Collider", () => {
     const input = bindInput();
     const blockedIntent = formalCaptureIntentValue({
       checkpointSpatialCriteria: [authoredCheckpointSpatialCriteria()[0], {
@@ -708,6 +708,17 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
     const materializerMetadata = parseBabylonNativeBlockMaterializerMetadataV1({
       ...input.materializerMetadata,
       caseHash: hashWorldReconstructionCaseV1(blockedCase),
+      colliderJoins: [{
+        ...input.materializerMetadata.colliderJoins[0],
+        sourceBlockIds: [
+          "central-ascent-block",
+          "upper-t-junction-block",
+        ],
+        visualGroupIds: [
+          "central-ascent-group",
+          "upper-t-junction-group",
+        ],
+      }],
     });
 
     const map = bind({
@@ -724,13 +735,13 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       expectation: "block",
       sourceVisualGroupId: "central-ascent-group",
       sourceBoundsMeters: {
-        minimumMetersXYZ: [0, 0, 0],
-        maximumMetersXYZ: [2, 2, 2],
+        minimumMetersXYZ: [-0.5, 0, -1.5],
+        maximumMetersXYZ: [0.5, 1, -0.5],
       },
       colliderId: "spawn-ground",
       axis: "x",
       sourceFace: "maximum",
-      planeMeters: 2,
+      planeMeters: 0.5,
       expectedCenterSide: "positive",
       capsuleRadiusMeters: 0.35,
       toleranceMeters: 0.05,

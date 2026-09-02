@@ -100,6 +100,14 @@ export interface PrepareFrozenBabylonNativeWorldPackageBuildInputV1 {
 
 export interface PreparedFrozenBabylonNativeWorldPackageBuildInputV1 {
   readonly frozenInput: FrozenBabylonNativeWorldPackageBuildInputV1;
+  /**
+   * Host-only checked evidence used by post-Package identity joins such as
+   * Ground Analysis. It is deliberately not serialized into WorldPackage:
+   * the analysis report binds this source identity to the finished Package
+   * root without creating a circular Package hash dependency.
+   */
+  readonly nativeBlockCheckedEpochEvidence?:
+    BabylonNativeBlockCheckedEpochEvidenceV1;
   readonly assetReplayLedgers:
     readonly [readonly string[], readonly string[]];
   readonly sceneModuleBundleManifestHash: Sha256HashV1;
@@ -620,6 +628,9 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
     }) as FrozenBabylonNativeWorldPackageBuildInputV1;
     return Object.freeze({
       frozenInput,
+      ...(isNil(firstBlockEvidence)
+        ? {}
+        : { nativeBlockCheckedEpochEvidence: firstBlockEvidence }),
       assetReplayLedgers,
       sceneModuleBundleManifestHash: finalizedBundle.manifestHash,
       dependencyLockHash: dependency.dependencyLockHash,

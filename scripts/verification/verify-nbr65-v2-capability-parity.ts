@@ -1,8 +1,9 @@
 import { readdir, readFile, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { isEmpty } from "lodash-es";
+import { isEmpty, isEqual, isNil } from "lodash-es";
 
 export type Nbr65CapabilityParityStatusV1 =
   | "passed"
@@ -15,6 +16,11 @@ export interface Nbr65CapabilityParityRowV1 {
   readonly disposition: string;
   readonly owner: string;
   readonly evidenceRefs: readonly string[];
+  readonly verificationGate: Readonly<{
+    readonly gateId: string;
+    readonly command: readonly string[];
+    readonly exitCode: number;
+  }> | null;
   readonly diagnostics: readonly string[];
 }
 
@@ -39,6 +45,24 @@ interface NotApplicableCapabilityDefinitionV1 {
   readonly disposition: string;
   readonly owner: string;
   readonly evidenceRefs: readonly string[];
+}
+
+interface Nbr65CapabilityGateDefinitionV1 {
+  readonly gateId: string;
+  readonly command: readonly string[];
+}
+
+export interface Nbr65CapabilityGateResultV1 {
+  readonly gateId: string;
+  readonly command: readonly string[];
+  readonly exitCode: number;
+}
+
+export interface VerifyNbr65V2CapabilityParityOptionsV1 {
+  readonly runGate?: (
+    repositoryRoot: string,
+    gate: Nbr65CapabilityGateDefinitionV1,
+  ) => Promise<Nbr65CapabilityGateResultV1>;
 }
 
 const PASSED_CAPABILITIES = Object.freeze([
@@ -239,6 +263,100 @@ const NOT_APPLICABLE_CAPABILITIES = Object.freeze([
   },
 ] as const satisfies readonly NotApplicableCapabilityDefinitionV1[]);
 
+const CAPABILITY_GATES = Object.freeze({
+  "profile-core": Object.freeze({
+    gateId: "profile-core",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "packages/native-babylon-block-profile/src/shapes.test.ts",
+      "packages/native-babylon-block-profile/src/session.test.ts",
+      "packages/native-babylon-block-profile/src/logical-ground-model.test.ts",
+    ]),
+  }),
+  "ground-analysis-production": Object.freeze({
+    gateId: "ground-analysis-production",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "packages/native-babylon-block-profile/src/ground-analysis.test.ts",
+      "scripts/reconstruction/native-ground-analysis-diagnostics.test.ts",
+      "scripts/reconstruction/native-package.test.ts",
+    ]),
+  }),
+  "topology-display": Object.freeze({
+    gateId: "topology-display",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "packages/native-babylon-block-profile/src/walkable-topology.test.ts",
+      "packages/native-babylon-block-profile/src/walkable-topology-materializer.test.ts",
+      "packages/native-babylon-block-profile/src/profile-settlement.test.ts",
+      "packages/native-babylon-block-profile/src/whitebox-display.test.ts",
+    ]),
+  }),
+  "runtime-ground": Object.freeze({
+    gateId: "runtime-ground",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "packages/runtime-babylon/src/babylon-character-body-port.test.ts",
+      "packages/runtime-babylon/src/babylon-character-body-port.conformance.test.ts",
+      "packages/native-babylon-block-profile/src/ground-boundary.test.ts",
+      "packages/runtime-babylon/src/runtime.test.ts",
+    ]),
+  }),
+  "chunk-realization": Object.freeze({
+    gateId: "chunk-realization",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "packages/native-babylon-block-profile/src/chunk-policy.test.ts",
+      "packages/native-babylon-block-profile/src/visual-batch-materializer.test.ts",
+      "packages/runtime-babylon/src/native-collider-residency.test.ts",
+    ]),
+  }),
+  "planner-skill": Object.freeze({
+    gateId: "planner-skill",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "scripts/agents/planner-skill.test.ts",
+    ]),
+  }),
+  "reconstruction-host": Object.freeze({
+    gateId: "reconstruction-host",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "scripts/agents/native-block-builder-skill.test.ts",
+      "scripts/native-scene/native-package-input.test.ts",
+      "packages/runtime-babylon/src/formal-world-capture-provider.test.ts",
+      "scripts/reconstruction/evaluate-evidence-set.test.ts",
+      "scripts/reconstruction/run.test.ts",
+    ]),
+  }),
+} as const satisfies Readonly<Record<
+  string,
+  Nbr65CapabilityGateDefinitionV1
+>>);
+
+type PassedCapabilityIdV1 =
+  (typeof PASSED_CAPABILITIES)[number]["capabilityId"];
+type CapabilityGateIdV1 = keyof typeof CAPABILITY_GATES;
+
+const CAPABILITY_GATE_ID_BY_CAPABILITY_ID = Object.freeze({
+  "metric-shapes-lattice-overlap": "profile-core",
+  "ergonomic-block-and-grid-authoring": "profile-core",
+  "palette-visual-and-collider-groups": "profile-core",
+  "subject-footprint-and-clearance": "ground-analysis-production",
+  "spawn-target-standability": "ground-analysis-production",
+  "step-adjacency-components-and-bands": "ground-analysis-production",
+  "reachable-space-metrics": "ground-analysis-production",
+  "continuous-walkable-and-solid-topology": "topology-display",
+  "ground-movement-and-contact-correction": "runtime-ground",
+  "walkable-whitebox-overlay": "topology-display",
+  "chunk-addressing-batching-and-residency": "chunk-realization",
+  "ground-only-edge-protection": "runtime-ground",
+  "clear-day-whitebox-display": "topology-display",
+  "planner-lineage-and-complete-world-continuation": "planner-skill",
+  "bounded-builder-repair": "reconstruction-host",
+  "package-capture-and-evaluation": "reconstruction-host",
+} as const satisfies Readonly<Record<PassedCapabilityIdV1, CapabilityGateIdV1>>);
+
 const FORBIDDEN_PATHS = Object.freeze([
   "packages/block-world",
   "packages/block-world-three",
@@ -274,9 +392,38 @@ async function sourceFiles(absoluteRoot: string): Promise<readonly string[]> {
   return files;
 }
 
+async function runCapabilityGate(
+  repositoryRoot: string,
+  gate: Nbr65CapabilityGateDefinitionV1,
+): Promise<Nbr65CapabilityGateResultV1> {
+  const [command, ...args] = gate.command;
+  if (isNil(command)) throw new Error(`NBR65_CAPABILITY_GATE_INVALID:${gate.gateId}`);
+  const exitCode = await new Promise<number>((resolve) => {
+    const child = spawn(command, args, {
+      cwd: repositoryRoot,
+      env: process.env,
+      stdio: "ignore",
+    });
+    child.once("error", () => resolve(-1));
+    child.once("close", (code) => resolve(code ?? -1));
+  });
+  return Object.freeze({
+    gateId: gate.gateId,
+    command: gate.command,
+    exitCode,
+  });
+}
+
 export async function verifyNbr65V2CapabilityParityV1(
   repositoryRoot: string,
+  options: VerifyNbr65V2CapabilityParityOptionsV1 = {},
 ): Promise<Nbr65CapabilityParityReportV1> {
+  const gateRunner = options.runGate ?? runCapabilityGate;
+  const gateResults = new Map<string, Nbr65CapabilityGateResultV1>();
+  for (const gate of Object.values(CAPABILITY_GATES)) {
+    const result = await gateRunner(repositoryRoot, gate);
+    gateResults.set(gate.gateId, result);
+  }
   const rows: Nbr65CapabilityParityRowV1[] = [];
   for (const definition of PASSED_CAPABILITIES) {
     const evidence = definition.evidence as Readonly<
@@ -297,12 +444,28 @@ export async function verifyNbr65V2CapabilityParityV1(
         }
       }
     }
+    const gateId = CAPABILITY_GATE_ID_BY_CAPABILITY_ID[definition.capabilityId];
+    const expectedGate = CAPABILITY_GATES[gateId];
+    const verificationGate = gateResults.get(gateId);
+    if (isNil(verificationGate)) {
+      diagnostics.push(`missing verification gate result: ${gateId}`);
+    } else if (
+      verificationGate.gateId !== expectedGate.gateId ||
+      !isEqual(verificationGate.command, expectedGate.command)
+    ) {
+      diagnostics.push(`verification gate identity mismatch: ${gateId}`);
+    } else if (verificationGate.exitCode !== 0) {
+      diagnostics.push(
+        `verification gate '${gateId}' exited ${verificationGate.exitCode}`,
+      );
+    }
     rows.push(Object.freeze({
       capabilityId: definition.capabilityId,
       status: isEmpty(diagnostics) ? "passed" : "failed",
       disposition: definition.disposition,
       owner: definition.owner,
       evidenceRefs: Object.freeze(evidenceRefs),
+      verificationGate: verificationGate ?? null,
       diagnostics: Object.freeze(diagnostics.sort()),
     }));
   }
@@ -319,6 +482,7 @@ export async function verifyNbr65V2CapabilityParityV1(
       disposition: definition.disposition,
       owner: definition.owner,
       evidenceRefs: definition.evidenceRefs,
+      verificationGate: null,
       diagnostics: Object.freeze(diagnostics.sort()),
     }));
   }
@@ -350,6 +514,7 @@ export async function verifyNbr65V2CapabilityParityV1(
       "packages/native-babylon-block-profile/src/collider-contribution.ts",
       "docs/superpowers/plans/2026-09-02-native-block-walkable-surface-closure-implementation.md",
     ]),
+    verificationGate: null,
     diagnostics: Object.freeze(cleanBreakDiagnostics.sort()),
   }));
   rows.sort((left, right) => left.capabilityId.localeCompare(right.capabilityId));

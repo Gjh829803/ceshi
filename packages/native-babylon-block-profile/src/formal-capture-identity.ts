@@ -74,18 +74,27 @@ function exactInput(value: unknown): Readonly<Record<string, unknown>> {
   return value as Readonly<Record<string, unknown>>;
 }
 
-function colliderBoundsMeters(
-  worldPositionsMetersXYZ: readonly number[],
+function blockBoundsMeters(
+  blocks: readonly Readonly<{
+    centerMetersXYZ: readonly [number, number, number];
+    sizeMetersXYZ: readonly [number, number, number];
+  }>[],
 ): FormalWorldBoundsMetersV1 {
   const minimum = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY,
     Number.POSITIVE_INFINITY];
   const maximum = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY,
     Number.NEGATIVE_INFINITY];
-  for (let index = 0; index < worldPositionsMetersXYZ.length; index += 3) {
+  for (const block of blocks) {
     for (let axis = 0; axis < 3; axis += 1) {
-      const value = worldPositionsMetersXYZ[index + axis]!;
-      minimum[axis] = Math.min(minimum[axis]!, value);
-      maximum[axis] = Math.max(maximum[axis]!, value);
+      const halfSize = block.sizeMetersXYZ[axis]! / 2;
+      minimum[axis] = Math.min(
+        minimum[axis]!,
+        block.centerMetersXYZ[axis]! - halfSize,
+      );
+      maximum[axis] = Math.max(
+        maximum[axis]!,
+        block.centerMetersXYZ[axis]! + halfSize,
+      );
     }
   }
   return Object.freeze({
@@ -216,6 +225,12 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
         ? matchingColliderJoins[0]!.sourceBlockIds.map((blockId) =>
             blockById.get(blockId))
         : [];
+      const visualGroupBlocks = joinedBlocks.filter(
+        (block): block is NonNullable<typeof block> =>
+          !isNil(block) &&
+          block.visualGroupId === criterion.sourceVisualGroupId &&
+          group.blockIds.includes(block.blockId),
+      );
       if (
         matchingColliderJoins.length !== 1 ||
         isNil(collider) ||
@@ -224,16 +239,19 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
         !matchingColliderJoins[0]!.visualGroupIds.includes(
           criterion.sourceVisualGroupId,
         ) ||
-        !joinedBlocks.some((block) =>
-          block?.visualGroupId === criterion.sourceVisualGroupId &&
-          group.blockIds.includes(block.blockId))
+        visualGroupBlocks.length === 0
       ) {
         fail(
           "checkpointSpatialCriteria",
           "block-plane must join one frozen Collider to the declared visual group",
         );
       }
-      sourceBoundsMeters = colliderBoundsMeters(collider.worldPositionsMetersXYZ);
+      // A logical Collider may merge Blocks from several semantic visual
+      // groups. The criterion names one of those groups, so its plane must be
+      // resolved from only the explicitly joined source Blocks in that group;
+      // the whole merged proxy bounds would move the checkpoint when an
+      // unrelated distant Block shares the Collider.
+      sourceBoundsMeters = blockBoundsMeters(visualGroupBlocks);
     }
     const axisIndex = criterion.axis === "x" ? 0 : criterion.axis === "y" ? 1 : 2;
     const planeMeters = criterion.sourceFace === "minimum"

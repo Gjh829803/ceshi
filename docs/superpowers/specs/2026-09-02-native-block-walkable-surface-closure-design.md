@@ -7,6 +7,22 @@
 **Implementation baseline:** `origin/main@9a4639109e4d161d92297506e9fc92192d32ff44`
 **Source evidence:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
 
+## Implementation revision record
+
+- **2026-09-03 — Ground Analysis admission join:** the trusted Native Package
+  owner retains the checked Build-Epoch logical-ground evidence outside the
+  serialized Package input, constructs and verifies the Package directory in
+  memory, then joins the frozen Package root, Case intent and resolved Subject
+  traversal envelope into `BabylonNativeBlockGroundAnalysisReportV1` before any
+  Package directory is published. A ground Case with failed Spawn or required
+  target standability fails closed and retains the logical model, report and
+  actionable diagnostics as Attempt evidence. This is a concrete placement of
+  the existing section 5/6 design; it adds no third Scene Source, Package field,
+  Runtime support owner or circular Package hash.
+- **2026-09-03 — executable parity evidence:** a parity row may be `passed`
+  only when its closed focused verification gate returns exit code zero on the
+  current tree. Source fragments remain discoverability evidence, not GO proof.
+
 ## 1. Decision
 
 The Babylon Native Block lane must migrate every reusable scene-reconstruction and ground-playability

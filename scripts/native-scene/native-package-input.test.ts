@@ -423,6 +423,8 @@ describe("prepareFrozenBabylonNativeWorldPackageBuildInputV1", () => {
     expect(prepared.frozenInput.resourceArtifacts).toHaveLength(1);
     expect(prepared.frozenInput.registryLock).toEqual(input.registryLock);
     expect(Object.isFrozen(prepared.frozenInput)).toBe(true);
+    expect(prepared.nativeBlockCheckedEpochEvidence).toBeUndefined();
+    expect("nativeBlockCheckedEpochEvidence" in prepared.frozenInput).toBe(false);
     expect(input.generationRequestHash).not.toBe(
       prepared.frozenInput.sceneModuleBundleManifest.sourceGraphHash,
     );

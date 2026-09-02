@@ -5,6 +5,13 @@
 **Baseline:** `origin/main@9a4639109e4d161d92297506e9fc92192d32ff44`
 **Evidence branch:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
 
+**2026-09-03 accepted execution clarification:** NBR-65C is consumed by the
+existing Native Package owner after the in-memory Package root is verified and
+before the Package directory is published. Checked Build-Epoch ground evidence
+stays Host-only; the ground report and diagnostics are Attempt artifacts rather
+than new WorldPackage fields. NBR-65H parity `passed` rows bind a closed focused
+gate command and zero exit code; token presence alone is insufficient.
+
 ## Delivery graph
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership / input -> output | Required evidence | Mode |
