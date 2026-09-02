@@ -62,7 +62,8 @@ be read as proof of a real Case run.
 | 10 | NBR-50A | Pure dimensioned evaluator and stable diagnostics | 2 | 11 | parallel-safe; validation evaluator only | PR F1 |
 | 11 | NBR-50B | Formal Capture/runtime evidence adapter | 9, 10 | 12, 13 | main-agent-only; evaluation adapter only | PR F2 |
 | 12 | NBR-60 | Atomic Case-bound Formal Capture Intent cutover, production ports, and at-most-one immutable repair journal | 4, 5, 9, 11 | 13 | main-agent-only; temporary exclusive ownership of shared Intent/Case/materializer seams plus run production integration | PR G |
-| 13 | NBR-70 | Real `cloud-temple-t-gate-native-block` Case/Intent, artifacts, and local launch | 6, 9, 11, 12 | 14 | main-agent-only; one Case artifact root | PR H |
+| 12A | NBR-65 | Migrate v2-equivalent semantic walkable surfaces, exact grouped collision, standability graph and ground-only edge protection under current Native/BNA owners | 4, 6, 9, 11, 12 plus BWB-6 | 13 | main-agent-only integration; detailed subtasks in the linked closure plan | PR H0 |
+| 13 | NBR-70 | Real `cloud-temple-t-gate-native-block` Case/Intent, artifacts, and local launch | 6, 9, 11, 12, 12A | 14 | main-agent-only; one Case artifact root | PR H |
 | 14 | NBR-80 | Delete replaced/duplicate experimental production and scattered Capture Intent paths | 13 | 15 | main-agent-only; deletion ledger | PR H |
 | 15 | NBR-90 | Exact-SHA gates, independent review, docs truth, final merge | 14 | later WRC | main-agent-only | final PR/merge |
 

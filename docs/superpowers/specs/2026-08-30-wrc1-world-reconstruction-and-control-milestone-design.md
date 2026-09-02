@@ -49,6 +49,13 @@ Package, Runtime, Capture, evaluation and one-repair chain, the sole highest-pri
 NBR-1 consumes only the minimum BNA-6, BNA-7, WRC-SR-1 and WRC-SR-2 slices needed by that runnable Case;
 it does not mark any whole parent work package complete.
 
+The real Case also revealed that the accepted BWB-6 deliverable is a read-only optimization assessment,
+not an active Runtime migration of v2 ground behavior. Before NBR-70, `NBR-65` must therefore implement
+the [Native Block Walkable Surface Closure](./2026-09-02-native-block-walkable-surface-closure-design.md):
+explicit semantic Collider Groups, whole-surface standability/connectivity evidence, exact aggregate
+collision, and ground-only exposed-edge protection. This consumes the existing BWB-2/BWB-4/BWB-6 and
+BNA-4 owners; it neither reopens those completed scopes nor changes WRC-1's 33-work-package count.
+
 BWB-6, full PHO-7/8, generalized Action/Camera, spatial events, the complete BNA-6 Golden Corpus,
 product Route/Nav/`goTo`, BNA-8 and WRC-ACC-1 are explicitly deferred. They remain in this dependency
 authority but must not block NBR-1 or be expanded opportunistically during it.

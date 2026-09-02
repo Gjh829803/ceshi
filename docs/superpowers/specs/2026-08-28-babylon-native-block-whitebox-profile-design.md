@@ -9,6 +9,8 @@
   它是本文成文时的固定实验基线，不是当前迁移源。
 - 当前唯一 v2 迁移源：`origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`。
 - 当前实施真相：[SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md)
+- v2 地面能力收口：
+  [Native Block Walkable Surface Closure](./2026-09-02-native-block-walkable-surface-closure-design.md)
 - Mode A 审查：[Block Whitebox Profile 设计审查](../../reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)
 - BWB-3/4 集成施工：
   [Block Settlement 与真实台阶闭环](./2026-08-31-babylon-block-settlement-and-step-closure-design.md)
@@ -340,6 +342,10 @@ BWB 首个视觉/静态碰撞切片。
 明确拒绝旧分支中的隐藏 `64m` foundation、按块数自动抬高预算、未消费 Preset 字段、材质决定物理、第二
 Ground Height Sampler、固定“世界必须大于参考可见面积若干倍”等做法。地图完整性由有意义的可玩延续和
 冻结 Evidence 判定，不由面积常数替代。
+
+上述“条件保留”不是仅记录未来方向。BWB-6 已如实完成只读优化评估，但没有实施真实合并 Collider、
+整面 standability graph 或 Runtime ground boundary。它们现在由 `NBR-65` 作为 NBR-70 前置负责落地；
+不得继续以少量 scripted corridor Collider 代替可见且声明为可玩的完整地表。
 
 ## 12. Capability 边界
 
