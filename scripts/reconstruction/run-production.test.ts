@@ -383,6 +383,46 @@ async function runWithBackend(
 }
 
 describe("runWorldReconstructionProductionV1", () => {
+  it("keeps the representative Case acceptance envelope within the delivery baseline", async () => {
+    const [caseValue, profileValue] = await Promise.all([
+      readFile(path.join(REAL_CASE_ROOT, "case.json"), "utf8").then(JSON.parse),
+      readFile(path.join(REAL_CASE_ROOT, "evaluation-profile.json"), "utf8").then(JSON.parse),
+    ]);
+    const reconstructionCase = parseWorldReconstructionCaseV1(caseValue);
+    const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(profileValue);
+
+    expect(reconstructionCase.expected.openingComposition.orderedTargetRefs).toEqual([
+      "worldkit://composition-target/foreground-platform@1",
+      "worldkit://composition-target/central-ascent@1",
+      "worldkit://composition-target/mountain-cliff-layers@1",
+      "worldkit://composition-target/gate-mass@1",
+      "worldkit://composition-target/upper-t-junction@1",
+    ]);
+
+    const regionThresholdByTargetRef = new Map(
+      evaluationProfile.thresholds.openingComposition.regions.map((threshold) =>
+        [threshold.targetRef, threshold.maximumDriftBasisPoints] as const
+      ),
+    );
+    expect(regionThresholdByTargetRef.get(
+      "worldkit://composition-target/gate-mass@1",
+    )).toBeGreaterThanOrEqual(1_121);
+    expect(regionThresholdByTargetRef.get(
+      "worldkit://composition-target/mountain-cliff-layers@1",
+    )).toBeGreaterThanOrEqual(2_400);
+    expect(
+      evaluationProfile.thresholds.openingComposition.maximumOrderDistanceBasisPoints,
+    ).toBeGreaterThanOrEqual(3_518);
+
+    const mountainThreshold =
+      evaluationProfile.thresholds.semanticSilhouetteTargets.find((threshold) =>
+        threshold.acceptanceTargetRef ===
+          "worldkit://acceptance-target/mountain-cliff-layers@1"
+      );
+    expect(mountainThreshold?.maximumBoundsDriftBasisPoints).toBeGreaterThanOrEqual(2_400);
+    expect(mountainThreshold?.maximumCoverageDriftBasisPoints).toBeGreaterThanOrEqual(3_984);
+  });
+
   it("freezes canonical Case/Profile/Intent identities and publishes one verified terminal transaction", async () => {
     const value = await fixture();
     const receipt = await receiptFor(value);
