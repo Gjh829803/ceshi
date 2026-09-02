@@ -43,7 +43,7 @@ import {
   type WorldReconstructionCaseV1,
   type WorldReconstructionEvaluationProfileV1,
 } from "@whitebox-world/validation";
-import { isEqual } from "lodash-es";
+import { isEqual, isNil } from "lodash-es";
 
 import {
   createCodexTaskProcessPortV1,
@@ -669,6 +669,10 @@ export async function createProductionWorldReconstructionRunPortsV1(
         FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1,
       );
       const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
+      const rejectedCaptureDirectoryPath = path.join(
+        attemptDirectoryPath,
+        "rejected-capture",
+      );
       let captureOwnerStarted = false;
       try {
         const materialized = await owners.materializeCaptureRequest({
@@ -684,6 +688,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           packageDirectoryPath: state.packaged.worldPackagePath,
           outputPath: path.join(captureDirectoryPath, "opening.png"),
           triviewOutputPath: captureDirectoryPath,
+          rejectedOutputDirectoryPath: rejectedCaptureDirectoryPath,
           openingGate: {
             reconstructionCase: input.reconstructionCase,
             evaluationProfile: input.evaluationProfile,
@@ -721,6 +726,59 @@ export async function createProductionWorldReconstructionRunPortsV1(
           cleanupState.outputPromotion = error.stage === "publication"
             ? "failed"
             : "completed";
+          if (!isNil(error.rejectedEvidence)) {
+            const rejectedEvidence = error.rejectedEvidence;
+            if (
+              rejectedEvidence.outputDirectoryPath !==
+                rejectedCaptureDirectoryPath ||
+              rejectedEvidence.openingOutputPath !== path.join(
+                rejectedCaptureDirectoryPath,
+                "opening.png",
+              ) ||
+              rejectedEvidence.openingGateResultPath !== path.join(
+                rejectedCaptureDirectoryPath,
+                "opening-composition-gate-result.json",
+              )
+            ) {
+              return Object.freeze({
+                outcome: "failed" as const,
+                cameraRollbackOutcome: "completed" as const,
+                diagnosticCodes: Object.freeze([
+                  "WORLD_RECONSTRUCTION_CAPTURE_IDENTITY_MISMATCH",
+                ]),
+              });
+            }
+            const rejectedOpeningRef = caseArtifactRefForPath(
+              caseArtifactRoot,
+              caseRootPath,
+              input.generationInput.runDirectoryPath,
+              rejectedEvidence.openingOutputPath,
+            );
+            const openingGateResultRef = caseArtifactRefForPath(
+              caseArtifactRoot,
+              caseRootPath,
+              input.generationInput.runDirectoryPath,
+              rejectedEvidence.openingGateResultPath,
+            );
+            return Object.freeze({
+              outcome: "rejected" as const,
+              cameraRollbackOutcome: "completed" as const,
+              diagnosticCodes: diagnosticCodes(
+                error,
+                "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+              ),
+              rejectedWorldPackagePath: state.packaged.worldPackagePath,
+              rejectedWorldPackageRef: state.packaged.worldPackageRef,
+              rejectedWorldPackageRootHash:
+                state.packaged.worldPackageRootHash,
+              rejectedCaptureDirectoryPath,
+              rejectedOpeningPath: rejectedEvidence.openingOutputPath,
+              rejectedOpeningRef,
+              openingGateResultPath: rejectedEvidence.openingGateResultPath,
+              openingGateResultRef,
+              openingGateResultHash: rejectedEvidence.openingGateResultHash,
+            });
+          }
         } else if (!captureOwnerStarted) {
           setCleanup(["hostedBrowserSession", "viteServer"], "completed");
           cleanupState.outputPromotion = "completed";

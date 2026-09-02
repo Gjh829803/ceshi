@@ -108,9 +108,30 @@ export interface FailedWorldReconstructionCapturePortResultV1 {
   readonly diagnosticCodes: readonly string[];
 }
 
+export interface RejectedWorldReconstructionCapturePortResultV1 {
+  readonly outcome: "rejected";
+  readonly cameraRollbackOutcome: "completed";
+  readonly diagnosticCodes: readonly string[];
+  readonly rejectedWorldPackagePath: string;
+  readonly rejectedWorldPackageRef: string;
+  readonly rejectedWorldPackageRootHash: Sha256HashV1;
+  readonly rejectedCaptureDirectoryPath: string;
+  readonly rejectedOpeningPath: string;
+  readonly rejectedOpeningRef: string;
+  readonly openingGateResultPath: string;
+  readonly openingGateResultRef: string;
+  readonly openingGateResultHash: Sha256HashV1;
+}
+
 export type WorldReconstructionCapturePortResultV1 =
   | CompletedWorldReconstructionCapturePortResultV1
+  | RejectedWorldReconstructionCapturePortResultV1
   | FailedWorldReconstructionCapturePortResultV1;
+
+export type WorldReconstructionRejectedCaptureEvidenceV1 = Omit<
+  RejectedWorldReconstructionCapturePortResultV1,
+  "outcome" | "cameraRollbackOutcome" | "diagnosticCodes"
+>;
 
 export interface WorldReconstructionEvaluatePortResultV1 {
   readonly outcome: WorldReconstructionOutcomeV1;
@@ -165,16 +186,23 @@ export class WorldReconstructionRunClosedErrorV1 extends Error {
   readonly code = "WORLD_RECONSTRUCTION_RUN_CLOSED";
   readonly diagnosticCodes: readonly string[];
   readonly cleanupOutcome: "completed" | "failed";
+  readonly rejectedCaptureEvidence?: WorldReconstructionRejectedCaptureEvidenceV1;
 
   constructor(
     diagnosticCodes: readonly string[],
     cleanupOutcome: "completed" | "failed",
     cause?: unknown,
+    rejectedCaptureEvidence?: WorldReconstructionRejectedCaptureEvidenceV1,
   ) {
     super(diagnosticCodes[0] ?? "WORLD_RECONSTRUCTION_RUN_CLOSED", { cause });
     this.name = "WorldReconstructionRunClosedErrorV1";
     this.diagnosticCodes = Object.freeze([...diagnosticCodes]);
     this.cleanupOutcome = cleanupOutcome;
+    if (!isNil(rejectedCaptureEvidence)) {
+      this.rejectedCaptureEvidence = Object.freeze({
+        ...rejectedCaptureEvidence,
+      });
+    }
   }
 }
 
@@ -273,11 +301,14 @@ const STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS",
   "FORMAL_CAPTURE_OUTPUT_DIRECTORY_INVALID",
   "FORMAL_CAPTURE_OUTPUT_TOPOLOGY_INVALID",
+  "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
   "FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH",
   "FORMAL_CAPTURE_PATH_INVALID",
   "FORMAL_CAPTURE_PNG_BUDGET_EXCEEDED",
   "FORMAL_CAPTURE_PNG_INVALID",
   "FORMAL_CAPTURE_REQUEST_FILE_INVALID",
+  "FORMAL_CAPTURE_REJECTED_GATE_RESULT_INVALID",
+  "FORMAL_CAPTURE_REJECTED_OUTPUT_REQUIRED",
   "FORMAL_WORLD_CAPTURE_INTENT_INVALID",
   "FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID",
   "FORMAL_WORLD_CAPTURE_RECEIPT_INVALID",
@@ -297,6 +328,18 @@ const STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_SHELL_ORIGIN_INVALID",
   "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_TERMINATED",
   "WORLDKIT_HOSTED_FORMAL_CAPTURE_ROUTE_UNAVAILABLE",
+  "WORLDKIT_OPENING_GATE_ANCHOR_DRIFT",
+  "WORLDKIT_OPENING_GATE_CAMERA_DISTANCE_DRIFT",
+  "WORLDKIT_OPENING_GATE_CAMERA_RETRACTED",
+  "WORLDKIT_OPENING_GATE_CAMERA_UNBOUND",
+  "WORLDKIT_OPENING_GATE_DEPTH_ORDER_DRIFT",
+  "WORLDKIT_OPENING_GATE_FOV_DRIFT",
+  "WORLDKIT_OPENING_GATE_PITCH_DRIFT",
+  "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+  "WORLDKIT_OPENING_GATE_SUBJECT_CENTER_DRIFT",
+  "WORLDKIT_OPENING_GATE_SUBJECT_IDENTITY_MISMATCH",
+  "WORLDKIT_OPENING_GATE_SUBJECT_SCALE_INVALID",
+  "WORLDKIT_OPENING_GATE_TARGET_MISSING",
   "WORLD_RECONSTRUCTION_ARTIFACT_PATH_INVALID",
   "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
   "WORLD_RECONSTRUCTION_CAMERA_ROLLBACK_FAILED",
@@ -558,12 +601,14 @@ async function failClosed(
   ports: WorldReconstructionRunPortsV1,
   diagnosticCodes: readonly string[],
   cause?: unknown,
+  rejectedCaptureEvidence?: WorldReconstructionRejectedCaptureEvidenceV1,
 ): Promise<never> {
   const cleanupOutcome = await joinCleanup(journal, ports, diagnosticCodes);
   throw new WorldReconstructionRunClosedErrorV1(
     diagnosticCodes,
     cleanupOutcome,
     cause,
+    rejectedCaptureEvidence,
   );
 }
 
@@ -671,6 +716,22 @@ async function runAttempt(
         "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
         captured.diagnosticCodes,
       ),
+      undefined,
+      captured.outcome === "rejected"
+        ? {
+          rejectedWorldPackagePath: captured.rejectedWorldPackagePath,
+          rejectedWorldPackageRef: captured.rejectedWorldPackageRef,
+          rejectedWorldPackageRootHash:
+            captured.rejectedWorldPackageRootHash,
+          rejectedCaptureDirectoryPath:
+            captured.rejectedCaptureDirectoryPath,
+          rejectedOpeningPath: captured.rejectedOpeningPath,
+          rejectedOpeningRef: captured.rejectedOpeningRef,
+          openingGateResultPath: captured.openingGateResultPath,
+          openingGateResultRef: captured.openingGateResultRef,
+          openingGateResultHash: captured.openingGateResultHash,
+        }
+        : undefined,
     );
   }
   await journal.recordBoundary({

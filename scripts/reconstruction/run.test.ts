@@ -1062,6 +1062,51 @@ describe("runWorldReconstructionV1", () => {
     expect(evaluation.calls.generateInputs[0]?.repairInstruction).toBeUndefined();
   });
 
+  it("preserves a rejected Capture Package and human-viewable evidence through fail-closed", async () => {
+    const base = fakePorts();
+    const ids = identities(0);
+    const rejectedCaptureEvidence = {
+      rejectedWorldPackagePath: ids.worldPackagePath,
+      rejectedWorldPackageRef: ids.worldPackageRef,
+      rejectedWorldPackageRootHash: ids.worldPackageRootHash,
+      rejectedCaptureDirectoryPath: "/attempts/0/rejected-capture",
+      rejectedOpeningPath: "/attempts/0/rejected-capture/opening.png",
+      rejectedOpeningRef:
+        "artifact://run/attempts/0/rejected-capture/opening.png",
+      openingGateResultPath:
+        "/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      openingGateResultRef:
+        "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      openingGateResultHash: taggedHash("gate"),
+    } as const;
+    const ports: WorldReconstructionRunPortsV1 = {
+      ...base.ports,
+      capture: async () => ({
+        outcome: "rejected",
+        cameraRollbackOutcome: "completed",
+        diagnosticCodes: [
+          "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+          "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+        ],
+        ...rejectedCaptureEvidence,
+      }),
+    };
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+        "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+      ],
+      cleanupOutcome: "completed",
+      rejectedCaptureEvidence,
+    });
+    expect(base.calls.evaluate).toEqual([]);
+  });
+
   it("publishes an incomplete receipt when cleanup fails after evaluation", async () => {
     const { ports } = fakePorts({
       evaluationByAttempt: [

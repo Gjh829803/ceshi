@@ -26,8 +26,9 @@ NDG-10 source contract + public dispatcher
 
 OCG-10 identity-bound Capture observations
   -> OCG-20 production-only gate admission
+  -> OCG-30 rejected Candidate evidence
 
-NDG-40 + OCG-20
+NDG-40 + OCG-30
   -> NDG-90 focused verification and independent review
 ```
 
@@ -106,6 +107,30 @@ The current near-field obstruction signal is the SDK Camera Domain's requested-v
 - [x] Evaluate after the exact opening Capture and complete Runtime cleanup before publication.
 - [x] Require gate input at the production owner type boundary.
 - [x] Preserve the lower-level transport function only for isolated transport tests.
+
+## OCG-30 — Rejected Candidate evidence
+
+**Depends on:** OCG-20.
+
+**Blocks:** NDG-90 real-Case handoff and the later bounded repair checkpoint.
+
+**Execution mode:** `main-agent-only`.
+
+**Owned files:** `scripts/reconstruction/formal-capture.ts`, `scripts/reconstruction/opening-composition-host-gate.ts`, `scripts/reconstruction/production-run-ports.ts`, and `scripts/reconstruction/run.ts` plus their focused tests.
+
+**Inputs:** one fully validated Hosted Capture payload and one identity-bound failed `OpeningCompositionHostGateResultV1`.
+
+**Outputs:** one immutable `rejected-capture/` directory containing the rendered views, observations, and `opening-composition-gate-result.json`; one rejected-Capture result surfaced by the production command.
+
+**Deliverable:** a composition-gate failure remains fail-closed for formal admission while preserving enough identity-bound evidence for a person and a later repair task to inspect the rejected Candidate. It never publishes `formal-world-capture-receipt.json`, never marks the world Ready, and never mutates the accepted `capture/` path.
+
+- [x] Publish rejected evidence atomically only after payload validation and a completed Hosted cleanup.
+- [x] Keep transport, payload, stale-identity, and publication failures free of misleading rejected-Candidate output.
+- [x] Surface the rejected opening image, gate-result, and verified Attempt
+  WorldPackage paths in the production result so `worldkit native run` can open
+  the Candidate with an explicit rejected status.
+- [x] Preserve detailed target/measurement/threshold diagnostics without lowering thresholds.
+- [x] Lock the no-Receipt and no-Ready boundary with focused tests.
 
 ## NDG-90 — Verification and handoff
 

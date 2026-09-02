@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { isNil } from "lodash-es";
 
 import {
   formalWorldCaptureIntentCanonicalBytesV1,
@@ -125,6 +126,22 @@ export interface WorldReconstructionProductionClosedResultV1
   readonly cleanupOutcome: "completed" | "failed" | "not-started" | "unknown";
 }
 
+export interface WorldReconstructionProductionRejectedCaptureResultV1
+  extends WorldReconstructionProductionIdentityV1 {
+  readonly outcome: "rejected-capture";
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed";
+  readonly rejectedWorldPackagePath: string;
+  readonly rejectedWorldPackageRef: string;
+  readonly rejectedWorldPackageRootHash: Sha256HashV1;
+  readonly rejectedCaptureDirectoryPath: string;
+  readonly rejectedOpeningPath: string;
+  readonly rejectedOpeningRef: string;
+  readonly openingGateResultPath: string;
+  readonly openingGateResultRef: string;
+  readonly openingGateResultHash: Sha256HashV1;
+}
+
 export interface WorldReconstructionProductionUnsupportedResultV1
   extends WorldReconstructionProductionIdentityV1 {
   readonly outcome: "unsupported-route";
@@ -133,6 +150,7 @@ export interface WorldReconstructionProductionUnsupportedResultV1
 
 export type WorldReconstructionProductionResultV1 =
   | WorldReconstructionProductionPublishedResultV1
+  | WorldReconstructionProductionRejectedCaptureResultV1
   | WorldReconstructionProductionClosedResultV1
   | WorldReconstructionProductionUnsupportedResultV1;
 
@@ -886,6 +904,19 @@ export async function runWorldReconstructionProductionV1(
     }, ports);
   } catch (error) {
     if (error instanceof WorldReconstructionRunClosedErrorV1) {
+      if (!isNil(error.rejectedCaptureEvidence)) {
+        return Object.freeze({
+          kind: "world-reconstruction-production-result",
+          schemaVersion: 1,
+          caseId: reconstructionCase.id,
+          caseRef,
+          runId,
+          outcome: "rejected-capture",
+          diagnosticCodes: error.diagnosticCodes,
+          cleanupOutcome: error.cleanupOutcome,
+          ...error.rejectedCaptureEvidence,
+        });
+      }
       return Object.freeze({
         kind: "world-reconstruction-production-result",
         schemaVersion: 1,

@@ -735,6 +735,71 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     }));
   });
 
+  it("surfaces identity-bound rejected Capture evidence without a formal receipt", async () => {
+    const value = await fixture();
+    const events: string[] = [];
+    const gateResultHash = H("e");
+    const ownerPorts = {
+      ...owners(value, events),
+      capturePackage: vi.fn(async (input) => {
+        const rejectedDirectoryPath = input.rejectedOutputDirectoryPath;
+        throw new FormalCaptureCommandClosedErrorV1({
+          stage: "post-dispose",
+          cleanupOutcomes: {
+            hostedBrowserSession: "completed",
+            viteServer: "completed",
+          },
+          cause: new Error(
+            "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED:" +
+              "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+          ),
+          rejectedEvidence: {
+            outputDirectoryPath: rejectedDirectoryPath,
+            openingOutputPath: path.join(rejectedDirectoryPath, "opening.png"),
+            openingGateResultPath: path.join(
+              rejectedDirectoryPath,
+              "opening-composition-gate-result.json",
+            ),
+            openingGateResultHash: gateResultHash,
+          },
+        });
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+    if (packaged.outcome !== "completed") {
+      throw new Error("expected completed Package fixture");
+    }
+
+    expect(await ports.capture({ attemptIndex: 0, packaged })).toEqual(
+      expect.objectContaining({
+        outcome: "rejected",
+        cameraRollbackOutcome: "completed",
+        diagnosticCodes: [
+          "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+          "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+        ],
+        rejectedWorldPackagePath: packaged.worldPackagePath,
+        rejectedWorldPackageRef: packaged.worldPackageRef,
+        rejectedWorldPackageRootHash: packaged.worldPackageRootHash,
+        rejectedCaptureDirectoryPath: path.join(
+          value.runDirectoryPath,
+          "attempts",
+          "0",
+          "rejected-capture",
+        ),
+        rejectedOpeningPath: expect.stringMatching(/rejected-capture\/opening\.png$/),
+        rejectedOpeningRef: expect.stringMatching(/rejected-capture\/opening\.png$/),
+        openingGateResultPath: expect.stringMatching(
+          /rejected-capture\/opening-composition-gate-result\.json$/,
+        ),
+        openingGateResultRef: expect.stringMatching(
+          /rejected-capture\/opening-composition-gate-result\.json$/,
+        ),
+        openingGateResultHash: gateResultHash,
+      }),
+    );
+  });
+
   it.each([
     ["pre-launch", "not-started", "not-started", "completed", "completed", "completed"],
     ["post-dispose", "completed", "completed", "completed", "completed", "completed"],

@@ -260,5 +260,27 @@ describe("identity-bound Opening Composition Host Gate", () => {
       "WORLDKIT_OPENING_GATE_REGION_DRIFT",
       "WORLDKIT_OPENING_GATE_ANCHOR_DRIFT",
     ]));
+    expect(failed.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+        targetRef: expect.stringMatching(/^worldkit:\/\/composition-target\//),
+        metricId: expect.stringMatching(/^normalizedBounds\./),
+        expectedValue: expect.any(Number),
+        actualValue: expect.any(Number),
+        allowedDeviation: expect.any(Number),
+        exceededBy: expect.any(Number),
+        correctionDirection: expect.stringMatching(/^(increase|decrease)$/),
+      }),
+      expect.objectContaining({
+        code: "WORLDKIT_OPENING_GATE_ANCHOR_DRIFT",
+        targetRef: expect.stringMatching(/^worldkit:\/\/composition-target\//),
+        metricId: expect.stringMatching(/^normalizedCenter\./),
+        expectedValue: expect.any(Number),
+        actualValue: expect.any(Number),
+        allowedDeviation: expect.any(Number),
+        exceededBy: expect.any(Number),
+        correctionDirection: expect.stringMatching(/^(increase|decrease)$/),
+      }),
+    ]));
   });
 });

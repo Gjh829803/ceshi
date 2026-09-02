@@ -127,10 +127,24 @@ second post-Capture authority. Landmark checks use materializer identities and
 semantic capture classes, never Mesh names or tags.
 
 Any blocking diagnostic rejects the Candidate Capture before formal Receipt
-publication. The failed candidate image and diagnostic result may remain as
-development evidence, but Studio cannot label the world ready and styled-image
-generation cannot consume it. A retry creates a new Candidate and Receipt identity;
-it never overwrites a frozen accepted Capture.
+publication. After the Hosted payload and identity join have both succeeded, the
+Host preserves a rejected Candidate atomically under a separate
+`rejected-capture/` directory. That directory contains the opening, side,
+top-down, and collider-overlay PNGs, their observation JSON, and the exact
+`opening-composition-gate-result.json`. It never contains
+`formal-world-capture-receipt.json`, is explicitly reported as rejected, and is
+not a Ready or publishable world. Transport failure, malformed payload, stale
+identity, or partial evidence publication produces no rejected-Candidate bundle.
+Studio may expose the rejected opening and diagnostics for human inspection, but
+styled-image generation and production consumers cannot consume them. A retry
+creates a new Candidate and Receipt identity; it never overwrites a frozen
+accepted Capture or the rejected evidence.
+
+Because the WorldPackage was already checked before Capture, the rejected result
+also exposes that exact Attempt Package path and identity. A developer may open it
+with the existing `worldkit native run <package-directory>` Harness for manual
+movement and collision inspection. This is an explicit rejected-Candidate view,
+not a second Runtime route and not evidence of formal admission.
 
 ## 5. Ownership boundaries
 
@@ -153,6 +167,8 @@ geometry, or become a second Camera controller.
 - Native Check failure: no Package Candidate;
 - Package/admission failure: no Runtime Candidate;
 - Opening gate failure: no formal Capture Receipt and no ready world;
+- validated Opening gate rejection: preserve a separate immutable rejected-Capture
+  bundle and surface its human-viewable opening and diagnostic paths;
 - provider timeout/unknown outcome: reconcile the existing request identity; never
   submit a duplicate task immediately;
 - retry/repair: same frozen Scene Source and owner inputs, new Attempt identity.

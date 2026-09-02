@@ -19,6 +19,7 @@ import {
 import {
   mkdtemp,
   mkdir,
+  lstat,
   readFile,
   readdir,
   realpath,
@@ -47,6 +48,7 @@ import {
   assertFormalCaptureRequestMatchesVerifiedPackageV1,
   captureHostedWorldPackageV1,
   publishFormalCaptureDirectoryV1,
+  publishRejectedCaptureDirectoryV1,
 } from "./formal-capture.js";
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 
@@ -492,6 +494,117 @@ describe("formal Package Capture preflight join", () => {
 });
 
 describe("formal Capture artifact publication", () => {
+  it("atomically preserves a rejected Candidate without a formal receipt", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "formal-capture-test-"));
+    temporaryRoots.push(root);
+    const outputDirectoryPath = path.join(root, "rejected-capture");
+    await publishRejectedCaptureDirectoryV1({
+      outputDirectoryPath,
+      artifacts: {
+        openingPng: PNG,
+        worldSidePng: PNG,
+        worldTopDownPng: PNG,
+        colliderOverlayPng: PNG,
+        openingObservationJson: new TextEncoder().encode("{}"),
+        spawnSupportObservationJson: new TextEncoder().encode("{}"),
+        colliderOverlayObservationJson: new TextEncoder().encode("{}"),
+        scriptedTraversalJson: new TextEncoder().encode("{}"),
+      },
+      openingGateResult: {
+        kind: "worldkit-opening-composition-host-gate",
+        schemaVersion: 1,
+        status: "failed",
+        diagnostics: [{
+          code: "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+          targetRef: "worldkit://composition-target/fixture@1",
+          metricId: "normalizedBounds.maxYBasisPoints",
+          expectedValue: 7_600,
+          actualValue: 10_000,
+          allowedDeviation: 1_000,
+          exceededBy: 1_400,
+          correctionDirection: "decrease",
+        }],
+      },
+      budget: {
+        maximumPngBytesPerArtifact: PNG.byteLength,
+        maximumJsonBytesPerArtifact: 1_024,
+      },
+    });
+
+    expect(await readdir(outputDirectoryPath)).toEqual([
+      "collider-overlay-observation.json",
+      "collider-overlay.png",
+      "opening-composition-gate-result.json",
+      "opening-observation.json",
+      "opening.png",
+      "scripted-traversal.json",
+      "spawn-support-observation.json",
+      "world-side.png",
+      "world-top-down.png",
+    ]);
+    await expect(readFile(path.join(
+      outputDirectoryPath,
+      "formal-world-capture-receipt.json",
+    ))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(JSON.parse(await readFile(path.join(
+      outputDirectoryPath,
+      "opening-composition-gate-result.json",
+    ), "utf8"))).toMatchObject({
+      status: "failed",
+      diagnostics: [{
+        code: "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+        metricId: "normalizedBounds.maxYBasisPoints",
+        expectedValue: 7_600,
+        actualValue: 10_000,
+        allowedDeviation: 1_000,
+        exceededBy: 1_400,
+        correctionDirection: "decrease",
+      }],
+    });
+  });
+
+  it("removes partial rejected-Candidate staging when publication fails", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "formal-capture-test-"));
+    temporaryRoots.push(root);
+    const outputDirectoryPath = path.join(root, "rejected-capture");
+    await expect(publishRejectedCaptureDirectoryV1({
+      outputDirectoryPath,
+      artifacts: {
+        openingPng: PNG,
+        worldSidePng: PNG,
+        worldTopDownPng: PNG,
+        colliderOverlayPng: PNG,
+        openingObservationJson: new TextEncoder().encode("{}"),
+        spawnSupportObservationJson: new TextEncoder().encode("{}"),
+        colliderOverlayObservationJson: new TextEncoder().encode("{}"),
+        scriptedTraversalJson: new TextEncoder().encode("{}"),
+      },
+      openingGateResult: {
+        kind: "worldkit-opening-composition-host-gate",
+        schemaVersion: 1,
+        status: "failed",
+        diagnostics: [{ code: "WORLDKIT_OPENING_GATE_TARGET_MISSING" }],
+      },
+      budget: {
+        maximumPngBytesPerArtifact: PNG.byteLength,
+        maximumJsonBytesPerArtifact: 1_024,
+      },
+      hooks: {
+        beforeWrite: async (relativePath) => {
+          if (relativePath === "opening-composition-gate-result.json") {
+            throw new Error("rejected evidence write failed");
+          }
+        },
+      },
+    })).rejects.toThrow("rejected evidence write failed");
+    await expect(lstat(outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    expect((await readdir(root)).filter((name) =>
+      name.includes("rejected-capture-")
+    )).toEqual([]);
+  });
+
   it("publishes all nine artifacts with the receipt written last", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "formal-capture-test-"));
     temporaryRoots.push(root);

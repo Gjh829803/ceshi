@@ -55,6 +55,7 @@ import {
   decideNativeBlockReconstructionRouteV1,
   type WorldReconstructionHostRoutePolicyV1,
 } from "./generation-request.js";
+import { WorldReconstructionRunClosedErrorV1 } from "./run.js";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const REAL_CASE_ROOT = path.join(
@@ -769,6 +770,95 @@ describe("runWorldReconstructionProductionV1", () => {
     await expect(lstat(path.join(value.caseRoot, "final"))).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  it("returns human-viewable rejected Capture evidence without claiming publication", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const { owners: baseOwners } = ownersFor(value, receipt);
+    const rejectedCaptureDirectoryPath = path.join(
+      value.outputDirectoryPath,
+      "attempts",
+      "0",
+      "rejected-capture",
+    );
+    const rejectedOpeningPath = path.join(
+      rejectedCaptureDirectoryPath,
+      "opening.png",
+    );
+    const openingGateResultPath = path.join(
+      rejectedCaptureDirectoryPath,
+      "opening-composition-gate-result.json",
+    );
+    const owners = Object.freeze({
+      ...baseOwners,
+      runCore: vi.fn(async () => {
+        throw new WorldReconstructionRunClosedErrorV1(
+          [
+            "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+            "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+          ],
+          "completed",
+          undefined,
+          {
+            rejectedWorldPackagePath: path.join(
+              value.outputDirectoryPath,
+              "attempts",
+              "0",
+              "world-package",
+            ),
+            rejectedWorldPackageRef:
+              `package://world-package/sha256/${"8".repeat(64)}`,
+            rejectedWorldPackageRootHash: H("8"),
+            rejectedCaptureDirectoryPath,
+            rejectedOpeningPath,
+            rejectedOpeningRef:
+              `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+              "attempts/0/rejected-capture/opening.png",
+            openingGateResultPath,
+            openingGateResultRef:
+              `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+              "attempts/0/rejected-capture/opening-composition-gate-result.json",
+            openingGateResultHash: H("e"),
+          },
+        );
+      }),
+    });
+
+    await expect(run(value, owners)).resolves.toEqual({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: CASE_ID,
+      caseRef: CASE_REF,
+      runId: RUN_ID,
+      outcome: "rejected-capture",
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+      ],
+      cleanupOutcome: "completed",
+      rejectedWorldPackagePath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "world-package",
+      ),
+      rejectedWorldPackageRef:
+        `package://world-package/sha256/${"8".repeat(64)}`,
+      rejectedWorldPackageRootHash: H("8"),
+      rejectedCaptureDirectoryPath,
+      rejectedOpeningPath,
+      rejectedOpeningRef:
+        `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+        "attempts/0/rejected-capture/opening.png",
+      openingGateResultPath,
+      openingGateResultRef:
+        `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+        "attempts/0/rejected-capture/opening-composition-gate-result.json",
+      openingGateResultHash: H("e"),
+    });
+    expect(owners.verifyRun).not.toHaveBeenCalled();
+    expect(owners.publishFinal).not.toHaveBeenCalled();
   });
 
   it.each([

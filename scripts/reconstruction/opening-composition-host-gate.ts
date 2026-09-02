@@ -29,9 +29,14 @@ export type OpeningCompositionHostGateDiagnosticCodeV1 =
 export interface OpeningCompositionHostGateDiagnosticV1 {
   readonly code: OpeningCompositionHostGateDiagnosticCodeV1;
   readonly targetRef?: string;
-  readonly measuredValue?: number;
-  readonly minimumValue?: number;
-  readonly maximumValue?: number;
+  readonly metricId?: string;
+  readonly expectedValue?: number;
+  readonly actualValue?: number;
+  readonly minimumAllowedValue?: number;
+  readonly maximumAllowedValue?: number;
+  readonly allowedDeviation?: number;
+  readonly exceededBy?: number;
+  readonly correctionDirection?: "increase" | "decrease" | "restore" | "reorder";
 }
 
 export interface OpeningCompositionHostGateResultV1 {
@@ -55,13 +60,29 @@ const MAXIMUM_SUBJECT_HEIGHT_BASIS_POINTS = 9_000;
 function boundsDrift(
   expected: Readonly<Record<"minXBasisPoints" | "minYBasisPoints" | "maxXBasisPoints" | "maxYBasisPoints", number>>,
   observed: Readonly<Record<"minXBasisPoints" | "minYBasisPoints" | "maxXBasisPoints" | "maxYBasisPoints", number>>,
-): number {
-  return Math.max(
-    Math.abs(expected.minXBasisPoints - observed.minXBasisPoints),
-    Math.abs(expected.minYBasisPoints - observed.minYBasisPoints),
-    Math.abs(expected.maxXBasisPoints - observed.maxXBasisPoints),
-    Math.abs(expected.maxYBasisPoints - observed.maxYBasisPoints),
-  );
+): Readonly<{
+  metricId: keyof typeof expected;
+  expectedValue: number;
+  actualValue: number;
+  deviation: number;
+  correctionDirection: "increase" | "decrease";
+}> {
+  const rows = ([
+    "minXBasisPoints",
+    "minYBasisPoints",
+    "maxXBasisPoints",
+    "maxYBasisPoints",
+  ] as const).map((metricId) => ({
+    metricId,
+    expectedValue: expected[metricId],
+    actualValue: observed[metricId],
+    deviation: Math.abs(expected[metricId] - observed[metricId]),
+    correctionDirection: observed[metricId] < expected[metricId]
+      ? "increase" as const
+      : "decrease" as const,
+  }));
+  return rows.reduce((maximum, row) =>
+    row.deviation > maximum.deviation ? row : maximum);
 }
 
 function centerDrift(
@@ -103,8 +124,12 @@ function cameraDiagnostics(
   if (distanceDrift > MAXIMUM_CAMERA_BASELINE_DRIFT) {
     diagnostics.push({
       code: "WORLDKIT_OPENING_GATE_CAMERA_DISTANCE_DRIFT",
-      measuredValue: distanceDrift,
-      maximumValue: MAXIMUM_CAMERA_BASELINE_DRIFT,
+      metricId: "camera.distanceDriftMeters",
+      expectedValue: 0,
+      actualValue: distanceDrift,
+      maximumAllowedValue: MAXIMUM_CAMERA_BASELINE_DRIFT,
+      exceededBy: distanceDrift - MAXIMUM_CAMERA_BASELINE_DRIFT,
+      correctionDirection: "restore",
     });
   }
   const effectiveArm = camera.effectiveArmLengthMeters;
@@ -116,8 +141,12 @@ function cameraDiagnostics(
   if (retraction > maximumRetraction) {
     diagnostics.push({
       code: "WORLDKIT_OPENING_GATE_CAMERA_RETRACTED",
-      measuredValue: retraction,
-      maximumValue: maximumRetraction,
+      metricId: "camera.retractionMeters",
+      expectedValue: 0,
+      actualValue: retraction,
+      maximumAllowedValue: maximumRetraction,
+      exceededBy: retraction - maximumRetraction,
+      correctionDirection: "restore",
     });
   }
   const fovDrift = Math.abs(
@@ -131,8 +160,12 @@ function cameraDiagnostics(
   if (maximumFovDrift > MAXIMUM_FOV_DRIFT_DEGREES) {
     diagnostics.push({
       code: "WORLDKIT_OPENING_GATE_FOV_DRIFT",
-      measuredValue: maximumFovDrift,
-      maximumValue: MAXIMUM_FOV_DRIFT_DEGREES,
+      metricId: "camera.fovDriftDegrees",
+      expectedValue: 0,
+      actualValue: maximumFovDrift,
+      maximumAllowedValue: MAXIMUM_FOV_DRIFT_DEGREES,
+      exceededBy: maximumFovDrift - MAXIMUM_FOV_DRIFT_DEGREES,
+      correctionDirection: "restore",
     });
   }
   const pitchDrift = Math.max(
@@ -144,8 +177,12 @@ function cameraDiagnostics(
   if (pitchDrift > MAXIMUM_PITCH_DRIFT_RADIANS) {
     diagnostics.push({
       code: "WORLDKIT_OPENING_GATE_PITCH_DRIFT",
-      measuredValue: pitchDrift,
-      maximumValue: MAXIMUM_PITCH_DRIFT_RADIANS,
+      metricId: "camera.pitchDriftRadians",
+      expectedValue: 0,
+      actualValue: pitchDrift,
+      maximumAllowedValue: MAXIMUM_PITCH_DRIFT_RADIANS,
+      exceededBy: pitchDrift - MAXIMUM_PITCH_DRIFT_RADIANS,
+      correctionDirection: "restore",
     });
   }
   return diagnostics;
@@ -173,22 +210,59 @@ function controlledSubjectDiagnostics(
     diagnostics.push({
       code: "WORLDKIT_OPENING_GATE_SUBJECT_CENTER_DRIFT",
       targetRef: projection.subjectEntityId,
-      measuredValue: centerDriftBasisPoints,
-      maximumValue: MAXIMUM_SUBJECT_CENTER_DRIFT_BASIS_POINTS,
+      metricId: "controlledSubjectProjection.centerXBasisPoints",
+      expectedValue: 5_000,
+      actualValue: projection.centerXBasisPoints,
+      allowedDeviation: MAXIMUM_SUBJECT_CENTER_DRIFT_BASIS_POINTS,
+      exceededBy:
+        centerDriftBasisPoints - MAXIMUM_SUBJECT_CENTER_DRIFT_BASIS_POINTS,
+      correctionDirection: projection.centerXBasisPoints < 5_000
+        ? "increase"
+        : "decrease",
     });
   }
   if (
     projection.coverageBasisPoints < MINIMUM_SUBJECT_COVERAGE_BASIS_POINTS ||
-    projection.coverageBasisPoints > MAXIMUM_SUBJECT_COVERAGE_BASIS_POINTS ||
+    projection.coverageBasisPoints > MAXIMUM_SUBJECT_COVERAGE_BASIS_POINTS
+  ) {
+    diagnostics.push({
+      code: "WORLDKIT_OPENING_GATE_SUBJECT_SCALE_INVALID",
+      targetRef: projection.subjectEntityId,
+      metricId: "controlledSubjectProjection.coverageBasisPoints",
+      actualValue: projection.coverageBasisPoints,
+      minimumAllowedValue: MINIMUM_SUBJECT_COVERAGE_BASIS_POINTS,
+      maximumAllowedValue: MAXIMUM_SUBJECT_COVERAGE_BASIS_POINTS,
+      exceededBy: projection.coverageBasisPoints <
+          MINIMUM_SUBJECT_COVERAGE_BASIS_POINTS
+        ? MINIMUM_SUBJECT_COVERAGE_BASIS_POINTS -
+          projection.coverageBasisPoints
+        : projection.coverageBasisPoints -
+          MAXIMUM_SUBJECT_COVERAGE_BASIS_POINTS,
+      correctionDirection: projection.coverageBasisPoints <
+          MINIMUM_SUBJECT_COVERAGE_BASIS_POINTS
+        ? "increase"
+        : "decrease",
+    });
+  }
+  if (
     projection.heightBasisPoints < MINIMUM_SUBJECT_HEIGHT_BASIS_POINTS ||
     projection.heightBasisPoints > MAXIMUM_SUBJECT_HEIGHT_BASIS_POINTS
   ) {
     diagnostics.push({
       code: "WORLDKIT_OPENING_GATE_SUBJECT_SCALE_INVALID",
       targetRef: projection.subjectEntityId,
-      measuredValue: projection.coverageBasisPoints,
-      minimumValue: MINIMUM_SUBJECT_COVERAGE_BASIS_POINTS,
-      maximumValue: MAXIMUM_SUBJECT_COVERAGE_BASIS_POINTS,
+      metricId: "controlledSubjectProjection.heightBasisPoints",
+      actualValue: projection.heightBasisPoints,
+      minimumAllowedValue: MINIMUM_SUBJECT_HEIGHT_BASIS_POINTS,
+      maximumAllowedValue: MAXIMUM_SUBJECT_HEIGHT_BASIS_POINTS,
+      exceededBy: projection.heightBasisPoints <
+          MINIMUM_SUBJECT_HEIGHT_BASIS_POINTS
+        ? MINIMUM_SUBJECT_HEIGHT_BASIS_POINTS - projection.heightBasisPoints
+        : projection.heightBasisPoints - MAXIMUM_SUBJECT_HEIGHT_BASIS_POINTS,
+      correctionDirection: projection.heightBasisPoints <
+          MINIMUM_SUBJECT_HEIGHT_BASIS_POINTS
+        ? "increase"
+        : "decrease",
     });
   }
   return diagnostics;
@@ -226,12 +300,16 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
       continue;
     }
     const drift = boundsDrift(region.normalizedBounds, observed.normalizedBounds);
-    if (drift > threshold.maximumDriftBasisPoints) {
+    if (drift.deviation > threshold.maximumDriftBasisPoints) {
       diagnostics.push({
         code: "WORLDKIT_OPENING_GATE_REGION_DRIFT",
         targetRef: region.targetRef,
-        measuredValue: drift,
-        maximumValue: threshold.maximumDriftBasisPoints,
+        metricId: `normalizedBounds.${drift.metricId}`,
+        expectedValue: drift.expectedValue,
+        actualValue: drift.actualValue,
+        allowedDeviation: threshold.maximumDriftBasisPoints,
+        exceededBy: drift.deviation - threshold.maximumDriftBasisPoints,
+        correctionDirection: drift.correctionDirection,
       });
     }
   }
@@ -248,11 +326,29 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
     }
     const drift = centerDrift(anchor.normalizedCenter, observed.normalizedCenter);
     if (drift > threshold.maximumDriftBasisPoints) {
+      const deltaX = Math.abs(
+        anchor.normalizedCenter.xBasisPoints -
+          observed.normalizedCenter.xBasisPoints,
+      );
+      const metricId = deltaX >= Math.abs(
+          anchor.normalizedCenter.yBasisPoints -
+            observed.normalizedCenter.yBasisPoints,
+        )
+        ? "xBasisPoints" as const
+        : "yBasisPoints" as const;
+      const expectedValue = anchor.normalizedCenter[metricId];
+      const actualValue = observed.normalizedCenter[metricId];
       diagnostics.push({
         code: "WORLDKIT_OPENING_GATE_ANCHOR_DRIFT",
         targetRef: anchor.targetRef,
-        measuredValue: drift,
-        maximumValue: threshold.maximumDriftBasisPoints,
+        metricId: `normalizedCenter.${metricId}`,
+        expectedValue,
+        actualValue,
+        allowedDeviation: threshold.maximumDriftBasisPoints,
+        exceededBy: drift - threshold.maximumDriftBasisPoints,
+        correctionDirection: actualValue < expectedValue
+          ? "increase"
+          : "decrease",
       });
     }
   }
@@ -264,7 +360,11 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
     expected.orderedTargetRefs.some((targetRef, index) =>
       targetRef !== observedOrder[index])
   ) {
-    diagnostics.push({ code: "WORLDKIT_OPENING_GATE_DEPTH_ORDER_DRIFT" });
+    diagnostics.push({
+      code: "WORLDKIT_OPENING_GATE_DEPTH_ORDER_DRIFT",
+      metricId: "visualGroups.depthOrder",
+      correctionDirection: "reorder",
+    });
   }
   return Object.freeze({
     kind: "worldkit-opening-composition-host-gate",
