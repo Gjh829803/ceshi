@@ -113,6 +113,9 @@ import { SubjectAnimationPlayer } from "./subject-animation-player";
 import { createSubjectVisual } from "./subject-visual";
 import { sampleExecutionTerrainHeight } from "./terrain";
 import { projectBabylonWorldRuntimeSnapshotV4 } from "./world-runtime-snapshot";
+import {
+  GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
+} from "./ground-safety-boundary-filter";
 
 const loadAssetContainerImplementation = vi
   .mocked(LoadAssetContainerAsync)
@@ -1016,6 +1019,16 @@ const NATIVE_STEP_BOX_INDICES = Object.freeze([
   0, 7, 3, 0, 4, 7,
   1, 6, 2, 1, 5, 6,
 ]);
+const NATIVE_GROUND_BOUNDARY_POSITIONS = Object.freeze([
+  -6, -0.2, -1.5,
+  6, -0.2, -1.5,
+  6, 4, -1.5,
+  -6, 4, -1.5,
+]);
+const NATIVE_GROUND_BOUNDARY_INDICES = Object.freeze([
+  0, 2, 1, 0, 3, 2,
+  0, 1, 2, 0, 2, 3,
+]);
 
 function registerNativeStepCollider(
   context: Parameters<BabylonNativeSceneModuleV1["build"]>[0],
@@ -1081,6 +1094,7 @@ function nativeStepWorldPackageInput(): ReturnType<
   const staticColliders = [
     createBabylonNativeStaticColliderContributionV1({
       id: "ground",
+      runtimeRole: "scene-static-collider",
       worldPositionsMetersXYZ: NATIVE_STEP_GROUND_POSITIONS,
       triangleIndices: NATIVE_STEP_GROUND_INDICES,
       frictionRatio: 0.8,
@@ -1094,6 +1108,7 @@ function nativeStepWorldPackageInput(): ReturnType<
     }),
     createBabylonNativeStaticColliderContributionV1({
       id: "step",
+      runtimeRole: "scene-static-collider",
       worldPositionsMetersXYZ: NATIVE_STEP_BOX_POSITIONS,
       triangleIndices: NATIVE_STEP_BOX_INDICES,
       frictionRatio: 0.8,
@@ -1111,6 +1126,31 @@ function nativeStepWorldPackageInput(): ReturnType<
     nativeSceneContribution: Object.freeze({
       ...base.nativeSceneContribution,
       staticColliders: Object.freeze(staticColliders),
+    }),
+  };
+}
+
+function nativeGroundBoundaryWorldPackageInput(): ReturnType<
+  typeof createBabylonNativeWorldPackageTestInputV1
+> {
+  const base = nativeStepWorldPackageInput();
+  const boundary = createBabylonNativeStaticColliderContributionV1({
+    id: "ground-safety-boundary",
+    runtimeRole: "ground-safety-boundary",
+    worldPositionsMetersXYZ: NATIVE_GROUND_BOUNDARY_POSITIONS,
+    triangleIndices: NATIVE_GROUND_BOUNDARY_INDICES,
+    frictionRatio: 0,
+    restitutionRatio: 0,
+    traversalBinding: { kind: "not-traversable" },
+  });
+  return {
+    ...base,
+    nativeSceneContribution: Object.freeze({
+      ...base.nativeSceneContribution,
+      staticColliders: Object.freeze([
+        ...base.nativeSceneContribution.staticColliders,
+        boundary,
+      ].sort((left, right) => left.id.localeCompare(right.id))),
     }),
   };
 }
@@ -2221,6 +2261,129 @@ describe("BabylonWorldRuntime", () => {
       await runtime.dispose();
     }
   }, 15_000);
+
+  it("uses a Host-derived ground-only Havok boundary without exposing it to Camera", async () => {
+    const runtime = await createVerifiedNativeRuntime(nativeStepModule(), {
+      worldPackageInput: nativeGroundBoundaryWorldPackageInput(),
+    });
+    try {
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      const boundary = scene.getMeshByName(
+        "worldkit.native-collider.ground-safety-boundary",
+      );
+      expect(boundary?.isVisible).toBe(false);
+      expect(boundary?.isPickable).toBe(false);
+      expect(boundary?.metadata).toMatchObject({
+        worldkitNativeColliderRuntimeRole: "ground-safety-boundary",
+      });
+      const debug = createRuntimeDebugProbe(runtime);
+      expect(
+        debug.collisionFilterMasks("player").collideMask &
+          GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
+      ).not.toBe(0);
+      await runtime.runFixedInput({ actions: [], ticks: 5 });
+      const blocked = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 120,
+      });
+      expect(blocked.subjectStatesByEntityId.player!.positionMetersXYZ[2])
+        .toBeGreaterThan(-1.45);
+      expect(blocked.subjectStatesByEntityId.player!.movementMedium).toBe(
+        "ground",
+      );
+      const cameraQuery = (runtime as unknown as {
+        cameraGeometryQuery: {
+          query(input: Readonly<{
+            schemaVersion: 2;
+            committedTick: number;
+            startPositionMetersXYZ: RuntimeVec3V1;
+            endPositionMetersXYZ: RuntimeVec3V1;
+            radiusMeters: number;
+            collisionMask: "camera-hard";
+            excludedEntityIds: readonly string[];
+            maximumHitCount: 1;
+          }>): unknown;
+        };
+      }).cameraGeometryQuery;
+      expect(cameraQuery.query({
+        schemaVersion: 2,
+        committedTick: 125,
+        startPositionMetersXYZ: [0, 1, 0],
+        endPositionMetersXYZ: [0, 1, -3],
+        radiusMeters: 0.2,
+        collisionMask: "camera-hard",
+        excludedEntityIds: ["player"],
+        maximumHitCount: 1,
+      })).toBeUndefined();
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "player");
+      await runtime.runFixedInput({ actions: [], ticks: 5 });
+      const jumping = await runtime.runFixedInput({
+        actions: ["jump", "move-forward"],
+        ticks: 30,
+      });
+      expect(jumping.subjectStatesByEntityId.player!.movementMedium).toBe(
+        "air",
+      );
+      expect(jumping.subjectStatesByEntityId.player!.positionMetersXYZ[2])
+        .toBeGreaterThan(-1.45);
+      expect(
+        debug.collisionFilterMasks("player").collideMask &
+          GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
+      ).not.toBe(0);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("isolates and completely cleans ground safety boundary resources", async () => {
+    const [first, second] = await Promise.all([
+      createVerifiedNativeRuntime(nativeStepModule(), {
+        worldPackageInput: nativeGroundBoundaryWorldPackageInput(),
+      }),
+      createVerifiedNativeRuntime(nativeStepModule(), {
+        worldPackageInput: nativeGroundBoundaryWorldPackageInput(),
+      }),
+    ]);
+    const secondDebug = createRuntimeDebugProbe(second);
+    try {
+      const firstBlocked = await first.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 120,
+      });
+      const secondBlocked = await second.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 120,
+      });
+      expect(secondBlocked.subjectStatesByEntityId.player!.positionMetersXYZ)
+        .toEqual(firstBlocked.subjectStatesByEntityId.player!.positionMetersXYZ);
+
+      const firstScene = (first as unknown as { scene: Scene }).scene;
+      const firstEngine = firstScene.getEngine();
+      const boundary = firstScene.getMeshByName(
+        "worldkit.native-collider.ground-safety-boundary",
+      )!;
+      const nativeDispose = boundary.dispose.bind(boundary);
+      vi.spyOn(boundary, "dispose").mockImplementation((...args) => {
+        nativeDispose(...args);
+        throw new Error("BABYLON_PROVIDER_PRIVATE_BOUNDARY_DISPOSE_FAILURE");
+      });
+      await expect(first.dispose()).rejects.toMatchObject({
+        code: "WORLDKIT_RUNTIME_DISPOSE_FAILED",
+      });
+      expect(firstScene.isDisposed).toBe(true);
+      expect(firstEngine.isDisposed).toBe(true);
+      expect(
+        secondDebug.collisionFilterMasks("player").collideMask &
+          GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
+      ).not.toBe(0);
+      await second.runFixedInput({ actions: [], ticks: 1 });
+    } finally {
+      await first.dispose();
+      await second.dispose();
+    }
+  }, 20_000);
 
   it("rejects a floating Native spawn before Havok and disposes the Candidate", async () => {
     const base = createBabylonNativeWorldPackageTestInputV1();

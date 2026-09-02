@@ -6,9 +6,13 @@ import type { PhysicsBody } from
 import type { PhysicsShape } from
   "@babylonjs/core/Physics/v2/physicsShape.js";
 import type { Scene } from "@babylonjs/core/scene.js";
+import type {
+  BabylonNativeStaticColliderRuntimeRoleV1,
+} from "@whitebox-world/runtime-contracts";
 
 export interface BabylonNativeLiveColliderHandleV1 {
   readonly colliderId: string;
+  readonly runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1;
   readonly colliderSubshapeId: string;
   readonly sourceBlockId?: string;
   readonly physicsBodyId: string;

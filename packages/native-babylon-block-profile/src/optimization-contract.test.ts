@@ -544,6 +544,7 @@ describe("BWB-6 profile optimization contract", () => {
         const fixtureContext = context(scene);
         const admission = await admitBabylonNativeSceneCandidateV1({
           candidate: Object.freeze({ engine, scene }),
+          hostDerivedStaticColliders: Object.freeze([]),
           bootstrap: fixtureContext.bootstrap,
           module: defineBabylonNativeScene({
             kind: "babylon-native-scene-module",

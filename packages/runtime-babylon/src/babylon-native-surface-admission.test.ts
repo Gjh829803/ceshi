@@ -52,6 +52,7 @@ function collider(
 ) {
   return createBabylonNativeStaticColliderContributionV1({
     id,
+    runtimeRole: "scene-static-collider",
     worldPositionsMetersXYZ: positions,
     triangleIndices: indices,
     frictionRatio: 0.8,

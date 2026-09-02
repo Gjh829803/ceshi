@@ -37,8 +37,13 @@ export interface BabylonNativeSpawnMarkerContributionV1 {
   readonly facingRadians: number;
 }
 
+export type BabylonNativeStaticColliderRuntimeRoleV1 =
+  | "scene-static-collider"
+  | "ground-safety-boundary";
+
 export interface BabylonNativeStaticColliderContributionV1 {
   readonly id: string;
+  readonly runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1;
   readonly colliderSubshapeId: string;
   readonly geometryHash: `sha256:${string}`;
   readonly worldPositionsMetersXYZ: readonly number[];
@@ -75,6 +80,7 @@ export interface BabylonNativeSceneContributionV1 {
 
 export interface CreateBabylonNativeStaticColliderContributionInputV1 {
   readonly id: string;
+  readonly runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1;
   readonly worldPositionsMetersXYZ: readonly number[];
   readonly triangleIndices: readonly number[];
   readonly frictionRatio: number;
@@ -100,6 +106,7 @@ const SPAWN_FIELDS = Object.freeze([
 
 const COLLIDER_FIELDS = Object.freeze([
   "id",
+  "runtimeRole",
   "colliderSubshapeId",
   "geometryHash",
   "worldPositionsMetersXYZ",
@@ -294,12 +301,14 @@ function geometryHash(
 
 function deriveColliderSubshapeId(
   id: string,
+  runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1,
   frozenGeometryHash: `sha256:${string}`,
   traversalBinding: BabylonNativeTraversalBindingInputV1,
 ): string {
   const hash = sha256CanonicalJson({
     kind: "babylon-native-collider-subshape-identity",
     colliderId: id,
+    runtimeRole,
     geometryHash: frozenGeometryHash,
     traversalBinding,
   });
@@ -331,6 +340,11 @@ export function createBabylonNativeStaticColliderContributionV1(
   input: CreateBabylonNativeStaticColliderContributionInputV1,
 ): BabylonNativeStaticColliderContributionV1 {
   const id = identity(input.id);
+  const runtimeRole = input.runtimeRole;
+  if (
+    runtimeRole !== "scene-static-collider" &&
+    runtimeRole !== "ground-safety-boundary"
+  ) return invalidContribution();
   const worldPositionsMetersXYZ = canonicalNumbers(
     input.worldPositionsMetersXYZ,
     9,
@@ -347,13 +361,19 @@ export function createBabylonNativeStaticColliderContributionV1(
     frozenTriangleIndices,
   );
   const binding = parseBabylonNativeTraversalBindingInputV1(input.traversalBinding);
+  if (
+    runtimeRole === "ground-safety-boundary" &&
+    binding.kind !== "not-traversable"
+  ) return invalidContribution();
   const colliderSubshapeId = deriveColliderSubshapeId(
     id,
+    runtimeRole,
     frozenGeometryHash,
     binding,
   );
   return Object.freeze({
     id,
+    runtimeRole,
     colliderSubshapeId,
     geometryHash: frozenGeometryHash,
     worldPositionsMetersXYZ,
@@ -427,6 +447,7 @@ function parsedCollider(
   const baseBinding = baseBindingFromContribution(record.traversalBinding);
   const recreated = createBabylonNativeStaticColliderContributionV1({
     id: identity(record.id),
+    runtimeRole: record.runtimeRole as BabylonNativeStaticColliderRuntimeRoleV1,
     worldPositionsMetersXYZ,
     triangleIndices: frozenTriangleIndices,
     frictionRatio: ratio(record.frictionRatio, true),

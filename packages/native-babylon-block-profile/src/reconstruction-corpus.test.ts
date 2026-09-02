@@ -118,6 +118,7 @@ async function admitCase(
   > | undefined;
   const admission = await admitBabylonNativeSceneCandidateV1({
     candidate: Object.freeze({ engine, scene }),
+    hostDerivedStaticColliders: Object.freeze([]),
     bootstrap: bootstrap(`corpus-${caseId}`, inspected.seed),
     module: defineBabylonNativeScene({
       kind: "babylon-native-scene-module",

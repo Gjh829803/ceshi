@@ -362,6 +362,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
     staticColliders: Object.freeze([
       createBabylonNativeStaticColliderContributionV1({
         id: "ground",
+        runtimeRole: "scene-static-collider",
         worldPositionsMetersXYZ: [-5, 0, -5, 5, 0, -5, 0, 0, 5],
         triangleIndices: [0, 1, 2],
         frictionRatio: 0.8,

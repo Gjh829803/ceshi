@@ -6,6 +6,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import {
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
+  createBabylonNativeStaticColliderContributionV1,
   hashBabylonNativeSceneContributionV1,
   parseBabylonNativeSceneBootstrapV1,
   parseNativeSceneDiagnosticV1,
@@ -27,6 +28,9 @@ import {
   type BabylonNativeSceneAdmissionBudgetV1,
   type BabylonNativeSceneCandidateAdmissionResultV1,
 } from "./host.js";
+import type {
+  BabylonNativeStaticColliderContributionV1,
+} from "@whitebox-world/runtime-contracts";
 
 const retainedEngines: NullEngine[] = [];
 
@@ -95,9 +99,12 @@ function buildCandidate(
   module: BabylonNativeSceneModuleV1,
   budget: BabylonNativeSceneAdmissionBudgetV1 = DEFAULT_BUDGET,
   bootstrap = BOOTSTRAP,
+  hostDerivedStaticColliders:
+    readonly BabylonNativeStaticColliderContributionV1[] = Object.freeze([]),
 ) {
   return admitBabylonNativeSceneCandidateV1({
     candidate: { scene, engine: scene.getEngine() },
+    hostDerivedStaticColliders,
     bootstrap,
     module,
     assets: ASSETS,
@@ -628,6 +635,7 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     const scene = createScene();
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: { scene, engine: scene.getEngine() },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: { ...BOOTSTRAP, geometry: [] } as never,
       module: moduleWithBuild(() => undefined),
       assets: ASSETS,
@@ -668,6 +676,7 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     const scene = createScene();
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: { scene, engine: scene.getEngine() },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: BOOTSTRAP,
       module: module as never,
       assets: ASSETS,
@@ -715,6 +724,7 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     const scene = createScene();
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: { scene, engine: scene.getEngine() },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: BOOTSTRAP,
       module: moduleWithBuild(async (context) => {
         const first = await context.assets.resolve({
@@ -768,6 +778,7 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     const scene = createScene();
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: { scene, engine: scene.getEngine() },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: BOOTSTRAP,
       module: moduleWithBuild(async (context) => {
         try {
@@ -805,6 +816,7 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     const scene = createScene();
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: { scene, engine: scene.getEngine() },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: BOOTSTRAP,
       module: moduleWithBuild(async (context) => {
         try {
@@ -850,6 +862,7 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     const scene = createScene();
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: { scene, engine: scene.getEngine() },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: BOOTSTRAP,
       module: moduleWithBuild(async (context) => {
         try {
@@ -1204,6 +1217,50 @@ describe("admitBabylonNativeSceneCandidateV1", () => {
     for (const [budget, code] of cases) {
       expect(rejectedCode(await buildCandidate(scene, module, budget))).toBe(code);
     }
+  });
+
+  it("admits only Host-derived ground safety boundaries outside Module registration", async () => {
+    const scene = createScene();
+    const boundary = createBabylonNativeStaticColliderContributionV1({
+      id: "ground-edge",
+      runtimeRole: "ground-safety-boundary",
+      worldPositionsMetersXYZ: [0, -0.2, 0, 1, -0.2, 0, 1, 4, 0, 0, 4, 0],
+      triangleIndices: [0, 2, 1, 0, 3, 2],
+      frictionRatio: 0,
+      restitutionRatio: 0,
+      traversalBinding: { kind: "not-traversable" },
+    });
+    const result = await buildCandidate(
+      scene,
+      moduleWithBuild(registerSpawn),
+      DEFAULT_BUDGET,
+      BOOTSTRAP,
+      Object.freeze([boundary]),
+    );
+
+    expect(result.outcome).toBe("passed");
+    if (result.outcome !== "passed") return;
+    expect(result.contribution.staticColliders).toEqual([boundary]);
+
+    const invalid = createBabylonNativeStaticColliderContributionV1({
+      id: "ordinary",
+      runtimeRole: "scene-static-collider",
+      worldPositionsMetersXYZ: [0, 0, 0, 1, 0, 0, 0, 0, 1],
+      triangleIndices: [0, 1, 2],
+      frictionRatio: 0,
+      restitutionRatio: 0,
+      traversalBinding: { kind: "not-traversable" },
+    });
+    const rejected = await buildCandidate(
+      createScene(),
+      moduleWithBuild(registerSpawn),
+      DEFAULT_BUDGET,
+      BOOTSTRAP,
+      Object.freeze([invalid]),
+    );
+    expect(rejectedCode(rejected)).toBe(
+      "WORLDKIT_NATIVE_SCENE_HOST_DERIVED_COLLIDER_INVALID",
+    );
   });
 
   it("rejects a non-exact admission budget before Module build", async () => {

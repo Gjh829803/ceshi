@@ -18,7 +18,7 @@ import {
   type NativeSceneDiagnosticMeasurementV1,
   type NativeSceneDiagnosticStageV1,
 } from "@whitebox-world/runtime-contracts";
-import { isEmpty, isNil } from "lodash-es";
+import { isEmpty, isEqual, isNil } from "lodash-es";
 
 import type {
   BabylonNativeLockedAssetResolutionFailureV1,
@@ -80,6 +80,8 @@ export interface AdmitBabylonNativeSceneCandidateInputV1 {
   readonly module: BabylonNativeSceneModuleV1;
   readonly assets: BabylonNativeLockedAssetResolverV1;
   readonly budget: BabylonNativeSceneAdmissionBudgetV1;
+  readonly hostDerivedStaticColliders:
+    readonly BabylonNativeStaticColliderContributionV1[];
 }
 
 export type BabylonNativeSceneCandidateAdmissionResultV1 =
@@ -567,6 +569,61 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
   let settlementContext: BabylonNativeSceneBuildContextV1 | undefined;
   try {
     validateBudget(input.budget);
+    const hostDerivedStaticColliders = Object.freeze(
+      input.hostDerivedStaticColliders.map((collider) => {
+        if (
+          collider.runtimeRole !== "ground-safety-boundary" ||
+          collider.traversalBinding.kind !== "not-traversable"
+        ) {
+          throw failure(
+            "WORLDKIT_NATIVE_SCENE_HOST_DERIVED_COLLIDER_INVALID",
+            "Host-derived Colliders must use the closed ground safety boundary role.",
+            "Derive boundary geometry through the trusted Block Profile Host path.",
+            { stage: "source-admission" },
+          );
+        }
+        const recreated = createBabylonNativeStaticColliderContributionV1({
+          id: collider.id,
+          runtimeRole: "ground-safety-boundary",
+          worldPositionsMetersXYZ: collider.worldPositionsMetersXYZ,
+          triangleIndices: collider.triangleIndices,
+          frictionRatio: collider.frictionRatio,
+          restitutionRatio: collider.restitutionRatio,
+          traversalBinding: Object.freeze({ kind: "not-traversable" }),
+        });
+        if (!isEqual(recreated, collider)) {
+          throw failure(
+            "WORLDKIT_NATIVE_SCENE_HOST_DERIVED_COLLIDER_INVALID",
+            `Host-derived Collider '${collider.id}' has stale identity.`,
+            "Rebuild the frozen boundary Contribution from the current topology.",
+            { stage: "source-admission" },
+          );
+        }
+        return recreated;
+      }),
+    );
+    const derivedColliderIds = hostDerivedStaticColliders.map(({ id }) => id);
+    const derivedVertexCount = hostDerivedStaticColliders.reduce(
+      (sum, collider) => sum + collider.vertexCount,
+      0,
+    );
+    const derivedTriangleCount = hostDerivedStaticColliders.reduce(
+      (sum, collider) => sum + collider.triangleCount,
+      0,
+    );
+    if (
+      new Set(derivedColliderIds).size !== derivedColliderIds.length ||
+      hostDerivedStaticColliders.length > input.budget.maximumStaticColliderCount ||
+      derivedVertexCount > input.budget.maximumStaticColliderVertexCount ||
+      derivedTriangleCount > input.budget.maximumStaticColliderTriangleCount
+    ) {
+      throw failure(
+        "WORLDKIT_NATIVE_SCENE_HOST_DERIVED_COLLIDER_BUDGET_EXCEEDED",
+        "Host-derived Collider identity or geometry exceeds the frozen admission budget.",
+        "Reduce protected boundary geometry before creating the Candidate.",
+        { stage: "source-admission" },
+      );
+    }
     let module: BabylonNativeSceneModuleV1;
     try {
       module = defineBabylonNativeScene(input.module);
@@ -589,9 +646,9 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
     let firstRegistrationFailure: NativeSceneAdmissionFailure | undefined;
     let moduleDidFail = false;
     let buildException: unknown;
-    let totalVertexCount = 0;
-    let totalTriangleCount = 0;
-    const registrationIds = new Set<string>();
+    let totalVertexCount = derivedVertexCount;
+    let totalTriangleCount = derivedTriangleCount;
+    const registrationIds = new Set<string>(derivedColliderIds);
     const retainedColliders: RetainedColliderV1[] = [];
 
     const retainFailure = (problem: NativeSceneAdmissionFailure): never => {
@@ -743,7 +800,8 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
               );
             }
             const geometry = validatedColliderGeometry(mesh, id);
-            const actualCount = retainedColliders.length + 1;
+            const actualCount = hostDerivedStaticColliders.length +
+              retainedColliders.length + 1;
             if (actualCount > input.budget.maximumStaticColliderCount) {
               throw failure(
                 "WORLDKIT_NATIVE_SCENE_COLLIDER_COUNT_EXCEEDED",
@@ -797,6 +855,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
             }
             const frozen = createBabylonNativeStaticColliderContributionV1({
               id,
+              runtimeRole: "scene-static-collider",
               worldPositionsMetersXYZ: geometry.worldPositionsMetersXYZ,
               triangleIndices: geometry.triangleIndices,
               frictionRatio: boundedRatio(record.frictionRatio, 0.75, id, "frictionRatio"),
@@ -937,6 +996,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
       );
       const finalContribution = createBabylonNativeStaticColliderContributionV1({
         id: retained.frozen.id,
+        runtimeRole: retained.frozen.runtimeRole,
         worldPositionsMetersXYZ: finalGeometry.worldPositionsMetersXYZ,
         triangleIndices: finalGeometry.triangleIndices,
         frictionRatio: retained.frozen.frictionRatio,
@@ -1033,6 +1093,7 @@ async function admitBabylonNativeSceneCandidateWithExclusiveProbeV1(
       spawnMarker,
       staticColliders: [...retainedColliders]
         .map(({ frozen }) => frozen)
+        .concat(hostDerivedStaticColliders)
         .sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
     });
     const authorityDiagnostics = authorityProbe.audit();

@@ -548,6 +548,7 @@ describe("formal world capture provider", () => {
 
     const contribution = {
       id: "ground",
+      runtimeRole: "scene-static-collider",
       colliderSubshapeId: "ground.shape",
       geometryHash: `sha256:${"b".repeat(64)}`,
       worldPositionsMetersXYZ: [0, 0, 0],
