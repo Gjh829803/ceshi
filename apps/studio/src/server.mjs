@@ -6106,7 +6106,10 @@ async function isOriginAvailable(origin) {
 }
 
 async function startMain() {
-  const host = "127.0.0.1";
+  const host = process.env.WORLDKIT_STUDIO_HOST ?? "127.0.0.1";
+  if (!["127.0.0.1", "0.0.0.0"].includes(host)) {
+    throw new Error("WORLDKIT_STUDIO_HOST must be 127.0.0.1 or 0.0.0.0.");
+  }
   const port = Number(process.env.WORLDKIT_STUDIO_PORT ?? 4174);
   const dataRoot = process.env.WORLDKIT_STUDIO_DATA_ROOT ?? defaultDataRoot;
   const readinessNonce = process.env.WORLDKIT_STUDIO_READINESS_NONCE ?? "";

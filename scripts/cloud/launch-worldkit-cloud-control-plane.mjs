@@ -68,6 +68,7 @@ export function cloudControlPlaneResources({
             ports: [{ name: "http", containerPort: port }],
             env: [
               { name: "WORLDKIT_STUDIO_PORT", value: String(port) },
+              { name: "WORLDKIT_STUDIO_HOST", value: "0.0.0.0" },
               { name: "WORLDKIT_STUDIO_DATA_ROOT", value: "/var/run/worldkit-studio" },
               { name: "WORLDKIT_CLOUD_CONTROL_PLANE", value: "1" },
               { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },

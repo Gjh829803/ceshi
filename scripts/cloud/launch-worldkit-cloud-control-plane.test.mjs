@@ -16,6 +16,8 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   assert.equal(container.resources.requests["nvidia.com/gpu"], undefined);
   assert.equal(container.env.find((item) =>
     item.name === "WORLDKIT_CLOUD_CONTROL_PLANE").value, "1");
+  assert.equal(container.env.find((item) =>
+    item.name === "WORLDKIT_STUDIO_HOST").value, "0.0.0.0");
   assert.ok(pod.volumes.every((volume) => volume.emptyDir));
   assert.equal(JSON.stringify(pod).includes("aws-credentials"), false);
   assert.equal(service.spec.type, "ClusterIP");
