@@ -31,6 +31,8 @@ interface BlockCreateInput {
   readonly id: string;
   readonly shape: Shape;
   readonly paletteRole: PaletteRole;
+  readonly centerMetersXYZ: readonly [number, number, number];
+  readonly rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
   readonly visualGroupId?: string;
 }
 
@@ -105,6 +107,8 @@ async function loadProfile(): Promise<BlockProfileModule> {
             updatable: true,
           }, context.scene);
           mesh.id = input.id;
+          mesh.position.set(...input.centerMetersXYZ);
+          mesh.rotation.y = (input.rotationQuarterTurnsY ?? 0) * Math.PI / 2;
           const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
           const indices = mesh.getIndices();
           if (positions === null || indices === null) {
@@ -225,8 +229,8 @@ describe("Babylon Native block profile structural check", () => {
         id: "ground-block",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      ground.position.set(0, 0.5, 0);
 
       const result = session.finalize().checkResult;
 
@@ -285,15 +289,15 @@ describe("Babylon Native block profile structural check", () => {
         shape: "small",
         paletteRole: "hazard",
         visualGroupId: "gate",
+        centerMetersXYZ: [0.25, 0.75, 0.25],
       });
-      upper.position.set(0.25, 0.75, 0.25);
       const lower = session.createBlock({
         id: "gate-lower",
         shape: "small",
         paletteRole: "structure",
         visualGroupId: "gate",
+        centerMetersXYZ: [0.25, 0.25, 0.25],
       });
-      lower.position.set(0.25, 0.25, 0.25);
 
       const result = session.finalize().checkResult;
 
@@ -336,8 +340,8 @@ describe("Babylon Native block profile structural check", () => {
             id: definition.id,
             shape: "full",
             paletteRole: "route",
+            centerMetersXYZ: [definition.x, 0.5, 0],
           });
-          mesh.position.set(definition.x, 0.5, 0);
         }
         return session.finalize().checkResult;
       } finally {
@@ -370,14 +374,14 @@ describe("Babylon Native block profile structural check", () => {
           id: "low-step",
           shape: "step",
           paletteRole: "route",
+          centerMetersXYZ: [0, 0.125, 0],
         });
-        low.position.set(0, 0.125, 0);
         const high = session.createBlock({
           id: "high-step",
           shape: "step",
           paletteRole: "route",
+          centerMetersXYZ: [1, upperY, 0],
         });
-        high.position.set(1, upperY, 0);
         return session.finalize().checkResult;
       } finally {
         scene.dispose();
@@ -415,32 +419,32 @@ describe("Babylon Native block profile structural check", () => {
         id: "overlap-first",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      first.position.set(0, 0.5, 0);
       const second = session.createBlock({
         id: "overlap-second",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      second.position.set(0, 0.5, 0);
       const ungrouped = session.createBlock({
         id: "ungrouped-structure",
         shape: "small",
         paletteRole: "structure",
+        centerMetersXYZ: [2.25, 0.25, 0.25],
       });
-      ungrouped.position.set(2.25, 0.25, 0.25);
       const westRoute = session.createBlock({
         id: "west-route",
         shape: "full",
         paletteRole: "route",
+        centerMetersXYZ: [4, 0.5, 0],
       });
-      westRoute.position.set(4, 0.5, 0);
       const eastRoute = session.createBlock({
         id: "east-route",
         shape: "full",
         paletteRole: "route",
+        centerMetersXYZ: [8, 0.5, 0],
       });
-      eastRoute.position.set(8, 0.5, 0);
 
       const result = session.finalize().checkResult;
 
@@ -482,15 +486,15 @@ describe("Babylon Native block profile structural check", () => {
         id: "base-block",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      base.position.set(0, 0.5, 0);
       const floating = session.createBlock({
         id: "floating-block",
         shape: "small",
         paletteRole: "background-mass",
         visualGroupId: "floating-mass",
+        centerMetersXYZ: [2.25, 2.25, 0.25],
       });
-      floating.position.set(2.25, 2.25, 0.25);
 
       const result = session.finalize().checkResult;
 
@@ -518,6 +522,7 @@ describe("Babylon Native block profile structural check", () => {
         id: "disposed-block",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
       mesh.dispose();
 
@@ -547,8 +552,8 @@ describe("Babylon Native block profile structural check", () => {
         id: "mutated-block",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      mesh.position.set(0, 0.5, 0);
       const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
       positions[0] = positions[0]! + 0.25;
       mesh.setVerticesData(VertexBuffer.PositionKind, positions, true);
@@ -578,8 +583,8 @@ describe("Babylon Native block profile structural check", () => {
         id: "thin-instance-source",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      mesh.position.set(0, 0.5, 0);
       // NullEngine intentionally lacks instanced-array support, so Babylon cannot
       // create a real thin instance here. Shadow only its public observation point
       // while retaining a real Mesh and the production checker path.
@@ -612,8 +617,8 @@ describe("Babylon Native block profile structural check", () => {
         id: "instance-source",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      mesh.position.set(0, 0.5, 0);
       mesh.createInstance("untracked-instance").position.set(2, 0, 0);
 
       const result = session.finalize().checkResult;
@@ -640,8 +645,8 @@ describe("Babylon Native block profile structural check", () => {
         id: "throwing-block",
         shape: "full",
         paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
       });
-      mesh.position.set(0, 0.5, 0);
       Object.defineProperty(mesh, "hasThinInstances", {
         configurable: true,
         get(): never {

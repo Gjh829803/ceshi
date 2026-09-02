@@ -88,6 +88,8 @@ function blockRecord(
       id: input.id,
       shape: input.shape,
       paletteRole: input.paletteRole,
+      centerMetersXYZ: input.positionMetersXYZ ?? ([0, 0, 0] as const),
+      rotationQuarterTurnsY: input.rotationQuarterTurnsY ?? 0,
       ...(input.visualGroupId === undefined
         ? {}
         : { visualGroupId: input.visualGroupId }),

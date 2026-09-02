@@ -322,8 +322,9 @@ describe("Babylon Native block profile session", () => {
         createContext(scene),
         { maximumBlockCount: 4 },
       );
+      // An identity root keeps the declared placement intact so this case
+      // isolates the unparented-final-Mesh rule from transform drift.
       const root = new TransformNode("ridge-root", scene);
-      root.position.set(2, 1, -3);
       const material = new StandardMaterial("ridge-material", scene);
       const mesh = session.createBlock({
         id: "ridge-core",
@@ -650,6 +651,33 @@ describe("Babylon Native block profile session", () => {
       expect(full.scaling.asArray()).toEqual([0.4, 0.4, 0.4]);
       expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("rejects post-creation placement mutation instead of accepting a second dialect", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    for (const tamper of [
+      (mesh: Mesh) => mesh.position.set(2, 0.5, 0),
+      (mesh: Mesh) => { mesh.rotation.y = Math.PI / 2; },
+    ]) {
+      withScene((scene) => {
+        const session = createBabylonNativeBlockProfileSessionV1(
+          createContext(scene),
+          { maximumBlockCount: 1 },
+        );
+        const mesh = session.createBlock({
+          id: "ground-block",
+          shape: "quarter",
+          paletteRole: "ground",
+          centerMetersXYZ: [0.25, 0.5, 0],
+        });
+
+        tamper(mesh);
+
+        expect(() => session.finalize({ staticColliders: [] }))
+          .toThrow(/WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED/);
+      });
+    }
   });
 
   it("derives grid IDs, spacing, and Y/Z/X order from the selected shape", async () => {

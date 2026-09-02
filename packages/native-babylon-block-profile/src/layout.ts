@@ -210,6 +210,20 @@ function deriveEntry(
       centerMetersXYZ,
       rotationQuarterTurnsY,
     });
+    // Placement is declared once at creation. A later transform is tampering,
+    // not a second supported placement dialect.
+    if (
+      rotationQuarterTurnsY !== (record.input.rotationQuarterTurnsY ?? 0) ||
+      centerMetersXYZ.some((value, axis) =>
+        !Object.is(value, record.input.centerMetersXYZ[axis]))
+    ) {
+      return Object.freeze({
+        issue: Object.freeze({
+          code: "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
+          blockId: record.input.id,
+        }),
+      });
+    }
     if (!babylonNativeBlockCenterAlignsToGridV1(placement)) {
       return Object.freeze({
         issue: Object.freeze({
