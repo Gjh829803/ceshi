@@ -10,6 +10,7 @@ import {
   parseWorldReconstructionEvidenceSetV1,
   parseWorldReconstructionRunReceiptV1,
   worldReconstructionCaseCanonicalBytesV1,
+  worldReconstructionEvidenceProfileClosureMatchesV1,
 } from "./reconstruction-contracts.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
@@ -382,6 +383,59 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionCaseV1(routeClaim)).toThrowError(
       "WORLD_RECONSTRUCTION_CASE_INVALID",
     );
+  });
+
+  it("requires exact unique Case/Profile threshold target closure", () => {
+    const caseDraft = caseValue();
+    caseDraft.requiredEvidenceProfileRefs = DIMENSIONS.map(
+      (dimensionId) => `worldkit://evidence-profile/${dimensionId}@1`,
+    );
+    const reconstructionCase = parseWorldReconstructionCaseV1(caseDraft);
+    const profile = parseWorldReconstructionEvaluationProfileV1(profileValue());
+    const semanticThreshold = profile.thresholds.semanticSilhouetteTargets[0]!;
+    const regionThreshold = profile.thresholds.openingComposition.regions[0]!;
+    const anchorThreshold = profile.thresholds.openingComposition.anchors[0]!;
+
+    expect(worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, profile)).toBe(true);
+
+    for (const semanticSilhouetteTargets of [
+      [],
+      [semanticThreshold, semanticThreshold],
+      [semanticThreshold, { ...semanticThreshold, acceptanceTargetRef: "worldkit://acceptance-target/extra@1" }],
+    ]) {
+      expect(worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, {
+        ...profile,
+        thresholds: { ...profile.thresholds, semanticSilhouetteTargets },
+      })).toBe(false);
+    }
+
+    for (const regions of [
+      [],
+      [regionThreshold, regionThreshold],
+      [regionThreshold, { ...regionThreshold, targetRef: "worldkit://composition-target/extra@1" }],
+    ]) {
+      expect(worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, {
+        ...profile,
+        thresholds: {
+          ...profile.thresholds,
+          openingComposition: { ...profile.thresholds.openingComposition, regions },
+        },
+      })).toBe(false);
+    }
+
+    for (const anchors of [
+      [],
+      [anchorThreshold, anchorThreshold],
+      [anchorThreshold, { ...anchorThreshold, targetRef: "worldkit://composition-target/extra@1" }],
+    ]) {
+      expect(worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, {
+        ...profile,
+        thresholds: {
+          ...profile.thresholds,
+          openingComposition: { ...profile.thresholds.openingComposition, anchors },
+        },
+      })).toBe(false);
+    }
   });
 
   it("requires opening order to declare every frozen opening target", () => {

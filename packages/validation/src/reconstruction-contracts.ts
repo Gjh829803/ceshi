@@ -950,7 +950,41 @@ export function worldReconstructionEvidenceProfileClosureMatchesV1(
   const requiredProfileRefs = sortBy(uniq(
     profile.requiredEvidenceByDimension.flatMap((entry) => entry.evidenceProfileRefs),
   ));
-  return isEqual(reconstructionCase.requiredEvidenceProfileRefs, requiredProfileRefs);
+  const exactUniqueRefClosureMatches = (
+    caseRefs: readonly string[],
+    profileRefs: readonly string[],
+  ): boolean => {
+    const uniqueCaseRefs = uniq(caseRefs);
+    const uniqueProfileRefs = uniq(profileRefs);
+    return caseRefs.length === uniqueCaseRefs.length
+      && profileRefs.length === uniqueProfileRefs.length
+      && isEqual(sortBy(uniqueCaseRefs), sortBy(uniqueProfileRefs));
+  };
+  return isEqual(reconstructionCase.requiredEvidenceProfileRefs, requiredProfileRefs)
+    && exactUniqueRefClosureMatches(
+      reconstructionCase.expected.semanticSilhouetteTargets.map(
+        (entry) => entry.acceptanceTargetRef,
+      ),
+      profile.thresholds.semanticSilhouetteTargets.map(
+        (entry) => entry.acceptanceTargetRef,
+      ),
+    )
+    && exactUniqueRefClosureMatches(
+      reconstructionCase.expected.openingComposition.regions.map(
+        (entry) => entry.targetRef,
+      ),
+      profile.thresholds.openingComposition.regions.map(
+        (entry) => entry.targetRef,
+      ),
+    )
+    && exactUniqueRefClosureMatches(
+      reconstructionCase.expected.openingComposition.anchors.map(
+        (entry) => entry.targetRef,
+      ),
+      profile.thresholds.openingComposition.anchors.map(
+        (entry) => entry.targetRef,
+      ),
+    );
 }
 
 export function parseWorldReconstructionEvidenceSetV1(value: unknown): WorldReconstructionEvidenceSetV1 {
