@@ -116,6 +116,7 @@ interface ResidencyFixtureV1 {
   readonly residency: BabylonNativeColliderResidencyV1;
   readonly cameraOwner: CameraOwnerProbeV1;
   readonly metadataCalls: () => number;
+  readonly failMetadataAtCall: (call: number | undefined) => void;
 }
 
 async function createFixture(input: Readonly<{
@@ -141,6 +142,7 @@ async function createFixture(input: Readonly<{
   }
   const cameraOwner = cameraOwnerProbe();
   let metadataCalls = 0;
+  let failMetadataOnCall = input.failMetadataOnCall;
   const residency = createBabylonNativeColliderResidencyV1({
     scene,
     chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
@@ -149,7 +151,7 @@ async function createFixture(input: Readonly<{
     cameraGeometryQuery: cameraOwner,
     applyColliderMetadata: (): void => {
       metadataCalls += 1;
-      if (metadataCalls === input.failMetadataOnCall) {
+      if (metadataCalls === failMetadataOnCall) {
         throw new Error("NATIVE_COLLIDER_METADATA_FAILURE");
       }
     },
@@ -161,7 +163,15 @@ async function createFixture(input: Readonly<{
       // A test may already have proven the throwing cleanup path.
     }
   });
-  return { scene, residency, cameraOwner, metadataCalls: () => metadataCalls };
+  return {
+    scene,
+    residency,
+    cameraOwner,
+    metadataCalls: () => metadataCalls,
+    failMetadataAtCall(call: number | undefined): void {
+      failMetadataOnCall = call;
+    },
+  };
 }
 
 function colliderMeshNames(scene: Scene): readonly string[] {
@@ -322,6 +332,22 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
     expect(colliderMeshNames(scene)).toEqual([]);
     expect([...cameraOwner.registered]).toEqual([]);
   });
+
+  it("keeps the previously published ring when a replacement activation fails",
+    async () => {
+      const fixture = await createFixture({ quadCount: 200 });
+      fixture.residency.update([[0, 0, 0]]);
+      const priorPartIds = fixture.residency.activeHandles()
+        .map(({ chunkPartId }) => chunkPartId);
+      const priorMeshNames = colliderMeshNames(fixture.scene);
+      fixture.failMetadataAtCall(fixture.metadataCalls() + 3);
+
+      expect(() => fixture.residency.update([[160, 0, 0]]))
+        .toThrow(/NATIVE_COLLIDER_METADATA_FAILURE/);
+      expect(fixture.residency.activeHandles()
+        .map(({ chunkPartId }) => chunkPartId)).toEqual(priorPartIds);
+      expect(colliderMeshNames(fixture.scene)).toEqual(priorMeshNames);
+    });
 
   it("keeps one logical Collider identity across every Chunk part", async () => {
     const { residency } = await createFixture({ quadCount: 40 });

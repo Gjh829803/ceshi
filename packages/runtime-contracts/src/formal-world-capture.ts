@@ -413,9 +413,15 @@ export interface FormalColliderOverlayObservationV1
   readonly colliders: readonly Readonly<{
     colliderId: string;
     sourceBlockId: string;
-    physicsBodyId: string;
     colliderSubshapeId: string;
-    overlayRecordId: string;
+    chunkParts: readonly Readonly<{
+      chunkPartId: string;
+      chunkResidencyGroupId: string;
+      overlayRecordId: string;
+      physicsResidency:
+        | Readonly<{ mode: "resident"; physicsBodyId: string }>
+        | Readonly<{ mode: "not-resident" }>;
+    }>[];
   }>[];
   readonly observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
 }
@@ -797,8 +803,11 @@ const COLLIDER_OVERLAY_OBSERVATION_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "colliders", "observedTopologyRelations",
 ] as const;
 const COLLIDER_OBSERVATION_FIELDS = [
-  "colliderId", "sourceBlockId", "physicsBodyId", "colliderSubshapeId",
-  "overlayRecordId",
+  "colliderId", "sourceBlockId", "colliderSubshapeId", "chunkParts",
+] as const;
+const COLLIDER_CHUNK_PART_OBSERVATION_FIELDS = [
+  "chunkPartId", "chunkResidencyGroupId", "overlayRecordId",
+  "physicsResidency",
 ] as const;
 const SCRIPTED_TRAVERSAL_OBSERVATION_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "checks",
@@ -3059,16 +3068,88 @@ export function parseFormalColliderOverlayObservationV1(
       const path = `colliders/${index}`;
       const row = object(entry, contract, path);
       exactFields(row, COLLIDER_OBSERVATION_FIELDS, contract, path);
+      const chunkParts = array(
+        row.chunkParts,
+        contract,
+        `${path}/chunkParts`,
+      ).map((partEntry, partIndex) => {
+        const partPath = `${path}/chunkParts/${partIndex}`;
+        const part = object(partEntry, contract, partPath);
+        exactFields(
+          part,
+          COLLIDER_CHUNK_PART_OBSERVATION_FIELDS,
+          contract,
+          partPath,
+        );
+        const residencyPath = `${partPath}/physicsResidency`;
+        const residency = object(
+          part.physicsResidency,
+          contract,
+          residencyPath,
+        );
+        const mode = text(
+          residency.mode,
+          contract,
+          `${residencyPath}/mode`,
+        );
+        if (mode === "resident") {
+          exactFields(
+            residency,
+            ["mode", "physicsBodyId"],
+            contract,
+            residencyPath,
+          );
+        } else if (mode === "not-resident") {
+          exactFields(residency, ["mode"], contract, residencyPath);
+        } else {
+          fail(contract, `${residencyPath}/mode`, "unsupported mode");
+        }
+        return Object.freeze({
+          chunkPartId: text(
+            part.chunkPartId,
+            contract,
+            `${partPath}/chunkPartId`,
+          ),
+          chunkResidencyGroupId: text(
+            part.chunkResidencyGroupId,
+            contract,
+            `${partPath}/chunkResidencyGroupId`,
+          ),
+          overlayRecordId: text(
+            part.overlayRecordId,
+            contract,
+            `${partPath}/overlayRecordId`,
+          ),
+          physicsResidency: mode === "resident"
+            ? Object.freeze({
+                mode: "resident" as const,
+                physicsBodyId: text(
+                  residency.physicsBodyId,
+                  contract,
+                  `${residencyPath}/physicsBodyId`,
+                ),
+              })
+            : Object.freeze({ mode: "not-resident" as const }),
+        });
+      });
+      if (
+        isEmpty(chunkParts) ||
+        chunkParts.some((part, partIndex) => partIndex > 0 &&
+          chunkParts[partIndex - 1]!.chunkPartId >= part.chunkPartId)
+      ) {
+        fail(
+          contract,
+          `${path}/chunkParts`,
+          "must be non-empty, unique, and chunkPartId-sorted",
+        );
+      }
       return Object.freeze({
         colliderId: text(row.colliderId, contract, `${path}/colliderId`),
         sourceBlockId: text(row.sourceBlockId, contract, `${path}/sourceBlockId`),
-        physicsBodyId: text(row.physicsBodyId, contract, `${path}/physicsBodyId`),
         colliderSubshapeId: text(
           row.colliderSubshapeId, contract, `${path}/colliderSubshapeId`,
         ),
-        overlayRecordId: text(
-          row.overlayRecordId, contract, `${path}/overlayRecordId`,
-        ),
+        chunkParts: Object.freeze(chunkParts),
       });
     },
   );
@@ -3077,10 +3158,18 @@ export function parseFormalColliderOverlayObservationV1(
     colliders.some((row, index) =>
       index > 0 && colliders[index - 1]!.colliderId >= row.colliderId)
   ) fail(contract, "colliders", "must be non-empty, unique, and collider-sorted");
-  for (const key of ["physicsBodyId", "overlayRecordId"] as const) {
-    if (new Set(colliders.map((row) => row[key])).size !== colliders.length) {
-      fail(contract, "colliders", `${key} must be unique`);
+  const parts = colliders.flatMap(({ chunkParts }) => chunkParts);
+  for (const key of ["chunkPartId", "overlayRecordId"] as const) {
+    if (new Set(parts.map((part) => part[key])).size !== parts.length) {
+      fail(contract, "colliders", `${key} must be globally unique`);
     }
+  }
+  const residentPhysicsBodyIds = parts.flatMap(({ physicsResidency }) =>
+    physicsResidency.mode === "resident"
+      ? [physicsResidency.physicsBodyId]
+      : []);
+  if (new Set(residentPhysicsBodyIds).size !== residentPhysicsBodyIds.length) {
+    fail(contract, "colliders", "resident physicsBodyId must be globally unique");
   }
   return freeze({
     kind: "formal-collider-overlay-observation",

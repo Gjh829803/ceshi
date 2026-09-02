@@ -19,6 +19,7 @@ import {
   GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
 } from "./ground-safety-boundary-filter.js";
 import type {
+  BabylonNativeColliderChunkPartInventoryV1,
   BabylonNativeLiveColliderHandleV1,
 } from "./babylon-native-live-collider-registry.js";
 
@@ -59,6 +60,7 @@ export interface BabylonNativeColliderResidencyV1 {
   readonly chunkPolicyHash: Sha256HashV1;
   readonly partitionHash: Sha256HashV1;
   readonly parts: readonly BabylonNativeBlockCollisionChunkPartV1[];
+  partInventory(): readonly BabylonNativeColliderChunkPartInventoryV1[];
   activeHandles(): readonly BabylonNativeLiveColliderHandleV1[];
   metrics(): BabylonNativeColliderResidencyMetricsV1;
   /**
@@ -269,6 +271,24 @@ export function createBabylonNativeColliderResidencyV1(
     chunkPolicyHash: partition.chunkPolicyHash,
     partitionHash: partition.partitionHash,
     parts: Object.freeze(parts),
+    partInventory(): readonly BabylonNativeColliderChunkPartInventoryV1[] {
+      return Object.freeze(parts.map((part) => {
+        const collider = colliderById.get(part.logicalColliderId)!;
+        const sourceBlockId = input.sourceBlockIdByColliderId.get(collider.id);
+        return Object.freeze({
+          colliderId: collider.id,
+          chunkPartId: part.partId,
+          chunkResidencyGroupId: part.chunkResidencyGroupId,
+          runtimeRole: collider.runtimeRole,
+          colliderSubshapeId: collider.colliderSubshapeId,
+          ...(isNil(sourceBlockId) ? {} : { sourceBlockId }),
+          overlayRecordId: `overlay:${part.partId}`,
+          worldPositionsMetersXYZ: part.worldPositionsMetersXYZ,
+          triangleIndices: part.triangleIndices,
+          partHash: part.partHash,
+        });
+      }));
+    },
     activeHandles(): readonly BabylonNativeLiveColliderHandleV1[] {
       return Object.freeze([...residentByPartId.values()]
         .map(({ handle }) => handle)
@@ -324,13 +344,14 @@ export function createBabylonNativeColliderResidencyV1(
         }
       }
       let didChange = false;
-      for (const partId of [...residentByPartId.keys()].sort(stableCompare)) {
-        if (desiredPartIds.has(partId)) continue;
-        release(partId);
-        didChange = true;
-      }
       const activated: string[] = [];
+      const activationCountBefore = activationCount;
+      const releaseCountBefore = releaseCount;
+      const peakActivePartCountBefore = peakActivePartCount;
       try {
+        // Build the complete replacement ring before releasing any published
+        // resident part. If one new Havok resource fails, rollback can leave
+        // the prior registry and its live handles byte-for-byte valid.
         for (const part of parts) {
           if (
             !desiredPartIds.has(part.partId) ||
@@ -341,11 +362,26 @@ export function createBabylonNativeColliderResidencyV1(
           didChange = true;
         }
       } catch (error) {
-        // Fail closed: a partially activated ring is never published.
+        // Fail closed: a partially activated replacement ring is never
+        // published and the previously published ring remains live.
+        let cleanupFailure: unknown;
         for (let index = activated.length - 1; index >= 0; index -= 1) {
-          release(activated[index]!);
+          try {
+            release(activated[index]!);
+          } catch (cleanupError) {
+            cleanupFailure ??= cleanupError;
+          }
         }
+        activationCount = activationCountBefore;
+        releaseCount = releaseCountBefore;
+        peakActivePartCount = peakActivePartCountBefore;
+        if (!isNil(cleanupFailure)) throw cleanupFailure;
         throw error;
+      }
+      for (const partId of [...residentByPartId.keys()].sort(stableCompare)) {
+        if (desiredPartIds.has(partId)) continue;
+        release(partId);
+        didChange = true;
       }
       return didChange;
     },

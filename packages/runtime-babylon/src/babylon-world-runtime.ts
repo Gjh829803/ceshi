@@ -181,7 +181,6 @@ import {
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
   materializeBabylonNativeBlockVisualBatchesV1,
   peekBabylonNativeBlockLiveHandleRegistryV1,
-  type MaterializedBabylonNativeBlockVisualBatchesV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
 
 function residencyEvidence(
@@ -1197,8 +1196,6 @@ export class BabylonWorldRuntime {
       let nativeColliderResidency: BabylonNativeColliderResidencyV1 | undefined;
       let nativeColliderRegistry:
         BabylonNativeLiveColliderRegistryV1 | undefined;
-      let nativeVisualRealization:
-        MaterializedBabylonNativeBlockVisualBatchesV1 | undefined;
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
@@ -1310,10 +1307,11 @@ export class BabylonWorldRuntime {
           ({ spawnSubjectOriginPositionMetersXYZ }) =>
             spawnSubjectOriginPositionMetersXYZ,
         ));
-        nativeColliderRegistry = createBabylonNativeLiveColliderRegistryV1(
-          residency.activeHandles(),
-          residencyEvidence(residency),
-        );
+        nativeColliderRegistry = createBabylonNativeLiveColliderRegistryV1({
+          handles: residency.activeHandles(),
+          residency: residencyEvidence(residency),
+          parts: residency.partInventory(),
+        });
         registerBabylonNativeLiveColliderRegistryV1(
           scene,
           nativeColliderRegistry,
@@ -1342,7 +1340,6 @@ export class BabylonWorldRuntime {
               placements: nativeBlockMaterializerMetadata.blocks,
               liveHandles: visualRegistry,
             });
-          nativeVisualRealization = visualBatches;
           ownedDisposers.push(() => visualBatches.dispose());
         }
       }
@@ -3092,10 +3089,11 @@ export class BabylonWorldRuntime {
     if (!residency.update(positions)) return;
     const previous = this.nativeColliderRegistry;
     if (isNil(previous)) return;
-    const replacement = createBabylonNativeLiveColliderRegistryV1(
-      residency.activeHandles(),
-      residencyEvidence(residency),
-    );
+    const replacement = createBabylonNativeLiveColliderRegistryV1({
+      handles: residency.activeHandles(),
+      residency: residencyEvidence(residency),
+      parts: residency.partInventory(),
+    });
     replaceBabylonNativeLiveColliderRegistryV1(
       this.scene,
       previous,
