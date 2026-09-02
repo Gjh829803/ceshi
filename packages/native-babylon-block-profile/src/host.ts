@@ -20,6 +20,22 @@ export {
   freezeBabylonNativeBlockLogicalGroundModelV1,
 } from "./logical-ground-model.js";
 export {
+  buildBabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology.js";
+export type {
+  BabylonNativeBlockTopologyGeometryV1,
+  BabylonNativeBlockWalkableTopologyPolicyV1,
+  BabylonNativeBlockWalkableTopologyV1,
+  BuildBabylonNativeBlockWalkableTopologyInputV1,
+} from "./walkable-topology.js";
+export {
+  materializeBabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology-materializer.js";
+export type {
+  BabylonNativeBlockWalkableOverlayHandleV1,
+  MaterializedBabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology-materializer.js";
+export {
   analyzeBabylonNativeBlockGroundV1,
 } from "./ground-analysis.js";
 export type {

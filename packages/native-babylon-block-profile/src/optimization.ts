@@ -17,6 +17,11 @@ import type {
   BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
 
+type BabylonNativeBlockLayoutVolumeColliderV1 = Extract<
+  BabylonNativeBlockColliderCandidateInventoryEntryV1,
+  Readonly<{ proxyKind: "layout-block-volume" }>
+>;
+
 export interface BabylonNativeBlockOptimizationChunkPolicyV1 {
   readonly kind: "fixed-xz-grid";
   readonly sizeMetersXZ: readonly [number, number];
@@ -155,7 +160,7 @@ function validateInput(
   epoch: BabylonNativeBlockFinalizedEpochV1,
 ): Readonly<{
   blocks: readonly BabylonNativeBlockLayoutEntryV1[];
-  colliders: readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
+  colliders: readonly BabylonNativeBlockLayoutVolumeColliderV1[];
 }> {
   if (
     epoch.kind !== "babylon-native-block-finalized-epoch" ||
@@ -235,7 +240,10 @@ function validateInput(
     validateRatio(collider, "frictionRatio");
     validateRatio(collider, "restitutionRatio");
   }
-  return Object.freeze({ blocks, colliders });
+  return Object.freeze({
+    blocks,
+    colliders: colliders as readonly BabylonNativeBlockLayoutVolumeColliderV1[],
+  });
 }
 
 function createResidencyGroups(
@@ -353,7 +361,7 @@ function createThinGroups(
 }
 
 function colliderPartitionKey(
-  collider: BabylonNativeBlockColliderCandidateInventoryEntryV1,
+  collider: BabylonNativeBlockLayoutVolumeColliderV1,
   residencyGroupId: string,
 ): string {
   return sha256CanonicalJson({
@@ -372,9 +380,9 @@ function colliderPartitionKey(
 }
 
 function connectedComponents(
-  colliders: readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[],
+  colliders: readonly BabylonNativeBlockLayoutVolumeColliderV1[],
   blockById: ReadonlyMap<string, BabylonNativeBlockLayoutEntryV1>,
-): readonly (readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[])[] {
+): readonly (readonly BabylonNativeBlockLayoutVolumeColliderV1[])[] {
   const colliderByCell = new Map<string, string>();
   const colliderById = new Map(colliders.map((collider) =>
     [collider.colliderId, collider] as const));
@@ -400,12 +408,12 @@ function connectedComponents(
     }
   }
   const unseen = new Set(colliders.map(({ colliderId }) => colliderId));
-  const components: BabylonNativeBlockColliderCandidateInventoryEntryV1[][] = [];
+  const components: BabylonNativeBlockLayoutVolumeColliderV1[][] = [];
   while (unseen.size > 0) {
     const seed = [...unseen].sort(stableCompare)[0]!;
     const pending = [seed];
     unseen.delete(seed);
-    const component: BabylonNativeBlockColliderCandidateInventoryEntryV1[] = [];
+    const component: BabylonNativeBlockLayoutVolumeColliderV1[] = [];
     while (pending.length > 0) {
       const id = pending.shift()!;
       component.push(colliderById.get(id)!);
@@ -421,7 +429,7 @@ function connectedComponents(
 }
 
 function isExactRectangularPrism(
-  component: readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[],
+  component: readonly BabylonNativeBlockLayoutVolumeColliderV1[],
   blockById: ReadonlyMap<string, BabylonNativeBlockLayoutEntryV1>,
 ): boolean {
   const cells = new Set(component.flatMap((collider) =>
@@ -438,7 +446,7 @@ function isExactRectangularPrism(
 }
 
 function createColliderGroups(
-  colliders: readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[],
+  colliders: readonly BabylonNativeBlockLayoutVolumeColliderV1[],
   blocks: readonly BabylonNativeBlockLayoutEntryV1[],
   residencyByBlockId: ReadonlyMap<string, string>,
 ): Readonly<{
