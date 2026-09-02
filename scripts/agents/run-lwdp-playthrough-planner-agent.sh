@@ -10,6 +10,8 @@ episode_id=""
 episode_root=""
 recon_root=""
 backend="cloud"
+attempt="1"
+repair_report=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --scene-id) shift; scene_id="${1:-}" ;;
@@ -17,6 +19,8 @@ while [[ $# -gt 0 ]]; do
     --episode-root) shift; episode_root="${1:-}" ;;
     --recon-root) shift; recon_root="${1:-}" ;;
     --backend) shift; backend="${1:-}" ;;
+    --attempt) shift; attempt="${1:-}" ;;
+    --repair-report) shift; repair_report="${1:-}" ;;
     *) echo "Unsupported option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -28,6 +32,7 @@ id_pattern='^[a-z0-9][a-z0-9-]{2,79}$'
   exit 2
 }
 [[ "$backend" == "cloud" || "$backend" == "local" ]] || exit 2
+[[ "$attempt" =~ ^[1-3]$ ]] || { echo "--attempt must be 1, 2, or 3." >&2; exit 2; }
 episode_root="$(cd "$(dirname "$episode_root")" && pwd)/$(basename "$episode_root")"
 recon_root="$(cd "$recon_root" && pwd)"
 scene_root="$project_root/artifacts/scenes/$scene_id"
@@ -53,6 +58,25 @@ for required in \
   }
 done
 
+repair_instruction=""
+repair_context=()
+repair_identity="initial"
+if [[ -n "$repair_report" ]]; then
+  repair_report="$(cd "$(dirname "$repair_report")" && pwd)/$(basename "$repair_report")"
+  [[ -f "$repair_report" && -s "$repair_report" && ! -L "$repair_report" ]] || {
+    echo "Capture repair report is missing or unsafe: $repair_report" >&2
+    exit 3
+  }
+  relative_repair_report="${repair_report#"$project_root"/}"
+  [[ "$relative_repair_report" != "$repair_report" ]] || {
+    echo "Capture repair report must be inside the repository." >&2
+    exit 3
+  }
+  repair_identity="$(shasum -a 256 "$repair_report" | cut -d ' ' -f 1 | cut -c1-20)"
+  repair_instruction="
+This is capture repair attempt $attempt. Read the prior plan supplied as repair input and $relative_repair_report. Keep passing segments stable. For every failing segment, use its measured stationary start and route outcome to replace the start/facing/waypoints and raw input timing with a clearly different, Host-admitted path that continues moving for the full 30 seconds. Do not merely rename ids or retry the same controls."
+fi
+
 unset LWDP_GENERATION_API_TOKEN LWDP_API_BASE LWDP_USER_ID
 export WORLDKIT_LWDP_ENV_FILE="$project_root/.codex-tmp/runtime-config/lwdp.env"
 [[ -s "$WORLDKIT_LWDP_ENV_FILE" && ! -L "$WORLDKIT_LWDP_ENV_FILE" ]] || {
@@ -71,6 +95,15 @@ mkdir -p "$temporary_root"
 task_tmp="$(mktemp -d "$temporary_root/playthrough-planner.XXXXXX")"
 trap 'case "$task_tmp" in "$temporary_root"/playthrough-planner.*) /bin/rm -rf -- "$task_tmp" ;; esac' EXIT
 instruction_file="$task_tmp/instruction.txt"
+if [[ -n "$repair_report" ]]; then
+  prior_plan_path="$task_tmp/prior-playthrough-plan.json"
+  /bin/cp -- "$plan_path" "$prior_plan_path"
+  relative_prior_plan_path="${prior_plan_path#"$project_root"/}"
+  repair_context=(
+    --context "$relative_prior_plan_path"
+    --context "$relative_repair_report"
+  )
+fi
 instruction="Use .codex/skills/worldkit-playthrough-planner/SKILL.md as the complete guide.
 
 Plan six independent 30-second wander captures for scene '$scene_id'. The Host already ran real Runtime reconnaissance and generated trusted navigation evidence. Read every declared context file and inspect every attached image before choosing the six start positions, local destinations, controls or camera views.
@@ -87,6 +120,7 @@ Every capture must keep naturally wandering for most of 30 seconds. Its first 2.
 Do not write seedancePromptEvents or propose visual events. All six captures receive styled opening frames and generate Seedance. Only captures 00, 02 and 04 receive Prompt Events: Gemini sees those three full videos together at 0.25fps plus their styled frames and creates five mutually different events in one call. Captures 01, 03 and 05 generate Seedance from the stable base visual without Prompt Events.
 
 After writing the output, run the Skill self-check against this scene and repair the same file until it passes. Do not write any other file.
+$repair_instruction
 "
 printf '%s\n' "$instruction" > "$instruction_file"
 
@@ -114,7 +148,7 @@ playthrough_input_material="$(shasum -a 256 \
   "$navigation_path" \
   "$public_root/world-plan.png")"
 playthrough_input_hash="$(printf '%s' "$playthrough_input_material" | shasum -a 256 | cut -c1-20)"
-task_id="playthrough-$episode_hash-$playthrough_input_hash"
+task_id="playthrough-$episode_hash-$playthrough_input_hash-r$attempt"
 echo "WORLDKIT_EPISODE_STAGE playthrough-planning"
 node scripts/agents/run-codex-task.mjs \
   --backend "$backend" \
@@ -122,8 +156,8 @@ node scripts/agents/run-codex-task.mjs \
   --task-id "$task_id" \
   --stage playthrough-planner \
   --job-name "WorldKit Playthrough Planner · $scene_id" \
-  --request-id "$episode_id-playthrough-plan-v5-$playthrough_input_hash" \
-  --output-s3-prefix "${cloud_root%/}/episodes/$episode_id/playthrough-plan-v5-$playthrough_input_hash" \
+  --request-id "$episode_id-playthrough-plan-v6-$playthrough_input_hash-$attempt-$repair_identity" \
+  --output-s3-prefix "${cloud_root%/}/episodes/$episode_id/playthrough-plan-v6-$playthrough_input_hash/$attempt-$repair_identity" \
   --instruction-file "$instruction_file" \
   --execution-profile formal \
   --timeout-seconds 1800 \
@@ -138,6 +172,7 @@ node scripts/agents/run-codex-task.mjs \
   --context "artifacts/scenes/$scene_id/triviews/whitebox-triview-manifest.json" \
   --context "$relative_recon_root/reconnaissance-report.json" \
   --context "$relative_episode_root/planning/navigation-evidence.json" \
+  "${repair_context[@]}" \
   "${asset_args[@]}" \
   --output "$relative_episode_root/planning/playthrough-plan.json::$plan_path::application/json"
 

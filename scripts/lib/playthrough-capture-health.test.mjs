@@ -51,28 +51,28 @@ test("rejects a Runtime Tick stall", () => {
     code === "CAPTURE_RUNTIME_STALLED"));
 });
 
-test("rejects more than ten consecutive seconds without Subject movement", () => {
+test("rejects more than five consecutive seconds without Subject movement", () => {
   const result = validatePlaythroughCaptureHealth({
     telemetrySamples: samplesWithStationaryWindow({
       startSeconds: 2,
-      endSeconds: 12.25,
+      endSeconds: 7.25,
     }),
   });
   assert.equal(result.ok, false);
   assert.ok(result.diagnostics.some(({ code }) =>
     code === "CAPTURE_SUBJECT_STATIONARY_TOO_LONG"));
-  assert.ok(result.metrics.maximumSubjectStationarySeconds > 10);
+  assert.ok(result.metrics.maximumSubjectStationarySeconds > 5);
 });
 
-test("accepts a purposeful stationary interval that does not exceed ten seconds", () => {
+test("accepts a purposeful stationary interval that does not exceed five seconds", () => {
   const result = validatePlaythroughCaptureHealth({
     telemetrySamples: samplesWithStationaryWindow({
       startSeconds: 2,
-      endSeconds: 12,
+      endSeconds: 7,
     }),
   });
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
-  assert.ok(result.metrics.maximumSubjectStationarySeconds <= 10);
+  assert.ok(result.metrics.maximumSubjectStationarySeconds <= 5);
 });
 
 test("rejects a ground Subject that keeps falling while Runtime Tick advances", () => {

@@ -4,7 +4,7 @@ const fatalRuntimePattern =
 export const PLAYTHROUGH_CAPTURE_HEALTH_POLICY =
   "runtime-and-continuous-motion-health-v2";
 
-const MAXIMUM_SUBJECT_STATIONARY_SECONDS = 10;
+const MAXIMUM_SUBJECT_STATIONARY_SECONDS = 5;
 const STATIONARY_SPEED_METERS_PER_SECOND = 0.05;
 const MAXIMUM_UNSUPPORTED_GROUND_SECONDS = 1.5;
 const MAXIMUM_UNINTENDED_GROUND_DROP_METERS = 3;
@@ -164,7 +164,7 @@ export function validatePlaythroughCaptureHealth(input) {
     diagnostics.push(diagnostic(
       "CAPTURE_SUBJECT_STATIONARY_TOO_LONG",
       "/telemetrySamples",
-      "The controlled Subject remained stationary for more than 10 consecutive seconds.",
+      "The controlled Subject remained stationary for more than 5 consecutive seconds.",
     ));
   }
   const maximumGroundDropMeters = initialGroundHeightMeters === null ||

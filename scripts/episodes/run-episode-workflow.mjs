@@ -785,13 +785,38 @@ try {
     await stage("whitebox-capture",
       () => hasCompleteWhiteboxCapture(whiteboxRoot, planPath),
       () => withRuntimeSlot(`whitebox-capture:${episodeId}`, () =>
-        retryOperation("whitebox-capture", 3, async () => {
-          await run("pnpm", ["exec", "tsx", "scripts/episodes/run-playthrough-capture.ts",
-            "--scene-id", sceneId, "--origin", origin, "--play-path", "/play",
-            "--plan", planPath, "--navigation-evidence", navigationPath,
-            "--output", whiteboxRoot]);
-          if (!await hasCompleteWhiteboxCapture(whiteboxRoot, planPath)) {
-            throw new Error("EPISODE_WHITEBOX_CAPTURE_CLOSURE_FAILED");
+        retryOperation("whitebox-capture", 3, async (captureAttempt) => {
+          try {
+            await run("pnpm", ["exec", "tsx", "scripts/episodes/run-playthrough-capture.ts",
+              "--scene-id", sceneId, "--origin", origin, "--play-path", "/play",
+              "--plan", planPath, "--navigation-evidence", navigationPath,
+              "--output", whiteboxRoot]);
+            if (!await hasCompleteWhiteboxCapture(whiteboxRoot, planPath)) {
+              throw new Error("EPISODE_WHITEBOX_CAPTURE_CLOSURE_FAILED");
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            const qualityReportPath = path.join(
+              whiteboxRoot,
+              "executed-playthrough-quality-report.json",
+            );
+            if (
+              captureAttempt < 3 &&
+              /EPISODE_MINIMUM_CAPTURE_HEALTH_FAILED/.test(message) &&
+              await exists(qualityReportPath)
+            ) {
+              const repairAttempt = captureAttempt + 1;
+              writeOutput(
+                `WORLDKIT_EPISODE_PLAN_REPAIR attempt=${repairAttempt}/3 report=${qualityReportPath}\n`,
+              );
+              await run("bash", ["scripts/agents/run-lwdp-playthrough-planner-agent.sh",
+                "--scene-id", sceneId, "--episode-id", episodeId,
+                "--episode-root", episodeRoot, "--recon-root", reconRoot,
+                "--backend", backend, "--attempt", String(repairAttempt),
+                "--repair-report", qualityReportPath]);
+              throw new Error("EPISODE_CAPTURE_PLAN_REPAIRED_RETRY");
+            }
+            throw error;
           }
         })));
   } else if (executionPart === "render" &&

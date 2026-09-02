@@ -101,11 +101,16 @@ test("workflow keeps gameplay planning separate and directs Segment video plus s
   assert.ok(visualEvents < seedancePrompts);
   assert.match(workflow, /run-gemini-visual-event-director\.py/);
   assert.match(workflow, /visualEventPlanIsCurrent/);
+  assert.match(workflow, /WORLDKIT_EPISODE_PLAN_REPAIR/);
+  assert.match(workflow, /--repair-report/);
   assert.match(launcher, /Do not write seedancePromptEvents or propose visual events/);
   assert.match(launcher, /six independent 30-second wander captures/);
   assert.match(launcher, /captures 00, 02 and 04/);
+  assert.match(launcher, /playthrough-plan-v6/);
+  assert.match(launcher, /prior-playthrough-plan\.json/);
   assert.match(skill, /six independent 30-second player captures/i);
   assert.match(skill, /no required 180–360 degree orbit/);
+  assert.match(skill, /more than five consecutive seconds/);
   assert.match(contract, /exactly six entries in Segment order/);
   assert.doesNotMatch(contract, /seedancePromptEvents\?:/);
   assert.match(director, /mime_type="video\/mp4"/);

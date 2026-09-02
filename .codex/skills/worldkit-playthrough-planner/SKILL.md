@@ -31,10 +31,16 @@ its 30 seconds:
   Space, an idle pause, or a camera-only action;
 - use sustained W/W+Shift travel and scene-grounded W+A/W+D arcs;
 - keep pauses short and purposeful; do not stop after reaching one viewpoint;
+- the Host rejects any capture with more than five consecutive seconds below
+  0.05 m/s, including movement input held against a wall; budget enough clear
+  route length for the full 30 seconds and change course before a boundary;
 - include A, D, Shift and Space where natural, and purposeful short S actions across
   at least three of the six captures;
 - avoid repeated W/S or A/D patrol macros, rapid taps, collisions and long blind
   holds into walls;
+- raw keys are open-loop input, not waypoint following: align initial facing and
+  A/D timing with the measured route, and do not assume a listed waypoint will
+  steer the Subject automatically;
 - use the evidence to pick a nearby destination and safe local route, but do not
   optimize for exact endpoint closure;
 - vary the six paths, speeds and viewpoints instead of copying one control pattern.
@@ -69,3 +75,8 @@ Prompt Events.
 Run the bundled self-check against the exact navigation evidence and repair only the
 plan until it prints `WORLDKIT_PLAYTHROUGH_PLAN_OK`. Do not edit contracts, world
 files, media or other outputs, and do not delegate or create another task.
+
+When the Host provides an executed capture-quality report, treat it as a repair
+request. Preserve every passing segment unless its start must change for uniqueness;
+replace each failing segment's start, facing, route and input timing so its known
+stationary window cannot recur. The repaired plan must still satisfy every rule above.
