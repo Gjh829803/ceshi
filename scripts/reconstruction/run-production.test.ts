@@ -121,6 +121,7 @@ async function fixture(): Promise<ProductionFixtureV1> {
   );
   await mkdir(path.dirname(caseRoot), { recursive: true });
   await cp(REAL_CASE_ROOT, caseRoot, { recursive: true });
+  await rm(path.join(caseRoot, "runs"), { recursive: true, force: true });
   const hostClosureRoot = path.join(
     repositoryRoot,
     "apps",
