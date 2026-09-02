@@ -1,6 +1,7 @@
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   hashFormalColliderOverlayObservationV1,
+  hashFormalOpeningObservationV1,
   hashFormalWorldCaptureRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
@@ -12,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorldReconstructionEvidenceSetV1,
   projectOpeningCompositionDistancesV1,
+  projectColliderEvidenceRoleV1,
   projectMeasuredTraversalCheck,
 } from "./evaluate-evidence-set.js";
 import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support.js";
@@ -75,6 +77,16 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("derives step evidence from the selected trusted Block shape", () => {
+    expect(projectColliderEvidenceRoleV1({
+      kind: "static-surface",
+      surfaceEntityId: "step-surface",
+      logicalSubshapeId: "step-top",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+    }, "step")).toBe("step");
+  });
+
   it("canonicalizes adjacent opening distance pairs independently of depth order", () => {
     expect(projectOpeningCompositionDistancesV1([
       {
@@ -178,6 +190,32 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       fixture.scriptedTraversalObservation.resetReadySnapshot.worldSessionId,
     ).not.toBe(fixture.captureReceipt.readySnapshot.worldSessionId);
     expect(() => buildWorldReconstructionEvidenceSetV1(fixture)).not.toThrow();
+  });
+
+  it("projects a measured missing topology relation for evaluator diagnostics", () => {
+    const fixture = createEvidenceSetFixtureInputV1();
+    const opening = parseFormalOpeningObservationV1({
+      ...fixture.openingObservation,
+      observedTopologyRelations: [],
+    });
+    const receipt = parseFormalWorldCaptureReceiptV1({
+      ...fixture.captureReceipt,
+      openingObservationContentHash: hashFormalOpeningObservationV1(opening),
+    });
+
+    const evidence = buildWorldReconstructionEvidenceSetV1({
+      ...fixture,
+      captureReceipt: receipt,
+      openingObservation: opening,
+    });
+    const topology = evidence.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "topology",
+    );
+
+    expect(topology?.observed).toMatchObject({
+      kind: "topology-observed",
+      relations: [],
+    });
   });
 
   it("derives collider roles from Frozen Contribution traversalBinding, not paletteRole or shape", () => {
