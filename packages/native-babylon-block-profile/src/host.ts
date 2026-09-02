@@ -16,3 +16,14 @@ export {
 export type {
   BabylonNativeBlockLiveHandleRegistryV1,
 } from "./live-handle-registry.js";
+export {
+  freezeBabylonNativeBlockLogicalGroundModelV1,
+} from "./logical-ground-model.js";
+export type {
+  BabylonNativeBlockLogicalColliderGroupV1,
+  BabylonNativeBlockLogicalGroundIdentityV1,
+  BabylonNativeBlockLogicalGroundModelV1,
+  BabylonNativeBlockLogicalSolidOccupancyCellV1,
+  BabylonNativeBlockLogicalSupportTopCellV1,
+  FreezeBabylonNativeBlockLogicalGroundModelInputV1,
+} from "./logical-ground-model.js";
