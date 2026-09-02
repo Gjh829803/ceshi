@@ -102,6 +102,9 @@ import {
   type BabylonWorldRuntimeOptions,
 } from "./index";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
+import {
+  peekBabylonNativeLiveColliderRegistryV1,
+} from "./babylon-native-live-collider-registry";
 import { CameraComponentV1 } from "./camera-component";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import {
@@ -117,6 +120,8 @@ import { projectBabylonWorldRuntimeSnapshotV4 } from "./world-runtime-snapshot";
 import {
   GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
 } from "./ground-safety-boundary-filter";
+import { BABYLON_TRAVERSAL_RUNTIME_INTERNAL } from
+  "./traversal-runtime-internal";
 
 const loadAssetContainerImplementation = vi
   .mocked(LoadAssetContainerAsync)
@@ -1006,6 +1011,103 @@ function packageFixtureNativeModule(
         frictionRatio: 0.8,
         restitutionRatio: 0,
       });
+    },
+  });
+}
+
+const FAR_SEPARATED_GROUND_INDICES = Object.freeze([
+  0, 1, 2,
+  0, 2, 3,
+]);
+
+function farSeparatedGroundPositions(
+  centerXMeters: number,
+): readonly number[] {
+  return Object.freeze([
+    centerXMeters - 10, 0, -10,
+    centerXMeters + 10, 0, -10,
+    centerXMeters + 10, 0, 10,
+    centerXMeters - 10, 0, 10,
+  ]);
+}
+
+function farSeparatedNativeGroundFixture(): Readonly<{
+  module: BabylonNativeSceneModuleV1;
+  worldPackageInput: ReturnType<
+    typeof createBabylonNativeWorldPackageTestInputV1
+  >;
+}> {
+  const base = createBabylonNativeWorldPackageTestInputV1();
+  const surfaceProfileRef =
+    "worldkit://traversal-surface-profile/ground.static@1";
+  const colliders = [
+    { id: "ground-far", centerXMeters: 120 },
+    { id: "ground-spawn", centerXMeters: 0 },
+  ].map(({ id, centerXMeters }) =>
+    createBabylonNativeStaticColliderContributionV1({
+      id,
+      runtimeRole: "scene-static-collider",
+      worldPositionsMetersXYZ: farSeparatedGroundPositions(centerXMeters),
+      triangleIndices: FAR_SEPARATED_GROUND_INDICES,
+      frictionRatio: 0.8,
+      restitutionRatio: 0,
+      traversalBinding: {
+        kind: "static-surface",
+        surfaceEntityId: `${id}-surface`,
+        logicalSubshapeId: "top",
+        traversalSurfaceProfileRef: surfaceProfileRef,
+      },
+    }));
+  const contribution = Object.freeze({
+    ...base.nativeSceneContribution,
+    staticColliders: Object.freeze(colliders),
+  });
+  const module = Object.freeze({
+    kind: "babylon-native-scene-module",
+    id: "package-fixture-module",
+    build(
+      context: Parameters<BabylonNativeSceneModuleV1["build"]>[0],
+    ) {
+      context.registration.registerSpawnMarker({
+        id: "player-spawn",
+        positionMetersXYZ: [0, 0, 0],
+        facingRadians: 0,
+      });
+      for (const { id, centerXMeters } of [
+        { id: "ground-far", centerXMeters: 120 },
+        { id: "ground-spawn", centerXMeters: 0 },
+      ] as const) {
+        const mesh = new Mesh(id, context.scene);
+        mesh.setVerticesData(
+          VertexBuffer.PositionKind,
+          [...farSeparatedGroundPositions(centerXMeters)],
+        );
+        mesh.setIndices([...FAR_SEPARATED_GROUND_INDICES]);
+        context.registration.registerStaticCollider({
+          id,
+          mesh,
+          traversalBinding: {
+            kind: "static-surface",
+            surfaceEntityId: `${id}-surface`,
+            logicalSubshapeId: "top",
+            traversalSurfaceProfileRef: surfaceProfileRef,
+          },
+          frictionRatio: 0.8,
+          restitutionRatio: 0,
+        });
+      }
+    },
+  }) satisfies BabylonNativeSceneModuleV1;
+  return Object.freeze({
+    module,
+    worldPackageInput: {
+      ...base,
+      worldBounds: {
+        centerMetersXZ: [60, 0],
+        sizeMetersXZ: [140, 40],
+        heightRangeMeters: [-5, 20],
+      },
+      nativeSceneContribution: contribution,
     },
   });
 }
@@ -1998,6 +2100,44 @@ describe("BabylonWorldRuntime", () => {
       await runtime.dispose();
     }
   }, 15_000);
+
+  it("restores the target physics Chunk ring before traversal teleport and reset support", async () => {
+    const fixture = farSeparatedNativeGroundFixture();
+    const runtime = await createVerifiedNativeRuntime(fixture.module, {
+      worldPackageInput: fixture.worldPackageInput,
+    });
+    const scene = (runtime as unknown as { scene: Scene }).scene;
+    const traversal = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
+    try {
+      expect(nativeColliderChunkPartMeshes(scene, "ground-spawn").length)
+        .toBeGreaterThan(0);
+      expect(nativeColliderChunkPartMeshes(scene, "ground-far")).toHaveLength(0);
+
+      traversal.resetToTraversalAnchor({
+        traversingEntityId: "player",
+        subjectOriginPositionMetersXYZ: [120, 0, 0],
+        facingYawRadians: 0,
+      });
+      expect(runtime.snapshot().subjectStatesByEntityId.player).toMatchObject({
+        positionMetersXYZ: [120, 0, 0],
+        movementMedium: "ground",
+      });
+      expect(nativeColliderChunkPartMeshes(scene, "ground-spawn")).toHaveLength(0);
+      expect(nativeColliderChunkPartMeshes(scene, "ground-far").length)
+        .toBeGreaterThan(0);
+
+      expect(runtime.reset().subjectStatesByEntityId.player).toMatchObject({
+        positionMetersXYZ: [0, 0, 0],
+        movementMedium: "ground",
+      });
+      expect(nativeColliderChunkPartMeshes(scene, "ground-spawn").length)
+        .toBeGreaterThan(0);
+      expect(nativeColliderChunkPartMeshes(scene, "ground-far")).toHaveLength(0);
+    } finally {
+      await runtime.dispose();
+    }
+    expect(peekBabylonNativeLiveColliderRegistryV1(scene)).toBeUndefined();
+  }, 20_000);
 
   it("fails a Native Module loader before Engine allocation", async () => {
     const engineFactory = vi.fn(() => new NullEngine());

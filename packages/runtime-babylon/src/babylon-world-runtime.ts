@@ -1196,6 +1196,7 @@ export class BabylonWorldRuntime {
       let nativeColliderResidency: BabylonNativeColliderResidencyV1 | undefined;
       let nativeColliderRegistry:
         BabylonNativeLiveColliderRegistryV1 | undefined;
+      let runtime: BabylonWorldRuntime | undefined;
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
@@ -1317,10 +1318,12 @@ export class BabylonWorldRuntime {
           nativeColliderRegistry,
         );
         ownedDisposers.push(() => {
-          if (isNil(nativeColliderRegistry)) return;
+          const currentRegistry = runtime?.nativeColliderRegistry ??
+            nativeColliderRegistry;
+          if (isNil(currentRegistry)) return;
           unregisterBabylonNativeLiveColliderRegistryV1(
             scene,
-            nativeColliderRegistry,
+            currentRegistry,
           );
         });
         if (!isNil(nativeBlockMaterializerMetadata)) {
@@ -1360,8 +1363,6 @@ export class BabylonWorldRuntime {
         scene,
         cameraGeometryQuery,
       ));
-      let runtime: BabylonWorldRuntime | undefined;
-
       options.onInitializationStage?.("subjects");
       const subjectAssetCache = new SubjectAssetCacheV1(
         scene,
@@ -3080,12 +3081,18 @@ export class BabylonWorldRuntime {
    * must never cull rendering.
    */
   private updateNativeColliderResidencyBeforeTick(): void {
-    const residency = this.nativeColliderResidency;
-    if (isNil(residency)) return;
     const positions = this.runtimeSubjects.map((subject) => {
       const origin = this.controllerFor(subject.entityId).subjectOrigin;
       return [origin.x, origin.y, origin.z] as const;
     });
+    this.updateNativeColliderResidencyForPositions(positions);
+  }
+
+  private updateNativeColliderResidencyForPositions(
+    positions: readonly RuntimeVec3V1[],
+  ): void {
+    const residency = this.nativeColliderResidency;
+    if (isNil(residency)) return;
     if (!residency.update(positions)) return;
     const previous = this.nativeColliderRegistry;
     if (isNil(previous)) return;
@@ -3167,6 +3174,12 @@ export class BabylonWorldRuntime {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
     this.legacyControllerFor(input.traversingEntityId);
+    this.updateNativeColliderResidencyForPositions(
+      this.runtimeSubjects.map((subject) =>
+        subject.entityId === input.traversingEntityId
+          ? input.subjectOriginPositionMetersXYZ
+          : subject.spawnSubjectOriginPositionMetersXYZ),
+    );
     this.traversalConfigurationEpoch += 1;
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
@@ -3509,6 +3522,10 @@ export class BabylonWorldRuntime {
         "3C_TICK_TOKEN_STALE: cannot reset while a Golden Runtime Tick is prepared.",
       );
     }
+    this.updateNativeColliderResidencyForPositions(
+      this.runtimeSubjects.map(({ spawnSubjectOriginPositionMetersXYZ }) =>
+        spawnSubjectOriginPositionMetersXYZ),
+    );
     this.traversalConfigurationEpoch += 1;
     for (const mounted of Object.values(
       this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
