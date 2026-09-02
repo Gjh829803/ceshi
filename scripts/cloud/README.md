@@ -114,13 +114,14 @@ worker-local `5297` asset origin; Studio listens only on loopback `4297` inside
 the disposable pod. Large videos and the ZIP are served to Studio through
 short-lived S3 URLs so Browser Range playback never hydrates them locally.
 The production config owns the optional Kubernetes `nodeSelector` and
-`tolerations`; the current cluster selects the scale-to-zero Karpenter
-compatible Karpenter pools through only `workload-type=ray-gpu`, and tolerates
-the GPU and Ray taints shared by those pools. Capacity type, AZ/FSx zone and
-image cache are intentionally not pinned because Episode production is S3-only:
-Karpenter may choose primary/fallback and Spot/On-Demand capacity according to
-availability. Do not hard-code a synthetic `workload-type=gpu` label in the
-Worker manifest.
+`tolerations`. Production currently leaves `nodeSelector` empty: the required
+`nvidia.com/gpu: 1` resource is the authoritative hardware constraint, while the
+GPU and Ray tolerations keep the scale-to-zero Karpenter pools eligible. This
+also lets Kubernetes use an already-running, untainted GPU node instead of
+leaving capture pending when no node carries a project-specific workload label.
+Capacity type, AZ/FSx zone and image cache remain intentionally unpinned because
+Episode production is S3-only. Do not hard-code a synthetic workload label in
+the Worker manifest.
 
 `config/cloud-episode-production.json` is enabled only with a built and pushed
 digest-pinned image. The image contains Chromium/Playwright, ffmpeg, Python

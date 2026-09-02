@@ -26,9 +26,7 @@
     "ephemeralStorageRequest": "16Gi",
     "ephemeralStorageLimit": "32Gi"
   },
-  "nodeSelector": {
-    "workload-type": "ray-gpu"
-  },
+  "nodeSelector": {},
   "tolerations": [
     {
       "key": "nvidia.com/gpu",
