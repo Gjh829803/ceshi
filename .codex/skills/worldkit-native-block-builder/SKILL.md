@@ -52,6 +52,7 @@ Before returning, verify this closure:
 
 - every `context/case.json` required Collider ID appears exactly once in `session.finalize().staticColliders`;
 - each required Collider selects one explicit Block in its corresponding acceptance visual group, including Spawn/support, step, and blocker roles;
+- each Collider selection uses only `id`, `blockId`, `traversalBinding`, and the optional friction/restitution ratios; never add `role` (the Host derives step from the selected checked Block shape and blocker from the binding);
 - the final Collider rows remain one-row-per-Collider, deterministic, and below the frozen budget; and
 - no Capture bounds, planes, Package fields, receipts, or extra outputs were authored.
 
