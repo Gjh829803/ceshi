@@ -86,7 +86,7 @@ Read the frozen scene-brief.md created by the unified WorldKit Planner and the a
   }
 }
 
-Use the current contracts supplied in repository context. worldBounds has exactly the three fields shown above, every tuple is a dense two-number array, both size values are greater than zero, and heightRangeMeters[0] is less than heightRangeMeters[1]. The proposal owns semantic topology and measurable intent, not quality thresholds or hashes. Use 3-7 complete visual groups with stable lowercase IDs. Every visual group must have one semantic silhouette target and one Formal Capture semantic binding. Keep target, region, anchor, node, collider, checkpoint, and acceptance identities bijective and internally closed. Include a ground/step Collider for Spawn support. Every pass/block traversal check must have a physically reachable supported approach using only its declared fixed input. Formal Capture topology relations must use package-bounds or scripted-traversal exactly as the contract permits. Use a 1280x720 capture profile. Sort every collection where the parser requires stable order.
+Use the current contracts supplied in repository context. worldBounds has exactly the three fields shown above, every tuple is a dense two-number array, both size values are greater than zero, and heightRangeMeters[0] is less than heightRangeMeters[1]. Never use minimumMetersXYZ or maximumMetersXYZ for worldBounds; those fields belong only to downstream Formal Capture spatial bounds. The proposal owns semantic topology and measurable intent, not quality thresholds or hashes. Use 3-7 complete visual groups with stable lowercase IDs. Every visual group must have one semantic silhouette target and one Formal Capture semantic binding. Keep target, region, anchor, node, collider, checkpoint, and acceptance identities bijective and internally closed. Include a ground/step Collider for Spawn support. Every pass/block traversal check must have a physically reachable supported approach using only its declared fixed input. Formal Capture topology relations must use package-bounds or scripted-traversal exactly as the contract permits. Use a 1280x720 capture profile. Sort every collection where the parser requires stable order.
 
 The Host will reject malformed output and will add hashes, fixed cross-case quality thresholds, resource identities, and all Runtime owners. Never copy the sample scene's geometry or target names; use it only to understand the current contract shape. Do not create or modify Scene Brief, Babylon code, physics, Package, Receipt, Runtime, Capture, or any Planner image.`;
 }
@@ -231,6 +231,7 @@ async function main(): Promise<void> {
         "--context", "packages/runtime-contracts/src/formal-world-capture.ts",
         "--context", "packages/world-package/src/package-contract.ts",
         "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/case.json",
+        "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json",
         "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json",
         "--asset", `world-plan::${worldPlanPath}::image::image/png`,
         "--asset", `entry-whitebox-target::${entryTargetPath}::image::image/png`,

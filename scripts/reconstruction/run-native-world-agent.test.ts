@@ -36,6 +36,12 @@ describe("Native-default world agent Host route", () => {
     expect(source).toContain(
       '"--context", "packages/world-package/src/package-contract.ts"',
     );
+    expect(source).toContain(
+      '"--context", "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json"',
+    );
+    expect(source).toContain(
+      "Never use minimumMetersXYZ or maximumMetersXYZ for worldBounds",
+    );
   });
 
   it("assembles Case planning and the formal reconstruction transaction", () => {
