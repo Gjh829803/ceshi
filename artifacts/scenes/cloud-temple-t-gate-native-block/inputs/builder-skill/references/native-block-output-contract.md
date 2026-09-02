@@ -74,6 +74,8 @@ Keep coordinate helpers, computed constants, collider arrays, loops, and all cha
 
 The Host typechecks with strict indexed access. An expression such as `cells[index]` therefore has an `undefined` possibility even when the loop bounds appear correct. Prefer `for (const [xMeters, zMeters] of cells)` when every row is consumed. When numeric indexing is required, assign the row first and check the indexed value for `undefined` before destructuring it. Do not use an unchecked tuple destructure from `array[index]`, and do not suppress the check with a type assertion merely to pass admission.
 
+`as const` also preserves numeric tuple members as literal unions. When a mutable range loop begins at a destructured literal bound and later compares or increments through values outside that inferred union, widen the loop variable explicitly: `for (let xMeters: number = minimumX; xMeters <= maximumX; xMeters += 1)`. Do not leave it inferred from `minimumX`, because strict Host TypeScript correctly rejects comparisons such as `xMeters === 0` when the inferred union contains only negative literals.
+
 ## Fixed Block Profile
 
 Use only shapes `full`, `half`, `quarter`, `small`, and `step`. Their unrotated `[x, y, z]` sizes in meters are:

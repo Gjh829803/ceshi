@@ -7,6 +7,7 @@ import {
   hashSceneAuthoringAttemptV1,
   hashSceneAuthoringRouteDecisionV1,
   parseSceneAuthoringRouteDecisionV1,
+  parseSceneAuthoringAttemptResultV1,
   type NativeBlockGenerationBudgetV1,
   type NativeBlockGenerationRequestV1,
   type SceneAuthoringAttemptV1,
@@ -42,6 +43,25 @@ import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
   "../native-scene/admission-budget.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
+const REPAIR_CONTEXT_RELATIVE_PATHS = Object.freeze([
+  "attempts/0/source/scene.ts",
+  "attempts/0/source/native-block-authoring.json",
+  "attempts/0/source/native-resources.json",
+  "attempts/0/generation-request.json",
+  "attempts/0/attempt-result.json",
+  "attempts/0/evaluation.json",
+  "attempts/0/capture/opening.png",
+  "attempts/0/capture/opening-observation.json",
+  "attempts/0/capture/collider-overlay.png",
+  "attempts/0/capture/collider-overlay-observation.json",
+  "attempts/0/capture/spawn-support-observation.json",
+  "attempts/0/capture/scripted-traversal.json",
+] as const);
+const REPAIR_TASK_PROTOCOL = `Repair attempt protocol:
+- Begin from the immutable prior source at inputs/attempts/0/source/scene.ts, inputs/attempts/0/source/native-block-authoring.json, and inputs/attempts/0/source/native-resources.json.
+- Read inputs/attempts/0/evaluation.json and the identity-bound evidence under inputs/attempts/0/capture/ before editing.
+- Inspect inputs/attempts/0/capture/opening.png and inputs/attempts/0/capture/collider-overlay.png for the visual and collider diagnostics.
+- Write a complete revised replacement only to the three declared output paths. Never mutate the prior source, evidence, frozen owners, or thresholds.`;
 
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 = Object.freeze({
@@ -551,6 +571,51 @@ export async function prepareNativeBlockGenerationTaskV1(
     throw new TypeError("Generation runId must match the run directory name.");
   }
   relativeWithin(caseRoot.requestedPath, requestedRunDirectoryPath, "Generation run directory");
+  const repairContextFiles = repairInstruction === undefined
+    ? []
+    : await (async () => {
+      const runRoot = await canonicalRoot(
+        requestedRunDirectoryPath,
+        "Generation repair run root",
+      );
+      return Promise.all(REPAIR_CONTEXT_RELATIVE_PATHS.map((relativePath) =>
+        freezeFile(runRoot, path.join(runRoot.requestedPath, relativePath))
+      ));
+    })();
+  if (repairInstruction !== undefined) {
+    const repairContextByPath = new Map(
+      repairContextFiles.map((file) => [file.relativePath, file] as const),
+    );
+    const priorEvaluation = repairContextByPath.get(
+      "attempts/0/evaluation.json",
+    );
+    const priorGenerationRequest = repairContextByPath.get(
+      "attempts/0/generation-request.json",
+    );
+    const priorAttemptResultFile = repairContextByPath.get(
+      "attempts/0/attempt-result.json",
+    );
+    if (
+      priorEvaluation?.hash !== repairInstruction.priorEvaluationResultHash
+    ) {
+      throw new TypeError("Repair prior evaluation identity closure failed.");
+    }
+    if (
+      priorGenerationRequest?.hash !== repairInstruction.priorGenerationRequestHash
+    ) {
+      throw new TypeError("Repair prior generation identity closure failed.");
+    }
+    const priorAttemptResult = parseSceneAuthoringAttemptResultV1(
+      JSON.parse(new TextDecoder().decode(priorAttemptResultFile?.bytes)),
+    );
+    if (
+      priorAttemptResult.outcome !== "completed" ||
+      priorAttemptResult.authoredSourceRef !== repairInstruction.priorSourceRef ||
+      priorAttemptResult.authoredSourceHash !== repairInstruction.priorSourceHash
+    ) {
+      throw new TypeError("Repair prior source identity closure failed.");
+    }
+  }
   const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, gameplaySource, runtimeSource, registryLockSource, ...references] = await Promise.all([
     freezeFile(inputRoot, path.resolve(inputRoot.requestedPath, reconstructionCase.sceneBriefRef)),
     freezeFile(inputRoot, input.taskInstructionPath),
@@ -563,6 +628,17 @@ export async function prepareNativeBlockGenerationTaskV1(
     freezeFile(hostClosureRoot, path.join(hostClosureRoot.requestedPath, "registry-lock.json")),
     ...reconstructionCase.referenceInputs.map((reference) => freezeFile(inputRoot, path.resolve(inputRoot.requestedPath, reference.inputRef))),
   ]);
+  const effectiveTaskInstruction = repairInstruction === undefined
+    ? taskInstruction
+    : (() => {
+      const source = new TextDecoder().decode(taskInstruction.bytes).trimEnd();
+      const bytes = new TextEncoder().encode(`${source}\n\n${REPAIR_TASK_PROTOCOL}\n`);
+      return Object.freeze({
+        relativePath: taskInstruction.relativePath,
+        bytes,
+        hash: sha256Bytes(bytes) as Sha256HashV1,
+      });
+    })();
   if (sceneBrief.hash !== reconstructionCase.sceneBriefHash) throw new TypeError("Frozen Scene Brief bytes do not match the Case hash.");
   const gameplayBootstrap = parseGameplayBootstrapV1(
     JSON.parse(new TextDecoder().decode(gameplaySource.bytes)),
@@ -672,7 +748,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "references/native-block-output-contract.md")),
     freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "scripts/self-check.mjs")),
   ]) : [];
-  const taskInputFiles = [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, ...builderBundle, ...references];
+  const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, ...builderBundle, ...references, ...repairContextFiles];
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
   const repairInstructionFile = repairInstruction === undefined
     ? undefined
@@ -680,7 +756,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       "repair-instruction.json",
       new TextEncoder().encode(stringifyCanonicalJson(repairInstruction)),
     );
-  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, builderSkill, ...builderBundle]
+  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, builderSkill, ...builderBundle, ...repairContextFiles]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
     .concat([
       { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
@@ -700,7 +776,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     referenceInputs: reconstructionCase.referenceInputs.map((reference) => ({ ...reference })) as NativeBlockGenerationRequestV1["referenceInputs"],
     codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
     codexExecutionProfileHash: sha256CanonicalJson({ resourceRef: "worldkit://codex-execution-profile/formal@1", model: "gpt-5.6-sol", reasoningEffort: "xhigh" }) as Sha256HashV1,
-    taskInstructionRef: asRef(taskInstruction.relativePath), taskInstructionHash: taskInstruction.hash,
+    taskInstructionRef: asRef(effectiveTaskInstruction.relativePath), taskInstructionHash: effectiveTaskInstruction.hash,
     builderSkillRef: asRef(builderSkill.relativePath), builderSkillHash: builderSkill.hash,
     workspaceContextManifestRef: "context/workspace-context-manifest.json", workspaceContextManifestHash,
     contextInputs, nativeSceneApiRef: nativeSceneApiResolution.resourceRef, nativeSceneApiHash: nativeSceneApiResolution.contentHash,
