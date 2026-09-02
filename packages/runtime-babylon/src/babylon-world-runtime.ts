@@ -1296,6 +1296,7 @@ export class BabylonWorldRuntime {
           scene,
           chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
           colliders: nativeContribution.staticColliders,
+          requiresSourceBlockJoins: !isNil(nativeBlockMaterializerMetadata),
           sourceBlockIdsByColliderId,
           cameraGeometryQuery,
           applyColliderMetadata: (mesh, collider) =>
@@ -1311,6 +1312,7 @@ export class BabylonWorldRuntime {
         ));
         nativeColliderRegistry = createBabylonNativeLiveColliderRegistryV1({
           handles: residency.activeHandles(),
+          requiresSourceBlockJoins: !isNil(nativeBlockMaterializerMetadata),
           residency: residencyEvidence(residency),
           parts: residency.partInventory(),
         });
@@ -3099,6 +3101,7 @@ export class BabylonWorldRuntime {
     if (isNil(previous)) return;
     const replacement = createBabylonNativeLiveColliderRegistryV1({
       handles: residency.activeHandles(),
+      requiresSourceBlockJoins: previous.requiresSourceBlockJoins,
       residency: residencyEvidence(residency),
       parts: residency.partInventory(),
     });

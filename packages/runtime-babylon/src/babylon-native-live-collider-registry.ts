@@ -53,6 +53,7 @@ export interface BabylonNativeLiveColliderResidencyEvidenceV1 {
 export interface BabylonNativeLiveColliderRegistryV1 {
   readonly kind: "babylon-native-live-collider-registry";
   readonly schemaVersion: 1;
+  readonly requiresSourceBlockJoins: boolean;
   readonly residency: BabylonNativeLiveColliderResidencyEvidenceV1;
   /** Frozen all-Chunk inventory; it is geometry evidence, not live Havok state. */
   readonly parts: readonly BabylonNativeColliderChunkPartInventoryV1[];
@@ -90,9 +91,11 @@ function assertLiveHandle(
 function hasCanonicalSourceBlockIds(
   sourceBlockIds: readonly string[],
   runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1,
+  requiresSourceBlockJoins: boolean,
 ): boolean {
   if (
-    (runtimeRole === "scene-static-collider" && isEmpty(sourceBlockIds)) ||
+    (runtimeRole === "scene-static-collider" &&
+      requiresSourceBlockJoins && isEmpty(sourceBlockIds)) ||
     (runtimeRole === "ground-safety-boundary" && !isEmpty(sourceBlockIds))
   ) return false;
   return sourceBlockIds.every((sourceBlockId, index) =>
@@ -104,6 +107,7 @@ function hasCanonicalSourceBlockIds(
 export function createBabylonNativeLiveColliderRegistryV1(
   input: Readonly<{
     handles: readonly BabylonNativeLiveColliderHandleV1[];
+    requiresSourceBlockJoins: boolean;
     residency: BabylonNativeLiveColliderResidencyEvidenceV1;
     parts: readonly BabylonNativeColliderChunkPartInventoryV1[];
   }>,
@@ -115,6 +119,7 @@ export function createBabylonNativeLiveColliderRegistryV1(
       if (!hasCanonicalSourceBlockIds(
         handle.sourceBlockIds,
         handle.runtimeRole,
+        input.requiresSourceBlockJoins,
       )) {
         throw new TypeError(
           "WORLDKIT_NATIVE_LIVE_COLLIDER_REGISTRY_INVALID: sourceBlockIds must be sorted and unique",
@@ -153,7 +158,11 @@ export function createBabylonNativeLiveColliderRegistryV1(
       parts.length ||
     parts.some((part) =>
       !SHA256.test(part.partHash) ||
-      !hasCanonicalSourceBlockIds(part.sourceBlockIds, part.runtimeRole) ||
+      !hasCanonicalSourceBlockIds(
+        part.sourceBlockIds,
+        part.runtimeRole,
+        input.requiresSourceBlockJoins,
+      ) ||
       part.worldPositionsMetersXYZ.length < 9 ||
       part.worldPositionsMetersXYZ.length % 3 !== 0 ||
       part.triangleIndices.length === 0 ||
@@ -205,6 +214,7 @@ export function createBabylonNativeLiveColliderRegistryV1(
   return Object.freeze({
     kind: "babylon-native-live-collider-registry" as const,
     schemaVersion: 1 as const,
+    requiresSourceBlockJoins: input.requiresSourceBlockJoins,
     residency: Object.freeze({ ...input.residency }),
     parts: Object.freeze(parts),
     colliders: Object.freeze(colliders),

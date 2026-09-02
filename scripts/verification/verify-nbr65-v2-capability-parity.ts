@@ -175,10 +175,17 @@ const PASSED_CAPABILITIES = Object.freeze([
   },
   {
     capabilityId: "clear-day-whitebox-display",
-    disposition: "Runtime-owned neutral lighting and Profile-owned pastel materials",
-    owner: "runtime-babylon-and-native-profile-display-adapter",
+    disposition: "Profile-owned readable pastel Block materials",
+    owner: "native-babylon-block-profile-display-adapter",
     evidence: {
       "packages/native-babylon-block-profile/src/whitebox-display.test.ts": ["walkable whitebox display"],
+    },
+  },
+  {
+    capabilityId: "neutral-runtime-inspection-lighting",
+    disposition: "Runtime-owned neutral lighting when the Native Module authors no light",
+    owner: "runtime-babylon",
+    evidence: {
       "packages/runtime-babylon/src/runtime.test.ts": ["neutral inspection lighting"],
     },
   },
@@ -352,6 +359,7 @@ const CAPABILITY_GATE_ID_BY_CAPABILITY_ID = Object.freeze({
   "chunk-addressing-batching-and-residency": "chunk-realization",
   "ground-only-edge-protection": "runtime-ground",
   "clear-day-whitebox-display": "topology-display",
+  "neutral-runtime-inspection-lighting": "runtime-ground",
   "planner-lineage-and-complete-world-continuation": "planner-skill",
   "bounded-builder-repair": "reconstruction-host",
   "package-capture-and-evaluation": "reconstruction-host",

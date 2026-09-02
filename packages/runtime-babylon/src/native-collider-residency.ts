@@ -88,6 +88,12 @@ export interface CreateBabylonNativeColliderResidencyInputV1 {
   readonly scene: Scene;
   readonly chunkPolicy: BabylonNativeBlockChunkPolicyV1;
   readonly colliders: readonly BabylonNativeStaticColliderContributionV1[];
+  /**
+   * True only for the Native Block Profile, whose verified Package carries
+   * source Block joins. Other admitted Native Profiles have no Block
+   * inventory and must not be forced to invent one.
+   */
+  readonly requiresSourceBlockJoins: boolean;
   readonly sourceBlockIdsByColliderId:
     ReadonlyMap<string, readonly string[]>;
   readonly cameraGeometryQuery: BabylonNativeColliderResidencyCameraOwnerV1;
@@ -167,7 +173,7 @@ export function createBabylonNativeColliderResidencyV1(
       return [colliderId, Object.freeze(canonicalIds)] as const;
     }),
   );
-  if (input.colliders.some((collider) =>
+  if (input.requiresSourceBlockJoins && input.colliders.some((collider) =>
     collider.runtimeRole === "scene-static-collider" &&
     !sourceBlockIdsByColliderId.has(collider.id))) {
     throw new TypeError(

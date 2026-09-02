@@ -135,6 +135,7 @@ async function createFixture(input: Readonly<{
   quadCount?: number;
   colliders?: readonly BabylonNativeStaticColliderContributionV1[];
   failMetadataOnCall?: number;
+  requiresSourceBlockJoins?: boolean;
   withPhysics?: boolean;
 }> = {}): Promise<ResidencyFixtureV1> {
   const engine = new NullEngine({
@@ -155,11 +156,15 @@ async function createFixture(input: Readonly<{
   const cameraOwner = cameraOwnerProbe();
   let metadataCalls = 0;
   let failMetadataOnCall = input.failMetadataOnCall;
+  const requiresSourceBlockJoins = input.requiresSourceBlockJoins ?? true;
   const residency = createBabylonNativeColliderResidencyV1({
     scene,
     chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
     colliders: input.colliders ?? [deckCollider(input.quadCount ?? 200)],
-    sourceBlockIdsByColliderId: new Map([["deck", ["deck-block"]]]),
+    requiresSourceBlockJoins,
+    sourceBlockIdsByColliderId: requiresSourceBlockJoins
+      ? new Map([["deck", ["deck-block"]]])
+      : new Map(),
     cameraGeometryQuery: cameraOwner,
     applyColliderMetadata: (): void => {
       metadataCalls += 1;
@@ -437,6 +442,18 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
       expect(residency.metrics().logicalColliderCount).toBe(2);
     });
 
+  it("keeps a standard Native Profile resident without inventing Block joins",
+    async () => {
+      const { residency } = await createFixture({
+        quadCount: 8,
+        requiresSourceBlockJoins: false,
+      });
+      residency.update([[0, 0, 0]]);
+      expect(residency.activeHandles()).not.toHaveLength(0);
+      expect(residency.activeHandles().every(({ sourceBlockIds }) =>
+        sourceBlockIds.length === 0)).toBe(true);
+    });
+
   it("rejects a forged residency policy or empty Subject union", async () => {
     const { residency } = await createFixture({ quadCount: 8 });
     expect(() => residency.update([]))
@@ -451,6 +468,7 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
       scene,
       chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
       colliders: [deckCollider(8)],
+      requiresSourceBlockJoins: true,
       sourceBlockIdsByColliderId: new Map(),
       cameraGeometryQuery: cameraOwner,
       policy: Object.freeze({
@@ -463,6 +481,7 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
       scene,
       chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
       colliders: [groundBoundaryCollider()],
+      requiresSourceBlockJoins: true,
       sourceBlockIdsByColliderId: new Map([
         ["ground-boundary", ["forged-block"]],
       ]),
