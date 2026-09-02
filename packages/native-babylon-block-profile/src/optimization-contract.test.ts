@@ -147,14 +147,16 @@ function selection(
   blockId: string,
   traversalBinding: BabylonNativeTraversalBindingV1 = NOT_TRAVERSABLE,
   material: Readonly<{
+    exposedEdgePolicy?: "none" | "protect-ground-subject";
     frictionRatio?: number;
     restitutionRatio?: number;
   }> = {},
 ): BabylonNativeBlockStaticColliderSelectionV1 {
   return Object.freeze({
     id,
-    blockId,
+    colliderGeometrySource: Object.freeze({ kind: "block", blockId }),
     traversalBinding,
+    exposedEdgePolicy: material.exposedEdgePolicy ?? "none",
     ...(material.frictionRatio === undefined
       ? {}
       : { frictionRatio: material.frictionRatio }),
@@ -241,6 +243,7 @@ describe("BWB-6 profile optimization contract", () => {
           visualGroupIds: [],
           proxyKind: "layout-block-volume",
           traversalBinding: STATIC_SURFACE,
+          exposedEdgePolicy: "none",
           frictionRatio: 0.25,
           restitutionRatio: 0.5,
         },
@@ -320,6 +323,7 @@ describe("BWB-6 profile optimization contract", () => {
           visualGroupIds: ["wall-group"],
           proxyKind: "layout-block-volume",
           traversalBinding: NOT_TRAVERSABLE,
+          exposedEdgePolicy: "none",
           frictionRatio: 0.25,
           restitutionRatio: 0.5,
           minimumMetersXYZ: [-0.5, 0, -0.5],
@@ -444,6 +448,15 @@ describe("BWB-6 profile optimization contract", () => {
       ], [
         selection("collider-gap-a", "gap-a"),
         selection("collider-gap-b", "gap-b"),
+      ]),
+      createEpoch([
+        { id: "edge-a", centerMetersXYZ: [0, 0.5, 0] as const },
+        { id: "edge-b", centerMetersXYZ: [1, 0.5, 0] as const },
+      ], [
+        selection("collider-edge-a", "edge-a", STATIC_SURFACE),
+        selection("collider-edge-b", "edge-b", STATIC_SURFACE, {
+          exposedEdgePolicy: "protect-ground-subject",
+        }),
       ]),
     ];
     try {

@@ -502,8 +502,9 @@ function traversalBindingFor(
 function layoutSelections(recordValue: CorpusRecordV1) {
   return Object.freeze(recordValue.blocks.map((spec) => Object.freeze({
     id: `collider-${spec.id}`,
-    blockId: spec.id,
+    colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: spec.id }),
     traversalBinding: traversalBindingFor(recordValue, spec),
+    exposedEdgePolicy: "none" as const,
     frictionRatio: 0.8,
     restitutionRatio: 0,
   })));
@@ -569,10 +570,11 @@ export function materializeBabylonNativeBlockReconstructionCorpusCaseV1(
       ? session.finalize(Object.freeze({
         staticColliders: Object.freeze([Object.freeze({
           id: "collider-bind-ground",
-          blockId: "bind-ground",
+          colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "bind-ground" }),
           traversalBinding: Object.freeze({
             kind: "static-surface",
           }) as unknown as BabylonNativeTraversalBindingV1,
+          exposedEdgePolicy: "none",
         })]),
       }))
       : session.finalize(Object.freeze({

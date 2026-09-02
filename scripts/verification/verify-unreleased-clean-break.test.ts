@@ -572,6 +572,38 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(false);
   });
 
+  it("blocks the retired Native Block authoring mechanisms and Collider selection shape", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-native-block-authoring-");
+    const fixturePath = path.join(
+      fixtureRoot,
+      "packages",
+      "native-block-authoring.ts",
+    );
+    await writeFile(
+      fixturePath,
+      [
+        `import "${token(["block", "-world", "-three"])}";`,
+        `const manifest: ${token(["Block", "World", "Manifest", "V2"])} = value;`,
+        "session.finalize({ staticColliders: [{",
+        '  id: "ground-collider",',
+        '  blockId: "ground-block",',
+        '  traversalBinding: { kind: "not-traversable" },',
+        "}] });",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+    const result = family(
+      report,
+      "WORLDKIT_UNRELEASED_LEGACY_NATIVE_BLOCK_AUTHORING",
+    );
+    expect(result.matchCount).toBe(3);
+    expect(result.matchesByPath.map(({ path: matchedPath }) => matchedPath))
+      .toEqual(["packages/native-block-authoring.ts"]);
+    expect(report.ok).toBe(false);
+  });
+
   it("discovers nested superseded serialized contracts under generated artifacts", async () => {
     const fixtureRoot = await createFixtureRoot("clean-break-artifacts-");
     await mkdir(path.join(fixtureRoot, "artifacts", "generated"), { recursive: true });

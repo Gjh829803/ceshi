@@ -40,10 +40,10 @@ export default defineBabylonNativeScene({
     session.createBlock({id: "mountain", shape: "full", paletteRole: "background-mass", visualGroupId: "mountain-cliff-layers-group", centerMetersXYZ: [-4, -0.5, 2] });
     session.createBlock({id: "upper", shape: "full", paletteRole: "structure", visualGroupId: "upper-t-junction-group", centerMetersXYZ: [0, -0.5, 2] });
     session.finalize({ staticColliders: [
-      { id: "collider-central-steps", blockId: "central", traversalBinding: { kind: "static-surface", surfaceEntityId: "central-surface", logicalSubshapeId: "central-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" } },
-      { id: "collider-cliff-blockers", blockId: "mountain", traversalBinding: { kind: "not-traversable" } },
-      { id: "collider-foreground-ground", blockId: "foreground", traversalBinding: { kind: "static-surface", surfaceEntityId: "foreground-surface", logicalSubshapeId: "foreground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" } },
-      { id: "collider-gate-walls", blockId: "gate", traversalBinding: { kind: "not-traversable" } },
+      { id: "collider-central-steps", colliderGeometrySource: { kind: "block", blockId: "central" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "central-surface", logicalSubshapeId: "central-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
+      { id: "collider-cliff-blockers", colliderGeometrySource: { kind: "block", blockId: "mountain" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
+      { id: "collider-foreground-ground", colliderGeometrySource: { kind: "block", blockId: "foreground" }, traversalBinding: { kind: "static-surface", surfaceEntityId: "foreground-surface", logicalSubshapeId: "foreground-top", traversalSurfaceProfileRef: "worldkit://traversal-surface-profile/ground.static@1" }, exposedEdgePolicy: "none" },
+      { id: "collider-gate-walls", colliderGeometrySource: { kind: "block", blockId: "gate" }, traversalBinding: { kind: "not-traversable" }, exposedEdgePolicy: "none" },
     ] });
     context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, 18], facingRadians: 0 });
   },

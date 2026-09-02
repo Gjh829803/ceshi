@@ -84,6 +84,9 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
       ...(isNil(block.visualGroupId)
         ? {}
         : { visualGroupId: block.visualGroupId }),
+      ...(isNil(block.colliderGroupId)
+        ? {}
+        : { colliderGroupId: block.colliderGroupId }),
       centerMetersXYZ: block.centerMetersXYZ,
       rotationQuarterTurnsY: block.rotationQuarterTurnsY,
       sizeMetersXYZ: block.sizeMetersXYZ,

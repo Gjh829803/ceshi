@@ -148,6 +148,20 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     token(["BABYLON_NATIVE_BLOCK_", "MICRO_GRID_METERS_V1"]),
     token(["BABYLON_NATIVE_BLOCK_", "CENTER_LATTICE_METERS_V1"]),
   ];
+  const legacyNativeBlockMechanisms = [
+    token(["Block", "World", "Manifest", "V2"]),
+    token(["create", "Block", "World", "Manifest", "V2"]),
+    token(["block", "-world", "-three"]),
+    token(["block", "-world", "-compiler"]),
+    token(["hidden", "Foundation"]),
+  ];
+  const retiredNativeBlockColliderSelection = [
+    "\\bstaticColliders\\s*:\\s*",
+    "(?:Object\\.freeze\\s*\\(\\s*)?\\[\\s*",
+    "(?:Object\\.freeze\\s*\\(\\s*)?\\{",
+    "(?:(?!colliderGeometrySource)[\\s\\S]){0,320}?",
+    "\\bblockId\\s*:",
+  ].join("");
   const legacyNativeBlockTransitionPrefix = token([
     "structural",
     "HalfMeterTransition",
@@ -212,6 +226,17 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
       blocksCompletion: true,
       pattern: new RegExp(
         `(?:${alternatives(legacyNativeBlockGridSymbols)}|${escaped(legacyNativeBlockTransitionPrefix)}(?:Keys|Count)?)`,
+        "g",
+      ),
+    }),
+    Object.freeze({
+      familyId: "WORLDKIT_UNRELEASED_LEGACY_NATIVE_BLOCK_AUTHORING",
+      classification: "superseded-delete" as const,
+      blocksCompletion: true,
+      pathPattern: /^(?:packages|apps|scripts|examples|artifacts|assets|\.codex)\//,
+      excludedPathPattern: /(?:^|\/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$/,
+      pattern: new RegExp(
+        `(?:${alternatives(legacyNativeBlockMechanisms)}|${retiredNativeBlockColliderSelection})`,
         "g",
       ),
     }),

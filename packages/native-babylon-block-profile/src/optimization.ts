@@ -5,6 +5,7 @@ import { groupBy, isEqual } from "lodash-es";
 
 import type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
+  BabylonNativeBlockExposedEdgePolicyV1,
 } from "./collider-contribution.js";
 import type { BabylonNativeBlockLayoutEntryV1 } from "./layout.js";
 import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
@@ -55,6 +56,7 @@ export interface BabylonNativeBlockColliderCoalescingGroupV1 {
   readonly visualGroupIds: readonly string[];
   readonly proxyKind: "layout-block-volume";
   readonly traversalBinding: BabylonNativeTraversalBindingV1;
+  readonly exposedEdgePolicy: BabylonNativeBlockExposedEdgePolicyV1;
   readonly frictionRatio?: number;
   readonly restitutionRatio?: number;
   readonly minimumMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
@@ -185,7 +187,8 @@ function validateInput(
       return block === undefined ||
         recordInput.shape !== block.shape ||
         recordInput.paletteRole !== block.paletteRole ||
-        recordInput.visualGroupId !== block.visualGroupId;
+        recordInput.visualGroupId !== block.visualGroupId ||
+        recordInput.colliderGroupId !== block.colliderGroupId;
     })
   ) fail("checked Block identities must be unique and exactly joined");
 
@@ -216,6 +219,10 @@ function validateInput(
       typeof sourceBlockId !== "string" ||
       !blockIds.has(sourceBlockId) ||
       collider.proxyKind !== "layout-block-volume" ||
+      (collider.exposedEdgePolicy !== "none" &&
+        collider.exposedEdgePolicy !== "protect-ground-subject") ||
+      (collider.exposedEdgePolicy === "protect-ground-subject" &&
+        binding.kind !== "static-surface") ||
       colliderIds.has(collider.colliderId) ||
       colliderBlockIds.has(sourceBlockId) ||
       !bindingIsClosed ||
@@ -353,6 +360,7 @@ function colliderPartitionKey(
     residencyGroupId,
     proxyKind: collider.proxyKind,
     traversalBinding: collider.traversalBinding,
+    exposedEdgePolicy: collider.exposedEdgePolicy,
     frictionRatio: Object.hasOwn(collider, "frictionRatio")
       ? { kind: "present", value: collider.frictionRatio }
       : { kind: "absent" },
@@ -473,6 +481,7 @@ function createColliderGroups(
       visualGroupIds: [...first.visualGroupIds],
       proxyKind: first.proxyKind,
       traversalBinding: { ...first.traversalBinding },
+      exposedEdgePolicy: first.exposedEdgePolicy,
       ...(Object.hasOwn(first, "frictionRatio")
         ? { frictionRatio: first.frictionRatio }
         : {}),

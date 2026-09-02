@@ -67,7 +67,7 @@ function groundGridBody(blockId = "entry-ground-x1-y0-z0"): string {
     session.finalize({
       staticColliders: [{
         id: "entry-ground-collider",
-        blockId: ${JSON.stringify(blockId)},
+        colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: ${JSON.stringify(blockId)} }),
         traversalBinding: {
           kind: "static-surface",
           surfaceEntityId: "entry-ground-surface",
@@ -75,6 +75,7 @@ function groundGridBody(blockId = "entry-ground-x1-y0-z0"): string {
           traversalSurfaceProfileRef:
             "worldkit://traversal-surface-profile/ground.static@1",
         },
+        exposedEdgePolicy: "none",
       }],
     });
     context.registration.registerSpawnMarker({
