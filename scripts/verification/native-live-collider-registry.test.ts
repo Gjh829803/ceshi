@@ -61,7 +61,8 @@ function moduleFixture(): BabylonNativeSceneModuleV1 {
         id: "ground-block",
         shape: "full",
         paletteRole: "ground",
-      }).position.set(0, -0.5, 0);
+        centerMetersXYZ: [0, -0.5, 0],
+      });
       session.finalize({
         displayGapMeters: 0.04,
         staticColliders: [{

@@ -183,6 +183,8 @@ function recordsFixture(
         id: block.id,
         shape: block.shape,
         paletteRole: block.paletteRole,
+        centerMetersXYZ: block.centerMetersXYZ,
+        rotationQuarterTurnsY: block.rotationQuarterTurnsY,
         ...(block.visualGroupId === undefined
           ? {}
           : { visualGroupId: block.visualGroupId }),

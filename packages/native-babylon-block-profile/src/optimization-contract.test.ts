@@ -45,7 +45,7 @@ interface BlockFixture {
   readonly paletteRole?: PaletteRole;
   readonly visualGroupId?: string;
   readonly centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
-  readonly rotationQuarterTurnsY?: number;
+  readonly rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
 }
 
 interface EpochFixture {

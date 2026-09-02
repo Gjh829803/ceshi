@@ -56,7 +56,7 @@ function blockRecord(
     paletteRole: "ground" | "route" | "structure";
     visualGroupId?: string;
     positionMetersXYZ?: readonly [number, number, number];
-    rotationQuarterTurnsY?: number;
+    rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
   }>,
 ): BabylonNativeBlockSessionRecordV1 {
   const size = ({

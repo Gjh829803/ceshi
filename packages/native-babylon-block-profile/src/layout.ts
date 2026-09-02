@@ -14,6 +14,7 @@ import {
   effectiveBabylonNativeBlockSizeMetersXYZV1,
   type BabylonNativeBlockBoundsMetersV1,
   type BabylonNativeBlockPositionMetersXYZV1,
+  type BabylonNativeBlockRotationQuarterTurnsYV1,
   type BabylonNativeBlockShapeKindV1,
 } from "./shapes.js";
 import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
@@ -40,7 +41,7 @@ export interface BabylonNativeBlockLayoutEntryV1
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly visualGroupId?: string;
   readonly centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
-  readonly rotationQuarterTurnsY: number;
+  readonly rotationQuarterTurnsY: BabylonNativeBlockRotationQuarterTurnsYV1;
   readonly sizeMetersXYZ: readonly [number, number, number];
   readonly occupiedMicroCellKeys: readonly string[];
 }
@@ -178,7 +179,7 @@ function deriveEntry(
       vectorMatches(xAxis, basis.x) &&
       vectorMatches(yAxis, basis.y) &&
       vectorMatches(zAxis, basis.z),
-    );
+    ) as -1 | BabylonNativeBlockRotationQuarterTurnsYV1;
     if (
       rotationQuarterTurnsY < 0 ||
       !close(matrix.determinant(), 1)
