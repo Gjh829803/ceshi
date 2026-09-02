@@ -109,11 +109,15 @@ function sample(input: Readonly<{
   footMetersXYZ?: readonly [number, number, number];
   contacts: readonly CharacterSupportProjectionContactV1[];
 }>): CharacterSupportProjectionSampleV1 {
-  const foot = input.footMetersXYZ ?? [0, 0, 0];
+  const foot = input.footMetersXYZ ?? ([0, 0, 0] as const);
   return Object.freeze({
     supportState: "supported",
-    supportNormalWorldXYZ: input.supportNormalWorldXYZ ?? [0, 1, 0],
-    sampledControllerCenterMetersXYZ: [foot[0], foot[1] + 0.96, foot[2]],
+    supportNormalWorldXYZ: input.supportNormalWorldXYZ ?? ([0, 1, 0] as const),
+    sampledControllerCenterMetersXYZ: [
+      foot[0],
+      foot[1] + 0.96,
+      foot[2],
+    ] as const,
     sampledFootPositionMetersXYZ: foot,
     supportContacts: input.contacts,
     isSupportSurfaceDynamic: false,
@@ -131,8 +135,12 @@ function resolveRouteWalkable(
   return resolveRetainedSupportSurfaceV1({
     plan: planWithSurfaces(options.surfaces ?? [TERRAIN, STEP]),
     sample: sample({
-      supportNormalWorldXYZ: options.supportNormalWorldXYZ,
-      footMetersXYZ: options.footMetersXYZ,
+      ...(options.supportNormalWorldXYZ === undefined
+        ? {}
+        : { supportNormalWorldXYZ: options.supportNormalWorldXYZ }),
+      ...(options.footMetersXYZ === undefined
+        ? {}
+        : { footMetersXYZ: options.footMetersXYZ }),
       contacts,
     }),
     live: LIVE_LOCK,
