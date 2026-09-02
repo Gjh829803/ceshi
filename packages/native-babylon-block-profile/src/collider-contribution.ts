@@ -29,16 +29,30 @@ export interface BabylonNativeBlockStaticColliderSelectionV1 {
   readonly restitutionRatio?: number;
 }
 
-export interface BabylonNativeBlockColliderCandidateInventoryEntryV1 {
+interface BabylonNativeBlockColliderCandidateInventoryCommonV1 {
   readonly colliderId: string;
-  readonly sourceBlockIds: readonly [string];
+  readonly sourceBlockIds: readonly [string, ...string[]];
   readonly visualGroupIds: readonly string[];
-  readonly proxyKind: "layout-block-volume";
   readonly traversalBinding: BabylonNativeTraversalBindingV1;
   readonly exposedEdgePolicy: BabylonNativeBlockExposedEdgePolicyV1;
   readonly frictionRatio?: number;
   readonly restitutionRatio?: number;
 }
+
+export type BabylonNativeBlockColliderCandidateInventoryEntryV1 =
+  | Readonly<BabylonNativeBlockColliderCandidateInventoryCommonV1 & {
+      readonly proxyKind: "layout-block-volume";
+    }>
+  | Readonly<BabylonNativeBlockColliderCandidateInventoryCommonV1 & {
+      readonly proxyKind:
+        | "continuous-walkable-surface"
+        | "exact-solid-union";
+      readonly minimumMetersXYZ: readonly [number, number, number];
+      readonly maximumMetersXYZ: readonly [number, number, number];
+      readonly vertexCount: number;
+      readonly triangleCount: number;
+      readonly topologyHash: `sha256:${string}`;
+    }>;
 
 export interface MaterializedBabylonNativeBlockColliderCandidatesV1 {
   readonly inventory:

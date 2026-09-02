@@ -812,6 +812,7 @@ export function createBabylonNativeBlockProfileSessionV1(
           checkedLayout,
           displayGapMeters: parsedInput.displayGapMeters,
           colliderInventory: colliders.inventory,
+          walkableOverlays: Object.freeze([]),
         });
         finalizedResult = Object.freeze({
           kind: "babylon-native-block-finalized-epoch",

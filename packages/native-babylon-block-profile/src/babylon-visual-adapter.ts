@@ -332,6 +332,7 @@ export function createBabylonNativeBlockVisualsV1(
           nodes.find((node) => node.blockId === blockId)!.mesh)),
       }),
     )),
+    walkableOverlays: Object.freeze([]),
   });
   try {
     registerBabylonNativeBlockLiveHandleRegistryV1(input.scene, liveHandles);

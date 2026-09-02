@@ -228,6 +228,8 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "createBabylonNativeBlockMaterializerMetadataV1",
       "peekBabylonNativeBlockLiveHandleRegistryV1",
       "freezeBabylonNativeBlockLogicalGroundModelV1",
+      "buildBabylonNativeBlockWalkableTopologyV1",
+      "materializeBabylonNativeBlockWalkableTopologyV1",
       "analyzeBabylonNativeBlockGroundV1",
     ]);
   });
@@ -257,6 +259,8 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "collider-contribution.ts",
       "logical-ground-model.ts",
       "ground-analysis.ts",
+      "walkable-topology.ts",
+      "walkable-topology-materializer.ts",
       "profile-settlement.ts",
       "session.ts",
     ]);

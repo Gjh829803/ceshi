@@ -15,10 +15,26 @@ export {
 } from "./live-handle-registry.js";
 export type {
   BabylonNativeBlockLiveHandleRegistryV1,
+  BabylonNativeBlockWalkableOverlayHandleV1,
 } from "./live-handle-registry.js";
 export {
   freezeBabylonNativeBlockLogicalGroundModelV1,
 } from "./logical-ground-model.js";
+export {
+  buildBabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology.js";
+export type {
+  BabylonNativeBlockTopologyGeometryV1,
+  BabylonNativeBlockWalkableTopologyPolicyV1,
+  BabylonNativeBlockWalkableTopologyV1,
+  BuildBabylonNativeBlockWalkableTopologyInputV1,
+} from "./walkable-topology.js";
+export {
+  materializeBabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology-materializer.js";
+export type {
+  MaterializedBabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology-materializer.js";
 export {
   analyzeBabylonNativeBlockGroundV1,
 } from "./ground-analysis.js";
