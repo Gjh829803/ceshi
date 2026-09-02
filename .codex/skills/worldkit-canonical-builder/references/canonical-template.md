@@ -2,13 +2,15 @@
 
 Use this template as the structural starting point. Infer IDs, bounds, terrain, Prototypes, placements, semantics, and camera values from the Scene Brief and planner images. JSON is closed: do not add fields not shown by this skill.
 
+Replace every `scene-id` placeholder with the exact Host-provided `--scene-id`. AuthoringSpec `id`, implementation-map `sceneId`, and implementation-map `authoringSpecId` are the same identity; never append `-authoring` or another suffix.
+
 `maxVertices`, `maxTriangles`, and `maxColliders` are all enforced by the current compiler. Size every budget deliberately and reduce geometry when measured use exceeds it.
 
 ```json
 {
   "kind": "worldkit-authoring-spec",
   "schemaVersion": 4,
-  "id": "scene-id-authoring",
+  "id": "scene-id",
   "seed": 1001,
   "provenance": {
     "userPrompt": "Concise implementation intent."
@@ -226,7 +228,7 @@ Write:
   "kind": "worldkit-scene-brief-implementation-map-draft",
   "schemaVersion": 1,
   "sceneId": "scene-id",
-  "authoringSpecId": "scene-id-authoring",
+  "authoringSpecId": "scene-id",
   "visualTargetMappings": [
     {
       "visualTargetId": "visual-target-1",
