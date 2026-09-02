@@ -1,0 +1,584 @@
+import { sha256CanonicalJson, type Sha256HashV1 } from
+  "@whitebox-world/protocol";
+import {
+  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  createTraversalCapabilityEnvelopeV1,
+  resolveTraversalGraphBuilderProfileV2,
+  resolveTraversalLockV1,
+  type ResolvedTraversalLockV1,
+  type TraversalCapabilityEnvelopeReceiptV1,
+} from "@whitebox-world/traversal";
+import { describe, expect, it } from "vitest";
+
+import {
+  analyzeBabylonNativeBlockGroundV1,
+  type BabylonNativeBlockGroundAnalysisBudgetV1,
+  type BabylonNativeBlockGroundCaseIntentV1,
+} from "./ground-analysis.js";
+import type {
+  BabylonNativeBlockLogicalGroundModelV1,
+  BabylonNativeBlockLogicalSolidOccupancyCellV1,
+  BabylonNativeBlockLogicalSupportTopCellV1,
+} from "./logical-ground-model.js";
+
+const H = (digit: string) => `sha256:${digit.repeat(64)}` as Sha256HashV1;
+const CASE_HASH = H("4");
+const PACKAGE_HASH = H("5");
+const MEASUREMENT_CHUNK_POLICY = Object.freeze({
+  kind: "fixed-xz-grid" as const,
+  sizeMetersXZ: Object.freeze([4, 4] as const),
+  originMetersXZ: Object.freeze([-0.5, -0.5] as const),
+  boundaryMode: "half-open-center-owned" as const,
+});
+const ANALYSIS_BUDGET = Object.freeze({
+  kind: "babylon-native-block-ground-analysis-budget" as const,
+  schemaVersion: 1 as const,
+  maximumSolidOccupancyCellCount: 50_000,
+  maximumSupportTopCellCount: 50_000,
+});
+const STATIC_SURFACE = Object.freeze({
+  kind: "static-surface" as const,
+  surfaceEntityId: "ground-surface",
+  logicalSubshapeId: "top",
+  traversalSurfaceProfileRef:
+    "worldkit://traversal-surface-profile/ground.static@1",
+});
+
+function capability(
+  overrides: Partial<ResolvedTraversalLockV1> = {},
+): TraversalCapabilityEnvelopeReceiptV1 {
+  const lock: ResolvedTraversalLockV1 = {
+    kind: "resolved-traversal-lock",
+    schemaVersion: 1,
+    subjectEntityId: "player",
+    resourceLockHash: H("a"),
+    subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
+    subjectDefinitionHash: H("a"),
+    colliderProfileRef: "worldkit://collider-profile/humanoid.medium-capsule@1",
+    colliderProfileHash: H("a"),
+    physicsBodyProfileRef: "worldkit://physics-body-profile/character.medium@1",
+    physicsBodyProfileHash: H("a"),
+    locomotionProfileRef: "worldkit://locomotion-profile/ground.standard@1",
+    locomotionProfileHash: H("a"),
+    locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
+    locomotionCapabilityHash: H("a"),
+    controlFeelProfileRef: "worldkit://control-feel-profile/humanoid.medium-ground@1",
+    controlFeelProfileHash: H("a"),
+    controlProfileRef: "worldkit://control-profile/planar.camera-relative@1",
+    controlProfileHash: H("a"),
+    motionProfileRef: "worldkit://motion-profile/free-ground.humanoid-medium@1",
+    motionProfileHash: H("a"),
+    motionKernelRef: "worldkit://motion-kernel/free-ground@1",
+    motionKernelHash: H("a"),
+    mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+    mediumProfileHash: H("a"),
+    runtimeBackendRef: "worldkit://runtime-backend/babylon-havok@1",
+    runtimeBackendResolvedVersion: "9.23.0+1.3.14",
+    runtimeBackendHash: H("a"),
+    runtimeAdapterRef: "worldkit://runtime-adapter/babylon.character-controller@1",
+    runtimeAdapterResolvedVersion: "1",
+    runtimeAdapterHash: H("b"),
+    capsuleRadiusMeters: 0.2,
+    capsuleHeightMeters: 1,
+    colliderCenterOffsetMetersXYZ: [0, 0.5, 0],
+    maxSlopeDegrees: 42,
+    maxStepHeightMeters: 0.3,
+    ...overrides,
+  };
+  return createTraversalCapabilityEnvelopeV1({
+    traversalLockReceipt: resolveTraversalLockV1(lock),
+    graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    ),
+  });
+}
+
+function logicalModel(input: Readonly<{
+  capability: TraversalCapabilityEnvelopeReceiptV1;
+  supportTopCellKeys: readonly string[];
+  blockerCellKeys?: readonly string[];
+}>): BabylonNativeBlockLogicalGroundModelV1 {
+  const supportTopCellKeys = [...input.supportTopCellKeys].sort();
+  const supportSolidKeys = supportTopCellKeys.map((key) => {
+    const [x, y, z] = key.split(",").map(Number);
+    return `${x},${y! - 1},${z}`;
+  });
+  const blockerCellKeys = [...(input.blockerCellKeys ?? [])].sort();
+  const supportBinding = STATIC_SURFACE;
+  const solids: BabylonNativeBlockLogicalSolidOccupancyCellV1[] = [
+    ...supportSolidKeys.map((cellKey, index) => Object.freeze({
+      cellKey,
+      colliderId: "ground-collider",
+      sourceBlockId: `ground-block-${index.toString().padStart(4, "0")}`,
+      colliderGroupId: "ground-group",
+      visualGroupId: "ground-visual",
+      traversalBinding: supportBinding,
+    })),
+    ...blockerCellKeys.map((cellKey, index) => Object.freeze({
+      cellKey,
+      colliderId: "blocker-collider",
+      sourceBlockId: `blocker-block-${index.toString().padStart(4, "0")}`,
+      colliderGroupId: "blocker-group",
+      visualGroupId: "blocker-visual",
+      traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
+    })),
+  ].sort((left, right) => left.cellKey.localeCompare(right.cellKey));
+  const supportTops: BabylonNativeBlockLogicalSupportTopCellV1[] =
+    supportTopCellKeys.map((topCellKey, index) => Object.freeze({
+      topCellKey,
+      sourceOccupiedCellKey: supportSolidKeys[index]!,
+      colliderId: "ground-collider",
+      sourceBlockId: `ground-block-${index.toString().padStart(4, "0")}`,
+      colliderGroupId: "ground-group",
+      visualGroupId: "ground-visual",
+      traversalBinding: supportBinding,
+    }));
+  const body = Object.freeze({
+    kind: "babylon-native-block-logical-ground-model" as const,
+    schemaVersion: 1 as const,
+    identity: Object.freeze({
+      buildEpochId: "ground-analysis-epoch",
+      checkedLayoutInventoryHash: H("1"),
+      profileInventoryHash: H("2"),
+      worldRuntimeBootstrapHash: H("3"),
+      traversalCapabilityEnvelopeHash:
+        input.capability.traversalCapabilityEnvelopeHash,
+      caseHash: CASE_HASH,
+    }),
+    supportedTraversalSurfaceProfileRefs: Object.freeze([
+      STATIC_SURFACE.traversalSurfaceProfileRef,
+    ]),
+    colliderGroups: Object.freeze([]),
+    solidOccupancyCells: Object.freeze(solids),
+    exposedSupportTopCells: Object.freeze(supportTops),
+  });
+  return Object.freeze({
+    ...body,
+    logicalGroundModelHash: sha256CanonicalJson(body) as Sha256HashV1,
+  });
+}
+
+function position(topCellKey: string): readonly [number, number, number] {
+  const [x, y, z] = topCellKey.split(",").map(Number);
+  return Object.freeze([(x! + 0.5) * 0.5, y! * 0.25, (z! + 0.5) * 0.5]);
+}
+
+function caseIntent(input: Partial<BabylonNativeBlockGroundCaseIntentV1> &
+  Pick<BabylonNativeBlockGroundCaseIntentV1, "spawn">,
+): BabylonNativeBlockGroundCaseIntentV1 {
+  return Object.freeze({
+    kind: "babylon-native-block-ground-case-intent",
+    schemaVersion: 1,
+    id: "ground-case",
+    caseHash: CASE_HASH,
+    groundFailurePolicy: "block-admission",
+    groundModelEvidenceRef:
+      "artifact://case/ground-case/evidence/logical-ground-model.json",
+    requiredTargets: Object.freeze([]),
+    requiredTraversalBands: Object.freeze([]),
+    requireSingleReachableComponent: true,
+    ...input,
+  });
+}
+
+function analyze(input: Readonly<{
+  supportTopCellKeys: readonly string[];
+  blockerCellKeys?: readonly string[];
+  capabilityOverrides?: Partial<ResolvedTraversalLockV1>;
+  caseIntent: BabylonNativeBlockGroundCaseIntentV1;
+  budget?: BabylonNativeBlockGroundAnalysisBudgetV1;
+}>) {
+  const receipt = capability(input.capabilityOverrides);
+  return analyzeBabylonNativeBlockGroundV1({
+    groundModel: logicalModel({
+      capability: receipt,
+      supportTopCellKeys: input.supportTopCellKeys,
+      ...(input.blockerCellKeys === undefined
+        ? {}
+        : { blockerCellKeys: input.blockerCellKeys }),
+    }),
+    traversalCapabilityEnvelopeReceipt: receipt,
+    caseIntent: input.caseIntent,
+    worldPackageRootHash: PACKAGE_HASH,
+    measurementChunkPolicy: MEASUREMENT_CHUNK_POLICY,
+    budget: input.budget ?? ANALYSIS_BUDGET,
+  });
+}
+
+function rectangle(
+  minimumX: number,
+  maximumX: number,
+  minimumZ: number,
+  maximumZ: number,
+  topY = 1,
+): readonly string[] {
+  const cells: string[] = [];
+  for (let z = minimumZ; z <= maximumZ; z += 1) {
+    for (let x = minimumX; x <= maximumX; x += 1) {
+      cells.push(`${x},${topY},${z}`);
+    }
+  }
+  return Object.freeze(cells);
+}
+
+const SPAWN = Object.freeze({
+  id: "spawn-check",
+  acceptanceTargetRef: "worldkit://acceptance-target/spawn@1",
+  standPositionMetersXYZ: position("0,1,0"),
+  openingYawQuarterTurnsY: 0 as const,
+  openingFovDegrees: 60,
+});
+
+describe("Babylon Native Block Subject-relative ground analysis", () => {
+  it("publishes deterministic standability, connectivity, band and report metrics", () => {
+    const target = Object.freeze({
+      id: "remote-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/remote@1",
+      standPositionMetersXYZ: position("4,1,0"),
+    });
+    const result = analyze({
+      supportTopCellKeys: rectangle(-1, 5, -1, 1),
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([target]),
+        requiredTraversalBands: Object.freeze([{
+          id: "main-band",
+          acceptanceTargetRef: target.acceptanceTargetRef,
+          centerlineStandPositionsMetersXYZ: Object.freeze([
+            SPAWN.standPositionMetersXYZ,
+            target.standPositionMetersXYZ,
+          ]),
+          halfWidthMeters: 0.5,
+          isBidirectional: true,
+        }]),
+      }),
+    });
+
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.failureFacts).toEqual([]);
+    expect(result.metrics.reachableRequiredTargetCount).toBe(1);
+    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(1);
+    expect(result.metrics.reachablePositionCount).toBeGreaterThan(5);
+    expect(result.metrics.reachableHorizontalSpanMetersXZ).toEqual([3.5, 1.5]);
+    expect(result.metrics.reachableChunkCount).toBe(1);
+    expect(result.identity).toEqual({
+      logicalGroundModelHash: expect.stringMatching(/^sha256:/),
+      traversalCapabilityEnvelopeHash: expect.stringMatching(/^sha256:/),
+      caseHash: CASE_HASH,
+      worldPackageRootHash: PACKAGE_HASH,
+      measurementChunkPolicyHash: sha256CanonicalJson(
+        MEASUREMENT_CHUNK_POLICY,
+      ),
+    });
+    expect(Object.isFrozen(result.standableNodes)).toBe(true);
+  });
+
+  it("rejects a narrow surface using full Capsule-footprint union coverage", () => {
+    const result = analyze({
+      supportTopCellKeys: rectangle(0, 3, 0, 0),
+      capabilityOverrides: { capsuleRadiusMeters: 0.3 },
+      caseIntent: caseIntent({ spawn: SPAWN }),
+    });
+
+    expect(result.analysisOutcome).toBe("failed");
+    expect(result.admissionOutcome).toBe("failed");
+    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
+      "ground-support-coverage-basis-points",
+    );
+    expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
+  });
+
+  it("includes the trusted traversal clearance margin in footprint coverage", () => {
+    const result = analyze({
+      supportTopCellKeys: rectangle(0, 3, 0, 0),
+      capabilityOverrides: { capsuleRadiusMeters: 0.24 },
+      caseIntent: caseIntent({ spawn: Object.freeze({
+        ...SPAWN,
+        standPositionMetersXYZ: position("1,1,0"),
+      }) }),
+    });
+
+    expect(result.analysisOutcome).toBe("failed");
+    expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
+    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
+      "ground-support-coverage-basis-points",
+    );
+  });
+
+  it("reports exact low-overhead clearance without changing the Capsule", () => {
+    const result = analyze({
+      supportTopCellKeys: rectangle(-1, 1, -1, 1),
+      blockerCellKeys: ["0,4,0"],
+      capabilityOverrides: { capsuleHeightMeters: 1.2 },
+      caseIntent: caseIntent({ spawn: SPAWN }),
+    });
+
+    const clearance = result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-clearance-millimeters");
+    expect(clearance?.details).toEqual({
+      kind: "millimeters-threshold",
+      expectedMillimeters: 1_200,
+      actualMillimeters: 750,
+      maximumAllowedDriftMillimeters: 0,
+      exceededByMillimeters: 450,
+      correctionDirection: "increase",
+    });
+  });
+
+  it("uses the lowest intersecting overhead regardless of cell-key order", () => {
+    const result = analyze({
+      supportTopCellKeys: rectangle(-1, 1, -1, 1),
+      blockerCellKeys: ["0,10,0", "0,3,0"],
+      capabilityOverrides: { capsuleHeightMeters: 3 },
+      caseIntent: caseIntent({ spawn: SPAWN }),
+    });
+
+    const clearance = result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-clearance-millimeters");
+    expect(clearance?.details).toMatchObject({
+      kind: "millimeters-threshold",
+      expectedMillimeters: 3_000,
+      actualMillimeters: 500,
+      exceededByMillimeters: 2_500,
+    });
+  });
+
+  it("reports the closest directed step frontier for an unreachable target", () => {
+    const target = Object.freeze({
+      id: "high-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/high@1",
+      standPositionMetersXYZ: position("1,3,0"),
+    });
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 0, -1, 1, 1),
+        ...rectangle(1, 2, -1, 1, 3),
+      ],
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([target]),
+      }),
+    });
+
+    const step = result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-step-up-millimeters");
+    expect(step?.details).toEqual({
+      kind: "millimeters-threshold",
+      expectedMillimeters: 0,
+      actualMillimeters: 500,
+      maximumAllowedDriftMillimeters: 300,
+      exceededByMillimeters: 200,
+      correctionDirection: "decrease",
+    });
+    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+  });
+
+  it("applies the trusted maximum slope to smoothed adjacent support", () => {
+    const target = Object.freeze({
+      id: "slope-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/slope@1",
+      standPositionMetersXYZ: position("1,2,0"),
+    });
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 0, -1, 1, 1),
+        ...rectangle(1, 2, -1, 1, 2),
+      ],
+      capabilityOverrides: { maxSlopeDegrees: 1 },
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([target]),
+      }),
+    });
+
+    expect(result.analysisOutcome).toBe("failed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+    expect(result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-step-up-millimeters")?.details).toMatchObject({
+      actualMillimeters: 250,
+      maximumAllowedDriftMillimeters: 9,
+      exceededByMillimeters: 241,
+    });
+  });
+
+  it("preserves directed step-down evidence from a higher Spawn", () => {
+    const highSpawn = Object.freeze({
+      ...SPAWN,
+      standPositionMetersXYZ: position("0,3,0"),
+    });
+    const target = Object.freeze({
+      id: "low-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/low@1",
+      standPositionMetersXYZ: position("1,1,0"),
+    });
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 0, -1, 1, 3),
+        ...rectangle(1, 2, -1, 1, 1),
+      ],
+      caseIntent: caseIntent({
+        spawn: highSpawn,
+        requiredTargets: Object.freeze([target]),
+      }),
+    });
+
+    const step = result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-step-down-millimeters");
+    expect(step?.details).toMatchObject({
+      kind: "millimeters-threshold",
+      actualMillimeters: 500,
+      maximumAllowedDriftMillimeters: 300,
+      exceededByMillimeters: 200,
+      correctionDirection: "decrease",
+    });
+  });
+
+  it("rejects a detour that leaves the declared traversal band", () => {
+    const support = [
+      ...rectangle(-1, 1, -1, 0),
+      ...rectangle(-1, 3, 2, 3),
+      ...rectangle(3, 4, -1, 2),
+    ];
+    const destination = position("3,1,0");
+    const result = analyze({
+      supportTopCellKeys: support,
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTraversalBands: Object.freeze([{
+          id: "tight-band",
+          acceptanceTargetRef: "worldkit://acceptance-target/tight-band@1",
+          centerlineStandPositionsMetersXYZ: Object.freeze([
+            SPAWN.standPositionMetersXYZ,
+            destination,
+          ]),
+          halfWidthMeters: 0.5,
+          isBidirectional: true,
+        }]),
+      }),
+    });
+
+    expect(result.metrics.reachablePositionCount).toBeGreaterThan(1);
+    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(0);
+    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
+      "ground-traversal-band-reachability",
+    );
+  });
+
+  it("measures disconnected islands without blocking a non-ground Case", () => {
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 1, -1, 1),
+        ...rectangle(10, 12, 10, 12),
+      ],
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        groundFailurePolicy: "measure-only",
+      }),
+    });
+
+    expect(result.analysisOutcome).toBe("failed");
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.metrics.componentCount).toBe(2);
+    expect(result.metrics.disconnectedStandablePositionCount).toBeGreaterThan(0);
+    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
+      "ground-component-reachability",
+    );
+  });
+
+  it("rejects duplicate targets before analysis", () => {
+    const target = Object.freeze({
+      id: "same-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/same@1",
+      standPositionMetersXYZ: position("1,1,0"),
+    });
+    expect(() => analyze({
+      supportTopCellKeys: rectangle(-1, 2, -1, 1),
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([target, target]),
+      }),
+    })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+  });
+
+  it("fails closed before analysis when the Host-frozen cell budget is exceeded", () => {
+    expect(() => analyze({
+      supportTopCellKeys: rectangle(-1, 1, -1, 1),
+      caseIntent: caseIntent({ spawn: SPAWN }),
+      budget: Object.freeze({
+        ...ANALYSIS_BUDGET,
+        maximumSolidOccupancyCellCount: 8,
+      }),
+    })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_BUDGET_EXCEEDED");
+  });
+
+  it("analyzes a 6,400-cell ground model through bounded column lookups", () => {
+    const result = analyze({
+      supportTopCellKeys: rectangle(0, 79, 0, 79),
+      caseIntent: caseIntent({
+        spawn: Object.freeze({
+          ...SPAWN,
+          standPositionMetersXYZ: position("40,1,40"),
+        }),
+      }),
+    });
+
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.metrics.supportTopCellCount).toBe(6_400);
+    expect(result.metrics.reachablePositionCount).toBe(6_400);
+  }, 5_000);
+
+  it("is stable across source and target ordering", () => {
+    const left = Object.freeze({
+      id: "left-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/left@1",
+      standPositionMetersXYZ: position("-1,1,0"),
+    });
+    const right = Object.freeze({
+      id: "right-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/right@1",
+      standPositionMetersXYZ: position("1,1,0"),
+    });
+    const cells = rectangle(-2, 2, -1, 1);
+    const first = analyze({
+      supportTopCellKeys: cells,
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([left, right]),
+      }),
+    });
+    const second = analyze({
+      supportTopCellKeys: [...cells].reverse(),
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([right, left]),
+      }),
+    });
+
+    expect(second).toEqual(first);
+    expect(second.groundAnalysisReportHash).toBe(first.groundAnalysisReportHash);
+  });
+
+  it("rejects accessor-bearing Host input without invoking the accessor", () => {
+    let accessCount = 0;
+    const hostile = Object.defineProperty({}, "groundModel", {
+      enumerable: true,
+      get() {
+        accessCount += 1;
+        return undefined;
+      },
+    });
+    expect(() => analyzeBabylonNativeBlockGroundV1(hostile as never))
+      .toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+    expect(accessCount).toBe(0);
+  });
+
+  it("routes malformed and cyclic Host input through the Profile failure channel", () => {
+    expect(() => analyzeBabylonNativeBlockGroundV1(null as never))
+      .toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(() => analyzeBabylonNativeBlockGroundV1(cyclic as never))
+      .toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+  });
+});
