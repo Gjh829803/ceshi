@@ -222,6 +222,43 @@ describe("resolveRetainedSupportSurfaceV1 route-walkable", () => {
     })).toEqual({ mode: "ambiguous" });
   });
 
+  it("uniquely resolves a coplanar exit manifold to the majority checkSupport floor", () => {
+    const floorPoint = [16.971040725708008, 0, 3.0124549865722656] as const;
+    expect(resolveRouteWalkable([
+      contact(TERRAIN, {
+        pointMetersXYZ: floorPoint,
+        normalXYZ: [0, 1, 0],
+        distanceMeters: 0.050000011920928955,
+      }),
+      contact(TERRAIN, {
+        pointMetersXYZ: [17, 0, 3.0124549865722656],
+        normalXYZ: [-0.07802966982126236, 0.9969510436058044, 0],
+        distanceMeters: 0.05113157629966736,
+      }),
+      contact(TERRAIN, {
+        pointMetersXYZ: [17, 0, 3],
+        normalXYZ: [-0.07798576354980469, 0.9963901042938232, 0.03354060649871826],
+        distanceMeters: 0.05134052038192749,
+      }),
+      contact(TERRAIN, {
+        pointMetersXYZ: [16.971040725708008, 0, 3],
+        normalXYZ: [0, 0.9994339346885681, 0.03364307060837746],
+        distanceMeters: 0.05020958185195923,
+      }),
+      contact(STEP, {
+        pointMetersXYZ: floorPoint,
+        normalXYZ: [0, 1, 0],
+        distanceMeters: 0.050000011920928955,
+      }),
+    ], {
+      footMetersXYZ: [16.971040369420383, 0.05000001590091063, 3.0124549855969365],
+    })).toMatchObject({
+      mode: "resolved",
+      surfaceEntityId: "terrain-main",
+      traversalSurfaceId: TERRAIN.traversalSurfaceId,
+    });
+  });
+
   it("still resolves a unique surface whose only contact is a slope-legal lip", () => {
     expect(resolveRouteWalkable([
       contact(STEP, {

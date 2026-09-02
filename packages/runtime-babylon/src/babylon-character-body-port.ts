@@ -29,12 +29,7 @@ import {
   type MovementVec3V1,
 } from "@whitebox-world/character-movement";
 
-import {
-  r1bInStepUpCorridor,
-  r1bIsFailureTick,
-  r1bSupportDebug,
-  type CharacterSupportProjectionSampleV1,
-} from "./retained-support-surface-resolver";
+import type { CharacterSupportProjectionSampleV1 } from "./retained-support-surface-resolver";
 
 export const BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1 = Object.freeze({
   babylonJs: "9.23.0",
@@ -2475,63 +2470,6 @@ class BabylonCharacterBodyPortV1
             ? {}
             : { surfaceEntityId: contact.surfaceEntityId }),
         }));
-    // #region agent log
-    {
-      const uniqueRawTs = [...new Set(contacts.flatMap((contact) =>
-        contact.traversalSurfaceId === undefined ? [] : [contact.traversalSurfaceId]
-      ))];
-      const uniqueKeptTs = [...new Set(supportContacts.flatMap((contact) =>
-        contact.traversalSurfaceId === undefined ? [] : [contact.traversalSurfaceId]
-      ))];
-      const tick = this.transaction?.tick ?? -1;
-      if (
-        r1bInStepUpCorridor(controllerCenterMetersXYZ) ||
-        r1bInStepUpCorridor(sampledFootPositionMetersXYZ) ||
-        r1bIsFailureTick(tick) ||
-        uniqueRawTs.length > 1 ||
-        uniqueKeptTs.length > 1
-      ) {
-        r1bSupportDebug(
-          "F",
-          "babylon-character-body-port.ts:projectRetainedSupportSample",
-          "retained-manifold",
-          {
-            tick,
-            supportMode: support.mode,
-            supportNormal: support.mode === "unsupported" ? up : support.normalXYZ,
-            isDynamic: support.mode === "unsupported" ? false : support.isDynamic,
-            center: controllerCenterMetersXYZ,
-            foot: sampledFootPositionMetersXYZ,
-            band: supportContactBandMeters,
-            rawCount: contacts.length,
-            keptCount: supportContacts.length,
-            uniqueRawTs,
-            uniqueKeptTs,
-            uniqueRawEnt: [...new Set(contacts.flatMap((contact) =>
-              contact.surfaceEntityId === undefined ? [] : [contact.surfaceEntityId]
-            ))],
-            rawContacts: contacts.map((contact) => ({
-              p: contact.pointMetersXYZ,
-              n: contact.normalXYZ,
-              d: contact.distanceMeters,
-              motion: contact.motionType,
-              sub: contact.colliderSubshapeId ?? null,
-              ts: contact.traversalSurfaceId ?? null,
-              ent: contact.surfaceEntityId ?? null,
-              col: contact.colliderId ?? null,
-            })),
-            keptContacts: supportContacts.map((contact) => ({
-              p: contact.pointMetersXYZ,
-              n: contact.normalXYZ,
-              sub: contact.colliderSubshapeId ?? null,
-              ts: contact.traversalSurfaceId ?? null,
-              ent: contact.surfaceEntityId ?? null,
-            })),
-          },
-        );
-      }
-    }
-    // #endregion
     return Object.freeze({
       supportState: support.mode,
       supportNormalWorldXYZ: support.mode === "unsupported"
@@ -2588,48 +2526,6 @@ class BabylonCharacterBodyPortV1
         dot(contact.normalXYZ, up) > 0.08 &&
         contact.distanceMeters <= this.options.controller.keepContactToleranceMeters
       );
-    // #region agent log
-    {
-      const uniqueSupportingTs = [...new Set(supportingContacts.flatMap((contact) =>
-        contact.traversalSurfaceId === undefined ? [] : [contact.traversalSurfaceId]
-      ))];
-      const tick = this.transaction?.tick ?? -1;
-      if (
-        r1bInStepUpCorridor(position) ||
-        r1bIsFailureTick(tick) ||
-        uniqueSupportingTs.length > 1
-      ) {
-        r1bSupportDebug(
-          "C",
-          "babylon-character-body-port.ts:projectBeginSupport",
-          "begin-checkSupport-vs-contacts",
-          {
-            tick,
-            nativeSupportMode: nativeSupport.mode,
-            nativeSupportNormal: nativeSupport.averageSurfaceNormalXYZ,
-            nativeIsDynamic: nativeSupport.isSurfaceDynamic,
-            center: position,
-            uniqueSupportingTs,
-            uniqueSupportingEnt: [...new Set(supportingContacts.flatMap((contact) =>
-              contact.surfaceEntityId === undefined ? [] : [contact.surfaceEntityId]
-            ))],
-            rawCount: contacts.length,
-            supportingCount: supportingContacts.length,
-            supportingContacts: supportingContacts.map((contact) => ({
-              p: contact.pointMetersXYZ,
-              n: contact.normalXYZ,
-              d: contact.distanceMeters,
-              motion: contact.motionType,
-              sub: contact.colliderSubshapeId ?? null,
-              ts: contact.traversalSurfaceId ?? null,
-              ent: contact.surfaceEntityId ?? null,
-              col: contact.colliderId ?? null,
-            })),
-          },
-        );
-      }
-    }
-    // #endregion
     const point = supportingContacts.length > 0
       ? averageVec3(supportingContacts.map((contact) => contact.pointMetersXYZ))
       : addScaled(position, up, -this.options.capsule.heightMeters / 2);

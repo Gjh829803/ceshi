@@ -30,11 +30,9 @@ import {
   type BabylonCharacterBodyNativeContactV1,
 } from "./babylon-character-body-port";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
-import {
-  r1bInStepUpCorridor,
-  r1bSupportDebug,
-  type CharacterSupportProjectionLockV1,
-  type CharacterSupportProjectionSampleV1,
+import type {
+  CharacterSupportProjectionLockV1,
+  CharacterSupportProjectionSampleV1,
 } from "./retained-support-surface-resolver";
 
 export interface MotionKernelSnapshotV1 {
@@ -744,91 +742,6 @@ export class MotionKernelRuntimeV1 {
       supportContacts: Object.freeze(supportContacts),
       isSupportSurfaceDynamic: support.isSurfaceDynamic,
     });
-    // #region agent log
-    {
-      const origin = sampledControllerCenter.subtract(this.colliderCenterOffset);
-      const originXYZ = [origin.x, origin.y, origin.z] as const;
-      const uniqueRawTs = [...new Set(currentContacts.flatMap((contact) =>
-        contact.traversalSurfaceId === undefined ? [] : [contact.traversalSurfaceId]
-      ))];
-      const uniqueRetainedTs = [...new Set(supportContacts.flatMap((contact) =>
-        contact.traversalSurfaceId === undefined ? [] : [contact.traversalSurfaceId]
-      ))];
-      if (
-        r1bInStepUpCorridor(originXYZ) ||
-        r1bInStepUpCorridor([sampledFoot.x, sampledFoot.y, sampledFoot.z]) ||
-        uniqueRawTs.length > 1 ||
-        uniqueRetainedTs.length > 1
-      ) {
-        r1bSupportDebug(
-          "C",
-          "motion-kernel-runtime.ts:publishResolvedState",
-          "checkSupport-vs-contacts",
-          {
-            checkSupportState: supportState,
-            checkSupportNative: support.supportedState,
-            checkSupportNormal: [
-              support.averageSurfaceNormal.x,
-              support.averageSurfaceNormal.y,
-              support.averageSurfaceNormal.z,
-            ],
-            isDynamic: support.isSurfaceDynamic,
-            origin: originXYZ,
-            capsuleCenter: [
-              sampledControllerCenter.x,
-              sampledControllerCenter.y,
-              sampledControllerCenter.z,
-            ],
-            foot: [sampledFoot.x, sampledFoot.y, sampledFoot.z],
-            band: supportContactBandMeters,
-            maxSlopeCosine: this.physicsController.maxSlopeCosine,
-            rawCount: currentContacts.length,
-            retainedCount: supportContacts.length,
-            uniqueRawTs,
-            uniqueRetainedTs,
-            uniqueRawEnt: [...new Set(currentContacts.flatMap((contact) =>
-              contact.surfaceEntityId === undefined ? [] : [contact.surfaceEntityId]
-            ))],
-            uniqueRetainedEnt: [...new Set(supportContacts.flatMap((contact) =>
-              contact.surfaceEntityId === undefined ? [] : [contact.surfaceEntityId]
-            ))],
-            rawContacts: currentContacts.map((contact) => {
-              const notStatic = contact.motionType !== "static";
-              const far = contact.distanceMeters > supportContactBandMeters;
-              const footBand = Math.abs(Vector3.Dot(
-                new Vector3(...contact.pointMetersXYZ).subtract(sampledFoot),
-                this.up,
-              )) > supportContactBandMeters;
-              const upward = Vector3.Dot(
-                new Vector3(...contact.normalXYZ),
-                this.up,
-              ) <= BABYLON_SUPPORTING_CONTACT_MINIMUM_UPWARD_NORMAL_Y;
-              return {
-                p: contact.pointMetersXYZ,
-                n: contact.normalXYZ,
-                d: contact.distanceMeters,
-                motion: contact.motionType,
-                sub: contact.colliderSubshapeId ?? null,
-                ts: contact.traversalSurfaceId ?? null,
-                ent: contact.surfaceEntityId ?? null,
-                col: contact.colliderId ?? null,
-                kept: !notStatic && !far && !footBand && !upward,
-                reject: notStatic
-                  ? "not-static"
-                  : far
-                  ? "distance"
-                  : footBand
-                  ? "foot-band"
-                  : upward
-                  ? "upward-normal"
-                  : null,
-              };
-            }),
-          },
-        );
-      }
-    }
-    // #endregion
     if (supportState === "supported") {
       this.coyoteRemainingSeconds = this.controlFeel.coyoteTimeSeconds;
     } else if (supportState === "sliding") {

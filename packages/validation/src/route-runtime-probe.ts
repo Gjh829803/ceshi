@@ -1,4 +1,3 @@
-import { appendFileSync } from "node:fs";
 import {
   advanceRouteRuntimeProbeSupportStationV2,
   canonicalRoutePathReceiptV2,
@@ -477,28 +476,6 @@ function surfaceMismatchV2(
     !expectedTraversalSurfaceIds.includes(resolution.traversalSurfaceId);
 }
 
-function r1bProbeDebug(
-  hypothesisId: string,
-  message: string,
-  data: Record<string, unknown>,
-): void {
-  const payload = {
-    hypothesisId,
-    location: "route-runtime-probe.ts:runRouteRuntimeProbeV2",
-    message,
-    data,
-    timestamp: Date.now(),
-    runId: "pre-fix",
-  };
-  const line = JSON.stringify(payload);
-  console.error(`R1B_SUPPORT_DEBUG ${line}`);
-  try {
-    appendFileSync("/opt/cursor/logs/debug.log", `${line}\n`);
-  } catch {
-    // Node-only debug sink.
-  }
-}
-
 function emptyMetricsV2(
   initial: TraversalRuntimeTickEvidenceV1,
   expectedTraversalSurfaceIds: readonly string[],
@@ -730,27 +707,6 @@ export async function runRouteRuntimeProbeV2(
     previousArcLengthMeters = station.arcLengthMeters;
     const expectedTraversalSurfaceIds = station.expectedTraversalSurfaceIds;
     const subjectAfterTick = xz(evidence.subjectPositionMetersXYZ);
-    // #region agent log
-    if (
-      (probeTick >= 46 && probeTick <= 50) ||
-      surfaceMismatchV2(evidence, expectedTraversalSurfaceIds)
-    ) {
-      r1bProbeDebug("E", "probe-station", {
-        probeTick,
-        evidenceTick: evidence.tick,
-        origin: evidence.subjectPositionMetersXYZ,
-        foot: evidence.characterSupport.sampledFootPositionMetersXYZ,
-        supportState: evidence.characterSupport.supportState,
-        supportNormal: evidence.characterSupport.supportNormalWorldXYZ,
-        surfaceResolution: evidence.characterSupport.surfaceResolution,
-        expectedTraversalSurfaceIds,
-        retainedSegmentIndexes: station.retainedSegmentIndexes,
-        stationArcMeters: station.arcLengthMeters,
-        remainingArcMeters: station.remainingArcLengthMeters,
-        mismatch: surfaceMismatchV2(evidence, expectedTraversalSurfaceIds),
-      });
-    }
-    // #endregion
     let routeProgressMetersXZ = projectForwardProgress(
       geometry,
       subjectAfterTick,
