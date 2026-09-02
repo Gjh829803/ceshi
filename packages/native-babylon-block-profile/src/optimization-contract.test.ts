@@ -22,7 +22,7 @@ import {
   assessBabylonNativeBlockOptimizationV1,
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
-} from "./index.js";
+} from "./host.js";
 import {
   materializeBabylonNativeBlockReconstructionCorpusCaseV1,
   type BabylonNativeBlockReconstructionCorpusCaseIdV1,

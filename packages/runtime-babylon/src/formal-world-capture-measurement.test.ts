@@ -4,12 +4,30 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { Viewport } from "@babylonjs/core/Maths/math.viewport.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import {
+  babylonNativeBlockLiveVisualHandleMeshV1,
+  type BabylonNativeBlockLiveVisualHandleV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 import type {
   BabylonNativeBlockMaterializerVisualGroupV1,
   FormalArtifactViewRequestV1,
   FormalSemanticCaptureTargetBindingV1,
 } from "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it } from "vitest";
+
+function liveBlockHandle(
+  blockId: string,
+  mesh: Mesh,
+): BabylonNativeBlockLiveVisualHandleV1 {
+  return Object.freeze({
+    kind: "independent-mesh" as const,
+    blockId,
+    runtimeEntityId: `native-block:${blockId}`,
+    semanticCaptureClassId: `worldkit.native-block.group.${blockId}`,
+    mesh,
+  });
+}
 
 import {
   fitOrthographicBoundsToWorldExtentsV1,
@@ -219,8 +237,14 @@ function createFixture(options: Readonly<{
     semanticCaptureMap: { bindings },
     liveHandleRegistry: {
       visualGroups: [
-        { visualGroupId: "zeta-group", meshes: [zetaMesh] },
-        { visualGroupId: "alpha-group", meshes: [alphaMesh] },
+        {
+          visualGroupId: "zeta-group",
+          blockHandles: [liveBlockHandle("zeta-block", zetaMesh)],
+        },
+        {
+          visualGroupId: "alpha-group",
+          blockHandles: [liveBlockHandle("alpha-block", alphaMesh)],
+        },
       ],
     },
   };
@@ -656,7 +680,7 @@ describe("formal world capture projection measurement", () => {
       liveHandleRegistry: {
         visualGroups: [...input.liveHandleRegistry.visualGroups, {
           visualGroupId: "extra-group",
-          meshes: input.liveHandleRegistry.visualGroups[0]!.meshes,
+          blockHandles: input.liveHandleRegistry.visualGroups[0]!.blockHandles,
         }],
       },
     })],
@@ -665,7 +689,7 @@ describe("formal world capture projection measurement", () => {
       liveHandleRegistry: {
         visualGroups: input.liveHandleRegistry.visualGroups.map((group) =>
           group.visualGroupId === "alpha-group"
-            ? { ...group, meshes: [] }
+            ? { ...group, blockHandles: [] }
             : group),
       },
     })],
@@ -685,7 +709,9 @@ describe("formal world capture projection measurement", () => {
   it("rejects a disposed explicit visual handle", () => {
     // This catches treating registry membership as proof that a Mesh remains live.
     const fixture = createFixture();
-    fixture.input.liveHandleRegistry.visualGroups[0]!.meshes[0]!.dispose();
+    babylonNativeBlockLiveVisualHandleMeshV1(
+      fixture.input.liveHandleRegistry.visualGroups[0]!.blockHandles[0]!,
+    ).dispose();
     cleanups.push(() => {
       fixture.scene.dispose();
       fixture.engine.dispose();

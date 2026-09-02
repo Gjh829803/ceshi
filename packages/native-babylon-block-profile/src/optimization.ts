@@ -239,14 +239,23 @@ function validateInput(
   });
 }
 
+export type BabylonNativeBlockResidencyExtentV1 = Readonly<{
+  id: string;
+  minimumMetersXYZ: readonly number[];
+  maximumMetersXYZ: readonly number[];
+}>;
+
 export function createBabylonNativeBlockResidencyGroupsV1(
-  blocks: readonly BabylonNativeBlockLayoutEntryV1[],
+  blocks: readonly BabylonNativeBlockResidencyExtentV1[],
   chunkPolicy: BabylonNativeBlockChunkPolicyV1,
 ): Readonly<{
   groups: readonly BabylonNativeBlockOptimizationResidencyGroupV1[];
   residencyGroupIdByBlockId: ReadonlyMap<string, string>;
 }> {
-  const blocksByResidencyId = new Map<string, BabylonNativeBlockLayoutEntryV1[]>();
+  const blocksByResidencyId = new Map<
+    string,
+    BabylonNativeBlockResidencyExtentV1[]
+  >();
   type ResidencyDefinition =
     | Readonly<{
         kind: "grid-chunk";
@@ -310,8 +319,15 @@ export function createBabylonNativeBlockResidencyGroupsV1(
  * inside one Chunk, one fixed shape, one palette role and at most one semantic
  * visual group; every other Block stays an independent Mesh.
  */
+export type BabylonNativeBlockBatchMembershipV1 = Readonly<{
+  id: string;
+  shape: BabylonNativeBlockShapeKindV1;
+  paletteRole: BabylonNativeBlockPaletteRoleV1;
+  visualGroupId?: string;
+}>;
+
 export function createBabylonNativeBlockThinInstanceGroupsV1(
-  blocks: readonly BabylonNativeBlockLayoutEntryV1[],
+  blocks: readonly BabylonNativeBlockBatchMembershipV1[],
   residencyByBlockId: ReadonlyMap<string, string>,
 ): Readonly<{
   groups: readonly BabylonNativeBlockThinInstanceGroupV1[];

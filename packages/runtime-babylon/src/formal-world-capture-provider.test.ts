@@ -149,41 +149,59 @@ describe("formal world capture provider", () => {
     const valid = {
       kind: "babylon-native-block-live-handle-registry",
       schemaVersion: 1,
+      realization: { kind: "authoring-unbatched" },
       blocks: [
         {
+          kind: "independent-mesh",
+          blockId: "first",
           runtimeEntityId: "native-block:first",
           semanticCaptureClassId: "worldkit.native-block.group.route",
           mesh: first,
         },
         {
+          kind: "independent-mesh",
+          blockId: "second",
           runtimeEntityId: "native-block:second",
           semanticCaptureClassId: "worldkit.native-block.group.route",
           mesh: second,
         },
       ],
-      visualGroups: [{ visualGroupId: "route", meshes: [first, second] }],
+      visualBatches: [],
+      visualGroups: [{ visualGroupId: "route", blockHandles: [] }],
       walkableOverlays: [],
+    } as const;
+    const validRegistry = {
+      ...valid,
+      visualGroups: [{
+        visualGroupId: "route",
+        blockHandles: [valid.blocks[0], valid.blocks[1]],
+      }],
     } as const;
 
     try {
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
-        liveHandleRegistry: valid,
+        liveHandleRegistry: validRegistry,
       })).not.toThrow();
       expect(metadataReadCount).toBe(0);
 
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
-        liveHandleRegistry: { ...valid, blocks: valid.blocks.slice(0, 1) },
+        liveHandleRegistry: {
+          ...validRegistry,
+          blocks: validRegistry.blocks.slice(0, 1),
+        },
       })).toThrowError(/LIVE_VISUAL/);
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
         liveHandleRegistry: {
-          ...valid,
-          blocks: [...valid.blocks, {
+          ...validRegistry,
+          blocks: [...validRegistry.blocks, {
+            kind: "independent-mesh" as const,
+            blockId: "extra",
             runtimeEntityId: "native-block:extra",
             semanticCaptureClassId: "worldkit.native-block.group.route",
             mesh: second,
@@ -194,16 +212,25 @@ describe("formal world capture provider", () => {
         scene: firstScene,
         materializerMetadata: metadata,
         liveHandleRegistry: {
-          ...valid,
-          blocks: [valid.blocks[0], { ...valid.blocks[1], mesh: foreign }],
-          visualGroups: [{ visualGroupId: "route", meshes: [first, foreign] }],
+          ...validRegistry,
+          blocks: [
+            validRegistry.blocks[0],
+            { ...validRegistry.blocks[1], mesh: foreign },
+          ],
+          visualGroups: [{
+            visualGroupId: "route",
+            blockHandles: [
+              validRegistry.blocks[0],
+              { ...validRegistry.blocks[1], mesh: foreign },
+            ],
+          }],
         },
       })).toThrowError(/LIVE_VISUAL/);
       second.dispose();
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
-        liveHandleRegistry: valid,
+        liveHandleRegistry: validRegistry,
       })).toThrowError(/LIVE_VISUAL/);
       expect(metadataReadCount).toBe(0);
     } finally {

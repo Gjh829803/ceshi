@@ -3,8 +3,6 @@ import { describe, expectTypeOf, it } from "vitest";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 
 import type {
-  BabylonNativeBlockChunkPolicyV1,
-  BabylonNativeBlockOptimizationAssessmentV1,
   BabylonNativeBlockCreateInputV1,
   BabylonNativeBlockColliderGeometrySourceV1,
   BabylonNativeBlockFinalizedEpochV1,
@@ -14,7 +12,11 @@ import type {
   BabylonNativeBlockRotationQuarterTurnsYV1,
   BabylonNativeBlockStaticColliderSelectionV1,
 } from "./index.js";
-import { assessBabylonNativeBlockOptimizationV1 } from "./index.js";
+import {
+  assessBabylonNativeBlockOptimizationV1,
+  type BabylonNativeBlockChunkPolicyV1,
+  type BabylonNativeBlockOptimizationAssessmentV1,
+} from "./host.js";
 
 describe("Babylon Native block profile public types", () => {
   it("names the ephemeral helper argument as a positioned create input", () => {

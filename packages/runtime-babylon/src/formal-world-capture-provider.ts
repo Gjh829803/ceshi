@@ -2,8 +2,10 @@ import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import {
+  babylonNativeBlockLiveVisualHandleMeshV1,
   peekBabylonNativeBlockLiveHandleRegistryV1,
   type BabylonNativeBlockLiveHandleRegistryV1,
+  type BabylonNativeBlockLiveVisualHandleV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
 import {
   FORMAL_WORLD_CAPTURE_SDK_OWNER_IDS_V1,
@@ -172,17 +174,42 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
     input.liveHandleRegistry.blocks.map(({ runtimeEntityId }) => runtimeEntityId),
     "BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BLOCK_SET_INVALID",
   );
-  const meshByBlockId = new Map<string, Mesh>();
+  const batchById = new Map(input.liveHandleRegistry.visualBatches.map((batch) =>
+    [batch.batchId, batch] as const));
+  if (batchById.size !== input.liveHandleRegistry.visualBatches.length) {
+    fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_IDENTITY_INVALID");
+  }
+  const handleByBlockId =
+    new Map<string, BabylonNativeBlockLiveVisualHandleV1>();
+  const batchedBlockIds = new Set<string>();
   for (const live of input.liveHandleRegistry.blocks) {
     const metadata = metadataBlockByRuntimeId.get(live.runtimeEntityId)!;
+    const mesh = babylonNativeBlockLiveVisualHandleMeshV1(live);
     if (
       metadata.semanticCaptureClassId !== live.semanticCaptureClassId ||
-      live.mesh.isDisposed() ||
-      live.mesh.getScene() !== input.scene ||
-      meshByBlockId.has(metadata.blockId)
+      metadata.blockId !== live.blockId ||
+      mesh.isDisposed() ||
+      mesh.getScene() !== input.scene ||
+      handleByBlockId.has(metadata.blockId)
     ) fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BLOCK_IDENTITY_INVALID");
-    meshByBlockId.set(metadata.blockId, live.mesh);
+    if (live.kind === "thin-instance") {
+      const batch = batchById.get(live.batchId);
+      if (
+        batch === undefined ||
+        batch.mesh !== live.batchMesh ||
+        batch.blockIds[live.instanceIndex] !== live.blockId ||
+        !live.batchMesh.hasThinInstances ||
+        live.batchMesh.thinInstanceCount !== batch.blockIds.length
+      ) fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_IDENTITY_INVALID");
+      batchedBlockIds.add(live.blockId);
+    }
+    handleByBlockId.set(metadata.blockId, live);
   }
+  exactStringSet(
+    input.liveHandleRegistry.visualBatches.flatMap(({ blockIds }) => blockIds),
+    [...batchedBlockIds],
+    "BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_BATCH_COVERAGE_INVALID",
+  );
 
   exactStringSet(
     input.materializerMetadata.visualGroups.map(({ visualGroupId }) => visualGroupId),
@@ -194,17 +221,21 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
   ));
   for (const metadataGroup of input.materializerMetadata.visualGroups) {
     const liveGroup = liveGroupById.get(metadataGroup.visualGroupId)!;
-    const expectedMeshes = metadataGroup.blockIds.map((blockId) =>
-      meshByBlockId.get(blockId) ?? fail(
+    const expectedHandles = metadataGroup.blockIds.map((blockId) =>
+      handleByBlockId.get(blockId) ?? fail(
         "BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_GROUP_BLOCK_MISSING",
         blockId,
       ));
     if (
-      liveGroup.meshes.length !== expectedMeshes.length ||
-      new Set(liveGroup.meshes).size !== liveGroup.meshes.length ||
-      expectedMeshes.some((mesh) => !liveGroup.meshes.includes(mesh)) ||
-      liveGroup.meshes.some((mesh) =>
-        mesh.isDisposed() || mesh.getScene() !== input.scene)
+      liveGroup.blockHandles.length !== expectedHandles.length ||
+      new Set(liveGroup.blockHandles.map(({ blockId }) => blockId)).size !==
+        liveGroup.blockHandles.length ||
+      expectedHandles.some((handle) =>
+        !liveGroup.blockHandles.includes(handle)) ||
+      liveGroup.blockHandles.some((handle) => {
+        const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
+        return mesh.isDisposed() || mesh.getScene() !== input.scene;
+      })
     ) fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_GROUP_IDENTITY_INVALID");
   }
 }
