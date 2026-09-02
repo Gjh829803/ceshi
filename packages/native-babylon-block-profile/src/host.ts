@@ -30,6 +30,15 @@ export type {
   BuildBabylonNativeBlockWalkableTopologyInputV1,
 } from "./walkable-topology.js";
 export {
+  buildBabylonNativeBlockGroundBoundaryV1,
+} from "./ground-boundary.js";
+export type {
+  BabylonNativeBlockGroundBoundaryPolicyV1,
+  BabylonNativeBlockGroundBoundarySegmentV1,
+  BabylonNativeBlockGroundBoundaryV1,
+  BuildBabylonNativeBlockGroundBoundaryInputV1,
+} from "./ground-boundary.js";
+export {
   materializeBabylonNativeBlockWalkableTopologyV1,
 } from "./walkable-topology-materializer.js";
 export type {
