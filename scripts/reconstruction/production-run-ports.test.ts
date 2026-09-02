@@ -35,6 +35,8 @@ import {
   type ProductionWorldReconstructionRunPortsInputV1,
 } from "./production-run-ports.js";
 import { FormalCaptureCommandClosedErrorV1 } from "./formal-capture.js";
+import { CaptureOnlyHostedSessionClosedErrorV1 } from
+  "./hosted-session-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "./evaluate.js";
 import { createEvidenceSetFixtureInputV1 } from
   "./evaluate-fixture.test-support.js";
@@ -437,6 +439,35 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     )).toEqual(reconstructionCase.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
     ));
+    expect(reconstructionCase.expected.colliders.find(
+      ({ colliderId }) => colliderId === "collider-cliff-approach-ground",
+    )).toEqual({
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/foreground-platform@1",
+      contributionId: "collider-cliff-approach-ground",
+      colliderId: "collider-cliff-approach-ground",
+      role: "ground",
+      requiresOverlay: true,
+    });
+    expect(reconstructionCase.expected.criticalTraversalChecks.find(
+      ({ id }) => id === "central-ascent-pass",
+    )?.fixedInputSequence).toEqual([{
+      actions: ["move-forward"],
+      axes: { moveYRatio: 1 },
+      ticks: 600,
+    }]);
+    expect(await readFile(
+      path.join(caseRoot, "inputs", "task-instruction.md"),
+      "utf8",
+    )).toContain(
+      "walking or falling off an unregistered ledge is not blocker evidence",
+    );
+    expect(await readFile(
+      path.join(caseRoot, "inputs", "task-instruction.md"),
+      "utf8",
+    )).toContain(
+      "Do not add `supported-spawn` or any other evidence-only acceptance target to `visualGroups`",
+    );
     await expect(createProductionWorldReconstructionRunPortsV1({
       ...value.input,
       repositoryRoot,
@@ -745,6 +776,45 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       }));
     },
   );
+
+  it("preserves a stable capture diagnostic from nested closure causes", async () => {
+    const value = await fixture();
+    const events: string[] = [];
+    const ownerPorts = {
+      ...owners(value, events),
+      capturePackage: vi.fn(async () => {
+        const providerFailure = new Error(
+          "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+        );
+        const transportFailure = new Error("hosted bridge rejected", {
+          cause: providerFailure,
+        });
+        throw new FormalCaptureCommandClosedErrorV1({
+          stage: "hosted-session",
+          cleanupOutcomes: {
+            hostedBrowserSession: "completed",
+            viteServer: "completed",
+          },
+          cause: new CaptureOnlyHostedSessionClosedErrorV1(
+            transportFailure,
+            {
+              hostedBrowserSession: "completed",
+              viteServer: "completed",
+            },
+          ),
+        });
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+
+    expect(await ports.capture({ attemptIndex: 0, packaged })).toEqual({
+      outcome: "failed",
+      cameraRollbackOutcome: "completed",
+      diagnosticCodes: [
+        "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+      ],
+    });
+  });
 
   it("never allocates Browser when the verified-Package capture request writer rejects", async () => {
     const value = await fixture();

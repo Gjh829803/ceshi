@@ -175,6 +175,7 @@ function assertObservationIdentity(
     FormalScriptedTraversalObservationV1,
   receipt: FormalWorldCaptureReceiptV1,
   role: string,
+  resetIdentity: "receipt-ready" | "independent-reset",
 ): void {
   exact(
     observation.formalRequestRef,
@@ -201,16 +202,18 @@ function assertObservationIdentity(
     receipt.runtimeSessionId,
     `${role} Runtime session does not match Capture Receipt`,
   );
-  exact(
-    observation.resetReadySnapshotHash,
-    receipt.readySnapshotHash,
-    `${role} reset Snapshot does not match Capture Receipt`,
-  );
-  sameCanonical(
-    observation.resetReadySnapshot,
-    receipt.readySnapshot,
-    `${role} reset Snapshot payload does not match Capture Receipt`,
-  );
+  if (resetIdentity === "receipt-ready") {
+    exact(
+      observation.resetReadySnapshotHash,
+      receipt.readySnapshotHash,
+      `${role} reset Snapshot does not match Capture Receipt`,
+    );
+    sameCanonical(
+      observation.resetReadySnapshot,
+      receipt.readySnapshot,
+      `${role} reset Snapshot payload does not match Capture Receipt`,
+    );
+  }
   exact(
     observation.semanticCaptureMapHash,
     receipt.semanticCaptureMapHash,
@@ -341,14 +344,33 @@ export function buildWorldReconstructionEvidenceSetV1(
     verified.nativeSceneContribution.profileSettlement.settledVisualHash,
     "profile settlement visual hash does not match trusted Block metadata");
 
-  for (const [observation, role] of [
-    [opening, "opening"],
-    [spawn, "spawn support"],
-    [overlay, "collider overlay"],
-    [traversal, "traversal"],
+  for (const [observation, role, resetIdentity] of [
+    [opening, "opening", "receipt-ready"],
+    [spawn, "spawn support", "receipt-ready"],
+    [overlay, "collider overlay", "receipt-ready"],
+    [traversal, "traversal", "independent-reset"],
   ] as const) {
-    assertObservationIdentity(observation, captureReceipt, role);
+    assertObservationIdentity(
+      observation,
+      captureReceipt,
+      role,
+      resetIdentity,
+    );
   }
+  const firstTraversalCheck = traversal.checks[0];
+  if (firstTraversalCheck === undefined) {
+    stale("traversal evidence contains no independently reset check");
+  }
+  exact(
+    traversal.resetReadySnapshotHash,
+    firstTraversalCheck.resetReadySnapshotHash,
+    "traversal identity Snapshot does not match its first reset check",
+  );
+  sameCanonical(
+    traversal.resetReadySnapshot,
+    firstTraversalCheck.resetReadySnapshot,
+    "traversal identity Snapshot payload does not match its first reset check",
+  );
   exact(captureReceipt.openingObservationContentHash,
     hashFormalOpeningObservationV1(opening),
     "opening observation content hash does not match Capture Receipt");

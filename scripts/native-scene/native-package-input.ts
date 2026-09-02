@@ -109,14 +109,22 @@ export interface PreparedFrozenBabylonNativeWorldPackageBuildInputV1 {
 
 export class BabylonNativePackageInputErrorV1 extends Error {
   readonly code = "WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID";
+  readonly diagnostic: string;
 
-  constructor() {
-    super("WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID");
+  constructor(
+    diagnostic = "native-package-input-invalid",
+    cause?: unknown,
+  ) {
+    super("WORLDKIT_NATIVE_PACKAGE_INPUT_INVALID", { cause });
+    this.diagnostic = diagnostic;
   }
 }
 
-function fail(): never {
-  throw new BabylonNativePackageInputErrorV1();
+function fail(
+  diagnostic = "native-package-input-invalid",
+  cause?: unknown,
+): never {
+  throw new BabylonNativePackageInputErrorV1(diagnostic, cause);
 }
 
 function identity(input: unknown): string {
@@ -519,19 +527,27 @@ export async function prepareFrozenBabylonNativeWorldPackageBuildInputV1(
           );
         const contributionHash =
           hashBabylonNativeSceneContributionV1(contribution);
-        const authoringLayoutBinding =
-          bindNativeBlockAuthoringManifestToCheckedLayoutV1({
-            reconstructionCase:
-              input.nativeBlockAuthoring.reconstructionCase,
-            authoringManifest: input.nativeBlockAuthoring.authoringManifest,
-            authoringManifestHash: hashNativeBlockAuthoringManifestV1(
-              input.nativeBlockAuthoring.authoringManifest,
-            ),
-            checkedLayout: firstBlockEvidence.checkedLayout,
-            checkedLayoutInventoryHash,
-            contributionHash,
-            frozenContributionHash: contributionHash,
-          });
+        const authoringLayoutBinding = (() => {
+          try {
+            return bindNativeBlockAuthoringManifestToCheckedLayoutV1({
+              reconstructionCase:
+                input.nativeBlockAuthoring.reconstructionCase,
+              authoringManifest: input.nativeBlockAuthoring.authoringManifest,
+              authoringManifestHash: hashNativeBlockAuthoringManifestV1(
+                input.nativeBlockAuthoring.authoringManifest,
+              ),
+              checkedLayout: firstBlockEvidence.checkedLayout,
+              checkedLayoutInventoryHash,
+              contributionHash,
+              frozenContributionHash: contributionHash,
+            });
+          } catch (error) {
+            return fail(
+              "native-block-authoring-layout-binding-invalid",
+              error,
+            );
+          }
+        })();
         return createBabylonNativeBlockMaterializerMetadataV1({
           authoringLayoutBinding,
           checkedLayout: firstBlockEvidence.checkedLayout,

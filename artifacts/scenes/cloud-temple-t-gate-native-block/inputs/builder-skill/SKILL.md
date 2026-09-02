@@ -17,6 +17,8 @@ scene.ts owns Babylon Native Block visual construction and explicit registration
 
 The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation.
 
+The Formal Capture Intent remains Capture-only Host input and is not part of the generation context or any Builder output. Do not predict `sourceBoundsMeters` or `planeMeters`; after Package verification, the Host resolves those values from checked visual-group bounds or exact frozen Collider geometry.
+
 This is one of exactly two Scene Sources. Do not emit Canonical geometry, overlay a Canonical world, introduce a third Source, or route Native output through a Manifest or Compiler. The Host-selected route and Bootstrap are immutable. A successful task or Skill self-check is not Native admission.
 
 The formal Builder task uses `gpt-5.6-sol` with reasoning effort `xhigh`. Never downgrade a formal run or describe a smoke run as reconstruction evidence.
@@ -34,14 +36,24 @@ Do not write logs, screenshots, receipts, locks, generated JavaScript, source ma
 ## Reconstruction method
 
 1. Establish the complete metric footprint before detail. Reconstruct the reference as coherent volumes seen from opening, top, side, and exploration views—not camera-facing facades.
-2. Use the fixed Block Profile shapes and palette. One block is metric geometry; keep the fixed lattice, undeformed meshes, Y-only quarter turns, stable IDs, and deterministic insertion order. Read the exact shape dimensions, center lattice, occupancy grid, support rule, route adjacency rule, and safe stair recipe in the output contract before choosing any coordinates; never infer a Minecraft-like 2 m block scale.
+2. Use the fixed Block Profile shapes and palette. One block is metric geometry; keep the fixed lattice, undeformed meshes, Y-only quarter turns, stable IDs, and deterministic insertion order. Read the exact shape dimensions, shape-specific legal center residues, occupancy grid, support rule, route adjacency rule, and safe stair recipe in the output contract before choosing any coordinates; never infer a Minecraft-like 2 m block scale. A center that is merely a multiple of the broad `[0.25, 0.125, 0.25]` lattice is not automatically valid for every shape.
 3. Use `context.random` and the frozen seed for every variation. Never use ambient randomness, wall-clock time, locale-sensitive ordering, or network input.
 4. Build ground/support first, then the central ascent, the T-shaped upper platform, the gate/building silhouette, side masses, and blocker walls. Keep the opening composition and the hidden continuation consistent with the Scene Brief.
 5. Give mountains, cliffs, stairs, platforms, and buildings real plan depth, cross-section, support, and rear mass. Small blocks express exposed detail; they do not replace structural volume.
-6. Give every selected complete semantic target one explicit `visualGroupId`. Do not split a complete gate, building, mountain mass, or repeated identity into decorative part groups.
+6. Give every row of `context/case.json.expected.semanticSilhouetteTargets` exactly its declared `visualGroupId`, with no additional visual group. Do not split a complete gate, building, mountain mass, or repeated identity into decorative part groups. Acceptance targets used only by Spawn support, Collider, traversal, topology, or deterministic evidence remain evidence bindings and must not become visual groups.
 7. Register the Host-declared Spawn Marker explicitly at a ground-supported Spawn with clearance. The marker identifies the support-top position; it does not create a Character or control state.
 8. Select every static collider explicitly during Block Profile finalization. Include the Spawn support, continuous playable corridor, required Case IDs, and necessary blocker walls, but do not register every visual Block. Keep the final selection below the frozen Generation Request Collider budget. Never infer collision from mesh names, tags, materials, or a later scene scan.
+   Every scripted fixed-input check must remain supported for its complete declared approach unless the Case explicitly expects a ledge departure. Before placing its geometry, read the exact actions, axes, and Tick count from `context/case.json`, then resolve the controlled Subject's forward direction, walk/run speeds, acceleration, Capsule, step, and slope limits from `inputs/world-runtime-bootstrap.json`. The formal Runtime advances at exactly 60 fixed Ticks per second. Treat `speed * ticks / 60` only as a theoretical flat-ground ceiling: leave material reserve for acceleration, stairs, slopes, support contacts, and Capsule entry into the Host-resolved checkpoint bounds. A pass check must enter its final checkpoint before the last Tick using only its declared inputs; if the sequence has no turn, lateral, jump, or run action, the route must not require one. A blocker check must reach the blocker on registered support; falling from a visual-only platform edge is not evidence that the blocker works.
 9. The first reconstruction Case has no Route/Nav claim. Static traversal intent is only an explicit collider contribution where admitted; do not emit product Route, NavMesh, `goTo`, or reachability evidence.
+
+Host TypeScript checking is strict. When an `as const` tuple supplies a mutable numeric loop bound, explicitly widen the loop variable to `number`; otherwise literal-union inference can make later valid numeric comparisons fail admission.
+
+Before returning, verify this closure:
+
+- every `context/case.json` required Collider ID appears exactly once in `session.finalize().staticColliders`;
+- each required Collider selects one explicit Block in its corresponding acceptance visual group, including Spawn/support, step, and blocker roles;
+- the final Collider rows remain one-row-per-Collider, deterministic, and below the frozen budget; and
+- no Capture bounds, planes, Package fields, receipts, or extra outputs were authored.
 
 ## Forbidden ownership
 

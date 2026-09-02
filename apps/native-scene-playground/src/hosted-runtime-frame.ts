@@ -31,6 +31,17 @@ export interface HostedRuntimeFrameV1 {
   dispose(): Promise<void>;
 }
 
+export function prepareHostedRuntimeFrameDocumentV1(
+  frameDocument: Document,
+): void {
+  frameDocument.documentElement.classList.add("hosted-runtime-surface");
+  for (const element of frameDocument.querySelectorAll(
+    "[data-worldkit-shell-chrome]",
+  )) {
+    element.remove();
+  }
+}
+
 function byteLength(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }

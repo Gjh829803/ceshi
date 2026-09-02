@@ -37,6 +37,14 @@ export interface HostedFormalCaptureFrameV1 {
   dispose(): Promise<void>;
 }
 
+function providerDiagnosticCode(error: unknown): string {
+  const match = error instanceof Error
+    ? /^(BABYLON_FORMAL_CAPTURE_[A-Z0-9_]+)(?::|$)/.exec(error.message)
+    : null;
+  return match?.[1] ??
+    "WORLDKIT_HOSTED_FORMAL_CAPTURE_PROVIDER_REJECTED";
+}
+
 export function startHostedFormalCaptureFrameV1(
   input: StartHostedFormalCaptureFrameInputV1,
 ): HostedFormalCaptureFrameV1 {
@@ -131,7 +139,7 @@ export function startHostedFormalCaptureFrameV1(
         } catch {
           void terminate();
         }
-      }, () => {
+      }, (error) => {
         if (isDisposed || isNil(port) || phase !== "capturing") return;
         const failure = Object.freeze({
           kind: "worldkit-hosted-formal-capture-failure" as const,
@@ -141,8 +149,7 @@ export function startHostedFormalCaptureFrameV1(
           formalRequestId: input.formalRequestId,
           formalRequestHash: input.formalRequestHash,
           messageSequence: 2 as const,
-          diagnosticCode:
-            "WORLDKIT_HOSTED_FORMAL_CAPTURE_PROVIDER_REJECTED" as const,
+          diagnosticCode: providerDiagnosticCode(error),
         });
         phase = "completed";
         port.postMessage(failure);

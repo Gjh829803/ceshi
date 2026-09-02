@@ -69,12 +69,33 @@ const AUTHORING = {
   ],
 } as const;
 
+const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
+  "    const upper = session.createBlock",
+  `    const supportedSpawn = session.createBlock({ id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group" });
+    supportedSpawn.position.set(8, -0.5, 2);
+    const upper = session.createBlock`,
+);
+
+const EXTRA_VISUAL_GROUP_AUTHORING = {
+  ...AUTHORING,
+  visualGroups: [
+    ...AUTHORING.visualGroups.slice(0, 4),
+    { visualGroupId: "supported-spawn-group", acceptanceTargetRef: "worldkit://acceptance-target/supported-spawn@1", semanticClassId: "ground.supported-spawn", identityColorHex: "#AA0006" },
+    AUTHORING.visualGroups[4]!,
+  ],
+} as const;
+
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) =>
     rm(root, { recursive: true, force: true })));
 });
 
-async function completedAttempt() {
+async function completedAttempt(options: Readonly<{
+  sceneSource?: string;
+  authoring?: typeof AUTHORING | typeof EXTRA_VISUAL_GROUP_AUTHORING;
+}> = {}) {
+  const sceneSource = options.sceneSource ?? SCENE_SOURCE;
+  const authoring = options.authoring ?? AUTHORING;
   const root = await realpath(await mkdtemp(
     path.join(os.tmpdir(), "worldkit-native-package-"),
   ));
@@ -136,8 +157,8 @@ async function completedAttempt() {
     },
   });
   await Promise.all([
-    writeFile(path.join(prepared.stagingDirectoryPath, "scene.ts"), SCENE_SOURCE),
-    writeFile(path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"), stringifyCanonicalJson(AUTHORING)),
+    writeFile(path.join(prepared.stagingDirectoryPath, "scene.ts"), sceneSource),
+    writeFile(path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"), stringifyCanonicalJson(authoring)),
     writeFile(path.join(prepared.stagingDirectoryPath, "native-resources.json"), stringifyCanonicalJson({ kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: [] })),
   ]);
   const generated = await runNativeBlockGenerationV1(prepared, {
@@ -226,6 +247,22 @@ describe("packageNativeBlockAttemptV1", () => {
       fixture.attemptDirectoryPath,
       "scene-authoring-attempt-result.json",
     ))).rejects.toMatchObject({ code: "ENOENT" });
+  }, 60_000);
+
+  it("reports the stable authoring/Layout binding diagnostic instead of an internal Package failure", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: EXTRA_VISUAL_GROUP_SCENE_SOURCE,
+      authoring: EXTRA_VISUAL_GROUP_AUTHORING,
+    });
+
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({
+      diagnostics: ["native-block-authoring-layout-binding-invalid"],
+    });
   }, 60_000);
 
   it("rejects a stale Generation Receipt before creating a check or Package output", async () => {

@@ -60,7 +60,7 @@ function stableCompare(left: string, right: string): number {
 
 function fail(section: string, message: string): never {
   throw new TypeError(
-    `BABYLON_FORMAL_WORLD_CAPTURE_MEASUREMENT_INVALID: ${section}: ${message}`,
+    `BABYLON_FORMAL_CAPTURE_MEASUREMENT_INVALID: ${section}: ${message}`,
   );
 }
 
@@ -352,6 +352,43 @@ function farClipMeters(camera: Camera): number {
   return camera.ignoreCameraMaxZ ? Number.POSITIVE_INFINITY : camera.maxZ;
 }
 
+const AABB_EDGE_CORNER_INDEX_PAIRS: readonly (readonly [number, number])[] =
+  Object.freeze([
+    [0, 1], [0, 2], [0, 4],
+    [1, 3], [1, 5], [2, 3],
+    [2, 6], [3, 7], [4, 5],
+    [4, 6], [5, 7], [6, 7],
+  ] as const);
+
+function perspectiveNearClippedPoints(
+  corners: readonly Vector3[],
+  cornerDepthMeters: readonly number[],
+  nearPlaneMeters: number,
+  visualGroupId: string,
+): readonly Vector3[] {
+  const points = corners.filter(
+    (_corner, index) => cornerDepthMeters[index]! > nearPlaneMeters,
+  );
+  if (points.length === 0) {
+    fail("PROJECTION", `${visualGroupId} is behind the near plane`);
+  }
+  for (const [startIndex, endIndex] of AABB_EDGE_CORNER_INDEX_PAIRS) {
+    const startDepthMeters = cornerDepthMeters[startIndex]!;
+    const endDepthMeters = cornerDepthMeters[endIndex]!;
+    const startIsVisible = startDepthMeters > nearPlaneMeters;
+    const endIsVisible = endDepthMeters > nearPlaneMeters;
+    if (startIsVisible === endIsVisible) continue;
+    const distanceRatio = (nearPlaneMeters - startDepthMeters) /
+      (endDepthMeters - startDepthMeters);
+    points.push(Vector3.Lerp(
+      corners[startIndex]!,
+      corners[endIndex]!,
+      distanceRatio,
+    ));
+  }
+  return points;
+}
+
 function projectGroup(
   input: FormalWorldCaptureMeasurementInputV1,
   binding: FormalSemanticCaptureMapV1["bindings"][number],
@@ -368,20 +405,26 @@ function projectGroup(
     (minimum[1] + maximum[1]) / 2,
     (minimum[2] + maximum[2]) / 2,
   );
-  const cameraDepthMeters = Vector3.Dot(
+  const sourceCenterDepthMeters = Vector3.Dot(
     center.subtract(cameraPosition),
     cameraForward,
   );
   const farPlaneMeters = farClipMeters(input.camera);
+  if (!Number.isFinite(sourceCenterDepthMeters)) {
+    fail("PROJECTION", `${binding.blockVisualGroupId} center depth is non-finite`);
+  }
   if (
-    !Number.isFinite(cameraDepthMeters) ||
-    cameraDepthMeters <= input.camera.minZ
+    input.camera.mode !== Camera.PERSPECTIVE_CAMERA &&
+    sourceCenterDepthMeters <= input.camera.minZ
   ) {
     fail("PROJECTION", `${binding.blockVisualGroupId} center is behind the near plane`);
   }
-  if (cameraDepthMeters >= farPlaneMeters) {
+  if (sourceCenterDepthMeters >= farPlaneMeters) {
     fail("PROJECTION", `${binding.blockVisualGroupId} center is beyond the far plane`);
   }
+  const cameraDepthMeters = input.camera.mode === Camera.PERSPECTIVE_CAMERA
+    ? Math.max(sourceCenterDepthMeters, input.camera.minZ)
+    : sourceCenterDepthMeters;
 
   const viewport = input.camera.viewport.toGlobal(
     input.view.widthPixels,
@@ -398,26 +441,39 @@ function projectGroup(
     viewport.y + viewport.height > input.view.heightPixels
   ) fail("PROJECTION", "camera viewport is outside the formal render target");
 
-  const projected = corners.map((corner) => {
-    const cornerDepthMeters = Vector3.Dot(
+  const cornerDepthMeters = corners.map((corner) =>
+    Vector3.Dot(
       corner.subtract(cameraPosition),
       cameraForward,
+    ));
+  if (!cornerDepthMeters.every(Number.isFinite)) {
+    fail("PROJECTION", `${binding.blockVisualGroupId} has non-finite camera depth`);
+  }
+  if (cornerDepthMeters.some((depthMeters) => depthMeters >= farPlaneMeters)) {
+    fail(
+      "PROJECTION",
+      `${binding.blockVisualGroupId} crosses or is beyond the far plane`,
     );
-    if (
-      !Number.isFinite(cornerDepthMeters) ||
-      cornerDepthMeters <= input.camera.minZ
-    ) {
-      fail(
-        "PROJECTION",
-        `${binding.blockVisualGroupId} crosses or is behind the near plane`,
-      );
-    }
-    if (cornerDepthMeters >= farPlaneMeters) {
-      fail(
-        "PROJECTION",
-        `${binding.blockVisualGroupId} crosses or is beyond the far plane`,
-      );
-    }
+  }
+  const projectionPoints = input.camera.mode === Camera.PERSPECTIVE_CAMERA
+    ? perspectiveNearClippedPoints(
+      corners,
+      cornerDepthMeters,
+      input.camera.minZ,
+      binding.blockVisualGroupId,
+    )
+    : corners;
+  if (
+    input.camera.mode !== Camera.PERSPECTIVE_CAMERA &&
+    cornerDepthMeters.some((depthMeters) => depthMeters <= input.camera.minZ)
+  ) {
+    fail(
+      "PROJECTION",
+      `${binding.blockVisualGroupId} crosses or is behind the near plane`,
+    );
+  }
+
+  const projected = projectionPoints.map((corner) => {
     const point = Vector3.Project(
       corner,
       Matrix.IdentityReadOnly,
@@ -425,7 +481,10 @@ function projectGroup(
       viewport,
     );
     if (![point.x, point.y, point.z].every(Number.isFinite)) {
-      fail("PROJECTION", `${binding.blockVisualGroupId} produced non-finite screen coordinates`);
+      fail(
+        "PROJECTION",
+        `${binding.blockVisualGroupId} produced non-finite screen coordinates`,
+      );
     }
     return point;
   });

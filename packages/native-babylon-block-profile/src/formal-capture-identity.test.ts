@@ -268,7 +268,7 @@ function checkedLayoutValue() {
   } as const;
 }
 
-function checkpointSpatialCriteria() {
+function resolvedCheckpointSpatialCriteria() {
   return [{
     kind: "reach-bounds",
     checkpointId: "junction",
@@ -292,6 +292,27 @@ function checkpointSpatialCriteria() {
     axis: "z",
     sourceFace: "minimum",
     planeMeters: -1.5,
+    expectedCenterSide: "negative",
+    capsuleRadiusMeters: 0.35,
+    toleranceMeters: 0.05,
+  }] as const;
+}
+
+function authoredCheckpointSpatialCriteria() {
+  return [{
+    kind: "reach-bounds",
+    checkpointId: "junction",
+    expectation: "reach",
+    sourceVisualGroupId: "upper-t-junction-group",
+    capsuleRadiusMeters: 0.35,
+    toleranceMeters: 0.05,
+  }, {
+    kind: "pass-plane",
+    checkpointId: "spawn",
+    expectation: "pass",
+    sourceVisualGroupId: "central-ascent-group",
+    axis: "z",
+    sourceFace: "minimum",
     expectedCenterSide: "negative",
     capsuleRadiusMeters: 0.35,
     toleranceMeters: 0.05,
@@ -332,7 +353,7 @@ function formalCaptureIntentValue(overrides: Record<string, unknown> = {}) {
       measurementSource: "scripted-traversal",
       traversalCheckId: "reach-junction",
     }],
-    checkpointSpatialCriteria: checkpointSpatialCriteria(),
+    checkpointSpatialCriteria: authoredCheckpointSpatialCriteria(),
     ...overrides,
   });
 }
@@ -358,8 +379,13 @@ function contribution() {
     },
     staticColliders: [createBabylonNativeStaticColliderContributionV1({
       id: "spawn-ground",
-      worldPositionsMetersXYZ: [0, 0, 0, 2, 0, 0, 0, 0, 2],
-      triangleIndices: [0, 1, 2],
+      worldPositionsMetersXYZ: [
+        0, 0, 0,
+        2, 0, 0,
+        0, 0, 2,
+        0, 2, 0,
+      ],
+      triangleIndices: [0, 1, 2, 0, 3, 1, 0, 2, 3, 1, 3, 2],
       frictionRatio: 0.75,
       restitutionRatio: 0,
       traversalBinding: {
@@ -529,7 +555,7 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
     }]);
     expect(map.traversalCheckBindings[0]).toMatchObject({
       traversalCheckId: "reach-junction",
-      checkpointCriteria: checkpointSpatialCriteria(),
+      checkpointCriteria: resolvedCheckpointSpatialCriteria(),
     });
     expect(hashFormalSemanticCaptureMapV1(bind())).toBe(
       hashFormalSemanticCaptureMapV1(map),
@@ -616,23 +642,13 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
       .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
   });
 
-  it("rejects checkpoint criteria stale against full Layout bounds or Contribution colliders", () => {
-    const staleBounds = checkpointSpatialCriteria().map((criterion) =>
-      criterion.checkpointId === "junction"
-        ? {
-            ...criterion,
-            sourceBoundsMeters: {
-              minimumMetersXYZ: [-1, 1, -2.5],
-              maximumMetersXYZ: [0.5, 2, -1.5],
-            },
-          }
-        : criterion);
-    expect(() => bind({
-      formalCaptureIntent: formalCaptureIntentValue({
-        checkpointSpatialCriteria: staleBounds,
-      }),
-    }))
-      .toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  it("resolves reach and pass criteria from verified visual-group bounds", () => {
+    expect(bind().traversalCheckBindings[0]?.checkpointCriteria).toEqual(
+      resolvedCheckpointSpatialCriteria(),
+    );
+  });
+
+  it("rejects a Block plane whose collider does not exist", () => {
     expect(() => bind({
       formalCaptureIntent: formalCaptureIntentValue({
         checkpointSpatialCriteria: [{
@@ -640,20 +656,74 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
           checkpointId: "junction",
           expectation: "block",
           sourceVisualGroupId: "upper-t-junction-group",
-          sourceBoundsMeters: {
-            minimumMetersXYZ: [-0.5, 1, -2.5],
-            maximumMetersXYZ: [0.5, 2, -1.5],
-          },
           colliderId: "missing-wall",
           axis: "x",
           sourceFace: "minimum",
-          planeMeters: -0.5,
           expectedCenterSide: "negative",
           capsuleRadiusMeters: 0.35,
           toleranceMeters: 0.05,
-        }, checkpointSpatialCriteria()[1]],
+        }, authoredCheckpointSpatialCriteria()[1]],
       }),
     })).toThrowError("FORMAL_BLOCK_SEMANTIC_CAPTURE_IDENTITY_INVALID");
+  });
+
+  it("resolves a Block plane from exact frozen Collider geometry, not its visual-group AABB", () => {
+    const input = bindInput();
+    const blockedIntent = formalCaptureIntentValue({
+      checkpointSpatialCriteria: [authoredCheckpointSpatialCriteria()[0], {
+        kind: "block-plane",
+        checkpointId: "spawn",
+        expectation: "block",
+        sourceVisualGroupId: "central-ascent-group",
+        colliderId: "spawn-ground",
+        axis: "x",
+        sourceFace: "maximum",
+        expectedCenterSide: "positive",
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
+      }],
+    });
+    const blockedCase = parseWorldReconstructionCaseV1({
+      ...caseValue(),
+      formalCaptureIntentHash: hashFormalWorldCaptureIntentV1(blockedIntent),
+      expected: {
+        ...caseValue().expected,
+        criticalTraversalChecks: [{
+          ...caseValue().expected.criticalTraversalChecks[0],
+          expectation: "block",
+        }],
+      },
+    });
+    const materializerMetadata = parseBabylonNativeBlockMaterializerMetadataV1({
+      ...input.materializerMetadata,
+      caseHash: hashWorldReconstructionCaseV1(blockedCase),
+    });
+
+    const map = bind({
+      case: blockedCase,
+      materializerMetadata,
+      materializerMetadataHash:
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
+      formalCaptureIntent: blockedIntent,
+    });
+
+    expect(map.traversalCheckBindings[0]?.checkpointCriteria[1]).toEqual({
+      kind: "block-plane",
+      checkpointId: "spawn",
+      expectation: "block",
+      sourceVisualGroupId: "central-ascent-group",
+      sourceBoundsMeters: {
+        minimumMetersXYZ: [0, 0, 0],
+        maximumMetersXYZ: [2, 2, 2],
+      },
+      colliderId: "spawn-ground",
+      axis: "x",
+      sourceFace: "maximum",
+      planeMeters: 2,
+      expectedCenterSide: "positive",
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    });
   });
 
   it("rejects a Block plane collider joined to a different visual group", () => {
@@ -664,18 +734,13 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         checkpointId: "junction",
         expectation: "block",
         sourceVisualGroupId: "upper-t-junction-group",
-        sourceBoundsMeters: {
-          minimumMetersXYZ: [-0.5, 1, -2.5],
-          maximumMetersXYZ: [0.5, 2, -1.5],
-        },
         colliderId: "spawn-ground",
         axis: "x",
         sourceFace: "minimum",
-        planeMeters: -0.5,
         expectedCenterSide: "negative",
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
-      }, checkpointSpatialCriteria()[1]],
+      }, authoredCheckpointSpatialCriteria()[1]],
     });
     const blockedCase = parseWorldReconstructionCaseV1({
       ...caseValue(),

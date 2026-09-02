@@ -161,6 +161,28 @@ describe("capture-only Hosted shell bridge", () => {
     await vi.waitFor(() => expect(h.bridge.phase()).toBe("terminated"));
   });
 
+  it("returns one stable Provider diagnostic without exposing private detail", async () => {
+    const h = harness();
+    const runtimePort = await connect(h);
+    const pending = h.bridge.executeFormalCapture(request);
+    runtimePort.postMessage({
+      kind: "worldkit-hosted-formal-capture-failure",
+      schemaVersion: 1,
+      runtimeSessionId,
+      sessionNonce,
+      formalRequestId: request.id,
+      formalRequestHash,
+      messageSequence: 2,
+      diagnosticCode:
+        "BABYLON_FORMAL_CAPTURE_TRAVERSAL_CHECKPOINT_UNMEASURED",
+    });
+
+    await expect(pending).rejects.toThrow(
+      "BABYLON_FORMAL_CAPTURE_TRAVERSAL_CHECKPOINT_UNMEASURED",
+    );
+    expect(h.bridge.phase()).toBe("completed");
+  });
+
   it.each([
     ["oversize message", { extra: "x".repeat(10_000_000) }],
     ["wrong direction", {

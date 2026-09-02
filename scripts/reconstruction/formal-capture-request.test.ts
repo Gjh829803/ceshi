@@ -147,9 +147,6 @@ async function fixture(): Promise<Readonly<{
     .sort();
   const baseInput = createBabylonNativeBlockWorldPackageTestInputV1();
   const baseMetadata = baseInput.nativeBlockMaterializerMetadata!;
-  const baseOpeningGroup = baseMetadata.visualGroups.find(
-    (group) => group.visualGroupId === "ground-group",
-  )!;
   const formalCaptureIntent = parseFormalWorldCaptureIntentV1({
     kind: "formal-world-capture-intent",
     schemaVersion: 1,
@@ -185,10 +182,6 @@ async function fixture(): Promise<Readonly<{
       checkpointId: "ground-checkpoint",
       expectation: "reach",
       sourceVisualGroupId: "ground-group",
-      sourceBoundsMeters: {
-        minimumMetersXYZ: baseOpeningGroup.minimumMetersXYZ,
-        maximumMetersXYZ: baseOpeningGroup.maximumMetersXYZ,
-      },
       capsuleRadiusMeters: 0.35,
       toleranceMeters: 0.05,
     }],

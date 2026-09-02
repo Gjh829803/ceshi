@@ -23,12 +23,18 @@ import { Engine } from "@babylonjs/core/Engines/engine.js";
 import { nativeSceneSubjectAssetResolver } from
   "./subject-asset-resolver.js";
 import { createHostedRuntimeBridgeV1 } from "./hosted-runtime-bridge.js";
-import { startHostedRuntimeFrameV1 } from "./hosted-runtime-frame.js";
+import {
+  prepareHostedRuntimeFrameDocumentV1,
+  startHostedRuntimeFrameV1,
+} from "./hosted-runtime-frame.js";
+import { createHostedNativeExecutionBudgetV1 } from
+  "./hosted-native-execution-budget.js";
 import {
   startHostedFormalCaptureFrameRouteV1,
   startHostedFormalCaptureShellRouteV1,
 } from "./hosted-formal-capture-route.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
+import { presentPageFailureV1 } from "./page-failure.js";
 import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
 import "./style.css";
@@ -109,12 +115,7 @@ function semanticActionsForCodes(
 }
 
 function showFailure(error: unknown): void {
-  const panel = requiredElement<HTMLElement>("[data-error]");
-  panel.hidden = false;
-  panel.textContent = error instanceof Error
-    ? `${error.name}\n${error.message}`
-    : String(error);
-  requiredElement<HTMLElement>("[data-state]").textContent = "FAILED";
+  presentPageFailureV1(document, error);
 }
 
 async function startVerifierProbe(): Promise<void> {
@@ -359,13 +360,10 @@ function browserProtocolBudget(
     maximumColliders: 0,
   },
 ): NativeEffectiveExecutionBudgetV1 {
-  return {
+  return createHostedNativeExecutionBudgetV1({
+    mode: "interactive-session",
     scene,
-    assets: { maximumAssetCount: 64, maximumAssetBytes: 64_000_000, maximumTextureCount: 32, maximumTextureBytes: 64_000_000 },
-    runtime: { maximumSceneNodeCount: 2_000, maximumMaterialCount: 256, maximumShaderCount: 256, maximumPhysicsBodyCount: 256 },
-    process: { maximumWallTimeMilliseconds: 120_000, maximumCpuTimeMilliseconds: 120_000, maximumMemoryBytes: 1_000_000_000, maximumProcessCount: 1 },
-    protocol: { maximumInboundMessageBytes: 2_000_000, maximumOutboundMessageBytes: 2_000_000, maximumReceiptBytes: 2_000_000, maximumDiagnosticCount: 64, maximumLogBytes: 100_000 },
-  };
+  });
 }
 
 async function startHostedShell(): Promise<void> {
@@ -405,6 +403,7 @@ async function startHostedShell(): Promise<void> {
 }
 
 async function startHostedFrame(): Promise<void> {
+  prepareHostedRuntimeFrameDocumentV1(document);
   const query = new URLSearchParams(location.search);
   const shellOrigin = __WORLDKIT_HOSTED_SHELL_ORIGIN__;
   const runtimeSessionId = query.get("runtimeSessionId");

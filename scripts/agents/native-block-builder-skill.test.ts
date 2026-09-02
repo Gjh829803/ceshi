@@ -117,6 +117,13 @@ describe("Native Block Builder Skill", () => {
     expect(skill).toContain("ground-supported Spawn");
     expect(skill).toContain("T-shaped upper platform");
     expect(skill).toContain("no Route/Nav claim");
+    expect(skill).toContain(
+      "The Formal Capture Intent remains Capture-only Host input",
+    );
+    expect(skill).toContain(
+      "Do not predict `sourceBoundsMeters` or `planeMeters`",
+    );
+    expect(skill).toContain("Before returning, verify this closure:");
     expect(outputContract).toContain("@whitebox-world/native-babylon");
     expect(outputContract).toContain("@whitebox-world/native-babylon-block-profile");
     expect(outputContract).toContain("deterministic seeded construction");
@@ -146,6 +153,15 @@ describe("Native Block Builder Skill", () => {
     );
     expect(outputContract).toContain(
       "Do not register every visible or supporting Block",
+    );
+    expect(outputContract).toContain(
+      "Every `case.json.expected.colliders[].colliderId` must appear exactly once",
+    );
+    expect(outputContract).toContain(
+      "bind to one explicit Block in the corresponding acceptance visual group",
+    );
+    expect(outputContract).toContain(
+      "Spawn/support, step, and blocker required IDs cannot be replaced by a large automatically generated Collider set",
     );
     expect(outputContract).toContain(
       "center lattice is `[0.25, 0.125, 0.25]` meters",
@@ -178,7 +194,10 @@ describe("Native Block Builder Skill", () => {
       "`resourceRefs` must be exactly `[]`",
     );
     expect(outputContract).toContain(
-      "Copy the Case's acceptance-target-to-visual-group mapping exactly",
+      "`visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`",
+    );
+    expect(outputContract).toContain(
+      "Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence",
     );
     expect(outputContract).toContain(
       "Every `identityColorHex` must also be unique",

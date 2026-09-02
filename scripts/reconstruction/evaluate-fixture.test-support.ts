@@ -25,6 +25,7 @@ import {
   parseFormalWorldCaptureIntentV1,
   parseWorldRuntimeSnapshotV4,
   type FormalWorldCaptureIntentV1,
+  type FormalTraversalCheckpointIntentCriterionV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -62,6 +63,7 @@ export interface EvidenceSetFixtureOptionsV1 {
     readonly generationRequestHash: Sha256HashV1;
   }>;
   readonly includePaletteTraversalDisagreement?: boolean;
+  readonly independentTraversalReset?: boolean;
   readonly traversalCheckExpectation?: "pass" | "block";
   readonly traversalCheckpointCriteria?: readonly FormalTraversalCheckpointSpatialCriterionV1[];
   readonly traversalCheckpoints?: readonly Readonly<{
@@ -81,6 +83,21 @@ const UPPER_COMPOSITION_TARGET_REF =
 const CASE_REF =
   "artifact://world-reconstruction-case/package-fixture.case/case.json";
 const PROFILE_REF = "artifact://case/package-fixture/evaluation-profile.json";
+
+function authoredCheckpointCriterion(
+  criterion: FormalTraversalCheckpointSpatialCriterionV1,
+): FormalTraversalCheckpointIntentCriterionV1 {
+  if (criterion.kind === "reach-bounds") {
+    const { sourceBoundsMeters: _resolvedBounds, ...authored } = criterion;
+    return authored;
+  }
+  const {
+    sourceBoundsMeters: _resolvedBounds,
+    planeMeters: _resolvedPlane,
+    ...authored
+  } = criterion;
+  return authored;
+}
 
 function snapshotValue() {
   return parseWorldRuntimeSnapshotV4({
@@ -284,7 +301,9 @@ export function createEvidenceSetFixtureInputV1(
       measurementSource: "scripted-traversal",
       traversalCheckId: "reach-ground",
     }],
-    checkpointSpatialCriteria: traversalCheckpointCriteria,
+    checkpointSpatialCriteria: traversalCheckpointCriteria.map(
+      authoredCheckpointCriterion,
+    ),
   });
   const reconstructionCase = parseWorldReconstructionCaseV1({
     kind: "world-reconstruction-case",
@@ -735,6 +754,20 @@ export function createEvidenceSetFixtureInputV1(
     scriptedTraversal,
   };
   const snapshot = snapshotValue();
+  const traversalResetSnapshot = options.independentTraversalReset === true
+    ? parseWorldRuntimeSnapshotV4({
+      ...snapshot,
+      worldSessionId: "world-session-package-fixture-traversal",
+      world: {
+        ...snapshot.world,
+        gameplayInspection: {
+          ...snapshot.world.gameplayInspection,
+          id: "gameplay-inspection:world-session-package-fixture-traversal:4",
+          worldSessionId: "world-session-package-fixture-traversal",
+        },
+      },
+    })
+    : snapshot;
   const ownerIdentities = [
     ["action", "actions", "1"],
     ["camera", "camera", "2"],
@@ -841,12 +874,14 @@ export function createEvidenceSetFixtureInputV1(
   });
   const scriptedTraversalObservation = parseFormalScriptedTraversalObservationV1({
     ...observationIdentity("formal-scripted-traversal-observation", "input"),
+    resetReadySnapshot: traversalResetSnapshot,
+    resetReadySnapshotHash: sha256CanonicalJson(traversalResetSnapshot),
     checks: [{
       id: "reach-ground",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       checkExpectation: traversalCheckExpectation,
-      resetReadySnapshot: snapshot,
-      resetReadySnapshotHash: sha256CanonicalJson(snapshot),
+      resetReadySnapshot: traversalResetSnapshot,
+      resetReadySnapshotHash: sha256CanonicalJson(traversalResetSnapshot),
       fixedTicks: [{
         tick: 1,
         fixedInputStepIndex: 0,

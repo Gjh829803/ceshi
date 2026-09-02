@@ -203,7 +203,7 @@ const MINIMAL_FIXED_INPUT_SEQUENCE_HASH = sha256CanonicalJson(
   MINIMAL_FIXED_INPUT_SEQUENCE,
 );
 
-function traversalCheckpointCriteria() {
+function resolvedTraversalCheckpointCriteria() {
   return [
     {
       kind: "reach-bounds",
@@ -223,6 +223,30 @@ function traversalCheckpointCriteria() {
       axis: "z",
       sourceFace: "minimum",
       planeMeters: 0,
+      expectedCenterSide: "negative",
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    },
+  ] as const;
+}
+
+function authoredTraversalCheckpointCriteria() {
+  return [
+    {
+      kind: "reach-bounds",
+      checkpointId: "junction",
+      expectation: "reach",
+      sourceVisualGroupId: "upper-t-junction-group",
+      capsuleRadiusMeters: 0.35,
+      toleranceMeters: 0.05,
+    },
+    {
+      kind: "pass-plane",
+      checkpointId: "spawn",
+      expectation: "pass",
+      sourceVisualGroupId: "central-ascent-group",
+      axis: "z",
+      sourceFace: "minimum",
       expectedCenterSide: "negative",
       capsuleRadiusMeters: 0.35,
       toleranceMeters: 0.05,
@@ -374,7 +398,7 @@ function semanticMapValue() {
         acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
         checkExpectation: "pass",
         fixedInputSequenceHash: FIXED_INPUT_SEQUENCE_HASH,
-        checkpointCriteria: traversalCheckpointCriteria(),
+        checkpointCriteria: resolvedTraversalCheckpointCriteria(),
       },
     ],
   };
@@ -431,7 +455,7 @@ function formalCaptureIntentValue() {
       subjectEntityId: "player",
       colliderId: "spawn-ground",
     }],
-    checkpointSpatialCriteria: traversalCheckpointCriteria(),
+    checkpointSpatialCriteria: authoredTraversalCheckpointCriteria(),
   } as const;
 }
 
@@ -453,7 +477,7 @@ function formalRequestValue() {
         checkExpectation: "pass",
         fixedInputSequence: FIXED_INPUT_SEQUENCE,
         fixedInputSequenceHash: FIXED_INPUT_SEQUENCE_HASH,
-        checkpointCriteria: traversalCheckpointCriteria(),
+        checkpointCriteria: resolvedTraversalCheckpointCriteria(),
       },
     ],
   } as const;
@@ -632,6 +656,26 @@ describe("FormalWorldCaptureIntentV1", () => {
     })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
   });
 
+  it("rejects resolved Package bounds and planes in authored Intent criteria", () => {
+    const intent = formalCaptureIntentValue();
+    expect(() => parseFormalWorldCaptureIntentV1({
+      ...intent,
+      checkpointSpatialCriteria: intent.checkpointSpatialCriteria.map(
+        (criterion, index) => index === 0
+          ? { ...criterion, sourceBoundsMeters: UPPER_T_JUNCTION_BOUNDS }
+          : criterion,
+      ),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+    expect(() => parseFormalWorldCaptureIntentV1({
+      ...intent,
+      checkpointSpatialCriteria: intent.checkpointSpatialCriteria.map(
+        (criterion, index) => index === 1
+          ? { ...criterion, planeMeters: 0 }
+          : criterion,
+      ),
+    })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
+  });
+
   it.each([
     { widthPixels: 0 },
     { widthPixels: 1.5 },
@@ -788,7 +832,7 @@ describe("FormalWorldCaptureRequestV1", () => {
 
   it("includes capsule-aware spatial criteria in both semantic-map and Request hashes", () => {
     const original = formalRequestValue();
-    const changedCriteria = traversalCheckpointCriteria().map((criterion) =>
+    const changedCriteria = resolvedTraversalCheckpointCriteria().map((criterion) =>
       criterion.checkpointId === "junction"
         ? { ...criterion, toleranceMeters: 0.04 }
         : criterion);

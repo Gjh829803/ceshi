@@ -206,7 +206,9 @@ describe("capture-only Hosted Runtime frame", () => {
 
     const rejected = harness({
       execute: async () => {
-        throw new Error("private provider failure");
+        throw new Error(
+          "BABYLON_FORMAL_CAPTURE_TRAVERSAL_CHECKPOINT_UNMEASURED: central-ascent-pass",
+        );
       },
     });
     rejected.transfer();
@@ -221,6 +223,20 @@ describe("capture-only Hosted Runtime frame", () => {
       formalRequestId: request.id,
       formalRequestHash,
       messageSequence: 2,
+      diagnosticCode:
+        "BABYLON_FORMAL_CAPTURE_TRAVERSAL_CHECKPOINT_UNMEASURED",
+    });
+
+    const privateFailure = harness({
+      execute: async () => {
+        throw new Error("private provider failure with local detail");
+      },
+    });
+    privateFailure.transfer();
+    await nextMessage(privateFailure.shellPort.port1);
+    const redacted = nextMessage(privateFailure.shellPort.port1);
+    privateFailure.shellPort.port1.postMessage(envelope);
+    await expect(redacted).resolves.toMatchObject({
       diagnosticCode: "WORLDKIT_HOSTED_FORMAL_CAPTURE_PROVIDER_REJECTED",
     });
   });
