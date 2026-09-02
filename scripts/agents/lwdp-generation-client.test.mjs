@@ -169,6 +169,29 @@ test("polls until a terminal LWDP status and rejects item failures", async () =>
   ), /builder: bad output/);
 });
 
+test("does not charge provider queue wait against the task execution timeout", async () => {
+  const states = [
+    { status: "running", counters: { total: 1, queued: 1, running: 0, succeeded: 0, failed: 0 } },
+    { status: "running", counters: { total: 1, queued: 1, running: 0, succeeded: 0, failed: 0 } },
+    { status: "running", counters: { total: 1, queued: 0, running: 1, succeeded: 0, failed: 0 } },
+    { status: "succeeded", counters: { total: 1, queued: 0, running: 0, succeeded: 1, failed: 0 } },
+  ];
+  const job = await pollGenerationJob("gen_queued", {
+    config: { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit" },
+    intervalMs: 100,
+    timeoutMs: 150,
+    queueTimeoutMs: 1_000,
+    fetchImplementation: async () => new Response(JSON.stringify({
+      job_id: "gen_queued",
+      ...(states.shift() ?? {
+        status: "succeeded",
+        counters: { total: 1, queued: 0, running: 0, succeeded: 1, failed: 0 },
+      }),
+    }), { status: 200 }),
+  });
+  assert.equal(job.status, "succeeded");
+});
+
 test("treats cancelled and stopped LWDP jobs and items as unsuccessful terminal results", () => {
   for (const status of ["cancelled", "stopped"]) {
     assert.throws(

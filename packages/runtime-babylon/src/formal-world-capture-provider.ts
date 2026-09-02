@@ -250,20 +250,34 @@ export function measureFormalTraversalCheckpointV1(input: Readonly<{
     const inside = input.positionMetersXYZ.every((value, axis) =>
       value >= criterion.sourceBoundsMeters.minimumMetersXYZ[axis]! - margin &&
       value <= criterion.sourceBoundsMeters.maximumMetersXYZ[axis]! + margin);
-    return inside
+    if (inside) {
+      return Object.freeze({
+        checkpointId: criterion.checkpointId,
+        outcome: "reached" as const,
+        observedAtTick: input.tick,
+      });
+    }
+    return input.isFinalTick
       ? Object.freeze({
           checkpointId: criterion.checkpointId,
-          outcome: "reached" as const,
+          outcome: "blocked" as const,
           observedAtTick: input.tick,
         })
       : undefined;
   }
   const crossed = crossedPlane(criterion, input.positionMetersXYZ);
   if (criterion.kind === "pass-plane") {
-    return crossed
+    if (crossed) {
+      return Object.freeze({
+        checkpointId: criterion.checkpointId,
+        outcome: "passed" as const,
+        observedAtTick: input.tick,
+      });
+    }
+    return input.isFinalTick
       ? Object.freeze({
           checkpointId: criterion.checkpointId,
-          outcome: "passed" as const,
+          outcome: "blocked" as const,
           observedAtTick: input.tick,
         })
       : undefined;
