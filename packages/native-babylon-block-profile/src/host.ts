@@ -34,6 +34,15 @@ export type {
   MaterializedBabylonNativeBlockVisualBatchesV1,
 } from "./visual-batch-materializer.js";
 export {
+  partitionBabylonNativeBlockCollisionIntoChunksV1,
+} from "./chunk-collision-partition.js";
+export type {
+  BabylonNativeBlockCollisionChunkPartV1,
+  BabylonNativeBlockCollisionChunkPartitionV1,
+  BabylonNativeBlockCollisionSourceV1,
+  PartitionBabylonNativeBlockCollisionInputV1,
+} from "./chunk-collision-partition.js";
+export {
   applyBabylonNativeBlockCaptureIsolationV1,
 } from "./capture-isolation.js";
 export type {

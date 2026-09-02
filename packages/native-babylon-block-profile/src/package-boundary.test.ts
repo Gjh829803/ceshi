@@ -230,6 +230,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "babylonNativeBlockLiveVisualHandleWorldMatrixV1",
       "babylonNativeBlockLiveVisualRenderedMeshesV1",
       "materializeBabylonNativeBlockVisualBatchesV1",
+      "partitionBabylonNativeBlockCollisionIntoChunksV1",
       "applyBabylonNativeBlockCaptureIsolationV1",
       "freezeBabylonNativeBlockLogicalGroundModelV1",
       "buildBabylonNativeBlockWalkableTopologyV1",
