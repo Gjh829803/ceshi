@@ -706,6 +706,24 @@ describe("world reconstruction contracts", () => {
     const run = parseWorldReconstructionRunReceiptV1(runValue);
     expect(run.attempts).toHaveLength(2);
     expect(run.finalAttemptIndex).toBe(1);
+    const packageScopedRefs = parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      attempts: [runValue.attempts[0], {
+        ...runValue.attempts[1],
+        worldPackageBuildReceiptRef:
+          runValue.attempts[0].worldPackageBuildReceiptRef,
+        worldBuildIdentityRef: runValue.attempts[0].worldBuildIdentityRef,
+      }],
+    });
+    expect(packageScopedRefs.attempts[1]?.worldPackageRef).not.toBe(
+      packageScopedRefs.attempts[0]?.worldPackageRef,
+    );
+    expect(packageScopedRefs.attempts[1]?.worldPackageBuildReceiptRef).toBe(
+      packageScopedRefs.attempts[0]?.worldPackageBuildReceiptRef,
+    );
+    expect(packageScopedRefs.attempts[1]?.worldBuildIdentityRef).toBe(
+      packageScopedRefs.attempts[0]?.worldBuildIdentityRef,
+    );
     for (const caseRef of [
       "artifact://case/cloud-temple.case/case.json",
       "worldkit://world-reconstruction-case/cloud-temple.case",
