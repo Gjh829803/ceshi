@@ -1,0 +1,13 @@
+{
+  "kind": "worldkit-episode-visual-event-director-config",
+  "schemaVersion": 1,
+  "provider": "vertex-gemini",
+  "model": "gemini-3.5-flash",
+  "location": "global",
+  "temperature": 0.8,
+  "maxOutputTokens": 8192,
+  "videoSamplingFps": 0.25,
+  "selectedCaptureIndices": [0, 2, 4],
+  "eventDistribution": [2, 2, 1],
+  "promptTemplatePath": "config/prompts/episode-visual-event-director.zh-CN.md"
+}

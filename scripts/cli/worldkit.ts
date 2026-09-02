@@ -77,6 +77,11 @@ import {
   type WorldkitDiagnostic,
 } from "../lib/worldkit-pipeline";
 import { createTrustedCanonicalWorldPackageV1 } from "../lib/trusted-world-package";
+import {
+  initialCaptureStartupWatchdogV1,
+  isTransientCaptureNavigationError,
+  observeCaptureStartupV1,
+} from "../lib/worldkit-capture-startup";
 import { signWhiteboxCaptureReceiptV1 } from "../lib/whitebox-capture-signing";
 import {
   startWorldkitServer,
@@ -1309,6 +1314,58 @@ export async function captureVisibleWorldWithRetries<
   throw new Error("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
 }
 
+export async function waitForWorldkitCaptureStartup(
+  page: Readonly<{
+    evaluate<T>(callback: () => T | Promise<T>): Promise<T>;
+    waitForTimeout(milliseconds: number): Promise<void>;
+  }>,
+  {
+    hardTimeoutMilliseconds = 180_000,
+    stallTimeoutMilliseconds = 45_000,
+    pollIntervalMilliseconds = 250,
+  } = {},
+): Promise<void> {
+  let watchdog = initialCaptureStartupWatchdogV1(Date.now());
+  for (;;) {
+    try {
+      const probe = await page.evaluate(() => {
+        const target = window as Window & {
+          __WORLDKIT_STARTUP_DIAGNOSTIC__?: {
+            phase: "loading" | "ready" | "error";
+            stage: string;
+            revision: number;
+            errorMessage?: string;
+          };
+        };
+        return {
+          hasBrowserApi: target.__WORLDKIT__ !== undefined,
+          ...target.__WORLDKIT_STARTUP_DIAGNOSTIC__,
+        };
+      });
+      const decision = observeCaptureStartupV1(
+        watchdog,
+        probe,
+        Date.now(),
+        { hardTimeoutMilliseconds, stallTimeoutMilliseconds },
+      );
+      watchdog = decision.state;
+      if (decision.status === "ready") return;
+      if (decision.status !== "waiting") {
+        throw new Error(
+          `WORLDKIT_CAPTURE_STARTUP_${decision.status.toUpperCase().replaceAll("-", "_")}: ${decision.message}`,
+        );
+      }
+    } catch (error) {
+      if (!isTransientCaptureNavigationError(error)) throw error;
+      watchdog = Object.freeze({
+        ...watchdog,
+        lastProgressAtMilliseconds: Date.now(),
+      });
+    }
+    await page.waitForTimeout(pollIntervalMilliseconds);
+  }
+}
+
 export async function captureFile(
   inputPath: string,
   outputPath: string,
@@ -1450,6 +1507,7 @@ export async function captureFile(
   let browser:
     | Awaited<ReturnType<(typeof import("playwright"))["chromium"]["launch"]>>
     | undefined;
+  const browserDiagnostics: string[] = [];
   const temporaryScreenshotPath = path.join(
     path.dirname(absoluteOutputPath),
     `.${path.basename(absoluteOutputPath)}.${process.pid}.${randomUUID()}.tmp.png`,
@@ -1490,15 +1548,26 @@ export async function captureFile(
       viewport: { width: 1280, height: 720 },
       deviceScaleFactor: 1,
     });
+    const rememberBrowserDiagnostic = (value: string): void => {
+      browserDiagnostics.push(value.slice(0, 2_000));
+      if (browserDiagnostics.length > 40) browserDiagnostics.shift();
+    };
+    page.on("console", (message) => {
+      if (["error", "warning"].includes(message.type())) {
+        rememberBrowserDiagnostic(`console.${message.type()}: ${message.text()}`);
+      }
+    });
+    page.on("pageerror", (error) =>
+      rememberBrowserDiagnostic(`pageerror: ${error.message}`));
+    page.on("requestfailed", (request) =>
+      rememberBrowserDiagnostic(
+        `requestfailed: ${request.url()} ${request.failure()?.errorText ?? "unknown"}`,
+      ));
     await page.goto(server.url, {
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
-    await page.waitForFunction(
-      () => window.__WORLDKIT__ !== undefined,
-      undefined,
-      { timeout: 30_000 },
-    );
+    await waitForWorldkitCaptureStartup(page);
     await page.evaluate(async () => {
       const api = window.__WORLDKIT__;
       if (api === undefined) {
@@ -1547,10 +1616,10 @@ export async function captureFile(
       await page.waitForFunction(
         () => window.__WORLDKIT_AUTHORING_CAPTURE__ !== undefined,
         undefined,
-        { timeout: 30_000 },
+        { timeout: 60_000 },
       );
     }
-    const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
+    const captureOperation = () => captureVisibleWorldWithRetries(() => page.evaluate(
       async (captureGroups): Promise<{
         snapshot: WorldRuntimeSnapshotV4;
         screenshotDataUrl: string;
@@ -1657,6 +1726,14 @@ export async function captureFile(
         };
       }, configuredCaptureGroups,
     ));
+    let capture;
+    try {
+      capture = await captureOperation();
+    } catch (error) {
+      if (!isTransientCaptureNavigationError(error)) throw error;
+      await waitForWorldkitCaptureStartup(page);
+      capture = await captureOperation();
+    }
     const pngDataUrlPrefix = "data:image/png;base64,";
     if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
       throw new Error("WORLDKIT_CAPTURE_PNG_DATA_URL_INVALID");
@@ -1713,6 +1790,7 @@ export async function captureFile(
         role: VisualCaptureGroupV1["role"];
         semanticClassId: string;
         identityColor: `#${string}`;
+        frontDirectionWorldXZ: readonly [number, number];
         views: readonly ["front", "right", "back"];
         imageUri: string;
       }[];
@@ -1857,7 +1935,10 @@ export async function captureFile(
     return cliFailure(
       "CLI_CAPTURE_FAILED",
       "Unable to capture the Canonical JSON world.",
-      { cause: error instanceof Error ? error.message : String(error) },
+      {
+        cause: error instanceof Error ? error.message : String(error),
+        browserDiagnostics,
+      },
     );
   } finally {
     await rm(temporaryScreenshotPath, { force: true });

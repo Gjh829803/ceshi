@@ -13,15 +13,19 @@ import {
   appendFile,
   chmod,
   copyFile,
+  mkdtemp,
   mkdir,
+  open,
   readFile,
   readdir,
   rename,
+  rm,
   stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
 import { createServer, request as createHttpRequest } from "node:http";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,10 +38,41 @@ import {
 import { FORMAL_CODEX_EXECUTION_PROFILE } from "../../../scripts/lib/lwdp-codex-profile.mjs";
 import {
   cancelGenerationJob,
+  classifyCodexTaskFailureForRetry,
   LwdpJobPendingError,
   loadLwdpGenerationConfig,
 } from "../../../scripts/lib/lwdp-generation-client.mjs";
 import { recoverSucceededCodexJobOutputs } from "../../../scripts/lib/lwdp-codex-output-recovery.mjs";
+import {
+  cancelCloudExecution,
+  cloudExecutionRecord,
+  dispatchCloudExecution,
+  getCloudExecution,
+  getCloudExecutionCapacity,
+  getCloudExecutionStages,
+} from "../../../scripts/lib/lwdp-cloud-execution-client.mjs";
+import {
+  cloudInternalStage,
+  cloudArtifactManifestS3Uri,
+  executeStudioCloudScene,
+  launchStudioCloudSceneWorker,
+  loadCloudSceneProductionConfig,
+  resumeStudioCloudSceneBuilder,
+  resumeStudioCloudSceneHost,
+} from "./cloud-scene-production.mjs";
+import {
+  executeStudioCloudEpisode,
+  loadCloudEpisodeProductionConfig,
+  recoverStudioCloudEpisode,
+  retryStudioCloudEpisode,
+} from "./cloud-episode-production.mjs";
+import {
+  cloudArtifactByPath,
+  readCloudArtifactManifest,
+  readVerifiedCloudArtifact,
+  streamCloudArtifact,
+  redirectToPresignedCloudArtifact,
+} from "./remote-cloud-artifacts.mjs";
 
 const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const studioRoot = path.resolve(studioSourceRoot, "..");
@@ -49,7 +84,142 @@ const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
 // Bump this only when the persisted Studio record shape changes; do not keep
 // parallel historical workflow implementations in the runtime.
 export const workflowPolicyVersion = 6;
+export function defaultManagedPlaygroundPort(studioPort) {
+  if (!Number.isSafeInteger(studioPort) || studioPort < 1 || studioPort > 64_535) {
+    throw new Error("Studio port must leave room for an isolated Playground port.");
+  }
+  return studioPort + 1_000;
+}
 const codexBackendValues = new Set(["cloud", "local"]);
+const recordLifecycleFields = new Set([
+  "attempt",
+  "captureError",
+  "captureRequired",
+  "captureStatus",
+  "error",
+  "failedStage",
+  "finishedAt",
+  "outcome",
+  "remoteExecutionId",
+  "remoteJobId",
+  "remoteOutputS3Prefix",
+  "remotePendingDeadlineAt",
+  "remotePendingSince",
+  "remoteRequestId",
+  "remoteStageId",
+  "remoteTaskId",
+  "resumeFromStage",
+  "stage",
+  "startedAt",
+  "status",
+  "styledOpeningFrameStatus",
+  "styledTriviewsStatus",
+  "triviewStatus",
+  "whiteboxOutcome",
+]);
+
+export function evaluateRecordTransition(current, patch, {
+  expectedAttempt,
+  expectedRecordRevision,
+  expectedRemoteExecutionId,
+  expectedRemoteJobId,
+  expectedStatuses,
+} = {}) {
+  if (current === null || typeof current !== "object") {
+    return { allowed: false, reason: "missing" };
+  }
+  if (expectedAttempt !== undefined && current.attempt !== expectedAttempt) {
+    return { allowed: false, reason: "attempt-drift" };
+  }
+  if (
+    expectedRecordRevision !== undefined &&
+    current.recordRevision !== expectedRecordRevision
+  ) {
+    return { allowed: false, reason: "revision-drift" };
+  }
+  if (
+    expectedRemoteExecutionId !== undefined &&
+    current.remoteExecutionId !== expectedRemoteExecutionId
+  ) {
+    return { allowed: false, reason: "execution-drift" };
+  }
+  if (
+    expectedRemoteJobId !== undefined &&
+    current.remoteJobId !== expectedRemoteJobId
+  ) {
+    return { allowed: false, reason: "job-drift" };
+  }
+  if (
+    expectedStatuses !== undefined &&
+    !new Set(expectedStatuses).has(current.status)
+  ) {
+    return {
+      allowed: false,
+      reason: current.status === "ready" ? "already-complete" : "status-drift",
+    };
+  }
+  if (
+    current.status === "ready" &&
+    Object.keys(patch).some((field) => recordLifecycleFields.has(field))
+  ) {
+    return { allowed: false, reason: "already-complete" };
+  }
+  return { allowed: true, reason: "applied" };
+}
+
+export function hasRemoteCloudHostResumeInputs(record) {
+  if (
+    typeof record?.remoteExecutionId !== "string" ||
+    typeof record?.remoteArtifactManifestS3Uri !== "string" ||
+    typeof record?.remoteRequestS3Uri !== "string" ||
+    typeof record?.remoteOutputS3Prefix !== "string"
+  ) return false;
+  const requiredPaths = [
+    "scene/scene-brief.md",
+    "scene/planner-self-check.json",
+    "scene/visual-identity-palette.json",
+    "scene/world.mjs",
+    "scene/authoring.json",
+    "scene/implementation-map.draft.json",
+    "scene/builder-self-check.json",
+    "scene/builder-top-down-comparison.png",
+    "scene/builder-entry-comparison.png",
+    "scene-plan/entry-whitebox-target.png",
+    "scene-plan/world-plan.png",
+  ];
+  if (requiredPaths.some((artifactPath) => cloudArtifactByPath(record, artifactPath) === null)) {
+    return false;
+  }
+  return !record.referenceImage || ["png", "jpg", "webp"].some((extension) =>
+    cloudArtifactByPath(record, `scene-plan/reference-0.${extension}`) !== null);
+}
+
+export function hasRemoteCloudPlannerResumeInputs(record) {
+  if (
+    typeof record?.remoteExecutionId !== "string" ||
+    typeof record?.remoteArtifactManifestS3Uri !== "string" ||
+    typeof record?.remoteRequestS3Uri !== "string" ||
+    typeof record?.remoteOutputS3Prefix !== "string"
+  ) return false;
+  const requiredPaths = [
+    "scene/scene-brief.md",
+    "scene/planner-self-check.json",
+    "scene/visual-identity-palette.json",
+    "scene-plan/entry-whitebox-target.png",
+    "scene-plan/world-plan.png",
+  ];
+  if (requiredPaths.some((artifactPath) => cloudArtifactByPath(record, artifactPath) === null)) {
+    return false;
+  }
+  return !record.referenceImage || ["png", "jpg", "webp"].some((extension) =>
+    cloudArtifactByPath(record, `scene-plan/reference-0.${extension}`) !== null);
+}
+
+export function expectedCloudSceneManifestS3Uri(record) {
+  return typeof record?.remoteOutputS3Prefix === "string"
+    ? `${record.remoteOutputS3Prefix.replace(/\/$/, "")}/stages/scene-production/cloud-artifact-manifest.json`
+    : null;
+}
 const allowedRootSceneAssets = new Set([
   "world-plan.png",
   "opening-shot.png",
@@ -260,6 +430,27 @@ export function parseRemotePendingLwdpMarker(rawLog = "") {
   };
 }
 
+export function parseLatestLwdpJobMarker(rawLog = "") {
+  const match = lastMatch(
+    rawLog,
+    /^(?:\[stdout\]\s*)?WORLDKIT_LWDP_JOB (planner|coding-agent|visual-reconstruction) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)([^\n]*)$/gm,
+  );
+  if (!match) return null;
+  const suffix = match[4] ?? "";
+  const requestId = /(?:^|\s)requestId=([^\s]+)/.exec(suffix)?.[1] ?? null;
+  const outputS3Prefix = /(?:^|\s)outputS3Prefix=(s3:\/\/[^\s]+)/.exec(suffix)?.[1] ?? null;
+  const taskAttempt = /(?:^|\s)taskAttempt=([0-9]+)\/([0-9]+)/.exec(suffix);
+  return {
+    stage: match[1],
+    taskId: match[2],
+    jobId: match[3],
+    requestId,
+    outputS3Prefix,
+    taskAttempt: taskAttempt ? Number(taskAttempt[1]) : null,
+    taskAttemptLimit: taskAttempt ? Number(taskAttempt[2]) : null,
+  };
+}
+
 /** Convert a child-process exit into the most specific safe failure shown by Studio. */
 export function deriveWorldGenerationFailureReason(
   rawLog = "",
@@ -303,6 +494,10 @@ export function deriveWorldGenerationFailureReason(
       /WORLDKIT_LWDP_JOB [^\s]+ [^\s]+ (gen_[a-zA-Z0-9]+)/g,
     );
     return `LWDP Codex${cloudJob ? ` Job ${cloudJob[1]}` : ""} 失败：gpt-5.6-sol 当前容量不足，远端任务已终止且没有生成完整产物；可在容量恢复后重试。`;
+  }
+
+  if (/BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED/.test(log)) {
+    return "Builder 选择的主体不具备 Scene Brief 要求的运动能力；当前 Agent Authoring Catalog 没有可执行的对应运动闭包，Host 已阻止静默降级。";
   }
 
   const missingOutputs = lastMatch(log, /missing required outputs:\s*([^\n]+)/gi);
@@ -900,11 +1095,126 @@ export function createStudio(options = {}) {
   const importBuiltinTestSets = options.importBuiltinTestSets ?? dataRoot === defaultDataRoot;
   const importBuiltinResults = options.importBuiltinResults ?? dataRoot === defaultDataRoot;
   const runtimeSettingsPath = path.join(dataRoot, "runtime-settings.json");
-  const configuredLwdpEnvFile = process.env.WORLDKIT_LWDP_ENV_FILE ||
-    path.join(repoRoot, ".codex-tmp", "runtime-config", "lwdp.env");
-  const projectLwdpEnvFile = path.isAbsolute(configuredLwdpEnvFile)
-    ? configuredLwdpEnvFile
-    : path.resolve(repoRoot, configuredLwdpEnvFile);
+  const studioOwnerPath = path.join(dataRoot, "studio-owner.json");
+  const studioInstanceId = `${process.pid}-${randomBytes(12).toString("hex")}`;
+  const enforceSingleWriterLease = options.enforceSingleWriterLease ?? true;
+  let ownsStudioWriterLease = false;
+
+  const processIsAlive = (pid) => {
+    if (!Number.isSafeInteger(pid) || pid < 1) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return error?.code === "EPERM";
+    }
+  };
+
+  async function acquireStudioWriterLease() {
+    if (!enforceSingleWriterLease || ownsStudioWriterLease) return;
+    await mkdir(dataRoot, { recursive: true });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const handle = await open(studioOwnerPath, "wx", 0o600);
+        try {
+          await handle.writeFile(`${JSON.stringify({
+            kind: "worldkit-studio-writer-lease",
+            schemaVersion: 1,
+            instanceId: studioInstanceId,
+            pid: process.pid,
+            startedAt: new Date().toISOString(),
+          })}\n`, "utf8");
+        } finally {
+          await handle.close();
+        }
+        ownsStudioWriterLease = true;
+        return;
+      } catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        const owner = await readJsonIfPresent(studioOwnerPath);
+        if (owner?.instanceId === studioInstanceId) {
+          ownsStudioWriterLease = true;
+          return;
+        }
+        if (attempt === 0 && !processIsAlive(owner?.pid)) {
+          await unlink(studioOwnerPath).catch(() => undefined);
+          continue;
+        }
+        throw new Error(
+          `WORLDKIT_STUDIO_WRITER_ALREADY_ACTIVE: ${owner?.instanceId ?? "unknown"}`,
+        );
+      }
+    }
+  }
+
+  async function releaseStudioWriterLease() {
+    if (!ownsStudioWriterLease) return;
+    const owner = await readJsonIfPresent(studioOwnerPath);
+    if (owner?.instanceId === studioInstanceId) {
+      await unlink(studioOwnerPath).catch(() => undefined);
+    }
+    ownsStudioWriterLease = false;
+  }
+  const projectLwdpEnvFile = path.join(
+    repoRoot,
+    ".codex-tmp",
+    "runtime-config",
+    "lwdp.env",
+  );
+  const cloudSceneExecutionEnabled = options.cloudSceneExecutionEnabled ?? true;
+  const loadCloudSceneProductionConfigImplementation =
+    options.loadCloudSceneProductionConfigImplementation ??
+    (() => loadCloudSceneProductionConfig(repoRoot));
+  const executeStudioCloudSceneImplementation =
+    options.executeStudioCloudSceneImplementation ?? executeStudioCloudScene;
+  const launchStudioCloudSceneWorkerImplementation =
+    options.launchStudioCloudSceneWorkerImplementation ?? launchStudioCloudSceneWorker;
+  const loadCloudEpisodeProductionConfigImplementation =
+    options.loadCloudEpisodeProductionConfigImplementation ??
+    (() => loadCloudEpisodeProductionConfig(repoRoot));
+  const executeStudioCloudEpisodeImplementation =
+    options.executeStudioCloudEpisodeImplementation ?? executeStudioCloudEpisode;
+  const retryStudioCloudEpisodeImplementation =
+    options.retryStudioCloudEpisodeImplementation ?? retryStudioCloudEpisode;
+  const recoverStudioCloudEpisodeImplementation =
+    options.recoverStudioCloudEpisodeImplementation ?? recoverStudioCloudEpisode;
+  const resumeStudioCloudSceneHostImplementation =
+    options.resumeStudioCloudSceneHostImplementation ?? resumeStudioCloudSceneHost;
+  const resumeStudioCloudSceneBuilderImplementation =
+    options.resumeStudioCloudSceneBuilderImplementation ?? resumeStudioCloudSceneBuilder;
+  const getCloudExecutionImplementation =
+    options.getCloudExecutionImplementation ?? getCloudExecution;
+  const getCloudExecutionStagesImplementation =
+    options.getCloudExecutionStagesImplementation ?? getCloudExecutionStages;
+  const getCloudExecutionCapacityImplementation =
+    options.getCloudExecutionCapacityImplementation ?? getCloudExecutionCapacity;
+  const cancelCloudExecutionImplementation =
+    options.cancelCloudExecutionImplementation ?? cancelCloudExecution;
+  const dispatchCloudExecutionImplementation =
+    options.dispatchCloudExecutionImplementation ?? dispatchCloudExecution;
+  const readCloudArtifactManifestImplementation =
+    options.readCloudArtifactManifestImplementation ?? readCloudArtifactManifest;
+  const readVerifiedCloudArtifactImplementation =
+    options.readVerifiedCloudArtifactImplementation ?? readVerifiedCloudArtifact;
+  const streamCloudArtifactImplementation =
+    options.streamCloudArtifactImplementation ?? streamCloudArtifact;
+  let cachedCloudSceneProductionConfig = null;
+  let cachedCloudEpisodeProductionConfig;
+  const cloudSceneProductionConfig = async () => {
+    if (!cloudSceneExecutionEnabled) return null;
+    if (cachedCloudSceneProductionConfig === null) {
+      cachedCloudSceneProductionConfig = await loadCloudSceneProductionConfigImplementation();
+    }
+    return cachedCloudSceneProductionConfig;
+  };
+  const cloudEpisodeProductionConfig = async () => {
+    if (!cloudSceneExecutionEnabled) return null;
+    if (cachedCloudEpisodeProductionConfig === undefined) {
+      cachedCloudEpisodeProductionConfig =
+        await loadCloudEpisodeProductionConfigImplementation();
+    }
+    return cachedCloudEpisodeProductionConfig;
+  };
   const initialCodexBackend = normalizedCodexBackend(
     options.initialCodexBackend ?? options.codexBackend ?? process.env.WORLDKIT_CODEX_BACKEND,
     "cloud",
@@ -912,6 +1222,37 @@ export function createStudio(options = {}) {
   const codexSpawnSync = options.codexSpawnSync ?? spawnSync;
   const codexBinary = options.codexBinary ?? process.env.WORLDKIT_LOCAL_CODEX_BIN ?? "codex";
   const worldSpawnImplementation = options.worldSpawnImplementation ?? spawn;
+  const artifactVerificationWaiters = [];
+  let activeArtifactVerifications = 0;
+  const withArtifactVerificationSlot = async (task) => {
+    if (activeArtifactVerifications >= 4) {
+      await new Promise((resolve) => artifactVerificationWaiters.push(resolve));
+    }
+    activeArtifactVerifications += 1;
+    try {
+      return await task();
+    } finally {
+      activeArtifactVerifications -= 1;
+      artifactVerificationWaiters.shift()?.();
+    }
+  };
+  const runArtifactVerifier = (arguments_) => withArtifactVerificationSlot(() =>
+    new Promise((resolve) => {
+      const child = spawn("pnpm", arguments_, {
+        cwd: repoRoot,
+        env: process.env,
+        stdio: "ignore",
+        timeout: 30_000,
+      });
+      let settled = false;
+      const finish = (passed) => {
+        if (settled) return;
+        settled = true;
+        resolve(passed);
+      };
+      child.once("error", () => finish(false));
+      child.once("close", (code) => finish(code === 0));
+    }));
   const verifyHostedWhiteboxArtifactsImplementation =
     options.verifyHostedWhiteboxArtifactsImplementation ?? (async (input) => {
       for (const trustedPublicKeyPath of trustedCapturePublicKeyPaths) {
@@ -934,12 +1275,7 @@ export function createStudio(options = {}) {
               ]
             : []),
         ];
-        const result = spawnSync("pnpm", arguments_, {
-          cwd: repoRoot,
-          encoding: "utf8",
-          env: process.env,
-        });
-        if (result?.status === 0) return true;
+        if (await runArtifactVerifier(arguments_)) return true;
       }
       return false;
     });
@@ -977,6 +1313,7 @@ export function createStudio(options = {}) {
   let shuttingDown = false;
   let remoteRecoveryTimer = null;
   let remoteRecoveryInFlight = false;
+  const remoteRecoveryLogKeys = new Set();
   const pnpmAvailable = options.pnpmAvailable ?? commandAvailable("pnpm");
   const codexAvailabilityTtlMs = Math.max(1_000, Number(options.codexAvailabilityTtlMs ?? 30_000));
   let cachedCodexAvailability = null;
@@ -1024,8 +1361,14 @@ export function createStudio(options = {}) {
     }
     if (codexAvailabilityInFlight) return codexAvailabilityInFlight;
     codexAvailabilityInFlight = (async () => {
-      const cloud = Boolean(options.lwdpConfigured ??
-        (Boolean(process.env.LWDP_GENERATION_API_TOKEN) || await fileExists(projectLwdpEnvFile)));
+      let cloud = Boolean(options.lwdpConfigured ?? await fileExists(projectLwdpEnvFile));
+      if (cloud && cloudSceneExecutionEnabled) {
+        try {
+          await cloudSceneProductionConfig();
+        } catch {
+          cloud = false;
+        }
+      }
       let local = false;
       try {
         const codexEnvironment = {
@@ -1097,6 +1440,138 @@ export function createStudio(options = {}) {
     studioOrigin: () => options.studioOrigin ??
       `http://127.0.0.1:${Number(process.env.WORLDKIT_STUDIO_PORT ?? 4174)}`,
     spawnImplementation: options.episodeSpawnImplementation,
+    ensureCloudEpisodeAvailable: async () => {
+      if (await cloudEpisodeProductionConfig() === null) {
+        throw new Error(
+          "Cloud Episode production is disabled until its digest-pinned GPU Worker image is deployed.",
+        );
+      }
+      const lwdpConfig = await loadLwdpConfigImplementation({
+        ...process.env,
+        LWDP_GENERATION_API_TOKEN: undefined,
+        LWDP_API_BASE: undefined,
+        LWDP_USER_ID: undefined,
+        WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+      });
+      try {
+        await getCloudExecutionCapacityImplementation({ config: lwdpConfig });
+      } catch (error) {
+        if (error?.status === 404) {
+          throw new Error(
+            "LWDP Cloud Execution control plane is unavailable (404); " +
+            "the Episode was not created and no Worker was launched.",
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+    },
+    resolveCloudSceneInput: async (sceneId) => {
+      const sceneRecord = await readRecord(sceneId);
+      if (
+        sceneRecord?.status !== "ready" ||
+        sceneRecord.remoteArtifactAdmission?.status !== "passed" ||
+        sceneRecord.remoteArtifactAdmission?.executionId !== sceneRecord.remoteExecutionId ||
+        typeof sceneRecord.remoteArtifactManifestS3Uri !== "string" ||
+        typeof sceneRecord.remoteExecutionId !== "string"
+      ) {
+        throw new Error(
+          "Cloud Episode requires a ready Scene with one admitted remote artifact manifest.",
+        );
+      }
+      return {
+        sceneRecord,
+        sceneExecutionId: sceneRecord.remoteExecutionId,
+        sceneManifestS3Uri: sceneRecord.remoteArtifactManifestS3Uri,
+      };
+    },
+    executeCloudEpisode: async (input) => {
+      const [productionConfig, lwdpConfig] = await Promise.all([
+        cloudEpisodeProductionConfig(),
+        loadLwdpConfigImplementation({
+          ...process.env,
+          LWDP_GENERATION_API_TOKEN: undefined,
+          LWDP_API_BASE: undefined,
+          LWDP_USER_ID: undefined,
+          WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+        }),
+      ]);
+      if (productionConfig === null) {
+        throw new Error("Cloud Episode production is disabled until its Worker image is deployed.");
+      }
+      return executeStudioCloudEpisodeImplementation({
+        ...input,
+        config: productionConfig,
+        cloudConfig: lwdpConfig,
+      });
+    },
+    retryCloudEpisode: async (input) => {
+      const [productionConfig, lwdpConfig] = await Promise.all([
+        cloudEpisodeProductionConfig(),
+        loadLwdpConfigImplementation({
+          ...process.env,
+          LWDP_GENERATION_API_TOKEN: undefined,
+          LWDP_API_BASE: undefined,
+          LWDP_USER_ID: undefined,
+          WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+        }),
+      ]);
+      if (productionConfig === null) {
+        throw new Error("Cloud Episode production is disabled.");
+      }
+      return retryStudioCloudEpisodeImplementation({
+        ...input,
+        config: productionConfig,
+        cloudConfig: lwdpConfig,
+      });
+    },
+    recoverCloudEpisode: async (input) => {
+      const [productionConfig, lwdpConfig] = await Promise.all([
+        cloudEpisodeProductionConfig(),
+        loadLwdpConfigImplementation({
+          ...process.env,
+          LWDP_GENERATION_API_TOKEN: undefined,
+          LWDP_API_BASE: undefined,
+          LWDP_USER_ID: undefined,
+          WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+        }),
+      ]);
+      if (productionConfig === null) {
+        throw new Error("Cloud Episode production is disabled.");
+      }
+      return recoverStudioCloudEpisodeImplementation({
+        ...input,
+        config: productionConfig,
+        cloudConfig: lwdpConfig,
+      });
+    },
+    cancelCloudEpisode: async (executionId) => {
+      const lwdpConfig = await loadLwdpConfigImplementation({
+        ...process.env,
+        LWDP_GENERATION_API_TOKEN: undefined,
+        LWDP_API_BASE: undefined,
+        LWDP_USER_ID: undefined,
+        WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+      });
+      return cancelCloudExecutionImplementation(executionId, { config: lwdpConfig });
+    },
+    readCloudEpisodeManifest: (manifestS3Uri, expected) =>
+      readCloudArtifactManifestImplementation(manifestS3Uri, {
+        repoRoot,
+        ...expected,
+      }),
+    readVerifiedRemoteArtifact: (record, artifactPath) =>
+      readVerifiedCloudArtifactImplementation(record, artifactPath, { repoRoot }),
+    streamRemoteArtifact: (response, artifact, streamOptions = {}) =>
+      streamCloudArtifactImplementation(response, artifact, {
+        repoRoot,
+        ...streamOptions,
+      }),
+    redirectRemoteArtifact: (response, artifact, streamOptions = {}) =>
+      redirectToPresignedCloudArtifact(response, artifact, {
+        repoRoot,
+        ...streamOptions,
+      }),
   });
 
   const recordPath = (id) => path.join(worldsRoot, id, "record.json");
@@ -1196,6 +1671,40 @@ export function createStudio(options = {}) {
     return candidates[id] ?? [];
   }
 
+  function remoteDeliverableArtifactPath(id) {
+    return ({
+      "scene-brief": "scene/scene-brief.md",
+      "planner-self-check": "scene/planner-self-check.json",
+      "visual-identity-palette": "scene/visual-identity-palette.json",
+      "world-plan": "scene-plan/world-plan.png",
+      "entry-whitebox-target": "scene-plan/entry-whitebox-target.png",
+      "world-module": "scene/world.mjs",
+      "authoring-spec": "scene/authoring.json",
+      "implementation-map-draft": "scene/implementation-map.draft.json",
+      "builder-self-check": "scene/builder-self-check.json",
+      "builder-top-down-comparison": "scene/builder-top-down-comparison.png",
+      "builder-entry-comparison": "scene/builder-entry-comparison.png",
+      "builder-host-resume": "scene/builder-host-resume.json",
+      "implementation-map": "scene/scene-implementation-map.json",
+      "execution-plan": "scene/world.build.json",
+      "route-validation-manifest": "scene/route-validation-manifest.json",
+      "opening-frame": "scene/opening-frame.png",
+      "runtime-snapshot": "scene/runtime-snapshot.json",
+      "whitebox-capture-receipt": "scene/whitebox-capture-receipt.json",
+      "whitebox-triview-manifest": "scene/triviews/whitebox-triview-manifest.json",
+      "entry-third-person-validation": "scene/entry-third-person-validation.json",
+      "visual-generation-prompts": "scene/visual-generation-prompts.json",
+      "styled-opening-frame": "scene/styled-opening-frame.png",
+      "styled-opening-frame-manifest": "scene/styled-opening-frame-manifest.json",
+      "styled-opening-frame-report": "scene/styled-opening-frame-report.json",
+      "styled-triviews-manifest": "scene/styled-triviews-manifest.json",
+      "styled-triviews-report": "scene/styled-triviews-report.json",
+      "evaluation-run": "scene/evaluation-run.json",
+      "evaluation-report": "scene/evaluation-report.json",
+      "agent-log": "logs/pipeline.log",
+    })[id] ?? null;
+  }
+
   async function resolveDeliverable(record, id) {
     for (const candidate of deliverableCandidates(record, id)) {
       try {
@@ -1203,6 +1712,17 @@ export function createStudio(options = {}) {
         if (!metadata.isFile()) continue;
         return { path: candidate, metadata };
       } catch {}
+    }
+    const remotePath = remoteDeliverableArtifactPath(id);
+    const remote = remotePath === null ? null : cloudArtifactByPath(record, remotePath);
+    if (remote !== null) {
+      return {
+        remote,
+        metadata: {
+          size: remote.byteSize,
+          mtime: new Date(record.remoteArtifactAdmission?.verifiedAt ?? record.updatedAt),
+        },
+      };
     }
     return null;
   }
@@ -1242,6 +1762,10 @@ export function createStudio(options = {}) {
   }
 
   async function writeRecordUnlocked(record) {
+    record.recordRevision = Number.isSafeInteger(record.recordRevision) &&
+        record.recordRevision >= 0
+      ? record.recordRevision + 1
+      : 1;
     record.updatedAt = new Date().toISOString();
     await writeJsonAtomic(recordPath(record.id), record);
     worldListRevision += 1;
@@ -1402,14 +1926,22 @@ export function createStudio(options = {}) {
     }
   }
 
-  async function updateRecord(id, patch) {
+  async function transitionRecord(id, patch, expectations = {}) {
     return runRecordMutation(id, async () => {
       const record = await readRecord(id);
-      if (!record) return null;
+      if (!record) return { applied: false, reason: "missing", record: null };
+      const decision = evaluateRecordTransition(record, patch, expectations);
+      if (!decision.allowed) {
+        return { applied: false, reason: decision.reason, record };
+      }
       Object.assign(record, patch);
       await writeRecordUnlocked(record);
-      return record;
+      return { applied: true, reason: "applied", record };
     });
+  }
+
+  async function updateRecord(id, patch) {
+    return (await transitionRecord(id, patch)).record;
   }
 
   async function listRecords() {
@@ -1440,11 +1972,112 @@ export function createStudio(options = {}) {
     }
   }
 
+  async function hasWhiteboxDisplayArtifacts(
+    artifactRoot,
+    freshnessFloor = Number.NEGATIVE_INFINITY,
+  ) {
+    const required = [
+      "authoring.json",
+      "world.build.json",
+      "runtime-snapshot.json",
+      "whitebox-capture-receipt.json",
+    ].map((relativePath) => path.join(artifactRoot, relativePath));
+    return (await Promise.all(required.map((filePath) =>
+      nonemptyArtifact(filePath, freshnessFloor)))).every(Boolean) &&
+      await pngArtifact(path.join(artifactRoot, "opening-frame.png"), freshnessFloor);
+  }
+
   async function sourceHash(filePath) {
     try {
       return `sha256:${createHash("sha256").update(await readFile(filePath)).digest("hex")}`;
     } catch {
       return null;
+    }
+  }
+
+  async function readRemoteArtifactBytes(record, artifactPath, maximumBytes) {
+    return readVerifiedCloudArtifactImplementation(record, artifactPath, {
+      repoRoot,
+      ...(maximumBytes === undefined ? {} : { maximumBytes }),
+    });
+  }
+
+  async function readSceneArtifactBytes(record, relativePath, maximumBytes) {
+    const localPath = path.join(repoRoot, "artifacts", "scenes", record.sceneId, relativePath);
+    try {
+      return await readFile(localPath);
+    } catch {
+      return readRemoteArtifactBytes(record, `scene/${relativePath}`, maximumBytes);
+    }
+  }
+
+  async function readSceneArtifactText(record, relativePath, maximumBytes = 16 * 1024 * 1024) {
+    const bytes = await readSceneArtifactBytes(record, relativePath, maximumBytes);
+    return bytes === null ? null : bytes.toString("utf8");
+  }
+
+  async function readSceneArtifactJson(record, relativePath, maximumBytes) {
+    const source = await readSceneArtifactText(record, relativePath, maximumBytes);
+    if (source === null) return null;
+    try {
+      return JSON.parse(source);
+    } catch {
+      return null;
+    }
+  }
+
+  function remoteArtifactAvailable(record, artifactPath) {
+    return cloudArtifactByPath(record, artifactPath) !== null;
+  }
+
+  async function admitCloudArtifactManifest(record, executionId, manifestS3Uri) {
+    const manifest = await readCloudArtifactManifestImplementation(manifestS3Uri, {
+      repoRoot,
+      expectedExecutionId: executionId,
+      expectedSceneId: record.sceneId,
+    });
+    const remoteRecord = { remoteArtifacts: manifest.artifacts };
+    const requiredByFileName = {
+      "authoring.json": "scene/authoring.json",
+      "world.build.json": "scene/world.build.json",
+      "opening-frame.png": "scene/opening-frame.png",
+      "runtime-snapshot.json": "scene/runtime-snapshot.json",
+      "whitebox-capture-receipt.json": "scene/whitebox-capture-receipt.json",
+    };
+    for (const artifactPath of Object.values(requiredByFileName)) {
+      if (!remoteArtifactAvailable(remoteRecord, artifactPath)) {
+        return { ok: false, manifest, error: `Cloud result omitted ${artifactPath}.` };
+      }
+    }
+    const temporaryRoot = await mkdtemp(path.join(tmpdir(), "worldkit-cloud-admission-"));
+    try {
+      const localPaths = {};
+      for (const [fileName, artifactPath] of Object.entries(requiredByFileName)) {
+        const bytes = await readVerifiedCloudArtifactImplementation(
+          remoteRecord,
+          artifactPath,
+          { repoRoot, maximumBytes: 64 * 1024 * 1024 },
+        );
+        const localPath = path.join(temporaryRoot, fileName);
+        await writeFile(localPath, bytes, { flag: "wx" });
+        localPaths[fileName] = localPath;
+      }
+      const ok = Boolean(await verifyHostedWhiteboxArtifactsImplementation({
+        sceneId: record.sceneId,
+        authoringPath: localPaths["authoring.json"],
+        buildPath: localPaths["world.build.json"],
+        openingFramePath: localPaths["opening-frame.png"],
+        runtimeSnapshotPath: localPaths["runtime-snapshot.json"],
+        captureReceiptPath: localPaths["whitebox-capture-receipt.json"],
+        requireTriview: false,
+      }));
+      return {
+        ok,
+        manifest,
+        error: ok ? null : "Cloud whitebox failed independent trusted Host admission.",
+      };
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
     }
   }
 
@@ -1530,7 +2163,8 @@ export function createStudio(options = {}) {
   }
 
   async function hasTrustedPlannerResumeInputs(record, { requirePalette = true } = {}) {
-    if (!["planner", "coding-agent"].includes(record?.failedStage)) return false;
+    const recoveryStage = record?.failedStage ?? record?.stage;
+    if (!["planner", "coding-agent"].includes(recoveryStage)) return false;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
     const paths = {
@@ -1982,7 +2616,7 @@ export function createStudio(options = {}) {
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const whiteboxOpeningFrameAvailable = await fileExists(
       path.join(scenePlanRoot, "whitebox-opening-frame.png"),
-    );
+    ) || remoteArtifactAvailable(record, "scene-plan/whitebox-opening-frame.png");
     const coverCandidates = [
       "whitebox-opening-frame.png",
       "entry-styled-target.png",
@@ -1992,20 +2626,30 @@ export function createStudio(options = {}) {
     ];
     const canonicalOpeningFrameAvailable = await fileExists(
       path.join(artifactRoot, "opening-frame.png"),
-    );
+    ) || remoteArtifactAvailable(record, "scene/opening-frame.png");
     const attemptStartedAt = record.origin === "existing-scene-brief-world"
       ? record.createdAt
       : record.startedAt;
     const attemptStartedAtMs = Date.parse(attemptStartedAt ?? "");
-    const whiteboxRuntimeAvailable = await hasPlayableWhiteboxArtifacts(
-      artifactRoot,
-      record.sceneId,
-      record.origin === "existing-scene-brief-world"
-        ? Number.NEGATIVE_INFINITY
-        : Number.isFinite(attemptStartedAtMs)
-          ? attemptStartedAtMs - 1_000
-          : Number.POSITIVE_INFINITY,
-    );
+    const freshnessFloor = record.origin === "existing-scene-brief-world"
+      ? Number.NEGATIVE_INFINITY
+      : Number.isFinite(attemptStartedAtMs)
+        ? attemptStartedAtMs - 1_000
+        : Number.POSITIVE_INFINITY;
+    // The list is a display projection of the durable Studio receipt. Keep it
+    // responsive with bounded file checks; the Preview endpoint independently
+    // replays the full signed Host verifier before serving playable authority.
+    const remoteWhiteboxRuntimeAvailable =
+      record.remoteArtifactAdmission?.status === "passed" &&
+      record.remoteArtifactAdmission?.executionId === record.remoteExecutionId;
+    const whiteboxRuntimeAvailable = remoteWhiteboxRuntimeAvailable || (record.captureStatus === "passed" &&
+        record.whiteboxOutcome === "passed" && record.captureRequired === false
+      ? await hasWhiteboxDisplayArtifacts(artifactRoot, freshnessFloor)
+      : await hasPlayableWhiteboxArtifacts(
+          artifactRoot,
+          record.sceneId,
+          freshnessFloor,
+        ));
     const persistedError = typeof record.error === "string" ? record.error : null;
     const diagnosticError = record.status === "failed" &&
         /^World generation exited with code /.test(persistedError ?? "")
@@ -2018,7 +2662,10 @@ export function createStudio(options = {}) {
       : record.referenceImage ? `/api/worlds/${record.id}/reference` : null;
     if (!canonicalOpeningFrameAvailable) {
       for (const candidate of coverCandidates) {
-        if (await fileExists(path.join(scenePlanRoot, candidate))) {
+        if (
+          await fileExists(path.join(scenePlanRoot, candidate)) ||
+          remoteArtifactAvailable(record, `scene-plan/${candidate}`)
+        ) {
           coverUrl = `/scene-assets/${record.sceneId}/${candidate}`;
           break;
         }
@@ -2352,9 +2999,9 @@ export function createStudio(options = {}) {
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const planRoot = path.join(repoRoot, "apps/playground/public/scene-plans", record.sceneId);
     const [sceneBrief, plannerCheck, captureManifest, episodes] = await Promise.all([
-      readFile(path.join(artifactRoot, "scene-brief.md"), "utf8").catch(() => null),
-      readJsonIfPresent(path.join(artifactRoot, "planner-self-check.json")),
-      readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
+      readSceneArtifactText(record, "scene-brief.md"),
+      readSceneArtifactJson(record, "planner-self-check.json"),
+      readSceneArtifactJson(record, path.join("triviews", "whitebox-triview-manifest.json")),
       episodeWorkflows.listForScene(record.sceneId),
     ]);
     const plannerValidation = plannerCheck?.kind === "worldkit-planner-self-check" && [
@@ -2415,7 +3062,15 @@ export function createStudio(options = {}) {
       ].includes(kind)
         ? path.join(artifactRoot, fileName)
         : path.join(planRoot, fileName);
-      const available = await fileExists(filePath);
+      const remotePath = [
+        "opening-frame",
+        "styled-opening-frame",
+        "builder-top-down-comparison",
+        "builder-entry-comparison",
+      ].includes(kind)
+        ? `scene/${fileName}`
+        : `scene-plan/${fileName}`;
+      const available = await fileExists(filePath) || remoteArtifactAvailable(record, remotePath);
       planning.push({ kind, title, description, prompt: null, url: available ? url : null, available });
     }
     const prototypes = [];
@@ -2423,8 +3078,14 @@ export function createStudio(options = {}) {
       if (!idPattern.test(target?.visualTargetId)) continue;
       const imagePath = path.join(artifactRoot, "triviews", target.visualTargetId, "whitebox-triview.png");
       const styledImagePath = path.join(artifactRoot, "triviews", target.visualTargetId, "styled-triview.png");
-      const available = await fileExists(imagePath);
-      const styledAvailable = await fileExists(styledImagePath);
+      const available = await fileExists(imagePath) || remoteArtifactAvailable(
+        record,
+        `scene/triviews/${target.visualTargetId}/whitebox-triview.png`,
+      );
+      const styledAvailable = await fileExists(styledImagePath) || remoteArtifactAvailable(
+        record,
+        `scene/triviews/${target.visualTargetId}/styled-triview.png`,
+      );
       prototypes.push({
         id: target.visualTargetId,
         role: target.role,
@@ -2501,6 +3162,104 @@ export function createStudio(options = {}) {
     await appendFile(logPath(id), text, "utf8");
   }
 
+  async function appendRemoteRecoveryLogOnce(id, key, text) {
+    const compoundKey = `${id}\u0000${key}`;
+    if (remoteRecoveryLogKeys.has(compoundKey)) return;
+    remoteRecoveryLogKeys.add(compoundKey);
+    await appendJobLog(id, text);
+  }
+
+  async function markCloudRecordForRemoteReconciliation(record, reason) {
+    if (
+      effectiveCodexBackend(record) !== "cloud" ||
+      record?.outcome === "cancelled"
+    ) return false;
+    if (
+      typeof record.remoteExecutionId === "string" &&
+      record.remoteExecutionId.length > 0
+    ) {
+      const now = new Date().toISOString();
+      const transition = await transitionRecord(record.id, {
+        status: "remote-pending",
+        stage: record.stage,
+        failedStage: null,
+        finishedAt: null,
+        error: reason,
+        outcome: null,
+        remotePendingSince: record.remotePendingSince ?? now,
+        remotePendingDeadlineAt: new Date(Date.now() + remotePendingGraceMs).toISOString(),
+      }, {
+        expectedAttempt: record.attempt,
+        expectedRemoteExecutionId: record.remoteExecutionId,
+        expectedStatuses: [
+          "running", "remote-pending", "interrupted", "visual-running",
+          "visual-queued", "awaiting-recording",
+        ],
+      });
+      if (!transition.applied && transition.reason !== "already-complete") return false;
+      await appendTrajectoryEvent(
+        record.id,
+        record.stage,
+        `Creator Studio 将继续按原 Cloud Execution ${record.remoteExecutionId} 对账，不会停止或重建云端 Worker。`,
+        {
+          kind: "remote-pending",
+          executionId: record.remoteExecutionId,
+          reason: "studio-lifecycle",
+        },
+      );
+      return true;
+    }
+    const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
+    const pendingMarker = parseRemotePendingLwdpMarker(rawLog);
+    const jobMarker = parseLatestLwdpJobMarker(rawLog) ?? pendingMarker;
+    if (jobMarker === null && typeof record.remoteJobId !== "string") return false;
+    const pendingForLatestJob = pendingMarker?.jobId === jobMarker?.jobId
+      ? pendingMarker
+      : null;
+    const now = new Date().toISOString();
+    const stage = canonicalWorkflowStage(
+      jobMarker?.stage ?? record.failedStage ?? record.stage,
+      record,
+    );
+    const jobId = jobMarker?.jobId ?? record.remoteJobId;
+    const taskId = jobMarker?.taskId ?? record.remoteTaskId ?? null;
+    const requestId = jobMarker?.requestId ?? pendingForLatestJob?.requestId ??
+      record.remoteRequestId ?? null;
+    const outputS3Prefix = jobMarker?.outputS3Prefix ?? pendingForLatestJob?.outputS3Prefix ??
+      record.remoteOutputS3Prefix ?? null;
+    await updateRecord(record.id, {
+      status: "remote-pending",
+      stage,
+      failedStage: null,
+      finishedAt: null,
+      error: reason,
+      outcome: null,
+      remoteJobId: jobId,
+      remoteTaskId: taskId,
+      remoteRequestId: requestId,
+      remoteOutputS3Prefix: outputS3Prefix,
+      remotePendingSince: record.remotePendingSince ?? now,
+      remotePendingDeadlineAt: new Date(Date.now() + remotePendingGraceMs).toISOString(),
+      captureRequired: record.whiteboxOutcome !== "passed",
+      captureError: null,
+      captureStatus: record.whiteboxOutcome === "passed"
+        ? "passed"
+        : record.captureStatus === "passed" ? "passed" : "pending",
+      triviewStatus: record.whiteboxOutcome === "passed"
+        ? record.triviewStatus
+        : "pending",
+      styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
+      styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+    });
+    await appendTrajectoryEvent(
+      record.id,
+      stage,
+      `Creator Studio 将继续按原 LWDP Job ${jobId} 对账，不会重复提交。`,
+      { kind: "remote-pending", jobId, taskId, reason: "studio-lifecycle" },
+    );
+    return true;
+  }
+
   function consumeOutput(id, source, chunk, state) {
     const text = chunk.toString("utf8");
     runBackgroundTask(id, "append-job-log", () => appendJobLog(id, `[${source}] ${text}`));
@@ -2533,13 +3292,26 @@ export function createStudio(options = {}) {
         ));
         continue;
       }
-      const cloudCodexJob = /^WORLDKIT_LWDP_JOB ([a-z-]+) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)(?:\s+.*)?$/.exec(line.trim());
+      const cloudCodexJob = parseLatestLwdpJobMarker(line.trim());
       if (cloudCodexJob) {
+        runBackgroundTask(id, "persist-codex-job", () => updateRecord(id, {
+          stage: canonicalWorkflowStage(cloudCodexJob.stage, {
+            styledTriviewsRequired: true,
+          }),
+          remoteJobId: cloudCodexJob.jobId,
+          remoteTaskId: cloudCodexJob.taskId,
+          ...(cloudCodexJob.requestId === null
+            ? {}
+            : { remoteRequestId: cloudCodexJob.requestId }),
+          ...(cloudCodexJob.outputS3Prefix === null
+            ? {}
+            : { remoteOutputS3Prefix: cloudCodexJob.outputS3Prefix }),
+        }));
         runBackgroundTask(id, "append-codex-job", () => appendTrajectoryEvent(
           id,
-          cloudCodexJob[1],
-          `LWDP 云端 Codex 任务 ${cloudCodexJob[2]} 已提交：${cloudCodexJob[3]}。`,
-          { kind: "cloud-job", jobId: cloudCodexJob[3], taskId: cloudCodexJob[2] },
+          cloudCodexJob.stage,
+          `LWDP 云端 Codex 任务 ${cloudCodexJob.taskId} 已提交：${cloudCodexJob.jobId}。`,
+          { kind: "cloud-job", jobId: cloudCodexJob.jobId, taskId: cloudCodexJob.taskId },
         ));
         continue;
       }
@@ -2563,7 +3335,29 @@ export function createStudio(options = {}) {
         ));
         continue;
       }
-        const agentRetry = /^WORLDKIT_AGENT_RETRY ([a-z-]+) ([0-9]+) ([0-9]+)$/.exec(line.trim());
+      const cloudStageRetry = /^WORLDKIT_LWDP_STAGE_RETRY ([a-z-]+) ([0-9]+) ([0-9]+) reason=([a-z-]+) previousJob=(\S+) delayMs=([0-9]+)$/.exec(line.trim());
+      if (cloudStageRetry) {
+        const retryStage = cloudStageRetry[1] === "coding-agent" ||
+            cloudStageRetry[1] === "builder"
+          ? "coding-agent"
+          : cloudStageRetry[1];
+        const delaySeconds = Math.ceil(Number(cloudStageRetry[6]) / 1_000);
+        runBackgroundTask(id, "append-cloud-stage-retry", () => appendTrajectoryEvent(
+          id,
+          retryStage,
+          `LWDP 云端任务因 ${cloudStageRetry[4]} 终态失败，将在 ${delaySeconds} 秒后自动重试 ${cloudStageRetry[2]}/${cloudStageRetry[3]}。`,
+          {
+            kind: "retry",
+            attempt: Number(cloudStageRetry[2]),
+            limit: Number(cloudStageRetry[3]),
+            reason: cloudStageRetry[4],
+            previousJobId: cloudStageRetry[5] === "unsubmitted" ? null : cloudStageRetry[5],
+            delayMs: Number(cloudStageRetry[6]),
+          },
+        ));
+        continue;
+      }
+      const agentRetry = /^WORLDKIT_AGENT_RETRY ([a-z-]+) ([0-9]+) ([0-9]+)$/.exec(line.trim());
       if (agentRetry) {
         const retryStage = agentRetry[1].includes("builder") || agentRetry[1] === "coding-agent"
           ? "coding-agent"
@@ -2601,7 +3395,331 @@ export function createStudio(options = {}) {
     }
   }
 
+  async function finalizeCloudSceneExecution(record, execution, stagesPayload, manifestS3Uri) {
+    const latest = await readRecord(record.id);
+    if (latest?.status === "ready") return true;
+    if (latest?.attempt !== record.attempt || latest?.remoteExecutionId !== execution.execution_id) {
+      return false;
+    }
+    let admission = null;
+    if (manifestS3Uri !== null) {
+      admission = await admitCloudArtifactManifest(record, execution.execution_id, manifestS3Uri)
+        .catch((error) => ({
+          ok: false,
+          manifest: null,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+    }
+    const playable = admission?.ok === true;
+    const remoteArtifacts = admission?.manifest?.artifacts ?? [];
+    const whiteboxTriviewPassed = remoteArtifacts.some((artifact) =>
+      artifact.path === "scene/triviews/whitebox-triview-manifest.json");
+    const styledOpeningPassed = remoteArtifacts.some((artifact) =>
+      artifact.path === "scene/styled-opening-frame.png");
+    const styledTriviewsPassed = remoteArtifacts.some((artifact) =>
+      artifact.path === "scene/styled-triviews-manifest.json");
+    const fullySucceeded = execution.status === "succeeded" && playable;
+    const finishedAt = new Date().toISOString();
+    const stageError = execution.error ||
+      (Array.isArray(stagesPayload?.stages)
+        ? stagesPayload.stages.find((stage) => stage?.stage_id === "scene-production")?.diagnostics?.error
+        : null) ||
+      admission?.error ||
+      `Cloud Scene Execution ended as ${execution.status}.`;
+    const transition = await transitionRecord(record.id, {
+      status: fullySucceeded ? "ready" : "failed",
+      stage: fullySucceeded ? "ready" : "failed",
+      failedStage: fullySucceeded ? null : cloudInternalStage(execution),
+      finishedAt,
+      error: fullySucceeded ? null : stageError,
+      captureRequired: !playable,
+      captureError: playable ? null : stageError,
+      captureStatus: playable ? "passed" : "failed",
+      triviewStatus: whiteboxTriviewPassed ? "passed" : playable ? "failed" : "not-run",
+      whiteboxOutcome: playable ? "passed" : "failed",
+      outcome: fullySucceeded ? "passed" : "failed",
+      styledOpeningFrameStatus: record.referenceImage
+        ? styledOpeningPassed ? "passed" : "failed"
+        : "not-required",
+      styledTriviewsStatus: record.referenceImage
+        ? styledTriviewsPassed ? "passed" : "failed"
+        : "not-required",
+      remoteArtifactManifestS3Uri: manifestS3Uri,
+      remoteArtifactAdmission: {
+        status: playable ? "passed" : "failed",
+        verifiedAt: new Date().toISOString(),
+        executionId: execution.execution_id,
+        error: admission?.error ?? null,
+      },
+      remoteArtifacts,
+      remotePendingSince: null,
+      remotePendingDeadlineAt: null,
+    }, {
+      expectedAttempt: record.attempt,
+      expectedRemoteExecutionId: execution.execution_id,
+      expectedStatuses: ["running", "remote-pending"],
+    });
+    if (!transition.applied) return transition.reason === "already-complete";
+    await appendJobLog(
+      record.id,
+      fullySucceeded
+        ? `\nCloud Scene Execution ${execution.execution_id} completed; trusted remote artifacts admitted without durable local hydration.\n`
+        : `\nCloud Scene Execution ${execution.execution_id} ended ${execution.status}: ${stageError}\n`,
+    );
+    await appendTrajectoryEvent(
+      record.id,
+      fullySucceeded ? "ready" : "failed",
+      fullySucceeded
+        ? "云端 Worker 已完成完整生产、可信捕获和 S3 发布；本地仅保存远程工件索引。"
+        : playable
+          ? "云端后置阶段失败，但可信白膜世界已发布并保持可进入。"
+          : `云端生产失败：${stageError}`,
+      {
+        kind: fullySucceeded ? "completed" : "failed",
+        executionId: execution.execution_id,
+        manifestS3Uri,
+        whiteboxRuntimeAvailable: playable,
+      },
+    );
+    return true;
+  }
+
+  async function runCloudSceneJob(id, initialRecord) {
+    const attempt = (initialRecord.attempt ?? 0) + 1;
+    const startedAt = new Date().toISOString();
+    const requestId = `${initialRecord.sceneId}-cloud-attempt-${attempt}`;
+    const cloudResumeMode = initialRecord.resumeFromStage === "cloud-host"
+      ? "host"
+      : initialRecord.resumeFromStage === "cloud-builder" ? "builder" : null;
+    const cloudResume = cloudResumeMode !== null &&
+      typeof initialRecord.remoteExecutionId === "string" &&
+      typeof initialRecord.remoteArtifactManifestS3Uri === "string" &&
+      typeof initialRecord.remoteRequestS3Uri === "string" &&
+      typeof initialRecord.remoteOutputS3Prefix === "string";
+    const resumeAuthority = cloudResume ? {
+      executionId: initialRecord.remoteExecutionId,
+      manifestS3Uri: initialRecord.remoteArtifactManifestS3Uri,
+      requestS3Uri: initialRecord.remoteRequestS3Uri,
+      outputS3Prefix: initialRecord.remoteOutputS3Prefix,
+    } : null;
+    const transition = await transitionRecord(id, {
+      status: "running",
+      stage: "preparing",
+      attempt,
+      startedAt,
+      finishedAt: null,
+      error: null,
+      failedStage: null,
+      captureRequired: true,
+      captureError: null,
+      captureStatus: "pending",
+      triviewStatus: "pending",
+      whiteboxOutcome: null,
+      outcome: null,
+      styledOpeningFrameRequired: initialRecord.referenceImage !== null,
+      styledOpeningFrameStatus: initialRecord.referenceImage ? "pending" : "not-required",
+      styledTriviewsRequired: initialRecord.referenceImage !== null,
+      styledTriviewsStatus: initialRecord.referenceImage ? "pending" : "not-required",
+      remoteExecutionId: resumeAuthority?.executionId ?? null,
+      remoteStageId: "scene-production",
+      remoteRequestId: requestId,
+      remoteRequestS3Uri: resumeAuthority?.requestS3Uri ?? null,
+      remoteOutputS3Prefix: resumeAuthority?.outputS3Prefix ?? null,
+      remoteArtifactManifestS3Uri: resumeAuthority?.manifestS3Uri ?? null,
+      remoteDispatchStatus: cloudResume ? "dispatched" : null,
+      remoteWorkerLaunchStatus: null,
+      remoteWorkerJobName: null,
+      remoteArtifactAdmission: cloudResume
+        ? initialRecord.remoteArtifactAdmission ?? null
+        : null,
+      remoteArtifacts: cloudResume ? initialRecord.remoteArtifacts ?? [] : [],
+    }, {
+      expectedAttempt: initialRecord.attempt ?? 0,
+      expectedStatuses: ["queued"],
+    });
+    if (!transition.applied) return;
+    const record = transition.record;
+    await writeFile(logPath(id), [
+      "WorldKit Creator Studio",
+      `scene=${record.sceneId}`,
+      `attempt=${attempt}`,
+      `mode=${cloudResume ? `cloud-${cloudResumeMode}-resume` : "cloud-scene-production"}`,
+      "",
+      cloudResume
+        ? cloudResumeMode === "host"
+          ? "Resuming only the trusted Host and downstream stages from the prior Cloud artifact manifest."
+          : "Resuming Builder and downstream Host stages from the trusted Planner artifact manifest."
+        : "Submitting the complete Scene pipeline to one isolated Cloud Scene Worker.",
+      "",
+    ].join("\n"), "utf8");
+    await appendTrajectoryEvent(id, "preparing",
+      `第 ${attempt} 次端到端云端生产开始；Planner、Builder、Host Capture 和视觉阶段均在隔离 Worker 中运行。`,
+      { kind: "started", codexBackend: "cloud", executionMode: "cloud-scene-production" });
+    let submittedExecutionId = null;
+    try {
+      const [productionConfig, lwdpConfig] = await Promise.all([
+        cloudSceneProductionConfig(),
+        loadLwdpConfigImplementation({
+          ...process.env,
+          LWDP_GENERATION_API_TOKEN: undefined,
+          LWDP_API_BASE: undefined,
+          LWDP_USER_ID: undefined,
+          WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+        }),
+      ]);
+      if (productionConfig === null) throw new Error("Cloud Scene production is disabled.");
+      const commonExecutionOptions = {
+        sceneId: record.sceneId,
+        prompt: record.prompt,
+        referenceImagePath: record.referenceImage
+          ? path.join(worldsRoot, record.id, record.referenceImage.fileName)
+          : null,
+        requestId,
+        attempt,
+        config: productionConfig,
+        cloudConfig: lwdpConfig,
+        onSubmitted: async (submitted) => {
+          submittedExecutionId = submitted.executionId;
+          const applied = await transitionRecord(id, {
+            status: "running",
+            stage: "preparing",
+            remoteExecutionId: submitted.executionId,
+            remoteStageId: "scene-production",
+            remoteRequestId: requestId,
+            remoteRequestS3Uri: submitted.requestS3Uri,
+            remoteOutputS3Prefix: submitted.outputS3Prefix,
+          }, {
+            expectedAttempt: attempt,
+            expectedStatuses: ["running"],
+          });
+          if (!applied.applied) throw new Error(`Cloud submission became stale: ${applied.reason}`);
+          await appendTrajectoryEvent(id, "preparing",
+            `Cloud Execution ${submitted.executionId} 已提交并绑定当前 attempt。`,
+            { kind: "cloud-execution", executionId: submitted.executionId });
+        },
+        onLaunched: async (launched) => {
+          const applied = await transitionRecord(id, {
+            remoteWorkerLaunchStatus: "launched",
+            remoteWorkerJobName: launched?.jobName ?? null,
+          }, {
+            expectedAttempt: attempt,
+            expectedRemoteExecutionId: submittedExecutionId,
+            expectedStatuses: ["running"],
+          });
+          if (!applied.applied) {
+            throw new Error(`Cloud Worker launch became stale: ${applied.reason}`);
+          }
+        },
+        onDispatched: async () => {
+          const applied = await transitionRecord(id, {
+            remoteDispatchStatus: "dispatched",
+          }, {
+            expectedAttempt: attempt,
+            expectedRemoteExecutionId: submittedExecutionId,
+            expectedStatuses: ["running"],
+          });
+          if (!applied.applied) {
+            throw new Error(`Cloud dispatch became stale: ${applied.reason}`);
+          }
+        },
+        onProgress: async (execution) => {
+          if (submittedExecutionId === null) return;
+          const internalStage = cloudInternalStage(execution);
+          await transitionRecord(id, {
+            status: "running",
+            stage: canonicalWorkflowStage(internalStage, record),
+            cloudInternalStage: internalStage,
+            cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
+          }, {
+            expectedAttempt: attempt,
+            expectedRemoteExecutionId: submittedExecutionId,
+            expectedStatuses: ["running"],
+          });
+        },
+      };
+      const result = cloudResume
+        ? await (cloudResumeMode === "host"
+          ? resumeStudioCloudSceneHostImplementation
+          : resumeStudioCloudSceneBuilderImplementation)({
+            ...commonExecutionOptions,
+            executionId: resumeAuthority.executionId,
+            requestS3Uri: resumeAuthority.requestS3Uri,
+            outputS3Prefix: resumeAuthority.outputS3Prefix,
+            manifestS3Uri: resumeAuthority.manifestS3Uri,
+            retryRequestId: `${requestId}-${cloudResumeMode}-resume`,
+          })
+        : await executeStudioCloudSceneImplementation(commonExecutionOptions);
+      await finalizeCloudSceneExecution(
+        await readRecord(id),
+        result.execution,
+        result.stages,
+        result.manifestS3Uri,
+      );
+    } catch (error) {
+      const latest = await readRecord(id);
+      if (latest?.status === "ready" || latest?.attempt !== attempt) return;
+      const message = error instanceof Error ? error.message : String(error);
+      if (latest?.remoteExecutionId) {
+        await transitionRecord(id, {
+          status: "remote-pending",
+          stage: latest.stage,
+          error: `Cloud Execution ${latest.remoteExecutionId} 的即时对账中断；将继续按原 execution_id 后台恢复：${message}`,
+          remotePendingSince: new Date().toISOString(),
+          remotePendingDeadlineAt: new Date(Date.now() + remotePendingGraceMs).toISOString(),
+        }, {
+          expectedAttempt: attempt,
+          expectedRemoteExecutionId: latest.remoteExecutionId,
+          expectedStatuses: ["running"],
+        });
+        return;
+      }
+      if (error?.status === 404) {
+        await transitionRecord(id, {
+          status: "remote-pending",
+          stage: "preparing",
+          failedStage: "preparing",
+          finishedAt: null,
+          error: "LWDP Cloud Execution 控制面当前不可用（404）；任务输入与 request_id 已冻结，将在控制面恢复后自动提交。",
+          remotePendingSince: new Date().toISOString(),
+          remotePendingDeadlineAt: null,
+          captureStatus: "pending",
+          triviewStatus: "pending",
+          whiteboxOutcome: null,
+          outcome: null,
+        }, {
+          expectedAttempt: attempt,
+          expectedStatuses: ["running"],
+        });
+        return;
+      }
+      await transitionRecord(id, {
+        status: "failed",
+        stage: "failed",
+        failedStage: "preparing",
+        finishedAt: new Date().toISOString(),
+        error: message,
+        captureStatus: "not-run",
+        triviewStatus: "not-run",
+        whiteboxOutcome: "failed",
+        outcome: "failed",
+      }, {
+        expectedAttempt: attempt,
+        expectedStatuses: ["running"],
+      });
+    }
+  }
+
   async function runJob(id) {
+    const record = await readRecord(id);
+    if (!record || shuttingDown || stoppingJobs.has(id)) return;
+    if (effectiveCodexBackend(record) === "cloud" && cloudSceneExecutionEnabled) {
+      await runCloudSceneJob(id, record);
+      return;
+    }
+    await runLocalSceneJob(id);
+  }
+
+  async function runLocalSceneJob(id) {
     const record = await readRecord(id);
     if (!record || shuttingDown || stoppingJobs.has(id)) return;
     const resumeHostOnly = record.resumeFromStage === "block-build";
@@ -2613,8 +3731,14 @@ export function createStudio(options = {}) {
     const attempt = (record.attempt ?? 0) + 1;
     const styledOpeningFrameRequired = record.referenceImage !== null;
     const styledTriviewsRequired = record.referenceImage !== null;
+    const priorAgentLog = await readFile(logPath(id), "utf8").catch(() => "");
+    const priorPlannerAttempts = submittedLwdpJobCountForStage(priorAgentLog, "planner");
+    const priorBuilderAttempts = submittedLwdpJobCountForStage(priorAgentLog, "builder");
+    const priorVisualAttempts = submittedLwdpJobCountForStage(priorAgentLog, "visual");
     const attemptHeader = `WorldKit Creator Studio\nscene=${record.sceneId}\nattempt=${attempt}\nmode=${executionMode}\n\n`;
-    if (resumeHostOnly || resumeBuilderOnly) await appendFile(logPath(id), `\n${attemptHeader}`, "utf8");
+    if (attempt > 1 || resumeHostOnly || resumeBuilderOnly) {
+      await appendFile(logPath(id), `\n${attemptHeader}`, "utf8");
+    }
     else await writeFile(logPath(id), attemptHeader, "utf8");
     if (shuttingDown || stoppingJobs.has(id)) return;
     const startedAt = new Date().toISOString();
@@ -2712,6 +3836,9 @@ export function createStudio(options = {}) {
         NO_COLOR: "1",
         WORLDKIT_CODEX_BACKEND: codexBackend,
         WORLDKIT_CAPTURE_SIGNING_PRIVATE_KEY_PATH: captureSigningPrivateKeyPath,
+        WORLDKIT_LWDP_PLANNER_PRIOR_ATTEMPTS: String(priorPlannerAttempts),
+        WORLDKIT_LWDP_BUILDER_PRIOR_ATTEMPTS: String(priorBuilderAttempts),
+        WORLDKIT_LWDP_VISUAL_PRIOR_ATTEMPTS: String(priorVisualAttempts),
       },
       shell: false,
       detached: process.platform !== "win32",
@@ -2735,6 +3862,10 @@ export function createStudio(options = {}) {
 
     if (shuttingDown) {
       const latestRecord = await readRecord(id);
+      if (latestRecord && await markCloudRecordForRemoteReconciliation(
+        latestRecord,
+        "Creator Studio 停止时云端 Job 仍需对账；服务恢复后将接管原 Job。",
+      )) return;
       await updateRecord(id, {
         status: "interrupted",
         stage: "interrupted",
@@ -2800,6 +3931,21 @@ export function createStudio(options = {}) {
         },
       );
       return;
+    }
+
+    const combinedOutput = `${stdout.raw}\n${stderr.raw}`;
+    if (
+      exit.code !== 0 && codexBackend === "cloud" &&
+      parseLatestLwdpJobMarker(combinedOutput) !== null &&
+      /(?:TypeError:\s*fetch failed|ERR_(?:SSL|TLS|NETWORK|SOCKET|CONNECTION)|ssl\/tls alert handshake failure|ECONN(?:RESET|REFUSED|ABORTED)|ENET(?:UNREACH|DOWN)|EHOSTUNREACH)/i.test(
+        combinedOutput,
+      )
+    ) {
+      const latestRecord = await readRecord(id);
+      if (latestRecord && await markCloudRecordForRemoteReconciliation(
+        latestRecord,
+        "与 LWDP 的连接中断，但远端 Job 结果未知；已转入原 Job 对账，不会重复提交。",
+      )) return;
     }
 
     const requiredArtifacts = [
@@ -3093,6 +4239,34 @@ export function createStudio(options = {}) {
 
   async function cancelRemoteLwdpJob(record) {
     if (effectiveCodexBackend(record) !== "cloud") return { requested: false, jobId: null };
+    if (typeof record.remoteExecutionId === "string" && record.remoteExecutionId) {
+      try {
+        const config = await loadLwdpConfigImplementation({
+          ...process.env,
+          LWDP_GENERATION_API_TOKEN: undefined,
+          LWDP_API_BASE: undefined,
+          LWDP_USER_ID: undefined,
+          WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+        });
+        const response = await cancelCloudExecutionImplementation(
+          record.remoteExecutionId,
+          { config },
+        );
+        const execution = cloudExecutionRecord(response);
+        return {
+          requested: true,
+          executionId: record.remoteExecutionId,
+          status: execution.status,
+        };
+      } catch (error) {
+        return {
+          requested: true,
+          executionId: record.remoteExecutionId,
+          status: "cancel-request-failed",
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
     const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
     const matches = [...rawLog.matchAll(/WORLDKIT_LWDP_JOB\s+[^\s]+\s+[^\s]+\s+(gen_[a-zA-Z0-9]+)/g)];
     const jobId = matches.at(-1)?.[1] ?? null;
@@ -3100,6 +4274,9 @@ export function createStudio(options = {}) {
     try {
       const config = await loadLwdpConfigImplementation({
         ...process.env,
+        LWDP_GENERATION_API_TOKEN: undefined,
+        LWDP_API_BASE: undefined,
+        LWDP_USER_ID: undefined,
         WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
       });
       const response = await cancelGenerationJob(jobId, { config, maxAttempts: 1 });
@@ -3184,6 +4361,12 @@ export function createStudio(options = {}) {
   }
 
   async function recoverGeneratedStyledOutputs(record) {
+    if (
+      record?.status === "ready" &&
+      record?.outcome === "passed" &&
+      record?.captureStatus === "passed" &&
+      record?.whiteboxOutcome === "passed"
+    ) return true;
     const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
     const recoverableInFlightVisualStage =
       ["interrupted", "running", "remote-pending"].includes(record.status) &&
@@ -3217,6 +4400,26 @@ export function createStudio(options = {}) {
       )
     ) return false;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    if (recoverableFinalizationFailure) {
+      if (record.referenceImage === null) return false;
+      try {
+        await visualRecoveryFinalizeImplementation({
+          repoRoot,
+          sceneId: record.sceneId,
+          userFrame: path.join(worldsRoot, record.id, record.referenceImage.fileName),
+        });
+        await appendJobLog(
+          record.id,
+          "\nRecovered completed LWDP visual outputs by replaying trusted Host finalization only; no visual Job was resubmitted.\n",
+        );
+      } catch (error) {
+        await appendJobLog(
+          record.id,
+          `\nTrusted Host visual finalization recovery failed: ${error instanceof Error ? error.message : String(error)}\n`,
+        );
+        return false;
+      }
+    }
     const startedAtMs = Date.parse(record.startedAt ?? "");
     if (!Number.isFinite(startedAtMs)) return false;
     const freshnessFloor = startedAtMs - 1_000;
@@ -3351,27 +4554,122 @@ export function createStudio(options = {}) {
     return true;
   }
 
+  function submittedLwdpJobCountForStage(rawLog, stage) {
+    const logStage = stage === "builder"
+      ? "coding-agent"
+      : stage === "visual" ? "visual-reconstruction" : "planner";
+    return new Set([...String(rawLog).matchAll(
+      /^(?:\[stdout\]\s*)?WORLDKIT_LWDP_JOB (planner|coding-agent|visual-reconstruction) [a-z0-9-]+ (gen_[a-zA-Z0-9]+)\b/gm,
+    )].filter((match) => match[1] === logStage).map((match) => match[2])).size;
+  }
+
+  async function queueRemoteStageRetry(record, {
+    stage,
+    jobId,
+    rawLog,
+    retryClass,
+  }) {
+    const retryLimit = retryClass === "task-timeout" ? 2 : 3;
+    const submittedCount = submittedLwdpJobCountForStage(rawLog, stage);
+    if (submittedCount >= retryLimit) return false;
+
+    const resumeHostOnly = stage === "visual" && await hasTrustedBuilderResumeInputs(record);
+    const resumeBuilderOnly = !resumeHostOnly && stage !== "planner" &&
+      await prepareTrustedPlannerResume(record);
+    const resumeFromStage = resumeHostOnly
+      ? "block-build"
+      : resumeBuilderOnly ? "planner" : null;
+    const executionMode = resumeHostOnly
+      ? "host-resume"
+      : resumeBuilderOnly ? "builder-resume" : "full";
+    const transition = await transitionRecord(record.id, {
+      status: "queued",
+      stage: "queued",
+      failedStage: null,
+      finishedAt: null,
+      error: null,
+      captureRequired: true,
+      captureError: null,
+      captureStatus: "pending",
+      triviewStatus: "pending",
+      whiteboxOutcome: null,
+      outcome: null,
+      styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
+      styledTriviewsRequired: Boolean(record.referenceImage),
+      styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+      resumeFromStage,
+      remoteJobId: null,
+      remoteTaskId: null,
+      remoteRequestId: null,
+      remoteOutputS3Prefix: null,
+      remotePendingSince: null,
+      remotePendingDeadlineAt: null,
+    }, {
+      expectedAttempt: record.attempt,
+      expectedStatuses: ["failed", "remote-pending", "interrupted"],
+    });
+    if (!transition.applied) return transition.reason === "already-complete";
+    await appendJobLog(
+      record.id,
+      `\nLWDP Job ${jobId} confirmed a retryable ${retryClass} terminal failure; queued ${executionMode} attempt ${submittedCount + 1}/${retryLimit}.\n`,
+    );
+    await appendTrajectoryEvent(
+      record.id,
+      "queued",
+      `LWDP Job ${jobId} 已确认是 ${retryClass} 瞬时终态失败，进入有界阶段重试 ${submittedCount + 1}/${retryLimit}。`,
+      {
+        kind: "retry",
+        reason: retryClass,
+        attempt: submittedCount + 1,
+        limit: retryLimit,
+        previousJobId: jobId,
+        executionMode,
+        resumeFromStage,
+      },
+    );
+    enqueue(record.id, effectiveCodexBackend(record));
+    return true;
+  }
+
   async function recoverLateLwdpCodexDelivery(record) {
+    const recoverableInterrupted = record.status === "interrupted" &&
+      record.outcome !== "cancelled";
     if (
-      !autoRecoverLateLwdpJobs || !["failed", "remote-pending"].includes(record.status) ||
+      !autoRecoverLateLwdpJobs ||
+      activeJobs.has(record.id) ||
+      queue.some((item) => parseQueueItem(item)?.id === record.id) ||
+      typeof record.remoteExecutionId === "string" ||
+      !(recoverableInterrupted || ["failed", "remote-pending"].includes(record.status)) ||
       effectiveCodexBackend(record) !== "cloud"
     ) return false;
     const rawLog = await readFile(logPath(record.id), "utf8").catch(() => "");
-    const failureReason = deriveWorldGenerationFailureReason(rawLog);
-    if (!/LWDP.*(?:[0-9]+ 分钟|timed out|远端对账)/i.test(`${record.error ?? ""}\n${failureReason}`)) {
-      return false;
-    }
     const matches = [...rawLog.matchAll(
       /^(?:\[stdout\]\s*)?WORLDKIT_LWDP_JOB (planner|coding-agent|visual-reconstruction) ([a-z0-9-]+) (gen_[a-z0-9]+)\b/gm,
     )];
     const latest = matches.at(-1);
     if (!latest) return false;
+    const latestJobLog = rawLog.slice(latest.index ?? 0);
+    const failureReason = deriveWorldGenerationFailureReason(rawLog);
+    const knownRetryClass = classifyCodexTaskFailureForRetry(new Error(
+      `${record.error ?? ""}\n${failureReason}\n${latestJobLog}`,
+    ));
+    if (
+      record.status === "failed" && knownRetryClass === null &&
+      !/LWDP.*(?:[0-9]+ 分钟|timed out|远端对账)/i.test(
+        `${record.error ?? ""}\n${failureReason}`,
+      )
+    ) {
+      return false;
+    }
     const stage = latest[1] === "planner"
       ? "planner"
       : latest[1] === "coding-agent" ? "builder" : "visual";
     try {
       const config = await loadLwdpConfigImplementation({
         ...process.env,
+        LWDP_GENERATION_API_TOKEN: undefined,
+        LWDP_API_BASE: undefined,
+        LWDP_USER_ID: undefined,
         WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
       });
       const recovery = await lateLwdpRecoveryImplementation({
@@ -3388,10 +4686,11 @@ export function createStudio(options = {}) {
           sceneId: record.sceneId,
           userFrame: path.join(worldsRoot, record.id, record.referenceImage.fileName),
         });
-        const recovered = await recoverGeneratedStyledOutputs(
-          await readRecord(record.id),
-        );
+        const latestRecord = await readRecord(record.id);
+        if (latestRecord?.status === "ready") return true;
+        const recovered = await recoverGeneratedStyledOutputs(latestRecord);
         if (!recovered) {
+          if ((await readRecord(record.id))?.status === "ready") return true;
           throw new Error("Recovered visual outputs failed trusted Host finalization checks.");
         }
         await appendJobLog(
@@ -3404,15 +4703,16 @@ export function createStudio(options = {}) {
         ? await hasTrustedBuilderResumeInputs(record)
         : await prepareTrustedPlannerResume(record);
       if (!trusted) {
-        await appendJobLog(
+        await appendRemoteRecoveryLogOnce(
           record.id,
+          `untrusted-${stage}-${latest[3]}`,
           `\nLate LWDP ${stage} delivery ${latest[3]} downloaded but failed trusted local replay checks.\n`,
         );
         return false;
       }
       const resumeFromStage = stage === "builder" ? "block-build" : "planner";
       const executionMode = stage === "builder" ? "host-resume" : "builder-resume";
-      await updateRecord(record.id, {
+      const transition = await transitionRecord(record.id, {
         status: "queued",
         stage: "queued",
         failedStage: null,
@@ -3433,7 +4733,11 @@ export function createStudio(options = {}) {
         remoteOutputS3Prefix: null,
         remotePendingSince: null,
         remotePendingDeadlineAt: null,
+      }, {
+        expectedAttempt: record.attempt,
+        expectedStatuses: ["failed", "remote-pending", "interrupted"],
       });
+      if (!transition.applied) return transition.reason === "already-complete";
       await appendJobLog(
         record.id,
         `\nRecovered late LWDP ${stage} delivery ${recovery.jobId}; queued ${executionMode} without resubmitting the successful stage.\n`,
@@ -3450,14 +4754,19 @@ export function createStudio(options = {}) {
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const latestRecord = await readRecord(record.id);
+      if (
+        latestRecord?.status === "ready" ||
+        latestRecord?.attempt !== record.attempt
+      ) return true;
       if (error instanceof LwdpJobPendingError || error?.code === "LWDP_JOB_PENDING") {
-        if (record.status === "failed") {
+        if (["failed", "interrupted"].includes(latestRecord?.status)) {
           const remotePendingSince = new Date().toISOString();
           const remotePendingDeadlineAt = new Date(Date.now() + remotePendingGraceMs).toISOString();
           const pendingStage = stage === "builder"
             ? "coding-agent"
             : stage === "visual" ? "visual-reconstruction" : "planner";
-          await updateRecord(record.id, {
+          const transition = await transitionRecord(record.id, {
             status: "remote-pending",
             stage: pendingStage,
             failedStage: null,
@@ -3477,7 +4786,11 @@ export function createStudio(options = {}) {
             outcome: null,
             styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
             styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+          }, {
+            expectedAttempt: record.attempt,
+            expectedStatuses: ["failed", "interrupted"],
           });
+          if (!transition.applied) return transition.reason === "already-complete";
           await appendTrajectoryEvent(
             record.id,
             pendingStage,
@@ -3491,14 +4804,14 @@ export function createStudio(options = {}) {
           );
           return true;
         }
-        const deadlineAt = Date.parse(record.remotePendingDeadlineAt ?? "");
+        const deadlineAt = Date.parse(latestRecord?.remotePendingDeadlineAt ?? "");
         if (
-          record.status === "remote-pending" &&
+          latestRecord?.status === "remote-pending" &&
           Number.isFinite(deadlineAt) &&
           Date.now() >= deadlineAt
         ) {
           const finishedAt = new Date().toISOString();
-          await updateRecord(record.id, {
+          const transition = await transitionRecord(record.id, {
             status: "failed",
             stage: "failed",
             failedStage: record.stage,
@@ -3507,7 +4820,11 @@ export function createStudio(options = {}) {
             outcome: "failed",
             styledOpeningFrameStatus: record.referenceImage ? "failed" : "not-required",
             styledTriviewsStatus: record.referenceImage ? "failed" : "not-required",
+          }, {
+            expectedAttempt: record.attempt,
+            expectedStatuses: ["remote-pending"],
           });
+          if (!transition.applied) return transition.reason === "already-complete";
           await appendTrajectoryEvent(
             record.id,
             "failed",
@@ -3518,9 +4835,16 @@ export function createStudio(options = {}) {
         }
         return false;
       }
-      if (record.status === "remote-pending") {
+      const retryClass = classifyCodexTaskFailureForRetry(error);
+      if (retryClass !== null && await queueRemoteStageRetry(record, {
+        stage,
+        jobId: latest[3],
+        rawLog,
+        retryClass,
+      })) return true;
+      if (["remote-pending", "interrupted"].includes(latestRecord?.status)) {
         const finishedAt = new Date().toISOString();
-        await updateRecord(record.id, {
+        const transition = await transitionRecord(record.id, {
           status: "failed",
           stage: "failed",
           failedStage: record.stage,
@@ -3529,7 +4853,12 @@ export function createStudio(options = {}) {
           outcome: "failed",
           styledOpeningFrameStatus: record.referenceImage ? "failed" : "not-required",
           styledTriviewsStatus: record.referenceImage ? "failed" : "not-required",
+        }, {
+          expectedAttempt: record.attempt,
+          expectedRemoteJobId: latestRecord.remoteJobId ?? undefined,
+          expectedStatuses: ["remote-pending", "interrupted"],
         });
+        if (!transition.applied) return transition.reason === "already-complete";
         await appendTrajectoryEvent(
           record.id,
           "failed",
@@ -3545,6 +4874,208 @@ export function createStudio(options = {}) {
     }
   }
 
+  async function reconcileCloudSceneExecution(record) {
+    if (
+      !cloudSceneExecutionEnabled ||
+      effectiveCodexBackend(record) !== "cloud" ||
+      typeof record.remoteExecutionId !== "string" ||
+      !record.remoteExecutionId
+    ) return false;
+    try {
+      const config = await loadLwdpConfigImplementation({
+        ...process.env,
+        LWDP_GENERATION_API_TOKEN: undefined,
+        LWDP_API_BASE: undefined,
+        LWDP_USER_ID: undefined,
+        WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+      });
+      const execution = cloudExecutionRecord(await getCloudExecutionImplementation(
+        record.remoteExecutionId,
+        { config },
+      ));
+      if (["succeeded", "failed", "interrupted", "cancelled"].includes(execution.status)) {
+        const stages = await getCloudExecutionStagesImplementation(
+          record.remoteExecutionId,
+          { config },
+        );
+        const manifestS3Uri = cloudArtifactManifestS3Uri(execution, stages);
+        return finalizeCloudSceneExecution(record, execution, stages, manifestS3Uri);
+      }
+      if (record.remoteDispatchStatus !== "dispatched") {
+        if (["queued", "submitted", "pending"].includes(execution.status)) {
+          await dispatchCloudExecutionImplementation(record.remoteExecutionId, { config });
+        } else if (execution.status !== "running") {
+          return false;
+        }
+        const dispatchTransition = await transitionRecord(record.id, {
+          remoteDispatchStatus: "dispatched",
+          error: `Cloud Execution ${record.remoteExecutionId} 已按原 execution_id 完成 dispatch 对账。`,
+        }, {
+          expectedAttempt: record.attempt,
+          expectedRemoteExecutionId: record.remoteExecutionId,
+          expectedStatuses: ["running", "remote-pending", "interrupted"],
+        });
+        if (!dispatchTransition.applied && dispatchTransition.reason !== "already-complete") {
+          return false;
+        }
+      }
+      if (
+        record.remoteWorkerLaunchStatus !== "launched" &&
+        typeof record.remoteRequestS3Uri === "string" &&
+        typeof record.remoteOutputS3Prefix === "string"
+      ) {
+        const productionConfig = await cloudSceneProductionConfig();
+        if (productionConfig === null) return false;
+        const hostResume = record.resumeFromStage === "cloud-host" &&
+          typeof record.remoteArtifactManifestS3Uri === "string";
+        const builderResume = record.resumeFromStage === "cloud-builder" &&
+          typeof record.remoteArtifactManifestS3Uri === "string";
+        const launched = await launchStudioCloudSceneWorkerImplementation({
+          executionId: record.remoteExecutionId,
+          requestS3Uri: record.remoteRequestS3Uri,
+          outputS3Prefix: record.remoteOutputS3Prefix,
+          manifestS3Uri: hostResume || builderResume
+            ? record.remoteArtifactManifestS3Uri
+            : null,
+          resumeMode: hostResume ? "host" : builderResume ? "builder" : "verify-only",
+          attempt: record.attempt,
+          userId: config.userId,
+          config: productionConfig,
+        });
+        const launchTransition = await transitionRecord(record.id, {
+          remoteWorkerLaunchStatus: "launched",
+          remoteWorkerJobName: launched?.jobName ?? null,
+          error: `Cloud Execution ${record.remoteExecutionId} 的 Worker 已按原 execution_id 幂等补启动。`,
+        }, {
+          expectedAttempt: record.attempt,
+          expectedRemoteExecutionId: record.remoteExecutionId,
+          expectedStatuses: ["running", "remote-pending", "interrupted"],
+        });
+        if (!launchTransition.applied && launchTransition.reason !== "already-complete") {
+          return false;
+        }
+      }
+      const internalStage = cloudInternalStage(execution);
+      const transition = await transitionRecord(record.id, {
+        status: "remote-pending",
+        stage: canonicalWorkflowStage(internalStage, record),
+        cloudInternalStage: internalStage,
+        cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
+        error: `Cloud Execution ${record.remoteExecutionId} 仍在云端运行；Studio 正按原 execution_id 对账。`,
+      }, {
+        expectedAttempt: record.attempt,
+        expectedRemoteExecutionId: record.remoteExecutionId,
+        expectedStatuses: ["running", "remote-pending", "interrupted"],
+      });
+      return transition.applied || transition.reason === "already-complete";
+    } catch (error) {
+      if (error?.status === 404) {
+        const manifestS3Uri = expectedCloudSceneManifestS3Uri(record);
+        if (manifestS3Uri !== null) {
+          try {
+            const manifest = await readCloudArtifactManifestImplementation(manifestS3Uri, {
+              repoRoot,
+              expectedSceneId: record.sceneId,
+              expectedExecutionId: record.remoteExecutionId,
+            });
+            const pipelineLog = await readVerifiedCloudArtifactImplementation(
+              { remoteArtifacts: manifest.artifacts },
+              "logs/pipeline.log",
+              { repoRoot, maximumBytes: 16 * 1024 * 1024 },
+            );
+            const pipelineLogText = pipelineLog?.toString("utf8") ?? "";
+            const publishedReady =
+              /(?:^|\n)WORLDKIT_STAGE ready(?:\r?\n|$)/.test(pipelineLogText);
+            const recoveredExecution = {
+              execution_id: record.remoteExecutionId,
+              status: publishedReady ? "succeeded" : "failed",
+              current_stage_id: "scene-production",
+              error: publishedReady
+                ? null
+                : deriveWorldGenerationFailureReason(pipelineLogText, { code: 1 }),
+              diagnostics: {
+                internal_stage: publishedReady ? "ready" : "failure-artifact-upload",
+                recovered_from_expected_manifest: true,
+              },
+            };
+            return await finalizeCloudSceneExecution(
+              record,
+              recoveredExecution,
+              { stages: [{
+                stage_id: "scene-production",
+                status: recoveredExecution.status,
+                diagnostics: {
+                  internal_stage: recoveredExecution.diagnostics.internal_stage,
+                  manifest_s3_uri: manifestS3Uri,
+                },
+              }] },
+              manifestS3Uri,
+            );
+          } catch {
+            // The exact Worker manifest is not published yet. Keep reconciling
+            // the same execution identity without creating another task.
+          }
+        }
+      }
+      await appendRemoteRecoveryLogOnce(
+        record.id,
+        `cloud-execution-${record.remoteExecutionId}`,
+        `\nCloud Execution reconciliation is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      return false;
+    }
+  }
+
+  async function reconcileCloudSceneSubmission(record) {
+    if (
+      !cloudSceneExecutionEnabled ||
+      effectiveCodexBackend(record) !== "cloud" ||
+      typeof record.remoteExecutionId === "string" ||
+      typeof record.remoteRequestId !== "string" ||
+      !["failed", "remote-pending"].includes(record.status) ||
+      !/Cloud Execution|request failed \(404\)|Not Found/i.test(record.error ?? "")
+    ) return false;
+    try {
+      const config = await loadLwdpConfigImplementation({
+        ...process.env,
+        LWDP_GENERATION_API_TOKEN: undefined,
+        LWDP_API_BASE: undefined,
+        LWDP_USER_ID: undefined,
+        WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+      });
+      await getCloudExecutionCapacityImplementation({ config });
+      const transition = await transitionRecord(record.id, {
+        status: "queued",
+        stage: "queued",
+        failedStage: null,
+        finishedAt: null,
+        error: null,
+        captureRequired: true,
+        captureError: null,
+        captureStatus: "pending",
+        triviewStatus: "pending",
+        whiteboxOutcome: null,
+        outcome: null,
+        remotePendingSince: null,
+        remotePendingDeadlineAt: null,
+      }, {
+        expectedAttempt: record.attempt,
+        expectedStatuses: ["failed", "remote-pending"],
+      });
+      if (!transition.applied) return transition.reason === "already-complete";
+      await appendTrajectoryEvent(
+        record.id,
+        "queued",
+        "LWDP Cloud Execution 控制面已恢复；冻结输入重新进入云端提交队列。",
+        { kind: "retry", reason: "cloud-control-plane-restored" },
+      );
+      enqueue(record.id, "cloud");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function reconcileRemoteLwdpDeliveries() {
     if (!autoRecoverLateLwdpJobs || shuttingDown || remoteRecoveryInFlight) return;
     remoteRecoveryInFlight = true;
@@ -3552,7 +5083,17 @@ export function createStudio(options = {}) {
       const records = await listRecords();
       for (const record of records) {
         if (shuttingDown) break;
-        if (!["failed", "remote-pending"].includes(record.status)) continue;
+        if (
+          activeJobs.has(record.id) ||
+          queue.some((item) => parseQueueItem(item)?.id === record.id)
+        ) continue;
+        if (
+          !["failed", "remote-pending", "interrupted"].includes(record.status) ||
+          (record.status === "interrupted" && record.outcome === "cancelled")
+        ) continue;
+        if (await reconcileCloudSceneSubmission(record)) continue;
+        if (await reconcileCloudSceneExecution(record)) continue;
+        if (await recoverGeneratedStyledOutputs(record)) continue;
         await recoverLateLwdpCodexDelivery(record);
       }
       pumpQueue();
@@ -3562,48 +5103,77 @@ export function createStudio(options = {}) {
   }
 
   async function initialize() {
-    await ensureWhiteboxCaptureHostKeyPair();
-    await Promise.all([
-      mkdir(worldsRoot, { recursive: true }),
-      mkdir(testSetsRoot, { recursive: true }),
-      recordingWorkbench.initialize(),
-    ]);
-    const persistedSettings = await readJsonIfPresent(runtimeSettingsPath);
-    const persistedCodexBackend = normalizedCodexBackend(persistedSettings?.codexBackend);
-    if (persistedCodexBackend === null) {
-      await persistCodexBackend(selectedCodexBackend);
-    } else {
-      selectedCodexBackend = persistedCodexBackend;
-    }
-    await importBuiltinTestSetRecords();
-    await importBuiltinResultRecords();
-    for (const testSet of await listTestSets()) await refreshTestSetIntegrity(testSet);
-    if (importExistingArtifacts) await importExistingWorlds();
-    const records = await listRecords();
-    for (const record of records) {
-      if (await recoverGeneratedStyledOutputs(record)) continue;
-      if (["running", "visual-running", "visual-queued", "awaiting-recording"].includes(record.status)) {
-        await updateRecord(record.id, {
-          status: "interrupted",
-          stage: "interrupted",
-          failedStage: record.stage,
-          finishedAt: new Date().toISOString(),
-          error: "Creator Studio restarted before this task completed.",
-        });
-        await appendTrajectoryEvent(record.id, "interrupted", "Creator Studio 重启，运行中的任务被标记为中断。", { kind: "failed" });
-      } else if (record.status === "queued") {
-        queue.push(queueItem(record.id, effectiveCodexBackend(record)));
+    await acquireStudioWriterLease();
+    try {
+      await ensureWhiteboxCaptureHostKeyPair();
+      await Promise.all([
+        mkdir(worldsRoot, { recursive: true }),
+        mkdir(testSetsRoot, { recursive: true }),
+        recordingWorkbench.initialize(),
+      ]);
+      const persistedSettings = await readJsonIfPresent(runtimeSettingsPath);
+      const persistedCodexBackend = normalizedCodexBackend(persistedSettings?.codexBackend);
+      if (persistedCodexBackend === null) {
+        await persistCodexBackend(selectedCodexBackend);
+      } else {
+        selectedCodexBackend = persistedCodexBackend;
       }
-    }
-    pumpQueue();
-    if (autoRecoverLateLwdpJobs && remoteRecoveryTimer === null) {
-      remoteRecoveryTimer = setInterval(() => {
-        runBackgroundTask("remote-lwdp", "reconcile-late-deliveries", () =>
+      await importBuiltinTestSetRecords();
+      await importBuiltinResultRecords();
+      for (const testSet of await listTestSets()) await refreshTestSetIntegrity(testSet);
+      if (importExistingArtifacts) await importExistingWorlds();
+      const records = await listRecords();
+      for (const record of records) {
+        if (await recoverGeneratedStyledOutputs(record)) continue;
+        if (["running", "visual-running", "visual-queued", "awaiting-recording"].includes(record.status)) {
+          if (
+            effectiveCodexBackend(record) === "cloud" &&
+            typeof record.remoteExecutionId === "string" &&
+            record.remoteExecutionId
+          ) {
+            await transitionRecord(record.id, {
+              status: "remote-pending",
+              stage: record.stage,
+              finishedAt: null,
+              error: `Creator Studio 已重启；正在按原 Cloud Execution ${record.remoteExecutionId} 对账。`,
+              remotePendingSince: new Date().toISOString(),
+              remotePendingDeadlineAt: new Date(Date.now() + remotePendingGraceMs).toISOString(),
+            }, {
+              expectedAttempt: record.attempt,
+              expectedRemoteExecutionId: record.remoteExecutionId,
+              expectedStatuses: ["running", "visual-running", "visual-queued", "awaiting-recording"],
+            });
+            continue;
+          }
+          if (await markCloudRecordForRemoteReconciliation(
+            record,
+            "Creator Studio 已重启；正在按持久化的原 LWDP Job 对账，不会重复提交。",
+          )) continue;
+          await updateRecord(record.id, {
+            status: "interrupted",
+            stage: "interrupted",
+            failedStage: record.stage,
+            finishedAt: new Date().toISOString(),
+            error: "Creator Studio restarted before this task completed.",
+          });
+          await appendTrajectoryEvent(record.id, "interrupted", "Creator Studio 重启，运行中的任务被标记为中断。", { kind: "failed" });
+        } else if (record.status === "queued") {
+          queue.push(queueItem(record.id, effectiveCodexBackend(record)));
+        }
+      }
+      pumpQueue();
+      if (autoRecoverLateLwdpJobs && remoteRecoveryTimer === null) {
+        remoteRecoveryTimer = setInterval(() => {
+          runBackgroundTask("remote-lwdp", "reconcile-late-deliveries", () =>
+            reconcileRemoteLwdpDeliveries());
+        }, remoteRecoveryIntervalMs);
+        remoteRecoveryTimer.unref?.();
+        runBackgroundTask("remote-lwdp", "initial-reconcile-late-deliveries", () =>
           reconcileRemoteLwdpDeliveries());
-      }, remoteRecoveryIntervalMs);
-      remoteRecoveryTimer.unref?.();
-      runBackgroundTask("remote-lwdp", "initial-reconcile-late-deliveries", () =>
-        reconcileRemoteLwdpDeliveries());
+      }
+    } catch (error) {
+      await releaseStudioWriterLease();
+      throw error;
     }
   }
 
@@ -4002,11 +5572,16 @@ export function createStudio(options = {}) {
         triviewMatch[2],
         "whitebox-triview.png",
       );
-      if (!await fileExists(imagePath)) {
+      const remote = cloudArtifactByPath(
+        record,
+        `scene/triviews/${triviewMatch[2]}/whitebox-triview.png`,
+      );
+      if (!await fileExists(imagePath) && remote === null) {
         sendError(response, 404, "这个三视图尚未生成。");
         return true;
       }
-      serveFile(response, imagePath, "private, no-store");
+      if (await fileExists(imagePath)) serveFile(response, imagePath, "private, no-store");
+      else await streamCloudArtifactImplementation(response, remote, { repoRoot });
       return true;
     }
 
@@ -4025,11 +5600,16 @@ export function createStudio(options = {}) {
         styledTriviewMatch[2],
         "styled-triview.png",
       );
-      if (!await fileExists(imagePath)) {
+      const remote = cloudArtifactByPath(
+        record,
+        `scene/triviews/${styledTriviewMatch[2]}/styled-triview.png`,
+      );
+      if (!await fileExists(imagePath) && remote === null) {
         sendError(response, 404, "这个渲染后三视图尚未生成。");
         return true;
       }
-      serveFile(response, imagePath, "private, no-store");
+      if (await fileExists(imagePath)) serveFile(response, imagePath, "private, no-store");
+      else await streamCloudArtifactImplementation(response, remote, { repoRoot });
       return true;
     }
 
@@ -4046,11 +5626,7 @@ export function createStudio(options = {}) {
       }
       const artifactRoot = path.join(repoRoot, "artifacts/scenes", recordBefore.sceneId);
       const readSourceIfPresent = async (relativePath) => {
-        try {
-          return await readFile(path.join(artifactRoot, relativePath), "utf8");
-        } catch {
-          return null;
-        }
+        return readSceneArtifactText(recordBefore, relativePath);
       };
       const attemptStartedAt = recordBefore.origin === "existing-scene-brief-world"
         ? recordBefore.createdAt
@@ -4066,15 +5642,18 @@ export function createStudio(options = {}) {
           readSourceIfPresent("authoring.json"),
           readSourceIfPresent("scene-implementation-map.json"),
           readSourceIfPresent("evaluation-run.json"),
-          hasPlayableWhiteboxArtifacts(
-            artifactRoot,
-            recordBefore.sceneId,
-            recordBefore.origin === "existing-scene-brief-world"
-              ? Number.NEGATIVE_INFINITY
-              : Number.isFinite(attemptStartedAtMs)
-                ? attemptStartedAtMs - 1_000
-                : Number.POSITIVE_INFINITY,
-          ),
+          recordBefore.remoteArtifactAdmission?.status === "passed" &&
+              recordBefore.remoteArtifactAdmission?.executionId === recordBefore.remoteExecutionId
+            ? true
+            : hasPlayableWhiteboxArtifacts(
+                artifactRoot,
+                recordBefore.sceneId,
+                recordBefore.origin === "existing-scene-brief-world"
+                  ? Number.NEGATIVE_INFINITY
+                  : Number.isFinite(attemptStartedAtMs)
+                    ? attemptStartedAtMs - 1_000
+                    : Number.POSITIVE_INFINITY,
+              ),
         ]);
       const recordAfter = await readRecord(worldId);
       if (authoringSource === null || implementationMapSource === null) {
@@ -4115,7 +5694,11 @@ export function createStudio(options = {}) {
         sendError(response, 404, "这个过程交付物尚未生成。");
         return true;
       }
-      serveFile(response, deliverable.path, "private, no-store");
+      if (deliverable.remote) {
+        await streamCloudArtifactImplementation(response, deliverable.remote, { repoRoot });
+      } else {
+        serveFile(response, deliverable.path, "private, no-store");
+      }
       return true;
     }
 
@@ -4202,14 +5785,22 @@ export function createStudio(options = {}) {
         sendError(response, 409, "只有失败或中断的任务可以重试。");
         return true;
       }
-      const resumeHostOnly = await hasTrustedBuilderResumeInputs(record);
-      const resumeBuilderOnly = !resumeHostOnly && await prepareTrustedPlannerResume(record);
-      const resumeFromStage = resumeHostOnly
-        ? "block-build"
-        : resumeBuilderOnly ? "planner" : null;
-      const executionMode = resumeHostOnly
-        ? "host-resume"
-        : resumeBuilderOnly ? "builder-resume" : "full";
+      const resumeCloudHostOnly = effectiveCodexBackend(record) === "cloud" &&
+        hasRemoteCloudHostResumeInputs(record);
+      const resumeCloudBuilderOnly = effectiveCodexBackend(record) === "cloud" &&
+        !resumeCloudHostOnly && hasRemoteCloudPlannerResumeInputs(record);
+      const resumeHostOnly = !resumeCloudHostOnly && !resumeCloudBuilderOnly &&
+        await hasTrustedBuilderResumeInputs(record);
+      const resumeBuilderOnly = !resumeCloudHostOnly && !resumeCloudBuilderOnly && !resumeHostOnly &&
+        await prepareTrustedPlannerResume(record);
+      const resumeFromStage = resumeCloudHostOnly
+        ? "cloud-host"
+        : resumeCloudBuilderOnly ? "cloud-builder"
+        : resumeHostOnly ? "block-build" : resumeBuilderOnly ? "planner" : null;
+      const executionMode = resumeCloudHostOnly
+        ? "cloud-host-resume"
+        : resumeCloudBuilderOnly ? "cloud-builder-resume"
+        : resumeHostOnly ? "host-resume" : resumeBuilderOnly ? "builder-resume" : "full";
       await updateRecord(record.id, {
         status: "queued",
         stage: "queued",
@@ -4229,7 +5820,11 @@ export function createStudio(options = {}) {
       await appendTrajectoryEvent(
         record.id,
         "queued",
-        resumeHostOnly
+        resumeCloudHostOnly
+          ? "用户发起云端 Host-only 恢复：复用同一 Cloud Execution 的可信 Manifest，不重新运行 Planner 或 Builder。"
+          : resumeCloudBuilderOnly
+            ? "用户发起云端 Builder 恢复：复用同一 Cloud Execution 的可信 Planner Manifest，不重新运行 Planner。"
+          : resumeHostOnly
           ? "用户发起 Host-only 恢复：复用 Planner 与 Builder 产物，从方块编译继续。"
           : resumeBuilderOnly
             ? "用户发起 Builder 恢复：复用迟到交付且经可信校验的 Planner 产物。"
@@ -4344,8 +5939,18 @@ export function createStudio(options = {}) {
         const assetPath = path.join(repoRoot, "apps/playground/public/scene-plans", assetMatch[1], assetMatch[2]);
         if (await fileExists(assetPath)) serveFile(response, assetPath, "no-cache");
         else {
-          response.writeHead(404);
-          response.end();
+          const record = (await listRecords()).find(({ sceneId }) => sceneId === assetMatch[1]);
+          const remote = record === undefined
+            ? null
+            : cloudArtifactByPath(record, `scene-plan/${assetMatch[2]}`);
+          if (remote) await streamCloudArtifactImplementation(response, remote, {
+            repoRoot,
+            cacheControl: "no-cache",
+          });
+          else {
+            response.writeHead(404);
+            response.end();
+          }
         }
         return;
       }
@@ -4389,14 +5994,22 @@ export function createStudio(options = {}) {
     await Promise.all([
       recordingWorkbench.shutdown(),
       episodeWorkflows.shutdown(),
-      ...[...activeJobs].map((id) => updateRecord(id, {
+      ...[...activeJobs].map(async (id) => {
+        const record = await readRecord(id);
+        if (record && await markCloudRecordForRemoteReconciliation(
+          record,
+          "Creator Studio 已停止；服务恢复后将继续对账原 LWDP Job。",
+        )) return;
+        await updateRecord(id, {
           status: "interrupted",
           stage: "interrupted",
           finishedAt: new Date().toISOString(),
           error: "Creator Studio stopped while this world was being generated.",
-        })),
+        });
+      }),
     ]);
     await new Promise((resolve) => server.close(resolve));
+    await releaseStudioWriterLease();
   }
 
   return {
@@ -4423,11 +6036,17 @@ async function startMain() {
   const dataRoot = process.env.WORLDKIT_STUDIO_DATA_ROOT ?? defaultDataRoot;
   const readinessNonce = process.env.WORLDKIT_STUDIO_READINESS_NONCE ?? "";
   delete process.env.WORLDKIT_STUDIO_READINESS_NONCE;
-  const playgroundInternalOrigin = process.env.WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN ?? "http://127.0.0.1:5173";
+  const configuredPlaygroundInternalOrigin = process.env.WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN;
+  const managedPlayground = configuredPlaygroundInternalOrigin === undefined;
+  const playgroundInternalOrigin = configuredPlaygroundInternalOrigin ??
+    `http://${host}:${defaultManagedPlaygroundPort(port)}`;
   const playgroundOrigin = process.env.WORLDKIT_PLAYGROUND_ORIGIN ?? playgroundInternalOrigin;
-  const additionalTrustedCapturePublicKeyPaths = String(
+  const additionalTrustedCapturePublicKeyPaths = [
+    path.join(defaultRepoRoot, "config", "trust", "worldkit-cloud-capture-public.pem"),
+    ...String(
     process.env.WORLDKIT_CAPTURE_ADDITIONAL_TRUSTED_PUBLIC_KEY_PATHS ?? "",
-  ).split(path.delimiter).filter(Boolean);
+    ).split(path.delimiter).filter(Boolean),
+  ];
   const accessKey = process.env.WORLDKIT_ACCESS_KEY ?? "";
   if (process.env.WORLDKIT_PUBLIC_MODE === "1" && accessKey.length < 16) {
     throw new Error("WORLDKIT_PUBLIC_MODE requires a WORLDKIT_ACCESS_KEY of at least 16 characters.");
@@ -4439,6 +6058,8 @@ async function startMain() {
     additionalTrustedCapturePublicKeyPaths,
     accessKey,
     readinessNonce,
+    importExistingArtifacts:
+      process.env.WORLDKIT_STUDIO_IMPORT_EXISTING_ARTIFACTS === "1",
   });
   await studio.initialize();
   await new Promise((resolve, reject) => {
@@ -4448,12 +6069,33 @@ async function startMain() {
   console.log(`WorldKit Creator Studio: http://${host}:${port}`);
 
   let playgroundChild = null;
-  if (process.env.WORLDKIT_DISABLE_PLAYGROUND_SPAWN !== "1" && !await isOriginAvailable(playgroundInternalOrigin)) {
-    playgroundChild = spawn(
-      "pnpm",
-      ["--filter", "@whitebox-world/playground", "dev", "--host", host, "--port", "5173"],
-      { cwd: defaultRepoRoot, stdio: "inherit", shell: false },
-    );
+  if (process.env.WORLDKIT_DISABLE_PLAYGROUND_SPAWN !== "1") {
+    const originAvailable = await isOriginAvailable(playgroundInternalOrigin);
+    if (managedPlayground && originAvailable) {
+      await studio.shutdown();
+      throw new Error(
+        `WORLDKIT_MANAGED_PLAYGROUND_PORT_COLLISION: ${playgroundInternalOrigin}`,
+      );
+    }
+    if (!originAvailable) {
+      const playgroundUrl = new URL(playgroundInternalOrigin);
+      if (playgroundUrl.protocol !== "http:" ||
+          !["127.0.0.1", "localhost"].includes(playgroundUrl.hostname) ||
+          playgroundUrl.port === "") {
+        await studio.shutdown();
+        throw new Error(
+          `WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN is unavailable and cannot be managed locally: ${playgroundInternalOrigin}`,
+        );
+      }
+      playgroundChild = spawn(
+        "pnpm",
+        [
+          "--filter", "@whitebox-world/playground", "dev",
+          "--host", host, "--port", playgroundUrl.port, "--strictPort",
+        ],
+        { cwd: defaultRepoRoot, stdio: "inherit", shell: false },
+      );
+    }
   }
 
   let stopping = false;

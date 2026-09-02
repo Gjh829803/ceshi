@@ -87,6 +87,7 @@ describe("worldkit rigged Subject tri-view capture", () => {
       visualTargetMappings: [{
         visualTargetId: "primary-g-bot",
         runtimeEntityIds: ["g-bot-primary"],
+        frontDirectionWorldXZ: [0, -1],
       }],
       visualCaptureGroups: [{
         visualTargetId: "primary-g-bot",
@@ -94,6 +95,7 @@ describe("worldkit rigged Subject tri-view capture", () => {
         role: "primary-subject",
         semanticClassId: "subject.humanoid.g-bot",
         identityColor: "#E85D5D",
+        frontDirectionWorldXZ: [0, -1],
       }],
     })}\n`, "utf8");
     const outputDirectory = path.join(temporaryDirectory, "triviews");
@@ -147,6 +149,7 @@ describe("worldkit rigged Subject tri-view capture", () => {
       visualTargetMappings: [{
         visualTargetId: "primary-pack-animal",
         runtimeEntityIds: ["pack-animal-a"],
+        frontDirectionWorldXZ: [0, -1],
       }],
       visualCaptureGroups: [{
         visualTargetId: "primary-pack-animal",
@@ -154,6 +157,7 @@ describe("worldkit rigged Subject tri-view capture", () => {
         role: "primary-subject",
         semanticClassId: "subject.animal.pack",
         identityColor: "#E85D5D",
+        frontDirectionWorldXZ: [0, -1],
       }],
     })}\n`, "utf8");
     const outputDirectory = path.join(temporaryDirectory, "triviews");

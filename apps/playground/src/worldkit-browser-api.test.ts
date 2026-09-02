@@ -714,7 +714,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     );
   });
 
-  it("publishes exactly the 38 mandatory V5 own enumerable keys", () => {
+  it("publishes exactly the 39 mandatory V5 own enumerable keys", () => {
     const installation = installDeferredWorldkitBrowserApi({
       target: {},
       statusElement: { dataset: {} },
@@ -748,6 +748,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
       "listSubjectDefinitions",
       "ready",
       "releaseRuntimeActivity",
+      "relocateControlledSubjectForCapture",
       "reset",
       "resetCameraView",
       "runFixedInput",
@@ -1760,7 +1761,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
     expect(Object.isFrozen(diagnostics[0])).toBe(true);
     expect(Object.isFrozen(diagnostics[0]?.details)).toBe(true);
     expect(Object.isFrozen(diagnostics[0]?.details?.measurements)).toBe(true);
-    expect(Object.keys(installation.api)).toHaveLength(38);
+    expect(Object.keys(installation.api)).toHaveLength(39);
     expect(installation.api).not.toHaveProperty("bindControl");
     expect(JSON.stringify(installation.api)).not.toMatch(/solve|search|repair|mutate/i);
   });
@@ -2004,6 +2005,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
           role: "primary-subject",
           semanticClassId: "subject.missing",
           identityColor: "#E85D5D",
+          frontDirectionWorldXZ: [0, -1],
         }],
         viewport: {} as HTMLElement,
         trackAdapter,
@@ -2035,6 +2037,7 @@ describe("createWorldkitBrowserApiV5", () => {
     "waitForRenderReady",
     "captureControlFrame",
     "captureScreenshot",
+    "relocateControlledSubjectForCapture",
     "reset",
     "setPaused",
     "getRouteSummary",
@@ -2046,7 +2049,7 @@ describe("createWorldkitBrowserApiV5", () => {
   it("preserves prior Browser methods, installs V5 on window.__WORLDKIT__, and deep-freezes Route Evidence", () => {
     const api = createWorldkitBrowserApiV5({});
     expect(api.version).toBe(5);
-    expect(Object.keys(api)).toHaveLength(38);
+    expect(Object.keys(api)).toHaveLength(39);
     expect(api).not.toHaveProperty("bindControl");
     for (const methodName of V5_REQUIRED_METHODS) {
       expect(typeof api[methodName]).toBe("function");
@@ -2296,11 +2299,11 @@ describe("Authoring camera console", () => {
       expect(await inputDebug.textContent()).toContain("加速 0.20 s");
       expect(await inputDebug.textContent()).toContain("减速 0.15 s");
       expect(await inputDebug.textContent()).toContain("最后清除 startup");
-      await page.keyboard.down("ArrowLeft");
+      await page.keyboard.down("j");
       await expect.poll(async () => page.locator(
         '[data-camera-input-diagnostic="当前偏航速度"]',
       ).textContent()).not.toBe("0.000000 rad / fixed tick");
-      await page.keyboard.up("ArrowLeft");
+      await page.keyboard.up("j");
 
       const profileRefs = await page.locator("#tuning-camera-cards article")
         .evaluateAll((cards) => cards.map((card) => card.getAttribute("data-camera-profile-ref")));

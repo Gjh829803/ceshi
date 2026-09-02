@@ -1,281 +1,115 @@
-# 数据合同草案
+# Episode data contracts
 
-本文件描述建议的 V1 持久制品。实现时应放入独立 package 并使用关闭 Schema Validator；
-本文示例不是可以直接提交给 Runtime 的现有 JSON。
+## Playthrough Plan V3
 
-## 1. PlaythroughPlanV1
-
-```json
-{
-  "kind": "worldkit-playthrough-plan",
-  "schemaVersion": 1,
-  "id": "episode-scene-a-seed-731991",
-  "sceneId": "scene-a",
-  "worldPackageRootHash": "sha256:...",
-  "seed": 731991,
-  "simulationTickRate": 60,
-  "captureFrameRate": 24,
-  "startTick": 0,
-  "endTickExclusive": 5400,
-  "controlledEntityId": "subject-a",
-  "motionRenderingGuidance": "<movement-specific natural final micro-animation while root motion stays locked>",
-  "movementCapabilityRefs": ["worldkit://..."],
-  "inputIntervals": [
-    {
-      "startTick": 0,
-      "endTickExclusive": 90,
-      "rawKeys": ["W"],
-      "semanticActions": ["move-forward"],
-      "purpose": "leave-spawn-and-establish-heading"
-    }
-  ],
-  "cameraIntervals": [
-    {
-      "startTick": 120,
-      "endTickExclusive": 180,
-      "yawDeltaRadians": -0.35,
-      "pitchDeltaRadians": 0.08,
-      "purpose": "inspect-left-landmark"
-    }
-  ],
-  "seedancePromptEvents": [],
-  "recoveryPolicies": [],
-  "explorationTargets": [],
-  "planningEvidenceRefs": [],
-  "selfCheckReportRef": "playthrough-self-check.json"
-}
-```
-
-规则：
-
-- Tick 区间均为左闭右开，不能重叠产生互斥键冲突。
-- `rawKeys` 只允许 `W/A/S/D/Shift/Space`；Camera 不伪装成键盘移动。
-- `semanticActions` 必须由当前主体 Control Profile 编译，不能由 Agent 猜测 Clip 名。
-- 计划固定 5400 Tick；Capture Schedule 固定 2160 帧。
-- 所有随机结果已落盘，重放不能再次随机。
-
-## 2. SeedancePromptEventV1
+固定 Header：六段、每段 30 秒、执行与交付均 180 秒、24fps、4320 帧、无镜头重置
+缓冲。`segmentPlans` 恰好六项，每项增加：
 
 ```json
 {
-  "kind": "worldkit-seedance-prompt-event",
-  "schemaVersion": 1,
-  "id": "prompt-event-01",
-  "windowIndex": 0,
-  "windowStartTick": 600,
-  "windowEndTickExclusive": 1200,
-  "selectedTick": 947,
   "segmentId": "segment-00",
-  "segmentRelativeTick": 947,
-  "eventClass": "environment-transformation",
-  "magnitude": "large-scale",
-  "frameImpact": {
-    "scope": "environment-dominant",
-    "coverage": "large",
-    "contrast": "dramatic"
-  },
-  "dominantChange": "<large immediately readable before/after transformation>",
-  "eventPrompt": "<scene-specific, time-explicit Seedance rendering instruction>",
-  "grounding": {
-    "visualTargetIds": ["visual-target-1"],
-    "naturalTargetNames": ["<existing target name>"],
-    "pairedInputIntervalIds": ["input-interval-17"],
-    "whiteboxEvidenceRefs": ["segment-00.mp4#t=15.783"]
-  },
-  "timing": {
-    "onsetSeconds": 15.783,
-    "transitionDurationSeconds": 1.2,
-    "holdDurationSeconds": 4.0,
-    "ending": "settle-or-fade-as-described"
-  },
-  "continuityRequirements": [
-    "preserve-whitebox-motion",
-    "preserve-camera-path",
-    "preserve-spatial-layout",
-    "preserve-controlled-actor-root-track-and-count"
-  ],
-  "audioRequirement": "synchronized-effect-sound-only",
-  "promptHash": "sha256:..."
+  "executionStartSeconds": 0,
+  "deliveryDurationSeconds": 30,
+  "cameraResetBufferSeconds": 0,
+  "initialPositionMetersXYZ": [0, 1, 0],
+  "initialFacingYawRadians": 0,
+  "destinationId": "local-viewpoint",
+  "destinationPositionMetersXYZ": [8, 1, -12],
+  "routeBandIds": ["safe-local-band"],
+  "routeWaypointsMetersXYZ": [[0, 1, 0], [8, 1, -12]],
+  "coverageTargetIds": ["primary-landmark"],
+  "purpose": "从独立起点持续游荡并观察主标志物"
 }
 ```
 
-Validator 要求三个 Event 的窗口分别为 `[600,1200)`、`[2400,3000)`、`[4200,4800)`；
-每个 Event 恰好属于一个 Segment。
+输入和镜头事件仍使用全局 0–180 秒时钟，但单个区间不能跨越 30 秒边界。六段之间
+没有位置连续性要求。视觉事件不属于这个合同。
 
-Event JSON 用于时间、Grounding 和审计；`eventPrompt` 才是交给 Seedance 的自然语言事件
-块。它必须包含事件开始时间、变化过程、动作/镜头保持要求和禁止项，不能只依赖 JSON
-字段让 Provider 猜测含义。
+## Whitebox capture
 
-## 3. ExecutedPlaythroughTraceV2
-
-执行 Trace 不覆盖 Plan，而是记录事实：
-
-```json
-{
-  "kind": "worldkit-executed-playthrough-trace",
-  "schemaVersion": 2,
-  "episodeId": "episode-scene-a-seed-731991",
-  "planHash": "sha256:...",
-  "runtimeSessionId": "runtime-session-...",
-  "worldSessionId": "world-session-...",
-  "recordingStartedAt": "...",
-  "recordingFinishedAt": "...",
-  "executedInputEvents": [],
-  "executedCameraEvents": [],
-  "seedancePromptEventMarkers": [],
-  "frameTelemetry": {
-    "kind": "worldkit-episode-frame-telemetry",
-    "schemaVersion": 1,
-    "samplingMode": "nearest-runtime-sample",
-    "captureFrameRate": 24,
-    "frameCount": 2160,
-    "widthPixels": 1280,
-    "heightPixels": 720,
-    "coordinateSystems": {},
-    "samples": []
-  },
-  "runtimeSnapshots": [],
-  "coverage": {
-    "visitedCellCount": 0,
-    "reachableCellCount": 0,
-    "visitedVisualTargetIds": [],
-    "unvisitedReasons": []
-  },
-  "recoveries": [],
-  "diagnostics": [],
-  "contentHash": "sha256:..."
-}
-```
-
-Marker 只证明 Event 与白膜 Timeline 的时间对应，不代表 Runtime 已执行视觉变化。
-
-`frameTelemetry.samples` 与最终白膜母片逐帧对齐。每项包含当前按键、Simulation Tick、
-主体世界坐标/四元数/速度，以及相机位置、实际 Target、动态垂直 FOV、near/far、3×3
-像素内参、View/Projection 和 Camera-to-World 4×4 矩阵。世界和相机均为右手米制坐标；
-矩阵默认 column-major，只有 `intrinsics.matrixRowMajor` 明确使用 row-major。
-
-## 4. SegmentManifestV1
-
-| Segment | Source frames | Required output |
-|---|---:|---|
-| `segment-00` | 0–719 | 30 s / 720 frames |
-| `segment-01` | 720–1439 | 30 s / 720 frames |
-| `segment-02` | 1440–2159 | 30 s / 720 frames |
-
-每段 Manifest 保存：
-
-- 母片 Hash 和 Frame Range；
-- 白膜分段 Hash、首帧 Hash；
-- 样式化首帧 Hash；
-- 共享 Styled Tri-view Manifest Hash；
-- Seedance Prompt Event、最终 Segment Prompt Hash；
-- MG request_id/job_id、480p 原始输出 Hash；
-- CF request_id/job_id、720p 原始输出 Hash；
-- 最终 Conformed 视频 Hash和媒体参数；
-- 白膜/生成视频 Pair Validation Report Hash。
-
-## 5. Episode 目录
+输出：
 
 ```text
-episodes/<scene-id>/<episode-id>/
-  episode-manifest.json
-  planning/
-    reconnaissance-report.json
-    playthrough-plan.json
-    playthrough-self-check.json
-    seedance-prompt-events.json
-  execution/
-    executed-playthrough-trace.json
-    runtime-snapshots.ndjson
-    seedance-prompt-event-markers.ndjson
-  whitebox/
-    episode-90s.mp4
-    episode-90s-media.json
-    segment-00.mp4
-    segment-01.mp4
-    segment-02.mp4
-    segment-00-first-frame.png
-    segment-01-first-frame.png
-    segment-02-first-frame.png
-  visual/
-    segment-00-styled-opening-frame.png
-    segment-01-styled-opening-frame.png
-    segment-02-styled-opening-frame.png
-    styled-triviews-manifest.json
-    triviews/<visual-target-id>/styled-triview.png
-  prompts/
-    segment-00.json
-    segment-01.json
-    segment-02.json
-  generated/
-    mg-480p/segment-00.mp4
-    mg-480p/segment-01.mp4
-    mg-480p/segment-02.mp4
-    cf-720p/segment-00.mp4
-    cf-720p/segment-01.mp4
-    cf-720p/segment-02.mp4
-    conformed/segment-00.mp4
-    conformed/segment-01.mp4
-    conformed/segment-02.mp4
-  validation/
-    segment-00-pair.json
-    segment-01-pair.json
-    segment-02-pair.json
+whitebox/
+  episode-180s.mp4
+  segment-00.mp4 ... segment-05.mp4
+  segment-00-first-frame.png ... segment-05-first-frame.png
+  executed-playthrough-raw-trace.json
+  executed-playthrough-trace.json
+  executed-playthrough-quality-report.json
 ```
 
-Provider URL、Token、Authorization、临时签名地址和 Codex 登录状态不得进入 Episode 目录。
+每段视频必须是 1280×720、24fps、720 帧、30 秒、无音频；母片是六段按顺序拼接的
+4320 帧。Trace V3 的 `segments` 保存每段出生位置、朝向、帧范围和
+`selectedForSeedance`；`frameTelemetry` 保存逐帧输入、世界坐标、主体姿态、速度、
+FOV、相机内参、View/Camera-to-world/Projection 矩阵。
 
-## 6. 幂等键
+每个 Segment 还保存视频和首帧内容 Hash，母片保存独立内容 Hash。地面主体逐帧记录
+`movementMedium`、`mobilityMode`、`supportMode` 和 `verticalPhase`，用于识别持续失去
+支撑或坠出地图；飞行/水下的正常垂直运动不会被当作地面坠落。
 
-- Codex 规划：`<scene-id>-<world-hash>-playthrough-plan-v1-<seed>`。
-- Episode 视觉重建：`<episode-id>-visual-v1`。
-- MG：`<episode-id>-segment-XX-mg-v1`。
-- CF：`<episode-id>-segment-XX-cf-v1`。
+云端 Episode 根目录包含 `episode-source-receipt.json`，绑定 Scene execution、Scene
+artifact manifest、World Build Identity、Scene capture receipt、Worker image digest 和
+冻结的生产模式。
 
-HTTP 502/504、连接超时或本地进程退出后，先按 `request_id` 查询原 Job。发现原 Job 后只
-接管轮询/下载，不能新建随机 request_id。只有明确失败且人工/策略批准新尝试时才使用
-`-attempt-N`。
+## Visual assets
 
-## 7. Seedance 审阅下载包
-
-三段最终视频全部完成后，Studio 提供：
+六个 Segment 都生成各自的样式首帧：
 
 ```text
-<episode-id>-seedance-review.zip
-  <episode-id>-seedance-review/
-    manifest.json
-    interaction-timeline.json
-    episode-record.json
-    planning/
-      playthrough-plan.json
-      reconnaissance-report.json
-    whitebox/
-      episode-90s-1280x720-24fps.mp4
-      episode-raw.webm
-      executed-playthrough-trace.json
-    reference/
-      user-first-frame.png
-      world-plan.png
-      base-styled-opening-frame.png
-    visual/
-      episode-visual-prompts.json
-      episode-visual-manifest.json
-      triviews/<visual-target-id>-whitebox.png
-      triviews/<visual-target-id>-styled.png
-    segments/segment-00..02/
-      whitebox-1280x720-24fps-720f.mp4
-      whitebox-first-frame.png
-      styled-opening-frame.png
-      seedance-mg-480p.mp4
-      seedance-cf-720p.mp4
-      seedance-final-1280x720-24fps-720f.mp4
-      seedance-prompt.json
-      provider-run.json
-    logs/pipeline.log
+visual/
+  segment-00-styled-opening-frame.png
+  segment-01-styled-opening-frame.png
+  segment-02-styled-opening-frame.png
+  segment-03-styled-opening-frame.png
+  segment-04-styled-opening-frame.png
+  segment-05-styled-opening-frame.png
+  triviews/<visual-target-id>/styled-triview.png
+  episode-visual-prompts.json
+  episode-visual-manifest.json
 ```
 
-`interaction-timeline.json` 是便携的人类操作合同。每个 Segment 同时记录实际执行的
-`W/A/S/D/Shift/Space`、方向键镜头输入、分段时间、全局时间，以及对应 Prompt Event 的
-自然语言输入 `inputPrompt` 和实际发送给 Seedance 的 `seedanceProviderPrompt`。下载包不
-包含含本地绝对路径的内部 `request.json`，也不得包含 Token、Authorization 或临时签名
-URL；可移植输入身份由 `provider-run.json` 中的 Hash 和任务 ID 表达。
+三视图按完整视觉目标只生成一次，六段共享。
+
+## Gemini Visual Events V1
+
+一次模型调用输入三段视频和三张样式首帧。视频采样元数据为 `fps: 0.25`。输出由 Host
+补齐槽位身份后恰好五项：
+
+```text
+segment-00: prompt-event-00 @ 8s, prompt-event-01 @ 20s
+segment-02: prompt-event-02 @ 8s, prompt-event-03 @ 20s
+segment-04: prompt-event-04 @ 14s
+```
+
+每项包含场景目标、事件类别、变化前/过程/结果、画面影响、空间连续性、音效与限制。
+事件独立于玩家按键和角色动作。
+
+## Seedance request V2 / provider run V3
+
+Ten-style production stores shared motion once under `whitebox/` and variant-owned
+artifacts under `style-variants/style-00..09/`. The aggregate
+`style-variant-manifest.json` binds every variant to the shared trace and video hashes.
+Each `review/visual-quality-review.json` is authored by an independent LWDP Codex Job,
+contains the exact generated-image input hashes, and must have `verdict=passed` before
+the variant's Gemini event plan or Seedance requests are admitted.
+
+六个 Segment 的 `request.json` 都指向：
+
+- 一个详细 Prompt JSON；
+- 对应白膜 Segment MP4；
+- 对应样式首帧；
+- 全部完整目标样式三视图；
+- `seedance-2.5.mp4` 原生 Provider 输出；
+- `final-1280x720-24fps-720f.mp4` 最终闭合输出。
+
+`provider-run.json` 保存输入 Hash、稳定幂等键、唯一 Job ID、模型链
+`["seedance-2.5"]`、状态、原始 Provider 视频 Hash/媒体探针/正式结果 URL 和最终媒体
+探针。Bearer Key、上传签名和下载签名从不保存。原始视频 Hash 不匹配时，从同一 Job
+重新下载，不重新创建视频任务。
+
+## Review bundle
+
+ZIP 包含六段白膜与首帧、六个 Segment 的样式首帧/Prompt/Provider 记录/原生与
+最终视频、共享三视图、用户图、世界规划图、交互时间线、执行 Trace、质量报告和日志。
+云端生产将 ZIP 与全部制品留在 S3，Studio 只维护 Hash 闭合的远端索引。

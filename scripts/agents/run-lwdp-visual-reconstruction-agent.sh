@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ "${WORLDKIT_FROZEN_SHELL_ACTIVE:-0}" != "1" ]]; then
+  source_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  source_project_root="$(cd "$(dirname "$source_script")/../.." && pwd)"
+  exec node "$source_project_root/scripts/agents/run-frozen-shell-script.mjs" "$source_script" "$@"
+fi
+
+project_root="${WORLDKIT_FROZEN_SHELL_PROJECT_ROOT:-}"
+[[ -n "$project_root" && -d "$project_root" ]] || {
+  echo "Frozen visual reconstruction script is missing its project root." >&2
+  exit 3
+}
 cd "$project_root"
 if [[ "${1:-}" == "--" ]]; then shift; fi
 
@@ -54,9 +64,11 @@ fi
   exit 3
 }
 
-if [[ -z "${WORLDKIT_LWDP_ENV_FILE:-}" && -f "$project_root/.codex-tmp/runtime-config/lwdp.env" ]]; then
-  export WORLDKIT_LWDP_ENV_FILE="$project_root/.codex-tmp/runtime-config/lwdp.env"
-fi
+unset LWDP_GENERATION_API_TOKEN LWDP_API_BASE LWDP_USER_ID
+export WORLDKIT_LWDP_ENV_FILE="$project_root/.codex-tmp/runtime-config/lwdp.env"
+[[ -s "$WORLDKIT_LWDP_ENV_FILE" && ! -L "$WORLDKIT_LWDP_ENV_FILE" ]] || {
+  echo "Project-local LWDP runtime config is missing or unsafe." >&2; exit 3;
+}
 
 pnpm_bin="$(command -v pnpm)"
 node_bin="$(command -v node)"
@@ -126,7 +138,7 @@ Opening-frame hard constraint: this is a registered material repaint, not a reco
 
 Technical-helper exception: a whitebox silhouette that is not declared by scene-brief.md or the visual target manifest may be a runtime-only support rather than visible world geometry. Flight stands, support columns, spawn pads, camera helpers, invisible colliders, air walls, movement volumes, shadow catchers, selection markers, and similar proxies must be erased and replaced by the surrounding movement medium. This exception overrides mask preservation. Never render an undeclared support beneath a flying Subject as a translucent pillar, pedestal, cloud column, beam, or platform.
 
-Tri-view hard order: every styled tri-view has exactly three panels. The left panel is Front and must show the target's front plane; the center panel is its anatomical Right profile with the target facing toward the image's right edge; the right panel is Back and must show the rear plane. Do not treat Front / Right / Back as an unordered set and never swap the left and center panels. Inspect this positional contract before accepting each tri-view.
+Tri-view hard order: every styled tri-view has exactly three panels. The trusted Host has already used the target's declared local front and one shared orthographic meter-to-pixel scale. The left panel is Front and must show the target's front plane; the center panel is its anatomical Right profile with the target facing toward the image's right edge; the right panel is Back and must show the rear plane. Preserve the whitebox panel baseline and physical scale exactly; never independently zoom, recenter, reinterpret, or swap a panel. Inspect this positional contract before accepting each tri-view.
 "
 printf '%s\n' "$instruction" > "$instruction_file"
 

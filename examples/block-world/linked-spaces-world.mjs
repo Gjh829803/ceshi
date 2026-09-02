@@ -108,6 +108,10 @@ export function buildBlockWorld() {
       halfWidthMeters: 1,
       isBidirectional: true,
     }],
+    visualTargetFacings: [{
+      visualTargetId: "visual-target-2",
+      frontYawQuarterTurnsY: 0,
+    }],
     spaceTransitions: [
       {
         id: outwardId,

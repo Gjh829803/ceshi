@@ -10,6 +10,7 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { BabylonHavokPhysicsWorldQueryV1 } from "./babylon-physics-world-query";
+import { BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1 } from "./block-ground-boundary";
 import { enableHavokPhysics } from "./physics";
 
 const havokWasmBytes = await readFile(
@@ -73,6 +74,58 @@ describe("BabylonHavokPhysicsWorldQueryV1", () => {
       query.dispose();
       wallAggregate.dispose();
       playerAggregate.dispose();
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("ignores ground-only Block World boundaries for ray and sphere Camera sweeps", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const plugin = await enableHavokPhysics(scene, [0, -9.81, 0], havokWasmBinary);
+    const boundary = MeshBuilder.CreateBox(
+      "ground-only-boundary",
+      { width: 4, height: 4, depth: 0.1 },
+      scene,
+    );
+    boundary.position.z = 3;
+    boundary.metadata = { worldkitEntityId: "ground-only-boundary" };
+    const boundaryAggregate = new PhysicsAggregate(
+      boundary,
+      PhysicsShapeType.BOX,
+      { mass: 0 },
+      scene,
+    );
+    boundaryAggregate.shape.filterMembershipMask =
+      BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1;
+    boundaryAggregate.shape.filterCollideMask = 0xffffffff;
+    const wall = MeshBuilder.CreateBox(
+      "real-wall",
+      { width: 4, height: 4, depth: 0.1 },
+      scene,
+    );
+    wall.position.z = 6;
+    wall.metadata = { worldkitEntityId: "real-wall" };
+    const wallAggregate = new PhysicsAggregate(
+      wall,
+      PhysicsShapeType.BOX,
+      { mass: 0 },
+      scene,
+    );
+    const query = new BabylonHavokPhysicsWorldQueryV1(scene, plugin);
+
+    try {
+      for (const probeRadiusMeters of [0, 0.25]) {
+        expect(query.sweepSphere({
+          startPositionMetersXYZ: [0, 0, 0],
+          endPositionMetersXYZ: [0, 0, 10],
+          probeRadiusMeters,
+        })).toMatchObject({ hitEntityId: "real-wall" });
+      }
+    } finally {
+      query.dispose();
+      wallAggregate.dispose();
+      boundaryAggregate.dispose();
       scene.dispose();
       engine.dispose();
     }

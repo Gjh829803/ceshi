@@ -81,6 +81,9 @@ For each styled tri-view:
 - its named `whitebox-triview-N` sheet fixes the complete target's silhouette,
   proportions, member count, part relationships, and exact Front / Right / Back
   panel order;
+- the trusted Host has already applied the target's declared local front and
+  one shared orthographic meter-to-pixel scale to all three panels, so never
+  reinterpret a panel from the opening Camera or independently zoom one view;
 - the generated styled opening and `user-first-frame` fix the shared final
   identity, materials, palette, and art direction;
 - render exactly three orthographic panels—Front, Right, Back—on one neutral
@@ -95,7 +98,7 @@ Panel position is a hard contract, not a list of views in arbitrary order:
   toward the image's right edge;
 - right panel = Back, showing the rear of the head/top, torso/body and feet/base.
 
-Keep all three at comparable scale and vertical alignment. Never swap the Front
+Keep all three at exactly the same physical scale and vertical baseline. Never swap the Front
 and Right panels even when the whitebox silhouettes are visually similar.
 
 One visual target is one complete Subject, building, landmark, or repeated set.

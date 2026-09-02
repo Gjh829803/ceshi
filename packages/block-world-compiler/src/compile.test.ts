@@ -75,6 +75,10 @@ function input(reverse = false): CheckBlockWorldInputV2 {
       standPositionMetersXYZ: [1, 0.5, 0],
     }],
     requiredGroundTraversalBands: [],
+    visualTargetFacings: blocks.some(({ visualGroupId }) =>
+      visualGroupId === "visual-target-2")
+      ? [{ visualTargetId: "visual-target-2", frontYawQuarterTurnsY: 1 }]
+      : [],
     spaceTransitions: [],
     requireSingleReachableComponent: true,
   };
@@ -110,8 +114,8 @@ describe("Block World internal compiler", () => {
       semanticClassId === "block.landmark-orange.shape.full.visual-group.visual-target-2");
     expect(palace?.entityId).toMatch(/^bw-chunk-/);
     expect(result.implementationMapDraft.visualTargetMappings).toEqual([
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-      { visualTargetId: "visual-target-2", runtimeEntityIds: [palace?.entityId] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: [palace?.entityId], frontDirectionWorldXZ: [-1, 0] },
     ]);
   });
 
@@ -198,6 +202,7 @@ describe("Block World internal compiler", () => {
           interactionInstanceId: transitionId,
         },
       ]),
+      visualTargetFacings: [],
       requiredTargets: [{
         id: "courtyard-target",
         navigationRole: "remote",
@@ -245,6 +250,7 @@ describe("Block World internal compiler", () => {
     const result = compileBlockWorldV2({
       ...source,
       manifest: createBlockWorldManifestV2(blocks),
+      visualTargetFacings: [],
       requiredTargets: [{
         id: "far-corner",
         navigationRole: "remote",
@@ -276,6 +282,7 @@ describe("Block World internal compiler", () => {
     const result = compileBlockWorldV2({
       ...source,
       manifest: createBlockWorldManifestV2(blocks),
+      visualTargetFacings: [],
       requiredTargets: [{
         id: "far-corner",
         navigationRole: "remote",
@@ -310,6 +317,7 @@ describe("Block World internal compiler", () => {
         block.id === "palace-main-000"
           ? { ...block, visualGroupId: "visual-target-1" }
           : block)),
+      visualTargetFacings: [],
     });
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map(({ code }) => code)).toContain(

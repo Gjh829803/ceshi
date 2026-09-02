@@ -1,12 +1,12 @@
 ---
 name: worldkit-episode-visual-reconstructor
-description: Generate three spatially locked styled opening frames for one 90-second WorldKit episode and one shared complete-target styled tri-view set. Use only after the whitebox episode has been split into three 30-second videos; do not alter motion, render Prompt Events early, or generate video.
+description: Generate six spatially locked styled opening frames for a six-position WorldKit episode and one shared complete-target styled tri-view set. Use only after six independent 30-second whitebox videos exist; do not alter motion, render Prompt Events early, or generate video.
 ---
 
 # WorldKit Episode Visual Reconstructor
 
 Read all attached roles and the declared target manifest. Create only the Host-declared
-prompt bundle, three styled segment opening frames, and one styled tri-view per complete
+prompt bundle, six styled opening frames for captures 00 through 05, and one styled tri-view per complete
 target.
 
 Before authoring any Segment prompt, read the original completed world's
@@ -33,8 +33,8 @@ language. Inherit that solution; do not invent a competing interpretation.
   center=Right, right=Back panel order.
 
 Treat each styled segment frame as a registered material repaint, not a new
-composition. Segment Prompt Events occur later in each video and must not appear in
-these first frames. Keep all three frames in one coherent baseline identity/style,
+composition. Prompt Events occur later only in Host-selected videos and must not appear
+in any first frame. Keep all six frames in one coherent baseline identity/style,
 while respecting their different whitebox cameras and positions.
 
 `Registered` means semantic and macro-spatial registration, not pixel registration to
@@ -124,7 +124,10 @@ Write `episode-visual-prompts.json` with:
   "segmentOpeningFrames": [
     { "segmentId": "segment-00", "referenceRoles": ["segment-00-whitebox-first-frame", "user-first-frame", "base-styled-opening-frame"], "prompt": "<complete prompt>" },
     { "segmentId": "segment-01", "referenceRoles": ["segment-01-whitebox-first-frame", "user-first-frame", "base-styled-opening-frame", "segment-00-styled-opening-frame"], "prompt": "<complete prompt>" },
-    { "segmentId": "segment-02", "referenceRoles": ["segment-02-whitebox-first-frame", "user-first-frame", "base-styled-opening-frame", "segment-00-styled-opening-frame"], "prompt": "<complete prompt>" }
+    { "segmentId": "segment-02", "referenceRoles": ["segment-02-whitebox-first-frame", "user-first-frame", "base-styled-opening-frame", "segment-00-styled-opening-frame"], "prompt": "<complete prompt>" },
+    { "segmentId": "segment-03", "referenceRoles": ["segment-03-whitebox-first-frame", "user-first-frame", "base-styled-opening-frame", "segment-00-styled-opening-frame"], "prompt": "<complete prompt>" },
+    { "segmentId": "segment-04", "referenceRoles": ["segment-04-whitebox-first-frame", "user-first-frame", "base-styled-opening-frame", "segment-00-styled-opening-frame"], "prompt": "<complete prompt>" },
+    { "segmentId": "segment-05", "referenceRoles": ["segment-05-whitebox-first-frame", "user-first-frame", "base-styled-opening-frame", "segment-00-styled-opening-frame"], "prompt": "<complete prompt>" }
   ],
   "styledTriviews": [
     { "visualTargetId": "<exact id>", "referenceRoles": ["target-whitebox-triview", "segment-00-styled-opening-frame", "user-first-frame"], "prompt": "<complete prompt>" }
@@ -135,7 +138,7 @@ Write `episode-visual-prompts.json` with:
 Use exact manifest order and ids. State the conflict rule in every prompt.
 
 For an explicitly Host-declared opening-only human-review run, generate only the
-declared review prompt bundle and three Segment opening frames. Do not generate
+declared review prompt bundle and Host-declared opening frames. Do not generate
 tri-views or undeclared files. All authority and reconstruction rules above remain
 identical.
 
@@ -146,8 +149,8 @@ identical.
    solution forward while updating the Segment's camera-relative movement envelope.
 2. Generate segment 00 styled frame and inspect spatial registration and removal of
    Block World rendering residue.
-3. Generate segment 01 and 02 frames using segment 00 only as appearance consistency
-   evidence, never as their layout.
+3. Generate segment 01 through 05 frames using segment 00 only as appearance
+   consistency evidence, never as their layout.
 4. Generate all shared tri-views, parallelizing independent calls when possible.
 5. Inspect movement envelopes, baseline event-free state, identity consistency,
    target count and exact panel order. Regenerate a failed image at most once.

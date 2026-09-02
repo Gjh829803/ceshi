@@ -87,6 +87,21 @@ const MOVEMENT_LABELS = new Map<string, SceneBriefMovementModeV1>([
   ["空中飞行", "flight"],
 ]);
 
+function movementModeForLabel(label: string): SceneBriefMovementModeV1 {
+  const exact = MOVEMENT_LABELS.get(label);
+  if (exact !== undefined) return exact;
+  for (const [standardLabel, mode] of MOVEMENT_LABELS) {
+    const suffix = label.slice(standardLabel.length).trimStart();
+    if (
+      label.startsWith(standardLabel) &&
+      ((suffix.startsWith("（") && suffix.endsWith("）")) ||
+        (suffix.startsWith("(") && suffix.endsWith(")"))) &&
+      suffix.length >= 3 && suffix.length <= 26
+    ) return mode;
+  }
+  return "custom";
+}
+
 const TARGET_KIND_LABELS = new Map<string, SceneBriefVisualTargetKindV1>([
   ["主体", "subject"],
   ["标志物", "landmark"],
@@ -161,7 +176,7 @@ function parseMovementModes(value: string):
     }
     labels.add(label);
     movementModes.push({
-      mode: MOVEMENT_LABELS.get(label) ?? "custom",
+      mode: movementModeForLabel(label),
       label,
       description: match[2]!.trim(),
     });

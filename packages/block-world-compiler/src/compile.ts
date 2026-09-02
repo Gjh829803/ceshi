@@ -318,6 +318,24 @@ function implementationMapDraft(
     ids.push(cluster.entityId);
     runtimeIdsByVisualTargetId.set(cluster.visualGroupId, ids);
   }
+  const yawByVisualTargetId = new Map(
+    input.visualTargetFacings.map(({ visualTargetId, frontYawQuarterTurnsY }) =>
+      [visualTargetId, frontYawQuarterTurnsY] as const),
+  );
+  yawByVisualTargetId.set(
+    input.controlledSubject.visualTargetId,
+    input.controlledSubject.yawQuarterTurnsY,
+  );
+  const frontDirectionForTarget = (visualTargetId: string): readonly [number, number] => {
+    const yaw = yawByVisualTargetId.get(visualTargetId);
+    const direction = yaw === undefined
+      ? undefined
+      : ([[0, -1], [-1, 0], [0, 1], [1, 0]] as const)[yaw];
+    if (direction === undefined) {
+      throw new Error(`BLOCK_WORLD_VISUAL_TARGET_FACING_MISSING: ${visualTargetId}`);
+    }
+    return direction;
+  };
   return Object.freeze({
     kind: "worldkit-scene-brief-implementation-map-draft",
     schemaVersion: 1,
@@ -329,6 +347,9 @@ function implementationMapDraft(
         .map(([visualTargetId, runtimeEntityIds]) => Object.freeze({
           visualTargetId,
           runtimeEntityIds: Object.freeze([...runtimeEntityIds].sort()),
+          frontDirectionWorldXZ: Object.freeze(
+            [...frontDirectionForTarget(visualTargetId)],
+          ) as readonly [number, number],
         })),
     ),
   });

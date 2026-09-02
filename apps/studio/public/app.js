@@ -1111,13 +1111,19 @@ function renderCompositionStatus(media) {
 
 const episodeStageLabels = {
   reconnaissance: "Runtime 侦察",
-  "playthrough-plan": "90 秒玩家剧本",
+  "playthrough-plan": "六起点玩家操作剧本",
   "whitebox-capture": "白膜录制与切分",
   "visual-reconstruction": "样式首帧与三视图",
+  "style-variant-production": "十种风格视觉生产",
+  "style-variant-plan": "十种独立风格规划",
+  "style-variant-visual-review": "Codex 构图与三视图质检",
+  "style-variant-gemini-events": "逐风格 Gemini 事件",
+  "style-variant-seedance-generation": "逐风格 Seedance 生成",
   "seedance-prompts": "Seedance 渲染 Prompt",
-  "seedance-generation": "MG Seedance 2.5 480p",
-  "mg-seedance": "MG Seedance 2.5 480p",
+  "seedance-generation": "Seedance 2.5 原生 720p",
+  "mg-seedance": "历史 MG Seedance 2.5 480p",
   "cf-upscale": "CF 超分 720p",
+  "mediakit-upscale": "AI MediaKit 画质增强 720p",
   conformance: "视频规格对齐",
 };
 function formatEpisodeSeconds(value) {
@@ -1125,7 +1131,7 @@ function formatEpisodeSeconds(value) {
 }
 const episodeInputKeyLabels = Object.freeze({
   W: "W", A: "A", S: "S", D: "D", Shift: "Shift", Space: "空格",
-  ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→",
+  I: "I", J: "J", K: "K", L: "L",
 });
 
 function renderComparisonVideo(video, role, title, description, { preload = "none", showPoster = true } = {}) {
@@ -1142,13 +1148,19 @@ function renderEpisodeComparison(comparison, { productionOnly = false } = {}) {
   const durationSeconds = Number(comparison?.durationSeconds) || 30;
   const globalStartSeconds = Number(comparison?.globalStartSeconds) || 0;
   const activations = Array.isArray(comparison?.inputActivations) ? comparison.inputActivations : [];
-  const event = comparison?.promptEvent;
-  const eventRelativeSeconds = Number.isFinite(Number(event?.relativeSeconds))
-    ? Number(event.relativeSeconds)
-    : null;
-  const eventEndSeconds = Number.isFinite(Number(event?.activeEndSeconds))
-    ? Number(event.activeEndSeconds)
-    : eventRelativeSeconds;
+  const events = Array.isArray(comparison?.promptEvents)
+    ? comparison.promptEvents
+    : comparison?.promptEvent ? [comparison.promptEvent] : [];
+  const promptEventsState = events.map((event, index) => ({
+    index,
+    startSeconds: Number.isFinite(Number(event?.relativeSeconds))
+      ? Number(event.relativeSeconds)
+      : null,
+    endSeconds: Number.isFinite(Number(event?.activeEndSeconds))
+      ? Number(event.activeEndSeconds)
+      : Number.isFinite(Number(event?.relativeSeconds)) ? Number(event.relativeSeconds) : null,
+    commandText: event?.commandText || `等待第 ${index + 1} 条世界指令`,
+  }));
   const displayedFinalVideo = productionOnly && publicSeedanceMode
     ? comparison?.publicPreviewVideo ?? comparison?.finalVideo
     : comparison?.finalVideo;
@@ -1164,10 +1176,10 @@ function renderEpisodeComparison(comparison, { productionOnly = false } = {}) {
     keyChip("D", "D", "key-right"),
   ].join("");
   const cameraKeys = [
-    keyChip("ArrowUp", "↑", "key-up"),
-    keyChip("ArrowLeft", "←", "key-left"),
-    keyChip("ArrowDown", "↓", "key-down"),
-    keyChip("ArrowRight", "→", "key-right"),
+    keyChip("I", "I", "key-up"),
+    keyChip("J", "J", "key-left"),
+    keyChip("K", "K", "key-down"),
+    keyChip("L", "L", "key-right"),
   ].join("");
   const actionKeys = [keyChip("Space", "空格"), keyChip("Shift", "Shift")].join("");
   const activationBars = activations.map((activation) => {
@@ -1175,14 +1187,28 @@ function renderEpisodeComparison(comparison, { productionOnly = false } = {}) {
     const end = Math.max(start, Math.min(durationSeconds, Number(activation.endSeconds) || start));
     return `<i class="episode-input-span" data-kind="${escapeHtml(activation.kind)}" style="left:${(start / durationSeconds) * 100}%;width:${Math.max(.25, ((end - start) / durationSeconds) * 100)}%"></i>`;
   }).join("");
-  const promptMarker = eventRelativeSeconds === null
+  const promptMarkers = promptEventsState.map((event) => event.startSeconds === null
     ? ""
-    : `<i class="episode-prompt-marker" style="left:${Math.max(0, Math.min(100, eventRelativeSeconds / durationSeconds * 100))}%" title="Prompt Event · ${formatEpisodeSeconds(eventRelativeSeconds)}"></i>`;
-  const eventPrompt = event?.eventPrompt || "该段 Prompt Event 尚未生成。";
-  const providerPrompt = event?.providerPrompt || "完整 Seedance Provider Prompt 尚未生成。";
-  const legacyProviderPrompt = event?.legacyProviderPrompt || "旧版重 Prompt 尚未生成。";
-  const relaxedProviderPrompt = event?.relaxedProviderPrompt || "放开动作 Prompt 尚未生成。";
-  const commandText = event?.commandText || "等待 Planner 生成本段大幅世界变化指令";
+    : `<i class="episode-prompt-marker" style="left:${Math.max(0, Math.min(100, event.startSeconds / durationSeconds * 100))}%" title="Prompt Event ${event.index + 1} · ${formatEpisodeSeconds(event.startSeconds)}"></i>`).join("");
+  const commandText = events[0]?.commandText || "本段无 Prompt Event，仅保持基础场景渲染";
+  const promptPanels = events.length > 0 ? events.map((event, eventIndex) => {
+    const relativeSeconds = promptEventsState[eventIndex]?.startSeconds ?? null;
+    const eventPrompt = event?.eventPrompt || `该段第 ${eventIndex + 1} 条 Prompt Event 尚未生成。`;
+    const providerPrompt = event?.providerPrompt || "完整 Seedance Provider Prompt 尚未生成。";
+    const legacyProviderPrompt = event?.legacyProviderPrompt || "旧版重 Prompt 尚未生成。";
+    const relaxedProviderPrompt = event?.relaxedProviderPrompt || "放开动作 Prompt 尚未生成。";
+    return `<div class="episode-prompt-panel" data-prompt-state="pending" data-prompt-event-index="${eventIndex}">
+      <header><div><small>SEEDANCE PROMPT EVENT ${eventIndex + 1}</small><h6>${event?.targetNames?.length ? escapeHtml(event.targetNames.join(" · ")) : `本段第 ${eventIndex + 1} 条输入 Prompt`}</h6></div><span data-prompt-status>${relativeSeconds === null ? "尚未生成" : `等待 ${formatEpisodeSeconds(relativeSeconds)}`}</span></header>
+      <pre>${escapeHtml(eventPrompt)}</pre>
+      ${eventIndex === 0 ? `<details><summary>查看送入模型的完整 Prompt（包含两条事件）</summary><pre>${escapeHtml(providerPrompt)}</pre></details>` : ""}
+      ${productionOnly || eventIndex !== 0 ? "" : `<details><summary>查看 B 版旧 Prompt</summary><pre>${escapeHtml(legacyProviderPrompt)}</pre></details>`}
+      ${productionOnly || eventIndex !== 0 ? "" : `<details><summary>查看 C 版放开动作 Prompt</summary><pre>${escapeHtml(relaxedProviderPrompt)}</pre></details>`}
+    </div>`;
+  }).join("") : `<div class="episode-prompt-panel" data-prompt-state="none">
+      <header><div><small>NO PROMPT EVENT</small><h6>基础场景连续渲染</h6></div><span>本段无事件</span></header>
+      <p>该起点仍生成 Seedance 最终视频，但不会注入 Gemini 世界变化事件。</p>
+      ${comparison.seedanceProviderPrompt ? `<details><summary>查看送入模型的基础 Prompt</summary><pre>${escapeHtml(comparison.seedanceProviderPrompt)}</pre></details>` : ""}
+    </div>`;
   const productionMediaOptions = productionOnly
     ? { preload: comparison.index === 0 ? "metadata" : "none", showPoster: comparison.index === 0 }
     : {};
@@ -1202,8 +1228,7 @@ function renderEpisodeComparison(comparison, { productionOnly = false } = {}) {
       data-global-start-seconds="${globalStartSeconds}"
       data-input-activations="${activationData}"
       data-command-text="${escapeHtml(commandText)}"
-      data-prompt-start-seconds="${eventRelativeSeconds ?? ""}"
-      data-prompt-end-seconds="${eventEndSeconds ?? ""}">
+      data-prompt-events="${escapeHtml(JSON.stringify(promptEventsState))}">
     <header class="episode-comparison-heading">
       <div><small>${escapeHtml(comparison.title)} · ${String(globalStartSeconds).padStart(2, "0")}–${globalStartSeconds + durationSeconds}s</small><h5>${productionOnly ? "白膜动作真值 ↔ Seedance 最终视频" : "白膜动作真值 ↔ A 固定模板 ↔ B 旧版重 Prompt ↔ C 放开动作"}</h5></div>
       <div class="episode-comparison-actions">
@@ -1214,7 +1239,7 @@ function renderEpisodeComparison(comparison, { productionOnly = false } = {}) {
     ${openingReview}
     <div class="episode-video-pair">
       ${renderComparisonVideo(comparison.whiteboxVideo, "whitebox", "白膜视频", "运动、镜头、空间与时序权威", productionMediaOptions)}
-      ${renderComparisonVideo(displayedFinalVideo, "final", productionOnly ? "Seedance 最终视频" : "A · 生产链路", productionOnly && publicSeedanceMode && comparison?.publicPreviewVideo?.url ? "公网流畅预览 · MG 480p（ZIP 含最终 720p）" : "MG 480p → CF 超分 720p", productionMediaOptions)}
+      ${renderComparisonVideo(displayedFinalVideo, "final", productionOnly ? "Seedance 最终视频" : "A · 生产链路", "Seedance 2.5 · 720p 直出 · 24fps/720帧", productionMediaOptions)}
       ${productionOnly ? "" : renderComparisonVideo(comparison.legacyPromptVideo, "legacy", "B · 旧版重 Prompt", "完整 Brief + 逐项事件 · MG 480p")}
       ${productionOnly ? "" : renderComparisonVideo(comparison.relaxedActionVideo, "relaxed", "C · 放开动作", "新版动作条款 · MG 480p")}
     </div>
@@ -1227,24 +1252,37 @@ function renderEpisodeComparison(comparison, { productionOnly = false } = {}) {
       </div>
       <div class="episode-input-readout"><b data-input-summary>等待播放</b><span><output data-local-time>00.00s</output> · 全局 <output data-global-time>${formatEpisodeSeconds(globalStartSeconds)}</output></span></div>
       <div class="episode-input-timeline" aria-label="本段输入时间线">
-        ${activationBars}${promptMarker}<i class="episode-input-cursor" data-input-cursor></i>
+        ${activationBars}${promptMarkers}<i class="episode-input-cursor" data-input-cursor></i>
       </div>
       <div class="episode-timeline-legend"><span>移动输入</span><span>相机方向键</span><span>Prompt Event</span><output data-compare-status>${hasComparison ? "READY" : "WAITING"}</output></div>
     </div>
-    <div class="episode-prompt-panel" data-prompt-state="pending">
-      <header><div><small>SEEDANCE PROMPT EVENT</small><h6>${event?.targetNames?.length ? escapeHtml(event.targetNames.join(" · ")) : "本段输入 Prompt"}</h6></div><span data-prompt-status>${eventRelativeSeconds === null ? "尚未生成" : `等待 ${formatEpisodeSeconds(eventRelativeSeconds)}`}</span></header>
-      <pre>${escapeHtml(eventPrompt)}</pre>
-      <details><summary>查看送入模型的完整 Prompt</summary><pre>${escapeHtml(providerPrompt)}</pre></details>
-      ${productionOnly ? "" : `<details><summary>查看 B 版旧 Prompt</summary><pre>${escapeHtml(legacyProviderPrompt)}</pre></details>`}
-      ${productionOnly ? "" : `<details><summary>查看 C 版放开动作 Prompt</summary><pre>${escapeHtml(relaxedProviderPrompt)}</pre></details>`}
-    </div>
+    <div class="episode-prompt-events">${promptPanels}</div>
   </section>`;
 }
 
 function renderEpisodeComparisons(episode, options = {}) {
   const comparisons = Array.isArray(episode?.playbackComparisons) ? episode.playbackComparisons : [];
   if (!comparisons.length) return "";
-  return `<div class="episode-comparison-stack"><div class="episode-comparison-intro"><div><small>THREE 30S REVIEW STAGES</small><h5>逐段同步对比</h5></div><p>播放任意一侧或点击“一键同步对比”，两条视频会锁定同一时间；键盘状态、相机方向键和 Prompt Event 随时间更新。</p></div>${comparisons.map((comparison) => renderEpisodeComparison(comparison, options)).join("")}</div>`;
+  return `<div class="episode-comparison-stack"><div class="episode-comparison-intro"><div><small>SIX 30S CAPTURES</small><h5>六个起点同步对比</h5></div><p>六段全部生成 Seedance；起点 1、3、5 含 Gemini Prompt Event，起点 2、4、6 仅做基础场景渲染。播放时按键与事件状态会同步更新。</p></div>${comparisons.map((comparison) => renderEpisodeComparison(comparison, options)).join("")}</div>`;
+}
+
+function renderStyleVariantReviews(episode) {
+  const variants = Array.isArray(episode?.styleVariants) ? episode.styleVariants : [];
+  if (!variants.length) return "";
+  return `<section class="style-variant-review-stack">
+    <header class="episode-comparison-intro"><div><small>TEN VISUAL WORLDS</small><h5>同一白膜 · 十种独立风格</h5></div><p>白膜视频固定运动、镜头和空间；每个风格拥有独立首帧、三视图、Codex 智能质检、Gemini 事件和 Seedance 成片。</p></header>
+    ${variants.map((variant) => {
+      const review = variant.visualReview ?? {};
+      const passed = review.verdict === "passed";
+      return `<details class="style-variant-card" data-status="${escapeHtml(variant.status ?? "pending")}" ${variant.id === "style-00" ? "open" : ""}>
+        <summary><span><small>${escapeHtml(variant.id)}</small><b>${escapeHtml(variant.name)}</b></span><em data-status="${passed ? "passed" : "pending"}">${passed ? "CODEX QA PASSED" : escapeHtml(variant.status ?? "等待生成")}</em></summary>
+        <p>${escapeHtml(variant.concept ?? "")}</p>
+        ${review.summary ? `<article class="style-variant-review-result"><small>CODEX VISUAL REVIEW</small><b>${passed ? "镜头、构图与三视图审核通过" : "需要定向修复"}</b><p>${escapeHtml(review.summary)}</p>${review.repairInstructions ? `<pre>${escapeHtml(review.repairInstructions)}</pre>` : ""}</article>` : ""}
+        <div class="style-variant-triviews">${(variant.triviews ?? []).map((target) => `<article><small>${escapeHtml(target.visualTargetId)}</small><div><img src="${escapeHtml(target.whiteboxUrl)}" alt="白膜三视图" loading="lazy" />${target.styled?.url ? `<img src="${escapeHtml(target.styled.url)}" alt="样式化三视图" loading="lazy" />` : ""}</div></article>`).join("")}</div>
+        <div class="style-variant-segments">${(variant.comparisons ?? []).map((comparison) => `<article><header><b>${escapeHtml(comparison.title)}</b><small>${escapeHtml(comparison.segmentId)}</small></header><div>${comparison.styledOpeningFrame?.url ? `<img src="${escapeHtml(comparison.styledOpeningFrame.url)}" alt="样式化首帧" loading="lazy" />` : `<span>首帧待生成</span>`}${comparison.whiteboxVideo?.url ? `<video controls muted playsinline preload="none" src="${escapeHtml(comparison.whiteboxVideo.url)}"></video>` : ""}${comparison.finalVideo?.url ? `<video controls playsinline preload="none" src="${escapeHtml(comparison.finalVideo.url)}"></video>` : ""}</div></article>`).join("")}</div>
+      </details>`;
+    }).join("")}
+  </section>`;
 }
 
 function renderSeedanceReviewDownloads(episode) {
@@ -1266,9 +1304,9 @@ function renderSeedanceReviewDownloads(episode) {
     : `<p class="media-empty">相关 JSON 文件尚未准备完成。</p>`;
   const bundleAction = bundle.ready && bundle.url
     ? `<a class="seedance-review-download-all" href="${escapeHtml(bundle.url)}" download>一键下载全部 ZIP</a>`
-    : `<button class="seedance-review-download-all" type="button" disabled>完整三段就绪后可下载</button>`;
+    : `<button class="seedance-review-download-all" type="button" disabled>六段成片就绪后可下载</button>`;
   return `<section class="seedance-review-downloads">
-    <header><div><small>CASE ASSETS & PORTABLE BUNDLE</small><h4>相关图片、输入记录与完整下载包</h4><p>ZIP 包含全部白膜、MG、CF 与最终视频，以及首帧、规划图、三视图、Prompt、Provider 记录和交互时间线。</p></div>${bundleAction}</header>
+    <header><div><small>CASE ASSETS & PORTABLE BUNDLE</small><h4>相关图片、输入记录与完整下载包</h4><p>ZIP 包含六段白膜、六段 Seedance 2.5 原生 720p 最终视频，以及六张首帧、规划图、三视图、Prompt、Provider 记录和交互时间线。</p></div>${bundleAction}</header>
     <section><div class="seedance-review-assets-heading"><small>RELATED IMAGES</small><h5>参考图与生成图片</h5></div>${imageGrid}</section>
     <section><div class="seedance-review-assets-heading"><small>JSON & METADATA</small><h5>输入、Prompt 与运行记录</h5></div>${fileList}</section>
   </section>`;
@@ -1277,6 +1315,13 @@ function renderSeedanceReviewDownloads(episode) {
 function seedanceEpisodeFinalCount(episode) {
   return (episode?.playbackComparisons ?? []).filter((comparison) =>
     comparison?.whiteboxVideo?.url && comparison?.finalVideo?.url).length;
+}
+
+function seedanceEpisodeExpectedCount(episode) {
+  const declared = Array.isArray(episode?.seedanceSegmentIds)
+    ? episode.seedanceSegmentIds.length
+    : 0;
+  return declared > 0 ? declared : 4;
 }
 
 function seedanceReviewRevision(episodes) {
@@ -1321,16 +1366,17 @@ function disposeEpisodeComparisonMedia(root) {
 function renderSeedanceReviewDetail(episode) {
   disposeEpisodeComparisonMedia(seedanceReviewDetail);
   if (!episode) {
-    seedanceReviewDetail.innerHTML = `<div class="seedance-review-placeholder"><span>S–00</span><h3>选择一个 case</h3><p>右侧会展示三段白膜与最终视频的同步对比。</p></div>`;
+    seedanceReviewDetail.innerHTML = `<div class="seedance-review-placeholder"><span>S–00</span><h3>选择一个 case</h3><p>右侧会展示六个起点的白膜与最终视频同步对比。</p></div>`;
     return;
   }
   const world = worldForEpisode(episode);
   const title = world?.title || episode.sceneId;
   const finalCount = seedanceEpisodeFinalCount(episode);
+  const expectedCount = seedanceEpisodeExpectedCount(episode);
   const previewUrl = world?.previewUrl ?? `/play?authoring=1&world=${encodeURIComponent(episode.sceneId)}`;
   const playAction = `<a class="seedance-world-button" href="${escapeHtml(previewUrl)}" target="worldkit-playground" rel="noreferrer">进入世界试玩 ↗</a>`;
   seedanceReviewDetail.innerHTML = `<header class="seedance-review-case-heading">
-    <div><small>${escapeHtml(episode.episodeId)}</small><h3>${escapeHtml(title)}</h3><p>${escapeHtml(episode.sceneId)} · ${finalCount}/3 段最终视频 · ${formatDateTime(episode.updatedAt)}</p></div>
+    <div><small>${escapeHtml(episode.episodeId)}</small><h3>${escapeHtml(title)}</h3><p>${escapeHtml(episode.sceneId)} · ${finalCount}/${expectedCount} 段最终视频 · ${formatDateTime(episode.updatedAt)}</p></div>
     ${playAction}
   </header>${renderEpisodeComparisons(episode, { productionOnly: true })}${renderSeedanceReviewDownloads(episode)}`;
   wireEpisodeComparisonPlayers(seedanceReviewDetail);
@@ -1351,7 +1397,7 @@ function renderSeedanceReview() {
     const active = episode.episodeId === state.selectedEpisodeId;
     return `<button type="button" role="tab" aria-selected="${active}" class="seedance-case-item ${active ? "active" : ""}" data-seedance-episode="${escapeHtml(episode.episodeId)}">
       ${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" />` : `<span class="seedance-case-index">${String(index + 1).padStart(2, "0")}</span>`}
-      <span class="seedance-case-copy"><b>${escapeHtml(title)}</b><small>${escapeHtml(episode.sceneId)}</small><em>${seedanceEpisodeFinalCount(episode)}/3 段 · ${formatDate(episode.updatedAt)}</em></span>
+      <span class="seedance-case-copy"><b>${escapeHtml(title)}</b><small>${escapeHtml(episode.sceneId)}</small><em>${seedanceEpisodeFinalCount(episode)}/${seedanceEpisodeExpectedCount(episode)} 段 · ${formatDate(episode.updatedAt)}</em></span>
     </button>`;
   }).join("");
   for (const button of seedanceCaseList.querySelectorAll("[data-seedance-episode]")) {
@@ -1385,8 +1431,8 @@ async function loadSeedanceReviews() {
 }
 
 function isComparisonVideoArtifact(artifact) {
-  return /^whitebox\/segment-0[0-2]\.mp4$/.test(artifact?.relativePath ?? "") ||
-    /^video\/segment-0[0-2]\/final-(?:854x480|1280x720)-24fps-720f\.mp4$/.test(artifact?.relativePath ?? "");
+  return /^whitebox\/segment-0[0-5]\.mp4$/.test(artifact?.relativePath ?? "") ||
+    /^video\/segment-0[0-5]\/final-(?:854x480|1280x720)-24fps-720f\.mp4$/.test(artifact?.relativePath ?? "");
 }
 
 function renderEpisodeArtifact(artifact) {
@@ -1407,8 +1453,8 @@ function renderEpisodeArtifact(artifact) {
 function renderEpisodeWorkflows(media, world) {
   const episodes = media?.episodes ?? [];
   const canStart = Boolean(world.previewUrl);
-  const controls = `<div class="episode-controls"><div><small>90S PLAYTHROUGH DATASET</small><h3>真实玩家操作 → 三段最终视频</h3><p>三条 Prompt Event 由 Seedance 在 10–20s、40–50s、70–80s 的对应段落中渲染；白膜 Runtime 只负责玩家动作、镜头和空间真值。</p></div><button type="button" data-start-episode ${canStart ? "" : "disabled"}>${canStart ? "运行一条 90 秒完整链路" : "白膜世界就绪后可运行"}</button></div>`;
-  if (!episodes.length) return `${controls}<p class="media-empty">还没有 90 秒数据任务。点击上方按钮后，各阶段图片、JSON、白膜视频、MG Seedance 480p 视频和最终对齐视频会依次出现在这里。</p>`;
+  const controls = `<div class="episode-controls"><div><small>ONE WHITEBOX · TEN VISUAL WORLDS</small><h3>六个白膜起点 → 十种风格 → 六十段 Seedance 成片</h3><p>白膜世界、试玩和六段 30 秒视频只生成一次；十个视觉分支分别生成首帧、三视图，经独立 Codex 智能质检后再进入各自 Gemini 与 Seedance。</p></div><button type="button" data-start-episode ${canStart ? "" : "disabled"}>${canStart ? "运行十风格完整链路" : "白膜世界就绪后可运行"}</button></div>`;
+  if (!episodes.length) return `${controls}<p class="media-empty">还没有十风格数据任务。运行后会先出现共享白膜，再逐风格展示样式首帧、三视图、Codex QA、Gemini Prompt 和最终视频。</p>`;
   return `${controls}<div class="episode-runs">${episodes.map((episode) => {
     const artifacts = episode.artifacts ?? [];
     const supplementalArtifacts = episode.playbackComparisons?.length
@@ -1419,6 +1465,7 @@ function renderEpisodeWorkflows(media, world) {
       <ol class="episode-stages">${(episode.stages ?? []).map((stage, index) => `<li data-status="${escapeHtml(stage.status)}"><b>${String(index + 1).padStart(2, "0")}</b><span>${escapeHtml(stage.title ?? episodeStageLabels[stage.id] ?? stage.id)}</span><small>${escapeHtml(stage.status)}</small></li>`).join("")}</ol>
       ${episode.error ? `<p class="episode-error">${escapeHtml(episode.error)}</p>` : ""}
       ${episode.running ? `<button type="button" class="text-button" data-stop-episode="${escapeHtml(episode.episodeId)}">停止这条数据任务</button>` : ""}
+      ${renderStyleVariantReviews(episode)}
       ${renderEpisodeComparisons(episode)}
       <div class="episode-artifacts">${supplementalArtifacts.map(renderEpisodeArtifact).join("") || `<p class="media-empty">本阶段尚未落下其他可展示工件。</p>`}</div>
     </section>`;
@@ -1436,12 +1483,13 @@ function wireEpisodeComparisonPlayers(root = dialogContent) {
     const reset = panel.querySelector("[data-compare-reset]");
     const durationSeconds = Number(panel.dataset.durationSeconds) || 30;
     const globalStartSeconds = Number(panel.dataset.globalStartSeconds) || 0;
-    const optionalSeconds = (value) => String(value ?? "").trim() === "" ? Number.NaN : Number(value);
-    const promptStartSeconds = optionalSeconds(panel.dataset.promptStartSeconds);
-    const promptEndSeconds = optionalSeconds(panel.dataset.promptEndSeconds);
     const commandText = panel.dataset.commandText || "等待本段世界指令";
     let activations = [];
     try { activations = JSON.parse(panel.dataset.inputActivations || "[]"); } catch {}
+    let promptEvents = [];
+    try { promptEvents = JSON.parse(panel.dataset.promptEvents || "[]"); } catch {}
+    const hasEventSecond = (value) => value !== null && value !== "" &&
+      Number.isFinite(Number(value));
     let internalSync = false;
     let animationFrame = null;
     let lastDriftCorrectionAt = 0;
@@ -1481,22 +1529,41 @@ function wireEpisodeComparisonPlayers(root = dialogContent) {
       if (globalTime) globalTime.textContent = formatEpisodeSeconds(globalStartSeconds + seconds);
       const cursor = panel.querySelector("[data-input-cursor]");
       if (cursor) cursor.style.left = `${Math.max(0, Math.min(100, seconds / durationSeconds * 100))}%`;
-      const promptPanel = panel.querySelector(".episode-prompt-panel");
-      const promptStatus = panel.querySelector("[data-prompt-status]");
-      if (promptPanel && promptStatus && Number.isFinite(promptStartSeconds)) {
-        const state = seconds < promptStartSeconds
+      for (const promptPanel of panel.querySelectorAll("[data-prompt-event-index]")) {
+        const event = promptEvents[Number(promptPanel.dataset.promptEventIndex)];
+        const promptStatus = promptPanel.querySelector("[data-prompt-status]");
+        if (!event || !hasEventSecond(event.startSeconds) || !promptStatus) continue;
+        const startSeconds = Number(event.startSeconds);
+        const endSeconds = hasEventSecond(event.endSeconds)
+          ? Number(event.endSeconds)
+          : startSeconds;
+        const state = seconds < startSeconds
           ? "pending"
-          : Number.isFinite(promptEndSeconds) && seconds <= promptEndSeconds ? "active" : "complete";
+          : seconds <= endSeconds ? "active" : "complete";
         promptPanel.dataset.promptState = state;
         promptStatus.textContent = state === "pending"
-          ? `等待 ${formatEpisodeSeconds(promptStartSeconds)}`
+          ? `等待 ${formatEpisodeSeconds(startSeconds)}`
           : state === "active" ? "Prompt 正在生效" : "Prompt 已执行";
-        const promptCommand = panel.querySelector("[data-prompt-command]");
-        const worldCommand = panel.querySelector(".episode-world-command");
-        if (worldCommand) worldCommand.dataset.promptState = state;
-        if (promptCommand) promptCommand.textContent = state === "pending"
-          ? `即将在 ${formatEpisodeSeconds(promptStartSeconds)} 执行：${commandText}`
-          : state === "active" ? `正在执行：${commandText}` : `已执行：${commandText}`;
+      }
+      const activePrompt = promptEvents.find((event) =>
+        hasEventSecond(event.startSeconds) &&
+        seconds >= Number(event.startSeconds) &&
+        seconds <= Number(event.endSeconds));
+      const nextPrompt = promptEvents.find((event) =>
+        hasEventSecond(event.startSeconds) && seconds < Number(event.startSeconds));
+      const visiblePrompt = activePrompt ?? nextPrompt ?? promptEvents.at(-1);
+      const promptCommand = panel.querySelector("[data-prompt-command]");
+      const worldCommand = panel.querySelector(".episode-world-command");
+      const promptState = activePrompt ? "active" : nextPrompt ? "pending" : "complete";
+      if (worldCommand) worldCommand.dataset.promptState = promptState;
+      if (promptCommand && visiblePrompt) {
+        promptCommand.textContent = activePrompt
+          ? `正在执行：${visiblePrompt.commandText}`
+          : nextPrompt
+            ? `即将在 ${formatEpisodeSeconds(visiblePrompt.startSeconds)} 执行：${visiblePrompt.commandText}`
+            : `已执行：${visiblePrompt.commandText}`;
+      } else if (promptCommand) {
+        promptCommand.textContent = commandText;
       }
       const now = performance.now();
       if (finalVideo && whitebox && finalVideo.readyState >= 2 && whitebox.readyState >= 2 &&
@@ -2060,7 +2127,7 @@ async function refreshDialog(id, suppliedPayload = null) {
             ["deliverables", "过程交付"],
             ["entities", "实体资产"],
             ["validation", "验收"],
-            ["episodes", "90 秒数据"],
+            ["episodes", "六起点数据"],
           ].map(([tab, label]) => `<button type="button" data-detail-tab="${tab}" class="${activeTab === tab ? "active" : ""}">${label}</button>`).join("")}
         </nav>
         ${panel("overview", `

@@ -3,11 +3,14 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  executionSegmentStartSeconds,
+  PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES,
   renderSeedancePromptEvent,
   sha256Canonical,
-  validatePlaythroughPlan,
+  validateVisualEventPlan,
   writeJsonAtomic,
 } from "../lib/playthrough-dataset.mjs";
+import { validatePlaythroughPlanStructure } from "../lib/playthrough-plan-structure.mjs";
 import {
   buildEpisodeSeedancePrompt,
   EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION,
@@ -29,18 +32,23 @@ if (!["legacy-heavy", "relaxed-action"].includes(variant)) {
   throw new Error(`Unsupported Prompt A/B variant: ${variant}`);
 }
 
-const [plan, sceneBrief, manifest, trace, pipeline] = await Promise.all([
+const [plan, eventPlan, sceneBrief, manifest, trace, pipeline] = await Promise.all([
   readFile(path.join(episodeRoot, "planning/playthrough-plan.json"), "utf8").then(JSON.parse),
+  readFile(path.join(episodeRoot, "prompts/visual-events.json"), "utf8").then(JSON.parse),
   readFile(path.join(sceneRoot, "scene-brief.md"), "utf8"),
   readFile(path.join(episodeRoot, "visual/episode-visual-manifest.json"), "utf8").then(JSON.parse),
   readFile(path.join(episodeRoot, "whitebox/executed-playthrough-trace.json"), "utf8").then(JSON.parse),
   readFile(path.resolve("config/episode-video-pipeline.json"), "utf8").then(JSON.parse),
 ]);
-const validation = validatePlaythroughPlan(plan, { sceneId });
+const validation = validatePlaythroughPlanStructure(plan, { sceneId });
 if (!validation.ok) throw new Error(`Invalid Playthrough Plan: ${JSON.stringify(validation.diagnostics)}`);
-const subjectTriview = manifest.targets?.[0]?.styledTriview?.path;
-if (typeof subjectTriview !== "string" || !subjectTriview) {
-  throw new Error("Primary Subject styled tri-view is missing.");
+const eventValidation = validateVisualEventPlan(eventPlan, { sceneId, episodeId });
+if (!eventValidation.ok) throw new Error(`Invalid Gemini Visual Event Plan: ${JSON.stringify(eventValidation.diagnostics)}`);
+const styledTriviews = (manifest.targets ?? []).map((target) =>
+  target?.styledTriview?.path);
+if (styledTriviews.length < 1 ||
+    styledTriviews.some((relativePath) => typeof relativePath !== "string" || !relativePath)) {
+  throw new Error("Complete-target styled tri-views are missing.");
 }
 const markers = new Map((trace.events ?? [])
   .filter((event) => event.kind === "prompt-marker")
@@ -49,20 +57,28 @@ const model = String(pipeline.seedance?.model ?? "");
 const delivery = pipeline.delivery ?? {};
 const finalName = `final-${delivery.width}x${delivery.height}-${delivery.fps}fps-${delivery.frameCount}f.mp4`;
 
-for (let index = 0; index < 3; index += 1) {
+for (const index of PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES) {
   const segmentId = `segment-0${index}`;
-  const event = plan.seedancePromptEvents[index];
-  const marker = markers.get(event.id);
-  if (!marker || !Number.isFinite(marker.actualSeconds)) {
-    throw new Error(`Executed Prompt marker missing: ${event.id}`);
+  const segmentEvents = eventPlan.events.filter((event) =>
+    event.segmentId === segmentId);
+  const expectedEventCount = index === 4 ? 1 : 2;
+  if (segmentEvents.length !== expectedEventCount) {
+    throw new Error(`Exactly ${expectedEventCount} Prompt Events are required for ${segmentId}.`);
   }
-  const executedEvent = {
-    ...event,
-    globalSeconds: marker.actualSeconds,
-    segmentRelativeSeconds: marker.actualSeconds - index * 30,
-  };
-  const canonicalEvent = renderSeedancePromptEvent(executedEvent);
-  const styledFrame = manifest.segmentOpeningFrames[index]?.path;
+  const executedEvents = segmentEvents.map((event) => {
+    const marker = markers.get(event.id);
+    if (!marker || !Number.isFinite(marker.actualSeconds)) {
+      throw new Error(`Executed Prompt marker missing: ${event.id}`);
+    }
+    return {
+      ...event,
+      globalSeconds: marker.actualSeconds,
+      segmentRelativeSeconds: marker.actualSeconds - executionSegmentStartSeconds(index),
+    };
+  });
+  const canonicalEvents = executedEvents.map(renderSeedancePromptEvent);
+  const styledFrame = manifest.segmentOpeningFrames.find((item) =>
+    item.segmentId === segmentId)?.path;
   if (styledFrame !== `visual/${segmentId}-styled-opening-frame.png`) {
     throw new Error(`Styled opening frame missing for ${segmentId}.`);
   }
@@ -80,8 +96,9 @@ ${sceneBrief.trim().slice(0, 5000)}
 动作与摄影：
 严格保持@视频1的连续第三人称玩家操作和镜头，不增加切镜、反打、旋转、额外推拉、传送或新的主要动作。动作具有自然重量、惯性、重心转换和真实接触感。滑板滑行时允许补充轻微蹬地、屈膝、压板与自然转弯，但不得改变@视频1的主体根轨迹、速度、方向、起跳落点或镜头。
 
-Seedance Prompt Event（必须按时渲染，不能省略、提前或改写）：
-${canonicalEvent}
+本段 ${segmentEvents.length} 个 Seedance Prompt Event（必须分别按时渲染，不能省略、提前或改写）：
+${canonicalEvents.map((eventPrompt, eventIndex) =>
+    `事件 ${eventIndex + 1}：\n${eventPrompt}`).join("\n\n")}
 
 声音：
 生成与玩家动作、环境和 Prompt Event 同步的真实音效。严禁音乐、配乐、歌曲、对白、旁白、解说、人声或语音。
@@ -93,8 +110,9 @@ ${canonicalEvent}
     : buildEpisodeSeedancePrompt({
         sceneBrief,
         motionRenderingGuidance: plan.motionRenderingGuidance,
-        event: executedEvent,
-        executedRelativeSeconds: executedEvent.segmentRelativeSeconds,
+        events: executedEvents,
+        visualReferenceLines: (manifest.targets ?? []).map((target) =>
+          `${target.visualTargetId} 完整三视图`),
       });
 
   const promptPath = path.join(episodeRoot, "prompt-ab", variant, `${segmentId}.json`);
@@ -109,8 +127,8 @@ ${canonicalEvent}
       ? EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION
       : "legacy-heavy@1",
     planHash: sha256Canonical(plan),
-    eventId: event.id,
-    executedEventSeconds: marker.actualSeconds,
+    eventIds: executedEvents.map((event) => event.id),
+    executedEventSeconds: executedEvents.map((event) => event.globalSeconds),
     prompt,
   });
   const variantRoot = path.join(episodeRoot, "video-ab", variant, segmentId);
@@ -123,11 +141,10 @@ ${canonicalEvent}
     promptPath,
     referenceVideoPath: path.join(episodeRoot, "whitebox", `${segmentId}.mp4`),
     referenceImagePaths: [
-      path.join(episodeRoot, subjectTriview),
       path.join(episodeRoot, styledFrame),
+      ...styledTriviews.map((relativePath) => path.join(episodeRoot, relativePath)),
     ],
     rawProviderOutputPath: path.join(variantRoot, `${model}.mp4`),
-    rawUpscaleOutputPath: path.join(variantRoot, "cf-upscaled-720p.mp4"),
     outputPath: path.join(variantRoot, finalName),
   });
 }

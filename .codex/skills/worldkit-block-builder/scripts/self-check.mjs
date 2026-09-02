@@ -4499,6 +4499,11 @@ function exactKeys(value, allowedKeys, instancePath) {
 function validIdArray(value) {
   return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && ID$2.test(item)) && new Set(value).size === value.length;
 }
+function validFrontDirectionWorldXZ(value) {
+  return Array.isArray(value) && value.length === 2 && [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
+    ([x, z]) => value[0] === x && value[1] === z
+  );
+}
 function validateVisualTargetMappings(value, instancePath) {
   if (!Array.isArray(value)) {
     return [diagnostic$4(
@@ -4528,7 +4533,11 @@ function validateVisualTargetMappings(value, instancePath) {
       ));
       return;
     }
-    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds"], path2));
+    diagnostics.push(...exactKeys(mapping, [
+      "visualTargetId",
+      "runtimeEntityIds",
+      "frontDirectionWorldXZ"
+    ], path2));
     if (typeof mapping.visualTargetId !== "string" || !ID$2.test(mapping.visualTargetId)) {
       diagnostics.push(diagnostic$4(
         "HOSTED_VISUAL_TARGET_ID_INVALID",
@@ -4546,6 +4555,13 @@ function validateVisualTargetMappings(value, instancePath) {
       ));
     } else {
       runtimeEntityIds.push(...mapping.runtimeEntityIds);
+    }
+    if (!validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ)) {
+      diagnostics.push(diagnostic$4(
+        "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+        `${path2}/frontDirectionWorldXZ`,
+        "frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates."
+      ));
     }
   });
   if (new Set(visualTargetIds).size !== visualTargetIds.length) {
@@ -15173,7 +15189,7 @@ const HUMANOID_THIRD_PERSON_DEFINITION = {
   id: "humanoid.third-person",
   version: 1,
   resourceRef: "worldkit://subject-definition/humanoid.third-person@1",
-  authoringAvailability: "recommended",
+  authoringAvailability: "advanced",
   category: "human",
   bodyTopology: "biped",
   semanticClassId: "subject.humanoid",
@@ -15228,9 +15244,9 @@ const HUMANOID_THIRD_PERSON_DEFINITION = {
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
-    displayName: "Third-person humanoid",
-    description: "A controllable humanoid whitebox proxy for outdoor traversal.",
-    semanticTags: ["biped", "ground", "human", "third-person"]
+    displayName: "Primitive capsule humanoid proxy",
+    description: "A primitive capsule humanoid retained for SDK traversal tests, not ordinary Hosted authoring.",
+    semanticTags: ["biped", "ground", "human", "primitive-proxy", "third-person"]
   }
 };
 const QUADRUPED_GROUND_PROXY_DEFINITION = {
@@ -20792,6 +20808,15 @@ const MOVEMENT_LABELS = /* @__PURE__ */ new Map([
   ["水下游动", "underwater"],
   ["空中飞行", "flight"]
 ]);
+function movementModeForLabel(label) {
+  const exact2 = MOVEMENT_LABELS.get(label);
+  if (exact2 !== void 0) return exact2;
+  for (const [standardLabel, mode] of MOVEMENT_LABELS) {
+    const suffix = label.slice(standardLabel.length).trimStart();
+    if (label.startsWith(standardLabel) && (suffix.startsWith("（") && suffix.endsWith("）") || suffix.startsWith("(") && suffix.endsWith(")")) && suffix.length >= 3 && suffix.length <= 26) return mode;
+  }
+  return "custom";
+}
 const TARGET_KIND_LABELS = /* @__PURE__ */ new Map([
   ["主体", "subject"],
   ["标志物", "landmark"],
@@ -20857,7 +20882,7 @@ function parseMovementModes(value) {
     }
     labels.add(label);
     movementModes.push({
-      mode: MOVEMENT_LABELS.get(label) ?? "custom",
+      mode: movementModeForLabel(label),
       label,
       description: match[2].trim()
     });
@@ -21677,6 +21702,7 @@ function checkBlockWorldV2(input) {
   const presetsByBlockId = /* @__PURE__ */ new Map();
   const landmarkPresetRefsByGroupId = /* @__PURE__ */ new Map();
   const landmarkGroupIdsByPresetRef = /* @__PURE__ */ new Map();
+  const visualGroupIds = /* @__PURE__ */ new Set();
   const reservedIds = /* @__PURE__ */ new Set([
     "spawn-main",
     "runtime-foundation",
@@ -21744,6 +21770,9 @@ function checkBlockWorldV2(input) {
       return;
     }
     presetsByBlockId.set(block.id, preset);
+    if (block.visualGroupId !== void 0 && ID$1.test(block.visualGroupId)) {
+      visualGroupIds.add(block.visualGroupId);
+    }
     if (preset.family !== "landmark") return;
     if (block.visualGroupId === void 0 || !ID$1.test(block.visualGroupId)) {
       diagnostics.push(diagnostic$2(
@@ -21776,6 +21805,37 @@ function checkBlockWorldV2(input) {
       { visualGroupIds: [...groups].sort() }
     )
   );
+  const facingIds = /* @__PURE__ */ new Set();
+  (input.visualTargetFacings ?? []).forEach((facing, index) => {
+    const facingPath = `/visualTargetFacings/${index}`;
+    const valid = ID$1.test(facing.visualTargetId) && facing.visualTargetId !== input.controlledSubject.visualTargetId && Number.isSafeInteger(facing.frontYawQuarterTurnsY) && facing.frontYawQuarterTurnsY >= 0 && facing.frontYawQuarterTurnsY <= 3 && !facingIds.has(facing.visualTargetId);
+    if (!valid) {
+      diagnostics.push(diagnostic$2(
+        "BLOCK_VISUAL_TARGET_FACING_INVALID",
+        facingPath,
+        "Each non-subject visual target requires one unique frontYawQuarterTurnsY from 0 through 3."
+      ));
+      return;
+    }
+    facingIds.add(facing.visualTargetId);
+    if (!visualGroupIds.has(facing.visualTargetId)) {
+      diagnostics.push(diagnostic$2(
+        "BLOCK_VISUAL_TARGET_FACING_UNDECLARED",
+        `${facingPath}/visualTargetId`,
+        `Facing '${facing.visualTargetId}' does not name a Block visualGroupId.`
+      ));
+    }
+  });
+  for (const visualGroupId of [...visualGroupIds].sort()) {
+    if (visualGroupId === input.controlledSubject.visualTargetId || facingIds.has(visualGroupId)) {
+      continue;
+    }
+    diagnostics.push(diagnostic$2(
+      "BLOCK_VISUAL_TARGET_FACING_MISSING",
+      "/visualTargetFacings",
+      `Visual group '${visualGroupId}' must declare its semantic front direction exactly once.`
+    ));
+  }
   const targetIds = /* @__PURE__ */ new Map();
   const targetPositionIndicesByKey = /* @__PURE__ */ new Map();
   const validTargets = [];
@@ -24360,6 +24420,21 @@ function implementationMapDraft(input, clusters) {
     ids.push(cluster.entityId);
     runtimeIdsByVisualTargetId.set(cluster.visualGroupId, ids);
   }
+  const yawByVisualTargetId = new Map(
+    input.visualTargetFacings.map(({ visualTargetId, frontYawQuarterTurnsY }) => [visualTargetId, frontYawQuarterTurnsY])
+  );
+  yawByVisualTargetId.set(
+    input.controlledSubject.visualTargetId,
+    input.controlledSubject.yawQuarterTurnsY
+  );
+  const frontDirectionForTarget = (visualTargetId) => {
+    const yaw = yawByVisualTargetId.get(visualTargetId);
+    const direction = yaw === void 0 ? void 0 : [[0, -1], [-1, 0], [0, 1], [1, 0]][yaw];
+    if (direction === void 0) {
+      throw new Error(`BLOCK_WORLD_VISUAL_TARGET_FACING_MISSING: ${visualTargetId}`);
+    }
+    return direction;
+  };
   return Object.freeze({
     kind: "worldkit-scene-brief-implementation-map-draft",
     schemaVersion: 1,
@@ -24368,7 +24443,10 @@ function implementationMapDraft(input, clusters) {
     visualTargetMappings: Object.freeze(
       [...runtimeIdsByVisualTargetId.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([visualTargetId, runtimeEntityIds]) => Object.freeze({
         visualTargetId,
-        runtimeEntityIds: Object.freeze([...runtimeEntityIds].sort())
+        runtimeEntityIds: Object.freeze([...runtimeEntityIds].sort()),
+        frontDirectionWorldXZ: Object.freeze(
+          [...frontDirectionForTarget(visualTargetId)]
+        )
       }))
     )
   });
@@ -68341,6 +68419,7 @@ function blockWorldCheckInputV2(loaded) {
     spawnStandPositionMetersXYZ: authored.spawnStandPositionMetersXYZ,
     requiredTargets: authored.requiredTargets,
     requiredGroundTraversalBands: authored.requiredGroundTraversalBands ?? [],
+    visualTargetFacings: authored.visualTargetFacings ?? [],
     spaceTransitions: authored.spaceTransitions ?? [],
     requireSingleReachableComponent: authored.requireSingleReachableComponent,
     sourceDiagnostics: extraction.diagnostics
@@ -68468,6 +68547,14 @@ function visualProxy(definition) {
     boundsMaximumMetersXYZ: maximum
   };
 }
+function hostedAuthoringRejectionDiagnostics(definition) {
+  if (definition.category !== "human" || definition.bodyTopology !== "biped") return [];
+  const hasAssetVisual = definition.visualParts.some(({ kind }) => kind === "asset");
+  if (hasAssetVisual && definition.visualBinding.mode === "rigged") return [];
+  return [
+    "Hosted ordinary-human authoring requires an asset-backed rigged Subject; primitive humanoid proxies remain SDK test/runtime fixtures."
+  ];
+}
 function traversalEnvelopeFromRuntimeColliderV1(collider) {
   return {
     clearanceHeightMeters: collider.heightMeters,
@@ -68515,6 +68602,7 @@ function compileProbe(subjectDefinitionRef) {
     spawnStandPositionMetersXYZ: [0, 0.5, 0],
     requiredTargets: [],
     requiredGroundTraversalBands: [],
+    visualTargetFacings: [],
     spaceTransitions: [],
     requireSingleReachableComponent: true
   };
@@ -68553,6 +68641,14 @@ function createAgentAuthoringCatalogV1() {
   const subjects = [];
   const rejectedSubjects = [];
   for (const definition of definitions2) {
+    const hostedDiagnostics = hostedAuthoringRejectionDiagnostics(definition);
+    if (hostedDiagnostics.length > 0) {
+      rejectedSubjects.push({
+        subjectDefinitionRef: definition.resourceRef,
+        diagnostics: hostedDiagnostics
+      });
+      continue;
+    }
     const admission = compileProbe(definition.resourceRef);
     if (!admission.ok) {
       rejectedSubjects.push({
@@ -68757,8 +68853,21 @@ async function runBlockBuilderSelfCheck(options) {
         });
       }
     }
-    const executableMovementModes = subject.kind === "registered" ? createAgentAuthoringCatalogV1().subjects.find(({ subjectDefinitionRef }) => subjectDefinitionRef === subject.subjectDefinitionRef)?.executableMovementModes ?? [] : ["ground-walk"];
-    const missingMovementModes = requestedMovementModes.filter((mode) => !executableMovementModes.includes(mode));
+    const authoringCatalog = createAgentAuthoringCatalogV1();
+    const registeredSubject = subject.kind === "registered" ? authoringCatalog.subjects.find(({ subjectDefinitionRef }) => subjectDefinitionRef === subject.subjectDefinitionRef) : void 0;
+    if (subject.kind === "registered" && registeredSubject === void 0) {
+      diagnostics.push({
+        code: "BLOCK_WORLD_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED",
+        message: "The controlled registered Subject is not admitted for Hosted Builder authoring.",
+        instancePath: "/controlledSubject/subjectDefinitionRef",
+        details: {
+          subjectDefinitionRef: subject.subjectDefinitionRef,
+          rejectionDiagnostics: authoringCatalog.rejectedSubjects.find(({ subjectDefinitionRef }) => subjectDefinitionRef === subject.subjectDefinitionRef)?.diagnostics ?? []
+        }
+      });
+    }
+    const executableMovementModes = subject.kind === "registered" ? registeredSubject?.executableMovementModes ?? [] : ["ground-walk"];
+    const missingMovementModes = subject.kind === "registered" && registeredSubject === void 0 ? [] : requestedMovementModes.filter((mode) => !executableMovementModes.includes(mode));
     if (missingMovementModes.length > 0) {
       diagnostics.push({
         code: "BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED",
@@ -68945,7 +69054,8 @@ async function main(arguments_ = process.argv.slice(2)) {
   if (result2.status !== "passed") process.exitCode = 2;
 }
 const entryPath = process.argv[1] === void 0 ? "" : path.resolve(process.argv[1]);
-if (entryPath === fileURLToPath(import.meta.url)) {
+const directEntryBaseName = path.basename(entryPath).replace(/\.(?:mjs|js|ts)$/, "");
+if (entryPath === fileURLToPath(import.meta.url) && directEntryBaseName === "agent-block-builder-self-check") {
   main().catch((error2) => {
     process.stderr.write(`${error2 instanceof Error ? error2.message : String(error2)}
 `);

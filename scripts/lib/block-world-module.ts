@@ -39,6 +39,7 @@ export function blockWorldCheckInputV2(
     spawnStandPositionMetersXYZ: authored.spawnStandPositionMetersXYZ,
     requiredTargets: authored.requiredTargets,
     requiredGroundTraversalBands: authored.requiredGroundTraversalBands ?? [],
+    visualTargetFacings: authored.visualTargetFacings ?? [],
     spaceTransitions: authored.spaceTransitions ?? [],
     requireSingleReachableComponent: authored.requireSingleReachableComponent,
     sourceDiagnostics: extraction.diagnostics,

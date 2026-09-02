@@ -1,0 +1,7 @@
+{
+  "kind": "worldkit-cloud-scene-production-config",
+  "schemaVersion": 1,
+  "workerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:5b6abc5c3aa23268f4396351e4f0556d25ea5a2d985a350883be56b4b849c795",
+  "outputS3Root": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/cloud-scenes",
+  "namespace": "lwdp"
+}

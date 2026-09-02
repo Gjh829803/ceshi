@@ -8,6 +8,9 @@ import type {
   WorldkitAuthoringCaptureApiV1,
   WorldkitBrowserApiV5,
 } from "@whitebox-world/runtime-contracts";
+import type {
+  BabylonCharacterBodySupportObservationDiagnosticV1,
+} from "@whitebox-world/runtime-babylon";
 export type { WorldkitBrowserApiV5 } from "@whitebox-world/runtime-contracts";
 
 export type InputAction =
@@ -80,6 +83,63 @@ export interface WorldSnapshot {
   };
 }
 
+export type PlaygroundRuntimeLoopPhaseV1 =
+  | "idle"
+  | "simulation"
+  | "render"
+  | "emit"
+  | "reset"
+  | "capture";
+
+export interface PlaygroundRuntimeFailureAttemptV1 {
+  readonly schemaVersion: 1;
+  readonly stage: "prepare" | "rollback";
+  readonly tick: number;
+  readonly actions: readonly string[];
+  readonly errorName: string;
+  readonly errorCode: string;
+  readonly errorMessage: string;
+  readonly rollbackErrorCode?: string;
+  readonly rollbackErrorMessage?: string;
+  readonly controlledSubject?: Readonly<{
+    readonly entityId: string;
+    readonly positionMetersXYZ: readonly [number, number, number];
+    readonly velocityMetersPerSecondXYZ: readonly [number, number, number];
+    readonly activeActionId: string;
+    readonly grounded: boolean;
+  }>;
+}
+
+export interface PlaygroundRuntimeFailureDiagnosticV1 {
+  readonly initial: PlaygroundRuntimeFailureAttemptV1 | null;
+  readonly recovery: PlaygroundRuntimeFailureAttemptV1 | null;
+}
+
+/** Read-only diagnostics. This state never participates in Runtime decisions. */
+export interface PlaygroundRuntimeLoopDiagnosticSnapshotV1 {
+  readonly phase: PlaygroundRuntimeLoopPhaseV1;
+  readonly phaseAgeMilliseconds: number;
+  readonly animationFrameRequested: boolean;
+  readonly animationPending: boolean;
+  readonly lastAnimationFrameGapMilliseconds: number | null;
+  readonly lastFixedTickBatchSize: number;
+  readonly lastSimulationDurationMilliseconds: number | null;
+  readonly lastRenderDurationMilliseconds: number | null;
+  readonly lastEmitDurationMilliseconds: number | null;
+  readonly pressedKeyCodes: readonly string[];
+  readonly cameraInputActions: readonly InputAction[];
+  readonly captureReserved: boolean;
+  readonly supportObservation:
+    | BabylonCharacterBodySupportObservationDiagnosticV1
+    | null;
+  readonly frameLoopDiagnostic: Readonly<{
+    readonly severity: "info" | "warning" | "error";
+    readonly code: string;
+    readonly message: string;
+  }> | null;
+  readonly runtimeFailure: PlaygroundRuntimeFailureDiagnosticV1 | null;
+}
+
 export interface OpeningCompositionReport {
   score: number;
   minimumScore: number;
@@ -122,6 +182,7 @@ export interface PlaygroundWorldAdapter {
   captureWhiteboxTriview(prototypeId: string): string;
   exportWhiteboxTriviews(): Promise<readonly string[]>;
   inspectFeatures(): readonly FeatureInspection[];
+  getRuntimeLoopDiagnosticSnapshot(): PlaygroundRuntimeLoopDiagnosticSnapshotV1;
   snapshot(): WorldSnapshot;
   subscribe(listener: (snapshot: WorldSnapshot) => void): () => void;
   dispose(): void;
@@ -169,7 +230,7 @@ export interface PlaygroundAutomationApi {
   getVisualPrototypes(): readonly VisualPrototypeSpec[];
   captureWhiteboxTriview(prototypeId: string): string;
   exportWhiteboxTriviews(): Promise<readonly string[]>;
-  reset(): WorldSnapshot;
+  reset(): Promise<WorldSnapshot>;
   setPaused(paused: boolean): WorldSnapshot;
 }
 
@@ -192,12 +253,21 @@ export type PlaygroundBrowserAutomationApi =
   | PlaygroundAutomationApi
   | PlaygroundArtifactAutomationApiV1;
 
+export interface WorldkitStartupDiagnosticV1 {
+  readonly phase: "loading" | "ready" | "error";
+  readonly stage: string;
+  readonly revision: number;
+  readonly updatedAtMilliseconds: number;
+  readonly errorMessage?: string;
+}
+
 declare global {
   interface Window {
     __WHITEBOX_PLAYGROUND__: PlaygroundBrowserAutomationApi;
     __WORLDKIT__?: WorldkitBrowserApiV5;
     __WORLDKIT_AUTHORING_CAPTURE__?: WorldkitAuthoringCaptureApiV1;
     __WORLDKIT_AUTHORING_EDIT__?: WorldkitAuthoringEditApiV1;
+    __WORLDKIT_STARTUP_DIAGNOSTIC__?: WorldkitStartupDiagnosticV1;
   }
 }
 

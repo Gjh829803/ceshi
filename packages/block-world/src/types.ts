@@ -142,6 +142,11 @@ export interface BlockRequiredGroundTraversalBandV2 {
   readonly isBidirectional: boolean;
 }
 
+export interface BlockVisualTargetFacingV2 {
+  readonly visualTargetId: string;
+  readonly frontYawQuarterTurnsY: number;
+}
+
 export interface BlockWorldSpaceTransitionV2 {
   readonly id: string;
   readonly kind: "door" | "portal";
@@ -189,6 +194,9 @@ export type BlockWorldDiagnosticCodeV2 =
   | "BLOCK_WORLD_SUBJECT_SCALE_INVALID"
   | "BLOCK_WORLD_TARGET_NOT_STANDABLE"
   | "BLOCK_WORLD_TARGET_UNREACHABLE"
+  | "BLOCK_VISUAL_TARGET_FACING_INVALID"
+  | "BLOCK_VISUAL_TARGET_FACING_MISSING"
+  | "BLOCK_VISUAL_TARGET_FACING_UNDECLARED"
   | "BLOCK_WORLD_WALKABLE_COMPONENT_DISCONNECTED"
   | "LANDMARK_BLOCK_VISUAL_GROUP_REQUIRED"
   | "LANDMARK_COLOR_REUSED"
@@ -211,6 +219,7 @@ export interface CheckBlockWorldInputV2 {
   readonly spawnStandPositionMetersXYZ: BlockPositionMetersXYZV2;
   readonly requiredTargets: readonly BlockRequiredTargetV2[];
   readonly requiredGroundTraversalBands: readonly BlockRequiredGroundTraversalBandV2[];
+  readonly visualTargetFacings: readonly BlockVisualTargetFacingV2[];
   readonly spaceTransitions: readonly BlockWorldSpaceTransitionV2[];
   readonly requireSingleReachableComponent: boolean;
   readonly sourceDiagnostics?: readonly BlockWorldDiagnosticV2[];

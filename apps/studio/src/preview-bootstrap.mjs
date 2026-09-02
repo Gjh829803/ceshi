@@ -132,6 +132,13 @@ function validStringArray(value) {
     new Set(value).size === value.length;
 }
 
+function validFrontDirectionWorldXZ(value) {
+  return Array.isArray(value) && value.length === 2 &&
+    [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
+      ([x, z]) => value[0] === x && value[1] === z,
+    );
+}
+
 function sameStringSet(left, right) {
   return left.length === right.length &&
     [...left].sort().every((value, index) => value === [...right].sort()[index]);
@@ -176,13 +183,18 @@ function validateImplementationMap(value) {
   for (const mapping of value.visualTargetMappings) {
     if (
       mapping === null || typeof mapping !== "object" || Array.isArray(mapping) ||
-      !hasExactKeys(mapping, ["visualTargetId", "runtimeEntityIds"]) ||
+      !hasExactKeys(mapping, [
+        "visualTargetId",
+        "runtimeEntityIds",
+        "frontDirectionWorldXZ",
+      ]) ||
       !ID.test(mapping.visualTargetId ?? "") ||
-      !validStringArray(mapping.runtimeEntityIds)
+      !validStringArray(mapping.runtimeEntityIds) ||
+      !validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ)
     ) return false;
     mappingTargetIds.push(mapping.visualTargetId);
     mappedEntityIds.push(...mapping.runtimeEntityIds);
-    mappingsByTargetId.set(mapping.visualTargetId, mapping.runtimeEntityIds);
+    mappingsByTargetId.set(mapping.visualTargetId, mapping);
   }
   if (
     new Set(mappingTargetIds).size !== mappingTargetIds.length ||
@@ -201,18 +213,23 @@ function validateImplementationMap(value) {
         "role",
         "semanticClassId",
         "identityColor",
+        "frontDirectionWorldXZ",
       ]) ||
       !ID.test(group.visualTargetId ?? "") ||
       !validStringArray(group.runtimeEntityIds) ||
       !VISUAL_CAPTURE_ROLES.has(group.role) ||
       typeof group.semanticClassId !== "string" || !group.semanticClassId.trim() ||
-      !COLOR.test(group.identityColor ?? "")
+      !COLOR.test(group.identityColor ?? "") ||
+      !validFrontDirectionWorldXZ(group.frontDirectionWorldXZ)
     ) return false;
     groupTargetIds.push(group.visualTargetId);
     groupedEntityIds.push(...group.runtimeEntityIds);
     if (group.role === "primary-subject") primarySubjectCount += 1;
-    const mappedIds = mappingsByTargetId.get(group.visualTargetId);
-    if (mappedIds === undefined || !sameStringSet(mappedIds, group.runtimeEntityIds)) {
+    const mapping = mappingsByTargetId.get(group.visualTargetId);
+    if (mapping === undefined ||
+        !sameStringSet(mapping.runtimeEntityIds, group.runtimeEntityIds) ||
+        mapping.frontDirectionWorldXZ[0] !== group.frontDirectionWorldXZ[0] ||
+        mapping.frontDirectionWorldXZ[1] !== group.frontDirectionWorldXZ[1]) {
       return false;
     }
   }
@@ -225,7 +242,13 @@ function validateImplementationMap(value) {
 function validateEvaluationRun(record, source) {
   // Imported artifacts receive a synthetic local attempt identity. A source
   // evaluation-run describes its original environment, not that local import.
-  if (record.origin === "existing-scene-brief-world") return;
+  if (
+    record.origin === "existing-scene-brief-world" ||
+    (
+      record.remoteArtifactAdmission?.status === "passed" &&
+      record.remoteArtifactAdmission?.executionId === record.remoteExecutionId
+    )
+  ) return;
   const evaluationRun = parseJsonRecord(source, "evaluation-run.json");
   if (
     evaluationRun.kind !== "worldkit-evaluation-run" ||

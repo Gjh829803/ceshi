@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,13 @@ import {
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const terminalStatuses = new Set(["succeeded", "failed", "interrupted", "cancelled"]);
 
+export function isRetryableCloudHostCaptureFailure(log) {
+  const source = String(log ?? "");
+  return /CLI_(?:CAPTURE_FAILED|SERVER_START_FAILED)/.test(source) &&
+    /Execution context was destroyed|most likely because of a navigation|Target page, context or browser has been closed|page\.waitForFunction: Timeout|WORLDKIT_CAPTURE_STARTUP_(?:STALLED|HARD_TIMEOUT)|PLAYWRIGHT_BROWSER_UNAVAILABLE|SERVER_START_(?:TIMEOUT|FAILED)/i.test(source) &&
+    !/WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING|ENTRY_THIRD_PERSON|BLOCK_WORLD_/i.test(source);
+}
+
 function parseArgs(argv) {
   const options = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -45,6 +52,39 @@ function parseArgs(argv) {
 function requiredString(value, label) {
   if (typeof value !== "string" || value.length === 0) throw new Error(`${label} is required.`);
   return value;
+}
+
+function singleLineSecret(value, label) {
+  const normalized = requiredString(value, label);
+  if (/[\r\n]/.test(normalized)) throw new Error(`${label} must be one line.`);
+  return normalized;
+}
+
+export async function materializeCloudWorkerLwdpConfig({
+  repoRoot,
+  environment = process.env,
+}) {
+  const token = singleLineSecret(
+    environment.LWDP_GENERATION_API_TOKEN,
+    "LWDP_GENERATION_API_TOKEN",
+  );
+  const baseUrl = singleLineSecret(
+    environment.LWDP_API_BASE ?? "https://lwdp.loopit.me",
+    "LWDP_API_BASE",
+  ).replace(/\/$/, "");
+  const userId = singleLineSecret(
+    environment.LWDP_USER_ID ?? "worldkit-studio",
+    "LWDP_USER_ID",
+  );
+  const runtimeRoot = join(repoRoot, ".codex-tmp", "runtime-config");
+  await mkdir(runtimeRoot, { recursive: true, mode: 0o700 });
+  await writeFile(join(runtimeRoot, "lwdp.env"), [
+    `LWDP_API_BASE=${baseUrl}`,
+    `LWDP_USER_ID=${userId}`,
+    `LWDP_GENERATION_API_TOKEN=${token}`,
+    "",
+  ].join("\n"), { mode: 0o600, flag: "w" });
+  return { baseUrl, userId, token };
 }
 
 async function nonemptyPath(filePath) {
@@ -232,11 +272,11 @@ export async function runCloudSceneWorker({
   assertS3Uri(requestS3Uri);
   assertS3Uri(outputS3Prefix);
   if (resumeManifestS3Uri !== undefined) assertS3Uri(resumeManifestS3Uri);
-  if (!["verify-only", "host"].includes(resumeMode)) {
-    throw new Error("resume_mode must be verify-only or host.");
+  if (!["verify-only", "builder", "host"].includes(resumeMode)) {
+    throw new Error("resume_mode must be verify-only, builder, or host.");
   }
   if (resumeManifestS3Uri === undefined && resumeMode !== "verify-only") {
-    throw new Error("resume_mode host requires resume_manifest_s3_uri.");
+    throw new Error("resume_mode builder or host requires resume_manifest_s3_uri.");
   }
   const temporaryRoot = await mkdtemp(join(tmpdir(), "worldkit-cloud-scene-"));
   const requestPath = join(temporaryRoot, "request.json");
@@ -442,7 +482,24 @@ export async function runCloudSceneWorker({
         ? await runPipelineCommand([
           "agent:world", "--", "--scene-id", request.sceneId, "--resume-host-only",
         ], "block-build", "a")
-        : { code: 0, signal: null };
+        : resumeMode === "builder"
+          ? await runPipelineCommand([
+            "agent:world", "--", "--scene-id", request.sceneId, "--build-only",
+          ], "coding-agent", "a")
+          : { code: 0, signal: null };
+    }
+    if (
+      result.code !== 0 &&
+      resumeManifestS3Uri === undefined &&
+      isRetryableCloudHostCaptureFailure(await readFile(logPath, "utf8").catch(() => ""))
+    ) {
+      await appendFile(
+        logPath,
+        "\nWORLDKIT_CLOUD_HOST_CAPTURE_RETRY attempt=2 agents=not-run reason=transient-browser-capture\n",
+      );
+      result = await runPipelineCommand([
+        "agent:world:resume-host", "--", "--scene-id", request.sceneId,
+      ], "block-build", "a");
     }
     if (externalTerminalStatus !== null) {
       return { executionId, stageId, status: externalTerminalStatus };
@@ -550,6 +607,11 @@ export async function runCloudSceneWorker({
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  const cloudConfig = await materializeCloudWorkerLwdpConfig({
+    repoRoot: sourceRoot,
+    environment: process.env,
+  });
+  delete process.env.LWDP_GENERATION_API_TOKEN;
   const result = await runCloudSceneWorker({
     executionId: options["execution-id"],
     stageId: options["stage-id"] ?? "scene-production",
@@ -558,6 +620,7 @@ async function main() {
     workerId: options["worker-id"],
     resumeManifestS3Uri: options["resume-manifest-s3-uri"],
     resumeMode: options["resume-mode"] ?? "verify-only",
+    cloudConfig,
   });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }

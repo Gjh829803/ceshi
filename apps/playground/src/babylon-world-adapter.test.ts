@@ -9,7 +9,10 @@ import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import {
   createGameplayBootstrapResourceLockEntryV1,
 } from "@whitebox-world/gameplay-contracts";
-import type { BabylonRuntimeProjectionV1 } from "@whitebox-world/runtime-babylon";
+import type {
+  BabylonFixedInputFailureDiagnosticV1,
+  BabylonRuntimeProjectionV1,
+} from "@whitebox-world/runtime-babylon";
 import type {
   CameraViewInputV1,
   ControlCaptureRequestV1,
@@ -112,12 +115,18 @@ interface RuntimeProbe {
   waitForRenderReady: ReturnType<typeof vi.fn>;
   captureControlFrame: ReturnType<typeof vi.fn>;
   captureArtifactView: ReturnType<typeof vi.fn>;
+  consumeFixedInputFailureDiagnostic: ReturnType<typeof vi.fn<
+    () => BabylonFixedInputFailureDiagnosticV1 | undefined
+  >>;
+  supportObservationDiagnostic: ReturnType<typeof vi.fn>;
   snapshot(): BabylonRuntimeProjectionV1;
 }
 
 interface AdapterProbe {
   animate(timestampMilliseconds: number): Promise<void>;
-  clearPhysicalInputState(reason: "blur" | "simulation-reset"): void;
+  clearPhysicalInputState(
+    reason: "blur" | "fixed-input-recovery" | "simulation-reset",
+  ): void;
   runFixedInput(
     steps: Parameters<BabylonWorldAdapter["runFixedInput"]>[0],
   ): ReturnType<BabylonWorldAdapter["runFixedInput"]>;
@@ -133,6 +142,9 @@ interface AdapterProbe {
   setPaused(paused: boolean): void;
   isPaused(): boolean;
   runtimeDiagnostics(): ReturnType<BabylonWorldAdapter["runtimeDiagnostics"]>;
+  getRuntimeLoopDiagnosticSnapshot(): ReturnType<
+    BabylonWorldAdapter["getRuntimeLoopDiagnosticSnapshot"]
+  >;
   getArrowInputDiagnosticSnapshot(): Readonly<{
     maximumYawRadiansPerFixedTick: number;
     maximumPitchRadiansPerFixedTick: number;
@@ -140,7 +152,13 @@ interface AdapterProbe {
     keyboardDecelerationSeconds: number;
     yawRadiansPerFixedTick: number;
     pitchRadiansPerFixedTick: number;
-    lastClearReason: "startup" | "blur" | "simulation-reset" | "possession-unbound" | "possession-rebind";
+    lastClearReason:
+      | "startup"
+      | "blur"
+      | "fixed-input-recovery"
+      | "simulation-reset"
+      | "possession-unbound"
+      | "possession-rebind";
   }>;
   resetRuntime(): Promise<WorldRuntimeSnapshotV4>;
   runWorldkitFixedInput(steps: readonly FixedInputV1[]): Promise<WorldRuntimeSnapshotV4>;
@@ -363,6 +381,8 @@ function createAdapterProbe(): {
       ]),
       projectedBoundsByEntityId: {},
     })),
+    consumeFixedInputFailureDiagnostic: vi.fn(() => undefined),
+    supportObservationDiagnostic: vi.fn(() => undefined),
     snapshot: () => runtimeSnapshot(tick, cameraView),
   };
   const executionPlan = LOCKED_EXECUTION_PLAN_V5;
@@ -437,6 +457,13 @@ function createAdapterProbe(): {
     previousAnimationTimestampMilliseconds: 0,
     fixedStepAccumulatorSeconds: 0,
     displayFramesPerSecond: 0,
+    loopPhase: "idle",
+    loopPhaseStartedAtMonotonicMilliseconds: performance.now(),
+    lastAnimationFrameGapMilliseconds: null,
+    lastFixedTickBatchSize: 0,
+    lastSimulationDurationMilliseconds: null,
+    lastRenderDurationMilliseconds: null,
+    lastEmitDurationMilliseconds: null,
   }) as unknown as AdapterProbe;
   const requestFrame = vi.fn(() => 1);
   vi.stubGlobal("requestAnimationFrame", requestFrame);
@@ -465,6 +492,7 @@ describe("BabylonWorldAdapter frame loop", () => {
       role: "primary-subject",
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
+      frontDirectionWorldXZ: [0, -1],
     } as const;
 
     expect(adapter.listVisualCaptureGroups()).toEqual([]);
@@ -485,6 +513,7 @@ describe("BabylonWorldAdapter frame loop", () => {
       heightPixels: 360,
       entityIds: ["player"],
       identityColor: "#E85D5D",
+      frontDirectionWorldXZ: [0, -1],
     });
   });
 
@@ -686,6 +715,140 @@ describe("BabylonWorldAdapter frame loop", () => {
     expect(requestFrame).toHaveBeenCalledOnce();
   });
 
+  it("recovers one safely rolled-back prepared input frame without pausing the world", async () => {
+    const { adapter, runtime, requestFrame } = createAdapterProbe();
+    const recoverableError = new Error(
+      "ADAPTER_FIXED_INPUT_FAILED: The Runtime Adapter could not prepare the fixed simulation Tick.",
+    );
+    recoverableError.name = "WorldSessionOperationErrorV1";
+    runtime.runFixedInput.mockRejectedValueOnce(recoverableError);
+    runtime.consumeFixedInputFailureDiagnostic.mockReturnValueOnce({
+      schemaVersion: 1,
+      stage: "prepare",
+      tick: 1,
+      actions: ["move-forward", "run"],
+      errorName: "RangeError",
+      errorCode: "3C_INPUT_INVALID",
+      errorMessage: "native velocity violates the active contact cone.",
+      controlledSubject: {
+        entityId: "player",
+        positionMetersXYZ: [43.19, 21.09, -3.7],
+        velocityMetersPerSecondXYZ: [0, 0, 0],
+        activeActionId: "run",
+        grounded: true,
+      },
+    });
+    adapter.keyboardInput.press("KeyW");
+    adapter.keyboardInput.press("ShiftLeft");
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await expect(adapter.animate(17)).resolves.toBeUndefined();
+
+    expect(runtime.runFixedInput).toHaveBeenCalledTimes(2);
+    expect(runtime.runFixedInput).toHaveBeenNthCalledWith(2, {
+      actions: [],
+      ticks: 1,
+    });
+    expect(adapter.isPaused()).toBe(false);
+    expect(adapter.getArrowInputDiagnosticSnapshot().lastClearReason)
+      .toBe("fixed-input-recovery");
+    expect(adapter.runtimeDiagnostics()).toContainEqual({
+      severity: "warning",
+      code: "WORLDKIT_RUNTIME_FRAME_RECOVERED",
+      instancePath: "",
+      message:
+        "A rejected input frame was rolled back and the runtime recovered safely.",
+    });
+    expect(adapter.getRuntimeLoopDiagnosticSnapshot().runtimeFailure?.initial)
+      .toMatchObject({
+        tick: 1,
+        errorCode: "3C_INPUT_INVALID",
+        actions: ["move-forward", "run"],
+      });
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "WORLDKIT_RUNTIME_FRAME_RECOVERED",
+      recoverableError,
+    );
+    expect(requestFrame).toHaveBeenCalledOnce();
+  });
+
+  it("still pauses when the neutral recovery tick also fails", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    const recoverableError = new Error(
+      "ADAPTER_FIXED_INPUT_FAILED: The Runtime Adapter could not prepare the fixed simulation Tick.",
+    );
+    recoverableError.name = "WorldSessionOperationErrorV1";
+    const recoveryError = new Error("private neutral recovery failure");
+    runtime.runFixedInput
+      .mockRejectedValueOnce(recoverableError)
+      .mockRejectedValueOnce(recoveryError);
+    runtime.consumeFixedInputFailureDiagnostic.mockReturnValueOnce({
+      schemaVersion: 1,
+      stage: "prepare",
+      tick: 1,
+      actions: ["move-forward"],
+      errorName: "RangeError",
+      errorCode: "3C_INPUT_INVALID",
+      errorMessage: "A rejected input frame was rolled back safely.",
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(adapter.animate(17)).resolves.toBeUndefined();
+
+    expect(adapter.isPaused()).toBe(true);
+    expect(adapter.runtimeDiagnostics()).toContainEqual({
+      severity: "error",
+      code: "WORLDKIT_RUNTIME_FRAME_FAILED",
+      instancePath: "",
+      message: "The runtime was paused after a simulation frame failed.",
+    });
+    expect(JSON.stringify(adapter.runtimeDiagnostics()))
+      .not.toContain("private neutral recovery failure");
+    expect(consoleError).toHaveBeenCalledWith(
+      "WORLDKIT_RUNTIME_FRAME_RECOVERY_FAILED",
+      recoveryError,
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "WORLDKIT_RUNTIME_FRAME_FAILED",
+      recoverableError,
+    );
+  });
+
+  it("does not retry a provider observation failure with neutral input", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    const providerFailure = new Error(
+      "ADAPTER_FIXED_INPUT_FAILED: The Runtime Adapter could not prepare the fixed simulation Tick.",
+    );
+    providerFailure.name = "WorldSessionOperationErrorV1";
+    runtime.runFixedInput.mockRejectedValueOnce(providerFailure);
+    runtime.consumeFixedInputFailureDiagnostic.mockReturnValueOnce({
+      schemaVersion: 1,
+      stage: "prepare",
+      tick: 2,
+      actions: ["jump"],
+      errorName: "Error",
+      errorCode: "WORLDKIT_PROVIDER_OBSERVATION_INVALID",
+      errorMessage: "The Character support provider returned malformed data.",
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(adapter.animate(17)).resolves.toBeUndefined();
+
+    expect(runtime.runFixedInput).toHaveBeenCalledTimes(1);
+    expect(adapter.isPaused()).toBe(true);
+    expect(adapter.getArrowInputDiagnosticSnapshot().lastClearReason)
+      .not.toBe("fixed-input-recovery");
+    expect(adapter.getRuntimeLoopDiagnosticSnapshot().runtimeFailure?.initial)
+      .toMatchObject({
+        tick: 2,
+        errorCode: "WORLDKIT_PROVIDER_OBSERVATION_INVALID",
+      });
+    expect(consoleError).toHaveBeenCalledWith(
+      "WORLDKIT_RUNTIME_FRAME_FAILED",
+      providerFailure,
+    );
+  });
+
   it("maps left and right camera actions to the matching screen-look direction", async () => {
     const leftProbe = createAdapterProbe();
     leftProbe.adapter.cameraInput.add("cameraLeft");
@@ -859,6 +1022,71 @@ describe("BabylonWorldAdapter frame loop", () => {
       unsubscribe();
     },
   );
+
+  it("waits for the active fixed-input frame before replacing the World", async () => {
+    const { adapter, runtime } = createAdapterProbe();
+    let releaseFrame: ((snapshot: BabylonRuntimeProjectionV1) => void) | undefined;
+    runtime.runFixedInput.mockImplementationOnce(() =>
+      new Promise<BabylonRuntimeProjectionV1>((resolve) => {
+        releaseFrame = resolve;
+      })
+    );
+
+    const animation = adapter.animate(17);
+    await vi.waitFor(() => expect(releaseFrame).toBeDefined());
+    expect(adapter.getRuntimeLoopDiagnosticSnapshot()).toMatchObject({
+      phase: "simulation",
+      animationPending: true,
+      lastFixedTickBatchSize: 1,
+    });
+    const reset = adapter.resetRuntime();
+    await Promise.resolve();
+
+    expect(runtime.reset).not.toHaveBeenCalled();
+    releaseFrame!(runtimeSnapshot(1));
+    await animation;
+    await reset;
+
+    expect(runtime.reset).toHaveBeenCalledOnce();
+    expect(adapter.snapshot()).toMatchObject({
+      tick: 0,
+      player: { action: "idle" },
+    });
+    expect(adapter.getRuntimeLoopDiagnosticSnapshot()).toMatchObject({
+      phase: "idle",
+      animationPending: false,
+      pressedKeyCodes: [],
+      cameraInputActions: [],
+    });
+  });
+
+  it("publishes a frozen read-only loop and input diagnostic snapshot", async () => {
+    const { adapter } = createAdapterProbe();
+    adapter.keyboardInput.press("Space");
+    adapter.keyboardInput.press("KeyW");
+    adapter.cameraInput.add("cameraRight");
+
+    await adapter.animate(17);
+
+    const diagnostic = adapter.getRuntimeLoopDiagnosticSnapshot();
+    expect(Object.isFrozen(diagnostic)).toBe(true);
+    expect(Object.isFrozen(diagnostic.pressedKeyCodes)).toBe(true);
+    expect(diagnostic).toMatchObject({
+      phase: "idle",
+      animationPending: false,
+      lastAnimationFrameGapMilliseconds: 17,
+      lastFixedTickBatchSize: 1,
+      pressedKeyCodes: ["KeyW", "Space"],
+      cameraInputActions: ["cameraRight"],
+      captureReserved: false,
+      supportObservation: null,
+      frameLoopDiagnostic: null,
+      runtimeFailure: null,
+    });
+    expect(diagnostic.lastSimulationDurationMilliseconds).toBeGreaterThanOrEqual(0);
+    expect(diagnostic.lastRenderDurationMilliseconds).toBeGreaterThanOrEqual(0);
+    expect(diagnostic.lastEmitDurationMilliseconds).toBeGreaterThanOrEqual(0);
+  });
 
   it("clears held movement and keyboard camera inertia across a protocol reset", async () => {
     const { adapter, runtime } = createAdapterProbe();

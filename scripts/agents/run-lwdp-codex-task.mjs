@@ -18,7 +18,93 @@ import {
   submittedJobId,
   uploadS3File,
 } from "../lib/lwdp-generation-client.mjs";
+import {
+  probeCodexDeterministicAgentStop,
+  probeCodexDeliveryEvidence,
+  probeCodexRayInfrastructureFailure,
+} from
+  "../lib/lwdp-codex-delivery-evidence.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
+
+const retryableFormalStages = new Set([
+  "planner",
+  "builder",
+  "coding-agent",
+  "visual-reconstruction",
+  "playthrough-planner",
+  "episode-visual",
+  "episode-opening-review",
+]);
+
+const maximumAttemptsEnvironmentKeyByStage = Object.freeze({
+  planner: "WORLDKIT_LWDP_PLANNER_MAX_ATTEMPTS",
+  builder: "WORLDKIT_LWDP_BUILDER_MAX_ATTEMPTS",
+  "coding-agent": "WORLDKIT_LWDP_BUILDER_MAX_ATTEMPTS",
+  "visual-reconstruction": "WORLDKIT_VISUAL_RECONSTRUCTION_MAX_ATTEMPTS",
+  "playthrough-planner": "WORLDKIT_LWDP_EPISODE_CODEX_MAX_ATTEMPTS",
+  "episode-visual": "WORLDKIT_LWDP_EPISODE_CODEX_MAX_ATTEMPTS",
+  "episode-opening-review": "WORLDKIT_LWDP_EPISODE_CODEX_MAX_ATTEMPTS",
+});
+
+const priorAttemptsEnvironmentKeyByStage = Object.freeze({
+  planner: "WORLDKIT_LWDP_PLANNER_PRIOR_ATTEMPTS",
+  builder: "WORLDKIT_LWDP_BUILDER_PRIOR_ATTEMPTS",
+  "coding-agent": "WORLDKIT_LWDP_BUILDER_PRIOR_ATTEMPTS",
+  "visual-reconstruction": "WORLDKIT_LWDP_VISUAL_PRIOR_ATTEMPTS",
+});
+
+function boundedTaskAttempts(value) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 3) {
+    throw new Error("--task-attempts must be an integer in [1, 3].");
+  }
+  return parsed;
+}
+
+function taskAttemptsForStage(stage, explicitValue, environment = process.env) {
+  const environmentKey = maximumAttemptsEnvironmentKeyByStage[stage];
+  const configured = explicitValue ?? (
+    environmentKey === undefined ? undefined : environment[environmentKey]
+  );
+  const attempts = boundedTaskAttempts(
+    configured ?? (retryableFormalStages.has(stage) ? 3 : 1),
+  );
+  if (!retryableFormalStages.has(stage) && attempts !== 1) {
+    throw new Error(
+      "Only formal Scene and Episode Codex stages support terminal-failure task attempts.",
+    );
+  }
+  return attempts;
+}
+
+function priorTaskAttemptsForStage(stage, environment = process.env) {
+  const key = priorAttemptsEnvironmentKeyByStage[stage];
+  if (key === undefined || environment[key] === undefined || environment[key] === "") return 0;
+  const parsed = Number(environment[key]);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`${key} must be a non-negative safe integer.`);
+  }
+  return parsed;
+}
+
+function retryDelayMsForAttempt(stage, failedAttempt, environment = process.env) {
+  const legacyVisualDelay = stage === "visual-reconstruction"
+    ? environment.WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS
+    : undefined;
+  const rawBaseDelay = environment.WORLDKIT_LWDP_STAGE_RETRY_BASE_DELAY_MS ??
+    legacyVisualDelay ?? "30000";
+  const baseDelayMs = Number(rawBaseDelay);
+  if (
+    !Number.isSafeInteger(baseDelayMs) ||
+    baseDelayMs < 0 ||
+    baseDelayMs > 300_000
+  ) {
+    throw new Error(
+      "WORLDKIT_LWDP_STAGE_RETRY_BASE_DELAY_MS must be an integer in [0, 300000].",
+    );
+  }
+  return Math.min(300_000, baseDelayMs * (4 ** Math.max(0, failedAttempt - 1)));
+}
 
 function parseArguments(argv) {
   const result = { contexts: [], assets: [], outputs: [] };
@@ -82,6 +168,21 @@ if (!args.instructionFile) throw new Error("--instruction-file is required.");
 if (args.outputs.length === 0) throw new Error("At least one --output is required.");
 
 const runToken = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
+const cloudStageAttempt = Number(process.env.WORLDKIT_CLOUD_STAGE_ATTEMPT ?? 1);
+if (!Number.isSafeInteger(cloudStageAttempt) || cloudStageAttempt < 1) {
+  throw new Error("WORLDKIT_CLOUD_STAGE_ATTEMPT must be a positive safe integer.");
+}
+const cloudExecutionId = process.env.WORLDKIT_CLOUD_EXECUTION_ID ?? "";
+if (cloudExecutionId && !/^exec_[a-z0-9]+$/.test(cloudExecutionId)) {
+  throw new Error("WORLDKIT_CLOUD_EXECUTION_ID is invalid.");
+}
+const cloudRequestNamespace = [
+  ...(cloudExecutionId ? [`cloud-exec-${cloudExecutionId.slice(-12)}`] : []),
+  ...(cloudStageAttempt > 1 ? [`attempt-${cloudStageAttempt}`] : []),
+].join("-") || null;
+const effectiveOutputS3Prefix = cloudRequestNamespace === null
+  ? args.outputS3Prefix
+  : `${args.outputS3Prefix.replace(/\/$/, "")}/${cloudRequestNamespace}`;
 const stagingRoot = resolve(repoRoot, ".codex-tmp", "lwdp-codex", `${taskId}-${runToken}`);
 const smokeMode = process.env.WORLDKIT_LWDP_CLIENT_SMOKE === "1";
 await mkdir(stagingRoot, { recursive: true });
@@ -92,7 +193,7 @@ try {
     const contextPaths = args.contexts.map((item) => safeContextPath(repoRoot, item));
     const archivePath = resolve(stagingRoot, "workspace-context.tar.gz");
     await execFilePromise("tar", ["-czf", archivePath, "-C", repoRoot, ...contextPaths], repoRoot);
-    const contextUri = joinS3Uri(args.outputS3Prefix, "inputs", taskId, "workspace-context.tar.gz");
+    const contextUri = joinS3Uri(effectiveOutputS3Prefix, "inputs", taskId, "workspace-context.tar.gz");
     if (!smokeMode) await uploadS3File(archivePath, contextUri);
     taskAssets.push({
       id: "workspace-context",
@@ -113,7 +214,7 @@ try {
     if (!metadata.isFile() || metadata.size === 0) throw new Error(`Asset is not a non-empty file: ${localPath}`);
     const digest = createHash("sha256").update(await readFile(absolutePath)).digest("hex").slice(0, 16);
     const suffix = extname(absolutePath).toLowerCase();
-    const s3Uri = joinS3Uri(args.outputS3Prefix, "inputs", taskId, `${id}-${digest}${suffix}`);
+    const s3Uri = joinS3Uri(effectiveOutputS3Prefix, "inputs", taskId, `${id}-${digest}${suffix}`);
     if (!smokeMode) await uploadS3File(absolutePath, s3Uri);
     taskAssets.push({ id, name: `${id}${suffix}`, s3_uri: s3Uri, media_type: mediaType, attach_as: attachAs });
   }
@@ -133,24 +234,17 @@ try {
     : "";
   const stage = args.stage || taskId;
   const timeoutMs = resolveLwdpJobTimeoutMs(stage);
-  const configuredTaskAttempts = Number(
-    args.taskAttempts ||
-    (stage === "visual-reconstruction"
-      ? process.env.WORLDKIT_VISUAL_RECONSTRUCTION_MAX_ATTEMPTS || 3
-      : 1),
+  const configuredTaskAttemptLimit = taskAttemptsForStage(stage, args.taskAttempts);
+  const priorTaskAttempts = priorTaskAttemptsForStage(stage);
+  const configuredTaskAttempts = Math.max(
+    1,
+    configuredTaskAttemptLimit - priorTaskAttempts,
   );
-  if (
-    !Number.isSafeInteger(configuredTaskAttempts) ||
-    configuredTaskAttempts < 1 ||
-    configuredTaskAttempts > 3
-  ) {
-    throw new Error("--task-attempts must be an integer in [1, 3].");
-  }
-  if (stage !== "visual-reconstruction" && configuredTaskAttempts !== 1) {
-    throw new Error("Only final visual reconstruction supports a new terminal-failure task attempt.");
-  }
-  const baseRequestId = args.requestId || `${taskId}-${runToken}`;
-  const baseOutputS3Prefix = args.outputS3Prefix.replace(/\/$/, "");
+  const requestedRequestId = args.requestId || `${taskId}-${runToken}`;
+  const baseRequestId = cloudRequestNamespace === null
+    ? requestedRequestId
+    : `${requestedRequestId}-${cloudRequestNamespace}`;
+  const baseOutputS3Prefix = effectiveOutputS3Prefix.replace(/\/$/, "");
   const payloadBase = {
     job_name: args.jobName || `worldkit ${taskId}`,
     defaults: {
@@ -183,12 +277,14 @@ try {
 
   if (smokeMode) {
     process.stdout.write(
-      `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} dispatch=single-task-fast-path tasks=1 profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} taskAttempts=${configuredTaskAttempts} timeoutMs=${timeoutMs} assets=${taskAssets.length} outputs=${outputSpecs.length}\n`,
+      `WORLDKIT_LWDP_CODEX_SMOKE ${taskId} dispatch=single-task-fast-path tasks=1 profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} submitAttempts=${submitAttempts} taskAttempts=${configuredTaskAttempts} priorTaskAttempts=${priorTaskAttempts} timeoutMs=${timeoutMs} assets=${taskAssets.length} outputs=${outputSpecs.length} cloudExecutionId=${cloudExecutionId || "none"} cloudStageAttempt=${cloudStageAttempt} requestId=${baseRequestId} outputS3Prefix=${baseOutputS3Prefix}\n`,
     );
     process.exit(0);
   }
 
-  const config = await loadLwdpGenerationConfig();
+  const config = await loadLwdpGenerationConfig(
+    process.env.WORLDKIT_LWDP_TEST_ENV_CONFIG === "1" ? process.env : undefined,
+  );
   let successfulOutputPrefix = null;
   let remotePending = false;
   for (let taskAttempt = 1; taskAttempt <= configuredTaskAttempts; taskAttempt += 1) {
@@ -207,6 +303,7 @@ try {
       output_s3_prefix: attemptOutputPrefix,
     };
     let jobId = null;
+    let lastJob = null;
     try {
       const submitted = await submitCodexGenerationJob(payload, { config });
       jobId = submittedJobId(submitted);
@@ -214,28 +311,70 @@ try {
         process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
       }
       process.stdout.write(
-        `WORLDKIT_LWDP_JOB ${stage} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} taskAttempt=${taskAttempt}/${configuredTaskAttempts}\n`,
+        `WORLDKIT_LWDP_JOB ${stage} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} requestId=${requestId} outputS3Prefix=${attemptOutputPrefix} taskAttempt=${priorTaskAttempts + taskAttempt}/${configuredTaskAttemptLimit}\n`,
       );
       if (args.dryRun) {
         process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
         process.exit(0);
       }
-      const job = await pollGenerationJob(jobId, {
+      lastJob = await pollGenerationJob(jobId, {
         config,
         timeoutMs,
+        nonTerminalCompletionProbe: () => probeCodexDeliveryEvidence({
+          outputS3Prefix: attemptOutputPrefix,
+          taskId,
+          expectedOutputPaths: outputSpecs.map((output) => output.remotePath),
+          stagingRoot,
+        }),
+        nonTerminalFailureProbe: (current) =>
+          probeCodexRayInfrastructureFailure(current),
         onProgress: (current) => process.stdout.write(
           `WORLDKIT_LWDP_PROGRESS ${taskId} ${current.status} ${JSON.stringify(current.counters || {})}\n`,
         ),
       });
-      const items = await fetchGenerationItems(jobId, { config });
-      assertSuccessfulJob(job, items, [taskId]);
+      let items;
+      if (lastJob?.delivery_evidence?.itemsPayload) {
+        items = lastJob.delivery_evidence.itemsPayload;
+        process.stdout.write(
+          `WORLDKIT_LWDP_DELIVERY_EVIDENCE ${stage} ${taskId} ${jobId}\n`,
+        );
+      } else {
+        try {
+          items = await fetchGenerationItems(jobId, { config });
+        } catch (error) {
+          if (classifyCodexTaskFailureForRetry(error) === "transport") {
+            throw new LwdpJobPendingError(jobId, timeoutMs, lastJob, {
+              cause: error,
+              reason: "transport",
+            });
+          }
+          throw error;
+        }
+      }
+      try {
+        assertSuccessfulJob(lastJob, items, [taskId]);
+      } catch (error) {
+        const deterministicStop = await probeCodexDeterministicAgentStop({
+          itemsPayload: items,
+          outputS3Prefix: attemptOutputPrefix,
+          taskId,
+          stagingRoot,
+        });
+        if (deterministicStop !== null) {
+          throw new Error(
+            `${deterministicStop.code}: Agent stopped before authoring because the required Runtime capability is unavailable.`,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
       successfulOutputPrefix = attemptOutputPrefix;
       break;
     } catch (error) {
       if (error instanceof LwdpJobPendingError || error?.code === "LWDP_JOB_PENDING") {
-        const lastJob = error.lastJob ?? {};
+        const pendingJob = error.lastJob ?? lastJob ?? {};
         process.stdout.write(
-          `WORLDKIT_LWDP_REMOTE_PENDING ${stage} ${taskId} ${error.jobId} ${requestId} ${attemptOutputPrefix} ${timeoutMs} ${String(lastJob.status ?? "unknown")} ${JSON.stringify(lastJob.counters ?? {})}\n`,
+          `WORLDKIT_LWDP_REMOTE_PENDING ${stage} ${taskId} ${error.jobId} ${requestId} ${attemptOutputPrefix} ${timeoutMs} ${String(pendingJob.status ?? "unknown")} ${JSON.stringify(pendingJob.counters ?? {})}\n`,
         );
         remotePending = true;
         process.exitCode = 4;
@@ -243,20 +382,16 @@ try {
       }
       const retryClass = classifyCodexTaskFailureForRetry(error);
       const maximumAttemptsForFailure = retryClass === "task-timeout"
-        ? Math.min(configuredTaskAttempts, 2)
+        ? Math.min(
+            configuredTaskAttempts,
+            Math.max(1, 2 - priorTaskAttempts),
+          )
         : configuredTaskAttempts;
-      if (
-        stage === "visual-reconstruction" &&
-        retryClass !== null &&
-        taskAttempt < maximumAttemptsForFailure
-      ) {
+      if (retryClass !== null && taskAttempt < maximumAttemptsForFailure) {
+        const retryDelayMs = retryDelayMsForAttempt(stage, taskAttempt);
         process.stdout.write(
-          `WORLDKIT_LWDP_STAGE_RETRY ${stage} ${taskAttempt + 1} ${maximumAttemptsForFailure} reason=${retryClass} previousJob=${jobId ?? "unsubmitted"}\n`,
+          `WORLDKIT_LWDP_STAGE_RETRY ${stage} ${priorTaskAttempts + taskAttempt + 1} ${retryClass === "task-timeout" ? 2 : configuredTaskAttemptLimit} reason=${retryClass} previousJob=${jobId ?? "unsubmitted"} delayMs=${retryDelayMs}\n`,
         );
-        const retryDelayMs = Number(process.env.WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS || 2_000);
-        if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0 || retryDelayMs > 60_000) {
-          throw new Error("WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS must be an integer in [0, 60000].");
-        }
         await new Promise((resolvePromise) => setTimeout(resolvePromise, retryDelayMs));
         continue;
       }

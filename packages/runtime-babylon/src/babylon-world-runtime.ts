@@ -104,6 +104,7 @@ import {
   type SubjectAssetResolverV1,
 } from "./subject-asset-cache";
 import { createSubjectVisual, type SubjectVisual } from "./subject-visual";
+import { ThirdPersonSubjectOcclusionFadeV1 } from "./third-person-subject-occlusion-fade";
 import {
   createTerrainMesh,
   sampleExecutionTerrainHeight,
@@ -290,6 +291,77 @@ interface GoldenFixedInputHistoryEntryV1 {
     BabylonGameplayRuntimeInternalV1["runFixedInputTick"]
   >[0];
   readonly actionProjection: GameplayFixedTickActionProjectionV1;
+}
+
+export interface BabylonFixedInputFailureDiagnosticV1 {
+  readonly schemaVersion: 1;
+  readonly stage: "prepare" | "rollback";
+  readonly tick: number;
+  readonly actions: readonly SemanticInputActionV1[];
+  readonly errorName: string;
+  readonly errorCode: string;
+  readonly errorMessage: string;
+  readonly rollbackErrorCode?: string;
+  readonly rollbackErrorMessage?: string;
+  readonly controlledSubject?: Readonly<{
+    readonly entityId: string;
+    readonly positionMetersXYZ: RuntimeVec3V1;
+    readonly velocityMetersPerSecondXYZ: RuntimeVec3V1;
+    readonly activeActionId: string;
+    readonly grounded: boolean;
+  }>;
+}
+
+interface PreparedGoldenFixedInputV1 {
+  readonly beforeRuntimeProjection: BabylonRuntimeProjectionV1;
+  readonly beforeWorldProjection: ReturnType<
+    BabylonGameplayRuntimeInternalV1["readWorldProjection"]
+  >;
+  readonly beforeGameplayPublishedState: BabylonGameplayPublishedStateV1;
+  readonly beforeCameraTransactionState: ReturnType<
+    CameraComponentV1["captureTransactionState"]
+  >;
+  readonly beforeCameraFovRadians: number;
+  readonly beforeActiveInputActions: readonly SemanticInputActionV1[];
+  readonly beforeActiveInputAxes: Readonly<ControlInputAxesV2>;
+  readonly beforePrimaryActionWasActive: boolean;
+  readonly beforeAppliedCameraViewStateRevision: number;
+  readonly beforePendingCameraHeadingLockBeforeNextTick: boolean;
+  readonly beforePendingPublishedCameraViewSyncBeforeNextTick: boolean;
+  readonly beforeControllerStateHashByEntityId: Readonly<Record<string, string>>;
+}
+
+const RUNTIME_FAILURE_CODE = /^([A-Z0-9][A-Z0-9_]+):\s*(.+)$/s;
+
+function sanitizedRuntimeFailure(
+  error: unknown,
+): Readonly<{ errorName: string; errorCode: string; errorMessage: string }> {
+  if (error instanceof Error) {
+    const match = RUNTIME_FAILURE_CODE.exec(error.message);
+    if (match !== null) {
+      return Object.freeze({
+        errorName: error.name || "Error",
+        errorCode: match[1]!,
+        errorMessage: match[2]!.slice(0, 500),
+      });
+    }
+    if (error instanceof AggregateError) {
+      const firstCoded = error.errors.map(sanitizedRuntimeFailure).find(
+        ({ errorCode }) => errorCode !== "WORLDKIT_RUNTIME_INTERNAL_FAILURE",
+      );
+      if (firstCoded !== undefined) return firstCoded;
+    }
+    return Object.freeze({
+      errorName: error.name || "Error",
+      errorCode: "WORLDKIT_RUNTIME_INTERNAL_FAILURE",
+      errorMessage: "An internal Runtime operation failed without a public diagnostic code.",
+    });
+  }
+  return Object.freeze({
+    errorName: "Error",
+    errorCode: "WORLDKIT_RUNTIME_INTERNAL_FAILURE",
+    errorMessage: "An internal Runtime operation failed without a public diagnostic code.",
+  });
 }
 
 const WATER_SURFACE_CLASSIFICATION_EPSILON_METERS = 0.1;
@@ -712,6 +784,8 @@ export class BabylonWorldRuntime {
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
   private readonly camera: FreeCamera;
   private readonly cameraComponent: CameraComponentV1;
+  private readonly thirdPersonSubjectOcclusionFade:
+    ThirdPersonSubjectOcclusionFadeV1 | undefined;
   private readonly renderLoop: () => void;
   private readonly autoStartRenderLoop: boolean;
   private readonly ownedDisposers: readonly OwnedDisposer[];
@@ -723,18 +797,9 @@ export class BabylonWorldRuntime {
   private gameplayPublishedState: BabylonGameplayPublishedStateV1;
   private goldenFixedInputHistory: GoldenFixedInputHistoryEntryV1[] = [];
   private goldenReplayBaselineState: BabylonGameplayPublishedStateV1 | undefined;
-  private preparedGoldenFixedInput: Readonly<{
-    beforeRuntimeProjection: BabylonRuntimeProjectionV1;
-    beforeWorldProjection: ReturnType<
-      BabylonGameplayRuntimeInternalV1["readWorldProjection"]
-    >;
-    beforeCameraTransactionState: ReturnType<
-      CameraComponentV1["captureTransactionState"]
-    >;
-    beforeCameraFovRadians: number;
-    beforePendingCameraHeadingLockBeforeNextTick: boolean;
-    beforePendingPublishedCameraViewSyncBeforeNextTick: boolean;
-  }> | undefined;
+  private preparedGoldenFixedInput: PreparedGoldenFixedInputV1 | undefined;
+  private latestFixedInputFailureDiagnostic:
+    BabylonFixedInputFailureDiagnosticV1 | undefined;
   readonly #creationExecutionPlanHash: `sha256:${string}` | undefined;
 
   private constructor(
@@ -756,6 +821,7 @@ export class BabylonWorldRuntime {
     subjectVisuals: readonly SubjectVisual[],
     camera: FreeCamera,
     cameraComponent: CameraComponentV1,
+    thirdPersonSubjectOcclusionFade: ThirdPersonSubjectOcclusionFadeV1 | undefined,
     ownedTerrainShape: PhysicsShape | undefined,
     aggregates: PhysicsAggregate[],
     staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[],
@@ -786,6 +852,7 @@ export class BabylonWorldRuntime {
     );
     this.camera = camera;
     this.cameraComponent = cameraComponent;
+    this.thirdPersonSubjectOcclusionFade = thirdPersonSubjectOcclusionFade;
     this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
     this.staticCollisionMeshes = staticCollisionMeshes;
@@ -949,48 +1016,57 @@ export class BabylonWorldRuntime {
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       let blockWorldCollisionResidency: BlockWorldCollisionResidencyV1 | undefined;
+      let thirdPersonSubjectOcclusionFade:
+        ThirdPersonSubjectOcclusionFadeV1 | undefined;
       let blockWalkableSurfaceHeightAtMetersXZ:
         ReturnType<typeof createBlockWalkableSurfaceHeightSamplerV1> = () => undefined;
-      let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
+      const usesBlockWorldGeometry = executionPlan?.objects.some(
+        ({ semanticClassId }) => semanticClassId.startsWith("block."),
+      ) === true;
+      let terrainSampleCount = usesBlockWorldGeometry
+        ? 0
+        : executionPlan?.terrain.heightSamplesMeters.length ?? 0;
       if (!isNil(executionPlan)) {
         options.onInitializationStage?.("terrain");
         configureAtmosphere(scene, executionPlan.atmospherePreset);
-        const terrainMesh = createTerrainMesh(
-          executionPlan.terrain,
-          materials.terrain,
-          scene,
-        );
-        const terrain = executionPlan.terrain;
-        const firstTerrainHeight = terrain.heightSamplesMeters[0]!;
-        const isFlatTerrain = terrain.heightSamplesMeters.every((height) =>
-          height === firstTerrainHeight
-        );
-        const flatTerrainThicknessMeters = 1;
-        terrainShape = isFlatTerrain
-          ? new PhysicsShapeBox(
-              new Vector3(
-                0,
-                firstTerrainHeight - flatTerrainThicknessMeters / 2,
-                0,
-              ),
-              Quaternion.Identity(),
-              new Vector3(
-                terrain.sizeMetersXZ[0],
-                flatTerrainThicknessMeters,
-                terrain.sizeMetersXZ[1],
-              ),
-              scene,
-            )
-          : new PhysicsShapeMesh(terrainMesh, scene);
-        ownedDisposers.push(() => terrainShape?.dispose());
-        const terrainAggregate = new PhysicsAggregate(
-          terrainMesh,
-          terrainShape,
-          { mass: 0, friction: 0.9, restitution: 0 },
-          scene,
-        );
-        aggregates.push(terrainAggregate);
-        ownedDisposers.push(() => terrainAggregate.dispose());
+        if (!usesBlockWorldGeometry) {
+          const terrainMesh = createTerrainMesh(
+            executionPlan.terrain,
+            materials.terrain,
+            scene,
+          );
+          const terrain = executionPlan.terrain;
+          const firstTerrainHeight = terrain.heightSamplesMeters[0]!;
+          const isFlatTerrain = terrain.heightSamplesMeters.every((height) =>
+            height === firstTerrainHeight
+          );
+          const flatTerrainThicknessMeters = 1;
+          terrainShape = isFlatTerrain
+            ? new PhysicsShapeBox(
+                new Vector3(
+                  0,
+                  firstTerrainHeight - flatTerrainThicknessMeters / 2,
+                  0,
+                ),
+                Quaternion.Identity(),
+                new Vector3(
+                  terrain.sizeMetersXZ[0],
+                  flatTerrainThicknessMeters,
+                  terrain.sizeMetersXZ[1],
+                ),
+                scene,
+              )
+            : new PhysicsShapeMesh(terrainMesh, scene);
+          ownedDisposers.push(() => terrainShape?.dispose());
+          const terrainAggregate = new PhysicsAggregate(
+            terrainMesh,
+            terrainShape,
+            { mass: 0, friction: 0.9, restitution: 0 },
+            scene,
+          );
+          aggregates.push(terrainAggregate);
+          ownedDisposers.push(() => terrainAggregate.dispose());
+        }
 
         for (const water of executionPlan.waters) {
           createBabylonWaterMeshV1(water, materials, scene);
@@ -1001,12 +1077,18 @@ export class BabylonWorldRuntime {
           createBlockWalkableSurfaceHeightSamplerV1(
             blockWalkableSurfaceTopologies,
           );
-        createBabylonObjectMeshesV1(
+        const blockObjectMeshes = createBabylonObjectMeshesV1(
           executionPlan.objects.filter((object) =>
             !isSmoothableBlockObjectV1(object)),
           materials,
           scene,
         );
+        if (usesBlockWorldGeometry) {
+          thirdPersonSubjectOcclusionFade =
+            new ThirdPersonSubjectOcclusionFadeV1(blockObjectMeshes);
+          const fade = thirdPersonSubjectOcclusionFade;
+          ownedDisposers.push(() => fade.dispose());
+        }
         createBlockWalkableSurfaceMeshesV1(
           blockWalkableSurfaceTopologies,
           materials,
@@ -1086,6 +1168,9 @@ export class BabylonWorldRuntime {
         camera,
         scene,
         physicsWorldQuery,
+        thirdPersonSubjectOcclusionFade === undefined
+          ? {}
+          : { thirdPersonOcclusionStrategy: "subject-occlusion-fade" },
       ));
       let runtime: BabylonWorldRuntime | undefined;
 
@@ -1238,6 +1323,10 @@ export class BabylonWorldRuntime {
                           request.cameraContext,
                           runtime.characterFor(subject.entityId).springArm,
                         );
+                        runtime.updateThirdPersonSubjectOcclusionFade(
+                          sample,
+                          FIXED_TIME_STEP_SECONDS,
+                        );
                       }
                       latestGoldenCameraContextsByEntityId.set(
                         subject.entityId,
@@ -1334,6 +1423,7 @@ export class BabylonWorldRuntime {
         subjectVisuals,
         camera,
         cameraComponent,
+        thirdPersonSubjectOcclusionFade,
         terrainShape,
         aggregates,
         staticCollisionMeshes,
@@ -1403,6 +1493,22 @@ export class BabylonWorldRuntime {
       this.commitFixedTick();
     }
     return this.snapshot();
+  }
+
+  consumeFixedInputFailureDiagnostic():
+    BabylonFixedInputFailureDiagnosticV1 | undefined {
+    const diagnostic = this.latestFixedInputFailureDiagnostic;
+    this.latestFixedInputFailureDiagnostic = undefined;
+    return diagnostic;
+  }
+
+  supportObservationDiagnostic(
+    entityId: string,
+  ): import("./babylon-character-body-port").BabylonCharacterBodySupportObservationDiagnosticV1 | undefined {
+    const controller = this.controllerFor(entityId);
+    return isGoldenHumanoidControllerV1(controller)
+      ? controller.supportObservationDiagnostic()
+      : undefined;
   }
 
   [BABYLON_TRAVERSAL_RUNTIME_INTERNAL](): BabylonTraversalRuntimeInternalV1 {
@@ -2283,13 +2389,31 @@ export class BabylonWorldRuntime {
       this.pendingCameraHeadingLockBeforeNextTick;
     const beforePendingPublishedCameraViewSyncBeforeNextTick =
       this.pendingPublishedCameraViewSyncBeforeNextTick;
+    const beforeControllerStateHashByEntityId = Object.freeze(Object.fromEntries(
+      this.runtimeSubjects.map(({ entityId }) => {
+        const controller = this.controllerFor(entityId);
+        if (!isGoldenHumanoidControllerV1(controller)) {
+          throw new Error(
+            "3C_INPUT_INVALID: Golden prepared publication cannot include a legacy movement owner.",
+          );
+        }
+        return [entityId, controller.movementSnapshot().stateHash] as const;
+      }),
+    ));
+    this.latestFixedInputFailureDiagnostic = undefined;
     this.preparedGoldenFixedInput = Object.freeze({
       beforeRuntimeProjection,
       beforeWorldProjection,
+      beforeGameplayPublishedState: this.gameplayPublishedState,
       beforeCameraTransactionState,
       beforeCameraFovRadians,
+      beforeActiveInputActions: Object.freeze([...this.activeInputActions]),
+      beforeActiveInputAxes: Object.freeze({ ...this.activeInputAxes }),
+      beforePrimaryActionWasActive: this.primaryActionWasActive,
+      beforeAppliedCameraViewStateRevision: this.appliedCameraViewStateRevision,
       beforePendingCameraHeadingLockBeforeNextTick,
       beforePendingPublishedCameraViewSyncBeforeNextTick,
+      beforeControllerStateHashByEntityId,
     });
     let projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
@@ -2300,14 +2424,30 @@ export class BabylonWorldRuntime {
         admittedActionProjection,
       );
     } catch (error) {
+      const initialFailure = this.fixedInputFailureDiagnostic(
+        "prepare",
+        admittedInput.actions,
+        beforeRuntimeProjection,
+        error,
+      );
       try {
-        await this.restoreGoldenPreparedFixedInput();
+        if (!this.restoreGoldenPreparedFixedInputWithoutReplay()) {
+          await this.restoreGoldenPreparedFixedInput();
+        }
       } catch (rollbackError) {
+        const sanitizedRollback = sanitizedRuntimeFailure(rollbackError);
+        this.latestFixedInputFailureDiagnostic = Object.freeze({
+          ...initialFailure,
+          stage: "rollback",
+          rollbackErrorCode: sanitizedRollback.errorCode,
+          rollbackErrorMessage: sanitizedRollback.errorMessage,
+        });
         throw new AggregateError(
           [error, rollbackError],
           "Golden Runtime Tick prepare failed and its checkpoint could not be restored.",
         );
       }
+      this.latestFixedInputFailureDiagnostic = initialFailure;
       throw error;
     }
     let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
@@ -2337,6 +2477,93 @@ export class BabylonWorldRuntime {
         return abortPromise;
       },
     });
+  }
+
+  private fixedInputFailureDiagnostic(
+    stage: BabylonFixedInputFailureDiagnosticV1["stage"],
+    actions: readonly SemanticInputActionV1[],
+    beforeRuntimeProjection: BabylonRuntimeProjectionV1,
+    error: unknown,
+  ): BabylonFixedInputFailureDiagnosticV1 {
+    const sanitized = sanitizedRuntimeFailure(error);
+    const possession = beforeRuntimeProjection.possessionTarget;
+    const controlledSubject = possession.mode === "possessed"
+      ? beforeRuntimeProjection.subjectStatesByEntityId[
+        possession.controlledEntityId
+      ]
+      : undefined;
+    return Object.freeze({
+      schemaVersion: 1,
+      stage,
+      tick: beforeRuntimeProjection.tick + 1,
+      actions: Object.freeze([...actions]),
+      ...sanitized,
+      ...(controlledSubject === undefined
+        ? {}
+        : {
+            controlledSubject: Object.freeze({
+              entityId: possession.mode === "possessed"
+                ? possession.controlledEntityId
+                : "",
+              positionMetersXYZ: Object.freeze([
+                ...controlledSubject.positionMetersXYZ,
+              ]) as RuntimeVec3V1,
+              velocityMetersPerSecondXYZ: Object.freeze([
+                ...controlledSubject.velocityMetersPerSecondXYZ,
+              ]) as RuntimeVec3V1,
+              activeActionId: controlledSubject.activeActionId,
+              grounded: controlledSubject.locomotion?.status === "active"
+                ? controlledSubject.locomotion.supportMode !== "unsupported"
+                : controlledSubject.locomotionMode !== "airborne",
+            }),
+          }),
+    });
+  }
+
+  private restoreGoldenPreparedFixedInputWithoutReplay(): boolean {
+    const prepared = this.preparedGoldenFixedInput;
+    if (prepared === undefined) return false;
+    for (const subject of this.runtimeSubjects) {
+      const controller = this.controllerFor(subject.entityId);
+      if (!isGoldenHumanoidControllerV1(controller)) return false;
+      if (
+        controller.movementSnapshot().stateHash !==
+          prepared.beforeControllerStateHashByEntityId[subject.entityId]
+      ) return false;
+    }
+    const retryTick = prepared.beforeRuntimeProjection.tick + 1;
+    for (const subject of this.runtimeSubjects) {
+      const controller = this.controllerFor(subject.entityId);
+      if (!isGoldenHumanoidControllerV1(controller)) return false;
+      controller.admitRolledBackTickRetry(retryTick);
+    }
+    this.gameplayPublishedState = prepared.beforeGameplayPublishedState;
+    this.activeInputActions = prepared.beforeActiveInputActions;
+    this.activeInputAxes = prepared.beforeActiveInputAxes;
+    this.primaryActionWasActive = prepared.beforePrimaryActionWasActive;
+    this.appliedCameraViewStateRevision =
+      prepared.beforeAppliedCameraViewStateRevision;
+    this.pendingCameraHeadingLockBeforeNextTick =
+      prepared.beforePendingCameraHeadingLockBeforeNextTick;
+    this.pendingPublishedCameraViewSyncBeforeNextTick =
+      prepared.beforePendingPublishedCameraViewSyncBeforeNextTick;
+    this.cameraComponent.restoreTransactionState(
+      prepared.beforeCameraTransactionState,
+    );
+    this.camera.position.copyFromFloats(
+      prepared.beforeRuntimeProjection.camera.positionMetersXYZ[0],
+      prepared.beforeRuntimeProjection.camera.positionMetersXYZ[1],
+      prepared.beforeRuntimeProjection.camera.positionMetersXYZ[2],
+    );
+    this.camera.fov = prepared.beforeCameraFovRadians;
+    this.latestRenderReadyReceipt = undefined;
+    const restoredProjection = this.snapshot();
+    if (
+      sha256CanonicalJson(restoredProjection) !==
+        sha256CanonicalJson(prepared.beforeRuntimeProjection)
+    ) return false;
+    this.preparedGoldenFixedInput = undefined;
+    return true;
   }
 
   private async restoreGoldenPreparedFixedInput(): Promise<void> {
@@ -3176,12 +3403,25 @@ export class BabylonWorldRuntime {
   ): BabylonArtifactCaptureResultV1 {
     this.assertUsable();
     this.updateCamera();
-    return captureBabylonArtifactViewV1({
-      scene: this.scene,
-      engine: this.engine,
-      camera: this.camera,
-      request,
-    });
+    const suspendSubjectOcclusionFade = request.kind === "top-down" ||
+      request.kind === "entity-triview";
+    const subjectOcclusionFadeWasEnabled =
+      this.thirdPersonSubjectOcclusionFade?.snapshot().enabled === true;
+    if (suspendSubjectOcclusionFade) {
+      this.thirdPersonSubjectOcclusionFade?.setEnabled(false);
+    }
+    try {
+      return captureBabylonArtifactViewV1({
+        scene: this.scene,
+        engine: this.engine,
+        camera: this.camera,
+        request,
+      });
+    } finally {
+      if (suspendSubjectOcclusionFade && subjectOcclusionFadeWasEnabled) {
+        this.thirdPersonSubjectOcclusionFade?.setEnabled(true);
+      }
+    }
   }
 
   async renderFrameWhenReady(): Promise<RenderReadyReceiptV1> {
@@ -3370,6 +3610,7 @@ export class BabylonWorldRuntime {
         context,
         this.characterFor(subject.entityId).springArm,
       );
+      this.updateThirdPersonSubjectOcclusionFade(sample, deltaSeconds);
       return;
     }
     const visual = this.visualFor(subject.entityId);
@@ -3443,6 +3684,30 @@ export class BabylonWorldRuntime {
       committedCameraContext,
       this.characterFor(subject.entityId).springArm,
     );
+    this.updateThirdPersonSubjectOcclusionFade(sample, deltaSeconds);
+  }
+
+  private updateThirdPersonSubjectOcclusionFade(
+    sample: ViewTargetSampleV1,
+    deltaSeconds: number,
+  ): void {
+    const fade = this.thirdPersonSubjectOcclusionFade;
+    if (fade === undefined) return;
+    const targetSubject = this.runtimeSubjects.find(
+      ({ entityId }) => entityId === sample.entityId,
+    ) ?? this.runtimeSubjects.find(
+      ({ entityId }) => entityId === sample.controlledEntityId,
+    );
+    if (targetSubject === undefined) return;
+    fade.update({
+      cameraPosition: this.camera.position,
+      subjectOriginPositionMetersXYZ: sample.targetPositionMetersXYZ,
+      colliderCenterOffsetMetersXYZ:
+        targetSubject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+      colliderHeightMeters: targetSubject.collider.heightMeters,
+      colliderRadiusMeters: targetSubject.collider.radiusMeters,
+      deltaSeconds,
+    });
   }
 
   setCameraViewPreference(
@@ -3562,6 +3827,43 @@ export class BabylonWorldRuntime {
     this.cameraComponent.resetView();
     this.latestRenderReadyReceipt = undefined;
     this.updateCamera();
+    return this.snapshot();
+  }
+
+  relocateControlledSubjectForCapture(input: Readonly<{
+    positionMetersXYZ: RuntimeVec3V1;
+    facingYawRadians: number;
+  }>): BabylonRuntimeProjectionV1 {
+    this.assertUsable();
+    if (input.positionMetersXYZ.length !== 3 ||
+        !input.positionMetersXYZ.every(Number.isFinite) ||
+        !Number.isFinite(input.facingYawRadians)) {
+      throw new RangeError("Capture start state must contain a finite position and facing.");
+    }
+    const controlledEntityId = this.controlledEntityId();
+    if (controlledEntityId === undefined) {
+      throw new Error("WORLDKIT_RUNTIME_CONTROL_TARGET_NOT_FOUND");
+    }
+    const controller = this.controllerFor(controlledEntityId);
+    controller.resetAt(
+      Object.freeze(input.positionMetersXYZ.map(canonicalizeSignedZero)) as RuntimeVec3V1,
+      canonicalizeSignedZero(input.facingYawRadians),
+      this.tick,
+    );
+    this.activeInputActions = EMPTY_INPUT_ACTIONS;
+    this.activeInputAxes = EMPTY_INPUT_AXES;
+    this.primaryActionWasActive = false;
+    for (const visual of this.subjectVisuals) visual.resetAnimation();
+    this.cameraComponent.reset();
+    // A Golden humanoid Camera Context caches the committed Subject pose. A
+    // capture relocation does not advance Tick, so retaining that cache would
+    // make the freshly reset Camera bind to the previous Segment's position.
+    // Drop both context families before the first relocated Camera update.
+    this.latestGoldenCameraContextsByEntityId.clear();
+    this.latestLegacyCameraContextsByEntityId.clear();
+    this.updateBlockWorldCollisionResidency();
+    this.latestRenderReadyReceipt = undefined;
+    this.updateCameraForEntity(controlledEntityId);
     return this.snapshot();
   }
 

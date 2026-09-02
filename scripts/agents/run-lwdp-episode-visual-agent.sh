@@ -25,10 +25,14 @@ visual_root="$episode_root/visual"
 whitebox_root="$episode_root/whitebox"
 public_root="$project_root/apps/playground/public/scene-plans/$scene_id"
 mkdir -p "$visual_root"
-for required in "$whitebox_root/segment-00-first-frame.png" "$whitebox_root/segment-01-first-frame.png" "$whitebox_root/segment-02-first-frame.png" "$scene_root/triviews/whitebox-triview-manifest.json" "$scene_root/scene-brief.md" "$scene_root/visual-generation-prompts.json" "$scene_root/visual-identity-palette.json" "$scene_root/styled-opening-frame.png" "$public_root/reference-0.png"; do
+for required in "$whitebox_root/segment-00-first-frame.png" "$whitebox_root/segment-01-first-frame.png" "$whitebox_root/segment-02-first-frame.png" "$whitebox_root/segment-03-first-frame.png" "$whitebox_root/segment-04-first-frame.png" "$whitebox_root/segment-05-first-frame.png" "$scene_root/triviews/whitebox-triview-manifest.json" "$scene_root/scene-brief.md" "$scene_root/visual-generation-prompts.json" "$scene_root/visual-identity-palette.json" "$scene_root/styled-opening-frame.png" "$public_root/reference-0.png"; do
   [[ -f "$required" && -s "$required" && ! -L "$required" ]] || { echo "Missing episode visual input: $required" >&2; exit 3; }
 done
-if [[ -z "${WORLDKIT_LWDP_ENV_FILE:-}" && -f "$project_root/.codex-tmp/runtime-config/lwdp.env" ]]; then export WORLDKIT_LWDP_ENV_FILE="$project_root/.codex-tmp/runtime-config/lwdp.env"; fi
+unset LWDP_GENERATION_API_TOKEN LWDP_API_BASE LWDP_USER_ID
+export WORLDKIT_LWDP_ENV_FILE="$project_root/.codex-tmp/runtime-config/lwdp.env"
+[[ -s "$WORLDKIT_LWDP_ENV_FILE" && ! -L "$WORLDKIT_LWDP_ENV_FILE" ]] || {
+  echo "Project-local LWDP runtime config is missing or unsafe." >&2; exit 3;
+}
 relative_episode_root="${episode_root#"$project_root"/}"
 target_asset_args=(); target_output_args=(); target_table=""; target_count=0
 while IFS=$'\t' read -r visual_target_id whitebox_path _ target_kind target_name target_description; do
@@ -38,22 +42,25 @@ while IFS=$'\t' read -r visual_target_id whitebox_path _ target_kind target_name
   target_asset_args+=(--asset "$asset_id::$whitebox_path::image::image/png")
   target_output_args+=(--output "$relative_episode_root/visual/triviews/$visual_target_id/styled-triview.png::$visual_root/triviews/$visual_target_id/styled-triview.png::image/png")
   target_table+="- asset=$asset_id; visualTargetId=$visual_target_id; kind=${target_kind:-unknown}; name=${target_name:-$visual_target_id}; description=${target_description:-none}; output=$relative_episode_root/visual/triviews/$visual_target_id/styled-triview.png"$'\n'
-done < <(node scripts/list-visual-triview-inputs.mjs --scene-root "$scene_root" --format tsv --limit 5)
+done < <(node scripts/visual/list-visual-triview-inputs.mjs --scene-root "$scene_root" --format tsv --limit 5)
 [[ "$target_count" -ge 1 && "$target_count" -le 5 ]] || exit 3
 temporary_root="$project_root/.codex-tmp"; mkdir -p "$temporary_root"; task_tmp="$(mktemp -d "$temporary_root/episode-visual.XXXXXX")"
 trap 'case "$task_tmp" in "$temporary_root"/episode-visual.*) /bin/rm -rf -- "$task_tmp" ;; esac' EXIT
 instruction_file="$task_tmp/instruction.txt"
 instruction="Use .codex/skills/worldkit-episode-visual-reconstructor/SKILL.md as the complete guide.
 
-Create the three event-free styled Segment opening frames and one shared styled tri-view per declared complete target for scene '$scene_id', episode '$episode_id'. Use the built-in image generation tool. Do not create another task or generate video.
+Create six event-free styled opening frames for captures 00 through 05, plus one shared styled tri-view per declared complete target for scene '$scene_id', episode '$episode_id'. Use the built-in image generation tool. Do not create another task or generate video.
 
 Attached roles in order:
 1. segment-00-whitebox-first-frame
 2. segment-01-whitebox-first-frame
 3. segment-02-whitebox-first-frame
-4. user-first-frame appearance authority
-5. base-styled-opening-frame from the accepted original Visual Reconstructor
-6+. complete whitebox tri-view targets
+4. segment-03-whitebox-first-frame
+5. segment-04-whitebox-first-frame
+6. segment-05-whitebox-first-frame
+7. user-first-frame appearance authority
+8. base-styled-opening-frame from the accepted original Visual Reconstructor
+9+. complete whitebox tri-view targets
 
 Mandatory inherited context:
 - artifacts/scenes/$scene_id/visual-generation-prompts.json is the case-specific base Prompt. Preserve its final identity, materials, continuous-surface reconstruction, lighting, art style, protected movement medium, and helper-removal policy. Adapt only camera-relative measurements and visible near/middle/far envelope descriptions to each Segment whitebox frame.
@@ -70,6 +77,9 @@ visual_input_material="$(shasum -a 256 \
   "$whitebox_root/segment-00-first-frame.png" \
   "$whitebox_root/segment-01-first-frame.png" \
   "$whitebox_root/segment-02-first-frame.png" \
+  "$whitebox_root/segment-03-first-frame.png" \
+  "$whitebox_root/segment-04-first-frame.png" \
+  "$whitebox_root/segment-05-first-frame.png" \
   "$public_root/reference-0.png" \
   "$scene_root/visual-generation-prompts.json" \
   "$scene_root/visual-identity-palette.json" \
@@ -78,7 +88,7 @@ visual_input_material="$(shasum -a 256 \
 while IFS=$'\t' read -r _ whitebox_path _ _ _ _; do
   [[ -f "$whitebox_path" ]] || continue
   visual_input_material+="$(shasum -a 256 "$whitebox_path")"
-done < <(node scripts/list-visual-triview-inputs.mjs --scene-root "$scene_root" --format tsv --limit 5)
+done < <(node scripts/visual/list-visual-triview-inputs.mjs --scene-root "$scene_root" --format tsv --limit 5)
 visual_input_hash="$(printf '%s' "$visual_input_material" | shasum -a 256 | cut -c1-20)"
 task_id="episode-visual-$visual_input_hash"
 attempt_suffix=""
@@ -93,6 +103,9 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --asset "segment-00-whitebox-first-frame::$whitebox_root/segment-00-first-frame.png::image::image/png" \
   --asset "segment-01-whitebox-first-frame::$whitebox_root/segment-01-first-frame.png::image::image/png" \
   --asset "segment-02-whitebox-first-frame::$whitebox_root/segment-02-first-frame.png::image::image/png" \
+  --asset "segment-03-whitebox-first-frame::$whitebox_root/segment-03-first-frame.png::image::image/png" \
+  --asset "segment-04-whitebox-first-frame::$whitebox_root/segment-04-first-frame.png::image::image/png" \
+  --asset "segment-05-whitebox-first-frame::$whitebox_root/segment-05-first-frame.png::image::image/png" \
   --asset "user-first-frame::$public_root/reference-0.png::image::image/png" \
   --asset "base-styled-opening-frame::$scene_root/styled-opening-frame.png::image::image/png" \
   "${target_asset_args[@]}" \
@@ -100,6 +113,9 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --output "$relative_episode_root/visual/segment-00-styled-opening-frame.png::$visual_root/segment-00-styled-opening-frame.png::image/png" \
   --output "$relative_episode_root/visual/segment-01-styled-opening-frame.png::$visual_root/segment-01-styled-opening-frame.png::image/png" \
   --output "$relative_episode_root/visual/segment-02-styled-opening-frame.png::$visual_root/segment-02-styled-opening-frame.png::image/png" \
+  --output "$relative_episode_root/visual/segment-03-styled-opening-frame.png::$visual_root/segment-03-styled-opening-frame.png::image/png" \
+  --output "$relative_episode_root/visual/segment-04-styled-opening-frame.png::$visual_root/segment-04-styled-opening-frame.png::image/png" \
+  --output "$relative_episode_root/visual/segment-05-styled-opening-frame.png::$visual_root/segment-05-styled-opening-frame.png::image/png" \
   "${target_output_args[@]}"
 node scripts/episodes/finalize-episode-visuals.mjs --scene-id "$scene_id" --episode-id "$episode_id" --episode-root "$episode_root" --scene-root "$scene_root"
 echo "WORLDKIT_EPISODE_STAGE visual-ready"

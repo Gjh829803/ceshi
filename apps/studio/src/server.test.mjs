@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
@@ -14,11 +14,16 @@ import {
   createSceneId,
   createKeyedSerialExecutor,
   createStudio as createStudioProduction,
+  defaultManagedPlaygroundPort,
   decodeImagePayload,
   deriveReliabilityMetrics,
   deriveWorldGenerationFailureReason,
   deriveWorkflowMetrics,
   deriveWorkflowTrajectory,
+  evaluateRecordTransition,
+  expectedCloudSceneManifestS3Uri,
+  hasRemoteCloudHostResumeInputs,
+  hasRemoteCloudPlannerResumeInputs,
   isAllowedSceneAsset,
   isAuthorizedHeader,
   isRecoverableVisualFinalizationFailure,
@@ -36,11 +41,29 @@ import {
 // production-chain test and its dedicated adversarial contract tests.
 const createStudio = (options = {}) => createStudioProduction({
   verifyHostedWhiteboxArtifactsImplementation: async () => true,
+  cloudSceneExecutionEnabled: false,
+  additionalTrustedCapturePublicKeyPaths: [],
   ...options,
 });
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const temporaryRoots = [];
+
+test("derives an isolated managed Playground port from each Studio port", () => {
+  assert.equal(defaultManagedPlaygroundPort(4174), 5174);
+  assert.equal(defaultManagedPlaygroundPort(4597), 5597);
+  assert.throws(() => defaultManagedPlaygroundPort(64_536), /leave room/);
+});
+
+test("derives the only admissible terminal Scene manifest from the frozen output prefix", () => {
+  assert.equal(
+    expectedCloudSceneManifestS3Uri({
+      remoteOutputS3Prefix: "s3://bucket/cloud-scenes/demo/attempt-1/",
+    }),
+    "s3://bucket/cloud-scenes/demo/attempt-1/stages/scene-production/cloud-artifact-manifest.json",
+  );
+  assert.equal(expectedCloudSceneManifestS3Uri({}), null);
+});
 
 test("normalizes and deduplicates additional capture trust public keys", () => {
   const primary = path.resolve("/tmp/worldkit-primary-trust.pem");
@@ -53,6 +76,321 @@ test("normalizes and deduplicates additional capture trust public keys", () => {
     () => normalizeTrustedCapturePublicKeyPaths(primary, [""]),
     /non-empty strings/,
   );
+});
+
+test("keeps ready as an absorbing lifecycle state and rejects stale remote writers", () => {
+  const ready = {
+    id: "absorbing-ready-world",
+    status: "ready",
+    stage: "ready",
+    attempt: 2,
+    recordRevision: 17,
+    remoteExecutionId: "scene-execution-2",
+    remoteJobId: "gen_current",
+  };
+  assert.deepEqual(
+    evaluateRecordTransition(ready, {
+      status: "failed",
+      stage: "failed",
+      error: "late recovery failed",
+    }, {
+      expectedAttempt: 2,
+      expectedStatuses: ["remote-pending", "interrupted"],
+    }),
+    { allowed: false, reason: "already-complete" },
+  );
+  assert.deepEqual(
+    evaluateRecordTransition({ ...ready, status: "remote-pending" }, {
+      status: "failed",
+    }, {
+      expectedAttempt: 1,
+    }),
+    { allowed: false, reason: "attempt-drift" },
+  );
+  assert.deepEqual(
+    evaluateRecordTransition({ ...ready, status: "remote-pending" }, {
+      status: "failed",
+    }, {
+      expectedRemoteJobId: "gen_old",
+    }),
+    { allowed: false, reason: "job-drift" },
+  );
+  assert.deepEqual(
+    evaluateRecordTransition(ready, { plannerReview: { status: "approved" } }),
+    { allowed: true, reason: "applied" },
+  );
+});
+
+test("allows Cloud Host-only recovery only after the complete Builder handoff exists", () => {
+  const base = {
+    remoteExecutionId: "execution-builder-complete",
+    remoteArtifactManifestS3Uri: "s3://worldkit-test/manifest.json",
+    remoteRequestS3Uri: "s3://worldkit-test/request.json",
+    remoteOutputS3Prefix: "s3://worldkit-test/output",
+    referenceImage: { fileName: "reference.png" },
+  };
+  const requiredPaths = [
+    "scene/scene-brief.md",
+    "scene/planner-self-check.json",
+    "scene/visual-identity-palette.json",
+    "scene/world.mjs",
+    "scene/authoring.json",
+    "scene/implementation-map.draft.json",
+    "scene/builder-self-check.json",
+    "scene/builder-top-down-comparison.png",
+    "scene/builder-entry-comparison.png",
+    "scene-plan/entry-whitebox-target.png",
+    "scene-plan/world-plan.png",
+    "scene-plan/reference-0.png",
+  ];
+  const remoteArtifacts = requiredPaths.map((artifactPath) => ({ path: artifactPath }));
+  assert.equal(hasRemoteCloudHostResumeInputs({
+    ...base,
+    remoteArtifacts: remoteArtifacts.filter(({ path: artifactPath }) =>
+      artifactPath !== "scene/world.mjs"),
+  }), false);
+  assert.equal(hasRemoteCloudHostResumeInputs({ ...base, remoteArtifacts }), true);
+  assert.equal(hasRemoteCloudHostResumeInputs({
+    ...base,
+    remoteArtifacts: remoteArtifacts.filter(({ path: artifactPath }) =>
+      artifactPath !== "scene-plan/reference-0.png"),
+  }), false);
+  const plannerArtifacts = remoteArtifacts.filter(({ path: artifactPath }) =>
+    ![
+      "scene/world.mjs",
+      "scene/authoring.json",
+      "scene/implementation-map.draft.json",
+      "scene/builder-self-check.json",
+      "scene/builder-top-down-comparison.png",
+      "scene/builder-entry-comparison.png",
+    ].includes(artifactPath));
+  assert.equal(hasRemoteCloudPlannerResumeInputs({
+    ...base,
+    remoteArtifacts: plannerArtifacts,
+  }), true);
+  assert.equal(hasRemoteCloudHostResumeInputs({
+    ...base,
+    remoteArtifacts: plannerArtifacts,
+  }), false);
+});
+
+test("admits only one Studio writer for a shared durable data root", async () => {
+  const dataRoot = await temporaryRoot(".test-data-writer-lease-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-writer-lease-");
+  const first = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  await first.initialize();
+  const second = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  await assert.rejects(second.initialize(), /STUDIO_WRITER_ALREADY_ACTIVE/);
+  await first.shutdown();
+  const replacement = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  await replacement.initialize();
+  await replacement.shutdown();
+});
+
+test("releases the Studio writer lease when initialization fails", async () => {
+  const dataRoot = await temporaryRoot(".test-data-writer-init-failure-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-writer-init-failure-");
+  const builtinRoot = path.join(
+    fakeRepoRoot,
+    "apps/studio/builtin-test-sets/broken-test-set",
+  );
+  await mkdir(builtinRoot, { recursive: true });
+  await writeFile(path.join(builtinRoot, "manifest.json"), `${JSON.stringify({
+    kind: "worldkit-builtin-test-set",
+    schemaVersion: 1,
+    id: "broken-test-set",
+    name: "Broken",
+    prompt: "Broken fixture",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    images: [{
+      id: "image-001-dead",
+      extension: "png",
+      sourceFile: "missing.png",
+      contentSha256: "0".repeat(64),
+      size: 1,
+    }],
+  })}\n`);
+  const failing = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: true,
+    importBuiltinResults: false,
+  });
+  await assert.rejects(failing.initialize(), /Built-in test image is missing/);
+  await rm(path.join(fakeRepoRoot, "apps/studio/builtin-test-sets"), {
+    recursive: true,
+    force: true,
+  });
+  const replacement = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  await replacement.initialize();
+  await replacement.shutdown();
+});
+
+test("routes a cloud world through Cloud Scene Execution and serves remote Preview artifacts", async () => {
+  const dataRoot = await temporaryRoot(".test-data-cloud-scene-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-cloud-scene-");
+  const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+  let localSpawned = false;
+  const executionId = "cloud-execution-001";
+  const buffers = new Map();
+  const studio = createStudioProduction({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    verifyHostedWhiteboxArtifactsImplementation: async () => true,
+    loadCloudSceneProductionConfigImplementation: async () => ({
+      workerImage: `worker@sha256:${"a".repeat(64)}`,
+      outputS3Root: "s3://worldkit-test/cloud-scenes",
+      namespace: "lwdp",
+    }),
+    loadLwdpConfigImplementation: async () => ({
+      baseUrl: "https://lwdp.test", token: "test", userId: "worldkit-test",
+    }),
+    worldSpawnImplementation: () => {
+      localSpawned = true;
+      throw new Error("cloud records must not spawn the local Scene pipeline");
+    },
+    executeStudioCloudSceneImplementation: async (input) => {
+      await input.onSubmitted({
+        executionId,
+        outputS3Prefix: "s3://worldkit-test/cloud-scenes/scene/attempt-1",
+      });
+      return {
+        execution: { execution_id: executionId, status: "succeeded" },
+        stages: { stages: [{ stage_id: "scene-production", artifacts: [{
+          role: "worldkit-cloud-artifact-manifest",
+          s3_uri: "s3://worldkit-test/cloud-scenes/manifest.json",
+        }] }] },
+        manifestS3Uri: "s3://worldkit-test/cloud-scenes/manifest.json",
+      };
+    },
+    readCloudArtifactManifestImplementation: async (_uri, { expectedSceneId }) => {
+      const authoringSpec = {
+        kind: "worldkit-authoring-spec", schemaVersion: 4,
+        id: expectedSceneId, seed: 1,
+      };
+      const authoringSpecHash = `sha256:${createHash("sha256")
+        .update(canonicalJson(authoringSpec)).digest("hex")}`;
+      const implementationMap = {
+        kind: "worldkit-scene-brief-implementation-map",
+        schemaVersion: 1,
+        sceneId: expectedSceneId,
+        sceneBriefHash: `sha256:${"b".repeat(64)}`,
+        authoringSpecId: expectedSceneId,
+        authoringSpecHash,
+        visualTargetMappings: [{
+          visualTargetId: "player-subject",
+          runtimeEntityIds: ["player"],
+          frontDirectionWorldXZ: [0, -1],
+        }],
+        visualCaptureGroups: [{
+          visualTargetId: "player-subject",
+          runtimeEntityIds: ["player"],
+          role: "primary-subject",
+          semanticClassId: "subject.player",
+          identityColor: "#E85D5D",
+          frontDirectionWorldXZ: [0, -1],
+        }],
+      };
+      const values = {
+        "scene/authoring.json": Buffer.from(JSON.stringify(authoringSpec)),
+        "scene/scene-implementation-map.json": Buffer.from(JSON.stringify(implementationMap)),
+        "scene/world.build.json": Buffer.from("{}"),
+        "scene/opening-frame.png": png,
+        "scene/runtime-snapshot.json": Buffer.from("{}"),
+        "scene/whitebox-capture-receipt.json": Buffer.from("{}"),
+      };
+      const artifacts = Object.entries(values).map(([artifactPath, bytes]) => {
+        buffers.set(artifactPath, bytes);
+        return {
+          path: artifactPath,
+          contentType: artifactPath.endsWith(".png") ? "image/png" : "application/json",
+          byteSize: bytes.length,
+          sha256: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+          s3Uri: `s3://worldkit-test/cloud-scenes/${artifactPath}`,
+          producerStage: "scene-production",
+          required: true,
+        };
+      });
+      return {
+        kind: "worldkit-cloud-artifact-manifest",
+        schemaVersion: 1,
+        sceneId: expectedSceneId,
+        executionId,
+        stageId: "scene-production",
+        artifacts,
+      };
+    },
+    readVerifiedCloudArtifactImplementation: async (_record, artifactPath) =>
+      buffers.get(artifactPath) ?? null,
+    streamCloudArtifactImplementation: async (response, artifact) => {
+      const bytes = buffers.get(artifact.path);
+      response.writeHead(200, { "content-type": artifact.contentType });
+      response.end(bytes);
+      return true;
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Cloud World", prompt: "Build in one Cloud Worker." }),
+    })).json()).world;
+    let detail;
+    const deadline = Date.now() + 2_000;
+    do {
+      detail = await (await fetch(`${origin}/api/worlds/${created.id}`)).json();
+      if (detail.world.status === "ready") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    } while (Date.now() < deadline);
+    assert.equal(localSpawned, false);
+    assert.equal(detail.world.status, "ready", JSON.stringify(detail.world));
+    assert.equal(detail.world.whiteboxRuntimeAvailable, true);
+    assert.equal(detail.world.remoteExecutionId, executionId);
+    const preview = await fetch(`${origin}/api/worlds/${created.id}/preview-bootstrap`);
+    assert.equal(preview.status, 200, await preview.text());
+    const opening = await fetch(`${origin}/api/worlds/${created.id}/deliverables/opening-frame`);
+    assert.equal(opening.status, 200);
+    assert.deepEqual(Buffer.from(await opening.arrayBuffer()), png);
+  } finally {
+    await studio.shutdown();
+  }
 });
 
 test("surfaces actionable World generation failures instead of only child exit codes", () => {
@@ -85,6 +423,11 @@ ERROR: Selected model is at capacity. Please try a different model.
   assert.equal(deriveWorldGenerationFailureReason(`
 Error: LWDP task failures: builder-1: missing required outputs: artifacts/scenes/demo/authoring.json, artifacts/scenes/demo/map.json
 `, { code: 1 }), "云端 Codex 已结束，但缺少声明的必需产物：artifacts/scenes/demo/authoring.json, artifacts/scenes/demo/map.json");
+
+  assert.match(deriveWorldGenerationFailureReason(`
+Error: LWDP task failures: builder-1: missing required outputs: artifacts/scenes/demo/world.mjs
+{"status":"failed","diagnostics":[{"code":"BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED"}]}
+`, { code: 1 }), /当前 Agent Authoring Catalog.*阻止静默降级/);
 
   assert.match(deriveWorldGenerationFailureReason(
     "WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING",
@@ -127,7 +470,9 @@ test("keeps a non-terminal LWDP timeout in remote-pending instead of failed", as
       child.kill = () => true;
       process.nextTick(() => {
         child.stdout.write("WORLDKIT_STAGE planner\n");
-        child.stdout.write("WORLDKIT_LWDP_JOB planner planner-test gen_pending dispatch=single-task-fast-path taskAttempt=1/1\n");
+        child.stdout.write("WORLDKIT_LWDP_JOB planner planner-test gen_capacity dispatch=single-task-fast-path taskAttempt=1/3\n");
+        child.stdout.write("WORLDKIT_LWDP_STAGE_RETRY planner 2 3 reason=capacity previousJob=gen_capacity delayMs=30000\n");
+        child.stdout.write("WORLDKIT_LWDP_JOB planner planner-test gen_pending dispatch=single-task-fast-path taskAttempt=2/3\n");
         child.stdout.write("WORLDKIT_LWDP_REMOTE_PENDING planner planner-test gen_pending request-test s3://bucket/worldkit/planner 2700000 running {\"total\":1,\"queued\":1,\"running\":0}\n");
         child.stdout.end();
         child.stderr.end();
@@ -162,6 +507,32 @@ test("keeps a non-terminal LWDP timeout in remote-pending instead of failed", as
     assert.equal(persisted.remoteJobId, "gen_pending");
     assert.equal(persisted.remoteTaskId, "planner-test");
     assert.ok(Date.parse(persisted.remotePendingDeadlineAt) > Date.parse(persisted.remotePendingSince));
+    let retryEvent = null;
+    const retryEventDeadline = Date.now() + 2_000;
+    while (Date.now() < retryEventDeadline) {
+      const serializedEvents = await readFile(
+        path.join(dataRoot, "worlds", created.id, "trajectory.jsonl"),
+        "utf8",
+      ).catch(() => "");
+      retryEvent = serializedEvents.split(/\r?\n/).filter(Boolean)
+        .map((line) => JSON.parse(line))
+        .find((event) => event.kind === "retry" && event.reason === "capacity");
+      if (retryEvent) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual({
+      stage: retryEvent?.stage,
+      attempt: retryEvent?.attempt,
+      limit: retryEvent?.limit,
+      previousJobId: retryEvent?.previousJobId,
+      delayMs: retryEvent?.delayMs,
+    }, {
+      stage: "planner",
+      attempt: 2,
+      limit: 3,
+      previousJobId: "gen_capacity",
+      delayMs: 30_000,
+    });
   } finally {
     await studio.shutdown();
   }
@@ -251,6 +622,425 @@ test("migrates a legacy timeout failure back to remote-pending while its Job is 
   }
 });
 
+test("recovers a successful remote-pending Planner using its current stage", async () => {
+  const dataRoot = await temporaryRoot(".test-data-current-stage-planner-recovery-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-current-stage-planner-recovery-");
+  const id = "current-stage-planner-recovery";
+  const recordRoot = path.join(dataRoot, "worlds", id);
+  await mkdir(recordRoot, { recursive: true });
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, id);
+  const timestamp = new Date().toISOString();
+  await Promise.all([
+    writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+      id,
+      sceneId: id,
+      title: "Current-stage Planner recovery",
+      prompt: "Recover the successful Planner delivery.",
+      referenceImage: null,
+      status: "remote-pending",
+      stage: "planner",
+      failedStage: null,
+      codexBackend: "cloud",
+      attempt: 1,
+      origin: "test-set",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      startedAt: timestamp,
+      finishedAt: null,
+      error: "LWDP 云端 Job gen_plannerlate 在 45 分钟后仍为 running；已转入远端对账状态。",
+      captureRequired: true,
+      captureStatus: "pending",
+      triviewStatus: "pending",
+      whiteboxOutcome: null,
+      outcome: null,
+      styledOpeningFrameRequired: false,
+      styledOpeningFrameStatus: "not-required",
+      styledTriviewsRequired: false,
+      styledTriviewsStatus: "not-required",
+      workflowPolicyVersion,
+      remoteJobId: "gen_plannerlate",
+    })),
+    writeFile(path.join(recordRoot, "agent.log"), [
+      "WorldKit Creator Studio",
+      `scene=${id}`,
+      "attempt=1",
+      "mode=full",
+      "",
+      "WORLDKIT_LWDP_JOB planner planner-late gen_plannerlate dispatch=single-task-fast-path taskAttempt=1/3",
+      "WORLDKIT_LWDP_REMOTE_PENDING planner planner-late gen_plannerlate request-late s3://bucket/planner 2700000 running {\"total\":1,\"queued\":1,\"running\":0}",
+      "",
+    ].join("\n")),
+  ]);
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    autoRecoverLateLwdpJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    remoteRecoveryIntervalMs: 60_000,
+    loadLwdpConfigImplementation: async () => ({
+      baseUrl: "https://lwdp.test", token: "test", userId: "worldkit-test",
+    }),
+    lateLwdpRecoveryImplementation: async () => ({
+      jobId: "gen_plannerlate", stage: "planner",
+    }),
+  });
+  const origin = await listen(studio);
+  try {
+    let detail = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      detail = await fetch(`${origin}/api/worlds/${id}`).then((response) => response.json());
+      if (detail.world.status === "queued") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(detail?.world.status, "queued", JSON.stringify(detail?.world));
+    assert.equal(detail?.world.resumeFromStage, "planner");
+    assert.equal(detail?.world.error, null);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("reattaches an interrupted successful Builder and queues Host-only resume", async () => {
+  const dataRoot = await temporaryRoot(".test-data-interrupted-builder-recovery-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-interrupted-builder-recovery-");
+  const id = "interrupted-builder-recovery";
+  const recordRoot = path.join(dataRoot, "worlds", id);
+  await mkdir(recordRoot, { recursive: true });
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, id);
+  const timestamp = new Date().toISOString();
+  await Promise.all([
+    writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+      id,
+      sceneId: id,
+      title: "Interrupted Builder recovery",
+      prompt: "Recover the successful Builder delivery.",
+      referenceImage: null,
+      status: "interrupted",
+      stage: "interrupted",
+      failedStage: "coding-agent",
+      codexBackend: "cloud",
+      attempt: 1,
+      origin: "test-set",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      startedAt: timestamp,
+      finishedAt: timestamp,
+      error: "Creator Studio restarted before this task completed.",
+      captureRequired: true,
+      captureStatus: "pending",
+      triviewStatus: "pending",
+      whiteboxOutcome: null,
+      outcome: "failed",
+      styledOpeningFrameRequired: false,
+      styledOpeningFrameStatus: "not-required",
+      styledTriviewsRequired: false,
+      styledTriviewsStatus: "not-required",
+      workflowPolicyVersion,
+    })),
+    writeFile(path.join(recordRoot, "agent.log"), [
+      "WorldKit Creator Studio",
+      `scene=${id}`,
+      "attempt=1",
+      "mode=full",
+      "",
+      "WORLDKIT_LWDP_JOB coding-agent builder-late gen_builderlate dispatch=single-task-fast-path taskAttempt=1/3",
+      "",
+    ].join("\n")),
+  ]);
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    autoRecoverLateLwdpJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    remoteRecoveryIntervalMs: 60_000,
+    loadLwdpConfigImplementation: async () => ({
+      baseUrl: "https://lwdp.test", token: "test", userId: "worldkit-test",
+    }),
+    lateLwdpRecoveryImplementation: async () => ({
+      jobId: "gen_builderlate", stage: "builder",
+    }),
+  });
+  const origin = await listen(studio);
+  try {
+    let detail = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      detail = await fetch(`${origin}/api/worlds/${id}`).then((response) => response.json());
+      if (detail.world.status === "queued") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(detail?.world.status, "queued", JSON.stringify(detail?.world));
+    assert.equal(detail?.world.resumeFromStage, "block-build");
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("moves a persisted running cloud Job to remote reconciliation after restart", async () => {
+  const dataRoot = await temporaryRoot(".test-data-restart-reattach-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-restart-reattach-");
+  const id = "restart-reattach-world";
+  const recordRoot = path.join(dataRoot, "worlds", id);
+  await mkdir(recordRoot, { recursive: true });
+  const timestamp = new Date().toISOString();
+  await Promise.all([
+    writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+      id,
+      sceneId: id,
+      title: "Restart reattach",
+      prompt: "Keep the submitted Builder Job attached.",
+      referenceImage: null,
+      status: "running",
+      stage: "coding-agent",
+      failedStage: null,
+      codexBackend: "cloud",
+      attempt: 1,
+      origin: "test-set",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      startedAt: timestamp,
+      finishedAt: null,
+      error: null,
+      captureRequired: true,
+      captureStatus: "pending",
+      triviewStatus: "pending",
+      whiteboxOutcome: null,
+      outcome: null,
+      styledOpeningFrameRequired: false,
+      styledOpeningFrameStatus: "not-required",
+      styledTriviewsRequired: false,
+      styledTriviewsStatus: "not-required",
+      workflowPolicyVersion,
+    })),
+    writeFile(path.join(recordRoot, "agent.log"), [
+      "WorldKit Creator Studio",
+      `scene=${id}`,
+      "attempt=1",
+      "mode=full",
+      "",
+      "WORLDKIT_LWDP_JOB planner planner-old gen_plannerold dispatch=single-task-fast-path taskAttempt=1/3",
+      "WORLDKIT_LWDP_REMOTE_PENDING planner planner-old gen_plannerold request-old s3://bucket/planner 2700000 running {\"total\":1,\"queued\":1,\"running\":0}",
+      "WORLDKIT_LWDP_JOB coding-agent builder-restart gen_builderrestart dispatch=single-task-fast-path taskAttempt=1/3",
+      "",
+    ].join("\n")),
+  ]);
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    autoRecoverLateLwdpJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  const origin = await listen(studio);
+  try {
+    const detail = await fetch(`${origin}/api/worlds/${id}`).then((response) => response.json());
+    assert.equal(detail.world.status, "remote-pending");
+    assert.equal(detail.world.stage, "coding-agent");
+    assert.equal(detail.world.failedStage, null);
+    assert.equal(detail.world.remoteJobId, "gen_builderrestart");
+    assert.equal(detail.world.outcome, null);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("reattaches a submitted Cloud Execution by idempotently launching its missing Worker", async () => {
+  const dataRoot = await temporaryRoot(".test-data-cloud-worker-reattach-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-cloud-worker-reattach-");
+  const id = "cloud-worker-reattach-world";
+  const executionId = "execution-worker-reattach-001";
+  const recordRoot = path.join(dataRoot, "worlds", id);
+  await mkdir(recordRoot, { recursive: true });
+  const timestamp = new Date().toISOString();
+  await writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+    id,
+    sceneId: id,
+    title: "Cloud Worker reattach",
+    prompt: "Continue the exact submitted Cloud Execution.",
+    referenceImage: null,
+    status: "running",
+    stage: "preparing",
+    failedStage: null,
+    codexBackend: "cloud",
+    attempt: 1,
+    origin: "test-set",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    startedAt: timestamp,
+    finishedAt: null,
+    error: null,
+    captureRequired: true,
+    captureStatus: "pending",
+    triviewStatus: "pending",
+    whiteboxOutcome: null,
+    outcome: null,
+    styledOpeningFrameRequired: false,
+    styledOpeningFrameStatus: "not-required",
+    styledTriviewsRequired: false,
+    styledTriviewsStatus: "not-required",
+    remoteExecutionId: executionId,
+    remoteRequestS3Uri: "s3://worldkit-test/cloud-scenes/request.json",
+    remoteOutputS3Prefix: "s3://worldkit-test/cloud-scenes/attempt-1",
+    remoteWorkerLaunchStatus: null,
+    workflowPolicyVersion,
+  }));
+  const launchCalls = [];
+  const dispatchCalls = [];
+  const studio = createStudioProduction({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    autoRecoverLateLwdpJobs: true,
+    remoteRecoveryIntervalMs: 60_000,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    additionalTrustedCapturePublicKeyPaths: [],
+    lwdpConfigured: true,
+    loadLwdpConfigImplementation: async () => ({
+      baseUrl: "https://lwdp.test", token: "test", userId: "worldkit-test",
+    }),
+    loadCloudSceneProductionConfigImplementation: async () => ({
+      workerImage: `worker@sha256:${"a".repeat(64)}`,
+      outputS3Root: "s3://worldkit-test/cloud-scenes",
+      namespace: "lwdp",
+    }),
+    getCloudExecutionImplementation: async () => ({
+      execution_id: executionId,
+      status: "queued",
+      current_stage_id: "scene-production",
+    }),
+    dispatchCloudExecutionImplementation: async (inputExecutionId) => {
+      dispatchCalls.push(inputExecutionId);
+      return { execution_id: inputExecutionId, status: "running" };
+    },
+    launchStudioCloudSceneWorkerImplementation: async (input) => {
+      launchCalls.push(input);
+      return { jobName: "worldkit-scene-execution-worker-reattach-001" };
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    let detail = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      detail = await fetch(`${origin}/api/worlds/${id}`).then((response) => response.json());
+      if (detail.world.remoteWorkerLaunchStatus === "launched") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(dispatchCalls, [executionId]);
+    assert.equal(launchCalls.length, 1);
+    assert.equal(launchCalls[0].executionId, executionId);
+    assert.equal(detail?.world.status, "remote-pending");
+    assert.equal(detail?.world.remoteWorkerLaunchStatus, "launched");
+    assert.equal(detail?.world.remoteDispatchStatus, "dispatched");
+    assert.equal(
+      detail?.world.remoteWorkerJobName,
+      "worldkit-scene-execution-worker-reattach-001",
+    );
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("requeues a remote terminal Ray infrastructure failure from the trusted prior stage", async () => {
+  const dataRoot = await temporaryRoot(".test-data-remote-terminal-retry-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-remote-terminal-retry-");
+  const id = "remote-terminal-retry";
+  const recordRoot = path.join(dataRoot, "worlds", id);
+  await mkdir(recordRoot, { recursive: true });
+  await writeTrustedWhiteboxArtifacts(fakeRepoRoot, id);
+  const timestamp = new Date().toISOString();
+  await Promise.all([
+    writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+      id,
+      sceneId: id,
+      title: "Remote terminal retry",
+      prompt: "Retry the failed Builder infrastructure stage.",
+      referenceImage: null,
+      status: "remote-pending",
+      stage: "coding-agent",
+      failedStage: null,
+      codexBackend: "cloud",
+      attempt: 1,
+      origin: "test-set",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      startedAt: timestamp,
+      finishedAt: null,
+      error: "LWDP 云端 Job gen_rayfailed 在 120 分钟后仍为 running；已转入远端对账状态。",
+      captureRequired: true,
+      captureStatus: "pending",
+      triviewStatus: "pending",
+      whiteboxOutcome: null,
+      outcome: null,
+      styledOpeningFrameRequired: false,
+      styledOpeningFrameStatus: "not-required",
+      styledTriviewsRequired: false,
+      styledTriviewsStatus: "not-required",
+      workflowPolicyVersion,
+      remoteJobId: "gen_rayfailed",
+    })),
+    writeFile(path.join(recordRoot, "agent.log"), [
+      "WorldKit Creator Studio",
+      `scene=${id}`,
+      "attempt=1",
+      "mode=full",
+      "",
+      "WORLDKIT_LWDP_JOB coding-agent builder-ray gen_rayfailed dispatch=single-task-fast-path taskAttempt=1/3",
+      "WORLDKIT_LWDP_REMOTE_PENDING coding-agent builder-ray gen_rayfailed request-ray s3://bucket/builder 7200000 running {\"total\":1,\"queued\":1,\"running\":0}",
+      "",
+    ].join("\n")),
+  ]);
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    autoRecoverLateLwdpJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    remoteRecoveryIntervalMs: 60_000,
+    loadLwdpConfigImplementation: async () => ({
+      baseUrl: "https://lwdp.test", token: "test", userId: "worldkit-test",
+    }),
+    lateLwdpRecoveryImplementation: async () => {
+      throw new Error("LWDP job did not succeed: Ray job FAILED: failed to get job supervisor");
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    let detail = null;
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      detail = await fetch(`${origin}/api/worlds/${id}`).then((response) => response.json());
+      if (detail.world.status === "queued") break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(detail?.world.status, "queued", JSON.stringify(detail?.world));
+    assert.equal(detail?.world.resumeFromStage, "planner");
+    const events = (await readFile(path.join(recordRoot, "trajectory.jsonl"), "utf8"))
+      .trim().split(/\r?\n/).map((line) => JSON.parse(line));
+    assert.equal(events.some((event) =>
+      event.kind === "retry" && event.reason === "transport" &&
+      event.previousJobId === "gen_rayfailed"), true);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
 test("recovers only a post-success visual finalization syntax failure", () => {
   const record = {
     status: "failed",
@@ -276,6 +1066,44 @@ WORLDKIT_LWDP_TASK_READY visual-demo
     { ...record, captureStatus: "failed" },
     finalizationLog,
   ), false);
+});
+
+test("executes a frozen shell snapshot when the source changes during a long child step", async () => {
+  const root = await temporaryRoot(".test-frozen-shell-");
+  const sourcePath = path.join(root, "mutable-workflow.sh");
+  const startedPath = path.join(root, "started");
+  const releasePath = path.join(root, "release");
+  await writeFile(sourcePath, `#!/usr/bin/env bash
+set -euo pipefail
+printf started > "$1"
+while [[ ! -f "$2" ]]; do /bin/sleep 0.01; done
+printf finished
+`);
+  const child = spawn(
+    process.execPath,
+    [path.join(repoRoot, "scripts/agents/run-frozen-shell-script.mjs"), sourcePath, startedPath, releasePath],
+    { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+  child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    try {
+      if ((await readFile(startedPath, "utf8")) === "started") break;
+    } catch {
+      // The immutable child has not reached its synchronization point yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(await readFile(startedPath, "utf8"), "started");
+  await writeFile(sourcePath, "#!/usr/bin/env bash\nprintf 'unterminated\n");
+  await writeFile(releasePath, "release");
+  const exit = await new Promise((resolve) => child.once("close", (code, signal) =>
+    resolve({ code, signal })));
+  assert.deepEqual(exit, { code: 0, signal: null }, stderr);
+  assert.equal(stdout, "finished");
 });
 
 async function temporaryRoot(prefix) {
@@ -328,7 +1156,7 @@ async function writeTrustedWhiteboxArtifacts(
     schemaVersion: 1,
     sceneId,
     authoringSpecId,
-    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
   })}\n`;
   const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
   const resourceLockHash = `sha256:${"e".repeat(64)}`;
@@ -349,6 +1177,7 @@ async function writeTrustedWhiteboxArtifacts(
     role: "primary-subject",
     semanticClassId: "subject.player",
     identityColor: "#E85D5D",
+    frontDirectionWorldXZ: [0, -1],
   };
   const implementationMap = {
     kind: "worldkit-scene-brief-implementation-map",
@@ -357,7 +1186,7 @@ async function writeTrustedWhiteboxArtifacts(
     sceneBriefHash,
     authoringSpecId,
     authoringSpecHash,
-    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
     visualCaptureGroups: [visualTarget],
   };
   const requiredRoutes = requiresRouteValidation
@@ -768,7 +1597,7 @@ test("packages one visual Codex task with all named inputs and declared outputs"
       },
     );
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.match(result.stdout, /WORLDKIT_LWDP_CODEX_SMOKE visual-[^\s]+ dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 taskAttempts=3 timeoutMs=7200000 assets=4 outputs=3/);
+    assert.match(result.stdout, /WORLDKIT_LWDP_CODEX_SMOKE visual-[^\s]+ dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 taskAttempts=3 priorTaskAttempts=0 timeoutMs=7200000 assets=4 outputs=3/);
     assert.match(result.stdout, /WORLDKIT_VISUAL_RECONSTRUCTION_DISPATCH_SMOKE targets=1 outputs=3/);
   } finally {
     await Promise.all([
@@ -2393,6 +3222,34 @@ WORLDKIT_LWDP_TASK_READY visual-demo
 `);
   }
   const { artifactRoot, captureTargets } = await writeTrustedWhiteboxArtifacts(fakeRepoRoot, created.sceneId);
+  const finalizedVisualArtifacts = recoveryMode === "failed-finalization-host-resume"
+    ? []
+    : [
+        writeFile(path.join(artifactRoot, "styled-opening-frame-manifest.json"), JSON.stringify({
+          kind: "worldkit-styled-opening-frame-manifest",
+          schemaVersion: 1,
+          sceneId: created.sceneId,
+          status: "passed",
+        })),
+        writeFile(path.join(artifactRoot, "styled-opening-frame-report.json"), JSON.stringify({
+          kind: "worldkit-styled-opening-frame-report",
+          schemaVersion: 1,
+          sceneId: created.sceneId,
+          status: "passed",
+        })),
+        writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), JSON.stringify({
+          kind: "worldkit-styled-triview-manifest",
+          schemaVersion: 1,
+          sceneId: created.sceneId,
+          status: "passed",
+        })),
+        writeFile(path.join(artifactRoot, "styled-triviews-report.json"), JSON.stringify({
+          kind: "worldkit-styled-triview-report",
+          schemaVersion: 1,
+          sceneId: created.sceneId,
+          status: "passed",
+        })),
+      ];
   await Promise.all([
     writeFile(path.join(artifactRoot, "evaluation-run.json"), JSON.stringify({
       kind: "worldkit-evaluation-run",
@@ -2422,30 +3279,7 @@ WORLDKIT_LWDP_TASK_READY visual-demo
       })),
     })),
     writeFile(path.join(artifactRoot, "styled-opening-frame.png"), png),
-    writeFile(path.join(artifactRoot, "styled-opening-frame-manifest.json"), JSON.stringify({
-      kind: "worldkit-styled-opening-frame-manifest",
-      schemaVersion: 1,
-      sceneId: created.sceneId,
-      status: "passed",
-    })),
-    writeFile(path.join(artifactRoot, "styled-opening-frame-report.json"), JSON.stringify({
-      kind: "worldkit-styled-opening-frame-report",
-      schemaVersion: 1,
-      sceneId: created.sceneId,
-      status: "passed",
-    })),
-    writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), JSON.stringify({
-      kind: "worldkit-styled-triview-manifest",
-      schemaVersion: 1,
-      sceneId: created.sceneId,
-      status: "passed",
-    })),
-    writeFile(path.join(artifactRoot, "styled-triviews-report.json"), JSON.stringify({
-      kind: "worldkit-styled-triview-report",
-      schemaVersion: 1,
-      sceneId: created.sceneId,
-      status: "passed",
-    })),
+    ...finalizedVisualArtifacts,
     ...captureTargets.whiteboxTriviews.map((target) =>
       writeFile(path.join(artifactRoot, "triviews", target.visualTargetId, "styled-triview.png"), png)),
   ]);
@@ -2466,13 +3300,47 @@ WORLDKIT_LWDP_TASK_READY visual-demo
     ].map((name) => utimes(path.join(planRoot, name), staleTime, staleTime)));
   }
 
-  const recoveredStudio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: false });
+  let replayedFinalization = false;
+  const recoveredStudio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    ...(recoveryMode === "failed-finalization-host-resume"
+      ? {
+          visualRecoveryFinalizeImplementation: async () => {
+            replayedFinalization = true;
+            await Promise.all([
+              writeFile(path.join(artifactRoot, "styled-opening-frame-manifest.json"), JSON.stringify({
+                kind: "worldkit-styled-opening-frame-manifest", schemaVersion: 1,
+                sceneId: created.sceneId, status: "passed",
+              })),
+              writeFile(path.join(artifactRoot, "styled-opening-frame-report.json"), JSON.stringify({
+                kind: "worldkit-styled-opening-frame-report", schemaVersion: 1,
+                sceneId: created.sceneId, status: "passed",
+              })),
+              writeFile(path.join(artifactRoot, "styled-triviews-manifest.json"), JSON.stringify({
+                kind: "worldkit-styled-triview-manifest", schemaVersion: 1,
+                sceneId: created.sceneId, status: "passed",
+              })),
+              writeFile(path.join(artifactRoot, "styled-triviews-report.json"), JSON.stringify({
+                kind: "worldkit-styled-triview-report", schemaVersion: 1,
+                sceneId: created.sceneId, status: "passed",
+              })),
+            ]);
+          },
+        }
+      : {}),
+  });
   const recoveredOrigin = await listen(recoveredStudio);
   try {
     const detail = await (await fetch(`${recoveredOrigin}/api/worlds/${created.id}`)).json();
     assert.equal(detail.world.status, "ready");
     assert.equal(detail.world.outcome, "passed");
     assert.equal(detail.world.error, null);
+    assert.equal(
+      replayedFinalization,
+      recoveryMode === "failed-finalization-host-resume",
+    );
   } finally {
     await recoveredStudio.shutdown();
   }
@@ -2657,6 +3525,7 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
           role: "primary-subject",
           semanticClassId: "subject.player",
           identityColor: "#E85D5D",
+          frontDirectionWorldXZ: [0, -1],
         }],
       })),
       writeFile(path.join(artifactRoot, "world.build.json"), "{}"),
@@ -2670,6 +3539,7 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
           role: "primary-subject",
           semanticClassId: "subject.player",
           identityColor: "#E85D5D",
+          frontDirectionWorldXZ: [0, -1],
         }],
       })),
       writeFile(path.join(artifactRoot, "triviews", "player-subject", "whitebox-triview.png"), Buffer.from("89504e470d0a1a0a", "hex")),
@@ -2734,13 +3604,14 @@ test("serves one atomic Preview bootstrap and removes split Preview authority ro
       sceneBriefHash: `sha256:${"b".repeat(64)}`,
       authoringSpecId: created.sceneId,
       authoringSpecHash,
-      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
       visualCaptureGroups: [{
         visualTargetId: "player-subject",
         runtimeEntityIds: ["player"],
         role: "primary-subject",
         semanticClassId: "subject.player",
         identityColor: "#E85D5D",
+        frontDirectionWorldXZ: [0, -1],
       }],
     };
     const executionPlan = {

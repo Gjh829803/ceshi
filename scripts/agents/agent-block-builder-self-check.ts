@@ -200,12 +200,30 @@ export async function runBlockBuilderSelfCheck(options: {
         });
       }
     }
+    const authoringCatalog = createAgentAuthoringCatalogV1();
+    const registeredSubject = subject.kind === "registered"
+      ? authoringCatalog.subjects.find(({ subjectDefinitionRef }) =>
+          subjectDefinitionRef === subject.subjectDefinitionRef)
+      : undefined;
+    if (subject.kind === "registered" && registeredSubject === undefined) {
+      diagnostics.push({
+        code: "BLOCK_WORLD_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED",
+        message: "The controlled registered Subject is not admitted for Hosted Builder authoring.",
+        instancePath: "/controlledSubject/subjectDefinitionRef",
+        details: {
+          subjectDefinitionRef: subject.subjectDefinitionRef,
+          rejectionDiagnostics: authoringCatalog.rejectedSubjects.find(({ subjectDefinitionRef }) =>
+            subjectDefinitionRef === subject.subjectDefinitionRef)?.diagnostics ?? [],
+        },
+      });
+    }
     const executableMovementModes = subject.kind === "registered"
-      ? createAgentAuthoringCatalogV1().subjects.find(({ subjectDefinitionRef }) =>
-          subjectDefinitionRef === subject.subjectDefinitionRef)?.executableMovementModes ?? []
+      ? registeredSubject?.executableMovementModes ?? []
       : ["ground-walk"] as const;
-    const missingMovementModes = requestedMovementModes.filter((mode) =>
-      !executableMovementModes.includes(mode));
+    const missingMovementModes = subject.kind === "registered" && registeredSubject === undefined
+      ? []
+      : requestedMovementModes.filter((mode) =>
+          !executableMovementModes.includes(mode));
     if (missingMovementModes.length > 0) {
       diagnostics.push({
         code: "BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED",
@@ -413,7 +431,9 @@ export async function main(arguments_: readonly string[] = process.argv.slice(2)
 }
 
 const entryPath = process.argv[1] === undefined ? "" : path.resolve(process.argv[1]);
-if (entryPath === fileURLToPath(import.meta.url)) {
+const directEntryBaseName = path.basename(entryPath).replace(/\.(?:mjs|js|ts)$/, "");
+if (entryPath === fileURLToPath(import.meta.url) &&
+    directEntryBaseName === "agent-block-builder-self-check") {
   main().catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 2;

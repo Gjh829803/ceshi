@@ -39,7 +39,7 @@ const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   id: "humanoid.third-person",
   version: 1,
   resourceRef: "worldkit://subject-definition/humanoid.third-person@1",
-  authoringAvailability: "recommended",
+  authoringAvailability: "advanced",
   category: "human",
   bodyTopology: "biped",
   semanticClassId: "subject.humanoid",
@@ -98,9 +98,10 @@ const HUMANOID_THIRD_PERSON_DEFINITION: RegistrySubjectDefinitionInputV3 = {
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
-    displayName: "Third-person humanoid",
-    description: "A controllable humanoid whitebox proxy for outdoor traversal.",
-    semanticTags: ["biped", "ground", "human", "third-person"],
+    displayName: "Primitive capsule humanoid proxy",
+    description:
+      "A primitive capsule humanoid retained for SDK traversal tests, not ordinary Hosted authoring.",
+    semanticTags: ["biped", "ground", "human", "primitive-proxy", "third-person"],
   },
 };
 

@@ -46,19 +46,41 @@ export function resolveLwdpJobTimeoutMs(stage, environment = process.env) {
 }
 
 export class LwdpJobPendingError extends Error {
-  constructor(jobId, timeoutMs, lastJob) {
-    super(`LWDP job ${jobId} remained non-terminal after ${timeoutMs}ms.`);
+  constructor(jobId, timeoutMs, lastJob, { cause, reason = "timeout" } = {}) {
+    super(
+      reason === "transport"
+        ? `LWDP job ${jobId} outcome became unknown after a polling transport failure.`
+        : `LWDP job ${jobId} remained non-terminal after ${timeoutMs}ms.`,
+      cause === undefined ? undefined : { cause },
+    );
     this.name = "LwdpJobPendingError";
     this.code = "LWDP_JOB_PENDING";
     this.jobId = jobId;
     this.timeoutMs = timeoutMs;
     this.lastJob = lastJob;
+    this.reason = reason;
   }
+}
+
+function errorDiagnosticText(error) {
+  const values = [];
+  const visited = new Set();
+  let current = error;
+  while (current !== null && current !== undefined && !visited.has(current)) {
+    visited.add(current);
+    for (const value of [current?.name, current?.code, current?.message]) {
+      if (typeof value === "string" && value.length > 0) values.push(value);
+    }
+    current = current?.cause;
+  }
+  if (values.length === 0) values.push(String(error ?? ""));
+  return values.join("; ");
 }
 
 export function classifyCodexTaskFailureForRetry(error) {
   if (error instanceof LwdpJobPendingError || error?.code === "LWDP_JOB_PENDING") return null;
-  const message = error instanceof Error ? error.message : String(error ?? "");
+  const message = errorDiagnosticText(error);
+  if (/BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED/i.test(message)) return null;
   if (
     /(?:401\s+Unauthorized|token_expired|access token|refresh token|auth_failed)/i.test(message)
   ) return "auth";
@@ -67,10 +89,19 @@ export function classifyCodexTaskFailureForRetry(error) {
       message,
     )
   ) return "account-model-compatibility";
-  if (/Selected model is at capacity|model capacity/i.test(message)) return "capacity";
-  if (/codex timeout after\s+[0-9]+s/i.test(message)) return "task-timeout";
   if (
-    /(?:websocket|connection).{0,80}(?:reset|closed|failed|refused)|(?:reset|closed) by peer|HTTP\s+(?:429|502|503|504)/i.test(
+    /Selected model is at capacity|model capacity|No available agent to submit job, please try again later/i
+      .test(message)
+  ) return "capacity";
+  if (/codex timeout after\s+[0-9]+s/i.test(message)) return "task-timeout";
+  if (/missing required outputs:\s*\S/i.test(message)) return "output-omission";
+  if (
+    /Ray job FAILED.{0,200}failed to get job supervisor|Job supervisor actor died|actor's node (?:has died|was terminated)|Raylet could not connect to Runtime Env Agent|LWDP job did not succeed:\s*timed out/i.test(
+      message,
+    )
+  ) return "transport";
+  if (
+    /(?:websocket|connection).{0,80}(?:reset|closed|failed|refused)|Remote end closed connection without response|(?:reset|closed) by peer|HTTP\s+(?:429|502|503|504)|ERR_(?:SSL|TLS|NETWORK|SOCKET|CONNECTION)|ssl\/tls alert handshake failure|ECONN(?:RESET|REFUSED|ABORTED)|ENET(?:UNREACH|DOWN)|EHOSTUNREACH/i.test(
       message,
     )
   ) return "transport";
@@ -95,26 +126,27 @@ function parseEnv(contents) {
   return values;
 }
 
-export async function loadLwdpGenerationConfig(environment = process.env) {
-  const envFile = environment.WORLDKIT_LWDP_ENV_FILE ||
-    join(projectRoot, ".codex-tmp", "runtime-config", "lwdp.env");
+export async function loadLwdpGenerationConfig(environment = null) {
+  const envFile = join(projectRoot, ".codex-tmp", "runtime-config", "lwdp.env");
   let fromFile = {};
   try {
     fromFile = parseEnv(await readFile(envFile, "utf8"));
   } catch {
     // Environment-only configuration is supported in CI and containers.
   }
-  const token = environment.LWDP_GENERATION_API_TOKEN || fromFile.LWDP_GENERATION_API_TOKEN || "";
+  const explicitEnvironment = environment ?? {};
+  const token = explicitEnvironment.LWDP_GENERATION_API_TOKEN ||
+    fromFile.LWDP_GENERATION_API_TOKEN || "";
   if (!token) {
     throw new Error(
-      "LWDP_GENERATION_API_TOKEN is unavailable. Configure the project-local .codex-tmp/runtime-config/lwdp.env file or WORLDKIT_LWDP_ENV_FILE.",
+      "LWDP_GENERATION_API_TOKEN is unavailable. Configure the project-local .codex-tmp/runtime-config/lwdp.env file.",
     );
   }
   return {
-    baseUrl: String(environment.LWDP_API_BASE || fromFile.LWDP_API_BASE || "https://lwdp.loopit.me")
+    baseUrl: String(explicitEnvironment.LWDP_API_BASE || fromFile.LWDP_API_BASE || "https://lwdp.loopit.me")
       .replace(/\/$/, ""),
     token,
-    userId: String(environment.LWDP_USER_ID || fromFile.LWDP_USER_ID || "worldkit-studio"),
+    userId: String(explicitEnvironment.LWDP_USER_ID || fromFile.LWDP_USER_ID || "worldkit-studio"),
   };
 }
 
@@ -263,16 +295,36 @@ export async function pollGenerationJob(jobId, {
   fetchImplementation = fetch,
   intervalMs = Number(process.env.WORLDKIT_LWDP_POLL_INTERVAL_MS || 10_000),
   timeoutMs = resolveLwdpJobTimeoutMs("other"),
+  requestMaxAttempts = 4,
+  requestRetryDelayMs = 1_000,
+  nonTerminalCompletionProbe,
+  nonTerminalFailureProbe,
+  completionProbeIntervalMs = 60_000,
   onProgress = () => undefined,
 } = {}) {
   const startedAt = Date.now();
   let lastSignature = "";
   let lastJob = null;
+  let lastCompletionProbeAt = Number.NEGATIVE_INFINITY;
+  let lastFailureProbeAt = Number.NEGATIVE_INFINITY;
   for (;;) {
-    const payload = await lwdpRequest(`/api/v1/generation/jobs/${encodeURIComponent(jobId)}`, {
-      config,
-      fetchImplementation,
-    });
+    let payload;
+    try {
+      payload = await lwdpRequest(`/api/v1/generation/jobs/${encodeURIComponent(jobId)}`, {
+        config,
+        fetchImplementation,
+        maxAttempts: requestMaxAttempts,
+        retryDelayMs: requestRetryDelayMs,
+      });
+    } catch (error) {
+      if (classifyCodexTaskFailureForRetry(error) === "transport") {
+        throw new LwdpJobPendingError(jobId, timeoutMs, lastJob, {
+          cause: error,
+          reason: "transport",
+        });
+      }
+      throw error;
+    }
     const job = payload?.job ?? payload;
     lastJob = job;
     const signature = JSON.stringify({ status: job?.status, counters: job?.counters, error: job?.error });
@@ -281,6 +333,48 @@ export async function pollGenerationJob(jobId, {
       onProgress(job);
     }
     if (terminalStatuses.has(String(job?.status))) return job;
+    if (
+      typeof nonTerminalCompletionProbe === "function" &&
+      Date.now() - lastCompletionProbeAt >= Math.max(1_000, completionProbeIntervalMs)
+    ) {
+      lastCompletionProbeAt = Date.now();
+      const deliveryEvidence = await nonTerminalCompletionProbe(job);
+      if (deliveryEvidence !== null && deliveryEvidence !== undefined) {
+        const recovered = {
+          ...job,
+          status: "succeeded",
+          counters: {
+            total: 1,
+            queued: 0,
+            running: 0,
+            succeeded: 1,
+            failed: 0,
+            skipped: 0,
+            rejected: 0,
+          },
+          delivery_evidence: deliveryEvidence,
+        };
+        onProgress(recovered);
+        return recovered;
+      }
+    }
+    if (
+      typeof nonTerminalFailureProbe === "function" &&
+      Date.now() - lastFailureProbeAt >= Math.max(1_000, completionProbeIntervalMs)
+    ) {
+      lastFailureProbeAt = Date.now();
+      const failureEvidence = await nonTerminalFailureProbe(job);
+      if (failureEvidence !== null && failureEvidence !== undefined) {
+        const recovered = {
+          ...job,
+          status: "failed",
+          error: `Ray infrastructure failure: ${failureEvidence.message}`,
+          ray_failure_evidence: failureEvidence,
+        };
+        onProgress(recovered);
+        return recovered;
+      }
+    }
     if (Date.now() - startedAt >= timeoutMs) {
       throw new LwdpJobPendingError(jobId, timeoutMs, lastJob);
     }

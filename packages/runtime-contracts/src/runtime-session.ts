@@ -565,6 +565,11 @@ export interface WorldStateSnapshotRequestV1 {
   readonly worldStateRef: string;
 }
 
+export interface CaptureStartStateV1 {
+  readonly positionMetersXYZ: readonly [number, number, number];
+  readonly facingYawRadians: number;
+}
+
 export type RuntimeActivityKindV1 =
   | "runtime-run"
   | "simulation-take"
@@ -645,6 +650,9 @@ export interface WorldkitBrowserApiV5 {
   setIntent(input: FixedInputV1): Promise<WorldRuntimeSnapshotV4>;
   adjustCameraView(input: CameraViewInputV1): WorldRuntimeSnapshotV4;
   resetCameraView(): WorldRuntimeSnapshotV4;
+  relocateControlledSubjectForCapture?(
+    input: CaptureStartStateV1,
+  ): WorldRuntimeSnapshotV4;
   getCameraPreviewState(): CameraPreviewStateV1;
   applyCameraPreview(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
   applySubjectPresetTuning(

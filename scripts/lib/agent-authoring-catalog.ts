@@ -195,6 +195,18 @@ function visualProxy(
   };
 }
 
+function hostedAuthoringRejectionDiagnostics(
+  definition: RegistrySubjectDefinitionV3,
+): readonly string[] {
+  if (definition.category !== "human" || definition.bodyTopology !== "biped") return [];
+  const hasAssetVisual = definition.visualParts.some(({ kind }) => kind === "asset");
+  if (hasAssetVisual && definition.visualBinding.mode === "rigged") return [];
+  return [
+    "Hosted ordinary-human authoring requires an asset-backed rigged Subject; " +
+      "primitive humanoid proxies remain SDK test/runtime fixtures.",
+  ];
+}
+
 export function traversalEnvelopeFromRuntimeColliderV1(collider: Readonly<{
   readonly radiusMeters: number;
   readonly heightMeters: number;
@@ -247,6 +259,7 @@ function compileProbe(subjectDefinitionRef: string) {
     spawnStandPositionMetersXYZ: [0, 0.5, 0] as const,
     requiredTargets: [],
     requiredGroundTraversalBands: [],
+    visualTargetFacings: [],
     spaceTransitions: [],
     requireSingleReachableComponent: true,
   };
@@ -290,6 +303,14 @@ export function createAgentAuthoringCatalogV1(): AgentAuthoringCatalogV1 {
     diagnostics: readonly string[];
   }> = [];
   for (const definition of definitions) {
+    const hostedDiagnostics = hostedAuthoringRejectionDiagnostics(definition);
+    if (hostedDiagnostics.length > 0) {
+      rejectedSubjects.push({
+        subjectDefinitionRef: definition.resourceRef,
+        diagnostics: hostedDiagnostics,
+      });
+      continue;
+    }
     const admission = compileProbe(definition.resourceRef);
     if (!admission.ok) {
       rejectedSubjects.push({

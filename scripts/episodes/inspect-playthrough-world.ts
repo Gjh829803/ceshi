@@ -4,13 +4,17 @@ import path from "node:path";
 import type { Page } from "playwright";
 import type { SemanticInputActionV1 } from "@whitebox-world/runtime-contracts";
 
-import { launchChromiumWithSystemFallback } from "../lib/playwright-browser-launch";
+import {
+  deterministicCaptureBrowserLaunchOptions,
+  launchChromiumWithSystemFallback,
+} from "../lib/playwright-browser-launch";
 
 interface Options {
   sceneId: string;
   origin: string;
   playPath: string;
   output: string;
+  sourceIdentityHash: string;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -26,6 +30,7 @@ function parseOptions(argv: string[]): Options {
     origin: value("--origin"),
     playPath: argv.includes("--play-path") ? value("--play-path") : "/",
     output: path.resolve(value("--output")),
+    sourceIdentityHash: value("--source-identity-hash"),
   };
 }
 
@@ -121,7 +126,9 @@ function movementEvidence(before: any, after: any) {
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   await mkdir(options.output, { recursive: true });
-  const browser = await launchChromiumWithSystemFallback();
+  const browser = await launchChromiumWithSystemFallback(
+    deterministicCaptureBrowserLaunchOptions(),
+  );
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
@@ -184,6 +191,7 @@ async function main(): Promise<void> {
       kind: "worldkit-playthrough-reconnaissance",
       schemaVersion: 1,
       sceneId: options.sceneId,
+      sourceIdentityHash: options.sourceIdentityHash,
       generatedAt: new Date().toISOString(),
       sourceUrl: url.toString(),
       browserProtocolVersion: 5,

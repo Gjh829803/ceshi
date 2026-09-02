@@ -245,6 +245,14 @@ that the authored complete targets use the same ordered presets. Pixel color
 cannot prove geographic correctness; Runtime block admission and connectivity
 remain the physical authority.
 
+Every non-subject complete target also declares one semantic front quarter-turn
+in `visualTargetFacings`; the controlled Subject reuses its existing yaw. The
+Host projects that single direction as `frontDirectionWorldXZ` through the
+implementation map and capture manifest. Babylon captures Front, target-local
+Right, and Back with one shared orthographic scale and baseline. World-axis
+guessing and per-panel camera fitting are forbidden because they make rotated
+asymmetric targets semantically mislabeled and visually incomparable.
+
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership / integration | Evidence | Mode |
 | --- | --- | --- | --- | --- | --- | --- |
 | `BW3-01` | Freeze shared functional/target color constants | `BW2-06` | `BW3-02`, `BW3-03` | `block-world` Registry | exact palette tests | `sequential` |

@@ -320,6 +320,13 @@ h1 span {
 
 .hud-card.hud-wide { min-width: 148px; }
 
+.hud-health[data-severity="info"] { border-color: rgba(104, 207, 148, .44); }
+.hud-health[data-severity="warning"] { border-color: rgba(215, 171, 104, .58); }
+.hud-health[data-severity="error"] {
+  border-color: rgba(225, 124, 115, .76);
+  background: rgba(74, 23, 22, .82);
+}
+
 .hud-card span,
 .hud-card strong {
   display: block;
@@ -583,6 +590,98 @@ kbd,
   margin-bottom: 18px;
   padding-bottom: 18px;
   border-bottom: 1px solid #29312d;
+}
+
+.runtime-diagnostics-card {
+  margin-bottom: 18px;
+  padding: 13px;
+  border: 1px solid #2b332f;
+  border-radius: 9px;
+  background: #151a18;
+}
+
+.runtime-diagnostics-heading,
+.runtime-diagnostics-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.runtime-diagnostics-heading h2 { margin: 0; font-size: 15px; }
+.runtime-diagnostics-heading > span {
+  padding: 5px 8px;
+  border: 1px solid #3b4942;
+  border-radius: 999px;
+  color: #9ba8a1;
+  font-size: 8px;
+}
+.runtime-diagnostics-heading > span[data-severity="warning"] {
+  border-color: rgba(215, 171, 104, .55);
+  color: #d7ab68;
+}
+.runtime-diagnostics-heading > span[data-severity="error"] {
+  border-color: rgba(225, 124, 115, .65);
+  color: #e17c73;
+}
+
+.runtime-diagnostics-message {
+  margin: 9px 0;
+  color: #8c9992;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.runtime-diagnostics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid #29302d;
+  border-radius: 6px;
+  background: #29302d;
+}
+
+.runtime-diagnostics-grid > div { min-width: 0; padding: 7px; background: #101513; }
+.runtime-diagnostics-grid dt { color: #6f7c75; font-size: 7px; }
+.runtime-diagnostics-grid dd {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #c4cec8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-diagnostics-actions { margin-top: 9px; }
+.runtime-diagnostics-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 4px;
+  border: 1px solid #3b4942;
+  border-radius: 5px;
+  color: #aebbb4;
+  background: #202824;
+  cursor: pointer;
+  font-size: 8px;
+}
+.runtime-diagnostics-actions button:hover { border-color: #668174; color: #e4eee8; }
+
+.runtime-diagnostics-events { margin-top: 9px; color: #77857e; font-size: 8px; }
+.runtime-diagnostics-events summary { cursor: pointer; }
+.runtime-diagnostics-events pre {
+  overflow: auto;
+  max-height: 130px;
+  margin: 7px 0 0;
+  padding: 8px;
+  border-radius: 5px;
+  color: #85938c;
+  background: #0e1210;
+  font-size: 8px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .styled-opening-panel {

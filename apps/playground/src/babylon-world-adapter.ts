@@ -33,6 +33,7 @@ import type {
 import {
   BabylonWorldRuntime,
   FIXED_TIME_STEP_SECONDS,
+  type BabylonFixedInputFailureDiagnosticV1,
   type BabylonRuntimeProjectionV1,
   type BabylonWorldRuntimeOptions,
 } from "@whitebox-world/runtime-babylon";
@@ -50,6 +51,9 @@ import type {
   InputAction,
   PlaygroundWorldMetadataV1,
   PlaygroundWorldAdapter,
+  PlaygroundRuntimeLoopDiagnosticSnapshotV1,
+  PlaygroundRuntimeFailureDiagnosticV1,
+  PlaygroundRuntimeLoopPhaseV1,
   OpeningCompositionReport,
   PlanningViewKind,
   WorldSnapshot,
@@ -101,6 +105,10 @@ type CameraInputAction = Extract<
 >;
 
 const CAMERA_KEY_ACTION_MAP: Readonly<Partial<Record<string, CameraInputAction>>> = {
+  KeyJ: "cameraLeft",
+  KeyL: "cameraRight",
+  KeyI: "cameraUp",
+  KeyK: "cameraDown",
   ArrowLeft: "cameraLeft",
   ArrowRight: "cameraRight",
   ArrowUp: "cameraUp",
@@ -124,9 +132,46 @@ const CONTEXTUAL_KEY_CODES = new Set(["ShiftLeft", "ShiftRight", "Space"]);
 export type ArrowInputClearReasonV1 =
   | "startup"
   | "blur"
+  | "fixed-input-recovery"
   | "simulation-reset"
   | "possession-unbound"
   | "possession-rebind";
+
+function isRecoverablePreparedFixedInputFailure(
+  error: unknown,
+  diagnostic: BabylonFixedInputFailureDiagnosticV1 | null,
+): error is Error {
+  return error instanceof Error &&
+    diagnostic?.errorCode === "3C_INPUT_INVALID" &&
+    error.name === "WorldSessionOperationErrorV1" &&
+    error.message.startsWith("ADAPTER_FIXED_INPUT_FAILED:") &&
+    error.message.includes(
+      "The Runtime Adapter could not prepare the fixed simulation Tick.",
+    );
+}
+
+function immutableRuntimeFailureAttempt(
+  value: BabylonFixedInputFailureDiagnosticV1 | undefined,
+): BabylonFixedInputFailureDiagnosticV1 | null {
+  if (value === undefined) return null;
+  return Object.freeze({
+    ...value,
+    actions: Object.freeze([...value.actions]),
+    ...(value.controlledSubject === undefined
+      ? {}
+      : {
+          controlledSubject: Object.freeze({
+            ...value.controlledSubject,
+            positionMetersXYZ: Object.freeze([
+              ...value.controlledSubject.positionMetersXYZ,
+            ]) as readonly [number, number, number],
+            velocityMetersPerSecondXYZ: Object.freeze([
+              ...value.controlledSubject.velocityMetersPerSecondXYZ,
+            ]) as readonly [number, number, number],
+          }),
+        }),
+  });
+}
 
 export interface ArrowInputDiagnosticSnapshotV1 {
   readonly maximumYawRadiansPerFixedTick: number;
@@ -208,6 +253,10 @@ export class PhysicalKeyboardActionTracker {
 
   clear(): void {
     this.#pressedCodes.clear();
+  }
+
+  snapshotPressedCodes(): readonly string[] {
+    return Object.freeze([...this.#pressedCodes].sort());
   }
 
   actions(activeMotionKernelRef = "worldkit://motion-kernel/free-ground@1"):
@@ -396,10 +445,13 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   private disposed = false;
   private disposePromise: Promise<void> | null = null;
   private animationPending = false;
+  private activeAnimationTask: Promise<void> | undefined;
   private previousAnimationTimestampMilliseconds: number | null = null;
   private fixedStepAccumulatorSeconds = 0;
   private displayFramesPerSecond = 0;
   private frameLoopDiagnostic: WorldkitBrowserDiagnosticV1 | undefined;
+  private runtimeFailureDiagnostic:
+    PlaygroundRuntimeFailureDiagnosticV1 | undefined;
   private captureReservationReceiptId: string | undefined;
   private captureActivitySequence = 0;
   private activeCameraPointerId: number | null = null;
@@ -409,6 +461,13 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     | Readonly<{ dataUrl: string; report: OpeningCompositionReport }>
     | undefined;
   private visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
+  private loopPhase: PlaygroundRuntimeLoopPhaseV1 = "idle";
+  private loopPhaseStartedAtMonotonicMilliseconds = performance.now();
+  private lastAnimationFrameGapMilliseconds: number | null = null;
+  private lastFixedTickBatchSize = 0;
+  private lastSimulationDurationMilliseconds: number | null = null;
+  private lastRenderDurationMilliseconds: number | null = null;
+  private lastEmitDurationMilliseconds: number | null = null;
 
   private constructor(
     private executionPlan: CanonicalSceneExecutionPlanV1,
@@ -626,6 +685,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     }
     this.paused = true;
     this.coordinator.setPaused(true);
+    this.setLoopPhase("capture");
     let primaryError: unknown;
     try {
       const frame = await this.activeRuntime().captureControlFrame(request);
@@ -634,6 +694,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       primaryError = error;
       throw error;
     } finally {
+      this.setLoopPhase("idle");
       this.captureReservationReceiptId = undefined;
       this.paused = wasPaused;
       this.coordinator.setPaused(wasPaused);
@@ -666,6 +727,19 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
   resetCameraViewRuntime(): WorldRuntimeSnapshotV4 {
     this.captureReservationReceiptId = undefined;
     this.activeRuntime().resetCameraView();
+    this.render();
+    this.emit();
+    return this.coordinator.snapshot();
+  }
+
+  relocateControlledSubjectForCaptureRuntime(
+    input: import("@whitebox-world/runtime-contracts").CaptureStartStateV1,
+  ): WorldRuntimeSnapshotV4 {
+    this.captureReservationReceiptId = undefined;
+    this.activeRuntime().relocateControlledSubjectForCapture({
+      positionMetersXYZ: [...input.positionMetersXYZ],
+      facingYawRadians: input.facingYawRadians,
+    });
     this.render();
     this.emit();
     return this.coordinator.snapshot();
@@ -800,10 +874,14 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.clearPhysicalInputState("simulation-reset");
     this.activeCameraPointerId = null;
     this.frameLoopDiagnostic = undefined;
+    this.runtimeFailureDiagnostic = undefined;
     this.paused = true;
     this.coordinator.setPaused(true);
     this.resetAnimationClock();
+    this.setLoopPhase("reset");
     try {
+      await this.activeAnimationTask;
+      this.setLoopPhase("reset");
       const previousCanvas = this.canvas;
       await this.coordinator.resetWithInitialControlBinding();
       await this.adoptActiveWorldSurface({
@@ -813,6 +891,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         inspections: this.initialInspections,
       });
     } finally {
+      this.setLoopPhase("idle");
       this.paused = wasPaused;
       this.coordinator.setPaused(wasPaused);
       this.resetAnimationClock();
@@ -869,6 +948,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
       heightPixels: Math.max(1, this.canvas.height),
       entityIds: target.runtimeEntityIds,
       identityColor: target.identityColor,
+      frontDirectionWorldXZ: target.frontDirectionWorldXZ,
     });
     return {
       kind: "worldkit-whitebox-triview-capture",
@@ -1004,6 +1084,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         instance.binding.id,
       ),
       identityColor: prototype.instanceColor,
+      frontDirectionWorldXZ: [0, -1],
     }).dataUrl;
   }
 
@@ -1228,6 +1309,46 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     return structuredClone(this.inspections);
   }
 
+  getRuntimeLoopDiagnosticSnapshot(): PlaygroundRuntimeLoopDiagnosticSnapshotV1 {
+    const now = performance.now();
+    const runtime = this.activeRuntime();
+    const possession = runtime.snapshot().possessionTarget;
+    const supportObservation = possession.mode === "possessed"
+      ? runtime.supportObservationDiagnostic(possession.controlledEntityId)
+      : undefined;
+    return Object.freeze({
+      phase: this.loopPhase,
+      phaseAgeMilliseconds: Math.max(
+        0,
+        now - this.loopPhaseStartedAtMonotonicMilliseconds,
+      ),
+      animationFrameRequested: this.animationFrameId !== null,
+      animationPending: this.animationPending,
+      lastAnimationFrameGapMilliseconds: this.lastAnimationFrameGapMilliseconds,
+      lastFixedTickBatchSize: this.lastFixedTickBatchSize,
+      lastSimulationDurationMilliseconds: this.lastSimulationDurationMilliseconds,
+      lastRenderDurationMilliseconds: this.lastRenderDurationMilliseconds,
+      lastEmitDurationMilliseconds: this.lastEmitDurationMilliseconds,
+      pressedKeyCodes: this.keyboardInput.snapshotPressedCodes(),
+      cameraInputActions: Object.freeze([...this.cameraInput].sort()),
+      captureReserved: this.captureReservationReceiptId !== undefined,
+      supportObservation: supportObservation ?? null,
+      frameLoopDiagnostic: this.frameLoopDiagnostic === undefined
+        ? null
+        : Object.freeze({
+            severity: this.frameLoopDiagnostic.severity,
+            code: this.frameLoopDiagnostic.code,
+            message: this.frameLoopDiagnostic.message,
+          }),
+      runtimeFailure: this.runtimeFailureDiagnostic === undefined
+        ? null
+        : Object.freeze({
+            initial: this.runtimeFailureDiagnostic.initial,
+            recovery: this.runtimeFailureDiagnostic.recovery,
+          }),
+    });
+  }
+
   snapshot(): WorldSnapshot {
     const snapshot = this.activeRuntime().snapshot();
     if (snapshot.possessionTarget.mode === "unbound") {
@@ -1427,43 +1548,147 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
 
   private async animate(timestampMilliseconds: number): Promise<void> {
     if (this.disposed) return;
+    if (this.previousAnimationTimestampMilliseconds !== null) {
+      this.lastAnimationFrameGapMilliseconds = Math.max(
+        0,
+        timestampMilliseconds - this.previousAnimationTimestampMilliseconds,
+      );
+    }
     const ticks = this.consumeFixedTicks(timestampMilliseconds);
+    this.lastFixedTickBatchSize = ticks;
     if (!this.paused && !this.animationPending && ticks > 0) {
       this.animationPending = true;
+      const simulationStartedAtMilliseconds = performance.now();
+      this.setLoopPhase("simulation", simulationStartedAtMilliseconds);
+      const task = this.runAnimationTicks(ticks);
+      this.activeAnimationTask = task;
       try {
-        const runtimeProjection = this.activeRuntime().snapshot();
-        const controlledEntityId = runtimeProjection.possessionTarget.mode === "possessed"
-          ? runtimeProjection.possessionTarget.controlledEntityId
-          : undefined;
-        if (isNil(controlledEntityId)) {
-          this.clearPhysicalInputState("possession-unbound");
-          this.lastPossessedControlledEntityId = undefined;
-        } else {
-          if (
-            this.lastPossessedControlledEntityId !== undefined &&
-            this.lastPossessedControlledEntityId !== controlledEntityId
-          ) {
-            this.clearPhysicalInputState("possession-rebind");
-          }
-          this.lastPossessedControlledEntityId = controlledEntityId;
-        }
-        const cameraActions = isNil(controlledEntityId)
-          ? []
-          : [...this.cameraInput];
-        const gameplayActions = isNil(controlledEntityId)
-          ? []
-          : this.keyboardInput.actions(
-            runtimeProjection.subjectStatesByEntityId[controlledEntityId]
-              ?.activeMotionKernelRef,
-          );
-        await this.runFixedInputWithCameraActions(
-          cameraActions,
-          gameplayActions,
-          ticks,
+        await task;
+      } finally {
+        this.lastSimulationDurationMilliseconds = Math.max(
+          0,
+          performance.now() - simulationStartedAtMilliseconds,
         );
-      } catch (error) {
-        if (this.disposed) return;
+        this.setLoopPhase("idle");
+        if (this.activeAnimationTask === task) {
+          this.activeAnimationTask = undefined;
+        }
+        this.animationPending = false;
+      }
+    }
+    if (this.disposed) return;
+    const renderStartedAtMilliseconds = performance.now();
+    this.setLoopPhase("render", renderStartedAtMilliseconds);
+    try {
+      this.render(this.renderInterpolationAlphaRatio());
+    } catch (error) {
+      this.pauseAfterLoopFailure(
+        "WORLDKIT_RUNTIME_RENDER_FRAME_FAILED",
+        "The runtime was paused after a render frame failed.",
+        error,
+      );
+      return;
+    } finally {
+      this.lastRenderDurationMilliseconds = Math.max(
+        0,
+        performance.now() - renderStartedAtMilliseconds,
+      );
+      this.setLoopPhase("idle");
+    }
+    const emitStartedAtMilliseconds = performance.now();
+    this.setLoopPhase("emit", emitStartedAtMilliseconds);
+    try {
+      this.emit();
+    } catch (error) {
+      this.pauseAfterLoopFailure(
+        "WORLDKIT_RUNTIME_UI_EMIT_FAILED",
+        "The runtime was paused after a UI snapshot listener failed.",
+        error,
+      );
+      return;
+    } finally {
+      this.lastEmitDurationMilliseconds = Math.max(
+        0,
+        performance.now() - emitStartedAtMilliseconds,
+      );
+      this.setLoopPhase("idle");
+    }
+    this.scheduleAnimationFrame();
+  }
+
+  private async runAnimationTicks(ticks: number): Promise<void> {
+    try {
+      const runtimeProjection = this.activeRuntime().snapshot();
+      const controlledEntityId = runtimeProjection.possessionTarget.mode === "possessed"
+        ? runtimeProjection.possessionTarget.controlledEntityId
+        : undefined;
+      if (isNil(controlledEntityId)) {
+        this.clearPhysicalInputState("possession-unbound");
+        this.lastPossessedControlledEntityId = undefined;
+      } else {
+        if (
+          this.lastPossessedControlledEntityId !== undefined &&
+          this.lastPossessedControlledEntityId !== controlledEntityId
+        ) {
+          this.clearPhysicalInputState("possession-rebind");
+        }
+        this.lastPossessedControlledEntityId = controlledEntityId;
+      }
+      const cameraActions = isNil(controlledEntityId)
+        ? []
+        : [...this.cameraInput];
+      const gameplayActions = isNil(controlledEntityId)
+        ? []
+        : this.keyboardInput.actions(
+          runtimeProjection.subjectStatesByEntityId[controlledEntityId]
+            ?.activeMotionKernelRef,
+        );
+      await this.runFixedInputWithCameraActions(
+        cameraActions,
+        gameplayActions,
+        ticks,
+      );
+    } catch (error) {
+      if (this.disposed) return;
+      const initialFailure = immutableRuntimeFailureAttempt(
+        this.activeRuntime().consumeFixedInputFailureDiagnostic?.(),
+      );
+      let recovered = false;
+      let recoveryFailure: BabylonFixedInputFailureDiagnosticV1 | null = null;
+      if (isRecoverablePreparedFixedInputFailure(error, initialFailure)) {
+        this.clearPhysicalInputState("fixed-input-recovery");
+        try {
+          await this.coordinator.runFixedInput({ actions: [], ticks: 1 });
+          recovered = true;
+          this.runtimeFailureDiagnostic = Object.freeze({
+            initial: initialFailure,
+            recovery: null,
+          });
+          this.frameLoopDiagnostic = {
+            severity: "warning",
+            code: "WORLDKIT_RUNTIME_FRAME_RECOVERED",
+            instancePath: "",
+            message:
+              "A rejected input frame was rolled back and the runtime recovered safely.",
+          };
+          console.warn("WORLDKIT_RUNTIME_FRAME_RECOVERED", error);
+        } catch (recoveryError) {
+          recoveryFailure = immutableRuntimeFailureAttempt(
+            this.activeRuntime().consumeFixedInputFailureDiagnostic?.(),
+          );
+          console.error(
+            "WORLDKIT_RUNTIME_FRAME_RECOVERY_FAILED",
+            recoveryError,
+          );
+        }
+      }
+      if (!recovered) {
+        this.runtimeFailureDiagnostic = Object.freeze({
+          initial: initialFailure,
+          recovery: recoveryFailure,
+        });
         this.paused = true;
+        this.coordinator.setPaused(true);
         this.frameLoopDiagnostic = {
           severity: "error",
           code: "WORLDKIT_RUNTIME_FRAME_FAILED",
@@ -1471,14 +1696,8 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
           message: "The runtime was paused after a simulation frame failed.",
         };
         console.error("WORLDKIT_RUNTIME_FRAME_FAILED", error);
-      } finally {
-        this.animationPending = false;
       }
     }
-    if (this.disposed) return;
-    this.render(this.renderInterpolationAlphaRatio());
-    this.emit();
-    this.scheduleAnimationFrame();
   }
 
   private consumeFixedTicks(timestampMilliseconds: number): number {
@@ -1532,6 +1751,31 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.previousAnimationTimestampMilliseconds = null;
     this.fixedStepAccumulatorSeconds = 0;
     this.displayFramesPerSecond = 0;
+  }
+
+  private setLoopPhase(
+    phase: PlaygroundRuntimeLoopPhaseV1,
+    startedAtMonotonicMilliseconds = performance.now(),
+  ): void {
+    this.loopPhase = phase;
+    this.loopPhaseStartedAtMonotonicMilliseconds =
+      startedAtMonotonicMilliseconds;
+  }
+
+  private pauseAfterLoopFailure(
+    code: string,
+    message: string,
+    error: unknown,
+  ): void {
+    this.paused = true;
+    this.coordinator.setPaused(true);
+    this.frameLoopDiagnostic = {
+      severity: "error",
+      code,
+      instancePath: "",
+      message,
+    };
+    console.error(code, error);
   }
 
   private clearPhysicalInputState(

@@ -26,6 +26,7 @@ function group(
     role: "primary-subject",
     semanticClassId: "visual.subject",
     identityColor: "#E85D5D",
+    frontDirectionWorldXZ: [0, -1],
   };
 }
 
@@ -40,6 +41,7 @@ function finalMap(): SceneBriefImplementationMapV1 {
     visualTargetMappings: [{
       visualTargetId: "visual-target-1",
       runtimeEntityIds: ["player"],
+      frontDirectionWorldXZ: [0, -1],
     }],
     visualCaptureGroups: [group()],
   };
@@ -146,6 +148,7 @@ describe("hosted visual capture contracts", () => {
       visualTargetMappings: [{
         visualTargetId: "visual-target-1",
         runtimeEntityIds: ["player"],
+        frontDirectionWorldXZ: [0, -1],
       }],
     };
     expect(validateSceneBriefImplementationMapDraftV1(draft)).toEqual([]);
@@ -193,6 +196,32 @@ describe("hosted visual capture contracts", () => {
     }));
   });
 
+  it("rejects missing, diagonal, and mapping-divergent front directions", () => {
+    expect(validateVisualCaptureGroupsV1([{
+      ...group(),
+      frontDirectionWorldXZ: undefined,
+    }])).toContainEqual(expect.objectContaining({
+      code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+      instancePath: "/0/frontDirectionWorldXZ",
+    }));
+    expect(validateVisualCaptureGroupsV1([{
+      ...group(),
+      frontDirectionWorldXZ: [1, 1],
+    }])).toContainEqual(expect.objectContaining({
+      code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+    }));
+    expect(validateSceneBriefImplementationMapV1({
+      ...finalMap(),
+      visualCaptureGroups: [{
+        ...group(),
+        frontDirectionWorldXZ: [1, 0],
+      }],
+    })).toContainEqual(expect.objectContaining({
+      code: "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH",
+      instancePath: "/visualCaptureGroups/0",
+    }));
+  });
+
   it("requires complete one-to-one mapping/group closure", () => {
     const value: SceneBriefImplementationMapV1 = {
       ...finalMap(),
@@ -201,15 +230,15 @@ describe("hosted visual capture contracts", () => {
     expect(validateSceneBriefImplementationMapV1(value)).toContainEqual(
       expect.objectContaining({
         code: "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH",
-        instancePath: "/visualCaptureGroups/0/runtimeEntityIds",
+        instancePath: "/visualCaptureGroups/0",
       }),
     );
 
     const reusedEntity: SceneBriefImplementationMapV1 = {
       ...finalMap(),
       visualTargetMappings: [
-        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-        { visualTargetId: "visual-target-2", runtimeEntityIds: ["player"] },
+        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+        { visualTargetId: "visual-target-2", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
       ],
     };
     expect(validateSceneBriefImplementationMapV1(reusedEntity)).toContainEqual(

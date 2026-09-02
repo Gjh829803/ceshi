@@ -45,6 +45,12 @@ Delete unused visual-target example lines. Keep 1-5 total; never pad the list.
 Always keep one continuous geographic world in the current workflow. Do not
 add S1/S2 panels, portals, teleports, or a second hidden scene.
 When several complete instances intentionally share one appearance, replace the landmark line with `- 重复标志物｜名称：共同外观说明` and keep them as one target.
+`标志物` is not limited to buildings. A prominent non-controlled person,
+animal, creature, mount, vehicle, machine, sculpture, or signature prop uses
+`- 标志物｜名称：完整身份与外观说明` when its identity materially defines the
+reference. Several intentionally identical important instances use one
+`重复标志物` line. Keep `主体` reserved for the one controlled Subject; ordinary
+background crowds, herds, traffic, and decoration do not consume target slots.
 The seven common movement labels are examples. Use one bullet per real mode and
 put the startup/default mode first. A custom line such as
 `- 磁力墙面行走：主体可吸附墙面并沿连续墙体移动。` is valid when it better matches the request.

@@ -45,6 +45,7 @@ describe("Unified WorldKit Planner skill", () => {
     expect(plannerPrompt).toContain("entry-whitebox-target.png");
     expect(plannerPrompt).toContain("built-in image generation tool");
     expect(plannerPrompt).toContain("1-5 visual targets");
+    expect(plannerPrompt).toContain("Important non-controlled people, animals");
     expect(plannerPrompt).toContain("one or more standard or custom movement modes");
     expect(plannerPrompt).toContain("four separate provenance sections required by current main");
     expect(plannerPrompt).toContain("Planner does not select Subject Definitions");
@@ -52,6 +53,8 @@ describe("Unified WorldKit Planner skill", () => {
     expect(plannerPrompt).toContain("discrete-cube block-whitebox renders");
     expect(plannerPrompt).toContain("ground-motion support, collision, interaction, water/cloud semantics");
     expect(skill).toContain("Create exactly three files");
+    expect(skill).toContain("Do not interpret `标志物` as architecture only");
+    expect(skill).toContain("scene-defining non-controlled person/animal/creature");
     expect(skill).toContain("built-in image generation tool");
     expect(skill).toContain("discrete-cube rendering");
     expect(skill).toContain("small red spawn-position token");
@@ -90,6 +93,7 @@ describe("Unified WorldKit Planner skill", () => {
     expect(imageContract).toContain("#00B8A9");
     expect(imageContract).toContain("Air is empty space, not a block");
     expect(imageContract).toContain("The images describe buildable three-dimensional volumes");
+    expect(imageContract).toContain("important non-controlled person, animal");
     expect(imageContract).toContain("Do not use camera-facing\nslabs");
     expect(imageContract).toContain("Keep the same elevation hierarchy");
     expect(imageContract).toContain("Studio renders the authoritative");

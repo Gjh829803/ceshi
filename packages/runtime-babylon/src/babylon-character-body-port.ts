@@ -66,6 +66,9 @@ export interface BabylonCharacterBodyTransactionPortV1
   extends CharacterBodyPortV1 {
   commitTick(token: MovementTickTokenV1): void;
   abortTick(token: MovementTickTokenV1): void;
+  readLatestSupportObservationDiagnostic():
+    | BabylonCharacterBodySupportObservationDiagnosticV1
+    | undefined;
   resetToState(state: Readonly<{
     positionMetersXYZ: MovementVec3V1;
     linearVelocityMetersPerSecondXYZ: MovementVec3V1;
@@ -108,6 +111,28 @@ export interface BabylonCharacterBodyNativeSupportV1 {
   readonly averageAngularSurfaceVelocityRadiansPerSecondXYZ?: MovementVec3V1;
 }
 
+export type BabylonCharacterBodySupportObservationResolutionV1 =
+  | "native-unsupported"
+  | "native-normal"
+  | "contact-derived-normal"
+  | "unsupported-upward-departure"
+  | "unsupported-provider-incoherent";
+
+/**
+ * Read-only provider telemetry. It never participates in Snapshot, Hash,
+ * Reset, Replay, Rollback, input interpretation, or movement decisions.
+ */
+export interface BabylonCharacterBodySupportObservationDiagnosticV1 {
+  readonly schemaVersion: 1;
+  readonly tick: number;
+  readonly rawMode: BabylonCharacterBodyNativeSupportV1["mode"];
+  readonly rawNormalWorldXYZ: MovementVec3V1;
+  readonly contactCount: number;
+  readonly supportingContactCount: number;
+  readonly upwardSupportDepartureActive: boolean;
+  readonly resolution: BabylonCharacterBodySupportObservationResolutionV1;
+}
+
 export interface BabylonCharacterBodyNativeIntegrateRequestV1 {
   readonly fixedDeltaSeconds: number;
   readonly translationDeltaMetersXYZ: MovementVec3V1;
@@ -133,6 +158,7 @@ export interface BabylonCharacterBodyNativeDriverV1 {
     fixedDeltaSeconds: number,
     gravityDirectionXYZ: MovementVec3V1,
   ): BabylonCharacterBodyNativeSupportV1;
+  isBlockWorldSupportContinuityActive?(): boolean;
   integrateExactTranslation(
     request: BabylonCharacterBodyNativeIntegrateRequestV1,
   ): BabylonCharacterBodyNativeIntegrateResultV1;
@@ -158,6 +184,7 @@ interface BabylonManifoldContactV1 {
   readonly bodyB: {
     readonly body: {
       readonly isDisposed?: boolean;
+      readonly transformNode: TransformNode;
       getMotionType(index: number): number;
     };
     readonly index: number;
@@ -195,12 +222,16 @@ interface GroundAwareControllerSnapshotV1 {
   readonly lastVelocity: Vector3;
   readonly lastInvDeltaTime: number;
   readonly bodyPositionTracking: Map<number, BabylonBodyPositionTrackingV1>;
+  readonly exactTranslationPreparedForCurrentIntegrate: boolean;
+  readonly exactTranslationLeavesSupportForCurrentIntegrate: boolean;
+  readonly blockWorldSupportContinuityActive: boolean;
+  readonly blockWorldSupportGraceTicksRemaining: number;
+  readonly lastBlockWorldSupport: CharacterSurfaceInfo | undefined;
 }
 
 const STEP_UP_FORWARD_CLEARANCE_METERS = 0.02;
 const STATIC_PHYSICS_MOTION_TYPE = 0;
 const DYNAMIC_PHYSICS_MOTION_TYPE = 2;
-const SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND = 0.5;
 const SNAP_DOWN_MINIMUM_DROP_METERS = 1e-4;
 const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
 const BLOCK_WORLD_MAXIMUM_CONTINUOUS_SNAP_METERS = 0.002;
@@ -260,7 +291,11 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
   private stepUpEnabledForCurrentIntegrate = false;
   private stepUpAppliedForCurrentIntegrate = false;
   private lastIntegrateAppliedStepUp = false;
+  private exactTranslationPreparedForCurrentIntegrate = false;
   private exactTranslationLeavesSupportForCurrentIntegrate = false;
+  private blockWorldSupportContinuityActive = false;
+  private blockWorldSupportGraceTicksRemaining = 0;
+  private lastBlockWorldSupport: CharacterSurfaceInfo | undefined;
   private ownedResourcesDisposed = false;
 
   private privateHost(): PhysicsCharacterControllerPrivateHostV1 {
@@ -287,6 +322,111 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     return closest;
   }
 
+  override checkSupport(
+    deltaTime: number,
+    direction: Vector3,
+  ): CharacterSurfaceInfo {
+    this.blockWorldSupportContinuityActive = false;
+    const support = super.checkSupport(deltaTime, direction);
+    if (support.supportedState !== CharacterSupportedState.UNSUPPORTED) {
+      const isBlockWorldSupport = this.privateHost()._manifold.some(
+        (contact) => {
+          const transformNode = contact.bodyB.body.transformNode;
+          return typeof transformNode.metadata?.blockWorldCollisionChunkKey ===
+              "string" ||
+            transformNode.name.startsWith(
+              "worldkit.block-collision-chunk.",
+            );
+        },
+      );
+      if (isBlockWorldSupport) {
+        this.blockWorldSupportContinuityActive = true;
+        this.blockWorldSupportGraceTicksRemaining = 1;
+        this.lastBlockWorldSupport = {
+          supportedState: support.supportedState,
+          averageSurfaceNormal: support.averageSurfaceNormal.clone(),
+          averageSurfaceVelocity: support.averageSurfaceVelocity.clone(),
+          averageAngularSurfaceVelocity:
+            support.averageAngularSurfaceVelocity.clone(),
+          isSurfaceDynamic: support.isSurfaceDynamic,
+        };
+      } else {
+        this.blockWorldSupportGraceTicksRemaining = 0;
+        this.lastBlockWorldSupport = undefined;
+      }
+      return support;
+    }
+    const probeDistance = this.keepDistance + this.keepContactTolerance;
+    if (!(probeDistance > 0)) return support;
+    const position = this.getPosition();
+    this._castWithCollectors(
+      position,
+      position.subtract(this.up.scale(probeDistance)),
+      this.privateHost()._castCollector,
+    );
+    const hit = this.closestWalkableCastHit();
+    if (hit === null || hit.body === null) {
+      const retained = this.lastBlockWorldSupport;
+      if (
+        retained !== undefined &&
+        this.blockWorldSupportGraceTicksRemaining > 0 &&
+        Vector3.Dot(this.getVelocity(), this.up) <=
+          BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
+      ) {
+        this.blockWorldSupportGraceTicksRemaining -= 1;
+        this.blockWorldSupportContinuityActive = true;
+        return {
+          supportedState: retained.supportedState,
+          averageSurfaceNormal: retained.averageSurfaceNormal.clone(),
+          averageSurfaceVelocity: retained.averageSurfaceVelocity.clone(),
+          averageAngularSurfaceVelocity:
+            retained.averageAngularSurfaceVelocity.clone(),
+          isSurfaceDynamic: retained.isSurfaceDynamic,
+        };
+      }
+      this.lastBlockWorldSupport = undefined;
+      return support;
+    }
+    if (
+      hit.body.body.getMotionType(hit.body.index) ===
+        DYNAMIC_PHYSICS_MOTION_TYPE
+    ) return support;
+    const collisionTransformNode = hit.body.body.transformNode;
+    const isBlockWorldSurface =
+      typeof collisionTransformNode.metadata?.blockWorldCollisionChunkKey ===
+        "string" ||
+      collisionTransformNode.name.startsWith(
+        "worldkit.block-collision-chunk.",
+      );
+    if (!isBlockWorldSurface) return support;
+    const supportGapMeters = hit.fraction * probeDistance - this.keepDistance;
+    if (
+      supportGapMeters < -this.keepDistance ||
+      supportGapMeters > this.keepContactTolerance
+    ) return support;
+    this.blockWorldSupportContinuityActive = true;
+    this.blockWorldSupportGraceTicksRemaining = 1;
+    const recovered = {
+      supportedState: CharacterSupportedState.SUPPORTED,
+      averageSurfaceNormal: hit.normal.normalizeToNew(),
+      averageSurfaceVelocity: Vector3.Zero(),
+      averageAngularSurfaceVelocity: Vector3.Zero(),
+      isSurfaceDynamic: false,
+    };
+    this.lastBlockWorldSupport = {
+      ...recovered,
+      averageSurfaceNormal: recovered.averageSurfaceNormal.clone(),
+      averageSurfaceVelocity: recovered.averageSurfaceVelocity.clone(),
+      averageAngularSurfaceVelocity:
+        recovered.averageAngularSurfaceVelocity.clone(),
+    };
+    return recovered;
+  }
+
+  isBlockWorldSupportContinuityActive(): boolean {
+    return this.blockWorldSupportContinuityActive;
+  }
+
   refreshCurrentManifold(): void {
     this._refreshManifoldAtPosition(this.getPosition());
   }
@@ -304,6 +444,7 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     host._lastDisplacement.copyFrom(translationDeltaMeters);
     host._lastVelocity.copyFrom(driverVelocityMetersPerSecond);
     host._lastInvDeltaTime = 1 / fixedDeltaSeconds;
+    this.exactTranslationPreparedForCurrentIntegrate = true;
     this.exactTranslationLeavesSupportForCurrentIntegrate =
       Vector3.Dot(translationDeltaMeters, this.up) >
         BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 &&
@@ -322,12 +463,51 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       lastVelocity: host._lastVelocity.clone(),
       lastInvDeltaTime: host._lastInvDeltaTime,
       bodyPositionTracking: cloneBodyPositionTracking(host._bodyPositionTracking),
+      exactTranslationPreparedForCurrentIntegrate:
+        this.exactTranslationPreparedForCurrentIntegrate,
+      exactTranslationLeavesSupportForCurrentIntegrate:
+        this.exactTranslationLeavesSupportForCurrentIntegrate,
+      blockWorldSupportContinuityActive:
+        this.blockWorldSupportContinuityActive,
+      blockWorldSupportGraceTicksRemaining:
+        this.blockWorldSupportGraceTicksRemaining,
+      lastBlockWorldSupport: this.lastBlockWorldSupport === undefined
+        ? undefined
+        : {
+            supportedState: this.lastBlockWorldSupport.supportedState,
+            averageSurfaceNormal:
+              this.lastBlockWorldSupport.averageSurfaceNormal.clone(),
+            averageSurfaceVelocity:
+              this.lastBlockWorldSupport.averageSurfaceVelocity.clone(),
+            averageAngularSurfaceVelocity:
+              this.lastBlockWorldSupport.averageAngularSurfaceVelocity.clone(),
+            isSurfaceDynamic: this.lastBlockWorldSupport.isSurfaceDynamic,
+          },
     };
   }
 
   restoreTransactionalState(snapshot: GroundAwareControllerSnapshotV1): void {
     const host = this.privateHost();
-    this.exactTranslationLeavesSupportForCurrentIntegrate = false;
+    this.exactTranslationPreparedForCurrentIntegrate =
+      snapshot.exactTranslationPreparedForCurrentIntegrate;
+    this.exactTranslationLeavesSupportForCurrentIntegrate =
+      snapshot.exactTranslationLeavesSupportForCurrentIntegrate;
+    this.blockWorldSupportContinuityActive =
+      snapshot.blockWorldSupportContinuityActive;
+    this.blockWorldSupportGraceTicksRemaining =
+      snapshot.blockWorldSupportGraceTicksRemaining;
+    this.lastBlockWorldSupport = snapshot.lastBlockWorldSupport === undefined
+      ? undefined
+      : {
+          supportedState: snapshot.lastBlockWorldSupport.supportedState,
+          averageSurfaceNormal:
+            snapshot.lastBlockWorldSupport.averageSurfaceNormal.clone(),
+          averageSurfaceVelocity:
+            snapshot.lastBlockWorldSupport.averageSurfaceVelocity.clone(),
+          averageAngularSurfaceVelocity:
+            snapshot.lastBlockWorldSupport.averageAngularSurfaceVelocity.clone(),
+          isSurfaceDynamic: snapshot.lastBlockWorldSupport.isSurfaceDynamic,
+        };
     this.setPosition(snapshot.position);
     this.setVelocity(snapshot.velocity);
     host._manifold.splice(
@@ -642,27 +822,82 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       effectiveSurfaceInfo.supportedState === CharacterSupportedState.SUPPORTED;
     this.stepUpAppliedForCurrentIntegrate = false;
     try {
+      if (!leavesSupport) {
+        this.preservePlanarTranslationOnWalkableSupport(
+          effectiveSurfaceInfo,
+          deltaTime,
+        );
+      }
       super.integrate(deltaTime, effectiveSurfaceInfo, gravity);
       if (!leavesSupport) {
-        this.snapDownToWalkableSupport(effectiveSurfaceInfo);
+        this.settleUncommandedUpwardSeparation(effectiveSurfaceInfo);
+        if (!this.stepUpAppliedForCurrentIntegrate) {
+          this.snapDownToWalkableSupport(effectiveSurfaceInfo, deltaTime);
+        }
       }
     } finally {
       this.lastIntegrateAppliedStepUp = this.stepUpAppliedForCurrentIntegrate;
       this.stepUpEnabledForCurrentIntegrate = false;
       this.stepUpAppliedForCurrentIntegrate = false;
+      this.exactTranslationPreparedForCurrentIntegrate = false;
       this.exactTranslationLeavesSupportForCurrentIntegrate = false;
     }
   }
 
+  private preservePlanarTranslationOnWalkableSupport(
+    supportBeforeIntegrate: CharacterSurfaceInfo,
+    deltaTime: number,
+  ): void {
+    if (
+      supportBeforeIntegrate.supportedState !== CharacterSupportedState.SUPPORTED ||
+      !(deltaTime > 0)
+    ) return;
+    const normal = supportBeforeIntegrate.averageSurfaceNormal.normalizeToNew();
+    const normalUp = Vector3.Dot(normal, this.up);
+    if (normalUp < Math.max(this.maxSlopeCosine, 0.1)) return;
+    const host = this.privateHost();
+    const semanticTranslation = host._lastDisplacement.clone();
+    const semanticVerticalMeters = Vector3.Dot(semanticTranslation, this.up);
+    if (
+      Math.abs(semanticVerticalMeters) >
+        BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
+    ) return;
+    const planarTranslation = semanticTranslation.subtract(
+      this.up.scale(semanticVerticalMeters),
+    );
+    if (planarTranslation.lengthSquared() <= 1e-12) return;
+    const tangentVerticalMeters = -Vector3.Dot(planarTranslation, normal) /
+      normalUp;
+    // Uphill motion must explicitly carry the planar Feel displacement onto
+    // the support tangent. Downhill descent remains owned by snap-down below;
+    // feeding a downward tangent into Havok can add solver-side XZ progress.
+    if (
+      !Number.isFinite(tangentVerticalMeters) ||
+      tangentVerticalMeters <=
+        BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 ||
+      Math.abs(tangentVerticalMeters) >
+        this.maxStepHeight + BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
+    ) return;
+    const tangentTranslation = planarTranslation.add(
+      this.up.scale(tangentVerticalMeters),
+    );
+    const tangentVelocity = tangentTranslation.scale(1 / deltaTime);
+    host._lastDisplacement.copyFrom(tangentTranslation);
+    host._lastVelocity.copyFrom(tangentVelocity);
+    host._lastInvDeltaTime = 1 / deltaTime;
+    this.setVelocity(tangentVelocity);
+  }
+
   private snapDownToWalkableSupport(
     supportBeforeIntegrate: CharacterSurfaceInfo,
+    deltaTime: number,
   ): void {
     if (
       supportBeforeIntegrate.supportedState === CharacterSupportedState.UNSUPPORTED
     ) return;
     if (
       Vector3.Dot(this.getVelocity(), this.up) >
-      SNAP_DOWN_UPWARD_SPEED_LIMIT_METERS_PER_SECOND
+      BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
     ) return;
     const maxStepHeight = this.maxStepHeight;
     if (!(maxStepHeight > 0)) return;
@@ -674,45 +909,79 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
     const horizontalVelocity = velocity.subtract(this.up.scale(verticalSpeed));
     const horizontalSpeed = horizontalVelocity.length();
     const radiusMeters = this.shapeOptions.capsuleRadius ?? 0;
-    const probeOrigin = horizontalSpeed > 1e-6
-      ? position.add(horizontalVelocity.scale(
-          (radiusMeters + keepDistance) / horizontalSpeed,
-        ))
-      : position;
-    const downEnd = probeOrigin.subtract(this.up.scale(downDistance));
-    this._castWithCollectors(
-      probeOrigin,
-      downEnd,
-      this.privateHost()._castCollector,
-    );
-    const hit = this.closestWalkableCastHit();
-    if (hit === null || hit.body === null) return;
-    if (hit.body.body.getMotionType(hit.body.index) === DYNAMIC_PHYSICS_MOTION_TYPE) {
-      return;
+    const forwardProbeOffset = horizontalSpeed > 1e-6
+      ? horizontalVelocity.scale((radiusMeters + keepDistance) / horizontalSpeed)
+      : Vector3.Zero();
+    const probeOrigins = horizontalSpeed > 1e-6
+      ? [
+          position,
+          position.add(forwardProbeOffset.scale(0.5)),
+          position.add(forwardProbeOffset),
+        ]
+      : [position];
+    let hit: CharacterCastHit | null = null;
+    let landingDrop = Number.POSITIVE_INFINITY;
+    let isReconstructedBlockWorldSurface = false;
+    for (const candidateProbeOrigin of probeOrigins) {
+      this._castWithCollectors(
+        candidateProbeOrigin,
+        candidateProbeOrigin.subtract(this.up.scale(downDistance)),
+        this.privateHost()._castCollector,
+      );
+      const candidateHit = this.closestWalkableCastHit();
+      if (candidateHit === null || candidateHit.body === null) continue;
+      if (
+        candidateHit.body.body.getMotionType(candidateHit.body.index) ===
+          DYNAMIC_PHYSICS_MOTION_TYPE
+      ) continue;
+      const collisionTransformNode = candidateHit.body.body.transformNode;
+      const candidateIsReconstructedBlockWorldSurface =
+        typeof collisionTransformNode.metadata?.blockWorldCollisionChunkKey === "string" ||
+        collisionTransformNode.name.startsWith("worldkit.block-collision-chunk.");
+      if (
+        Vector3.Dot(candidateHit.normal, this.up) <
+          Math.max(this.maxSlopeCosine, 0.1)
+      ) continue;
+      if (
+        Vector3.Dot(
+          candidateHit.normal,
+          supportBeforeIntegrate.averageSurfaceNormal,
+        ) < 1 - SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON &&
+        !candidateIsReconstructedBlockWorldSurface
+      ) continue;
+      const candidateDrop = candidateHit.fraction * downDistance - keepDistance +
+        Vector3.Dot(candidateProbeOrigin.subtract(position), this.up);
+      if (
+        candidateDrop <= SNAP_DOWN_MINIMUM_DROP_METERS ||
+        candidateDrop > maxStepHeight ||
+        candidateDrop >= landingDrop
+      ) continue;
+      hit = candidateHit;
+      landingDrop = candidateDrop;
+      isReconstructedBlockWorldSurface =
+        candidateIsReconstructedBlockWorldSurface;
     }
-    const collisionTransformNode = hit.body.body.transformNode;
-    const isReconstructedBlockWorldSurface =
-      typeof collisionTransformNode.metadata?.blockWorldCollisionChunkKey === "string" ||
-      collisionTransformNode.name.startsWith("worldkit.block-collision-chunk.");
-    if (
-      Vector3.Dot(hit.normal, this.up) < Math.max(this.maxSlopeCosine, 0.1)
-    ) return;
-    if (
-      Vector3.Dot(hit.normal, supportBeforeIntegrate.averageSurfaceNormal) <
-        1 - SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON &&
-      !isReconstructedBlockWorldSurface
-    ) return;
-    const probeDrop = hit.fraction * downDistance - keepDistance;
-    const landingDrop = probeDrop + Vector3.Dot(
-      probeOrigin.subtract(position),
-      this.up,
+    if (hit === null) return;
+    const normalizedHitNormal = hit.normal.normalizeToNew();
+    const normalUp = Math.max(
+      0.000001,
+      Math.abs(Vector3.Dot(normalizedHitNormal, this.up)),
     );
-    if (
-      landingDrop <= SNAP_DOWN_MINIMUM_DROP_METERS ||
-      landingDrop > maxStepHeight
-    ) return;
+    const normalPlanarRatio = normalizedHitNormal.subtract(
+      this.up.scale(Vector3.Dot(normalizedHitNormal, this.up)),
+    ).length() / normalUp;
+    const maximumContinuousSnapMeters = Math.min(
+      maxStepHeight,
+      // One Tick may descend by the planar distance multiplied by the
+      // physical slope gradient. The small fixed allowance covers provider
+      // contact tolerance without turning snap-down into a ledge teleport.
+      BLOCK_WORLD_MAXIMUM_CONTINUOUS_SNAP_METERS +
+        horizontalSpeed * deltaTime * normalPlanarRatio,
+    );
     const continuousLandingDrop = isReconstructedBlockWorldSurface
-      ? Math.min(landingDrop, BLOCK_WORLD_MAXIMUM_CONTINUOUS_SNAP_METERS)
+      ? landingDrop <= keepDistance
+        ? landingDrop
+        : Math.min(landingDrop, maximumContinuousSnapMeters)
       : landingDrop;
     const landingPosition = position.subtract(
       this.up.scale(continuousLandingDrop),
@@ -728,7 +997,6 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       const stabilizedHorizontalVelocity = stabilizedVelocity.subtract(
         this.up.scale(stabilizedVerticalSpeed),
       );
-      const normalizedHitNormal = hit.normal.normalizeToNew();
       const expectedTangentDescentMetersPerSecond =
         stabilizedHorizontalVelocity.length() *
         Math.hypot(normalizedHitNormal.x, normalizedHitNormal.z) /
@@ -743,6 +1011,96 @@ export class GroundAwarePhysicsCharacterController extends PhysicsCharacterContr
       }
     }
   }
+
+  private settleUncommandedUpwardSeparation(
+    supportBeforeIntegrate: CharacterSurfaceInfo,
+  ): void {
+    if (
+      !this.exactTranslationPreparedForCurrentIntegrate ||
+      this.stepUpAppliedForCurrentIntegrate ||
+      supportBeforeIntegrate.supportedState !== CharacterSupportedState.SUPPORTED
+    ) return;
+    const velocity = this.getVelocity();
+    const verticalSpeed = Vector3.Dot(velocity, this.up);
+    if (
+      verticalSpeed <= BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 ||
+      !(this.maxStepHeight > 0)
+    ) return;
+
+    const minimumWalkableAlignment = Math.max(this.maxSlopeCosine, 0.1);
+    const walkableContacts = this.privateHost()._manifold.filter((contact) =>
+      contact.bodyB.body.getMotionType(contact.bodyB.index) !==
+        DYNAMIC_PHYSICS_MOTION_TYPE &&
+      Vector3.Dot(contact.normal, this.up) >= minimumWalkableAlignment
+    );
+    const hadWalkableSupportBeforeSettle = walkableContacts.some((contact) =>
+      contact.distance <= this.keepContactTolerance
+    );
+    const nearbyWalkableContacts = walkableContacts.filter((contact) =>
+      contact.distance > this.keepContactTolerance &&
+      contact.distance <= this.keepContactTolerance + this.maxStepHeight
+    ).sort((left, right) => left.distance - right.distance);
+    const contact = nearbyWalkableContacts[0];
+    if (contact === undefined) {
+      if (hadWalkableSupportBeforeSettle) return;
+      // Walking off the end of a rising terrain surface is not a Jump. Do not
+      // let the last supported slope tangent become an uncommanded takeoff;
+      // gravity owns the following unsupported Tick.
+      this.setVelocity(velocity.subtract(this.up.scale(verticalSpeed)));
+      return;
+    }
+
+    const normal = contact.normal.normalizeToNew();
+    const normalUp = Vector3.Dot(normal, this.up);
+    if (normalUp < minimumWalkableAlignment) return;
+    const targetDistance = Math.max(
+      this.keepContactTolerance - Math.min(this.keepDistance, 0.001),
+      0,
+    );
+    const settlingDistance = (contact.distance - targetDistance) / normalUp;
+    if (
+      settlingDistance <= BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1 ||
+      settlingDistance >
+        this.maxStepHeight + BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
+    ) return;
+
+    const snapshot = this.captureTransactionalState();
+    const settledPosition = snapshot.position.subtract(
+      this.up.scale(settlingDistance),
+    );
+    this.setPosition(settledPosition);
+    this._refreshManifoldAtPosition(settledPosition);
+    const settledManifold = this.privateHost()._manifold;
+    const penetratesBlockingSurface = settledManifold.some((candidate) =>
+      Vector3.Dot(candidate.normal, this.up) < minimumWalkableAlignment &&
+      candidate.distance < -this.keepDistance
+    );
+    const hasWalkableSupport = settledManifold.some((candidate) =>
+      candidate.bodyB.body.getMotionType(candidate.bodyB.index) !==
+        DYNAMIC_PHYSICS_MOTION_TYPE &&
+      Vector3.Dot(candidate.normal, this.up) >= minimumWalkableAlignment &&
+      candidate.distance <= this.keepContactTolerance
+    );
+    if (penetratesBlockingSurface || !hasWalkableSupport) {
+      this.restoreTransactionalState(snapshot);
+      return;
+    }
+
+    // Havok can separate a capsule upward when it grazes the edge between a
+    // walkable Block surface and a nearby obstacle. With no authored upward
+    // translation that separation is collision recovery, not Jump intent.
+    // Preserve planar Feel and any vertical component required by the actual
+    // support tangent, while removing only the solver-created excess lift.
+    const horizontalVelocity = velocity.subtract(this.up.scale(verticalSpeed));
+    const expectedTangentVerticalSpeed = Math.max(
+      0,
+      -Vector3.Dot(horizontalVelocity, normal) / normalUp,
+    );
+    const settledVelocity = horizontalVelocity.add(
+      this.up.scale(Math.min(verticalSpeed, expectedTangentVerticalSpeed)),
+    );
+    this.setVelocity(settledVelocity);
+  }
 }
 
 /** @internal Temporary construction reuse for MotionKernelRuntime until Task 7 deletes it. */
@@ -751,11 +1109,19 @@ export function createGroundAwareControllerInternal(
   shapeOptions: ConstructorParameters<typeof PhysicsCharacterController>[1],
   scene: Scene,
 ) {
-  return new GroundAwarePhysicsCharacterController(position, shapeOptions, scene);
+  return new GroundAwarePhysicsCharacterController(
+    position,
+    shapeOptions,
+    scene,
+  );
 }
 
 function invalid(detail: string): never {
   throw new RangeError(`3C_INPUT_INVALID: ${detail}`);
+}
+
+function providerObservationInvalid(detail: string): never {
+  throw new Error(`WORLDKIT_PROVIDER_OBSERVATION_INVALID: ${detail}`);
 }
 
 function stale(detail: string): never {
@@ -823,7 +1189,7 @@ function parseVec3(input: unknown): MovementVec3V1 {
 
 function parseOptions(input: unknown): BabylonCharacterBodyPortOptionsV1 {
   const value = record(input) ?? invalid("BodyPort options must be a plain record.");
-  if (!exact(value, [
+  const optionKeys = [
     "schemaVersion",
     "providerVersions",
     "scene",
@@ -832,7 +1198,9 @@ function parseOptions(input: unknown): BabylonCharacterBodyPortOptionsV1 {
     "capsule",
     "controller",
     "resetState",
-  ]) || value.schemaVersion !== 1 || !finite(value.fixedDeltaSeconds) ||
+  ];
+  if (!exact(value, optionKeys) || value.schemaVersion !== 1 ||
+    !finite(value.fixedDeltaSeconds) ||
     value.fixedDeltaSeconds <= 0 || !(value.scene instanceof Scene)) {
     invalid("BodyPort options are malformed.");
   }
@@ -1012,12 +1380,37 @@ function compareContacts(
     (left.motionType < right.motionType ? -1 : left.motionType > right.motionType ? 1 : 0);
 }
 
-function canonicalSupportNormal(
-  mode: BabylonCharacterBodyNativeSupportV1["mode"],
+function normalizedOrUndefined(
   input: MovementVec3V1,
-): MovementVec3V1 {
-  if (mode === "unsupported") return freezeVec3([0, 0, 0]);
-  return normalized(input, "support normal must be nonzero.");
+): MovementVec3V1 | undefined {
+  const length = Math.hypot(...input);
+  if (!finite(length) || length <= 1e-12) return undefined;
+  return freezeVec3(input.map((component) => component / length));
+}
+
+function unsupportedNativeSupport(): BabylonCharacterBodyNativeSupportV1 {
+  return Object.freeze({
+    mode: "unsupported",
+    averageSurfaceNormalXYZ: freezeVec3([0, 0, 0]),
+    isSurfaceDynamic: false,
+    averageSurfaceVelocityMetersPerSecondXYZ: freezeVec3([0, 0, 0]),
+    averageAngularSurfaceVelocityRadiansPerSecondXYZ: freezeVec3([0, 0, 0]),
+  });
+}
+
+function canonicalNativeSupport(
+  raw: BabylonCharacterBodyNativeSupportV1,
+  normal: MovementVec3V1,
+): BabylonCharacterBodyNativeSupportV1 {
+  return Object.freeze({
+    mode: raw.mode,
+    averageSurfaceNormalXYZ: normal,
+    isSurfaceDynamic: raw.isSurfaceDynamic,
+    averageSurfaceVelocityMetersPerSecondXYZ:
+      raw.averageSurfaceVelocityMetersPerSecondXYZ ?? freezeVec3([0, 0, 0]),
+    averageAngularSurfaceVelocityRadiansPerSecondXYZ:
+      raw.averageAngularSurfaceVelocityRadiansPerSecondXYZ ?? freezeVec3([0, 0, 0]),
+  });
 }
 
 function canonicalContact(
@@ -1203,12 +1596,29 @@ function assertProposalWasNotAmplified(
   const stepHeightAllowanceMeters = support.mode === "unsupported"
     ? 0
     : maxStepHeightMeters;
+  const maximumLandingSurfaceRiseMeters =
+    support.mode === "unsupported" &&
+      proposedVertical < 0 &&
+      projectionNormal !== undefined
+      ? (() => {
+          const normalUp = dot(projectionNormal, up);
+          if (!(normalUp > 0)) return 0;
+          const proposedPlanar = freezeVec3(proposed.map((component, axis) =>
+            component - up[axis]! * proposedVertical
+          ));
+          return Math.max(
+            0,
+            -dot(proposedPlanar, projectionNormal) / normalUp,
+          );
+        })()
+      : 0;
   const minimumVertical =
     Math.min(0, proposedVertical) - stepHeightAllowanceMeters -
     maximumSolverCorrectionMeters -
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
   const maximumVertical =
     Math.max(0, proposedVertical) + stepHeightAllowanceMeters +
+    maximumLandingSurfaceRiseMeters +
     maximumSolverCorrectionMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
   if (appliedVertical < minimumVertical || appliedVertical > maximumVertical) {
@@ -1229,7 +1639,8 @@ function assertProposalWasNotAmplified(
 }
 
 function parseNativeSupport(input: unknown): BabylonCharacterBodyNativeSupportV1 {
-  const value = record(input) ?? invalid("native support output is malformed.");
+  const value = record(input) ??
+    providerObservationInvalid("native support output is malformed.");
   const allowedKeys = [
     "mode",
     "averageSurfaceNormalXYZ",
@@ -1241,24 +1652,34 @@ function parseNativeSupport(input: unknown): BabylonCharacterBodyNativeSupportV1
     typeof key !== "string" || !allowedKeys.includes(key)
   ) || (value.mode !== "supported" && value.mode !== "sliding" &&
     value.mode !== "unsupported") || typeof value.isSurfaceDynamic !== "boolean") {
-    invalid("native support output is outside the closed driver surface.");
+    providerObservationInvalid(
+      "native support output is outside the closed driver surface.",
+    );
   }
-  const normal = canonicalSupportNormal(
-    value.mode,
-    parseVec3(value.averageSurfaceNormalXYZ),
-  );
-  return Object.freeze({
-    mode: value.mode,
-    averageSurfaceNormalXYZ: normal,
-    isSurfaceDynamic: value.isSurfaceDynamic,
-    averageSurfaceVelocityMetersPerSecondXYZ:
-      value.averageSurfaceVelocityMetersPerSecondXYZ === undefined
-        ? freezeVec3([0, 0, 0])
-        : parseVec3(value.averageSurfaceVelocityMetersPerSecondXYZ),
-    averageAngularSurfaceVelocityRadiansPerSecondXYZ:
+  let rawNormal: MovementVec3V1;
+  let averageSurfaceVelocity: MovementVec3V1;
+  let averageAngularSurfaceVelocity: MovementVec3V1;
+  try {
+    rawNormal = parseVec3(value.averageSurfaceNormalXYZ);
+    averageSurfaceVelocity = value.averageSurfaceVelocityMetersPerSecondXYZ === undefined
+      ? freezeVec3([0, 0, 0])
+      : parseVec3(value.averageSurfaceVelocityMetersPerSecondXYZ);
+    averageAngularSurfaceVelocity =
       value.averageAngularSurfaceVelocityRadiansPerSecondXYZ === undefined
         ? freezeVec3([0, 0, 0])
-        : parseVec3(value.averageAngularSurfaceVelocityRadiansPerSecondXYZ),
+        : parseVec3(value.averageAngularSurfaceVelocityRadiansPerSecondXYZ);
+  } catch {
+    providerObservationInvalid(
+      "native support vectors must be exact finite XYZ values.",
+    );
+  }
+  return Object.freeze({
+    mode: value.mode,
+    averageSurfaceNormalXYZ: rawNormal,
+    isSurfaceDynamic: value.isSurfaceDynamic,
+    averageSurfaceVelocityMetersPerSecondXYZ: averageSurfaceVelocity,
+    averageAngularSurfaceVelocityRadiansPerSecondXYZ:
+      averageAngularSurfaceVelocity,
   });
 }
 
@@ -1385,6 +1806,10 @@ class BabylonPhysicsCharacterControllerDriverV1
         support.averageAngularSurfaceVelocity.z,
       ]),
     });
+  }
+
+  isBlockWorldSupportContinuityActive(): boolean {
+    return this.controller.isBlockWorldSupportContinuityActive();
   }
 
   integrateExactTranslation(
@@ -1825,12 +2250,19 @@ interface BodyTokenRecordV1 {
   status: "begun" | "resolved" | "committed";
 }
 
+interface BeginSupportProjectionV1 {
+  readonly support: BodySampleV1["support"];
+  readonly nativeSupport: BabylonCharacterBodyNativeSupportV1;
+  readonly diagnostic: BabylonCharacterBodySupportObservationDiagnosticV1;
+}
+
 interface BodyTransactionV1 {
   readonly token: MovementTickTokenV1;
   readonly tick: number;
   readonly serial: number;
   readonly sample: BodySampleV1;
   readonly nativeSupport: BabylonCharacterBodyNativeSupportV1;
+  readonly blockWorldSupportContinuityActive: boolean;
   readonly beginCheckpoint: unknown;
   readonly upwardSupportDepartureActive: boolean;
 }
@@ -1850,6 +2282,8 @@ class BabylonCharacterBodyPortV1
   private beginAttemptEpoch = 0;
   private transaction: BodyTransactionV1 | undefined;
   private upwardSupportDepartureActive = false;
+  private latestSupportObservationDiagnostic:
+    BabylonCharacterBodySupportObservationDiagnosticV1 | undefined;
   private disposed = false;
 
   constructor(
@@ -1914,15 +2348,18 @@ class BabylonCharacterBodyPortV1
       const velocity = parseVec3(
         this.driver.getLinearVelocityMetersPerSecondXYZ(),
       );
-      const nativeSupport = parseNativeSupport(this.driver.checkSupport(
+      const rawNativeSupport = parseNativeSupport(this.driver.checkSupport(
         this.configuration.fixedDeltaSeconds,
         this.configuration.gravityDirectionXYZ,
       ));
+      const blockWorldSupportContinuityActive =
+        this.driver.isBlockWorldSupportContinuityActive?.() === true;
       const contacts = parseNativeContacts(this.driver.readCurrentContacts());
-      const support = this.projectBeginSupport(
+      const supportProjection = this.projectBeginSupport(
+        value.tick,
         position,
         velocity,
-        nativeSupport,
+        rawNativeSupport,
         contacts,
       );
       const sample = parseBodySampleV1({
@@ -1931,7 +2368,7 @@ class BabylonCharacterBodyPortV1
         tick: value.tick,
         positionMetersXYZ: position,
         linearVelocityMetersPerSecondXYZ: velocity,
-        support,
+        support: supportProjection.support,
       });
       const serial = this.serial + 1;
       this.serial = serial;
@@ -1946,10 +2383,12 @@ class BabylonCharacterBodyPortV1
         tick: value.tick,
         serial,
         sample,
-        nativeSupport,
+        nativeSupport: supportProjection.nativeSupport,
+        blockWorldSupportContinuityActive,
         beginCheckpoint: checkpoint,
         upwardSupportDepartureActive: this.upwardSupportDepartureActive,
       });
+      this.latestSupportObservationDiagnostic = supportProjection.diagnostic;
       return sample;
     } catch (error) {
       this.restorePreservingPrimary(checkpoint);
@@ -2028,6 +2467,8 @@ class BabylonCharacterBodyPortV1
       const post = this.projectPostContacts(
         proposal,
         position,
+        transaction.nativeSupport,
+        transaction.blockWorldSupportContinuityActive,
         contacts,
       );
       const velocity = this.projectPersistentVelocity(
@@ -2118,6 +2559,13 @@ class BabylonCharacterBodyPortV1
     this.transaction = undefined;
   }
 
+  readLatestSupportObservationDiagnostic():
+    | BabylonCharacterBodySupportObservationDiagnosticV1
+    | undefined {
+    this.assertLive();
+    return this.latestSupportObservationDiagnostic;
+  }
+
   abortTick(token: MovementTickTokenV1): void {
     this.assertLive();
     this.assertOwnedToken(token);
@@ -2185,6 +2633,7 @@ class BabylonCharacterBodyPortV1
     this.serial += 1;
     this.transaction = undefined;
     this.upwardSupportDepartureActive = false;
+    this.latestSupportObservationDiagnostic = undefined;
   }
 
   collisionFilterMasks(): Readonly<{
@@ -2272,51 +2721,91 @@ class BabylonCharacterBodyPortV1
     this.generation += 1;
     this.serial += 1;
     this.transaction = undefined;
+    this.latestSupportObservationDiagnostic = undefined;
     this.driver.dispose();
   }
 
   private projectBeginSupport(
+    tick: number,
     position: MovementVec3V1,
     velocity: MovementVec3V1,
     nativeSupport: BabylonCharacterBodyNativeSupportV1,
     contacts: readonly BabylonCharacterBodyNativeContactV1[],
-  ): BodySampleV1["support"] {
+  ): BeginSupportProjectionV1 {
     const up = freezeVec3(
       this.configuration.gravityDirectionXYZ.map((value) => value === 0 ? 0 : -value),
     );
-    if (
+    const supportingContacts = contacts.filter((contact) =>
+      dot(contact.normalXYZ, up) > 0.08 &&
+      contact.distanceMeters <= this.options.controller.keepContactToleranceMeters
+    );
+    const upwardDeparture =
       this.upwardSupportDepartureActive &&
-      dot(velocity, up) > 0
-    ) {
-      return Object.freeze({ mode: "unsupported" });
+      dot(velocity, up) > 0;
+    const diagnostic = (
+      resolution: BabylonCharacterBodySupportObservationResolutionV1,
+    ): BabylonCharacterBodySupportObservationDiagnosticV1 => Object.freeze({
+      schemaVersion: 1,
+      tick,
+      rawMode: nativeSupport.mode,
+      rawNormalWorldXYZ: nativeSupport.averageSurfaceNormalXYZ,
+      contactCount: contacts.length,
+      supportingContactCount: supportingContacts.length,
+      upwardSupportDepartureActive: upwardDeparture,
+      resolution,
+    });
+    const unsupported = (
+      resolution: BabylonCharacterBodySupportObservationResolutionV1,
+    ): BeginSupportProjectionV1 => Object.freeze({
+      support: Object.freeze({ mode: "unsupported" }),
+      nativeSupport: unsupportedNativeSupport(),
+      diagnostic: diagnostic(resolution),
+    });
+    if (upwardDeparture) {
+      return unsupported("unsupported-upward-departure");
     }
     if (nativeSupport.mode === "unsupported") {
-      return Object.freeze({ mode: "unsupported" });
+      return unsupported("native-unsupported");
     }
-    const normal = normalized(
+    const nativeNormal = normalizedOrUndefined(
       nativeSupport.averageSurfaceNormalXYZ,
-      "native support normal is invalid.",
     );
-    const supportingPoints = contacts
-      .filter((contact) =>
-        dot(contact.normalXYZ, up) > 0.08 &&
-        contact.distanceMeters <= this.options.controller.keepContactToleranceMeters
-      )
-      .map((contact) => contact.pointMetersXYZ);
+    const contactNormal = nativeNormal === undefined && supportingContacts.length > 0
+      ? normalizedOrUndefined(averageVec3(
+          supportingContacts.map((contact) => contact.normalXYZ),
+        ))
+      : undefined;
+    const normal = nativeNormal ?? contactNormal;
+    if (normal === undefined) {
+      return unsupported("unsupported-provider-incoherent");
+    }
+    const supportingPoints = supportingContacts.map(
+      (contact) => contact.pointMetersXYZ,
+    );
     const point = supportingPoints.length > 0
       ? averageVec3(supportingPoints)
       : addScaled(position, up, -this.options.capsule.heightMeters / 2);
     return Object.freeze({
-      mode: nativeSupport.mode,
-      pointMetersXYZ: point,
-      normalXYZ: normal,
-      isDynamic: nativeSupport.isSurfaceDynamic,
+      support: Object.freeze({
+        mode: nativeSupport.mode,
+        pointMetersXYZ: point,
+        normalXYZ: normal,
+        isDynamic: nativeSupport.isSurfaceDynamic,
+      }),
+      nativeSupport: canonicalNativeSupport(nativeSupport, normal),
+      diagnostic: diagnostic(
+        nativeNormal === undefined
+          ? "contact-derived-normal"
+          : "native-normal",
+      ),
     });
   }
 
   private projectPostContacts(
     proposal: MovementProposalV1,
     position: MovementVec3V1,
+    nativeSupport: BabylonCharacterBodyNativeSupportV1,
+    blockWorldSupportContinuityActive: boolean,
     contacts: readonly BabylonCharacterBodyNativeContactV1[],
   ): Pick<BodyResolutionV1, "support" | "hasCeilingContact"> {
     const up = freezeVec3(
@@ -2344,6 +2833,24 @@ class BabylonCharacterBodyPortV1
         ),
         normalXYZ: normal,
         isDynamic: supporting.some((contact) => contact.motionType === "dynamic"),
+      });
+    } else if (
+      !movingUp &&
+      blockWorldSupportContinuityActive &&
+      nativeSupport.mode !== "unsupported"
+    ) {
+      support = Object.freeze({
+        mode: nativeSupport.mode,
+        pointMetersXYZ: addScaled(
+          position,
+          up,
+          -this.options.capsule.heightMeters / 2,
+        ),
+        normalXYZ: normalized(
+          nativeSupport.averageSurfaceNormalXYZ,
+          "post-resolution support normal is invalid.",
+        ),
+        isDynamic: false,
       });
     }
     const proposedUpward = dot(proposal.translationDeltaMetersXYZ, up) >

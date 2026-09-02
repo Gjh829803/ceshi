@@ -92,6 +92,18 @@ describe("Scene Brief V1", () => {
     });
   });
 
+  it("keeps parenthetical priority notes on a standard movement label canonical", () => {
+    const result = parseSceneBriefV1(validBrief
+      .replace("陆地滑行", "陆地滑行（默认）")
+      .replace("空中飞行", "空中飞行 (备用)"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.movementModes).toEqual([
+      expect.objectContaining({ mode: "ground-slide", label: "陆地滑行（默认）" }),
+      expect.objectContaining({ mode: "flight", label: "空中飞行 (备用)" }),
+    ]);
+  });
+
   it("requires connected ground only when every declared movement mode is ground-based", () => {
     const groundOnly = parseSceneBriefV1(validBrief.replace(
       "- 空中飞行：主体可以离开地面自由升降和转向。\n",

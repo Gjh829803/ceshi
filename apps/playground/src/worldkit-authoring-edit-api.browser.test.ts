@@ -35,6 +35,7 @@ const BROWSER_V5_KEYS = [
   "listSubjectDefinitions",
   "ready",
   "releaseRuntimeActivity",
+  "relocateControlledSubjectForCapture",
   "reset",
   "resetCameraView",
   "runFixedInput",

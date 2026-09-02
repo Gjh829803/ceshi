@@ -414,7 +414,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
   });
 
   it.each(["begin", "resolve"] as const)(
-    "rolls JS and exact native state back when Body %s fails and rejects replay",
+    "rolls JS and exact native state back when Body %s fails, then admits a Host-verified retry",
     (failure) => {
       const projection = new ProjectionPort();
       const { body, movement, transaction } = createHarness({ projections: [projection] });
@@ -430,8 +430,21 @@ describe("Golden Humanoid 3C vNext transaction", () => {
         .toBe(beforeBody);
       expect(projection.prepareCalls).toBe(0);
       expect(() => transaction.runTick({ command: command(1) })).toThrow("3C_TICK_TOKEN_STALE");
+      transaction.admitRolledBackTickRetry(1);
+      body.throwAt = undefined;
+      expect(transaction.runTick({ command: command(1) }).commit.tick).toBe(1);
     },
   );
+
+  it("rejects a rolled-back Tick retry when the requested Tick is not next", () => {
+    const { body, transaction } = createHarness();
+    body.throwAt = "resolve";
+    expect(() => transaction.runTick({ command: command(1) }))
+      .toThrow("BODY_RESOLVE_FAILED");
+
+    expect(() => transaction.admitRolledBackTickRetry(2))
+      .toThrow("3C_TICK_TOKEN_STALE");
+  });
 
   it("rolls exact Movement and Body authority back when Camera prepare fails", () => {
     const animation = new ProjectionPort();

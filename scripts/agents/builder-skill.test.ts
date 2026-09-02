@@ -130,9 +130,16 @@ describe("Block Builder skill", () => {
     }) => subjectDefinitionRef);
     expect(refs).toContain("worldkit://subject-definition/humanoid.g-bot@2");
     expect(refs).toContain("worldkit://subject-definition/xier120.quadruped-animal@1");
+    expect(refs).not.toContain("worldkit://subject-definition/humanoid.third-person@1");
     expect(refs).not.toContain(
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
     );
+    expect(catalog.rejectedSubjects).toContainEqual(expect.objectContaining({
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+      diagnostics: expect.arrayContaining([
+        expect.stringContaining("primitive humanoid proxies"),
+      ]),
+    }));
     expect(catalog.subjects.every(({ executableMovementModes, camera }: {
       executableMovementModes: readonly string[];
       camera: {
@@ -271,6 +278,38 @@ describe("Block Builder skill", () => {
     }));
   });
 
+  it("rejects the primitive humanoid proxy as an ordinary Hosted Subject", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "block-builder-primitive-human-"));
+    const source = await readFile("examples/block-world/basic-world.mjs", "utf8");
+    const worldPath = path.join(root, "world.mjs");
+    await Promise.all([
+      writeFile(path.join(root, "scene-brief.md"), BRIEF, "utf8"),
+      writeFile(
+        worldPath,
+        source.replace(
+          "worldkit://subject-definition/humanoid.g-bot@2",
+          "worldkit://subject-definition/humanoid.third-person@1",
+        ),
+        "utf8",
+      ),
+    ]);
+    const result = await runBlockBuilderSelfCheck({
+      ...paths(root, "primitive-human"),
+      worldModulePath: worldPath,
+    });
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "BLOCK_WORLD_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED",
+      instancePath: "/controlledSubject/subjectDefinitionRef",
+      details: expect.objectContaining({
+        subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+        rejectionDiagnostics: expect.arrayContaining([
+          expect.stringContaining("primitive humanoid proxies"),
+        ]),
+      }),
+    }));
+  });
+
   it("requires semantic middle/remote anchors and an entry traversal band for ground-only worlds", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "block-builder-navigation-contract-"));
     const source = await readFile("examples/block-world/basic-world.mjs", "utf8");
@@ -335,6 +374,10 @@ describe("Block Builder skill", () => {
       "--report", agent.reportPath,
     ], { cwd: root, encoding: "utf8" });
     expect(run.status, run.stderr || run.stdout).toBe(0);
+    expect(run.stderr).toBe("");
+    const outputLines = run.stdout.trim().split("\n");
+    expect(outputLines).toHaveLength(1);
+    expect(JSON.parse(outputLines[0]!)).toMatchObject({ status: "passed" });
     expect(await readFile(agent.reportPath, "utf8")).toBe(
       await readFile(host.reportPath, "utf8"),
     );

@@ -37,6 +37,7 @@ function validInput() {
     visualTargetMappings: [{
       visualTargetId: "player-subject",
       runtimeEntityIds: ["player", "player-hat"],
+      frontDirectionWorldXZ: [0, -1],
     }],
     visualCaptureGroups: [{
       visualTargetId: "player-subject",
@@ -44,6 +45,7 @@ function validInput() {
       role: "primary-subject",
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
+      frontDirectionWorldXZ: [0, -1],
     }],
   };
   const record = {

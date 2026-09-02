@@ -11,6 +11,7 @@ import type {
   BlockWorldSpaceTransitionV2,
   BlockWorldManifestV2,
   BlockWorldThirdPersonCameraV2,
+  BlockVisualTargetFacingV2,
 } from "@whitebox-world/block-world";
 
 export interface WorldkitBlockBindingInputV1 {
@@ -40,6 +41,7 @@ export interface ThreeBlockWorldAuthoringResultV2 {
   readonly spawnStandPositionMetersXYZ: BlockPositionMetersXYZV2;
   readonly requiredTargets: readonly BlockRequiredTargetV2[];
   readonly requiredGroundTraversalBands: readonly BlockRequiredGroundTraversalBandV2[];
+  readonly visualTargetFacings?: readonly BlockVisualTargetFacingV2[];
   readonly spaceTransitions?: readonly BlockWorldSpaceTransitionV2[];
   readonly requireSingleReachableComponent: boolean;
 }

@@ -46,18 +46,24 @@ for the floor and obstacle blocks for its walls.
 ## Ordered complete visual targets
 
 The first target is the controlled Subject and uses the fixed non-block Subject
-silhouette color. Remaining complete targets use landmark block colors in Brief order:
+silhouette color. Remaining complete targets use landmark block colors in Brief
+order even when the target is an important non-controlled person, animal,
+creature, vehicle, machine, sculpture, or distinctive prop rather than a
+building:
 
 1. `visual-target-1` → `#E85D5D`; a small spawn-position token in `world-plan.png`, and the complete Subject silhouette only in `entry-whitebox-target.png`
-2. `visual-target-2` complete landmark/repeated set → `#F28E2B`
-3. `visual-target-3` complete landmark/repeated set → `#D9A514`
-4. `visual-target-4` complete landmark/repeated set → `#4E79A7`
-5. `visual-target-5` complete landmark/repeated set → `#9C6ADE`
+2. `visual-target-2` complete non-subject target/repeated set → `#F28E2B`
+3. `visual-target-3` complete non-subject target/repeated set → `#D9A514`
+4. `visual-target-4` complete non-subject target/repeated set → `#4E79A7`
+5. `visual-target-5` complete non-subject target/repeated set → `#9C6ADE`
 
-Use one target color across the whole recognizable landmark, except any
+Use one target color across the whole recognizable target, except any
 traversable surface or interactive block inside it keeps its functional color.
 Repeated identical landmarks use the same target color. Never assign colors to
 roofs, columns, supports, decoration, or other parts as separate targets.
+Important people, animals, vehicles, and objects use one compact complete proxy
+at truthful scale and location; do not split heads, limbs, riders, cargo, or
+equipment into target parts.
 
 `#E15759` and `#E66AA5` remain reserved Block World landmark colors but are not
 used by Planner target ordering. This prevents another red block from corrupting

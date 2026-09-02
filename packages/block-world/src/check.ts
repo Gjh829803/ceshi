@@ -639,6 +639,7 @@ export function checkBlockWorldV2(input: CheckBlockWorldInputV2): BlockWorldChec
   const presetsByBlockId = new Map<string, BlockPresetDefinitionV1>();
   const landmarkPresetRefsByGroupId = new Map<string, Set<string>>();
   const landmarkGroupIdsByPresetRef = new Map<string, Set<string>>();
+  const visualGroupIds = new Set<string>();
   const reservedIds = new Set([
     "spawn-main", "runtime-foundation", input.controlledSubject.entityId, input.camera.entityId,
     ...(input.spaceTransitions ?? []).flatMap((transition) =>
@@ -699,6 +700,9 @@ export function checkBlockWorldV2(input: CheckBlockWorldInputV2): BlockWorldChec
       return;
     }
     presetsByBlockId.set(block.id, preset);
+    if (block.visualGroupId !== undefined && ID.test(block.visualGroupId)) {
+      visualGroupIds.add(block.visualGroupId);
+    }
     if (preset.family !== "landmark") return;
     if (block.visualGroupId === undefined || !ID.test(block.visualGroupId)) {
       diagnostics.push(diagnostic(
@@ -723,6 +727,42 @@ export function checkBlockWorldV2(input: CheckBlockWorldInputV2): BlockWorldChec
     diagnostic("LANDMARK_COLOR_REUSED", `/landmarkColors/${encodeURIComponent(presetRef)}`,
       `Landmark color '${presetRef}' is reused by unrelated groups.`, { visualGroupIds: [...groups].sort() }),
   );
+
+  const facingIds = new Set<string>();
+  (input.visualTargetFacings ?? []).forEach((facing, index) => {
+    const facingPath = `/visualTargetFacings/${index}`;
+    const valid = ID.test(facing.visualTargetId) &&
+      facing.visualTargetId !== input.controlledSubject.visualTargetId &&
+      Number.isSafeInteger(facing.frontYawQuarterTurnsY) &&
+      facing.frontYawQuarterTurnsY >= 0 && facing.frontYawQuarterTurnsY <= 3 &&
+      !facingIds.has(facing.visualTargetId);
+    if (!valid) {
+      diagnostics.push(diagnostic(
+        "BLOCK_VISUAL_TARGET_FACING_INVALID",
+        facingPath,
+        "Each non-subject visual target requires one unique frontYawQuarterTurnsY from 0 through 3.",
+      ));
+      return;
+    }
+    facingIds.add(facing.visualTargetId);
+    if (!visualGroupIds.has(facing.visualTargetId)) {
+      diagnostics.push(diagnostic(
+        "BLOCK_VISUAL_TARGET_FACING_UNDECLARED",
+        `${facingPath}/visualTargetId`,
+        `Facing '${facing.visualTargetId}' does not name a Block visualGroupId.`,
+      ));
+    }
+  });
+  for (const visualGroupId of [...visualGroupIds].sort()) {
+    if (visualGroupId === input.controlledSubject.visualTargetId || facingIds.has(visualGroupId)) {
+      continue;
+    }
+    diagnostics.push(diagnostic(
+      "BLOCK_VISUAL_TARGET_FACING_MISSING",
+      "/visualTargetFacings",
+      `Visual group '${visualGroupId}' must declare its semantic front direction exactly once.`,
+    ));
+  }
 
   const targetIds = new Map<string, number>();
   const targetPositionIndicesByKey = new Map<string, number>();

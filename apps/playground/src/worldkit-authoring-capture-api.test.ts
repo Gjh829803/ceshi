@@ -8,6 +8,7 @@ const TARGET = {
   role: "primary-subject" as const,
   semanticClassId: "subject.player",
   identityColor: "#E85D5D" as const,
+  frontDirectionWorldXZ: [0, -1] as const,
 };
 
 describe("WorldKit authoring capture API", () => {

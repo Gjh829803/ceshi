@@ -109,7 +109,8 @@ Read all three maintained references before writing the module:
   impose movement-mode numeric minima.
 - Reproduce terrain evidence at four scales: macro silhouette and horizon;
   ridges, valleys, shorelines, ledges and constructed surfaces; complete visual
-  landmarks; then exposed rock, foliage, eave, rail and edge detail. Full blocks
+  landmarks and important-object targets; then exposed rock, foliage, eave,
+  rail and edge detail. Full blocks
   own mass, half blocks own transitions, quarter/small blocks own exposed
   silhouette detail. Never use small blocks as hidden bulk fill, and never turn
   a detail part into a separate visual target.
@@ -126,6 +127,12 @@ Read all three maintained references before writing the module:
   enclosure or drop, and supporting mass. Use admitted full/half blocks to
   reproduce the visible rise and tread rhythm at Block World resolution. A flat
   road with colored or shaded cross-bands is never an acceptable staircase.
+- Preserve the course of every visually important road, trail, bridge approach,
+  corridor, and other route: its endpoints, ordered bends, junctions,
+  switchbacks, width changes, elevation changes, and relationship to nearby
+  landmarks. Approximate a curve with the permitted block resolution while
+  retaining its centerline and turning sequence; never replace a winding route
+  with a convenient straight or axis-aligned shortcut.
 - Give terrain real depth behind its visible face. Valleys have a floor and
   containing sides; cliffs have a rim, face, base, and mass behind the rim;
   mountains occupy volume across foreground/middle/background rather than one
@@ -150,6 +157,10 @@ Read all three maintained references before writing the module:
   then consider composition. A coarse registered proxy is correct even when it
   does not resemble the reference closely. Subject appearance fidelity is not
   a whitebox goal; correct control behavior and Camera framing are.
+- A registered ref must appear in `agent-authoring-catalog.json.subjects`.
+  `rejectedSubjects` includes Registry fixtures that compile but are not valid
+  Hosted authoring choices; primitive human capsule proxies belong there and
+  never represent an ordinary person.
 - Never compose or add primitive parts merely to reproduce a face, hairstyle,
   clothing, armor, handheld or holstered weapons, backpacks, headwear,
   colors, or other appearance-only equipment. For example, a walking human
@@ -178,14 +189,31 @@ Read all three maintained references before writing the module:
   remain authoritative after a later context switch.
 - The primary Subject uses the Brief's `primary-subject` visual-target ID.
   Every other selected target is one complete `visualGroupId`. All blocks of a
-  multi-block landmark share that one ID. Do not create groups for parts,
-  generic decoration, routes, or ordinary ground.
-- Match complete landmark targets to the fixed ordered presets: target 2 orange,
+  multi-block landmark or important non-controlled person, animal, creature,
+  vehicle, machine, sculpture, or prop share that one ID. Represent an important
+  object as one compact complete block proxy at truthful scale and location;
+  visual-target status does not create a second controlled/animated Subject.
+  Identical important instances named as one repeated target all share the same
+  ID. Do not create groups for body parts, equipment, generic decoration,
+  routes, or ordinary ground.
+- Before detailing a non-subject visual target, lock its complete spatial pose
+  from the Planner images: left/right and near/far region, footprint center and
+  long axis, semantic front, and relation to nearby paths and structures. A
+  target that merely exists but is mirrored, quarter-turned, front/back
+  reversed, or moved into another region is not faithful.
+- Match complete non-subject targets to the fixed ordered presets: target 2 orange,
   target 3 yellow, target 4 blue, target 5 purple. The primary red target belongs
   only to the controlled Subject. Functional support or interactive blocks
-  inside a landmark keep their functional preset but may share its
-  `visualGroupId`. The checker rejects a landmark target built with a different
+  inside a target keep their functional preset but may share its
+  `visualGroupId`. The checker rejects a non-subject target built with a different
   reserved color.
+- Declare one `visualTargetFacings` row for every non-subject `visualGroupId`.
+  `frontYawQuarterTurnsY` uses the same exact convention as the controlled
+  Subject: `0=-Z`, `1=-X`, `2=+Z`, `3=+X`. Choose the target's semantic front
+  (a face, vehicle nose, animal head, doorway facade, or principal building
+  entrance), not the longest world axis or the opening Camera. Runtime uses this
+  single declaration to capture true Front / Right / Back panels at one shared
+  meter-to-pixel scale; do not rotate geometry merely to satisfy capture.
 
 ## Completion
 
@@ -222,8 +250,15 @@ split vertically: Planner intent is on the left and the current `world.mjs`
 software render is on the right. In the top-down comparison, check the single
 continuous footprint, four-times reference coverage, spawn position, relative
 geography, ground-only traversable coloring, landmark placement, and elevation
-mass. In the entry comparison, check centered rear framing, foreground/middle/
+mass. Also compare important route centerlines, bend order, junctions, and
+approaches to landmarks. In the entry comparison, check centered rear framing, foreground/middle/
 background order, landmark scale, stair/bridge rise, thickness, and occlusion.
+Treat these left/right comparisons as the primary repair feedback, not as files
+to acknowledge and move past. Before adding decorative detail, identify and fix
+the largest visible mismatch in this order: complete landmark position, landmark
+front/travel direction, footprint and scale, then depth order and occlusion.
+Preserve the Planner side's left/right and near/far relationships; do not accept
+"the same objects are present" when their spatial arrangement differs.
 The software render is deterministic Builder feedback, not Runtime evidence and
 not an automatic visual-similarity Gate. Its four Camera values are nevertheless
 the same authored tuning that the trusted Babylon opening capture applies.

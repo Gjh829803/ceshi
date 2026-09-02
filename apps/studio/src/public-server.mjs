@@ -101,7 +101,7 @@ export async function startStudioPublicServer(options = {}) {
   const studioPort = validatedPort(options.studioPort ?? 4197, "Internal Studio port");
   const publicPort = validatedPort(options.publicPort ?? 4175, "Public proxy port");
   const readinessTimeoutMs = validatedDuration(
-    options.readinessTimeoutMs ?? 10_000,
+    options.readinessTimeoutMs ?? 30_000,
     "Readiness timeout",
   );
   const readinessPollMs = validatedDuration(
@@ -189,8 +189,10 @@ export async function startStudioPublicServer(options = {}) {
 }
 
 async function startMain() {
-  const envFile = process.env.WORLDKIT_PUBLIC_ENV_FILE ??
-    path.join(repoRoot, ".codex-tmp/runtime-config/studio-public.env");
+  const envFile = path.join(
+    repoRoot,
+    ".codex-tmp/runtime-config/studio-public.env",
+  );
   try {
     process.loadEnvFile(envFile);
   } catch (error) {

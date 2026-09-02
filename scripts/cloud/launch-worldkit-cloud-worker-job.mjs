@@ -52,11 +52,11 @@ export function cloudSceneWorkerJob({
   required(outputS3Prefix, "output_s3_prefix");
   required(image, "image");
   if (resumeManifestS3Uri !== undefined) required(resumeManifestS3Uri, "resume_manifest_s3_uri");
-  if (!["verify-only", "host"].includes(resumeMode)) {
-    throw new Error("resume_mode must be verify-only or host.");
+  if (!["verify-only", "builder", "host"].includes(resumeMode)) {
+    throw new Error("resume_mode must be verify-only, builder, or host.");
   }
   if (resumeManifestS3Uri === undefined && resumeMode !== "verify-only") {
-    throw new Error("resume_mode host requires resume_manifest_s3_uri.");
+    throw new Error("resume_mode builder or host requires resume_manifest_s3_uri.");
   }
   if (!/@sha256:[a-f0-9]{64}$/.test(image)) {
     throw new Error("image must be pinned by an immutable sha256 digest.");
@@ -190,6 +190,7 @@ async function main() {
     outputS3Prefix: options["output-s3-prefix"],
     image: options.image,
     namespace: options.namespace ?? "lwdp",
+    userId: options["user-id"] ?? "worldkit-studio",
     resumeManifestS3Uri: options["resume-manifest-s3-uri"],
     resumeMode: options["resume-mode"] ?? "verify-only",
     jobSuffix: options["job-suffix"] ?? "",

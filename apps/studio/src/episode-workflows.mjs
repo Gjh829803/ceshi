@@ -1,46 +1,79 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { loadEpisodeStyleVariantConfig } from "../../../scripts/lib/episode-style-variants.mjs";
 
 const idPattern = /^[a-z0-9][a-z0-9-]{2,119}$/;
 const artifactDefinitions = [
   ["planning/reconnaissance/reconnaissance-report.json", "运行时侦察报告", "json", "reconnaissance"],
+  ["planning/navigation-evidence.json", "模型探索参考", "json", "navigation-evidence"],
   ["planning/reconnaissance/recon-00-initial.png", "侦察初始画面", "image", "reconnaissance"],
-  ["planning/playthrough-plan.json", "90 秒玩家剧本", "json", "playthrough-plan"],
-  ["whitebox/episode-90s.mp4", "90 秒白膜试玩", "video", "whitebox-capture"],
+  ["planning/playthrough-plan.json", "六起点玩家操作剧本", "json", "playthrough-plan"],
+  ["whitebox/executed-playthrough-quality-report.json", "最小运行与移动健康检查", "json", "whitebox-capture"],
+  ["whitebox/episode-124s-execution.mp4", "124 秒含镜头归位缓冲的白膜执行母片", "video", "whitebox-capture"],
+  ["whitebox/episode-120s.mp4", "120 秒白膜交付母片", "video", "whitebox-capture"],
+  ["whitebox/episode-180s.mp4", "六起点独立白膜母片", "video", "whitebox-capture"],
   ["whitebox/executed-playthrough-trace.json", "实际执行轨迹", "json", "whitebox-capture"],
-  ["whitebox/segment-00.mp4", "白膜 00–30s", "video", "whitebox-capture"],
-  ["whitebox/segment-01.mp4", "白膜 30–60s", "video", "whitebox-capture"],
-  ["whitebox/segment-02.mp4", "白膜 60–90s", "video", "whitebox-capture"],
+  ["whitebox/segment-00.mp4", "白膜起点 1", "video", "whitebox-capture"],
+  ["whitebox/segment-01.mp4", "白膜起点 2", "video", "whitebox-capture"],
+  ["whitebox/segment-02.mp4", "白膜起点 3", "video", "whitebox-capture"],
+  ["whitebox/segment-03.mp4", "白膜起点 4", "video", "whitebox-capture"],
+  ["whitebox/segment-04.mp4", "白膜起点 5", "video", "whitebox-capture"],
+  ["whitebox/segment-05.mp4", "白膜起点 6", "video", "whitebox-capture"],
   ["visual/segment-00-styled-opening-frame.png", "第 1 段最终样式首帧", "image", "visual-reconstruction"],
   ["visual/segment-01-styled-opening-frame.png", "第 2 段最终样式首帧", "image", "visual-reconstruction"],
   ["visual/segment-02-styled-opening-frame.png", "第 3 段最终样式首帧", "image", "visual-reconstruction"],
+  ["visual/segment-03-styled-opening-frame.png", "第 4 段最终样式首帧", "image", "visual-reconstruction"],
+  ["visual/segment-04-styled-opening-frame.png", "起点 5 最终样式首帧", "image", "visual-reconstruction"],
+  ["visual/segment-05-styled-opening-frame.png", "起点 6 最终样式首帧", "image", "visual-reconstruction"],
   ["visual/episode-visual-prompts.json", "首帧与三视图生成 Prompt", "json", "visual-reconstruction"],
   ["visual/episode-visual-manifest.json", "视觉重建清单", "json", "visual-reconstruction"],
+  ["prompts/visual-events.json", "Gemini 大型视觉事件", "json", "visual-events"],
   ["visual-reviews/visual-reconstructor-v5/episode-opening-review-prompts.json", "Visual Reconstructor V5 首帧 Prompt", "json", "visual-reconstruction"],
   ["visual-reviews/visual-reconstructor-v5/episode-opening-review-manifest.json", "Visual Reconstructor V5 首帧审阅清单", "json", "visual-reconstruction"],
   ["prompts/segment-00.json", "第 1 段 Seedance 渲染 Prompt", "json", "seedance-prompts"],
   ["prompts/segment-01.json", "第 2 段 Seedance 渲染 Prompt", "json", "seedance-prompts"],
   ["prompts/segment-02.json", "第 3 段 Seedance 渲染 Prompt", "json", "seedance-prompts"],
+  ["prompts/segment-03.json", "第 4 段 Seedance 渲染 Prompt", "json", "seedance-prompts"],
+  ["prompts/segment-04.json", "起点 5 Seedance 渲染 Prompt", "json", "seedance-prompts"],
+  ["prompts/segment-05.json", "起点 6 Seedance 渲染 Prompt", "json", "seedance-prompts"],
+  ["video/segment-00/seedance-2.5.mp4", "起点 1 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-01/seedance-2.5.mp4", "起点 2 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-02/seedance-2.5.mp4", "起点 3 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-03/seedance-2.5.mp4", "起点 4 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-04/seedance-2.5.mp4", "起点 5 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-05/seedance-2.5.mp4", "起点 6 Seedance 2.5 720p", "video", "seedance-generation"],
   ["video/segment-00/mg-seedance-2.5-480p.mp4", "第 1 段 MG Seedance 480p", "video", "seedance-generation"],
   ["video/segment-01/mg-seedance-2.5-480p.mp4", "第 2 段 MG Seedance 480p", "video", "seedance-generation"],
   ["video/segment-02/mg-seedance-2.5-480p.mp4", "第 3 段 MG Seedance 480p", "video", "seedance-generation"],
+  ["video/segment-03/mg-seedance-2.5-480p.mp4", "第 4 段 MG Seedance 480p", "video", "seedance-generation"],
   // Historical OV + CF artifacts remain readable for already completed episodes.
   ["video/segment-00/ov-seedance-2.5-720p-gz-30s.mp4", "历史第 1 段 OV 720p", "video", "seedance-generation"],
   ["video/segment-01/ov-seedance-2.5-720p-gz-30s.mp4", "历史第 2 段 OV 720p", "video", "seedance-generation"],
   ["video/segment-02/ov-seedance-2.5-720p-gz-30s.mp4", "历史第 3 段 OV 720p", "video", "seedance-generation"],
-  ["video/segment-00/cf-upscaled-720p.mp4", "第 1 段 CF 720p", "video", "cf-upscale"],
-  ["video/segment-01/cf-upscaled-720p.mp4", "第 2 段 CF 720p", "video", "cf-upscale"],
-  ["video/segment-02/cf-upscaled-720p.mp4", "第 3 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-00/mediakit-enhanced-720p.mp4", "第 1 段 MediaKit 720p", "video", "mediakit-upscale"],
+  ["video/segment-01/mediakit-enhanced-720p.mp4", "第 2 段 MediaKit 720p", "video", "mediakit-upscale"],
+  ["video/segment-02/mediakit-enhanced-720p.mp4", "第 3 段 MediaKit 720p", "video", "mediakit-upscale"],
+  ["video/segment-03/mediakit-enhanced-720p.mp4", "第 4 段 MediaKit 720p", "video", "mediakit-upscale"],
+  // Historical CF artifacts remain readable for already completed episodes.
+  ["video/segment-00/cf-upscaled-720p.mp4", "历史第 1 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-01/cf-upscaled-720p.mp4", "历史第 2 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-02/cf-upscaled-720p.mp4", "历史第 3 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-03/cf-upscaled-720p.mp4", "历史第 4 段 CF 720p", "video", "cf-upscale"],
   ["video/segment-00/final-1280x720-24fps-720f.mp4", "第 1 段最终视频", "video", "conformance"],
   ["video/segment-01/final-1280x720-24fps-720f.mp4", "第 2 段最终视频", "video", "conformance"],
   ["video/segment-02/final-1280x720-24fps-720f.mp4", "第 3 段最终视频", "video", "conformance"],
+  ["video/segment-03/final-1280x720-24fps-720f.mp4", "第 4 段最终视频", "video", "conformance"],
+  ["video/segment-04/final-1280x720-24fps-720f.mp4", "起点 5 最终视频", "video", "conformance"],
+  ["video/segment-05/final-1280x720-24fps-720f.mp4", "起点 6 最终视频", "video", "conformance"],
   ["video/segment-00/final-854x480-24fps-720f.mp4", "第 1 段最终 480p 视频", "video", "conformance"],
   ["video/segment-01/final-854x480-24fps-720f.mp4", "第 2 段最终 480p 视频", "video", "conformance"],
   ["video/segment-02/final-854x480-24fps-720f.mp4", "第 3 段最终 480p 视频", "video", "conformance"],
+  ["video/segment-03/final-854x480-24fps-720f.mp4", "第 4 段最终 480p 视频", "video", "conformance"],
   ["prompt-ab/legacy-heavy/segment-00.json", "第 1 段旧版重 Prompt", "json", "seedance-prompts"],
   ["prompt-ab/legacy-heavy/segment-01.json", "第 2 段旧版重 Prompt", "json", "seedance-prompts"],
   ["prompt-ab/legacy-heavy/segment-02.json", "第 3 段旧版重 Prompt", "json", "seedance-prompts"],
@@ -56,6 +89,9 @@ const artifactDefinitions = [
   ["video/segment-00/provider-run.json", "第 1 段 Provider 任务", "json", "conformance"],
   ["video/segment-01/provider-run.json", "第 2 段 Provider 任务", "json", "conformance"],
   ["video/segment-02/provider-run.json", "第 3 段 Provider 任务", "json", "conformance"],
+  ["video/segment-03/provider-run.json", "第 4 段 Provider 任务", "json", "conformance"],
+  ["video/segment-04/provider-run.json", "起点 5 Provider 任务", "json", "conformance"],
+  ["video/segment-05/provider-run.json", "起点 6 Provider 任务", "json", "conformance"],
   ["pipeline.log", "整条流水线日志", "text", "conformance"],
 ];
 const contentTypes = new Map([
@@ -68,10 +104,49 @@ const contentTypes = new Map([
 ]);
 const playbackKeys = new Set([
   "W", "A", "S", "D", "Space", "Shift",
-  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+  "I", "J", "K", "L",
 ]);
+const canonicalPlaybackKey = (key) => ({
+  ArrowUp: "I",
+  ArrowLeft: "J",
+  ArrowDown: "K",
+  ArrowRight: "L",
+}[key] ?? key);
 const segmentDurationSeconds = 30;
-const segmentCount = 3;
+const legacySegmentExecutionSeconds = 31;
+const legacySeedanceSegmentIds = Object.freeze([
+  "segment-00", "segment-01", "segment-02", "segment-03",
+]);
+const currentSeedanceSegmentIds = Object.freeze([
+  "segment-00", "segment-01", "segment-02", "segment-03", "segment-04", "segment-05",
+]);
+const seedanceSegmentIdsForRecord = (record) =>
+  Array.isArray(record?.seedanceSegmentIds) && record.seedanceSegmentIds.length > 0
+    ? record.seedanceSegmentIds
+    : legacySeedanceSegmentIds;
+const executionSecondsForRecord = (record) =>
+  Number(record?.segmentCount) === 6 ? 30 : legacySegmentExecutionSeconds;
+const sharedEpisodeStageDefinitions = [
+  ["reconnaissance", "运行时侦察"],
+  ["navigation-evidence", "可通行区域与核心目的地"],
+  ["playthrough-plan", "六个独立起点游荡剧本"],
+  ["whitebox-capture", "六段独立 30 秒白膜录制"],
+];
+const legacyEpisodeStageDefinitions = [
+  ...sharedEpisodeStageDefinitions,
+  ["visual-reconstruction", "六段样式首帧与共享三视图"],
+  ["visual-events", "Gemini 3.5 Flash 单次五事件"],
+  ["seedance-prompts", "六条详细 Seedance 渲染 Prompt（三条含事件）"],
+  ["seedance-generation", "Seedance 2.5 720p 直出"],
+  ["conformance", "24fps / 720 帧一致性"],
+];
+const tenStyleEpisodeStageDefinitions = [
+  ...sharedEpisodeStageDefinitions,
+  ["style-variant-production", "十种风格视觉、Codex 质检、独立 Gemini 与 Seedance"],
+];
+const episodeStageDefinitionsForMode = (mode) => mode === "ten-style"
+  ? tenStyleEpisodeStageDefinitions
+  : legacyEpisodeStageDefinitions;
 
 async function readJson(filePath) {
   try { return JSON.parse(await readFile(filePath, "utf8")); } catch { return null; }
@@ -90,32 +165,44 @@ function artifactUrl(episodeId, relativePath) {
   return `/api/episode-workflows/${episodeId}/artifacts/${relativePath}`;
 }
 
-async function existingArtifact(episodeRoot, episodeId, relativePath) {
+function remoteEpisodeArtifact(record, relativePath) {
+  const manifestPath = `episode/${String(relativePath).replaceAll("\\", "/")}`;
+  return Array.isArray(record?.remoteArtifacts)
+    ? record.remoteArtifacts.find((artifact) => artifact?.path === manifestPath) ?? null
+    : null;
+}
+
+async function existingArtifact(record, episodeRoot, episodeId, relativePath) {
   try {
     const metadata = await stat(path.join(episodeRoot, relativePath));
     if (!metadata.isFile() || metadata.size <= 0) return null;
     return { relativePath, url: artifactUrl(episodeId, relativePath), sizeBytes: metadata.size };
   } catch {
-    return null;
+    const remote = remoteEpisodeArtifact(record, relativePath);
+    return remote
+      ? { relativePath, url: artifactUrl(episodeId, relativePath), sizeBytes: remote.byteSize }
+      : null;
   }
 }
 
-function clipActivation(activation, segmentIndex) {
-  const globalStartSeconds = segmentIndex * segmentDurationSeconds;
-  const globalEndSeconds = globalStartSeconds + segmentDurationSeconds;
-  const startSeconds = Math.max(globalStartSeconds, activation.startSeconds);
-  const endSeconds = Math.min(globalEndSeconds, activation.endSeconds);
+function clipActivation(activation, segmentIndex, executionSegmentSeconds) {
+  const executionStartSeconds = segmentIndex * executionSegmentSeconds;
+  const executionEndSeconds = executionStartSeconds + segmentDurationSeconds;
+  const startSeconds = Math.max(executionStartSeconds, activation.startSeconds);
+  const endSeconds = Math.min(executionEndSeconds, activation.endSeconds);
   if (endSeconds <= startSeconds) return null;
   return {
     id: activation.id,
     kind: activation.kind,
-    startSeconds: roundedSeconds(startSeconds - globalStartSeconds),
-    endSeconds: roundedSeconds(endSeconds - globalStartSeconds),
-    keys: [...new Set(activation.keys.filter((key) => playbackKeys.has(key)))],
+    startSeconds: roundedSeconds(startSeconds - executionStartSeconds),
+    endSeconds: roundedSeconds(endSeconds - executionStartSeconds),
+    keys: [...new Set(activation.keys
+      .map(canonicalPlaybackKey)
+      .filter((key) => playbackKeys.has(key)))],
   };
 }
 
-function executedActivations(trace, segmentIndex) {
+function executedActivations(trace, segmentIndex, executionSegmentSeconds) {
   const events = Array.isArray(trace?.events) ? trace.events : [];
   const startedInputs = new Map();
   const activations = [];
@@ -151,126 +238,191 @@ function executedActivations(trace, segmentIndex) {
     }
   }
   for (const start of startedInputs.values()) {
-    activations.push({ ...start, endSeconds: segmentCount * segmentDurationSeconds });
+    activations.push({
+      ...start,
+      endSeconds: (segmentIndex + 1) * executionSegmentSeconds,
+    });
   }
   return activations
-    .map((activation) => clipActivation(activation, segmentIndex))
+    .map((activation) => clipActivation(
+      activation,
+      segmentIndex,
+      executionSegmentSeconds,
+    ))
     .filter((activation) => activation && activation.keys.length > 0)
     .sort((left, right) => left.startSeconds - right.startSeconds || left.id.localeCompare(right.id));
 }
 
-function promptEventForSegment(plan, trace, promptDocument, segmentId, segmentIndex) {
-  const planned = (plan?.seedancePromptEvents ?? []).find((event) => event?.segmentId === segmentId) ?? null;
-  const marker = (trace?.events ?? []).find((event) =>
-    event?.kind === "prompt-marker" && (event.segmentId === segmentId || event.id === planned?.id)) ?? null;
-  const globalSeconds = finiteSeconds(
-    promptDocument?.executedEventSeconds,
-    finiteSeconds(marker?.actualSeconds, finiteSeconds(planned?.globalSeconds)),
-  );
-  const relativeSeconds = globalSeconds === null
-    ? finiteSeconds(planned?.segmentRelativeSeconds)
-    : globalSeconds - segmentIndex * segmentDurationSeconds;
-  const transitionDurationSeconds = Math.max(0, finiteSeconds(planned?.timing?.transitionDurationSeconds, 0));
-  const endingDurationSeconds = Math.max(0, finiteSeconds(planned?.timing?.endingDurationSeconds, 0));
+function promptEventsForSegment(
+  eventPlan,
+  trace,
+  promptDocument,
+  segmentId,
+  segmentIndex,
+  executionSegmentSeconds,
+) {
+  const plannedEvents = (eventPlan?.events ?? [])
+    .filter((event) => event?.segmentId === segmentId)
+    .sort((left, right) => finiteSeconds(left?.windowIndex, 0) -
+      finiteSeconds(right?.windowIndex, 0));
+  const documentIds = Array.isArray(promptDocument?.eventIds)
+    ? promptDocument.eventIds.map(String)
+    : promptDocument?.eventId ? [String(promptDocument.eventId)] : [];
+  const documentSeconds = Array.isArray(promptDocument?.executedEventSeconds)
+    ? promptDocument.executedEventSeconds
+    : Number.isFinite(Number(promptDocument?.executedEventSeconds))
+      ? [promptDocument.executedEventSeconds]
+      : [];
   const providerPrompt = typeof promptDocument?.prompt === "string" ? promptDocument.prompt : "";
-  const eventPrompt = typeof planned?.eventPrompt === "string" ? planned.eventPrompt : "";
-  if (!planned && !providerPrompt) return null;
-  return {
-    id: String(promptDocument?.eventId ?? planned?.id ?? `${segmentId}-prompt`),
-    globalSeconds: globalSeconds === null ? null : roundedSeconds(globalSeconds),
-    relativeSeconds: relativeSeconds === null ? null : roundedSeconds(relativeSeconds),
-    activeEndSeconds: relativeSeconds === null
-      ? null
-      : roundedSeconds(relativeSeconds + transitionDurationSeconds + endingDurationSeconds),
-    targetNames: Array.isArray(planned?.targetNames) ? planned.targetNames.map(String) : [],
-    eventClass: typeof planned?.eventClass === "string" ? planned.eventClass : null,
-    commandText: typeof planned?.dominantChange === "string"
-      ? planned.dominantChange
-      : typeof planned?.transitionDescription === "string" ? planned.transitionDescription : "",
-    eventPrompt,
-    providerPrompt,
-  };
+  if (plannedEvents.length === 0) return [];
+  const sourceEvents = plannedEvents;
+  return sourceEvents.map((planned, eventIndex) => {
+    const eventId = documentIds[eventIndex] ?? planned?.id ??
+      `${segmentId}-prompt-${eventIndex}`;
+    const marker = (trace?.events ?? []).find((event) =>
+      event?.kind === "prompt-marker" && event.id === eventId) ?? null;
+    const globalSeconds = finiteSeconds(
+      documentSeconds[eventIndex],
+      finiteSeconds(marker?.actualSeconds, finiteSeconds(planned?.globalSeconds)),
+    );
+    const relativeSeconds = globalSeconds === null
+      ? finiteSeconds(planned?.segmentRelativeSeconds)
+      : globalSeconds - segmentIndex * executionSegmentSeconds;
+    const transitionDurationSeconds = Math.max(
+      0,
+      finiteSeconds(planned?.timing?.transitionDurationSeconds, 0),
+    );
+    const endingDurationSeconds = Math.max(
+      0,
+      finiteSeconds(planned?.timing?.endingDurationSeconds, 0),
+    );
+    return {
+      id: String(eventId),
+      globalSeconds: globalSeconds === null ? null : roundedSeconds(globalSeconds),
+      relativeSeconds: relativeSeconds === null ? null : roundedSeconds(relativeSeconds),
+      activeEndSeconds: relativeSeconds === null
+        ? null
+        : roundedSeconds(relativeSeconds + transitionDurationSeconds + endingDurationSeconds),
+      targetNames: Array.isArray(planned?.targetNames) ? planned.targetNames.map(String) : [],
+      eventClass: typeof planned?.eventClass === "string" ? planned.eventClass : null,
+      commandText: typeof planned?.dominantChange === "string"
+        ? planned.dominantChange
+        : typeof planned?.transitionDescription === "string" ? planned.transitionDescription : "",
+      eventPrompt: typeof planned?.eventPrompt === "string" ? planned.eventPrompt : "",
+      providerPrompt,
+    };
+  });
 }
 
-async function buildPlaybackComparisons(episodeRoot, episodeId, sceneId) {
-  const [plan, trace, ...promptDocuments] = await Promise.all([
-    readJson(path.join(episodeRoot, "planning/playthrough-plan.json")),
+async function buildPlaybackComparisons(record, episodeRoot, episodeId, sceneId) {
+  const segmentIds = seedanceSegmentIdsForRecord(record);
+  const executionSegmentSeconds = executionSecondsForRecord(record);
+  const [eventPlan, trace, ...promptDocuments] = await Promise.all([
+    readJson(path.join(episodeRoot, "prompts/visual-events.json")),
     readJson(path.join(episodeRoot, "whitebox/executed-playthrough-trace.json")),
-    ...Array.from({ length: segmentCount }, (_, index) =>
-      readJson(path.join(episodeRoot, `prompts/segment-${String(index).padStart(2, "0")}.json`))),
+    ...segmentIds.map((segmentId) =>
+      readJson(path.join(episodeRoot, `prompts/${segmentId}.json`))),
   ]);
-  return Promise.all(Array.from({ length: segmentCount }, async (_, index) => {
-    const segmentId = `segment-${String(index).padStart(2, "0")}`;
+  return Promise.all(segmentIds.map(async (segmentId, selectedIndex) => {
+    const index = Number(segmentId.slice(-2));
     const globalStartSeconds = index * segmentDurationSeconds;
-    const [whiteboxVideo, finalVideo720, finalVideo480, providerVideo480, legacyPromptVideo, legacyPrompt, relaxedActionVideo, relaxedPrompt, whiteboxPoster, finalPoster, reviewStyledOpeningFrame] = await Promise.all([
-      existingArtifact(episodeRoot, episodeId, `whitebox/${segmentId}.mp4`),
+    const executionStartSeconds = index * executionSegmentSeconds;
+    const [whiteboxVideo, finalVideo720, finalVideo480, providerVideo720, providerVideo480, legacyPromptVideo, legacyPrompt, relaxedActionVideo, relaxedPrompt, whiteboxPoster, finalPoster, reviewStyledOpeningFrame] = await Promise.all([
+      existingArtifact(record, episodeRoot, episodeId, `whitebox/${segmentId}.mp4`),
       existingArtifact(
-        episodeRoot,
+        record, episodeRoot,
         episodeId,
         `video/${segmentId}/final-1280x720-24fps-720f.mp4`,
       ),
       existingArtifact(
-        episodeRoot,
+        record, episodeRoot,
         episodeId,
         `video/${segmentId}/final-854x480-24fps-720f.mp4`,
       ),
       existingArtifact(
-        episodeRoot,
+        record, episodeRoot,
+        episodeId,
+        `video/${segmentId}/seedance-2.5.mp4`,
+      ),
+      existingArtifact(
+        record, episodeRoot,
         episodeId,
         `video/${segmentId}/mg-seedance-2.5-480p.mp4`,
       ),
       existingArtifact(
-        episodeRoot,
+        record, episodeRoot,
         episodeId,
         `video-ab/legacy-heavy/${segmentId}/final-854x480-24fps-720f.mp4`,
       ),
       readJson(path.join(episodeRoot, `prompt-ab/legacy-heavy/${segmentId}.json`)),
       existingArtifact(
-        episodeRoot,
+        record, episodeRoot,
         episodeId,
         `video-ab/relaxed-action/${segmentId}/final-854x480-24fps-720f.mp4`,
       ),
       readJson(path.join(episodeRoot, `prompt-ab/relaxed-action/${segmentId}.json`)),
-      existingArtifact(episodeRoot, episodeId, `whitebox/${segmentId}-first-frame.png`),
-      existingArtifact(episodeRoot, episodeId, `visual/${segmentId}-styled-opening-frame.png`),
-      existingArtifact(episodeRoot, episodeId, `visual-reviews/visual-reconstructor-v5/${segmentId}-styled-opening-frame.png`),
+      existingArtifact(record, episodeRoot, episodeId, `whitebox/${segmentId}-first-frame.png`),
+      existingArtifact(record, episodeRoot, episodeId, `visual/${segmentId}-styled-opening-frame.png`),
+      existingArtifact(record, episodeRoot, episodeId, `visual-reviews/visual-reconstructor-v5/${segmentId}-styled-opening-frame.png`),
     ]);
-    const basePromptEvent = promptEventForSegment(
-      plan, trace, promptDocuments[index], segmentId, index,
+    const basePromptEvents = promptEventsForSegment(
+      eventPlan,
+      trace,
+      promptDocuments[selectedIndex],
+      segmentId,
+      index,
+      executionSegmentSeconds,
     );
+    const promptEvents = basePromptEvents.map((promptEvent) => ({
+      ...promptEvent,
+      ...(typeof legacyPrompt?.prompt === "string"
+        ? { legacyProviderPrompt: legacyPrompt.prompt }
+        : {}),
+      ...(typeof relaxedPrompt?.prompt === "string"
+        ? { relaxedProviderPrompt: relaxedPrompt.prompt }
+        : {}),
+    }));
     const finalVideo = finalVideo720 ?? finalVideo480;
     return {
       segmentId,
       index,
-      title: `阶段 ${index + 1}`,
+      title: `起点 ${index + 1}`,
       globalStartSeconds,
       globalEndSeconds: globalStartSeconds + segmentDurationSeconds,
+      executionStartSeconds,
+      executionEndSeconds: executionStartSeconds + segmentDurationSeconds,
       durationSeconds: segmentDurationSeconds,
       whiteboxVideo: whiteboxVideo ? { ...whiteboxVideo, poster: whiteboxPoster } : null,
       finalVideo: finalVideo ? { ...finalVideo, poster: finalPoster } : null,
-      publicPreviewVideo: finalVideo480 || providerVideo480
-        ? { ...(finalVideo480 ?? providerVideo480), poster: finalPoster }
+      publicPreviewVideo: finalVideo720 || finalVideo480 || providerVideo720 || providerVideo480
+        ? { ...(finalVideo720 ?? finalVideo480 ?? providerVideo720 ?? providerVideo480), poster: finalPoster }
         : null,
       baseStyledOpeningFrame: { url: `/api/worlds/${sceneId}/deliverables/styled-opening-frame` },
       reviewStyledOpeningFrame,
       legacyPromptVideo: legacyPromptVideo ? { ...legacyPromptVideo, poster: finalPoster } : null,
       relaxedActionVideo: relaxedActionVideo ? { ...relaxedActionVideo, poster: finalPoster } : null,
-      inputActivations: executedActivations(trace, index),
-      promptEvent: basePromptEvent
-        ? {
-            ...basePromptEvent,
-            ...(typeof legacyPrompt?.prompt === "string" ? { legacyProviderPrompt: legacyPrompt.prompt } : {}),
-            ...(typeof relaxedPrompt?.prompt === "string" ? { relaxedProviderPrompt: relaxedPrompt.prompt } : {}),
-          }
-        : null,
+      inputActivations: executedActivations(trace, index, executionSegmentSeconds),
+      seedanceProviderPrompt:
+        typeof promptDocuments[selectedIndex]?.prompt === "string"
+          ? promptDocuments[selectedIndex].prompt
+          : "",
+      promptEvents,
+      promptEvent: promptEvents[0] ?? null,
     };
   }));
 }
 
 export function buildEpisodeInteractionTimeline(record, playbackComparisons, executedTrace = null) {
+  const executionSegmentSeconds = executionSecondsForRecord(record);
   const segments = (playbackComparisons ?? []).map((comparison) => {
     const globalStartSeconds = finiteSeconds(comparison?.globalStartSeconds, 0);
-    const prompt = comparison?.promptEvent;
+    const executionStartSeconds = finiteSeconds(
+      comparison?.executionStartSeconds,
+      0,
+    );
+    const prompts = Array.isArray(comparison?.promptEvents)
+      ? comparison.promptEvents
+      : comparison?.promptEvent ? [comparison.promptEvent] : [];
     return {
       segmentId: comparison.segmentId,
       globalStartSeconds,
@@ -278,6 +430,8 @@ export function buildEpisodeInteractionTimeline(record, playbackComparisons, exe
         comparison?.globalEndSeconds,
         globalStartSeconds + segmentDurationSeconds,
       ),
+      executionStartSeconds,
+      executionEndSeconds: executionStartSeconds + segmentDurationSeconds,
       inputs: (comparison?.inputActivations ?? []).map((activation) => ({
         id: activation.id,
         kind: activation.kind,
@@ -286,8 +440,10 @@ export function buildEpisodeInteractionTimeline(record, playbackComparisons, exe
         segmentEndSeconds: roundedSeconds(activation.endSeconds),
         globalStartSeconds: roundedSeconds(globalStartSeconds + activation.startSeconds),
         globalEndSeconds: roundedSeconds(globalStartSeconds + activation.endSeconds),
+        executionStartSeconds: roundedSeconds(executionStartSeconds + activation.startSeconds),
+        executionEndSeconds: roundedSeconds(executionStartSeconds + activation.endSeconds),
       })),
-      promptEvent: prompt ? {
+      promptEvents: prompts.map((prompt) => ({
         id: prompt.id,
         eventClass: prompt.eventClass,
         targetNames: [...(prompt.targetNames ?? [])],
@@ -297,15 +453,29 @@ export function buildEpisodeInteractionTimeline(record, playbackComparisons, exe
         commandText: prompt.commandText,
         inputPrompt: prompt.eventPrompt,
         seedanceProviderPrompt: prompt.providerPrompt,
+      })),
+      promptEvent: prompts[0] ? {
+        id: prompts[0].id,
+        eventClass: prompts[0].eventClass,
+        targetNames: [...(prompts[0].targetNames ?? [])],
+        globalSeconds: prompts[0].globalSeconds,
+        segmentSeconds: prompts[0].relativeSeconds,
+        activeEndSeconds: prompts[0].activeEndSeconds,
+        commandText: prompts[0].commandText,
+        inputPrompt: prompts[0].eventPrompt,
+        seedanceProviderPrompt: prompts[0].providerPrompt,
       } : null,
     };
   });
   return {
     kind: "worldkit-episode-interaction-timeline",
-    schemaVersion: executedTrace?.frameTelemetry ? 2 : 1,
+    schemaVersion: executedTrace?.frameTelemetry ? 3 : 1,
     sceneId: record.sceneId,
     episodeId: record.episodeId,
-    durationSeconds: segmentCount * segmentDurationSeconds,
+    durationSeconds: Number(record?.deliveryDurationSeconds) ||
+      Number(record?.segmentCount || 4) * segmentDurationSeconds,
+    executionDurationSeconds: Number(record?.executionDurationSeconds) ||
+      Number(record?.segmentCount || 4) * executionSegmentSeconds,
     captureFrameRate: 24,
     segments,
     ...(executedTrace?.frameTelemetry
@@ -428,7 +598,20 @@ export function createEpisodeWorkflowService(options) {
   const spawnImplementation = options.spawnImplementation ?? spawn;
   const createReadStreamImplementation = options.createReadStreamImplementation ?? createReadStream;
   const activeChildren = new Map();
+  const activeCloudExecutions = new Map();
   const listAllCache = new Map();
+  const executeCloudEpisode = options.executeCloudEpisode ?? null;
+  const retryCloudEpisode = options.retryCloudEpisode ?? null;
+  const recoverCloudEpisode = options.recoverCloudEpisode ?? null;
+  const ensureCloudEpisodeAvailable = options.ensureCloudEpisodeAvailable ?? null;
+  const resolveCloudSceneInput = options.resolveCloudSceneInput ?? null;
+  const cancelCloudEpisode = options.cancelCloudEpisode ?? null;
+  const readCloudEpisodeManifest = options.readCloudEpisodeManifest ?? null;
+  const readVerifiedRemoteArtifact = options.readVerifiedRemoteArtifact ?? null;
+  const streamRemoteArtifact = options.streamRemoteArtifact ?? null;
+  const redirectRemoteArtifact = options.redirectRemoteArtifact ?? null;
+  const loadStyleVariantConfig = options.loadEpisodeStyleVariantConfig ??
+    (() => loadEpisodeStyleVariantConfig(repoRoot));
 
   async function fileMetadata(filePath) {
     try {
@@ -453,13 +636,23 @@ export function createEpisodeWorkflowService(options) {
       "world-plan.png",
     );
     const images = [];
-    for (const [id, title, filePath] of [
-      ["user-reference", "用户参考首帧", path.join(sceneRoot, "user-first-frame.png")],
-      ["world-plan", "Planner 世界俯视图", worldPlanPath],
-      ["base-styled-opening", "场景最终样式基准", path.join(sceneRoot, "styled-opening-frame.png")],
+    for (const [id, title, filePath, remoteUrl] of [
+      ["user-reference", "用户参考首帧", path.join(sceneRoot, "user-first-frame.png"),
+        `/api/worlds/${record.sceneId}/reference`],
+      ["world-plan", "Planner 世界俯视图", worldPlanPath,
+        `/scene-assets/${record.sceneId}/world-plan.png`],
+      ["base-styled-opening", "场景最终样式基准",
+        path.join(sceneRoot, "styled-opening-frame.png"),
+        `/api/worlds/${record.sceneId}/deliverables/styled-opening-frame`],
     ]) {
       const metadata = await fileMetadata(filePath);
-      if (metadata) images.push({ id, title, group: "reference", sizeBytes: metadata.size, url: sceneAssetUrl(record.episodeId, id) });
+      images.push({
+        id,
+        title,
+        group: "reference",
+        sizeBytes: metadata?.size ?? null,
+        url: metadata ? sceneAssetUrl(record.episodeId, id) : remoteUrl,
+      });
     }
     for (const comparison of playbackComparisons) {
       if (comparison.whiteboxVideo?.poster) images.push({
@@ -482,37 +675,47 @@ export function createEpisodeWorkflowService(options) {
           typeof styledRelativePath !== "string" ||
           !/^visual\/triviews\/[a-z0-9-]+\/styled-triview\.png$/.test(styledRelativePath)) continue;
       const whiteboxPath = path.join(sceneRoot, "triviews", visualTargetId, "whitebox-triview.png");
-      const styledPath = path.join(episodeRoot, styledRelativePath);
-      const [whiteboxMetadata, styledMetadata] = await Promise.all([
+      const [whiteboxMetadata, styledArtifact] = await Promise.all([
         fileMetadata(whiteboxPath),
-        fileMetadata(styledPath),
+        existingArtifact(record, episodeRoot, record.episodeId, styledRelativePath),
       ]);
-      if (whiteboxMetadata) images.push({
+      images.push({
         id: `whitebox-triview-${visualTargetId}`,
         title: `${visualTargetId} · 白膜三视图`,
         group: "triview",
-        sizeBytes: whiteboxMetadata.size,
-        url: sceneAssetUrl(record.episodeId, `whitebox-triview-${visualTargetId}`),
+        sizeBytes: whiteboxMetadata?.size ?? null,
+        url: whiteboxMetadata
+          ? sceneAssetUrl(record.episodeId, `whitebox-triview-${visualTargetId}`)
+          : `/api/worlds/${record.sceneId}/triviews/${visualTargetId}`,
       });
-      if (styledMetadata) images.push({
+      if (styledArtifact) images.push({
         id: `styled-triview-${visualTargetId}`,
         title: `${visualTargetId} · 最终样式三视图`,
         group: "triview",
-        sizeBytes: styledMetadata.size,
-        url: artifactUrl(record.episodeId, styledRelativePath),
+        sizeBytes: styledArtifact.sizeBytes,
+        url: styledArtifact.url,
       });
     }
     const documentPaths = new Set([
       "planning/playthrough-plan.json",
+      "planning/navigation-evidence.json",
+      "whitebox/executed-playthrough-quality-report.json",
       "whitebox/executed-playthrough-trace.json",
       "visual/episode-visual-prompts.json",
       "visual/episode-visual-manifest.json",
+      "prompts/visual-events.json",
       "prompts/segment-00.json",
       "prompts/segment-01.json",
       "prompts/segment-02.json",
+      "prompts/segment-03.json",
+      "prompts/segment-04.json",
+      "prompts/segment-05.json",
       "video/segment-00/provider-run.json",
       "video/segment-01/provider-run.json",
       "video/segment-02/provider-run.json",
+      "video/segment-03/provider-run.json",
+      "video/segment-04/provider-run.json",
+      "video/segment-05/provider-run.json",
     ]);
     const documents = [{
       id: "interaction-timeline",
@@ -526,8 +729,20 @@ export function createEpisodeWorkflowService(options) {
       sizeBytes: artifact.sizeBytes,
       url: artifact.url,
     }))];
-    const bundleReady = record.status === "succeeded" && playbackComparisons.length === segmentCount &&
-      playbackComparisons.every((comparison) => comparison.whiteboxVideo?.url && comparison.finalVideo?.url);
+    const expectedComparisonCount = seedanceSegmentIdsForRecord(record).length;
+    const styleVariantManifest = await readJson(path.join(
+      episodeRoot, "style-variants/style-variant-manifest.json",
+    ));
+    const styleVariantsReady = styleVariantManifest?.kind ===
+        "worldkit-episode-style-variant-manifest" &&
+      styleVariantManifest.succeededCount === styleVariantManifest.variantCount &&
+      styleVariantManifest.variantCount === 10;
+    const bundleReady = record.productionScope !== "visual-sample" &&
+      record.status === "succeeded" && (styleVariantsReady || (
+      playbackComparisons.length === expectedComparisonCount &&
+      playbackComparisons.every((comparison) =>
+        comparison.whiteboxVideo?.url && comparison.finalVideo?.url)
+    ));
     return {
       images,
       documents,
@@ -539,11 +754,74 @@ export function createEpisodeWorkflowService(options) {
     };
   }
 
+  async function buildStyleVariantReviews(record, episodeRoot) {
+    const [manifest, productionRecord] = await Promise.all([
+      readJson(path.join(episodeRoot, "style-variants/style-variant-manifest.json")),
+      readJson(path.join(episodeRoot, "style-variants/style-variant-production-record.json")),
+    ]);
+    const entries = manifest?.kind === "worldkit-episode-style-variant-manifest"
+      ? manifest.variants
+      : productionRecord?.kind === "worldkit-episode-style-variant-production-record"
+        ? productionRecord.variants
+        : [];
+    if (!Array.isArray(entries)) return [];
+    return Promise.all(entries.map(async (entry) => {
+      const variantRoot = `style-variants/${entry.id}`;
+      const [definition, visualManifest, review, reviewReport, events] = await Promise.all([
+        readJson(path.join(episodeRoot, variantRoot, "style-variant.json")),
+        readJson(path.join(episodeRoot, variantRoot, "visual/visual-manifest.json")),
+        readJson(path.join(episodeRoot, variantRoot, "review/visual-quality-review.json")),
+        readJson(path.join(episodeRoot, variantRoot, "review/visual-quality-review-report.json")),
+        readJson(path.join(episodeRoot, variantRoot, "prompts/visual-events.json")),
+      ]);
+      const comparisons = await Promise.all(seedanceSegmentIdsForRecord(record)
+        .map(async (segmentId, index) => ({
+          segmentId,
+          title: `起点 ${index + 1}`,
+          whiteboxVideo: await existingArtifact(
+            record, episodeRoot, record.episodeId, `whitebox/${segmentId}.mp4`,
+          ),
+          styledOpeningFrame: await existingArtifact(
+            record, episodeRoot, record.episodeId,
+            `${variantRoot}/visual/${segmentId}-styled-opening-frame.png`,
+          ),
+          finalVideo: await existingArtifact(
+            record, episodeRoot, record.episodeId,
+            `${variantRoot}/video/${segmentId}/final-1280x720-24fps-720f.mp4`,
+          ),
+          seedancePrompt: await readJson(path.join(
+            episodeRoot, variantRoot, "prompts", `${segmentId}.json`,
+          )),
+        })));
+      const triviews = await Promise.all((visualManifest?.targets ?? []).map(async (target) => ({
+        visualTargetId: target.visualTargetId,
+        styled: await existingArtifact(
+          record, episodeRoot, record.episodeId,
+          `${variantRoot}/${target.styledTriview.path}`,
+        ),
+        whiteboxUrl: `/api/worlds/${record.sceneId}/triviews/${target.visualTargetId}`,
+      })));
+      return {
+        id: entry.id,
+        name: definition?.name ?? entry.id,
+        concept: definition?.concept ?? "",
+        status: entry.status,
+        visualAttempt: entry.visualAttempt ?? null,
+        visualReview: review,
+        visualReviewReport: reviewReport,
+        geminiEvents: events,
+        comparisons,
+        triviews,
+      };
+    }));
+  }
+
   async function prepareEpisodeBundle(record) {
     const episodeRoot = path.join(episodesRoot, record.episodeId);
     const sceneRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     const visualManifest = await readJson(path.join(episodeRoot, "visual/episode-visual-manifest.json"));
     const playbackComparisons = await buildPlaybackComparisons(
+      record,
       episodeRoot,
       record.episodeId,
       record.sceneId,
@@ -551,9 +829,10 @@ export function createEpisodeWorkflowService(options) {
     const executedTrace = await readJson(
       path.join(episodeRoot, "whitebox/executed-playthrough-trace.json"),
     );
-    if (record.status !== "succeeded" || playbackComparisons.length !== segmentCount ||
+    if (record.status !== "succeeded" ||
+        playbackComparisons.length !== seedanceSegmentIdsForRecord(record).length ||
         !playbackComparisons.every((comparison) => comparison.whiteboxVideo?.url && comparison.finalVideo?.url)) {
-      throw new Error("Episode 尚未完成三段白膜与最终视频，暂不能打包。");
+      throw new Error("Episode 尚未完成全部六个白膜起点与六段最终视频，暂不能打包。");
     }
     const timeline = buildEpisodeInteractionTimeline(record, playbackComparisons, executedTrace);
     const temporaryRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-bundle-"));
@@ -583,13 +862,17 @@ export function createEpisodeWorkflowService(options) {
       await writeJsonEntry("interaction-timeline.json", "wasd-camera-and-prompt-timeline", timeline);
       for (const [sourceRelativePath, destinationRelativePath, role, required] of [
         ["episode-record.json", "episode-record.json", "workflow-record", true],
-        ["planning/playthrough-plan.json", "planning/playthrough-plan.json", "planned-input-and-prompt-script", true],
+        ["planning/playthrough-plan.json", "planning/playthrough-plan.json", "planned-gameplay-script", true],
+        ["planning/navigation-evidence.json", "planning/navigation-evidence.json", "host-navigation-evidence", false],
         ["planning/reconnaissance/reconnaissance-report.json", "planning/reconnaissance-report.json", "runtime-reconnaissance", false],
-        ["whitebox/episode-90s.mp4", "whitebox/episode-90s-1280x720-24fps.mp4", "complete-whitebox-video", true],
-        ["whitebox/episode-raw.webm", "whitebox/episode-raw.webm", "original-browser-capture", false],
+        ["whitebox/episode-180s.mp4", "whitebox/episode-180s-six-independent-captures.mp4", "complete-six-capture-whitebox-video", Number(record.segmentCount) === 6],
+        ["whitebox/episode-120s.mp4", "whitebox/episode-120s-1280x720-24fps.mp4", "legacy-complete-delivery-whitebox-video", Number(record.segmentCount) !== 6],
+        ["whitebox/episode-124s-execution.mp4", "whitebox/episode-124s-execution-with-camera-reset-buffers.mp4", "legacy-complete-execution-whitebox-video", false],
+        ["whitebox/executed-playthrough-quality-report.json", "whitebox/executed-playthrough-quality-report.json", "minimal-runtime-and-motion-health", true],
         ["whitebox/executed-playthrough-trace.json", "whitebox/executed-playthrough-trace.json", "raw-executed-input-trace", true],
         ["visual/episode-visual-prompts.json", "visual/episode-visual-prompts.json", "visual-reconstruction-prompts", true],
         ["visual/episode-visual-manifest.json", "visual/episode-visual-manifest.json", "visual-reconstruction-manifest", true],
+        ["prompts/visual-events.json", "prompts/visual-events.json", "gemini-visual-event-plan", true],
         ["pipeline.log", "logs/pipeline.log", "workflow-log", false],
       ]) {
         await copy(path.join(episodeRoot, sourceRelativePath), destinationRelativePath, role, required);
@@ -620,8 +903,23 @@ export function createEpisodeWorkflowService(options) {
           true,
         );
       }
-      for (let index = 0; index < segmentCount; index += 1) {
-        const segmentId = `segment-${String(index).padStart(2, "0")}`;
+      for (let index = 0; index < Number(record.segmentCount || 4); index += 1) {
+        const captureId = `segment-${String(index).padStart(2, "0")}`;
+        await copy(
+          path.join(episodeRoot, `whitebox/${captureId}.mp4`),
+          `whitebox-captures/${captureId}-1280x720-24fps-720f.mp4`,
+          "independent-whitebox-capture",
+          true,
+        );
+        await copy(
+          path.join(episodeRoot, `whitebox/${captureId}-first-frame.png`),
+          `whitebox-captures/${captureId}-first-frame.png`,
+          "independent-whitebox-first-frame",
+          true,
+        );
+      }
+      for (const segmentId of seedanceSegmentIdsForRecord(record)) {
+        const index = Number(segmentId.slice(-2));
         const segmentRoot = `segments/${segmentId}`;
         const final1280 = path.join(episodeRoot, `video/${segmentId}/final-1280x720-24fps-720f.mp4`);
         const final480 = path.join(episodeRoot, `video/${segmentId}/final-854x480-24fps-720f.mp4`);
@@ -631,7 +929,7 @@ export function createEpisodeWorkflowService(options) {
           [path.join(episodeRoot, `whitebox/${segmentId}-first-frame.png`), `${segmentRoot}/whitebox-first-frame.png`, "segment-whitebox-first-frame", true],
           [path.join(episodeRoot, `visual/${segmentId}-styled-opening-frame.png`), `${segmentRoot}/styled-opening-frame.png`, "segment-styled-opening-frame", true],
           [path.join(episodeRoot, `video/${segmentId}/mg-seedance-2.5-480p.mp4`), `${segmentRoot}/seedance-mg-480p.mp4`, "seedance-provider-video", false],
-          [path.join(episodeRoot, `video/${segmentId}/cf-upscaled-720p.mp4`), `${segmentRoot}/seedance-cf-720p.mp4`, "seedance-upscaled-video", false],
+          [path.join(episodeRoot, `video/${segmentId}/mediakit-enhanced-720p.mp4`), `${segmentRoot}/seedance-mediakit-720p.mp4`, "seedance-upscaled-video", false],
           [finalPath, `${segmentRoot}/seedance-final-1280x720-24fps-720f.mp4`, "seedance-final-video", true],
           [path.join(episodeRoot, `prompts/${segmentId}.json`), `${segmentRoot}/seedance-prompt.json`, "seedance-prompt", true],
           [path.join(episodeRoot, `video/${segmentId}/provider-run.json`), `${segmentRoot}/provider-run.json`, "provider-run-metadata", true],
@@ -646,7 +944,7 @@ export function createEpisodeWorkflowService(options) {
         episodeId: record.episodeId,
         createdAt: new Date().toISOString(),
         naming: {
-          segmentDirectory: "segments/segment-00..02",
+          segmentDirectory: "segments/segment-00..05",
           whiteboxVideo: "whitebox-1280x720-24fps-720f.mp4",
           finalVideo: "seedance-final-1280x720-24fps-720f.mp4",
           interactionTimeline: "interaction-timeline.json",
@@ -673,7 +971,17 @@ export function createEpisodeWorkflowService(options) {
           relativePath, title, kind, stage, sizeBytes: metadata.size,
           url: `/api/episode-workflows/${record.episodeId}/artifacts/${relativePath}`,
         };
-      } catch { return null; }
+      } catch {
+        const remote = remoteEpisodeArtifact(record, relativePath);
+        return remote ? {
+          relativePath,
+          title,
+          kind,
+          stage,
+          sizeBytes: remote.byteSize,
+          url: `/api/episode-workflows/${record.episodeId}/artifacts/${relativePath}`,
+        } : null;
+      }
     }))).filter(Boolean);
     const visualManifest = await readJson(path.join(episodeRoot, "visual/episode-visual-manifest.json"));
     for (const target of visualManifest?.targets ?? []) {
@@ -691,9 +999,25 @@ export function createEpisodeWorkflowService(options) {
           sizeBytes: metadata.size,
           url: `/api/episode-workflows/${record.episodeId}/artifacts/${relativePath}`,
         });
-      } catch {}
+      } catch {
+        const remote = remoteEpisodeArtifact(record, relativePath);
+        if (remote) artifacts.push({
+          relativePath,
+          title: `${target.visualTargetId} · 共享最终三视图`,
+          kind: "image",
+          stage: "visual-reconstruction",
+          sizeBytes: remote.byteSize,
+          url: `/api/episode-workflows/${record.episodeId}/artifacts/${relativePath}`,
+        });
+      }
     }
-    const playbackComparisons = await buildPlaybackComparisons(episodeRoot, record.episodeId, record.sceneId);
+    const playbackComparisons = await buildPlaybackComparisons(
+      record,
+      episodeRoot,
+      record.episodeId,
+      record.sceneId,
+    );
+    const styleVariants = await buildStyleVariantReviews(record, episodeRoot);
     const reviewDownloads = await buildReviewDownloads(
       record,
       artifacts,
@@ -702,9 +1026,12 @@ export function createEpisodeWorkflowService(options) {
     );
     return {
       ...record,
-      running: activeChildren.has(record.episodeId),
+      running: activeChildren.has(record.episodeId) ||
+        activeCloudExecutions.has(record.episodeId) ||
+        ["running", "remote-pending"].includes(record.status),
       artifacts,
       playbackComparisons,
+      styleVariants,
       reviewDownloads,
     };
   }
@@ -744,15 +1071,20 @@ export function createEpisodeWorkflowService(options) {
           "video/segment-00/final-1280x720-24fps-720f.mp4",
           "video/segment-01/final-1280x720-24fps-720f.mp4",
           "video/segment-02/final-1280x720-24fps-720f.mp4",
+          "video/segment-03/final-1280x720-24fps-720f.mp4",
           "video/segment-00/final-854x480-24fps-720f.mp4",
           "video/segment-01/final-854x480-24fps-720f.mp4",
           "video/segment-02/final-854x480-24fps-720f.mp4",
+          "video/segment-03/final-854x480-24fps-720f.mp4",
+          ...((record.styleVariantIds ?? []).flatMap((styleVariantId) =>
+            seedanceSegmentIdsForRecord(record).map((segmentId) =>
+              `style-variants/${styleVariantId}/video/${segmentId}/final-1280x720-24fps-720f.mp4`))),
       ];
       const hasFinalVideo = (await Promise.all(finalCandidates.map(async (relativePath) => {
         try {
           const metadata = await stat(path.join(episodesRoot, entry.name, relativePath));
           return metadata.isFile() && metadata.size > 0;
-        } catch { return false; }
+        } catch { return remoteEpisodeArtifact(record, relativePath) !== null; }
       }))).some(Boolean);
       return hasFinalVideo ? record : null;
     }))).filter(Boolean);
@@ -770,8 +1102,420 @@ export function createEpisodeWorkflowService(options) {
     return enriched.sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
   }
 
-  async function start(sceneId, backend = "cloud") {
-    if (!idPattern.test(sceneId) || !["cloud", "local"].includes(backend)) {
+  async function persistEpisodeRecord(record) {
+    const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
+    await mkdir(path.dirname(recordPath), { recursive: true });
+    const temporaryPath = `${recordPath}.${process.pid}.tmp`;
+    await writeFile(temporaryPath, `${JSON.stringify({
+      ...record,
+      updatedAt: new Date().toISOString(),
+    }, null, 2)}\n`, "utf8");
+    await rename(temporaryPath, recordPath);
+    listAllCache.clear();
+  }
+
+  async function hydrateCloudEpisodeMetadata(record) {
+    if (typeof readVerifiedRemoteArtifact !== "function") return;
+    const episodeRoot = path.join(episodesRoot, record.episodeId);
+    const metadataPaths = [
+      "planning/playthrough-plan.json",
+      "planning/navigation-evidence.json",
+      "planning/reconnaissance/reconnaissance-report.json",
+      "whitebox/executed-playthrough-trace.json",
+      "whitebox/executed-playthrough-quality-report.json",
+      "visual/episode-visual-manifest.json",
+      "visual/episode-visual-prompts.json",
+      "prompts/visual-events.json",
+      ...seedanceSegmentIdsForRecord(record).map((segmentId) =>
+        `prompts/${segmentId}.json`),
+      ...seedanceSegmentIdsForRecord(record).map((segmentId) =>
+        `video/${segmentId}/provider-run.json`),
+      ...((record.styleVariantIds ?? []).length === 0 ? [] : [
+        "style-variants/style-variant-plan.json",
+        "style-variants/style-variant-plan-report.json",
+        "style-variants/style-variant-manifest.json",
+        "style-variants/style-variant-production-record.json",
+        ...(record.styleVariantIds ?? []).flatMap((styleVariantId) => [
+          `style-variants/${styleVariantId}/style-variant.json`,
+          `style-variants/${styleVariantId}/visual/visual-manifest.json`,
+          `style-variants/${styleVariantId}/review/visual-quality-review.json`,
+          `style-variants/${styleVariantId}/review/visual-quality-review-report.json`,
+          `style-variants/${styleVariantId}/prompts/visual-events.json`,
+          ...seedanceSegmentIdsForRecord(record).flatMap((segmentId) => [
+            `style-variants/${styleVariantId}/prompts/${segmentId}.json`,
+            `style-variants/${styleVariantId}/video/${segmentId}/provider-run.json`,
+          ]),
+        ]),
+      ]),
+    ];
+    for (const relativePath of metadataPaths) {
+      const bytes = await readVerifiedRemoteArtifact(
+        record,
+        `episode/${relativePath}`,
+      ).catch(() => null);
+      if (!bytes) continue;
+      const destination = path.join(episodeRoot, relativePath);
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, bytes, { mode: 0o600 });
+    }
+  }
+
+  async function admitCloudEpisodeResult(recordPath, record, result) {
+    if (result.execution?.status !== "succeeded" || !result.manifestS3Uri) {
+      throw new Error(
+        `Cloud Episode Execution ended as ${result.execution?.status ?? "unknown"}: ` +
+        `${result.execution?.error ?? "no error detail"}`,
+      );
+    }
+    const manifest = await readCloudEpisodeManifest(result.manifestS3Uri, {
+      expectedExecutionId: result.execution.execution_id,
+      expectedSceneId: record.sceneId,
+      expectedEpisodeId: record.episodeId,
+    });
+    if (typeof record.remoteWorkerImage !== "string" ||
+        manifest.workerImage !== record.remoteWorkerImage) {
+      throw new Error("Cloud Episode manifest Worker image does not match the frozen request digest.");
+    }
+    if (typeof readVerifiedRemoteArtifact !== "function") {
+      throw new Error("Cloud Episode source receipt verifier is unavailable.");
+    }
+    const sourceReceiptBytes = await readVerifiedRemoteArtifact(
+      { ...record, remoteArtifacts: manifest.artifacts },
+      "episode/episode-source-receipt.json",
+    );
+    const sourceReceipt = JSON.parse(sourceReceiptBytes?.toString("utf8") ?? "null");
+    if (sourceReceipt?.kind !== "worldkit-cloud-episode-source-receipt" ||
+        sourceReceipt.schemaVersion !== 1 ||
+        sourceReceipt.sceneId !== record.sceneId ||
+        sourceReceipt.episodeId !== record.episodeId ||
+        sourceReceipt.sceneExecutionId !== record.sourceSceneExecutionId ||
+        sourceReceipt.sceneManifestS3Uri !== record.sourceSceneManifestS3Uri ||
+        sourceReceipt.workerImage !== record.remoteWorkerImage ||
+        sourceReceipt.styleVariantMode !== record.styleVariantMode ||
+        !/^sha256:[a-f0-9]{64}$/.test(sourceReceipt.sceneManifestContentHash ?? "") ||
+        !/^sha256:[a-f0-9]{64}$/.test(sourceReceipt.worldBuildIdentityHash ?? "") ||
+        !/^sha256:[a-f0-9]{64}$/.test(sourceReceipt.sceneCaptureReceiptContentHash ?? "")) {
+      throw new Error("Cloud Episode source receipt does not bind the admitted Scene and Worker.");
+    }
+    const styleVariantIds = [...new Set(manifest.artifacts.flatMap((artifact) => {
+      const match = /^episode\/style-variants\/(style-0[0-9])\/style-variant\.json$/
+        .exec(String(artifact?.path ?? ""));
+      return match ? [match[1]] : [];
+    }))].sort();
+    const styleVariantMode = manifest.artifacts.some((artifact) =>
+      artifact?.path === "episode/style-variants/style-variant-manifest.json");
+    if ((record.styleVariantMode === "ten-style") !== styleVariantMode) {
+      throw new Error("Cloud Episode output mode does not match its frozen production profile.");
+    }
+    const visualSample = record.productionScope === "visual-sample";
+    const required = [
+      "episode/episode-record.json",
+      "episode/episode-source-receipt.json",
+      "episode/planning/reconnaissance/reconnaissance-report.json",
+      "episode/planning/navigation-evidence.json",
+      "episode/planning/playthrough-plan.json",
+      "episode/whitebox/episode-180s.mp4",
+      "episode/whitebox/executed-playthrough-raw-trace.json",
+      "episode/whitebox/executed-playthrough-trace.json",
+      "episode/whitebox/executed-playthrough-quality-report.json",
+      ...(visualSample ? [] : [`episode/bundle/${record.episodeId}-seedance-review.zip`]),
+      ...Array.from({ length: Number(record.segmentCount || 4) }, (_, index) => [
+        `episode/whitebox/segment-0${index}.mp4`,
+        `episode/whitebox/segment-0${index}-first-frame.png`,
+      ]).flat(),
+      ...(styleVariantMode
+        ? [
+            "episode/style-variants/style-variant-plan.json",
+            "episode/style-variants/style-variant-plan-report.json",
+            "episode/style-variants/style-variant-manifest.json",
+            ...styleVariantIds.flatMap((styleVariantId) => [
+              `episode/style-variants/${styleVariantId}/style-variant.json`,
+              `episode/style-variants/${styleVariantId}/visual/visual-manifest.json`,
+              `episode/style-variants/${styleVariantId}/review/visual-quality-review.json`,
+              `episode/style-variants/${styleVariantId}/review/visual-quality-review-report.json`,
+              ...seedanceSegmentIdsForRecord(record).map((segmentId) =>
+                `episode/style-variants/${styleVariantId}/visual/${segmentId}-styled-opening-frame.png`),
+              ...(visualSample ? [] : [
+                `episode/style-variants/${styleVariantId}/prompts/visual-events.json`,
+                ...seedanceSegmentIdsForRecord(record).map((segmentId) =>
+                  `episode/style-variants/${styleVariantId}/video/${segmentId}/final-1280x720-24fps-720f.mp4`),
+              ]),
+            ]),
+          ]
+        : [
+            "episode/visual/episode-visual-prompts.json",
+            "episode/visual/episode-visual-manifest.json",
+            "episode/prompts/visual-events.json",
+            ...seedanceSegmentIdsForRecord(record).flatMap((segmentId) => [
+              `episode/visual/${segmentId}-styled-opening-frame.png`,
+              `episode/prompts/${segmentId}.json`,
+              `episode/video/${segmentId}/request.json`,
+              `episode/video/${segmentId}/provider-run.json`,
+              `episode/video/${segmentId}/seedance-2.5.mp4`,
+              `episode/video/${segmentId}/final-1280x720-24fps-720f.mp4`,
+            ]),
+          ]),
+    ];
+    if (styleVariantMode && (styleVariantIds.length !== 10 ||
+        styleVariantIds.some((id, index) => id !== `style-${String(index).padStart(2, "0")}`))) {
+      throw new Error("Cloud Episode manifest must close exactly ten ordered Style Variants.");
+    }
+    if (!required.every((artifactPath) => manifest.artifacts.some((artifact) =>
+      artifact.path === artifactPath && artifact.required === true))) {
+      throw new Error("Cloud Episode manifest omitted required deliverables.");
+    }
+    record = await readJson(recordPath) ?? record;
+    record = {
+      ...record,
+      status: "finalizing",
+      currentStage: "artifact-metadata",
+      finishedAt: null,
+      error: null,
+      styleVariantCount: styleVariantMode ? styleVariantIds.length : 0,
+      styleVariantIds,
+      stages: record.stages.map((stage) => ({ ...stage, status: "complete" })),
+      remoteExecutionId: result.execution.execution_id,
+      remoteArtifactManifestS3Uri: result.manifestS3Uri,
+      remoteArtifactAdmission: {
+        status: "passed",
+        executionId: result.execution.execution_id,
+        verifiedAt: new Date().toISOString(),
+      },
+      remoteArtifacts: manifest.artifacts,
+    };
+    await persistEpisodeRecord(record);
+    await hydrateCloudEpisodeMetadata(record);
+    record = {
+      ...record,
+      status: "succeeded",
+      currentStage: null,
+      finishedAt: new Date().toISOString(),
+    };
+    await persistEpisodeRecord(record);
+    return record;
+  }
+
+  async function runCloudEpisode(sceneId, episodeId) {
+    const recordPath = path.join(episodesRoot, episodeId, "episode-record.json");
+    let record = await readJson(recordPath);
+    const requestId = `${episodeId}-cloud-run-1`;
+    try {
+      if (
+        typeof executeCloudEpisode !== "function" ||
+        typeof resolveCloudSceneInput !== "function" ||
+        typeof readCloudEpisodeManifest !== "function"
+      ) throw new Error("Cloud Episode production is not configured.");
+      const scene = await resolveCloudSceneInput(sceneId);
+      const result = await executeCloudEpisode({
+        sceneId,
+        episodeId,
+        sceneExecutionId: scene.sceneExecutionId,
+        sceneManifestS3Uri: scene.sceneManifestS3Uri,
+        sceneRecord: scene.sceneRecord,
+        productionScope: record.productionScope ?? "full",
+        styleVariantMode: record.styleVariantMode ?? "legacy",
+        requestId,
+        onSubmitted: async (submitted) => {
+          activeCloudExecutions.set(episodeId, submitted.executionId);
+          record = {
+            ...record,
+            remoteExecutionId: submitted.executionId,
+            remoteStageId: "episode-production",
+            remoteRequestId: requestId,
+            remoteOutputS3Prefix: submitted.outputS3Prefix,
+            remoteRequestS3Uri: submitted.requestS3Uri,
+            remoteWorkerImage: submitted.workerImage,
+            sourceSceneExecutionId: scene.sceneExecutionId,
+            sourceSceneManifestS3Uri: scene.sceneManifestS3Uri,
+            cloudAttempt: 1,
+          };
+          await persistEpisodeRecord(record);
+        },
+        onProgress: async (execution) => {
+          record = await readJson(recordPath) ?? record;
+          const internalStage = execution?.stages?.find?.((stage) =>
+            stage?.stage_id === "episode-production")?.diagnostics?.internal_stage ??
+            execution?.diagnostics?.internal_stage ?? record.currentStage;
+          const stageIndex = record.stages.findIndex((stage) => stage.id === internalStage);
+          record = {
+            ...record,
+            status: "running",
+            currentStage: internalStage,
+            cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
+            stages: record.stages.map((stage, index) => ({
+              ...stage,
+              status: index < stageIndex
+                ? "complete"
+                : index === stageIndex ? "running" : stage.status,
+            })),
+          };
+          await persistEpisodeRecord(record);
+        },
+      });
+      record = await admitCloudEpisodeResult(recordPath, record, result);
+    } catch (error) {
+      record = await readJson(recordPath) ?? record;
+      if (record.status !== "cancelled") {
+        record = {
+          ...record,
+          status: record.remoteExecutionId ? "remote-pending" : "failed",
+          error: error instanceof Error ? error.message : String(error),
+          finishedAt: record.remoteExecutionId ? null : new Date().toISOString(),
+        };
+        await persistEpisodeRecord(record);
+      }
+    } finally {
+      activeCloudExecutions.delete(episodeId);
+    }
+  }
+
+  async function runCloudEpisodeRetry(record) {
+    const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
+    const attempt = Number(record.cloudAttempt ?? 1) + 1;
+    try {
+      if (
+        typeof retryCloudEpisode !== "function" ||
+        typeof readCloudEpisodeManifest !== "function" ||
+        typeof record.remoteExecutionId !== "string" ||
+        typeof record.remoteRequestS3Uri !== "string" ||
+        typeof record.remoteOutputS3Prefix !== "string"
+      ) throw new Error("Cloud Episode retry identity is incomplete.");
+      record = {
+        ...record,
+        status: "running",
+        currentStage: "preparing",
+        finishedAt: null,
+        error: null,
+        cloudAttempt: attempt,
+        remoteArtifactAdmission: null,
+        remoteArtifacts: [],
+        stages: record.stages.map((stage) => ({
+          ...stage,
+          status: "pending",
+          startedAt: null,
+          finishedAt: null,
+        })),
+      };
+      await persistEpisodeRecord(record);
+      const result = await retryCloudEpisode({
+        executionId: record.remoteExecutionId,
+        requestS3Uri: record.remoteRequestS3Uri,
+        outputS3Prefix: record.remoteOutputS3Prefix,
+        retryRequestId: `${record.episodeId}-retry-${attempt}`,
+        attempt,
+        workerImage: record.remoteWorkerImage,
+        onProgress: async (execution) => {
+          record = await readJson(recordPath) ?? record;
+          const internalStage = execution?.stages?.find?.((stage) =>
+            stage?.stage_id === "episode-production")?.diagnostics?.internal_stage ??
+            execution?.diagnostics?.internal_stage ?? record.currentStage;
+          record = { ...record, currentStage: internalStage };
+          await persistEpisodeRecord(record);
+        },
+      });
+      await admitCloudEpisodeResult(recordPath, record, result);
+    } catch (error) {
+      record = await readJson(recordPath) ?? record;
+      if (record.status !== "cancelled") {
+        await persistEpisodeRecord({
+          ...record,
+          status: "failed",
+          finishedAt: new Date().toISOString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } finally {
+      activeCloudExecutions.delete(record.episodeId);
+    }
+  }
+
+  async function runCloudEpisodeRecovery(record) {
+    const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
+    try {
+      if (typeof recoverCloudEpisode !== "function" ||
+          typeof record.remoteExecutionId !== "string") {
+        throw new Error("Cloud Episode recovery identity is incomplete.");
+      }
+      const result = await recoverCloudEpisode({
+        executionId: record.remoteExecutionId,
+        requestS3Uri: record.remoteRequestS3Uri,
+        outputS3Prefix: record.remoteOutputS3Prefix,
+        workerImage: record.remoteWorkerImage,
+        attempt: Number(record.cloudAttempt ?? 1),
+        onProgress: async (execution) => {
+          record = await readJson(recordPath) ?? record;
+          const internalStage = execution?.stages?.find?.((stage) =>
+            stage?.stage_id === "episode-production")?.diagnostics?.internal_stage ??
+            execution?.diagnostics?.internal_stage ?? record.currentStage;
+          await persistEpisodeRecord({
+            ...record,
+            status: "running",
+            currentStage: internalStage,
+            cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
+            finishedAt: null,
+            error: null,
+          });
+        },
+      });
+      if (result.cancelled) {
+        await persistEpisodeRecord({
+          ...record,
+          status: "cancelled",
+          finishedAt: new Date().toISOString(),
+          error: "Cloud Episode was cancelled by the user.",
+        });
+        return;
+      }
+      if (result.retryRequired) {
+        await runCloudEpisodeRetry(await readJson(recordPath) ?? record);
+        return;
+      }
+      await admitCloudEpisodeResult(recordPath, record, result);
+    } catch (error) {
+      record = await readJson(recordPath) ?? record;
+      if (record.status !== "cancelled") {
+        await persistEpisodeRecord({
+          ...record,
+          status: "remote-pending",
+          finishedAt: null,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } finally {
+      activeCloudExecutions.delete(record.episodeId);
+    }
+  }
+
+  async function adoptSucceededCloudExecution(episodeId, executionId) {
+    if (!idPattern.test(episodeId) || !/^exec_[a-z0-9]+$/.test(executionId)) {
+      throw new Error("Cloud Episode adoption identity is invalid.");
+    }
+    const recordPath = path.join(episodesRoot, episodeId, "episode-record.json");
+    let record = await readJson(recordPath);
+    if (!record || record.episodeId !== episodeId || record.backend !== "cloud") {
+      throw new Error("Cloud Episode is not adoptable.");
+    }
+    if (typeof recoverCloudEpisode !== "function" ||
+        typeof readCloudEpisodeManifest !== "function") {
+      throw new Error("Cloud Episode recovery is not configured.");
+    }
+    const result = await recoverCloudEpisode({ executionId });
+    if (result.retryRequired || result.cancelled || result.execution?.status !== "succeeded") {
+      throw new Error(`Cloud Episode Execution ${executionId} is not succeeded.`);
+    }
+    record = {
+      ...record,
+      remoteExecutionId: executionId,
+      remoteStageId: "episode-production",
+      remoteArtifactManifestS3Uri: result.manifestS3Uri,
+    };
+    await persistEpisodeRecord(record);
+    return admitCloudEpisodeResult(recordPath, record, result);
+  }
+
+  async function start(sceneId, backend = "cloud", productionScope = "full") {
+    if (!idPattern.test(sceneId) || !["cloud", "local"].includes(backend) ||
+        !["full", "visual-sample"].includes(productionScope)) {
       throw new Error("Invalid episode scene or backend.");
     }
     const existing = (await listForScene(sceneId)).find((record) => record.running);
@@ -779,14 +1523,68 @@ export function createEpisodeWorkflowService(options) {
     const episodeId = `episode-${sceneId.slice(0, 70)}-${randomBytes(3).toString("hex")}`;
     const episodeRoot = path.join(episodesRoot, episodeId);
     await mkdir(episodeRoot, { recursive: true });
-    return spawnEpisode(sceneId, episodeId, backend, false);
+    if (backend === "cloud") {
+      if (typeof ensureCloudEpisodeAvailable === "function") {
+        await ensureCloudEpisodeAvailable();
+      }
+      const createdAt = new Date().toISOString();
+      const styleVariantConfig = await loadStyleVariantConfig();
+      const styleVariantMode = styleVariantConfig.enabled ? "ten-style" : "legacy";
+      const styleVariantIds = styleVariantMode === "ten-style"
+        ? Array.from({ length: styleVariantConfig.variantCount }, (_, index) =>
+          `style-${String(index).padStart(2, "0")}`)
+        : [];
+      await persistEpisodeRecord({
+        kind: "worldkit-episode-workflow-record",
+        schemaVersion: 1,
+        sceneId,
+        episodeId,
+        backend,
+        styleVariantMode,
+        styleVariantCount: styleVariantIds.length,
+        styleVariantIds,
+        productionScope,
+        segmentCount: 6,
+        seedanceSegmentIds: [...currentSeedanceSegmentIds],
+        deliveryDurationSeconds: 180,
+        executionDurationSeconds: 180,
+        status: "running",
+        currentStage: "preparing",
+        createdAt,
+        updatedAt: createdAt,
+        finishedAt: null,
+        error: null,
+        remoteExecutionId: null,
+        remoteStageId: "episode-production",
+        remoteRequestId: `${episodeId}-cloud-run-1`,
+        remoteArtifactManifestS3Uri: null,
+        remoteArtifactAdmission: null,
+        remoteArtifacts: [],
+        stages: episodeStageDefinitionsForMode(styleVariantMode).map(([id, title]) => ({
+          id,
+          title,
+          status: "pending",
+          startedAt: null,
+          finishedAt: null,
+        })),
+      });
+      activeCloudExecutions.set(episodeId, "submitting");
+      void runCloudEpisode(sceneId, episodeId);
+      return { episodeId, reused: false, resumed: false };
+    }
+    return spawnEpisode(sceneId, episodeId, backend, false, productionScope);
   }
 
-  function spawnEpisode(sceneId, episodeId, backend, resumed) {
+  function spawnEpisode(sceneId, episodeId, backend, resumed, productionScope = "full") {
     const child = spawnImplementation("node", [
       "scripts/episodes/run-episode-workflow.mjs", "--scene-id", sceneId,
       "--episode-id", episodeId, "--origin", options.studioOrigin(), "--backend", backend,
-    ], { cwd: repoRoot, env: process.env, stdio: "ignore", detached: false });
+    ], {
+      cwd: repoRoot,
+      env: { ...process.env, WORLDKIT_EPISODE_PRODUCTION_SCOPE: productionScope },
+      stdio: "ignore",
+      detached: false,
+    });
     activeChildren.set(episodeId, child);
     child.once("close", () => activeChildren.delete(episodeId));
     child.once("error", () => activeChildren.delete(episodeId));
@@ -795,13 +1593,29 @@ export function createEpisodeWorkflowService(options) {
 
   async function resume(episodeId) {
     if (!idPattern.test(episodeId)) throw new Error("Invalid episode id.");
-    if (activeChildren.has(episodeId)) return { episodeId, reused: true, resumed: true };
+    if (activeChildren.has(episodeId) || activeCloudExecutions.has(episodeId)) {
+      return { episodeId, reused: true, resumed: true };
+    }
     const record = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
     if (!record || record.episodeId !== episodeId || !idPattern.test(record.sceneId) ||
         !["cloud", "local"].includes(record.backend)) {
       throw new Error("Episode is not resumable.");
     }
-    return spawnEpisode(record.sceneId, episodeId, record.backend, true);
+    if (record.backend === "cloud") {
+      if (record.status === "cancelled") throw new Error("Cancelled Cloud Episode is not resumable.");
+      activeCloudExecutions.set(episodeId, record.remoteExecutionId ?? "recovering");
+      void (record.remoteExecutionId
+        ? runCloudEpisodeRecovery(record)
+        : runCloudEpisode(record.sceneId, episodeId));
+      return { episodeId, reused: false, resumed: true };
+    }
+    return spawnEpisode(
+      record.sceneId,
+      episodeId,
+      record.backend,
+      true,
+      record.productionScope ?? "full",
+    );
   }
 
   async function handleApi(request, response, url) {
@@ -818,7 +1632,11 @@ export function createEpisodeWorkflowService(options) {
     }
     if (request.method === "POST" && url.pathname === "/api/episode-workflows") {
       const body = await readJsonBody(request);
-      const result = await start(String(body.sceneId ?? ""), String(body.backend ?? "cloud"));
+      const result = await start(
+        String(body.sceneId ?? ""),
+        String(body.backend ?? "cloud"),
+        String(body.productionScope ?? "full"),
+      );
       sendJson(response, 202, result);
       return true;
     }
@@ -833,12 +1651,37 @@ export function createEpisodeWorkflowService(options) {
     if (request.method === "POST" && stop) {
       const child = activeChildren.get(stop[1]);
       if (child && !child.killed) child.kill("SIGTERM");
-      sendJson(response, 202, { stopped: Boolean(child) });
+      const record = await readJson(path.join(episodesRoot, stop[1], "episode-record.json"));
+      let cloudStopped = false;
+      if (record?.backend === "cloud" && record.remoteExecutionId &&
+          typeof cancelCloudEpisode === "function") {
+        await cancelCloudEpisode(record.remoteExecutionId);
+        cloudStopped = true;
+        await persistEpisodeRecord({
+          ...record,
+          status: "cancelled",
+          finishedAt: new Date().toISOString(),
+          error: "Cloud Episode was cancelled by the user.",
+        });
+      }
+      sendJson(response, 202, { stopped: Boolean(child) || cloudStopped });
       return true;
     }
     const resumeMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/resume$/.exec(url.pathname);
     if (request.method === "POST" && resumeMatch) {
       sendJson(response, 202, await resume(resumeMatch[1]));
+      return true;
+    }
+    const adoptMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/adopt-cloud-execution$/.exec(
+      url.pathname,
+    );
+    if (request.method === "POST" && adoptMatch) {
+      const body = await readJsonBody(request);
+      const episode = await adoptSucceededCloudExecution(
+        adoptMatch[1],
+        String(body.executionId ?? ""),
+      );
+      sendJson(response, 200, { episode: await enrich(episode) });
       return true;
     }
     const interactionTimelineMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/interaction-timeline$/.exec(url.pathname);
@@ -850,6 +1693,7 @@ export function createEpisodeWorkflowService(options) {
         return true;
       }
       const comparisons = await buildPlaybackComparisons(
+        record,
         path.join(episodesRoot, episodeId),
         episodeId,
         record.sceneId,
@@ -870,6 +1714,33 @@ export function createEpisodeWorkflowService(options) {
       const record = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
       if (!record || record.episodeId !== episodeId) {
         sendJson(response, 404, { error: "Episode not found." });
+        return true;
+      }
+      const remoteBundle = remoteEpisodeArtifact(
+        record,
+        `bundle/${episodeId}-seedance-review.zip`,
+      );
+      if (remoteBundle && typeof streamRemoteArtifact === "function") {
+        const serveRemote = typeof redirectRemoteArtifact === "function"
+          ? redirectRemoteArtifact
+          : streamRemoteArtifact;
+        await serveRemote(response, remoteBundle, {
+          downloadName: `${episodeId}-seedance-review.zip`,
+        });
+        return true;
+      }
+      const localBundlePath = path.join(
+        episodesRoot, episodeId, "bundle", `${episodeId}-seedance-review.zip`,
+      );
+      const localBundleMetadata = await fileMetadata(localBundlePath);
+      if (localBundleMetadata) {
+        await serveRange(
+          request,
+          response,
+          localBundlePath,
+          createReadStreamImplementation,
+          `${episodeId}-seedance-review.zip`,
+        );
         return true;
       }
       let bundle = null;
@@ -937,7 +1808,23 @@ export function createEpisodeWorkflowService(options) {
         return true;
       }
       try {
-        await serveRange(request, response, filePath, createReadStreamImplementation);
+        const record = await readJson(path.join(
+          episodesRoot,
+          artifact[1],
+          "episode-record.json",
+        ));
+        const remote = remoteEpisodeArtifact(record, relativePath);
+        if (await fileMetadata(filePath)) {
+          await serveRange(request, response, filePath, createReadStreamImplementation);
+        } else if (remote && (
+          typeof redirectRemoteArtifact === "function" ||
+          typeof streamRemoteArtifact === "function"
+        )) {
+          const serveRemote = typeof redirectRemoteArtifact === "function"
+            ? redirectRemoteArtifact
+            : streamRemoteArtifact;
+          await serveRemote(response, remote);
+        } else throw new Error("Artifact not found.");
       } catch {
         sendJson(response, 404, { error: "Artifact not found." });
       }
@@ -948,8 +1835,22 @@ export function createEpisodeWorkflowService(options) {
 
   async function shutdown() {
     for (const child of activeChildren.values()) if (!child.killed) child.kill("SIGTERM");
+    if (typeof cancelCloudEpisode === "function") {
+      await Promise.all([...activeCloudExecutions.values()]
+        .filter((executionId) => typeof executionId === "string" && executionId !== "submitting")
+        .map((executionId) => cancelCloudEpisode(executionId).catch(() => undefined)));
+    }
     activeChildren.clear();
+    activeCloudExecutions.clear();
   }
 
-  return { handleApi, listForScene, listAll, shutdown, get activeJobs() { return [...activeChildren.keys()]; } };
+  return {
+    handleApi,
+    listForScene,
+    listAll,
+    shutdown,
+    get activeJobs() {
+      return [...new Set([...activeChildren.keys(), ...activeCloudExecutions.keys()])];
+    },
+  };
 }

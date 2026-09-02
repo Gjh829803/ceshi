@@ -1,47 +1,41 @@
 {
   "kind": "worldkit-episode-video-pipeline",
-  "schemaVersion": 1,
-  "promptTemplateVersion": "worldkit-reference-video-relaxed-action@1",
-  "provider": {
-    "baseUrl": "https://clmm-mall.top/v1",
-    "credentialFile": ".codex-tmp/runtime-config/mg.key",
-    "submitPath": "/videos",
-    "pollPathTemplate": "/videos/{taskId}",
-    "pollIntervalSeconds": 15,
-    "timeoutSeconds": 7200
-  },
-  "referenceUpload": {
-    "bucket": "leap-server-dev",
-    "region": "us-east-1",
-    "prefix": "codex-temp/worldkit-episode-video",
-    "presignSeconds": 86400
+  "schemaVersion": 2,
+  "captureCount": 6,
+  "seedanceCaptureIndices": [0, 1, 2, 3, 4, 5],
+  "eventCaptureIndices": [0, 2, 4],
+  "captureSeconds": 30,
+  "promptTemplateVersion": "worldkit-reference-video-six-capture@6",
+  "seedanceProvider": {
+    "kind": "infinite-canvas-seedance-2.5",
+    "baseUrl": "https://env-00jy6ktfybhu.dev-hz.cloudbasefunction.cn/gateway",
+    "credentialFile": ".codex-tmp/runtime-config/infinite-canvas.key",
+    "modelsPath": "/v1/models",
+    "uploadSignPath": "/v1/uploads/sign",
+    "submitPath": "/v1/videos",
+    "pollPathTemplate": "/v1/jobs/{taskId}",
+    "pollIntervalSeconds": 8,
+    "timeoutSeconds": 7200,
+    "maxConcurrentJobs": 3,
+    "maxTerminalAttempts": 2
   },
   "seedance": {
-    "model": "mg-seedance-2.5-480p",
-    "aspectRatio": "16:9",
-    "resolution": "480p",
-    "size": "854x480",
-    "seconds": "30",
-    "generateAudio": true
-  },
-  "upscale": {
-    "model": "cf-超分-720p-30s",
-    "aspectRatio": "16:9",
+    "model": "seedance-2.5",
+    "ratio": "16:9",
     "resolution": "720p",
     "size": "1280x720",
-    "seconds": "1"
-  },
-  "reference": {
-    "width": 1280,
-    "height": 720,
-    "fps": 24,
-    "frameCount": 720
+    "duration": 30,
+    "generateAudio": true,
+    "maxPromptChars": 15000,
+    "includeAllStyledTriviews": true
   },
   "delivery": {
     "width": 1280,
     "height": 720,
     "fps": 24,
     "frameCount": 720,
-    "requireAudio": true
+    "durationSeconds": 30,
+    "requireAudio": true,
+    "frameSynthesisAllowed": false
   }
 }

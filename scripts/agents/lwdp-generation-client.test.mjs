@@ -22,6 +22,12 @@ import {
   submitCodexGenerationJob,
   submittedJobId,
 } from "../lib/lwdp-generation-client.mjs";
+import {
+  probeCodexDeterministicAgentStop,
+  probeCodexDeliveryEvidence,
+  probeCodexRayInfrastructureFailure,
+} from
+  "../lib/lwdp-codex-delivery-evidence.mjs";
 
 test("uses stage-specific LWDP wait windows with explicit override precedence", () => {
   assert.equal(resolveLwdpJobTimeoutMs("planner", {}), 45 * 60_000);
@@ -59,19 +65,90 @@ test("classifies only terminal transient Codex task failures for bounded retries
     new Error("Selected model is at capacity"),
   ), "capacity");
   assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("Ray job submit failed: http 500: No available agent to submit job, please try again later."),
+  ), "capacity");
+  assert.equal(classifyCodexTaskFailureForRetry(
     new Error("codex timeout after 1800s"),
   ), "task-timeout");
   assert.equal(classifyCodexTaskFailureForRetry(
     new Error("websocket connection reset by peer"),
   ), "transport");
   assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("LWDP job did not succeed: Remote end closed connection without response"),
+  ), "transport");
+  const tlsFailure = new TypeError("fetch failed", {
+    cause: Object.assign(new Error("ssl/tls alert handshake failure"), {
+      code: "ERR_SSL_SSL/TLS_ALERT_HANDSHAKE_FAILURE",
+    }),
+  });
+  assert.equal(classifyCodexTaskFailureForRetry(tlsFailure), "transport");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("LWDP job did not succeed: Ray job FAILED: failed to get job supervisor"),
+  ), "transport");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("LWDP job did not succeed: timed out"),
+  ), "transport");
+  assert.equal(classifyCodexTaskFailureForRetry(
     new Error("missing required outputs: result.json"),
+  ), "output-omission");
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED", {
+      cause: new Error("missing required outputs: world.mjs"),
+    }),
+  ), null);
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error("Builder self-check failed: ground connectivity is incomplete."),
   ), null);
   const pending = new LwdpJobPendingError("gen_pending", 120_000, {
     status: "running",
     counters: { queued: 1, running: 0 },
   });
   assert.equal(classifyCodexTaskFailureForRetry(pending), null);
+});
+
+test("distinguishes a deliberate capability stop from a transient missing-output task", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lwdp-agent-stop-evidence-"));
+  const taskId = "builder-capability-stop";
+  const outputS3Prefix = "s3://bucket/worldkit/capability-stop";
+  try {
+    const evidence = await probeCodexDeterministicAgentStop({
+      itemsPayload: { items: [{
+        item_id: taskId,
+        status: "failed",
+        error: "missing required outputs: world.mjs",
+        metadata: {
+          log_uri: `${outputS3Prefix}/tasks/${taskId}/logs/codex_attempt.json`,
+        },
+      }] },
+      outputS3Prefix,
+      taskId,
+      stagingRoot: root,
+      downloadImplementation: async (_uri, destination) => writeFile(
+        destination,
+        JSON.stringify({
+          item_id: taskId,
+          status: "missing_outputs",
+          stdout_tail: "BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED: flight is unavailable",
+          stderr_tail: "",
+        }),
+      ),
+    });
+    assert.equal(evidence?.code, "BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED");
+    assert.equal(await probeCodexDeterministicAgentStop({
+      itemsPayload: { items: [{
+        item_id: taskId,
+        status: "failed",
+        error: "missing required outputs: world.mjs",
+        metadata: { log_uri: "s3://other/log.json" },
+      }] },
+      outputS3Prefix,
+      taskId,
+      stagingRoot: root,
+      downloadImplementation: async () => undefined,
+    }), null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("loads explicit LWDP configuration without exposing the token", async () => {
@@ -210,6 +287,119 @@ test("polls until a terminal LWDP status and rejects item failures", async () =>
   ), /builder: bad output/);
 });
 
+test("recovers a non-terminal Job only from exact completed S3 delivery evidence", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lwdp-delivery-evidence-"));
+  const taskId = "planner-delivery-evidence";
+  const outputS3Prefix = "s3://bucket/worldkit/planner";
+  const expectedOutputPaths = ["scene-brief.md", "world-plan.png"];
+  const outputUris = expectedOutputPaths.map((outputPath) =>
+    joinS3Uri(outputS3Prefix, "tasks", taskId, outputPath));
+  try {
+    const downloadImplementation = async (s3Uri, localPath) => {
+      const value = s3Uri.endsWith("codex_delivery_report.json")
+        ? {
+            counters: {
+              total: 1, queued: 0, running: 0, succeeded: 1,
+              failed: 0, skipped: 0, rejected: 0,
+            },
+          }
+        : {
+            id: taskId,
+            status: "succeeded",
+            metadata: { output_uris: outputUris },
+          };
+      await writeFile(localPath, `${JSON.stringify(value)}\n`);
+      return { localPath, s3Uri };
+    };
+    const evidence = await probeCodexDeliveryEvidence({
+      outputS3Prefix,
+      taskId,
+      expectedOutputPaths,
+      stagingRoot: root,
+      downloadImplementation,
+    });
+    assert.equal(evidence?.taskId, taskId);
+    assert.deepEqual(evidence?.itemsPayload.items.map((item) => item.status), ["succeeded"]);
+    const progress = [];
+    const job = await pollGenerationJob("gen_delivery_evidence", {
+      config: { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit" },
+      timeoutMs: 1_000,
+      onProgress: (current) => progress.push(current.status),
+      nonTerminalCompletionProbe: async () => evidence,
+      fetchImplementation: async () => new Response(JSON.stringify({
+        job_id: "gen_delivery_evidence",
+        status: "submitted",
+        counters: { total: 1, queued: 1 },
+      }), { status: 200 }),
+    });
+    assert.equal(job.status, "succeeded");
+    assert.equal(job.delivery_evidence, evidence);
+    assert.deepEqual(progress, ["submitted", "succeeded"]);
+    const mismatched = await probeCodexDeliveryEvidence({
+      outputS3Prefix,
+      taskId,
+      expectedOutputPaths: [...expectedOutputPaths].reverse(),
+      stagingRoot: root,
+      downloadImplementation,
+    });
+    assert.equal(mismatched, null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("converts only trusted internal Ray infrastructure failure evidence to a retryable terminal", async () => {
+  const rayJob = {
+    job_id: "gen_ray_failure",
+    status: "running",
+    counters: { total: 1, queued: 1 },
+    ray_dashboard_url: "http://ray-cluster-head-svc.ray.svc.cluster.local:8265",
+    ray_submission_id: "lwdp_gen_ray_failure",
+  };
+  const evidence = await probeCodexRayInfrastructureFailure(rayJob, {
+    fetchImplementation: async (url) => {
+      assert.equal(
+        String(url),
+        "http://ray-cluster-head-svc.ray.svc.cluster.local:8265/api/jobs/lwdp_gen_ray_failure",
+      );
+      return new Response(JSON.stringify({
+        status: "FAILED",
+        message: "Job supervisor actor died because its node has died; Raylet could not connect to Runtime Env Agent",
+      }), { status: 200 });
+    },
+  });
+  assert.equal(evidence?.submissionId, "lwdp_gen_ray_failure");
+  assert.equal(await probeCodexRayInfrastructureFailure({
+    ...rayJob,
+    ray_dashboard_url: "http://attacker.example.test:8265",
+  }, {
+    fetchImplementation: async () => {
+      throw new Error("untrusted Ray URL must never be fetched");
+    },
+  }), null);
+  assert.equal(await probeCodexRayInfrastructureFailure(rayJob, {
+    fetchImplementation: async () => new Response(JSON.stringify({
+      status: "FAILED",
+      message: "Builder self-check failed: missing ground support",
+    }), { status: 200 }),
+  }), null);
+  const progress = [];
+  const terminal = await pollGenerationJob("gen_ray_failure", {
+    config: { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit" },
+    timeoutMs: 1_000,
+    onProgress: (current) => progress.push(current.status),
+    nonTerminalCompletionProbe: async () => null,
+    nonTerminalFailureProbe: async () => evidence,
+    fetchImplementation: async () => new Response(JSON.stringify(rayJob), { status: 200 }),
+  });
+  assert.equal(terminal.status, "failed");
+  assert.match(terminal.error, /Job supervisor actor died/);
+  assert.equal(classifyCodexTaskFailureForRetry(
+    new Error(`LWDP job did not succeed: ${terminal.error}`),
+  ), "transport");
+  assert.deepEqual(progress, ["running", "failed"]);
+});
+
 test("returns a typed pending outcome instead of disguising a non-terminal timeout as failure", async () => {
   const lastJob = {
     job_id: "gen_pending",
@@ -229,6 +419,43 @@ test("returns a typed pending outcome instead of disguising a non-terminal timeo
       assert.equal(error.jobId, "gen_pending");
       assert.equal(error.timeoutMs, 0);
       assert.deepEqual(error.lastJob, lastJob);
+      return true;
+    },
+  );
+});
+
+test("treats a polling transport failure after submission as an unknown remote outcome", async () => {
+  const lastJob = {
+    job_id: "gen_transport_pending",
+    status: "running",
+    counters: { total: 1, queued: 1, running: 0 },
+  };
+  let requestCount = 0;
+  await assert.rejects(
+    pollGenerationJob("gen_transport_pending", {
+      config: { baseUrl: "https://lwdp.example.test", token: "secret", userId: "worldkit" },
+      intervalMs: 1,
+      timeoutMs: 1_000,
+      requestMaxAttempts: 1,
+      requestRetryDelayMs: 1,
+      fetchImplementation: async () => {
+        requestCount += 1;
+        if (requestCount === 1) {
+          return new Response(JSON.stringify(lastJob), { status: 200 });
+        }
+        throw new TypeError("fetch failed", {
+          cause: Object.assign(new Error("ssl/tls alert handshake failure"), {
+            code: "ERR_SSL_SSL/TLS_ALERT_HANDSHAKE_FAILURE",
+          }),
+        });
+      },
+    }),
+    (error) => {
+      assert.equal(error instanceof LwdpJobPendingError, true);
+      assert.equal(error.code, "LWDP_JOB_PENDING");
+      assert.equal(error.jobId, "gen_transport_pending");
+      assert.deepEqual(error.lastJob, lastJob);
+      assert.match(error.cause?.message ?? "", /fetch failed/);
       return true;
     },
   );
@@ -323,7 +550,7 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
     assert.equal(codex.status, 0, codex.stderr);
     assert.match(
       codex.stdout,
-      /WORLDKIT_LWDP_CODEX_SMOKE codex-smoke dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 taskAttempts=1 timeoutMs=2700000 assets=1 outputs=1/,
+      /WORLDKIT_LWDP_CODEX_SMOKE codex-smoke dispatch=single-task-fast-path tasks=1 profile=formal model=gpt-5\.6-sol reasoning=xhigh submitAttempts=1 taskAttempts=3 priorTaskAttempts=0 timeoutMs=2700000 assets=1 outputs=1/,
     );
     const visual = spawnSync(process.execPath, [
       "scripts/agents/run-lwdp-codex-task.mjs",
@@ -337,8 +564,40 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
     assert.equal(visual.status, 0, visual.stderr);
     assert.match(
       visual.stdout,
-      /taskAttempts=3 timeoutMs=7200000/,
+      /taskAttempts=3 priorTaskAttempts=0 timeoutMs=7200000/,
     );
+    const playthrough = spawnSync(process.execPath, [
+      "scripts/agents/run-lwdp-codex-task.mjs",
+      "--repo-root", repoRoot,
+      "--task-id", "playthrough-smoke",
+      "--stage", "playthrough-planner",
+      "--output-s3-prefix", "s3://bucket/worldkit/playthrough-smoke",
+      "--instruction-file", instruction,
+      "--output", `result.json::${path.join(root, "playthrough-result.json")}::application/json`,
+    ], { cwd: repoRoot, env: environment, encoding: "utf8" });
+    assert.equal(playthrough.status, 0, playthrough.stderr);
+    assert.match(playthrough.stdout, /taskAttempts=3 priorTaskAttempts=0/);
+    const cloudRetryPlaythrough = spawnSync(process.execPath, [
+      "scripts/agents/run-lwdp-codex-task.mjs",
+      "--repo-root", repoRoot,
+      "--task-id", "playthrough-retry-smoke",
+      "--stage", "playthrough-planner",
+      "--request-id", "episode-plan-v3",
+      "--output-s3-prefix", "s3://bucket/worldkit/playthrough-retry-smoke",
+      "--instruction-file", instruction,
+      "--output", `result.json::${path.join(root, "playthrough-retry-result.json")}::application/json`,
+    ], {
+      cwd: repoRoot,
+      env: {
+        ...environment,
+        WORLDKIT_CLOUD_EXECUTION_ID: "exec_abcdefghijklmnop",
+        WORLDKIT_CLOUD_STAGE_ATTEMPT: "2",
+      },
+      encoding: "utf8",
+    });
+    assert.equal(cloudRetryPlaythrough.status, 0, cloudRetryPlaythrough.stderr);
+    assert.match(cloudRetryPlaythrough.stdout,
+      /cloudExecutionId=exec_abcdefghijklmnop cloudStageAttempt=2 requestId=episode-plan-v3-cloud-exec-efghijklmnop-attempt-2 outputS3Prefix=s3:\/\/bucket\/worldkit\/playthrough-retry-smoke\/cloud-exec-efghijklmnop-attempt-2/);
     const cloudRunner = await readFile(path.join(repoRoot, "scripts/agents/run-lwdp-codex-task.mjs"), "utf8");
     assert.doesNotMatch(cloudRunner, /distributed|max_pods|pod_concurrency|account_concurrency/);
 
@@ -356,7 +615,7 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
   }
 });
 
-test("rejects repeated creation attempts for formal Codex and WorldKit T2I stages", async () => {
+test("keeps creation idempotent while allowing bounded formal Stage attempts", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "lwdp-cli-no-create-retry-"));
   const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
   try {
@@ -380,7 +639,7 @@ test("rejects repeated creation attempts for formal Codex and WorldKit T2I stage
     assert.notEqual(codex.status, 0);
     assert.match(codex.stderr, /submits every LWDP Codex creation request exactly once/);
 
-    const nonVisualTaskRetry = spawnSync(process.execPath, [
+    const builderTaskRetry = spawnSync(process.execPath, [
       "scripts/agents/run-lwdp-codex-task.mjs",
       "--repo-root", repoRoot,
       "--task-id", "builder-smoke",
@@ -390,8 +649,8 @@ test("rejects repeated creation attempts for formal Codex and WorldKit T2I stage
       "--output", `result.json::${path.join(root, "builder-result.json")}::application/json`,
       "--task-attempts", "2",
     ], { cwd: repoRoot, env: environment, encoding: "utf8" });
-    assert.notEqual(nonVisualTaskRetry.status, 0);
-    assert.match(nonVisualTaskRetry.stderr, /Only final visual reconstruction supports/);
+    assert.equal(builderTaskRetry.status, 0, builderTaskRetry.stderr);
+    assert.match(builderTaskRetry.stdout, /taskAttempts=2/);
 
     const t2i = spawnSync(process.execPath, [
       "scripts/agents/run-lwdp-t2i-job.mjs",
@@ -489,6 +748,7 @@ fs.writeFileSync(destination, "{\\\"ok\\\":true}");
           LWDP_API_BASE: `http://127.0.0.1:${address.port}`,
           LWDP_GENERATION_API_TOKEN: "test-token",
           LWDP_USER_ID: "worldkit-test",
+          WORLDKIT_LWDP_TEST_ENV_CONFIG: "1",
           WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS: "0",
           WORLDKIT_LWDP_POLL_INTERVAL_MS: "1",
         },
@@ -509,6 +769,194 @@ fs.writeFileSync(destination, "{\\\"ok\\\":true}");
     assert.equal(posts[0].body.output_s3_prefix, "s3://bucket/worldkit/visual-retry");
     assert.equal(posts[1].body.request_id, "visual-retry-request-attempt-2");
     assert.equal(posts[1].body.output_s3_prefix, "s3://bucket/worldkit/visual-retry/attempt-2");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("retries a terminal Planner capacity failure with a new request id and isolated S3 prefix", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lwdp-planner-capacity-retry-"));
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const parsedBody = body ? JSON.parse(body) : null;
+    requests.push({ method: request.method, url: request.url, body: parsedBody });
+    const send = (payload) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(payload));
+    };
+    if (request.method === "POST") {
+      const attempt = requests.filter(({ method }) => method === "POST").length;
+      send({ job: { job_id: attempt === 1 ? "gen_planner_capacity" : "gen_planner_ok" } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_planner_capacity") {
+      send({ status: "completed", counters: { total: 1, failed: 1 } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_planner_capacity/items?size=1000") {
+      send({ items: [{
+        item_id: "planner-capacity-test",
+        status: "failed",
+        error: "Selected model is at capacity. Please try a different model.",
+      }] });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_planner_ok") {
+      send({ status: "succeeded", counters: { total: 1, succeeded: 1 } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_planner_ok/items?size=1000") {
+      send({ items: [{ item_id: "planner-capacity-test", status: "succeeded", error: "" }] });
+      return;
+    }
+    response.writeHead(404).end();
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  try {
+    const instruction = path.join(root, "instruction.txt");
+    const output = path.join(root, "result.json");
+    const binRoot = path.join(root, "bin");
+    const aws = path.join(binRoot, "aws");
+    await mkdir(binRoot, { recursive: true });
+    await Promise.all([
+      writeFile(instruction, "Write result.json."),
+      writeFile(aws, `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const destination = process.argv.at(-1);
+fs.mkdirSync(path.dirname(destination), { recursive: true });
+fs.writeFileSync(destination, "{\\"ok\\":true}");
+`),
+    ]);
+    await chmod(aws, 0o755);
+    const childResult = await new Promise((resolveResult) => {
+      const child = spawn(process.execPath, [
+        "scripts/agents/run-lwdp-codex-task.mjs",
+        "--repo-root", repoRoot,
+        "--task-id", "planner-capacity-test",
+        "--stage", "planner",
+        "--request-id", "planner-capacity-request",
+        "--output-s3-prefix", "s3://bucket/worldkit/planner-capacity",
+        "--instruction-file", instruction,
+        "--output", `result.json::${output}::application/json`,
+      ], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          PATH: `${binRoot}${path.delimiter}${process.env.PATH}`,
+          LWDP_API_BASE: `http://127.0.0.1:${address.port}`,
+          LWDP_GENERATION_API_TOKEN: "test-token",
+          LWDP_USER_ID: "worldkit-test",
+          WORLDKIT_LWDP_TEST_ENV_CONFIG: "1",
+          WORLDKIT_LWDP_STAGE_RETRY_BASE_DELAY_MS: "0",
+          WORLDKIT_LWDP_POLL_INTERVAL_MS: "1",
+        },
+        encoding: "utf8",
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.once("close", (code) => resolveResult({ code, stdout, stderr }));
+    });
+    assert.equal(childResult.code, 0, childResult.stderr);
+    assert.match(
+      childResult.stdout,
+      /WORLDKIT_LWDP_STAGE_RETRY planner 2 3 reason=capacity previousJob=gen_planner_capacity delayMs=0/,
+    );
+    assert.equal(await readFile(output, "utf8"), '{"ok":true}');
+    const posts = requests.filter(({ method }) => method === "POST");
+    assert.equal(posts.length, 2);
+    assert.equal(posts[0].body.request_id, "planner-capacity-request");
+    assert.equal(posts[0].body.output_s3_prefix, "s3://bucket/worldkit/planner-capacity");
+    assert.equal(posts[1].body.request_id, "planner-capacity-request-attempt-2");
+    assert.equal(posts[1].body.output_s3_prefix, "s3://bucket/worldkit/planner-capacity/attempt-2");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("does not retry a terminal Builder authoring failure", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lwdp-builder-authoring-failure-"));
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  const requests = [];
+  const server = createServer(async (request, response) => {
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    requests.push({ method: request.method, url: request.url, body: body ? JSON.parse(body) : null });
+    const send = (payload) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(payload));
+    };
+    if (request.method === "POST") {
+      send({ job: { job_id: "gen_builder_authoring_failure" } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_builder_authoring_failure") {
+      send({ status: "completed", counters: { total: 1, failed: 1 } });
+      return;
+    }
+    if (request.url === "/api/v1/generation/jobs/gen_builder_authoring_failure/items?size=1000") {
+      send({ items: [{
+        item_id: "builder-authoring-test",
+        status: "failed",
+        error: "Builder self-check failed: ground connectivity is incomplete.",
+      }] });
+      return;
+    }
+    response.writeHead(404).end();
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  try {
+    const instruction = path.join(root, "instruction.txt");
+    await writeFile(instruction, "Write result.json.");
+    const childResult = await new Promise((resolveResult) => {
+      const child = spawn(process.execPath, [
+        "scripts/agents/run-lwdp-codex-task.mjs",
+        "--repo-root", repoRoot,
+        "--task-id", "builder-authoring-test",
+        "--stage", "coding-agent",
+        "--request-id", "builder-authoring-request",
+        "--output-s3-prefix", "s3://bucket/worldkit/builder-authoring",
+        "--instruction-file", instruction,
+        "--output", `result.json::${path.join(root, "result.json")}::application/json`,
+      ], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          LWDP_API_BASE: `http://127.0.0.1:${address.port}`,
+          LWDP_GENERATION_API_TOKEN: "test-token",
+          LWDP_USER_ID: "worldkit-test",
+          WORLDKIT_LWDP_TEST_ENV_CONFIG: "1",
+          WORLDKIT_LWDP_STAGE_RETRY_BASE_DELAY_MS: "0",
+          WORLDKIT_LWDP_POLL_INTERVAL_MS: "1",
+        },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      child.once("close", (code) => resolveResult({ code, stdout, stderr }));
+    });
+    assert.notEqual(childResult.code, 0);
+    assert.doesNotMatch(childResult.stdout, /WORLDKIT_LWDP_STAGE_RETRY/);
+    assert.match(childResult.stderr, /ground connectivity is incomplete/);
+    assert.equal(requests.filter(({ method }) => method === "POST").length, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await rm(root, { recursive: true, force: true });

@@ -10,7 +10,10 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { captureBabylonArtifactViewV1 } from "./artifact-capture.js";
+import {
+  captureBabylonArtifactViewV1,
+  deriveBabylonTriviewProjectionV1,
+} from "./artifact-capture.js";
 import { createWhiteboxMaterials } from "./materials.js";
 import { createBabylonObjectMeshesV1 } from "./scene-geometry.js";
 
@@ -277,6 +280,7 @@ describe("Babylon artifact capture", () => {
           heightPixels: 8,
           entityIds: ["rigged-entity"],
           identityColor: "#E85D5D",
+          frontDirectionWorldXZ: [0, -1],
         },
       });
 
@@ -298,5 +302,25 @@ describe("Babylon artifact capture", () => {
       scene.dispose();
       engine.dispose();
     }
+  });
+
+  it("uses target-local Front/Right/Back directions with one shared orthographic scale", () => {
+    const projection = deriveBabylonTriviewProjectionV1({
+      sizeMetersXYZ: [5, 4, 2],
+      panelAspectRatio: 0.75,
+      frontDirectionWorldXZ: [-1, 0],
+    });
+
+    expect(projection.viewDirectionsWorldXYZ).toEqual([
+      [-1, 0, 0],
+      [0, 0, -1],
+      [1, 0, 0],
+    ]);
+    expect(projection.halfHeightMeters).toBeCloseTo((5 * 0.58) / 0.75);
+    expect(deriveBabylonTriviewProjectionV1({
+      sizeMetersXYZ: [2, 4, 5],
+      panelAspectRatio: 0.75,
+      frontDirectionWorldXZ: [0, -1],
+    }).halfHeightMeters).toBeCloseTo(projection.halfHeightMeters);
   });
 });

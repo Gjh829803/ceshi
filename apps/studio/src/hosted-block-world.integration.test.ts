@@ -83,6 +83,7 @@ describe("Hosted Block World production chain", () => {
       importBuiltinTestSets: false,
       importBuiltinResults: false,
       lwdpConfigured: true,
+      initialCodexBackend: "local",
       captureSigningPrivateKeyPath,
       trustedCapturePublicKeyPath,
       verifyHostedWhiteboxArtifactsImplementation: async (input: Parameters<
@@ -361,7 +362,7 @@ describe("Hosted Block World production chain", () => {
         if (detail.world.status === "failed") break;
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
-      expect(producedArtifactRoot).not.toBe("");
+      expect(producedArtifactRoot, JSON.stringify(detail?.world ?? detail)).not.toBe("");
       expect(path.basename(producedArtifactRoot)).toBe(created.sceneId);
       const freshnessFloor = Date.parse(detail.world.startedAt) - 1_000;
       for (const relativePath of [

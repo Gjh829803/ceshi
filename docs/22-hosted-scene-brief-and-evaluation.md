@@ -6,6 +6,13 @@ This workflow is the current Agent-facing hosted authoring path on the Block Wor
 
 Neither planning image is runtime evidence. Actual whitebox images and tri-views are produced only by the verified Babylon Runtime.
 
+For tri-views, Builder declares the semantic front of each non-subject complete
+target once; the Subject reuses its authored yaw. The Host carries that local
+direction into Runtime capture, and all Front / Right / Back panels share one
+orthographic meter-to-pixel scale and vertical baseline. Visual reconstruction
+must preserve those panels rather than infer orientation from the opening
+Camera or refit each view independently.
+
 ## Authority chain
 
 ```text
@@ -23,7 +30,7 @@ User prompt + optional reference image
   -> optional provider-neutral visual reconstruction
 ```
 
-The trusted Host owns extraction, block/preset admission, Subject-relative connectivity, Registry closure, Gameplay Bootstrap, internal compilation, final implementation-map promotion and runtime capture. The Builder never writes a second JSON world description or Babylon/Havok handles.
+The trusted Host owns extraction, block/preset admission, Subject-relative connectivity, Registry closure, Gameplay Bootstrap, internal compilation, final implementation-map promotion and runtime capture. In the default cloud lane that Host runs inside one isolated, digest-pinned Cloud Scene Worker; the local Host exists only for explicit developer runs. The Builder never writes a second JSON world description or Babylon/Havok handles.
 
 ## Scene Brief contract
 
@@ -43,6 +50,12 @@ Subject and movement-aware ground connectivity. Movement capabilities absent fro
 general interactive state search remain explicit gaps rather than hidden
 fallbacks.
 
+Hosted Builder registration is narrower than Runtime Registry availability.
+Ordinary human/biped authoring requires an admitted asset-backed rigged Subject
+such as `humanoid.g-bot@2`; primitive humanoid capsules remain SDK test/runtime
+fixtures and appear only in the Agent Catalog's `rejectedSubjects`. Builder
+self-check rejects a registered ref that is absent from `subjects`.
+
 World content is derived from visible evidence and inferred continuation. The
 Planner must produce one continuous geographic world with meaningful middle,
 side/rear, and remote regions whose total top-down footprint is at least four
@@ -56,7 +69,13 @@ complete reachability authority. Raw bounds padding is not exploration.
 
 ## Visual targets and implementation map
 
-The Brief defines one to five complete visual targets. The first and only subject target is required. A target represents a semantic whole, not every mesh or structural part.
+The Brief defines one to five complete visual targets. The first and only
+controlled Subject target is required. A target represents a semantic whole,
+not every mesh or structural part. Non-controlled people, animals, creatures,
+vehicles, machines, sculptures, and distinctive props count as landmark targets
+when they are identity-critical to the reference; repeated identical important
+objects share one repeated-landmark target. Ordinary background crowds, herds,
+traffic, and decoration do not consume slots.
 
 The controlled Subject declares the primary target ID. Every other complete target is a shared `visualGroupId` on its blocks. The Host derives the one-to-many runtime mapping and promotes it into `scene-implementation-map.json`; the Builder never writes that map.
 
@@ -104,9 +123,9 @@ Studio persists one unreleased current workflow contract instead of carrying V18
 7. optional visual prompt synthesis;
 8. optional visual image generation.
 
-Each task is isolated, uses atomic artifact promotion, records stage receipts and can be retried without treating partial results as passed. Cloud and local Codex execution use independent bounded queues; local defaults to one slot. A queued, running, or remote-pending case can be stopped without counting user cancellation as an evaluation failure. Each cloud attempt uses one single-task POST and recovers an uncertain response only through the same stable `request_id`, never by issuing a duplicate creation request.
+Each task is isolated, uses atomic artifact promotion, records stage receipts and can be retried without treating partial results as passed. The Studio `cloud` selection routes the complete unchanged workflow through Cloud Execution, including trusted Host capture, while `local` remains a one-slot developer lane. One Kubernetes Worker owns one ephemeral Scene workspace, so concurrent cases do not share Vite watchers, Chromium state, or output directories. Large artifacts stay in S3; Studio persists a bounded hash index and streams or verifies bytes on demand. A queued, running, or remote-pending case can be stopped without counting user cancellation as an evaluation failure. Each cloud attempt uses one idempotent Cloud Execution request and reconciles that exact execution identity instead of starting a local fallback.
 
-Planner's ordinary wait window is 45 minutes; Builder and final visual reconstruction each wait 120 minutes. A Job that remains non-terminal after its stage window becomes `remote-pending` rather than failed. It releases the local Studio slot while the Studio reconciles the exact Job for a further 60 minutes. A late successful Planner/Builder delivery resumes from the next trusted stage; a late successful visual delivery downloads only the declared outputs, runs local finalizers, and preserves the already-playable whitebox boundary. Terminal visual auth, account/model incompatibility, capacity, or transport failures may use at most two new whole-task attempts with distinct request IDs and S3 prefixes; a terminal Codex task timeout may retry once. Account/model retries keep the formal model and effort unchanged and rely on the new Job identity to select another eligible account. Deterministic output-contract failures do not retry blindly. External evaluation corpora belong outside ordinary Git history; their manifests must record source, license/provenance and content hashes.
+Planner's ordinary wait window is 45 minutes; Builder and final visual reconstruction each wait 120 minutes inside the Worker. Studio heartbeats the enclosing Cloud Execution and resumes reconciliation by `execution_id` after a restart. Execution creation, dispatch, and pinned Worker launch are distinct persisted recovery points, so a response loss between them advances the same execution instead of creating another one. `ready` is absorbing for one attempt, and every lifecycle write is conditional on attempt, revision, execution and Job identity. A transient browser navigation/startup capture failure receives one Host-only retry in the same ephemeral workspace. A later manual Host recovery retries the same Cloud Execution stage from its exact S3 manifest only when that manifest closes the full Planner and Builder handoff; it never reruns an admitted Planner or Builder. Early failures use a full attempt. Nested Codex capacity and transport failures use at most three isolated Stage attempts. When Ray delivery succeeded but LWDP progress is stale, a Worker may proceed only from an exact 1/1-success delivery report and single-task manifest whose output URIs exactly match the declared current task. Terminal Agent failures continue to follow the bounded stage-specific retry rules inside the existing pipeline. External evaluation corpora belong outside ordinary Git history; their manifests must record source, license/provenance and content hashes.
 
 ## Current production boundary
 

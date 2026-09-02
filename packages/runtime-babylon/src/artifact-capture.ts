@@ -93,7 +93,56 @@ export type BabylonArtifactCaptureRequestV1 =
       heightPixels: number;
       entityIds: readonly string[];
       identityColor: string;
+      frontDirectionWorldXZ: readonly [number, number];
     }>;
+
+export interface BabylonTriviewProjectionV1 {
+  readonly halfHeightMeters: number;
+  readonly viewDirectionsWorldXYZ: readonly [
+    readonly [number, number, number],
+    readonly [number, number, number],
+    readonly [number, number, number],
+  ];
+}
+
+export function deriveBabylonTriviewProjectionV1(options: Readonly<{
+  sizeMetersXYZ: readonly [number, number, number];
+  panelAspectRatio: number;
+  frontDirectionWorldXZ: readonly [number, number];
+}>): BabylonTriviewProjectionV1 {
+  const [frontX, frontZ] = options.frontDirectionWorldXZ;
+  const front = new Vector3(frontX, 0, frontZ);
+  if (!Number.isFinite(options.panelAspectRatio) || options.panelAspectRatio <= 0 ||
+      ![options.sizeMetersXYZ[0], options.sizeMetersXYZ[1], options.sizeMetersXYZ[2]]
+        .every((value) => Number.isFinite(value) && value >= 0) ||
+      Math.abs(front.lengthSquared() - 1) > 1e-9) {
+    throw new Error("BABYLON_ARTIFACT_TRIVIEW_PROJECTION_INVALID");
+  }
+  // Runtime scenes are right-handed. Looking from the target's local right
+  // keeps its semantic front pointing toward the right edge of the center panel.
+  const right = Vector3.Cross(front, Vector3.UpReadOnly).normalize();
+  const horizontalSpanMeters = (axis: Vector3): number =>
+    Math.abs(axis.x) * options.sizeMetersXYZ[0] +
+    Math.abs(axis.z) * options.sizeMetersXYZ[2];
+  const maximumHorizontalSpanMeters = Math.max(
+    horizontalSpanMeters(right),
+    horizontalSpanMeters(front),
+  );
+  const halfHeightMeters = Math.max(
+    options.sizeMetersXYZ[1] * 0.58,
+    (maximumHorizontalSpanMeters * 0.58) / options.panelAspectRatio,
+    0.5,
+  );
+  const stable = (value: number): number => Object.is(value, -0) ? 0 : value;
+  return {
+    halfHeightMeters,
+    viewDirectionsWorldXYZ: [
+      [stable(front.x), 0, stable(front.z)],
+      [stable(right.x), 0, stable(right.z)],
+      [stable(-front.x), 0, stable(-front.z)],
+    ],
+  };
+}
 
 function renderingCanvas(engine: AbstractEngine): HTMLCanvasElement {
   const canvas = engine.getRenderingCanvas();
@@ -286,28 +335,27 @@ function renderTriview(
   camera.minZ = 0.01;
   const panelAspect = panelWidth / request.heightPixels;
   const distance = Math.max(size.x, size.y, size.z, 1) * 3;
-  const views = [
-    { direction: new Vector3(0, 0, -1), horizontalMeters: size.x },
-    { direction: new Vector3(1, 0, 0), horizontalMeters: size.z },
-    { direction: new Vector3(0, 0, 1), horizontalMeters: size.x },
-  ];
+  const projection = deriveBabylonTriviewProjectionV1({
+    sizeMetersXYZ: [size.x, size.y, size.z],
+    panelAspectRatio: panelAspect,
+    frontDirectionWorldXZ: request.frontDirectionWorldXZ,
+  });
+  const views = projection.viewDirectionsWorldXYZ.map(
+    ([x, y, z]) => new Vector3(x, y, z),
+  );
   engine.setSize(panelWidth, request.heightPixels, true);
   const canvas = renderingCanvas(engine);
   scene.clearColor = Color4.FromHexString(`${WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1}FF`);
   scene.activeCamera = camera;
   try {
     for (let index = 0; index < views.length; index += 1) {
-      const view = views[index]!;
-      const halfHeight = Math.max(
-        size.y * 0.58,
-        (view.horizontalMeters * 0.58) / Math.max(panelAspect, 0.01),
-        0.5,
-      );
+      const viewDirection = views[index]!;
+      const halfHeight = projection.halfHeightMeters;
       camera.orthoLeft = -halfHeight * panelAspect;
       camera.orthoRight = halfHeight * panelAspect;
       camera.orthoTop = halfHeight;
       camera.orthoBottom = -halfHeight;
-      camera.position.copyFrom(center.add(view.direction.scale(distance)));
+      camera.position.copyFrom(center.add(viewDirection.scale(distance)));
       camera.upVector.copyFromFloats(0, 1, 0);
       camera.setTarget(center);
       // Rigged assets can require multiple renders to refresh skinning and

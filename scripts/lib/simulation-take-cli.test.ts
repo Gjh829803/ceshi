@@ -26,13 +26,13 @@ describe("createSimulationTakeWorldPackageIdentityV1", () => {
 
     expect(identity).toEqual({
       worldPackageRef:
-        "package://world-package/sha256/74593c1fedf3c6cca006329bc6f995a0da6e6ee27689d2e6140ab8afe98de849",
+        "package://world-package/sha256/2d0424bdcca116c51f230e318a78da3472b4a8de3a5f689c907c5e3c4c8a54bd",
       worldPackageRootHash:
-        "sha256:74593c1fedf3c6cca006329bc6f995a0da6e6ee27689d2e6140ab8afe98de849",
+        "sha256:2d0424bdcca116c51f230e318a78da3472b4a8de3a5f689c907c5e3c4c8a54bd",
       normalizedWorldIrHash:
-        "sha256:3f838a339c11efce180851a44b63bc9a7d516a763f3738d1f1ea7bf0b30c1fad",
+        "sha256:8a243603c757d8088da24bab02d7e907272e3d40bf25fc416b05c602a93dff3b",
       worldBuildIdentityHash:
-        "sha256:f25576c1c46a6075b7f60387aa0aefc186b727e59c76fef52fede2ea864dff02",
+        "sha256:83b120e34727ab6ad7aef3029a96912586815cc55b0f908d40050671612a64c5",
     });
   }, 30_000);
 });

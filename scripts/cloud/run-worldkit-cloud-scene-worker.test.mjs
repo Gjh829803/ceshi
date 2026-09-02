@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -10,6 +10,8 @@ import test from "node:test";
 import {
   claimCloudSceneStageWithWait,
   hasPlayableCloudWhitebox,
+  isRetryableCloudHostCaptureFailure,
+  materializeCloudWorkerLwdpConfig,
   runCloudSceneWorker,
 } from "./run-worldkit-cloud-scene-worker.mjs";
 import {
@@ -22,6 +24,51 @@ const config = {
   token: "secret",
   userId: "worldkit-studio",
 };
+
+test("materializes the K8s Secret as ephemeral project-local LWDP config", async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), "worldkit-cloud-worker-config-test-"));
+  try {
+    const value = await materializeCloudWorkerLwdpConfig({
+      repoRoot,
+      environment: {
+        LWDP_API_BASE: "https://lwdp.example.test/",
+        LWDP_USER_ID: "worldkit-cloud-worker",
+        LWDP_GENERATION_API_TOKEN: "secret-token",
+      },
+    });
+    const configPath = join(repoRoot, ".codex-tmp/runtime-config/lwdp.env");
+    const contents = await readFile(configPath, "utf8");
+    assert.deepEqual(value, {
+      baseUrl: "https://lwdp.example.test",
+      userId: "worldkit-cloud-worker",
+      token: "secret-token",
+    });
+    assert.match(contents, /^LWDP_API_BASE=https:\/\/lwdp\.example\.test$/m);
+    assert.match(contents, /^LWDP_GENERATION_API_TOKEN=secret-token$/m);
+    assert.equal((await stat(configPath)).mode & 0o777, 0o600);
+    await assert.rejects(
+      materializeCloudWorkerLwdpConfig({
+        repoRoot,
+        environment: { LWDP_GENERATION_API_TOKEN: "bad\nvalue" },
+      }),
+      /must be one line/,
+    );
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("retries only transient Host browser capture failures", () => {
+  assert.equal(isRetryableCloudHostCaptureFailure(
+    'CLI_CAPTURE_FAILED cause="page.evaluate: Execution context was destroyed, most likely because of a navigation"',
+  ), true);
+  assert.equal(isRetryableCloudHostCaptureFailure(
+    "CLI_CAPTURE_FAILED WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING",
+  ), false);
+  assert.equal(isRetryableCloudHostCaptureFailure(
+    "BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED",
+  ), false);
+});
 
 function completedChild(run) {
   const child = new EventEmitter();
@@ -402,6 +449,92 @@ test("host resume reuses Agent outputs and runs only the existing Host continuat
       "agent:world", "--", "--scene-id", sceneId, "--resume-host-only",
     ]);
     assert.equal(spawnCall.args.includes("Original prompt must not run again."), false);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("builder resume reuses the Planner handoff and runs build-only", async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), "worldkit-cloud-builder-resume-test-"));
+  const sceneId = "builder-resume-scene";
+  const executionId = "exec-builder-resume";
+  const requestUri = "s3://bucket/inputs/request.json";
+  const manifestUri = "s3://bucket/output/cloud-artifact-manifest.json";
+  const briefBytes = Buffer.from("# Scene Brief\n");
+  const briefSource = join(repoRoot, "brief-source.md");
+  writeFileSync(briefSource, briefBytes);
+  const request = {
+    kind: "worldkit-cloud-scene-request",
+    schemaVersion: 1,
+    sceneId,
+    prompt: "Original Planner prompt must not run again.",
+    references: [],
+  };
+  const manifest = {
+    kind: "worldkit-cloud-artifact-manifest",
+    schemaVersion: 1,
+    sceneId,
+    executionId,
+    artifacts: [{
+      path: "scene/scene-brief.md",
+      byteSize: briefBytes.length,
+      sha256: await sha256File(briefSource),
+      s3Uri: "s3://bucket/output/scene/scene-brief.md",
+    }],
+  };
+  let spawnCall;
+  try {
+    const result = await runCloudSceneWorker({
+      executionId,
+      requestS3Uri: requestUri,
+      outputS3Prefix: "s3://bucket/output",
+      workerId: "worker-builder-resume",
+      repoRoot,
+      heartbeatIntervalMs: 60_000,
+      cloudConfig: config,
+      resumeManifestS3Uri: manifestUri,
+      resumeMode: "builder",
+      fetchImplementation: async (url) => new Response(JSON.stringify(
+        url.endsWith("/claim") ? { lease_id: "lease-builder-resume" } : { accepted: true },
+      ), { status: 200 }),
+      downloadImplementation: async (s3Uri, localPath) => {
+        mkdirSync(join(localPath, ".."), { recursive: true });
+        writeFileSync(localPath, s3Uri === requestUri
+          ? Buffer.from(JSON.stringify(request))
+          : s3Uri === manifestUri ? Buffer.from(JSON.stringify(manifest)) : briefBytes);
+      },
+      spawnImplementation: (command, args, options) => {
+        spawnCall = { command, args, options };
+        return completedChild(() => {
+          const sceneRoot = join(repoRoot, "artifacts/scenes", sceneId);
+          const planRoot = join(repoRoot, "apps/playground/public/scene-plans", sceneId);
+          mkdirSync(join(sceneRoot, "world.build.json"), { recursive: true });
+          mkdirSync(planRoot, { recursive: true });
+          for (const [name, contents] of [
+            ["world.mjs", "export default {};"],
+            ["authoring.json", "{}"],
+            ["scene-implementation-map.json", "{}"],
+            ["runtime-snapshot.json", "{}"],
+            ["whitebox-capture-receipt.json", "{}"],
+            ["entry-third-person-validation.json", "{}"],
+            ["opening-frame.png", "png"],
+          ]) writeFileSync(join(sceneRoot, name), contents);
+          writeFileSync(join(sceneRoot, "world.build.json/manifest.json"), "{}");
+          writeFileSync(join(planRoot, "entry-whitebox-target.png"), "entry");
+          writeFileSync(join(planRoot, "world-plan.png"), "plan");
+        });
+      },
+      uploadOptions: {
+        execFileImplementation: (_command, _args, _options, callback) => callback(null, "", ""),
+      },
+      trustedCapturePublicKeyPath: "/trusted/public.pem",
+      verifyPlayableImplementation: async () => ({ ok: true, output: "", code: 0, signal: null }),
+    });
+    assert.equal(result.status, "succeeded");
+    assert.deepEqual(spawnCall.args, [
+      "agent:world", "--", "--scene-id", sceneId, "--build-only",
+    ]);
+    assert.equal(spawnCall.args.includes("Original Planner prompt must not run again."), false);
   } finally {
     await rm(repoRoot, { recursive: true, force: true });
   }

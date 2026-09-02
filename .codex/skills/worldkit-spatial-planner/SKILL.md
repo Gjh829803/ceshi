@@ -71,6 +71,11 @@ references, not a closed list:
 - `水下游动` — free motion through an underwater volume;
 - `空中飞行` — free motion through an air volume.
 
+Use those seven standard labels exactly, without adding `（默认）`, `（主要）`,
+numbers, priority notes, or any other qualifier inside the label. Ordering
+already makes the first row startup/default and later rows alternates; put
+explanatory wording after the colon instead.
+
 When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Preserve a user-specified custom mode instead of coercing it to the nearest reference mode. Do not collapse `陆地步行 + 空中飞行`, `陆地步行 + 水下游动`, or another genuine hybrid into one vague custom label. The Builder owns implementation: it may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. A missing named Subject preset is not a reason to revise or reject the plan; the Agent does not add SDK motion bases.
 
 Movement-changing equipment belongs to the complete subject description. Clothing, weapons, armor, and backpacks that do not change locomotion remain appearance details and do not create another subject.
@@ -128,6 +133,17 @@ count toward the four-times area.
 
 Write 1-5 entries total. The first and only `主体` entry is required and counts toward five. Add no landmark merely to fill the list.
 
+Do not interpret `标志物` as architecture only. A non-controlled person,
+animal, creature, vehicle, machine, sculpture, or distinctive prop is an
+important-object landmark when it is visibly prominent, compositionally or
+narratively important, and losing its identity would materially change the
+scene. Such an object must not be downgraded to a generic obstacle merely
+because it is organic, movable, or smaller than a building. Keep `主体` reserved
+for the one controlled Subject; write each selected important non-controlled
+object as `标志物`, or use `重复标志物` for several intentionally identical
+complete instances. A visual-target designation alone does not claim that the
+object is another controllable or animated Runtime Subject.
+
 A landmark qualifies only when all are true:
 
 1. it is a complete, independently recognizable visual whole;
@@ -137,13 +153,26 @@ A landmark qualifies only when all are true:
 
 Use `标志物` for one distinctive whole. Use `重复标志物` when several complete instances intentionally share the same appearance; define the identical set once, not one target per instance. Repeated generic decoration, ordinary trees, rocks, walls, terrain patches, background mountains, and construction pieces are not targets unless the complete repeated formation is itself a defining visual landmark.
 
+When more identity-critical wholes are visible than the four non-subject slots,
+prioritize: a scene-defining non-controlled person/animal/creature or other
+important object; the primary architectural or natural landmark; then a
+secondary or repeated formation. Do not spend a slot on a generic background
+building while omitting the important character, animal, mount, vehicle, or
+object that carries the reference's identity. Background crowds, herds, flocks,
+traffic, or ordinary props remain unselected unless their shared formation is
+itself distinctive and important.
+
 Examples:
 
 - one palace complex with a unified identity → one `标志物`;
 - two matching gate towers → one `重复标志物`;
+- one prominent non-controlled fox, guardian, astronaut, boat, or signature
+  machine → one `标志物`;
+- several visually identical important animals or guards acting as one
+  recognizable set → one `重复标志物`;
 - twelve identical ordinary lamps → normally no visual target;
 - palace roof, columns, stairs, and foundation → parts of the palace, never four targets;
-- no distinctive landmark → output only the subject target.
+- no distinctive landmark or important object → output only the subject target.
 
 ## Entry composition
 
@@ -193,7 +222,9 @@ The image contains only four information layers:
 2. one small red spawn-position token at the described initial position;
 3. exact functional block colors showing ground-motion support, collision,
    interaction, water/cloud, and visual-only semantics that actually exist;
-4. the ordered colors of every selected complete visual landmark.
+4. the ordered colors of every selected complete non-subject visual target,
+   including important people, animals, creatures, vehicles, objects, and
+   repeated sets as well as environmental landmarks.
 
 Show the complete intended playable footprint at no less than four times the
 reference-visible geographic area, not a crop matching the entry frame. The
@@ -202,6 +233,10 @@ and remote off-camera areas visibly dominate the plan. The red token is a simple
 top-down point made from a few red cube tops. It is not a humanoid, animal,
 rider, vehicle, board, glider, weapon, equipment silhouette, facing arrow, or
 camera cone. Do not depict any Subject anatomy or pose in `world-plan.png`.
+This restriction applies only to the red controlled-Subject spawn token. A
+selected non-subject person, animal, vehicle, or other important-object target
+still appears once at its real geographic location as a compact complete block
+proxy in its own ordered target color.
 
 For open ground movement, shade the entire collision-free walkable ground area
 instead of inventing a preferred lane. For a real constrained ground

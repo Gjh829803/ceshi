@@ -9,6 +9,7 @@ test("creates an isolated pinned worker Job without embedding credentials", () =
     requestS3Uri: "s3://bucket/execution/inputs/request.json",
     outputS3Prefix: "s3://bucket/execution",
     image: `829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:${"a".repeat(64)}`,
+    userId: "partner_codex",
   });
   assert.equal(manifest.metadata.name, "worldkit-scene-exec-123456");
   assert.equal(manifest.spec.backoffLimit, 0);
@@ -27,6 +28,8 @@ test("creates an isolated pinned worker Job without embedding credentials", () =
     name: "NODE_OPTIONS",
     value: "--max-old-space-size=6144",
   });
+  assert.equal(container.env.find((entry) => entry.name === "LWDP_USER_ID").value,
+    "partner_codex");
   assert.throws(() => cloudSceneWorkerJob({
     executionId: "exec-2",
     requestS3Uri: "s3://bucket/request.json",
@@ -46,4 +49,18 @@ test("creates an isolated pinned worker Job without embedding credentials", () =
   assert.equal(resumed.metadata.name, "worldkit-scene-exec-2-retry-2");
   assert.ok(resumed.spec.template.spec.containers[0].args.includes("--resume-manifest-s3-uri"));
   assert.deepEqual(resumed.spec.template.spec.containers[0].args.slice(-2), ["--resume-mode", "host"]);
+
+  const builderResumed = cloudSceneWorkerJob({
+    executionId: "exec-3",
+    requestS3Uri: "s3://bucket/request.json",
+    outputS3Prefix: "s3://bucket/output",
+    image: `worldkit-cloud-worker@sha256:${"c".repeat(64)}`,
+    resumeManifestS3Uri: "s3://bucket/output/stages/scene-production/cloud-artifact-manifest.json",
+    resumeMode: "builder",
+    jobSuffix: "builder-3",
+  });
+  assert.deepEqual(
+    builderResumed.spec.template.spec.containers[0].args.slice(-2),
+    ["--resume-mode", "builder"],
+  );
 });

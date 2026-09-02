@@ -1,0 +1,11 @@
+{
+  "kind": "worldkit-episode-style-variant-production-config",
+  "schemaVersion": 1,
+  "enabled": true,
+  "variantCount": 10,
+  "visualConcurrency": 10,
+  "reviewConcurrency": 10,
+  "geminiConcurrency": 5,
+  "seedanceConcurrency": 20,
+  "maximumVisualAttempts": 2
+}

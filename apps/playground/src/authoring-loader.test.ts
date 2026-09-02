@@ -258,13 +258,14 @@ describe("loadAuthoringScene", () => {
       sceneBriefHash: `sha256:${"b".repeat(64)}` as const,
       authoringSpecId: authoringSpec.id,
       authoringSpecHash: authoringSpecHash as `sha256:${string}`,
-      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
       visualCaptureGroups: [{
         visualTargetId: "player-subject",
         runtimeEntityIds: ["player"],
         role: "primary-subject",
         semanticClassId: "subject.player",
         identityColor: "#E85D5D",
+        frontDirectionWorldXZ: [0, -1],
       }],
     };
     const fetchBootstrap = vi.fn(async () => jsonResponse({
@@ -289,6 +290,7 @@ describe("loadAuthoringScene", () => {
       role: "primary-subject",
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
+      frontDirectionWorldXZ: [0, -1],
     }]);
     implementationMap.visualCaptureGroups[0]!.runtimeEntityIds.push("mutated");
     expect(preview.visualCaptureGroups[0]!.runtimeEntityIds).toEqual(["player"]);
@@ -315,13 +317,14 @@ describe("loadAuthoringScene", () => {
         sceneBriefHash: `sha256:${"b".repeat(64)}`,
         authoringSpecId: authoringSpec.id,
         authoringSpecHash,
-        visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+        visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
         visualCaptureGroups: [{
           visualTargetId: "player-subject",
           runtimeEntityIds: ["player"],
           role: "primary-subject",
           semanticClassId: "subject.player",
           identityColor: "#E85D5D",
+          frontDirectionWorldXZ: [0, -1],
         }],
       },
     };

@@ -105,6 +105,9 @@ export class CanvasRecorder {
         throw new Error("无法建立 1280×720 白膜录制画布。");
       }
       this.drawCaptureFrame();
+      // Episode capture samples the actual rendered canvas on a dedicated clock.
+      // Each submitted frame is a real framebuffer read; no interpolation or
+      // post-capture frame duplication is used when the Runtime renders slowly.
       this.drawTimer = window.setInterval(
         () => this.drawCaptureFrame(),
         1_000 / this.frameRate,

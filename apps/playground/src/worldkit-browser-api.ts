@@ -28,6 +28,7 @@ import {
   type CameraViewCommandV1,
   type CameraViewPreferenceV1,
   type CameraViewInputV1,
+  type CaptureStartStateV1,
   type CompatibleProfileSummaryV1,
   type ControlCaptureCapabilitiesV1,
   type ControlCaptureRequestV1,
@@ -89,6 +90,9 @@ export interface DeferredWorldkitBrowserRuntimeAdapterV1 {
   disposeRuntime(): Promise<void>;
   adjustCameraViewRuntime(input: CameraViewInputV1): WorldRuntimeSnapshotV4;
   resetCameraViewRuntime(): WorldRuntimeSnapshotV4;
+  relocateControlledSubjectForCaptureRuntime?(
+    input: CaptureStartStateV1,
+  ): WorldRuntimeSnapshotV4;
   getCameraPreviewStateRuntime(): CameraPreviewStateV1;
   applyCameraPreviewRuntime(request: ApplyCameraPreviewRequestV1): CameraPreviewStateV1;
   applySubjectPresetTuningRuntime(
@@ -1096,6 +1100,30 @@ export function installDeferredWorldkitBrowserApi(options: {
         () => adapter.resetCameraViewRuntime(),
       );
     },
+    relocateControlledSubjectForCapture: (input) => {
+      if (!Array.isArray(input?.positionMetersXYZ) ||
+          input.positionMetersXYZ.length !== 3 ||
+          !input.positionMetersXYZ.every(Number.isFinite) ||
+          !Number.isFinite(input.facingYawRadians)) {
+        throw boundaryError(
+          "WORLDKIT_CAPTURE_START_STATE_INVALID",
+          "Capture start state must contain a finite position and facing.",
+        );
+      }
+      const adapter = requireReadyAdapter();
+      const relocate = adapter.relocateControlledSubjectForCaptureRuntime;
+      if (typeof relocate !== "function") {
+        throw boundaryError(
+          "WORLDKIT_CAPTURE_START_RELOCATION_UNAVAILABLE",
+          "Capture start relocation is unavailable in this Runtime.",
+        );
+      }
+      return callAdapter(
+        "WORLDKIT_CAPTURE_START_RELOCATION_FAILED",
+        "Capture start relocation failed.",
+        () => relocate.call(adapter, input),
+      );
+    },
     getCameraPreviewState: () => {
       const adapter = requireReadyAdapter();
       return callAdapter(
@@ -1371,6 +1399,7 @@ export function createWorldkitBrowserApiV5(options: Readonly<{
     setIntent: notReady,
     adjustCameraView: notReady,
     resetCameraView: notReady,
+    relocateControlledSubjectForCapture: notReady,
     getCameraPreviewState: notReady,
     applyCameraPreview: notReady,
     applySubjectPresetTuning: notReady,

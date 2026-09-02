@@ -7,10 +7,28 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  PLAYTHROUGH_HOST_EVENT_SLOTS,
+  PLAYTHROUGH_EVENT_SEGMENT_INDICES,
+  PLAYTHROUGH_PROMPT_WINDOWS,
+  PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES,
+  PLAYTHROUGH_SEGMENT_FRAME_COUNT,
+  sha256Canonical,
   validatePlaythroughFrameTelemetry,
+  validateVisualEventPlan,
   writeJsonAtomic,
 } from "../lib/playthrough-dataset.mjs";
 import { EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION } from "../lib/episode-seedance-prompt.mjs";
+import {
+  PLAYTHROUGH_CAPTURE_HEALTH_POLICY,
+  validatePlaythroughCaptureHealth,
+} from "../lib/playthrough-capture-health.mjs";
+import { validatePlaythroughPlanStructure } from "../lib/playthrough-plan-structure.mjs";
+import { loadEpisodeStyleVariantConfig } from "../lib/episode-style-variants.mjs";
+import {
+  buildEpisodeSceneRuntimeIdentity,
+  buildEpisodeVisualEventInputIdentity,
+  buildEpisodeVisualInputIdentity,
+} from "../lib/episode-input-identity.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
@@ -34,17 +52,58 @@ if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(sceneId) ||
 }
 const sceneRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
 const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+const persistedEpisodeIdentity = await readFile(
+  path.join(episodeRoot, "episode-record.json"), "utf8",
+).then(JSON.parse).catch(() => null);
+const productionScope = process.env.WORLDKIT_EPISODE_PRODUCTION_SCOPE ??
+  persistedEpisodeIdentity?.productionScope ?? "full";
+if (!["full", "visual-sample"].includes(productionScope)) {
+  throw new Error("Episode production scope must be full or visual-sample.");
+}
 const videoPipelineConfig = JSON.parse(await readFile(
   path.join(repoRoot, "config/episode-video-pipeline.json"),
   "utf8",
 ));
+const loadedStyleVariantConfig = await loadEpisodeStyleVariantConfig(repoRoot);
+const styleVariantEnvironmentOverride = ["0", "1"].includes(
+  process.env.WORLDKIT_EPISODE_STYLE_VARIANTS ?? "",
+);
+const styleVariantConfig = Object.freeze({
+  ...loadedStyleVariantConfig,
+  enabled: styleVariantEnvironmentOverride
+    ? loadedStyleVariantConfig.enabled
+    : persistedEpisodeIdentity === null
+      ? loadedStyleVariantConfig.enabled
+      : persistedEpisodeIdentity.styleVariantMode === "ten-style",
+});
+const visualEventDirectorConfigPath = path.join(
+  repoRoot,
+  "config/episode-visual-event-director.json",
+);
+const visualEventDirectorConfig = JSON.parse(await readFile(
+  visualEventDirectorConfigPath,
+  "utf8",
+));
+const visualEventPromptPath = path.join(
+  repoRoot,
+  visualEventDirectorConfig.promptTemplatePath,
+);
 const providerModel = videoPipelineConfig.seedance?.model;
-const upscaleModel = videoPipelineConfig.upscale?.model;
-if (providerModel !== "mg-seedance-2.5-480p") {
+const seedanceConcurrency = Math.max(
+  1,
+  Math.min(
+    PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES.length,
+    Number(videoPipelineConfig.seedanceProvider?.maxConcurrentJobs ?? 3),
+  ),
+);
+if (providerModel !== "seedance-2.5") {
   throw new Error(`Unexpected episode Seedance model: ${providerModel}`);
 }
-if (upscaleModel !== "cf-超分-720p-30s") {
-  throw new Error(`Unexpected episode upscale model: ${upscaleModel}`);
+if (videoPipelineConfig.captureCount !== 6 ||
+    JSON.stringify(videoPipelineConfig.seedanceCaptureIndices) !== "[0,1,2,3,4,5]" ||
+    JSON.stringify(videoPipelineConfig.eventCaptureIndices) !== "[0,2,4]" ||
+    videoPipelineConfig.captureSeconds !== 30) {
+  throw new Error("Episode six-capture timing contract is invalid.");
 }
 if (videoPipelineConfig.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION) {
   throw new Error(
@@ -54,7 +113,6 @@ if (videoPipelineConfig.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLA
 }
 const delivery = videoPipelineConfig.delivery;
 const rawProviderFileName = `${providerModel}.mp4`;
-const rawUpscaleFileName = "cf-upscaled-720p.mp4";
 const finalVideoFileName = `final-${delivery.width}x${delivery.height}-${delivery.fps}fps-${delivery.frameCount}f.mp4`;
 const recordPath = path.join(episodeRoot, "episode-record.json");
 const logPath = path.join(episodeRoot, "pipeline.log");
@@ -65,15 +123,24 @@ let stopping = false;
 const runtimeSlotRoot = path.join(repoRoot, ".codex-tmp/episode-runtime-slot");
 const runtimeSlotPath = path.join(runtimeSlotRoot, "slot-0");
 
-const stageDefinitions = [
+const sharedStageDefinitions = [
   ["reconnaissance", "运行时侦察"],
-  ["playthrough-plan", "90 秒玩家剧本"],
-  ["whitebox-capture", "白膜视频与三段切分"],
-  ["visual-reconstruction", "三段样式首帧与共享三视图"],
-  ["seedance-prompts", "三条 Seedance 渲染 Prompt"],
-  ["seedance-generation", "MG Seedance 2.5 480p"],
-  ["cf-upscale", "CF 超分 720p"],
+  ["navigation-evidence", "可通行区域与核心目的地"],
+  ["playthrough-plan", "六个独立起点游荡剧本"],
+  ["whitebox-capture", "六段独立 30 秒白膜录制"],
+];
+const legacyStageDefinitions = [
+  ["visual-reconstruction", "六段样式首帧与共享三视图"],
+  ["visual-events", "Gemini 3.5 Flash 单次五事件"],
+  ["seedance-prompts", "六条详细 Seedance 渲染 Prompt（三条含事件）"],
+  ["seedance-generation", "Seedance 2.5 720p 直出"],
   ["conformance", "24fps / 720 帧一致性"],
+];
+const stageDefinitions = [
+  ...sharedStageDefinitions,
+  ...(styleVariantConfig.enabled
+    ? [["style-variant-production", "十种风格视觉、Codex 质检、独立 Gemini 与 Seedance"]]
+    : legacyStageDefinitions),
 ];
 let record = {
   kind: "worldkit-episode-workflow-record",
@@ -81,6 +148,17 @@ let record = {
   sceneId,
   episodeId,
   backend,
+  segmentCount: 6,
+  seedanceSegmentIds: ["segment-00", "segment-01", "segment-02", "segment-03", "segment-04", "segment-05"],
+  deliveryDurationSeconds: 180,
+  executionDurationSeconds: 180,
+  styleVariantCount: styleVariantConfig.enabled ? styleVariantConfig.variantCount : 0,
+  styleVariantMode: styleVariantConfig.enabled ? "ten-style" : "legacy",
+  styleVariantIds: styleVariantConfig.enabled
+    ? Array.from({ length: styleVariantConfig.variantCount }, (_, index) =>
+        `style-${String(index).padStart(2, "0")}`)
+    : [],
+  productionScope,
   status: "running",
   currentStage: null,
   createdAt: new Date().toISOString(),
@@ -92,7 +170,27 @@ let record = {
 try {
   const existing = JSON.parse(await readFile(recordPath, "utf8"));
   if (existing.sceneId === sceneId && existing.episodeId === episodeId) {
-    record = { ...record, ...existing, status: "running", error: null, updatedAt: new Date().toISOString() };
+    record = {
+      ...record,
+      ...existing,
+      backend,
+      seedanceSegmentIds: [
+        "segment-00", "segment-01", "segment-02",
+        "segment-03", "segment-04", "segment-05",
+      ],
+      styleVariantCount: styleVariantConfig.enabled
+        ? styleVariantConfig.variantCount
+        : 0,
+      styleVariantMode: styleVariantConfig.enabled ? "ten-style" : "legacy",
+      styleVariantIds: styleVariantConfig.enabled
+        ? Array.from({ length: styleVariantConfig.variantCount }, (_, index) =>
+          `style-${String(index).padStart(2, "0")}`)
+        : [],
+      productionScope,
+      status: "running",
+      error: null,
+      updatedAt: new Date().toISOString(),
+    };
     const priorStages = new Map((existing.stages ?? []).map((item) => [item.id, item]));
     record.stages = stageDefinitions.map(([id, title]) => ({
       id,
@@ -117,11 +215,95 @@ async function exists(filePath) {
 async function hasCompleteFrameTelemetry(filePath) {
   try {
     const trace = JSON.parse(await readFile(filePath, "utf8"));
-    return trace?.kind === "worldkit-executed-playthrough-trace" && trace.schemaVersion === 2 &&
+    return trace?.kind === "worldkit-executed-playthrough-trace" && trace.schemaVersion === 3 &&
       validatePlaythroughFrameTelemetry(trace.frameTelemetry).ok;
   } catch {
     return false;
   }
+}
+async function hasCompleteWhiteboxCapture(whiteboxRoot, planPath) {
+  const tracePath = path.join(whiteboxRoot, "executed-playthrough-trace.json");
+  if (!await hasCompleteFrameTelemetry(tracePath)) return false;
+  const [trace, rawTrace, storedQualityReport, plan] = await Promise.all([
+    readJsonIfPresent(tracePath),
+    readJsonIfPresent(path.join(whiteboxRoot, "executed-playthrough-raw-trace.json")),
+    readJsonIfPresent(path.join(whiteboxRoot, "executed-playthrough-quality-report.json")),
+    readJsonIfPresent(planPath),
+  ]);
+  const planHash = plan ? sha256Canonical(plan) : null;
+  let qualityReport = storedQualityReport;
+  if (qualityReport?.policy !== PLAYTHROUGH_CAPTURE_HEALTH_POLICY &&
+      Array.isArray(rawTrace?.telemetrySamples) && planHash) {
+    const segments = Array.from({ length: 6 }, (_, index) => {
+      const quality = validatePlaythroughCaptureHealth({
+        telemetrySamples: rawTrace.telemetrySamples.slice(
+          index * PLAYTHROUGH_SEGMENT_FRAME_COUNT,
+          (index + 1) * PLAYTHROUGH_SEGMENT_FRAME_COUNT,
+        ),
+        consoleErrors: rawTrace.consoleErrors ?? [],
+      });
+      return {
+        segmentId: `segment-0${index}`,
+        passed: quality.ok,
+        diagnostics: quality.diagnostics,
+        metrics: quality.metrics,
+      };
+    });
+    qualityReport = {
+      kind: "worldkit-executed-playthrough-quality-report",
+      schemaVersion: 3,
+      sceneId,
+      planHash,
+      policy: PLAYTHROUGH_CAPTURE_HEALTH_POLICY,
+      passed: segments.every((segment) => segment.passed),
+      diagnostics: segments.flatMap((segment) => segment.diagnostics.map(
+        (diagnostic) => ({ ...diagnostic, segmentId: segment.segmentId }),
+      )),
+      segments,
+      migratedAt: new Date().toISOString(),
+    };
+    await writeJsonAtomic(
+      path.join(whiteboxRoot, "executed-playthrough-quality-report.json"),
+      qualityReport,
+    );
+  }
+  if (qualityReport?.passed !== true || qualityReport?.planHash !== planHash ||
+      qualityReport?.policy !== PLAYTHROUGH_CAPTURE_HEALTH_POLICY ||
+      !Array.isArray(qualityReport?.segments) || qualityReport.segments.length !== 6 ||
+      qualityReport.segments.some((segment) => segment?.passed !== true) ||
+      trace?.planHash !== planHash || !Array.isArray(trace?.segments) ||
+      trace.segments.length !== 6 || !Array.isArray(rawTrace?.telemetrySamples)) return false;
+  if (trace.episodeContentHash !== await fileHash(path.join(
+    whiteboxRoot,
+    "episode-180s.mp4",
+  ))) return false;
+  for (const segment of trace.segments) {
+    if (segment?.videoContentHash !== await fileHash(path.join(
+      whiteboxRoot,
+      segment?.videoPath ?? "",
+    )) || segment?.firstFrameContentHash !== await fileHash(path.join(
+      whiteboxRoot,
+      segment?.firstFramePath ?? "",
+    ))) return false;
+  }
+  const markers = new Map((trace.events ?? [])
+    .filter((event) => event?.kind === "prompt-marker")
+    .map((event) => [event.id, event]));
+  for (const slot of PLAYTHROUGH_HOST_EVENT_SLOTS) {
+    const marker = markers.get(slot.id);
+    const window = PLAYTHROUGH_PROMPT_WINDOWS[slot.windowIndex];
+    if (!Number.isFinite(marker?.actualSeconds) ||
+        marker.segmentId !== slot.segmentId ||
+        marker.actualSeconds < window.startSeconds ||
+        marker.actualSeconds >= window.endSeconds) return false;
+  }
+  const requiredMedia = [
+    "episode-180s.mp4",
+    ...Array.from({ length: 6 }, (_, index) => `segment-0${index}.mp4`),
+    ...Array.from({ length: 6 }, (_, index) => `segment-0${index}-first-frame.png`),
+  ];
+  return (await Promise.all(requiredMedia.map((fileName) =>
+    exists(path.join(whiteboxRoot, fileName))))).every(Boolean);
 }
 async function fileHash(filePath) {
   try {
@@ -129,6 +311,28 @@ async function fileHash(filePath) {
   } catch {
     return null;
   }
+}
+async function hasCompleteStyleVariantProduction() {
+  const manifest = await readJsonIfPresent(path.join(
+    episodeRoot, "style-variants/style-variant-manifest.json",
+  ));
+  if (manifest?.kind !== "worldkit-episode-style-variant-manifest" ||
+      manifest?.schemaVersion !== 1 || manifest?.sceneId !== sceneId ||
+      manifest?.episodeId !== episodeId ||
+      manifest?.variantCount !== styleVariantConfig.variantCount ||
+      manifest?.productionScope !== productionScope ||
+      manifest?.succeededCount !== styleVariantConfig.variantCount ||
+      !Array.isArray(manifest.variants) ||
+      manifest.variants.length !== styleVariantConfig.variantCount ||
+      manifest.variants.some((variant) => productionScope === "visual-sample"
+        ? variant?.status !== "visual-passed"
+        : variant?.status !== "succeeded")) return false;
+  const [traceHash, qualityReportHash] = await Promise.all([
+    fileHash(path.join(episodeRoot, "whitebox/executed-playthrough-trace.json")),
+    fileHash(path.join(episodeRoot, "whitebox/executed-playthrough-quality-report.json")),
+  ]);
+  return manifest.sourceWhiteboxIdentity?.traceHash === traceHash &&
+    manifest.sourceWhiteboxIdentity?.qualityReportHash === qualityReportHash;
 }
 async function providerPromptHash(filePath) {
   try {
@@ -144,19 +348,19 @@ async function readJsonIfPresent(filePath) {
 }
 async function providerResultIsCurrent(
   index,
-  { requireUpscale = false, requireFinal = false } = {},
+  { requireFinal = false } = {},
 ) {
   const segmentId = `segment-0${index}`;
   const segmentRoot = path.join(episodeRoot, "video", segmentId);
   const request = await readJsonIfPresent(path.join(segmentRoot, "request.json"));
   const result = await readJsonIfPresent(path.join(segmentRoot, "provider-run.json"));
-  if (request?.schemaVersion !== 2 || result?.modelChain?.length !== 2 ||
-      result.modelChain[0] !== providerModel || result.modelChain[1] !== upscaleModel ||
-      typeof result.providerTaskId !== "string") return false;
+  if (request?.schemaVersion !== 2 || result?.schemaVersion !== 3 ||
+      result?.modelChain?.length !== 1 || result.modelChain[0] !== providerModel ||
+      typeof result.providerJobId !== "string") return false;
   const promptHash = await providerPromptHash(path.resolve(request.promptPath ?? ""));
   const referenceVideoHash = await fileHash(path.resolve(request.referenceVideoPath ?? ""));
-  if (result.inputIdentity?.providerModel !== providerModel ||
-      result.inputIdentity?.upscaleModel !== upscaleModel ||
+  if (result.inputIdentity?.model !== providerModel ||
+      result.inputIdentity?.provider !== "infinite-canvas-seedance-2.5" ||
       result.inputIdentity?.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION ||
       result.inputIdentity?.promptSha256 !== promptHash?.replace(/^sha256:/, "") ||
       result.inputIdentity?.referenceVideoSha256 !== referenceVideoHash?.replace(/^sha256:/, "")) return false;
@@ -166,12 +370,11 @@ async function providerResultIsCurrent(
     if (result.inputIdentity?.[key] !== imageHash?.replace(/^sha256:/, "")) return false;
   }
   if (!await exists(path.join(segmentRoot, rawProviderFileName))) return false;
-  if (!requireUpscale && !requireFinal) {
-    return ["seedance-ready", "upscale-submitted", "upscale-ready", "succeeded"].includes(result.status);
+  const rawProviderHash = await fileHash(path.join(segmentRoot, rawProviderFileName));
+  if (result.rawProviderOutput?.sha256 !== rawProviderHash?.replace(/^sha256:/, "")) {
+    return false;
   }
-  if (typeof result.upscaleTaskId !== "string" ||
-      !await exists(path.join(segmentRoot, rawUpscaleFileName))) return false;
-  if (!requireFinal) return ["upscale-ready", "succeeded"].includes(result.status);
+  if (!requireFinal) return ["seedance-ready", "succeeded"].includes(result.status);
   const finalPath = path.join(segmentRoot, finalVideoFileName);
   const finalHash = await fileHash(finalPath);
   return result.status === "succeeded" && result.output?.sha256 === finalHash?.replace(/^sha256:/, "") &&
@@ -180,9 +383,15 @@ async function providerResultIsCurrent(
 async function visualManifestMatchesCapture(filePath) {
   try {
     const manifest = JSON.parse(await readFile(filePath, "utf8"));
-    if (!Array.isArray(manifest.sourceWhiteboxFirstFrames) || manifest.sourceWhiteboxFirstFrames.length !== 3) return false;
-    for (let index = 0; index < 3; index += 1) {
-      const source = manifest.sourceWhiteboxFirstFrames[index];
+    const expectedInputIdentity = await buildEpisodeVisualInputIdentity({
+      sceneRoot,
+      scenePlanRoot: path.join(repoRoot, "apps/playground/public/scene-plans", sceneId),
+      episodeRoot,
+    });
+    if (manifest.inputIdentity?.identityHash !== expectedInputIdentity.identityHash) return false;
+    if (!Array.isArray(manifest.sourceWhiteboxFirstFrames) || manifest.sourceWhiteboxFirstFrames.length !== 6) return false;
+    for (const [selectedIndex, index] of PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES.entries()) {
+      const source = manifest.sourceWhiteboxFirstFrames[selectedIndex];
       if (source.segmentId !== `segment-0${index}` || source.contentHash !== await fileHash(path.join(
         episodeRoot, "whitebox", `segment-0${index}-first-frame.png`,
       ))) return false;
@@ -191,6 +400,94 @@ async function visualManifestMatchesCapture(filePath) {
   } catch {
     return false;
   }
+}
+async function visualEventPlanIsCurrent(filePath) {
+  try {
+    const plan = JSON.parse(await readFile(filePath, "utf8"));
+    if (!validateVisualEventPlan(plan, { sceneId, episodeId }).ok ||
+        plan.model !== visualEventDirectorConfig.model) {
+      return false;
+    }
+    const expectedInputIdentity = await buildEpisodeVisualEventInputIdentity({
+      configPath: visualEventDirectorConfigPath,
+      promptTemplatePath: visualEventPromptPath,
+      episodeRoot,
+      selectedCaptureIndices: PLAYTHROUGH_EVENT_SEGMENT_INDICES,
+    });
+    if (plan.inputIdentity?.identityHash !== expectedInputIdentity.identityHash) return false;
+    const inputPaths = [
+      visualEventDirectorConfigPath,
+      visualEventPromptPath,
+      path.join(episodeRoot, "visual/episode-visual-manifest.json"),
+      ...PLAYTHROUGH_EVENT_SEGMENT_INDICES.map(
+        (index) => path.join(
+          episodeRoot,
+          "visual",
+          `segment-0${index}-styled-opening-frame.png`,
+        ),
+      ),
+      ...PLAYTHROUGH_EVENT_SEGMENT_INDICES.map(
+        (index) => path.join(
+          episodeRoot,
+          "whitebox",
+          `segment-0${index}.mp4`,
+        ),
+      ),
+    ];
+    await Promise.all(inputPaths.map((inputPath) => access(inputPath)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function seedancePromptSetIsCurrent(planPath, visualEventPlanPath) {
+  const [plan, visualEventPlan, visualManifest, visualPromptBundle] = await Promise.all([
+    readJsonIfPresent(planPath),
+    readJsonIfPresent(visualEventPlanPath),
+    readJsonIfPresent(path.join(episodeRoot, "visual/episode-visual-manifest.json")),
+    readJsonIfPresent(path.join(episodeRoot, "visual/episode-visual-prompts.json")),
+  ]);
+  if (!plan || !visualEventPlan || !visualManifest || !visualPromptBundle) return false;
+  const planHash = sha256Canonical(plan);
+  const visualEventPlanHash = sha256Canonical(visualEventPlan);
+  const visualManifestHash = sha256Canonical(visualManifest);
+  const visualPromptBundleHash = sha256Canonical(visualPromptBundle);
+  for (const index of PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES) {
+    const prompt = await readJsonIfPresent(path.join(
+      episodeRoot,
+      "prompts",
+      `segment-0${index}.json`,
+    ));
+    if (prompt?.kind !== "worldkit-episode-seedance-segment-prompt" ||
+        prompt.schemaVersion !== 1 || prompt.sceneId !== sceneId ||
+        prompt.episodeId !== episodeId || prompt.segmentId !== `segment-0${index}` ||
+        prompt.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION ||
+        prompt.planHash !== planHash || prompt.visualEventPlanHash !== visualEventPlanHash ||
+        prompt.visualManifestHash !== visualManifestHash ||
+        prompt.visualPromptBundleHash !== visualPromptBundleHash ||
+        typeof prompt.prompt !== "string" || prompt.prompt.trim().length === 0) return false;
+  }
+  return true;
+}
+async function planIsCurrent(planPath, navigationPath) {
+  const plan = await readJsonIfPresent(planPath);
+  const navigationEvidence = await readJsonIfPresent(navigationPath);
+  if (!plan || !navigationEvidence) return false;
+  if (!validatePlaythroughPlanStructure(plan, { sceneId, navigationEvidence }).ok) return false;
+  return true;
+}
+async function navigationEvidenceIsCurrent(navigationPath, worldModulePath, reconnaissancePath) {
+  const evidence = await readJsonIfPresent(navigationPath);
+  return evidence?.kind === "worldkit-episode-navigation-evidence" &&
+    evidence.schemaVersion === 1 && evidence.sceneId === sceneId &&
+    evidence.source?.worldModuleContentHash === await fileHash(worldModulePath) &&
+    evidence.source?.reconnaissanceContentHash === await fileHash(reconnaissancePath);
+}
+async function reconnaissanceIsCurrent(reconnaissancePath, sourceIdentityHash) {
+  const report = await readJsonIfPresent(reconnaissancePath);
+  return report?.kind === "worldkit-playthrough-reconnaissance" &&
+    report.schemaVersion === 1 && report.sceneId === sceneId &&
+    report.sourceIdentityHash === sourceIdentityHash;
 }
 function writeOutput(chunk) {
   process.stdout.write(chunk);
@@ -251,7 +548,12 @@ async function retryOperation(label, maximumAttempts, operation) {
       return await operation(attempt);
     } catch (error) {
       lastError = error;
-      if (stopping || attempt === maximumAttempts) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      const deterministicInputFailure =
+        /PLAYTHROUGH_PLAN_INVALID|CAPTURE_SUBJECT_DID_NOT_MOVE|CAPTURE_SUBJECT_STATIONARY_TOO_LONG|CAPTURE_SUBJECT_UNINTENDED_FALL/.test(
+          message,
+        );
+      if (stopping || deterministicInputFailure || attempt === maximumAttempts) throw error;
       writeOutput(
         `WORLDKIT_EPISODE_RETRY ${label} attempt=${attempt + 1}/${maximumAttempts}\n`,
       );
@@ -259,6 +561,21 @@ async function retryOperation(label, maximumAttempts, operation) {
     }
   }
   throw lastError;
+}
+
+async function runWithConcurrency(items, limit, operation) {
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const itemIndex = nextIndex;
+        nextIndex += 1;
+        await operation(items[itemIndex]);
+      }
+    },
+  );
+  await Promise.all(workers);
 }
 function run(command, commandArgs, options = {}) {
   return new Promise((resolvePromise, reject) => {
@@ -269,15 +586,20 @@ function run(command, commandArgs, options = {}) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     runningChildren.add(child);
-    child.stdout.on("data", (chunk) => writeOutput(chunk));
-    child.stderr.on("data", (chunk) => writeOutput(chunk));
+    let outputTail = "";
+    const captureOutput = (chunk) => {
+      outputTail = `${outputTail}${String(chunk)}`.slice(-8_000);
+      writeOutput(chunk);
+    };
+    child.stdout.on("data", captureOutput);
+    child.stderr.on("data", captureOutput);
     child.once("error", reject);
     child.once("close", (code, signal) => {
       runningChildren.delete(child);
       if (code === 0) resolvePromise();
       else reject(new Error(stopping
         ? "Episode workflow was stopped by the user."
-        : `${command} exited ${code ?? "null"} signal=${signal ?? "none"}`));
+        : `${command} exited ${code ?? "null"} signal=${signal ?? "none"}\n${outputTail}`));
     });
   });
 }
@@ -312,76 +634,135 @@ async function stage(id, skipWhen, operation) {
 try {
   await access(path.join(sceneRoot, "world.mjs"));
   const reconRoot = path.join(episodeRoot, "planning/reconnaissance");
+  const reconnaissancePath = path.join(reconRoot, "reconnaissance-report.json");
+  const sceneRuntimeIdentity = await buildEpisodeSceneRuntimeIdentity({
+    sceneRoot,
+    scenePlanRoot: path.join(repoRoot, "apps/playground/public/scene-plans", sceneId),
+    episodeSourceReceiptPath: await exists(path.join(
+      episodeRoot,
+      "episode-source-receipt.json",
+    )) ? path.join(episodeRoot, "episode-source-receipt.json") : null,
+  });
   await stage("reconnaissance",
-    () => exists(path.join(reconRoot, "reconnaissance-report.json")),
+    () => reconnaissanceIsCurrent(
+      reconnaissancePath,
+      sceneRuntimeIdentity.identityHash,
+    ),
     () => withRuntimeSlot(`reconnaissance:${episodeId}`, () =>
       run("pnpm", ["exec", "tsx", "scripts/episodes/inspect-playthrough-world.ts",
         "--scene-id", sceneId, "--origin", origin, "--play-path", "/play",
-        "--output", reconRoot])));
+        "--output", reconRoot,
+        "--source-identity-hash", sceneRuntimeIdentity.identityHash])));
+  const navigationPath = path.join(episodeRoot, "planning/navigation-evidence.json");
+  const worldModulePath = path.join(sceneRoot, "world.mjs");
+  await stage("navigation-evidence",
+    () => navigationEvidenceIsCurrent(
+      navigationPath,
+      worldModulePath,
+      reconnaissancePath,
+    ),
+    () => run("pnpm", ["exec", "tsx", "scripts/episodes/build-exploration-navigation-evidence.ts",
+      "--scene-id", sceneId, "--world", worldModulePath,
+      "--reconnaissance", reconnaissancePath,
+      "--output", navigationPath]));
   const planPath = path.join(episodeRoot, "planning/playthrough-plan.json");
-  await stage("playthrough-plan", () => exists(planPath),
+  await stage("playthrough-plan",
+    () => planIsCurrent(planPath, navigationPath),
     () => run("bash", ["scripts/agents/run-lwdp-playthrough-planner-agent.sh",
       "--scene-id", sceneId, "--episode-id", episodeId, "--episode-root", episodeRoot,
       "--recon-root", reconRoot, "--backend", backend]));
   const whiteboxRoot = path.join(episodeRoot, "whitebox");
-  const executedTracePath = path.join(whiteboxRoot, "executed-playthrough-trace.json");
   await stage("whitebox-capture",
-    () => hasCompleteFrameTelemetry(executedTracePath),
+    () => hasCompleteWhiteboxCapture(whiteboxRoot, planPath),
     () => withRuntimeSlot(`whitebox-capture:${episodeId}`, () =>
       retryOperation("whitebox-capture", 3, async () => {
         await run("pnpm", ["exec", "tsx", "scripts/episodes/run-playthrough-capture.ts",
           "--scene-id", sceneId, "--origin", origin, "--play-path", "/play",
-          "--plan", planPath, "--output", whiteboxRoot]);
-        if (!await hasCompleteFrameTelemetry(executedTracePath)) {
-          throw new Error("EPISODE_FRAME_TELEMETRY_CONFORMANCE_FAILED");
+          "--plan", planPath, "--navigation-evidence", navigationPath,
+          "--output", whiteboxRoot]);
+        if (!await hasCompleteWhiteboxCapture(whiteboxRoot, planPath)) {
+          throw new Error("EPISODE_WHITEBOX_CAPTURE_CLOSURE_FAILED");
         }
       })));
-  const visualManifest = path.join(episodeRoot, "visual/episode-visual-manifest.json");
-  await stage("visual-reconstruction", () => visualManifestMatchesCapture(visualManifest),
-    () => retryOperation("visual-reconstruction", 3, (attempt) =>
-      run("bash", ["scripts/agents/run-lwdp-episode-visual-agent.sh",
+  if (styleVariantConfig.enabled) {
+    await stage("style-variant-production", hasCompleteStyleVariantProduction,
+      () => run("node", [
+        "scripts/episodes/run-style-variant-workflow.mjs",
         "--scene-id", sceneId, "--episode-id", episodeId,
-        "--episode-root", episodeRoot, "--backend", backend,
-        "--attempt", String(attempt)])));
+        "--scene-root", sceneRoot, "--episode-root", episodeRoot,
+        "--backend", backend, "--origin", origin,
+        "--until", productionScope === "visual-sample" ? "visual-review" : "full",
+      ]));
+  } else {
+    const visualManifest = path.join(episodeRoot, "visual/episode-visual-manifest.json");
+    await stage("visual-reconstruction", () => visualManifestMatchesCapture(visualManifest),
+    () => run("bash", ["scripts/agents/run-lwdp-episode-visual-agent.sh",
+      "--scene-id", sceneId, "--episode-id", episodeId,
+      "--episode-root", episodeRoot, "--backend", backend,
+      "--attempt", "1"]));
+  const visualEventPlan = path.join(episodeRoot, "prompts/visual-events.json");
+  await stage("visual-events", () => visualEventPlanIsCurrent(visualEventPlan),
+    () => retryOperation("visual-events", 3, () =>
+      run("python3", ["scripts/episodes/run-gemini-visual-event-director.py",
+        "--scene-id", sceneId, "--episode-id", episodeId,
+        "--episode-root", episodeRoot])));
   await stage("seedance-prompts",
-    async () => false,
+    () => seedancePromptSetIsCurrent(planPath, visualEventPlan),
     () => run("node", ["scripts/episodes/build-episode-seedance-prompts.mjs",
       "--scene-id", sceneId, "--episode-id", episodeId,
       "--scene-root", sceneRoot, "--episode-root", episodeRoot]));
   await run("node", ["scripts/episodes/prepare-episode-video-requests.mjs",
     "--scene-id", sceneId, "--episode-id", episodeId, "--episode-root", episodeRoot]);
-  const resultPaths = [0, 1, 2].map((index) =>
-    path.join(episodeRoot, "video", `segment-0${index}`, "provider-run.json"));
+  const segmentIndices = [...PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES];
+  const segmentRuns = segmentIndices.map((index) => ({
+    index,
+    resultPath: path.join(episodeRoot, "video", `segment-0${index}`, "provider-run.json"),
+  }));
   await stage("seedance-generation",
-    async () => (await Promise.all([0, 1, 2].map((index) => providerResultIsCurrent(index)))).every(Boolean),
-    () => Promise.all(resultPaths.map((resultPath, index) => run("python3", [
-      "scripts/episodes/run-episode-video-segment.py",
-      "--request", path.join(episodeRoot, "video", `segment-0${index}`, "request.json"),
-      "--result", resultPath,
-      "--until", "seedance",
-    ]))));
-  await stage("cf-upscale",
-    async () => (await Promise.all([0, 1, 2].map((index) =>
-      providerResultIsCurrent(index, { requireUpscale: true })))).every(Boolean),
-    () => Promise.all(resultPaths.map((resultPath, index) => run("python3", [
-      "scripts/episodes/run-episode-video-segment.py",
-      "--request", path.join(episodeRoot, "video", `segment-0${index}`, "request.json"),
-      "--result", resultPath,
-      "--until", "upscale",
-    ]))));
-  await stage("conformance",
-    async () => (await Promise.all([0, 1, 2].map((index) =>
+    async () => (await Promise.all(segmentIndices.map((index) => providerResultIsCurrent(index)))).every(Boolean),
+    async () => {
+      const pending = [];
+      for (const item of segmentRuns) {
+        if (!await providerResultIsCurrent(item.index)) pending.push(item);
+      }
+      await runWithConcurrency(pending, seedanceConcurrency, ({ resultPath, index }) =>
+        run("python3", [
+          "scripts/episodes/run-episode-video-segment.py",
+          "--request", path.join(episodeRoot, "video", `segment-0${index}`, "request.json"),
+          "--result", resultPath,
+          "--until", "seedance",
+        ]));
+    });
+    await stage("conformance",
+    async () => (await Promise.all(segmentIndices.map((index) =>
       providerResultIsCurrent(index, { requireFinal: true })))).every(Boolean),
-    () => Promise.all(resultPaths.map((resultPath, index) => run("python3", [
-      "scripts/episodes/run-episode-video-segment.py",
-      "--request", path.join(episodeRoot, "video", `segment-0${index}`, "request.json"),
-      "--result", resultPath, "--until", "conformance",
-    ]))));
+    async () => {
+      const pending = [];
+      for (const item of segmentRuns) {
+        if (!await providerResultIsCurrent(item.index, { requireFinal: true })) {
+          pending.push(item);
+        }
+      }
+      await runWithConcurrency(pending, seedanceConcurrency, ({ resultPath, index }) =>
+        run("python3", [
+          "scripts/episodes/run-episode-video-segment.py",
+          "--request", path.join(episodeRoot, "video", `segment-0${index}`, "request.json"),
+          "--result", resultPath, "--until", "conformance",
+        ]));
+    });
+  }
   record.status = "succeeded";
   record.currentStage = null;
   record.finishedAt = new Date().toISOString();
   record.error = null;
   await persist();
+  if (styleVariantConfig.enabled && productionScope === "full") {
+    await run("node", [
+      "scripts/episodes/build-style-variant-bundle.mjs",
+      "--episode-id", episodeId,
+      "--episode-root", episodeRoot,
+    ]);
+  }
   writeOutput(`WORLDKIT_EPISODE_WORKFLOW_READY ${episodeId}\n`);
 } catch (error) {
   const item = record.stages.find((candidate) => candidate.id === record.currentStage);

@@ -42,7 +42,7 @@ const prompts = JSON.parse(await readFile(promptsPath, "utf8"));
 if (prompts.kind !== "worldkit-episode-opening-review-prompts" || prompts.schemaVersion !== 1 ||
     prompts.provider !== "lwdp-codex" || prompts.sceneId !== sceneId ||
     prompts.episodeId !== episodeId || prompts.reviewId !== reviewId ||
-    !Array.isArray(prompts.segmentOpeningFrames) || prompts.segmentOpeningFrames.length !== 3 ||
+    !Array.isArray(prompts.segmentOpeningFrames) || prompts.segmentOpeningFrames.length !== 4 ||
     prompts.segmentOpeningFrames.some((item, index) =>
       item.segmentId !== `segment-0${index}` || typeof item.prompt !== "string" || item.prompt.length < 300)) {
   throw new Error("Episode opening-review prompt bundle is invalid.");
@@ -50,7 +50,7 @@ if (prompts.kind !== "worldkit-episode-opening-review-prompts" || prompts.schema
 
 const frames = [];
 const sources = [];
-for (let index = 0; index < 3; index += 1) {
+for (let index = 0; index < 4; index += 1) {
   const segmentId = `segment-0${index}`;
   const source = path.join(episodeRoot, "whitebox", `${segmentId}-first-frame.png`);
   sources.push({ segmentId, path: path.relative(episodeRoot, source), contentHash: await hash(source) });

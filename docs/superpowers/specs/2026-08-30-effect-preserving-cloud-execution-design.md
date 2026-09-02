@@ -85,3 +85,25 @@ document. The worker verifies every reference hash before invoking the existing
 command. On completion it uploads the Scene artifact tree, public Scene-plan
 tree, pipeline log, and a SHA-256 manifest to S3. Kubernetes injects the LWDP
 token and Host capture key; neither secret is part of the artifact bundle.
+
+## Episode production slice
+
+Episode production also uses one coarse worker stage. It deliberately does not
+use the backend's built-in fine-grained Episode template because that template
+omits the current Gemini visual-event stage and names the retired CF upscale
+stage. Studio submits one custom `episode-production` worker bound to an already
+admitted Scene execution and immutable Scene artifact manifest.
+
+The worker hydrates the Scene into an ephemeral workspace, verifies the signed
+whitebox authority, starts a loopback static Playground and Studio, and invokes
+the unchanged `episode:run` command. Its internal reconnaissance, Planner,
+four-Segment capture, visual reconstruction, Gemini events, Seedance, MediaKit
+enhancement, conformance and portable ZIP steps are progress markers rather than
+new retry boundaries. A stage retry reuses the exact request and Scene manifest,
+launches a new GPU worker attempt, and never reruns Scene Planner or Builder.
+
+All Episode media, JSON, images, logs and the portable ZIP are uploaded under
+`stages/episode-production/episode/**` and closed by SHA-256. Studio keeps only
+the Episode record, bounded JSON metadata and the remote artifact index. Video
+and ZIP requests redirect to short-lived S3 URLs so Browser Range playback and
+downloads never persist large media locally.

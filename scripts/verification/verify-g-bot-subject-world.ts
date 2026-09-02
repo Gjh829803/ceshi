@@ -595,6 +595,7 @@ async function verifyBrowser(
         role: "primary-subject",
         semanticClassId: "subject.humanoid.g-bot",
         identityColor: "#E85D5D",
+        frontDirectionWorldXZ: [0, -1],
       }])[0];
     }, PRIMARY_ENTITY_ID);
     assert.equal(poseTarget?.runtimeEntityIds[0], PRIMARY_ENTITY_ID);

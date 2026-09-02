@@ -54,22 +54,32 @@ def _load_env_file(path: Path) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
+        if key:
             os.environ[key] = value
 
 
 def _prepare_vertex_environment() -> tuple[str, str, str, str, str]:
-    env_file = Path(os.environ.get("WORLDKIT_GEMINI_ENV_FILE", DEFAULT_ENV_FILE))
-    _load_env_file(env_file)
-    if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip():
-        if DEFAULT_CREDENTIAL_FILE.is_file():
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(DEFAULT_CREDENTIAL_FILE)
-    credential_value = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-    credential_path = Path(credential_value) if credential_value else None
-    if credential_path is not None and not credential_path.is_absolute():
-        credential_path = (PROJECT_ROOT / credential_path).resolve()
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credential_path)
-    if not os.environ.get("GCLOUD_PROJECT_ID", "").strip() and credential_path is not None:
+    managed_keys = (
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GCLOUD_PROJECT_ID",
+        "GCLOUD_LOCATION",
+        "WORLDKIT_GEMINI_PROMPT_LOCATION",
+        "WORLDKIT_GEMINI_IMAGE_LOCATION",
+        "WORLDKIT_GEMINI_PROMPT_MODEL",
+        "WORLDKIT_GEMINI_IMAGE_MODEL",
+        "WORLDKIT_IMAGEGEN_CONCURRENCY",
+    )
+    for key in managed_keys:
+        os.environ.pop(key, None)
+    _load_env_file(DEFAULT_ENV_FILE)
+    credential_path = DEFAULT_CREDENTIAL_FILE.resolve()
+    if not credential_path.is_file() or PROJECT_ROOT not in credential_path.parents:
+        raise RuntimeError(
+            "A project-local Google credential is required at "
+            ".codex-tmp/runtime-config/google-service-account.json."
+        )
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credential_path)
+    if not os.environ.get("GCLOUD_PROJECT_ID", "").strip():
         try:
             credential_payload = json.loads(credential_path.read_text(encoding="utf-8"))
             project_id = credential_payload.get("project_id")
@@ -82,12 +92,6 @@ def _prepare_vertex_environment() -> tuple[str, str, str, str, str]:
         raise RuntimeError(
             "GCLOUD_PROJECT_ID is required. Configure the project-local "
             ".codex-tmp/runtime-config/gemini.env file."
-        )
-    if credential_path is None or not credential_path.is_file():
-        raise RuntimeError(
-            "A project-local Google credential is required at "
-            ".codex-tmp/runtime-config/google-service-account.json or via "
-            "GOOGLE_APPLICATION_CREDENTIALS."
         )
     base_location = os.environ.get("GCLOUD_LOCATION", "global").strip() or "global"
     prompt_location = (
@@ -471,6 +475,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--generate-only", action="store_true")
     parser.add_argument("--only", choices=("all", "opening", "triviews"), default="all")
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--runtime-config-smoke", action="store_true")
     return parser.parse_args()
 
 
@@ -488,6 +493,20 @@ def main() -> int:
                 sort_keys=True,
             )
         )
+        return 0
+    if arguments.runtime_config_smoke:
+        project_id, prompt_location, image_location, prompt_model, image_model = (
+            _prepare_vertex_environment()
+        )
+        print(json.dumps({
+            "project_id_present": bool(project_id),
+            "prompt_location": prompt_location,
+            "image_location": image_location,
+            "prompt_model": prompt_model,
+            "image_model": image_model,
+            "credential_file": str(DEFAULT_CREDENTIAL_FILE.relative_to(PROJECT_ROOT)),
+            "project_local_only": True,
+        }, sort_keys=True))
         return 0
     if arguments.prompt_only and arguments.generate_only:
         raise RuntimeError("--prompt-only and --generate-only are mutually exclusive.")

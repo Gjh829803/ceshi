@@ -38,6 +38,7 @@ import {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
   createBabylonCharacterBodyPortV1,
   type BabylonCharacterBodyRuntimePortV1,
+  type BabylonCharacterBodySupportObservationDiagnosticV1,
 } from "./babylon-character-body-port";
 import {
   GoldenHumanoid3CVNextTransactionV1,
@@ -443,6 +444,18 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   latestTickResult(): GoldenHumanoidTickResultV1 | undefined {
     this.#assertLive();
     return this.#latestTickResult;
+  }
+
+  supportObservationDiagnostic():
+    | BabylonCharacterBodySupportObservationDiagnosticV1
+    | undefined {
+    this.#assertLive();
+    return this.#bodyPort?.readLatestSupportObservationDiagnostic();
+  }
+
+  admitRolledBackTickRetry(tick: number): boolean {
+    this.#assertLive();
+    return this.#transaction.admitRolledBackTickRetry(tick);
   }
 
   synchronizeVisual(): void {

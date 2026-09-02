@@ -40,6 +40,10 @@ For an ordinary walking human, the recommended entry remains
 xier120 assets, are valid only for the executable movement modes explicitly
 listed on their catalog entry.
 
+The SDK may retain primitive humanoid proxies for Runtime and traversal tests,
+but the Host excludes them from `subjects`; they may appear only in
+`rejectedSubjects`. Never copy a rejected ref into `controlledSubject`.
+
 Copy the selected entry's complete `traversalEnvelope` object into
 `subjectTraversalProfile` without changing a number or boolean. This envelope
 is Host-derived from the exact admitted Runtime capsule (`heightMeters`,

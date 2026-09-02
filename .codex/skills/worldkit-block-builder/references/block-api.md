@@ -118,6 +118,22 @@ The remaining red and pink landmark presets stay reserved and are not used for
 ordered Planner targets. A functional block inside a complete target keeps its
 functional preset and shares the target's `visualGroupId`.
 
+Every non-subject complete target also appears exactly once in the returned
+`visualTargetFacings` array:
+
+```js
+visualTargetFacings: [{
+  visualTargetId: "visual-target-2",
+  frontYawQuarterTurnsY: 1,
+}],
+```
+
+The quarter-turn convention is `0=-Z`, `1=-X`, `2=+Z`, `3=+X`. This declares
+the target's semantic front independently of its world placement. The primary
+Subject is omitted because `controlledSubject.yawQuarterTurnsY` already owns
+its front direction. Missing, duplicate, extra, or primary-Subject rows fail
+the Builder self-check.
+
 ## Stand positions, smoothing, and connectivity
 
 A support block creates a candidate at its top-center world position.

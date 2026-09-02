@@ -2012,6 +2012,53 @@ describe("BabylonWorldRuntime", () => {
     await runtime.dispose();
   });
 
+  it("relocates the controlled Subject to an independent capture start without advancing Tick", async () => {
+    const executionPlan = createFlatPackageExecutionPlan();
+    const runtime = await createRuntime(executionPlan);
+    const debug = createRuntimeDebugProbe(runtime);
+    await runtime.runFixedInput(moveRightForTicks(12));
+    const beforeTick = runtime.snapshot().tick;
+    const startPosition = [7.5, 0, -11.25] as const;
+    const startYaw = -Math.PI / 3;
+
+    const relocated = runtime.relocateControlledSubjectForCapture({
+      positionMetersXYZ: startPosition,
+      facingYawRadians: startYaw,
+    });
+
+    const state = relocated.subjectStatesByEntityId.player!;
+    const subject = runtimeSubjects(executionPlan).find(({ entityId }) =>
+      entityId === "player")!;
+    expect(relocated.tick).toBe(beforeTick);
+    expect(state.positionMetersXYZ).toEqual(startPosition);
+    expect(state.velocityMetersPerSecondXYZ).toEqual([0, 0, 0]);
+    expect(state.forwardXYZ).toEqual([
+      -Math.sin(startYaw),
+      0,
+      -Math.cos(startYaw),
+    ].map((value) => expect.closeTo(value, 12)));
+    expect(debug.subjectVisualOrigin("player")).toEqual(startPosition);
+    expect(debug.controllerCenter("player")).toEqual(addVec3(
+      startPosition,
+      subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+    ));
+    expect(relocated.camera.targetEntityId).toBe("player");
+    expect(relocated.camera.positionMetersXYZ.every(Number.isFinite)).toBe(true);
+    expect(relocated.camera.actualTargetPositionMetersXYZ?.[0]).toBeCloseTo(
+      startPosition[0],
+      12,
+    );
+    expect(relocated.camera.actualTargetPositionMetersXYZ?.[2]).toBeCloseTo(
+      startPosition[2],
+      12,
+    );
+    expect(Math.hypot(
+      relocated.camera.positionMetersXYZ[0] - startPosition[0],
+      relocated.camera.positionMetersXYZ[2] - startPosition[2],
+    )).toBeLessThan(10);
+    await runtime.dispose();
+  });
+
   it("creates unbound and snapshots every compiled Subject independently", async () => {
     const executionPlan = createFlatPackageExecutionPlan();
     const runtime = await createRuntime(executionPlan, {}, false);
@@ -3342,6 +3389,71 @@ function emptyActionProjection(simulationTick: number) {
           cameraContextTags: [],
         },
       });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("restores an unchanged failed Golden Tick without replaying session history", async () => {
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      await bindRuntimeTestPossession(runtime, "g-bot-primary");
+      const internals = runtime as unknown as {
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: {
+            step(...args: unknown[]): unknown;
+            reset(): void;
+          };
+        }>;
+        prepareGoldenGameplayFixedInputTick(
+          input: FixedInputV1,
+          actionProjection: Readonly<{
+            simulationTick: number;
+            activeActionStatesById: Readonly<Record<string, never>>;
+          }>,
+        ): Promise<Readonly<{
+          commitPrepared(): void;
+          abort(): Promise<void>;
+        }>>;
+      };
+      const movement = internals.characterEntitiesByEntityId
+        .get("g-bot-primary")!.movement;
+      const resetSpy = vi.spyOn(movement, "reset");
+      vi.spyOn(movement, "step").mockImplementationOnce(() => {
+        throw new RangeError(
+          "3C_INPUT_INVALID: synthetic contact resolution failed.",
+        );
+      });
+      const before = runtime.snapshot();
+      const actionProjection = Object.freeze({
+        simulationTick: 1,
+        activeActionStatesById: Object.freeze({}),
+      });
+
+      await expect(internals.prepareGoldenGameplayFixedInputTick(
+        { actions: ["move-right"], ticks: 1 },
+        actionProjection,
+      )).rejects.toThrow("synthetic contact resolution failed");
+
+      expect(resetSpy).not.toHaveBeenCalled();
+      expect(runtime.snapshot()).toEqual(before);
+      expect(runtime.consumeFixedInputFailureDiagnostic()).toMatchObject({
+        stage: "prepare",
+        tick: 1,
+        actions: ["move-right"],
+        errorCode: "3C_INPUT_INVALID",
+        errorMessage: "synthetic contact resolution failed.",
+      });
+
+      const retry = await internals.prepareGoldenGameplayFixedInputTick(
+        { actions: [], ticks: 1 },
+        actionProjection,
+      );
+      retry.commitPrepared();
+      expect(runtime.snapshot().tick).toBe(1);
     } finally {
       await runtime.dispose();
     }

@@ -39,6 +39,14 @@ import type { PhysicsWorldQueryPortV1 } from "@whitebox-world/runtime-framework"
 import { CameraViewSolverV1 } from "./camera-view-solver";
 import { SpringArmComponentV1 } from "./spring-arm-component";
 
+export type ThirdPersonOcclusionStrategyV1 =
+  | "spring-arm"
+  | "subject-occlusion-fade";
+
+export interface CameraDirectorOptionsV1 {
+  readonly thirdPersonOcclusionStrategy?: ThirdPersonOcclusionStrategyV1;
+}
+
 export interface CameraDirectorSnapshotV1 {
   activeCameraProfileRef: string;
   activeCameraRigRef: string;
@@ -593,6 +601,7 @@ export class CameraDirectorV1 {
     private readonly camera: FreeCamera,
     private readonly scene: Scene,
     private readonly physicsWorldQuery: PhysicsWorldQueryPortV1,
+    private readonly options: CameraDirectorOptionsV1 = {},
   ) {
     this.activeProfileRef = initialCamera.cameraRigProfileRef;
   }
@@ -1184,7 +1193,10 @@ export class CameraDirectorV1 {
     let isCollisionRetracted: boolean | undefined;
     let collisionHitEntityId: string | undefined;
     let collisionHitPositionXYZ: RuntimeVec3V1 | undefined;
-    if (!firstPerson) {
+    if (
+      !firstPerson &&
+      this.options.thirdPersonOcclusionStrategy !== "subject-occlusion-fade"
+    ) {
       let collision: ReturnType<SpringArmComponentV1["solve"]>;
       try {
         collision = springArm.solve({
@@ -1206,6 +1218,10 @@ export class CameraDirectorV1 {
       isCollisionRetracted = collision.isCollisionRetracted;
       collisionHitEntityId = collision.collisionHitEntityId;
       collisionHitPositionXYZ = collision.collisionHitPositionXYZ;
+    } else if (!firstPerson) {
+      safeArmLengthMeters = requestedArmLengthMeters;
+      effectiveArmLengthMeters = requestedArmLengthMeters;
+      isCollisionRetracted = false;
     }
 
     let nextPosition = isCollisionRetracted === true

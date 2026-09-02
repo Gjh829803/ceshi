@@ -5,131 +5,75 @@ Write valid JSON with these exact top-level fields:
 ```json
 {
   "kind": "worldkit-playthrough-plan",
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "id": "<stable lowercase id>",
   "sceneId": "<host scene id>",
   "seed": 0,
-  "durationSeconds": 90,
+  "deliveryDurationSeconds": 180,
+  "executionDurationSeconds": 180,
+  "segmentCount": 6,
+  "segmentDeliverySeconds": 30,
+  "segmentExecutionSeconds": 30,
+  "cameraResetBufferSeconds": 0,
   "simulationTickRate": 60,
   "captureFrameRate": 24,
-  "frameCount": 2160,
+  "frameCount": 4320,
+  "executionFrameCount": 4320,
   "controlledEntityId": "<runtime subject id>",
   "worldPackageRootHash": "sha256:<64 hex> or unavailable",
-  "motionRenderingGuidance": "<scene-specific final locomotion mechanics>",
-  "explorationTargets": [],
+  "motionRenderingGuidance": "<detailed scene-specific final locomotion mechanics>",
+  "navigationEvidenceHash": "sha256:<exact Host evidence hash>",
+  "segmentPlans": [],
   "inputIntervals": [],
-  "cameraEvents": [],
-  "seedancePromptEvents": []
+  "cameraEvents": []
 }
 ```
 
-## Exploration target
+## Independent capture
+
+Provide exactly six entries in Segment order. Global starts are 0, 30, 60, 90,
+120 and 150 seconds, but each capture is independently reset and positioned.
 
 ```json
 {
-  "id": "<stable id>",
-  "description": "<reachable area, viewpoint, or complete visual target>",
-  "priority": "required or opportunistic"
-}
-```
-
-Provide at least two. Do not label unreachable evidence as required.
-
-## Input interval
-
-```json
-{
-  "id": "input-00",
-  "startSeconds": 0,
-  "endSeconds": 3.2,
-  "rawKeys": ["W", "Shift"],
-  "semanticActions": ["move-forward", "run"],
-  "purpose": "<scene-grounded reason>"
-}
-```
-
-Allowed raw keys: `W`, `A`, `S`, `D`, `Shift`, `Space`.
-Allowed actions: `move-forward`, `move-backward`, `move-left`, `move-right`,
-`run`, `jump`, `boost`, `brake`, `primary-action`, `secondary-action`.
-Intervals are ordered, non-overlapping, within 0-90 seconds, and contain 12-240
-rows. Gaps are natural idle play.
-
-At the 30s and 60s Segment boundaries, the interval from 1.5 seconds before to
-1.0 second after the boundary is a rear-view opening window. Any input interval
-overlapping it must be W or W+Shift. Do not use S, A, D, or Space there. Do not
-place a camera event inside the same window. S remains required in every third,
-but belongs away from Segment boundaries.
-
-## Camera event
-
-```json
-{
-  "id": "camera-00",
-  "atSeconds": 4.2,
-  "yawDeltaRadians": -0.18,
-  "pitchDeltaRadians": 0.06,
-  "purpose": "<visible inspection purpose>"
-}
-```
-
-Provide 6-80 ordered events. Include negative/positive yaw and negative/positive
-pitch. One event may not exceed 1.2 yaw or 0.6 pitch radians.
-
-## Seedance Prompt Event
-
-```json
-{
-  "id": "prompt-event-00",
-  "windowIndex": 0,
-  "globalSeconds": 15.25,
   "segmentId": "segment-00",
-  "segmentRelativeSeconds": 15.25,
-  "targetNames": ["<existing natural target name>"],
-  "eventClass": "subject-transformation | ability-manifestation | environment-transformation | atmospheric-spectacle",
-  "magnitude": "large-scale",
-  "frameImpact": {
-    "scope": "subject-dominant | environment-dominant | sky-dominant",
-    "coverage": "large",
-    "contrast": "dramatic"
-  },
-  "dominantChange": "<large frame-dominant visible change>",
-  "targetContext": "<where/what it is doing now>",
-  "beforeState": "<locked initial appearance>",
-  "transitionDescription": "<continuous visible process>",
-  "afterState": "<observable completion>",
-  "actionCoupling": "<preserved whitebox motion/camera and synchronization>",
-  "spatialContinuity": "<unchanged layout/topology/occlusion>",
-  "audioDescription": "<synchronized effect sound only>",
-  "negativeConstraints": "<explicit bounded restrictions>",
-  "timing": {
-    "transitionDurationSeconds": 1.2,
-    "ending": "hold",
-    "endingDurationSeconds": 0
-  },
-  "eventPrompt": "<exact canonical renderer output>"
+  "executionStartSeconds": 0,
+  "deliveryDurationSeconds": 30,
+  "cameraResetBufferSeconds": 0,
+  "initialPositionMetersXYZ": [0, 0, 0],
+  "initialFacingYawRadians": 0,
+  "destinationId": "<navigation evidence destination id>",
+  "destinationPositionMetersXYZ": [0, 0, 0],
+  "arrivalRadiusMeters": 3,
+  "expectedArrivalSeconds": 24,
+  "routeBandIds": ["<admitted corridor id>"],
+  "routeWaypointsMetersXYZ": [[0, 0, 0], [1, 0, 0]],
+  "coverageTargetIds": ["<destination or visual target id>"],
+  "purpose": "<scene-grounded local wandering and observation purpose>"
 }
 ```
 
-For index N, global time is in `[10+30N,20+30N)`, `segmentId` is
-`segment-0N`, and relative time is `globalSeconds - 30N`. `ending` is one of
-`hold`, `fade`, `settle`.
+`initialPositionMetersXYZ` and every waypoint must be exact Host-admitted stand
+positions. The first route waypoint equals the initial position. Captures may start
+far apart and do not connect to the preceding capture. Use at least three distinct
+destinations overall and cover all core destinations when evidence permits.
 
-The three Events use at least two `eventClass` values and two `frameImpact.scope`
-values. At least one scope is `environment-dominant` or `sky-dominant`. The
-authorized visual transformation may be radical, but it never changes the
-recorded root trajectory, camera, entity count, physical collision, or topology.
+## Inputs and camera
 
-Before filling the structured fields, define each Event as one familiar,
-scene-grounded noun phrase that an ordinary viewer can immediately name. Do not
-use an abstract ring, halo, portal, geometric canopy, magnetic curtain, energy
-ribbon, glyph, light tunnel, generic particle stream, or unexplained color wash
-unless that exact phenomenon is explicit in the user/source evidence. A
-sky-dominant Event should normally be a recognizable weather, atmospheric, or
-physical phenomenon rather than invented motion-graphics geometry.
+Input intervals use the global 0–180 second clock, remain inside one 30-second
+capture, are ordered and non-overlapping, and use W/A/S/D/Shift/Space with their
+existing semantic actions. Keep movement active for most of each capture using
+deliberate holds rather than taps. Space is normally a 0.08–0.25 second edge press.
+Use purposeful S in at least three captures, without repeated opposite-key loops.
 
-An `environment-transformation` must describe a completed frame whose dominant
-environment palette or material response is unmistakably different from the
-before-state; a same-color gloss/grade or local transition stripe is not enough.
+The first 2.0 seconds of every capture must be continuously covered by input intervals
+that include W. Those opening intervals must not include S or Space and must contain no
+gap. S remains required later in suitable captures, but never as the opening action.
 
-Use the self-check's diagnostic paths to repair content. Never edit this contract
-or the self-check during a planning task.
+Camera events also use the global clock. I/J/K/L are represented by pitch/yaw deltas;
+one event remains within ±1.2 yaw and ±0.6 pitch radians. Plan useful observations,
+not a mandatory end reset or identical orbit macro. A Camera Event's natural gesture
+duration must not overlap any Space/jump interval; keep the camera stable throughout
+takeoff, airborne time and landing input. Visual events are absent from this contract
+and are authored later by one Gemini call for captures 00, 02 and 04 only. All six
+captures still receive styled opening frames and Seedance outputs.

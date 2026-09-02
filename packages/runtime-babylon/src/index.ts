@@ -18,6 +18,7 @@ export {
   BABYLON_CHARACTER_BODY_PROVIDER_VERSIONS_V1,
   createBabylonCharacterBodyPortV1,
   type BabylonCharacterBodyPortOptionsV1,
+  type BabylonCharacterBodySupportObservationDiagnosticV1,
 } from "./babylon-character-body-port";
 export {
   BabylonCameraCollisionQueryPortV1,

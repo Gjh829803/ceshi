@@ -405,7 +405,7 @@ test("real public-server CLI handles parent SIGTERM and closes both listeners", 
       wrapper.stdout,
       wrapper,
       /WorldKit supervised public Studio: http:\/\/127\.0\.0\.1:\d+ \(Studio pid (\d+)\)/,
-      5_000,
+      35_000,
     );
     internalPid = Number(outputMatch[1]);
     const health = await fetch(`http://127.0.0.1:${publicPort}/api/health`, {

@@ -23,10 +23,11 @@ describe("Block World compile CLI", () => {
     expect(map).toMatchObject({
       sceneId: "basic-block-world",
       visualTargetMappings: [
-        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
+        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
         {
           visualTargetId: "visual-target-2",
           runtimeEntityIds: [expect.stringMatching(/^bw-chunk-/)],
+          frontDirectionWorldXZ: [0, -1],
         },
       ],
     });

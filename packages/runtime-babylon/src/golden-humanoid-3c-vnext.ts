@@ -418,6 +418,24 @@ export class GoldenHumanoid3CVNextTransactionV1 {
     return this.#latestBodyDiagnostic;
   }
 
+  /**
+   * Allows the trusted outer Runtime transaction to retry a semantic Tick
+   * only after every participant has been proven to remain at the preceding
+   * committed checkpoint. The failed Body token stays stale; the retry gets a
+   * fresh Movement/Body token for the same next Tick.
+   */
+  admitRolledBackTickRetry(tick: number): boolean {
+    this.#assertRunnable();
+    const nextTick = this.options.movementRuntime.snapshot().tick + 1;
+    if (!Number.isSafeInteger(tick) || tick !== nextTick) {
+      throw failure(
+        "3C_TICK_TOKEN_STALE",
+        "rolled-back retry must target the next Movement Tick.",
+      );
+    }
+    return this.#failedTicks.delete(tick);
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;

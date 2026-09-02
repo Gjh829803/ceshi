@@ -69,6 +69,8 @@ export async function finalizeStyledTriviews(options: {
       runtimeEntityIds: [...target.runtimeEntityIds],
       role: target.role,
       semanticClassId: target.semanticClassId,
+      frontDirectionWorldXZ: [...target.frontDirectionWorldXZ],
+      views: [...target.views],
       whiteboxTriview: {
         path: canonicalRelativePath(sceneRoot, whiteboxPath),
         contentHash: await hash(whiteboxPath),

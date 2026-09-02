@@ -9827,7 +9827,7 @@ const HUMANOID_THIRD_PERSON_DEFINITION = {
   id: "humanoid.third-person",
   version: 1,
   resourceRef: "worldkit://subject-definition/humanoid.third-person@1",
-  authoringAvailability: "recommended",
+  authoringAvailability: "advanced",
   category: "human",
   bodyTopology: "biped",
   semanticClassId: "subject.humanoid",
@@ -9882,9 +9882,9 @@ const HUMANOID_THIRD_PERSON_DEFINITION = {
   renderBindingProfileRef: "worldkit://render-binding/subject.standard@1",
   allowedOverridePaths: FIRST_SLICE_ALLOWED_OVERRIDE_PATHS,
   aiMetadata: {
-    displayName: "Third-person humanoid",
-    description: "A controllable humanoid whitebox proxy for outdoor traversal.",
-    semanticTags: ["biped", "ground", "human", "third-person"]
+    displayName: "Primitive capsule humanoid proxy",
+    description: "A primitive capsule humanoid retained for SDK traversal tests, not ordinary Hosted authoring.",
+    semanticTags: ["biped", "ground", "human", "primitive-proxy", "third-person"]
   }
 };
 const QUADRUPED_GROUND_PROXY_DEFINITION = {
@@ -12563,6 +12563,15 @@ const MOVEMENT_LABELS = /* @__PURE__ */ new Map([
   ["水下游动", "underwater"],
   ["空中飞行", "flight"]
 ]);
+function movementModeForLabel(label) {
+  const exact = MOVEMENT_LABELS.get(label);
+  if (exact !== void 0) return exact;
+  for (const [standardLabel, mode] of MOVEMENT_LABELS) {
+    const suffix = label.slice(standardLabel.length).trimStart();
+    if (label.startsWith(standardLabel) && (suffix.startsWith("（") && suffix.endsWith("）") || suffix.startsWith("(") && suffix.endsWith(")")) && suffix.length >= 3 && suffix.length <= 26) return mode;
+  }
+  return "custom";
+}
 const TARGET_KIND_LABELS = /* @__PURE__ */ new Map([
   ["主体", "subject"],
   ["标志物", "landmark"],
@@ -12628,7 +12637,7 @@ function parseMovementModes(value) {
     }
     labels.add(label);
     movementModes.push({
-      mode: MOVEMENT_LABELS.get(label) ?? "custom",
+      mode: movementModeForLabel(label),
       label,
       description: match[2].trim()
     });

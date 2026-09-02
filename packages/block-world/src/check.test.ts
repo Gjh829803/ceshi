@@ -71,6 +71,7 @@ function check(
       standPositionMetersXYZ: [2, 0.5, 0],
     }],
     requiredGroundTraversalBands: [],
+    visualTargetFacings: [],
     spaceTransitions: [],
     requireSingleReachableComponent: true,
   });
@@ -112,6 +113,7 @@ describe("Block World V2 checker", () => {
       spawnStandPositionMetersXYZ: [0, 0.5, 0],
       requiredTargets: [],
       requiredGroundTraversalBands: [],
+      visualTargetFacings: [],
       spaceTransitions: [],
       requireSingleReachableComponent: true,
     });
@@ -126,6 +128,37 @@ describe("Block World V2 checker", () => {
       ]),
     });
     expect(overlap.diagnostics.map(({ code }) => code)).toContain("BLOCK_OCCUPANCY_OVERLAP");
+  });
+
+  it("requires one semantic front for every non-subject visual group", () => {
+    const landmark = block(
+      "horse-main",
+      [4, 1, 0],
+      BLOCK_PRESET_REFS_V1.landmarkOrange,
+      "full",
+      "visual-target-2",
+    );
+    const missing = checkBlockWorldV2({
+      ...checkInput([block("ground-main", [0, 0, 0]), landmark]),
+      visualTargetFacings: [],
+    });
+    expect(missing.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_VISUAL_TARGET_FACING_MISSING",
+    );
+
+    const declared = checkBlockWorldV2({
+      ...checkInput([block("ground-main", [0, 0, 0]), landmark]),
+      visualTargetFacings: [{
+        visualTargetId: "visual-target-2",
+        frontYawQuarterTurnsY: 1,
+      }],
+    });
+    expect(declared.diagnostics.map(({ code }) => code)).not.toContain(
+      "BLOCK_VISUAL_TARGET_FACING_MISSING",
+    );
+    expect(declared.diagnostics.map(({ code }) => code)).not.toContain(
+      "BLOCK_VISUAL_TARGET_FACING_INVALID",
+    );
   });
 
   it("connects and counts a one-meter smoothed transition", () => {
@@ -362,6 +395,7 @@ function checkInput(blocks: readonly BlockInstanceV2[]) {
     spawnStandPositionMetersXYZ: [0, 0.5, 0] as BlockPositionMetersXYZV2,
     requiredTargets: [] as const,
     requiredGroundTraversalBands: [] as const,
+    visualTargetFacings: [] as const,
     spaceTransitions: [] as const,
     requireSingleReachableComponent: true,
   };

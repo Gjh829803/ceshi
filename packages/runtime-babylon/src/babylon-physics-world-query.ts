@@ -12,6 +12,12 @@ import type {
   SphereSweepRequestV1,
 } from "@whitebox-world/runtime-framework";
 
+import { BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1 } from "./block-ground-boundary.js";
+
+const CAMERA_QUERY_MEMBERSHIP_MASK_V1 = 0xffffffff;
+const CAMERA_QUERY_COLLIDE_MASK_V1 =
+  (0xffffffff & ~BLOCK_WORLD_GROUND_BOUNDARY_MEMBERSHIP_MASK_V1) >>> 0;
+
 function vectorFrom(value: PhysicsWorldPositionMetersXYZV1): Vector3 {
   return new Vector3(value[0], value[1], value[2]);
 }
@@ -155,6 +161,8 @@ export class BabylonHavokPhysicsWorldQueryV1 implements PhysicsWorldQueryPortV1 
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     const hit = physicsEngine.raycast(start, end, {
+      membership: CAMERA_QUERY_MEMBERSHIP_MASK_V1,
+      collideWith: CAMERA_QUERY_COLLIDE_MASK_V1,
       shouldHitTriggers: false,
       ...(ignoreBody === undefined ? {} : { ignoreBody }),
     });
@@ -175,6 +183,8 @@ export class BabylonHavokPhysicsWorldQueryV1 implements PhysicsWorldQueryPortV1 
     const cached = this.sphereShapesByRadiusMeters.get(radiusMeters);
     if (cached !== undefined) return cached;
     const created = new PhysicsShapeSphere(Vector3.Zero(), radiusMeters, this.scene);
+    created.filterMembershipMask = CAMERA_QUERY_MEMBERSHIP_MASK_V1;
+    created.filterCollideMask = CAMERA_QUERY_COLLIDE_MASK_V1;
     this.sphereShapesByRadiusMeters.set(radiusMeters, created);
     return created;
   }
