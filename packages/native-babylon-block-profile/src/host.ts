@@ -24,6 +24,7 @@ export {
 } from "./ground-analysis.js";
 export type {
   AnalyzeBabylonNativeBlockGroundInputV1,
+  BabylonNativeBlockGroundAnalysisBudgetV1,
   BabylonNativeBlockGroundAnalysisMetricsV1,
   BabylonNativeBlockGroundAnalysisReportV1,
   BabylonNativeBlockGroundAnalysisTargetV1,

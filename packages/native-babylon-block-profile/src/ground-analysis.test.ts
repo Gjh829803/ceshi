@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   analyzeBabylonNativeBlockGroundV1,
+  type BabylonNativeBlockGroundAnalysisBudgetV1,
   type BabylonNativeBlockGroundCaseIntentV1,
 } from "./ground-analysis.js";
 import type {
@@ -28,6 +29,12 @@ const MEASUREMENT_CHUNK_POLICY = Object.freeze({
   sizeMetersXZ: Object.freeze([4, 4] as const),
   originMetersXZ: Object.freeze([-0.5, -0.5] as const),
   boundaryMode: "half-open-center-owned" as const,
+});
+const ANALYSIS_BUDGET = Object.freeze({
+  kind: "babylon-native-block-ground-analysis-budget" as const,
+  schemaVersion: 1 as const,
+  maximumSolidOccupancyCellCount: 50_000,
+  maximumSupportTopCellCount: 50_000,
 });
 const STATIC_SURFACE = Object.freeze({
   kind: "static-surface" as const,
@@ -179,6 +186,7 @@ function analyze(input: Readonly<{
   blockerCellKeys?: readonly string[];
   capabilityOverrides?: Partial<ResolvedTraversalLockV1>;
   caseIntent: BabylonNativeBlockGroundCaseIntentV1;
+  budget?: BabylonNativeBlockGroundAnalysisBudgetV1;
 }>) {
   const receipt = capability(input.capabilityOverrides);
   return analyzeBabylonNativeBlockGroundV1({
@@ -193,6 +201,7 @@ function analyze(input: Readonly<{
     caseIntent: input.caseIntent,
     worldPackageRootHash: PACKAGE_HASH,
     measurementChunkPolicy: MEASUREMENT_CHUNK_POLICY,
+    budget: input.budget ?? ANALYSIS_BUDGET,
   });
 }
 
@@ -280,6 +289,23 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
   });
 
+  it("includes the trusted traversal clearance margin in footprint coverage", () => {
+    const result = analyze({
+      supportTopCellKeys: rectangle(0, 3, 0, 0),
+      capabilityOverrides: { capsuleRadiusMeters: 0.24 },
+      caseIntent: caseIntent({ spawn: Object.freeze({
+        ...SPAWN,
+        standPositionMetersXYZ: position("1,1,0"),
+      }) }),
+    });
+
+    expect(result.analysisOutcome).toBe("failed");
+    expect(result.metrics.footprintUnsupportedPositionCount).toBeGreaterThan(0);
+    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
+      "ground-support-coverage-basis-points",
+    );
+  });
+
   it("reports exact low-overhead clearance without changing the Capsule", () => {
     const result = analyze({
       supportTopCellKeys: rectangle(-1, 1, -1, 1),
@@ -346,6 +372,34 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       correctionDirection: "decrease",
     });
     expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+  });
+
+  it("applies the trusted maximum slope to smoothed adjacent support", () => {
+    const target = Object.freeze({
+      id: "slope-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/slope@1",
+      standPositionMetersXYZ: position("1,2,0"),
+    });
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-1, 0, -1, 1, 1),
+        ...rectangle(1, 2, -1, 1, 2),
+      ],
+      capabilityOverrides: { maxSlopeDegrees: 1 },
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([target]),
+      }),
+    });
+
+    expect(result.analysisOutcome).toBe("failed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(0);
+    expect(result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-step-up-millimeters")?.details).toMatchObject({
+      actualMillimeters: 250,
+      maximumAllowedDriftMillimeters: 9,
+      exceededByMillimeters: 241,
+    });
   });
 
   it("preserves directed step-down evidence from a higher Spawn", () => {
@@ -446,6 +500,33 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }),
     })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
   });
+
+  it("fails closed before analysis when the Host-frozen cell budget is exceeded", () => {
+    expect(() => analyze({
+      supportTopCellKeys: rectangle(-1, 1, -1, 1),
+      caseIntent: caseIntent({ spawn: SPAWN }),
+      budget: Object.freeze({
+        ...ANALYSIS_BUDGET,
+        maximumSolidOccupancyCellCount: 8,
+      }),
+    })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_BUDGET_EXCEEDED");
+  });
+
+  it("analyzes a 6,400-cell ground model through bounded column lookups", () => {
+    const result = analyze({
+      supportTopCellKeys: rectangle(0, 79, 0, 79),
+      caseIntent: caseIntent({
+        spawn: Object.freeze({
+          ...SPAWN,
+          standPositionMetersXYZ: position("40,1,40"),
+        }),
+      }),
+    });
+
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.metrics.supportTopCellCount).toBe(6_400);
+    expect(result.metrics.reachablePositionCount).toBe(6_400);
+  }, 5_000);
 
   it("is stable across source and target ordering", () => {
     const left = Object.freeze({

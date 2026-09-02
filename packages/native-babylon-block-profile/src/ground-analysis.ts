@@ -168,10 +168,19 @@ export interface AnalyzeBabylonNativeBlockGroundInputV1 {
   readonly caseIntent: BabylonNativeBlockGroundCaseIntentV1;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly measurementChunkPolicy: BabylonNativeBlockOptimizationChunkPolicyV1;
+  readonly budget: BabylonNativeBlockGroundAnalysisBudgetV1;
+}
+
+export interface BabylonNativeBlockGroundAnalysisBudgetV1 {
+  readonly kind: "babylon-native-block-ground-analysis-budget";
+  readonly schemaVersion: 1;
+  readonly maximumSolidOccupancyCellCount: number;
+  readonly maximumSupportTopCellCount: number;
 }
 
 const INPUT_CODE = "WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID";
 const IDENTITY_CODE = "WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_IDENTITY_MISMATCH";
+const BUDGET_CODE = "WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_BUDGET_EXCEEDED";
 const HASH = /^sha256:[a-f0-9]{64}$/;
 const ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
@@ -203,7 +212,13 @@ interface BlockedStep {
   readonly fromNodeId: string;
   readonly toNodeId: string;
   readonly deltaMeters: number;
+  readonly maximumAllowedHeightDeltaMeters: number;
 }
+
+type SolidOccupancyByHorizontalCell = ReadonlyMap<
+  string,
+  readonly BabylonNativeBlockLogicalSolidOccupancyCellV1[]
+>;
 
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -409,8 +424,7 @@ function evaluateCandidate(
     string,
     BabylonNativeBlockLogicalSupportTopCellV1
   >,
-  solidOccupancyCells:
-    readonly BabylonNativeBlockLogicalSolidOccupancyCellV1[],
+  solidOccupancyByHorizontalCell: SolidOccupancyByHorizontalCell,
   capsuleRadiusMeters: number,
   capsuleHeightMeters: number,
 ): CandidateEvaluation {
@@ -420,22 +434,21 @@ function evaluateCandidate(
     supportByTopCellKey.has(cellKey(x, topY, z)));
   let availableClearanceMeters = capsuleHeightMeters;
   const clearanceBlockerSourceBlockIds = new Set<string>();
-  for (const solid of solidOccupancyCells) {
-    const [x, y, z] = parseCellKey(solid.cellKey);
-    const minimumY = y * GRID[1];
-    const maximumY = (y + 1) * GRID[1];
-    if (
-      maximumY <= position[1] + EPSILON ||
-      minimumY >= position[1] + capsuleHeightMeters - EPSILON ||
-      !circleIntersectsOpenCell(
-        position[0], position[2], capsuleRadiusMeters, x, z,
-      )
-    ) continue;
-    availableClearanceMeters = Math.min(
-      availableClearanceMeters,
-      Math.max(0, minimumY - position[1]),
-    );
-    clearanceBlockerSourceBlockIds.add(solid.sourceBlockId);
+  for (const [x, z] of footprint) {
+    for (const solid of solidOccupancyByHorizontalCell.get(`${x},${z}`) ?? []) {
+      const [_solidX, y] = parseCellKey(solid.cellKey);
+      const minimumY = y * GRID[1];
+      const maximumY = (y + 1) * GRID[1];
+      if (
+        maximumY <= position[1] + EPSILON ||
+        minimumY >= position[1] + capsuleHeightMeters - EPSILON
+      ) continue;
+      availableClearanceMeters = Math.min(
+        availableClearanceMeters,
+        Math.max(0, minimumY - position[1]),
+      );
+      clearanceBlockerSourceBlockIds.add(solid.sourceBlockId);
+    }
   }
   const supportCoverageBasisPoints = footprint.length === 0
     ? 0
@@ -628,6 +641,7 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
     "caseIntent",
     "worldPackageRootHash",
     "measurementChunkPolicy",
+    "budget",
   ], [], "input");
   requireRecord(input.groundModel, "groundModel");
   requireRecord(input.groundModel.identity, "groundModel.identity");
@@ -679,6 +693,30 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
   );
   requireHash(input.worldPackageRootHash, "worldPackageRootHash");
   requireRecord(input.measurementChunkPolicy, "measurementChunkPolicy");
+  requireRecord(input.budget, "budget");
+  requireClosedKeys(input.budget, [
+    "kind",
+    "schemaVersion",
+    "maximumSolidOccupancyCellCount",
+    "maximumSupportTopCellCount",
+  ], [], "budget");
+  if (
+    input.budget.kind !== "babylon-native-block-ground-analysis-budget" ||
+    input.budget.schemaVersion !== 1 ||
+    !Number.isSafeInteger(input.budget.maximumSolidOccupancyCellCount) ||
+    !Number.isSafeInteger(input.budget.maximumSupportTopCellCount) ||
+    input.budget.maximumSolidOccupancyCellCount <= 0 ||
+    input.budget.maximumSupportTopCellCount <= 0
+  ) return fail(INPUT_CODE, "ground analysis budget is invalid");
+  if (
+    input.groundModel.solidOccupancyCells.length >
+      input.budget.maximumSolidOccupancyCellCount ||
+    input.groundModel.exposedSupportTopCells.length >
+      input.budget.maximumSupportTopCellCount
+  ) return fail(
+    BUDGET_CODE,
+    `Ground Model uses ${input.groundModel.solidOccupancyCells.length} solid cells and ${input.groundModel.exposedSupportTopCells.length} support tops; Host budget allows ${input.budget.maximumSolidOccupancyCellCount} and ${input.budget.maximumSupportTopCellCount}.`,
+  );
   requireClosedKeys(input.measurementChunkPolicy, [
     "kind",
     "sizeMetersXZ",
@@ -801,12 +839,18 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
   const actualEnvelopeHash = sha256CanonicalJson(receipt.envelope) as Sha256HashV1;
   finite(receipt.envelope.capsuleRadiusMeters, "envelope.capsuleRadiusMeters");
   finite(receipt.envelope.capsuleHeightMeters, "envelope.capsuleHeightMeters");
+  finite(receipt.envelope.clearanceMarginMeters,
+    "envelope.clearanceMarginMeters");
+  finite(receipt.envelope.maxSlopeDegrees, "envelope.maxSlopeDegrees");
   finite(receipt.envelope.maxStepHeightMeters, "envelope.maxStepHeightMeters");
   if (
     actualEnvelopeHash !== receipt.traversalCapabilityEnvelopeHash ||
     receipt.envelope.traversalMode !== "ground" ||
     receipt.envelope.capsuleRadiusMeters < 0 ||
     receipt.envelope.capsuleHeightMeters <= 0 ||
+    receipt.envelope.clearanceMarginMeters < 0 ||
+    receipt.envelope.maxSlopeDegrees < 0 ||
+    receipt.envelope.maxSlopeDegrees >= 90 ||
     receipt.envelope.maxStepHeightMeters < 0
   ) return fail(IDENTITY_CODE, "traversal capability envelope is invalid or stale");
   if (
@@ -907,6 +951,28 @@ function metricSummary(
   };
 }
 
+function indexSolidOccupancyByHorizontalCell(
+  solids: readonly BabylonNativeBlockLogicalSolidOccupancyCellV1[],
+): SolidOccupancyByHorizontalCell {
+  const mutable = new Map<
+    string,
+    BabylonNativeBlockLogicalSolidOccupancyCellV1[]
+  >();
+  for (const solid of solids) {
+    const [x, _y, z] = parseCellKey(solid.cellKey);
+    const key = `${x},${z}`;
+    const column = mutable.get(key) ?? [];
+    column.push(solid);
+    mutable.set(key, column);
+  }
+  return new Map([...mutable.entries()].map(([key, column]) => [
+    key,
+    Object.freeze(column.sort((left, right) =>
+      stableCompare(left.cellKey, right.cellKey) ||
+      stableCompare(left.sourceBlockId, right.sourceBlockId))),
+  ] as const));
+}
+
 export function analyzeBabylonNativeBlockGroundV1(
   input: AnalyzeBabylonNativeBlockGroundInputV1,
 ): BabylonNativeBlockGroundAnalysisReportV1 {
@@ -919,13 +985,17 @@ export function analyzeBabylonNativeBlockGroundV1(
   const solidOccupancyCells = [...input.groundModel.solidOccupancyCells]
     .sort((left, right) => stableCompare(left.cellKey, right.cellKey) ||
       stableCompare(left.sourceBlockId, right.sourceBlockId));
+  const solidOccupancyByHorizontalCell =
+    indexSolidOccupancyByHorizontalCell(solidOccupancyCells);
+  const effectiveCapsuleRadiusMeters =
+    envelope.capsuleRadiusMeters + envelope.clearanceMarginMeters;
   const evaluations = [...supportByTopCellKey.entries()]
     .sort(([left], [right]) => stableCompare(left, right))
     .map(([key]) => evaluateCandidate(
       positionFromTopCellKey(key),
       supportByTopCellKey,
-      solidOccupancyCells,
-      envelope.capsuleRadiusMeters,
+      solidOccupancyByHorizontalCell,
+      effectiveCapsuleRadiusMeters,
       envelope.capsuleHeightMeters,
     ));
   const nodesById = new Map<string, MutableNode>();
@@ -960,7 +1030,20 @@ export function analyzeBabylonNativeBlockGroundV1(
         `${neighborX},${neighborZ}`,
       ) ?? []) {
         const delta = other.positionMetersXYZ[1] - node.positionMetersXYZ[1];
-        if (Math.abs(delta) <= envelope.maxStepHeightMeters + EPSILON) {
+        const horizontalDistanceMeters = Math.hypot(
+          other.positionMetersXYZ[0] - node.positionMetersXYZ[0],
+          other.positionMetersXYZ[2] - node.positionMetersXYZ[2],
+        );
+        const maximumSlopeRiseMeters = horizontalDistanceMeters * Math.tan(
+          envelope.maxSlopeDegrees * Math.PI / 180,
+        );
+        const maximumAllowedHeightDeltaMeters = Math.min(
+          envelope.maxStepHeightMeters,
+          maximumSlopeRiseMeters,
+        );
+        if (
+          Math.abs(delta) <= maximumAllowedHeightDeltaMeters + EPSILON
+        ) {
           node.neighbors.add(other.id);
           other.neighbors.add(node.id);
         } else {
@@ -968,11 +1051,13 @@ export function analyzeBabylonNativeBlockGroundV1(
             fromNodeId: node.id,
             toNodeId: other.id,
             deltaMeters: delta,
+            maximumAllowedHeightDeltaMeters,
           }));
           blockedSteps.push(Object.freeze({
             fromNodeId: other.id,
             toNodeId: node.id,
             deltaMeters: -delta,
+            maximumAllowedHeightDeltaMeters,
           }));
         }
       }
@@ -1007,8 +1092,8 @@ export function analyzeBabylonNativeBlockGroundV1(
   const spawnEvaluation = evaluateCandidate(
     input.caseIntent.spawn.standPositionMetersXYZ,
     supportByTopCellKey,
-    solidOccupancyCells,
-    envelope.capsuleRadiusMeters,
+    solidOccupancyByHorizontalCell,
+    effectiveCapsuleRadiusMeters,
     envelope.capsuleHeightMeters,
   );
   failureFacts.push(...failureFactsForPosition(
@@ -1041,8 +1126,8 @@ export function analyzeBabylonNativeBlockGroundV1(
     const evaluation = evaluateCandidate(
       target.standPositionMetersXYZ,
       supportByTopCellKey,
-      solidOccupancyCells,
-      envelope.capsuleRadiusMeters,
+      solidOccupancyByHorizontalCell,
+      effectiveCapsuleRadiusMeters,
       envelope.capsuleHeightMeters,
     );
     failureFacts.push(...failureFactsForPosition(
@@ -1082,7 +1167,9 @@ export function analyzeBabylonNativeBlockGroundV1(
         stableCompare(left.toNodeId, right.toNodeId))[0];
     if (!isNil(frontier)) {
       const actualMillimeters = Math.round(Math.abs(frontier.deltaMeters) * 1_000);
-      const allowedMillimeters = Math.round(envelope.maxStepHeightMeters * 1_000);
+      const allowedMillimeters = Math.round(
+        frontier.maximumAllowedHeightDeltaMeters * 1_000,
+      );
       failureFacts.push(failureFact({
         acceptanceTargetRef: target.acceptanceTargetRef,
         targetId: target.id,
@@ -1102,8 +1189,8 @@ export function analyzeBabylonNativeBlockGroundV1(
           nodesById.get(frontier.fromNodeId)!.support.sourceBlockId,
           nodesById.get(frontier.toNodeId)!.support.sourceBlockId,
         ].sort(stableCompare)),
-        message: `The closest disconnected frontier toward ${target.id} changes height by ${actualMillimeters}mm; the trusted step limit is ${allowedMillimeters}mm.`,
-        instruction: `Add intermediate explicit step Blocks or lower the frontier toward ${target.id} until every height change is at most ${allowedMillimeters}mm; do not change the Physics Body profile.`,
+        message: `The closest disconnected frontier toward ${target.id} changes height by ${actualMillimeters}mm; the trusted combined step/slope limit is ${allowedMillimeters}mm.`,
+        instruction: `Add intermediate explicit step Blocks or lower the frontier toward ${target.id} until every smoothed height change is at most ${allowedMillimeters}mm; do not change the Physics Body profile.`,
       }));
     }
   }
