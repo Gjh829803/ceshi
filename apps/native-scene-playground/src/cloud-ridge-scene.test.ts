@@ -117,6 +117,7 @@ describe("cloud ridge Babylon Native scene", () => {
 
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: { engine, scene },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: CLOUD_RIDGE_NATIVE_BOOTSTRAP_V1,
       module: cloudRidgeNativeScene,
       assets: TEST_ASSET_RESOLVER,

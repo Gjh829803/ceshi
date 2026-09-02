@@ -34,6 +34,9 @@ import type {
   CharacterSupportProjectionLockV1,
   CharacterSupportProjectionSampleV1,
 } from "./retained-support-surface-resolver";
+import {
+  groundSafetyBoundaryCollideMaskV1,
+} from "./ground-safety-boundary-filter";
 
 export interface MotionKernelSnapshotV1 {
   activeMotionProfileRef: string;
@@ -288,6 +291,7 @@ export class MotionKernelRuntimeV1 {
       );
       this.physicsController.maxStepHeight = subject.collider.maxStepHeightMeters;
       this.physicsController.characterMass = subject.collider.massKilograms;
+      this.synchronizeGroundSafetyBoundaryFilter();
       this.syncVisual(spawnSubjectOrigin);
       this.physicsController.setVelocity(Vector3.Zero());
       this.bootstrapContactManifold();
@@ -563,6 +567,7 @@ export class MotionKernelRuntimeV1 {
     this.motionModeResolver.reset();
     this.motionModeResolver.request(this.lastRequestedMotionProfileRef);
     this.motionModeResolver.commitTickBoundary();
+    this.synchronizeGroundSafetyBoundaryFilter();
     this.pendingControlFeel = undefined;
     const restoredFeel = this.lockedFeelSurface(this.lastRequestedControlFeelRef);
     this.controlFeel = restoredFeel ?? requireControlFeel(this.subject);
@@ -1355,7 +1360,9 @@ export class MotionKernelRuntimeV1 {
   }
 
   private commitPendingProfile(): void {
-    if (this.motionModeResolver.commitTickBoundary()) {
+    const changed = this.motionModeResolver.commitTickBoundary();
+    this.synchronizeGroundSafetyBoundaryFilter();
+    if (changed) {
       this.forwardSpeedMetersPerSecond = 0;
       this.planarVelocity.setAll(0);
       this.steeringInput = 0;
@@ -1368,6 +1375,17 @@ export class MotionKernelRuntimeV1 {
       this.coyoteRemainingSeconds = 0;
       this.jumpBufferRemainingSeconds = 0;
       this.jumpHoldElapsedSeconds = 0;
+    }
+  }
+
+  private synchronizeGroundSafetyBoundaryFilter(): void {
+    const shape = this.physicsController.shape;
+    const next = groundSafetyBoundaryCollideMaskV1(
+      shape.filterCollideMask,
+      this.activeKernelImplementationId(),
+    );
+    if ((shape.filterCollideMask >>> 0) !== next) {
+      shape.filterCollideMask = next;
     }
   }
 

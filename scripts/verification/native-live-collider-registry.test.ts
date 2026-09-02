@@ -99,6 +99,7 @@ async function admittedFixture(): Promise<Readonly<{
   try {
     const admission = await admitBabylonNativeSceneCandidateV1({
       candidate: { engine, scene },
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: packageInput.nativeSceneBootstrap,
       module: moduleFixture(),
       assets: Object.freeze({

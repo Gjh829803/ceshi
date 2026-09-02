@@ -379,6 +379,7 @@ function contribution() {
     },
     staticColliders: [createBabylonNativeStaticColliderContributionV1({
       id: "spawn-ground",
+      runtimeRole: "scene-static-collider",
       worldPositionsMetersXYZ: [
         0, 0, 0,
         2, 0, 0,

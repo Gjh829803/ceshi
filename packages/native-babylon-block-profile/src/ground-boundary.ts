@@ -1,5 +1,9 @@
 import { sha256CanonicalJson, type Sha256HashV1 } from
   "@whitebox-world/protocol";
+import {
+  createBabylonNativeStaticColliderContributionV1,
+  type BabylonNativeStaticColliderContributionV1,
+} from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
 
 import { failBabylonNativeBlockProfileBuildV1 as fail } from
@@ -51,6 +55,31 @@ export interface BabylonNativeBlockGroundBoundaryV1 {
 export interface BuildBabylonNativeBlockGroundBoundaryInputV1 {
   readonly topology: BabylonNativeBlockWalkableTopologyV1;
   readonly policy: BabylonNativeBlockGroundBoundaryPolicyV1;
+}
+
+export function createBabylonNativeBlockGroundBoundaryContributionV1(
+  boundary: BabylonNativeBlockGroundBoundaryV1,
+): BabylonNativeStaticColliderContributionV1 {
+  const { boundaryHash, ...body } = boundary;
+  if (
+    boundary.kind !== "babylon-native-block-ground-boundary" ||
+    boundary.schemaVersion !== 1 ||
+    boundary.derivedColliderRole !== "ground-safety-boundary" ||
+    sha256CanonicalJson(body) !== boundaryHash
+  ) return fail(IDENTITY_CODE, "ground boundary hash is stale");
+  if (boundary.triangleIndices.length === 0) {
+    return fail(INPUT_CODE,
+      "an empty ground boundary cannot publish a Collider Contribution");
+  }
+  return createBabylonNativeStaticColliderContributionV1({
+    id: `ground-safety-boundary:${boundaryHash.slice(7, 23)}`,
+    runtimeRole: "ground-safety-boundary",
+    worldPositionsMetersXYZ: boundary.positionsMetersXYZ,
+    triangleIndices: boundary.triangleIndices,
+    frictionRatio: 0,
+    restitutionRatio: 0,
+    traversalBinding: Object.freeze({ kind: "not-traversable" }),
+  });
 }
 
 const INPUT_CODE = "WORLDKIT_NATIVE_BLOCK_GROUND_BOUNDARY_INPUT_INVALID";
@@ -364,6 +393,8 @@ export function buildBabylonNativeBlockGroundBoundaryV1(
     indices.push(
       offset, offset + 2, offset + 1,
       offset, offset + 3, offset + 2,
+      offset, offset + 1, offset + 2,
+      offset, offset + 2, offset + 3,
     );
     return Object.freeze({ id, ...segmentBody });
   }));

@@ -461,6 +461,7 @@ export function createEvidenceSetFixtureInputV1(
     ? [
       createBabylonNativeStaticColliderContributionV1({
         id: "palette-ground-blocker",
+        runtimeRole: "scene-static-collider",
         worldPositionsMetersXYZ: [1.5, 0, 1.5, 2.5, 0, 1.5, 2, 0, 2.5],
         triangleIndices: [0, 1, 2],
         frictionRatio: 0.8,
@@ -469,6 +470,7 @@ export function createEvidenceSetFixtureInputV1(
       }),
       createBabylonNativeStaticColliderContributionV1({
         id: "structure-painted-ground",
+        runtimeRole: "scene-static-collider",
         worldPositionsMetersXYZ: [-1, 1, -4, 1, 1, -4, 0, 1, -2],
         triangleIndices: [0, 1, 2],
         frictionRatio: 0.8,

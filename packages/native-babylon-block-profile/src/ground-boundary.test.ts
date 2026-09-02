@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildBabylonNativeBlockGroundBoundaryV1,
+  createBabylonNativeBlockGroundBoundaryContributionV1,
   type BabylonNativeBlockGroundBoundaryPolicyV1,
 } from "./ground-boundary.js";
 import type {
@@ -125,6 +126,7 @@ describe("Babylon Native Block ground boundary", () => {
       "east",
       "west",
     ]);
+    expect(result.triangleCount).toBe(result.mergedSegmentCount * 4);
   });
 
   it("keeps policy visual-neutral and omits unprotected external edges", () => {
@@ -212,5 +214,23 @@ describe("Babylon Native Block ground boundary", () => {
       topology: current,
       policy: Object.freeze({ ...POLICY, maximumMergedSegmentCount: 3 }),
     })).toThrow(/GROUND_BOUNDARY_BUDGET_EXCEEDED/);
+  });
+
+  it("publishes only the Host-derived non-traversable boundary Runtime role", () => {
+    const boundary = buildBabylonNativeBlockGroundBoundaryV1({
+      topology: topology([geometry({ id: "ground", x0: 0, x1: 0.5 })]),
+      policy: POLICY,
+    });
+    const contribution =
+      createBabylonNativeBlockGroundBoundaryContributionV1(boundary);
+
+    expect(contribution.runtimeRole).toBe("ground-safety-boundary");
+    expect(contribution.traversalBinding).toEqual({ kind: "not-traversable" });
+    expect(contribution.worldPositionsMetersXYZ).toEqual(
+      boundary.positionsMetersXYZ,
+    );
+    expect(() => createBabylonNativeBlockGroundBoundaryContributionV1(
+      Object.freeze({ ...boundary, boundaryHash: H("f") }),
+    )).toThrow(/GROUND_BOUNDARY_IDENTITY_MISMATCH/);
   });
 });

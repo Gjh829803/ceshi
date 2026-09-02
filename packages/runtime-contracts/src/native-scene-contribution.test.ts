@@ -31,6 +31,7 @@ function validContribution() {
     staticColliders: [
       createBabylonNativeStaticColliderContributionV1({
         id: "main-route",
+        runtimeRole: "scene-static-collider",
         ...TRIANGLE_GEOMETRY,
         frictionRatio: 0.75,
         restitutionRatio: 0,
@@ -186,6 +187,7 @@ describe("BabylonNativeSceneContributionV1", () => {
   it("derives stable collider and traversal identities from frozen geometry and binding", () => {
     const first = createBabylonNativeStaticColliderContributionV1({
       id: "route",
+      runtimeRole: "scene-static-collider",
       ...TRIANGLE_GEOMETRY,
       frictionRatio: 0.75,
       restitutionRatio: 0,
@@ -199,6 +201,7 @@ describe("BabylonNativeSceneContributionV1", () => {
     });
     const same = createBabylonNativeStaticColliderContributionV1({
       id: "route",
+      runtimeRole: "scene-static-collider",
       ...TRIANGLE_GEOMETRY,
       frictionRatio: 0.75,
       restitutionRatio: 0,
@@ -212,6 +215,7 @@ describe("BabylonNativeSceneContributionV1", () => {
     });
     const changed = createBabylonNativeStaticColliderContributionV1({
       id: "route",
+      runtimeRole: "scene-static-collider",
       worldPositionsMetersXYZ: [0, 0, 0, 3, 0, 0, 0, 0, 2],
       triangleIndices: [0, 1, 2],
       frictionRatio: 0.75,
@@ -238,6 +242,42 @@ describe("BabylonNativeSceneContributionV1", () => {
         first.traversalBinding.traversalSurfaceId,
       );
     }
+  });
+
+  it("binds the closed Runtime role and keeps safety boundaries non-traversable", () => {
+    const scene = createBabylonNativeStaticColliderContributionV1({
+      id: "edge",
+      runtimeRole: "scene-static-collider",
+      ...TRIANGLE_GEOMETRY,
+      frictionRatio: 0,
+      restitutionRatio: 0,
+      traversalBinding: { kind: "not-traversable" },
+    });
+    const boundary = createBabylonNativeStaticColliderContributionV1({
+      id: "edge",
+      runtimeRole: "ground-safety-boundary",
+      ...TRIANGLE_GEOMETRY,
+      frictionRatio: 0,
+      restitutionRatio: 0,
+      traversalBinding: { kind: "not-traversable" },
+    });
+
+    expect(boundary.colliderSubshapeId).not.toBe(scene.colliderSubshapeId);
+    expect(boundary.runtimeRole).toBe("ground-safety-boundary");
+    expect(() => createBabylonNativeStaticColliderContributionV1({
+      id: "invalid-boundary",
+      runtimeRole: "ground-safety-boundary",
+      ...TRIANGLE_GEOMETRY,
+      frictionRatio: 0,
+      restitutionRatio: 0,
+      traversalBinding: {
+        kind: "static-surface",
+        surfaceEntityId: "invalid-boundary",
+        logicalSubshapeId: "top",
+        traversalSurfaceProfileRef:
+          "worldkit://traversal-surface-profile/ground.static@1",
+      },
+    })).toThrow(/BabylonNativeSceneContributionV1/);
   });
 
   it.each([

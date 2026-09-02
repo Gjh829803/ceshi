@@ -285,6 +285,7 @@ async function auditedAdmission(
   try {
     const result = await admitBabylonNativeSceneCandidateV1({
       candidate: Object.freeze({ engine, scene }),
+      hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: packageInput.nativeSceneBootstrap,
       module,
       assets: Object.freeze({

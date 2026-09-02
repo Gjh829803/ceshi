@@ -171,6 +171,9 @@ import {
   unregisterBabylonNativeLiveColliderRegistryV1,
   type BabylonNativeLiveColliderHandleV1,
 } from "./babylon-native-live-collider-registry";
+import {
+  GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
+} from "./ground-safety-boundary-filter";
 
 function committedPresentationFromLocomotionMode(
   committedTick: number,
@@ -823,6 +826,7 @@ function nativeColliderMetadata(
   mesh.metadata = {
     ...retained,
     worldkitEntityId: collider.id,
+    worldkitNativeColliderRuntimeRole: collider.runtimeRole,
     colliderSubshapeId: collider.colliderSubshapeId,
     worldkitNativeTraversalKind: traversalBinding.kind,
     ...(traversalBinding.kind === "static-surface"
@@ -1084,6 +1088,10 @@ export class BabylonWorldRuntime {
           module: preparedNativeScene.module,
           assets: preparedNativeScene.assets,
           budget: preparedNativeScene.budget,
+          hostDerivedStaticColliders:
+            preparedNativeScene.verifiedWorldPackage.nativeSceneContribution
+              .staticColliders.filter(({ runtimeRole }) =>
+                runtimeRole === "ground-safety-boundary"),
         });
         if (nativeResult.outcome !== "passed") {
           const problem = nativeResult.diagnostics.find(
@@ -1279,6 +1287,11 @@ export class BabylonWorldRuntime {
           const collisionMesh = createOwnedNativeCollisionMesh(collider, scene);
           ownedDisposers.push(() => collisionMesh.dispose());
           const shape = new PhysicsShapeMesh(collisionMesh, scene);
+          if (collider.runtimeRole === "ground-safety-boundary") {
+            shape.filterMembershipMask =
+              GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1;
+            shape.filterCollideMask = 0xffff_ffff;
+          }
           ownedDisposers.push(() => shape.dispose());
           const aggregate = new PhysicsAggregate(
             collisionMesh,
@@ -1292,9 +1305,18 @@ export class BabylonWorldRuntime {
           );
           aggregates.push(aggregate);
           ownedDisposers.push(() => aggregate.dispose());
+          if (collider.runtimeRole === "ground-safety-boundary") {
+            const cameraBoundaryId = `ground-safety-boundary:${collider.id}`;
+            cameraGeometryQuery.registerEntityPhysicsBody(
+              cameraBoundaryId,
+              aggregate.body,
+            );
+            cameraGeometryQuery.setEntityQueryEnabled(cameraBoundaryId, false);
+          }
           const sourceBlockId = sourceBlockIdByColliderId.get(collider.id);
           nativeColliderHandles.push(Object.freeze({
             colliderId: collider.id,
+            runtimeRole: collider.runtimeRole,
             colliderSubshapeId: collider.colliderSubshapeId,
             ...(isNil(sourceBlockId) ? {} : { sourceBlockId }),
             physicsBodyId: `physics-body:${collider.id}`,

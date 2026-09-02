@@ -144,6 +144,7 @@ async function admit(
 ) {
   return admitBabylonNativeSceneCandidateV1({
     candidate: Object.freeze({ engine, scene }),
+    hostDerivedStaticColliders: Object.freeze([]),
     bootstrap: bootstrap(id),
     module: defineBabylonNativeScene({
       kind: "babylon-native-scene-module",

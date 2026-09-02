@@ -102,6 +102,7 @@ async function admit(
 ): Promise<BabylonNativeSceneCandidateAdmissionResultV1> {
   return admitBabylonNativeSceneCandidateV1({
     candidate,
+    hostDerivedStaticColliders: Object.freeze([]),
     bootstrap: BOOTSTRAP,
     module: defineBabylonNativeScene({
       kind: "babylon-native-scene-module",

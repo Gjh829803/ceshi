@@ -230,6 +230,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "freezeBabylonNativeBlockLogicalGroundModelV1",
       "buildBabylonNativeBlockWalkableTopologyV1",
       "buildBabylonNativeBlockGroundBoundaryV1",
+      "createBabylonNativeBlockGroundBoundaryContributionV1",
       "materializeBabylonNativeBlockWalkableTopologyV1",
       "analyzeBabylonNativeBlockGroundV1",
     ]);

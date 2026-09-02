@@ -193,6 +193,7 @@ async function runCandidate(
         module: input.module,
         assets: input.assets,
         budget: input.budget,
+        hostDerivedStaticColliders: Object.freeze([]),
       });
     } catch {
       toolingDiagnostics.push(internalReplayDiagnostic(input.bootstrap));

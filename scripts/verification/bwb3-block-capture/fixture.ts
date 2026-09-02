@@ -135,6 +135,7 @@ async function start(): Promise<void> {
   let finalizedEpoch: BabylonNativeBlockFinalizedEpochV1 | undefined;
   const admission = await admitBabylonNativeSceneCandidateV1({
     candidate: Object.freeze({ engine, scene }),
+    hostDerivedStaticColliders: Object.freeze([]),
     bootstrap: BOOTSTRAP,
     module: defineBabylonNativeScene({
       kind: "babylon-native-scene-module",
