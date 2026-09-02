@@ -166,10 +166,16 @@ describe("Native Block Builder Skill", () => {
       "Treat `budgets.maximumStaticColliderCount` as a hard ceiling",
     );
     expect(outputContract).toContain(
-      "Use `colliderGeometrySource: { kind: \"block\", blockId }`",
+      "Use `colliderGeometrySource: { kind: \"block-group\", colliderGroupId }`",
+    );
+    expect(outputContract).toContain(
+      "Use `{ kind: \"block\", blockId }` only for a genuine singleton blocker or tread",
     );
     expect(outputContract).toContain(
       "The retired top-level `blockId` shape is invalid",
+    );
+    expect(outputContract).toContain(
+      "A blocker is exactly `{ kind: \"not-traversable\" }`",
     );
     expect(outputContract).toContain(
       "Every `case.json.expected.colliders[].colliderId` must appear exactly once",
@@ -178,7 +184,7 @@ describe("Native Block Builder Skill", () => {
       "Never infer group membership from palette, visual group, ID prefix, Mesh metadata, or a Scene scan",
     );
     expect(outputContract).toContain(
-      "Ground-only edge protection is valid only for a checked static-surface source",
+      "For an intended exposed edge of checked static ground where falling would violate the Case, use `protect-ground-subject`",
     );
     expect(outputContract).toContain(
       "center lattice is `[0.25, 0.125, 0.25]` meters",
@@ -557,6 +563,24 @@ describe("Native Block Builder Skill", () => {
     const result = await runSelfCheck(workspace);
     expect(result.exitCode).toBe(2);
     expect(result.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_SOURCE_AUTHORITY_FORBIDDEN");
+  });
+
+  it("rejects fields from the static-surface branch on a not-traversable binding", async () => {
+    const workspace = await createWorkspace();
+    await writeFile(path.join(workspace, "scene.ts"), `
+const traversalBinding = {
+  kind: "not-traversable",
+  surfaceEntityId: "invalid-surface",
+};
+void traversalBinding;
+`.trimStart());
+
+    const result = await runSelfCheck(workspace);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.report.diagnosticCodes).toContain(
+      "NATIVE_BLOCK_BUILDER_TRAVERSAL_BINDING_UNION_INVALID",
+    );
   });
 
 });

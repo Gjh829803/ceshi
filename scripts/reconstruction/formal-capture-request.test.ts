@@ -190,7 +190,7 @@ async function fixture(): Promise<Readonly<{
     ...baseInput.nativeSceneContribution,
     profileSettlement: {
       ...baseInput.nativeSceneContribution.profileSettlement,
-      targetCount: 2,
+      targetCount: 3,
     },
   } as typeof baseInput.nativeSceneContribution;
   const reconstructionCase = parseWorldReconstructionCaseV1({

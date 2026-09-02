@@ -71,24 +71,27 @@ export function createBabylonNativeBlockMaterializerMetadataV1(
         ...(isNil(block.visualGroupId)
           ? {}
           : { visualGroupId: block.visualGroupId }),
+        ...(isNil(block.colliderGroupId)
+          ? {}
+          : { colliderGroupId: block.colliderGroupId }),
         centerMetersXYZ: block.centerMetersXYZ,
         rotationQuarterTurnsY: block.rotationQuarterTurnsY,
         sizeMetersXYZ: block.sizeMetersXYZ,
       };
     });
   const colliderJoins = [...input.colliderInventory]
-    .map((entry) => {
-      if (entry.sourceBlockIds.length !== 1) {
-        return fail("Every Block Collider must join exactly one Block");
-      }
-      return {
-        blockId: entry.sourceBlockIds[0]!,
+    .map((entry) => ({
         colliderId: entry.colliderId,
-      };
-    })
-    .sort((left, right) =>
-      stableCompare(left.blockId, right.blockId) ||
-      stableCompare(left.colliderId, right.colliderId));
+        sourceBlockIds: [...entry.sourceBlockIds].sort(stableCompare),
+        visualGroupIds: [...entry.visualGroupIds].sort(stableCompare),
+        proxyKind: entry.proxyKind,
+        minimumMetersXYZ: entry.minimumMetersXYZ,
+        maximumMetersXYZ: entry.maximumMetersXYZ,
+        vertexCount: entry.vertexCount,
+        triangleCount: entry.triangleCount,
+        topologyHash: entry.topologyHash,
+      }))
+    .sort((left, right) => stableCompare(left.colliderId, right.colliderId));
   return parseBabylonNativeBlockMaterializerMetadataV1({
     kind: "babylon-native-block-materializer-metadata",
     schemaVersion: 1,

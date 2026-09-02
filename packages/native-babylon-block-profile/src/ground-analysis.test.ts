@@ -138,10 +138,7 @@ function logicalModel(input: Readonly<{
       buildEpochId: "ground-analysis-epoch",
       checkedLayoutInventoryHash: H("1"),
       profileInventoryHash: H("2"),
-      worldRuntimeBootstrapHash: H("3"),
-      traversalCapabilityEnvelopeHash:
-        input.capability.traversalCapabilityEnvelopeHash,
-      caseHash: CASE_HASH,
+      nativeSceneBootstrapHash: H("3"),
     }),
     supportedTraversalSurfaceProfileRefs: Object.freeze([
       STATIC_SURFACE.traversalSurfaceProfileRef,

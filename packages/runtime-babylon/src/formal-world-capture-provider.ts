@@ -559,25 +559,33 @@ function validateColliderRegistry(
     "BABYLON_FORMAL_CAPTURE_LIVE_COLLIDER_SET_INVALID",
   );
   exactStringSet(
-    contribution.staticColliders.map(({ id }) => id),
+    contribution.staticColliders
+      .filter(({ runtimeRole }) => runtimeRole === "scene-static-collider")
+      .map(({ id }) => id),
     metadata.colliderJoins.map(({ colliderId }) => colliderId),
     "BABYLON_FORMAL_CAPTURE_COLLIDER_JOIN_SET_INVALID",
   );
   const contributionById = new Map(contribution.staticColliders.map(
     (collider) => [collider.id, collider] as const,
   ));
-  const blockByColliderId = new Map(metadata.colliderJoins.map(
-    ({ blockId, colliderId }) => [colliderId, blockId] as const,
+  const blocksByColliderId = new Map(metadata.colliderJoins.map(
+    ({ sourceBlockIds, colliderId }) => [colliderId, sourceBlockIds] as const,
   ));
   const liveByPartId = new Map(registry.colliders.map((handle) =>
     [handle.chunkPartId, handle] as const));
   return Object.freeze([...contribution.staticColliders]
     .sort((left, right) => stableCompare(left.id, right.id))
     .map((collider) => {
-      const sourceBlockId = blockByColliderId.get(collider.id) ?? fail(
-        "BABYLON_FORMAL_CAPTURE_COLLIDER_JOIN_MISSING",
-        collider.id,
-      );
+      const sourceBlockIds = blocksByColliderId.get(collider.id) ??
+        Object.freeze([]);
+      if (
+        collider.runtimeRole === "scene-static-collider" &&
+        sourceBlockIds.length === 0
+      ) fail("BABYLON_FORMAL_CAPTURE_COLLIDER_JOIN_MISSING", collider.id);
+      if (
+        collider.runtimeRole === "ground-safety-boundary" &&
+        sourceBlockIds.length !== 0
+      ) fail("BABYLON_FORMAL_CAPTURE_COLLIDER_JOIN_INVALID", collider.id);
       const parts = registry.parts
         .filter(({ colliderId }) => colliderId === collider.id)
         .sort((left, right) => stableCompare(left.chunkPartId, right.chunkPartId));
@@ -586,17 +594,21 @@ function validateColliderRegistry(
       }
       return Object.freeze({
         colliderId: collider.id,
-        sourceBlockId,
+        sourceBlockIds,
         colliderSubshapeId: collider.colliderSubshapeId,
         chunkParts: Object.freeze(parts.map((part) => {
           const live = liveByPartId.get(part.chunkPartId);
           if (
             part.colliderSubshapeId !== collider.colliderSubshapeId ||
-            part.sourceBlockId !== sourceBlockId ||
+            part.sourceBlockIds.length !== sourceBlockIds.length ||
+            part.sourceBlockIds.some((sourceBlockId, index) =>
+              sourceBlockId !== sourceBlockIds[index]) ||
             (!isNil(live) && (
               live.colliderId !== collider.id ||
               live.colliderSubshapeId !== collider.colliderSubshapeId ||
-              live.sourceBlockId !== sourceBlockId ||
+              live.sourceBlockIds.length !== sourceBlockIds.length ||
+              live.sourceBlockIds.some((sourceBlockId, index) =>
+                sourceBlockId !== sourceBlockIds[index]) ||
               live.chunkResidencyGroupId !== part.chunkResidencyGroupId ||
               live.overlayRecordId !== part.overlayRecordId ||
               live.mesh.isDisposed() ||
@@ -784,10 +796,47 @@ function measuredColliderRelations(
       );
       return sourceBlockIds !== undefined && colliders.some((collider) =>
         collider.colliderId === relation.colliderId &&
-        sourceBlockIds.has(collider.sourceBlockId));
+        collider.sourceBlockIds.some((sourceBlockId) =>
+          sourceBlockIds.has(sourceBlockId)));
     })
     .map(({ fromNodeId, relation, toNodeId }) =>
       Object.freeze({ fromNodeId, relation, toNodeId })));
+}
+
+function resolveSupportSourceBlockId(
+  metadata: BabylonNativeBlockMaterializerMetadataV1,
+  sourceBlockIds: readonly string[],
+  pointMetersXYZ: readonly [number, number, number],
+): string {
+  const blocksById = new Map(metadata.blocks.map((block) =>
+    [block.blockId, block] as const));
+  const ranked = sourceBlockIds.map((sourceBlockId) => {
+    const block = blocksById.get(sourceBlockId) ?? fail(
+      "BABYLON_FORMAL_CAPTURE_SUPPORT_SOURCE_BLOCK_MISSING",
+      sourceBlockId,
+    );
+    const halfX = block.sizeMetersXYZ[0] / 2;
+    const halfZ = block.sizeMetersXYZ[2] / 2;
+    const gapX = Math.max(
+      Math.abs(pointMetersXYZ[0] - block.centerMetersXYZ[0]) - halfX,
+      0,
+    );
+    const gapZ = Math.max(
+      Math.abs(pointMetersXYZ[2] - block.centerMetersXYZ[2]) - halfZ,
+      0,
+    );
+    const topY = block.centerMetersXYZ[1] + block.sizeMetersXYZ[1] / 2;
+    return Object.freeze({
+      sourceBlockId,
+      distanceSquared: gapX ** 2 + gapZ ** 2 +
+        (pointMetersXYZ[1] - topY) ** 2,
+    });
+  }).sort((left, right) =>
+    left.distanceSquared - right.distanceSquared ||
+    stableCompare(left.sourceBlockId, right.sourceBlockId));
+  return ranked[0]?.sourceBlockId ?? fail(
+    "BABYLON_FORMAL_CAPTURE_SUPPORT_SOURCE_BLOCK_MISSING",
+  );
 }
 
 type FormalTraversalCaptureRequestV1 = Pick<
@@ -1051,6 +1100,11 @@ export async function executeFormalWorldCaptureProviderV1(
     supportContact,
     contributionCollider,
   );
+  const supportSourceBlockId = resolveSupportSourceBlockId(
+    metadata,
+    supportCollider.sourceBlockIds,
+    supportContact.pointMetersXYZ,
+  );
 
   const openingObservation = parseFormalOpeningObservationV1({
     kind: "formal-opening-observation",
@@ -1090,7 +1144,7 @@ export async function executeFormalWorldCaptureProviderV1(
     subjectEntityId,
     supportContact: {
       colliderId: supportCollider.colliderId,
-      sourceBlockId: supportCollider.sourceBlockId,
+      sourceBlockId: supportSourceBlockId,
       surfaceEntityId: supportContact.surfaceEntityId,
       logicalSubshapeId: supportContact.logicalSubshapeId,
       pointMetersXYZ: supportContact.pointMetersXYZ,

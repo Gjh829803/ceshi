@@ -88,7 +88,14 @@ export interface CreateBabylonNativeColliderResidencyInputV1 {
   readonly scene: Scene;
   readonly chunkPolicy: BabylonNativeBlockChunkPolicyV1;
   readonly colliders: readonly BabylonNativeStaticColliderContributionV1[];
-  readonly sourceBlockIdByColliderId: ReadonlyMap<string, string>;
+  /**
+   * True only for the Native Block Profile, whose verified Package carries
+   * source Block joins. Other admitted Native Profiles have no Block
+   * inventory and must not be forced to invent one.
+   */
+  readonly requiresSourceBlockJoins: boolean;
+  readonly sourceBlockIdsByColliderId:
+    ReadonlyMap<string, readonly string[]>;
   readonly cameraGeometryQuery: BabylonNativeColliderResidencyCameraOwnerV1;
   readonly policy?: BabylonNativeColliderResidencyPolicyV1;
   readonly applyColliderMetadata: (
@@ -147,6 +154,31 @@ export function createBabylonNativeColliderResidencyV1(
     [collider.id, collider] as const));
   if (colliderById.size !== input.colliders.length) {
     throw new TypeError(`${CODE}: Collider IDs must be unique.`);
+  }
+  const sourceBlockIdsByColliderId = new Map(
+    [...input.sourceBlockIdsByColliderId].map(([colliderId, sourceBlockIds]) => {
+      const collider = colliderById.get(colliderId);
+      const canonicalIds = [...sourceBlockIds].sort(stableCompare);
+      if (
+        isNil(collider) ||
+        collider.runtimeRole !== "scene-static-collider" ||
+        canonicalIds.length === 0 ||
+        canonicalIds.length !== new Set(canonicalIds).size ||
+        canonicalIds.some((sourceBlockId) => sourceBlockId.length === 0)
+      ) {
+        throw new TypeError(
+          `${CODE}: source Block joins must be unique and name one Collider.`,
+        );
+      }
+      return [colliderId, Object.freeze(canonicalIds)] as const;
+    }),
+  );
+  if (input.requiresSourceBlockJoins && input.colliders.some((collider) =>
+    collider.runtimeRole === "scene-static-collider" &&
+    !sourceBlockIdsByColliderId.has(collider.id))) {
+    throw new TypeError(
+      `${CODE}: every scene topology Collider must join source Blocks.`,
+    );
   }
   const partition = partitionBabylonNativeBlockCollisionIntoChunksV1({
     chunkPolicy: input.chunkPolicy,
@@ -233,9 +265,8 @@ export function createBabylonNativeColliderResidencyV1(
         chunkResidencyGroupId: part.chunkResidencyGroupId,
         runtimeRole: collider.runtimeRole,
         colliderSubshapeId: collider.colliderSubshapeId,
-        ...(isNil(input.sourceBlockIdByColliderId.get(collider.id))
-          ? {}
-          : { sourceBlockId: input.sourceBlockIdByColliderId.get(collider.id)! }),
+        sourceBlockIds: sourceBlockIdsByColliderId.get(collider.id) ??
+          Object.freeze([]),
         physicsBodyId: `physics-body:${part.partId}`,
         overlayRecordId: `overlay:${part.partId}`,
         mesh,
@@ -274,14 +305,15 @@ export function createBabylonNativeColliderResidencyV1(
     partInventory(): readonly BabylonNativeColliderChunkPartInventoryV1[] {
       return Object.freeze(parts.map((part) => {
         const collider = colliderById.get(part.logicalColliderId)!;
-        const sourceBlockId = input.sourceBlockIdByColliderId.get(collider.id);
+        const sourceBlockIds = sourceBlockIdsByColliderId.get(collider.id) ??
+          Object.freeze([]);
         return Object.freeze({
           colliderId: collider.id,
           chunkPartId: part.partId,
           chunkResidencyGroupId: part.chunkResidencyGroupId,
           runtimeRole: collider.runtimeRole,
           colliderSubshapeId: collider.colliderSubshapeId,
-          ...(isNil(sourceBlockId) ? {} : { sourceBlockId }),
+          sourceBlockIds,
           overlayRecordId: `overlay:${part.partId}`,
           worldPositionsMetersXYZ: part.worldPositionsMetersXYZ,
           triangleIndices: part.triangleIndices,

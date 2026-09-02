@@ -494,7 +494,7 @@ describe("formal world capture provider", () => {
     } as unknown as BabylonNativeBlockMaterializerMetadataV1;
     const colliders = [{
       colliderId: "wall.collider",
-      sourceBlockId: "wall-block",
+      sourceBlockIds: ["wall-block"],
       colliderSubshapeId: "wall.shape",
       chunkParts: [{
         chunkPartId: "wall.collider-grid-chunk-xp0-zp0",
@@ -535,7 +535,7 @@ describe("formal world capture provider", () => {
       chunkResidencyGroupId: `grid-chunk-${suffix}-zp0`,
       runtimeRole: "scene-static-collider" as const,
       colliderSubshapeId: "ground.shape",
-      sourceBlockId: "ground-block",
+      sourceBlockIds: ["ground-block"],
       overlayRecordId: `ground.overlay.${index}`,
       worldPositionsMetersXYZ: positions,
       triangleIndices: indices,
@@ -566,6 +566,7 @@ describe("formal world capture provider", () => {
       nativeSceneContribution: {
         staticColliders: [{
           id: "ground.collider",
+          runtimeRole: "scene-static-collider",
           colliderSubshapeId: "ground.shape",
         }],
       },
@@ -575,7 +576,7 @@ describe("formal world capture provider", () => {
     const metadata = {
       colliderJoins: [{
         colliderId: "ground.collider",
-        blockId: "ground-block",
+        sourceBlockIds: ["ground-block"],
       }],
     } as unknown as BabylonNativeBlockMaterializerMetadataV1;
 
@@ -583,7 +584,7 @@ describe("formal world capture provider", () => {
       expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
         .validateColliderRegistry(verified, metadata, registry)).toEqual([{
         colliderId: "ground.collider",
-        sourceBlockId: "ground-block",
+        sourceBlockIds: ["ground-block"],
         colliderSubshapeId: "ground.shape",
         chunkParts: [{
           chunkPartId: "ground.collider-grid-chunk-xp0-zp0",

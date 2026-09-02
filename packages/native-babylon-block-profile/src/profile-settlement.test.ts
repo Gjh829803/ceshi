@@ -13,6 +13,9 @@ import { describe, expect, it } from "vitest";
 
 import { createBabylonNativeBlockProfileCheckResultV1 } from "./check.js";
 import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+import {
+  createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1,
+} from "./profile-inventory.js";
 import { settleBabylonNativeBlockProfileV1 } from "./profile-settlement.js";
 import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 
@@ -29,7 +32,7 @@ interface FinalizeSelection {
     | { kind: "static-surface"; surfaceEntityId: string;
         logicalSubshapeId: string; traversalSurfaceProfileRef: string }
   >;
-  readonly exposedEdgePolicy: "none";
+  readonly exposedEdgePolicy: "none" | "protect-ground-subject";
   readonly frictionRatio?: number;
   readonly restitutionRatio?: number;
 }
@@ -108,13 +111,22 @@ function fullBlockRecord(
 function frozenSelection(
   id = "route-collider",
   blockId = "route-block",
+  options: Readonly<{
+    notTraversable?: boolean;
+    exposedEdgePolicy?: "none" | "protect-ground-subject";
+    frictionRatio?: number;
+  }> = {},
 ): FinalizeSelection {
   return Object.freeze({
     id,
     colliderGeometrySource: Object.freeze({ kind: "block", blockId }),
-    traversalBinding: STATIC_SURFACE,
-    exposedEdgePolicy: "none",
-    frictionRatio: 0.8, restitutionRatio: 0 });
+    traversalBinding: options.notTraversable === true
+      ? Object.freeze({ kind: "not-traversable" as const })
+      : STATIC_SURFACE,
+    exposedEdgePolicy: options.exposedEdgePolicy ?? "none",
+    frictionRatio: options.frictionRatio ?? 0.8,
+    restitutionRatio: 0,
+  });
 }
 function bootstrap(id: string) {
   return Object.freeze({
@@ -166,7 +178,7 @@ async function admit(
     budget: Object.freeze({
       maximumStaticColliderCount: maximumColliderCount,
       maximumStaticColliderVertexCount: maximumColliderCount * 24,
-      maximumStaticColliderTriangleCount: maximumColliderCount * 12,
+      maximumStaticColliderTriangleCount: maximumColliderCount * 20,
     }),
   });
 }
@@ -180,6 +192,9 @@ interface HashVariant {
   readonly xMeters?: number;
   readonly displayGapMeters?: number;
   readonly colliderId?: string;
+  readonly notTraversable?: boolean;
+  readonly exposedEdgePolicy?: "none" | "protect-ground-subject";
+  readonly frictionRatio?: number;
 }
 async function buildProfileInventoryHash(
   variant: Readonly<HashVariant> = {},
@@ -225,7 +240,20 @@ async function buildProfileInventoryHash(
       epoch = session.finalize(Object.freeze({
         displayGapMeters: variant.displayGapMeters ?? 0.04,
         staticColliders: Object.freeze([frozenSelection(
-          variant.colliderId ?? "feature-collider", "feature-block")]),
+          variant.colliderId ?? "feature-collider",
+          "feature-block",
+          {
+            ...(variant.notTraversable === undefined
+              ? {}
+              : { notTraversable: variant.notTraversable }),
+            ...(variant.exposedEdgePolicy === undefined
+              ? {}
+              : { exposedEdgePolicy: variant.exposedEdgePolicy }),
+            ...(variant.frictionRatio === undefined
+              ? {}
+              : { frictionRatio: variant.frictionRatio }),
+          },
+        )]),
       }));
     });
     if (result.outcome === "rejected") {
@@ -241,7 +269,7 @@ async function buildProfileInventoryHash(
 }
 
 describe("Babylon Native block Profile settlement", () => {
-  it("finalizes one Host-settled epoch with styled visuals and independent no-gap proxies", async () => {
+  it("finalizes one Host-settled epoch with styled visuals and topology proxies", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
     const engine = new NullEngine();
     const scene = new Scene(engine);
@@ -282,7 +310,7 @@ describe("Babylon Native block Profile settlement", () => {
       expect(Object.isFrozen(epoch.colliderInventory)).toBe(true);
       expect(epoch.profileInventoryHash).toMatch(/^sha256:[0-9a-f]{64}$/);
       expect(admission.contribution.profileSettlement).toMatchObject({
-        kind: "host-snapshot", targetCount: 2,
+        kind: "host-snapshot", targetCount: 3,
         profileInventoryHash: epoch.profileInventoryHash,
       });
       expect(admission.contribution.staticColliders[0]!.id)
@@ -290,12 +318,12 @@ describe("Babylon Native block Profile settlement", () => {
       const route = scene.getMeshById("route-block")!;
       const structure = scene.getMeshById("structure-block")!;
       const proxy = scene.getMeshByName(
-        "worldkit-block-collider-block-finalize-test-route-collider")!;
+        "worldkit-block-topology-collider-block-finalize-test-route-collider")!;
       expect(proxy).not.toBe(route);
       expect(proxy.isVisible).toBe(false);
       proxy.computeWorldMatrix(true);
       expect(proxy.getBoundingInfo().boundingBox.minimumWorld.asArray())
-        .toEqual([-0.5, 0, -0.5]);
+        .toEqual([-0.5, 1, -0.5]);
       expect(proxy.getBoundingInfo().boundingBox.maximumWorld.asArray())
         .toEqual([0.5, 1, 0.5]);
       expect(route.scaling.asArray()).toEqual([0.96, 0.96, 0.96]);
@@ -425,43 +453,44 @@ describe("Babylon Native block Profile settlement", () => {
             scene,
           );
           overlay.position.set(-0.5, 1.005, 0);
+          const colliderInventory = Object.freeze([
+            Object.freeze({
+              colliderId: "floor-collider",
+              sourceBlockIds: Object.freeze([
+                "floor-east",
+                "floor-west",
+              ] as const),
+              visualGroupIds: Object.freeze(["floor-visual"]),
+              proxyKind: "continuous-walkable-surface" as const,
+              traversalBinding: STATIC_SURFACE,
+              exposedEdgePolicy: "none" as const,
+              minimumMetersXYZ: Object.freeze([-1.5, 1, -0.5] as const),
+              maximumMetersXYZ: Object.freeze([0.5, 1, 0.5] as const),
+              vertexCount: 4,
+              triangleCount: 2,
+              topologyHash: TOPOLOGY_HASH,
+            }),
+            Object.freeze({
+              colliderId: "wall-collider",
+              sourceBlockIds: Object.freeze(["wall-block"] as const),
+              visualGroupIds: Object.freeze(["wall-visual"]),
+              proxyKind: "exact-solid-union" as const,
+              traversalBinding: Object.freeze({
+                kind: "not-traversable" as const,
+              }),
+              exposedEdgePolicy: "none" as const,
+              minimumMetersXYZ: Object.freeze([0.5, 0, -0.5] as const),
+              maximumMetersXYZ: Object.freeze([1.5, 1, 0.5] as const),
+              vertexCount: 8,
+              triangleCount: 12,
+              topologyHash: TOPOLOGY_HASH,
+            }),
+          ]);
           profileInventoryHash = settleBabylonNativeBlockProfileV1({
             context,
             checkedLayout,
             displayGapMeters: 0.04,
-            colliderInventory: Object.freeze([
-              Object.freeze({
-                colliderId: "floor-collider",
-                sourceBlockIds: Object.freeze([
-                  "floor-east",
-                  "floor-west",
-                ] as const),
-                visualGroupIds: Object.freeze(["floor-visual"]),
-                proxyKind: "continuous-walkable-surface" as const,
-                traversalBinding: STATIC_SURFACE,
-                exposedEdgePolicy: "none" as const,
-                minimumMetersXYZ: Object.freeze([-1.5, 1, -0.5] as const),
-                maximumMetersXYZ: Object.freeze([0.5, 1, 0.5] as const),
-                vertexCount: 4,
-                triangleCount: 2,
-                topologyHash: TOPOLOGY_HASH,
-              }),
-              Object.freeze({
-                colliderId: "wall-collider",
-                sourceBlockIds: Object.freeze(["wall-block"] as const),
-                visualGroupIds: Object.freeze(["wall-visual"]),
-                proxyKind: "exact-solid-union" as const,
-                traversalBinding: Object.freeze({
-                  kind: "not-traversable" as const,
-                }),
-                exposedEdgePolicy: "none" as const,
-                minimumMetersXYZ: Object.freeze([0.5, 0, -0.5] as const),
-                maximumMetersXYZ: Object.freeze([1.5, 1, 0.5] as const),
-                vertexCount: 8,
-                triangleCount: 12,
-                topologyHash: TOPOLOGY_HASH,
-              }),
-            ]),
+            colliderInventory,
             walkableOverlays: Object.freeze([Object.freeze({
               logicalColliderId: "floor-collider",
               sourceBlockIds: Object.freeze([
@@ -472,6 +501,12 @@ describe("Babylon Native block Profile settlement", () => {
               topologyHash: TOPOLOGY_HASH,
               mesh: overlay,
             })]),
+            expectedProfileInventoryHash:
+              createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1({
+                checkedLayout,
+                displayGapMeters: 0.04,
+                colliderInventory,
+              }).profileInventoryHash,
           });
         },
       );
@@ -505,6 +540,9 @@ describe("Babylon Native block Profile settlement", () => {
       { xMeters: 1.75 },
       { displayGapMeters: 0.03 },
       { colliderId: "changed-collider" },
+      { notTraversable: true },
+      { exposedEdgePolicy: "protect-ground-subject" as const },
+      { frictionRatio: 0.7 },
     ]) {
       expect(await buildProfileInventoryHash(variant)).not.toBe(baseline);
     }

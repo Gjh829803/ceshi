@@ -11,6 +11,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  assertColliderOverlaySourceJoinClosureV1,
   buildWorldReconstructionEvidenceSetV1,
   projectOpeningCompositionDistancesV1,
   projectColliderEvidenceRoleV1,
@@ -77,6 +78,52 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("accepts a ground boundary only without a Block metadata join", () => {
+    const fixture = createEvidenceSetFixtureInputV1();
+    const metadata = fixture.verifiedWorldPackage
+      .nativeBlockMaterializerMetadata!;
+    const boundary = {
+      id: "ground-boundary",
+      runtimeRole: "ground-safety-boundary" as const,
+    };
+    const boundaryOverlay = {
+      colliderId: boundary.id,
+      sourceBlockIds: [],
+      colliderSubshapeId: "collider-subshape:ground-boundary",
+      chunkParts: [{
+        chunkPartId: "ground-boundary-grid-chunk-xp0-zp0",
+        chunkResidencyGroupId: "grid-chunk-xp0-zp0",
+        overlayRecordId: "overlay:ground-boundary-grid-chunk-xp0-zp0",
+        physicsResidency: { mode: "resident" as const,
+          physicsBodyId: "physics-body:ground-boundary-grid-chunk-xp0-zp0" },
+      }],
+    };
+    expect(() => assertColliderOverlaySourceJoinClosureV1({
+      contributionColliders: [
+        ...fixture.verifiedWorldPackage.nativeSceneContribution.staticColliders,
+        boundary,
+      ],
+      metadata,
+      overlayColliders: [
+        ...fixture.colliderOverlayObservation.colliders,
+        boundaryOverlay,
+      ],
+    })).not.toThrow();
+    expect(() => assertColliderOverlaySourceJoinClosureV1({
+      contributionColliders: [
+        ...fixture.verifiedWorldPackage.nativeSceneContribution.staticColliders,
+        boundary,
+      ],
+      metadata,
+      overlayColliders: [
+        ...fixture.colliderOverlayObservation.colliders,
+        { ...boundaryOverlay, sourceBlockIds: ["ground-block"] },
+      ],
+    })).toThrowError(
+      /WORLD_RECONSTRUCTION_EVIDENCE_STALE.*boundary.*source Block join/i,
+    );
+  });
+
   it("derives step evidence from the selected trusted Block shape", () => {
     expect(projectColliderEvidenceRoleV1({
       kind: "static-surface",
@@ -85,7 +132,15 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
       traversalSurfaceId: "traversal-surface:step-surface:step-top",
-    }, "step")).toBe("step");
+    }, ["step"])).toBe("step");
+    expect(projectColliderEvidenceRoleV1({
+      kind: "static-surface",
+      surfaceEntityId: "group-surface",
+      logicalSubshapeId: "group-top",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceId: "traversal-surface:group-surface:group-top",
+    }, ["step", "full"])).toBe("ground");
   });
 
   it("canonicalizes adjacent opening distance pairs independently of depth order", () => {
@@ -448,7 +503,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       ...fixture.colliderOverlayObservation,
       colliders: fixture.colliderOverlayObservation.colliders.map((collider) => ({
         ...collider,
-        sourceBlockId: "shadow-ground-block",
+        sourceBlockIds: ["shadow-ground-block"],
       })),
     });
     const forgedReceipt = parseFormalWorldCaptureReceiptV1({

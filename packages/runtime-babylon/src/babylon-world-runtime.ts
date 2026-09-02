@@ -1286,16 +1286,18 @@ export class BabylonWorldRuntime {
         const nativeBlockMaterializerMetadata =
           preparedNativeScene?.verifiedWorldPackage
             .nativeBlockMaterializerMetadata;
-        const sourceBlockIdByColliderId = new Map(
+        const sourceBlockIdsByColliderId = new Map(
           nativeBlockMaterializerMetadata?.colliderJoins.map(
-            ({ blockId, colliderId }) => [colliderId, blockId] as const,
+            ({ sourceBlockIds, colliderId }) =>
+              [colliderId, sourceBlockIds] as const,
           ) ?? [],
         );
         nativeColliderResidency = createBabylonNativeColliderResidencyV1({
           scene,
           chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
           colliders: nativeContribution.staticColliders,
-          sourceBlockIdByColliderId,
+          requiresSourceBlockJoins: !isNil(nativeBlockMaterializerMetadata),
+          sourceBlockIdsByColliderId,
           cameraGeometryQuery,
           applyColliderMetadata: (mesh, collider) =>
             nativeColliderMetadata(mesh, collider, collider.traversalBinding),
@@ -1310,6 +1312,7 @@ export class BabylonWorldRuntime {
         ));
         nativeColliderRegistry = createBabylonNativeLiveColliderRegistryV1({
           handles: residency.activeHandles(),
+          requiresSourceBlockJoins: !isNil(nativeBlockMaterializerMetadata),
           residency: residencyEvidence(residency),
           parts: residency.partInventory(),
         });
@@ -3098,6 +3101,7 @@ export class BabylonWorldRuntime {
     if (isNil(previous)) return;
     const replacement = createBabylonNativeLiveColliderRegistryV1({
       handles: residency.activeHandles(),
+      requiresSourceBlockJoins: previous.requiresSourceBlockJoins,
       residency: residencyEvidence(residency),
       parts: residency.partInventory(),
     });

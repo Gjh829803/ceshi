@@ -499,15 +499,35 @@ export function createEvidenceSetFixtureInputV1(
     : [];
   const extraJoins = paletteTraversalDisagreement
     ? [
-      { blockId: "step-shaped-ground-block", colliderId: "palette-ground-blocker" },
-      { blockId: "upper-block", colliderId: "structure-painted-ground" },
+      {
+        colliderId: "palette-ground-blocker",
+        sourceBlockIds: ["step-shaped-ground-block"],
+        visualGroupIds: ["ground-group"],
+        proxyKind: "exact-solid-union" as const,
+        minimumMetersXYZ: [1.5, 0, 1.5],
+        maximumMetersXYZ: [2.5, 0, 2.5],
+        vertexCount: 3,
+        triangleCount: 1,
+        topologyHash: H("9"),
+      },
+      {
+        colliderId: "structure-painted-ground",
+        sourceBlockIds: ["upper-block"],
+        visualGroupIds: ["upper-group"],
+        proxyKind: "continuous-walkable-surface" as const,
+        minimumMetersXYZ: [-1, 1, -4],
+        maximumMetersXYZ: [1, 1, -2],
+        vertexCount: 3,
+        triangleCount: 1,
+        topologyHash: H("9"),
+      },
     ]
     : [];
   const nativeSceneContribution = {
     ...packageInput.nativeSceneContribution,
     profileSettlement: {
       ...packageInput.nativeSceneContribution.profileSettlement,
-      targetCount: paletteTraversalDisagreement ? 3 : 2,
+      targetCount: paletteTraversalDisagreement ? 5 : 3,
     },
     staticColliders: [
       ...packageInput.nativeSceneContribution.staticColliders,
@@ -583,11 +603,9 @@ export function createEvidenceSetFixtureInputV1(
     colliderJoins: [
       ...baseMetadata.colliderJoins,
       ...extraJoins,
-    ].sort((left, right) => {
-      const leftKey = `${left.blockId}\u0000${left.colliderId}`;
-      const rightKey = `${right.blockId}\u0000${right.colliderId}`;
-      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-    }),
+    ].sort((left, right) => left.colliderId < right.colliderId
+      ? -1
+      : left.colliderId > right.colliderId ? 1 : 0),
   });
   const directory = createBabylonNativeWorldPackageV1({
     ...packageInput,
@@ -875,7 +893,7 @@ export function createEvidenceSetFixtureInputV1(
     ...observationIdentity("formal-collider-overlay-observation", "physics"),
     colliders: [{
       colliderId: "ground",
-      sourceBlockId: "ground-block",
+      sourceBlockIds: ["ground-block"],
       colliderSubshapeId: "collider-subshape:ground",
       chunkParts: [{
         chunkPartId: "ground-grid-chunk-xp0-zp0",

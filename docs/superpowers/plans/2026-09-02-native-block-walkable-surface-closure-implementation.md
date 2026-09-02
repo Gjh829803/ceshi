@@ -5,6 +5,13 @@
 **Baseline:** `origin/main@9a4639109e4d161d92297506e9fc92192d32ff44`
 **Evidence branch:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
 
+**2026-09-03 accepted execution clarification:** NBR-65C is consumed by the
+existing Native Package owner after the in-memory Package root is verified and
+before the Package directory is published. Checked Build-Epoch ground evidence
+stays Host-only; the ground report and diagnostics are Attempt artifacts rather
+than new WorldPackage fields. NBR-65H parity `passed` rows bind a closed focused
+gate command and zero exit code; token presence alone is insufficient.
+
 ## Delivery graph
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership / input -> output | Required evidence | Mode |
@@ -45,8 +52,10 @@ Focused evidence: Profile API/type/session tests, Skill source/copy tests and cl
 3. Record sorted source Block, Collider Group, visual group, traversal binding and cell identities.
 4. Derive global exposed support tops and solid occupancy once; every later ground consumer receives
    this frozen model.
-5. Bind canonical bytes and hash to Build Epoch, Profile inventory, Bootstrap/Subject envelope and
-   Case intent.
+5. Bind canonical bytes and hash to Build Epoch, checked Layout inventory, Profile inventory and
+   Native Scene Bootstrap. Join the Subject traversal envelope, Case intent and Package root only in
+   the later Ground Analysis Report, so source/profile topology identity has no circular Runtime or
+   Package dependency.
 6. Reject empty/duplicate groups, one Block in multiple Collider Groups, mixed incompatible binding,
    cross-Session membership, missing source identities and accessor-bearing input.
 
@@ -64,7 +73,8 @@ Focused evidence: pure ground-model tests, session rollback, Host evidence hash 
    not a false rejection.
 5. Map every failure to the current actionable diagnostic DTO with actual/expected/limit/delta,
    direction, source IDs and one bounded geometry repair action.
-6. Bind the report to the same ground-model and Package identity used by materialization.
+6. Bind the report to the same ground-model used by materialization and to the resolved Subject
+   traversal envelope, Case intent and frozen Package-root identity used by admission.
 
 Focused evidence: pure graph fixtures covering narrow footprint, low overhead, asymmetric step limits,
 detours outside a band, disconnected islands, duplicate targets and stable diagnostic ordering.

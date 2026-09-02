@@ -33,6 +33,9 @@ const FORBIDDEN_SOURCE_PATTERNS = Object.freeze([
   /\bMath\.random\s*\(/,
   /\bDate\.now\s*\(/,
 ]);
+const INVALID_CLOSED_UNION_SOURCE_PATTERNS = Object.freeze([
+  /\{\s*kind\s*:\s*["']not-traversable["']\s*,/,
+]);
 
 function parseOption(arguments_, name) {
   const index = arguments_.indexOf(name);
@@ -217,6 +220,9 @@ export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
       const source = bytes.toString("utf8");
       if (FORBIDDEN_SOURCE_PATTERNS.some((pattern) => pattern.test(source))) {
         diagnosticCodes.add("NATIVE_BLOCK_BUILDER_SOURCE_AUTHORITY_FORBIDDEN");
+      }
+      if (INVALID_CLOSED_UNION_SOURCE_PATTERNS.some((pattern) => pattern.test(source))) {
+        diagnosticCodes.add("NATIVE_BLOCK_BUILDER_TRAVERSAL_BINDING_UNION_INVALID");
       }
     } else {
       const value = parseJsonData(bytes, diagnosticCodes);

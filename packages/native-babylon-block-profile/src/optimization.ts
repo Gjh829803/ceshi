@@ -1,5 +1,3 @@
-import type { BabylonNativeTraversalBindingV1 } from
-  "@whitebox-world/native-babylon";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { groupBy, isEqual } from "lodash-es";
 
@@ -11,22 +9,13 @@ import {
 } from "./chunk-policy.js";
 import type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
-  BabylonNativeBlockExposedEdgePolicyV1,
 } from "./collider-contribution.js";
 import type { BabylonNativeBlockLayoutEntryV1 } from "./layout.js";
 import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
 import type {
   BabylonNativeBlockFinalizedEpochV1,
 } from "./session.js";
-import type {
-  BabylonNativeBlockPositionMetersXYZV1,
-  BabylonNativeBlockShapeKindV1,
-} from "./shapes.js";
-
-type BabylonNativeBlockLayoutVolumeColliderV1 = Extract<
-  BabylonNativeBlockColliderCandidateInventoryEntryV1,
-  Readonly<{ proxyKind: "layout-block-volume" }>
->;
+import type { BabylonNativeBlockShapeKindV1 } from "./shapes.js";
 
 export type BabylonNativeBlockOptimizationResidencyGroupV1 =
   | Readonly<{
@@ -50,21 +39,6 @@ export interface BabylonNativeBlockThinInstanceGroupV1 {
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly semanticCaptureClassId: string;
   readonly blockIds: readonly string[];
-}
-
-export interface BabylonNativeBlockColliderCoalescingGroupV1 {
-  readonly id: string;
-  readonly residencyGroupId: string;
-  readonly colliderIds: readonly string[];
-  readonly sourceBlockIds: readonly string[];
-  readonly visualGroupIds: readonly string[];
-  readonly proxyKind: "layout-block-volume";
-  readonly traversalBinding: BabylonNativeTraversalBindingV1;
-  readonly exposedEdgePolicy: BabylonNativeBlockExposedEdgePolicyV1;
-  readonly frictionRatio?: number;
-  readonly restitutionRatio?: number;
-  readonly minimumMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
-  readonly maximumMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
 }
 
 export interface BabylonNativeBlockOptimizationBaselineResourcesV1 {
@@ -92,7 +66,7 @@ export interface BabylonNativeBlockOptimizationEquivalenceV1 {
   readonly isSemanticCaptureMembershipPreserved: true;
   readonly areColliderIdsPreserved: true;
   readonly areColliderSemanticsPreserved: true;
-  readonly areCoalescedBoundsExact: true;
+  readonly isColliderTopologyPreserved: true;
 }
 
 export interface BabylonNativeBlockOptimizationAssessmentV1 {
@@ -106,9 +80,7 @@ export interface BabylonNativeBlockOptimizationAssessmentV1 {
     readonly BabylonNativeBlockOptimizationResidencyGroupV1[];
   readonly thinInstanceGroups: readonly BabylonNativeBlockThinInstanceGroupV1[];
   readonly independentVisualBlockIds: readonly string[];
-  readonly colliderCoalescingGroups:
-    readonly BabylonNativeBlockColliderCoalescingGroupV1[];
-  readonly independentColliderIds: readonly string[];
+  readonly topologyColliderIds: readonly string[];
   readonly baselineResources: BabylonNativeBlockOptimizationBaselineResourcesV1;
   readonly projectedResources:
     BabylonNativeBlockOptimizationProjectedResourcesV1;
@@ -153,7 +125,7 @@ function validateInput(
   epoch: BabylonNativeBlockFinalizedEpochV1,
 ): Readonly<{
   blocks: readonly BabylonNativeBlockLayoutEntryV1[];
-  colliders: readonly BabylonNativeBlockLayoutVolumeColliderV1[];
+  colliders: readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
 }> {
   if (
     epoch.kind !== "babylon-native-block-finalized-epoch" ||
@@ -195,13 +167,11 @@ function validateInput(
   const colliderIds = new Set<string>();
   const colliderBlockIds = new Set<string>();
   for (const collider of colliders) {
-    const sourceBlockId = collider.sourceBlockIds[0];
-    const sourceBlock = typeof sourceBlockId === "string"
-      ? blockById.get(sourceBlockId)
-      : undefined;
-    const expectedVisualGroupIds = sourceBlock?.visualGroupId === undefined
-      ? []
-      : [sourceBlock.visualGroupId];
+    const sourceBlocks = collider.sourceBlockIds.map((sourceBlockId) =>
+      blockById.get(sourceBlockId));
+    const expectedVisualGroupIds = [...new Set(sourceBlocks.flatMap((block) =>
+      block?.visualGroupId === undefined ? [] : [block.visualGroupId]))]
+      .sort(stableCompare);
     const binding = collider.traversalBinding;
     const bindingIsClosed = binding.kind === "not-traversable"
       ? Object.keys(binding).length === 1
@@ -213,29 +183,47 @@ function validateInput(
           binding.traversalSurfaceProfileRef,
         ].every((value) => typeof value === "string" && value.length > 0);
     if (
-      collider.sourceBlockIds.length !== 1 ||
-      typeof sourceBlockId !== "string" ||
-      !blockIds.has(sourceBlockId) ||
-      collider.proxyKind !== "layout-block-volume" ||
+      collider.sourceBlockIds.length === 0 ||
+      sourceBlocks.some((block) => block === undefined) ||
+      ![...collider.sourceBlockIds].sort(stableCompare)
+        .every((id, index) => id === collider.sourceBlockIds[index]) ||
+      new Set(collider.sourceBlockIds).size !== collider.sourceBlockIds.length ||
+      (collider.proxyKind !== "continuous-walkable-surface" &&
+        collider.proxyKind !== "exact-solid-union") ||
       (collider.exposedEdgePolicy !== "none" &&
         collider.exposedEdgePolicy !== "protect-ground-subject") ||
       (collider.exposedEdgePolicy === "protect-ground-subject" &&
         binding.kind !== "static-surface") ||
       colliderIds.has(collider.colliderId) ||
-      colliderBlockIds.has(sourceBlockId) ||
+      collider.sourceBlockIds.some((sourceBlockId) =>
+        colliderBlockIds.has(sourceBlockId)) ||
       !bindingIsClosed ||
       !isEqual(collider.visualGroupIds, expectedVisualGroupIds) ||
       ![...collider.visualGroupIds].sort(stableCompare)
-        .every((id, index) => id === collider.visualGroupIds[index])
+        .every((id, index) => id === collider.visualGroupIds[index]) ||
+      collider.minimumMetersXYZ.some((value) => !Number.isFinite(value)) ||
+      collider.maximumMetersXYZ.some((value, axis) =>
+        !Number.isFinite(value) || value < collider.minimumMetersXYZ[axis]!) ||
+      (collider.proxyKind === "continuous-walkable-surface"
+        ? collider.maximumMetersXYZ[0] <= collider.minimumMetersXYZ[0] ||
+          collider.maximumMetersXYZ[2] <= collider.minimumMetersXYZ[2]
+        : collider.maximumMetersXYZ.some((value, axis) =>
+          value <= collider.minimumMetersXYZ[axis]!)) ||
+      !Number.isSafeInteger(collider.vertexCount) ||
+      collider.vertexCount < 3 ||
+      !Number.isSafeInteger(collider.triangleCount) ||
+      collider.triangleCount < 1 ||
+      !HASH.test(collider.topologyHash)
     ) fail("Collider identities and source Block joins must be exact and unique");
     colliderIds.add(collider.colliderId);
-    colliderBlockIds.add(sourceBlockId);
+    collider.sourceBlockIds.forEach((sourceBlockId) =>
+      colliderBlockIds.add(sourceBlockId));
     validateRatio(collider, "frictionRatio");
     validateRatio(collider, "restitutionRatio");
   }
   return Object.freeze({
     blocks,
-    colliders: colliders as readonly BabylonNativeBlockLayoutVolumeColliderV1[],
+    colliders,
   });
 }
 
@@ -367,154 +355,6 @@ export function createBabylonNativeBlockThinInstanceGroupsV1(
   });
 }
 
-function colliderPartitionKey(
-  collider: BabylonNativeBlockLayoutVolumeColliderV1,
-  residencyGroupId: string,
-): string {
-  return sha256CanonicalJson({
-    residencyGroupId,
-    proxyKind: collider.proxyKind,
-    traversalBinding: collider.traversalBinding,
-    exposedEdgePolicy: collider.exposedEdgePolicy,
-    frictionRatio: Object.hasOwn(collider, "frictionRatio")
-      ? { kind: "present", value: collider.frictionRatio }
-      : { kind: "absent" },
-    restitutionRatio: Object.hasOwn(collider, "restitutionRatio")
-      ? { kind: "present", value: collider.restitutionRatio }
-      : { kind: "absent" },
-    visualGroupIds: collider.visualGroupIds,
-  });
-}
-
-function connectedComponents(
-  colliders: readonly BabylonNativeBlockLayoutVolumeColliderV1[],
-  blockById: ReadonlyMap<string, BabylonNativeBlockLayoutEntryV1>,
-): readonly (readonly BabylonNativeBlockLayoutVolumeColliderV1[])[] {
-  const colliderByCell = new Map<string, string>();
-  const colliderById = new Map(colliders.map((collider) =>
-    [collider.colliderId, collider] as const));
-  for (const collider of colliders) {
-    for (const key of blockById.get(collider.sourceBlockIds[0])!
-      .occupiedMicroCellKeys) colliderByCell.set(key, collider.colliderId);
-  }
-  const adjacentById = new Map(colliders.map((collider) =>
-    [collider.colliderId, new Set<string>()] as const));
-  const directions = [
-    [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
-  ] as const;
-  for (const collider of colliders) {
-    for (const key of blockById.get(collider.sourceBlockIds[0])!
-      .occupiedMicroCellKeys) {
-      const [x, y, z] = key.split(",").map(Number) as [number, number, number];
-      for (const [dx, dy, dz] of directions) {
-        const neighbor = colliderByCell.get(`${x + dx},${y + dy},${z + dz}`);
-        if (neighbor !== undefined && neighbor !== collider.colliderId) {
-          adjacentById.get(collider.colliderId)!.add(neighbor);
-        }
-      }
-    }
-  }
-  const unseen = new Set(colliders.map(({ colliderId }) => colliderId));
-  const components: BabylonNativeBlockLayoutVolumeColliderV1[][] = [];
-  while (unseen.size > 0) {
-    const seed = [...unseen].sort(stableCompare)[0]!;
-    const pending = [seed];
-    unseen.delete(seed);
-    const component: BabylonNativeBlockLayoutVolumeColliderV1[] = [];
-    while (pending.length > 0) {
-      const id = pending.shift()!;
-      component.push(colliderById.get(id)!);
-      for (const neighbor of [...adjacentById.get(id)!].sort(stableCompare)) {
-        if (!unseen.delete(neighbor)) continue;
-        pending.push(neighbor);
-      }
-    }
-    components.push(component.sort((left, right) =>
-      stableCompare(left.colliderId, right.colliderId)));
-  }
-  return components;
-}
-
-function isExactRectangularPrism(
-  component: readonly BabylonNativeBlockLayoutVolumeColliderV1[],
-  blockById: ReadonlyMap<string, BabylonNativeBlockLayoutEntryV1>,
-): boolean {
-  const cells = new Set(component.flatMap((collider) =>
-    blockById.get(collider.sourceBlockIds[0])!.occupiedMicroCellKeys));
-  const parsed = [...cells].map((key) => key.split(",").map(Number));
-  const minimum = [0, 1, 2].map((axis) =>
-    Math.min(...parsed.map((cell) => cell[axis]!)));
-  const maximum = [0, 1, 2].map((axis) =>
-    Math.max(...parsed.map((cell) => cell[axis]!)));
-  const expectedCount = (maximum[0]! - minimum[0]! + 1) *
-    (maximum[1]! - minimum[1]! + 1) *
-    (maximum[2]! - minimum[2]! + 1);
-  return cells.size === expectedCount;
-}
-
-function createColliderGroups(
-  colliders: readonly BabylonNativeBlockLayoutVolumeColliderV1[],
-  blocks: readonly BabylonNativeBlockLayoutEntryV1[],
-  residencyByBlockId: ReadonlyMap<string, string>,
-): Readonly<{
-  groups: readonly BabylonNativeBlockColliderCoalescingGroupV1[];
-  independentColliderIds: readonly string[];
-}> {
-  const blockById = new Map(blocks.map((block) => [block.id, block] as const));
-  const partitions = groupBy(colliders, (collider) => colliderPartitionKey(
-    collider,
-    residencyByBlockId.get(collider.sourceBlockIds[0])!,
-  ));
-  const eligibleComponents = Object.entries(partitions)
-    .sort(([left], [right]) => stableCompare(left, right))
-    .flatMap(([, members]) => connectedComponents(members, blockById))
-    .filter((component) => component.length >= 2 &&
-      isExactRectangularPrism(component, blockById))
-    .sort((left, right) => stableCompare(
-      left.map(({ colliderId }) => colliderId).join("\0"),
-      right.map(({ colliderId }) => colliderId).join("\0"),
-    ));
-  const groupedColliderIds = new Set<string>();
-  const groups = eligibleComponents.map((component, index) => {
-    const first = component[0]!;
-    const sourceBlocks = component.map((collider) =>
-      blockById.get(collider.sourceBlockIds[0])!);
-    component.forEach(({ colliderId }) => groupedColliderIds.add(colliderId));
-    const minimumMetersXYZ = [0, 1, 2].map((axis) => Math.min(
-      ...sourceBlocks.map((block) => block.minimumMetersXYZ[axis]!),
-    )) as [number, number, number];
-    const maximumMetersXYZ = [0, 1, 2].map((axis) => Math.max(
-      ...sourceBlocks.map((block) => block.maximumMetersXYZ[axis]!),
-    )) as [number, number, number];
-    return {
-      id: `collider-coalescing-group-${String(index + 1).padStart(4, "0")}`,
-      residencyGroupId: residencyByBlockId.get(first.sourceBlockIds[0])!,
-      colliderIds: component.map(({ colliderId }) => colliderId)
-        .sort(stableCompare),
-      sourceBlockIds: component.map(({ sourceBlockIds }) => sourceBlockIds[0])
-        .sort(stableCompare),
-      visualGroupIds: [...first.visualGroupIds],
-      proxyKind: first.proxyKind,
-      traversalBinding: { ...first.traversalBinding },
-      exposedEdgePolicy: first.exposedEdgePolicy,
-      ...(Object.hasOwn(first, "frictionRatio")
-        ? { frictionRatio: first.frictionRatio }
-        : {}),
-      ...(Object.hasOwn(first, "restitutionRatio")
-        ? { restitutionRatio: first.restitutionRatio }
-        : {}),
-      minimumMetersXYZ,
-      maximumMetersXYZ,
-    };
-  });
-  return Object.freeze({
-    groups,
-    independentColliderIds: colliders.map(({ colliderId }) => colliderId)
-      .filter((id) => !groupedColliderIds.has(id))
-      .sort(stableCompare),
-  });
-}
-
 function assertExactCoverage(
   expectedIds: readonly string[],
   proposedIds: readonly string[],
@@ -557,11 +397,6 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
     blocks,
     residency.residencyGroupIdByBlockId,
   );
-  const collider = createColliderGroups(
-    colliders,
-    blocks,
-    residency.residencyGroupIdByBlockId,
-  );
   assertExactCoverage(
     blocks.map(({ id }) => id),
     [...thin.groups.flatMap(({ blockIds }) => blockIds),
@@ -573,12 +408,8 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
     residency.groups.flatMap(({ blockIds }) => blockIds),
     "residency",
   );
-  assertExactCoverage(
-    colliders.map(({ colliderId }) => colliderId),
-    [...collider.groups.flatMap(({ colliderIds }) => colliderIds),
-      ...collider.independentColliderIds],
-    "Collider",
-  );
+  const topologyColliderIds = colliders.map(({ colliderId }) => colliderId)
+    .sort(stableCompare);
 
   const baselineResources = {
     visualMeshCount: blocks.length,
@@ -587,10 +418,11 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
     paletteMaterialCount: new Set(blocks.map(({ paletteRole }) => paletteRole))
       .size,
     colliderProxyCount: colliders.length,
-    colliderTriangleCount: colliders.length * 12,
+    colliderTriangleCount: colliders.reduce(
+      (sum, { triangleCount }) => sum + triangleCount,
+      0,
+    ),
   };
-  const projectedColliderProxyCount = collider.groups.length +
-    collider.independentColliderIds.length;
   const projectedResources = {
     thinInstanceBatchCount: thin.groups.length,
     independentVisualMeshCount: thin.independentBlockIds.length,
@@ -598,8 +430,8 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
     visualGeometryBufferSetCount:
       thin.groups.length + thin.independentBlockIds.length,
     residencyGroupCount: residency.groups.length,
-    colliderProxyCount: projectedColliderProxyCount,
-    colliderTriangleCount: projectedColliderProxyCount * 12,
+    colliderProxyCount: baselineResources.colliderProxyCount,
+    colliderTriangleCount: baselineResources.colliderTriangleCount,
   };
   const payload = {
     kind: "babylon-native-block-optimization-assessment" as const,
@@ -611,8 +443,7 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
     residencyGroups: residency.groups,
     thinInstanceGroups: thin.groups,
     independentVisualBlockIds: thin.independentBlockIds,
-    colliderCoalescingGroups: collider.groups,
-    independentColliderIds: collider.independentColliderIds,
+    topologyColliderIds,
     baselineResources,
     projectedResources,
     equivalence: {
@@ -621,7 +452,7 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
       isSemanticCaptureMembershipPreserved: true as const,
       areColliderIdsPreserved: true as const,
       areColliderSemanticsPreserved: true as const,
-      areCoalescedBoundsExact: true as const,
+      isColliderTopologyPreserved: true as const,
     },
   };
   return deepFreezeData({

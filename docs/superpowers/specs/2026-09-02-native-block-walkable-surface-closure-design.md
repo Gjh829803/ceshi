@@ -7,6 +7,22 @@
 **Implementation baseline:** `origin/main@9a4639109e4d161d92297506e9fc92192d32ff44`
 **Source evidence:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
 
+## Implementation revision record
+
+- **2026-09-03 — Ground Analysis admission join:** the trusted Native Package
+  owner retains the checked Build-Epoch logical-ground evidence outside the
+  serialized Package input, constructs and verifies the Package directory in
+  memory, then joins the frozen Package root, Case intent and resolved Subject
+  traversal envelope into `BabylonNativeBlockGroundAnalysisReportV1` before any
+  Package directory is published. A ground Case with failed Spawn or required
+  target standability fails closed and retains the logical model, report and
+  actionable diagnostics as Attempt evidence. This is a concrete placement of
+  the existing section 5/6 design; it adds no third Scene Source, Package field,
+  Runtime support owner or circular Package hash.
+- **2026-09-03 — executable parity evidence:** a parity row may be `passed`
+  only when its closed focused verification gate returns exit code zero on the
+  current tree. Source fragments remain discoverability evidence, not GO proof.
+
 ## 1. Decision
 
 The Babylon Native Block lane must migrate every reusable scene-reconstruction and ground-playability
@@ -162,14 +178,20 @@ model from explicit Collider Groups:
 3. derive globally exposed support-top cells only from groups whose binding is `static-surface` and
    whose locked traversal profile supports the controlled Subject;
 4. derive solid occupancy from every selected static group, including blockers;
-5. bind the model to the Build Epoch, Profile inventory hash, Bootstrap/Subject envelope and Case
-   intent hash;
+5. bind the source/profile topology identity to the Build Epoch, checked Layout inventory hash,
+   Profile inventory hash and Native Scene Bootstrap hash;
 6. sort every inventory and diagnostic by stable identity before hashing.
 
 This model is trusted derived evidence, not Agent JSON and not Runtime state. It is the single input to
 standability, continuous surface construction, exposed-edge derivation, collision aggregation and
 optimization realization. Those consumers must not independently rescan meshes or reconstruct a
 second cell map.
+
+The logical model deliberately does not contain the Subject traversal envelope, Case hash, Package
+root or Runtime Session identity. Those values are unavailable or mutable at this source/profile
+topology boundary and would create a circular identity dependency. The trusted Ground Analysis
+Report is the later join point: it binds this logical-ground hash to the resolved Subject traversal
+envelope, Case intent and frozen Package root before any admission claim is accepted.
 
 ## 6. Subject-relative standability and connectivity
 

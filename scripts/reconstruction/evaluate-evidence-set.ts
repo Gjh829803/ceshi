@@ -13,8 +13,10 @@ import {
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
+  type BabylonNativeBlockMaterializerMetadataV1,
   type BabylonNativeContributionTraversalBindingV1,
   type BabylonNativeBlockMaterializerShapeV1,
+  type BabylonNativeStaticColliderContributionV1,
   type FormalColliderOverlayObservationV1,
   type FormalOpeningObservationV1,
   type FormalScriptedTraversalObservationV1,
@@ -27,6 +29,7 @@ import {
   hashSceneAuthoringAttemptResultV1,
   hashSceneAuthoringAttemptV1,
 } from "@whitebox-world/scene-authoring-contracts";
+import { isNil } from "lodash-es";
 import {
   hashNativeBlockAuthoringManifestV1,
   parseNativeBlockAuthoringManifestV1,
@@ -73,6 +76,47 @@ function exact(actual: unknown, expected: unknown, detail: string): void {
 
 function sameCanonical(actual: unknown, expected: unknown, detail: string): void {
   if (sha256CanonicalJson(actual) !== sha256CanonicalJson(expected)) stale(detail);
+}
+
+export function assertColliderOverlaySourceJoinClosureV1(input: Readonly<{
+  contributionColliders: readonly Readonly<Pick<
+    BabylonNativeStaticColliderContributionV1,
+    "id" | "runtimeRole"
+  >>[];
+  metadata: Readonly<Pick<
+    BabylonNativeBlockMaterializerMetadataV1,
+    "blocks" | "colliderJoins"
+  >>;
+  overlayColliders: FormalColliderOverlayObservationV1["colliders"];
+}>): void {
+  const contributionById = new Map(input.contributionColliders.map((collider) =>
+    [collider.id, collider] as const));
+  const metadataBlockIds = new Set(input.metadata.blocks.map(({ blockId }) =>
+    blockId));
+  const colliderJoins = new Map(input.metadata.colliderJoins.map((join) =>
+    [join.colliderId, join.sourceBlockIds] as const));
+  for (const collider of input.overlayColliders) {
+    const contribution = contributionById.get(collider.colliderId);
+    if (isNil(contribution)) {
+      stale("overlay Collider is absent from verified Contribution");
+    }
+    const sourceBlockIds = colliderJoins.get(collider.colliderId);
+    if (contribution.runtimeRole === "ground-safety-boundary") {
+      if (!isNil(sourceBlockIds) || collider.sourceBlockIds.length !== 0) {
+        stale("ground safety boundary must not claim a source Block join");
+      }
+      continue;
+    }
+    if (isNil(sourceBlockIds)) {
+      stale("scene Collider is absent from trusted Block metadata");
+    }
+    if (collider.sourceBlockIds.some((sourceBlockId) =>
+      !metadataBlockIds.has(sourceBlockId))) {
+      stale("overlay source Block is absent from trusted Block metadata");
+    }
+    sameCanonical(sourceBlockIds, collider.sourceBlockIds,
+      "overlay collider join does not match trusted Block metadata");
+  }
 }
 
 function uniqueSorted(values: readonly string[]): readonly string[] {
@@ -124,7 +168,7 @@ const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
 
 export function projectColliderEvidenceRoleV1(
   binding: BabylonNativeContributionTraversalBindingV1,
-  sourceBlockShape: BabylonNativeBlockMaterializerShapeV1,
+  sourceBlockShapes: readonly BabylonNativeBlockMaterializerShapeV1[],
 ): "ground" | "blocker" | "step" {
   if (binding.kind === "not-traversable") return "blocker";
   if (
@@ -132,7 +176,9 @@ export function projectColliderEvidenceRoleV1(
     binding.traversalSurfaceProfileRef ===
       GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF
   ) {
-    return sourceBlockShape === "step" ? "step" : "ground";
+    return sourceBlockShapes.length === 1 && sourceBlockShapes[0] === "step"
+      ? "step"
+      : "ground";
   }
   stale("Contribution traversalBinding does not admit a blocker or ground collider role");
 }
@@ -435,23 +481,22 @@ export function buildWorldReconstructionEvidenceSetV1(
   const metadataBlocks = new Map(metadata.blocks.map((block) => [block.blockId, block]));
   const colliderJoins = new Map(metadata.colliderJoins.map((join) => [
     join.colliderId,
-    join.blockId,
+    join.sourceBlockIds,
   ]));
-  for (const collider of overlay.colliders) {
-    if (!metadataBlocks.has(collider.sourceBlockId)) {
-      stale("overlay source Block is absent from trusted Block metadata");
-    }
-    exact(colliderJoins.get(collider.colliderId), collider.sourceBlockId,
-      "overlay collider join does not match trusted Block metadata");
-  }
+  assertColliderOverlaySourceJoinClosureV1({
+    contributionColliders:
+      verified.nativeSceneContribution.staticColliders,
+    metadata,
+    overlayColliders: overlay.colliders,
+  });
   exact(spawn.spawnMarkerId, verified.nativeSceneContribution.spawnMarker.id,
     "spawn marker does not match verified Contribution");
   if (!metadataBlocks.has(spawn.supportContact.sourceBlockId)) {
     stale("spawn support Block is absent from trusted Block metadata");
   }
-  exact(colliderJoins.get(spawn.supportContact.colliderId),
+  if (!colliderJoins.get(spawn.supportContact.colliderId)?.includes(
     spawn.supportContact.sourceBlockId,
-    "spawn support collider join does not match trusted Block metadata");
+  )) stale("spawn support collider join does not match trusted Block metadata");
 
   const expectedChecks = new Map(
     reconstructionCase.expected.criticalTraversalChecks.map((check) => [check.id, check]),
@@ -497,20 +542,26 @@ export function buildWorldReconstructionEvidenceSetV1(
   const distances = projectOpeningCompositionDistancesV1(opening.visualGroups);
   const overlayColliderIds = new Set(overlay.colliders.map(({ colliderId }) => colliderId));
   const colliderContributions = [...verified.nativeSceneContribution.staticColliders]
+    .filter(({ runtimeRole }) => runtimeRole === "scene-static-collider")
     .sort((left, right) => compareText(left.id, right.id))
     .map((collider) => {
-      const blockId = colliderJoins.get(collider.id);
-      if (blockId === undefined) stale("Contribution collider is absent from trusted Block metadata");
-      const sourceBlock = metadataBlocks.get(blockId);
-      if (sourceBlock === undefined) {
-        stale("Contribution collider Block is absent from trusted Block metadata");
+      const sourceBlockIds = colliderJoins.get(collider.id);
+      if (sourceBlockIds === undefined || sourceBlockIds.length === 0) {
+        stale("Contribution collider is absent from trusted Block metadata");
       }
+      const sourceBlockShapes = sourceBlockIds.map((sourceBlockId) => {
+        const sourceBlock = metadataBlocks.get(sourceBlockId);
+        if (sourceBlock === undefined) {
+          stale("Contribution collider Block is absent from trusted Block metadata");
+        }
+        return sourceBlock.shape;
+      });
       return {
         contributionId: collider.id,
         colliderId: collider.id,
         role: projectColliderEvidenceRoleV1(
           collider.traversalBinding,
-          sourceBlock.shape,
+          sourceBlockShapes,
         ),
         hasOverlay: overlayColliderIds.has(collider.id),
       };

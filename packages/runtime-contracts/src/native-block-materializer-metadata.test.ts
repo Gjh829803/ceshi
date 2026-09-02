@@ -66,8 +66,28 @@ function metadataValue() {
       },
     ],
     colliderJoins: [
-      { blockId: "bridge", colliderId: "bridge-collider" },
-      { blockId: "wall", colliderId: "wall-collider" },
+      {
+        colliderId: "bridge-collider",
+        sourceBlockIds: ["bridge"],
+        visualGroupIds: ["route-group"],
+        proxyKind: "continuous-walkable-surface",
+        minimumMetersXYZ: [-1, 0.5, -1],
+        maximumMetersXYZ: [1, 0.5, 1],
+        vertexCount: 4,
+        triangleCount: 2,
+        topologyHash: H("3"),
+      },
+      {
+        colliderId: "wall-collider",
+        sourceBlockIds: ["wall"],
+        visualGroupIds: ["wall-group"],
+        proxyKind: "exact-solid-union",
+        minimumMetersXYZ: [1.5, -0.5, -1],
+        maximumMetersXYZ: [2.5, 1.5, 1],
+        vertexCount: 8,
+        triangleCount: 12,
+        topologyHash: H("3"),
+      },
     ],
   };
 }
@@ -103,7 +123,10 @@ describe("BabylonNativeBlockMaterializerMetadataV1", () => {
     })],
     ["unknown collider block", () => ({
       ...metadataValue(),
-      colliderJoins: [{ blockId: "missing", colliderId: "wall-collider" }],
+      colliderJoins: [{
+        ...metadataValue().colliderJoins[1],
+        sourceBlockIds: ["missing"],
+      }],
     })],
     ["derived mesh identity drift", () => ({
       ...metadataValue(),

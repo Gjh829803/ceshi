@@ -1,5 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
+import { isNil } from "lodash-es";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -61,6 +62,53 @@ function evidence(id: string): BabylonNativeBlockCheckedEpochEvidenceV1 {
     },
     profileInventoryHash: `sha256:${"a".repeat(64)}`,
     colliderInventory: [],
+    logicalGroundModel: {
+      kind: "babylon-native-block-logical-ground-model",
+      schemaVersion: 1,
+      identity: {
+        buildEpochId: "evidence-epoch",
+        checkedLayoutInventoryHash: `sha256:${"b".repeat(64)}`,
+        profileInventoryHash: `sha256:${"a".repeat(64)}`,
+        nativeSceneBootstrapHash: `sha256:${"c".repeat(64)}`,
+      },
+      supportedTraversalSurfaceProfileRefs: [],
+      colliderGroups: [],
+      solidOccupancyCells: [],
+      exposedSupportTopCells: [],
+      logicalGroundModelHash: `sha256:${"d".repeat(64)}`,
+    },
+    topology: {
+      kind: "babylon-native-block-walkable-topology",
+      schemaVersion: 1,
+      identity: {
+        logicalGroundModelHash: `sha256:${"d".repeat(64)}`,
+        topologyPolicyHash: `sha256:${"e".repeat(64)}`,
+      },
+      walkableGeometries: [],
+      solidGeometries: [],
+      logicalColliderCount: 0,
+      colliderVertexCount: 0,
+      colliderTriangleCount: 0,
+      removedInternalFaceCount: 0,
+      topologyHash: `sha256:${"f".repeat(64)}`,
+    },
+    groundBoundary: {
+      kind: "babylon-native-block-ground-boundary",
+      schemaVersion: 1,
+      derivedColliderRole: "ground-safety-boundary",
+      identity: {
+        topologyHash: `sha256:${"f".repeat(64)}`,
+        boundaryPolicyHash: `sha256:${"1".repeat(64)}`,
+      },
+      sourceSegmentCount: 0,
+      mergedSegmentCount: 0,
+      segments: [],
+      positionsMetersXYZ: [],
+      triangleIndices: [],
+      vertexCount: 0,
+      triangleCount: 0,
+      boundaryHash: `sha256:${"2".repeat(64)}`,
+    },
   };
 }
 
@@ -72,6 +120,17 @@ function scene(): Scene {
   const engine = new NullEngine();
   retainedEngines.push(engine);
   return new Scene(engine);
+}
+
+function expectDeeplyFrozenPlainData(value: unknown): void {
+  if (isNil(value) || typeof value !== "object") return;
+  expect(Object.isFrozen(value)).toBe(true);
+  expect([Object.prototype, Array.prototype]).toContain(
+    Object.getPrototypeOf(value),
+  );
+  for (const child of Object.values(value)) {
+    expectDeeplyFrozenPlainData(child);
+  }
 }
 
 describe("Block Profile Host checked-epoch evidence", () => {
@@ -95,8 +154,6 @@ describe("Block Profile Host checked-epoch evidence", () => {
     const [captured] = takeBabylonNativeBlockCheckedEpochEvidenceV1(candidate);
 
     expect(captured).toBeDefined();
-    expect(Object.isFrozen(captured)).toBe(true);
-    expect(Object.isFrozen(captured!.checkedLayout.checkResult.metrics)).toBe(true);
-    expect(JSON.stringify(captured)).not.toMatch(/records|mesh|scene|engine/i);
+    expectDeeplyFrozenPlainData(captured);
   });
 });

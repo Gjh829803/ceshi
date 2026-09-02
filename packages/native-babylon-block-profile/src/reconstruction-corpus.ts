@@ -2,7 +2,7 @@ import type {
   BabylonNativeSceneBuildContextV1,
   BabylonNativeTraversalBindingV1,
 } from "@whitebox-world/native-babylon";
-import { isEmpty, isNil } from "lodash-es";
+import { groupBy, isEmpty, isNil } from "lodash-es";
 
 import type { BabylonNativeBlockAuthoringCaptureV1 } from "./authoring-capture.js";
 import type { BabylonNativeBlockProfileCheckResultV1 } from "./check.js";
@@ -473,6 +473,7 @@ function requireRecord(
 
 function createCorpusBlock(
   session: BabylonNativeBlockProfileSessionV1,
+  recordValue: CorpusRecordV1,
   spec: CorpusBlockSpecV1,
 ): void {
   session.createBlock({
@@ -481,7 +482,20 @@ function createCorpusBlock(
     paletteRole: spec.paletteRole,
     centerMetersXYZ: spec.centerMetersXYZ,
     ...(isNil(spec.visualGroupId) ? {} : { visualGroupId: spec.visualGroupId }),
+    colliderGroupId: colliderGroupIdFor(recordValue, spec),
   });
+}
+
+function colliderGroupIdFor(
+  recordValue: CorpusRecordV1,
+  spec: CorpusBlockSpecV1,
+): string {
+  const role = recordValue.notTraversableBlockIds.includes(spec.id)
+    ? "solid"
+    : "ground";
+  const semanticGroup = spec.visualGroupId ??
+    (role === "ground" ? "main" : spec.id);
+  return `corpus-${recordValue.id}-${role}-${semanticGroup}`;
 }
 
 function traversalBindingFor(
@@ -493,21 +507,31 @@ function traversalBindingFor(
   }
   return Object.freeze({
     kind: GROUND_STATIC.kind,
-    surfaceEntityId: `surface-${spec.id}`,
+    surfaceEntityId: `surface-${colliderGroupIdFor(recordValue, spec)}`,
     logicalSubshapeId: GROUND_STATIC.logicalSubshapeId,
     traversalSurfaceProfileRef: GROUND_STATIC.traversalSurfaceProfileRef,
   });
 }
 
 function layoutSelections(recordValue: CorpusRecordV1) {
-  return Object.freeze(recordValue.blocks.map((spec) => Object.freeze({
-    id: `collider-${spec.id}`,
-    colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: spec.id }),
-    traversalBinding: traversalBindingFor(recordValue, spec),
-    exposedEdgePolicy: "none" as const,
-    frictionRatio: 0.8,
-    restitutionRatio: 0,
-  })));
+  return Object.freeze(Object.entries(groupBy(
+    recordValue.blocks,
+    (spec) => colliderGroupIdFor(recordValue, spec),
+  )).sort(([left], [right]) => left.localeCompare(right))
+    .map(([colliderGroupId, specs]) => {
+      const first = specs[0]!;
+      return Object.freeze({
+        id: `collider-${colliderGroupId}`,
+        colliderGeometrySource: Object.freeze({
+          kind: "block-group" as const,
+          colliderGroupId,
+        }),
+        traversalBinding: traversalBindingFor(recordValue, first),
+        exposedEdgePolicy: "none" as const,
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
+      });
+    }));
 }
 
 function errorMessage(error: unknown): string {
@@ -561,10 +585,10 @@ export function materializeBabylonNativeBlockReconstructionCorpusCaseV1(
   });
   try {
     for (const spec of recordValue.blocks) {
-      createCorpusBlock(session, spec);
+      createCorpusBlock(session, recordValue, spec);
     }
     if (!isNil(recordValue.extraBlock)) {
-      createCorpusBlock(session, recordValue.extraBlock);
+      createCorpusBlock(session, recordValue, recordValue.extraBlock);
     }
     const epoch = recordValue.colliderMode === "invalid-binding"
       ? session.finalize(Object.freeze({

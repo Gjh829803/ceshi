@@ -6,6 +6,8 @@ import {
   parseNativeBlockAuthoringManifestV1,
   parseNativeBlockVisualResourceListV1,
 } from "@whitebox-world/native-babylon-block-profile";
+import type { BabylonNativeBlockGroundAnalysisReportV1 } from
+  "@whitebox-world/native-babylon-block-profile/host";
 import {
   sha256Bytes,
   sha256CanonicalJson,
@@ -78,6 +80,8 @@ import {
   parseNativeBlockGenerationHostClosureV1,
   parseResolvedNativeBlockGenerationResourceV1,
 } from "./generation-request.js";
+import { analyzeProductionNativeBlockGroundV1 } from
+  "./native-ground-analysis-admission.js";
 
 const SOURCE_FILES = Object.freeze([
   "native-block-authoring.json",
@@ -124,6 +128,9 @@ export interface PackagedNativeBlockAttemptV1 {
   readonly worldPackageRootHash: Sha256HashV1;
   readonly worldBuildIdentityHash: Sha256HashV1;
   readonly buildReceiptHash: Sha256HashV1;
+  readonly groundAnalysisReport: BabylonNativeBlockGroundAnalysisReportV1;
+  readonly groundAnalysisReportHash: Sha256HashV1;
+  readonly groundAnalysisReportPath: string;
   readonly outputDirectoryPath: string;
   readonly diagnostics: readonly string[];
 }
@@ -546,6 +553,50 @@ export async function packageNativeBlockAttemptV1(
     if (verified.kind !== "babylon-native-scene") {
       return fail("world-package-kind-mismatch");
     }
+    const checkedEpochEvidence = prepared.nativeBlockCheckedEpochEvidence;
+    const materializerMetadata = verified.nativeBlockMaterializerMetadata;
+    if (isNil(checkedEpochEvidence) || isNil(materializerMetadata)) {
+      return fail("native-block-ground-evidence-missing");
+    }
+    const groundModelEvidenceRef =
+      `artifact://world-reconstruction-case/${reconstructionCase.id}/${attempt.id}/logical-ground-model.json`;
+    const analyzedGround = analyzeProductionNativeBlockGroundV1({
+      reconstructionCase,
+      worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
+      registryLock: verified.registryLock,
+      contribution: verified.nativeSceneContribution,
+      materializerMetadata,
+      checkedEpochEvidence,
+      worldPackageRootHash: verified.receipt.worldPackageRootHash,
+      maximumBlockCount: generationRequest.budgets.maximumBlockCount,
+      groundModelEvidenceRef,
+    });
+    const groundAnalysisReportPath = path.join(
+      attemptDirectoryPath,
+      "ground-analysis-report.json",
+    );
+    await Promise.all([
+      writeCanonicalJsonFresh(
+        path.join(attemptDirectoryPath, "logical-ground-model.json"),
+        checkedEpochEvidence.logicalGroundModel,
+      ),
+      writeCanonicalJsonFresh(
+        groundAnalysisReportPath,
+        analyzedGround.report,
+      ),
+      writeCanonicalJsonFresh(
+        path.join(attemptDirectoryPath, "ground-analysis-diagnostics.json"),
+        analyzedGround.repairDiagnostics,
+      ),
+    ]);
+    if (analyzedGround.report.admissionOutcome !== "passed") {
+      throw new NativeBlockPackageErrorV1(
+        [
+          "native-ground-analysis-rejected",
+          ...new Set(analyzedGround.repairDiagnostics.map(({ code }) => code)),
+        ],
+      );
+    }
     await writeWorldPackageDirectoryV1({
       outputDirectoryPath,
       directory,
@@ -572,6 +623,9 @@ export async function packageNativeBlockAttemptV1(
         receipt.worldBuildIdentity,
       ),
       buildReceiptHash: sha256CanonicalJson(receipt) as Sha256HashV1,
+      groundAnalysisReport: analyzedGround.report,
+      groundAnalysisReportHash: analyzedGround.report.groundAnalysisReportHash,
+      groundAnalysisReportPath,
       outputDirectoryPath,
       diagnostics: Object.freeze([]),
     });

@@ -3,7 +3,6 @@ import type { BabylonNativeSceneBuildContextV1 } from
 import {
   commitBabylonNativeProfileSettlementV1,
 } from "@whitebox-world/native-babylon/host";
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
 
 import {
@@ -13,8 +12,9 @@ import type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
 } from "./collider-contribution.js";
 import {
-  BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
-} from "./profile.js";
+  createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1,
+} from "./profile-inventory.js";
+import { BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 } from "./profile.js";
 import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
 import type {
   BabylonNativeBlockWalkableOverlayHandleV1,
@@ -31,6 +31,7 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
   colliderInventory:
     readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
   walkableOverlays: readonly BabylonNativeBlockWalkableOverlayHandleV1[];
+  expectedProfileInventoryHash: `sha256:${string}`;
 }>): `sha256:${string}` {
   const recordsById = new Map(input.checkedLayout.records.map((record) =>
     [record.input.id, record] as const));
@@ -112,9 +113,7 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
         proxyKind: collider.proxyKind,
         sourceBlockIds: Object.freeze(sourceBlockIds),
         visualGroupIds: Object.freeze(visualGroupIds),
-        ...(collider.proxyKind === "layout-block-volume"
-          ? {}
-          : { topologyHash: collider.topologyHash }),
+        topologyHash: collider.topologyHash,
         bindingElementId,
       });
     });
@@ -137,32 +136,18 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
       "Checked Layout and Session records must contain the same unique blocks.",
     );
   }
-  const profileInventoryHash = sha256CanonicalJson({
-    kind: "babylon-native-block-profile-inventory",
-    schemaVersion: 1,
-    profileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
-    displayGapMeters: Object.is(input.displayGapMeters, -0)
-      ? 0
-      : input.displayGapMeters,
-    blocks: blocks.map((block) => ({
-      id: block.id,
-      runtimeEntityId: `native-block:${block.id}`,
-      semanticCaptureClassId:
-        `worldkit.native-block.group.${block.visualGroupId ?? "ungrouped"}`,
-      shape: block.shape,
-      paletteRole: block.paletteRole,
-      ...(isNil(block.visualGroupId)
-        ? {}
-        : { visualGroupId: block.visualGroupId }),
-      ...(isNil(block.colliderGroupId)
-        ? {}
-        : { colliderGroupId: block.colliderGroupId }),
-      centerMetersXYZ: block.centerMetersXYZ,
-      rotationQuarterTurnsY: block.rotationQuarterTurnsY,
-      sizeMetersXYZ: block.sizeMetersXYZ,
-    })),
-    colliderJoins,
-  }) as `sha256:${string}`;
+  const profileInventoryHash =
+    createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1({
+      checkedLayout: input.checkedLayout,
+      displayGapMeters: input.displayGapMeters,
+      colliderInventory: input.colliderInventory,
+    }).profileInventoryHash;
+  if (profileInventoryHash !== input.expectedProfileInventoryHash) {
+    return fail(
+      "WORLDKIT_NATIVE_BLOCK_PROFILE_INVENTORY_MISMATCH",
+      "Materialized Collider joins drifted from the frozen Profile inventory.",
+    );
+  }
   commitBabylonNativeProfileSettlementV1(input.context, Object.freeze({
     kind: "babylon-native-profile-settlement-batch",
     schemaVersion: 1,

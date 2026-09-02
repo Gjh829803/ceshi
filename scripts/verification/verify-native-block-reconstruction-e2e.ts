@@ -434,10 +434,8 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
   exactStringSet(formalBlockers, caseBlockers);
   exactStringSet(contributionBlockers, caseBlockers);
 
-  const joinsByColliderId = new Map<string, readonly Readonly<{
-    colliderId: string;
-    blockId: string;
-  }>[]>();
+  const joinsByColliderId = new Map<string,
+    typeof input.materializerMetadata.colliderJoins>();
   for (const colliderId of caseBlockers) {
     joinsByColliderId.set(
       colliderId,
@@ -449,10 +447,7 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
   for (const criterion of blockCriteria) {
     const joins = joinsByColliderId.get(criterion.colliderId);
     if (joins?.length !== 1) fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
-    const block = input.materializerMetadata.blocks.find(
-      ({ blockId }) => blockId === joins[0]!.blockId,
-    );
-    if (block?.visualGroupId !== criterion.sourceVisualGroupId) {
+    if (!joins[0]!.visualGroupIds.includes(criterion.sourceVisualGroupId)) {
       fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
     }
   }

@@ -5,6 +5,14 @@ import type { BabylonNativeBlockLayoutV1 } from "./layout.js";
 import type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
 } from "./collider-contribution.js";
+import type { BabylonNativeBlockGroundBoundaryV1 } from
+  "./ground-boundary.js";
+import type { BabylonNativeBlockLogicalGroundModelV1 } from
+  "./logical-ground-model.js";
+import type { BabylonNativeBlockWalkableTopologyV1 } from
+  "./walkable-topology.js";
+import type { BabylonNativeStaticColliderContributionV1 } from
+  "@whitebox-world/runtime-contracts";
 
 export interface BabylonNativeBlockCheckedEpochEvidenceV1 {
   readonly kind: "babylon-native-block-checked-epoch-evidence";
@@ -18,6 +26,11 @@ export interface BabylonNativeBlockCheckedEpochEvidenceV1 {
   readonly profileInventoryHash: `sha256:${string}`;
   readonly colliderInventory:
     readonly BabylonNativeBlockColliderCandidateInventoryEntryV1[];
+  readonly logicalGroundModel: BabylonNativeBlockLogicalGroundModelV1;
+  readonly topology: BabylonNativeBlockWalkableTopologyV1;
+  readonly groundBoundary: BabylonNativeBlockGroundBoundaryV1;
+  readonly groundBoundaryContribution?:
+    BabylonNativeStaticColliderContributionV1;
 }
 
 const EVIDENCE_BY_SCENE = new WeakMap<

@@ -1280,7 +1280,7 @@ describe("formal measured observation documents", () => {
       ...observationIdentity("formal-collider-overlay-observation", "physics"),
       colliders: [{
         colliderId: "spawn-ground",
-        sourceBlockId: "central-ascent-block",
+        sourceBlockIds: ["central-ascent-block"],
         colliderSubshapeId: "collider-subshape:spawn-ground",
         chunkParts: [{
           chunkPartId: "spawn-ground-grid-chunk-xp0-zp0",

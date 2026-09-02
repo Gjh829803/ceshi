@@ -412,7 +412,7 @@ export interface FormalColliderOverlayObservationV1
   readonly schemaVersion: 1;
   readonly colliders: readonly Readonly<{
     colliderId: string;
-    sourceBlockId: string;
+    sourceBlockIds: readonly string[];
     colliderSubshapeId: string;
     chunkParts: readonly Readonly<{
       chunkPartId: string;
@@ -803,7 +803,7 @@ const COLLIDER_OVERLAY_OBSERVATION_FIELDS = [
   ...OBSERVATION_IDENTITY_FIELDS, "colliders", "observedTopologyRelations",
 ] as const;
 const COLLIDER_OBSERVATION_FIELDS = [
-  "colliderId", "sourceBlockId", "colliderSubshapeId", "chunkParts",
+  "colliderId", "sourceBlockIds", "colliderSubshapeId", "chunkParts",
 ] as const;
 const COLLIDER_CHUNK_PART_OBSERVATION_FIELDS = [
   "chunkPartId", "chunkResidencyGroupId", "overlayRecordId",
@@ -3143,9 +3143,26 @@ export function parseFormalColliderOverlayObservationV1(
           "must be non-empty, unique, and chunkPartId-sorted",
         );
       }
+      const sourceBlockIds = array(
+        row.sourceBlockIds,
+        contract,
+        `${path}/sourceBlockIds`,
+      ).map((sourceBlockId, sourceIndex) => text(
+        sourceBlockId,
+        contract,
+        `${path}/sourceBlockIds/${sourceIndex}`,
+      ));
+      if (sourceBlockIds.some((sourceBlockId, sourceIndex) =>
+        sourceIndex > 0 && sourceBlockIds[sourceIndex - 1]! >= sourceBlockId)) {
+        fail(
+          contract,
+          `${path}/sourceBlockIds`,
+          "must be unique and sorted",
+        );
+      }
       return Object.freeze({
         colliderId: text(row.colliderId, contract, `${path}/colliderId`),
-        sourceBlockId: text(row.sourceBlockId, contract, `${path}/sourceBlockId`),
+        sourceBlockIds: Object.freeze(sourceBlockIds),
         colliderSubshapeId: text(
           row.colliderSubshapeId, contract, `${path}/colliderSubshapeId`,
         ),

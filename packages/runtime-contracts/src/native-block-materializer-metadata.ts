@@ -32,6 +32,7 @@ export interface BabylonNativeBlockMaterializerBlockV1 {
   readonly shape: BabylonNativeBlockMaterializerShapeV1;
   readonly paletteRole: BabylonNativeBlockMaterializerPaletteRoleV1;
   readonly visualGroupId?: string;
+  readonly colliderGroupId?: string;
   readonly centerMetersXYZ: readonly [number, number, number];
   readonly rotationQuarterTurnsY: 0 | 1 | 2 | 3;
   readonly sizeMetersXYZ: readonly [number, number, number];
@@ -50,8 +51,15 @@ export interface BabylonNativeBlockMaterializerVisualGroupV1 {
 }
 
 export interface BabylonNativeBlockMaterializerColliderJoinV1 {
-  readonly blockId: string;
   readonly colliderId: string;
+  readonly sourceBlockIds: readonly [string, ...string[]];
+  readonly visualGroupIds: readonly string[];
+  readonly proxyKind: "continuous-walkable-surface" | "exact-solid-union";
+  readonly minimumMetersXYZ: readonly [number, number, number];
+  readonly maximumMetersXYZ: readonly [number, number, number];
+  readonly vertexCount: number;
+  readonly triangleCount: number;
+  readonly topologyHash: Sha256HashV1;
 }
 
 export interface BabylonNativeBlockMaterializerMetadataV1 {
@@ -207,10 +215,13 @@ function parseBlock(
     "blockId", "runtimeEntityId", "semanticCaptureClassId", "shape",
     "paletteRole", "centerMetersXYZ", "rotationQuarterTurnsY",
     "sizeMetersXYZ",
-  ], ["visualGroupId"], path);
+  ], ["visualGroupId", "colliderGroupId"], path);
   const blockId = stableId(row.blockId, `${path}/blockId`);
   const visualGroupId = Object.hasOwn(row, "visualGroupId")
     ? stableId(row.visualGroupId, `${path}/visualGroupId`)
+    : undefined;
+  const colliderGroupId = Object.hasOwn(row, "colliderGroupId")
+    ? stableId(row.colliderGroupId, `${path}/colliderGroupId`)
     : undefined;
   const expectedEntityId = `native-block:${blockId}`;
   const expectedSemanticClassId =
@@ -238,6 +249,7 @@ function parseBlock(
     shape: row.shape as BabylonNativeBlockMaterializerShapeV1,
     paletteRole: row.paletteRole as BabylonNativeBlockMaterializerPaletteRoleV1,
     ...(isNil(visualGroupId) ? {} : { visualGroupId }),
+    ...(isNil(colliderGroupId) ? {} : { colliderGroupId }),
     centerMetersXYZ: tuple3(row.centerMetersXYZ, `${path}/centerMetersXYZ`),
     rotationQuarterTurnsY: row.rotationQuarterTurnsY as 0 | 1 | 2 | 3,
     sizeMetersXYZ: tuple3(row.sizeMetersXYZ, `${path}/sizeMetersXYZ`, true),
@@ -315,10 +327,58 @@ function parseColliderJoin(
   index: number,
 ): BabylonNativeBlockMaterializerColliderJoinV1 {
   const path = `colliderJoins/${index}`;
-  const row = exactRecord(value, ["blockId", "colliderId"], [], path);
+  const row = exactRecord(value, [
+    "colliderId", "sourceBlockIds", "visualGroupIds", "proxyKind",
+    "minimumMetersXYZ", "maximumMetersXYZ", "vertexCount", "triangleCount",
+    "topologyHash",
+  ], [], path);
+  const sourceBlockIds = exactArray(
+    row.sourceBlockIds,
+    `${path}/sourceBlockIds`,
+  ).map((entry, sourceIndex) => stableId(
+    entry,
+    `${path}/sourceBlockIds/${sourceIndex}`,
+  ));
+  const visualGroupIds = exactArray(
+    row.visualGroupIds,
+    `${path}/visualGroupIds`,
+  ).map((entry, groupIndex) => stableId(
+    entry,
+    `${path}/visualGroupIds/${groupIndex}`,
+  ));
+  sortedUnique(sourceBlockIds, `${path}/sourceBlockIds`);
+  sortedUnique(visualGroupIds, `${path}/visualGroupIds`);
+  if (sourceBlockIds.length === 0) {
+    fail(`${path}/sourceBlockIds`, "must not be empty");
+  }
+  if (
+    row.proxyKind !== "continuous-walkable-surface" &&
+    row.proxyKind !== "exact-solid-union"
+  ) fail(`${path}/proxyKind`, "is outside the closed union");
+  const vertexCount = row.vertexCount as number;
+  const triangleCount = row.triangleCount as number;
+  if (
+    !Number.isSafeInteger(vertexCount) || vertexCount <= 0 ||
+    !Number.isSafeInteger(triangleCount) || triangleCount <= 0 ||
+    typeof row.topologyHash !== "string" || !HASH.test(row.topologyHash)
+  ) fail(path, "geometry counts and topologyHash are invalid");
   return Object.freeze({
-    blockId: stableId(row.blockId, `${path}/blockId`),
     colliderId: stableId(row.colliderId, `${path}/colliderId`),
+    sourceBlockIds: Object.freeze(sourceBlockIds) as
+      readonly [string, ...string[]],
+    visualGroupIds: Object.freeze(visualGroupIds),
+    proxyKind: row.proxyKind,
+    minimumMetersXYZ: tuple3(
+      row.minimumMetersXYZ,
+      `${path}/minimumMetersXYZ`,
+    ),
+    maximumMetersXYZ: tuple3(
+      row.maximumMetersXYZ,
+      `${path}/maximumMetersXYZ`,
+    ),
+    vertexCount,
+    triangleCount,
+    topologyHash: row.topologyHash as Sha256HashV1,
   });
 }
 
@@ -408,16 +468,18 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
       !groupsById.get(block.visualGroupId)?.blockIds.includes(block.blockId)
     ) fail("blocks/visualGroupId", "must join one complete visual group");
   }
-  const joinKeys = colliderJoins.map(({ blockId, colliderId }) =>
-    `${blockId}\u0000${colliderId}`);
-  sortedUnique(joinKeys, "colliderJoins");
+  sortedUnique(
+    colliderJoins.map(({ colliderId }) => colliderId),
+    "colliderJoins/colliderId",
+  );
+  const joinedBlockIds = colliderJoins.flatMap(({ sourceBlockIds }) =>
+    sourceBlockIds);
   if (
-    new Set(colliderJoins.map(({ blockId }) => blockId)).size !==
-      colliderJoins.length ||
-    new Set(colliderJoins.map(({ colliderId }) => colliderId)).size !==
-      colliderJoins.length ||
-    colliderJoins.some(({ blockId }) => !blocksById.has(blockId))
-  ) fail("colliderJoins", "must be a one-to-one join to known Blocks");
+    new Set(joinedBlockIds).size !== joinedBlockIds.length ||
+    joinedBlockIds.some((blockId) => !blocksById.has(blockId)) ||
+    colliderJoins.some(({ visualGroupIds }) =>
+      visualGroupIds.some((groupId) => !groupsById.has(groupId)))
+  ) fail("colliderJoins", "must partition known source Blocks and visual groups");
   return Object.freeze({
     kind: "babylon-native-block-materializer-metadata",
     schemaVersion: 1,
