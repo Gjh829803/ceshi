@@ -59,8 +59,10 @@ const REPAIR_CONTEXT_RELATIVE_PATHS = Object.freeze([
 ] as const);
 const REPAIR_TASK_PROTOCOL = `Repair attempt protocol:
 - Begin from the immutable prior source at inputs/attempts/0/source/scene.ts, inputs/attempts/0/source/native-block-authoring.json, and inputs/attempts/0/source/native-resources.json.
+- Read context/repair-instruction.json first. For every diagnostic, execute its repairAction.instruction against the declared targetId and operation; do not substitute a change to names, tags, materials, or logical subshape ids unless that exact action requests it.
 - Read inputs/attempts/0/evaluation.json and the identity-bound evidence under inputs/attempts/0/capture/ before editing.
 - Inspect inputs/attempts/0/capture/opening.png and inputs/attempts/0/capture/collider-overlay.png for the visual and collider diagnostics.
+- Do not change the Case, Profile, or acceptance thresholds. The diagnostic expected value, actual value, allowed threshold, exceeded amount, and correction direction are frozen evidence, not authoring suggestions.
 - Write a complete revised replacement only to the three declared output paths. Never mutate the prior source, evidence, frozen owners, or thresholds.`;
 
 export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;

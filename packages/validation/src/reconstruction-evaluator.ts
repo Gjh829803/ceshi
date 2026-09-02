@@ -13,6 +13,8 @@ import {
   WORLD_RECONSTRUCTION_DIMENSION_IDS_V1,
   type WorldReconstructionCaseV1,
   type WorldReconstructionDiagnosticCodeV1,
+  type WorldReconstructionDiagnosticDetailsV1,
+  type WorldReconstructionDiagnosticMetricIdV1,
   type WorldReconstructionDiagnosticV1,
   type WorldReconstructionDimensionIdV1,
   type WorldReconstructionEvaluationProfileV1,
@@ -25,6 +27,7 @@ import {
   type WorldReconstructionObservedDimensionV1,
   type WorldReconstructionOutcomeV1,
   type WorldReconstructionPositionXYZMetersV1,
+  type WorldReconstructionRepairActionV1,
   type WorldReconstructionTopologyRelationV1,
 } from "./reconstruction-contracts.js";
 
@@ -37,8 +40,13 @@ interface EvaluateWorldReconstructionV1Input {
 interface DraftDiagnosticV1 {
   readonly code: WorldReconstructionDiagnosticCodeV1;
   readonly acceptanceTargetRef: string;
+  readonly targetRef: string;
+  readonly targetId: string;
+  readonly metricId: WorldReconstructionDiagnosticMetricIdV1;
+  readonly details: WorldReconstructionDiagnosticDetailsV1;
   readonly evidenceRefs: readonly string[];
   readonly message: string;
+  readonly repairAction?: WorldReconstructionRepairActionV1;
 }
 
 interface DimensionDraftV1 {
@@ -112,6 +120,101 @@ function millimeterMetric(valueMillimeters: number): WorldReconstructionMetricV1
   });
 }
 
+function basisPointsThresholdDetails(
+  expectedBasisPoints: number,
+  actualBasisPoints: number,
+  maximumAllowedDriftBasisPoints: number,
+): Extract<WorldReconstructionDiagnosticDetailsV1, {
+  kind: "basis-points-threshold";
+}> {
+  return Object.freeze({
+    kind: "basis-points-threshold",
+    expectedBasisPoints,
+    actualBasisPoints,
+    maximumAllowedDriftBasisPoints,
+    exceededByBasisPoints:
+      Math.abs(actualBasisPoints - expectedBasisPoints) -
+      maximumAllowedDriftBasisPoints,
+    correctionDirection:
+      actualBasisPoints < expectedBasisPoints ? "increase" : "decrease",
+  });
+}
+
+function millimetersThresholdDetails(
+  expectedMillimeters: number,
+  actualMillimeters: number,
+  maximumAllowedDriftMillimeters: number,
+): Extract<WorldReconstructionDiagnosticDetailsV1, {
+  kind: "millimeters-threshold";
+}> {
+  return Object.freeze({
+    kind: "millimeters-threshold",
+    expectedMillimeters,
+    actualMillimeters,
+    maximumAllowedDriftMillimeters,
+    exceededByMillimeters:
+      Math.abs(actualMillimeters - expectedMillimeters) -
+      maximumAllowedDriftMillimeters,
+    correctionDirection:
+      actualMillimeters < expectedMillimeters ? "increase" : "decrease",
+  });
+}
+
+function stateMismatchDetails(
+  expectedValue: string,
+  actualValue: string,
+): Extract<WorldReconstructionDiagnosticDetailsV1, {
+  kind: "state-mismatch";
+}> {
+  return Object.freeze({
+    kind: "state-mismatch",
+    expectedValue,
+    actualValue,
+    correctionDirection: "replace",
+  });
+}
+
+function presenceMismatchDetails(): Extract<
+  WorldReconstructionDiagnosticDetailsV1,
+  { kind: "presence-mismatch" }
+> {
+  return Object.freeze({
+    kind: "presence-mismatch",
+    expectedValue: "present",
+    actualValue: "missing",
+    correctionDirection: "add",
+  });
+}
+
+function sequenceMismatchDetails(
+  expectedValues: readonly string[],
+  actualValues: readonly string[],
+): Extract<WorldReconstructionDiagnosticDetailsV1, {
+  kind: "sequence-mismatch";
+}> {
+  return Object.freeze({
+    kind: "sequence-mismatch",
+    expectedValues: Object.freeze([...expectedValues]),
+    actualValues: Object.freeze([...actualValues]),
+    correctionDirection: "reorder",
+  });
+}
+
+function sourceRepairAction(
+  targetKind: WorldReconstructionRepairActionV1["targetKind"],
+  targetId: string,
+  operation: WorldReconstructionRepairActionV1["operation"],
+  instruction: string,
+): WorldReconstructionRepairActionV1 {
+  return Object.freeze({
+    kind: "revise-native-source",
+    targetKind,
+    targetId,
+    operation,
+    instruction,
+  });
+}
+
 function boundsDrift(
   expected: WorldReconstructionNormalizedBoundsV1,
   observed: WorldReconstructionNormalizedBoundsV1,
@@ -181,6 +284,10 @@ function missingEvidenceDraft(
     diagnostics: Object.freeze([{
       code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
       acceptanceTargetRef,
+      targetRef: acceptanceTargetRef,
+      targetId: dimensionId,
+      metricId: "required-evidence-presence",
+      details: presenceMismatchDetails(),
       evidenceRefs: uniqueSorted(evidenceRefs),
       message: `Required evidence is missing for ${dimensionId}.`,
     }]),
@@ -200,6 +307,10 @@ function staleDraft(
     diagnostics: Object.freeze([{
       code: "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
       acceptanceTargetRef,
+      targetRef: acceptanceTargetRef,
+      targetId: dimensionId,
+      metricId: "evidence-identity",
+      details: stateMismatchDetails("current", "stale"),
       evidenceRefs: uniqueSorted(evidenceRefs),
       message: "Stale Case, Profile, or Evidence identities cannot be scored.",
     }]),
@@ -288,24 +399,59 @@ function evaluateTopology(
     !observedRelationKeys.has(relationKey(relation))
   );
   const diagnostics: DraftDiagnosticV1[] = [];
-  if (!isEmpty(missingNodes) || !isEmpty(missingLayers)) {
-    const parts = [
-      ...isEmpty(missingNodes) ? [] : [`nodes: ${missingNodes.join(", ")}`],
-      ...isEmpty(missingLayers) ? [] : [`layers: ${missingLayers.join(", ")}`],
-    ];
+  for (const nodeId of missingNodes) {
     diagnostics.push({
       code: "WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING",
       acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: nodeId,
+      metricId: "topology-node-presence",
+      details: presenceMismatchDetails(),
       evidenceRefs: row.evidenceRefs,
-      message: `Required topology graph members are missing: ${parts.join("; ")}.`,
+      message: `Required topology node ${nodeId} is missing.`,
+      repairAction: sourceRepairAction(
+        "topology-node",
+        nodeId,
+        "add",
+        `Add topology node ${nodeId} by revising the Native visual groups and native-block-authoring.json; do not edit the Case or thresholds.`,
+      ),
     });
   }
-  if (!isEmpty(missingRelations)) {
+  for (const layerId of missingLayers) {
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: layerId,
+      metricId: "topology-layer-presence",
+      details: presenceMismatchDetails(),
+      evidenceRefs: row.evidenceRefs,
+      message: `Required topology layer ${layerId} is missing.`,
+      repairAction: sourceRepairAction(
+        "topology-layer",
+        layerId,
+        "add",
+        `Add topology layer ${layerId} by revising the Native visual groups and native-block-authoring.json; do not edit the Case or thresholds.`,
+      ),
+    });
+  }
+  for (const relation of missingRelations) {
+    const formattedRelation = formatRelation(relation);
     diagnostics.push({
       code: "WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING",
       acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: formattedRelation,
+      metricId: "topology-relation-presence",
+      details: presenceMismatchDetails(),
       evidenceRefs: row.evidenceRefs,
-      message: `Required topology relations are missing: ${missingRelations.map(formatRelation).join(", ")}.`,
+      message: `Required topology relation ${formattedRelation} is missing.`,
+      repairAction: sourceRepairAction(
+        "topology-relation",
+        formattedRelation,
+        "add",
+        `Revise Native geometry so the captured topology proves ${formattedRelation}; do not edit the Case, evidence, or thresholds.`,
+      ),
     });
   }
   if (!isEmpty(diagnostics)) {
@@ -349,11 +495,24 @@ function evaluateSemanticSilhouette(
       || observedTarget.visualGroupId !== expected.visualGroupId
     ) {
       hasIdentityMismatch = true;
+      const actualValue = isNil(observedTarget)
+        ? "missing"
+        : observedTarget.visualGroupId;
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.visualGroupId,
+        metricId: "semantic-target-binding",
+        details: stateMismatchDetails(expected.visualGroupId, actualValue),
         evidenceRefs: row.evidenceRefs,
-        message: `Semantic silhouette target ${expected.acceptanceTargetRef} is missing or unbound.`,
+        message: `Semantic silhouette target ${expected.acceptanceTargetRef} expected visual group ${expected.visualGroupId}, observed ${actualValue}.`,
+        repairAction: sourceRepairAction(
+          "visual-group",
+          expected.visualGroupId,
+          "bind",
+          `Create or bind visual group ${expected.visualGroupId} to acceptance target ${expected.acceptanceTargetRef}; do not edit the Case or thresholds.`,
+        ),
       });
       continue;
     }
@@ -365,16 +524,85 @@ function evaluateSemanticSilhouette(
     maximumBoundsDrift = Math.max(maximumBoundsDrift, nextBoundsDrift);
     maximumCenterDrift = Math.max(maximumCenterDrift, nextCenterDrift);
     maximumCoverageDrift = Math.max(maximumCoverageDrift, nextCoverageDrift);
-    if (
-      nextBoundsDrift > threshold.maximumBoundsDriftBasisPoints
-      || nextCenterDrift > threshold.maximumCenterDriftBasisPoints
-      || nextCoverageDrift > threshold.maximumCoverageDriftBasisPoints
-    ) {
+    const boundsMetrics = [
+      ["semantic-bounds-min-x-basis-points", "minimum screen X edge", expected.normalizedBounds.minXBasisPoints, observedTarget.normalizedBounds.minXBasisPoints],
+      ["semantic-bounds-min-y-basis-points", "minimum screen Y edge", expected.normalizedBounds.minYBasisPoints, observedTarget.normalizedBounds.minYBasisPoints],
+      ["semantic-bounds-max-x-basis-points", "maximum screen X edge", expected.normalizedBounds.maxXBasisPoints, observedTarget.normalizedBounds.maxXBasisPoints],
+      ["semantic-bounds-max-y-basis-points", "maximum screen Y edge", expected.normalizedBounds.maxYBasisPoints, observedTarget.normalizedBounds.maxYBasisPoints],
+    ] as const;
+    for (const [metricId, label, expectedValue, actualValue] of boundsMetrics) {
+      if (Math.abs(actualValue - expectedValue) <= threshold.maximumBoundsDriftBasisPoints) continue;
+      const details = basisPointsThresholdDetails(
+        expectedValue,
+        actualValue,
+        threshold.maximumBoundsDriftBasisPoints,
+      );
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.visualGroupId,
+        metricId,
+        details,
         evidenceRefs: row.evidenceRefs,
-        message: `Semantic silhouette target ${expected.acceptanceTargetRef} drifted beyond Profile thresholds.`,
+        message: `Visual group ${expected.visualGroupId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumBoundsDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
+        repairAction: sourceRepairAction(
+          "visual-group",
+          expected.visualGroupId,
+          "resize",
+          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; keep drift within ${threshold.maximumBoundsDriftBasisPoints} and do not edit thresholds.`,
+        ),
+      });
+    }
+    const centerMetrics = [
+      ["semantic-center-x-basis-points", "screen X center", expected.normalizedCenter.xBasisPoints, observedTarget.normalizedCenter.xBasisPoints],
+      ["semantic-center-y-basis-points", "screen Y center", expected.normalizedCenter.yBasisPoints, observedTarget.normalizedCenter.yBasisPoints],
+    ] as const;
+    for (const [metricId, label, expectedValue, actualValue] of centerMetrics) {
+      if (Math.abs(actualValue - expectedValue) <= threshold.maximumCenterDriftBasisPoints) continue;
+      const details = basisPointsThresholdDetails(
+        expectedValue,
+        actualValue,
+        threshold.maximumCenterDriftBasisPoints,
+      );
+      diagnostics.push({
+        code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+        acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.visualGroupId,
+        metricId,
+        details,
+        evidenceRefs: row.evidenceRefs,
+        message: `Visual group ${expected.visualGroupId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumCenterDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
+        repairAction: sourceRepairAction(
+          "visual-group",
+          expected.visualGroupId,
+          "move",
+          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; keep drift within ${threshold.maximumCenterDriftBasisPoints} and do not edit thresholds.`,
+        ),
+      });
+    }
+    if (nextCoverageDrift > threshold.maximumCoverageDriftBasisPoints) {
+      const details = basisPointsThresholdDetails(
+        expected.coverageBasisPoints,
+        observedTarget.coverageBasisPoints,
+        threshold.maximumCoverageDriftBasisPoints,
+      );
+      diagnostics.push({
+        code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+        acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.visualGroupId,
+        metricId: "semantic-coverage-basis-points",
+        details,
+        evidenceRefs: row.evidenceRefs,
+        message: `Visual group ${expected.visualGroupId} coverage is ${observedTarget.coverageBasisPoints} basis points; target ${expected.coverageBasisPoints}, allowed drift ${threshold.maximumCoverageDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
+        repairAction: sourceRepairAction(
+          "visual-group",
+          expected.visualGroupId,
+          "resize",
+          `${details.correctionDirection === "increase" ? "Enlarge" : "Shrink"} visual group ${expected.visualGroupId} toward ${expected.coverageBasisPoints} coverage basis points; keep drift within ${threshold.maximumCoverageDriftBasisPoints} and do not edit thresholds.`,
+        ),
       });
     }
   }
@@ -423,19 +651,51 @@ function evaluateOpeningComposition(
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: region.targetRef,
+        targetId: region.targetRef,
+        metricId: "opening-region-presence",
+        details: presenceMismatchDetails(),
         evidenceRefs: row.evidenceRefs,
         message: `Opening composition region ${region.targetRef} is missing.`,
+        repairAction: sourceRepairAction(
+          "composition-target",
+          region.targetRef,
+          "add",
+          `Add or restore the Native visual group bound to opening region ${region.targetRef}; do not edit the Case or thresholds.`,
+        ),
       });
       continue;
     }
     const drift = boundsDrift(region.normalizedBounds, observedRegion.normalizedBounds);
     maximumRegionDrift = Math.max(maximumRegionDrift, drift);
-    if (drift > threshold.maximumDriftBasisPoints) {
+    const regionBoundsMetrics = [
+      ["opening-region-min-x-basis-points", "minimum screen X edge", region.normalizedBounds.minXBasisPoints, observedRegion.normalizedBounds.minXBasisPoints],
+      ["opening-region-min-y-basis-points", "minimum screen Y edge", region.normalizedBounds.minYBasisPoints, observedRegion.normalizedBounds.minYBasisPoints],
+      ["opening-region-max-x-basis-points", "maximum screen X edge", region.normalizedBounds.maxXBasisPoints, observedRegion.normalizedBounds.maxXBasisPoints],
+      ["opening-region-max-y-basis-points", "maximum screen Y edge", region.normalizedBounds.maxYBasisPoints, observedRegion.normalizedBounds.maxYBasisPoints],
+    ] as const;
+    for (const [metricId, label, expectedValue, actualValue] of regionBoundsMetrics) {
+      if (Math.abs(actualValue - expectedValue) <= threshold.maximumDriftBasisPoints) continue;
+      const details = basisPointsThresholdDetails(
+        expectedValue,
+        actualValue,
+        threshold.maximumDriftBasisPoints,
+      );
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: region.targetRef,
+        targetId: region.targetRef,
+        metricId,
+        details,
         evidenceRefs: row.evidenceRefs,
-        message: `Opening composition region ${region.targetRef} drifted beyond Profile thresholds.`,
+        message: `Opening region ${region.targetRef} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
+        repairAction: sourceRepairAction(
+          "composition-target",
+          region.targetRef,
+          "resize",
+          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} the Native visual group bound to opening region ${region.targetRef} at its ${label} toward ${expectedValue} basis points; do not edit thresholds.`,
+        ),
       });
     }
   }
@@ -451,19 +711,49 @@ function evaluateOpeningComposition(
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: anchor.targetRef,
+        targetId: anchor.targetRef,
+        metricId: "opening-anchor-presence",
+        details: presenceMismatchDetails(),
         evidenceRefs: row.evidenceRefs,
         message: `Opening composition anchor ${anchor.targetRef} is missing.`,
+        repairAction: sourceRepairAction(
+          "composition-target",
+          anchor.targetRef,
+          "add",
+          `Add or restore the Native visual group bound to opening anchor ${anchor.targetRef}; do not edit the Case or thresholds.`,
+        ),
       });
       continue;
     }
     const drift = centerDrift(anchor.normalizedCenter, observedAnchor.normalizedCenter);
     maximumAnchorDrift = Math.max(maximumAnchorDrift, drift);
-    if (drift > threshold.maximumDriftBasisPoints) {
+    const anchorCenterMetrics = [
+      ["opening-anchor-x-basis-points", "screen X center", anchor.normalizedCenter.xBasisPoints, observedAnchor.normalizedCenter.xBasisPoints],
+      ["opening-anchor-y-basis-points", "screen Y center", anchor.normalizedCenter.yBasisPoints, observedAnchor.normalizedCenter.yBasisPoints],
+    ] as const;
+    for (const [metricId, label, expectedValue, actualValue] of anchorCenterMetrics) {
+      if (Math.abs(actualValue - expectedValue) <= threshold.maximumDriftBasisPoints) continue;
+      const details = basisPointsThresholdDetails(
+        expectedValue,
+        actualValue,
+        threshold.maximumDriftBasisPoints,
+      );
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: anchor.targetRef,
+        targetId: anchor.targetRef,
+        metricId,
+        details,
         evidenceRefs: row.evidenceRefs,
-        message: `Opening composition anchor ${anchor.targetRef} drifted beyond Profile thresholds.`,
+        message: `Opening anchor ${anchor.targetRef} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumDriftBasisPoints}, exceeded by ${details.exceededByBasisPoints}.`,
+        repairAction: sourceRepairAction(
+          "composition-target",
+          anchor.targetRef,
+          "move",
+          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} the Native visual group bound to opening anchor ${anchor.targetRef} ${label} toward ${expectedValue} basis points; do not edit thresholds.`,
+        ),
       });
     }
   }
@@ -475,8 +765,21 @@ function evaluateOpeningComposition(
     diagnostics.push({
       code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
       acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: expected.acceptanceTargetRef,
+      metricId: "opening-target-order",
+      details: sequenceMismatchDetails(
+        expected.orderedTargetRefs,
+        observed.orderedTargetRefs,
+      ),
       evidenceRefs: row.evidenceRefs,
       message: "Opening composition target order does not match the Case.",
+      repairAction: sourceRepairAction(
+        "composition-target",
+        expected.acceptanceTargetRef,
+        "reorder",
+        `Reposition the Native visual groups bound to opening targets so their order is ${expected.orderedTargetRefs.join(" -> ")}; do not edit the Case or thresholds.`,
+      ),
     });
   } else {
     for (let index = 0; index < expected.orderedTargetRefs.length - 1; index += 1) {
@@ -487,16 +790,26 @@ function evaluateOpeningComposition(
       const observedDistance = observed.distances.find((entry) =>
         entry.fromTargetRef === fromTargetRef && entry.toTargetRef === toTargetRef
       );
-      if (
-        isNil(observedDistance)
-        || observedDistance.distanceBasisPoints
-          > profile.thresholds.openingComposition.maximumOrderDistanceBasisPoints
-      ) {
+      const maximumDistance = profile.thresholds.openingComposition.maximumOrderDistanceBasisPoints;
+      const actualDistance = observedDistance?.distanceBasisPoints ?? 10_000;
+      if (isNil(observedDistance) || actualDistance > maximumDistance) {
+        const details = basisPointsThresholdDetails(0, actualDistance, maximumDistance);
+        const targetId = `${fromTargetRef}->${toTargetRef}`;
         diagnostics.push({
           code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
           acceptanceTargetRef: expected.acceptanceTargetRef,
+          targetRef: expected.acceptanceTargetRef,
+          targetId,
+          metricId: "opening-framing-distance-basis-points",
+          details,
           evidenceRefs: row.evidenceRefs,
-          message: `Opening composition framing distance ${fromTargetRef} to ${toTargetRef} exceeded the Profile threshold.`,
+          message: `Opening framing distance ${fromTargetRef} to ${toTargetRef} is ${actualDistance} basis points; maximum ${maximumDistance}, exceeded by ${details.exceededByBasisPoints}.`,
+          repairAction: sourceRepairAction(
+            "composition-target",
+            targetId,
+            "move",
+            `Move the Native visual groups bound to ${fromTargetRef} and ${toTargetRef} closer in the opening frame until their distance is at most ${maximumDistance} basis points; do not edit thresholds.`,
+          ),
         });
       }
     }
@@ -527,7 +840,13 @@ function uniqueDraftDiagnostics(
   const seen = new Set<string>();
   const unique: DraftDiagnosticV1[] = [];
   for (const diagnostic of diagnostics) {
-    const key = `${diagnostic.code}\0${diagnostic.acceptanceTargetRef}`;
+    const key = [
+      diagnostic.code,
+      diagnostic.acceptanceTargetRef,
+      diagnostic.targetRef,
+      diagnostic.targetId,
+      diagnostic.metricId,
+    ].join("\0");
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(diagnostic);
@@ -564,6 +883,107 @@ function evaluateSpawnSupport(
       millimeterMetric(nextGap),
     ]);
   }
+  const diagnostics: DraftDiagnosticV1[] = [];
+  if (observed.spawnMarkerId !== expected.spawnMarkerId) {
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: expected.spawnMarkerId,
+      metricId: "spawn-marker-identity",
+      details: stateMismatchDetails(expected.spawnMarkerId, observed.spawnMarkerId),
+      evidenceRefs: row.evidenceRefs,
+      message: `Spawn marker is ${observed.spawnMarkerId}; expected ${expected.spawnMarkerId}.`,
+      repairAction: sourceRepairAction(
+        "spawn-marker",
+        expected.spawnMarkerId,
+        "bind",
+        `Bind the Native spawn contribution to marker ${expected.spawnMarkerId}; do not edit the Case or thresholds.`,
+      ),
+    });
+  }
+  if (observed.supportColliderId !== expected.supportColliderId) {
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: expected.supportColliderId,
+      metricId: "spawn-support-collider-identity",
+      details: stateMismatchDetails(expected.supportColliderId, observed.supportColliderId),
+      evidenceRefs: row.evidenceRefs,
+      message: `Spawn support collider is ${observed.supportColliderId}; expected ${expected.supportColliderId}.`,
+      repairAction: sourceRepairAction(
+        "static-collider",
+        expected.supportColliderId,
+        "bind",
+        `Place spawn marker ${expected.spawnMarkerId} on static collider ${expected.supportColliderId} and preserve that explicit contribution identity.`,
+      ),
+    });
+  }
+  if (observed.medium !== expected.expectedMedium) {
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: expected.spawnMarkerId,
+      metricId: "spawn-medium",
+      details: stateMismatchDetails(expected.expectedMedium, observed.medium),
+      evidenceRefs: row.evidenceRefs,
+      message: `Spawn medium is ${observed.medium}; expected ${expected.expectedMedium}.`,
+      repairAction: sourceRepairAction(
+        "spawn-marker",
+        expected.spawnMarkerId,
+        "adjust-support",
+        `Move spawn marker ${expected.spawnMarkerId} onto a stable ${expected.expectedMedium} support surface contributed by ${expected.supportColliderId}.`,
+      ),
+    });
+  }
+  if (nextPositionDrift > profile.thresholds.spawnSupport.maximumPositionDriftMillimeters) {
+    const details = millimetersThresholdDetails(
+      0,
+      nextPositionDrift,
+      profile.thresholds.spawnSupport.maximumPositionDriftMillimeters,
+    );
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: expected.spawnMarkerId,
+      metricId: "spawn-position-drift-millimeters",
+      details,
+      evidenceRefs: row.evidenceRefs,
+      message: `Spawn position drift is ${nextPositionDrift}mm; maximum ${profile.thresholds.spawnSupport.maximumPositionDriftMillimeters}mm, exceeded by ${details.exceededByMillimeters}mm.`,
+      repairAction: sourceRepairAction(
+        "spawn-marker",
+        expected.spawnMarkerId,
+        "move",
+        `Move spawn marker ${expected.spawnMarkerId} toward [${expected.expectedPositionXYZMeters.xMeters}, ${expected.expectedPositionXYZMeters.yMeters}, ${expected.expectedPositionXYZMeters.zMeters}] meters until position drift is at most ${profile.thresholds.spawnSupport.maximumPositionDriftMillimeters}mm.`,
+      ),
+    });
+  }
+  if (nextGap > profile.thresholds.spawnSupport.maximumSupportGapMillimeters) {
+    const details = millimetersThresholdDetails(
+      0,
+      nextGap,
+      profile.thresholds.spawnSupport.maximumSupportGapMillimeters,
+    );
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: expected.spawnMarkerId,
+      metricId: "spawn-support-gap-millimeters",
+      details,
+      evidenceRefs: row.evidenceRefs,
+      message: `Spawn support gap is ${nextGap}mm; maximum ${profile.thresholds.spawnSupport.maximumSupportGapMillimeters}mm, exceeded by ${details.exceededByMillimeters}mm.`,
+      repairAction: sourceRepairAction(
+        "spawn-marker",
+        expected.spawnMarkerId,
+        "adjust-support",
+        `Lower spawn marker ${expected.spawnMarkerId} or raise support collider ${expected.supportColliderId} until the support gap is at most ${profile.thresholds.spawnSupport.maximumSupportGapMillimeters}mm.`,
+      ),
+    });
+  }
   return failedDraft(
     "spawn-support",
     row.evidenceRefs,
@@ -573,12 +993,7 @@ function evaluateSpawnSupport(
       millimeterMetric(nextPositionDrift),
       millimeterMetric(nextGap),
     ],
-    [{
-      code: "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
-      acceptanceTargetRef: expected.acceptanceTargetRef,
-      evidenceRefs: row.evidenceRefs,
-      message: "Spawn support is missing, unsupported, or outside Profile tolerances.",
-    }],
+    uniqueDraftDiagnostics(diagnostics),
   );
 }
 
@@ -601,23 +1016,86 @@ function evaluateCollider(
     const observedContribution = observed.contributions.find(
       (entry) => entry.contributionId === expected.contributionId,
     );
-    if (isNil(observedContribution) || (expected.requiresOverlay && observedContribution.hasOverlay !== true)) {
+    if (isNil(observedContribution)) {
       hasMissing = true;
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.colliderId,
+        metricId: "collider-contribution-presence",
+        details: presenceMismatchDetails(),
         evidenceRefs: row.evidenceRefs,
         message: `Required collider contribution ${expected.contributionId} is missing.`,
+        repairAction: sourceRepairAction(
+          "static-collider",
+          expected.colliderId,
+          "add",
+          `Register static collider contribution ${expected.contributionId} with collider id ${expected.colliderId}; do not infer colliders from Mesh names, tags, or materials.`,
+        ),
       });
       continue;
     }
-    if (observedContribution.colliderId !== expected.colliderId || observedContribution.role !== expected.role) {
+    if (expected.requiresOverlay && observedContribution.hasOverlay !== true) {
+      hasMissing = true;
+      diagnostics.push({
+        code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+        acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.colliderId,
+        metricId: "collider-overlay-presence",
+        details: presenceMismatchDetails(),
+        evidenceRefs: row.evidenceRefs,
+        message: `Required collider overlay for ${expected.colliderId} is missing.`,
+        repairAction: sourceRepairAction(
+          "static-collider",
+          expected.colliderId,
+          "bind",
+          `Preserve static collider contribution ${expected.contributionId} so formal Capture can render its identity-bound collider overlay.`,
+        ),
+      });
+    }
+    if (observedContribution.colliderId !== expected.colliderId) {
       hasRoleMismatch = true;
       diagnostics.push({
         code: "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.colliderId,
+        metricId: "collider-identity",
+        details: stateMismatchDetails(expected.colliderId, observedContribution.colliderId),
+        evidenceRefs: row.evidenceRefs,
+        message: `Collider contribution ${expected.contributionId} resolves to ${observedContribution.colliderId}; expected ${expected.colliderId}.`,
+        repairAction: sourceRepairAction(
+          "static-collider",
+          expected.colliderId,
+          "bind",
+          `Bind contribution ${expected.contributionId} to static collider ${expected.colliderId}; do not rename the Case target or scan Mesh metadata.`,
+        ),
+      });
+    }
+    if (observedContribution.role !== expected.role) {
+      hasRoleMismatch = true;
+      const instruction = expected.role === "blocker"
+        ? `Set static collider ${expected.colliderId} traversalBinding.kind to "not-traversable" so the Host derives role blocker. Changing logicalSubshapeId, name, tag, material, paletteRole, or shape does not change the Host-derived blocker role.`
+        : expected.role === "step"
+          ? `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" and author its source block with shape.kind "step" so the Host derives role step.`
+          : `Set static collider ${expected.colliderId} traversalBinding.kind to "static-surface" and use a non-step source block shape so the Host derives role ground.`;
+      diagnostics.push({
+        code: "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
+        acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.colliderId,
+        metricId: "collider-role",
+        details: stateMismatchDetails(expected.role, observedContribution.role),
         evidenceRefs: row.evidenceRefs,
         message: `Required collider ${expected.colliderId} has role ${observedContribution.role} instead of ${expected.role}.`,
+        repairAction: sourceRepairAction(
+          "static-collider",
+          expected.colliderId,
+          "set-traversal-binding",
+          instruction,
+        ),
       });
     }
   }
@@ -658,6 +1136,10 @@ function evaluateCriticalTraversal(
       missingDiagnostics.push({
         code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.id,
+        metricId: "critical-traversal-evidence",
+        details: presenceMismatchDetails(),
         evidenceRefs: row.evidenceRefs,
         message: `Required traversal evidence is missing for ${expected.id}.`,
       });
@@ -667,16 +1149,36 @@ function evaluateCriticalTraversal(
       failureDiagnostics.push({
         code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.id,
+        metricId: "critical-traversal-outcome",
+        details: stateMismatchDetails("reached", observedCheck.outcome),
         evidenceRefs: row.evidenceRefs,
         message: `Required traversal ${expected.id} was blocked.`,
+        repairAction: sourceRepairAction(
+          "traversal-check",
+          expected.id,
+          "adjust-traversal",
+          `Open or reshape the Native route for traversal check ${expected.id} until every declared checkpoint is reachable; keep required blocker colliders intact.`,
+        ),
       });
     }
     if (expected.expectation === "block" && observedCheck.outcome === "reached") {
       failureDiagnostics.push({
         code: "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE",
         acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.id,
+        metricId: "critical-traversal-outcome",
+        details: stateMismatchDetails("blocked", observedCheck.outcome),
         evidenceRefs: row.evidenceRefs,
         message: `Required blocker ${expected.id} was passable.`,
+        repairAction: sourceRepairAction(
+          "traversal-check",
+          expected.id,
+          "adjust-traversal",
+          `Close the Native blocker for traversal check ${expected.id} and register its static collider with traversalBinding.kind "not-traversable" so the path remains blocked.`,
+        ),
       });
     }
   }
@@ -722,16 +1224,42 @@ function evaluateDeterministicBuild(
       receiptOutcome("completed"),
     ]);
   }
+  const diagnostics: DraftDiagnosticV1[] = [];
+  if (observed.candidateReplayOutcome !== "completed") {
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId: "candidate-replay",
+      metricId: "deterministic-candidate-replay",
+      details: stateMismatchDetails("completed", observed.candidateReplayOutcome),
+      evidenceRefs: row.evidenceRefs,
+      message: `Candidate replay outcome is ${observed.candidateReplayOutcome}; expected completed.`,
+    });
+  }
+  const identityChecks = [
+    ["deterministic-world-package-identity", "world-package", observed.worldPackageIdentityMatches],
+    ["deterministic-build-identity", "world-build", observed.buildIdentityMatches],
+    ["deterministic-capture-identity", "capture", observed.captureIdentityMatches],
+  ] as const;
+  for (const [metricId, targetId, isMatch] of identityChecks) {
+    if (isMatch) continue;
+    diagnostics.push({
+      code: "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
+      acceptanceTargetRef: expected.acceptanceTargetRef,
+      targetRef: expected.acceptanceTargetRef,
+      targetId,
+      metricId,
+      details: stateMismatchDetails("matching", "mismatched"),
+      evidenceRefs: row.evidenceRefs,
+      message: `Deterministic ${targetId} identity does not match the frozen attempt.`,
+    });
+  }
   return failedDraft(
     "deterministic-build",
     row.evidenceRefs,
     [failurePresence(), failureMatch(), receiptOutcome("failed")],
-    [{
-      code: "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC",
-      acceptanceTargetRef: expected.acceptanceTargetRef,
-      evidenceRefs: row.evidenceRefs,
-      message: "Deterministic build identities or Candidate replay do not agree.",
-    }],
+    uniqueDraftDiagnostics(diagnostics),
   );
 }
 
@@ -772,22 +1300,29 @@ function finishResult(
       const common = {
         kind: "world-reconstruction-diagnostic" as const,
         schemaVersion: 1 as const,
-        id: `world-reconstruction-diagnostic:${draft.dimensionId}:${diagnostic.code}:${diagnostic.acceptanceTargetRef}`,
+        id: `world-reconstruction-diagnostic:${draft.dimensionId}:${diagnostic.code}:${diagnostic.metricId}:${diagnostic.targetRef}:${diagnostic.targetId}`,
         dimensionId: draft.dimensionId,
         acceptanceTargetRef: diagnostic.acceptanceTargetRef,
+        targetRef: diagnostic.targetRef,
+        targetId: diagnostic.targetId,
+        metricId: diagnostic.metricId,
+        details: diagnostic.details,
         evidenceRefs: uniqueSorted(diagnostic.evidenceRefs),
         message: diagnostic.message,
       };
       if (!isWorldReconstructionRepairableDiagnosticCodeV1(diagnostic.code)) {
         return Object.freeze({ ...common, code: diagnostic.code });
       }
+      if (isNil(diagnostic.repairAction)) {
+        throw new Error(`Repairable diagnostic ${diagnostic.code} requires an executable repair action.`);
+      }
       return Object.freeze({
         ...common,
         code: diagnostic.code,
-        repairAction: Object.freeze({ kind: "revise-native-source" as const }),
+        repairAction: diagnostic.repairAction,
       });
     })),
-    ["dimensionId", "code", "acceptanceTargetRef"],
+    ["dimensionId", "code", "metricId", "targetRef", "targetId"],
   );
   const dimensions = WORLD_RECONSTRUCTION_DIMENSION_IDS_V1.map((dimensionId) => {
     const draft = drafts.find((entry) => entry.dimensionId === dimensionId)!;

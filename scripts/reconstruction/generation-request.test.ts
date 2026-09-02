@@ -421,9 +421,24 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
           dimensionId: "collider",
           acceptanceTargetRef: "worldkit://acceptance-target/gate@1",
+          targetRef: "worldkit://acceptance-target/gate@1",
+          targetId: "gate-wall",
+          metricId: "collider-contribution-presence",
+          details: {
+            kind: "presence-mismatch",
+            expectedValue: "present",
+            actualValue: "missing",
+            correctionDirection: "add",
+          },
           evidenceRefs: ["artifact://run/attempts/0/evidence-set.json"],
           message: "Collider is missing.",
-          repairAction: { kind: "revise-native-source" },
+          repairAction: {
+            kind: "revise-native-source",
+            targetKind: "static-collider",
+            targetId: "gate-wall",
+            operation: "add",
+            instruction: "Register the missing gate-wall static collider contribution.",
+          },
         })],
         priorSourceRef: "artifact://run/attempts/0/source",
         priorSourceHash: hash("d"),
@@ -524,6 +539,9 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         "utf8",
       );
       expect(repairTaskInstruction).toContain("inputs/attempts/0/source/scene.ts");
+      expect(repairTaskInstruction).toContain("context/repair-instruction.json");
+      expect(repairTaskInstruction).toContain("repairAction.instruction");
+      expect(repairTaskInstruction).toContain("Do not change the Case, Profile, or acceptance thresholds");
       expect(repairTaskInstruction).toContain("inputs/attempts/0/evaluation.json");
       expect(repairTaskInstruction).toContain("inputs/attempts/0/capture/opening.png");
       expect(sha256Bytes(new TextEncoder().encode(repairTaskInstruction))).toBe(

@@ -264,20 +264,59 @@ function diagnostic(input: {
   readonly code: WorldReconstructionDiagnosticCodeV1;
   readonly dimensionId: WorldReconstructionDimensionIdV1;
 }): WorldReconstructionDiagnosticV1 {
+  const targetRef = "worldkit://acceptance-target/central-ascent@1";
+  const targetId = input.dimensionId;
+  const isMissingEvidence = input.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING";
+  const isNondeterministic = input.code === "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC";
   return parseWorldReconstructionDiagnosticV1({
     kind: "world-reconstruction-diagnostic",
     schemaVersion: 1,
     id: input.id,
     code: input.code,
     dimensionId: input.dimensionId,
-    acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+    acceptanceTargetRef: targetRef,
+    targetRef,
+    targetId,
+    metricId: isMissingEvidence
+      ? "required-evidence-presence"
+      : isNondeterministic
+        ? "deterministic-build-identity"
+        : "collider-contribution-presence",
+    details: isMissingEvidence
+      ? {
+          kind: "presence-mismatch",
+          expectedValue: "present",
+          actualValue: "missing",
+          correctionDirection: "add",
+        }
+      : isNondeterministic
+        ? {
+            kind: "state-mismatch",
+            expectedValue: "matching",
+            actualValue: "mismatched",
+            correctionDirection: "replace",
+          }
+        : {
+            kind: "presence-mismatch",
+            expectedValue: "present",
+            actualValue: "missing",
+            correctionDirection: "add",
+          },
     evidenceRefs: input.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" ||
         input.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
       ? []
       : [`artifact://case/cloud-temple/evidence/${input.dimensionId}.json`],
     message: `${input.code} on ${input.dimensionId}.`,
     ...(isWorldReconstructionRepairableDiagnosticCodeV1(input.code)
-      ? { repairAction: { kind: "revise-native-source" } }
+      ? {
+          repairAction: {
+            kind: "revise-native-source",
+            targetKind: "static-collider",
+            targetId,
+            operation: "add",
+            instruction: `Register the missing ${targetId} static collider contribution.`,
+          },
+        }
       : {}),
   });
 }
@@ -290,7 +329,7 @@ function evaluationResult(input: {
   const ids = identities(input.attemptIndex);
   const diagnostics = [...(input.diagnostics ?? [])].sort((left, right) => {
     const key = (value: WorldReconstructionDiagnosticV1) =>
-      `${value.dimensionId}\0${value.code}\0${value.acceptanceTargetRef}`;
+      `${value.dimensionId}\0${value.code}\0${value.metricId}\0${value.targetRef}\0${value.targetId}`;
     return key(left) < key(right) ? -1 : key(left) > key(right) ? 1 : 0;
   });
   const failedIds = new Set(

@@ -45,9 +45,24 @@ function colliderMissingDiagnostic(): WorldReconstructionDiagnosticV1 {
     code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
     dimensionId: "collider",
     acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+    targetRef: "worldkit://acceptance-target/central-ascent@1",
+    targetId: "west-gate",
+    metricId: "collider-contribution-presence",
+    details: {
+      kind: "presence-mismatch",
+      expectedValue: "present",
+      actualValue: "missing",
+      correctionDirection: "add",
+    },
     evidenceRefs: ["artifact://case/cloud-temple/evidence/collider.json"],
     message: "Required west-gate collider is missing.",
-    repairAction: { kind: "revise-native-source" },
+    repairAction: {
+      kind: "revise-native-source",
+      targetKind: "static-collider",
+      targetId: "west-gate",
+      operation: "add",
+      instruction: "Register the missing west-gate static collider contribution.",
+    },
   });
 }
 
@@ -225,6 +240,15 @@ describe("createNativeBlockRepairInstructionV1", () => {
       code: "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
       dimensionId: "collider",
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+      targetRef: "worldkit://acceptance-target/central-ascent@1",
+      targetId: "collider",
+      metricId: "evidence-identity",
+      details: {
+        kind: "state-mismatch",
+        expectedValue: "current",
+        actualValue: "stale",
+        correctionDirection: "replace",
+      },
       evidenceRefs: [],
       message: "Capture identity is stale.",
     });
@@ -271,6 +295,15 @@ describe("isRepairableWorldReconstructionEvaluationV1", () => {
         code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
         dimensionId: "spawn-support",
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+        targetRef: "worldkit://acceptance-target/central-ascent@1",
+        targetId: "spawn-support",
+        metricId: "required-evidence-presence",
+        details: {
+          kind: "presence-mismatch",
+          expectedValue: "present",
+          actualValue: "missing",
+          correctionDirection: "add",
+        },
         evidenceRefs: [],
         message: "Spawn support evidence is absent.",
       })],

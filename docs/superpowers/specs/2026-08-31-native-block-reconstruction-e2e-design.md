@@ -607,14 +607,30 @@ Metric unions are closed (`ratio-basis-points`, `normalized-distance-basis-point
 
 ### 8.3 Diagnostics
 
-Each diagnostic contains a closed code, dimension ID, acceptance target ref, evidence refs, and message.
-Repairable quality failures additionally require exactly
-`repairAction: { kind: "revise-native-source" }`. Non-repairable missing/stale evidence and deterministic
-Build identity diagnostics omit `repairAction` completely because the Builder cannot repair Host evidence,
-identity, or replay failures. There is no `select-native-resource` branch: no production diagnostic producer
-or admitted resource resolver implements it. Diagnostic codes cover missing/disconnected structure,
-silhouette/anchor drift, unsupported Spawn, missing/wrong collider, blocked required traversal, passable
-required blocker, nondeterministic build, and stale evidence.
+Each diagnostic contains a closed code, dimension ID, acceptance target ref, `targetRef`, `targetId`, closed
+`metricId`, typed `details`, evidence refs, and a human-readable message. Threshold failures record the
+expected value, actual value, maximum allowed drift, exact exceeded amount, and correction direction in
+basis points or millimeters. Presence, state, and sequence failures use equally closed detail variants.
+One acceptance target may therefore emit several independently addressable submetric diagnostics; stable
+deduplication includes code, target, and metric and must not collapse X/Y/bounds/coverage failures into one
+generic message.
+
+Repairable quality failures additionally require one executable `repairAction` with the sole kind
+`revise-native-source`, a closed target kind, the same `targetId`, a closed operation, and an instruction.
+The metric fixes the allowed target-kind/operation pair: for example a semantic center uses
+`visual-group/move`, coverage uses `visual-group/resize`, and a Collider role uses
+`static-collider/set-traversal-binding`. A blocker-role repair explicitly requires
+`traversalBinding.kind: "not-traversable"`; changing `logicalSubshapeId`, Mesh names, tags, materials,
+palette roles, or block shape cannot substitute for that Host-owned role derivation. Repair tasks read the
+canonical repair instruction before editing and execute every diagnostic action. They may change only the
+three Native authoring outputs and must not change the Case, Profile, acceptance thresholds, frozen owners,
+Runtime, evaluator, prior Package, prior Capture, or durable prior Attempt inputs.
+
+Non-repairable missing/stale evidence and deterministic Build identity diagnostics omit `repairAction`
+completely because the Builder cannot repair Host evidence, identity, or replay failures. There is no
+`select-native-resource` branch. Diagnostic codes cover missing/disconnected structure, silhouette/anchor
+drift, unsupported Spawn, missing/wrong collider, blocked required traversal, passable required blocker,
+nondeterministic build, and stale evidence.
 
 The evaluator does not edit files, run a model, mutate Runtime, or update a Package.
 
@@ -633,6 +649,11 @@ initial Attempt -> Package A -> Capture A -> Evaluation A
        -> Check -> Package B -> Capture B -> Evaluation B
        -> final Run Receipt(A -> B)
 ```
+
+If the bounded repair still fails, the Host preserves and publishes both immutable Attempt chains, their
+diagnostics, Packages, Receipts, and Captures as a failed or incomplete run for inspection. It does not
+promote a failed Package as the runnable final world, weaken a hard Collider/Spawn/Traversal/identity gate,
+or silently lower thresholds. A later user- or queue-triggered run starts a new run identity.
 
 Repair writes only a new task workspace and may change `scene.ts`, `native-block-authoring.json`, or
 `native-resources.json` within the frozen Case/Profile budgets. It cannot edit Package A, Capture A,
