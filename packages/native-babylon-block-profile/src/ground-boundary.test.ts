@@ -126,7 +126,10 @@ describe("Babylon Native Block ground boundary", () => {
       "east",
       "west",
     ]);
-    expect(result.triangleCount).toBe(result.mergedSegmentCount * 4);
+    expect(result.triangleCount).toBe(result.mergedSegmentCount * 2);
+    expect(result.triangleIndices).toHaveLength(
+      result.mergedSegmentCount * 6,
+    );
   });
 
   it("keeps policy visual-neutral and omits unprotected external edges", () => {

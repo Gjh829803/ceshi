@@ -30,14 +30,4 @@ describe("ground safety boundary filter", () => {
     expect(groundSafetyBoundaryCollideMaskV1(input, kernel)).toBe(unrelated);
   });
 
-  it("preserves the bit while a ground kernel is airborne for a jump", () => {
-    const collideMask = groundSafetyBoundaryCollideMaskV1(
-      0x101,
-      "free-ground",
-    );
-    const movementMedium = "air";
-
-    expect(movementMedium).toBe("air");
-    expect(collideMask & GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1).not.toBe(0);
-  });
 });

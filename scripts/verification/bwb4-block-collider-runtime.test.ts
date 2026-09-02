@@ -622,6 +622,7 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       expect(spawnCollisionMesh?.metadata).toMatchObject({
         worldkitEntityId: "collider-ground-zero",
         colliderSubshapeId: expect.stringMatching(/^collider-subshape:[a-f0-9]{64}$/),
+        worldkitNativeColliderRuntimeRole: "scene-static-collider",
         worldkitNativeTraversalKind: "static-surface",
         worldkitSurfaceEntityId: "surface-ground-zero",
         worldkitLogicalSubshapeId: "top",
@@ -648,6 +649,7 @@ describe("BWB-4 Block Profile Collider Runtime", () => {
       expect(elevatedSupport.body?.transformNode.metadata).toEqual({
         worldkitEntityId: elevatedContribution.id,
         colliderSubshapeId: elevatedContribution.colliderSubshapeId,
+        worldkitNativeColliderRuntimeRole: "scene-static-collider",
         worldkitNativeTraversalKind:
           elevatedContribution.traversalBinding.kind,
         worldkitSurfaceEntityId:

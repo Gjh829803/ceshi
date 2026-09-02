@@ -393,8 +393,6 @@ export function buildBabylonNativeBlockGroundBoundaryV1(
     indices.push(
       offset, offset + 2, offset + 1,
       offset, offset + 3, offset + 2,
-      offset, offset + 1, offset + 2,
-      offset, offset + 2, offset + 3,
     );
     return Object.freeze({ id, ...segmentBody });
   }));
