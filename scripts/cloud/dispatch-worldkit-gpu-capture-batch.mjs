@@ -69,6 +69,32 @@ async function mapWithConcurrency(items, limit, operation) {
   return results;
 }
 
+export async function cleanStaleQueueEntries(
+  s3Uris,
+  remove = (s3Uri) => execFilePromise(
+    "aws",
+    ["s3", "rm", "--only-show-errors", s3Uri],
+  ),
+) {
+  const outcomes = [];
+  for (const s3Uri of s3Uris) {
+    try {
+      await remove(s3Uri);
+      outcomes.push({ s3Uri, status: "removed" });
+    } catch (error) {
+      // Queue admission is closed by the live Cloud Execution state. Object
+      // deletion is storage hygiene only and must not block valid GPU work
+      // when the workload role intentionally lacks DeleteObject.
+      outcomes.push({
+        s3Uri,
+        status: "retained",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return outcomes;
+}
+
 function captureStageIsReady(execution) {
   if (["succeeded", "failed", "interrupted", "cancelled"].includes(execution?.status)) {
     return false;
@@ -436,10 +462,10 @@ async function main() {
         ephemeralStorageLimit: config.gpuBatch.ephemeralStorageLimit,
       }),
     });
-    for (const s3Uri of result.staleQueueEntryUris) {
-      await execFilePromise("aws", ["s3", "rm", "--only-show-errors", s3Uri]);
-    }
-    process.stdout.write(`${JSON.stringify(result)}\n`);
+    const staleQueueCleanup = await cleanStaleQueueEntries(
+      result.staleQueueEntryUris,
+    );
+    process.stdout.write(`${JSON.stringify({ ...result, staleQueueCleanup })}\n`);
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }

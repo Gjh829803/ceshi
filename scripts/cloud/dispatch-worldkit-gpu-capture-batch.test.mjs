@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  cleanStaleQueueEntries,
   dispatchGpuCaptureBatch,
   reconcileCloudEpisodeCpuStages,
 } from "./dispatch-worldkit-gpu-capture-batch.mjs";
@@ -239,6 +240,20 @@ test("removes a cancelled Episode queue entry even when its Execution ended fail
   });
   assert.equal(result.status, "waiting");
   assert.deepEqual(result.staleQueueEntryUris, [item.queueEntryS3Uri]);
+});
+
+test("stale queue cleanup never blocks dispatch when DeleteObject is unavailable", async () => {
+  const calls = [];
+  const outcomes = await cleanStaleQueueEntries([
+    "s3://bucket/queue/pending/stale-a.json",
+    "s3://bucket/queue/pending/stale-b.json",
+  ], async (s3Uri) => {
+    calls.push(s3Uri);
+    if (s3Uri.endsWith("stale-a.json")) throw new Error("AccessDenied");
+  });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(outcomes.map(({ status }) => status), ["retained", "removed"]);
+  assert.match(outcomes[0].error, /AccessDenied/);
 });
 
 test("cloud reconciler recovers a lost create response and launches CPU prepare", async () => {
