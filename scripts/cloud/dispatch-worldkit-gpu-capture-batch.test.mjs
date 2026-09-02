@@ -144,6 +144,32 @@ test("dispatcher drains a stable final tail after every registered producer is r
   ]);
 });
 
+test("dispatcher uses the live capture stage when the Run Index still says prepare", async () => {
+  const item = entry(0);
+  const calls = [];
+  const result = await dispatchGpuCaptureBatch({
+    entries: [item],
+    episodeRecords: [episodeRecordFor(item, "episode-prepare")],
+    defaultWorkerImage: IMAGE,
+    tailIdleSeconds: 120,
+    observedAt: "2026-09-02T00:05:00.000Z",
+    inspectExecution: async () => ({
+      ...executionFor(item),
+      current_stage_id: "whitebox-capture",
+    }),
+    publishManifest: async (batch) => {
+      calls.push(["publish", batch.taskCount]);
+      return { s3Uri: "s3://bucket/queue/batches/tail/manifest.json" };
+    },
+    launchBatch: async (batch) => {
+      calls.push(["launch", batch.taskCount]);
+      return { jobName: "tail-batch-job" };
+    },
+  });
+  assert.equal(result.status, "launched");
+  assert.deepEqual(calls, [["publish", 1], ["launch", 1]]);
+});
+
 test("dispatcher does not drain a tail while one registered producer is preparing", async () => {
   const entries = Array.from({ length: 20 }, (_, index) => entry(index));
   const preparing = entry(20);
@@ -200,6 +226,19 @@ test("cancelled and non-ready executions do not count toward the floor", async (
   assert.equal(result.status, "waiting");
   assert.equal(result.readyCount, 99);
   assert.deepEqual(result.staleQueueEntryUris, [entries[0].queueEntryS3Uri]);
+});
+
+test("removes a cancelled Episode queue entry even when its Execution ended failed", async () => {
+  const item = entry(0);
+  const result = await dispatchGpuCaptureBatch({
+    entries: [item],
+    episodeRecords: [{ ...episodeRecordFor(item), status: "cancelled" }],
+    inspectExecution: async () => ({ ...executionFor(item), status: "failed" }),
+    publishManifest: async () => assert.fail("must not publish"),
+    launchBatch: async () => assert.fail("must not launch"),
+  });
+  assert.equal(result.status, "waiting");
+  assert.deepEqual(result.staleQueueEntryUris, [item.queueEntryS3Uri]);
 });
 
 test("cloud reconciler recovers a lost create response and launches CPU prepare", async () => {

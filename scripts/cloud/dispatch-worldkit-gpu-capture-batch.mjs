@@ -113,8 +113,18 @@ export async function dispatchGpuCaptureBatch({
     entry,
     execution: cloudExecutionRecord(await inspectExecution(entry.executionId)),
   }));
+  const executionById = new Map(inspected.map(({ execution }) => [
+    execution.execution_id,
+    execution,
+  ]));
+  const recordByExecutionId = new Map(episodeRecords.flatMap((record) =>
+    typeof record?.remoteExecutionId === "string"
+      ? [[record.remoteExecutionId, record]]
+      : []));
   const staleQueueEntryUris = inspected.flatMap(({ entry, execution }) =>
-    ["succeeded", "cancelled"].includes(execution.status) && entry.queueEntryS3Uri
+    (["succeeded", "cancelled"].includes(execution.status) ||
+      recordByExecutionId.get(entry.executionId)?.status === "cancelled") &&
+      entry.queueEntryS3Uri
       ? [entry.queueEntryS3Uri]
       : []);
   const ready = inspected.flatMap(({ entry, execution }) => {
@@ -129,7 +139,15 @@ export async function dispatchGpuCaptureBatch({
         ? stageAttempt : entry.stageAttempt,
     }];
   });
-  const activeEpisodeRecords = episodeRecords.filter((record) =>
+  const activeEpisodeRecords = episodeRecords.map((record) => {
+    const execution = executionById.get(record?.remoteExecutionId);
+    if (!execution || ["succeeded", "failed", "interrupted", "cancelled"]
+      .includes(execution.status)) return record;
+    return {
+      ...record,
+      remoteStageId: execution.current_stage_id ?? record.remoteStageId,
+    };
+  }).filter((record) =>
     record?.backend === "cloud" &&
     ["running", "remote-pending"].includes(record?.status));
   const readyByWorkerImage = new Map();
