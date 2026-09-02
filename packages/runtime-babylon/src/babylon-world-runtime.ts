@@ -168,12 +168,34 @@ import {
 import {
   createBabylonNativeLiveColliderRegistryV1,
   registerBabylonNativeLiveColliderRegistryV1,
+  replaceBabylonNativeLiveColliderRegistryV1,
   unregisterBabylonNativeLiveColliderRegistryV1,
-  type BabylonNativeLiveColliderHandleV1,
+  type BabylonNativeLiveColliderRegistryV1,
+  type BabylonNativeLiveColliderResidencyEvidenceV1,
 } from "./babylon-native-live-collider-registry";
 import {
-  GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1,
-} from "./ground-safety-boundary-filter";
+  createBabylonNativeColliderResidencyV1,
+  type BabylonNativeColliderResidencyV1,
+} from "./native-collider-residency";
+import {
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+  materializeBabylonNativeBlockVisualBatchesV1,
+  peekBabylonNativeBlockLiveHandleRegistryV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
+
+function residencyEvidence(
+  residency: BabylonNativeColliderResidencyV1,
+): BabylonNativeLiveColliderResidencyEvidenceV1 {
+  const metrics = residency.metrics();
+  return Object.freeze({
+    chunkPolicyHash: residency.chunkPolicyHash,
+    partitionHash: residency.partitionHash,
+    logicalColliderCount: metrics.logicalColliderCount,
+    partCount: metrics.partCount,
+    activePartCount: metrics.activePartCount,
+    peakActivePartCount: metrics.peakActivePartCount,
+  });
+}
 
 function committedPresentationFromLocomotionMode(
   committedTick: number,
@@ -841,29 +863,6 @@ function nativeColliderMetadata(
   };
 }
 
-function createOwnedNativeCollisionMesh(
-  collider: BabylonNativeStaticColliderContributionV1,
-  scene: Scene,
-): Mesh {
-  const mesh = new Mesh(`worldkit.native-collider.${collider.id}`, scene);
-  const normals: number[] = [];
-  VertexData.ComputeNormals(
-    collider.worldPositionsMetersXYZ,
-    collider.triangleIndices,
-    normals,
-  );
-  const vertexData = new VertexData();
-  vertexData.positions = [...collider.worldPositionsMetersXYZ];
-  vertexData.indices = [...collider.triangleIndices];
-  vertexData.normals = normals;
-  vertexData.applyToMesh(mesh, false);
-  nativeColliderMetadata(mesh, collider, collider.traversalBinding);
-  mesh.isVisible = false;
-  mesh.isPickable = false;
-  mesh.computeWorldMatrix(true);
-  return mesh;
-}
-
 async function disposeOwnedStack(
   ownedDisposers: readonly OwnedDisposer[],
 ): Promise<void> {
@@ -971,6 +970,10 @@ export class BabylonWorldRuntime {
     creationExecutionPlanHash: `sha256:${string}` | undefined,
     terrainSampleCount: number,
     private readonly expectedPhysicsBodyCount: number,
+    private readonly nativeColliderResidency:
+      BabylonNativeColliderResidencyV1 | undefined,
+    private nativeColliderRegistry:
+      BabylonNativeLiveColliderRegistryV1 | undefined,
   ) {
     this.gameplayPublishedState = Object.freeze({
       possessionTarget: Object.freeze({ mode: "unbound" }),
@@ -1190,7 +1193,10 @@ export class BabylonWorldRuntime {
       const entityRegistry = new EntityRegistryV1();
       const materials = createWhiteboxMaterials(scene);
       const aggregates: PhysicsAggregate[] = [];
-      const nativeColliderHandles: BabylonNativeLiveColliderHandleV1[] = [];
+      let nativeColliderResidency: BabylonNativeColliderResidencyV1 | undefined;
+      let nativeColliderRegistry:
+        BabylonNativeLiveColliderRegistryV1 | undefined;
+      let runtime: BabylonWorldRuntime | undefined;
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
@@ -1277,67 +1283,68 @@ export class BabylonWorldRuntime {
             "WORLDKIT_NATIVE_SCENE_CONTRIBUTION_MISSING: Native Scene Contribution must pass before physics attachment.",
           );
         }
-        const sourceBlockIdByColliderId = new Map(
+        const nativeBlockMaterializerMetadata =
           preparedNativeScene?.verifiedWorldPackage
-            .nativeBlockMaterializerMetadata?.colliderJoins.map(
-              ({ blockId, colliderId }) => [colliderId, blockId] as const,
-            ) ?? [],
+            .nativeBlockMaterializerMetadata;
+        const sourceBlockIdByColliderId = new Map(
+          nativeBlockMaterializerMetadata?.colliderJoins.map(
+            ({ blockId, colliderId }) => [colliderId, blockId] as const,
+          ) ?? [],
         );
-        for (const collider of nativeContribution.staticColliders) {
-          const collisionMesh = createOwnedNativeCollisionMesh(collider, scene);
-          ownedDisposers.push(() => collisionMesh.dispose());
-          const shape = new PhysicsShapeMesh(collisionMesh, scene);
-          if (collider.runtimeRole === "ground-safety-boundary") {
-            shape.filterMembershipMask =
-              GROUND_SAFETY_BOUNDARY_MEMBERSHIP_MASK_V1;
-            shape.filterCollideMask = 0xffff_ffff;
-          }
-          ownedDisposers.push(() => shape.dispose());
-          const aggregate = new PhysicsAggregate(
-            collisionMesh,
-            shape,
-            {
-              mass: 0,
-              friction: collider.frictionRatio,
-              restitution: collider.restitutionRatio,
-            },
-            scene,
-          );
-          aggregates.push(aggregate);
-          ownedDisposers.push(() => aggregate.dispose());
-          if (collider.runtimeRole === "ground-safety-boundary") {
-            const cameraBoundaryId = `ground-safety-boundary:${collider.id}`;
-            cameraGeometryQuery.registerEntityPhysicsBody(
-              cameraBoundaryId,
-              aggregate.body,
-            );
-            cameraGeometryQuery.setEntityQueryEnabled(cameraBoundaryId, false);
-          }
-          const sourceBlockId = sourceBlockIdByColliderId.get(collider.id);
-          nativeColliderHandles.push(Object.freeze({
-            colliderId: collider.id,
-            runtimeRole: collider.runtimeRole,
-            colliderSubshapeId: collider.colliderSubshapeId,
-            ...(isNil(sourceBlockId) ? {} : { sourceBlockId }),
-            physicsBodyId: `physics-body:${collider.id}`,
-            overlayRecordId: `overlay:${collider.id}`,
-            mesh: collisionMesh,
-            aggregate,
-            body: aggregate.body,
-            shape: aggregate.shape,
-          }));
-        }
-        const nativeColliderRegistry =
-          createBabylonNativeLiveColliderRegistryV1(nativeColliderHandles);
+        nativeColliderResidency = createBabylonNativeColliderResidencyV1({
+          scene,
+          chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+          colliders: nativeContribution.staticColliders,
+          sourceBlockIdByColliderId,
+          cameraGeometryQuery,
+          applyColliderMetadata: (mesh, collider) =>
+            nativeColliderMetadata(mesh, collider, collider.traversalBinding),
+        });
+        const residency = nativeColliderResidency;
+        ownedDisposers.push(() => residency.dispose());
+        // Activate the Spawn ring before readiness: the controlled Subject must
+        // land on real Havok geometry, not on a ring that only fills in later.
+        residency.update(effectiveRuntimeSubjects.map(
+          ({ spawnSubjectOriginPositionMetersXYZ }) =>
+            spawnSubjectOriginPositionMetersXYZ,
+        ));
+        nativeColliderRegistry = createBabylonNativeLiveColliderRegistryV1({
+          handles: residency.activeHandles(),
+          residency: residencyEvidence(residency),
+          parts: residency.partInventory(),
+        });
         registerBabylonNativeLiveColliderRegistryV1(
           scene,
           nativeColliderRegistry,
         );
-        ownedDisposers.push(() =>
+        ownedDisposers.push(() => {
+          const currentRegistry = runtime?.nativeColliderRegistry ??
+            nativeColliderRegistry;
+          if (isNil(currentRegistry)) return;
           unregisterBabylonNativeLiveColliderRegistryV1(
             scene,
-            nativeColliderRegistry,
-          ));
+            currentRegistry,
+          );
+        });
+        if (!isNil(nativeBlockMaterializerMetadata)) {
+          const visualRegistry =
+            peekBabylonNativeBlockLiveHandleRegistryV1(scene);
+          if (isNil(visualRegistry)) {
+            throw new Error(
+              "WORLDKIT_NATIVE_BLOCK_LIVE_VISUAL_REGISTRY_MISSING: Native Block visuals must be registered before Chunk batching.",
+            );
+          }
+          const visualBatches =
+            materializeBabylonNativeBlockVisualBatchesV1({
+              scene,
+              realizationId: preparedNativeScene!.verifiedWorldPackage
+                .bootstrap.id,
+              chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+              placements: nativeBlockMaterializerMetadata.blocks,
+              liveHandles: visualRegistry,
+            });
+          ownedDisposers.push(() => visualBatches.dispose());
+        }
       }
 
       options.onInitializationStage?.("camera");
@@ -1356,8 +1363,6 @@ export class BabylonWorldRuntime {
         scene,
         cameraGeometryQuery,
       ));
-      let runtime: BabylonWorldRuntime | undefined;
-
       options.onInitializationStage?.("subjects");
       const subjectAssetCache = new SubjectAssetCacheV1(
         scene,
@@ -1612,7 +1617,10 @@ export class BabylonWorldRuntime {
         creationExecutionPlanHash,
         terrainSampleCount,
         executionPlan?.sceneResourceUsage.colliders ??
-          runtimeSubjects.length + (nativeContribution?.staticColliders.length ?? 0),
+          runtimeSubjects.length +
+            (nativeColliderResidency?.metrics().activePartCount ?? 0),
+        nativeColliderResidency,
+        nativeColliderRegistry,
       );
       return runtime;
     } catch (error) {
@@ -3026,6 +3034,7 @@ export class BabylonWorldRuntime {
   private commitGameplayFixedTick(
     targetEntityId: string | undefined,
   ): void {
+    this.updateNativeColliderResidencyBeforeTick();
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -3066,7 +3075,42 @@ export class BabylonWorldRuntime {
     this.publishCameraProjection();
   }
 
+  /**
+   * Bring the bounded Havok residency ring in line with the union of every
+   * active Subject position. Visual batches are untouched: physics residency
+   * must never cull rendering.
+   */
+  private updateNativeColliderResidencyBeforeTick(): void {
+    const positions = this.runtimeSubjects.map((subject) => {
+      const origin = this.controllerFor(subject.entityId).subjectOrigin;
+      return [origin.x, origin.y, origin.z] as const;
+    });
+    this.updateNativeColliderResidencyForPositions(positions);
+  }
+
+  private updateNativeColliderResidencyForPositions(
+    positions: readonly RuntimeVec3V1[],
+  ): void {
+    const residency = this.nativeColliderResidency;
+    if (isNil(residency)) return;
+    if (!residency.update(positions)) return;
+    const previous = this.nativeColliderRegistry;
+    if (isNil(previous)) return;
+    const replacement = createBabylonNativeLiveColliderRegistryV1({
+      handles: residency.activeHandles(),
+      residency: residencyEvidence(residency),
+      parts: residency.partInventory(),
+    });
+    replaceBabylonNativeLiveColliderRegistryV1(
+      this.scene,
+      previous,
+      replacement,
+    );
+    this.nativeColliderRegistry = replacement;
+  }
+
   private commitFixedTick(): void {
+    this.updateNativeColliderResidencyBeforeTick();
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
@@ -3130,6 +3174,12 @@ export class BabylonWorldRuntime {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
     this.legacyControllerFor(input.traversingEntityId);
+    this.updateNativeColliderResidencyForPositions(
+      this.runtimeSubjects.map((subject) =>
+        subject.entityId === input.traversingEntityId
+          ? input.subjectOriginPositionMetersXYZ
+          : subject.spawnSubjectOriginPositionMetersXYZ),
+    );
     this.traversalConfigurationEpoch += 1;
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
@@ -3472,6 +3522,10 @@ export class BabylonWorldRuntime {
         "3C_TICK_TOKEN_STALE: cannot reset while a Golden Runtime Tick is prepared.",
       );
     }
+    this.updateNativeColliderResidencyForPositions(
+      this.runtimeSubjects.map(({ spawnSubjectOriginPositionMetersXYZ }) =>
+        spawnSubjectOriginPositionMetersXYZ),
+    );
     this.traversalConfigurationEpoch += 1;
     for (const mounted of Object.values(
       this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,

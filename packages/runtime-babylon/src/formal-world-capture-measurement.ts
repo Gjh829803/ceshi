@@ -1,8 +1,11 @@
 import { Camera } from "@babylonjs/core/Cameras/camera.js";
 import { TargetCamera } from "@babylonjs/core/Cameras/targetCamera.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
-import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
+import {
+  babylonNativeBlockLiveVisualHandleMeshV1,
+  type BabylonNativeBlockLiveVisualHandleV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 import type {
   BabylonNativeBlockMaterializerMetadataV1,
   FormalArtifactViewRequestV1,
@@ -15,7 +18,7 @@ import { fitOrthographicBoundsToWorldExtentsV1 } from "./formal-world-camera.js"
 
 export interface FormalWorldCaptureLiveVisualGroupV1 {
   readonly visualGroupId: string;
-  readonly meshes: readonly Mesh[];
+  readonly blockHandles: readonly BabylonNativeBlockLiveVisualHandleV1[];
 }
 
 export interface FormalWorldCaptureMeasurementInputV1 {
@@ -598,10 +601,13 @@ export function measureFormalWorldCaptureViewV1(
 
   const scene = input.camera.getScene();
   for (const [visualGroupId, live] of liveById) {
-    if (live.meshes.length === 0) {
-      fail("LIVE_VISUAL_GROUPS", `${visualGroupId} has no explicit Mesh handle`);
+    if (live.blockHandles.length === 0) {
+      fail("LIVE_VISUAL_GROUPS", `${visualGroupId} has no explicit Block handle`);
     }
-    if (live.meshes.some((mesh) => mesh.isDisposed() || mesh.getScene() !== scene)) {
+    if (live.blockHandles.some((handle) => {
+      const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
+      return mesh.isDisposed() || mesh.getScene() !== scene;
+    })) {
       fail("LIVE_VISUAL_GROUPS", `${visualGroupId} contains a non-live or foreign Mesh`);
     }
   }

@@ -252,10 +252,24 @@ describe("SDK-owned Native live collider registry", () => {
       expect(registry?.colliders).toHaveLength(1);
       expect(record).toMatchObject({
         colliderId: "ground",
+        chunkPartId: "ground-grid-chunk-xp0-zp0",
+        chunkResidencyGroupId: "grid-chunk-xp0-zp0",
         sourceBlockId: "ground-block",
-        physicsBodyId: "physics-body:ground",
-        overlayRecordId: "overlay:ground",
+        physicsBodyId: "physics-body:ground-grid-chunk-xp0-zp0",
+        overlayRecordId: "overlay:ground-grid-chunk-xp0-zp0",
       });
+      // One logical Collider stays one logical identity while the Runtime
+      // realizes it as bounded Chunk parts.
+      expect(registry?.residency).toMatchObject({
+        logicalColliderCount: 1,
+        partCount: 1,
+        activePartCount: 1,
+        peakActivePartCount: 1,
+      });
+      expect(registry?.residency.chunkPolicyHash)
+        .toMatch(/^sha256:[0-9a-f]{64}$/);
+      expect(registry?.residency.partitionHash)
+        .toMatch(/^sha256:[0-9a-f]{64}$/);
       expect(record?.colliderSubshapeId).toMatch(
         /^collider-subshape:[a-f0-9]{64}$/,
       );

@@ -149,41 +149,59 @@ describe("formal world capture provider", () => {
     const valid = {
       kind: "babylon-native-block-live-handle-registry",
       schemaVersion: 1,
+      realization: { kind: "authoring-unbatched" },
       blocks: [
         {
+          kind: "independent-mesh",
+          blockId: "first",
           runtimeEntityId: "native-block:first",
           semanticCaptureClassId: "worldkit.native-block.group.route",
           mesh: first,
         },
         {
+          kind: "independent-mesh",
+          blockId: "second",
           runtimeEntityId: "native-block:second",
           semanticCaptureClassId: "worldkit.native-block.group.route",
           mesh: second,
         },
       ],
-      visualGroups: [{ visualGroupId: "route", meshes: [first, second] }],
+      visualBatches: [],
+      visualGroups: [{ visualGroupId: "route", blockHandles: [] }],
       walkableOverlays: [],
+    } as const;
+    const validRegistry = {
+      ...valid,
+      visualGroups: [{
+        visualGroupId: "route",
+        blockHandles: [valid.blocks[0], valid.blocks[1]],
+      }],
     } as const;
 
     try {
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
-        liveHandleRegistry: valid,
+        liveHandleRegistry: validRegistry,
       })).not.toThrow();
       expect(metadataReadCount).toBe(0);
 
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
-        liveHandleRegistry: { ...valid, blocks: valid.blocks.slice(0, 1) },
+        liveHandleRegistry: {
+          ...validRegistry,
+          blocks: validRegistry.blocks.slice(0, 1),
+        },
       })).toThrowError(/LIVE_VISUAL/);
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
         liveHandleRegistry: {
-          ...valid,
-          blocks: [...valid.blocks, {
+          ...validRegistry,
+          blocks: [...validRegistry.blocks, {
+            kind: "independent-mesh" as const,
+            blockId: "extra",
             runtimeEntityId: "native-block:extra",
             semanticCaptureClassId: "worldkit.native-block.group.route",
             mesh: second,
@@ -194,16 +212,25 @@ describe("formal world capture provider", () => {
         scene: firstScene,
         materializerMetadata: metadata,
         liveHandleRegistry: {
-          ...valid,
-          blocks: [valid.blocks[0], { ...valid.blocks[1], mesh: foreign }],
-          visualGroups: [{ visualGroupId: "route", meshes: [first, foreign] }],
+          ...validRegistry,
+          blocks: [
+            validRegistry.blocks[0],
+            { ...validRegistry.blocks[1], mesh: foreign },
+          ],
+          visualGroups: [{
+            visualGroupId: "route",
+            blockHandles: [
+              validRegistry.blocks[0],
+              { ...validRegistry.blocks[1], mesh: foreign },
+            ],
+          }],
         },
       })).toThrowError(/LIVE_VISUAL/);
       second.dispose();
       expect(() => assertFormalCaptureLiveVisualRegistryV1({
         scene: firstScene,
         materializerMetadata: metadata,
-        liveHandleRegistry: valid,
+        liveHandleRegistry: validRegistry,
       })).toThrowError(/LIVE_VISUAL/);
       expect(metadataReadCount).toBe(0);
     } finally {
@@ -468,9 +495,16 @@ describe("formal world capture provider", () => {
     const colliders = [{
       colliderId: "wall.collider",
       sourceBlockId: "wall-block",
-      physicsBodyId: "wall.body",
       colliderSubshapeId: "wall.shape",
-      overlayRecordId: "wall.overlay",
+      chunkParts: [{
+        chunkPartId: "wall.collider-grid-chunk-xp0-zp0",
+        chunkResidencyGroupId: "grid-chunk-xp0-zp0",
+        overlayRecordId: "wall.overlay",
+        physicsResidency: {
+          mode: "resident" as const,
+          physicsBodyId: "wall.body",
+        },
+      }],
     }] as const;
 
     expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
@@ -482,6 +516,101 @@ describe("formal world capture provider", () => {
     expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
       .measuredColliderRelations(request, metadata, colliders))
       .toEqual([{ fromNodeId: "wall-node", relation: "blocks", toNodeId: "route-node" }]);
+  });
+
+  it("keeps one logical collider observation across resident and non-resident Chunk parts", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const liveMesh = MeshBuilder.CreateBox("live-part", {}, scene);
+    const positions = [
+      -1, 0, -1,
+      1, 0, -1,
+      1, 0, 1,
+      -1, 0, 1,
+    ] as const;
+    const indices = [0, 1, 2, 0, 2, 3] as const;
+    const parts = ["xp0", "xp1"].map((suffix, index) => ({
+      colliderId: "ground.collider",
+      chunkPartId: `ground.collider-grid-chunk-${suffix}-zp0`,
+      chunkResidencyGroupId: `grid-chunk-${suffix}-zp0`,
+      runtimeRole: "scene-static-collider" as const,
+      colliderSubshapeId: "ground.shape",
+      sourceBlockId: "ground-block",
+      overlayRecordId: `ground.overlay.${index}`,
+      worldPositionsMetersXYZ: positions,
+      triangleIndices: indices,
+      partHash: `sha256:${String(index + 1).repeat(64)}` as const,
+    }));
+    const registry = {
+      kind: "babylon-native-live-collider-registry",
+      schemaVersion: 1,
+      residency: {
+        chunkPolicyHash: `sha256:${"a".repeat(64)}`,
+        partitionHash: `sha256:${"b".repeat(64)}`,
+        logicalColliderCount: 1,
+        partCount: 2,
+        activePartCount: 1,
+        peakActivePartCount: 1,
+      },
+      parts,
+      colliders: [{
+        ...parts[0],
+        physicsBodyId: "ground.body.0",
+        mesh: liveMesh,
+        body: { isDisposed: false },
+      }],
+    } as unknown as Parameters<
+      typeof FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.validateColliderRegistry
+    >[2];
+    const verified = {
+      nativeSceneContribution: {
+        staticColliders: [{
+          id: "ground.collider",
+          colliderSubshapeId: "ground.shape",
+        }],
+      },
+    } as unknown as Parameters<
+      typeof FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.validateColliderRegistry
+    >[0];
+    const metadata = {
+      colliderJoins: [{
+        colliderId: "ground.collider",
+        blockId: "ground-block",
+      }],
+    } as unknown as BabylonNativeBlockMaterializerMetadataV1;
+
+    try {
+      expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+        .validateColliderRegistry(verified, metadata, registry)).toEqual([{
+        colliderId: "ground.collider",
+        sourceBlockId: "ground-block",
+        colliderSubshapeId: "ground.shape",
+        chunkParts: [{
+          chunkPartId: "ground.collider-grid-chunk-xp0-zp0",
+          chunkResidencyGroupId: "grid-chunk-xp0-zp0",
+          overlayRecordId: "ground.overlay.0",
+          physicsResidency: {
+            mode: "resident",
+            physicsBodyId: "ground.body.0",
+          },
+        }, {
+          chunkPartId: "ground.collider-grid-chunk-xp1-zp0",
+          chunkResidencyGroupId: "grid-chunk-xp1-zp0",
+          overlayRecordId: "ground.overlay.1",
+          physicsResidency: { mode: "not-resident" },
+        }],
+      }]);
+
+      const overlay = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+        .materializeColliderOverlayMeshes(scene, registry);
+      expect(overlay.meshes).toHaveLength(2);
+      expect(overlay.meshes.every((mesh) => !mesh.isDisposed())).toBe(true);
+      overlay.dispose();
+      expect(overlay.meshes.every((mesh) => mesh.isDisposed())).toBe(true);
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
   });
 
   it("rejects stale and ambiguous committed support evidence", () => {

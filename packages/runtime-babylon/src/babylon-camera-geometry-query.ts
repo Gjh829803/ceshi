@@ -87,6 +87,14 @@ export class BabylonHavokCameraGeometryQueryV2 implements CameraGeometryQueryPor
     this.bodiesByEntityId.set(entityId, body);
   }
 
+  unregisterEntityPhysicsBody(entityId: string): void {
+    if (this.disposed) throw new Error("CAMERA_GEOMETRY_QUERY_DISPOSED");
+    if (!this.bodiesByEntityId.delete(entityId)) {
+      throw new Error(`CAMERA_GEOMETRY_QUERY_ENTITY_UNKNOWN: ${entityId}`);
+    }
+    this.disabledEntityIds.delete(entityId);
+  }
+
   setEntityQueryEnabled(entityId: string, enabled: boolean): void {
     if (this.disposed) throw new Error("CAMERA_GEOMETRY_QUERY_DISPOSED");
     if (!this.bodiesByEntityId.has(entityId)) {

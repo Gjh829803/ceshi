@@ -1,5 +1,9 @@
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
+import type { Sha256HashV1 } from "@whitebox-world/protocol";
+
+import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
+import type { BabylonNativeBlockShapeKindV1 } from "./shapes.js";
 
 export interface BabylonNativeBlockWalkableOverlayHandleV1 {
   readonly logicalColliderId: string;
@@ -9,20 +13,74 @@ export interface BabylonNativeBlockWalkableOverlayHandleV1 {
   readonly mesh: Mesh;
 }
 
+/**
+ * One closed row per logical Block. A Block is realized either as its own Mesh
+ * or as one instance inside a Chunk-local Thin Instance batch; both branches
+ * keep the logical Block ID, runtime Entity ID and semantic Capture class, so
+ * Capture selection, tinting, hiding and diagnostics never lose identity.
+ */
+export type BabylonNativeBlockLiveVisualHandleV1 =
+  | Readonly<{
+      kind: "independent-mesh";
+      blockId: string;
+      runtimeEntityId: string;
+      semanticCaptureClassId: string;
+      mesh: Mesh;
+    }>
+  | Readonly<{
+      kind: "thin-instance";
+      blockId: string;
+      runtimeEntityId: string;
+      semanticCaptureClassId: string;
+      batchId: string;
+      batchMesh: Mesh;
+      instanceIndex: number;
+    }>;
+
+export interface BabylonNativeBlockLiveVisualBatchV1 {
+  readonly batchId: string;
+  readonly residencyGroupId: string;
+  readonly shape: BabylonNativeBlockShapeKindV1;
+  readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
+  readonly semanticCaptureClassId: string;
+  /** Ordered by Thin Instance index. */
+  readonly blockIds: readonly string[];
+  readonly mesh: Mesh;
+}
+
+export interface BabylonNativeBlockLiveVisualGroupHandleV1 {
+  readonly visualGroupId: string;
+  readonly blockHandles: readonly BabylonNativeBlockLiveVisualHandleV1[];
+}
+
+/**
+ * Authoring materialization publishes one Mesh per Block. The trusted Host
+ * Chunk realization replaces that registry after Candidate admission, so the
+ * discriminator names which realization the live rows describe.
+ */
+export type BabylonNativeBlockLiveVisualRealizationV1 =
+  | Readonly<{ kind: "authoring-unbatched" }>
+  | Readonly<{
+      kind: "host-chunk-batched";
+      chunkPolicyHash: Sha256HashV1;
+      batchPlanHash: Sha256HashV1;
+    }>;
+
 export interface BabylonNativeBlockLiveHandleRegistryV1 {
   readonly kind: "babylon-native-block-live-handle-registry";
   readonly schemaVersion: 1;
-  readonly blocks: readonly Readonly<{
-    runtimeEntityId: string;
-    semanticCaptureClassId: string;
-    mesh: Mesh;
-  }>[];
-  readonly visualGroups: readonly Readonly<{
-    visualGroupId: string;
-    meshes: readonly Mesh[];
-  }>[];
+  readonly realization: BabylonNativeBlockLiveVisualRealizationV1;
+  readonly blocks: readonly BabylonNativeBlockLiveVisualHandleV1[];
+  readonly visualBatches: readonly BabylonNativeBlockLiveVisualBatchV1[];
+  readonly visualGroups: readonly BabylonNativeBlockLiveVisualGroupHandleV1[];
   readonly walkableOverlays:
     readonly BabylonNativeBlockWalkableOverlayHandleV1[];
+}
+
+export function babylonNativeBlockLiveVisualHandleMeshV1(
+  handle: BabylonNativeBlockLiveVisualHandleV1,
+): Mesh {
+  return handle.kind === "independent-mesh" ? handle.mesh : handle.batchMesh;
 }
 
 const REGISTRY_BY_SCENE = new WeakMap<

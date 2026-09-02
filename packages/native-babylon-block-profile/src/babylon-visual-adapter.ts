@@ -316,20 +316,26 @@ export function createBabylonNativeBlockVisualsV1(
   }
 
   let isDisposed = false;
-  const liveHandles = Object.freeze({
-    kind: "babylon-native-block-live-handle-registry" as const,
-    schemaVersion: 1 as const,
-    blocks: Object.freeze(nodes.map((node) => Object.freeze({
+  const handleByBlockId = new Map(nodes.map((node) =>
+    [node.blockId, Object.freeze({
+      kind: "independent-mesh" as const,
+      blockId: node.blockId,
       runtimeEntityId: `native-block:${node.blockId}`,
       semanticCaptureClassId:
         `worldkit.native-block.group.${node.visualGroupId ?? "ungrouped"}`,
       mesh: node.mesh,
-    }))),
+    })] as const));
+  const liveHandles: BabylonNativeBlockLiveHandleRegistryV1 = Object.freeze({
+    kind: "babylon-native-block-live-handle-registry" as const,
+    schemaVersion: 1 as const,
+    realization: Object.freeze({ kind: "authoring-unbatched" as const }),
+    blocks: Object.freeze([...handleByBlockId.values()]),
+    visualBatches: Object.freeze([]),
     visualGroups: Object.freeze(input.checkedLayout.checkResult.visualGroups.map(
       (group) => Object.freeze({
         visualGroupId: group.id,
-        meshes: Object.freeze(group.blockIds.map((blockId) =>
-          nodes.find((node) => node.blockId === blockId)!.mesh)),
+        blockHandles: Object.freeze(group.blockIds.map((blockId) =>
+          handleByBlockId.get(blockId)!)),
       }),
     )),
     walkableOverlays: Object.freeze([]),

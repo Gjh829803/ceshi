@@ -876,9 +876,16 @@ export function createEvidenceSetFixtureInputV1(
     colliders: [{
       colliderId: "ground",
       sourceBlockId: "ground-block",
-      physicsBodyId: "physics-body:ground",
       colliderSubshapeId: "collider-subshape:ground",
-      overlayRecordId: "overlay:ground",
+      chunkParts: [{
+        chunkPartId: "ground-grid-chunk-xp0-zp0",
+        chunkResidencyGroupId: "grid-chunk-xp0-zp0",
+        overlayRecordId: "overlay:ground-grid-chunk-xp0-zp0",
+        physicsResidency: {
+          mode: "resident",
+          physicsBodyId: "physics-body:ground-grid-chunk-xp0-zp0",
+        },
+      }],
     }],
     observedTopologyRelations: [],
   });

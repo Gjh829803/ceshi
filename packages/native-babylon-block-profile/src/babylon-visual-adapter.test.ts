@@ -43,14 +43,18 @@ interface VisualAdapterModule {
       maximumMetersXYZ: readonly [number, number, number];
     }>[];
     liveHandles: Readonly<{
+      realization: Readonly<{ kind: string }>;
       blocks: readonly Readonly<{
+        kind: "independent-mesh";
+        blockId: string;
         runtimeEntityId: string;
         semanticCaptureClassId: string;
         mesh: Mesh;
       }>[];
+      visualBatches: readonly unknown[];
       visualGroups: readonly Readonly<{
         visualGroupId: string;
-        meshes: readonly Mesh[];
+        blockHandles: readonly Readonly<{ blockId: string; mesh: Mesh }>[];
       }>[];
     }>;
     dispose(): void;
@@ -300,9 +304,15 @@ describe("Babylon Native block visual adapter", () => {
         runtimeEntityId: "native-block:route-block",
         semanticCaptureClassId: "worldkit.native-block.group.ungrouped",
       }]);
-      expect(visuals.liveHandles.visualGroups[0]?.meshes).toEqual([
-        meshByBlockId.get("gate-cap"),
-        meshByBlockId.get("gate-quarter"),
+      expect(visuals.liveHandles.realization).toEqual({
+        kind: "authoring-unbatched",
+      });
+      expect(visuals.liveHandles.visualBatches).toEqual([]);
+      expect(visuals.liveHandles.visualGroups[0]?.blockHandles.map(
+        ({ blockId, mesh }) => [blockId, mesh],
+      )).toEqual([
+        ["gate-cap", meshByBlockId.get("gate-cap")],
+        ["gate-quarter", meshByBlockId.get("gate-quarter")],
       ]);
       expect(Object.isFrozen(visuals.liveHandles)).toBe(true);
     });

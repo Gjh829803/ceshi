@@ -1281,9 +1281,17 @@ describe("formal measured observation documents", () => {
       colliders: [{
         colliderId: "spawn-ground",
         sourceBlockId: "central-ascent-block",
-        physicsBodyId: "physics-body:spawn-ground",
         colliderSubshapeId: "collider-subshape:spawn-ground",
-        overlayRecordId: "overlay:spawn-ground",
+        chunkParts: [{
+          chunkPartId: "spawn-ground-grid-chunk-xp0-zp0",
+          chunkResidencyGroupId: "grid-chunk-xp0-zp0",
+          overlayRecordId: "overlay:spawn-ground-grid-chunk-xp0-zp0",
+          physicsResidency: {
+            mode: "resident",
+            physicsBodyId:
+              "physics-body:spawn-ground-grid-chunk-xp0-zp0",
+          },
+        }],
       }],
       observedTopologyRelations: [],
     };
@@ -1298,6 +1306,16 @@ describe("formal measured observation documents", () => {
         ...value.colliders[0],
         colliderSubshapeId: undefined,
         logicalSubshapeId: "primary",
+      }],
+    })).toThrowError("FORMAL_COLLIDER_OVERLAY_OBSERVATION_INVALID");
+    expect(() => parseFormalColliderOverlayObservationV1({
+      ...value,
+      colliders: [{
+        ...value.colliders[0],
+        chunkParts: [
+          value.colliders[0]!.chunkParts[0],
+          value.colliders[0]!.chunkParts[0],
+        ],
       }],
     })).toThrowError("FORMAL_COLLIDER_OVERLAY_OBSERVATION_INVALID");
   });
