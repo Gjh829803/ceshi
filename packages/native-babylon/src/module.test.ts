@@ -52,6 +52,10 @@ describe("defineBabylonNativeScene", () => {
   it("keeps Profile settlement Host-only", () => {
     expect("commitBabylonNativeProfileSettlementV1" in nativeRoot).toBe(false);
     expect("commitBabylonNativeProfileSettlementV1" in nativeHost).toBe(true);
+    expect("createBabylonNativeBlockProfileBuildFailureV1" in nativeRoot)
+      .toBe(false);
+    expect("createBabylonNativeBlockProfileBuildFailureV1" in nativeHost)
+      .toBe(true);
   });
 
   it("returns an immutable detached definition with one build epoch", async () => {

@@ -4,6 +4,9 @@ import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import { isNil } from "lodash-es";
 
+import {
+  failBabylonNativeBlockProfileBuildV1 as fail,
+} from "./build-failure.js";
 import type {
   BabylonNativeBlockVisualGroupInventoryV1,
 } from "./check.js";
@@ -49,10 +52,6 @@ export interface CreateBabylonNativeBlockVisualsInputV1 {
 
 const BUILD_EPOCH_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const DEFAULT_DISPLAY_GAP_METERS = 0.04;
-
-function fail(code: string, message: string): never {
-  throw new TypeError(`${code}: ${message}`);
-}
 
 export function validateBabylonNativeBlockDisplayGapV1(
   layout: BabylonNativeBlockLayoutV1,

@@ -14,6 +14,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const commitProfileSettlement = vi.hoisted(() => vi.fn());
 vi.mock("@whitebox-world/native-babylon/host", () => ({
   commitBabylonNativeProfileSettlementV1: commitProfileSettlement,
+  createBabylonNativeBlockProfileBuildFailureV1(
+    code: string,
+    detail: string,
+  ) {
+    return new TypeError(`${code}: ${detail}`);
+  },
 }));
 
 beforeEach(() => {
@@ -133,6 +139,19 @@ function withScene(run: (scene: Scene) => void): void {
     scene.dispose();
     engine.dispose();
   }
+}
+
+function hostPublishableFailure(run: () => void): string {
+  try {
+    run();
+  } catch (error) {
+    expect(error).toBeInstanceOf(TypeError);
+    const message = (error as TypeError).message;
+    expect(message).toMatch(/^(WORLDKIT_NATIVE_BLOCK_[A-Z0-9_]+): [^\n]+$/);
+    expect(message).not.toMatch(/\n|\bat\s+\S+\s+\(|Error:/);
+    return message;
+  }
+  throw new Error("expected a Host-publishable Block Profile failure");
 }
 
 describe("Babylon Native block profile session", () => {
@@ -674,6 +693,70 @@ describe("Babylon Native block profile session", () => {
       }))).not.toThrow();
       expect(full.scaling.asArray()).toEqual([0.4, 0.4, 0.4]);
       expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("keeps fail() messages in the Host-publishable TypeError dialect", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      expect(hostPublishableFailure(() => {
+        session.createBlock({
+          id: "central-step",
+          shape: "step",
+          paletteRole: "route",
+          centerMetersXYZ: [0, 0.1, 0],
+        });
+      })).toMatch(/^WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID: /);
+    });
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 2 },
+      );
+      session.createBlock({
+        id: "ground-a",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0, -0.5, 0],
+      });
+      expect(hostPublishableFailure(() => {
+        session.createBlock({
+          id: "ground-b",
+          shape: "full",
+          paletteRole: "ground",
+          centerMetersXYZ: [0, -0.5, 0],
+        });
+      })).toMatch(/^WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP: /);
+    });
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 2 },
+      );
+      session.createBlock({
+        id: "west-route",
+        shape: "full",
+        paletteRole: "route",
+        centerMetersXYZ: [0, -0.5, 0],
+      });
+      session.createBlock({
+        id: "east-route",
+        shape: "full",
+        paletteRole: "route",
+        centerMetersXYZ: [8, -0.5, 0],
+      });
+      expect(hostPublishableFailure(() => {
+        session.finalize({ staticColliders: [] });
+      })).toMatch(
+        /^WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED: WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED$/,
+      );
     });
   });
 

@@ -6,6 +6,11 @@ import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import {
+  babylonNativeBlockCenterAlignsToGridV1,
+  babylonNativeBlockOccupiedMicroCellKeysV1,
+} from "@whitebox-world/native-babylon-block-profile/testing";
+
 import packageJson from "../../package.json";
 
 const execFileAsync = promisify(execFile);
@@ -238,6 +243,95 @@ describe("Native Block Builder Skill", () => {
     expect(outputContract).toContain("Placement is declared once, at creation.");
     expect(outputContract).not.toMatch(/createBlock\([\s\S]*?\}\);\s*\n\s*\w+\.position/);
     expect(outputContract).not.toMatch(/\bplaceBlock\b|\baddBlock\b|createBlocks\(/);
+  });
+
+  it("keeps the documented Grid and stair recipe on the occupancy grid", async () => {
+    const outputContract = await readFile(path.resolve(
+      ".codex/skills/worldkit-native-block-builder/references/native-block-output-contract.md",
+    ), "utf8");
+
+    expect(outputContract).toContain("minimumCenterMetersXYZ: [-1, -0.5, 0]");
+    expect(outputContract).toContain("repeatCountXYZ: [3, 1, 1]");
+    expect(outputContract).toContain(
+      "centerMetersXYZ: [0, 0.125 + stepIndex * 0.25, -1 - stepIndex]",
+    );
+    expect(outputContract).toContain(
+      "stack `n` `step` blocks at the same XZ center with Y centers `0.125 + 0.25 * j`",
+    );
+    expect(outputContract).toContain(
+      "Put successive tread columns exactly one meter apart along X or Z",
+    );
+
+    for (const xMeters of [-1, 0, 1]) {
+      expect(babylonNativeBlockCenterAlignsToGridV1({
+        shape: "full",
+        centerMetersXYZ: [xMeters, -0.5, 0],
+        rotationQuarterTurnsY: 0,
+      })).toBe(true);
+    }
+    const stairColumns: Array<readonly [number, number, number]> = [];
+    for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
+      const centerMetersXYZ = [
+        0,
+        0.125 + stepIndex * 0.25,
+        -1 - stepIndex,
+      ] as const;
+      stairColumns.push(centerMetersXYZ);
+      expect(babylonNativeBlockCenterAlignsToGridV1({
+        shape: "step",
+        centerMetersXYZ,
+        rotationQuarterTurnsY: 0,
+      })).toBe(true);
+    }
+    for (let columnIndex = 1; columnIndex < stairColumns.length; columnIndex += 1) {
+      const previous = new Set(babylonNativeBlockOccupiedMicroCellKeysV1({
+        shape: "step",
+        centerMetersXYZ: stairColumns[columnIndex - 1]!,
+        rotationQuarterTurnsY: 0,
+      }));
+      const current = babylonNativeBlockOccupiedMicroCellKeysV1({
+        shape: "step",
+        centerMetersXYZ: stairColumns[columnIndex]!,
+        rotationQuarterTurnsY: 0,
+      });
+      expect(current.some((key) => previous.has(key))).toBe(false);
+    }
+    const stackedKeys = new Set<string>();
+    for (let treadIndex = 0; treadIndex < 4; treadIndex += 1) {
+      const centerMetersXYZ = [0, 0.125 + 0.25 * treadIndex, 0] as const;
+      expect(babylonNativeBlockCenterAlignsToGridV1({
+        shape: "step",
+        centerMetersXYZ,
+        rotationQuarterTurnsY: 0,
+      })).toBe(true);
+      const keys = babylonNativeBlockOccupiedMicroCellKeysV1({
+        shape: "step",
+        centerMetersXYZ,
+        rotationQuarterTurnsY: 0,
+      });
+      expect(keys.some((key) => stackedKeys.has(key))).toBe(false);
+      for (const key of keys) stackedKeys.add(key);
+    }
+    expect(babylonNativeBlockCenterAlignsToGridV1({
+      shape: "step",
+      centerMetersXYZ: [0, 0.1, 0],
+      rotationQuarterTurnsY: 0,
+    })).toBe(false);
+    expect(babylonNativeBlockCenterAlignsToGridV1({
+      shape: "small",
+      centerMetersXYZ: [0, 0.25, 0],
+      rotationQuarterTurnsY: 0,
+    })).toBe(false);
+    const entryGroundKeys = new Set(babylonNativeBlockOccupiedMicroCellKeysV1({
+      shape: "full",
+      centerMetersXYZ: [0, -0.5, 0],
+      rotationQuarterTurnsY: 0,
+    }));
+    expect(babylonNativeBlockOccupiedMicroCellKeysV1({
+      shape: "step",
+      centerMetersXYZ: [0, 0.125, -1],
+      rotationQuarterTurnsY: 0,
+    }).some((key) => entryGroundKeys.has(key))).toBe(false);
   });
 
   it("registers the focused root command", () => {

@@ -77,6 +77,11 @@ const REGENERATED_GRID_SCENE_SOURCE = SCENE_SOURCE
   )
   .replace(`blockId: "foreground"`, `blockId: "foreground-x1-y0-z0"`);
 
+const MISSING_GRID_CHILD_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `    session.createBlock({id: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", centerMetersXYZ: [0, -0.5, 18] });`,
+  `    session.createBlockGrid({idPrefix: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", minimumCenterMetersXYZ: [-1, -0.5, 18], repeatCountXYZ: [3, 1, 1] });`,
+);
+
 const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
   `    session.createBlock({id: "upper",`,
   `    session.createBlock({id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group", centerMetersXYZ: [8, -0.5, 2] });
@@ -287,6 +292,29 @@ describe("packageNativeBlockAttemptV1", () => {
       fixture.attemptDirectoryPath,
       "native-check-result.json",
     ), "utf8")).toContain("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  }, 60_000);
+
+  it("rejects a Grid Collider that names the prefix instead of a child Block", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: MISSING_GRID_CHILD_SCENE_SOURCE,
+    });
+
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["native-check-rejected"] });
+    const checkResult = await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "native-check-result.json",
+    ), "utf8");
+    expect(checkResult).toContain("WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_MISSING");
+    expect(checkResult).not.toContain("WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED");
+    expect(checkResult).not.toMatch(/(?:Error:|\n\s+at\s)/);
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
     });

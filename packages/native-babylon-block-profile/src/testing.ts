@@ -11,6 +11,10 @@ import {
 import { createBabylonNativeBlockProfileSessionV1 } from "./session.js";
 
 export {
+  babylonNativeBlockCenterAlignsToGridV1,
+  babylonNativeBlockOccupiedMicroCellKeysV1,
+} from "./shapes.js";
+export {
   BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1,
   createBabylonNativeBlockReconstructionCorpusEvidenceIndexV1,
   inspectBabylonNativeBlockReconstructionCorpusCaseV1,
