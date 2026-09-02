@@ -189,7 +189,7 @@ test("recovers an existing Cloud Episode without launching a duplicate worker", 
   assert.equal(interrupted.manifestS3Uri, null);
 });
 
-test("re-applies the deterministic Worker Job before polling a non-terminal execution", async () => {
+test("does not mutate an already-running Worker Job during recovery", async () => {
   const launches = [];
   const workerImage = `worker@sha256:${"f".repeat(64)}`;
   const recovered = await recoverStudioCloudEpisode({
@@ -211,6 +211,11 @@ test("re-applies the deterministic Worker Job before polling a non-terminal exec
       execution_id: "exec-episode-recoverable",
       status: "running",
       current_stage_id: "episode-render",
+      stages: [{
+        stage_id: "episode-render",
+        status: "running",
+        current_attempt: 2,
+      }],
     }),
     launchImplementation: async (input) => launches.push(input),
     pollImplementation: async () => ({
@@ -221,9 +226,46 @@ test("re-applies the deterministic Worker Job before polling a non-terminal exec
     stagesImplementation: async () => ({ stages: [] }),
   });
   assert.equal(recovered.execution.status, "succeeded");
+  assert.equal(launches.length, 0);
+});
+
+test("launches a missing ready CPU stage with its exact remote attempt", async () => {
+  const launches = [];
+  const workerImage = `worker@sha256:${"e".repeat(64)}`;
+  await recoverStudioCloudEpisode({
+    executionId: "exec-episode-ready",
+    requestS3Uri: "s3://bucket/episode/request.json",
+    outputS3Prefix: "s3://bucket/episode",
+    workerImage,
+    config: {
+      namespace: "lwdp",
+      gpuResourceName: "nvidia.com/gpu",
+      gpuCount: 1,
+      nodeSelector: {},
+      tolerations: [],
+      cpuWorker: {},
+    },
+    cloudConfig: { userId: "worldkit-studio" },
+    getImplementation: async () => ({
+      execution_id: "exec-episode-ready",
+      status: "queued",
+      current_stage_id: "episode-render",
+      stages: [{
+        stage_id: "episode-render",
+        status: "ready",
+        current_attempt: 3,
+      }],
+    }),
+    launchImplementation: async (input) => launches.push(input),
+    pollImplementation: async () => ({
+      execution_id: "exec-episode-ready",
+      status: "succeeded",
+      diagnostics: { manifest_s3_uri: "s3://bucket/episode/manifest.json" },
+    }),
+    stagesImplementation: async () => ({ stages: [] }),
+  });
   assert.equal(launches.length, 1);
   assert.equal(launches[0].image, workerImage);
   assert.equal(launches[0].stageId, "episode-render");
-  assert.equal(launches[0].gpuRequired, false);
-  assert.equal(launches[0].jobSuffix, "retry-2");
+  assert.equal(launches[0].jobSuffix, "retry-3");
 });

@@ -39,6 +39,32 @@ test("creates one GPU Episode worker with project-local runtime Secret material"
   });
   assert.equal(retried.metadata.name, "worldkit-episode-exec-episode-001-retry-2");
 
+  const longExecutionId = "exec_83ac6d65fc7fe19ad65f";
+  const longRetry2 = cloudEpisodeWorkerJob({
+    executionId: longExecutionId,
+    stageId: "episode-prepare",
+    executionPart: "prepare",
+    requestS3Uri: "s3://bucket/episode/inputs/request.json",
+    outputS3Prefix: "s3://bucket/episode",
+    image: `worldkit-cloud-worker@sha256:${"a".repeat(64)}`,
+    gpuRequired: false,
+    jobSuffix: "retry-2",
+  });
+  const longRetry3 = cloudEpisodeWorkerJob({
+    executionId: longExecutionId,
+    stageId: "episode-prepare",
+    executionPart: "prepare",
+    requestS3Uri: "s3://bucket/episode/inputs/request.json",
+    outputS3Prefix: "s3://bucket/episode",
+    image: `worldkit-cloud-worker@sha256:${"a".repeat(64)}`,
+    gpuRequired: false,
+    jobSuffix: "retry-3",
+  });
+  assert.ok(longRetry2.metadata.name.endsWith("-episode-prepare-retry-2"));
+  assert.ok(longRetry3.metadata.name.endsWith("-episode-prepare-retry-3"));
+  assert.notEqual(longRetry2.metadata.name, longRetry3.metadata.name);
+  assert.ok(longRetry2.metadata.name.length <= 63);
+
   const cpuPrepare = cloudEpisodeWorkerJob({
     executionId: "exec_episode_001",
     stageId: "episode-prepare",

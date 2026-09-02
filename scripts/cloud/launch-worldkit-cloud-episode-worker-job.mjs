@@ -22,12 +22,15 @@ function required(value, label) {
 }
 
 function jobName(executionId, jobSuffix = "") {
+  const prefix = "worldkit-episode-";
+  const execution = executionId.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
   const suffix = String(jobSuffix).toLowerCase().replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-  return (
-    `worldkit-episode-${executionId.toLowerCase().replace(/[^a-z0-9]+/g, "-")}` +
-    `${suffix ? `-${suffix}` : ""}`
-  ).slice(0, 63).replace(/-$/, "");
+  const suffixPart = suffix ? `-${suffix}` : "";
+  const executionBudget = 63 - prefix.length - suffixPart.length;
+  if (executionBudget < 1) throw new Error("job_suffix is too long for a Kubernetes Job name.");
+  return `${prefix}${execution.slice(0, executionBudget).replace(/-$/, "")}${suffixPart}`;
 }
 
 export function cloudEpisodeWorkerJob({

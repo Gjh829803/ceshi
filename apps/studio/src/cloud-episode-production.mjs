@@ -361,16 +361,19 @@ export async function recoverStudioCloudEpisode({
     return { execution, cancelled: true, stages: [], manifestS3Uri: null };
   }
   if (execution.status !== "succeeded") {
-    if (requestS3Uri && outputS3Prefix && workerImage && config) {
-      await launchEpisodeStageWorker({
-        stageId: execution.current_stage_id ?? "episode-prepare",
+    const currentStage = execution.stages?.find?.((stage) =>
+      stage?.stage_id === execution.current_stage_id);
+    if (
+      currentStage?.status === "ready" &&
+      requestS3Uri && outputS3Prefix && workerImage && config
+    ) {
+      await launchReadyCpuStage(execution, {
         executionId,
         requestS3Uri,
         outputS3Prefix,
         workerImage,
         config,
         cloudConfig,
-        attempt,
         launchImplementation,
       });
     }
