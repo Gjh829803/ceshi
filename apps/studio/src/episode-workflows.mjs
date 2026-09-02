@@ -8,6 +8,14 @@ import path from "node:path";
 import { loadEpisodeStyleVariantConfig } from "../../../scripts/lib/episode-style-variants.mjs";
 
 const idPattern = /^[a-z0-9][a-z0-9-]{2,119}$/;
+
+export function failedEpisodeStageId(execution) {
+  const stages = Array.isArray(execution?.stages) ? execution.stages : [];
+  const failed = stages.find((stage) =>
+    stage && typeof stage === "object" && stage.status === "failed" &&
+    typeof stage.stage_id === "string" && stage.stage_id.length > 0);
+  return failed?.stage_id ?? null;
+}
 const artifactDefinitions = [
   ["planning/reconnaissance/reconnaissance-report.json", "运行时侦察报告", "json", "reconnaissance"],
   ["planning/navigation-evidence.json", "模型探索参考", "json", "navigation-evidence"],
@@ -1449,6 +1457,7 @@ export function createEpisodeWorkflowService(options) {
       ]);
       record = {
         ...record,
+        remoteStageId: retryStageId,
         status: "running",
         currentStage: "preparing",
         finishedAt: null,
@@ -1557,7 +1566,12 @@ export function createEpisodeWorkflowService(options) {
         return;
       }
       if (result.retryRequired) {
-        await runCloudEpisodeRetry(await readJson(recordPath) ?? record);
+        const retryStageId = failedEpisodeStageId(result.execution);
+        const retryRecord = {
+          ...(await readJson(recordPath) ?? record),
+          ...(retryStageId === null ? {} : { remoteStageId: retryStageId }),
+        };
+        await runCloudEpisodeRetry(retryRecord);
         return;
       }
       await admitCloudEpisodeResult(recordPath, record, result);

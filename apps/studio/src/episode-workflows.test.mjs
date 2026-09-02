@@ -8,7 +8,22 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 
-import { createEpisodeWorkflowService } from "./episode-workflows.mjs";
+import {
+  createEpisodeWorkflowService,
+  failedEpisodeStageId,
+} from "./episode-workflows.mjs";
+
+test("retries the failed Episode stage instead of the next queued stage", () => {
+  assert.equal(failedEpisodeStageId({
+    current_stage_id: "episode-render",
+    stages: [
+      { stage_id: "episode-prepare", status: "succeeded" },
+      { stage_id: "whitebox-capture", status: "failed" },
+      { stage_id: "episode-render", status: "queued" },
+    ],
+  }), "whitebox-capture");
+  assert.equal(failedEpisodeStageId({ stages: [] }), null);
+});
 
 test("destroys an artifact stream when the browser aborts a video request", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-abort-"));
