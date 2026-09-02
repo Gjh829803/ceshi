@@ -83,6 +83,18 @@ function deckCollider(
   });
 }
 
+function groundBoundaryCollider(): BabylonNativeStaticColliderContributionV1 {
+  return createBabylonNativeStaticColliderContributionV1({
+    id: "ground-boundary",
+    runtimeRole: "ground-safety-boundary",
+    worldPositionsMetersXYZ: [0, -0.2, -1, 0, 4, -1, 2, 4, -1, 2, -0.2, -1],
+    triangleIndices: [0, 1, 2, 0, 2, 3],
+    frictionRatio: 0.8,
+    restitutionRatio: 0,
+    traversalBinding: { kind: "not-traversable" },
+  });
+}
+
 interface CameraOwnerProbeV1
   extends BabylonNativeColliderResidencyCameraOwnerV1 {
   readonly registered: ReadonlySet<string>;
@@ -408,6 +420,23 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
       .toBe(secondNames.length);
   });
 
+  it("keeps a Host-derived ground boundary live without forging Block joins",
+    async () => {
+      const { residency } = await createFixture({
+        quadCount: 8,
+        colliders: [deckCollider(8), groundBoundaryCollider()],
+      });
+      residency.update([[0, 0, 0]]);
+      const handles = residency.activeHandles();
+      expect(handles.some(({ runtimeRole, sourceBlockIds }) =>
+        runtimeRole === "scene-static-collider" &&
+        sourceBlockIds.join(",") === "deck-block")).toBe(true);
+      expect(handles.some(({ runtimeRole, sourceBlockIds }) =>
+        runtimeRole === "ground-safety-boundary" &&
+        sourceBlockIds.length === 0)).toBe(true);
+      expect(residency.metrics().logicalColliderCount).toBe(2);
+    });
+
   it("rejects a forged residency policy or empty Subject union", async () => {
     const { residency } = await createFixture({ quadCount: 8 });
     expect(() => residency.update([]))
@@ -428,6 +457,16 @@ describe("NBR-65F bounded Native Chunk physics residency", () => {
         ...BABYLON_NATIVE_COLLIDER_RESIDENCY_POLICY_V1,
         releaseRadiusMeters: 1,
       }),
+      applyColliderMetadata: (): void => {},
+    })).toThrow(/WORLDKIT_NATIVE_COLLIDER_RESIDENCY_INVALID/);
+    expect(() => createBabylonNativeColliderResidencyV1({
+      scene,
+      chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+      colliders: [groundBoundaryCollider()],
+      sourceBlockIdsByColliderId: new Map([
+        ["ground-boundary", ["forged-block"]],
+      ]),
+      cameraGeometryQuery: cameraOwner,
       applyColliderMetadata: (): void => {},
     })).toThrow(/WORLDKIT_NATIVE_COLLIDER_RESIDENCY_INVALID/);
   });

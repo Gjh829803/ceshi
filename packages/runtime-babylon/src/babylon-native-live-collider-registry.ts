@@ -87,8 +87,15 @@ function assertLiveHandle(
   }
 }
 
-function hasCanonicalSourceBlockIds(sourceBlockIds: readonly string[]): boolean {
-  return !isEmpty(sourceBlockIds) && sourceBlockIds.every((sourceBlockId, index) =>
+function hasCanonicalSourceBlockIds(
+  sourceBlockIds: readonly string[],
+  runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1,
+): boolean {
+  if (
+    (runtimeRole === "scene-static-collider" && isEmpty(sourceBlockIds)) ||
+    (runtimeRole === "ground-safety-boundary" && !isEmpty(sourceBlockIds))
+  ) return false;
+  return sourceBlockIds.every((sourceBlockId, index) =>
     sourceBlockId.length > 0 &&
     (index === 0 || stableCompare(sourceBlockIds[index - 1]!, sourceBlockId) < 0)
   );
@@ -105,7 +112,10 @@ export function createBabylonNativeLiveColliderRegistryV1(
     .sort((left, right) => stableCompare(left.chunkPartId, right.chunkPartId))
     .map((handle) => {
       assertLiveHandle(handle);
-      if (!hasCanonicalSourceBlockIds(handle.sourceBlockIds)) {
+      if (!hasCanonicalSourceBlockIds(
+        handle.sourceBlockIds,
+        handle.runtimeRole,
+      )) {
         throw new TypeError(
           "WORLDKIT_NATIVE_LIVE_COLLIDER_REGISTRY_INVALID: sourceBlockIds must be sorted and unique",
         );
@@ -143,7 +153,7 @@ export function createBabylonNativeLiveColliderRegistryV1(
       parts.length ||
     parts.some((part) =>
       !SHA256.test(part.partHash) ||
-      !hasCanonicalSourceBlockIds(part.sourceBlockIds) ||
+      !hasCanonicalSourceBlockIds(part.sourceBlockIds, part.runtimeRole) ||
       part.worldPositionsMetersXYZ.length < 9 ||
       part.worldPositionsMetersXYZ.length % 3 !== 0 ||
       part.triangleIndices.length === 0 ||

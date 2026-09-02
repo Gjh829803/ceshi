@@ -151,9 +151,12 @@ export function createBabylonNativeColliderResidencyV1(
   }
   const sourceBlockIdsByColliderId = new Map(
     [...input.sourceBlockIdsByColliderId].map(([colliderId, sourceBlockIds]) => {
+      const collider = colliderById.get(colliderId);
       const canonicalIds = [...sourceBlockIds].sort(stableCompare);
       if (
-        !colliderById.has(colliderId) ||
+        isNil(collider) ||
+        collider.runtimeRole !== "scene-static-collider" ||
+        canonicalIds.length === 0 ||
         canonicalIds.length !== new Set(canonicalIds).size ||
         canonicalIds.some((sourceBlockId) => sourceBlockId.length === 0)
       ) {
@@ -164,6 +167,13 @@ export function createBabylonNativeColliderResidencyV1(
       return [colliderId, Object.freeze(canonicalIds)] as const;
     }),
   );
+  if (input.colliders.some((collider) =>
+    collider.runtimeRole === "scene-static-collider" &&
+    !sourceBlockIdsByColliderId.has(collider.id))) {
+    throw new TypeError(
+      `${CODE}: every scene topology Collider must join source Blocks.`,
+    );
+  }
   const partition = partitionBabylonNativeBlockCollisionIntoChunksV1({
     chunkPolicy: input.chunkPolicy,
     colliders: input.colliders.map((collider) => Object.freeze({
