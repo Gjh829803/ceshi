@@ -23,6 +23,9 @@ import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import { FIXED_TIME_STEP_SECONDS } from "./physics";
 import { BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1 } from "./traversal-implementation-identity";
 import {
+  r1bInStepUpCorridor,
+  r1bIsFailureTick,
+  r1bSupportDebug,
   resolveRetainedSupportSurfaceV1,
   type CharacterSupportProjectionLockV1,
 } from "./retained-support-surface-resolver";
@@ -475,6 +478,12 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     const sample = controller.retainedCharacterSupportSample();
     if (isNil(sample)) fail("TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE");
     const live = controller.liveLockState();
+    const surfaceResolution = resolveRetainedSupportSurfaceV1({
+      plan: this.#plan,
+      sample,
+      live,
+      policy: { mode: "route-walkable" },
+    });
     const support: CharacterSupportEvidenceV1 = {
       kind: "character-support-evidence",
       schemaVersion: 1,
@@ -482,15 +491,65 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
       supportNormalWorldXYZ: sample.supportNormalWorldXYZ,
       sampledFootPositionMetersXYZ: sample.sampledFootPositionMetersXYZ,
       isSupportSurfaceDynamic: sample.isSupportSurfaceDynamic,
-      surfaceResolution: resolveRetainedSupportSurfaceV1({
-        plan: this.#plan,
-        sample,
-        live,
-        policy: { mode: "route-walkable" },
-      }),
+      surfaceResolution,
     };
     const origin = controller.subjectOrigin;
     const velocity = controller.velocity;
+    // #region agent log
+    {
+      const tick = this.#host.readTick();
+      const originXYZ = [origin.x, origin.y, origin.z] as const;
+      if (
+        r1bIsFailureTick(tick) ||
+        r1bInStepUpCorridor(originXYZ) ||
+        r1bInStepUpCorridor(sample.sampledFootPositionMetersXYZ) ||
+        surfaceResolution.mode === "ambiguous"
+      ) {
+        r1bSupportDebug(
+          "E",
+          "traversal-runtime-port.ts:createEvidence",
+          "tick-evidence",
+          {
+            tick,
+            origin: originXYZ,
+            velocity: [velocity.x, velocity.y, velocity.z],
+            foot: sample.sampledFootPositionMetersXYZ,
+            capsuleCenter: sample.sampledControllerCenterMetersXYZ,
+            supportState: sample.supportState,
+            supportNormal: sample.supportNormalWorldXYZ,
+            isDynamic: sample.isSupportSurfaceDynamic,
+            contactCount: sample.supportContacts.length,
+            contactsHaveDistance: sample.supportContacts.some(
+              (contact) => contact.distanceMeters !== undefined,
+            ),
+            uniqueContactTs: [...new Set(sample.supportContacts.flatMap((contact) =>
+              contact.traversalSurfaceId === undefined
+                ? []
+                : [contact.traversalSurfaceId]
+            ))],
+            uniqueContactEnt: [...new Set(sample.supportContacts.flatMap((contact) =>
+              contact.surfaceEntityId === undefined ? [] : [contact.surfaceEntityId]
+            ))],
+            contacts: sample.supportContacts.map((contact) => ({
+              p: contact.pointMetersXYZ,
+              n: contact.normalXYZ,
+              d: contact.distanceMeters ?? null,
+              sub: contact.colliderSubshapeId ?? null,
+              ts: contact.traversalSurfaceId ?? null,
+              ent: contact.surfaceEntityId ?? null,
+              col: contact.colliderId ?? null,
+            })),
+            surfaceResolution,
+            planSurfaces: this.#plan.traversal.surfaces.map((surface) => ({
+              ts: surface.traversalSurfaceId,
+              ent: surface.surfaceEntityId,
+              sub: surface.colliderSubshapeId,
+            })),
+          },
+        );
+      }
+    }
+    // #endregion
     return canonicalTraversalRuntimeTickEvidenceV1({
       kind: "traversal-runtime-tick-evidence",
       schemaVersion: 1,
