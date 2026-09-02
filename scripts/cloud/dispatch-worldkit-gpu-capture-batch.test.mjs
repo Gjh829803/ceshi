@@ -38,6 +38,21 @@ function executionFor(item, status = "ready") {
   };
 }
 
+function episodeRecordFor(item, remoteStageId = "whitebox-capture") {
+  return {
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    backend: "cloud",
+    sceneId: item.sceneId,
+    episodeId: item.episodeId,
+    status: "running",
+    recordRevision: 1,
+    remoteExecutionId: item.executionId,
+    remoteWorkerImage: item.workerImage,
+    remoteStageId,
+  };
+}
+
 test("dispatcher leaves the GPU off when only ninety-nine tasks are ready", async () => {
   const entries = Array.from({ length: 99 }, (_, index) => entry(index));
   let published = false;
@@ -97,6 +112,76 @@ test("dispatcher publishes then launches exactly one Batch at one hundred ready 
   });
   assert.equal(result.status, "launched");
   assert.deepEqual(calls, [["publish", 100], ["launch", 100]]);
+});
+
+test("dispatcher drains a stable final tail after every registered producer is ready", async () => {
+  const entries = Array.from({ length: 20 }, (_, index) => entry(index));
+  const calls = [];
+  const result = await dispatchGpuCaptureBatch({
+    entries,
+    episodeRecords: entries.map((item) => episodeRecordFor(item)),
+    defaultWorkerImage: IMAGE,
+    tailIdleSeconds: 120,
+    observedAt: "2026-09-02T00:05:00.000Z",
+    inspectExecution: async (executionId) => executionFor(
+      entries.find((item) => item.executionId === executionId),
+    ),
+    publishManifest: async (batch) => {
+      calls.push(["publish", batch.taskCount, batch.dispatchReason]);
+      return { s3Uri: "s3://bucket/queue/batches/tail/manifest.json" };
+    },
+    launchBatch: async (batch) => {
+      calls.push(["launch", batch.taskCount, batch.dispatchReason]);
+      return { jobName: "tail-batch-job" };
+    },
+  });
+  assert.equal(result.status, "launched");
+  assert.equal(result.batch.taskCount, 20);
+  assert.equal(result.batch.dispatchReason, "producer-drained");
+  assert.deepEqual(calls, [
+    ["publish", 20, "producer-drained"],
+    ["launch", 20, "producer-drained"],
+  ]);
+});
+
+test("dispatcher does not drain a tail while one registered producer is preparing", async () => {
+  const entries = Array.from({ length: 20 }, (_, index) => entry(index));
+  const preparing = entry(20);
+  const result = await dispatchGpuCaptureBatch({
+    entries,
+    episodeRecords: [
+      ...entries.map((item) => episodeRecordFor(item)),
+      episodeRecordFor(preparing, "episode-prepare"),
+    ],
+    defaultWorkerImage: IMAGE,
+    tailIdleSeconds: 120,
+    observedAt: "2026-09-02T00:05:00.000Z",
+    inspectExecution: async (executionId) => executionFor(
+      entries.find((item) => item.executionId === executionId),
+    ),
+    publishManifest: async () => assert.fail("must not publish"),
+    launchBatch: async () => assert.fail("must not launch"),
+  });
+  assert.equal(result.status, "waiting");
+  assert.equal(result.drainEligibleCount, 0);
+});
+
+test("dispatcher waits for the tail stabilization interval", async () => {
+  const entries = Array.from({ length: 20 }, (_, index) => entry(index));
+  const result = await dispatchGpuCaptureBatch({
+    entries,
+    episodeRecords: entries.map((item) => episodeRecordFor(item)),
+    defaultWorkerImage: IMAGE,
+    tailIdleSeconds: 120,
+    observedAt: "2026-09-02T00:01:00.000Z",
+    inspectExecution: async (executionId) => executionFor(
+      entries.find((item) => item.executionId === executionId),
+    ),
+    publishManifest: async () => assert.fail("must not publish"),
+    launchBatch: async () => assert.fail("must not launch"),
+  });
+  assert.equal(result.status, "waiting");
+  assert.equal(result.drainEligibleCount, 0);
 });
 
 test("cancelled and non-ready executions do not count toward the floor", async () => {

@@ -86,6 +86,10 @@ export async function dispatchGpuCaptureBatch({
   entries,
   minimumBatchSize = 100,
   maximumBatchSize = 128,
+  episodeRecords = [],
+  defaultWorkerImage = null,
+  tailIdleSeconds = 120,
+  observedAt = new Date().toISOString(),
   inspectExecution,
   publishManifest,
   launchBatch,
@@ -125,9 +129,57 @@ export async function dispatchGpuCaptureBatch({
         ? stageAttempt : entry.stageAttempt,
     }];
   });
+  const activeEpisodeRecords = episodeRecords.filter((record) =>
+    record?.backend === "cloud" &&
+    ["running", "remote-pending"].includes(record?.status));
+  const readyByWorkerImage = new Map();
+  for (const entry of ready) {
+    const group = readyByWorkerImage.get(entry.workerImage) ?? [];
+    group.push(entry);
+    readyByWorkerImage.set(entry.workerImage, group);
+  }
+  const drainEvidenceByWorkerImage = new Map();
+  for (const [workerImage, group] of readyByWorkerImage) {
+    if (group.length >= minimumBatchSize) continue;
+    const readyExecutionIds = new Set(group.map((entry) => entry.executionId));
+    const records = activeEpisodeRecords.filter((record) =>
+      (record.remoteWorkerImage ?? defaultWorkerImage) === workerImage);
+    const readyRecordCount = records.filter((record) =>
+      record.remoteStageId === "whitebox-capture" &&
+      readyExecutionIds.has(record.remoteExecutionId)).length;
+    const inFlightPrepareCount = records.filter((record) => {
+      if (record.remoteStageId === "episode-render") return false;
+      if (record.remoteStageId !== "whitebox-capture") return true;
+      return !readyExecutionIds.has(record.remoteExecutionId);
+    }).length;
+    const newestReadyAt = group.reduce((latest, entry) =>
+      entry.createdAt.localeCompare(latest) > 0 ? entry.createdAt : latest,
+    group[0].createdAt);
+    if (
+      records.length > 0 &&
+      readyRecordCount === group.length &&
+      inFlightPrepareCount === 0 &&
+      Number.isSafeInteger(tailIdleSeconds) &&
+      tailIdleSeconds >= 60 &&
+      Number.isFinite(Date.parse(observedAt)) &&
+      Date.parse(observedAt) - Date.parse(newestReadyAt) >= tailIdleSeconds * 1_000
+    ) {
+      drainEvidenceByWorkerImage.set(workerImage, Object.freeze({
+        observedAt,
+        newestReadyAt,
+        tailIdleSeconds,
+        readyRecordCount,
+        inFlightPrepareCount,
+      }));
+    }
+  }
   let batch;
   try {
-    batch = selectGpuCaptureBatch(ready, { minimumBatchSize, maximumBatchSize });
+    batch = selectGpuCaptureBatch(ready, {
+      minimumBatchSize,
+      maximumBatchSize,
+      drainEvidenceByWorkerImage,
+    });
   } catch (error) {
     if (error?.code === "GPU_CAPTURE_BATCH_NOT_READY") {
       return Object.freeze({
@@ -136,6 +188,9 @@ export async function dispatchGpuCaptureBatch({
         queueObjectCount: parsedCandidates.length,
         readyCount: ready.length,
         minimumBatchSize,
+        tailIdleSeconds,
+        drainEligibleCount: [...drainEvidenceByWorkerImage.values()]
+          .reduce((sum, evidence) => sum + evidence.readyRecordCount, 0),
         staleQueueEntryUris,
         batch: null,
       });
@@ -150,6 +205,7 @@ export async function dispatchGpuCaptureBatch({
     queueObjectCount: parsedCandidates.length,
     readyCount: ready.length,
     minimumBatchSize,
+    tailIdleSeconds,
     staleQueueEntryUris,
     batch,
     published,
@@ -326,6 +382,9 @@ async function main() {
       entries,
       minimumBatchSize: config.gpuBatch.minimumBatchSize,
       maximumBatchSize: config.gpuBatch.maximumBatchSize,
+      episodeRecords: runIndexRecords,
+      defaultWorkerImage: config.workerImage,
+      tailIdleSeconds: config.gpuBatch.tailFlushIdleSeconds,
       inspectExecution: (executionId) => getCloudExecution(executionId, {
         config: cloudConfig,
       }),

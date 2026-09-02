@@ -69,7 +69,11 @@ export function parseCloudEpisodeRequest(value) {
       !Number.isSafeInteger(request.gpuBatch?.minimumBatchSize) ||
       request.gpuBatch.minimumBatchSize < 100 ||
       !Number.isSafeInteger(request.gpuBatch?.maximumBatchSize) ||
-      request.gpuBatch.maximumBatchSize < request.gpuBatch.minimumBatchSize
+      request.gpuBatch.maximumBatchSize < request.gpuBatch.minimumBatchSize ||
+      (request.gpuBatch.tailFlushIdleSeconds !== undefined &&
+        (!Number.isSafeInteger(request.gpuBatch.tailFlushIdleSeconds) ||
+          request.gpuBatch.tailFlushIdleSeconds < 60 ||
+          request.gpuBatch.tailFlushIdleSeconds > 3_600))
     ) throw new Error("Cloud Episode GPU Batch profile is invalid.");
     assertS3Uri(request.gpuBatch.queueS3Prefix);
   }
@@ -127,6 +131,9 @@ export async function submitCloudEpisode({
       queueS3Prefix: assertS3Uri(gpuBatch?.queueS3Prefix),
       minimumBatchSize: Number(gpuBatch?.minimumBatchSize),
       maximumBatchSize: Number(gpuBatch?.maximumBatchSize),
+      ...(gpuBatch?.tailFlushIdleSeconds === undefined ? {} : {
+        tailFlushIdleSeconds: Number(gpuBatch.tailFlushIdleSeconds),
+      }),
     },
     pipeline: {
       command: "episode:run",

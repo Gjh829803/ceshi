@@ -12,6 +12,7 @@
     "queueS3Prefix": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/gpu-capture-queue",
     "minimumBatchSize": 100,
     "maximumBatchSize": 128,
+    "tailFlushIdleSeconds": 120,
     "taskLeaseSeconds": 43200,
     "dispatcherIntervalSeconds": 60,
     "ephemeralStorageRequest": "32Gi",

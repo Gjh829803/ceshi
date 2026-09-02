@@ -9,8 +9,11 @@ Episode production uses one custom three-stage DAG:
 `episode-prepare -> whitebox-capture -> episode-render`. These are compute and
 checkpoint boundaries, not new Agent boundaries. The middle stage is never
 launched per Episode. CPU prepare publishes a queue entry; the cloud dispatcher
-waits for at least 100 compatible ready entries, then one GPU Pod processes a
-100–128 task Batch in one lifecycle. CPU render resumes each admitted capture
+starts immediately at 100 compatible ready entries, or drains a smaller final
+tail after every same-image Episode is represented by the durable Run Index,
+no prepare or queue publication remains in flight, and the queue has been stable
+for the configured interval. One GPU Pod processes up to 128 tasks in one
+lifecycle. CPU render resumes each admitted capture
 and runs the unchanged visual, Gemini, direct Seedance 2.5 720p, conformance and
 bundle behavior.
 
@@ -134,8 +137,8 @@ pnpm cloud:control-plane:deploy
 ```
 
 Both commands mutate Kubernetes and require an authorized rollout. The
-dispatcher itself starts no GPU until the queue contains at least 100 admitted
-tasks.
+dispatcher starts no GPU below 100 while a producer is still active. A smaller
+final tail is eligible only through the closed-producer evidence above.
 
 The corresponding capture public key is a trust root owned outside the
 artifact bundle. Do not copy the private key into the repository, S3 inputs,

@@ -57,6 +57,9 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     gpuBatch.minimumBatchSize < 100 ||
     !Number.isSafeInteger(gpuBatch?.maximumBatchSize) ||
     gpuBatch.maximumBatchSize < gpuBatch.minimumBatchSize ||
+    !Number.isSafeInteger(gpuBatch?.tailFlushIdleSeconds) ||
+    gpuBatch.tailFlushIdleSeconds < 60 ||
+    gpuBatch.tailFlushIdleSeconds > 3_600 ||
     !Number.isSafeInteger(gpuBatch?.taskLeaseSeconds) ||
     gpuBatch.taskLeaseSeconds < 900 ||
     !Number.isSafeInteger(gpuBatch?.dispatcherIntervalSeconds) ||
@@ -92,6 +95,7 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
       queueS3Prefix: assertS3Uri(gpuBatch.queueS3Prefix),
       minimumBatchSize: gpuBatch.minimumBatchSize,
       maximumBatchSize: gpuBatch.maximumBatchSize,
+      tailFlushIdleSeconds: gpuBatch.tailFlushIdleSeconds,
       taskLeaseSeconds: gpuBatch.taskLeaseSeconds,
       dispatcherIntervalSeconds: gpuBatch.dispatcherIntervalSeconds,
       ephemeralStorageRequest: gpuBatch.ephemeralStorageRequest,

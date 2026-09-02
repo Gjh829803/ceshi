@@ -1379,6 +1379,8 @@ export function createEpisodeWorkflowService(options) {
             remoteExecutionProfile: submitted.executionProfile ?? "legacy-coarse@1",
             gpuBatchMinimumSize: submitted.gpuBatch?.minimumBatchSize ?? 100,
             gpuBatchMaximumSize: submitted.gpuBatch?.maximumBatchSize ?? 128,
+            gpuBatchTailFlushIdleSeconds:
+              submitted.gpuBatch?.tailFlushIdleSeconds ?? 120,
             gpuBatchStatus: "preparing",
             sourceSceneExecutionId: scene.sceneExecutionId,
             sourceSceneManifestS3Uri: scene.sceneManifestS3Uri,

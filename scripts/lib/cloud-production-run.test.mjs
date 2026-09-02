@@ -41,11 +41,33 @@ test("Episode Cloud Execution uses three coarse effect-preserving stages", () =>
   assert.deepEqual(CLOUD_EPISODE_STAGE_PROFILE_V2[2].depends_on, ["whitebox-capture"]);
 });
 
-test("GPU batch never starts below the production floor of one hundred", () => {
+test("GPU batch below one hundred requires closed-producer evidence", () => {
   assert.throws(
     () => selectGpuCaptureBatch(Array.from({ length: 99 }, (_, index) => entry(index))),
     (error) => error?.code === "GPU_CAPTURE_BATCH_NOT_READY" && error.eligibleCount === 99,
   );
+});
+
+test("GPU batch admits and verifies a stable producer-drained tail", () => {
+  const entries = Array.from({ length: 20 }, (_, index) => entry(index));
+  const evidence = {
+    observedAt: "2026-09-02T00:05:00.000Z",
+    newestReadyAt: entries.at(-1).createdAt,
+    tailIdleSeconds: 120,
+    readyRecordCount: 20,
+    inFlightPrepareCount: 0,
+  };
+  const batch = selectGpuCaptureBatch(entries, {
+    createdAt: evidence.observedAt,
+    drainEvidenceByWorkerImage: new Map([[IMAGE, evidence]]),
+  });
+  assert.equal(batch.taskCount, 20);
+  assert.equal(batch.dispatchReason, "producer-drained");
+  assert.deepEqual(parseGpuCaptureBatchManifest(JSON.stringify(batch)), batch);
+  assert.throws(() => parseGpuCaptureBatchManifest({
+    ...batch,
+    drainEvidence: { ...batch.drainEvidence, inFlightPrepareCount: 1 },
+  }), /identity is invalid/);
 });
 
 test("GPU batch deterministically admits one hundred compatible tasks", () => {
