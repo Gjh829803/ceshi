@@ -241,6 +241,52 @@ describe("formal world capture provider", () => {
 
     expect(measureFormalTraversalCheckpointV1({
       criterion: {
+        kind: "pass-plane",
+        checkpointId: "blocked-east",
+        expectation: "pass",
+        sourceVisualGroupId: "gate",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [4, 0, -1],
+          maximumMetersXYZ: [6, 2, 1],
+        },
+        axis: "x",
+        sourceFace: "maximum",
+        planeMeters: 6,
+        expectedCenterSide: "positive",
+        capsuleRadiusMeters: 0.5,
+        toleranceMeters: 0.1,
+      },
+      startPositionMetersXYZ: [4, 1, 0],
+      positionMetersXYZ: [5.2, 1, 0],
+      tick: 8,
+      isFinalTick: true,
+    })).toEqual({ checkpointId: "blocked-east", outcome: "blocked", observedAtTick: 8 });
+
+    expect(measureFormalTraversalCheckpointV1({
+      criterion: {
+        kind: "reach-bounds",
+        checkpointId: "blocked-platform",
+        expectation: "reach",
+        sourceVisualGroupId: "platform",
+        sourceBoundsMeters: {
+          minimumMetersXYZ: [-1, 0, -4],
+          maximumMetersXYZ: [1, 2, -2],
+        },
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
+      },
+      startPositionMetersXYZ: [0, 1, 0],
+      positionMetersXYZ: [0, 1, -1],
+      tick: 9,
+      isFinalTick: true,
+    })).toEqual({
+      checkpointId: "blocked-platform",
+      outcome: "blocked",
+      observedAtTick: 9,
+    });
+
+    expect(measureFormalTraversalCheckpointV1({
+      criterion: {
         kind: "block-plane",
         checkpointId: "blocked-west",
         expectation: "block",
@@ -660,19 +706,30 @@ describe("formal world capture provider", () => {
     expect(resetCount()).toBe(2);
   });
 
-  it.each([
-    ["pass", "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED"],
-    ["block", "BABYLON_FORMAL_CAPTURE_BLOCK_CHECKPOINT_UNMEASURED"],
-  ] as const)("reports which %s evidence class failed to measure", async (
-    checkExpectation,
-    diagnosticCode,
-  ) => {
-    const runtimeSessionId = `runtime.formal.provider-unmeasured.${checkExpectation}`;
+  it("publishes a measured blocked checkpoint when a pass traversal misses its target", async () => {
+    const runtimeSessionId = "runtime.formal.provider-pass-blocked";
     const { ports } = traversalPorts(
       runtimeSessionId,
       false,
       [5, 1, 5],
     );
+    const fixture = traversalRequestFixture();
+    const checks = await FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
+      .captureTraversalChecks(fixture, runtimeSessionId, "player", ports);
+
+    expect(checks).toHaveLength(2);
+    expect(checks.every(({ outcome }) => outcome === "passed")).toBe(true);
+    expect(checks.map(({ checkpoints }) => checkpoints)).toEqual([
+      [{ checkpointId: "spawn", outcome: "blocked", observedAtTick: 2 }],
+      [{ checkpointId: "spawn", outcome: "blocked", observedAtTick: 2 }],
+    ]);
+    expect(checks.every(({ observedTopologyRelations }) =>
+      observedTopologyRelations.length === 0)).toBe(true);
+  });
+
+  it("still rejects a block check that cannot prove contact with its frozen face", async () => {
+    const runtimeSessionId = "runtime.formal.provider-block-unmeasured";
+    const { ports } = traversalPorts(runtimeSessionId, false, [0, 1, 0]);
     const fixture = traversalRequestFixture();
     const request = {
       ...fixture,
@@ -680,7 +737,24 @@ describe("formal world capture provider", () => {
         ...fixture.scriptedTraversal,
         checks: [{
           ...fixture.scriptedTraversal.checks[0]!,
-          checkExpectation,
+          checkExpectation: "block" as const,
+          checkpointCriteria: [{
+            kind: "block-plane" as const,
+            checkpointId: "gate",
+            expectation: "block" as const,
+            sourceVisualGroupId: "gate",
+            sourceBoundsMeters: {
+              minimumMetersXYZ: [-1, 0, 1] as const,
+              maximumMetersXYZ: [1, 2, 2] as const,
+            },
+            colliderId: "gate.collider",
+            axis: "z" as const,
+            sourceFace: "minimum" as const,
+            planeMeters: 1,
+            expectedCenterSide: "positive" as const,
+            capsuleRadiusMeters: 0.35,
+            toleranceMeters: 0.05,
+          }],
         }],
       },
     } as Parameters<
@@ -689,6 +763,6 @@ describe("formal world capture provider", () => {
 
     await expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
       .captureTraversalChecks(request, runtimeSessionId, "player", ports))
-      .rejects.toThrow(diagnosticCode);
+      .rejects.toThrow("BABYLON_FORMAL_CAPTURE_BLOCK_CHECKPOINT_UNMEASURED");
   });
 });
