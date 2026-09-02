@@ -3,6 +3,7 @@ import { describe, expectTypeOf, it } from "vitest";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 
 import type {
+  BabylonNativeBlockChunkPolicyV1,
   BabylonNativeBlockOptimizationAssessmentV1,
   BabylonNativeBlockCreateInputV1,
   BabylonNativeBlockColliderGeometrySourceV1,
@@ -112,11 +113,12 @@ describe("Babylon Native block profile public types", () => {
       }>>();
   });
 
-  it("exposes one finalized-epoch optimization assessment", () => {
+  it("exposes one Host-selected Chunk policy optimization assessment", () => {
     expectTypeOf(assessBabylonNativeBlockOptimizationV1)
       .parameter(0)
       .toEqualTypeOf<Readonly<{
         finalizedEpoch: BabylonNativeBlockFinalizedEpochV1;
+        chunkPolicy: BabylonNativeBlockChunkPolicyV1;
       }>>();
     expectTypeOf(assessBabylonNativeBlockOptimizationV1)
       .returns

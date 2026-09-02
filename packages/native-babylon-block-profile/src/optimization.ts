@@ -3,6 +3,12 @@ import type { BabylonNativeTraversalBindingV1 } from
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { groupBy, isEqual } from "lodash-es";
 
+import {
+  hashBabylonNativeBlockChunkPolicyV1,
+  parseBabylonNativeBlockChunkPolicyV1,
+  resolveBabylonNativeBlockChunkAssignmentV1,
+  type BabylonNativeBlockChunkPolicyV1,
+} from "./chunk-policy.js";
 import type {
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
   BabylonNativeBlockExposedEdgePolicyV1,
@@ -22,13 +28,6 @@ type BabylonNativeBlockLayoutVolumeColliderV1 = Extract<
   Readonly<{ proxyKind: "layout-block-volume" }>
 >;
 
-export interface BabylonNativeBlockOptimizationChunkPolicyV1 {
-  readonly kind: "fixed-xz-grid";
-  readonly sizeMetersXZ: readonly [number, number];
-  readonly originMetersXZ: readonly [number, number];
-  readonly boundaryMode: "half-open-center-owned";
-}
-
 export type BabylonNativeBlockOptimizationResidencyGroupV1 =
   | Readonly<{
       kind: "grid-chunk";
@@ -39,7 +38,7 @@ export type BabylonNativeBlockOptimizationResidencyGroupV1 =
       blockIds: readonly string[];
     }>
   | Readonly<{
-      kind: "boundary-block";
+      kind: "chunk-straddling-block";
       id: string;
       blockIds: readonly [string];
     }>;
@@ -101,7 +100,8 @@ export interface BabylonNativeBlockOptimizationAssessmentV1 {
   readonly schemaVersion: 1;
   readonly profileInventoryHash: `sha256:${string}`;
   readonly measurementKind: "deterministic-resource-counts";
-  readonly chunkPolicy: BabylonNativeBlockOptimizationChunkPolicyV1;
+  readonly chunkPolicy: BabylonNativeBlockChunkPolicyV1;
+  readonly chunkPolicyHash: `sha256:${string}`;
   readonly residencyGroups:
     readonly BabylonNativeBlockOptimizationResidencyGroupV1[];
   readonly thinInstanceGroups: readonly BabylonNativeBlockThinInstanceGroupV1[];
@@ -117,9 +117,6 @@ export interface BabylonNativeBlockOptimizationAssessmentV1 {
 }
 
 const HASH = /^sha256:[0-9a-f]{64}$/;
-const CHUNK_SIZE_XZ = [4, 4] as const;
-const CHUNK_ORIGIN_XZ = [-0.5, -0.5] as const;
-const GEOMETRY_EPSILON = 1e-8;
 const INPUT_INVALID_CODE = "WORLDKIT_NATIVE_BLOCK_OPTIMIZATION_INPUT_INVALID";
 
 function stableCompare(left: string, right: string): number {
@@ -130,10 +127,6 @@ function fail(message: string): never {
   throw new TypeError(
     `${INPUT_INVALID_CODE}: ${message}`,
   );
-}
-
-function signedIndex(index: number): string {
-  return index < 0 ? `n${Math.abs(index)}` : `p${index}`;
 }
 
 function deepFreezeData<T>(value: T): Readonly<T> {
@@ -246,8 +239,9 @@ function validateInput(
   });
 }
 
-function createResidencyGroups(
+export function createBabylonNativeBlockResidencyGroupsV1(
   blocks: readonly BabylonNativeBlockLayoutEntryV1[],
+  chunkPolicy: BabylonNativeBlockChunkPolicyV1,
 ): Readonly<{
   groups: readonly BabylonNativeBlockOptimizationResidencyGroupV1[];
   residencyGroupIdByBlockId: ReadonlyMap<string, string>;
@@ -261,46 +255,29 @@ function createResidencyGroups(
         minimumMetersXZ: readonly [number, number];
         maximumMetersXZ: readonly [number, number];
       }>
-    | Readonly<{ kind: "boundary-block"; id: string }>;
+    | Readonly<{ kind: "chunk-straddling-block"; id: string }>;
   const definitionById = new Map<string, ResidencyDefinition>();
   const residencyGroupIdByBlockId = new Map<string, string>();
   for (const block of blocks) {
-    const chunkX = Math.floor(
-      (block.centerMetersXYZ[0] - CHUNK_ORIGIN_XZ[0]) / CHUNK_SIZE_XZ[0],
-    );
-    const chunkZ = Math.floor(
-      (block.centerMetersXYZ[2] - CHUNK_ORIGIN_XZ[1]) / CHUNK_SIZE_XZ[1],
-    );
-    const minimumMetersXZ = [
-      CHUNK_ORIGIN_XZ[0] + chunkX * CHUNK_SIZE_XZ[0],
-      CHUNK_ORIGIN_XZ[1] + chunkZ * CHUNK_SIZE_XZ[1],
-    ] as const;
-    const maximumMetersXZ = [
-      minimumMetersXZ[0] + CHUNK_SIZE_XZ[0],
-      minimumMetersXZ[1] + CHUNK_SIZE_XZ[1],
-    ] as const;
-    const fits = block.minimumMetersXYZ[0] >=
-        minimumMetersXZ[0] - GEOMETRY_EPSILON &&
-      block.maximumMetersXYZ[0] <= maximumMetersXZ[0] + GEOMETRY_EPSILON &&
-      block.minimumMetersXYZ[2] >= minimumMetersXZ[1] - GEOMETRY_EPSILON &&
-      block.maximumMetersXYZ[2] <= maximumMetersXZ[1] + GEOMETRY_EPSILON;
-    const id = fits
-      ? `grid-chunk-x${signedIndex(chunkX)}-z${signedIndex(chunkZ)}`
-      : `boundary-block-${block.id}`;
-    residencyGroupIdByBlockId.set(block.id, id);
-    const members = blocksByResidencyId.get(id) ?? [];
+    const assignment = resolveBabylonNativeBlockChunkAssignmentV1(chunkPolicy, {
+      minimumMetersXYZ: block.minimumMetersXYZ,
+      maximumMetersXYZ: block.maximumMetersXYZ,
+      straddlingId: `chunk-straddling-block-${block.id}`,
+    });
+    residencyGroupIdByBlockId.set(block.id, assignment.id);
+    const members = blocksByResidencyId.get(assignment.id) ?? [];
     members.push(block);
-    blocksByResidencyId.set(id, members);
-    if (!definitionById.has(id)) {
-      definitionById.set(id, fits
+    blocksByResidencyId.set(assignment.id, members);
+    if (!definitionById.has(assignment.id)) {
+      definitionById.set(assignment.id, assignment.kind === "grid-chunk"
         ? {
             kind: "grid-chunk",
-            id,
-            chunkIndexXZ: [chunkX, chunkZ],
-            minimumMetersXZ,
-            maximumMetersXZ,
+            id: assignment.id,
+            chunkIndexXZ: assignment.chunkIndexXZ,
+            minimumMetersXZ: assignment.minimumMetersXZ,
+            maximumMetersXZ: assignment.maximumMetersXZ,
           }
-        : { kind: "boundary-block", id });
+        : { kind: "chunk-straddling-block", id: assignment.id });
     }
   }
   const groups = [...blocksByResidencyId.entries()]
@@ -310,7 +287,16 @@ function createResidencyGroups(
       const blockIds = members.map(({ id: blockId }) => blockId)
         .sort(stableCompare);
       return definition.kind === "grid-chunk"
-        ? Object.freeze({ ...definition, blockIds: Object.freeze(blockIds) })
+        ? Object.freeze({
+            ...definition,
+            chunkIndexXZ: Object.freeze([...definition.chunkIndexXZ]) as
+              readonly [number, number],
+            minimumMetersXZ: Object.freeze([...definition.minimumMetersXZ]) as
+              readonly [number, number],
+            maximumMetersXZ: Object.freeze([...definition.maximumMetersXZ]) as
+              readonly [number, number],
+            blockIds: Object.freeze(blockIds),
+          })
         : Object.freeze({
             ...definition,
             blockIds: Object.freeze([blockIds[0]!] as [string]),
@@ -319,7 +305,12 @@ function createResidencyGroups(
   return Object.freeze({ groups, residencyGroupIdByBlockId });
 }
 
-function createThinGroups(
+/**
+ * Single owner of Thin Instance batch membership. A batch may join Blocks only
+ * inside one Chunk, one fixed shape, one palette role and at most one semantic
+ * visual group; every other Block stays an independent Mesh.
+ */
+export function createBabylonNativeBlockThinInstanceGroupsV1(
   blocks: readonly BabylonNativeBlockLayoutEntryV1[],
   residencyByBlockId: ReadonlyMap<string, string>,
 ): Readonly<{
@@ -521,14 +512,17 @@ function assertExactCoverage(
 
 export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
   finalizedEpoch: BabylonNativeBlockFinalizedEpochV1;
+  chunkPolicy: BabylonNativeBlockChunkPolicyV1;
 }>): BabylonNativeBlockOptimizationAssessmentV1 {
   if (
     typeof input !== "object" || input === null || Array.isArray(input) ||
     Reflect.getPrototypeOf(input) !== Object.prototype ||
-    !isEqual(Object.keys(input), ["finalizedEpoch"]) ||
+    !isEqual([...Object.keys(input)].sort(stableCompare),
+      ["chunkPolicy", "finalizedEpoch"]) ||
     typeof input.finalizedEpoch !== "object" ||
     input.finalizedEpoch === null
-  ) fail("input must contain exactly one finalizedEpoch");
+  ) fail("input must contain exactly one finalizedEpoch and one chunkPolicy");
+  const chunkPolicy = parseBabylonNativeBlockChunkPolicyV1(input.chunkPolicy);
   let validated: ReturnType<typeof validateInput>;
   try {
     validated = validateInput(input.finalizedEpoch);
@@ -539,8 +533,14 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
     return fail("finalizedEpoch does not match the current closed contract");
   }
   const { blocks, colliders } = validated;
-  const residency = createResidencyGroups(blocks);
-  const thin = createThinGroups(blocks, residency.residencyGroupIdByBlockId);
+  const residency = createBabylonNativeBlockResidencyGroupsV1(
+    blocks,
+    chunkPolicy,
+  );
+  const thin = createBabylonNativeBlockThinInstanceGroupsV1(
+    blocks,
+    residency.residencyGroupIdByBlockId,
+  );
   const collider = createColliderGroups(
     colliders,
     blocks,
@@ -590,12 +590,8 @@ export function assessBabylonNativeBlockOptimizationV1(input: Readonly<{
     schemaVersion: 1 as const,
     profileInventoryHash: input.finalizedEpoch.profileInventoryHash,
     measurementKind: "deterministic-resource-counts" as const,
-    chunkPolicy: {
-      kind: "fixed-xz-grid" as const,
-      sizeMetersXZ: [...CHUNK_SIZE_XZ] as [number, number],
-      originMetersXZ: [...CHUNK_ORIGIN_XZ] as [number, number],
-      boundaryMode: "half-open-center-owned" as const,
-    },
+    chunkPolicy,
+    chunkPolicyHash: hashBabylonNativeBlockChunkPolicyV1(chunkPolicy),
     residencyGroups: residency.groups,
     thinInstanceGroups: thin.groups,
     independentVisualBlockIds: thin.independentBlockIds,

@@ -11,8 +11,11 @@ import type {
   BabylonNativeBlockLogicalSolidOccupancyCellV1,
   BabylonNativeBlockLogicalSupportTopCellV1,
 } from "./logical-ground-model.js";
-import type { BabylonNativeBlockOptimizationChunkPolicyV1 } from
-  "./optimization.js";
+import {
+  babylonNativeBlockChunkAxisIndexV1,
+  parseBabylonNativeBlockChunkPolicyV1,
+  type BabylonNativeBlockChunkPolicyV1,
+} from "./chunk-policy.js";
 import { BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1 as GRID } from
   "./shapes.js";
 
@@ -167,7 +170,7 @@ export interface AnalyzeBabylonNativeBlockGroundInputV1 {
     TraversalCapabilityEnvelopeReceiptV1;
   readonly caseIntent: BabylonNativeBlockGroundCaseIntentV1;
   readonly worldPackageRootHash: Sha256HashV1;
-  readonly measurementChunkPolicy: BabylonNativeBlockOptimizationChunkPolicyV1;
+  readonly measurementChunkPolicy: BabylonNativeBlockChunkPolicyV1;
   readonly budget: BabylonNativeBlockGroundAnalysisBudgetV1;
 }
 
@@ -717,35 +720,14 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
     BUDGET_CODE,
     `Ground Model uses ${input.groundModel.solidOccupancyCells.length} solid cells and ${input.groundModel.exposedSupportTopCells.length} support tops; Host budget allows ${input.budget.maximumSolidOccupancyCellCount} and ${input.budget.maximumSupportTopCellCount}.`,
   );
-  requireClosedKeys(input.measurementChunkPolicy, [
-    "kind",
-    "sizeMetersXZ",
-    "originMetersXZ",
-    "boundaryMode",
-  ], [], "measurementChunkPolicy");
-  requireArray(
-    input.measurementChunkPolicy.sizeMetersXZ,
-    "measurementChunkPolicy.sizeMetersXZ",
-  );
-  requireArray(
-    input.measurementChunkPolicy.originMetersXZ,
-    "measurementChunkPolicy.originMetersXZ",
-  );
-  const chunkPolicy = input.measurementChunkPolicy;
-  if (
-    chunkPolicy.kind !== "fixed-xz-grid" ||
-    chunkPolicy.boundaryMode !== "half-open-center-owned" ||
-    chunkPolicy.sizeMetersXZ.length !== 2 ||
-    chunkPolicy.originMetersXZ.length !== 2
-  ) return fail(INPUT_CODE, "measurementChunkPolicy uses an unsupported contract");
-  chunkPolicy.sizeMetersXZ.forEach((value, index) => {
-    finite(value, `measurementChunkPolicy.sizeMetersXZ[${index}]`);
-    if (value <= 0) {
-      return fail(INPUT_CODE, "measurement Chunk sizes must be positive");
-    }
-  });
-  chunkPolicy.originMetersXZ.forEach((value, index) =>
-    finite(value, `measurementChunkPolicy.originMetersXZ[${index}]`));
+  try {
+    parseBabylonNativeBlockChunkPolicyV1(input.measurementChunkPolicy);
+  } catch {
+    return fail(
+      INPUT_CODE,
+      "measurementChunkPolicy uses an unsupported contract",
+    );
+  }
   requireHash(input.groundModel.logicalGroundModelHash, "logicalGroundModelHash");
   requireHash(input.caseIntent.caseHash, "caseIntent.caseHash");
   requireId(input.caseIntent.id, "caseIntent.id");
@@ -869,7 +851,7 @@ function metricSummary(
   reachableNodeIds: ReadonlySet<string>,
   nodesById: ReadonlyMap<string, MutableNode>,
   spawn: BabylonNativeBlockGroundCaseIntentV1["spawn"],
-  chunkPolicy: BabylonNativeBlockOptimizationChunkPolicyV1,
+  chunkPolicy: BabylonNativeBlockChunkPolicyV1,
 ): Pick<
   BabylonNativeBlockGroundAnalysisMetricsV1,
   | "reachableStandPositionBoundsMeters"
@@ -915,13 +897,9 @@ function metricSummary(
     maximumSurfaceX = Math.max(maximumSurfaceX, (cellX + 1) * GRID[0]);
     minimumSurfaceZ = Math.min(minimumSurfaceZ, cellZ * GRID[2]);
     maximumSurfaceZ = Math.max(maximumSurfaceZ, (cellZ + 1) * GRID[2]);
-    const chunkKey = `${Math.floor(
-      (position[0] - chunkPolicy.originMetersXZ[0]) /
-        chunkPolicy.sizeMetersXZ[0],
-    )},${Math.floor(
-      (position[2] - chunkPolicy.originMetersXZ[1]) /
-        chunkPolicy.sizeMetersXZ[1],
-    )}`;
+    const chunkKey = `${
+      babylonNativeBlockChunkAxisIndexV1(chunkPolicy, 0, position[0]!)
+    },${babylonNativeBlockChunkAxisIndexV1(chunkPolicy, 1, position[2]!)}`;
     chunks.add(chunkKey);
     const deltaX = position[0] - spawn.standPositionMetersXYZ[0];
     const deltaZ = position[2] - spawn.standPositionMetersXYZ[2];

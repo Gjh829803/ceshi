@@ -11,6 +11,9 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+} from "./chunk-policy.js";
+import {
   analyzeBabylonNativeBlockGroundV1,
   type BabylonNativeBlockGroundAnalysisBudgetV1,
   type BabylonNativeBlockGroundCaseIntentV1,
@@ -24,12 +27,7 @@ import type {
 const H = (digit: string) => `sha256:${digit.repeat(64)}` as Sha256HashV1;
 const CASE_HASH = H("4");
 const PACKAGE_HASH = H("5");
-const MEASUREMENT_CHUNK_POLICY = Object.freeze({
-  kind: "fixed-xz-grid" as const,
-  sizeMetersXZ: Object.freeze([4, 4] as const),
-  originMetersXZ: Object.freeze([-0.5, -0.5] as const),
-  boundaryMode: "half-open-center-owned" as const,
-});
+const MEASUREMENT_CHUNK_POLICY = BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1;
 const ANALYSIS_BUDGET = Object.freeze({
   kind: "babylon-native-block-ground-analysis-budget" as const,
   schemaVersion: 1 as const,

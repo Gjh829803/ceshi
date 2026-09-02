@@ -70,9 +70,30 @@ export type {
   BabylonNativeBlockColliderCoalescingGroupV1,
   BabylonNativeBlockOptimizationAssessmentV1,
   BabylonNativeBlockOptimizationBaselineResourcesV1,
-  BabylonNativeBlockOptimizationChunkPolicyV1,
   BabylonNativeBlockOptimizationEquivalenceV1,
   BabylonNativeBlockOptimizationProjectedResourcesV1,
   BabylonNativeBlockOptimizationResidencyGroupV1,
   BabylonNativeBlockThinInstanceGroupV1,
 } from "./optimization.js";
+export {
+  BABYLON_NATIVE_BLOCK_CHUNK_POLICY_CANDIDATES_V1,
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+  hashBabylonNativeBlockChunkPolicyV1,
+  parseBabylonNativeBlockChunkPolicyV1,
+} from "./chunk-policy.js";
+export type {
+  BabylonNativeBlockChunkAssignmentV1,
+  BabylonNativeBlockChunkPolicyIdV1,
+  BabylonNativeBlockChunkPolicyV1,
+} from "./chunk-policy.js";
+export {
+  measureBabylonNativeBlockChunkPolicyBenchmarkV1,
+} from "./chunk-policy-benchmark.js";
+export type {
+  BabylonNativeBlockChunkPolicyBenchmarkCaseMeasurementV1,
+  BabylonNativeBlockChunkPolicyBenchmarkPolicyRowV1,
+  BabylonNativeBlockChunkPolicyBenchmarkV1,
+  BabylonNativeBlockChunkPolicyPendingCaseSlotV1,
+  MeasureBabylonNativeBlockChunkPolicyBenchmarkInputV1,
+} from "./chunk-policy-benchmark.js";

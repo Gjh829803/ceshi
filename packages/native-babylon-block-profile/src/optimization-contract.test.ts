@@ -20,6 +20,8 @@ import {
 } from "./collider-contribution.js";
 import {
   assessBabylonNativeBlockOptimizationV1,
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
+  BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
 } from "./index.js";
 import {
   materializeBabylonNativeBlockReconstructionCorpusCaseV1,
@@ -283,21 +285,19 @@ describe("BWB-6 profile optimization contract", () => {
     try {
       const assessment = assessBabylonNativeBlockOptimizationV1({
         finalizedEpoch: fixture.epoch,
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
       });
       const reversedAssessment = assessBabylonNativeBlockOptimizationV1({
         finalizedEpoch: reversed.epoch,
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
       });
       expect(assessment).toMatchObject({
         kind: "babylon-native-block-optimization-assessment",
         schemaVersion: 1,
         profileInventoryHash: `sha256:${"a".repeat(64)}`,
         measurementKind: "deterministic-resource-counts",
-        chunkPolicy: {
-          kind: "fixed-xz-grid",
-          sizeMetersXZ: [4, 4],
-          originMetersXZ: [-0.5, -0.5],
-          boundaryMode: "half-open-center-owned",
-        },
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+        chunkPolicyHash: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_HASH_V1,
         residencyGroups: [{
           kind: "grid-chunk",
           id: "grid-chunk-xp0-zp0",
@@ -392,6 +392,7 @@ describe("BWB-6 profile optimization contract", () => {
     try {
       const assessment = assessBabylonNativeBlockOptimizationV1({
         finalizedEpoch: fixture.epoch,
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
       });
       expect(assessment.residencyGroups).toEqual(expect.arrayContaining([
         expect.objectContaining({
@@ -401,8 +402,8 @@ describe("BWB-6 profile optimization contract", () => {
           blockIds: ["negative"],
         }),
         expect.objectContaining({
-          kind: "boundary-block",
-          id: "boundary-block-boundary",
+          kind: "chunk-straddling-block",
+          id: "chunk-straddling-block-boundary",
           blockIds: ["boundary"],
         }),
       ]));
@@ -463,6 +464,7 @@ describe("BWB-6 profile optimization contract", () => {
       for (const fixture of fixtures) {
         const assessment = assessBabylonNativeBlockOptimizationV1({
           finalizedEpoch: fixture.epoch,
+          chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
         });
         expect(assessment.colliderCoalescingGroups).toEqual([]);
         expect(assessment.independentColliderIds).toHaveLength(2);
@@ -479,12 +481,14 @@ describe("BWB-6 profile optimization contract", () => {
     );
     try {
       expect(() => assessBabylonNativeBlockOptimizationV1({
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
         finalizedEpoch: Object.freeze({
           ...fixture.epoch,
           profileInventoryHash: "not-a-hash" as `sha256:${string}`,
         }),
       })).toThrow(/WORLDKIT_NATIVE_BLOCK_OPTIMIZATION_INPUT_INVALID/);
       expect(() => assessBabylonNativeBlockOptimizationV1({
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
         finalizedEpoch: Object.freeze({
           ...fixture.epoch,
           checkedLayout: Object.freeze({
@@ -497,6 +501,7 @@ describe("BWB-6 profile optimization contract", () => {
         }),
       })).toThrow(/WORLDKIT_NATIVE_BLOCK_OPTIMIZATION_INPUT_INVALID/);
       expect(() => assessBabylonNativeBlockOptimizationV1({
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
         finalizedEpoch: Object.freeze({
           ...fixture.epoch,
           colliderInventory: Object.freeze([Object.freeze({
@@ -511,6 +516,7 @@ describe("BWB-6 profile optimization contract", () => {
         >[0],
       )).toThrow(/WORLDKIT_NATIVE_BLOCK_OPTIMIZATION_INPUT_INVALID/);
       expect(() => assessBabylonNativeBlockOptimizationV1({
+        chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
         finalizedEpoch: Object.freeze({
           ...fixture.epoch,
           colliderInventory: Object.freeze([
@@ -572,6 +578,7 @@ describe("BWB-6 profile optimization contract", () => {
         }
         const assessment = assessBabylonNativeBlockOptimizationV1({
           finalizedEpoch: materialization.epoch,
+          chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
         });
         for (const candidate of materialization.epoch.colliderInventory) {
           if (candidate.traversalBinding.kind === "static-surface") {
