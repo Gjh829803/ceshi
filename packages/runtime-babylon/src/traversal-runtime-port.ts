@@ -475,12 +475,6 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     const sample = controller.retainedCharacterSupportSample();
     if (isNil(sample)) fail("TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE");
     const live = controller.liveLockState();
-    const surfaceResolution = resolveRetainedSupportSurfaceV1({
-      plan: this.#plan,
-      sample,
-      live,
-      policy: { mode: "route-walkable" },
-    });
     const support: CharacterSupportEvidenceV1 = {
       kind: "character-support-evidence",
       schemaVersion: 1,
@@ -488,7 +482,12 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
       supportNormalWorldXYZ: sample.supportNormalWorldXYZ,
       sampledFootPositionMetersXYZ: sample.sampledFootPositionMetersXYZ,
       isSupportSurfaceDynamic: sample.isSupportSurfaceDynamic,
-      surfaceResolution,
+      surfaceResolution: resolveRetainedSupportSurfaceV1({
+        plan: this.#plan,
+        sample,
+        live,
+        policy: { mode: "route-walkable" },
+      }),
     };
     const origin = controller.subjectOrigin;
     const velocity = controller.velocity;
