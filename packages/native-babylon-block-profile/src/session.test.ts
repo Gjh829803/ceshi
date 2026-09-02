@@ -904,6 +904,53 @@ describe("Babylon Native block profile session", () => {
     }
   });
 
+  it("fails closed when ground protection has no trusted Host publication path", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const registeredColliders: BabylonNativeStaticColliderV1[] = [];
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene, Object.freeze({
+          registerSpawnMarker(): void {},
+          registerStaticCollider(
+            collider: Readonly<BabylonNativeStaticColliderV1>,
+          ): void {
+            registeredColliders.push(collider);
+          },
+        })),
+        { maximumBlockCount: 1 },
+      );
+      session.createBlock({
+        id: "ground-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
+      });
+
+      expect(() => session.finalize({
+        staticColliders: [Object.freeze({
+          id: "ground-collider",
+          colliderGeometrySource: Object.freeze({
+            kind: "block" as const,
+            blockId: "ground-block",
+          }),
+          traversalBinding: Object.freeze({
+            kind: "static-surface" as const,
+            surfaceEntityId: "ground-surface",
+            logicalSubshapeId: "top",
+            traversalSurfaceProfileRef:
+              "worldkit://traversal-surface-profile/ground.static@1",
+          }),
+          exposedEdgePolicy: "protect-ground-subject" as const,
+        })],
+      } as never)).toThrow(
+        /WORLDKIT_NATIVE_BLOCK_GROUND_BOUNDARY_PUBLICATION_UNAVAILABLE/,
+      );
+      expect(registeredColliders).toEqual([]);
+      expect(commitProfileSettlement).not.toHaveBeenCalled();
+    });
+  });
+
   it("accepts the closed Collider Group source but fails before realization until its materializer lands", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 

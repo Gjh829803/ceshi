@@ -485,6 +485,12 @@ function parseSelection(input: unknown): BabylonNativeBlockStaticColliderSelecti
     return fail(code,
       "protect-ground-subject requires a static-surface traversal binding");
   }
+  if (record.exposedEdgePolicy === "protect-ground-subject") {
+    return fail(
+      "WORLDKIT_NATIVE_BLOCK_GROUND_BOUNDARY_PUBLICATION_UNAVAILABLE",
+      "protect-ground-subject is unavailable until the trusted Host publishes the derived boundary Contribution",
+    );
+  }
   return Object.freeze({
     id,
     colliderGeometrySource: parseColliderGeometrySource(

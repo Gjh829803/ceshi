@@ -1027,8 +1027,14 @@ const NATIVE_GROUND_BOUNDARY_POSITIONS = Object.freeze([
 ]);
 const NATIVE_GROUND_BOUNDARY_INDICES = Object.freeze([
   0, 2, 1, 0, 3, 2,
-  0, 1, 2, 0, 2, 3,
 ]);
+const NATIVE_CAMERA_WALL_POSITIONS = Object.freeze([
+  -2, 0, -2.5,
+  2, 0, -2.5,
+  2, 4, -2.5,
+  -2, 4, -2.5,
+]);
+const NATIVE_CAMERA_WALL_INDICES = Object.freeze([0, 2, 1, 0, 3, 2]);
 
 function registerNativeStepCollider(
   context: Parameters<BabylonNativeSceneModuleV1["build"]>[0],
@@ -1080,6 +1086,29 @@ function nativeStepModule(): BabylonNativeSceneModuleV1 {
         positions: NATIVE_STEP_BOX_POSITIONS,
         indices: NATIVE_STEP_BOX_INDICES,
         surfaceEntityId: "step-surface",
+      });
+    },
+  });
+}
+
+function nativeGroundBoundaryCameraWallModule(): BabylonNativeSceneModuleV1 {
+  const base = nativeStepModule();
+  return Object.freeze({
+    ...base,
+    build(context: Parameters<BabylonNativeSceneModuleV1["build"]>[0]) {
+      base.build(context);
+      const mesh = new Mesh("native-camera-wall", context.scene);
+      mesh.setVerticesData(
+        VertexBuffer.PositionKind,
+        [...NATIVE_CAMERA_WALL_POSITIONS],
+      );
+      mesh.setIndices([...NATIVE_CAMERA_WALL_INDICES]);
+      context.registration.registerStaticCollider({
+        id: "camera-wall",
+        mesh,
+        traversalBinding: { kind: "not-traversable" },
+        frictionRatio: 0.8,
+        restitutionRatio: 0,
       });
     },
   });
@@ -1150,6 +1179,31 @@ function nativeGroundBoundaryWorldPackageInput(): ReturnType<
       staticColliders: Object.freeze([
         ...base.nativeSceneContribution.staticColliders,
         boundary,
+      ].sort((left, right) => left.id.localeCompare(right.id))),
+    }),
+  };
+}
+
+function nativeGroundBoundaryCameraWallWorldPackageInput(): ReturnType<
+  typeof createBabylonNativeWorldPackageTestInputV1
+> {
+  const base = nativeGroundBoundaryWorldPackageInput();
+  const cameraWall = createBabylonNativeStaticColliderContributionV1({
+    id: "camera-wall",
+    runtimeRole: "scene-static-collider",
+    worldPositionsMetersXYZ: NATIVE_CAMERA_WALL_POSITIONS,
+    triangleIndices: NATIVE_CAMERA_WALL_INDICES,
+    frictionRatio: 0.8,
+    restitutionRatio: 0,
+    traversalBinding: { kind: "not-traversable" },
+  });
+  return {
+    ...base,
+    nativeSceneContribution: Object.freeze({
+      ...base.nativeSceneContribution,
+      staticColliders: Object.freeze([
+        ...base.nativeSceneContribution.staticColliders,
+        cameraWall,
       ].sort((left, right) => left.id.localeCompare(right.id))),
     }),
   };
@@ -2263,8 +2317,9 @@ describe("BabylonWorldRuntime", () => {
   }, 15_000);
 
   it("uses a Host-derived ground-only Havok boundary without exposing it to Camera", async () => {
-    const runtime = await createVerifiedNativeRuntime(nativeStepModule(), {
-      worldPackageInput: nativeGroundBoundaryWorldPackageInput(),
+    const runtime = await createVerifiedNativeRuntime(
+      nativeGroundBoundaryCameraWallModule(), {
+      worldPackageInput: nativeGroundBoundaryCameraWallWorldPackageInput(),
     });
     try {
       const scene = (runtime as unknown as { scene: Scene }).scene;
@@ -2309,12 +2364,15 @@ describe("BabylonWorldRuntime", () => {
         schemaVersion: 2,
         committedTick: 125,
         startPositionMetersXYZ: [0, 1, 0],
-        endPositionMetersXYZ: [0, 1, -3],
+        endPositionMetersXYZ: [0, 1, -4],
         radiusMeters: 0.2,
         collisionMask: "camera-hard",
         excludedEntityIds: ["player"],
         maximumHitCount: 1,
-      })).toBeUndefined();
+      })).toMatchObject({
+        hitEntityId: "camera-wall",
+        obstructionClass: "hard",
+      });
 
       runtime.reset();
       await bindRuntimeTestPossession(runtime, "player");
