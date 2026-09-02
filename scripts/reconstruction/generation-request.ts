@@ -62,6 +62,8 @@ const REPAIR_TASK_PROTOCOL = `Repair attempt protocol:
 - Read context/repair-instruction.json first. For every diagnostic, execute its repairAction.instruction against the declared targetId and operation; do not substitute a change to names, tags, materials, or logical subshape ids unless that exact action requests it.
 - Read inputs/attempts/0/evaluation.json and the identity-bound evidence under inputs/attempts/0/capture/ before editing.
 - Inspect inputs/attempts/0/capture/opening.png and inputs/attempts/0/capture/collider-overlay.png for the visual and collider diagnostics.
+- A visual repair must produce a visible geometry change in the evidence view named by the diagnostic. Move, add, or remove actual Blocks in the declared target while preserving its semantic identity; a metadata-only change is not a repair.
+- Do not reassign an existing Block's visualGroupId merely to change measured group bounds, ordering, or coverage. Keep prior group membership stable unless the diagnostic explicitly reports a missing or incorrect semantic binding; names, group ids, identity colors, and bindings are not substitutes for visible geometry.
 - Do not change the Case, Profile, or acceptance thresholds. The diagnostic expected value, actual value, allowed threshold, exceeded amount, and correction direction are frozen evidence, not authoring suggestions.
 - Write a complete revised replacement only to the three declared output paths. Never mutate the prior source, evidence, frozen owners, or thresholds.`;
 

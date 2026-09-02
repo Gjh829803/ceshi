@@ -544,6 +544,12 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(repairTaskInstruction).toContain("Do not change the Case, Profile, or acceptance thresholds");
       expect(repairTaskInstruction).toContain("inputs/attempts/0/evaluation.json");
       expect(repairTaskInstruction).toContain("inputs/attempts/0/capture/opening.png");
+      expect(repairTaskInstruction).toContain(
+        "Do not reassign an existing Block's visualGroupId",
+      );
+      expect(repairTaskInstruction).toContain(
+        "must produce a visible geometry change in the evidence view",
+      );
       expect(sha256Bytes(new TextEncoder().encode(repairTaskInstruction))).toBe(
         attempt1.generationRequest.taskInstructionHash,
       );
