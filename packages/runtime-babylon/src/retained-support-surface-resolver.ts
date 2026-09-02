@@ -72,6 +72,12 @@ function normalizedDot(
   ) / (leftLength * rightLength);
 }
 
+// Route-walkable admission stays maxSlopeCosine. This tighter cosine is only
+// used to unique-resolve a multi-surface manifold onto the checkSupport()
+// normal: slope-legal lip/corner contacts drop out, dual-layer interiors that
+// both match stay fail-closed ambiguous.
+const ROUTE_WALKABLE_CHECK_SUPPORT_ALIGNMENT_COSINE_V1 = 0.95;
+
 function contactMatchesPolicy(
   contact: CharacterSupportProjectionContactV1,
   sample: CharacterSupportProjectionSampleV1,
@@ -83,6 +89,38 @@ function contactMatchesPolicy(
   }
   return normalizedDot(contact.normalXYZ, sample.supportNormalWorldXYZ) >=
     policy.minimumContactToAggregateSupportNormalCosine;
+}
+
+function resolvedFromSurface(
+  surface: CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number],
+): CharacterSupportSurfaceResolutionV1 {
+  return {
+    mode: "resolved",
+    traversalSurfaceId: surface.traversalSurfaceId,
+    surfaceEntityId: surface.surfaceEntityId,
+    colliderSubshapeId: surface.colliderSubshapeId,
+    resourceRef: surface.resourceRef,
+    resolvedVersion: surface.resolvedVersion,
+    resourceHash: surface.resourceHash,
+  };
+}
+
+function uniqueCheckSupportAlignedSurface(
+  contacts: readonly CharacterSupportProjectionContactV1[],
+  resolvedSurfaces: readonly CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number][],
+  supportNormalWorldXYZ: RuntimeVec3V1,
+): CanonicalSceneExecutionPlanV1["traversal"]["surfaces"][number] | undefined {
+  const alignedSurfaces = resolvedSurfaces.filter((_, index) =>
+    normalizedDot(
+      contacts[index]!.normalXYZ,
+      supportNormalWorldXYZ,
+    ) >= ROUTE_WALKABLE_CHECK_SUPPORT_ALIGNMENT_COSINE_V1
+  );
+  const alignedIds = new Set(
+    alignedSurfaces.map((surface) => surface.traversalSurfaceId),
+  );
+  if (alignedIds.size !== 1) return undefined;
+  return alignedSurfaces[0];
 }
 
 export function retainedContactsAdmittedByPolicyV1(input: Readonly<{
@@ -200,6 +238,48 @@ export function resolveRetainedSupportSurfaceV1(input: Readonly<{
     resolvedSurfaces.map((surface) => surface.traversalSurfaceId),
   );
   if (traversalSurfaceIds.size !== 1) {
+    const checkSupportSurface = policy.mode === "route-walkable"
+      ? uniqueCheckSupportAlignedSurface(
+        contacts,
+        resolvedSurfaces,
+        sample.supportNormalWorldXYZ,
+      )
+      : undefined;
+    if (checkSupportSurface !== undefined) {
+      const resolved = resolvedFromSurface(checkSupportSurface);
+      // #region agent log
+      r1bSupportDebug(
+        "A",
+        "retained-support-surface-resolver.ts:resolveRetainedSupportSurfaceV1",
+        "checkSupport-unique-resolution",
+        {
+          policy: policy.mode,
+          supportNormal: sample.supportNormalWorldXYZ,
+          uniqueResolvedTs: [checkSupportSurface.traversalSurfaceId],
+          uniqueResolvedEnt: [checkSupportSurface.surfaceEntityId],
+          admittedCount: contacts.length,
+          alignmentCosine: ROUTE_WALKABLE_CHECK_SUPPORT_ALIGNMENT_COSINE_V1,
+          resolutionMode: resolved.mode,
+        },
+      );
+      if (
+        r1bInStepUpCorridor(sample.sampledFootPositionMetersXYZ) ||
+        r1bInStepUpCorridor(sample.sampledControllerCenterMetersXYZ)
+      ) {
+        r1bLogRetainedSupportResolution({
+          sample,
+          live,
+          policy,
+          admitted: contacts,
+          resolvedSurfaces: [checkSupportSurface],
+          ambiguousReason,
+          firstMultiMatch,
+          resolutionMode: resolved.mode,
+        });
+      }
+      // #endregion
+      return resolved;
+    }
     ambiguousReason = "multi-distinct-surface-ids";
     // #region agent log
     r1bLogRetainedSupportResolution({
@@ -215,16 +295,7 @@ export function resolveRetainedSupportSurfaceV1(input: Readonly<{
     // #endregion
     return { mode: "ambiguous" };
   }
-  const surface = resolvedSurfaces[0]!;
-  const resolved = {
-    mode: "resolved" as const,
-    traversalSurfaceId: surface.traversalSurfaceId,
-    surfaceEntityId: surface.surfaceEntityId,
-    colliderSubshapeId: surface.colliderSubshapeId,
-    resourceRef: surface.resourceRef,
-    resolvedVersion: surface.resolvedVersion,
-    resourceHash: surface.resourceHash,
-  };
+  const resolved = resolvedFromSurface(resolvedSurfaces[0]!);
   // #region agent log
   if (
     r1bInStepUpCorridor(sample.sampledFootPositionMetersXYZ) ||
