@@ -14,6 +14,16 @@ import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
 export interface BabylonNativeBlockProfileColliderJoinV1 {
   readonly colliderId: string;
   readonly sourceBlockIds: readonly [string, ...string[]];
+  readonly visualGroupIds: readonly string[];
+  readonly proxyKind:
+    | "continuous-walkable-surface"
+    | "exact-solid-union";
+  readonly traversalBinding:
+    BabylonNativeBlockStaticColliderSelectionV1["traversalBinding"];
+  readonly exposedEdgePolicy:
+    BabylonNativeBlockStaticColliderSelectionV1["exposedEdgePolicy"];
+  readonly frictionRatio?: number;
+  readonly restitutionRatio?: number;
 }
 
 export interface BabylonNativeBlockProfileInventoryIdentityV1 {
@@ -77,6 +87,16 @@ function identity(
       colliderId: join.colliderId,
       sourceBlockIds: Object.freeze([...join.sourceBlockIds].sort(stableCompare)) as
         readonly [string, ...string[]],
+      visualGroupIds: Object.freeze([...join.visualGroupIds].sort(stableCompare)),
+      proxyKind: join.proxyKind,
+      traversalBinding: join.traversalBinding,
+      exposedEdgePolicy: join.exposedEdgePolicy,
+      ...(!Object.hasOwn(join, "frictionRatio")
+        ? {}
+        : { frictionRatio: join.frictionRatio }),
+      ...(!Object.hasOwn(join, "restitutionRatio")
+        ? {}
+        : { restitutionRatio: join.restitutionRatio }),
     }))
     .sort((left, right) => stableCompare(left.colliderId, right.colliderId)));
   const duplicateBlockIds = new Set<string>();
@@ -121,13 +141,35 @@ export function createBabylonNativeBlockProfileInventoryIdentityFromSelectionsV1
   return identity(
     input.checkedLayout,
     input.displayGapMeters,
-    input.selections.map((selection) => Object.freeze({
-      colliderId: selection.id,
-      sourceBlockIds: sourceBlockIdsForSelection(
+    input.selections.map((selection) => {
+      const sourceBlockIds = sourceBlockIdsForSelection(
         input.checkedLayout,
         selection,
-      ),
-    })),
+      );
+      const sourceBlockIdSet = new Set(sourceBlockIds);
+      const visualGroupIds = [...new Set(input.checkedLayout.layout.blocks
+        .filter(({ id }) => sourceBlockIdSet.has(id))
+        .flatMap(({ visualGroupId }) => isNil(visualGroupId)
+          ? []
+          : [visualGroupId]))]
+        .sort(stableCompare);
+      return Object.freeze({
+        colliderId: selection.id,
+        sourceBlockIds,
+        visualGroupIds: Object.freeze(visualGroupIds),
+        proxyKind: selection.traversalBinding.kind === "static-surface"
+          ? "continuous-walkable-surface" as const
+          : "exact-solid-union" as const,
+        traversalBinding: selection.traversalBinding,
+        exposedEdgePolicy: selection.exposedEdgePolicy,
+        ...(!Object.hasOwn(selection, "frictionRatio")
+          ? {}
+          : { frictionRatio: selection.frictionRatio }),
+        ...(!Object.hasOwn(selection, "restitutionRatio")
+          ? {}
+          : { restitutionRatio: selection.restitutionRatio }),
+      });
+    }),
   );
 }
 
@@ -145,6 +187,16 @@ export function createBabylonNativeBlockProfileInventoryIdentityFromMaterialized
     input.colliderInventory.map((entry) => Object.freeze({
       colliderId: entry.colliderId,
       sourceBlockIds: entry.sourceBlockIds,
+      visualGroupIds: entry.visualGroupIds,
+      proxyKind: entry.proxyKind,
+      traversalBinding: entry.traversalBinding,
+      exposedEdgePolicy: entry.exposedEdgePolicy,
+      ...(!Object.hasOwn(entry, "frictionRatio")
+        ? {}
+        : { frictionRatio: entry.frictionRatio }),
+      ...(!Object.hasOwn(entry, "restitutionRatio")
+        ? {}
+        : { restitutionRatio: entry.restitutionRatio }),
     })),
   );
 }

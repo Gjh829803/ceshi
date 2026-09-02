@@ -32,7 +32,7 @@ interface FinalizeSelection {
     | { kind: "static-surface"; surfaceEntityId: string;
         logicalSubshapeId: string; traversalSurfaceProfileRef: string }
   >;
-  readonly exposedEdgePolicy: "none";
+  readonly exposedEdgePolicy: "none" | "protect-ground-subject";
   readonly frictionRatio?: number;
   readonly restitutionRatio?: number;
 }
@@ -111,13 +111,22 @@ function fullBlockRecord(
 function frozenSelection(
   id = "route-collider",
   blockId = "route-block",
+  options: Readonly<{
+    notTraversable?: boolean;
+    exposedEdgePolicy?: "none" | "protect-ground-subject";
+    frictionRatio?: number;
+  }> = {},
 ): FinalizeSelection {
   return Object.freeze({
     id,
     colliderGeometrySource: Object.freeze({ kind: "block", blockId }),
-    traversalBinding: STATIC_SURFACE,
-    exposedEdgePolicy: "none",
-    frictionRatio: 0.8, restitutionRatio: 0 });
+    traversalBinding: options.notTraversable === true
+      ? Object.freeze({ kind: "not-traversable" as const })
+      : STATIC_SURFACE,
+    exposedEdgePolicy: options.exposedEdgePolicy ?? "none",
+    frictionRatio: options.frictionRatio ?? 0.8,
+    restitutionRatio: 0,
+  });
 }
 function bootstrap(id: string) {
   return Object.freeze({
@@ -169,7 +178,7 @@ async function admit(
     budget: Object.freeze({
       maximumStaticColliderCount: maximumColliderCount,
       maximumStaticColliderVertexCount: maximumColliderCount * 24,
-      maximumStaticColliderTriangleCount: maximumColliderCount * 12,
+      maximumStaticColliderTriangleCount: maximumColliderCount * 20,
     }),
   });
 }
@@ -183,6 +192,9 @@ interface HashVariant {
   readonly xMeters?: number;
   readonly displayGapMeters?: number;
   readonly colliderId?: string;
+  readonly notTraversable?: boolean;
+  readonly exposedEdgePolicy?: "none" | "protect-ground-subject";
+  readonly frictionRatio?: number;
 }
 async function buildProfileInventoryHash(
   variant: Readonly<HashVariant> = {},
@@ -228,7 +240,20 @@ async function buildProfileInventoryHash(
       epoch = session.finalize(Object.freeze({
         displayGapMeters: variant.displayGapMeters ?? 0.04,
         staticColliders: Object.freeze([frozenSelection(
-          variant.colliderId ?? "feature-collider", "feature-block")]),
+          variant.colliderId ?? "feature-collider",
+          "feature-block",
+          {
+            ...(variant.notTraversable === undefined
+              ? {}
+              : { notTraversable: variant.notTraversable }),
+            ...(variant.exposedEdgePolicy === undefined
+              ? {}
+              : { exposedEdgePolicy: variant.exposedEdgePolicy }),
+            ...(variant.frictionRatio === undefined
+              ? {}
+              : { frictionRatio: variant.frictionRatio }),
+          },
+        )]),
       }));
     });
     if (result.outcome === "rejected") {
@@ -515,6 +540,9 @@ describe("Babylon Native block Profile settlement", () => {
       { xMeters: 1.75 },
       { displayGapMeters: 0.03 },
       { colliderId: "changed-collider" },
+      { notTraversable: true },
+      { exposedEdgePolicy: "protect-ground-subject" as const },
+      { frictionRatio: 0.7 },
     ]) {
       expect(await buildProfileInventoryHash(variant)).not.toBe(baseline);
     }
