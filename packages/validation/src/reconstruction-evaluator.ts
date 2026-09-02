@@ -4,6 +4,7 @@ import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvidenceSetV1,
+  isWorldReconstructionRepairableDiagnosticCodeV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
@@ -767,17 +768,25 @@ function finishResult(
     captureReceiptHash: evidence.captureReceiptHash,
   });
   const diagnostics = sortBy(
-    drafts.flatMap((draft) => draft.diagnostics.map((diagnostic) => ({
-      kind: "world-reconstruction-diagnostic" as const,
-      schemaVersion: 1 as const,
-      id: `world-reconstruction-diagnostic:${draft.dimensionId}:${diagnostic.code}:${diagnostic.acceptanceTargetRef}`,
-      code: diagnostic.code,
-      dimensionId: draft.dimensionId,
-      acceptanceTargetRef: diagnostic.acceptanceTargetRef,
-      evidenceRefs: uniqueSorted(diagnostic.evidenceRefs),
-      message: diagnostic.message,
-      repairAction: Object.freeze({ kind: "revise-native-source" as const }),
-    } satisfies WorldReconstructionDiagnosticV1))),
+    drafts.flatMap((draft) => draft.diagnostics.map((diagnostic): WorldReconstructionDiagnosticV1 => {
+      const common = {
+        kind: "world-reconstruction-diagnostic" as const,
+        schemaVersion: 1 as const,
+        id: `world-reconstruction-diagnostic:${draft.dimensionId}:${diagnostic.code}:${diagnostic.acceptanceTargetRef}`,
+        dimensionId: draft.dimensionId,
+        acceptanceTargetRef: diagnostic.acceptanceTargetRef,
+        evidenceRefs: uniqueSorted(diagnostic.evidenceRefs),
+        message: diagnostic.message,
+      };
+      if (!isWorldReconstructionRepairableDiagnosticCodeV1(diagnostic.code)) {
+        return Object.freeze({ ...common, code: diagnostic.code });
+      }
+      return Object.freeze({
+        ...common,
+        code: diagnostic.code,
+        repairAction: Object.freeze({ kind: "revise-native-source" as const }),
+      });
+    })),
     ["dimensionId", "code", "acceptanceTargetRef"],
   );
   const dimensions = WORLD_RECONSTRUCTION_DIMENSION_IDS_V1.map((dimensionId) => {

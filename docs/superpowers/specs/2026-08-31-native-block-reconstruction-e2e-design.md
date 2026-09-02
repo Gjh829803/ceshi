@@ -607,10 +607,14 @@ Metric unions are closed (`ratio-basis-points`, `normalized-distance-basis-point
 
 ### 8.3 Diagnostics
 
-Each diagnostic contains a closed code, dimension ID, acceptance target ref, evidence refs, message, and
-one allowed repair action targeting only Native authoring source or resource selection. Diagnostic codes
-cover missing/disconnected structure, silhouette/anchor drift, unsupported Spawn, missing/wrong collider,
-blocked required traversal, passable required blocker, nondeterministic build, and stale evidence.
+Each diagnostic contains a closed code, dimension ID, acceptance target ref, evidence refs, and message.
+Repairable quality failures additionally require exactly
+`repairAction: { kind: "revise-native-source" }`. Non-repairable missing/stale evidence and deterministic
+Build identity diagnostics omit `repairAction` completely because the Builder cannot repair Host evidence,
+identity, or replay failures. There is no `select-native-resource` branch: no production diagnostic producer
+or admitted resource resolver implements it. Diagnostic codes cover missing/disconnected structure,
+silhouette/anchor drift, unsupported Spawn, missing/wrong collider, blocked required traversal, passable
+required blocker, nondeterministic build, and stale evidence.
 
 The evaluator does not edit files, run a model, mutate Runtime, or update a Package.
 
@@ -630,9 +634,10 @@ initial Attempt -> Package A -> Capture A -> Evaluation A
        -> final Run Receipt(A -> B)
 ```
 
-Repair writes only a new task workspace and may change `scene.ts`, bootstrap JSON, or requested Resource
-refs within the frozen Case/Profile budgets. It cannot edit Package A, Capture A, Runtime, Physics, Camera,
-Evaluator, Case, Profile, or acceptance thresholds. Package B is promoted only after every gate passes.
+Repair writes only a new task workspace and may change `scene.ts`, `native-block-authoring.json`, or
+`native-resources.json` within the frozen Case/Profile budgets. It cannot edit Package A, Capture A,
+Runtime, Physics, Camera, Evaluator, Case, Profile, Host-owned evidence/identity, or acceptance thresholds.
+Package B is promoted only after every gate passes.
 
 The run journal is content-addressed and fail-closed:
 

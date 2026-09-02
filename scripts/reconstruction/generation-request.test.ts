@@ -276,6 +276,38 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
+  it("rejects a Case semantic target without a matching Profile threshold before generation", async () => {
+    const value = await fixture();
+    try {
+      const preparedInput = input(value);
+      const extraTargetRef = "worldkit://acceptance-target/spire@1";
+      const existingTarget = preparedInput.case.expected.semanticSilhouetteTargets[0]!;
+      preparedInput.case = parseWorldReconstructionCaseV1({
+        ...preparedInput.case,
+        acceptanceTargetRefs: [
+          ...preparedInput.case.acceptanceTargetRefs,
+          extraTargetRef,
+        ],
+        expected: {
+          ...preparedInput.case.expected,
+          semanticSilhouetteTargets: [
+            ...preparedInput.case.expected.semanticSilhouetteTargets,
+            {
+              ...existingTarget,
+              acceptanceTargetRef: extraTargetRef,
+              visualGroupId: "spire",
+            },
+          ],
+        },
+      });
+      await expect(prepareNativeBlockGenerationTaskV1(preparedInput)).rejects.toThrow(
+        /evidence profile closure/i,
+      );
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
   it("freezes one canonical native request with three declared router outputs", async () => {
     const value = await fixture();
     try {

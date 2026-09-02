@@ -1268,7 +1268,7 @@ Cover topology node present/relation missing, semantic silhouette bounds center 
 
 - [ ] **Step 2: Write RED stable diagnostic tests**
 
-Require closed codes and one allowed source/resource repair action:
+Require closed codes. Repairable quality failures require the sole source repair action:
 
 ```ts
 expect(result.diagnostics).toContainEqual(expect.objectContaining({
@@ -1279,7 +1279,12 @@ expect(result.diagnostics).toContainEqual(expect.objectContaining({
 }));
 ```
 
-Test codes for missing/disconnected topology, silhouette drift, opening-anchor drift, unsupported Spawn, missing/wrong Collider, blocked required traversal, passable required blocker, nondeterministic build, and stale evidence. Diagnostics are sorted by dimension/code/target and contain exact evidence refs; no free-form repair command or Runtime mutation is accepted.
+Test codes for missing/disconnected topology, silhouette drift, opening-anchor drift, unsupported Spawn,
+missing/wrong Collider, blocked required traversal, passable required blocker, nondeterministic build, and
+stale evidence. Missing/stale evidence and deterministic Build identity diagnostics omit `repairAction`
+because they are not Builder-repairable. Repairable diagnostics require exactly
+`{ kind: "revise-native-source" }`; `select-native-resource`, free-form repair commands, and Runtime mutation
+are rejected. Diagnostics are sorted by dimension/code/target and contain exact evidence refs.
 
 - [ ] **Step 3: Run RED evaluator tests**
 
