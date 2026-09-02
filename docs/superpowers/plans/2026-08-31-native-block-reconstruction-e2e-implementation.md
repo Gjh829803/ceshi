@@ -21,7 +21,7 @@ be read as proof of a real Case run.
 
 ## Global Constraints
 
-- `NBR-1` is the only highest-priority WRC-1 slice until the representative Case is runnable end to end; do not expand BWB-6, full PHO-7/8, full Action/Camera/Event, product Route/Nav/`goTo`, full Golden Corpus, BNA-8, or WRC-ACC-1.
+- `NBR-1` is the only highest-priority WRC-1 slice until the representative Case is runnable end to end. BWB-6 remains closed as an assessment, while NBR-65 realizes its accepted batching/Chunk/collision proposal as part of v2 capability parity. Do not otherwise expand full PHO-7/8, full Action/Camera/Event, product Route/Nav/`goTo`, full Golden Corpus, BNA-8, or WRC-ACC-1.
 - `RuntimeSceneSourceV1` remains exactly Canonical JSON Source or Babylon Native Source; one World selects exactly one Source.
 - Do not add overlay, a third Scene Source, a shadow Plan, Canonical Compiler re-entry, Mesh/tag/name collider scan, or a Native-specific Runtime/Gameplay/Camera/Physics/Package/Browser owner.
 - The Native Module may create visual objects only in the Host Candidate Scene and may register only explicit Spawn/static Collider/Surface intent; it must not create Engine, Scene, Render Loop, Havok/Physics, SDK Camera, Input, Gameplay entities, timers, workers, network calls, or an independent Tick.
@@ -62,7 +62,7 @@ be read as proof of a real Case run.
 | 10 | NBR-50A | Pure dimensioned evaluator and stable diagnostics | 2 | 11 | parallel-safe; validation evaluator only | PR F1 |
 | 11 | NBR-50B | Formal Capture/runtime evidence adapter | 9, 10 | 12, 13 | main-agent-only; evaluation adapter only | PR F2 |
 | 12 | NBR-60 | Atomic Case-bound Formal Capture Intent cutover, production ports, and at-most-one immutable repair journal | 4, 5, 9, 11 | 13 | main-agent-only; temporary exclusive ownership of shared Intent/Case/materializer seams plus run production integration | PR G |
-| 12A | NBR-65 | Migrate v2-equivalent semantic walkable surfaces, exact grouped collision, standability graph and ground-only edge protection under current Native/BNA owners | 4, 6, 9, 11, 12 plus BWB-6 | 13 | main-agent-only integration; detailed subtasks in the linked closure plan | PR H0 |
+| 12A | NBR-65 | Migrate the complete reusable v2 Block reconstruction/ground capability set under current Native/BNA owners: logical ground model, Subject graph, shared visible/Havok surface, exact collision, batching/residency, display parity and ground boundary | 4, 6, 9, 11, 12 plus BWB-6 | 13 | main-agent-only integration; detailed NBR-65A..I graph in the linked closure plan | PR H0 |
 | 13 | NBR-70 | Real `cloud-temple-t-gate-native-block` Case/Intent, artifacts, and local launch | 6, 9, 11, 12, 12A | 14 | main-agent-only; one Case artifact root | PR H |
 | 14 | NBR-80 | Delete replaced/duplicate experimental production and scattered Capture Intent paths | 13 | 15 | main-agent-only; deletion ledger | PR H |
 | 15 | NBR-90 | Exact-SHA gates, independent review, docs truth, final merge | 14 | later WRC | main-agent-only | final PR/merge |
@@ -1847,12 +1847,13 @@ For each finding, reproduce on the reviewed SHA, add a failing focused test, imp
 
 - [ ] **Step 5: Update durable status without overclaiming**
 
-Mark `NBR-1` complete only when the spec completion definition is satisfied. In WRC/backlog, record only the delivered minimum slices of BNA-6, BNA-7, WRC-SR-1, and WRC-SR-2; leave complete Golden Corpus, product Route/Nav/`goTo`, BNA-8, WRC-ACC-1, BWB-6, PHO-7/8, generalized Action/Camera, and events unchecked/deferred. Ensure design, plan, commands, package paths, receipts, and code status agree.
+Mark `NBR-1` complete only when the spec completion definition is satisfied. In WRC/backlog, record only the delivered minimum slices of BNA-6, BNA-7, WRC-SR-1, and WRC-SR-2. Keep BWB-6 checked only as the completed assessment and mark its runtime realization solely through NBR-65 evidence. Leave complete Golden Corpus, product Route/Nav/`goTo`, BNA-8, WRC-ACC-1, PHO-7/8, generalized Action/Camera, and events unchecked/deferred. Ensure design, plan, commands, package paths, receipts, and code status agree.
 
 - [ ] **Step 5A: Re-audit `codex/block-world-sdk-v2` capability migration**
 
 Against exact source `codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`, close the
-reuse table for Builder/Self-check, real AI generation, deterministic Block validation, playthrough Capture,
+per-capability parity table for Builder/Self-check, real AI generation, deterministic Block validation,
+Subject-relative ground analysis, shared visual/Havok topology, batching/residency, lighting, playthrough Capture,
 visual reconstruction diagnostics and resume/bounded-repair behavior. Each accepted capability must name its
 current Babylon/BNA owner, focused test and real-Case evidence; every non-migrated capability must have an
 explicit rejection reason. Verify the final representative Case preserves the source branch's useful visual

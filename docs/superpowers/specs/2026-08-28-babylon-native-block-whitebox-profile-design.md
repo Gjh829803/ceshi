@@ -9,8 +9,8 @@
   它是本文成文时的固定实验基线，不是当前迁移源。
 - 当前唯一 v2 迁移源：`origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`。
 - 当前实施真相：[SDK 重构总进度与 Backlog](../../18-refactor-progress-and-backlog.md)
-- v2 地面能力收口：
-  [Native Block Walkable Surface Closure](./2026-09-02-native-block-walkable-surface-closure-design.md)
+- v2 能力迁移与地面收口：
+  [Native Block V2 Capability Migration and Walkable Surface Closure](./2026-09-02-native-block-walkable-surface-closure-design.md)
 - Mode A 审查：[Block Whitebox Profile 设计审查](../../reviews/2026-08-28-babylon-native-block-whitebox-profile-design-review.md)
 - BWB-3/4 集成施工：
   [Block Settlement 与真实台阶闭环](./2026-08-31-babylon-block-settlement-and-step-closure-design.md)
@@ -335,17 +335,18 @@ BWB 首个视觉/静态碰撞切片。
 | `packages/block-world` 持久 Manifest/Presets | 不迁移 | 不建立第三个 Scene Source 或公开逐块 JSON |
 | shapes/grid/palette | 直接迁移纯算法实现并更换类型边界 | `@whitebox-world/native-babylon-block-profile`；不依赖旧 Package |
 | occupancy/layout/checker | 测试先行后迁移可复用算法 | package-local in-memory layout + authoring diagnostics；不迁移旧 DTO |
-| smooth surface / cliff boundary | 条件保留 | 只产出显式登记并冻结的 Static Collider Mesh；Traversal 使用同一登记的关闭 binding |
-| clustering/chunking/thin instances | 条件保留 | Host/Adapter 内部优化，先正确后性能 |
+| continuous walkable surface / cliff boundary | 迁移行为，不迁移旧 Runtime | `NBR-65` 从显式 Collider Group 派生唯一逻辑地面、共享视觉/Havok 拓扑和 ground-only 边界；仍由 SDK 拥有 support/medium |
+| clustering/chunking/thin instances / physics residency | 迁移行为，不公开旧 DTO | BWB-6 评估作为输入；`NBR-65` 在 Profile/Host Adapter 内真实落地，Block 身份、远景可见性和生命周期必须保持 |
 | old movement/preset/transition runtime | 不迁移 | 当前 SDK 3C、Action、Camera、State 和 `checkSupport()` |
 
 明确拒绝旧分支中的隐藏 `64m` foundation、按块数自动抬高预算、未消费 Preset 字段、材质决定物理、第二
 Ground Height Sampler、固定“世界必须大于参考可见面积若干倍”等做法。地图完整性由有意义的可玩延续和
 冻结 Evidence 判定，不由面积常数替代。
 
-上述“条件保留”不是仅记录未来方向。BWB-6 已如实完成只读优化评估，但没有实施真实合并 Collider、
-整面 standability graph 或 Runtime ground boundary。它们现在由 `NBR-65` 作为 NBR-70 前置负责落地；
-不得继续以少量 scripted corridor Collider 代替可见且声明为可玩的完整地表。
+上述迁移不是仅记录未来方向。BWB-6 已如实完成只读优化评估，但没有实施真实视觉 batching、合并
+Collider、physics Chunk residency、整面 standability graph、连续可走面或 Runtime ground boundary。
+它们现在由 `NBR-65` 作为 NBR-70 前置统一落地；不得继续以少量 scripted corridor Collider 代替
+可见且声明为可玩的完整地表，也不得以 BWB-6 的 proposal/benchmark 冒充 Runtime 能力。
 
 ## 12. Capability 边界
 
@@ -485,7 +486,7 @@ proxy、Scene membership 与 Contribution Hash 全部 settlement 后，才构成
   Capture/Route、BNA-6 成功率、Thin Instance/Chunk/Collider coalescing。
 - 执行模式：Corpus 合同 `sequential`；Havok/cadence/rebind/review `main-agent-only`。
 
-### BWB-6：Chunk、实例化与 Collider 优化提案
+### BWB-6：Chunk、实例化与 Collider 优化评估（历史已完成范围）
 
 - 目标与独立交付物：在 BWB-5 正确性基线后评估 Thin Instances、语义 Chunk、Collider coalescing 和
   residency，交付 Profile-side eligibility/grouping inventory、等价性 fixtures、benchmark 和 BNA-4
@@ -501,6 +502,11 @@ proxy、Scene membership 与 Contribution Hash 全部 settlement 后，才构成
 - 验证证据：visual/collider identity equivalence、frustum/Chunk 边界、CPU/GPU/memory/collider baseline 和
   候选 A/B；生产资源释放与 Havok 等价性由后续 BNA-4-owned 实施重新验证。
 - 执行模式：`sequential`。
+
+BWB-6 的完成只表示上述 assessment、等价性 fixture 和资源包络已经交付。真实 batching、far-visible
+identity、共享 walkable topology、collision-part materialization、Subject-centered physics residency 和
+完整 cleanup 由 [NBR-65](./2026-09-02-native-block-walkable-surface-closure-design.md) 承接；在 NBR-65
+证据通过前，这些能力仍是 `planned`，不能从 BWB-6 的完成状态推导为 `implemented`。
 
 ```text
 BWB-0 + BNA-2 -> BWB-1
@@ -519,6 +525,8 @@ Block Profile Trusted Local Alpha 可以宣布前：
 - 不存在 `block-world-three`、持久 `BlockWorldManifest` 或 Block Compiler Runtime 依赖；
 - Babylon Module 是唯一视觉源，冻结 Contribution/Havok 是唯一物理源；
 - 同一布局的视觉、Collider overlay、Spawn Support 和人物通过性 Evidence 可重放；
+- `NBR-65` 的整面 logical ground、连续视觉/Havok 拓扑、Subject-relative checker、真实
+  batching/residency、ground-only boundary、灯光/材质与 v2 parity Receipt 已通过；
 - 五类 Corpus 的结构与视觉 Gate 通过，负向 Corpus 能 fail closed；
 - 室内、Route、自动寻路、Hosted 和增量编辑只按各自已完成 Gate 声明。
 

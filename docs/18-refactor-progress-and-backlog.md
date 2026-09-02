@@ -1197,10 +1197,13 @@ source-neutral Opening Composition Host Gate。
 - [x] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；修复任务逐条执行
   metric-bound Native source action，禁止修改 Case、Profile、阈值、冻结 Owner 或既有产物；
 - [ ] NBR-65：按
-  [Native Block Walkable Surface Closure](superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md)
-  迁移 v2 已验证的语义可玩地表、足迹/净空/连通检查、精确聚合 Collider 与 ground-only 悬崖边界；
-  保持 Babylon Native + Frozen Contributions + SDK-owned Havok，不恢复 Three、Manifest、Compiler 或第二
-  support owner。它是 NBR-70 前置，不增加 WRC-1 第 34 个工作包；
+  [Native Block V2 Capability Migration and Walkable Surface Closure](superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md)
+  迁移 v2 已验证且适用于当前生产链的完整能力集：显式 Collider/Surface Group、唯一 logical ground
+  model、足迹/净空/Spawn/目标/连通/Traversal Band 与探索指标、共享可视/Havok 地表、精确聚合
+  Collider、真实 Thin Instance/Chunk/physics residency、远景常驻、白膜光照和 ground-only 悬崖边界；
+  最终以逐能力 parity report 防止“只迁视觉、不迁可玩性”。保持 Babylon Native + Frozen
+  Contributions + SDK-owned Havok，不恢复 Three、Manifest、Compiler、hidden foundation 或第二 support
+  owner。它是 NBR-70 前置，不增加 WRC-1 第 34 个工作包；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
 - [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
   临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；
@@ -1216,8 +1219,9 @@ Browser verifier。NBR-45、NBR-50 与 NBR-60 的生产集成检查点由
 165/165 affected tests、typecheck、425-entry test census 与 BNA clean-break gate 全部 GO。该证据只关闭
 上述三个 NBR 实施切片，不提前完成 NBR-20 的真实 formal generation、NBR-70/80/90、整体 NBR-1、完整
 BNA-6/7、WRC-SR 或产品 Native Viewer。
-BWB-6、PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8 与 WRC-ACC-1 在本切片期间
-保持延期，不删除也不展开。
+BWB-6 仍只按已经合入的优化评估标记完成；其 Runtime 落地由 NBR-65 承接，不能把评估误写成实际
+Thin Instance/Chunk/Havok residency。PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8
+与 WRC-ACC-1 在本切片期间保持延期，不删除也不展开。
 
 #### CAST 组件观察研究关联（非 WRC / NBR 关键路径）
 

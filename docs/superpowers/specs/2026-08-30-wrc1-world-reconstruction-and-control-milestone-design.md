@@ -51,14 +51,19 @@ it does not mark any whole parent work package complete.
 
 The real Case also revealed that the accepted BWB-6 deliverable is a read-only optimization assessment,
 not an active Runtime migration of v2 ground behavior. Before NBR-70, `NBR-65` must therefore implement
-the [Native Block Walkable Surface Closure](./2026-09-02-native-block-walkable-surface-closure-design.md):
-explicit semantic Collider Groups, whole-surface standability/connectivity evidence, exact aggregate
-collision, and ground-only exposed-edge protection. This consumes the existing BWB-2/BWB-4/BWB-6 and
-BNA-4 owners; it neither reopens those completed scopes nor changes WRC-1's 33-work-package count.
+the [Native Block V2 Capability Migration and Walkable Surface Closure](./2026-09-02-native-block-walkable-surface-closure-design.md):
+explicit semantic Collider Groups, one frozen logical ground model, Subject-relative standability and
+connectivity, shared visible/Havok walkable topology, actual batching and bounded physics residency,
+ground-only exposed-edge protection, lighting/display parity, and a per-capability parity receipt. This
+consumes the existing BWB-2/BWB-4/BWB-6 and BNA-4 owners; it neither reopens those completed scopes nor
+changes WRC-1's 33-work-package count. The v2 Three adapter, Manifest, Compiler, hidden foundation and
+second Runtime support sampler remain rejected.
 
-BWB-6, full PHO-7/8, generalized Action/Camera, spatial events, the complete BNA-6 Golden Corpus,
-product Route/Nav/`goTo`, BNA-8 and WRC-ACC-1 are explicitly deferred. They remain in this dependency
-authority but must not block NBR-1 or be expanded opportunistically during it.
+Full PHO-7/8, generalized Action/Camera, spatial events, the complete BNA-6 Golden Corpus, product
+Route/Nav/`goTo`, BNA-8 and WRC-ACC-1 are explicitly deferred. BWB-6 itself remains historically
+complete as an assessment; realizing its accepted optimization proposal is now an NBR-65 subtask
+because it is required for v2-equivalent Native Block behavior. The deferred capabilities remain in
+this dependency authority but must not otherwise block NBR-1 or be expanded opportunistically.
 
 ### 1.2 Unified Scene Viewer is a downstream developer tool
 

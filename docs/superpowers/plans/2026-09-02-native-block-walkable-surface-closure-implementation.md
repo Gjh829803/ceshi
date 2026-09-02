@@ -1,109 +1,191 @@
-# Native Block Walkable Surface Closure Implementation Plan
+# Native Block V2 Capability Migration and Walkable Surface Closure Implementation Plan
 
-**Design:** [Native Block Walkable Surface Closure](../specs/2026-09-02-native-block-walkable-surface-closure-design.md)
+**Design:** [Native Block V2 Capability Migration and Walkable Surface Closure](../specs/2026-09-02-native-block-walkable-surface-closure-design.md)
 **Stable task:** `NBR-65`
-**Baseline:** `origin/main@c67bb5bf480d8789d9a7a757121526d010205e6d`
+**Baseline:** `origin/main@9a4639109e4d161d92297506e9fc92192d32ff44`
+**Evidence branch:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
 
 ## Delivery graph
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership / input -> output | Required evidence | Mode |
 |---|---|---|---|---|---|---|
-| NBR-65A | Freeze migration ledger and current-only grouped Collider API | BWB-2, BWB-4, BWB-6 | 65B..65F | Profile spec/types/Skill; v2 evidence + current contracts -> one API and deletion ledger | type fixtures, docs truth, exact public export census | main-agent-only |
-| NBR-65B | Materialize one exact union Collider per explicit Block Group | 65A | 65C..65F | `native-babylon-block-profile` only; checked Layout + group selection -> registered proxy + frozen inventory | holes/internal faces/asymmetry/order/budget/rollback tests | sequential |
-| NBR-65C | Add trusted standability and connectivity evidence | 65B | 65D..65F | Profile Host/evaluator only; checked group geometry + resolved Subject envelope + frozen Case intent -> stable report | footprint/clearance/Spawn/target/component/band tests | sequential |
-| NBR-65D | Add explicit ground-boundary contribution role and SDK filter | 65B, 65C | 65E..65F | Native contribution + WorldPackage + `runtime-babylon`; checked exposed edges -> identity-bound filtered Havok boundary | installed Babylon/Havok source audit, ground/flight mask, reset/replay/isolation/cleanup | main-agent-only |
-| NBR-65E | Atomically migrate active Modules, fixtures, Skills and copied Skill inputs | 65B, 65C, 65D | 65F | consumers only; old single-block selection -> grouped current contract | no legacy `blockId` dialect, self-check and package closure | sequential |
-| NBR-65F | Run real Case, publish evidence, review and merge | 65E | NBR-70 | one Case root plus review/status; reference -> Package/Runtime/Capture/manual preview | focused gates, real Havok exploration, overlay, exact-SHA Mode B/runtime review | main-agent-only |
+| NBR-65A | Freeze the complete v2 capability ledger and current-only Group API | BWB-2, BWB-4, BWB-6 | 65B..65I | Profile spec/types/Skill; v2 evidence + current contracts -> one authoring API and deletion ledger | type fixtures, docs truth, public export census | main-agent-only |
+| NBR-65B | Freeze one identity-bound logical ground model | 65A | 65C..65I | Block Profile Host seam; checked Layout + explicit Groups -> canonical occupied/support inventory | asymmetry, holes, cross-group, order and replay tests | sequential |
+| NBR-65C | Add Subject-relative standability, connectivity and exploration evidence | 65B | 65D..65I | Host analysis only; ground model + resolved Subject + Case intent -> stable report | footprint, clearance, Spawn, target, component, band and metric tests | sequential |
+| NBR-65D | Build one continuous visible/Havok walkable topology and exact solid union | 65B, 65C | 65E..65I | Profile materializer; ground model -> identity-bound topology/proxies | mixed height, seams, holes, triangle determinism and budgets | sequential |
+| NBR-65E | Reproduce slope/step movement and add ground-only exposed-edge protection | 65D | 65F..65I | Native contribution, Package and runtime-babylon; exact topology -> SDK-owned Havok behavior | installed-engine audit, real Havok, masks, jump, reset and cleanup | main-agent-only |
+| NBR-65F | Realize Profile batching, far visibility and bounded collision residency | 65D, 65E | 65G..65I | Profile visual adapter + existing Runtime lifecycle; BWB-6 assessment -> actual batches/Chunks | draw/resource counts, Capture identity, seam traversal, residency lifecycle | main-agent-only |
+| NBR-65G | Align whitebox lighting/materials and current Skills | 65D, 65F | 65H, 65I | Runtime light owner, Profile display adapter, live/copied Builder Skill | material/light tests, Skill parity and negative ownership census | sequential |
+| NBR-65H | Atomically migrate every active consumer and add a v2 parity verifier | 65C..65G | 65I | fixtures, Corpus, generated Module, Package metadata and verifier | no old field/fallback; per-capability current-code evidence | sequential |
+| NBR-65I | Run the real Case, publish evidence, review and merge | 65H | NBR-70 | one Case root plus status/review; reference -> Package/Runtime/Capture/parity Receipt | focused gates, Browser play, exact-SHA Mode B/runtime review | main-agent-only |
 
-`NBR-65A -> 65B -> 65C -> 65D -> 65E -> 65F` is sequential at shared contract boundaries. Tests and documentation that consume a frozen boundary may be prepared in parallel, but no worker owns the cross-package integration or final merge.
+The shared contract path is sequential. Tests for a frozen producer can be prepared while its consumer
+is implemented, but no worker independently changes Runtime state ownership, Package identity or the
+final integration tree.
 
-## NBR-65A: contract and RED fixtures
+## NBR-65A: current-only API and deletion ledger
 
-1. Add type-level RED tests for required `colliderGroupId` placement and the new closed
-   `colliderGeometrySource` union.
-2. Prove the old direct `blockId` selection is rejected and absent from public examples, generated
-   Skill copies, Corpus fixtures, and production artifacts used as current inputs.
-3. Add diagnostics for duplicate/missing/empty Collider Groups, mixed selection, unsupported exposed
-   edge policy, and group use across Sessions.
-4. Update the Builder Skill to teach full declared playable-surface coverage, not a narrow scripted
-   corridor.
+1. Add RED type tests for optional `colliderGroupId` on `createBlock()` and
+   `createBlockGrid()`, plus the closed `colliderGeometrySource` union.
+2. Make `staticColliders[].blockId` invalid. Do not support both shapes through overloads, aliases,
+   parser fallbacks or migration adapters.
+3. Freeze `exposedEdgePolicy` and reject it for non-static-surface selections.
+4. Preserve stable logical Collider IDs even when Host realization later creates multiple Chunk parts.
+5. Update the live Builder Skill and every frozen Skill copy in one checkpoint.
+6. Add a repository census for the removed selection shape, Three adapter imports, Block Manifest,
+   Block Compiler, hidden foundation and Scene-scan collision inference.
 
-Focused gate: Profile API/type/session tests and Skill source/copy tests only.
+Focused evidence: Profile API/type/session tests, Skill source/copy tests and clean-break census.
 
-## NBR-65B: exact aggregate collision
+## NBR-65B: canonical logical ground model
 
-1. Implement deterministic occupied-cell face emission and internal-face removal in a package-local
-   module. Reuse Babylon geometry APIs and existing Profile lattice helpers.
-2. Materialize one invisible Mesh per group and register it through the existing core registration.
-3. Extend Profile inventory with `colliderGroupId`, sorted `sourceBlockIds`, `proxyKind`, geometry
-   counts, and exact bounds.
-4. Preserve `kind: block` singleton evidence using the same materializer path.
-5. Fail before registration on count/vertex/triangle budget overflow; dispose every partial Mesh in
-   reverse order on allocation, registration, or cleanup failure.
+1. Add one package-local pure module that consumes only a passed checked Layout and parsed Group
+   selections.
+2. Expand the existing occupied microcell inventory without reading Mesh/tag/material/name state.
+3. Record sorted source Block, Collider Group, visual group, traversal binding and cell identities.
+4. Derive global exposed support tops and solid occupancy once; every later ground consumer receives
+   this frozen model.
+5. Bind canonical bytes and hash to Build Epoch, Profile inventory, Bootstrap/Subject envelope and
+   Case intent.
+6. Reject empty/duplicate groups, one Block in multiple Collider Groups, mixed incompatible binding,
+   cross-Session membership, missing source identities and accessor-bearing input.
 
-Focused gate: materializer tests, Candidate admission tests affected by geometry, Profile session tests,
-and typecheck.
+Focused evidence: pure ground-model tests, session rollback, Host evidence hash and replay tests.
 
-## NBR-65C: semantic ground checker
+## NBR-65C: checker and actionable diagnostics
 
-1. Port v2's footprint-union, clearance, adjacency, connected-component, and traversal-band algorithms
-   to current Profile/Host types; do not import the old package.
-2. Resolve the Subject traversal envelope from the trusted WorldRuntimeBootstrap/Registry closure.
-   The Builder output must not contain policy numbers.
-3. Join only explicit static-surface Collider Groups. Palette and visual group remain irrelevant.
-4. Emit stable diagnostics with target, actual, limit, delta, direction, group/source IDs, and repair
-   action so the existing bounded repair loop can act on failures.
-5. Record the report in the existing Host evidence path and bind it to Profile/Contribution identity.
+1. Port the algorithms, not the v2 package: footprint-union coverage, vertical clearance,
+   shared-edge step adjacency, BFS components, target reachability and bounded traversal bands.
+2. Resolve Capsule/Physics Body limits from the trusted current Bootstrap/Registry closure. No policy
+   number enters `scene.ts`.
+3. Publish report-only reachable bounds, XZ span, maximum distance, off-camera position/Chunk counts
+   and component summaries.
+4. Keep ground-only blocking policy Case/Profile-owned. Non-ground movement receives measurements,
+   not a false rejection.
+5. Map every failure to the current actionable diagnostic DTO with actual/expected/limit/delta,
+   direction, source IDs and one bounded geometry repair action.
+6. Bind the report to the same ground-model and Package identity used by materialization.
 
-Focused gate: graph unit tests, package/check/explain identity tests, evaluator diagnostic tests, and
-typecheck.
+Focused evidence: pure graph fixtures covering narrow footprint, low overhead, asymmetric step limits,
+detours outside a band, disconnected islands, duplicate targets and stable diagnostic ordering.
 
-## NBR-65D: exposed-edge protection and Runtime
+## NBR-65D: topology, overlay and collision materialization
 
-1. Audit the installed Babylon 9.23.0 and Havok sources for static mesh shape filtering and disposal.
-2. Add one closed internal boundary role to the Native contribution and WorldPackage parser; perform a
-   current-only migration of every producer/consumer.
-3. Build deterministic boundary geometry from exposed support edges and coalesce only collinear,
-   equal-slope contiguous segments.
-4. Assign the boundary membership mask in `runtime-babylon`; the committed movement medium/motion
-   kernel determines whether the Character Capsule collides with it.
-5. Prove Camera and non-ground kernels do not acquire the boundary, and that reset/rebind/replay restore
-   filters atomically.
+1. Derive the global support topology before any Chunk split. Use deterministic micro-grid rectangles,
+   corner keys, smooth-height policy and triangle diagonal selection.
+2. Generate the visible walkable overlay and Havok walkable proxy from the exact same topology bytes;
+   apply the render epsilon only to the overlay.
+3. Bind overlay batches to source Block IDs and visual groups in the live-handle registry and formal
+   materializer metadata.
+4. Generate exact-union faces for non-walkable solids; remove internal faces while preserving holes,
+   concavity, blockers and cliff mass.
+5. Extend frozen inventory with source IDs, logical Collider ID, proxy kind, bounds, counts and
+   topology hash.
+6. Fail before registration on logical Collider, vertex or triangle budget overflow. Roll back every
+   partial Mesh and registration in reverse order.
 
-Focused gate: contribution/package contract tests, actual installed-engine Havok tests, Runtime reset/
-replay/isolation/throwing cleanup, Native build, and typecheck.
+Focused evidence: mixed-height surface, hole, T junction, cross-group seam, negative coordinate,
+creation-order determinism, visual/collision byte relation, budget and throwing cleanup tests.
 
-## NBR-65E: current-only consumer migration
+## NBR-65E: movement and ground boundary
 
-1. Migrate all current Profile fixtures, BWB Corpus, representative generated Module, examples, live
-   Skill, and frozen Builder Skill copy in one checkpoint.
-2. Delete local helpers, old single-Block DTO fields, fallback parsers, and documentation that teaches
-   corridor-only collision.
-3. Keep Case-required stable Collider IDs as group selection IDs; update frozen artifacts by producing a
-   new Candidate/Package/Receipt rather than rewriting published identity.
-4. Add a repository census that rejects the removed selection shape in production and AI-facing input.
+1. Audit installed Babylon and Havok source for triangle-mesh filtering, support contacts, collision
+   masks and disposal before implementing engine-dependent behavior.
+2. Verify the existing SDK movement path can preserve configured ground speed along the derived slope
+   using committed support contact data. Add no second support or medium owner.
+3. Bound provider contact correction so it closes numerical error without becoming a second step or
+   teleport path.
+4. Derive exposed edges globally, coalesce only contiguous collinear equal-slope segments and freeze a
+   closed internal boundary role in Contribution/Package identity.
+5. Create invisible boundary proxies under existing Runtime physics ownership and apply one dedicated
+   membership bit only to locked ground kernels.
+6. Prove jump retention, ledge opt-out, water/flight bit removal, Camera exclusion, cadence, reset,
+   replay, rebind, multiple Runtime isolation and throwing cleanup.
 
-Focused gate: consumer tests, Skill drift/self-check, BNA clean-break gate, test census, and typecheck.
+Focused evidence: actual installed-engine Havok tests plus the directly affected Runtime contract and
+typecheck. Do not run the full repository here.
 
-## NBR-65F: real Case and closure
+## NBR-65F: executable optimization
+
+1. Measure at least two Chunk profiles on the five BWB Corpus scenes and the petrified-forest Case;
+   freeze one policy from draw, geometry, collision and residency evidence.
+2. Materialize Thin Instance batches only within a single Chunk, shape, palette role and semantic
+   visual group. Keep singleton or incompatible Blocks as independent Meshes.
+3. Replace live-handle rows with a closed union for independent Mesh or batch/instance identity;
+   migrate Capture selection, visibility and tinting atomically.
+4. Keep every visual batch resident and far-visible. Never use physics residency as visual culling.
+5. Split logical collision into deterministic Chunk parts while retaining one logical Collider/
+   Surface identity in Package metadata and overlays.
+6. Maintain a bounded physics ring around every active Subject, activate Spawn before ready and update
+   before each fixed Tick.
+7. Own batch buffers, proxy Meshes, shapes, aggregates and boundary resources exactly once.
+
+Focused evidence: deterministic resource benchmark, NullEngine batch identity, formal Capture target
+isolation, real Havok traversal across Chunk seams, multi-Subject desired-ring union, partial activation
+and reverse disposal.
+
+## NBR-65G: lighting, material and Agent guidance
+
+1. Keep Native production modules from creating lights. Reuse the Runtime neutral inspection fallback.
+2. Align Profile materials to diffuse face shading, low specular and a small readability floor; share
+   them across near/far batches.
+3. Add the identity-bound walkable overlay pattern without changing palette, collision or evaluation
+   masks.
+4. Teach the Builder to declare complete playable floor groups, support depth, clearance, real stair
+   columns and intentional ledges; forbid narrow scripted-only collision and air walls.
+5. Preserve the evidence priority: uploaded reference, entry composition, top-down continuation, then
+   Builder coherent hidden geometry.
+6. Regenerate/freeze Skill copies through the trusted existing mechanism and prove byte parity.
+
+Focused evidence: material/light owner tests, rendered authoring screenshot inspection, Skill tests,
+forbidden-token census and typecheck if source changed.
+
+## NBR-65H: consumer migration and parity verifier
+
+1. Migrate Profile fixtures, BWB Corpus, representative generated Module, examples, Package metadata,
+   formal Capture binder and Collider overlay to the new identity shape.
+2. Produce new Candidate/Package/Receipt identities; never edit a published Package in place.
+3. Implement a stable v2 capability-parity verifier that reports every in-scope ledger row as
+   `passed`, `failed` or `not-applicable`, with evidence refs and no aggregate score that can hide a
+   failed row.
+4. Make deferred capabilities point to their WRC owner/task instead of being marked passed.
+5. Delete temporary adapters, single-Block fallback materializers, duplicate cell maps, old Skill text
+   and assessment-only wording that implies runtime optimization already exists.
+
+Focused evidence: consumer tests, Package/Receipt verification, formal Capture/overlay identity,
+clean-break census, parity verifier fixtures, Skill drift and test census.
+
+## NBR-65I: real Case and closure
 
 1. Run `/Users/xiateng/Downloads/测试集/024_petrified_primordial_forest.png` through the formal Native
-   production route on the new API.
-2. Verify the full declared foreground and basin floor, not only the fixed-input centerline.
-3. Verify Spawn/support, ordinary movement, steps where present, blocker walls, intentional ledges,
-   ground-boundary behavior, and no seam fall-through.
-4. Publish identity-bound Package, Receipt, Capture, Collider overlay, standability report, evaluation,
-   and preview command. A failed final visual score may remain previewable only after Package/Runtime
-   gates pass.
-5. Freeze the candidate, run affected gates once, then request one exact-SHA independent Mode B plus
+   production route using the new API.
+2. Verify the full declared foreground and basin/forest floor, not only the scripted centerline.
+3. Verify Spawn/support, free walking, mixed heights/steps, blockers, intentional ledges, cliff
+   protection, cross-Chunk movement and far silhouette visibility.
+4. Publish identity-bound Package, Receipt, opening/top/side Capture, Collider overlay, ground report,
+   parity report, evaluation and a stable preview command. A failed visual score is previewable only
+   after Package and Runtime admission pass.
+5. Record actual draw/buffer counts, collision parts, peak active physics objects, readiness and
+   Browser feel separately from contract evidence.
+6. Freeze the candidate, run the affected gates once, then request one exact-SHA Mode B plus
    runtime-deep review. Fix P0/P1 and rerun only invalidated evidence.
-6. Merge the accepted checkpoint, update the live backlog, and only then resume NBR-70.
+7. Merge the accepted checkpoint, update the live backlog and only then mark `NBR-65` complete and
+   resume `NBR-70`.
 
-## Stopping rules
+## Explicit non-migrations and later owners
 
-- Do not run repository-wide `pnpm test` during 65A-65E.
-- Do not lower visual thresholds to hide physical coverage failure.
-- Do not preserve the removed public selection dialect.
-- Do not claim completion from NullEngine, structural graphs, or screenshots without real Havok evidence.
-- Stop and revise the design if exact union collision requires a third Scene Source, persisted Block
-  Manifest, Runtime Layout query, Mesh scan, or second support owner.
+- Never create `block-world`, `block-world-three` or `block-world-compiler` compatibility packages.
+- Never add a Native-specific RuntimeHost, Physics, Camera, Subject or Gameplay owner.
+- Never restore a hidden foundation, automatic Mesh/name/tag collision scan, Runtime height sampler,
+  public Chunk DSL, Batch DTO or a third Scene Source.
+- Do not implement v2 space transitions here. Record their behavior under `WRC-EVT-1`.
+- Do not claim product Route/Nav/`goTo`, water/flight traversal, generic events, complete BNA-6 Golden
+  Corpus, BNA-8 or WRC-ACC-1.
+
+## Verification discipline
+
+Each implementation checkpoint runs focused RED -> GREEN, the directly affected typecheck/build only
+when its inputs changed, and `git diff --check`. Do not repeatedly run root `pnpm test`.
+
+Only the final frozen candidate runs one affected/full exact-SHA gate set and one independent review.
+Automated contract evidence, rendered Capture and manual Browser play are reported separately.
