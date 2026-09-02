@@ -10,6 +10,7 @@ import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js"
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
@@ -157,6 +158,21 @@ const gBotSubjectAssetBytes = new Uint8Array(
     ),
   ),
 );
+
+/**
+ * Resolve the deterministic Runtime Chunk parts of one logical Native
+ * Collider. The logical Collider identity stays stable while the Runtime
+ * realizes it as one or more bounded residency parts.
+ */
+function nativeColliderChunkPartMeshes(
+  scene: Scene,
+  logicalColliderId: string,
+): readonly AbstractMesh[] {
+  const prefix = `worldkit.native-collider.${logicalColliderId}-grid-chunk-`;
+  return scene.meshes
+    .filter(({ name }) => name.startsWith(prefix))
+    .sort((left, right) => left.name < right.name ? -1 : 1);
+}
 
 describe("Babylon terrain surface", () => {
   it("samples the canonical rendered triangle across an asymmetric saddle cell", () => {
@@ -1956,7 +1972,7 @@ describe("BabylonWorldRuntime", () => {
       for (const water of executionPlan.waters) {
         expect(scene.getMeshByName(water.entityId)).toBeNull();
       }
-      expect(scene.getMeshByName("worldkit.native-collider.ground")?.metadata)
+      expect(nativeColliderChunkPartMeshes(scene, "ground")[0]?.metadata)
         .toMatchObject({
           worldkitEntityId: "ground",
           colliderSubshapeId: expect.stringMatching(
@@ -1974,10 +1990,10 @@ describe("BabylonWorldRuntime", () => {
         positionMetersXYZ: [0, 0, 0],
         movementMedium: "ground",
       });
-      expect(scene.getMeshByName("worldkit.native-collider.ground"))
+      expect(nativeColliderChunkPartMeshes(scene, "ground")[0])
         .not.toBe(moduleOwnedGround);
       moduleOwnedGround?.dispose();
-      expect(scene.getMeshByName("worldkit.native-collider.ground")).not.toBeNull();
+      expect(nativeColliderChunkPartMeshes(scene, "ground")).toHaveLength(1);
     } finally {
       await runtime.dispose();
     }
@@ -2323,9 +2339,10 @@ describe("BabylonWorldRuntime", () => {
     });
     try {
       const scene = (runtime as unknown as { scene: Scene }).scene;
-      const boundary = scene.getMeshByName(
-        "worldkit.native-collider.ground-safety-boundary",
-      );
+      const boundary = nativeColliderChunkPartMeshes(
+        scene,
+        "ground-safety-boundary",
+      )[0];
       expect(boundary?.isVisible).toBe(false);
       expect(boundary?.isPickable).toBe(false);
       expect(boundary?.metadata).toMatchObject({
@@ -2419,9 +2436,10 @@ describe("BabylonWorldRuntime", () => {
 
       const firstScene = (first as unknown as { scene: Scene }).scene;
       const firstEngine = firstScene.getEngine();
-      const boundary = firstScene.getMeshByName(
-        "worldkit.native-collider.ground-safety-boundary",
-      )!;
+      const boundary = nativeColliderChunkPartMeshes(
+        firstScene,
+        "ground-safety-boundary",
+      )[0]!;
       const nativeDispose = boundary.dispose.bind(boundary);
       vi.spyOn(boundary, "dispose").mockImplementation((...args) => {
         nativeDispose(...args);
@@ -6393,14 +6411,26 @@ function emptyActionProjection(simulationTick: number) {
         dispose(): void;
         shape: { dispose(): void };
       }>;
+      nativeColliderResidency: {
+        activeHandles(): readonly {
+          aggregate: { dispose(): void; shape: { dispose(): void } };
+        }[];
+        metrics(): Readonly<{ activePartCount: number; partCount: number }>;
+      };
       scene: Scene;
       engine: NullEngine;
     };
-    expect(internals.aggregates).toHaveLength(1);
-    const aggregate = internals.aggregates[0]!;
-    const collisionMesh = internals.scene.getMeshByName(
-      "worldkit.native-collider.ground",
-    );
+    // Native Chunk parts are owned by the Runtime residency ring, so the
+    // ExecutionPlan aggregate list stays empty for a Native scene.
+    expect(internals.aggregates).toHaveLength(0);
+    expect(internals.nativeColliderResidency.metrics())
+      .toMatchObject({ activePartCount: 1, partCount: 1 });
+    const aggregate =
+      internals.nativeColliderResidency.activeHandles()[0]!.aggregate;
+    const collisionMesh = nativeColliderChunkPartMeshes(
+      internals.scene,
+      "ground",
+    )[0];
     if (isNil(collisionMesh)) {
       throw new Error("Native collision proxy fixture is missing.");
     }

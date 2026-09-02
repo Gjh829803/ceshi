@@ -12,7 +12,13 @@ import {
 
 const CODE = "WORLDKIT_NATIVE_BLOCK_COLLISION_PARTITION_INVALID";
 const PARITY_CODE = "WORLDKIT_NATIVE_BLOCK_COLLISION_PARTITION_PARITY_BROKEN";
-const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
+/**
+ * Frozen Contribution Collider IDs are canonical identity strings rather than
+ * lowercase Profile IDs: the Host-derived ground safety boundary uses
+ * `ground-safety-boundary:<hash>`. Accept any canonical identity and keep the
+ * Chunk suffix the only derived part of a part ID.
+ */
+const CANONICAL_IDENTITY = /^\S(?:.*\S)?$/;
 
 /**
  * One deterministic Chunk part of exactly one logical Collider. Triangles are
@@ -97,7 +103,8 @@ function validatedSource(
   const indices = collider.triangleIndices;
   if (
     typeof collider.colliderId !== "string" ||
-    !STABLE_ID.test(collider.colliderId) ||
+    !CANONICAL_IDENTITY.test(collider.colliderId) ||
+    collider.colliderId.normalize("NFC") !== collider.colliderId ||
     !Array.isArray(positions) ||
     !Array.isArray(indices) ||
     positions.length < 9 ||
@@ -180,12 +187,6 @@ export function partitionBabylonNativeBlockCollisionIntoChunksV1(
       [...bucketByChunkKey.entries()]
         .sort(([left], [right]) => stableCompare(left, right))) {
       const partId = `${collider.colliderId}-${chunkResidencyGroupId}`;
-      if (!STABLE_ID.test(partId)) {
-        fail(
-          CODE,
-          `Chunk part id '${partId}' is outside the stable ID contract.`,
-        );
-      }
       const positions: number[] = [];
       const indices: number[] = [];
       const vertexIndexByKey = new Map<string, number>();

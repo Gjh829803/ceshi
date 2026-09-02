@@ -284,10 +284,21 @@ describe("NBR-65F Collider Chunk partition", () => {
     expect(() => partitionBabylonNativeBlockCollisionIntoChunksV1({
       chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
       colliders: [{
-        colliderId: "Broken-Id",
+        colliderId: " leading-space",
         worldPositionsMetersXYZ: [0, 0, 0, 1, 0, 0, 1, 0, 1],
         triangleIndices: [0, 1, 2],
       }],
     })).toThrow(/WORLDKIT_NATIVE_BLOCK_COLLISION_PARTITION_INVALID/);
+    // Host-derived ground safety boundary IDs are canonical identity strings.
+    expect(partitionBabylonNativeBlockCollisionIntoChunksV1({
+      chunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
+      colliders: [{
+        colliderId: `ground-safety-boundary:${"a".repeat(16)}`,
+        worldPositionsMetersXYZ: [0, 0, 0, 1, 0, 0, 1, 0, 1],
+        triangleIndices: [0, 1, 2],
+      }],
+    }).parts[0]!.partId).toBe(
+      `ground-safety-boundary:${"a".repeat(16)}-grid-chunk-xp0-zp0`,
+    );
   });
 });

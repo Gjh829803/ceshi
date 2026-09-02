@@ -11,7 +11,11 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 
 export interface BabylonNativeLiveColliderHandleV1 {
+  /** Stable logical Collider identity, preserved across every Chunk part. */
   readonly colliderId: string;
+  /** Host-derived realization identity of one deterministic Chunk part. */
+  readonly chunkPartId: string;
+  readonly chunkResidencyGroupId: string;
   readonly runtimeRole: BabylonNativeStaticColliderRuntimeRoleV1;
   readonly colliderSubshapeId: string;
   readonly sourceBlockId?: string;
@@ -23,9 +27,20 @@ export interface BabylonNativeLiveColliderHandleV1 {
   readonly shape: PhysicsShape;
 }
 
+export interface BabylonNativeLiveColliderResidencyEvidenceV1 {
+  readonly chunkPolicyHash: `sha256:${string}`;
+  readonly partitionHash: `sha256:${string}`;
+  readonly logicalColliderCount: number;
+  readonly partCount: number;
+  readonly activePartCount: number;
+  readonly peakActivePartCount: number;
+}
+
 export interface BabylonNativeLiveColliderRegistryV1 {
   readonly kind: "babylon-native-live-collider-registry";
   readonly schemaVersion: 1;
+  readonly residency: BabylonNativeLiveColliderResidencyEvidenceV1;
+  /** Currently resident Chunk parts, one row per live Havok body. */
   readonly colliders: readonly BabylonNativeLiveColliderHandleV1[];
 }
 
@@ -33,6 +48,8 @@ const REGISTRY_BY_SCENE = new WeakMap<
   Scene,
   BabylonNativeLiveColliderRegistryV1[]
 >();
+
+const SHA256 = /^sha256:[0-9a-f]{64}$/;
 
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -56,16 +73,16 @@ function assertLiveHandle(
 
 export function createBabylonNativeLiveColliderRegistryV1(
   handles: readonly BabylonNativeLiveColliderHandleV1[],
+  residency: BabylonNativeLiveColliderResidencyEvidenceV1,
 ): BabylonNativeLiveColliderRegistryV1 {
   const colliders = [...handles]
-    .sort((left, right) => stableCompare(left.colliderId, right.colliderId))
+    .sort((left, right) => stableCompare(left.chunkPartId, right.chunkPartId))
     .map((handle) => {
       assertLiveHandle(handle);
       return Object.freeze({ ...handle });
     });
   for (const key of [
-    "colliderId",
-    "colliderSubshapeId",
+    "chunkPartId",
     "physicsBodyId",
     "overlayRecordId",
   ] as const) {
@@ -75,11 +92,45 @@ export function createBabylonNativeLiveColliderRegistryV1(
       );
     }
   }
+  const residentLogicalColliderCount =
+    new Set(colliders.map(({ colliderId }) => colliderId)).size;
+  if (
+    !SHA256.test(residency.chunkPolicyHash) ||
+    !SHA256.test(residency.partitionHash) ||
+    residency.activePartCount !== colliders.length ||
+    residency.activePartCount > residency.partCount ||
+    residency.peakActivePartCount < residency.activePartCount ||
+    residency.logicalColliderCount < residentLogicalColliderCount ||
+    residency.partCount < residency.logicalColliderCount
+  ) {
+    throw new TypeError(
+      "WORLDKIT_NATIVE_LIVE_COLLIDER_REGISTRY_INVALID: residency evidence does not describe the live rows",
+    );
+  }
   return Object.freeze({
     kind: "babylon-native-live-collider-registry" as const,
     schemaVersion: 1 as const,
+    residency: Object.freeze({ ...residency }),
     colliders: Object.freeze(colliders),
   });
+}
+
+export function replaceBabylonNativeLiveColliderRegistryV1(
+  scene: Scene,
+  expected: BabylonNativeLiveColliderRegistryV1,
+  replacement: BabylonNativeLiveColliderRegistryV1,
+): void {
+  const registries = REGISTRY_BY_SCENE.get(scene);
+  if (
+    registries === undefined ||
+    registries.length !== 1 ||
+    registries[0] !== expected
+  ) {
+    throw new TypeError(
+      "WORLDKIT_NATIVE_LIVE_COLLIDER_REGISTRY_REPLACEMENT_INVALID",
+    );
+  }
+  registries[0] = replacement;
 }
 
 export function registerBabylonNativeLiveColliderRegistryV1(
