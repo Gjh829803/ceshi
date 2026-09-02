@@ -28,6 +28,8 @@ import {
   type NativeBlockRepairInstructionV1,
   type WorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./repair-request.js";
+import { deriveNativeBlockGenerationRouterRequestIdV1 } from
+  "./generation-request.js";
 import {
   createWorldReconstructionRunJournalV1,
   type WorldReconstructionCleanupOutcomesV1,
@@ -449,7 +451,11 @@ function requestIdFor(
   runId: string,
   attemptIndex: 0 | 1,
 ): string {
-  return `native-block-generation-${reconstructionCase.id}-${runId}-attempt-${attemptIndex}`;
+  return deriveNativeBlockGenerationRouterRequestIdV1({
+    caseId: reconstructionCase.id,
+    runId,
+    attemptIndex,
+  });
 }
 
 function attemptReceiptRow(record: CompletedAttemptRecordV1) {

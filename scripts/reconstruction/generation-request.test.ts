@@ -701,6 +701,27 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
+  it("keeps the formal router identity bounded for a valid timestamped run", async () => {
+    const value = await fixture();
+    try {
+      const runId = "run-20260902130320-15359";
+      const prepared = await prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        runId,
+        runDirectoryPath: path.join(value.root, "runs", runId),
+      });
+      expect(prepared.routerRequestId).toMatch(/^[a-z0-9][a-z0-9-]{2,79}$/);
+      expect(prepared.routerArguments).toEqual(expect.arrayContaining([
+        "--task-id",
+        prepared.routerRequestId,
+        "--request-id",
+        prepared.routerRequestId,
+      ]));
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     ["canonical route", async (value: Awaited<ReturnType<typeof fixture>>) => ({ ...input(value), routeDecision: decideSceneAuthoringRouteV1({ id: "canonical", sceneBriefRef: "scene-brief.md", sceneBriefHash: hash("a"), trustProfileRef: "worldkit://trust-profile/trusted-local@1", trustProfileHash: hash("b"), requiredCapabilityRefs: [], requestedSourceKind: "canonical", nativeTrustAdmitted: true, referenceDrivenDistinctiveSilhouette: false }) })],
     ["second repair index", async (value: Awaited<ReturnType<typeof fixture>>) => ({ ...input(value), attemptIndex: 2 })],

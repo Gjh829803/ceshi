@@ -85,6 +85,30 @@ const CURRENT_NATIVE_TRUST_PROFILE_HASH = sha256CanonicalJson({
   id: "trusted-local",
   version: 1,
 }) as Sha256HashV1;
+const FORMAL_ROUTER_REQUEST_ID_PATTERN = /^[a-z0-9][a-z0-9-]{2,79}$/;
+
+export function deriveNativeBlockGenerationRouterRequestIdV1(input: Readonly<{
+  caseId: string;
+  runId: string;
+  attemptIndex: 0 | 1;
+}>): string {
+  const readable =
+    `native-block-generation-${input.caseId}-${input.runId}-attempt-${input.attemptIndex}`;
+  if (FORMAL_ROUTER_REQUEST_ID_PATTERN.test(readable)) return readable;
+  const identityHash = sha256CanonicalJson({
+    caseId: input.caseId,
+    runId: input.runId,
+    attemptIndex: input.attemptIndex,
+  }).slice("sha256:".length, "sha256:".length + 20);
+  const bounded =
+    `native-block-generation-${input.caseId.slice(0, 32)}-${identityHash}-a${input.attemptIndex}`;
+  if (!FORMAL_ROUTER_REQUEST_ID_PATTERN.test(bounded)) {
+    throw new TypeError(
+      "Generation router request identity exceeds the formal router contract.",
+    );
+  }
+  return bounded;
+}
 
 export interface WorldReconstructionHostRoutePolicyV1 {
   readonly requiredCapabilityRefs: readonly string[];
@@ -809,10 +833,11 @@ export async function prepareNativeBlockGenerationTaskV1(
       : [["repair-instruction.json", repairInstruction] as const]),
     ["workspace-context-manifest.json", workspaceContextManifest],
   ] as const;
-  const routerRequestId = `native-block-generation-${reconstructionCase.id}-${input.runId}-attempt-${input.attemptIndex}`;
-  if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(routerRequestId)) {
-    throw new TypeError("Generation router request identity exceeds the formal router contract.");
-  }
+  const routerRequestId = deriveNativeBlockGenerationRouterRequestIdV1({
+    caseId: reconstructionCase.id,
+    runId: input.runId,
+    attemptIndex: input.attemptIndex,
+  });
   const routerArguments = [
     "--backend", input.backend, "--repo-root", ".", "--task-id", routerRequestId,
     "--stage", "native-block-generation", "--job-name", `Native Block Generation ${reconstructionCase.id}`,

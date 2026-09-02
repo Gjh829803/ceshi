@@ -44,6 +44,7 @@ import {
   NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   decideNativeBlockReconstructionRouteV1,
+  deriveNativeBlockGenerationRouterRequestIdV1,
   deriveNativeBlockGenerationBootstrapV1,
   resolveWorldReconstructionFrozenOwnerIdentitiesV1,
   type WorldReconstructionHostRoutePolicyV1,
@@ -605,10 +606,13 @@ export async function runWorldReconstructionProductionV1(
   const runId = path.basename(outputDirectoryPath);
   if (
     path.dirname(outputDirectoryPath) !== runsRoot ||
-    !RUN_ID_PATTERN.test(runId) ||
-    `native-block-generation-${reconstructionCase.id}-${runId}-attempt-1`
-      .length > 80
+    !RUN_ID_PATTERN.test(runId)
   ) throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  deriveNativeBlockGenerationRouterRequestIdV1({
+    caseId: reconstructionCase.id,
+    runId,
+    attemptIndex: 1,
+  });
   if (await lstatOrMissing(outputDirectoryPath) !== undefined) {
     throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_ALREADY_EXISTS");
   }

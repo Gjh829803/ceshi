@@ -26,6 +26,8 @@ import {
   type WorldReconstructionGeneratePortResultV1,
   type WorldReconstructionRunPortsV1,
 } from "./run.js";
+import { deriveNativeBlockGenerationRouterRequestIdV1 } from
+  "./generation-request.js";
 
 const H = (character: string): Sha256HashV1 =>
   `sha256:${character.repeat(64)}` as Sha256HashV1;
@@ -404,7 +406,11 @@ function generateResult(
   const ids = identities(attemptIndex);
   return Object.freeze({
     outcome,
-    requestId: `native-block-generation-cloud-temple-t-gate-native-block-formal-20260831-attempt-${attemptIndex}`,
+    requestId: deriveNativeBlockGenerationRouterRequestIdV1({
+      caseId: "cloud-temple-t-gate-native-block",
+      runId: "formal-20260831",
+      attemptIndex,
+    }),
     requestHash: ids.routerTaskPayloadHash,
     generationRequestRef: ids.generationRequestRef,
     generationRequestHash: ids.generationRequestHash,
