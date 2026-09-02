@@ -250,7 +250,8 @@ function validateInput(
       record.mesh.isEnabled() !== true ||
       record.input.shape !== block.shape ||
       record.input.paletteRole !== block.paletteRole ||
-      record.input.visualGroupId !== block.visualGroupId
+      record.input.visualGroupId !== block.visualGroupId ||
+      record.input.colliderGroupId !== block.colliderGroupId
     ) {
       return fail(
         "WORLDKIT_NATIVE_BLOCK_VISUAL_RECORD_MISMATCH",

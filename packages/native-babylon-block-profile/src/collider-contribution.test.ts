@@ -217,13 +217,15 @@ function deterministicTwoBlockEvidence(reverse: boolean): Readonly<{
     const selections = [
       Object.freeze({
         id: "collider-z",
-        blockId: "quarter-block",
+        colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "quarter-block" }),
         traversalBinding: staticSurface,
+        exposedEdgePolicy: "none" as const,
       }),
       Object.freeze({
         id: "collider-a",
-        blockId: "full-block",
+        colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "full-block" }),
         traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
+        exposedEdgePolicy: "none" as const,
         frictionRatio: 0.25,
         restitutionRatio: 0.5,
       }),
@@ -313,8 +315,12 @@ describe("Babylon Native block Collider contribution", () => {
         records,
         selections: Object.freeze([Object.freeze({
           id: "route-ground-a",
-          blockId: "route-block-a",
+          colliderGeometrySource: Object.freeze({
+            kind: "block" as const,
+            blockId: "route-block-a",
+          }),
           traversalBinding,
+          exposedEdgePolicy: "none" as const,
         })]),
         registration,
       });
@@ -346,6 +352,7 @@ describe("Babylon Native block Collider contribution", () => {
         visualGroupIds: ["route-group"],
         proxyKind: "layout-block-volume",
         traversalBinding,
+        exposedEdgePolicy: "none",
       }]);
       expect(Object.isFrozen(inventory)).toBe(true);
       expect(Object.isFrozen(inventory[0])).toBe(true);
@@ -392,8 +399,9 @@ describe("Babylon Native block Collider contribution", () => {
         records,
         selections: Object.freeze([Object.freeze({
           id: "overlap-ground-a",
-          blockId: "overlap-a",
+          colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "overlap-a" }),
           traversalBinding: Object.freeze({ kind: "not-traversable" }),
+          exposedEdgePolicy: "none" as const,
         })]),
         registration,
       })).toThrow(/WORLDKIT_NATIVE_BLOCK_COLLIDER_CHECK_REJECTED/);
@@ -426,13 +434,15 @@ describe("Babylon Native block Collider contribution", () => {
         selections: Object.freeze([
           Object.freeze({
             id: "a-valid-ground",
-            blockId: "route-block-a",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
             traversalBinding: notTraversable,
+            exposedEdgePolicy: "none" as const,
           }),
           Object.freeze({
             id: "z-missing-ground",
-            blockId: "missing-block",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "missing-block" }),
             traversalBinding: notTraversable,
+            exposedEdgePolicy: "none" as const,
           }),
         ]),
         registration,
@@ -450,13 +460,15 @@ describe("Babylon Native block Collider contribution", () => {
           selections: Object.freeze([
             Object.freeze({
               id: "duplicate-ground",
-              blockId: "route-block-a",
+              colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
               traversalBinding: notTraversable,
+              exposedEdgePolicy: "none" as const,
             }),
             Object.freeze({
               id: "duplicate-ground",
-              blockId: "route-block-a",
+              colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
               traversalBinding: notTraversable,
+              exposedEdgePolicy: "none" as const,
             }),
           ]),
           code: "WORLDKIT_NATIVE_BLOCK_COLLIDER_ID_DUPLICATE",
@@ -465,13 +477,15 @@ describe("Babylon Native block Collider contribution", () => {
           selections: Object.freeze([
             Object.freeze({
               id: "ground-a",
-              blockId: "route-block-a",
+              colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
               traversalBinding: notTraversable,
+              exposedEdgePolicy: "none" as const,
             }),
             Object.freeze({
               id: "ground-b",
-              blockId: "route-block-a",
+              colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
               traversalBinding: notTraversable,
+              exposedEdgePolicy: "none" as const,
             }),
           ]),
           code: "WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_DUPLICATE",
@@ -515,8 +529,9 @@ describe("Babylon Native block Collider contribution", () => {
           records,
           selections: Object.freeze([Object.freeze({
             id: "wrong-scene-ground",
-            blockId: "route-block-a",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
             traversalBinding: Object.freeze({ kind: "not-traversable" }),
+            exposedEdgePolicy: "none" as const,
           })]),
           registration: Object.freeze({
             registerSpawnMarker(): void {},
@@ -547,8 +562,9 @@ describe("Babylon Native block Collider contribution", () => {
         records,
         selections: [{
           id: "mutable-ground",
-          blockId: "route-block-a",
+          colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
           traversalBinding: { kind: "not-traversable" },
+          exposedEdgePolicy: "none" as const,
         }],
         registration: Object.freeze({
           registerSpawnMarker(): void {},
@@ -571,32 +587,36 @@ describe("Babylon Native block Collider contribution", () => {
           buildEpochId: "Bad Epoch",
           selection: Object.freeze({
             id: "valid-collider",
-            blockId: "route-block-a",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
             traversalBinding: notTraversable,
+            exposedEdgePolicy: "none" as const,
           }),
         }),
         Object.freeze({
           buildEpochId: "valid-epoch",
           selection: Object.freeze({
             id: "x",
-            blockId: "route-block-a",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
             traversalBinding: notTraversable,
+            exposedEdgePolicy: "none" as const,
           }),
         }),
         Object.freeze({
           buildEpochId: "valid-epoch",
           selection: Object.freeze({
             id: "valid-collider",
-            blockId: "Route Block A",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "Route Block A" }),
             traversalBinding: notTraversable,
+            exposedEdgePolicy: "none" as const,
           }),
         }),
         Object.freeze({
           buildEpochId: "valid-epoch",
           selection: Object.freeze({
             id: "valid-collider",
-            blockId: "route-block-a",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
             traversalBinding: notTraversable,
+            exposedEdgePolicy: "none" as const,
             frictionRatio: 1.01,
           }),
         }),
@@ -604,8 +624,9 @@ describe("Babylon Native block Collider contribution", () => {
           buildEpochId: "valid-epoch",
           selection: Object.freeze({
             id: "valid-collider",
-            blockId: "route-block-a",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
             traversalBinding: notTraversable,
+            exposedEdgePolicy: "none" as const,
             restitutionRatio: Number.NaN,
           }),
         }),
@@ -655,8 +676,9 @@ describe("Babylon Native block Collider contribution", () => {
         records: Object.freeze([staleRecord]),
         selections: Object.freeze([Object.freeze({
           id: "stale-record-collider",
-          blockId: "route-block-a",
+          colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-block-a" }),
           traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
+          exposedEdgePolicy: "none" as const,
         })]),
         registration: Object.freeze({
           registerSpawnMarker(): void {},

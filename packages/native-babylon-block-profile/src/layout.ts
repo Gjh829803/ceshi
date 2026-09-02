@@ -39,6 +39,7 @@ export interface BabylonNativeBlockLayoutEntryV1
   readonly shape: BabylonNativeBlockShapeKindV1;
   readonly paletteRole: BabylonNativeBlockPaletteRoleV1;
   readonly visualGroupId?: string;
+  readonly colliderGroupId?: string;
   readonly centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
   readonly rotationQuarterTurnsY: BabylonNativeBlockRotationQuarterTurnsYV1;
   readonly sizeMetersXYZ: readonly [number, number, number];
@@ -240,6 +241,9 @@ function deriveEntry(
         ...(isNil(record.input.visualGroupId)
           ? {}
           : { visualGroupId: record.input.visualGroupId }),
+        ...(isNil(record.input.colliderGroupId)
+          ? {}
+          : { colliderGroupId: record.input.colliderGroupId }),
         centerMetersXYZ,
         rotationQuarterTurnsY,
         sizeMetersXYZ: effectiveBabylonNativeBlockSizeMetersXYZV1(

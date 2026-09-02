@@ -45,6 +45,7 @@ interface SessionModule {
       centerMetersXYZ: readonly [number, number, number];
       rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
       visualGroupId?: string;
+      colliderGroupId?: string;
     }>): Mesh;
     createBlockGrid(input: Readonly<{
       idPrefix: string;
@@ -60,19 +61,25 @@ interface SessionModule {
       repeatCountXYZ: readonly [number, number, number];
       rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
       visualGroupId?: string;
+      colliderGroupId?: string;
     }>): readonly Mesh[];
     finalize(input: Readonly<{
       displayGapMeters?: number;
       staticColliders: readonly Readonly<{
         id: string;
-        blockId: string;
+        colliderGeometrySource:
+          | Readonly<{ kind: "block"; blockId: string }>
+          | Readonly<{ kind: "block-group"; colliderGroupId: string }>;
         traversalBinding: Readonly<{ kind: "not-traversable" }>;
+        exposedEdgePolicy: "none" | "protect-ground-subject";
       }>[];
     }>): Readonly<{
       kind: "babylon-native-block-finalized-epoch";
       schemaVersion: 1;
       checkedLayout: Readonly<{
-        layout: Readonly<{ blocks: readonly unknown[] }>;
+        layout: Readonly<{
+          blocks: readonly Readonly<{ colliderGroupId?: string }>[];
+        }>;
         checkResult: Readonly<{
           kind: "babylon-native-block-profile-check-result";
           schemaVersion: 1;
@@ -662,8 +669,9 @@ describe("Babylon Native block profile session", () => {
         displayGapMeters: 0.25,
         staticColliders: Object.freeze([Object.freeze({
           id: "route-step-collider",
-          blockId: "route-step",
+          colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "route-step" }),
           traversalBinding: Object.freeze({ kind: "not-traversable" }),
+          exposedEdgePolicy: "none" as const,
         })]),
       }))).toThrow(/WORLDKIT_NATIVE_BLOCK_FINALIZE_INPUT_INVALID/);
       expect(registeredColliders).toEqual([]);
@@ -801,6 +809,7 @@ describe("Babylon Native block profile session", () => {
         shape: "full",
         paletteRole: "ground",
         visualGroupId: "entry-ground-group",
+        colliderGroupId: "entry-ground-colliders",
         minimumCenterMetersXYZ: [0, 0.5, 0],
         repeatCountXYZ: [2, 2, 2],
       });
@@ -819,6 +828,127 @@ describe("Babylon Native block profile session", () => {
         [0, 0.5, 0], [1, 0.5, 0], [0, 0.5, 1], [1, 0.5, 1],
         [0, 1.5, 0], [1, 1.5, 0], [0, 1.5, 1], [1, 1.5, 1],
       ]);
+      const epoch = session.finalize({ staticColliders: [] });
+      expect(epoch.checkedLayout.layout.blocks.map((block) =>
+        block.colliderGroupId)).toEqual(Array(8).fill("entry-ground-colliders"));
+    });
+  });
+
+  it("rejects invalid Collider Group identity before allocating a Mesh", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 2 },
+      );
+      const initialMeshCount = scene.meshes.length;
+      expect(() => session.createBlock({
+        id: "ground-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
+        colliderGroupId: "Ground Group",
+      })).toThrow(/WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID/);
+      expect(scene.meshes.length).toBe(initialMeshCount);
+    });
+  });
+
+  it("rejects the retired Collider blockId shape and invalid edge policy before contribution", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+    const invalidSelections = [
+      Object.freeze({
+        id: "ground-collider",
+        blockId: "ground-block",
+        traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
+        exposedEdgePolicy: "none" as const,
+      }),
+      Object.freeze({
+        id: "ground-collider",
+        colliderGeometrySource: Object.freeze({
+          kind: "block" as const,
+          blockId: "ground-block",
+        }),
+        traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
+        exposedEdgePolicy: "protect-ground-subject" as const,
+      }),
+    ];
+
+    for (const selection of invalidSelections) {
+      withScene((scene) => {
+        const registeredColliders: BabylonNativeStaticColliderV1[] = [];
+        const session = createBabylonNativeBlockProfileSessionV1(
+          createContext(scene, Object.freeze({
+            registerSpawnMarker(): void {},
+            registerStaticCollider(
+              collider: Readonly<BabylonNativeStaticColliderV1>,
+            ): void {
+              registeredColliders.push(collider);
+            },
+          })),
+          { maximumBlockCount: 1 },
+        );
+        session.createBlock({
+          id: "ground-block",
+          shape: "full",
+          paletteRole: "ground",
+          centerMetersXYZ: [0, 0.5, 0],
+        });
+
+        expect(() => session.finalize({
+          staticColliders: [selection],
+        } as never)).toThrow(/WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID/);
+        expect(registeredColliders).toEqual([]);
+        expect(commitProfileSettlement).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  it("accepts the closed Collider Group source but fails before realization until its materializer lands", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const registeredColliders: BabylonNativeStaticColliderV1[] = [];
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene, Object.freeze({
+          registerSpawnMarker(): void {},
+          registerStaticCollider(
+            collider: Readonly<BabylonNativeStaticColliderV1>,
+          ): void {
+            registeredColliders.push(collider);
+          },
+        })),
+        { maximumBlockCount: 1 },
+      );
+      session.createBlock({
+        id: "ground-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
+        colliderGroupId: "ground-collider-group",
+      });
+
+      expect(() => session.finalize({
+        staticColliders: [Object.freeze({
+          id: "ground-collider",
+          colliderGeometrySource: Object.freeze({
+            kind: "block-group" as const,
+            colliderGroupId: "ground-collider-group",
+          }),
+          traversalBinding: Object.freeze({
+            kind: "static-surface" as const,
+            surfaceEntityId: "ground-surface",
+            logicalSubshapeId: "top",
+            traversalSurfaceProfileRef:
+              "worldkit://traversal-surface-profile/ground.static@1",
+          }),
+          exposedEdgePolicy: "none" as const,
+        })],
+      } as never)).toThrow(
+        /WORLDKIT_NATIVE_BLOCK_COLLIDER_GROUP_MATERIALIZATION_UNAVAILABLE/,
+      );
+      expect(registeredColliders).toEqual([]);
+      expect(commitProfileSettlement).not.toHaveBeenCalled();
     });
   });
 
@@ -1261,13 +1391,15 @@ describe("Babylon Native block profile session", () => {
         staticColliders: Object.freeze([
           Object.freeze({
             id: "first-collider",
-            blockId: "first-block",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "first-block" }),
             traversalBinding: Object.freeze({ kind: "not-traversable" }),
+            exposedEdgePolicy: "none" as const,
           }),
           Object.freeze({
             id: "second-collider",
-            blockId: "second-block",
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "second-block" }),
             traversalBinding: Object.freeze({ kind: "not-traversable" }),
+            exposedEdgePolicy: "none" as const,
           }),
         ]),
       }))).toThrow(/late Host commit failed/);

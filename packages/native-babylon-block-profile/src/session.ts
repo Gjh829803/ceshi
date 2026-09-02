@@ -22,6 +22,7 @@ import {
 } from "./check.js";
 import {
   materializeBabylonNativeBlockColliderCandidatesV1,
+  type BabylonNativeBlockColliderGeometrySourceV1,
   type BabylonNativeBlockColliderCandidateInventoryEntryV1,
   type BabylonNativeBlockStaticColliderSelectionV1,
 } from "./collider-contribution.js";
@@ -62,6 +63,7 @@ export interface BabylonNativeBlockCreateInputV1 {
   readonly centerMetersXYZ: BabylonNativeBlockPositionMetersXYZV1;
   readonly rotationQuarterTurnsY?: BabylonNativeBlockRotationQuarterTurnsYV1;
   readonly visualGroupId?: string;
+  readonly colliderGroupId?: string;
 }
 
 export interface BabylonNativeBlockGridCreateInputV1 {
@@ -76,6 +78,7 @@ export interface BabylonNativeBlockGridCreateInputV1 {
   ];
   readonly rotationQuarterTurnsY?: BabylonNativeBlockRotationQuarterTurnsYV1;
   readonly visualGroupId?: string;
+  readonly colliderGroupId?: string;
 }
 
 export interface BabylonNativeBlockProfileFinalizeInputV1 {
@@ -260,17 +263,21 @@ function parseCreateInput(
   const code = "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID";
   const record = exactPlainRecord(input,
     ["id", "shape", "paletteRole", "centerMetersXYZ"],
-    ["rotationQuarterTurnsY", "visualGroupId"], code);
+    ["rotationQuarterTurnsY", "visualGroupId", "colliderGroupId"], code);
   const id = canonicalId(record.id);
   const hasVisualGroupId = Object.hasOwn(record, "visualGroupId");
   const visualGroupId = hasVisualGroupId
     ? canonicalId(record.visualGroupId) : undefined;
+  const hasColliderGroupId = Object.hasOwn(record, "colliderGroupId");
+  const colliderGroupId = hasColliderGroupId
+    ? canonicalId(record.colliderGroupId) : undefined;
   if (isNil(id) ||
       !SHAPES.has(record.shape as BabylonNativeBlockShapeKindV1) ||
       !PALETTE_ROLES.has(record.paletteRole as BabylonNativeBlockPaletteRoleV1) ||
-      (hasVisualGroupId && isNil(visualGroupId))) {
+      (hasVisualGroupId && isNil(visualGroupId)) ||
+      (hasColliderGroupId && isNil(colliderGroupId))) {
     return fail(code,
-      "id, shape, paletteRole, or visualGroupId is outside the closed Profile");
+      "id, shape, paletteRole, visualGroupId, or colliderGroupId is outside the closed Profile");
   }
   const shape = record.shape as BabylonNativeBlockShapeKindV1;
   const declaredCenterMetersXYZ = parseFiniteNumberTupleXYZ(
@@ -297,6 +304,7 @@ function parseCreateInput(
     centerMetersXYZ,
     rotationQuarterTurnsY,
     ...(isNil(visualGroupId) ? {} : { visualGroupId }),
+    ...(isNil(colliderGroupId) ? {} : { colliderGroupId }),
   });
 }
 
@@ -308,17 +316,21 @@ function parseGridCreateInput(
   const record = exactPlainRecord(input,
     ["idPrefix", "shape", "paletteRole", "minimumCenterMetersXYZ",
       "repeatCountXYZ"],
-    ["rotationQuarterTurnsY", "visualGroupId"], code);
+    ["rotationQuarterTurnsY", "visualGroupId", "colliderGroupId"], code);
   const idPrefix = canonicalId(record.idPrefix);
   const hasVisualGroupId = Object.hasOwn(record, "visualGroupId");
   const visualGroupId = hasVisualGroupId
     ? canonicalId(record.visualGroupId) : undefined;
+  const hasColliderGroupId = Object.hasOwn(record, "colliderGroupId");
+  const colliderGroupId = hasColliderGroupId
+    ? canonicalId(record.colliderGroupId) : undefined;
   if (isNil(idPrefix) ||
       !SHAPES.has(record.shape as BabylonNativeBlockShapeKindV1) ||
       !PALETTE_ROLES.has(record.paletteRole as BabylonNativeBlockPaletteRoleV1) ||
-      (hasVisualGroupId && isNil(visualGroupId))) {
+      (hasVisualGroupId && isNil(visualGroupId)) ||
+      (hasColliderGroupId && isNil(colliderGroupId))) {
     return fail(code,
-      "idPrefix, shape, paletteRole, or visualGroupId is outside the closed Profile");
+      "idPrefix, shape, paletteRole, visualGroupId, or colliderGroupId is outside the closed Profile");
   }
   const shape = record.shape as BabylonNativeBlockShapeKindV1;
   const paletteRole = record.paletteRole as BabylonNativeBlockPaletteRoleV1;
@@ -366,6 +378,7 @@ function parseGridCreateInput(
           ] as [number, number, number]),
           rotationQuarterTurnsY,
           ...(isNil(visualGroupId) ? {} : { visualGroupId }),
+          ...(isNil(colliderGroupId) ? {} : { colliderGroupId }),
         })));
       }
     }
@@ -424,20 +437,62 @@ function parseRatio(value: unknown, code: string, name: string): number {
   return value;
 }
 
+function parseColliderGeometrySource(
+  input: unknown,
+  code: string,
+): BabylonNativeBlockColliderGeometrySourceV1 {
+  const record = exactPlainRecord(
+    input,
+    ["kind"],
+    ["blockId", "colliderGroupId"],
+    code,
+  );
+  if (record.kind === "block") {
+    const branch = exactPlainRecord(input, ["kind", "blockId"], [], code);
+    const blockId = canonicalId(branch.blockId);
+    if (isNil(blockId)) {
+      return fail(code, "blockId must be one stable lowercase ID");
+    }
+    return Object.freeze({ kind: "block", blockId });
+  }
+  if (record.kind === "block-group") {
+    const branch = exactPlainRecord(input, ["kind", "colliderGroupId"], [], code);
+    const colliderGroupId = canonicalId(branch.colliderGroupId);
+    if (isNil(colliderGroupId)) {
+      return fail(code, "colliderGroupId must be one stable lowercase ID");
+    }
+    return Object.freeze({ kind: "block-group", colliderGroupId });
+  }
+  return fail(code, "colliderGeometrySource.kind is outside the closed union");
+}
+
 function parseSelection(input: unknown): BabylonNativeBlockStaticColliderSelectionV1 {
   const code = "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID";
   const record = exactPlainRecord(input,
-    ["id", "blockId", "traversalBinding"],
+    ["id", "colliderGeometrySource", "traversalBinding", "exposedEdgePolicy"],
     ["frictionRatio", "restitutionRatio"], code);
   const id = canonicalId(record.id);
-  const blockId = canonicalId(record.blockId);
-  if (isNil(id) || isNil(blockId)) {
-    return fail(code, "Collider and block IDs must be stable lowercase IDs");
+  if (isNil(id)) {
+    return fail(code, "Collider ID must be one stable lowercase ID");
+  }
+  const traversalBinding = parseTraversalBinding(record.traversalBinding, code);
+  if (record.exposedEdgePolicy !== "none" &&
+      record.exposedEdgePolicy !== "protect-ground-subject") {
+    return fail(code, "exposedEdgePolicy is outside the closed union");
+  }
+  if (record.exposedEdgePolicy === "protect-ground-subject" &&
+      traversalBinding.kind !== "static-surface") {
+    return fail(code,
+      "protect-ground-subject requires a static-surface traversal binding");
   }
   return Object.freeze({
     id,
-    blockId,
-    traversalBinding: parseTraversalBinding(record.traversalBinding, code),
+    colliderGeometrySource: parseColliderGeometrySource(
+      record.colliderGeometrySource,
+      code,
+    ),
+    traversalBinding,
+    exposedEdgePolicy: record.exposedEdgePolicy,
     ...(!Object.hasOwn(record, "frictionRatio") ? {} : {
       frictionRatio: parseRatio(record.frictionRatio, code, "frictionRatio"),
     }),
@@ -473,18 +528,21 @@ function parseFinalizeInput(
     .map(parseSelection)
     .sort((left, right) => stableCompare(left.id, right.id));
   const colliderIds = new Set<string>();
-  const blockIds = new Set<string>();
+  const geometrySourceKeys = new Set<string>();
   for (const selection of staticColliders) {
     if (colliderIds.has(selection.id)) {
       return fail("WORLDKIT_NATIVE_BLOCK_COLLIDER_ID_DUPLICATE",
         `Collider id '${selection.id}' appears more than once`);
     }
-    if (blockIds.has(selection.blockId)) {
-      return fail("WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_DUPLICATE",
-        `Block '${selection.blockId}' has more than one Collider selection`);
+    const geometrySourceKey = selection.colliderGeometrySource.kind === "block"
+      ? `block:${selection.colliderGeometrySource.blockId}`
+      : `block-group:${selection.colliderGeometrySource.colliderGroupId}`;
+    if (geometrySourceKeys.has(geometrySourceKey)) {
+      return fail("WORLDKIT_NATIVE_BLOCK_COLLIDER_GEOMETRY_SOURCE_DUPLICATE",
+        `Collider geometry source '${geometrySourceKey}' appears more than once`);
     }
     colliderIds.add(selection.id);
-    blockIds.add(selection.blockId);
+    geometrySourceKeys.add(geometrySourceKey);
   }
   return Object.freeze({
     displayGapMeters: Object.is(displayGapMeters, -0) ? 0 : displayGapMeters,

@@ -67,13 +67,14 @@ BabylonNativeSceneModuleV1 {
         staticColliders: Object.freeze(RUNTIME_FIXTURE_BLOCKS.map((block) =>
           Object.freeze({
             id: `collider-${block.id}`,
-            blockId: block.id,
+            colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: block.id }),
             traversalBinding: Object.freeze({
               kind: "static-surface" as const,
               surfaceEntityId: `surface-${block.id}`,
               logicalSubshapeId: "top",
               traversalSurfaceProfileRef,
             }),
+            exposedEdgePolicy: "none" as const,
             frictionRatio: 0.8,
             restitutionRatio: 0,
           }))),

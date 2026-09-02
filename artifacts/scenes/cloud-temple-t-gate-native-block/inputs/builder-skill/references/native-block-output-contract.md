@@ -37,6 +37,7 @@ export default defineBabylonNativeScene({
       shape: "full",
       paletteRole: "ground",
       visualGroupId: "entry-ground-group",
+      colliderGroupId: "entry-ground-collider-group",
       minimumCenterMetersXYZ: [-1, -0.5, 0],
       repeatCountXYZ: [3, 1, 1],
     });
@@ -55,7 +56,10 @@ export default defineBabylonNativeScene({
       displayGapMeters: 0.04,
       staticColliders: [{
         id: "entry-ground-collider",
-        blockId: "entry-ground-x1-y0-z0",
+        colliderGeometrySource: {
+          kind: "block",
+          blockId: "entry-ground-x1-y0-z0",
+        },
         traversalBinding: {
           kind: "static-surface",
           surfaceEntityId: "entry-ground-surface",
@@ -63,6 +67,7 @@ export default defineBabylonNativeScene({
           traversalSurfaceProfileRef:
             "worldkit://traversal-surface-profile/ground.static@1",
         },
+        exposedEdgePolicy: "none",
       }],
     });
 
@@ -81,7 +86,7 @@ This is explicit visual construction with explicit visual groups, explicit Spawn
 
 `createBlock()` requires `centerMetersXYZ` and accepts an optional `rotationQuarterTurnsY` of exactly `0`, `1`, `2`, or `3`. Placement is declared once, at creation. Never create a Block and then assign `position`, `rotation.y`, or `scaling` for its initial placement: the Session validates the shape-specific lattice, occupancy and budget before allocating a Mesh, and Finalize rejects any later transform as tampering.
 
-`createBlockGrid()` is dense mechanical repetition of one shape and palette role only. It takes `idPrefix`, `minimumCenterMetersXYZ`, and a positive `repeatCountXYZ`, spaces cells by the selected shape's effective rotated size, iterates Y outermost then Z then X, and names children `<idPrefix>-x<i>-y<j>-z<k>` with zero-based unpadded indices. It has no stride, gap, mask, or callback, and it never creates Collider intent. Use it for ground slabs, wall runs, and solid mass; keep stairs, gates, buildings, and any semantic topology as ordinary TypeScript loops over `createBlock()`.
+`createBlockGrid()` is dense mechanical repetition of one shape and palette role only. It takes `idPrefix`, `minimumCenterMetersXYZ`, and a positive `repeatCountXYZ`, spaces cells by the selected shape's effective rotated size, iterates Y outermost then Z then X, and names children `<idPrefix>-x<i>-y<j>-z<k>` with zero-based unpadded indices. It has no stride, gap, mask, or callback. An optional `colliderGroupId` assigns every generated child to one explicit logical Collider Group; it does not itself register collision. Use the Grid for ground slabs, wall runs, and solid mass; keep stairs, gates, buildings, and any semantic topology as ordinary TypeScript loops over `createBlock()`.
 
 ### Source-admission-safe module structure
 
@@ -121,16 +126,9 @@ For this production reconstruction Case, every non-root structural or playable b
 
 All `route` blocks must form one edge-adjacent component. Neighboring route tops may differ by at most `0.25` meters. A safe quarter-meter stair column starts with a `full` ground block centered at `y=-0.5`; for a tread top at `0.25 * n`, stack `n` `step` blocks at the same XZ center with Y centers `0.125 + 0.25 * j` for `j=0..n-1`, and expose/collide only the top tread as appropriate. Put successive tread columns exactly one meter apart along X or Z so their route blocks touch at an edge without overlap. Never fill through a `step` using a `full` block whose volume reaches into the tread.
 
-Treat `budgets.maximumStaticColliderCount` as a hard ceiling shared by generation, Native admission, and Package closure. In the Block Profile, one `staticColliders` row selects one Block and consumes one Collider. Do not register every visible or supporting Block. Every `case.json.expected.colliders[].colliderId` must appear exactly once in the final `staticColliders` array and bind to one explicit Block in the corresponding acceptance visual group. Spawn/support, step, and blocker required IDs cannot be replaced by a large automatically generated Collider set. Register the exact Case-required Collider IDs, the Spawn support, the continuous playable corridor, and only the blocker faces needed to prevent traversal; keep background mass and non-playable support visual-only. Count the final array before returning and leave margin below the frozen ceiling. Never assume that many visual Blocks will be coalesced into one proxy.
+Treat `budgets.maximumStaticColliderCount` as a hard ceiling shared by generation, Native admission, and Package closure. Every `case.json.expected.colliders[].colliderId` must appear exactly once in the final `staticColliders` array. Use `colliderGeometrySource: { kind: "block", blockId }` for a singleton blocker or tread. The closed `{ kind: "block-group", colliderGroupId }` branch is reserved for a complete explicitly labelled floor or structural mass and becomes materializable only after the NBR-65 logical-ground gate; until that gate is published, production generation must use the singleton branch. Never infer group membership from palette, visual group, ID prefix, Mesh metadata, or a Scene scan.
 
-Each `staticColliders` row uses the exact required fields `id`, `blockId`, and
-`traversalBinding`; only `frictionRatio` and `restitutionRatio` are optional.
-Do not add a `role` field. The trusted evaluator derives `blocker` from a
-`not-traversable` binding, derives `step` from a selected Block whose checked
-shape is `step`, and otherwise derives `ground` from the admitted static-surface
-binding. Therefore a Case Collider with role `step` must select an actual
-`step` Block and use the ordinary `ground.static@1` traversal surface; it does
-not author a second role dialect in `scene.ts`.
+Each `staticColliders` row uses the exact required fields `id`, `colliderGeometrySource`, `traversalBinding`, and `exposedEdgePolicy`; only `frictionRatio` and `restitutionRatio` are optional. The retired top-level `blockId` shape is invalid. Do not add a `role` field. The trusted evaluator derives `blocker` from a `not-traversable` binding, derives `step` from a singleton selected Block whose checked shape is `step`, and otherwise derives `ground` from the admitted static-surface binding. A blocker must use `exposedEdgePolicy: "none"`. Ground-only edge protection is valid only for a checked static-surface source; do not request `protect-ground-subject` until the NBR-65 exposed-edge gate is available.
 
 Scripted traversal is a metric authoring constraint, not a promise that the Host will adapt the test to the generated layout. Read every check's exact fixed-input segments from `context/case.json` and the controlled Subject descriptor selected by `initialControlledEntityId` from `inputs/world-runtime-bootstrap.json`. The formal Runtime uses 60 fixed Ticks per second. For each segment, its declared action set selects walk or run speed; missing turn, lateral, jump, or run actions cannot be invented. Compute the flat-ground travel ceiling from the declared Tick count and selected speed, then shorten the authored route enough to absorb acceleration, elevation, contact, and Capsule-entry costs. A pass target's Host-resolved bounds must begin inside that conservative envelope along the declared movement axis. Keep the complete approach continuously supported by explicit Collider rows. For a blocker check, place the Collider face beyond the Spawn but inside the input envelope so the Capsule can actually reach and stop at it.
 

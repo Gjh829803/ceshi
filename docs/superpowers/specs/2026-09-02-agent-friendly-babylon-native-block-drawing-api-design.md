@@ -188,13 +188,18 @@ approach, movement toward the frozen face, and final Capsule contact near the un
 
 ## 7. Collider and Runtime semantics
 
-`createBlockGrid()` never registers colliders. The only current Collider authoring path remains:
+`createBlockGrid()` never registers colliders. NBR-65 replaced the original singleton-only
+selection shape with one current-only geometry-source union. Until the NBR-65 logical-ground
+materializer lands, production Modules must use the admitted singleton branch:
 
 ```ts
 session.finalize({
   staticColliders: [{
     id: "entry-ground-collider",
-    blockId: "entry-ground-x0-y0-z0",
+    colliderGeometrySource: {
+      kind: "block",
+      blockId: "entry-ground-x0-y0-z0",
+    },
     traversalBinding: {
       kind: "static-surface",
       surfaceEntityId: "entry-ground-surface",
@@ -202,9 +207,15 @@ session.finalize({
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
     },
+    exposedEdgePolicy: "none",
   }],
 });
 ```
+
+The closed alternative `{ kind: "block-group", colliderGroupId }` is reserved for an explicitly
+labelled floor or structural mass. It fails closed until the NBR-65 logical-ground gate is
+published. The retired top-level `staticColliders[].blockId` shape is invalid and has no alias or
+fallback.
 
 There is no `collidable`, `physics`, `role`, `isGround`, or `isTraversable` field on Block creation. The
 Host continues to derive the evaluator role from the selected checked Block shape and the closed traversal

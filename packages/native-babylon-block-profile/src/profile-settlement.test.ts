@@ -13,12 +13,16 @@ type Shape = "full" | "half" | "quarter" | "small" | "step";
 type PaletteRole = "ground" | "route" | "structure";
 interface FinalizeSelection {
   readonly id: string;
-  readonly blockId: string;
+  readonly colliderGeometrySource: Readonly<{
+    kind: "block";
+    blockId: string;
+  }>;
   readonly traversalBinding: Readonly<
     | { kind: "not-traversable" }
     | { kind: "static-surface"; surfaceEntityId: string;
         logicalSubshapeId: string; traversalSurfaceProfileRef: string }
   >;
+  readonly exposedEdgePolicy: "none";
   readonly frictionRatio?: number;
   readonly restitutionRatio?: number;
 }
@@ -35,7 +39,8 @@ interface Session {
     paletteRole: PaletteRole;
     centerMetersXYZ: readonly [number, number, number];
     rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
-    visualGroupId?: string }>): Mesh;
+    visualGroupId?: string;
+    colliderGroupId?: string }>): Mesh;
   finalize(input: Readonly<{ displayGapMeters?: number;
     staticColliders: readonly FinalizeSelection[] }>): FinalizedEpoch;
   dispose(): void;
@@ -61,7 +66,11 @@ function frozenSelection(
   id = "route-collider",
   blockId = "route-block",
 ): FinalizeSelection {
-  return Object.freeze({ id, blockId, traversalBinding: STATIC_SURFACE,
+  return Object.freeze({
+    id,
+    colliderGeometrySource: Object.freeze({ kind: "block", blockId }),
+    traversalBinding: STATIC_SURFACE,
+    exposedEdgePolicy: "none",
     frictionRatio: 0.8, restitutionRatio: 0 });
 }
 function bootstrap(id: string) {
@@ -123,6 +132,7 @@ interface HashVariant {
   readonly shape?: Shape;
   readonly paletteRole?: PaletteRole;
   readonly visualGroupId?: string;
+  readonly colliderGroupId?: string;
   readonly xMeters?: number;
   readonly displayGapMeters?: number;
   readonly colliderId?: string;
@@ -162,6 +172,10 @@ async function buildProfileInventoryHash(
           centerMetersXYZ: definition.center,
           ...(definition.visualGroupId === undefined
             ? {} : { visualGroupId: definition.visualGroupId }),
+          ...(definition.id !== "feature-block" ||
+              variant.colliderGroupId === undefined
+            ? {}
+            : { colliderGroupId: variant.colliderGroupId }),
         });
       }
       epoch = session.finalize(Object.freeze({
@@ -298,6 +312,7 @@ describe("Babylon Native block Profile settlement", () => {
       { shape: "step" as const },
       { paletteRole: "structure" as const },
       { visualGroupId: "changed-group" },
+      { colliderGroupId: "changed-collider-group" },
       { xMeters: 1.75 },
       { displayGapMeters: 0.03 },
       { colliderId: "changed-collider" },

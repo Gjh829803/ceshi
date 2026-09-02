@@ -5,11 +5,13 @@ import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type {
   BabylonNativeBlockOptimizationAssessmentV1,
   BabylonNativeBlockCreateInputV1,
+  BabylonNativeBlockColliderGeometrySourceV1,
   BabylonNativeBlockFinalizedEpochV1,
   BabylonNativeBlockGridCreateInputV1,
   BabylonNativeBlockProfileFinalizeInputV1,
   BabylonNativeBlockProfileSessionV1,
   BabylonNativeBlockRotationQuarterTurnsYV1,
+  BabylonNativeBlockStaticColliderSelectionV1,
 } from "./index.js";
 import { assessBabylonNativeBlockOptimizationV1 } from "./index.js";
 
@@ -34,6 +36,7 @@ describe("Babylon Native block profile public types", () => {
       ];
       rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
       visualGroupId?: string;
+      colliderGroupId?: string;
     }>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlock"]>()
       .parameter(0)
@@ -75,6 +78,7 @@ describe("Babylon Native block profile public types", () => {
       ];
       rotationQuarterTurnsY?: 0 | 1 | 2 | 3;
       visualGroupId?: string;
+      colliderGroupId?: string;
     }>>();
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlockGrid"]>()
       .parameter(0)
@@ -82,6 +86,30 @@ describe("Babylon Native block profile public types", () => {
     expectTypeOf<BabylonNativeBlockProfileSessionV1["createBlockGrid"]>()
       .returns
       .toEqualTypeOf<readonly Mesh[]>();
+  });
+
+  it("exposes one closed current-only Collider geometry source", () => {
+    expectTypeOf<BabylonNativeBlockColliderGeometrySourceV1>()
+      .toEqualTypeOf<
+        | Readonly<{ kind: "block"; blockId: string }>
+        | Readonly<{ kind: "block-group"; colliderGroupId: string }>
+      >();
+    expectTypeOf<BabylonNativeBlockStaticColliderSelectionV1>()
+      .toEqualTypeOf<Readonly<{
+        id: string;
+        colliderGeometrySource: BabylonNativeBlockColliderGeometrySourceV1;
+        traversalBinding:
+          | Readonly<{ kind: "not-traversable" }>
+          | Readonly<{
+              kind: "static-surface";
+              surfaceEntityId: string;
+              logicalSubshapeId: string;
+              traversalSurfaceProfileRef: string;
+            }>;
+        exposedEdgePolicy: "none" | "protect-ground-subject";
+        frictionRatio?: number;
+        restitutionRatio?: number;
+      }>>();
   });
 
   it("exposes one finalized-epoch optimization assessment", () => {

@@ -39,7 +39,9 @@ export type {
   BabylonNativeBlockProfileSessionV1,
 } from "./session.js";
 export type {
+  BabylonNativeBlockColliderGeometrySourceV1,
   BabylonNativeBlockColliderCandidateInventoryEntryV1,
+  BabylonNativeBlockExposedEdgePolicyV1,
   BabylonNativeBlockStaticColliderSelectionV1,
 } from "./collider-contribution.js";
 export { bindBlockMaterializerMetadataToSemanticCaptureTargetsV1 } from "./formal-capture-identity.js";

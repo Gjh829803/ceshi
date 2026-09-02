@@ -53,8 +53,8 @@ Host TypeScript checking is strict. When an `as const` tuple supplies a mutable 
 Before returning, verify this closure:
 
 - every `context/case.json` required Collider ID appears exactly once in `session.finalize().staticColliders`;
-- each required Collider selects one explicit Block in its corresponding acceptance visual group, including Spawn/support, step, and blocker roles;
-- each Collider selection uses only `id`, `blockId`, `traversalBinding`, and the optional friction/restitution ratios; never add `role` (the Host derives step from the selected checked Block shape and blocker from the binding);
+- each required Collider uses the closed `colliderGeometrySource` union; use `kind: "block"` for the current singleton Spawn/support, step, and blocker path, and never infer group membership from visual metadata;
+- each Collider selection uses only `id`, `colliderGeometrySource`, `traversalBinding`, required `exposedEdgePolicy`, and the optional friction/restitution ratios; the retired top-level `blockId` field and any `role` field are invalid;
 - the final Collider rows remain one-row-per-Collider, deterministic, and below the frozen budget; and
 - no Capture bounds, planes, Package fields, receipts, or extra outputs were authored.
 

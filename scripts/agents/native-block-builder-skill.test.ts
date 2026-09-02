@@ -154,19 +154,19 @@ describe("Native Block Builder Skill", () => {
       "Treat `budgets.maximumStaticColliderCount` as a hard ceiling",
     );
     expect(outputContract).toContain(
-      "one `staticColliders` row selects one Block and consumes one Collider",
+      "Use `colliderGeometrySource: { kind: \"block\", blockId }`",
     );
     expect(outputContract).toContain(
-      "Do not register every visible or supporting Block",
+      "The retired top-level `blockId` shape is invalid",
     );
     expect(outputContract).toContain(
       "Every `case.json.expected.colliders[].colliderId` must appear exactly once",
     );
     expect(outputContract).toContain(
-      "bind to one explicit Block in the corresponding acceptance visual group",
+      "Never infer group membership from palette, visual group, ID prefix, Mesh metadata, or a Scene scan",
     );
     expect(outputContract).toContain(
-      "Spawn/support, step, and blocker required IDs cannot be replaced by a large automatically generated Collider set",
+      "Ground-only edge protection is valid only for a checked static-surface source",
     );
     expect(outputContract).toContain(
       "center lattice is `[0.25, 0.125, 0.25]` meters",

@@ -67,7 +67,7 @@ function moduleFixture(): BabylonNativeSceneModuleV1 {
         displayGapMeters: 0.04,
         staticColliders: [{
           id: "ground",
-          blockId: "ground-block",
+          colliderGeometrySource: Object.freeze({ kind: "block" as const, blockId: "ground-block" }),
           traversalBinding: {
             kind: "static-surface",
             surfaceEntityId: "ground-surface",
@@ -75,6 +75,7 @@ function moduleFixture(): BabylonNativeSceneModuleV1 {
             traversalSurfaceProfileRef:
               "worldkit://traversal-surface-profile/ground.static@1",
           },
+          exposedEdgePolicy: "none",
           frictionRatio: 0.8,
           restitutionRatio: 0,
         }],

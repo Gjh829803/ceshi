@@ -12,10 +12,19 @@ import {
 } from "./build-failure.js";
 import type { BabylonNativeBlockCheckedLayoutV1 } from "./session.js";
 
+export type BabylonNativeBlockColliderGeometrySourceV1 =
+  | Readonly<{ kind: "block"; blockId: string }>
+  | Readonly<{ kind: "block-group"; colliderGroupId: string }>;
+
+export type BabylonNativeBlockExposedEdgePolicyV1 =
+  | "none"
+  | "protect-ground-subject";
+
 export interface BabylonNativeBlockStaticColliderSelectionV1 {
   readonly id: string;
-  readonly blockId: string;
+  readonly colliderGeometrySource: BabylonNativeBlockColliderGeometrySourceV1;
   readonly traversalBinding: BabylonNativeTraversalBindingV1;
+  readonly exposedEdgePolicy: BabylonNativeBlockExposedEdgePolicyV1;
   readonly frictionRatio?: number;
   readonly restitutionRatio?: number;
 }
@@ -26,6 +35,7 @@ export interface BabylonNativeBlockColliderCandidateInventoryEntryV1 {
   readonly visualGroupIds: readonly string[];
   readonly proxyKind: "layout-block-volume";
   readonly traversalBinding: BabylonNativeTraversalBindingV1;
+  readonly exposedEdgePolicy: BabylonNativeBlockExposedEdgePolicyV1;
   readonly frictionRatio?: number;
   readonly restitutionRatio?: number;
 }
@@ -48,25 +58,50 @@ function isClosedFrozenSelection(
   selection: BabylonNativeBlockStaticColliderSelectionV1,
 ): boolean {
   if (
+    typeof selection !== "object" ||
+    isNil(selection) ||
+    Array.isArray(selection)
+  ) return false;
+  if (
     !Object.isFrozen(selection) ||
-    !Object.isFrozen(selection.traversalBinding) ||
     Reflect.getPrototypeOf(selection) !== Object.prototype
   ) return false;
   const descriptors = Object.getOwnPropertyDescriptors(selection);
   const keys = Object.keys(descriptors);
   if (
-    !["id", "blockId", "traversalBinding"].every((key) =>
-      Object.hasOwn(descriptors, key)) ||
+    ![
+      "id",
+      "colliderGeometrySource",
+      "traversalBinding",
+      "exposedEdgePolicy",
+    ].every((key) => Object.hasOwn(descriptors, key)) ||
     keys.some((key) => ![
       "id",
-      "blockId",
+      "colliderGeometrySource",
       "traversalBinding",
+      "exposedEdgePolicy",
       "frictionRatio",
       "restitutionRatio",
     ].includes(key)) ||
     Object.values(descriptors).some((descriptor) =>
       !descriptor.enumerable || !("value" in descriptor))
   ) return false;
+  const source = descriptors.colliderGeometrySource!.value as unknown;
+  const traversalBinding = descriptors.traversalBinding!.value as unknown;
+  if (
+    typeof source !== "object" ||
+    isNil(source) ||
+    Array.isArray(source) ||
+    !Object.isFrozen(source) ||
+    Reflect.getPrototypeOf(source) !== Object.prototype ||
+    typeof traversalBinding !== "object" ||
+    isNil(traversalBinding) ||
+    !Object.isFrozen(traversalBinding)
+  ) return false;
+  const sourceDescriptors = Object.getOwnPropertyDescriptors(source);
+  if (Object.values(sourceDescriptors).some((descriptor) =>
+    !descriptor.enumerable || !("value" in descriptor)
+  )) return false;
   const validRatio = (key: "frictionRatio" | "restitutionRatio"): boolean => {
     if (!Object.hasOwn(descriptors, key)) return true;
     const value = descriptors[key]!.value as unknown;
@@ -76,8 +111,17 @@ function isClosedFrozenSelection(
       value <= 1 &&
       !Object.is(value, -0);
   };
-  return isCanonicalStableId(selection.id) &&
-    isCanonicalStableId(selection.blockId) &&
+  const kind = sourceDescriptors.kind?.value as unknown;
+  const sourceIsClosed = kind === "block"
+    ? Object.keys(source).length === 2 &&
+      isCanonicalStableId(sourceDescriptors.blockId?.value)
+    : kind === "block-group" && Object.keys(source).length === 2 &&
+      isCanonicalStableId(sourceDescriptors.colliderGroupId?.value);
+  const id = descriptors.id!.value as unknown;
+  const exposedEdgePolicy = descriptors.exposedEdgePolicy!.value as unknown;
+  return isCanonicalStableId(id) && sourceIsClosed &&
+    (exposedEdgePolicy === "none" ||
+      exposedEdgePolicy === "protect-ground-subject") &&
     validRatio("frictionRatio") &&
     validRatio("restitutionRatio");
 }
@@ -187,7 +231,8 @@ export function materializeBabylonNativeBlockColliderCandidatesV1(
         record.mesh.isDisposed() ||
         record.input.shape !== block.shape ||
         record.input.paletteRole !== block.paletteRole ||
-        record.input.visualGroupId !== block.visualGroupId;
+        record.input.visualGroupId !== block.visualGroupId ||
+        record.input.colliderGroupId !== block.colliderGroupId;
     })
   ) {
     return fail(
@@ -213,20 +258,27 @@ export function materializeBabylonNativeBlockColliderCandidatesV1(
       );
     }
     colliderIds.add(selection.id);
-    if (blockIds.has(selection.blockId)) {
+    if (selection.colliderGeometrySource.kind === "block-group") {
       return fail(
-        "WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_DUPLICATE",
-        `Block '${selection.blockId}' has more than one Collider selection.`,
+        "WORLDKIT_NATIVE_BLOCK_COLLIDER_GROUP_MATERIALIZATION_UNAVAILABLE",
+        `Collider Group '${selection.colliderGeometrySource.colliderGroupId}' requires the NBR-65 logical-ground materializer.`,
       );
     }
-    blockIds.add(selection.blockId);
+    const blockId = selection.colliderGeometrySource.blockId;
+    if (blockIds.has(blockId)) {
+      return fail(
+        "WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_DUPLICATE",
+        `Block '${blockId}' has more than one Collider selection.`,
+      );
+    }
+    blockIds.add(blockId);
     if (
-      !layoutById.has(selection.blockId) ||
-      !recordsById.has(selection.blockId)
+      !layoutById.has(blockId) ||
+      !recordsById.has(blockId)
     ) {
       return fail(
         "WORLDKIT_NATIVE_BLOCK_COLLIDER_BLOCK_MISSING",
-        `Block '${selection.blockId}' is absent from this checked Build Epoch.`,
+        `Block '${blockId}' is absent from this checked Build Epoch.`,
       );
     }
   }
@@ -234,8 +286,15 @@ export function materializeBabylonNativeBlockColliderCandidatesV1(
   const inventory: BabylonNativeBlockColliderCandidateInventoryEntryV1[] = [];
   try {
     for (const selection of selections) {
-      const block = layoutById.get(selection.blockId)!;
-      const record = recordsById.get(selection.blockId)!;
+      if (selection.colliderGeometrySource.kind !== "block") {
+        return fail(
+          "WORLDKIT_NATIVE_BLOCK_COLLIDER_GROUP_MATERIALIZATION_UNAVAILABLE",
+          "Collider Group materialization is unavailable in this checkpoint.",
+        );
+      }
+      const blockId = selection.colliderGeometrySource.blockId;
+      const block = layoutById.get(blockId)!;
+      const record = recordsById.get(blockId)!;
       const proxy = createExactBoxProxy(
         `worldkit-block-collider-${input.context.bootstrap.id}-${selection.id}`,
         block.sizeMetersXYZ,
@@ -263,7 +322,7 @@ export function materializeBabylonNativeBlockColliderCandidatesV1(
       }));
       inventory.push(Object.freeze({
         colliderId: selection.id,
-        sourceBlockIds: Object.freeze([selection.blockId] as [string]),
+        sourceBlockIds: Object.freeze([blockId] as [string]),
         visualGroupIds: Object.freeze(
           isNil(record.input.visualGroupId)
             ? []
@@ -271,6 +330,7 @@ export function materializeBabylonNativeBlockColliderCandidatesV1(
         ),
         proxyKind: "layout-block-volume" as const,
         traversalBinding: selection.traversalBinding,
+        exposedEdgePolicy: selection.exposedEdgePolicy,
         ...(!Object.hasOwn(selection, "frictionRatio")
           ? {}
           : { frictionRatio: selection.frictionRatio }),
