@@ -49,6 +49,8 @@ instruction="Use .codex/skills/worldkit-style-variant-visual-reviewer/SKILL.md a
 
 Independently review '$style_variant_id', scene '$scene_id', episode '$episode_id'. Do not generate or edit images. The attached opening images are six ordered whitebox/styled pairs. The remaining images are ordered whitebox/styled tri-view pairs.
 
+Segment-00 is already accepted and immutable under the attached opening-anchor-manifest. Verify its identity binding, then record its openingFrameReview as passed without reopening its prior visual admission. Use it as the appearance authority when judging Segments 01-05 and all tri-views.
+
 Copy inputIdentity byte-for-byte from the attached review-input-identity JSON. Write exactly one JSON review to:
 - ${review_path#"$project_root"/}
 
@@ -69,6 +71,7 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --instruction-file "$instruction_file" --execution-profile formal --timeout-seconds 1200 \
   --context ".codex/skills/worldkit-style-variant-visual-reviewer" \
   --asset "style-variant::$variant_root/style-variant.json::file::application/json" \
+  --asset "opening-anchor-manifest::$episode_root/style-variants/opening-anchor-manifest.json::file::application/json" \
   --asset "review-input-identity::$input_path::file::application/json" \
   --asset "segment-00-whitebox::$episode_root/whitebox/segment-00-first-frame.png::image::image/png" \
   --asset "segment-00-styled::$variant_root/visual/segment-00-styled-opening-frame.png::image::image/png" \

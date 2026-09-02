@@ -4,7 +4,7 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$project_root"
 if [[ "${1:-}" == "--" ]]; then shift; fi
-scene_id=""; episode_id=""; episode_root=""; attempt="1"; review_path=""
+scene_id=""; episode_id=""; episode_root=""; attempt="1"; review_path=""; prior_run=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --scene-id) shift; scene_id="${1:-}" ;;
@@ -12,23 +12,32 @@ while [[ $# -gt 0 ]]; do
     --episode-root) shift; episode_root="${1:-}" ;;
     --attempt) shift; attempt="${1:-}" ;;
     --review) shift; review_path="${1:-}" ;;
+    --prior-run) shift; prior_run="${1:-}" ;;
     *) echo "Unsupported option: $1" >&2; exit 2 ;;
   esac
   shift
 done
 id_pattern='^[a-z0-9][a-z0-9-]{2,119}$'
-[[ "$scene_id" =~ $id_pattern && "$episode_id" =~ $id_pattern && "$attempt" =~ ^[1-3]$ ]] || exit 2
+[[ "$scene_id" =~ $id_pattern && "$episode_id" =~ $id_pattern && "$attempt" =~ ^[1-4]$ ]] || exit 2
 episode_root="$(cd "$(dirname "$episode_root")" && pwd)/$(basename "$episode_root")"
 run_root="$project_root/.codex-tmp/style-variant-opening-batch/$episode_id/attempt-$attempt"
 image_root="$run_root/images"
 batch_path="$run_root/imagegen-batch.json"
 run_path="$run_root/imagegen-run.json"
 mkdir -p "$image_root"
+if [[ -n "$prior_run" ]]; then
+  prior_run="$(cd "$prior_run" && pwd)"
+  for source_image in "$prior_run"/images/style-??.png; do
+    [[ -f "$source_image" && -s "$source_image" ]] || continue
+    cp -p "$source_image" "$image_root/$(basename "$source_image")"
+  done
+fi
 prepare_args=(
   --scene-id "$scene_id" --episode-id "$episode_id"
   --episode-root "$episode_root" --output "$batch_path"
 )
 if [[ -n "$review_path" ]]; then prepare_args+=(--review "$review_path"); fi
+if [[ -n "$prior_run" ]]; then prepare_args+=(--prior-run "$prior_run"); fi
 node scripts/episodes/prepare-style-variant-opening-batch.mjs \
   "${prepare_args[@]}"
 batch_hash="$(shasum -a 256 "$batch_path" | cut -d' ' -f1 | cut -c1-20)"

@@ -7,5 +7,6 @@
   "reviewConcurrency": 10,
   "geminiConcurrency": 5,
   "seedanceConcurrency": 20,
+  "maximumOpeningAttempts": 4,
   "maximumVisualAttempts": 2
 }

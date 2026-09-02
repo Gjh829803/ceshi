@@ -165,23 +165,34 @@ test("requires every reviewed Style Variant video while storing shared whitebox 
     episodeId,
     variantCount: 10,
     succeededCount: 10,
-    variants: variantIds.map((id) => ({ id, status: "succeeded" })),
+    variants: variantIds.map((id) => ({
+      id,
+      status: "succeeded",
+      targetTriviews: ["visual-target-1", "visual-target-2"].map((visualTargetId) => ({
+        visualTargetId,
+        path: `style-variants/${id}/visual/triviews/${visualTargetId}/styled-triview.png`,
+      })),
+    })),
   };
   const files = [
     ...sharedEpisodeFiles(),
     `bundle/${episodeId}-seedance-review.zip`,
     "style-variants/style-variant-plan.json",
     "style-variants/style-variant-plan-report.json",
+    "style-variants/opening-anchor-manifest.json",
     "style-variants/style-variant-manifest.json",
     "style-variants/diversity-review.json",
     "style-variants/diversity-review-report.json",
     ...variantIds.flatMap((styleVariantId) => [
       `style-variants/${styleVariantId}/style-variant.json`,
+      `style-variants/${styleVariantId}/visual/visual-prompts.json`,
       `style-variants/${styleVariantId}/visual/visual-manifest.json`,
       `style-variants/${styleVariantId}/review/visual-quality-review.json`,
       `style-variants/${styleVariantId}/review/visual-quality-review-report.json`,
       ...Array.from({ length: 6 }, (_, index) =>
         `style-variants/${styleVariantId}/visual/segment-0${index}-styled-opening-frame.png`),
+      ...["visual-target-1", "visual-target-2"].map((visualTargetId) =>
+        `style-variants/${styleVariantId}/visual/triviews/${visualTargetId}/styled-triview.png`),
       `style-variants/${styleVariantId}/prompts/visual-events.json`,
       ...Array.from({ length: 6 }, (_, index) =>
         `style-variants/${styleVariantId}/video/segment-0${index}/final-1280x720-24fps-720f.mp4`),
@@ -205,7 +216,7 @@ test("requires every reviewed Style Variant video while storing shared whitebox 
     });
     assert.equal(
       cloudManifest.artifacts.filter((artifact) => artifact.required).length,
-      197,
+      228,
     );
     assert.equal(
       cloudManifest.artifacts.filter((artifact) =>
@@ -235,22 +246,33 @@ test("publishes a reviewed ten-style visual sample without Gemini, Seedance, or 
     productionScope: "visual-sample",
     variantCount: 10,
     succeededCount: 10,
-    variants: variantIds.map((id) => ({ id, status: "visual-passed" })),
+    variants: variantIds.map((id) => ({
+      id,
+      status: "visual-passed",
+      targetTriviews: ["visual-target-1", "visual-target-2"].map((visualTargetId) => ({
+        visualTargetId,
+        path: `style-variants/${id}/visual/triviews/${visualTargetId}/styled-triview.png`,
+      })),
+    })),
   };
   const files = [
     ...sharedEpisodeFiles(),
     "style-variants/style-variant-plan.json",
     "style-variants/style-variant-plan-report.json",
+    "style-variants/opening-anchor-manifest.json",
     "style-variants/style-variant-manifest.json",
     "style-variants/diversity-review.json",
     "style-variants/diversity-review-report.json",
     ...variantIds.flatMap((styleVariantId) => [
       `style-variants/${styleVariantId}/style-variant.json`,
+      `style-variants/${styleVariantId}/visual/visual-prompts.json`,
       `style-variants/${styleVariantId}/visual/visual-manifest.json`,
       `style-variants/${styleVariantId}/review/visual-quality-review.json`,
       `style-variants/${styleVariantId}/review/visual-quality-review-report.json`,
       ...Array.from({ length: 6 }, (_, index) =>
         `style-variants/${styleVariantId}/visual/segment-0${index}-styled-opening-frame.png`),
+      ...["visual-target-1", "visual-target-2"].map((visualTargetId) =>
+        `style-variants/${styleVariantId}/visual/triviews/${visualTargetId}/styled-triview.png`),
     ]),
   ];
   try {
@@ -272,7 +294,7 @@ test("publishes a reviewed ten-style visual sample without Gemini, Seedance, or 
       stageOutputS3Prefix: "s3://bucket/episode/stages/episode-production",
       episodeRoot: root,
     });
-    assert.equal(cloudManifest.artifacts.filter((artifact) => artifact.required).length, 126);
+    assert.equal(cloudManifest.artifacts.filter((artifact) => artifact.required).length, 157);
     assert.equal(cloudManifest.artifacts.some((artifact) =>
       artifact.path.includes("/prompts/visual-events.json")), false);
     assert.equal(cloudManifest.artifacts.some((artifact) =>

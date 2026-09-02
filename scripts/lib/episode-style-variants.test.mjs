@@ -8,6 +8,7 @@ import {
   createJsonAtomicWriter,
   episodeStyleVariantIds,
   validateEpisodeStyleVariantPlan,
+  validateStyleVariantOpeningAnchorManifest,
   validateStyleVariantDiversityReview,
   validateStyleVariantVisualReview,
 } from "./episode-style-variants.mjs";
@@ -16,6 +17,49 @@ import { validateStyleVariantDirectorOutput } from
 
 const HASH = `sha256:${"a".repeat(64)}`;
 const targetIds = ["player-subject", "primary-landmark"];
+
+test("accepts one explicitly approved immutable Segment-00 anchor per style", () => {
+  const manifest = {
+    kind: "worldkit-style-variant-opening-anchor-manifest",
+    schemaVersion: 1,
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    referencePolicy: "whitebox-only",
+    planHash: HASH,
+    whiteboxHash: HASH,
+    imagegenRunHash: HASH,
+    approval: { mode: "human-review", note: "The user accepted all ten opening anchors." },
+    anchors: episodeStyleVariantIds().map((styleVariantId) => ({
+      styleVariantId,
+      path: `${styleVariantId}/visual/segment-00-styled-opening-frame.png`,
+      contentHash: HASH,
+      sizeBytes: 3_000,
+      width: 1280,
+      height: 720,
+    })),
+  };
+  assert.equal(validateStyleVariantOpeningAnchorManifest(manifest, {
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    planHash: HASH,
+    whiteboxHash: HASH,
+  }).ok, true);
+  manifest.anchors[0].contentHash = "sha256:bad";
+  assert.equal(validateStyleVariantOpeningAnchorManifest(manifest, {
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    planHash: HASH,
+    whiteboxHash: HASH,
+  }).ok, false);
+  manifest.anchors[0].contentHash = HASH;
+  manifest.anchors[0].path = "style-00/visual/wrong.png";
+  assert.equal(validateStyleVariantOpeningAnchorManifest(manifest, {
+    sceneId: "scene-one",
+    episodeId: "episode-one",
+    planHash: HASH,
+    whiteboxHash: HASH,
+  }).ok, false);
+});
 
 function plan() {
   return {
@@ -222,6 +266,24 @@ test("style visual generation exposes no original styled reference or Scene pros
   assert.equal(runner.includes("source-reference"), false);
   assert.equal(runner.includes("reference-0"), false);
   assert.equal(runner.includes("scene-brief.md"), false);
-  assert.match(runner, /segment-00-whitebox/);
+  assert.match(runner, /segment-00-approved-anchor/);
+  assert.doesNotMatch(
+    runner,
+    /--output[^\n]*segment-00-styled-opening-frame\.png/,
+  );
   assert.match(runner, /whitebox-triview-/);
+});
+
+test("formal ten-style workflow admits anchors before cloud visual fan-out", async () => {
+  const [workflow, runner] = await Promise.all([
+    readFile(path.resolve("scripts/episodes/run-style-variant-workflow.mjs"), "utf8"),
+    readFile(path.resolve("scripts/agents/run-lwdp-style-variant-visual-agent.sh"), "utf8"),
+  ]);
+  const anchorStage = workflow.indexOf('stage("style-variant-opening-anchors"');
+  const visualFanOut = workflow.indexOf("const generateVisuals = async");
+  assert.ok(anchorStage >= 0 && visualFanOut > anchorStage);
+  assert.match(workflow, /maximumOpeningAttempts/);
+  assert.match(workflow, /--approval-mode", "codex-review"/);
+  assert.match(runner, /--required-approval-mode codex-review/);
+  assert.match(runner, /--timeout-seconds 7200/);
 });

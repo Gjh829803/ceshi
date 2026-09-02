@@ -25,11 +25,21 @@ scene_root="$project_root/artifacts/scenes/$scene_id"
 variant_root="$episode_root/style-variants/$style_variant_id"
 visual_root="$variant_root/visual"
 whitebox_root="$episode_root/whitebox"
+anchor_manifest="$episode_root/style-variants/opening-anchor-manifest.json"
+anchor_path="$visual_root/segment-00-styled-opening-frame.png"
 mkdir -p "$visual_root"
-for required in "$variant_root/style-variant.json" "$scene_root/triviews/whitebox-triview-manifest.json"; do
+for required in "$variant_root/style-variant.json" "$scene_root/triviews/whitebox-triview-manifest.json" "$anchor_manifest" "$anchor_path"; do
   [[ -f "$required" && -s "$required" && ! -L "$required" ]] || { echo "Missing Style Variant visual input: $required" >&2; exit 3; }
 done
-for index in 0 1 2 3 4 5; do
+anchor_verify_args=(
+  --scene-id "$scene_id" --episode-id "$episode_id"
+  --episode-root "$episode_root" --style-variant-id "$style_variant_id"
+)
+if [[ "$backend" == "cloud" ]]; then
+  anchor_verify_args+=(--required-approval-mode codex-review)
+fi
+node scripts/episodes/verify-style-variant-opening-anchor.mjs "${anchor_verify_args[@]}"
+for index in 1 2 3 4 5; do
   required="$whitebox_root/segment-0$index-first-frame.png"
   [[ -f "$required" && -s "$required" && ! -L "$required" ]] || { echo "Missing $required" >&2; exit 3; }
 done
@@ -58,20 +68,20 @@ if [[ "$attempt" != "1" ]]; then
 fi
 instruction="Use .codex/skills/worldkit-style-variant-visual-reconstructor/SKILL.md as the complete guide.
 
-Generate one complete visual set for '$style_variant_id', scene '$scene_id', episode '$episode_id'. $repair_instruction
+Complete one visual set for '$style_variant_id', scene '$scene_id', episode '$episode_id'. $repair_instruction
 
-Attached image roles are six ordered Segment whitebox first frames followed by the declared whitebox target sheets. They are the only initial image references. The selected style-variant document is the complete intended appearance authority. Reconstruct the Subject, environment and every target as visibly different identities; preserve only the whitebox spatial registration.
+The attached approved Segment-00 styled opening is immutable and already accepted. It is this variant's sole realized appearance anchor. Do not regenerate, edit, replace, or declare it as an output. The five Segment whitebox frames own Segment-01 through Segment-05 spatial registration. The declared whitebox target sheets own tri-view geometry and direction. The selected style-variant document owns intended semantics.
 
-Enforce the Skill dependency order inside this one task: generate, inspect and accept segment-00 first; then include that newly generated segment-00 styled opening as an image reference in every tri-view generation call together with the matching whitebox tri-view; also include it when generating Segments 01-05 together with each Segment's whitebox. Never generate tri-views directly from text plus whitebox alone.
+For every Segment-01 through Segment-05 image-generation call include that Segment's whitebox and the approved Segment-00 anchor. For every tri-view generation call include the approved Segment-00 anchor and the matching whitebox tri-view. Inspect and repair every generated image inside this same task. Never generate tri-views directly from text plus whitebox alone.
 
 Declared targets:
 $target_table
-Write only the Host-declared prompt bundle, six styled opening frames, and all target tri-views. Do not generate video or a review verdict."
+Write only the Host-declared prompt bundle, five new styled opening frames, and all target tri-views. Do not generate video, Segment-00, or a review verdict."
 printf '%s\n' "$instruction" > "$instruction_file"
 unset LWDP_GENERATION_API_TOKEN LWDP_API_BASE LWDP_USER_ID
 export WORLDKIT_LWDP_ENV_FILE="$project_root/.codex-tmp/runtime-config/lwdp.env"
-input_material="$(shasum -a 256 "$variant_root/style-variant.json" "$scene_root/triviews/whitebox-triview-manifest.json")"
-for index in 0 1 2 3 4 5; do input_material+="$(shasum -a 256 "$whitebox_root/segment-0$index-first-frame.png")"; done
+input_material="$(shasum -a 256 "$variant_root/style-variant.json" "$scene_root/triviews/whitebox-triview-manifest.json" "$anchor_manifest" "$anchor_path")"
+for index in 1 2 3 4 5; do input_material+="$(shasum -a 256 "$whitebox_root/segment-0$index-first-frame.png")"; done
 if [[ -f "$review_path" ]]; then input_material+="$(shasum -a 256 "$review_path")"; fi
 input_hash="$(printf '%s' "$input_material" | shasum -a 256 | cut -c1-20)"
 attempt_suffix=""; [[ "$attempt" == "1" ]] || attempt_suffix="-attempt-$attempt"
@@ -80,10 +90,11 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --job-name "WorldKit Style Visual · $style_variant_id · attempt $attempt" \
   --request-id "$episode_id-$style_variant_id-visual-$input_hash$attempt_suffix" \
   --output-s3-prefix "${WORLDKIT_LWDP_S3_ROOT:-s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk}/episodes/$episode_id/$style_variant_id/visual-$input_hash$attempt_suffix" \
-  --instruction-file "$instruction_file" --execution-profile formal --timeout-seconds 1800 \
+  --instruction-file "$instruction_file" --execution-profile formal --timeout-seconds 7200 \
   --context ".codex/skills/worldkit-style-variant-visual-reconstructor" \
   --asset "style-variant::$variant_root/style-variant.json::file::application/json" \
-  --asset "segment-00-whitebox::$whitebox_root/segment-00-first-frame.png::image::image/png" \
+  --asset "opening-anchor-manifest::$anchor_manifest::file::application/json" \
+  --asset "segment-00-approved-anchor::$anchor_path::image::image/png" \
   --asset "segment-01-whitebox::$whitebox_root/segment-01-first-frame.png::image::image/png" \
   --asset "segment-02-whitebox::$whitebox_root/segment-02-first-frame.png::image::image/png" \
   --asset "segment-03-whitebox::$whitebox_root/segment-03-first-frame.png::image::image/png" \
@@ -91,7 +102,6 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   --asset "segment-05-whitebox::$whitebox_root/segment-05-first-frame.png::image::image/png" \
   "${target_asset_args[@]}" "${review_args[@]}" \
   --output "${visual_root#"$project_root"/}/visual-prompts.json::$visual_root/visual-prompts.json::application/json" \
-  --output "${visual_root#"$project_root"/}/segment-00-styled-opening-frame.png::$visual_root/segment-00-styled-opening-frame.png::image/png" \
   --output "${visual_root#"$project_root"/}/segment-01-styled-opening-frame.png::$visual_root/segment-01-styled-opening-frame.png::image/png" \
   --output "${visual_root#"$project_root"/}/segment-02-styled-opening-frame.png::$visual_root/segment-02-styled-opening-frame.png::image/png" \
   --output "${visual_root#"$project_root"/}/segment-03-styled-opening-frame.png::$visual_root/segment-03-styled-opening-frame.png::image/png" \

@@ -13,7 +13,12 @@ color ratios, bounding-box thresholds, or a demand to preserve voxel edges.
 
 ## Opening-frame review
 
-Compare every styled Segment opening with its corresponding whitebox frame. Require
+Segment-00 has already passed the separate opening-anchor admission Gate and is
+immutable. Confirm that the attached identity binds it, record that row as `passed`,
+and use the image as the realized appearance authority. Do not reopen or reverse that
+earlier admission in this downstream review.
+
+Compare Segment-01 through Segment-05 with their corresponding whitebox frames. Require
 the same camera direction, apparent FOV, crop, viewpoint height, Subject position,
 scale, orientation and pose, major target centers, approximate screen occupancy,
 visible fraction, depth order, overlaps, occlusion, openings, and traversable envelope.

@@ -6,6 +6,7 @@ import { normalizeEpisodePng, readPngSize } from "../lib/episode-visual-normaliz
 import {
   EPISODE_STYLE_VARIANT_SEGMENT_IDS,
   sha256File,
+  validateStyleVariantOpeningAnchorManifest,
   writeJsonAtomic,
 } from "../lib/episode-style-variants.mjs";
 
@@ -22,12 +23,40 @@ const episodeRoot = path.resolve(value("--episode-root"));
 const sceneRoot = path.resolve(value("--scene-root"));
 const variantRoot = path.join(episodeRoot, "style-variants", styleVariantId);
 const visualRoot = path.join(variantRoot, "visual");
-const [styleVariant, prompts, whiteboxManifest] = await Promise.all([
+const anchorManifestPath = path.join(
+  episodeRoot,
+  "style-variants/opening-anchor-manifest.json",
+);
+const [styleVariant, prompts, whiteboxManifest, anchorManifest] = await Promise.all([
   readFile(path.join(variantRoot, "style-variant.json"), "utf8").then(JSON.parse),
   readFile(path.join(visualRoot, "visual-prompts.json"), "utf8").then(JSON.parse),
   readFile(path.join(sceneRoot, "triviews/whitebox-triview-manifest.json"), "utf8")
     .then(JSON.parse),
+  readFile(anchorManifestPath, "utf8").then(JSON.parse),
 ]);
+const anchorValidation = validateStyleVariantOpeningAnchorManifest(anchorManifest, {
+  sceneId,
+  episodeId,
+  planHash: await sha256File(path.join(
+    episodeRoot,
+    "style-variants/style-variant-plan.json",
+  )),
+  whiteboxHash: await sha256File(path.join(
+    episodeRoot,
+    "whitebox/segment-00-first-frame.png",
+  )),
+  variantCount: 10,
+});
+const approvedAnchor = anchorManifest?.anchors?.find(
+  ({ styleVariantId: id }) => id === styleVariantId,
+);
+if (!anchorValidation.ok || !approvedAnchor ||
+    (process.env.WORLDKIT_CLOUD_EXECUTION_ID &&
+      anchorManifest.approval.mode !== "codex-review") ||
+    await sha256File(path.join(visualRoot, "segment-00-styled-opening-frame.png")) !==
+      approvedAnchor.contentHash) {
+  throw new Error("Style Variant approved opening anchor is invalid or changed.");
+}
 if (styleVariant?.sceneId !== sceneId || styleVariant?.episodeId !== episodeId ||
     styleVariant?.id !== styleVariantId ||
     prompts?.kind !== "worldkit-style-variant-visual-prompts" ||
@@ -43,6 +72,7 @@ if (!Array.isArray(prompts.segmentOpeningFrames) ||
     prompts.segmentOpeningFrames.length !== EPISODE_STYLE_VARIANT_SEGMENT_IDS.length ||
     prompts.segmentOpeningFrames.some((item, index) =>
       item?.segmentId !== EPISODE_STYLE_VARIANT_SEGMENT_IDS[index] ||
+      item?.mode !== (index === 0 ? "accepted-anchor" : "generated") ||
       typeof item?.prompt !== "string" || item.prompt.trim().length < 200) ||
     !Array.isArray(prompts.styledTriviews) ||
     prompts.styledTriviews.length !== targetIds.length ||
@@ -79,6 +109,8 @@ await writeJsonAtomic(path.join(visualRoot, "visual-manifest.json"), {
   episodeId,
   styleVariantId,
   styleVariantHash: await sha256File(path.join(variantRoot, "style-variant.json")),
+  openingAnchorManifestHash: await sha256File(anchorManifestPath),
+  appearanceAnchorHash: approvedAnchor.contentHash,
   promptBundleHash: await sha256File(path.join(visualRoot, "visual-prompts.json")),
   segmentOpeningFrames,
   targets,

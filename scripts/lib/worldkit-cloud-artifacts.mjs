@@ -171,16 +171,19 @@ export async function buildCloudEpisodeArtifactManifest({
     ? [
         "episode/style-variants/style-variant-plan.json",
         "episode/style-variants/style-variant-plan-report.json",
+        "episode/style-variants/opening-anchor-manifest.json",
         "episode/style-variants/style-variant-manifest.json",
         "episode/style-variants/diversity-review.json",
         "episode/style-variants/diversity-review-report.json",
         ...styleVariantManifest.variants.flatMap((variant) => [
           `episode/style-variants/${variant.id}/style-variant.json`,
+          `episode/style-variants/${variant.id}/visual/visual-prompts.json`,
           `episode/style-variants/${variant.id}/visual/visual-manifest.json`,
           `episode/style-variants/${variant.id}/review/visual-quality-review.json`,
           `episode/style-variants/${variant.id}/review/visual-quality-review-report.json`,
           ...Array.from({ length: 6 }, (_, index) =>
             `episode/style-variants/${variant.id}/visual/segment-0${index}-styled-opening-frame.png`),
+          ...(variant.targetTriviews ?? []).map(({ path }) => `episode/${path}`),
           ...(visualSample ? [] : [
             `episode/style-variants/${variant.id}/prompts/visual-events.json`,
             ...Array.from({ length: 6 }, (_, index) =>

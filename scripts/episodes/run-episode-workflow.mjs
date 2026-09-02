@@ -23,7 +23,10 @@ import {
   validatePlaythroughCaptureHealth,
 } from "../lib/playthrough-capture-health.mjs";
 import { validatePlaythroughPlanStructure } from "../lib/playthrough-plan-structure.mjs";
-import { loadEpisodeStyleVariantConfig } from "../lib/episode-style-variants.mjs";
+import {
+  loadEpisodeStyleVariantConfig,
+  validateStyleVariantOpeningAnchorManifest,
+} from "../lib/episode-style-variants.mjs";
 import {
   buildEpisodeSceneRuntimeIdentity,
   buildEpisodeVisualEventInputIdentity,
@@ -378,9 +381,13 @@ async function fileHash(filePath) {
   }
 }
 async function hasCompleteStyleVariantProduction() {
-  const manifest = await readJsonIfPresent(path.join(
-    episodeRoot, "style-variants/style-variant-manifest.json",
-  ));
+  const styleRoot = path.join(episodeRoot, "style-variants");
+  const manifestPath = path.join(styleRoot, "style-variant-manifest.json");
+  const anchorManifestPath = path.join(styleRoot, "opening-anchor-manifest.json");
+  const [manifest, anchorManifest] = await Promise.all([
+    readJsonIfPresent(manifestPath),
+    readJsonIfPresent(anchorManifestPath),
+  ]);
   if (manifest?.kind !== "worldkit-episode-style-variant-manifest" ||
       manifest?.schemaVersion !== 1 || manifest?.sceneId !== sceneId ||
       manifest?.episodeId !== episodeId ||
@@ -392,12 +399,39 @@ async function hasCompleteStyleVariantProduction() {
       manifest.variants.some((variant) => productionScope === "visual-sample"
         ? variant?.status !== "visual-passed"
         : variant?.status !== "succeeded")) return false;
-  const [traceHash, qualityReportHash] = await Promise.all([
+  const [traceHash, qualityReportHash, planHash, whiteboxHash, anchorManifestHash] =
+    await Promise.all([
     fileHash(path.join(episodeRoot, "whitebox/executed-playthrough-trace.json")),
     fileHash(path.join(episodeRoot, "whitebox/executed-playthrough-quality-report.json")),
+    fileHash(path.join(styleRoot, "style-variant-plan.json")),
+    fileHash(path.join(episodeRoot, "whitebox/segment-00-first-frame.png")),
+    fileHash(anchorManifestPath),
   ]);
-  return manifest.sourceWhiteboxIdentity?.traceHash === traceHash &&
-    manifest.sourceWhiteboxIdentity?.qualityReportHash === qualityReportHash;
+  if (manifest.sourceWhiteboxIdentity?.traceHash !== traceHash ||
+      manifest.sourceWhiteboxIdentity?.qualityReportHash !== qualityReportHash ||
+      manifest.openingAnchorManifestHash !== anchorManifestHash ||
+      !validateStyleVariantOpeningAnchorManifest(anchorManifest, {
+        sceneId,
+        episodeId,
+        planHash,
+        whiteboxHash,
+        variantCount: styleVariantConfig.variantCount,
+      }).ok) return false;
+  for (const variant of manifest.variants) {
+    if (variant.visualManifestHash !== await fileHash(path.join(
+      episodeRoot, variant.visualManifestPath ?? "",
+    )) || variant.appearanceAnchorHash !== await fileHash(path.join(
+      episodeRoot, variant.appearanceAnchorPath ?? "",
+    )) || !Array.isArray(variant.targetTriviews) || variant.targetTriviews.length < 1) {
+      return false;
+    }
+    for (const target of variant.targetTriviews) {
+      if (target.contentHash !== await fileHash(path.join(
+        episodeRoot, target.path ?? "",
+      ))) return false;
+    }
+  }
+  return true;
 }
 async function providerPromptHash(filePath) {
   try {

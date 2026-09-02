@@ -4,7 +4,7 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$project_root"
 if [[ "${1:-}" == "--" ]]; then shift; fi
-scene_id=""; episode_id=""; episode_root=""; run_root=""; backend="local"; attempt="1"
+scene_id=""; episode_id=""; episode_root=""; run_root=""; backend="local"; attempt="1"; prior_review=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --scene-id) shift; scene_id="${1:-}" ;;
@@ -13,12 +13,13 @@ while [[ $# -gt 0 ]]; do
     --run-root) shift; run_root="${1:-}" ;;
     --backend) shift; backend="${1:-}" ;;
     --attempt) shift; attempt="${1:-}" ;;
+    --prior-review) shift; prior_review="${1:-}" ;;
     *) echo "Unsupported option: $1" >&2; exit 2 ;;
   esac
   shift
 done
 id_pattern='^[a-z0-9][a-z0-9-]{2,119}$'
-[[ "$scene_id" =~ $id_pattern && "$episode_id" =~ $id_pattern && "$attempt" =~ ^[1-3]$ ]] || exit 2
+[[ "$scene_id" =~ $id_pattern && "$episode_id" =~ $id_pattern && "$attempt" =~ ^[1-4]$ ]] || exit 2
 episode_root="$(cd "$(dirname "$episode_root")" && pwd)/$(basename "$episode_root")"
 run_root="$(cd "$run_root" && pwd)"
 review_root="$run_root/review"; mkdir -p "$review_root"
@@ -33,6 +34,13 @@ for index in 0 1 2 3 4 5 6 7 8 9; do
   variant_id="style-0$index"
   asset_args+=(--asset "$variant_id-opening::$run_root/images/$variant_id.png::image::image/png")
 done
+prior_review_instruction=""
+if [[ -n "$prior_review" ]]; then
+  prior_review="$(cd "$(dirname "$prior_review")" && pwd)/$(basename "$prior_review")"
+  [[ -f "$prior_review" && -s "$prior_review" ]] || { echo "Prior opening review is missing." >&2; exit 3; }
+  asset_args+=(--asset "prior-opening-review::$prior_review::file::application/json")
+  prior_review_instruction="A prior opening review is attached. For every variant whose current contentHash matches the prior inputIdentity and whose prior verdict is passed, copy its prior variantReview row byte-for-byte and do not spatially rejudge it. Review changed variants normally. Re-evaluate set-level diversity, but revoke a frozen pass only if a changed image creates a new cross-variant visual conflict and explain that conflict explicitly."
+fi
 temporary_root="$project_root/.codex-tmp"; mkdir -p "$temporary_root"
 task_tmp="$(mktemp -d "$temporary_root/style-opening-review.XXXXXX")"
 trap 'case "$task_tmp" in "$temporary_root"/style-opening-review.*) /bin/rm -rf -- "$task_tmp" ;; esac' EXIT
@@ -43,10 +51,14 @@ Review scene '$scene_id', episode '$episode_id'. The first attached image is the
 
 Judge each styled image against the whitebox for camera, FOV, crop, Subject registration, terrain profile, landmark center/occupancy, depth, occlusion, negative space and traversable clearance. Then judge all ten together for unmistakable Subject, environment and landmark diversity. Do not generate or edit images.
 
+$prior_review_instruction
+
 Copy inputIdentity byte-for-byte from the attached input JSON and write only:
 - ${review_path#"$project_root"/}"
 printf '%s\n' "$instruction" > "$instruction_file"
-input_hash="$(shasum -a 256 "$input_path" | cut -d' ' -f1 | cut -c1-20)"
+input_material="$(shasum -a 256 "$input_path")"
+if [[ -n "$prior_review" ]]; then input_material+="$(shasum -a 256 "$prior_review")"; fi
+input_hash="$(printf '%s' "$input_material" | shasum -a 256 | cut -c1-20)"
 task_id="style-opening-review-$input_hash"
 request_id="$episode_id-style-opening-review-$input_hash-attempt-$attempt"
 node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$project_root" \
@@ -61,10 +73,13 @@ node scripts/agents/run-codex-task.mjs --backend "$backend" --repo-root "$projec
   "${asset_args[@]}" \
   --output "${review_path#"$project_root"/}::$review_path::application/json"
 set +e
-node scripts/episodes/finalize-style-variant-opening-review.mjs \
-  --scene-id "$scene_id" --episode-id "$episode_id" \
-  --input "$input_path" --review "$review_path" --report "$report_path" \
+finalize_args=(
+  --scene-id "$scene_id" --episode-id "$episode_id"
+  --input "$input_path" --review "$review_path" --report "$report_path"
   --reviewer-task-id "$task_id" --reviewer-request-id "$request_id"
+)
+if [[ -n "$prior_review" ]]; then finalize_args+=(--prior-review "$prior_review"); fi
+node scripts/episodes/finalize-style-variant-opening-review.mjs "${finalize_args[@]}"
 status=$?
 set -e
 exit "$status"

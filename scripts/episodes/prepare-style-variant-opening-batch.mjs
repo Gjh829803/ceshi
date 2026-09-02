@@ -6,6 +6,8 @@ import {
   episodeStyleVariantIds,
   writeJsonAtomic,
 } from "../lib/episode-style-variants.mjs";
+import { deriveWhiteboxImageSpatialRegistration } from
+  "../lib/whitebox-image-spatial-registration.mjs";
 
 const arguments_ = process.argv.slice(2);
 const value = (name) => {
@@ -20,8 +22,12 @@ const outputPath = path.resolve(value("--output"));
 const reviewPath = arguments_.includes("--review")
   ? path.resolve(value("--review"))
   : null;
+const priorRunRoot = arguments_.includes("--prior-run")
+  ? path.resolve(value("--prior-run"))
+  : null;
 const styleRoot = path.join(episodeRoot, "style-variants");
 const whiteboxPath = path.join(episodeRoot, "whitebox/segment-00-first-frame.png");
+const sceneRoot = path.resolve("artifacts/scenes", sceneId);
 const plan = JSON.parse(await readFile(
   path.join(styleRoot, "style-variant-plan.json"),
   "utf8",
@@ -44,13 +50,31 @@ const selectedVariants = review
   ? plan.variants.filter((variant) => reviewById.get(variant.id)?.verdict === "needs-repair")
   : plan.variants;
 if (selectedVariants.length < 1) throw new Error("Style opening batch has no selected variants.");
-const items = selectedVariants.map((variant) => {
+const spatialRegistration = await deriveWhiteboxImageSpatialRegistration({
+  openingPath: whiteboxPath,
+  triviewManifestPath: path.join(sceneRoot, "triviews/whitebox-triview-manifest.json"),
+});
+const spatialPrompt = spatialRegistration.targets
+  .filter(({ visible }) => visible)
+  .map(({ prompt }) => prompt)
+  .join("\n");
+const items = await Promise.all(selectedVariants.map(async (variant) => {
   const targetSummary = variant.targetInterpretations.map((target) =>
     `${target.visualTargetId}: ${target.finalIdentity}. ${target.appearance}`).join("\n");
   const repair = reviewById.get(variant.id);
+  const priorAppearancePath = priorRunRoot
+    ? path.join(priorRunRoot, "images", `${variant.id}.png`)
+    : null;
+  if (priorAppearancePath) await readFile(priorAppearancePath);
   const prompt = `Use the attached Image 1 as the sole edit target and sole spatial ` +
     `reference. Image 1 is a whitebox frame and provides no final appearance or ` +
-    `semantic identity. Preserve its camera, FOV, crop, horizon, Subject pose and ` +
+    `semantic identity. ` +
+    (priorAppearancePath
+      ? `Image 2 is this variant's previously generated appearance reference; preserve ` +
+        `its successful Subject, environment, landmark, material, palette and lighting ` +
+        `identity, but never copy its framing or spatial drift. `
+      : "") +
+    `Preserve Image 1's camera, FOV, crop, horizon, Subject pose and ` +
     `screen position, terrain profiles, target centers, approximate occupancy, depth, ` +
     `visible fraction, occlusion, openings, negative space, and traversable clearance. ` +
     `Do not zoom or reframe. This is a registered image edit, not a new composition. ` +
@@ -60,7 +84,8 @@ const items = selectedVariants.map((variant) => {
     `describe in-world identity only and must never enlarge screen occupancy. Preserve ` +
     `the whitebox's large open sky/negative space and do not add foreground or background ` +
     `masses outside existing silhouettes. Remove all whitebox, voxel, block-seam, helper, UI, and ` +
-    `placeholder residue. Reconstruct every visible surface as one coherent final world.\n\n` +
+    `placeholder residue. Reconstruct every visible surface as one coherent final world.\n` +
+    `WHITEBOX SCREEN-SPACE REGISTRATION:\n${spatialPrompt}\n\n` +
     `STYLE FAMILY: ${variant.styleFamily}\n` +
     `WORLD IDENTITY: ${variant.worldIdentity}\n` +
     `SUBJECT IDENTITY: ${variant.subjectIdentity}\n` +
@@ -78,14 +103,22 @@ const items = selectedVariants.map((variant) => {
     orientation: "横图",
     width: 1280,
     height: 720,
-    referenceImages: [{
-      path: whiteboxPath,
-      role: "structure",
-      name: "segment-00-whitebox",
-      description: "Sole spatial authority; contains no final appearance identity.",
-    }],
+    referenceImages: [
+      {
+        path: whiteboxPath,
+        role: "structure",
+        name: "segment-00-whitebox",
+        description: "Sole spatial authority; contains no final appearance identity.",
+      },
+      ...(priorAppearancePath ? [{
+        path: priorAppearancePath,
+        role: "appearance",
+        name: `${variant.id}-prior-generated-opening`,
+        description: "Generated appearance authority only; never a spatial authority.",
+      }] : []),
+    ],
   };
-});
+}));
 await writeJsonAtomic(outputPath, {
   kind: "worldkit-style-variant-opening-imagegen-batch",
   schemaVersion: 1,
@@ -94,10 +127,12 @@ await writeJsonAtomic(outputPath, {
   referencePolicy: "whitebox-only",
   width: 1280,
   height: 720,
-  maxReferenceImagesPerItem: 1,
+  maxReferenceImagesPerItem: priorRunRoot ? 2 : 1,
+  sourceSpatialRegistration: spatialRegistration,
   items,
   ...(reviewPath ? { repairReviewPath: reviewPath } : {}),
+  ...(priorRunRoot ? { priorGeneratedAppearanceRoot: priorRunRoot } : {}),
 });
 process.stdout.write(
-  `WORLDKIT_STYLE_OPENING_BATCH_INPUT_OK items=${items.length} references=1\n`,
+  `WORLDKIT_STYLE_OPENING_BATCH_INPUT_OK items=${items.length} references=${priorRunRoot ? 2 : 1}\n`,
 );

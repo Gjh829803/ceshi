@@ -30,6 +30,12 @@ if (manifest?.sceneId !== sceneId || manifest?.episodeId !== episodeId ||
 }
 await writeJsonAtomic(outputPath, {
   styleVariantHash: await sha256File(path.join(variantRoot, "style-variant.json")),
+  openingAnchorManifestHash: await sha256File(path.join(
+    episodeRoot, "style-variants/opening-anchor-manifest.json",
+  )),
+  appearanceAnchorHash: await sha256File(path.join(
+    variantRoot, "visual/segment-00-styled-opening-frame.png",
+  )),
   openingFrameHashes: await Promise.all(
     EPISODE_STYLE_VARIANT_SEGMENT_IDS.map(async (segmentId) => ({
       segmentId,

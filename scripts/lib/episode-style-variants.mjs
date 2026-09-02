@@ -47,6 +47,7 @@ export async function loadEpisodeStyleVariantConfig(repoRoot, {
     reviewConcurrency: integer("reviewConcurrency", 1, 10),
     geminiConcurrency: integer("geminiConcurrency", 1, 10),
     seedanceConcurrency: integer("seedanceConcurrency", 1, 20),
+    maximumOpeningAttempts: integer("maximumOpeningAttempts", 1, 4),
     maximumVisualAttempts: integer("maximumVisualAttempts", 1, 3),
   });
 }
@@ -59,6 +60,58 @@ export function episodeStyleVariantIds(count = 10) {
     { length: count },
     (_, index) => `style-${String(index).padStart(2, "0")}`,
   ));
+}
+
+export function validateStyleVariantOpeningAnchorManifest(value, {
+  sceneId,
+  episodeId,
+  planHash,
+  whiteboxHash,
+  variantCount = 10,
+} = {}) {
+  const diagnostics = [];
+  const expectedIds = episodeStyleVariantIds(variantCount);
+  if (!object(value) ||
+      value.kind !== "worldkit-style-variant-opening-anchor-manifest" ||
+      value.schemaVersion !== 1 || value.sceneId !== sceneId ||
+      value.episodeId !== episodeId || value.referencePolicy !== "whitebox-only" ||
+      value.planHash !== planHash || value.whiteboxHash !== whiteboxHash ||
+      !HASH.test(value.imagegenRunHash ?? "")) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_OPENING_ANCHOR_IDENTITY_INVALID",
+      "",
+      "Opening Anchor Manifest does not bind the current plan and whitebox opening.",
+    ));
+    return { ok: false, diagnostics };
+  }
+  if (!object(value.approval) ||
+      !["codex-review", "human-review"].includes(value.approval.mode) ||
+      (value.approval.mode === "codex-review" &&
+        (!HASH.test(value.approval.reviewHash ?? "") ||
+          !HASH.test(value.approval.reportHash ?? ""))) ||
+      (value.approval.mode === "human-review" && !text(value.approval.note, 12))) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_OPENING_ANCHOR_APPROVAL_INVALID",
+      "/approval",
+      "Opening anchors need one explicit Codex or human approval record.",
+    ));
+  }
+  if (!Array.isArray(value.anchors) || value.anchors.length !== expectedIds.length ||
+      value.anchors.some((anchor, index) =>
+        anchor?.styleVariantId !== expectedIds[index] ||
+        anchor?.path !== `${expectedIds[index]}/visual/segment-00-styled-opening-frame.png` ||
+        !HASH.test(anchor?.contentHash ?? "") || anchor?.width !== 1280 ||
+        anchor?.height !== 720 || !Number.isSafeInteger(anchor?.sizeBytes) ||
+        anchor.sizeBytes <= 2_000)) {
+    diagnostics.push(diagnostic(
+      "STYLE_VARIANT_OPENING_ANCHORS_INVALID",
+      "/anchors",
+      "Opening Anchor Manifest must bind every ordered 1280x720 Segment-00 image.",
+    ));
+  }
+  return diagnostics.length === 0
+    ? { ok: true, diagnostics: [] }
+    : { ok: false, diagnostics };
 }
 
 export function validateEpisodeStyleVariantPlan(value, {

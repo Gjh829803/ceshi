@@ -13,6 +13,7 @@ import {
   sha256File,
   styleVariantPassedDiversityReview,
   styleVariantPassedReview,
+  validateStyleVariantOpeningAnchorManifest,
   writeJsonAtomic,
 } from "../lib/episode-style-variants.mjs";
 
@@ -42,6 +43,7 @@ const styleRoot = path.join(episodeRoot, "style-variants");
 const planInputPath = path.join(styleRoot, "style-variant-plan-input.json");
 const planPath = path.join(styleRoot, "style-variant-plan.json");
 const planReportPath = path.join(styleRoot, "style-variant-plan-report.json");
+const openingAnchorManifestPath = path.join(styleRoot, "opening-anchor-manifest.json");
 const recordPath = path.join(styleRoot, "style-variant-production-record.json");
 const manifestPath = path.join(styleRoot, "style-variant-manifest.json");
 const videoPipeline = JSON.parse(await readFile(
@@ -191,6 +193,30 @@ async function planIsCurrent() {
   }
 }
 
+async function openingAnchorsAreCurrent() {
+  const manifest = await readJson(openingAnchorManifestPath);
+  if (!manifest) return false;
+  const [planHash, whiteboxHash] = await Promise.all([
+    sha256File(planPath).catch(() => null),
+    sha256File(path.join(episodeRoot, "whitebox/segment-00-first-frame.png"))
+      .catch(() => null),
+  ]);
+  const validation = validateStyleVariantOpeningAnchorManifest(manifest, {
+    sceneId,
+    episodeId,
+    planHash,
+    whiteboxHash,
+    variantCount: config.variantCount,
+  });
+  if (!validation.ok || (process.env.WORLDKIT_CLOUD_EXECUTION_ID &&
+      manifest.approval.mode !== "codex-review")) return false;
+  for (const anchor of manifest.anchors) {
+    const anchorPath = path.join(styleRoot, anchor.path);
+    if (await sha256File(anchorPath).catch(() => null) !== anchor.contentHash) return false;
+  }
+  return true;
+}
+
 async function reviewIsCurrent(styleVariantId) {
   const variantRoot = path.join(styleRoot, styleVariantId);
   const reviewPath = path.join(variantRoot, "review/visual-quality-review.json");
@@ -281,6 +307,60 @@ try {
       "scripts/episodes/materialize-style-variant-roots.mjs",
       "--episode-root", episodeRoot, "--plan", planPath,
     ]);
+  });
+
+  await stage("style-variant-opening-anchors", async () => {
+    if (await openingAnchorsAreCurrent()) return;
+    let priorRunRoot = null;
+    let priorReviewPath = null;
+    for (let attempt = 1; attempt <= config.maximumOpeningAttempts; attempt += 1) {
+      const runRoot = path.join(
+        repoRoot,
+        ".codex-tmp/style-variant-opening-batch",
+        episodeId,
+        `attempt-${attempt}`,
+      );
+      const generationArgs = [
+        "scripts/agents/run-style-variant-opening-imagegen-batch.sh",
+        "--scene-id", sceneId,
+        "--episode-id", episodeId,
+        "--episode-root", episodeRoot,
+        "--attempt", String(attempt),
+      ];
+      if (priorRunRoot && priorReviewPath) generationArgs.push(
+        "--prior-run", priorRunRoot,
+        "--review", priorReviewPath,
+      );
+      await run("bash", generationArgs);
+      const reviewArgs = [
+        "scripts/agents/run-style-variant-opening-reviewer-agent.sh",
+        "--scene-id", sceneId,
+        "--episode-id", episodeId,
+        "--episode-root", episodeRoot,
+        "--run-root", runRoot,
+        "--backend", backend,
+        "--attempt", String(attempt),
+      ];
+      if (priorReviewPath) reviewArgs.push("--prior-review", priorReviewPath);
+      const review = await run("bash", reviewArgs, { accept: [0, 10] });
+      if (review.code === 0) {
+        await run("node", [
+          "scripts/episodes/promote-style-variant-opening-anchors.mjs",
+          "--scene-id", sceneId,
+          "--episode-id", episodeId,
+          "--episode-root", episodeRoot,
+          "--run-root", runRoot,
+          "--approval-mode", "codex-review",
+        ]);
+        if (!await openingAnchorsAreCurrent()) {
+          throw new Error("Promoted Style Variant opening anchors are stale.");
+        }
+        return;
+      }
+      priorRunRoot = runRoot;
+      priorReviewPath = path.join(runRoot, "review/opening-review.json");
+    }
+    throw new Error("Style Variant openings did not pass within the repair budget.");
   });
 
   const alreadyPassed = [];
@@ -537,10 +617,22 @@ try {
   const plan = await readJson(planPath);
   const variants = await Promise.all(record.variants.map(async (item) => {
     const variantRoot = path.join(styleRoot, item.id);
+    const visualManifestPath = path.join(variantRoot, "visual/visual-manifest.json");
+    const visualManifest = await readJson(visualManifestPath);
     return {
       ...item,
       styleVariantPath: `style-variants/${item.id}/style-variant.json`,
       visualManifestPath: `style-variants/${item.id}/visual/visual-manifest.json`,
+      visualManifestHash: await sha256File(visualManifestPath).catch(() => null),
+      visualPromptPath: `style-variants/${item.id}/visual/visual-prompts.json`,
+      appearanceAnchorPath:
+        `style-variants/${item.id}/visual/segment-00-styled-opening-frame.png`,
+      appearanceAnchorHash: visualManifest?.appearanceAnchorHash ?? null,
+      targetTriviews: (visualManifest?.targets ?? []).map((target) => ({
+        visualTargetId: target.visualTargetId,
+        path: `style-variants/${item.id}/${target.styledTriview.path}`,
+        contentHash: target.styledTriview.contentHash,
+      })),
       visualReviewPath: `style-variants/${item.id}/review/visual-quality-review.json`,
       visualReviewHash: await sha256File(path.join(
         variantRoot, "review/visual-quality-review.json",
@@ -565,6 +657,8 @@ try {
     sceneId,
     episodeId,
     sourceWhiteboxIdentity: plan.sourceWhiteboxIdentity,
+    openingAnchorManifestPath: "style-variants/opening-anchor-manifest.json",
+    openingAnchorManifestHash: await sha256File(openingAnchorManifestPath),
     diversityReviewPath: "style-variants/diversity-review.json",
     diversityReviewHash: await sha256File(path.join(
       styleRoot, "diversity-review.json",
