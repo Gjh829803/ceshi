@@ -84,6 +84,7 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       logicalSubshapeId: "step-top",
       traversalSurfaceProfileRef:
         "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceId: "traversal-surface:step-surface:step-top",
     }, "step")).toBe("step");
   });
 
