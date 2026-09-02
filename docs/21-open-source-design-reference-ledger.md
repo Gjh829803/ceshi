@@ -44,6 +44,7 @@ Authoring Schema。
 | [ImperativeScene `3d233bc`](https://github.com/mxgmn/ImperativeScene/tree/3d233bc47f0b0342958983d4e43c8d366d760c5a) | MIT | 候选验证 | 命令式可执行场景表达和程序空间修复 | 设计已吸收 Native Code 方向；不引入其 Scene DSL、Optimizer 或第二布局语言 |
 | [Code-as-Room `ffd266c`](https://github.com/YxuanAr/Code-as-Room/tree/ffd266c6a4de497fb182a03bb08af6ce319d4b97) | Apache-2.0 | 候选验证 | 临时语义/关系规划、可执行 Blender Code、确定性 harness 验证/修复/集成 | 设计已区分 ephemeral planning 与 durable Native source；不移植 Blender/13-stage Runtime |
 | [GameFactory-3A `d56fd17`](https://github.com/OpenDCAI/GameFactory-3A/tree/d56fd171ce18cac554478b769e05b7b1605ce9bd) | Apache-2.0 | 候选验证 | 单 Engine Context、Engine-native code、资产/场景/玩法分层与真实运行验收 | 设计保持 Babylon 单一出口；不引入多引擎统一 Adapter 或其完整资产流水线 |
+| [CAST `arXiv:2502.12894v2`](https://arxiv.org/abs/2502.12894) / [官方项目页](https://sites.google.com/view/cast4) | 论文 CC BY-NC-ND 4.0；未采用代码 | 候选验证 | 组件级分割/相对深度证据、细粒度物理关系归约、对象生成与对齐交替迭代、SDF 静态修正 | 仅研究不可信 Reconstruction Observation 与组件级 Authoring repair；不增加 Scene Source，不把推断关系写成 Gameplay 真相，不替换 SDK Havok/Support/Runtime |
 | [ProcTHOR `53d5bd4`](https://github.com/allenai/procthor/tree/53d5bd4c8c96a699e6a615dc390abb670cc9d353) | Apache-2.0 | 候选验证 | 生成后由真实 Runtime 执行 Spawn、Reachability 与逐区域准入 | 只借鉴验证 Gate；不移植房屋 JSON、Unity Loader 或资产数据库 |
 | [OpenUSD `23b83aa`](https://github.com/PixarAnimationStudios/OpenUSD/tree/23b83aa8c479ec0f8b8b11dada50e764af6f3645) | Tomorrow Open Source Technology License 1.0 | 现有实现一致 | visual Mesh 与不渲染 sibling collider Mesh 分离 | 支持当前视觉/Collider Contribution 分权；不增加 USD 中间协议 |
 | [O3DE `0a1e0da`](https://github.com/o3de/o3de/tree/0a1e0da79e3590980596ee94e5d5da5ba6a40b86) | Apache-2.0 OR MIT | 现有实现一致 | White Box proxy geometry 与独立 Collider/Physics Material 组件 | 支持当前 Block Whitebox + SDK Physics Owner；不引入 O3DE Runtime |
@@ -168,6 +169,31 @@ package-local 的内存 Block Layout，用于 Occupancy、坡面、边界、Chun
 `block-world-three`、`block-world-compiler`、持久 `BlockWorldManifest` 或旧 Motion Runtime。上述来源
 目前均不作为生产依赖；只有 BWB 工作图在本仓库完成并通过真实 Babylon/Havok Gate 后，状态才能从
 “候选验证”升级为“已吸收代码/测试”。
+
+### 4.1 CAST / Hyper3D WorldGen：组件观察与关系约束
+
+Hyper3D WorldGen 的公开技术依据目前以 CAST 论文为主；本台账只依据公开论文和项目页记录，
+不推断其未公开产品实现。CAST 将单图重建拆成对象级分割与相对深度、遮挡感知的对象生成、姿态
+对齐，以及由细粒度关系图归约得到的 Support/Contact 约束。该方向与 WorldKit 的参考图还原前半段
+相似，但 CAST 明确不模拟完整动力学，其静态修正只能作为后续物理模拟的初始化。
+
+对 Native Block 场景生成可验证的候选借鉴是：
+
+- 在 Scene Brief/参考图与正式 Generation Request 之间保留不可信的组件观察证据，包括稳定组件 ID、
+  图像区域或 mask ref、相对深度、遮挡、可见比例、关系建议、置信度与 evidence ref；它不是第三条
+  Scene Source、Canonical Schema、WorldPackage 或 Runtime 状态；
+- 先识别 `stack/lean/hang/clamped/contained/edge-contact` 等细粒度图像关系，再由受信 Host 归约为
+  Topology、Placement、Composition 或 Collider 意图；证据不足必须产生 ambiguity diagnostic，禁止
+  照搬 CAST 的模糊关系默认 Stack 策略；
+- 把修复限制在稳定 `visualGroupId`/组件及其明确依赖，交替修正形状与位置，而不是自由重写整场景；
+  每次仍产生新的 Candidate、Package、Receipt 与 Capture；
+- 相对深度、mask overlap、遮挡顺序和组件多视角一致性只作为生成/评分证据。真实 Spawn、Support、
+  Collider、Traversal、Reset 与确定性继续由现有 Host、Runtime 和 SDK Gate 决定。
+
+首个跟进任务是 live backlog 中的 `CAST-R0`。它必须在 NBR-1 收口后以 5--10 个真实参考图 Case
+验证首次生成与一次修复的收益；本阶段不引入 CAST 的大型对象生成训练栈，不增加生产依赖。SDF 仅
+保留为未来任意 Mesh 资产的 Authoring-time advisory 研究，不进入 Block Runtime，也不得在冻结产物上
+原地移动对象。
 
 ## 5. 核心能力的跨项目对照
 
