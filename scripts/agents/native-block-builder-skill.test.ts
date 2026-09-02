@@ -210,6 +210,36 @@ describe("Native Block Builder Skill", () => {
     }
   });
 
+  it("keeps the representative Case builder inputs byte-identical to the live Skill", async () => {
+    const frozenRoot = path.resolve(
+      "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/builder-skill",
+    );
+    const liveRoot = path.resolve(".codex/skills/worldkit-native-block-builder");
+
+    for (const relativePath of [
+      "SKILL.md",
+      "references/native-block-output-contract.md",
+      "scripts/self-check.mjs",
+    ]) {
+      const [live, frozen] = await Promise.all([
+        readFile(path.join(liveRoot, relativePath), "utf8"),
+        readFile(path.join(frozenRoot, relativePath), "utf8"),
+      ]);
+      expect(frozen, relativePath).toBe(live);
+    }
+  });
+
+  it("teaches only the atomic Block drawing dialect", async () => {
+    const outputContract = await readFile(path.resolve(
+      ".codex/skills/worldkit-native-block-builder/references/native-block-output-contract.md",
+    ), "utf8");
+
+    expect(outputContract).toContain("`createBlock()` requires `centerMetersXYZ`");
+    expect(outputContract).toContain("Placement is declared once, at creation.");
+    expect(outputContract).not.toMatch(/createBlock\([\s\S]*?\}\);\s*\n\s*\w+\.position/);
+    expect(outputContract).not.toMatch(/\bplaceBlock\b|\baddBlock\b|createBlocks\(/);
+  });
+
   it("registers the focused root command", () => {
     expect(packageJson.scripts["check:native-block-builder-skill"]).toBe(
       "vitest run scripts/agents/native-block-builder-skill.test.ts",

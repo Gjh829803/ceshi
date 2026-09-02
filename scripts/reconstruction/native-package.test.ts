@@ -64,6 +64,19 @@ const AUTHORING = {
   ],
 } as const;
 
+const REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `    session.createBlock({id: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", centerMetersXYZ: [0, -0.5, 10] });`,
+  `    const central = session.createBlock({id: "central", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group" });
+    central.position.set(0, -0.5, 10);`,
+);
+
+const REGENERATED_GRID_SCENE_SOURCE = SCENE_SOURCE
+  .replace(
+    `    session.createBlock({id: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", centerMetersXYZ: [0, -0.5, 18] });`,
+    `    session.createBlockGrid({idPrefix: "foreground", shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", minimumCenterMetersXYZ: [-1, -0.5, 18], repeatCountXYZ: [3, 1, 1] });`,
+  )
+  .replace(`blockId: "foreground"`, `blockId: "foreground-x1-y0-z0"`);
+
 const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
   `    session.createBlock({id: "upper",`,
   `    session.createBlock({id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group", centerMetersXYZ: [8, -0.5, 2] });
@@ -258,6 +271,71 @@ describe("packageNativeBlockAttemptV1", () => {
       diagnostics: ["native-block-authoring-layout-binding-invalid"],
     });
   }, 60_000);
+
+  it("rejects a generated module that still places Blocks after creation", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE,
+    });
+
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({ diagnostics: ["native-check-rejected"] });
+    expect(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "native-check-result.json",
+    ), "utf8")).toContain("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  }, 60_000);
+
+  it("gives regenerated current-API source a new authored-source and Package identity", async () => {
+    const publishedResultPath = path.join(
+      HOST_CLOSURE_ROOT,
+      "authoring/scene-authoring-attempt-result.json",
+    );
+    const publishedBefore = await readFile(publishedResultPath, "utf8");
+    const [baseline, regenerated] = [
+      await completedAttempt(),
+      await completedAttempt({ sceneSource: REGENERATED_GRID_SCENE_SOURCE }),
+    ];
+
+    const [baselinePackage, regeneratedPackage] = await Promise.all([
+      packageNativeBlockAttemptV1({
+        repositoryRoot: REPOSITORY_ROOT,
+        attemptDirectoryPath: baseline.attemptDirectoryPath,
+        casePath: baseline.casePath,
+        outputDirectoryPath: baseline.outputDirectoryPath,
+      }),
+      packageNativeBlockAttemptV1({
+        repositoryRoot: REPOSITORY_ROOT,
+        attemptDirectoryPath: regenerated.attemptDirectoryPath,
+        casePath: regenerated.casePath,
+        outputDirectoryPath: regenerated.outputDirectoryPath,
+      }),
+    ]);
+
+    expect(regeneratedPackage.checkResult.outcome).toBe("passed");
+    expect(regeneratedPackage.sceneAuthoringAttemptResult.authoredSourceHash)
+      .not.toBe(baselinePackage.sceneAuthoringAttemptResult.authoredSourceHash);
+    expect(regeneratedPackage.worldPackageRootHash)
+      .not.toBe(baselinePackage.worldPackageRootHash);
+    expect(regeneratedPackage.buildReceiptHash)
+      .not.toBe(baselinePackage.buildReceiptHash);
+    expect(regeneratedPackage.sceneAuthoringAttemptResult.authoredSourceHash)
+      .toBe(
+        regeneratedPackage.verifiedWorldPackage.sceneModuleBundleManifest
+          .sourceGraphHash,
+      );
+
+    const publishedResult = JSON.parse(publishedBefore);
+    expect(regeneratedPackage.sceneAuthoringAttemptResult.authoredSourceHash)
+      .not.toBe(publishedResult.authoredSourceHash);
+    expect(await readFile(publishedResultPath, "utf8")).toBe(publishedBefore);
+  }, 120_000);
 
   it("rejects a stale Generation Receipt before creating a check or Package output", async () => {
     const fixture = await completedAttempt();
