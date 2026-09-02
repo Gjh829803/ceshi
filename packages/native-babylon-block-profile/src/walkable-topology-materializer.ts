@@ -16,14 +16,11 @@ import type {
   BabylonNativeBlockTopologyGeometryV1,
   BabylonNativeBlockWalkableTopologyV1,
 } from "./walkable-topology.js";
-
-export interface BabylonNativeBlockWalkableOverlayHandleV1 {
-  readonly logicalColliderId: string;
-  readonly sourceBlockIds: readonly [string, ...string[]];
-  readonly visualGroupIds: readonly string[];
-  readonly topologyHash: `sha256:${string}`;
-  readonly mesh: Mesh;
-}
+import {
+  replaceBabylonNativeBlockLiveHandleRegistryV1,
+  type BabylonNativeBlockLiveHandleRegistryV1,
+  type BabylonNativeBlockWalkableOverlayHandleV1,
+} from "./live-handle-registry.js";
 
 export interface MaterializedBabylonNativeBlockWalkableTopologyV1 {
   readonly topology: BabylonNativeBlockWalkableTopologyV1;
@@ -32,6 +29,7 @@ export interface MaterializedBabylonNativeBlockWalkableTopologyV1 {
   readonly collisionMeshes: readonly Mesh[];
   readonly walkableOverlays:
     readonly BabylonNativeBlockWalkableOverlayHandleV1[];
+  readonly liveHandles: BabylonNativeBlockLiveHandleRegistryV1;
   dispose(): void;
 }
 
@@ -128,6 +126,7 @@ export function materializeBabylonNativeBlockWalkableTopologyV1(
   input: Readonly<{
     context: BabylonNativeSceneBuildContextV1;
     topology: BabylonNativeBlockWalkableTopologyV1;
+    liveHandles: BabylonNativeBlockLiveHandleRegistryV1;
   }>,
 ): MaterializedBabylonNativeBlockWalkableTopologyV1 {
   const { context, topology } = input;
@@ -166,6 +165,7 @@ export function materializeBabylonNativeBlockWalkableTopologyV1(
   const colliderInventory:
     BabylonNativeBlockColliderCandidateInventoryEntryV1[] = [];
   const walkableOverlays: BabylonNativeBlockWalkableOverlayHandleV1[] = [];
+  let materializedLiveHandles: BabylonNativeBlockLiveHandleRegistryV1 | undefined;
   try {
     for (const geometry of geometries) {
       const sourceBlockIds = nonEmptySourceBlockIds(geometry);
@@ -229,6 +229,15 @@ export function materializeBabylonNativeBlockWalkableTopologyV1(
           : { restitutionRatio: geometry.restitutionRatio }),
       }));
     }
+    materializedLiveHandles = Object.freeze({
+      ...input.liveHandles,
+      walkableOverlays: Object.freeze(walkableOverlays),
+    });
+    replaceBabylonNativeBlockLiveHandleRegistryV1(
+      context.scene,
+      input.liveHandles,
+      materializedLiveHandles,
+    );
   } catch (error) {
     disposeMeshes([...collisionMeshes, ...overlayMeshes]);
     throw error;
@@ -236,15 +245,28 @@ export function materializeBabylonNativeBlockWalkableTopologyV1(
 
   let isDisposed = false;
   const allMeshes = Object.freeze([...collisionMeshes, ...overlayMeshes]);
+  const settledLiveHandles = materializedLiveHandles!;
   return Object.freeze({
     topology,
     colliderInventory: Object.freeze(colliderInventory),
     collisionMeshes: Object.freeze(collisionMeshes),
     walkableOverlays: Object.freeze(walkableOverlays),
+    liveHandles: settledLiveHandles,
     dispose(): void {
       if (isDisposed) return;
       isDisposed = true;
+      let registryError: unknown;
+      try {
+        replaceBabylonNativeBlockLiveHandleRegistryV1(
+          context.scene,
+          settledLiveHandles,
+          input.liveHandles,
+        );
+      } catch (error) {
+        registryError = error;
+      }
       const cleanup = disposeMeshes(allMeshes);
+      if (!isNil(registryError)) throw registryError;
       if (cleanup.didFail && !isNil(cleanup.error)) throw cleanup.error;
     },
   });

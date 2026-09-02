@@ -162,6 +162,7 @@ describe("formal world capture provider", () => {
         },
       ],
       visualGroups: [{ visualGroupId: "route", meshes: [first, second] }],
+      walkableOverlays: [],
     } as const;
 
     try {

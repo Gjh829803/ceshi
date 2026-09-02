@@ -15,6 +15,7 @@ export {
 } from "./live-handle-registry.js";
 export type {
   BabylonNativeBlockLiveHandleRegistryV1,
+  BabylonNativeBlockWalkableOverlayHandleV1,
 } from "./live-handle-registry.js";
 export {
   freezeBabylonNativeBlockLogicalGroundModelV1,
@@ -32,7 +33,6 @@ export {
   materializeBabylonNativeBlockWalkableTopologyV1,
 } from "./walkable-topology-materializer.js";
 export type {
-  BabylonNativeBlockWalkableOverlayHandleV1,
   MaterializedBabylonNativeBlockWalkableTopologyV1,
 } from "./walkable-topology-materializer.js";
 export {

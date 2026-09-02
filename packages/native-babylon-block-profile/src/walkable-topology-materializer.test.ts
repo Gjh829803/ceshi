@@ -18,6 +18,12 @@ import {
 import {
   materializeBabylonNativeBlockWalkableTopologyV1,
 } from "./walkable-topology-materializer.js";
+import {
+  peekBabylonNativeBlockLiveHandleRegistryV1,
+  registerBabylonNativeBlockLiveHandleRegistryV1,
+  unregisterBabylonNativeBlockLiveHandleRegistryV1,
+  type BabylonNativeBlockLiveHandleRegistryV1,
+} from "./live-handle-registry.js";
 
 const H = (digit: string) => `sha256:${digit.repeat(64)}` as Sha256HashV1;
 const STATIC_SURFACE = Object.freeze({
@@ -149,10 +155,25 @@ function context(
   }) as never;
 }
 
+function registeredLiveHandles(
+  scene: Scene,
+): BabylonNativeBlockLiveHandleRegistryV1 {
+  const registry = Object.freeze({
+    kind: "babylon-native-block-live-handle-registry" as const,
+    schemaVersion: 1 as const,
+    blocks: Object.freeze([]),
+    visualGroups: Object.freeze([]),
+    walkableOverlays: Object.freeze([]),
+  });
+  registerBabylonNativeBlockLiveHandleRegistryV1(scene, registry);
+  return registry;
+}
+
 describe("Babylon Native Block walkable topology materializer", () => {
   it("creates and registers collision proxies plus identity-bound overlays", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
+    const initialLiveHandles = registeredLiveHandles(scene);
     try {
       const registered: BabylonNativeStaticColliderV1[] = [];
       const materialized = materializeBabylonNativeBlockWalkableTopologyV1({
@@ -165,6 +186,7 @@ describe("Babylon Native Block walkable topology materializer", () => {
           },
         })),
         topology: topology(),
+        liveHandles: initialLiveHandles,
       });
 
       expect(registered.map(({ id }) => id)).toEqual([
@@ -206,11 +228,24 @@ describe("Babylon Native Block walkable topology materializer", () => {
       expect(registered[0]!.mesh.getIndices()).toEqual(
         materialized.topology.walkableGeometries[0]!.triangleIndices,
       );
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
+        materialized.liveHandles,
+      );
+      expect(materialized.liveHandles.walkableOverlays).toEqual(
+        materialized.walkableOverlays,
+      );
 
       materialized.dispose();
       materialized.dispose();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
+        initialLiveHandles,
+      );
       expect(scene.meshes).toEqual([]);
     } finally {
+      unregisterBabylonNativeBlockLiveHandleRegistryV1(
+        scene,
+        initialLiveHandles,
+      );
       scene.dispose();
       engine.dispose();
     }
@@ -219,6 +254,7 @@ describe("Babylon Native Block walkable topology materializer", () => {
   it("allocates every Mesh before registration and rolls back on registration failure", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
+    const initialLiveHandles = registeredLiveHandles(scene);
     try {
       let registrationCount = 0;
       expect(() => materializeBabylonNativeBlockWalkableTopologyV1({
@@ -230,10 +266,51 @@ describe("Babylon Native Block walkable topology materializer", () => {
           },
         })),
         topology: topology(),
+        liveHandles: initialLiveHandles,
       })).toThrow("registration failed");
       expect(registrationCount).toBe(2);
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
+        initialLiveHandles,
+      );
       expect(scene.meshes).toEqual([]);
     } finally {
+      unregisterBabylonNativeBlockLiveHandleRegistryV1(
+        scene,
+        initialLiveHandles,
+      );
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
+  it("rolls back Meshes when the supplied live-handle owner is stale", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const currentLiveHandles = registeredLiveHandles(scene);
+    const staleLiveHandles = Object.freeze({
+      ...currentLiveHandles,
+      blocks: Object.freeze([]),
+    });
+    try {
+      expect(() => materializeBabylonNativeBlockWalkableTopologyV1({
+        context: context(scene, Object.freeze({
+          registerSpawnMarker(): void {},
+          registerStaticCollider(): void {},
+        })),
+        topology: topology(),
+        liveHandles: staleLiveHandles,
+      })).toThrow(
+        "WORLDKIT_NATIVE_BLOCK_LIVE_HANDLE_REGISTRY_REPLACEMENT_INVALID",
+      );
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
+        currentLiveHandles,
+      );
+      expect(scene.meshes).toEqual([]);
+    } finally {
+      unregisterBabylonNativeBlockLiveHandleRegistryV1(
+        scene,
+        currentLiveHandles,
+      );
       scene.dispose();
       engine.dispose();
     }
@@ -242,6 +319,7 @@ describe("Babylon Native Block walkable topology materializer", () => {
   it("continues reverse cleanup after one Mesh dispose throws", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
+    const initialLiveHandles = registeredLiveHandles(scene);
     try {
       const materialized = materializeBabylonNativeBlockWalkableTopologyV1({
         context: context(scene, Object.freeze({
@@ -249,6 +327,7 @@ describe("Babylon Native Block walkable topology materializer", () => {
           registerStaticCollider(): void {},
         })),
         topology: topology(),
+        liveHandles: initialLiveHandles,
       });
       const first = materialized.collisionMeshes[0]!;
       const last = materialized.walkableOverlays[0]!.mesh;
@@ -259,7 +338,14 @@ describe("Babylon Native Block walkable topology materializer", () => {
 
       expect(() => materialized.dispose()).toThrow("overlay cleanup failed");
       expect(firstDispose).toHaveBeenCalledOnce();
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
+        initialLiveHandles,
+      );
     } finally {
+      unregisterBabylonNativeBlockLiveHandleRegistryV1(
+        scene,
+        initialLiveHandles,
+      );
       scene.dispose();
       engine.dispose();
     }

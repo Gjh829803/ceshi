@@ -1,5 +1,7 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
   defineBabylonNativeScene,
@@ -8,6 +10,11 @@ import {
 import { admitBabylonNativeSceneCandidateV1 } from
   "@whitebox-world/native-babylon/host";
 import { describe, expect, it } from "vitest";
+
+import { createBabylonNativeBlockProfileCheckResultV1 } from "./check.js";
+import { deriveBabylonNativeBlockLayoutV1 } from "./layout.js";
+import { settleBabylonNativeBlockProfileV1 } from "./profile-settlement.js";
+import type { BabylonNativeBlockSessionRecordV1 } from "./session.js";
 
 type Shape = "full" | "half" | "quarter" | "small" | "step";
 type PaletteRole = "ground" | "route" | "structure";
@@ -62,6 +69,42 @@ const STATIC_SURFACE = Object.freeze({
   traversalSurfaceProfileRef:
     "worldkit://traversal-surface-profile/ground.static@1",
 });
+const TOPOLOGY_HASH = `sha256:${"a".repeat(64)}` as const;
+
+function fullBlockRecord(
+  scene: Scene,
+  input: Readonly<{
+    id: string;
+    centerMetersXYZ: readonly [number, number, number];
+    visualGroupId: string;
+    colliderGroupId: string;
+    paletteRole: "ground" | "structure";
+  }>,
+): BabylonNativeBlockSessionRecordV1 {
+  const mesh = MeshBuilder.CreateBox(input.id, { size: 1 }, scene);
+  mesh.position.set(...input.centerMetersXYZ);
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+  const indices = mesh.getIndices();
+  if (positions === null || indices === null) {
+    throw new Error("Block settlement fixture requires indexed geometry");
+  }
+  return Object.freeze({
+    input: Object.freeze({
+      id: input.id,
+      shape: "full" as const,
+      paletteRole: input.paletteRole,
+      centerMetersXYZ: input.centerMetersXYZ,
+      rotationQuarterTurnsY: 0 as const,
+      visualGroupId: input.visualGroupId,
+      colliderGroupId: input.colliderGroupId,
+    }),
+    mesh,
+    localGeometrySnapshot: Object.freeze({
+      positions: Object.freeze(Array.from(positions)),
+      indices: Object.freeze(Array.from(indices)),
+    }),
+  });
+}
 function frozenSelection(
   id = "route-collider",
   blockId = "route-block",
@@ -300,6 +343,151 @@ describe("Babylon Native block Profile settlement", () => {
         scene.dispose();
         engine.dispose();
       }
+    }
+  });
+
+  it("settles one multi-Block walkable Collider through its identity-bound overlay", async () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      let profileInventoryHash: `sha256:${string}` | undefined;
+      const admission = await admit(
+        engine,
+        scene,
+        "topology-settlement-test",
+        2,
+        (context) => {
+          const records = Object.freeze([
+            fullBlockRecord(scene, {
+              id: "floor-east",
+              centerMetersXYZ: [0, 0.5, 0],
+              visualGroupId: "floor-visual",
+              colliderGroupId: "floor-source",
+              paletteRole: "ground",
+            }),
+            fullBlockRecord(scene, {
+              id: "floor-west",
+              centerMetersXYZ: [-1, 0.5, 0],
+              visualGroupId: "floor-visual",
+              colliderGroupId: "floor-source",
+              paletteRole: "ground",
+            }),
+            fullBlockRecord(scene, {
+              id: "wall-block",
+              centerMetersXYZ: [1, 0.5, 0],
+              visualGroupId: "wall-visual",
+              colliderGroupId: "wall-source",
+              paletteRole: "structure",
+            }),
+          ]);
+          const layout = deriveBabylonNativeBlockLayoutV1(scene, records);
+          const checkResult = createBabylonNativeBlockProfileCheckResultV1(
+            "topology-settlement-test",
+            records,
+            layout,
+          );
+          expect(checkResult.outcome).toBe("passed");
+          const checkedLayout = Object.freeze({
+            kind: "babylon-native-block-checked-layout" as const,
+            schemaVersion: 1 as const,
+            layout,
+            checkResult,
+            records,
+          });
+          const floorProxy = MeshBuilder.CreateBox(
+            "floor-proxy",
+            { width: 2, height: 0.1, depth: 1 },
+            scene,
+          );
+          floorProxy.isVisible = false;
+          const wallProxy = MeshBuilder.CreateBox(
+            "wall-proxy",
+            { size: 1 },
+            scene,
+          );
+          wallProxy.isVisible = false;
+          context.registration.registerStaticCollider(Object.freeze({
+            id: "floor-collider",
+            mesh: floorProxy,
+            traversalBinding: STATIC_SURFACE,
+          }));
+          context.registration.registerStaticCollider(Object.freeze({
+            id: "wall-collider",
+            mesh: wallProxy,
+            traversalBinding: Object.freeze({
+              kind: "not-traversable" as const,
+            }),
+          }));
+          const overlay = MeshBuilder.CreateBox(
+            "floor-overlay",
+            { width: 2, height: 0.01, depth: 1 },
+            scene,
+          );
+          overlay.position.set(-0.5, 1.005, 0);
+          profileInventoryHash = settleBabylonNativeBlockProfileV1({
+            context,
+            checkedLayout,
+            displayGapMeters: 0.04,
+            colliderInventory: Object.freeze([
+              Object.freeze({
+                colliderId: "floor-collider",
+                sourceBlockIds: Object.freeze([
+                  "floor-east",
+                  "floor-west",
+                ] as const),
+                visualGroupIds: Object.freeze(["floor-visual"]),
+                proxyKind: "continuous-walkable-surface" as const,
+                traversalBinding: STATIC_SURFACE,
+                exposedEdgePolicy: "none" as const,
+                minimumMetersXYZ: Object.freeze([-1.5, 1, -0.5] as const),
+                maximumMetersXYZ: Object.freeze([0.5, 1, 0.5] as const),
+                vertexCount: 4,
+                triangleCount: 2,
+                topologyHash: TOPOLOGY_HASH,
+              }),
+              Object.freeze({
+                colliderId: "wall-collider",
+                sourceBlockIds: Object.freeze(["wall-block"] as const),
+                visualGroupIds: Object.freeze(["wall-visual"]),
+                proxyKind: "exact-solid-union" as const,
+                traversalBinding: Object.freeze({
+                  kind: "not-traversable" as const,
+                }),
+                exposedEdgePolicy: "none" as const,
+                minimumMetersXYZ: Object.freeze([0.5, 0, -0.5] as const),
+                maximumMetersXYZ: Object.freeze([1.5, 1, 0.5] as const),
+                vertexCount: 8,
+                triangleCount: 12,
+                topologyHash: TOPOLOGY_HASH,
+              }),
+            ]),
+            walkableOverlays: Object.freeze([Object.freeze({
+              logicalColliderId: "floor-collider",
+              sourceBlockIds: Object.freeze([
+                "floor-east",
+                "floor-west",
+              ] as const),
+              visualGroupIds: Object.freeze(["floor-visual"]),
+              topologyHash: TOPOLOGY_HASH,
+              mesh: overlay,
+            })]),
+          });
+        },
+      );
+      if (admission.outcome === "rejected") {
+        throw new Error(JSON.stringify(admission.diagnostics));
+      }
+      expect(profileInventoryHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+      expect(admission.contribution.profileSettlement).toMatchObject({
+        kind: "host-snapshot",
+        targetCount: 4,
+        profileInventoryHash,
+      });
+      expect(admission.contribution.staticColliders.map(({ id }) => id))
+        .toEqual(["floor-collider", "wall-collider"]);
+    } finally {
+      scene.dispose();
+      engine.dispose();
     }
   });
 

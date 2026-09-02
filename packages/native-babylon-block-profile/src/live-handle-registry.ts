@@ -1,6 +1,14 @@
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 
+export interface BabylonNativeBlockWalkableOverlayHandleV1 {
+  readonly logicalColliderId: string;
+  readonly sourceBlockIds: readonly [string, ...string[]];
+  readonly visualGroupIds: readonly string[];
+  readonly topologyHash: `sha256:${string}`;
+  readonly mesh: Mesh;
+}
+
 export interface BabylonNativeBlockLiveHandleRegistryV1 {
   readonly kind: "babylon-native-block-live-handle-registry";
   readonly schemaVersion: 1;
@@ -13,6 +21,8 @@ export interface BabylonNativeBlockLiveHandleRegistryV1 {
     visualGroupId: string;
     meshes: readonly Mesh[];
   }>[];
+  readonly walkableOverlays:
+    readonly BabylonNativeBlockWalkableOverlayHandleV1[];
 }
 
 const REGISTRY_BY_SCENE = new WeakMap<
@@ -52,4 +62,22 @@ export function unregisterBabylonNativeBlockLiveHandleRegistryV1(
   if (registries.length === 0) {
     REGISTRY_BY_SCENE.delete(scene);
   }
+}
+
+export function replaceBabylonNativeBlockLiveHandleRegistryV1(
+  scene: Scene,
+  expected: BabylonNativeBlockLiveHandleRegistryV1,
+  replacement: BabylonNativeBlockLiveHandleRegistryV1,
+): void {
+  const registries = REGISTRY_BY_SCENE.get(scene);
+  if (
+    registries === undefined ||
+    registries.length !== 1 ||
+    registries[0] !== expected
+  ) {
+    throw new TypeError(
+      "WORLDKIT_NATIVE_BLOCK_LIVE_HANDLE_REGISTRY_REPLACEMENT_INVALID",
+    );
+  }
+  registries[0] = replacement;
 }
