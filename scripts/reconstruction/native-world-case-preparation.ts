@@ -59,6 +59,24 @@ function mediaType(filePath: string): "image/png" | "image/jpeg" {
   throw new TypeError("NATIVE_WORLD_REFERENCE_MEDIA_TYPE_INVALID");
 }
 
+function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
+  try {
+    return parseWorldPackageWorldBoundsV1(value);
+  } catch (error) {
+    const receivedFields = isNil(value) || typeof value !== "object" ||
+        Array.isArray(value) || Reflect.getPrototypeOf(value) !== Object.prototype
+      ? "<non-record>"
+      : sortBy(Object.keys(value as Record<string, unknown>)).join(", ") ||
+        "<none>";
+    throw new TypeError(
+      "NATIVE_WORLD_CASE_WORLD_BOUNDS_INVALID: expected exactly " +
+        "centerMetersXZ, sizeMetersXZ, heightRangeMeters; received " +
+        `${receivedFields}; Formal Capture AABB fields are not Package worldBounds`,
+      { cause: error },
+    );
+  }
+}
+
 async function writeCanonicalExclusive(filePath: string, value: unknown) {
   await writeFile(filePath, stringifyCanonicalJson(value), {
     encoding: "utf8",
@@ -100,7 +118,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     `${input.sceneId}.formal-world-capture-intent`) {
     throw new TypeError("NATIVE_WORLD_CAPTURE_INTENT_IDENTITY_INVALID");
   }
-  const worldBounds = parseWorldPackageWorldBoundsV1(proposal.worldBounds);
+  const worldBounds = parseNativeWorldCaseWorldBoundsV1(proposal.worldBounds);
   const briefBytes = await readFile(input.sceneBriefPath);
 
   const acceptanceTargetRefs = sortBy([...new Set([

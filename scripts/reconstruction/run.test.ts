@@ -26,6 +26,8 @@ import {
   type WorldReconstructionGeneratePortResultV1,
   type WorldReconstructionRunPortsV1,
 } from "./run.js";
+import { deriveNativeBlockGenerationRouterRequestIdV1 } from
+  "./generation-request.js";
 
 const H = (character: string): Sha256HashV1 =>
   `sha256:${character.repeat(64)}` as Sha256HashV1;
@@ -264,21 +266,95 @@ function diagnostic(input: {
   readonly code: WorldReconstructionDiagnosticCodeV1;
   readonly dimensionId: WorldReconstructionDimensionIdV1;
 }): WorldReconstructionDiagnosticV1 {
+  const targetRef = "worldkit://acceptance-target/central-ascent@1";
+  const targetId = input.dimensionId;
+  const isMissingEvidence = input.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING";
+  const isNondeterministic = input.code === "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC";
   return parseWorldReconstructionDiagnosticV1({
     kind: "world-reconstruction-diagnostic",
     schemaVersion: 1,
     id: input.id,
     code: input.code,
     dimensionId: input.dimensionId,
-    acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+    acceptanceTargetRef: targetRef,
+    targetRef,
+    targetId,
+    metricId: isMissingEvidence
+      ? "required-evidence-presence"
+      : isNondeterministic
+        ? "deterministic-build-identity"
+        : "collider-contribution-presence",
+    details: isMissingEvidence
+      ? {
+          kind: "presence-mismatch",
+          expectedValue: "present",
+          actualValue: "missing",
+          correctionDirection: "add",
+        }
+      : isNondeterministic
+        ? {
+            kind: "state-mismatch",
+            expectedValue: "matching",
+            actualValue: "mismatched",
+            correctionDirection: "replace",
+          }
+        : {
+            kind: "presence-mismatch",
+            expectedValue: "present",
+            actualValue: "missing",
+            correctionDirection: "add",
+          },
     evidenceRefs: input.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" ||
         input.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
       ? []
       : [`artifact://case/cloud-temple/evidence/${input.dimensionId}.json`],
     message: `${input.code} on ${input.dimensionId}.`,
     ...(isWorldReconstructionRepairableDiagnosticCodeV1(input.code)
-      ? { repairAction: { kind: "revise-native-source" } }
+      ? {
+          repairAction: {
+            kind: "revise-native-source",
+            targetKind: "static-collider",
+            targetId,
+            operation: "add",
+            instruction: `Register the missing ${targetId} static collider contribution.`,
+          },
+        }
       : {}),
+  });
+}
+
+function openingCompositionDiagnostic(): WorldReconstructionDiagnosticV1 {
+  return parseWorldReconstructionDiagnosticV1({
+    kind: "world-reconstruction-diagnostic",
+    schemaVersion: 1,
+    id: "diag.opening-region-x",
+    code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+    dimensionId: "opening-composition",
+    acceptanceTargetRef:
+      "worldkit://acceptance-target/opening-composition@1",
+    targetRef: "worldkit://composition-target/mountain-spire@1",
+    targetId: "mountain-spire",
+    metricId: "opening-region-min-x-basis-points",
+    details: {
+      kind: "basis-points-threshold",
+      expectedBasisPoints: 2_000,
+      actualBasisPoints: 3_200,
+      maximumAllowedDriftBasisPoints: 500,
+      exceededByBasisPoints: 700,
+      correctionDirection: "decrease",
+    },
+    evidenceRefs: [
+      "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+    ],
+    message: "Mountain spire is too far right in the opening view.",
+    repairAction: {
+      kind: "revise-native-source",
+      targetKind: "composition-target",
+      targetId: "mountain-spire",
+      operation: "resize",
+      instruction:
+        "Decrease the minimum X bound of the mountain-spire Blocks toward 2000.",
+    },
   });
 }
 
@@ -290,7 +366,7 @@ function evaluationResult(input: {
   const ids = identities(input.attemptIndex);
   const diagnostics = [...(input.diagnostics ?? [])].sort((left, right) => {
     const key = (value: WorldReconstructionDiagnosticV1) =>
-      `${value.dimensionId}\0${value.code}\0${value.acceptanceTargetRef}`;
+      `${value.dimensionId}\0${value.code}\0${value.metricId}\0${value.targetRef}\0${value.targetId}`;
     return key(left) < key(right) ? -1 : key(left) > key(right) ? 1 : 0;
   });
   const failedIds = new Set(
@@ -365,7 +441,11 @@ function generateResult(
   const ids = identities(attemptIndex);
   return Object.freeze({
     outcome,
-    requestId: `native-block-generation-cloud-temple-t-gate-native-block-formal-20260831-attempt-${attemptIndex}`,
+    requestId: deriveNativeBlockGenerationRouterRequestIdV1({
+      caseId: "cloud-temple-t-gate-native-block",
+      runId: "formal-20260831",
+      attemptIndex,
+    }),
     requestHash: ids.routerTaskPayloadHash,
     generationRequestRef: ids.generationRequestRef,
     generationRequestHash: ids.generationRequestHash,
@@ -597,11 +677,19 @@ describe("runWorldReconstructionV1", () => {
     expect(parsed.attempts[0]?.worldPackageRootHash).not.toBe(
       parsed.attempts[1]?.worldPackageRootHash,
     );
-    expect(parsed.attempts[0]?.captureReceiptHash).not.toBe(
-      parsed.attempts[1]?.captureReceiptHash,
+    const initialAttempt = parsed.attempts[0];
+    const repairAttempt = parsed.attempts[1];
+    expect(initialAttempt?.kind).toBe("evaluated");
+    expect(repairAttempt?.kind).toBe("evaluated");
+    if (initialAttempt?.kind !== "evaluated" ||
+      repairAttempt?.kind !== "evaluated") {
+      throw new Error("expected two evaluated Attempts");
+    }
+    expect(initialAttempt.captureReceiptHash).not.toBe(
+      repairAttempt.captureReceiptHash,
     );
-    expect(parsed.attempts[0]?.evaluationResultHash).not.toBe(
-      parsed.attempts[1]?.evaluationResultHash,
+    expect(initialAttempt.evaluationResultHash).not.toBe(
+      repairAttempt.evaluationResultHash,
     );
     expect(calls.generateInputs[0]?.frozenOwnerIdentities).toEqual(OWNER);
     expect(calls.generateInputs[1]?.frozenOwnerIdentities).toEqual(OWNER);
@@ -1015,6 +1103,190 @@ describe("runWorldReconstructionV1", () => {
     });
     expect(evaluation.calls.generate).toEqual([0]);
     expect(evaluation.calls.generateInputs[0]?.repairInstruction).toBeUndefined();
+  });
+
+  it("preserves a rejected Capture Package and human-viewable evidence through fail-closed", async () => {
+    const base = fakePorts();
+    const ids = identities(0);
+    const rejectedCaptureEvidence = {
+      rejectedWorldPackagePath: ids.worldPackagePath,
+      rejectedWorldPackageRef: ids.worldPackageRef,
+      rejectedWorldPackageRootHash: ids.worldPackageRootHash,
+      rejectedCaptureDirectoryPath: "/attempts/0/rejected-capture",
+      rejectedOpeningPath: "/attempts/0/rejected-capture/opening.png",
+      rejectedOpeningRef:
+        "artifact://run/attempts/0/rejected-capture/opening.png",
+      openingGateResultPath:
+        "/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      openingGateResultRef:
+        "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      openingGateResultHash: taggedHash("gate"),
+    } as const;
+    const ports: WorldReconstructionRunPortsV1 = {
+      ...base.ports,
+      capture: async () => ({
+        outcome: "rejected",
+        cameraRollbackOutcome: "completed",
+        diagnosticCodes: [
+          "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+          "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+        ],
+        ...rejectedCaptureEvidence,
+        repairDiagnostics: [],
+      }),
+    };
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+        "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+      ],
+      cleanupOutcome: "completed",
+      rejectedCaptureEvidence,
+    });
+    expect(base.calls.evaluate).toEqual([]);
+  });
+
+  it("uses the allowed repair Attempt after a source-repairable Opening Gate rejection", async () => {
+    const outputDirectoryPath = await outputRoot();
+    const base = fakePorts({
+      evaluationByAttempt: [
+        evaluationResult({ attemptIndex: 0, outcome: "passed" }),
+        evaluationResult({ attemptIndex: 1, outcome: "passed" }),
+      ],
+    });
+    const attempt0 = identities(0);
+    const ports: WorldReconstructionRunPortsV1 = {
+      ...base.ports,
+      capture: async (input) => {
+        if (input.attemptIndex === 1) return base.ports.capture(input);
+        base.calls.capture.push(0);
+        return Object.freeze({
+          outcome: "rejected" as const,
+          cameraRollbackOutcome: "completed" as const,
+          diagnosticCodes: Object.freeze([
+            "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+            "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+          ]),
+          rejectedWorldPackagePath: attempt0.worldPackagePath,
+          rejectedWorldPackageRef: attempt0.worldPackageRef,
+          rejectedWorldPackageRootHash: attempt0.worldPackageRootHash,
+          rejectedCaptureDirectoryPath: "/attempts/0/rejected-capture",
+          rejectedOpeningPath: "/attempts/0/rejected-capture/opening.png",
+          rejectedOpeningRef:
+            "artifact://run/attempts/0/rejected-capture/opening.png",
+          openingGateResultPath:
+            "/attempts/0/rejected-capture/opening-composition-gate-result.json",
+          openingGateResultRef:
+            "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+          openingGateResultHash: taggedHash("opening-gate"),
+          repairDiagnostics: Object.freeze([openingCompositionDiagnostic()]),
+        });
+      },
+    };
+
+    const receipt = await runWorldReconstructionV1(
+      runInput(outputDirectoryPath),
+      ports,
+    );
+
+    expect(receipt.outcome).toBe("passed");
+    expect(receipt.attempts.map(({ kind }) => kind)).toEqual([
+      "capture-rejected",
+      "evaluated",
+    ]);
+    expect(receipt.finalAttemptIndex).toBe(1);
+    expect(base.calls.generate).toEqual([0, 1]);
+    expect(base.calls.capture).toEqual([0, 1]);
+    expect(base.calls.evaluate).toEqual([1]);
+    expect(base.calls.generateInputs[1]?.repairInstruction).toEqual(
+      expect.objectContaining({
+        priorEvidence: {
+          kind: "opening-composition-gate-result",
+          resultRef:
+            "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+          resultHash: taggedHash("opening-gate"),
+        },
+      }),
+    );
+  });
+
+  it("stops after the maximum repair Attempt and exposes the latest rejected Package", async () => {
+    const base = fakePorts();
+    const ports: WorldReconstructionRunPortsV1 = {
+      ...base.ports,
+      capture: async (input) => {
+        if (input.attemptIndex === 0) {
+          const ids = identities(0);
+          base.calls.capture.push(0);
+          return Object.freeze({
+            outcome: "rejected" as const,
+            cameraRollbackOutcome: "completed" as const,
+            diagnosticCodes: Object.freeze([
+              "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+              "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+            ]),
+            rejectedWorldPackagePath: ids.worldPackagePath,
+            rejectedWorldPackageRef: ids.worldPackageRef,
+            rejectedWorldPackageRootHash: ids.worldPackageRootHash,
+            rejectedCaptureDirectoryPath: "/attempts/0/rejected-capture",
+            rejectedOpeningPath: "/attempts/0/rejected-capture/opening.png",
+            rejectedOpeningRef:
+              "artifact://run/attempts/0/rejected-capture/opening.png",
+            openingGateResultPath:
+              "/attempts/0/rejected-capture/opening-composition-gate-result.json",
+            openingGateResultRef:
+              "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+            openingGateResultHash: taggedHash("opening-gate-0"),
+            repairDiagnostics: Object.freeze([openingCompositionDiagnostic()]),
+          });
+        }
+        const ids = identities(1);
+        base.calls.capture.push(1);
+        return Object.freeze({
+          outcome: "rejected" as const,
+          cameraRollbackOutcome: "completed" as const,
+          diagnosticCodes: Object.freeze([
+            "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+            "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+          ]),
+          rejectedWorldPackagePath: ids.worldPackagePath,
+          rejectedWorldPackageRef: ids.worldPackageRef,
+          rejectedWorldPackageRootHash: ids.worldPackageRootHash,
+          rejectedCaptureDirectoryPath: "/attempts/1/rejected-capture",
+          rejectedOpeningPath: "/attempts/1/rejected-capture/opening.png",
+          rejectedOpeningRef:
+            "artifact://run/attempts/1/rejected-capture/opening.png",
+          openingGateResultPath:
+            "/attempts/1/rejected-capture/opening-composition-gate-result.json",
+          openingGateResultRef:
+            "artifact://run/attempts/1/rejected-capture/opening-composition-gate-result.json",
+          openingGateResultHash: taggedHash("opening-gate-1"),
+          repairDiagnostics: Object.freeze([openingCompositionDiagnostic()]),
+        });
+      },
+    };
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      cleanupOutcome: "completed",
+      rejectedCaptureEvidence: {
+        rejectedWorldPackagePath: identities(1).worldPackagePath,
+        rejectedWorldPackageRef: identities(1).worldPackageRef,
+        rejectedWorldPackageRootHash: identities(1).worldPackageRootHash,
+        rejectedOpeningRef:
+          "artifact://run/attempts/1/rejected-capture/opening.png",
+      },
+    });
+    expect(base.calls.generate).toEqual([0, 1]);
+    expect(base.calls.capture).toEqual([0, 1]);
+    expect(base.calls.evaluate).toEqual([]);
   });
 
   it("publishes an incomplete receipt when cleanup fails after evaluation", async () => {

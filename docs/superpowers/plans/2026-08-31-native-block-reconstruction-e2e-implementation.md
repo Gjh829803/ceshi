@@ -1268,23 +1268,40 @@ Cover topology node present/relation missing, semantic silhouette bounds center 
 
 - [ ] **Step 2: Write RED stable diagnostic tests**
 
-Require closed codes. Repairable quality failures require the sole source repair action:
+Require closed codes and independently preserved submetrics. Repairable quality failures require the sole
+source repair action with a metric-specific target and operation:
 
 ```ts
 expect(result.diagnostics).toContainEqual(expect.objectContaining({
   code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
   dimensionId: "collider",
   acceptanceTargetRef: westGateBlockerTargetRef,
-  repairAction: { kind: "revise-native-source" },
+  targetRef: westGateBlockerTargetRef,
+  targetId: "west-wall",
+  metricId: "collider-contribution-presence",
+  details: {
+    kind: "presence-mismatch",
+    expectedValue: "present",
+    actualValue: "missing",
+    correctionDirection: "add",
+  },
+  repairAction: {
+    kind: "revise-native-source",
+    targetKind: "static-collider",
+    targetId: "west-wall",
+    operation: "add",
+    instruction: expect.any(String),
+  },
 }));
 ```
 
 Test codes for missing/disconnected topology, silhouette drift, opening-anchor drift, unsupported Spawn,
 missing/wrong Collider, blocked required traversal, passable required blocker, nondeterministic build, and
 stale evidence. Missing/stale evidence and deterministic Build identity diagnostics omit `repairAction`
-because they are not Builder-repairable. Repairable diagnostics require exactly
-`{ kind: "revise-native-source" }`; `select-native-resource`, free-form repair commands, and Runtime mutation
-are rejected. Diagnostics are sorted by dimension/code/target and contain exact evidence refs.
+because they are not Builder-repairable. Repairable diagnostics require the closed current-only action
+shape; the metric fixes its detail variant and target-kind/operation pair. `select-native-resource`, generic
+action-only payloads, action/target mismatches, malformed threshold arithmetic, and Runtime mutation are
+rejected. Diagnostics are sorted by dimension/code/metric/target and contain exact evidence refs.
 
 - [ ] **Step 3: Run RED evaluator tests**
 

@@ -52,6 +52,7 @@ import {
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionEvidenceSetV1,
+  getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionRunReceiptV1,
 } from "@whitebox-world/validation";
@@ -575,6 +576,7 @@ async function completeRunFixture(
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(fixture.evaluationProfile),
     outcome: "passed",
     attempts: [{
+      kind: "evaluated",
       attemptIndex: 0,
       generationRequestRef: generationReceipt.generationRequestRef,
       generationRequestHash: hashNativeBlockGenerationRequestV1(request),
@@ -612,7 +614,7 @@ async function finalLaunchFixture(input: Readonly<{
   const runReceipt = parseWorldReconstructionRunReceiptV1(JSON.parse(
     await readFile(path.join(input.runDirectoryPath, "run-receipt.json"), "utf8"),
   ));
-  const finalAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
+  const finalAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(runReceipt);
   return {
     kind: "native-block-reconstruction-launch" as const,
     schemaVersion: 1 as const,
@@ -839,7 +841,7 @@ async function createFinalCandidate(input: Readonly<{
   const runReceipt = parseWorldReconstructionRunReceiptV1(JSON.parse(
     await readFile(path.join(input.runDirectoryPath, "run-receipt.json"), "utf8"),
   ));
-  const finalAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
+  const finalAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(runReceipt);
   await writeJson(path.join(finalDirectoryPath, "launch.json"), {
     kind: "native-block-reconstruction-launch",
     schemaVersion: 1,
@@ -983,6 +985,7 @@ async function addRepairAttempt(input: Readonly<{
     await readFile(receiptPath, "utf8"),
   ));
   const repairAttempt = {
+    kind: "evaluated" as const,
     attemptIndex: 1,
     generationRequestRef,
     generationRequestHash: hashNativeBlockGenerationRequestV1(request),

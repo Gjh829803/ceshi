@@ -30,6 +30,7 @@ import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionRunReceiptV1,
+  getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionRunReceiptV1,
@@ -55,6 +56,7 @@ import {
   decideNativeBlockReconstructionRouteV1,
   type WorldReconstructionHostRoutePolicyV1,
 } from "./generation-request.js";
+import { WorldReconstructionRunClosedErrorV1 } from "./run.js";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const REAL_CASE_ROOT = path.join(
@@ -192,6 +194,7 @@ async function receiptFor(
       hashWorldReconstructionEvaluationProfileV1(evaluationProfile),
     outcome: terminalOutcome,
     attempts: [{
+      kind: "evaluated",
       attemptIndex: 0,
       generationRequestRef:
         `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/generation-request.json`,
@@ -289,7 +292,7 @@ function ownersFor(
         },
         playability,
       });
-      const terminal = receipt.attempts[receipt.finalAttemptIndex]!;
+      const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
       return Object.freeze({
         outcome: "verified" as const,
         candidateKind: "run" as const,
@@ -313,7 +316,7 @@ function ownersFor(
       expect(input.caseDirectoryPath).toBe(value.caseRoot);
       expect(input.runDirectoryPath).toBe(value.outputDirectoryPath);
       expect(input.playability).toBe(playability);
-      const terminal = receipt.attempts[receipt.finalAttemptIndex]!;
+      const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
       expect(input.launch).toEqual({
         kind: "native-block-reconstruction-launch",
         schemaVersion: 1,
@@ -338,11 +341,14 @@ function ownersFor(
         outcome: "published" as const,
         finalDirectoryPath,
         worldPackageRootHash:
-          receipt.attempts[receipt.finalAttemptIndex]!.worldPackageRootHash,
+          getWorldReconstructionFinalEvaluatedAttemptV1(receipt)
+            .worldPackageRootHash,
         captureReceiptHash:
-          receipt.attempts[receipt.finalAttemptIndex]!.captureReceiptHash,
+          getWorldReconstructionFinalEvaluatedAttemptV1(receipt)
+            .captureReceiptHash,
         evaluationHash:
-          receipt.attempts[receipt.finalAttemptIndex]!.evaluationResultHash,
+          getWorldReconstructionFinalEvaluatedAttemptV1(receipt)
+            .evaluationResultHash,
       });
     }),
     playability,
@@ -478,7 +484,7 @@ describe("runWorldReconstructionProductionV1", () => {
       "publish-final",
     ]);
 
-    const terminal = receipt.attempts[0]!;
+    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
     expect(result).toEqual({
       kind: "world-reconstruction-production-result",
       schemaVersion: 1,
@@ -771,6 +777,95 @@ describe("runWorldReconstructionProductionV1", () => {
     });
   });
 
+  it("returns human-viewable rejected Capture evidence without claiming publication", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const { owners: baseOwners } = ownersFor(value, receipt);
+    const rejectedCaptureDirectoryPath = path.join(
+      value.outputDirectoryPath,
+      "attempts",
+      "0",
+      "rejected-capture",
+    );
+    const rejectedOpeningPath = path.join(
+      rejectedCaptureDirectoryPath,
+      "opening.png",
+    );
+    const openingGateResultPath = path.join(
+      rejectedCaptureDirectoryPath,
+      "opening-composition-gate-result.json",
+    );
+    const owners = Object.freeze({
+      ...baseOwners,
+      runCore: vi.fn(async () => {
+        throw new WorldReconstructionRunClosedErrorV1(
+          [
+            "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+            "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+          ],
+          "completed",
+          undefined,
+          {
+            rejectedWorldPackagePath: path.join(
+              value.outputDirectoryPath,
+              "attempts",
+              "0",
+              "world-package",
+            ),
+            rejectedWorldPackageRef:
+              `package://world-package/sha256/${"8".repeat(64)}`,
+            rejectedWorldPackageRootHash: H("8"),
+            rejectedCaptureDirectoryPath,
+            rejectedOpeningPath,
+            rejectedOpeningRef:
+              `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+              "attempts/0/rejected-capture/opening.png",
+            openingGateResultPath,
+            openingGateResultRef:
+              `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+              "attempts/0/rejected-capture/opening-composition-gate-result.json",
+            openingGateResultHash: H("e"),
+          },
+        );
+      }),
+    });
+
+    await expect(run(value, owners)).resolves.toEqual({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: CASE_ID,
+      caseRef: CASE_REF,
+      runId: RUN_ID,
+      outcome: "rejected-capture",
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+      ],
+      cleanupOutcome: "completed",
+      rejectedWorldPackagePath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "world-package",
+      ),
+      rejectedWorldPackageRef:
+        `package://world-package/sha256/${"8".repeat(64)}`,
+      rejectedWorldPackageRootHash: H("8"),
+      rejectedCaptureDirectoryPath,
+      rejectedOpeningPath,
+      rejectedOpeningRef:
+        `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+        "attempts/0/rejected-capture/opening.png",
+      openingGateResultPath,
+      openingGateResultRef:
+        `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
+        "attempts/0/rejected-capture/opening-composition-gate-result.json",
+      openingGateResultHash: H("e"),
+    });
+    expect(owners.verifyRun).not.toHaveBeenCalled();
+    expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["failed", "completed"],
     ["incomplete", "completed"],
@@ -964,7 +1059,7 @@ describe("runWorldReconstructionProductionV1", () => {
       "formal-world-capture-intent.json",
     );
     const defaults = ownersFor(value, receipt);
-    const terminal = receipt.attempts[0]!;
+    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
     vi.mocked(defaults.owners.verifyRun).mockImplementationOnce(async () => {
       const intent = JSON.parse(await readFile(intentPath, "utf8"));
       await writeFile(intentPath, JSON.stringify({

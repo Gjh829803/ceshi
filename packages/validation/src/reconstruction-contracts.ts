@@ -17,7 +17,7 @@ import {
   parseFixedInputV1,
   type FixedInputV1,
 } from "@whitebox-world/runtime-contracts";
-import { isEqual, isPlainObject, sortBy, uniq } from "lodash-es";
+import { isEqual, isNil, isPlainObject, sortBy, uniq } from "lodash-es";
 
 export const WORLD_RECONSTRUCTION_DIMENSION_IDS_V1 = Object.freeze([
   "collider",
@@ -356,12 +356,260 @@ export type WorldReconstructionDiagnosticCodeV1 =
   | WorldReconstructionRepairableDiagnosticCodeV1
   | WorldReconstructionNonRepairableDiagnosticCodeV1;
 
+export const WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1 = Object.freeze([
+  "topology-node-presence",
+  "topology-layer-presence",
+  "topology-relation-presence",
+  "semantic-target-binding",
+  "semantic-bounds-min-x-basis-points",
+  "semantic-bounds-min-y-basis-points",
+  "semantic-bounds-max-x-basis-points",
+  "semantic-bounds-max-y-basis-points",
+  "semantic-center-x-basis-points",
+  "semantic-center-y-basis-points",
+  "semantic-coverage-basis-points",
+  "opening-region-presence",
+  "opening-region-min-x-basis-points",
+  "opening-region-min-y-basis-points",
+  "opening-region-max-x-basis-points",
+  "opening-region-max-y-basis-points",
+  "opening-anchor-presence",
+  "opening-anchor-x-basis-points",
+  "opening-anchor-y-basis-points",
+  "opening-target-order",
+  "opening-framing-distance-basis-points",
+  "spawn-marker-identity",
+  "spawn-support-collider-identity",
+  "spawn-medium",
+  "spawn-position-drift-millimeters",
+  "spawn-support-gap-millimeters",
+  "collider-contribution-presence",
+  "collider-overlay-presence",
+  "collider-identity",
+  "collider-role",
+  "critical-traversal-evidence",
+  "critical-traversal-outcome",
+  "deterministic-candidate-replay",
+  "deterministic-world-package-identity",
+  "deterministic-build-identity",
+  "deterministic-capture-identity",
+  "required-evidence-presence",
+  "evidence-identity",
+] as const);
+
+export type WorldReconstructionDiagnosticMetricIdV1 =
+  (typeof WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1)[number];
+
+export type WorldReconstructionDiagnosticDetailsV1 =
+  | Readonly<{
+      kind: "basis-points-threshold";
+      expectedBasisPoints: number;
+      actualBasisPoints: number;
+      maximumAllowedDriftBasisPoints: number;
+      exceededByBasisPoints: number;
+      correctionDirection: "increase" | "decrease";
+    }>
+  | Readonly<{
+      kind: "millimeters-threshold";
+      expectedMillimeters: number;
+      actualMillimeters: number;
+      maximumAllowedDriftMillimeters: number;
+      exceededByMillimeters: number;
+      correctionDirection: "increase" | "decrease";
+    }>
+  | Readonly<{
+      kind: "state-mismatch";
+      expectedValue: string;
+      actualValue: string;
+      correctionDirection: "replace";
+    }>
+  | Readonly<{
+      kind: "presence-mismatch";
+      expectedValue: "present";
+      actualValue: "missing";
+      correctionDirection: "add";
+    }>
+  | Readonly<{
+      kind: "sequence-mismatch";
+      expectedValues: readonly string[];
+      actualValues: readonly string[];
+      correctionDirection: "reorder";
+    }>;
+
+export interface WorldReconstructionRepairActionV1 {
+  readonly kind: "revise-native-source";
+  readonly targetKind:
+    | "topology-node"
+    | "topology-layer"
+    | "topology-relation"
+    | "visual-group"
+    | "composition-target"
+    | "spawn-marker"
+    | "static-collider"
+    | "traversal-check";
+  readonly targetId: string;
+  readonly operation:
+    | "add"
+    | "bind"
+    | "move"
+    | "resize"
+    | "reorder"
+    | "adjust-support"
+    | "set-traversal-binding"
+    | "adjust-traversal";
+  readonly instruction: string;
+}
+
+const DIAGNOSTIC_DETAIL_KIND_BY_METRIC_ID: Readonly<
+  Record<WorldReconstructionDiagnosticMetricIdV1, WorldReconstructionDiagnosticDetailsV1["kind"]>
+> = Object.freeze({
+  "topology-node-presence": "presence-mismatch",
+  "topology-layer-presence": "presence-mismatch",
+  "topology-relation-presence": "presence-mismatch",
+  "semantic-target-binding": "state-mismatch",
+  "semantic-bounds-min-x-basis-points": "basis-points-threshold",
+  "semantic-bounds-min-y-basis-points": "basis-points-threshold",
+  "semantic-bounds-max-x-basis-points": "basis-points-threshold",
+  "semantic-bounds-max-y-basis-points": "basis-points-threshold",
+  "semantic-center-x-basis-points": "basis-points-threshold",
+  "semantic-center-y-basis-points": "basis-points-threshold",
+  "semantic-coverage-basis-points": "basis-points-threshold",
+  "opening-region-presence": "presence-mismatch",
+  "opening-region-min-x-basis-points": "basis-points-threshold",
+  "opening-region-min-y-basis-points": "basis-points-threshold",
+  "opening-region-max-x-basis-points": "basis-points-threshold",
+  "opening-region-max-y-basis-points": "basis-points-threshold",
+  "opening-anchor-presence": "presence-mismatch",
+  "opening-anchor-x-basis-points": "basis-points-threshold",
+  "opening-anchor-y-basis-points": "basis-points-threshold",
+  "opening-target-order": "sequence-mismatch",
+  "opening-framing-distance-basis-points": "basis-points-threshold",
+  "spawn-marker-identity": "state-mismatch",
+  "spawn-support-collider-identity": "state-mismatch",
+  "spawn-medium": "state-mismatch",
+  "spawn-position-drift-millimeters": "millimeters-threshold",
+  "spawn-support-gap-millimeters": "millimeters-threshold",
+  "collider-contribution-presence": "presence-mismatch",
+  "collider-overlay-presence": "presence-mismatch",
+  "collider-identity": "state-mismatch",
+  "collider-role": "state-mismatch",
+  "critical-traversal-evidence": "presence-mismatch",
+  "critical-traversal-outcome": "state-mismatch",
+  "deterministic-candidate-replay": "state-mismatch",
+  "deterministic-world-package-identity": "state-mismatch",
+  "deterministic-build-identity": "state-mismatch",
+  "deterministic-capture-identity": "state-mismatch",
+  "required-evidence-presence": "presence-mismatch",
+  "evidence-identity": "state-mismatch",
+});
+
+const DIAGNOSTIC_METRIC_IDS_BY_CODE: Readonly<
+  Record<WorldReconstructionDiagnosticCodeV1, readonly WorldReconstructionDiagnosticMetricIdV1[]>
+> = Object.freeze({
+  WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING: [
+    "topology-node-presence",
+    "topology-layer-presence",
+  ],
+  WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING: ["topology-relation-presence"],
+  WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT: [
+    "semantic-target-binding",
+    "semantic-bounds-min-x-basis-points",
+    "semantic-bounds-min-y-basis-points",
+    "semantic-bounds-max-x-basis-points",
+    "semantic-bounds-max-y-basis-points",
+    "semantic-center-x-basis-points",
+    "semantic-center-y-basis-points",
+    "semantic-coverage-basis-points",
+  ],
+  WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT: [
+    "opening-region-presence",
+    "opening-region-min-x-basis-points",
+    "opening-region-min-y-basis-points",
+    "opening-region-max-x-basis-points",
+    "opening-region-max-y-basis-points",
+    "opening-anchor-presence",
+    "opening-anchor-x-basis-points",
+    "opening-anchor-y-basis-points",
+    "opening-target-order",
+    "opening-framing-distance-basis-points",
+  ],
+  WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING: [
+    "spawn-marker-identity",
+    "spawn-support-collider-identity",
+    "spawn-medium",
+    "spawn-position-drift-millimeters",
+    "spawn-support-gap-millimeters",
+  ],
+  WORLD_RECONSTRUCTION_COLLIDER_MISSING: [
+    "collider-contribution-presence",
+    "collider-overlay-presence",
+  ],
+  WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH: ["collider-identity", "collider-role"],
+  WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED: ["critical-traversal-outcome"],
+  WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE: ["critical-traversal-outcome"],
+  WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC: [
+    "deterministic-candidate-replay",
+    "deterministic-world-package-identity",
+    "deterministic-build-identity",
+    "deterministic-capture-identity",
+  ],
+  WORLD_RECONSTRUCTION_EVIDENCE_STALE: ["evidence-identity"],
+  WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING: [
+    "required-evidence-presence",
+    "critical-traversal-evidence",
+  ],
+});
+
+const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
+  WorldReconstructionDiagnosticMetricIdV1,
+  Readonly<{
+    targetKind: WorldReconstructionRepairActionV1["targetKind"];
+    operation: WorldReconstructionRepairActionV1["operation"];
+  }>
+>>> = Object.freeze({
+  "topology-node-presence": { targetKind: "topology-node", operation: "add" },
+  "topology-layer-presence": { targetKind: "topology-layer", operation: "add" },
+  "topology-relation-presence": { targetKind: "topology-relation", operation: "add" },
+  "semantic-target-binding": { targetKind: "visual-group", operation: "bind" },
+  "semantic-bounds-min-x-basis-points": { targetKind: "visual-group", operation: "resize" },
+  "semantic-bounds-min-y-basis-points": { targetKind: "visual-group", operation: "resize" },
+  "semantic-bounds-max-x-basis-points": { targetKind: "visual-group", operation: "resize" },
+  "semantic-bounds-max-y-basis-points": { targetKind: "visual-group", operation: "resize" },
+  "semantic-center-x-basis-points": { targetKind: "visual-group", operation: "move" },
+  "semantic-center-y-basis-points": { targetKind: "visual-group", operation: "move" },
+  "semantic-coverage-basis-points": { targetKind: "visual-group", operation: "resize" },
+  "opening-region-presence": { targetKind: "composition-target", operation: "add" },
+  "opening-region-min-x-basis-points": { targetKind: "composition-target", operation: "resize" },
+  "opening-region-min-y-basis-points": { targetKind: "composition-target", operation: "resize" },
+  "opening-region-max-x-basis-points": { targetKind: "composition-target", operation: "resize" },
+  "opening-region-max-y-basis-points": { targetKind: "composition-target", operation: "resize" },
+  "opening-anchor-presence": { targetKind: "composition-target", operation: "add" },
+  "opening-anchor-x-basis-points": { targetKind: "composition-target", operation: "move" },
+  "opening-anchor-y-basis-points": { targetKind: "composition-target", operation: "move" },
+  "opening-target-order": { targetKind: "composition-target", operation: "reorder" },
+  "opening-framing-distance-basis-points": { targetKind: "composition-target", operation: "move" },
+  "spawn-marker-identity": { targetKind: "spawn-marker", operation: "bind" },
+  "spawn-support-collider-identity": { targetKind: "static-collider", operation: "bind" },
+  "spawn-medium": { targetKind: "spawn-marker", operation: "adjust-support" },
+  "spawn-position-drift-millimeters": { targetKind: "spawn-marker", operation: "move" },
+  "spawn-support-gap-millimeters": { targetKind: "spawn-marker", operation: "adjust-support" },
+  "collider-contribution-presence": { targetKind: "static-collider", operation: "add" },
+  "collider-overlay-presence": { targetKind: "static-collider", operation: "bind" },
+  "collider-identity": { targetKind: "static-collider", operation: "bind" },
+  "collider-role": { targetKind: "static-collider", operation: "set-traversal-binding" },
+  "critical-traversal-outcome": { targetKind: "traversal-check", operation: "adjust-traversal" },
+});
+
 interface WorldReconstructionDiagnosticBaseV1 {
   readonly kind: "world-reconstruction-diagnostic";
   readonly schemaVersion: 1;
   readonly id: string;
   readonly dimensionId: WorldReconstructionDimensionIdV1;
   readonly acceptanceTargetRef: string;
+  readonly targetRef: string;
+  readonly targetId: string;
+  readonly metricId: WorldReconstructionDiagnosticMetricIdV1;
+  readonly details: WorldReconstructionDiagnosticDetailsV1;
   readonly evidenceRefs: readonly string[];
   readonly message: string;
 }
@@ -369,7 +617,7 @@ interface WorldReconstructionDiagnosticBaseV1 {
 export type WorldReconstructionDiagnosticV1 =
   | Readonly<WorldReconstructionDiagnosticBaseV1 & {
       readonly code: WorldReconstructionRepairableDiagnosticCodeV1;
-      readonly repairAction: Readonly<{ kind: "revise-native-source" }>;
+      readonly repairAction: Readonly<WorldReconstructionRepairActionV1>;
     }>
   | Readonly<WorldReconstructionDiagnosticBaseV1 & {
       readonly code: WorldReconstructionNonRepairableDiagnosticCodeV1;
@@ -383,6 +631,56 @@ export function isWorldReconstructionRepairableDiagnosticCodeV1(
   );
 }
 
+export type WorldReconstructionEvaluatedRunAttemptV1 = Readonly<{
+  kind: "evaluated";
+  attemptIndex: 0 | 1;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+  generationReceiptRef: string;
+  generationReceiptHash: Sha256HashV1;
+  sceneAuthoringAttemptRef: string;
+  sceneAuthoringAttemptHash: Sha256HashV1;
+  sceneAuthoringAttemptResultRef: string;
+  sceneAuthoringAttemptResultHash: Sha256HashV1;
+  worldPackageRef: string;
+  worldPackageRootHash: Sha256HashV1;
+  worldPackageBuildReceiptRef: string;
+  worldPackageBuildReceiptHash: Sha256HashV1;
+  worldBuildIdentityRef: string;
+  worldBuildIdentityHash: Sha256HashV1;
+  captureReceiptRef: string;
+  captureReceiptHash: Sha256HashV1;
+  evaluationResultRef: string;
+  evaluationResultHash: Sha256HashV1;
+  outcome: WorldReconstructionOutcomeV1;
+}>;
+
+export type WorldReconstructionCaptureRejectedRunAttemptV1 = Readonly<{
+  kind: "capture-rejected";
+  attemptIndex: 0;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+  generationReceiptRef: string;
+  generationReceiptHash: Sha256HashV1;
+  sceneAuthoringAttemptRef: string;
+  sceneAuthoringAttemptHash: Sha256HashV1;
+  sceneAuthoringAttemptResultRef: string;
+  sceneAuthoringAttemptResultHash: Sha256HashV1;
+  worldPackageRef: string;
+  worldPackageRootHash: Sha256HashV1;
+  worldPackageBuildReceiptRef: string;
+  worldPackageBuildReceiptHash: Sha256HashV1;
+  worldBuildIdentityRef: string;
+  worldBuildIdentityHash: Sha256HashV1;
+  openingGateResultRef: string;
+  openingGateResultHash: Sha256HashV1;
+  outcome: "failed";
+}>;
+
+export type WorldReconstructionRunAttemptV1 =
+  | WorldReconstructionEvaluatedRunAttemptV1
+  | WorldReconstructionCaptureRejectedRunAttemptV1;
+
 export interface WorldReconstructionRunReceiptV1 {
   readonly kind: "world-reconstruction-run-receipt";
   readonly schemaVersion: 1;
@@ -392,32 +690,25 @@ export interface WorldReconstructionRunReceiptV1 {
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
   readonly outcome: WorldReconstructionOutcomeV1;
-  readonly attempts: readonly Readonly<{
-    attemptIndex: 0 | 1;
-    generationRequestRef: string;
-    generationRequestHash: Sha256HashV1;
-    generationReceiptRef: string;
-    generationReceiptHash: Sha256HashV1;
-    sceneAuthoringAttemptRef: string;
-    sceneAuthoringAttemptHash: Sha256HashV1;
-    sceneAuthoringAttemptResultRef: string;
-    sceneAuthoringAttemptResultHash: Sha256HashV1;
-    worldPackageRef: string;
-    worldPackageRootHash: Sha256HashV1;
-    worldPackageBuildReceiptRef: string;
-    worldPackageBuildReceiptHash: Sha256HashV1;
-    worldBuildIdentityRef: string;
-    worldBuildIdentityHash: Sha256HashV1;
-    captureReceiptRef: string;
-    captureReceiptHash: Sha256HashV1;
-    evaluationResultRef: string;
-    evaluationResultHash: Sha256HashV1;
-    outcome: WorldReconstructionOutcomeV1;
-  }>[];
+  readonly attempts: readonly WorldReconstructionRunAttemptV1[];
   readonly finalAttemptIndex: 0 | 1;
   readonly finalEvaluationResultRef: string;
   readonly finalEvaluationResultHash: Sha256HashV1;
   readonly cleanupOutcome: "completed" | "failed";
+}
+
+export function getWorldReconstructionFinalEvaluatedAttemptV1(
+  receipt: WorldReconstructionRunReceiptV1,
+): WorldReconstructionEvaluatedRunAttemptV1 {
+  const finalAttempt = receipt.attempts.find(
+    ({ attemptIndex }) => attemptIndex === receipt.finalAttemptIndex,
+  );
+  if (isNil(finalAttempt) || finalAttempt.kind !== "evaluated") {
+    throw new Error(
+      "WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID: final Attempt is not evaluated",
+    );
+  }
+  return finalAttempt;
 }
 
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -451,11 +742,13 @@ const RESULT_FIELDS = [
 ] as const;
 const DIAGNOSTIC_FIELDS = [
   "kind", "schemaVersion", "id", "code", "dimensionId",
-  "acceptanceTargetRef", "evidenceRefs", "message", "repairAction",
+  "acceptanceTargetRef", "targetRef", "targetId", "metricId", "details",
+  "evidenceRefs", "message", "repairAction",
 ] as const;
 const NON_REPAIRABLE_DIAGNOSTIC_FIELDS = [
   "kind", "schemaVersion", "id", "code", "dimensionId",
-  "acceptanceTargetRef", "evidenceRefs", "message",
+  "acceptanceTargetRef", "targetRef", "targetId", "metricId", "details",
+  "evidenceRefs", "message",
 ] as const;
 const RUN_FIELDS = [
   "kind", "schemaVersion", "id", "caseRef", "caseHash", "evaluationProfileRef",
@@ -463,13 +756,22 @@ const RUN_FIELDS = [
   "finalEvaluationResultRef", "finalEvaluationResultHash", "cleanupOutcome",
 ] as const;
 const RUN_ATTEMPT_FIELDS = [
-  "attemptIndex", "generationRequestRef", "generationRequestHash",
+  "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
   "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
   "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash", "worldBuildIdentityRef", "worldBuildIdentityHash",
   "captureReceiptRef", "captureReceiptHash", "evaluationResultRef",
   "evaluationResultHash", "outcome",
+] as const;
+const RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS = [
+  "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
+  "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
+  "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
+  "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
+  "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash",
+  "worldBuildIdentityRef", "worldBuildIdentityHash", "openingGateResultRef",
+  "openingGateResultHash", "outcome",
 ] as const;
 
 function fail(contract: string, path: string, message: string): never {
@@ -1133,8 +1435,10 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
     WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING: WORLD_RECONSTRUCTION_DIMENSION_IDS_V1,
   };
   if (diagnostics.some((diagnostic) => !diagnosticAllowedDimensions[diagnostic.code].includes(diagnostic.dimensionId))) fail(contract, "diagnostics", "diagnostic code is not allowed for its dimension");
-  const diagnosticKeys = diagnostics.map(({ dimensionId, code, acceptanceTargetRef }) => `${dimensionId}\0${code}\0${acceptanceTargetRef}`);
-  if (diagnosticKeys.some((key, index) => index > 0 && diagnosticKeys[index - 1]! >= key)) fail(contract, "diagnostics", "must be unique and sorted by dimension, code, and target");
+  const diagnosticKeys = diagnostics.map(({ dimensionId, code, metricId, targetRef, targetId }) =>
+    `${dimensionId}\0${code}\0${metricId}\0${targetRef}\0${targetId}`
+  );
+  if (diagnosticKeys.some((key, index) => index > 0 && diagnosticKeys[index - 1]! >= key)) fail(contract, "diagnostics", "must be unique and sorted by dimension, code, metric, target ref, and target id");
   const declaredDiagnosticIds = new Set(dimensions.flatMap(({ diagnosticIds }) => diagnosticIds));
   const diagnosticDimensionById = new Map(diagnostics.map(({ id, dimensionId }) => [id, dimensionId]));
   if (diagnostics.some(({ id }) => !declaredDiagnosticIds.has(id)) || declaredDiagnosticIds.size !== diagnostics.length || dimensions.some(({ dimensionId, diagnosticIds }) => diagnosticIds.some((id) => diagnosticDimensionById.get(id) !== dimensionId))) fail(contract, "diagnostics", "must exactly match same-dimension diagnostic IDs");
@@ -1159,6 +1463,254 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
   });
 }
 
+function parseWorldReconstructionDiagnosticDetailsV1(
+  value: unknown,
+  contract: string,
+): WorldReconstructionDiagnosticDetailsV1 {
+  const source = object(value, contract, "details");
+  const kind = enumValue(source.kind, [
+    "basis-points-threshold",
+    "millimeters-threshold",
+    "state-mismatch",
+    "presence-mismatch",
+    "sequence-mismatch",
+  ] as const, contract, "details/kind");
+  if (kind === "basis-points-threshold") {
+    exactFields(source, [
+      "kind", "expectedBasisPoints", "actualBasisPoints",
+      "maximumAllowedDriftBasisPoints", "exceededByBasisPoints",
+      "correctionDirection",
+    ], contract, "details");
+    const expectedBasisPoints = basisPoints(
+      source.expectedBasisPoints,
+      contract,
+      "details/expectedBasisPoints",
+    );
+    const actualBasisPoints = basisPoints(
+      source.actualBasisPoints,
+      contract,
+      "details/actualBasisPoints",
+    );
+    const maximumAllowedDriftBasisPoints = basisPoints(
+      source.maximumAllowedDriftBasisPoints,
+      contract,
+      "details/maximumAllowedDriftBasisPoints",
+    );
+    const exceededByBasisPoints = integer(
+      source.exceededByBasisPoints,
+      1,
+      10_000,
+      contract,
+      "details/exceededByBasisPoints",
+    );
+    if (
+      Math.abs(actualBasisPoints - expectedBasisPoints) -
+          maximumAllowedDriftBasisPoints !== exceededByBasisPoints
+    ) {
+      fail(contract, "details/exceededByBasisPoints", "must equal the measured threshold excess");
+    }
+    const correctionDirection = enumValue(
+      source.correctionDirection,
+      ["increase", "decrease"] as const,
+      contract,
+      "details/correctionDirection",
+    );
+    if (
+      (actualBasisPoints < expectedBasisPoints) !==
+      (correctionDirection === "increase")
+    ) {
+      fail(contract, "details/correctionDirection", "must move the actual value toward the expected value");
+    }
+    return Object.freeze({
+      kind,
+      expectedBasisPoints,
+      actualBasisPoints,
+      maximumAllowedDriftBasisPoints,
+      exceededByBasisPoints,
+      correctionDirection,
+    });
+  }
+  if (kind === "millimeters-threshold") {
+    exactFields(source, [
+      "kind", "expectedMillimeters", "actualMillimeters",
+      "maximumAllowedDriftMillimeters", "exceededByMillimeters",
+      "correctionDirection",
+    ], contract, "details");
+    const expectedMillimeters = integer(
+      source.expectedMillimeters,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      contract,
+      "details/expectedMillimeters",
+    );
+    const actualMillimeters = integer(
+      source.actualMillimeters,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      contract,
+      "details/actualMillimeters",
+    );
+    const maximumAllowedDriftMillimeters = integer(
+      source.maximumAllowedDriftMillimeters,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      contract,
+      "details/maximumAllowedDriftMillimeters",
+    );
+    const exceededByMillimeters = integer(
+      source.exceededByMillimeters,
+      1,
+      Number.MAX_SAFE_INTEGER,
+      contract,
+      "details/exceededByMillimeters",
+    );
+    if (
+      Math.abs(actualMillimeters - expectedMillimeters) -
+          maximumAllowedDriftMillimeters !== exceededByMillimeters
+    ) {
+      fail(contract, "details/exceededByMillimeters", "must equal the measured threshold excess");
+    }
+    const correctionDirection = enumValue(
+      source.correctionDirection,
+      ["increase", "decrease"] as const,
+      contract,
+      "details/correctionDirection",
+    );
+    if (
+      (actualMillimeters < expectedMillimeters) !==
+      (correctionDirection === "increase")
+    ) {
+      fail(contract, "details/correctionDirection", "must move the actual value toward the expected value");
+    }
+    return Object.freeze({
+      kind,
+      expectedMillimeters,
+      actualMillimeters,
+      maximumAllowedDriftMillimeters,
+      exceededByMillimeters,
+      correctionDirection,
+    });
+  }
+  if (kind === "state-mismatch") {
+    exactFields(source, [
+      "kind", "expectedValue", "actualValue", "correctionDirection",
+    ], contract, "details");
+    const expectedValue = text(source.expectedValue, contract, "details/expectedValue");
+    const actualValue = text(source.actualValue, contract, "details/actualValue");
+    if (expectedValue === actualValue) {
+      fail(contract, "details", "state mismatch values must differ");
+    }
+    return Object.freeze({
+      kind,
+      expectedValue,
+      actualValue,
+      correctionDirection: enumValue(
+        source.correctionDirection,
+        ["replace"] as const,
+        contract,
+        "details/correctionDirection",
+      ),
+    });
+  }
+  if (kind === "presence-mismatch") {
+    exactFields(source, [
+      "kind", "expectedValue", "actualValue", "correctionDirection",
+    ], contract, "details");
+    if (
+      source.expectedValue !== "present" ||
+      source.actualValue !== "missing" ||
+      source.correctionDirection !== "add"
+    ) {
+      fail(contract, "details", "presence mismatch must require adding a missing value");
+    }
+    return Object.freeze({
+      kind,
+      expectedValue: "present",
+      actualValue: "missing",
+      correctionDirection: "add",
+    });
+  }
+  exactFields(source, [
+    "kind", "expectedValues", "actualValues", "correctionDirection",
+  ], contract, "details");
+  const orderedUniqueStrings = (
+    input: unknown,
+    path: string,
+    allowEmpty: boolean,
+  ): readonly string[] => {
+    const values = array(input, contract, path).map((entry, index) =>
+      text(entry, contract, `${path}/${index}`)
+    );
+    if (!allowEmpty && values.length === 0) fail(contract, path, "must not be empty");
+    if (new Set(values).size !== values.length) fail(contract, path, "must be unique");
+    return Object.freeze(values);
+  };
+  const expectedValues = orderedUniqueStrings(
+    source.expectedValues,
+    "details/expectedValues",
+    false,
+  );
+  const actualValues = orderedUniqueStrings(
+    source.actualValues,
+    "details/actualValues",
+    true,
+  );
+  if (isEqual(expectedValues, actualValues)) {
+    fail(contract, "details", "sequence mismatch values must differ");
+  }
+  return Object.freeze({
+    kind,
+    expectedValues,
+    actualValues,
+    correctionDirection: enumValue(
+      source.correctionDirection,
+      ["reorder"] as const,
+      contract,
+      "details/correctionDirection",
+    ),
+  });
+}
+
+function parseWorldReconstructionRepairActionV1(
+  value: unknown,
+  contract: string,
+): WorldReconstructionRepairActionV1 {
+  const source = object(value, contract, "repairAction");
+  exactFields(source, [
+    "kind", "targetKind", "targetId", "operation", "instruction",
+  ], contract, "repairAction");
+  return Object.freeze({
+    kind: enumValue(
+      source.kind,
+      ["revise-native-source"] as const,
+      contract,
+      "repairAction/kind",
+    ),
+    targetKind: enumValue(source.targetKind, [
+      "topology-node",
+      "topology-layer",
+      "topology-relation",
+      "visual-group",
+      "composition-target",
+      "spawn-marker",
+      "static-collider",
+      "traversal-check",
+    ] as const, contract, "repairAction/targetKind"),
+    targetId: text(source.targetId, contract, "repairAction/targetId"),
+    operation: enumValue(source.operation, [
+      "add",
+      "bind",
+      "move",
+      "resize",
+      "reorder",
+      "adjust-support",
+      "set-traversal-binding",
+      "adjust-traversal",
+    ] as const, contract, "repairAction/operation"),
+    instruction: text(source.instruction, contract, "repairAction/instruction"),
+  });
+}
+
 export function parseWorldReconstructionDiagnosticV1(value: unknown): WorldReconstructionDiagnosticV1 {
   const contract = "WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID";
   assertAccessorFree(value, contract);
@@ -1172,20 +1724,51 @@ export function parseWorldReconstructionDiagnosticV1(value: unknown): WorldRecon
   const common = {
     kind: "world-reconstruction-diagnostic", schemaVersion: 1, id: text(source.id, contract, "id"),
     dimensionId: enumValue(source.dimensionId, WORLD_RECONSTRUCTION_DIMENSION_IDS_V1, contract, "dimensionId"),
-    acceptanceTargetRef: text(source.acceptanceTargetRef, contract, "acceptanceTargetRef"), evidenceRefs: sortedStrings(source.evidenceRefs, contract, "evidenceRefs", true), message: text(source.message, contract, "message"),
+    acceptanceTargetRef: text(source.acceptanceTargetRef, contract, "acceptanceTargetRef"),
+    targetRef: text(source.targetRef, contract, "targetRef"),
+    targetId: text(source.targetId, contract, "targetId"),
+    metricId: enumValue(
+      source.metricId,
+      WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1,
+      contract,
+      "metricId",
+    ),
+    details: parseWorldReconstructionDiagnosticDetailsV1(source.details, contract),
+    evidenceRefs: sortedStrings(source.evidenceRefs, contract, "evidenceRefs", true),
+    message: text(source.message, contract, "message"),
   } as const;
+  if (!DIAGNOSTIC_METRIC_IDS_BY_CODE[code].includes(common.metricId)) {
+    fail(contract, "metricId", `is not allowed for diagnostic code ${code}`);
+  }
+  if (common.details.kind !== DIAGNOSTIC_DETAIL_KIND_BY_METRIC_ID[common.metricId]) {
+    fail(contract, "details/kind", `does not match metric ${common.metricId}`);
+  }
   if (!isWorldReconstructionRepairableDiagnosticCodeV1(code)) {
     exactFields(source, NON_REPAIRABLE_DIAGNOSTIC_FIELDS, contract, "");
     return freeze({ ...common, code });
   }
   exactFields(source, DIAGNOSTIC_FIELDS, contract, "");
-  const repairAction = object(source.repairAction, contract, "repairAction");
-  exactFields(repairAction, ["kind"], contract, "repairAction");
-  const repairKind = enumValue(repairAction.kind, ["revise-native-source"] as const, contract, "repairAction/kind");
+  const repairAction = parseWorldReconstructionRepairActionV1(
+    source.repairAction,
+    contract,
+  );
+  if (repairAction.targetId !== common.targetId) {
+    fail(contract, "repairAction/targetId", "must match the diagnostic targetId");
+  }
+  const expectedRepairActionShape = REPAIR_ACTION_SHAPE_BY_METRIC_ID[common.metricId];
+  if (isNil(expectedRepairActionShape)) {
+    fail(contract, "repairAction", `metric ${common.metricId} is not source repairable`);
+  }
+  if (
+    repairAction.targetKind !== expectedRepairActionShape.targetKind ||
+    repairAction.operation !== expectedRepairActionShape.operation
+  ) {
+    fail(contract, "repairAction", `must use ${expectedRepairActionShape.targetKind}/${expectedRepairActionShape.operation} for metric ${common.metricId}`);
+  }
   return freeze({
     ...common,
     code,
-    repairAction: Object.freeze({ kind: repairKind }),
+    repairAction,
   });
 }
 
@@ -1197,9 +1780,22 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   const attempts = array(source.attempts, contract, "attempts").map((entry, index) => {
     const path = `attempts/${index}`;
     const row = object(entry, contract, path);
-    exactFields(row, RUN_ATTEMPT_FIELDS, contract, path);
+    const attemptKind = enumValue(
+      row.kind,
+      ["evaluated", "capture-rejected"] as const,
+      contract,
+      `${path}/kind`,
+    );
+    exactFields(
+      row,
+      attemptKind === "evaluated"
+        ? RUN_ATTEMPT_FIELDS
+        : RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS,
+      contract,
+      path,
+    );
     if (index > 1 || row.attemptIndex !== index) fail(contract, `${path}/attemptIndex`, "attempts must be contiguous 0 then optional 1");
-    return Object.freeze({
+    const common = {
       attemptIndex: index as 0 | 1,
       generationRequestRef: text(row.generationRequestRef, contract, `${path}/generationRequestRef`),
       generationRequestHash: hash(row.generationRequestHash, contract, `${path}/generationRequestHash`),
@@ -1215,6 +1811,23 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       worldPackageBuildReceiptHash: hash(row.worldPackageBuildReceiptHash, contract, `${path}/worldPackageBuildReceiptHash`),
       worldBuildIdentityRef: text(row.worldBuildIdentityRef, contract, `${path}/worldBuildIdentityRef`),
       worldBuildIdentityHash: hash(row.worldBuildIdentityHash, contract, `${path}/worldBuildIdentityHash`),
+    };
+    if (attemptKind === "capture-rejected") {
+      if (index !== 0 || row.outcome !== "failed") {
+        fail(contract, path, "only the initial Attempt may be capture-rejected");
+      }
+      return Object.freeze({
+        kind: attemptKind,
+        ...common,
+        attemptIndex: 0 as const,
+        openingGateResultRef: text(row.openingGateResultRef, contract, `${path}/openingGateResultRef`),
+        openingGateResultHash: hash(row.openingGateResultHash, contract, `${path}/openingGateResultHash`),
+        outcome: "failed" as const,
+      });
+    }
+    return Object.freeze({
+      kind: attemptKind,
+      ...common,
       captureReceiptRef: text(row.captureReceiptRef, contract, `${path}/captureReceiptRef`),
       captureReceiptHash: hash(row.captureReceiptHash, contract, `${path}/captureReceiptHash`),
       evaluationResultRef: text(row.evaluationResultRef, contract, `${path}/evaluationResultRef`),
@@ -1228,13 +1841,17 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       attempt.generationRequestRef, attempt.generationReceiptRef,
       attempt.sceneAuthoringAttemptRef, attempt.sceneAuthoringAttemptResultRef,
       attempt.worldPackageRef,
-      attempt.captureReceiptRef, attempt.evaluationResultRef,
+      ...(attempt.kind === "evaluated"
+        ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
+        : [attempt.openingGateResultRef]),
     ];
     const identityHashes = (attempt: (typeof attempts)[number]) => [
       attempt.generationRequestHash, attempt.generationReceiptHash,
       attempt.sceneAuthoringAttemptHash, attempt.sceneAuthoringAttemptResultHash,
       attempt.worldPackageRootHash, attempt.worldPackageBuildReceiptHash, attempt.worldBuildIdentityHash,
-      attempt.captureReceiptHash, attempt.evaluationResultHash,
+      ...(attempt.kind === "evaluated"
+        ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
+        : [attempt.openingGateResultHash]),
     ];
     const firstRefs = new Set(runScopedIdentityRefs(attempts[0]!));
     const firstHashes = new Set(identityHashes(attempts[0]!));
@@ -1247,7 +1864,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   const finalAttemptIndex = integer(source.finalAttemptIndex, 0, 1, contract, "finalAttemptIndex") as 0 | 1;
   const finalEvaluationResultRef = text(source.finalEvaluationResultRef, contract, "finalEvaluationResultRef");
   const finalEvaluationResultHash = hash(source.finalEvaluationResultHash, contract, "finalEvaluationResultHash");
-  if (final.attemptIndex !== finalAttemptIndex || final.evaluationResultRef !== finalEvaluationResultRef || final.evaluationResultHash !== finalEvaluationResultHash) fail(contract, "finalAttemptIndex", "final identity must identify the last Attempt evaluation result");
+  if (final.kind !== "evaluated" || final.attemptIndex !== finalAttemptIndex || final.evaluationResultRef !== finalEvaluationResultRef || final.evaluationResultHash !== finalEvaluationResultHash) fail(contract, "finalAttemptIndex", "final identity must identify the last evaluated Attempt result");
   const outcome = enumValue(source.outcome, ["passed", "failed", "incomplete"] as const, contract, "outcome");
   const cleanupOutcome = enumValue(source.cleanupOutcome, ["completed", "failed"] as const, contract, "cleanupOutcome");
   const expectedOutcome = cleanupOutcome === "failed" ? "incomplete" : final.outcome;

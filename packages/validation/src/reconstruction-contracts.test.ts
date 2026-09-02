@@ -26,6 +26,43 @@ const DIMENSIONS = [
   "topology",
 ] as const;
 
+const missingDiagnosticFields = (
+  targetRef = "worldkit://acceptance-target/central-ascent@1",
+  targetId = "collider",
+) => ({
+  targetRef,
+  targetId,
+  metricId: "required-evidence-presence",
+  details: {
+    kind: "presence-mismatch",
+    expectedValue: "present",
+    actualValue: "missing",
+    correctionDirection: "add",
+  },
+} as const);
+
+const colliderRepairFields = (
+  targetRef = "worldkit://acceptance-target/upper-t-junction@1",
+  targetId = "west-wall",
+) => ({
+  targetRef,
+  targetId,
+  metricId: "collider-contribution-presence",
+  details: {
+    kind: "presence-mismatch",
+    expectedValue: "present",
+    actualValue: "missing",
+    correctionDirection: "add",
+  },
+  repairAction: {
+    kind: "revise-native-source",
+    targetKind: "static-collider",
+    targetId,
+    operation: "add",
+    instruction: `Register missing static collider ${targetId}.`,
+  },
+} as const);
+
 const caseValue = () => ({
   kind: "world-reconstruction-case",
   schemaVersion: 1,
@@ -258,10 +295,22 @@ describe("world reconstruction contracts", () => {
         kind: "world-reconstruction-diagnostic", schemaVersion: 1,
         id: "diag.generic-evidence", code, dimensionId: "collider",
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
-        evidenceRefs: [], message: "Evidence cannot support a pass.",
         ...(code === "WORLD_RECONSTRUCTION_COLLIDER_MISSING"
-          ? { repairAction: { kind: "revise-native-source" } }
-          : {}),
+          ? colliderRepairFields("worldkit://acceptance-target/central-ascent@1")
+          : code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
+            ? {
+                targetRef: "worldkit://acceptance-target/central-ascent@1",
+                targetId: "collider",
+                metricId: "evidence-identity",
+                details: {
+                  kind: "state-mismatch",
+                  expectedValue: "current",
+                  actualValue: "stale",
+                  correctionDirection: "replace",
+                },
+              }
+            : missingDiagnosticFields()),
+        evidenceRefs: [], message: "Evidence cannot support a pass.",
       }];
       expect(() => parseWorldReconstructionEvaluationResultV1(result)).toThrowError(
         "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
@@ -279,6 +328,7 @@ describe("world reconstruction contracts", () => {
       kind: "world-reconstruction-diagnostic", schemaVersion: 1, id: "diag.spawn-missing",
       code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING", dimensionId: "spawn-support",
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", evidenceRefs: [],
+      ...missingDiagnosticFields("worldkit://acceptance-target/central-ascent@1", "spawn-support"),
       message: "Spawn support evidence is absent.",
     }];
     incomplete.outcome = "incomplete";
@@ -289,7 +339,20 @@ describe("world reconstruction contracts", () => {
     stale.dimensions[0]!.metrics = [];
     stale.dimensions[0]!.evidenceRefs = [];
     stale.dimensions[0]!.diagnosticIds = ["diag.collider-stale"];
-    stale.diagnostics = [{ ...stale.diagnostics[0]!, id: "diag.collider-stale", code: "WORLD_RECONSTRUCTION_EVIDENCE_STALE", dimensionId: "collider" }];
+    stale.diagnostics = [{
+      ...stale.diagnostics[0]!,
+      id: "diag.collider-stale",
+      code: "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
+      dimensionId: "collider",
+      targetId: "collider",
+      metricId: "evidence-identity",
+      details: {
+        kind: "state-mismatch",
+        expectedValue: "current",
+        actualValue: "stale",
+        correctionDirection: "replace",
+      },
+    }];
     stale.dimensions[5]!.status = "passed";
     stale.dimensions[5]!.metrics = [{ kind: "boolean-presence", isPresent: true }];
     stale.dimensions[5]!.evidenceRefs = ["artifact://case/cloud-temple/evidence/spawn-support.json"];
@@ -299,7 +362,25 @@ describe("world reconstruction contracts", () => {
     const wrongSpecificDimension = structuredClone(incomplete);
     wrongSpecificDimension.diagnostics[0]!.code = "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING";
     wrongSpecificDimension.diagnostics[0]!.dimensionId = "collider";
-    wrongSpecificDimension.diagnostics[0]!.repairAction = { kind: "revise-native-source" };
+    Object.assign(wrongSpecificDimension.diagnostics[0]!, {
+      targetId: "player-spawn",
+      metricId: "spawn-position-drift-millimeters",
+      details: {
+        kind: "millimeters-threshold",
+        expectedMillimeters: 0,
+        actualMillimeters: 200,
+        maximumAllowedDriftMillimeters: 100,
+        exceededByMillimeters: 100,
+        correctionDirection: "decrease",
+      },
+      repairAction: {
+        kind: "revise-native-source",
+        targetKind: "spawn-marker",
+        targetId: "player-spawn",
+        operation: "move",
+        instruction: "Move player-spawn toward the expected position.",
+      },
+    });
     expect(() => parseWorldReconstructionEvaluationResultV1(wrongSpecificDimension)).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_RESULT_INVALID",
     );
@@ -701,11 +782,9 @@ describe("world reconstruction contracts", () => {
       code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
       dimensionId: "collider",
       acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+      ...colliderRepairFields(),
       evidenceRefs: ["artifact://case/cloud-temple/evidence/collider.json"],
       message: "Required west wall collider is missing.",
-      repairAction: {
-        kind: "revise-native-source",
-      },
     });
     expect("repairAction" in diagnostic).toBe(true);
     if (!("repairAction" in diagnostic)) throw new Error("repair action missing");
@@ -722,6 +801,7 @@ describe("world reconstruction contracts", () => {
       outcome: "passed",
       attempts: [
         {
+          kind: "evaluated",
           attemptIndex: 0,
           generationRequestRef: "artifact://case/cloud-temple/attempts/0/generation-request.json",
           generationRequestHash: H("6"),
@@ -744,6 +824,7 @@ describe("world reconstruction contracts", () => {
           outcome: "failed",
         },
         {
+          kind: "evaluated",
           attemptIndex: 1,
           generationRequestRef: "artifact://case/cloud-temple/attempts/1/generation-request.json",
           generationRequestHash: H("d"),
@@ -774,6 +855,26 @@ describe("world reconstruction contracts", () => {
     const run = parseWorldReconstructionRunReceiptV1(runValue);
     expect(run.attempts).toHaveLength(2);
     expect(run.finalAttemptIndex).toBe(1);
+    const {
+      captureReceiptRef: _captureReceiptRef,
+      captureReceiptHash: _captureReceiptHash,
+      evaluationResultRef: _evaluationResultRef,
+      evaluationResultHash: _evaluationResultHash,
+      ...initialPackageIdentity
+    } = runValue.attempts[0];
+    const repairedAfterOpeningRejection = parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      attempts: [{
+        ...initialPackageIdentity,
+        kind: "capture-rejected",
+        openingGateResultRef:
+          "artifact://case/cloud-temple/attempts/0/rejected-capture/opening-composition-gate-result.json",
+        openingGateResultHash: `sha256:${"10".repeat(32)}`,
+        outcome: "failed",
+      }, runValue.attempts[1]],
+    });
+    expect(repairedAfterOpeningRejection.attempts.map(({ kind }) => kind))
+      .toEqual(["capture-rejected", "evaluated"]);
     const packageScopedRefs = parseWorldReconstructionRunReceiptV1({
       ...runValue,
       attempts: [runValue.attempts[0], {
@@ -865,6 +966,21 @@ describe("world reconstruction contracts", () => {
         code,
         dimensionId: "deterministic-build",
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+        targetRef: "worldkit://acceptance-target/central-ascent@1",
+        targetId: "deterministic-build",
+        metricId: code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
+          ? "evidence-identity"
+          : code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"
+            ? "required-evidence-presence"
+            : "deterministic-build-identity",
+        details: code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"
+          ? missingDiagnosticFields().details
+          : {
+              kind: "state-mismatch",
+              expectedValue: code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE" ? "current" : "matching",
+              actualValue: code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE" ? "stale" : "mismatched",
+              correctionDirection: "replace",
+            },
         evidenceRefs: [],
         message: "Host-owned evidence cannot be repaired by revising Native source.",
       });
@@ -876,6 +992,7 @@ describe("world reconstruction contracts", () => {
   });
 
   it("requires exactly revise-native-source only for repairable diagnostics", () => {
+    const { repairAction: _omittedRepairAction, ...colliderFields } = colliderRepairFields();
     const repairable = {
       kind: "world-reconstruction-diagnostic",
       schemaVersion: 1,
@@ -883,6 +1000,7 @@ describe("world reconstruction contracts", () => {
       code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
       dimensionId: "collider",
       acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+      ...colliderFields,
       evidenceRefs: ["artifact://case/cloud-temple/evidence/collider.json"],
       message: "Required west wall collider is missing.",
     };
@@ -906,6 +1024,52 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionDiagnosticV1({
       ...nonRepairable,
       repairAction: { kind: "revise-native-source" },
+    })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
+  });
+
+  it("rejects mismatched metric details, threshold arithmetic, and repair operations", () => {
+    const semanticCenterDiagnostic = {
+      kind: "world-reconstruction-diagnostic",
+      schemaVersion: 1,
+      id: "diag.semantic-center-x",
+      code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
+      dimensionId: "semantic-silhouette",
+      acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+      targetRef: "worldkit://acceptance-target/central-ascent@1",
+      targetId: "central-ascent-group",
+      metricId: "semantic-center-x-basis-points",
+      details: {
+        kind: "basis-points-threshold",
+        expectedBasisPoints: 300,
+        actualBasisPoints: 500,
+        maximumAllowedDriftBasisPoints: 100,
+        exceededByBasisPoints: 100,
+        correctionDirection: "decrease",
+      },
+      evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"],
+      message: "Move the central ascent left in the opening frame.",
+      repairAction: {
+        kind: "revise-native-source",
+        targetKind: "visual-group",
+        targetId: "central-ascent-group",
+        operation: "move",
+        instruction: "Decrease the central ascent screen X center toward 300 basis points.",
+      },
+    } as const;
+    expect(parseWorldReconstructionDiagnosticV1(semanticCenterDiagnostic).metricId).toBe(
+      "semantic-center-x-basis-points",
+    );
+    expect(() => parseWorldReconstructionDiagnosticV1({
+      ...semanticCenterDiagnostic,
+      details: { ...semanticCenterDiagnostic.details, exceededByBasisPoints: 99 },
+    })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
+    expect(() => parseWorldReconstructionDiagnosticV1({
+      ...semanticCenterDiagnostic,
+      repairAction: { ...semanticCenterDiagnostic.repairAction, operation: "resize" },
+    })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
+    expect(() => parseWorldReconstructionDiagnosticV1({
+      ...semanticCenterDiagnostic,
+      metricId: "collider-role",
     })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
   });
 });

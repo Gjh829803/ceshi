@@ -421,16 +421,34 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
           dimensionId: "collider",
           acceptanceTargetRef: "worldkit://acceptance-target/gate@1",
+          targetRef: "worldkit://acceptance-target/gate@1",
+          targetId: "gate-wall",
+          metricId: "collider-contribution-presence",
+          details: {
+            kind: "presence-mismatch",
+            expectedValue: "present",
+            actualValue: "missing",
+            correctionDirection: "add",
+          },
           evidenceRefs: ["artifact://run/attempts/0/evidence-set.json"],
           message: "Collider is missing.",
-          repairAction: { kind: "revise-native-source" },
+          repairAction: {
+            kind: "revise-native-source",
+            targetKind: "static-collider",
+            targetId: "gate-wall",
+            operation: "add",
+            instruction: "Register the missing gate-wall static collider contribution.",
+          },
         })],
         priorSourceRef: "artifact://run/attempts/0/source",
         priorSourceHash: hash("d"),
-        priorEvaluationResultRef: "artifact://run/attempts/0/evaluation.json",
-        priorEvaluationResultHash: sha256Bytes(
-          new TextEncoder().encode("{}"),
-        ) as `sha256:${string}`,
+        priorEvidence: {
+          kind: "evaluation-result",
+          resultRef: "artifact://run/attempts/0/evaluation.json",
+          resultHash: sha256Bytes(
+            new TextEncoder().encode("{}"),
+          ) as `sha256:${string}`,
+        },
         priorGenerationRequestRef: "artifact://run/attempts/0/generation-request.json",
         priorGenerationRequestHash: attempt0.generationRequestHash,
         frozenOwnerIdentities: attempt0.frozenOwnerIdentities,
@@ -463,7 +481,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         ...input(value),
         attemptIndex: 1,
         repairInstruction,
-      })).rejects.toThrowError("Repair prior evaluation identity closure failed");
+      })).rejects.toThrowError("Repair prior evidence identity closure failed");
       await writeFile(priorEvaluationPath, "{}");
 
       const priorAttemptResultPath = path.join(priorAttemptRoot, "attempt-result.json");
@@ -524,8 +542,22 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         "utf8",
       );
       expect(repairTaskInstruction).toContain("inputs/attempts/0/source/scene.ts");
+      expect(repairTaskInstruction).toContain("context/repair-instruction.json");
+      expect(repairTaskInstruction).toContain("repairAction.instruction");
+      expect(repairTaskInstruction).toContain("Do not change the Case, Profile, or acceptance thresholds");
       expect(repairTaskInstruction).toContain("inputs/attempts/0/evaluation.json");
-      expect(repairTaskInstruction).toContain("inputs/attempts/0/capture/opening.png");
+      expect(repairTaskInstruction).toContain(
+        "read inputs/attempts/0/evaluation.json and inputs/attempts/0/capture/",
+      );
+      expect(repairTaskInstruction).toContain(
+        "read inputs/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      );
+      expect(repairTaskInstruction).toContain(
+        "Do not reassign an existing Block's visualGroupId",
+      );
+      expect(repairTaskInstruction).toContain(
+        "must produce a visible geometry change in the evidence view",
+      );
       expect(sha256Bytes(new TextEncoder().encode(repairTaskInstruction))).toBe(
         attempt1.generationRequest.taskInstructionHash,
       );
@@ -672,6 +704,27 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(second.routerRequestId).not.toBe(first.routerRequestId);
       expect(first.routerRequestId).toContain("-initial-");
       expect(second.routerRequestId).toContain("-second-");
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the formal router identity bounded for a valid timestamped run", async () => {
+    const value = await fixture();
+    try {
+      const runId = "run-20260902130320-15359";
+      const prepared = await prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        runId,
+        runDirectoryPath: path.join(value.root, "runs", runId),
+      });
+      expect(prepared.routerRequestId).toMatch(/^[a-z0-9][a-z0-9-]{2,79}$/);
+      expect(prepared.routerArguments).toEqual(expect.arrayContaining([
+        "--task-id",
+        prepared.routerRequestId,
+        "--request-id",
+        prepared.routerRequestId,
+      ]));
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }

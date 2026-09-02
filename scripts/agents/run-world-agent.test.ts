@@ -35,6 +35,9 @@ describe("the single public world-generation entry", () => {
     expect(invocation.arguments[0]).toBe(
       "scripts/agents/run-canonical-world-agent.sh",
     );
+    expect(invocation.arguments.slice(1, 3)).toEqual([
+      "--scene-source", "canonical",
+    ]);
   });
 
   it("preserves image inputs and rejects aliases or unknown Sources", () => {

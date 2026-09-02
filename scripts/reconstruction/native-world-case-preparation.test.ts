@@ -20,6 +20,48 @@ afterEach(async () => {
 });
 
 describe("trusted Native world Case preparation", () => {
+  it("reports the exact Package bounds shape when Mapper copies Formal Capture AABB fields", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-case-bounds-"));
+    temporaryRoots.push(root);
+    const proposalPath = path.join(root, "proposal.json");
+    const briefPath = path.join(root, "scene-brief.md");
+    const referencePath = path.join(root, "reference.png");
+    const outputCaseRoot = path.join(root, "prepared-case");
+    const [fixtureCase, formalCaptureIntent] = await Promise.all([
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
+    ]);
+    await Promise.all([
+      writeFile(briefPath, "# Native World\n"),
+      writeFile(referencePath, "reference-bytes"),
+      writeFile(proposalPath, JSON.stringify({
+        kind: "native-world-case-proposal",
+        schemaVersion: 1,
+        sceneId: "invalid-native-world-bounds",
+        expected: fixtureCase.expected,
+        formalCaptureIntent: {
+          ...formalCaptureIntent,
+          id: "invalid-native-world-bounds.formal-world-capture-intent",
+        },
+        worldBounds: {
+          minimumMetersXYZ: [-20, -2, -30],
+          maximumMetersXYZ: [20, 24, 30],
+        },
+      })),
+    ]);
+
+    await expect(prepareNativeWorldCaseV1({
+      repositoryRoot: process.cwd(),
+      sceneId: "invalid-native-world-bounds",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      referenceImagePaths: [referencePath],
+      outputCaseRoot,
+    })).rejects.toThrow(
+      "NATIVE_WORLD_CASE_WORLD_BOUNDS_INVALID: expected exactly centerMetersXZ, sizeMetersXZ, heightRangeMeters; received maximumMetersXYZ, minimumMetersXYZ; Formal Capture AABB fields are not Package worldBounds",
+    );
+  });
+
   it("binds an untrusted semantic proposal to Host profiles and immutable inputs", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-case-"));
     temporaryRoots.push(root);

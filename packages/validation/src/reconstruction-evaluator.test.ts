@@ -411,7 +411,7 @@ describe("evaluateWorldReconstructionV1", () => {
       dimensionId: "collider",
       acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
       evidenceRefs: ["artifact://case/cloud-temple/evidence/collider.json"],
-      repairAction: { kind: "revise-native-source" },
+      repairAction: expect.objectContaining({ kind: "revise-native-source" }),
     }));
   });
 
@@ -428,7 +428,7 @@ describe("evaluateWorldReconstructionV1", () => {
       code: "WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING",
       dimensionId: "topology",
       acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
-      repairAction: { kind: "revise-native-source" },
+      repairAction: expect.objectContaining({ kind: "revise-native-source" }),
     }));
   });
 
@@ -474,7 +474,7 @@ describe("evaluateWorldReconstructionV1", () => {
       code: "WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT",
       dimensionId: "semantic-silhouette",
       acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
-      repairAction: { kind: "revise-native-source" },
+      repairAction: expect.objectContaining({ kind: "revise-native-source" }),
     }));
   });
 
@@ -492,6 +492,50 @@ describe("evaluateWorldReconstructionV1", () => {
     });
   });
 
+  it("preserves each failed semantic submetric with executable correction data", () => {
+    const result = evaluateBound({
+      evidence: (draft) => {
+        const silhouette = observedRow(draft, "semantic-silhouette");
+        if (silhouette.observed.kind !== "semantic-silhouette-observed") {
+          throw new Error("silhouette observed");
+        }
+        silhouette.observed.targets[0]!.normalizedCenter = {
+          xBasisPoints: 500,
+          yBasisPoints: 250,
+        };
+        silhouette.observed.targets[0]!.coverageBasisPoints = 2_700;
+      },
+    });
+
+    expectIndependentFailure(result, "semantic-silhouette");
+    expect(result.diagnostics.map((diagnostic) =>
+      Reflect.get(diagnostic, "metricId")
+    )).toEqual([
+      "semantic-center-x-basis-points",
+      "semantic-center-y-basis-points",
+      "semantic-coverage-basis-points",
+    ]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
+      targetRef: CENTRAL_ASCENT_TARGET_REF,
+      metricId: "semantic-center-x-basis-points",
+      details: {
+        kind: "basis-points-threshold",
+        expectedBasisPoints: 300,
+        actualBasisPoints: 500,
+        maximumAllowedDriftBasisPoints: 100,
+        exceededByBasisPoints: 100,
+        correctionDirection: "decrease",
+      },
+      repairAction: expect.objectContaining({
+        kind: "revise-native-source",
+        targetKind: "visual-group",
+        targetId: "central-ascent-group",
+        operation: "move",
+      }),
+    }));
+  });
+
   it("fails opening composition when anchors drift but order is unchanged", () => {
     const result = evaluateBound({
       evidence: (draft) => {
@@ -505,7 +549,7 @@ describe("evaluateWorldReconstructionV1", () => {
       code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
       dimensionId: "opening-composition",
       acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
-      repairAction: { kind: "revise-native-source" },
+      repairAction: expect.objectContaining({ kind: "revise-native-source" }),
     }));
   });
 
@@ -542,7 +586,7 @@ describe("evaluateWorldReconstructionV1", () => {
         code: "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
         dimensionId: "spawn-support",
         acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
-        repairAction: { kind: "revise-native-source" },
+        repairAction: expect.objectContaining({ kind: "revise-native-source" }),
       }));
     }
   });
@@ -560,7 +604,21 @@ describe("evaluateWorldReconstructionV1", () => {
       code: "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
       dimensionId: "collider",
       acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
-      repairAction: { kind: "revise-native-source" },
+      targetRef: WEST_GATE_BLOCKER_TARGET_REF,
+      metricId: "collider-role",
+      details: {
+        kind: "state-mismatch",
+        expectedValue: "blocker",
+        actualValue: "ground",
+        correctionDirection: "replace",
+      },
+      repairAction: {
+        kind: "revise-native-source",
+        targetKind: "static-collider",
+        targetId: "west-wall",
+        operation: "set-traversal-binding",
+        instruction: "Set static collider west-wall traversalBinding.kind to \"not-traversable\" so the Host derives role blocker. Changing logicalSubshapeId, name, tag, material, paletteRole, or shape does not change the Host-derived blocker role.",
+      },
     }));
   });
 
@@ -577,7 +635,7 @@ describe("evaluateWorldReconstructionV1", () => {
       code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
       dimensionId: "critical-traversal",
       acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
-      repairAction: { kind: "revise-native-source" },
+      repairAction: expect.objectContaining({ kind: "revise-native-source" }),
     }));
   });
 
@@ -591,7 +649,7 @@ describe("evaluateWorldReconstructionV1", () => {
       code: "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE",
       dimensionId: "critical-traversal",
       acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
-      repairAction: { kind: "revise-native-source" },
+      repairAction: expect.objectContaining({ kind: "revise-native-source" }),
     }));
   });
 

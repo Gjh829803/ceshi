@@ -1192,7 +1192,10 @@ source-neutral Opening Composition Host Gate。
   Havok/Subject/Input/Action/Camera 启动验证后的 Native Package；不修改 Canonical-only Unified Viewer；
 - [x] NBR-45：从同一 Package/Runtime 发布身份绑定 Opening/top/side Capture 与 Collider overlay；
 - [x] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
-- [x] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；
+  每条失败以闭合 `metricId` 独立记录目标、期望、实测、阈值、超出量和修正方向，不用笼统诊断吞掉
+  同一目标的多个子指标；
+- [x] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；修复任务逐条执行
+  metric-bound Native source action，禁止修改 Case、Profile、阈值、冻结 Owner 或既有产物；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
 - [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
   临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；

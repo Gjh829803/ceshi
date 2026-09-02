@@ -57,7 +57,10 @@ import {
   runCaptureOnlyHostedSessionV1,
   type StartCaptureOnlyHostedTransportV1,
 } from "./hosted-session-capture.js";
-import { assertOpeningCompositionHostGateV1 } from
+import {
+  evaluateOpeningCompositionHostGateV1,
+  type OpeningCompositionHostGateResultV1,
+} from
   "./opening-composition-host-gate.js";
 
 const MATERIALIZER_METADATA_REF =
@@ -101,6 +104,14 @@ export interface PublishFormalCaptureDirectoryInputV1 {
   readonly hooks?: FormalCapturePublicationHooksV1;
 }
 
+export interface PublishRejectedCaptureDirectoryInputV1 {
+  readonly outputDirectoryPath: string;
+  readonly artifacts: FormalCaptureArtifactBytesV1;
+  readonly openingGateResult: OpeningCompositionHostGateResultV1;
+  readonly budget: FormalCaptureArtifactBudgetV1;
+  readonly hooks?: FormalCapturePublicationHooksV1;
+}
+
 export type {
   FormalHostedWorldCapturePayloadV1,
 } from "@whitebox-world/runtime-babylon";
@@ -109,6 +120,8 @@ export interface CaptureHostedWorldPackageInputV1 {
   readonly packageDirectoryPath: string;
   readonly outputPath: string;
   readonly triviewOutputPath: string;
+  /** Separate non-admitted evidence location used only for a validated gate rejection. */
+  readonly rejectedOutputDirectoryPath?: string;
   readonly port?: number;
   readonly budget?: FormalCaptureArtifactBudgetV1;
   /** Required by the production reconstruction owner; omitted only by low-level transport tests. */
@@ -123,6 +136,7 @@ export interface CaptureProductionHostedWorldPackageInputV1
   readonly openingGate: NonNullable<
     CaptureHostedWorldPackageInputV1["openingGate"]
   >;
+  readonly rejectedOutputDirectoryPath: string;
 }
 
 export interface CaptureHostedWorldPackagePortsV1 {
@@ -167,11 +181,19 @@ export interface FormalCaptureCommandCleanupOutcomesV1 {
 export class FormalCaptureCommandClosedErrorV1 extends Error {
   readonly stage: "pre-launch" | "hosted-session" | "post-dispose" | "publication";
   readonly cleanupOutcomes: FormalCaptureCommandCleanupOutcomesV1;
+  readonly rejectedEvidence?: Readonly<{
+    readonly outputDirectoryPath: string;
+    readonly openingOutputPath: string;
+    readonly openingGateResultPath: string;
+    readonly openingGateResultHash: Sha256HashV1;
+    readonly openingGateResult: OpeningCompositionHostGateResultV1;
+  }>;
 
   constructor(input: Readonly<{
     stage: FormalCaptureCommandClosedErrorV1["stage"];
     cleanupOutcomes: FormalCaptureCommandCleanupOutcomesV1;
     cause: unknown;
+    rejectedEvidence?: FormalCaptureCommandClosedErrorV1["rejectedEvidence"];
   }>) {
     super(input.cause instanceof Error
       ? input.cause.message
@@ -179,6 +201,9 @@ export class FormalCaptureCommandClosedErrorV1 extends Error {
     this.name = "FormalCaptureCommandClosedErrorV1";
     this.stage = input.stage;
     this.cleanupOutcomes = Object.freeze({ ...input.cleanupOutcomes });
+    if (!isNil(input.rejectedEvidence)) {
+      this.rejectedEvidence = Object.freeze({ ...input.rejectedEvidence });
+    }
   }
 }
 
@@ -480,6 +505,7 @@ export async function captureHostedWorldPackageV1(
   let packageDirectoryPath: string;
   let outputPath: string;
   let triviewOutputPath: string;
+  let rejectedOutputDirectoryPath: string | undefined;
   let joined: JoinedFormalCapturePackageRequestV1;
   try {
     packageDirectoryPath = exactAbsolutePath(
@@ -491,11 +517,25 @@ export async function captureHostedWorldPackageV1(
       input.triviewOutputPath,
       "triviewOutputPath",
     );
+    rejectedOutputDirectoryPath = isNil(input.rejectedOutputDirectoryPath)
+      ? undefined
+      : exactAbsolutePath(
+        input.rejectedOutputDirectoryPath,
+        "rejectedOutputDirectoryPath",
+      );
     if (outputPath !== path.join(triviewOutputPath, "opening.png")) {
       throw new Error("FORMAL_CAPTURE_OUTPUT_TOPOLOGY_INVALID");
     }
     if (!(await missing(triviewOutputPath))) {
       throw new Error("FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS");
+    }
+    if (!isNil(rejectedOutputDirectoryPath)) {
+      if (rejectedOutputDirectoryPath === triviewOutputPath) {
+        throw new Error("FORMAL_CAPTURE_OUTPUT_TOPOLOGY_INVALID");
+      }
+      if (!(await missing(rejectedOutputDirectoryPath))) {
+        throw new Error("FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS");
+      }
     }
 
     // The verified Package + parsed formal Request join is complete before the
@@ -550,14 +590,60 @@ export async function captureHostedWorldPackageV1(
           input.openingGate.evaluationProfile,
         ) !== joined.request.evaluationProfileHash
       ) mismatch("openingGate/identity");
-      assertOpeningCompositionHostGateV1({
+      const openingGateResult = evaluateOpeningCompositionHostGateV1({
         reconstructionCase: input.openingGate.reconstructionCase,
         evaluationProfile: input.openingGate.evaluationProfile,
         openingObservation: payload.openingObservation,
         expectedCamera: joined.verifiedPackage.bootstrap.initialCamera,
       });
+      if (openingGateResult.status === "failed") {
+        if (isNil(rejectedOutputDirectoryPath)) {
+          throw new Error("FORMAL_CAPTURE_REJECTED_OUTPUT_REQUIRED");
+        }
+        try {
+          await publishRejectedCaptureDirectoryV1({
+            outputDirectoryPath: rejectedOutputDirectoryPath,
+            artifacts: validated.artifacts,
+            openingGateResult,
+            budget: input.budget ?? defaultBudget(),
+          });
+        } catch (error) {
+          captureClosed("publication", {
+            hostedBrowserSession: "completed",
+            viteServer: "completed",
+          }, error);
+        }
+        const openingGateResultHash = sha256CanonicalJson(
+          openingGateResult,
+        ) as Sha256HashV1;
+        throw new FormalCaptureCommandClosedErrorV1({
+          stage: "post-dispose",
+          cleanupOutcomes: {
+            hostedBrowserSession: "completed",
+            viteServer: "completed",
+          },
+          cause: new Error(
+            `FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED:${openingGateResult
+              .diagnostics.map(({ code }) => code).join(",")}`,
+          ),
+          rejectedEvidence: {
+            outputDirectoryPath: rejectedOutputDirectoryPath,
+            openingOutputPath: path.join(
+              rejectedOutputDirectoryPath,
+              "opening.png",
+            ),
+            openingGateResultPath: path.join(
+              rejectedOutputDirectoryPath,
+              "opening-composition-gate-result.json",
+            ),
+            openingGateResultHash,
+            openingGateResult,
+          },
+        });
+      }
     }
   } catch (error) {
+    if (error instanceof FormalCaptureCommandClosedErrorV1) throw error;
     captureClosed("post-dispose", {
       hostedBrowserSession: "completed",
       viteServer: "completed",
@@ -590,6 +676,78 @@ export async function captureHostedWorldPackageV1(
       sha256CanonicalJson(validated.receipt) as Sha256HashV1,
     worldPackageRootHash: joined.verifiedPackage.receipt.worldPackageRootHash,
   });
+}
+
+export async function publishRejectedCaptureDirectoryV1(
+  input: PublishRejectedCaptureDirectoryInputV1,
+): Promise<void> {
+  const outputDirectoryPath = path.resolve(input.outputDirectoryPath);
+  if (
+    !path.isAbsolute(input.outputDirectoryPath) ||
+    outputDirectoryPath !== input.outputDirectoryPath ||
+    path.parse(outputDirectoryPath).root === outputDirectoryPath
+  ) throw new Error("FORMAL_CAPTURE_OUTPUT_DIRECTORY_INVALID");
+  if (input.openingGateResult.status !== "failed") {
+    throw new Error("FORMAL_CAPTURE_REJECTED_GATE_RESULT_INVALID");
+  }
+  positiveInteger(
+    input.budget.maximumPngBytesPerArtifact,
+    "maximumPngBytesPerArtifact",
+  );
+  positiveInteger(
+    input.budget.maximumJsonBytesPerArtifact,
+    "maximumJsonBytesPerArtifact",
+  );
+  const rows = [
+    ["opening.png", input.artifacts.openingPng, "png"],
+    ["world-side.png", input.artifacts.worldSidePng, "png"],
+    ["world-top-down.png", input.artifacts.worldTopDownPng, "png"],
+    ["collider-overlay.png", input.artifacts.colliderOverlayPng, "png"],
+    ["opening-observation.json", input.artifacts.openingObservationJson, "json"],
+    ["spawn-support-observation.json", input.artifacts.spawnSupportObservationJson, "json"],
+    ["collider-overlay-observation.json", input.artifacts.colliderOverlayObservationJson, "json"],
+    ["scripted-traversal.json", input.artifacts.scriptedTraversalJson, "json"],
+    [
+      "opening-composition-gate-result.json",
+      canonicalJsonBytes(input.openingGateResult),
+      "json",
+    ],
+  ] as const;
+  for (const [relativePath, bytes, kind] of rows) {
+    if (kind === "png") {
+      assertPng(bytes, input.budget.maximumPngBytesPerArtifact, relativePath);
+    } else {
+      assertJson(bytes, input.budget.maximumJsonBytesPerArtifact, relativePath);
+    }
+  }
+  if (!(await missing(outputDirectoryPath))) {
+    throw new Error("FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS");
+  }
+  const parentDirectoryPath = path.dirname(outputDirectoryPath);
+  await mkdir(parentDirectoryPath, { recursive: true, mode: 0o700 });
+  const stagingDirectoryPath = await mkdtemp(path.join(
+    parentDirectoryPath,
+    `.${path.basename(outputDirectoryPath)}.rejected-capture-`,
+  ));
+  let published = false;
+  try {
+    for (const [relativePath, bytes] of rows) {
+      await input.hooks?.beforeWrite?.(relativePath);
+      await writeFile(path.join(stagingDirectoryPath, relativePath), bytes, {
+        flag: "wx",
+        mode: 0o600,
+      });
+    }
+    if (!(await missing(outputDirectoryPath))) {
+      throw new Error("FORMAL_CAPTURE_OUTPUT_ALREADY_EXISTS");
+    }
+    await rename(stagingDirectoryPath, outputDirectoryPath);
+    published = true;
+  } finally {
+    if (!published) {
+      await rm(stagingDirectoryPath, { recursive: true, force: true });
+    }
+  }
 }
 
 export async function publishFormalCaptureDirectoryV1(

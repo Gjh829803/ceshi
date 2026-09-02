@@ -99,7 +99,7 @@ describe("evaluateNativeBlockAttemptV1", () => {
         code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
         dimensionId: "critical-traversal",
         message: "Required traversal reach-ground was blocked.",
-        repairAction: { kind: "revise-native-source" },
+        repairAction: expect.objectContaining({ kind: "revise-native-source" }),
       }),
     ]));
     expect(published.evidenceSet.observedDimensions.find((row) =>

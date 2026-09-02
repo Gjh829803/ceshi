@@ -166,6 +166,7 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
       const plannerReport = path.join(root, "planner-self-check.json");
       const planner = run("node", [
         ".codex/skills/worldkit-spatial-planner/scripts/self-check.mjs",
+        "--scene-source", "canonical",
         "--scene-id", "self-check-scene",
         "--brief", briefPath,
         "--world-plan", worldPlanPath,

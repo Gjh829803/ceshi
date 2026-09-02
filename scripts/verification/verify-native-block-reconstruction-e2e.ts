@@ -56,6 +56,7 @@ import {
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionEvidenceSetV1,
+  getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
@@ -642,6 +643,19 @@ async function verifyAllRunAttempts(input: Readonly<{
       hashNativeSceneCheckResultV1(checkResult),
     );
 
+    if (runAttempt.kind === "capture-rejected") {
+      const gateResultBytes = await requiredFile(
+        attemptRoot,
+        "rejected-capture/opening-composition-gate-result.json",
+        "NBR70_CAPTURE_ARTIFACT_MISSING",
+      );
+      exact(
+        runAttempt.openingGateResultHash,
+        sha256CanonicalJson(json(gateResultBytes)),
+      );
+      continue;
+    }
+
     const captureRoot = path.join(attemptRoot, "capture");
     const captureReceipt = parseFormalWorldCaptureReceiptV1(json(
       await requiredFile(
@@ -866,7 +880,9 @@ async function verifyFinalPromotion(input: Readonly<{
     "pnpm worldkit native run final/world-package --port 5174 --json",
   );
 
-  const finalAttempt = input.runReceipt.attempts[input.runReceipt.finalAttemptIndex]!;
+  const finalAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(
+    input.runReceipt,
+  );
   exact(launch.worldPackageRef, finalAttempt.worldPackageRef);
   exact(launch.worldPackageRootHash, finalAttempt.worldPackageRootHash);
   exact(launch.captureReceiptHash, finalAttempt.captureReceiptHash);
@@ -1164,7 +1180,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     evaluationProfile,
   });
 
-  const runAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
+  const runAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(runReceipt);
   const attemptRoot = path.join(runRoot, `attempts/${runAttempt.attemptIndex}`);
   const generationRequest = parseNativeBlockGenerationRequestV1(json(
     await requiredFile(attemptRoot, "generation-request.json", "NBR70_REQUIRED_ARTIFACT_MISSING"),

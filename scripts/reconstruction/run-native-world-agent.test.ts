@@ -12,8 +12,36 @@ describe("Native-default world agent Host route", () => {
     );
     expect(source).toContain("scripts/agents/run-canonical-world-agent.sh");
     expect(source).toContain('"--plan-only"');
+    expect(source).toContain('"--scene-source"');
+    expect(source).toContain('"babylon-native"');
     expect(source).toContain("native-case-proposal.json");
     expect(source).not.toContain("Produce exactly two outputs");
+    expect(source).not.toContain('"terrain-height-intent-prompt.md",');
+  });
+
+  it("closes the WorldPackage world-bounds contract in Mapper inputs", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      '"centerMetersXZ": [<finite x meters>, <finite z meters>]',
+    );
+    expect(source).toContain(
+      '"sizeMetersXZ": [<positive width meters>, <positive depth meters>]',
+    );
+    expect(source).toContain(
+      '"heightRangeMeters": [<finite minimum y meters>, <finite maximum y meters>]',
+    );
+    expect(source).toContain(
+      '"--context", "packages/world-package/src/package-contract.ts"',
+    );
+    expect(source).toContain(
+      '"--context", "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json"',
+    );
+    expect(source).toContain(
+      "Never use minimumMetersXYZ or maximumMetersXYZ for worldBounds",
+    );
   });
 
   it("assembles Case planning and the formal reconstruction transaction", () => {

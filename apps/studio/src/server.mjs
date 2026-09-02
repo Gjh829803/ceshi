@@ -1323,6 +1323,7 @@ export function createStudio(options = {}) {
       typeof brief !== "string" || !brief.startsWith("# WorldKit Scene Brief") ||
       plannerCheck?.kind !== "worldkit-planner-self-check" || plannerCheck.schemaVersion !== 1 ||
       plannerCheck.validatorVersion !== "worldkit-planner-self-check-v3" ||
+      plannerCheck.sceneSourceKind !== "canonical" ||
       plannerCheck.sceneId !== sceneId || plannerCheck.status !== "passed" ||
       plannerCheck.inputs?.sceneBriefHash !== briefHash ||
       plannerCheck.inputs?.terrainHeightIntentPromptHash !== terrainPromptHash ||

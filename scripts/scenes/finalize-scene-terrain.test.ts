@@ -100,6 +100,7 @@ describe("scene terrain finalizer", { timeout: 30_000 }, () => {
       schemaVersion: 1,
       validatorVersion: "worldkit-planner-self-check-v3",
       sceneId: SCENE_ID,
+      sceneSourceKind: "canonical",
       status: "passed",
       inputs: {
         sceneBriefHash: hash(briefSource),

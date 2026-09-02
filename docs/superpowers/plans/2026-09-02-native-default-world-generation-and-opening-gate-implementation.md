@@ -26,8 +26,9 @@ NDG-10 source contract + public dispatcher
 
 OCG-10 identity-bound Capture observations
   -> OCG-20 production-only gate admission
+  -> OCG-30 rejected Candidate evidence
 
-NDG-40 + OCG-20
+NDG-40 + OCG-30
   -> NDG-90 focused verification and independent review
 ```
 
@@ -57,11 +58,13 @@ NDG-40 + OCG-20
 
 **Owned files:** `scripts/reconstruction/run-native-world-agent.ts` and `scripts/reconstruction/native-world-case-preparation.ts`.
 
-**Deliverable:** prompt/reference input first runs the unified Planner task and self-check, then one Native Case Mapper creates a closed proposal through the unified Codex task router. The Host binds fixed cross-Case thresholds, admitted resource descriptors, Case/Profile/Capture intent, bootstrap and bounds, publishes the Case atomically, then invokes `worldkit reconstruct run`.
+**Deliverable:** prompt/reference input first runs the unified Planner task and self-check through a source-discriminated closed output profile, then one Native Case Mapper creates a closed proposal through the unified Codex task router. Native planning produces only the Scene Brief, World Plan and entry target; it never creates or retains Canonical Height Intent artifacts. The Host binds fixed cross-Case thresholds, admitted resource descriptors, Case/Profile/Capture intent, bootstrap and bounds, publishes the Case atomically, then invokes `worldkit reconstruct run`.
 
 - [x] Support prompt-only and PNG/JPEG reference input.
 - [x] Reject unsupported media, changed input identity and partial Case roots.
-- [x] Keep the unified Planner output unchanged and limit the following Native Case Mapper to one closed semantic proposal.
+- [x] Keep one unified Planner while selecting a required `sceneSourceKind` output profile: Canonical retains Height Intent; Native has exactly three semantic outputs and no Height Intent.
+- [x] Bind the selected Scene Source in `planner-self-check.json`, replay the same route-aware checker in the Host, and reject Native receipts in the Canonical terrain finalizer.
+- [x] Limit the following Native Case Mapper to one closed semantic proposal.
 - [x] Copy admitted descriptors and Skill/checker closure from repository-owned frozen resources.
 - [x] Clean temporary task and staged Case roots on every failure path.
 - [x] Invoke the existing Check/Package/Runtime/Capture/Evaluation/repair transaction without a Canonical fallback.
@@ -104,6 +107,30 @@ The current near-field obstruction signal is the SDK Camera Domain's requested-v
 - [x] Evaluate after the exact opening Capture and complete Runtime cleanup before publication.
 - [x] Require gate input at the production owner type boundary.
 - [x] Preserve the lower-level transport function only for isolated transport tests.
+
+## OCG-30 — Rejected Candidate evidence
+
+**Depends on:** OCG-20.
+
+**Blocks:** NDG-90 real-Case handoff and the later bounded repair checkpoint.
+
+**Execution mode:** `main-agent-only`.
+
+**Owned files:** `scripts/reconstruction/formal-capture.ts`, `scripts/reconstruction/opening-composition-host-gate.ts`, `scripts/reconstruction/production-run-ports.ts`, and `scripts/reconstruction/run.ts` plus their focused tests.
+
+**Inputs:** one fully validated Hosted Capture payload and one identity-bound failed `OpeningCompositionHostGateResultV1`.
+
+**Outputs:** one immutable `rejected-capture/` directory containing the rendered views, observations, and `opening-composition-gate-result.json`; one rejected-Capture result surfaced by the production command.
+
+**Deliverable:** a composition-gate failure remains fail-closed for formal admission while preserving enough identity-bound evidence for a person and a later repair task to inspect the rejected Candidate. It never publishes `formal-world-capture-receipt.json`, never marks the world Ready, and never mutates the accepted `capture/` path.
+
+- [x] Publish rejected evidence atomically only after payload validation and a completed Hosted cleanup.
+- [x] Keep transport, payload, stale-identity, and publication failures free of misleading rejected-Candidate output.
+- [x] Surface the rejected opening image, gate-result, and verified Attempt
+  WorldPackage paths in the production result so `worldkit native run` can open
+  the Candidate with an explicit rejected status.
+- [x] Preserve detailed target/measurement/threshold diagnostics without lowering thresholds.
+- [x] Lock the no-Receipt and no-Ready boundary with focused tests.
 
 ## NDG-90 — Verification and handoff
 

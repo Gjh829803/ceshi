@@ -56,6 +56,30 @@ interface TerrainIntentMeasurement {
   readonly p95RampResidualRgbUnits: number;
 }
 
+type PlannerSceneSourceKind = "canonical" | "babylon-native";
+
+interface PlannerSelfCheckBaseOptions {
+  readonly sceneId: string;
+  readonly briefPath: string;
+  readonly worldPlanPath: string;
+  readonly entryPath: string;
+  readonly reportPath: string;
+}
+
+interface CanonicalPlannerSelfCheckOptions extends PlannerSelfCheckBaseOptions {
+  readonly sceneSourceKind: "canonical";
+  readonly terrainPromptPath: string;
+  readonly terrainIntentPath: string;
+}
+
+interface NativePlannerSelfCheckOptions extends PlannerSelfCheckBaseOptions {
+  readonly sceneSourceKind: "babylon-native";
+}
+
+type PlannerSelfCheckOptions =
+  | CanonicalPlannerSelfCheckOptions
+  | NativePlannerSelfCheckOptions;
+
 function option(arguments_: readonly string[], name: string): string {
   const index = arguments_.indexOf(name);
   const value = index < 0 ? undefined : arguments_[index + 1];
@@ -63,6 +87,20 @@ function option(arguments_: readonly string[], name: string): string {
     throw new Error(`${name} is required.`);
   }
   return value;
+}
+
+function sceneSourceKindOption(arguments_: readonly string[]): PlannerSceneSourceKind {
+  const value = option(arguments_, "--scene-source");
+  if (value !== "canonical" && value !== "babylon-native") {
+    throw new Error("--scene-source must be canonical or babylon-native.");
+  }
+  return value;
+}
+
+function rejectOption(arguments_: readonly string[], name: string): void {
+  if (arguments_.includes(name)) {
+    throw new Error(`${name} is not accepted for Babylon Native Planner output.`);
+  }
 }
 
 function contentHash(bytes: Uint8Array): `sha256:${string}` {
@@ -317,38 +355,18 @@ function sceneBriefDiagnostics(source: string): PlannerSelfCheckDiagnostic[] {
   }));
 }
 
-export async function runPlannerSelfCheck(options: {
-  readonly sceneId: string;
-  readonly briefPath: string;
-  readonly worldPlanPath: string;
-  readonly entryPath: string;
-  readonly terrainPromptPath: string;
-  readonly terrainIntentPath: string;
-  readonly reportPath: string;
-}): Promise<{
+export async function runPlannerSelfCheck(options: PlannerSelfCheckOptions): Promise<{
   readonly status: "passed" | "failed";
   readonly diagnostics: readonly PlannerSelfCheckDiagnostic[];
 }> {
-  const [
-    briefBytes,
-    worldPlanBytes,
-    entryBytes,
-    terrainPromptBytes,
-    terrainIntentBytes,
-  ] = await Promise.all([
+  const [briefBytes, worldPlanBytes, entryBytes] = await Promise.all([
     readFile(options.briefPath),
     readFile(options.worldPlanPath),
     readFile(options.entryPath),
-    readFile(options.terrainPromptPath),
-    readFile(options.terrainIntentPath),
   ]);
   const briefSource = briefBytes.toString("utf8");
-  const diagnostics = [
-    ...sceneBriefDiagnostics(briefSource),
-    ...terrainPromptDiagnostics(terrainPromptBytes.toString("utf8")),
-  ];
+  const diagnostics = [...sceneBriefDiagnostics(briefSource)];
   let imageMeasurements: PlannerImageMeasurement | null = null;
-  let terrainIntentMeasurements: TerrainIntentMeasurement | null = null;
   try {
     decodePng(worldPlanBytes);
     imageMeasurements = centerMeasurement(entryBytes);
@@ -366,6 +384,34 @@ export async function runPlannerSelfCheck(options: {
       message: error instanceof Error ? error.message : String(error),
     });
   }
+  const baseReport = {
+    kind: "worldkit-planner-self-check",
+    schemaVersion: 1,
+    validatorVersion: PLANNER_SELF_CHECK_VERSION,
+    sceneId: options.sceneId,
+    sceneSourceKind: options.sceneSourceKind,
+    status: diagnostics.length === 0 ? "passed" : "failed",
+    inputs: {
+      sceneBriefHash: contentHash(briefBytes),
+      worldPlanHash: contentHash(worldPlanBytes),
+      entryWhiteboxTargetHash: contentHash(entryBytes),
+    },
+    imageMeasurements,
+  } as const;
+  if (options.sceneSourceKind === "babylon-native") {
+    const report = { ...baseReport, diagnostics } as const;
+    await writeFile(options.reportPath, `${JSON.stringify(report)}\n`, "utf8");
+    return { status: report.status, diagnostics };
+  }
+
+  const [terrainPromptBytes, terrainIntentBytes] = await Promise.all([
+    readFile(options.terrainPromptPath),
+    readFile(options.terrainIntentPath),
+  ]);
+  diagnostics.push(
+    ...terrainPromptDiagnostics(terrainPromptBytes.toString("utf8")),
+  );
+  let terrainIntentMeasurements: TerrainIntentMeasurement | null = null;
   try {
     terrainIntentMeasurements = terrainIntentMeasurement(terrainIntentBytes);
     const ratioRange = terrainIntentMeasurements.maximumHeightRatio -
@@ -397,19 +443,13 @@ export async function runPlannerSelfCheck(options: {
     });
   }
   const report = {
-    kind: "worldkit-planner-self-check",
-    schemaVersion: 1,
-    validatorVersion: PLANNER_SELF_CHECK_VERSION,
-    sceneId: options.sceneId,
+    ...baseReport,
     status: diagnostics.length === 0 ? "passed" : "failed",
     inputs: {
-      sceneBriefHash: contentHash(briefBytes),
-      worldPlanHash: contentHash(worldPlanBytes),
-      entryWhiteboxTargetHash: contentHash(entryBytes),
+      ...baseReport.inputs,
       terrainHeightIntentPromptHash: contentHash(terrainPromptBytes),
       terrainHeightIntentPngHash: contentHash(terrainIntentBytes),
     },
-    imageMeasurements,
     terrainIntentMeasurements,
     diagnostics,
   } as const;
@@ -420,15 +460,27 @@ export async function runPlannerSelfCheck(options: {
 export async function main(
   arguments_: readonly string[] = process.argv.slice(2),
 ): Promise<void> {
-  const result = await runPlannerSelfCheck({
+  const sceneSourceKind = sceneSourceKindOption(arguments_);
+  const baseOptions = {
+    sceneSourceKind,
     sceneId: option(arguments_, "--scene-id"),
     briefPath: path.resolve(option(arguments_, "--brief")),
     worldPlanPath: path.resolve(option(arguments_, "--world-plan")),
     entryPath: path.resolve(option(arguments_, "--entry")),
-    terrainPromptPath: path.resolve(option(arguments_, "--terrain-prompt")),
-    terrainIntentPath: path.resolve(option(arguments_, "--terrain-intent")),
     reportPath: path.resolve(option(arguments_, "--report")),
-  });
+  } as const;
+  const result = sceneSourceKind === "canonical"
+    ? await runPlannerSelfCheck({
+      ...baseOptions,
+      sceneSourceKind,
+      terrainPromptPath: path.resolve(option(arguments_, "--terrain-prompt")),
+      terrainIntentPath: path.resolve(option(arguments_, "--terrain-intent")),
+    })
+    : await (async () => {
+      rejectOption(arguments_, "--terrain-prompt");
+      rejectOption(arguments_, "--terrain-intent");
+      return runPlannerSelfCheck({ ...baseOptions, sceneSourceKind });
+    })();
   process.stdout.write(`${JSON.stringify(result)}\n`);
   if (result.status !== "passed") process.exitCode = 2;
 }

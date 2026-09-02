@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { isNil } from "lodash-es";
 
 import {
   formalWorldCaptureIntentCanonicalBytesV1,
@@ -24,6 +25,7 @@ import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionRunReceiptV1,
+  getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionRunReceiptV1,
@@ -44,6 +46,7 @@ import {
   NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   decideNativeBlockReconstructionRouteV1,
+  deriveNativeBlockGenerationRouterRequestIdV1,
   deriveNativeBlockGenerationBootstrapV1,
   resolveWorldReconstructionFrozenOwnerIdentitiesV1,
   type WorldReconstructionHostRoutePolicyV1,
@@ -124,6 +127,22 @@ export interface WorldReconstructionProductionClosedResultV1
   readonly cleanupOutcome: "completed" | "failed" | "not-started" | "unknown";
 }
 
+export interface WorldReconstructionProductionRejectedCaptureResultV1
+  extends WorldReconstructionProductionIdentityV1 {
+  readonly outcome: "rejected-capture";
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed";
+  readonly rejectedWorldPackagePath: string;
+  readonly rejectedWorldPackageRef: string;
+  readonly rejectedWorldPackageRootHash: Sha256HashV1;
+  readonly rejectedCaptureDirectoryPath: string;
+  readonly rejectedOpeningPath: string;
+  readonly rejectedOpeningRef: string;
+  readonly openingGateResultPath: string;
+  readonly openingGateResultRef: string;
+  readonly openingGateResultHash: Sha256HashV1;
+}
+
 export interface WorldReconstructionProductionUnsupportedResultV1
   extends WorldReconstructionProductionIdentityV1 {
   readonly outcome: "unsupported-route";
@@ -132,6 +151,7 @@ export interface WorldReconstructionProductionUnsupportedResultV1
 
 export type WorldReconstructionProductionResultV1 =
   | WorldReconstructionProductionPublishedResultV1
+  | WorldReconstructionProductionRejectedCaptureResultV1
   | WorldReconstructionProductionClosedResultV1
   | WorldReconstructionProductionUnsupportedResultV1;
 
@@ -605,10 +625,13 @@ export async function runWorldReconstructionProductionV1(
   const runId = path.basename(outputDirectoryPath);
   if (
     path.dirname(outputDirectoryPath) !== runsRoot ||
-    !RUN_ID_PATTERN.test(runId) ||
-    `native-block-generation-${reconstructionCase.id}-${runId}-attempt-1`
-      .length > 80
+    !RUN_ID_PATTERN.test(runId)
   ) throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  deriveNativeBlockGenerationRouterRequestIdV1({
+    caseId: reconstructionCase.id,
+    runId,
+    attemptIndex: 1,
+  });
   if (await lstatOrMissing(outputDirectoryPath) !== undefined) {
     throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_ALREADY_EXISTS");
   }
@@ -882,6 +905,19 @@ export async function runWorldReconstructionProductionV1(
     }, ports);
   } catch (error) {
     if (error instanceof WorldReconstructionRunClosedErrorV1) {
+      if (!isNil(error.rejectedCaptureEvidence)) {
+        return Object.freeze({
+          kind: "world-reconstruction-production-result",
+          schemaVersion: 1,
+          caseId: reconstructionCase.id,
+          caseRef,
+          runId,
+          outcome: "rejected-capture",
+          diagnosticCodes: error.diagnosticCodes,
+          cleanupOutcome: error.cleanupOutcome,
+          ...error.rejectedCaptureEvidence,
+        });
+      }
       return Object.freeze({
         kind: "world-reconstruction-production-result",
         schemaVersion: 1,
@@ -1019,7 +1055,7 @@ export async function runWorldReconstructionProductionV1(
       cleanupOutcome,
     });
   }
-  const terminal = receipt.attempts[receipt.finalAttemptIndex]!;
+  const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
   if (
     verification.attemptIndex !== receipt.finalAttemptIndex ||
     verification.worldPackageRef !== terminal.worldPackageRef ||
