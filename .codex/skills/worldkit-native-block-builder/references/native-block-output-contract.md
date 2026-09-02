@@ -106,6 +106,15 @@ All `route` blocks must form one edge-adjacent component. Neighboring route tops
 
 Treat `budgets.maximumStaticColliderCount` as a hard ceiling shared by generation, Native admission, and Package closure. In the Block Profile, one `staticColliders` row selects one Block and consumes one Collider. Do not register every visible or supporting Block. Every `case.json.expected.colliders[].colliderId` must appear exactly once in the final `staticColliders` array and bind to one explicit Block in the corresponding acceptance visual group. Spawn/support, step, and blocker required IDs cannot be replaced by a large automatically generated Collider set. Register the exact Case-required Collider IDs, the Spawn support, the continuous playable corridor, and only the blocker faces needed to prevent traversal; keep background mass and non-playable support visual-only. Count the final array before returning and leave margin below the frozen ceiling. Never assume that many visual Blocks will be coalesced into one proxy.
 
+Each `staticColliders` row uses the exact required fields `id`, `blockId`, and
+`traversalBinding`; only `frictionRatio` and `restitutionRatio` are optional.
+Do not add a `role` field. The trusted evaluator derives `blocker` from a
+`not-traversable` binding, derives `step` from a selected Block whose checked
+shape is `step`, and otherwise derives `ground` from the admitted static-surface
+binding. Therefore a Case Collider with role `step` must select an actual
+`step` Block and use the ordinary `ground.static@1` traversal surface; it does
+not author a second role dialect in `scene.ts`.
+
 Scripted traversal is a metric authoring constraint, not a promise that the Host will adapt the test to the generated layout. Read every check's exact fixed-input segments from `context/case.json` and the controlled Subject descriptor selected by `initialControlledEntityId` from `inputs/world-runtime-bootstrap.json`. The formal Runtime uses 60 fixed Ticks per second. For each segment, its declared action set selects walk or run speed; missing turn, lateral, jump, or run actions cannot be invented. Compute the flat-ground travel ceiling from the declared Tick count and selected speed, then shorten the authored route enough to absorb acceleration, elevation, contact, and Capsule-entry costs. A pass target's Host-resolved bounds must begin inside that conservative envelope along the declared movement axis. Keep the complete approach continuously supported by explicit Collider rows. For a blocker check, place the Collider face beyond the Spawn but inside the input envelope so the Capsule can actually reach and stop at it.
 
 The Case-bound Formal Capture Intent is Capture-only Host input, not generation context and not a Builder output. Do not predict or write `sourceBoundsMeters` or `planeMeters`. The trusted Host resolves reach/pass criteria from verified visual-group bounds and resolves block planes from exact frozen Collider geometry after the collider-to-Block-to-visual-group join closes.

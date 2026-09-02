@@ -129,6 +129,16 @@ function captureExecutionBudget(
   });
 }
 
+/** @internal Candidate canvases must not share one WebGL context across reset. */
+export function createFormalCaptureCandidateCanvasV1(
+  viewport: HTMLElement,
+): HTMLCanvasElement {
+  const canvas = viewport.ownerDocument.createElement("canvas");
+  canvas.setAttribute("aria-label", "Babylon Native formal Capture Candidate");
+  viewport.replaceChildren(canvas);
+  return canvas;
+}
+
 export async function startHostedFormalCaptureShellRouteV1(input: Readonly<{
   constants: HostedFormalCaptureRouteConstantsV1;
   viewport: HTMLElement;
@@ -193,8 +203,6 @@ export async function startHostedFormalCaptureFrameRouteV1(input: Readonly<{
     input.search,
     "frame",
   );
-  const canvas = document.createElement("canvas");
-  input.viewport.replaceChildren(canvas);
   const verified = await loadVerifiedNativeWorldPackageV1(
     new URL("/__worldkit/native-package/", location.origin),
   );
@@ -222,10 +230,14 @@ export async function startHostedFormalCaptureFrameRouteV1(input: Readonly<{
     request: requestBody,
     verifiedWorldPackage: verified,
     moduleLoader: { load: async () => moduleImport.default },
-    engineFactory: () => new Engine(canvas, true, {
-      preserveDrawingBuffer: true,
-      stencil: true,
-    }),
+    engineFactory: () => new Engine(
+      createFormalCaptureCandidateCanvasV1(input.viewport),
+      true,
+      {
+        preserveDrawingBuffer: true,
+        stencil: true,
+      },
+    ),
     subjectAssetResolver: nativeSceneSubjectAssetResolver,
     sdkOwnerIdentities: input.constants.sdkOwnerIdentities,
   });

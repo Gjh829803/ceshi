@@ -1,6 +1,7 @@
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   hashFormalColliderOverlayObservationV1,
+  hashFormalOpeningObservationV1,
   hashFormalWorldCaptureRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
@@ -11,6 +12,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildWorldReconstructionEvidenceSetV1,
+  projectOpeningCompositionDistancesV1,
+  projectColliderEvidenceRoleV1,
   projectMeasuredTraversalCheck,
 } from "./evaluate-evidence-set.js";
 import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support.js";
@@ -74,6 +77,48 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("derives step evidence from the selected trusted Block shape", () => {
+    expect(projectColliderEvidenceRoleV1({
+      kind: "static-surface",
+      surfaceEntityId: "step-surface",
+      logicalSubshapeId: "step-top",
+      traversalSurfaceProfileRef:
+        "worldkit://traversal-surface-profile/ground.static@1",
+      traversalSurfaceId: "traversal-surface:step-surface:step-top",
+    }, "step")).toBe("step");
+  });
+
+  it("canonicalizes adjacent opening distance pairs independently of depth order", () => {
+    expect(projectOpeningCompositionDistancesV1([
+      {
+        compositionTargetRef: "worldkit://composition-target/zeta@1",
+        normalizedCenter: { xBasisPoints: 0, yBasisPoints: 0 },
+        depthOrder: 0,
+      },
+      {
+        compositionTargetRef: "worldkit://composition-target/alpha@1",
+        normalizedCenter: { xBasisPoints: 3, yBasisPoints: 4 },
+        depthOrder: 1,
+      },
+      {
+        compositionTargetRef: "worldkit://composition-target/middle@1",
+        normalizedCenter: { xBasisPoints: 9, yBasisPoints: 12 },
+        depthOrder: 2,
+      },
+    ])).toEqual([
+      {
+        fromTargetRef: "worldkit://composition-target/alpha@1",
+        toTargetRef: "worldkit://composition-target/middle@1",
+        distanceBasisPoints: 10,
+      },
+      {
+        fromTargetRef: "worldkit://composition-target/alpha@1",
+        toTargetRef: "worldkit://composition-target/zeta@1",
+        distanceBasisPoints: 5,
+      },
+    ]);
+  });
+
   it("projects a complete frozen criterion set independently of criterion order", () => {
     const criteria = Object.freeze([
       MIXED_BLOCK_CHECKPOINT_CRITERIA[2],
@@ -146,6 +191,32 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       fixture.scriptedTraversalObservation.resetReadySnapshot.worldSessionId,
     ).not.toBe(fixture.captureReceipt.readySnapshot.worldSessionId);
     expect(() => buildWorldReconstructionEvidenceSetV1(fixture)).not.toThrow();
+  });
+
+  it("projects a measured missing topology relation for evaluator diagnostics", () => {
+    const fixture = createEvidenceSetFixtureInputV1();
+    const opening = parseFormalOpeningObservationV1({
+      ...fixture.openingObservation,
+      observedTopologyRelations: [],
+    });
+    const receipt = parseFormalWorldCaptureReceiptV1({
+      ...fixture.captureReceipt,
+      openingObservationContentHash: hashFormalOpeningObservationV1(opening),
+    });
+
+    const evidence = buildWorldReconstructionEvidenceSetV1({
+      ...fixture,
+      captureReceipt: receipt,
+      openingObservation: opening,
+    });
+    const topology = evidence.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "topology",
+    );
+
+    expect(topology?.observed).toMatchObject({
+      kind: "topology-observed",
+      relations: [],
+    });
   });
 
   it("derives collider roles from Frozen Contribution traversalBinding, not paletteRole or shape", () => {

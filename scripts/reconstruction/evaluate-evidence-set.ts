@@ -14,6 +14,7 @@ import {
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
   type BabylonNativeContributionTraversalBindingV1,
+  type BabylonNativeBlockMaterializerShapeV1,
   type FormalColliderOverlayObservationV1,
   type FormalOpeningObservationV1,
   type FormalScriptedTraversalObservationV1,
@@ -82,6 +83,38 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+type OpeningDistanceGroupV1 = Readonly<Pick<
+  FormalOpeningObservationV1["visualGroups"][number],
+  "compositionTargetRef" | "normalizedCenter" | "depthOrder"
+>>;
+
+export function projectOpeningCompositionDistancesV1(
+  visualGroups: readonly OpeningDistanceGroupV1[],
+) {
+  const depthOrderedGroups = [...visualGroups].sort((left, right) =>
+    left.depthOrder - right.depthOrder ||
+    compareText(left.compositionTargetRef, right.compositionTargetRef));
+  return depthOrderedGroups.slice(1)
+    .map((group, index) => {
+      const previous = depthOrderedGroups[index]!;
+      const [fromTargetRef, toTargetRef] =
+        compareText(previous.compositionTargetRef, group.compositionTargetRef) < 0
+          ? [previous.compositionTargetRef, group.compositionTargetRef]
+          : [group.compositionTargetRef, previous.compositionTargetRef];
+      return {
+        fromTargetRef,
+        toTargetRef,
+        distanceBasisPoints: Math.round(Math.hypot(
+          group.normalizedCenter.xBasisPoints - previous.normalizedCenter.xBasisPoints,
+          group.normalizedCenter.yBasisPoints - previous.normalizedCenter.yBasisPoints,
+        )),
+      };
+    })
+    .sort((left, right) =>
+      compareText(left.fromTargetRef, right.fromTargetRef) ||
+      compareText(left.toTargetRef, right.toTargetRef));
+}
+
 function relationKey(value: WorldReconstructionTopologyRelationV1): string {
   return `${value.fromNodeId}\u0000${value.relation}\u0000${value.toNodeId}`;
 }
@@ -89,16 +122,17 @@ function relationKey(value: WorldReconstructionTopologyRelationV1): string {
 const GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF =
   "worldkit://traversal-surface-profile/ground.static@1" as const;
 
-function roleFromTraversalBinding(
+export function projectColliderEvidenceRoleV1(
   binding: BabylonNativeContributionTraversalBindingV1,
-): "ground" | "blocker" {
+  sourceBlockShape: BabylonNativeBlockMaterializerShapeV1,
+): "ground" | "blocker" | "step" {
   if (binding.kind === "not-traversable") return "blocker";
   if (
     binding.kind === "static-surface" &&
     binding.traversalSurfaceProfileRef ===
       GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF
   ) {
-    return "ground";
+    return sourceBlockShape === "step" ? "step" : "ground";
   }
   stale("Contribution traversalBinding does not admit a blocker or ground collider role");
 }
@@ -454,46 +488,30 @@ export function buildWorldReconstructionEvidenceSetV1(
     colliderOverlayObservation: overlay,
     scriptedTraversalObservation: traversal,
   });
-  const observedRelationKeys = new Set(observedRelationRows.map(relationKey));
-  for (const relation of semanticMap.topologyRelations) {
-    if (!observedRelationKeys.has(relationKey(relation))) {
-      stale("semantic topology relation lacks its declared measured observation");
-    }
-  }
 
   const openingGroups = [...opening.visualGroups].sort((left, right) =>
     compareText(left.compositionTargetRef, right.compositionTargetRef));
   const depthOrderedGroups = [...opening.visualGroups].sort((left, right) =>
     left.depthOrder - right.depthOrder ||
     compareText(left.compositionTargetRef, right.compositionTargetRef));
-  const distances = depthOrderedGroups.slice(1).map((group, index) => {
-    const previous = depthOrderedGroups[index]!;
-    const [fromTargetRef, toTargetRef] =
-      compareText(previous.compositionTargetRef, group.compositionTargetRef) < 0
-        ? [previous.compositionTargetRef, group.compositionTargetRef]
-        : [group.compositionTargetRef, previous.compositionTargetRef];
-    return {
-      fromTargetRef,
-      toTargetRef,
-      distanceBasisPoints: Math.round(Math.hypot(
-        group.normalizedCenter.xBasisPoints - previous.normalizedCenter.xBasisPoints,
-        group.normalizedCenter.yBasisPoints - previous.normalizedCenter.yBasisPoints,
-      )),
-    };
-  });
+  const distances = projectOpeningCompositionDistancesV1(opening.visualGroups);
   const overlayColliderIds = new Set(overlay.colliders.map(({ colliderId }) => colliderId));
   const colliderContributions = [...verified.nativeSceneContribution.staticColliders]
     .sort((left, right) => compareText(left.id, right.id))
     .map((collider) => {
       const blockId = colliderJoins.get(collider.id);
       if (blockId === undefined) stale("Contribution collider is absent from trusted Block metadata");
-      if (!metadataBlocks.has(blockId)) {
+      const sourceBlock = metadataBlocks.get(blockId);
+      if (sourceBlock === undefined) {
         stale("Contribution collider Block is absent from trusted Block metadata");
       }
       return {
         contributionId: collider.id,
         colliderId: collider.id,
-        role: roleFromTraversalBinding(collider.traversalBinding),
+        role: projectColliderEvidenceRoleV1(
+          collider.traversalBinding,
+          sourceBlock.shape,
+        ),
         hasOverlay: overlayColliderIds.has(collider.id),
       };
     });
