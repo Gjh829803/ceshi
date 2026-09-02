@@ -129,6 +129,18 @@ describe("Native Block Builder Skill", () => {
       "Do not predict `sourceBoundsMeters` or `planeMeters`",
     );
     expect(skill).toContain("Before returning, verify this closure:");
+    expect(skill).toContain(
+      "complete playable floor groups across the whole intended exploration domain",
+    );
+    expect(skill).toContain(
+      "uploaded reference evidence, frozen entry composition, frozen top-down continuation",
+    );
+    expect(skill).toContain(
+      "Never place an invisible or visual-only air wall",
+    );
+    expect(skill).toContain(
+      "Runtime owns the neutral whitebox inspection lights",
+    );
     expect(outputContract).toContain("@whitebox-world/native-babylon");
     expect(outputContract).toContain("@whitebox-world/native-babylon-block-profile");
     expect(outputContract).toContain("deterministic seeded construction");

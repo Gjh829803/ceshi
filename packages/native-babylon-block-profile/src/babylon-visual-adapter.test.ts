@@ -283,6 +283,15 @@ describe("Babylon Native block visual adapter", () => {
       expect(quarterMaterial.diffuseColor).toEqual(
         Color3.FromHexString("#AEB8C4"),
       );
+      expect(quarterMaterial.ambientColor).toEqual(
+        Color3.FromHexString("#AEB8C4").scale(0.3),
+      );
+      expect(quarterMaterial.emissiveColor).toEqual(
+        Color3.FromHexString("#AEB8C4").scale(0.025),
+      );
+      expect(quarterMaterial.specularColor).toEqual(Color3.Black());
+      expect(quarterMaterial.disableLighting).toBe(false);
+      expect(quarterMaterial.maxSimultaneousLights).toBe(2);
 
       expect(visuals.nodes.every(({ mesh }) =>
         mesh.hasInstances === false && mesh.hasThinInstances === false,

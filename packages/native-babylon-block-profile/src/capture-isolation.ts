@@ -12,6 +12,8 @@ import {
   babylonNativeBlockLiveVisualHandleMeshV1,
   type BabylonNativeBlockLiveHandleRegistryV1,
 } from "./live-handle-registry.js";
+import { suspendBabylonNativeBlockWalkableDisplayV1 } from
+  "./whitebox-display.js";
 
 const CODE = "WORLDKIT_NATIVE_BLOCK_CAPTURE_ISOLATION_INVALID";
 const THIN_INSTANCE_MATRIX_STRIDE = 16;
@@ -110,6 +112,10 @@ export function applyBabylonNativeBlockCaptureIsolationV1(
       restoreSteps.push(() => {
         owned.dispose();
       });
+    }
+    const walkableDisplay = suspendBabylonNativeBlockWalkableDisplayV1(mesh);
+    if (!isNil(walkableDisplay)) {
+      restoreSteps.push(() => walkableDisplay.restore());
     }
     const priorMaterial: Material | null = mesh.material;
     restoreSteps.push(() => {

@@ -25,6 +25,8 @@ import {
   unregisterBabylonNativeBlockLiveHandleRegistryV1,
   type BabylonNativeBlockLiveHandleRegistryV1,
 } from "./live-handle-registry.js";
+import { BABYLON_NATIVE_BLOCK_WHITEBOX_DISPLAY_V1 } from
+  "./whitebox-display.js";
 
 export interface BabylonNativeBlockVisualNodeV1 {
   readonly blockId: string;
@@ -285,10 +287,21 @@ export function createBabylonNativeBlockVisualsV1(
           `${input.buildEpochId}.palette.${role}`,
           input.scene,
         );
-        material.diffuseColor = Color3.FromHexString(
+        const displayColor = Color3.FromHexString(
           BABYLON_NATIVE_BLOCK_PALETTE_COLOR_HEX_BY_ROLE_V1[role],
         );
-        material.specularColor = new Color3(0.08, 0.08, 0.08);
+        material.diffuseColor = displayColor;
+        material.ambientColor = displayColor.scale(
+          BABYLON_NATIVE_BLOCK_WHITEBOX_DISPLAY_V1.ambientRatio,
+        );
+        material.emissiveColor = displayColor.scale(
+          BABYLON_NATIVE_BLOCK_WHITEBOX_DISPLAY_V1.emissiveRatio,
+        );
+        material.specularColor = displayColor.scale(
+          BABYLON_NATIVE_BLOCK_WHITEBOX_DISPLAY_V1.specularRatio,
+        );
+        material.disableLighting = false;
+        material.maxSimultaneousLights = 2;
         materialsByRole.set(role, material);
         materials.push(material);
       }

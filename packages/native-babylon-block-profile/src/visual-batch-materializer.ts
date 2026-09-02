@@ -27,6 +27,11 @@ import {
 } from "./optimization.js";
 import type { BabylonNativeBlockPaletteRoleV1 } from "./profile.js";
 import type { BabylonNativeBlockShapeKindV1 } from "./shapes.js";
+import {
+  registerBabylonNativeBlockWalkableInstanceDisplayV1,
+  registerBabylonNativeBlockWalkableVertexDisplayV1,
+  type BabylonNativeBlockWalkableDisplayRegistrationV1,
+} from "./whitebox-display.js";
 
 const CODE = "WORLDKIT_NATIVE_BLOCK_VISUAL_BATCH_MATERIALIZATION_INVALID";
 
@@ -143,6 +148,9 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
     );
   }
   const meshByBlockId = new Map<string, Mesh>();
+  const placementByBlockId = new Map(
+    placements.map((placement) => [placement.blockId, placement] as const),
+  );
   for (const placement of placements) {
     const handle = handleByBlockId.get(placement.blockId);
     if (
@@ -182,6 +190,8 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
   const batchMeshes: Mesh[] = [];
   const batches: BabylonNativeBlockLiveVisualBatchV1[] = [];
   const handles: BabylonNativeBlockLiveVisualHandleV1[] = [];
+  const walkableDisplayRegistrations:
+    BabylonNativeBlockWalkableDisplayRegistrationV1[] = [];
   let materialized: BabylonNativeBlockLiveHandleRegistryV1 | undefined;
   const retain = (mesh: Mesh): void => {
     restorable.push(Object.freeze({
@@ -224,6 +234,21 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
         );
       }
       batchMesh.material = sourceMesh.material;
+      if (group.paletteRole === "ground" || group.paletteRole === "route") {
+        walkableDisplayRegistrations.push(
+          registerBabylonNativeBlockWalkableInstanceDisplayV1(
+            batchMesh,
+            group.blockIds.map((blockId) => {
+              const placement = placementByBlockId.get(blockId)!;
+              return Object.freeze({
+                blockId,
+                paletteRole: placement.paletteRole,
+                centerMetersXYZ: placement.centerMetersXYZ,
+              });
+            }),
+          ),
+        );
+      }
       batchMesh.isPickable = false;
       batchMesh.receiveShadows = sourceMesh.receiveShadows;
       batchMesh.isVisible = true;
@@ -258,8 +283,16 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
     }
     for (const blockId of partition.independentBlockIds) {
       const memberMesh = meshByBlockId.get(blockId)!;
+      const placement = placementByBlockId.get(blockId)!;
       retain(memberMesh);
       memberMesh.alwaysSelectAsActiveMesh = true;
+      const walkableDisplay = registerBabylonNativeBlockWalkableVertexDisplayV1(
+        memberMesh,
+        placement,
+      );
+      if (!isNil(walkableDisplay)) {
+        walkableDisplayRegistrations.push(walkableDisplay);
+      }
       handles.push(handleByBlockId.get(blockId)!);
     }
     handles.sort((left, right) => stableCompare(left.blockId, right.blockId));
@@ -340,18 +373,24 @@ export function materializeBabylonNativeBlockVisualBatchesV1(
         } catch (error) {
           firstFailure = error;
         }
-        const cleanup = reverseCleanup(batchMeshes, restorable);
+        const cleanup = reverseCleanup(
+          walkableDisplayRegistrations,
+          batchMeshes,
+          restorable,
+        );
         if (!isNil(firstFailure)) throw firstFailure;
         if (cleanup.didFail) throw cleanup.error;
       },
     });
   } catch (error) {
-    reverseCleanup(batchMeshes, restorable);
+    reverseCleanup(walkableDisplayRegistrations, batchMeshes, restorable);
     throw error;
   }
 }
 
 function reverseCleanup(
+  walkableDisplayRegistrations:
+    readonly BabylonNativeBlockWalkableDisplayRegistrationV1[],
   batchMeshes: readonly Mesh[],
   restorable: readonly RestorableVisualStateV1[],
 ): Readonly<{ didFail: boolean; error: unknown }> {
@@ -362,6 +401,17 @@ function reverseCleanup(
     didFail = true;
     firstFailure = error;
   };
+  for (
+    let index = walkableDisplayRegistrations.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    try {
+      walkableDisplayRegistrations[index]!.dispose();
+    } catch (error) {
+      record(error);
+    }
+  }
   for (let index = restorable.length - 1; index >= 0; index -= 1) {
     const state = restorable[index]!;
     try {
