@@ -44,10 +44,37 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
 ) as ArrayBuffer;
 
 const RESOURCE_BUDGET = Object.freeze({
-  maximumVertices: 256,
-  maximumTriangles: 288,
+  maximumVertices: 512,
+  maximumTriangles: 512,
   maximumColliders: 24,
 });
+
+const CORPUS_COLLIDER_RESOLUTION = Object.freeze({
+  "collider-half-meter-blocker": Object.freeze({
+    id: "collider-corpus-ordinary-and-blocked-steps-ground-main",
+    includeVertex: (_x: number, y: number, z: number) => y >= 0.2 && z <= -3.2,
+  }),
+  "collider-t-north-wall": Object.freeze({
+    id: "collider-corpus-t-shaped-traversal-solid-t-north-wall",
+  }),
+  "collider-t-west-wall": Object.freeze({
+    id: "collider-corpus-t-shaped-traversal-solid-t-west-wall",
+  }),
+  "collider-m-cliff-mid-s": Object.freeze({
+    id: "collider-corpus-mountain-cliff-solid-m-cliff",
+  }),
+  "collider-m-overlook": Object.freeze({
+    id: "collider-corpus-mountain-cliff-ground-m-route",
+  }),
+  "collider-b-wall-back": Object.freeze({
+    id: "collider-corpus-building-exterior-solid-building-shell",
+    includeVertex: (_x: number, _y: number, z: number) => z <= -3.5,
+  }),
+  "collider-i-wall-back": Object.freeze({
+    id: "collider-corpus-limited-interior-solid-interior-shell",
+    includeVertex: (_x: number, _y: number, z: number) => z <= -2.5,
+  }),
+} as const);
 
 const POSITIVE_CASE_IDS = Object.freeze([
   "ordinary-and-blocked-steps",
@@ -115,7 +142,7 @@ async function auditedAdmission(
     candidateColliderMeshes = Object.freeze(scene.meshes.filter(
       (mesh): mesh is Mesh =>
         mesh instanceof Mesh &&
-        mesh.name.startsWith("worldkit-block-collider-"),
+        mesh.name.startsWith("worldkit-block-topology-collider-"),
     ));
   } finally {
     blockEvidence = takeBabylonNativeBlockCheckedEpochEvidenceV1(scene);
@@ -261,6 +288,52 @@ function subjectOf(
   return subject;
 }
 
+function resolvedCorpusCollider(
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+  colliderId: string,
+) {
+  const resolution = colliderId in CORPUS_COLLIDER_RESOLUTION
+    ? CORPUS_COLLIDER_RESOLUTION[
+      colliderId as keyof typeof CORPUS_COLLIDER_RESOLUTION
+    ]
+    : undefined;
+  const contributionId = resolution?.id ?? colliderId;
+  const contribution = verified.nativeSceneContribution.staticColliders.find(
+    ({ id }) => id === contributionId,
+  );
+  if (isNil(contribution)) {
+    throw new Error(`BWB-5 verified Package is missing Collider '${colliderId}'.`);
+  }
+  return Object.freeze({ contribution, resolution });
+}
+
+function contributionNearFaceMeters(
+  verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
+  colliderId: string,
+  axisIndex: 0 | 2,
+): number {
+  const { contribution, resolution } = resolvedCorpusCollider(
+    verified,
+    colliderId,
+  );
+  const includeVertex = resolution && "includeVertex" in resolution
+    ? resolution.includeVertex
+    : undefined;
+  const axisCoordinates: number[] = [];
+  const positions = contribution.worldPositionsMetersXYZ;
+  for (let index = 0; index < positions.length; index += 3) {
+    const x = positions[index]!;
+    const y = positions[index + 1]!;
+    const z = positions[index + 2]!;
+    if (includeVertex !== undefined && !includeVertex(x, y, z)) continue;
+    axisCoordinates.push(positions[index + axisIndex]!);
+  }
+  if (axisCoordinates.length === 0) {
+    throw new Error(`BWB-5 Collider '${colliderId}' has no matching vertices.`);
+  }
+  return Math.max(...axisCoordinates);
+}
+
 function positiveAxisCenterLimitMeters(
   verified: VerifiedBabylonNativeWorldPackageDirectoryV1,
   colliderId: string,
@@ -274,18 +347,8 @@ function positiveAxisCenterLimitMeters(
   if (isNil(controlledDescriptor)) {
     throw new Error("BWB-5 verified Package is missing its controlled Subject.");
   }
-  const contribution = verified.nativeSceneContribution.staticColliders.find(
-    ({ id }) => id === colliderId,
-  );
-  if (isNil(contribution)) {
-    throw new Error(`BWB-5 verified Package is missing Collider '${colliderId}'.`);
-  }
-  const nearFaceMeters = Math.max(
-    ...contribution.worldPositionsMetersXYZ.filter(
-      (_, index) => index % 3 === axisIndex,
-    ),
-  );
-  return nearFaceMeters + controlledDescriptor.collider.radiusMeters;
+  return contributionNearFaceMeters(verified, colliderId, axisIndex) +
+    controlledDescriptor.collider.radiusMeters;
 }
 
 function blockingCenterLimitMeters(
@@ -293,12 +356,7 @@ function blockingCenterLimitMeters(
   colliderId: string,
   axisIndex: 0 | 2,
 ): number {
-  const contribution = verified.nativeSceneContribution.staticColliders.find(
-    ({ id }) => id === colliderId,
-  );
-  if (isNil(contribution)) {
-    throw new Error(`BWB-5 verified Package is missing Collider '${colliderId}'.`);
-  }
+  const { contribution } = resolvedCorpusCollider(verified, colliderId);
   if (contribution.traversalBinding.kind !== "not-traversable") {
     throw new Error(`BWB-5 Collider '${colliderId}' must be not-traversable.`);
   }

@@ -1,9 +1,9 @@
-import { readdir } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { parseNativeSceneCheckResultV1 } from
   "@whitebox-world/runtime-contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { checkBabylonNativeSceneWorldDirectoryV1 } from
   "./native-scene-check.js";
@@ -22,6 +22,10 @@ const BLOCKS_BOOTSTRAP = Object.freeze({
   ...VALID_NATIVE_SCENE_BOOTSTRAP_FIXTURE_V1,
   nativeSceneProfileRef:
     "worldkit://native-scene-profile/whitebox.blocks@1",
+});
+
+beforeEach(async () => {
+  await rm(BUNDLE_PARENT, { recursive: true, force: true });
 });
 
 async function fixture(
