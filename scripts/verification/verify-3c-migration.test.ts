@@ -83,7 +83,12 @@ async function singleAuthorityRepository(): Promise<string> {
     writeRepositoryFile(
       root,
       "packages/runtime-babylon/src/character-movement-component.ts",
-      "supportsCharacterMovementSubjectV1(subject); 3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;\n",
+      [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "this.#transaction.resetAtSupportedPlacement(input);",
+        "this.#transaction.suspendForRelationship(input);",
+      ].join("\n"),
     ),
     writeRepositoryFile(
       root,
@@ -191,6 +196,26 @@ describe("3C migration ledger verifier", () => {
       ].join("\n"),
     },
     {
+      label: "callable-property fixed-input mutation beside the transaction",
+      path: "packages/runtime-host/src/gameplay-world-port.ts",
+      source: [
+        "export interface GameplayWorldPortV1 {",
+        "prepareFixedInputTick(input: FixedInputOneTickV1): Promise<GameplayWorldTransactionV1>;",
+        "readonly advanceFixedInputTickDirectly?: (input: FixedInputOneTickV1) => Promise<void>;",
+        "}",
+      ].join("\n"),
+    },
+    {
+      label: "local fixed-input port facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "interface PreparedInputPort extends GameplayWorldPortV1 {",
+        'advanceFixedInputTickDirectly(input: Readonly<Omit<FixedInputV1, "ticks"> & { ticks: 1 }>): Promise<void>;',
+        "}",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
       label: "flat Locomotion V1 envelope",
       path: "packages/gameplay-contracts/src/gameplay-contracts.ts",
       source: [
@@ -206,6 +231,17 @@ describe("3C migration ledger verifier", () => {
         "supportsCharacterMovementSubjectV1(subject);",
         "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
         "sampleMotion();",
+      ].join("\n"),
+    },
+    {
+      label: "provider-side CharacterMovement state hashing",
+      path: "packages/runtime-babylon/src/character-movement-component.ts",
+      source: [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "this.#transaction.resetAtSupportedPlacement(input);",
+        "this.#transaction.suspendForRelationship(input);",
+        "hashCharacterMovementStateV1(state);",
       ].join("\n"),
     },
     {

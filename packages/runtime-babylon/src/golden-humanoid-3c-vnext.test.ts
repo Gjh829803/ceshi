@@ -641,6 +641,10 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       snapshot: () => realMovement.snapshot(),
       reconcileSupportAfterReset: (support, activeTickToken) =>
         realMovement.reconcileSupportAfterReset(support, activeTickToken),
+      resetAtSupportedPlacement: (input) =>
+        realMovement.resetAtSupportedPlacement(input),
+      suspendForRelationship: (input) =>
+        realMovement.suspendForRelationship(input),
       reset: (snapshot) => realMovement.reset(snapshot),
       dispose: () => realMovement.dispose(),
     };

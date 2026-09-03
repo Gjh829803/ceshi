@@ -237,6 +237,17 @@ export interface CharacterMovementRuntimeV1 {
     support: BodySupportSampleV1,
     activeTickToken: MovementTickTokenV1 | undefined,
   ): CharacterMovementSnapshotV1;
+  resetAtSupportedPlacement(input: Readonly<{
+    positionMetersXYZ: MovementVec3V1;
+    facingYawRadians: number;
+    committedTick: number;
+  }>): CharacterMovementSnapshotV1;
+  suspendForRelationship(input: Readonly<{
+    positionMetersXYZ: MovementVec3V1;
+    facingYawRadians: number;
+    committedTick: number;
+    suspendedByRelationshipId: string;
+  }>): CharacterMovementSnapshotV1;
   reset(snapshot?: CharacterMovementSnapshotV1): void;
   dispose(): void;
 }

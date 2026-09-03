@@ -51,9 +51,11 @@ import { isEqual, isNil } from "lodash-es";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
-import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
-import { readCharacterMovementNativeDriverForTestingV1 } from "../../packages/runtime-babylon/src/babylon-character-body-port.testing.js";
-import type { CharacterMovementSubjectControllerV1 } from "../../packages/runtime-babylon/src/character-movement-component.js";
+import {
+  bindRuntimeTestPossession,
+  readCharacterMovementNativeDriverForTestingV1,
+  type CharacterMovementSubjectControllerV1,
+} from "@whitebox-world/runtime-babylon/testing";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(

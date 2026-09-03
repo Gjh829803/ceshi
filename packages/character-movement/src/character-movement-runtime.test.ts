@@ -349,6 +349,61 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
     expect(supported.stateHash).not.toBe(airborne.stateHash);
   });
 
+  it("owns supported placement and relationship suspension snapshots", () => {
+    const runtime = createCharacterMovementRuntimeV1(options());
+    const placed = runtime.resetAtSupportedPlacement({
+      positionMetersXYZ: [2, 3, 4],
+      facingYawRadians: 0.4,
+      committedTick: 7,
+    });
+    expect(placed).toMatchObject({
+      tick: 7,
+      positionMetersXYZ: [2, 3, 4],
+      facingYawRadians: 0.4,
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      locomotion: {
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "idle",
+        supportMode: "supported",
+        movementMedium: "ground",
+        transitionSequence: 1,
+      },
+    });
+
+    const suspended = runtime.suspendForRelationship({
+      positionMetersXYZ: [5, 6, 7],
+      facingYawRadians: -0.2,
+      committedTick: 8,
+      suspendedByRelationshipId: "mounted-on:test",
+    });
+    expect(suspended).toMatchObject({
+      tick: 8,
+      positionMetersXYZ: [5, 6, 7],
+      locomotion: {
+        status: "suspended",
+        suspendedByRelationshipId: "mounted-on:test",
+        transitionSequence: 2,
+      },
+    });
+    const repeated = runtime.suspendForRelationship({
+      positionMetersXYZ: [8, 9, 10],
+      facingYawRadians: 0.1,
+      committedTick: 9,
+      suspendedByRelationshipId: "mounted-on:test",
+    });
+    expect(repeated.locomotion.transitionSequence).toBe(2);
+    expect(repeated.stateHash).not.toBe(suspended.stateHash);
+
+    runtime.reset();
+    runtime.beginTick(command(1));
+    expect(() => runtime.resetAtSupportedPlacement({
+      positionMetersXYZ: [0, 1, 0],
+      facingYawRadians: 0,
+      committedTick: 0,
+    })).toThrow("3C_TICK_TOKEN_STALE");
+  });
+
   it("stages jump without mutation, then commits takeoff from BodyResolution", () => {
     const runtime = createCharacterMovementRuntimeV1(options());
     const before = runtime.snapshot();

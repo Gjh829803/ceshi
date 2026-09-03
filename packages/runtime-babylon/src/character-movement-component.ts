@@ -14,7 +14,6 @@ import type {
 import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import {
   createCharacterMovementRuntimeV1,
-  hashCharacterMovementStateV1,
   type CharacterMovementCommandV1,
   type CharacterMovementSnapshotV1,
 } from "@whitebox-world/character-movement";
@@ -718,23 +717,18 @@ export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
     suspendedByRelationshipId: string,
     committedTick = this.movementSnapshot().tick,
   ): void {
-    const before = this.movementSnapshot();
-    const transitionSequence = before.locomotion.status === "suspended" &&
-        before.locomotion.suspendedByRelationshipId === suspendedByRelationshipId
-      ? before.locomotion.transitionSequence
-      : this.#nextTransitionSequence(before.locomotion.transitionSequence);
-    this.#resetAtSnapshot({
-      subjectOriginMetersXYZ,
+    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    this.#transaction.suspendForRelationship({
+      positionMetersXYZ: [
+        subjectOriginMetersXYZ[0] + offset[0],
+        subjectOriginMetersXYZ[1] + offset[1],
+        subjectOriginMetersXYZ[2] + offset[2],
+      ],
       facingYawRadians,
       committedTick,
-      locomotion: {
-        schemaVersion: 2,
-        status: "suspended",
-        suspendedByRelationshipId,
-        committedTick,
-        transitionSequence,
-      },
+      suspendedByRelationshipId,
     });
+    this.#afterPlacementReset();
   }
 
   resetAt(
@@ -742,29 +736,17 @@ export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
     facingYawRadians: number,
     committedTick = this.movementSnapshot().tick,
   ): void {
-    const before = this.movementSnapshot();
-    this.#resetAtSnapshot({
-      subjectOriginMetersXYZ,
+    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    this.#transaction.resetAtSupportedPlacement({
+      positionMetersXYZ: [
+        subjectOriginMetersXYZ[0] + offset[0],
+        subjectOriginMetersXYZ[1] + offset[1],
+        subjectOriginMetersXYZ[2] + offset[2],
+      ],
       facingYawRadians,
       committedTick,
-      locomotion: {
-        schemaVersion: 2,
-        status: "active",
-        mobilityMode: "grounded",
-        gait: "idle",
-        verticalPhase: "none",
-        supportMode: "supported",
-        movementMedium: "ground",
-        facingYawRadians,
-        linearVelocity: { x: 0, y: 0, z: 0 },
-        horizontalSpeedMetersPerSecond: 0,
-        committedTick,
-        phaseEnteredTick: committedTick,
-        transitionSequence: this.#nextTransitionSequence(
-          before.locomotion.transitionSequence,
-        ),
-      },
     });
+    this.#afterPlacementReset();
   }
 
   reset(): void {
@@ -789,53 +771,11 @@ export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
     }
   }
 
-  #resetAtSnapshot(input: Readonly<{
-    subjectOriginMetersXYZ: RuntimeVec3V1;
-    facingYawRadians: number;
-    committedTick: number;
-    locomotion: LocomotionCapabilityStateV2;
-  }>): void {
-    if (!Number.isSafeInteger(input.committedTick) || input.committedTick < 0) {
-      throw new Error("3C_INPUT_INVALID: relationship Tick is invalid.");
-    }
-    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
-    const state = {
-      schemaVersion: 1 as const,
-      tick: input.committedTick,
-      positionMetersXYZ: [
-        input.subjectOriginMetersXYZ[0] + offset[0],
-        input.subjectOriginMetersXYZ[1] + offset[1],
-        input.subjectOriginMetersXYZ[2] + offset[2],
-      ] as const,
-      facingYawRadians: input.facingYawRadians,
-      linearVelocityMetersPerSecondXYZ: [0, 0, 0] as const,
-      locomotion: input.locomotion,
-      transitionEvents: [],
-      runtimeState: {
-        schemaVersion: 1 as const,
-        coyoteTicksRemaining: 0,
-        jumpBufferTicksRemaining: 0,
-        variableJumpHoldTicksRemaining: 0,
-        landingTicksRemaining: 0,
-        apexCrossedInAirborneEpisode: false,
-      },
-    };
-    const snapshot = Object.freeze({
-      ...state,
-      stateHash: hashCharacterMovementStateV1(state),
-    });
-    this.#transaction.reset(snapshot);
+  #afterPlacementReset(): void {
     this.#latestTickResult = undefined;
     this.#jumpWasHeld = false;
     this.#renderPoseBuffer.reset(this.#committedRenderPose());
     this.#applyRenderPose(this.#renderPoseBuffer.sample(1));
-  }
-
-  #nextTransitionSequence(current: number): number {
-    if (current === Number.MAX_SAFE_INTEGER) {
-      throw new Error("3C_INPUT_INVALID: transition sequence exhausted.");
-    }
-    return current + 1;
   }
 
   #requireBodyPort(): BabylonCharacterBodyRuntimePortV1 {

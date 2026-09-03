@@ -371,8 +371,14 @@ const SINGLE_AUTHORITY_STRUCTURE_RULES_V1 = Object.freeze([
     required: Object.freeze([
       "supportsCharacterMovementSubjectV1(subject)",
       "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE",
+      "this.#transaction.resetAtSupportedPlacement(",
+      "this.#transaction.suspendForRelationship(",
     ]),
-    forbidden: Object.freeze(["sampleMotion("]),
+    forbidden: Object.freeze([
+      "sampleMotion(",
+      "hashCharacterMovementStateV1",
+      "#resetAtSnapshot(",
+    ]),
   }),
   Object.freeze({
     id: "movement-projection-discriminator",
@@ -404,6 +410,7 @@ function assertSingleFixedInputMutationMethod(
   interfaceName: string,
   expectedReturnTypeName: string,
   allowedReadOnlyMethodNames: readonly string[] = [],
+  allowedInterfaceMemberNames: readonly string[] = [],
 ): void {
   const sourceFile = ts.createSourceFile(
     sourcePath,
@@ -419,10 +426,28 @@ function assertSingleFixedInputMutationMethod(
   if (declaration === undefined) {
     fail("SINGLE_AUTHORITY_STRUCTURE_REQUIRED_MISSING", `${interfaceName} interface`);
   }
+  const allowedMembers = new Set(allowedInterfaceMemberNames);
+  if (declaration.members.some((member) => {
+    const name = "name" in member && member.name !== undefined
+      ? member.name.getText(sourceFile).replace(/^['\"]|['\"]$/g, "")
+      : undefined;
+    return name === undefined || !allowedMembers.has(name);
+  })) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${interfaceName} exposes an unrecognized member path`,
+    );
+  }
   const fixedInputMethods = declaration.members.filter(
-    (member): member is ts.MethodSignature => {
-      if (!ts.isMethodSignature(member)) return false;
-      return member.parameters.some((parameter) =>
+    (member): member is ts.MethodSignature | ts.PropertySignature => {
+      const parameters = ts.isMethodSignature(member)
+        ? member.parameters
+        : ts.isPropertySignature(member) &&
+            member.type !== undefined &&
+            ts.isFunctionTypeNode(member.type)
+          ? member.type.parameters
+          : [];
+      return parameters.some((parameter) =>
         parameter.type?.getText(sourceFile).includes("FixedInputOneTickV1") === true
       );
     },
@@ -458,6 +483,50 @@ function assertSingleFixedInputMutationMethod(
   }
 }
 
+function assertWorldSessionHasNoFixedInputPortFacade(
+  source: string,
+  sourcePath: string,
+): void {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let forbidden: string | undefined;
+  const inspect = (node: ts.Node): void => {
+    if (forbidden !== undefined) return;
+    if (ts.isInterfaceDeclaration(node)) {
+      const extendsGameplayWorldPort = node.heritageClauses?.some((clause) =>
+        clause.types.some((type) =>
+          type.expression.getText(sourceFile) === "GameplayWorldPortV1"
+        )
+      ) === true;
+      const declaresFixedInputMember = node.members.some((member) =>
+        member.getText(sourceFile).includes("FixedInputV1")
+      );
+      if (extendsGameplayWorldPort || declaresFixedInputMember) {
+        forbidden = node.name.text;
+        return;
+      }
+    }
+    if (ts.isIntersectionTypeNode(node) &&
+      node.getText(sourceFile).includes("GameplayWorldPortV1")) {
+      forbidden = "GameplayWorldPortV1 intersection";
+      return;
+    }
+    ts.forEachChild(node, inspect);
+  };
+  inspect(sourceFile);
+  if (forbidden !== undefined) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${sourcePath} declares a local fixed-input port facade: ${forbidden}`,
+    );
+  }
+}
+
 export async function verifySingleAuthorityStructureV1(
   repositoryRoot: string,
 ): Promise<readonly string[]> {
@@ -486,6 +555,17 @@ export async function verifySingleAuthorityStructureV1(
         "GameplayWorldPortV1",
         "GameplayWorldTransactionV1",
         ["estimateFixedInputTickCapacity"],
+        [
+          "initialize",
+          "hasEntity",
+          "isEntityControllable",
+          "isActionAvailable",
+          "prepareGameplayTransition",
+          "estimateFixedInputTickCapacity",
+          "prepareFixedInputTick",
+          "snapshot",
+          "dispose",
+        ],
       );
     }
     if (rule.id === "runtime-provider-fixed-input-transaction") {
@@ -494,7 +574,24 @@ export async function verifySingleAuthorityStructureV1(
         rule.path,
         "BabylonGameplayRuntimeInternalV1",
         "PreparedBabylonGameplayFixedInputTickV1",
+        [],
+        [
+          "readPossessionTarget",
+          "readWorldProjection",
+          "readViewProjection",
+          "hasEntity",
+          "isEntityControllable",
+          "estimateSemanticFactProjectionCapacity",
+          "hasLockedActionPresentation",
+          "preparePossessionTarget",
+          "prepareMountedRelationshipTransition",
+          "prepareFixedInputTick",
+          "dispose",
+        ],
       );
+    }
+    if (rule.id === "runtime-host-fixed-input-call-site") {
+      assertWorldSessionHasNoFixedInputPortFacade(source, rule.path);
     }
     verified.push(rule.id);
   }

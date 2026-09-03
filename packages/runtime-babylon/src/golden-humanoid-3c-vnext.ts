@@ -389,12 +389,38 @@ export class GoldenHumanoid3CVNextTransactionV1 {
   }
 
   reset(snapshot?: CharacterMovementSnapshotV1): void {
+    this.#resetMovementAndBody(() => {
+      this.options.movementRuntime.reset(snapshot);
+    });
+  }
+
+  resetAtSupportedPlacement(
+    input: Parameters<
+      CharacterMovementRuntimeV1["resetAtSupportedPlacement"]
+    >[0],
+  ): void {
+    this.#resetMovementAndBody(() => {
+      this.options.movementRuntime.resetAtSupportedPlacement(input);
+    });
+  }
+
+  suspendForRelationship(
+    input: Parameters<
+      CharacterMovementRuntimeV1["suspendForRelationship"]
+    >[0],
+  ): void {
+    this.#resetMovementAndBody(() => {
+      this.options.movementRuntime.suspendForRelationship(input);
+    });
+  }
+
+  #resetMovementAndBody(mutateOwner: () => void): void {
     this.#assertRunnable();
     if (this.#running) {
       throw failure("3C_TICK_TOKEN_STALE", "Golden Tick is active during reset.");
     }
     const before = this.options.movementRuntime.snapshot();
-    this.options.movementRuntime.reset(snapshot);
+    mutateOwner();
     const after = this.options.movementRuntime.snapshot();
     try {
       const support = this.options.bodyPort.resetToState({

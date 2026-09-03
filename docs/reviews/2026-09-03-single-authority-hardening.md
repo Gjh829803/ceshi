@@ -25,8 +25,10 @@ runtime deep-review checklist, and ADR-0007's Babylon Native isolation boundary.
   `checkSupport()` query before the first publishable Snapshot; unsupported
   starts publish `air`, and a query failure rolls back construction without
   exposing a Runtime.
-- CharacterMovement also owns post-reset support reconciliation and transition counters;
-  the Babylon transaction supplies the Body sample but cannot rebuild Locomotion state.
+- CharacterMovement also owns supported-placement reset, relationship suspension,
+  post-reset support reconciliation, transition counters, and state hashing; the Babylon
+  transaction supplies placement/relationship intent and the Body sample but cannot rebuild
+  Locomotion state.
 - Mounted riders remain suspended across Traversal anchor reset and are excluded from
   ordinary Traversal ticks. An initially mounted rider receives only its suspension-time
   Body reset/support query before publication.
@@ -55,8 +57,9 @@ runtime deep-review checklist, and ADR-0007's Babylon Native isolation boundary.
 
 ## Failure prevention
 
-`pnpm verify:3c-migration` now checks the TypeScript fixed-input port shape, its sole
-WorldSession call site, V2-only Locomotion,
+`pnpm verify:3c-migration` now checks the closed TypeScript fixed-input port shape, rejects
+callable-property and local-interface facades around its sole WorldSession call site, verifies
+owner-only placement/suspension state hashing, V2-only Locomotion,
 disjoint movement ownership, and unique Authoring public entries in addition to
 the historical symbol census, and root `pnpm test` executes the gate. `AGENTS.md` requires capability-based authority
 selection, bounded clean-break migrations, semantic structural gates, and
@@ -75,11 +78,16 @@ Focused local evidence before freezing the candidate:
   unsupported Spawn, fixed Tick, abort, replay, reset, and mounted state;
 - changed-file focused suites: 794 pass and 3 intentional skips, followed by
   the final Gameplay parser suite at 287/287 and the structural verifier suite
-  at 68 pass with 3 intentional skips;
+  at 70 pass with 3 intentional skips;
 - post-review Runtime evidence: the complete Babylon Runtime file passes 177/177,
   BodyPort transaction coverage passes 74/74, and the directly affected movement,
   Golden transaction, Body conformance, Route probe, BWB-4/BWB-5, and structural
   suites pass 214 with 3 intentional skips;
+- final advisory remediation: CharacterMovement plus Golden owner suites pass 82/82,
+  mounted/reset Runtime regressions pass 14/14, Route probe passes 10/10, and the
+  strengthened structural verifier passes 70 with 3 intentional skips; the workspace
+  boundary gate passes after the Route probe moved to the package testing subpath and
+  its corresponding debt entry was removed;
 - `pnpm typecheck`, `pnpm verify:3c-migration`,
   `pnpm verify:runtime-authority-boundaries`,
   `pnpm verify:workspace-boundaries`, `pnpm check:agent-self-check`, and

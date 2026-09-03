@@ -55,8 +55,9 @@ workflow gate so equivalent duplicate paths cannot become a long-lived migration
   - both `align-to-move` and registered `align-to-view` planar profiles provide separate
     movement/facing inputs to the same CharacterMovement owner; MotionKernel contains no
     planar-vector execution branch;
-  - CharacterMovement alone reconciles post-reset Body support, coyote state, transition
-    sequence, and bounded turn-rate state;
+  - CharacterMovement alone constructs supported-placement and relationship-suspension
+    snapshots and reconciles post-reset Body support, coyote state, transition sequence,
+    state hash, and bounded turn-rate state;
   - the BodyPort performs exactly one support query after all colliders and Subjects activate
     and before the first Runtime Snapshot is publishable;
   - canonical Gameplay capability state accepts only `locomotion-capability-state-v2`.
@@ -90,8 +91,10 @@ workflow gate so equivalent duplicate paths cannot become a long-lived migration
 - **Input/output contract:** the migration verifier checks structural invariants for controller
   selection, fixed-Tick port shape, and Locomotion envelope shape in addition to symbol counts;
   AGENTS requires one owner/entry point/parser and bounded migrations with an exit gate.
-  The fixed-input rule parses TypeScript interface structure so a renamed direct mutation
-  beside the prepared transaction still fails, and the verifier runs inside root `pnpm test`.
+  The fixed-input rule parses TypeScript interface structure so renamed methods, callable
+  properties, and local WorldSession port facades beside the prepared transaction all fail;
+  the verifier also rejects provider-side placement/suspension state hashing and runs inside
+  root `pnpm test`.
 - **Evidence:** verifier RED fixtures followed by `pnpm verify:3c-migration` GREEN.
 - **Execution mode:** `main-agent-only` because the gate defines repository-wide policy.
 

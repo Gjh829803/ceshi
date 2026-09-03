@@ -969,6 +969,137 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     return this.#currentSnapshot;
   }
 
+  resetAtSupportedPlacement(input: Readonly<{
+    positionMetersXYZ: MovementVec3V1;
+    facingYawRadians: number;
+    committedTick: number;
+  }>): CharacterMovementSnapshotV1 {
+    this.#assertLive();
+    if (this.#activeTransaction !== undefined) {
+      throw diagnostic(
+        "3C_TICK_TOKEN_STALE",
+        "supported placement cannot replace an active movement Tick.",
+      );
+    }
+    const current = this.#currentSnapshot;
+    if (!Number.isSafeInteger(input.committedTick) || input.committedTick < 0 ||
+      current.locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
+      return inputInvalid("supported placement state is invalid.");
+    }
+    let state: CharacterMovementStateV1;
+    try {
+      const position = vec3(...input.positionMetersXYZ);
+      const facingYawRadians = checkedFinite(
+        input.facingYawRadians,
+        "supported placement facing",
+      );
+      state = parseCharacterMovementStateV1({
+        schemaVersion: 1,
+        tick: input.committedTick,
+        positionMetersXYZ: position,
+        facingYawRadians,
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+        locomotion: {
+          schemaVersion: 2,
+          status: "active",
+          mobilityMode: "grounded",
+          gait: "idle",
+          verticalPhase: "none",
+          supportMode: "supported",
+          movementMedium: "ground",
+          facingYawRadians,
+          linearVelocity: { x: 0, y: 0, z: 0 },
+          horizontalSpeedMetersPerSecond: 0,
+          committedTick: input.committedTick,
+          phaseEnteredTick: input.committedTick,
+          transitionSequence: current.locomotion.transitionSequence + 1,
+        },
+        transitionEvents: [],
+        runtimeState: {
+          schemaVersion: 1,
+          coyoteTicksRemaining: 0,
+          jumpBufferTicksRemaining: 0,
+          variableJumpHoldTicksRemaining: 0,
+          landingTicksRemaining: 0,
+          apexCrossedInAirborneEpisode: false,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("3C_INPUT_INVALID")) {
+        throw error;
+      }
+      return inputInvalid("supported placement state is invalid.");
+    }
+    this.reset(snapshotFromState(state));
+    return this.#currentSnapshot;
+  }
+
+  suspendForRelationship(input: Readonly<{
+    positionMetersXYZ: MovementVec3V1;
+    facingYawRadians: number;
+    committedTick: number;
+    suspendedByRelationshipId: string;
+  }>): CharacterMovementSnapshotV1 {
+    this.#assertLive();
+    if (this.#activeTransaction !== undefined) {
+      throw diagnostic(
+        "3C_TICK_TOKEN_STALE",
+        "relationship suspension cannot replace an active movement Tick.",
+      );
+    }
+    const current = this.#currentSnapshot;
+    const retainsTransitionSequence = current.locomotion.status === "suspended" &&
+      current.locomotion.suspendedByRelationshipId ===
+        input.suspendedByRelationshipId;
+    if (!Number.isSafeInteger(input.committedTick) || input.committedTick < 0 ||
+      typeof input.suspendedByRelationshipId !== "string" ||
+      input.suspendedByRelationshipId.length === 0 ||
+      (!retainsTransitionSequence &&
+        current.locomotion.transitionSequence === Number.MAX_SAFE_INTEGER)) {
+      return inputInvalid("relationship suspension state is invalid.");
+    }
+    let state: CharacterMovementStateV1;
+    try {
+      const position = vec3(...input.positionMetersXYZ);
+      const facingYawRadians = checkedFinite(
+        input.facingYawRadians,
+        "relationship suspension facing",
+      );
+      state = parseCharacterMovementStateV1({
+        schemaVersion: 1,
+        tick: input.committedTick,
+        positionMetersXYZ: position,
+        facingYawRadians,
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+        locomotion: {
+          schemaVersion: 2,
+          status: "suspended",
+          suspendedByRelationshipId: input.suspendedByRelationshipId,
+          committedTick: input.committedTick,
+          transitionSequence: retainsTransitionSequence
+            ? current.locomotion.transitionSequence
+            : current.locomotion.transitionSequence + 1,
+        },
+        transitionEvents: [],
+        runtimeState: {
+          schemaVersion: 1,
+          coyoteTicksRemaining: 0,
+          jumpBufferTicksRemaining: 0,
+          variableJumpHoldTicksRemaining: 0,
+          landingTicksRemaining: 0,
+          apexCrossedInAirborneEpisode: false,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("3C_INPUT_INVALID")) {
+        throw error;
+      }
+      return inputInvalid("relationship suspension state is invalid.");
+    }
+    this.reset(snapshotFromState(state));
+    return this.#currentSnapshot;
+  }
+
   #assertResolutionCoherent(
     sample: BodySampleV1,
     proposal: MovementProposalV1,
