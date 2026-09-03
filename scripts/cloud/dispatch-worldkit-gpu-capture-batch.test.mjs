@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   cleanStaleQueueEntries,
   dispatchGpuCaptureBatch,
+  immediateGpuCaptureWorkerImages,
   reconcileCloudEpisodeCpuStages,
   unfinishedGpuBatchIsActionable,
 } from "./dispatch-worldkit-gpu-capture-batch.mjs";
@@ -101,6 +102,19 @@ test("current Worker dispatches ready Cases without waiting for slow producers",
     ["publish", 7, "ready-wave"],
     ["launch", 7, "ready-wave"],
   ]);
+});
+
+test("a deployment keeps frozen digest-pinned Episodes eligible for immediate capture", () => {
+  const priorImage = `registry.example/worldkit@sha256:${"c".repeat(64)}`;
+  const images = immediateGpuCaptureWorkerImages([
+    entry(0),
+    { ...entry(1), workerImage: priorImage },
+  ], IMAGE, true);
+  assert.deepEqual([...images], [IMAGE, priorImage]);
+  assert.deepEqual(
+    [...immediateGpuCaptureWorkerImages([entry(0)], IMAGE, false)],
+    [],
+  );
 });
 
 test("replayed prepare queue objects do not inflate the one-hundred-task floor", async () => {

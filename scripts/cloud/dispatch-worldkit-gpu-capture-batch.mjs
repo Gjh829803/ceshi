@@ -95,6 +95,18 @@ export async function cleanStaleQueueEntries(
   return outcomes;
 }
 
+export function immediateGpuCaptureWorkerImages(
+  entries,
+  defaultWorkerImage,
+  enabled,
+) {
+  if (!enabled) return new Set();
+  return new Set([
+    defaultWorkerImage,
+    ...entries.map((entry) => entry.workerImage),
+  ].filter((value) => typeof value === "string" && value.length > 0));
+}
+
 function captureStageIsReady(execution) {
   if (["succeeded", "failed", "interrupted", "cancelled"].includes(execution?.status)) {
     return false;
@@ -475,8 +487,16 @@ async function main() {
       episodeRecords: runIndexRecords,
       defaultWorkerImage: config.workerImage,
       tailIdleSeconds: config.gpuBatch.tailFlushIdleSeconds,
-      immediateWorkerImages: config.gpuBatch.dispatchReadyImmediately
-        ? new Set([config.workerImage]) : new Set(),
+      // Every parsed queue entry is still bound to its admitted Episode record
+      // and live Cloud Execution below. Preserve immediate dispatch across a
+      // deployment: in-flight Episodes intentionally retain their frozen,
+      // digest-pinned Worker image instead of being starved until every newer
+      // producer has finished.
+      immediateWorkerImages: immediateGpuCaptureWorkerImages(
+        entries,
+        config.workerImage,
+        config.gpuBatch.dispatchReadyImmediately,
+      ),
       inspectExecution: (executionId) => getCloudExecution(executionId, {
         config: cloudConfig,
       }),
