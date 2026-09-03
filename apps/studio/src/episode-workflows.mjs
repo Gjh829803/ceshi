@@ -1435,6 +1435,7 @@ export function createEpisodeWorkflowService(options) {
     requestId: requestedRequestId = null,
     resumeEpisodeManifest = undefined,
     cloudAttempt = 1,
+    workerImage = undefined,
   } = {}) {
     const recordPath = path.join(episodesRoot, episodeId, "episode-record.json");
     let record = await readJson(recordPath);
@@ -1461,6 +1462,7 @@ export function createEpisodeWorkflowService(options) {
         productionScope: record.productionScope ?? "full",
         styleVariantMode: record.styleVariantMode ?? "legacy",
         resumeEpisodeManifest,
+        workerImage,
         requestId,
         onSubmitted: async (submitted) => {
           activeCloudExecutions.set(episodeId, submitted.executionId);
@@ -1843,6 +1845,7 @@ export function createEpisodeWorkflowService(options) {
           requestId,
           resumeEpisodeManifest,
           cloudAttempt,
+          workerImage: record.remoteWorkerImage,
         });
         return { episodeId, reused: false, resumed: true, restartGeneration };
       }

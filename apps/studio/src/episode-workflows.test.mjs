@@ -86,6 +86,7 @@ test("explicitly resumes a cancelled Cloud Episode from its capture checkpoint",
     status: "cancelled",
     currentStage: "style-variant-visual-review",
     remoteExecutionId: "exec_cancelled_resume_001",
+    remoteWorkerImage: `worker@sha256:${"b".repeat(64)}`,
     cloudAttempt: 1,
     recordRevision: 7,
     createdAt: "2026-09-03T00:00:00.000Z",
@@ -147,6 +148,7 @@ test("explicitly resumes a cancelled Cloud Episode from its capture checkpoint",
     assert.equal(resumed.restartGeneration, 1);
     await started;
     assert.equal(executionInput.requestId, `${episodeId}-restart-1`);
+    assert.equal(executionInput.workerImage, `worker@sha256:${"b".repeat(64)}`);
     assert.deepEqual(executionInput.resumeEpisodeManifest, {
       executionId: "exec_cancelled_resume_001",
       s3Uri: "s3://bucket/capture/cloud-artifact-manifest.json",
