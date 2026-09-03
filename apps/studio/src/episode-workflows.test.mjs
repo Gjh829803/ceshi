@@ -493,6 +493,79 @@ test("retries the failed Cloud stage after its infrastructure cooldown elapses",
   }
 });
 
+test("does not repeat a Cloud stage after its internal content repairs are exhausted", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-content-pool-"));
+  const episodeId = "episode-content-pool-001";
+  const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+  await mkdir(episodeRoot, { recursive: true });
+  await writeFile(path.join(episodeRoot, "episode-record.json"), JSON.stringify({
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    sceneId: "content-pool-scene",
+    episodeId,
+    backend: "cloud",
+    status: "remote-pending",
+    currentStage: "whitebox-capture",
+    remoteStageId: "whitebox-capture",
+    remoteExecutionId: "exec_content_pool",
+    remoteRequestS3Uri: "s3://bucket/episode/request.json",
+    remoteOutputS3Prefix: "s3://bucket/episode",
+    remoteWorkerImage: `worker@sha256:${"c".repeat(64)}`,
+    cloudAttempt: 1,
+    createdAt: "2026-09-03T00:00:00.000Z",
+    updatedAt: "2026-09-03T00:01:00.000Z",
+    stages: [{
+      id: "whitebox-capture",
+      title: "capture",
+      status: "failed",
+      startedAt: "2026-09-03T00:00:30.000Z",
+      finishedAt: "2026-09-03T00:01:00.000Z",
+    }],
+  }));
+  let retryCount = 0;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    recoverCloudEpisode: async () => ({
+      retryRequired: true,
+      execution: {
+        execution_id: "exec_content_pool",
+        status: "failed",
+        error: "EPISODE_MINIMUM_CAPTURE_HEALTH_FAILED after three repairs",
+        stages: [{
+          stage_id: "whitebox-capture",
+          status: "failed",
+          diagnostics: {
+            error: "EPISODE_MINIMUM_CAPTURE_HEALTH_FAILED after three repairs",
+          },
+        }],
+      },
+    }),
+    retryCloudEpisode: async () => { retryCount += 1; },
+    readCloudEpisodeManifest: async () => ({}),
+  });
+  try {
+    assert.equal(await service.recoverPersistedCloudEpisodes(), 1);
+    for (let attempt = 0; attempt < 50 && service.activeJobs.length > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const record = JSON.parse(await readFile(
+      path.join(episodeRoot, "episode-record.json"),
+      "utf8",
+    ));
+    assert.equal(retryCount, 0);
+    assert.equal(record.status, "failed");
+    assert.equal(record.retryPool, "content-repair");
+    assert.equal(record.failureClass, "CONTENT_REPAIR_REQUIRED");
+    assert.equal(record.consumesContentAttempt, true);
+    assert.equal(record.remoteStageId, "whitebox-capture");
+    assert.match(record.error, /EPISODE_MINIMUM_CAPTURE_HEALTH_FAILED/);
+  } finally {
+    await service.shutdown();
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("queues an infrastructure failure that happens before Cloud Execution creation", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-presubmit-pool-"));
   const scheduled = [];

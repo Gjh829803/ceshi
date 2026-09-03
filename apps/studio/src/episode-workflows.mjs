@@ -800,6 +800,14 @@ export function createEpisodeWorkflowService(options) {
     };
   }
 
+  function cloudExecutionFailureMessage(execution) {
+    const failedStage = execution?.stages?.find?.((stage) =>
+      ["failed", "interrupted"].includes(stage?.status));
+    return failedStage?.error || failedStage?.diagnostics?.error ||
+      execution?.error || execution?.message ||
+      `Cloud Episode Execution ended as ${execution?.status ?? "failed"}.`;
+  }
+
   async function fileMetadata(filePath) {
     try {
       const metadata = await stat(filePath);
@@ -1829,6 +1837,21 @@ export function createEpisodeWorkflowService(options) {
         return;
       }
       if (result.retryRequired) {
+        const classification = classifyCloudProductionFailure(result.execution);
+        if (!classification.retryable || classification.consumesContentAttempt) {
+          const retryStageId = failedEpisodeStageId(result.execution);
+          await persistEpisodeRecord({
+            ...(await readJson(recordPath) ?? record),
+            status: "failed",
+            finishedAt: new Date().toISOString(),
+            error: cloudExecutionFailureMessage(result.execution),
+            ...(retryStageId === null ? {} : { remoteStageId: retryStageId }),
+            retryPool: classification.pool,
+            failureClass: classification.code,
+            consumesContentAttempt: classification.consumesContentAttempt,
+          });
+          return;
+        }
         if (!infrastructureCooldownElapsed &&
             await deferCloudEpisodeRecovery(record, result.execution)) return;
         const retryStageId = failedEpisodeStageId(result.execution);

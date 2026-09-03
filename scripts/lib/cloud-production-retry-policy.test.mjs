@@ -31,6 +31,9 @@ test("reconciles an uncertain submission instead of creating a replacement", () 
 test("keeps semantic repair and unknown engineering failures out of infra retry", () => {
   assert.equal(classifyCloudProductionFailure("Builder self-check failed").pool,
     "content-repair");
+  assert.equal(classifyCloudProductionFailure(
+    "EPISODE_MINIMUM_CAPTURE_HEALTH_FAILED",
+  ).pool, "content-repair");
   assert.equal(classifyCloudProductionFailure("Unexpected schema identity").pool,
     "manual-engineering");
 });

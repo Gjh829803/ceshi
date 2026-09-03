@@ -21,10 +21,10 @@ const RECONCILE = [
 
 const CONTENT_REPAIR = [
   /self-check/i,
-  /needs[- ]repair/i,
-  /minimum capture health failed/i,
-  /visual review did not pass/i,
-  /style variant production incomplete/i,
+  /needs[-_ ]repair/i,
+  /minimum[-_ ]capture[-_ ]health[-_ ]failed/i,
+  /visual[-_ ]review[-_ ]did[-_ ]not[-_ ]pass/i,
+  /style[-_ ]variant[-_ ]production[-_ ]incomplete/i,
 ];
 
 function collectFailureText(value, seen = new Set()) {
