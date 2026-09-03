@@ -480,12 +480,9 @@ function wrapGameplayWorldPort(
         GameplayWorldPortV1["estimateFixedInputTickCapacity"]
       >[0],
     ) => port.estimateFixedInputTickCapacity(fixedInput),
-    runFixedInputTick: (
-      fixedInput: Parameters<GameplayWorldPortV1["runFixedInputTick"]>[0],
-      actionProjection: Parameters<
-        GameplayWorldPortV1["runFixedInputTick"]
-      >[1],
-    ) => port.runFixedInputTick(fixedInput, actionProjection),
+    prepareFixedInputTick: (
+      ...args: Parameters<GameplayWorldPortV1["prepareFixedInputTick"]>
+    ) => port.prepareFixedInputTick(...args),
     snapshot: () => port.snapshot(),
     dispose: () => {
       if (!isNil(disposePromise)) return disposePromise;
@@ -525,9 +522,9 @@ function wrapCandidateGameplayWorldPort(
         GameplayWorldPortV1["estimateFixedInputTickCapacity"]
       >
     ) => port.estimateFixedInputTickCapacity(...args),
-    runFixedInputTick: (
-      ...args: Parameters<GameplayWorldPortV1["runFixedInputTick"]>
-    ) => port.runFixedInputTick(...args),
+    prepareFixedInputTick: (
+      ...args: Parameters<GameplayWorldPortV1["prepareFixedInputTick"]>
+    ) => port.prepareFixedInputTick(...args),
     snapshot: () => port.snapshot(),
     dispose: () => {
       if (disposed) return Promise.resolve();

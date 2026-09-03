@@ -18,12 +18,14 @@ import {
   parseCanonicalJson,
   parseSceneBriefV1,
   ResourceLockBuilderV1,
-  sha256CanonicalJson,
-  stringifyCanonicalJson,
   validatePackageSubjectDefinition,
   type AuthoringDiagnostic,
 } from "@whitebox-world/authoring";
-import { canonicalJsonBytes } from "@whitebox-world/protocol";
+import {
+  canonicalJsonBytes,
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";
 import {
   validateSceneBriefImplementationMapV1,
   type SceneBriefImplementationMapV1,

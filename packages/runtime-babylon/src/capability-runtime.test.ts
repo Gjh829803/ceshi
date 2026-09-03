@@ -243,7 +243,7 @@ async function bindAndPublishInitialCamera(
 describe("capability package runtime smoke tests", () => {
   it("keeps Camera Director independent from controls and real-world subject categories", () => {
     expect(cameraDirectorSource).not.toMatch(
-      /controlProfile|CharacterMovementComponentV1|RuntimeSubjectDescriptorV1|humanoid|vehicle|category\s*===/,
+      /controlProfile|SpecializedMotionSubjectControllerV1|RuntimeSubjectDescriptorV1|humanoid|vehicle|category\s*===/,
     );
   });
 

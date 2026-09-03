@@ -47,6 +47,7 @@ export interface CharacterMovementRuntimeOptionsV1 {
   readonly runSpeedMetersPerSecond: number;
   readonly accelerationMetersPerSecondSquared: number;
   readonly decelerationMetersPerSecondSquared: number;
+  readonly turnRateRadiansPerSecond: number;
   readonly airControlRatio: number;
   readonly gravityMetersPerSecondSquared: number;
   readonly jumpSpeedMetersPerSecond: number;
@@ -226,7 +227,8 @@ export function parseCharacterMovementRuntimeOptionsV1(
   const keys = [
     "schemaVersion", "fixedDeltaSeconds", "jumpVariantPolicy", "initialState", "walkSpeedMetersPerSecond",
     "runSpeedMetersPerSecond", "accelerationMetersPerSecondSquared",
-    "decelerationMetersPerSecondSquared", "airControlRatio", "gravityMetersPerSecondSquared",
+    "decelerationMetersPerSecondSquared", "turnRateRadiansPerSecond",
+    "airControlRatio", "gravityMetersPerSecondSquared",
     "jumpSpeedMetersPerSecond", "coyoteTimeSeconds", "jumpBufferSeconds",
     "variableJumpHoldSeconds", "jumpHoldGravityRatio", "jumpReleaseGravityRatio",
     "landingDurationTicks", "apexEnterSpeedMetersPerSecond", "apexExitSpeedMetersPerSecond",
@@ -238,6 +240,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
     value.walkSpeedMetersPerSecond > value.runSpeedMetersPerSecond ||
     !inRange(value.accelerationMetersPerSecondSquared, 0, 60) ||
     !inRange(value.decelerationMetersPerSecondSquared, 0, 80) ||
+    !inRange(value.turnRateRadiansPerSecond, 0, 20) ||
     !inRange(value.airControlRatio, 0, 1) ||
     !inRange(value.gravityMetersPerSecondSquared, Number.MIN_VALUE, 100) ||
     !inRange(value.jumpSpeedMetersPerSecond, Number.MIN_VALUE, 12) ||
@@ -277,6 +280,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
     runSpeedMetersPerSecond: value.runSpeedMetersPerSecond,
     accelerationMetersPerSecondSquared: value.accelerationMetersPerSecondSquared,
     decelerationMetersPerSecondSquared: value.decelerationMetersPerSecondSquared,
+    turnRateRadiansPerSecond: value.turnRateRadiansPerSecond,
     airControlRatio: value.airControlRatio,
     gravityMetersPerSecondSquared: value.gravityMetersPerSecondSquared,
     jumpSpeedMetersPerSecond: value.jumpSpeedMetersPerSecond,
@@ -599,7 +603,31 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
       checkedAdd(horizontal[1], layered.velocityDeltaMetersPerSecondXYZ[2], "proposed velocity Z"),
     );
     let facingYaw = this.#currentSnapshot.facingYawRadians;
-    if (inputMagnitude > 0) facingYaw = Math.atan2(-directionX, -directionZ);
+    if (inputMagnitude > 0) {
+      const targetFacingYaw = Math.atan2(-directionX, -directionZ);
+      const shortestDelta = Math.atan2(
+        Math.sin(targetFacingYaw - facingYaw),
+        Math.cos(targetFacingYaw - facingYaw),
+      );
+      const maximumTurn = checkedMultiply(
+        this.#options.turnRateRadiansPerSecond,
+        this.#options.fixedDeltaSeconds,
+        "maximum facing turn",
+      );
+      const appliedTurn = Math.max(
+        -maximumTurn,
+        Math.min(maximumTurn, shortestDelta),
+      );
+      const turnedFacingYaw = checkedAdd(
+        facingYaw,
+        appliedTurn,
+        "facing yaw",
+      );
+      facingYaw = Math.atan2(
+        Math.sin(turnedFacingYaw),
+        Math.cos(turnedFacingYaw),
+      );
+    }
     facingYaw = checkedAdd(facingYaw, layered.facingYawDeltaRadians, "proposed facing yaw");
     const proposal = parseMovementProposalV1({
       schemaVersion: 1,

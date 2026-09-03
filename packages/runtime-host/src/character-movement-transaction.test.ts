@@ -121,20 +121,12 @@ function projectionWithMismatchedLocomotionTick(
   });
 }
 
-interface PreparedFixedInputWorldPortV1 extends GameplayWorldPortV1 {
-  prepareFixedInputTick(
-    input: FixedInputOneTickV1,
-    actionProjection: GameplayFixedTickActionProjectionV1,
-  ): Promise<GameplayWorldTransactionV1>;
-}
-
 function preparedPortHarness() {
   let committedProjection = projection(0);
   let prepares = 0;
   let commits = 0;
   let commitAttempts = 0;
   let aborts = 0;
-  let legacyRuns = 0;
   let disposes = 0;
   let nextProjection: GameplayWorldStateProjectionV1 | undefined;
   let nextPrepareFailure: Error | undefined;
@@ -142,7 +134,7 @@ function preparedPortHarness() {
   let nextAbortFailure: Error | undefined;
   let nextCommitFailure: Error | undefined;
   let prepareBarrier: Promise<void> | undefined;
-  const port: PreparedFixedInputWorldPortV1 = {
+  const port: GameplayWorldPortV1 = {
     initialize: async () => committedProjection,
     hasEntity: (entityId) => entityId === HERO.id,
     isEntityControllable: () => true,
@@ -211,10 +203,6 @@ function preparedPortHarness() {
         },
       });
     },
-    runFixedInputTick: async () => {
-      legacyRuns += 1;
-      throw new Error("legacy fixed-input path must not run");
-    },
     snapshot: () => committedProjection,
     dispose: async () => {
       disposes += 1;
@@ -227,7 +215,6 @@ function preparedPortHarness() {
     commits: () => commits,
     commitAttempts: () => commitAttempts,
     aborts: () => aborts,
-    legacyRuns: () => legacyRuns,
     disposes: () => disposes,
     stageProjection: (value: GameplayWorldStateProjectionV1) => {
       nextProjection = value;
@@ -322,7 +309,6 @@ describe("RuntimeHost Character Movement publication transaction", () => {
     expect(harness.prepares()).toBe(1);
     expect(harness.commits()).toBe(1);
     expect(harness.aborts()).toBe(0);
-    expect(harness.legacyRuns()).toBe(0);
     expect(before.worldState.simulationTick).toBe(0);
     expect(after.worldState.simulationTick).toBe(1);
     const publishedCapability = after.worldState.capabilityStatesById[

@@ -2,10 +2,15 @@ import type { CharacterBodyPortV1 } from "@whitebox-world/character-movement";
 
 import {
   createBabylonCharacterBodyPortForTestingInternalV1,
+  readBabylonCharacterBodyNativeDriverForTestingInternalV1,
   type BabylonCharacterBodyNativeAllocationV1,
   type BabylonCharacterBodyNativeDriverV1,
   type BabylonCharacterBodyPortOptionsV1,
 } from "./babylon-character-body-port.js";
+import {
+  readCharacterMovementBodyPortForTestingInternalV1,
+  type CharacterMovementSubjectControllerV1,
+} from "./character-movement-component.js";
 
 /** Testing-only relative-module seam. Never export this module from the package barrel. */
 export function createBabylonCharacterBodyPortForTestingV1(
@@ -17,5 +22,13 @@ export function createBabylonCharacterBodyPortForTestingV1(
   return createBabylonCharacterBodyPortForTestingInternalV1(
     input,
     nativeDriverFactory,
+  );
+}
+
+export function readCharacterMovementNativeDriverForTestingV1(
+  controller: CharacterMovementSubjectControllerV1,
+): BabylonCharacterBodyNativeDriverV1 {
+  return readBabylonCharacterBodyNativeDriverForTestingInternalV1(
+    readCharacterMovementBodyPortForTestingInternalV1(controller),
   );
 }

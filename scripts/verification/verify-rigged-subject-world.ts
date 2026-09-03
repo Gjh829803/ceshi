@@ -12,9 +12,9 @@ import path from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright";
 
 import {
-  stringifyCanonicalJson,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import type {
   CanonicalSceneExecutionPlanV1,
   RuntimeVec3V1,

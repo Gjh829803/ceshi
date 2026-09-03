@@ -62,15 +62,7 @@ export interface BabylonGameplayRuntimeInternalV1 {
   prepareMountedRelationshipTransition(
     transition: BabylonGameplayMountedTransitionV1,
   ): Promise<PreparedBabylonGameplayPossessionV1>;
-  runFixedInputTick(
-    input: FixedInputOneTickV1,
-    actionProjection: GameplayFixedTickActionProjectionV1,
-  ): Promise<GameplayWorldStateProjectionV1>;
-  /**
-   * Additive Golden-path seam. Legacy Runtime implementations intentionally
-   * omit it so RuntimeHost cannot mistake a mutating Tick for a transaction.
-   */
-  prepareFixedInputTick?(
+  prepareFixedInputTick(
     input: FixedInputOneTickV1,
     actionProjection: GameplayFixedTickActionProjectionV1,
   ): Promise<PreparedBabylonGameplayFixedInputTickV1>;

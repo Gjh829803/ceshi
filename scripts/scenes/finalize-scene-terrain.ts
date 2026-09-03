@@ -13,8 +13,8 @@ import path from "node:path";
 
 import {
   parseAuthoringSpecV4,
-  stringifyCanonicalJson,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import {
   compileTerrainHeightIntent,
   TERRAIN_HEIGHT_INTENT_COMPILER_VERSION,

@@ -7,7 +7,7 @@ import {
   type AuthoringSpecV4,
 } from "./index.js";
 import { createValidAuthoringSpec } from "./test-fixture.js";
-import { sha256CanonicalJson } from "./canonical-json.js";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 const GROUND_STATIC_PROFILE_REF =
   "worldkit://traversal-surface-profile/ground.static@1";

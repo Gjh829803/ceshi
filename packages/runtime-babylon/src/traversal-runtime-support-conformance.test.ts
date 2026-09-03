@@ -28,6 +28,8 @@ import {
   createValidPackageSubjectWorld,
 } from "../../authoring/src/test-fixture";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
+import { readCharacterMovementNativeDriverForTestingV1 } from "./babylon-character-body-port.testing";
+import type { CharacterMovementSubjectControllerV1 } from "./character-movement-component";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";
 import { createBabylonTraversalRuntimePortV1 } from "./traversal-runtime-port";
@@ -345,17 +347,13 @@ async function createRuntime(
   return runtime;
 }
 
-type SupportInspectableController = Readonly<{
-  physicsController: PhysicsCharacterController;
-}>;
-
 function controllerFor(
   runtime: BabylonWorldRuntime,
   entityId: string,
-): SupportInspectableController {
+): CharacterMovementSubjectControllerV1 {
   const character = (runtime as unknown as {
     characterEntitiesByEntityId: Map<string, {
-      movement: SupportInspectableController;
+      movement: CharacterMovementSubjectControllerV1;
     }>;
   }).characterEntitiesByEntityId.get(entityId);
   if (character === undefined) {
@@ -364,8 +362,14 @@ function controllerFor(
   return character.movement;
 }
 
+function nativeDriverFor(runtime: BabylonWorldRuntime, entityId: string) {
+  return readCharacterMovementNativeDriverForTestingV1(
+    controllerFor(runtime, entityId),
+  );
+}
+
 describe("Traversal runtime support conformance", () => {
-  it("publishes constructor support from exactly one checkSupport call", async () => {
+  it("publishes initialization support from exactly one BodyPort query", async () => {
     const fixture = compileFixture();
     const supportSpy = vi.spyOn(
       PhysicsCharacterController.prototype,
@@ -376,6 +380,9 @@ describe("Traversal runtime support conformance", () => {
       runtime = await createRuntime(fixture.executionPlan);
 
       expect(supportSpy).toHaveBeenCalledTimes(1);
+      expect(
+        controllerFor(runtime, "player").retainedCharacterSupportSample(),
+      ).toMatchObject({ supportState: "supported" });
       expect(runtime.snapshot().subjectStatesByEntityId.player).toMatchObject({
         movementMedium: "ground",
         locomotionMode: "idle",
@@ -396,7 +403,7 @@ describe("Traversal runtime support conformance", () => {
       });
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
       const supportSpy = vi.spyOn(
-        controllerFor(runtime, "player").physicsController,
+        nativeDriverFor(runtime, "player"),
         "checkSupport",
       );
       let slidingEvidence: TraversalRuntimeTickEvidenceV1 | undefined;
@@ -409,11 +416,9 @@ describe("Traversal runtime support conformance", () => {
         expect(supportSpy).toHaveBeenCalledTimes(1);
         if (evidence.characterSupport.supportState === "sliding") {
           const queriedSupport = supportSpy.mock.results[0]!.value;
-          expect(evidence.characterSupport.supportNormalWorldXYZ).toEqual([
-            queriedSupport.averageSurfaceNormal.x,
-            queriedSupport.averageSurfaceNormal.y,
-            queriedSupport.averageSurfaceNormal.z,
-          ]);
+          expect(evidence.characterSupport.supportNormalWorldXYZ).toEqual(
+            queriedSupport.averageSurfaceNormalXYZ,
+          );
           expect(evidence.characterSupport.isSupportSurfaceDynamic).toBe(
             queriedSupport.isSurfaceDynamic,
           );
@@ -448,12 +453,12 @@ describe("Traversal runtime support conformance", () => {
       });
       port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
       const controlledSupportSpy = vi.spyOn(
-        controllerFor(runtime, "player").physicsController,
+        nativeDriverFor(runtime, "player"),
         "checkSupport",
       );
       const uncontrolledSupportSpies = ["pack-animal-a", "pack-animal-b"].map(
         (entityId) => vi.spyOn(
-          controllerFor(runtime, entityId).physicsController,
+          nativeDriverFor(runtime, entityId),
           "checkSupport",
         ),
       );
@@ -490,7 +495,7 @@ describe("Traversal runtime support conformance", () => {
       const supportSpies = runtimeTestSubjectsForPlanV1(fixture.executionPlan).map((subject) => ({
         entityId: subject.entityId,
         spy: vi.spyOn(
-          controllerFor(runtime, subject.entityId).physicsController,
+          nativeDriverFor(runtime, subject.entityId),
           "checkSupport",
         ),
       }));
@@ -528,7 +533,7 @@ describe("Traversal runtime support conformance", () => {
       const supportSpies = runtimeTestSubjectsForPlanV1(fixture.executionPlan).map((subject) => ({
         entityId: subject.entityId,
         spy: vi.spyOn(
-          controllerFor(runtime, subject.entityId).physicsController,
+          nativeDriverFor(runtime, subject.entityId),
           "checkSupport",
         ),
       }));
@@ -570,7 +575,7 @@ describe("Traversal runtime support conformance", () => {
         traversalLockReceipt: fixture.traversalLockReceipt,
       });
       const supportSpy = vi.spyOn(
-        controllerFor(runtime, "player").physicsController,
+        nativeDriverFor(runtime, "player"),
         "checkSupport",
       );
       const evidence = port.resetToStartAnchor({
@@ -603,26 +608,31 @@ describe("Traversal runtime support conformance", () => {
           traversalLockReceipt: fixture.traversalLockReceipt,
         });
         port.resetToStartAnchor({ startAnchorEntityId: "spawn-main" });
-        const physicsController = controllerFor(
-          runtime,
-          "player",
-        ).physicsController;
-        const supportSpy = vi.spyOn(physicsController, "checkSupport");
-
-        if (driftKind === "Feel") {
-          expect(runtime.requestControlFeelProfile(
-            "player",
-            "worldkit://control-feel-profile/humanoid.heavy-ground@1",
-          )).toBe(true);
-        } else if (driftKind === "capsule") {
-          const shape = physicsController.shapeOptions;
-          physicsController.setShapeOptions({
-            capsuleHeight: shape.capsuleHeight!,
-            capsuleRadius: shape.capsuleRadius! + 0.01,
-          });
-        } else {
-          physicsController.maxStepHeight += 0.01;
-        }
+        const controller = controllerFor(runtime, "player");
+        const supportSpy = vi.spyOn(
+          nativeDriverFor(runtime, "player"),
+          "checkSupport",
+        );
+        const liveLock = controller.liveLockState();
+        vi.spyOn(controller, "liveLockState").mockReturnValue(
+          driftKind === "Feel"
+            ? {
+                ...liveLock,
+                controlFeelProfileRef:
+                  "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+                requestedControlFeelProfileRef:
+                  "worldkit://control-feel-profile/humanoid.heavy-ground@1",
+              }
+            : driftKind === "capsule"
+              ? {
+                  ...liveLock,
+                  capsuleRadiusMeters: liveLock.capsuleRadiusMeters + 0.01,
+                }
+              : {
+                  ...liveLock,
+                  maxStepHeightMeters: liveLock.maxStepHeightMeters + 0.01,
+                },
+        );
         supportSpy.mockClear();
 
         await expect(port.runFixedTick({

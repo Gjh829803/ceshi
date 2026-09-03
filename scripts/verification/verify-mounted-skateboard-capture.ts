@@ -15,9 +15,9 @@ import type { Browser, BrowserContext, Page } from "playwright";
 import {
   normalizeAuthoringSpecV4,
   parseAuthoringSpecV4,
-  stringifyCanonicalJson,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import {
   compileSimulationTakeV1,
   type SimulationTakeV1,

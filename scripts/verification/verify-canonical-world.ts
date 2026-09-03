@@ -11,9 +11,9 @@ import path from "node:path";
 import type { Browser, BrowserContext, Page } from "playwright";
 
 import {
-  stringifyCanonicalJson,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import type {
   CanonicalSceneExecutionPlanV1,
   RuntimeVec3V1,
@@ -369,10 +369,8 @@ async function verifyArtifacts(paths: CanonicalArtifactPaths): Promise<{
   for (const state of Object.values(snapshot.world.subjectStatesByEntityId)) {
     assert.ok(
       Object.values(state.capabilityStatesById).every(
-        (capability) => capability.kind === "locomotion-capability-state-v2"
-          ? capability.locomotion.status === "active" &&
-            capability.locomotion.gait === "idle"
-          : capability.mode === "idle",
+        (capability) => capability.locomotion.status === "active" &&
+          capability.locomotion.gait === "idle",
       ),
       "Initial locomotion capability state was not idle.",
     );

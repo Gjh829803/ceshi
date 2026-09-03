@@ -4,16 +4,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeAuthoringSpecV4,
-  sha256CanonicalJson,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import {
+  sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
 import {
   createGameplayBootstrapV1,
   RETAINED_SUPPORT_SEMANTIC_FACT_PROJECTOR_PROFILE_RESOURCE_V1,
 } from "@whitebox-world/gameplay-contracts";
 import { BIPED_BONE_IDS_V1 } from "@whitebox-world/subject-contracts";
-import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   builtInSubjectResourceRegistry,
   createSubjectResourceRegistry,

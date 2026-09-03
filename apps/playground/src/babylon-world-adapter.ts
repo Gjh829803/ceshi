@@ -1467,10 +1467,15 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
           : [...this.cameraInput];
         const gameplayActions = isNil(controlledEntityId)
           ? []
-          : this.keyboardInput.actions(
-            runtimeProjection.subjectStatesByEntityId[controlledEntityId]
-              ?.activeMotionKernelRef,
-          );
+          : (() => {
+            const subjectState =
+              runtimeProjection.subjectStatesByEntityId[controlledEntityId];
+            return this.keyboardInput.actions(
+              subjectState?.movementOwner === "specialized-motion"
+                ? subjectState.activeMotionKernelRef
+                : undefined,
+            );
+          })();
         await this.runFixedInputWithCameraActions(
           cameraActions,
           gameplayActions,

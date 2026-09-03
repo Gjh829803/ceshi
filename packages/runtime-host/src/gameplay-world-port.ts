@@ -79,10 +79,10 @@ export interface GameplayWorldPortV1 {
   estimateFixedInputTickCapacity(
     input: FixedInputOneTickV1,
   ): GameplayFixedInputCapacityEstimateV1;
-  runFixedInputTick(
+  prepareFixedInputTick(
     input: FixedInputOneTickV1,
     actionProjection: GameplayFixedTickActionProjectionV1,
-  ): Promise<GameplayWorldStateProjectionV1>;
+  ): Promise<GameplayWorldTransactionV1>;
   snapshot(): GameplayWorldStateProjectionV1;
   dispose(): Promise<void>;
 }

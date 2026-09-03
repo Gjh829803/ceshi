@@ -55,12 +55,6 @@ import type {
   CharacterSupportProjectionSampleV1,
 } from "./retained-support-surface-resolver";
 
-interface LegacySubjectMotionSampleV1 {
-  horizontalSpeedMetersPerSecond: number;
-  runRequested: boolean;
-  movementMedium: PublishedMovementMediumV1;
-}
-
 /**
  * Input interpretation and movement execution are owned by
  * separate runtimes; this class only commits them on the same fixed-tick boundary.
@@ -78,11 +72,10 @@ function physicsBodyForCharacterController(
 }
 
 /**
- * Entity component boundary around the existing Motion Kernel. The kernel keeps
- * its sole authority for support, gravity and locomotion state; this component
- * contributes lifecycle and fixed-phase integration to the new framework.
+ * Controller for explicit non-planar movement strategies such as throttle/steer
+ * and flight attitude. A planar-vector Subject must never be routed here.
  */
-export class CharacterMovementComponentV1 extends EntityComponentV1 {
+export class SpecializedMotionSubjectControllerV1 extends EntityComponentV1 {
   private readonly motionKernel: MotionKernelRuntimeV1;
   readonly physicsController: MotionKernelRuntimeV1["physicsController"];
 
@@ -96,6 +89,11 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     ) => number | undefined,
   ) {
     super("character-movement");
+    if (supportsCharacterMovementSubjectV1(subject)) {
+      throw new Error(
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE: camera-relative planar-vector Subjects are owned by CharacterMovementRuntime.",
+      );
+    }
     this.motionKernel = new MotionKernelRuntimeV1(
       subject,
       gravityMetersPerSecondSquaredXYZ,
@@ -150,17 +148,8 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
   }
 
   renderVisual(_interpolationAlphaRatio: number): void {
-    // Legacy Movement writes its visual during synchronizeVisual. The Golden
-    // slice alone owns two-Snapshot render interpolation during migration.
-  }
-
-  sampleMotion(runRequested: boolean): LegacySubjectMotionSampleV1 {
-    const velocity = this.motionKernel.velocity;
-    return {
-      horizontalSpeedMetersPerSecond: Math.hypot(velocity.x, velocity.z),
-      runRequested,
-      movementMedium: this.motionKernel.movementMedium,
-    };
+    // Specialized motion writes its visual during synchronizeVisual. The
+    // CharacterMovement path owns two-Snapshot render interpolation.
   }
 
   motionSnapshot(): MotionKernelSnapshotV1 {
@@ -339,29 +328,40 @@ export interface GoldenHumanoidRenderPoseDiagnosticV1 {
   }>;
 }
 
-function assertGoldenHumanoidSubjectAdmissionV1(
+export function supportsCharacterMovementSubjectV1(
   subject: BabylonRuntimeSubjectV1,
-): void {
+): boolean {
   const control = subject.capabilityAssembly.controlProfile;
-  if (
+  return !(
     control.commandKind !== "planar-vector" ||
     control.inputSpace !== "camera-relative" ||
     control.facingPolicy !== "align-to-move" ||
     (control.lateralMovementPolicy !== "allowed" &&
       control.lateralMovementPolicy !== "forbidden")
-  ) {
+  );
+}
+
+function assertCharacterMovementSubjectAdmissionV1(
+  subject: BabylonRuntimeSubjectV1,
+): void {
+  if (!supportsCharacterMovementSubjectV1(subject)) {
     throw new Error(
-      "3C_GOLDEN_CONTROL_PROFILE_UNSUPPORTED: Golden Humanoid requires camera-relative planar-vector align-to-move Control.",
+      "3C_CHARACTER_MOVEMENT_CONTROL_PROFILE_UNSUPPORTED: CharacterMovement requires camera-relative planar-vector align-to-move Control.",
     );
   }
 }
 
+const controllerBodyPortsForTesting = new WeakMap<
+  CharacterMovementSubjectControllerV1,
+  BabylonCharacterBodyRuntimePortV1
+>();
+
 /**
- * Live Golden Subject facade. It deliberately has no MotionKernel member: the
- * injected Golden transaction owns the one CharacterMovementRuntime and the
+ * Live planar Subject facade. It deliberately has no MotionKernel member: the
+ * injected transaction owns the one CharacterMovementRuntime and the
  * one Babylon BodyPort/native controller for this Subject.
  */
-export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
+export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
   readonly #subject: BabylonRuntimeSubjectV1;
   readonly #visualRoot: TransformNode;
   readonly #transaction: GoldenHumanoid3CVNextTransactionV1;
@@ -377,12 +377,15 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     if (options.subject.entityId.length === 0) {
       throw new Error("3C_INPUT_INVALID: Golden Subject entity id is empty.");
     }
-    assertGoldenHumanoidSubjectAdmissionV1(options.subject);
+    assertCharacterMovementSubjectAdmissionV1(options.subject);
     this.#subject = options.subject;
     this.#visualRoot = options.visualRoot;
     this.#transaction = options.transaction;
     this.#physicsBody = options.physicsBody;
     this.#bodyPort = options.bodyPort;
+    if (options.bodyPort !== undefined) {
+      controllerBodyPortsForTesting.set(this, options.bodyPort);
+    }
     this.#renderPoseBuffer = new CommittedRenderPoseBufferV1(
       this.#committedRenderPose(),
     );
@@ -416,7 +419,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     );
     if (interpreted.kind !== "planar-vector" && interpreted.kind !== "none") {
       throw new Error(
-        "3C_INPUT_INVALID: Golden Humanoid accepts only planar-vector Control.",
+        "3C_INPUT_INVALID: CharacterMovement accepts only planar-vector Control.",
       );
     }
     const jumpHeld = interpreted.kind === "planar-vector" &&
@@ -811,7 +814,7 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
     this.#transaction.reset(snapshot);
     this.#latestTickResult = undefined;
     this.#jumpWasHeld = false;
-    this.#renderPoseBuffer.commit(this.#committedRenderPose());
+    this.#renderPoseBuffer.reset(this.#committedRenderPose());
     this.#applyRenderPose(this.#renderPoseBuffer.sample(1));
   }
 
@@ -840,7 +843,18 @@ export class GoldenHumanoidSubjectControllerV1 extends EntityComponentV1 {
   }
 }
 
-export interface CreateGoldenHumanoidSubjectControllerOptionsV1 {
+/** @internal Used only by the adjacent testing-only relative module. */
+export function readCharacterMovementBodyPortForTestingInternalV1(
+  controller: CharacterMovementSubjectControllerV1,
+): BabylonCharacterBodyRuntimePortV1 {
+  const bodyPort = controllerBodyPortsForTesting.get(controller);
+  if (bodyPort === undefined) {
+    throw new Error("WORLDKIT_CHARACTER_BODY_PORT_TEST_SEAM_UNAVAILABLE");
+  }
+  return bodyPort;
+}
+
+export interface CreateCharacterMovementSubjectControllerOptionsV1 {
   readonly subject: BabylonRuntimeSubjectV1;
   readonly gravityMetersPerSecondSquaredXYZ: RuntimeVec3V1;
   readonly visualRoot: TransformNode;
@@ -850,11 +864,11 @@ export interface CreateGoldenHumanoidSubjectControllerOptionsV1 {
 }
 
 /** Allocates exactly one MovementRuntime and one Babylon BodyPort. */
-export function createGoldenHumanoidSubjectControllerV1(
-  options: CreateGoldenHumanoidSubjectControllerOptionsV1,
-): GoldenHumanoidSubjectControllerV1 {
+export function createCharacterMovementSubjectControllerV1(
+  options: CreateCharacterMovementSubjectControllerOptionsV1,
+): CharacterMovementSubjectControllerV1 {
   const subject = options.subject;
-  assertGoldenHumanoidSubjectAdmissionV1(subject);
+  assertCharacterMovementSubjectAdmissionV1(subject);
   const centerOffset = subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
   const initialCenter = subject.spawnSubjectOriginPositionMetersXYZ.map(
     (value, axis) => value + centerOffset[axis]!,
@@ -862,7 +876,7 @@ export function createGoldenHumanoidSubjectControllerV1(
   const gravity = options.gravityMetersPerSecondSquaredXYZ;
   if (gravity[0] !== 0 || gravity[2] !== 0 || gravity[1] >= 0) {
     throw new Error(
-      "3C_INPUT_INVALID: Golden Humanoid V1 requires downward world-Y gravity.",
+      "3C_INPUT_INVALID: CharacterMovement V1 requires downward world-Y gravity.",
     );
   }
   const feel = subject.controlFeel;
@@ -909,6 +923,7 @@ export function createGoldenHumanoidSubjectControllerV1(
       feel.accelerationMetersPerSecondSquared,
     decelerationMetersPerSecondSquared:
       feel.decelerationMetersPerSecondSquared,
+    turnRateRadiansPerSecond: feel.turnRateRadiansPerSecond,
     airControlRatio: feel.airControlRatio,
     gravityMetersPerSecondSquared: Math.abs(gravity[1]),
     jumpSpeedMetersPerSecond: feel.jumpSpeedMetersPerSecond,
@@ -955,7 +970,7 @@ export function createGoldenHumanoidSubjectControllerV1(
         ? {}
         : { projectionPorts: options.projectionPorts }),
     });
-    return new GoldenHumanoidSubjectControllerV1({
+    return new CharacterMovementSubjectControllerV1({
       subject,
       visualRoot: options.visualRoot,
       transaction,

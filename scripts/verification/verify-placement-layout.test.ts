@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sha256CanonicalJson } from "@whitebox-world/authoring";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { LayoutSolveReportV1 } from "../../packages/layout-solver/src/index.js";
 
 import {

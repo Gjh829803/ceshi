@@ -312,6 +312,7 @@ function movementOptions(): CharacterMovementRuntimeOptionsV1 {
     runSpeedMetersPerSecond: 4,
     accelerationMetersPerSecondSquared: 16,
     decelerationMetersPerSecondSquared: 22,
+    turnRateRadiansPerSecond: 9,
     airControlRatio: 0.3,
     gravityMetersPerSecondSquared: 9.81,
     jumpSpeedMetersPerSecond: 5.5,

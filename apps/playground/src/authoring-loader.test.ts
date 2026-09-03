@@ -9,10 +9,10 @@ import {
 } from "../../../packages/authoring/src/test-fixture";
 import {
   normalizeAuthoringSpecV4,
-  sha256CanonicalJson,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import {
   CONTROL_TRANSITION_CAPABILITY_REF,
@@ -481,6 +481,7 @@ describe("loadAuthoringScene", () => {
             "worldkit://locomotion-profile/test@1",
           locomotionMode: "run",
           activeMotionProfileRef: "worldkit://motion-profile/test@1",
+          movementOwner: "specialized-motion",
           activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
           motionTags: ["ground"],
           safeFallbackActive: false,

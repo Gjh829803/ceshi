@@ -3,6 +3,7 @@ import {
   parseCharacterMovementCommandV1,
   type BodyResolutionV1,
   type BodySampleV1,
+  type BodySupportSampleV1,
   type CharacterBodyPortV1,
   type CharacterMovementCommandV1,
   type CharacterMovementRuntimeV1,
@@ -52,7 +53,7 @@ export interface GoldenCharacterBodyTransactionPortV1
   resetToState(state: Readonly<{
     positionMetersXYZ: readonly [number, number, number];
     linearVelocityMetersPerSecondXYZ: readonly [number, number, number];
-  }>): void;
+  }>): BodySupportSampleV1;
 }
 
 export interface GoldenHumanoidPreparedProjectionV1 {
@@ -412,11 +413,45 @@ export class GoldenHumanoid3CVNextTransactionV1 {
     this.options.movementRuntime.reset(snapshot);
     const after = this.options.movementRuntime.snapshot();
     try {
-      this.options.bodyPort.resetToState({
+      const support = this.options.bodyPort.resetToState({
         positionMetersXYZ: after.positionMetersXYZ,
         linearVelocityMetersPerSecondXYZ:
           after.linearVelocityMetersPerSecondXYZ,
       });
+      if (after.locomotion.status === "active") {
+        const isGrounded = support.mode !== "unsupported";
+        const velocity = after.linearVelocityMetersPerSecondXYZ;
+        const correctedState = Object.freeze({
+          ...after,
+          locomotion: Object.freeze({
+            ...after.locomotion,
+            mobilityMode: isGrounded ? "grounded" as const : "airborne" as const,
+            gait: isGrounded ? "idle" as const : "none" as const,
+            verticalPhase: isGrounded ? "none" as const : "falling" as const,
+            supportMode: support.mode,
+            movementMedium: isGrounded ? "ground" as const : "air" as const,
+            linearVelocity: Object.freeze({
+              x: velocity[0],
+              y: velocity[1],
+              z: velocity[2],
+            }),
+            horizontalSpeedMetersPerSecond: Math.hypot(
+              velocity[0],
+              velocity[2],
+            ),
+            phaseEnteredTick: after.tick,
+          }),
+          runtimeState: Object.freeze({
+            ...after.runtimeState,
+            coyoteTicksRemaining: 0,
+          }),
+        });
+        const { stateHash: _stateHash, ...state } = correctedState;
+        this.options.movementRuntime.reset(Object.freeze({
+          ...state,
+          stateHash: hashCharacterMovementStateV1(state),
+        }));
+      }
     } catch (error) {
       this.options.movementRuntime.reset(before);
       throw error;

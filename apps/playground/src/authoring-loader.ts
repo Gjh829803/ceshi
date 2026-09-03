@@ -5,12 +5,14 @@ import {
   normalizeAuthoringSpecV4,
   parseCanonicalJson,
   parseAuthoringSpecV4,
-  sha256CanonicalJson,
-  stringifyCanonicalJson,
   type AuthoringDiagnostic,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import {
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";
 import {
   compileCanonicalWorldV1,
   type CompileDiagnostic,

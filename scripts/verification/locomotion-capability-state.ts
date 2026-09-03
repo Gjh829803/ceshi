@@ -18,7 +18,6 @@ export function findLocomotionCapabilityState(
   const subject = snapshot.world.subjectStatesByEntityId[entityId];
   if (isNil(subject)) return undefined;
   const candidates = Object.values(subject.capabilityStatesById).filter((candidate) =>
-    candidate.kind === "locomotion-capability-state" ||
     candidate.kind === "locomotion-capability-state-v2"
   );
   if (candidates.length > 1) {
@@ -35,24 +34,15 @@ export function requireActivePublishedLocomotionV1(
   if (isNil(capability)) {
     throw new Error(`Missing locomotion capability state for '${entityId}'.`);
   }
-  if (capability.kind === "locomotion-capability-state-v2") {
-    if (capability.locomotion.status === "suspended") {
-      throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
-    }
-    return {
-      mode: capability.locomotion.mobilityMode === "airborne"
-        ? "airborne"
-        : capability.locomotion.gait === "none"
-          ? "idle"
-          : capability.locomotion.gait,
-      movementMedium: capability.locomotion.movementMedium,
-    };
-  }
-  if (capability.mode === "suspended") {
+  if (capability.locomotion.status === "suspended") {
     throw new Error(`Unexpected suspended locomotion capability for '${entityId}'.`);
   }
   return {
-    mode: capability.mode,
-    movementMedium: capability.movementMedium,
+    mode: capability.locomotion.mobilityMode === "airborne"
+      ? "airborne"
+      : capability.locomotion.gait === "none"
+        ? "idle"
+        : capability.locomotion.gait,
+    movementMedium: capability.locomotion.movementMedium,
   };
 }

@@ -26,25 +26,7 @@ function snapshotWithCapability(
 }
 
 describe("published locomotion capability", () => {
-  it("reads a live V1 locomotion capability", () => {
-    const snapshot = snapshotWithCapability("player", {
-      id: "capability-state:player:locomotion",
-      kind: "locomotion-capability-state",
-      ownerEntityId: "player",
-      locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
-      locomotionCapabilityHash: `sha256:${"a".repeat(64)}`,
-      mode: "walk",
-      movementMedium: "ground",
-      facingYawRadians: 0,
-      speedMetersPerSecond: 1.4,
-    });
-    expect(requireActivePublishedLocomotionV1(snapshot, "player")).toEqual({
-      mode: "walk",
-      movementMedium: "ground",
-    });
-  });
-
-  it("reads a live V2 locomotion capability", () => {
+  it("reads the canonical locomotion capability", () => {
     const snapshot = snapshotWithCapability("g-bot-primary", {
       id: "capability-state:g-bot-primary:locomotion",
       kind: "locomotion-capability-state-v2",
@@ -104,15 +86,26 @@ describe("published locomotion capability", () => {
 
   it("rejects two locomotion authorities for one Subject", () => {
     const snapshot = snapshotWithCapability("player", {
-      id: "capability-state:player:locomotion-v1",
-      kind: "locomotion-capability-state",
+      id: "capability-state:player:locomotion-a",
+      kind: "locomotion-capability-state-v2",
       ownerEntityId: "player",
       locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
       locomotionCapabilityHash: `sha256:${"a".repeat(64)}`,
-      mode: "idle",
-      movementMedium: "ground",
-      facingYawRadians: 0,
-      speedMetersPerSecond: 0,
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "idle",
+        verticalPhase: "none",
+        supportMode: "supported",
+        movementMedium: "ground",
+        facingYawRadians: 0,
+        linearVelocity: { x: 0, y: 0, z: 0 },
+        horizontalSpeedMetersPerSecond: 0,
+        committedTick: 0,
+        phaseEnteredTick: 0,
+        transitionSequence: 0,
+      },
     });
     const subject = snapshot.world.subjectStatesByEntityId.player!;
     const ambiguous = {
@@ -124,8 +117,8 @@ describe("published locomotion capability", () => {
             ...subject,
             capabilityStatesById: {
               ...subject.capabilityStatesById,
-              "capability-state:player:locomotion-v2": {
-                id: "capability-state:player:locomotion-v2",
+              "capability-state:player:locomotion-b": {
+                id: "capability-state:player:locomotion-b",
                 kind: "locomotion-capability-state-v2",
                 ownerEntityId: "player",
                 locomotionCapabilityRef:

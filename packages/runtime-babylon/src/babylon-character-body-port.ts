@@ -23,6 +23,7 @@ import {
   type BodyBeginTickRequestV1,
   type BodyResolutionV1,
   type BodySampleV1,
+  type BodySupportSampleV1,
   type CharacterBodyPortV1,
   type MovementProposalV1,
   type MovementTickTokenV1,
@@ -76,7 +77,7 @@ export interface BabylonCharacterBodyTransactionPortV1
   resetToState(state: Readonly<{
     positionMetersXYZ: MovementVec3V1;
     linearVelocityMetersPerSecondXYZ: MovementVec3V1;
-  }>): void;
+  }>): BodySupportSampleV1;
 }
 
 export interface BabylonCharacterBodyNativeAllocationV1 {
@@ -1944,6 +1945,7 @@ interface BodyTransactionV1 {
 }
 
 const tokenOwners = new WeakMap<object, BodyTokenOwnerV1>();
+const nativeDriversByPort = new WeakMap<object, BabylonCharacterBodyNativeDriverV1>();
 
 class BabylonCharacterBodyPortV1
   implements BabylonCharacterBodyRuntimePortV1 {
@@ -1970,7 +1972,9 @@ class BabylonCharacterBodyPortV1
     private readonly options: BabylonCharacterBodyPortOptionsV1,
     private readonly configuration: BabylonCharacterBodyNativeConfigurationV1,
     private readonly driver: BabylonCharacterBodyNativeDriverV1,
-  ) {}
+  ) {
+    nativeDriversByPort.set(this, driver);
+  }
 
   get physicsBody(): PhysicsBody {
     this.assertLive();
@@ -2289,7 +2293,7 @@ class BabylonCharacterBodyPortV1
   resetToState(input: Readonly<{
     positionMetersXYZ: MovementVec3V1;
     linearVelocityMetersPerSecondXYZ: MovementVec3V1;
-  }>): void {
+  }>): BodySupportSampleV1 {
     this.assertLive();
     const positionInput = parseVec3(input.positionMetersXYZ);
     const velocityInput = parseVec3(input.linearVelocityMetersPerSecondXYZ);
@@ -2334,6 +2338,14 @@ class BabylonCharacterBodyPortV1
     this.stagedRetainedSupportSample = undefined;
     this.upwardSupportDepartureActive = false;
     this.latestCommittedSupportEvidence = undefined;
+    return nextRetainedSupportSample.supportState === "unsupported"
+      ? Object.freeze({ mode: "unsupported" })
+      : Object.freeze({
+          mode: nextRetainedSupportSample.supportState,
+          pointMetersXYZ: nextRetainedSupportSample.sampledFootPositionMetersXYZ,
+          normalXYZ: nextRetainedSupportSample.supportNormalWorldXYZ,
+          isDynamic: nextRetainedSupportSample.isSupportSurfaceDynamic,
+        });
   }
 
   retainedCharacterSupportSample():
@@ -2782,4 +2794,15 @@ export function createBabylonCharacterBodyPortForTestingInternalV1(
     input,
     nativeDriverFactory,
   );
+}
+
+/** @internal Used only by the adjacent testing-only relative module. */
+export function readBabylonCharacterBodyNativeDriverForTestingInternalV1(
+  port: object,
+): BabylonCharacterBodyNativeDriverV1 {
+  const driver = nativeDriversByPort.get(port);
+  if (driver === undefined) {
+    throw new Error("WORLDKIT_CHARACTER_BODY_TEST_DRIVER_UNAVAILABLE");
+  }
+  return driver;
 }

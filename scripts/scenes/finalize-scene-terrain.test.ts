@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { stringifyCanonicalJson } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
 

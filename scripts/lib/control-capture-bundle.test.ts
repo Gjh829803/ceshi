@@ -369,12 +369,17 @@ function mountedGameplayEvidence(): Readonly<{
     capabilityStatesById: {
       "capability-state:player:locomotion": {
         id: "capability-state:player:locomotion",
-        kind: "locomotion-capability-state",
+        kind: "locomotion-capability-state-v2",
         ownerEntityId: "player",
         locomotionCapabilityRef: "worldkit://capability/locomotion.ground@1",
         locomotionCapabilityHash: WORLD_HASH,
-        mode: "suspended",
-        suspendedByRelationshipId: relationship.id,
+        locomotion: {
+          schemaVersion: 2,
+          status: "suspended",
+          suspendedByRelationshipId: relationship.id,
+          committedTick: 5,
+          transitionSequence: 1,
+        },
       },
     },
     relationshipStatesById: {

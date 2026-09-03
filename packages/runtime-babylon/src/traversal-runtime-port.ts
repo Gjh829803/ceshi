@@ -37,6 +37,27 @@ function fail(code: TraversalRuntimeErrorV1["code"]): never {
   throw new TraversalRuntimeErrorV1(code);
 }
 
+function activeLocomotionState(
+  controller: NonNullable<ReturnType<
+    BabylonTraversalRuntimeInternalV1["readCharacterMovement"]
+  >>,
+) {
+  const locomotion = controller.locomotionStateV2();
+  if (locomotion.status !== "active") {
+    fail("TRAVERSAL_RUNTIME_EVIDENCE_UNAVAILABLE");
+  }
+  return locomotion;
+}
+
+function traversalLocomotionMode(
+  locomotion: ReturnType<typeof activeLocomotionState>,
+): TraversalRuntimeTickEvidenceV1["locomotionMode"] {
+  if (locomotion.mobilityMode === "airborne") return "airborne";
+  return locomotion.gait === "walk" || locomotion.gait === "run"
+    ? locomotion.gait
+    : "idle";
+}
+
 function exactPlanAndReceiptLock(
   plan: CanonicalSceneExecutionPlanV1,
   runtimeBootstrap: WorldRuntimeBootstrapV1,
@@ -382,10 +403,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
       const postTickController = this.#host.readCharacterMovement(
         this.traversingEntityId,
       );
-      if (
-        isNil(postTickController) ||
-        postTickController.motionSnapshot().fallbackActive
-      ) {
+      if (isNil(postTickController)) {
         this.#runtimeUnavailable = true;
         fail("TRAVERSAL_RUNTIME_UNAVAILABLE");
       }
@@ -435,10 +453,6 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     const controller = this.#host.readCharacterMovement(this.traversingEntityId);
     if (isNil(controller)) {
       fail("TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH");
-    }
-    if (controller.motionSnapshot().fallbackActive) {
-      this.#runtimeUnavailable = true;
-      fail("TRAVERSAL_RUNTIME_UNAVAILABLE");
     }
     if (!liveLockMatches(controller.liveLockState(), this.#lock)) {
       fail("TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH");
@@ -491,6 +505,7 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
     };
     const origin = controller.subjectOrigin;
     const velocity = controller.velocity;
+    const locomotion = activeLocomotionState(controller);
     return canonicalTraversalRuntimeTickEvidenceV1({
       kind: "traversal-runtime-tick-evidence",
       schemaVersion: 1,
@@ -506,8 +521,8 @@ class BabylonTraversalRuntimePortV1 implements TraversalRuntimePortV1 {
       fixedTimeStepSeconds: FIXED_TIME_STEP_SECONDS,
       subjectPositionMetersXYZ: [origin.x, origin.y, origin.z],
       velocityMetersPerSecondXYZ: [velocity.x, velocity.y, velocity.z],
-      movementMedium: controller.movementMedium,
-      locomotionMode: controller.motionSnapshot().locomotionMode,
+      movementMedium: locomotion.movementMedium,
+      locomotionMode: traversalLocomotionMode(locomotion),
       characterSupport: support,
     });
   }
@@ -558,9 +573,6 @@ export function createBabylonTraversalRuntimePortV1(input: Readonly<{
   const controller = host.readCharacterMovement(lock.subjectEntityId);
   if (isNil(controller)) {
     fail("TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH");
-  }
-  if (controller.motionSnapshot().fallbackActive) {
-    fail("TRAVERSAL_RUNTIME_UNAVAILABLE");
   }
   if (!liveLockMatches(controller.liveLockState(), lock)) {
     fail("TRAVERSAL_RUNTIME_LIVE_LOCK_MISMATCH");

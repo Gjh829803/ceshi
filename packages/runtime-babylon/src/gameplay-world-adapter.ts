@@ -255,42 +255,10 @@ function providerNeutralTransaction(
 }
 
 class BabylonGameplayWorldPortV1 implements GameplayWorldPortV1 {
-  declare readonly prepareFixedInputTick?: (
-    input: FixedInputOneTickV1,
-    actionProjection: GameplayFixedTickActionProjectionV1,
-  ) => Promise<GameplayWorldTransactionV1>;
-
   constructor(
     private readonly internal: BabylonGameplayRuntimeInternalV1,
     private readonly fixedInputControllerEntityId: string,
-  ) {
-    const providerPrepareFixedInputTick = internal.prepareFixedInputTick;
-    if (typeof providerPrepareFixedInputTick === "function") {
-      Object.defineProperty(this, "prepareFixedInputTick", {
-        configurable: false,
-        enumerable: false,
-        writable: false,
-        value: async (
-          input: FixedInputOneTickV1,
-          actionProjection: GameplayFixedTickActionProjectionV1,
-        ): Promise<GameplayWorldTransactionV1> => {
-          assertSingleFixedTick(input);
-          try {
-            return providerNeutralTransaction(await Reflect.apply(
-              providerPrepareFixedInputTick,
-              internal,
-              [input, actionProjection],
-            ));
-          } catch {
-            throw portError(
-              "ADAPTER_FIXED_INPUT_FAILED",
-              "Gameplay World Port could not prepare fixed input.",
-            );
-          }
-        },
-      });
-    }
-  }
+  ) {}
 
   initialize(): Promise<GameplayWorldStateProjectionV1> {
     try {
@@ -381,17 +349,19 @@ class BabylonGameplayWorldPortV1 implements GameplayWorldPortV1 {
     return this.internal.estimateSemanticFactProjectionCapacity();
   }
 
-  async runFixedInputTick(
+  async prepareFixedInputTick(
     input: FixedInputOneTickV1,
     actionProjection: GameplayFixedTickActionProjectionV1,
-  ): Promise<GameplayWorldStateProjectionV1> {
+  ): Promise<GameplayWorldTransactionV1> {
     assertSingleFixedTick(input);
     try {
-      return await this.internal.runFixedInputTick(input, actionProjection);
+      return providerNeutralTransaction(
+        await this.internal.prepareFixedInputTick(input, actionProjection),
+      );
     } catch {
       throw portError(
         "ADAPTER_FIXED_INPUT_FAILED",
-        "Gameplay World Port could not run fixed input.",
+        "Gameplay World Port could not prepare fixed input.",
       );
     }
   }

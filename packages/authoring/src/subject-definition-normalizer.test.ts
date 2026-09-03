@@ -21,9 +21,9 @@ import {
   normalizeAuthoringSpecV4,
   normalizeSubjectDefinitionV2,
   ResourceLockBuilderV1,
-  sha256CanonicalJson,
   type NormalizeAuthoringResultV4,
 } from "./index";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorld,

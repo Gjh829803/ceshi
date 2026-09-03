@@ -6,12 +6,14 @@ import {
   normalizeAuthoringSpecV4,
   parseAuthoringSpecV4,
   parseCanonicalJson,
-  sha256CanonicalJson,
-  stringifyCanonicalJson,
   type AuthoringSpecV4,
   type NormalizeAuthoringResultV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import {
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";
 
 import {
   promoteArtifactDirectory,

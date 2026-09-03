@@ -89,6 +89,7 @@ function options(
     runSpeedMetersPerSecond: 4,
     accelerationMetersPerSecondSquared: 16,
     decelerationMetersPerSecondSquared: 22,
+    turnRateRadiansPerSecond: 9,
     airControlRatio: 0.3,
     gravityMetersPerSecondSquared: 9.81,
     jumpSpeedMetersPerSecond: 5.5,
@@ -286,7 +287,7 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
     expect(commit.locomotion).toMatchObject({ gait, supportMode: "supported", verticalPhase: "none" });
   });
 
-  it("aligns proposed and committed facing with off-axis movement", () => {
+  it("turns proposed and committed facing toward off-axis movement at the locked rate", () => {
     const runtime = createCharacterMovementRuntimeV1(options());
     const { proposal, commit } = transact(runtime, command(1, { movementInputXZ: [0.6, 0.8] }));
 
@@ -294,8 +295,7 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
       proposal.proposedFacingYawRadians,
       commit.facingYawRadians,
     ]) {
-      expect(-Math.sin(facingYawRadians)).toBeCloseTo(0.6);
-      expect(-Math.cos(facingYawRadians)).toBeCloseTo(-0.8);
+      expect(facingYawRadians).toBeCloseTo(-9 / 60);
     }
   });
 

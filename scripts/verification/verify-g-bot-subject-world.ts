@@ -9,9 +9,9 @@ import type { Browser, BrowserContext, Page } from "playwright";
 import { isNil } from "lodash-es";
 
 import {
-  stringifyCanonicalJson,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import type {
   CanonicalSceneExecutionPlanV1,

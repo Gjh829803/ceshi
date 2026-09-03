@@ -109,12 +109,14 @@
       "targetOwner": "@whitebox-world/gameplay-contracts",
       "dependsOn": ["3C-6", "3C-7"],
       "deletionCondition": "Golden authoritative World State publishes LocomotionCapabilityStateV2 and no Golden fixture references V1.",
-      "state": "live",
+      "state": "completed",
       "baselineSourceReferenceCount": 3,
-      "currentSourceReferenceCeiling": 2,
+      "currentSourceReferenceCeiling": 0,
       "evidence": [
         "6d9e030 expanded executable-source census: 3",
-        "3C-6 Runtime Snapshot validation delegates to the shared V1/V2 capability parser; V1 remains only as an explicit legacy contract"
+        "3C-6 Runtime Snapshot validation delegates to the shared V1/V2 capability parser; V1 remains only as an explicit legacy contract",
+        "SAH-30 removes the V1 parser and envelope from executable source; exact executable-source census: 0",
+        "completion:v1|command=pnpm verify:3c-migration|artifact=docs/reviews/2026-09-03-single-authority-hardening.md"
       ]
     },
     {

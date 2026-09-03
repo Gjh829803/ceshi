@@ -329,6 +329,90 @@ function admittedSource(pathname: string, policy: SourcePolicyV1): boolean {
 }
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
+const SINGLE_AUTHORITY_STRUCTURE_RULES_V1 = Object.freeze([
+  Object.freeze({
+    id: "runtime-host-fixed-input-transaction",
+    path: "packages/runtime-host/src/gameplay-world-port.ts",
+    required: Object.freeze(["prepareFixedInputTick("]),
+    forbidden: Object.freeze(["runFixedInputTick"]),
+  }),
+  Object.freeze({
+    id: "runtime-provider-fixed-input-transaction",
+    path: "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
+    required: Object.freeze(["prepareFixedInputTick("]),
+    forbidden: Object.freeze(["runFixedInputTick"]),
+  }),
+  Object.freeze({
+    id: "locomotion-v2-only",
+    path: "packages/gameplay-contracts/src/gameplay-contracts.ts",
+    required: Object.freeze([
+      'readonly kind: "locomotion-capability-state-v2";',
+      "export type GameplayCapabilityStateV1 = LocomotionCapabilityStateEnvelopeV2;",
+    ]),
+    forbidden: Object.freeze([
+      "interface LocomotionCapabilityStateV1",
+      '"locomotion-capability-state-v1"',
+    ]),
+  }),
+  Object.freeze({
+    id: "planar-movement-admission",
+    path: "packages/runtime-babylon/src/character-movement-component.ts",
+    required: Object.freeze([
+      "supportsCharacterMovementSubjectV1(subject)",
+      "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE",
+    ]),
+    forbidden: Object.freeze(["sampleMotion("]),
+  }),
+  Object.freeze({
+    id: "movement-projection-discriminator",
+    path: "packages/runtime-babylon/src/runtime-projection.ts",
+    required: Object.freeze([
+      'movementOwner: "character-movement";',
+      'movementOwner: "specialized-motion";',
+      "locomotion?: never;",
+    ]),
+    forbidden: Object.freeze([]),
+  }),
+  Object.freeze({
+    id: "authoring-canonical-public-entry",
+    path: "packages/authoring/src/index.ts",
+    required: Object.freeze([]),
+    forbidden: Object.freeze(['export * from "./canonical-json"']),
+  }),
+  Object.freeze({
+    id: "authoring-schema-public-entry",
+    path: "packages/authoring/package.json",
+    required: Object.freeze(['"./schema": "./src/authoring-spec-v4.schema.json"']),
+    forbidden: Object.freeze(['"./schema-v4"']),
+  }),
+] as const);
+
+export async function verifySingleAuthorityStructureV1(
+  repositoryRoot: string,
+): Promise<readonly string[]> {
+  const verified: string[] = [];
+  for (const rule of SINGLE_AUTHORITY_STRUCTURE_RULES_V1) {
+    let source: string;
+    try {
+      source = await readFile(path.join(repositoryRoot, rule.path), "utf8");
+    } catch {
+      fail("SINGLE_AUTHORITY_STRUCTURE_FILE_MISSING", `${rule.id}: ${rule.path}`);
+    }
+    for (const required of rule.required) {
+      if (!source.includes(required)) {
+        fail("SINGLE_AUTHORITY_STRUCTURE_REQUIRED_MISSING", `${rule.id}: ${required}`);
+      }
+    }
+    for (const forbidden of rule.forbidden) {
+      if (source.includes(forbidden)) {
+        fail("SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN", `${rule.id}: ${forbidden}`);
+      }
+    }
+    verified.push(rule.id);
+  }
+  return Object.freeze(verified);
+}
+
 export async function verify3cMigrationV1(options: Verify3cMigrationOptionsV1) {
   const ledger = parseLedger(options.ledger);
   const required = options.requiredLegacySymbols ?? [];
@@ -800,5 +884,8 @@ if (invokedPath === fileURLToPath(import.meta.url)) {
     requiredLegacySymbols: GOLDEN_3C_REQUIRED_LEGACY_SYMBOLS_V1,
     sourceFilePaths,
   });
-  process.stdout.write(`3C migration ledger passed (${report.entries.length} entries; ${report.entries.reduce((sum, entry) => sum + entry.liveSourceReferenceCount, 0)} live references).\n`);
+  const structuralInvariants = await verifySingleAuthorityStructureV1(
+    repositoryRoot,
+  );
+  process.stdout.write(`3C migration ledger passed (${report.entries.length} entries; ${report.entries.reduce((sum, entry) => sum + entry.liveSourceReferenceCount, 0)} live references; ${structuralInvariants.length} single-authority invariants).\n`);
 }

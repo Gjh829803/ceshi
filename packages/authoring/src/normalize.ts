@@ -3,7 +3,7 @@ import {
   type RegistrySubjectDefinitionV3,
 } from "@whitebox-world/subject-registry";
 
-import { sha256CanonicalJson } from "./canonical-json";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { ResourceLockBuilderV1 } from "./resource-lock";
 import { normalizeSubjectDefinitionV2 } from "./subject-definition-normalizer";
 import type {
@@ -413,12 +413,20 @@ function normalizeNodeV2(
   }
 }
 
-interface ResolvedDefinitionInputV2 {
-  definition: PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV3;
+interface ResolvedDefinitionInputBaseV2 {
   subjectDefinitionRef: string;
-  source: "package" | "registry";
   instancePath: string;
 }
+
+type ResolvedDefinitionInputV2 =
+  | (ResolvedDefinitionInputBaseV2 & Readonly<{
+      source: "package";
+      definition: PackageSubjectDefinitionV1;
+    }>)
+  | (ResolvedDefinitionInputBaseV2 & Readonly<{
+      source: "registry";
+      definition: RegistrySubjectDefinitionV3;
+    }>);
 
 function packageDefinitionRef(definition: PackageSubjectDefinitionV1): string {
   return `package://subject-definition/${definition.id}@${definition.version}`;

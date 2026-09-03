@@ -11,6 +11,7 @@ import {
   priorTextFromDiversionDiffV1,
   readGitPriorLedgerV1,
   verify3cMigrationV1,
+  verifySingleAuthorityStructureV1,
 } from "./verify-3c-migration.js";
 
 const execFileAsync = promisify(execFile);
@@ -53,6 +54,49 @@ async function writeRepositoryFile(root: string, relativePath: string, content: 
   const file = join(root, ...relativePath.split("/"));
   await mkdir(join(file, ".."), { recursive: true });
   await writeFile(file, content, "utf8");
+}
+
+async function singleAuthorityRepository(): Promise<string> {
+  const root = await repositoryWithSource(
+    "export interface GameplayWorldPortV1 { prepareFixedInputTick(): void }\n",
+    "packages/runtime-host/src/gameplay-world-port.ts",
+  );
+  await Promise.all([
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
+      "export interface Internal { prepareFixedInputTick(): void }\n",
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/gameplay-contracts/src/gameplay-contracts.ts",
+      [
+        'readonly kind: "locomotion-capability-state-v2";',
+        "export type GameplayCapabilityStateV1 = LocomotionCapabilityStateEnvelopeV2;",
+      ].join("\n"),
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/character-movement-component.ts",
+      "supportsCharacterMovementSubjectV1(subject); 3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;\n",
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/runtime-projection.ts",
+      [
+        'movementOwner: "character-movement";',
+        'movementOwner: "specialized-motion";',
+        "locomotion?: never;",
+      ].join("\n"),
+    ),
+    writeRepositoryFile(root, "packages/authoring/src/index.ts", "export {};\n"),
+    writeRepositoryFile(
+      root,
+      "packages/authoring/package.json",
+      '{"exports":{"./schema": "./src/authoring-spec-v4.schema.json"}}\n',
+    ),
+  ]);
+  return root;
 }
 
 function ledger(entryOverrides: Record<string, unknown> = {}, rootOverrides: Record<string, unknown> = {}) {
@@ -115,6 +159,68 @@ describe("Diversion prior-ledger reconstruction", () => {
 });
 
 describe("3C migration ledger verifier", () => {
+  it("accepts the fixed-input, movement, locomotion, and public-entry single-authority structure", async () => {
+    const root = await singleAuthorityRepository();
+    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(7);
+  });
+
+  it.each([
+    {
+      label: "RuntimeHost mutating fixed-input fallback",
+      path: "packages/runtime-host/src/gameplay-world-port.ts",
+      source: "prepareFixedInputTick(): void; runFixedInputTick(): void;\n",
+    },
+    {
+      label: "provider mutating fixed-input fallback",
+      path: "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
+      source: "prepareFixedInputTick(): void; runFixedInputTick(): void;\n",
+    },
+    {
+      label: "flat Locomotion V1 envelope",
+      path: "packages/gameplay-contracts/src/gameplay-contracts.ts",
+      source: [
+        'readonly kind: "locomotion-capability-state-v2";',
+        "interface LocomotionCapabilityStateV1 {}",
+        "export type GameplayCapabilityStateV1 = LocomotionCapabilityStateEnvelopeV2;",
+      ].join("\n"),
+    },
+    {
+      label: "second planar motion sampler",
+      path: "packages/runtime-babylon/src/character-movement-component.ts",
+      source: [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "sampleMotion();",
+      ].join("\n"),
+    },
+    {
+      label: "projection without specialized owner discriminator",
+      path: "packages/runtime-babylon/src/runtime-projection.ts",
+      source: 'movementOwner: "character-movement";\nlocomotion?: never;\n',
+    },
+    {
+      label: "Authoring canonical JSON re-export",
+      path: "packages/authoring/src/index.ts",
+      source: 'export * from "./canonical-json";\n',
+    },
+    {
+      label: "duplicate Authoring schema subpath",
+      path: "packages/authoring/package.json",
+      source: JSON.stringify({
+        exports: {
+          "./schema": "./src/authoring-spec-v4.schema.json",
+          "./schema-v4": "./src/authoring-spec-v4.schema.json",
+        },
+      }),
+    },
+  ])("rejects $label", async ({ path, source }) => {
+    const root = await singleAuthorityRepository();
+    await writeRepositoryFile(root, path, source);
+    await expect(verifySingleAuthorityStructureV1(root)).rejects.toThrow(
+      /^SINGLE_AUTHORITY_STRUCTURE_(?:FORBIDDEN|REQUIRED_MISSING)/,
+    );
+  });
+
   it.each([
     ["unknown root key", { ...ledger(), generatedAt: "now" }],
     ["missing deletion condition", ledger({ deletionCondition: undefined })],

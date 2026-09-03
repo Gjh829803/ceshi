@@ -1,4 +1,3 @@
-export * from "./canonical-json";
 export {
   canonicalAuthoringLayoutIdentityV4,
   hashAuthoringDocumentV4,

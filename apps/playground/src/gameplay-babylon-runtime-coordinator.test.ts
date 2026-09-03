@@ -129,7 +129,6 @@ function fakeRuntimeFactory(
   options: Readonly<{
     rejectCandidateInitialCameraPublication?: boolean;
     rejectCandidateRender?: boolean;
-    usePreparedFixedInput?: boolean;
   }> = {},
 ) {
   const runtimes: FakeRuntimeV1[] = [];
@@ -141,7 +140,6 @@ function fakeRuntimeFactory(
     viewStateRevision?: number;
   }>> = [];
   const prepareFixedInputTick = vi.fn();
-  const legacyFixedInputTick = vi.fn();
   const factory = vi.fn(async ({
     canvas,
   }: Readonly<{ canvas: HTMLCanvasElement }>): Promise<GameplayBabylonRuntimeBundleV1> => {
@@ -201,9 +199,7 @@ function fakeRuntimeFactory(
       dispose,
       snapshot: (): BabylonRuntimeProjectionV1 => ({
         runtimeBackend: "babylon-havok",
-        tick: options.usePreparedFixedInput === true
-          ? preparedProjection.simulationTick
-          : harness.publishedWorldProjection.simulationTick,
+        tick: preparedProjection.simulationTick,
         ready: true,
         possessionTarget: {
           mode: "possessed",
@@ -225,9 +221,7 @@ function fakeRuntimeFactory(
           viewDistanceOffsetMeters: 0,
           selectionDecision: {
             schemaVersion: 2,
-            committedTick: options.usePreparedFixedInput === true
-              ? preparedProjection.simulationTick
-              : harness.publishedWorldProjection.simulationTick,
+            committedTick: preparedProjection.simulationTick,
             targetEntityId:
               configuration.worldRuntimeBootstrap.initialControlledEntityId,
             activeCameraRigProfileRef: "worldkit://camera-rig/third-person@1",
@@ -293,12 +287,8 @@ function fakeRuntimeFactory(
         abort: async () => undefined,
       });
     };
-    const gameplayWorldPort: GameplayWorldPortV1 & {
-      readonly prepareFixedInputTick?: typeof preparedFixedInput;
-    } = Object.freeze({
-      initialize: () => options.usePreparedFixedInput === true
-        ? Promise.resolve(preparedProjection)
-        : harness.port.initialize(),
+    const gameplayWorldPort: GameplayWorldPortV1 = Object.freeze({
+      initialize: () => Promise.resolve(preparedProjection),
       hasEntity: (entityId: string) => harness.port.hasEntity(entityId),
       isEntityControllable: (entityId: string) =>
         harness.port.isEntityControllable(entityId),
@@ -320,24 +310,8 @@ function fakeRuntimeFactory(
         input: Parameters<GameplayWorldPortV1["estimateFixedInputTickCapacity"]>[0],
       ) =>
         harness.port.estimateFixedInputTickCapacity(input),
-      runFixedInputTick: (
-        input: Parameters<GameplayWorldPortV1["runFixedInputTick"]>[0],
-        actionProjection: Parameters<
-          GameplayWorldPortV1["runFixedInputTick"]
-        >[1],
-      ) => {
-        legacyFixedInputTick(input);
-        if (options.usePreparedFixedInput === true) {
-          return Promise.reject(new Error("legacy fixed-input path must not run"));
-        }
-        return harness.port.runFixedInputTick(input, actionProjection);
-      },
-      ...(options.usePreparedFixedInput === true
-        ? { prepareFixedInputTick: preparedFixedInput }
-        : {}),
-      snapshot: () => options.usePreparedFixedInput === true
-        ? preparedProjection
-        : harness.port.snapshot(),
+      prepareFixedInputTick: preparedFixedInput,
+      snapshot: () => preparedProjection,
       dispose: async () => {
         await harness.port.dispose();
         await runtime.dispose();
@@ -354,7 +328,6 @@ function fakeRuntimeFactory(
     commitCountsAtReady,
     candidateReadinessSteps,
     prepareFixedInputTick,
-    legacyFixedInputTick,
   };
 }
 
@@ -388,9 +361,7 @@ async function createHarness(
 describe("Gameplay Babylon Runtime coordinator", () => {
   it("preserves the prepared fixed-input seam through the owned-port wrapper", async () => {
     const configuration = await worldConfiguration();
-    const runtimeFactory = fakeRuntimeFactory(configuration, {
-      usePreparedFixedInput: true,
-    });
+    const runtimeFactory = fakeRuntimeFactory(configuration);
     const coordinator = await createGameplayBabylonRuntimeCoordinatorV1({
       runtimeSessionId: "runtime.prepared-fixed-input",
       initialWorldConfiguration: configuration,
@@ -403,7 +374,6 @@ describe("Gameplay Babylon Runtime coordinator", () => {
 
     expect(after.world.simulationTick).toBe(1);
     expect(runtimeFactory.prepareFixedInputTick).toHaveBeenCalledOnce();
-    expect(runtimeFactory.legacyFixedInputTick).not.toHaveBeenCalled();
     await coordinator.dispose();
   });
 

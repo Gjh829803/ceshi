@@ -17,6 +17,7 @@ import {
   parseGameplayCapacityBudgetV1,
   parseGameplayCommandV1,
   parseGameplayCommandReceiptV1,
+  parseGameplayCapabilityStateV1,
   parseGameplayDiagnosticV1,
   parseGameplayEventV1,
   parseGameplayInspectionSnapshotV1,
@@ -56,6 +57,20 @@ const activeLocomotionV2 = {
 } as const;
 
 describe("LocomotionCapabilityStateV2", () => {
+  it("rejects the removed flat Locomotion V1 envelope", () => {
+    expect(parseGameplayCapabilityStateV1({
+      id: "locomotion-g-bot-primary",
+      kind: "locomotion-capability-state",
+      ownerEntityId: "g-bot-primary",
+      locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
+      locomotionCapabilityHash: `sha256:${"c".repeat(64)}`,
+      mode: "run",
+      movementMedium: "ground",
+      facingYawRadians: 0,
+      speedMetersPerSecond: 2,
+    })).toBeUndefined();
+  });
+
   it("parses and deeply freezes the exact active state", () => {
     const parsed = parseLocomotionCapabilityStateV2(activeLocomotionV2);
 
@@ -945,14 +960,25 @@ const controllerEntityState = {
 
 const locomotionCapabilityState = {
   id: "locomotion-g-bot-primary",
-  kind: "locomotion-capability-state",
+  kind: "locomotion-capability-state-v2",
   ownerEntityId: "g-bot-primary",
   locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
   locomotionCapabilityHash: HASH_C,
-  mode: "run",
-  movementMedium: "ground",
-  facingYawRadians: Math.PI,
-  speedMetersPerSecond: 2,
+  locomotion: {
+    schemaVersion: 2,
+    status: "active",
+    mobilityMode: "grounded",
+    gait: "run",
+    verticalPhase: "none",
+    supportMode: "supported",
+    movementMedium: "ground",
+    facingYawRadians: Math.PI,
+    linearVelocity: { x: 0, y: 0, z: 2 },
+    horizontalSpeedMetersPerSecond: 2,
+    committedTick: 12,
+    phaseEnteredTick: 12,
+    transitionSequence: 1,
+  },
 } as const;
 
 const possessionRelationshipState = {
@@ -1034,9 +1060,9 @@ const worldStateSnapshot = buildWorldStateSnapshotV1(
 );
 
 const WORLD_STATE_GOLDEN_HASH =
-  "sha256:ad16de84009c118144a649af8bc46e44c09febe5cd1eb37d08998bbc1f2a59a3" as const;
+  "sha256:dc002a73367fc9725eece82c3a8383a791846dde7833b8d8d6f2b7b4abb0e0df" as const;
 const WORLD_STATE_GOLDEN_ID =
-  "world-state:1f56997271f2ec9621e210f6f81cf6e91be93c4f1bb1df0da11897d269b422dc" as const;
+  "world-state:307c04152e3fdbd1c841a6e5a649d2551970019c5ffc293f12b12134494016ba" as const;
 
 function worldStateBuildInputOf(
   input: object,
@@ -1163,7 +1189,19 @@ describe("WorldStateSnapshotV1", () => {
 
   it("changes the semantic hash for tick, lock, map, fact, or sequence tampering", () => {
     const tamperedInputs = [
-      { ...worldStateSnapshot, simulationTick: 13 },
+      {
+        ...worldStateSnapshot,
+        simulationTick: 13,
+        capabilityStatesById: {
+          [locomotionCapabilityState.id]: {
+            ...locomotionCapabilityState,
+            locomotion: {
+              ...locomotionCapabilityState.locomotion,
+              committedTick: 13,
+            },
+          },
+        },
+      },
       { ...worldStateSnapshot, worldPackageRootHash: HASH_C },
       { ...worldStateSnapshot, worldBuildIdentityHash: HASH_C },
       {
@@ -1445,17 +1483,26 @@ describe("WorldStateSnapshotV1", () => {
   it.each([
     ["air medium with non-airborne mode", {
       ...locomotionCapabilityState,
-      mode: "run",
-      movementMedium: "air",
+      locomotion: {
+        ...locomotionCapabilityState.locomotion,
+        mobilityMode: "grounded",
+        movementMedium: "air",
+      },
     }],
     ["airborne mode with ground medium", {
       ...locomotionCapabilityState,
-      mode: "airborne",
-      movementMedium: "ground",
+      locomotion: {
+        ...locomotionCapabilityState.locomotion,
+        mobilityMode: "airborne",
+        movementMedium: "ground",
+      },
     }],
     ["negative speed", {
       ...locomotionCapabilityState,
-      speedMetersPerSecond: -0.01,
+      locomotion: {
+        ...locomotionCapabilityState.locomotion,
+        horizontalSpeedMetersPerSecond: -0.01,
+      },
     }],
   ])("rejects invalid locomotion cross-field state: %s", (_label, capability) => {
     expect(() => rebuildWorldStateSnapshotV1({
@@ -1467,12 +1514,17 @@ describe("WorldStateSnapshotV1", () => {
   it("accepts an exact suspended locomotion branch owned by mountedOn", () => {
     const suspendedLocomotion = {
       id: "locomotion-g-bot-primary",
-      kind: "locomotion-capability-state",
+      kind: "locomotion-capability-state-v2",
       ownerEntityId: "g-bot-primary",
       locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
       locomotionCapabilityHash: HASH_C,
-      mode: "suspended",
-      suspendedByRelationshipId: "mounted-on-primary",
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: "mounted-on-primary",
+        committedTick: 12,
+        transitionSequence: 2,
+      },
     } as const;
     const input = {
       ...worldStateSnapshot,
@@ -1499,7 +1551,10 @@ describe("WorldStateSnapshotV1", () => {
       capabilityStatesById: {
         [suspendedLocomotion.id]: {
           ...suspendedLocomotion,
-          movementMedium: "ground",
+          locomotion: {
+            ...suspendedLocomotion.locomotion,
+            movementMedium: "ground",
+          },
         },
       },
     })).toThrow("closed WorldStateSnapshotV1 schema");
@@ -1508,12 +1563,17 @@ describe("WorldStateSnapshotV1", () => {
   it("rejects direct possession of a mounted rider", () => {
     const suspendedLocomotion = {
       id: "locomotion-g-bot-primary",
-      kind: "locomotion-capability-state",
+      kind: "locomotion-capability-state-v2",
       ownerEntityId: "g-bot-primary",
       locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
       locomotionCapabilityHash: HASH_C,
-      mode: "suspended",
-      suspendedByRelationshipId: "mounted-on-primary",
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: "mounted-on-primary",
+        committedTick: 12,
+        transitionSequence: 2,
+      },
     } as const;
     expect(() => rebuildWorldStateSnapshotV1({
       ...worldStateSnapshot,
@@ -1537,12 +1597,17 @@ describe("WorldStateSnapshotV1", () => {
       capabilityStatesById: {
         "locomotion-g-bot-primary": {
           id: "locomotion-g-bot-primary",
-          kind: "locomotion-capability-state",
+          kind: "locomotion-capability-state-v2",
           ownerEntityId: "g-bot-primary",
           locomotionCapabilityRef: "worldkit://locomotion-profile/g-bot@1",
           locomotionCapabilityHash: HASH_C,
-          mode: "suspended",
-          suspendedByRelationshipId: "possession-primary",
+          locomotion: {
+            schemaVersion: 2,
+            status: "suspended",
+            suspendedByRelationshipId: "possession-primary",
+            committedTick: 12,
+            transitionSequence: 2,
+          },
         },
       },
     })).toThrow("closed WorldStateSnapshotV1 schema");
