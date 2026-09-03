@@ -707,12 +707,16 @@ export async function prepareNativeBlockGenerationTaskV1(
         `/${priorEvidenceRelativePath}`,
       )
     ) {
-      throw new TypeError("Repair prior evidence identity closure failed.");
+      throw new TypeError(
+        "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH: prior evidence identity closure failed.",
+      );
     }
     if (
       priorGenerationRequest?.hash !== repairInstruction.priorGenerationRequestHash
     ) {
-      throw new TypeError("Repair prior generation identity closure failed.");
+      throw new TypeError(
+        "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH: prior generation identity closure failed.",
+      );
     }
     const priorAttemptResult = parseSceneAuthoringAttemptResultV1(
       JSON.parse(new TextDecoder().decode(priorAttemptResultFile?.bytes)),
@@ -722,7 +726,9 @@ export async function prepareNativeBlockGenerationTaskV1(
       priorAttemptResult.authoredSourceRef !== repairInstruction.priorSourceRef ||
       priorAttemptResult.authoredSourceHash !== repairInstruction.priorSourceHash
     ) {
-      throw new TypeError("Repair prior source identity closure failed.");
+      throw new TypeError(
+        "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH: prior source identity closure failed.",
+      );
     }
   }
   const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, gameplaySource, runtimeSource, registryLockSource, ...references] = await Promise.all([
@@ -850,7 +856,9 @@ export async function prepareNativeBlockGenerationTaskV1(
     repairInstruction !== undefined &&
     !isEqual(repairInstruction.frozenOwnerIdentities, frozenOwnerIdentities)
   ) {
-    throw new TypeError("Repair instruction frozen owner identity closure failed.");
+    throw new TypeError(
+      "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH: frozen owner identity closure failed.",
+    );
   }
   for (let index = 0; index < references.length; index += 1) {
     if (references[index]!.hash !== reconstructionCase.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");

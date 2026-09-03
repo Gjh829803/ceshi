@@ -625,7 +625,8 @@ async function rejectedEvaluationResult(
     evaluation.worldBuildIdentityHash !== terminal.worldBuildIdentityHash ||
     evaluation.captureReceiptRef !== terminal.captureReceiptRef ||
     evaluation.captureReceiptHash !== terminal.captureReceiptHash ||
-    evaluation.id !== terminal.evaluationResultRef ||
+    terminal.evaluationResultRef !==
+      `${attemptArtifactRoot}/evaluation.json` ||
     terminal.captureReceiptRef !==
       `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json` ||
     hashWorldReconstructionEvaluationResultV1(evaluation) !==

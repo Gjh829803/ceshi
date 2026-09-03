@@ -533,6 +533,37 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     ))).toEqual(value.generationReceipt);
   });
 
+  it("does not report cleanup failure when repair preparation fails before provider allocation", async () => {
+    const value = await fixture();
+    const ownerPorts = {
+      ...owners(value, []),
+      prepareGeneration: vi.fn(async () => {
+        throw new TypeError(
+          "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH: prior evidence identity closure failed.",
+        );
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const ports = await createProductionWorldReconstructionRunPortsV1(
+      value.input,
+      ownerPorts,
+    );
+
+    await expect(ports.generate({
+      attemptIndex: 1,
+      backend: "local",
+      runId: RUN_ID,
+      requestId: value.prepared.routerRequestId,
+      frozenOwnerIdentities: value.frozenOwnerIdentities,
+      repairInstruction: {} as never,
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH");
+
+    expect(await ports.cleanup()).toEqual(expect.objectContaining({
+      providerTask: "completed",
+      temporaryDirectories: "completed",
+      outputPromotion: "completed",
+    }));
+  });
+
   it("rejects stale, non-canonical, and symlinked Case-bound Intent bytes before exposing ports", async () => {
     const stale = await fixture();
     await expect(createProductionWorldReconstructionRunPortsV1({
@@ -1212,6 +1243,9 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     );
     expect(evaluated.evaluation.captureReceiptHash).toBe(
       hashFormalWorldCaptureReceiptV1(evidence.captureReceipt),
+    );
+    expect(evaluated.evaluationResultRef).toBe(
+      `artifact://world-reconstruction-case/${evidence.reconstructionCase.id}/runs/${RUN_ID}/attempts/0/evaluation.json`,
     );
 
     evaluateAttempt.mockClear();

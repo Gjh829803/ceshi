@@ -466,7 +466,6 @@ export async function createProductionWorldReconstructionRunPortsV1(
       if (state.prepared !== undefined || state.generated !== undefined) {
         throw new Error("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
       }
-      setCleanup(["providerTask", "temporaryDirectories"], "failed");
       const prepared = await owners.prepareGeneration({
         ...input.generationInput,
         case: input.reconstructionCase,
@@ -479,6 +478,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           : { repairInstruction: stageInput.repairInstruction }),
       });
       state.prepared = prepared;
+      setCleanup(["providerTask", "temporaryDirectories"], "failed");
       if (
         prepared.routerRequestId !== stageInput.requestId ||
         !isEqual(prepared.frozenOwnerIdentities, stageInput.frozenOwnerIdentities)
@@ -969,9 +969,16 @@ export async function createProductionWorldReconstructionRunPortsV1(
           },
         });
         cleanupState.outputPromotion = "completed";
+        const evaluationResultRef = caseArtifactRefForPath(
+          caseArtifactRoot,
+          caseRootPath,
+          input.generationInput.runDirectoryPath,
+          published.evaluationPath,
+        );
         return Object.freeze({
           outcome: published.evaluation.outcome,
           evaluation: published.evaluation,
+          evaluationResultRef,
           evaluationPath: published.evaluationPath,
           evaluationHash: hashWorldReconstructionEvaluationResultV1(
             published.evaluation,

@@ -484,7 +484,9 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         ...input(value),
         attemptIndex: 1,
         repairInstruction,
-      })).rejects.toThrowError("Repair prior evidence identity closure failed");
+      })).rejects.toThrowError(
+        "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH",
+      );
       await writeFile(priorEvaluationPath, "{}");
 
       const priorAttemptResultPath = path.join(priorAttemptRoot, "attempt-result.json");
@@ -497,7 +499,9 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         ...input(value),
         attemptIndex: 1,
         repairInstruction,
-      })).rejects.toThrowError("Repair prior source identity closure failed");
+      })).rejects.toThrowError(
+        "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH",
+      );
       await writeFile(priorAttemptResultPath, stringifyCanonicalJson(priorAttemptResult));
 
       const attempt1 = await prepareNativeBlockGenerationTaskV1({

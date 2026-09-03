@@ -291,7 +291,7 @@ async function publishFailedEvaluationArtifacts(
   const evaluation = parseWorldReconstructionEvaluationResultV1({
     kind: "world-reconstruction-evaluation-result",
     schemaVersion: 1,
-    id: terminal.evaluationResultRef,
+    id: `${CASE_ID}.attempt-0.evaluation-result`,
     caseRef: baseReceipt.caseRef,
     caseHash: baseReceipt.caseHash,
     evaluationProfileRef: baseReceipt.evaluationProfileRef,

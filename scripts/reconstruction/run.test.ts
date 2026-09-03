@@ -24,6 +24,7 @@ import {
 import {
   WorldReconstructionRunClosedErrorV1,
   runWorldReconstructionV1,
+  type WorldReconstructionGeneratePortInputV1,
   type WorldReconstructionGeneratePortResultV1,
   type WorldReconstructionRunPortsV1,
 } from "./run.js";
@@ -527,12 +528,11 @@ function fakePorts(options: FakePortOptions = {}) {
     capture: [] as number[],
     evaluate: [] as number[],
     cleanup: 0,
-    generateInputs: [] as Readonly<{
-      attemptIndex: WorldReconstructionAttemptIndexV1;
-      requestId: string;
-      frozenOwnerIdentities: typeof OWNER;
-      repairInstruction?: unknown;
-    }>[],
+    generateInputs: [] as Pick<
+      WorldReconstructionGeneratePortInputV1,
+      "attemptIndex" | "requestId" | "frozenOwnerIdentities" |
+        "repairInstruction"
+    >[],
   };
   const ports: WorldReconstructionRunPortsV1 = {
     generate: async (input) => {
@@ -642,6 +642,8 @@ function fakePorts(options: FakePortOptions = {}) {
       return Object.freeze({
         outcome: evaluation.outcome,
         evaluation,
+        evaluationResultRef:
+          identities(input.attemptIndex).evaluationResultRef,
         evaluationPath: identities(input.attemptIndex).evaluationPath,
         evaluationHash: hashWorldReconstructionEvaluationResultV1(evaluation),
         diagnosticCodes: evaluation.diagnostics.map(({ code }) => code),
@@ -769,6 +771,13 @@ describe("runWorldReconstructionV1", () => {
         frozenOwnerIdentities: OWNER,
       }),
     );
+    expect(
+      calls.generateInputs[1]?.repairInstruction?.priorEvidence,
+    ).toEqual({
+      kind: "evaluation-result",
+      resultRef: identities(0).evaluationResultRef,
+      resultHash: hashWorldReconstructionEvaluationResultV1(failed),
+    });
     expect(isNil(calls.generateInputs[0]?.repairInstruction)).toBe(true);
     expect(calls.generateInputs[0]?.requestId).not.toBe(
       calls.generateInputs[1]?.requestId,

@@ -170,6 +170,7 @@ export type WorldReconstructionRejectedCaptureEvidenceV1 = Omit<
 export interface WorldReconstructionEvaluatePortResultV1 {
   readonly outcome: WorldReconstructionOutcomeV1;
   readonly evaluation: WorldReconstructionEvaluationResultV1;
+  readonly evaluationResultRef: string;
   readonly evaluationPath: string;
   readonly evaluationHash: Sha256HashV1;
   readonly diagnosticCodes: readonly string[];
@@ -470,6 +471,7 @@ const STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "WORLD_RECONSTRUCTION_PRODUCTION_FAILED",
   "WORLD_RECONSTRUCTION_PRODUCTION_PORTS_FAILED",
   "WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID",
+  "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH",
   "WORLD_RECONSTRUCTION_REPOSITORY_ROOT_INVALID",
   "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE",
   "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
@@ -656,7 +658,7 @@ function attemptReceiptRow(record: AttemptRecordV1) {
     ...common,
     captureReceiptRef: record.captured.captureReceiptRef,
     captureReceiptHash: record.captured.captureReceiptHash,
-    evaluationResultRef: record.evaluated.evaluation.id,
+    evaluationResultRef: record.evaluated.evaluationResultRef,
     evaluationResultHash: record.evaluated.evaluationHash,
     outcome: record.evaluated.outcome,
   });
@@ -1064,7 +1066,7 @@ async function publishCompletedReceipt(
     diagnosticCodes,
     attempts: attempts.map((attempt) => attemptReceiptRow(attempt)),
     finalAttemptIndex: final.attemptIndex,
-    finalEvaluationResultRef: final.evaluated.evaluation.id,
+    finalEvaluationResultRef: final.evaluated.evaluationResultRef,
     finalEvaluationResultHash: final.evaluated.evaluationHash,
     cleanupOutcome,
   });
@@ -1172,7 +1174,7 @@ function createRepairInstructionForAttempt(
     priorSourceHash: record.packaged.authoredSourceHash,
     priorEvidence: {
       kind: "evaluation-result",
-      resultRef: record.evaluated.evaluation.id,
+      resultRef: record.evaluated.evaluationResultRef,
       resultHash: record.evaluated.evaluationHash,
     },
     ...generationIdentity,
