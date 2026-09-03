@@ -208,7 +208,11 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
    protection, cross-Chunk movement and far silhouette visibility.
 5. Publish identity-bound Package, Receipt, opening/top/side Capture, Collider overlay, ground report,
    parity report, evaluation and a stable preview command. A failed visual score is previewable only
-   after Package and Runtime admission pass.
+   after Package and Runtime admission pass. The terminal command returns `rejected-evaluation` with the
+   exact diagnostic codes and immutable Package/Capture/evaluation/Receipt paths; it must not call the final
+   publisher or label that candidate accepted. Native Case mapping also uses one static Collider identity
+   (`contributionId === colliderId`), and the trusted Formal Capture binder rejects pass/block planes whose
+   crossed `expectedCenterSide` is already satisfied at Spawn.
 6. Record actual draw/buffer counts, collision parts, peak active physics objects, readiness and
    Browser feel separately from contract evidence.
 7. Freeze the candidate, run the affected gates once, then request one exact-SHA Mode B plus

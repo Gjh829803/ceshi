@@ -687,6 +687,38 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
     );
   });
 
+  it("rejects a plane criterion when Spawn already starts on its expected crossed side", () => {
+    const input = bindInput();
+    const invalidIntent = formalCaptureIntentValue({
+      checkpointSpatialCriteria: [
+        authoredCheckpointSpatialCriteria()[0],
+        {
+          ...authoredCheckpointSpatialCriteria()[1],
+          expectedCenterSide: "positive",
+        },
+      ],
+    });
+    const invalidCase = parseWorldReconstructionCaseV1({
+      ...input.case,
+      formalCaptureIntentHash: hashFormalWorldCaptureIntentV1(invalidIntent),
+    });
+    const materializerMetadata =
+      parseBabylonNativeBlockMaterializerMetadataV1({
+        ...input.materializerMetadata,
+        caseHash: hashWorldReconstructionCaseV1(invalidCase),
+      });
+
+    expect(() => bind({
+      case: invalidCase,
+      materializerMetadata,
+      materializerMetadataHash:
+        hashBabylonNativeBlockMaterializerMetadataV1(materializerMetadata),
+      formalCaptureIntent: invalidIntent,
+    })).toThrowError(
+      "spawn must start with Spawn on the opposite approach side outside capsule clearance",
+    );
+  });
+
   it("rejects a Block plane whose collider does not exist", () => {
     expect(() => bind({
       formalCaptureIntent: formalCaptureIntentValue({

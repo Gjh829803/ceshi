@@ -29,13 +29,16 @@ import {
 import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
+  hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionRunReceiptV1,
   getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
+  parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionRunReceiptV1,
   worldReconstructionCaseCanonicalBytesV1,
   worldReconstructionEvaluationProfileCanonicalBytesV1,
+  worldReconstructionEvaluationResultCanonicalBytesV1,
   worldReconstructionRunReceiptCanonicalBytesV1,
   type WorldReconstructionOutcomeV1,
   type WorldReconstructionRunReceiptV1,
@@ -227,6 +230,138 @@ async function receiptFor(
     finalEvaluationResultRef: evaluationResultRef,
     finalEvaluationResultHash: H("9"),
     cleanupOutcome,
+  });
+}
+
+async function publishFailedEvaluationArtifacts(
+  value: ProductionFixtureV1,
+  baseReceipt: WorldReconstructionRunReceiptV1,
+): Promise<Readonly<{
+  receipt: WorldReconstructionRunReceiptV1;
+  publishArtifacts: () => Promise<void>;
+}>> {
+  const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(baseReceipt);
+  const acceptanceTargetRef = parseWorldReconstructionCaseV1(JSON.parse(
+    await readFile(value.casePath, "utf8"),
+  )).acceptanceTargetRefs[0]!;
+  const diagnostic = {
+    kind: "world-reconstruction-diagnostic",
+    schemaVersion: 1,
+    id: "rejected-evaluation-opening-drift",
+    code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+    dimensionId: "opening-composition",
+    acceptanceTargetRef,
+    targetRef: acceptanceTargetRef,
+    targetId: "opening-target",
+    metricId: "opening-region-min-x-basis-points",
+    details: {
+      kind: "basis-points-threshold",
+      expectedBasisPoints: 1000,
+      actualBasisPoints: 3000,
+      maximumAllowedDriftBasisPoints: 1000,
+      exceededByBasisPoints: 1000,
+      correctionDirection: "decrease",
+    },
+    evidenceRefs: [`${CASE_ARTIFACT_ROOT}/evidence/opening.json`],
+    message: "Opening target is outside the accepted region.",
+    repairAction: {
+      kind: "revise-native-source",
+      operation: "resize",
+      targetKind: "composition-target",
+      targetId: "opening-target",
+      instruction: "Resize the opening target.",
+    },
+  } as const;
+  const dimensionIds = [
+    "collider",
+    "critical-traversal",
+    "deterministic-build",
+    "opening-composition",
+    "semantic-silhouette",
+    "spawn-support",
+    "topology",
+  ] as const;
+  const evaluation = parseWorldReconstructionEvaluationResultV1({
+    kind: "world-reconstruction-evaluation-result",
+    schemaVersion: 1,
+    id: terminal.evaluationResultRef,
+    caseRef: baseReceipt.caseRef,
+    caseHash: baseReceipt.caseHash,
+    evaluationProfileRef: baseReceipt.evaluationProfileRef,
+    evaluationProfileHash: baseReceipt.evaluationProfileHash,
+    evidenceSetRef: `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/evidence-set.json`,
+    evidenceSetHash: H("a"),
+    attemptRef: terminal.sceneAuthoringAttemptRef,
+    attemptHash: terminal.sceneAuthoringAttemptHash,
+    worldPackageRef: terminal.worldPackageRef,
+    worldPackageRootHash: terminal.worldPackageRootHash,
+    worldBuildIdentityRef: terminal.worldBuildIdentityRef,
+    worldBuildIdentityHash: terminal.worldBuildIdentityHash,
+    captureReceiptRef: terminal.captureReceiptRef,
+    captureReceiptHash: terminal.captureReceiptHash,
+    outcome: "failed",
+    diagnostics: [diagnostic],
+    dimensions: dimensionIds.map((dimensionId) => ({
+      dimensionId,
+      status: dimensionId === "opening-composition" ? "failed" : "passed",
+      metrics: [{
+        kind: "boolean-presence",
+        isPresent: dimensionId !== "opening-composition",
+      }],
+      evidenceRefs: [`${CASE_ARTIFACT_ROOT}/evidence/${dimensionId}.json`],
+      diagnosticIds: dimensionId === "opening-composition"
+        ? [diagnostic.id]
+        : [],
+      identity: {
+        attemptHash: terminal.sceneAuthoringAttemptHash,
+        worldPackageRootHash: terminal.worldPackageRootHash,
+        worldBuildIdentityHash: terminal.worldBuildIdentityHash,
+        captureReceiptHash: terminal.captureReceiptHash,
+      },
+    })),
+  });
+  const evaluationHash = hashWorldReconstructionEvaluationResultV1(evaluation);
+  const receipt = parseWorldReconstructionRunReceiptV1({
+    ...baseReceipt,
+    outcome: "failed",
+    attempts: baseReceipt.attempts.map((attempt) => ({
+      ...attempt,
+      outcome: "failed",
+      evaluationResultHash: evaluationHash,
+    })),
+    finalEvaluationResultHash: evaluationHash,
+  });
+  const attemptDirectoryPath = path.join(
+    value.outputDirectoryPath,
+    "attempts",
+    "0",
+  );
+  return Object.freeze({
+    receipt,
+    publishArtifacts: async () => {
+      await Promise.all([
+        mkdir(path.join(attemptDirectoryPath, "world-package"), { recursive: true }),
+        mkdir(path.join(attemptDirectoryPath, "capture"), { recursive: true }),
+      ]);
+      await Promise.all([
+        writeFile(
+          path.join(attemptDirectoryPath, "capture", "opening.png"),
+          "opening",
+        ),
+        writeFile(
+          path.join(
+            attemptDirectoryPath,
+            "capture",
+            "formal-world-capture-receipt.json",
+          ),
+          "{}\n",
+        ),
+        writeFile(
+          path.join(attemptDirectoryPath, "evaluation.json"),
+          worldReconstructionEvaluationResultCanonicalBytesV1(evaluation),
+        ),
+      ]);
+    },
   });
 }
 
@@ -866,6 +1001,84 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(owners.publishFinal).not.toHaveBeenCalled();
   });
 
+  it("returns identity-bound playable evidence and exact diagnostics for a failed evaluation", async () => {
+    const value = await fixture();
+    const baseReceipt = await receiptFor(value, { outcome: "failed" });
+    const failedEvaluation = await publishFailedEvaluationArtifacts(
+      value,
+      baseReceipt,
+    );
+    const { receipt } = failedEvaluation;
+    const defaultOwners = ownersFor(value, receipt).owners;
+    const owners = {
+      ...defaultOwners,
+      runCore: vi.fn(async (input, ports) => {
+        await failedEvaluation.publishArtifacts();
+        await publishReceipt(input.outputDirectoryPath, receipt);
+        return receipt;
+      }),
+    };
+    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
+
+    await expect(run(value, owners)).resolves.toEqual({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: CASE_ID,
+      caseRef: CASE_REF,
+      runId: RUN_ID,
+      outcome: "rejected-evaluation",
+      runOutcome: "failed",
+      attemptCount: 1,
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT"],
+      cleanupOutcome: "completed",
+      rejectedWorldPackagePath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "world-package",
+      ),
+      rejectedWorldPackageRef: terminal.worldPackageRef,
+      rejectedWorldPackageRootHash: terminal.worldPackageRootHash,
+      rejectedCaptureDirectoryPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "capture",
+      ),
+      rejectedOpeningPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "capture",
+        "opening.png",
+      ),
+      rejectedOpeningRef:
+        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/capture/opening.png`,
+      rejectedCaptureReceiptPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "capture",
+        "formal-world-capture-receipt.json",
+      ),
+      rejectedCaptureReceiptHash: terminal.captureReceiptHash,
+      rejectedEvaluationPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "evaluation.json",
+      ),
+      rejectedEvaluationRef: terminal.evaluationResultRef,
+      rejectedEvaluationHash: terminal.evaluationResultHash,
+      runReceiptPath: path.join(value.outputDirectoryPath, "run-receipt.json"),
+      runReceiptRef:
+        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/run-receipt.json`,
+      runReceiptHash: hashWorldReconstructionRunReceiptV1(receipt),
+    });
+    expect(owners.verifyRun).not.toHaveBeenCalled();
+    expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["failed", "completed"],
     ["incomplete", "completed"],
@@ -881,7 +1094,7 @@ describe("runWorldReconstructionProductionV1", () => {
       const diagnosticCodes = cleanupOutcome === "failed"
         ? ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"]
         : receipt.outcome === "failed"
-        ? ["WORLD_RECONSTRUCTION_RUN_FAILED"]
+        ? ["NBR_REJECTED_EVALUATION_EVIDENCE_INVALID"]
         : ["WORLD_RECONSTRUCTION_RUN_INCOMPLETE"];
 
       expect(result).toEqual({

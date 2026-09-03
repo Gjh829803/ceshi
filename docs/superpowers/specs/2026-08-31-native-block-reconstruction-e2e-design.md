@@ -501,6 +501,14 @@ relation that the current Capture profile cannot measure is missing evidence rat
 expectations. This extends the existing semantic map; it is not a second Package identity inventory and does
 not change the AI generation request already in flight.
 
+The Native Contribution exposes one public identity for each static Collider. Therefore the Native Case
+mapping uses the same exact string for `expected.colliders[].contributionId` and `colliderId`; a parallel
+"contribution" name is invalid rather than an alias. For `pass-plane` and `block-plane`,
+`expectedCenterSide` is the crossed destination or forbidden far side. The frozen Spawn must begin on the
+opposite approach side outside capsule radius plus tolerance. The trusted binder resolves the plane from the
+checked visual-group/Collider join and rejects a criterion that is already satisfied at Spawn before Runtime
+or Capture allocation.
+
 The current trusted artifact `worldkit capture` evidence command is extended source-neutrally to accept a
 verified WorldPackage directory. It starts the same admitted BNA Runtime session through the verification
 Harness/isolated port, not the product Viewer shell, waits for Browser/Runtime ready, and produces:
@@ -623,6 +631,13 @@ One acceptance target may therefore emit several independently addressable subme
 deduplication includes code, target, and metric and must not collapse X/Y/bounds/coverage failures into one
 generic message.
 
+The pre-publication Opening Host Gate follows the same rule: it emits every region edge and anchor axis that
+exceeds its threshold, not only the largest drift for a target. An Opening repair groups those rows by the
+stable visual group and jointly preserves the complete Case-owned four-edge region, anchor and depth-order
+envelope. A clipped `0`/`10000` projection edge is explicit evidence that the group extends outside the frame;
+repair guidance must couple near-camera footprint/depth and height instead of encouraging a one-axis change
+that merely transfers failure to the opposite edge or anchor.
+
 Repairable quality failures additionally require one executable `repairAction` with the sole kind
 `revise-native-source`, a closed target kind, the same `targetId`, a closed operation, and an instruction.
 The metric fixes the allowed target-kind/operation pair: for example a semantic center uses
@@ -682,6 +697,13 @@ artifact that reached a trusted boundary. A pre-Package rejection therefore has 
 but no fabricated Package or Capture. It does not
 promote a failed Package as the runnable final world, weaken a hard Collider/Spawn/Traversal/identity gate,
 or silently lower thresholds. A later user- or queue-triggered run starts a new run identity.
+
+When a terminal failed evaluation still has a verified Package, completed Runtime Capture and completed
+cleanup, the production command returns an identity-bound `rejected-evaluation` inspection result. It exposes
+the rejected Package directory, opening image, Capture Receipt, evaluation, Run Receipt and exact evaluation
+diagnostic codes so a person can inspect and launch the admitted candidate. This is not publication, does not
+turn the failed evaluation into GO, and is unavailable when Package/Runtime/Capture identity evidence is
+missing or stale.
 
 Repair writes only a new task workspace and may change `scene.ts`, `native-block-authoring.json`, or
 `native-resources.json` within the frozen Case/Profile budgets. It cannot edit Package A, Capture A,

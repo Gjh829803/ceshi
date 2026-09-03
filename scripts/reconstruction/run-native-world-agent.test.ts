@@ -98,7 +98,31 @@ describe("Native-default world agent Host route", () => {
       "The acceptanceTargetRef of every block traversal check must name a target with a blocker Collider role",
     );
     expect(source).toContain(
-      "Every Collider ID, contribution ID, and checkpoint ID must be globally unique",
+      "Every Collider ID and checkpoint ID must be globally unique",
+    );
+  });
+
+  it("uses one Native Collider contribution identity", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "every expected.colliders row must set contributionId to exactly the same string as colliderId",
+    );
+    expect(source).toContain("Do not invent a parallel contribution name");
+  });
+
+  it("defines the traversal plane side from the crossed destination", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "expectedCenterSide means the destination or forbidden far side reached only after crossing sourceFace",
+    );
+    expect(source).toContain(
+      "the Spawn center begins strictly on the opposite side outside capsule clearance",
     );
   });
 

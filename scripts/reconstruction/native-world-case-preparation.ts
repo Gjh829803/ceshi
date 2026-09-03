@@ -233,6 +233,17 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     requiredEvidenceProfileRefs,
     expected: proposal.expected,
   });
+  const mismatchedColliderIdentity = reconstructionCase.expected.colliders.find(
+    ({ contributionId, colliderId }) => contributionId !== colliderId,
+  );
+  if (!isNil(mismatchedColliderIdentity)) {
+    throw new TypeError(
+      "NATIVE_WORLD_CASE_COLLIDER_IDENTITY_INVALID: Babylon Native static " +
+        "Collider contributionId must equal colliderId; received " +
+        `${mismatchedColliderIdentity.contributionId} and ` +
+        mismatchedColliderIdentity.colliderId,
+    );
+  }
 
   const inputRoot = path.join(input.outputCaseRoot, "inputs");
   const skillRoot = path.join(inputRoot, "builder-skill");

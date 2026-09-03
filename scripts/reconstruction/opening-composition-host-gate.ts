@@ -61,17 +61,17 @@ const MAXIMUM_SUBJECT_COVERAGE_BASIS_POINTS = 2_500;
 const MINIMUM_SUBJECT_HEIGHT_BASIS_POINTS = 1_200;
 const MAXIMUM_SUBJECT_HEIGHT_BASIS_POINTS = 9_000;
 
-function boundsDrift(
+function boundsDrifts(
   expected: Readonly<Record<"minXBasisPoints" | "minYBasisPoints" | "maxXBasisPoints" | "maxYBasisPoints", number>>,
   observed: Readonly<Record<"minXBasisPoints" | "minYBasisPoints" | "maxXBasisPoints" | "maxYBasisPoints", number>>,
-): Readonly<{
+): readonly Readonly<{
   metricId: keyof typeof expected;
   expectedValue: number;
   actualValue: number;
   deviation: number;
   correctionDirection: "increase" | "decrease";
-}> {
-  const rows = ([
+}>[] {
+  return Object.freeze(([
     "minXBasisPoints",
     "minYBasisPoints",
     "maxXBasisPoints",
@@ -84,19 +84,30 @@ function boundsDrift(
     correctionDirection: observed[metricId] < expected[metricId]
       ? "increase" as const
       : "decrease" as const,
-  }));
-  return rows.reduce((maximum, row) =>
-    row.deviation > maximum.deviation ? row : maximum);
+  })));
 }
 
-function centerDrift(
+function centerDrifts(
   expected: Readonly<{ xBasisPoints: number; yBasisPoints: number }>,
   observed: Readonly<{ xBasisPoints: number; yBasisPoints: number }>,
-): number {
-  return Math.max(
-    Math.abs(expected.xBasisPoints - observed.xBasisPoints),
-    Math.abs(expected.yBasisPoints - observed.yBasisPoints),
-  );
+): readonly Readonly<{
+  metricId: "xBasisPoints" | "yBasisPoints";
+  expectedValue: number;
+  actualValue: number;
+  deviation: number;
+  correctionDirection: "increase" | "decrease";
+}>[] {
+  return Object.freeze((["xBasisPoints", "yBasisPoints"] as const).map(
+    (metricId) => ({
+      metricId,
+      expectedValue: expected[metricId],
+      actualValue: observed[metricId],
+      deviation: Math.abs(expected[metricId] - observed[metricId]),
+      correctionDirection: observed[metricId] < expected[metricId]
+        ? "increase" as const
+        : "decrease" as const,
+    }),
+  ));
 }
 
 function cameraDiagnostics(
@@ -305,8 +316,11 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
       });
       continue;
     }
-    const drift = boundsDrift(region.normalizedBounds, observed.normalizedBounds);
-    if (drift.deviation > threshold.maximumDriftBasisPoints) {
+    for (const drift of boundsDrifts(
+      region.normalizedBounds,
+      observed.normalizedBounds,
+    )) {
+      if (drift.deviation <= threshold.maximumDriftBasisPoints) continue;
       diagnostics.push({
         code: "WORLDKIT_OPENING_GATE_REGION_DRIFT",
         targetRef: region.targetRef,
@@ -332,31 +346,20 @@ export function evaluateOpeningCompositionHostGateV1(input: Readonly<{
       });
       continue;
     }
-    const drift = centerDrift(anchor.normalizedCenter, observed.normalizedCenter);
-    if (drift > threshold.maximumDriftBasisPoints) {
-      const deltaX = Math.abs(
-        anchor.normalizedCenter.xBasisPoints -
-          observed.normalizedCenter.xBasisPoints,
-      );
-      const metricId = deltaX >= Math.abs(
-          anchor.normalizedCenter.yBasisPoints -
-            observed.normalizedCenter.yBasisPoints,
-        )
-        ? "xBasisPoints" as const
-        : "yBasisPoints" as const;
-      const expectedValue = anchor.normalizedCenter[metricId];
-      const actualValue = observed.normalizedCenter[metricId];
+    for (const drift of centerDrifts(
+      anchor.normalizedCenter,
+      observed.normalizedCenter,
+    )) {
+      if (drift.deviation <= threshold.maximumDriftBasisPoints) continue;
       diagnostics.push({
         code: "WORLDKIT_OPENING_GATE_ANCHOR_DRIFT",
         targetRef: anchor.targetRef,
-        metricId: `normalizedCenter.${metricId}`,
-        expectedValue,
-        actualValue,
+        metricId: `normalizedCenter.${drift.metricId}`,
+        expectedValue: drift.expectedValue,
+        actualValue: drift.actualValue,
         allowedDeviation: threshold.maximumDriftBasisPoints,
-        exceededBy: drift - threshold.maximumDriftBasisPoints,
-        correctionDirection: actualValue < expectedValue
-          ? "increase"
-          : "decrease",
+        exceededBy: drift.deviation - threshold.maximumDriftBasisPoints,
+        correctionDirection: drift.correctionDirection,
       });
     }
   }
@@ -510,9 +513,14 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
       (diagnostic.correctionDirection !== "increase" &&
         diagnostic.correctionDirection !== "decrease")
     ) return Object.freeze([]);
-    const operation = diagnostic.code === "WORLDKIT_OPENING_GATE_REGION_DRIFT"
+    const isRegionDrift = diagnostic.code ===
+      "WORLDKIT_OPENING_GATE_REGION_DRIFT";
+    const operation = isRegionDrift
       ? "resize" as const
       : "move" as const;
+    const jointConstraintInstruction = isRegionDrift
+      ? "Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from inputs/attempts/0/rejected-capture/opening-observation.json; satisfy all four region edges and the anchor jointly, including axes that currently pass. If a projected edge is clipped at 0 or 10000, adjust near-camera footprint/depth and height together instead of trading one screen edge or center for another."
+      : "Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from inputs/attempts/0/rejected-capture/opening-observation.json; satisfy the anchor and all four region edges jointly, including axes that currently pass. Do not move the center by pushing any screen edge outside its allowed envelope.";
     converted.push(parseWorldReconstructionDiagnosticV1({
       kind: "world-reconstruction-diagnostic",
       schemaVersion: 1,
@@ -538,7 +546,7 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
         targetKind: "composition-target",
         targetId: binding.blockVisualGroupId,
         operation,
-        instruction: `${diagnostic.correctionDirection === "increase" ? "Increase" : "Decrease"} ${metricId} for the actual Blocks in visual group ${binding.blockVisualGroupId} toward ${diagnostic.expectedValue}; keep drift within ${diagnostic.allowedDeviation}, do not relabel unchanged geometry, and do not edit thresholds.`,
+        instruction: `${diagnostic.correctionDirection === "increase" ? "Increase" : "Decrease"} ${metricId} for the actual Blocks in visual group ${binding.blockVisualGroupId} toward ${diagnostic.expectedValue}; keep drift within ${diagnostic.allowedDeviation}. ${jointConstraintInstruction} Do not relabel unchanged geometry, change the frozen Camera, or edit thresholds.`,
       },
     }));
   }

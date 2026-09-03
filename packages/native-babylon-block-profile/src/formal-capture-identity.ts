@@ -257,6 +257,19 @@ export function bindBlockMaterializerMetadataToSemanticCaptureTargetsV1(
     const planeMeters = criterion.sourceFace === "minimum"
       ? sourceBoundsMeters.minimumMetersXYZ[axisIndex]
       : sourceBoundsMeters.maximumMetersXYZ[axisIndex];
+    const spawnMeters = contribution.spawnMarker.positionMetersXYZ[axisIndex];
+    const approachClearanceMeters =
+      criterion.capsuleRadiusMeters + criterion.toleranceMeters;
+    const startsOnApproachSide = criterion.expectedCenterSide === "positive"
+      ? spawnMeters <= planeMeters - approachClearanceMeters
+      : spawnMeters >= planeMeters + approachClearanceMeters;
+    if (!startsOnApproachSide) {
+      fail(
+        "checkpointSpatialCriteria",
+        `${criterion.checkpointId} must start with Spawn on the opposite ` +
+          "approach side outside capsule clearance",
+      );
+    }
     return Object.freeze({
       ...criterion,
       sourceBoundsMeters,

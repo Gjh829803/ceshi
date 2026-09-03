@@ -559,6 +559,18 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(repairTaskInstruction).toContain(
         "must produce a visible geometry change in the evidence view",
       );
+      expect(repairTaskInstruction).toContain(
+        "Group opening-composition diagnostics by targetId before editing",
+      );
+      expect(repairTaskInstruction).toContain(
+        "never stop after fixing only the largest drift row",
+      );
+      expect(repairTaskInstruction).toContain(
+        "A target edge clipped at 0 or 10000 means the target extends beyond the captured frame",
+      );
+      expect(repairTaskInstruction).toContain(
+        "add mass at comparable camera depth and height",
+      );
       expect(sha256Bytes(new TextEncoder().encode(repairTaskInstruction))).toBe(
         attempt1.generationRequest.taskInstructionHash,
       );
