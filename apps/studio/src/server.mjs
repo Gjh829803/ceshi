@@ -106,6 +106,9 @@ const recordLifecycleFields = new Set([
   "captureError",
   "captureRequired",
   "captureStatus",
+  "cloudBuilderRebuildSourceExecutionId",
+  "cloudBuilderRebuildSourceManifestS3Uri",
+  "cloudBuilderRebuildSourceRequestS3Uri",
   "error",
   "failedStage",
   "finishedAt",
@@ -3613,16 +3616,25 @@ export function createStudio(options = {}) {
       requestS3Uri: initialRecord.remoteRequestS3Uri,
       outputS3Prefix: initialRecord.remoteOutputS3Prefix,
     } : null;
-    const rebuildAuthority = cloudBuilderRebuild &&
-        typeof initialRecord.remoteExecutionId === "string" &&
-        typeof initialRecord.remoteArtifactManifestS3Uri === "string" &&
-        typeof initialRecord.remoteRequestS3Uri === "string"
-      ? {
-          executionId: initialRecord.remoteExecutionId,
-          manifestS3Uri: initialRecord.remoteArtifactManifestS3Uri,
-          requestS3Uri: initialRecord.remoteRequestS3Uri,
-        }
-      : null;
+    const rebuildAuthority = !cloudBuilderRebuild
+      ? null
+      : typeof initialRecord.cloudBuilderRebuildSourceExecutionId === "string" &&
+          typeof initialRecord.cloudBuilderRebuildSourceManifestS3Uri === "string" &&
+          typeof initialRecord.cloudBuilderRebuildSourceRequestS3Uri === "string"
+        ? {
+            executionId: initialRecord.cloudBuilderRebuildSourceExecutionId,
+            manifestS3Uri: initialRecord.cloudBuilderRebuildSourceManifestS3Uri,
+            requestS3Uri: initialRecord.cloudBuilderRebuildSourceRequestS3Uri,
+          }
+        : typeof initialRecord.remoteExecutionId === "string" &&
+            typeof initialRecord.remoteArtifactManifestS3Uri === "string" &&
+            typeof initialRecord.remoteRequestS3Uri === "string"
+          ? {
+              executionId: initialRecord.remoteExecutionId,
+              manifestS3Uri: initialRecord.remoteArtifactManifestS3Uri,
+              requestS3Uri: initialRecord.remoteRequestS3Uri,
+            }
+          : null;
     if (cloudBuilderRebuild && rebuildAuthority === null) {
       throw new Error("Cloud Builder rebuild requires a prior trusted Planner manifest.");
     }
@@ -5943,13 +5955,28 @@ export function createStudio(options = {}) {
         sendError(response, 409, "只有已完成、失败、中断或待远端对账的任务可以从 Builder 重建。");
         return true;
       }
+      const savedRebuildSource =
+        typeof record.cloudBuilderRebuildSourceExecutionId === "string" &&
+          typeof record.cloudBuilderRebuildSourceManifestS3Uri === "string" &&
+          typeof record.cloudBuilderRebuildSourceRequestS3Uri === "string"
+          ? {
+              executionId: record.cloudBuilderRebuildSourceExecutionId,
+              manifestS3Uri: record.cloudBuilderRebuildSourceManifestS3Uri,
+              requestS3Uri: record.cloudBuilderRebuildSourceRequestS3Uri,
+            }
+          : null;
       if (
         effectiveCodexBackend(record) !== "cloud" ||
-        !hasRemoteCloudPlannerResumeInputs(record)
+        (savedRebuildSource === null && !hasRemoteCloudPlannerResumeInputs(record))
       ) {
         sendError(response, 409, "这个任务没有可复用的可信云端 Planner 产物。");
         return true;
       }
+      const rebuildSource = savedRebuildSource ?? {
+        executionId: record.remoteExecutionId,
+        manifestS3Uri: record.remoteArtifactManifestS3Uri,
+        requestS3Uri: record.remoteRequestS3Uri,
+      };
       const transition = await transitionRecord(record.id, {
         status: "queued",
         stage: "queued",
@@ -5965,6 +5992,9 @@ export function createStudio(options = {}) {
         styledTriviewsRequired: Boolean(record.referenceImage),
         styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
         resumeFromStage: "cloud-builder-rebuild",
+        cloudBuilderRebuildSourceExecutionId: rebuildSource.executionId,
+        cloudBuilderRebuildSourceManifestS3Uri: rebuildSource.manifestS3Uri,
+        cloudBuilderRebuildSourceRequestS3Uri: rebuildSource.requestS3Uri,
       }, {
         allowReadyLifecycleTransition: true,
         expectedAttempt: record.attempt,

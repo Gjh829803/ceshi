@@ -2629,6 +2629,18 @@ test("rebuilds a ready Cloud Scene from its trusted Planner handoff", async () =
     assert.equal(detail.status, "queued");
     assert.equal(detail.resumeFromStage, "cloud-builder-rebuild");
     assert.equal(detail.attempt, 1);
+    assert.equal(
+      detail.cloudBuilderRebuildSourceExecutionId,
+      "execution-ready-builder-rebuild",
+    );
+    assert.equal(
+      detail.cloudBuilderRebuildSourceManifestS3Uri,
+      `s3://worldkit-test/cloud-scenes/${sceneId}/attempt-1/cloud-artifact-manifest.json`,
+    );
+    assert.equal(
+      detail.cloudBuilderRebuildSourceRequestS3Uri,
+      `s3://worldkit-test/cloud-scenes/${sceneId}/request.json`,
+    );
   } finally {
     await studio.shutdown();
   }
