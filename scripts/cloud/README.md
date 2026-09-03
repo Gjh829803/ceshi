@@ -57,13 +57,15 @@ completed Gemini, Seedance, or conformance stage to rerun.
 
 ## Deferred Seedance throughput change
 
-The production Batch that started on 2026-09-03 keeps its existing
-`seedanceConcurrency: 10` behavior until every admitted Episode is terminal.
-Do not change its image, configuration, queue ownership, or provider admission
-while it is running.
+The production Batch that started on 2026-09-03 keeps its existing per-Episode
+`seedanceConcurrency: 10` behavior. Do not raise that field as a substitute for
+global scheduling: ten concurrent Episodes would otherwise create 100 provider
+requests.
 
-After that Batch closes, replace per-Episode Seedance admission with one
-Host-owned global work pool:
+The next Batch uses two independent pools. Up to 10 Cases may concurrently run
+playthrough planning, cloud capture, ten-style visual generation and intelligent
+review. Every completed Seedance request then enters one Host-owned global work
+pool:
 
 - the initial global limit is 20 non-terminal Seedance provider Jobs across all
   Episodes, not 20 Jobs per Episode;
