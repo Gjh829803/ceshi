@@ -119,7 +119,7 @@ describe("Native Block Builder Skill", () => {
     expect(skill).toContain("builderSelfRepairAttemptCount");
     expect(skill).toContain("self-check reports only");
     expect(skill).toContain("at most three self-repair cycles");
-    expect(skill).toContain("do not replace the separate Host-owned post-Package repair Attempt");
+    expect(skill).toContain("do not replace the separate Host-owned bounded external repair Attempts");
     expect(skill).toContain("ground-supported Spawn");
     expect(skill).toContain("`context/case.json.expected.groundConnectivity`");
     expect(skill).toContain("every declared traversal-band waypoint");

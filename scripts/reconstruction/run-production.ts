@@ -107,7 +107,7 @@ interface WorldReconstructionProductionIdentityV1 {
 export interface WorldReconstructionProductionPublishedResultV1
   extends WorldReconstructionProductionIdentityV1 {
   readonly outcome: "published";
-  readonly attemptCount: 1 | 2;
+  readonly attemptCount: 1 | 2 | 3 | 4;
   readonly finalWorldPackagePath: string;
   readonly finalWorldPackageRef: string;
   readonly finalWorldPackageRootHash: Sha256HashV1;
@@ -125,7 +125,7 @@ export interface WorldReconstructionProductionClosedResultV1
   extends WorldReconstructionProductionIdentityV1 {
   readonly outcome: "closed";
   readonly runOutcome?: "passed" | "failed" | "incomplete";
-  readonly attemptCount?: 1 | 2;
+  readonly attemptCount?: 1 | 2 | 3 | 4;
   readonly diagnosticCodes: readonly string[];
   readonly cleanupOutcome: "completed" | "failed" | "not-started" | "unknown";
 }
@@ -150,7 +150,7 @@ export interface WorldReconstructionProductionRejectedEvaluationResultV1
   extends WorldReconstructionProductionIdentityV1 {
   readonly outcome: "rejected-evaluation";
   readonly runOutcome: "failed";
-  readonly attemptCount: 1 | 2;
+  readonly attemptCount: 1 | 2 | 3 | 4;
   readonly diagnosticCodes: readonly string[];
   readonly cleanupOutcome: "completed";
   readonly rejectedWorldPackagePath: string;
@@ -641,7 +641,7 @@ async function rejectedEvaluationResult(
     runId: input.runId,
     outcome: "rejected-evaluation",
     runOutcome: "failed",
-    attemptCount: input.receipt.attempts.length as 1 | 2,
+    attemptCount: input.receipt.attempts.length as 1 | 2 | 3 | 4,
     diagnosticCodes: Object.freeze([
       ...new Set(evaluation.diagnostics.map(({ code }) => code)),
     ].sort()),
@@ -1122,7 +1122,7 @@ export async function runWorldReconstructionProductionV1(
         runId,
         outcome: "closed",
         runOutcome: receipt.outcome,
-        attemptCount: receipt.attempts.length as 1 | 2,
+        attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
         diagnosticCodes: diagnosticCodesFromError(error),
         cleanupOutcome: receipt.cleanupOutcome,
       });
@@ -1137,7 +1137,7 @@ export async function runWorldReconstructionProductionV1(
       runId,
       outcome: "closed",
       runOutcome: receipt.outcome,
-      attemptCount: receipt.attempts.length as 1 | 2,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: closedDiagnosticCodes(receipt),
       cleanupOutcome: receipt.cleanupOutcome,
     });
@@ -1182,7 +1182,7 @@ export async function runWorldReconstructionProductionV1(
       runId,
       outcome: "closed",
       runOutcome: receipt.outcome,
-      attemptCount: receipt.attempts.length as 1 | 2,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
     });
@@ -1211,7 +1211,7 @@ export async function runWorldReconstructionProductionV1(
       runId,
       outcome: "closed",
       runOutcome: receipt.outcome,
-      attemptCount: receipt.attempts.length as 1 | 2,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes,
       cleanupOutcome,
     });
@@ -1233,7 +1233,7 @@ export async function runWorldReconstructionProductionV1(
       runId,
       outcome: "closed",
       runOutcome: receipt.outcome,
-      attemptCount: receipt.attempts.length as 1 | 2,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: Object.freeze(["NBR70_PRODUCTION_IDENTITY_MISMATCH"]),
       cleanupOutcome: "completed",
     });
@@ -1251,7 +1251,7 @@ export async function runWorldReconstructionProductionV1(
       runId,
       outcome: "closed",
       runOutcome: receipt.outcome,
-      attemptCount: receipt.attempts.length as 1 | 2,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
     });
@@ -1299,7 +1299,7 @@ export async function runWorldReconstructionProductionV1(
       runId,
       outcome: "closed",
       runOutcome: receipt.outcome,
-      attemptCount: receipt.attempts.length as 1 | 2,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes,
       cleanupOutcome,
     });
@@ -1326,7 +1326,7 @@ export async function runWorldReconstructionProductionV1(
       runId,
       outcome: "closed",
       runOutcome: receipt.outcome,
-      attemptCount: receipt.attempts.length as 1 | 2,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: Object.freeze([
         "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID",
       ]),
@@ -1341,7 +1341,7 @@ export async function runWorldReconstructionProductionV1(
     caseRef,
     runId,
     outcome: "published",
-    attemptCount: receipt.attempts.length as 1 | 2,
+    attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
     finalWorldPackagePath: path.join(finalDirectoryPath, "world-package"),
     finalWorldPackageRef: terminal.worldPackageRef,
     finalWorldPackageRootHash: terminal.worldPackageRootHash,

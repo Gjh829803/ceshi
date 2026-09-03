@@ -29,8 +29,8 @@
   Package directory is published. A ground Case with failed Spawn or required
   target standability fails closed and retains the checked authored source,
   Attempt result, logical model, report and actionable diagnostics as Attempt
-  evidence. When the diagnostics are repairable and the one-repair budget remains,
-  this evidence starts Attempt 1 without fabricating a Package or Capture for the
+  evidence. When the diagnostics are repairable and the bounded repair budget remains,
+  this evidence starts the next Attempt without fabricating a Package or Capture for the
   rejected Attempt. This is a concrete placement of
   the existing section 5/6 design; it adds no third Scene Source, Package field,
   Runtime support owner or circular Package hash.

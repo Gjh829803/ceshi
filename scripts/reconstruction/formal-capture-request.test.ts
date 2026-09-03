@@ -79,7 +79,7 @@ function profileValue() {
     schemaVersion: 1,
     id: "package-fixture-profile",
     dimensionIds,
-    maximumRepairAttemptCount: 1,
+    maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: [{

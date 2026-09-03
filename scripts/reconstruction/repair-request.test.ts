@@ -72,7 +72,7 @@ function profile() {
     schemaVersion: 1,
     id: "cloud-temple.profile",
     dimensionIds: [...DIMENSIONS],
-    maximumRepairAttemptCount: 1,
+    maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: [{
@@ -162,6 +162,8 @@ describe("createNativeBlockRepairInstructionV1", () => {
   it("declares exactly the three Native authoring outputs and freezes owner identities", () => {
     const diagnostic = colliderMissingDiagnostic();
     const instruction = createNativeBlockRepairInstructionV1({
+      priorAttemptIndex: 0,
+      nextAttemptIndex: 1,
       diagnostics: [diagnostic],
       priorSourceRef: "artifact://case/cloud-temple/attempts/0/source",
       priorSourceHash: H("a"),
@@ -222,6 +224,8 @@ describe("createNativeBlockRepairInstructionV1", () => {
 
   it("rejects empty diagnostics and non-repairable evidence diagnostics", () => {
     expect(() => createNativeBlockRepairInstructionV1({
+      priorAttemptIndex: 0,
+      nextAttemptIndex: 1,
       diagnostics: [],
       priorSourceRef: "artifact://case/cloud-temple/attempts/0/source",
       priorSourceHash: H("a"),
@@ -256,6 +260,8 @@ describe("createNativeBlockRepairInstructionV1", () => {
       message: "Capture identity is stale.",
     });
     expect(() => createNativeBlockRepairInstructionV1({
+      priorAttemptIndex: 0,
+      nextAttemptIndex: 1,
       diagnostics: [stale],
       priorSourceRef: "artifact://case/cloud-temple/attempts/0/source",
       priorSourceHash: H("a"),
@@ -281,7 +287,10 @@ describe("isRepairableWorldReconstructionEvaluationV1", () => {
     expect(isRepairableWorldReconstructionEvaluationV1(failed, profile(), 0)).toBe(
       true,
     );
-    expect(isRepairableWorldReconstructionEvaluationV1(failed, profile(), 1)).toBe(
+    expect(isRepairableWorldReconstructionEvaluationV1(failed, profile(), 2)).toBe(
+      true,
+    );
+    expect(isRepairableWorldReconstructionEvaluationV1(failed, profile(), 3)).toBe(
       false,
     );
 

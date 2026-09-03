@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { isEmpty, isEqual, isNil } from "lodash-es";
 import { stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import type { WorldReconstructionAttemptIndexV1 } from
+  "@whitebox-world/validation";
 
 import type { WorldReconstructionFrozenOwnerIdentitiesV1 } from "./generation-request.js";
 
@@ -35,6 +37,7 @@ export interface WorldReconstructionJournalRowV1 {
   readonly state: WorldReconstructionJournalStateV1;
   readonly boundary: "before" | "after";
   readonly operation: string;
+  readonly attemptIndex?: WorldReconstructionAttemptIndexV1;
   readonly frozenOwnerIdentities: WorldReconstructionFrozenOwnerIdentitiesV1;
   readonly diagnosticCodes: readonly string[];
   readonly requestId?: string;
@@ -71,9 +74,15 @@ const NEXT_STATES = Object.freeze({
   ] as const),
   "initial-evaluated": Object.freeze(["repair-generating", "cleanup-joined"] as const),
   "repair-generating": Object.freeze(["repair-packaged", "cleanup-joined"] as const),
-  "repair-packaged": Object.freeze(["repair-captured", "cleanup-joined"] as const),
-  "repair-captured": Object.freeze(["repair-evaluated", "cleanup-joined"] as const),
-  "repair-evaluated": Object.freeze(["cleanup-joined"] as const),
+  "repair-packaged": Object.freeze([
+    "repair-captured", "repair-generating", "cleanup-joined",
+  ] as const),
+  "repair-captured": Object.freeze([
+    "repair-evaluated", "repair-generating", "cleanup-joined",
+  ] as const),
+  "repair-evaluated": Object.freeze([
+    "repair-generating", "cleanup-joined",
+  ] as const),
   "cleanup-joined": Object.freeze(["completed"] as const),
   completed: Object.freeze([] as const),
 }) satisfies Readonly<Record<WorldReconstructionJournalStateV1, readonly WorldReconstructionJournalStateV1[]>>;
@@ -89,7 +98,7 @@ const STALE_FIELD_CODES = Object.freeze({
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const CLEANUP_KEYS = ["providerTask", "candidate", "hostedBrowserSession", "viteServer", "temporaryDirectories", "outputPromotion"] as const;
 const REQUIRED_ROW_KEYS = ["kind", "schemaVersion", "sequence", "runId", "caseRef", "evaluationProfileRef", "state", "boundary", "operation", "frozenOwnerIdentities", "diagnosticCodes"] as const;
-const OPTIONAL_ROW_KEYS = ["requestId", "requestHash", "cleanupOutcomes"] as const;
+const OPTIONAL_ROW_KEYS = ["attemptIndex", "requestId", "requestHash", "cleanupOutcomes"] as const;
 
 function fail(code: string, detail = ""): never {
   throw new Error(isEmpty(detail) ? code : `${code}: ${detail}`);
@@ -115,12 +124,19 @@ function parseRow(input: unknown, sequence: number): WorldReconstructionJournalR
   const keys = Object.keys(input);
   const allowed = [...REQUIRED_ROW_KEYS, ...OPTIONAL_ROW_KEYS] as readonly string[];
   if (REQUIRED_ROW_KEYS.some((key) => !keys.includes(key)) || keys.some((key) => !allowed.includes(key))) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "row fields");
+  const isAttemptState = typeof input.state === "string" &&
+    (input.state.startsWith("initial-") || input.state.startsWith("repair-"));
   if (
     input.kind !== "world-reconstruction-journal-row" || input.schemaVersion !== 1 || input.sequence !== sequence ||
     typeof input.runId !== "string" || typeof input.caseRef !== "string" || typeof input.evaluationProfileRef !== "string" ||
     !WORLD_RECONSTRUCTION_JOURNAL_STATES_V1.includes(input.state as WorldReconstructionJournalStateV1) ||
     (input.boundary !== "before" && input.boundary !== "after") || typeof input.operation !== "string" ||
     !Array.isArray(input.diagnosticCodes) || input.diagnosticCodes.some((code) => typeof code !== "string") ||
+    (isAttemptState && !Number.isInteger(input.attemptIndex)) ||
+    (!isAttemptState && input.attemptIndex !== undefined) ||
+    (input.state?.toString().startsWith("initial-") && input.attemptIndex !== 0) ||
+    (input.state?.toString().startsWith("repair-") &&
+      (typeof input.attemptIndex !== "number" || input.attemptIndex < 1 || input.attemptIndex > 3)) ||
     (input.requestId === undefined && input.requestHash !== undefined) ||
     (input.requestId !== undefined && typeof input.requestId !== "string") ||
     (input.requestHash !== undefined && (typeof input.requestHash !== "string" || !SHA256_PATTERN.test(input.requestHash)))
@@ -135,15 +151,28 @@ function parseRow(input: unknown, sequence: number): WorldReconstructionJournalR
 }
 function validateTransition(rows: readonly WorldReconstructionJournalRowV1[], row: WorldReconstructionJournalRowV1): void {
   if (row.sequence === 0) {
-    if (row.state !== "created" || row.boundary !== "after" || row.operation !== "created") fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "created row");
+    if (row.state !== "created" || row.boundary !== "after" || row.operation !== "created" || row.attemptIndex !== undefined) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "created row");
     return;
   }
+  const isInitialState = row.state.startsWith("initial-");
+  const isRepairState = row.state.startsWith("repair-");
+  if (
+    (isInitialState && row.attemptIndex !== 0) ||
+    (isRepairState &&
+      (row.attemptIndex === undefined || row.attemptIndex < 1 || row.attemptIndex > 3)) ||
+    (!isInitialState && !isRepairState && row.attemptIndex !== undefined)
+  ) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "attempt identity");
   const last = rows.at(-1);
   const current = rows.filter((candidate) => candidate.boundary === "after").at(-1)?.state;
   if (isNil(last) || isNil(current)) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "missing predecessor");
   if (row.boundary === "before") {
     if (last.boundary === "before" || !NEXT_STATES[current].includes(row.state as never)) fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID");
-  } else if (last.boundary !== "before" || last.state !== row.state || last.operation !== row.operation) fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID", "after without matching before");
+  } else if (
+    last.boundary !== "before" ||
+    last.state !== row.state ||
+    last.operation !== row.operation ||
+    last.attemptIndex !== row.attemptIndex
+  ) fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID", "after without matching before");
 }
 async function fsyncDirectory(directoryPath: string): Promise<void> {
   const directory = await open(directoryPath, constants.O_RDONLY);
@@ -189,8 +218,8 @@ export interface WorldReconstructionRunJournalV1 {
   rows(): readonly WorldReconstructionJournalRowV1[];
   states(): readonly WorldReconstructionJournalStateV1[];
   currentState(): WorldReconstructionJournalStateV1;
-  beginAttempt(attemptIndex: 0 | 1): void;
-  recordBoundary(input: Readonly<{ state: WorldReconstructionJournalStateV1; boundary: "before" | "after"; operation: string; diagnosticCodes?: readonly string[]; requestId?: string; requestHash?: Sha256HashV1; cleanupOutcomes?: WorldReconstructionCleanupOutcomesV1 }>): Promise<WorldReconstructionJournalRowV1>;
+  beginAttempt(attemptIndex: WorldReconstructionAttemptIndexV1): void;
+  recordBoundary(input: Readonly<{ state: WorldReconstructionJournalStateV1; boundary: "before" | "after"; operation: string; attemptIndex?: WorldReconstructionAttemptIndexV1; diagnosticCodes?: readonly string[]; requestId?: string; requestHash?: Sha256HashV1; cleanupOutcomes?: WorldReconstructionCleanupOutcomesV1 }>): Promise<WorldReconstructionJournalRowV1>;
   attachOrRejectRequest(requestId: string, requestHash: Sha256HashV1): "accepted" | "attached";
   recordedRequest(requestId: string): WorldReconstructionRecordedRequestV1 | undefined;
   recordCleanup(outcomes: WorldReconstructionCleanupOutcomesV1): void;
@@ -211,8 +240,18 @@ export async function createWorldReconstructionRunJournalV1(input: CreateWorldRe
   let cleanup: WorldReconstructionCleanupOutcomesV1 | undefined;
   for (const row of rows) {
     if (row.runId !== input.runId || row.caseRef !== input.caseRef || row.evaluationProfileRef !== input.evaluationProfileRef || !isEqual(row.frozenOwnerIdentities, input.frozenOwnerIdentities)) fail("WORLD_RECONSTRUCTION_JOURNAL_IDENTITY_MISMATCH");
-    if (row.state.startsWith("initial-")) begunAttempts.add(0);
-    if (row.state.startsWith("repair-")) begunAttempts.add(1);
+    if (
+      row.attemptIndex !== undefined &&
+      !begunAttempts.has(row.attemptIndex)
+    ) {
+      if (row.attemptIndex !== begunAttempts.size) {
+        fail(
+          "WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID",
+          "Attempt identities must be contiguous",
+        );
+      }
+      begunAttempts.add(row.attemptIndex);
+    }
     if (row.requestId !== undefined && row.requestHash !== undefined) {
       const existing = requests.get(row.requestId);
       if (existing !== undefined && existing.requestHash !== row.requestHash) fail("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
@@ -242,14 +281,23 @@ export async function createWorldReconstructionRunJournalV1(input: CreateWorldRe
     id: `world-reconstruction-journal:${input.runId}`, runId: input.runId, outputDirectoryPath: input.outputDirectoryPath,
     frozenOwnerIdentities: Object.freeze({ ...input.frozenOwnerIdentities }), rows: () => Object.freeze([...rows]),
     states: () => Object.freeze(rows.filter((row) => row.boundary === "after").map((row) => row.state)), currentState: currentAfterState,
-    beginAttempt: (attemptIndex: 0 | 1) => {
-      if (attemptIndex !== 0 && attemptIndex !== 1) fail("WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED");
+    beginAttempt: (attemptIndex: WorldReconstructionAttemptIndexV1) => {
+      if (attemptIndex < 0 || attemptIndex > 3) {
+        fail("WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED");
+      }
       if (begunAttempts.has(attemptIndex)) fail("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID", `attempt ${attemptIndex} already begun`);
+      if (attemptIndex !== begunAttempts.size) {
+        fail(
+          "WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID",
+          "Attempt identities must be contiguous",
+        );
+      }
       begunAttempts.add(attemptIndex);
     },
     recordBoundary: async (boundaryInput) => {
       if (boundaryInput.requestId === undefined && boundaryInput.requestHash !== undefined) fail("WORLD_RECONSTRUCTION_JOURNAL_CORRUPT", "partial request identity");
       const row = await appendRow({ state: boundaryInput.state, boundary: boundaryInput.boundary, operation: boundaryInput.operation,
+        ...(boundaryInput.attemptIndex === undefined ? {} : { attemptIndex: boundaryInput.attemptIndex }),
         ...(boundaryInput.diagnosticCodes === undefined ? {} : { diagnosticCodes: boundaryInput.diagnosticCodes }),
         ...(boundaryInput.requestId === undefined ? {} : { requestId: boundaryInput.requestId, requestHash: boundaryInput.requestHash }),
         ...(boundaryInput.cleanupOutcomes === undefined ? {} : { cleanupOutcomes: Object.freeze({ ...boundaryInput.cleanupOutcomes }) }),

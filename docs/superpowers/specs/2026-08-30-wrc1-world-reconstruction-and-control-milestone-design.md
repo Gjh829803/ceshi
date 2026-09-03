@@ -44,7 +44,7 @@ stability follow-up on this document's source baseline.
 ### 1.1 Current execution priority: NBR-1 vertical slice
 
 Until one real reference-driven Babylon Native Block Case completes the formal generation, Check,
-Package, Runtime, Capture, evaluation and one-repair chain, the sole highest-priority WRC-1 slice is
+Package, Runtime, Capture, evaluation and bounded repair chain, the sole highest-priority WRC-1 slice is
 [NBR-1 Babylon Native Block Reconstruction End-to-End](./2026-08-31-native-block-reconstruction-e2e-design.md).
 NBR-1 consumes only the minimum BNA-6, BNA-7, WRC-SR-1 and WRC-SR-2 slices needed by that runnable Case;
 it does not mark any whole parent work package complete.

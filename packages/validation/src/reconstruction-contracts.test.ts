@@ -137,7 +137,7 @@ const profileValue = () => ({
   schemaVersion: 1,
   id: "cloud-temple.profile",
   dimensionIds: [...DIMENSIONS],
-  maximumRepairAttemptCount: 1,
+  maximumRepairAttemptCount: 3,
   builderSelfRepairAttemptCount: 3,
   thresholds: {
     semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }],
@@ -860,10 +860,10 @@ describe("world reconstruction contracts", () => {
     );
   });
 
-  it("fixes all seven dimensions and the one-repair profile", () => {
+  it("fixes all seven dimensions and the three-repair profile", () => {
     const parsed = parseWorldReconstructionEvaluationProfileV1(profileValue());
     expect(parsed.dimensionIds).toEqual(DIMENSIONS);
-    expect(() => parseWorldReconstructionEvaluationProfileV1({ ...profileValue(), maximumRepairAttemptCount: 2 })).toThrowError(
+    expect(() => parseWorldReconstructionEvaluationProfileV1({ ...profileValue(), maximumRepairAttemptCount: 1 })).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID",
     );
     expect(() => parseWorldReconstructionEvaluationProfileV1({ ...profileValue(), builderSelfRepairAttemptCount: 0 })).toThrowError(

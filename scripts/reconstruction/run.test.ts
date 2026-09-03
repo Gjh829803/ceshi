@@ -17,6 +17,7 @@ import {
   type WorldReconstructionDiagnosticV1,
   type WorldReconstructionDimensionIdV1,
   type WorldReconstructionEvaluationResultV1,
+  type WorldReconstructionAttemptIndexV1,
   type WorldReconstructionOutcomeV1,
 } from "@whitebox-world/validation";
 
@@ -80,8 +81,8 @@ function packageRef(rootHash: Sha256HashV1): string {
   );
 }
 
-function identities(attemptIndex: 0 | 1) {
-  const prefix = attemptIndex === 0 ? "a0" : "a1";
+function identities(attemptIndex: WorldReconstructionAttemptIndexV1) {
+  const prefix = `a${attemptIndex}`;
   const worldPackageRootHash = taggedHash(`${prefix}pkg`);
   return Object.freeze({
     generationRequestRef: `artifact://run/attempts/${attemptIndex}/generation-request.json`,
@@ -119,7 +120,7 @@ function profile() {
     schemaVersion: 1,
     id: "cloud-temple.profile",
     dimensionIds: [...DIMENSIONS],
-    maximumRepairAttemptCount: 1,
+    maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: [{
@@ -404,7 +405,7 @@ function groundStandabilityDiagnostic(): WorldReconstructionDiagnosticV1 {
 }
 
 function evaluationResult(input: {
-  readonly attemptIndex: 0 | 1;
+  readonly attemptIndex: WorldReconstructionAttemptIndexV1;
   readonly outcome: WorldReconstructionOutcomeV1;
   readonly diagnostics?: readonly WorldReconstructionDiagnosticV1[];
 }): WorldReconstructionEvaluationResultV1 {
@@ -480,7 +481,7 @@ function evaluationResult(input: {
 }
 
 function generateResult(
-  attemptIndex: 0 | 1,
+  attemptIndex: WorldReconstructionAttemptIndexV1,
   outcome: WorldReconstructionGeneratePortResultV1["outcome"] = "completed",
 ): WorldReconstructionGeneratePortResultV1 {
   const ids = identities(attemptIndex);
@@ -507,7 +508,7 @@ interface FakePortOptions {
     readonly WorldReconstructionGeneratePortResultV1["outcome"][];
   readonly generateDiagnosticCodesByAttempt?: readonly (readonly string[])[];
   readonly generateHashOverrideByAttempt?: readonly (Sha256HashV1 | undefined)[];
-  readonly packageOutcomeByAttempt?: readonly ("completed" | "check-failed" | "package-failed")[];
+  readonly packageOutcomeByAttempt?: readonly ("completed" | "native-check-rejected" | "package-failed")[];
   readonly packageDiagnosticCodesByAttempt?: readonly (readonly string[])[];
   readonly captureOutcomeByAttempt?:
     readonly ("completed" | "failed" | "camera-rollback-failed")[];
@@ -527,7 +528,7 @@ function fakePorts(options: FakePortOptions = {}) {
     evaluate: [] as number[],
     cleanup: 0,
     generateInputs: [] as Readonly<{
-      attemptIndex: 0 | 1;
+      attemptIndex: WorldReconstructionAttemptIndexV1;
       requestId: string;
       frozenOwnerIdentities: typeof OWNER;
       repairInstruction?: unknown;
@@ -566,6 +567,26 @@ function fakePorts(options: FakePortOptions = {}) {
       const ids = identities(input.attemptIndex);
       const outcome = options.packageOutcomeByAttempt?.[input.attemptIndex] ??
         "completed";
+      const diagnosticCodes =
+        options.packageDiagnosticCodesByAttempt?.[input.attemptIndex] ??
+        (outcome === "completed" ? [] : [outcome]);
+      if (outcome === "package-failed") {
+        return Object.freeze({ outcome, diagnosticCodes });
+      }
+      if (outcome === "native-check-rejected") {
+        return Object.freeze({
+          outcome,
+          sceneAuthoringAttemptResultRef: ids.sceneAuthoringAttemptResultRef,
+          sceneAuthoringAttemptResultHash: ids.sceneAuthoringAttemptResultHash,
+          authoredSourceRef: ids.authoredSourceRef,
+          authoredSourceHash: ids.authoredSourceHash,
+          nativeCheckResultRef:
+            `artifact://run/attempts/${input.attemptIndex}/native-check-result.json`,
+          nativeCheckResultHash: taggedHash(`a${input.attemptIndex}check`),
+          repairDiagnostics: Object.freeze([]),
+          diagnosticCodes,
+        });
+      }
       return Object.freeze({
         outcome,
         sceneAuthoringAttemptResultRef: ids.sceneAuthoringAttemptResultRef,
@@ -579,9 +600,7 @@ function fakePorts(options: FakePortOptions = {}) {
         worldPackageBuildReceiptHash: ids.worldPackageBuildReceiptHash,
         worldBuildIdentityRef: ids.worldBuildIdentityRef,
         worldBuildIdentityHash: ids.worldBuildIdentityHash,
-        diagnosticCodes:
-          options.packageDiagnosticCodesByAttempt?.[input.attemptIndex] ??
-          (outcome === "completed" ? [] : [outcome]),
+        diagnosticCodes,
       });
     },
     capture: async (input) => {
@@ -819,6 +838,114 @@ describe("runWorldReconstructionV1", () => {
     );
   });
 
+  it("uses separate bounded repairs for Native Check, Ground Analysis, Opening, and final evaluation", async () => {
+    const outputDirectoryPath = await outputRoot();
+    const base = fakePorts({
+      evaluationByAttempt: [
+        evaluationResult({ attemptIndex: 0, outcome: "passed" }),
+        evaluationResult({ attemptIndex: 1, outcome: "passed" }),
+        evaluationResult({ attemptIndex: 2, outcome: "passed" }),
+        evaluationResult({ attemptIndex: 3, outcome: "passed" }),
+      ],
+    });
+    const ports: WorldReconstructionRunPortsV1 = {
+      ...base.ports,
+      package: async (input) => {
+        if (input.attemptIndex >= 2) return base.ports.package(input);
+        base.calls.package.push(input.attemptIndex);
+        const ids = identities(input.attemptIndex);
+        if (input.attemptIndex === 0) {
+          return Object.freeze({
+            outcome: "native-check-rejected" as const,
+            sceneAuthoringAttemptResultRef: ids.sceneAuthoringAttemptResultRef,
+            sceneAuthoringAttemptResultHash: ids.sceneAuthoringAttemptResultHash,
+            authoredSourceRef: ids.authoredSourceRef,
+            authoredSourceHash: ids.authoredSourceHash,
+            nativeCheckResultRef:
+              "artifact://run/attempts/0/native-check-result.json",
+            nativeCheckResultHash: taggedHash("native-check-0"),
+            repairDiagnostics: Object.freeze([groundStandabilityDiagnostic()]),
+            diagnosticCodes: Object.freeze([
+              "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+            ]),
+          });
+        }
+        return Object.freeze({
+          outcome: "ground-analysis-rejected" as const,
+          sceneAuthoringAttemptResultRef: ids.sceneAuthoringAttemptResultRef,
+          sceneAuthoringAttemptResultHash: ids.sceneAuthoringAttemptResultHash,
+          authoredSourceRef: ids.authoredSourceRef,
+          authoredSourceHash: ids.authoredSourceHash,
+          groundAnalysisReportRef:
+            "artifact://run/attempts/1/ground-analysis-report.json",
+          groundAnalysisReportHash: taggedHash("ground-analysis-1"),
+          repairDiagnostics: Object.freeze([groundStandabilityDiagnostic()]),
+          diagnosticCodes: Object.freeze([
+            "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+          ]),
+        });
+      },
+      capture: async (input) => {
+        if (input.attemptIndex === 3) return base.ports.capture(input);
+        if (input.attemptIndex !== 2) {
+          throw new Error("unexpected Capture allocation");
+        }
+        base.calls.capture.push(2);
+        const ids = identities(2);
+        return Object.freeze({
+          outcome: "rejected" as const,
+          cameraRollbackOutcome: "completed" as const,
+          diagnosticCodes: Object.freeze([
+            "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
+          ]),
+          rejectedWorldPackagePath: ids.worldPackagePath,
+          rejectedWorldPackageRef: ids.worldPackageRef,
+          rejectedWorldPackageRootHash: ids.worldPackageRootHash,
+          rejectedCaptureDirectoryPath: "/attempts/2/rejected-capture",
+          rejectedOpeningPath: "/attempts/2/rejected-capture/opening.png",
+          rejectedOpeningRef:
+            "artifact://run/attempts/2/rejected-capture/opening.png",
+          openingGateResultPath:
+            "/attempts/2/rejected-capture/opening-composition-gate-result.json",
+          openingGateResultRef:
+            "artifact://run/attempts/2/rejected-capture/opening-composition-gate-result.json",
+          openingGateResultHash: taggedHash("opening-gate-2"),
+          repairDiagnostics: Object.freeze([openingCompositionDiagnostic()]),
+        });
+      },
+    };
+
+    const receipt = await runWorldReconstructionV1(
+      runInput(outputDirectoryPath),
+      ports,
+    );
+
+    expect(receipt.outcome).toBe("passed");
+    expect(receipt.attempts.map(({ kind }) => kind)).toEqual([
+      "native-check-rejected",
+      "ground-analysis-rejected",
+      "capture-rejected",
+      "evaluated",
+    ]);
+    expect(receipt.finalAttemptIndex).toBe(3);
+    expect(base.calls.generate).toEqual([0, 1, 2, 3]);
+    expect(base.calls.package).toEqual([0, 1, 2, 3]);
+    expect(base.calls.capture).toEqual([2, 3]);
+    expect(base.calls.evaluate).toEqual([3]);
+    expect(base.calls.generateInputs.slice(1).map((entry) =>
+      (entry.repairInstruction as { priorEvidence: { kind: string } })
+        .priorEvidence.kind)).toEqual([
+      "native-check-result",
+      "ground-analysis-report",
+      "opening-composition-gate-result",
+    ]);
+    expect(base.calls.generateInputs.slice(1).map((entry) =>
+      (entry.repairInstruction as {
+        priorAttemptIndex: number;
+        nextAttemptIndex: number;
+      }).nextAttemptIndex)).toEqual([1, 2, 3]);
+  });
+
   it("preserves the canonical Case artifact Ref through the journal and terminal receipt so Final can derive its run receipt Ref", async () => {
     const outputDirectoryPath = await outputRoot();
     const { ports } = fakePorts({
@@ -1026,7 +1153,9 @@ describe("runWorldReconstructionV1", () => {
     await expect(runWorldReconstructionV1(
       runInput(await outputRoot()),
       ports,
-    )).rejects.toMatchObject({ diagnosticCodes: [code] });
+    )).rejects.toMatchObject({
+      diagnosticCodes: [code],
+    });
     expect(calls.package).toEqual([]);
     expect(calls.capture).toEqual([]);
   });
@@ -1086,7 +1215,7 @@ describe("runWorldReconstructionV1", () => {
   );
 
   it.each([
-    ["check-failed", "WORLD_RECONSTRUCTION_CHECK_FAILED"],
+    ["native-check-rejected", "WORLD_RECONSTRUCTION_CHECK_FAILED"],
     ["package-failed", "WORLD_RECONSTRUCTION_PACKAGE_FAILED"],
   ] as const)("fails closed on %s", async (outcome, code) => {
     const { ports, calls } = fakePorts({
@@ -1095,13 +1224,17 @@ describe("runWorldReconstructionV1", () => {
     await expect(runWorldReconstructionV1(
       runInput(await outputRoot()),
       ports,
-    )).rejects.toMatchObject({ diagnosticCodes: [code] });
+    )).rejects.toMatchObject({
+      diagnosticCodes: outcome === "native-check-rejected"
+        ? [code, "native-check-rejected"]
+        : [code],
+    });
     expect(calls.capture).toEqual([]);
   });
 
   it("preserves allowlisted Package diagnostics beside the stage code", async () => {
     const { ports } = fakePorts({
-      packageOutcomeByAttempt: ["check-failed"],
+      packageOutcomeByAttempt: ["native-check-rejected"],
       packageDiagnosticCodesByAttempt: [[
         "native-check-rejected",
         "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
@@ -1353,33 +1486,9 @@ describe("runWorldReconstructionV1", () => {
     const ports: WorldReconstructionRunPortsV1 = {
       ...base.ports,
       capture: async (input) => {
-        if (input.attemptIndex === 0) {
-          const ids = identities(0);
-          base.calls.capture.push(0);
-          return Object.freeze({
-            outcome: "rejected" as const,
-            cameraRollbackOutcome: "completed" as const,
-            diagnosticCodes: Object.freeze([
-              "FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED",
-              "WORLDKIT_OPENING_GATE_REGION_DRIFT",
-            ]),
-            rejectedWorldPackagePath: ids.worldPackagePath,
-            rejectedWorldPackageRef: ids.worldPackageRef,
-            rejectedWorldPackageRootHash: ids.worldPackageRootHash,
-            rejectedCaptureDirectoryPath: "/attempts/0/rejected-capture",
-            rejectedOpeningPath: "/attempts/0/rejected-capture/opening.png",
-            rejectedOpeningRef:
-              "artifact://run/attempts/0/rejected-capture/opening.png",
-            openingGateResultPath:
-              "/attempts/0/rejected-capture/opening-composition-gate-result.json",
-            openingGateResultRef:
-              "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
-            openingGateResultHash: taggedHash("opening-gate-0"),
-            repairDiagnostics: Object.freeze([openingCompositionDiagnostic()]),
-          });
-        }
-        const ids = identities(1);
-        base.calls.capture.push(1);
+        const ids = identities(input.attemptIndex);
+        base.calls.capture.push(input.attemptIndex);
+        const root = `/attempts/${input.attemptIndex}/rejected-capture`;
         return Object.freeze({
           outcome: "rejected" as const,
           cameraRollbackOutcome: "completed" as const,
@@ -1390,15 +1499,17 @@ describe("runWorldReconstructionV1", () => {
           rejectedWorldPackagePath: ids.worldPackagePath,
           rejectedWorldPackageRef: ids.worldPackageRef,
           rejectedWorldPackageRootHash: ids.worldPackageRootHash,
-          rejectedCaptureDirectoryPath: "/attempts/1/rejected-capture",
-          rejectedOpeningPath: "/attempts/1/rejected-capture/opening.png",
+          rejectedCaptureDirectoryPath: root,
+          rejectedOpeningPath: `${root}/opening.png`,
           rejectedOpeningRef:
-            "artifact://run/attempts/1/rejected-capture/opening.png",
+            `artifact://run/attempts/${input.attemptIndex}/rejected-capture/opening.png`,
           openingGateResultPath:
-            "/attempts/1/rejected-capture/opening-composition-gate-result.json",
+            `${root}/opening-composition-gate-result.json`,
           openingGateResultRef:
-            "artifact://run/attempts/1/rejected-capture/opening-composition-gate-result.json",
-          openingGateResultHash: taggedHash("opening-gate-1"),
+            `artifact://run/attempts/${input.attemptIndex}/rejected-capture/opening-composition-gate-result.json`,
+          openingGateResultHash: taggedHash(
+            `opening-gate-${input.attemptIndex}`,
+          ),
           repairDiagnostics: Object.freeze([openingCompositionDiagnostic()]),
         });
       },
@@ -1410,15 +1521,15 @@ describe("runWorldReconstructionV1", () => {
     )).rejects.toMatchObject({
       cleanupOutcome: "completed",
       rejectedCaptureEvidence: {
-        rejectedWorldPackagePath: identities(1).worldPackagePath,
-        rejectedWorldPackageRef: identities(1).worldPackageRef,
-        rejectedWorldPackageRootHash: identities(1).worldPackageRootHash,
+        rejectedWorldPackagePath: identities(3).worldPackagePath,
+        rejectedWorldPackageRef: identities(3).worldPackageRef,
+        rejectedWorldPackageRootHash: identities(3).worldPackageRootHash,
         rejectedOpeningRef:
-          "artifact://run/attempts/1/rejected-capture/opening.png",
+          "artifact://run/attempts/3/rejected-capture/opening.png",
       },
     });
-    expect(base.calls.generate).toEqual([0, 1]);
-    expect(base.calls.capture).toEqual([0, 1]);
+    expect(base.calls.generate).toEqual([0, 1, 2, 3]);
+    expect(base.calls.capture).toEqual([0, 1, 2, 3]);
     expect(base.calls.evaluate).toEqual([]);
   });
 

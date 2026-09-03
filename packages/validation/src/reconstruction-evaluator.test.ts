@@ -125,7 +125,7 @@ const profileValue = () => ({
   schemaVersion: 1 as const,
   id: "cloud-temple.profile",
   dimensionIds: [...DIMENSIONS],
-  maximumRepairAttemptCount: 1 as const,
+  maximumRepairAttemptCount: 3 as const,
   builderSelfRepairAttemptCount: 3 as const,
   thresholds: {
     semanticSilhouetteTargets: [{

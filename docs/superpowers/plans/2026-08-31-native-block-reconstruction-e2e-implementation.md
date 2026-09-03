@@ -92,7 +92,7 @@ After Task 2 freezes contracts, Task 10/NBR-50A may run in parallel with sequent
 - `scripts/reconstruction/formal-capture.ts`: Package/Runtime/Capture orchestration and Receipt publication.
 - `scripts/reconstruction/evaluate.ts`: filesystem adapter that loads verified evidence and calls the pure validation evaluator.
 - `scripts/reconstruction/run-journal.ts`: immutable initial/repair Attempt state machine and cleanup join.
-- `scripts/reconstruction/run.ts`: core at-most-two-Attempt state machine over injected ports; it is not a
+- `scripts/reconstruction/run.ts`: core Attempt 0 plus at-most-three-repair state machine over injected ports; it is not a
   production adapter.
 - `scripts/reconstruction/run-production.ts`: sole production transaction that materializes Case/Profile/Intent
   inputs, constructs the existing generation/package/capture/evaluate/cleanup ports, calls the core, then
@@ -322,7 +322,7 @@ expect(request.declaredOutputPaths).toEqual([
 ]);
 ```
 
-Reject output reordering, extra keys, duplicate reference/context inputs, unsorted context manifest rows, any absolute path/mtime/gzip identity, API/Profile hash mismatch, Bootstrap identity mismatch, `maximumRepairAttemptCount > 1`, non-formal resolved model/effort, credentials/provider payloads, and output inventory not exactly matching the request. The Request rejects `routerTaskPayloadHash`: the canonical router task payload contains the Request identity, so putting its payload hash back into the Request would be self-referential.
+Reject output reordering, extra keys, duplicate reference/context inputs, unsorted context manifest rows, any absolute path/mtime/gzip identity, API/Profile hash mismatch, Bootstrap identity mismatch, `maximumRepairAttemptCount !== 3`, non-formal resolved model/effort, credentials/provider payloads, and output inventory not exactly matching the request. The Request rejects `routerTaskPayloadHash`: the canonical router task payload contains the Request identity, so putting its payload hash back into the Request would be self-referential.
 
 - [ ] **Step 2: Write RED reconstruction contract tests**
 
@@ -400,7 +400,7 @@ export type WorldReconstructionMetricV1 =
   | Readonly<{ kind: "receipt-outcome"; outcome: "completed" | "failed" | "incomplete" }>;
 ```
 
-The Profile sets `maximumRepairAttemptCount: 1` and `builderSelfRepairAttemptCount: 3`. The latter permits at most three bounded source-only self-repair cycles inside the original Builder task after its initial output; it never allocates a Package or Runtime Candidate. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
+The Profile sets `maximumRepairAttemptCount: 3` and `builderSelfRepairAttemptCount: 3`. The former permits at most three fresh external Attempts driven by the immediately preceding trusted Native Check, Ground Analysis, Opening or Evaluation evidence. The latter permits at most three bounded source-only self-repair cycles inside one Builder task after its initial output; it never allocates a Package or Runtime Candidate. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
 
 NBR-10C closes the evaluator seam before NBR-50A: Case freezes facts only, Profile owns every
 BasisPoints/Millimeters threshold, and EvidenceSet contains seven closed observed payloads with per-row
@@ -626,7 +626,7 @@ The completed Attempt Result binds `authoredSourceHash` to the admitted source g
 
 - [ ] **Step 6: Create and validate the real Case inputs**
 
-Copy the source image without transformation, calculate its SHA-256, and bind it in `case.json`. Bind the copied Scene Brief hash. Reuse the retained verified Cloud Ridge Package's canonical Gameplay and World Runtime Bootstrap owner artifacts for the one real controlled Subject/Camera closure, snapshot their canonical bytes into the durable Attempt input, and bind the validated WorldPackage Bounds; do not hand-author a second Subject/Camera closure in the Native Bootstrap. The Case must contain non-empty acceptance targets for foreground platform, central ascent, mountain/cliff layers, upper T junction, gate mass, supported Spawn, required blocker colliders, and fixed-input traversal checkpoints. `evaluation-profile.json` fixes one formal model/Profile/Prompt/budget/threshold set, `maximumRepairAttemptCount: 1`, and `builderSelfRepairAttemptCount: 3`.
+Copy the source image without transformation, calculate its SHA-256, and bind it in `case.json`. Bind the copied Scene Brief hash. Reuse the retained verified Cloud Ridge Package's canonical Gameplay and World Runtime Bootstrap owner artifacts for the one real controlled Subject/Camera closure, snapshot their canonical bytes into the durable Attempt input, and bind the validated WorldPackage Bounds; do not hand-author a second Subject/Camera closure in the Native Bootstrap. The Case must contain non-empty acceptance targets for foreground platform, central ascent, mountain/cliff layers, upper T junction, gate mass, supported Spawn, required blocker colliders, and fixed-input traversal checkpoints. `evaluation-profile.json` fixes one formal model/Profile/Prompt/budget/threshold set, `maximumRepairAttemptCount: 3`, and `builderSelfRepairAttemptCount: 3`.
 
 Run:
 
@@ -1398,11 +1398,12 @@ git push -u origin HEAD
 
 Request exact-identity review, close every P0/P1, merge PR F2, and refresh `origin/main`.
 
-### Task 12: NBR-60 Orchestrate at most one immutable diagnostic-driven repair
+### Task 12: NBR-60 Orchestrate at most three immutable diagnostic-driven repairs
 
 **Current status:** Complete on `origin/main@04dda773deaea94c1ba9521cb3c13898fbdf8327` through PR #138.
-This closes the production transaction and injected one-repair proof only; Task 13 still owns the real Case
-execution that must supply NBR-20 real formal-generation evidence, real two-Attempt evidence, final publication
+This originally closed the production transaction and injected one-repair proof; the current-only contract now
+extends that same owner to a bounded three-repair chain. Task 13 still owns the real Case execution that must
+supply NBR-20 real formal-generation evidence, real multi-Attempt evidence, final publication
 and manual launch.
 
 **Files:**
@@ -1437,7 +1438,7 @@ and manual launch.
 - Produces: the sole `FormalWorldCaptureIntentV1` parser/hash owner, Case
   `formalCaptureIntentRef/formalCaptureIntentHash` closure, a request materializer that accepts one parsed
   Intent, `runWorldReconstructionV1(input, ports): Promise<WorldReconstructionRunReceiptV1>` with Attempt 0
-  and at most Attempt 1, and one production transaction used by `worldkit reconstruct run`; every Attempt
+  and at most Attempts 1–3, and one production transaction used by `worldkit reconstruct run`; every Attempt
   owns different Request/Attempt/source/Package/Capture identities while reusing the same frozen Case/Intent.
 
 - [ ] **Step 0: Write RED Case-bound Formal Capture Intent contract and cutover tests**
@@ -1552,7 +1553,7 @@ initial-evaluated(failed, repairable) -> repair-generating -> repair-packaged
 -> repair-captured -> repair-evaluated -> cleanup-joined -> completed
 ```
 
-Also test initial pass (no repair), initial incomplete (no publication), maximum one repair, non-repairable diagnostic, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure.
+Also test initial pass (no repair), initial incomplete (no publication), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure.
 
 - [ ] **Step 2: Write RED source-only repair tests**
 
@@ -1564,7 +1565,7 @@ native-block-authoring.json
 native-resources.json
 ```
 
-Assert the repair cannot change Case/Profile, canonical Gameplay/World Runtime/Bounds inputs, derived Bootstrap, acceptance thresholds, Runtime, Physics, Camera, evaluator, prior Package, prior Capture, or old durable Attempt inputs. Attempt 1 must bind the same `bootstrapInputHash` and the same canonical owner-input hashes, plus new Request/source graph/Package Root/Capture hashes.
+Assert the repair cannot change Case/Profile, canonical Gameplay/World Runtime/Bounds inputs, derived Bootstrap, acceptance thresholds, Runtime, Physics, Camera, evaluator, prior Package, prior Capture, or old durable Attempt inputs. Every repair Attempt must bind the same `bootstrapInputHash` and the same canonical owner-input hashes, plus a new Request/source graph and, after admission, new Package Root/Capture hashes.
 
 - [ ] **Step 3: Run RED repair tests**
 
@@ -1576,7 +1577,7 @@ Expected: FAIL because the bounded orchestrator and command do not exist.
 
 - [ ] **Step 4: Implement the journal and cleanup join**
 
-Persist a canonical append-only journal row before and after every external boundary. Re-read frozen input hashes before task creation and final publication. Never mutate Attempt 0. Attempt 1 uses a new S3 prefix and new Request ID; the same logical retry reuses that exact ID/hash. Terminal Run Receipt publishes only after provider task, Candidate, Hosted Browser Session, Vite Server, temporary directories, and output promotion cleanup all reach recorded terminal outcomes.
+Persist a canonical append-only journal row before and after every external boundary, including the exact Attempt index. Re-read frozen input hashes before task creation and final publication. Never mutate a prior Attempt. Attempts 1–3 each use a new S3 prefix and new Request ID; the same logical retry reuses that exact ID/hash. Terminal Run Receipt publishes only after provider task, Candidate, Hosted Browser Session, Vite Server, temporary directories, and output promotion cleanup all reach recorded terminal outcomes.
 
 - [ ] **Step 5: Add the stable `reconstruct run` command**
 
@@ -1601,9 +1602,9 @@ verified atomic publication. A Canonical/capability-gap decision returns one sta
 diagnostic; it never calls the old Builder. A Case/Intent ref, byte, hash, target-closure or Package-join
 mismatch fails before Hosted Runtime/Capture allocation and cannot publish `final`.
 
-- [ ] **Step 6: Run GREEN repair tests including a full injected two-Attempt proof**
+- [ ] **Step 6: Run GREEN repair tests including a full injected bounded multi-stage proof**
 
-Use fake router/Package/Hosted Capture ports that still emit correctly parsed identities. Attempt 0 must fail `WORLD_RECONSTRUCTION_COLLIDER_MISSING`; Attempt 1 must pass and own a different source graph, Package Root, Capture hash, and evaluation hash.
+Use fake router/Package/Hosted Capture ports that still emit correctly parsed identities. Cover a simple Attempt 0 failure followed by a passing Attempt 1, plus a four-Attempt chain whose Native Check, Ground Analysis and Opening rejections each bind their own prior evidence before Attempt 3 passes. Every Attempt owns a different source graph and every admitted Attempt owns different Package Root, Capture and evaluation identities.
 
 ```bash
 pnpm exec vitest run scripts/reconstruction/repair-request.test.ts scripts/reconstruction/run-journal.test.ts scripts/reconstruction/run.test.ts scripts/reconstruction/run-production.test.ts scripts/reconstruction/formal-capture-request.test.ts scripts/cli/worldkit.test.ts
@@ -1611,7 +1612,8 @@ pnpm typecheck
 git diff --check
 ```
 
-Expected: focused tests/typecheck pass; attempts length is exactly 2 and a requested third attempt fails closed.
+Expected: focused tests/typecheck pass; the four-Attempt proof records indexes `0, 1, 2, 3`, and a requested
+repair beyond Attempt 3 fails closed.
 
 - [ ] **Step 7: Commit and merge repair checkpoint PR G**
 
@@ -1691,7 +1693,12 @@ authoring outputs; Check precedes Package; Runtime/Capture use one admitted Host
 cleanup retains durable Attempt inputs; and all terminal resources clean up. The short `f-20260831` run ID
 keeps the derived router request ID within its frozen 80-character contract.
 
-If initial evaluation has a repairable failure, the command must execute exactly one diagnostic-driven repair and publish a distinct second Package/Capture identity. The NBR-1 acceptance run must contain a real two-Attempt proof; if this initial result has no repairable failure, keep it immutable and run another independently identified initial Case execution under the same already-frozen Case/Profile until a genuine repairable diagnostic occurs. Do not alter thresholds, inject fake evidence, or corrupt a passed Package to manufacture repair.
+If any admitted Attempt has a repairable failure, the command may execute the next bounded diagnostic-driven
+repair, up to Attempt 3, and every admitted repair must publish a distinct Package/Capture identity. The NBR-1
+acceptance run must contain at least one real repair proof; if the initial result passes without repair, keep it
+immutable and run another independently identified initial Case execution under the same already-frozen
+Case/Profile until a genuine repairable diagnostic occurs. Do not alter thresholds, inject fake evidence, or
+corrupt a passed Package to manufacture repair.
 
 - [ ] **Step 4: Run the artifact and playability verifier**
 

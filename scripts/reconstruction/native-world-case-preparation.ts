@@ -169,7 +169,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     schemaVersion: 1,
     id: `${input.sceneId}-profile`,
     dimensionIds: DIMENSION_IDS,
-    maximumRepairAttemptCount: 1,
+    maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: silhouetteTargets.map(({ acceptanceTargetRef }) => ({

@@ -327,6 +327,7 @@ describe("identity-bound Opening Composition Host Gate", () => {
     });
 
     const diagnostics = createOpeningCompositionRepairDiagnosticsV1({
+      priorAttemptIndex: 0,
       gateResult,
       reconstructionCase: fixture.reconstructionCase,
       evidenceRef:

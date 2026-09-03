@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "cloud-temple-t-gate-native-block-profile",
   "dimensionIds": ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"],
-  "maximumRepairAttemptCount": 1,
+  "maximumRepairAttemptCount": 3,
   "builderSelfRepairAttemptCount": 3,
   "thresholds": {
     "semanticSilhouetteTargets": [

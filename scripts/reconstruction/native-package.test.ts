@@ -594,11 +594,26 @@ describe("packageNativeBlockAttemptV1", () => {
         "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
         "native-check-rejected",
       ],
+      nativeCheckRejection: {
+        kind: "native-check-rejected",
+        nativeCheckResultPath: path.join(
+          fixture.attemptDirectoryPath,
+          "native-check-result.json",
+        ),
+        repairDiagnostics: [expect.objectContaining({
+          code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+          metricId: "ground-component-reachability",
+        })],
+      },
     });
     expect(await readFile(path.join(
       fixture.attemptDirectoryPath,
       "native-check-result.json",
     ), "utf8")).toContain("WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED");
+    await expect(readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "attempt-result.json",
+    ), "utf8")).resolves.toContain('"outcome":"completed"');
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
     });

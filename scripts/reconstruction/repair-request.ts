@@ -1,6 +1,7 @@
 import { isEmpty, isEqual, isNil } from "lodash-es";
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import type {
+  WorldReconstructionAttemptIndexV1,
   WorldReconstructionDiagnosticV1,
   WorldReconstructionEvaluationProfileV1,
   WorldReconstructionEvaluationResultV1,
@@ -48,14 +49,19 @@ export type NativeBlockRepairEvidenceV1 =
       readonly kind: "ground-analysis-report";
       readonly resultRef: string;
       readonly resultHash: Sha256HashV1;
+    }>
+  | Readonly<{
+      readonly kind: "native-check-result";
+      readonly resultRef: string;
+      readonly resultHash: Sha256HashV1;
     }>;
 
 export interface NativeBlockRepairInstructionV1 {
   readonly kind: "native-block-repair-instruction";
   readonly schemaVersion: 1;
   readonly id: string;
-  readonly priorAttemptIndex: 0;
-  readonly nextAttemptIndex: 1;
+  readonly priorAttemptIndex: Exclude<WorldReconstructionAttemptIndexV1, 3>;
+  readonly nextAttemptIndex: Exclude<WorldReconstructionAttemptIndexV1, 0>;
   readonly diagnostics: readonly WorldReconstructionDiagnosticV1[];
   readonly priorSourceRef: string;
   readonly priorSourceHash: Sha256HashV1;
@@ -70,6 +76,8 @@ export interface NativeBlockRepairInstructionV1 {
 }
 
 export interface CreateNativeBlockRepairInstructionInputV1 {
+  readonly priorAttemptIndex: 0 | 1 | 2;
+  readonly nextAttemptIndex: 1 | 2 | 3;
   readonly diagnostics: readonly WorldReconstructionDiagnosticV1[];
   readonly priorSourceRef: string;
   readonly priorSourceHash: Sha256HashV1;
@@ -96,7 +104,8 @@ function parseRepairEvidence(input: unknown): NativeBlockRepairEvidenceV1 {
     ) ||
     (value.kind !== "evaluation-result" &&
       value.kind !== "opening-composition-gate-result" &&
-      value.kind !== "ground-analysis-report") ||
+      value.kind !== "ground-analysis-report" &&
+      value.kind !== "native-check-result") ||
     typeof value.resultRef !== "string" ||
     typeof value.resultHash !== "string" ||
     !SHA256_PATTERN.test(value.resultHash)
@@ -126,7 +135,12 @@ export function parseNativeBlockRepairInstructionV1(
   }
   if (
     value.kind !== "native-block-repair-instruction" || value.schemaVersion !== 1 ||
-    typeof value.id !== "string" || value.priorAttemptIndex !== 0 || value.nextAttemptIndex !== 1 ||
+    typeof value.id !== "string" ||
+    !Number.isInteger(value.priorAttemptIndex) ||
+    !Number.isInteger(value.nextAttemptIndex) ||
+    (value.priorAttemptIndex !== 0 && value.priorAttemptIndex !== 1 && value.priorAttemptIndex !== 2) ||
+    (value.nextAttemptIndex !== 1 && value.nextAttemptIndex !== 2 && value.nextAttemptIndex !== 3) ||
+    value.nextAttemptIndex !== value.priorAttemptIndex + 1 ||
     !Array.isArray(value.diagnostics) || value.diagnostics.length === 0 ||
     typeof value.priorSourceRef !== "string" ||
     typeof value.priorGenerationRequestRef !== "string" ||
@@ -143,6 +157,8 @@ export function parseNativeBlockRepairInstructionV1(
     fail("WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID", "owner identities");
   }
   const parsed = createNativeBlockRepairInstructionV1({
+    priorAttemptIndex: value.priorAttemptIndex as 0 | 1 | 2,
+    nextAttemptIndex: value.nextAttemptIndex as 1 | 2 | 3,
     diagnostics: value.diagnostics.map((diagnostic) =>
       parseWorldReconstructionDiagnosticV1(diagnostic)
     ),
@@ -171,7 +187,7 @@ export function isRepairableWorldReconstructionDiagnosticV1(
 export function isRepairableWorldReconstructionEvaluationV1(
   evaluation: WorldReconstructionEvaluationResultV1,
   profile: WorldReconstructionEvaluationProfileV1,
-  completedRepairCount: 0 | 1,
+  completedRepairCount: number,
 ): boolean {
   if (evaluation.outcome !== "failed") return false;
   if (completedRepairCount >= profile.maximumRepairAttemptCount) return false;
@@ -184,6 +200,12 @@ export function isRepairableWorldReconstructionEvaluationV1(
 export function createNativeBlockRepairInstructionV1(
   input: CreateNativeBlockRepairInstructionInputV1,
 ): NativeBlockRepairInstructionV1 {
+  if (input.nextAttemptIndex !== input.priorAttemptIndex + 1) {
+    fail(
+      "WORLD_RECONSTRUCTION_REPAIR_INSTRUCTION_INVALID",
+      "repair Attempt indices must be contiguous",
+    );
+  }
   if (isEmpty(input.diagnostics) || isNil(input.diagnostics[0])) {
     fail(
       "WORLD_RECONSTRUCTION_NON_REPAIRABLE",
@@ -203,9 +225,9 @@ export function createNativeBlockRepairInstructionV1(
   return Object.freeze({
     kind: "native-block-repair-instruction",
     schemaVersion: 1,
-    id: `native-block-repair:${input.priorEvidence.resultHash}`,
-    priorAttemptIndex: 0,
-    nextAttemptIndex: 1,
+    id: `native-block-repair:${input.nextAttemptIndex}:${input.priorEvidence.resultHash}`,
+    priorAttemptIndex: input.priorAttemptIndex,
+    nextAttemptIndex: input.nextAttemptIndex,
     diagnostics: Object.freeze([...input.diagnostics]),
     priorSourceRef: input.priorSourceRef,
     priorSourceHash: input.priorSourceHash,

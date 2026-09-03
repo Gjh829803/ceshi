@@ -116,7 +116,7 @@ async function writePriorRepairContext(
 }
 
 function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
-  const profile = parseWorldReconstructionEvaluationProfileV1({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: "cloud-temple-profile", dimensionIds: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"], maximumRepairAttemptCount: 1, builderSelfRepairAttemptCount: 3, thresholds: { semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }], openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }] }, spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 } }, requiredEvidenceByDimension: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"].map((dimensionId) => ({ dimensionId, evidenceProfileRefs: [`worldkit://evidence/${dimensionId}@1`] })) });
+  const profile = parseWorldReconstructionEvaluationProfileV1({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: "cloud-temple-profile", dimensionIds: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"], maximumRepairAttemptCount: 3, builderSelfRepairAttemptCount: 3, thresholds: { semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }], openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }] }, spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 } }, requiredEvidenceByDimension: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"].map((dimensionId) => ({ dimensionId, evidenceProfileRefs: [`worldkit://evidence/${dimensionId}@1`] })) });
   const requiredEvidenceProfileRefs = profile.requiredEvidenceByDimension
     .flatMap((entry) => entry.evidenceProfileRefs)
     .sort();
@@ -415,6 +415,8 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     try {
       const attempt0 = await prepareNativeBlockGenerationTaskV1(input(value));
       const repairInstruction = createNativeBlockRepairInstructionV1({
+        priorAttemptIndex: 0,
+        nextAttemptIndex: 1,
         diagnostics: [parseWorldReconstructionDiagnosticV1({
           kind: "world-reconstruction-diagnostic",
           schemaVersion: 1,
@@ -640,6 +642,8 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         ),
       ]);
       const repairInstruction = createNativeBlockRepairInstructionV1({
+        priorAttemptIndex: 0,
+        nextAttemptIndex: 1,
         diagnostics: [parseWorldReconstructionDiagnosticV1({
           kind: "world-reconstruction-diagnostic",
           schemaVersion: 1,
@@ -735,6 +739,120 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       );
       expect(repairTaskInstruction).toContain(
         "Do not trade a Package/Ground gate failure for a predictable Capture/evaluation failure",
+      );
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
+  it("binds Attempt 3 only to the immediately preceding Attempt 2 Native Check evidence", async () => {
+    const value = await fixture();
+    try {
+      const runId = "native-check-repair-three";
+      const runDirectoryPath = path.join(value.root, "runs", runId);
+      const initial = await prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        runId,
+        runDirectoryPath,
+      });
+      const priorAttemptRoot = path.join(runDirectoryPath, "attempts", "2");
+      const priorSourceRef = "artifact://run/attempts/2/source";
+      const priorSourceHash = hash("d");
+      await writePriorRepairContext(priorAttemptRoot, {
+        sceneAuthoringAttemptRef:
+          `worldkit://scene-authoring-attempt/${initial.attempt.id}@1`,
+        sceneAuthoringAttemptHash: initial.attemptHash,
+        priorSourceRef,
+        priorSourceHash,
+        evaluationText: "{}",
+      });
+      const nativeCheckText = stringifyCanonicalJson({ outcome: "rejected" });
+      await Promise.all([
+        writeFile(
+          path.join(priorAttemptRoot, "generation-request.json"),
+          await readFile(path.join(
+            runDirectoryPath,
+            "attempts",
+            "0",
+            "generation-request.json",
+          )),
+        ),
+        writeFile(
+          path.join(priorAttemptRoot, "native-check-result.json"),
+          nativeCheckText,
+        ),
+      ]);
+      const repairInstruction = createNativeBlockRepairInstructionV1({
+        priorAttemptIndex: 2,
+        nextAttemptIndex: 3,
+        diagnostics: [parseWorldReconstructionDiagnosticV1({
+          kind: "world-reconstruction-diagnostic",
+          schemaVersion: 1,
+          id: "native-check-route-disconnected",
+          code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+          dimensionId: "critical-traversal",
+          acceptanceTargetRef: "worldkit://acceptance-target/gate@1",
+          targetRef: "worldkit://acceptance-target/gate@1",
+          targetId: "native-block-route",
+          metricId: "ground-component-reachability",
+          details: {
+            kind: "state-mismatch",
+            expectedValue: "one-edge-connected-route-component",
+            actualValue: "multiple-disconnected-route-components",
+            correctionDirection: "replace",
+          },
+          evidenceRefs: [
+            "artifact://run/attempts/2/native-check-result.json",
+          ],
+          message: "Native Check found a disconnected route.",
+          repairAction: {
+            kind: "revise-native-source",
+            targetKind: "traversal-check",
+            targetId: "native-block-route",
+            operation: "adjust-traversal",
+            instruction: "Connect the explicit route Blocks.",
+          },
+        })],
+        priorSourceRef,
+        priorSourceHash,
+        priorEvidence: {
+          kind: "native-check-result",
+          resultRef: "artifact://run/attempts/2/native-check-result.json",
+          resultHash: sha256CanonicalJson(
+            JSON.parse(nativeCheckText),
+          ) as `sha256:${string}`,
+        },
+        priorGenerationRequestRef:
+          "artifact://run/attempts/2/generation-request.json",
+        priorGenerationRequestHash: initial.generationRequestHash,
+        frozenOwnerIdentities: initial.frozenOwnerIdentities,
+      });
+
+      const attempt3 = await prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        attemptIndex: 3,
+        runId,
+        runDirectoryPath,
+        repairInstruction,
+      });
+      const inputRefs = attempt3.generationRequest.contextInputs.map(
+        ({ inputRef }) => inputRef,
+      );
+      expect(inputRefs).toContain(
+        "inputs/attempts/2/native-check-result.json",
+      );
+      expect(inputRefs.some((inputRef) =>
+        inputRef.startsWith("inputs/attempts/0/")
+      )).toBe(false);
+      const instruction = await readFile(path.join(
+        attempt3.taskWorkspacePath,
+        attempt3.generationRequest.taskInstructionRef,
+      ), "utf8");
+      expect(instruction).toContain(
+        "inputs/attempts/2/native-check-result.json",
+      );
+      expect(instruction).not.toContain(
+        "inputs/attempts/0/native-check-result.json",
       );
     } finally {
       await rm(value.root, { recursive: true, force: true });
@@ -899,7 +1017,7 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
 
   it.each([
     ["canonical route", async (value: Awaited<ReturnType<typeof fixture>>) => ({ ...input(value), routeDecision: decideSceneAuthoringRouteV1({ id: "canonical", sceneBriefRef: "scene-brief.md", sceneBriefHash: hash("a"), trustProfileRef: "worldkit://trust-profile/trusted-local@1", trustProfileHash: hash("b"), requiredCapabilityRefs: [], requestedSourceKind: "canonical", nativeTrustAdmitted: true, referenceDrivenDistinctiveSilhouette: false }) })],
-    ["second repair index", async (value: Awaited<ReturnType<typeof fixture>>) => ({ ...input(value), attemptIndex: 2 })],
+    ["repair index without its instruction", async (value: Awaited<ReturnType<typeof fixture>>) => ({ ...input(value), attemptIndex: 2 })],
     ["run directory escape", async (value: Awaited<ReturnType<typeof fixture>>) => ({ ...input(value), runDirectoryPath: path.join(value.root, "..", "escape") })],
     ["run identity outside the router dialect", async (value: Awaited<ReturnType<typeof fixture>>) => ({ ...input(value), runId: "invalid.run", runDirectoryPath: path.join(value.root, "runs", "invalid.run") })],
   ])("rejects %s before process preparation", async (_label, mutate) => {

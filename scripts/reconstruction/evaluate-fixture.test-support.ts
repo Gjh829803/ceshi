@@ -233,7 +233,7 @@ export function createEvidenceSetFixtureInputV1(
       "spawn-support",
       "topology",
     ],
-    maximumRepairAttemptCount: 1,
+    maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: [{

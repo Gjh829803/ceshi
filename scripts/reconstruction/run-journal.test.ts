@@ -61,7 +61,7 @@ const REPAIR_PATH: readonly WorldReconstructionJournalStateV1[] = [
 ];
 
 describe("world reconstruction run journal", () => {
-  it("records the exact two-attempt state machine around every external boundary", async () => {
+  it("records an initial and repair state machine around every external boundary", async () => {
     const journal = await openJournal(await journalRoot());
     expect(journal.currentState()).toBe("created");
     expect(journal.states()).toEqual(["created"]);
@@ -73,15 +73,22 @@ describe("world reconstruction run journal", () => {
     ]));
 
     for (const state of REPAIR_PATH.slice(1)) {
+      const attemptIndex = state.startsWith("initial-")
+        ? 0 as const
+        : state.startsWith("repair-")
+          ? 1 as const
+          : undefined;
       await journal.recordBoundary({
         state,
         boundary: "before",
         operation: state,
+        ...(attemptIndex === undefined ? {} : { attemptIndex }),
       });
       await journal.recordBoundary({
         state,
         boundary: "after",
         operation: state,
+        ...(attemptIndex === undefined ? {} : { attemptIndex }),
         ...(state === "cleanup-joined"
           ? {
               cleanupOutcomes: {
@@ -124,17 +131,20 @@ describe("world reconstruction run journal", () => {
       state: "repair-generating",
       boundary: "before",
       operation: "repair-generating",
+      attemptIndex: 1,
     })).rejects.toThrowError("WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID");
     await journal.recordBoundary({
       state: "initial-generating",
       boundary: "before",
       operation: "initial-generating",
+      attemptIndex: 0,
     });
     const before = journal.rows()[1];
     await journal.recordBoundary({
       state: "initial-generating",
       boundary: "after",
       operation: "initial-generating",
+      attemptIndex: 0,
     });
     expect(journal.rows()[1]).toBe(before);
     expect(journal.rows()[0]).toBe(first);
@@ -162,6 +172,7 @@ describe("world reconstruction run journal", () => {
       state: "initial-generating",
       boundary: "before",
       operation: "initial-generating",
+      attemptIndex: 0,
       requestId: "req-a",
     });
     journal.attachOrRejectRequest("req-a", H("a"));
@@ -169,6 +180,7 @@ describe("world reconstruction run journal", () => {
       state: "initial-generating",
       boundary: "after",
       operation: "initial-generating",
+      attemptIndex: 0,
       requestId: "req-a",
       requestHash: H("a"),
     });
@@ -234,11 +246,13 @@ describe("world reconstruction run journal", () => {
       state: "initial-generating",
       boundary: "before",
       operation: "initial-generating",
+      attemptIndex: 0,
     });
     await journal.recordBoundary({
       state: "initial-generating",
       boundary: "after",
       operation: "initial-generating",
+      attemptIndex: 0,
     });
     expect(journal.canPublishTerminalReceipt()).toBe(false);
     journal.recordCleanup({
@@ -272,11 +286,19 @@ describe("world reconstruction run journal", () => {
     expect(journal.cleanupOutcome()).toBe("failed");
   });
 
-  it("rejects a third attempt and stale owner identities before submission", async () => {
+  it("allows three repair attempts, rejects a fifth attempt, and checks stale owners", async () => {
     const journal = await openJournal(await journalRoot());
+    expect(() => journal.beginAttempt(1)).toThrowError(
+      "WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID",
+    );
     journal.beginAttempt(0);
+    expect(() => journal.beginAttempt(2)).toThrowError(
+      "WORLD_RECONSTRUCTION_JOURNAL_TRANSITION_INVALID",
+    );
     journal.beginAttempt(1);
-    expect(() => journal.beginAttempt(2 as 0 | 1)).toThrowError(
+    journal.beginAttempt(2);
+    journal.beginAttempt(3);
+    expect(() => journal.beginAttempt(4 as never)).toThrowError(
       "WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED",
     );
     expect(() => journal.assertOwnerIdentities({
