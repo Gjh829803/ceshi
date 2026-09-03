@@ -40,6 +40,7 @@ import {
   type BabylonNativeSceneContributionV1,
   type FixedInputV1,
   type FormalMeasuredObservationIdentityV1,
+  type FormalScriptedTraversalObservationV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
   type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
@@ -339,6 +340,7 @@ function assertReadySnapshot(
 function assertObservationMatchesCapture(
   observation: FormalMeasuredObservationIdentityV1,
   captureReceipt: ReturnType<typeof parseFormalWorldCaptureReceiptV1>,
+  resetIdentity: "receipt-ready" | "independent-reset" = "receipt-ready",
 ): void {
   exact(observation.worldPackageRef, captureReceipt.worldPackageRef);
   exact(observation.worldPackageRootHash, captureReceipt.worldPackageRootHash);
@@ -348,7 +350,18 @@ function assertObservationMatchesCapture(
   exact(observation.formalRequestHash, captureReceipt.formalRequestHash);
   exact(observation.semanticCaptureMapHash, captureReceipt.semanticCaptureMapHash);
   exact(observation.runtimeSessionId, captureReceipt.runtimeSessionId);
-  exact(observation.resetReadySnapshotHash, captureReceipt.readySnapshotHash);
+  if (resetIdentity === "receipt-ready") {
+    exact(observation.resetReadySnapshotHash, captureReceipt.readySnapshotHash);
+  } else {
+    const traversal = observation as FormalScriptedTraversalObservationV1;
+    const firstCheck = traversal.checks[0];
+    if (firstCheck === undefined) fail("NBR70_IDENTITY_MISMATCH");
+    exact(observation.resetReadySnapshotHash, firstCheck.resetReadySnapshotHash);
+    exact(
+      sha256CanonicalJson(observation.resetReadySnapshot),
+      firstCheck.resetReadySnapshotHash,
+    );
+  }
   const owner = captureReceipt.sdkOwnerIdentities.find(
     ({ ownerId }) => ownerId === observation.domainOwnerIdentity.ownerId,
   );
@@ -429,7 +442,9 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
   );
   const contributionBlockers = uniqueSortedExactSet(
     input.contribution.staticColliders
-      .filter(({ traversalBinding }) => traversalBinding.kind === "not-traversable")
+      .filter(({ runtimeRole, traversalBinding }) =>
+        runtimeRole === "scene-static-collider" &&
+        traversalBinding.kind === "not-traversable")
       .map(({ id }) => id),
   );
   exactStringSet(formalBlockers, caseBlockers);
@@ -492,6 +507,11 @@ async function verifyAllRunAttempts(input: Readonly<{
   let frozenRequest: ReturnType<typeof parseNativeBlockGenerationRequestV1> |
     undefined;
   const verifiedAttempts: VerifiedRunAttemptArtifacts[] = [];
+  const caseArtifactRoot = input.runReceipt.caseRef.slice(
+    0,
+    -"/case.json".length,
+  );
+  const runArtifactRoot = `${caseArtifactRoot}/runs/${path.basename(input.runRoot)}`;
   for (const runAttempt of input.runReceipt.attempts) {
     const attemptRoot = path.join(
       input.runRoot,
@@ -519,7 +539,10 @@ async function verifyAllRunAttempts(input: Readonly<{
       runAttempt.generationReceiptHash,
       hashNativeBlockGenerationReceiptV1(generationReceipt),
     );
-    exact(runAttempt.generationRequestRef, generationReceipt.generationRequestRef);
+    exact(
+      runAttempt.generationRequestRef,
+      `${runArtifactRoot}/attempts/${runAttempt.attemptIndex}/generation-request.json`,
+    );
     if (
       generationReceipt.outcome !== "completed" ||
       generationReceipt.cleanupOutcome !== "completed"
@@ -577,6 +600,10 @@ async function verifyAllRunAttempts(input: Readonly<{
       attempt.sourceInput.kind !== "babylon-native" ||
       attemptResult.outcome !== "completed"
     ) fail("NBR70_IDENTITY_MISMATCH");
+    exact(
+      generationReceipt.generationRequestRef,
+      attempt.sourceInput.generationRequestRef,
+    );
     exact(
       generationRequest.routeDecisionHash,
       hashSceneAuthoringRouteDecisionV1(routeDecision),
@@ -665,11 +692,6 @@ async function verifyAllRunAttempts(input: Readonly<{
       hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
       hashSceneAuthoringAttemptResultV1(attemptResult),
     );
-    exact(
-      hashNativeSceneCheckResultV1(verified.nativeSceneCheckResult),
-      hashNativeSceneCheckResultV1(checkResult),
-    );
-
     if (runAttempt.kind === "capture-rejected") {
       const gateResultBytes = await requiredFile(
         attemptRoot,
@@ -696,11 +718,14 @@ async function verifyAllRunAttempts(input: Readonly<{
     exact(captureReceipt.caseHash, input.runReceipt.caseHash);
     exact(captureReceipt.evaluationProfileRef, input.runReceipt.evaluationProfileRef);
     exact(captureReceipt.evaluationProfileHash, input.runReceipt.evaluationProfileHash);
-    exact(captureReceipt.sceneAuthoringAttemptRef, runAttempt.sceneAuthoringAttemptRef);
+    exact(
+      captureReceipt.sceneAuthoringAttemptRef,
+      attemptResult.sceneAuthoringAttemptRef,
+    );
     exact(captureReceipt.sceneAuthoringAttemptHash, runAttempt.sceneAuthoringAttemptHash);
     exact(
       captureReceipt.sceneAuthoringAttemptResultRef,
-      runAttempt.sceneAuthoringAttemptResultRef,
+      verified.manifest.sceneSource.sceneAuthoringAttemptResultRef,
     );
     exact(
       captureReceipt.sceneAuthoringAttemptResultHash,
@@ -763,9 +788,14 @@ async function verifyAllRunAttempts(input: Readonly<{
         "NBR70_CAPTURE_ARTIFACT_MISSING",
       ),
     ));
-    for (const observation of [opening, spawn, overlay, scripted]) {
+    for (const observation of [opening, spawn, overlay]) {
       assertObservationMatchesCapture(observation, captureReceipt);
     }
+    assertObservationMatchesCapture(
+      scripted,
+      captureReceipt,
+      "independent-reset",
+    );
     const blockerColliderIds = verifyBlockerEvidenceClosure({
       caseBlockerColliderIds: input.reconstructionCase.expected.colliders
         .filter(({ role }) => role === "blocker")
@@ -1219,7 +1249,12 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     hashNativeBlockGenerationRequestV1(generationRequest));
   exact(runAttempt.generationReceiptHash,
     hashNativeBlockGenerationReceiptV1(generationReceipt));
-  exact(runAttempt.generationRequestRef, generationReceipt.generationRequestRef);
+  exact(
+    runAttempt.generationRequestRef,
+    `${runReceipt.caseRef.slice(0, -"/case.json".length)}/runs/${
+      path.basename(runRoot)
+    }/attempts/${runAttempt.attemptIndex}/generation-request.json`,
+  );
   if (
     generationReceipt.outcome !== "completed" ||
     generationReceipt.cleanupOutcome !== "completed"
@@ -1264,6 +1299,10 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     hashSceneAuthoringAttemptResultV1(attemptResult));
   exact(attemptResult.sceneAuthoringAttemptHash, hashSceneAuthoringAttemptV1(attempt));
   if (attempt.sourceInput.kind !== "babylon-native") fail("NBR70_IDENTITY_MISMATCH");
+  exact(
+    generationReceipt.generationRequestRef,
+    attempt.sourceInput.generationRequestRef,
+  );
   assertNativeBlockGenerationRequestMatchesAttemptV1(
     attempt.sourceInput.generationRequestRef,
     generationRequest,
@@ -1307,9 +1346,6 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     hashSceneAuthoringAttemptV1(attempt));
   exact(hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
     hashSceneAuthoringAttemptResultV1(attemptResult));
-  exact(hashNativeSceneCheckResultV1(verified.nativeSceneCheckResult),
-    hashNativeSceneCheckResultV1(checkResult));
-
   const captureRoot = path.join(attemptRoot, "capture");
   const captureReceipt = parseFormalWorldCaptureReceiptV1(json(await requiredFile(
     captureRoot,
@@ -1325,11 +1361,16 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   exact(captureReceipt.sceneAuthoringAttemptHash, runAttempt.sceneAuthoringAttemptHash);
   exact(captureReceipt.sceneAuthoringRouteDecisionHash,
     hashSceneAuthoringRouteDecisionV1(routeDecision));
-  exact(captureReceipt.sceneAuthoringAttemptRef, runAttempt.sceneAuthoringAttemptRef);
+  exact(
+    captureReceipt.sceneAuthoringAttemptRef,
+    attemptResult.sceneAuthoringAttemptRef,
+  );
   exact(captureReceipt.sceneAuthoringAttemptResultHash,
     runAttempt.sceneAuthoringAttemptResultHash);
-  exact(captureReceipt.sceneAuthoringAttemptResultRef,
-    runAttempt.sceneAuthoringAttemptResultRef);
+  exact(
+    captureReceipt.sceneAuthoringAttemptResultRef,
+    verified.manifest.sceneSource.sceneAuthoringAttemptResultRef,
+  );
   exact(captureReceipt.worldPackageRef, runAttempt.worldPackageRef);
   exact(captureReceipt.worldPackageRootHash, runAttempt.worldPackageRootHash);
   exact(captureReceipt.worldPackageBuildReceiptHash,
@@ -1391,9 +1432,14 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     captureReceipt.colliderOverlayObservationContentHash);
   exact(hashFormalScriptedTraversalObservationV1(scripted),
     captureReceipt.scriptedTraversalContentHash);
-  for (const observation of [opening, spawn, overlay, scripted]) {
+  for (const observation of [opening, spawn, overlay]) {
     assertObservationMatchesCapture(observation, captureReceipt);
   }
+  assertObservationMatchesCapture(
+    scripted,
+    captureReceipt,
+    "independent-reset",
+  );
 
   const evaluation = parseWorldReconstructionEvaluationResultV1(json(
     await requiredFile(
@@ -1411,7 +1457,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   exact(evaluation.evaluationProfileRef, runReceipt.evaluationProfileRef);
   exact(evaluation.evaluationProfileHash, runReceipt.evaluationProfileHash);
   exact(evaluation.attemptHash, runAttempt.sceneAuthoringAttemptHash);
-  exact(evaluation.attemptRef, runAttempt.sceneAuthoringAttemptRef);
+  exact(evaluation.attemptRef, captureReceipt.sceneAuthoringAttemptRef);
   exact(evaluation.worldPackageRef, runAttempt.worldPackageRef);
   exact(evaluation.worldPackageRootHash, runAttempt.worldPackageRootHash);
   exact(evaluation.worldBuildIdentityHash, runAttempt.worldBuildIdentityHash);

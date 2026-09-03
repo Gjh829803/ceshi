@@ -36,6 +36,7 @@ import {
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
   parseWorldRuntimeSnapshotV4,
+  createBabylonNativeStaticColliderContributionV1,
   type FixedInputV1,
   type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
@@ -366,6 +367,10 @@ async function completeRunFixture(
   const caseRef = caseRefOverride ?? fixture.caseRef;
   const verified = fixture.verifiedWorldPackage;
   const attemptDirectoryPath = path.join(runDirectoryPath, "attempts/0");
+  const attemptArtifactRoot =
+    `artifact://world-reconstruction-case/${fixture.reconstructionCase.id}/runs/formal-fixture/attempts/0`;
+  const captureReceiptRef =
+    `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json`;
   const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
   await mkdir(captureDirectoryPath, { recursive: true });
   await chmod(attemptDirectoryPath, 0o700);
@@ -390,6 +395,10 @@ async function completeRunFixture(
     ["native-resources.json", new TextEncoder().encode("[]")],
     ["scene.ts", new TextEncoder().encode("export default {};\n")],
   ] as const);
+  const sourceCheckResult = Object.freeze({
+    ...verified.nativeSceneCheckResult,
+    id: "package-fixture.native-scene-check",
+  });
   const generationReceipt = parseNativeBlockGenerationReceiptV1({
     kind: "native-block-generation-receipt",
     schemaVersion: 1,
@@ -424,10 +433,10 @@ async function completeRunFixture(
   for (const [relativePath, bytes] of sourceByPath) {
     await writeFile(path.join(attemptDirectoryPath, "source", relativePath), bytes);
   }
-  await writeJson(path.join(attemptDirectoryPath, "native-check-result.json"), verified.nativeSceneCheckResult);
+  await writeJson(path.join(attemptDirectoryPath, "native-check-result.json"), sourceCheckResult);
   await writeFile(
     path.join(attemptDirectoryPath, "native-explain.txt"),
-    explainNativeSceneCheckResultV1(verified.nativeSceneCheckResult),
+    explainNativeSceneCheckResultV1(sourceCheckResult),
   );
   await writeWorldPackageDirectoryV1({
     outputDirectoryPath: path.join(attemptDirectoryPath, "world-package"),
@@ -493,6 +502,7 @@ async function completeRunFixture(
   const originalEvidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
     caseRef,
+    captureReceiptRef,
     captureReceipt: originalCaptureReceipt,
     openingObservation: openingObservationBase,
     spawnSupportObservation,
@@ -534,6 +544,7 @@ async function completeRunFixture(
   const evidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
     caseRef,
+    captureReceiptRef,
     captureReceipt,
     openingObservation,
     spawnSupportObservation,
@@ -579,13 +590,13 @@ async function completeRunFixture(
     attempts: [{
       kind: "evaluated",
       attemptIndex: 0,
-      generationRequestRef: generationReceipt.generationRequestRef,
+      generationRequestRef: `${attemptArtifactRoot}/generation-request.json`,
       generationRequestHash: hashNativeBlockGenerationRequestV1(request),
-      generationReceiptRef: "artifact://case/package-fixture/attempts/0/generation-receipt.json",
+      generationReceiptRef: `${attemptArtifactRoot}/generation-receipt.json`,
       generationReceiptHash: hashNativeBlockGenerationReceiptV1(generationReceipt),
-      sceneAuthoringAttemptRef: captureReceipt.sceneAuthoringAttemptRef,
+      sceneAuthoringAttemptRef: `${attemptArtifactRoot}/attempt.json`,
       sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(verified.sceneAuthoringAttempt),
-      sceneAuthoringAttemptResultRef: captureReceipt.sceneAuthoringAttemptResultRef,
+      sceneAuthoringAttemptResultRef: `${attemptArtifactRoot}/attempt-result.json`,
       sceneAuthoringAttemptResultHash: hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
       worldPackageRef: verified.receipt.worldPackageRef,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
@@ -593,14 +604,14 @@ async function completeRunFixture(
       worldPackageBuildReceiptHash: sha256CanonicalJson(verified.receipt),
       worldBuildIdentityRef: captureReceipt.worldBuildIdentityRef,
       worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
-      captureReceiptRef: fixture.captureReceiptRef,
+      captureReceiptRef,
       captureReceiptHash,
-      evaluationResultRef: "artifact://case/package-fixture/attempts/0/evaluation.json",
+      evaluationResultRef: `${attemptArtifactRoot}/evaluation.json`,
       evaluationResultHash: evaluationHash,
       outcome: "passed",
     }],
     finalAttemptIndex: 0,
-    finalEvaluationResultRef: "artifact://case/package-fixture/attempts/0/evaluation.json",
+    finalEvaluationResultRef: `${attemptArtifactRoot}/evaluation.json`,
     finalEvaluationResultHash: evaluationHash,
     cleanupOutcome: "completed",
   });
@@ -869,8 +880,12 @@ async function addRepairAttempt(input: Readonly<{
 }>): Promise<void> {
   const seedFixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
   const seedRequest = generationRequestFixture(seedFixture);
+  const attemptArtifactRoot =
+    `artifact://world-reconstruction-case/${seedFixture.reconstructionCase.id}/runs/formal-fixture/attempts/1`;
   const generationRequestRef =
-    "artifact://case/package-fixture/attempts/1/generation-request.json";
+    `${attemptArtifactRoot}/generation-request.json`;
+  const captureReceiptRef =
+    `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json`;
   const requestShape = parseNativeBlockGenerationRequestV1({
     ...seedRequest,
     id: "package-fixture.repair",
@@ -971,6 +986,7 @@ async function addRepairAttempt(input: Readonly<{
     captureReceipt);
   const evidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
+    captureReceiptRef,
     captureReceipt,
   });
   const evaluation = evaluateWorldReconstructionV1({
@@ -990,12 +1006,11 @@ async function addRepairAttempt(input: Readonly<{
     attemptIndex: 1,
     generationRequestRef,
     generationRequestHash: hashNativeBlockGenerationRequestV1(request),
-    generationReceiptRef:
-      "artifact://case/package-fixture/attempts/1/generation-receipt.json",
+    generationReceiptRef: `${attemptArtifactRoot}/generation-receipt.json`,
     generationReceiptHash: hashNativeBlockGenerationReceiptV1(generationReceipt),
-    sceneAuthoringAttemptRef: captureReceipt.sceneAuthoringAttemptRef,
+    sceneAuthoringAttemptRef: `${attemptArtifactRoot}/attempt.json`,
     sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(verified.sceneAuthoringAttempt),
-    sceneAuthoringAttemptResultRef: captureReceipt.sceneAuthoringAttemptResultRef,
+    sceneAuthoringAttemptResultRef: `${attemptArtifactRoot}/attempt-result.json`,
     sceneAuthoringAttemptResultHash:
       hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
     worldPackageRef: verified.receipt.worldPackageRef,
@@ -1004,10 +1019,9 @@ async function addRepairAttempt(input: Readonly<{
     worldPackageBuildReceiptHash: sha256CanonicalJson(verified.receipt),
     worldBuildIdentityRef: captureReceipt.worldBuildIdentityRef,
     worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
-    captureReceiptRef: fixture.captureReceiptRef,
+    captureReceiptRef,
     captureReceiptHash: hashFormalWorldCaptureReceiptV1(captureReceipt),
-    evaluationResultRef:
-      "artifact://case/package-fixture/attempts/1/evaluation.json",
+    evaluationResultRef: `${attemptArtifactRoot}/evaluation.json`,
     evaluationResultHash: hashWorldReconstructionEvaluationResultV1(evaluation),
     outcome: "passed" as const,
   };
@@ -1082,6 +1096,29 @@ describe("Native Block reconstruction E2E verifier", () => {
     };
     expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
       .verifyBlockerEvidenceClosure(valid)).not.toThrow();
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosure({
+        ...valid,
+        contribution: {
+          ...valid.contribution,
+          staticColliders: [
+            ...valid.contribution.staticColliders,
+            createBabylonNativeStaticColliderContributionV1({
+              id: "ground-safety-boundary:fixture",
+              runtimeRole: "ground-safety-boundary",
+              worldPositionsMetersXYZ: [
+                -1, 0, -1,
+                1, 0, -1,
+                0, 1, -1,
+              ],
+              triangleIndices: [0, 1, 2],
+              frictionRatio: 0.8,
+              restitutionRatio: 0,
+              traversalBinding: { kind: "not-traversable" },
+            }),
+          ],
+        },
+      })).not.toThrow();
     for (const invalid of [
       { ...valid, caseBlockerColliderIds: [] },
       { ...valid, caseBlockerColliderIds: ["palette-ground-blocker", "foreign"] },
