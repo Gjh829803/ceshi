@@ -8,7 +8,7 @@ const INFRASTRUCTURE = [
   /\b(?:429|502|503|504)\b/,
   /slowdown|throttl|rate.?limit/i,
   /(?:s3|sts).*?(?:unavailable|timeout|connection|transport)/i,
-  /worker_lease_expired|pod (?:evicted|lost)|node.*?(?:lost|not ready)/i,
+  /worker[-_ ]lease[-_ ]expired|pod (?:evicted|lost)|node.*?(?:lost|not ready)/i,
 ];
 
 const RECONCILE = [

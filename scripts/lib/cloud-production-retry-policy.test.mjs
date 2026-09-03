@@ -17,6 +17,9 @@ test("routes cloud infrastructure failures without consuming content attempts", 
     consumesContentAttempt: false,
     code: "CLOUD_INFRASTRUCTURE_UNAVAILABLE",
   });
+  assert.equal(classifyCloudProductionFailure(
+    "worker lease expired before a terminal progress update",
+  ).code, "CLOUD_INFRASTRUCTURE_UNAVAILABLE");
 });
 
 test("reconciles an uncertain submission instead of creating a replacement", () => {
