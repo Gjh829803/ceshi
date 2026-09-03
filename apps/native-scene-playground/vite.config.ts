@@ -615,6 +615,11 @@ export async function createNativeScenePlaygroundViteConfigV1(
       },
       plugins: [plugin],
       optimizeDeps: {
+        // Each hosted session owns fresh, role-isolated caches. Discovering the
+        // entire Runtime graph twice can monopolize the event loop before the
+        // Package readiness endpoint is able to answer. Keep optimization
+        // closed to the audited Babylon entries instead.
+        noDiscovery: true,
         include: [...HOSTED_RUNTIME_OPTIMIZE_DEPENDENCY_IDS],
       },
       server: {

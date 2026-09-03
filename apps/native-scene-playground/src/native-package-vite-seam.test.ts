@@ -202,6 +202,7 @@ describe("Native Playground verified Package Vite seam", () => {
       "runtime",
     ));
     expect(runtimeConfig.optimizeDeps).toEqual({
+      noDiscovery: true,
       include: [
         "@babylonjs/core/Maths/math.viewport.js",
         "@babylonjs/core/scene.js",
