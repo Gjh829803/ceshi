@@ -64,6 +64,17 @@ export const CLOUD_EPISODE_STAGE_PROFILE_V3 = Object.freeze([
   })),
 ]);
 
+export const CLOUD_EPISODE_SEEDANCE_CONFORMANCE_STAGE_PROFILE_V3 = Object.freeze(
+  CLOUD_EPISODE_STAGE_PROFILE_V3.filter((stage) =>
+    stage.stage_id !== "episode-publication"),
+);
+
+export function cloudEpisodeStageProfileV3(productionScope = "full") {
+  return productionScope === "seedance-conformance"
+    ? CLOUD_EPISODE_SEEDANCE_CONFORMANCE_STAGE_PROFILE_V3
+    : CLOUD_EPISODE_STAGE_PROFILE_V3;
+}
+
 export const CLOUD_EPISODE_PART_BY_STAGE_ID = Object.freeze({
   "episode-prepare": "prepare",
   "whitebox-capture": "capture",

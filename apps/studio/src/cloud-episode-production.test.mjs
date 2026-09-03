@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  cloudEpisodeFinalStageId,
   cloudEpisodeInternalStage,
   executeStudioCloudEpisode,
   loadCloudEpisodeProductionConfig,
@@ -14,6 +15,18 @@ import {
 } from "./cloud-episode-production.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+
+test("resolves Seedance-conformance as the terminal streaming checkpoint", () => {
+  assert.equal(cloudEpisodeFinalStageId(
+    "cpu-gpu-streaming-checkpoints@1",
+    { stages: [{ stage_id: "episode-conformance", status: "succeeded" }] },
+  ), "episode-conformance");
+  assert.equal(cloudEpisodeFinalStageId(
+    "cpu-gpu-streaming-checkpoints@1",
+    null,
+    "seedance-conformance",
+  ), "episode-conformance");
+});
 
 test("uses the deployment-owned Worker digest over the image-baked config", async () => {
   const workerImage = `worker@sha256:${"f".repeat(64)}`;

@@ -5,6 +5,7 @@ import {
   CLOUD_EPISODE_STAGE_PROFILE_V3,
   CLOUD_EPISODE_STAGE_PROFILE_V2,
   buildGpuCaptureQueueEntry,
+  cloudEpisodeStageProfileV3,
   parseCloudProviderJournal,
   parseGpuCaptureBatchManifest,
   selectGpuCaptureBatch,
@@ -60,6 +61,14 @@ test("48-hour production profile exposes durable post-capture checkpoints", () =
     CLOUD_EPISODE_STAGE_PROFILE_V3.at(-1).depends_on,
     ["episode-conformance"],
   );
+});
+
+test("Seedance-conformance scope stops the durable DAG before publication", () => {
+  const stages = cloudEpisodeStageProfileV3("seedance-conformance");
+  assert.equal(stages.at(-1).stage_id, "episode-conformance");
+  assert.deepEqual(stages.at(-1).depends_on, ["episode-seedance"]);
+  assert.equal(stages.some(({ stage_id }) => stage_id === "episode-publication"), false);
+  assert.equal(CLOUD_EPISODE_STAGE_PROFILE_V3.at(-1).stage_id, "episode-publication");
 });
 
 test("GPU batch below one hundred requires closed-producer evidence", () => {

@@ -19,7 +19,7 @@ import {
 } from "../lib/lwdp-generation-client.mjs";
 import {
   CLOUD_EPISODE_STAGE_PROFILE_V2,
-  CLOUD_EPISODE_STAGE_PROFILE_V3,
+  cloudEpisodeStageProfileV3,
 } from "../lib/cloud-production-run.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -60,7 +60,8 @@ export function parseCloudEpisodeRequest(value) {
   }
   required(request.sceneExecutionId, "request.sceneExecutionId");
   assertS3Uri(request.sceneManifestS3Uri);
-  if (!["full", "visual-sample"].includes(request.productionScope ?? "full")) {
+  if (!["full", "visual-sample", "seedance-conformance"]
+    .includes(request.productionScope ?? "full")) {
     throw new Error("Cloud Episode productionScope is invalid.");
   }
   if (!["legacy", "ten-style"].includes(request.styleVariantMode)) {
@@ -146,7 +147,7 @@ export async function submitCloudEpisode({
     throw new Error("Streaming checkpoint production requires ten-style mode.");
   }
   const stageProfile = effectiveExecutionProfile === "cpu-gpu-streaming-checkpoints@1"
-    ? CLOUD_EPISODE_STAGE_PROFILE_V3
+    ? cloudEpisodeStageProfileV3(productionScope)
     : CLOUD_EPISODE_STAGE_PROFILE_V2;
   const resolvedOutputPrefix = assertS3Uri(outputS3Prefix);
   const request = parseCloudEpisodeRequest({
@@ -222,6 +223,7 @@ export async function submitCloudEpisode({
       workerImage: existingRequest.workerImage,
       executionProfile: existingRequest.executionProfile,
       gpuBatch: existingRequest.gpuBatch,
+      productionScope: existingRequest.productionScope ?? "full",
       recoveredByRequestId: true,
     };
   }
@@ -289,6 +291,7 @@ export async function submitCloudEpisode({
     workerImage,
     executionProfile: request.executionProfile,
     gpuBatch: request.gpuBatch,
+    productionScope: request.productionScope ?? "full",
   };
 }
 

@@ -80,8 +80,10 @@ const persistedEpisodeIdentity = await readFile(
 ).then(JSON.parse).catch(() => null);
 const productionScope = process.env.WORLDKIT_EPISODE_PRODUCTION_SCOPE ??
   persistedEpisodeIdentity?.productionScope ?? "full";
-if (!["full", "visual-sample"].includes(productionScope)) {
-  throw new Error("Episode production scope must be full or visual-sample.");
+if (!["full", "visual-sample", "seedance-conformance"].includes(productionScope)) {
+  throw new Error(
+    "Episode production scope must be full, visual-sample, or seedance-conformance.",
+  );
 }
 const videoPipelineConfig = JSON.parse(await readFile(
   path.join(repoRoot, "config/episode-video-pipeline.json"),
@@ -859,7 +861,9 @@ try {
   if (executionPart === "full" || executionPart === "render" || fineGrainedRenderPart) {
   if (styleVariantConfig.enabled) {
     const styleUntil = styleUntilByExecutionPart[executionPart] ??
-      (productionScope === "visual-sample" ? "visual-review" : "full");
+      (productionScope === "visual-sample"
+        ? "visual-review"
+        : productionScope === "seedance-conformance" ? "conformance" : "full");
     const requiresCompleteStyleOutput = ["full", "render", "publication"]
       .includes(executionPart);
     await stage("style-variant-production",

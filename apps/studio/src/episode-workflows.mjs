@@ -251,9 +251,14 @@ const tenStyleEpisodeStageDefinitions = [
   ["style-variant-conformance", "逐段媒体一致性校验"],
   ["episode-publication", "云端产物与 Review Bundle 发布"],
 ];
-const episodeStageDefinitionsForMode = (mode) => mode === "ten-style"
-  ? tenStyleEpisodeStageDefinitions
-  : legacyEpisodeStageDefinitions;
+const episodeStageDefinitionsForMode = (mode, productionScope = "full") => {
+  const definitions = mode === "ten-style"
+    ? tenStyleEpisodeStageDefinitions
+    : legacyEpisodeStageDefinitions;
+  return productionScope === "seedance-conformance"
+    ? definitions.filter(([id]) => id !== "episode-publication")
+    : definitions;
+};
 
 async function readJson(filePath) {
   try { return JSON.parse(await readFile(filePath, "utf8")); } catch { return null; }
@@ -919,7 +924,7 @@ export function createEpisodeWorkflowService(options) {
         "worldkit-episode-style-variant-manifest" &&
       styleVariantManifest.succeededCount === styleVariantManifest.variantCount &&
       styleVariantManifest.variantCount === 10;
-    const bundleReady = record.productionScope !== "visual-sample" &&
+    const bundleReady = (record.productionScope ?? "full") === "full" &&
       record.status === "succeeded" && (styleVariantsReady || (
       playbackComparisons.length === expectedComparisonCount &&
       playbackComparisons.every((comparison) =>
@@ -1430,10 +1435,18 @@ export function createEpisodeWorkflowService(options) {
         (manifest.stageId !== "episode-render" || manifest.executionPart !== "render")) {
       throw new Error("Cloud Episode final admission requires the episode-render manifest.");
     }
-    if (record.remoteExecutionProfile === "cpu-gpu-streaming-checkpoints@1" &&
-        (manifest.stageId !== "episode-publication" ||
-          manifest.executionPart !== "publication")) {
-      throw new Error("Streaming Cloud Episode final admission requires the publication manifest.");
+    if (record.remoteExecutionProfile === "cpu-gpu-streaming-checkpoints@1") {
+      const expectedStage = record.productionScope === "seedance-conformance"
+        ? "episode-conformance"
+        : "episode-publication";
+      const expectedPart = record.productionScope === "seedance-conformance"
+        ? "conformance"
+        : "publication";
+      if (manifest.stageId !== expectedStage || manifest.executionPart !== expectedPart) {
+        throw new Error(
+          `Streaming Cloud Episode final admission requires the ${expectedStage} manifest.`,
+        );
+      }
     }
     if (typeof record.remoteWorkerImage !== "string" ||
         manifest.workerImage !== record.remoteWorkerImage) {
@@ -1481,7 +1494,9 @@ export function createEpisodeWorkflowService(options) {
       "episode/whitebox/executed-playthrough-raw-trace.json",
       "episode/whitebox/executed-playthrough-trace.json",
       "episode/whitebox/executed-playthrough-quality-report.json",
-      ...(visualSample ? [] : [`episode/bundle/${record.episodeId}-seedance-review.zip`]),
+      ...((record.productionScope ?? "full") === "full"
+        ? [`episode/bundle/${record.episodeId}-seedance-review.zip`]
+        : []),
       ...Array.from({ length: Number(record.segmentCount || 4) }, (_, index) => [
         `episode/whitebox/segment-0${index}.mp4`,
         `episode/whitebox/segment-0${index}-first-frame.png`,
@@ -1868,7 +1883,7 @@ export function createEpisodeWorkflowService(options) {
 
   async function start(sceneId, backend = "cloud", productionScope = "full") {
     if (!idPattern.test(sceneId) || !["cloud", "local"].includes(backend) ||
-        !["full", "visual-sample"].includes(productionScope)) {
+        !["full", "visual-sample", "seedance-conformance"].includes(productionScope)) {
       throw new Error("Invalid episode scene or backend.");
     }
     const existing = (await listForScene(sceneId)).find((record) => record.running);
@@ -1914,13 +1929,14 @@ export function createEpisodeWorkflowService(options) {
         remoteArtifactManifestS3Uri: null,
         remoteArtifactAdmission: null,
         remoteArtifacts: [],
-        stages: episodeStageDefinitionsForMode(styleVariantMode).map(([id, title]) => ({
+        stages: episodeStageDefinitionsForMode(styleVariantMode, productionScope)
+          .map(([id, title]) => ({
           id,
           title,
           status: "pending",
           startedAt: null,
           finishedAt: null,
-        })),
+          })),
       });
       activeCloudExecutions.set(episodeId, "submitting");
       void runCloudEpisode(sceneId, episodeId);

@@ -20,14 +20,22 @@ import { CLOUD_EPISODE_PART_BY_STAGE_ID } from
 
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
-export function cloudEpisodeFinalStageId(executionProfile, execution = null) {
-  const hasStreamingStage = execution?.stages?.some?.((stage) =>
-    stage?.stage_id === "episode-publication");
+export function cloudEpisodeFinalStageId(
+  executionProfile,
+  execution = null,
+  productionScope = "full",
+) {
+  const observedStageIds = new Set((execution?.stages ?? []).map((stage) => stage?.stage_id));
   const hasObservedStages = Array.isArray(execution?.stages) && execution.stages.length > 0;
-  return (hasObservedStages ? hasStreamingStage :
-    executionProfile === "cpu-gpu-streaming-checkpoints@1")
-    ? "episode-publication"
-    : "episode-render";
+  if (hasObservedStages) {
+    if (observedStageIds.has("episode-publication")) return "episode-publication";
+    if (observedStageIds.has("episode-conformance")) return "episode-conformance";
+    return "episode-render";
+  }
+  if (executionProfile !== "cpu-gpu-streaming-checkpoints@1") return "episode-render";
+  return productionScope === "seedance-conformance"
+    ? "episode-conformance"
+    : "episode-publication";
 }
 
 function validNodeSelector(value) {
@@ -299,7 +307,11 @@ export async function executeStudioCloudEpisode({
     manifestS3Uri: cloudArtifactManifestS3Uri(
       execution,
       stages,
-      cloudEpisodeFinalStageId(submitted.executionProfile, execution),
+      cloudEpisodeFinalStageId(
+        submitted.executionProfile,
+        execution,
+        productionScope,
+      ),
     ),
     outputS3Prefix,
     submitted,
