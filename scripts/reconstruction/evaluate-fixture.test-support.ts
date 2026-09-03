@@ -233,6 +233,7 @@ export function createEvidenceSetFixtureInputV1(
       "spawn-support",
       "topology",
     ],
+    qualityGateMode: "required-for-publication",
     maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {

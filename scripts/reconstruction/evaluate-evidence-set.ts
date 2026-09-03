@@ -186,7 +186,7 @@ export function projectColliderEvidenceRoleV1(
 export function projectMeasuredTraversalCheck(
   measured: readonly Readonly<{
     checkpointId: string;
-    outcome: "reached" | "passed" | "blocked";
+    outcome: "reached" | "passed" | "blocked" | "incomplete";
   }>[],
   criteria: readonly FormalTraversalCheckpointSpatialCriterionV1[],
   checkExpectation: "pass" | "block",
@@ -209,6 +209,9 @@ export function projectMeasuredTraversalCheck(
   const measuredById = new Map(
     measured.map((row) => [row.checkpointId, row.outcome]),
   );
+  if (measured.some(({ outcome }) => outcome === "incomplete")) {
+    return { outcome: "incomplete", checkpointIds };
+  }
   const criterionIsSatisfied = (
     criterion: FormalTraversalCheckpointSpatialCriterionV1,
   ): boolean => {

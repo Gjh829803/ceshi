@@ -527,6 +527,69 @@ describe("worldkit CLI", () => {
     expect(stderr).toBe("");
   });
 
+  it("returns success for a non-accepted report-only preview", async () => {
+    let stdout = "";
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
+      (chunk) => {
+        stdout += String(chunk);
+        return true;
+      },
+    );
+    const result = Object.freeze({
+      kind: "world-reconstruction-production-result" as const,
+      schemaVersion: 1 as const,
+      caseId: "case-a",
+      caseRef: "artifact://world-reconstruction-case/case-a/case.json",
+      runId: "run-a",
+      outcome: "preview-ready" as const,
+      publicationStatus: "not-accepted" as const,
+      qualityStage: "evaluation" as const,
+      qualityOutcome: "failed" as const,
+      attemptCount: 4 as const,
+      diagnosticCodes: Object.freeze([
+        "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+      ]),
+      cleanupOutcome: "completed" as const,
+      previewWorldPackagePath: "/case/runs/run-a/attempts/3/world-package",
+      previewWorldPackageRef:
+        `package://world-package/sha256/${"1".repeat(64)}`,
+      previewWorldPackageRootHash: `sha256:${"1".repeat(64)}` as const,
+      previewCaptureDirectoryPath: "/case/runs/run-a/attempts/3/capture",
+      previewOpeningPath: "/case/runs/run-a/attempts/3/capture/opening.png",
+      previewOpeningRef:
+        "artifact://world-reconstruction-case/case-a/runs/run-a/attempts/3/capture/opening.png",
+      previewCaptureReceiptPath:
+        "/case/runs/run-a/attempts/3/capture/formal-world-capture-receipt.json",
+      previewCaptureReceiptHash: `sha256:${"2".repeat(64)}` as const,
+      previewEvaluationPath: "/case/runs/run-a/attempts/3/evaluation.json",
+      previewEvaluationRef:
+        "artifact://world-reconstruction-case/case-a/runs/run-a/attempts/3/evaluation.json",
+      previewEvaluationHash: `sha256:${"3".repeat(64)}` as const,
+      runReceiptPath: "/case/runs/run-a/run-receipt.json",
+      runReceiptRef:
+        "artifact://world-reconstruction-case/case-a/runs/run-a/run-receipt.json",
+      runReceiptHash: `sha256:${"4".repeat(64)}` as const,
+      launchWorkingDirectoryPath: "/case/runs/run-a",
+      launchCommand:
+        "pnpm worldkit native run attempts/3/world-package --port 5174 --json",
+    });
+    try {
+      await expect(main([
+        "reconstruct",
+        "run",
+        "case.json",
+        "--output",
+        "runs/run-a",
+        "--json",
+      ], {
+        runWorldReconstructionProductionV1: async () => result,
+      })).resolves.toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+    expect(stdout).toBe(`${stringifyCanonicalJson(result)}\n`);
+  });
+
   it("prints one stable reconstruction diagnostic without leaking a thrown cause", async () => {
     let stdout = "";
     let stderr = "";

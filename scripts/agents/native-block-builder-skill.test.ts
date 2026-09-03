@@ -128,6 +128,11 @@ describe("Native Block Builder Skill", () => {
     expect(skill).toContain("ground-supported Spawn");
     expect(skill).toContain("`context/case.json.expected.groundConnectivity`");
     expect(skill).toContain("every declared traversal-band waypoint");
+    expect(skill).toContain("Inspect `inputs/world-plan.png` before choosing coordinates");
+    expect(skill).toContain("Inspect `inputs/entry-whitebox-target.png` before composing visual groups");
+    expect(outputContract).toContain(
+      "A Builder that omits either named planning image has not completed reconstruction preflight.",
+    );
     expect(skill).toContain("final smoothed collision triangles");
     expect(skill).toContain("place stair and slope transitions outside that landing");
     expect(skill).toContain("structural admission evidence, not a Route/Nav product claim");

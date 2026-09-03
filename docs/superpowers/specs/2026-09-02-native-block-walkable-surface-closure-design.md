@@ -9,6 +9,21 @@
 
 ## Implementation revision record
 
+- **2026-09-04 — v2 production-loop usability parity correction:** the previous
+  adaptation preserved v2 geometry/runtime behavior but did not preserve its
+  causal Builder feedback loop. The Native Builder was told to use the frozen
+  world plan and entry-composition target without receiving either image, while
+  a traversal checkpoint that could not be measured was promoted to a Capture
+  infrastructure failure and erased the otherwise admitted preview. The current
+  correction binds both Planner images into every generation/repair task,
+  records an unmeasured traversal checkpoint as explicit incomplete evidence,
+  and separates hard Runtime admission from reconstruction-quality disposition.
+  A hash-bound Evaluation Profile chooses `report-only` or
+  `required-for-publication`; both modes execute the same checks and bounded
+  repairs, but `report-only` preserves a runnable, explicitly non-accepted
+  preview after quality budget exhaustion. No threshold is lowered and no
+  Native Check, Ground Analysis, Package, Runtime, Spawn, Support, Collider,
+  identity, determinism or cleanup failure becomes previewable.
 - **2026-09-03 — deep v2/current-contract parity audit:** the source audit now
   includes the supplemental Block World production changes rather than treating
   the pinned v2 branch as the only evidence. The current replacement keeps actual
@@ -154,7 +169,7 @@ No v2 capability is silently dropped. Each row has one explicit disposition.
 | Planner image lineage and complete-world continuation | current Planner/Scene Brief owns planning, but parity is not recorded here | retain current Planner owner; add NBR acceptance evidence, not a second Planner |
 | Builder structural self-repair in the same task | current Native Check/Explain and bounded production repair exist | retain current task/Host split; self-check cannot bypass trusted Host replay and every post-Package repair gets a new identity |
 | route course, staircase structure and semantic target pose guidance | partially implicit | migrate into the current Native Builder Skill; a new serialized per-target facing/Capture contract remains owned by NBR-70 |
-| Builder preflight visual comparison | superseded by authoring Capture plus formal Package-bound Capture/evaluation | retain stronger current evidence; make its actionable diagnostics visible to the repair Agent; do not restore a Three software renderer as product truth |
+| Builder preflight visual comparison | only partially adapted: formal Package-bound Capture/evaluation exists, but the Native Builder did not receive the frozen Planner images and an unmeasured traversal checkpoint could abort all Capture publication | migrate the causal behavior, not the Three renderer: bind the world plan and entry target as immutable named Builder inputs, feed Package-bound Capture/evaluation evidence into bounded repairs, and preserve an admitted preview when quality evidence remains failed/incomplete |
 | directed door/portal space transitions | intentionally deferred | assign to `WRC-EVT-1`; do not hide it inside surface closure |
 | cloud/water support and non-ground reachability | current Traversal Capability Envelope is ground-only | explicit deferral to Movement/Medium owners; an air Spawn makes this ground report measurement-only but proves no flight or water capability |
 | interaction identities and independently addressable blocks | current gameplay/event work is separate | preserve logical Block identities; implementation belongs to `WRC-EVT-1` |
@@ -399,13 +414,55 @@ second Planner job. Acceptance nevertheless requires the useful v2 reconstructio
 - structural admission, formal Package-bound Capture, automated reconstruction scores and human
   play inspection remain separate evidence layers.
 
+The two Planner images are mandatory named, hash-bound inputs to every initial
+Builder and repair task:
+
+- `world-plan.png` owns orientation, complete-world extent, route/junction
+  topology and coherent hidden continuation;
+- `entry-whitebox-target.png` owns entry framing, left/right and near/far
+  placement, silhouette scale, depth order and occlusion intent.
+
+They are reference evidence inside the existing Case/Generation Request
+identity. They do not create a shadow Plan, third Scene Source or second Camera
+owner. The Builder receives them under those semantic asset names rather than
+as anonymous `reference-N` images. The uploaded user reference remains
+separately named and retains visible-evidence priority.
+
+Quality enforcement is frozen by one required Evaluation Profile field:
+
+```ts
+qualityGateMode: "report-only" | "required-for-publication";
+```
+
+This is an intentional policy mode, not legacy compatibility. Both values run
+the same Formal Capture, seven-dimension evaluation and at-most-three repair
+Attempts. `required-for-publication` retains the strict final GO behavior.
+`report-only`, which is the default for newly mapped exploratory Native Cases,
+never converts a failed or incomplete quality result into a pass; after the
+repair budget is exhausted it returns an identity-bound preview result with the
+admitted Package path, exact diagnostic codes, surviving Capture/evaluation
+evidence and a stable `worldkit native run` command. Automation can therefore
+distinguish accepted publication from human-inspectable output without losing
+the world.
+
+The following remain hard, mode-independent admission failures: Native source
+or authority audit, deterministic replay, budget, Ground Analysis, Package or
+Receipt identity, Runtime startup/readiness, SDK-owned Spawn/Support/Collider,
+lifecycle and cleanup. They produce no runnable preview. Opening composition,
+semantic silhouette, measured topology and scripted traversal quality are
+repair/evaluation evidence after Runtime admission. A checkpoint that finishes
+without proving either side is `incomplete` evidence; it must not be mislabeled
+as pass/block and must not be thrown as Capture infrastructure failure. A true
+Browser, Runtime, screenshot or identity failure still closes Capture.
+
 The existing bounded repair loop may change only Native authoring source/resources. A ground failure
 names the affected group/Block/region and the required structural change. A pre-Package Ground Analysis
 rejection starts a new Attempt from immutable source/check/logical-ground/report evidence; that rejected
 Attempt owns no Package or Capture. The repaired Attempt must pass Check and Ground Analysis before it can
 create a Candidate, Package, Receipt or Capture. Exceeding the repair budget preserves the reached evidence
-for diagnosis, but Native Check, Ground Analysis, Package or Runtime-admission failure remains
-non-previewable. Prior-evidence selection never disables the rest of the frozen Case: a Ground Analysis
+for diagnosis. A quality-only failure follows the frozen `qualityGateMode`, but Native Check, Ground
+Analysis, Package or Runtime-admission failure remains non-previewable. Prior-evidence selection never
+disables the rest of the frozen Case: a Ground Analysis
 repair must preserve the opening regions, anchors and depth order from `case.json`. It connects support with
 the correct ground/route group and cannot stretch a ridge, cliff, landmark, structure or background group
 toward Spawn to satisfy connectivity. Formal opening depth order remains the deterministic ordering of each

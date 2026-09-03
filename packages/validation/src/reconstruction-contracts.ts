@@ -169,6 +169,7 @@ export interface WorldReconstructionEvaluationProfileV1 {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly dimensionIds: readonly WorldReconstructionDimensionIdV1[];
+  readonly qualityGateMode: "report-only" | "required-for-publication";
   readonly maximumRepairAttemptCount: 3;
   readonly builderSelfRepairAttemptCount: 3;
   readonly thresholds: WorldReconstructionThresholdsV1;
@@ -814,7 +815,8 @@ const CASE_FIELDS = [
   "acceptanceTargetRefs", "requiredEvidenceProfileRefs", "expected",
 ] as const;
 const PROFILE_FIELDS = [
-  "kind", "schemaVersion", "id", "dimensionIds", "maximumRepairAttemptCount",
+  "kind", "schemaVersion", "id", "dimensionIds", "qualityGateMode",
+  "maximumRepairAttemptCount",
   "builderSelfRepairAttemptCount", "thresholds", "requiredEvidenceByDimension",
 ] as const;
 const EVIDENCE_FIELDS = [
@@ -1602,6 +1604,12 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
   if (source.kind !== "world-reconstruction-evaluation-profile") fail(contract, "kind", "unexpected kind");
   exactInteger(source.schemaVersion, 1, contract, "schemaVersion");
   const dimensionIds = exactDimensions(source.dimensionIds, contract, "dimensionIds");
+  const qualityGateMode = enumValue(
+    source.qualityGateMode,
+    ["report-only", "required-for-publication"] as const,
+    contract,
+    "qualityGateMode",
+  );
   exactInteger(source.maximumRepairAttemptCount, 3, contract, "maximumRepairAttemptCount");
   exactInteger(source.builderSelfRepairAttemptCount, 3, contract, "builderSelfRepairAttemptCount");
   const thresholdsSource = object(source.thresholds, contract, "thresholds");
@@ -1637,7 +1645,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
     return Object.freeze({ dimensionId, evidenceProfileRefs: sortedStrings(row.evidenceProfileRefs, contract, `${path}/evidenceProfileRefs`) });
   });
   if (requiredEvidenceByDimension.length !== 7) fail(contract, "requiredEvidenceByDimension", "must cover all seven dimensions");
-  return freeze({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: text(source.id, contract, "id"), dimensionIds, maximumRepairAttemptCount: 3, builderSelfRepairAttemptCount: 3, thresholds, requiredEvidenceByDimension: Object.freeze(requiredEvidenceByDimension) });
+  return freeze({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: text(source.id, contract, "id"), dimensionIds, qualityGateMode, maximumRepairAttemptCount: 3, builderSelfRepairAttemptCount: 3, thresholds, requiredEvidenceByDimension: Object.freeze(requiredEvidenceByDimension) });
 }
 
 export function worldReconstructionEvidenceProfileClosureMatchesV1(

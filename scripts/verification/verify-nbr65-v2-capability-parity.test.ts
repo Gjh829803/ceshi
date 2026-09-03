@@ -38,7 +38,9 @@ describe("NBR-65 v2 capability parity verifier", () => {
       "ergonomic-block-and-grid-authoring",
       "ground-movement-and-contact-correction",
       "ground-only-edge-protection",
+      "incomplete-traversal-evidence",
       "metric-shapes-lattice-overlap",
+      "named-planning-image-builder-feedback",
       "neutral-runtime-inspection-lighting",
       "package-capture-and-evaluation",
       "palette-visual-and-collider-groups",
@@ -46,6 +48,7 @@ describe("NBR-65 v2 capability parity verifier", () => {
       "playthrough-episode-and-video",
       "provider-neutral-block-manifest",
       "reachable-space-metrics",
+      "report-only-quality-preview",
       "route-course-and-semantic-pose-guidance",
       "safe-exploration-start-and-capture-health",
       "semantic-front-oriented-target-triview",
@@ -81,6 +84,9 @@ describe("NBR-65 v2 capability parity verifier", () => {
       "continuous-native-runtime-traversal",
       "bounded-four-plane-contact-correction",
       "route-course-and-semantic-pose-guidance",
+      "named-planning-image-builder-feedback",
+      "incomplete-traversal-evidence",
+      "report-only-quality-preview",
     ]) {
       expect(report.rows.find((row) => row.capabilityId === capabilityId))
         .toMatchObject({ status: "passed", diagnostics: [] });

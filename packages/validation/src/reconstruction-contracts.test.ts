@@ -137,6 +137,7 @@ const profileValue = () => ({
   schemaVersion: 1,
   id: "cloud-temple.profile",
   dimensionIds: [...DIMENSIONS],
+  qualityGateMode: "report-only",
   maximumRepairAttemptCount: 3,
   builderSelfRepairAttemptCount: 3,
   thresholds: {
@@ -869,6 +870,10 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionEvaluationProfileV1({ ...profileValue(), builderSelfRepairAttemptCount: 0 })).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID",
     );
+    expect(() => parseWorldReconstructionEvaluationProfileV1({
+      ...profileValue(),
+      qualityGateMode: "disabled",
+    })).toThrowError("WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID");
   });
 
   it("requires internally consistent Attempt, Package, and Capture evidence identities", () => {

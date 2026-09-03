@@ -445,10 +445,10 @@ export interface FormalScriptedTraversalObservationV1
     }>[];
     checkpoints: readonly Readonly<{
       checkpointId: string;
-      outcome: "reached" | "passed" | "blocked";
+      outcome: "reached" | "passed" | "blocked" | "incomplete";
       observedAtTick: number;
     }>[];
-    outcome: "passed" | "blocked";
+    outcome: "passed" | "blocked" | "incomplete";
     observedTopologyRelations: readonly FormalObservedTopologyRelationV1[];
   }>[];
 }
@@ -3298,7 +3298,7 @@ export function parseFormalScriptedTraversalObservationV1(
           ),
           outcome: enumValue(
             checkpoint.outcome,
-            ["reached", "passed", "blocked"] as const,
+            ["reached", "passed", "blocked", "incomplete"] as const,
             contract,
             `${checkpointPath}/outcome`,
           ),
@@ -3319,14 +3319,10 @@ export function parseFormalScriptedTraversalObservationV1(
     );
     const outcome = enumValue(
       row.outcome,
-      ["passed", "blocked"] as const,
+      ["passed", "blocked", "incomplete"] as const,
       contract,
       `${path}/outcome`,
     );
-    if (
-      (checkExpectation === "pass" && outcome !== "passed") ||
-      (checkExpectation === "block" && outcome !== "blocked")
-    ) fail(contract, `${path}/outcome`, "must satisfy the requested measured outcome");
     return freeze({
       id: text(row.id, contract, `${path}/id`),
       acceptanceTargetRef: text(

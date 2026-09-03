@@ -145,6 +145,38 @@ async function fixture(): Promise<ProductionFixtureV1> {
   });
 }
 
+async function setQualityGateMode(
+  value: ProductionFixtureV1,
+  qualityGateMode: "report-only" | "required-for-publication",
+): Promise<void> {
+  const caseValue = parseWorldReconstructionCaseV1(JSON.parse(
+    await readFile(value.casePath, "utf8"),
+  ));
+  const profilePath = path.join(
+    value.caseRoot,
+    caseValue.evaluationProfileRef,
+  );
+  const profile = parseWorldReconstructionEvaluationProfileV1({
+    ...JSON.parse(await readFile(profilePath, "utf8")),
+    qualityGateMode,
+  });
+  const joinedCase = parseWorldReconstructionCaseV1({
+    ...caseValue,
+    evaluationProfileHash:
+      hashWorldReconstructionEvaluationProfileV1(profile),
+  });
+  await Promise.all([
+    writeFile(
+      profilePath,
+      worldReconstructionEvaluationProfileCanonicalBytesV1(profile),
+    ),
+    writeFile(
+      value.casePath,
+      worldReconstructionCaseCanonicalBytesV1(joinedCase),
+    ),
+  ]);
+}
+
 function nativeRoute(): SceneAuthoringRouteDecisionV1 {
   return decideSceneAuthoringRouteV1({
     id: `${CASE_ID}-route`,
@@ -240,9 +272,11 @@ async function receiptFor(
   });
 }
 
-async function publishFailedEvaluationArtifacts(
+async function publishQualityEvaluationArtifacts(
   value: ProductionFixtureV1,
   baseReceipt: WorldReconstructionRunReceiptV1,
+  qualityOutcome: "failed" | "incomplete" = "failed",
+  hardFailure = false,
 ): Promise<Readonly<{
   receipt: WorldReconstructionRunReceiptV1;
   publishArtifacts: () => Promise<void>;
@@ -251,7 +285,7 @@ async function publishFailedEvaluationArtifacts(
   const acceptanceTargetRef = parseWorldReconstructionCaseV1(JSON.parse(
     await readFile(value.casePath, "utf8"),
   )).acceptanceTargetRefs[0]!;
-  const diagnostic = {
+  const failedDiagnostic = {
     kind: "world-reconstruction-diagnostic",
     schemaVersion: 1,
     id: "rejected-evaluation-opening-drift",
@@ -279,6 +313,61 @@ async function publishFailedEvaluationArtifacts(
       instruction: "Resize the opening target.",
     },
   } as const;
+  const incompleteDiagnostic = {
+    kind: "world-reconstruction-diagnostic",
+    schemaVersion: 1,
+    id: "rejected-evaluation-critical-traversal-missing",
+    code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
+    dimensionId: "critical-traversal",
+    acceptanceTargetRef,
+    targetRef: acceptanceTargetRef,
+    targetId: "opening-target",
+    metricId: "critical-traversal-evidence",
+    details: {
+      kind: "presence-mismatch",
+      expectedValue: "present",
+      actualValue: "missing",
+      correctionDirection: "add",
+    },
+    evidenceRefs: [`${CASE_ARTIFACT_ROOT}/evidence/critical-traversal.json`],
+    message: "Required traversal evidence is missing.",
+  } as const;
+  const hardDiagnostic = {
+    kind: "world-reconstruction-diagnostic",
+    schemaVersion: 1,
+    id: "rejected-evaluation-collider-missing",
+    code: "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
+    dimensionId: "collider",
+    acceptanceTargetRef,
+    targetRef: acceptanceTargetRef,
+    targetId: "opening-target",
+    metricId: "collider-contribution-presence",
+    details: {
+      kind: "presence-mismatch",
+      expectedValue: "present",
+      actualValue: "missing",
+      correctionDirection: "add",
+    },
+    evidenceRefs: [`${CASE_ARTIFACT_ROOT}/evidence/collider.json`],
+    message: "Required collider contribution is missing.",
+    repairAction: {
+      kind: "revise-native-source",
+      operation: "add",
+      targetKind: "static-collider",
+      targetId: "opening-target",
+      instruction: "Add the required explicit Collider contribution.",
+    },
+  } as const;
+  const diagnostic = hardFailure
+    ? hardDiagnostic
+    : qualityOutcome === "failed"
+      ? failedDiagnostic
+      : incompleteDiagnostic;
+  const affectedDimensionId = hardFailure
+    ? "collider"
+    : qualityOutcome === "failed"
+      ? "opening-composition"
+      : "critical-traversal";
   const dimensionIds = [
     "collider",
     "critical-traversal",
@@ -306,17 +395,22 @@ async function publishFailedEvaluationArtifacts(
     worldBuildIdentityHash: terminal.worldBuildIdentityHash,
     captureReceiptRef: terminal.captureReceiptRef,
     captureReceiptHash: terminal.captureReceiptHash,
-    outcome: "failed",
+    outcome: qualityOutcome,
     diagnostics: [diagnostic],
     dimensions: dimensionIds.map((dimensionId) => ({
       dimensionId,
-      status: dimensionId === "opening-composition" ? "failed" : "passed",
-      metrics: [{
-        kind: "boolean-presence",
-        isPresent: dimensionId !== "opening-composition",
-      }],
+      status: dimensionId === affectedDimensionId
+        ? qualityOutcome
+        : "passed",
+      metrics: dimensionId === affectedDimensionId &&
+          qualityOutcome === "incomplete"
+        ? []
+        : [{
+            kind: "boolean-presence",
+            isPresent: dimensionId !== affectedDimensionId,
+          }],
       evidenceRefs: [`${CASE_ARTIFACT_ROOT}/evidence/${dimensionId}.json`],
-      diagnosticIds: dimensionId === "opening-composition"
+      diagnosticIds: dimensionId === affectedDimensionId
         ? [diagnostic.id]
         : [],
       identity: {
@@ -330,10 +424,10 @@ async function publishFailedEvaluationArtifacts(
   const evaluationHash = hashWorldReconstructionEvaluationResultV1(evaluation);
   const receipt = parseWorldReconstructionRunReceiptV1({
     ...baseReceipt,
-    outcome: "failed",
+    outcome: qualityOutcome,
     attempts: baseReceipt.attempts.map((attempt) => ({
       ...attempt,
-      outcome: "failed",
+      outcome: qualityOutcome,
       evaluationResultHash: evaluationHash,
     })),
     finalEvaluationResultHash: evaluationHash,
@@ -1004,10 +1098,99 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(owners.publishFinal).not.toHaveBeenCalled();
   });
 
+  it("delivers an admitted report-only Package after opening quality repair is exhausted", async () => {
+    const value = await fixture();
+    await setQualityGateMode(value, "report-only");
+    const receipt = await receiptFor(value);
+    const { owners: baseOwners } = ownersFor(value, receipt);
+    const rejectedWorldPackagePath = path.join(
+      value.outputDirectoryPath,
+      "attempts",
+      "3",
+      "world-package",
+    );
+    const rejectedCaptureDirectoryPath = path.join(
+      value.outputDirectoryPath,
+      "attempts",
+      "3",
+      "rejected-capture",
+    );
+    const rejectedOpeningPath = path.join(
+      rejectedCaptureDirectoryPath,
+      "opening.png",
+    );
+    const openingGateResultPath = path.join(
+      rejectedCaptureDirectoryPath,
+      "opening-composition-gate-result.json",
+    );
+    const rejectedOpeningRef =
+      `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/3/rejected-capture/opening.png`;
+    const openingGateResultRef =
+      `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/3/rejected-capture/` +
+      "opening-composition-gate-result.json";
+    const owners = Object.freeze({
+      ...baseOwners,
+      runCore: vi.fn(async () => {
+        throw new WorldReconstructionRunClosedErrorV1(
+          [
+            "WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED",
+            "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+          ],
+          "completed",
+          undefined,
+          {
+            rejectedWorldPackagePath,
+            rejectedWorldPackageRef:
+              `package://world-package/sha256/${"8".repeat(64)}`,
+            rejectedWorldPackageRootHash: H("8"),
+            rejectedCaptureDirectoryPath,
+            rejectedOpeningPath,
+            rejectedOpeningRef,
+            openingGateResultPath,
+            openingGateResultRef,
+            openingGateResultHash: H("e"),
+          },
+        );
+      }),
+    });
+
+    await expect(run(value, owners)).resolves.toEqual({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: CASE_ID,
+      caseRef: CASE_REF,
+      runId: RUN_ID,
+      outcome: "preview-ready",
+      publicationStatus: "not-accepted",
+      qualityStage: "opening-composition",
+      qualityOutcome: "failed",
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED",
+        "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+      ],
+      cleanupOutcome: "completed",
+      previewWorldPackagePath: rejectedWorldPackagePath,
+      previewWorldPackageRef:
+        `package://world-package/sha256/${"8".repeat(64)}`,
+      previewWorldPackageRootHash: H("8"),
+      previewCaptureDirectoryPath: rejectedCaptureDirectoryPath,
+      previewOpeningPath: rejectedOpeningPath,
+      previewOpeningRef: rejectedOpeningRef,
+      openingGateResultPath,
+      openingGateResultRef,
+      openingGateResultHash: H("e"),
+      launchWorkingDirectoryPath: value.outputDirectoryPath,
+      launchCommand:
+        "pnpm worldkit native run attempts/3/world-package --port 5174 --json",
+    });
+    expect(owners.verifyRun).not.toHaveBeenCalled();
+    expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
   it("returns identity-bound playable evidence and exact diagnostics for a failed evaluation", async () => {
     const value = await fixture();
     const baseReceipt = await receiptFor(value, { outcome: "failed" });
-    const failedEvaluation = await publishFailedEvaluationArtifacts(
+    const failedEvaluation = await publishQualityEvaluationArtifacts(
       value,
       baseReceipt,
     );
@@ -1078,6 +1261,166 @@ describe("runWorldReconstructionProductionV1", () => {
         `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/run-receipt.json`,
       runReceiptHash: hashWorldReconstructionRunReceiptV1(receipt),
     });
+    expect(owners.verifyRun).not.toHaveBeenCalled();
+    expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
+  it("delivers a non-accepted report-only preview after evaluation repair is exhausted", async () => {
+    const value = await fixture();
+    await setQualityGateMode(value, "report-only");
+    const baseReceipt = await receiptFor(value, { outcome: "failed" });
+    const failedEvaluation = await publishQualityEvaluationArtifacts(
+      value,
+      baseReceipt,
+    );
+    const { receipt } = failedEvaluation;
+    const defaultOwners = ownersFor(value, receipt).owners;
+    const owners = {
+      ...defaultOwners,
+      runCore: vi.fn(async (input) => {
+        await failedEvaluation.publishArtifacts();
+        await publishReceipt(input.outputDirectoryPath, receipt);
+        return receipt;
+      }),
+    };
+    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
+
+    await expect(run(value, owners)).resolves.toEqual({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: CASE_ID,
+      caseRef: CASE_REF,
+      runId: RUN_ID,
+      outcome: "preview-ready",
+      publicationStatus: "not-accepted",
+      qualityStage: "evaluation",
+      qualityOutcome: "failed",
+      attemptCount: 1,
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT"],
+      cleanupOutcome: "completed",
+      previewWorldPackagePath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "world-package",
+      ),
+      previewWorldPackageRef: terminal.worldPackageRef,
+      previewWorldPackageRootHash: terminal.worldPackageRootHash,
+      previewCaptureDirectoryPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "capture",
+      ),
+      previewOpeningPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "capture",
+        "opening.png",
+      ),
+      previewOpeningRef:
+        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/capture/opening.png`,
+      previewCaptureReceiptPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "capture",
+        "formal-world-capture-receipt.json",
+      ),
+      previewCaptureReceiptHash: terminal.captureReceiptHash,
+      previewEvaluationPath: path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "evaluation.json",
+      ),
+      previewEvaluationRef: terminal.evaluationResultRef,
+      previewEvaluationHash: terminal.evaluationResultHash,
+      runReceiptPath: path.join(value.outputDirectoryPath, "run-receipt.json"),
+      runReceiptRef:
+        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/run-receipt.json`,
+      runReceiptHash: hashWorldReconstructionRunReceiptV1(receipt),
+      launchWorkingDirectoryPath: value.outputDirectoryPath,
+      launchCommand:
+        "pnpm worldkit native run attempts/0/world-package --port 5174 --json",
+    });
+    expect(owners.verifyRun).not.toHaveBeenCalled();
+    expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
+  it("delivers incomplete soft evidence as a report-only preview without inventing a pass", async () => {
+    const value = await fixture();
+    await setQualityGateMode(value, "report-only");
+    const baseReceipt = await receiptFor(value, { outcome: "incomplete" });
+    const incompleteEvaluation = await publishQualityEvaluationArtifacts(
+      value,
+      baseReceipt,
+      "incomplete",
+    );
+    const { receipt } = incompleteEvaluation;
+    const defaultOwners = ownersFor(value, receipt).owners;
+    const owners = {
+      ...defaultOwners,
+      runCore: vi.fn(async (input) => {
+        await incompleteEvaluation.publishArtifacts();
+        await publishReceipt(input.outputDirectoryPath, receipt);
+        return receipt;
+      }),
+    };
+
+    const result = await run(value, owners);
+    expect(result).toMatchObject({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: CASE_ID,
+      caseRef: CASE_REF,
+      runId: RUN_ID,
+      outcome: "preview-ready",
+      publicationStatus: "not-accepted",
+      qualityStage: "evaluation",
+      qualityOutcome: "incomplete",
+      attemptCount: 1,
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"],
+      cleanupOutcome: "completed",
+      launchWorkingDirectoryPath: value.outputDirectoryPath,
+      launchCommand:
+        "pnpm worldkit native run attempts/0/world-package --port 5174 --json",
+    });
+    expect(result).not.toHaveProperty("finalDirectoryPath");
+    expect(owners.verifyRun).not.toHaveBeenCalled();
+    expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
+  it("keeps Collider failure rejected even for a report-only Case", async () => {
+    const value = await fixture();
+    await setQualityGateMode(value, "report-only");
+    const baseReceipt = await receiptFor(value, { outcome: "failed" });
+    const failedEvaluation = await publishQualityEvaluationArtifacts(
+      value,
+      baseReceipt,
+      "failed",
+      true,
+    );
+    const { receipt } = failedEvaluation;
+    const defaultOwners = ownersFor(value, receipt).owners;
+    const owners = {
+      ...defaultOwners,
+      runCore: vi.fn(async (input) => {
+        await failedEvaluation.publishArtifacts();
+        await publishReceipt(input.outputDirectoryPath, receipt);
+        return receipt;
+      }),
+    };
+
+    const result = await run(value, owners);
+    expect(result).toMatchObject({
+      outcome: "rejected-evaluation",
+      runOutcome: "failed",
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_COLLIDER_MISSING"],
+      cleanupOutcome: "completed",
+    });
+    expect(result).not.toHaveProperty("launchCommand");
     expect(owners.verifyRun).not.toHaveBeenCalled();
     expect(owners.publishFinal).not.toHaveBeenCalled();
   });

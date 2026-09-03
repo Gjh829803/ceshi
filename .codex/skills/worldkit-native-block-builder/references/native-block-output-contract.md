@@ -6,6 +6,8 @@ This reference is an AI-facing authoring guide. The installed package types and 
 
 Treat the frozen Generation Request, Scene Brief, reference inputs, API/Profile context, and `native-scene.bootstrap.json` as immutable. The Host derives the Bootstrap as a read-only Native startup projection: it carries the seed, Gameplay Bootstrap ref, controlled Subject identity, opening-camera numeric values, and Spawn Marker identity. World bounds remain a separate WorldPackage-owned context input, while Subject and Camera resource closure remain owned by `WorldRuntimeBootstrapV1`. Do not duplicate or override those fields in generated JSON.
 
+Reference inputs have stable semantic filenames. Read `world-plan.png` for complete-world orientation, footprint, routes, junctions and hidden continuation. Read `entry-whitebox-target.png` for opening-frame placement, silhouette scale, depth order and occlusion. Read `reference-<index>.*` for the user's visible evidence. A Builder that omits either named planning image has not completed reconstruction preflight.
+
 Write only:
 
 1. `scene.ts`: the Babylon Native Scene Module.

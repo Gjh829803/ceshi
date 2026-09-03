@@ -850,7 +850,7 @@ describe("formal world capture provider", () => {
       .captureTraversalChecks(fixture, runtimeSessionId, "player", ports);
 
     expect(checks).toHaveLength(2);
-    expect(checks.every(({ outcome }) => outcome === "passed")).toBe(true);
+    expect(checks.every(({ outcome }) => outcome === "blocked")).toBe(true);
     expect(checks.map(({ checkpoints }) => checkpoints)).toEqual([
       [{ checkpointId: "spawn", outcome: "blocked", observedAtTick: 2 }],
       [{ checkpointId: "spawn", outcome: "blocked", observedAtTick: 2 }],
@@ -859,7 +859,7 @@ describe("formal world capture provider", () => {
       observedTopologyRelations.length === 0)).toBe(true);
   });
 
-  it("still rejects a block check that cannot prove contact with its frozen face", async () => {
+  it("publishes incomplete evidence when a block check cannot prove contact with its frozen face", async () => {
     const runtimeSessionId = "runtime.formal.provider-block-unmeasured";
     const { ports } = traversalPorts(runtimeSessionId, false, [0, 1, 0]);
     const fixture = traversalRequestFixture();
@@ -895,7 +895,16 @@ describe("formal world capture provider", () => {
 
     await expect(FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1
       .captureTraversalChecks(request, runtimeSessionId, "player", ports))
-      .rejects.toThrow("BABYLON_FORMAL_CAPTURE_BLOCK_CHECKPOINT_UNMEASURED");
+      .resolves.toEqual([expect.objectContaining({
+        id: fixture.scriptedTraversal.checks[0]!.id,
+        outcome: "incomplete",
+        checkpoints: [{
+          checkpointId: "gate",
+          outcome: "incomplete",
+          observedAtTick: 2,
+        }],
+        observedTopologyRelations: [],
+      })]);
   });
 
   it("freezes the rendered controlled Subject projection for the opening gate", () => {

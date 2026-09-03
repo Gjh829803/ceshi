@@ -121,6 +121,7 @@ function profile() {
     schemaVersion: 1,
     id: "cloud-temple.profile",
     dimensionIds: [...DIMENSIONS],
+    qualityGateMode: "required-for-publication",
     maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {

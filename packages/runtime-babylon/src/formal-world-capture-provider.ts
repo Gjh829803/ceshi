@@ -274,7 +274,7 @@ export function measureFormalTraversalCheckpointV1(input: Readonly<{
   isFinalTick: boolean;
 }>): Readonly<{
   checkpointId: string;
-  outcome: "reached" | "passed" | "blocked";
+  outcome: "reached" | "passed" | "blocked" | "incomplete";
   observedAtTick: number;
 }> | undefined {
   const criterion = input.criterion;
@@ -898,13 +898,17 @@ async function captureTraversalChecks(
         }
       }
     }
-    if (checkpoints.size !== check.checkpointCriteria.length) {
-      fail(
-        check.checkExpectation === "pass"
-          ? "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED"
-          : "BABYLON_FORMAL_CAPTURE_BLOCK_CHECKPOINT_UNMEASURED",
-        check.id,
-      );
+    const finalMeasuredTick = fixedTicks.at(-1)?.tick ?? fail(
+      "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_MISSING",
+      check.id,
+    );
+    for (const criterion of check.checkpointCriteria) {
+      if (checkpoints.has(criterion.checkpointId)) continue;
+      checkpoints.set(criterion.checkpointId, Object.freeze({
+        checkpointId: criterion.checkpointId,
+        outcome: "incomplete" as const,
+        observedAtTick: finalMeasuredTick,
+      }));
     }
     const checkpointRows = [...checkpoints.values()].sort((left, right) =>
       stableCompare(left.checkpointId, right.checkpointId));
@@ -916,7 +920,14 @@ async function captureTraversalChecks(
       if (criterion.expectation === "pass") return observed === "passed";
       return observed === "blocked";
     });
-    const outcome = check.checkExpectation === "pass" ? "passed" : "blocked";
+    const hasIncompleteCheckpoint = checkpointRows.some(
+      ({ outcome }) => outcome === "incomplete",
+    );
+    const outcome = hasIncompleteCheckpoint
+      ? "incomplete"
+      : check.checkExpectation === "pass"
+        ? expectationObserved ? "passed" : "blocked"
+        : expectationObserved ? "blocked" : "passed";
     checks.push(Object.freeze({
       id: check.id,
       acceptanceTargetRef: check.acceptanceTargetRef,
