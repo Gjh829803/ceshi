@@ -279,3 +279,42 @@ test("launches a missing ready CPU stage with its exact remote attempt", async (
   assert.equal(launches[0].stageId, "episode-render");
   assert.equal(launches[0].jobSuffix, "retry-3");
 });
+
+test("uses the local recovery generation when the worker failed before claim", async () => {
+  const launches = [];
+  await recoverStudioCloudEpisode({
+    executionId: "exec-episode-preclaim-failure",
+    requestS3Uri: "s3://bucket/episode/request.json",
+    outputS3Prefix: "s3://bucket/episode",
+    workerImage: `worker@sha256:${"f".repeat(64)}`,
+    attempt: 4,
+    config: {
+      namespace: "lwdp",
+      gpuResourceName: "nvidia.com/gpu",
+      gpuCount: 1,
+      nodeSelector: {},
+      tolerations: [],
+      cpuWorker: {},
+    },
+    cloudConfig: { userId: "worldkit-studio" },
+    getImplementation: async () => ({
+      execution_id: "exec-episode-preclaim-failure",
+      status: "queued",
+      current_stage_id: "episode-prepare",
+      stages: [{
+        stage_id: "episode-prepare",
+        status: "ready",
+        current_attempt: 0,
+      }],
+    }),
+    launchImplementation: async (input) => launches.push(input),
+    pollImplementation: async () => ({
+      execution_id: "exec-episode-preclaim-failure",
+      status: "succeeded",
+      diagnostics: { manifest_s3_uri: "s3://bucket/episode/manifest.json" },
+    }),
+    stagesImplementation: async () => ({ stages: [] }),
+  });
+  assert.equal(launches.length, 1);
+  assert.equal(launches[0].jobSuffix, "retry-4");
+});

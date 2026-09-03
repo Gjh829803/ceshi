@@ -188,7 +188,15 @@ async function launchReadyCpuStage(execution, options) {
   return launchEpisodeStageWorker({
     ...options,
     stageId,
-    attempt: Number(stage.current_attempt ?? 1),
+    // A Worker can die before claiming the LWDP stage. In that state the
+    // remote attempt is still zero, but the failed Kubernetes Job already owns
+    // the unsuffixed name. Keep the local recovery generation as the lower
+    // bound so the retry always creates a fresh Pod instead of applying the
+    // terminal Job unchanged.
+    attempt: Math.max(
+      Number(options.attempt ?? 1),
+      Number(stage.current_attempt ?? 0),
+    ),
   });
 }
 
@@ -383,6 +391,7 @@ export async function recoverStudioCloudEpisode({
         workerImage,
         config,
         cloudConfig,
+        attempt,
         launchImplementation,
       });
     }
@@ -398,6 +407,7 @@ export async function recoverStudioCloudEpisode({
           workerImage,
           config,
           cloudConfig,
+          attempt,
           launchImplementation,
         });
         await onProgress(value);
