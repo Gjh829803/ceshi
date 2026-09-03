@@ -49,7 +49,7 @@ instruction="Use .codex/skills/worldkit-style-variant-diversity-reviewer/SKILL.m
 
 Review scene '$scene_id', episode '$episode_id'. The first attached image is the sole whitebox spatial authority. It has no final appearance identity. The next ten images are ordered style-00 through style-09. No original styled image or original tri-view is provided.
 
-Judge each styled image against the whitebox for camera, FOV, crop, Subject registration, terrain profile, landmark center/occupancy, depth, occlusion, negative space and traversable clearance. Then judge all ten together for unmistakable Subject, environment and landmark diversity. Do not generate or edit images.
+Judge each styled image against the whitebox using the opening-batch semantic shot-registration threshold defined by the Skill. Preserve the recognizable shot design, not pixel geometry: identity-dependent Subject proportions, terrain morphology, surface detail, and landmark scale variation are expected. Do not infer collision or gameplay failure from this still image. Then judge all ten together for unmistakable Subject, environment and landmark diversity. Do not generate or edit images.
 
 $prior_review_instruction
 

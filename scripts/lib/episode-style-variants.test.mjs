@@ -287,3 +287,18 @@ test("formal ten-style workflow admits anchors before cloud visual fan-out", asy
   assert.match(runner, /--required-approval-mode codex-review/);
   assert.match(runner, /--timeout-seconds 7200/);
 });
+
+test("opening Codex review uses a semantic shot-registration threshold", async () => {
+  const [reviewerRunner, reviewerSkill] = await Promise.all([
+    readFile(path.resolve("scripts/agents/run-style-variant-opening-reviewer-agent.sh"), "utf8"),
+    readFile(path.resolve(
+      ".codex/skills/worldkit-style-variant-diversity-reviewer/SKILL.md",
+    ), "utf8"),
+  ]);
+  assert.match(reviewerRunner, /semantic shot-registration threshold/);
+  assert.match(reviewerRunner, /Do not infer collision or gameplay failure/);
+  assert.match(reviewerSkill, /not pixel matching/);
+  assert.match(reviewerSkill, /A single opening image is not proof of collision/);
+  assert.match(reviewerSkill, /Fail spatial registration only for a clear shot-design break/);
+  assert.match(reviewerSkill, /never invent percentages/);
+});
