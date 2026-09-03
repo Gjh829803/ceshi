@@ -342,6 +342,29 @@ test("admits only one Studio writer for a shared durable data root", async () =>
   await replacement.shutdown();
 });
 
+test("reclaims a legacy Studio writer lease after a container reuses the same PID", async () => {
+  const dataRoot = await temporaryRoot(".test-data-reused-pid-writer-lease-");
+  const fakeRepoRoot = await temporaryRoot(".test-repo-reused-pid-writer-lease-");
+  await mkdir(dataRoot, { recursive: true });
+  await writeFile(path.join(dataRoot, "studio-owner.json"), `${JSON.stringify({
+    kind: "worldkit-studio-writer-lease",
+    schemaVersion: 1,
+    instanceId: `${process.pid}-dead-container-process`,
+    pid: process.pid,
+    startedAt: new Date(Date.now() - 60_000).toISOString(),
+  })}\n`);
+  const replacement = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+  });
+  await replacement.initialize();
+  await replacement.shutdown();
+});
+
 test("releases the Studio writer lease when initialization fails", async () => {
   const dataRoot = await temporaryRoot(".test-data-writer-init-failure-");
   const fakeRepoRoot = await temporaryRoot(".test-repo-writer-init-failure-");

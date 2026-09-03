@@ -91,6 +91,13 @@ const defaultRepoRoot = path.resolve(studioRoot, "../..");
 const defaultDataRoot = path.join(studioRoot, "data");
 const publicRoot = path.join(studioRoot, "public");
 const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
+// Container runtimes commonly reuse the same PID after restarting the main
+// process inside an existing Pod. Keep a process-generation marker in the
+// filesystem lease so a dead predecessor with the same PID cannot fence the
+// replacement forever. This marker is shared by every Studio instance in one
+// live Node process, preserving the single-writer guard in tests and embeds.
+const studioWriterProcessIdentity = `${process.pid}-${randomBytes(12).toString("hex")}`;
+const studioWriterProcessStartedAtMs = Date.now() - (process.uptime() * 1_000);
 // The Studio workflow is unreleased and intentionally has one current contract.
 // Bump this only when the persisted Studio record shape changes; do not keep
 // parallel historical workflow implementations in the runtime.
@@ -1218,6 +1225,7 @@ export function createStudio(options = {}) {
             schemaVersion: 1,
             instanceId: studioInstanceId,
             pid: process.pid,
+            processIdentity: studioWriterProcessIdentity,
             startedAt: new Date().toISOString(),
           })}\n`, "utf8");
         } finally {
@@ -1232,7 +1240,15 @@ export function createStudio(options = {}) {
           ownsStudioWriterLease = true;
           return;
         }
-        if (attempt === 0 && !processIsAlive(owner?.pid)) {
+        const ownerStartedAtMs = Date.parse(owner?.startedAt);
+        const reusedCurrentPid = owner?.pid === process.pid && (
+          (typeof owner?.processIdentity === "string" &&
+            owner.processIdentity !== studioWriterProcessIdentity) ||
+          (typeof owner?.processIdentity !== "string" &&
+            Number.isFinite(ownerStartedAtMs) &&
+            ownerStartedAtMs < studioWriterProcessStartedAtMs - 1_000)
+        );
+        if (attempt === 0 && (!processIsAlive(owner?.pid) || reusedCurrentPid)) {
           await unlink(studioOwnerPath).catch(() => undefined);
           continue;
         }
