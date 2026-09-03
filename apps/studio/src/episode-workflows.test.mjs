@@ -114,6 +114,7 @@ test("explicitly resumes a cancelled Cloud Episode from its capture checkpoint",
     resolveCloudEpisodeResumeManifest: async () => ({
       executionId: "exec_cancelled_resume_001",
       s3Uri: "s3://bucket/capture/cloud-artifact-manifest.json",
+      workerImage: `worker@sha256:${"b".repeat(64)}`,
     }),
     resolveCloudSceneInput: async () => ({
       sceneExecutionId: "exec_scene_resume_001",
@@ -152,6 +153,7 @@ test("explicitly resumes a cancelled Cloud Episode from its capture checkpoint",
     assert.deepEqual(executionInput.resumeEpisodeManifest, {
       executionId: "exec_cancelled_resume_001",
       s3Uri: "s3://bucket/capture/cloud-artifact-manifest.json",
+      workerImage: `worker@sha256:${"b".repeat(64)}`,
     });
     const current = JSON.parse(await readFile(
       path.join(episodeRoot, "episode-record.json"),

@@ -1845,7 +1845,7 @@ export function createEpisodeWorkflowService(options) {
           requestId,
           resumeEpisodeManifest,
           cloudAttempt,
-          workerImage: record.remoteWorkerImage,
+          workerImage: resumeEpisodeManifest.workerImage ?? record.remoteWorkerImage,
         });
         return { episodeId, reused: false, resumed: true, restartGeneration };
       }
