@@ -1,8 +1,10 @@
-import type { Sha256HashV1 } from "@whitebox-world/protocol";
-
 import {
   canonicalJsonBytes,
   sha256CanonicalJson,
+  type Sha256HashV1,
+} from "@whitebox-world/protocol";
+
+import {
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
   type PackageSubjectDefinitionV1,

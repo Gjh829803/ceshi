@@ -282,6 +282,7 @@ function runtimeSnapshot(
           "worldkit://locomotion-profile/test@1",
         locomotionMode: "idle",
         activeMotionProfileRef: "worldkit://motion-profile/test@1",
+        movementOwner: "specialized-motion",
         activeMotionKernelRef: "worldkit://motion-kernel/test@1",
         motionTags: ["ground"],
         safeFallbackActive: false,

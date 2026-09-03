@@ -231,11 +231,27 @@ function runtimeHarness(
       mountedPrepareInputs.push(input);
       return internal.preparePossessionTarget(input.possessionTarget);
     },
-    runFixedInputTick: async (input, actionProjection) => {
+    prepareFixedInputTick: async (input, actionProjection) => {
       if (input.ticks !== 1) throw new RangeError("single tick required");
       fixedInputActionProjections.push(actionProjection);
-      projection = worldProjection(projection.simulationTick + 1);
-      return projection;
+      const staged = worldProjection(projection.simulationTick + 1);
+      let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
+      let abortPromise: Promise<void> | undefined;
+      return Object.freeze({
+        projectedWorldStateAfter: staged,
+        projectedViewStateAfter: Object.freeze({ viewStateRevision }),
+        commitPrepared: () => {
+          if (lifecycle !== "prepared") return;
+          lifecycle = "committed";
+          projection = staged;
+        },
+        abort: () => {
+          if (abortPromise !== undefined) return abortPromise;
+          lifecycle = "aborted";
+          abortPromise = Promise.resolve();
+          return abortPromise;
+        },
+      });
     },
     dispose: async () => undefined,
   };
@@ -276,15 +292,9 @@ function runtimeHarness(
 }
 
 describe("Babylon Gameplay World Port V1", () => {
-  it("exposes one provider-neutral prepared fixed Tick only when Runtime supports the seam", async () => {
+  it("exposes one provider-neutral prepared fixed Tick", async () => {
     const harness = runtimeHarness();
-    const internal = harness.runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]() as
-      BabylonGameplayRuntimeInternalV1 & {
-        prepareFixedInputTick(
-          input: FixedInputOneTickV1,
-          actionProjection: GameplayFixedTickActionProjectionV1,
-        ): Promise<GameplayWorldTransactionV1>;
-      };
+    const internal = harness.runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
     let commits = 0;
     let aborts = 0;
     let preparedActionProjection: unknown;
@@ -301,16 +311,10 @@ describe("Babylon Gameplay World Port V1", () => {
       },
       });
     });
-    const runLegacy = vi.spyOn(internal, "runFixedInputTick");
     const port = createBabylonGameplayWorldPortV1(
       harness.runtime,
       FIXED_INPUT_CONTROLLER_ENTITY_ID,
-    ) as GameplayWorldPortV1 & {
-      prepareFixedInputTick(
-        input: FixedInputOneTickV1,
-        actionProjection: GameplayFixedTickActionProjectionV1,
-      ): Promise<GameplayWorldTransactionV1>;
-    };
+    );
 
     expect(typeof port.prepareFixedInputTick).toBe("function");
     const actionProjection = fixedTickActionProjection();
@@ -320,7 +324,6 @@ describe("Babylon Gameplay World Port V1", () => {
     );
     expect(internal.prepareFixedInputTick).toHaveBeenCalledOnce();
     expect(preparedActionProjection).toBe(actionProjection);
-    expect(runLegacy).not.toHaveBeenCalled();
     expect(commits).toBe(0);
     prepared.commitPrepared();
     expect(commits).toBe(1);
@@ -337,13 +340,7 @@ describe("Babylon Gameplay World Port V1", () => {
 
   it("delegates prepared fixed-Tick abort once and keeps it idempotent", async () => {
     const harness = runtimeHarness();
-    const internal = harness.runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]() as
-      BabylonGameplayRuntimeInternalV1 & {
-        prepareFixedInputTick(
-          input: FixedInputOneTickV1,
-          actionProjection: GameplayFixedTickActionProjectionV1,
-        ): Promise<GameplayWorldTransactionV1>;
-      };
+    const internal = harness.runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
     let providerAborts = 0;
     internal.prepareFixedInputTick = async () => Object.freeze({
       projectedWorldStateAfter: worldProjection(1),
@@ -356,12 +353,7 @@ describe("Babylon Gameplay World Port V1", () => {
     const port = createBabylonGameplayWorldPortV1(
       harness.runtime,
       FIXED_INPUT_CONTROLLER_ENTITY_ID,
-    ) as GameplayWorldPortV1 & {
-      prepareFixedInputTick(
-        input: FixedInputOneTickV1,
-        actionProjection: GameplayFixedTickActionProjectionV1,
-      ): Promise<GameplayWorldTransactionV1>;
-    };
+    );
     const prepared = await port.prepareFixedInputTick(
       { actions: [], ticks: 1 },
       fixedTickActionProjection(),
@@ -373,28 +365,16 @@ describe("Babylon Gameplay World Port V1", () => {
     expect(providerAborts).toBe(1);
   });
 
-  it("redacts prepared fixed-Tick provider failure without invoking the legacy path", async () => {
+  it("redacts prepared fixed-Tick provider failure", async () => {
     const harness = runtimeHarness();
-    const internal = harness.runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]() as
-      BabylonGameplayRuntimeInternalV1 & {
-        prepareFixedInputTick(
-          input: FixedInputOneTickV1,
-          actionProjection: GameplayFixedTickActionProjectionV1,
-        ): Promise<GameplayWorldTransactionV1>;
-      };
+    const internal = harness.runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
     internal.prepareFixedInputTick = vi.fn(async () => {
       throw new Error("Havok checkpoint detail");
     });
-    const legacy = vi.spyOn(internal, "runFixedInputTick");
     const port = createBabylonGameplayWorldPortV1(
       harness.runtime,
       FIXED_INPUT_CONTROLLER_ENTITY_ID,
-    ) as GameplayWorldPortV1 & {
-      prepareFixedInputTick(
-        input: FixedInputOneTickV1,
-        actionProjection: GameplayFixedTickActionProjectionV1,
-      ): Promise<GameplayWorldTransactionV1>;
-    };
+    );
 
     await expect(port.prepareFixedInputTick(
       { actions: [], ticks: 1 },
@@ -403,23 +383,6 @@ describe("Babylon Gameplay World Port V1", () => {
       .rejects.toThrow(
         "ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not prepare fixed input.",
       );
-    expect(legacy).not.toHaveBeenCalled();
-  });
-
-  it("does not advertise a staged fixed Tick on a legacy Runtime", () => {
-    const harness = runtimeHarness();
-    const port = createBabylonGameplayWorldPortV1(
-      harness.runtime,
-      FIXED_INPUT_CONTROLLER_ENTITY_ID,
-    ) as GameplayWorldPortV1 & Partial<{
-      prepareFixedInputTick(
-        input: FixedInputOneTickV1,
-        actionProjection: GameplayFixedTickActionProjectionV1,
-      ): Promise<unknown>;
-    }>;
-
-    expect(Object.hasOwn(port, "prepareFixedInputTick")).toBe(false);
-    expect(port.prepareFixedInputTick).toBeUndefined();
   });
 
   it("routes a trusted mountedOn Action to one staged mounted Runtime transaction", async () => {
@@ -667,19 +630,20 @@ describe("Babylon Gameplay World Port V1", () => {
       .toEqual({
         maximumSemanticFactCountAfterInput: 2,
         maximumSemanticFactTransitionEventCount: 0,
-      });
+    });
     const actionProjection = fixedTickActionProjection();
-    await expect(port.runFixedInputTick(
+    const prepared = await port.prepareFixedInputTick(
       { actions: [], ticks: 1 },
       actionProjection,
-    ))
-      .resolves.toMatchObject({ simulationTick: 1 });
+    );
+    expect(prepared.projectedWorldStateAfter).toMatchObject({ simulationTick: 1 });
+    prepared.commitPrepared();
     expect(harness.fixedInputActionProjections).toEqual([actionProjection]);
     expect(() => port.estimateFixedInputTickCapacity({
       actions: [],
       ticks: 2,
     } as never)).toThrow("Gameplay World Port accepts exactly one fixed tick.");
-    await expect(port.runFixedInputTick({
+    await expect(port.prepareFixedInputTick({
       actions: [],
       ticks: 2,
     } as never, fixedTickActionProjection())).rejects.toThrow(
@@ -751,7 +715,7 @@ describe("Babylon Gameplay World Port V1", () => {
     vi.spyOn(internal, "preparePossessionTarget").mockRejectedValueOnce(
       new Error("Babylon Havok provider failure"),
     );
-    vi.spyOn(internal, "runFixedInputTick").mockRejectedValueOnce(
+    vi.spyOn(internal, "prepareFixedInputTick").mockRejectedValueOnce(
       new Error("Babylon Havok provider failure"),
     );
     const port = createBabylonGameplayWorldPortV1(
@@ -765,12 +729,12 @@ describe("Babylon Gameplay World Port V1", () => {
     ))).rejects.toThrow(
       "ADAPTER_PREPARE_FAILED: Gameplay World Port could not prepare the transition.",
     );
-    await expect(port.runFixedInputTick(
+    await expect(port.prepareFixedInputTick(
       { actions: [], ticks: 1 },
       fixedTickActionProjection(),
     ))
       .rejects.toThrow(
-        "ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not run fixed input.",
+        "ADAPTER_FIXED_INPUT_FAILED: Gameplay World Port could not prepare fixed input.",
       );
   });
 });

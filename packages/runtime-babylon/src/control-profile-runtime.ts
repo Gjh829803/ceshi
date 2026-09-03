@@ -33,6 +33,11 @@ export type MotionCommandV1 =
     }
   | { kind: "none" };
 
+export type SpecializedMotionCommandV1 = Exclude<
+  MotionCommandV1,
+  { kind: "planar-vector" }
+>;
+
 function hasAction(
   actions: readonly SemanticInputActionV1[],
   action: SemanticInputActionV1,

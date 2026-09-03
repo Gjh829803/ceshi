@@ -1,6 +1,6 @@
 import { worldResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
 
-import { sha256CanonicalJson } from "./canonical-json.js";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type { NormalizedWorldBase, NormalizedWorldResourcesV2 } from "./types.js";
 import type {
   AuthoringSpecV4,

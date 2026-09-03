@@ -20,7 +20,7 @@ export type FakeGameplayWorldPortOperationV1 =
   | "commit-prepared"
   | "abort"
   | "estimate-fixed-input-tick-capacity"
-  | "run-fixed-input-tick"
+  | "prepare-fixed-input-tick"
   | "dispose";
 
 export type FakeGameplayAsyncOperationV1 = Extract<
@@ -28,7 +28,7 @@ export type FakeGameplayAsyncOperationV1 = Extract<
   | "initialize"
   | "prepare-gameplay-transition"
   | "abort"
-  | "run-fixed-input-tick"
+  | "prepare-fixed-input-tick"
   | "dispose"
 >;
 
@@ -362,27 +362,29 @@ class FakeGameplayWorldPortHarness
     });
   }
 
-  runFixedInputTick(
+  prepareFixedInputTick(
     input: FixedInputOneTickV1,
     actionProjection: GameplayFixedTickActionProjectionV1,
-  ): Promise<GameplayWorldStateProjectionV1> {
+  ): Promise<GameplayWorldTransactionV1> {
     this.requireSingleTick(input);
     this.record({
-      operation: "run-fixed-input-tick",
+      operation: "prepare-fixed-input-tick",
       input: freezeFixedInput(input),
       actionProjection,
     });
-    const failure = this.takeFailure("run-fixed-input-tick");
+    const failure = this.takeFailure("prepare-fixed-input-tick");
     if (!isNil(failure) && failure.mode === "throw") throw failure.error;
     if (!isNil(failure)) return Promise.reject(failure.error);
 
-    return this.waitAtBarrier("run-fixed-input-tick").then(() => {
+    return this.waitAtBarrier("prepare-fixed-input-tick").then(() => {
       const queued = this.fixedInputTicks.shift();
       const next = isNil(queued)
         ? this.nextDefaultTickProjection()
         : queued.worldProjectionAfter;
-      this.currentWorldProjection = next;
-      return next as GameplayWorldStateProjectionV1;
+      return this.createTransaction({
+        projectedWorldStateAfter: next,
+        projectedViewStateAfter: this.currentViewProjection,
+      });
     });
   }
 
@@ -407,7 +409,7 @@ class FakeGameplayWorldPortHarness
 
   private createTransaction(
     staged: FakePreparedGameplayTransitionV1,
-    identity: ReturnType<typeof transitionIdentity>,
+    identity: Partial<ReturnType<typeof transitionIdentity>> = {},
   ): GameplayWorldTransactionV1 {
     let lifecycle: "prepared" | "committed" | "aborted" = "prepared";
     let abortPromise: Promise<void> | undefined;

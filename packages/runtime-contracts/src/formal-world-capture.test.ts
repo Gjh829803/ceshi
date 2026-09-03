@@ -144,7 +144,7 @@ function snapshotFixture(
 function legacyLocomotionSnapshotFixture(): WorldRuntimeSnapshotV4 {
   const snapshot = snapshotFixture();
   const player = snapshot.world.subjectStatesByEntityId.player!;
-  return parseWorldRuntimeSnapshotV4({
+  return {
     ...snapshot,
     world: {
       ...snapshot.world,
@@ -170,7 +170,7 @@ function legacyLocomotionSnapshotFixture(): WorldRuntimeSnapshotV4 {
         },
       },
     },
-  });
+  } as unknown as WorldRuntimeSnapshotV4;
 }
 
 const WORLD_BOUNDS = {

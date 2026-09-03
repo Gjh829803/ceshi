@@ -36,6 +36,10 @@ const CONTROLLER_ID = "controller.primary";
 const RIDER_DEFINITION_REF = "worldkit://entity-definition/humanoid@1";
 const MOUNT_DEFINITION_REF = "worldkit://entity-definition/skateboard@1";
 const MOUNT_ACTION_REF = "worldkit://semantic-action/mount@1";
+const MOUNTED_RELATIONSHIP_ID = `mounted-on:${sha256CanonicalJson({
+  type: "mountedOn",
+  acceptedActionCommandId: "command.mount.rider",
+})}`;
 
 const participant = Object.freeze({
   id: "participant.primary",
@@ -237,10 +241,6 @@ function mountCommand(): ActionActivateGameplayCommandV1 {
 }
 
 function mountedProjection(input: Readonly<{ mutateMount?: boolean }> = {}) {
-  const mountedRelationshipId = `mounted-on:${sha256CanonicalJson({
-    type: "mountedOn",
-    acceptedActionCommandId: "command.mount.rider",
-  })}`;
   return projection(
     { ...rider, positionMetersXYZ: [0, 1, 0] },
     input.mutateMount
@@ -249,12 +249,17 @@ function mountedProjection(input: Readonly<{ mutateMount?: boolean }> = {}) {
     {
       [`capability-state:${RIDER_ID}:locomotion`]: {
         id: `capability-state:${RIDER_ID}:locomotion`,
-        kind: "locomotion-capability-state",
+        kind: "locomotion-capability-state-v2",
         ownerEntityId: RIDER_ID,
         locomotionCapabilityRef: "worldkit://locomotion-profile/humanoid@1",
         locomotionCapabilityHash: HASH,
-        mode: "suspended",
-        suspendedByRelationshipId: mountedRelationshipId,
+        locomotion: {
+          schemaVersion: 2,
+          status: "suspended",
+          suspendedByRelationshipId: MOUNTED_RELATIONSHIP_ID,
+          committedTick: 0,
+          transitionSequence: 1,
+        },
       },
     },
   );
@@ -295,7 +300,11 @@ describe("WorldSession mountedOn transaction", () => {
         },
         capabilityStatesById: {
           [`capability-state:${RIDER_ID}:locomotion`]: {
-            mode: "suspended",
+            kind: "locomotion-capability-state-v2",
+            locomotion: {
+              status: "suspended",
+              suspendedByRelationshipId: MOUNTED_RELATIONSHIP_ID,
+            },
           },
         },
       },

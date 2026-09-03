@@ -101,13 +101,6 @@ export interface WorldSessionPublicationV1 {
   readonly viewState: GameplayViewStateProjectionV1;
 }
 
-interface PreparedFixedInputWorldPortV1 extends GameplayWorldPortV1 {
-  prepareFixedInputTick(
-    input: Readonly<Omit<FixedInputV1, "ticks"> & { ticks: 1 }>,
-    actionProjection: GameplayFixedTickActionProjectionV1,
-  ): Promise<unknown>;
-}
-
 export interface CameraViewSelectionProjectionV1 {
   readonly cameraEntityId: string;
   readonly activeCameraRigProfileRef: string;
@@ -1620,74 +1613,17 @@ export class WorldSession {
         "Simulation Tick is exhausted.",
       );
     }
-    let prepareFixedInputTick: PreparedFixedInputWorldPortV1[
-      "prepareFixedInputTick"
-    ] | undefined;
-    try {
-      const candidate = (
-        this.options.worldPort as Partial<PreparedFixedInputWorldPortV1>
-      ).prepareFixedInputTick;
-      prepareFixedInputTick = typeof candidate === "function"
-        ? candidate
-        : undefined;
-    } catch {
-      throw sessionFailure(
-        "ADAPTER_FIXED_INPUT_FAILED",
-        "The Runtime Adapter fixed-input transaction seam is unavailable.",
-      );
-    }
-    const usesPreparedFixedInput = !isNil(prepareFixedInputTick);
-
-    const activeTerminalEventCountBeforeEstimate = Object.keys(
-      currentInspection.activeActionStatesById,
-    ).length;
-    if (
-      this.commandJournal.snapshot().retainedEventCount +
-          activeTerminalEventCountBeforeEstimate + 1 >
-        this.options.gameplayCapacityBudget.maximumRetainedEventCount
-    ) {
-      throw sessionFailure(
-        "GAMEPLAY_CAPACITY_EXCEEDED",
-        "Fixed input cannot preserve failure evidence.",
-      );
-    }
-    const failureReservation = this.commandJournal.reserveEventCapacity({
-      eventCount: 1,
-    });
-    if (failureReservation.status !== "reserved") {
-      throw sessionFailure(
-        "GAMEPLAY_CAPACITY_EXCEEDED",
-        "Gameplay Event capacity is exhausted.",
-      );
-    }
-    const failureBundle = this.buildWorldFailureBundle(diagnostic(
-      "ADAPTER_FIXED_INPUT_FAILED",
-      "The Runtime Adapter could not advance the fixed simulation Tick.",
-    ));
-    const preparedEarlyFailure = failureReservation.reservation.prepare([
-      failureBundle.event,
-    ]);
-
     let estimate;
     try {
       estimate = parseGameplayFixedInputCapacityEstimateV1(
         this.options.worldPort.estimateFixedInputTickCapacity(input),
       );
     } catch {
-      if (usesPreparedFixedInput) {
-        failureReservation.reservation.release();
-        throw sessionFailure(
-          "ADAPTER_FIXED_INPUT_FAILED",
-          "The Runtime Adapter could not estimate the fixed simulation Tick.",
-        );
-      }
-      preparedEarlyFailure.commitPrepared();
-      this.phaseValue = "failed";
-      this.currentPublication = failureBundle.publication;
-      await this.cleanupResources();
-      return;
+      throw sessionFailure(
+        "ADAPTER_FIXED_INPUT_FAILED",
+        "The Runtime Adapter could not estimate the fixed simulation Tick.",
+      );
     }
-    failureReservation.reservation.release();
 
     if (
       estimate.maximumSemanticFactCountAfterInput >
@@ -1747,12 +1683,6 @@ export class WorldSession {
         "Gameplay Event capacity is exhausted.",
       );
     }
-    const failure = this.buildWorldFailureBundle(diagnostic(
-      "ADAPTER_FIXED_INPUT_FAILED",
-      "The Runtime Adapter could not publish the fixed simulation Tick.",
-    ));
-    const preparedFailure = eventReservation.reservation.prepare([failure.event]);
-
     let projectionAfter: GameplayWorldStateProjectionV1;
     let fixedInputTransaction: ReturnType<
       typeof parseGameplayWorldTransactionV1
@@ -1766,26 +1696,15 @@ export class WorldSession {
           this.currentPublication.gameplayInspection.relationshipStatesById,
         ),
       } as const;
-      if (usesPreparedFixedInput) {
-        rawFixedInputTransaction = await Reflect.apply(
-          prepareFixedInputTick!,
-          this.options.worldPort,
-          [input, actionProjection],
-        );
-        fixedInputTransaction = parseGameplayWorldTransactionV1(
-          rawFixedInputTransaction,
-          validationOptions,
-        );
-        projectionAfter = fixedInputTransaction.projectedWorldStateAfter;
-      } else {
-        projectionAfter = parseGameplayWorldStateProjectionV1(
-          await this.options.worldPort.runFixedInputTick(
-            input,
-            actionProjection,
-          ),
-          validationOptions,
-        );
-      }
+      rawFixedInputTransaction = await this.options.worldPort.prepareFixedInputTick(
+        input,
+        actionProjection,
+      );
+      fixedInputTransaction = parseGameplayWorldTransactionV1(
+        rawFixedInputTransaction,
+        validationOptions,
+      );
+      projectionAfter = fixedInputTransaction.projectedWorldStateAfter;
       if (projectionAfter.simulationTick !== nextTick) {
         throw new Error("FIXED_INPUT_TICK_MISMATCH");
       }
@@ -1877,48 +1796,42 @@ export class WorldSession {
       this.publishedWorldProjection = projectionAfter;
       this.currentPublication = nextPublication;
     } catch (error) {
-      if (usesPreparedFixedInput) {
-        eventReservation.reservation.release();
-        if (fixedInputCommitAttempted) {
-          if (error instanceof WorldSessionOperationErrorV1) throw error;
-          throw sessionFailure(
-            "ADAPTER_COMMIT_CONTRACT_VIOLATED",
-            "The Runtime Adapter violated the fixed-input commit barrier.",
-          );
-        }
-        if (!isNil(fixedInputTransaction)) {
-          try {
-            await fixedInputTransaction.abort();
-          } catch {
-            this.phaseValue = "failed";
-            await this.cleanupResources();
-            throw sessionFailure(
-              "ADAPTER_ABORT_FAILED",
-              "The Runtime Adapter could not abort the prepared fixed simulation Tick.",
-            );
-          }
-        } else if (!isNil(rawFixedInputTransaction)) {
-          try {
-            await abortUnparsedTransaction(rawFixedInputTransaction);
-          } catch {
-            this.phaseValue = "failed";
-            await this.cleanupResources();
-            throw sessionFailure(
-              "ADAPTER_ABORT_FAILED",
-              "The Runtime Adapter could not abort the invalid fixed simulation Tick.",
-            );
-          }
-        }
+      eventReservation.reservation.release();
+      if (fixedInputCommitAttempted) {
         if (error instanceof WorldSessionOperationErrorV1) throw error;
         throw sessionFailure(
-          "ADAPTER_FIXED_INPUT_FAILED",
-          "The Runtime Adapter could not prepare the fixed simulation Tick.",
+          "ADAPTER_COMMIT_CONTRACT_VIOLATED",
+          "The Runtime Adapter violated the fixed-input commit barrier.",
         );
       }
-      preparedFailure.commitPrepared();
-      this.phaseValue = "failed";
-      this.currentPublication = failure.publication;
-      await this.cleanupResources();
+      if (!isNil(fixedInputTransaction)) {
+        try {
+          await fixedInputTransaction.abort();
+        } catch {
+          this.phaseValue = "failed";
+          await this.cleanupResources();
+          throw sessionFailure(
+            "ADAPTER_ABORT_FAILED",
+            "The Runtime Adapter could not abort the prepared fixed simulation Tick.",
+          );
+        }
+      } else if (!isNil(rawFixedInputTransaction)) {
+        try {
+          await abortUnparsedTransaction(rawFixedInputTransaction);
+        } catch {
+          this.phaseValue = "failed";
+          await this.cleanupResources();
+          throw sessionFailure(
+            "ADAPTER_ABORT_FAILED",
+            "The Runtime Adapter could not abort the invalid fixed simulation Tick.",
+          );
+        }
+      }
+      if (error instanceof WorldSessionOperationErrorV1) throw error;
+      throw sessionFailure(
+        "ADAPTER_FIXED_INPUT_FAILED",
+        "The Runtime Adapter could not prepare the fixed simulation Tick.",
+      );
     }
   }
 

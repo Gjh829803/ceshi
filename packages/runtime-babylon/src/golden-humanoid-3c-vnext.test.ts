@@ -3,6 +3,7 @@ import {
   hashRootMotionSourceV1,
   type BodyResolutionV1,
   type BodySampleV1,
+  type BodySupportSampleV1,
   type CharacterMovementCommandV1,
   type CharacterMovementRuntimeV1,
   type CharacterMovementRuntimeOptionsV1,
@@ -32,8 +33,8 @@ import {
   type GoldenHumanoidTickStageV1,
 } from "./golden-humanoid-3c-vnext.js";
 import {
-  createGoldenHumanoidSubjectControllerV1,
-  GoldenHumanoidSubjectControllerV1,
+  createCharacterMovementSubjectControllerV1,
+  CharacterMovementSubjectControllerV1,
 } from "./character-movement-component.js";
 
 const HASH_A = `sha256:${"a".repeat(64)}` as const;
@@ -78,6 +79,7 @@ function movementOptions(): CharacterMovementRuntimeOptionsV1 {
     runSpeedMetersPerSecond: 6,
     accelerationMetersPerSecondSquared: 60,
     decelerationMetersPerSecondSquared: 80,
+    turnRateRadiansPerSecond: 9,
     airControlRatio: 0.5,
     gravityMetersPerSecondSquared: 9.81,
     jumpSpeedMetersPerSecond: 5.5,
@@ -96,11 +98,13 @@ function command(
   tick: number,
   overrides: Partial<CharacterMovementCommandV1> = {},
 ): CharacterMovementCommandV1 {
+  const movementInputXZ = overrides.movementInputXZ ?? [0, 0];
   return {
     schemaVersion: 1,
     tick,
     fixedDeltaSeconds: 1 / 60,
-    movementInputXZ: [0, 0],
+    movementInputXZ,
+    facingInputXZ: overrides.facingInputXZ ?? movementInputXZ,
     runRequested: false,
     jumpPressed: false,
     jumpHeld: false,
@@ -206,12 +210,13 @@ class TransactionBodyPort implements GoldenCharacterBodyTransactionPortV1 {
   resetToState(state: Readonly<{
     positionMetersXYZ: readonly [number, number, number];
     linearVelocityMetersPerSecondXYZ: readonly [number, number, number];
-  }>): void {
+  }>): BodySupportSampleV1 {
     this.position = [...state.positionMetersXYZ];
     this.velocity = [...state.linearVelocityMetersPerSecondXYZ];
     this.#before = undefined;
     this.#token = undefined;
     this.resolutionSupport = undefined;
+    return this.support;
   }
 
   dispose(): void {}
@@ -634,6 +639,16 @@ describe("Golden Humanoid 3C vNext transaction", () => {
         throw new Error("MOVEMENT_RECONCILE_FAILED");
       },
       snapshot: () => realMovement.snapshot(),
+      reconcileSupportAfterReset: (support, activeTickToken) =>
+        realMovement.reconcileSupportAfterReset(support, activeTickToken),
+      previewSupportedPlacement: (input) =>
+        realMovement.previewSupportedPlacement(input),
+      resetAtSupportedPlacement: (input) =>
+        realMovement.resetAtSupportedPlacement(input),
+      previewRelationshipSuspension: (input) =>
+        realMovement.previewRelationshipSuspension(input),
+      suspendForRelationship: (input) =>
+        realMovement.suspendForRelationship(input),
       reset: (snapshot) => realMovement.reset(snapshot),
       dispose: () => realMovement.dispose(),
     };
@@ -655,6 +670,33 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       .toBe(nativeBefore);
     expect(body.resolveCalls).toBe(1);
     expect(body.abortCalls).toBe(1);
+  });
+
+  it("restores Movement and Body when placement support reconciliation fails", () => {
+    const movement = createCharacterMovementRuntimeV1(movementOptions());
+    const body = new TransactionBodyPort();
+    const transaction = new GoldenHumanoid3CVNextTransactionV1({
+      subjectEntityId: "player",
+      fixedDeltaSeconds: 1 / 60,
+      movementRuntime: movement,
+      bodyPort: body,
+      actionPresentationRegistry: emptyRegistry(),
+    });
+    const before = movement.snapshot();
+    const bodyBefore = {
+      position: [...body.position],
+      velocity: [...body.velocity],
+    };
+    body.support = { mode: "invalid" } as unknown as BodySampleV1["support"];
+
+    expect(() => transaction.resetAtSupportedPlacement({
+      positionMetersXYZ: [4, 5, 6],
+      facingYawRadians: 0.2,
+      committedTick: 8,
+    })).toThrow("3C_INPUT_INVALID");
+
+    expect(movement.snapshot()).toEqual(before);
+    expect({ position: body.position, velocity: body.velocity }).toEqual(bodyBefore);
   });
 
   it("rejects untrusted Action/Root Motion before Body admission and invalidates the failed Tick", () => {
@@ -943,7 +985,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
   it("provides a live-ready Subject facade that advances only the Golden transaction", () => {
     const harness = createHarness();
     const visualRoot = visualRootSpy();
-    const controller = new GoldenHumanoidSubjectControllerV1({
+    const controller = new CharacterMovementSubjectControllerV1({
       subject: goldenSubject(),
       visualRoot,
       transaction: harness.transaction,
@@ -969,7 +1011,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     });
     const visualRoot = visualRootSpy();
 
-    new GoldenHumanoidSubjectControllerV1({
+    new CharacterMovementSubjectControllerV1({
       subject: goldenSubject(),
       visualRoot,
       transaction: harness.transaction,
@@ -983,7 +1025,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
   it("renders between two committed poses without mutating the authoritative snapshot", () => {
     const harness = createHarness();
     const visualRoot = visualRootSpy();
-    const controller = new GoldenHumanoidSubjectControllerV1({
+    const controller = new CharacterMovementSubjectControllerV1({
       subject: goldenSubject(),
       visualRoot,
       transaction: harness.transaction,
@@ -1037,7 +1079,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
   it("keeps committed hashes identical under actual 30/60/120-like render sampling", () => {
     const runLane = (renderHertz: 30 | 60 | 120): string => {
       const harness = createHarness();
-      const controller = new GoldenHumanoidSubjectControllerV1({
+      const controller = new CharacterMovementSubjectControllerV1({
         subject: goldenSubject(),
         visualRoot: visualRootSpy(),
         transaction: harness.transaction,
@@ -1066,7 +1108,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
 
   it("rejects a stale ViewControlFrame before command or Body admission", () => {
     const harness = createHarness();
-    const controller = new GoldenHumanoidSubjectControllerV1({
+    const controller = new CharacterMovementSubjectControllerV1({
       subject: goldenSubject(),
       visualRoot: visualRootSpy(),
       transaction: harness.transaction,
@@ -1087,7 +1129,7 @@ describe("Golden Humanoid 3C vNext transaction", () => {
     ["jump", { allowWalk: true, allowRun: true, allowJump: false }, ["jump"]],
   ] as const)("rejects undeclared %s capability before Body admission", (_name, locomotion, actions) => {
     const harness = createHarness();
-    const controller = new GoldenHumanoidSubjectControllerV1({
+    const controller = new CharacterMovementSubjectControllerV1({
       subject: goldenSubject({ locomotion }),
       visualRoot: visualRootSpy(),
       transaction: harness.transaction,
@@ -1100,10 +1142,9 @@ describe("Golden Humanoid 3C vNext transaction", () => {
   it.each([
     ["command", { commandKind: "throttle-steer" }],
     ["input", { inputSpace: "subject-local" }],
-    ["facing", { facingPolicy: "align-to-view" }],
   ] as const)("fails closed on unsupported Golden %s profile semantics", (_name, patch) => {
     const base = goldenSubject().capabilityAssembly.controlProfile;
-    expect(() => createGoldenHumanoidSubjectControllerV1({
+    expect(() => createCharacterMovementSubjectControllerV1({
       subject: goldenSubject({
         controlProfile: { ...base, ...patch } as typeof base,
       }),
@@ -1111,18 +1152,40 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       scene: {} as Scene,
       gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
       actionPresentationRegistry: emptyRegistry(),
-    })).toThrow("3C_GOLDEN_CONTROL_PROFILE_UNSUPPORTED");
+    })).toThrow("3C_CHARACTER_MOVEMENT_CONTROL_PROFILE_UNSUPPORTED");
+  });
+
+  it("keeps registered align-to-view strafing inside CharacterMovement authority", () => {
+    const harness = createHarness();
+    const base = goldenSubject().capabilityAssembly.controlProfile;
+    const controller = new CharacterMovementSubjectControllerV1({
+      subject: goldenSubject({
+        controlProfile: {
+          ...base,
+          resourceRef: "worldkit://control-profile/planar.aim-relative@1",
+          facingPolicy: "align-to-view",
+        },
+      }),
+      visualRoot: visualRootSpy(),
+      transaction: harness.transaction,
+    });
+
+    controller.step(["move-right"]);
+    const snapshot = controller.movementSnapshot();
+    expect(snapshot.linearVelocityMetersPerSecondXYZ[0]).toBeGreaterThan(0);
+    expect(snapshot.facingYawRadians).toBe(0);
+    expect(harness.body.beginCalls).toBe(1);
   });
 
   it("keeps Golden facade reset, dispose and two-session state isolated", () => {
     const aHarness = createHarness();
     const bHarness = createHarness();
-    const a = new GoldenHumanoidSubjectControllerV1({
+    const a = new CharacterMovementSubjectControllerV1({
       subject: goldenSubject(),
       visualRoot: visualRootSpy(),
       transaction: aHarness.transaction,
     });
-    const b = new GoldenHumanoidSubjectControllerV1({
+    const b = new CharacterMovementSubjectControllerV1({
       subject: goldenSubject(),
       visualRoot: visualRootSpy(),
       transaction: bHarness.transaction,

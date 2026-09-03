@@ -233,13 +233,6 @@
       "removalGate": "Replace with an explicitly exported public or testing subpath."
     },
     {
-      "importer": "scripts/lib/route-runtime-probe.integration.test.ts",
-      "specifier": "../../packages/runtime-babylon/src/runtime-test-possession.js",
-      "owner": "@whitebox-world/runtime-babylon",
-      "reason": "Existing boundary debt recorded by the 2026-08-26 workspace audit; no new edge is allowed.",
-      "removalGate": "Replace with an explicitly exported public or testing subpath."
-    },
-    {
       "importer": "scripts/lib/route-validation-orchestrator.test.ts",
       "specifier": "../../packages/authoring/src/test-fixture.js",
       "owner": "@whitebox-world/authoring",

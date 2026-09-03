@@ -18,11 +18,13 @@ import type { Browser, BrowserContext, Page } from "playwright";
 import {
   parseAuthoringSpecV4,
   resolveAuthoringLayoutV4,
-  sha256CanonicalJson,
-  stringifyCanonicalJson,
   type AuthoringSpecV4,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import {
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";
 import type {
   CanonicalSceneExecutionPlanV1,
   WorldRuntimeBootstrapV1,

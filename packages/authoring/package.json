@@ -7,7 +7,6 @@
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts",
     "./schema": "./src/authoring-spec-v4.schema.json",
-    "./schema-v4": "./src/authoring-spec-v4.schema.json",
     "./subject-definition-schema": "./src/subject-definition-v1.schema.json"
   },
   "dependencies": {

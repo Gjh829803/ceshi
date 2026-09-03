@@ -1,10 +1,10 @@
 import {
-  sha256CanonicalJson,
   type AuthoringDiagnostic,
   type AuthoringSpecV4,
   type PrimitivePrototypeSpecV2,
   type WorldNodeSpecV4,
 } from "@whitebox-world/authoring";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
   CanonicalSceneExecutionPlanV1,
 } from "@whitebox-world/runtime-contracts";

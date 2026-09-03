@@ -262,7 +262,7 @@ function fixedInputCalls(
   harness: ReturnType<typeof createFakeGameplayWorldPortHarnessV1>,
 ) {
   return harness.calls.filter(({ operation }) =>
-    operation === "run-fixed-input-tick"
+    operation === "prepare-fixed-input-tick"
   );
 }
 
@@ -423,37 +423,21 @@ describe("WorldSession fixed-input estimate breaches with due Actions", () => {
         worldProjectionAfter: projection(1, { [fact.id]: fact }),
       });
 
-      const failed = await session.runFixedInput({ actions: [], ticks: 1 });
+      await expect(session.runFixedInput({ actions: [], ticks: 1 }))
+        .rejects.toThrow("ADAPTER_FIXED_INPUT_FAILED");
 
       expect(fixedInputCalls(harness)).toHaveLength(1);
-      expect(session.phase).toBe("failed");
-      expect(failed).toBe(session.snapshot());
-      expect(failed).toMatchObject({
-        publicationEpoch: before.publicationEpoch + 1,
-        worldState: { simulationTick: 0 },
-        gameplayInspection: {
-          phase: "failed",
-          activeActionStatesById: {
-            "execution.due-on-breach": {
-              mode: "active",
-              lastTransitionSimulationTick: 0,
-            },
-          },
-          diagnostic: { code: "ADAPTER_FIXED_INPUT_FAILED" },
-        },
-      });
+      expect(harness.abortCount).toBe(1);
+      expect(session.phase).toBe("ready");
+      expect(session.snapshot()).toBe(before);
       expect(session.eventsAfter(
         before.gameplayInspection.lastEventSequence,
         10,
-      )).toMatchObject([{
-        type: "world.failed",
-        simulationTick: 0,
-        sequence: before.gameplayInspection.lastEventSequence + 1,
-      }]);
+      )).toEqual([]);
       expect(session.eventsAfter(0, 20).some(({ type }) =>
         type === "action.completed"
       )).toBe(false);
-      expect(harness.disposeCount).toBe(1);
+      expect(harness.disposeCount).toBe(0);
       const firstDispose = session.dispose();
       const secondDispose = session.dispose();
       expect(secondDispose).toBe(firstDispose);

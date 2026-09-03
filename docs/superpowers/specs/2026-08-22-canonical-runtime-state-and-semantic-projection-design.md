@@ -434,16 +434,35 @@ interface ControllerEntityStateV1 {
 Entity Core State 只保存几乎所有可运行对象都共有的身份、生命周期和空间状态。人物移动、门开合、车辆档位、生命值或飞行模式等差异由独立 Capability State 表达：
 
 ```ts
-interface LocomotionCapabilityStateV1 {
+interface LocomotionCapabilityStateEnvelopeV2 {
   id: string;
-  kind: "locomotion-capability-state";
+  kind: "locomotion-capability-state-v2";
   ownerEntityId: string;
   locomotionCapabilityRef: string;
   locomotionCapabilityHash: `sha256:${string}`;
-  mode: "idle" | "walk" | "run" | "airborne";
-  movementMedium: "ground" | "air";
-  facingYawRadians: number;
-  speedMetersPerSecond: number;
+  locomotion:
+    | {
+        schemaVersion: 2;
+        status: "active";
+        mobilityMode: "grounded" | "airborne";
+        gait: "none" | "idle" | "walk" | "run";
+        verticalPhase: "none" | "takeoff" | "rising" | "apex" | "falling" | "landing";
+        supportMode: "supported" | "sliding" | "unsupported";
+        movementMedium: "ground" | "air";
+        facingYawRadians: number;
+        linearVelocity: { x: number; y: number; z: number };
+        horizontalSpeedMetersPerSecond: number;
+        committedTick: number;
+        phaseEnteredTick: number;
+        transitionSequence: number;
+      }
+    | {
+        schemaVersion: 2;
+        status: "suspended";
+        suspendedByRelationshipId: string;
+        committedTick: number;
+        transitionSequence: number;
+      };
 }
 
 interface DoorCapabilityStateV1 {

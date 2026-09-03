@@ -10,6 +10,7 @@ import {
   isMovementTickTokenV1,
   parseBodyResolutionV1,
   parseBodySampleV1,
+  parseBodySupportSampleV1,
   parseCharacterMovementCommandV1,
   parseCharacterMovementRuntimeStateV1,
   parseCharacterMovementSnapshotV1,
@@ -19,11 +20,14 @@ import {
   parseMovementProposalV1,
   type BodyResolutionV1,
   type BodySampleV1,
+  type BodySupportSampleV1,
   type CharacterMovementCommandV1,
   type CharacterMovementRuntimeStateV1,
   type CharacterMovementRuntimeV1,
+  type CharacterMovementRelationshipSuspensionV1,
   type CharacterMovementSnapshotV1,
   type CharacterMovementStateV1,
+  type CharacterMovementSupportedPlacementV1,
   type JumpEpisodeStateV1,
   type JumpVariantV1,
   type JumpVariantPolicyV1,
@@ -47,6 +51,7 @@ export interface CharacterMovementRuntimeOptionsV1 {
   readonly runSpeedMetersPerSecond: number;
   readonly accelerationMetersPerSecondSquared: number;
   readonly decelerationMetersPerSecondSquared: number;
+  readonly turnRateRadiansPerSecond: number;
   readonly airControlRatio: number;
   readonly gravityMetersPerSecondSquared: number;
   readonly jumpSpeedMetersPerSecond: number;
@@ -226,7 +231,8 @@ export function parseCharacterMovementRuntimeOptionsV1(
   const keys = [
     "schemaVersion", "fixedDeltaSeconds", "jumpVariantPolicy", "initialState", "walkSpeedMetersPerSecond",
     "runSpeedMetersPerSecond", "accelerationMetersPerSecondSquared",
-    "decelerationMetersPerSecondSquared", "airControlRatio", "gravityMetersPerSecondSquared",
+    "decelerationMetersPerSecondSquared", "turnRateRadiansPerSecond",
+    "airControlRatio", "gravityMetersPerSecondSquared",
     "jumpSpeedMetersPerSecond", "coyoteTimeSeconds", "jumpBufferSeconds",
     "variableJumpHoldSeconds", "jumpHoldGravityRatio", "jumpReleaseGravityRatio",
     "landingDurationTicks", "apexEnterSpeedMetersPerSecond", "apexExitSpeedMetersPerSecond",
@@ -238,6 +244,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
     value.walkSpeedMetersPerSecond > value.runSpeedMetersPerSecond ||
     !inRange(value.accelerationMetersPerSecondSquared, 0, 60) ||
     !inRange(value.decelerationMetersPerSecondSquared, 0, 80) ||
+    !inRange(value.turnRateRadiansPerSecond, 0, 20) ||
     !inRange(value.airControlRatio, 0, 1) ||
     !inRange(value.gravityMetersPerSecondSquared, Number.MIN_VALUE, 100) ||
     !inRange(value.jumpSpeedMetersPerSecond, Number.MIN_VALUE, 12) ||
@@ -277,6 +284,7 @@ export function parseCharacterMovementRuntimeOptionsV1(
     runSpeedMetersPerSecond: value.runSpeedMetersPerSecond,
     accelerationMetersPerSecondSquared: value.accelerationMetersPerSecondSquared,
     decelerationMetersPerSecondSquared: value.decelerationMetersPerSecondSquared,
+    turnRateRadiansPerSecond: value.turnRateRadiansPerSecond,
     airControlRatio: value.airControlRatio,
     gravityMetersPerSecondSquared: value.gravityMetersPerSecondSquared,
     jumpSpeedMetersPerSecond: value.jumpSpeedMetersPerSecond,
@@ -346,6 +354,108 @@ function vec3(x: number, y: number, z: number): MovementVec3V1 {
     checkedFinite(y, "movement vector Y"),
     checkedFinite(z, "movement vector Z"),
   ]);
+}
+
+function snapshotAtSupportedPlacement(
+  input: CharacterMovementSupportedPlacementV1,
+  transitionSequence: number,
+): CharacterMovementSnapshotV1 {
+  if (!Number.isSafeInteger(input.committedTick) || input.committedTick < 0 ||
+    !Number.isSafeInteger(transitionSequence) || transitionSequence < 0) {
+    return inputInvalid("supported placement state is invalid.");
+  }
+  try {
+    const position = vec3(...input.positionMetersXYZ);
+    const facingYawRadians = checkedFinite(
+      input.facingYawRadians,
+      "supported placement facing",
+    );
+    return snapshotFromState(parseCharacterMovementStateV1({
+      schemaVersion: 1,
+      tick: input.committedTick,
+      positionMetersXYZ: position,
+      facingYawRadians,
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      locomotion: {
+        schemaVersion: 2,
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "idle",
+        verticalPhase: "none",
+        supportMode: "supported",
+        movementMedium: "ground",
+        facingYawRadians,
+        linearVelocity: { x: 0, y: 0, z: 0 },
+        horizontalSpeedMetersPerSecond: 0,
+        committedTick: input.committedTick,
+        phaseEnteredTick: input.committedTick,
+        transitionSequence,
+      },
+      transitionEvents: [],
+      runtimeState: {
+        schemaVersion: 1,
+        // A placement declaration is not Body support evidence. The first Body
+        // sample or reset reconciliation arms coyote only after real support.
+        coyoteTicksRemaining: 0,
+        jumpBufferTicksRemaining: 0,
+        variableJumpHoldTicksRemaining: 0,
+        landingTicksRemaining: 0,
+        apexCrossedInAirborneEpisode: false,
+      },
+    }));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("3C_INPUT_INVALID")) {
+      throw error;
+    }
+    return inputInvalid("supported placement state is invalid.");
+  }
+}
+
+function snapshotAtRelationshipSuspension(
+  input: CharacterMovementRelationshipSuspensionV1,
+  transitionSequence: number,
+): CharacterMovementSnapshotV1 {
+  if (!Number.isSafeInteger(input.committedTick) || input.committedTick < 0 ||
+    typeof input.suspendedByRelationshipId !== "string" ||
+    input.suspendedByRelationshipId.length === 0 ||
+    !Number.isSafeInteger(transitionSequence) || transitionSequence < 0) {
+    return inputInvalid("relationship suspension state is invalid.");
+  }
+  try {
+    const position = vec3(...input.positionMetersXYZ);
+    const facingYawRadians = checkedFinite(
+      input.facingYawRadians,
+      "relationship suspension facing",
+    );
+    return snapshotFromState(parseCharacterMovementStateV1({
+      schemaVersion: 1,
+      tick: input.committedTick,
+      positionMetersXYZ: position,
+      facingYawRadians,
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      locomotion: {
+        schemaVersion: 2,
+        status: "suspended",
+        suspendedByRelationshipId: input.suspendedByRelationshipId,
+        committedTick: input.committedTick,
+        transitionSequence,
+      },
+      transitionEvents: [],
+      runtimeState: {
+        schemaVersion: 1,
+        coyoteTicksRemaining: 0,
+        jumpBufferTicksRemaining: 0,
+        variableJumpHoldTicksRemaining: 0,
+        landingTicksRemaining: 0,
+        apexCrossedInAirborneEpisode: false,
+      },
+    }));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("3C_INPUT_INVALID")) {
+      throw error;
+    }
+    return inputInvalid("relationship suspension state is invalid.");
+  }
 }
 
 function moveTowardXZ(
@@ -541,6 +651,18 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     const directionZ = inputMagnitude === 0
       ? 0
       : (rightZ * command.movementInputXZ[0] + forwardZ * command.movementInputXZ[1]) / inputMagnitude;
+    const facingInputMagnitude = Math.hypot(
+      command.facingInputXZ[0],
+      command.facingInputXZ[1],
+    );
+    const facingDirectionX = facingInputMagnitude === 0
+      ? 0
+      : (rightX * command.facingInputXZ[0] +
+          forwardX * command.facingInputXZ[1]) / facingInputMagnitude;
+    const facingDirectionZ = facingInputMagnitude === 0
+      ? 0
+      : (rightZ * command.facingInputXZ[0] +
+          forwardZ * command.facingInputXZ[1]) / facingInputMagnitude;
     const requestedSpeed = (command.runRequested
       ? this.#options.runSpeedMetersPerSecond
       : this.#options.walkSpeedMetersPerSecond) * inputMagnitude;
@@ -599,7 +721,31 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
       checkedAdd(horizontal[1], layered.velocityDeltaMetersPerSecondXYZ[2], "proposed velocity Z"),
     );
     let facingYaw = this.#currentSnapshot.facingYawRadians;
-    if (inputMagnitude > 0) facingYaw = Math.atan2(-directionX, -directionZ);
+    if (facingInputMagnitude > 0) {
+      const targetFacingYaw = Math.atan2(-facingDirectionX, -facingDirectionZ);
+      const shortestDelta = Math.atan2(
+        Math.sin(targetFacingYaw - facingYaw),
+        Math.cos(targetFacingYaw - facingYaw),
+      );
+      const maximumTurn = checkedMultiply(
+        this.#options.turnRateRadiansPerSecond,
+        this.#options.fixedDeltaSeconds,
+        "maximum facing turn",
+      );
+      const appliedTurn = Math.max(
+        -maximumTurn,
+        Math.min(maximumTurn, shortestDelta),
+      );
+      const turnedFacingYaw = checkedAdd(
+        facingYaw,
+        appliedTurn,
+        "facing yaw",
+      );
+      facingYaw = Math.atan2(
+        Math.sin(turnedFacingYaw),
+        Math.cos(turnedFacingYaw),
+      );
+    }
     facingYaw = checkedAdd(facingYaw, layered.facingYawDeltaRadians, "proposed facing yaw");
     const proposal = parseMovementProposalV1({
       schemaVersion: 1,
@@ -827,6 +973,168 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     return this.#currentSnapshot;
   }
 
+  reconcileSupportAfterReset(
+    input: BodySupportSampleV1,
+    activeTickToken: MovementTickTokenV1 | undefined,
+  ): CharacterMovementSnapshotV1 {
+    this.#assertLive();
+    if (this.#activeTransaction === undefined && activeTickToken !== undefined) {
+      throw diagnostic(
+        "3C_TICK_TOKEN_STALE",
+        "reset support received a Tick token without an active Tick.",
+      );
+    }
+    if (this.#activeTransaction !== undefined) {
+      if (activeTickToken === undefined ||
+        this.#transaction(activeTickToken) !== this.#activeTransaction ||
+        this.#activeTransaction.proposal !== undefined ||
+        this.#currentSnapshot.tick !== 0) {
+        throw diagnostic(
+          "3C_TICK_TOKEN_STALE",
+          "only the first active Tick may reconcile reset support.",
+        );
+      }
+    }
+    let support: BodySupportSampleV1;
+    try {
+      support = parseBodySupportSampleV1(input);
+    } catch {
+      return inputInvalid("reset BodySupportSampleV1 is invalid.");
+    }
+    const current = this.#currentSnapshot;
+    if (current.locomotion.status !== "active") {
+      throw diagnostic(
+        "3C_LOCOMOTION_TRANSITION_INVALID",
+        "suspended Locomotion cannot reconcile reset support.",
+      );
+    }
+    const isGrounded = support.mode !== "unsupported";
+    const velocity = current.linearVelocityMetersPerSecondXYZ;
+    const horizontalSpeed = checkedFinite(
+      Math.hypot(velocity[0], velocity[2]),
+      "reset horizontal speed",
+    );
+    const gait: GaitV2 = !isGrounded
+      ? "none"
+      : horizontalSpeed === 0
+        ? "idle"
+        : current.locomotion.gait === "run"
+          ? "run"
+          : "walk";
+    const verticalPhase = isGrounded ? "none" as const : "falling" as const;
+    const movementMedium = isGrounded ? "ground" as const : "air" as const;
+    const semanticChanged =
+      current.locomotion.mobilityMode !== (isGrounded ? "grounded" : "airborne") ||
+      current.locomotion.gait !== gait ||
+      current.locomotion.verticalPhase !== verticalPhase ||
+      current.locomotion.supportMode !== support.mode ||
+      current.locomotion.movementMedium !== movementMedium;
+    if (semanticChanged &&
+      current.locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
+      return inputInvalid("reset Locomotion transition sequence is exhausted.");
+    }
+    const state = parseCharacterMovementStateV1({
+      schemaVersion: 1,
+      tick: current.tick,
+      positionMetersXYZ: current.positionMetersXYZ,
+      facingYawRadians: current.facingYawRadians,
+      linearVelocityMetersPerSecondXYZ: velocity,
+      locomotion: {
+        ...current.locomotion,
+        mobilityMode: isGrounded ? "grounded" : "airborne",
+        gait,
+        verticalPhase,
+        supportMode: support.mode,
+        movementMedium,
+        linearVelocity: { x: velocity[0], y: velocity[1], z: velocity[2] },
+        horizontalSpeedMetersPerSecond: horizontalSpeed,
+        phaseEnteredTick: semanticChanged
+          ? current.tick
+          : current.locomotion.phaseEnteredTick,
+        transitionSequence: semanticChanged
+          ? current.locomotion.transitionSequence + 1
+          : current.locomotion.transitionSequence,
+      },
+      transitionEvents: [],
+      runtimeState: {
+        ...current.runtimeState,
+        coyoteTicksRemaining:
+          support.mode === "supported" ? this.#windows.coyoteTicks : 0,
+        landingTicksRemaining: 0,
+        apexCrossedInAirborneEpisode: false,
+      },
+      ...(!isGrounded || current.jumpEpisode === undefined
+        ? current.jumpEpisode === undefined
+          ? {}
+          : { jumpEpisode: current.jumpEpisode }
+        : {}),
+    });
+    this.#currentSnapshot = snapshotFromState(state);
+    return this.#currentSnapshot;
+  }
+
+  previewSupportedPlacement(
+    input: CharacterMovementSupportedPlacementV1,
+  ): CharacterMovementSnapshotV1 {
+    this.#assertLive();
+    if (this.#activeTransaction !== undefined) {
+      throw diagnostic(
+        "3C_TICK_TOKEN_STALE",
+        "supported placement cannot be projected during an active movement Tick.",
+      );
+    }
+    const current = this.#currentSnapshot;
+    if (current.locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
+      return inputInvalid("supported placement state is invalid.");
+    }
+    return snapshotAtSupportedPlacement(
+      input,
+      current.locomotion.transitionSequence + 1,
+    );
+  }
+
+  resetAtSupportedPlacement(
+    input: CharacterMovementSupportedPlacementV1,
+  ): CharacterMovementSnapshotV1 {
+    const projected = this.previewSupportedPlacement(input);
+    this.reset(projected);
+    return this.#currentSnapshot;
+  }
+
+  previewRelationshipSuspension(
+    input: CharacterMovementRelationshipSuspensionV1,
+  ): CharacterMovementSnapshotV1 {
+    this.#assertLive();
+    if (this.#activeTransaction !== undefined) {
+      throw diagnostic(
+        "3C_TICK_TOKEN_STALE",
+        "relationship suspension cannot be projected during an active movement Tick.",
+      );
+    }
+    const current = this.#currentSnapshot;
+    const retainsTransitionSequence = current.locomotion.status === "suspended" &&
+      current.locomotion.suspendedByRelationshipId ===
+        input.suspendedByRelationshipId;
+    if (!retainsTransitionSequence &&
+      current.locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
+      return inputInvalid("relationship suspension state is invalid.");
+    }
+    return snapshotAtRelationshipSuspension(
+      input,
+      retainsTransitionSequence
+        ? current.locomotion.transitionSequence
+        : current.locomotion.transitionSequence + 1,
+    );
+  }
+
+  suspendForRelationship(
+    input: CharacterMovementRelationshipSuspensionV1,
+  ): CharacterMovementSnapshotV1 {
+    const projected = this.previewRelationshipSuspension(input);
+    this.reset(projected);
+    return this.#currentSnapshot;
+  }
+
   #assertResolutionCoherent(
     sample: BodySampleV1,
     proposal: MovementProposalV1,
@@ -892,4 +1200,11 @@ export function createCharacterMovementRuntimeV1(
 ): CharacterMovementRuntimeV1 {
   const options = parseCharacterMovementRuntimeOptionsV1(input);
   return new DeterministicCharacterMovementRuntimeV1(options);
+}
+
+/** CharacterMovement-owned fresh-spawn state construction from metric placement. */
+export function createCharacterMovementInitialStateAtPlacementV1(
+  input: CharacterMovementSupportedPlacementV1,
+): CharacterMovementStateV1 {
+  return stateFromSnapshot(snapshotAtSupportedPlacement(input, 0));
 }

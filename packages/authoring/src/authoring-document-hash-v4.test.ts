@@ -7,9 +7,9 @@ import {
   parseAuthoringSpecV4,
   projectNormalizedWorldResourcesToLayoutIdentityV4,
   resolveAuthoringLayoutV4,
-  stringifyCanonicalJson,
   type AuthoringSpecV4,
 } from "./index.js";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { createValidAuthoringSpec } from "./test-fixture.js";
 
 function reorderNodes(spec: AuthoringSpecV4): AuthoringSpecV4 {

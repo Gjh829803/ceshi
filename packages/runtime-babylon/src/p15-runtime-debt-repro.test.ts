@@ -40,7 +40,9 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
 
-function compileFlatPackagePlan(): CanonicalSceneExecutionPlanV1 {
+function compileFlatPackagePlan(
+  playerControlFeelRef = MEDIUM_FEEL_REF,
+): CanonicalSceneExecutionPlanV1 {
   const spec = createValidPackageSubjectWorldV4();
   spec.nodes = spec.nodes.map((node) =>
     node.kind === "terrain" && node.components.terrain.source.kind === "procedural"
@@ -60,7 +62,19 @@ function compileFlatPackagePlan(): CanonicalSceneExecutionPlanV1 {
         }
       : node,
   );
-  return compileRuntimeTestScenePlanV1(spec);
+  const plan = compileRuntimeTestScenePlanV1(spec);
+  return createRuntimeTestWorldVariantV1(plan, {
+    runtimeSubjects: runtimeTestSubjectsForPlanV1(plan).map((subject) => {
+      if (subject.entityId !== "player") return subject;
+      const controlFeel = subject.availableControlFeels.find(
+        (candidate) => candidate.resourceRef === playerControlFeelRef,
+      );
+      if (controlFeel === undefined) {
+        throw new Error(`Missing compiled Control Feel '${playerControlFeelRef}'.`);
+      }
+      return { ...subject, controlFeel };
+    }),
+  });
 }
 
 async function createDebtRuntime(
@@ -118,7 +132,7 @@ describe("P1.5 runtime debt", () => {
     expect(worldSource.includes("supporting.maximumMetersXYZ[1]")).toBe(false);
   });
 
-  it("publishes air from checkSupport after reset when spawned 0.4 m above terrain", async () => {
+  it("publishes air from initialization support when spawned 0.4 m above terrain", async () => {
     const base = compileFlatPackagePlan();
     const player = runtimeTestSubjectsForPlanV1(base)
       .find((subject) => subject.entityId === "player")!;
@@ -141,8 +155,7 @@ describe("P1.5 runtime debt", () => {
     });
     const runtime = await createDebtRuntime(executionPlan);
     try {
-      const afterReset = runtime.reset();
-      const medium = afterReset.subjectStatesByEntityId.player!.movementMedium;
+      const medium = runtime.snapshot().subjectStatesByEntityId.player!.movementMedium;
       expect(medium === "air" || medium === "ground").toBe(true);
       expect(medium).toBe("air");
       expect(medium).not.toBe("ground");
@@ -151,23 +164,23 @@ describe("P1.5 runtime debt", () => {
     }
   }, 15_000);
 
-  it("switches locked feel refs without setMotionTuning and diverges speed or yaw hashes", async () => {
+  it("keeps separately compiled Feel locks distinct without runtime tuning", async () => {
     expect(worldSource.includes("setMotionTuning")).toBe(false);
     expect(kernelSource.includes("setMotionTuning")).toBe(false);
     expect(kernelSource.includes("setParameterTuning")).toBe(false);
 
-    const executionPlan = compileFlatPackagePlan();
-    const runtime = await createDebtRuntime(executionPlan);
+    const mediumRuntime = await createDebtRuntime(
+      compileFlatPackagePlan(MEDIUM_FEEL_REF),
+    );
+    const heavyRuntime = await createDebtRuntime(
+      compileFlatPackagePlan(HEAVY_FEEL_REF),
+    );
     try {
-      expect(runtime.requestControlFeelProfile("player", MEDIUM_FEEL_REF)).toBe(true);
-      const medium = await runtime.runFixedInput({
+      const medium = await mediumRuntime.runFixedInput({
         actions: ["move-forward", "move-left"],
         ticks: 30,
       });
-      runtime.reset();
-      await bindRuntimeTestPossession(runtime, "player");
-      expect(runtime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(true);
-      const heavy = await runtime.runFixedInput({
+      const heavy = await heavyRuntime.runFixedInput({
         actions: ["move-forward", "move-left"],
         ticks: 30,
       });
@@ -184,13 +197,13 @@ describe("P1.5 runtime debt", () => {
       const heavyHash = playerTrajectoryHash(heavy);
       expect(mediumHash).not.toBe(heavyHash);
       expect(() =>
-        runtime.requestControlFeelProfile(
+        mediumRuntime.requestControlFeelProfile(
           "player",
-          "worldkit://control-feel-profile/unknown.unlisted@1",
+          HEAVY_FEEL_REF,
         ),
       ).toThrow(/^SUBJECT_OVERRIDE_FORBIDDEN/);
     } finally {
-      await runtime.dispose();
+      await Promise.all([mediumRuntime.dispose(), heavyRuntime.dispose()]);
     }
   }, 15_000);
 });

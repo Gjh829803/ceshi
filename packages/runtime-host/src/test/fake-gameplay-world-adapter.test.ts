@@ -162,7 +162,7 @@ describe("FakeGameplayWorldPort harness", () => {
     expect(() => prepared.commitPrepared()).toThrow(/already aborted/);
   });
 
-  it("pairs one-tick estimates with one-tick runs and publishes only the run result", async () => {
+  it("pairs one-tick estimates with one prepared Tick and publishes only on commit", async () => {
     const nextProjection = projection(1);
     const harness = createFakeGameplayWorldPortHarnessV1({
       initialWorldProjection: projection(0),
@@ -180,14 +180,18 @@ describe("FakeGameplayWorldPort harness", () => {
       maximumSemanticFactTransitionEventCount: 2,
     });
     expect(harness.publishedWorldProjection.simulationTick).toBe(0);
-    await expect(harness.port.runFixedInputTick(
+    const prepared = await harness.port.prepareFixedInputTick(
       ONE_TICK_INPUT,
       EMPTY_ACTION_PROJECTION,
-    )).resolves.toBe(nextProjection);
+    );
+    expect(prepared.projectedWorldStateAfter).toBe(nextProjection);
+    expect(harness.publishedWorldProjection.simulationTick).toBe(0);
+    prepared.commitPrepared();
     expect(harness.publishedWorldProjection).toBe(nextProjection);
     expect(harness.calls.map((call) => call.operation)).toEqual([
       "estimate-fixed-input-tick-capacity",
-      "run-fixed-input-tick",
+      "prepare-fixed-input-tick",
+      "commit-prepared",
     ]);
   });
 

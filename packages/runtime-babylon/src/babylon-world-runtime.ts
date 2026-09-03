@@ -101,9 +101,10 @@ import { resolveCameraViewTargetContextV1 } from "./camera-view-target-context";
 import { createWhiteboxMaterials } from "./materials";
 import { enableHavokPhysics, FIXED_TIME_STEP_SECONDS } from "./physics";
 import {
-  CharacterMovementComponentV1,
-  GoldenHumanoidSubjectControllerV1,
-  createGoldenHumanoidSubjectControllerV1,
+  SpecializedMotionSubjectControllerV1,
+  CharacterMovementSubjectControllerV1,
+  createCharacterMovementSubjectControllerV1,
+  supportsCharacterMovementSubjectV1,
 } from "./character-movement-component";
 import {
   committedCameraContextFromViewTargetV2,
@@ -377,7 +378,7 @@ function assertRuntimeSubjectSetV1(
 }
 
 type GameplayFixedTickActionProjectionV1 = Parameters<
-  BabylonGameplayRuntimeInternalV1["runFixedInputTick"]
+  BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]
 >[1];
 
 type BabylonPublishedCameraProjectionV1 = Readonly<{
@@ -385,11 +386,11 @@ type BabylonPublishedCameraProjectionV1 = Readonly<{
   positionMetersXYZ: RuntimeVec3V1;
 }>;
 
-type GoldenReplayHistoryEntryV1 =
+type FixedInputReplayHistoryEntryV1 =
   | Readonly<{
       kind: "fixed-input";
       input: Parameters<
-        BabylonGameplayRuntimeInternalV1["runFixedInputTick"]
+        BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]
       >[0];
       actionProjection: GameplayFixedTickActionProjectionV1;
     }>
@@ -435,7 +436,7 @@ type GoldenReplayHistoryEntryV1 =
       traversalConfigurationEpoch: number;
     }>;
 
-interface GoldenReplayBaselineCheckpointV1 {
+interface FixedInputReplayBaselineCheckpointV1 {
   readonly gameplayPublishedState: BabylonGameplayPublishedStateV1;
   readonly traversalConfigurationEpoch: number;
   readonly cameraTransactionState: ReturnType<
@@ -462,16 +463,16 @@ const EMPTY_INPUT_ACTIONS: readonly SemanticInputActionV1[] = Object.freeze([]);
 const EMPTY_INPUT_AXES: Readonly<ControlInputAxesV2> = Object.freeze({});
 
 type LiveSubjectControllerV1 =
-  | CharacterMovementComponentV1
-  | GoldenHumanoidSubjectControllerV1;
+  | SpecializedMotionSubjectControllerV1
+  | CharacterMovementSubjectControllerV1;
 
-function isGoldenHumanoidControllerV1(
-  controller: LiveSubjectControllerV1,
-): controller is GoldenHumanoidSubjectControllerV1 {
-  return controller instanceof GoldenHumanoidSubjectControllerV1;
+function isCharacterMovementControllerV1(
+  controller: LiveSubjectControllerV1 | undefined,
+): controller is CharacterMovementSubjectControllerV1 {
+  return controller instanceof CharacterMovementSubjectControllerV1;
 }
 
-function legacyLocomotionModeFromV2(
+function locomotionModeFromV2(
   locomotion: LocomotionCapabilityStateV2,
 ): LocomotionModeV1 {
   if (locomotion.status === "suspended") return "idle";
@@ -913,7 +914,7 @@ export class BabylonWorldRuntime {
     string,
     CameraContextSampleV2
   >;
-  private readonly latestLegacyCameraContextsByEntityId = new Map<
+  private readonly latestSpecializedCameraContextsByEntityId = new Map<
     string,
     CameraContextSampleV2
   >();
@@ -930,10 +931,10 @@ export class BabylonWorldRuntime {
   private activeInputActions: readonly SemanticInputActionV1[] = [];
   private activeInputAxes: Readonly<ControlInputAxesV2> = {};
   private gameplayPublishedState: BabylonGameplayPublishedStateV1;
-  private goldenReplayHistory: readonly GoldenReplayHistoryEntryV1[] = [];
-  private goldenReplayBaseline: GoldenReplayBaselineCheckpointV1 | undefined;
-  private isReplayingGoldenHistory = false;
-  private preparedGoldenFixedInput: Readonly<{
+  private fixedInputReplayHistory: readonly FixedInputReplayHistoryEntryV1[] = [];
+  private fixedInputReplayBaseline: FixedInputReplayBaselineCheckpointV1 | undefined;
+  private isReplayingFixedInputHistory = false;
+  private preparedFixedInput: Readonly<{
     beforeRuntimeProjection: BabylonRuntimeProjectionV1;
     beforeWorldProjection: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
@@ -1398,7 +1399,8 @@ export class BabylonWorldRuntime {
         subjectVisuals.push(visual);
         ownedDisposers.push(() => visual.dispose());
         let controller: LiveSubjectControllerV1;
-        if (subject.visualBinding.mode === "rigged") {
+        const usesCharacterMovement = supportsCharacterMovementSubjectV1(subject);
+        if (usesCharacterMovement && subject.visualBinding.mode === "rigged") {
           let latestAnimation: Readonly<{
             presentation: ResolvedActionPresentationV1;
             committedActionState?: Parameters<SubjectVisual["stepAnimation"]>[1];
@@ -1547,7 +1549,7 @@ export class BabylonWorldRuntime {
           });
           goldenProjectionsByEntityId.set(subject.entityId, projection);
           ownedDisposers.push(() => projection.dispose());
-          controller = createGoldenHumanoidSubjectControllerV1({
+          controller = createCharacterMovementSubjectControllerV1({
             subject,
             gravityMetersPerSecondSquaredXYZ:
               effectiveGravityMetersPerSecondSquaredXYZ,
@@ -1556,8 +1558,17 @@ export class BabylonWorldRuntime {
             actionPresentationRegistry,
             projectionPorts: [projection],
           });
+        } else if (usesCharacterMovement) {
+          controller = createCharacterMovementSubjectControllerV1({
+            subject,
+            gravityMetersPerSecondSquaredXYZ:
+              effectiveGravityMetersPerSecondSquaredXYZ,
+            visualRoot: visual.root,
+            scene,
+            actionPresentationRegistry,
+          });
         } else {
-          controller = new CharacterMovementComponentV1(
+          controller = new SpecializedMotionSubjectControllerV1(
             subject,
             effectiveGravityMetersPerSecondSquaredXYZ,
             visual.root,
@@ -1593,6 +1604,26 @@ export class BabylonWorldRuntime {
       }
 
       entityRegistry.activateAll();
+      const initiallyMountedRiderEntityIds = new Set(
+        gameplayBootstrap.initialRelationshipStates.flatMap((relationship) =>
+          relationship.type === "mountedOn"
+            ? [relationship.riderEntityId]
+            : []
+        ),
+      );
+      // Authoring placement is not physics support evidence. Sample every
+      // active, unmounted CharacterMovement Body exactly once after all
+      // colliders and Subjects are active, but before constructing the
+      // publishable Runtime Snapshot. An initially mounted rider is sampled by
+      // its one suspension projection in the Runtime constructor instead.
+      // This keeps BodyPort/checkSupport as the sole support authority for the
+      // first committed locomotion state as well as later reset/tick states.
+      for (const [entityId, character] of characterEntitiesByEntityId) {
+        if (isCharacterMovementControllerV1(character.movement) &&
+          !initiallyMountedRiderEntityIds.has(entityId)) {
+          character.movement.reset();
+        }
+      }
       ownedDisposers.push(() => entityRegistry.dispose());
       options.onInitializationStage?.("ready");
       runtime = new BabylonWorldRuntime(
@@ -1659,7 +1690,7 @@ export class BabylonWorldRuntime {
           continue;
         }
         const controlled = subject.entityId === controlledEntityId;
-        if (isGoldenHumanoidControllerV1(controller)) {
+        if (isCharacterMovementControllerV1(controller)) {
           controller.step(
             controlled ? input.actions : [],
             viewControlFrame,
@@ -1706,7 +1737,7 @@ export class BabylonWorldRuntime {
       isDisposed: () => this.disposed,
       readCharacterMovement: (entityId) => {
         const movement = this.characterEntitiesByEntityId.get(entityId)?.movement;
-        return movement instanceof CharacterMovementComponentV1
+        return isCharacterMovementControllerV1(movement)
           ? movement
           : undefined;
       },
@@ -1732,7 +1763,7 @@ export class BabylonWorldRuntime {
           (subject) => {
             if (mountedRiderEntityIds.has(subject.entityId)) return false;
             const controller = this.controllerFor(subject.entityId);
-            return !isGoldenHumanoidControllerV1(controller) ||
+            return !isCharacterMovementControllerV1(controller) ||
               controller.locomotionStateV2().status !== "suspended";
           },
         ).length;
@@ -1753,7 +1784,7 @@ export class BabylonWorldRuntime {
           actorEntityId,
         )?.movement;
         return controller !== undefined &&
-          isGoldenHumanoidControllerV1(controller) &&
+          isCharacterMovementControllerV1(controller) &&
           this.actionPresentationRegistry.bindings.some((binding) =>
             binding.semanticActionRef === semanticActionRef
           );
@@ -1762,31 +1793,10 @@ export class BabylonWorldRuntime {
         this.prepareGameplayPossessionTarget(target),
       prepareMountedRelationshipTransition: (transition) =>
         this.prepareMountedRelationshipTransition(transition),
-      runFixedInputTick: (input, actionProjection) =>
-        this.runGameplayFixedInputTick(input, actionProjection),
+      prepareFixedInputTick: (input, actionProjection) =>
+        this.prepareGameplayFixedInputTick(input, actionProjection),
       dispose: () => this.dispose(),
     };
-    if (
-      this.gameplayBootstrap.initialRelationshipStates.length === 0 &&
-      [...this.characterEntitiesByEntityId.values()].every((character) =>
-        isGoldenHumanoidControllerV1(character.movement)
-      )
-    ) {
-      Object.defineProperty(internal, "prepareFixedInputTick", {
-        configurable: false,
-        enumerable: false,
-        writable: false,
-        value: (
-          input: Parameters<
-            BabylonGameplayRuntimeInternalV1["runFixedInputTick"]
-          >[0],
-          actionProjection: GameplayFixedTickActionProjectionV1,
-        ) => this.prepareGoldenGameplayFixedInputTick(
-          input,
-          actionProjection,
-        ),
-      });
-    }
     return internal;
   }
 
@@ -1795,13 +1805,13 @@ export class BabylonWorldRuntime {
   ): ReturnType<
     BabylonGameplayRuntimeInternalV1["readWorldProjection"]
   > {
-    if (!includePreparedState && this.preparedGoldenFixedInput !== undefined) {
-      return this.preparedGoldenFixedInput.beforeWorldProjection;
+    if (!includePreparedState && this.preparedFixedInput !== undefined) {
+      return this.preparedFixedInput.beforeWorldProjection;
     }
     const spatialEntityStatesById: Record<string, SpatialEntityStateV1> = {};
     const capabilityStatesById: Record<string, GameplayCapabilityStateV1> = {};
     for (const subject of this.runtimeSubjects) {
-      const controller = this.controllerFor(subject.entityId);
+      const controller = this.characterMovementControllerFor(subject.entityId);
       const origin = controller.subjectOrigin;
       const velocity = controller.velocity;
       const halfYawRadians = controller.facingYawRadians / 2;
@@ -1834,54 +1844,22 @@ export class BabylonWorldRuntime {
       const capabilityStateId = `capability-state:${subject.entityId}:locomotion`;
       const mounted = this.gameplayPublishedState
         .mountedRelationshipsByRiderEntityId[subject.entityId];
-      if (isGoldenHumanoidControllerV1(controller)) {
-        const locomotion = !isNil(mounted)
-          ? Object.freeze({
-              schemaVersion: 2 as const,
-              status: "suspended" as const,
-              suspendedByRelationshipId: mounted.relationship.id,
-              committedTick: this.tick,
-              transitionSequence:
-                controller.locomotionStateV2().transitionSequence,
-            })
-          : controller.locomotionStateV2();
-        capabilityStatesById[capabilityStateId] = Object.freeze({
-          id: capabilityStateId,
-          kind: "locomotion-capability-state-v2",
-          ownerEntityId: subject.entityId,
-          locomotionCapabilityRef: subject.locomotionCapabilityRef,
-          locomotionCapabilityHash:
-            subject.locomotionCapabilityHash as `sha256:${string}`,
-          locomotion,
-        });
-      } else {
-        const motion = controller.motionSnapshot();
-        capabilityStatesById[capabilityStateId] = !isNil(mounted)
-          ? Object.freeze({
-              id: capabilityStateId,
-              kind: "locomotion-capability-state",
-              ownerEntityId: subject.entityId,
-              locomotionCapabilityRef: subject.locomotionCapabilityRef,
-              locomotionCapabilityHash:
-                subject.locomotionCapabilityHash as `sha256:${string}`,
-              mode: "suspended",
-              suspendedByRelationshipId: mounted.relationship.id,
-            })
-          : Object.freeze({
-              id: capabilityStateId,
-              kind: "locomotion-capability-state",
-              ownerEntityId: subject.entityId,
-              locomotionCapabilityRef: subject.locomotionCapabilityRef,
-              locomotionCapabilityHash:
-                subject.locomotionCapabilityHash as `sha256:${string}`,
-              mode: motion.locomotionMode,
-              movementMedium: controller.movementMedium,
-              facingYawRadians: canonicalizeSignedZero(controller.facingYawRadians),
-              speedMetersPerSecond: canonicalizeSignedZero(
-                motion.speedMetersPerSecond,
-              ),
-            });
+      const locomotion = controller.locomotionStateV2();
+      if ((!isNil(mounted) &&
+          (locomotion.status !== "suspended" ||
+            locomotion.suspendedByRelationshipId !== mounted.relationship.id)) ||
+        (isNil(mounted) && locomotion.status === "suspended")) {
+        throw new Error("WORLDKIT_MOUNTED_LOCOMOTION_STATE_MISMATCH");
       }
+      capabilityStatesById[capabilityStateId] = Object.freeze({
+        id: capabilityStateId,
+        kind: "locomotion-capability-state-v2",
+        ownerEntityId: subject.entityId,
+        locomotionCapabilityRef: subject.locomotionCapabilityRef,
+        locomotionCapabilityHash:
+          subject.locomotionCapabilityHash as `sha256:${string}`,
+        locomotion,
+      });
     }
     return Object.freeze({
       simulationTick: this.tick,
@@ -1899,7 +1877,7 @@ export class BabylonWorldRuntime {
       if (mountedRiderEntityIds.has(subject.entityId)) return [];
       const controller = this.controllerFor(subject.entityId);
       if (
-        isGoldenHumanoidControllerV1(controller) &&
+        isCharacterMovementControllerV1(controller) &&
         controller.locomotionStateV2().status === "suspended"
       ) return [];
       return [{
@@ -1976,7 +1954,7 @@ export class BabylonWorldRuntime {
     const traversalConfigurationEpochAfter = targetChanged
       ? this.traversalConfigurationEpoch + 1
       : this.traversalConfigurationEpoch;
-    const nextGoldenReplayHistory = this.nextGoldenReplayHistory(Object.freeze({
+    const nextFixedInputReplayHistory = this.nextFixedInputReplayHistory(Object.freeze({
       kind: "possession" as const,
       publishedState: stagedState,
       traversalConfigurationEpoch: traversalConfigurationEpochAfter,
@@ -2008,7 +1986,7 @@ export class BabylonWorldRuntime {
         this.activeInputActions = EMPTY_INPUT_ACTIONS;
         this.activeInputAxes = EMPTY_INPUT_AXES;
         this.latestRenderReadyReceipt = undefined;
-        this.goldenReplayHistory = nextGoldenReplayHistory;
+        this.fixedInputReplayHistory = nextFixedInputReplayHistory;
       },
       abort: (): Promise<void> => {
         if (!isNil(abortPromise)) return abortPromise;
@@ -2104,21 +2082,6 @@ export class BabylonWorldRuntime {
     });
   }
 
-  private nextGoldenTransitionSequence(
-    locomotion: LocomotionCapabilityStateV2,
-    suspendedByRelationshipId?: string,
-  ): number {
-    if (
-      suspendedByRelationshipId !== undefined &&
-      locomotion.status === "suspended" &&
-      locomotion.suspendedByRelationshipId === suspendedByRelationshipId
-    ) return locomotion.transitionSequence;
-    if (locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
-      throw new Error("3C_INPUT_INVALID: transition sequence exhausted.");
-    }
-    return locomotion.transitionSequence + 1;
-  }
-
   private projectMountedRider(
     rider: LiveSubjectControllerV1,
     relationship: MountedOnRelationshipStateV1,
@@ -2130,7 +2093,7 @@ export class BabylonWorldRuntime {
       pose.subjectOrigin.y,
       pose.subjectOrigin.z,
     ] as const;
-    if (isGoldenHumanoidControllerV1(rider)) {
+    if (isCharacterMovementControllerV1(rider)) {
       rider.projectSuspendedAt(
         subjectOrigin,
         pose.facingYawRadians,
@@ -2199,38 +2162,38 @@ export class BabylonWorldRuntime {
       throw new Error("WORLDKIT_MOUNTED_RIDER_UNAVAILABLE");
     }
     const halfYawRadians = pose.facingYawRadians / 2;
+    const riderCenterOffset =
+      riderSubject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    const poseSubjectOrigin = pose.subjectOrigin.asArray();
+    // Preserve the exact floating-point operation order used by the committed
+    // Body center-to-origin projection. Although the offset cancels
+    // algebraically, applying and removing it here avoids a one-ULP mismatch
+    // between the prepared Gameplay projection and the Body transaction.
+    const projectedRiderOrigin: RuntimeVec3V1 = [
+      poseSubjectOrigin[0]! + riderCenterOffset[0] - riderCenterOffset[0],
+      poseSubjectOrigin[1]! + riderCenterOffset[1] - riderCenterOffset[1],
+      poseSubjectOrigin[2]! + riderCenterOffset[2] - riderCenterOffset[2],
+    ];
     const capabilityStateId =
       `capability-state:${relationship.riderEntityId}:locomotion`;
-    const suspendedCapability: GameplayCapabilityStateV1 =
-      isGoldenHumanoidControllerV1(rider)
-        ? Object.freeze({
-            id: capabilityStateId,
-            kind: "locomotion-capability-state-v2" as const,
-            ownerEntityId: relationship.riderEntityId,
-            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-            locomotionCapabilityHash:
-              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            locomotion: Object.freeze({
-              schemaVersion: 2 as const,
-              status: "suspended" as const,
-              suspendedByRelationshipId: relationship.id,
-              committedTick: this.tick,
-              transitionSequence: this.nextGoldenTransitionSequence(
-                rider.locomotionStateV2(),
-                relationship.id,
-              ),
-            }),
-          })
-        : Object.freeze({
-            id: capabilityStateId,
-            kind: "locomotion-capability-state" as const,
-            ownerEntityId: relationship.riderEntityId,
-            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-            locomotionCapabilityHash:
-              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            mode: "suspended" as const,
-            suspendedByRelationshipId: relationship.id,
-          });
+    const transactionalRider = this.characterMovementControllerFor(
+      relationship.riderEntityId,
+    );
+    const suspendedLocomotion = transactionalRider.previewSuspendedAt(
+      projectedRiderOrigin,
+      pose.facingYawRadians,
+      relationship.id,
+      this.tick,
+    ).locomotion;
+    const suspendedCapability: GameplayCapabilityStateV1 = Object.freeze({
+      id: capabilityStateId,
+      kind: "locomotion-capability-state-v2" as const,
+      ownerEntityId: relationship.riderEntityId,
+      locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+      locomotionCapabilityHash:
+        riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+      locomotion: suspendedLocomotion,
+    });
     const projectedWorldStateAfter = Object.freeze({
       ...baseProjection,
       spatialEntityStatesById: Object.freeze({
@@ -2238,9 +2201,9 @@ export class BabylonWorldRuntime {
         [relationship.riderEntityId]: Object.freeze({
           ...riderState,
           positionMetersXYZ: Object.freeze([
-            canonicalizeSignedZero(pose.subjectOrigin.x),
-            canonicalizeSignedZero(pose.subjectOrigin.y),
-            canonicalizeSignedZero(pose.subjectOrigin.z),
+            canonicalizeSignedZero(projectedRiderOrigin[0]),
+            canonicalizeSignedZero(projectedRiderOrigin[1]),
+            canonicalizeSignedZero(projectedRiderOrigin[2]),
           ]) as readonly [number, number, number],
           rotationQuaternionXYZW: Object.freeze([
             0,
@@ -2284,7 +2247,7 @@ export class BabylonWorldRuntime {
     }
     const traversalConfigurationEpochAfter =
       this.traversalConfigurationEpoch + 1;
-    const nextGoldenReplayHistory = this.nextGoldenReplayHistory(Object.freeze({
+    const nextFixedInputReplayHistory = this.nextFixedInputReplayHistory(Object.freeze({
       kind: "mount" as const,
       publishedState: stagedState,
       relationship,
@@ -2313,7 +2276,7 @@ export class BabylonWorldRuntime {
           this.activeInputActions = EMPTY_INPUT_ACTIONS;
           this.activeInputAxes = EMPTY_INPUT_AXES;
           this.latestRenderReadyReceipt = undefined;
-          this.goldenReplayHistory = nextGoldenReplayHistory;
+          this.fixedInputReplayHistory = nextFixedInputReplayHistory;
           lifecycle = "committed";
         } catch (error) {
           rider.setCollisionFilterMasks(
@@ -2456,49 +2419,27 @@ export class BabylonWorldRuntime {
     const halfYawRadians = placement.facingYawRadians / 2;
     const capabilityStateId =
       `capability-state:${relationship.riderEntityId}:locomotion`;
-    const dismountedCapability: GameplayCapabilityStateV1 =
-      isGoldenHumanoidControllerV1(rider)
-        ? Object.freeze({
-            id: capabilityStateId,
-            kind: "locomotion-capability-state-v2" as const,
-            ownerEntityId: relationship.riderEntityId,
-            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-            locomotionCapabilityHash:
-              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            locomotion: Object.freeze({
-              schemaVersion: 2 as const,
-              status: "active" as const,
-              mobilityMode: "grounded" as const,
-              gait: "idle" as const,
-              verticalPhase: "none" as const,
-              supportMode: "supported" as const,
-              movementMedium: "ground" as const,
-              facingYawRadians: canonicalizeSignedZero(
-                placement.facingYawRadians,
-              ),
-              linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-              horizontalSpeedMetersPerSecond: 0,
-              committedTick: this.tick,
-              phaseEnteredTick: this.tick,
-              transitionSequence: this.nextGoldenTransitionSequence(
-                rider.locomotionStateV2(),
-              ),
-            }),
-          })
-        : Object.freeze({
-            id: capabilityStateId,
-            kind: "locomotion-capability-state" as const,
-            ownerEntityId: relationship.riderEntityId,
-            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-            locomotionCapabilityHash:
-              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            mode: "idle" as const,
-            movementMedium: "ground" as const,
-            facingYawRadians: canonicalizeSignedZero(
-              placement.facingYawRadians,
-            ),
-            speedMetersPerSecond: 0,
-          });
+    const transactionalRider = this.characterMovementControllerFor(
+      relationship.riderEntityId,
+    );
+    const dismountedLocomotion = transactionalRider.previewResetAt(
+      [
+        placement.subjectOrigin.x,
+        placement.subjectOrigin.y,
+        placement.subjectOrigin.z,
+      ],
+      placement.facingYawRadians,
+      this.tick,
+    ).locomotion;
+    const dismountedCapability: GameplayCapabilityStateV1 = Object.freeze({
+      id: capabilityStateId,
+      kind: "locomotion-capability-state-v2" as const,
+      ownerEntityId: relationship.riderEntityId,
+      locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+      locomotionCapabilityHash:
+        riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+      locomotion: dismountedLocomotion,
+    });
     const projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
     > =
@@ -2551,7 +2492,7 @@ export class BabylonWorldRuntime {
     }
     const traversalConfigurationEpochAfter =
       this.traversalConfigurationEpoch + 1;
-    const nextGoldenReplayHistory = this.nextGoldenReplayHistory(Object.freeze({
+    const nextFixedInputReplayHistory = this.nextFixedInputReplayHistory(Object.freeze({
       kind: "dismount" as const,
       publishedState: stagedState,
       relationship,
@@ -2595,7 +2536,7 @@ export class BabylonWorldRuntime {
           this.activeInputActions = EMPTY_INPUT_ACTIONS;
           this.activeInputAxes = EMPTY_INPUT_AXES;
           this.latestRenderReadyReceipt = undefined;
-          this.goldenReplayHistory = nextGoldenReplayHistory;
+          this.fixedInputReplayHistory = nextFixedInputReplayHistory;
           lifecycle = "committed";
         } catch (error) {
           rider.setCollisionFilterMasks(
@@ -2620,8 +2561,8 @@ export class BabylonWorldRuntime {
     });
   }
 
-  private async prepareGoldenGameplayFixedInputTick(
-    input: Parameters<BabylonGameplayRuntimeInternalV1["runFixedInputTick"]>[0],
+  private async prepareGameplayFixedInputTick(
+    input: Parameters<BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]>[0],
     actionProjection: GameplayFixedTickActionProjectionV1,
   ): Promise<NonNullable<
     Awaited<ReturnType<NonNullable<
@@ -2629,29 +2570,36 @@ export class BabylonWorldRuntime {
     >>>
   >> {
     this.assertUsable();
-    if (this.preparedGoldenFixedInput !== undefined) {
-      throw new Error("3C_TICK_TOKEN_STALE: a Golden Runtime Tick is already prepared.");
+    if ([...this.characterEntitiesByEntityId.values()].some(
+      (character) => !isCharacterMovementControllerV1(character.movement),
+    )) {
+      throw new Error(
+        "3C_TRANSACTIONAL_GAMEPLAY_CONTROL_UNSUPPORTED: hosted Gameplay requires CharacterMovement-backed planar-vector Subjects.",
+      );
+    }
+    if (this.preparedFixedInput !== undefined) {
+      throw new Error("3C_TICK_TOKEN_STALE: a Transactional Runtime Tick is already prepared.");
     }
     if (input.ticks !== 1) {
       throw new RangeError("Gameplay Runtime input must contain exactly one fixed Tick.");
     }
     this.assertActionProjectionForNextTick(actionProjection);
-    const committedFixedTickCount = this.goldenReplayHistory.reduce(
+    const committedFixedTickCount = this.fixedInputReplayHistory.reduce(
       (count, entry) => count + (entry.kind === "fixed-input" ? 1 : 0),
       0,
     );
     if (this.tick !== committedFixedTickCount) {
       throw new Error(
-        "3C_TICK_TOKEN_STALE: Golden Runtime replay baseline was invalidated by an unstaged Tick.",
+        "3C_TICK_TOKEN_STALE: Transactional Runtime replay baseline was invalidated by an unstaged Tick.",
       );
     }
-    if (this.goldenReplayBaseline === undefined) {
+    if (this.fixedInputReplayBaseline === undefined) {
       if (this.tick !== 0) {
         throw new Error(
-          "3C_TICK_TOKEN_STALE: Golden prepared publication must begin from Tick zero.",
+          "3C_TICK_TOKEN_STALE: Prepared fixed-input publication must begin from Tick zero.",
         );
       }
-      this.goldenReplayBaseline = Object.freeze({
+      this.fixedInputReplayBaseline = Object.freeze({
         gameplayPublishedState: this.gameplayPublishedState,
         traversalConfigurationEpoch: this.traversalConfigurationEpoch,
         cameraTransactionState: this.cameraComponent.captureTransactionState(),
@@ -2697,14 +2645,14 @@ export class BabylonWorldRuntime {
         ...actionProjection.activeActionStatesById,
       }),
     });
-    const nextGoldenReplayHistory = this.nextGoldenReplayHistory(Object.freeze({
+    const nextFixedInputReplayHistory = this.nextFixedInputReplayHistory(Object.freeze({
       kind: "fixed-input" as const,
       input: admittedInput,
       actionProjection: admittedActionProjection,
     }));
     const beforeRuntimeProjection = this.snapshot();
     const beforeWorldProjection = this.gameplayWorldProjection();
-    this.preparedGoldenFixedInput = Object.freeze({
+    this.preparedFixedInput = Object.freeze({
       beforeRuntimeProjection,
       beforeWorldProjection,
       beforeLatestRenderReadyReceipt: this.latestRenderReadyReceipt,
@@ -2719,11 +2667,11 @@ export class BabylonWorldRuntime {
       );
     } catch (error) {
       try {
-        await this.restoreGoldenPreparedFixedInput();
+        await this.restorePreparedFixedInput();
       } catch (rollbackError) {
         throw new AggregateError(
           [error, rollbackError],
-          "Golden Runtime Tick prepare failed and its checkpoint could not be restored.",
+          "Transactional Runtime Tick prepare failed and its checkpoint could not be restored.",
         );
       }
       throw error;
@@ -2736,35 +2684,35 @@ export class BabylonWorldRuntime {
       commitPrepared: (): void => {
         if (lifecycle !== "prepared") return;
         lifecycle = "committed";
-        this.preparedGoldenFixedInput = undefined;
-        this.goldenReplayHistory = nextGoldenReplayHistory;
+        this.preparedFixedInput = undefined;
+        this.fixedInputReplayHistory = nextFixedInputReplayHistory;
       },
       abort: (): Promise<void> => {
         if (abortPromise !== undefined) return abortPromise;
         if (lifecycle === "committed") {
           abortPromise = Promise.reject(new Error(
-            "3C_TICK_TOKEN_STALE: committed Golden Runtime Tick cannot be aborted.",
+            "3C_TICK_TOKEN_STALE: committed Transactional Runtime Tick cannot be aborted.",
           ));
           return abortPromise;
         }
         lifecycle = "aborted";
-        abortPromise = this.restoreGoldenPreparedFixedInput();
+        abortPromise = this.restorePreparedFixedInput();
         return abortPromise;
       },
     });
   }
 
-  private nextGoldenReplayHistory(
-    entry: GoldenReplayHistoryEntryV1,
-  ): readonly GoldenReplayHistoryEntryV1[] {
-    if (this.goldenReplayBaseline === undefined || this.isReplayingGoldenHistory) {
-      return this.goldenReplayHistory;
+  private nextFixedInputReplayHistory(
+    entry: FixedInputReplayHistoryEntryV1,
+  ): readonly FixedInputReplayHistoryEntryV1[] {
+    if (this.fixedInputReplayBaseline === undefined || this.isReplayingFixedInputHistory) {
+      return this.fixedInputReplayHistory;
     }
-    return Object.freeze([...this.goldenReplayHistory, entry]);
+    return Object.freeze([...this.fixedInputReplayHistory, entry]);
   }
 
-  private async applyGoldenReplayHistoryEntry(
-    entry: GoldenReplayHistoryEntryV1,
+  private async applyFixedInputReplayHistoryEntry(
+    entry: FixedInputReplayHistoryEntryV1,
   ): Promise<void> {
     if (entry.kind === "fixed-input") {
       await this.runGameplayFixedInputTick(
@@ -2841,27 +2789,19 @@ export class BabylonWorldRuntime {
     throw new Error(`GOLDEN_REPLAY_HISTORY_ENTRY_UNHANDLED: ${String(exhaustive)}`);
   }
 
-  private async restoreGoldenPreparedFixedInput(): Promise<void> {
-    const prepared = this.preparedGoldenFixedInput;
-    const baseline = this.goldenReplayBaseline;
+  private async restorePreparedFixedInput(): Promise<void> {
+    const prepared = this.preparedFixedInput;
+    const baseline = this.fixedInputReplayBaseline;
     if (prepared === undefined || baseline === undefined) {
-      throw new Error("3C_TICK_TOKEN_STALE: Golden Runtime Tick is not prepared.");
+      throw new Error("3C_TICK_TOKEN_STALE: Transactional Runtime Tick is not prepared.");
     }
     try {
       for (const projection of this.goldenProjectionsByEntityId.values()) {
         projection.reset();
       }
       this.latestGoldenCameraContextsByEntityId.clear();
-      for (const character of this.characterEntitiesByEntityId.values()) {
-        const controller = character.movement;
-        if (!isGoldenHumanoidControllerV1(controller)) {
-          throw new Error(
-            "3C_INPUT_INVALID: Golden replay cannot include a legacy movement owner.",
-          );
-        }
-        controller.reset();
-      }
-      for (const visual of this.subjectVisuals) visual.resetAnimation();
+      // Collision admission is part of the Body baseline. Restore it before
+      // reset samples support; a mounted Rider may currently have zero masks.
       for (const [entityId, collisionFilterMasks] of
         baseline.collisionFilterMasksByEntityId) {
         this.controllerFor(entityId).setCollisionFilterMasks(
@@ -2869,6 +2809,16 @@ export class BabylonWorldRuntime {
           collisionFilterMasks.collideMask,
         );
       }
+      for (const character of this.characterEntitiesByEntityId.values()) {
+        const controller = character.movement;
+        if (!isCharacterMovementControllerV1(controller)) {
+          throw new Error(
+            "3C_INPUT_INVALID: Fixed-input replay cannot include a specialized movement owner.",
+          );
+        }
+        controller.reset();
+      }
+      for (const visual of this.subjectVisuals) visual.resetAnimation();
       this.tick = 0;
       this.gameplayPublishedState = baseline.gameplayPublishedState;
       this.traversalConfigurationEpoch =
@@ -2909,33 +2859,33 @@ export class BabylonWorldRuntime {
           0,
         );
       }
-      this.isReplayingGoldenHistory = true;
+      this.isReplayingFixedInputHistory = true;
       try {
-        for (const entry of this.goldenReplayHistory) {
-          await this.applyGoldenReplayHistoryEntry(entry);
+        for (const entry of this.fixedInputReplayHistory) {
+          await this.applyFixedInputReplayHistoryEntry(entry);
         }
       } finally {
-        this.isReplayingGoldenHistory = false;
+        this.isReplayingFixedInputHistory = false;
       }
       this.latestRenderReadyReceipt = prepared.beforeLatestRenderReadyReceipt;
-      this.preparedGoldenFixedInput = undefined;
+      this.preparedFixedInput = undefined;
       const restoredProjection = this.snapshot();
       if (
         sha256CanonicalJson(restoredProjection) !==
           sha256CanonicalJson(prepared.beforeRuntimeProjection)
       ) {
         throw new Error(
-          "3C_TICK_TOKEN_STALE: Golden Runtime replay did not restore the committed Snapshot.",
+          "3C_TICK_TOKEN_STALE: Transactional Runtime replay did not restore the committed Snapshot.",
         );
       }
     } catch (error) {
-      this.preparedGoldenFixedInput = undefined;
+      this.preparedFixedInput = undefined;
       throw error;
     }
   }
 
   private async runGameplayFixedInputTick(
-    input: Parameters<BabylonGameplayRuntimeInternalV1["runFixedInputTick"]>[0],
+    input: Parameters<BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]>[0],
     actionProjection: GameplayFixedTickActionProjectionV1,
   ): Promise<ReturnType<BabylonGameplayRuntimeInternalV1["readWorldProjection"]>> {
     this.assertUsable();
@@ -2964,7 +2914,7 @@ export class BabylonWorldRuntime {
         continue;
       }
       const isTarget = subject.entityId === targetEntityId;
-      if (isGoldenHumanoidControllerV1(controller)) {
+      if (isCharacterMovementControllerV1(controller)) {
         const activeActionState = this.goldenActionStateForSubject(
           actionProjection,
           subject.entityId,
@@ -3011,7 +2961,7 @@ export class BabylonWorldRuntime {
     actionProjection: GameplayFixedTickActionProjectionV1,
   ): void {
     for (const subject of this.runtimeSubjects) {
-      if (!isGoldenHumanoidControllerV1(this.controllerFor(subject.entityId))) {
+      if (!isCharacterMovementControllerV1(this.controllerFor(subject.entityId))) {
         continue;
       }
       this.goldenActionStateForSubject(actionProjection, subject.entityId);
@@ -3057,7 +3007,7 @@ export class BabylonWorldRuntime {
         continue;
       }
       controller.synchronizeVisual();
-      if (!isGoldenHumanoidControllerV1(controller)) {
+      if (!isCharacterMovementControllerV1(controller)) {
         visual.stepAnimation(committedPresentationFromLocomotionMode(
           this.tick,
           controller.motionSnapshot().locomotionMode,
@@ -3135,7 +3085,7 @@ export class BabylonWorldRuntime {
         continue;
       }
       controller.synchronizeVisual();
-      if (!isGoldenHumanoidControllerV1(controller)) {
+      if (!isCharacterMovementControllerV1(controller)) {
         visual.stepAnimation(committedPresentationFromLocomotionMode(
           this.tick,
           controller.motionSnapshot().locomotionMode,
@@ -3161,14 +3111,22 @@ export class BabylonWorldRuntime {
     this.reconcileSemanticFacts();
     if (controlledEntityId !== undefined) {
       const controlled = this.controllerFor(controlledEntityId);
-      if (!isGoldenHumanoidControllerV1(controlled)) {
+      if (!isCharacterMovementControllerV1(controlled)) {
         this.updateCameraForEntity(controlledEntityId);
       } else {
-        // Motion Kernel already published this Tick's Camera Context. Stamp the
-        // view revision so a later render cannot reset() the session and snap
-        // heading onto post-step velocity.
-        this.appliedCameraViewStateRevision =
-          this.gameplayPublishedState.viewProjection.viewStateRevision;
+        const context = this.latestGoldenCameraContextsByEntityId.get(
+          controlledEntityId,
+        );
+        if (context?.committedTick === this.tick) {
+          // The fixed-input transaction already published this Tick's Camera
+          // Context. Stamp the view revision so render cannot reset the session.
+          this.appliedCameraViewStateRevision =
+            this.gameplayPublishedState.viewProjection.viewStateRevision;
+        } else {
+          // Trusted Traversal drives the same CharacterMovement authority
+          // directly and therefore needs the Host to derive its Camera Context.
+          this.updateCameraForEntity(controlledEntityId);
+        }
       }
     }
     this.publishCameraProjection();
@@ -3184,7 +3142,16 @@ export class BabylonWorldRuntime {
     if (input.traversingEntityId !== this.controlledEntityId()) {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
-    this.legacyControllerFor(input.traversingEntityId);
+    const mountedRelationships = Object.values(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    );
+    const mountedRiderEntityIds = new Set(
+      mountedRelationships.map(({ relationship }) => relationship.riderEntityId),
+    );
+    if (mountedRiderEntityIds.has(input.traversingEntityId)) {
+      throw new Error("TRAVERSAL_RUNTIME_MOUNTED_SUBJECT_UNSUPPORTED");
+    }
+    this.characterMovementControllerFor(input.traversingEntityId);
     this.updateNativeColliderResidencyForPositions(
       this.runtimeSubjects.map((subject) =>
         subject.entityId === input.traversingEntityId
@@ -3194,21 +3161,33 @@ export class BabylonWorldRuntime {
     this.traversalConfigurationEpoch += 1;
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
+      if (mountedRiderEntityIds.has(subject.entityId)) continue;
       if (subject.entityId === input.traversingEntityId) {
-        this.legacyControllerFor(subject.entityId).resetAt(
+        this.characterMovementControllerFor(subject.entityId).resetAt(
           input.subjectOriginPositionMetersXYZ,
           input.facingYawRadians,
+          0,
         );
       } else {
         controller.reset();
       }
     }
-    for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.tick = 0;
+    for (const mounted of mountedRelationships) {
+      const rider = this.controllerFor(mounted.relationship.riderEntityId);
+      this.projectMountedRider(
+        rider,
+        mounted.relationship,
+        this.mountedPose(mounted.relationship),
+        this.tick,
+      );
+    }
+    for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.activeInputActions = [];
     this.activeInputAxes = {};
     this.cameraComponent.reset();
-    this.latestLegacyCameraContextsByEntityId.clear();
+    this.latestGoldenCameraContextsByEntityId.clear();
+    this.latestSpecializedCameraContextsByEntityId.clear();
     this.latestRenderReadyReceipt = undefined;
     this.gameplayPublishedState = Object.freeze({
       ...this.gameplayPublishedState,
@@ -3227,31 +3206,52 @@ export class BabylonWorldRuntime {
     if (input.traversingEntityId !== this.controlledEntityId()) {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
-    this.legacyControllerFor(input.traversingEntityId);
+    if (Object.prototype.hasOwnProperty.call(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+      input.traversingEntityId,
+    )) {
+      throw new Error("TRAVERSAL_RUNTIME_MOUNTED_SUBJECT_UNSUPPORTED");
+    }
+    this.characterMovementControllerFor(input.traversingEntityId);
     this.latestRenderReadyReceipt = undefined;
     this.activeInputActions = [];
     this.activeInputAxes = {};
     this.cameraComponent.setInputActions([]);
+    const mountedRiderEntityIds = new Set(Object.keys(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    ));
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
-      if (subject.entityId === input.traversingEntityId) {
-        this.legacyControllerFor(subject.entityId).stepCommand({
-          kind: "planar-vector",
-          directionMetersXZ: input.walkDirectionWorldXZ,
+      if (mountedRiderEntityIds.has(subject.entityId)) continue;
+      if (isCharacterMovementControllerV1(controller)) {
+        const direction = subject.entityId === input.traversingEntityId
+          ? input.walkDirectionWorldXZ
+          : [0, 0] as const;
+        const before = controller.movementSnapshot();
+        controller.runCommand({
+          schemaVersion: 1,
+          tick: before.tick + 1,
+          fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
+          // CharacterMovement input is view-relative; with zero view yaw,
+          // world +Z is input -Z.
+          movementInputXZ: [
+            direction[0] === 0 ? 0 : direction[0],
+            direction[1] === 0 ? 0 : -direction[1],
+          ],
+          facingInputXZ: [
+            direction[0] === 0 ? 0 : direction[0],
+            direction[1] === 0 ? 0 : -direction[1],
+          ],
           runRequested: false,
-          jumpRequested: false,
-          aimRequested: false,
-          facingDirectionMetersXZ: input.walkDirectionWorldXZ,
+          jumpPressed: false,
+          jumpHeld: false,
+          viewYawRadians: 0,
+          layeredMoves: [],
         });
       } else if (
-        !isGoldenHumanoidControllerV1(controller) &&
         controller.movementMedium !== "ground"
       ) {
         controller.stepCommand({ kind: "none" });
-      } else if (isGoldenHumanoidControllerV1(controller)) {
-        throw new Error(
-          "3C_INPUT_INVALID: traversal cannot mix Golden and legacy movement owners.",
-        );
       } else {
         controller.publishSupport();
       }
@@ -3261,8 +3261,8 @@ export class BabylonWorldRuntime {
 
   snapshot(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
-    if (this.preparedGoldenFixedInput !== undefined) {
-      return this.preparedGoldenFixedInput.beforeRuntimeProjection;
+    if (this.preparedFixedInput !== undefined) {
+      return this.preparedFixedInput.beforeRuntimeProjection;
     }
     const possessionTarget = this.gameplayPublishedState.possessionTarget;
     const controlledEntityId = this.controlledEntityId();
@@ -3274,7 +3274,7 @@ export class BabylonWorldRuntime {
       const controller = this.controllerFor(subject.entityId);
       const subjectOrigin = controller.subjectOrigin;
       const velocity = controller.velocity;
-      if (isGoldenHumanoidControllerV1(controller)) {
+      if (isCharacterMovementControllerV1(controller)) {
         const locomotion = controller.locomotionStateV2();
         const forward = controller.forward;
         subjectStatesByEntityId[subject.entityId] = {
@@ -3302,8 +3302,10 @@ export class BabylonWorldRuntime {
           activeControlFeelProfileRef: subject.controlFeel.resourceRef,
           activePhysicsBodyProfileRef: subject.physicsBodyProfileRef,
           activeLocomotionProfileRef: subject.locomotionProfileRef,
-          locomotionMode: legacyLocomotionModeFromV2(locomotion),
-          activeMotionProfileRef: subject.locomotionProfileRef,
+          locomotionMode: locomotionModeFromV2(locomotion),
+          activeMotionProfileRef:
+            subject.capabilityAssembly.defaultMotionProfile.resourceRef,
+          movementOwner: "character-movement",
           motionTags: locomotion.status === "active"
             ? [
                 `mobility:${locomotion.mobilityMode}`,
@@ -3331,6 +3333,7 @@ export class BabylonWorldRuntime {
           activeLocomotionProfileRef: motion.activeLocomotionProfileRef,
           locomotionMode: motion.locomotionMode,
           activeMotionProfileRef: motion.activeMotionProfileRef,
+          movementOwner: "specialized-motion",
           activeMotionKernelRef: motion.activeMotionKernelRef,
           motionTags: motion.motionTags,
           safeFallbackActive: motion.fallbackActive,
@@ -3528,9 +3531,9 @@ export class BabylonWorldRuntime {
 
   reset(): BabylonRuntimeProjectionV1 {
     this.assertUsable();
-    if (this.preparedGoldenFixedInput !== undefined) {
+    if (this.preparedFixedInput !== undefined) {
       throw new Error(
-        "3C_TICK_TOKEN_STALE: cannot reset while a Golden Runtime Tick is prepared.",
+        "3C_TICK_TOKEN_STALE: cannot reset while a Transactional Runtime Tick is prepared.",
       );
     }
     this.updateNativeColliderResidencyForPositions(
@@ -3551,7 +3554,7 @@ export class BabylonWorldRuntime {
       projection.reset();
     }
     this.latestGoldenCameraContextsByEntityId.clear();
-    this.latestLegacyCameraContextsByEntityId.clear();
+    this.latestSpecializedCameraContextsByEntityId.clear();
     for (const character of this.characterEntitiesByEntityId.values()) {
       character.movement.reset();
     }
@@ -3568,9 +3571,9 @@ export class BabylonWorldRuntime {
     this.appliedCameraViewStateRevision = 0;
     this.pendingCameraHeadingLockBeforeNextTick = false;
     this.pendingPublishedCameraViewSyncBeforeNextTick = false;
-    this.goldenReplayHistory = [];
-    this.goldenReplayBaseline = undefined;
-    this.isReplayingGoldenHistory = false;
+    this.fixedInputReplayHistory = [];
+    this.fixedInputReplayBaseline = undefined;
+    this.isReplayingFixedInputHistory = false;
     this.activeInputActions = [];
     this.activeInputAxes = {};
     this.cameraComponent.reset();
@@ -3732,7 +3735,7 @@ export class BabylonWorldRuntime {
     ) {
       throw new Error("WORLDKIT_RUNTIME_INITIAL_CAMERA_VIEW_REVISION_MISMATCH");
     }
-    if (this.preparedGoldenFixedInput !== undefined) {
+    if (this.preparedFixedInput !== undefined) {
       throw new Error("WORLDKIT_RUNTIME_INITIAL_CAMERA_VIEW_TICK_PREPARED");
     }
     const controlledEntityId = this.controlledEntityId();
@@ -3743,7 +3746,7 @@ export class BabylonWorldRuntime {
     if (
       this.tick !== 0 ||
       this.latestRenderReadyReceipt !== undefined ||
-      this.goldenReplayBaseline !== undefined
+      this.fixedInputReplayBaseline !== undefined
     ) {
       throw new Error("WORLDKIT_RUNTIME_INITIAL_CAMERA_VIEW_PHASE_INVALID");
     }
@@ -3766,7 +3769,7 @@ export class BabylonWorldRuntime {
   ): BabylonCharacterBodyCommittedSupportEvidenceV1 | undefined {
     this.assertUsable();
     const controller = this.controllerFor(subjectEntityId);
-    return isGoldenHumanoidControllerV1(controller)
+    return isCharacterMovementControllerV1(controller)
       ? controller.readCommittedSupportEvidence()
       : controller.readCommittedSupportEvidence(this.tick);
   }
@@ -3818,7 +3821,7 @@ export class BabylonWorldRuntime {
   private detectMovementMedium(
     controller: LiveSubjectControllerV1,
   ): PublishedMovementMediumV1 {
-    if (isGoldenHumanoidControllerV1(controller)) {
+    if (isCharacterMovementControllerV1(controller)) {
       const locomotion = controller.locomotionStateV2();
       return locomotion.status === "active" ? locomotion.movementMedium : "ground";
     }
@@ -3865,7 +3868,7 @@ export class BabylonWorldRuntime {
   }
 
   private journalCommittedCameraState(): void {
-    if (this.goldenReplayBaseline === undefined || this.isReplayingGoldenHistory) {
+    if (this.fixedInputReplayBaseline === undefined || this.isReplayingFixedInputHistory) {
       return;
     }
     const entry = Object.freeze({
@@ -3884,14 +3887,14 @@ export class BabylonWorldRuntime {
         this.pendingPublishedCameraViewSyncBeforeNextTick,
       publishedCameraProjection: this.publishedCameraProjection,
     });
-    const previousEntry = this.goldenReplayHistory.at(-1);
-    this.goldenReplayHistory = previousEntry?.kind === "camera-state"
-      ? Object.freeze([...this.goldenReplayHistory.slice(0, -1), entry])
-      : Object.freeze([...this.goldenReplayHistory, entry]);
+    const previousEntry = this.fixedInputReplayHistory.at(-1);
+    this.fixedInputReplayHistory = previousEntry?.kind === "camera-state"
+      ? Object.freeze([...this.fixedInputReplayHistory.slice(0, -1), entry])
+      : Object.freeze([...this.fixedInputReplayHistory, entry]);
   }
 
   private isCameraViewEpochPending(): boolean {
-    return this.preparedGoldenFixedInput !== undefined ||
+    return this.preparedFixedInput !== undefined ||
       this.pendingCameraHeadingLockBeforeNextTick ||
       this.pendingPublishedCameraViewSyncBeforeNextTick ||
       this.appliedCameraViewStateRevision !==
@@ -3954,7 +3957,7 @@ export class BabylonWorldRuntime {
       return;
     }
     this.cameraComponent.reset();
-    this.latestLegacyCameraContextsByEntityId.clear();
+    this.latestSpecializedCameraContextsByEntityId.clear();
     this.appliedCameraViewStateRevision = publishedViewStateRevision;
   }
 
@@ -3975,7 +3978,7 @@ export class BabylonWorldRuntime {
     this.pendingCameraHeadingLockBeforeNextTick = false;
     this.pendingPublishedCameraViewSyncBeforeNextTick = false;
     const controller = this.controllerFor(subject.entityId);
-    if (isGoldenHumanoidControllerV1(controller)) {
+    if (isCharacterMovementControllerV1(controller)) {
       const committedControlledEntityId = this.controlledEntityId();
       if (committedControlledEntityId === undefined) {
         throw new Error(
@@ -3987,6 +3990,7 @@ export class BabylonWorldRuntime {
       );
       if (
         context === undefined ||
+        context.committedTick !== this.tick ||
         context.controlledEntityId !== committedControlledEntityId ||
         context.targetEntityId !== subject.entityId
       ) {
@@ -4111,7 +4115,7 @@ export class BabylonWorldRuntime {
       ],
     };
     let committedCameraContext =
-      this.latestLegacyCameraContextsByEntityId.get(subject.entityId);
+      this.latestSpecializedCameraContextsByEntityId.get(subject.entityId);
     if (committedCameraContext?.committedTick !== this.tick) {
       committedCameraContext = committedCameraContextFromViewTargetV2(
         sample,
@@ -4119,7 +4123,7 @@ export class BabylonWorldRuntime {
         motion.locomotionMode,
         controller.facingYawRadians,
       );
-      this.latestLegacyCameraContextsByEntityId.set(
+      this.latestSpecializedCameraContextsByEntityId.set(
         subject.entityId,
         committedCameraContext,
       );
@@ -4215,7 +4219,7 @@ export class BabylonWorldRuntime {
       latestRenderReadyReceipt: this.latestRenderReadyReceipt,
       appliedCameraViewStateRevision: this.appliedCameraViewStateRevision,
       publishedCameraProjection: this.publishedCameraProjection,
-      goldenReplayHistory: this.goldenReplayHistory,
+      fixedInputReplayHistory: this.fixedInputReplayHistory,
     });
     const restore = (): void => {
       this.cameraComponent.restoreTransactionState(checkpoint.camera);
@@ -4224,7 +4228,7 @@ export class BabylonWorldRuntime {
       this.latestRenderReadyReceipt = checkpoint.latestRenderReadyReceipt;
       this.appliedCameraViewStateRevision = checkpoint.appliedCameraViewStateRevision;
       this.publishedCameraProjection = checkpoint.publishedCameraProjection;
-      this.goldenReplayHistory = checkpoint.goldenReplayHistory;
+      this.fixedInputReplayHistory = checkpoint.fixedInputReplayHistory;
     };
     const previous = this.snapshot();
     let next: BabylonRuntimeProjectionV1;
@@ -4330,11 +4334,14 @@ export class BabylonWorldRuntime {
   requestMotionProfile(subjectEntityId: string, motionProfileRef: string): boolean {
     this.assertUsable();
     const controller = this.controllerFor(subjectEntityId);
-    if (isGoldenHumanoidControllerV1(controller)) {
+    if (isCharacterMovementControllerV1(controller)) {
       const subject = this.runtimeSubjects.find(
         (candidate) => candidate.entityId === subjectEntityId,
       )!;
-      if (motionProfileRef !== subject.locomotionProfileRef) {
+      if (
+        motionProfileRef !==
+          subject.capabilityAssembly.defaultMotionProfile.resourceRef
+      ) {
         throw new Error("SUBJECT_OVERRIDE_FORBIDDEN: Golden locomotion is compiler-locked.");
       }
       return true;
@@ -4350,7 +4357,7 @@ export class BabylonWorldRuntime {
   requestControlFeelProfile(subjectEntityId: string, resourceRef: string): boolean {
     this.assertUsable();
     const controller = this.controllerFor(subjectEntityId);
-    if (isGoldenHumanoidControllerV1(controller)) {
+    if (isCharacterMovementControllerV1(controller)) {
       const subject = this.runtimeSubjects.find(
         (candidate) => candidate.entityId === subjectEntityId,
       )!;
@@ -4405,7 +4412,7 @@ export class BabylonWorldRuntime {
     }
     const assembly = subject.capabilityAssembly;
     const controller = this.controllerFor(subject.entityId);
-    if (isGoldenHumanoidControllerV1(controller)) {
+    if (isCharacterMovementControllerV1(controller)) {
       return reject(
         "SUBJECT_PRESET_GOLDEN_RECOMPILE_REQUIRED",
         "Golden Subject tuning is compiler-locked and requires a new Execution Plan.",
@@ -4465,7 +4472,7 @@ export class BabylonWorldRuntime {
     const subject = this.runtimeSubjects.find((row) => row.entityId === subjectEntityId);
     if (subject === undefined) throw new Error(`WORLDKIT_RUNTIME_SUBJECT_NOT_FOUND: ${subjectEntityId}`);
     const controller = this.controllerFor(subjectEntityId);
-    const golden = isGoldenHumanoidControllerV1(controller);
+    const golden = isCharacterMovementControllerV1(controller);
     const motion = golden ? undefined : controller.motionSnapshot();
     const state = this.snapshot().subjectStatesByEntityId[subjectEntityId]!;
     const assembly = subject.capabilityAssembly;
@@ -4591,11 +4598,13 @@ export class BabylonWorldRuntime {
     return this.characterFor(subjectEntityId).movement;
   }
 
-  private legacyControllerFor(subjectEntityId: string): CharacterMovementComponentV1 {
+  private characterMovementControllerFor(
+    subjectEntityId: string,
+  ): CharacterMovementSubjectControllerV1 {
     const controller = this.controllerFor(subjectEntityId);
-    if (isGoldenHumanoidControllerV1(controller)) {
+    if (!isCharacterMovementControllerV1(controller)) {
       throw new Error(
-        "3C_INPUT_INVALID: operation still requires the legacy non-Golden adapter.",
+        "3C_TRANSACTIONAL_GAMEPLAY_CONTROL_UNSUPPORTED: hosted Gameplay requires CharacterMovement-backed planar-vector Subjects.",
       );
     }
     return controller;

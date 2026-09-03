@@ -1,8 +1,8 @@
 import {
-  hashCharacterMovementStateV1,
   parseCharacterMovementCommandV1,
   type BodyResolutionV1,
   type BodySampleV1,
+  type BodySupportSampleV1,
   type CharacterBodyPortV1,
   type CharacterMovementCommandV1,
   type CharacterMovementRuntimeV1,
@@ -52,7 +52,7 @@ export interface GoldenCharacterBodyTransactionPortV1
   resetToState(state: Readonly<{
     positionMetersXYZ: readonly [number, number, number];
     linearVelocityMetersPerSecondXYZ: readonly [number, number, number];
-  }>): void;
+  }>): BodySupportSampleV1;
 }
 
 export interface GoldenHumanoidPreparedProjectionV1 {
@@ -287,6 +287,12 @@ export class GoldenHumanoid3CVNextTransactionV1 {
         tick: movementCommand.tick,
       });
       bodyBegun = true;
+      if (before.tick === 0) {
+        this.options.movementRuntime.reconcileSupportAfterReset(
+          sample.support,
+          token,
+        );
+      }
 
       this.#stage("movement-mode");
       const proposal = this.options.movementRuntime.proposeMovement(token, sample);
@@ -298,27 +304,6 @@ export class GoldenHumanoid3CVNextTransactionV1 {
       this.#stage("authority-commit");
       const commit = this.options.movementRuntime.reconcile(token, bodyResolution);
       movementAdvanced = true;
-      if (
-        before.tick === 0 &&
-        before.runtimeState.coyoteTicksRemaining === 0 &&
-        bodyResolution.support.mode === "unsupported"
-      ) {
-        const staged = this.options.movementRuntime.snapshot();
-        if (staged.runtimeState.coyoteTicksRemaining !== 0) {
-          const { stateHash: _stateHash, ...state } = staged;
-          const correctedState = Object.freeze({
-            ...state,
-            runtimeState: Object.freeze({
-              ...state.runtimeState,
-              coyoteTicksRemaining: 0,
-            }),
-          });
-          this.options.movementRuntime.reset(Object.freeze({
-            ...correctedState,
-            stateHash: hashCharacterMovementStateV1(correctedState),
-          }));
-        }
-      }
       this.#stage("animation-camera-projection");
       const presentation = prepareActionPresentation(
         commit.tick,
@@ -404,21 +389,86 @@ export class GoldenHumanoid3CVNextTransactionV1 {
   }
 
   reset(snapshot?: CharacterMovementSnapshotV1): void {
+    this.#resetMovementAndBody(() => {
+      this.options.movementRuntime.reset(snapshot);
+    });
+  }
+
+  previewSupportedPlacement(
+    input: Parameters<
+      CharacterMovementRuntimeV1["previewSupportedPlacement"]
+    >[0],
+  ): CharacterMovementSnapshotV1 {
+    this.#assertRunnable();
+    return this.options.movementRuntime.previewSupportedPlacement(input);
+  }
+
+  resetAtSupportedPlacement(
+    input: Parameters<
+      CharacterMovementRuntimeV1["resetAtSupportedPlacement"]
+    >[0],
+  ): void {
+    this.#resetMovementAndBody(() => {
+      this.options.movementRuntime.resetAtSupportedPlacement(input);
+    });
+  }
+
+  previewRelationshipSuspension(
+    input: Parameters<
+      CharacterMovementRuntimeV1["previewRelationshipSuspension"]
+    >[0],
+  ): CharacterMovementSnapshotV1 {
+    this.#assertRunnable();
+    return this.options.movementRuntime.previewRelationshipSuspension(input);
+  }
+
+  suspendForRelationship(
+    input: Parameters<
+      CharacterMovementRuntimeV1["suspendForRelationship"]
+    >[0],
+  ): void {
+    this.#resetMovementAndBody(() => {
+      this.options.movementRuntime.suspendForRelationship(input);
+    });
+  }
+
+  #resetMovementAndBody(mutateOwner: () => void): void {
     this.#assertRunnable();
     if (this.#running) {
       throw failure("3C_TICK_TOKEN_STALE", "Golden Tick is active during reset.");
     }
     const before = this.options.movementRuntime.snapshot();
-    this.options.movementRuntime.reset(snapshot);
+    mutateOwner();
     const after = this.options.movementRuntime.snapshot();
     try {
-      this.options.bodyPort.resetToState({
+      const support = this.options.bodyPort.resetToState({
         positionMetersXYZ: after.positionMetersXYZ,
         linearVelocityMetersPerSecondXYZ:
           after.linearVelocityMetersPerSecondXYZ,
       });
+      if (after.locomotion.status === "active") {
+        this.options.movementRuntime.reconcileSupportAfterReset(
+          support,
+          undefined,
+        );
+      }
     } catch (error) {
-      this.options.movementRuntime.reset(before);
+      let rollbackFailed = false;
+      try {
+        this.options.bodyPort.resetToState({
+          positionMetersXYZ: before.positionMetersXYZ,
+          linearVelocityMetersPerSecondXYZ:
+            before.linearVelocityMetersPerSecondXYZ,
+        });
+      } catch {
+        rollbackFailed = true;
+      }
+      try {
+        this.options.movementRuntime.reset(before);
+      } catch {
+        rollbackFailed = true;
+      }
+      if (rollbackFailed) this.#rollbackFailedClosed = true;
       throw error;
     }
     this.#latestBodyDiagnostic = undefined;

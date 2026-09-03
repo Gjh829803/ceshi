@@ -61,6 +61,32 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - A released or externally adopted public rename must update the authoritative Schema, examples, validation, migration, and conformance coverage together. Preserve that compatibility through explicit version migration, not permanent alias fields.
 - This repository is currently unreleased. For every contract touched by current work, a current-only clean break is the default rather than an exception: the final accepted tree has one public name, one parser, one public entry point, and one authoritative state owner for each concept. Update all consumers, fixtures, generated artifacts, receipts, and examples together, then delete the replaced fields, types, parsers, packages, re-exports, adapters, and fallbacks. A `schemaVersion` or `V1` suffix identifies the sole current contract; it does not authorize parallel V1/V2/V3 implementations. Intermediate feature commits may be incomplete, but no GO decision, final handoff, or merge candidate may contain legacy/new compatibility paths.
 
+### Single-authority and migration enforcement
+
+- Select an authority from the canonical capability contract, never from presentation details
+  such as a static or rigged visual binding. A distinct strategy is valid only when it has an
+  explicit discriminator, disjoint admission rules, and cannot accept the canonical owner's
+  inputs as a fallback.
+- Do not expose optional old/new methods, accept legacy and current envelopes in one parser, or
+  retain a renamed facade that computes the same semantic state. For fixed-step Runtime changes,
+  one prepared transaction must own prepare, commit, abort, Snapshot, Replay, Reset, and Rollback.
+- Providers must pass fresh-spawn placement into the movement owner and must not construct a
+  Locomotion envelope or transition sequence themselves. A prepared Gameplay projection must use
+  the same owner's non-mutating preview as commit; never copy its transition rules into Host or
+  provider code, even when the copied result is currently byte-identical.
+- Every temporary migration path must have a bounded ledger entry, deletion condition, and a
+  structural gate that detects semantic equivalents rather than relying only on the old symbol
+  spelling. A merge candidate must delete the replaced path when its current contract is touched;
+  changing a class, field, or method name does not count as deletion.
+- Run `pnpm verify:3c-migration` whenever movement authority, fixed input, Locomotion publication,
+  or their provider/Host ports change. Keep its single-authority structural assertions current
+  with the accepted architecture; weakening or deleting an assertion requires an explicit design
+  update and independent review.
+- When a live WorldKit Skill, bundled checker, or reference is frozen into a representative Case
+  input, update the frozen copy byte-for-byte in the same change and run its focused drift check.
+  In particular, Native Block Builder changes require `pnpm check:native-block-builder-skill`
+  before broader gates.
+
 ## Dependency reuse and utility code
 
 - Before writing a general-purpose helper, search the repository and check the language runtime, platform APIs, engine APIs, and existing dependencies. Prefer a mature, maintained implementation when it reduces custom code and edge-case risk.

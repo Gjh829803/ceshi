@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 
 import {
   parseAuthoringSpecV4,
-  stringifyCanonicalJson,
   validateAuthoringSpecV4,
   type AuthoringSpecV4,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 import {
   assertMatchingTraversalLocksV1,

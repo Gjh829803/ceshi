@@ -105,7 +105,10 @@ import {
   type BabylonWorldRuntimeInitializationStageV1,
   type BabylonWorldRuntimeOptions,
 } from "./index";
-import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
+import {
+  BABYLON_GAMEPLAY_RUNTIME_INTERNAL,
+  type BabylonGameplayRuntimeInternalV1,
+} from "./gameplay-runtime-internal";
 import {
   peekBabylonNativeLiveColliderRegistryV1,
 } from "./babylon-native-live-collider-registry";
@@ -130,6 +133,18 @@ import { BABYLON_TRAVERSAL_RUNTIME_INTERNAL } from
 const loadAssetContainerImplementation = vi
   .mocked(LoadAssetContainerAsync)
   .getMockImplementation()!;
+
+async function commitGameplayFixedInputTick(
+  internal: BabylonGameplayRuntimeInternalV1,
+  input: Parameters<BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]>[0],
+  actionProjection: Parameters<
+    BabylonGameplayRuntimeInternalV1["prepareFixedInputTick"]
+  >[1],
+) {
+  const prepared = await internal.prepareFixedInputTick(input, actionProjection);
+  prepared.commitPrepared();
+  return prepared.projectedWorldStateAfter;
+}
 
 function mutateNextLoadedContainer(
   mutate: (container: AssetContainer) => void,
@@ -626,22 +641,24 @@ interface CartesianVector {
   z: number;
 }
 
-interface ControllerProbe {
+interface CharacterEntityProbe {
+  root: {
+    transformNode: {
+      position: CartesianVector;
+      rotation: CartesianVector;
+      rotationQuaternion?: { toEulerAngles(): CartesianVector } | null;
+      getChildMeshes(): readonly { name: string; position: CartesianVector }[];
+    };
+  };
+  movement: {
   collisionFilterMasks(): Readonly<{
     membershipMask: number;
     collideMask: number;
   }>;
-  physicsController: {
-    readonly _body: {
+    controllerCenter: CartesianVector;
+    physicsBody: {
       readonly _pluginData: { readonly hpBodyId: unknown };
     };
-    getPosition(): CartesianVector;
-  };
-  visualRoot: {
-    position: CartesianVector;
-    rotation: CartesianVector;
-    rotationQuaternion?: { toEulerAngles(): CartesianVector } | null;
-    getChildMeshes(): readonly { name: string; position: CartesianVector }[];
   };
 }
 
@@ -654,21 +671,21 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
     scene: Scene;
     camera: CartesianVector;
     cameraComponent: CameraComponentV1;
-    characterEntitiesByEntityId: ReadonlyMap<string, { movement: ControllerProbe }>;
+    characterEntitiesByEntityId: ReadonlyMap<string, CharacterEntityProbe>;
   };
-  const controllerFor = (subjectEntityId: string): ControllerProbe => {
-    const controller = internals.characterEntitiesByEntityId.get(subjectEntityId)?.movement;
-    if (controller === undefined) throw new Error(`Missing Subject '${subjectEntityId}'.`);
-    return controller;
+  const characterFor = (subjectEntityId: string): CharacterEntityProbe => {
+    const character = internals.characterEntitiesByEntityId.get(subjectEntityId);
+    if (character === undefined) throw new Error(`Missing Subject '${subjectEntityId}'.`);
+    return character;
   };
   return {
     subjectVisualOrigin: (subjectEntityId) =>
-      toVec3(controllerFor(subjectEntityId).visualRoot.position),
+      toVec3(characterFor(subjectEntityId).root.transformNode.position),
     controllerCenter: (subjectEntityId) =>
-      toVec3(controllerFor(subjectEntityId).physicsController.getPosition()),
+      toVec3(characterFor(subjectEntityId).movement.controllerCenter),
     nativeControllerCenter: (subjectEntityId) => {
-      const bodyId = controllerFor(subjectEntityId).physicsController
-        ._body._pluginData.hpBodyId;
+      const bodyId = characterFor(subjectEntityId).movement.physicsBody
+        ._pluginData.hpBodyId;
       const plugin = internals.scene.getPhysicsEngine()!.getPhysicsPlugin() as unknown as {
         readonly _hknp: {
           HP_Body_GetQTransform(
@@ -681,14 +698,14 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
     },
     visualPartLocalPosition: (subjectEntityId, partId) => {
       const expectedName = `${subjectEntityId}.${partId}`;
-      const mesh = controllerFor(subjectEntityId)
-        .visualRoot.getChildMeshes()
+      const mesh = characterFor(subjectEntityId)
+        .root.transformNode.getChildMeshes()
         .find((candidate) => candidate.name === expectedName);
       if (mesh === undefined) throw new Error(`Missing visual Part '${expectedName}'.`);
       return toVec3(mesh.position);
     },
     visualRootYawRadians: (subjectEntityId) => {
-      const visualRoot = controllerFor(subjectEntityId).visualRoot;
+      const visualRoot = characterFor(subjectEntityId).root.transformNode;
       return visualRoot.rotationQuaternion?.toEulerAngles().y ?? visualRoot.rotation.y;
     },
     cameraProjection: () => ({
@@ -698,7 +715,7 @@ function createRuntimeDebugProbe(runtime: BabylonWorldRuntime): RuntimeDebugProb
     cameraTransactionState: () =>
       internals.cameraComponent.captureTransactionState(),
     collisionFilterMasks: (subjectEntityId) =>
-      controllerFor(subjectEntityId).collisionFilterMasks(),
+      characterFor(subjectEntityId).movement.collisionFilterMasks(),
   };
 }
 
@@ -2799,7 +2816,7 @@ describe("BabylonWorldRuntime", () => {
     expect(runtime.snapshot().subjectStatesByEntityId.player).toMatchObject({
       activeMotionProfileRef:
         "worldkit://motion-profile/free-ground.humanoid-medium@1",
-      activeMotionKernelRef: "worldkit://motion-kernel/free-ground@1",
+      movementOwner: "character-movement",
     });
     expect(
       runtime.requestMotionProfile(
@@ -2927,7 +2944,7 @@ describe("BabylonWorldRuntime", () => {
     expect(disposeEngine).toHaveBeenCalledTimes(1);
   });
 
-  it("releases a native character controller when support bootstrap throws", async () => {
+  it("fails closed when initialization support sampling fails", async () => {
     const supportFailure = new Error(
       "BABYLON_PROVIDER_PRIVATE_SUPPORT_BOOTSTRAP_FAILURE",
     );
@@ -2940,12 +2957,14 @@ describe("BabylonWorldRuntime", () => {
       "dispose",
     );
 
-    const error = await createRuntime(createFlatPackageExecutionPlan()).catch(
-      (reason) => reason as unknown,
-    );
+    const executionPlan = createFlatPackageExecutionPlan();
+    const error = await createRuntime(executionPlan)
+      .catch((reason) => reason as unknown);
 
     expect(error).toBe(supportFailure);
-    expect(disposeController).toHaveBeenCalledTimes(1);
+    expect(disposeController).toHaveBeenCalledTimes(
+      runtimeSubjects(executionPlan).length,
+    );
   });
 
   it("rolls back registered character components when ready-stage initialization fails", async () => {
@@ -2966,14 +2985,10 @@ describe("BabylonWorldRuntime", () => {
     expect(disposeController).toHaveBeenCalledTimes(runtimeSubjects(executionPlan).length);
   });
 
-  it("preserves the controller construction failure when rollback also throws", async () => {
-    const supportFailure = new Error(
-      "BABYLON_PROVIDER_PRIVATE_SUPPORT_BOOTSTRAP_FAILURE",
+  it("preserves the ready-stage failure when controller cleanup also throws", async () => {
+    const initializationFailure = new Error(
+      "TEST_READY_STAGE_INITIALIZATION_FAILURE",
     );
-    vi.spyOn(PhysicsCharacterController.prototype, "checkSupport")
-      .mockImplementationOnce(() => {
-        throw supportFailure;
-      });
     const nativeDispose = PhysicsCharacterController.prototype.dispose;
     vi.spyOn(PhysicsCharacterController.prototype, "dispose")
       .mockImplementationOnce(function (this: PhysicsCharacterController) {
@@ -2981,11 +2996,13 @@ describe("BabylonWorldRuntime", () => {
         throw new Error("BABYLON_PROVIDER_PRIVATE_CONTROLLER_DISPOSE_FAILURE");
       });
 
-    const error = await createRuntime(createFlatPackageExecutionPlan()).catch(
-      (reason) => reason as unknown,
-    );
+    const error = await createRuntime(createFlatPackageExecutionPlan(), {
+      onInitializationStage: (stage) => {
+        if (stage === "ready") throw initializationFailure;
+      },
+    }).catch((reason) => reason as unknown);
 
-    expect(error).toBe(supportFailure);
+    expect(error).toBe(initializationFailure);
   });
 
   it("rejects a tampered frozen minimum-clearance assertion", async () => {
@@ -4028,7 +4045,7 @@ describe("BabylonWorldRuntime", () => {
 
       expect(internal.estimateSemanticFactProjectionCapacity()).toEqual({
         maximumSemanticFactCountAfterInput: 2,
-        maximumSemanticFactTransitionEventCount: 2,
+        maximumSemanticFactTransitionEventCount: 4,
       });
 
       const prepared = await internal.prepareFixedInputTick!(
@@ -4052,9 +4069,14 @@ describe("BabylonWorldRuntime", () => {
       const supportFacts = () => Object.values(
         internal.readWorldProjection().semanticFactsById,
       ).filter((fact) => fact.type === "supportedBy");
-      const initial = supportFacts();
+      const initial = internal.readWorldProjection().semanticFactsById;
 
-      expect(initial).toEqual([]);
+      expect(Object.values(initial)).toHaveLength(1);
+      expect(Object.values(initial)[0]).toMatchObject({
+        supportedEntityId: "player",
+        supportSurfaceEntityId: createFlatRiggedExecutionPlan().terrain.entityId,
+        startedSimulationTick: 0,
+      });
 
       const first = await internal.prepareFixedInputTick!(
         { actions: [], ticks: 1 },
@@ -4062,11 +4084,7 @@ describe("BabylonWorldRuntime", () => {
       );
       first.commitPrepared();
       const committedAtOne = internal.readWorldProjection().semanticFactsById;
-      expect(Object.values(committedAtOne)[0]).toMatchObject({
-        supportedEntityId: "player",
-        supportSurfaceEntityId: createFlatRiggedExecutionPlan().terrain.entityId,
-        startedSimulationTick: 1,
-      });
+      expect(committedAtOne).toEqual(initial);
 
       const aborted = await internal.prepareFixedInputTick!(
         { actions: ["move-right"], ticks: 1 },
@@ -4080,10 +4098,7 @@ describe("BabylonWorldRuntime", () => {
       runtime.reset();
       const resetFacts = supportFacts();
       expect(resetFacts).toHaveLength(1);
-      expect(resetFacts[0]).toMatchObject({
-        startedSimulationTick: 0,
-      });
-      expect(resetFacts[0]!.id).not.toBe(Object.values(committedAtOne)[0]!.id);
+      expect(internal.readWorldProjection().semanticFactsById).toEqual(initial);
     } finally {
       await runtime.dispose();
     }
@@ -4105,9 +4120,9 @@ describe("BabylonWorldRuntime", () => {
 
       expect(internal.estimateSemanticFactProjectionCapacity()).toEqual({
         maximumSemanticFactCountAfterInput: 1,
-        maximumSemanticFactTransitionEventCount: 1,
+        maximumSemanticFactTransitionEventCount: 2,
       });
-      await internal.runFixedInputTick(
+      await commitGameplayFixedInputTick(internal,
         { actions: [], ticks: 1 },
         emptyActionProjection(1),
       );
@@ -4132,7 +4147,7 @@ describe("BabylonWorldRuntime", () => {
         fact.supportedEntityId === "pack-animal-a"
       )).toBe(false);
 
-      await internal.runFixedInputTick(
+      await commitGameplayFixedInputTick(internal,
         { actions: [], ticks: 1 },
         emptyActionProjection(2),
       );
@@ -4296,7 +4311,16 @@ describe("BabylonWorldRuntime", () => {
           controlledEntityId: relationship.mountEntityId,
         },
       });
+      const riderCapabilityStateId =
+        `capability-state:${relationship.riderEntityId}:locomotion`;
+      const preparedMountedCapability =
+        mount.projectedWorldStateAfter.capabilityStatesById[
+          riderCapabilityStateId
+        ];
       mount.commitPrepared();
+      expect(internal.readWorldProjection().capabilityStatesById[
+        riderCapabilityStateId
+      ]).toEqual(preparedMountedCapability);
       const mountedSnapshot = runtime.snapshot();
       const mountedWorld = internal.readWorldProjection();
       const mountedCameraTransaction = debug.cameraTransactionState();
@@ -4329,7 +4353,14 @@ describe("BabylonWorldRuntime", () => {
           controlledEntityId: relationship.riderEntityId,
         },
       });
+      const preparedDismountedCapability =
+        dismount.projectedWorldStateAfter.capabilityStatesById[
+          riderCapabilityStateId
+        ];
       dismount.commitPrepared();
+      expect(internal.readWorldProjection().capabilityStatesById[
+        riderCapabilityStateId
+      ]).toEqual(preparedDismountedCapability);
       const dismountedSnapshot = runtime.snapshot();
       const dismountedWorld = internal.readWorldProjection();
       const dismountedCameraTransaction = debug.cameraTransactionState();
@@ -4966,7 +4997,7 @@ function emptyActionProjection(simulationTick: number) {
         lastTransitionSimulationTick: 1,
       });
       const beforeStateOnly = runtime.snapshot();
-      await internal.runFixedInputTick(
+      await commitGameplayFixedInputTick(internal,
         { actions: [], ticks: 1 },
         {
           simulationTick: 1,
@@ -5014,7 +5045,7 @@ function emptyActionProjection(simulationTick: number) {
         lastTransitionSimulationTick: 2,
       });
       const beforeRootMotion = runtime.snapshot();
-      await internal.runFixedInputTick(
+      await commitGameplayFixedInputTick(internal,
         { actions: [], ticks: 1 },
         {
           simulationTick: 2,
@@ -5089,7 +5120,7 @@ function emptyActionProjection(simulationTick: number) {
         lastTransitionSimulationTick: 1,
       });
       const before = runtime.snapshot();
-      await expect(internal.runFixedInputTick(
+      await expect(commitGameplayFixedInputTick(internal,
         { actions: [], ticks: 1 },
         {
           simulationTick: 2,
@@ -5097,7 +5128,7 @@ function emptyActionProjection(simulationTick: number) {
         },
       )).rejects.toThrow("3C_ACTION_TICK_MISMATCH");
       expect(runtime.snapshot()).toEqual(before);
-      await expect(internal.runFixedInputTick(
+      await expect(commitGameplayFixedInputTick(internal,
         { actions: [], ticks: 1 },
         {
           simulationTick: 1,
@@ -5184,9 +5215,8 @@ function emptyActionProjection(simulationTick: number) {
         committedTick: 0,
       },
     });
-    expect(
-      initialVNextSnapshot.subjectStatesByEntityId.player?.activeMotionKernelRef,
-    ).toBeUndefined();
+    expect(initialVNextSnapshot.subjectStatesByEntityId.player)
+      .not.toHaveProperty("activeMotionKernelRef");
     const adjustedCamera = runtime.adjustCameraView({ yawDeltaRadians: Math.PI / 2 });
     const cameraForwardXYZ = adjustedCamera.camera.controlForwardXYZ!;
     const cameraRelativeStep = await runtime.runFixedInput({
@@ -7142,13 +7172,15 @@ function emptyActionProjection(simulationTick: number) {
       expect(prepared.projectedWorldStateAfter).toMatchObject({
         spatialEntityStatesById: {
           "pack-animal-a": {
-            positionMetersXYZ: [4, 0.45, 5],
+            positionMetersXYZ: [4, expect.closeTo(0.45, 12), 5],
           },
         },
         capabilityStatesById: {
           "capability-state:pack-animal-a:locomotion": {
-            mode: "suspended",
-            suspendedByRelationshipId: relationship.id,
+            locomotion: {
+              status: "suspended",
+              suspendedByRelationshipId: relationship.id,
+            },
           },
         },
       });
@@ -7160,7 +7192,7 @@ function emptyActionProjection(simulationTick: number) {
       expect(internal.readWorldProjection()).toEqual(
         prepared.projectedWorldStateAfter,
       );
-      const moved = await internal.runFixedInputTick({
+      const moved = await commitGameplayFixedInputTick(internal, {
         actions: ["move-right"],
         ticks: 1,
       }, emptyActionProjection(
@@ -7177,8 +7209,10 @@ function emptyActionProjection(simulationTick: number) {
       expect(moved.capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"
       ]).toMatchObject({
-        mode: "suspended",
-        suspendedByRelationshipId: relationship.id,
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: relationship.id,
+        },
       });
       const mountedBeforeDismount = internal.readWorldProjection();
       const dismount = await internal.prepareMountedRelationshipTransition({
@@ -7193,8 +7227,11 @@ function emptyActionProjection(simulationTick: number) {
       expect(dismount.projectedWorldStateAfter.capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"
       ]).toMatchObject({
-        mode: "idle",
-        movementMedium: "ground",
+        locomotion: {
+          status: "active",
+          gait: "idle",
+          movementMedium: "ground",
+        },
       });
       expect(dismount.projectedWorldStateAfter.spatialEntityStatesById[
         "pack-animal-a"
@@ -7213,7 +7250,7 @@ function emptyActionProjection(simulationTick: number) {
       );
       const riderBeforeIndependentMove = internal.readWorldProjection()
         .spatialEntityStatesById["pack-animal-a"]!.positionMetersXYZ;
-      const riderMoved = await internal.runFixedInputTick({
+      const riderMoved = await commitGameplayFixedInputTick(internal, {
         actions: ["move-left"],
         ticks: 1,
       }, emptyActionProjection(
@@ -7341,7 +7378,7 @@ function emptyActionProjection(simulationTick: number) {
         expectedRiderPosition.map((value) => expect.closeTo(value, 6)),
       );
 
-      const afterTick = await internal.runFixedInputTick(
+      const afterTick = await commitGameplayFixedInputTick(internal,
         { actions: [], ticks: 1 },
         emptyActionProjection(
           internal.readWorldProjection().simulationTick + 1,
@@ -7359,7 +7396,7 @@ function emptyActionProjection(simulationTick: number) {
       runtime.reset();
       expect(internal.readWorldProjection().capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"
-      ]).not.toMatchObject({ mode: "suspended" });
+      ]).not.toMatchObject({ locomotion: { status: "suspended" } });
       expect(debug.subjectVisualOrigin("pack-animal-a")).toEqual(
         riderAnchor.placement.transform.positionMetersXYZ.map(
           (value) => expect.closeTo(value, 6),
@@ -7557,12 +7594,14 @@ function emptyActionProjection(simulationTick: number) {
       expect(afterFirst.capabilityStatesById[
         "capability-state:rider-a:locomotion"
       ]).toMatchObject({
-        mode: "suspended",
-        suspendedByRelationshipId: relationshipA.id,
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: relationshipA.id,
+        },
       });
       expect(afterFirst.capabilityStatesById[
         "capability-state:rider-b:locomotion"
-      ]).not.toMatchObject({ mode: "suspended" });
+      ]).not.toMatchObject({ locomotion: { status: "suspended" } });
       expectNativeControllerAtLogicalCenter("rider-a");
       expectNativeControllerAt("rider-b", riderBNativeBeforeFirst);
 
@@ -7597,14 +7636,18 @@ function emptyActionProjection(simulationTick: number) {
       expect(bothMounted.capabilityStatesById[
         "capability-state:rider-a:locomotion"
       ]).toMatchObject({
-        mode: "suspended",
-        suspendedByRelationshipId: relationshipA.id,
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: relationshipA.id,
+        },
       });
       expect(bothMounted.capabilityStatesById[
         "capability-state:rider-b:locomotion"
       ]).toMatchObject({
-        mode: "suspended",
-        suspendedByRelationshipId: relationshipB.id,
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: relationshipB.id,
+        },
       });
       expectNativeControllerAtLogicalCenter("rider-a");
       expectNativeControllerAtLogicalCenter("rider-b");
@@ -7619,7 +7662,7 @@ function emptyActionProjection(simulationTick: number) {
         expect.closeTo(5, 6),
       ]);
 
-      const afterTick = await internal.runFixedInputTick({
+      const afterTick = await commitGameplayFixedInputTick(internal, {
         actions: ["move-right"],
         ticks: 1,
       }, emptyActionProjection(
@@ -7651,19 +7694,23 @@ function emptyActionProjection(simulationTick: number) {
       ).toBeGreaterThan(9);
       expect(afterTick.capabilityStatesById[
         "capability-state:rider-a:locomotion"
-      ]).toMatchObject({ suspendedByRelationshipId: relationshipA.id });
+      ]).toMatchObject({
+        locomotion: { suspendedByRelationshipId: relationshipA.id },
+      });
       expect(afterTick.capabilityStatesById[
         "capability-state:rider-b:locomotion"
-      ]).toMatchObject({ suspendedByRelationshipId: relationshipB.id });
+      ]).toMatchObject({
+        locomotion: { suspendedByRelationshipId: relationshipB.id },
+      });
 
       runtime.reset();
       const reset = internal.readWorldProjection();
       expect(reset.capabilityStatesById[
         "capability-state:rider-a:locomotion"
-      ]).not.toMatchObject({ mode: "suspended" });
+      ]).not.toMatchObject({ locomotion: { status: "suspended" } });
       expect(reset.capabilityStatesById[
         "capability-state:rider-b:locomotion"
-      ]).not.toMatchObject({ mode: "suspended" });
+      ]).not.toMatchObject({ locomotion: { status: "suspended" } });
       expect(debug.subjectVisualOrigin("rider-a")).toEqual([0, 0, 5]);
       expect(debug.subjectVisualOrigin("rider-b")).toEqual([10, 0, 5]);
       expectNativeControllerAt("rider-a", resetCenter("rider-a"));
@@ -7677,22 +7724,58 @@ function emptyActionProjection(simulationTick: number) {
     const executionPlan = compileExecutionPlan(
       createValidMountedOnAuthoringSpec(),
     );
-    const runtime = await createRuntime(executionPlan, {}, false);
+    const runtime = await createRuntime(executionPlan);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const traversal = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
       const initialProjection = internal.readWorldProjection();
       expect(initialProjection.capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"
       ]).toMatchObject({
-        mode: "suspended",
-        suspendedByRelationshipId: "rider-mounted-on-board",
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: "rider-mounted-on-board",
+        },
       });
+      traversal.runTraversalFixedTick({
+        traversingEntityId: "pack-animal-b",
+        walkDirectionWorldXZ: [0, 0],
+      });
+      expect(internal.readWorldProjection().capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: "rider-mounted-on-board",
+        },
+      });
+      traversal.resetToTraversalAnchor({
+        traversingEntityId: "pack-animal-b",
+        subjectOriginPositionMetersXYZ: initialProjection
+          .spatialEntityStatesById["pack-animal-b"]!.positionMetersXYZ,
+        facingYawRadians: 0,
+      });
+      expect(internal.readWorldProjection().capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: "rider-mounted-on-board",
+        },
+      });
+      expect(internal.readWorldProjection().spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ).toEqual(initialProjection.spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ);
       const reset = runtime.reset();
       expect(internal.readWorldProjection().capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"
       ]).toMatchObject({
-        mode: "suspended",
-        suspendedByRelationshipId: "rider-mounted-on-board",
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: "rider-mounted-on-board",
+        },
       });
       expect(reset.subjectStatesByEntityId["pack-animal-a"]!.positionMetersXYZ)
         .toEqual(initialProjection.spatialEntityStatesById[
@@ -7800,12 +7883,22 @@ function emptyActionProjection(simulationTick: number) {
       expect(supportFacts().some((fact) =>
         fact.supportedEntityId === "pack-animal-a"
       )).toBe(false);
+      await commitGameplayFixedInputTick(internal, {
+        actions: [],
+        ticks: 1,
+      }, emptyActionProjection(1));
+      expect(supportFacts().find((fact) =>
+        fact.supportedEntityId === "pack-animal-b"
+      )).toEqual(initialBoardSupport);
+      expect(supportFacts().some((fact) =>
+        fact.supportedEntityId === "pack-animal-a"
+      )).toBe(false);
 
       await bindRuntimeTestPossession(runtime, "pack-animal-b");
 
       let unsupportedTick: number | undefined;
       for (let index = 0; index < 180; index += 1) {
-        await internal.runFixedInputTick({
+        await commitGameplayFixedInputTick(internal, {
           actions: ["move-right", "run"],
           ticks: 1,
         }, emptyActionProjection(
@@ -7822,7 +7915,7 @@ function emptyActionProjection(simulationTick: number) {
 
       let landedBoardSupport: (typeof initialBoardSupport) | undefined;
       for (let index = 0; index < 240; index += 1) {
-        await internal.runFixedInputTick(
+        await commitGameplayFixedInputTick(internal,
           { actions: [], ticks: 1 },
           emptyActionProjection(
             internal.readWorldProjection().simulationTick + 1,
@@ -7849,10 +7942,10 @@ function emptyActionProjection(simulationTick: number) {
         fact.supportedEntityId === "pack-animal-b"
       );
       expect(resetBoardSupport).toMatchObject({
-        id: initialBoardSupport?.id,
         supportSurfaceEntityId: "mounted-support-platform",
         startedSimulationTick: 0,
       });
+      expect(resetBoardSupport?.id).toBe(initialBoardSupport?.id);
     } finally {
       await runtime.dispose();
     }
@@ -8135,7 +8228,7 @@ function emptyActionProjection(simulationTick: number) {
         controlledEntityId: "player",
       });
       initialBind.commitPrepared();
-      await internal.runFixedInputTick({
+      await commitGameplayFixedInputTick(internal, {
         actions: ["move-right", "run"],
         ticks: 1,
       }, emptyActionProjection(
@@ -8148,7 +8241,9 @@ function emptyActionProjection(simulationTick: number) {
       const runtimeInternals = runtime as unknown as {
         cameraComponent: { reset(): void };
         updateCameraForEntity(entityId: string): void;
-        characterEntitiesByEntityId: ReadonlyMap<string, { movement: { stop(): void } }>;
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: { runCommand(...args: unknown[]): unknown };
+        }>;
         subjectVisualsByEntityId: ReadonlyMap<
           string,
           { stepAnimation(presentation: ResolvedActionPresentationV1): void }
@@ -8159,8 +8254,8 @@ function emptyActionProjection(simulationTick: number) {
       const previousVisual = runtimeInternals.subjectVisualsByEntityId
         .get("player")!;
 
-      vi.spyOn(previousController, "stop").mockImplementation(() => {
-        throw new Error("controller stop must not run during publication");
+      vi.spyOn(previousController, "runCommand").mockImplementation(() => {
+        throw new Error("controller Tick must not run during publication");
       });
       vi.spyOn(previousVisual, "stepAnimation").mockImplementation(() => {
         throw new Error("animation mutation must not run during publication");
@@ -8315,7 +8410,7 @@ function emptyActionProjection(simulationTick: number) {
     const runtime = await createRuntime(executionPlan);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
-      const playerMoving = await internal.runFixedInputTick({
+      const playerMoving = await commitGameplayFixedInputTick(internal, {
         actions: ["move-right", "run"],
         ticks: 1,
       }, emptyActionProjection(
@@ -8323,7 +8418,10 @@ function emptyActionProjection(simulationTick: number) {
       ));
       expect(playerMoving.capabilityStatesById[
         "capability-state:player:locomotion"
-      ]).toMatchObject({ mode: "run" });
+      ]).toMatchObject({
+        kind: "locomotion-capability-state-v2",
+        locomotion: { status: "active", gait: "run" },
+      });
       const bind = await internal.preparePossessionTarget({
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
@@ -8340,7 +8438,7 @@ function emptyActionProjection(simulationTick: number) {
         })
       ).toThrow("WORLDKIT_RUNTIME_CAMERA_VIEW_EPOCH_PENDING");
       const before = internal.readWorldProjection();
-      const moved = await internal.runFixedInputTick({
+      const moved = await commitGameplayFixedInputTick(internal, {
         actions: ["move-right"],
         ticks: 1,
       }, emptyActionProjection(
@@ -8375,12 +8473,15 @@ function emptyActionProjection(simulationTick: number) {
       expect(moved.capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"
       ]).toMatchObject({
-        kind: "locomotion-capability-state",
+        kind: "locomotion-capability-state-v2",
         ownerEntityId: "pack-animal-a",
         locomotionCapabilityRef:
           "worldkit://capability/locomotion.ground@1",
-        mode: "walk",
-        movementMedium: "ground",
+        locomotion: {
+          status: "active",
+          gait: "walk",
+          movementMedium: "ground",
+        },
       });
       const supportedEntityIds = Object.values(moved.semanticFactsById)
         .filter((fact) => fact.type === "supportedBy")
@@ -8395,7 +8496,7 @@ function emptyActionProjection(simulationTick: number) {
       const cameraBeforeRelease = runtime.snapshot().camera;
       const release = await internal.preparePossessionTarget({ mode: "unbound" });
       release.commitPrepared();
-      await internal.runFixedInputTick({
+      await commitGameplayFixedInputTick(internal, {
         actions: ["move-right", "camera-recenter"],
         ticks: 1,
       }, emptyActionProjection(
@@ -8419,7 +8520,7 @@ function emptyActionProjection(simulationTick: number) {
         mode: "possessed",
         controlledEntityId: "missing",
       })).rejects.toThrow(/target/i);
-      await expect(internal.runFixedInputTick({
+      await expect(commitGameplayFixedInputTick(internal, {
         actions: [],
         ticks: 2,
       } as never, emptyActionProjection(
@@ -8548,7 +8649,7 @@ function emptyActionProjection(simulationTick: number) {
     }
   });
 
-  it("aligns the Golden Subject front with off-axis camera-relative movement", async () => {
+  it("turns the Golden Subject front toward off-axis camera-relative movement at the locked rate", async () => {
     const runtime = await createRiggedRuntime();
     try {
       runtime.setCameraViewPreference({
@@ -8598,10 +8699,38 @@ function emptyActionProjection(simulationTick: number) {
       expect(
         subjectForwardDirectionXZ[0] * velocityDirectionXZ[0] +
           subjectForwardDirectionXZ[1] * velocityDirectionXZ[1],
-      ).toBeGreaterThan(0.999);
+      ).toBeGreaterThan(0.99);
+      expect(
+        subjectForwardDirectionXZ[0] * velocityDirectionXZ[0] +
+          subjectForwardDirectionXZ[1] * velocityDirectionXZ[1],
+      ).toBeLessThan(0.9999);
       expect(
         velocityDirectionXZ[0] * cameraForwardDirectionXZ[0] +
           velocityDirectionXZ[1] * cameraForwardDirectionXZ[1],
+      ).toBeGreaterThan(0.999999);
+
+      const aligned = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 1,
+      });
+      const alignedSubject = aligned.subjectStatesByEntityId.player!;
+      const alignedVelocityLength = Math.hypot(
+        alignedSubject.velocityMetersPerSecondXYZ[0],
+        alignedSubject.velocityMetersPerSecondXYZ[2],
+      );
+      const alignedForwardLength = Math.hypot(
+        alignedSubject.forwardXYZ[0],
+        alignedSubject.forwardXYZ[2],
+      );
+      expect(
+        alignedSubject.forwardXYZ[0] /
+              alignedForwardLength *
+              alignedSubject.velocityMetersPerSecondXYZ[0] /
+              alignedVelocityLength +
+          alignedSubject.forwardXYZ[2] /
+              alignedForwardLength *
+              alignedSubject.velocityMetersPerSecondXYZ[2] /
+              alignedVelocityLength,
       ).toBeGreaterThan(0.999999);
     } finally {
       await runtime.dispose();
@@ -8731,7 +8860,10 @@ function emptyActionProjection(simulationTick: number) {
       airborne = await runtime.runFixedInput({ actions: [], ticks: 1 });
     }
     expect(airborne.subjectStatesByEntityId.player!.movementMedium).toBe("air");
-    expect(airborne.subjectStatesByEntityId.player!.activeActionId).toBe("jump");
+    expect(airborne.subjectStatesByEntityId.player).toMatchObject({
+      movementOwner: "character-movement",
+      locomotion: { status: "active", mobilityMode: "airborne" },
+    });
 
     await runtime.dispose();
   });

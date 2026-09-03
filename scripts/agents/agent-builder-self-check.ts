@@ -7,9 +7,9 @@ import {
   normalizeAuthoringSpecV4,
   parseAuthoringSpecV4,
   parseSceneBriefV1,
-  stringifyCanonicalJson,
   type NormalizedWorldIRV4,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import {
   compileCanonicalWorldV1,
   sampleTerrainHeight,

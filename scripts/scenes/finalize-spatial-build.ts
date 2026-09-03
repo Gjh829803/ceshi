@@ -6,10 +6,12 @@ import {
   parseAuthoringSpecV4,
   parseCanonicalJson,
   parseSceneBriefV1,
-  sha256CanonicalJson,
-  stringifyCanonicalJson,
   type SceneBriefV1,
 } from "@whitebox-world/authoring";
+import {
+  sha256CanonicalJson,
+  stringifyCanonicalJson,
+} from "@whitebox-world/protocol";
 import {
   validateSceneBriefImplementationMapDraftV1,
   validateSceneBriefImplementationMapV1,

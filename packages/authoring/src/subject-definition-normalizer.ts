@@ -14,7 +14,7 @@ import type {
 import { selectableControlFeelProfileRefsV1 } from "@whitebox-world/subject-registry";
 import { isNil } from "lodash-es";
 
-import { sha256CanonicalJson } from "./canonical-json";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { ResourceLockBuilderV1 } from "./resource-lock";
 import type {
   AuthoringDiagnostic,
@@ -31,16 +31,24 @@ import type {
 
 type SubjectDefinitionSourceV2 = PackageSubjectDefinitionV1 | RegistrySubjectDefinitionV3;
 
-export interface NormalizeSubjectDefinitionRequestV2 {
-  definition: SubjectDefinitionSourceV2;
+interface NormalizeSubjectDefinitionRequestBaseV2 {
   subjectDefinitionRef: string;
-  source: "package" | "registry";
   instancePath: string;
   subjectResourceRegistry: SubjectResourceRegistryV3;
   resourceLockBuilder: ResourceLockBuilderV1;
   diagnostics: AuthoringDiagnostic[];
   resourceBudget?: AuthoringDocumentBase["world"]["resourceBudget"];
 }
+
+export type NormalizeSubjectDefinitionRequestV2 =
+  | (NormalizeSubjectDefinitionRequestBaseV2 & Readonly<{
+      source: "package";
+      definition: PackageSubjectDefinitionV1;
+    }>)
+  | (NormalizeSubjectDefinitionRequestBaseV2 & Readonly<{
+      source: "registry";
+      definition: RegistrySubjectDefinitionV3;
+    }>);
 
 interface NormalizedVisualResourcesV1 {
   subjectAssetResource?: SubjectAssetManifestV1;
@@ -895,7 +903,7 @@ export function normalizeSubjectDefinitionV2(
   const initialErrorCount = diagnostics.filter((item) => item.severity === "error").length;
 
   if (source === "registry") {
-    resourceLockBuilder.addRegistryResource(definition as RegistrySubjectDefinitionV3,
+    resourceLockBuilder.addRegistryResource(definition,
       instancePath, diagnostics);
   }
   const visualParts = normalizeVisualParts(definition, instancePath, diagnostics);

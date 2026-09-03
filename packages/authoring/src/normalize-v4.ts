@@ -5,7 +5,7 @@ import {
 } from "@whitebox-world/layout-solver";
 import { resolveTraversalSurfaceProfileV1 } from "@whitebox-world/traversal";
 
-import { sha256CanonicalJson } from "./canonical-json.js";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { hashAuthoringDocumentV4 } from "./canonical-authoring-identity-v4.js";
 import { resolveAuthoringLayoutV4 } from "./layout-input.js";
 import { normalizeAuthoringBaseV4 } from "./normalize.js";

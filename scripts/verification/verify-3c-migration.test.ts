@@ -11,6 +11,7 @@ import {
   priorTextFromDiversionDiffV1,
   readGitPriorLedgerV1,
   verify3cMigrationV1,
+  verifySingleAuthorityStructureV1,
 } from "./verify-3c-migration.js";
 
 const execFileAsync = promisify(execFile);
@@ -53,6 +54,71 @@ async function writeRepositoryFile(root: string, relativePath: string, content: 
   const file = join(root, ...relativePath.split("/"));
   await mkdir(join(file, ".."), { recursive: true });
   await writeFile(file, content, "utf8");
+}
+
+async function singleAuthorityRepository(): Promise<string> {
+  const root = await repositoryWithSource(
+    "export interface GameplayWorldPortV1 { prepareFixedInputTick(input: FixedInputOneTickV1): Promise<GameplayWorldTransactionV1> }\n",
+    "packages/runtime-host/src/gameplay-world-port.ts",
+  );
+  await Promise.all([
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
+      "export interface BabylonGameplayRuntimeInternalV1 { prepareFixedInputTick(input: FixedInputOneTickV1): Promise<PreparedBabylonGameplayFixedInputTickV1> }\n",
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-host/src/world-session.ts",
+      "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);\n",
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/gameplay-contracts/src/gameplay-contracts.ts",
+      [
+        'readonly kind: "locomotion-capability-state-v2";',
+        "export type GameplayCapabilityStateV1 = LocomotionCapabilityStateEnvelopeV2;",
+      ].join("\n"),
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/character-movement-component.ts",
+      [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "createCharacterMovementInitialStateAtPlacementV1({ positionMetersXYZ: placement });",
+        "this.#transaction.previewSupportedPlacement(input);",
+        "this.#transaction.previewRelationshipSuspension(input);",
+        "this.#transaction.resetAtSupportedPlacement(input);",
+        "this.#transaction.suspendForRelationship(input);",
+      ].join("\n"),
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/babylon-world-runtime.ts",
+      [
+        "controller.locomotionStateV2();",
+        "controller.previewSuspendedAt(input);",
+        "controller.previewResetAt(input);",
+      ].join("\n"),
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/runtime-projection.ts",
+      [
+        'movementOwner: "character-movement";',
+        'movementOwner: "specialized-motion";',
+        "locomotion?: never;",
+      ].join("\n"),
+    ),
+    writeRepositoryFile(root, "packages/authoring/src/index.ts", "export {};\n"),
+    writeRepositoryFile(
+      root,
+      "packages/authoring/package.json",
+      '{"exports":{"./schema": "./src/authoring-spec-v4.schema.json"}}\n',
+    ),
+  ]);
+  return root;
 }
 
 function ledger(entryOverrides: Record<string, unknown> = {}, rootOverrides: Record<string, unknown> = {}) {
@@ -115,6 +181,161 @@ describe("Diversion prior-ledger reconstruction", () => {
 });
 
 describe("3C migration ledger verifier", () => {
+  it("accepts the fixed-input, movement, locomotion, and public-entry single-authority structure", async () => {
+    const root = await singleAuthorityRepository();
+    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(9);
+  });
+
+  it.each([
+    {
+      label: "RuntimeHost mutating fixed-input fallback",
+      path: "packages/runtime-host/src/gameplay-world-port.ts",
+      source: "prepareFixedInputTick(): void; runFixedInputTick(): void;\n",
+    },
+    {
+      label: "provider mutating fixed-input fallback",
+      path: "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
+      source: "prepareFixedInputTick(): void; runFixedInputTick(): void;\n",
+    },
+    {
+      label: "renamed direct fixed-input mutation beside the transaction",
+      path: "packages/runtime-host/src/gameplay-world-port.ts",
+      source: [
+        "export interface GameplayWorldPortV1 {",
+        "prepareFixedInputTick(input: FixedInputOneTickV1): Promise<GameplayWorldTransactionV1>;",
+        "advanceFixedInputTickDirectly(input: FixedInputOneTickV1): Promise<void>;",
+        "}",
+      ].join("\n"),
+    },
+    {
+      label: "callable-property fixed-input mutation beside the transaction",
+      path: "packages/runtime-host/src/gameplay-world-port.ts",
+      source: [
+        "export interface GameplayWorldPortV1 {",
+        "prepareFixedInputTick(input: FixedInputOneTickV1): Promise<GameplayWorldTransactionV1>;",
+        "readonly advanceFixedInputTickDirectly?: (input: FixedInputOneTickV1) => Promise<void>;",
+        "}",
+      ].join("\n"),
+    },
+    {
+      label: "local fixed-input port facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "interface PreparedInputPort extends GameplayWorldPortV1 {",
+        'advanceFixedInputTickDirectly(input: Readonly<Omit<FixedInputV1, "ticks"> & { ticks: 1 }>): Promise<void>;',
+        "}",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
+      label: "local one-tick fixed-input port facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "interface PreparedInputPort {",
+        "advanceFixedInputTickDirectly(input: FixedInputOneTickV1): Promise<void>;",
+        "}",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
+      label: "inline fixed-input callable facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "const direct = this.options.worldPort as unknown as {",
+        "advanceFixedInputTickDirectly?: (input: FixedInputOneTickV1) => Promise<void>;",
+        "};",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
+      label: "intersection fixed-input port facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "type PreparedInputPort = GameplayWorldPortV1 & { readonly direct: true };",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
+      label: "flat Locomotion V1 envelope",
+      path: "packages/gameplay-contracts/src/gameplay-contracts.ts",
+      source: [
+        'readonly kind: "locomotion-capability-state-v2";',
+        "interface LocomotionCapabilityStateV1 {}",
+        "export type GameplayCapabilityStateV1 = LocomotionCapabilityStateEnvelopeV2;",
+      ].join("\n"),
+    },
+    {
+      label: "second planar motion sampler",
+      path: "packages/runtime-babylon/src/character-movement-component.ts",
+      source: [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "sampleMotion();",
+      ].join("\n"),
+    },
+    {
+      label: "provider-side CharacterMovement state hashing",
+      path: "packages/runtime-babylon/src/character-movement-component.ts",
+      source: [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "this.#transaction.resetAtSupportedPlacement(input);",
+        "this.#transaction.suspendForRelationship(input);",
+        "hashCharacterMovementStateV1(state);",
+      ].join("\n"),
+    },
+    {
+      label: "provider-side fresh-spawn Locomotion envelope",
+      path: "packages/runtime-babylon/src/character-movement-component.ts",
+      source: [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "createCharacterMovementInitialStateAtPlacementV1({ positionMetersXYZ: placement });",
+        "this.#transaction.previewSupportedPlacement(input);",
+        "this.#transaction.previewRelationshipSuspension(input);",
+        "this.#transaction.resetAtSupportedPlacement(input);",
+        "this.#transaction.suspendForRelationship(input);",
+        'mobilityMode: "grounded";',
+      ].join("\n"),
+    },
+    {
+      label: "provider-side Locomotion transition sequence rule",
+      path: "packages/runtime-babylon/src/babylon-world-runtime.ts",
+      source: [
+        "controller.locomotionStateV2();",
+        "controller.previewSuspendedAt(input);",
+        "controller.previewResetAt(input);",
+        "transitionSequence: locomotion.transitionSequence + 1;",
+      ].join("\n"),
+    },
+    {
+      label: "projection without specialized owner discriminator",
+      path: "packages/runtime-babylon/src/runtime-projection.ts",
+      source: 'movementOwner: "character-movement";\nlocomotion?: never;\n',
+    },
+    {
+      label: "Authoring canonical JSON re-export",
+      path: "packages/authoring/src/index.ts",
+      source: 'export * from "./canonical-json";\n',
+    },
+    {
+      label: "duplicate Authoring schema subpath",
+      path: "packages/authoring/package.json",
+      source: JSON.stringify({
+        exports: {
+          "./schema": "./src/authoring-spec-v4.schema.json",
+          "./schema-v4": "./src/authoring-spec-v4.schema.json",
+        },
+      }),
+    },
+  ])("rejects $label", async ({ path, source }) => {
+    const root = await singleAuthorityRepository();
+    await writeRepositoryFile(root, path, source);
+    await expect(verifySingleAuthorityStructureV1(root)).rejects.toThrow(
+      /^SINGLE_AUTHORITY_STRUCTURE_(?:FORBIDDEN|REQUIRED_MISSING)/,
+    );
+  });
+
   it.each([
     ["unknown root key", { ...ledger(), generatedAt: "now" }],
     ["missing deletion condition", ledger({ deletionCondition: undefined })],

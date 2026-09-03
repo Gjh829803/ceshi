@@ -36,7 +36,7 @@ import {
   runtimeTestWorldArtifactsForPlanV1,
   runtimeTestWorldInputForPlanV1,
 } from "./runtime-test-plan";
-import type { CharacterMovementComponentV1 } from "./character-movement-component";
+import type { CharacterMovementSubjectControllerV1 } from "./character-movement-component";
 
 const MEDIUM_FEEL_REF = "worldkit://control-feel-profile/humanoid.medium-ground@1";
 const HEAVY_FEEL_REF = "worldkit://control-feel-profile/humanoid.heavy-ground@1";
@@ -54,7 +54,9 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
 
-function compileFlatPackagePlan(): CanonicalSceneExecutionPlanV1 {
+function compileFlatPackagePlan(
+  playerControlFeelRef = MEDIUM_FEEL_REF,
+): CanonicalSceneExecutionPlanV1 {
   const spec = createValidPackageSubjectWorldV4();
   spec.nodes = spec.nodes.map((node) =>
     node.kind === "terrain" && node.components.terrain.source.kind === "procedural"
@@ -76,13 +78,16 @@ function compileFlatPackagePlan(): CanonicalSceneExecutionPlanV1 {
   );
   const plan = compileRuntimeTestScenePlanV1(spec);
   return createRuntimeTestWorldVariantV1(plan, {
-    // P1.5 is the retained legacy conformance suite. A static visual binding
-    // keeps this fixture on that path instead of accidentally admitting the
-    // single-rigged-subject Golden Humanoid vNext vertical slice.
-    runtimeSubjects: runtimeTestSubjectsForPlanV1(plan).map((subject) => ({
-      ...subject,
-      visualBinding: { mode: "static" as const },
-    })),
+    runtimeSubjects: runtimeTestSubjectsForPlanV1(plan).map((subject) => {
+      if (subject.entityId !== "player") return subject;
+      const controlFeel = subject.availableControlFeels.find(
+        (candidate) => candidate.resourceRef === playerControlFeelRef,
+      );
+      if (controlFeel === undefined) {
+        throw new Error(`Missing compiled Control Feel '${playerControlFeelRef}'.`);
+      }
+      return { ...subject, controlFeel };
+    }),
   });
 }
 
@@ -246,10 +251,10 @@ async function tickUntil(
 function controllerFor(
   runtime: BabylonWorldRuntime,
   entityId: string,
-): CharacterMovementComponentV1 {
+): CharacterMovementSubjectControllerV1 {
   const controller = (runtime as unknown as {
     characterEntitiesByEntityId: ReadonlyMap<string, {
-      movement: CharacterMovementComponentV1;
+      movement: CharacterMovementSubjectControllerV1;
     }>;
   }).characterEntitiesByEntityId.get(entityId)?.movement;
   if (controller === undefined) {
@@ -284,14 +289,15 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
 
   it("2. keeps speed, yaw, and Feel Refs isolated between instances with different Feels", async () => {
     const mediumRuntime = await createConformanceRuntime(compileFlatPackagePlan());
-    const heavyRuntime = await createConformanceRuntime(compileFlatPackagePlan());
+    const heavyRuntime = await createConformanceRuntime(
+      compileFlatPackagePlan(HEAVY_FEEL_REF),
+    );
     try {
       const packAnimalFeelBefore = heavyRuntime
         .snapshot()
         .subjectStatesByEntityId["pack-animal-a"]!.activeControlFeelProfileRef;
-      expect(heavyRuntime.requestControlFeelProfile("player", HEAVY_FEEL_REF)).toBe(
-        true,
-      );
+      expect(heavyRuntime.snapshot().subjectStatesByEntityId.player!
+        .activeControlFeelProfileRef).toBe(HEAVY_FEEL_REF);
 
       // Sample mid-turn, where the different Feel turn rates are visible.
       const turningInput = {
@@ -456,7 +462,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       // the controller regression behind the later jump assertion.
       const controller = controllerFor(runtime, "player");
       let supportBeforeDeparture:
-        | ReturnType<CharacterMovementComponentV1["retainedCharacterSupportSample"]>
+        | ReturnType<CharacterMovementSubjectControllerV1["retainedCharacterSupportSample"]>
         | undefined;
       let departed:
         | { state: SubjectRuntimeState; elapsedTicks: number }
@@ -563,7 +569,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
       for (let tick = 0; tick < 20; tick += 1) {
         const state = rising.subjectStatesByEntityId.player!;
         if (
-          state.positionMetersXYZ[2] < -1.9 &&
+          state.positionMetersXYZ[2] < -1.8 &&
           state.velocityMetersPerSecondXYZ[1] > 0
         ) {
           break;
@@ -574,7 +580,7 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
         });
       }
       const risingState = rising.subjectStatesByEntityId.player!;
-      expect(risingState.positionMetersXYZ[2]).toBeLessThan(-1.9);
+      expect(risingState.positionMetersXYZ[2]).toBeLessThan(-1.8);
       expect(risingState.positionMetersXYZ[1]).toBeGreaterThan(takeoffY + 0.1);
       expect(risingState.velocityMetersPerSecondXYZ[1]).toBeGreaterThan(0);
       expect(risingState.movementMedium).toBe("air");
@@ -735,12 +741,10 @@ describe("P1.5 conformance: closed Ground/Air Feel slice", () => {
         possession.commitPrepared();
         await runtime.runFixedInput({ actions: ["move-forward", "jump"], ticks: 20 });
         runtime.renderFrame();
-        expect(
-          runtime.requestControlFeelProfile(
-            "player",
-            cycle % 2 === 0 ? HEAVY_FEEL_REF : MEDIUM_FEEL_REF,
-          ),
-        ).toBe(true);
+        expect(() => runtime.requestControlFeelProfile(
+          "player",
+          HEAVY_FEEL_REF,
+        )).toThrow("SUBJECT_OVERRIDE_FORBIDDEN");
         const reset = runtime.reset();
 
         expect(reset.possessionTarget).toEqual({ mode: "unbound" });

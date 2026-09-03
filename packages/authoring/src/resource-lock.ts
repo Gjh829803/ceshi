@@ -7,7 +7,7 @@ import type {
 } from "@whitebox-world/subject-registry";
 import { worldResourceLockEntriesV1 } from "@whitebox-world/runtime-contracts";
 
-import { sha256CanonicalJson } from "./canonical-json";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import type {
   AuthoringDiagnostic,
   NormalizedAnimationSetV1,

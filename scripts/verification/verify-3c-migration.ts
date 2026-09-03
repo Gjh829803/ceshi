@@ -3,6 +3,7 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const execFileAsync = promisify(execFile);
 
@@ -328,6 +329,319 @@ function admittedSource(pathname: string, policy: SourcePolicyV1): boolean {
     !policy.excludedFileSuffixes.some((suffix) => normalized.endsWith(suffix));
 }
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+const SINGLE_AUTHORITY_STRUCTURE_RULES_V1 = Object.freeze([
+  Object.freeze({
+    id: "runtime-host-fixed-input-transaction",
+    path: "packages/runtime-host/src/gameplay-world-port.ts",
+    required: Object.freeze(["prepareFixedInputTick("]),
+    forbidden: Object.freeze(["runFixedInputTick"]),
+  }),
+  Object.freeze({
+    id: "runtime-provider-fixed-input-transaction",
+    path: "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
+    required: Object.freeze(["prepareFixedInputTick("]),
+    forbidden: Object.freeze(["runFixedInputTick"]),
+  }),
+  Object.freeze({
+    id: "runtime-host-fixed-input-call-site",
+    path: "packages/runtime-host/src/world-session.ts",
+    required: Object.freeze(["this.options.worldPort.prepareFixedInputTick("]),
+    forbidden: Object.freeze([
+      "runFixedInputTick",
+      'worldPort["prepareFixedInputTick"]',
+      "worldPort.prepareFixedInputTick?.(",
+    ]),
+  }),
+  Object.freeze({
+    id: "locomotion-v2-only",
+    path: "packages/gameplay-contracts/src/gameplay-contracts.ts",
+    required: Object.freeze([
+      'readonly kind: "locomotion-capability-state-v2";',
+      "export type GameplayCapabilityStateV1 = LocomotionCapabilityStateEnvelopeV2;",
+    ]),
+    forbidden: Object.freeze([
+      "interface LocomotionCapabilityStateV1",
+      '"locomotion-capability-state-v1"',
+    ]),
+  }),
+  Object.freeze({
+    id: "planar-movement-admission",
+    path: "packages/runtime-babylon/src/character-movement-component.ts",
+    required: Object.freeze([
+      "supportsCharacterMovementSubjectV1(subject)",
+      "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE",
+      "createCharacterMovementInitialStateAtPlacementV1({",
+      "this.#transaction.previewSupportedPlacement(",
+      "this.#transaction.previewRelationshipSuspension(",
+      "this.#transaction.resetAtSupportedPlacement(",
+      "this.#transaction.suspendForRelationship(",
+    ]),
+    forbidden: Object.freeze([
+      "sampleMotion(",
+      "hashCharacterMovementStateV1",
+      'mobilityMode: "grounded"',
+      "transitionSequence:",
+      "#resetAtSnapshot(",
+    ]),
+  }),
+  Object.freeze({
+    id: "movement-locomotion-projection-authority",
+    path: "packages/runtime-babylon/src/babylon-world-runtime.ts",
+    required: Object.freeze([
+      "controller.locomotionStateV2()",
+      ".previewSuspendedAt(",
+      ".previewResetAt(",
+    ]),
+    forbidden: Object.freeze([
+      "nextGoldenTransitionSequence(",
+      "transitionSequence:",
+    ]),
+  }),
+  Object.freeze({
+    id: "movement-projection-discriminator",
+    path: "packages/runtime-babylon/src/runtime-projection.ts",
+    required: Object.freeze([
+      'movementOwner: "character-movement";',
+      'movementOwner: "specialized-motion";',
+      "locomotion?: never;",
+    ]),
+    forbidden: Object.freeze([]),
+  }),
+  Object.freeze({
+    id: "authoring-canonical-public-entry",
+    path: "packages/authoring/src/index.ts",
+    required: Object.freeze([]),
+    forbidden: Object.freeze(['export * from "./canonical-json"']),
+  }),
+  Object.freeze({
+    id: "authoring-schema-public-entry",
+    path: "packages/authoring/package.json",
+    required: Object.freeze(['"./schema": "./src/authoring-spec-v4.schema.json"']),
+    forbidden: Object.freeze(['"./schema-v4"']),
+  }),
+] as const);
+
+function assertSingleFixedInputMutationMethod(
+  source: string,
+  sourcePath: string,
+  interfaceName: string,
+  expectedReturnTypeName: string,
+  allowedReadOnlyMethodNames: readonly string[] = [],
+  allowedInterfaceMemberNames: readonly string[] = [],
+): void {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const declaration = sourceFile.statements.find(
+    (statement): statement is ts.InterfaceDeclaration =>
+      ts.isInterfaceDeclaration(statement) && statement.name.text === interfaceName,
+  );
+  if (declaration === undefined) {
+    fail("SINGLE_AUTHORITY_STRUCTURE_REQUIRED_MISSING", `${interfaceName} interface`);
+  }
+  const allowedMembers = new Set(allowedInterfaceMemberNames);
+  if (declaration.members.some((member) => {
+    const name = "name" in member && member.name !== undefined
+      ? member.name.getText(sourceFile).replace(/^['\"]|['\"]$/g, "")
+      : undefined;
+    return name === undefined || !allowedMembers.has(name);
+  })) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${interfaceName} exposes an unrecognized member path`,
+    );
+  }
+  const fixedInputMethods = declaration.members.filter(
+    (member): member is ts.MethodSignature | ts.PropertySignature => {
+      const parameters = ts.isMethodSignature(member)
+        ? member.parameters
+        : ts.isPropertySignature(member) &&
+            member.type !== undefined &&
+            ts.isFunctionTypeNode(member.type)
+          ? member.type.parameters
+          : [];
+      return parameters.some((parameter) =>
+        parameter.type?.getText(sourceFile).includes("FixedInputOneTickV1") === true
+      );
+    },
+  );
+  const allowedMethodNames = new Set([
+    "prepareFixedInputTick",
+    ...allowedReadOnlyMethodNames,
+  ]);
+  if (fixedInputMethods.some((member) =>
+    !ts.isIdentifier(member.name) || !allowedMethodNames.has(member.name.text)
+  )) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${interfaceName} exposes an unrecognized fixed-input path`,
+    );
+  }
+  const fixedInputMutationMethods = fixedInputMethods.filter((member) =>
+    ts.isIdentifier(member.name) &&
+    !allowedReadOnlyMethodNames.includes(member.name.text)
+  );
+  const method = fixedInputMutationMethods[0];
+  const methodName = method !== undefined && ts.isIdentifier(method.name)
+    ? method.name.text
+    : undefined;
+  const returnType = method?.type?.getText(sourceFile) ?? "";
+  if (fixedInputMutationMethods.length !== 1 ||
+    methodName !== "prepareFixedInputTick" ||
+    !returnType.includes(expectedReturnTypeName)) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${interfaceName} must expose exactly one staged fixed-input mutation method`,
+    );
+  }
+}
+
+function assertWorldSessionHasNoFixedInputPortFacade(
+  source: string,
+  sourcePath: string,
+): void {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let forbidden: string | undefined;
+  const isFixedInputType = (node: ts.TypeNode | undefined): boolean =>
+    node !== undefined &&
+    /(?:^|\W)FixedInput(?:OneTick)?V1(?:\W|$)/.test(node.getText(sourceFile));
+  const declaresFixedInputCallableMember = (
+    members: ts.NodeArray<ts.TypeElement>,
+  ): boolean => members.some((member) => {
+    if (ts.isMethodSignature(member) || ts.isCallSignatureDeclaration(member) ||
+      ts.isConstructSignatureDeclaration(member)) {
+      return member.parameters.some((parameter) => isFixedInputType(parameter.type));
+    }
+    if (!ts.isPropertySignature(member) || member.type === undefined) return false;
+    let acceptsFixedInput = false;
+    const inspectPropertyType = (node: ts.Node): void => {
+      if (acceptsFixedInput) return;
+      if (ts.isFunctionTypeNode(node) &&
+        node.parameters.some((parameter) => isFixedInputType(parameter.type))) {
+        acceptsFixedInput = true;
+        return;
+      }
+      ts.forEachChild(node, inspectPropertyType);
+    };
+    inspectPropertyType(member.type);
+    return acceptsFixedInput;
+  });
+  const inspect = (node: ts.Node): void => {
+    if (forbidden !== undefined) return;
+    if (ts.isInterfaceDeclaration(node)) {
+      const extendsGameplayWorldPort = node.heritageClauses?.some((clause) =>
+        clause.types.some((type) =>
+          type.expression.getText(sourceFile) === "GameplayWorldPortV1"
+        )
+      ) === true;
+      if (extendsGameplayWorldPort ||
+        declaresFixedInputCallableMember(node.members)) {
+        forbidden = node.name.text;
+        return;
+      }
+    }
+    if (ts.isTypeLiteralNode(node) &&
+      declaresFixedInputCallableMember(node.members)) {
+      forbidden = "inline fixed-input port facade";
+      return;
+    }
+    if (ts.isIntersectionTypeNode(node) &&
+      node.getText(sourceFile).includes("GameplayWorldPortV1")) {
+      forbidden = "GameplayWorldPortV1 intersection";
+      return;
+    }
+    ts.forEachChild(node, inspect);
+  };
+  inspect(sourceFile);
+  if (forbidden !== undefined) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${sourcePath} declares a local fixed-input port facade: ${forbidden}`,
+    );
+  }
+}
+
+export async function verifySingleAuthorityStructureV1(
+  repositoryRoot: string,
+): Promise<readonly string[]> {
+  const verified: string[] = [];
+  for (const rule of SINGLE_AUTHORITY_STRUCTURE_RULES_V1) {
+    let source: string;
+    try {
+      source = await readFile(path.join(repositoryRoot, rule.path), "utf8");
+    } catch {
+      fail("SINGLE_AUTHORITY_STRUCTURE_FILE_MISSING", `${rule.id}: ${rule.path}`);
+    }
+    for (const required of rule.required) {
+      if (!source.includes(required)) {
+        fail("SINGLE_AUTHORITY_STRUCTURE_REQUIRED_MISSING", `${rule.id}: ${required}`);
+      }
+    }
+    for (const forbidden of rule.forbidden) {
+      if (source.includes(forbidden)) {
+        fail("SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN", `${rule.id}: ${forbidden}`);
+      }
+    }
+    if (rule.id === "runtime-host-fixed-input-transaction") {
+      assertSingleFixedInputMutationMethod(
+        source,
+        rule.path,
+        "GameplayWorldPortV1",
+        "GameplayWorldTransactionV1",
+        ["estimateFixedInputTickCapacity"],
+        [
+          "initialize",
+          "hasEntity",
+          "isEntityControllable",
+          "isActionAvailable",
+          "prepareGameplayTransition",
+          "estimateFixedInputTickCapacity",
+          "prepareFixedInputTick",
+          "snapshot",
+          "dispose",
+        ],
+      );
+    }
+    if (rule.id === "runtime-provider-fixed-input-transaction") {
+      assertSingleFixedInputMutationMethod(
+        source,
+        rule.path,
+        "BabylonGameplayRuntimeInternalV1",
+        "PreparedBabylonGameplayFixedInputTickV1",
+        [],
+        [
+          "readPossessionTarget",
+          "readWorldProjection",
+          "readViewProjection",
+          "hasEntity",
+          "isEntityControllable",
+          "estimateSemanticFactProjectionCapacity",
+          "hasLockedActionPresentation",
+          "preparePossessionTarget",
+          "prepareMountedRelationshipTransition",
+          "prepareFixedInputTick",
+          "dispose",
+        ],
+      );
+    }
+    if (rule.id === "runtime-host-fixed-input-call-site") {
+      assertWorldSessionHasNoFixedInputPortFacade(source, rule.path);
+    }
+    verified.push(rule.id);
+  }
+  return Object.freeze(verified);
+}
 
 export async function verify3cMigrationV1(options: Verify3cMigrationOptionsV1) {
   const ledger = parseLedger(options.ledger);
@@ -800,5 +1114,8 @@ if (invokedPath === fileURLToPath(import.meta.url)) {
     requiredLegacySymbols: GOLDEN_3C_REQUIRED_LEGACY_SYMBOLS_V1,
     sourceFilePaths,
   });
-  process.stdout.write(`3C migration ledger passed (${report.entries.length} entries; ${report.entries.reduce((sum, entry) => sum + entry.liveSourceReferenceCount, 0)} live references).\n`);
+  const structuralInvariants = await verifySingleAuthorityStructureV1(
+    repositoryRoot,
+  );
+  process.stdout.write(`3C migration ledger passed (${report.entries.length} entries; ${report.entries.reduce((sum, entry) => sum + entry.liveSourceReferenceCount, 0)} live references; ${structuralInvariants.length} single-authority invariants).\n`);
 }

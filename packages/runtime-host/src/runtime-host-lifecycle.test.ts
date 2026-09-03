@@ -498,7 +498,7 @@ describe("RuntimeHost lifecycle isolation and admission", () => {
       });
     expect(host.snapshot().worldState.simulationTick).toBe(1);
     expect(current.calls.filter(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )).toHaveLength(1);
   });
 
@@ -902,12 +902,12 @@ describe("RuntimeHost two-phase replacement", () => {
     expect(oldPort.disposeCount).toBe(1);
   });
 
-  it("does not swap a deferred candidate after the old Session fail-closes", async () => {
+  it("keeps a deferred candidate valid after the old Session aborts one Tick", async () => {
     const oldPort = createPortHarness();
     const candidatePort = createPortHarness();
     const initialize = candidatePort.deferNextOperation("initialize");
     oldPort.failNextOperation(
-      "run-fixed-input-tick",
+      "prepare-fixed-input-tick",
       "reject",
       new Error("private old fixed-input failure"),
     );
@@ -918,27 +918,21 @@ describe("RuntimeHost two-phase replacement", () => {
     );
     await initialize.entered;
 
-    const failedPublication = await host.runFixedInput({ actions: [], ticks: 1 });
-    expect(failedPublication).toMatchObject({
-      worldState: {
-        worldSessionId: oldSessionId,
-        worldPackageRef: INITIAL_WORLD_PACKAGE_REF,
-        simulationTick: 0,
-      },
-      gameplayInspection: {
-        phase: "failed",
-        diagnostic: { code: "ADAPTER_FIXED_INPUT_FAILED" },
-      },
-    });
-    expect(host.snapshot()).toBe(failedPublication);
+    const before = host.snapshot();
+    await expect(host.runFixedInput({ actions: [], ticks: 1 })).rejects
+      .toMatchObject({ diagnostic: { code: "ADAPTER_FIXED_INPUT_FAILED" } });
+    expect(host.snapshot()).toBe(before);
+    expect(host.snapshot().worldState.worldSessionId).toBe(oldSessionId);
 
     initialize.release();
-    await expect(replacement).rejects.toMatchObject({
-      diagnostic: { code: "WORLD_SESSION_FAILED" },
+    await expect(replacement).resolves.toMatchObject({
+      worldState: {
+        worldSessionId: "world-session.next",
+        worldPackageRef: REPLACEMENT_WORLD_PACKAGE_REF,
+      },
     });
-    expect(host.snapshot()).toBe(failedPublication);
-    expect(host.snapshot().worldState.worldSessionId).toBe(oldSessionId);
-    expect(candidatePort.disposeCount).toBe(1);
+    expect(oldPort.disposeCount).toBe(1);
+    expect(candidatePort.disposeCount).toBe(0);
   });
 
   it("sanitizes a throwing replacement WorldSession ID factory", async () => {

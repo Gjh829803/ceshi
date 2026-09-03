@@ -107,9 +107,9 @@ function throwingCleanupPort(
         GameplayWorldPortV1["estimateFixedInputTickCapacity"]
       >
     ) => port.estimateFixedInputTickCapacity(...args),
-    runFixedInputTick: (
-      ...args: Parameters<GameplayWorldPortV1["runFixedInputTick"]>
-    ) => port.runFixedInputTick(...args),
+    prepareFixedInputTick: (
+      ...args: Parameters<GameplayWorldPortV1["prepareFixedInputTick"]>
+    ) => port.prepareFixedInputTick(...args),
     snapshot: () => port.snapshot(),
     dispose: () => {
       if (isNil(disposePromise)) {

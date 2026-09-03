@@ -788,7 +788,7 @@ describe("WorldSession fixed input", () => {
       { type: "semantic-fact.ended", simulationTick: 2, semanticFact: fact },
     ]);
     expect(harness.calls.filter(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )).toHaveLength(2);
   });
 
@@ -809,13 +809,13 @@ describe("WorldSession fixed input", () => {
         diagnostic: { code: "GAMEPLAY_CAPACITY_EXCEEDED" },
       });
     expect(harness.calls.some(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )).toBe(false);
     expect(session.phase).toBe("ready");
     expect(session.snapshot().publicationEpoch).toBe(0);
   });
 
-  it("fails closed and preserves the last publication when the Adapter skips a Tick", async () => {
+  it("aborts and preserves the last publication when the Adapter skips a Tick", async () => {
     const { harness, options } = createHarnessAndOptions();
     const session = await WorldSession.create(options);
     harness.queueFixedInputTick({
@@ -826,29 +826,28 @@ describe("WorldSession fixed input", () => {
       worldProjectionAfter: projection(2),
     });
 
-    const result = await session.runFixedInput({ actions: [], ticks: 2 });
-
-    expect(session.phase).toBe("failed");
-    expect(result).toBe(session.snapshot());
-    expect(result).toMatchObject({
-      publicationEpoch: 1,
-      worldState: { simulationTick: 0 },
-      gameplayInspection: {
-        phase: "failed",
-        lastEventSequence: 1,
+    const before = session.snapshot();
+    await expect(session.runFixedInput({ actions: [], ticks: 2 })).rejects
+      .toMatchObject({
         diagnostic: { code: "ADAPTER_FIXED_INPUT_FAILED" },
-      },
+      });
+
+    expect(session.phase).toBe("ready");
+    expect(session.snapshot()).toBe(before);
+    expect(session.snapshot()).toMatchObject({
+      publicationEpoch: 0,
+      worldState: { simulationTick: 0 },
+      gameplayInspection: { phase: "ready", lastEventSequence: 0 },
     });
-    expect(session.eventsAfter(0, 10)).toMatchObject([
-      { type: "world.failed", simulationTick: 0, sequence: 1 },
-    ]);
+    expect(session.eventsAfter(0, 10)).toEqual([]);
     expect(harness.calls.filter(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )).toHaveLength(1);
-    expect(harness.disposeCount).toBe(1);
+    expect(harness.abortCount).toBe(1);
+    expect(harness.disposeCount).toBe(0);
   });
 
-  it("fails closed and disposes owned runtime resources for a malformed estimate", async () => {
+  it("rejects a malformed estimate without mutating or disposing the Session", async () => {
     const { harness, options } = createHarnessAndOptions();
     const session = await WorldSession.create(options);
     harness.queueFixedInputTick({
@@ -856,16 +855,18 @@ describe("WorldSession fixed input", () => {
       worldProjectionAfter: projection(1),
     });
 
-    const result = await session.runFixedInput({ actions: [], ticks: 2 });
-
-    expect(result.gameplayInspection).toMatchObject({
-      phase: "failed",
-      diagnostic: { code: "ADAPTER_FIXED_INPUT_FAILED" },
-    });
+    const before = session.snapshot();
+    await expect(session.runFixedInput({ actions: [], ticks: 2 })).rejects
+      .toMatchObject({
+        diagnostic: { code: "ADAPTER_FIXED_INPUT_FAILED" },
+      });
+    expect(session.phase).toBe("ready");
+    expect(session.snapshot()).toBe(before);
     expect(harness.calls.some(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )).toBe(false);
-    expect(harness.disposeCount).toBe(1);
+    expect(harness.abortCount).toBe(0);
+    expect(harness.disposeCount).toBe(0);
   });
 
   it("snapshots caller-owned actions before entering the mutation queue", async () => {
@@ -878,7 +879,7 @@ describe("WorldSession fixed input", () => {
       },
       worldProjectionAfter: projection(1),
     });
-    const barrier = harness.deferNextOperation("run-fixed-input-tick");
+    const barrier = harness.deferNextOperation("prepare-fixed-input-tick");
     const actions: string[] = ["camera-recenter"];
 
     const pending = session.runFixedInput({ actions, ticks: 1 });
@@ -888,7 +889,7 @@ describe("WorldSession fixed input", () => {
     await pending;
 
     expect(harness.calls.find(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )?.input?.actions).toEqual(["camera-recenter"]);
   });
 
@@ -910,7 +911,7 @@ describe("WorldSession fixed input", () => {
     });
 
     expect(harness.calls.find(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )?.input).toEqual({ actions: ["camera-recenter"], ticks: 1 });
   });
 
@@ -929,7 +930,7 @@ describe("WorldSession fixed input", () => {
       },
       worldProjectionAfter: projection(1),
     });
-    const barrier = harness.deferNextOperation("run-fixed-input-tick");
+    const barrier = harness.deferNextOperation("prepare-fixed-input-tick");
     const actions = ["move-forward", "primary-action"];
     const axes = { moveXRatio: 0.5, throttleRatio: 1 };
 
@@ -951,7 +952,7 @@ describe("WorldSession fixed input", () => {
     await pending;
 
     expect(harness.calls.find(({ operation }) =>
-      operation === "run-fixed-input-tick"
+      operation === "prepare-fixed-input-tick"
     )?.input).toEqual({
       actions: ["move-forward", "primary-action"],
       axes: { moveXRatio: 0.5, throttleRatio: 1 },

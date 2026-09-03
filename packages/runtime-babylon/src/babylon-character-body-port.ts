@@ -23,6 +23,7 @@ import {
   type BodyBeginTickRequestV1,
   type BodyResolutionV1,
   type BodySampleV1,
+  type BodySupportSampleV1,
   type CharacterBodyPortV1,
   type MovementProposalV1,
   type MovementTickTokenV1,
@@ -76,7 +77,7 @@ export interface BabylonCharacterBodyTransactionPortV1
   resetToState(state: Readonly<{
     positionMetersXYZ: MovementVec3V1;
     linearVelocityMetersPerSecondXYZ: MovementVec3V1;
-  }>): void;
+  }>): BodySupportSampleV1;
 }
 
 export interface BabylonCharacterBodyNativeAllocationV1 {
@@ -1197,6 +1198,60 @@ function removeBoundedSupportTranslation(
   ));
 }
 
+/**
+ * Babylon may move the capsule outward while maintaining its configured
+ * keep-distance contact shell. Remove only the component that is proven by an
+ * active non-walkable contact normal, and cap the total correction by
+ * keepDistance. Only the gravity-orthogonal component is eligible: vertical
+ * step/landing differences must never be reinterpreted as horizontal contact
+ * separation. This admits collision separation without turning the provider
+ * into a second movement-authority source.
+ */
+function removeBoundedContactSeparation(
+  applied: MovementVec3V1,
+  proposed: MovementVec3V1,
+  contacts: readonly BabylonCharacterBodyNativeContactV1[],
+  maximumActiveContactDistanceMeters: number,
+  maximumContactSeparationMeters: number,
+  up: MovementVec3V1,
+  maxSlopeCosine: number,
+): MovementVec3V1 {
+  let adjusted = applied;
+  let remaining = maximumContactSeparationMeters;
+  for (const contact of contacts) {
+    if (remaining <= 0 ||
+      contact.distanceMeters > maximumActiveContactDistanceMeters ||
+      dot(contact.normalXYZ, up) >= maxSlopeCosine) continue;
+    const normalUp = dot(contact.normalXYZ, up);
+    const planarNormal = freezeVec3(contact.normalXYZ.map(
+      (component, axis) => component - up[axis]! * normalUp,
+    ));
+    const planarNormalMagnitude = Math.hypot(...planarNormal);
+    if (!(planarNormalMagnitude > 1e-12)) continue;
+    const planarDirection = freezeVec3(planarNormal.map(
+      (component) => component / planarNormalMagnitude,
+    ));
+    const unexplainedVertical = dot(
+      freezeVec3(adjusted.map((component, axis) =>
+        component - proposed[axis]!
+      )),
+      up,
+    );
+    const unexplainedPlanar = freezeVec3(adjusted.map(
+      (component, axis) =>
+        component - proposed[axis]! - up[axis]! * unexplainedVertical,
+    ));
+    const outward = dot(unexplainedPlanar, planarDirection);
+    if (!(outward > 0)) continue;
+    const accepted = Math.min(outward, remaining);
+    adjusted = freezeVec3(adjusted.map(
+      (component, axis) => component - planarDirection[axis]! * accepted,
+    ));
+    remaining -= accepted;
+  }
+  return adjusted;
+}
+
 function assertProposalWasNotAmplified(
   applied: MovementVec3V1,
   proposed: MovementVec3V1,
@@ -1206,6 +1261,7 @@ function assertProposalWasNotAmplified(
   maxStepHeightMeters: number,
   maxSlopeCosine: number,
   maximumActiveContactDistanceMeters: number,
+  maximumContactSeparationMeters: number,
   maximumSolverCorrectionMeters: number,
   contacts: readonly BabylonCharacterBodyNativeContactV1[],
 ): void {
@@ -1221,6 +1277,15 @@ function assertProposalWasNotAmplified(
     supportDelta,
   );
   const up = freezeVec3(gravityDirection.map((component) => component === 0 ? 0 : -component));
+  const contactAdjustedApplied = removeBoundedContactSeparation(
+    supportAdjustedApplied,
+    proposed,
+    contacts,
+    maximumActiveContactDistanceMeters,
+    maximumContactSeparationMeters,
+    up,
+    maxSlopeCosine,
+  );
   const projectionNormal = support.mode === "unsupported"
     ? (() => {
       const activeWalkableContacts = contacts.filter((contact) =>
@@ -1236,15 +1301,15 @@ function assertProposalWasNotAmplified(
     })()
     : support.averageSurfaceNormalXYZ;
   const horizontalGuardApplied = projectionNormal === undefined
-    ? supportAdjustedApplied
+    ? contactAdjustedApplied
     : removeBoundedDownhillProjection(
-      supportAdjustedApplied,
+      contactAdjustedApplied,
       proposed,
       up,
       projectionNormal,
     );
   const proposedVertical = dot(proposed, up);
-  const appliedVertical = dot(supportAdjustedApplied, up);
+  const appliedVertical = dot(contactAdjustedApplied, up);
   if (!finite(maximumSolverCorrectionMeters) || maximumSolverCorrectionMeters < 0 ||
     maximumSolverCorrectionMeters >
       BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1) {
@@ -1944,6 +2009,7 @@ interface BodyTransactionV1 {
 }
 
 const tokenOwners = new WeakMap<object, BodyTokenOwnerV1>();
+const nativeDriversByPort = new WeakMap<object, BabylonCharacterBodyNativeDriverV1>();
 
 class BabylonCharacterBodyPortV1
   implements BabylonCharacterBodyRuntimePortV1 {
@@ -1970,7 +2036,9 @@ class BabylonCharacterBodyPortV1
     private readonly options: BabylonCharacterBodyPortOptionsV1,
     private readonly configuration: BabylonCharacterBodyNativeConfigurationV1,
     private readonly driver: BabylonCharacterBodyNativeDriverV1,
-  ) {}
+  ) {
+    nativeDriversByPort.set(this, driver);
+  }
 
   get physicsBody(): PhysicsBody {
     this.assertLive();
@@ -2133,6 +2201,7 @@ class BabylonCharacterBodyPortV1
         this.configuration.maxSlopeCosine,
         this.options.controller.keepDistanceMeters +
           this.options.controller.keepContactToleranceMeters,
+        this.options.controller.keepDistanceMeters,
         integrateResult.maximumSolverCorrectionMeters,
         contacts,
       );
@@ -2289,7 +2358,7 @@ class BabylonCharacterBodyPortV1
   resetToState(input: Readonly<{
     positionMetersXYZ: MovementVec3V1;
     linearVelocityMetersPerSecondXYZ: MovementVec3V1;
-  }>): void {
+  }>): BodySupportSampleV1 {
     this.assertLive();
     const positionInput = parseVec3(input.positionMetersXYZ);
     const velocityInput = parseVec3(input.linearVelocityMetersPerSecondXYZ);
@@ -2334,6 +2403,14 @@ class BabylonCharacterBodyPortV1
     this.stagedRetainedSupportSample = undefined;
     this.upwardSupportDepartureActive = false;
     this.latestCommittedSupportEvidence = undefined;
+    return nextRetainedSupportSample.supportState === "unsupported"
+      ? Object.freeze({ mode: "unsupported" })
+      : Object.freeze({
+          mode: nextRetainedSupportSample.supportState,
+          pointMetersXYZ: nextRetainedSupportSample.sampledFootPositionMetersXYZ,
+          normalXYZ: nextRetainedSupportSample.supportNormalWorldXYZ,
+          isDynamic: nextRetainedSupportSample.isSupportSurfaceDynamic,
+        });
   }
 
   retainedCharacterSupportSample():
@@ -2782,4 +2859,15 @@ export function createBabylonCharacterBodyPortForTestingInternalV1(
     input,
     nativeDriverFactory,
   );
+}
+
+/** @internal Used only by the adjacent testing-only relative module. */
+export function readBabylonCharacterBodyNativeDriverForTestingInternalV1(
+  port: object,
+): BabylonCharacterBodyNativeDriverV1 {
+  const driver = nativeDriversByPort.get(port);
+  if (driver === undefined) {
+    throw new Error("WORLDKIT_CHARACTER_BODY_TEST_DRIVER_UNAVAILABLE");
+  }
+  return driver;
 }

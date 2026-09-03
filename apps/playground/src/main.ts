@@ -576,7 +576,7 @@ function locomotionStateFromSubjectV4(
   subject: WorldRuntimeSubjectStateV4 | undefined,
 ) {
   return Object.values(subject?.capabilityStatesById ?? {}).find(
-    (state) => state.kind === "locomotion-capability-state",
+    (state) => state.kind === "locomotion-capability-state-v2",
   );
 }
 
@@ -670,7 +670,7 @@ function installTuningWorkbench(
   summary.innerHTML = `
     <div><span>现在调的是</span><strong>${escapeHtml(subjectFriendlyName(workbenchContext.definition))}</strong></div>
     <div><span>移动方式</span><strong>${escapeHtml(kernelFriendlyName(workbenchContext.activeKernel))}</strong></div>
-    <div><span>所在环境</span><strong>${currentLocomotionState?.movementMedium === "air" ? "空中" : "地面"}</strong></div>
+    <div><span>所在环境</span><strong>${currentLocomotionState?.locomotion.status === "active" && currentLocomotionState.locomotion.movementMedium === "air" ? "空中" : "地面"}</strong></div>
     <div><span>配置权限</span><strong>${workbenchContext.definition.authoringAvailability}</strong></div>
   `;
 

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -165,9 +166,19 @@ describe("evaluateTestGateCensusV1", () => {
 });
 
 describe("test gate configuration", () => {
+  it("keeps enough CI history for the fail-closed migration ledger comparison", async () => {
+    const workflow = await readFile(
+      new URL("../../.github/workflows/ci.yml", import.meta.url),
+      "utf8",
+    );
+    expect(workflow).toMatch(
+      /uses: actions\/checkout@v4\s+with:\s+(?:#[^\n]*\s+)*fetch-depth: 2/,
+    );
+  });
+
   it("keeps the source-backed wrapper and discovered lanes exactly aligned with the manifest", async () => {
     expect(packageJson.scripts.test).toBe(
-      "pnpm verify:workspace-boundaries && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
+      "pnpm verify:workspace-boundaries && pnpm verify:3c-migration && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     );
     expect(packageJson.scripts["test:resource-heavy"]).toBe(
       "NODE_OPTIONS=--max-old-space-size=4096 vitest run --config vitest.resource-heavy.config.ts",

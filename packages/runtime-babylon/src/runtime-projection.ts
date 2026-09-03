@@ -56,7 +56,7 @@ export interface BabylonPreparedCameraDirectorProjectionPortV1 {
  * serialized World Runtime Snapshot protocol; the coordinator owns projection
  * into the canonical WorldRuntimeSnapshotV4 contract.
  */
-export interface BabylonRuntimeSubjectProjectionV1 {
+interface BabylonRuntimeSubjectProjectionBaseV1 {
   readonly entityId: string;
   readonly subjectDefinitionRef: string;
   readonly subjectDefinitionHash: string;
@@ -71,14 +71,26 @@ export interface BabylonRuntimeSubjectProjectionV1 {
   readonly activeLocomotionProfileRef: string;
   readonly locomotionMode: LocomotionModeV1;
   readonly activeMotionProfileRef: string;
-  /** Legacy-only authority identity; absent on Golden CharacterMovementRuntime projections. */
-  readonly activeMotionKernelRef?: string;
   readonly motionTags: readonly string[];
-  /** Present for CharacterMovementRuntime-backed Golden Subjects. */
-  readonly locomotion?: LocomotionCapabilityStateV2;
   readonly safeFallbackActive: boolean;
   readonly motionFailureCode?: string;
 }
+
+/**
+ * Provider projection with an explicit, disjoint movement owner. Planar
+ * CharacterMovement and specialized throttle/flight strategies cannot publish
+ * one another's authority fields.
+ */
+export type BabylonRuntimeSubjectProjectionV1 =
+  | (BabylonRuntimeSubjectProjectionBaseV1 & Readonly<{
+      movementOwner: "character-movement";
+      locomotion: LocomotionCapabilityStateV2;
+    }>)
+  | (BabylonRuntimeSubjectProjectionBaseV1 & Readonly<{
+      movementOwner: "specialized-motion";
+      activeMotionKernelRef: string;
+      locomotion?: never;
+    }>);
 
 export interface BabylonRuntimeCameraProjectionV1 {
   readonly entityId: string;

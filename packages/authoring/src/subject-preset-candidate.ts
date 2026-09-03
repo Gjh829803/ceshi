@@ -21,7 +21,7 @@ import {
 } from "@whitebox-world/subject-registry";
 import { isNil } from "lodash-es";
 
-import { sha256CanonicalJson } from "./canonical-json";
+import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/;

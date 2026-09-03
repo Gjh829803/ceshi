@@ -312,6 +312,7 @@ function movementOptions(): CharacterMovementRuntimeOptionsV1 {
     runSpeedMetersPerSecond: 4,
     accelerationMetersPerSecondSquared: 16,
     decelerationMetersPerSecondSquared: 22,
+    turnRateRadiansPerSecond: 9,
     airControlRatio: 0.3,
     gravityMetersPerSecondSquared: 9.81,
     jumpSpeedMetersPerSecond: 5.5,
@@ -335,6 +336,7 @@ function movementCommand(
     tick,
     fixedDeltaSeconds: 1 / 60,
     movementInputXZ: [0, 0],
+    facingInputXZ: [0, 0],
     runRequested: false,
     jumpPressed: false,
     jumpHeld: false,
@@ -931,6 +933,69 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
       token,
       proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
     })).not.toThrow();
+    port.dispose();
+  });
+
+  it("accepts only bounded outward separation proven by an active contact", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 4e-4;
+    driver.onIntegrate = () => {
+      driver.position = [0.04, 1, 0];
+      driver.velocity = [0.6, 0, 0];
+      driver.contacts = [{
+        ...groundContact([1, 0, 0]),
+        distanceMeters: 0.1,
+      }];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).not.toThrow();
+    port.dispose();
+  });
+
+  it("rejects contact separation beyond the configured keep-distance shell", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 4e-4;
+    driver.onIntegrate = () => {
+      driver.position = [0.071, 1, 0];
+      driver.velocity = [0.6, 0, 0];
+      driver.contacts = [{
+        ...groundContact([1, 0, 0]),
+        distanceMeters: 0.1,
+      }];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).toThrow("native collision resolution amplified horizontal proposal progress");
+    port.dispose();
+  });
+
+  it("does not reinterpret vertical solver displacement as planar contact separation", () => {
+    const { driver, port } = createPort();
+    driver.support = unsupportedSupport();
+    driver.onIntegrate = () => {
+      driver.position = [0, 1.01, 0];
+      driver.velocity = [0, 0.6, 0];
+      driver.contacts = [{
+        ...groundContact([-0.8, 0.6, 0]),
+        distanceMeters: 0.1,
+      }];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).toThrow("native collision resolution amplified vertical proposal");
     port.dispose();
   });
 

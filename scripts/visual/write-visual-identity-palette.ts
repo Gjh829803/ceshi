@@ -4,8 +4,8 @@ import path from "node:path";
 
 import {
   parseSceneBriefV1,
-  stringifyCanonicalJson,
 } from "@whitebox-world/authoring";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
 import { deriveVisualIdentityPalette } from "../scenes/finalize-spatial-build";
 

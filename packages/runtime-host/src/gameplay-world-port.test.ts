@@ -57,14 +57,25 @@ function worldProjectionInput() {
     capabilityStatesById: {
       "capability.hero.locomotion": {
         id: "capability.hero.locomotion",
-        kind: "locomotion-capability-state" as const,
+        kind: "locomotion-capability-state-v2" as const,
         ownerEntityId: hero.id,
         locomotionCapabilityRef: "worldkit://locomotion-capability/humanoid@1",
         locomotionCapabilityHash: HASH,
-        mode: "idle" as const,
-        movementMedium: "ground" as const,
-        facingYawRadians: 0,
-        speedMetersPerSecond: 0,
+        locomotion: {
+          schemaVersion: 2 as const,
+          status: "active" as const,
+          mobilityMode: "grounded" as const,
+          gait: "idle" as const,
+          verticalPhase: "none" as const,
+          supportMode: "supported" as const,
+          movementMedium: "ground" as const,
+          facingYawRadians: 0,
+          linearVelocity: { x: 0, y: 0, z: 0 },
+          horizontalSpeedMetersPerSecond: 0,
+          committedTick: 7,
+          phaseEnteredTick: 7,
+          transitionSequence: 0,
+        },
       },
     },
     semanticFactsById: { [fact.id]: fact },
@@ -98,12 +109,17 @@ describe("GameplayWorldPortV1 projection boundary", () => {
       capabilityStatesById: {
         "capability-state:entity.hero:locomotion": {
           id: "capability-state:entity.hero:locomotion",
-          kind: "locomotion-capability-state" as const,
+          kind: "locomotion-capability-state-v2" as const,
           ownerEntityId: "entity.hero",
           locomotionCapabilityRef: "worldkit://locomotion-profile/humanoid@1",
           locomotionCapabilityHash: HASH,
-          mode: "suspended" as const,
-          suspendedByRelationshipId: relationship.id,
+          locomotion: {
+            schemaVersion: 2 as const,
+            status: "suspended" as const,
+            suspendedByRelationshipId: relationship.id,
+            committedTick: 7,
+            transitionSequence: 1,
+          },
         },
       },
     };
@@ -505,10 +521,9 @@ describe("GameplayWorldPortV1 transaction boundary", () => {
         maximumSemanticFactCountAfterInput: 1,
         maximumSemanticFactTransitionEventCount: 0,
       }),
-      runFixedInputTick: async () => parseGameplayWorldStateProjectionV1(
-        worldProjectionInput(),
-        projectionValidationOptions(),
-      ),
+      prepareFixedInputTick: async () => {
+        throw new Error("not used in this contract test");
+      },
       snapshot: () => parseGameplayWorldStateProjectionV1(
         worldProjectionInput(),
         projectionValidationOptions(),

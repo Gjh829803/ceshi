@@ -20,7 +20,7 @@ import {
 } from "@whitebox-world/subject-actions";
 import { isNil } from "lodash-es";
 
-import type { MotionCommandV1 } from "./control-profile-runtime";
+import type { SpecializedMotionCommandV1 } from "./control-profile-runtime";
 import {
   MotionModeResolverV1,
   type MotionModeFailureCodeV1,
@@ -116,22 +116,6 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
-function moveVectorTowards(
-  current: Vector3,
-  target: Vector3,
-  maximumDelta: number,
-): Vector3 {
-  const delta = target.subtract(current);
-  const distance = delta.length();
-  if (distance <= maximumDelta || distance <= 0.000001) return target.clone();
-  return current.add(delta.scale(maximumDelta / distance));
-}
-
-function moveAngleTowards(current: number, target: number, maximumDelta: number): number {
-  const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
-  return current + Math.max(-maximumDelta, Math.min(maximumDelta, delta));
-}
-
 function smoothstep01(value: number): number {
   const clamped = Math.max(0, Math.min(1, value));
   return clamped * clamped * (3 - 2 * clamped);
@@ -141,17 +125,9 @@ function isSafeStoppedMotionTags(tags: readonly string[]): boolean {
   return tags.includes("safe") && tags.includes("stopped");
 }
 
-function zeroIntentCommand(command: MotionCommandV1): MotionCommandV1 {
-  if (command.kind === "planar-vector") {
-    return {
-      kind: "planar-vector",
-      directionMetersXZ: [0, 0],
-      runRequested: false,
-      jumpRequested: false,
-      aimRequested: false,
-      facingDirectionMetersXZ: command.facingDirectionMetersXZ,
-    };
-  }
+function zeroIntentCommand(
+  command: SpecializedMotionCommandV1,
+): SpecializedMotionCommandV1 {
   if (command.kind === "throttle-steer") {
     return {
       kind: "throttle-steer",
@@ -176,17 +152,10 @@ function zeroIntentCommand(command: MotionCommandV1): MotionCommandV1 {
   return { kind: "none" };
 }
 
-function requestedFromCommand(command: MotionCommandV1): {
+function requestedFromCommand(command: SpecializedMotionCommandV1): {
   moveRequested: boolean;
   runRequested: boolean;
 } {
-  if (command.kind === "planar-vector") {
-    return {
-      moveRequested: command.directionMetersXZ[0] !== 0 ||
-        command.directionMetersXZ[1] !== 0,
-      runRequested: command.runRequested,
-    };
-  }
   if (command.kind === "throttle-steer") {
     return {
       moveRequested: command.throttle !== 0 || command.steering !== 0,
@@ -223,7 +192,6 @@ export class MotionKernelRuntimeV1 {
   private retainedSupportSample: CharacterSupportProjectionSampleV1 | undefined;
   private yawRadians: number;
   private forwardSpeedMetersPerSecond = 0;
-  private planarVelocity = Vector3.Zero();
   private steeringInput = 0;
   private slideVelocity = Vector3.Zero();
   private flightPitchRadians = 0;
@@ -475,7 +443,7 @@ export class MotionKernelRuntimeV1 {
     );
   }
 
-  step(command: MotionCommandV1): void {
+  step(command: SpecializedMotionCommandV1): void {
     this.commitPendingProfile();
     this.commitPendingFeel();
     const effectiveCommand = this.shouldEmitZeroIntent()
@@ -573,7 +541,6 @@ export class MotionKernelRuntimeV1 {
     this.controlFeel = restoredFeel ?? requireControlFeel(this.subject);
     this.yawRadians = facingYawRadians;
     this.forwardSpeedMetersPerSecond = 0;
-    this.planarVelocity.setAll(0);
     this.steeringInput = 0;
     this.slideVelocity.setAll(0);
     this.flightPitchRadians = 0;
@@ -616,7 +583,6 @@ export class MotionKernelRuntimeV1 {
 
   stop(): void {
     this.forwardSpeedMetersPerSecond = 0;
-    this.planarVelocity.setAll(0);
     this.steeringInput = 0;
     this.slideVelocity.setAll(0);
     this.flightPitchRadians = 0;
@@ -799,7 +765,7 @@ export class MotionKernelRuntimeV1 {
   }
 
   private stepActiveKernel(
-    command: MotionCommandV1,
+    command: SpecializedMotionCommandV1,
     support: CharacterSurfaceInfo,
     resolved: SubjectResolvedStateV1,
   ): void {
@@ -807,77 +773,14 @@ export class MotionKernelRuntimeV1 {
     const feel = this.controlFeel;
     const unsupported =
       support.supportedState === CharacterSupportedState.UNSUPPORTED;
-    const movementMedium = resolved.movementMedium;
-    const jumpHeldThisTick =
-      (command.kind === "planar-vector" || command.kind === "throttle-steer") &&
+    const jumpHeldThisTick = command.kind === "throttle-steer" &&
       command.jumpRequested;
     let desired = Vector3.Zero();
     let jumpRequestedThisTick = false;
     const jumpPressedThisTick = jumpHeldThisTick && !this.jumpActionWasActive;
     this.jumpActionWasActive = jumpHeldThisTick;
 
-    if (implementationId === "free-ground") {
-      const planar = command.kind === "planar-vector" ? command : undefined;
-      const direction = planar?.directionMetersXZ ?? [0, 0];
-      const requestedSpeed = planar?.runRequested
-        ? feel.runSpeedMetersPerSecond
-        : feel.walkSpeedMetersPerSecond;
-      const targetPlanarVelocity = new Vector3(
-        direction[0] * requestedSpeed,
-        0,
-        direction[1] * requestedSpeed,
-      );
-      const currentVelocity = this.physicsController.getVelocity();
-      const currentPlanarVelocity = new Vector3(
-        currentVelocity.x,
-        0,
-        currentVelocity.z,
-      );
-      const changingSpeed = targetPlanarVelocity.lengthSquared() > 0.000001;
-      const response = changingSpeed
-        ? feel.accelerationMetersPerSecondSquared
-        : feel.decelerationMetersPerSecondSquared;
-      const airControl = movementMedium === "air" ? feel.airControlRatio : 1;
-      if (targetPlanarVelocity.lengthSquared() > 0.000001 || planar?.aimRequested === true) {
-        const facingDirection = planar?.aimRequested === true
-          ? planar.facingDirectionMetersXZ
-          : [targetPlanarVelocity.x, targetPlanarVelocity.z] as const;
-        const targetYaw = Math.atan2(
-          -facingDirection[0],
-          -facingDirection[1],
-        );
-        this.yawRadians = moveAngleTowards(
-          this.yawRadians,
-          targetYaw,
-          feel.turnRateRadiansPerSecond * airControl * FIXED_TIME_STEP_SECONDS,
-        );
-      }
-      this.planarVelocity = moveVectorTowards(
-        currentPlanarVelocity,
-        targetPlanarVelocity,
-        response * airControl * FIXED_TIME_STEP_SECONDS,
-      );
-      desired.copyFrom(this.planarVelocity);
-      if (planar?.jumpRequested === true && jumpPressedThisTick) {
-        this.jumpBufferRemainingSeconds = feel.jumpBufferSeconds;
-      } else {
-        this.jumpBufferRemainingSeconds = Math.max(
-          0,
-          this.jumpBufferRemainingSeconds - FIXED_TIME_STEP_SECONDS,
-        );
-      }
-      if (
-        this.jumpBufferRemainingSeconds > 0 &&
-        resolved.isJumpAllowed &&
-        !this.jumpInProgress
-      ) {
-        this.jumpInProgress = true;
-        jumpRequestedThisTick = true;
-        this.jumpBufferRemainingSeconds = 0;
-        this.coyoteRemainingSeconds = 0;
-        this.jumpHoldElapsedSeconds = 0;
-      }
-    } else {
+    {
       const throttleCommand = command.kind === "throttle-steer" ? command : undefined;
       const throttle = throttleCommand?.throttle ?? 0;
       const steering = throttleCommand?.steering ?? 0;
@@ -1249,14 +1152,12 @@ export class MotionKernelRuntimeV1 {
   }
 
   private activeKernelImplementationId():
-    | "free-ground"
     | "forward-steer"
     | "wheeled-arcade"
     | "surface-slide"
     | "water-surface"
     | "unpowered-glide" {
     const assembly = this.subject.capabilityAssembly;
-    if (assembly === undefined) return "free-ground";
     const activeMotionKernelRef = this.activeProfile.motionKernelRef;
     const motionKernel = assembly.motionKernels.find(
       (candidate) => candidate.resourceRef === activeMotionKernelRef,
@@ -1264,11 +1165,16 @@ export class MotionKernelRuntimeV1 {
     if (motionKernel === undefined) {
       throw new Error("MOTION_KERNEL_NOT_LOCKED");
     }
+    if (motionKernel.implementationId === "free-ground") {
+      throw new Error(
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE: free-ground execution is owned by CharacterMovementRuntime.",
+      );
+    }
     return motionKernel.implementationId;
   }
 
   private stepGlide(
-    command: MotionCommandV1,
+    command: SpecializedMotionCommandV1,
     support: CharacterSurfaceInfo,
   ): void {
     this.jumpActionWasActive = false;
@@ -1364,7 +1270,6 @@ export class MotionKernelRuntimeV1 {
     this.synchronizeGroundSafetyBoundaryFilter();
     if (changed) {
       this.forwardSpeedMetersPerSecond = 0;
-      this.planarVelocity.setAll(0);
       this.steeringInput = 0;
       this.slideVelocity.setAll(0);
       this.flightPitchRadians = 0;

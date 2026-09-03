@@ -1266,7 +1266,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         movementMedium: subjectBefore?.movementMedium,
         speedMetersPerSecond: subjectBefore?.speedMetersPerSecond,
         activeMotionProfileRef: subjectBefore?.activeMotionProfileRef,
-        activeMotionKernelRef: subjectBefore?.activeMotionKernelRef,
         motionTags: subjectBefore?.motionTags,
       });
       const cameraPoseBytesBefore = JSON.stringify(beforeOrbit.camera.positionMetersXYZ);
@@ -1284,7 +1283,6 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         movementMedium: staged.subjectStatesByEntityId.player?.movementMedium,
         speedMetersPerSecond: staged.subjectStatesByEntityId.player?.speedMetersPerSecond,
         activeMotionProfileRef: staged.subjectStatesByEntityId.player?.activeMotionProfileRef,
-        activeMotionKernelRef: staged.subjectStatesByEntityId.player?.activeMotionKernelRef,
         motionTags: staged.subjectStatesByEntityId.player?.motionTags,
       })).toBe(locomotionBytesBefore);
       const committedOrbit = await runtime.runFixedInput({ actions: [], ticks: 1 });

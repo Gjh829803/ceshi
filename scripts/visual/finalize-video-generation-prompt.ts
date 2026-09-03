@@ -3,7 +3,7 @@ import { readFile, realpath, rename, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { sha256CanonicalJson, stringifyCanonicalJson } from "@whitebox-world/authoring";
+import { sha256CanonicalJson, stringifyCanonicalJson } from "@whitebox-world/protocol";
 import {
   validateVideoPromptFieldsV1,
   validateVisualReferenceManifestV1,
