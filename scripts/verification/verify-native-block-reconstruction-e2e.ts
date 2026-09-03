@@ -470,6 +470,19 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
   return caseBlockers;
 }
 
+function verifyNativeCheckReplayClosure(input: Readonly<{
+  sourceCheck: ReturnType<typeof parseNativeSceneCheckResultV1>;
+  replayCheck: ReturnType<typeof parseNativeSceneCheckResultV1>;
+}>): void {
+  if (input.sourceCheck.id === input.replayCheck.id) {
+    fail("NBR70_IDENTITY_MISMATCH");
+  }
+  exact(
+    sha256CanonicalJson({ ...input.sourceCheck, id: "role-normalized" }),
+    sha256CanonicalJson({ ...input.replayCheck, id: "role-normalized" }),
+  );
+}
+
 export const NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1 = Object.freeze({
   verifyBlockerEvidenceClosure,
 });
@@ -692,6 +705,10 @@ async function verifyAllRunAttempts(input: Readonly<{
       hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
       hashSceneAuthoringAttemptResultV1(attemptResult),
     );
+    verifyNativeCheckReplayClosure({
+      sourceCheck: checkResult,
+      replayCheck: verified.nativeSceneCheckResult,
+    });
     if (runAttempt.kind === "capture-rejected") {
       const gateResultBytes = await requiredFile(
         attemptRoot,
@@ -1346,6 +1363,10 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     hashSceneAuthoringAttemptV1(attempt));
   exact(hashSceneAuthoringAttemptResultV1(verified.sceneAuthoringAttemptResult),
     hashSceneAuthoringAttemptResultV1(attemptResult));
+  verifyNativeCheckReplayClosure({
+    sourceCheck: checkResult,
+    replayCheck: verified.nativeSceneCheckResult,
+  });
   const captureRoot = path.join(attemptRoot, "capture");
   const captureReceipt = parseFormalWorldCaptureReceiptV1(json(await requiredFile(
     captureRoot,

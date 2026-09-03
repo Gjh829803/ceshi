@@ -35,6 +35,7 @@ import {
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   parseFormalWorldCaptureReceiptV1,
+  parseNativeSceneCheckResultV1,
   parseWorldRuntimeSnapshotV4,
   createBabylonNativeStaticColliderContributionV1,
   type FixedInputV1,
@@ -954,10 +955,14 @@ async function addRepairAttempt(input: Readonly<{
   for (const [relativePath, bytes] of sourceByPath) {
     await writeFile(path.join(attemptRoot, "source", relativePath), bytes);
   }
+  const sourceCheckResult = Object.freeze({
+    ...verified.nativeSceneCheckResult,
+    id: "package-fixture.native-scene-check",
+  });
   await writeJson(path.join(attemptRoot, "native-check-result.json"),
-    verified.nativeSceneCheckResult);
+    sourceCheckResult);
   await writeFile(path.join(attemptRoot, "native-explain.txt"),
-    explainNativeSceneCheckResultV1(verified.nativeSceneCheckResult));
+    explainNativeSceneCheckResultV1(sourceCheckResult));
   await writeWorldPackageDirectoryV1({
     outputDirectoryPath: path.join(attemptRoot, "world-package"),
     directory: verified.directory,
@@ -1239,6 +1244,46 @@ describe("Native Block reconstruction E2E verifier", () => {
       }));
     } finally {
       await rm(fixture.runDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("requires role-bound semantic equivalence between source and Runtime replay checks", async () => {
+    const fixture = await completeRunFixture();
+    const checkPath = path.join(
+      fixture.runDirectoryPath,
+      "attempts/0/native-check-result.json",
+    );
+    const check = parseNativeSceneCheckResultV1(JSON.parse(
+      await readFile(checkPath, "utf8"),
+    ));
+    const forged = parseNativeSceneCheckResultV1({
+      ...check,
+      checkedInput: {
+        ...check.checkedInput,
+        sceneModuleRef: "worldkit://native-scene/foreign-source@1",
+      },
+    });
+    await writeJson(checkPath, forged);
+    await writeFile(
+      path.join(fixture.runDirectoryPath, "attempts/0/native-explain.txt"),
+      explainNativeSceneCheckResultV1(forged),
+    );
+    const playability = playabilityPort();
+    try {
+      await expectVerificationClosed(
+        verifyNativeBlockReconstructionE2EV1({
+          candidate: {
+            kind: "run",
+            runDirectoryPath: fixture.runDirectoryPath,
+          },
+          playability: playability.port,
+        }),
+        ["NBR70_IDENTITY_MISMATCH"],
+        "not-started",
+      );
+      expect(playability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
 
