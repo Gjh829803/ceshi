@@ -754,7 +754,7 @@ export function createEpisodeWorkflowService(options) {
           latest.remoteExecutionId ?? "recovering",
         );
         if (typeof latest.remoteExecutionId === "string" && latest.remoteExecutionId) {
-          await runCloudEpisodeRecovery(latest);
+          await runCloudEpisodeRecovery(latest, { infrastructureCooldownElapsed: true });
         } else {
           await runCloudEpisode(latest.sceneId, latest.episodeId, {
             requestId: latest.remoteRequestId ?? `${latest.episodeId}-cloud-run-1`,
@@ -1780,7 +1780,9 @@ export function createEpisodeWorkflowService(options) {
     }
   }
 
-  async function runCloudEpisodeRecovery(record) {
+  async function runCloudEpisodeRecovery(record, {
+    infrastructureCooldownElapsed = false,
+  } = {}) {
     const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
     try {
       if (typeof recoverCloudEpisode !== "function" ||
@@ -1827,7 +1829,8 @@ export function createEpisodeWorkflowService(options) {
         return;
       }
       if (result.retryRequired) {
-        if (await deferCloudEpisodeRecovery(record, result.execution)) return;
+        if (!infrastructureCooldownElapsed &&
+            await deferCloudEpisodeRecovery(record, result.execution)) return;
         const retryStageId = failedEpisodeStageId(result.execution);
         const retryRecord = {
           ...(await readJson(recordPath) ?? record),

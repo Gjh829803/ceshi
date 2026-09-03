@@ -404,6 +404,95 @@ test("defers Ray outages into the infrastructure retry pool without consuming a 
   }
 });
 
+test("retries the failed Cloud stage after its infrastructure cooldown elapses", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-infra-retry-"));
+  const episodeId = "episode-infra-retry-001";
+  const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+  await mkdir(episodeRoot, { recursive: true });
+  await writeFile(path.join(episodeRoot, "episode-record.json"), JSON.stringify({
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    sceneId: "infra-retry-scene",
+    episodeId,
+    backend: "cloud",
+    status: "remote-pending",
+    currentStage: "style-variant-plan",
+    remoteStageId: "episode-render",
+    remoteExecutionId: "exec_infra_retry",
+    remoteRequestS3Uri: "s3://bucket/episode/request.json",
+    remoteOutputS3Prefix: "s3://bucket/episode",
+    remoteWorkerImage: `worker@sha256:${"c".repeat(64)}`,
+    cloudAttempt: 1,
+    createdAt: "2026-09-03T00:00:00.000Z",
+    updatedAt: "2026-09-03T00:01:00.000Z",
+    stages: [{
+      id: "style-variant-production",
+      title: "styles",
+      status: "failed",
+      startedAt: "2026-09-03T00:00:30.000Z",
+      finishedAt: "2026-09-03T00:01:00.000Z",
+    }],
+  }));
+  const scheduled = [];
+  let retryInput = null;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    recoverCloudEpisode: async () => ({
+      retryRequired: true,
+      execution: {
+        execution_id: "exec_infra_retry",
+        status: "failed",
+        error: "Ray Dashboard request timed out after 5000ms",
+        stages: [{
+          stage_id: "episode-render",
+          status: "failed",
+          diagnostics: { error: "Ray cluster unavailable" },
+        }],
+      },
+    }),
+    retryCloudEpisode: async (input) => {
+      retryInput = input;
+      throw new Error("synthetic stop after retry observation");
+    },
+    readCloudEpisodeManifest: async () => ({}),
+    nowImplementation: () => Date.parse("2026-09-03T00:02:00.000Z"),
+    infrastructureRetryBaseMs: 1_000,
+    infrastructureRetryMaximumMs: 1_000,
+    setTimeoutImplementation: (operation, delayMs) => {
+      scheduled.push({ operation, delayMs });
+      return { unref() {} };
+    },
+    clearTimeoutImplementation: () => undefined,
+  });
+  try {
+    assert.equal(await service.recoverPersistedCloudEpisodes(), 1);
+    for (let attempt = 0; attempt < 50 && scheduled.length === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(scheduled.length, 1);
+    for (let attempt = 0; attempt < 50 && service.activeJobs.length > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.deepEqual(service.activeJobs, []);
+    scheduled[0].operation();
+    for (let attempt = 0; attempt < 50 && retryInput === null; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const afterRetry = JSON.parse(await readFile(
+      path.join(episodeRoot, "episode-record.json"),
+      "utf8",
+    ));
+    assert.notEqual(retryInput, null, JSON.stringify(afterRetry));
+    assert.equal(retryInput.stageId, "episode-render");
+    assert.equal(retryInput.executionId, "exec_infra_retry");
+    assert.equal(retryInput.retryRequestId, `${episodeId}-retry-2`);
+  } finally {
+    await service.shutdown();
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("queues an infrastructure failure that happens before Cloud Execution creation", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-presubmit-pool-"));
   const scheduled = [];
