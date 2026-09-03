@@ -14,8 +14,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  formalWorldCaptureReceiptCanonicalBytesV1,
   formalWorldCaptureIntentCanonicalBytesV1,
+  hashFormalWorldCaptureReceiptV1,
+  hashFormalWorldCaptureRequestV1,
   hashFormalWorldCaptureIntentV1,
+  hashFormalSemanticCaptureMapV1,
+  parseFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureIntentV1,
 } from "@whitebox-world/runtime-contracts";
 import {
@@ -60,6 +65,8 @@ import {
   type WorldReconstructionHostRoutePolicyV1,
 } from "./generation-request.js";
 import { WorldReconstructionRunClosedErrorV1 } from "./run.js";
+import { createEvidenceSetFixtureInputV1 } from
+  "./evaluate-fixture.test-support.js";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 const REAL_CASE_ROOT = path.join(
@@ -282,6 +289,57 @@ async function publishQualityEvaluationArtifacts(
   publishArtifacts: () => Promise<void>;
 }>> {
   const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(baseReceipt);
+  const captureFixture = createEvidenceSetFixtureInputV1({
+    allDimensionsPass: true,
+  });
+  const baseCaptureReceipt = captureFixture.captureReceipt;
+  const semanticCaptureMap = {
+    ...baseCaptureReceipt.formalRequest.semanticCaptureMap,
+    caseRef: baseReceipt.caseRef,
+    caseHash: baseReceipt.caseHash,
+  };
+  const formalRequest = {
+    ...baseCaptureReceipt.formalRequest,
+    caseRef: baseReceipt.caseRef,
+    caseHash: baseReceipt.caseHash,
+    evaluationProfileRef: baseReceipt.evaluationProfileRef,
+    evaluationProfileHash: baseReceipt.evaluationProfileHash,
+    sceneAuthoringAttemptHash: terminal.sceneAuthoringAttemptHash,
+    sceneAuthoringAttemptResultHash: terminal.sceneAuthoringAttemptResultHash,
+    worldPackageRef: terminal.worldPackageRef,
+    worldPackageRootHash: terminal.worldPackageRootHash,
+    worldPackageBuildReceiptRef: terminal.worldPackageBuildReceiptRef,
+    worldPackageBuildReceiptHash: terminal.worldPackageBuildReceiptHash,
+    worldBuildIdentityRef: terminal.worldBuildIdentityRef,
+    worldBuildIdentityHash: terminal.worldBuildIdentityHash,
+    semanticCaptureMap,
+    semanticCaptureMapHash:
+      hashFormalSemanticCaptureMapV1(semanticCaptureMap),
+  };
+  const captureReceipt = parseFormalWorldCaptureReceiptV1({
+    ...baseCaptureReceipt,
+    id: `${CASE_ID}.attempt-0.formal-capture`,
+    formalRequest,
+    formalRequestHash: hashFormalWorldCaptureRequestV1(formalRequest),
+    caseRef: formalRequest.caseRef,
+    caseHash: formalRequest.caseHash,
+    evaluationProfileRef: formalRequest.evaluationProfileRef,
+    evaluationProfileHash: formalRequest.evaluationProfileHash,
+    sceneAuthoringAttemptRef: formalRequest.sceneAuthoringAttemptRef,
+    sceneAuthoringAttemptHash: formalRequest.sceneAuthoringAttemptHash,
+    sceneAuthoringAttemptResultRef:
+      formalRequest.sceneAuthoringAttemptResultRef,
+    sceneAuthoringAttemptResultHash:
+      formalRequest.sceneAuthoringAttemptResultHash,
+    worldPackageRef: formalRequest.worldPackageRef,
+    worldPackageRootHash: formalRequest.worldPackageRootHash,
+    worldPackageBuildReceiptRef: formalRequest.worldPackageBuildReceiptRef,
+    worldPackageBuildReceiptHash: formalRequest.worldPackageBuildReceiptHash,
+    worldBuildIdentityRef: formalRequest.worldBuildIdentityRef,
+    worldBuildIdentityHash: formalRequest.worldBuildIdentityHash,
+    semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+  });
+  const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
   const acceptanceTargetRef = parseWorldReconstructionCaseV1(JSON.parse(
     await readFile(value.casePath, "utf8"),
   )).acceptanceTargetRefs[0]!;
@@ -387,14 +445,14 @@ async function publishQualityEvaluationArtifacts(
     evaluationProfileHash: baseReceipt.evaluationProfileHash,
     evidenceSetRef: `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/evidence-set.json`,
     evidenceSetHash: H("a"),
-    attemptRef: terminal.sceneAuthoringAttemptRef,
-    attemptHash: terminal.sceneAuthoringAttemptHash,
+    attemptRef: captureReceipt.sceneAuthoringAttemptRef,
+    attemptHash: captureReceipt.sceneAuthoringAttemptHash,
     worldPackageRef: terminal.worldPackageRef,
     worldPackageRootHash: terminal.worldPackageRootHash,
     worldBuildIdentityRef: terminal.worldBuildIdentityRef,
     worldBuildIdentityHash: terminal.worldBuildIdentityHash,
     captureReceiptRef: terminal.captureReceiptRef,
-    captureReceiptHash: terminal.captureReceiptHash,
+    captureReceiptHash,
     outcome: qualityOutcome,
     diagnostics: [diagnostic],
     dimensions: dimensionIds.map((dimensionId) => ({
@@ -417,7 +475,7 @@ async function publishQualityEvaluationArtifacts(
         attemptHash: terminal.sceneAuthoringAttemptHash,
         worldPackageRootHash: terminal.worldPackageRootHash,
         worldBuildIdentityHash: terminal.worldBuildIdentityHash,
-        captureReceiptHash: terminal.captureReceiptHash,
+        captureReceiptHash,
       },
     })),
   });
@@ -428,6 +486,7 @@ async function publishQualityEvaluationArtifacts(
     attempts: baseReceipt.attempts.map((attempt) => ({
       ...attempt,
       outcome: qualityOutcome,
+      captureReceiptHash,
       evaluationResultHash: evaluationHash,
     })),
     finalEvaluationResultHash: evaluationHash,
@@ -455,7 +514,7 @@ async function publishQualityEvaluationArtifacts(
             "capture",
             "formal-world-capture-receipt.json",
           ),
-          "{}\n",
+          formalWorldCaptureReceiptCanonicalBytesV1(captureReceipt),
         ),
         writeFile(
           path.join(attemptDirectoryPath, "evaluation.json"),

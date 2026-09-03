@@ -284,6 +284,8 @@ function diagnostic(input: {
   const targetRef = "worldkit://acceptance-target/central-ascent@1";
   const targetId = input.dimensionId;
   const isMissingEvidence = input.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING";
+  const isTraversalEvidenceIncomplete =
+    input.code === "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE";
   const isNondeterministic = input.code === "WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC";
   return parseWorldReconstructionDiagnosticV1({
     kind: "world-reconstruction-diagnostic",
@@ -296,6 +298,8 @@ function diagnostic(input: {
     targetId,
     metricId: isMissingEvidence
       ? "required-evidence-presence"
+      : isTraversalEvidenceIncomplete
+        ? "critical-traversal-completeness"
       : isNondeterministic
         ? "deterministic-build-identity"
         : "collider-contribution-presence",
@@ -306,6 +310,13 @@ function diagnostic(input: {
           actualValue: "missing",
           correctionDirection: "add",
         }
+      : isTraversalEvidenceIncomplete
+        ? {
+            kind: "state-mismatch",
+            expectedValue: "complete",
+            actualValue: "incomplete",
+            correctionDirection: "replace",
+          }
       : isNondeterministic
         ? {
             kind: "state-mismatch",
@@ -326,13 +337,21 @@ function diagnostic(input: {
     message: `${input.code} on ${input.dimensionId}.`,
     ...(isWorldReconstructionRepairableDiagnosticCodeV1(input.code)
       ? {
-          repairAction: {
+          repairAction: isTraversalEvidenceIncomplete
+            ? {
+                kind: "revise-native-source",
+                targetKind: "traversal-check",
+                targetId,
+                operation: "adjust-traversal",
+                instruction: `Adjust ${targetId} until traversal evidence is conclusive.`,
+              }
+            : {
             kind: "revise-native-source",
             targetKind: "static-collider",
             targetId,
             operation: "add",
             instruction: `Register the missing ${targetId} static collider contribution.`,
-          },
+              },
         }
       : {}),
   });
@@ -421,7 +440,8 @@ function evaluationResult(input: {
     diagnostics
       .filter((entry) =>
         entry.code !== "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" &&
-        entry.code !== "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
+        entry.code !== "WORLD_RECONSTRUCTION_EVIDENCE_STALE" &&
+        entry.code !== "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE"
       )
       .map(({ dimensionId }) => dimensionId),
   );
@@ -429,7 +449,8 @@ function evaluationResult(input: {
     diagnostics
       .filter((entry) =>
         entry.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" ||
-        entry.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"
+        entry.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE" ||
+        entry.code === "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE"
       )
       .map(({ dimensionId }) => dimensionId),
   );
@@ -1057,6 +1078,35 @@ describe("runWorldReconstructionV1", () => {
     expect(names).not.toContain("final");
   });
 
+  it("repairs observed incomplete traversal evidence before publishing", async () => {
+    const outputDirectoryPath = await outputRoot();
+    const incomplete = evaluationResult({
+      attemptIndex: 0,
+      outcome: "incomplete",
+      diagnostics: [diagnostic({
+        id: "diag.traversal-incomplete",
+        code: "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE",
+        dimensionId: "critical-traversal",
+      })],
+    });
+    const passed = evaluationResult({ attemptIndex: 1, outcome: "passed" });
+    const { ports, calls } = fakePorts({ evaluationByAttempt: [incomplete, passed] });
+
+    const receipt = await runWorldReconstructionV1(
+      runInput(outputDirectoryPath),
+      ports,
+    );
+
+    expect(receipt.outcome).toBe("passed");
+    expect(receipt.attempts).toHaveLength(2);
+    expect(calls.generate).toEqual([0, 1]);
+    expect(calls.generateInputs[1]?.repairInstruction?.priorEvidence).toEqual({
+      kind: "evaluation-result",
+      resultRef: identities(0).evaluationResultRef,
+      resultHash: hashWorldReconstructionEvaluationResultV1(incomplete),
+    });
+  });
+
   it("fails closed on a non-repairable diagnostic without Attempt 1", async () => {
     const outputDirectoryPath = await outputRoot();
     const { ports, calls } = fakePorts({
@@ -1291,7 +1341,7 @@ describe("runWorldReconstructionV1", () => {
       captureOutcomeByAttempt: ["failed"],
       captureDiagnosticCodesByAttempt: [[
         "WORLDKIT_SERVER_START_TIMEOUT",
-        "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+        "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
       ]],
     });
 
@@ -1302,7 +1352,7 @@ describe("runWorldReconstructionV1", () => {
       diagnosticCodes: [
         "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
         "WORLDKIT_SERVER_START_TIMEOUT",
-        "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+        "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
       ],
     });
   });

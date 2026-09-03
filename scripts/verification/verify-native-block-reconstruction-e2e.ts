@@ -39,8 +39,10 @@ import {
   type BabylonNativeBlockMaterializerMetadataV1,
   type BabylonNativeSceneContributionV1,
   type FixedInputV1,
-  type FormalMeasuredObservationIdentityV1,
+  type FormalColliderOverlayObservationV1,
+  type FormalOpeningObservationV1,
   type FormalScriptedTraversalObservationV1,
+  type FormalSpawnSupportObservationV1,
   type FormalTraversalCheckpointSpatialCriterionV1,
   type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
@@ -338,9 +340,12 @@ function assertReadySnapshot(
 }
 
 function assertObservationMatchesCapture(
-  observation: FormalMeasuredObservationIdentityV1,
+  observation:
+    | FormalOpeningObservationV1
+    | FormalSpawnSupportObservationV1
+    | FormalColliderOverlayObservationV1
+    | FormalScriptedTraversalObservationV1,
   captureReceipt: ReturnType<typeof parseFormalWorldCaptureReceiptV1>,
-  resetIdentity: "receipt-ready" | "independent-reset" = "receipt-ready",
 ): void {
   exact(observation.worldPackageRef, captureReceipt.worldPackageRef);
   exact(observation.worldPackageRootHash, captureReceipt.worldPackageRootHash);
@@ -350,17 +355,16 @@ function assertObservationMatchesCapture(
   exact(observation.formalRequestHash, captureReceipt.formalRequestHash);
   exact(observation.semanticCaptureMapHash, captureReceipt.semanticCaptureMapHash);
   exact(observation.runtimeSessionId, captureReceipt.runtimeSessionId);
-  if (resetIdentity === "receipt-ready") {
-    exact(observation.resetReadySnapshotHash, captureReceipt.readySnapshotHash);
-  } else {
-    const traversal = observation as FormalScriptedTraversalObservationV1;
-    const firstCheck = traversal.checks[0];
+  if (observation.kind === "formal-scripted-traversal-observation") {
+    const firstCheck = observation.checks[0];
     if (firstCheck === undefined) fail("NBR70_IDENTITY_MISMATCH");
     exact(observation.resetReadySnapshotHash, firstCheck.resetReadySnapshotHash);
     exact(
       sha256CanonicalJson(observation.resetReadySnapshot),
       firstCheck.resetReadySnapshotHash,
     );
+  } else {
+    exact(observation.resetReadySnapshotHash, captureReceipt.readySnapshotHash);
   }
   const owner = captureReceipt.sdkOwnerIdentities.find(
     ({ ownerId }) => ownerId === observation.domainOwnerIdentity.ownerId,
@@ -808,11 +812,7 @@ async function verifyAllRunAttempts(input: Readonly<{
     for (const observation of [opening, spawn, overlay]) {
       assertObservationMatchesCapture(observation, captureReceipt);
     }
-    assertObservationMatchesCapture(
-      scripted,
-      captureReceipt,
-      "independent-reset",
-    );
+    assertObservationMatchesCapture(scripted, captureReceipt);
     const blockerColliderIds = verifyBlockerEvidenceClosure({
       caseBlockerColliderIds: input.reconstructionCase.expected.colliders
         .filter(({ role }) => role === "blocker")
@@ -1456,11 +1456,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   for (const observation of [opening, spawn, overlay]) {
     assertObservationMatchesCapture(observation, captureReceipt);
   }
-  assertObservationMatchesCapture(
-    scripted,
-    captureReceipt,
-    "independent-reset",
-  );
+  assertObservationMatchesCapture(scripted, captureReceipt);
 
   const evaluation = parseWorldReconstructionEvaluationResultV1(json(
     await requiredFile(

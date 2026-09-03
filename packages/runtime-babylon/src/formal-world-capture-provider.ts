@@ -274,7 +274,7 @@ export function measureFormalTraversalCheckpointV1(input: Readonly<{
   isFinalTick: boolean;
 }>): Readonly<{
   checkpointId: string;
-  outcome: "reached" | "passed" | "blocked" | "incomplete";
+  outcome: "reached" | "passed" | "blocked";
   observedAtTick: number;
 }> | undefined {
   const criterion = input.criterion;

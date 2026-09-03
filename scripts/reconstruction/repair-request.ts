@@ -189,7 +189,7 @@ export function isRepairableWorldReconstructionEvaluationV1(
   profile: WorldReconstructionEvaluationProfileV1,
   completedRepairCount: number,
 ): boolean {
-  if (evaluation.outcome !== "failed") return false;
+  if (evaluation.outcome !== "failed" && evaluation.outcome !== "incomplete") return false;
   if (completedRepairCount >= profile.maximumRepairAttemptCount) return false;
   if (isEmpty(evaluation.diagnostics)) return false;
   return evaluation.diagnostics.every((diagnostic) =>

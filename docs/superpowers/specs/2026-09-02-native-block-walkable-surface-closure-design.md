@@ -450,10 +450,14 @@ or authority audit, deterministic replay, budget, Ground Analysis, Package or
 Receipt identity, Runtime startup/readiness, SDK-owned Spawn/Support/Collider,
 lifecycle and cleanup. They produce no runnable preview. Opening composition,
 semantic silhouette, measured topology and scripted traversal quality are
-repair/evaluation evidence after Runtime admission. A checkpoint that finishes
-without proving either side is `incomplete` evidence; it must not be mislabeled
-as pass/block and must not be thrown as Capture infrastructure failure. A true
-Browser, Runtime, screenshot or identity failure still closes Capture.
+repair/evaluation evidence after Runtime admission. A declared checkpoint that
+is present but finishes without proving either side emits the dedicated,
+source-repairable `WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE`
+diagnostic while repair budget remains; it must not be mislabeled as pass/block
+or thrown as Capture infrastructure failure. A missing checkpoint identity,
+missing observation row or stale evidence remains non-repairable and fails
+closed. A true Browser, Runtime, screenshot or identity failure still closes
+Capture.
 
 The existing bounded repair loop may change only Native authoring source/resources. A ground failure
 names the affected group/Block/region and the required structural change. A pre-Package Ground Analysis

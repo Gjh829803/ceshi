@@ -66,6 +66,7 @@ import {
 } from "../native-scene/build-trusted-world-package.js";
 import {
   buildAndLoadBabylonNativeSceneModuleV1,
+  hashAdmittedBabylonNativeSceneSourceGraphV1,
 } from "../native-scene/module-bundle.js";
 import {
   BabylonNativePackageInputErrorV1,
@@ -504,10 +505,8 @@ export async function packageNativeBlockAttemptV1(
       "native-check-result.json",
     );
     await writeCanonicalJsonFresh(nativeCheckResultPath, formalCheck);
-    const bundled = await buildAndLoadBabylonNativeSceneModuleV1(
-      admitted.sourceGraph,
-    );
-    if (bundled.outcome !== "passed") return fail("source-bundle-stale");
+    const authoredSourceHash =
+      await hashAdmittedBabylonNativeSceneSourceGraphV1(admitted.sourceGraph);
     const sceneAuthoringAttemptRef =
       `worldkit://scene-authoring-attempt/${attempt.id}@1`;
     const sceneAuthoringAttemptResultRef =
@@ -520,7 +519,7 @@ export async function packageNativeBlockAttemptV1(
       sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(attempt),
       outcome: "completed",
       authoredSourceRef: bootstrap.sceneModuleRef,
-      authoredSourceHash: bundled.bundleArtifact.sourceGraphHash,
+      authoredSourceHash,
       evidenceRefs: [
         `worldkit://native-scene-check-result/${bootstrap.id}@1`,
       ],
@@ -561,6 +560,13 @@ export async function packageNativeBlockAttemptV1(
         }),
       );
     }
+    const bundled = await buildAndLoadBabylonNativeSceneModuleV1(
+      admitted.sourceGraph,
+    );
+    if (
+      bundled.outcome !== "passed" ||
+      bundled.bundleArtifact.sourceGraphHash !== authoredSourceHash
+    ) return fail("source-bundle-stale");
     const runtimeOwnerEntries = runtime.runtimeResourceLockEntries;
     if (runtimeOwnerEntries.some((entry) =>
       !registryOwner.some((ownerEntry) => isEqual(ownerEntry, entry)))) {

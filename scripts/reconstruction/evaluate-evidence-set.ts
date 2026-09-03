@@ -209,9 +209,6 @@ export function projectMeasuredTraversalCheck(
   const measuredById = new Map(
     measured.map((row) => [row.checkpointId, row.outcome]),
   );
-  if (measured.some(({ outcome }) => outcome === "incomplete")) {
-    return { outcome: "incomplete", checkpointIds };
-  }
   const criterionIsSatisfied = (
     criterion: FormalTraversalCheckpointSpatialCriterionV1,
   ): boolean => {
@@ -226,6 +223,9 @@ export function projectMeasuredTraversalCheck(
     )
   ) {
     return { outcome: "reached", checkpointIds };
+  }
+  if (measured.some(({ outcome }) => outcome === "incomplete")) {
+    return { outcome: "incomplete", checkpointIds };
   }
   if (checkExpectation === "block") {
     return criteria.every(criterionIsSatisfied)

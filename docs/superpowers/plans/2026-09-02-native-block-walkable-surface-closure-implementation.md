@@ -215,7 +215,10 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
    modes.
 4. Publish every requested scripted traversal row even when a checkpoint cannot
    prove pass or block. Record the final-tick checkpoint and check outcome as
-   `incomplete`; never synthesize success or throw
+   `incomplete`; emit a dedicated source-repairable diagnostic when every
+   declared checkpoint identity is present, and spend the next bounded repair
+   Attempt before terminal disposition. Missing checkpoint rows or stale
+   evidence remain non-repairable. Never synthesize success or throw
    `BABYLON_FORMAL_CAPTURE_*_CHECKPOINT_UNMEASURED` for this quality condition.
 5. Run the existing bounded quality repair loop in both modes. At exhaustion,
    `required-for-publication` remains rejected. `report-only` returns exit zero

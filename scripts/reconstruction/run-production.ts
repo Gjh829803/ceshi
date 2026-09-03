@@ -13,8 +13,11 @@ import path from "node:path";
 import { isEmpty, isNil } from "lodash-es";
 
 import {
+  formalWorldCaptureReceiptCanonicalBytesV1,
   formalWorldCaptureIntentCanonicalBytesV1,
+  hashFormalWorldCaptureReceiptV1,
   hashFormalWorldCaptureIntentV1,
+  parseFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureIntentV1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "@whitebox-world/runtime-contracts";
@@ -679,10 +682,21 @@ async function rejectedEvaluationResult(
     rejectedCaptureDirectoryPath,
     "formal-world-capture-receipt.json",
   );
-  await readCanonicalRegularFile(
+  const captureReceiptBytes = await readCanonicalRegularFile(
     rejectedCaptureReceiptPath,
     "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
   );
+  let captureReceipt;
+  try {
+    captureReceipt = parseFormalWorldCaptureReceiptV1(parseJson(
+      captureReceiptBytes,
+      "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
+    ));
+  } catch (error) {
+    throw new TypeError("NBR_REJECTED_EVALUATION_EVIDENCE_INVALID", {
+      cause: error,
+    });
+  }
   const rejectedEvaluationPath = path.join(attemptDirectoryPath, "evaluation.json");
   const evaluationBytes = await readCanonicalRegularFile(
     rejectedEvaluationPath,
@@ -701,6 +715,28 @@ async function rejectedEvaluationResult(
   }
   if (
     !bytesEqual(
+      captureReceiptBytes,
+      formalWorldCaptureReceiptCanonicalBytesV1(captureReceipt),
+    ) ||
+    hashFormalWorldCaptureReceiptV1(captureReceipt) !==
+      terminal.captureReceiptHash ||
+    captureReceipt.caseRef !== input.receipt.caseRef ||
+    captureReceipt.caseHash !== input.receipt.caseHash ||
+    captureReceipt.evaluationProfileRef !== input.receipt.evaluationProfileRef ||
+    captureReceipt.evaluationProfileHash !== input.receipt.evaluationProfileHash ||
+    captureReceipt.sceneAuthoringAttemptHash !==
+      terminal.sceneAuthoringAttemptHash ||
+    captureReceipt.sceneAuthoringAttemptResultHash !==
+      terminal.sceneAuthoringAttemptResultHash ||
+    captureReceipt.worldPackageRef !== terminal.worldPackageRef ||
+    captureReceipt.worldPackageRootHash !== terminal.worldPackageRootHash ||
+    captureReceipt.worldPackageBuildReceiptRef !==
+      terminal.worldPackageBuildReceiptRef ||
+    captureReceipt.worldPackageBuildReceiptHash !==
+      terminal.worldPackageBuildReceiptHash ||
+    captureReceipt.worldBuildIdentityRef !== terminal.worldBuildIdentityRef ||
+    captureReceipt.worldBuildIdentityHash !== terminal.worldBuildIdentityHash ||
+    !bytesEqual(
       evaluationBytes,
       worldReconstructionEvaluationResultCanonicalBytesV1(evaluation),
     ) ||
@@ -709,8 +745,8 @@ async function rejectedEvaluationResult(
     evaluation.caseHash !== input.receipt.caseHash ||
     evaluation.evaluationProfileRef !== input.receipt.evaluationProfileRef ||
     evaluation.evaluationProfileHash !== input.receipt.evaluationProfileHash ||
-    evaluation.attemptRef !== terminal.sceneAuthoringAttemptRef ||
-    evaluation.attemptHash !== terminal.sceneAuthoringAttemptHash ||
+    evaluation.attemptRef !== captureReceipt.sceneAuthoringAttemptRef ||
+    evaluation.attemptHash !== captureReceipt.sceneAuthoringAttemptHash ||
     evaluation.worldPackageRef !== terminal.worldPackageRef ||
     evaluation.worldPackageRootHash !== terminal.worldPackageRootHash ||
     evaluation.worldBuildIdentityRef !== terminal.worldBuildIdentityRef ||

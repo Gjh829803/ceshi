@@ -385,6 +385,17 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     });
   });
 
+  it("preserves a confirmed passable blocker when another criterion is incomplete", () => {
+    expect(projectMeasuredTraversalCheck([
+      { checkpointId: "approach", outcome: "incomplete" },
+      { checkpointId: "gate", outcome: "passed" },
+      { checkpointId: "threshold", outcome: "incomplete" },
+    ], MIXED_BLOCK_CHECKPOINT_CRITERIA, "block")).toEqual({
+      outcome: "reached",
+      checkpointIds: ["approach", "gate", "threshold"],
+    });
+  });
+
   it("projects blocked only when every mixed block-check criterion is satisfied", () => {
     const evidence = buildWorldReconstructionEvidenceSetV1(
       createEvidenceSetFixtureInputV1({
