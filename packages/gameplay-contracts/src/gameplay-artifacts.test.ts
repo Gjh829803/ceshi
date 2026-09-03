@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
@@ -157,7 +157,7 @@ function bootstrapBody(
   };
 }
 
-function accessorArray<T>(value: T, getter: ReturnType<typeof vi.fn>): T[] {
+function accessorArray<T>(value: T, getter: Mock<() => T>): T[] {
   const array: T[] = [];
   Object.defineProperty(array, "0", {
     configurable: true,
@@ -541,7 +541,7 @@ describe("GameplayBootstrapV1", () => {
 
   it("rejects hostile root/nested accessors, prototypes, Symbols, and unknown fields without side effects", () => {
     const body = bootstrapBody();
-    const getter = vi.fn(() => body.entityDescriptors[0]);
+    const getter = vi.fn(() => body.entityDescriptors[0]!);
     expect(() => createGameplayBootstrapV1({
       ...body,
       entityDescriptors: accessorArray(body.entityDescriptors[0]!, getter),

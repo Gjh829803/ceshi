@@ -12,16 +12,12 @@ export default defineConfig({
     // One worker, one file at a time. Use forks so Havok/WASM/Vite heaps from
     // an earlier file cannot accumulate into ERR_WORKER_OUT_OF_MEMORY.
     // native-package.test.ts still packs several Vite+Havok publishes into one
-    // file and hits the default ~2 GiB worker limit on GitHub runners.
+    // file and needs the 4 GiB NODE_OPTIONS budget from test:resource-heavy on
+    // GitHub runners.
     pool: "forks",
     isolate: true,
     fileParallelism: false,
     minWorkers: 1,
     maxWorkers: 1,
-    poolOptions: {
-      forks: {
-        execArgv: ["--max-old-space-size=4096"],
-      },
-    },
   },
 });
