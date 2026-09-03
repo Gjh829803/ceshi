@@ -5,7 +5,10 @@ import {
   parseGpuCaptureBatchManifest,
   selectGpuCaptureBatch,
 } from "../lib/cloud-production-run.mjs";
-import { runGpuCaptureBatch } from "./run-worldkit-cloud-gpu-capture-batch-worker.mjs";
+import {
+  assertGpuQueuePrepareManifestIdentity,
+  runGpuCaptureBatch,
+} from "./run-worldkit-cloud-gpu-capture-batch-worker.mjs";
 
 const IMAGE = `registry.example/worldkit@sha256:${"a".repeat(64)}`;
 const HASH = `sha256:${"b".repeat(64)}`;
@@ -30,6 +33,28 @@ function queueEntry(index) {
     createdAt: new Date(Date.UTC(2026, 8, 2, 0, 0, index)).toISOString(),
   };
 }
+
+test("capture admission selects the exact successful Prepare retry manifest", () => {
+  const task = {
+    ...queueEntry(1),
+    stageAttempt: 2,
+    prepareManifestS3Uri: "s3://bucket/001/prepare/attempt-2/manifest.json",
+  };
+  const artifacts = [1, 2].map((attempt) => ({
+    role: "worldkit-cloud-artifact-manifest",
+    stage_id: "episode-prepare",
+    attempt,
+    s3_uri: `s3://bucket/001/prepare/attempt-${attempt}/manifest.json`,
+  }));
+  assert.doesNotThrow(() => assertGpuQueuePrepareManifestIdentity({ artifacts }, task));
+  assert.throws(
+    () => assertGpuQueuePrepareManifestIdentity({ artifacts }, {
+      ...task,
+      prepareManifestS3Uri: "s3://bucket/001/prepare/attempt-3/manifest.json",
+    }),
+    /differs from the LWDP prepare manifest/,
+  );
+});
 
 test("ready-wave manifests preserve their content-addressed identity", () => {
   const batch = selectGpuCaptureBatch(

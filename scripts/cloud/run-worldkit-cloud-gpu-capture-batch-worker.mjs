@@ -188,6 +188,24 @@ export async function runGpuCaptureBatch({
   }
 }
 
+export function assertGpuQueuePrepareManifestIdentity(execution, task) {
+  const declaredPrepareManifests = [
+    ...(execution?.artifacts ?? []),
+    ...(execution?.stages ?? []).flatMap((stage) => stage?.artifacts ?? []),
+  ].filter((artifact) =>
+    artifact?.role === "worldkit-cloud-artifact-manifest" &&
+    artifact?.stage_id === "episode-prepare");
+  if (declaredPrepareManifests.length === 0) return;
+  const matchingManifest = declaredPrepareManifests.find((artifact) =>
+    artifact.s3_uri === task.prepareManifestS3Uri &&
+    (!Number.isSafeInteger(artifact.attempt) ||
+      !Number.isSafeInteger(task.stageAttempt) ||
+      artifact.attempt === task.stageAttempt));
+  if (!matchingManifest) {
+    throw new Error("GPU queue entry differs from the LWDP prepare manifest.");
+  }
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const batchManifestS3Uri = options["batch-manifest-s3-uri"];
@@ -267,17 +285,7 @@ async function main() {
       ),
       runCaptureImplementation: async (task, { execution }) => {
         try {
-          const declaredArtifacts = [
-            ...(execution?.artifacts ?? []),
-            ...(execution?.stages ?? []).flatMap((stage) => stage?.artifacts ?? []),
-          ];
-          const declaredPrepareManifest = declaredArtifacts.find((artifact) =>
-            artifact?.role === "worldkit-cloud-artifact-manifest" &&
-            artifact?.stage_id === "episode-prepare");
-          if (declaredPrepareManifest &&
-              declaredPrepareManifest.s3_uri !== task.prepareManifestS3Uri) {
-            throw new Error("GPU queue entry differs from the LWDP prepare manifest.");
-          }
+          assertGpuQueuePrepareManifestIdentity(execution, task);
           const prepareManifestPath = join(
             temporaryRoot,
             "prepare-manifests",
