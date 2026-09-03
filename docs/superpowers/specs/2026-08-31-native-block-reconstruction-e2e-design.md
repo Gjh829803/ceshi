@@ -22,12 +22,13 @@ reference image + Scene Brief + reconstruction Case/Profile + Case-bound Formal 
   -> one formal Codex task through scripts/agents/run-codex-task.mjs
   -> Babylon Native Block source workspace
   -> worldkit native check/explain
-  -> Bundle + locks + Frozen Contributions + WorldPackage + Build Receipt
+  -> Bundle + locks + Frozen Contributions + Ground Analysis admission
+  -> WorldPackage + Build Receipt
   -> the existing RuntimeHost + BabylonWorldRuntime + SDK-owned Havok/Subject/Input/Action/Camera
   -> identity-bound formal Capture + runtime traversal evidence
   -> dimensioned reconstruction evaluation
   -> at most one diagnostic-driven repair task
-  -> new Attempt + Candidate + Package + Receipt + Capture + evaluation
+  -> new Attempt + checked source, then Package + Receipt + Capture + evaluation
   -> one directly runnable final WorldPackage
 ```
 
@@ -633,6 +634,12 @@ canonical repair instruction before editing and execute every diagnostic action.
 three Native authoring outputs and must not change the Case, Profile, acceptance thresholds, frozen owners,
 Runtime, evaluator, prior Package, prior Capture, or durable prior Attempt inputs.
 
+Ground Analysis is a trusted pre-Package admission gate. A repairable Ground Analysis rejection retains the
+checked authored source, Attempt result, logical-ground model, failed report and actionable diagnostics, but
+publishes no WorldPackage or Capture for that Attempt. Those immutable artifacts are sufficient evidence for
+the same one-repair loop; the repaired Attempt must rerun Native Check and Ground Analysis before it can
+publish a new Package. The Builder must not invent missing Capture evidence for this path.
+
 Non-repairable missing/stale evidence and deterministic Build identity diagnostics omit `repairAction`
 completely because the Builder cannot repair Host evidence, identity, or replay failures. There is no
 `select-native-resource` branch. Diagnostic codes cover missing/disconnected structure, silhouette/anchor
@@ -655,10 +662,20 @@ initial Attempt -> Package A -> Capture A -> Evaluation A
        -> new authored source
        -> Check -> Package B -> Capture B -> Evaluation B
        -> final Run Receipt(A -> B)
+
+or, before Package publication:
+
+initial Attempt -> Check -> Ground Analysis rejected
+  -> if repairable and budget remains:
+       Repair Request(ground report + logical-ground evidence)
+       -> new Attempt -> new authored source
+       -> Check -> Ground Analysis -> Package B -> Capture B -> Evaluation B
+       -> final Run Receipt(rejected source evidence -> B)
 ```
 
-If the bounded repair still fails, the Host preserves and publishes both immutable Attempt chains, their
-diagnostics, Packages, Receipts, and Captures as a failed or incomplete run for inspection. It does not
+If the bounded repair still fails, the Host preserves and publishes both immutable Attempt chains and every
+artifact that reached a trusted boundary. A pre-Package rejection therefore has source/check/ground evidence
+but no fabricated Package or Capture. It does not
 promote a failed Package as the runnable final world, weaken a hard Collider/Spawn/Traversal/identity gate,
 or silently lower thresholds. A later user- or queue-triggered run starts a new run identity.
 

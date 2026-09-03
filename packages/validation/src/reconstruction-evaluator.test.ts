@@ -86,8 +86,20 @@ const caseValue = () => ({
       { acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF, contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground" as const, requiresOverlay: true },
       { acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF, contributionId: "west-wall-contribution", colliderId: "west-wall", role: "blocker" as const, requiresOverlay: true },
     ],
+    groundConnectivity: {
+      requireSingleReachableComponent: true,
+      requiredTraversalBands: [{
+        acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
+        id: "central-ascent-band",
+        centerlineStandPositionsXYZMeters: [
+          { xMeters: 0, yMeters: 1, zMeters: 0 },
+          { xMeters: 0, yMeters: 1, zMeters: -1 },
+        ],
+        halfWidthMeters: 1,
+      }],
+    },
     criticalTraversalChecks: [{
-      acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
+      acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
       id: "reach-junction",
       evidenceKind: "scripted-fixed-input" as const,
       expectation: "pass" as "pass" | "block",
@@ -634,7 +646,7 @@ describe("evaluateWorldReconstructionV1", () => {
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
       dimensionId: "critical-traversal",
-      acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
+      acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
       repairAction: expect.objectContaining({ kind: "revise-native-source" }),
     }));
   });

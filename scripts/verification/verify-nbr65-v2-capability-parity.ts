@@ -28,8 +28,11 @@ export interface Nbr65CapabilityParityReportV1 {
   readonly kind: "worldkit-nbr65-v2-capability-parity-report";
   readonly schemaVersion: 1;
   readonly outcome: "passed" | "failed";
-  readonly sourceEvidenceRef:
-    "origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05";
+  readonly sourceEvidenceRefs: readonly [
+    "origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05",
+    "origin/codex/block-world-main-integration@8c250b5fc2181b48947d95b12fac03333bf11e5f",
+    "origin/codex/block-world-main-integration@d69d7f821f10328bc02dac3a83218f924e754780",
+  ];
   readonly rows: readonly Nbr65CapabilityParityRowV1[];
 }
 
@@ -44,7 +47,7 @@ interface NotApplicableCapabilityDefinitionV1 {
   readonly capabilityId: string;
   readonly disposition: string;
   readonly owner: string;
-  readonly evidenceRefs: readonly string[];
+  readonly evidence: Readonly<Record<string, readonly string[]>>;
 }
 
 interface Nbr65CapabilityGateDefinitionV1 {
@@ -98,7 +101,21 @@ const PASSED_CAPABILITIES = Object.freeze([
     disposition: "Subject-relative footprint union and solid-volume clearance analysis",
     owner: "native-babylon-block-profile-host-analysis",
     evidence: {
-      "packages/native-babylon-block-profile/src/ground-analysis.test.ts": ["footprint", "clearance"],
+      "packages/native-babylon-block-profile/src/ground-analysis.test.ts": [
+        "rejects a narrow surface using full Capsule-footprint union coverage",
+        "reports exact low-overhead clearance without changing the Capsule",
+      ],
+    },
+  },
+  {
+    capabilityId: "source-block-center-and-shared-edge-adjacency",
+    disposition: "actual source Block centers and checked shared-edge step connectivity",
+    owner: "native-babylon-block-profile-host-analysis",
+    evidence: {
+      "packages/native-babylon-block-profile/src/ground-analysis.test.ts": [
+        "ports v2 Block-center stand samples across one admitted shared-edge step",
+        "does not shift a partially covered source Block center onto its exposed half",
+      ],
     },
   },
   {
@@ -114,8 +131,35 @@ const PASSED_CAPABILITIES = Object.freeze([
     disposition: "step-aware adjacency, components and bounded traversal bands",
     owner: "native-babylon-block-profile-host-analysis",
     evidence: {
-      "packages/native-babylon-block-profile/src/ground-analysis.ts": ["requiredTraversalBands", "component"],
-      "packages/native-babylon-block-profile/src/ground-analysis.test.ts": ["step"],
+      "packages/native-babylon-block-profile/src/ground-analysis.test.ts": [
+        "publishes deterministic standability, connectivity, band and report metrics",
+        "rejects a detour that leaves the declared traversal band",
+      ],
+      "scripts/reconstruction/native-world-case-preparation.test.ts": [
+        "rejects ground bands that evade Spawn origin or bind non-pass targets",
+      ],
+    },
+  },
+  {
+    capabilityId: "subject-bound-topology-policy",
+    disposition: "Native-owned Profile identity plus final topology identity, smoothing, exact support height and triangle slope fail closed against the resolved controlled Subject",
+    owner: "native-profile-production-host",
+    evidence: {
+      "packages/traversal/src/profile-registry.test.ts": [
+        "resolves an independently identified Native Block Ground V2 profile",
+      ],
+      "packages/native-babylon-block-profile/src/ground-analysis.test.ts": [
+        "rejects a final topology bound to a different logical Ground Model",
+        "rejects an exact Spawn height that differs from the final smoothed topology",
+      ],
+      "scripts/reconstruction/native-ground-analysis-admission.ts": [
+        "assertProductionNativeBlockGroundTopologyCompatibleV1",
+        "maximumAutoSmoothHeightDeltaMeters",
+        "maxSlopeDegrees",
+      ],
+      "scripts/reconstruction/native-package.test.ts": [
+        "fails closed when the Profile topology exceeds the controlled Subject envelope",
+      ],
     },
   },
   {
@@ -137,12 +181,41 @@ const PASSED_CAPABILITIES = Object.freeze([
   },
   {
     capabilityId: "ground-movement-and-contact-correction",
-    disposition: "existing SDK movement/support owners traverse derived topology",
+    disposition: "existing SDK movement/support owners traverse derived topology without amplifying authored motion",
     owner: "runtime-babylon",
     evidence: {
-      "packages/runtime-babylon/src/babylon-character-body-port.test.ts": ["slope-tangential"],
-      "packages/runtime-babylon/src/babylon-character-body-port.conformance.test.ts": ["0.25m step"],
+      "packages/runtime-babylon/src/babylon-character-body-port.test.ts": [
+        "allows bounded downward slope projection while %s",
+        "allows only contact-derived uphill surface rise while an unsupported body lands",
+      ],
+      "packages/runtime-babylon/src/babylon-character-body-port.conformance.test.ts": [
+        "climbs a 0.25m step across walk-speed ticks without remaining on the riser",
+      ],
       "packages/runtime-babylon/src/babylon-character-body-port.ts": ["checkSupport"],
+    },
+  },
+  {
+    capabilityId: "continuous-native-runtime-traversal",
+    disposition: "the formal Native Module, checked Block topology, WorldPackage, RuntimeHost, Havok and SDK Character preserve support uphill and downhill",
+    owner: "native-profile-host-and-runtime-babylon",
+    evidence: {
+      "scripts/verification/native-live-collider-registry.test.ts": [
+        "preserves current movement, Action and Camera contracts across one smoothed Native Block ramp",
+      ],
+    },
+  },
+  {
+    capabilityId: "bounded-four-plane-contact-correction",
+    disposition: "installed Babylon four-plane simplex correction is accepted only inside a provider-private 4e-4 meter bound",
+    owner: "runtime-babylon",
+    evidence: {
+      "packages/runtime-babylon/src/babylon-character-body-port.test.ts": [
+        "accepts accumulated micro-correction from Babylon's four-plane simplex",
+        "rejects a provider correction receipt beyond Babylon's four-plane bound",
+      ],
+      "packages/runtime-babylon/src/babylon-character-body-port.ts": [
+        "BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1",
+      ],
     },
   },
   {
@@ -208,6 +281,20 @@ const PASSED_CAPABILITIES = Object.freeze([
     },
   },
   {
+    capabilityId: "route-course-and-semantic-pose-guidance",
+    disposition: "Builder preserves route course, staircase structure and non-Subject semantic pose across reference and planning views",
+    owner: "worldkit-native-block-builder",
+    evidence: {
+      ".codex/skills/worldkit-native-block-builder/SKILL.md": [
+        "keep its endpoints, ordered bends, junctions, switchbacks, width changes, elevation changes",
+        "lock its footprint center, long axis, semantic front",
+      ],
+      "scripts/agents/native-block-builder-skill.test.ts": [
+        "preserve its lower and upper support elevations, total rise, tread rhythm, width, course, major landings",
+      ],
+    },
+  },
+  {
     capabilityId: "package-capture-and-evaluation",
     disposition: "Package-bound formal Capture, Collider overlay and actionable evaluation",
     owner: "world-package-runtime-capture-evaluator",
@@ -224,49 +311,129 @@ const NOT_APPLICABLE_CAPABILITIES = Object.freeze([
     capabilityId: "provider-neutral-block-manifest",
     disposition: "superseded by Build-Epoch checked inventory and frozen Package identity",
     owner: "not-applicable-current-only",
-    evidenceRefs: ["docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md"],
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["provider-neutral extracted Manifest", "do not migrate"],
+    },
   },
   {
     capabilityId: "threejs-binding",
     disposition: "Babylon Native Module is the sole Native authoring surface",
     owner: "not-applicable-current-only",
-    evidenceRefs: ["docs/decisions/0007-canonical-and-babylon-native-authoring-lanes.md"],
+    evidence: {
+      "docs/decisions/0007-canonical-and-babylon-native-authoring-lanes.md": ["Babylon Native"],
+    },
   },
   {
     capabilityId: "block-compiler-and-hidden-foundation",
     disposition: "superseded by Frozen Contributions, current WorldPackage and ground boundary",
     owner: "not-applicable-current-only",
-    evidenceRefs: ["docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md"],
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["Block Compiler and hidden foundation", "do not migrate"],
+    },
   },
   {
     capabilityId: "block-source-subject-and-camera",
     disposition: "JSON control plane and WorldRuntimeBootstrap remain authoritative",
     owner: "runtime-bootstrap-subject-camera",
-    evidenceRefs: ["docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md"],
+    evidence: {
+      "docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md": ["WorldRuntimeBootstrapV1"],
+    },
+  },
+  {
+    capabilityId: "block-specific-support-cache-and-mesh-inference",
+    disposition: "rejected because explicit Contributions and the SDK checkSupport path are the sole Collider and support authorities",
+    owner: "runtime-babylon-shared-support",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["Block-specific support grace/cache", "second support state machine"],
+    },
+  },
+  {
+    capabilityId: "block-specific-subject-occlusion-fade",
+    disposition: "deferred to the current Camera Domain and WRC-CAM rather than entering ground admission",
+    owner: "WRC-CAM-1/2",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["Block-specific third-person Subject occlusion-fade strategy", "WRC-CAM-1/2"],
+    },
   },
   {
     capabilityId: "directed-space-transitions-and-interactions",
     disposition: "preserve Block identity; implement under the event owner",
     owner: "WRC-EVT-1",
-    evidenceRefs: ["docs/18-refactor-progress-and-backlog.md"],
+    evidence: {
+      "docs/18-refactor-progress-and-backlog.md": ["WRC-EVT-1"],
+    },
   },
   {
     capabilityId: "water-flight-and-hybrid-reachability",
-    disposition: "ground graph is non-blocking for non-ground movement",
+    disposition: "current Traversal Capability Envelope is ground-only; air-Spawn measurement proves no flight or water capability",
     owner: "movement-medium-roadmap",
-    evidenceRefs: ["docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md"],
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["cloud/water support and non-ground reachability"],
+    },
   },
   {
     capabilityId: "styled-output-generation",
     disposition: "source-locked post-whitebox visual pipeline remains separate",
     owner: "visual-pipeline",
-    evidenceRefs: ["docs/22-hosted-scene-brief-and-evaluation.md"],
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["styled opening/tri-view reconstruction", "source-locked current pipeline"],
+    },
   },
   {
     capabilityId: "playthrough-episode-and-video",
     disposition: "downstream evidence and media, not world admission",
     owner: "recording-playthrough",
-    evidenceRefs: ["docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md"],
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["planned playthrough, episode capture and video styling"],
+    },
+  },
+  {
+    capabilityId: "safe-exploration-start-and-capture-health",
+    disposition: "kept under downstream Recording/Capture evidence and forbidden from hiding Spawn or ground-admission failures",
+    owner: "recording-capture",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["safe exploration-start selection and Capture-health diagnostics", "do not let relocation conceal"],
+    },
+  },
+  {
+    capabilityId: "v2-one-meter-auto-smoothing",
+    disposition: "superseded by the current Subject Physics Body step limit and 0.25-meter admitted route-top delta; v2's fixed one-meter policy is not Runtime-truthful for G Bot",
+    owner: "runtime-bootstrap-physics-body-and-native-profile-host",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["fixed one-meter automatic smoothing", "0.25m Profile top increments"],
+    },
+  },
+  {
+    capabilityId: "v2-asymmetric-step-thresholds",
+    disposition: "the current Runtime and Traversal envelope own one symmetric maxStepHeightMeters; independent v2 up/down fields are not revived",
+    owner: "runtime-bootstrap-physics-body-and-traversal-envelope",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["maximumStepUpMeters", "maximumStepDownMeters", "explicit non-migration"],
+    },
+  },
+  {
+    capabilityId: "v2-adjacent-walkable-height-cap",
+    disposition: "the v2 fixed two-meter invalidation is replaced by explicit components, bands, blockers and ground-boundary policy",
+    owner: "native-profile-ground-analysis-and-ground-boundary",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["maximumAdjacentWalkableHeightDeltaMeters", "explicit non-migration"],
+    },
+  },
+  {
+    capabilityId: "v2-smoothed-edge-count-metric",
+    disposition: "a raw smoothed-edge count is not an admission proof; current topology hash plus Package/Runtime traversal evidence supersede it",
+    owner: "native-profile-topology-and-runtime-evidence",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["smoothedWalkableEdgeCount", "topology hash"],
+    },
+  },
+  {
+    capabilityId: "semantic-front-oriented-target-triview",
+    disposition: "semantic front remains required reconstruction intent, while a new serialized facing field and oriented per-target Capture belong to the later NBR-70 Capture contract rather than ground admission",
+    owner: "NBR-70",
+    evidence: {
+      "docs/superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md": ["semantic target pose guidance", "NBR-70"],
+    },
   },
 ] as const satisfies readonly NotApplicableCapabilityDefinitionV1[]);
 
@@ -285,7 +452,9 @@ const CAPABILITY_GATES = Object.freeze({
     command: Object.freeze([
       "pnpm", "exec", "vitest", "run",
       "packages/native-babylon-block-profile/src/ground-analysis.test.ts",
+      "packages/traversal/src/profile-registry.test.ts",
       "scripts/reconstruction/native-ground-analysis-diagnostics.test.ts",
+      "scripts/reconstruction/native-world-case-preparation.test.ts",
       "scripts/reconstruction/native-package.test.ts",
     ]),
   }),
@@ -307,6 +476,7 @@ const CAPABILITY_GATES = Object.freeze({
       "packages/runtime-babylon/src/babylon-character-body-port.conformance.test.ts",
       "packages/native-babylon-block-profile/src/ground-boundary.test.ts",
       "packages/runtime-babylon/src/runtime.test.ts",
+      "scripts/verification/native-live-collider-registry.test.ts",
     ]),
   }),
   "chunk-realization": Object.freeze({
@@ -350,11 +520,15 @@ const CAPABILITY_GATE_ID_BY_CAPABILITY_ID = Object.freeze({
   "ergonomic-block-and-grid-authoring": "profile-core",
   "palette-visual-and-collider-groups": "profile-core",
   "subject-footprint-and-clearance": "ground-analysis-production",
+  "source-block-center-and-shared-edge-adjacency": "ground-analysis-production",
   "spawn-target-standability": "ground-analysis-production",
   "step-adjacency-components-and-bands": "ground-analysis-production",
+  "subject-bound-topology-policy": "ground-analysis-production",
   "reachable-space-metrics": "ground-analysis-production",
   "continuous-walkable-and-solid-topology": "topology-display",
   "ground-movement-and-contact-correction": "runtime-ground",
+  "continuous-native-runtime-traversal": "runtime-ground",
+  "bounded-four-plane-contact-correction": "runtime-ground",
   "walkable-whitebox-overlay": "topology-display",
   "chunk-addressing-batching-and-residency": "chunk-realization",
   "ground-only-edge-protection": "runtime-ground",
@@ -362,6 +536,7 @@ const CAPABILITY_GATE_ID_BY_CAPABILITY_ID = Object.freeze({
   "neutral-runtime-inspection-lighting": "runtime-ground",
   "planner-lineage-and-complete-world-continuation": "planner-skill",
   "bounded-builder-repair": "reconstruction-host",
+  "route-course-and-semantic-pose-guidance": "reconstruction-host",
   "package-capture-and-evaluation": "reconstruction-host",
 } as const satisfies Readonly<Record<PassedCapabilityIdV1, CapabilityGateIdV1>>);
 
@@ -374,6 +549,9 @@ const FORBIDDEN_PATHS = Object.freeze([
 const FORBIDDEN_SOURCE_TOKENS = Object.freeze([
   "layout-block-volume",
   "materializeBabylonNativeBlockColliderCandidatesV1",
+  "blockWorldSupportContinuityActive",
+  "blockWorldSupportGraceTicksRemaining",
+  "lastBlockWorldSupport",
 ] as const);
 
 async function pathExists(absolutePath: string): Promise<boolean> {
@@ -478,10 +656,24 @@ export async function verifyNbr65V2CapabilityParityV1(
     }));
   }
   for (const definition of NOT_APPLICABLE_CAPABILITIES) {
-    const diagnostics = [];
-    for (const evidenceRef of definition.evidenceRefs) {
-      if (!await pathExists(path.join(repositoryRoot, evidenceRef))) {
+    const diagnostics: string[] = [];
+    const evidence = definition.evidence as Readonly<
+      Record<string, readonly string[]>
+    >;
+    const evidenceRefs = Object.keys(evidence).sort();
+    for (const evidenceRef of evidenceRefs) {
+      const absolutePath = path.join(repositoryRoot, evidenceRef);
+      if (!await pathExists(absolutePath)) {
         diagnostics.push(`missing disposition evidence: ${evidenceRef}`);
+        continue;
+      }
+      const source = await readFile(absolutePath, "utf8");
+      for (const fragment of evidence[evidenceRef] ?? []) {
+        if (!source.includes(fragment)) {
+          diagnostics.push(
+            `missing disposition fragment '${fragment}' in ${evidenceRef}`,
+          );
+        }
       }
     }
     rows.push(Object.freeze({
@@ -489,7 +681,7 @@ export async function verifyNbr65V2CapabilityParityV1(
       status: isEmpty(diagnostics) ? "not-applicable" : "failed",
       disposition: definition.disposition,
       owner: definition.owner,
-      evidenceRefs: definition.evidenceRefs,
+      evidenceRefs: Object.freeze(evidenceRefs),
       verificationGate: null,
       diagnostics: Object.freeze(diagnostics.sort()),
     }));
@@ -532,8 +724,11 @@ export async function verifyNbr65V2CapabilityParityV1(
     outcome: rows.some(({ status }) => status === "failed")
       ? "failed"
       : "passed",
-    sourceEvidenceRef:
+    sourceEvidenceRefs: Object.freeze([
       "origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05",
+      "origin/codex/block-world-main-integration@8c250b5fc2181b48947d95b12fac03333bf11e5f",
+      "origin/codex/block-world-main-integration@d69d7f821f10328bc02dac3a83218f924e754780",
+    ] as const),
     rows: Object.freeze(rows),
   });
 }

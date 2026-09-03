@@ -287,6 +287,18 @@ async function fixture(): Promise<Readonly<{
         role: "ground",
         requiresOverlay: true,
       }],
+      groundConnectivity: {
+        requireSingleReachableComponent: true,
+        requiredTraversalBands: [{
+          acceptanceTargetRef: OPENING_TARGET,
+          id: "ground-band",
+          centerlineStandPositionsXYZMeters: [
+            { xMeters: 0, yMeters: 0, zMeters: 0 },
+            { xMeters: 0, yMeters: 0, zMeters: -1 },
+          ],
+          halfWidthMeters: 1,
+        }],
+      },
       criticalTraversalChecks: [{
         acceptanceTargetRef: OPENING_TARGET,
         id: "ground-check",

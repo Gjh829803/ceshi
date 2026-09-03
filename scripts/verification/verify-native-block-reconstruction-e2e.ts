@@ -609,6 +609,27 @@ async function verifyAllRunAttempts(input: Readonly<{
     if (explain !== explainNativeSceneCheckResultV1(checkResult)) {
       fail("NBR70_IDENTITY_MISMATCH");
     }
+    if (runAttempt.kind === "ground-analysis-rejected") {
+      exact(runAttempt.authoredSourceRef, attemptResult.authoredSourceRef);
+      exact(runAttempt.authoredSourceHash, attemptResult.authoredSourceHash);
+      const groundAnalysisReportBytes = await requiredFile(
+        attemptRoot,
+        "ground-analysis-report.json",
+        "NBR70_REQUIRED_ARTIFACT_MISSING",
+      );
+      const groundAnalysisReport = json(groundAnalysisReportBytes) as
+        Record<string, unknown>;
+      if (
+        groundAnalysisReport.kind !==
+          "babylon-native-block-ground-analysis-report" ||
+        groundAnalysisReport.admissionOutcome !== "failed"
+      ) fail("NBR70_IDENTITY_MISMATCH");
+      exact(
+        runAttempt.groundAnalysisReportHash,
+        sha256CanonicalJson(groundAnalysisReport),
+      );
+      continue;
+    }
     const packageDirectoryPath = path.join(attemptRoot, "world-package");
     const verified = verifyWorldPackageDirectoryV1(
       await readWorldPackageDirectoryV1({

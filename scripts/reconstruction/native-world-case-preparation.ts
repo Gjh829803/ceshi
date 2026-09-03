@@ -139,6 +139,13 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       .criticalTraversalChecks ?? []).map((value) =>
         (value as { acceptanceTargetRef?: unknown }).acceptanceTargetRef
       ),
+    ...((proposal.expected as {
+      groundConnectivity?: {
+        requiredTraversalBands?: unknown[];
+      };
+    }).groundConnectivity?.requiredTraversalBands ?? []).map((value) =>
+      (value as { acceptanceTargetRef?: unknown }).acceptanceTargetRef
+    ),
     (proposal.expected as { deterministicBuild?: { acceptanceTargetRef?: unknown } })
       .deterministicBuild?.acceptanceTargetRef,
   ].filter((value): value is string => typeof value === "string"))]);
@@ -258,7 +265,9 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       "Build the complete playable world described by the frozen Scene Brief, Case, references, and Host Bootstrap.",
       "Write exactly scene.ts, native-block-authoring.json, and native-resources.json.",
       "Implement every Case visual group and every explicit required Collider contribution exactly once.",
+      "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
       "Keep the Spawn supported and preserve every fixed-input pass or block check without adding undeclared input.",
+      "For a ground Case, preserve every frozen groundConnectivity band and keep the complete explicitly contributed support surface in one Spawn-reachable component.",
       "Do not create Runtime, physics, camera, input, timers, gameplay entities, Package, Capture, Receipt, or thresholds.",
       "Do not alter any frozen input. Formal Capture Intent remains Host-only.",
       "",

@@ -4,7 +4,33 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import {
+  resolveNativeCaseMappingCloudOutputS3PrefixV1,
+} from "./run-native-world-agent.js";
+
 describe("Native-default world agent Host route", () => {
+  it("gives only Cloud mapping tasks one stable scene/run/stage S3 prefix", () => {
+    expect(resolveNativeCaseMappingCloudOutputS3PrefixV1({
+      backend: "cloud",
+      sceneId: "native-prompt-smoke",
+      mappingTaskId: "native-case-map-native-prompt-smoke-123456789abc",
+      environment: {
+        WORLDKIT_LWDP_S3_ROOT: "s3://bucket/worldkit///",
+      },
+    })).toBe(
+      "s3://bucket/worldkit/native-prompt-smoke/" +
+      "native-case-map-native-prompt-smoke-123456789abc/native-case-mapping",
+    );
+    expect(resolveNativeCaseMappingCloudOutputS3PrefixV1({
+      backend: "local",
+      sceneId: "native-prompt-smoke",
+      mappingTaskId: "native-case-map-native-prompt-smoke-123456789abc",
+      environment: {
+        WORLDKIT_LWDP_S3_ROOT: "s3://must-not-cross/local",
+      },
+    })).toBeUndefined();
+  });
+
   it("reuses the unified Planner before the Native Case proposal stage", () => {
     const source = readFileSync(
       "scripts/reconstruction/run-native-world-agent.ts",
@@ -41,6 +67,65 @@ describe("Native-default world agent Host route", () => {
     );
     expect(source).toContain(
       "Never use minimumMetersXYZ or maximumMetersXYZ for worldBounds",
+    );
+  });
+
+  it("keeps the SDK controlled Subject out of Native Block visual groups", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "Never create a semantic silhouette target, visual group, topology node, or composition target for the controlled Subject",
+    );
+    expect(source).toContain(
+      "The Host-owned SDK Subject remains visible in Runtime Capture without a Native Block binding",
+    );
+  });
+
+  it("keeps pass checks bound to declared traversable targets", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "The acceptanceTargetRef of every pass traversal check must name a target with a ground or step Collider role",
+    );
+    expect(source).toContain(
+      "never bind a pass check to a blocker, cliff, wall, mountain, or other non-traversable landmark",
+    );
+    expect(source).toContain(
+      "The acceptanceTargetRef of every block traversal check must name a target with a blocker Collider role",
+    );
+    expect(source).toContain(
+      "Every Collider ID, contribution ID, and checkpoint ID must be globally unique",
+    );
+  });
+
+  it("gives Mapper the exact source-neutral ground-connectivity contract", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "For a ground Spawn, expected.groundConnectivity is required and has exactly this shape",
+    );
+    expect(source).toContain("centerlineStandPositionsXYZMeters");
+    expect(source).toContain(
+      "The first position of at least one band must exactly equal expected.spawnSupport.expectedPositionXYZMeters",
+    );
+    expect(source).toContain(
+      "every band binds one pass target",
+    );
+    expect(source).toContain(
+      "every ground pass target has exactly one explicit band",
+    );
+    expect(source).toContain(
+      "For an air Spawn, use requireSingleReachableComponent false and an empty requiredTraversalBands array",
+    );
+    expect(source).toContain("current ground-only Traversal Envelope");
+    expect(source).toContain(
+      "do not add an isBidirectional or one-way field",
     );
   });
 

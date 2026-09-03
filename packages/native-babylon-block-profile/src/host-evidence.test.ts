@@ -71,7 +71,7 @@ function evidence(id: string): BabylonNativeBlockCheckedEpochEvidenceV1 {
         profileInventoryHash: `sha256:${"a".repeat(64)}`,
         nativeSceneBootstrapHash: `sha256:${"c".repeat(64)}`,
       },
-      supportedTraversalSurfaceProfileRefs: [],
+      declaredTraversalSurfaceProfileRefs: [],
       colliderGroups: [],
       solidOccupancyCells: [],
       exposedSupportTopCells: [],

@@ -158,9 +158,6 @@ function freeze(input: Readonly<{
     checkedLayout: checkedLayout(input.blocks, buildEpochId),
     profileInventoryHash: H("1"),
     nativeSceneBootstrapHash: H("2"),
-    supportedTraversalSurfaceProfileRefs: Object.freeze([
-      STATIC_SURFACE.traversalSurfaceProfileRef,
-    ]),
     selections: Object.freeze([...input.selections]),
   });
 }
@@ -265,22 +262,41 @@ describe("Babylon Native Block logical ground model", () => {
     expect(second.logicalGroundModelHash).toBe(first.logicalGroundModelHash);
   });
 
-  it("keeps unsupported static surfaces solid but out of support tops", () => {
+  it("derives declared surface refs and support candidates from selections", () => {
     const result = freezeBabylonNativeBlockLogicalGroundModelV1({
-      buildEpochId: "unsupported-surface-epoch",
+      buildEpochId: "declared-surface-epoch",
       checkedLayout: checkedLayout([
         block({ id: "ground-block", cells: ["0,0,0"] }),
-      ], "unsupported-surface-epoch"),
+      ], "declared-surface-epoch"),
       profileInventoryHash: H("1"),
       nativeSceneBootstrapHash: H("2"),
-      supportedTraversalSurfaceProfileRefs: Object.freeze([]),
       selections: Object.freeze([selection({ id: "ground", source: {
         kind: "block", blockId: "ground-block",
       } })]),
     });
 
+    expect(result.declaredTraversalSurfaceProfileRefs).toEqual([
+      STATIC_SURFACE.traversalSurfaceProfileRef,
+    ]);
     expect(result.solidOccupancyCells).toHaveLength(1);
-    expect(result.exposedSupportTopCells).toEqual([]);
+    expect(result.exposedSupportTopCells).toHaveLength(1);
+  });
+
+  it("rejects the removed caller-supplied supported-surface field", () => {
+    expect(() => freezeBabylonNativeBlockLogicalGroundModelV1({
+      buildEpochId: "legacy-surface-owner-epoch",
+      checkedLayout: checkedLayout([
+        block({ id: "ground-block", cells: ["0,0,0"] }),
+      ], "legacy-surface-owner-epoch"),
+      profileInventoryHash: H("1"),
+      nativeSceneBootstrapHash: H("2"),
+      selections: Object.freeze([selection({ id: "ground", source: {
+        kind: "block", blockId: "ground-block",
+      } })]),
+      supportedTraversalSurfaceProfileRefs: Object.freeze([
+        STATIC_SURFACE.traversalSurfaceProfileRef,
+      ]),
+    } as never)).toThrow("WORLDKIT_NATIVE_BLOCK_LOGICAL_GROUND_INPUT_INVALID");
   });
 
   it.each([
@@ -326,9 +342,6 @@ describe("Babylon Native Block logical ground model", () => {
       ], "foreign-epoch"),
       profileInventoryHash: H("1"),
       nativeSceneBootstrapHash: H("2"),
-      supportedTraversalSurfaceProfileRefs: Object.freeze([
-        STATIC_SURFACE.traversalSurfaceProfileRef,
-      ]),
       selections: Object.freeze([selection({ id: "ground", source: {
         kind: "block", blockId: "ground-block",
       } })]),
@@ -361,9 +374,6 @@ describe("Babylon Native Block logical ground model", () => {
       checkedLayout: checkedLayout(blocks),
       profileInventoryHash: H("1"),
       nativeSceneBootstrapHash: H("2"),
-      supportedTraversalSurfaceProfileRefs: Object.freeze([
-        STATIC_SURFACE.traversalSurfaceProfileRef,
-      ]),
       selections: Object.freeze(selections),
     } as const;
     const original = freezeBabylonNativeBlockLogicalGroundModelV1(base);

@@ -233,6 +233,7 @@ describe("@whitebox-world/native-babylon-block-profile package boundary", () => 
       "partitionBabylonNativeBlockCollisionIntoChunksV1",
       "applyBabylonNativeBlockCaptureIsolationV1",
       "freezeBabylonNativeBlockLogicalGroundModelV1",
+      "BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1",
       "buildBabylonNativeBlockWalkableTopologyV1",
       "buildBabylonNativeBlockGroundBoundaryV1",
       "createBabylonNativeBlockGroundBoundaryContributionV1",

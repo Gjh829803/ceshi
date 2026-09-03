@@ -139,7 +139,34 @@ function caseValue() {
         colliderId: "spawn-ground",
         role: "ground",
         requiresOverlay: true,
+      }, {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+        contributionId: "upper-blocker-contribution",
+        colliderId: "upper-blocker",
+        role: "blocker",
+        requiresOverlay: true,
+      }, {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+        contributionId: "upper-step-contribution",
+        colliderId: "upper-step",
+        role: "step",
+        requiresOverlay: true,
       }],
+      groundConnectivity: {
+        requireSingleReachableComponent: true,
+        requiredTraversalBands: [{
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/upper-t-junction@1",
+          id: "central-ascent-band",
+          centerlineStandPositionsXYZMeters: [
+            { xMeters: 0, yMeters: 1, zMeters: 0 },
+            { xMeters: 0, yMeters: 1, zMeters: -1 },
+          ],
+          halfWidthMeters: 1,
+        }],
+      },
       criticalTraversalChecks: [{
         acceptanceTargetRef:
           "worldkit://acceptance-target/upper-t-junction@1",
@@ -503,10 +530,11 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
           ...input.case.expected.spawnSupport,
           acceptanceTargetRef: supportedSpawnTarget,
         },
-        colliders: input.case.expected.colliders.map((collider) => ({
-          ...collider,
-          acceptanceTargetRef: supportedSpawnTarget,
-        })),
+        colliders: input.case.expected.colliders.map((collider) =>
+          collider.colliderId === input.case.expected.spawnSupport.supportColliderId
+            ? { ...collider, acceptanceTargetRef: supportedSpawnTarget }
+            : collider
+        ),
       },
     });
     const materializerMetadata =
@@ -692,6 +720,13 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         expectedCenterSide: "positive",
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
+      }, {
+        kind: "reach-bounds",
+        checkpointId: "upper-support",
+        expectation: "reach",
+        sourceVisualGroupId: "upper-t-junction-group",
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
       }],
     });
     const blockedCase = parseWorldReconstructionCaseV1({
@@ -702,6 +737,18 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         criticalTraversalChecks: [{
           ...caseValue().expected.criticalTraversalChecks[0],
           expectation: "block",
+        }, {
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/upper-t-junction@1",
+          id: "traverse-upper-support",
+          evidenceKind: "scripted-fixed-input",
+          expectation: "pass",
+          checkpointIds: ["upper-support"],
+          fixedInputSequence: [{
+            actions: ["move-forward"],
+            axes: { moveYRatio: 1 },
+            ticks: 1,
+          }],
         }],
       },
     });
@@ -762,7 +809,14 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         expectedCenterSide: "negative",
         capsuleRadiusMeters: 0.35,
         toleranceMeters: 0.05,
-      }, authoredCheckpointSpatialCriteria()[1]],
+      }, authoredCheckpointSpatialCriteria()[1], {
+        kind: "reach-bounds",
+        checkpointId: "upper-support",
+        expectation: "reach",
+        sourceVisualGroupId: "upper-t-junction-group",
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
+      }],
     });
     const blockedCase = parseWorldReconstructionCaseV1({
       ...caseValue(),
@@ -772,6 +826,18 @@ describe("bindBlockMaterializerMetadataToSemanticCaptureTargetsV1", () => {
         criticalTraversalChecks: [{
           ...caseValue().expected.criticalTraversalChecks[0],
           expectation: "block",
+        }, {
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/upper-t-junction@1",
+          id: "traverse-upper-support",
+          evidenceKind: "scripted-fixed-input",
+          expectation: "pass",
+          checkpointIds: ["upper-support"],
+          fixedInputSequence: [{
+            actions: ["move-forward"],
+            axes: { moveYRatio: 1 },
+            ticks: 1,
+          }],
         }],
       },
     });

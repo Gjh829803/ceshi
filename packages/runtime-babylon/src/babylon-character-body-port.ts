@@ -241,6 +241,11 @@ const SNAP_DOWN_SURFACE_NORMAL_ALIGNMENT_EPSILON = 1e-3;
 // provider adapter; protocol and published-state coherence continue to use
 // the stricter shared SDK tolerance.
 const BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1 = 1e-4;
+// Babylon 9.23.0 can keep four active support planes in its 3D simplex and uses
+// a 1e-4 displacement epsilon. Keep a conservative provider-local four-epsilon
+// envelope for observed multi-contact correction without widening SDK state.
+const BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1 =
+  4 * BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1;
 
 type BabylonCharacterBodyNativeSurfaceIdentityV1 = Readonly<Pick<
   BabylonCharacterBodyNativeContactV1,
@@ -1242,7 +1247,7 @@ function assertProposalWasNotAmplified(
   const appliedVertical = dot(supportAdjustedApplied, up);
   if (!finite(maximumSolverCorrectionMeters) || maximumSolverCorrectionMeters < 0 ||
     maximumSolverCorrectionMeters >
-      BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1) {
+      BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1) {
     invalid("native collision solver correction receipt is invalid.");
   }
   const progress = horizontalProgressAlongProposal(
@@ -1258,12 +1263,29 @@ function assertProposalWasNotAmplified(
   const stepHeightAllowanceMeters = support.mode === "unsupported"
     ? 0
     : maxStepHeightMeters;
+  const maximumLandingSurfaceRiseMeters =
+    support.mode === "unsupported" &&
+      proposedVertical < 0 &&
+      projectionNormal !== undefined
+      ? (() => {
+          const normalUp = dot(projectionNormal, up);
+          if (!(normalUp > 0)) return 0;
+          const proposedPlanar = freezeVec3(proposed.map((component, axis) =>
+            component - up[axis]! * proposedVertical
+          ));
+          return Math.max(
+            0,
+            -dot(proposedPlanar, projectionNormal) / normalUp,
+          );
+        })()
+      : 0;
   const minimumVertical =
     Math.min(0, proposedVertical) - stepHeightAllowanceMeters -
     maximumSolverCorrectionMeters -
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
   const maximumVertical =
     Math.max(0, proposedVertical) + stepHeightAllowanceMeters +
+    maximumLandingSurfaceRiseMeters +
     maximumSolverCorrectionMeters +
     BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
   if (appliedVertical < minimumVertical || appliedVertical > maximumVertical) {
@@ -1504,7 +1526,7 @@ class BabylonPhysicsCharacterControllerDriverV1
     return Object.freeze({
       didStepUp: this.controller.didStepUpDuringLastIntegrate(),
       maximumSolverCorrectionMeters:
-        BABYLON_CHARACTER_CONTROLLER_COLLISION_TOLERANCE_METERS_V1,
+        BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1,
     });
   }
 

@@ -25,6 +25,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import {
   parseWorldReconstructionCaseV1,
+  parseWorldReconstructionDiagnosticV1,
   parseWorldReconstructionEvaluationProfileV1,
 } from "@whitebox-world/validation";
 import { hashWorldBuildIdentityV1 } from "@whitebox-world/world-identity";
@@ -42,6 +43,7 @@ import { createEvidenceSetFixtureInputV1 } from
   "./evaluate-fixture.test-support.js";
 import { resolveWorldReconstructionFrozenOwnerIdentitiesV1 } from
   "./generation-request.js";
+import { NativeBlockPackageErrorV1 } from "./native-package.js";
 
 const H = (character: string): Sha256HashV1 =>
   `sha256:${character.repeat(64)}` as Sha256HashV1;
@@ -712,6 +714,90 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     ]);
   });
 
+  it("surfaces an identity-bound Ground Analysis rejection for one source-only repair", async () => {
+    const value = await fixture();
+    const baseOwners = owners(value, []);
+    const repairDiagnostic = parseWorldReconstructionDiagnosticV1({
+      kind: "world-reconstruction-diagnostic",
+      schemaVersion: 1,
+      id: "ground-analysis:ground-target-standability:reach-junction",
+      code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+      dimensionId: "critical-traversal",
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/upper-t-junction@1",
+      targetRef: "worldkit://acceptance-target/upper-t-junction@1",
+      targetId: "reach-junction",
+      metricId: "ground-target-standability",
+      details: {
+        kind: "state-mismatch",
+        expectedValue: "standable",
+        actualValue: "not-standable",
+        correctionDirection: "replace",
+      },
+      evidenceRefs: ["artifact://case/logical-ground-model.json"],
+      message: "Required target is not standable.",
+      repairAction: {
+        kind: "revise-native-source",
+        targetKind: "traversal-check",
+        targetId: "reach-junction",
+        operation: "adjust-traversal",
+        instruction: "Extend explicit support Blocks beneath the target.",
+      },
+    });
+    const groundAnalysisReportPath = path.join(
+      value.attemptDirectoryPath,
+      "ground-analysis-report.json",
+    );
+    const groundAnalysisReport = {
+      kind: "babylon-native-block-ground-analysis-report",
+      schemaVersion: 1,
+      admissionOutcome: "failed",
+    } as never;
+    const groundAnalysisReportArtifactHash = sha256CanonicalJson(
+      groundAnalysisReport,
+    ) as Sha256HashV1;
+    const packageAttempt = vi.fn(async () => {
+      throw new NativeBlockPackageErrorV1(
+        [
+          "native-ground-analysis-rejected",
+          "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+        ],
+        undefined,
+        {
+          kind: "ground-analysis-rejected",
+          sceneAuthoringAttemptResult:
+            value.packageResult.sceneAuthoringAttemptResult as never,
+          groundAnalysisReport,
+          groundAnalysisReportHash: groundAnalysisReportArtifactHash,
+          groundAnalysisReportPath,
+          repairDiagnostics: [repairDiagnostic],
+        },
+      );
+    });
+    const ownerPorts = {
+      ...baseOwners,
+      packageAttempt,
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+
+    expect(packaged).toEqual(expect.objectContaining({
+      outcome: "ground-analysis-rejected",
+      authoredSourceRef:
+        value.packageResult.sceneAuthoringAttemptResult.authoredSourceRef,
+      authoredSourceHash:
+        value.packageResult.sceneAuthoringAttemptResult.authoredSourceHash,
+      groundAnalysisReportRef: expect.stringMatching(
+        /attempts\/0\/ground-analysis-report\.json$/,
+      ),
+      groundAnalysisReportHash: groundAnalysisReportArtifactHash,
+      repairDiagnostics: [repairDiagnostic],
+    }));
+    expect(await ports.cleanup()).toEqual(expect.objectContaining({
+      candidate: "completed",
+      outputPromotion: "completed",
+    }));
+  });
+
   it("does not claim Browser or Vite cleanup after the capture owner throws", async () => {
     const value = await fixture();
     const events: string[] = [];
@@ -890,6 +976,35 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       diagnosticCodes: [
         "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
       ],
+    });
+  });
+
+  it("preserves a typed Worldkit server start code from nested closure causes", async () => {
+    const value = await fixture();
+    const events: string[] = [];
+    const ownerPorts = {
+      ...owners(value, events),
+      capturePackage: vi.fn(async () => {
+        const startFailure = Object.assign(
+          new Error("Worldkit playground did not become ready within 30000ms."),
+          { code: "WORLDKIT_SERVER_START_TIMEOUT" },
+        );
+        throw new FormalCaptureCommandClosedErrorV1({
+          stage: "hosted-session",
+          cleanupOutcomes: {
+            hostedBrowserSession: "failed",
+            viteServer: "completed",
+          },
+          cause: startFailure,
+        });
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+
+    expect(await ports.capture({ attemptIndex: 0, packaged })).toEqual({
+      outcome: "failed",
+      cameraRollbackOutcome: "completed",
+      diagnosticCodes: ["WORLDKIT_SERVER_START_TIMEOUT"],
     });
   });
 

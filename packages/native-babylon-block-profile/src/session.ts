@@ -46,7 +46,10 @@ import {
 import { settleBabylonNativeBlockProfileV1 } from "./profile-settlement.js";
 import { freezeBabylonNativeBlockLogicalGroundModelV1 } from
   "./logical-ground-model.js";
-import { buildBabylonNativeBlockWalkableTopologyV1 } from
+import {
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+  buildBabylonNativeBlockWalkableTopologyV1,
+} from
   "./walkable-topology.js";
 import { materializeBabylonNativeBlockWalkableTopologyV1 } from
   "./walkable-topology-materializer.js";
@@ -151,15 +154,6 @@ const QUARTER_TURNS = new Set<number>(
   BABYLON_NATIVE_BLOCK_ROTATION_QUARTER_TURNS_Y_V1,
 );
 const DEFAULT_DISPLAY_GAP_METERS = 0.04;
-const WALKABLE_TOPOLOGY_POLICY = Object.freeze({
-  kind: "babylon-native-block-walkable-topology-policy" as const,
-  schemaVersion: 1 as const,
-  maximumAutoSmoothHeightDeltaMeters: 0.3,
-  visualOverlayOffsetMeters: 0.004,
-  maximumLogicalColliderCount: 4_096,
-  maximumColliderVertexCount: 1_048_576,
-  maximumColliderTriangleCount: 2_097_152,
-});
 const GROUND_BOUNDARY_POLICY = Object.freeze({
   kind: "babylon-native-block-ground-boundary-policy" as const,
   schemaVersion: 1 as const,
@@ -840,17 +834,11 @@ export function createBabylonNativeBlockProfileSessionV1(
             profileInventoryHash: profileInventory.profileInventoryHash,
             nativeSceneBootstrapHash:
               hashBabylonNativeSceneBootstrapV1(context.bootstrap),
-            supportedTraversalSurfaceProfileRefs: Object.freeze([
-              ...new Set(parsedInput.staticColliders.flatMap((selection) =>
-                selection.traversalBinding.kind === "static-surface"
-                  ? [selection.traversalBinding.traversalSurfaceProfileRef]
-                  : [])),
-            ].sort(stableCompare)),
             selections: parsedInput.staticColliders,
           });
         const topology = buildBabylonNativeBlockWalkableTopologyV1({
           groundModel: logicalGroundModel,
-          policy: WALKABLE_TOPOLOGY_POLICY,
+          policy: BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
         });
         const visuals = createBabylonNativeBlockVisualsV1({
           scene: context.scene,

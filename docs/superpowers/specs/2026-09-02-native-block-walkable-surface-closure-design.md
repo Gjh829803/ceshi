@@ -5,20 +5,43 @@
 **Status:** accepted current-only implementation authority
 **Date:** 2026-09-02
 **Implementation baseline:** `origin/main@9a4639109e4d161d92297506e9fc92192d32ff44`
-**Source evidence:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
+**Source evidence:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`, plus the accepted audit inputs `origin/codex/block-world-main-integration@8c250b5fc2181b48947d95b12fac03333bf11e5f` and `origin/codex/block-world-main-integration@d69d7f821f10328bc02dac3a83218f924e754780`
 
 ## Implementation revision record
 
+- **2026-09-03 — deep v2/current-contract parity audit:** the source audit now
+  includes the supplemental Block World production changes rather than treating
+  the pinned v2 branch as the only evidence. The current replacement keeps actual
+  source-Block top centers and shared-edge connectivity in Ground Analysis,
+  proves the formal Native Module -> Package -> RuntimeHost -> Havok -> SDK
+  Character path across an ascending and descending quarter-meter-smoothed ramp,
+  and bounds installed-Babylon four-plane contact correction. The supplemental
+  branch's fixed one-meter smoothing policy is explicitly rejected because it
+  exceeds the current G Bot `maxStepHeightMeters`; current Profile topology admits
+  only the 0.25-meter height increments that remain inside the 0.3-meter runtime
+  step contract. The old Block-specific support cache, Mesh-name inference and
+  second support state machine remain prohibited.
 - **2026-09-03 — Ground Analysis admission join:** the trusted Native Package
   owner retains the checked Build-Epoch logical-ground evidence outside the
   serialized Package input, constructs and verifies the Package directory in
   memory, then joins the frozen Package root, Case intent and resolved Subject
   traversal envelope into `BabylonNativeBlockGroundAnalysisReportV1` before any
   Package directory is published. A ground Case with failed Spawn or required
-  target standability fails closed and retains the logical model, report and
-  actionable diagnostics as Attempt evidence. This is a concrete placement of
+  target standability fails closed and retains the checked authored source,
+  Attempt result, logical model, report and actionable diagnostics as Attempt
+  evidence. When the diagnostics are repairable and the one-repair budget remains,
+  this evidence starts Attempt 1 without fabricating a Package or Capture for the
+  rejected Attempt. This is a concrete placement of
   the existing section 5/6 design; it adds no third Scene Source, Package field,
   Runtime support owner or circular Package hash.
+- **2026-09-03 — final-topology admission identity:** Ground Analysis runs after
+  the global walkable topology is frozen, binds that topology hash in its report,
+  and samples its collision triangles at exact Spawn, required-target and band
+  waypoint positions. Raw support occupancy cannot make admission pass when
+  smoothing moved the final surface or materialization left a hole. Native Block
+  Ground uses its own Registry Profile Ref and explicit Profile value; equal
+  current numeric limits do not couple its identity or future tuning to the
+  Heightfield lane.
 - **2026-09-03 — executable parity evidence:** a parity row may be `passed`
   only when its closed focused verification gate returns exit code zero on the
   current tree. Source fragments remain discoverability evidence, not GO proof.
@@ -105,15 +128,22 @@ No v2 capability is silently dropped. Each row has one explicit disposition.
 | Three.js binding/extraction | absent by design | do not migrate; Babylon Native Module is the sole Native authoring surface |
 | Block Compiler and hidden foundation | absent by design | do not migrate; use Frozen Contributions and existing WorldPackage/RuntimeHost |
 | Subject and Camera declarations in block source | absent by design | already superseded by JSON control plane and `WorldRuntimeBootstrapV1` |
+| Block-specific support grace/cache and Mesh-name or metadata recognition | conflicts with the one SDK support owner and explicit Contribution identity | do not migrate; the existing Character `checkSupport()` result over frozen Havok geometry remains the sole support truth |
+| Block-specific third-person Subject occlusion-fade strategy | useful Camera behavior but unrelated to ground admission | assign to `WRC-CAM-1/2`; do not bypass the current Camera Domain or Spring Arm contracts inside NBR-65 |
 | preset-owned support/obstacle/visual-only semantics | only explicit one-Block Collider selections exist | migrate as explicit authoring-time Collider/Surface Groups; never infer from color |
 | support union for the whole Subject footprint | missing | migrate into trusted Host ground analysis |
 | solid-volume body clearance | missing | migrate using the resolved Capsule/Physics Body envelope |
+| actual source-Block top centers and shared-edge center connectivity | present in v2; microcell-only current sampling could omit a one-meter Block center | migrate behind the current Ground Analysis owner while retaining denser microcell samples |
 | Spawn and required target standability | narrow runtime checks only | migrate into structural analysis and retain runtime proof |
-| step-aware directed adjacency | route-block structural approximation only | migrate using current Physics Body limits and checked support topology |
+| step-aware adjacency | route-block structural approximation only | migrate using the current Physics Body's single symmetric `maxStepHeightMeters` plus slope limit and checked support topology; v2's independent up/down thresholds are not current Runtime truth |
 | connected components and bounded traversal bands | missing for Native structural admission | migrate as stable Host evidence; do not call it product Route/Nav |
 | reachable bounds, distance, Chunk and off-camera metrics | missing | migrate as report-only measurements; never reward empty padding |
 | mixed-height shared walkable topology | missing | migrate one deterministic global topology used by visual overlay and Havok collision |
 | slope-tangent movement and bounded contact correction | not proven for the derived Native surface | reproduce the observable behavior through existing movement/support owners, without a second support state machine |
+| fixed one-meter automatic smoothing from the supplemental branch | conflicts with the current G Bot 0.3m step contract | do not migrate the constant; use 0.25m Profile top increments and prove the resulting continuous topology in the formal Runtime |
+| independent v2 step-up / step-down thresholds | conflicts with the current single `maxStepHeightMeters` Runtime and Traversal owner | explicit non-migration; use the current symmetric limit and preserve directional failure evidence |
+| fixed v2 `maximumAdjacentWalkableHeightDeltaMeters` | conflicts with legitimate separately connected high plateaus and current component/band evidence | explicit non-migration; use components, bands, explicit blockers and ground-boundary policy instead of a global two-meter authoring veto |
+| v2 `smoothedWalkableEdgeCount` metric | a raw count does not prove traversability or identity | explicit non-migration; topology hash plus Package-bound uphill/downhill Runtime evidence is the stronger current proof |
 | ground stripe/readable walkable overlay | missing | migrate as SDK-derived whitebox rendering bound to source Block identities; do not copy v2 shader/renderer handles into authoring |
 | stable logical Chunk addressing | assessment-only grouping exists | migrate as Host-derived realization identity and Receipt evidence; never expose a public Chunk DSL |
 | deterministic same-semantics batching | assessment only | realize inside the Profile/Host adapter; preserve per-Block evidence identity |
@@ -123,12 +153,14 @@ No v2 capability is silently dropped. Each row has one explicit disposition.
 | clear-day lit pastel whitebox | neutral Runtime lighting exists; Profile material is only partially aligned | consolidate under the existing Runtime light owner and Profile display adapter |
 | Planner image lineage and complete-world continuation | current Planner/Scene Brief owns planning, but parity is not recorded here | retain current Planner owner; add NBR acceptance evidence, not a second Planner |
 | Builder structural self-repair in the same task | current Native Check/Explain and bounded production repair exist | retain current task/Host split; self-check cannot bypass trusted Host replay and every post-Package repair gets a new identity |
+| route course, staircase structure and semantic target pose guidance | partially implicit | migrate into the current Native Builder Skill; a new serialized per-target facing/Capture contract remains owned by NBR-70 |
 | Builder preflight visual comparison | superseded by authoring Capture plus formal Package-bound Capture/evaluation | retain stronger current evidence; make its actionable diagnostics visible to the repair Agent; do not restore a Three software renderer as product truth |
 | directed door/portal space transitions | intentionally deferred | assign to `WRC-EVT-1`; do not hide it inside surface closure |
-| cloud/water support and non-ground reachability | not a ground-profile production claim | retain under Movement/Medium owners; report ground graph as non-blocking for such Cases |
+| cloud/water support and non-ground reachability | current Traversal Capability Envelope is ground-only | explicit deferral to Movement/Medium owners; an air Spawn makes this ground report measurement-only but proves no flight or water capability |
 | interaction identities and independently addressable blocks | current gameplay/event work is separate | preserve logical Block identities; implementation belongs to `WRC-EVT-1` |
 | styled opening/tri-view reconstruction | current post-whitebox visual pipeline is a separate owner | preserve the stronger source-locked current pipeline; NBR-65 only proves whitebox inputs and never edits styling outputs |
 | planned playthrough, episode capture and video styling | downstream episode/video capability, not world admission | preserve under its current Recording/Playthrough owner; exclude from NBR-65 completion and ground truth |
+| safe exploration-start selection and Capture-health diagnostics | downstream Playthrough/Capture evidence, not Package or support admission | preserve under the Recording/Capture owner; do not let relocation conceal a rejected Spawn or disconnected ground Case |
 
 “Migrate every capability” means every reusable capability above is either implemented by NBR-65,
 already superseded by a stronger current owner, or assigned to its existing WRC owner with an explicit
@@ -175,16 +207,21 @@ model from explicit Collider Groups:
 
 1. expand each Block to its occupied microcells using existing Profile geometry;
 2. retain the group, source Block, visual group and traversal-binding identity for every cell;
-3. derive globally exposed support-top cells only from groups whose binding is `static-surface` and
-   whose locked traversal profile supports the controlled Subject;
+3. derive globally exposed support-top candidates only from groups whose binding is
+   `static-surface`, and derive `declaredTraversalSurfaceProfileRefs` from those explicit
+   selections rather than accepting a caller-supplied supported-profile list;
 4. derive solid occupancy from every selected static group, including blockers;
 5. bind the source/profile topology identity to the Build Epoch, checked Layout inventory hash,
    Profile inventory hash and Native Scene Bootstrap hash;
 6. sort every inventory and diagnostic by stable identity before hashing.
 
-This model is trusted derived evidence, not Agent JSON and not Runtime state. It is the single input to
-standability, continuous surface construction, exposed-edge derivation, collision aggregation and
-optimization realization. Those consumers must not independently rescan meshes or reconstruct a
+This model is trusted derived evidence, not Agent JSON and not Runtime state. At this source/profile
+boundary, `declaredTraversalSurfaceProfileRefs` means only “used by explicit static-surface
+selections”; it is not a Subject-compatibility verdict. The later Package/Runtime admission resolves
+the exact Registry locks and checks every resulting triangle against the controlled Subject. The model
+is the single source/profile input to continuous surface construction, exposed-edge derivation,
+collision aggregation and optimization realization. Ground Analysis consumes that model plus the
+identity-bound final walkable topology; it must not independently rescan meshes or reconstruct a
 second cell map.
 
 The logical model deliberately does not contain the Subject traversal envelope, Case hash, Package
@@ -199,18 +236,52 @@ The Host ports the v2 algorithms behind current types and owners:
 
 - a stand sample is accepted only when the full Capsule footprint is covered by the union of
   same-height support cells;
+- the deterministic sample set includes microcell centers, exact Spawn/target/band positions, and
+  each source Block's actual exposed top-surface center; a one-meter Block must not become
+  unstandable merely because its center lies on a microcell boundary;
+- exact Spawn and required target samples come from the registered Spawn contribution and explicit
+  ground-band endpoints; the Host never snaps them to a nearby support sample or visual-group center;
+- after raw occupancy standability succeeds, exact Spawn, required-target and band-waypoint XZ
+  positions must resolve to the final walkable collision triangles at the frozen Y; missing topology
+  support or smoothing-induced height drift is a blocking, actionable failure;
 - the complete vertical Capsule clearance volume must be free of selected solid occupancy;
-- shared-edge adjacency uses resolved maximum step-up/down and slope policy, including direction;
-- the registered Spawn Marker and Case-required targets must bind to accepted stand samples;
+- source Blocks whose exposed top cells share a horizontal edge connect through their actual
+  surface-center samples using the current Runtime's symmetric `maxStepHeightMeters` and
+  `maxSlopeDegrees` policy;
+- the registered Spawn Marker and every Case-required ground pass target must bind to accepted stand
+  samples, and bands form a one-to-one binding with ground pass targets by `acceptanceTargetRef`;
+- the public `WorldReconstructionCaseV1` parser is the sole semantic owner of traversal-to-Collider
+  closure: Collider, Contribution and checkpoint IDs are unique; Spawn support and its Collider bind
+  the same acceptance target; each `pass` target binds `ground` or `step`; and each `block` target
+  binds `blocker`; Native Case preparation must not maintain a shadow rule;
 - required ground traversal bands constrain graph search to their declared XZ width;
+- the current static ground graph is bidirectional by construction; the retired `isBidirectional`
+  flag is not a supported dialect, and one-way transitions remain assigned to `WRC-EVT-1`;
 - BFS from Spawn publishes reachable and disconnected components plus target/band reachability;
 - report-only metrics include reachable bounds, XZ span, maximum distance, off-camera coverage and
   deterministic Chunk coverage.
 
 The Agent does not author Capsule radius, clearance, slope or step thresholds. They come from the
-trusted Gameplay/World Runtime Bootstrap and Registry closure. A ground-only Case fails according to
-its frozen connectivity policy. For water, flight or custom free-space movement, disconnected ground
-remains observable but cannot be used as proof that the Subject is unreachable.
+trusted Gameplay/World Runtime Bootstrap and Registry closure. Native analysis resolves the dedicated
+`worldkit://traversal-graph-builder-profile/outdoor-humanoid.native-block-ground@1`; it must not reuse
+the Heightfield resource identity. A ground-Spawn Case fails according to its frozen connectivity
+policy. An air-Spawn Case records disconnected ground as measurement-only, but the current Traversal
+Capability Envelope remains ground-only; this result proves neither flight nor water movement and
+cannot be used as their admission evidence.
+
+The v2 checker exposed separate `maximumStepUpMeters` and `maximumStepDownMeters`. The current SDK
+Physics Body and Traversal Capability Envelope deliberately expose one `maxStepHeightMeters`; Ground
+Analysis therefore uses the same symmetric value in both directions and retains directional failure
+evidence. Reintroducing independent up/down thresholds here would create a second movement policy
+that Runtime does not own, so that v2 field split is an explicit non-migration rather than a silent
+semantic claim.
+
+The v2 profile also exposed a fixed `maximumAdjacentWalkableHeightDeltaMeters` and reported
+`smoothedWalkableEdgeCount`. Neither value enters the current admission contract. A global adjacent
+height veto would incorrectly reject two high/low walkable plateaus that are connected by a valid
+stair elsewhere, while an edge count cannot prove that Spawn, targets or Havok traversal use the
+same topology. Their explicit non-migration is replaced by component/band diagnostics, explicit
+blocker and ground-boundary policy, topology hash identity, and Package-bound Runtime traversal.
 
 Every failure must use the existing actionable diagnostic dialect: stable metric ID, target/source
 identity, expected value, actual value, limit, delta, direction and bounded Native-source repair
@@ -226,6 +297,10 @@ Group boundary cannot become a false cliff.
 
 - Exposed support rectangles are split on the Profile micro-grid.
 - Shared corners may be joined only when their height span is within the resolved auto-smooth limit.
+- The current Profile limit is constrained by the controlled Subject's 0.3m
+  `maxStepHeightMeters`; with the 0.25m occupancy-height lattice, one admitted
+  neighboring top increment is 0.25m. The v2/supplemental fixed 1m smoothing
+  value is not a compatible policy and must not be copied.
 - A discontinuity outside that limit keeps separate vertices and remains a cliff.
 - Non-coplanar quads choose the deterministic lower-discontinuity diagonal.
 - Internal and downward faces are omitted; required vertical blocker/cliff volume remains in explicit
@@ -245,6 +320,19 @@ path. It may not restore v2's independent Runtime height sampler or publish a se
 decision. If installed Havok/Babylon semantics require a provider-private geometric query, that query
 may only refine motion against the exact same frozen collision topology and must not own support,
 medium, jump eligibility, Snapshot or Replay state.
+
+The supplemental branch's Block-only support grace/cache is not a parity feature to copy. Its Mesh
+name/metadata recognition, private retained support and downward probe would create both an implicit
+Collider registry and a second support state machine. Current NBR support therefore comes only from
+explicit Frozen Contributions materialized by the existing Runtime and the same SDK `checkSupport()`
+path used by other Scene Sources.
+
+The parity gate must instantiate the formal Native scene module, pass Native
+admission, construct and verify a WorldPackage, start the existing RuntimeHost,
+materialize SDK-owned Havok collision, bind the SDK Character, and traverse the
+same smoothed ramp uphill and downhill. Canonical heightfield slope tests,
+BodyPort-only numeric fixtures, topology byte tests and generic Chunk-seam probes
+remain useful but cannot substitute for this cross-owner evidence.
 
 ## 8. Batching, Chunking and residency realization
 
@@ -312,9 +400,11 @@ second Planner job. Acceptance nevertheless requires the useful v2 reconstructio
   play inspection remain separate evidence layers.
 
 The existing bounded repair loop may change only Native authoring source/resources. A ground failure
-names the affected group/Block/region and the required structural change. Each repair creates a new
-Attempt, Candidate, Package, Receipt and Capture. Exceeding the repair budget may still publish a
-verified rejected Package for preview, but Native Check, Package or Runtime-admission failure remains
+names the affected group/Block/region and the required structural change. A pre-Package Ground Analysis
+rejection starts a new Attempt from immutable source/check/logical-ground/report evidence; that rejected
+Attempt owns no Package or Capture. The repaired Attempt must pass Check and Ground Analysis before it can
+create a Candidate, Package, Receipt or Capture. Exceeding the repair budget preserves the reached evidence
+for diagnosis, but Native Check, Ground Analysis, Package or Runtime-admission failure remains
 non-previewable.
 
 ## 12. Budget and identity
@@ -384,6 +474,8 @@ the ground reconstruction slice:
 - product Route/Nav/`goTo`: BNA-7 Route/Nav continuation;
 - water, swimming, flight and hybrid-medium reachability: Movement/Medium roadmap owners;
 - generic Action/Posture and complex Camera semantics: WRC-ACT/WRC-CAM;
+- Block-specific Subject occlusion fade: `WRC-CAM-1/2`, after the Camera Domain and collision-safe
+  final-pose contracts decide its semantics;
 - complete Golden Corpus and production success-rate acceptance: BNA-6/BNA-8/WRC-ACC-1.
 
 Those assignments prevent capability loss without violating current ownership or falsely declaring

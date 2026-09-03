@@ -131,7 +131,27 @@ function reconstructionCaseValue() {
         colliderId: "spawn-ground",
         role: "ground",
         requiresOverlay: true,
+      }, {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+        contributionId: "upper-step-contribution",
+        colliderId: "upper-step",
+        role: "step",
+        requiresOverlay: true,
       }],
+      groundConnectivity: {
+        requireSingleReachableComponent: true,
+        requiredTraversalBands: [{
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/upper-t-junction@1",
+          id: "central-ascent-band",
+          centerlineStandPositionsXYZMeters: [
+            { xMeters: 0, yMeters: 1, zMeters: 0 },
+            { xMeters: 0, yMeters: 1, zMeters: -1 },
+          ],
+          halfWidthMeters: 1,
+        }],
+      },
       criticalTraversalChecks: [{
         acceptanceTargetRef:
           "worldkit://acceptance-target/upper-t-junction@1",
@@ -329,6 +349,7 @@ describe("Native Block authoring manifest", () => {
     ["duplicate acceptance target ref", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], acceptanceTargetRef: manifestValue().visualGroups[0]!.acceptanceTargetRef }] }],
     ["duplicate identity color", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], identityColorHex: manifestValue().visualGroups[0]!.identityColorHex }] }],
     ["lowercase identity color", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], identityColorHex: "#aeb8c4" }, manifestValue().visualGroups[1]] }],
+    ["controlled Subject semantic class", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], semanticClassId: "subject.rider-mount" }, manifestValue().visualGroups[1]] }],
     ["nested Physics authority", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], physicsBodyId: "forbidden" }, manifestValue().visualGroups[1]] }],
     ["nested Subject authority", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], subjectDefinitionRef: "worldkit://subject/forbidden@1" }, manifestValue().visualGroups[1]] }],
   ])("rejects %s", (_label, value) => {
@@ -449,6 +470,15 @@ describe("Native Block authoring to checked Layout binding", () => {
           acceptanceTargetRef:
             "worldkit://acceptance-target/runtime-support@1",
         },
+        colliders: source.expected.colliders.map((collider) =>
+          collider.colliderId === source.expected.spawnSupport.supportColliderId
+            ? {
+                ...collider,
+                acceptanceTargetRef:
+                  "worldkit://acceptance-target/runtime-support@1",
+              }
+            : collider
+        ),
       },
     });
 

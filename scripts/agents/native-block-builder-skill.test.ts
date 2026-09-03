@@ -120,8 +120,14 @@ describe("Native Block Builder Skill", () => {
     expect(skill).toContain("self-check reports only");
     expect(skill).not.toContain("at most three self-repair cycles");
     expect(skill).toContain("ground-supported Spawn");
-    expect(skill).toContain("T-shaped upper platform");
-    expect(skill).toContain("no Route/Nav claim");
+    expect(skill).toContain("`context/case.json.expected.groundConnectivity`");
+    expect(skill).toContain("every declared traversal-band waypoint");
+    expect(skill).toContain("final smoothed collision triangles");
+    expect(skill).toContain("place stair and slope transitions outside that landing");
+    expect(skill).toContain("structural admission evidence, not a Route/Nav product claim");
+    expect(skill).not.toContain(
+      "then the central ascent, the T-shaped upper platform, the gate/building silhouette",
+    );
     expect(skill).toContain(
       "The Formal Capture Intent remains Capture-only Host input",
     );
@@ -139,7 +145,28 @@ describe("Native Block Builder Skill", () => {
       "Never place an invisible or visual-only air wall",
     );
     expect(skill).toContain(
+      "Never reconstruct the controlled Subject as Native Block geometry",
+    );
+    expect(skill).toContain(
       "Runtime owns the neutral whitebox inspection lights",
+    );
+    expect(skill).toContain(
+      "keep its endpoints, ordered bends, junctions, switchbacks, width changes, elevation changes",
+    );
+    expect(skill).toContain(
+      "preserve its lower and upper support elevations, total rise, tread rhythm, width, course, major landings",
+    );
+    expect(skill).toContain(
+      "lock its footprint center, long axis, semantic front",
+    );
+    expect(skill).toContain(
+      "Reconstruct terrain evidence at four scales",
+    );
+    expect(skill).toContain(
+      "camera-facing mountain walls, facade-only buildings, shallow scenery strips",
+    );
+    expect(outputContract).toContain(
+      "The opening Camera does not define the object's front",
     );
     expect(outputContract).toContain("@whitebox-world/native-babylon");
     expect(outputContract).toContain("@whitebox-world/native-babylon-block-profile");
@@ -178,7 +205,13 @@ describe("Native Block Builder Skill", () => {
       "A blocker is exactly `{ kind: \"not-traversable\" }`",
     );
     expect(outputContract).toContain(
-      "Every `case.json.expected.colliders[].colliderId` must appear exactly once",
+      "Every `case.json.expected.colliders[].colliderId` and `contributionId` is unique",
+    );
+    expect(outputContract).toContain(
+      "A pass check's `acceptanceTargetRef` binds at least one required `ground` or `step` Collider",
+    );
+    expect(outputContract).toContain(
+      "a block check's ref binds at least one required `blocker` Collider",
     );
     expect(outputContract).toContain(
       "Never infer group membership from palette, visual group, ID prefix, Mesh metadata, or a Scene scan",
@@ -205,6 +238,21 @@ describe("Native Block Builder Skill", () => {
       "Never place a support block through the occupied volume of the block it supports.",
     );
     expect(outputContract).toContain(
+      "`context/case.json.expected.groundConnectivity` is the source-neutral, frozen Host constraint",
+    );
+    expect(outputContract).toContain(
+      "Never move, widen, delete, replace, duplicate, or invent a band",
+    );
+    expect(outputContract).toContain(
+      "Give each frozen point a flat landing with full Capsule-footprint support",
+    );
+    expect(outputContract).toContain(
+      "`isBidirectional` and one-way fields are invalid",
+    );
+    expect(outputContract).not.toContain(
+      "The representative Case needs a readable central ascent, T-shaped upper platform",
+    );
+    expect(outputContract).toContain(
       "every non-root structural or playable block needs a face-contact support chain to the lowest occupied stratum.",
     );
     expect(outputContract).toContain(
@@ -224,6 +272,12 @@ describe("Native Block Builder Skill", () => {
     );
     expect(outputContract).toContain(
       "Every `identityColorHex` must also be unique",
+    );
+    expect(skill).toContain(
+      "relative to this exact `SKILL.md` copy",
+    );
+    expect(skill).not.toContain(
+      "node .codex/skills/worldkit-native-block-builder/scripts/self-check.mjs",
     );
     for (const forbidden of [
       "new Engine(", "new Scene(", "runRenderLoop", "new Havok", "new FreeCamera(",
@@ -386,6 +440,29 @@ describe("Native Block Builder Skill", () => {
     expect(first.stdout).toBe(second.stdout);
   });
 
+  it("ignores only Host-owned isolated-workspace infrastructure around the three outputs", async () => {
+    const workspace = await createWorkspace();
+    await Promise.all([
+      mkdir(path.join(workspace, "inputs"), { recursive: true }),
+      mkdir(path.join(workspace, "attempts", "0", ".task", "context"), {
+        recursive: true,
+      }),
+      writeFile(path.join(workspace, ".codex-last-message.txt"), "pending\n"),
+    ]);
+    await Promise.all([
+      writeFile(path.join(workspace, "inputs", "reference-0.png"), "input"),
+      writeFile(
+        path.join(workspace, "attempts", "0", ".task", "context", "case.json"),
+        "{}",
+      ),
+    ]);
+
+    const result = await runSelfCheck(workspace);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.report).toMatchObject({ ok: true, diagnosticCodes: [] });
+  });
+
   it.each([
     ["missing output", async (workspace: string) => rm(path.join(workspace, "scene.ts")), "NATIVE_BLOCK_BUILDER_OUTPUT_MISSING"],
     ["extra output", async (workspace: string) => writeFile(path.join(workspace, "extra.txt"), "no"), "NATIVE_BLOCK_BUILDER_OUTPUT_EXTRA"],
@@ -475,6 +552,18 @@ describe("Native Block Builder Skill", () => {
         physicsBodyId: "forbidden",
       }],
     }, "NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"],
+    ["controlled Subject semantic class", "native-block-authoring.json", {
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [{
+        visualGroupId: "rider-mount-group",
+        acceptanceTargetRef: "worldkit://acceptance-target/rider-mount@1",
+        semanticClassId: "subject.rider-mount",
+        identityColorHex: "#AEB8C4",
+      }],
+    }, "NATIVE_BLOCK_BUILDER_SUBJECT_VISUAL_GROUP_FORBIDDEN"],
     ["unsorted visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
       schemaVersion: 1,

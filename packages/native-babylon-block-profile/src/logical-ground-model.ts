@@ -62,7 +62,7 @@ export interface BabylonNativeBlockLogicalGroundModelV1 {
   readonly kind: "babylon-native-block-logical-ground-model";
   readonly schemaVersion: 1;
   readonly identity: BabylonNativeBlockLogicalGroundIdentityV1;
-  readonly supportedTraversalSurfaceProfileRefs: readonly string[];
+  readonly declaredTraversalSurfaceProfileRefs: readonly string[];
   readonly colliderGroups: readonly BabylonNativeBlockLogicalColliderGroupV1[];
   readonly solidOccupancyCells:
     readonly BabylonNativeBlockLogicalSolidOccupancyCellV1[];
@@ -79,7 +79,6 @@ export interface FreezeBabylonNativeBlockLogicalGroundModelInputV1 {
   >;
   readonly profileInventoryHash: Sha256HashV1;
   readonly nativeSceneBootstrapHash: Sha256HashV1;
-  readonly supportedTraversalSurfaceProfileRefs: readonly string[];
   readonly selections: readonly BabylonNativeBlockStaticColliderSelectionV1[];
 }
 
@@ -324,7 +323,6 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
     "checkedLayout",
     "profileInventoryHash",
     "nativeSceneBootstrapHash",
-    "supportedTraversalSurfaceProfileRefs",
     "selections",
   ], [], "input");
   const inputDescriptors = Object.getOwnPropertyDescriptors(suppliedInput);
@@ -370,16 +368,6 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
 
   const checkedLayoutInventoryHash =
     hashBabylonNativeBlockCheckedLayoutInventoryV1(rawInput.checkedLayout);
-  const supportedTraversalSurfaceProfileRefs = [...new Set(
-    rawInput.supportedTraversalSurfaceProfileRefs,
-  )].sort(stableCompare);
-  if (
-    supportedTraversalSurfaceProfileRefs.length !==
-      rawInput.supportedTraversalSurfaceProfileRefs.length ||
-    supportedTraversalSurfaceProfileRefs.some((ref) => !STABLE_REF.test(ref))
-  ) return fail(INPUT_CODE,
-    "supportedTraversalSurfaceProfileRefs must be unique canonical refs.");
-
   const blocksById = new Map<string, BabylonNativeBlockLayoutEntryV1>();
   const blocksByColliderGroupId = new Map<
     string,
@@ -456,6 +444,12 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
 
   const colliderGroups = Object.freeze(resolved.map(({ selection, blocks }) =>
     groupRow(selection, blocks)));
+  const declaredTraversalSurfaceProfileRefs = Object.freeze([...new Set(
+    resolved.flatMap(({ selection }) =>
+      selection.traversalBinding.kind === "static-surface"
+        ? [selection.traversalBinding.traversalSurfaceProfileRef]
+        : []),
+  )].sort(stableCompare));
   const solidOccupancyCells = Object.freeze(resolved.flatMap(
     ({ selection, blocks }) => blocks.flatMap((entry) =>
       entry.occupiedMicroCellKeys.map((key) => deepFreezePlainData({
@@ -475,13 +469,9 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
     stableCompare(left.cellKey, right.cellKey) ||
     stableCompare(left.colliderId, right.colliderId)));
   const occupiedCellKeys = new Set(solidOccupancyCells.map(({ cellKey: key }) => key));
-  const supportedRefs = new Set(supportedTraversalSurfaceProfileRefs);
   const exposedSupportTopCells = Object.freeze(solidOccupancyCells.flatMap((cell) => {
     const binding = cell.traversalBinding;
-    if (
-      binding.kind !== "static-surface" ||
-      !supportedRefs.has(binding.traversalSurfaceProfileRef)
-    ) return [];
+    if (binding.kind !== "static-surface") return [];
     const [x, y, z] = parseCellKey(cell.cellKey);
     const topCellKey = cellKey(x, y + 1, z);
     if (occupiedCellKeys.has(topCellKey)) return [];
@@ -512,7 +502,7 @@ export function freezeBabylonNativeBlockLogicalGroundModelV1(
     kind: "babylon-native-block-logical-ground-model" as const,
     schemaVersion: 1 as const,
     identity,
-    supportedTraversalSurfaceProfileRefs,
+    declaredTraversalSurfaceProfileRefs,
     colliderGroups,
     solidOccupancyCells,
     exposedSupportTopCells,

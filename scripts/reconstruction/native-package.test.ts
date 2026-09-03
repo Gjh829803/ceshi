@@ -3,6 +3,9 @@ import os from "node:os";
 import path from "node:path";
 
 import { sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import {
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 import { hashBabylonNativeSceneContributionV1 } from "@whitebox-world/runtime-contracts";
 import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
 import { parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
@@ -11,6 +14,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 import { runNativeBlockGenerationV1 } from "./generation-runner.js";
+import {
+  assertProductionNativeBlockGroundTopologyCompatibleV1,
+} from
+  "./native-ground-analysis-admission.js";
 import {
   assertNativeBlockProductionSourceImportsV1,
   NativeBlockPackageErrorV1,
@@ -85,8 +92,8 @@ const MISSING_GRID_CHILD_SCENE_SOURCE = SCENE_SOURCE.replace(
 );
 
 const NARROW_SPAWN_GROUND_SCENE_SOURCE = SCENE_SOURCE.replace(
-  `minimumCenterMetersXYZ: [-1, -0.5, 11], repeatCountXYZ: [3, 1, 8]`,
-  `minimumCenterMetersXYZ: [0, -0.5, 11], repeatCountXYZ: [1, 1, 8]`,
+  `shape: "full", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [-1, -0.5, 11], repeatCountXYZ: [3, 1, 8]`,
+  `shape: "small", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [0.25, -0.25, 11.25], repeatCountXYZ: [1, 1, 14]`,
 );
 
 const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
@@ -218,6 +225,73 @@ async function completedAttempt(options: Readonly<{
 }
 
 describe("packageNativeBlockAttemptV1", () => {
+  it("fails closed when the Profile topology exceeds the controlled Subject envelope", () => {
+    const evidence = (options: Readonly<{
+      riseMeters?: number;
+      reverseWinding?: boolean;
+      topologyPolicyHash?: Sha256HashV1;
+    }> = {}) => {
+      const logicalGroundModelHash = sha256CanonicalJson({ ground: "model" });
+      const topologyBody = {
+        kind: "babylon-native-block-walkable-topology",
+        schemaVersion: 1,
+        identity: {
+          logicalGroundModelHash,
+          topologyPolicyHash: options.topologyPolicyHash ?? sha256CanonicalJson(
+            BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+          ),
+        },
+        walkableGeometries: [{
+          logicalColliderId: "ground",
+          collisionPositionsMetersXYZ: [
+            0, 0, 0,
+            1, options.riseMeters ?? 0, 0,
+            0, 0, 1,
+          ],
+          triangleIndices: options.reverseWinding ? [0, 2, 1] : [0, 1, 2],
+        }],
+        solidGeometries: [],
+        logicalColliderCount: 1,
+        colliderVertexCount: 3,
+        colliderTriangleCount: 1,
+        removedInternalFaceCount: 0,
+      };
+      return {
+        logicalGroundModel: { logicalGroundModelHash },
+        topology: {
+          ...topologyBody,
+          topologyHash: sha256CanonicalJson(topologyBody),
+        },
+      } as never;
+    };
+    const envelope = (maxStepHeightMeters: number, maxSlopeDegrees: number) => ({
+      envelope: { maxStepHeightMeters, maxSlopeDegrees },
+    }) as never;
+
+    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+      evidence(),
+      envelope(0.3, 42),
+    )).not.toThrow();
+    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+      evidence(),
+      envelope(0.2, 42),
+    )).toThrow(
+      "WORLDKIT_NATIVE_BLOCK_GROUND_ADMISSION_INPUT_INVALID: Block Profile auto-smooth limit 0.3m exceeds controlled Subject maxStepHeightMeters 0.2m",
+    );
+    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+      evidence({ riseMeters: 0.5 }),
+      envelope(0.3, 20),
+    )).toThrow(/slope .* exceeds controlled Subject maxSlopeDegrees 20deg/);
+    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+      evidence({ reverseWinding: true }),
+      envelope(0.3, 42),
+    )).toThrow(/downward-facing triangle/);
+    expect(() => assertProductionNativeBlockGroundTopologyCompatibleV1(
+      evidence({ topologyPolicyHash: `sha256:${"0".repeat(64)}` }),
+      envelope(0.3, 42),
+    )).toThrow(/topology identity or Profile policy is stale/);
+  });
+
   it("keeps Runtime as the sole light owner for Block production Modules", () => {
     expect(() => assertNativeBlockProductionSourceImportsV1([
       "@whitebox-world/native-babylon",
@@ -304,8 +378,14 @@ describe("packageNativeBlockAttemptV1", () => {
         worldPackageRootHash: packaged.worldPackageRootHash,
       },
     });
+    expect(packaged.groundAnalysisReport.standableNodes).toEqual(
+      expect.arrayContaining([expect.objectContaining({
+        positionMetersXYZ: [0, 0, 18],
+        isReachableFromSpawn: true,
+      })]),
+    );
     expect(packaged.groundAnalysisReportHash).toBe(
-      packaged.groundAnalysisReport.groundAnalysisReportHash,
+      sha256CanonicalJson(packaged.groundAnalysisReport),
     );
     expect(JSON.parse(await readFile(
       packaged.groundAnalysisReportPath,
@@ -363,16 +443,29 @@ describe("packageNativeBlockAttemptV1", () => {
       sceneSource: NARROW_SPAWN_GROUND_SCENE_SOURCE,
     });
 
-    await expect(packageNativeBlockAttemptV1({
+    const rejected = await packageNativeBlockAttemptV1({
       repositoryRoot: REPOSITORY_ROOT,
       attemptDirectoryPath: fixture.attemptDirectoryPath,
       casePath: fixture.casePath,
       outputDirectoryPath: fixture.outputDirectoryPath,
-    })).rejects.toMatchObject({
+    }).catch((error: unknown) => error);
+    expect(rejected).toMatchObject({
       diagnostics: [
         "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
         "native-ground-analysis-rejected",
       ],
+      groundAnalysisRejection: {
+        kind: "ground-analysis-rejected",
+        groundAnalysisReport: {
+          admissionOutcome: "failed",
+        },
+        repairDiagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            metricId: "ground-support-coverage-basis-points",
+            targetId: "spawn-foreground-platform",
+          }),
+        ]),
+      },
     });
     const report = JSON.parse(await readFile(path.join(
       fixture.attemptDirectoryPath,
@@ -388,6 +481,14 @@ describe("packageNativeBlockAttemptV1", () => {
         targetId: "spawn-foreground-platform",
       }),
     ]));
+    expect(JSON.parse(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "attempt-result.json",
+    ), "utf8"))).toMatchObject({
+      outcome: "completed",
+      authoredSourceRef: expect.any(String),
+      authoredSourceHash: expect.stringMatching(/^sha256:/),
+    });
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
     });

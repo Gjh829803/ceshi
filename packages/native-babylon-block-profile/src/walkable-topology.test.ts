@@ -61,12 +61,9 @@ function coordinates(cellKey: string): readonly [number, number, number] {
 
 function model(fixtures: readonly GroupFixture[]):
 BabylonNativeBlockLogicalGroundModelV1 {
-  const supportedTraversalSurfaceProfileRefs = Object.freeze([
+  const declaredTraversalSurfaceProfileRefs = Object.freeze([
     STATIC_SURFACE.traversalSurfaceProfileRef,
   ]);
-  const supportedTraversalSurfaceProfileRefSet = new Set<string>(
-    supportedTraversalSurfaceProfileRefs,
-  );
   const groups: BabylonNativeBlockLogicalColliderGroupV1[] = fixtures.map(
     (fixture) => Object.freeze({
       colliderId: fixture.colliderId,
@@ -108,12 +105,7 @@ BabylonNativeBlockLogicalGroundModelV1 {
       left.colliderId.localeCompare(right.colliderId));
   const exposedSupportTopCells: BabylonNativeBlockLogicalSupportTopCellV1[] =
     fixtures.flatMap((fixture) => {
-      if (
-        fixture.traversal !== "surface" ||
-        !supportedTraversalSurfaceProfileRefSet.has(
-          surfaceBinding(fixture).traversalSurfaceProfileRef,
-        )
-      ) return [];
+      if (fixture.traversal !== "surface") return [];
       return fixture.cells.flatMap((sourceOccupiedCellKey, index) => {
         const [x, y, z] = coordinates(sourceOccupiedCellKey);
         const topCellKey = `${x},${y + 1},${z}`;
@@ -144,7 +136,7 @@ BabylonNativeBlockLogicalGroundModelV1 {
       profileInventoryHash: H("2"),
       nativeSceneBootstrapHash: H("3"),
     }),
-    supportedTraversalSurfaceProfileRefs,
+    declaredTraversalSurfaceProfileRefs,
     colliderGroups: Object.freeze(groups),
     solidOccupancyCells: Object.freeze(solidOccupancyCells),
     exposedSupportTopCells: Object.freeze(exposedSupportTopCells),
@@ -208,7 +200,7 @@ describe("Babylon Native Block walkable topology", () => {
     ]);
   });
 
-  it("keeps unsupported static surfaces as exact solid collision", () => {
+  it("keeps declared static surfaces walkable until later Registry and Subject admission", () => {
     const groundModel = model([{
       colliderId: "ice-collider",
       cells: ["0,0,0"],
@@ -218,12 +210,12 @@ describe("Babylon Native Block walkable topology", () => {
     }]);
     const result = topology(groundModel);
 
-    expect(result.walkableGeometries).toHaveLength(0);
-    expect(result.solidGeometries).toHaveLength(1);
-    expect(result.solidGeometries[0]).toMatchObject({
+    expect(result.walkableGeometries).toHaveLength(1);
+    expect(result.solidGeometries).toHaveLength(0);
+    expect(result.walkableGeometries[0]).toMatchObject({
       logicalColliderId: "ice-collider",
-      proxyKind: "exact-solid-union",
-      triangleCount: 12,
+      proxyKind: "continuous-walkable-surface",
+      triangleCount: 2,
     });
   });
 

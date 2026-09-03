@@ -53,7 +53,7 @@ function groundModel(): BabylonNativeBlockLogicalGroundModelV1 {
       profileInventoryHash: H("2"),
       nativeSceneBootstrapHash: H("3"),
     }),
-    supportedTraversalSurfaceProfileRefs: Object.freeze([
+    declaredTraversalSurfaceProfileRefs: Object.freeze([
       STATIC_SURFACE.traversalSurfaceProfileRef,
     ]),
     colliderGroups: Object.freeze([

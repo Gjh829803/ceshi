@@ -72,6 +72,18 @@ export interface BuildBabylonNativeBlockWalkableTopologyInputV1 {
   readonly policy: BabylonNativeBlockWalkableTopologyPolicyV1;
 }
 
+/** @internal Host/profile policy; not part of the Native authoring API. */
+export const BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1 =
+  Object.freeze({
+    kind: "babylon-native-block-walkable-topology-policy" as const,
+    schemaVersion: 1 as const,
+    maximumAutoSmoothHeightDeltaMeters: 0.3,
+    visualOverlayOffsetMeters: 0.004,
+    maximumLogicalColliderCount: 4_096,
+    maximumColliderVertexCount: 1_048_576,
+    maximumColliderTriangleCount: 2_097_152,
+  });
+
 const INPUT_CODE = "WORLDKIT_NATIVE_BLOCK_TOPOLOGY_INPUT_INVALID";
 const IDENTITY_CODE = "WORLDKIT_NATIVE_BLOCK_TOPOLOGY_IDENTITY_MISMATCH";
 const BUDGET_CODE = "WORLDKIT_NATIVE_BLOCK_TOPOLOGY_BUDGET_EXCEEDED";

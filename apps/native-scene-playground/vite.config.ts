@@ -301,6 +301,7 @@ function installVerifiedPackageAssets(input: Readonly<{
   hostedRuntimeOrigin: string;
   hostedShellOrigin: string;
   receiptContentHash: `sha256:${string}`;
+  admittedReceiptBytes: Uint8Array;
   packageEntryByPath: ReadonlyMap<string, Readonly<{
     contentHash: `sha256:${string}`;
     mediaType: string;
@@ -378,6 +379,16 @@ function installVerifiedPackageAssets(input: Readonly<{
       ? requestUrl.pathname.slice(NATIVE_PACKAGE_PREFIX.length)
       : undefined;
     if (requestUrl.pathname === NATIVE_PACKAGE_RECEIPT_PATH) {
+      if (request.method === "HEAD") {
+        writeResponse(response, {
+          statusCode: 200,
+          method: request.method,
+          bytes: input.admittedReceiptBytes,
+          mediaType: "application/json",
+          contentHash: input.receiptContentHash,
+        });
+        return;
+      }
       void input.readReceipt().then((receiptBytes) => {
         writeResponse(response, {
           statusCode: 200,
@@ -546,6 +557,7 @@ export async function createNativeScenePlaygroundViteConfigV1(
       hostedRuntimeOrigin,
       hostedShellOrigin,
       receiptContentHash,
+      admittedReceiptBytes: receiptBytes,
       packageEntryByPath,
       readReceipt: () => transport.readReceipt(),
       read: (packagePath) => transport.read(packagePath),

@@ -17,6 +17,10 @@ export interface CreateWorldPackageBrowserTransportV1Input {
   readonly maximumFileCount?: number;
 }
 
+export interface WorldPackageBrowserTransportPortsV1 {
+  readonly readDirectory?: typeof readWorldPackageDirectoryV1;
+}
+
 export interface WorldPackageBrowserTransportV1 {
   readonly worldPackageRootHash: `sha256:${string}`;
   readonly sceneSourceKind:
@@ -67,14 +71,16 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 
 export async function createWorldPackageBrowserTransportV1(
   input: CreateWorldPackageBrowserTransportV1Input,
+  ports: WorldPackageBrowserTransportPortsV1 = {},
 ): Promise<WorldPackageBrowserTransportV1> {
+  const readDirectory = ports.readDirectory ?? readWorldPackageDirectoryV1;
   const readLimits = Object.freeze({
     maximumTotalBytes:
       input.maximumTotalBytes ?? DEFAULT_MAXIMUM_TOTAL_BYTES,
     maximumFileCount:
       input.maximumFileCount ?? DEFAULT_MAXIMUM_FILE_COUNT,
   });
-  const initialDirectory = await readWorldPackageDirectoryV1({
+  const initialDirectory = await readDirectory({
     packageDirectoryPath: input.packageDirectoryPath,
     ...readLimits,
   });
@@ -93,6 +99,7 @@ export async function createWorldPackageBrowserTransportV1(
       .map((file) => [file.path, new Uint8Array(file.bytes)] as const),
   );
   let isDisposed = false;
+  let freshnessVerification: Promise<typeof initialDirectory> | undefined;
 
   const requireActive = (): void => {
     if (isDisposed) {
@@ -103,10 +110,10 @@ export async function createWorldPackageBrowserTransportV1(
     }
   };
 
-  const verifyStillAdmitted = async () => {
+  const verifyStillAdmittedOnce = async () => {
     let currentDirectory;
     try {
-      currentDirectory = await readWorldPackageDirectoryV1({
+      currentDirectory = await readDirectory({
         packageDirectoryPath: input.packageDirectoryPath,
         ...readLimits,
       });
@@ -131,6 +138,19 @@ export async function createWorldPackageBrowserTransportV1(
     }
     requireActive();
     return currentDirectory;
+  };
+
+  const verifyStillAdmitted = async () => {
+    requireActive();
+    const verification = freshnessVerification ??=
+      verifyStillAdmittedOnce();
+    try {
+      return await verification;
+    } finally {
+      if (freshnessVerification === verification) {
+        freshnessVerification = undefined;
+      }
+    }
   };
 
   return Object.freeze({

@@ -80,6 +80,14 @@ export interface WorldReconstructionTraversalCheckV1 {
   readonly fixedInputSequence: readonly FixedInputV1[];
 }
 
+export interface WorldReconstructionGroundTraversalBandV1 {
+  readonly acceptanceTargetRef: string;
+  readonly id: string;
+  readonly centerlineStandPositionsXYZMeters:
+    readonly WorldReconstructionPositionXYZMetersV1[];
+  readonly halfWidthMeters: number;
+}
+
 export interface WorldReconstructionCaseV1 {
   readonly kind: "world-reconstruction-case";
   readonly schemaVersion: 1;
@@ -141,6 +149,11 @@ export interface WorldReconstructionExpectedV1 {
     readonly role: "ground" | "blocker" | "step";
     readonly requiresOverlay: boolean;
   }>[];
+  readonly groundConnectivity: Readonly<{
+    readonly requireSingleReachableComponent: boolean;
+    readonly requiredTraversalBands:
+      readonly WorldReconstructionGroundTraversalBandV1[];
+  }>;
   readonly criticalTraversalChecks: readonly WorldReconstructionTraversalCheckV1[];
   readonly deterministicBuild: Readonly<{
     readonly acceptanceTargetRef: string;
@@ -390,6 +403,7 @@ export const WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1 = Object.freeze([
   "critical-traversal-evidence",
   "critical-traversal-outcome",
   "ground-support-coverage-basis-points",
+  "ground-support-height-millimeters",
   "ground-clearance-millimeters",
   "ground-step-up-millimeters",
   "ground-step-down-millimeters",
@@ -505,6 +519,7 @@ const DIAGNOSTIC_DETAIL_KIND_BY_METRIC_ID: Readonly<
   "critical-traversal-evidence": "presence-mismatch",
   "critical-traversal-outcome": "state-mismatch",
   "ground-support-coverage-basis-points": "basis-points-threshold",
+  "ground-support-height-millimeters": "millimeters-threshold",
   "ground-clearance-millimeters": "millimeters-threshold",
   "ground-step-up-millimeters": "millimeters-threshold",
   "ground-step-down-millimeters": "millimeters-threshold",
@@ -566,6 +581,7 @@ const DIAGNOSTIC_METRIC_IDS_BY_CODE: Readonly<
   WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED: [
     "critical-traversal-outcome",
     "ground-support-coverage-basis-points",
+    "ground-support-height-millimeters",
     "ground-clearance-millimeters",
     "ground-step-up-millimeters",
     "ground-step-down-millimeters",
@@ -628,6 +644,7 @@ const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
   "collider-role": { targetKind: "static-collider", operation: "set-traversal-binding" },
   "critical-traversal-outcome": { targetKind: "traversal-check", operation: "adjust-traversal" },
   "ground-support-coverage-basis-points": { targetKind: "traversal-check", operation: "adjust-traversal" },
+  "ground-support-height-millimeters": { targetKind: "traversal-check", operation: "adjust-traversal" },
   "ground-clearance-millimeters": { targetKind: "traversal-check", operation: "adjust-traversal" },
   "ground-step-up-millimeters": { targetKind: "traversal-check", operation: "adjust-traversal" },
   "ground-step-down-millimeters": { targetKind: "traversal-check", operation: "adjust-traversal" },
@@ -715,9 +732,28 @@ export type WorldReconstructionCaptureRejectedRunAttemptV1 = Readonly<{
   outcome: "failed";
 }>;
 
+export type WorldReconstructionGroundAnalysisRejectedRunAttemptV1 = Readonly<{
+  kind: "ground-analysis-rejected";
+  attemptIndex: 0;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+  generationReceiptRef: string;
+  generationReceiptHash: Sha256HashV1;
+  sceneAuthoringAttemptRef: string;
+  sceneAuthoringAttemptHash: Sha256HashV1;
+  sceneAuthoringAttemptResultRef: string;
+  sceneAuthoringAttemptResultHash: Sha256HashV1;
+  authoredSourceRef: string;
+  authoredSourceHash: Sha256HashV1;
+  groundAnalysisReportRef: string;
+  groundAnalysisReportHash: Sha256HashV1;
+  outcome: "failed";
+}>;
+
 export type WorldReconstructionRunAttemptV1 =
   | WorldReconstructionEvaluatedRunAttemptV1
-  | WorldReconstructionCaptureRejectedRunAttemptV1;
+  | WorldReconstructionCaptureRejectedRunAttemptV1
+  | WorldReconstructionGroundAnalysisRejectedRunAttemptV1;
 
 export interface WorldReconstructionRunReceiptV1 {
   readonly kind: "world-reconstruction-run-receipt";
@@ -810,6 +846,13 @@ const RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS = [
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash",
   "worldBuildIdentityRef", "worldBuildIdentityHash", "openingGateResultRef",
   "openingGateResultHash", "outcome",
+] as const;
+const RUN_REJECTED_GROUND_ANALYSIS_ATTEMPT_FIELDS = [
+  "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
+  "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
+  "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
+  "sceneAuthoringAttemptResultHash", "authoredSourceRef", "authoredSourceHash",
+  "groundAnalysisReportRef", "groundAnalysisReportHash", "outcome",
 ] as const;
 
 function fail(contract: string, path: string, message: string): never {
@@ -1078,7 +1121,192 @@ function parseTraversalChecks(value: unknown, contract: string, path: string, de
   if (checks.length === 0 || checks.some((row, index) => index > 0 && checks[index - 1]!.id >= row.id)) {
     fail(contract, path, "must be non-empty, unique, and sorted by id");
   }
+  const checkpointIds = checks.flatMap((check) => check.checkpointIds);
+  if (new Set(checkpointIds).size !== checkpointIds.length) {
+    fail(contract, path, "checkpointIds must be globally unique across checks");
+  }
   return Object.freeze(checks);
+}
+
+function parseGroundConnectivity(
+  value: unknown,
+  contract: string,
+  path: string,
+  declaredAcceptanceTarget: (value: unknown, path: string) => string,
+): WorldReconstructionExpectedV1["groundConnectivity"] {
+  const source = object(value, contract, path);
+  exactFields(source, [
+    "requireSingleReachableComponent",
+    "requiredTraversalBands",
+  ], contract, path);
+  const requiredTraversalBands = array(
+    source.requiredTraversalBands,
+    contract,
+    `${path}/requiredTraversalBands`,
+  ).map((entry, index) => {
+    const itemPath = `${path}/requiredTraversalBands/${index}`;
+    const row = object(entry, contract, itemPath);
+    exactFields(row, [
+      "acceptanceTargetRef",
+      "id",
+      "centerlineStandPositionsXYZMeters",
+      "halfWidthMeters",
+    ], contract, itemPath);
+    const centerlineStandPositionsXYZMeters = array(
+      row.centerlineStandPositionsXYZMeters,
+      contract,
+      `${itemPath}/centerlineStandPositionsXYZMeters`,
+    ).map((position, positionIndex) => parsePositionXYZMeters(
+      position,
+      contract,
+      `${itemPath}/centerlineStandPositionsXYZMeters/${positionIndex}`,
+    ));
+    if (
+      centerlineStandPositionsXYZMeters.length < 2 ||
+      centerlineStandPositionsXYZMeters.length > 256 ||
+      centerlineStandPositionsXYZMeters.some((position, positionIndex) =>
+        positionIndex > 0 &&
+        isEqual(position, centerlineStandPositionsXYZMeters[positionIndex - 1])
+      )
+    ) {
+      fail(
+        contract,
+        `${itemPath}/centerlineStandPositionsXYZMeters`,
+        "must contain 2-256 positions with distinct consecutive entries",
+      );
+    }
+    const halfWidthMeters = meters(
+      row.halfWidthMeters,
+      contract,
+      `${itemPath}/halfWidthMeters`,
+    );
+    if (!(halfWidthMeters > 0)) {
+      fail(contract, `${itemPath}/halfWidthMeters`, "must be greater than zero");
+    }
+    return Object.freeze({
+      acceptanceTargetRef: declaredAcceptanceTarget(
+        row.acceptanceTargetRef,
+        `${itemPath}/acceptanceTargetRef`,
+      ),
+      id: text(row.id, contract, `${itemPath}/id`),
+      centerlineStandPositionsXYZMeters:
+        Object.freeze(centerlineStandPositionsXYZMeters),
+      halfWidthMeters,
+    });
+  });
+  if (requiredTraversalBands.some((row, index) =>
+    index > 0 && requiredTraversalBands[index - 1]!.id >= row.id)) {
+    fail(
+      contract,
+      `${path}/requiredTraversalBands`,
+      "must be unique and strictly sorted by id",
+    );
+  }
+  if (new Set(requiredTraversalBands.map(({ acceptanceTargetRef }) =>
+    acceptanceTargetRef)).size !== requiredTraversalBands.length) {
+    fail(
+      contract,
+      `${path}/requiredTraversalBands`,
+      "must bind each acceptanceTargetRef exactly once",
+    );
+  }
+  return Object.freeze({
+    requireSingleReachableComponent: boolean(
+      source.requireSingleReachableComponent,
+      contract,
+      `${path}/requireSingleReachableComponent`,
+    ),
+    requiredTraversalBands: Object.freeze(requiredTraversalBands),
+  });
+}
+
+function assertGroundConnectivityMatchesExpectedRuntimeV1(
+  spawnSupport: WorldReconstructionExpectedV1["spawnSupport"],
+  groundConnectivity: WorldReconstructionExpectedV1["groundConnectivity"],
+  criticalTraversalChecks: readonly WorldReconstructionTraversalCheckV1[],
+  contract: string,
+): void {
+  const bands = groundConnectivity.requiredTraversalBands;
+  if (spawnSupport.expectedMedium === "air") {
+    if (groundConnectivity.requireSingleReachableComponent || bands.length > 0) {
+      fail(
+        contract,
+        "expected/groundConnectivity",
+        "air Spawn requires false single-component policy and no ground traversal bands",
+      );
+    }
+    return;
+  }
+  if (!groundConnectivity.requireSingleReachableComponent || bands.length === 0) {
+    fail(
+      contract,
+      "expected/groundConnectivity",
+      "ground Spawn requires one reachable component and at least one traversal band",
+    );
+  }
+  if (!bands.some((band) => isEqual(
+    band.centerlineStandPositionsXYZMeters[0],
+    spawnSupport.expectedPositionXYZMeters,
+  ))) {
+    fail(
+      contract,
+      "expected/groundConnectivity/requiredTraversalBands",
+      "at least one traversal band must begin at the exact expected Spawn position",
+    );
+  }
+  const passTargetRefs = new Set(criticalTraversalChecks.flatMap((check) =>
+    check.expectation === "pass" ? [check.acceptanceTargetRef] : []
+  ));
+  if (bands.some((band) => !passTargetRefs.has(band.acceptanceTargetRef))) {
+    fail(
+      contract,
+      "expected/groundConnectivity/requiredTraversalBands",
+      "every traversal band must bind an acceptance target with a pass traversal check",
+    );
+  }
+  const bandTargetRefs = new Set(bands.map(({ acceptanceTargetRef }) =>
+    acceptanceTargetRef));
+  if ([...passTargetRefs].some((targetRef) => !bandTargetRefs.has(targetRef))) {
+    fail(
+      contract,
+      "expected/groundConnectivity/requiredTraversalBands",
+      "every ground pass traversal target must have at least one explicit traversal band",
+    );
+  }
+}
+
+function assertTraversalChecksMatchColliderRolesV1(
+  colliders: WorldReconstructionExpectedV1["colliders"],
+  criticalTraversalChecks: readonly WorldReconstructionTraversalCheckV1[],
+  contract: string,
+): void {
+  const colliderRolesByAcceptanceTargetRef = new Map<string, Set<
+    WorldReconstructionExpectedV1["colliders"][number]["role"]
+  >>();
+  for (const collider of colliders) {
+    const roles = colliderRolesByAcceptanceTargetRef.get(
+      collider.acceptanceTargetRef,
+    ) ?? new Set();
+    roles.add(collider.role);
+    colliderRolesByAcceptanceTargetRef.set(collider.acceptanceTargetRef, roles);
+  }
+  for (const check of criticalTraversalChecks) {
+    const roles = colliderRolesByAcceptanceTargetRef.get(
+      check.acceptanceTargetRef,
+    );
+    const matches = check.expectation === "pass"
+      ? roles?.has("ground") === true || roles?.has("step") === true
+      : roles?.has("blocker") === true;
+    if (!matches) {
+      fail(
+        contract,
+        `expected/criticalTraversalChecks/${check.id}/acceptanceTargetRef`,
+        check.expectation === "pass"
+          ? "pass traversal target must bind at least one ground or step collider"
+          : "block traversal target must bind at least one blocker collider",
+      );
+    }
+  }
 }
 
 function parseObservedDimension(value: unknown, dimensionId: WorldReconstructionDimensionIdV1, contract: string, path: string): WorldReconstructionObservedDimensionV1 {
@@ -1170,7 +1398,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   }
 
   const expectedSource = object(source.expected, contract, "expected");
-  exactFields(expectedSource, ["topology", "semanticSilhouetteTargets", "openingComposition", "spawnSupport", "colliders", "criticalTraversalChecks", "deterministicBuild"], contract, "expected");
+  exactFields(expectedSource, ["topology", "semanticSilhouetteTargets", "openingComposition", "spawnSupport", "colliders", "groundConnectivity", "criticalTraversalChecks", "deterministicBuild"], contract, "expected");
   const acceptanceTargetRefs = sortedStrings(source.acceptanceTargetRefs, contract, "acceptanceTargetRefs");
   const declaredAcceptanceTarget = (value: unknown, path: string) => {
     const parsed = text(value, contract, path);
@@ -1194,6 +1422,10 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
     });
   });
   if (semanticSilhouetteTargets.length === 0 || semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "expected/semanticSilhouetteTargets", "must be non-empty, unique, and sorted by acceptanceTargetRef");
+  if (new Set(semanticSilhouetteTargets.map(({ visualGroupId }) =>
+    visualGroupId)).size !== semanticSilhouetteTargets.length) {
+    fail(contract, "expected/semanticSilhouetteTargets", "visualGroupId values must be unique");
+  }
   const openingSource = object(expectedSource.openingComposition, contract, "expected/openingComposition");
   exactFields(openingSource, ["acceptanceTargetRef", "targetRefs", "regions", "anchors", "orderedTargetRefs"], contract, "expected/openingComposition");
   const openingAcceptanceTargetRef = declaredAcceptanceTarget(openingSource.acceptanceTargetRef, "expected/openingComposition/acceptanceTargetRef");
@@ -1227,12 +1459,83 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
     return Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(row.acceptanceTargetRef, `${path}/acceptanceTargetRef`), contributionId: text(row.contributionId, contract, `${path}/contributionId`), colliderId: text(row.colliderId, contract, `${path}/colliderId`), role: enumValue(row.role, ["ground", "blocker", "step"] as const, contract, `${path}/role`), requiresOverlay: boolean(row.requiresOverlay, contract, `${path}/requiresOverlay`) });
   });
   if (colliders.length === 0 || colliders.some((row, index) => index > 0 && colliders[index - 1]!.contributionId >= row.contributionId)) fail(contract, "expected/colliders", "must be non-empty, unique, and sorted by contributionId");
+  if (new Set(colliders.map(({ colliderId }) => colliderId)).size !== colliders.length) {
+    fail(contract, "expected/colliders", "colliderId values must be unique");
+  }
   const supportColliderId = text(spawnSource.supportColliderId, contract, "expected/spawnSupport/supportColliderId");
-  if (!colliders.some(({ colliderId, role }) => colliderId === supportColliderId && (role === "ground" || role === "step"))) fail(contract, "expected/spawnSupport/supportColliderId", "must name a ground or step collider");
+  if (!colliders.some(({ acceptanceTargetRef, colliderId, role }) =>
+    colliderId === supportColliderId &&
+    acceptanceTargetRef === spawnAcceptanceTargetRef &&
+    (role === "ground" || role === "step")
+  )) fail(contract, "expected/spawnSupport/supportColliderId", "must name a ground or step collider bound to the same acceptance target");
+  const spawnSupport = Object.freeze({
+    acceptanceTargetRef: spawnAcceptanceTargetRef,
+    spawnMarkerId: text(
+      spawnSource.spawnMarkerId,
+      contract,
+      "expected/spawnSupport/spawnMarkerId",
+    ),
+    supportColliderId,
+    expectedMedium: enumValue(
+      spawnSource.expectedMedium,
+      ["ground", "air"] as const,
+      contract,
+      "expected/spawnSupport/expectedMedium",
+    ),
+    expectedPositionXYZMeters: parsePositionXYZMeters(
+      spawnSource.expectedPositionXYZMeters,
+      contract,
+      "expected/spawnSupport/expectedPositionXYZMeters",
+    ),
+  });
+  const groundConnectivity = parseGroundConnectivity(
+    expectedSource.groundConnectivity,
+    contract,
+    "expected/groundConnectivity",
+    declaredAcceptanceTarget,
+  );
+  const criticalTraversalChecks = parseTraversalChecks(
+    expectedSource.criticalTraversalChecks,
+    contract,
+    "expected/criticalTraversalChecks",
+    declaredAcceptanceTarget,
+  );
+  assertTraversalChecksMatchColliderRolesV1(
+    colliders,
+    criticalTraversalChecks,
+    contract,
+  );
+  assertGroundConnectivityMatchesExpectedRuntimeV1(
+    spawnSupport,
+    groundConnectivity,
+    criticalTraversalChecks,
+    contract,
+  );
   const deterministicSource = object(expectedSource.deterministicBuild, contract, "expected/deterministicBuild");
   exactFields(deterministicSource, ["acceptanceTargetRef", "requiresCandidateReplay", "requiresWorldPackageIdentityAgreement", "requiresBuildIdentityAgreement", "requiresCaptureIdentityAgreement"], contract, "expected/deterministicBuild");
   const deterministicAcceptanceTargetRef = declaredAcceptanceTarget(deterministicSource.acceptanceTargetRef, "expected/deterministicBuild/acceptanceTargetRef");
   for (const key of ["requiresCandidateReplay", "requiresWorldPackageIdentityAgreement", "requiresBuildIdentityAgreement", "requiresCaptureIdentityAgreement"] as const) if (deterministicSource[key] !== true) fail(contract, `expected/deterministicBuild/${key}`, "must require identity agreement");
+  const usedAcceptanceTargetRefs = sortBy([...new Set([
+    topology.acceptanceTargetRef,
+    ...semanticSilhouetteTargets.map(({ acceptanceTargetRef }) =>
+      acceptanceTargetRef),
+    openingAcceptanceTargetRef,
+    spawnSupport.acceptanceTargetRef,
+    ...colliders.map(({ acceptanceTargetRef }) => acceptanceTargetRef),
+    ...criticalTraversalChecks.map(({ acceptanceTargetRef }) =>
+      acceptanceTargetRef),
+    ...groundConnectivity.requiredTraversalBands.map(
+      ({ acceptanceTargetRef }) => acceptanceTargetRef,
+    ),
+    deterministicAcceptanceTargetRef,
+  ])]);
+  if (!isEqual(acceptanceTargetRefs, usedAcceptanceTargetRefs)) {
+    fail(
+      contract,
+      "acceptanceTargetRefs",
+      "must exactly equal the acceptance targets referenced by expected",
+    );
+  }
 
   return freeze({
     kind: "world-reconstruction-case",
@@ -1260,9 +1563,10 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
       topology,
       semanticSilhouetteTargets: Object.freeze(semanticSilhouetteTargets),
       openingComposition: Object.freeze({ acceptanceTargetRef: openingAcceptanceTargetRef, targetRefs, regions: Object.freeze(regions), anchors: Object.freeze(anchors), orderedTargetRefs }),
-      spawnSupport: Object.freeze({ acceptanceTargetRef: spawnAcceptanceTargetRef, spawnMarkerId: text(spawnSource.spawnMarkerId, contract, "expected/spawnSupport/spawnMarkerId"), supportColliderId, expectedMedium: enumValue(spawnSource.expectedMedium, ["ground", "air"] as const, contract, "expected/spawnSupport/expectedMedium"), expectedPositionXYZMeters: parsePositionXYZMeters(spawnSource.expectedPositionXYZMeters, contract, "expected/spawnSupport/expectedPositionXYZMeters") }),
+      spawnSupport,
       colliders: Object.freeze(colliders),
-      criticalTraversalChecks: parseTraversalChecks(expectedSource.criticalTraversalChecks, contract, "expected/criticalTraversalChecks", declaredAcceptanceTarget),
+      groundConnectivity,
+      criticalTraversalChecks,
       deterministicBuild: Object.freeze({ acceptanceTargetRef: deterministicAcceptanceTargetRef, requiresCandidateReplay: true, requiresWorldPackageIdentityAgreement: true, requiresBuildIdentityAgreement: true, requiresCaptureIdentityAgreement: true }),
     }),
   });
@@ -1820,7 +2124,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
     const row = object(entry, contract, path);
     const attemptKind = enumValue(
       row.kind,
-      ["evaluated", "capture-rejected"] as const,
+      ["evaluated", "capture-rejected", "ground-analysis-rejected"] as const,
       contract,
       `${path}/kind`,
     );
@@ -1828,12 +2132,14 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       row,
       attemptKind === "evaluated"
         ? RUN_ATTEMPT_FIELDS
-        : RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS,
+        : attemptKind === "capture-rejected"
+          ? RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS
+          : RUN_REJECTED_GROUND_ANALYSIS_ATTEMPT_FIELDS,
       contract,
       path,
     );
     if (index > 1 || row.attemptIndex !== index) fail(contract, `${path}/attemptIndex`, "attempts must be contiguous 0 then optional 1");
-    const common = {
+    const generationCommon = {
       attemptIndex: index as 0 | 1,
       generationRequestRef: text(row.generationRequestRef, contract, `${path}/generationRequestRef`),
       generationRequestHash: hash(row.generationRequestHash, contract, `${path}/generationRequestHash`),
@@ -1841,6 +2147,26 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       generationReceiptHash: hash(row.generationReceiptHash, contract, `${path}/generationReceiptHash`),
       sceneAuthoringAttemptRef: text(row.sceneAuthoringAttemptRef, contract, `${path}/sceneAuthoringAttemptRef`),
       sceneAuthoringAttemptHash: hash(row.sceneAuthoringAttemptHash, contract, `${path}/sceneAuthoringAttemptHash`),
+    };
+    if (attemptKind === "ground-analysis-rejected") {
+      if (index !== 0 || row.outcome !== "failed") {
+        fail(contract, path, "only the initial Attempt may be ground-analysis-rejected");
+      }
+      return Object.freeze({
+        kind: attemptKind,
+        ...generationCommon,
+        attemptIndex: 0 as const,
+        sceneAuthoringAttemptResultRef: text(row.sceneAuthoringAttemptResultRef, contract, `${path}/sceneAuthoringAttemptResultRef`),
+        sceneAuthoringAttemptResultHash: hash(row.sceneAuthoringAttemptResultHash, contract, `${path}/sceneAuthoringAttemptResultHash`),
+        authoredSourceRef: text(row.authoredSourceRef, contract, `${path}/authoredSourceRef`),
+        authoredSourceHash: hash(row.authoredSourceHash, contract, `${path}/authoredSourceHash`),
+        groundAnalysisReportRef: text(row.groundAnalysisReportRef, contract, `${path}/groundAnalysisReportRef`),
+        groundAnalysisReportHash: hash(row.groundAnalysisReportHash, contract, `${path}/groundAnalysisReportHash`),
+        outcome: "failed" as const,
+      });
+    }
+    const common = {
+      ...generationCommon,
       sceneAuthoringAttemptResultRef: text(row.sceneAuthoringAttemptResultRef, contract, `${path}/sceneAuthoringAttemptResultRef`),
       sceneAuthoringAttemptResultHash: hash(row.sceneAuthoringAttemptResultHash, contract, `${path}/sceneAuthoringAttemptResultHash`),
       worldPackageRootHash: hash(row.worldPackageRootHash, contract, `${path}/worldPackageRootHash`),
@@ -1878,18 +2204,28 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
     const runScopedIdentityRefs = (attempt: (typeof attempts)[number]) => [
       attempt.generationRequestRef, attempt.generationReceiptRef,
       attempt.sceneAuthoringAttemptRef, attempt.sceneAuthoringAttemptResultRef,
-      attempt.worldPackageRef,
-      ...(attempt.kind === "evaluated"
-        ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
-        : [attempt.openingGateResultRef]),
+      ...(attempt.kind === "ground-analysis-rejected"
+        ? [attempt.authoredSourceRef, attempt.groundAnalysisReportRef]
+        : [
+            attempt.worldPackageRef,
+            ...(attempt.kind === "evaluated"
+              ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
+              : [attempt.openingGateResultRef]),
+          ]),
     ];
     const identityHashes = (attempt: (typeof attempts)[number]) => [
       attempt.generationRequestHash, attempt.generationReceiptHash,
       attempt.sceneAuthoringAttemptHash, attempt.sceneAuthoringAttemptResultHash,
-      attempt.worldPackageRootHash, attempt.worldPackageBuildReceiptHash, attempt.worldBuildIdentityHash,
-      ...(attempt.kind === "evaluated"
-        ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
-        : [attempt.openingGateResultHash]),
+      ...(attempt.kind === "ground-analysis-rejected"
+        ? [attempt.authoredSourceHash, attempt.groundAnalysisReportHash]
+        : [
+            attempt.worldPackageRootHash,
+            attempt.worldPackageBuildReceiptHash,
+            attempt.worldBuildIdentityHash,
+            ...(attempt.kind === "evaluated"
+              ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
+              : [attempt.openingGateResultHash]),
+          ]),
     ];
     const firstRefs = new Set(runScopedIdentityRefs(attempts[0]!));
     const firstHashes = new Set(identityHashes(attempts[0]!));
