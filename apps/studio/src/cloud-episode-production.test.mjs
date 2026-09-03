@@ -100,6 +100,10 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
     sceneRecord: { id: "scene-cloud-001" },
     productionScope: "visual-sample",
     styleVariantMode: "legacy",
+    resumeEpisodeManifest: {
+      executionId: "exec-episode-prior",
+      s3Uri: "s3://bucket/episode-prior/capture-manifest.json",
+    },
     requestId: "episode-run-001",
     config: {
       outputS3Root: "s3://bucket/episodes",
@@ -122,6 +126,7 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
         input.productionScope,
         input.styleVariantMode,
         input.workerImage,
+        input.resumeEpisodeManifest,
       ]);
       return {
         executionId: "exec-episode-001",
@@ -146,6 +151,10 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
       "visual-sample",
       "legacy",
       `worker@sha256:${"a".repeat(64)}`,
+      {
+        executionId: "exec-episode-prior",
+        s3Uri: "s3://bucket/episode-prior/capture-manifest.json",
+      },
     ],
     ["launch", "episode-prepare", "prepare", false, "partner_codex"],
   ]);

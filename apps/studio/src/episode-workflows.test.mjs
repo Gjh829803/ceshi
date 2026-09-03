@@ -43,6 +43,129 @@ test("cancelled and succeeded Episode records reject stale lifecycle writers", (
   assert.equal(cancellation.applied, true);
   assert.equal(cancellation.record.status, "cancelled");
   assert.equal(cancellation.record.recordRevision, 10);
+
+  const explicitRestart = resolveEpisodeRecordWrite({
+    ...base,
+    status: "cancelled",
+    restartGeneration: 2,
+  }, {
+    ...base,
+    status: "running",
+    remoteExecutionId: null,
+    restartGeneration: 3,
+  }, "2026-09-03T00:00:01.000Z", { allowCancelledRestart: true });
+  assert.equal(explicitRestart.applied, true);
+  assert.equal(explicitRestart.record.status, "running");
+  assert.equal(explicitRestart.record.restartGeneration, 3);
+
+  const staleGeneration = resolveEpisodeRecordWrite({
+    ...base,
+    status: "running",
+    restartGeneration: 3,
+  }, {
+    ...base,
+    status: "cancelled",
+    restartGeneration: 2,
+  }, "2026-09-03T00:00:02.000Z");
+  assert.equal(staleGeneration.applied, false);
+  assert.equal(staleGeneration.reason, "restart-generation-drift");
+});
+
+test("explicitly resumes a cancelled Cloud Episode from its capture checkpoint", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-cancelled-resume-"));
+  const episodeId = "episode-cancelled-resume-001";
+  const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+  const record = {
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    sceneId: "cancelled-resume-scene",
+    episodeId,
+    backend: "cloud",
+    productionScope: "full",
+    styleVariantMode: "ten-style",
+    status: "cancelled",
+    currentStage: "style-variant-visual-review",
+    remoteExecutionId: "exec_cancelled_resume_001",
+    cloudAttempt: 1,
+    recordRevision: 7,
+    createdAt: "2026-09-03T00:00:00.000Z",
+    updatedAt: "2026-09-03T00:01:00.000Z",
+    finishedAt: "2026-09-03T00:01:00.000Z",
+    error: "cancelled",
+    stages: [{
+      id: "style-variant-production",
+      title: "styles",
+      status: "cancelled",
+      startedAt: "2026-09-03T00:00:30.000Z",
+      finishedAt: "2026-09-03T00:01:00.000Z",
+    }],
+  };
+  await mkdir(episodeRoot, { recursive: true });
+  await writeFile(path.join(episodeRoot, "episode-record.json"), JSON.stringify(record));
+  let executionInput = null;
+  let executionStarted;
+  const started = new Promise((resolve) => { executionStarted = resolve; });
+  const persisted = [];
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    persistCloudEpisodeRecord: async (value) => { persisted.push({ ...value }); },
+    resolveCloudEpisodeResumeManifest: async () => ({
+      executionId: "exec_cancelled_resume_001",
+      s3Uri: "s3://bucket/capture/cloud-artifact-manifest.json",
+    }),
+    resolveCloudSceneInput: async () => ({
+      sceneExecutionId: "exec_scene_resume_001",
+      sceneManifestS3Uri: "s3://bucket/scene/cloud-artifact-manifest.json",
+      sceneRecord: {},
+    }),
+    executeCloudEpisode: async (input) => {
+      executionInput = input;
+      await input.onSubmitted({
+        executionId: "exec_restarted_001",
+        outputS3Prefix: "s3://bucket/restarted",
+        requestS3Uri: "s3://bucket/restarted/inputs/request.json",
+        workerImage: `worker@sha256:${"a".repeat(64)}`,
+        executionProfile: "cpu-gpu-batch-cpu@1",
+        gpuBatch: { minimumBatchSize: 100, maximumBatchSize: 128 },
+      });
+      executionStarted();
+      return new Promise(() => undefined);
+    },
+    readCloudEpisodeManifest: async () => ({}),
+  });
+  const server = createServer((request, response) => {
+    void service.handleApi(request, response, new URL(request.url, "http://127.0.0.1"));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const resumed = await fetch(`${origin}/api/episode-workflows/${episodeId}/resume`, {
+      method: "POST",
+    }).then((response) => response.json());
+    assert.equal(resumed.resumed, true);
+    assert.equal(resumed.restartGeneration, 1);
+    await started;
+    assert.equal(executionInput.requestId, `${episodeId}-restart-1`);
+    assert.deepEqual(executionInput.resumeEpisodeManifest, {
+      executionId: "exec_cancelled_resume_001",
+      s3Uri: "s3://bucket/capture/cloud-artifact-manifest.json",
+    });
+    const current = JSON.parse(await readFile(
+      path.join(episodeRoot, "episode-record.json"),
+      "utf8",
+    ));
+    assert.equal(current.status, "running");
+    assert.equal(current.remoteExecutionId, "exec_restarted_001");
+    assert.equal(current.restartGeneration, 1);
+    assert.equal(current.cloudAttempt, 2);
+    assert.ok(persisted.some((value) => value.remoteExecutionId === null));
+    assert.ok(persisted.some((value) => value.remoteExecutionId === "exec_restarted_001"));
+  } finally {
+    await service.shutdown();
+    await new Promise((resolve) => server.close(resolve));
+    await rm(repoRoot, { recursive: true, force: true });
+  }
 });
 
 test("retries the failed Episode stage instead of the next queued stage", () => {

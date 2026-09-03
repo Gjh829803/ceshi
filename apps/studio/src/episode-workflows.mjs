@@ -19,14 +19,32 @@ export function failedEpisodeStageId(execution) {
 }
 const absorbingEpisodeStatuses = new Set(["cancelled", "succeeded"]);
 
-export function resolveEpisodeRecordWrite(current, incoming, updatedAt) {
+export function resolveEpisodeRecordWrite(current, incoming, updatedAt, {
+  allowCancelledRestart = false,
+} = {}) {
   if (!incoming || typeof incoming !== "object") {
     throw new Error("Episode record write requires one record.");
   }
   if (current && typeof current === "object") {
     if (absorbingEpisodeStatuses.has(current.status)) {
-      return { applied: false, reason: `absorbing-${current.status}`, record: current };
+      const nextRestartGeneration = Number(incoming.restartGeneration ?? 0);
+      const currentRestartGeneration = Number(current.restartGeneration ?? 0);
+      if (
+        current.status === "cancelled" &&
+        allowCancelledRestart &&
+        incoming.status === "running" &&
+        nextRestartGeneration === currentRestartGeneration + 1
+      ) {
+        // An explicit user retry is a new lifecycle generation. Ordinary
+        // asynchronous writers never receive this capability, so cancelled
+        // remains absorbing for stale recovery and worker callbacks.
+      } else {
+        return { applied: false, reason: `absorbing-${current.status}`, record: current };
+      }
     }
+    if (
+      Number(incoming.restartGeneration ?? 0) < Number(current.restartGeneration ?? 0)
+    ) return { applied: false, reason: "restart-generation-drift", record: current };
     if (
       current.remoteExecutionId && incoming.remoteExecutionId &&
       current.remoteExecutionId !== incoming.remoteExecutionId
@@ -650,6 +668,7 @@ export function createEpisodeWorkflowService(options) {
   const cancelCloudEpisode = options.cancelCloudEpisode ?? null;
   const cancelCloudEpisodeWorkers = options.cancelCloudEpisodeWorkers ?? null;
   const readCloudEpisodeManifest = options.readCloudEpisodeManifest ?? null;
+  const resolveCloudEpisodeResumeManifest = options.resolveCloudEpisodeResumeManifest ?? null;
   const readVerifiedRemoteArtifact = options.readVerifiedRemoteArtifact ?? null;
   const streamRemoteArtifact = options.streamRemoteArtifact ?? null;
   const redirectRemoteArtifact = options.redirectRemoteArtifact ?? null;
@@ -1181,13 +1200,18 @@ export function createEpisodeWorkflowService(options) {
     listAllCache.clear();
   }
 
-  async function persistEpisodeRecord(record) {
+  async function persistEpisodeRecord(record, writeOptions = {}) {
     const episodeId = record?.episodeId;
     if (!idPattern.test(episodeId ?? "")) throw new Error("Episode record ID is invalid.");
     const prior = episodePersistenceQueues.get(episodeId) ?? Promise.resolve();
     const operation = prior.catch(() => undefined).then(async () => {
       const current = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
-      const decision = resolveEpisodeRecordWrite(current, record, new Date().toISOString());
+      const decision = resolveEpisodeRecordWrite(
+        current,
+        record,
+        new Date().toISOString(),
+        writeOptions,
+      );
       if (!decision.applied) return decision.record;
       Object.assign(record, decision.record);
       if (record.backend === "cloud" && typeof persistCloudEpisodeRecord === "function") {
@@ -1407,10 +1431,14 @@ export function createEpisodeWorkflowService(options) {
     return record;
   }
 
-  async function runCloudEpisode(sceneId, episodeId) {
+  async function runCloudEpisode(sceneId, episodeId, {
+    requestId: requestedRequestId = null,
+    resumeEpisodeManifest = undefined,
+    cloudAttempt = 1,
+  } = {}) {
     const recordPath = path.join(episodesRoot, episodeId, "episode-record.json");
     let record = await readJson(recordPath);
-    const requestId = `${episodeId}-cloud-run-1`;
+    const requestId = requestedRequestId ?? `${episodeId}-cloud-run-1`;
     try {
       // Startup recovery may discover an S3 Run Index entry before its
       // disposable local compatibility cache has been materialized. The
@@ -1432,6 +1460,7 @@ export function createEpisodeWorkflowService(options) {
         sceneRecord: scene.sceneRecord,
         productionScope: record.productionScope ?? "full",
         styleVariantMode: record.styleVariantMode ?? "legacy",
+        resumeEpisodeManifest,
         requestId,
         onSubmitted: async (submitted) => {
           activeCloudExecutions.set(episodeId, submitted.executionId);
@@ -1451,7 +1480,11 @@ export function createEpisodeWorkflowService(options) {
             gpuBatchStatus: "preparing",
             sourceSceneExecutionId: scene.sceneExecutionId,
             sourceSceneManifestS3Uri: scene.sceneManifestS3Uri,
-            cloudAttempt: 1,
+            cloudAttempt,
+            ...(resumeEpisodeManifest ? {
+              resumedFromEpisodeExecutionId: resumeEpisodeManifest.executionId,
+              resumedFromEpisodeManifestS3Uri: resumeEpisodeManifest.s3Uri,
+            } : {}),
           };
           await persistEpisodeRecord(record);
         },
@@ -1769,7 +1802,50 @@ export function createEpisodeWorkflowService(options) {
       throw new Error("Episode is not resumable.");
     }
     if (record.backend === "cloud") {
-      if (record.status === "cancelled") throw new Error("Cancelled Cloud Episode is not resumable.");
+      if (record.status === "cancelled") {
+        if (
+          typeof resolveCloudEpisodeResumeManifest !== "function" ||
+          typeof record.remoteExecutionId !== "string"
+        ) throw new Error("Cancelled Cloud Episode has no resumable checkpoint.");
+        const resumeEpisodeManifest = await resolveCloudEpisodeResumeManifest(record);
+        const restartGeneration = Number(record.restartGeneration ?? 0) + 1;
+        const cloudAttempt = Number(record.cloudAttempt ?? 1) + 1;
+        const requestId = `${episodeId}-restart-${restartGeneration}`;
+        const restarted = {
+          ...record,
+          status: "running",
+          currentStage: "preparing",
+          finishedAt: null,
+          error: null,
+          restartGeneration,
+          cloudAttempt,
+          remoteExecutionId: null,
+          remoteStageId: "episode-prepare",
+          remoteRequestId: requestId,
+          remoteRequestS3Uri: null,
+          remoteArtifactManifestS3Uri: null,
+          remoteArtifactAdmission: null,
+          remoteArtifacts: [],
+          resumedFromEpisodeExecutionId: resumeEpisodeManifest.executionId,
+          resumedFromEpisodeManifestS3Uri: resumeEpisodeManifest.s3Uri,
+          stages: record.stages.map((stage) => ({
+            ...stage,
+            status: stage.id === "style-variant-production" ? "pending" : stage.status,
+            ...(stage.id === "style-variant-production" ? {
+              startedAt: null,
+              finishedAt: null,
+            } : {}),
+          })),
+        };
+        await persistEpisodeRecord(restarted, { allowCancelledRestart: true });
+        activeCloudExecutions.set(episodeId, "submitting");
+        void runCloudEpisode(record.sceneId, episodeId, {
+          requestId,
+          resumeEpisodeManifest,
+          cloudAttempt,
+        });
+        return { episodeId, reused: false, resumed: true, restartGeneration };
+      }
       activeCloudExecutions.set(episodeId, record.remoteExecutionId ?? "recovering");
       void (record.remoteExecutionId
         ? runCloudEpisodeRecovery(record)

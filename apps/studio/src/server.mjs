@@ -1687,6 +1687,29 @@ export function createStudio(options = {}) {
         repoRoot,
         ...expected,
       }),
+    resolveCloudEpisodeResumeManifest: async (record) => {
+      const lwdpConfig = await loadLwdpConfigImplementation({
+        ...process.env,
+        LWDP_GENERATION_API_TOKEN: undefined,
+        LWDP_API_BASE: undefined,
+        LWDP_USER_ID: undefined,
+        WORLDKIT_LWDP_ENV_FILE: projectLwdpEnvFile,
+      });
+      const [executionPayload, stages] = await Promise.all([
+        getCloudExecutionImplementation(record.remoteExecutionId, { config: lwdpConfig }),
+        getCloudExecutionStagesImplementation(record.remoteExecutionId, { config: lwdpConfig }),
+      ]);
+      const execution = cloudExecutionRecord(executionPayload);
+      const s3Uri = cloudArtifactManifestS3Uri(
+        execution,
+        stages,
+        "whitebox-capture",
+      );
+      if (!s3Uri) {
+        throw new Error("Cancelled Cloud Episode has no completed whitebox-capture checkpoint.");
+      }
+      return { executionId: record.remoteExecutionId, s3Uri };
+    },
     readVerifiedRemoteArtifact: (record, artifactPath) =>
       readVerifiedCloudArtifactImplementation(record, artifactPath, { repoRoot }),
     streamRemoteArtifact: (response, artifact, streamOptions = {}) =>
