@@ -35,6 +35,8 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   assert.equal(container.livenessProbe.initialDelaySeconds, 600);
   assert.equal(container.livenessProbe.timeoutSeconds, 10);
   assert.equal(container.livenessProbe.httpGet.path, "/index.html");
+  assert.equal(container.resources.requests.cpu, "500m");
+  assert.equal(container.resources.limits.cpu, "4");
   assert.ok(pod.volumes.every((volume) => volume.emptyDir));
   assert.equal(JSON.stringify(pod).includes("aws-credentials"), false);
   assert.equal(service.spec.type, "ClusterIP");

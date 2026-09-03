@@ -109,7 +109,7 @@ export function cloudControlPlaneResources({
               periodSeconds: 20,
             },
             resources: {
-              requests: { cpu: "1", memory: "2Gi", "ephemeral-storage": "2Gi" },
+              requests: { cpu: "500m", memory: "2Gi", "ephemeral-storage": "2Gi" },
               limits: { cpu: "4", memory: "8Gi", "ephemeral-storage": "8Gi" },
             },
             volumeMounts: [{ name: "ephemeral-data", mountPath: "/var/run/worldkit-studio" }],
