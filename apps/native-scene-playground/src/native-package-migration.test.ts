@@ -111,15 +111,15 @@ describe("Babylon Native package migration", () => {
   });
 
   it("keeps authoring at the root and Host ownership on the host subpath", async () => {
-    const [cloudRidge, runtime] = await Promise.all([
-      source("apps/native-scene-playground/src/scene.ts"),
+    const [blockProfile, runtime] = await Promise.all([
+      source("packages/native-babylon-block-profile/src/session.ts"),
       source("packages/runtime-babylon/src/babylon-world-runtime.ts"),
     ]);
 
-    expect(cloudRidge).toContain(
+    expect(blockProfile).toContain(
       'from "@whitebox-world/native-babylon"',
     );
-    expect(cloudRidge).not.toContain(
+    expect(blockProfile).not.toContain(
       'from "@whitebox-world/runtime-babylon"',
     );
     expect(runtime).toContain(
@@ -131,10 +131,9 @@ describe("Babylon Native package migration", () => {
   });
 
   it("deletes the old owner instead of retaining aliases", async () => {
-    const [runtimeIndex, bootstrap, runtimeManifest, appManifest] =
+    const [runtimeIndex, runtimeManifest, appManifest] =
       await Promise.all([
         source("packages/runtime-babylon/src/index.ts"),
-        source("apps/native-scene-playground/src/native-bootstrap.ts"),
         source("packages/runtime-babylon/package.json"),
         source("apps/native-scene-playground/package.json"),
       ]);
@@ -147,14 +146,21 @@ describe("Babylon Native package migration", () => {
       "packages/runtime-babylon/src/native-scene-module.test.ts",
       REPOSITORY_ROOT,
     ))).rejects.toThrow();
+    for (const removedFixedCasePath of [
+      "apps/native-scene-playground/src/cloud-ridge-gameplay-bootstrap.json",
+      "apps/native-scene-playground/src/cloud-ridge-world-runtime-bootstrap.json",
+      "apps/native-scene-playground/src/native-bootstrap.ts",
+      "apps/native-scene-playground/src/native-scene.bootstrap.json",
+      "apps/native-scene-playground/src/scene.ts",
+    ]) {
+      await expect(access(new URL(
+        removedFixedCasePath,
+        REPOSITORY_ROOT,
+      ))).rejects.toThrow();
+    }
     expect(runtimeIndex).not.toMatch(
       /BabylonNativeSceneModule(?:V1)?\b|buildBabylonNativeSceneContribution/,
     );
-    expect(bootstrap).not.toContain("parseBabylonNativeSceneBootstrapV1");
-    expect(bootstrap).not.toContain(
-      ["native-scene", ".bootstrap.json"].join(""),
-    );
-    expect(bootstrap).not.toContain("BabylonNativeWorldBootstrapV1");
     expect(JSON.parse(runtimeManifest).dependencies).toHaveProperty(
       "@whitebox-world/native-babylon",
       "workspace:*",

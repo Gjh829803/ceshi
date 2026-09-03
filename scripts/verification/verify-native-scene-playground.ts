@@ -13,11 +13,11 @@ import { createOwnedNativePackageFixtureV1 } from
 
 const CONTROLLED_ENTITY_ID = "g-bot-primary";
 const EXPECTED_NATIVE_CONTRIBUTION_HASH =
-  "sha256:cae0d302c98fc886b7406810a736dc94511b412b7228ad484852cae563ce9b3d";
+  "sha256:2c314ef28e8916c3eb1b0f8e0aea732daeb4c510ae451d6c27d25b0b0abc3b11";
 const EXPECTED_COLLIDER_SUBSHAPE_IDS = Object.freeze([
-  "collider-subshape:5af935abea0d5d3da0e32a9e5c1121f3d88f5174c3c0cd32414ea4740b13dc89",
-  "collider-subshape:0069b3ff456288eb8ea99f6a7ff396f9886725df6dd89e8626cd14150b71dbcc",
-  "collider-subshape:c31d374e9b1f86c1eec231de6db07cf966100a57700ab344f41e64a1c53429bc",
+  "collider-subshape:dd81c7ac9572e9671adb05d95e796ee1f507bdb2480e068d13c89c9d44b4be2e",
+  "collider-subshape:c45f8d800af8550ee7326d587f07f50a53be3408e090abae615b74b36710273c",
+  "collider-subshape:e525e03a86b17577bde81d0c5b646a865081ec7916c46c2291b2ed6bd23998c4",
 ]);
 const NATIVE_ENVIRONMENT_NAMES = Object.freeze([
   "WORLDKIT_NATIVE_PACKAGE_PATH",
@@ -80,7 +80,7 @@ function controlledSubject(
 }
 
 async function readProjection(page: Page): Promise<NativeSceneProjectionV1> {
-  return page.evaluate(() => window.__WORLDKIT_NATIVE_SPIKE__!.snapshot());
+  return page.evaluate(() => window.__WORLDKIT_NATIVE_VERIFIER__!.snapshot());
 }
 
 async function closeBestEffort(
@@ -169,17 +169,17 @@ async function main(): Promise<void> {
       { timeout: 5_000 },
     );
     assert.equal(
-      await page.evaluate(() => window.__WORLDKIT_NATIVE_SPIKE__),
+      await page.evaluate(() => window.__WORLDKIT_NATIVE_VERIFIER__),
       undefined,
       "An unqualified top-level URL must not create a single-Origin Runtime",
     );
-    await page.goto(new URL("?verifier-native-spike=1", url).href, {
+    await page.goto(new URL("?verifier-native-package=1", url).href, {
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
     try {
       await page.waitForFunction(
-        () => window.__WORLDKIT_NATIVE_SPIKE__?.ready === true,
+        () => window.__WORLDKIT_NATIVE_VERIFIER__?.ready === true,
         undefined,
         { timeout: 90_000 },
       );
@@ -201,7 +201,7 @@ async function main(): Promise<void> {
     }
 
     const initialAudit = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.audit(),
     ) as NativeSceneAuditV1;
     assert.equal(
       initialAudit.contributionHash,
@@ -225,15 +225,18 @@ async function main(): Promise<void> {
     }
 
     const initial = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.reset(),
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.reset(),
     );
     const firstResetAudit = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.audit(),
     ) as NativeSceneAuditV1;
     assert.notEqual(firstResetAudit.worldSessionId, initialAudit.worldSessionId);
     assert.equal(firstResetAudit.successfulRuntimeCreateCount, 2);
     assert.equal(Object.keys(initial.subjectStatesByEntityId).length, 1);
-    assert.equal(initial.resources.bodies, 4);
+    assert.ok(
+      initial.resources.bodies > initialAudit.colliderIds.length,
+      "The Runtime must own the Subject body and any derived safety bodies in addition to declared static Colliders",
+    );
     assert.deepEqual(controlledSubject(initial).positionMetersXYZ, [
       0,
       0,
@@ -241,19 +244,19 @@ async function main(): Promise<void> {
     ]);
 
     const takeoff = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.runFixedInput({
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.runFixedInput({
         actions: ["jump"],
         ticks: 1,
       }),
     );
     const airborne = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.runFixedInput({
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.runFixedInput({
         actions: [],
         ticks: 15,
       }),
     );
     const landed = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.runFixedInput({
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.runFixedInput({
         actions: [],
         ticks: 120,
       }),
@@ -287,10 +290,10 @@ async function main(): Promise<void> {
       beforeOrbit.camera.viewYawOffsetRadians,
     );
     const afterReset = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.reset(),
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.reset(),
     );
     const cameraResetAudit = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.audit(),
     ) as NativeSceneAuditV1;
     assert.notEqual(
       cameraResetAudit.worldSessionId,
@@ -300,7 +303,7 @@ async function main(): Promise<void> {
     assert.equal(afterReset.camera.viewYawOffsetRadians, 0);
 
     const reached = await page.evaluate(async () => {
-      const probe = window.__WORLDKIT_NATIVE_SPIKE__!;
+      const probe = window.__WORLDKIT_NATIVE_VERIFIER__!;
       await probe.reset();
       return probe.runFixedInput({
         actions: ["move-forward", "run"],
@@ -309,15 +312,31 @@ async function main(): Promise<void> {
     });
     const reachedSubject = controlledSubject(reached);
     assert.equal(reachedSubject.movementMedium, "ground");
+    assert.ok(
+      reached.resources.bodies >= initial.resources.bodies,
+      "Traversal may load bounded resident safety bodies but must retain the admitted baseline",
+    );
     assert.ok(reachedSubject.positionMetersXYZ[1] > 12);
     assert.ok(reachedSubject.positionMetersXYZ[2] < -29);
     const finalAudit = await page.evaluate(
-      () => window.__WORLDKIT_NATIVE_SPIKE__!.audit(),
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.audit(),
     ) as NativeSceneAuditV1;
     assert.equal(finalAudit.contributionHash, initialAudit.contributionHash);
     assert.notEqual(finalAudit.worldSessionId, cameraResetAudit.worldSessionId);
     assert.equal(finalAudit.successfulRuntimeCreateCount, 4);
     assert.deepEqual(finalAudit.colliderIds, initialAudit.colliderIds);
+    const residencyReset = await page.evaluate(
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.reset(),
+    );
+    const residencyResetAudit = await page.evaluate(
+      () => window.__WORLDKIT_NATIVE_VERIFIER__!.audit(),
+    ) as NativeSceneAuditV1;
+    assert.equal(
+      residencyReset.resources.bodies,
+      initial.resources.bodies,
+      "Reset must dispose traversal-loaded bodies and restore the initial Runtime resource baseline",
+    );
+    assert.equal(residencyResetAudit.successfulRuntimeCreateCount, 5);
     const errorUi = await page.locator("[data-error]").evaluate((element) => ({
       hidden: (element as HTMLElement).hidden,
       text: element.textContent ?? "",
@@ -349,7 +368,7 @@ async function main(): Promise<void> {
       colliderSubshapeIds: finalAudit.colliderSubshapeIds,
       contributionHash: finalAudit.contributionHash,
       successfulRuntimeCreateCount:
-        finalAudit.successfulRuntimeCreateCount,
+        residencyResetAudit.successfulRuntimeCreateCount,
       ...(renderedScreenshotPath === undefined
         ? {}
         : { renderedScreenshotPath }),

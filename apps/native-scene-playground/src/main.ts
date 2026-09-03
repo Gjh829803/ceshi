@@ -46,7 +46,7 @@ declare const __WORLDKIT_HOSTED_SHELL_ORIGIN__: string;
 declare const __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__:
   readonly FormalWorldCaptureSdkOwnerIdentityV1[];
 declare const __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: boolean;
-interface NativeSceneSpikeProbeV1 {
+interface NativePackageVerifierProbeV1 {
   readonly ready: true;
   readonly bootstrap: BabylonNativeSceneBootstrapV1;
   snapshot(): BabylonRuntimeProjectionV1;
@@ -64,7 +64,7 @@ interface NativeSceneSpikeProbeV1 {
 
 declare global {
   interface Window {
-    __WORLDKIT_NATIVE_SPIKE__?: NativeSceneSpikeProbeV1;
+    __WORLDKIT_NATIVE_VERIFIER__?: NativePackageVerifierProbeV1;
     __WORLDKIT_HOSTED_RUNTIME__?: Readonly<{
       phase(): string;
       waitUntilReady(): Promise<import("@whitebox-world/runtime-contracts").RuntimeSessionEventV1>;
@@ -187,7 +187,7 @@ async function startVerifierProbe(): Promise<void> {
   activeRuntime().resize();
   await activeRuntime().renderFrameWhenReady();
 
-  window.__WORLDKIT_NATIVE_SPIKE__ = Object.freeze({
+  window.__WORLDKIT_NATIVE_VERIFIER__ = Object.freeze({
     ready: true as const,
     bootstrap: verifiedWorldPackage.bootstrap,
     snapshot: () => coordinator.snapshot(),
@@ -583,7 +583,7 @@ void (mode.has("hosted-formal-capture-frame")
         ? startHostedShell()
         : __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__ &&
             mode.size === 1 &&
-            mode.get("verifier-native-spike") === "1"
+            mode.get("verifier-native-package") === "1"
           ? startVerifierProbe()
           : Promise.reject(new Error(
               "WORLDKIT_NATIVE_HARNESS_MODE_REQUIRED",

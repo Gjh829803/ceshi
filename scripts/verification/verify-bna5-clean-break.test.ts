@@ -115,8 +115,8 @@ describe("BNA-5 clean-break verifier", () => {
     const report = await scanBna5CleanBreak(await fixture({
       "scripts/reconstruction/generation-request.ts":
         "decideSceneAuthoringRouteV1({ trustProfileRef: CURRENT_NATIVE_TRUST_PROFILE_REF });\n",
-      "scripts/reconstruction/run-native-block-generation.ts":
-        "decideSceneAuthoringRouteV1({ trustProfileRef: 'worldkit://trust-profile/trusted-local@1' });\n",
+      "scripts/scenes/world-generation-route.ts":
+        "decideSceneAuthoringRouteV1({ trustProfileRef: CURRENT_NATIVE_TRUST_PROFILE_REF });\n",
     }));
 
     expect(report.diagnostics.filter(({ code }) =>
