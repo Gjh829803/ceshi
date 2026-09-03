@@ -57,6 +57,7 @@ import {
   executeStudioCloudScene,
   launchStudioCloudSceneWorker,
   loadCloudSceneProductionConfig,
+  rebuildStudioCloudSceneBuilder,
   resumeStudioCloudSceneBuilder,
   resumeStudioCloudSceneHost,
 } from "./cloud-scene-production.mjs";
@@ -1200,6 +1201,8 @@ export function createStudio(options = {}) {
     options.resumeStudioCloudSceneHostImplementation ?? resumeStudioCloudSceneHost;
   const resumeStudioCloudSceneBuilderImplementation =
     options.resumeStudioCloudSceneBuilderImplementation ?? resumeStudioCloudSceneBuilder;
+  const rebuildStudioCloudSceneBuilderImplementation =
+    options.rebuildStudioCloudSceneBuilderImplementation ?? rebuildStudioCloudSceneBuilder;
   const getCloudExecutionImplementation =
     options.getCloudExecutionImplementation ?? getCloudExecution;
   const getCloudExecutionStagesImplementation =
@@ -3597,6 +3600,7 @@ export function createStudio(options = {}) {
     const cloudResumeMode = initialRecord.resumeFromStage === "cloud-host"
       ? "host"
       : initialRecord.resumeFromStage === "cloud-builder" ? "builder" : null;
+    const cloudBuilderRebuild = initialRecord.resumeFromStage === "cloud-builder-rebuild";
     const cloudResume = cloudResumeMode !== null &&
       typeof initialRecord.remoteExecutionId === "string" &&
       typeof initialRecord.remoteArtifactManifestS3Uri === "string" &&
@@ -3608,6 +3612,17 @@ export function createStudio(options = {}) {
       requestS3Uri: initialRecord.remoteRequestS3Uri,
       outputS3Prefix: initialRecord.remoteOutputS3Prefix,
     } : null;
+    const rebuildAuthority = cloudBuilderRebuild &&
+        typeof initialRecord.remoteExecutionId === "string" &&
+        typeof initialRecord.remoteArtifactManifestS3Uri === "string"
+      ? {
+          executionId: initialRecord.remoteExecutionId,
+          manifestS3Uri: initialRecord.remoteArtifactManifestS3Uri,
+        }
+      : null;
+    if (cloudBuilderRebuild && rebuildAuthority === null) {
+      throw new Error("Cloud Builder rebuild requires a prior trusted Planner manifest.");
+    }
     const transition = await transitionRecord(id, {
       status: "running",
       stage: "preparing",
@@ -3649,18 +3664,33 @@ export function createStudio(options = {}) {
       "WorldKit Creator Studio",
       `scene=${record.sceneId}`,
       `attempt=${attempt}`,
-      `mode=${cloudResume ? `cloud-${cloudResumeMode}-resume` : "cloud-scene-production"}`,
+      `mode=${cloudBuilderRebuild
+        ? "cloud-builder-rebuild"
+        : cloudResume ? `cloud-${cloudResumeMode}-resume` : "cloud-scene-production"}`,
       "",
-      cloudResume
+      cloudBuilderRebuild
+        ? "Rebuilding Builder and downstream Host stages in a fresh Cloud Execution from the prior trusted Planner manifest."
+        : cloudResume
         ? cloudResumeMode === "host"
           ? "Resuming only the trusted Host and downstream stages from the prior Cloud artifact manifest."
           : "Resuming Builder and downstream Host stages from the trusted Planner artifact manifest."
         : "Submitting the complete Scene pipeline to one isolated Cloud Scene Worker.",
       "",
     ].join("\n"), "utf8");
-    await appendTrajectoryEvent(id, "preparing",
-      `第 ${attempt} 次端到端云端生产开始；Planner、Builder、Host Capture 和视觉阶段均在隔离 Worker 中运行。`,
-      { kind: "started", codexBackend: "cloud", executionMode: "cloud-scene-production" });
+    await appendTrajectoryEvent(
+      id,
+      "preparing",
+      cloudBuilderRebuild
+        ? `第 ${attempt} 次云端 Builder 重建开始；复用上一次可信 Planner Manifest，在新 Execution 中运行 Builder、Host Capture 和视觉阶段。`
+        : `第 ${attempt} 次端到端云端生产开始；Planner、Builder、Host Capture 和视觉阶段均在隔离 Worker 中运行。`,
+      {
+        kind: "started",
+        codexBackend: "cloud",
+        executionMode: cloudBuilderRebuild
+          ? "cloud-builder-rebuild"
+          : "cloud-scene-production",
+      },
+    );
     let submittedExecutionId = null;
     try {
       const [productionConfig, lwdpConfig] = await Promise.all([
@@ -3743,7 +3773,13 @@ export function createStudio(options = {}) {
           });
         },
       };
-      const result = cloudResume
+      const result = cloudBuilderRebuild
+        ? await rebuildStudioCloudSceneBuilderImplementation({
+            ...commonExecutionOptions,
+            sourceExecutionId: rebuildAuthority.executionId,
+            sourceManifestS3Uri: rebuildAuthority.manifestS3Uri,
+          })
+        : cloudResume
         ? await (cloudResumeMode === "host"
           ? resumeStudioCloudSceneHostImplementation
           : resumeStudioCloudSceneBuilderImplementation)({
@@ -5895,8 +5931,8 @@ export function createStudio(options = {}) {
         sendError(response, 404, "没有找到这个世界。");
         return true;
       }
-      if (!["ready", "failed", "interrupted"].includes(record.status)) {
-        sendError(response, 409, "只有已完成、失败或中断的任务可以从 Builder 重建。");
+      if (!["ready", "failed", "interrupted", "remote-pending"].includes(record.status)) {
+        sendError(response, 409, "只有已完成、失败、中断或待远端对账的任务可以从 Builder 重建。");
         return true;
       }
       if (
@@ -5920,7 +5956,7 @@ export function createStudio(options = {}) {
         styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
         styledTriviewsRequired: Boolean(record.referenceImage),
         styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
-        resumeFromStage: "cloud-builder",
+        resumeFromStage: "cloud-builder-rebuild",
       }, {
         allowReadyLifecycleTransition: true,
         expectedAttempt: record.attempt,
@@ -5940,7 +5976,7 @@ export function createStudio(options = {}) {
       sendJson(response, 202, {
         ok: true,
         executionMode: "cloud-builder-rebuild",
-        resumeFromStage: "cloud-builder",
+        resumeFromStage: "cloud-builder-rebuild",
       });
       return true;
     }

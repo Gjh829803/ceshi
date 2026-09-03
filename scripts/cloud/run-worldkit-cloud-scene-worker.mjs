@@ -265,6 +265,7 @@ export async function runCloudSceneWorker({
   trustedCapturePublicKeyPath = process.env.WORLDKIT_CAPTURE_TRUSTED_PUBLIC_KEY_PATH,
   verifyPlayableImplementation = verifyPlayableCloudWhitebox,
   resumeManifestS3Uri = undefined,
+  resumeSourceExecutionId = undefined,
   resumeMode = "verify-only",
 }) {
   requiredString(executionId, "execution_id");
@@ -272,6 +273,12 @@ export async function runCloudSceneWorker({
   assertS3Uri(requestS3Uri);
   assertS3Uri(outputS3Prefix);
   if (resumeManifestS3Uri !== undefined) assertS3Uri(resumeManifestS3Uri);
+  if (resumeSourceExecutionId !== undefined) {
+    requiredString(resumeSourceExecutionId, "resume_source_execution_id");
+    if (resumeManifestS3Uri === undefined) {
+      throw new Error("resume_source_execution_id requires resume_manifest_s3_uri.");
+    }
+  }
   if (!["verify-only", "builder", "host"].includes(resumeMode)) {
     throw new Error("resume_mode must be verify-only, builder, or host.");
   }
@@ -317,6 +324,7 @@ export async function runCloudSceneWorker({
           : Math.floor((Date.now() - currentGenerationJobStartedAtMs) / 1_000),
         inner_generation_jobs: completedGenerationJobs,
         resumed_from_manifest_s3_uri: resumeManifestS3Uri ?? null,
+        resumed_from_execution_id: resumeSourceExecutionId ?? null,
         resume_mode: resumeManifestS3Uri === undefined ? null : resumeMode,
         worker_id: workerId,
         ...extra.diagnostics,
@@ -467,7 +475,7 @@ export async function runCloudSceneWorker({
         manifestS3Uri: resumeManifestS3Uri,
         manifestPath: join(temporaryRoot, "resume-artifact-manifest.json"),
         expectedSceneId: request.sceneId,
-        expectedExecutionId: executionId,
+        expectedExecutionId: resumeSourceExecutionId ?? executionId,
         sceneRoot,
         scenePlanRoot,
         logPath,
@@ -619,6 +627,7 @@ async function main() {
     outputS3Prefix: options["output-s3-prefix"],
     workerId: options["worker-id"],
     resumeManifestS3Uri: options["resume-manifest-s3-uri"],
+    resumeSourceExecutionId: options["resume-source-execution-id"],
     resumeMode: options["resume-mode"] ?? "verify-only",
     cloudConfig,
   });

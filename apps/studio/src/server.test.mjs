@@ -124,7 +124,7 @@ test("keeps ready as an absorbing lifecycle state and rejects stale remote write
     evaluateRecordTransition(ready, {
       status: "queued",
       stage: "queued",
-      resumeFromStage: "cloud-builder",
+      resumeFromStage: "cloud-builder-rebuild",
     }, {
       allowReadyLifecycleTransition: true,
       expectedAttempt: 2,
@@ -2623,11 +2623,11 @@ test("rebuilds a ready Cloud Scene from its trusted Planner handoff", async () =
     assert.deepEqual(await response.json(), {
       ok: true,
       executionMode: "cloud-builder-rebuild",
-      resumeFromStage: "cloud-builder",
+      resumeFromStage: "cloud-builder-rebuild",
     });
     const detail = JSON.parse(await readFile(path.join(recordRoot, "record.json"), "utf8"));
     assert.equal(detail.status, "queued");
-    assert.equal(detail.resumeFromStage, "cloud-builder");
+    assert.equal(detail.resumeFromStage, "cloud-builder-rebuild");
     assert.equal(detail.attempt, 1);
   } finally {
     await studio.shutdown();

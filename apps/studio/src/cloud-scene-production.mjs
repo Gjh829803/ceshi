@@ -80,6 +80,7 @@ export async function launchStudioCloudSceneWorker({
   requestS3Uri,
   outputS3Prefix,
   manifestS3Uri = null,
+  resumeSourceExecutionId = undefined,
   resumeMode = "verify-only",
   attempt = 1,
   userId,
@@ -97,6 +98,7 @@ export async function launchStudioCloudSceneWorker({
       ? {}
       : {
           resumeManifestS3Uri: manifestS3Uri,
+          resumeSourceExecutionId,
           resumeMode,
           jobSuffix: `${resumeMode}-${attempt}`,
         }),
@@ -121,6 +123,9 @@ export async function executeStudioCloudScene({
   launchImplementation = launchCloudSceneWorkerJob,
   pollImplementation = pollCloudExecution,
   stagesImplementation = getCloudExecutionStages,
+  resumeManifestS3Uri = null,
+  resumeSourceExecutionId = undefined,
+  resumeMode = "verify-only",
 }) {
   const outputS3Prefix = joinS3Uri(
     config.outputS3Root,
@@ -147,6 +152,9 @@ export async function executeStudioCloudScene({
     executionId: submitted.executionId,
     requestS3Uri: submitted.requestS3Uri,
     outputS3Prefix,
+    manifestS3Uri: resumeManifestS3Uri,
+    resumeSourceExecutionId,
+    resumeMode,
     config,
     userId: cloudConfig.userId,
     launchImplementation,
@@ -237,4 +245,17 @@ export function resumeStudioCloudSceneHost(options) {
 
 export function resumeStudioCloudSceneBuilder(options) {
   return resumeStudioCloudSceneFromManifest({ ...options, resumeMode: "builder" });
+}
+
+export function rebuildStudioCloudSceneBuilder({
+  sourceExecutionId,
+  sourceManifestS3Uri,
+  ...options
+}) {
+  return executeStudioCloudScene({
+    ...options,
+    resumeManifestS3Uri: sourceManifestS3Uri,
+    resumeSourceExecutionId: sourceExecutionId,
+    resumeMode: "builder",
+  });
 }

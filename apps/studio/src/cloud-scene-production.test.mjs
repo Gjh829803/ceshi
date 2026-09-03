@@ -8,6 +8,7 @@ import {
   executeStudioCloudScene,
   launchStudioCloudSceneWorker,
   loadCloudSceneProductionConfig,
+  rebuildStudioCloudSceneBuilder,
   resumeStudioCloudSceneBuilder,
   resumeStudioCloudSceneHost,
 } from "./cloud-scene-production.mjs";
@@ -170,4 +171,52 @@ test("retries the same Cloud Execution from a trusted Planner manifest", async (
   assert.equal(calls[0][0], "retry");
   assert.equal(calls[1][1].resumeMode, "builder");
   assert.equal(calls[1][1].jobSuffix, "builder-2");
+});
+
+test("rebuilds Builder in a fresh Cloud Execution from a prior Planner manifest", async () => {
+  const calls = [];
+  const result = await rebuildStudioCloudSceneBuilder({
+    sceneId: "cloud-scene-builder-rebuild",
+    prompt: "Keep the prior Planner handoff.",
+    referenceImagePath: "/input/reference.png",
+    requestId: "cloud-scene-builder-rebuild-attempt-2",
+    attempt: 2,
+    sourceExecutionId: "execution-source-1",
+    sourceManifestS3Uri: "s3://worldkit-test/source/planner-manifest.json",
+    config: {
+      workerImage: `worker@sha256:${"e".repeat(64)}`,
+      outputS3Root: "s3://worldkit-test/cloud-scenes",
+      namespace: "lwdp",
+    },
+    cloudConfig: {
+      baseUrl: "https://lwdp.test", token: "test", userId: "partner-codex",
+    },
+    submitImplementation: async (input) => {
+      calls.push(["submit", input]);
+      return {
+        executionId: "execution-current-2",
+        requestS3Uri: "s3://worldkit-test/current/request.json",
+      };
+    },
+    dispatchImplementation: async (...args) => calls.push(["dispatch", ...args]),
+    launchImplementation: async (input) => {
+      calls.push(["launch", input]);
+      return { jobName: "worldkit-scene-execution-current-2" };
+    },
+    pollImplementation: async () => ({
+      execution_id: "execution-current-2", status: "succeeded",
+    }),
+    stagesImplementation: async () => ({ stages: [] }),
+  });
+  assert.equal(calls[0][0], "submit");
+  assert.equal(calls[1][0], "dispatch");
+  assert.equal(calls[2][0], "launch");
+  assert.equal(calls[2][1].executionId, "execution-current-2");
+  assert.equal(calls[2][1].resumeMode, "builder");
+  assert.equal(calls[2][1].resumeSourceExecutionId, "execution-source-1");
+  assert.equal(
+    calls[2][1].resumeManifestS3Uri,
+    "s3://worldkit-test/source/planner-manifest.json",
+  );
+  assert.equal(result.execution.execution_id, "execution-current-2");
 });

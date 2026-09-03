@@ -44,6 +44,7 @@ export function cloudSceneWorkerJob({
   apiBase = "https://lwdp.loopit.me",
   userId = "worldkit-studio",
   resumeManifestS3Uri = undefined,
+  resumeSourceExecutionId = undefined,
   resumeMode = "verify-only",
   jobSuffix = "",
 }) {
@@ -52,6 +53,12 @@ export function cloudSceneWorkerJob({
   required(outputS3Prefix, "output_s3_prefix");
   required(image, "image");
   if (resumeManifestS3Uri !== undefined) required(resumeManifestS3Uri, "resume_manifest_s3_uri");
+  if (resumeSourceExecutionId !== undefined) {
+    required(resumeSourceExecutionId, "resume_source_execution_id");
+    if (resumeManifestS3Uri === undefined) {
+      throw new Error("resume_source_execution_id requires resume_manifest_s3_uri.");
+    }
+  }
   if (!["verify-only", "builder", "host"].includes(resumeMode)) {
     throw new Error("resume_mode must be verify-only, builder, or host.");
   }
@@ -104,6 +111,9 @@ export function cloudSceneWorkerJob({
                 : [
                   "--resume-manifest-s3-uri", resumeManifestS3Uri,
                   "--resume-mode", resumeMode,
+                  ...(resumeSourceExecutionId === undefined
+                    ? []
+                    : ["--resume-source-execution-id", resumeSourceExecutionId]),
                 ]),
             ],
             env: [
@@ -192,6 +202,7 @@ async function main() {
     namespace: options.namespace ?? "lwdp",
     userId: options["user-id"] ?? "worldkit-studio",
     resumeManifestS3Uri: options["resume-manifest-s3-uri"],
+    resumeSourceExecutionId: options["resume-source-execution-id"],
     resumeMode: options["resume-mode"] ?? "verify-only",
     jobSuffix: options["job-suffix"] ?? "",
   });

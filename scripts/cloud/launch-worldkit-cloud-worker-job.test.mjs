@@ -56,11 +56,12 @@ test("creates an isolated pinned worker Job without embedding credentials", () =
     outputS3Prefix: "s3://bucket/output",
     image: `worldkit-cloud-worker@sha256:${"c".repeat(64)}`,
     resumeManifestS3Uri: "s3://bucket/output/stages/scene-production/cloud-artifact-manifest.json",
+    resumeSourceExecutionId: "exec-source",
     resumeMode: "builder",
     jobSuffix: "builder-3",
   });
-  assert.deepEqual(
-    builderResumed.spec.template.spec.containers[0].args.slice(-2),
-    ["--resume-mode", "builder"],
-  );
+  assert.deepEqual(builderResumed.spec.template.spec.containers[0].args.slice(-4), [
+    "--resume-mode", "builder",
+    "--resume-source-execution-id", "exec-source",
+  ]);
 });

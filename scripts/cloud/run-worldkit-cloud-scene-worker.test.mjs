@@ -539,3 +539,90 @@ test("builder resume reuses the Planner handoff and runs build-only", async () =
     await rm(repoRoot, { recursive: true, force: true });
   }
 });
+
+test("builder rebuild accepts a Planner manifest from a prior Cloud Execution", async () => {
+  const repoRoot = await mkdtemp(join(tmpdir(), "worldkit-cloud-builder-rebuild-test-"));
+  const sceneId = "builder-rebuild-scene";
+  const executionId = "exec-builder-rebuild-current";
+  const sourceExecutionId = "exec-builder-rebuild-source";
+  const requestUri = "s3://bucket/current/request.json";
+  const manifestUri = "s3://bucket/source/cloud-artifact-manifest.json";
+  const briefBytes = Buffer.from("# Scene Brief\n");
+  const briefSource = join(repoRoot, "brief-source.md");
+  writeFileSync(briefSource, briefBytes);
+  const request = {
+    kind: "worldkit-cloud-scene-request",
+    schemaVersion: 1,
+    sceneId,
+    prompt: "The new execution must reuse the prior Planner handoff.",
+    references: [],
+  };
+  const manifest = {
+    kind: "worldkit-cloud-artifact-manifest",
+    schemaVersion: 1,
+    sceneId,
+    executionId: sourceExecutionId,
+    artifacts: [{
+      path: "scene/scene-brief.md",
+      byteSize: briefBytes.length,
+      sha256: await sha256File(briefSource),
+      s3Uri: "s3://bucket/source/scene/scene-brief.md",
+    }],
+  };
+  let spawnCall;
+  try {
+    const result = await runCloudSceneWorker({
+      executionId,
+      requestS3Uri: requestUri,
+      outputS3Prefix: "s3://bucket/current",
+      workerId: "worker-builder-rebuild",
+      repoRoot,
+      heartbeatIntervalMs: 60_000,
+      cloudConfig: config,
+      resumeManifestS3Uri: manifestUri,
+      resumeSourceExecutionId: sourceExecutionId,
+      resumeMode: "builder",
+      fetchImplementation: async (url) => new Response(JSON.stringify(
+        url.endsWith("/claim") ? { lease_id: "lease-builder-rebuild" } : { accepted: true },
+      ), { status: 200 }),
+      downloadImplementation: async (s3Uri, localPath) => {
+        mkdirSync(join(localPath, ".."), { recursive: true });
+        writeFileSync(localPath, s3Uri === requestUri
+          ? Buffer.from(JSON.stringify(request))
+          : s3Uri === manifestUri ? Buffer.from(JSON.stringify(manifest)) : briefBytes);
+      },
+      spawnImplementation: (command, args, options) => {
+        spawnCall = { command, args, options };
+        return completedChild(() => {
+          const sceneRoot = join(repoRoot, "artifacts/scenes", sceneId);
+          const planRoot = join(repoRoot, "apps/playground/public/scene-plans", sceneId);
+          mkdirSync(join(sceneRoot, "world.build.json"), { recursive: true });
+          mkdirSync(planRoot, { recursive: true });
+          for (const [name, contents] of [
+            ["world.mjs", "export default {};"],
+            ["authoring.json", "{}"],
+            ["scene-implementation-map.json", "{}"],
+            ["runtime-snapshot.json", "{}"],
+            ["whitebox-capture-receipt.json", "{}"],
+            ["entry-third-person-validation.json", "{}"],
+            ["opening-frame.png", "png"],
+          ]) writeFileSync(join(sceneRoot, name), contents);
+          writeFileSync(join(sceneRoot, "world.build.json/manifest.json"), "{}");
+          writeFileSync(join(planRoot, "entry-whitebox-target.png"), "entry");
+          writeFileSync(join(planRoot, "world-plan.png"), "plan");
+        });
+      },
+      uploadOptions: {
+        execFileImplementation: (_command, _args, _options, callback) => callback(null, "", ""),
+      },
+      trustedCapturePublicKeyPath: "/trusted/public.pem",
+      verifyPlayableImplementation: async () => ({ ok: true, output: "", code: 0, signal: null }),
+    });
+    assert.equal(result.status, "succeeded");
+    assert.deepEqual(spawnCall.args, [
+      "agent:world", "--", "--scene-id", sceneId, "--build-only",
+    ]);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
