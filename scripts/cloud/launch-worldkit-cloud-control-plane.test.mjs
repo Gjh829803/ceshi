@@ -8,7 +8,10 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
     image: `registry.example/worldkit@sha256:${"a".repeat(64)}`,
   });
   const deployment = resources.find((resource) => resource.kind === "Deployment");
-  const service = resources.find((resource) => resource.kind === "Service");
+  const service = resources.find((resource) =>
+    resource.kind === "Service" && resource.metadata.name === "worldkit-cloud-control-plane");
+  const publicService = resources.find((resource) =>
+    resource.kind === "Service" && resource.metadata.name === "worldkit-cloud-monitor-public");
   const role = resources.find((resource) => resource.kind === "Role");
   const pod = deployment.spec.template.spec;
   const container = pod.containers[0];
@@ -27,6 +30,12 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   assert.ok(pod.volumes.every((volume) => volume.emptyDir));
   assert.equal(JSON.stringify(pod).includes("aws-credentials"), false);
   assert.equal(service.spec.type, "ClusterIP");
+  assert.equal(publicService.spec.type, "LoadBalancer");
+  assert.equal(publicService.spec.ports[0].targetPort, "monitor");
+  const monitor = pod.containers.find((item) => item.name === "read-only-monitor-proxy");
+  assert.ok(monitor);
+  assert.equal(monitor.command[1], "apps/studio/src/cloud-monitor-public-proxy.mjs");
+  assert.equal(monitor.env.some((item) => item.name === "LWDP_GENERATION_API_TOKEN"), false);
   assert.ok(role.rules[0].verbs.includes("create"));
   assert.ok(role.rules[0].verbs.includes("patch"));
   assert.equal(role.rules[0].verbs.includes("delete"), false);

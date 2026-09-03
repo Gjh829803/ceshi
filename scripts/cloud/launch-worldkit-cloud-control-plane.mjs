@@ -44,6 +44,7 @@ export function cloudControlPlaneResources({
   apiBase = "https://lwdp.loopit.me",
   userId = "worldkit-studio",
   port = 4197,
+  monitorPort = 4175,
 }) {
   if (!IMAGE.test(image ?? "")) throw new Error("Control-plane image must be digest-pinned.");
   const labels = { app: "worldkit-cloud-control-plane" };
@@ -101,6 +102,26 @@ export function cloudControlPlaneResources({
               limits: { cpu: "4", memory: "8Gi", "ephemeral-storage": "8Gi" },
             },
             volumeMounts: [{ name: "ephemeral-data", mountPath: "/var/run/worldkit-studio" }],
+          }, {
+            name: "read-only-monitor-proxy",
+            image,
+            imagePullPolicy: "IfNotPresent",
+            command: ["node", "apps/studio/src/cloud-monitor-public-proxy.mjs"],
+            ports: [{ name: "monitor", containerPort: monitorPort }],
+            env: [
+              { name: "WORLDKIT_CLOUD_MONITOR_PORT", value: String(monitorPort) },
+              { name: "WORLDKIT_CLOUD_MONITOR_TARGET", value: `http://127.0.0.1:${port}` },
+            ],
+            readinessProbe: {
+              httpGet: { path: "/api/health", port: "monitor" },
+              initialDelaySeconds: 5,
+              timeoutSeconds: 10,
+              periodSeconds: 10,
+            },
+            resources: {
+              requests: { cpu: "100m", memory: "128Mi" },
+              limits: { cpu: "500m", memory: "512Mi" },
+            },
           }],
           volumes: [{ name: "ephemeral-data", emptyDir: { sizeLimit: "8Gi" } }],
         },
@@ -117,10 +138,27 @@ export function cloudControlPlaneResources({
       ports: [{ name: "http", port, targetPort: "http" }],
     },
   };
+  const publicMonitorService = {
+    apiVersion: "v1",
+    kind: "Service",
+    metadata: {
+      name: "worldkit-cloud-monitor-public",
+      namespace,
+      annotations: {
+        "service.beta.kubernetes.io/aws-load-balancer-scheme": "internet-facing",
+      },
+    },
+    spec: {
+      type: "LoadBalancer",
+      selector: labels,
+      ports: [{ name: "http", port: 80, targetPort: "monitor" }],
+    },
+  };
   return Object.freeze([
     ...worldkitJobControllerRbac({ namespace, serviceAccountName }),
     deployment,
     service,
+    publicMonitorService,
   ]);
 }
 

@@ -243,6 +243,11 @@ export function isAllowedSeedancePublicRequest(method, rawUrl) {
   ].some((pattern) => pattern.test(pathname));
 }
 
+export function isAllowedCloudMonitorPublicRequest(method, rawUrl) {
+  if (!["GET", "HEAD"].includes(method)) return false;
+  return isAllowedStudioPublicRequest(method, rawUrl);
+}
+
 function upstreamHeaders(headers, target) {
   const forwarded = { ...headers, host: target.host };
   delete forwarded.authorization;

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   createStudioPublicProxy,
+  isAllowedCloudMonitorPublicRequest,
   isAllowedSeedancePublicRequest,
 } from "./public-proxy.mjs";
 
@@ -142,6 +143,28 @@ test("exposes an anonymous read-only Seedance and playable-world surface only", 
       new Promise((resolve) => proxy.close(resolve)),
       new Promise((resolve) => upstream.close(resolve)),
     ]);
+  }
+});
+
+test("exposes the complete evaluation surface read-only for the Cloud monitor", async () => {
+  for (const pathname of [
+    "/", "/styles.css", "/app.js", "/api/health", "/api/test-sets", "/api/worlds",
+    "/api/worlds/demo-world", "/api/worlds/demo-world/reference",
+    "/api/worlds/demo-world/deliverables/opening-frame",
+    "/api/episode-workflows", "/api/episode-workflows/episode-demo-world-abc",
+    "/api/episode-workflows/episode-demo-world-abc/artifacts/video/segment-00.mp4",
+  ]) {
+    assert.equal(isAllowedCloudMonitorPublicRequest("GET", pathname), true, pathname);
+  }
+  for (const [method, pathname] of [
+    ["POST", "/api/worlds"],
+    ["POST", "/api/test-sets/test-set-demo/run"],
+    ["POST", "/api/worlds/demo-world/retry"],
+    ["POST", "/api/episode-workflows"],
+    ["DELETE", "/api/worlds/demo-world"],
+  ]) {
+    assert.equal(isAllowedCloudMonitorPublicRequest(method, pathname), false,
+      `${method} ${pathname}`);
   }
 });
 
