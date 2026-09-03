@@ -1196,7 +1196,7 @@ source-neutral Opening Composition Host Gate。
   同一目标的多个子指标；
 - [x] NBR-60：一个初始 Attempt 加最多三次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；修复任务逐条执行
   metric-bound Native source action，禁止修改 Case、Profile、阈值、冻结 Owner 或既有产物；
-- [ ] NBR-65：按
+- [x] NBR-65：按
   [Native Block V2 Capability Migration and Walkable Surface Closure](superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md)
   迁移 v2 已验证且适用于当前生产链的完整能力集：显式 Collider/Surface Group、唯一 logical ground
   model、足迹/净空/Spawn/目标/连通/Traversal Band 与探索指标、共享可视/Havok 地表、精确聚合
@@ -1204,7 +1204,7 @@ source-neutral Opening Composition Host Gate。
   最终以逐能力 parity report 防止“只迁视觉、不迁可玩性”。保持 Babylon Native + Frozen
   Contributions + SDK-owned Havok，不恢复 Three、Manifest、Compiler、hidden foundation 或第二 support
   owner。它是 NBR-70 前置，不增加 WRC-1 第 34 个工作包；
-- [ ] NBR-65J：恢复 `codex/block-world-main-integration` 已验证的生产反馈语义，但不恢复 Three、
+- [x] NBR-65J：恢复 `codex/block-world-main-integration` 已验证的生产反馈语义，但不恢复 Three、
   Manifest、Compiler 或 hidden foundation：把 Planner 的 `world-plan.png` 与
   `entry-whitebox-target.png` 作为具名哈希输入交给 Native Builder；区分硬准入与还原质量；所有
   Profile 继续执行相同检测和最多三轮修复，探索 Case 默认 `report-only`，质量未达标时保留明确
@@ -1225,8 +1225,18 @@ Browser verifier。NBR-45、NBR-50 与 NBR-60 的生产集成检查点由
 165/165 affected tests、typecheck、425-entry test census 与 BNA clean-break gate 全部 GO。该证据只关闭
 上述三个 NBR 实施切片，不提前完成 NBR-20 的真实 formal generation、NBR-70/80/90、整体 NBR-1、完整
 BNA-6/7、WRC-SR 或产品 Native Viewer。
-BWB-6 仍只按已经合入的优化评估标记完成；其 Runtime 落地由 NBR-65 承接，不能把评估误写成实际
-Thin Instance/Chunk/Havok residency。PHO-7/8、通用 Action/Camera、空间事件、产品 Route/Nav、BNA-8
+NBR-65 与其内部纠偏 NBR-65J 由
+[PR #187](https://github.com/seedleap/agent-whitebox-world-sdk/pull/187) 合入
+`origin/main@8fb866e7eea807b1e624da65555ce38e47686065`；精确候选
+`6ae7aba2385626dfc99bade0b5f5482fe72a2da3` 的 Cursor Cloud affected gates 为 120/120、
+typecheck、42 行 v2 capability parity 与 diff check 全部 GO，独立 Opus 5 复核为开放 P0=0/P1=0。
+本地真实 `mars-first-rain-native-0904/run-20260903173619-46331` 生成了 identity-bound Final
+Package/Capture/launch，七个 Evaluation 维度全过，并验证接地、移动、跳跃/Reset、一条通过路线和
+三面阻挡墙。该证据只关闭 NBR-65/NBR-65J；它不把临时 Case 当作已发布 Corpus，也不提前完成
+NBR-20、NBR-70/80/90、整体 NBR-1、BNA-6/7、WRC-SR 或 WRC-1。
+BWB-6 本身仍只按已经合入的优化评估标记完成；实际 Thin Instance/Chunk/Havok residency 已由
+NBR-65 在当前生产 Owner 下落地，不能回写为 BWB-6 自己拥有 Runtime。PHO-7/8、通用
+Action/Camera、空间事件、产品 Route/Nav、BNA-8
 与 WRC-ACC-1 在本切片期间保持延期，不删除也不展开。
 
 #### CAST 组件观察研究关联（非 WRC / NBR 关键路径）

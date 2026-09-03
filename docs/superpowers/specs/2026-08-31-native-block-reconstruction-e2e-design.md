@@ -709,11 +709,13 @@ promote a failed Package as the runnable final world, weaken a hard Collider/Spa
 or silently lower thresholds. A later user- or queue-triggered run starts a new run identity.
 
 When a terminal failed evaluation still has a verified Package, completed Runtime Capture and completed
-cleanup, the production command returns an identity-bound `rejected-evaluation` inspection result. It exposes
-the rejected Package directory, opening image, Capture Receipt, evaluation, Run Receipt and exact evaluation
-diagnostic codes so a person can inspect and launch the admitted candidate. This is not publication, does not
-turn the failed evaluation into GO, and is unavailable when Package/Runtime/Capture identity evidence is
-missing or stale.
+cleanup, its frozen Evaluation Profile decides the non-publication disposition. A
+`required-for-publication` Case returns an identity-bound `rejected-evaluation`; a `report-only` Case whose
+failures are limited to previewable reconstruction-quality dimensions returns `preview-ready` with
+`publicationStatus: "not-accepted"`. Both expose the admitted Package directory, opening image, Capture
+Receipt, evaluation, Run Receipt and exact evaluation diagnostic codes so a person can inspect the candidate.
+Neither outcome is publication or GO, and neither is available when Package/Runtime/Capture identity evidence
+is missing or stale.
 
 Repair writes only a new task workspace and may change `scene.ts`, `native-block-authoring.json`, or
 `native-resources.json` within the frozen Case/Profile budgets. It cannot edit Package A, Capture A,
