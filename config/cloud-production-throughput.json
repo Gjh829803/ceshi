@@ -20,12 +20,12 @@
     "whiteboxCaptureCases": 16,
     "gemini": 20,
     "seedancePerCase": 10,
-    "seedanceGlobal": 96,
+    "seedanceGlobal": 10,
     "mediaConformance": 48
   },
   "ramp": {
     "lwdpBatches": [24, 48, 80, 120],
-    "seedance": [40, 64, 80, 96],
+    "seedance": [4, 6, 8, 10],
     "minimumObservationSeconds": 1200,
     "maximumTerminalFailureRatio": 0.05
   },

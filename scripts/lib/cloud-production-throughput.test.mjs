@@ -13,7 +13,7 @@ test("loads the bounded 200-Case 48-hour production profile", async () => {
   assert.equal(profile.batching.codexMaxTasksPerBatch, 1000);
   assert.equal(profile.batching.codexAccountConcurrency, 20);
   assert.equal(profile.pools.whiteboxCaptureCases, 16);
-  assert.equal(profile.pools.seedanceGlobal, 96);
+  assert.equal(profile.pools.seedanceGlobal, 10);
   assert.equal(profile.submission.maxConcurrentCreates, 24);
   assert.equal(profile.submission.maxNonTerminalLwdpBatches, 120);
   assert.deepEqual(profile.ramp.lwdpBatches, [24, 48, 80, 120]);
@@ -27,6 +27,6 @@ test("rejects unsafe submission and mismatched ramp limits", async () => {
   }), /maxConcurrentCreates/);
   assert.throws(() => parseCloudProductionThroughputConfig({
     ...current,
-    ramp: { ...current.ramp, seedance: [40, 64] },
+    ramp: { ...current.ramp, seedance: [4, 6] },
   }), /terminate/);
 });
