@@ -305,6 +305,9 @@ describe("packageNativeBlockAttemptV1", () => {
       },
     });
     expect(packaged.groundAnalysisReportHash).toBe(
+      sha256CanonicalJson(packaged.groundAnalysisReport),
+    );
+    expect(packaged.groundAnalysisReportHash).not.toBe(
       packaged.groundAnalysisReport.groundAnalysisReportHash,
     );
     expect(JSON.parse(await readFile(

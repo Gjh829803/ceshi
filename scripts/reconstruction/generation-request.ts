@@ -503,6 +503,16 @@ async function freezeFile(root: CanonicalRootV1, candidate: string): Promise<Fro
   return { relativePath, bytes, hash: sha256Bytes(bytes) as Sha256HashV1 };
 }
 
+function canonicalJsonHash(file: FrozenFileV1): Sha256HashV1 {
+  try {
+    return sha256CanonicalJson(
+      JSON.parse(new TextDecoder().decode(file.bytes)),
+    ) as Sha256HashV1;
+  } catch {
+    throw new TypeError("Repair prior evidence identity closure failed.");
+  }
+}
+
 async function copyFrozenFile(taskWorkspacePath: string, file: FrozenFileV1): Promise<void> {
   const destination = path.join(taskWorkspacePath, "inputs", file.relativePath);
   await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
@@ -658,7 +668,9 @@ export async function prepareNativeBlockGenerationTaskV1(
       "attempts/0/attempt-result.json",
     );
     if (
-      priorEvidence?.hash !== repairInstruction.priorEvidence.resultHash ||
+      priorEvidence === undefined ||
+      canonicalJsonHash(priorEvidence) !==
+        repairInstruction.priorEvidence.resultHash ||
       !repairInstruction.priorEvidence.resultRef.endsWith(
         `/${priorEvidenceRelativePath}`,
       )

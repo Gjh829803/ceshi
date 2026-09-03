@@ -753,6 +753,9 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       schemaVersion: 1,
       admissionOutcome: "failed",
     } as never;
+    const groundAnalysisReportArtifactHash = sha256CanonicalJson(
+      groundAnalysisReport,
+    ) as Sha256HashV1;
     const packageAttempt = vi.fn(async () => {
       throw new NativeBlockPackageErrorV1(
         [
@@ -765,7 +768,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
           sceneAuthoringAttemptResult:
             value.packageResult.sceneAuthoringAttemptResult as never,
           groundAnalysisReport,
-          groundAnalysisReportHash: H("7"),
+          groundAnalysisReportHash: groundAnalysisReportArtifactHash,
           groundAnalysisReportPath,
           repairDiagnostics: [repairDiagnostic],
         },
@@ -786,7 +789,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       groundAnalysisReportRef: expect.stringMatching(
         /attempts\/0\/ground-analysis-report\.json$/,
       ),
-      groundAnalysisReportHash: H("7"),
+      groundAnalysisReportHash: groundAnalysisReportArtifactHash,
       repairDiagnostics: [repairDiagnostic],
     }));
     expect(await ports.cleanup()).toEqual(expect.objectContaining({

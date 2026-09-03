@@ -600,7 +600,14 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         priorSourceHash,
         evaluationText: "{}",
       });
-      const groundAnalysisText = "{}";
+      const groundAnalysisValue = {
+        kind: "babylon-native-block-ground-analysis-report",
+        schemaVersion: 1,
+        admissionOutcome: "failed",
+        groundAnalysisReportHash: hash("e"),
+      };
+      const groundAnalysisText =
+        `${stringifyCanonicalJson(groundAnalysisValue)}\n`;
       await Promise.all([
         writeFile(
           path.join(priorAttemptRoot, "native-check-result.json"),
@@ -655,8 +662,8 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
           kind: "ground-analysis-report",
           resultRef:
             "artifact://run/attempts/0/ground-analysis-report.json",
-          resultHash: sha256Bytes(
-            new TextEncoder().encode(groundAnalysisText),
+          resultHash: sha256CanonicalJson(
+            groundAnalysisValue,
           ) as `sha256:${string}`,
         },
         priorGenerationRequestRef:

@@ -637,7 +637,7 @@ export async function packageNativeBlockAttemptV1(
           sceneAuthoringAttemptResult: attemptResult,
           groundAnalysisReport: analyzedGround.report,
           groundAnalysisReportHash:
-            analyzedGround.report.groundAnalysisReportHash,
+            sha256CanonicalJson(analyzedGround.report) as Sha256HashV1,
           groundAnalysisReportPath,
           repairDiagnostics: analyzedGround.repairDiagnostics,
         }),
@@ -670,7 +670,8 @@ export async function packageNativeBlockAttemptV1(
       ),
       buildReceiptHash: sha256CanonicalJson(receipt) as Sha256HashV1,
       groundAnalysisReport: analyzedGround.report,
-      groundAnalysisReportHash: analyzedGround.report.groundAnalysisReportHash,
+      groundAnalysisReportHash:
+        sha256CanonicalJson(analyzedGround.report) as Sha256HashV1,
       groundAnalysisReportPath,
       outputDirectoryPath,
       diagnostics: Object.freeze([]),
