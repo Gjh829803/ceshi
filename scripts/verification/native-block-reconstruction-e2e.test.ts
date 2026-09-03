@@ -1214,7 +1214,7 @@ describe("Native Block reconstruction E2E verifier", () => {
     }
   });
 
-  it("allows contributed Case blockers without a dedicated scripted block check", () => {
+  it("rejects contributed Case blockers without a dedicated scripted block check", () => {
     const fixture = createEvidenceSetFixtureInputV1({
       allDimensionsPass: true,
       includePaletteTraversalDisagreement: true,
@@ -1262,7 +1262,34 @@ describe("Native Block reconstruction E2E verifier", () => {
           ],
         },
         materializerMetadata,
-      })).not.toThrow();
+      })).toThrowError("NBR70_BLOCKER_IDENTITY_MISMATCH");
+  });
+
+  it("requires a passing ground traversal to finish inside its frozen band endpoint", () => {
+    const band = {
+      acceptanceTargetRef: "worldkit://acceptance-target/upper@1",
+      id: "upper-arm-band",
+      centerlineStandPositionsXYZMeters: [
+        { xMeters: 0, yMeters: 0, zMeters: 0 },
+        { xMeters: -3, yMeters: 0, zMeters: -12 },
+      ],
+      halfWidthMeters: 1,
+    } as const;
+    const input = {
+      checkExpectation: "pass" as const,
+      acceptanceTargetRef: band.acceptanceTargetRef,
+      traversalBands: [band],
+      finalPositionMetersXYZ: [-2.5, 0, -12] as const,
+      finalMovementMedium: "ground" as const,
+    };
+
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyGroundPassEndpointClosure(input)).not.toThrow();
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyGroundPassEndpointClosure({
+        ...input,
+        finalPositionMetersXYZ: [0, 0, -5],
+      })).toThrowError("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
   });
 
   it("rejects an empty candidate before launching playability", async () => {

@@ -1,5 +1,6 @@
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { isNil } from "lodash-es";
 
 import {
   parseNativeBlockAuthoringManifestV1,
@@ -452,10 +453,7 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
       .map(({ id }) => id),
   );
   exactStringSet(contributionBlockers, caseBlockers);
-  const caseBlockerSet = new Set(caseBlockers);
-  if (formalBlockers.some((colliderId) => !caseBlockerSet.has(colliderId))) {
-    fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
-  }
+  exactStringSet(formalBlockers, caseBlockers);
 
   const joinsByColliderId = new Map<string,
     typeof input.materializerMetadata.colliderJoins>();
@@ -490,14 +488,50 @@ function verifyNativeCheckReplayClosure(input: Readonly<{
   );
 }
 
-export const NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1 = Object.freeze({
-  verifyBlockerEvidenceClosure,
-});
-
 type ReconstructionRunReceipt = ReturnType<
   typeof parseWorldReconstructionRunReceiptV1
 >;
 type ReconstructionCase = ReturnType<typeof parseWorldReconstructionCaseV1>;
+type ReconstructionTraversalCheck =
+  ReconstructionCase["expected"]["criticalTraversalChecks"][number];
+type ReconstructionTraversalBand =
+  ReconstructionCase["expected"]["groundConnectivity"]["requiredTraversalBands"][number];
+
+function verifyGroundPassEndpointClosure(input: Readonly<{
+  checkExpectation: ReconstructionTraversalCheck["expectation"];
+  acceptanceTargetRef: string;
+  traversalBands: readonly ReconstructionTraversalBand[];
+  finalPositionMetersXYZ: readonly [number, number, number];
+  finalMovementMedium: "air" | "ground";
+}>): void {
+  if (input.checkExpectation !== "pass") return;
+  const matchingBands = input.traversalBands.filter(
+    ({ acceptanceTargetRef }) =>
+      acceptanceTargetRef === input.acceptanceTargetRef,
+  );
+  if (matchingBands.length !== 1 || input.finalMovementMedium !== "ground") {
+    fail("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
+  }
+  const band = matchingBands[0]!;
+  const endpoint = band.centerlineStandPositionsXYZMeters.at(-1);
+  if (isNil(endpoint)) {
+    fail("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
+  }
+  const distanceMeters = Math.hypot(
+    input.finalPositionMetersXYZ[0] - endpoint.xMeters,
+    input.finalPositionMetersXYZ[1] - endpoint.yMeters,
+    input.finalPositionMetersXYZ[2] - endpoint.zMeters,
+  );
+  if (distanceMeters > band.halfWidthMeters) {
+    fail("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
+  }
+}
+
+export const NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1 = Object.freeze({
+  verifyBlockerEvidenceClosure,
+  verifyGroundPassEndpointClosure,
+});
+
 type ReconstructionEvaluationProfile = ReturnType<
   typeof parseWorldReconstructionEvaluationProfileV1
 >;
@@ -1014,6 +1048,7 @@ async function verifyPlayability(input: Readonly<{
   maximumPositionDriftMeters: number;
   checks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
   caseChecks: ReturnType<typeof parseWorldReconstructionCaseV1>["expected"]["criticalTraversalChecks"];
+  traversalBands: ReturnType<typeof parseWorldReconstructionCaseV1>["expected"]["groundConnectivity"]["requiredTraversalBands"];
   blockerColliderIds: readonly string[];
 }>): Promise<NativeBlockReconstructionE2EVerificationV1["playability"]> {
   const ready = assertReadySnapshot(await input.session.awaitReady());
@@ -1124,6 +1159,7 @@ async function verifyPlayability(input: Readonly<{
       0,
     );
     let committed = 0;
+    let finalSnapshot: WorldRuntimeSnapshotV4 | undefined;
     for (const fixedInput of check.fixedInputSequence) {
       for (let tick = 0; tick < fixedInput.ticks; tick += 1) {
         committed += 1;
@@ -1136,6 +1172,7 @@ async function verifyPlayability(input: Readonly<{
           runtimeSessionId,
           reset.worldSessionId,
         );
+        finalSnapshot = snapshot;
         if (snapshot.world.simulationTick !== reset.world.simulationTick + committed) {
           fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
         }
@@ -1166,6 +1203,14 @@ async function verifyPlayability(input: Readonly<{
       checkpointIds.length !== expectedCheckpointIds.length ||
       checkpointIds.some((id, index) => id !== expectedCheckpointIds[index])
     ) fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
+    if (isNil(finalSnapshot)) fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
+    verifyGroundPassEndpointClosure({
+      checkExpectation: caseCheck.expectation,
+      acceptanceTargetRef: caseCheck.acceptanceTargetRef,
+      traversalBands: input.traversalBands,
+      finalPositionMetersXYZ: position(finalSnapshot, input.subjectEntityId),
+      finalMovementMedium: movementMedium(finalSnapshot, input.subjectEntityId),
+    });
     const outcome = check.checkExpectation === "block" ? "blocked" : "passed";
     results.push(Object.freeze({ id: check.id, outcome, checkpointIds }));
   }
@@ -1536,6 +1581,8 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
         1_000,
       checks: captureReceipt.formalRequest.scriptedTraversal.checks,
       caseChecks: reconstructionCase.expected.criticalTraversalChecks,
+      traversalBands:
+        reconstructionCase.expected.groundConnectivity.requiredTraversalBands,
       blockerColliderIds: measuredBlockerColliderIds,
     });
   } catch (error) {
