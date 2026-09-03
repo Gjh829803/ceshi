@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, get as httpGet } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -132,6 +132,57 @@ test("reattaches persisted Cloud Episodes and never cancels them on process shut
     assert.equal(cancelCount, 0);
     assert.deepEqual(service.activeJobs, []);
   } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("hydrates an S3-only Episode record before resuming a pre-submission cloud run", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-s3-recovery-"));
+  const episodeId = "episode-s3-only-recovery-001";
+  let executeCount = 0;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    listCloudEpisodeRecords: async () => [{
+      kind: "worldkit-episode-workflow-record",
+      schemaVersion: 1,
+      sceneId: "s3-only-scene",
+      episodeId,
+      backend: "cloud",
+      status: "running",
+      currentStage: "preparing",
+      remoteExecutionId: null,
+      createdAt: "2026-09-03T00:00:00.000Z",
+      updatedAt: "2026-09-03T00:01:00.000Z",
+      stages: [],
+    }],
+    persistCloudEpisodeRecord: async () => undefined,
+    resolveCloudSceneInput: async () => ({
+      sceneExecutionId: "exec_scene_s3_only",
+      sceneManifestS3Uri: "s3://bucket/scene/manifest.json",
+      sceneRecord: {},
+    }),
+    executeCloudEpisode: async () => {
+      executeCount += 1;
+      throw new Error("synthetic transport failure after cache hydration");
+    },
+    readCloudEpisodeManifest: async () => ({}),
+  });
+  try {
+    assert.equal(await service.recoverPersistedCloudEpisodes(), 1);
+    for (let attempt = 0; attempt < 50 && service.activeJobs.length > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(executeCount, 1);
+    assert.deepEqual(service.activeJobs, []);
+    const record = JSON.parse(await readFile(
+      path.join(repoRoot, "artifacts/episodes", episodeId, "episode-record.json"),
+      "utf8",
+    ));
+    assert.equal(record.status, "failed");
+    assert.match(record.error, /synthetic transport failure/);
+  } finally {
+    await service.shutdown();
     await rm(repoRoot, { recursive: true, force: true });
   }
 });

@@ -1360,6 +1360,12 @@ export function createEpisodeWorkflowService(options) {
     let record = await readJson(recordPath);
     const requestId = `${episodeId}-cloud-run-1`;
     try {
+      // Startup recovery may discover an S3 Run Index entry before its
+      // disposable local compatibility cache has been materialized. The
+      // recovery coordinator normally hydrates it first; if it disappears
+      // concurrently, leave the durable remote record untouched instead of
+      // dereferencing a missing local record or creating a second execution.
+      if (!record) return;
       if (
         typeof executeCloudEpisode !== "function" ||
         typeof resolveCloudSceneInput !== "function" ||
@@ -1427,7 +1433,7 @@ export function createEpisodeWorkflowService(options) {
       record = await admitCloudEpisodeResult(recordPath, record, result);
     } catch (error) {
       record = await readJson(recordPath) ?? record;
-      if (record.status !== "cancelled") {
+      if (record && record.status !== "cancelled") {
         record = {
           ...record,
           status: record.remoteExecutionId ? "remote-pending" : "failed",
@@ -1736,6 +1742,18 @@ export function createEpisodeWorkflowService(options) {
         activeCloudExecutions.has(record.episodeId)
       ) continue;
       recovered += 1;
+      const localRecordPath = path.join(
+        episodesRoot,
+        record.episodeId,
+        "episode-record.json",
+      );
+      if (!await readJson(localRecordPath)) {
+        // S3 is authoritative in the cloud lane, but the asynchronous worker
+        // functions intentionally operate on one local compatibility record.
+        // Hydrate that cache before launching recovery so all later reads have
+        // the same immutable Episode identity.
+        await persistEpisodeRecord({ ...record });
+      }
       if (typeof record.remoteExecutionId === "string" && record.remoteExecutionId) {
         activeCloudExecutions.set(record.episodeId, record.remoteExecutionId);
         void runCloudEpisodeRecovery(record);
