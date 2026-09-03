@@ -228,6 +228,12 @@ describe("Native Block Builder Skill", () => {
     expect(outputContract).toContain(
       "Every `identityColorHex` must also be unique",
     );
+    expect(skill).toContain(
+      "relative to this exact `SKILL.md` copy",
+    );
+    expect(skill).not.toContain(
+      "node .codex/skills/worldkit-native-block-builder/scripts/self-check.mjs",
+    );
     for (const forbidden of [
       "new Engine(", "new Scene(", "runRenderLoop", "new Havok", "new FreeCamera(",
       "addEventListener", "setInterval", "setTimeout", "fetch(", "Three.js", "Compiler",
@@ -387,6 +393,29 @@ describe("Native Block Builder Skill", () => {
       expect.objectContaining({ path: "scene.ts" }),
     ]);
     expect(first.stdout).toBe(second.stdout);
+  });
+
+  it("ignores only Host-owned isolated-workspace infrastructure around the three outputs", async () => {
+    const workspace = await createWorkspace();
+    await Promise.all([
+      mkdir(path.join(workspace, "inputs"), { recursive: true }),
+      mkdir(path.join(workspace, "attempts", "0", ".task", "context"), {
+        recursive: true,
+      }),
+      writeFile(path.join(workspace, ".codex-last-message.txt"), "pending\n"),
+    ]);
+    await Promise.all([
+      writeFile(path.join(workspace, "inputs", "reference-0.png"), "input"),
+      writeFile(
+        path.join(workspace, "attempts", "0", ".task", "context", "case.json"),
+        "{}",
+      ),
+    ]);
+
+    const result = await runSelfCheck(workspace);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.report).toMatchObject({ ok: true, diagnosticCodes: [] });
   });
 
   it.each([

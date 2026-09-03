@@ -11,6 +11,11 @@ const DECLARED_OUTPUT_PATHS = Object.freeze([
   "native-resources.json",
 ]);
 const DECLARED_OUTPUT_SET = new Set(DECLARED_OUTPUT_PATHS);
+const HOST_WORKSPACE_ENTRY_SET = new Set([
+  ".codex-last-message.txt",
+  "attempts",
+  "inputs",
+]);
 const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
@@ -193,7 +198,10 @@ export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
   }
 
   for (const entry of entries.sort(stableCompare)) {
-    if (!DECLARED_OUTPUT_SET.has(entry)) {
+    if (
+      !DECLARED_OUTPUT_SET.has(entry) &&
+      !HOST_WORKSPACE_ENTRY_SET.has(entry)
+    ) {
       diagnosticCodes.add("NATIVE_BLOCK_BUILDER_OUTPUT_EXTRA");
     }
   }

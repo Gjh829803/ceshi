@@ -68,13 +68,13 @@ Use only `@whitebox-world/native-babylon`, `@whitebox-world/native-babylon-block
 
 ## Completion and frozen repair budget
 
-Run the bundled advisory output-shape checker inside this same Builder task:
+Resolve `scripts/self-check.mjs` relative to this exact `SKILL.md` copy and run the bundled advisory output-shape checker inside this same Builder task:
 
 ```bash
-node .codex/skills/worldkit-native-block-builder/scripts/self-check.mjs \
-  --workspace <declared-output-directory>
+node <resolved-bundled-self-check-path> \
+  --workspace .
 ```
 
-The checker verifies only the closed output inventory, file safety, JSON plain-data shape, sorted unique visual resource refs, and obvious forbidden authority tokens. The self-check reports only; it does not edit generated files, retry the Builder, typecheck Babylon, instantiate a Candidate, validate a Layout, infer colliders, produce a Package/Receipt, or grant admission.
+The checker verifies only the three declared root outputs, file safety, JSON plain-data shape, sorted unique visual resource refs, and obvious forbidden authority tokens. It ignores the task runner's reserved root entries `inputs/`, `attempts/`, and `.codex-last-message.txt`; the trusted Host still promotes exactly the three declared files and rejects every other output. The self-check reports only; it does not edit generated files, retry the Builder, typecheck Babylon, instantiate a Candidate, validate a Layout, infer colliders, produce a Package/Receipt, or grant admission.
 
 Obey the frozen Request/Profile `builderSelfRepairAttemptCount`; never invent a retry budget. The representative NBR Case freezes `builderSelfRepairAttemptCount` to `0`, so run this checker once and return its diagnostics without editing or retrying on failure. A future nonzero Host-selected budget still owns the exact attempt count and every new attempt identity. Only a passing fresh report may proceed to trusted Host replay and `worldkit native check`, which run before any Package or Runtime Candidate exists.
