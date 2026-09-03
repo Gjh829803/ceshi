@@ -108,6 +108,29 @@ function readyCaptureStage(execution) {
   return execution.stages.find((item) => item?.stage_id === "whitebox-capture");
 }
 
+export async function unfinishedGpuBatchIsActionable(
+  batch,
+  inspectExecution,
+) {
+  const actionable = await mapWithConcurrency(batch.tasks, 8, async (task) => {
+    try {
+      const execution = cloudExecutionRecord(await inspectExecution(task.executionId));
+      if (["succeeded", "failed", "interrupted", "cancelled"].includes(execution.status)) {
+        return false;
+      }
+      const stage = execution.stages?.find?.(
+        (item) => item?.stage_id === "whitebox-capture",
+      );
+      return stage?.status === "ready" || stage?.status === "running";
+    } catch {
+      // An unknown execution must remain recoverable. Only skip a manifest
+      // when every task is positively known to be stale.
+      return true;
+    }
+  });
+  return actionable.some(Boolean);
+}
+
 export async function dispatchGpuCaptureBatch({
   entries,
   minimumBatchSize = 100,
@@ -385,16 +408,28 @@ async function main() {
       .filter((item) => /\/result\.json$/.test(item.key))
       .map((item) => /\/batches\/([^/]+)\/result\.json$/.exec(item.key)?.[1])
       .filter(Boolean));
-    const unfinishedManifest = batchObjects
+    const unfinishedManifests = batchObjects
       .filter((item) => /\/manifest\.json$/.test(item.key))
-      .find((item) => {
+      .filter((item) => {
         const batchId = /\/batches\/([^/]+)\/manifest\.json$/.exec(item.key)?.[1];
         return batchId && !resultBatchIds.has(batchId);
       });
-    if (unfinishedManifest) {
+    for (const unfinishedManifest of unfinishedManifests) {
       const localPath = join(temporaryRoot, "unfinished-batch.json");
       await downloadS3FileAtomic(unfinishedManifest.s3Uri, localPath);
       const batch = parseGpuCaptureBatchManifest(await readFile(localPath, "utf8"));
+      const actionable = await unfinishedGpuBatchIsActionable(
+        batch,
+        (executionId) => getCloudExecution(executionId, { config: cloudConfig }),
+      );
+      if (!actionable) {
+        process.stdout.write(`${JSON.stringify({
+          status: "stale-unfinished-batch-skipped",
+          batchId: batch.batchId,
+          taskCount: batch.taskCount,
+        })}\n`);
+        continue;
+      }
       const launched = await launchCloudGpuCaptureBatchJob({
         batchId: batch.batchId,
         batchManifestS3Uri: unfinishedManifest.s3Uri,

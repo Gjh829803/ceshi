@@ -5,6 +5,7 @@ import {
   cleanStaleQueueEntries,
   dispatchGpuCaptureBatch,
   reconcileCloudEpisodeCpuStages,
+  unfinishedGpuBatchIsActionable,
 } from "./dispatch-worldkit-gpu-capture-batch.mjs";
 
 const IMAGE = `registry.example/worldkit@sha256:${"a".repeat(64)}`;
@@ -284,6 +285,37 @@ test("stale queue cleanup never blocks dispatch when DeleteObject is unavailable
   assert.equal(calls.length, 2);
   assert.deepEqual(outcomes.map(({ status }) => status), ["retained", "removed"]);
   assert.match(outcomes[0].error, /AccessDenied/);
+});
+
+test("unfinished GPU Batch is skipped after every linked Execution is terminal", async () => {
+  const items = [entry(0), entry(1)];
+  const actionable = await unfinishedGpuBatchIsActionable(
+    { tasks: items },
+    async (executionId) => ({
+      ...executionFor(items.find((item) => item.executionId === executionId)),
+      status: executionId === "execution_000" ? "failed" : "cancelled",
+    }),
+  );
+  assert.equal(actionable, false);
+});
+
+test("unfinished GPU Batch remains actionable while one capture can resume", async () => {
+  const items = [entry(0), entry(1)];
+  const actionable = await unfinishedGpuBatchIsActionable(
+    { tasks: items },
+    async (executionId) => executionId === "execution_000"
+      ? { ...executionFor(items[0]), status: "failed" }
+      : executionFor(items[1], "running"),
+  );
+  assert.equal(actionable, true);
+});
+
+test("unfinished GPU Batch fails closed when Execution state is unavailable", async () => {
+  const actionable = await unfinishedGpuBatchIsActionable(
+    { tasks: [entry(0)] },
+    async () => { throw new Error("temporary LWDP outage"); },
+  );
+  assert.equal(actionable, true);
 });
 
 test("cloud reconciler recovers a lost create response and launches CPU prepare", async () => {
