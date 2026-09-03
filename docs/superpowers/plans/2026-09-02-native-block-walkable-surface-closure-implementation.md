@@ -18,6 +18,14 @@ can erase an otherwise admitted world. NBR-65J closes that causal-feedback and
 preview boundary before the real Case is accepted. It ports v2 behavior without
 restoring its Three renderer, Manifest, Compiler or hidden foundation.
 
+**2026-09-04 accepted checkpoint:** PR #187 merged exact candidate
+`6ae7aba2385626dfc99bade0b5f5482fe72a2da3` as
+`origin/main@8fb866e7eea807b1e624da65555ce38e47686065`. Exact-SHA affected gates,
+the 42-row behavior-bound v2 parity verifier and independent review all passed
+with open P0=0/P1=0. The local `mars-first-rain-native-0904` Case supplied the
+NBR-65I runtime evidence. This completes NBR-65/NBR-65J only; NBR-20 and
+NBR-70/80/90 remain live tasks under the backlog authority.
+
 ## Delivery graph
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership / input -> output | Required evidence | Mode |
@@ -252,9 +260,11 @@ the real Case candidate is frozen.
    protection, cross-Chunk movement and far silhouette visibility.
 5. Publish identity-bound Package, Receipt, opening/top/side Capture, Collider overlay, ground report,
    parity report, evaluation and a stable preview command. A failed visual score is previewable only
-   after Package and Runtime admission pass. The terminal command returns `rejected-evaluation` with the
-   exact diagnostic codes and immutable Package/Capture/evaluation/Receipt paths; it must not call the final
-   publisher or label that candidate accepted. Native Case mapping also uses one static Collider identity
+   after Package and Runtime admission pass. An exhausted `required-for-publication` result remains
+   `rejected-evaluation`; an exhausted soft-quality `report-only` result is `preview-ready` with
+   `publicationStatus: "not-accepted"`. Both expose exact diagnostic codes and immutable
+   Package/Capture/evaluation/Receipt paths; neither may call the final publisher or label that candidate
+   accepted. Native Case mapping also uses one static Collider identity
    (`contributionId === colliderId`), and the trusted Formal Capture binder rejects pass/block planes whose
    crossed `expectedCenterSide` is already satisfied at Spawn.
 6. Record actual draw/buffer counts, collision parts, peak active physics objects, readiness and
