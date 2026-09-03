@@ -40,6 +40,7 @@ import {
   cancelGenerationJob,
   classifyCodexTaskFailureForRetry,
   LwdpJobPendingError,
+  joinS3Uri,
   loadLwdpGenerationConfig,
 } from "../../../scripts/lib/lwdp-generation-client.mjs";
 import { recoverSucceededCodexJobOutputs } from "../../../scripts/lib/lwdp-codex-output-recovery.mjs";
@@ -232,6 +233,82 @@ export function hasRemoteCloudPlannerResumeInputs(record) {
   }
   return !record.referenceImage || ["png", "jpg", "webp"].some((extension) =>
     cloudArtifactByPath(record, `scene-plan/reference-0.${extension}`) !== null);
+}
+
+export async function resolveCloudBuilderRebuildSource(record, {
+  outputS3Root,
+  repoRoot,
+  readManifestImplementation = readCloudArtifactManifest,
+  readArtifactImplementation = readRemoteS3Artifact,
+} = {}) {
+  if (
+    typeof record?.cloudBuilderRebuildSourceExecutionId === "string" &&
+    typeof record?.cloudBuilderRebuildSourceManifestS3Uri === "string" &&
+    typeof record?.cloudBuilderRebuildSourceRequestS3Uri === "string"
+  ) {
+    return {
+      executionId: record.cloudBuilderRebuildSourceExecutionId,
+      manifestS3Uri: record.cloudBuilderRebuildSourceManifestS3Uri,
+      requestS3Uri: record.cloudBuilderRebuildSourceRequestS3Uri,
+    };
+  }
+  if (hasRemoteCloudPlannerResumeInputs(record)) {
+    return {
+      executionId: record.remoteExecutionId,
+      manifestS3Uri: record.remoteArtifactManifestS3Uri,
+      requestS3Uri: record.remoteRequestS3Uri,
+    };
+  }
+  if (
+    typeof outputS3Root !== "string" ||
+    typeof record?.sceneId !== "string" ||
+    !Number.isSafeInteger(record.attempt) || record.attempt < 1
+  ) return null;
+  const requiredPaths = new Set([
+    "scene/scene-brief.md",
+    "scene/planner-self-check.json",
+    "scene/visual-identity-palette.json",
+    "scene-plan/entry-whitebox-target.png",
+    "scene-plan/world-plan.png",
+  ]);
+  for (let attempt = record.attempt; attempt >= 1; attempt -= 1) {
+    const attemptRoot = joinS3Uri(outputS3Root, record.sceneId, `attempt-${attempt}`);
+    const manifestS3Uri = joinS3Uri(
+      attemptRoot,
+      "stages",
+      "scene-production",
+      "cloud-artifact-manifest.json",
+    );
+    try {
+      const manifest = await readManifestImplementation(manifestS3Uri, {
+        repoRoot,
+        expectedSceneId: record.sceneId,
+      });
+      const artifactPaths = new Set(manifest.artifacts.map(({ path: artifactPath }) => artifactPath));
+      if ([...requiredPaths].some((artifactPath) => !artifactPaths.has(artifactPath))) continue;
+      if (record.referenceImage && !["png", "jpg", "webp"].some((extension) =>
+        artifactPaths.has(`scene-plan/reference-0.${extension}`))) continue;
+      const requestS3Uri = joinS3Uri(attemptRoot, "inputs", "request.json");
+      const requestBytes = await readArtifactImplementation(requestS3Uri, {
+        repoRoot,
+        maximumBytes: 1024 * 1024,
+      });
+      const sourceRequest = JSON.parse(requestBytes.toString("utf8"));
+      if (
+        sourceRequest?.kind !== "worldkit-cloud-scene-request" ||
+        sourceRequest.schemaVersion !== 1 ||
+        sourceRequest.sceneId !== record.sceneId
+      ) continue;
+      return {
+        executionId: manifest.executionId,
+        manifestS3Uri,
+        requestS3Uri,
+      };
+    } catch {
+      // Older or incomplete attempts are not rebuild authorities; keep scanning.
+    }
+  }
+  return null;
 }
 
 export function expectedCloudSceneManifestS3Uri(record) {
@@ -5955,28 +6032,17 @@ export function createStudio(options = {}) {
         sendError(response, 409, "只有已完成、失败、中断或待远端对账的任务可以从 Builder 重建。");
         return true;
       }
-      const savedRebuildSource =
-        typeof record.cloudBuilderRebuildSourceExecutionId === "string" &&
-          typeof record.cloudBuilderRebuildSourceManifestS3Uri === "string" &&
-          typeof record.cloudBuilderRebuildSourceRequestS3Uri === "string"
-          ? {
-              executionId: record.cloudBuilderRebuildSourceExecutionId,
-              manifestS3Uri: record.cloudBuilderRebuildSourceManifestS3Uri,
-              requestS3Uri: record.cloudBuilderRebuildSourceRequestS3Uri,
-            }
-          : null;
-      if (
-        effectiveCodexBackend(record) !== "cloud" ||
-        (savedRebuildSource === null && !hasRemoteCloudPlannerResumeInputs(record))
-      ) {
+      const productionConfig = await cloudSceneProductionConfig();
+      const rebuildSource = effectiveCodexBackend(record) === "cloud"
+        ? await resolveCloudBuilderRebuildSource(record, {
+            outputS3Root: productionConfig?.outputS3Root,
+            repoRoot,
+          })
+        : null;
+      if (rebuildSource === null) {
         sendError(response, 409, "这个任务没有可复用的可信云端 Planner 产物。");
         return true;
       }
-      const rebuildSource = savedRebuildSource ?? {
-        executionId: record.remoteExecutionId,
-        manifestS3Uri: record.remoteArtifactManifestS3Uri,
-        requestS3Uri: record.remoteRequestS3Uri,
-      };
       const transition = await transitionRecord(record.id, {
         status: "queued",
         stage: "queued",

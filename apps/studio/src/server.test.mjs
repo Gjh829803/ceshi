@@ -33,6 +33,7 @@ import {
   normalizeTrustedCapturePublicKeyPaths,
   parseRemotePendingLwdpMarker,
   parseStageTokenUsage,
+  resolveCloudBuilderRebuildSource,
   workflowPolicyVersion,
   writeJsonAtomic,
 } from "./server.mjs";
@@ -132,6 +133,49 @@ test("keeps ready as an absorbing lifecycle state and rejects stale remote write
     }),
     { allowed: true, reason: "applied" },
   );
+});
+
+test("recovers Builder rebuild authority from the latest complete prior Cloud attempt", async () => {
+  const sceneId = "recover-builder-source";
+  const calls = [];
+  const source = await resolveCloudBuilderRebuildSource({
+    sceneId,
+    attempt: 3,
+    referenceImage: { fileName: "reference.png" },
+  }, {
+    outputS3Root: "s3://worldkit-test/cloud-scenes",
+    repoRoot: "/workspace/worldkit",
+    readManifestImplementation: async (uri) => {
+      calls.push(uri);
+      if (!uri.includes("/attempt-1/")) throw new Error("missing attempt");
+      return {
+        executionId: "execution-source-1",
+        artifacts: [
+          "scene/scene-brief.md",
+          "scene/planner-self-check.json",
+          "scene/visual-identity-palette.json",
+          "scene-plan/entry-whitebox-target.png",
+          "scene-plan/world-plan.png",
+          "scene-plan/reference-0.png",
+        ].map((artifactPath) => ({ path: artifactPath })),
+      };
+    },
+    readArtifactImplementation: async () => Buffer.from(JSON.stringify({
+      kind: "worldkit-cloud-scene-request",
+      schemaVersion: 1,
+      sceneId,
+      prompt: "Reuse this request.",
+      references: [],
+    })),
+  });
+  assert.equal(calls.length, 3);
+  assert.deepEqual(source, {
+    executionId: "execution-source-1",
+    manifestS3Uri:
+      `s3://worldkit-test/cloud-scenes/${sceneId}/attempt-1/stages/scene-production/cloud-artifact-manifest.json`,
+    requestS3Uri:
+      `s3://worldkit-test/cloud-scenes/${sceneId}/attempt-1/inputs/request.json`,
+  });
 });
 
 test("applies Cloud run-index transitions without mutating frozen records", () => {
