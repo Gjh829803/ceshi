@@ -461,8 +461,10 @@ async function main() {
         taskLeaseSeconds: config.gpuBatch.taskLeaseSeconds,
         ephemeralStorageRequest: config.gpuBatch.ephemeralStorageRequest,
         ephemeralStorageLimit: config.gpuBatch.ephemeralStorageLimit,
-        caseConcurrency: batch.workerImage === config.workerImage
-          ? config.gpuBatch.caseConcurrency : 1,
+        // A schema-v1 Batch manifest is executable only by a Worker that
+        // already implements indexed capture. Keep the configured case pool
+        // when reconciling a batch frozen to an earlier digest.
+        caseConcurrency: config.gpuBatch.caseConcurrency,
       });
       process.stdout.write(`${JSON.stringify({ status: "reconciled", batch, launched })}\n`);
       return;
@@ -526,8 +528,7 @@ async function main() {
         taskLeaseSeconds: config.gpuBatch.taskLeaseSeconds,
         ephemeralStorageRequest: config.gpuBatch.ephemeralStorageRequest,
         ephemeralStorageLimit: config.gpuBatch.ephemeralStorageLimit,
-        caseConcurrency: batch.workerImage === config.workerImage
-          ? config.gpuBatch.caseConcurrency : 1,
+        caseConcurrency: config.gpuBatch.caseConcurrency,
       }),
     });
     const staleQueueCleanup = await cleanStaleQueueEntries(
