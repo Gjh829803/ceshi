@@ -126,6 +126,25 @@ describe("Native-default world agent Host route", () => {
     );
   });
 
+  it("does not turn visual depth language into false physical topology", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "package-bounds above means literal physical AABB separation on Y with XZ overlap",
+    );
+    expect(source).toContain(
+      "Never use above for visually higher, farther, on the horizon, or visible behind another target",
+    );
+    expect(source).toContain(
+      "Use orderedTargetRefs only for front-to-back Camera depth order",
+    );
+    expect(source).toContain(
+      "A blocks relation requires a matching block traversal check",
+    );
+  });
+
   it("gives Mapper the exact source-neutral ground-connectivity contract", () => {
     const source = readFileSync(
       "scripts/reconstruction/run-native-world-agent.ts",

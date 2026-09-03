@@ -3,8 +3,8 @@
   "schemaVersion": 1,
   "id": "cloud-temple-t-gate-native-block-profile",
   "dimensionIds": ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"],
-  "maximumRepairAttemptCount": 1,
-  "builderSelfRepairAttemptCount": 0,
+  "maximumRepairAttemptCount": 3,
+  "builderSelfRepairAttemptCount": 3,
   "thresholds": {
     "semanticSilhouetteTargets": [
       { "acceptanceTargetRef": "worldkit://acceptance-target/central-ascent@1", "maximumBoundsDriftBasisPoints": 1200, "maximumCenterDriftBasisPoints": 900, "maximumCoverageDriftBasisPoints": 1200 },
@@ -27,8 +27,7 @@
         { "targetRef": "worldkit://composition-target/gate-mass@1", "maximumDriftBasisPoints": 800 },
         { "targetRef": "worldkit://composition-target/mountain-cliff-layers@1", "maximumDriftBasisPoints": 1000 },
         { "targetRef": "worldkit://composition-target/upper-t-junction@1", "maximumDriftBasisPoints": 800 }
-      ],
-      "maximumOrderDistanceBasisPoints": 3600
+      ]
     },
     "spawnSupport": { "maximumPositionDriftMillimeters": 250, "maximumSupportGapMillimeters": 50 }
   },

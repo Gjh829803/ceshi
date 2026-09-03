@@ -196,6 +196,13 @@ async function receiptFor(
     evaluationProfileHash:
       hashWorldReconstructionEvaluationProfileV1(evaluationProfile),
     outcome: terminalOutcome,
+    diagnosticCodes: terminalOutcome === "passed"
+      ? []
+      : terminalOutcome === "failed"
+        ? ["WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT"]
+        : cleanupOutcome === "failed"
+          ? ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"]
+          : ["WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"],
     attempts: [{
       kind: "evaluated",
       attemptIndex: 0,
@@ -284,7 +291,7 @@ async function publishFailedEvaluationArtifacts(
   const evaluation = parseWorldReconstructionEvaluationResultV1({
     kind: "world-reconstruction-evaluation-result",
     schemaVersion: 1,
-    id: terminal.evaluationResultRef,
+    id: `${CASE_ID}.attempt-0.evaluation-result`,
     caseRef: baseReceipt.caseRef,
     caseHash: baseReceipt.caseHash,
     evaluationProfileRef: baseReceipt.evaluationProfileRef,
@@ -551,10 +558,6 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(regionThresholdByTargetRef.get(
       "worldkit://composition-target/mountain-cliff-layers@1",
     )).toBeGreaterThanOrEqual(2_400);
-    expect(
-      evaluationProfile.thresholds.openingComposition.maximumOrderDistanceBasisPoints,
-    ).toBeGreaterThanOrEqual(3_518);
-
     const mountainThreshold =
       evaluationProfile.thresholds.semanticSilhouetteTargets.find((threshold) =>
         threshold.acceptanceTargetRef ===
@@ -1095,7 +1098,7 @@ describe("runWorldReconstructionProductionV1", () => {
         ? ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"]
         : receipt.outcome === "failed"
         ? ["NBR_REJECTED_EVALUATION_EVIDENCE_INVALID"]
-        : ["WORLD_RECONSTRUCTION_RUN_INCOMPLETE"];
+        : ["WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"];
 
       expect(result).toEqual({
         kind: "world-reconstruction-production-result",

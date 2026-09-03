@@ -40,6 +40,7 @@ import { parseNativeBlockAuthoringManifestV1 } from
   "@whitebox-world/native-babylon-block-profile";
 import {
   hashWorldReconstructionEvaluationResultV1,
+  type WorldReconstructionAttemptIndexV1,
   type WorldReconstructionCaseV1,
   type WorldReconstructionEvaluationProfileV1,
 } from "@whitebox-world/validation";
@@ -425,7 +426,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
     path.isAbsolute(runRelativePath)
   ) throw new TypeError("WORLD_RECONSTRUCTION_RUN_DIRECTORY_INVALID");
   const formalCaptureIntent = await verifyCaseBoundFormalCaptureIntentV1(input);
-  const checkpoints = new Map<0 | 1, AttemptCheckpointV1>();
+  const checkpoints = new Map<WorldReconstructionAttemptIndexV1, AttemptCheckpointV1>();
   const cleanupState: Record<CleanupKeyV1, WorldReconstructionCleanupOwnerOutcomeV1> = {
     providerTask: "pending",
     candidate: "pending",
@@ -449,7 +450,9 @@ export async function createProductionWorldReconstructionRunPortsV1(
       ? "failed"
       : "completed";
   };
-  const checkpoint = (attemptIndex: 0 | 1): AttemptCheckpointV1 => {
+  const checkpoint = (
+    attemptIndex: WorldReconstructionAttemptIndexV1,
+  ): AttemptCheckpointV1 => {
     const existing = checkpoints.get(attemptIndex);
     if (existing !== undefined) return existing;
     const created: AttemptCheckpointV1 = {};
@@ -463,7 +466,6 @@ export async function createProductionWorldReconstructionRunPortsV1(
       if (state.prepared !== undefined || state.generated !== undefined) {
         throw new Error("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
       }
-      setCleanup(["providerTask", "temporaryDirectories"], "failed");
       const prepared = await owners.prepareGeneration({
         ...input.generationInput,
         case: input.reconstructionCase,
@@ -476,6 +478,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           : { repairInstruction: stageInput.repairInstruction }),
       });
       state.prepared = prepared;
+      setCleanup(["providerTask", "temporaryDirectories"], "failed");
       if (
         prepared.routerRequestId !== stageInput.requestId ||
         !isEqual(prepared.frozenOwnerIdentities, stageInput.frozenOwnerIdentities)
@@ -645,6 +648,43 @@ export async function createProductionWorldReconstructionRunPortsV1(
           ? error
           : undefined;
         const groundAnalysisRejection = packageError?.groundAnalysisRejection;
+        const nativeCheckRejection = packageError?.nativeCheckRejection;
+        if (!isNil(packageError) && !isNil(nativeCheckRejection)) {
+          cleanupState.candidate = "completed";
+          cleanupState.outputPromotion = "completed";
+          const attemptDirectoryPath = path.join(
+            input.generationInput.runDirectoryPath,
+            "attempts",
+            String(stageInput.attemptIndex),
+          );
+          return Object.freeze({
+            outcome: "native-check-rejected" as const,
+            sceneAuthoringAttemptResultRef: caseArtifactRefForPath(
+              caseArtifactRoot,
+              caseRootPath,
+              input.generationInput.runDirectoryPath,
+              path.join(attemptDirectoryPath, "attempt-result.json"),
+            ),
+            sceneAuthoringAttemptResultHash:
+              hashSceneAuthoringAttemptResultV1(
+                nativeCheckRejection.sceneAuthoringAttemptResult,
+              ),
+            authoredSourceRef:
+              nativeCheckRejection.sceneAuthoringAttemptResult.authoredSourceRef,
+            authoredSourceHash:
+              nativeCheckRejection.sceneAuthoringAttemptResult.authoredSourceHash,
+            nativeCheckResultRef: caseArtifactRefForPath(
+              caseArtifactRoot,
+              caseRootPath,
+              input.generationInput.runDirectoryPath,
+              nativeCheckRejection.nativeCheckResultPath,
+            ),
+            nativeCheckResultHash:
+              nativeCheckRejection.nativeCheckResultHash,
+            repairDiagnostics: nativeCheckRejection.repairDiagnostics,
+            diagnosticCodes: Object.freeze([...packageError.diagnostics]),
+          });
+        }
         if (!isNil(packageError) && !isNil(groundAnalysisRejection)) {
           cleanupState.candidate = "completed";
           cleanupState.outputPromotion = "completed";
@@ -691,10 +731,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           "WORLD_RECONSTRUCTION_PACKAGE_FAILED",
         );
         return Object.freeze({
-          outcome: error instanceof NativeBlockPackageErrorV1 &&
-              error.diagnostics.includes("native-check-rejected")
-            ? "check-failed" as const
-            : "package-failed" as const,
+          outcome: "package-failed" as const,
           diagnosticCodes: codes,
         });
       }
@@ -814,6 +851,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
                 gateResult: rejectedEvidence.openingGateResult,
                 reconstructionCase: input.reconstructionCase,
                 evidenceRef: openingGateResultRef,
+                priorAttemptIndex: stageInput.attemptIndex,
                 semanticCaptureTargetBindings:
                   formalCaptureIntent.semanticCaptureTargetBindings,
               });
@@ -931,9 +969,16 @@ export async function createProductionWorldReconstructionRunPortsV1(
           },
         });
         cleanupState.outputPromotion = "completed";
+        const evaluationResultRef = caseArtifactRefForPath(
+          caseArtifactRoot,
+          caseRootPath,
+          input.generationInput.runDirectoryPath,
+          published.evaluationPath,
+        );
         return Object.freeze({
           outcome: published.evaluation.outcome,
           evaluation: published.evaluation,
+          evaluationResultRef,
           evaluationPath: published.evaluationPath,
           evaluationHash: hashWorldReconstructionEvaluationResultV1(
             published.evaluation,

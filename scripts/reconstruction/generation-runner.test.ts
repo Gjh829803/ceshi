@@ -191,6 +191,38 @@ process.exit(1);
     }
   });
 
+  it("classifies a local adapter missing-output rejection without publishing private stderr", async () => {
+    const prepared = await preparedFixture();
+    const privatePath = "/private/task/workspace/scene.ts";
+    try {
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: {
+          run: async () => ({
+            exitCode: 1,
+            stdout: "",
+            stderr:
+              `Error: WORLDKIT_LOCAL_CODEX_OUTPUT_MISSING: Local Codex omitted a non-empty declared output: ${privatePath}`,
+            taskOutcome: {
+              kind: "worldkit-codex-task-outcome",
+              schemaVersion: 1,
+              requestId: prepared.routerRequestId,
+              outcome: "task-rejected",
+            },
+          }),
+        },
+        selfCheck: async () => ({ ok: true, diagnosticCodes: [] }),
+        reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => ({ outcome: "completed" }),
+      });
+
+      expect(result.receipt.outcome).toBe("rejected");
+      expect(result.receipt.diagnosticCodes).toEqual(["output-missing"]);
+      expect(JSON.stringify(result.receipt)).not.toContain(privatePath);
+    } finally {
+      await rm(prepared.root, { recursive: true, force: true });
+    }
+  });
+
   it("appends cleanup-failed without replacing task-timeout", async () => {
     const prepared = await preparedFixture();
     try {

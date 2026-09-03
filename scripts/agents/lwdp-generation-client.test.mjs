@@ -307,6 +307,25 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
       codex.stdout,
       /WORLDKIT_CODEX_TASK_OUTCOME \{"kind":"worldkit-codex-task-outcome","schemaVersion":1,"requestId":"codex-smoke-request","outcome":"completed"\}/,
     );
+    const taskWorkspace = path.join(root, "task-workspace");
+    await mkdir(path.join(taskWorkspace, "context"), { recursive: true });
+    await mkdir(path.join(taskWorkspace, "inputs"), { recursive: true });
+    await writeFile(path.join(taskWorkspace, "context", "case.json"), "{}\n");
+    await writeFile(path.join(taskWorkspace, "inputs", "profile.json"), "{}\n");
+    const mountedCodex = spawnSync(process.execPath, [
+      "scripts/agents/run-lwdp-codex-task.mjs",
+      "--repo-root", root,
+      "--task-id", "codex-mounted-smoke",
+      "--request-id", "codex-mounted-smoke-request",
+      "--stage", "native-block-generation",
+      "--output-s3-prefix", "s3://bucket/worldkit/mounted-smoke",
+      "--instruction-file", instruction,
+      "--workspace-context-root", "task-workspace",
+      "--output",
+      `result.json::${path.join(root, "mounted-result.json")}::application/json`,
+    ], { cwd: repoRoot, env: environment, encoding: "utf8" });
+    assert.equal(mountedCodex.status, 0, mountedCodex.stderr);
+    assert.match(mountedCodex.stdout, /assets=1 outputs=1/);
     const cloudRunner = await readFile(path.join(repoRoot, "scripts/agents/run-lwdp-codex-task.mjs"), "utf8");
     assert.doesNotMatch(cloudRunner, /distributed|max_pods|pod_concurrency|account_concurrency/);
 

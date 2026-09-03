@@ -169,8 +169,8 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     schemaVersion: 1,
     id: `${input.sceneId}-profile`,
     dimensionIds: DIMENSION_IDS,
-    maximumRepairAttemptCount: 1,
-    builderSelfRepairAttemptCount: 0,
+    maximumRepairAttemptCount: 3,
+    builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: silhouetteTargets.map(({ acceptanceTargetRef }) => ({
         acceptanceTargetRef,
@@ -187,7 +187,6 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
           targetRef,
           maximumDriftBasisPoints: 1000,
         })),
-        maximumOrderDistanceBasisPoints: 3600,
       },
       spawnSupport: {
         maximumPositionDriftMillimeters: 250,

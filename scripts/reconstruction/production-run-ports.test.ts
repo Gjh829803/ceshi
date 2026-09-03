@@ -533,6 +533,37 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     ))).toEqual(value.generationReceipt);
   });
 
+  it("does not report cleanup failure when repair preparation fails before provider allocation", async () => {
+    const value = await fixture();
+    const ownerPorts = {
+      ...owners(value, []),
+      prepareGeneration: vi.fn(async () => {
+        throw new TypeError(
+          "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH: prior evidence identity closure failed.",
+        );
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const ports = await createProductionWorldReconstructionRunPortsV1(
+      value.input,
+      ownerPorts,
+    );
+
+    await expect(ports.generate({
+      attemptIndex: 1,
+      backend: "local",
+      runId: RUN_ID,
+      requestId: value.prepared.routerRequestId,
+      frozenOwnerIdentities: value.frozenOwnerIdentities,
+      repairInstruction: {} as never,
+    })).rejects.toThrow("WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH");
+
+    expect(await ports.cleanup()).toEqual(expect.objectContaining({
+      providerTask: "completed",
+      temporaryDirectories: "completed",
+      outputPromotion: "completed",
+    }));
+  });
+
   it("rejects stale, non-canonical, and symlinked Case-bound Intent bytes before exposing ports", async () => {
     const stale = await fixture();
     await expect(createProductionWorldReconstructionRunPortsV1({
@@ -790,6 +821,82 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         /attempts\/0\/ground-analysis-report\.json$/,
       ),
       groundAnalysisReportHash: groundAnalysisReportArtifactHash,
+      repairDiagnostics: [repairDiagnostic],
+    }));
+    expect(await ports.cleanup()).toEqual(expect.objectContaining({
+      candidate: "completed",
+      outputPromotion: "completed",
+    }));
+  });
+
+  it("surfaces an identity-bound repairable Native Check rejection before Candidate allocation", async () => {
+    const value = await fixture();
+    const baseOwners = owners(value, []);
+    const repairDiagnostic = parseWorldReconstructionDiagnosticV1({
+      kind: "world-reconstruction-diagnostic",
+      schemaVersion: 1,
+      id: "native-check-route-disconnected",
+      code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+      dimensionId: "critical-traversal",
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/upper-t-junction@1",
+      targetRef: "worldkit://acceptance-target/upper-t-junction@1",
+      targetId: "native-block-route",
+      metricId: "ground-component-reachability",
+      details: {
+        kind: "state-mismatch",
+        expectedValue: "one-edge-connected-route-component",
+        actualValue: "multiple-disconnected-route-components",
+        correctionDirection: "replace",
+      },
+      evidenceRefs: ["artifact://case/native-check-result.json"],
+      message: "Native Check found a disconnected route.",
+      repairAction: {
+        kind: "revise-native-source",
+        targetKind: "traversal-check",
+        targetId: "native-block-route",
+        operation: "adjust-traversal",
+        instruction: "Connect the explicit route Blocks.",
+      },
+    });
+    const nativeCheckResultPath = path.join(
+      value.attemptDirectoryPath,
+      "native-check-result.json",
+    );
+    const packageAttempt = vi.fn(async () => {
+      throw new NativeBlockPackageErrorV1(
+        [
+          "native-check-rejected",
+          "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+        ],
+        undefined,
+        undefined,
+        {
+          kind: "native-check-rejected",
+          sceneAuthoringAttemptResult:
+            value.packageResult.sceneAuthoringAttemptResult as never,
+          nativeCheckResultHash: H("8"),
+          nativeCheckResultPath,
+          repairDiagnostics: [repairDiagnostic],
+        },
+      );
+    });
+    const ownerPorts = {
+      ...baseOwners,
+      packageAttempt,
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+
+    expect(packaged).toEqual(expect.objectContaining({
+      outcome: "native-check-rejected",
+      authoredSourceRef:
+        value.packageResult.sceneAuthoringAttemptResult.authoredSourceRef,
+      authoredSourceHash:
+        value.packageResult.sceneAuthoringAttemptResult.authoredSourceHash,
+      nativeCheckResultRef: expect.stringMatching(
+        /attempts\/0\/native-check-result\.json$/,
+      ),
+      nativeCheckResultHash: H("8"),
       repairDiagnostics: [repairDiagnostic],
     }));
     expect(await ports.cleanup()).toEqual(expect.objectContaining({
@@ -1136,6 +1243,9 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     );
     expect(evaluated.evaluation.captureReceiptHash).toBe(
       hashFormalWorldCaptureReceiptV1(evidence.captureReceipt),
+    );
+    expect(evaluated.evaluationResultRef).toBe(
+      `artifact://world-reconstruction-case/${evidence.reconstructionCase.id}/runs/${RUN_ID}/attempts/0/evaluation.json`,
     );
 
     evaluateAttempt.mockClear();

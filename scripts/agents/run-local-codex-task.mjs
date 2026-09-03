@@ -173,9 +173,37 @@ process.once("SIGTERM", () => stopChild("SIGTERM"));
 
 try {
   try {
-  for (const context of args.contexts) {
-    const source = safeRelativePath(repoRoot, context, "context");
-    await copyIsolatedTree(source.absolute, resolve(stagingRoot, source.relative));
+  if (args.workspaceContextRoot && args.contexts.length > 0) {
+    throw new Error(
+      "--workspace-context-root and --context are mutually exclusive.",
+    );
+  }
+  if (args.workspaceContextRoot) {
+    const source = safeRelativePath(
+      repoRoot,
+      args.workspaceContextRoot,
+      "workspace context root",
+    );
+    const metadata = await lstat(source.absolute);
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+      throw new Error(
+        "--workspace-context-root must be a canonical directory.",
+      );
+    }
+    for (const entry of await readdir(source.absolute)) {
+      await copyIsolatedTree(
+        resolve(source.absolute, entry),
+        resolve(stagingRoot, entry),
+      );
+    }
+  } else {
+    for (const context of args.contexts) {
+      const source = safeRelativePath(repoRoot, context, "context");
+      await copyIsolatedTree(
+        source.absolute,
+        resolve(stagingRoot, source.relative),
+      );
+    }
   }
 
   const assetRows = [];
@@ -305,7 +333,9 @@ try {
   for (const output of outputSpecs) {
     const metadata = await stat(output.stagedPath).catch(() => null);
     if (metadata === null || !metadata.isFile() || metadata.size === 0) {
-      throw new Error(`Local Codex omitted a non-empty declared output: ${output.remotePath}`);
+      throw new Error(
+        `WORLDKIT_LOCAL_CODEX_OUTPUT_MISSING: Local Codex omitted a non-empty declared output: ${output.remotePath}`,
+      );
     }
   }
   for (const output of outputSpecs) {

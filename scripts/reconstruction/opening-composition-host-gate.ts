@@ -3,6 +3,7 @@ import type {
   WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
 import type {
+  WorldReconstructionAttemptIndexV1,
   WorldReconstructionCaseV1,
   WorldReconstructionDiagnosticV1,
   WorldReconstructionEvaluationProfileV1,
@@ -405,6 +406,7 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
   gateResult: OpeningCompositionHostGateResultV1;
   reconstructionCase: WorldReconstructionCaseV1;
   evidenceRef: string;
+  priorAttemptIndex: WorldReconstructionAttemptIndexV1;
   semanticCaptureTargetBindings: readonly Readonly<{
     acceptanceTargetRef: string;
     compositionTargetRef: string;
@@ -416,6 +418,8 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
     input.semanticCaptureTargetBindings.map((binding) =>
       [binding.compositionTargetRef, binding] as const),
   );
+  const openingObservationInputPath =
+    `inputs/attempts/${input.priorAttemptIndex}/rejected-capture/opening-observation.json`;
   const converted: WorldReconstructionDiagnosticV1[] = [];
   for (const [index, diagnostic] of input.gateResult.diagnostics.entries()) {
     if (diagnostic.code === "WORLDKIT_OPENING_GATE_DEPTH_ORDER_DRIFT") {
@@ -519,8 +523,8 @@ export function createOpeningCompositionRepairDiagnosticsV1(input: Readonly<{
       ? "resize" as const
       : "move" as const;
     const jointConstraintInstruction = isRegionDrift
-      ? "Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from inputs/attempts/0/rejected-capture/opening-observation.json; satisfy all four region edges and the anchor jointly, including axes that currently pass. If a projected edge is clipped at 0 or 10000, adjust near-camera footprint/depth and height together instead of trading one screen edge or center for another."
-      : "Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from inputs/attempts/0/rejected-capture/opening-observation.json; satisfy the anchor and all four region edges jointly, including axes that currently pass. Do not move the center by pushing any screen edge outside its allowed envelope.";
+      ? `Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from ${openingObservationInputPath}; satisfy all four region edges and the anchor jointly, including axes that currently pass. If a projected edge is clipped at 0 or 10000, adjust near-camera footprint/depth and height together instead of trading one screen edge or center for another.`
+      : `Read the complete expected region bounds and anchor for this target from context/case.json and the complete observed normalizedBounds and normalizedCenter from ${openingObservationInputPath}; satisfy the anchor and all four region edges jointly, including axes that currently pass. Do not move the center by pushing any screen edge outside its allowed envelope.`;
     converted.push(parseWorldReconstructionDiagnosticV1({
       kind: "world-reconstruction-diagnostic",
       schemaVersion: 1,

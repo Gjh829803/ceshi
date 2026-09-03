@@ -3,6 +3,7 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+  BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
   parseNativeBlockAuthoringManifestV1,
   parseNativeBlockVisualResourceListV1,
 } from "@whitebox-world/native-babylon-block-profile";
@@ -83,6 +84,8 @@ import {
 } from "./generation-request.js";
 import { analyzeProductionNativeBlockGroundV1 } from
   "./native-ground-analysis-admission.js";
+import { createNativeCheckRepairDiagnosticsV1 } from
+  "./native-check-diagnostics.js";
 
 const SOURCE_FILES = Object.freeze([
   "native-block-authoring.json",
@@ -95,6 +98,33 @@ const NATIVE_BLOCK_PRODUCTION_FORBIDDEN_LIGHT_IMPORTS_V1 = new Set([
   "@babylonjs/core/Lights/hemisphericLight.js",
   "@babylonjs/core/Lights/pointLight.js",
 ]);
+const STABLE_NATIVE_BLOCK_CHECK_DIAGNOSTIC_CODES_V1 = new Set<string>(
+  BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+);
+const NATIVE_BLOCK_PROFILE_CHECK_REJECTED_CODE =
+  "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED";
+
+function trustedNativeBlockCheckDiagnosticCodes(
+  checkResult: Awaited<ReturnType<
+    typeof checkBabylonNativeSceneWorldDirectoryV1
+  >>,
+): readonly string[] {
+  const codes = checkResult.diagnostics.flatMap((diagnostic) => {
+    if (STABLE_NATIVE_BLOCK_CHECK_DIAGNOSTIC_CODES_V1.has(diagnostic.code)) {
+      return [diagnostic.code];
+    }
+    if (diagnostic.code !== NATIVE_BLOCK_PROFILE_CHECK_REJECTED_CODE) {
+      return [];
+    }
+    return [
+      diagnostic.code,
+      ...BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1.filter((code) =>
+        diagnostic.message.includes(code)
+      ),
+    ];
+  });
+  return Object.freeze([...new Set(codes)].sort());
+}
 
 export function assertNativeBlockProductionSourceImportsV1(
   externalImportSpecifiers: readonly string[],
@@ -148,15 +178,28 @@ export interface NativeBlockGroundAnalysisRejectionV1 {
   readonly repairDiagnostics: readonly WorldReconstructionDiagnosticV1[];
 }
 
+export interface NativeBlockCheckRejectionV1 {
+  readonly kind: "native-check-rejected";
+  readonly sceneAuthoringAttemptResult: Extract<
+    SceneAuthoringAttemptResultV1,
+    { readonly outcome: "completed" }
+  >;
+  readonly nativeCheckResultHash: Sha256HashV1;
+  readonly nativeCheckResultPath: string;
+  readonly repairDiagnostics: readonly WorldReconstructionDiagnosticV1[];
+}
+
 export class NativeBlockPackageErrorV1 extends Error {
   readonly code = "WORLDKIT_NATIVE_BLOCK_PACKAGE_FAILED";
   readonly diagnostics: readonly string[];
   readonly groundAnalysisRejection?: NativeBlockGroundAnalysisRejectionV1;
+  readonly nativeCheckRejection?: NativeBlockCheckRejectionV1;
 
   constructor(
     diagnostics: readonly string[],
     cause?: unknown,
     groundAnalysisRejection?: NativeBlockGroundAnalysisRejectionV1,
+    nativeCheckRejection?: NativeBlockCheckRejectionV1,
   ) {
     super("WORLDKIT_NATIVE_BLOCK_PACKAGE_FAILED", { cause });
     this.diagnostics = Object.freeze([...diagnostics].sort());
@@ -165,6 +208,14 @@ export class NativeBlockPackageErrorV1 extends Error {
         ...groundAnalysisRejection,
         repairDiagnostics: Object.freeze([
           ...groundAnalysisRejection.repairDiagnostics,
+        ]),
+      });
+    }
+    if (!isNil(nativeCheckRejection)) {
+      this.nativeCheckRejection = Object.freeze({
+        ...nativeCheckRejection,
+        repairDiagnostics: Object.freeze([
+          ...nativeCheckRejection.repairDiagnostics,
         ]),
       });
     }
@@ -448,13 +499,11 @@ export async function packageNativeBlockAttemptV1(
     const formalCheck = await checkBabylonNativeSceneWorldDirectoryV1(
       checkDirectoryPath,
     );
-    await writeCanonicalJsonFresh(
-      path.join(attemptDirectoryPath, "native-check-result.json"),
-      formalCheck,
+    const nativeCheckResultPath = path.join(
+      attemptDirectoryPath,
+      "native-check-result.json",
     );
-    if (formalCheck.outcome !== "passed") {
-      return fail(...["native-check-rejected"]);
-    }
+    await writeCanonicalJsonFresh(nativeCheckResultPath, formalCheck);
     const bundled = await buildAndLoadBabylonNativeSceneModuleV1(
       admitted.sourceGraph,
     );
@@ -478,6 +527,39 @@ export async function packageNativeBlockAttemptV1(
     });
     if (attemptResult.outcome !== "completed") {
       return fail("attempt-result-invalid");
+    }
+    if (formalCheck.outcome !== "passed") {
+      const repairDiagnostics = createNativeCheckRepairDiagnosticsV1({
+        reconstructionCase,
+        checkResult: formalCheck,
+        evidenceRef: `worldkit://native-scene-check-result/${formalCheck.id}@1`,
+      });
+      await Promise.all([
+        writeTextFresh(
+          path.join(attemptDirectoryPath, "native-explain.txt"),
+          explainNativeSceneCheckResultV1(formalCheck),
+        ),
+        writeCanonicalJsonFresh(
+          path.join(attemptDirectoryPath, "attempt-result.json"),
+          attemptResult,
+        ),
+      ]);
+      throw new NativeBlockPackageErrorV1(
+        [
+          "native-check-rejected",
+          ...trustedNativeBlockCheckDiagnosticCodes(formalCheck),
+        ],
+        undefined,
+        undefined,
+        Object.freeze({
+          kind: "native-check-rejected" as const,
+          sceneAuthoringAttemptResult: attemptResult,
+          nativeCheckResultHash:
+            sha256CanonicalJson(formalCheck) as Sha256HashV1,
+          nativeCheckResultPath,
+          repairDiagnostics,
+        }),
+      );
     }
     const runtimeOwnerEntries = runtime.runtimeResourceLockEntries;
     if (runtimeOwnerEntries.some((entry) =>

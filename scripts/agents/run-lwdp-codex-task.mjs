@@ -2,7 +2,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { basename, dirname, extname, isAbsolute, relative, resolve } from "node:path";
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, stat } from "node:fs/promises";
 
 import {
   findGenerationJobByRequestId,
@@ -68,6 +68,22 @@ function safeContextPath(repoRoot, value) {
   const rel = relative(repoRoot, absolute);
   if (!rel || rel.startsWith("..") || isAbsolute(rel)) throw new Error(`Unsafe context path: ${value}`);
   return rel;
+}
+
+async function assertSafeContextTree(root) {
+  const metadata = await lstat(root);
+  if (metadata.isSymbolicLink()) {
+    throw new Error(`Symlinks are not allowed in cloud Codex inputs: ${root}`);
+  }
+  if (metadata.isDirectory()) {
+    for (const entry of await readdir(root)) {
+      await assertSafeContextTree(resolve(root, entry));
+    }
+    return;
+  }
+  if (!metadata.isFile()) {
+    throw new Error(`Unsupported cloud Codex input: ${root}`);
+  }
 }
 
 function execFilePromise(command, args, cwd) {
@@ -163,13 +179,43 @@ try {
   const taskAssets = [];
   const pendingUploads = [];
   const inputContents = [];
+  if (args.workspaceContextRoot && args.contexts.length > 0) {
+    throw new Error("--workspace-context-root and --context are mutually exclusive.");
+  }
   if (!smokeMode) {
     await validateDeclaredOutputDestinations(repoRoot, outputSpecs);
   }
-  if (args.contexts.length > 0) {
-    const contextPaths = args.contexts.map((item) => safeContextPath(repoRoot, item));
+  const hasWorkspaceContext = Boolean(
+    args.workspaceContextRoot || args.contexts.length > 0,
+  );
+  if (hasWorkspaceContext) {
     const archivePath = resolve(stagingRoot, "workspace-context.tar.gz");
-    await execFilePromise("tar", ["-czf", archivePath, "-C", repoRoot, ...contextPaths], repoRoot);
+    if (args.workspaceContextRoot) {
+      const contextRootRelativePath = safeContextPath(
+        repoRoot,
+        args.workspaceContextRoot,
+      );
+      const contextRoot = resolve(repoRoot, contextRootRelativePath);
+      const metadata = await lstat(contextRoot);
+      if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+        throw new Error("--workspace-context-root must be a canonical directory.");
+      }
+      await assertSafeContextTree(contextRoot);
+      await execFilePromise(
+        "tar",
+        ["-czf", archivePath, "-C", contextRoot, "."],
+        repoRoot,
+      );
+    } else {
+      const contextPaths = args.contexts.map((item) =>
+        safeContextPath(repoRoot, item)
+      );
+      await execFilePromise(
+        "tar",
+        ["-czf", archivePath, "-C", repoRoot, ...contextPaths],
+        repoRoot,
+      );
+    }
     const contextSha256 = createHash("sha256").update(await readFile(archivePath)).digest("hex");
     const contextUri = joinS3Uri(args.outputS3Prefix, "inputs", taskId, "workspace-context.tar.gz");
     if (!smokeMode) pendingUploads.push({ localPath: archivePath, s3Uri: contextUri });
@@ -200,7 +246,7 @@ try {
     taskAssets.push({ id, name: `${id}${suffix}`, s3_uri: s3Uri, media_type: mediaType, attach_as: attachAs });
   }
 
-  const workspaceProtocol = args.contexts.length > 0
+  const workspaceProtocol = hasWorkspaceContext
     ? `\n\nCloud workspace protocol:\n- Locate the input asset named workspace-context.tar.gz in the host-provided Input assets list and extract it into the current task working directory before reading project paths.\n- Treat extracted files and other attached inputs as read-only context.\n- Write only the host-declared output files at their exact Declared outputs paths.\n- Do not access credentials, unrelated directories, or external services. Host-provided built-in tools explicitly required by the caller instruction, such as image generation, are allowed.\n- The trusted local host performs contract validation after delivery; do not claim validation you did not run.`
     : "";
   const payload = {

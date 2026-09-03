@@ -125,8 +125,8 @@ const profileValue = () => ({
   schemaVersion: 1 as const,
   id: "cloud-temple.profile",
   dimensionIds: [...DIMENSIONS],
-  maximumRepairAttemptCount: 1 as const,
-  builderSelfRepairAttemptCount: 0 as const,
+  maximumRepairAttemptCount: 3 as const,
+  builderSelfRepairAttemptCount: 3 as const,
   thresholds: {
     semanticSilhouetteTargets: [{
       acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
@@ -137,7 +137,6 @@ const profileValue = () => ({
     openingComposition: {
       regions: [{ targetRef: OPENING_TARGET_REF, maximumDriftBasisPoints: 100 }],
       anchors: [{ targetRef: OPENING_TARGET_REF, maximumDriftBasisPoints: 100 }],
-      maximumOrderDistanceBasisPoints: 100,
     },
     spawnSupport: {
       maximumPositionDriftMillimeters: 100,
@@ -581,6 +580,25 @@ describe("evaluateWorldReconstructionV1", () => {
     expect(result.diagnostics[0]).toMatchObject({
       code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
     });
+  });
+
+  it("does not reject a valid lateral composition because adjacent depth targets are far apart on screen", () => {
+    const result = evaluateBound({
+      case: withTwoOpeningTargets,
+      profile: withTwoOpeningThresholds,
+      evidence: (draft) => {
+        withTwoOpeningObserved(draft, [FOREGROUND_TARGET_REF, OPENING_TARGET_REF], [{
+          fromTargetRef: FOREGROUND_TARGET_REF,
+          toTargetRef: OPENING_TARGET_REF,
+          distanceBasisPoints: 7_300,
+        }]);
+      },
+    });
+
+    expect(dimension(result, "opening-composition").status).toBe("passed");
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
+      metricId: "opening-framing-distance-basis-points",
+    }));
   });
 
   it("fails spawn support above and below the expected support height", () => {

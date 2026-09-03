@@ -62,6 +62,7 @@ import {
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionEvidenceSetV1,
   parseWorldReconstructionRunReceiptV1,
+  type WorldReconstructionAttemptIndexV1,
 } from "@whitebox-world/validation";
 import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 
@@ -107,7 +108,7 @@ export interface VerifyNativeBlockReconstructionE2EInputV1 {
 export interface NativeBlockReconstructionE2EVerificationV1 {
   readonly outcome: "verified";
   readonly candidateKind: "run" | "final";
-  readonly attemptIndex: 0 | 1;
+  readonly attemptIndex: WorldReconstructionAttemptIndexV1;
   readonly worldPackageRef: string;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly worldBuildIdentityHash: Sha256HashV1;
@@ -600,7 +601,6 @@ async function verifyAllRunAttempts(input: Readonly<{
       "native-check-result.json",
       "NBR70_REQUIRED_ARTIFACT_MISSING",
     )));
-    if (checkResult.outcome !== "passed") fail("NBR70_IDENTITY_MISMATCH");
     const explain = new TextDecoder().decode(await requiredFile(
       attemptRoot,
       "native-explain.txt",
@@ -609,6 +609,17 @@ async function verifyAllRunAttempts(input: Readonly<{
     if (explain !== explainNativeSceneCheckResultV1(checkResult)) {
       fail("NBR70_IDENTITY_MISMATCH");
     }
+    if (runAttempt.kind === "native-check-rejected") {
+      if (checkResult.outcome === "passed") fail("NBR70_IDENTITY_MISMATCH");
+      exact(runAttempt.authoredSourceRef, attemptResult.authoredSourceRef);
+      exact(runAttempt.authoredSourceHash, attemptResult.authoredSourceHash);
+      exact(
+        runAttempt.nativeCheckResultHash,
+        hashNativeSceneCheckResultV1(checkResult),
+      );
+      continue;
+    }
+    if (checkResult.outcome !== "passed") fail("NBR70_IDENTITY_MISMATCH");
     if (runAttempt.kind === "ground-analysis-rejected") {
       exact(runAttempt.authoredSourceRef, attemptResult.authoredSourceRef);
       exact(runAttempt.authoredSourceHash, attemptResult.authoredSourceHash);

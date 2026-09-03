@@ -108,6 +108,49 @@ console.log("fake local codex completed");
   assert.deepEqual(taskRoots, []);
 });
 
+test("mounts a task workspace context root at the isolated workspace root", async () => {
+  const root = await createFixture();
+  const taskWorkspace = path.join(root, "attempts", "2", ".task");
+  await mkdir(path.join(taskWorkspace, "context"), { recursive: true });
+  await mkdir(path.join(taskWorkspace, "inputs"), { recursive: true });
+  await writeFile(path.join(taskWorkspace, "context", "case.json"), "{}\n");
+  await writeFile(path.join(taskWorkspace, "inputs", "profile.json"), "{}\n");
+  const outputPath = path.join(root, "delivered", "result.txt");
+  const fakeCodexPath = path.join(root, "fake-context-root-codex.mjs");
+  await writeFile(fakeCodexPath, `#!/usr/bin/env node
+import { existsSync, writeFileSync } from "node:fs";
+import path from "node:path";
+const args = process.argv.slice(2);
+if (args.includes("--version")) process.exit(0);
+const cwd = args[args.indexOf("--cd") + 1];
+process.stdin.resume();
+process.stdin.on("end", () => {
+  if (!existsSync(path.join(cwd, "context", "case.json"))) process.exit(21);
+  if (!existsSync(path.join(cwd, "inputs", "profile.json"))) process.exit(22);
+  writeFileSync(path.join(cwd, "result.txt"), "mounted\\n");
+  writeFileSync(args[args.indexOf("--output-last-message") + 1], "done\\n");
+});
+`);
+  await chmod(fakeCodexPath, 0o755);
+  const args = baseArguments(root, outputPath);
+  const contextIndex = args.indexOf("--context");
+  args.splice(
+    contextIndex,
+    2,
+    "--workspace-context-root",
+    path.relative(root, taskWorkspace),
+  );
+  const outputIndex = args.indexOf("--output") + 1;
+  args[outputIndex] = `result.txt::${outputPath}::text/plain`;
+  const result = spawnSync(process.execPath, [localRunnerPath, ...args], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: { ...process.env, WORLDKIT_LOCAL_CODEX_BIN: fakeCodexPath },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(outputPath, "utf8"), "mounted\n");
+});
+
 test("validates every declared output before promoting any local result", async () => {
   const root = await createFixture();
   const firstDestination = path.join(root, "delivered", "first.txt");

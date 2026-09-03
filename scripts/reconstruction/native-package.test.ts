@@ -86,6 +86,12 @@ const REGENERATED_GRID_SCENE_SOURCE = SCENE_SOURCE
     `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [5, -0.5, 2] });`,
   );
 
+const DISCONNECTED_ROUTE_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+  `    session.createBlock({id: "isolated-route", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", centerMetersXYZ: [20, -0.5, 20] });
+    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+);
+
 const MISSING_GRID_CHILD_SCENE_SOURCE = SCENE_SOURCE.replace(
   `{ kind: "block-group", colliderGroupId: "foreground-ground-group" }`,
   `{ kind: "block", blockId: "foreground" }`,
@@ -567,6 +573,47 @@ describe("packageNativeBlockAttemptV1", () => {
       fixture.attemptDirectoryPath,
       "native-check-result.json",
     ), "utf8")).toContain("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  }, 60_000);
+
+  it("preserves a trusted Block-profile owner code when Native Check rejects", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: DISCONNECTED_ROUTE_SCENE_SOURCE,
+    });
+
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({
+      diagnostics: [
+        "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
+        "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+        "native-check-rejected",
+      ],
+      nativeCheckRejection: {
+        kind: "native-check-rejected",
+        nativeCheckResultPath: path.join(
+          fixture.attemptDirectoryPath,
+          "native-check-result.json",
+        ),
+        repairDiagnostics: [expect.objectContaining({
+          code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+          metricId: "ground-component-reachability",
+        })],
+      },
+    });
+    expect(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "native-check-result.json",
+    ), "utf8")).toContain("WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED");
+    await expect(readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "attempt-result.json",
+    ), "utf8")).resolves.toContain('"outcome":"completed"');
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
     });

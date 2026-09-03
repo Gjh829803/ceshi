@@ -596,7 +596,7 @@ BasisPoints/Millimeters tolerances. Evidence stores one closed observed discrimi
 list per dimension (an empty list expresses missing evidence), bound through Attempt, formal Package
 root, World Build Identity and Capture identities. It retains only evaluator inputs, never a raw Runtime
 Snapshot: semantic graph/layers; visual-group target presence and normalized projections; opening
-anchors/order/distances; spawn support/medium/XYZ/gap; collider contributions/roles/overlay;
+anchors/depth order plus advisory pairwise screen distances; spawn support/medium/XYZ/gap; collider contributions/roles/overlay;
 reached/blocked/incomplete traversal checkpoints; and replay/Package/Build/Capture agreement.
 
 ### 8.2 Independent dimensions
@@ -608,7 +608,7 @@ The Result has no masking aggregate score. Each required dimension independently
 |---|---|
 | `topology` | required semantic nodes/relations/layers and graph presence |
 | `semantic-silhouette` | visual-group presence plus normalized projected bounds/centers/coverage; pixel diff advisory only |
-| `opening-composition` | normalized regions/anchors, subject/landmark ordering and framing distances |
+| `opening-composition` | normalized regions/anchors and front-to-back depth ordering; pairwise 2D screen distances remain evidence only because laterally separated targets are valid |
 | `spawn-support` | BNA-4 admitted Spawn support + settled Runtime medium/position |
 | `collider` | required explicit Contribution IDs, overlay presence and blocker/ground roles |
 | `critical-traversal` | committed fixed-input scripted checkpoints through Havok Runtime |
@@ -652,7 +652,7 @@ Runtime, evaluator, prior Package, prior Capture, or durable prior Attempt input
 Ground Analysis is a trusted pre-Package admission gate. A repairable Ground Analysis rejection retains the
 checked authored source, Attempt result, logical-ground model, failed report and actionable diagnostics, but
 publishes no WorldPackage or Capture for that Attempt. Those immutable artifacts are sufficient evidence for
-the same one-repair loop; the repaired Attempt must rerun Native Check and Ground Analysis before it can
+the same bounded repair loop; the repaired Attempt must rerun Native Check and Ground Analysis before it can
 publish a new Package. The Builder must not invent missing Capture evidence for this path. Selecting Ground
 Analysis as the prior evidence source narrows the defect being repaired; it does not suspend any other frozen
 Case expectation. The Builder rereads the frozen opening regions, anchors and depth order from `case.json`,
@@ -667,29 +667,39 @@ nondeterministic build, and stale evidence.
 
 The evaluator does not edit files, run a model, mutate Runtime, or update a Package.
 
-## 9. One-repair closure
+## 9. Bounded multi-stage repair closure
 
-The Profile fixes `maximumRepairAttemptCount: 1`. This means one initial generation plus at most one
-external diagnostic-driven repair task; it is distinct from any internal Builder self-check. The first
-NBR profile sets Builder self-repair to zero so BNA-6 can measure the initial result and the explicit repair.
+The Profile fixes `maximumRepairAttemptCount: 3`. This means one initial generation plus at most three
+external diagnostic-driven repair Attempts; it is distinct from the bounded source-only self-repair performed
+inside the original Builder task. The current NBR profile fixes `builderSelfRepairAttemptCount: 3`: after
+the initial output, the Builder may repair only its three declared outputs and rerun its bundled checker at
+most three times. Those cycles create neither a Package nor a Runtime Candidate. Host Check, Package,
+Capture, evaluation and the identity-bearing external repair Attempt remain separate authorities.
+
+Each external repair consumes exactly the trusted evidence from the immediately preceding Attempt. Native
+Check, Ground Analysis, Opening Composition and Evaluation may therefore reject in successive Attempts
+without forcing an early close after the first repaired stage. Every repair produces a fresh generation
+Request, authored-source identity and—only after admission—a fresh Package, Capture and Evaluation identity.
+No Attempt mutates a frozen prior artifact or lowers a Case/Profile threshold. A rejected Native Check may
+enter this loop only when the Host projects a source-repairable owner fact; tooling, determinism, identity and
+cleanup failures remain terminal.
 
 ```text
-initial Attempt -> Package A -> Capture A -> Evaluation A
-  -> if failed, repairable and budget remains:
-       Repair Request(Evaluation A diagnostics)
-       -> new Attempt
-       -> new authored source
-       -> Check -> Package B -> Capture B -> Evaluation B
-       -> final Run Receipt(A -> B)
+Attempt N -> Native Check -> Ground Analysis -> Package -> Capture -> Evaluation
+  -> if the current trusted boundary rejects, diagnostics are source-repairable,
+     and N < maximumRepairAttemptCount:
+       Repair Request(Attempt N source + exactly that boundary's evidence)
+       -> Attempt N+1 -> new authored source -> replay every downstream gate
+  -> otherwise publish the terminal passed/incomplete/rejected evidence state
 
 or, before Package publication:
 
-initial Attempt -> Check -> Ground Analysis rejected
+Attempt N -> Check or Ground Analysis rejected
   -> if repairable and budget remains:
        Repair Request(ground report + logical-ground evidence)
-       -> new Attempt -> new authored source
-       -> Check -> Ground Analysis -> Package B -> Capture B -> Evaluation B
-       -> final Run Receipt(rejected source evidence -> B)
+       -> Attempt N+1 -> new authored source
+       -> Check -> Ground Analysis -> Package -> Capture -> Evaluation
+       -> continue within the same bounded Run Receipt chain
 ```
 
 If the bounded repair still fails, the Host preserves and publishes both immutable Attempt chains and every
@@ -719,7 +729,9 @@ The run journal is content-addressed and fail-closed:
 - stale identity, no output, timeout, duplicate mismatch, missing Capture, cleanup failure or quarantine
   produces `incomplete` and cannot publish a final passed Receipt;
 - old Package/Capture artifacts remain immutable;
-- terminal Receipt publishes only after Candidate, Browser, Server, temp and provider cleanup join.
+- terminal Receipt publishes only after Candidate, Browser, Server, temp and provider cleanup join;
+- a non-passing terminal Receipt carries the stable allowlisted owner `diagnosticCodes` that caused the
+  closure. The production result reuses those codes instead of replacing them with a generic Run failure.
 
 ## 10. Representative real Case
 
@@ -828,7 +840,7 @@ No `NBR-1` checkpoint is accepted while both old and new production paths remain
 | NBR-45B | Integrate world-side and hosted same-session Capture | NBR-40, NBR-45P | NBR-50B, NBR-70 | runtime-babylon/isolated bridge/Capture CLI only | semantic pass, PNG identity, Camera rollback, cleanup | main-agent-only |
 | NBR-50A | Implement pure dimensioned evaluator | NBR-10 | NBR-50B | `validation/reconstruction-evaluator*` only | asymmetric/negative/missing evidence/no pixel-only GO | parallel-safe |
 | NBR-50B | Adapt formal Capture/runtime evidence to evaluator | NBR-45B, NBR-50A | NBR-60, NBR-70 | `scripts/reconstruction/evaluate*` only | identity/stale/traversal evidence joins | main-agent-only |
-| NBR-60 | Atomically cut over the Case-bound Formal Capture Intent, wire production ports, and add the one-repair journal/orchestrator | NBR-20, NBR-30, NBR-45B, NBR-50B | NBR-70 | temporary exclusive integration ownership of `runtime-contracts` Intent, `validation` Case fields, `formal-capture-request*`, production run ports and run journal; parsed Case/Intent/Package -> immutable run | Intent parser/hash and Case-closure RED/GREEN, no scattered args, max-one/stale/unknown/no-output/cleanup | main-agent-only |
+| NBR-60 | Atomically cut over the Case-bound Formal Capture Intent, wire production ports, and add the bounded multi-stage repair journal/orchestrator | NBR-20, NBR-30, NBR-45B, NBR-50B | NBR-70 | temporary exclusive integration ownership of `runtime-contracts` Intent, `validation` Case fields, `formal-capture-request*`, production run ports and run journal; parsed Case/Intent/Package -> immutable run | Intent parser/hash and Case-closure RED/GREEN, no scattered args, max-three/stale/unknown/no-output/cleanup | main-agent-only |
 | NBR-65 | Migrate every reusable v2 Block reconstruction/ground capability: logical ground model, Subject-relative graph, shared visible/Havok surface, exact grouped collision, batching/residency, display parity and ground-only edge protection, without restoring Three/Manifest/Compiler | BWB-2, BWB-4, BWB-6, NBR-60 | NBR-70 | Block Profile + BNA/Runtime integration; explicit Build-Epoch groups -> frozen topology/Contribution/Package/Havok/parity evidence | footprint/clearance/connectivity/bands, exact topology/union, actual resource counts, Chunk seams, far visibility, real Havok, reset/replay/isolation/cleanup | main-agent-only |
 | NBR-70 | Run the real Case with its frozen Formal Capture Intent and publish runnable artifacts | NBR-40, NBR-45B, NBR-50B, NBR-60, NBR-65 | NBR-80 | one Case artifact root only | real Intent hash/closure plus AI/Package/Runtime/Capture/score/repair/manual launch and whole declared playable-floor support | main-agent-only |
 | NBR-80 | Delete replaced/duplicate production and scattered Capture Intent paths | NBR-70 | NBR-90 | package exports, fixed Harness loader, root scripts and obsolete materializer call shape only | clean-break censuses, generic commands and final Package still green | main-agent-only |
@@ -851,7 +863,7 @@ The work does not wait for the full slice before merging:
 4. generic playable Runtime checkpoint;
 5. formal Capture checkpoint;
 6. evaluation checkpoint;
-7. Case-bound Formal Capture Intent plus production one-repair checkpoint;
+7. Case-bound Formal Capture Intent plus production bounded-repair checkpoint;
 8. real Case/final and current-only deletion checkpoint;
 9. final exact-SHA review/docs-truth checkpoint.
 
