@@ -96,6 +96,12 @@ const NARROW_SPAWN_GROUND_SCENE_SOURCE = SCENE_SOURCE.replace(
   `shape: "small", paletteRole: "ground", visualGroupId: "foreground-platform-group", colliderGroupId: "foreground-ground-group", minimumCenterMetersXYZ: [0.25, -0.25, 11.25], repeatCountXYZ: [1, 1, 14]`,
 );
 
+const SPAWN_ADJACENT_STEP_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+  `    session.createBlockGrid({idPrefix: "spawn-step-left", shape: "step", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [-1, 0.125, 11], repeatCountXYZ: [1, 1, 8] });
+    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+);
+
 const EXTRA_VISUAL_GROUP_SCENE_SOURCE = SCENE_SOURCE.replace(
   `    session.createBlockGrid({idPrefix: "upper",`,
   `    session.createBlock({id: "supported-spawn", shape: "full", paletteRole: "ground", visualGroupId: "supported-spawn-group", centerMetersXYZ: [8, -0.5, 2] });
@@ -488,6 +494,58 @@ describe("packageNativeBlockAttemptV1", () => {
       outcome: "completed",
       authoredSourceRef: expect.any(String),
       authoredSourceHash: expect.stringMatching(/^sha256:/),
+    });
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  }, 60_000);
+
+  it("reuses Runtime surface admission before Package publication when final topology obstructs the Spawn Capsule", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: SPAWN_ADJACENT_STEP_SCENE_SOURCE,
+    });
+
+    const rejected = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    }).catch((error: unknown) => error);
+
+    expect(rejected).toMatchObject({
+      diagnostics: [
+        "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+        "native-ground-analysis-rejected",
+      ],
+      groundAnalysisRejection: {
+        groundAnalysisReport: {
+          admissionOutcome: "failed",
+          failureFacts: expect.arrayContaining([
+            expect.objectContaining({
+              metricId: "ground-spawn-standability",
+              targetId: "spawn-foreground-platform",
+              details: {
+                kind: "state-mismatch",
+                expectedValue: "runtime-surface-admitted",
+                actualValue:
+                  "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_CAPSULE_OBSTRUCTED",
+                correctionDirection: "replace",
+              },
+            }),
+          ]),
+        },
+        repairDiagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            metricId: "ground-spawn-standability",
+            message: expect.stringContaining("Related frozen Collider IDs:"),
+            repairAction: expect.objectContaining({
+              instruction: expect.stringContaining(
+                "Keep the frozen Subject Capsule and Runtime admission threshold unchanged.",
+              ),
+            }),
+          }),
+        ]),
+      },
     });
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",

@@ -199,7 +199,10 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
 2. Prove the production orchestrator treats a repairable Attempt 0 Ground Analysis rejection as immutable
    repair evidence, supplies the checked source plus logical-ground/report diagnostics to Attempt 1, and
    reruns Check/Ground Analysis before any Package or Capture publication. Attempt 1 rejection remains
-   fail-closed; no rejected Attempt may invent Package/Capture identity.
+   fail-closed; no rejected Attempt may invent Package/Capture identity. The repair task must also reread
+   every frozen Case expectation and preserve opening regions, anchors and checked-bounds-center depth order;
+   support connections stay in the correct ground/route visual group rather than extending ridge, cliff,
+   landmark, structure or background groups toward Spawn.
 3. Verify the full declared foreground and basin/forest floor, not only the scripted centerline.
 4. Verify Spawn/support, free walking, mixed heights/steps, blockers, intentional ledges, cliff
    protection, cross-Chunk movement and far silhouette visibility.

@@ -704,13 +704,25 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         "Ground Analysis runs before Capture",
       );
       expect(repairTaskInstruction).toContain(
-        "preserve every required target's elevation, semantic silhouette, acceptanceTargetRef, and fixed pass-check meaning",
+        "preserve every required target's elevation, semantic silhouette, acceptanceTargetRef, fixed pass-check meaning, and the full frozen opening composition",
       );
       expect(repairTaskInstruction).toContain(
         "Do not flatten or lower the destination merely to make it reachable",
       );
       expect(repairTaskInstruction).toContain(
         "continuous face-contact support down to an existing root support",
+      );
+      expect(repairTaskInstruction).toContain(
+        "does not suspend any other frozen Case requirement",
+      );
+      expect(repairTaskInstruction).toContain(
+        "context/case.json.expected.openingComposition even though no prior Capture exists",
+      );
+      expect(repairTaskInstruction).toContain(
+        "Never extend a ridge, cliff, landmark, structure, or background visual group toward Spawn merely to connect support",
+      );
+      expect(repairTaskInstruction).toContain(
+        "Do not trade a Package/Ground gate failure for a predictable Capture/evaluation failure",
       );
     } finally {
       await rm(value.root, { recursive: true, force: true });
