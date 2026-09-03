@@ -59,7 +59,7 @@
     "test:census": "tsx scripts/testing/verify-test-gate-census.ts",
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:contract:coverage": "vitest run --coverage --config vitest.contract.config.ts --coverage.reporter=text --coverage.reporter=json-summary",
-    "test:resource-heavy": "vitest run --config vitest.resource-heavy.config.ts",
+    "test:resource-heavy": "NODE_OPTIONS=--max-old-space-size=4096 vitest run --config vitest.resource-heavy.config.ts",
     "test:focused": "vitest run",
     "test:scenes": "vitest run packages/world/src/scene.test.ts apps/playground/src/scenes/scenes.test.ts",
     "test:watch": "vitest",

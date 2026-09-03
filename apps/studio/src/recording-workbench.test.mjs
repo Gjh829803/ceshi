@@ -128,6 +128,11 @@ async function waitForRecording(origin, sceneId, predicate, timeoutMs = 10_000) 
 
 function createGenerationSpawn({ holdCodex = Promise.resolve() } = {}) {
   const calls = [];
+  let signalFirstCodexStart;
+  const firstCodexStart = new Promise((resolve) => {
+    signalFirstCodexStart = resolve;
+  });
+  let firstCodexStartSignaled = false;
   const spawnImplementation = (command, args) => {
     const child = new EventEmitter();
     child.stdout = new PassThrough();
@@ -142,6 +147,10 @@ function createGenerationSpawn({ holdCodex = Promise.resolve() } = {}) {
       void (async () => {
         const script = path.basename(args[0] ?? "");
         if (script === "run-codex-task.mjs") {
+          if (!firstCodexStartSignaled) {
+            firstCodexStartSignaled = true;
+            signalFirstCodexStart();
+          }
           await holdCodex;
           const taskId = args[args.indexOf("--task-id") + 1];
           const backend = args[args.indexOf("--backend") + 1];
@@ -170,7 +179,7 @@ function createGenerationSpawn({ holdCodex = Promise.resolve() } = {}) {
     });
     return child;
   };
-  return { calls, spawnImplementation };
+  return { calls, firstCodexStart, spawnImplementation };
 }
 
 test("locks video, subject, opening-frame, and supplementary tri-view roles in the prompt", () => {
@@ -353,7 +362,8 @@ test("rewrites an existing Seedance prompt when the selected Codex backend chang
       { method: "POST" },
     );
     assert.equal(firstResponse.status, 202, await firstResponse.text());
-    setTimeout(releaseFirstCodex, 2_500);
+    await fake.firstCodexStart;
+    releaseFirstCodex();
     const cloudReady = await waitForRecording(
       http.origin,
       fixture.sceneId,

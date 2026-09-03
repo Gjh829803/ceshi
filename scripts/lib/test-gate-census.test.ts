@@ -169,7 +169,13 @@ describe("test gate configuration", () => {
     expect(packageJson.scripts.test).toBe(
       "pnpm verify:workspace-boundaries && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     );
-    expect(resourceHeavyVitestConfig.test?.pool).toBe("threads");
+    expect(resourceHeavyVitestConfig.test?.pool).toBe("forks");
+    expect(resourceHeavyVitestConfig.test?.isolate).toBe(true);
+    expect(resourceHeavyVitestConfig.test?.fileParallelism).toBe(false);
+    expect(resourceHeavyVitestConfig.test?.maxWorkers).toBe(1);
+    expect(resourceHeavyVitestConfig.test?.poolOptions?.forks?.execArgv).toEqual([
+      "--max-old-space-size=4096",
+    ]);
 
     vi.doUnmock("vitest/node");
     vi.resetModules();
