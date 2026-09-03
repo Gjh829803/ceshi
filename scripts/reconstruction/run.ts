@@ -393,7 +393,7 @@ const STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "FORMAL_WORLD_CAPTURE_REQUEST_IDENTITY_MISMATCH",
   "FORMAL_WORLD_CAPTURE_REQUEST_INVALID",
   "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID",
-  "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+  "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
   "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_BROWSER_EXITED",
   "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_CAPTURE_TIMEOUT",
   "WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_DUPLICATE_REQUEST",
@@ -1253,7 +1253,6 @@ export async function runWorldReconstructionV1(
       if (attempt.outcome === "completed") {
         if (
           attempt.evaluated.outcome === "passed" ||
-          attempt.evaluated.outcome === "incomplete" ||
           !isRepairableWorldReconstructionEvaluationV1(
             attempt.evaluated.evaluation,
             profile,

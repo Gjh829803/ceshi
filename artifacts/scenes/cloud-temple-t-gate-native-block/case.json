@@ -6,7 +6,7 @@
   "sceneBriefHash": "sha256:c1299a6f991a8292daf86fd7168213084e020bcb1d797429b049934544d5fce9",
   "referenceInputs": [{ "inputRef": "reference-0.png", "contentHash": "sha256:3ee88950b9d03733cf0743058a5418d78e7c99f0e222a1038c65cab8977309e0", "mediaType": "image/png" }],
   "evaluationProfileRef": "evaluation-profile.json",
-  "evaluationProfileHash": "sha256:9807f2c23755da5cf48c9580d348046764aaa9cac857b91fa089f5f297c5a8c9",
+  "evaluationProfileHash": "sha256:e489e2191db4cf6c1cef811ce6fd6ca1a9defa9a4d6b53e6294f39b4db440c22",
   "formalCaptureIntentRef": "inputs/formal-world-capture-intent.json",
   "formalCaptureIntentHash": "sha256:037b21aba2f20d22f38611766a08c06a4ba091e0d33505e5963e0e6c50ec2be8",
   "acceptanceTargetRefs": ["worldkit://acceptance-target/central-ascent@1", "worldkit://acceptance-target/foreground-platform@1", "worldkit://acceptance-target/gate-mass@1", "worldkit://acceptance-target/mountain-cliff-layers@1", "worldkit://acceptance-target/supported-spawn@1", "worldkit://acceptance-target/upper-t-junction@1"],

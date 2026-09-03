@@ -10,11 +10,14 @@ import {
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { isNil } from "lodash-es";
+import { isEmpty, isNil } from "lodash-es";
 
 import {
+  formalWorldCaptureReceiptCanonicalBytesV1,
   formalWorldCaptureIntentCanonicalBytesV1,
+  hashFormalWorldCaptureReceiptV1,
   hashFormalWorldCaptureIntentV1,
+  parseFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureIntentV1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "@whitebox-world/runtime-contracts";
@@ -169,6 +172,47 @@ export interface WorldReconstructionProductionRejectedEvaluationResultV1
   readonly runReceiptHash: Sha256HashV1;
 }
 
+interface WorldReconstructionProductionPreviewReadyIdentityV1
+  extends WorldReconstructionProductionIdentityV1 {
+  readonly outcome: "preview-ready";
+  readonly publicationStatus: "not-accepted";
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed";
+  readonly previewWorldPackagePath: string;
+  readonly previewWorldPackageRef: string;
+  readonly previewWorldPackageRootHash: Sha256HashV1;
+  readonly previewOpeningPath: string;
+  readonly previewOpeningRef: string;
+  readonly launchWorkingDirectoryPath: string;
+  readonly launchCommand: string;
+}
+
+export interface WorldReconstructionProductionPreviewReadyCaptureResultV1
+  extends WorldReconstructionProductionPreviewReadyIdentityV1 {
+  readonly qualityStage: "opening-composition";
+  readonly qualityOutcome: "failed";
+  readonly previewCaptureDirectoryPath: string;
+  readonly openingGateResultPath: string;
+  readonly openingGateResultRef: string;
+  readonly openingGateResultHash: Sha256HashV1;
+}
+
+export interface WorldReconstructionProductionPreviewReadyEvaluationResultV1
+  extends WorldReconstructionProductionPreviewReadyIdentityV1 {
+  readonly qualityStage: "evaluation";
+  readonly qualityOutcome: "failed" | "incomplete";
+  readonly attemptCount: 1 | 2 | 3 | 4;
+  readonly previewCaptureDirectoryPath: string;
+  readonly previewCaptureReceiptPath: string;
+  readonly previewCaptureReceiptHash: Sha256HashV1;
+  readonly previewEvaluationPath: string;
+  readonly previewEvaluationRef: string;
+  readonly previewEvaluationHash: Sha256HashV1;
+  readonly runReceiptPath: string;
+  readonly runReceiptRef: string;
+  readonly runReceiptHash: Sha256HashV1;
+}
+
 export interface WorldReconstructionProductionUnsupportedResultV1
   extends WorldReconstructionProductionIdentityV1 {
   readonly outcome: "unsupported-route";
@@ -177,6 +221,8 @@ export interface WorldReconstructionProductionUnsupportedResultV1
 
 export type WorldReconstructionProductionResultV1 =
   | WorldReconstructionProductionPublishedResultV1
+  | WorldReconstructionProductionPreviewReadyCaptureResultV1
+  | WorldReconstructionProductionPreviewReadyEvaluationResultV1
   | WorldReconstructionProductionRejectedCaptureResultV1
   | WorldReconstructionProductionRejectedEvaluationResultV1
   | WorldReconstructionProductionClosedResultV1
@@ -549,6 +595,50 @@ function closedDiagnosticCodes(
   return receipt.diagnosticCodes;
 }
 
+function previewLaunch(
+  outputDirectoryPath: string,
+  worldPackagePath: string,
+): Readonly<{
+  launchWorkingDirectoryPath: string;
+  launchCommand: string;
+}> {
+  const relativePackagePath = path.relative(
+    outputDirectoryPath,
+    worldPackagePath,
+  );
+  if (
+    isEmpty(relativePackagePath) ||
+    path.isAbsolute(relativePackagePath) ||
+    relativePackagePath === ".." ||
+    relativePackagePath.startsWith(`..${path.sep}`)
+  ) {
+    throw new TypeError("NBR_PREVIEW_WORLD_PACKAGE_PATH_INVALID");
+  }
+  return Object.freeze({
+    launchWorkingDirectoryPath: outputDirectoryPath,
+    launchCommand:
+      `pnpm worldkit native run ${relativePackagePath.split(path.sep).join("/")} --port 5174 --json`,
+  });
+}
+
+const PREVIEWABLE_QUALITY_DIMENSION_IDS = new Set([
+  "critical-traversal",
+  "opening-composition",
+  "semantic-silhouette",
+  "topology",
+]);
+
+function isPreviewableQualityEvaluation(
+  evaluation: ReturnType<typeof parseWorldReconstructionEvaluationResultV1>,
+): boolean {
+  const nonPassingDimensions = evaluation.dimensions.filter(
+    ({ status }) => status !== "passed",
+  );
+  return !isEmpty(nonPassingDimensions) && nonPassingDimensions.every(
+    ({ dimensionId }) => PREVIEWABLE_QUALITY_DIMENSION_IDS.has(dimensionId),
+  );
+}
+
 async function rejectedEvaluationResult(
   input: Readonly<{
     caseId: string;
@@ -556,8 +646,13 @@ async function rejectedEvaluationResult(
     runId: string;
     outputDirectoryPath: string;
     receipt: WorldReconstructionRunReceiptV1;
+    qualityGateMode: "report-only" | "required-for-publication";
   }>,
-): Promise<WorldReconstructionProductionRejectedEvaluationResultV1> {
+): Promise<
+  | WorldReconstructionProductionPreviewReadyEvaluationResultV1
+  | WorldReconstructionProductionRejectedEvaluationResultV1
+  | undefined
+> {
   const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(input.receipt);
   const caseArtifactRoot = input.caseRef.slice(0, -"/case.json".length);
   const attemptArtifactRoot =
@@ -587,10 +682,21 @@ async function rejectedEvaluationResult(
     rejectedCaptureDirectoryPath,
     "formal-world-capture-receipt.json",
   );
-  await readCanonicalRegularFile(
+  const captureReceiptBytes = await readCanonicalRegularFile(
     rejectedCaptureReceiptPath,
     "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
   );
+  let captureReceipt;
+  try {
+    captureReceipt = parseFormalWorldCaptureReceiptV1(parseJson(
+      captureReceiptBytes,
+      "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
+    ));
+  } catch (error) {
+    throw new TypeError("NBR_REJECTED_EVALUATION_EVIDENCE_INVALID", {
+      cause: error,
+    });
+  }
   const rejectedEvaluationPath = path.join(attemptDirectoryPath, "evaluation.json");
   const evaluationBytes = await readCanonicalRegularFile(
     rejectedEvaluationPath,
@@ -609,16 +715,38 @@ async function rejectedEvaluationResult(
   }
   if (
     !bytesEqual(
+      captureReceiptBytes,
+      formalWorldCaptureReceiptCanonicalBytesV1(captureReceipt),
+    ) ||
+    hashFormalWorldCaptureReceiptV1(captureReceipt) !==
+      terminal.captureReceiptHash ||
+    captureReceipt.caseRef !== input.receipt.caseRef ||
+    captureReceipt.caseHash !== input.receipt.caseHash ||
+    captureReceipt.evaluationProfileRef !== input.receipt.evaluationProfileRef ||
+    captureReceipt.evaluationProfileHash !== input.receipt.evaluationProfileHash ||
+    captureReceipt.sceneAuthoringAttemptHash !==
+      terminal.sceneAuthoringAttemptHash ||
+    captureReceipt.sceneAuthoringAttemptResultHash !==
+      terminal.sceneAuthoringAttemptResultHash ||
+    captureReceipt.worldPackageRef !== terminal.worldPackageRef ||
+    captureReceipt.worldPackageRootHash !== terminal.worldPackageRootHash ||
+    captureReceipt.worldPackageBuildReceiptRef !==
+      terminal.worldPackageBuildReceiptRef ||
+    captureReceipt.worldPackageBuildReceiptHash !==
+      terminal.worldPackageBuildReceiptHash ||
+    captureReceipt.worldBuildIdentityRef !== terminal.worldBuildIdentityRef ||
+    captureReceipt.worldBuildIdentityHash !== terminal.worldBuildIdentityHash ||
+    !bytesEqual(
       evaluationBytes,
       worldReconstructionEvaluationResultCanonicalBytesV1(evaluation),
     ) ||
-    evaluation.outcome !== "failed" ||
+    evaluation.outcome === "passed" ||
     evaluation.caseRef !== input.receipt.caseRef ||
     evaluation.caseHash !== input.receipt.caseHash ||
     evaluation.evaluationProfileRef !== input.receipt.evaluationProfileRef ||
     evaluation.evaluationProfileHash !== input.receipt.evaluationProfileHash ||
-    evaluation.attemptRef !== terminal.sceneAuthoringAttemptRef ||
-    evaluation.attemptHash !== terminal.sceneAuthoringAttemptHash ||
+    evaluation.attemptRef !== captureReceipt.sceneAuthoringAttemptRef ||
+    evaluation.attemptHash !== captureReceipt.sceneAuthoringAttemptHash ||
     evaluation.worldPackageRef !== terminal.worldPackageRef ||
     evaluation.worldPackageRootHash !== terminal.worldPackageRootHash ||
     evaluation.worldBuildIdentityRef !== terminal.worldBuildIdentityRef ||
@@ -634,19 +762,13 @@ async function rejectedEvaluationResult(
   ) {
     throw new TypeError("NBR_REJECTED_EVALUATION_EVIDENCE_INVALID");
   }
-  return Object.freeze({
-    kind: "world-reconstruction-production-result",
-    schemaVersion: 1,
-    caseId: input.caseId,
-    caseRef: input.caseRef,
-    runId: input.runId,
-    outcome: "rejected-evaluation",
-    runOutcome: "failed",
+  const diagnosticCodes = Object.freeze([
+    ...new Set(evaluation.diagnostics.map(({ code }) => code)),
+  ].sort());
+  const evidence = Object.freeze({
     attemptCount: input.receipt.attempts.length as 1 | 2 | 3 | 4,
-    diagnosticCodes: Object.freeze([
-      ...new Set(evaluation.diagnostics.map(({ code }) => code)),
-    ].sort()),
-    cleanupOutcome: "completed",
+    diagnosticCodes,
+    cleanupOutcome: "completed" as const,
     rejectedWorldPackagePath,
     rejectedWorldPackageRef: terminal.worldPackageRef,
     rejectedWorldPackageRootHash: terminal.worldPackageRootHash,
@@ -664,6 +786,54 @@ async function rejectedEvaluationResult(
       input.outputDirectoryPath,
       input.receipt,
     ),
+  });
+  if (
+    input.qualityGateMode === "report-only" &&
+    isPreviewableQualityEvaluation(evaluation)
+  ) {
+    return Object.freeze({
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: input.caseId,
+      caseRef: input.caseRef,
+      runId: input.runId,
+      outcome: "preview-ready",
+      publicationStatus: "not-accepted",
+      qualityStage: "evaluation",
+      qualityOutcome: evaluation.outcome,
+      attemptCount: input.receipt.attempts.length as 1 | 2 | 3 | 4,
+      diagnosticCodes,
+      cleanupOutcome: "completed",
+      previewWorldPackagePath: rejectedWorldPackagePath,
+      previewWorldPackageRef: terminal.worldPackageRef,
+      previewWorldPackageRootHash: terminal.worldPackageRootHash,
+      previewCaptureDirectoryPath: rejectedCaptureDirectoryPath,
+      previewOpeningPath: rejectedOpeningPath,
+      previewOpeningRef: `${attemptArtifactRoot}/capture/opening.png`,
+      previewCaptureReceiptPath: rejectedCaptureReceiptPath,
+      previewCaptureReceiptHash: terminal.captureReceiptHash,
+      previewEvaluationPath: rejectedEvaluationPath,
+      previewEvaluationRef: terminal.evaluationResultRef,
+      previewEvaluationHash: terminal.evaluationResultHash,
+      ...runReceiptIdentity(
+        input.caseRef,
+        input.runId,
+        input.outputDirectoryPath,
+        input.receipt,
+      ),
+      ...previewLaunch(input.outputDirectoryPath, rejectedWorldPackagePath),
+    });
+  }
+  if (evaluation.outcome !== "failed") return undefined;
+  return Object.freeze({
+    kind: "world-reconstruction-production-result",
+    schemaVersion: 1,
+    caseId: input.caseId,
+    caseRef: input.caseRef,
+    runId: input.runId,
+    outcome: "rejected-evaluation",
+    runOutcome: "failed",
+    ...evidence,
   });
 }
 
@@ -1044,6 +1214,53 @@ export async function runWorldReconstructionProductionV1(
   } catch (error) {
     if (error instanceof WorldReconstructionRunClosedErrorV1) {
       if (!isNil(error.rejectedCaptureEvidence)) {
+        if (
+          evaluationProfile.qualityGateMode === "report-only" &&
+          error.cleanupOutcome === "completed"
+        ) {
+          const evidence = error.rejectedCaptureEvidence;
+          try {
+            return Object.freeze({
+              kind: "world-reconstruction-production-result",
+              schemaVersion: 1,
+              caseId: reconstructionCase.id,
+              caseRef,
+              runId,
+              outcome: "preview-ready",
+              publicationStatus: "not-accepted",
+              qualityStage: "opening-composition",
+              qualityOutcome: "failed",
+              diagnosticCodes: error.diagnosticCodes,
+              cleanupOutcome: "completed",
+              previewWorldPackagePath: evidence.rejectedWorldPackagePath,
+              previewWorldPackageRef: evidence.rejectedWorldPackageRef,
+              previewWorldPackageRootHash:
+                evidence.rejectedWorldPackageRootHash,
+              previewCaptureDirectoryPath:
+                evidence.rejectedCaptureDirectoryPath,
+              previewOpeningPath: evidence.rejectedOpeningPath,
+              previewOpeningRef: evidence.rejectedOpeningRef,
+              openingGateResultPath: evidence.openingGateResultPath,
+              openingGateResultRef: evidence.openingGateResultRef,
+              openingGateResultHash: evidence.openingGateResultHash,
+              ...previewLaunch(
+                outputDirectoryPath,
+                evidence.rejectedWorldPackagePath,
+              ),
+            });
+          } catch (previewError) {
+            return Object.freeze({
+              kind: "world-reconstruction-production-result",
+              schemaVersion: 1,
+              caseId: reconstructionCase.id,
+              caseRef,
+              runId,
+              outcome: "closed",
+              diagnosticCodes: diagnosticCodesFromError(previewError),
+              cleanupOutcome: error.cleanupOutcome,
+            });
+          }
+        }
         return Object.freeze({
           kind: "world-reconstruction-production-result",
           schemaVersion: 1,
@@ -1105,15 +1322,22 @@ export async function runWorldReconstructionProductionV1(
     outputDirectoryPath,
     receipt,
   );
-  if (receipt.outcome === "failed" && receipt.cleanupOutcome === "completed") {
+  if (
+    (receipt.outcome === "failed" ||
+      (receipt.outcome === "incomplete" &&
+        evaluationProfile.qualityGateMode === "report-only")) &&
+    receipt.cleanupOutcome === "completed"
+  ) {
     try {
-      return await rejectedEvaluationResult({
+      const qualityResult = await rejectedEvaluationResult({
         caseId: reconstructionCase.id,
         caseRef,
         runId,
         outputDirectoryPath,
         receipt,
+        qualityGateMode: evaluationProfile.qualityGateMode,
       });
+      if (!isNil(qualityResult)) return qualityResult;
     } catch (error) {
       return Object.freeze({
         kind: "world-reconstruction-production-result",

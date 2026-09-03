@@ -936,7 +936,10 @@ export async function prepareNativeBlockGenerationTaskV1(
     "--timeout-seconds", String(generationRequest.budgets.timeoutSeconds),
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
     "--workspace-context-root", `attempts/${input.attemptIndex}/.task`,
-    ...references.flatMap((reference, index) => ["--asset", `reference-${index}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::image::${reconstructionCase.referenceInputs[index]!.mediaType}`]),
+    ...references.flatMap((reference, index) => [
+      "--asset",
+      `${path.basename(reference.relativePath, path.extname(reference.relativePath))}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::image::${reconstructionCase.referenceInputs[index]!.mediaType}`,
+    ]),
     "--output", `scene.ts::attempts/${input.attemptIndex}/.staging/scene.ts::text/typescript`,
     "--output", `native-block-authoring.json::attempts/${input.attemptIndex}/.staging/native-block-authoring.json::application/json`,
     "--output", `native-resources.json::attempts/${input.attemptIndex}/.staging/native-resources.json::application/json`,

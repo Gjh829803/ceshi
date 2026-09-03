@@ -1553,7 +1553,7 @@ initial-evaluated(failed, repairable) -> repair-generating -> repair-packaged
 -> repair-captured -> repair-evaluated -> cleanup-joined -> completed
 ```
 
-Also test initial pass (no repair), initial incomplete (no publication), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure.
+Also test initial pass (no repair), genuinely missing/stale evidence (no repair or accepted publication), an observed-but-incomplete traversal checkpoint (source-only repair while budget remains), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure. After the later NBR-65J policy cutover, an exhausted `report-only` quality result may expose a non-accepted preview; it is never an accepted publication.
 
 - [ ] **Step 2: Write RED source-only repair tests**
 

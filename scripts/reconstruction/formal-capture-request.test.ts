@@ -79,6 +79,7 @@ function profileValue() {
     schemaVersion: 1,
     id: "package-fixture-profile",
     dimensionIds,
+    qualityGateMode: "required-for-publication",
     maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {

@@ -66,12 +66,42 @@ function colliderMissingDiagnostic(): WorldReconstructionDiagnosticV1 {
   });
 }
 
+function traversalEvidenceIncompleteDiagnostic(): WorldReconstructionDiagnosticV1 {
+  return parseWorldReconstructionDiagnosticV1({
+    kind: "world-reconstruction-diagnostic",
+    schemaVersion: 1,
+    id: "diag.traversal-incomplete",
+    code: "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE",
+    dimensionId: "critical-traversal",
+    acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+    targetRef: "worldkit://acceptance-target/central-ascent@1",
+    targetId: "reach-junction",
+    metricId: "critical-traversal-completeness",
+    details: {
+      kind: "state-mismatch",
+      expectedValue: "complete",
+      actualValue: "incomplete",
+      correctionDirection: "replace",
+    },
+    evidenceRefs: ["artifact://case/cloud-temple/evidence/critical-traversal.json"],
+    message: "Required traversal evidence is incomplete for reach-junction.",
+    repairAction: {
+      kind: "revise-native-source",
+      targetKind: "traversal-check",
+      targetId: "reach-junction",
+      operation: "adjust-traversal",
+      instruction: "Adjust the Native route until reach-junction can be measured conclusively.",
+    },
+  });
+}
+
 function profile() {
   return parseWorldReconstructionEvaluationProfileV1({
     kind: "world-reconstruction-evaluation-profile",
     schemaVersion: 1,
     id: "cloud-temple.profile",
     dimensionIds: [...DIMENSIONS],
+    qualityGateMode: "required-for-publication",
     maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
@@ -279,7 +309,7 @@ describe("createNativeBlockRepairInstructionV1", () => {
 });
 
 describe("isRepairableWorldReconstructionEvaluationV1", () => {
-  it("repairs only a failed evaluation with source diagnostics and remaining budget", () => {
+  it("repairs failed or source-repairable incomplete evaluations while budget remains", () => {
     const failed = evaluation({
       outcome: "failed",
       diagnostics: [colliderMissingDiagnostic()],
@@ -293,6 +323,14 @@ describe("isRepairableWorldReconstructionEvaluationV1", () => {
     expect(isRepairableWorldReconstructionEvaluationV1(failed, profile(), 3)).toBe(
       false,
     );
+
+    const repairableIncomplete = evaluation({
+      outcome: "incomplete",
+      diagnostics: [traversalEvidenceIncompleteDiagnostic()],
+    });
+    expect(
+      isRepairableWorldReconstructionEvaluationV1(repairableIncomplete, profile(), 0),
+    ).toBe(true);
 
     const passed = evaluation({ outcome: "passed" });
     expect(isEmpty(passed.diagnostics)).toBe(true);

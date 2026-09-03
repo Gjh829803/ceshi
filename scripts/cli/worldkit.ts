@@ -2674,7 +2674,9 @@ export async function main(
         }),
       });
       process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
-      return result.outcome === "published" ? 0 : 1;
+      return result.outcome === "published" || result.outcome === "preview-ready"
+        ? 0
+        : 1;
     } catch (error) {
       process.stdout.write(
         `${stringifyCanonicalJson(reconstructionProductionFailureV1(error))}\n`,

@@ -296,6 +296,10 @@ async function main(): Promise<void> {
         proposalPath,
         sceneBriefPath: briefPath,
         referenceImagePaths: stagedReferences,
+        planningImagePaths: {
+          worldPlanPath,
+          entryWhiteboxTargetPath: entryTargetPath,
+        },
         outputCaseRoot: stagedCaseRoot,
       });
       for (const fileName of [

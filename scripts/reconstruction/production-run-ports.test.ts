@@ -1054,7 +1054,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       ...owners(value, events),
       capturePackage: vi.fn(async () => {
         const providerFailure = new Error(
-          "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+          "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
         );
         const transportFailure = new Error("hosted bridge rejected", {
           cause: providerFailure,
@@ -1081,7 +1081,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       outcome: "failed",
       cameraRollbackOutcome: "completed",
       diagnosticCodes: [
-        "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+        "BABYLON_FORMAL_CAPTURE_TRAVERSAL_TICK_NOT_COMMITTED",
       ],
     });
   });

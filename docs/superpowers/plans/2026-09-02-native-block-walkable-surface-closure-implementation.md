@@ -12,6 +12,12 @@ stays Host-only; the ground report and diagnostics are Attempt artifacts rather
 than new WorldPackage fields. NBR-65H parity `passed` rows bind a closed focused
 gate command and zero exit code; token presence alone is insufficient.
 
+**2026-09-04 production-loop correction:** the migration is not complete while
+the Native Builder lacks the frozen Planner images or a quality-measurement miss
+can erase an otherwise admitted world. NBR-65J closes that causal-feedback and
+preview boundary before the real Case is accepted. It ports v2 behavior without
+restoring its Three renderer, Manifest, Compiler or hidden foundation.
+
 ## Delivery graph
 
 | ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive ownership / input -> output | Required evidence | Mode |
@@ -24,7 +30,8 @@ gate command and zero exit code; token presence alone is insufficient.
 | NBR-65F | Realize Profile batching, far visibility and bounded collision residency | 65D, 65E | 65G..65I | Profile visual adapter + existing Runtime lifecycle; BWB-6 assessment -> actual batches/Chunks | draw/resource counts, Capture identity, seam traversal, residency lifecycle | main-agent-only |
 | NBR-65G | Align whitebox lighting/materials and current Skills | 65D, 65F | 65H, 65I | Runtime light owner, Profile display adapter, live/copied Builder Skill | material/light tests, Skill parity and negative ownership census | sequential |
 | NBR-65H | Atomically migrate every active consumer and add a v2 parity verifier | 65C..65G | 65I | fixtures, Corpus, generated Module, Package metadata and verifier | no old field/fallback; per-capability current-code evidence | sequential |
-| NBR-65I | Run the real Case, publish evidence, review and merge | 65H | NBR-70 | one Case root plus status/review; reference -> Package/Runtime/Capture/parity Receipt | focused gates, Browser play, exact-SHA Mode B/runtime review | main-agent-only |
+| NBR-65J | Restore v2 production-loop usability parity under current Native owners | 65G, 65H | 65I, NBR-70 | Case/Profile, generation task, Formal Capture and production result; named Planner images + admitted Package -> bounded feedback + preview-safe terminal disposition | input identity, incomplete traversal, report-only/strict disposition, launch and cleanup tests | main-agent-only |
+| NBR-65I | Run the real Case, publish evidence, review and merge | 65H, 65J | NBR-70 | one Case root plus status/review; reference -> Package/Runtime/Capture/parity Receipt | focused gates, Browser play, exact-SHA Mode B/runtime review | main-agent-only |
 
 The shared contract path is sequential. Tests for a frozen producer can be prepared while its consumer
 is implemented, but no worker independently changes Runtime state ownership, Package identity or the
@@ -192,9 +199,45 @@ forbidden-token census and typecheck if source changed.
 Focused evidence: consumer tests, Package/Receipt verification, formal Capture/overlay identity,
 clean-break census, parity verifier fixtures, Skill drift and test census.
 
+## NBR-65J: v2 production-loop usability parity
+
+1. Freeze `world-plan.png` and `entry-whitebox-target.png` into the existing
+   Case/Generation Request identity and pass them to the Native Builder under
+   semantic asset names on initial and repair Attempts. Preserve the uploaded
+   reference as a separate named input.
+2. Extend the sole current Evaluation Profile with
+   `qualityGateMode: "report-only" | "required-for-publication"`. Newly mapped
+   exploratory Native Cases use `report-only`; curated acceptance fixtures may
+   use `required-for-publication`. Do not retain an old parser or implicit
+   fallback.
+3. Keep Native Check, Ground Analysis, Package/Receipt, Runtime, Spawn/Support,
+   explicit Collider, identity, determinism and cleanup failures hard in both
+   modes.
+4. Publish every requested scripted traversal row even when a checkpoint cannot
+   prove pass or block. Record the final-tick checkpoint and check outcome as
+   `incomplete`; emit a dedicated source-repairable diagnostic when every
+   declared checkpoint identity is present, and spend the next bounded repair
+   Attempt before terminal disposition. Missing checkpoint rows or stale
+   evidence remain non-repairable. Never synthesize success or throw
+   `BABYLON_FORMAL_CAPTURE_*_CHECKPOINT_UNMEASURED` for this quality condition.
+5. Run the existing bounded quality repair loop in both modes. At exhaustion,
+   `required-for-publication` remains rejected. `report-only` returns exit zero
+   with an explicitly non-accepted preview result, admitted Package identity,
+   exact diagnostics, surviving Capture/evaluation paths and stable launch
+   command. It must not call the final accepted-artifact publisher.
+6. Add focused RED->GREEN coverage for named Planner assets, task identity,
+   incomplete evidence projection, failed/incomplete quality preview, strict
+   rejection, hard-admission rejection and cleanup. Update the parity verifier
+   to bind these behaviors rather than source keywords.
+
+Focused evidence: validation contract tests, generation request tests,
+Runtime-contract/provider traversal tests, evidence projection, production
+result/CLI exit tests and `git diff --check`. No full-suite replay occurs until
+the real Case candidate is frozen.
+
 ## NBR-65I: real Case and closure
 
-1. Run `/Users/xiateng/Downloads/测试集/024_petrified_primordial_forest.png` through the formal Native
+1. Run `/Users/xiateng/Downloads/测试集/001_mars_first_rain.png` through the formal Native
    production route using the new API.
 2. Prove the production orchestrator treats every repairable Ground Analysis rejection as immutable
    repair evidence, supplies the checked source plus logical-ground/report diagnostics to the next bounded

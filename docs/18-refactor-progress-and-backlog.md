@@ -1194,7 +1194,7 @@ source-neutral Opening Composition Host Gate。
 - [x] NBR-50：输出拓扑、语义轮廓、Opening、Spawn/Support、Collider、固定输入关键通过性和确定性诊断；
   每条失败以闭合 `metricId` 独立记录目标、期望、实测、阈值、超出量和修正方向，不用笼统诊断吞掉
   同一目标的多个子指标；
-- [x] NBR-60：最多一次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；修复任务逐条执行
+- [x] NBR-60：一个初始 Attempt 加最多三次诊断驱动修复，并产生新的 Attempt/Package/Receipt/Capture；修复任务逐条执行
   metric-bound Native source action，禁止修改 Case、Profile、阈值、冻结 Owner 或既有产物；
 - [ ] NBR-65：按
   [Native Block V2 Capability Migration and Walkable Surface Closure](superpowers/specs/2026-09-02-native-block-walkable-surface-closure-design.md)
@@ -1204,6 +1204,12 @@ source-neutral Opening Composition Host Gate。
   最终以逐能力 parity report 防止“只迁视觉、不迁可玩性”。保持 Babylon Native + Frozen
   Contributions + SDK-owned Havok，不恢复 Three、Manifest、Compiler、hidden foundation 或第二 support
   owner。它是 NBR-70 前置，不增加 WRC-1 第 34 个工作包；
+- [ ] NBR-65J：恢复 `codex/block-world-main-integration` 已验证的生产反馈语义，但不恢复 Three、
+  Manifest、Compiler 或 hidden foundation：把 Planner 的 `world-plan.png` 与
+  `entry-whitebox-target.png` 作为具名哈希输入交给 Native Builder；区分硬准入与还原质量；所有
+  Profile 继续执行相同检测和最多三轮修复，探索 Case 默认 `report-only`，质量未达标时保留明确
+  非 GO、但可启动的 Package/Capture/诊断；正式验收使用 `required-for-publication`。该项属于
+  NBR-65 内部纠偏，不增加 WRC-1 工作包数量；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
 - [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
   临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；

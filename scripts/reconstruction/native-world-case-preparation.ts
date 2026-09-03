@@ -97,6 +97,10 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
   proposalPath: string;
   sceneBriefPath: string;
   referenceImagePaths: readonly string[];
+  planningImagePaths: Readonly<{
+    worldPlanPath: string;
+    entryWhiteboxTargetPath: string;
+  }>;
   outputCaseRoot: string;
 }>): Promise<PreparedNativeWorldCaseV1> {
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(input.sceneId)) {
@@ -169,6 +173,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     schemaVersion: 1,
     id: `${input.sceneId}-profile`,
     dimensionIds: DIMENSION_IDS,
+    qualityGateMode: "report-only",
     maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
@@ -198,7 +203,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       evidenceProfileRefs: [EVIDENCE_PROFILE_REF_BY_DIMENSION[dimensionId]],
     })),
   });
-  const referenceInputs = await Promise.all(input.referenceImagePaths.map(
+  const uploadedReferenceInputs = await Promise.all(input.referenceImagePaths.map(
     async (sourcePath, index) => {
       const bytes = await readFile(sourcePath);
       const type = mediaType(sourcePath);
@@ -213,6 +218,31 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       });
     },
   ));
+  const planningReferenceInputs = await Promise.all([{
+    sourcePath: input.planningImagePaths.entryWhiteboxTargetPath,
+    inputRef: "entry-whitebox-target.png",
+  }, {
+    sourcePath: input.planningImagePaths.worldPlanPath,
+    inputRef: "world-plan.png",
+  }].map(async ({ sourcePath, inputRef }) => {
+    if (mediaType(sourcePath) !== "image/png") {
+      throw new TypeError("NATIVE_WORLD_PLANNING_IMAGE_MEDIA_TYPE_INVALID");
+    }
+    const bytes = await readFile(sourcePath);
+    return Object.freeze({
+      sourcePath,
+      bytes,
+      row: Object.freeze({
+        inputRef,
+        contentHash: sha256Bytes(bytes) as Sha256HashV1,
+        mediaType: "image/png" as const,
+      }),
+    });
+  }));
+  const referenceInputs = sortBy(
+    [...uploadedReferenceInputs, ...planningReferenceInputs],
+    ({ row }) => row.inputRef,
+  );
   const requiredEvidenceProfileRefs = sortBy(
     Object.values(EVIDENCE_PROFILE_REF_BY_DIMENSION),
   );
@@ -272,7 +302,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     writeFile(path.join(inputRoot, "task-instruction.md"), [
       "# Native Block generation request",
       "",
-      "Build the complete playable world described by the frozen Scene Brief, Case, references, and Host Bootstrap.",
+      "Build the complete playable world described by the frozen Scene Brief, uploaded references, world-plan.png, entry-whitebox-target.png, and Host Bootstrap.",
       "Write exactly scene.ts, native-block-authoring.json, and native-resources.json.",
       "Implement every Case visual group and every explicit required Collider contribution exactly once.",
       "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",

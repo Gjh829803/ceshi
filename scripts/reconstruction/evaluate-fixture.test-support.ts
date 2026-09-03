@@ -233,6 +233,7 @@ export function createEvidenceSetFixtureInputV1(
       "spawn-support",
       "topology",
     ],
+    qualityGateMode: "required-for-publication",
     maximumRepairAttemptCount: 3,
     builderSelfRepairAttemptCount: 3,
     thresholds: {
@@ -669,13 +670,11 @@ export function createEvidenceSetFixtureInputV1(
   const { receipt, sceneAuthoringAttempt, sceneAuthoringAttemptResult } =
     verifiedWorldPackage;
   const attemptIndex = options.attemptIdentity?.attemptIndex ?? 0;
-  const attemptRef = `artifact://case/package-fixture/attempts/${attemptIndex}/attempt.json`;
+  const attemptRef = sceneAuthoringAttemptResult.sceneAuthoringAttemptRef;
   const attemptResultRef =
-    `artifact://case/package-fixture/attempts/${attemptIndex}/attempt-result.json`;
-  const buildReceiptRef =
-    `artifact://case/package-fixture/attempts/${attemptIndex}/world-package-build-receipt.json`;
-  const buildIdentityRef =
-    `artifact://case/package-fixture/attempts/${attemptIndex}/world-build-identity.json`;
+    verifiedWorldPackage.manifest.sceneSource.sceneAuthoringAttemptResultRef;
+  const buildReceiptRef = "world-package://world-package-build-receipt.json";
+  const buildIdentityRef = "world-package://world-build-identity.json";
   const semanticCaptureMap = {
     kind: "formal-semantic-capture-map" as const,
     schemaVersion: 1 as const,

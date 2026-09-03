@@ -304,6 +304,53 @@ const PASSED_CAPABILITIES = Object.freeze([
       "scripts/reconstruction/evaluate-evidence-set.test.ts": ["trusted Package"],
     },
   },
+  {
+    capabilityId: "named-planning-image-builder-feedback",
+    disposition: "frozen top-down and entry-composition images reach every Builder Attempt under semantic asset names",
+    owner: "native-reconstruction-production-host-and-builder-skill",
+    evidence: {
+      "scripts/reconstruction/native-world-case-preparation.test.ts": [
+        "binds an untrusted semantic proposal to Host profiles and immutable inputs",
+        "entry-whitebox-target.png",
+        "world-plan.png",
+      ],
+      "scripts/reconstruction/generation-request.test.ts": [
+        "declares Planner images and uploaded references as semantically named router assets",
+      ],
+      ".codex/skills/worldkit-native-block-builder/SKILL.md": [
+        "Inspect `inputs/world-plan.png` before choosing coordinates",
+        "Inspect `inputs/entry-whitebox-target.png` before composing visual groups",
+      ],
+    },
+  },
+  {
+    capabilityId: "incomplete-traversal-evidence",
+    disposition: "unmeasured traversal remains explicit incomplete quality evidence rather than a Capture infrastructure exception",
+    owner: "formal-capture-runtime-contract-and-evidence-projector",
+    evidence: {
+      "packages/runtime-babylon/src/formal-world-capture-provider.test.ts": [
+        "publishes incomplete evidence when a block check cannot prove contact with its frozen face",
+      ],
+      "scripts/reconstruction/evaluate-evidence-set.test.ts": [
+        "projects incomplete when a required checkpoint has no measured evidence",
+      ],
+    },
+  },
+  {
+    capabilityId: "report-only-quality-preview",
+    disposition: "quality gates and repairs remain active while exploratory Cases retain one explicitly non-accepted runnable preview",
+    owner: "native-reconstruction-production-host",
+    evidence: {
+      "scripts/reconstruction/run-production.test.ts": [
+        "delivers an admitted report-only Package after opening quality repair is exhausted",
+        "delivers a non-accepted report-only preview after evaluation repair is exhausted",
+        "delivers incomplete soft evidence as a report-only preview without inventing a pass",
+      ],
+      "scripts/cli/worldkit.test.ts": [
+        "returns success for a non-accepted report-only preview",
+      ],
+    },
+  },
 ] as const satisfies readonly PassedCapabilityDefinitionV1[]);
 
 const NOT_APPLICABLE_CAPABILITIES = Object.freeze([
@@ -506,6 +553,20 @@ const CAPABILITY_GATES = Object.freeze({
       "scripts/reconstruction/run.test.ts",
     ]),
   }),
+  "production-loop-usability": Object.freeze({
+    gateId: "production-loop-usability",
+    command: Object.freeze([
+      "pnpm", "exec", "vitest", "run",
+      "scripts/agents/native-block-builder-skill.test.ts",
+      "scripts/reconstruction/native-world-case-preparation.test.ts",
+      "scripts/reconstruction/generation-request.test.ts",
+      "packages/runtime-contracts/src/formal-world-capture.test.ts",
+      "packages/runtime-babylon/src/formal-world-capture-provider.test.ts",
+      "scripts/reconstruction/evaluate-evidence-set.test.ts",
+      "scripts/reconstruction/run-production.test.ts",
+      "scripts/cli/worldkit.test.ts",
+    ]),
+  }),
 } as const satisfies Readonly<Record<
   string,
   Nbr65CapabilityGateDefinitionV1
@@ -538,6 +599,9 @@ const CAPABILITY_GATE_ID_BY_CAPABILITY_ID = Object.freeze({
   "bounded-builder-repair": "reconstruction-host",
   "route-course-and-semantic-pose-guidance": "reconstruction-host",
   "package-capture-and-evaluation": "reconstruction-host",
+  "named-planning-image-builder-feedback": "production-loop-usability",
+  "incomplete-traversal-evidence": "production-loop-usability",
+  "report-only-quality-preview": "production-loop-usability",
 } as const satisfies Readonly<Record<PassedCapabilityIdV1, CapabilityGateIdV1>>);
 
 const FORBIDDEN_PATHS = Object.freeze([

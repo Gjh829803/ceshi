@@ -259,6 +259,14 @@ async function createSourceInventory(
   return Object.freeze(rows);
 }
 
+export async function hashAdmittedBabylonNativeSceneSourceGraphV1(
+  sourceGraph: AdmittedBabylonNativeSourceGraphV1,
+): Promise<Sha256HashV1> {
+  return sha256CanonicalJson(
+    await createSourceInventory(sourceGraph),
+  ) as Sha256HashV1;
+}
+
 async function writeAdmittedSnapshot(
   sourceGraph: AdmittedBabylonNativeSourceGraphV1,
   snapshotRoot: string,

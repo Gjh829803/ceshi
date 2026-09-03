@@ -125,6 +125,7 @@ const profileValue = () => ({
   schemaVersion: 1 as const,
   id: "cloud-temple.profile",
   dimensionIds: [...DIMENSIONS],
+  qualityGateMode: "required-for-publication" as const,
   maximumRepairAttemptCount: 3 as const,
   builderSelfRepairAttemptCount: 3 as const,
   thresholds: {
@@ -680,6 +681,29 @@ describe("evaluateWorldReconstructionV1", () => {
       dimensionId: "critical-traversal",
       acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF,
       repairAction: expect.objectContaining({ kind: "revise-native-source" }),
+    }));
+  });
+
+  it("marks an observed incomplete traversal as source-repairable incomplete evidence", () => {
+    const result = evaluateBound({
+      evidence: (draft) => {
+        const traversal = observedRow(draft, "critical-traversal");
+        if (traversal.observed.kind !== "critical-traversal-observed") throw new Error("traversal observed");
+        traversal.observed.checks[0]!.outcome = "incomplete";
+      },
+    });
+
+    expect(result.outcome).toBe("incomplete");
+    expect(dimension(result, "critical-traversal").status).toBe("incomplete");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE",
+      dimensionId: "critical-traversal",
+      metricId: "critical-traversal-completeness",
+      repairAction: expect.objectContaining({
+        kind: "revise-native-source",
+        targetKind: "traversal-check",
+        operation: "adjust-traversal",
+      }),
     }));
   });
 

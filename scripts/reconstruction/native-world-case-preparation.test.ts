@@ -59,6 +59,10 @@ describe("trusted Native world Case preparation", () => {
       proposalPath,
       sceneBriefPath: briefPath,
       referenceImagePaths: [referencePath],
+      planningImagePaths: {
+        worldPlanPath: referencePath,
+        entryWhiteboxTargetPath: referencePath,
+      },
       outputCaseRoot,
     })).rejects.toThrow("WORLD_RECONSTRUCTION_CASE_INVALID");
   });
@@ -110,6 +114,10 @@ describe("trusted Native world Case preparation", () => {
       proposalPath,
       sceneBriefPath: briefPath,
       referenceImagePaths: [referencePath],
+      planningImagePaths: {
+        worldPlanPath: referencePath,
+        entryWhiteboxTargetPath: referencePath,
+      },
       outputCaseRoot,
     })).rejects.toThrow("WORLD_RECONSTRUCTION_CASE_INVALID");
   });
@@ -150,6 +158,10 @@ describe("trusted Native world Case preparation", () => {
       proposalPath,
       sceneBriefPath: briefPath,
       referenceImagePaths: [referencePath],
+      planningImagePaths: {
+        worldPlanPath: referencePath,
+        entryWhiteboxTargetPath: referencePath,
+      },
       outputCaseRoot,
     })).rejects.toThrow(
       "NATIVE_WORLD_CASE_WORLD_BOUNDS_INVALID: expected exactly centerMetersXZ, sizeMetersXZ, heightRangeMeters; received maximumMetersXYZ, minimumMetersXYZ; Formal Capture AABB fields are not Package worldBounds",
@@ -195,6 +207,10 @@ describe("trusted Native world Case preparation", () => {
       proposalPath,
       sceneBriefPath: briefPath,
       referenceImagePaths: [referencePath],
+      planningImagePaths: {
+        worldPlanPath: referencePath,
+        entryWhiteboxTargetPath: referencePath,
+      },
       outputCaseRoot,
     })).rejects.toThrow(
       "NATIVE_WORLD_CASE_COLLIDER_IDENTITY_INVALID: Babylon Native static " +
@@ -236,6 +252,10 @@ describe("trusted Native world Case preparation", () => {
       proposalPath,
       sceneBriefPath: briefPath,
       referenceImagePaths: [referencePath],
+      planningImagePaths: {
+        worldPlanPath: referencePath,
+        entryWhiteboxTargetPath: referencePath,
+      },
       outputCaseRoot,
     });
 
@@ -249,7 +269,21 @@ describe("trusted Native world Case preparation", () => {
     expect(reconstructionCase.evaluationProfileHash).toBe(
       hashWorldReconstructionEvaluationProfileV1(profile),
     );
-    expect(reconstructionCase.referenceInputs).toHaveLength(1);
+    expect(reconstructionCase.referenceInputs.map(({ inputRef }) => inputRef))
+      .toEqual([
+        "entry-whitebox-target.png",
+        "reference-0.png",
+        "world-plan.png",
+      ]);
+    expect(profile.qualityGateMode).toBe("report-only");
+    await expect(readFile(
+      path.join(outputCaseRoot, "inputs", "world-plan.png"),
+      "utf8",
+    )).resolves.toBe("reference-bytes");
+    await expect(readFile(
+      path.join(outputCaseRoot, "inputs", "entry-whitebox-target.png"),
+      "utf8",
+    )).resolves.toBe("reference-bytes");
     expect(reconstructionCase.requiredEvidenceProfileRefs).toHaveLength(7);
     expect(await readFile(
       path.join(outputCaseRoot, "inputs", "builder-skill", "SKILL.md"),

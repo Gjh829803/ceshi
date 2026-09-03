@@ -1100,7 +1100,7 @@ function evaluateCriticalTraversal(
     const observedCheck = observed.checks.find((entry) => entry.id === expected.id);
     const checkpointsPresent = !isNil(observedCheck)
       && expected.checkpointIds.every((checkpointId) => observedCheck.checkpointIds.includes(checkpointId));
-    if (isNil(observedCheck) || !checkpointsPresent || observedCheck.outcome === "incomplete") {
+    if (isNil(observedCheck) || !checkpointsPresent) {
       missingDiagnostics.push({
         code: "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING",
         acceptanceTargetRef: expected.acceptanceTargetRef,
@@ -1110,6 +1110,30 @@ function evaluateCriticalTraversal(
         details: presenceMismatchDetails(),
         evidenceRefs: row.evidenceRefs,
         message: `Required traversal evidence is missing for ${expected.id}.`,
+      });
+      continue;
+    }
+    if (observedCheck.outcome === "incomplete") {
+      missingDiagnostics.push({
+        code: "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE",
+        acceptanceTargetRef: expected.acceptanceTargetRef,
+        targetRef: expected.acceptanceTargetRef,
+        targetId: expected.id,
+        metricId: "critical-traversal-completeness",
+        details: {
+          kind: "state-mismatch",
+          expectedValue: "complete",
+          actualValue: "incomplete",
+          correctionDirection: "replace",
+        },
+        evidenceRefs: row.evidenceRefs,
+        message: `Required traversal evidence is incomplete for ${expected.id}.`,
+        repairAction: sourceRepairAction(
+          "traversal-check",
+          expected.id,
+          "adjust-traversal",
+          `Adjust the Native route for traversal check ${expected.id} so every declared checkpoint produces a conclusive reached, passed, or blocked measurement.`,
+        ),
       });
       continue;
     }

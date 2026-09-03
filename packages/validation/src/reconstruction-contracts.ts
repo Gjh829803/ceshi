@@ -169,6 +169,7 @@ export interface WorldReconstructionEvaluationProfileV1 {
   readonly schemaVersion: 1;
   readonly id: string;
   readonly dimensionIds: readonly WorldReconstructionDimensionIdV1[];
+  readonly qualityGateMode: "report-only" | "required-for-publication";
   readonly maximumRepairAttemptCount: 3;
   readonly builderSelfRepairAttemptCount: 3;
   readonly thresholds: WorldReconstructionThresholdsV1;
@@ -352,6 +353,7 @@ export const WORLD_RECONSTRUCTION_REPAIRABLE_DIAGNOSTIC_CODES_V1 = Object.freeze
   "WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING",
   "WORLD_RECONSTRUCTION_COLLIDER_MISSING",
   "WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH",
+  "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE",
   "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
   "WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE",
 ] as const);
@@ -401,6 +403,7 @@ export const WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1 = Object.freeze([
   "collider-identity",
   "collider-role",
   "critical-traversal-evidence",
+  "critical-traversal-completeness",
   "critical-traversal-outcome",
   "ground-support-coverage-basis-points",
   "ground-support-height-millimeters",
@@ -516,6 +519,7 @@ const DIAGNOSTIC_DETAIL_KIND_BY_METRIC_ID: Readonly<
   "collider-identity": "state-mismatch",
   "collider-role": "state-mismatch",
   "critical-traversal-evidence": "presence-mismatch",
+  "critical-traversal-completeness": "state-mismatch",
   "critical-traversal-outcome": "state-mismatch",
   "ground-support-coverage-basis-points": "basis-points-threshold",
   "ground-support-height-millimeters": "millimeters-threshold",
@@ -576,6 +580,7 @@ const DIAGNOSTIC_METRIC_IDS_BY_CODE: Readonly<
     "collider-overlay-presence",
   ],
   WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH: ["collider-identity", "collider-role"],
+  WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE: ["critical-traversal-completeness"],
   WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED: [
     "critical-traversal-outcome",
     "ground-support-coverage-basis-points",
@@ -639,6 +644,7 @@ const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
   "collider-overlay-presence": { targetKind: "static-collider", operation: "bind" },
   "collider-identity": { targetKind: "static-collider", operation: "bind" },
   "collider-role": { targetKind: "static-collider", operation: "set-traversal-binding" },
+  "critical-traversal-completeness": { targetKind: "traversal-check", operation: "adjust-traversal" },
   "critical-traversal-outcome": { targetKind: "traversal-check", operation: "adjust-traversal" },
   "ground-support-coverage-basis-points": { targetKind: "traversal-check", operation: "adjust-traversal" },
   "ground-support-height-millimeters": { targetKind: "traversal-check", operation: "adjust-traversal" },
@@ -814,7 +820,8 @@ const CASE_FIELDS = [
   "acceptanceTargetRefs", "requiredEvidenceProfileRefs", "expected",
 ] as const;
 const PROFILE_FIELDS = [
-  "kind", "schemaVersion", "id", "dimensionIds", "maximumRepairAttemptCount",
+  "kind", "schemaVersion", "id", "dimensionIds", "qualityGateMode",
+  "maximumRepairAttemptCount",
   "builderSelfRepairAttemptCount", "thresholds", "requiredEvidenceByDimension",
 ] as const;
 const EVIDENCE_FIELDS = [
@@ -1602,6 +1609,12 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
   if (source.kind !== "world-reconstruction-evaluation-profile") fail(contract, "kind", "unexpected kind");
   exactInteger(source.schemaVersion, 1, contract, "schemaVersion");
   const dimensionIds = exactDimensions(source.dimensionIds, contract, "dimensionIds");
+  const qualityGateMode = enumValue(
+    source.qualityGateMode,
+    ["report-only", "required-for-publication"] as const,
+    contract,
+    "qualityGateMode",
+  );
   exactInteger(source.maximumRepairAttemptCount, 3, contract, "maximumRepairAttemptCount");
   exactInteger(source.builderSelfRepairAttemptCount, 3, contract, "builderSelfRepairAttemptCount");
   const thresholdsSource = object(source.thresholds, contract, "thresholds");
@@ -1637,7 +1650,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
     return Object.freeze({ dimensionId, evidenceProfileRefs: sortedStrings(row.evidenceProfileRefs, contract, `${path}/evidenceProfileRefs`) });
   });
   if (requiredEvidenceByDimension.length !== 7) fail(contract, "requiredEvidenceByDimension", "must cover all seven dimensions");
-  return freeze({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: text(source.id, contract, "id"), dimensionIds, maximumRepairAttemptCount: 3, builderSelfRepairAttemptCount: 3, thresholds, requiredEvidenceByDimension: Object.freeze(requiredEvidenceByDimension) });
+  return freeze({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: text(source.id, contract, "id"), dimensionIds, qualityGateMode, maximumRepairAttemptCount: 3, builderSelfRepairAttemptCount: 3, thresholds, requiredEvidenceByDimension: Object.freeze(requiredEvidenceByDimension) });
 }
 
 export function worldReconstructionEvidenceProfileClosureMatchesV1(
@@ -1795,6 +1808,7 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
     WORLD_RECONSTRUCTION_TOPOLOGY_NODE_MISSING: ["topology"], WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING: ["topology"],
     WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT: ["semantic-silhouette"], WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT: ["opening-composition"],
     WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING: ["spawn-support"], WORLD_RECONSTRUCTION_COLLIDER_MISSING: ["collider"], WORLD_RECONSTRUCTION_COLLIDER_ROLE_MISMATCH: ["collider"],
+    WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE: ["critical-traversal"],
     WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED: ["critical-traversal"], WORLD_RECONSTRUCTION_REQUIRED_BLOCKER_PASSABLE: ["critical-traversal"],
     WORLD_RECONSTRUCTION_BUILD_NONDETERMINISTIC: ["deterministic-build"],
     WORLD_RECONSTRUCTION_EVIDENCE_STALE: WORLD_RECONSTRUCTION_DIMENSION_IDS_V1,
@@ -1815,7 +1829,7 @@ export function parseWorldReconstructionEvaluationResultV1(value: unknown): Worl
     const successOnly = dimension.metrics.length > 0 && !failurePolarity;
     if (dimension.status === "passed" && dimensionDiagnostics.length !== 0) fail(contract, "dimensions", "passed dimensions must not declare failure diagnostics");
     if (dimension.status === "failed" && (!failurePolarity || dimensionDiagnostics.length === 0)) fail(contract, "dimensions", "failed dimensions require failure-polarity evidence and a diagnostic");
-    if (dimension.status === "incomplete" && (successOnly || !dimensionDiagnostics.some((diagnostic) => diagnostic.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" || diagnostic.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE"))) fail(contract, "dimensions", "incomplete dimensions require missing or stale evidence diagnostics");
+    if (dimension.status === "incomplete" && (successOnly || !dimensionDiagnostics.some((diagnostic) => diagnostic.code === "WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING" || diagnostic.code === "WORLD_RECONSTRUCTION_EVIDENCE_STALE" || diagnostic.code === "WORLD_RECONSTRUCTION_TRAVERSAL_EVIDENCE_INCOMPLETE"))) fail(contract, "dimensions", "incomplete dimensions require missing, stale, or explicitly repairable incomplete evidence diagnostics");
   }
   const expectedOutcome: WorldReconstructionOutcomeV1 = dimensions.some(({ status }) => status === "incomplete") ? "incomplete" : dimensions.some(({ status }) => status === "failed") ? "failed" : "passed";
   const outcome = enumValue(source.outcome, ["passed", "failed", "incomplete"] as const, contract, "outcome");

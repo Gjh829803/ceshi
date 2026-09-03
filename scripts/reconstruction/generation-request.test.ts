@@ -116,7 +116,7 @@ async function writePriorRepairContext(
 }
 
 function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
-  const profile = parseWorldReconstructionEvaluationProfileV1({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: "cloud-temple-profile", dimensionIds: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"], maximumRepairAttemptCount: 3, builderSelfRepairAttemptCount: 3, thresholds: { semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }], openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }] }, spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 } }, requiredEvidenceByDimension: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"].map((dimensionId) => ({ dimensionId, evidenceProfileRefs: [`worldkit://evidence/${dimensionId}@1`] })) });
+  const profile = parseWorldReconstructionEvaluationProfileV1({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: "cloud-temple-profile", dimensionIds: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"], qualityGateMode: "required-for-publication", maximumRepairAttemptCount: 3, builderSelfRepairAttemptCount: 3, thresholds: { semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }], openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }] }, spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 } }, requiredEvidenceByDimension: ["collider", "critical-traversal", "deterministic-build", "opening-composition", "semantic-silhouette", "spawn-support", "topology"].map((dimensionId) => ({ dimensionId, evidenceProfileRefs: [`worldkit://evidence/${dimensionId}@1`] })) });
   const requiredEvidenceProfileRefs = profile.requiredEvidenceByDimension
     .flatMap((entry) => entry.evidenceProfileRefs)
     .sort();
@@ -1061,14 +1061,33 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
-  it("declares every frozen reference as a router asset", async () => {
+  it("declares Planner images and uploaded references as semantically named router assets", async () => {
     const value = await fixture();
     try {
-      await writeFile(path.join(value.inputDirectory, "reference-1.png"), "another");
+      await Promise.all([
+        writeFile(path.join(value.inputDirectory, "entry-whitebox-target.png"), "entry"),
+        writeFile(path.join(value.inputDirectory, "world-plan.png"), "plan"),
+      ]);
       const fixtureInput = input(value);
-      fixtureInput.case = parseWorldReconstructionCaseV1({ ...fixtureInput.case, referenceInputs: [...fixtureInput.case.referenceInputs, { inputRef: "reference-1.png", contentHash: sha256Bytes(new TextEncoder().encode("another")), mediaType: "image/png" }] });
+      fixtureInput.case = parseWorldReconstructionCaseV1({
+        ...fixtureInput.case,
+        referenceInputs: [{
+          inputRef: "entry-whitebox-target.png",
+          contentHash: sha256Bytes(new TextEncoder().encode("entry")),
+          mediaType: "image/png",
+        }, ...fixtureInput.case.referenceInputs, {
+          inputRef: "world-plan.png",
+          contentHash: sha256Bytes(new TextEncoder().encode("plan")),
+          mediaType: "image/png",
+        }],
+      });
       const prepared = await prepareNativeBlockGenerationTaskV1(fixtureInput);
-      expect(prepared.routerArguments.filter((argument) => argument === "--asset")).toHaveLength(2);
+      expect(prepared.routerArguments.filter((argument) => argument === "--asset")).toHaveLength(3);
+      expect(prepared.routerArguments).toEqual(expect.arrayContaining([
+        "entry-whitebox-target::attempts/0/.task/inputs/entry-whitebox-target.png::image::image/png",
+        "reference-0::attempts/0/.task/inputs/reference-0.png::image::image/png",
+        "world-plan::attempts/0/.task/inputs/world-plan.png::image::image/png",
+      ]));
     } finally { await rm(value.root, { recursive: true, force: true }); }
   });
 

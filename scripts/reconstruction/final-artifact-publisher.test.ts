@@ -15,6 +15,7 @@ import {
   formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureReceiptV1,
+  parseNativeSceneCheckResultV1,
   parseWorldRuntimeSnapshotV4,
   type FixedInputV1,
   type RuntimeSessionSubjectSupportV1,
@@ -388,6 +389,10 @@ async function createRunFixture() {
     diagnosticCodes: [],
     cleanupOutcome: "completed",
   });
+  const sourceNativeCheckResult = parseNativeSceneCheckResultV1({
+    ...verified.nativeSceneCheckResult,
+    id: `${verified.nativeSceneCheckResult.id}.source-check`,
+  });
   await writeJson(
     path.join(attemptRoot, "generation-request.json"),
     generationRequest,
@@ -414,11 +419,11 @@ async function createRunFixture() {
   }
   await writeJson(
     path.join(attemptRoot, "native-check-result.json"),
-    verified.nativeSceneCheckResult,
+    sourceNativeCheckResult,
   );
   await writeFile(
     path.join(attemptRoot, "native-explain.txt"),
-    explainNativeSceneCheckResultV1(verified.nativeSceneCheckResult),
+    explainNativeSceneCheckResultV1(sourceNativeCheckResult),
   );
   await writeWorldPackageDirectoryV1({
     outputDirectoryPath: path.join(attemptRoot, "world-package"),
@@ -468,6 +473,8 @@ async function createRunFixture() {
   await writeJson(path.join(attemptRoot, "evaluation.json"), evaluation);
   const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
   const evaluationHash = hashWorldReconstructionEvaluationResultV1(evaluation);
+  const runArtifactRoot =
+    `${fixture.caseRef.slice(0, -"/case.json".length)}/runs/formal`;
   const runReceipt = parseWorldReconstructionRunReceiptV1({
     kind: "world-reconstruction-run-receipt",
     schemaVersion: 1,
@@ -482,7 +489,8 @@ async function createRunFixture() {
     attempts: [{
       kind: "evaluated",
       attemptIndex: 0,
-      generationRequestRef: generationReceipt.generationRequestRef,
+      generationRequestRef:
+        `${runArtifactRoot}/attempts/0/generation-request.json`,
       generationRequestHash:
         hashNativeBlockGenerationRequestV1(generationRequest),
       generationReceiptRef: "artifact://case/package-fixture/attempts/0/generation-receipt.json",
