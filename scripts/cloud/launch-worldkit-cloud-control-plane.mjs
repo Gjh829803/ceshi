@@ -57,7 +57,18 @@ export function cloudControlPlaneResources({
       strategy: { type: "Recreate" },
       selector: { matchLabels: labels },
       template: {
-        metadata: { labels },
+        metadata: {
+          labels,
+          // The control plane is a Node-only workload. Explicit opt-outs avoid
+          // the cluster-wide observability mutator adding Java, Python and
+          // .NET init containers that delay or block Studio recovery.
+          annotations: {
+            "instrumentation.opentelemetry.io/inject-java": "false",
+            "instrumentation.opentelemetry.io/inject-python": "false",
+            "instrumentation.opentelemetry.io/inject-dotnet": "false",
+            "instrumentation.opentelemetry.io/inject-nodejs": "true",
+          },
+        },
         spec: {
           serviceAccountName,
           terminationGracePeriodSeconds: 60,

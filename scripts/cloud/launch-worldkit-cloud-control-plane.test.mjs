@@ -16,6 +16,12 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   const pod = deployment.spec.template.spec;
   const container = pod.containers[0];
   assert.equal(deployment.spec.replicas, 1);
+  assert.deepEqual(deployment.spec.template.metadata.annotations, {
+    "instrumentation.opentelemetry.io/inject-java": "false",
+    "instrumentation.opentelemetry.io/inject-python": "false",
+    "instrumentation.opentelemetry.io/inject-dotnet": "false",
+    "instrumentation.opentelemetry.io/inject-nodejs": "true",
+  });
   assert.equal(container.resources.requests["nvidia.com/gpu"], undefined);
   assert.equal(container.env.find((item) =>
     item.name === "WORLDKIT_CLOUD_CONTROL_PLANE").value, "1");
