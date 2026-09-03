@@ -86,8 +86,20 @@ async function singleAuthorityRepository(): Promise<string> {
       [
         "supportsCharacterMovementSubjectV1(subject);",
         "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "createCharacterMovementInitialStateAtPlacementV1({ positionMetersXYZ: placement });",
+        "this.#transaction.previewSupportedPlacement(input);",
+        "this.#transaction.previewRelationshipSuspension(input);",
         "this.#transaction.resetAtSupportedPlacement(input);",
         "this.#transaction.suspendForRelationship(input);",
+      ].join("\n"),
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-babylon/src/babylon-world-runtime.ts",
+      [
+        "controller.locomotionStateV2();",
+        "controller.previewSuspendedAt(input);",
+        "controller.previewResetAt(input);",
       ].join("\n"),
     ),
     writeRepositoryFile(
@@ -171,7 +183,7 @@ describe("Diversion prior-ledger reconstruction", () => {
 describe("3C migration ledger verifier", () => {
   it("accepts the fixed-input, movement, locomotion, and public-entry single-authority structure", async () => {
     const root = await singleAuthorityRepository();
-    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(8);
+    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(9);
   });
 
   it.each([
@@ -216,6 +228,34 @@ describe("3C migration ledger verifier", () => {
       ].join("\n"),
     },
     {
+      label: "local one-tick fixed-input port facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "interface PreparedInputPort {",
+        "advanceFixedInputTickDirectly(input: FixedInputOneTickV1): Promise<void>;",
+        "}",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
+      label: "inline fixed-input callable facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "const direct = this.options.worldPort as unknown as {",
+        "advanceFixedInputTickDirectly?: (input: FixedInputOneTickV1) => Promise<void>;",
+        "};",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
+      label: "intersection fixed-input port facade in WorldSession",
+      path: "packages/runtime-host/src/world-session.ts",
+      source: [
+        "type PreparedInputPort = GameplayWorldPortV1 & { readonly direct: true };",
+        "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);",
+      ].join("\n"),
+    },
+    {
       label: "flat Locomotion V1 envelope",
       path: "packages/gameplay-contracts/src/gameplay-contracts.ts",
       source: [
@@ -242,6 +282,30 @@ describe("3C migration ledger verifier", () => {
         "this.#transaction.resetAtSupportedPlacement(input);",
         "this.#transaction.suspendForRelationship(input);",
         "hashCharacterMovementStateV1(state);",
+      ].join("\n"),
+    },
+    {
+      label: "provider-side fresh-spawn Locomotion envelope",
+      path: "packages/runtime-babylon/src/character-movement-component.ts",
+      source: [
+        "supportsCharacterMovementSubjectV1(subject);",
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE;",
+        "createCharacterMovementInitialStateAtPlacementV1({ positionMetersXYZ: placement });",
+        "this.#transaction.previewSupportedPlacement(input);",
+        "this.#transaction.previewRelationshipSuspension(input);",
+        "this.#transaction.resetAtSupportedPlacement(input);",
+        "this.#transaction.suspendForRelationship(input);",
+        'mobilityMode: "grounded";',
+      ].join("\n"),
+    },
+    {
+      label: "provider-side Locomotion transition sequence rule",
+      path: "packages/runtime-babylon/src/babylon-world-runtime.ts",
+      source: [
+        "controller.locomotionStateV2();",
+        "controller.previewSuspendedAt(input);",
+        "controller.previewResetAt(input);",
+        "transitionSequence: locomotion.transitionSequence + 1;",
       ].join("\n"),
     },
     {

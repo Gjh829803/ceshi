@@ -4311,7 +4311,16 @@ describe("BabylonWorldRuntime", () => {
           controlledEntityId: relationship.mountEntityId,
         },
       });
+      const riderCapabilityStateId =
+        `capability-state:${relationship.riderEntityId}:locomotion`;
+      const preparedMountedCapability =
+        mount.projectedWorldStateAfter.capabilityStatesById[
+          riderCapabilityStateId
+        ];
       mount.commitPrepared();
+      expect(internal.readWorldProjection().capabilityStatesById[
+        riderCapabilityStateId
+      ]).toEqual(preparedMountedCapability);
       const mountedSnapshot = runtime.snapshot();
       const mountedWorld = internal.readWorldProjection();
       const mountedCameraTransaction = debug.cameraTransactionState();
@@ -4344,7 +4353,14 @@ describe("BabylonWorldRuntime", () => {
           controlledEntityId: relationship.riderEntityId,
         },
       });
+      const preparedDismountedCapability =
+        dismount.projectedWorldStateAfter.capabilityStatesById[
+          riderCapabilityStateId
+        ];
       dismount.commitPrepared();
+      expect(internal.readWorldProjection().capabilityStatesById[
+        riderCapabilityStateId
+      ]).toEqual(preparedDismountedCapability);
       const dismountedSnapshot = runtime.snapshot();
       const dismountedWorld = internal.readWorldProjection();
       const dismountedCameraTransaction = debug.cameraTransactionState();

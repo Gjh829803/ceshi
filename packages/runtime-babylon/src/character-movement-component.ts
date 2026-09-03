@@ -13,6 +13,7 @@ import type {
 } from "@whitebox-world/runtime-contracts";
 import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
 import {
+  createCharacterMovementInitialStateAtPlacementV1,
   createCharacterMovementRuntimeV1,
   type CharacterMovementCommandV1,
   type CharacterMovementSnapshotV1,
@@ -711,19 +712,25 @@ export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
         ];
   }
 
+  #bodyCenterAtSubjectOrigin(
+    subjectOriginMetersXYZ: RuntimeVec3V1,
+  ): RuntimeVec3V1 {
+    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
+    return [
+      subjectOriginMetersXYZ[0] + offset[0],
+      subjectOriginMetersXYZ[1] + offset[1],
+      subjectOriginMetersXYZ[2] + offset[2],
+    ];
+  }
+
   projectSuspendedAt(
     subjectOriginMetersXYZ: RuntimeVec3V1,
     facingYawRadians: number,
     suspendedByRelationshipId: string,
     committedTick = this.movementSnapshot().tick,
   ): void {
-    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
     this.#transaction.suspendForRelationship({
-      positionMetersXYZ: [
-        subjectOriginMetersXYZ[0] + offset[0],
-        subjectOriginMetersXYZ[1] + offset[1],
-        subjectOriginMetersXYZ[2] + offset[2],
-      ],
+      positionMetersXYZ: this.#bodyCenterAtSubjectOrigin(subjectOriginMetersXYZ),
       facingYawRadians,
       committedTick,
       suspendedByRelationshipId,
@@ -731,22 +738,43 @@ export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
     this.#afterPlacementReset();
   }
 
+  previewSuspendedAt(
+    subjectOriginMetersXYZ: RuntimeVec3V1,
+    facingYawRadians: number,
+    suspendedByRelationshipId: string,
+    committedTick = this.movementSnapshot().tick,
+  ): CharacterMovementSnapshotV1 {
+    return this.#transaction.previewRelationshipSuspension({
+      positionMetersXYZ: this.#bodyCenterAtSubjectOrigin(subjectOriginMetersXYZ),
+      facingYawRadians,
+      committedTick,
+      suspendedByRelationshipId,
+    });
+  }
+
   resetAt(
     subjectOriginMetersXYZ: RuntimeVec3V1,
     facingYawRadians: number,
     committedTick = this.movementSnapshot().tick,
   ): void {
-    const offset = this.#subject.collider.centerOffsetFromSubjectOriginMetersXYZ;
     this.#transaction.resetAtSupportedPlacement({
-      positionMetersXYZ: [
-        subjectOriginMetersXYZ[0] + offset[0],
-        subjectOriginMetersXYZ[1] + offset[1],
-        subjectOriginMetersXYZ[2] + offset[2],
-      ],
+      positionMetersXYZ: this.#bodyCenterAtSubjectOrigin(subjectOriginMetersXYZ),
       facingYawRadians,
       committedTick,
     });
     this.#afterPlacementReset();
+  }
+
+  previewResetAt(
+    subjectOriginMetersXYZ: RuntimeVec3V1,
+    facingYawRadians: number,
+    committedTick = this.movementSnapshot().tick,
+  ): CharacterMovementSnapshotV1 {
+    return this.#transaction.previewSupportedPlacement({
+      positionMetersXYZ: this.#bodyCenterAtSubjectOrigin(subjectOriginMetersXYZ),
+      facingYawRadians,
+      committedTick,
+    });
   }
 
   reset(): void {
@@ -837,39 +865,11 @@ export function createCharacterMovementSubjectControllerV1(
     schemaVersion: 1,
     fixedDeltaSeconds: FIXED_TIME_STEP_SECONDS,
     jumpVariantPolicy: feel.jumpVariantPolicy,
-    initialState: {
-      schemaVersion: 1,
-      tick: 0,
+    initialState: createCharacterMovementInitialStateAtPlacementV1({
       positionMetersXYZ: initialCenter,
       facingYawRadians: subject.spawnSubjectFacingRadians,
-      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
-      locomotion: {
-        schemaVersion: 2,
-        status: "active",
-        mobilityMode: "grounded",
-        gait: "idle",
-        verticalPhase: "none",
-        supportMode: "supported",
-        movementMedium: "ground",
-        facingYawRadians: subject.spawnSubjectFacingRadians,
-        linearVelocity: { x: 0, y: 0, z: 0 },
-        horizontalSpeedMetersPerSecond: 0,
-        committedTick: 0,
-        phaseEnteredTick: 0,
-        transitionSequence: 0,
-      },
-      transitionEvents: [],
-      runtimeState: {
-        schemaVersion: 1,
-        // The authored spawn is not support evidence. The first Body sample
-        // and resolution arm coyote only when they observe real support.
-        coyoteTicksRemaining: 0,
-        jumpBufferTicksRemaining: 0,
-        variableJumpHoldTicksRemaining: 0,
-        landingTicksRemaining: 0,
-        apexCrossedInAirborneEpisode: false,
-      },
-    },
+      committedTick: 0,
+    }),
     walkSpeedMetersPerSecond: feel.walkSpeedMetersPerSecond,
     runSpeedMetersPerSecond: feel.runSpeedMetersPerSecond,
     accelerationMetersPerSecondSquared:

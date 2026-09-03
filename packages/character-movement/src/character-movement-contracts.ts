@@ -211,6 +211,17 @@ export interface CharacterMovementSnapshotV1 extends CharacterMovementStateV1 {
   readonly stateHash: `sha256:${string}`;
 }
 
+export interface CharacterMovementSupportedPlacementV1 {
+  readonly positionMetersXYZ: MovementVec3V1;
+  readonly facingYawRadians: number;
+  readonly committedTick: number;
+}
+
+export interface CharacterMovementRelationshipSuspensionV1
+  extends CharacterMovementSupportedPlacementV1 {
+  readonly suspendedByRelationshipId: string;
+}
+
 export interface BodyBeginTickRequestV1 {
   readonly token: MovementTickTokenV1;
   readonly tick: number;
@@ -237,17 +248,18 @@ export interface CharacterMovementRuntimeV1 {
     support: BodySupportSampleV1,
     activeTickToken: MovementTickTokenV1 | undefined,
   ): CharacterMovementSnapshotV1;
-  resetAtSupportedPlacement(input: Readonly<{
-    positionMetersXYZ: MovementVec3V1;
-    facingYawRadians: number;
-    committedTick: number;
-  }>): CharacterMovementSnapshotV1;
-  suspendForRelationship(input: Readonly<{
-    positionMetersXYZ: MovementVec3V1;
-    facingYawRadians: number;
-    committedTick: number;
-    suspendedByRelationshipId: string;
-  }>): CharacterMovementSnapshotV1;
+  previewSupportedPlacement(
+    input: CharacterMovementSupportedPlacementV1,
+  ): CharacterMovementSnapshotV1;
+  resetAtSupportedPlacement(
+    input: CharacterMovementSupportedPlacementV1,
+  ): CharacterMovementSnapshotV1;
+  previewRelationshipSuspension(
+    input: CharacterMovementRelationshipSuspensionV1,
+  ): CharacterMovementSnapshotV1;
+  suspendForRelationship(
+    input: CharacterMovementRelationshipSuspensionV1,
+  ): CharacterMovementSnapshotV1;
   reset(snapshot?: CharacterMovementSnapshotV1): void;
   dispose(): void;
 }

@@ -1844,16 +1844,13 @@ export class BabylonWorldRuntime {
       const capabilityStateId = `capability-state:${subject.entityId}:locomotion`;
       const mounted = this.gameplayPublishedState
         .mountedRelationshipsByRiderEntityId[subject.entityId];
-      const locomotion = !isNil(mounted)
-        ? Object.freeze({
-            schemaVersion: 2 as const,
-            status: "suspended" as const,
-            suspendedByRelationshipId: mounted.relationship.id,
-            committedTick: this.tick,
-            transitionSequence:
-              controller.locomotionStateV2().transitionSequence,
-          })
-        : controller.locomotionStateV2();
+      const locomotion = controller.locomotionStateV2();
+      if ((!isNil(mounted) &&
+          (locomotion.status !== "suspended" ||
+            locomotion.suspendedByRelationshipId !== mounted.relationship.id)) ||
+        (isNil(mounted) && locomotion.status === "suspended")) {
+        throw new Error("WORLDKIT_MOUNTED_LOCOMOTION_STATE_MISMATCH");
+      }
       capabilityStatesById[capabilityStateId] = Object.freeze({
         id: capabilityStateId,
         kind: "locomotion-capability-state-v2",
@@ -2085,21 +2082,6 @@ export class BabylonWorldRuntime {
     });
   }
 
-  private nextGoldenTransitionSequence(
-    locomotion: LocomotionCapabilityStateV2,
-    suspendedByRelationshipId?: string,
-  ): number {
-    if (
-      suspendedByRelationshipId !== undefined &&
-      locomotion.status === "suspended" &&
-      locomotion.suspendedByRelationshipId === suspendedByRelationshipId
-    ) return locomotion.transitionSequence;
-    if (locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
-      throw new Error("3C_INPUT_INVALID: transition sequence exhausted.");
-    }
-    return locomotion.transitionSequence + 1;
-  }
-
   private projectMountedRider(
     rider: LiveSubjectControllerV1,
     relationship: MountedOnRelationshipStateV1,
@@ -2197,24 +2179,21 @@ export class BabylonWorldRuntime {
     const transactionalRider = this.characterMovementControllerFor(
       relationship.riderEntityId,
     );
+    const suspendedLocomotion = transactionalRider.previewSuspendedAt(
+      projectedRiderOrigin,
+      pose.facingYawRadians,
+      relationship.id,
+      this.tick,
+    ).locomotion;
     const suspendedCapability: GameplayCapabilityStateV1 = Object.freeze({
-            id: capabilityStateId,
-            kind: "locomotion-capability-state-v2" as const,
-            ownerEntityId: relationship.riderEntityId,
-            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-            locomotionCapabilityHash:
-              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            locomotion: Object.freeze({
-              schemaVersion: 2 as const,
-              status: "suspended" as const,
-              suspendedByRelationshipId: relationship.id,
-              committedTick: this.tick,
-              transitionSequence: this.nextGoldenTransitionSequence(
-                transactionalRider.locomotionStateV2(),
-                relationship.id,
-              ),
-            }),
-          });
+      id: capabilityStateId,
+      kind: "locomotion-capability-state-v2" as const,
+      ownerEntityId: relationship.riderEntityId,
+      locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+      locomotionCapabilityHash:
+        riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+      locomotion: suspendedLocomotion,
+    });
     const projectedWorldStateAfter = Object.freeze({
       ...baseProjection,
       spatialEntityStatesById: Object.freeze({
@@ -2443,33 +2422,24 @@ export class BabylonWorldRuntime {
     const transactionalRider = this.characterMovementControllerFor(
       relationship.riderEntityId,
     );
+    const dismountedLocomotion = transactionalRider.previewResetAt(
+      [
+        placement.subjectOrigin.x,
+        placement.subjectOrigin.y,
+        placement.subjectOrigin.z,
+      ],
+      placement.facingYawRadians,
+      this.tick,
+    ).locomotion;
     const dismountedCapability: GameplayCapabilityStateV1 = Object.freeze({
-            id: capabilityStateId,
-            kind: "locomotion-capability-state-v2" as const,
-            ownerEntityId: relationship.riderEntityId,
-            locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
-            locomotionCapabilityHash:
-              riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            locomotion: Object.freeze({
-              schemaVersion: 2 as const,
-              status: "active" as const,
-              mobilityMode: "grounded" as const,
-              gait: "idle" as const,
-              verticalPhase: "none" as const,
-              supportMode: "supported" as const,
-              movementMedium: "ground" as const,
-              facingYawRadians: canonicalizeSignedZero(
-                placement.facingYawRadians,
-              ),
-              linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-              horizontalSpeedMetersPerSecond: 0,
-              committedTick: this.tick,
-              phaseEnteredTick: this.tick,
-              transitionSequence: this.nextGoldenTransitionSequence(
-                transactionalRider.locomotionStateV2(),
-              ),
-            }),
-          });
+      id: capabilityStateId,
+      kind: "locomotion-capability-state-v2" as const,
+      ownerEntityId: relationship.riderEntityId,
+      locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
+      locomotionCapabilityHash:
+        riderSubject.locomotionCapabilityHash as `sha256:${string}`,
+      locomotion: dismountedLocomotion,
+    });
     const projectedWorldStateAfter: ReturnType<
       BabylonGameplayRuntimeInternalV1["readWorldProjection"]
     > =

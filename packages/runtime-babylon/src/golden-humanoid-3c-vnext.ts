@@ -394,6 +394,15 @@ export class GoldenHumanoid3CVNextTransactionV1 {
     });
   }
 
+  previewSupportedPlacement(
+    input: Parameters<
+      CharacterMovementRuntimeV1["previewSupportedPlacement"]
+    >[0],
+  ): CharacterMovementSnapshotV1 {
+    this.#assertRunnable();
+    return this.options.movementRuntime.previewSupportedPlacement(input);
+  }
+
   resetAtSupportedPlacement(
     input: Parameters<
       CharacterMovementRuntimeV1["resetAtSupportedPlacement"]
@@ -402,6 +411,15 @@ export class GoldenHumanoid3CVNextTransactionV1 {
     this.#resetMovementAndBody(() => {
       this.options.movementRuntime.resetAtSupportedPlacement(input);
     });
+  }
+
+  previewRelationshipSuspension(
+    input: Parameters<
+      CharacterMovementRuntimeV1["previewRelationshipSuspension"]
+    >[0],
+  ): CharacterMovementSnapshotV1 {
+    this.#assertRunnable();
+    return this.options.movementRuntime.previewRelationshipSuspension(input);
   }
 
   suspendForRelationship(
@@ -435,7 +453,22 @@ export class GoldenHumanoid3CVNextTransactionV1 {
         );
       }
     } catch (error) {
-      this.options.movementRuntime.reset(before);
+      let rollbackFailed = false;
+      try {
+        this.options.bodyPort.resetToState({
+          positionMetersXYZ: before.positionMetersXYZ,
+          linearVelocityMetersPerSecondXYZ:
+            before.linearVelocityMetersPerSecondXYZ,
+        });
+      } catch {
+        rollbackFailed = true;
+      }
+      try {
+        this.options.movementRuntime.reset(before);
+      } catch {
+        rollbackFailed = true;
+      }
+      if (rollbackFailed) this.#rollbackFailedClosed = true;
       throw error;
     }
     this.#latestBodyDiagnostic = undefined;

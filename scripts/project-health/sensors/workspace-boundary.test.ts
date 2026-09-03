@@ -94,7 +94,7 @@ describe("workspace-boundary sensor", { timeout: 30_000 }, () => {
     expect(observation.metricsById["workspace-boundary-debt-count"]).toEqual({
       id: "workspace-boundary-debt-count",
       kind: "count",
-      valueCount: 49,
+      valueCount: 48,
     });
   });
 

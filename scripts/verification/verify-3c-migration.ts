@@ -371,13 +371,31 @@ const SINGLE_AUTHORITY_STRUCTURE_RULES_V1 = Object.freeze([
     required: Object.freeze([
       "supportsCharacterMovementSubjectV1(subject)",
       "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE",
+      "createCharacterMovementInitialStateAtPlacementV1({",
+      "this.#transaction.previewSupportedPlacement(",
+      "this.#transaction.previewRelationshipSuspension(",
       "this.#transaction.resetAtSupportedPlacement(",
       "this.#transaction.suspendForRelationship(",
     ]),
     forbidden: Object.freeze([
       "sampleMotion(",
       "hashCharacterMovementStateV1",
+      'mobilityMode: "grounded"',
+      "transitionSequence:",
       "#resetAtSnapshot(",
+    ]),
+  }),
+  Object.freeze({
+    id: "movement-locomotion-projection-authority",
+    path: "packages/runtime-babylon/src/babylon-world-runtime.ts",
+    required: Object.freeze([
+      "controller.locomotionStateV2()",
+      ".previewSuspendedAt(",
+      ".previewResetAt(",
+    ]),
+    forbidden: Object.freeze([
+      "nextGoldenTransitionSequence(",
+      "transitionSequence:",
     ]),
   }),
   Object.freeze({
@@ -495,6 +513,30 @@ function assertWorldSessionHasNoFixedInputPortFacade(
     ts.ScriptKind.TS,
   );
   let forbidden: string | undefined;
+  const isFixedInputType = (node: ts.TypeNode | undefined): boolean =>
+    node !== undefined &&
+    /(?:^|\W)FixedInput(?:OneTick)?V1(?:\W|$)/.test(node.getText(sourceFile));
+  const declaresFixedInputCallableMember = (
+    members: ts.NodeArray<ts.TypeElement>,
+  ): boolean => members.some((member) => {
+    if (ts.isMethodSignature(member) || ts.isCallSignatureDeclaration(member) ||
+      ts.isConstructSignatureDeclaration(member)) {
+      return member.parameters.some((parameter) => isFixedInputType(parameter.type));
+    }
+    if (!ts.isPropertySignature(member) || member.type === undefined) return false;
+    let acceptsFixedInput = false;
+    const inspectPropertyType = (node: ts.Node): void => {
+      if (acceptsFixedInput) return;
+      if (ts.isFunctionTypeNode(node) &&
+        node.parameters.some((parameter) => isFixedInputType(parameter.type))) {
+        acceptsFixedInput = true;
+        return;
+      }
+      ts.forEachChild(node, inspectPropertyType);
+    };
+    inspectPropertyType(member.type);
+    return acceptsFixedInput;
+  });
   const inspect = (node: ts.Node): void => {
     if (forbidden !== undefined) return;
     if (ts.isInterfaceDeclaration(node)) {
@@ -503,13 +545,16 @@ function assertWorldSessionHasNoFixedInputPortFacade(
           type.expression.getText(sourceFile) === "GameplayWorldPortV1"
         )
       ) === true;
-      const declaresFixedInputMember = node.members.some((member) =>
-        member.getText(sourceFile).includes("FixedInputV1")
-      );
-      if (extendsGameplayWorldPort || declaresFixedInputMember) {
+      if (extendsGameplayWorldPort ||
+        declaresFixedInputCallableMember(node.members)) {
         forbidden = node.name.text;
         return;
       }
+    }
+    if (ts.isTypeLiteralNode(node) &&
+      declaresFixedInputCallableMember(node.members)) {
+      forbidden = "inline fixed-input port facade";
+      return;
     }
     if (ts.isIntersectionTypeNode(node) &&
       node.getText(sourceFile).includes("GameplayWorldPortV1")) {

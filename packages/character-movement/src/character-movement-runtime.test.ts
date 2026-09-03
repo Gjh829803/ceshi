@@ -9,6 +9,7 @@ import type {
   MovementTickTokenV1,
 } from "./character-movement-contracts.js";
 import {
+  createCharacterMovementInitialStateAtPlacementV1,
   createCharacterMovementRuntimeV1,
   hashCharacterMovementStateV1,
   parseCharacterMovementRuntimeOptionsV1,
@@ -351,11 +352,18 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
 
   it("owns supported placement and relationship suspension snapshots", () => {
     const runtime = createCharacterMovementRuntimeV1(options());
-    const placed = runtime.resetAtSupportedPlacement({
-      positionMetersXYZ: [2, 3, 4],
+    const beforePlacement = runtime.snapshot();
+    const placementInput = {
+      positionMetersXYZ: [2, 3, 4] as const,
       facingYawRadians: 0.4,
       committedTick: 7,
+    };
+    const placementPreview = runtime.previewSupportedPlacement(placementInput);
+    expect(runtime.snapshot()).toEqual(beforePlacement);
+    const placed = runtime.resetAtSupportedPlacement({
+      ...placementInput,
     });
+    expect(placed).toEqual(placementPreview);
     expect(placed).toMatchObject({
       tick: 7,
       positionMetersXYZ: [2, 3, 4],
@@ -371,12 +379,19 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
       },
     });
 
-    const suspended = runtime.suspendForRelationship({
+    const suspensionInput = {
       positionMetersXYZ: [5, 6, 7],
       facingYawRadians: -0.2,
       committedTick: 8,
       suspendedByRelationshipId: "mounted-on:test",
-    });
+    } as const;
+    const beforeSuspension = runtime.snapshot();
+    const suspensionPreview = runtime.previewRelationshipSuspension(
+      suspensionInput,
+    );
+    expect(runtime.snapshot()).toEqual(beforeSuspension);
+    const suspended = runtime.suspendForRelationship(suspensionInput);
+    expect(suspended).toEqual(suspensionPreview);
     expect(suspended).toMatchObject({
       tick: 8,
       positionMetersXYZ: [5, 6, 7],
@@ -402,6 +417,30 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
       facingYawRadians: 0,
       committedTick: 0,
     })).toThrow("3C_TICK_TOKEN_STALE");
+  });
+
+  it("constructs a fresh-spawn Locomotion envelope from owner-side placement", () => {
+    const runtime = createCharacterMovementRuntimeV1({
+      ...options(),
+      initialState: createCharacterMovementInitialStateAtPlacementV1({
+        positionMetersXYZ: [4, 5, 6],
+        facingYawRadians: -0.3,
+        committedTick: 0,
+      }),
+    });
+    expect(runtime.snapshot()).toMatchObject({
+      tick: 0,
+      positionMetersXYZ: [4, 5, 6],
+      facingYawRadians: -0.3,
+      locomotion: {
+        status: "active",
+        mobilityMode: "grounded",
+        supportMode: "supported",
+        movementMedium: "ground",
+        transitionSequence: 0,
+      },
+      runtimeState: { coyoteTicksRemaining: 0 },
+    });
   });
 
   it("stages jump without mutation, then commits takeoff from BodyResolution", () => {

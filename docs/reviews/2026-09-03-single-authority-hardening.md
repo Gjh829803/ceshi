@@ -57,13 +57,14 @@ runtime deep-review checklist, and ADR-0007's Babylon Native isolation boundary.
 
 ## Failure prevention
 
-`pnpm verify:3c-migration` now checks the closed TypeScript fixed-input port shape, rejects
-callable-property and local-interface facades around its sole WorldSession call site, verifies
-owner-only placement/suspension state hashing, V2-only Locomotion,
-disjoint movement ownership, and unique Authoring public entries in addition to
-the historical symbol census, and root `pnpm test` executes the gate. `AGENTS.md` requires capability-based authority
-selection, bounded clean-break migrations, semantic structural gates, and
-byte-identical updates to frozen representative Skill inputs.
+`pnpm verify:3c-migration` now checks the closed TypeScript fixed-input port shape; rejects
+callable-property, canonical one-Tick alias, local-interface, inline type-literal, and intersection
+facades around its sole WorldSession call site; and verifies owner-only fresh-spawn,
+placement/suspension preview, transition sequencing, state hashing, V2-only Locomotion,
+disjoint movement ownership, and unique Authoring public entries in addition to the historical
+symbol census. Root `pnpm test` executes the gate. `AGENTS.md` requires capability-based authority
+selection, bounded clean-break migrations, semantic structural gates, owner previews for prepared
+Gameplay publication, and byte-identical updates to frozen representative Skill inputs.
 
 ## Verification record
 
@@ -88,6 +89,12 @@ Focused local evidence before freezing the candidate:
   strengthened structural verifier passes 70 with 3 intentional skips; the workspace
   boundary gate passes after the Route probe moved to the package testing subpath and
   its corresponding debt entry was removed;
+- post-Cursor gate remediation: the three stale root-test expectations now match the root
+  gate and 48-entry workspace ledger; the structural/configuration regressions pass 109 with
+  3 intentional skips, CharacterMovement plus Golden owner/rollback suites pass 84/84, and
+  the real mounted prepare-versus-commit projection regressions pass 3/3. Fresh-spawn state,
+  mounted suspension, dismount placement, and transition sequencing now come from the one
+  CharacterMovement owner rather than provider-authored Locomotion envelopes;
 - `pnpm typecheck`, `pnpm verify:3c-migration`,
   `pnpm verify:runtime-authority-boundaries`,
   `pnpm verify:workspace-boundaries`, `pnpm check:agent-self-check`, and

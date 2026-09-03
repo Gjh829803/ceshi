@@ -641,8 +641,12 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       snapshot: () => realMovement.snapshot(),
       reconcileSupportAfterReset: (support, activeTickToken) =>
         realMovement.reconcileSupportAfterReset(support, activeTickToken),
+      previewSupportedPlacement: (input) =>
+        realMovement.previewSupportedPlacement(input),
       resetAtSupportedPlacement: (input) =>
         realMovement.resetAtSupportedPlacement(input),
+      previewRelationshipSuspension: (input) =>
+        realMovement.previewRelationshipSuspension(input),
       suspendForRelationship: (input) =>
         realMovement.suspendForRelationship(input),
       reset: (snapshot) => realMovement.reset(snapshot),
@@ -666,6 +670,33 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       .toBe(nativeBefore);
     expect(body.resolveCalls).toBe(1);
     expect(body.abortCalls).toBe(1);
+  });
+
+  it("restores Movement and Body when placement support reconciliation fails", () => {
+    const movement = createCharacterMovementRuntimeV1(movementOptions());
+    const body = new TransactionBodyPort();
+    const transaction = new GoldenHumanoid3CVNextTransactionV1({
+      subjectEntityId: "player",
+      fixedDeltaSeconds: 1 / 60,
+      movementRuntime: movement,
+      bodyPort: body,
+      actionPresentationRegistry: emptyRegistry(),
+    });
+    const before = movement.snapshot();
+    const bodyBefore = {
+      position: [...body.position],
+      velocity: [...body.velocity],
+    };
+    body.support = { mode: "invalid" } as unknown as BodySampleV1["support"];
+
+    expect(() => transaction.resetAtSupportedPlacement({
+      positionMetersXYZ: [4, 5, 6],
+      facingYawRadians: 0.2,
+      committedTick: 8,
+    })).toThrow("3C_INPUT_INVALID");
+
+    expect(movement.snapshot()).toEqual(before);
+    expect({ position: body.position, velocity: body.velocity }).toEqual(bodyBefore);
   });
 
   it("rejects untrusted Action/Root Motion before Body admission and invalidates the failed Tick", () => {

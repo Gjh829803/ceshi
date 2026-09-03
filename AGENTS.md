@@ -70,6 +70,10 @@ Apply these rules whenever adding or changing public Authoring Schema, Registry 
 - Do not expose optional old/new methods, accept legacy and current envelopes in one parser, or
   retain a renamed facade that computes the same semantic state. For fixed-step Runtime changes,
   one prepared transaction must own prepare, commit, abort, Snapshot, Replay, Reset, and Rollback.
+- Providers must pass fresh-spawn placement into the movement owner and must not construct a
+  Locomotion envelope or transition sequence themselves. A prepared Gameplay projection must use
+  the same owner's non-mutating preview as commit; never copy its transition rules into Host or
+  provider code, even when the copied result is currently byte-identical.
 - Every temporary migration path must have a bounded ledger entry, deletion condition, and a
   structural gate that detects semantic equivalents rather than relying only on the old symbol
   spelling. A merge candidate must delete the replaced path when its current contract is touched;

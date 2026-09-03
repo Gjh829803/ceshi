@@ -211,7 +211,7 @@ describe("workspace boundary evidence contract", () => {
       }[];
     };
 
-    expect(ledger.entries).toHaveLength(49);
+    expect(ledger.entries).toHaveLength(48);
     for (const entry of ledger.entries) {
       const expected = sha256CanonicalJson({
         importer: entry.importer,
