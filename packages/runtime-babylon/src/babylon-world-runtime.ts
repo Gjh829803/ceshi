@@ -1128,6 +1128,9 @@ export class BabylonWorldRuntime {
         }
         revalidateRuntimeLayoutAssertions(executionPlan);
       } else {
+        if (scene.lights.length === 0) {
+          configureAtmosphere(scene, "clear-day");
+        }
         terrainSampleCount = 0;
         if (nativeContribution === undefined) {
           throw new Error(

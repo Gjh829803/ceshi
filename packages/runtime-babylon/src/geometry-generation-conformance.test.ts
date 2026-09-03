@@ -15,12 +15,6 @@ import {
   type WhiteboxMaterials,
 } from "./materials.js";
 import {
-  BLOCK_WORLD_GROUND_STRIPE_DISPLAY_V1,
-  blockWorldGroundStripeColorMultiplierV1,
-  restoreBlockWorldGroundStripeColorsV1,
-  suspendBlockWorldGroundStripeColorsV1,
-} from "./block-ground-stripe.js";
-import {
   createBabylonObjectMeshV1,
   createBabylonObjectMeshesV1,
   createBabylonWaterMeshV1,
@@ -145,12 +139,7 @@ describe("Babylon geometry generation conformance", () => {
       materials,
       scene,
     )[0]!;
-    expect(surface.isVerticesDataPresent(VertexBuffer.ColorKind)).toBe(true);
-    const suspended = suspendBlockWorldGroundStripeColorsV1(surface);
-    expect(suspended?.kind).toBe("vertex");
     expect(surface.isVerticesDataPresent(VertexBuffer.ColorKind)).toBe(false);
-    restoreBlockWorldGroundStripeColorsV1(surface, suspended!);
-    expect(surface.isVerticesDataPresent(VertexBuffer.ColorKind)).toBe(true);
   });
 
   it("adds the ground-boundary bit only for ground motion kernels", () => {
@@ -351,19 +340,7 @@ describe("Babylon geometry generation conformance", () => {
     ]);
   });
 
-  it("renders broad low-contrast crosswise bands on walkable Block World ground", () => {
-    expect(BLOCK_WORLD_GROUND_STRIPE_DISPLAY_V1).toMatchObject({
-      forwardAxis: "-Z",
-      periodMeters: 6,
-      stripeWidthMeters: 2,
-    });
-    expect(blockWorldGroundStripeColorMultiplierV1([0, 0, -3]))
-      .toEqual(BLOCK_WORLD_GROUND_STRIPE_DISPLAY_V1.stripeColorMultiplierRgba);
-    expect(blockWorldGroundStripeColorMultiplierV1([91, 0, 0]))
-      .toEqual([1, 1, 1, 1]);
-    expect(blockWorldGroundStripeColorMultiplierV1([-37, 0, -9]))
-      .toEqual(BLOCK_WORLD_GROUND_STRIPE_DISPLAY_V1.stripeColorMultiplierRgba);
-
+  it("keeps walkable Block World ground uniformly material-colored", () => {
     const walkable = createBabylonObjectMeshesV1([{
       entityId: "bw-chunk-x-p0-z-p0-cluster-0000",
       prototypeId: "block-walkable",
@@ -376,12 +353,7 @@ describe("Babylon geometry generation conformance", () => {
       collisionEnabled: true,
       semanticClassId: "block.walkable",
     }], materials, scene)[0]!;
-    expect(walkable.isVerticesDataPresent(VertexBuffer.ColorInstanceKind)).toBe(true);
-    const suspended = suspendBlockWorldGroundStripeColorsV1(walkable);
-    expect(suspended).toBeDefined();
     expect(walkable.isVerticesDataPresent(VertexBuffer.ColorInstanceKind)).toBe(false);
-    restoreBlockWorldGroundStripeColorsV1(walkable, suspended!);
-    expect(walkable.isVerticesDataPresent(VertexBuffer.ColorInstanceKind)).toBe(true);
 
     const obstacle = createBabylonObjectMeshesV1([{
       entityId: "bw-chunk-x-p0-z-p0-cluster-0001",

@@ -4,10 +4,6 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import { parseBlockWorldChunkEntityIdV2 } from "@whitebox-world/block-world";
 import type { CanonicalSceneObjectV1 } from "@whitebox-world/runtime-contracts";
 
-import {
-  blockWorldGroundStripeColorMultiplierV1,
-  registerBlockWorldGroundStripeVertexColorsV1,
-} from "./block-ground-stripe.js";
 import type { WhiteboxMaterials } from "./materials.js";
 
 export const BLOCK_WORLD_AUTO_SMOOTH_HEIGHT_DELTA_METERS_V1 = 1;
@@ -485,17 +481,6 @@ export function createBlockWalkableSurfaceMeshesV1(
     data.indices = [...topology.triangleIndices];
     data.normals = normals;
     data.applyToMesh(mesh, false);
-    if (topology.materialSemanticClassId === "block.walkable") {
-      const colorBuffer = new Float32Array(positions.length / 3 * 4);
-      for (let offset = 0; offset < positions.length; offset += 3) {
-        colorBuffer.set(blockWorldGroundStripeColorMultiplierV1([
-          positions[offset]!,
-          positions[offset + 1]!,
-          positions[offset + 2]!,
-        ]), offset / 3 * 4);
-      }
-      registerBlockWorldGroundStripeVertexColorsV1(mesh, colorBuffer);
-    }
     mesh.overrideMaterialSideOrientation = Mesh.DOUBLESIDE;
     const material = materials.blockBySemanticClassId.get(topology.materialSemanticClassId) ??
       materials.terrain;

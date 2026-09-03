@@ -1,5 +1,4 @@
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
-import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { RegisterAbstractEngineStencil } from "@babylonjs/core/Engines/AbstractEngine/abstractEngine.stencil.pure.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
@@ -14,8 +13,6 @@ import {
   captureBabylonArtifactViewV1,
   deriveBabylonTriviewProjectionV1,
 } from "./artifact-capture.js";
-import { createWhiteboxMaterials } from "./materials.js";
-import { createBabylonObjectMeshesV1 } from "./scene-geometry.js";
 
 class FakeCanvasElement {
   width = 8;
@@ -161,67 +158,6 @@ describe("Babylon artifact capture", () => {
       expect(scene.textures).toEqual([beautyTexture]);
       expect(mesh.material).toBe(beautyMaterial);
       expect(beautyMaterial.diffuseTexture).toBe(beautyTexture);
-    } finally {
-      scene.dispose();
-      engine.dispose();
-    }
-  });
-
-  it("suspends beauty-only ground stripes during a semantic mask capture", () => {
-    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
-    vi.stubGlobal("document", {
-      addEventListener: vi.fn(),
-      createElement: () => new FakeCanvasElement(),
-      removeEventListener: vi.fn(),
-    });
-    RegisterAbstractEngineStencil();
-    const engine = new NullEngine();
-    const scene = new Scene(engine);
-    const camera = new FreeCamera("striped-artifact-camera", new Vector3(0, 4, -8), scene);
-    camera.setTarget(Vector3.Zero());
-    scene.activeCamera = camera;
-    const mesh = createBabylonObjectMeshesV1([{
-      entityId: "bw-chunk-x-p0-z-p0-cluster-0000",
-      prototypeId: "block-walkable",
-      primitive: { kind: "box", sizeMetersXYZ: [1, 1, 1] },
-      transform: {
-        positionMetersXYZ: [0, 0, 0],
-        rotationEulerRadiansXYZ: [0, 0, 0],
-        scaleXYZ: [1, 1, 9],
-      },
-      collisionEnabled: true,
-      semanticClassId: "block.walkable",
-    }], createWhiteboxMaterials(scene), scene)[0]!;
-    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(
-      new FakeCanvasElement() as unknown as HTMLCanvasElement,
-    );
-    const instanceColorPresenceDuringRender: boolean[] = [];
-    scene.onBeforeRenderObservable.add(() => {
-      instanceColorPresenceDuringRender.push(
-        mesh.isVerticesDataPresent(VertexBuffer.ColorInstanceKind),
-      );
-    });
-
-    try {
-      expect(mesh.isVerticesDataPresent(VertexBuffer.ColorInstanceKind)).toBe(true);
-      captureBabylonArtifactViewV1({
-        scene,
-        engine,
-        camera,
-        request: {
-          kind: "composition-mask",
-          widthPixels: 8,
-          heightPixels: 8,
-          backgroundColor: "#000000",
-          colorByEntityId: {
-            "bw-chunk-x-p0-z-p0-cluster-0000": "#FFFFFF",
-          },
-          projectedEntityIds: [],
-        },
-      });
-      expect(instanceColorPresenceDuringRender.slice(0, 2)).toEqual([false, false]);
-      expect(instanceColorPresenceDuringRender.at(-1)).toBe(true);
-      expect(mesh.isVerticesDataPresent(VertexBuffer.ColorInstanceKind)).toBe(true);
     } finally {
       scene.dispose();
       engine.dispose();

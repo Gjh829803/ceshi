@@ -12,10 +12,6 @@ import type {
 import { parseBlockWorldChunkEntityIdV2 } from "@whitebox-world/block-world";
 import { groupBy } from "lodash-es";
 
-import {
-  blockWorldGroundStripeColorMultiplierV1,
-  registerBlockWorldGroundStripeInstanceColorsV1,
-} from "./block-ground-stripe.js";
 import type { WhiteboxMaterials } from "./materials.js";
 import { triangulatePolygonMetersXZV1 } from "./polygon-triangulation.js";
 import { registerBlockWorldOcclusionBatchV1 } from "./third-person-subject-occlusion-fade.js";
@@ -91,11 +87,6 @@ function blockBatchKey(object: CanonicalSceneObjectV1): string | undefined {
   return chunk === undefined
     ? undefined
     : `${chunk.chunkX},${chunk.chunkZ}\u0000${object.semanticClassId}`;
-}
-
-function isWalkableBlockSemanticClassId(semanticClassId: string): boolean {
-  return semanticClassId === "block.walkable" ||
-    semanticClassId.startsWith("block.walkable.");
 }
 
 const BLOCK_RENDER_CUBE_SCALE_V1 = 0.985;
@@ -180,16 +171,6 @@ export function createBabylonObjectMeshesV1(
       matrixBuffer[offset + 15] = 1;
     }
     mesh.thinInstanceSetBuffer("matrix", matrixBuffer, 16, true);
-    if (isWalkableBlockSemanticClassId(first.semanticClassId)) {
-      const colorBuffer = new Float32Array(transforms.length * 4);
-      for (const [index, transform] of transforms.entries()) {
-        colorBuffer.set(
-          blockWorldGroundStripeColorMultiplierV1(transform.positionMetersXYZ),
-          index * 4,
-        );
-      }
-      registerBlockWorldGroundStripeInstanceColorsV1(mesh, colorBuffer);
-    }
     mesh.thinInstanceRefreshBoundingInfo(true);
     mesh.material = blockMaterial(first.semanticClassId, materials);
     mesh.metadata = {

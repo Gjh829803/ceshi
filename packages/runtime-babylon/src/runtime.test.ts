@@ -7,6 +7,7 @@ import { AnimationGroup } from "@babylonjs/core/Animations/animationGroup.js";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader.js";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight.js";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
@@ -1383,6 +1384,10 @@ describe("BabylonWorldRuntime", () => {
     try {
       const scene = (runtime as unknown as { scene: Scene }).scene;
       expect(buildCount).toBe(1);
+      expect(scene.lights.map(({ name }) => name).sort()).toEqual([
+        "worldkit.light.ambient",
+        "worldkit.light.sun",
+      ]);
       expect(scene.getMeshByName(executionPlan.terrain.entityId)).toBeNull();
       for (const object of executionPlan.objects) {
         expect(scene.getMeshByName(object.entityId)).toBeNull();
@@ -1413,6 +1418,50 @@ describe("BabylonWorldRuntime", () => {
         .toBeCloseTo(4, 1);
       expect(runtimeSubjects(executionPlan).find(({ entityId }) => entityId === "player")!
         .spawnSubjectOriginPositionMetersXYZ).not.toEqual([0, 2, 4]);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 15_000);
+
+  it("preserves authored Native scene lighting", async () => {
+    const executionPlan = compileFlatTerrainExecutionPlan(
+      createValidAuthoringSpecV4(),
+    );
+    const runtime = await createRuntime(executionPlan, {
+      nativeScene: {
+        bootstrap: createNativeRuntimeBootstrap(
+          executionPlan,
+          "player-spawn",
+        ),
+        assets: EMPTY_NATIVE_ASSET_RESOLVER,
+        module: {
+          kind: "babylon-native-scene-module",
+          id: "native-authored-light-test",
+          build(context) {
+            new HemisphericLight(
+              "native-authored-light",
+              Vector3.Up(),
+              context.scene,
+            );
+            context.registration.registerSpawnMarker({
+              id: "player-spawn",
+              positionMetersXYZ: [0, 2, 0],
+              facingRadians: 0,
+            });
+          },
+        },
+        budget: {
+          maximumStaticColliderCount: 0,
+          maximumStaticColliderVertexCount: 0,
+          maximumStaticColliderTriangleCount: 0,
+        },
+      },
+    });
+    try {
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      expect(scene.lights.map(({ name }) => name)).toEqual([
+        "native-authored-light",
+      ]);
     } finally {
       await runtime.dispose();
     }

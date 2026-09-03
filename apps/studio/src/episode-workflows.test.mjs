@@ -297,7 +297,22 @@ test("reattaches persisted Cloud Episodes and never cancels them on process shut
 
 test("local Studio readiness does not wait for remote Episode inventory", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-local-readiness-"));
+  const episodeId = "episode-local-readiness-001";
+  const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+  await mkdir(episodeRoot, { recursive: true });
+  await writeFile(path.join(episodeRoot, "episode-record.json"), JSON.stringify({
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    sceneId: "local-readiness-scene",
+    episodeId,
+    backend: "cloud",
+    status: "succeeded",
+    createdAt: "2026-09-03T00:00:00.000Z",
+    updatedAt: "2026-09-03T00:01:00.000Z",
+    stages: [],
+  }));
   let remoteLists = 0;
+  let remoteReads = 0;
   const service = createEpisodeWorkflowService({
     repoRoot,
     studioOrigin: () => "http://127.0.0.1:4297",
@@ -305,10 +320,15 @@ test("local Studio readiness does not wait for remote Episode inventory", async 
       remoteLists += 1;
       return [];
     },
+    readCloudEpisodeRecord: async () => {
+      remoteReads += 1;
+      return null;
+    },
   });
   try {
     assert.equal(await service.recoverPersistedCloudEpisodes({ includeRemote: false }), 0);
     assert.equal(remoteLists, 0);
+    assert.equal(remoteReads, 0);
   } finally {
     await service.shutdown();
     await rm(repoRoot, { recursive: true, force: true });

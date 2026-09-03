@@ -2019,7 +2019,9 @@ export function createEpisodeWorkflowService(options) {
   async function recoverPersistedCloudEpisodes({ includeRemote = true } = {}) {
     let recovered = 0;
     for (const listedRecord of await listRecords({ includeRemote })) {
-      const record = await readEpisodeRecordById(listedRecord.episodeId) ?? listedRecord;
+      const record = includeRemote
+        ? await readEpisodeRecordById(listedRecord.episodeId) ?? listedRecord
+        : listedRecord;
       if (
         record.backend !== "cloud" ||
         !["running", "remote-pending"].includes(record.status) ||

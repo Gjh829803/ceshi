@@ -13,12 +13,6 @@ import {
   WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1,
 } from "@whitebox-world/runtime-contracts";
 
-import {
-  type BlockWorldGroundStripeBufferV1,
-  restoreBlockWorldGroundStripeColorsV1,
-  suspendBlockWorldGroundStripeColorsV1,
-} from "./block-ground-stripe.js";
-
 // Hard-disabling unrelated meshes makes Babylon drop skinned targets from the
 // active render/animation dependency graph. Retaining a sub-byte contribution
 // keeps that graph alive without producing visible pixels in the PNG artifact.
@@ -423,10 +417,6 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
   const previousHeight = engine.getRenderHeight(true);
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
   const originalMaterialByMesh = new Map<AbstractMesh, Material>();
-  const suspendedGroundStripeColorsByMesh = new Map<
-    AbstractMesh,
-    BlockWorldGroundStripeBufferV1
-  >();
   const temporaryMaterials = new Set<Material>();
   const temporaryTextures = new Set<BaseTexture>();
   let temporaryCamera: FreeCamera | undefined;
@@ -493,10 +483,6 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       scene.clearColor = Color4.FromHexString(`${request.backgroundColor}FF`);
       for (const mesh of scene.meshes) {
         if (!mesh.isVisible || mesh.material === null) continue;
-        const stripeColors = suspendBlockWorldGroundStripeColorsV1(mesh);
-        if (stripeColors !== undefined) {
-          suspendedGroundStripeColorsByMesh.set(mesh, stripeColors);
-        }
         const entityId = String(mesh.metadata?.worldkitEntityId ?? "");
         const originalMaterial = mesh.material;
         const texturesBeforeClone = new Set(scene.textures);
@@ -545,9 +531,6 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     };
   } finally {
     temporaryCamera?.dispose();
-    for (const [mesh, colors] of suspendedGroundStripeColorsByMesh) {
-      restoreBlockWorldGroundStripeColorsV1(mesh, colors);
-    }
     for (const [mesh, material] of originalMaterialByMesh) mesh.material = material;
     restoreMaterialColors(materialColors);
     for (const material of temporaryMaterials) material.dispose();
