@@ -8,7 +8,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import ts from "typescript";
 
 import {
@@ -53,6 +53,10 @@ async function runFixture(
 async function bundleEntries(): Promise<readonly string[]> {
   return readdir(BUNDLE_PARENT).catch(() => []);
 }
+
+beforeEach(async () => {
+  await rm(BUNDLE_PARENT, { recursive: true, force: true });
+});
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(removeNativeSceneWorkspaceFixtureV1));
