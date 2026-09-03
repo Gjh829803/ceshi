@@ -139,6 +139,9 @@ describe("Native Block Builder Skill", () => {
       "Never place an invisible or visual-only air wall",
     );
     expect(skill).toContain(
+      "Never reconstruct the controlled Subject as Native Block geometry",
+    );
+    expect(skill).toContain(
       "Runtime owns the neutral whitebox inspection lights",
     );
     expect(outputContract).toContain("@whitebox-world/native-babylon");
@@ -475,6 +478,18 @@ describe("Native Block Builder Skill", () => {
         physicsBodyId: "forbidden",
       }],
     }, "NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"],
+    ["controlled Subject semantic class", "native-block-authoring.json", {
+      kind: "native-block-authoring",
+      schemaVersion: 1,
+      entryModulePath: "scene.ts",
+      blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
+      visualGroups: [{
+        visualGroupId: "rider-mount-group",
+        acceptanceTargetRef: "worldkit://acceptance-target/rider-mount@1",
+        semanticClassId: "subject.rider-mount",
+        identityColorHex: "#AEB8C4",
+      }],
+    }, "NATIVE_BLOCK_BUILDER_SUBJECT_VISUAL_GROUP_FORBIDDEN"],
     ["unsorted visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
       schemaVersion: 1,

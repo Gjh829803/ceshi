@@ -14,6 +14,7 @@ const DECLARED_OUTPUT_SET = new Set(DECLARED_OUTPUT_PATHS);
 const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
 const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
+const HOST_SUBJECT_SEMANTIC_CLASS_ID = /^subject(?:\.|$)/;
 const IDENTITY_COLOR_HEX = /^#[0-9A-F]{6}$/;
 const DANGEROUS_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const FORBIDDEN_JSON_FIELD_TOKENS = Object.freeze([
@@ -137,6 +138,7 @@ function validateAuthoring(value, diagnosticCodes) {
     return;
   }
   let rowsAreValid = true;
+  let hasSubjectVisualGroup = false;
   for (const visualGroup of value.visualGroups) {
     if (!hasExactKeys(visualGroup, [
       "visualGroupId", "acceptanceTargetRef", "semanticClassId", "identityColorHex",
@@ -146,10 +148,17 @@ function validateAuthoring(value, diagnosticCodes) {
         !IDENTITY_COLOR_HEX.test(visualGroup.identityColorHex)) {
       rowsAreValid = false;
     }
+    if (typeof visualGroup.semanticClassId === "string" &&
+        HOST_SUBJECT_SEMANTIC_CLASS_ID.test(visualGroup.semanticClassId)) {
+      hasSubjectVisualGroup = true;
+    }
   }
   if (!rowsAreValid) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
     return;
+  }
+  if (hasSubjectVisualGroup) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_SUBJECT_VISUAL_GROUP_FORBIDDEN");
   }
   const groupIds = value.visualGroups.map(({ visualGroupId }) => visualGroupId);
   const sortedGroupIds = [...groupIds].sort(stableCompare);

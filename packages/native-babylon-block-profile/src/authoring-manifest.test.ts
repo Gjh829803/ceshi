@@ -329,6 +329,7 @@ describe("Native Block authoring manifest", () => {
     ["duplicate acceptance target ref", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], acceptanceTargetRef: manifestValue().visualGroups[0]!.acceptanceTargetRef }] }],
     ["duplicate identity color", { ...manifestValue(), visualGroups: [manifestValue().visualGroups[0], { ...manifestValue().visualGroups[1], identityColorHex: manifestValue().visualGroups[0]!.identityColorHex }] }],
     ["lowercase identity color", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], identityColorHex: "#aeb8c4" }, manifestValue().visualGroups[1]] }],
+    ["controlled Subject semantic class", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], semanticClassId: "subject.rider-mount" }, manifestValue().visualGroups[1]] }],
     ["nested Physics authority", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], physicsBodyId: "forbidden" }, manifestValue().visualGroups[1]] }],
     ["nested Subject authority", { ...manifestValue(), visualGroups: [{ ...manifestValue().visualGroups[0], subjectDefinitionRef: "worldkit://subject/forbidden@1" }, manifestValue().visualGroups[1]] }],
   ])("rejects %s", (_label, value) => {

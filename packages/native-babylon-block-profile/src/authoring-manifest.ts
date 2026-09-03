@@ -67,6 +67,7 @@ const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
 const NATIVE_VISUAL_RESOURCE_REF =
   /^worldkit:\/\/static-geometry-asset\/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?@[1-9][0-9]*$/;
 const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
+const HOST_SUBJECT_SEMANTIC_CLASS_ID = /^subject(?:\.|$)/;
 const IDENTITY_COLOR_HEX = /^#[0-9A-F]{6}$/;
 const SHA256_HASH = /^sha256:[0-9a-f]{64}$/;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -260,6 +261,9 @@ export function parseNativeBlockAuthoringManifestV1(
     }
     if (!SEMANTIC_CLASS_ID.test(semanticClassId)) {
       return fail(code, `${path}/semanticClassId is invalid`);
+    }
+    if (HOST_SUBJECT_SEMANTIC_CLASS_ID.test(semanticClassId)) {
+      return fail(code, `${path}/semanticClassId belongs to the Host-owned Subject`);
     }
     if (!IDENTITY_COLOR_HEX.test(identityColorHex)) {
       return fail(code, `${path}/identityColorHex must be uppercase #RRGGBB`);

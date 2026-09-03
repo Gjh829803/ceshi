@@ -258,6 +258,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       "Build the complete playable world described by the frozen Scene Brief, Case, references, and Host Bootstrap.",
       "Write exactly scene.ts, native-block-authoring.json, and native-resources.json.",
       "Implement every Case visual group and every explicit required Collider contribution exactly once.",
+      "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
       "Keep the Spawn supported and preserve every fixed-input pass or block check without adding undeclared input.",
       "Do not create Runtime, physics, camera, input, timers, gameplay entities, Package, Capture, Receipt, or thresholds.",
       "Do not alter any frozen input. Formal Capture Intent remains Host-only.",

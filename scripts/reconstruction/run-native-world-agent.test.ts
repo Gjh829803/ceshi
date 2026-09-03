@@ -70,6 +70,19 @@ describe("Native-default world agent Host route", () => {
     );
   });
 
+  it("keeps the SDK controlled Subject out of Native Block visual groups", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "Never create a semantic silhouette target, visual group, topology node, or composition target for the controlled Subject",
+    );
+    expect(source).toContain(
+      "The Host-owned SDK Subject remains visible in Runtime Capture without a Native Block binding",
+    );
+  });
+
   it("assembles Case planning and the formal reconstruction transaction", () => {
     const result = spawnSync(
       "pnpm",
