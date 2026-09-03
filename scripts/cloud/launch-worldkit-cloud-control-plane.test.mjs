@@ -6,6 +6,7 @@ import { cloudControlPlaneResources } from "./launch-worldkit-cloud-control-plan
 test("cloud control plane has no durable volume, GPU, or local credential mount", () => {
   const resources = cloudControlPlaneResources({
     image: `registry.example/worldkit@sha256:${"a".repeat(64)}`,
+    codexAccountIds: "account-one,account-two",
   });
   const deployment = resources.find((resource) => resource.kind === "Deployment");
   const service = resources.find((resource) =>
@@ -30,6 +31,9 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   assert.equal(container.env.find((item) =>
     item.name === "WORLDKIT_CLOUD_WORKER_IMAGE").value,
     `registry.example/worldkit@sha256:${"a".repeat(64)}`);
+  assert.equal(container.env.find((item) =>
+    item.name === "WORLDKIT_LWDP_CODEX_ACCOUNT_IDS").value,
+  "account-one,account-two");
   assert.equal(container.readinessProbe.timeoutSeconds, 10);
   assert.equal(container.readinessProbe.httpGet.path, "/index.html");
   assert.equal(container.livenessProbe.initialDelaySeconds, 600);

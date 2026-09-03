@@ -47,6 +47,7 @@ export function cloudControlPlaneResources({
   generationTokenSecretName = "lwdp-generation-token",
   apiBase = "https://lwdp.loopit.me",
   userId = "worldkit-studio",
+  codexAccountIds = "",
   port = 4197,
   monitorPort = 4175,
 }) {
@@ -89,6 +90,10 @@ export function cloudControlPlaneResources({
               { name: "WORLDKIT_STUDIO_DATA_ROOT", value: "/var/run/worldkit-studio" },
               { name: "WORLDKIT_CLOUD_CONTROL_PLANE", value: "1" },
               { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
+              ...(codexAccountIds ? [{
+                name: "WORLDKIT_LWDP_CODEX_ACCOUNT_IDS",
+                value: codexAccountIds,
+              }] : []),
               { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
               { name: "LWDP_API_BASE", value: apiBase },
               { name: "LWDP_USER_ID", value: userId },
@@ -196,6 +201,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     namespace: config.namespace,
     apiBase: lwdpConfig.baseUrl,
     userId: lwdpConfig.userId,
+    codexAccountIds: process.env.WORLDKIT_LWDP_CODEX_ACCOUNT_IDS ?? "",
   })
     .then((result) => process.stdout.write(`${JSON.stringify(result)}\n`))
     .catch((error) => {
