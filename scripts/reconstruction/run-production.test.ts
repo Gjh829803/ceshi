@@ -132,8 +132,14 @@ async function fixture(): Promise<ProductionFixtureV1> {
     CASE_ID,
   );
   await mkdir(path.dirname(caseRoot), { recursive: true });
-  await cp(REAL_CASE_ROOT, caseRoot, { recursive: true });
-  await rm(path.join(caseRoot, "runs"), { recursive: true, force: true });
+  const excludedEvidenceRoots = new Set([
+    path.join(REAL_CASE_ROOT, "runs"),
+    path.join(REAL_CASE_ROOT, "final"),
+  ]);
+  await cp(REAL_CASE_ROOT, caseRoot, {
+    recursive: true,
+    filter: (sourcePath) => !excludedEvidenceRoots.has(sourcePath),
+  });
   const hostClosureRoot = path.join(
     repositoryRoot,
     "apps",
