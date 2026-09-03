@@ -404,7 +404,7 @@ test("defers Ray outages into the infrastructure retry pool without consuming a 
   }
 });
 
-test("retries the failed Cloud stage after its infrastructure cooldown elapses", async () => {
+test("retries the actual failed Cloud stage after its infrastructure cooldown elapses", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-infra-retry-"));
   const episodeId = "episode-infra-retry-001";
   const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
@@ -417,7 +417,9 @@ test("retries the failed Cloud stage after its infrastructure cooldown elapses",
     backend: "cloud",
     status: "remote-pending",
     currentStage: "style-variant-plan",
-    remoteStageId: "episode-render",
+    // The execution cursor may already point at the dependent next stage when
+    // its predecessor is interrupted. Recovery must freeze the failed stage.
+    remoteStageId: "episode-conformance",
     remoteExecutionId: "exec_infra_retry",
     remoteRequestS3Uri: "s3://bucket/episode/request.json",
     remoteOutputS3Prefix: "s3://bucket/episode",
@@ -442,12 +444,14 @@ test("retries the failed Cloud stage after its infrastructure cooldown elapses",
       retryRequired: true,
       execution: {
         execution_id: "exec_infra_retry",
-        status: "failed",
-        error: "Ray Dashboard request timed out after 5000ms",
+        status: "interrupted",
+        current_stage_id: "episode-conformance",
+        error: "worker lease expired before a terminal progress update",
         stages: [{
-          stage_id: "episode-render",
-          status: "failed",
-          diagnostics: { error: "Ray cluster unavailable" },
+          stage_id: "episode-seedance",
+          status: "interrupted",
+          current_attempt: 1,
+          diagnostics: { error: "worker lease expired before a terminal progress update" },
         }],
       },
     }),
@@ -484,9 +488,13 @@ test("retries the failed Cloud stage after its infrastructure cooldown elapses",
       "utf8",
     ));
     assert.notEqual(retryInput, null, JSON.stringify(afterRetry));
-    assert.equal(retryInput.stageId, "episode-render");
+    assert.equal(retryInput.stageId, "episode-seedance");
     assert.equal(retryInput.executionId, "exec_infra_retry");
-    assert.equal(retryInput.retryRequestId, `${episodeId}-retry-2`);
+    assert.equal(retryInput.attempt, 2);
+    assert.equal(
+      retryInput.retryRequestId,
+      `${episodeId}-episode-seedance-retry-2`,
+    );
   } finally {
     await service.shutdown();
     await rm(repoRoot, { recursive: true, force: true });

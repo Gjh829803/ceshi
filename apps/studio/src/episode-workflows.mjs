@@ -22,6 +22,18 @@ export function failedEpisodeStageId(execution) {
   return failed?.stage_id ?? null;
 }
 
+function failedEpisodeStageAttempt(execution) {
+  const stages = Array.isArray(execution?.stages) ? execution.stages : [];
+  const failed = stages.find((stage) =>
+    stage && typeof stage === "object" &&
+    ["failed", "interrupted"].includes(stage.status) &&
+    typeof stage.stage_id === "string" && stage.stage_id.length > 0);
+  const currentAttempt = Number(failed?.current_attempt ?? 0);
+  return Number.isSafeInteger(currentAttempt) && currentAttempt >= 0
+    ? currentAttempt + 1
+    : null;
+}
+
 function episodeGpuBatchStatus(execution, remoteStage, fallback = "preparing") {
   if (execution?.current_stage_id === "whitebox-capture") {
     return remoteStage?.status === "running" ? "capturing" : "waiting-for-batch";
@@ -1703,6 +1715,10 @@ export function createEpisodeWorkflowService(options) {
     const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
     const attempt = Number(record.cloudAttempt ?? 1) + 1;
     const retryStageId = record.remoteStageId ?? "episode-render";
+    const requestedStageAttempt = Number(record.remoteStageAttempt ?? attempt);
+    const stageAttempt = Number.isSafeInteger(requestedStageAttempt) && requestedStageAttempt > 0
+      ? Math.max(attempt, requestedStageAttempt)
+      : attempt;
     try {
       if (
         typeof retryCloudEpisode !== "function" ||
@@ -1745,8 +1761,8 @@ export function createEpisodeWorkflowService(options) {
         executionId: record.remoteExecutionId,
         requestS3Uri: record.remoteRequestS3Uri,
         outputS3Prefix: record.remoteOutputS3Prefix,
-        retryRequestId: `${record.episodeId}-retry-${attempt}`,
-        attempt,
+        retryRequestId: `${record.episodeId}-${retryStageId}-retry-${stageAttempt}`,
+        attempt: stageAttempt,
         stageId: retryStageId,
         workerImage: record.remoteWorkerImage,
         onProgress: async (execution) => {
@@ -1838,10 +1854,16 @@ export function createEpisodeWorkflowService(options) {
       }
       if (result.retryRequired) {
         const classification = classifyCloudProductionFailure(result.execution);
+        const retryStageId = failedEpisodeStageId(result.execution);
+        const remoteStageAttempt = failedEpisodeStageAttempt(result.execution);
+        const retryRecord = {
+          ...record,
+          ...(retryStageId === null ? {} : { remoteStageId: retryStageId }),
+          ...(remoteStageAttempt === null ? {} : { remoteStageAttempt }),
+        };
         if (!classification.retryable || classification.consumesContentAttempt) {
-          const retryStageId = failedEpisodeStageId(result.execution);
           await persistEpisodeRecord({
-            ...(await readJson(recordPath) ?? record),
+            ...(await readJson(recordPath) ?? retryRecord),
             status: "failed",
             finishedAt: new Date().toISOString(),
             error: cloudExecutionFailureMessage(result.execution),
@@ -1853,13 +1875,12 @@ export function createEpisodeWorkflowService(options) {
           return;
         }
         if (!infrastructureCooldownElapsed &&
-            await deferCloudEpisodeRecovery(record, result.execution)) return;
-        const retryStageId = failedEpisodeStageId(result.execution);
-        const retryRecord = {
-          ...(await readJson(recordPath) ?? record),
+            await deferCloudEpisodeRecovery(retryRecord, result.execution)) return;
+        await runCloudEpisodeRetry({
+          ...(await readJson(recordPath) ?? retryRecord),
           ...(retryStageId === null ? {} : { remoteStageId: retryStageId }),
-        };
-        await runCloudEpisodeRetry(retryRecord);
+          ...(remoteStageAttempt === null ? {} : { remoteStageAttempt }),
+        });
         return;
       }
       await admitCloudEpisodeResult(recordPath, record, result);
