@@ -144,6 +144,61 @@ test("applies Cloud run-index transitions without mutating frozen records", () =
   });
 });
 
+test("coalesces Cloud run-index reads across health and world-list polling", async () => {
+  const dataRoot = await temporaryRoot(".test-cloud-index-cache-");
+  let listCalls = 0;
+  const now = new Date().toISOString();
+  const remoteRecord = Object.freeze({
+    id: "cached-cloud-world",
+    sceneId: "cached-cloud-world",
+    title: "Cached cloud world",
+    prompt: "Read one remote record once.",
+    codexBackend: "cloud",
+    status: "ready",
+    stage: "ready",
+    attempt: 1,
+    origin: "test-set",
+    workflowPolicyVersion,
+    recordRevision: 2,
+    createdAt: now,
+    updatedAt: now,
+    remoteArtifacts: [],
+  });
+  const studio = createStudio({
+    repoRoot,
+    dataRoot,
+    cloudControlPlane: true,
+    cloudSceneExecutionEnabled: true,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    loadCloudSceneProductionConfigImplementation: async () => ({
+      outputS3Root: "s3://bucket/cloud-scenes",
+    }),
+    listCloudSceneRunIndexRecordsImplementation: async () => {
+      listCalls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return [remoteRecord];
+    },
+  });
+  const origin = await listen(studio);
+  try {
+    const [health, worlds] = await Promise.all([
+      fetch(`${origin}/api/health`),
+      fetch(`${origin}/api/worlds`),
+    ]);
+    assert.equal(health.status, 200);
+    assert.equal(worlds.status, 200);
+    assert.equal((await worlds.json()).worlds[0].id, remoteRecord.id);
+    assert.equal(listCalls, 1);
+    assert.equal((await fetch(`${origin}/api/worlds`)).status, 200);
+    assert.equal(listCalls, 1);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
 test("allows Cloud Host-only recovery only after the complete Builder handoff exists", () => {
   const base = {
     remoteExecutionId: "execution-builder-complete",

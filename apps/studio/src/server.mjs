@@ -1176,6 +1176,8 @@ export function createStudio(options = {}) {
   const cloudControlPlane = options.cloudControlPlane ??
     process.env.WORLDKIT_CLOUD_CONTROL_PLANE === "1";
   const cloudSceneExecutionEnabled = options.cloudSceneExecutionEnabled ?? true;
+  const listCloudSceneRunIndexRecordsImplementation =
+    options.listCloudSceneRunIndexRecordsImplementation ?? listCloudSceneRunIndexRecords;
   const loadCloudSceneProductionConfigImplementation =
     options.loadCloudSceneProductionConfigImplementation ??
     (() => loadCloudSceneProductionConfig(repoRoot));
@@ -1321,6 +1323,9 @@ export function createStudio(options = {}) {
   const activeJobBackends = new Map();
   const activeChildren = new Map();
   const stoppingJobs = new Set();
+  let cloudSceneRunIndexCache = null;
+  let cloudSceneRunIndexInFlight = null;
+  let cloudSceneRunIndexRevision = 0;
   const runRecordMutation = createKeyedSerialExecutor();
   const runRuntimeSettingsMutation = createKeyedSerialExecutor();
   let selectedCodexBackend = initialCodexBackend;
@@ -1827,6 +1832,8 @@ export function createStudio(options = {}) {
           repoRoot,
           outputS3Root: productionConfig.outputS3Root,
         });
+        cloudSceneRunIndexRevision += 1;
+        cloudSceneRunIndexCache = null;
       }
     }
     await writeJsonAtomic(recordPath(record.id), record);
@@ -2015,10 +2022,28 @@ export function createStudio(options = {}) {
     if (cloudControlPlane) {
       const productionConfig = await cloudSceneProductionConfig();
       if (productionConfig !== null) {
-        const remoteRecords = await listCloudSceneRunIndexRecords({
-          repoRoot,
-          outputS3Root: productionConfig.outputS3Root,
-        }).catch(() => []);
+        if (cloudSceneRunIndexCache?.expiresAt <= Date.now()) {
+          cloudSceneRunIndexCache = null;
+        }
+        if (cloudSceneRunIndexCache === null && cloudSceneRunIndexInFlight === null) {
+          const revision = cloudSceneRunIndexRevision;
+          cloudSceneRunIndexInFlight = listCloudSceneRunIndexRecordsImplementation({
+            repoRoot,
+            outputS3Root: productionConfig.outputS3Root,
+          }).then((remoteRecords) => {
+            if (revision === cloudSceneRunIndexRevision) {
+              cloudSceneRunIndexCache = {
+                records: remoteRecords,
+                expiresAt: Date.now() + 15_000,
+              };
+            }
+            return remoteRecords;
+          }).catch(() => []).finally(() => {
+            cloudSceneRunIndexInFlight = null;
+          });
+        }
+        const remoteRecords = cloudSceneRunIndexCache?.records ??
+          await cloudSceneRunIndexInFlight;
         const byId = new Map(records.map((record) => [record.id, record]));
         for (const remoteRecord of remoteRecords) {
           const local = byId.get(remoteRecord.id);
