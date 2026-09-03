@@ -83,6 +83,19 @@ describe("Native-default world agent Host route", () => {
     );
   });
 
+  it("keeps pass checks bound to declared traversable targets", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "The acceptanceTargetRef of every pass traversal check must name a target with a ground or step Collider role",
+    );
+    expect(source).toContain(
+      "never bind a pass check to a blocker, cliff, wall, mountain, or other non-traversable landmark",
+    );
+  });
+
   it("assembles Case planning and the formal reconstruction transaction", () => {
     const result = spawnSync(
       "pnpm",

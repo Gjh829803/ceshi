@@ -77,6 +77,38 @@ function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
   }
 }
 
+function assertNativePassTargetsAreTraversableV1(value: unknown): void {
+  if (isNil(value) || typeof value !== "object" || Array.isArray(value)) return;
+  const expected = value as Readonly<{
+    colliders?: readonly Readonly<{
+      acceptanceTargetRef?: unknown;
+      role?: unknown;
+    }>[];
+    criticalTraversalChecks?: readonly Readonly<{
+      id?: unknown;
+      acceptanceTargetRef?: unknown;
+      expectation?: unknown;
+    }>[];
+  }>;
+  if (!Array.isArray(expected.colliders) ||
+    !Array.isArray(expected.criticalTraversalChecks)) return;
+  const traversableTargetRefs = new Set(expected.colliders.flatMap((collider) =>
+    (collider.role === "ground" || collider.role === "step") &&
+      typeof collider.acceptanceTargetRef === "string"
+      ? [collider.acceptanceTargetRef]
+      : []
+  ));
+  for (const check of expected.criticalTraversalChecks) {
+    if (check.expectation !== "pass" ||
+      typeof check.acceptanceTargetRef !== "string" ||
+      traversableTargetRefs.has(check.acceptanceTargetRef)) continue;
+    throw new TypeError(
+      "NATIVE_WORLD_CASE_PASS_TARGET_NOT_TRAVERSABLE: " +
+        (typeof check.id === "string" ? check.id : "<unknown>"),
+    );
+  }
+}
+
 async function writeCanonicalExclusive(filePath: string, value: unknown) {
   await writeFile(filePath, stringifyCanonicalJson(value), {
     encoding: "utf8",
@@ -119,6 +151,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     throw new TypeError("NATIVE_WORLD_CAPTURE_INTENT_IDENTITY_INVALID");
   }
   const worldBounds = parseNativeWorldCaseWorldBoundsV1(proposal.worldBounds);
+  assertNativePassTargetsAreTraversableV1(proposal.expected);
   const briefBytes = await readFile(input.sceneBriefPath);
 
   const acceptanceTargetRefs = sortBy([...new Set([

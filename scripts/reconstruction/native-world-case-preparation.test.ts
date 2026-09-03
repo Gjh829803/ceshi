@@ -20,6 +20,51 @@ afterEach(async () => {
 });
 
 describe("trusted Native world Case preparation", () => {
+  it("rejects a pass check whose acceptance target is only a blocker", async () => {
+    const root = await mkdtemp(path.join(
+      os.tmpdir(),
+      "native-world-case-pass-target-",
+    ));
+    temporaryRoots.push(root);
+    const proposalPath = path.join(root, "proposal.json");
+    const briefPath = path.join(root, "scene-brief.md");
+    const referencePath = path.join(root, "reference.png");
+    const outputCaseRoot = path.join(root, "prepared-case");
+    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+    ]);
+    fixtureCase.expected.criticalTraversalChecks[0].acceptanceTargetRef =
+      "worldkit://acceptance-target/mountain-cliff-layers@1";
+    await Promise.all([
+      writeFile(briefPath, "# Native World\n"),
+      writeFile(referencePath, "reference-bytes"),
+      writeFile(proposalPath, JSON.stringify({
+        kind: "native-world-case-proposal",
+        schemaVersion: 1,
+        sceneId: "invalid-native-pass-target",
+        expected: fixtureCase.expected,
+        formalCaptureIntent: {
+          ...formalCaptureIntent,
+          id: "invalid-native-pass-target.formal-world-capture-intent",
+        },
+        worldBounds,
+      })),
+    ]);
+
+    await expect(prepareNativeWorldCaseV1({
+      repositoryRoot: process.cwd(),
+      sceneId: "invalid-native-pass-target",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      referenceImagePaths: [referencePath],
+      outputCaseRoot,
+    })).rejects.toThrow(
+      "NATIVE_WORLD_CASE_PASS_TARGET_NOT_TRAVERSABLE: central-ascent-pass",
+    );
+  });
+
   it("reports the exact Package bounds shape when Mapper copies Formal Capture AABB fields", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-case-bounds-"));
     temporaryRoots.push(root);
