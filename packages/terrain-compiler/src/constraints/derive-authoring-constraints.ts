@@ -51,7 +51,8 @@ function primitiveFootprintMetersXZ(
 ): Vec2 | undefined {
   const scaleX = Math.abs(transform.scaleXYZ?.[0] ?? 1);
   const scaleZ = Math.abs(transform.scaleXYZ?.[2] ?? 1);
-  switch (prototype.primitive) {
+  const primitive = prototype.primitive;
+  switch (primitive) {
     case "sphere":
     case "cylinder":
     case "cone":
@@ -63,6 +64,10 @@ function primitiveFootprintMetersXZ(
       const cosine = Math.abs(Math.cos(yawRadians));
       const sine = Math.abs(Math.sin(yawRadians));
       return [cosine * sizeX + sine * sizeZ, sine * sizeX + cosine * sizeZ];
+    }
+    default: {
+      const exhaustive: never = primitive;
+      throw new Error(`AUTHORING_PRIMITIVE_FOOTPRINT_UNHANDLED: ${String(exhaustive)}`);
     }
   }
 }

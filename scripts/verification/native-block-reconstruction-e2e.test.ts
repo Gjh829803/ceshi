@@ -1319,6 +1319,10 @@ describe("Native Block reconstruction E2E verifier", () => {
             id: "reach-ground",
             outcome: "blocked",
             checkpointIds: ["gate-approach", "gate-limit"],
+          }, {
+            id: "support-ground",
+            outcome: "passed",
+            checkpointIds: ["support-ground"],
           }],
         },
       });

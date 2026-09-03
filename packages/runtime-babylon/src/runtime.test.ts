@@ -21,7 +21,11 @@ import {
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
 import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 vi.mock("@babylonjs/core/Loading/sceneLoader.js", async (importOriginal) => {
   const actual = await importOriginal<
@@ -6312,7 +6316,7 @@ function emptyActionProjection(simulationTick: number) {
   });
 
   it("unwinds the partial runtime and disposes a cloned Asset instance exactly once", async () => {
-    let instanceDispose: ReturnType<typeof vi.fn> | undefined;
+    let instanceDispose: Mock<() => void> | undefined;
     const secret = "BABYLON_PROVIDER_PRIVATE_INITIALIZATION_CLEANUP_FAILURE";
     mutateNextLoadedContainer((container) => {
       const nativeInstantiate = container.instantiateModelsToScene.bind(container);
@@ -6352,7 +6356,7 @@ function emptyActionProjection(simulationTick: number) {
   });
 
   it("disposes a successful rigged Visual instance once across repeated Runtime disposal", async () => {
-    let instanceDispose: ReturnType<typeof vi.fn> | undefined;
+    let instanceDispose: Mock<() => void> | undefined;
     mutateNextLoadedContainer((container) => {
       const nativeInstantiate = container.instantiateModelsToScene.bind(container);
       vi.spyOn(container, "instantiateModelsToScene").mockImplementation((...args) => {

@@ -137,6 +137,36 @@ describe("deriveTerrainConstraintsFromAuthoringV4", () => {
     });
   });
 
+  it("derives a scaled cone footprint from its radius", () => {
+    const spec = focusedAuthoringSpec();
+    const prototype = spec.resources.prototypes[0];
+    if (prototype === undefined) throw new Error("TEST_PROTOTYPE_MISSING");
+    spec.resources.prototypes = [{
+      id: prototype.id,
+      version: prototype.version,
+      kind: "primitive",
+      primitive: "cone",
+      radiusMeters: 3,
+      heightMeters: 8,
+      collisionEnabled: prototype.collisionEnabled,
+      ...(prototype.semantic === undefined ? {} : { semantic: prototype.semantic }),
+    }];
+    const landmark = spec.nodes.find((node) => node.id === "wall-east");
+    if (landmark?.kind !== "object" || landmark.placement.kind !== "fixed") {
+      throw new Error("TEST_LANDMARK_MISSING");
+    }
+    landmark.placement.transform.scaleXYZ = [2, 1, 0.5];
+
+    const result = deriveTerrainConstraintsFromAuthoringV4(spec);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.constraints.find((constraint) => constraint.id === "landmark-supported"))
+      .toMatchObject({
+        kind: "flatten-footprint",
+        sizeMetersXZ: [12, 3],
+      });
+  });
+
   it("requires an explicit terrain datum and an unambiguous single Terrain", () => {
     const missingDatum = focusedAuthoringSpec();
     const terrain = missingDatum.nodes.find((node) => node.kind === "terrain");

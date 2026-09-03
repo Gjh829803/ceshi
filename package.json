@@ -133,14 +133,14 @@
     "@gltf-transform/functions": "4.4.2",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^24.3.0",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "^4.1.11",
     "ajv": "^8.17.1",
     "gltf-validator": "2.0.0-dev.3.10",
     "playwright": "^1.62.1",
     "tsx": "^4.23.12",
     "typescript": "^5.9.2",
     "vite": "^7.1.2",
-    "vitest": "^3.2.4",
+    "vitest": "^4.1.11",
     "yaml": "2.9.0"
   }
 }

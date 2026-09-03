@@ -116,6 +116,10 @@ function validateConstraint(constraint: TerrainConstraint): void {
         case "polygon":
           requirePolygon(constraint.boundary.pointsMetersXZ, `${constraint.id}.pointsMetersXZ`);
           break;
+        default: {
+          const exhaustive: never = constraint.boundary;
+          throw new Error(`TERRAIN_WATER_BOUNDARY_UNHANDLED: ${String(exhaustive)}`);
+        }
       }
       break;
     case "flatten-region":
@@ -137,6 +141,10 @@ function validateConstraint(constraint: TerrainConstraint): void {
         throw new Error(`${constraint.id}.maximumSlopeDegrees must be less than 90.`);
       }
       break;
+    default: {
+      const exhaustive: never = constraint;
+      throw new Error(`TERRAIN_CONSTRAINT_UNHANDLED: ${String(exhaustive)}`);
+    }
   }
 }
 
@@ -343,6 +351,10 @@ function waterInteriorDistanceMeters(
     }
     case "polygon":
       return polygonInteriorDistanceMeters(point, boundary.pointsMetersXZ);
+    default: {
+      const exhaustive: never = boundary;
+      throw new Error(`TERRAIN_WATER_BOUNDARY_UNHANDLED: ${String(exhaustive)}`);
+    }
   }
 }
 

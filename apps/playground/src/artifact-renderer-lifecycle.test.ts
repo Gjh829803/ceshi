@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import { createAndStartArtifactRenderer } from "./artifact-renderer-lifecycle.js";
 
@@ -14,12 +14,12 @@ function deferred(): {
 }
 
 function rendererFixture(): {
-  mount: ReturnType<typeof vi.fn>;
-  dispose: ReturnType<typeof vi.fn>;
+  mount: Mock<(container: HTMLElement) => void>;
+  dispose: Mock<() => void | PromiseLike<void>>;
 } {
   return {
-    mount: vi.fn(),
-    dispose: vi.fn(),
+    mount: vi.fn<(container: HTMLElement) => void>(),
+    dispose: vi.fn<() => void | PromiseLike<void>>(),
   };
 }
 
