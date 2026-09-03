@@ -32226,6 +32226,10 @@ function semanticReferenceDiagnostics(spec) {
         requireNode(constraint.cameraEntityId, `${base}/cameraEntityId`, ["camera"]);
         if (!screenRegionIds.has(constraint.screenRegionId)) diagnostics.push(diagnostic("AUTHORING_REFERENCE_NOT_FOUND", `${base}/screenRegionId`, `Screen Region '${constraint.screenRegionId}' does not exist.`, { screenRegionId: constraint.screenRegionId }));
         break;
+      default: {
+        const exhaustive = constraint;
+        throw new Error(`AUTHORING_PLACEMENT_CONSTRAINT_UNHANDLED: ${String(exhaustive)}`);
+      }
     }
   });
   return diagnostics;

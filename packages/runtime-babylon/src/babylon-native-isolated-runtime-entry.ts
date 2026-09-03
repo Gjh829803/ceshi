@@ -599,12 +599,17 @@ implements BabylonNativeIsolatedRuntimeEntryV1 {
       }
     }
 
-    this.#isActive = false;
-    const closingWorldSessionId = currentWorldSessionId();
-    await this.host.dispose();
-    return succeededReceipt(request, closingWorldSessionId, {
-      closeResult: Object.freeze({ mode: "closed" as const }),
-    });
+    if (request.type === "session.close") {
+      this.#isActive = false;
+      const closingWorldSessionId = currentWorldSessionId();
+      await this.host.dispose();
+      return succeededReceipt(request, closingWorldSessionId, {
+        closeResult: Object.freeze({ mode: "closed" as const }),
+      });
+    }
+
+    const exhaustive: never = request;
+    throw new Error(`RUNTIME_SESSION_REQUEST_UNHANDLED: ${String(exhaustive)}`);
   }
 }
 

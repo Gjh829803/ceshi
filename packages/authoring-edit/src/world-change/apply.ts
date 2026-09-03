@@ -895,6 +895,10 @@ function affectedIdsFromOperations(
         break;
       case "startup":
         break;
+      default: {
+        const exhaustive: never = target;
+        throw new Error(`WORLD_CHANGE_TARGET_UNHANDLED: ${String(exhaustive)}`);
+      }
     }
   }
   return parseWorldChangeAffectedIdsV1({
