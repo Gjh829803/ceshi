@@ -2807,8 +2807,8 @@ export class BabylonWorldRuntime {
       }
       return;
     }
-    const rider = this.controllerFor(entry.relationship.riderEntityId);
     if (entry.kind === "mount") {
+      const rider = this.controllerFor(entry.relationship.riderEntityId);
       rider.setCollisionFilterMasks(0, 0);
       this.projectMountedRider(
         rider,
@@ -2823,15 +2823,22 @@ export class BabylonWorldRuntime {
       );
       return;
     }
-    rider.setCollisionFilterMasks(
-      entry.riderCollisionFilterMembershipMask,
-      entry.riderCollisionFilterCollideMask,
-    );
-    rider.resetAt(
-      entry.subjectOriginPositionMetersXYZ,
-      entry.facingYawRadians,
-      entry.committedTick,
-    );
+    if (entry.kind === "dismount") {
+      const rider = this.controllerFor(entry.relationship.riderEntityId);
+      rider.setCollisionFilterMasks(
+        entry.riderCollisionFilterMembershipMask,
+        entry.riderCollisionFilterCollideMask,
+      );
+      rider.resetAt(
+        entry.subjectOriginPositionMetersXYZ,
+        entry.facingYawRadians,
+        entry.committedTick,
+      );
+      return;
+    }
+
+    const exhaustive: never = entry;
+    throw new Error(`GOLDEN_REPLAY_HISTORY_ENTRY_UNHANDLED: ${String(exhaustive)}`);
   }
 
   private async restoreGoldenPreparedFixedInput(): Promise<void> {

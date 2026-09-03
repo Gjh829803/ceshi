@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveAuthoringLayoutV4,
   type AuthoringSpecV4,
+  type PlacementConstraintSpecV1,
 } from "./index.js";
 import { createValidAuthoringSpec } from "./test-fixture.js";
 
@@ -188,6 +189,126 @@ describe("Authoring V4 resolved layout input", () => {
         expect.objectContaining({
           code: "AUTHORING_REFERENCE_NOT_FOUND",
           instancePath: "/nodes/3/placement/placementConstraintIds/0",
+        }),
+      ]),
+    });
+  });
+
+  it.each<{
+    kind: PlacementConstraintSpecV1["kind"];
+    constraint: PlacementConstraintSpecV1;
+    instancePath: string;
+  }>([
+    {
+      kind: "inside-region",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "inside-region",
+        requirement: "required",
+        entityId: "wall-east",
+        regionId: "missing-region",
+        boundaryClearanceMeters: 0,
+      },
+      instancePath: "/constraints/placements/0/regionId",
+    },
+    {
+      kind: "outside-region",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "outside-region",
+        requirement: "required",
+        entityId: "wall-east",
+        regionId: "missing-region",
+        boundaryClearanceMeters: 0,
+      },
+      instancePath: "/constraints/placements/0/regionId",
+    },
+    {
+      kind: "distance-range",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "distance-range",
+        requirement: "required",
+        entityId: "wall-east",
+        referenceEntityId: "missing-entity",
+        minimumDistanceMeters: 1,
+        maximumDistanceMeters: 2,
+      },
+      instancePath: "/constraints/placements/0/referenceEntityId",
+    },
+    {
+      kind: "faces-entity",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "faces-entity",
+        requirement: "required",
+        facingEntityId: "wall-east",
+        targetEntityId: "missing-entity",
+        maximumAngularDeviationDegrees: 15,
+      },
+      instancePath: "/constraints/placements/0/targetEntityId",
+    },
+    {
+      kind: "supported-by",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "supported-by",
+        requirement: "required",
+        supportedEntityId: "wall-east",
+        supportingEntityId: "missing-entity",
+        maximumSupportGapMeters: 0,
+        minimumSupportRatio: 1,
+      },
+      instancePath: "/constraints/placements/0/supportingEntityId",
+    },
+    {
+      kind: "minimum-clearance",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "minimum-clearance",
+        requirement: "required",
+        entityId: "wall-east",
+        clearanceMeters: 1,
+        otherEntityIds: ["missing-entity"],
+      },
+      instancePath: "/constraints/placements/0/otherEntityIds/0",
+    },
+    {
+      kind: "within-slope-limit",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "within-slope-limit",
+        requirement: "required",
+        terrainEntityId: "terrain-main",
+        routeId: "missing-route",
+        maximumSlopeDegrees: 12,
+      },
+      instancePath: "/constraints/placements/0/routeId",
+    },
+    {
+      kind: "visible-in-camera-region",
+      constraint: {
+        id: "constraint-under-test",
+        kind: "visible-in-camera-region",
+        requirement: "required",
+        visibleEntityId: "wall-east",
+        cameraEntityId: "camera-main",
+        screenRegionId: "missing-screen-region",
+        minimumVisibleRatio: 0.5,
+        minimumProjectedAreaRatio: 0.01,
+      },
+      instancePath: "/constraints/placements/0/screenRegionId",
+    },
+  ])("validates $kind semantic references", ({ constraint, instancePath }) => {
+    const spec = createValidAuthoringSpec();
+    spec.constraints.placements = [constraint];
+
+    expect(resolveAuthoringLayoutV4(spec)).toMatchObject({
+      ok: false,
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: "AUTHORING_REFERENCE_NOT_FOUND",
+          instancePath,
         }),
       ]),
     });

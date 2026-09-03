@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -120,7 +120,7 @@ interface FakeRuntimeV1 {
   readonly publishInitialBoundCameraView: ReturnType<typeof vi.fn>;
   readonly renderFrame: ReturnType<typeof vi.fn>;
   readonly renderFrameWhenReady: ReturnType<typeof vi.fn>;
-  readonly dispose: ReturnType<typeof vi.fn>;
+  readonly dispose: Mock<() => Promise<void>>;
   snapshot(): BabylonRuntimeProjectionV1;
 }
 
