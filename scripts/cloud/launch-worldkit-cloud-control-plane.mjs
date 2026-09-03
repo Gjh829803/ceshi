@@ -86,14 +86,14 @@ export function cloudControlPlaneResources({
               },
             ],
             readinessProbe: {
-              httpGet: { path: "/api/health", port: "http" },
+              httpGet: { path: "/index.html", port: "http" },
               initialDelaySeconds: 5,
               timeoutSeconds: 10,
               periodSeconds: 10,
             },
             livenessProbe: {
-              httpGet: { path: "/api/health", port: "http" },
-              initialDelaySeconds: 120,
+              httpGet: { path: "/index.html", port: "http" },
+              initialDelaySeconds: 600,
               timeoutSeconds: 10,
               periodSeconds: 20,
             },
@@ -113,7 +113,7 @@ export function cloudControlPlaneResources({
               { name: "WORLDKIT_CLOUD_MONITOR_TARGET", value: `http://127.0.0.1:${port}` },
             ],
             readinessProbe: {
-              httpGet: { path: "/api/health", port: "monitor" },
+              httpGet: { path: "/index.html", port: "monitor" },
               initialDelaySeconds: 5,
               timeoutSeconds: 10,
               periodSeconds: 10,

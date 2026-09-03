@@ -25,8 +25,10 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
     item.name === "WORLDKIT_CLOUD_WORKER_IMAGE").value,
     `registry.example/worldkit@sha256:${"a".repeat(64)}`);
   assert.equal(container.readinessProbe.timeoutSeconds, 10);
-  assert.equal(container.livenessProbe.initialDelaySeconds, 120);
+  assert.equal(container.readinessProbe.httpGet.path, "/index.html");
+  assert.equal(container.livenessProbe.initialDelaySeconds, 600);
   assert.equal(container.livenessProbe.timeoutSeconds, 10);
+  assert.equal(container.livenessProbe.httpGet.path, "/index.html");
   assert.ok(pod.volumes.every((volume) => volume.emptyDir));
   assert.equal(JSON.stringify(pod).includes("aws-credentials"), false);
   assert.equal(service.spec.type, "ClusterIP");
@@ -35,6 +37,7 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   const monitor = pod.containers.find((item) => item.name === "read-only-monitor-proxy");
   assert.ok(monitor);
   assert.equal(monitor.command[1], "apps/studio/src/cloud-monitor-public-proxy.mjs");
+  assert.equal(monitor.readinessProbe.httpGet.path, "/index.html");
   assert.equal(monitor.env.some((item) => item.name === "LWDP_GENERATION_API_TOKEN"), false);
   assert.ok(role.rules[0].verbs.includes("create"));
   assert.ok(role.rules[0].verbs.includes("patch"));

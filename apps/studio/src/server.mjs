@@ -5201,46 +5201,53 @@ export function createStudio(options = {}) {
       await importBuiltinResultRecords();
       for (const testSet of await listTestSets()) await refreshTestSetIntegrity(testSet);
       if (importExistingArtifacts) await importExistingWorlds();
-      const records = await listRecords();
-      for (const record of records) {
-        if (await recoverGeneratedStyledOutputs(record)) continue;
-        if (["running", "visual-running", "visual-queued", "awaiting-recording"].includes(record.status)) {
-          if (
-            effectiveCodexBackend(record) === "cloud" &&
-            typeof record.remoteExecutionId === "string" &&
-            record.remoteExecutionId
-          ) {
-            await transitionRecord(record.id, {
-              status: "remote-pending",
-              stage: record.stage,
-              finishedAt: null,
-              error: `Creator Studio 已重启；正在按原 Cloud Execution ${record.remoteExecutionId} 对账。`,
-              remotePendingSince: new Date().toISOString(),
-              remotePendingDeadlineAt: new Date(Date.now() + remotePendingGraceMs).toISOString(),
-            }, {
-              expectedAttempt: record.attempt,
-              expectedRemoteExecutionId: record.remoteExecutionId,
-              expectedStatuses: ["running", "visual-running", "visual-queued", "awaiting-recording"],
+      const recoverPersistedRecords = async () => {
+        const records = await listRecords();
+        for (const record of records) {
+          if (await recoverGeneratedStyledOutputs(record)) continue;
+          if (["running", "visual-running", "visual-queued", "awaiting-recording"].includes(record.status)) {
+            if (
+              effectiveCodexBackend(record) === "cloud" &&
+              typeof record.remoteExecutionId === "string" &&
+              record.remoteExecutionId
+            ) {
+              await transitionRecord(record.id, {
+                status: "remote-pending",
+                stage: record.stage,
+                finishedAt: null,
+                error: `Creator Studio 已重启；正在按原 Cloud Execution ${record.remoteExecutionId} 对账。`,
+                remotePendingSince: new Date().toISOString(),
+                remotePendingDeadlineAt: new Date(Date.now() + remotePendingGraceMs).toISOString(),
+              }, {
+                expectedAttempt: record.attempt,
+                expectedRemoteExecutionId: record.remoteExecutionId,
+                expectedStatuses: ["running", "visual-running", "visual-queued", "awaiting-recording"],
+              });
+              continue;
+            }
+            if (await markCloudRecordForRemoteReconciliation(
+              record,
+              "Creator Studio 已重启；正在按持久化的原 LWDP Job 对账，不会重复提交。",
+            )) continue;
+            await updateRecord(record.id, {
+              status: "interrupted",
+              stage: "interrupted",
+              failedStage: record.stage,
+              finishedAt: new Date().toISOString(),
+              error: "Creator Studio restarted before this task completed.",
             });
-            continue;
+            await appendTrajectoryEvent(record.id, "interrupted", "Creator Studio 重启，运行中的任务被标记为中断。", { kind: "failed" });
+          } else if (record.status === "queued") {
+            queue.push(queueItem(record.id, effectiveCodexBackend(record)));
           }
-          if (await markCloudRecordForRemoteReconciliation(
-            record,
-            "Creator Studio 已重启；正在按持久化的原 LWDP Job 对账，不会重复提交。",
-          )) continue;
-          await updateRecord(record.id, {
-            status: "interrupted",
-            stage: "interrupted",
-            failedStage: record.stage,
-            finishedAt: new Date().toISOString(),
-            error: "Creator Studio restarted before this task completed.",
-          });
-          await appendTrajectoryEvent(record.id, "interrupted", "Creator Studio 重启，运行中的任务被标记为中断。", { kind: "failed" });
-        } else if (record.status === "queued") {
-          queue.push(queueItem(record.id, effectiveCodexBackend(record)));
         }
+        pumpQueue();
+      };
+      if (cloudControlPlane) {
+        runBackgroundTask("cloud-control-plane", "startup-recovery", recoverPersistedRecords);
+      } else {
+        await recoverPersistedRecords();
       }
-      pumpQueue();
       if (autoRecoverLateLwdpJobs && remoteRecoveryTimer === null) {
         remoteRecoveryTimer = setInterval(() => {
           runBackgroundTask("remote-lwdp", "reconcile-late-deliveries", () =>
