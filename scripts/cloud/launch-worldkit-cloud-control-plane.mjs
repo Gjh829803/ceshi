@@ -59,14 +59,15 @@ export function cloudControlPlaneResources({
       template: {
         metadata: {
           labels,
-          // The control plane is a Node-only workload. Explicit opt-outs avoid
-          // the cluster-wide observability mutator adding Java, Python and
-          // .NET init containers that delay or block Studio recovery.
+          // The control plane already reports durable run state, LWDP
+          // heartbeats and structured stdout logs. Explicit opt-outs avoid the
+          // cluster-wide observability mutator adding language runtime init
+          // containers that can delay or block Studio recovery.
           annotations: {
             "instrumentation.opentelemetry.io/inject-java": "false",
             "instrumentation.opentelemetry.io/inject-python": "false",
             "instrumentation.opentelemetry.io/inject-dotnet": "false",
-            "instrumentation.opentelemetry.io/inject-nodejs": "true",
+            "instrumentation.opentelemetry.io/inject-nodejs": "false",
           },
         },
         spec: {
