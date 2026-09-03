@@ -46,6 +46,11 @@ test("submits one three-stage Episode DAG bound to an admitted Scene manifest", 
       outputS3Prefix: "s3://bucket/episodes/episode-scene-cloud-001-a1b2c3",
       cloudConfig: config,
       requestPath,
+      findExistingImplementation: async () => {
+        const error = new Error("not found");
+        error.status = 404;
+        throw error;
+      },
       uploadOptions: {
         execFileImplementation: (_command, args, _options, callback) => {
           uploads.push(args);
@@ -90,4 +95,67 @@ test("submits one three-stage Episode DAG bound to an admitted Scene manifest", 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("recovers an existing Cloud Episode without overwriting its immutable request", async () => {
+  const oldImage = `worker@sha256:${"a".repeat(64)}`;
+  const currentImage = `worker@sha256:${"b".repeat(64)}`;
+  const sceneRecord = {
+    id: "scene-cloud-001",
+    sceneId: "scene-cloud-001",
+    status: "ready",
+    remoteExecutionId: "exec-scene-001",
+    remoteArtifactAdmission: { status: "passed", executionId: "exec-scene-001" },
+  };
+  const existingRequest = {
+    kind: "worldkit-cloud-episode-request",
+    schemaVersion: 2,
+    sceneId: "scene-cloud-001",
+    episodeId: "episode-scene-cloud-001-a1b2c3",
+    sceneExecutionId: "exec-scene-001",
+    sceneManifestS3Uri: "s3://bucket/scene/cloud-artifact-manifest.json",
+    sceneRecord,
+    productionScope: "full",
+    styleVariantMode: "ten-style",
+    workerImage: oldImage,
+    executionProfile: "cpu-gpu-batch-cpu@1",
+    gpuBatch: {
+      queueS3Prefix: "s3://bucket/gpu-capture-queue",
+      minimumBatchSize: 100,
+      maximumBatchSize: 128,
+      tailFlushIdleSeconds: 120,
+    },
+    pipeline: { command: "episode:run", backend: "cloud", stageIds: [] },
+  };
+  let uploadCount = 0;
+  const result = await submitCloudEpisode({
+    sceneId: existingRequest.sceneId,
+    episodeId: existingRequest.episodeId,
+    sceneExecutionId: existingRequest.sceneExecutionId,
+    sceneManifestS3Uri: existingRequest.sceneManifestS3Uri,
+    sceneRecord,
+    productionScope: existingRequest.productionScope,
+    styleVariantMode: existingRequest.styleVariantMode,
+    workerImage: currentImage,
+    gpuBatch: existingRequest.gpuBatch,
+    requestId: "episode-scene-cloud-001-a1b2c3-cloud-run-1",
+    outputS3Prefix: "s3://bucket/episodes/episode-scene-cloud-001-a1b2c3",
+    cloudConfig: config,
+    findExistingImplementation: async () => ({
+      execution: { execution_id: "exec-existing-episode", status: "awaiting-recording" },
+    }),
+    readExistingRequestImplementation: async () => Buffer.from(
+      `${JSON.stringify(existingRequest)}\n`,
+    ),
+    uploadOptions: {
+      execFileImplementation: (_command, _args, _options, callback) => {
+        uploadCount += 1;
+        callback(null, "", "");
+      },
+    },
+  });
+  assert.equal(uploadCount, 0);
+  assert.equal(result.executionId, "exec-existing-episode");
+  assert.equal(result.workerImage, oldImage);
+  assert.equal(result.recoveredByRequestId, true);
 });

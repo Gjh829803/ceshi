@@ -9,7 +9,9 @@ import {
   cloudExecutionRecord,
   createCloudExecution,
   dispatchCloudExecution,
+  findCloudExecutionByRequestId,
 } from "../lib/lwdp-cloud-execution-client.mjs";
+import { readRemoteS3Artifact } from "../lib/cloud-s3-runtime.mjs";
 import {
   assertS3Uri,
   joinS3Uri,
@@ -17,6 +19,7 @@ import {
 } from "../lib/lwdp-generation-client.mjs";
 import { CLOUD_EPISODE_STAGE_PROFILE_V2 } from "../lib/cloud-production-run.mjs";
 
+const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const ID = /^[a-z0-9][a-z0-9-]{2,119}$/;
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
@@ -108,6 +111,11 @@ export async function submitCloudEpisode({
   fetchImplementation,
   uploadOptions = {},
   requestPath = undefined,
+  findExistingImplementation = findCloudExecutionByRequestId,
+  readExistingRequestImplementation = (s3Uri) => readRemoteS3Artifact(s3Uri, {
+    repoRoot,
+    maximumBytes: 4 * 1024 * 1024,
+  }),
 }) {
   if (!ID.test(String(sceneId ?? "")) || !ID.test(String(episodeId ?? ""))) {
     throw new Error("scene_id and episode_id must be stable lowercase ids.");
@@ -145,11 +153,56 @@ export async function submitCloudEpisode({
   });
   const serializedRequest = `${JSON.stringify(request, null, 2)}\n`;
   const requestHash = `sha256:${createHash("sha256").update(serializedRequest).digest("hex")}`;
+  const requestS3Uri = joinS3Uri(resolvedOutputPrefix, "inputs", "request.json");
+  let existingExecution = null;
+  try {
+    existingExecution = cloudExecutionRecord(await findExistingImplementation(requestId, {
+      kind: "episode",
+      config: cloudConfig,
+      fetchImplementation,
+    }));
+  } catch (error) {
+    if (error?.status !== 404) throw error;
+  }
+  if (existingExecution) {
+    const existingRequest = parseCloudEpisodeRequest(
+      (await readExistingRequestImplementation(requestS3Uri)).toString("utf8"),
+    );
+    if (
+      existingRequest.sceneId !== sceneId ||
+      existingRequest.episodeId !== episodeId ||
+      existingRequest.sceneExecutionId !== sceneExecutionId ||
+      existingRequest.styleVariantMode !== styleVariantMode ||
+      (existingRequest.productionScope ?? "full") !== productionScope
+    ) {
+      throw new Error("Existing Cloud Episode request identity does not match this recovery.");
+    }
+    if (autoDispatch && existingExecution.status === "queued") {
+      await dispatchCloudExecution(existingExecution.execution_id, {
+        config: cloudConfig,
+        fetchImplementation,
+      });
+    }
+    const existingSerialized = `${JSON.stringify(existingRequest, null, 2)}\n`;
+    return {
+      executionId: existingExecution.execution_id,
+      sceneId,
+      episodeId,
+      requestId,
+      requestHash: `sha256:${createHash("sha256").update(existingSerialized).digest("hex")}`,
+      requestS3Uri,
+      outputS3Prefix: resolvedOutputPrefix,
+      status: existingExecution.status,
+      workerImage: existingRequest.workerImage,
+      executionProfile: existingRequest.executionProfile,
+      gpuBatch: existingRequest.gpuBatch,
+      recoveredByRequestId: true,
+    };
+  }
   const temporaryRoot = requestPath ? undefined : await mkdtemp(`${tmpdir()}/worldkit-cloud-episode-request-`);
   const localRequestPath = requestPath ?? resolve(temporaryRoot, "request.json");
   await mkdir(dirname(localRequestPath), { recursive: true });
   await writeFile(localRequestPath, serializedRequest, { mode: 0o600 });
-  const requestS3Uri = joinS3Uri(resolvedOutputPrefix, "inputs", "request.json");
   await uploadS3File(localRequestPath, requestS3Uri, uploadOptions);
   const payload = {
     kind: "episode",
