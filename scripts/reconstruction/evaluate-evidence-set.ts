@@ -218,9 +218,11 @@ export function projectMeasuredTraversalCheck(
     return outcome === "blocked";
   };
   if (
-    criteria.some((criterion) =>
-      criterion.expectation === "block" && !criterionIsSatisfied(criterion)
-    )
+    criteria.some((criterion) => {
+      if (criterion.expectation !== "block") return false;
+      const outcome = measuredById.get(criterion.checkpointId);
+      return outcome !== "blocked" && outcome !== "incomplete";
+    })
   ) {
     return { outcome: "reached", checkpointIds };
   }

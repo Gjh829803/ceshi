@@ -65,6 +65,24 @@ const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
   toleranceMeters: 0.05,
 }] as const;
 
+const SINGLE_BLOCK_CHECKPOINT_CRITERION = Object.freeze([{
+  kind: "block-plane" as const,
+  checkpointId: "cliff-edge",
+  expectation: "block" as const,
+  sourceVisualGroupId: "cliff-group",
+  sourceBoundsMeters: {
+    minimumMetersXYZ: [-5, -1, -5] as const,
+    maximumMetersXYZ: [5, 0, 5] as const,
+  },
+  colliderId: "cliff-wall",
+  axis: "z" as const,
+  sourceFace: "maximum" as const,
+  planeMeters: 5,
+  expectedCenterSide: "positive" as const,
+  capsuleRadiusMeters: 0.35,
+  toleranceMeters: 0.05,
+}]);
+
 function observed<
   Id extends "collider" | "critical-traversal" | "deterministic-build",
 >(
@@ -393,6 +411,15 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
     ], MIXED_BLOCK_CHECKPOINT_CRITERIA, "block")).toEqual({
       outcome: "reached",
       checkpointIds: ["approach", "gate", "threshold"],
+    });
+  });
+
+  it("keeps an unmeasured block-plane checkpoint incomplete", () => {
+    expect(projectMeasuredTraversalCheck([
+      { checkpointId: "cliff-edge", outcome: "incomplete" },
+    ], SINGLE_BLOCK_CHECKPOINT_CRITERION, "block")).toEqual({
+      outcome: "incomplete",
+      checkpointIds: ["cliff-edge"],
     });
   });
 
