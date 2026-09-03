@@ -10,7 +10,7 @@ import {
 } from "../../../scripts/lib/lwdp-cloud-execution-client.mjs";
 import { launchCloudSceneWorkerJob } from
   "../../../scripts/cloud/launch-worldkit-cloud-worker-job.mjs";
-import { submitCloudScene } from
+import { submitCloudScene, submitCloudSceneFromExistingRequest } from
   "../../../scripts/cloud/submit-worldkit-cloud-scene.mjs";
 import { assertS3Uri, joinS3Uri } from
   "../../../scripts/lib/lwdp-generation-client.mjs";
@@ -250,12 +250,21 @@ export function resumeStudioCloudSceneBuilder(options) {
 export function rebuildStudioCloudSceneBuilder({
   sourceExecutionId,
   sourceManifestS3Uri,
+  sourceRequestSource,
+  sourceRequestS3Uri,
+  submitExistingRequestImplementation = submitCloudSceneFromExistingRequest,
   ...options
 }) {
   return executeStudioCloudScene({
     ...options,
+    referenceImagePath: null,
     resumeManifestS3Uri: sourceManifestS3Uri,
     resumeSourceExecutionId: sourceExecutionId,
     resumeMode: "builder",
+    submitImplementation: (input) => submitExistingRequestImplementation({
+      ...input,
+      sourceRequestSource,
+      sourceRequestS3Uri,
+    }),
   });
 }

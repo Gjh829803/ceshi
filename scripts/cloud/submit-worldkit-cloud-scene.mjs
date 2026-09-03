@@ -161,6 +161,92 @@ export async function submitCloudScene({
   };
 }
 
+export async function submitCloudSceneFromExistingRequest({
+  sceneId,
+  sourceRequestSource,
+  sourceRequestS3Uri,
+  requestId,
+  outputS3Prefix,
+  autoDispatch = true,
+  cloudConfig,
+  fetchImplementation,
+}) {
+  if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(String(sceneId ?? ""))) {
+    throw new Error("scene_id must be 3-80 lowercase letters, numbers, or hyphens.");
+  }
+  required(requestId, "request_id");
+  required(sourceRequestSource, "source_request_source");
+  const requestS3Uri = assertS3Uri(sourceRequestS3Uri);
+  const resolvedOutputPrefix = assertS3Uri(outputS3Prefix);
+  let sourceRequest;
+  try {
+    sourceRequest = JSON.parse(sourceRequestSource);
+  } catch (error) {
+    throw new Error("The prior Cloud Scene request is not valid JSON.", { cause: error });
+  }
+  if (
+    sourceRequest?.kind !== "worldkit-cloud-scene-request" ||
+    sourceRequest.schemaVersion !== 1 ||
+    sourceRequest.sceneId !== sceneId ||
+    typeof sourceRequest.prompt !== "string" ||
+    !Array.isArray(sourceRequest.references)
+  ) throw new Error("The prior Cloud Scene request does not match the rebuilt Scene.");
+  const references = sourceRequest.references.map((reference, index) => {
+    if (
+      typeof reference?.fileName !== "string" ||
+      typeof reference?.contentType !== "string" ||
+      typeof reference?.sha256 !== "string" ||
+      typeof reference?.s3Uri !== "string"
+    ) throw new Error(`The prior Cloud Scene reference ${index} is incomplete.`);
+    return {
+      role: "user-reference-image",
+      path: `inputs/references/${reference.fileName}`,
+      s3_uri: assertS3Uri(reference.s3Uri),
+      content_type: reference.contentType,
+    };
+  });
+  const payload = {
+    kind: "scene",
+    scene_id: sceneId,
+    request_id: requestId,
+    output_s3_prefix: resolvedOutputPrefix,
+    max_concurrency: 1,
+    auto_dispatch: autoDispatch,
+    inputs: [{
+      role: "worldkit-cloud-scene-request",
+      path: "inputs/request.json",
+      s3_uri: requestS3Uri,
+      content_type: "application/json",
+    }, ...references],
+    stages: [{
+      stage_id: "scene-production",
+      executor: "worker",
+      max_attempts: 3,
+      timeout_seconds: 21_600,
+    }],
+  };
+  const createdPayload = await createCloudExecution(payload, {
+    config: cloudConfig,
+    fetchImplementation,
+  });
+  const execution = cloudExecutionRecord(createdPayload);
+  if (autoDispatch && execution.status === "queued") {
+    await dispatchCloudExecution(execution.execution_id, {
+      config: cloudConfig,
+      fetchImplementation,
+    });
+  }
+  return {
+    executionId: execution.execution_id,
+    sceneId,
+    requestId,
+    requestHash: `sha256:${createHash("sha256").update(sourceRequestSource).digest("hex")}`,
+    requestS3Uri,
+    outputS3Prefix: resolvedOutputPrefix,
+    status: execution.status,
+  };
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const result = await submitCloudScene({

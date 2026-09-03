@@ -183,6 +183,14 @@ test("rebuilds Builder in a fresh Cloud Execution from a prior Planner manifest"
     attempt: 2,
     sourceExecutionId: "execution-source-1",
     sourceManifestS3Uri: "s3://worldkit-test/source/planner-manifest.json",
+    sourceRequestSource: JSON.stringify({
+      kind: "worldkit-cloud-scene-request",
+      schemaVersion: 1,
+      sceneId: "cloud-scene-builder-rebuild",
+      prompt: "Keep the prior Planner handoff.",
+      references: [],
+    }),
+    sourceRequestS3Uri: "s3://worldkit-test/source/request.json",
     config: {
       workerImage: `worker@sha256:${"e".repeat(64)}`,
       outputS3Root: "s3://worldkit-test/cloud-scenes",
@@ -191,7 +199,7 @@ test("rebuilds Builder in a fresh Cloud Execution from a prior Planner manifest"
     cloudConfig: {
       baseUrl: "https://lwdp.test", token: "test", userId: "partner-codex",
     },
-    submitImplementation: async (input) => {
+    submitExistingRequestImplementation: async (input) => {
       calls.push(["submit", input]);
       return {
         executionId: "execution-current-2",

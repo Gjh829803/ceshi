@@ -51,6 +51,7 @@ import {
   getCloudExecutionCapacity,
   getCloudExecutionStages,
 } from "../../../scripts/lib/lwdp-cloud-execution-client.mjs";
+import { readRemoteS3Artifact } from "../../../scripts/lib/cloud-s3-runtime.mjs";
 import {
   cloudInternalStage,
   cloudArtifactManifestS3Uri,
@@ -3614,10 +3615,12 @@ export function createStudio(options = {}) {
     } : null;
     const rebuildAuthority = cloudBuilderRebuild &&
         typeof initialRecord.remoteExecutionId === "string" &&
-        typeof initialRecord.remoteArtifactManifestS3Uri === "string"
+        typeof initialRecord.remoteArtifactManifestS3Uri === "string" &&
+        typeof initialRecord.remoteRequestS3Uri === "string"
       ? {
           executionId: initialRecord.remoteExecutionId,
           manifestS3Uri: initialRecord.remoteArtifactManifestS3Uri,
+          requestS3Uri: initialRecord.remoteRequestS3Uri,
         }
       : null;
     if (cloudBuilderRebuild && rebuildAuthority === null) {
@@ -3778,6 +3781,11 @@ export function createStudio(options = {}) {
             ...commonExecutionOptions,
             sourceExecutionId: rebuildAuthority.executionId,
             sourceManifestS3Uri: rebuildAuthority.manifestS3Uri,
+            sourceRequestS3Uri: rebuildAuthority.requestS3Uri,
+            sourceRequestSource: (await readRemoteS3Artifact(
+              rebuildAuthority.requestS3Uri,
+              { repoRoot, maximumBytes: 1024 * 1024 },
+            )).toString("utf8"),
           })
         : cloudResume
         ? await (cloudResumeMode === "host"
