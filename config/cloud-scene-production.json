@@ -1,7 +1,7 @@
 {
   "kind": "worldkit-cloud-scene-production-config",
   "schemaVersion": 1,
-  "workerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:2fbbb99e6b7da596e069d4e603ab4594983851f4f30daa48a07061e0145937c5",
+  "workerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:e9ba9ba330f21af40a7022f13c432663451f70695dfc84d58a90b817bdc9a402",
   "outputS3Root": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/cloud-scenes",
   "namespace": "lwdp"
 }
