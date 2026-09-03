@@ -875,6 +875,32 @@ describe("world reconstruction contracts", () => {
     });
     expect(repairedAfterOpeningRejection.attempts.map(({ kind }) => kind))
       .toEqual(["capture-rejected", "evaluated"]);
+    const initial = runValue.attempts[0];
+    const repairedAfterGroundRejection = parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      attempts: [{
+        kind: "ground-analysis-rejected",
+        attemptIndex: 0,
+        generationRequestRef: initial.generationRequestRef,
+        generationRequestHash: initial.generationRequestHash,
+        generationReceiptRef: initial.generationReceiptRef,
+        generationReceiptHash: initial.generationReceiptHash,
+        sceneAuthoringAttemptRef: initial.sceneAuthoringAttemptRef,
+        sceneAuthoringAttemptHash: initial.sceneAuthoringAttemptHash,
+        sceneAuthoringAttemptResultRef: initial.sceneAuthoringAttemptResultRef,
+        sceneAuthoringAttemptResultHash:
+          initial.sceneAuthoringAttemptResultHash,
+        authoredSourceRef:
+          "artifact://case/cloud-temple/attempts/0/source",
+        authoredSourceHash: H("7"),
+        groundAnalysisReportRef:
+          "artifact://case/cloud-temple/attempts/0/ground-analysis-report.json",
+        groundAnalysisReportHash: H("8"),
+        outcome: "failed",
+      }, runValue.attempts[1]],
+    });
+    expect(repairedAfterGroundRejection.attempts.map(({ kind }) => kind))
+      .toEqual(["ground-analysis-rejected", "evaluated"]);
     const packageScopedRefs = parseWorldReconstructionRunReceiptV1({
       ...runValue,
       attempts: [runValue.attempts[0], {
@@ -884,14 +910,22 @@ describe("world reconstruction contracts", () => {
         worldBuildIdentityRef: runValue.attempts[0].worldBuildIdentityRef,
       }],
     });
-    expect(packageScopedRefs.attempts[1]?.worldPackageRef).not.toBe(
-      packageScopedRefs.attempts[0]?.worldPackageRef,
+    const packageScopedInitial = packageScopedRefs.attempts[0];
+    const packageScopedRepair = packageScopedRefs.attempts[1];
+    expect(packageScopedInitial?.kind).toBe("evaluated");
+    expect(packageScopedRepair?.kind).toBe("evaluated");
+    if (
+      packageScopedInitial?.kind !== "evaluated" ||
+      packageScopedRepair?.kind !== "evaluated"
+    ) throw new Error("expected evaluated Package attempts");
+    expect(packageScopedRepair.worldPackageRef).not.toBe(
+      packageScopedInitial.worldPackageRef,
     );
-    expect(packageScopedRefs.attempts[1]?.worldPackageBuildReceiptRef).toBe(
-      packageScopedRefs.attempts[0]?.worldPackageBuildReceiptRef,
+    expect(packageScopedRepair.worldPackageBuildReceiptRef).toBe(
+      packageScopedInitial.worldPackageBuildReceiptRef,
     );
-    expect(packageScopedRefs.attempts[1]?.worldBuildIdentityRef).toBe(
-      packageScopedRefs.attempts[0]?.worldBuildIdentityRef,
+    expect(packageScopedRepair.worldBuildIdentityRef).toBe(
+      packageScopedInitial.worldBuildIdentityRef,
     );
     for (const caseRef of [
       "artifact://case/cloud-temple.case/case.json",

@@ -70,11 +70,17 @@ const REPAIR_OPENING_GATE_CONTEXT_RELATIVE_PATHS = Object.freeze([
   "attempts/0/rejected-capture/spawn-support-observation.json",
   "attempts/0/rejected-capture/scripted-traversal.json",
 ] as const);
+const REPAIR_GROUND_ANALYSIS_CONTEXT_RELATIVE_PATHS = Object.freeze([
+  "attempts/0/native-check-result.json",
+  "attempts/0/logical-ground-model.json",
+  "attempts/0/ground-analysis-report.json",
+  "attempts/0/ground-analysis-diagnostics.json",
+] as const);
 const REPAIR_TASK_PROTOCOL = `Repair attempt protocol:
 - Begin from the immutable prior source at inputs/attempts/0/source/scene.ts, inputs/attempts/0/source/native-block-authoring.json, and inputs/attempts/0/source/native-resources.json.
 - Read context/repair-instruction.json first. For every diagnostic, execute its repairAction.instruction against the declared targetId and operation; do not substitute a change to names, tags, materials, or logical subshape ids unless that exact action requests it.
-- Use priorEvidence.kind to select exactly one evidence source. For evaluation-result, read inputs/attempts/0/evaluation.json and inputs/attempts/0/capture/. For opening-composition-gate-result, read inputs/attempts/0/rejected-capture/opening-composition-gate-result.json and inputs/attempts/0/rejected-capture/.
-- Inspect the selected evidence directory's opening.png and collider-overlay.png before editing.
+- Use priorEvidence.kind to select exactly one evidence source. For evaluation-result, read inputs/attempts/0/evaluation.json and inputs/attempts/0/capture/. For opening-composition-gate-result, read inputs/attempts/0/rejected-capture/opening-composition-gate-result.json and inputs/attempts/0/rejected-capture/. For ground-analysis-report, read inputs/attempts/0/ground-analysis-report.json, inputs/attempts/0/ground-analysis-diagnostics.json, and inputs/attempts/0/logical-ground-model.json.
+- Inspect opening.png and collider-overlay.png before editing only when the selected evidence kind has Capture artifacts. Ground Analysis runs before Capture; repair its named source Blocks and measured footprint, clearance, connectivity, or traversal support directly from the three ground JSON artifacts.
 - A visual repair must produce a visible geometry change in the evidence view named by the diagnostic. Move, add, or remove actual Blocks in the declared target while preserving its semantic identity; a metadata-only change is not a repair.
 - Do not reassign an existing Block's visualGroupId merely to change measured group bounds, ordering, or coverage. Keep prior group membership stable unless the diagnostic explicitly reports a missing or incorrect semantic binding; names, group ids, identity colors, and bindings are not substitutes for visible geometry.
 - Do not change the Case, Profile, or acceptance thresholds. The diagnostic expected value, actual value, allowed threshold, exceeded amount, and correction direction are frozen evidence, not authoring suggestions.
@@ -622,7 +628,10 @@ export async function prepareNativeBlockGenerationTaskV1(
       const evidencePaths = repairInstruction.priorEvidence.kind ===
           "evaluation-result"
         ? REPAIR_EVALUATION_CONTEXT_RELATIVE_PATHS
-        : REPAIR_OPENING_GATE_CONTEXT_RELATIVE_PATHS;
+        : repairInstruction.priorEvidence.kind ===
+            "opening-composition-gate-result"
+          ? REPAIR_OPENING_GATE_CONTEXT_RELATIVE_PATHS
+          : REPAIR_GROUND_ANALYSIS_CONTEXT_RELATIVE_PATHS;
       return Promise.all([
         ...REPAIR_COMMON_CONTEXT_RELATIVE_PATHS,
         ...evidencePaths,
@@ -637,7 +646,10 @@ export async function prepareNativeBlockGenerationTaskV1(
     const priorEvidenceRelativePath = repairInstruction.priorEvidence.kind ===
         "evaluation-result"
       ? "attempts/0/evaluation.json"
-      : "attempts/0/rejected-capture/opening-composition-gate-result.json";
+      : repairInstruction.priorEvidence.kind ===
+          "opening-composition-gate-result"
+        ? "attempts/0/rejected-capture/opening-composition-gate-result.json"
+        : "attempts/0/ground-analysis-report.json";
     const priorEvidence = repairContextByPath.get(priorEvidenceRelativePath);
     const priorGenerationRequest = repairContextByPath.get(
       "attempts/0/generation-request.json",

@@ -363,16 +363,29 @@ describe("packageNativeBlockAttemptV1", () => {
       sceneSource: NARROW_SPAWN_GROUND_SCENE_SOURCE,
     });
 
-    await expect(packageNativeBlockAttemptV1({
+    const rejected = await packageNativeBlockAttemptV1({
       repositoryRoot: REPOSITORY_ROOT,
       attemptDirectoryPath: fixture.attemptDirectoryPath,
       casePath: fixture.casePath,
       outputDirectoryPath: fixture.outputDirectoryPath,
-    })).rejects.toMatchObject({
+    }).catch((error: unknown) => error);
+    expect(rejected).toMatchObject({
       diagnostics: [
         "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
         "native-ground-analysis-rejected",
       ],
+      groundAnalysisRejection: {
+        kind: "ground-analysis-rejected",
+        groundAnalysisReport: {
+          admissionOutcome: "failed",
+        },
+        repairDiagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            metricId: "ground-support-coverage-basis-points",
+            targetId: "spawn-foreground-platform",
+          }),
+        ]),
+      },
     });
     const report = JSON.parse(await readFile(path.join(
       fixture.attemptDirectoryPath,
@@ -388,6 +401,14 @@ describe("packageNativeBlockAttemptV1", () => {
         targetId: "spawn-foreground-platform",
       }),
     ]));
+    expect(JSON.parse(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "attempt-result.json",
+    ), "utf8"))).toMatchObject({
+      outcome: "completed",
+      authoredSourceRef: expect.any(String),
+      authoredSourceHash: expect.stringMatching(/^sha256:/),
+    });
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
     });

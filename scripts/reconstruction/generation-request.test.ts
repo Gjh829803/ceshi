@@ -574,6 +574,132 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     }
   });
 
+  it("freezes Ground Analysis evidence without inventing Capture inputs for Attempt 1", async () => {
+    const value = await fixture();
+    try {
+      const runId = "ground-repair";
+      const runDirectoryPath = path.join(value.root, "runs", runId);
+      const attempt0 = await prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        runId,
+        runDirectoryPath,
+      });
+      const priorSourceRef =
+        "artifact://run/attempts/0/source";
+      const priorSourceHash = hash("d");
+      const priorAttemptRoot = path.join(
+        runDirectoryPath,
+        "attempts",
+        "0",
+      );
+      await writePriorRepairContext(priorAttemptRoot, {
+        sceneAuthoringAttemptRef:
+          `worldkit://scene-authoring-attempt/${attempt0.attempt.id}@1`,
+        sceneAuthoringAttemptHash: attempt0.attemptHash,
+        priorSourceRef,
+        priorSourceHash,
+        evaluationText: "{}",
+      });
+      const groundAnalysisText = "{}";
+      await Promise.all([
+        writeFile(
+          path.join(priorAttemptRoot, "native-check-result.json"),
+          "{}",
+        ),
+        writeFile(
+          path.join(priorAttemptRoot, "logical-ground-model.json"),
+          "{}",
+        ),
+        writeFile(
+          path.join(priorAttemptRoot, "ground-analysis-report.json"),
+          groundAnalysisText,
+        ),
+        writeFile(
+          path.join(priorAttemptRoot, "ground-analysis-diagnostics.json"),
+          "[]",
+        ),
+      ]);
+      const repairInstruction = createNativeBlockRepairInstructionV1({
+        diagnostics: [parseWorldReconstructionDiagnosticV1({
+          kind: "world-reconstruction-diagnostic",
+          schemaVersion: 1,
+          id: "ground-analysis:ground-target-standability:reach-junction",
+          code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+          dimensionId: "critical-traversal",
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/upper-t-junction@1",
+          targetRef: "worldkit://acceptance-target/upper-t-junction@1",
+          targetId: "reach-junction",
+          metricId: "ground-target-standability",
+          details: {
+            kind: "state-mismatch",
+            expectedValue: "standable",
+            actualValue: "not-standable",
+            correctionDirection: "replace",
+          },
+          evidenceRefs: [
+            "artifact://run/attempts/0/logical-ground-model.json",
+          ],
+          message: "Required target is not standable.",
+          repairAction: {
+            kind: "revise-native-source",
+            targetKind: "traversal-check",
+            targetId: "reach-junction",
+            operation: "adjust-traversal",
+            instruction: "Extend explicit support Blocks beneath the target.",
+          },
+        })],
+        priorSourceRef,
+        priorSourceHash,
+        priorEvidence: {
+          kind: "ground-analysis-report",
+          resultRef:
+            "artifact://run/attempts/0/ground-analysis-report.json",
+          resultHash: sha256Bytes(
+            new TextEncoder().encode(groundAnalysisText),
+          ) as `sha256:${string}`,
+        },
+        priorGenerationRequestRef:
+          "artifact://run/attempts/0/generation-request.json",
+        priorGenerationRequestHash: attempt0.generationRequestHash,
+        frozenOwnerIdentities: attempt0.frozenOwnerIdentities,
+      });
+
+      const attempt1 = await prepareNativeBlockGenerationTaskV1({
+        ...input(value),
+        attemptIndex: 1,
+        runId,
+        runDirectoryPath,
+        repairInstruction,
+      });
+      const inputRefs = attempt1.generationRequest.contextInputs.map(
+        ({ inputRef }) => inputRef,
+      );
+      expect(inputRefs).toEqual(expect.arrayContaining([
+        "inputs/attempts/0/native-check-result.json",
+        "inputs/attempts/0/logical-ground-model.json",
+        "inputs/attempts/0/ground-analysis-report.json",
+        "inputs/attempts/0/ground-analysis-diagnostics.json",
+      ]));
+      expect(inputRefs).not.toContain("inputs/attempts/0/capture/opening.png");
+      const repairTaskInstruction = await readFile(
+        path.join(
+          attempt1.taskWorkspacePath,
+          attempt1.generationRequest.taskInstructionRef,
+        ),
+        "utf8",
+      );
+      expect(repairTaskInstruction).toContain(
+        "For ground-analysis-report, read inputs/attempts/0/ground-analysis-report.json",
+      );
+      expect(repairTaskInstruction).toContain(
+        "Ground Analysis runs before Capture",
+      );
+    } finally {
+      await rm(value.root, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a Native Route whose canonical decision or Case Scene Brief closure was forged", async () => {
     const value = await fixture();
     try {

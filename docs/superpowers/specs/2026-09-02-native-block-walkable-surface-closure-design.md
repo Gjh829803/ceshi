@@ -15,8 +15,11 @@
   memory, then joins the frozen Package root, Case intent and resolved Subject
   traversal envelope into `BabylonNativeBlockGroundAnalysisReportV1` before any
   Package directory is published. A ground Case with failed Spawn or required
-  target standability fails closed and retains the logical model, report and
-  actionable diagnostics as Attempt evidence. This is a concrete placement of
+  target standability fails closed and retains the checked authored source,
+  Attempt result, logical model, report and actionable diagnostics as Attempt
+  evidence. When the diagnostics are repairable and the one-repair budget remains,
+  this evidence starts Attempt 1 without fabricating a Package or Capture for the
+  rejected Attempt. This is a concrete placement of
   the existing section 5/6 design; it adds no third Scene Source, Package field,
   Runtime support owner or circular Package hash.
 - **2026-09-03 — executable parity evidence:** a parity row may be `passed`
@@ -312,9 +315,11 @@ second Planner job. Acceptance nevertheless requires the useful v2 reconstructio
   play inspection remain separate evidence layers.
 
 The existing bounded repair loop may change only Native authoring source/resources. A ground failure
-names the affected group/Block/region and the required structural change. Each repair creates a new
-Attempt, Candidate, Package, Receipt and Capture. Exceeding the repair budget may still publish a
-verified rejected Package for preview, but Native Check, Package or Runtime-admission failure remains
+names the affected group/Block/region and the required structural change. A pre-Package Ground Analysis
+rejection starts a new Attempt from immutable source/check/logical-ground/report evidence; that rejected
+Attempt owns no Package or Capture. The repaired Attempt must pass Check and Ground Analysis before it can
+create a Candidate, Package, Receipt or Capture. Exceeding the repair budget preserves the reached evidence
+for diagnosis, but Native Check, Ground Analysis, Package or Runtime-admission failure remains
 non-previewable.
 
 ## 12. Budget and identity

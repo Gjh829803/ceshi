@@ -59,7 +59,11 @@ export interface WorldReconstructionRecordedRequestV1 {
 const NEXT_STATES = Object.freeze({
   created: Object.freeze(["initial-generating", "cleanup-joined"] as const),
   "initial-generating": Object.freeze(["initial-packaged", "cleanup-joined"] as const),
-  "initial-packaged": Object.freeze(["initial-captured", "cleanup-joined"] as const),
+  "initial-packaged": Object.freeze([
+    "initial-captured",
+    "repair-generating",
+    "cleanup-joined",
+  ] as const),
   "initial-captured": Object.freeze([
     "initial-evaluated",
     "repair-generating",

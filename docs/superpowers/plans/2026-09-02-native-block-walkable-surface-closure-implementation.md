@@ -169,17 +169,21 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
 
 1. Run `/Users/xiateng/Downloads/测试集/024_petrified_primordial_forest.png` through the formal Native
    production route using the new API.
-2. Verify the full declared foreground and basin/forest floor, not only the scripted centerline.
-3. Verify Spawn/support, free walking, mixed heights/steps, blockers, intentional ledges, cliff
+2. Prove the production orchestrator treats a repairable Attempt 0 Ground Analysis rejection as immutable
+   repair evidence, supplies the checked source plus logical-ground/report diagnostics to Attempt 1, and
+   reruns Check/Ground Analysis before any Package or Capture publication. Attempt 1 rejection remains
+   fail-closed; no rejected Attempt may invent Package/Capture identity.
+3. Verify the full declared foreground and basin/forest floor, not only the scripted centerline.
+4. Verify Spawn/support, free walking, mixed heights/steps, blockers, intentional ledges, cliff
    protection, cross-Chunk movement and far silhouette visibility.
-4. Publish identity-bound Package, Receipt, opening/top/side Capture, Collider overlay, ground report,
+5. Publish identity-bound Package, Receipt, opening/top/side Capture, Collider overlay, ground report,
    parity report, evaluation and a stable preview command. A failed visual score is previewable only
    after Package and Runtime admission pass.
-5. Record actual draw/buffer counts, collision parts, peak active physics objects, readiness and
+6. Record actual draw/buffer counts, collision parts, peak active physics objects, readiness and
    Browser feel separately from contract evidence.
-6. Freeze the candidate, run the affected gates once, then request one exact-SHA Mode B plus
+7. Freeze the candidate, run the affected gates once, then request one exact-SHA Mode B plus
    runtime-deep review. Fix P0/P1 and rerun only invalidated evidence.
-7. Merge the accepted checkpoint, update the live backlog and only then mark `NBR-65` complete and
+8. Merge the accepted checkpoint, update the live backlog and only then mark `NBR-65` complete and
    resume `NBR-70`.
 
 ## Explicit non-migrations and later owners

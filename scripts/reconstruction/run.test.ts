@@ -358,6 +358,39 @@ function openingCompositionDiagnostic(): WorldReconstructionDiagnosticV1 {
   });
 }
 
+function groundStandabilityDiagnostic(): WorldReconstructionDiagnosticV1 {
+  return parseWorldReconstructionDiagnosticV1({
+    kind: "world-reconstruction-diagnostic",
+    schemaVersion: 1,
+    id: "ground-analysis:ground-target-standability:reach-junction",
+    code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+    dimensionId: "critical-traversal",
+    acceptanceTargetRef:
+      "worldkit://acceptance-target/upper-t-junction@1",
+    targetRef: "worldkit://acceptance-target/upper-t-junction@1",
+    targetId: "reach-junction",
+    metricId: "ground-target-standability",
+    details: {
+      kind: "state-mismatch",
+      expectedValue: "standable",
+      actualValue: "not-standable",
+      correctionDirection: "replace",
+    },
+    evidenceRefs: [
+      "artifact://run/attempts/0/logical-ground-model.json",
+    ],
+    message: "The required traversal target is not standable.",
+    repairAction: {
+      kind: "revise-native-source",
+      targetKind: "traversal-check",
+      targetId: "reach-junction",
+      operation: "adjust-traversal",
+      instruction:
+        "Extend the explicit support Blocks beneath reach-junction until the complete Capsule footprint is standable.",
+    },
+  });
+}
+
 function evaluationResult(input: {
   readonly attemptIndex: 0 | 1;
   readonly outcome: WorldReconstructionOutcomeV1;
@@ -674,9 +707,6 @@ describe("runWorldReconstructionV1", () => {
     expect(parsed.attempts[0]?.sceneAuthoringAttemptHash).not.toBe(
       parsed.attempts[1]?.sceneAuthoringAttemptHash,
     );
-    expect(parsed.attempts[0]?.worldPackageRootHash).not.toBe(
-      parsed.attempts[1]?.worldPackageRootHash,
-    );
     const initialAttempt = parsed.attempts[0];
     const repairAttempt = parsed.attempts[1];
     expect(initialAttempt?.kind).toBe("evaluated");
@@ -685,6 +715,9 @@ describe("runWorldReconstructionV1", () => {
       repairAttempt?.kind !== "evaluated") {
       throw new Error("expected two evaluated Attempts");
     }
+    expect(initialAttempt.worldPackageRootHash).not.toBe(
+      repairAttempt.worldPackageRootHash,
+    );
     expect(initialAttempt.captureReceiptHash).not.toBe(
       repairAttempt.captureReceiptHash,
     );
@@ -708,6 +741,69 @@ describe("runWorldReconstructionV1", () => {
     expect(isNil(calls.generateInputs[0]?.repairInstruction)).toBe(true);
     expect(calls.generateInputs[0]?.requestId).not.toBe(
       calls.generateInputs[1]?.requestId,
+    );
+  });
+
+  it("repairs an initial Ground Analysis rejection before allocating Capture", async () => {
+    const outputDirectoryPath = await outputRoot();
+    const base = fakePorts({
+      evaluationByAttempt: [
+        evaluationResult({ attemptIndex: 0, outcome: "passed" }),
+        evaluationResult({ attemptIndex: 1, outcome: "passed" }),
+      ],
+    });
+    const attempt0 = identities(0);
+    const ports: WorldReconstructionRunPortsV1 = {
+      ...base.ports,
+      package: async (input) => {
+        if (input.attemptIndex === 1) return base.ports.package(input);
+        base.calls.package.push(0);
+        return Object.freeze({
+          outcome: "ground-analysis-rejected" as const,
+          sceneAuthoringAttemptResultRef:
+            attempt0.sceneAuthoringAttemptResultRef,
+          sceneAuthoringAttemptResultHash:
+            attempt0.sceneAuthoringAttemptResultHash,
+          authoredSourceRef: attempt0.authoredSourceRef,
+          authoredSourceHash: attempt0.authoredSourceHash,
+          groundAnalysisReportRef:
+            "artifact://run/attempts/0/ground-analysis-report.json",
+          groundAnalysisReportHash: taggedHash("ground-analysis"),
+          repairDiagnostics: Object.freeze([
+            groundStandabilityDiagnostic(),
+          ]),
+          diagnosticCodes: Object.freeze([
+            "native-ground-analysis-rejected",
+            "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+          ]),
+        });
+      },
+    } as WorldReconstructionRunPortsV1;
+
+    const receipt = await runWorldReconstructionV1(
+      runInput(outputDirectoryPath),
+      ports,
+    );
+
+    expect(receipt.outcome).toBe("passed");
+    expect(receipt.attempts.map(({ kind }) => kind)).toEqual([
+      "ground-analysis-rejected",
+      "evaluated",
+    ]);
+    expect(receipt.finalAttemptIndex).toBe(1);
+    expect(base.calls.generate).toEqual([0, 1]);
+    expect(base.calls.package).toEqual([0, 1]);
+    expect(base.calls.capture).toEqual([1]);
+    expect(base.calls.evaluate).toEqual([1]);
+    expect(base.calls.generateInputs[1]?.repairInstruction).toEqual(
+      expect.objectContaining({
+        priorEvidence: {
+          kind: "ground-analysis-report",
+          resultRef:
+            "artifact://run/attempts/0/ground-analysis-report.json",
+          resultHash: taggedHash("ground-analysis"),
+        },
+      }),
     );
   });
 

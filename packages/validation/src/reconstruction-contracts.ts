@@ -715,9 +715,28 @@ export type WorldReconstructionCaptureRejectedRunAttemptV1 = Readonly<{
   outcome: "failed";
 }>;
 
+export type WorldReconstructionGroundAnalysisRejectedRunAttemptV1 = Readonly<{
+  kind: "ground-analysis-rejected";
+  attemptIndex: 0;
+  generationRequestRef: string;
+  generationRequestHash: Sha256HashV1;
+  generationReceiptRef: string;
+  generationReceiptHash: Sha256HashV1;
+  sceneAuthoringAttemptRef: string;
+  sceneAuthoringAttemptHash: Sha256HashV1;
+  sceneAuthoringAttemptResultRef: string;
+  sceneAuthoringAttemptResultHash: Sha256HashV1;
+  authoredSourceRef: string;
+  authoredSourceHash: Sha256HashV1;
+  groundAnalysisReportRef: string;
+  groundAnalysisReportHash: Sha256HashV1;
+  outcome: "failed";
+}>;
+
 export type WorldReconstructionRunAttemptV1 =
   | WorldReconstructionEvaluatedRunAttemptV1
-  | WorldReconstructionCaptureRejectedRunAttemptV1;
+  | WorldReconstructionCaptureRejectedRunAttemptV1
+  | WorldReconstructionGroundAnalysisRejectedRunAttemptV1;
 
 export interface WorldReconstructionRunReceiptV1 {
   readonly kind: "world-reconstruction-run-receipt";
@@ -810,6 +829,13 @@ const RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS = [
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash",
   "worldBuildIdentityRef", "worldBuildIdentityHash", "openingGateResultRef",
   "openingGateResultHash", "outcome",
+] as const;
+const RUN_REJECTED_GROUND_ANALYSIS_ATTEMPT_FIELDS = [
+  "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
+  "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
+  "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
+  "sceneAuthoringAttemptResultHash", "authoredSourceRef", "authoredSourceHash",
+  "groundAnalysisReportRef", "groundAnalysisReportHash", "outcome",
 ] as const;
 
 function fail(contract: string, path: string, message: string): never {
@@ -1820,7 +1846,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
     const row = object(entry, contract, path);
     const attemptKind = enumValue(
       row.kind,
-      ["evaluated", "capture-rejected"] as const,
+      ["evaluated", "capture-rejected", "ground-analysis-rejected"] as const,
       contract,
       `${path}/kind`,
     );
@@ -1828,12 +1854,14 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       row,
       attemptKind === "evaluated"
         ? RUN_ATTEMPT_FIELDS
-        : RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS,
+        : attemptKind === "capture-rejected"
+          ? RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS
+          : RUN_REJECTED_GROUND_ANALYSIS_ATTEMPT_FIELDS,
       contract,
       path,
     );
     if (index > 1 || row.attemptIndex !== index) fail(contract, `${path}/attemptIndex`, "attempts must be contiguous 0 then optional 1");
-    const common = {
+    const generationCommon = {
       attemptIndex: index as 0 | 1,
       generationRequestRef: text(row.generationRequestRef, contract, `${path}/generationRequestRef`),
       generationRequestHash: hash(row.generationRequestHash, contract, `${path}/generationRequestHash`),
@@ -1841,6 +1869,26 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       generationReceiptHash: hash(row.generationReceiptHash, contract, `${path}/generationReceiptHash`),
       sceneAuthoringAttemptRef: text(row.sceneAuthoringAttemptRef, contract, `${path}/sceneAuthoringAttemptRef`),
       sceneAuthoringAttemptHash: hash(row.sceneAuthoringAttemptHash, contract, `${path}/sceneAuthoringAttemptHash`),
+    };
+    if (attemptKind === "ground-analysis-rejected") {
+      if (index !== 0 || row.outcome !== "failed") {
+        fail(contract, path, "only the initial Attempt may be ground-analysis-rejected");
+      }
+      return Object.freeze({
+        kind: attemptKind,
+        ...generationCommon,
+        attemptIndex: 0 as const,
+        sceneAuthoringAttemptResultRef: text(row.sceneAuthoringAttemptResultRef, contract, `${path}/sceneAuthoringAttemptResultRef`),
+        sceneAuthoringAttemptResultHash: hash(row.sceneAuthoringAttemptResultHash, contract, `${path}/sceneAuthoringAttemptResultHash`),
+        authoredSourceRef: text(row.authoredSourceRef, contract, `${path}/authoredSourceRef`),
+        authoredSourceHash: hash(row.authoredSourceHash, contract, `${path}/authoredSourceHash`),
+        groundAnalysisReportRef: text(row.groundAnalysisReportRef, contract, `${path}/groundAnalysisReportRef`),
+        groundAnalysisReportHash: hash(row.groundAnalysisReportHash, contract, `${path}/groundAnalysisReportHash`),
+        outcome: "failed" as const,
+      });
+    }
+    const common = {
+      ...generationCommon,
       sceneAuthoringAttemptResultRef: text(row.sceneAuthoringAttemptResultRef, contract, `${path}/sceneAuthoringAttemptResultRef`),
       sceneAuthoringAttemptResultHash: hash(row.sceneAuthoringAttemptResultHash, contract, `${path}/sceneAuthoringAttemptResultHash`),
       worldPackageRootHash: hash(row.worldPackageRootHash, contract, `${path}/worldPackageRootHash`),
@@ -1878,18 +1926,28 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
     const runScopedIdentityRefs = (attempt: (typeof attempts)[number]) => [
       attempt.generationRequestRef, attempt.generationReceiptRef,
       attempt.sceneAuthoringAttemptRef, attempt.sceneAuthoringAttemptResultRef,
-      attempt.worldPackageRef,
-      ...(attempt.kind === "evaluated"
-        ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
-        : [attempt.openingGateResultRef]),
+      ...(attempt.kind === "ground-analysis-rejected"
+        ? [attempt.authoredSourceRef, attempt.groundAnalysisReportRef]
+        : [
+            attempt.worldPackageRef,
+            ...(attempt.kind === "evaluated"
+              ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
+              : [attempt.openingGateResultRef]),
+          ]),
     ];
     const identityHashes = (attempt: (typeof attempts)[number]) => [
       attempt.generationRequestHash, attempt.generationReceiptHash,
       attempt.sceneAuthoringAttemptHash, attempt.sceneAuthoringAttemptResultHash,
-      attempt.worldPackageRootHash, attempt.worldPackageBuildReceiptHash, attempt.worldBuildIdentityHash,
-      ...(attempt.kind === "evaluated"
-        ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
-        : [attempt.openingGateResultHash]),
+      ...(attempt.kind === "ground-analysis-rejected"
+        ? [attempt.authoredSourceHash, attempt.groundAnalysisReportHash]
+        : [
+            attempt.worldPackageRootHash,
+            attempt.worldPackageBuildReceiptHash,
+            attempt.worldBuildIdentityHash,
+            ...(attempt.kind === "evaluated"
+              ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
+              : [attempt.openingGateResultHash]),
+          ]),
     ];
     const firstRefs = new Set(runScopedIdentityRefs(attempts[0]!));
     const firstHashes = new Set(identityHashes(attempts[0]!));

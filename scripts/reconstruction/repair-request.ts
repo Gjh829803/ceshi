@@ -43,6 +43,11 @@ export type NativeBlockRepairEvidenceV1 =
       readonly kind: "opening-composition-gate-result";
       readonly resultRef: string;
       readonly resultHash: Sha256HashV1;
+    }>
+  | Readonly<{
+      readonly kind: "ground-analysis-report";
+      readonly resultRef: string;
+      readonly resultHash: Sha256HashV1;
     }>;
 
 export interface NativeBlockRepairInstructionV1 {
@@ -90,7 +95,8 @@ function parseRepairEvidence(input: unknown): NativeBlockRepairEvidenceV1 {
       !["kind", "resultRef", "resultHash"].includes(key)
     ) ||
     (value.kind !== "evaluation-result" &&
-      value.kind !== "opening-composition-gate-result") ||
+      value.kind !== "opening-composition-gate-result" &&
+      value.kind !== "ground-analysis-report") ||
     typeof value.resultRef !== "string" ||
     typeof value.resultHash !== "string" ||
     !SHA256_PATTERN.test(value.resultHash)

@@ -35,6 +35,7 @@ import {
 import {
   hashWorldReconstructionCaseV1,
   parseWorldReconstructionCaseV1,
+  type WorldReconstructionDiagnosticV1,
 } from "@whitebox-world/validation";
 import {
   BABYLON_WEB_WORLD_PACKAGE_HOST_COMPATIBILITY_V1,
@@ -135,13 +136,38 @@ export interface PackagedNativeBlockAttemptV1 {
   readonly diagnostics: readonly string[];
 }
 
+export interface NativeBlockGroundAnalysisRejectionV1 {
+  readonly kind: "ground-analysis-rejected";
+  readonly sceneAuthoringAttemptResult: Extract<
+    SceneAuthoringAttemptResultV1,
+    { readonly outcome: "completed" }
+  >;
+  readonly groundAnalysisReport: BabylonNativeBlockGroundAnalysisReportV1;
+  readonly groundAnalysisReportHash: Sha256HashV1;
+  readonly groundAnalysisReportPath: string;
+  readonly repairDiagnostics: readonly WorldReconstructionDiagnosticV1[];
+}
+
 export class NativeBlockPackageErrorV1 extends Error {
   readonly code = "WORLDKIT_NATIVE_BLOCK_PACKAGE_FAILED";
   readonly diagnostics: readonly string[];
+  readonly groundAnalysisRejection?: NativeBlockGroundAnalysisRejectionV1;
 
-  constructor(diagnostics: readonly string[], cause?: unknown) {
+  constructor(
+    diagnostics: readonly string[],
+    cause?: unknown,
+    groundAnalysisRejection?: NativeBlockGroundAnalysisRejectionV1,
+  ) {
     super("WORLDKIT_NATIVE_BLOCK_PACKAGE_FAILED", { cause });
     this.diagnostics = Object.freeze([...diagnostics].sort());
+    if (!isNil(groundAnalysisRejection)) {
+      this.groundAnalysisRejection = Object.freeze({
+        ...groundAnalysisRejection,
+        repairDiagnostics: Object.freeze([
+          ...groundAnalysisRejection.repairDiagnostics,
+        ]),
+      });
+    }
   }
 }
 
@@ -590,11 +616,31 @@ export async function packageNativeBlockAttemptV1(
       ),
     ]);
     if (analyzedGround.report.admissionOutcome !== "passed") {
+      await Promise.all([
+        writeTextFresh(
+          path.join(attemptDirectoryPath, "native-explain.txt"),
+          explainNativeSceneCheckResultV1(formalCheck),
+        ),
+        writeCanonicalJsonFresh(
+          path.join(attemptDirectoryPath, "attempt-result.json"),
+          attemptResult,
+        ),
+      ]);
       throw new NativeBlockPackageErrorV1(
         [
           "native-ground-analysis-rejected",
           ...new Set(analyzedGround.repairDiagnostics.map(({ code }) => code)),
         ],
+        undefined,
+        Object.freeze({
+          kind: "ground-analysis-rejected" as const,
+          sceneAuthoringAttemptResult: attemptResult,
+          groundAnalysisReport: analyzedGround.report,
+          groundAnalysisReportHash:
+            analyzedGround.report.groundAnalysisReportHash,
+          groundAnalysisReportPath,
+          repairDiagnostics: analyzedGround.repairDiagnostics,
+        }),
       );
     }
     await writeWorldPackageDirectoryV1({

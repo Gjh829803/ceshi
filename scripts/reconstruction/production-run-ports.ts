@@ -637,6 +637,49 @@ export async function createProductionWorldReconstructionRunPortsV1(
         state.packaged = completed;
         return completed;
       } catch (error) {
+        const packageError = error instanceof NativeBlockPackageErrorV1
+          ? error
+          : undefined;
+        const groundAnalysisRejection = packageError?.groundAnalysisRejection;
+        if (!isNil(packageError) && !isNil(groundAnalysisRejection)) {
+          cleanupState.candidate = "completed";
+          cleanupState.outputPromotion = "completed";
+          const attemptDirectoryPath = path.join(
+            input.generationInput.runDirectoryPath,
+            "attempts",
+            String(stageInput.attemptIndex),
+          );
+          return Object.freeze({
+            outcome: "ground-analysis-rejected" as const,
+            sceneAuthoringAttemptResultRef: caseArtifactRefForPath(
+              caseArtifactRoot,
+              caseRootPath,
+              input.generationInput.runDirectoryPath,
+              path.join(attemptDirectoryPath, "attempt-result.json"),
+            ),
+            sceneAuthoringAttemptResultHash:
+              hashSceneAuthoringAttemptResultV1(
+                groundAnalysisRejection.sceneAuthoringAttemptResult,
+              ),
+            authoredSourceRef:
+              groundAnalysisRejection.sceneAuthoringAttemptResult
+                .authoredSourceRef,
+            authoredSourceHash:
+              groundAnalysisRejection.sceneAuthoringAttemptResult
+                .authoredSourceHash,
+            groundAnalysisReportRef: caseArtifactRefForPath(
+              caseArtifactRoot,
+              caseRootPath,
+              input.generationInput.runDirectoryPath,
+              groundAnalysisRejection.groundAnalysisReportPath,
+            ),
+            groundAnalysisReportHash:
+              groundAnalysisRejection.groundAnalysisReportHash,
+            repairDiagnostics:
+              groundAnalysisRejection.repairDiagnostics,
+            diagnosticCodes: Object.freeze([...packageError.diagnostics]),
+          });
+        }
         cleanupState.candidate = "failed";
         cleanupState.outputPromotion = "failed";
         const codes = diagnosticCodes(
