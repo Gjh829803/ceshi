@@ -206,6 +206,53 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
   assert.equal(cloudEpisodeInternalStage({ diagnostics: { internal_stage: "whitebox-capture" } }), "whitebox-capture");
 });
 
+test("defaults a new Cloud Episode to the configured Worker image", async () => {
+  const configuredWorker = `worker@sha256:${"d".repeat(64)}`;
+  let submittedWorker = null;
+  await executeStudioCloudEpisode({
+    sceneId: "scene-cloud-default-worker",
+    episodeId: "episode-scene-cloud-default-worker-a1b2c3",
+    sceneExecutionId: "exec-scene-default-worker",
+    sceneManifestS3Uri: "s3://bucket/scene/manifest.json",
+    sceneRecord: { id: "scene-cloud-default-worker" },
+    styleVariantMode: "ten-style",
+    requestId: "episode-default-worker-001",
+    config: {
+      outputS3Root: "s3://bucket/episodes",
+      workerImage: configuredWorker,
+      namespace: "lwdp",
+      executionProfile: "cpu-gpu-streaming-checkpoints@1",
+      gpuBatch: {
+        queueS3Prefix: "s3://bucket/gpu-queue",
+        minimumBatchSize: 100,
+        maximumBatchSize: 128,
+      },
+      cpuWorker: {},
+    },
+    cloudConfig: { userId: "worldkit", baseUrl: "http://lwdp-internal" },
+    submitImplementation: async (input) => {
+      submittedWorker = input.workerImage;
+      return {
+        executionId: "exec-episode-default-worker",
+        requestS3Uri: "s3://bucket/episode/request.json",
+        workerImage: input.workerImage,
+        executionProfile: "cpu-gpu-streaming-checkpoints@1",
+      };
+    },
+    launchImplementation: async () => undefined,
+    pollImplementation: async () => ({
+      execution_id: "exec-episode-default-worker",
+      status: "succeeded",
+      stages: [{ stage_id: "episode-publication", status: "succeeded" }],
+    }),
+    stagesImplementation: async () => ({ stages: [{
+      stage_id: "episode-publication",
+      diagnostics: { manifest_s3_uri: "s3://bucket/episode/manifest.json" },
+    }] }),
+  });
+  assert.equal(submittedWorker, configuredWorker);
+});
+
 test("recovers an existing Cloud Episode without launching a duplicate worker", async () => {
   let pollCount = 0;
   const recovered = await recoverStudioCloudEpisode({

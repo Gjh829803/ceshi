@@ -223,7 +223,7 @@ export async function executeStudioCloudEpisode({
   productionScope = "full",
   styleVariantMode = "legacy",
   resumeEpisodeManifest = undefined,
-  workerImage = config.workerImage,
+  workerImage,
   requestId,
   config,
   cloudConfig,
@@ -235,6 +235,7 @@ export async function executeStudioCloudEpisode({
   pollImplementation = pollCloudExecution,
   stagesImplementation = getCloudExecutionStages,
 }) {
+  const resolvedWorkerImage = workerImage ?? config.workerImage;
   const outputS3Prefix = joinS3Uri(
     config.outputS3Root,
     sceneId,
@@ -251,7 +252,7 @@ export async function executeStudioCloudEpisode({
     executionProfile: config.executionProfile,
     resumeEpisodeManifest,
     gpuBatch: config.gpuBatch,
-    workerImage,
+    workerImage: resolvedWorkerImage,
     requestId,
     outputS3Prefix,
     cloudConfig,
