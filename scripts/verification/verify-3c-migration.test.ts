@@ -58,14 +58,19 @@ async function writeRepositoryFile(root: string, relativePath: string, content: 
 
 async function singleAuthorityRepository(): Promise<string> {
   const root = await repositoryWithSource(
-    "export interface GameplayWorldPortV1 { prepareFixedInputTick(): void }\n",
+    "export interface GameplayWorldPortV1 { prepareFixedInputTick(input: FixedInputOneTickV1): Promise<GameplayWorldTransactionV1> }\n",
     "packages/runtime-host/src/gameplay-world-port.ts",
   );
   await Promise.all([
     writeRepositoryFile(
       root,
       "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
-      "export interface Internal { prepareFixedInputTick(): void }\n",
+      "export interface BabylonGameplayRuntimeInternalV1 { prepareFixedInputTick(input: FixedInputOneTickV1): Promise<PreparedBabylonGameplayFixedInputTickV1> }\n",
+    ),
+    writeRepositoryFile(
+      root,
+      "packages/runtime-host/src/world-session.ts",
+      "await this.options.worldPort.prepareFixedInputTick(input, actionProjection);\n",
     ),
     writeRepositoryFile(
       root,
@@ -161,7 +166,7 @@ describe("Diversion prior-ledger reconstruction", () => {
 describe("3C migration ledger verifier", () => {
   it("accepts the fixed-input, movement, locomotion, and public-entry single-authority structure", async () => {
     const root = await singleAuthorityRepository();
-    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(7);
+    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(8);
   });
 
   it.each([
@@ -174,6 +179,16 @@ describe("3C migration ledger verifier", () => {
       label: "provider mutating fixed-input fallback",
       path: "packages/runtime-babylon/src/gameplay-runtime-internal.ts",
       source: "prepareFixedInputTick(): void; runFixedInputTick(): void;\n",
+    },
+    {
+      label: "renamed direct fixed-input mutation beside the transaction",
+      path: "packages/runtime-host/src/gameplay-world-port.ts",
+      source: [
+        "export interface GameplayWorldPortV1 {",
+        "prepareFixedInputTick(input: FixedInputOneTickV1): Promise<GameplayWorldTransactionV1>;",
+        "advanceFixedInputTickDirectly(input: FixedInputOneTickV1): Promise<void>;",
+        "}",
+      ].join("\n"),
     },
     {
       label: "flat Locomotion V1 envelope",

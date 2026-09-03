@@ -52,6 +52,8 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
 import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
+import { readCharacterMovementNativeDriverForTestingV1 } from "../../packages/runtime-babylon/src/babylon-character-body-port.testing.js";
+import type { CharacterMovementSubjectControllerV1 } from "../../packages/runtime-babylon/src/character-movement-component.js";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(
@@ -513,14 +515,15 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
     try {
       const internals = harness.runtime as unknown as {
         characterEntitiesByEntityId: ReadonlyMap<string, {
-          movement: {
-            physicsController: { checkSupport: (...args: unknown[]) => unknown };
-          };
+          movement: CharacterMovementSubjectControllerV1;
         }>;
       };
       const character = internals.characterEntitiesByEntityId.get("player");
       if (isNil(character)) throw new Error("Player character was not created.");
-      const checkSupport = vi.spyOn(character.movement.physicsController, "checkSupport");
+      const checkSupport = vi.spyOn(
+        readCharacterMovementNativeDriverForTestingV1(character.movement),
+        "checkSupport",
+      );
       const receipt = await runProbe(fixture, harness.port);
 
       expect(receipt.status).toBe("complete");
@@ -609,13 +612,14 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
       const bodyCountBeforeWithdrawal = harness.runtime.snapshot().resources.bodies;
       const character = (harness.runtime as unknown as {
         characterEntitiesByEntityId: ReadonlyMap<string, {
-          movement: {
-            physicsController: { checkSupport: (...args: unknown[]) => unknown };
-          };
+          movement: CharacterMovementSubjectControllerV1;
         }>;
       }).characterEntitiesByEntityId.get("player");
       if (isNil(character)) throw new Error("Player character was not created.");
-      const checkSupport = vi.spyOn(character.movement.physicsController, "checkSupport");
+      const checkSupport = vi.spyOn(
+        readCharacterMovementNativeDriverForTestingV1(character.movement),
+        "checkSupport",
+      );
       const port = wrapTraversalPort(harness.port, {
         afterReset: (evidence) => {
           expect(evidence.characterSupport.supportState).toBe("supported");

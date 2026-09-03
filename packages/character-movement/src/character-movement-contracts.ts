@@ -186,6 +186,7 @@ export interface CharacterMovementCommandV1 {
   readonly tick: number;
   readonly fixedDeltaSeconds: number;
   readonly movementInputXZ: readonly [number, number];
+  readonly facingInputXZ: readonly [number, number];
   readonly runRequested: boolean;
   readonly jumpPressed: boolean;
   readonly jumpHeld: boolean;
@@ -232,6 +233,10 @@ export interface CharacterMovementRuntimeV1 {
   proposeMovement(token: MovementTickTokenV1, sample: BodySampleV1): MovementProposalV1;
   reconcile(token: MovementTickTokenV1, result: BodyResolutionV1): MovementCommitV1;
   snapshot(): CharacterMovementSnapshotV1;
+  reconcileSupportAfterReset(
+    support: BodySupportSampleV1,
+    activeTickToken: MovementTickTokenV1 | undefined,
+  ): CharacterMovementSnapshotV1;
   reset(snapshot?: CharacterMovementSnapshotV1): void;
   dispose(): void;
 }
@@ -445,6 +450,10 @@ function support(input: unknown, schemaName: string): BodySupportSampleV1 {
   });
 }
 
+export function parseBodySupportSampleV1(input: unknown): BodySupportSampleV1 {
+  return support(input, "BodySupportSampleV1");
+}
+
 export function parseLayeredMoveV1(input: unknown): LayeredMoveV1 {
   const schemaName = "LayeredMoveV1";
   const value = record(input) ?? invalid(schemaName);
@@ -617,7 +626,7 @@ export function parseCharacterMovementCommandV1(input: unknown): CharacterMoveme
   const schemaName = "CharacterMovementCommandV1";
   const value = record(input) ?? invalid(schemaName);
   if (!exact(value, [
-    "schemaVersion", "tick", "fixedDeltaSeconds", "movementInputXZ", "runRequested",
+    "schemaVersion", "tick", "fixedDeltaSeconds", "movementInputXZ", "facingInputXZ", "runRequested",
     "jumpPressed", "jumpHeld", "viewYawRadians", "layeredMoves",
   ]) || value.schemaVersion !== 1 || !tick(value.tick) || !finite(value.fixedDeltaSeconds) ||
     value.fixedDeltaSeconds <= 0 || !finite(value.viewYawRadians) ||
@@ -625,8 +634,11 @@ export function parseCharacterMovementCommandV1(input: unknown): CharacterMoveme
     typeof value.jumpHeld !== "boolean") invalid(schemaName);
   const commandTick = value.tick;
   const movementInputXZ = vec2(value.movementInputXZ, schemaName);
+  const facingInputXZ = vec2(value.facingInputXZ, schemaName);
   if (Math.hypot(movementInputXZ[0], movementInputXZ[1]) >
-    1 + MOVEMENT_INPUT_UNIT_DISC_TOLERANCE_V1) invalid(schemaName);
+      1 + MOVEMENT_INPUT_UNIT_DISC_TOLERANCE_V1 ||
+    Math.hypot(facingInputXZ[0], facingInputXZ[1]) >
+      1 + MOVEMENT_INPUT_UNIT_DISC_TOLERANCE_V1) invalid(schemaName);
   const layeredMoves = arraySnapshot(value.layeredMoves, schemaName).map(parseLayeredMoveV1);
   if (layeredMoves.some((move) => move.startedTick > commandTick)) invalid(schemaName);
   return Object.freeze({
@@ -634,6 +646,7 @@ export function parseCharacterMovementCommandV1(input: unknown): CharacterMoveme
     tick: value.tick,
     fixedDeltaSeconds: value.fixedDeltaSeconds,
     movementInputXZ,
+    facingInputXZ,
     runRequested: value.runRequested,
     jumpPressed: value.jumpPressed,
     jumpHeld: value.jumpHeld,

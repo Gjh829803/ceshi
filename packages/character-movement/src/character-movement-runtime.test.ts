@@ -121,11 +121,13 @@ function splitOptions(
 }
 
 function command(tick: number, overrides: Partial<CharacterMovementCommandV1> = {}): CharacterMovementCommandV1 {
+  const movementInputXZ = overrides.movementInputXZ ?? [0, 0];
   return {
     schemaVersion: 1,
     tick,
     fixedDeltaSeconds: FIXED_DELTA,
-    movementInputXZ: [0, 0],
+    movementInputXZ,
+    facingInputXZ: overrides.facingInputXZ ?? movementInputXZ,
     runRequested: false,
     jumpPressed: false,
     jumpHeld: false,
@@ -297,6 +299,54 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
     ]) {
       expect(facingYawRadians).toBeCloseTo(-9 / 60);
     }
+  });
+
+  it("turns toward an independent view-facing input while movement remains stationary", () => {
+    const runtime = createCharacterMovementRuntimeV1(options());
+    const { proposal, commit } = transact(runtime, command(1, {
+      movementInputXZ: [0, 0],
+      facingInputXZ: [1, 0],
+    }));
+
+    expect(proposal.proposedLinearVelocityMetersPerSecondXYZ).toEqual([0, 0, 0]);
+    expect(proposal.proposedFacingYawRadians).toBeCloseTo(-9 / 60);
+    expect(commit.facingYawRadians).toBeCloseTo(-9 / 60);
+  });
+
+  it("reconciles reset support and transition counters only inside the movement owner", () => {
+    const runtime = createCharacterMovementRuntimeV1(options());
+    const airborne = runtime.reconcileSupportAfterReset(
+      { mode: "unsupported" },
+      undefined,
+    );
+    expect(airborne.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "airborne",
+      gait: "none",
+      verticalPhase: "falling",
+      supportMode: "unsupported",
+      movementMedium: "air",
+      transitionSequence: 1,
+    });
+    expect(airborne.runtimeState.coyoteTicksRemaining).toBe(0);
+
+    const supported = runtime.reconcileSupportAfterReset({
+      mode: "supported",
+      pointMetersXYZ: [0, 0, 0],
+      normalXYZ: [0, 1, 0],
+      isDynamic: false,
+    }, undefined);
+    expect(supported.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "grounded",
+      gait: "idle",
+      verticalPhase: "none",
+      supportMode: "supported",
+      movementMedium: "ground",
+      transitionSequence: 2,
+    });
+    expect(supported.runtimeState.coyoteTicksRemaining).toBe(6);
+    expect(supported.stateHash).not.toBe(airborne.stateHash);
   });
 
   it("stages jump without mutation, then commits takeoff from BodyResolution", () => {

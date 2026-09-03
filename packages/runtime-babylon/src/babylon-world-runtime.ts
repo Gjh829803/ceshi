@@ -1604,13 +1604,23 @@ export class BabylonWorldRuntime {
       }
 
       entityRegistry.activateAll();
+      const initiallyMountedRiderEntityIds = new Set(
+        gameplayBootstrap.initialRelationshipStates.flatMap((relationship) =>
+          relationship.type === "mountedOn"
+            ? [relationship.riderEntityId]
+            : []
+        ),
+      );
       // Authoring placement is not physics support evidence. Sample every
-      // CharacterMovement Body exactly once after all colliders and Subjects
-      // are active, but before constructing the publishable Runtime Snapshot.
+      // active, unmounted CharacterMovement Body exactly once after all
+      // colliders and Subjects are active, but before constructing the
+      // publishable Runtime Snapshot. An initially mounted rider is sampled by
+      // its one suspension projection in the Runtime constructor instead.
       // This keeps BodyPort/checkSupport as the sole support authority for the
       // first committed locomotion state as well as later reset/tick states.
-      for (const character of characterEntitiesByEntityId.values()) {
-        if (isCharacterMovementControllerV1(character.movement)) {
+      for (const [entityId, character] of characterEntitiesByEntityId) {
+        if (isCharacterMovementControllerV1(character.movement) &&
+          !initiallyMountedRiderEntityIds.has(entityId)) {
           character.movement.reset();
         }
       }
@@ -2173,6 +2183,10 @@ export class BabylonWorldRuntime {
     const riderCenterOffset =
       riderSubject.collider.centerOffsetFromSubjectOriginMetersXYZ;
     const poseSubjectOrigin = pose.subjectOrigin.asArray();
+    // Preserve the exact floating-point operation order used by the committed
+    // Body center-to-origin projection. Although the offset cancels
+    // algebraically, applying and removing it here avoids a one-ULP mismatch
+    // between the prepared Gameplay projection and the Body transaction.
     const projectedRiderOrigin: RuntimeVec3V1 = [
       poseSubjectOrigin[0]! + riderCenterOffset[0] - riderCenterOffset[0],
       poseSubjectOrigin[1]! + riderCenterOffset[1] - riderCenterOffset[1],
@@ -3158,6 +3172,15 @@ export class BabylonWorldRuntime {
     if (input.traversingEntityId !== this.controlledEntityId()) {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
+    const mountedRelationships = Object.values(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    );
+    const mountedRiderEntityIds = new Set(
+      mountedRelationships.map(({ relationship }) => relationship.riderEntityId),
+    );
+    if (mountedRiderEntityIds.has(input.traversingEntityId)) {
+      throw new Error("TRAVERSAL_RUNTIME_MOUNTED_SUBJECT_UNSUPPORTED");
+    }
     this.characterMovementControllerFor(input.traversingEntityId);
     this.updateNativeColliderResidencyForPositions(
       this.runtimeSubjects.map((subject) =>
@@ -3168,6 +3191,7 @@ export class BabylonWorldRuntime {
     this.traversalConfigurationEpoch += 1;
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
+      if (mountedRiderEntityIds.has(subject.entityId)) continue;
       if (subject.entityId === input.traversingEntityId) {
         this.characterMovementControllerFor(subject.entityId).resetAt(
           input.subjectOriginPositionMetersXYZ,
@@ -3178,8 +3202,17 @@ export class BabylonWorldRuntime {
         controller.reset();
       }
     }
-    for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.tick = 0;
+    for (const mounted of mountedRelationships) {
+      const rider = this.controllerFor(mounted.relationship.riderEntityId);
+      this.projectMountedRider(
+        rider,
+        mounted.relationship,
+        this.mountedPose(mounted.relationship),
+        this.tick,
+      );
+    }
+    for (const visual of this.subjectVisuals) visual.resetAnimation();
     this.activeInputActions = [];
     this.activeInputAxes = {};
     this.cameraComponent.reset();
@@ -3203,13 +3236,23 @@ export class BabylonWorldRuntime {
     if (input.traversingEntityId !== this.controlledEntityId()) {
       throw new Error("TRAVERSAL_RUNTIME_NOT_CONTROLLED");
     }
+    if (Object.prototype.hasOwnProperty.call(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+      input.traversingEntityId,
+    )) {
+      throw new Error("TRAVERSAL_RUNTIME_MOUNTED_SUBJECT_UNSUPPORTED");
+    }
     this.characterMovementControllerFor(input.traversingEntityId);
     this.latestRenderReadyReceipt = undefined;
     this.activeInputActions = [];
     this.activeInputAxes = {};
     this.cameraComponent.setInputActions([]);
+    const mountedRiderEntityIds = new Set(Object.keys(
+      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
+    ));
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
+      if (mountedRiderEntityIds.has(subject.entityId)) continue;
       if (isCharacterMovementControllerV1(controller)) {
         const direction = subject.entityId === input.traversingEntityId
           ? input.walkDirectionWorldXZ
@@ -3222,6 +3265,10 @@ export class BabylonWorldRuntime {
           // CharacterMovement input is view-relative; with zero view yaw,
           // world +Z is input -Z.
           movementInputXZ: [
+            direction[0] === 0 ? 0 : direction[0],
+            direction[1] === 0 ? 0 : -direction[1],
+          ],
+          facingInputXZ: [
             direction[0] === 0 ? 0 : direction[0],
             direction[1] === 0 ? 0 : -direction[1],
           ],
@@ -4579,16 +4626,6 @@ export class BabylonWorldRuntime {
 
   private controllerFor(subjectEntityId: string): LiveSubjectControllerV1 {
     return this.characterFor(subjectEntityId).movement;
-  }
-
-  private specializedControllerFor(subjectEntityId: string): SpecializedMotionSubjectControllerV1 {
-    const controller = this.controllerFor(subjectEntityId);
-    if (isCharacterMovementControllerV1(controller)) {
-      throw new Error(
-        "3C_INPUT_INVALID: operation requires a specialized non-planar movement controller.",
-      );
-    }
-    return controller;
   }
 
   private characterMovementControllerFor(

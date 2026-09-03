@@ -1,5 +1,4 @@
 import {
-  hashCharacterMovementStateV1,
   parseCharacterMovementCommandV1,
   type BodyResolutionV1,
   type BodySampleV1,
@@ -288,6 +287,12 @@ export class GoldenHumanoid3CVNextTransactionV1 {
         tick: movementCommand.tick,
       });
       bodyBegun = true;
+      if (before.tick === 0) {
+        this.options.movementRuntime.reconcileSupportAfterReset(
+          sample.support,
+          token,
+        );
+      }
 
       this.#stage("movement-mode");
       const proposal = this.options.movementRuntime.proposeMovement(token, sample);
@@ -299,27 +304,6 @@ export class GoldenHumanoid3CVNextTransactionV1 {
       this.#stage("authority-commit");
       const commit = this.options.movementRuntime.reconcile(token, bodyResolution);
       movementAdvanced = true;
-      if (
-        before.tick === 0 &&
-        before.runtimeState.coyoteTicksRemaining === 0 &&
-        bodyResolution.support.mode === "unsupported"
-      ) {
-        const staged = this.options.movementRuntime.snapshot();
-        if (staged.runtimeState.coyoteTicksRemaining !== 0) {
-          const { stateHash: _stateHash, ...state } = staged;
-          const correctedState = Object.freeze({
-            ...state,
-            runtimeState: Object.freeze({
-              ...state.runtimeState,
-              coyoteTicksRemaining: 0,
-            }),
-          });
-          this.options.movementRuntime.reset(Object.freeze({
-            ...correctedState,
-            stateHash: hashCharacterMovementStateV1(correctedState),
-          }));
-        }
-      }
       this.#stage("animation-camera-projection");
       const presentation = prepareActionPresentation(
         commit.tick,
@@ -419,38 +403,10 @@ export class GoldenHumanoid3CVNextTransactionV1 {
           after.linearVelocityMetersPerSecondXYZ,
       });
       if (after.locomotion.status === "active") {
-        const isGrounded = support.mode !== "unsupported";
-        const velocity = after.linearVelocityMetersPerSecondXYZ;
-        const correctedState = Object.freeze({
-          ...after,
-          locomotion: Object.freeze({
-            ...after.locomotion,
-            mobilityMode: isGrounded ? "grounded" as const : "airborne" as const,
-            gait: isGrounded ? "idle" as const : "none" as const,
-            verticalPhase: isGrounded ? "none" as const : "falling" as const,
-            supportMode: support.mode,
-            movementMedium: isGrounded ? "ground" as const : "air" as const,
-            linearVelocity: Object.freeze({
-              x: velocity[0],
-              y: velocity[1],
-              z: velocity[2],
-            }),
-            horizontalSpeedMetersPerSecond: Math.hypot(
-              velocity[0],
-              velocity[2],
-            ),
-            phaseEnteredTick: after.tick,
-          }),
-          runtimeState: Object.freeze({
-            ...after.runtimeState,
-            coyoteTicksRemaining: 0,
-          }),
-        });
-        const { stateHash: _stateHash, ...state } = correctedState;
-        this.options.movementRuntime.reset(Object.freeze({
-          ...state,
-          stateHash: hashCharacterMovementStateV1(state),
-        }));
+        this.options.movementRuntime.reconcileSupportAfterReset(
+          support,
+          undefined,
+        );
       }
     } catch (error) {
       this.options.movementRuntime.reset(before);

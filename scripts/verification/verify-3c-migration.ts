@@ -3,6 +3,7 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const execFileAsync = promisify(execFile);
 
@@ -343,6 +344,16 @@ const SINGLE_AUTHORITY_STRUCTURE_RULES_V1 = Object.freeze([
     forbidden: Object.freeze(["runFixedInputTick"]),
   }),
   Object.freeze({
+    id: "runtime-host-fixed-input-call-site",
+    path: "packages/runtime-host/src/world-session.ts",
+    required: Object.freeze(["this.options.worldPort.prepareFixedInputTick("]),
+    forbidden: Object.freeze([
+      "runFixedInputTick",
+      'worldPort["prepareFixedInputTick"]',
+      "worldPort.prepareFixedInputTick?.(",
+    ]),
+  }),
+  Object.freeze({
     id: "locomotion-v2-only",
     path: "packages/gameplay-contracts/src/gameplay-contracts.ts",
     required: Object.freeze([
@@ -387,6 +398,66 @@ const SINGLE_AUTHORITY_STRUCTURE_RULES_V1 = Object.freeze([
   }),
 ] as const);
 
+function assertSingleFixedInputMutationMethod(
+  source: string,
+  sourcePath: string,
+  interfaceName: string,
+  expectedReturnTypeName: string,
+  allowedReadOnlyMethodNames: readonly string[] = [],
+): void {
+  const sourceFile = ts.createSourceFile(
+    sourcePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const declaration = sourceFile.statements.find(
+    (statement): statement is ts.InterfaceDeclaration =>
+      ts.isInterfaceDeclaration(statement) && statement.name.text === interfaceName,
+  );
+  if (declaration === undefined) {
+    fail("SINGLE_AUTHORITY_STRUCTURE_REQUIRED_MISSING", `${interfaceName} interface`);
+  }
+  const fixedInputMethods = declaration.members.filter(
+    (member): member is ts.MethodSignature => {
+      if (!ts.isMethodSignature(member)) return false;
+      return member.parameters.some((parameter) =>
+        parameter.type?.getText(sourceFile).includes("FixedInputOneTickV1") === true
+      );
+    },
+  );
+  const allowedMethodNames = new Set([
+    "prepareFixedInputTick",
+    ...allowedReadOnlyMethodNames,
+  ]);
+  if (fixedInputMethods.some((member) =>
+    !ts.isIdentifier(member.name) || !allowedMethodNames.has(member.name.text)
+  )) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${interfaceName} exposes an unrecognized fixed-input path`,
+    );
+  }
+  const fixedInputMutationMethods = fixedInputMethods.filter((member) =>
+    ts.isIdentifier(member.name) &&
+    !allowedReadOnlyMethodNames.includes(member.name.text)
+  );
+  const method = fixedInputMutationMethods[0];
+  const methodName = method !== undefined && ts.isIdentifier(method.name)
+    ? method.name.text
+    : undefined;
+  const returnType = method?.type?.getText(sourceFile) ?? "";
+  if (fixedInputMutationMethods.length !== 1 ||
+    methodName !== "prepareFixedInputTick" ||
+    !returnType.includes(expectedReturnTypeName)) {
+    fail(
+      "SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN",
+      `${interfaceName} must expose exactly one staged fixed-input mutation method`,
+    );
+  }
+}
+
 export async function verifySingleAuthorityStructureV1(
   repositoryRoot: string,
 ): Promise<readonly string[]> {
@@ -407,6 +478,23 @@ export async function verifySingleAuthorityStructureV1(
       if (source.includes(forbidden)) {
         fail("SINGLE_AUTHORITY_STRUCTURE_FORBIDDEN", `${rule.id}: ${forbidden}`);
       }
+    }
+    if (rule.id === "runtime-host-fixed-input-transaction") {
+      assertSingleFixedInputMutationMethod(
+        source,
+        rule.path,
+        "GameplayWorldPortV1",
+        "GameplayWorldTransactionV1",
+        ["estimateFixedInputTickCapacity"],
+      );
+    }
+    if (rule.id === "runtime-provider-fixed-input-transaction") {
+      assertSingleFixedInputMutationMethod(
+        source,
+        rule.path,
+        "BabylonGameplayRuntimeInternalV1",
+        "PreparedBabylonGameplayFixedInputTickV1",
+      );
     }
     verified.push(rule.id);
   }

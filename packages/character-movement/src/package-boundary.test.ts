@@ -605,6 +605,7 @@ describe("character movement neutral contracts", () => {
       tick: 5,
       fixedDeltaSeconds: 1 / 60,
       movementInputXZ: [0.5, -0.5],
+      facingInputXZ: [0, -1],
       runRequested: true,
       jumpPressed: false,
       jumpHeld: true,
@@ -641,6 +642,8 @@ describe("character movement neutral contracts", () => {
       .toThrow("closed CharacterMovementCommandV1 schema");
     expect(parseCharacterMovementCommandV1({ ...command, movementInputXZ: [1, 0.000_001] }).movementInputXZ)
       .toEqual([1, 0.000_001]);
+    expect(() => parseCharacterMovementCommandV1({ ...command, facingInputXZ: [1.1, 0] }))
+      .toThrow(RangeError);
     expect(() => parseCharacterMovementCommandV1({
       ...command,
       layeredMoves: [{

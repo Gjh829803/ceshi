@@ -7708,9 +7708,10 @@ function emptyActionProjection(simulationTick: number) {
     const executionPlan = compileExecutionPlan(
       createValidMountedOnAuthoringSpec(),
     );
-    const runtime = await createRuntime(executionPlan, {}, false);
+    const runtime = await createRuntime(executionPlan);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const traversal = runtime[BABYLON_TRAVERSAL_RUNTIME_INTERNAL]();
       const initialProjection = internal.readWorldProjection();
       expect(initialProjection.capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"
@@ -7720,6 +7721,37 @@ function emptyActionProjection(simulationTick: number) {
           suspendedByRelationshipId: "rider-mounted-on-board",
         },
       });
+      traversal.runTraversalFixedTick({
+        traversingEntityId: "pack-animal-b",
+        walkDirectionWorldXZ: [0, 0],
+      });
+      expect(internal.readWorldProjection().capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: "rider-mounted-on-board",
+        },
+      });
+      traversal.resetToTraversalAnchor({
+        traversingEntityId: "pack-animal-b",
+        subjectOriginPositionMetersXYZ: initialProjection
+          .spatialEntityStatesById["pack-animal-b"]!.positionMetersXYZ,
+        facingYawRadians: 0,
+      });
+      expect(internal.readWorldProjection().capabilityStatesById[
+        "capability-state:pack-animal-a:locomotion"
+      ]).toMatchObject({
+        locomotion: {
+          status: "suspended",
+          suspendedByRelationshipId: "rider-mounted-on-board",
+        },
+      });
+      expect(internal.readWorldProjection().spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ).toEqual(initialProjection.spatialEntityStatesById[
+        "pack-animal-a"
+      ]!.positionMetersXYZ);
       const reset = runtime.reset();
       expect(internal.readWorldProjection().capabilityStatesById[
         "capability-state:pack-animal-a:locomotion"

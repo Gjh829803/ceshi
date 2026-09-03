@@ -98,11 +98,13 @@ function command(
   tick: number,
   overrides: Partial<CharacterMovementCommandV1> = {},
 ): CharacterMovementCommandV1 {
+  const movementInputXZ = overrides.movementInputXZ ?? [0, 0];
   return {
     schemaVersion: 1,
     tick,
     fixedDeltaSeconds: 1 / 60,
-    movementInputXZ: [0, 0],
+    movementInputXZ,
+    facingInputXZ: overrides.facingInputXZ ?? movementInputXZ,
     runRequested: false,
     jumpPressed: false,
     jumpHeld: false,
@@ -637,6 +639,8 @@ describe("Golden Humanoid 3C vNext transaction", () => {
         throw new Error("MOVEMENT_RECONCILE_FAILED");
       },
       snapshot: () => realMovement.snapshot(),
+      reconcileSupportAfterReset: (support, activeTickToken) =>
+        realMovement.reconcileSupportAfterReset(support, activeTickToken),
       reset: (snapshot) => realMovement.reset(snapshot),
       dispose: () => realMovement.dispose(),
     };
@@ -1103,7 +1107,6 @@ describe("Golden Humanoid 3C vNext transaction", () => {
   it.each([
     ["command", { commandKind: "throttle-steer" }],
     ["input", { inputSpace: "subject-local" }],
-    ["facing", { facingPolicy: "align-to-view" }],
   ] as const)("fails closed on unsupported Golden %s profile semantics", (_name, patch) => {
     const base = goldenSubject().capabilityAssembly.controlProfile;
     expect(() => createCharacterMovementSubjectControllerV1({
@@ -1115,6 +1118,28 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
       actionPresentationRegistry: emptyRegistry(),
     })).toThrow("3C_CHARACTER_MOVEMENT_CONTROL_PROFILE_UNSUPPORTED");
+  });
+
+  it("keeps registered align-to-view strafing inside CharacterMovement authority", () => {
+    const harness = createHarness();
+    const base = goldenSubject().capabilityAssembly.controlProfile;
+    const controller = new CharacterMovementSubjectControllerV1({
+      subject: goldenSubject({
+        controlProfile: {
+          ...base,
+          resourceRef: "worldkit://control-profile/planar.aim-relative@1",
+          facingPolicy: "align-to-view",
+        },
+      }),
+      visualRoot: visualRootSpy(),
+      transaction: harness.transaction,
+    });
+
+    controller.step(["move-right"]);
+    const snapshot = controller.movementSnapshot();
+    expect(snapshot.linearVelocityMetersPerSecondXYZ[0]).toBeGreaterThan(0);
+    expect(snapshot.facingYawRadians).toBe(0);
+    expect(harness.body.beginCalls).toBe(1);
   });
 
   it("keeps Golden facade reset, dispose and two-session state isolated", () => {

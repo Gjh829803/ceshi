@@ -55,7 +55,7 @@
     "health:record": "tsx scripts/project-health/cli.ts record",
     "health:explain": "tsx scripts/project-health/cli.ts explain",
     "health:update-baseline": "tsx scripts/project-health/cli.ts update-baseline",
-    "test": "pnpm verify:workspace-boundaries && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
+    "test": "pnpm verify:workspace-boundaries && pnpm verify:3c-migration && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     "test:census": "tsx scripts/testing/verify-test-gate-census.ts",
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:contract:coverage": "vitest run --coverage --config vitest.contract.config.ts --coverage.reporter=text --coverage.reporter=json-summary",

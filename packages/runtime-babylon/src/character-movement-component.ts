@@ -26,7 +26,7 @@ import type { ActionPresentationRegistryV1 } from "@whitebox-world/subject-actio
 
 import {
   compileMotionCommandV1,
-  type MotionCommandV1,
+  type SpecializedMotionCommandV1,
 } from "./control-profile-runtime";
 import {
   MotionKernelRuntimeV1,
@@ -89,7 +89,7 @@ export class SpecializedMotionSubjectControllerV1 extends EntityComponentV1 {
     ) => number | undefined,
   ) {
     super("character-movement");
-    if (supportsCharacterMovementSubjectV1(subject)) {
+    if (subject.capabilityAssembly.controlProfile.commandKind === "planar-vector") {
       throw new Error(
         "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE: camera-relative planar-vector Subjects are owned by CharacterMovementRuntime.",
       );
@@ -120,6 +120,11 @@ export class SpecializedMotionSubjectControllerV1 extends EntityComponentV1 {
       viewControlFrame,
       axes,
     );
+    if (command.kind === "planar-vector") {
+      throw new Error(
+        "3C_PLANAR_MOVEMENT_OWNER_DUPLICATE: planar-vector Commands are owned by CharacterMovementRuntime.",
+      );
+    }
     this.motionKernel.step(command);
   }
 
@@ -127,7 +132,7 @@ export class SpecializedMotionSubjectControllerV1 extends EntityComponentV1 {
     this.motionKernel.publishSupport();
   }
 
-  stepCommand(command: MotionCommandV1): void {
+  stepCommand(command: SpecializedMotionCommandV1): void {
     this.motionKernel.step(command);
   }
 
@@ -335,7 +340,8 @@ export function supportsCharacterMovementSubjectV1(
   return !(
     control.commandKind !== "planar-vector" ||
     control.inputSpace !== "camera-relative" ||
-    control.facingPolicy !== "align-to-move" ||
+    (control.facingPolicy !== "align-to-move" &&
+      control.facingPolicy !== "align-to-view") ||
     (control.lateralMovementPolicy !== "allowed" &&
       control.lateralMovementPolicy !== "forbidden")
   );
@@ -346,7 +352,7 @@ function assertCharacterMovementSubjectAdmissionV1(
 ): void {
   if (!supportsCharacterMovementSubjectV1(subject)) {
     throw new Error(
-      "3C_CHARACTER_MOVEMENT_CONTROL_PROFILE_UNSUPPORTED: CharacterMovement requires camera-relative planar-vector align-to-move Control.",
+      "3C_CHARACTER_MOVEMENT_CONTROL_PROFILE_UNSUPPORTED: CharacterMovement requires camera-relative planar-vector Control with align-to-move or align-to-view facing.",
     );
   }
 }
@@ -447,6 +453,12 @@ export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
     }
     const movementX = direction[0] === 0 ? 0 : direction[0];
     const movementZ = direction[1] === 0 ? 0 : -direction[1];
+    const facingDirection = interpreted.kind === "planar-vector" &&
+        interpreted.aimRequested
+      ? interpreted.facingDirectionMetersXZ
+      : direction;
+    const facingX = facingDirection[0] === 0 ? 0 : facingDirection[0];
+    const facingZ = facingDirection[1] === 0 ? 0 : -facingDirection[1];
     const command: CharacterMovementCommandV1 = {
       schemaVersion: 1,
       tick: before.tick + 1,
@@ -454,6 +466,7 @@ export class CharacterMovementSubjectControllerV1 extends EntityComponentV1 {
       // compileMotionCommand returns a world-space planar direction. At zero
       // view yaw CharacterMovement maps [x, inputZ] to [x, -z].
       movementInputXZ: [movementX, movementZ],
+      facingInputXZ: [facingX, facingZ],
       runRequested,
       jumpPressed: jumpHeld && !this.#jumpWasHeld,
       jumpHeld,

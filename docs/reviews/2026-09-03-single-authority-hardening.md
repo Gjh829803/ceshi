@@ -15,6 +15,9 @@ runtime deep-review checklist, and ADR-0007's Babylon Native isolation boundary.
   there is no mutating compatibility path.
 - Camera-relative planar-vector Subjects are admitted only to
   `CharacterMovementRuntimeV1`, independent of static or rigged presentation.
+  Registered `align-to-view` profiles pass an independent facing vector into that same
+  owner, where the locked turn rate is applied; the specialized MotionKernel has no
+  planar-vector implementation.
   Specialized throttle/steer and flight algorithms remain explicitly disjoint
   and reject planar admission.
 - Authored Spawn placement is not treated as support truth. After all colliders
@@ -22,6 +25,11 @@ runtime deep-review checklist, and ADR-0007's Babylon Native isolation boundary.
   `checkSupport()` query before the first publishable Snapshot; unsupported
   starts publish `air`, and a query failure rolls back construction without
   exposing a Runtime.
+- CharacterMovement also owns post-reset support reconciliation and transition counters;
+  the Babylon transaction supplies the Body sample but cannot rebuild Locomotion state.
+- Mounted riders remain suspended across Traversal anchor reset and are excluded from
+  ordinary Traversal ticks. An initially mounted rider receives only its suspension-time
+  Body reset/support query before publication.
 - Canonical Gameplay World State publishes only the V2 Locomotion envelope.
   Provider projections distinguish `character-movement` from
   `specialized-motion` and make their authority fields mutually exclusive.
@@ -47,9 +55,10 @@ runtime deep-review checklist, and ADR-0007's Babylon Native isolation boundary.
 
 ## Failure prevention
 
-`pnpm verify:3c-migration` now checks fixed-input port shape, V2-only Locomotion,
+`pnpm verify:3c-migration` now checks the TypeScript fixed-input port shape, its sole
+WorldSession call site, V2-only Locomotion,
 disjoint movement ownership, and unique Authoring public entries in addition to
-the historical symbol census. `AGENTS.md` requires capability-based authority
+the historical symbol census, and root `pnpm test` executes the gate. `AGENTS.md` requires capability-based authority
 selection, bounded clean-break migrations, semantic structural gates, and
 byte-identical updates to frozen representative Skill inputs.
 
@@ -66,7 +75,11 @@ Focused local evidence before freezing the candidate:
   unsupported Spawn, fixed Tick, abort, replay, reset, and mounted state;
 - changed-file focused suites: 794 pass and 3 intentional skips, followed by
   the final Gameplay parser suite at 287/287 and the structural verifier suite
-  at 67 pass with 3 intentional skips;
+  at 68 pass with 3 intentional skips;
+- post-review Runtime evidence: the complete Babylon Runtime file passes 177/177,
+  BodyPort transaction coverage passes 74/74, and the directly affected movement,
+  Golden transaction, Body conformance, Route probe, BWB-4/BWB-5, and structural
+  suites pass 214 with 3 intentional skips;
 - `pnpm typecheck`, `pnpm verify:3c-migration`,
   `pnpm verify:runtime-authority-boundaries`,
   `pnpm verify:workspace-boundaries`, `pnpm check:agent-self-check`, and
@@ -74,4 +87,5 @@ Focused local evidence before freezing the candidate:
 - `git diff --check` passes.
 
 The exact candidate SHA, Cursor full gate, independent review, and final
-integration result are recorded after the candidate is frozen.
+integration result are post-freeze external evidence; they are not written back
+into the immutable candidate that they attest.

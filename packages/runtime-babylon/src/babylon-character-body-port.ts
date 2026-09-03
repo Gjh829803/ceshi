@@ -1198,6 +1198,60 @@ function removeBoundedSupportTranslation(
   ));
 }
 
+/**
+ * Babylon may move the capsule outward while maintaining its configured
+ * keep-distance contact shell. Remove only the component that is proven by an
+ * active non-walkable contact normal, and cap the total correction by
+ * keepDistance. Only the gravity-orthogonal component is eligible: vertical
+ * step/landing differences must never be reinterpreted as horizontal contact
+ * separation. This admits collision separation without turning the provider
+ * into a second movement-authority source.
+ */
+function removeBoundedContactSeparation(
+  applied: MovementVec3V1,
+  proposed: MovementVec3V1,
+  contacts: readonly BabylonCharacterBodyNativeContactV1[],
+  maximumActiveContactDistanceMeters: number,
+  maximumContactSeparationMeters: number,
+  up: MovementVec3V1,
+  maxSlopeCosine: number,
+): MovementVec3V1 {
+  let adjusted = applied;
+  let remaining = maximumContactSeparationMeters;
+  for (const contact of contacts) {
+    if (remaining <= 0 ||
+      contact.distanceMeters > maximumActiveContactDistanceMeters ||
+      dot(contact.normalXYZ, up) >= maxSlopeCosine) continue;
+    const normalUp = dot(contact.normalXYZ, up);
+    const planarNormal = freezeVec3(contact.normalXYZ.map(
+      (component, axis) => component - up[axis]! * normalUp,
+    ));
+    const planarNormalMagnitude = Math.hypot(...planarNormal);
+    if (!(planarNormalMagnitude > 1e-12)) continue;
+    const planarDirection = freezeVec3(planarNormal.map(
+      (component) => component / planarNormalMagnitude,
+    ));
+    const unexplainedVertical = dot(
+      freezeVec3(adjusted.map((component, axis) =>
+        component - proposed[axis]!
+      )),
+      up,
+    );
+    const unexplainedPlanar = freezeVec3(adjusted.map(
+      (component, axis) =>
+        component - proposed[axis]! - up[axis]! * unexplainedVertical,
+    ));
+    const outward = dot(unexplainedPlanar, planarDirection);
+    if (!(outward > 0)) continue;
+    const accepted = Math.min(outward, remaining);
+    adjusted = freezeVec3(adjusted.map(
+      (component, axis) => component - planarDirection[axis]! * accepted,
+    ));
+    remaining -= accepted;
+  }
+  return adjusted;
+}
+
 function assertProposalWasNotAmplified(
   applied: MovementVec3V1,
   proposed: MovementVec3V1,
@@ -1207,6 +1261,7 @@ function assertProposalWasNotAmplified(
   maxStepHeightMeters: number,
   maxSlopeCosine: number,
   maximumActiveContactDistanceMeters: number,
+  maximumContactSeparationMeters: number,
   maximumSolverCorrectionMeters: number,
   contacts: readonly BabylonCharacterBodyNativeContactV1[],
 ): void {
@@ -1222,6 +1277,15 @@ function assertProposalWasNotAmplified(
     supportDelta,
   );
   const up = freezeVec3(gravityDirection.map((component) => component === 0 ? 0 : -component));
+  const contactAdjustedApplied = removeBoundedContactSeparation(
+    supportAdjustedApplied,
+    proposed,
+    contacts,
+    maximumActiveContactDistanceMeters,
+    maximumContactSeparationMeters,
+    up,
+    maxSlopeCosine,
+  );
   const projectionNormal = support.mode === "unsupported"
     ? (() => {
       const activeWalkableContacts = contacts.filter((contact) =>
@@ -1237,15 +1301,15 @@ function assertProposalWasNotAmplified(
     })()
     : support.averageSurfaceNormalXYZ;
   const horizontalGuardApplied = projectionNormal === undefined
-    ? supportAdjustedApplied
+    ? contactAdjustedApplied
     : removeBoundedDownhillProjection(
-      supportAdjustedApplied,
+      contactAdjustedApplied,
       proposed,
       up,
       projectionNormal,
     );
   const proposedVertical = dot(proposed, up);
-  const appliedVertical = dot(supportAdjustedApplied, up);
+  const appliedVertical = dot(contactAdjustedApplied, up);
   if (!finite(maximumSolverCorrectionMeters) || maximumSolverCorrectionMeters < 0 ||
     maximumSolverCorrectionMeters >
       BABYLON_CHARACTER_CONTROLLER_MAXIMUM_ACCUMULATED_CORRECTION_METERS_V1) {
@@ -2137,6 +2201,7 @@ class BabylonCharacterBodyPortV1
         this.configuration.maxSlopeCosine,
         this.options.controller.keepDistanceMeters +
           this.options.controller.keepContactToleranceMeters,
+        this.options.controller.keepDistanceMeters,
         integrateResult.maximumSolverCorrectionMeters,
         contacts,
       );
