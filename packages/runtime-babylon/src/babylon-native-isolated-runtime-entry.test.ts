@@ -399,7 +399,11 @@ describe("Babylon Native isolated Runtime entry", () => {
 
     expect(snapshot.runtimeSessionId).toBe(input.request.runtimeSessionId);
     expect(snapshot.runtime.phase).toBe("ready");
-    expect(snapshot.resources.physicsBodyCount).toBe(4);
+    // Cloud-ridge keeps 3 logical Colliders plus the possessed character. The
+    // Runtime realizes those Colliders as a spawn-ring of 4 m Chunk parts, so
+    // the committed body count is the resident set rather than one body per
+    // logical Collider.
+    expect(snapshot.resources.physicsBodyCount).toBe(35);
     expect(snapshot.view).toMatchObject({
       viewStateRevision: 1,
       camera: {
