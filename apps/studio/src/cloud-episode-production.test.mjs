@@ -69,7 +69,7 @@ test("retries one CPU Episode stage and launches only its new worker attempt", a
       gpuCount: 1,
       cpuWorker: {},
     },
-    cloudConfig: { userId: "partner_codex" },
+    cloudConfig: { userId: "partner_codex", baseUrl: "http://lwdp-internal" },
     retryImplementation: async (_executionId, input) => {
       calls.push(["retry", input.stage_id, input.retry_request_id]);
     },
@@ -119,7 +119,7 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
       },
       cpuWorker: {},
     },
-    cloudConfig: { userId: "partner_codex" },
+    cloudConfig: { userId: "partner_codex", baseUrl: "http://lwdp-internal" },
     submitImplementation: async (input) => {
       calls.push([
         "submit",
@@ -136,7 +136,14 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
       };
     },
     launchImplementation: async (input) => {
-      calls.push(["launch", input.stageId, input.executionPart, input.gpuRequired, input.userId]);
+      calls.push([
+        "launch",
+        input.stageId,
+        input.executionPart,
+        input.gpuRequired,
+        input.userId,
+        input.apiBase,
+      ]);
     },
     pollImplementation: async () => ({
       execution_id: "exec-episode-001",
@@ -157,7 +164,7 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
         s3Uri: "s3://bucket/episode-prior/capture-manifest.json",
       },
     ],
-    ["launch", "episode-prepare", "prepare", false, "partner_codex"],
+    ["launch", "episode-prepare", "prepare", false, "partner_codex", "http://lwdp-internal"],
   ]);
   assert.equal(result.execution.status, "succeeded");
   assert.equal(result.manifestS3Uri, "s3://bucket/episode/manifest.json");

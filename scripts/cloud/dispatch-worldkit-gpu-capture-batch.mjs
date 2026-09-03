@@ -332,6 +332,7 @@ export async function reconcileCloudEpisodeCpuStages({
       image: record.remoteWorkerImage ?? config.workerImage,
       namespace: config.namespace,
       userId: cloudConfig.userId,
+      apiBase: cloudConfig.baseUrl,
       gpuRequired: false,
       ...config.cpuWorker,
       jobSuffix: Number(stage.current_attempt ?? 1) > 1
@@ -403,6 +404,7 @@ async function main() {
         image: batch.workerImage,
         namespace: config.namespace,
         userId: cloudConfig.userId,
+        apiBase: cloudConfig.baseUrl,
         gpuResourceName: config.gpuResourceName,
         gpuCount: config.gpuCount,
         nodeSelector: config.nodeSelector,
@@ -459,6 +461,7 @@ async function main() {
         image: batch.workerImage,
         namespace: config.namespace,
         userId: cloudConfig.userId,
+        apiBase: cloudConfig.baseUrl,
         gpuResourceName: config.gpuResourceName,
         gpuCount: config.gpuCount,
         nodeSelector: config.nodeSelector,

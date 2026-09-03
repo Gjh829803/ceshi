@@ -168,6 +168,7 @@ async function launchEpisodeStageWorker({
     image: workerImage,
     namespace: config.namespace,
     userId: cloudConfig.userId,
+    apiBase: cloudConfig.baseUrl,
     ...(stageId === "episode-production"
       ? {
           gpuResourceName: config.gpuResourceName,
