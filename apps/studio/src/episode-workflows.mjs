@@ -1138,8 +1138,16 @@ export function createEpisodeWorkflowService(options) {
     return enriched.sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
   }
 
-  async function persistEpisodeRecord(record) {
+  async function writeLocalEpisodeRecordCache(record) {
     const recordPath = path.join(episodesRoot, record.episodeId, "episode-record.json");
+    await mkdir(path.dirname(recordPath), { recursive: true });
+    const temporaryPath = `${recordPath}.${process.pid}.tmp`;
+    await writeFile(temporaryPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+    await rename(temporaryPath, recordPath);
+    listAllCache.clear();
+  }
+
+  async function persistEpisodeRecord(record) {
     record.recordRevision = Number.isSafeInteger(record.recordRevision) && record.recordRevision >= 0
       ? record.recordRevision + 1
       : 1;
@@ -1150,11 +1158,7 @@ export function createEpisodeWorkflowService(options) {
       // make an uncommitted control-plane transition look durable.
       await persistCloudEpisodeRecord(record);
     }
-    await mkdir(path.dirname(recordPath), { recursive: true });
-    const temporaryPath = `${recordPath}.${process.pid}.tmp`;
-    await writeFile(temporaryPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
-    await rename(temporaryPath, recordPath);
-    listAllCache.clear();
+    await writeLocalEpisodeRecordCache(record);
   }
 
   async function readEpisodeRecordById(episodeId) {
@@ -1735,7 +1739,8 @@ export function createEpisodeWorkflowService(options) {
 
   async function recoverPersistedCloudEpisodes() {
     let recovered = 0;
-    for (const record of await listRecords()) {
+    for (const listedRecord of await listRecords()) {
+      const record = await readEpisodeRecordById(listedRecord.episodeId) ?? listedRecord;
       if (
         record.backend !== "cloud" ||
         !["running", "remote-pending"].includes(record.status) ||
@@ -1747,12 +1752,17 @@ export function createEpisodeWorkflowService(options) {
         record.episodeId,
         "episode-record.json",
       );
-      if (!await readJson(localRecordPath)) {
+      const localRecord = await readJson(localRecordPath);
+      if (
+        !localRecord ||
+        Number(record.recordRevision ?? 0) > Number(localRecord.recordRevision ?? 0)
+      ) {
         // S3 is authoritative in the cloud lane, but the asynchronous worker
         // functions intentionally operate on one local compatibility record.
-        // Hydrate that cache before launching recovery so all later reads have
-        // the same immutable Episode identity.
-        await persistEpisodeRecord({ ...record });
+        // Hydrate that cache without republishing or incrementing the durable
+        // record before launching recovery, so all later reads keep the same
+        // immutable Episode identity.
+        await writeLocalEpisodeRecordCache({ ...record });
       }
       if (typeof record.remoteExecutionId === "string" && record.remoteExecutionId) {
         activeCloudExecutions.set(record.episodeId, record.remoteExecutionId);

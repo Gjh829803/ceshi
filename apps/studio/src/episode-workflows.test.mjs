@@ -187,6 +187,62 @@ test("hydrates an S3-only Episode record before resuming a pre-submission cloud 
   }
 });
 
+test("replaces a stale local Episode cache with the newer S3 authority before recovery", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-stale-cache-"));
+  const episodeId = "episode-stale-cache-recovery-001";
+  const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+  const remoteRecord = {
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    sceneId: "stale-cache-scene",
+    episodeId,
+    backend: "cloud",
+    status: "remote-pending",
+    currentStage: "playthrough-plan",
+    remoteExecutionId: "exec_stale_cache",
+    remoteWorkerImage: `worker@sha256:${"a".repeat(64)}`,
+    recordRevision: 5,
+    createdAt: "2026-09-03T00:00:00.000Z",
+    updatedAt: "2026-09-03T00:05:00.000Z",
+    stages: [],
+  };
+  await mkdir(episodeRoot, { recursive: true });
+  await writeFile(path.join(episodeRoot, "episode-record.json"), JSON.stringify({
+    ...remoteRecord,
+    remoteWorkerImage: `worker@sha256:${"b".repeat(64)}`,
+    recordRevision: 4,
+    updatedAt: "2026-09-03T00:04:00.000Z",
+  }));
+  let recoveryStarted;
+  const started = new Promise((resolve) => { recoveryStarted = resolve; });
+  let recoveredWorkerImage = null;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    listCloudEpisodeRecords: async () => [remoteRecord],
+    readCloudEpisodeRecord: async () => remoteRecord,
+    recoverCloudEpisode: async (input) => {
+      recoveredWorkerImage = input.workerImage;
+      recoveryStarted();
+      return new Promise(() => undefined);
+    },
+  });
+  try {
+    assert.equal(await service.recoverPersistedCloudEpisodes(), 1);
+    await started;
+    assert.equal(recoveredWorkerImage, remoteRecord.remoteWorkerImage);
+    const cached = JSON.parse(await readFile(
+      path.join(episodeRoot, "episode-record.json"),
+      "utf8",
+    ));
+    assert.equal(cached.remoteWorkerImage, remoteRecord.remoteWorkerImage);
+    assert.equal(cached.recordRevision, remoteRecord.recordRevision);
+  } finally {
+    await service.shutdown();
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("lists only the selected scene and exposes every completed stage artifact", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-service-"));
   const root = path.join(repoRoot, "artifacts/episodes/episode-demo-world-abc123");
