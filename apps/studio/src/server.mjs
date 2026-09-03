@@ -127,6 +127,7 @@ const recordLifecycleFields = new Set([
 ]);
 
 export function evaluateRecordTransition(current, patch, {
+  allowReadyLifecycleTransition = false,
   expectedAttempt,
   expectedRecordRevision,
   expectedRemoteExecutionId,
@@ -168,6 +169,7 @@ export function evaluateRecordTransition(current, patch, {
   }
   if (
     current.status === "ready" &&
+    !allowReadyLifecycleTransition &&
     Object.keys(patch).some((field) => recordLifecycleFields.has(field))
   ) {
     return { allowed: false, reason: "already-complete" };
@@ -5881,6 +5883,64 @@ export function createStudio(options = {}) {
         ok: true,
         world: await enrichRecord(stopped),
         remoteCancellation,
+      });
+      return true;
+    }
+
+    const rebuildBuilderMatch =
+      /^\/api\/worlds\/([a-z0-9-]+)\/rebuild-builder$/.exec(url.pathname);
+    if (request.method === "POST" && rebuildBuilderMatch) {
+      const record = await readRecord(rebuildBuilderMatch[1]);
+      if (!record) {
+        sendError(response, 404, "没有找到这个世界。");
+        return true;
+      }
+      if (!["ready", "failed", "interrupted"].includes(record.status)) {
+        sendError(response, 409, "只有已完成、失败或中断的任务可以从 Builder 重建。");
+        return true;
+      }
+      if (
+        effectiveCodexBackend(record) !== "cloud" ||
+        !hasRemoteCloudPlannerResumeInputs(record)
+      ) {
+        sendError(response, 409, "这个任务没有可复用的可信云端 Planner 产物。");
+        return true;
+      }
+      const transition = await transitionRecord(record.id, {
+        status: "queued",
+        stage: "queued",
+        failedStage: null,
+        error: null,
+        captureRequired: true,
+        captureError: null,
+        captureStatus: "pending",
+        triviewStatus: "pending",
+        whiteboxOutcome: null,
+        outcome: null,
+        styledOpeningFrameStatus: record.referenceImage ? "pending" : "not-required",
+        styledTriviewsRequired: Boolean(record.referenceImage),
+        styledTriviewsStatus: record.referenceImage ? "pending" : "not-required",
+        resumeFromStage: "cloud-builder",
+      }, {
+        allowReadyLifecycleTransition: true,
+        expectedAttempt: record.attempt,
+        expectedStatuses: [record.status],
+      });
+      if (!transition.applied) {
+        sendError(response, 409, `任务状态已变化，无法从 Builder 重建：${transition.reason}`);
+        return true;
+      }
+      await appendTrajectoryEvent(
+        record.id,
+        "queued",
+        "用户发起云端 Builder 重建：复用可信 Planner Manifest，不重新运行 Planner。",
+        { kind: "queued", executionMode: "cloud-builder-rebuild" },
+      );
+      enqueue(record.id, "cloud");
+      sendJson(response, 202, {
+        ok: true,
+        executionMode: "cloud-builder-rebuild",
+        resumeFromStage: "cloud-builder",
       });
       return true;
     }

@@ -40,6 +40,10 @@ For an ordinary walking human, the recommended entry remains
 xier120 assets, are valid only for the executable movement modes explicitly
 listed on their catalog entry.
 
+The project-owned Golden humanoid is a deterministic SDK rig and animation
+fixture. It is not a production visual Subject and must not be used by Hosted
+Builder, even though lower-level Registry tests retain it.
+
 The SDK may retain primitive humanoid proxies for Runtime and traversal tests,
 but the Host excludes them from `subjects`; they may appear only in
 `rejectedSubjects`. Never copy a rejected ref into `controlledSubject`.

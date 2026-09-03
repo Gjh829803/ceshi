@@ -198,6 +198,15 @@ function visualProxy(
 function hostedAuthoringRejectionDiagnostics(
   definition: RegistrySubjectDefinitionV3,
 ): readonly string[] {
+  if (
+    definition.resourceRef ===
+      "worldkit://subject-definition/humanoid.rigged-golden@2"
+  ) {
+    return [
+      "The Golden humanoid is a deterministic SDK rig/animation fixture, not a " +
+        "production authoring Subject. Use humanoid.g-bot@2 for an ordinary walking human.",
+    ];
+  }
   if (definition.category !== "human" || definition.bodyTopology !== "biped") return [];
   const hasAssetVisual = definition.visualParts.some(({ kind }) => kind === "asset");
   if (hasAssetVisual && definition.visualBinding.mode === "rigged") return [];

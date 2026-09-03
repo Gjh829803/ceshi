@@ -130,6 +130,9 @@ describe("Block Builder skill", () => {
     }) => subjectDefinitionRef);
     expect(refs).toContain("worldkit://subject-definition/humanoid.g-bot@2");
     expect(refs).toContain("worldkit://subject-definition/xier120.quadruped-animal@1");
+    expect(refs).not.toContain(
+      "worldkit://subject-definition/humanoid.rigged-golden@2",
+    );
     expect(refs).not.toContain("worldkit://subject-definition/humanoid.third-person@1");
     expect(refs).not.toContain(
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
@@ -138,6 +141,12 @@ describe("Block Builder skill", () => {
       subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
       diagnostics: expect.arrayContaining([
         expect.stringContaining("primitive humanoid proxies"),
+      ]),
+    }));
+    expect(catalog.rejectedSubjects).toContainEqual(expect.objectContaining({
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.rigged-golden@2",
+      diagnostics: expect.arrayContaining([
+        expect.stringContaining("deterministic SDK rig/animation fixture"),
       ]),
     }));
     expect(catalog.subjects.every(({ executableMovementModes, camera }: {

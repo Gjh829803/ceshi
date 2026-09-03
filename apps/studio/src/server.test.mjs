@@ -120,6 +120,18 @@ test("keeps ready as an absorbing lifecycle state and rejects stale remote write
     evaluateRecordTransition(ready, { plannerReview: { status: "approved" } }),
     { allowed: true, reason: "applied" },
   );
+  assert.deepEqual(
+    evaluateRecordTransition(ready, {
+      status: "queued",
+      stage: "queued",
+      resumeFromStage: "cloud-builder",
+    }, {
+      allowReadyLifecycleTransition: true,
+      expectedAttempt: 2,
+      expectedStatuses: ["ready"],
+    }),
+    { allowed: true, reason: "applied" },
+  );
 });
 
 test("applies Cloud run-index transitions without mutating frozen records", () => {
@@ -2538,6 +2550,85 @@ test("retries a trusted late Planner delivery from Builder without launching Pla
     assert.equal(spawnedArgs.includes("agent:world"), false);
     const log = await readFile(path.join(recordRoot, "agent.log"), "utf8");
     assert.match(log, /only Builder and downstream Host stages will run/);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("rebuilds a ready Cloud Scene from its trusted Planner handoff", async () => {
+  const dataRoot = await temporaryRoot(".ready-cloud-builder-rebuild-data-");
+  const sceneId = "ready-cloud-builder-rebuild";
+  const recordRoot = path.join(dataRoot, "worlds", sceneId);
+  await mkdir(recordRoot, { recursive: true });
+  const timestamp = new Date().toISOString();
+  const plannerArtifacts = [
+    "scene/scene-brief.md",
+    "scene/planner-self-check.json",
+    "scene/visual-identity-palette.json",
+    "scene-plan/entry-whitebox-target.png",
+    "scene-plan/world-plan.png",
+  ].map((artifactPath) => ({
+    path: artifactPath,
+    s3_uri: `s3://worldkit-test/cloud-scenes/${sceneId}/${artifactPath}`,
+  }));
+  await writeFile(path.join(recordRoot, "record.json"), JSON.stringify({
+    id: sceneId,
+    sceneId,
+    title: "Ready Cloud Builder rebuild",
+    prompt: "Reuse this Planner handoff.",
+    referenceImage: null,
+    status: "ready",
+    stage: "ready",
+    failedStage: null,
+    codexBackend: "cloud",
+    attempt: 1,
+    origin: "test-set",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    startedAt: timestamp,
+    finishedAt: timestamp,
+    error: null,
+    captureRequired: false,
+    captureStatus: "passed",
+    triviewStatus: "passed",
+    outcome: "passed",
+    whiteboxOutcome: "passed",
+    styledOpeningFrameRequired: false,
+    styledOpeningFrameStatus: "not-required",
+    styledTriviewsRequired: false,
+    styledTriviewsStatus: "not-required",
+    workflowPolicyVersion,
+    remoteExecutionId: "execution-ready-builder-rebuild",
+    remoteRequestS3Uri: `s3://worldkit-test/cloud-scenes/${sceneId}/request.json`,
+    remoteOutputS3Prefix: `s3://worldkit-test/cloud-scenes/${sceneId}/attempt-1`,
+    remoteArtifactManifestS3Uri:
+      `s3://worldkit-test/cloud-scenes/${sceneId}/attempt-1/cloud-artifact-manifest.json`,
+    remoteArtifacts: plannerArtifacts,
+  }));
+  const studio = createStudio({
+    dataRoot,
+    autoRunJobs: false,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+  });
+  const origin = await listen(studio);
+  try {
+    const response = await fetch(
+      `${origin}/api/worlds/${sceneId}/rebuild-builder`,
+      { method: "POST" },
+    );
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      executionMode: "cloud-builder-rebuild",
+      resumeFromStage: "cloud-builder",
+    });
+    const detail = JSON.parse(await readFile(path.join(recordRoot, "record.json"), "utf8"));
+    assert.equal(detail.status, "queued");
+    assert.equal(detail.resumeFromStage, "cloud-builder");
+    assert.equal(detail.attempt, 1);
   } finally {
     await studio.shutdown();
   }
