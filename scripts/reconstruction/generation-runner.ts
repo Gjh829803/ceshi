@@ -67,6 +67,14 @@ function appendDiagnostic(
     NativeBlockGenerationReceiptV1["diagnosticCodes"];
 }
 
+function rejectedProcessDiagnostic(
+  stderr: string,
+): NativeBlockGenerationReceiptV1["diagnosticCodes"][number] {
+  return stderr.includes("WORLDKIT_LOCAL_CODEX_OUTPUT_MISSING")
+    ? "output-missing"
+    : "task-rejected";
+}
+
 async function inspectOutputs(input: PreparedInput): Promise<NativeBlockGenerationReceiptV1["outputs"]> {
   const entries = await readdir(input.stagingDirectoryPath);
   if (entries.length !== OUTPUTS.length || entries.some((entry) => !OUTPUTS.includes(entry as OutputPath))) throw new TypeError("output-unexpected");
@@ -131,7 +139,8 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
       outcome = "rejected"; diagnostics = ["task-timeout"];
     } else if (result.exitCode !== 0 ||
         result.taskOutcome?.outcome !== "completed") {
-      outcome = "rejected"; diagnostics = ["task-rejected"];
+      outcome = "rejected";
+      diagnostics = [rejectedProcessDiagnostic(result.stderr)];
     } else if (!hasTrustedRouterMarker(result.stdout, input.backend, input.routerRequestId)) {
       outcome = "rejected"; diagnostics = ["task-rejected"];
     } else {

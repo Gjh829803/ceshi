@@ -320,7 +320,12 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       expect(prepared.routerArguments).toEqual(expect.arrayContaining([
         "--execution-profile", "formal", "--submit-attempts", "1",
         "--timeout-seconds", "1800",
+        "--workspace-context-root", "attempts/0/.task",
       ]));
+      expect(prepared.routerArguments).not.toContain("--context");
+      expect(prepared.routerArguments).toContain(
+        "reference-0::attempts/0/.task/inputs/reference-0.png::image::image/png",
+      );
       expect(NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1).toBe(1_800);
       expect(prepared.generationRequest.declaredOutputPaths).toEqual([
         "scene.ts", "native-block-authoring.json", "native-resources.json",
