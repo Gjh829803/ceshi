@@ -14,6 +14,10 @@ function parsedTime(value) {
   return Number.isFinite(milliseconds) ? milliseconds : null;
 }
 
+function leaseTimestamp(milliseconds) {
+  return new Date(milliseconds).toISOString().replace(/\.(\d{3})Z$/, ".$1000Z");
+}
+
 export class KubectlLeaseStore {
   constructor(namespace, { spawnImplementation = spawn } = {}) {
     if (!namespace) throw new Error("Kubernetes Lease namespace is required.");
@@ -160,9 +164,9 @@ export class GlobalCloudWorkSlotPool {
         holderIdentity,
         leaseDurationSeconds: this.leaseDurationSeconds,
         acquireTime: previousHolder === holderIdentity
-          ? existing?.spec?.acquireTime ?? new Date(current).toISOString()
-          : new Date(current).toISOString(),
-        renewTime: new Date(current).toISOString(),
+          ? existing?.spec?.acquireTime ?? leaseTimestamp(current)
+          : leaseTimestamp(current),
+        renewTime: leaseTimestamp(current),
         leaseTransitions: Number(existing?.spec?.leaseTransitions ?? 0) +
           Number(Boolean(previousHolder && previousHolder !== holderIdentity)),
       },

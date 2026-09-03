@@ -39,6 +39,10 @@ test("atomically reserves and releases a weighted global work-slot group", async
   });
   const lease = await pool.acquire("episode/style-opening", { count: 3 });
   assert.equal([...store.items.values()].filter(({ spec }) => spec.holderIdentity).length, 3);
+  for (const item of store.items.values()) {
+    assert.match(item.spec.acquireTime, /^2026-09-03T00:00:00\.000000Z$/);
+    assert.match(item.spec.renewTime, /^2026-09-03T00:00:00\.000000Z$/);
+  }
   await lease.release();
   assert.equal([...store.items.values()].filter(({ spec }) => spec.holderIdentity).length, 0);
 });
