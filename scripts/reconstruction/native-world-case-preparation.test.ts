@@ -156,6 +156,52 @@ describe("trusted Native world Case preparation", () => {
     );
   });
 
+  it("rejects a parallel Native Collider contribution identity", async () => {
+    const root = await mkdtemp(path.join(
+      os.tmpdir(),
+      "native-world-case-collider-identity-",
+    ));
+    temporaryRoots.push(root);
+    const proposalPath = path.join(root, "proposal.json");
+    const briefPath = path.join(root, "scene-brief.md");
+    const referencePath = path.join(root, "reference.png");
+    const outputCaseRoot = path.join(root, "prepared-case");
+    const [fixtureCase, formalCaptureIntent, worldBounds] = await Promise.all([
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/case.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
+      readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
+    ]);
+    fixtureCase.expected.colliders[0].contributionId =
+      "collider-central-steps-parallel";
+    await Promise.all([
+      writeFile(briefPath, "# Native World\n"),
+      writeFile(referencePath, "reference-bytes"),
+      writeFile(proposalPath, JSON.stringify({
+        kind: "native-world-case-proposal",
+        schemaVersion: 1,
+        sceneId: "invalid-native-collider-identity",
+        expected: fixtureCase.expected,
+        formalCaptureIntent: {
+          ...formalCaptureIntent,
+          id: "invalid-native-collider-identity.formal-world-capture-intent",
+        },
+        worldBounds,
+      })),
+    ]);
+
+    await expect(prepareNativeWorldCaseV1({
+      repositoryRoot: process.cwd(),
+      sceneId: "invalid-native-collider-identity",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      referenceImagePaths: [referencePath],
+      outputCaseRoot,
+    })).rejects.toThrow(
+      "NATIVE_WORLD_CASE_COLLIDER_IDENTITY_INVALID: Babylon Native static " +
+        "Collider contributionId must equal colliderId",
+    );
+  });
+
   it("binds an untrusted semantic proposal to Host profiles and immutable inputs", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-case-"));
     temporaryRoots.push(root);
