@@ -623,6 +623,13 @@ One acceptance target may therefore emit several independently addressable subme
 deduplication includes code, target, and metric and must not collapse X/Y/bounds/coverage failures into one
 generic message.
 
+The pre-publication Opening Host Gate follows the same rule: it emits every region edge and anchor axis that
+exceeds its threshold, not only the largest drift for a target. An Opening repair groups those rows by the
+stable visual group and jointly preserves the complete Case-owned four-edge region, anchor and depth-order
+envelope. A clipped `0`/`10000` projection edge is explicit evidence that the group extends outside the frame;
+repair guidance must couple near-camera footprint/depth and height instead of encouraging a one-axis change
+that merely transfers failure to the opposite edge or anchor.
+
 Repairable quality failures additionally require one executable `repairAction` with the sole kind
 `revise-native-source`, a closed target kind, the same `targetId`, a closed operation, and an instruction.
 The metric fixes the allowed target-kind/operation pair: for example a semantic center uses

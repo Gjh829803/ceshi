@@ -285,6 +285,16 @@ describe("identity-bound Opening Composition Host Gate", () => {
         correctionDirection: expect.stringMatching(/^(increase|decrease)$/),
       }),
     ]));
+    const shiftedTargetRef = openingObservation.visualGroups[0]
+      ?.compositionTargetRef;
+    expect(shiftedTargetRef).toBeDefined();
+    expect(failed.diagnostics.filter((diagnostic) =>
+      diagnostic.code === "WORLDKIT_OPENING_GATE_ANCHOR_DRIFT" &&
+      diagnostic.targetRef === shiftedTargetRef
+    ).map(({ metricId }) => metricId)).toEqual(expect.arrayContaining([
+      "normalizedCenter.xBasisPoints",
+      "normalizedCenter.yBasisPoints",
+    ]));
   });
 
   it("converts source-owned visual drift into executable repair diagnostics", () => {
@@ -299,6 +309,8 @@ describe("identity-bound Opening Composition Host Gate", () => {
                 ...group.normalizedBounds,
                 minXBasisPoints: group.normalizedBounds.minXBasisPoints + 500,
                 maxXBasisPoints: group.normalizedBounds.maxXBasisPoints + 500,
+                minYBasisPoints: 0,
+                maxYBasisPoints: 10_000,
               },
               normalizedCenter: {
                 ...group.normalizedCenter,
@@ -324,6 +336,17 @@ describe("identity-bound Opening Composition Host Gate", () => {
     });
 
     expect(gateResult.status).toBe("failed");
+    const shiftedTargetRef = shifted.visualGroups[0]?.compositionTargetRef;
+    expect(shiftedTargetRef).toBeDefined();
+    expect(gateResult.diagnostics.filter((diagnostic) =>
+      diagnostic.code === "WORLDKIT_OPENING_GATE_REGION_DRIFT" &&
+      diagnostic.targetRef === shiftedTargetRef
+    ).map(({ metricId }) => metricId)).toEqual(expect.arrayContaining([
+      "normalizedBounds.minXBasisPoints",
+      "normalizedBounds.minYBasisPoints",
+      "normalizedBounds.maxXBasisPoints",
+      "normalizedBounds.maxYBasisPoints",
+    ]));
     expect(diagnostics.length).toBeGreaterThan(0);
     expect(diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -331,8 +354,19 @@ describe("identity-bound Opening Composition Host Gate", () => {
         targetId: "ground-group",
         repairAction: expect.objectContaining({
           kind: "revise-native-source",
+          instruction: expect.stringContaining(
+            "satisfy all four region edges and the anchor jointly",
+          ),
         }),
       }),
     ]));
+    expect(diagnostics.filter(({ metricId }) =>
+      metricId.startsWith("opening-region-")
+    ).every((diagnostic) =>
+      "repairAction" in diagnostic &&
+      diagnostic.repairAction.instruction.includes(
+        "inputs/attempts/0/rejected-capture/opening-observation.json",
+      )
+    )).toBe(true);
   });
 });
