@@ -202,7 +202,6 @@ describe("Native Playground verified Package Vite seam", () => {
       "runtime",
     ));
     expect(runtimeConfig.optimizeDeps).toEqual({
-      noDiscovery: true,
       include: [
         "@babylonjs/core/Maths/math.viewport.js",
         "@babylonjs/core/scene.js",
@@ -422,6 +421,31 @@ describe("Native Playground verified Package Vite seam", () => {
     expect(methodRejected.statusCode).toBe(405);
     expect(methodRejected.headers.allow).toBe("GET, HEAD");
     expect(methodRejected.headers["x-worldkit-server-nonce"]).toBe(NONCE);
+  });
+
+  it("keeps readiness HEAD non-blocking while GET still rejects Package drift", async () => {
+    const config = await createConfig();
+    const stack = middlewareStack(config);
+    await writeFile(
+      path.join(packageDirectoryPath, "native/scene.mjs"),
+      "export default async function drifted() {}\n",
+      { mode: 0o600 },
+    );
+
+    const readiness = await invoke(stack, {
+      method: "HEAD",
+      url: "/__worldkit/native-package/world-package-build-receipt.json",
+    });
+    expect(readiness.statusCode).toBe(200);
+    expect(readiness.bytes).toHaveLength(0);
+    expect(readiness.headers["x-worldkit-server-nonce"]).toBe(NONCE);
+
+    const runtimeRead = await invoke(stack, {
+      method: "GET",
+      url: "/__worldkit/native-package/world-package-build-receipt.json",
+    });
+    expect(runtimeRead.statusCode).toBe(409);
+    expect(runtimeRead.bytes).toHaveLength(0);
   });
 
   it("keeps the Browser Harness package-generic", async () => {

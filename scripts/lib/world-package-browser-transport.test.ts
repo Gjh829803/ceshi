@@ -70,6 +70,40 @@ afterEach(async () => {
 });
 
 describe("WorldPackage browser transport", () => {
+  it("coalesces overlapping Package freshness verification", async () => {
+    let readCount = 0;
+    let signalVerificationStarted!: () => void;
+    let releaseVerification!: () => void;
+    const verificationStarted = new Promise<void>((resolve) => {
+      signalVerificationStarted = resolve;
+    });
+    const verificationRelease = new Promise<void>((resolve) => {
+      releaseVerification = resolve;
+    });
+    const transport = await createWorldPackageBrowserTransportV1({
+      packageDirectoryPath,
+    }, {
+      readDirectory: async (input) => {
+        readCount += 1;
+        if (readCount > 1) {
+          signalVerificationStarted();
+          await verificationRelease;
+        }
+        return readWorldPackageDirectoryV1(input);
+      },
+    });
+
+    const first = transport.readReceipt();
+    await verificationStarted;
+    const second = transport.readReceipt();
+    await Promise.resolve();
+    expect(readCount).toBe(2);
+
+    releaseVerification();
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    transport.dispose();
+  });
+
   it("exposes only fresh copies of receipt-listed immutable bytes", async () => {
     const transport = await createWorldPackageBrowserTransportV1({
       packageDirectoryPath,
