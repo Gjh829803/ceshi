@@ -28,7 +28,11 @@ function run(command, args) {
   });
 }
 
-export async function normalizeEpisodePng(filePath, expected = { width: 1280, height: 720 }) {
+export async function normalizeEpisodePng(
+  filePath,
+  expected = { width: 1280, height: 720 },
+  { allowAspectFit = false } = {},
+) {
   const source = await readPngSize(filePath);
   if (source.width === expected.width && source.height === expected.height) {
     return { ...source, normalized: false };
@@ -36,7 +40,7 @@ export async function normalizeEpisodePng(filePath, expected = { width: 1280, he
   const sourceAspect = source.width / source.height;
   const expectedAspect = expected.width / expected.height;
   const relativeAspectError = Math.abs(sourceAspect - expectedAspect) / expectedAspect;
-  if (relativeAspectError > 0.01) {
+  if (relativeAspectError > 0.01 && !allowAspectFit) {
     throw new Error(
       `Episode image must be approximately ${expected.width}:${expected.height} before normalization: ` +
       `${filePath} is ${source.width}x${source.height}`,
@@ -47,9 +51,14 @@ export async function normalizeEpisodePng(filePath, expected = { width: 1280, he
     `.${path.basename(filePath)}.${process.pid}.normalized.png`,
   );
   try {
+    const filter = allowAspectFit
+      ? `scale=${expected.width}:${expected.height}:force_original_aspect_ratio=decrease:` +
+        `flags=lanczos,pad=${expected.width}:${expected.height}:` +
+        `(ow-iw)/2:(oh-ih)/2:color=white,setsar=1`
+      : `scale=${expected.width}:${expected.height}:flags=lanczos,setsar=1`;
     await run("ffmpeg", [
       "-y", "-v", "error", "-i", filePath,
-      "-vf", `scale=${expected.width}:${expected.height}:flags=lanczos,setsar=1`,
+      "-vf", filter,
       "-frames:v", "1", temporary,
     ]);
     const normalized = await readPngSize(temporary);

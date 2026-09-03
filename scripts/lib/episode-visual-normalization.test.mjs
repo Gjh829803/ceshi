@@ -42,3 +42,23 @@ test("rejects a materially different aspect ratio instead of hiding composition 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("aspect-fits a valid tri-view canvas without cropping its subject views", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-episode-triview-"));
+  const imagePath = path.join(root, "styled-triview.png");
+  try {
+    await execFileAsync("ffmpeg", [
+      "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=1492x1054",
+      "-frames:v", "1", imagePath,
+    ]);
+    const result = await normalizeEpisodePng(
+      imagePath,
+      { width: 1280, height: 720 },
+      { allowAspectFit: true },
+    );
+    assert.equal(result.normalized, true);
+    assert.deepEqual(await readPngSize(imagePath), { width: 1280, height: 720 });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

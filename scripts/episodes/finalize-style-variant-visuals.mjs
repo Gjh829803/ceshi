@@ -81,9 +81,9 @@ if (!Array.isArray(prompts.segmentOpeningFrames) ||
       typeof item?.prompt !== "string" || item.prompt.trim().length < 150)) {
   throw new Error("Style Variant visual prompt closure is invalid.");
 }
-async function image(relativePath) {
+async function image(relativePath, options = {}) {
   const filePath = path.join(variantRoot, relativePath);
-  await normalizeEpisodePng(filePath, { width: 1280, height: 720 });
+  await normalizeEpisodePng(filePath, { width: 1280, height: 720 }, options);
   const size = await readPngSize(filePath);
   return {
     path: relativePath,
@@ -100,7 +100,10 @@ const segmentOpeningFrames = await Promise.all(
 );
 const targets = await Promise.all(targetIds.map(async (visualTargetId) => ({
   visualTargetId,
-  styledTriview: await image(`visual/triviews/${visualTargetId}/styled-triview.png`),
+  styledTriview: await image(
+    `visual/triviews/${visualTargetId}/styled-triview.png`,
+    { allowAspectFit: true },
+  ),
 })));
 await writeJsonAtomic(path.join(visualRoot, "visual-manifest.json"), {
   kind: "worldkit-style-variant-visual-manifest",
