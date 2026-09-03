@@ -451,8 +451,11 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
         traversalBinding.kind === "not-traversable")
       .map(({ id }) => id),
   );
-  exactStringSet(formalBlockers, caseBlockers);
   exactStringSet(contributionBlockers, caseBlockers);
+  const caseBlockerSet = new Set(caseBlockers);
+  if (formalBlockers.some((colliderId) => !caseBlockerSet.has(colliderId))) {
+    fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
+  }
 
   const joinsByColliderId = new Map<string,
     typeof input.materializerMetadata.colliderJoins>();
@@ -471,7 +474,7 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
       fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
     }
   }
-  return caseBlockers;
+  return formalBlockers;
 }
 
 function verifyNativeCheckReplayClosure(input: Readonly<{
@@ -1373,6 +1376,14 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "formal-world-capture-receipt.json",
     "NBR70_CAPTURE_ARTIFACT_MISSING",
   )));
+  const measuredBlockerColliderIds = verifyBlockerEvidenceClosure({
+    caseBlockerColliderIds: reconstructionCase.expected.colliders
+      .filter(({ role }) => role === "blocker")
+      .map(({ colliderId }) => colliderId),
+    formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
+    contribution: verified.nativeSceneContribution,
+    materializerMetadata: verified.nativeBlockMaterializerMetadata,
+  });
   const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
   exact(runAttempt.captureReceiptHash, captureReceiptHash);
   exact(captureReceipt.caseRef, runReceipt.caseRef);
@@ -1525,9 +1536,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
         1_000,
       checks: captureReceipt.formalRequest.scriptedTraversal.checks,
       caseChecks: reconstructionCase.expected.criticalTraversalChecks,
-      blockerColliderIds: reconstructionCase.expected.colliders
-        .filter(({ role }) => role === "blocker")
-        .map(({ colliderId }) => colliderId),
+      blockerColliderIds: measuredBlockerColliderIds,
     });
   } catch (error) {
     failure = error;

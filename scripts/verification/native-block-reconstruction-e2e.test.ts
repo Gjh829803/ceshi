@@ -1077,7 +1077,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
-  it("requires one exact blocker set across Case, formal criteria, Contribution, and materializer", () => {
+  it("requires exact Case-to-Contribution blockers and exact formal blocker joins", () => {
     const fixture = createEvidenceSetFixtureInputV1({
       allDimensionsPass: true,
       includePaletteTraversalDisagreement: true,
@@ -1089,15 +1089,18 @@ describe("Native Block reconstruction E2E verifier", () => {
       ],
     });
     const verified = fixture.verifiedWorldPackage;
+    const materializerMetadata = verified.kind === "babylon-native-scene"
+      ? verified.nativeBlockMaterializerMetadata
+      : undefined;
     if (verified.kind !== "babylon-native-scene" ||
-        verified.nativeBlockMaterializerMetadata === undefined) {
+        materializerMetadata === undefined) {
       throw new Error("fixture must include trusted Block metadata");
     }
     const valid = {
       caseBlockerColliderIds: ["palette-ground-blocker"],
       formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
       contribution: verified.nativeSceneContribution,
-      materializerMetadata: verified.nativeBlockMaterializerMetadata,
+      materializerMetadata,
     };
     expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
       .verifyBlockerEvidenceClosure(valid)).not.toThrow();
@@ -1171,6 +1174,57 @@ describe("Native Block reconstruction E2E verifier", () => {
           "NBR70_BLOCKER_IDENTITY_MISMATCH",
         );
     }
+  });
+
+  it("allows contributed Case blockers without a dedicated scripted block check", () => {
+    const fixture = createEvidenceSetFixtureInputV1({
+      allDimensionsPass: true,
+      includePaletteTraversalDisagreement: true,
+      traversalCheckExpectation: "block",
+      traversalCheckpointCriteria: MIXED_BLOCK_CHECKPOINT_CRITERIA,
+      traversalCheckpoints: [
+        { checkpointId: "gate-approach", outcome: "reached", observedAtTick: 1 },
+        { checkpointId: "gate-limit", outcome: "blocked", observedAtTick: 1 },
+      ],
+    });
+    const verified = fixture.verifiedWorldPackage;
+    const materializerMetadata = verified.kind === "babylon-native-scene"
+      ? verified.nativeBlockMaterializerMetadata
+      : undefined;
+    if (verified.kind !== "babylon-native-scene" ||
+        materializerMetadata === undefined) {
+      throw new Error("fixture must include trusted Block metadata");
+    }
+    const unmeasuredBlocker = createBabylonNativeStaticColliderContributionV1({
+      id: "unmeasured-case-blocker",
+      runtimeRole: "scene-static-collider",
+      worldPositionsMetersXYZ: [
+        -1, 0, -1,
+        1, 0, -1,
+        0, 1, -1,
+      ],
+      triangleIndices: [0, 1, 2],
+      frictionRatio: 0.8,
+      restitutionRatio: 0,
+      traversalBinding: { kind: "not-traversable" },
+    });
+
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosure({
+        caseBlockerColliderIds: [
+          "palette-ground-blocker",
+          "unmeasured-case-blocker",
+        ],
+        formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
+        contribution: {
+          ...verified.nativeSceneContribution,
+          staticColliders: [
+            ...verified.nativeSceneContribution.staticColliders,
+            unmeasuredBlocker,
+          ],
+        },
+        materializerMetadata,
+      })).not.toThrow();
   });
 
   it("rejects an empty candidate before launching playability", async () => {

@@ -341,6 +341,44 @@ describe("worldkit CLI", () => {
     ])).toThrow("Unknown native operation 'run-cloud-ridge'.");
   });
 
+  it("resolves a relative Native Package path before Host admission", async () => {
+    let receivedSource: unknown;
+    const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
+      () => true,
+    );
+    try {
+      await expect(main([
+        "native",
+        "run",
+        "artifacts/scenes/case-a/final/world-package",
+        "--port",
+        "5174",
+        "--json",
+      ], {
+        startWorldkitServerV1: async (options) => {
+          receivedSource = options.source;
+          return {
+            url: "http://127.0.0.1:5174/",
+            port: 5174,
+            process: {} as never,
+            sceneSourceKind: "babylon-native-scene",
+            worldPackageRootHash: `sha256:${"1".repeat(64)}`,
+            stop: async () => {},
+            waitForExit: async () => 0,
+          };
+        },
+      })).resolves.toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+    }
+    expect(receivedSource).toEqual({
+      kind: "world-package",
+      packageDirectoryPath: path.resolve(
+        "artifacts/scenes/case-a/final/world-package",
+      ),
+    });
+  });
+
   it("parses the sole reconstruction production transaction command", () => {
     expect(parseWorldkitArgs([
       "reconstruct",

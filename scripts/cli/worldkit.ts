@@ -451,11 +451,14 @@ type RunWorldReconstructionProductionPortV1 = (
   input: Omit<WorldReconstructionProductionInputV1, "repositoryRoot">,
 ) => Promise<WorldReconstructionProductionResultV1>;
 
+type StartWorldkitServerPortV1 = typeof startWorldkitServer;
+
 export interface WorldkitMainPortsV1 {
   readonly packageNativeBlockAttemptV1?: PackageNativeBlockAttemptPortV1;
   readonly captureHostedWorldPackageV1?: CaptureHostedWorldPackagePortV1;
   readonly runWorldReconstructionProductionV1?:
     RunWorldReconstructionProductionPortV1;
+  readonly startWorldkitServerV1?: StartWorldkitServerPortV1;
 }
 
 async function loadRunWorldReconstructionProductionPortV1(): Promise<
@@ -2368,11 +2371,15 @@ async function runNativeUntilSignal(
   packageDirectoryPath: string,
   port: number | undefined,
   json: boolean,
+  startServer: StartWorldkitServerPortV1 = startWorldkitServer,
 ): Promise<number> {
   let server: WorldkitServerHandle;
   try {
-    server = await startWorldkitServer({
-      source: { kind: "world-package", packageDirectoryPath },
+    server = await startServer({
+      source: {
+        kind: "world-package",
+        packageDirectoryPath: path.resolve(packageDirectoryPath),
+      },
       ...(port === undefined ? { port: 5174 } : { port }),
       forwardOutput: !json,
     });
@@ -2657,6 +2664,7 @@ export async function main(
       parsed.packageDirectoryPath,
       parsed.port,
       parsed.json,
+      ports.startWorldkitServerV1,
     );
   }
   if (parsed.command === "reconstruct-run") {
