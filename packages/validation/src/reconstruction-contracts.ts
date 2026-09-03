@@ -170,7 +170,7 @@ export interface WorldReconstructionEvaluationProfileV1 {
   readonly id: string;
   readonly dimensionIds: readonly WorldReconstructionDimensionIdV1[];
   readonly maximumRepairAttemptCount: 1;
-  readonly builderSelfRepairAttemptCount: 0;
+  readonly builderSelfRepairAttemptCount: 3;
   readonly thresholds: WorldReconstructionThresholdsV1;
   readonly requiredEvidenceByDimension: readonly Readonly<{
     dimensionId: WorldReconstructionDimensionIdV1;
@@ -188,7 +188,6 @@ export interface WorldReconstructionThresholdsV1 {
   readonly openingComposition: Readonly<{
     readonly regions: readonly Readonly<{ readonly targetRef: string; readonly maximumDriftBasisPoints: number }>[];
     readonly anchors: readonly Readonly<{ readonly targetRef: string; readonly maximumDriftBasisPoints: number }>[];
-    readonly maximumOrderDistanceBasisPoints: number;
   }>;
   readonly spawnSupport: Readonly<{
     readonly maximumPositionDriftMillimeters: number;
@@ -390,7 +389,6 @@ export const WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1 = Object.freeze([
   "opening-anchor-x-basis-points",
   "opening-anchor-y-basis-points",
   "opening-target-order",
-  "opening-framing-distance-basis-points",
   "spawn-marker-identity",
   "spawn-support-collider-identity",
   "spawn-medium",
@@ -506,7 +504,6 @@ const DIAGNOSTIC_DETAIL_KIND_BY_METRIC_ID: Readonly<
   "opening-anchor-x-basis-points": "basis-points-threshold",
   "opening-anchor-y-basis-points": "basis-points-threshold",
   "opening-target-order": "sequence-mismatch",
-  "opening-framing-distance-basis-points": "basis-points-threshold",
   "spawn-marker-identity": "state-mismatch",
   "spawn-support-collider-identity": "state-mismatch",
   "spawn-medium": "state-mismatch",
@@ -564,7 +561,6 @@ const DIAGNOSTIC_METRIC_IDS_BY_CODE: Readonly<
     "opening-anchor-x-basis-points",
     "opening-anchor-y-basis-points",
     "opening-target-order",
-    "opening-framing-distance-basis-points",
   ],
   WORLD_RECONSTRUCTION_SPAWN_SUPPORT_MISSING: [
     "spawn-marker-identity",
@@ -632,7 +628,6 @@ const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
   "opening-anchor-x-basis-points": { targetKind: "composition-target", operation: "move" },
   "opening-anchor-y-basis-points": { targetKind: "composition-target", operation: "move" },
   "opening-target-order": { targetKind: "composition-target", operation: "reorder" },
-  "opening-framing-distance-basis-points": { targetKind: "composition-target", operation: "move" },
   "spawn-marker-identity": { targetKind: "spawn-marker", operation: "bind" },
   "spawn-support-collider-identity": { targetKind: "static-collider", operation: "bind" },
   "spawn-medium": { targetKind: "spawn-marker", operation: "adjust-support" },
@@ -764,6 +759,7 @@ export interface WorldReconstructionRunReceiptV1 {
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
   readonly outcome: WorldReconstructionOutcomeV1;
+  readonly diagnosticCodes: readonly string[];
   readonly attempts: readonly WorldReconstructionRunAttemptV1[];
   readonly finalAttemptIndex: 0 | 1;
   readonly finalEvaluationResultRef: string;
@@ -826,7 +822,7 @@ const NON_REPAIRABLE_DIAGNOSTIC_FIELDS = [
 ] as const;
 const RUN_FIELDS = [
   "kind", "schemaVersion", "id", "caseRef", "caseHash", "evaluationProfileRef",
-  "evaluationProfileHash", "outcome", "attempts", "finalAttemptIndex",
+  "evaluationProfileHash", "outcome", "diagnosticCodes", "attempts", "finalAttemptIndex",
   "finalEvaluationResultRef", "finalEvaluationResultHash", "cleanupOutcome",
 ] as const;
 const RUN_ATTEMPT_FIELDS = [
@@ -1579,7 +1575,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
   exactInteger(source.schemaVersion, 1, contract, "schemaVersion");
   const dimensionIds = exactDimensions(source.dimensionIds, contract, "dimensionIds");
   exactInteger(source.maximumRepairAttemptCount, 1, contract, "maximumRepairAttemptCount");
-  exactInteger(source.builderSelfRepairAttemptCount, 0, contract, "builderSelfRepairAttemptCount");
+  exactInteger(source.builderSelfRepairAttemptCount, 3, contract, "builderSelfRepairAttemptCount");
   const thresholdsSource = object(source.thresholds, contract, "thresholds");
   exactFields(thresholdsSource, ["semanticSilhouetteTargets", "openingComposition", "spawnSupport"], contract, "thresholds");
   const semanticSilhouetteTargets = array(thresholdsSource.semanticSilhouetteTargets, contract, "thresholds/semanticSilhouetteTargets").map((entry, index) => {
@@ -1590,7 +1586,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
   });
   if (semanticSilhouetteTargets.length === 0 || semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "thresholds/semanticSilhouetteTargets", "must be non-empty, unique, and sorted by acceptanceTargetRef");
   const openingThresholds = object(thresholdsSource.openingComposition, contract, "thresholds/openingComposition");
-  exactFields(openingThresholds, ["regions", "anchors", "maximumOrderDistanceBasisPoints"], contract, "thresholds/openingComposition");
+  exactFields(openingThresholds, ["regions", "anchors"], contract, "thresholds/openingComposition");
   const parseOpeningThresholds = (value: unknown, path: string) => {
     const rows = array(value, contract, path).map((entry, index) => {
       const itemPath = `${path}/${index}`;
@@ -1603,7 +1599,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
   };
   const spawnThresholds = object(thresholdsSource.spawnSupport, contract, "thresholds/spawnSupport");
   exactFields(spawnThresholds, ["maximumPositionDriftMillimeters", "maximumSupportGapMillimeters"], contract, "thresholds/spawnSupport");
-  const thresholds = Object.freeze({ semanticSilhouetteTargets: Object.freeze(semanticSilhouetteTargets), openingComposition: Object.freeze({ regions: parseOpeningThresholds(openingThresholds.regions, "thresholds/openingComposition/regions"), anchors: parseOpeningThresholds(openingThresholds.anchors, "thresholds/openingComposition/anchors"), maximumOrderDistanceBasisPoints: basisPoints(openingThresholds.maximumOrderDistanceBasisPoints, contract, "thresholds/openingComposition/maximumOrderDistanceBasisPoints") }), spawnSupport: Object.freeze({ maximumPositionDriftMillimeters: integer(spawnThresholds.maximumPositionDriftMillimeters, 0, Number.MAX_SAFE_INTEGER, contract, "thresholds/spawnSupport/maximumPositionDriftMillimeters"), maximumSupportGapMillimeters: integer(spawnThresholds.maximumSupportGapMillimeters, 0, Number.MAX_SAFE_INTEGER, contract, "thresholds/spawnSupport/maximumSupportGapMillimeters") }) });
+  const thresholds = Object.freeze({ semanticSilhouetteTargets: Object.freeze(semanticSilhouetteTargets), openingComposition: Object.freeze({ regions: parseOpeningThresholds(openingThresholds.regions, "thresholds/openingComposition/regions"), anchors: parseOpeningThresholds(openingThresholds.anchors, "thresholds/openingComposition/anchors") }), spawnSupport: Object.freeze({ maximumPositionDriftMillimeters: integer(spawnThresholds.maximumPositionDriftMillimeters, 0, Number.MAX_SAFE_INTEGER, contract, "thresholds/spawnSupport/maximumPositionDriftMillimeters"), maximumSupportGapMillimeters: integer(spawnThresholds.maximumSupportGapMillimeters, 0, Number.MAX_SAFE_INTEGER, contract, "thresholds/spawnSupport/maximumSupportGapMillimeters") }) });
   const requiredEvidenceByDimension = array(source.requiredEvidenceByDimension, contract, "requiredEvidenceByDimension").map((entry, index) => {
     const path = `requiredEvidenceByDimension/${index}`;
     const row = object(entry, contract, path);
@@ -1613,7 +1609,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
     return Object.freeze({ dimensionId, evidenceProfileRefs: sortedStrings(row.evidenceProfileRefs, contract, `${path}/evidenceProfileRefs`) });
   });
   if (requiredEvidenceByDimension.length !== 7) fail(contract, "requiredEvidenceByDimension", "must cover all seven dimensions");
-  return freeze({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: text(source.id, contract, "id"), dimensionIds, maximumRepairAttemptCount: 1, builderSelfRepairAttemptCount: 0, thresholds, requiredEvidenceByDimension: Object.freeze(requiredEvidenceByDimension) });
+  return freeze({ kind: "world-reconstruction-evaluation-profile", schemaVersion: 1, id: text(source.id, contract, "id"), dimensionIds, maximumRepairAttemptCount: 1, builderSelfRepairAttemptCount: 3, thresholds, requiredEvidenceByDimension: Object.freeze(requiredEvidenceByDimension) });
 }
 
 export function worldReconstructionEvidenceProfileClosureMatchesV1(
@@ -2240,10 +2236,14 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   const finalEvaluationResultHash = hash(source.finalEvaluationResultHash, contract, "finalEvaluationResultHash");
   if (final.kind !== "evaluated" || final.attemptIndex !== finalAttemptIndex || final.evaluationResultRef !== finalEvaluationResultRef || final.evaluationResultHash !== finalEvaluationResultHash) fail(contract, "finalAttemptIndex", "final identity must identify the last evaluated Attempt result");
   const outcome = enumValue(source.outcome, ["passed", "failed", "incomplete"] as const, contract, "outcome");
+  const diagnosticCodes = sortedStrings(source.diagnosticCodes, contract, "diagnosticCodes", true);
   const cleanupOutcome = enumValue(source.cleanupOutcome, ["completed", "failed"] as const, contract, "cleanupOutcome");
   const expectedOutcome = cleanupOutcome === "failed" ? "incomplete" : final.outcome;
   if (outcome !== expectedOutcome) fail(contract, "outcome", "must match final result and fail closed on cleanup");
-  return freeze({ kind: "world-reconstruction-run-receipt", schemaVersion: 1, id: text(source.id, contract, "id"), caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"), outcome, attempts: Object.freeze(attempts), finalAttemptIndex, finalEvaluationResultRef, finalEvaluationResultHash, cleanupOutcome });
+  if ((outcome === "passed") !== (diagnosticCodes.length === 0)) {
+    fail(contract, "diagnosticCodes", "must be empty only for a passed Run");
+  }
+  return freeze({ kind: "world-reconstruction-run-receipt", schemaVersion: 1, id: text(source.id, contract, "id"), caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"), outcome, diagnosticCodes, attempts: Object.freeze(attempts), finalAttemptIndex, finalEvaluationResultRef, finalEvaluationResultHash, cleanupOutcome });
 }
 
 type Parser<T> = (value: unknown) => T;

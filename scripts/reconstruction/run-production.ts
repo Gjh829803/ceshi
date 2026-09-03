@@ -546,14 +546,7 @@ function runReceiptIdentity(
 function closedDiagnosticCodes(
   receipt: WorldReconstructionRunReceiptV1,
 ): readonly string[] {
-  if (receipt.cleanupOutcome === "failed") {
-    return Object.freeze(["WORLD_RECONSTRUCTION_CLEANUP_FAILED"]);
-  }
-  return Object.freeze([
-    receipt.outcome === "failed"
-      ? "WORLD_RECONSTRUCTION_RUN_FAILED"
-      : "WORLD_RECONSTRUCTION_RUN_INCOMPLETE",
-  ]);
+  return receipt.diagnosticCodes;
 }
 
 async function rejectedEvaluationResult(

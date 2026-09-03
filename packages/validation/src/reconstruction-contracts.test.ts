@@ -138,10 +138,10 @@ const profileValue = () => ({
   id: "cloud-temple.profile",
   dimensionIds: [...DIMENSIONS],
   maximumRepairAttemptCount: 1,
-  builderSelfRepairAttemptCount: 0,
+  builderSelfRepairAttemptCount: 3,
   thresholds: {
     semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }],
-    openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], maximumOrderDistanceBasisPoints: 100 },
+    openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }] },
     spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 },
   },
   requiredEvidenceByDimension: DIMENSIONS.map((dimensionId) => ({
@@ -412,7 +412,7 @@ describe("world reconstruction contracts", () => {
     Object.assign(profile, {
       thresholds: {
         semanticSilhouetteTargets: [{ acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", maximumBoundsDriftBasisPoints: 100, maximumCenterDriftBasisPoints: 100, maximumCoverageDriftBasisPoints: 100 }],
-        openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], maximumOrderDistanceBasisPoints: 100 },
+        openingComposition: { regions: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", maximumDriftBasisPoints: 100 }] },
         spawnSupport: { maximumPositionDriftMillimeters: 100, maximumSupportGapMillimeters: 10 },
       },
     });
@@ -866,7 +866,7 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionEvaluationProfileV1({ ...profileValue(), maximumRepairAttemptCount: 2 })).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID",
     );
-    expect(() => parseWorldReconstructionEvaluationProfileV1({ ...profileValue(), builderSelfRepairAttemptCount: 1 })).toThrowError(
+    expect(() => parseWorldReconstructionEvaluationProfileV1({ ...profileValue(), builderSelfRepairAttemptCount: 0 })).toThrowError(
       "WORLD_RECONSTRUCTION_EVALUATION_PROFILE_INVALID",
     );
   });
@@ -985,6 +985,7 @@ describe("world reconstruction contracts", () => {
       evaluationProfileRef: "artifact://case/cloud-temple/evaluation-profile.json",
       evaluationProfileHash: H("e"),
       outcome: "passed",
+      diagnosticCodes: [],
       attempts: [
         {
           kind: "evaluated",
@@ -1168,9 +1169,24 @@ describe("world reconstruction contracts", () => {
     const incomplete = parseWorldReconstructionRunReceiptV1({
       ...runValue,
       outcome: "incomplete",
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"],
       cleanupOutcome: "failed",
     });
     expect(incomplete.outcome).toBe("incomplete");
+    expect(incomplete.diagnosticCodes).toEqual([
+      "WORLD_RECONSTRUCTION_CLEANUP_FAILED",
+    ]);
+    expect(() => parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      outcome: "failed",
+      diagnosticCodes: [],
+      attempts: [
+        { ...runValue.attempts[0], outcome: "failed" },
+      ],
+      finalAttemptIndex: 0,
+      finalEvaluationResultRef: runValue.attempts[0].evaluationResultRef,
+      finalEvaluationResultHash: runValue.attempts[0].evaluationResultHash,
+    })).toThrowError("WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID");
   });
 
   it("omits repairAction from non-repairable diagnostics and their canonical bytes", () => {

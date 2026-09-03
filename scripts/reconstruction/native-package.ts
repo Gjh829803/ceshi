@@ -3,6 +3,7 @@ import { Scene } from "@babylonjs/core/scene.pure.js";
 import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+  BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
   parseNativeBlockAuthoringManifestV1,
   parseNativeBlockVisualResourceListV1,
 } from "@whitebox-world/native-babylon-block-profile";
@@ -95,6 +96,33 @@ const NATIVE_BLOCK_PRODUCTION_FORBIDDEN_LIGHT_IMPORTS_V1 = new Set([
   "@babylonjs/core/Lights/hemisphericLight.js",
   "@babylonjs/core/Lights/pointLight.js",
 ]);
+const STABLE_NATIVE_BLOCK_CHECK_DIAGNOSTIC_CODES_V1 = new Set<string>(
+  BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+);
+const NATIVE_BLOCK_PROFILE_CHECK_REJECTED_CODE =
+  "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED";
+
+function trustedNativeBlockCheckDiagnosticCodes(
+  checkResult: Awaited<ReturnType<
+    typeof checkBabylonNativeSceneWorldDirectoryV1
+  >>,
+): readonly string[] {
+  const codes = checkResult.diagnostics.flatMap((diagnostic) => {
+    if (STABLE_NATIVE_BLOCK_CHECK_DIAGNOSTIC_CODES_V1.has(diagnostic.code)) {
+      return [diagnostic.code];
+    }
+    if (diagnostic.code !== NATIVE_BLOCK_PROFILE_CHECK_REJECTED_CODE) {
+      return [];
+    }
+    return [
+      diagnostic.code,
+      ...BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1.filter((code) =>
+        diagnostic.message.includes(code)
+      ),
+    ];
+  });
+  return Object.freeze([...new Set(codes)].sort());
+}
 
 export function assertNativeBlockProductionSourceImportsV1(
   externalImportSpecifiers: readonly string[],
@@ -453,7 +481,10 @@ export async function packageNativeBlockAttemptV1(
       formalCheck,
     );
     if (formalCheck.outcome !== "passed") {
-      return fail(...["native-check-rejected"]);
+      throw new NativeBlockPackageErrorV1([
+        "native-check-rejected",
+        ...trustedNativeBlockCheckDiagnosticCodes(formalCheck),
+      ]);
     }
     const bundled = await buildAndLoadBabylonNativeSceneModuleV1(
       admitted.sourceGraph,

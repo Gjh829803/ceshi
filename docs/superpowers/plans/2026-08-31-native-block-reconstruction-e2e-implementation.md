@@ -400,7 +400,7 @@ export type WorldReconstructionMetricV1 =
   | Readonly<{ kind: "receipt-outcome"; outcome: "completed" | "failed" | "incomplete" }>;
 ```
 
-The Profile sets `maximumRepairAttemptCount: 1` and `builderSelfRepairAttemptCount: 0`. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
+The Profile sets `maximumRepairAttemptCount: 1` and `builderSelfRepairAttemptCount: 3`. The latter permits at most three bounded source-only self-repair cycles inside the original Builder task after its initial output; it never allocates a Package or Runtime Candidate. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
 
 NBR-10C closes the evaluator seam before NBR-50A: Case freezes facts only, Profile owns every
 BasisPoints/Millimeters threshold, and EvidenceSet contains seven closed observed payloads with per-row
@@ -626,7 +626,7 @@ The completed Attempt Result binds `authoredSourceHash` to the admitted source g
 
 - [ ] **Step 6: Create and validate the real Case inputs**
 
-Copy the source image without transformation, calculate its SHA-256, and bind it in `case.json`. Bind the copied Scene Brief hash. Reuse the retained verified Cloud Ridge Package's canonical Gameplay and World Runtime Bootstrap owner artifacts for the one real controlled Subject/Camera closure, snapshot their canonical bytes into the durable Attempt input, and bind the validated WorldPackage Bounds; do not hand-author a second Subject/Camera closure in the Native Bootstrap. The Case must contain non-empty acceptance targets for foreground platform, central ascent, mountain/cliff layers, upper T junction, gate mass, supported Spawn, required blocker colliders, and fixed-input traversal checkpoints. `evaluation-profile.json` fixes one formal model/Profile/Prompt/budget/threshold set, `maximumRepairAttemptCount: 1`, and `builderSelfRepairAttemptCount: 0`.
+Copy the source image without transformation, calculate its SHA-256, and bind it in `case.json`. Bind the copied Scene Brief hash. Reuse the retained verified Cloud Ridge Package's canonical Gameplay and World Runtime Bootstrap owner artifacts for the one real controlled Subject/Camera closure, snapshot their canonical bytes into the durable Attempt input, and bind the validated WorldPackage Bounds; do not hand-author a second Subject/Camera closure in the Native Bootstrap. The Case must contain non-empty acceptance targets for foreground platform, central ascent, mountain/cliff layers, upper T junction, gate mass, supported Spawn, required blocker colliders, and fixed-input traversal checkpoints. `evaluation-profile.json` fixes one formal model/Profile/Prompt/budget/threshold set, `maximumRepairAttemptCount: 1`, and `builderSelfRepairAttemptCount: 3`.
 
 Run:
 

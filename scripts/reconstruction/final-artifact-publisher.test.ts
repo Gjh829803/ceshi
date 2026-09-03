@@ -478,6 +478,7 @@ async function createRunFixture() {
     evaluationProfileHash:
       hashWorldReconstructionEvaluationProfileV1(fixture.evaluationProfile),
     outcome: "passed",
+    diagnosticCodes: [],
     attempts: [{
       kind: "evaluated",
       attemptIndex: 0,

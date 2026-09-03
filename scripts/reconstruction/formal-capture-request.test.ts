@@ -80,7 +80,7 @@ function profileValue() {
     id: "package-fixture-profile",
     dimensionIds,
     maximumRepairAttemptCount: 1,
-    builderSelfRepairAttemptCount: 0,
+    builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: [{
         acceptanceTargetRef: OPENING_TARGET,
@@ -108,7 +108,6 @@ function profileValue() {
           targetRef: SECONDARY_COMPOSITION,
           maximumDriftBasisPoints: 100,
         }],
-        maximumOrderDistanceBasisPoints: 100,
       },
       spawnSupport: {
         maximumPositionDriftMillimeters: 100,

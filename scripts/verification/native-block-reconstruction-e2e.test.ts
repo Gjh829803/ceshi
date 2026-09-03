@@ -575,6 +575,7 @@ async function completeRunFixture(
     evaluationProfileRef: fixture.evaluationProfileRef,
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(fixture.evaluationProfile),
     outcome: "passed",
+    diagnosticCodes: [],
     attempts: [{
       kind: "evaluated",
       attemptIndex: 0,
@@ -1380,6 +1381,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       else {
         receipt.cleanupOutcome = "failed";
         receipt.outcome = "incomplete";
+        receipt.diagnosticCodes = ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"];
       }
       await writeJson(receiptPath, receipt);
       try {

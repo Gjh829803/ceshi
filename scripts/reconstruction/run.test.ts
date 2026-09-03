@@ -120,7 +120,7 @@ function profile() {
     id: "cloud-temple.profile",
     dimensionIds: [...DIMENSIONS],
     maximumRepairAttemptCount: 1,
-    builderSelfRepairAttemptCount: 0,
+    builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: [{
         acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
@@ -137,7 +137,6 @@ function profile() {
           targetRef: "worldkit://composition-target/opening@1",
           maximumDriftBasisPoints: 100,
         }],
-        maximumOrderDistanceBasisPoints: 100,
       },
       spawnSupport: {
         maximumPositionDriftMillimeters: 100,
@@ -1105,6 +1104,8 @@ describe("runWorldReconstructionV1", () => {
       packageOutcomeByAttempt: ["check-failed"],
       packageDiagnosticCodesByAttempt: [[
         "native-check-rejected",
+        "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
+        "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
         "secret-provider-trace-42",
       ]],
     });
@@ -1116,6 +1117,8 @@ describe("runWorldReconstructionV1", () => {
       diagnosticCodes: [
         "WORLD_RECONSTRUCTION_CHECK_FAILED",
         "native-check-rejected",
+        "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
+        "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       ],
     });
   });

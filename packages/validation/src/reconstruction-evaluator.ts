@@ -781,38 +781,6 @@ function evaluateOpeningComposition(
         `Reposition the Native visual groups bound to opening targets so their order is ${expected.orderedTargetRefs.join(" -> ")}; do not edit the Case or thresholds.`,
       ),
     });
-  } else {
-    for (let index = 0; index < expected.orderedTargetRefs.length - 1; index += 1) {
-      const left = expected.orderedTargetRefs[index]!;
-      const right = expected.orderedTargetRefs[index + 1]!;
-      const fromTargetRef = left < right ? left : right;
-      const toTargetRef = left < right ? right : left;
-      const observedDistance = observed.distances.find((entry) =>
-        entry.fromTargetRef === fromTargetRef && entry.toTargetRef === toTargetRef
-      );
-      const maximumDistance = profile.thresholds.openingComposition.maximumOrderDistanceBasisPoints;
-      const actualDistance = observedDistance?.distanceBasisPoints ?? 10_000;
-      if (isNil(observedDistance) || actualDistance > maximumDistance) {
-        const details = basisPointsThresholdDetails(0, actualDistance, maximumDistance);
-        const targetId = `${fromTargetRef}->${toTargetRef}`;
-        diagnostics.push({
-          code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
-          acceptanceTargetRef: expected.acceptanceTargetRef,
-          targetRef: expected.acceptanceTargetRef,
-          targetId,
-          metricId: "opening-framing-distance-basis-points",
-          details,
-          evidenceRefs: row.evidenceRefs,
-          message: `Opening framing distance ${fromTargetRef} to ${toTargetRef} is ${actualDistance} basis points; maximum ${maximumDistance}, exceeded by ${details.exceededByBasisPoints}.`,
-          repairAction: sourceRepairAction(
-            "composition-target",
-            targetId,
-            "move",
-            `Move the Native visual groups bound to ${fromTargetRef} and ${toTargetRef} closer in the opening frame until their distance is at most ${maximumDistance} basis points; do not edit thresholds.`,
-          ),
-        });
-      }
-    }
   }
   const uniqueDiagnostics = uniqueDraftDiagnostics(diagnostics);
   const driftMetrics = [

@@ -596,7 +596,7 @@ BasisPoints/Millimeters tolerances. Evidence stores one closed observed discrimi
 list per dimension (an empty list expresses missing evidence), bound through Attempt, formal Package
 root, World Build Identity and Capture identities. It retains only evaluator inputs, never a raw Runtime
 Snapshot: semantic graph/layers; visual-group target presence and normalized projections; opening
-anchors/order/distances; spawn support/medium/XYZ/gap; collider contributions/roles/overlay;
+anchors/depth order plus advisory pairwise screen distances; spawn support/medium/XYZ/gap; collider contributions/roles/overlay;
 reached/blocked/incomplete traversal checkpoints; and replay/Package/Build/Capture agreement.
 
 ### 8.2 Independent dimensions
@@ -608,7 +608,7 @@ The Result has no masking aggregate score. Each required dimension independently
 |---|---|
 | `topology` | required semantic nodes/relations/layers and graph presence |
 | `semantic-silhouette` | visual-group presence plus normalized projected bounds/centers/coverage; pixel diff advisory only |
-| `opening-composition` | normalized regions/anchors, subject/landmark ordering and framing distances |
+| `opening-composition` | normalized regions/anchors and front-to-back depth ordering; pairwise 2D screen distances remain evidence only because laterally separated targets are valid |
 | `spawn-support` | BNA-4 admitted Spawn support + settled Runtime medium/position |
 | `collider` | required explicit Contribution IDs, overlay presence and blocker/ground roles |
 | `critical-traversal` | committed fixed-input scripted checkpoints through Havok Runtime |
@@ -670,8 +670,11 @@ The evaluator does not edit files, run a model, mutate Runtime, or update a Pack
 ## 9. One-repair closure
 
 The Profile fixes `maximumRepairAttemptCount: 1`. This means one initial generation plus at most one
-external diagnostic-driven repair task; it is distinct from any internal Builder self-check. The first
-NBR profile sets Builder self-repair to zero so BNA-6 can measure the initial result and the explicit repair.
+external diagnostic-driven repair task; it is distinct from the bounded source-only self-repair performed
+inside the original Builder task. The current NBR profile fixes `builderSelfRepairAttemptCount: 3`: after
+the initial output, the Builder may repair only its three declared outputs and rerun its bundled checker at
+most three times. Those cycles create neither a Package nor a Runtime Candidate. Host Check, Package,
+Capture, evaluation and the identity-bearing external repair Attempt remain separate authorities.
 
 ```text
 initial Attempt -> Package A -> Capture A -> Evaluation A
@@ -719,7 +722,9 @@ The run journal is content-addressed and fail-closed:
 - stale identity, no output, timeout, duplicate mismatch, missing Capture, cleanup failure or quarantine
   produces `incomplete` and cannot publish a final passed Receipt;
 - old Package/Capture artifacts remain immutable;
-- terminal Receipt publishes only after Candidate, Browser, Server, temp and provider cleanup join.
+- terminal Receipt publishes only after Candidate, Browser, Server, temp and provider cleanup join;
+- a non-passing terminal Receipt carries the stable allowlisted owner `diagnosticCodes` that caused the
+  closure. The production result reuses those codes instead of replacing them with a generic Run failure.
 
 ## 10. Representative real Case
 

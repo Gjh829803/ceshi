@@ -3,6 +3,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { isEmpty, isNil } from "lodash-es";
+import {
+  BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+} from "@whitebox-world/native-babylon-block-profile";
 import { type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   parseWorldReconstructionCaseArtifactRefV1,
@@ -333,6 +336,8 @@ const STABLE_LOWERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "world-package-kind-mismatch",
 ]);
 const STABLE_UPPERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
+  ...BABYLON_NATIVE_BLOCK_PROFILE_DIAGNOSTIC_CODES_V1,
+  "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
   "FORMAL_CAPTURE_ARTIFACT_BUDGET_INVALID",
   "FORMAL_CAPTURE_JSON_BUDGET_EXCEEDED",
   "FORMAL_CAPTURE_NATIVE_PACKAGE_REQUIRED",
@@ -934,6 +939,21 @@ async function publishCompletedReceipt(
   const finalOutcome: WorldReconstructionOutcomeV1 = cleanupOutcome === "failed"
     ? "incomplete"
     : final.evaluated.outcome;
+  const diagnosticCodes = finalOutcome === "passed"
+    ? []
+    : [...new Set([
+        ...allowlistedOwnerDiagnosticCodes(final.evaluated.diagnosticCodes),
+        ...(cleanupOutcome === "failed"
+          ? ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"]
+          : []),
+      ])].sort();
+  if (finalOutcome !== "passed" && diagnosticCodes.length === 0) {
+    diagnosticCodes.push(
+      finalOutcome === "failed"
+        ? "WORLD_RECONSTRUCTION_RUN_FAILED"
+        : "WORLD_RECONSTRUCTION_RUN_INCOMPLETE",
+    );
+  }
   const receipt = parseWorldReconstructionRunReceiptV1({
     kind: "world-reconstruction-run-receipt",
     schemaVersion: 1,
@@ -943,6 +963,7 @@ async function publishCompletedReceipt(
     evaluationProfileRef: reconstructionCase.evaluationProfileRef,
     evaluationProfileHash: input.frozenOwnerIdentities.evaluationProfileHash,
     outcome: finalOutcome,
+    diagnosticCodes,
     attempts: attempts.map((attempt) => attemptReceiptRow(attempt)),
     finalAttemptIndex: final.attemptIndex,
     finalEvaluationResultRef: final.evaluated.evaluation.id,

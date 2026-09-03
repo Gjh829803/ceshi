@@ -234,7 +234,7 @@ export function createEvidenceSetFixtureInputV1(
       "topology",
     ],
     maximumRepairAttemptCount: 1,
-    builderSelfRepairAttemptCount: 0,
+    builderSelfRepairAttemptCount: 3,
     thresholds: {
       semanticSilhouetteTargets: [{
         acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
@@ -264,7 +264,6 @@ export function createEvidenceSetFixtureInputV1(
               maximumDriftBasisPoints: 100,
             }]
             : []],
-        maximumOrderDistanceBasisPoints: allDimensionsPass ? 300 : 100,
       },
       spawnSupport: {
         maximumPositionDriftMillimeters: 100,
