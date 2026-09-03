@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 MODULE_PATH = Path(__file__).with_name("run-episode-video-segment.py")
@@ -46,6 +46,7 @@ class Seedance25ContractTest(unittest.TestCase):
             ".codex-tmp/runtime-config/infinite-canvas.key",
         )
         self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 10)
+        self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 20)
         self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 2)
 
     def test_idempotency_header_is_kept_separate_from_bearer_key(self) -> None:
@@ -53,6 +54,40 @@ class Seedance25ContractTest(unittest.TestCase):
         self.assertEqual(headers["Authorization"], "Bearer secret")
         self.assertEqual(headers["Idempotency-Key"], "stable-task-key")
         self.assertEqual(headers["Content-Type"], "application/json")
+
+    def test_cloud_provider_uses_the_shared_twenty_slot_pool(self) -> None:
+        lease = object()
+        pool = MagicMock()
+        pool.acquire.return_value = lease
+        provider = {
+            "globalConcurrency": {
+                "enabledInCloud": True,
+                "namespace": "lwdp",
+                "leaseNamePrefix": "worldkit-seedance-slot",
+                "slotCount": 20,
+                "leaseDurationSeconds": 900,
+                "waitTimeoutSeconds": 21600,
+                "pollIntervalSeconds": 5,
+            },
+        }
+        with patch.dict(os.environ, {"WORLDKIT_CLOUD_EXECUTION_ID": "exec_episode"}), patch.object(
+            MODULE, "GlobalSeedanceLeasePool", return_value=pool
+        ) as constructor:
+            acquired = MODULE.acquire_global_seedance_slot(
+                provider,
+                task_identity="episode/style/segment",
+            )
+        self.assertIs(acquired, lease)
+        self.assertEqual(constructor.call_args.kwargs["slot_count"], 20)
+        pool.acquire.assert_called_once_with("episode/style/segment", 21600.0)
+
+    def test_local_provider_does_not_consume_a_cloud_slot(self) -> None:
+        provider = {"globalConcurrency": {"enabledInCloud": True, "slotCount": 20}}
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(MODULE.acquire_global_seedance_slot(
+                provider,
+                task_identity="episode/style/segment",
+            ))
 
     def test_retryable_submit_reuses_exact_payload_and_idempotency_key(self) -> None:
         provider = {"baseUrl": "https://provider.test", "submitPath": "/v1/videos"}

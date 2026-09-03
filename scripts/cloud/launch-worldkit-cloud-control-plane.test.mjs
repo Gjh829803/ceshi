@@ -50,4 +50,9 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   assert.ok(role.rules[0].verbs.includes("create"));
   assert.ok(role.rules[0].verbs.includes("patch"));
   assert.equal(role.rules[0].verbs.includes("delete"), false);
+  const leaseRule = role.rules.find((rule) => rule.resources.includes("leases"));
+  assert.deepEqual(leaseRule.apiGroups, ["coordination.k8s.io"]);
+  assert.ok(leaseRule.verbs.includes("create"));
+  assert.ok(leaseRule.verbs.includes("update"));
+  assert.equal(leaseRule.verbs.includes("delete"), false);
 });

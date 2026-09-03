@@ -22,6 +22,8 @@ from typing import Any
 
 import requests
 
+from cloud_seedance_slots import GlobalSeedanceLeasePool, SeedanceSlotLease
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "episode-video-pipeline.json"
@@ -126,6 +128,29 @@ def sanitized(value: Any) -> str:
     text = re.sub(r"https?://[^\s\"']+", "<redacted-url>", text)
     text = re.sub(r"(?i)(authorization|api[_-]?key|token)[=: ]+[^,\s]+", r"\1=<redacted>", text)
     return text[:3000]
+
+
+def acquire_global_seedance_slot(
+    provider: dict[str, Any],
+    *,
+    task_identity: str,
+) -> SeedanceSlotLease | None:
+    settings = provider.get("globalConcurrency")
+    if not os.environ.get("WORLDKIT_CLOUD_EXECUTION_ID") or not isinstance(settings, dict):
+        return None
+    if settings.get("enabledInCloud") is not True:
+        return None
+    pool = GlobalSeedanceLeasePool(
+        namespace=str(settings.get("namespace") or "lwdp"),
+        lease_name_prefix=str(settings.get("leaseNamePrefix") or "worldkit-seedance-slot"),
+        slot_count=int(settings.get("slotCount") or 20),
+        lease_duration_seconds=int(settings.get("leaseDurationSeconds") or 900),
+        poll_interval_seconds=float(settings.get("pollIntervalSeconds") or 5),
+    )
+    return pool.acquire(
+        task_identity,
+        float(settings.get("waitTimeoutSeconds") or 21600),
+    )
 
 
 def api_headers(api_key: str, *, idempotency_key: str | None = None) -> dict[str, str]:
@@ -435,6 +460,7 @@ def main() -> None:
 
     if not raw_valid:
         model_available(provider, api_key, model)
+        needs_submission = not job_id
         if not job_id:
             saved_payload = previous.get("providerRequest")
             saved_idempotency_key = previous.get("idempotencyKey")
@@ -491,62 +517,78 @@ def main() -> None:
                     "createdAt": previous.get("createdAt") or utc_now(),
                     "updatedAt": utc_now(),
                 })
-            job_id = submit_job(
-                provider=provider,
-                api_key=api_key,
-                idempotency_key=idempotency_key,
-                payload=payload,
-            )
-            persist_provider_record(result_path, {
-                "kind": "worldkit-episode-video-provider-run",
-                "schemaVersion": 3,
-                "sceneId": scene_id,
+        slot = acquire_global_seedance_slot(
+            provider,
+            task_identity=json.dumps({
                 "episodeId": episode_id,
                 "segmentId": segment_id,
-                "status": "seedance-submitted",
-                "providerJobId": job_id,
-                "providerAttempt": provider_attempt,
-                "modelChain": [model],
                 "inputIdentity": input_identity,
-                "idempotencyKey": idempotency_key,
-                "providerRequest": payload,
-                "createdAt": previous.get("createdAt") or utc_now(),
-                "updatedAt": utc_now(),
-            })
-            print(f"WORLDKIT_EPISODE_SEEDANCE25_SUBMITTED {job_id}", flush=True)
+                "providerAttempt": provider_attempt,
+            }, sort_keys=True, separators=(",", ":")),
+        )
         try:
-            result_url = poll_job(provider, api_key, job_id)
-        except EpisodeVideoProviderTerminalError as error:
-            record = read_json(result_path) if result_path.is_file() else {}
-            record.update({
-                "kind": "worldkit-episode-video-provider-run",
-                "schemaVersion": 3,
-                "sceneId": scene_id,
-                "episodeId": episode_id,
-                "segmentId": segment_id,
-                "status": error.status,
-                "providerJobId": job_id,
-                "providerAttempt": provider_attempt,
-                "modelChain": [model],
-                "inputIdentity": input_identity,
-                "updatedAt": utc_now(),
-                "error": error.detail,
-            })
-            record.pop("providerRequest", None)
-            persist_provider_record(result_path, record)
-            raise
-        download(result_url, raw_output)
-        raw_media = probe(raw_output)
-        if raw_media["durationSeconds"] < 29.5 or not raw_media["hasAudio"]:
-            raw_output.unlink(missing_ok=True)
-            raise EpisodeVideoError(f"Seedance source media is incomplete: {raw_media}")
-        raw_receipt = {
-            "fileName": raw_output.name,
-            "sha256": sha256(raw_output),
-            "media": raw_media,
-            "resultUrl": result_url,
-        }
-        print("WORLDKIT_EPISODE_SEEDANCE25_READY", flush=True)
+            if slot is not None:
+                slot.__enter__()
+            if needs_submission:
+                job_id = submit_job(
+                    provider=provider,
+                    api_key=api_key,
+                    idempotency_key=idempotency_key,
+                    payload=payload,
+                )
+                persist_provider_record(result_path, {
+                    "kind": "worldkit-episode-video-provider-run",
+                    "schemaVersion": 3,
+                    "sceneId": scene_id,
+                    "episodeId": episode_id,
+                    "segmentId": segment_id,
+                    "status": "seedance-submitted",
+                    "providerJobId": job_id,
+                    "providerAttempt": provider_attempt,
+                    "modelChain": [model],
+                    "inputIdentity": input_identity,
+                    "idempotencyKey": idempotency_key,
+                    "providerRequest": payload,
+                    "createdAt": previous.get("createdAt") or utc_now(),
+                    "updatedAt": utc_now(),
+                })
+                print(f"WORLDKIT_EPISODE_SEEDANCE25_SUBMITTED {job_id}", flush=True)
+            try:
+                result_url = poll_job(provider, api_key, job_id)
+            except EpisodeVideoProviderTerminalError as error:
+                record = read_json(result_path) if result_path.is_file() else {}
+                record.update({
+                    "kind": "worldkit-episode-video-provider-run",
+                    "schemaVersion": 3,
+                    "sceneId": scene_id,
+                    "episodeId": episode_id,
+                    "segmentId": segment_id,
+                    "status": error.status,
+                    "providerJobId": job_id,
+                    "providerAttempt": provider_attempt,
+                    "modelChain": [model],
+                    "inputIdentity": input_identity,
+                    "updatedAt": utc_now(),
+                    "error": error.detail,
+                })
+                record.pop("providerRequest", None)
+                persist_provider_record(result_path, record)
+                raise
+            download(result_url, raw_output)
+            raw_media = probe(raw_output)
+            if raw_media["durationSeconds"] < 29.5 or not raw_media["hasAudio"]:
+                raw_output.unlink(missing_ok=True)
+                raise EpisodeVideoError(f"Seedance source media is incomplete: {raw_media}")
+            raw_receipt = {
+                "fileName": raw_output.name,
+                "sha256": sha256(raw_output),
+                "media": raw_media,
+                "resultUrl": result_url,
+            }
+            print("WORLDKIT_EPISODE_SEEDANCE25_READY", flush=True)
+        finally:
+            if slot is not None:
+                slot.__exit__(None, None, None)
 
     if args.until == "seedance":
         record = read_json(result_path) if result_path.is_file() else {}

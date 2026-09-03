@@ -22,6 +22,10 @@ export function worldkitJobControllerRbac({
       apiGroups: ["batch"],
       resources: ["jobs"],
       verbs: ["get", "list", "watch", "create", "update", "patch"],
+    }, {
+      apiGroups: ["coordination.k8s.io"],
+      resources: ["leases"],
+      verbs: ["get", "list", "watch", "create", "update", "patch"],
     }],
   }, {
     apiVersion: "rbac.authorization.k8s.io/v1",

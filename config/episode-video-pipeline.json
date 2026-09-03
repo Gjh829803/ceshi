@@ -17,7 +17,16 @@
     "pollIntervalSeconds": 8,
     "timeoutSeconds": 7200,
     "maxConcurrentJobs": 10,
-    "maxTerminalAttempts": 2
+    "maxTerminalAttempts": 2,
+    "globalConcurrency": {
+      "enabledInCloud": true,
+      "namespace": "lwdp",
+      "leaseNamePrefix": "worldkit-seedance-slot",
+      "slotCount": 20,
+      "leaseDurationSeconds": 900,
+      "waitTimeoutSeconds": 21600,
+      "pollIntervalSeconds": 5
+    }
   },
   "seedance": {
     "model": "seedance-2.5",

@@ -77,6 +77,10 @@ pool:
   provider cannot consume another provider's slots;
 - the pool counts submitted and running provider Jobs until their exact Job IDs
   become terminal, including Jobs being recovered after Worker replacement;
+- cloud Episode Workers acquire one of 20 Kubernetes `Lease` objects immediately
+  before Seedance submission or recovery polling and release it only after the
+  provider result is downloaded; lease renewal and expiry preserve the cap
+  across Worker replacement without storing media locally;
 - throttling, transport failures, and provider-capacity responses use bounded
   exponential backoff with jitter and preserve the existing idempotency/checkpoint
   identity; authored or conformance failures are not retried as infrastructure;
