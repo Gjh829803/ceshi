@@ -667,6 +667,49 @@ test("keeps creation idempotent while allowing bounded formal Stage attempts", a
   }
 });
 
+test("treats one thousand T2I items as one admitted LWDP batch", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "lwdp-t2i-batch-limit-"));
+  const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  try {
+    const manifest = path.join(root, "manifest.json");
+    const items = Array.from({ length: 1_000 }, (_, index) => ({
+      id: `image-${String(index).padStart(4, "0")}`,
+      prompt: "neutral whitebox",
+      orientation: "横图",
+    }));
+    await writeFile(manifest, JSON.stringify({ items }));
+    const accepted = spawnSync(process.execPath, [
+      "scripts/agents/run-lwdp-t2i-job.mjs",
+      "--stage", "styled-opening-frame",
+      "--output-s3-prefix", "s3://bucket/worldkit/t2i-batch-limit",
+      "--manifest", manifest,
+    ], {
+      cwd: repoRoot,
+      env: { ...process.env, WORLDKIT_LWDP_CLIENT_SMOKE: "1" },
+      encoding: "utf8",
+    });
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.match(accepted.stdout, /WORLDKIT_LWDP_T2I_SMOKE items=1000/);
+
+    items.push({ id: "image-1000", prompt: "neutral whitebox", orientation: "横图" });
+    await writeFile(manifest, JSON.stringify({ items }));
+    const rejected = spawnSync(process.execPath, [
+      "scripts/agents/run-lwdp-t2i-job.mjs",
+      "--stage", "styled-opening-frame",
+      "--output-s3-prefix", "s3://bucket/worldkit/t2i-batch-limit",
+      "--manifest", manifest,
+    ], {
+      cwd: repoRoot,
+      env: { ...process.env, WORLDKIT_LWDP_CLIENT_SMOKE: "1" },
+      encoding: "utf8",
+    });
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /cannot exceed the LWDP batch limit of 1000/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("retries a terminal visual account-model incompatibility with a new request id and isolated S3 prefix", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "lwdp-visual-retry-"));
   const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");

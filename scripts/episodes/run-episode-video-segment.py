@@ -23,6 +23,7 @@ from typing import Any
 import requests
 
 from cloud_seedance_slots import GlobalSeedanceLeasePool, SeedanceSlotLease
+from cloud_production_slots import acquire_global_production_slot
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -76,14 +77,24 @@ def persist_provider_record(path: Path, value: dict[str, Any]) -> None:
         raise EpisodeVideoError("WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX must be an S3 URI")
     episode_id = safe_id(value.get("episodeId"), "provider journal episodeId")
     segment_id = safe_id(value.get("segmentId"), "provider journal segmentId")
-    destination = f"{prefix}/{episode_id}/{segment_id}/provider-run.json"
+    style_variant_id = value.get("styleVariantId")
+    variant_path = (
+        safe_id(style_variant_id, "provider journal styleVariantId")
+        if style_variant_id is not None
+        else "legacy"
+    )
+    destination = (
+        f"{prefix}/{episode_id}/{variant_path}/{segment_id}/provider-run.json"
+        if style_variant_id is not None
+        else f"{prefix}/{episode_id}/{segment_id}/provider-run.json"
+    )
     subprocess.run(
         ["aws", "s3", "cp", "--only-show-errors", str(path), destination],
         check=True,
         timeout=120,
     )
     print(
-        f"WORLDKIT_PROVIDER_JOURNAL_CHECKPOINT {segment_id} {value.get('status')}",
+        f"WORLDKIT_PROVIDER_JOURNAL_CHECKPOINT {variant_path} {segment_id} {value.get('status')}",
         flush=True,
     )
 
@@ -198,6 +209,7 @@ def upload_material(
     provider: dict[str, Any],
     api_key: str,
     episode_id: str,
+    variant_id: str,
     segment_id: str,
 ) -> str:
     if path.stat().st_size > MAX_MATERIAL_BYTES:
@@ -211,7 +223,7 @@ def upload_material(
         provider_url(provider, str(provider["uploadSignPath"])),
         headers=api_headers(api_key),
         json={
-            "folder": f"openapi/video/worldkit/{episode_id}/{segment_id}",
+            "folder": f"openapi/video/worldkit/{episode_id}/{variant_id}/{segment_id}",
             "fileName": f"{digest[:16]}-{safe_name}",
             "contentType": content_type,
         },
@@ -399,6 +411,12 @@ def main() -> None:
         raise EpisodeVideoError("Episode video request identity is invalid")
     scene_id = safe_id(request.get("sceneId"), "sceneId")
     episode_id = safe_id(request.get("episodeId"), "episodeId")
+    style_variant_id = (
+        safe_id(request.get("styleVariantId"), "styleVariantId")
+        if request.get("styleVariantId") is not None
+        else None
+    )
+    variant_id = style_variant_id or "legacy"
     segment_id = safe_id(request.get("segmentId"), "segmentId")
     prompt_file = existing_file(request.get("promptPath"), "Seedance prompt")
     prompt_record = read_json(prompt_file)
@@ -473,6 +491,7 @@ def main() -> None:
                     provider=provider,
                     api_key=api_key,
                     episode_id=episode_id,
+                    variant_id=variant_id,
                     segment_id=segment_id,
                 )
                 image_urls = [
@@ -481,12 +500,14 @@ def main() -> None:
                         provider=provider,
                         api_key=api_key,
                         episode_id=episode_id,
+                        variant_id=variant_id,
                         segment_id=segment_id,
                     )
                     for image in reference_images
                 ]
                 idempotency_key = "worldkit-" + sha256_text(json.dumps({
                     "episodeId": episode_id,
+                    "styleVariantId": style_variant_id,
                     "segmentId": segment_id,
                     "inputIdentity": input_identity,
                     "providerAttempt": provider_attempt,
@@ -506,6 +527,7 @@ def main() -> None:
                     "schemaVersion": 3,
                     "sceneId": scene_id,
                     "episodeId": episode_id,
+                    **({"styleVariantId": style_variant_id} if style_variant_id else {}),
                     "segmentId": segment_id,
                     "status": "seedance-submitting",
                     "providerJobId": None,
@@ -521,6 +543,7 @@ def main() -> None:
             provider,
             task_identity=json.dumps({
                 "episodeId": episode_id,
+                "styleVariantId": style_variant_id,
                 "segmentId": segment_id,
                 "inputIdentity": input_identity,
                 "providerAttempt": provider_attempt,
@@ -541,6 +564,7 @@ def main() -> None:
                     "schemaVersion": 3,
                     "sceneId": scene_id,
                     "episodeId": episode_id,
+                    **({"styleVariantId": style_variant_id} if style_variant_id else {}),
                     "segmentId": segment_id,
                     "status": "seedance-submitted",
                     "providerJobId": job_id,
@@ -562,6 +586,7 @@ def main() -> None:
                     "schemaVersion": 3,
                     "sceneId": scene_id,
                     "episodeId": episode_id,
+                    **({"styleVariantId": style_variant_id} if style_variant_id else {}),
                     "segmentId": segment_id,
                     "status": error.status,
                     "providerJobId": job_id,
@@ -597,6 +622,7 @@ def main() -> None:
             "schemaVersion": 3,
             "sceneId": scene_id,
             "episodeId": episode_id,
+            **({"styleVariantId": style_variant_id} if style_variant_id else {}),
             "segmentId": segment_id,
             "status": "seedance-ready",
             "providerJobId": job_id or record.get("providerJobId"),
@@ -610,13 +636,26 @@ def main() -> None:
         persist_provider_record(result_path, record)
         return
 
-    media = conform(raw_output, final_output)
+    conformance_slot = acquire_global_production_slot("media-conformance", {
+        "episodeId": episode_id,
+        "styleVariantId": style_variant_id or "legacy",
+        "segmentId": segment_id,
+        "inputIdentity": input_identity,
+    })
+    try:
+        if conformance_slot is not None:
+            conformance_slot.__enter__()
+        media = conform(raw_output, final_output)
+    finally:
+        if conformance_slot is not None:
+            conformance_slot.__exit__(None, None, None)
     record = read_json(result_path) if result_path.is_file() else {}
     record.update({
         "kind": "worldkit-episode-video-provider-run",
         "schemaVersion": 3,
         "sceneId": scene_id,
         "episodeId": episode_id,
+        **({"styleVariantId": style_variant_id} if style_variant_id else {}),
         "segmentId": segment_id,
         "status": "succeeded",
         "providerJobId": job_id or record.get("providerJobId"),

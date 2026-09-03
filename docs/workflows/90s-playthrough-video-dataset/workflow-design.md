@@ -3,11 +3,12 @@
 ```text
 Admitted Scene manifest
   → CPU episode-prepare: reconnaissance + navigation + one Planner Codex Job
-  → S3 GPU queue (hard floor: 100 ready Episodes)
-  → one shared GPU Batch Pod: six independent 30s captures per Episode
-  → CPU episode-render: Visual Codex + one Gemini five-event call
-  → six detailed prompts + six direct seedance-2.5 720p Jobs
-  → exact media conformance + S3 manifest + review ZIP
+  → S3 GPU ready-wave queue
+  → indexed GPU capture: six independent 30s captures per Episode
+  → style plan → ten opening anchors → variant visuals and tri-views → Codex reviews
+  → diversity review → Gemini events → sixty detailed prompts
+  → sixty Seedance 2.5 720p Jobs → exact media conformance
+  → S3 publication manifest + review ZIP
 ```
 
 ## Authority
@@ -42,8 +43,8 @@ not three parallel requests.
 ## Failure and resume
 
 Each internal stage is content-addressed and resumes when its exact inputs still match. Six whitebox
-captures are the only stages that require the shared Runtime slot. Six Seedance Jobs are admitted
-through a bounded three-slot pool. Provider submission persists the exact payload before POST and uses one stable
+captures are the only stages that require the shared Runtime/GPU lane. Seedance Jobs are admitted
+through a per-Case limit of 10 and a global limit of 96. Provider submission persists the exact payload before POST and uses one stable
 Idempotency-Key; after Job ID creation, resume only polls that Job. A Seedance failure does not
 recapture whitebox or regenerate Scene/Planner/Visual assets.
 
@@ -53,7 +54,14 @@ attempt-specific S3 prefix. `episode-source-receipt.json` binds the Episode to t
 Seedance raw checkpoints carry their own content hash and provider result URL; a corrupt checkpoint
 is downloaded again from the same provider Job instead of creating a replacement Job.
 
-Cloud production keeps one parent LWDP execution but uses three coarse compute stages. This releases
-GPU capacity immediately after deterministic capture while preserving every model and content
-boundary. Large artifacts stay in S3; Studio streams them through signed URLs and never needs a
-persistent local media copy.
+New full cloud production keeps one parent LWDP execution with durable boundaries for prepare,
+capture, style plan, openings, visuals, diversity, events, prompts, Seedance, conformance, and
+publication. A failed boundary retries independently from its direct S3 predecessor; successful
+Cases continue downstream without waiting for sibling failures. Historical and visual-sample runs
+keep the three-stage replay path. Large artifacts stay in S3; disposable Workers hydrate only the
+checkpoint they need, Studio streams media on demand, and no persistent local media copy is required.
+
+LWDP caller capacity counts batches, not tasks inside a batch. One Codex or T2I request may contain
+up to 1000 compatible tasks/items and occupies one of at most 120 non-terminal batch slots. At most
+24 create HTTP requests may be in flight. Batch-internal account and Pod concurrency remain LWDP
+scheduler settings and are not modeled as 1000 caller-side slots.

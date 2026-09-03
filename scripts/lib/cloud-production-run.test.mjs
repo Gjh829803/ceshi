@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CLOUD_EPISODE_STAGE_PROFILE_V3,
   CLOUD_EPISODE_STAGE_PROFILE_V2,
   buildGpuCaptureQueueEntry,
   parseCloudProviderJournal,
@@ -39,6 +40,26 @@ test("Episode Cloud Execution uses three coarse effect-preserving stages", () =>
   ]);
   assert.deepEqual(CLOUD_EPISODE_STAGE_PROFILE_V2[1].depends_on, ["episode-prepare"]);
   assert.deepEqual(CLOUD_EPISODE_STAGE_PROFILE_V2[2].depends_on, ["whitebox-capture"]);
+});
+
+test("48-hour production profile exposes durable post-capture checkpoints", () => {
+  assert.deepEqual(CLOUD_EPISODE_STAGE_PROFILE_V3.map(({ stage_id }) => stage_id), [
+    "episode-prepare",
+    "whitebox-capture",
+    "episode-style-plan",
+    "episode-style-openings",
+    "episode-style-visuals",
+    "episode-style-diversity",
+    "episode-style-events",
+    "episode-style-prompts",
+    "episode-seedance",
+    "episode-conformance",
+    "episode-publication",
+  ]);
+  assert.deepEqual(
+    CLOUD_EPISODE_STAGE_PROFILE_V3.at(-1).depends_on,
+    ["episode-conformance"],
+  );
 });
 
 test("GPU batch below one hundred requires closed-producer evidence", () => {
@@ -116,7 +137,12 @@ test("Provider Journal closes the request before and after submission", () => {
   }));
   assert.equal(parseCloudProviderJournal({
     ...prepared,
+    styleVariantId: "style-03",
     status: "seedance-submitted",
     providerJobId: "provider-job-001",
-  }).providerJobId, "provider-job-001");
+  }).styleVariantId, "style-03");
+  assert.throws(() => parseCloudProviderJournal({
+    ...prepared,
+    styleVariantId: "style-10",
+  }));
 });

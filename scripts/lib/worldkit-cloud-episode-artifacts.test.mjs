@@ -153,6 +153,40 @@ test("rehydrates a prior Episode attempt only from its hash-closed namespace", a
   }
 });
 
+test("reuses hash-identical prior artifacts without uploading the bytes again", async () => {
+  const root = await mkdtemp(join(tmpdir(), "worldkit-cloud-episode-reuse-"));
+  try {
+    const filePath = join(root, "episode-record.json");
+    const bytes = Buffer.from("stable record\n");
+    await writeFile(filePath, bytes);
+    const sha256 = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+    const manifest = await buildCloudEpisodeArtifactManifest({
+      sceneId: "scene-cloud-001",
+      episodeId: "episode-scene-cloud-001-reuse",
+      executionId: "exec-episode-reuse",
+      stageId: "episode-render",
+      executionPart: "render",
+      requireComplete: false,
+      stageOutputS3Prefix: "s3://bucket/episode/checkpoints/current",
+      episodeRoot: root,
+      reuseArtifacts: [{
+        path: "episode/episode-record.json",
+        byteSize: bytes.length,
+        sha256,
+        s3Uri: "s3://bucket/episode/checkpoints/prior/episode/episode-record.json",
+        producerStage: "whitebox-capture",
+      }],
+    });
+    assert.equal(manifest.artifacts.length, 1);
+    assert.equal(manifest.artifacts[0].s3Uri,
+      "s3://bucket/episode/checkpoints/prior/episode/episode-record.json");
+    assert.equal(manifest.artifacts[0].producerStage, "whitebox-capture");
+    assert.equal("localPath" in manifest.artifacts[0], false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("requires every reviewed Style Variant video while storing shared whitebox once", async () => {
   const root = await mkdtemp(join(tmpdir(), "worldkit-cloud-style-variants-"));
   const episodeId = "episode-scene-cloud-001-style01";

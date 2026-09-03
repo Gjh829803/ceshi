@@ -20,6 +20,16 @@ import { CLOUD_EPISODE_PART_BY_STAGE_ID } from
 
 const DIGEST_IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
+export function cloudEpisodeFinalStageId(executionProfile, execution = null) {
+  const hasStreamingStage = execution?.stages?.some?.((stage) =>
+    stage?.stage_id === "episode-publication");
+  const hasObservedStages = Array.isArray(execution?.stages) && execution.stages.length > 0;
+  return (hasObservedStages ? hasStreamingStage :
+    executionProfile === "cpu-gpu-streaming-checkpoints@1")
+    ? "episode-publication"
+    : "episode-render";
+}
+
 function validNodeSelector(value) {
   return value && typeof value === "object" && !Array.isArray(value) &&
     Object.entries(value).every(([key, item]) =>
@@ -43,7 +53,8 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
   if (
     value?.kind !== "worldkit-cloud-episode-production-config" ||
     value?.schemaVersion !== 2 ||
-    value?.executionProfile !== "cpu-gpu-batch-cpu@1"
+    !["cpu-gpu-batch-cpu@1", "cpu-gpu-streaming-checkpoints@1"]
+      .includes(value?.executionProfile)
   ) throw new Error("Cloud Episode production config identity is invalid.");
   if (value.enabled !== true) return null;
   const workerImage = environment.WORLDKIT_CLOUD_WORKER_IMAGE || value.workerImage;
@@ -74,7 +85,7 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     gpuBatch.dispatcherIntervalSeconds < 10 ||
     !Number.isSafeInteger(gpuBatch?.caseConcurrency) ||
     gpuBatch.caseConcurrency < 1 ||
-    gpuBatch.caseConcurrency > 10 ||
+    gpuBatch.caseConcurrency > 32 ||
     typeof gpuBatch.dispatchReadyImmediately !== "boolean"
   ) throw new Error("Cloud Episode GPU Batch config is invalid.");
   for (const key of ["ephemeralStorageRequest", "ephemeralStorageLimit"]) {
@@ -235,6 +246,7 @@ export async function executeStudioCloudEpisode({
     sceneRecord,
     productionScope,
     styleVariantMode,
+    executionProfile: config.executionProfile,
     resumeEpisodeManifest,
     gpuBatch: config.gpuBatch,
     workerImage,
@@ -281,7 +293,11 @@ export async function executeStudioCloudEpisode({
   return {
     execution,
     stages,
-    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages, "episode-render"),
+    manifestS3Uri: cloudArtifactManifestS3Uri(
+      execution,
+      stages,
+      cloudEpisodeFinalStageId(submitted.executionProfile, execution),
+    ),
     outputS3Prefix,
     submitted,
   };
@@ -347,7 +363,11 @@ export async function retryStudioCloudEpisode({
   return {
     execution,
     stages,
-    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages, "episode-render"),
+    manifestS3Uri: cloudArtifactManifestS3Uri(
+      execution,
+      stages,
+      cloudEpisodeFinalStageId(config.executionProfile, execution),
+    ),
     outputS3Prefix,
     awaitingGpuBatch: launch?.awaitingGpuBatch === true,
   };
@@ -424,6 +444,10 @@ export async function recoverStudioCloudEpisode({
     stages,
     retryRequired: ["failed", "interrupted"].includes(String(execution.status)),
     cancelled: execution.status === "cancelled",
-    manifestS3Uri: cloudArtifactManifestS3Uri(execution, stages, "episode-render"),
+    manifestS3Uri: cloudArtifactManifestS3Uri(
+      execution,
+      stages,
+      cloudEpisodeFinalStageId(config?.executionProfile, execution),
+    ),
   };
 }

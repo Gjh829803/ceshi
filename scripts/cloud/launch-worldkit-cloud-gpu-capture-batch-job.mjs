@@ -84,8 +84,8 @@ export function cloudGpuCaptureBatchJob({
   if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900 || taskLeaseSeconds > 3_600) {
     throw new Error("taskLeaseSeconds must be between 900 and 3600.");
   }
-  if (!Number.isSafeInteger(caseConcurrency) || caseConcurrency < 1 || caseConcurrency > 10) {
-    throw new Error("caseConcurrency must be between 1 and 10.");
+  if (!Number.isSafeInteger(caseConcurrency) || caseConcurrency < 1 || caseConcurrency > 32) {
+    throw new Error("caseConcurrency must be between 1 and 32.");
   }
   const indexed = caseConcurrency > 1 && taskCount > 1;
   const name = `worldkit-${batchId}`.slice(0, 63).replace(/-$/, "");

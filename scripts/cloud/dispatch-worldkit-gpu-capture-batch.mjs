@@ -348,7 +348,9 @@ async function main() {
     join(repoRoot, "config", "cloud-episode-production.json"),
     "utf8",
   ));
-  if (config?.schemaVersion !== 2 || config?.executionProfile !== "cpu-gpu-batch-cpu@1") {
+  if (config?.schemaVersion !== 2 ||
+      !["cpu-gpu-batch-cpu@1", "cpu-gpu-streaming-checkpoints@1"]
+        .includes(config?.executionProfile)) {
     throw new Error("GPU dispatcher requires Cloud Episode production config v2.");
   }
   if (process.env.WORLDKIT_CLOUD_WORKER_IMAGE) {

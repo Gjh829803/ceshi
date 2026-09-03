@@ -15,6 +15,8 @@ from typing import Any
 
 from PIL import Image
 
+from cloud_production_slots import acquire_global_production_slot
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "episode-visual-event-director.json"
@@ -406,17 +408,28 @@ def _run(args: argparse.Namespace) -> None:
             + "\n\n"
             + prompt_template
         )
-    events = _generate_events(
-        videos=videos,
-        frames=frames,
-        slots=slots,
-        prompt_template=prompt_template,
-        project_id=project_id,
-        location=location,
-        model=model,
-        config=config,
-        video_sampling_fps=float(config["videoSamplingFps"]),
-    )
+    gemini_slot = acquire_global_production_slot("gemini", {
+        "sceneId": scene_id,
+        "episodeId": episode_id,
+        "styleVariantId": style_variant.get("id") if style_variant else "legacy",
+    })
+    try:
+        if gemini_slot is not None:
+            gemini_slot.__enter__()
+        events = _generate_events(
+            videos=videos,
+            frames=frames,
+            slots=slots,
+            prompt_template=prompt_template,
+            project_id=project_id,
+            location=location,
+            model=model,
+            config=config,
+            video_sampling_fps=float(config["videoSamplingFps"]),
+        )
+    finally:
+        if gemini_slot is not None:
+            gemini_slot.__exit__(None, None, None)
     print("WORLDKIT_GEMINI_VISUAL_EVENTS_READY videos=3 events=5 fps=0.25", flush=True)
     raw = {"events": events}
     prompt_root = style_root / "prompts"

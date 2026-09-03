@@ -46,7 +46,7 @@ class Seedance25ContractTest(unittest.TestCase):
             ".codex-tmp/runtime-config/infinite-canvas.key",
         )
         self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 10)
-        self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 20)
+        self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 96)
         self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 2)
 
     def test_idempotency_header_is_kept_separate_from_bearer_key(self) -> None:
@@ -55,7 +55,7 @@ class Seedance25ContractTest(unittest.TestCase):
         self.assertEqual(headers["Idempotency-Key"], "stable-task-key")
         self.assertEqual(headers["Content-Type"], "application/json")
 
-    def test_cloud_provider_uses_the_shared_twenty_slot_pool(self) -> None:
+    def test_cloud_provider_uses_the_configured_shared_slot_pool(self) -> None:
         lease = object()
         pool = MagicMock()
         pool.acquire.return_value = lease
@@ -88,6 +88,24 @@ class Seedance25ContractTest(unittest.TestCase):
                 provider,
                 task_identity="episode/style/segment",
             ))
+
+    def test_cloud_provider_journal_is_namespaced_by_style_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as root, patch.dict(
+            os.environ,
+            {"WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX": "s3://bucket/provider-journals"},
+            clear=False,
+        ), patch.object(MODULE.subprocess, "run") as upload:
+            destination = Path(root) / "provider-run.json"
+            MODULE.persist_provider_record(destination, {
+                "episodeId": "episode-case-001",
+                "styleVariantId": "style-03",
+                "segmentId": "segment-04",
+                "status": "seedance-submitted",
+            })
+        self.assertEqual(
+            upload.call_args.args[0][-1],
+            "s3://bucket/provider-journals/episode-case-001/style-03/segment-04/provider-run.json",
+        )
 
     def test_retryable_submit_reuses_exact_payload_and_idempotency_key(self) -> None:
         provider = {"baseUrl": "https://provider.test", "submitPath": "/v1/videos"}

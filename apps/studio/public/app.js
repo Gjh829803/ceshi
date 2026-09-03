@@ -1112,6 +1112,15 @@ function renderCompositionStatus(media) {
 const episodeStageLabels = {
   "episode-prepare": "云端 CPU 准备",
   "episode-render": "云端 CPU 视觉与视频生成",
+  "episode-style-plan": "云端十风格规划",
+  "episode-style-openings": "云端十张首帧生成与审核",
+  "episode-style-visuals": "云端多样首帧与三视图重建",
+  "episode-style-diversity": "云端十风格差异性审核",
+  "episode-style-events": "云端 Gemini 场景事件",
+  "episode-style-prompts": "云端 Seedance Prompt",
+  "episode-seedance": "云端 Seedance 生成池",
+  "episode-conformance": "云端媒体一致性校验",
+  "episode-publication": "云端产物发布",
   reconnaissance: "Runtime 侦察",
   "navigation-evidence": "探索导航证据",
   "playthrough-plan": "六起点玩家操作剧本",
@@ -1465,13 +1474,21 @@ function renderEpisodeWorkflows(media, world) {
       ? artifacts.filter((artifact) => !isComparisonVideoArtifact(artifact))
       : artifacts;
     const gpuBatchNote = episode.gpuBatchStatus === "waiting-for-batch"
-      ? `<p class="media-empty">GPU 捕获正在云端汇集：达到至少 ${escapeHtml(episode.gpuBatchMinimumSize ?? 100)} 个就绪任务后，才会启动一台 GPU 连续处理整批；当前不会临时拉起 GPU。</p>`
+      ? `<p class="media-empty">白膜捕获已进入云端 Ready Wave；调度器会立即使用空闲 GPU 槽位，不再等待凑满固定数量。</p>`
       : episode.gpuBatchStatus === "capturing"
         ? `<p class="media-empty">已进入共享 GPU Batch，正在连续录制六段白膜视频。</p>`
         : "";
+    const retryPoolNote = episode.retryPool === "infrastructure"
+      ? `<p class="media-empty">云端基础设施暂时不可用；本 Case 已进入退避重试池，不消耗内容重试次数，将在 ${escapeHtml(episode.retryNotBeforeAt ?? "服务恢复后")} 自动继续。</p>`
+      : episode.retryPool === "provider-reconcile"
+        ? `<p class="media-empty">远端提交结果暂不确定；正在按原 request ID 对账，不会重复创建任务。</p>`
+        : episode.retryPool
+          ? `<p class="media-empty">失败分流：${escapeHtml(episode.retryPool)} · ${escapeHtml(episode.failureClass ?? "等待处理")}</p>`
+          : "";
     return `<section class="episode-run" data-episode-id="${escapeHtml(episode.episodeId)}">
       <header class="episode-run-heading"><div><small>${escapeHtml(episode.episodeId)}</small><h4>${episode.status === "succeeded" ? "完整链路已交付" : episode.status === "failed" ? "链路需要处理" : "链路正在运行"}</h4></div><span data-status="${escapeHtml(episode.status)}">${escapeHtml(episode.currentStage ? episodeStageLabels[episode.currentStage] ?? episode.currentStage : episode.status)}</span></header>
       ${gpuBatchNote}
+      ${retryPoolNote}
       <ol class="episode-stages">${(episode.stages ?? []).map((stage, index) => `<li data-status="${escapeHtml(stage.status)}"><b>${String(index + 1).padStart(2, "0")}</b><span>${escapeHtml(stage.title ?? episodeStageLabels[stage.id] ?? stage.id)}</span><small>${escapeHtml(stage.status)}</small></li>`).join("")}</ol>
       ${episode.error ? `<p class="episode-error">${escapeHtml(episode.error)}</p>` : ""}
       ${episode.running ? `<button type="button" class="text-button" data-stop-episode="${escapeHtml(episode.episodeId)}">停止这条数据任务</button>` : ""}

@@ -134,12 +134,28 @@ export async function buildCloudEpisodeArtifactManifest({
   sourceRevision = null,
   requireComplete = true,
   executionPart = "full",
+  reuseArtifacts = [],
 }) {
-  if (!["full", "prepare", "capture", "render"].includes(executionPart)) {
+  if (![
+    "full", "prepare", "capture", "render",
+    "style-plan", "style-openings", "style-visuals", "style-diversity",
+    "style-events", "style-prompts", "seedance", "conformance", "publication",
+  ].includes(executionPart)) {
     throw new Error("Cloud Episode executionPart is invalid.");
   }
   const resolvedPrefix = assertS3Uri(stageOutputS3Prefix);
   const root = resolve(episodeRoot);
+  if (!Array.isArray(reuseArtifacts) || reuseArtifacts.length > 10_000) {
+    throw new Error("Cloud Episode reusable artifact set is invalid.");
+  }
+  const reusableByPath = new Map(reuseArtifacts.flatMap((artifact) => {
+    const artifactPath = String(artifact?.path ?? "");
+    if (!artifactPath.startsWith("episode/") ||
+        typeof artifact?.sha256 !== "string" ||
+        !Number.isSafeInteger(artifact?.byteSize) || artifact.byteSize < 1 ||
+        typeof artifact?.s3Uri !== "string") return [];
+    return [[artifactPath, artifact]];
+  }));
   const [episodeRecord, styleVariantManifest] = await Promise.all([
     readFile(join(root, "episode-record.json"), "utf8").then(JSON.parse).catch(() => null),
     readFile(
@@ -204,30 +220,39 @@ export async function buildCloudEpisodeArtifactManifest({
           `episode/video/segment-0${index}/final-1280x720-24fps-720f.mp4`,
         ]).flat(),
       ];
+  const finalRenderPart = ["full", "render", "publication"].includes(executionPart);
   const requiredPaths = new Set(executionPart === "prepare"
     ? prepareRequiredPaths
     : executionPart === "capture"
       ? captureRequiredPaths
-      : [
+      : finalRenderPart ? [
           ...captureRequiredPaths,
           ...(visualSample ? [] : [`episode/bundle/${episodeId}-seedance-review.zip`]),
           ...styleVariantRequiredPaths,
-        ]);
+        ] : captureRequiredPaths);
   const artifacts = [];
   for (const filePath of await walkFiles(root)) {
     const metadata = await stat(filePath);
     const relativePath = portablePath(relative(root, filePath));
     const artifactPath = `episode/${relativePath}`;
+    const sha256 = await sha256File(filePath);
+    const reusable = reusableByPath.get(artifactPath);
+    const canReuse = reusable?.sha256 === sha256 &&
+      reusable.byteSize === metadata.size;
     artifacts.push({
       path: artifactPath,
       contentType: contentTypes[extname(filePath).toLowerCase()] ??
         "application/octet-stream",
       byteSize: metadata.size,
-      sha256: await sha256File(filePath),
-      s3Uri: joinS3Uri(resolvedPrefix, artifactPath),
-      producerStage: stageId,
+      sha256,
+      s3Uri: canReuse
+        ? assertS3Uri(reusable.s3Uri)
+        : joinS3Uri(resolvedPrefix, artifactPath),
+      producerStage: canReuse
+        ? reusable.producerStage ?? stageId
+        : stageId,
       required: requiredPaths.has(artifactPath),
-      localPath: filePath,
+      ...(canReuse ? {} : { localPath: filePath }),
     });
   }
   if (requireComplete) {
@@ -259,7 +284,9 @@ export async function uploadCloudArtifactManifest(manifest, manifestPath, option
   };
   await writeFile(manifestPath, `${JSON.stringify(serializable, null, 2)}\n`, { mode: 0o600 });
   for (const artifact of manifest.artifacts) {
-    await uploadS3File(artifact.localPath, artifact.s3Uri, options);
+    if (artifact.localPath) {
+      await uploadS3File(artifact.localPath, artifact.s3Uri, options);
+    }
   }
   const s3Uri = joinS3Uri(options.stageOutputS3Prefix, "cloud-artifact-manifest.json");
   await uploadS3File(manifestPath, s3Uri, options);

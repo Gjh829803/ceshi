@@ -99,10 +99,14 @@ class SeedanceSlotLease:
         while not self._stop.wait(interval):
             try:
                 if not self.pool.renew(self.name, self.holder_identity):
-                    print(f"WORLDKIT_SEEDANCE_SLOT_RENEW_WARNING {self.name}", flush=True)
+                    print(
+                        f"WORLDKIT_{self.pool.marker_name}_SLOT_RENEW_WARNING {self.name}",
+                        flush=True,
+                    )
             except Exception as error:  # noqa: BLE001 - renewal remains best effort
                 print(
-                    f"WORLDKIT_SEEDANCE_SLOT_RENEW_WARNING {self.name} {type(error).__name__}",
+                    f"WORLDKIT_{self.pool.marker_name}_SLOT_RENEW_WARNING "
+                    f"{self.name} {type(error).__name__}",
                     flush=True,
                 )
 
@@ -115,7 +119,8 @@ class SeedanceSlotLease:
             self.pool.release(self.name, self.holder_identity)
         except Exception as error:  # noqa: BLE001 - expiry is the crash fallback
             print(
-                f"WORLDKIT_SEEDANCE_SLOT_RELEASE_WARNING {self.name} {type(error).__name__}",
+                f"WORLDKIT_{self.pool.marker_name}_SLOT_RELEASE_WARNING "
+                f"{self.name} {type(error).__name__}",
                 flush=True,
             )
 
@@ -129,6 +134,7 @@ class GlobalSeedanceLeasePool:
         slot_count: int,
         lease_duration_seconds: int,
         poll_interval_seconds: float = 5,
+        pool_name: str = "seedance",
         store: Any | None = None,
         now: Callable[[], datetime] = _utc_now,
         monotonic: Callable[[], float] = time.monotonic,
@@ -136,6 +142,11 @@ class GlobalSeedanceLeasePool:
     ) -> None:
         if not namespace or not lease_name_prefix:
             raise SeedanceSlotError("Seedance slot namespace and prefix are required")
+        if not pool_name or any(
+            character not in "abcdefghijklmnopqrstuvwxyz0123456789-"
+            for character in pool_name
+        ):
+            raise SeedanceSlotError("Cloud slot pool name is invalid")
         if slot_count < 1 or slot_count > 100:
             raise SeedanceSlotError("Seedance slot count must be between 1 and 100")
         if lease_duration_seconds < 60 or lease_duration_seconds > 7200:
@@ -145,6 +156,8 @@ class GlobalSeedanceLeasePool:
         self.slot_count = slot_count
         self.lease_duration_seconds = lease_duration_seconds
         self.poll_interval_seconds = max(0.05, poll_interval_seconds)
+        self.pool_name = pool_name
+        self.marker_name = pool_name.upper().replace("-", "_")
         self.store = store or KubectlLeaseStore(namespace)
         self.now = now
         self.monotonic = monotonic
@@ -166,7 +179,7 @@ class GlobalSeedanceLeasePool:
         metadata: dict[str, Any] = {
             "name": name,
             "namespace": self.namespace,
-            "labels": {"worldkit.seedleap.dev/pool": "seedance"},
+            "labels": {"worldkit.seedleap.dev/pool": self.pool_name},
         }
         if resource_version:
             metadata["resourceVersion"] = resource_version
@@ -225,7 +238,10 @@ class GlobalSeedanceLeasePool:
                 name = self._name((start_index + offset) % self.slot_count)
                 claimed = self._claim(name, holder_identity)
                 if claimed is not None:
-                    print(f"WORLDKIT_SEEDANCE_SLOT_ACQUIRED {name}", flush=True)
+                    print(
+                        f"WORLDKIT_{self.marker_name}_SLOT_ACQUIRED {name}",
+                        flush=True,
+                    )
                     return SeedanceSlotLease(self, name, holder_identity)
             remaining = deadline - self.monotonic()
             if remaining <= 0:
@@ -262,5 +278,8 @@ class GlobalSeedanceLeasePool:
                 transitions=int(spec.get("leaseTransitions") or 0),
             )
             if self.store.replace(released) is not None:
-                print(f"WORLDKIT_SEEDANCE_SLOT_RELEASED {name}", flush=True)
+                print(
+                    f"WORLDKIT_{self.marker_name}_SLOT_RELEASED {name}",
+                    flush=True,
+                )
                 return

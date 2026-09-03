@@ -62,7 +62,11 @@ export function cloudEpisodeWorkerJob({
 }) {
   required(executionId, "execution_id");
   required(stageId, "stage_id");
-  if (!["full", "prepare", "capture", "render"].includes(executionPart)) {
+  if (![
+    "full", "prepare", "capture", "render",
+    "style-plan", "style-openings", "style-visuals", "style-diversity",
+    "style-events", "style-prompts", "seedance", "conformance", "publication",
+  ].includes(executionPart)) {
     throw new Error("execution_part is invalid.");
   }
   required(requestS3Uri, "request_s3_uri");

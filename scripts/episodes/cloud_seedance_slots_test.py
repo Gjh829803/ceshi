@@ -85,6 +85,26 @@ class GlobalSeedanceLeasePoolTest(unittest.TestCase):
         with self.assertRaises(SeedanceSlotError):
             pool.acquire("episode-b/style-00/segment-00", 1)
 
+    def test_supports_a_distinct_global_pool_without_sharing_seedance_leases(self):
+        pool = GlobalSeedanceLeasePool(
+            namespace="lwdp",
+            lease_name_prefix="worldkit-gemini-slot",
+            slot_count=1,
+            lease_duration_seconds=60,
+            pool_name="gemini",
+            store=self.store,
+            now=lambda: self.now,
+            monotonic=lambda: self.monotonic,
+            sleep=self.advance,
+        )
+        lease = pool.acquire("episode-a/style-00/gemini", 1)
+        self.assertEqual(
+            self.store.values[lease.name]["metadata"]["labels"][
+                "worldkit.seedleap.dev/pool"
+            ],
+            "gemini",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,7 @@ import {
 } from "../lib/lwdp-generation-client.mjs";
 import {
   CLOUD_EPISODE_PART_BY_STAGE_ID,
+  CLOUD_EPISODE_UPSTREAM_STAGE_BY_STAGE_ID,
   buildGpuCaptureQueueEntry,
   cloudProductionContentHash,
   parseCloudProviderJournal,
@@ -197,7 +198,11 @@ export async function runCloudEpisodeWorker({
 }) {
   required(executionId, "execution_id");
   required(stageId, "stage_id");
-  if (!["full", "prepare", "capture", "render"].includes(executionPart)) {
+  if (![
+    "full", "prepare", "capture", "render",
+    "style-plan", "style-openings", "style-visuals", "style-diversity",
+    "style-events", "style-prompts", "seedance", "conformance", "publication",
+  ].includes(executionPart)) {
     throw new Error("Cloud Episode executionPart is invalid.");
   }
   if (stageId !== "episode-production" &&
@@ -208,6 +213,10 @@ export async function runCloudEpisodeWorker({
   assertS3Uri(outputS3Prefix);
   const temporaryRoot = await mkdtemp(join(tmpdir(), "worldkit-cloud-episode-"));
   const requestPath = join(temporaryRoot, "request.json");
+  const episodeResumeManifestPath = join(
+    temporaryRoot,
+    "episode-resume-artifact-manifest.json",
+  );
   const sceneHydrationLogPath = join(temporaryRoot, "scene-pipeline.log");
   const studioDataRoot = join(temporaryRoot, "studio-data");
   const studioOrigin = "http://127.0.0.1:4297";
@@ -286,7 +295,7 @@ export async function runCloudEpisodeWorker({
     await report("running");
     await downloadImplementation(requestS3Uri, requestPath, uploadOptions);
     request = parseCloudEpisodeRequest(await readFile(requestPath, "utf8"));
-    if (request.schemaVersion === 2 &&
+    if (request.schemaVersion >= 2 && stageId !== "episode-production" &&
         CLOUD_EPISODE_PART_BY_STAGE_ID[stageId] !== executionPart) {
       throw new Error("Cloud Episode request does not admit this stage execution part.");
     }
@@ -295,9 +304,7 @@ export async function runCloudEpisodeWorker({
         "Cloud Episode Worker image does not match the digest frozen into the request.",
       );
     }
-    const upstreamStageId = executionPart === "capture"
-      ? "episode-prepare"
-      : executionPart === "render" ? "whitebox-capture" : null;
+    const upstreamStageId = CLOUD_EPISODE_UPSTREAM_STAGE_BY_STAGE_ID[stageId] ?? null;
     const upstreamManifest = upstreamStageId
       ? latestStageManifest(claimedExecution, upstreamStageId)
       : null;
@@ -307,7 +314,7 @@ export async function runCloudEpisodeWorker({
         execution_id: request.resumeEpisodeManifest.executionId,
         attempt: "prior-execution",
       } : null);
-    if (["capture", "render"].includes(executionPart) &&
+    if (executionPart !== "full" && executionPart !== "prepare" &&
         previousEpisodeManifest === null) {
       throw new Error(`Cloud Episode ${executionPart} stage omitted its upstream manifest.`);
     }
@@ -353,7 +360,7 @@ export async function runCloudEpisodeWorker({
       setStage("episode-artifact-resume");
       const resumed = await hydrateCloudEpisodeArtifactManifest({
         manifestS3Uri: previousEpisodeManifest.s3_uri,
-        manifestPath: join(temporaryRoot, "episode-resume-artifact-manifest.json"),
+        manifestPath: episodeResumeManifestPath,
         expectedSceneId: request.sceneId,
         expectedEpisodeId: request.episodeId,
         expectedExecutionId: previousEpisodeManifest.execution_id ?? executionId,
@@ -368,17 +375,38 @@ export async function runCloudEpisodeWorker({
         },
       });
     }
-    if (executionPart === "render") {
+    if (["render", "seedance", "conformance", "publication"].includes(executionPart)) {
       setStage("provider-journal-resume");
-      for (let index = 0; index < 6; index += 1) {
-        const segmentId = `segment-0${index}`;
-        const destination = join(episodeRoot, "video", segmentId, "provider-run.json");
+      const providerJournalTargets = request.styleVariantMode === "ten-style"
+        ? Array.from({ length: 10 }, (_, styleIndex) =>
+            Array.from({ length: 6 }, (_, segmentIndex) => ({
+              styleVariantId: `style-0${styleIndex}`,
+              variantPath: `style-0${styleIndex}`,
+              segmentId: `segment-0${segmentIndex}`,
+            }))).flat()
+        : Array.from({ length: 6 }, (_, segmentIndex) => ({
+            styleVariantId: null,
+            variantPath: null,
+            segmentId: `segment-0${segmentIndex}`,
+          }));
+      for (const { styleVariantId, variantPath, segmentId } of providerJournalTargets) {
+        const destination = styleVariantId
+          ? join(
+              episodeRoot,
+              "style-variants",
+              styleVariantId,
+              "video",
+              segmentId,
+              "provider-run.json",
+            )
+          : join(episodeRoot, "video", segmentId, "provider-run.json");
         await mkdir(dirname(destination), { recursive: true });
         const downloaded = await downloadImplementation(
           joinS3Uri(
             outputS3Prefix,
             "provider-journals",
             request.episodeId,
+            ...(variantPath ? [variantPath] : []),
             segmentId,
             "provider-run.json",
           ),
@@ -390,6 +418,7 @@ export async function runCloudEpisodeWorker({
           if (
             journal.sceneId !== request.sceneId ||
             journal.episodeId !== request.episodeId ||
+            (journal.styleVariantId ?? null) !== styleVariantId ||
             journal.segmentId !== segmentId
           ) {
             throw new Error(`Cloud Provider Journal identity mismatch: ${segmentId}`);
@@ -494,6 +523,7 @@ export async function runCloudEpisodeWorker({
         WORLDKIT_CLOUD_EXECUTION_STAGE_ID: stageId,
         WORLDKIT_CLOUD_STAGE_ATTEMPT: String(cloudStageAttempt),
         WORLDKIT_CLOUD_OUTPUT_S3_PREFIX: outputS3Prefix,
+        WORLDKIT_CLOUD_BASE_MANIFEST_PATH: episodeResumeManifestPath,
         WORLDKIT_CAPTURE_GPU: ["full", "capture"].includes(executionPart) ? "1" : "0",
         WORLDKIT_CAPTURE_HEADLESS: "1",
         WORLDKIT_EPISODE_STYLE_VARIANTS:
@@ -535,7 +565,10 @@ export async function runCloudEpisodeWorker({
     ));
     const expectedEpisodeStatus = executionPart === "prepare"
       ? "awaiting-capture"
-      : executionPart === "capture" ? "captured" : "succeeded";
+      : executionPart === "capture" ? "captured"
+        : ["full", "render", "publication"].includes(executionPart)
+          ? "succeeded"
+          : "checkpoint";
     if (result.code !== 0 || episodeRecord.status !== expectedEpisodeStatus) {
       throw new Error(
         `Existing Episode workflow exited ${result.code ?? `by ${result.signal}`}: ` +
@@ -544,7 +577,7 @@ export async function runCloudEpisodeWorker({
       );
     }
 
-    if (["full", "render"].includes(executionPart) &&
+    if (["full", "render", "publication"].includes(executionPart) &&
         (request.productionScope ?? "full") === "full") {
       setStage("portable-bundle");
       const bundlePath = join(
@@ -588,6 +621,9 @@ export async function runCloudEpisodeWorker({
       workerImage: process.env.WORLDKIT_CLOUD_WORKER_IMAGE ?? null,
       sourceRevision: process.env.WORLDKIT_SOURCE_REVISION ?? null,
       executionPart,
+      reuseArtifacts: (await readFile(episodeResumeManifestPath, "utf8")
+        .then(JSON.parse)
+        .catch(() => null))?.artifacts ?? [],
     });
     const manifestPath = join(temporaryRoot, "cloud-episode-artifact-manifest.json");
     const uploaded = await uploadCloudArtifactManifest(
@@ -678,6 +714,9 @@ export async function runCloudEpisodeWorker({
             sourceRevision: process.env.WORLDKIT_SOURCE_REVISION ?? null,
             requireComplete: false,
             executionPart,
+            reuseArtifacts: (await readFile(episodeResumeManifestPath, "utf8")
+              .then(JSON.parse)
+              .catch(() => null))?.artifacts ?? [],
           });
           if (partial.artifacts.length > 0) {
             const uploaded = await uploadCloudArtifactManifest(

@@ -2029,8 +2029,8 @@ test("defaults to cloud and atomically persists an available one-click Codex bac
   try {
     const initialHealth = await fetch(`${origin}/api/health`).then((response) => response.json());
     assert.equal(initialHealth.codexBackend, "cloud");
-    assert.equal(initialHealth.maxConcurrentJobs, 20);
-    assert.deepEqual(initialHealth.maxConcurrentJobsByBackend, { cloud: 20, local: 1 });
+    assert.equal(initialHealth.maxConcurrentJobs, 24);
+    assert.deepEqual(initialHealth.maxConcurrentJobsByBackend, { cloud: 24, local: 1 });
     assert.deepEqual(initialHealth.codexBackends, {
       cloud: { available: true },
       local: { available: true },

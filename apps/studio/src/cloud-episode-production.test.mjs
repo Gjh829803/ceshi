@@ -21,6 +21,7 @@ test("uses the deployment-owned Worker digest over the image-baked config", asyn
     environment: { WORLDKIT_CLOUD_WORKER_IMAGE: workerImage },
   });
   assert.equal(config.workerImage, workerImage);
+  assert.equal(config.executionProfile, "cpu-gpu-streaming-checkpoints@1");
 });
 
 test("keeps Cloud Episode disabled until a digest-pinned GPU image is deployed", async () => {
@@ -88,6 +89,40 @@ test("retries one CPU Episode stage and launches only its new worker attempt", a
     ["launch", "retry-2", "partner_codex", `worker@sha256:${"c".repeat(64)}`],
   ]);
   assert.equal(result.manifestS3Uri, "s3://bucket/episode/retry-manifest.json");
+});
+
+test("retries one streaming checkpoint stage without replaying earlier Episode work", async () => {
+  const launches = [];
+  const result = await retryStudioCloudEpisode({
+    executionId: "exec-episode-streaming",
+    requestS3Uri: "s3://bucket/episode/request.json",
+    outputS3Prefix: "s3://bucket/episode",
+    retryRequestId: "episode-style-events-retry-2",
+    attempt: 2,
+    stageId: "episode-style-events",
+    workerImage: `worker@sha256:${"a".repeat(64)}`,
+    config: {
+      executionProfile: "cpu-gpu-streaming-checkpoints@1",
+      namespace: "lwdp",
+      cpuWorker: {},
+    },
+    cloudConfig: { userId: "worldkit", baseUrl: "http://lwdp-internal" },
+    retryImplementation: async () => undefined,
+    launchImplementation: async (input) => launches.push(input),
+    pollImplementation: async () => ({
+      execution_id: "exec-episode-streaming",
+      status: "succeeded",
+      stages: [{ stage_id: "episode-publication", status: "succeeded" }],
+    }),
+    stagesImplementation: async () => ({ stages: [{
+      stage_id: "episode-publication",
+      diagnostics: { manifest_s3_uri: "s3://bucket/episode/publication.json" },
+    }] }),
+  });
+  assert.equal(launches.length, 1);
+  assert.equal(launches[0].stageId, "episode-style-events");
+  assert.equal(launches[0].executionPart, "style-events");
+  assert.equal(result.manifestS3Uri, "s3://bucket/episode/publication.json");
 });
 
 test("submits the three-stage Episode execution and launches CPU prepare only", async () => {

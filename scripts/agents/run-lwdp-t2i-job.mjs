@@ -15,6 +15,9 @@ import {
   submittedJobId,
   uploadS3File,
 } from "../lib/lwdp-generation-client.mjs";
+import { GlobalCloudWorkSlotPool } from "../lib/cloud-global-work-slots.mjs";
+import { loadCloudProductionThroughputConfig } from
+  "../lib/cloud-production-throughput.mjs";
 
 function parseArguments(argv) {
   const result = { downloads: [] };
@@ -48,7 +51,13 @@ if (!args.manifest) throw new Error("--manifest is required.");
 if (!args.outputS3Prefix) throw new Error("--output-s3-prefix is required.");
 const manifest = JSON.parse(await readFile(resolve(args.manifest), "utf8"));
 if (!Array.isArray(manifest.items) || manifest.items.length === 0) throw new Error("T2I manifest.items is required.");
+if (manifest.items.length > 1_000) {
+  throw new Error("T2I manifest.items cannot exceed the LWDP batch limit of 1000.");
+}
 const smokeMode = process.env.WORLDKIT_LWDP_CLIENT_SMOKE === "1";
+const cloudThroughput = process.env.WORLDKIT_CLOUD_EXECUTION_ID
+  ? await loadCloudProductionThroughputConfig(process.cwd())
+  : null;
 
 const uploadedByPath = new Map();
 async function uploadReference(reference) {
@@ -101,9 +110,12 @@ const payload = {
   items,
   dry_run: Boolean(args.dryRun),
   options: {
-    account_concurrency: Number(process.env.WORLDKIT_LWDP_ACCOUNT_CONCURRENCY || 20),
-    pod_concurrency: Number(process.env.WORLDKIT_LWDP_POD_CONCURRENCY || 32),
-    max_pods: Number(process.env.WORLDKIT_LWDP_MAX_PODS || 50),
+    account_concurrency: Number(process.env.WORLDKIT_LWDP_ACCOUNT_CONCURRENCY ||
+      cloudThroughput?.batching.codexAccountConcurrency || 20),
+    pod_concurrency: Number(process.env.WORLDKIT_LWDP_POD_CONCURRENCY ||
+      cloudThroughput?.batching.codexPodConcurrency || 32),
+    max_pods: Number(process.env.WORLDKIT_LWDP_MAX_PODS ||
+      cloudThroughput?.batching.codexMaxPods || 50),
     codex_image_tool: "system_image_gen",
     max_reference_images_per_item: Number(manifest.maxReferenceImagesPerItem || 8),
   },
@@ -119,54 +131,95 @@ if (smokeMode) {
   process.exit(0);
 }
 
-const config = await loadLwdpGenerationConfig();
-const submitted = await submitGenerationJob(payload, { config, maxAttempts: submitAttempts });
-const jobId = submittedJobId(submitted);
-process.stdout.write(`WORLDKIT_LWDP_IMAGE_JOB ${args.stage || "image-generation"} ${jobId} items=${items.length}\n`);
-if (args.dryRun) {
-  process.stdout.write(`WORLDKIT_LWDP_IMAGE_DRY_RUN ${jobId}\n`);
-  process.exit(0);
-}
-const job = await pollGenerationJob(jobId, {
-  config,
-  onProgress: (current) => process.stdout.write(
-    `WORLDKIT_LWDP_IMAGE_PROGRESS ${current.status} ${JSON.stringify(current.counters || {})}\n`,
-  ),
-});
-const jobItems = await fetchGenerationItems(jobId, { config });
-const parsedDownloads = args.downloads.map((rawDownload) => {
-  const separator = rawDownload.indexOf("::");
-  if (separator <= 0) throw new Error("--download must be <item-id>::<local-path>.");
-  return {
-    id: safeItemId(rawDownload.slice(0, separator)),
-    localPath: resolve(rawDownload.slice(separator + 2)),
-  };
-});
-const salvageableItemIds = salvageableGenerationItemIds(jobItems);
-const requestedDownloadIds = new Set(parsedDownloads.map(({ id }) => id));
-const unverifiableSalvage = [...salvageableItemIds].filter(
-  (itemId) => !requestedDownloadIds.has(itemId),
-);
-if (unverifiableSalvage.length > 0) {
-  throw new Error(
-    `LWDP salvaged outputs without a declared local download target: ${unverifiableSalvage.join(", ")}`,
-  );
-}
-const effectiveItems = {
-  ...jobItems,
-  items: (jobItems?.items ?? jobItems?.data ?? []).map((item) =>
-    salvageableItemIds.has(item?.item_id || item?.id)
-      ? { ...item, status: "succeeded", error: "" }
-      : item),
-};
-assertSuccessfulJob(job, effectiveItems, items.map(({ id }) => id));
+let globalLwdpBatchLease = null;
+try {
+  if (process.env.WORLDKIT_CLOUD_EXECUTION_ID && !args.dryRun) {
+    globalLwdpBatchLease = await new GlobalCloudWorkSlotPool({
+      namespace: "lwdp",
+      poolName: "lwdp-batch",
+      leaseNamePrefix: "worldkit-lwdp-batch-slot",
+      slotCount: cloudThroughput.submission.maxNonTerminalLwdpBatches,
+      leaseDurationSeconds: 900,
+    }).acquire(JSON.stringify({
+      cloudExecutionId: process.env.WORLDKIT_CLOUD_EXECUTION_ID,
+      cloudStageAttempt: process.env.WORLDKIT_CLOUD_STAGE_ATTEMPT ?? "1",
+      requestId: payload.request_id,
+    }), { count: 1 });
+  }
 
-for (const { id, localPath } of parsedDownloads) {
-  await downloadS3FileAtomic(joinS3Uri(args.outputS3Prefix, "images", `${id}.png`), localPath);
-}
-if (salvageableItemIds.size > 0) {
-  process.stdout.write(
-    `WORLDKIT_LWDP_IMAGE_SALVAGED ${[...salvageableItemIds].sort().join(",")}\n`,
+  const config = await loadLwdpGenerationConfig();
+  let submissionLease = null;
+  let submitted;
+  try {
+    if (cloudThroughput !== null) {
+      submissionLease = await new GlobalCloudWorkSlotPool({
+        namespace: "lwdp",
+        poolName: "lwdp-submit",
+        leaseNamePrefix: "worldkit-lwdp-submit-slot",
+        slotCount: cloudThroughput.submission.maxConcurrentCreates,
+        leaseDurationSeconds: 120,
+      }).acquire(`${process.env.WORLDKIT_CLOUD_EXECUTION_ID}:${payload.request_id}`, {
+        count: 1,
+        waitTimeoutMs: 30 * 60_000,
+      });
+    }
+    submitted = await submitGenerationJob(payload, { config, maxAttempts: submitAttempts });
+  } finally {
+    await submissionLease?.release();
+  }
+  const jobId = submittedJobId(submitted);
+  process.stdout.write(`WORLDKIT_LWDP_IMAGE_JOB ${args.stage || "image-generation"} ${jobId} items=${items.length}\n`);
+  if (args.dryRun) {
+    process.stdout.write(`WORLDKIT_LWDP_IMAGE_DRY_RUN ${jobId}\n`);
+    process.exit(0);
+  }
+  const job = await pollGenerationJob(jobId, {
+    config,
+    onProgress: (current) => process.stdout.write(
+      `WORLDKIT_LWDP_IMAGE_PROGRESS ${current.status} ${JSON.stringify(current.counters || {})}\n`,
+    ),
+  });
+  const jobItems = await fetchGenerationItems(jobId, { config });
+  const parsedDownloads = args.downloads.map((rawDownload) => {
+    const separator = rawDownload.indexOf("::");
+    if (separator <= 0) throw new Error("--download must be <item-id>::<local-path>.");
+    return {
+      id: safeItemId(rawDownload.slice(0, separator)),
+      localPath: resolve(rawDownload.slice(separator + 2)),
+    };
+  });
+  const salvageableItemIds = salvageableGenerationItemIds(jobItems);
+  const requestedDownloadIds = new Set(parsedDownloads.map(({ id }) => id));
+  const unverifiableSalvage = [...salvageableItemIds].filter(
+    (itemId) => !requestedDownloadIds.has(itemId),
   );
+  if (unverifiableSalvage.length > 0) {
+    throw new Error(
+      `LWDP salvaged outputs without a declared local download target: ${unverifiableSalvage.join(", ")}`,
+    );
+  }
+  const effectiveItems = {
+    ...jobItems,
+    items: (jobItems?.items ?? jobItems?.data ?? []).map((item) =>
+      salvageableItemIds.has(item?.item_id || item?.id)
+        ? { ...item, status: "succeeded", error: "" }
+        : item),
+  };
+  assertSuccessfulJob(job, effectiveItems, items.map(({ id }) => id));
+
+  for (const { id, localPath } of parsedDownloads) {
+    await downloadS3FileAtomic(joinS3Uri(args.outputS3Prefix, "images", `${id}.png`), localPath);
+  }
+  if (salvageableItemIds.size > 0) {
+    process.stdout.write(
+      `WORLDKIT_LWDP_IMAGE_SALVAGED ${[...salvageableItemIds].sort().join(",")}\n`,
+    );
+  }
+  process.stdout.write(`WORLDKIT_LWDP_IMAGE_READY items=${items.length}\n`);
+} finally {
+  if (globalLwdpBatchLease !== null) {
+    await globalLwdpBatchLease.release().catch((error) => {
+      process.stderr.write(`WORLDKIT_GLOBAL_SLOT_RELEASE_WARNING lwdp-batch ${error.message}\n`);
+    });
+  }
 }
-process.stdout.write(`WORLDKIT_LWDP_IMAGE_READY items=${items.length}\n`);

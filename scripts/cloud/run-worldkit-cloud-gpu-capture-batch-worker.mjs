@@ -57,7 +57,9 @@ async function loadProductionConfig() {
     join(repoRoot, "config", "cloud-episode-production.json"),
     "utf8",
   ));
-  if (value?.schemaVersion !== 2 || value?.executionProfile !== "cpu-gpu-batch-cpu@1") {
+  if (value?.schemaVersion !== 2 ||
+      !["cpu-gpu-batch-cpu@1", "cpu-gpu-streaming-checkpoints@1"]
+        .includes(value?.executionProfile)) {
     throw new Error("GPU Batch Worker requires Cloud Episode production config v2.");
   }
   return value;

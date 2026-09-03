@@ -17,7 +17,10 @@ import {
   joinS3Uri,
   uploadS3File,
 } from "../lib/lwdp-generation-client.mjs";
-import { CLOUD_EPISODE_STAGE_PROFILE_V2 } from "../lib/cloud-production-run.mjs";
+import {
+  CLOUD_EPISODE_STAGE_PROFILE_V2,
+  CLOUD_EPISODE_STAGE_PROFILE_V3,
+} from "../lib/cloud-production-run.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const ID = /^[a-z0-9][a-z0-9-]{2,119}$/;
@@ -49,8 +52,8 @@ function required(value, label) {
 export function parseCloudEpisodeRequest(value) {
   const request = typeof value === "string" ? JSON.parse(value) : value;
   if (request?.kind !== "worldkit-cloud-episode-request" ||
-      ![1, 2].includes(request?.schemaVersion)) {
-    throw new Error("Cloud Episode request must use schemaVersion 1 or 2.");
+      ![1, 2, 3].includes(request?.schemaVersion)) {
+    throw new Error("Cloud Episode request must use schemaVersion 1, 2, or 3.");
   }
   if (!ID.test(request.sceneId ?? "") || !ID.test(request.episodeId ?? "")) {
     throw new Error("Cloud Episode sceneId or episodeId is invalid.");
@@ -66,9 +69,11 @@ export function parseCloudEpisodeRequest(value) {
   if (!DIGEST_IMAGE.test(String(request.workerImage ?? ""))) {
     throw new Error("Cloud Episode workerImage must be digest-pinned.");
   }
-  if (request.schemaVersion === 2) {
+  if ([2, 3].includes(request.schemaVersion)) {
     if (
-      request.executionProfile !== "cpu-gpu-batch-cpu@1" ||
+      request.executionProfile !== (request.schemaVersion === 3
+        ? "cpu-gpu-streaming-checkpoints@1"
+        : "cpu-gpu-batch-cpu@1") ||
       !Number.isSafeInteger(request.gpuBatch?.minimumBatchSize) ||
       request.gpuBatch.minimumBatchSize < 100 ||
       !Number.isSafeInteger(request.gpuBatch?.maximumBatchSize) ||
@@ -101,6 +106,7 @@ export async function submitCloudEpisode({
   sceneRecord,
   productionScope = "full",
   styleVariantMode = "legacy",
+  executionProfile = "cpu-gpu-batch-cpu@1",
   workerImage,
   gpuBatch,
   resumeEpisodeManifest = undefined,
@@ -122,10 +128,30 @@ export async function submitCloudEpisode({
   }
   required(requestId, "request_id");
   required(sceneExecutionId, "scene_execution_id");
+  if (!["cpu-gpu-batch-cpu@1", "cpu-gpu-streaming-checkpoints@1"]
+    .includes(executionProfile)) {
+    throw new Error("Cloud Episode execution profile is invalid.");
+  }
+  // The fine-grained DAG is the durable full-production lane. Visual samples
+  // intentionally keep the existing coarse render stage because they end
+  // after visual review and have no events, Seedance, conformance, or
+  // publication work to checkpoint.
+  const effectiveExecutionProfile =
+    executionProfile === "cpu-gpu-streaming-checkpoints@1" &&
+      productionScope === "visual-sample"
+      ? "cpu-gpu-batch-cpu@1"
+      : executionProfile;
+  if (effectiveExecutionProfile === "cpu-gpu-streaming-checkpoints@1" &&
+      styleVariantMode !== "ten-style") {
+    throw new Error("Streaming checkpoint production requires ten-style mode.");
+  }
+  const stageProfile = effectiveExecutionProfile === "cpu-gpu-streaming-checkpoints@1"
+    ? CLOUD_EPISODE_STAGE_PROFILE_V3
+    : CLOUD_EPISODE_STAGE_PROFILE_V2;
   const resolvedOutputPrefix = assertS3Uri(outputS3Prefix);
   const request = parseCloudEpisodeRequest({
     kind: "worldkit-cloud-episode-request",
-    schemaVersion: 2,
+    schemaVersion: effectiveExecutionProfile === "cpu-gpu-streaming-checkpoints@1" ? 3 : 2,
     sceneId,
     episodeId,
     sceneExecutionId,
@@ -134,7 +160,7 @@ export async function submitCloudEpisode({
     productionScope,
     styleVariantMode,
     workerImage,
-    executionProfile: "cpu-gpu-batch-cpu@1",
+    executionProfile: effectiveExecutionProfile,
     gpuBatch: {
       queueS3Prefix: assertS3Uri(gpuBatch?.queueS3Prefix),
       minimumBatchSize: Number(gpuBatch?.minimumBatchSize),
@@ -146,7 +172,7 @@ export async function submitCloudEpisode({
     pipeline: {
       command: "episode:run",
       backend: "cloud",
-      stageIds: CLOUD_EPISODE_STAGE_PROFILE_V2.map((stage) => stage.stage_id),
+      stageIds: stageProfile.map((stage) => stage.stage_id),
       styleVariantMode,
     },
     ...(resumeEpisodeManifest ? { resumeEpisodeManifest } : {}),
@@ -231,7 +257,7 @@ export async function submitCloudEpisode({
         content_type: "application/json",
       },
     ],
-    stages: CLOUD_EPISODE_STAGE_PROFILE_V2.map((stage) => ({
+    stages: stageProfile.map((stage) => ({
       ...stage,
       ...(stage.depends_on ? { depends_on: [...stage.depends_on] } : {}),
     })),
@@ -277,6 +303,7 @@ async function main() {
     sceneRecord,
     productionScope: options["production-scope"] ?? "full",
     styleVariantMode: options["style-variant-mode"] ?? "legacy",
+    executionProfile: options["execution-profile"] ?? "cpu-gpu-batch-cpu@1",
     workerImage: options["worker-image"],
     gpuBatch: {
       queueS3Prefix: options["gpu-batch-queue-s3-prefix"],

@@ -54,10 +54,23 @@ const episodeId = value("--episode-id", `episode-${sceneId}-${Date.now().toStrin
 const origin = value("--origin", process.env.WORLDKIT_STUDIO_ORIGIN || "http://127.0.0.1:4297");
 const backend = value("--backend", "cloud");
 const executionPart = value("--execution-part", "full");
+const styleUntilByExecutionPart = Object.freeze({
+  "style-plan": "plan",
+  "style-openings": "openings",
+  "style-visuals": "visuals",
+  "style-diversity": "diversity",
+  "style-events": "events",
+  "style-prompts": "prompts",
+  seedance: "seedance",
+  conformance: "conformance",
+  publication: "full",
+});
+const fineGrainedRenderPart = executionPart in styleUntilByExecutionPart;
 if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(sceneId) ||
     !/^[a-z0-9][a-z0-9-]{2,119}$/.test(episodeId) ||
     !["cloud", "local"].includes(backend) ||
-    !["full", "prepare", "capture", "render"].includes(executionPart)) {
+    !["full", "prepare", "capture", "render", ...Object.keys(styleUntilByExecutionPart)]
+      .includes(executionPart)) {
   throw new Error("Invalid workflow identity or backend.");
 }
 const sceneRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
@@ -149,7 +162,19 @@ const legacyStageDefinitions = [
 const stageDefinitions = [
   ...sharedStageDefinitions,
   ...(styleVariantConfig.enabled
-    ? [["style-variant-production", "十种风格视觉、Codex 质检、独立 Gemini 与 Seedance"]]
+    ? [
+        ["style-variant-production", "十风格生产编排"],
+        ["style-variant-plan", "十种独立风格规划"],
+        ["style-variant-opening-anchors", "十张样式首帧与独立审核"],
+        ["style-variant-visuals", "多样首帧与三视图生成"],
+        ["style-variant-visual-review", "逐风格 Codex 视觉审核"],
+        ["style-variant-diversity-review", "十风格差异性审核"],
+        ["style-variant-gemini-events", "逐风格 Gemini 大型事件"],
+        ["style-variant-seedance-prompts", "六十条 Seedance Prompt"],
+        ["style-variant-seedance-generation", "六十段 Seedance 视频"],
+        ["style-variant-conformance", "逐段媒体一致性校验"],
+        ["episode-publication", "云端产物与 Review Bundle 发布"],
+      ]
     : legacyStageDefinitions),
 ];
 let record = {
@@ -221,10 +246,12 @@ async function persist() {
   await writeJsonAtomic(recordPath, record);
 }
 const cloudCheckpointStages = new Set([
+  "style-variant-production",
   "visual-reconstruction",
   "visual-events",
   "seedance-prompts",
   "seedance-generation",
+  "conformance",
 ]);
 async function publishCloudStageCheckpoint(stageId) {
   const outputS3Prefix = process.env.WORLDKIT_CLOUD_OUTPUT_S3_PREFIX;
@@ -232,7 +259,7 @@ async function publishCloudStageCheckpoint(stageId) {
   const cloudStageId = process.env.WORLDKIT_CLOUD_EXECUTION_STAGE_ID;
   const cloudStageAttempt = Number(process.env.WORLDKIT_CLOUD_STAGE_ATTEMPT ?? 1);
   if (
-    executionPart !== "render" ||
+    !["render", ...Object.keys(styleUntilByExecutionPart)].includes(executionPart) ||
     !cloudCheckpointStages.has(stageId) ||
     typeof outputS3Prefix !== "string" ||
     typeof cloudExecutionId !== "string" ||
@@ -246,7 +273,9 @@ async function publishCloudStageCheckpoint(stageId) {
     episodeId,
   );
   await mkdir(checkpointRoot, { recursive: true });
-  const manifestPath = path.join(checkpointRoot, `${stageId}.json`);
+  const manifestPath = process.env.WORLDKIT_CLOUD_BASE_MANIFEST_PATH
+    ? path.resolve(process.env.WORLDKIT_CLOUD_BASE_MANIFEST_PATH)
+    : path.join(checkpointRoot, `${stageId}.json`);
   const checkpointS3Prefix = joinS3Uri(
     outputS3Prefix,
     "stages",
@@ -266,11 +295,14 @@ async function publishCloudStageCheckpoint(stageId) {
     sourceRevision: process.env.WORLDKIT_SOURCE_REVISION ?? null,
     requireComplete: false,
     executionPart,
+    reuseArtifacts: (await readJsonIfPresent(manifestPath))?.artifacts ?? [],
   });
   const uploaded = await uploadCloudArtifactManifest(manifest, manifestPath, {
     stageOutputS3Prefix: checkpointS3Prefix,
   });
-  await rm(manifestPath, { force: true });
+  if (!process.env.WORLDKIT_CLOUD_BASE_MANIFEST_PATH) {
+    await rm(manifestPath, { force: true });
+  }
   writeOutput(
     `WORLDKIT_EPISODE_CLOUD_CHECKPOINT ${stageId} ` +
       `${uploaded.cloudExecutionArtifacts[0].s3_uri}\n`,
@@ -819,22 +851,30 @@ try {
             throw error;
           }
         })));
-  } else if (executionPart === "render" &&
+  } else if (["render", ...Object.keys(styleUntilByExecutionPart)].includes(executionPart) &&
       !await hasCompleteWhiteboxCapture(whiteboxRoot, planPath)) {
     throw new Error("EPISODE_WHITEBOX_CAPTURE_CHECKPOINT_REQUIRED");
   }
 
-  if (executionPart === "full" || executionPart === "render") {
+  if (executionPart === "full" || executionPart === "render" || fineGrainedRenderPart) {
   if (styleVariantConfig.enabled) {
-    await stage("style-variant-production", hasCompleteStyleVariantProduction,
+    const styleUntil = styleUntilByExecutionPart[executionPart] ??
+      (productionScope === "visual-sample" ? "visual-review" : "full");
+    const requiresCompleteStyleOutput = ["full", "render", "publication"]
+      .includes(executionPart);
+    await stage("style-variant-production",
+      () => requiresCompleteStyleOutput && hasCompleteStyleVariantProduction(),
       () => run("node", [
         "scripts/episodes/run-style-variant-workflow.mjs",
         "--scene-id", sceneId, "--episode-id", episodeId,
         "--scene-root", sceneRoot, "--episode-root", episodeRoot,
         "--backend", backend, "--origin", origin,
-        "--until", productionScope === "visual-sample" ? "visual-review" : "full",
+        "--until", styleUntil,
       ]));
   } else {
+    if (fineGrainedRenderPart) {
+      throw new Error("Fine-grained Episode production requires ten-style mode.");
+    }
     const visualManifest = path.join(episodeRoot, "visual/episode-visual-manifest.json");
     await stage("visual-reconstruction", () => visualManifestMatchesCapture(visualManifest),
     () => run("bash", ["scripts/agents/run-lwdp-episode-visual-agent.sh",
@@ -895,7 +935,10 @@ try {
   }
   record.status = executionPart === "prepare"
     ? "awaiting-capture"
-    : executionPart === "capture" ? "captured" : "succeeded";
+    : executionPart === "capture" ? "captured"
+      : fineGrainedRenderPart && executionPart !== "publication"
+        ? "checkpoint"
+        : "succeeded";
   record.currentStage = null;
   record.finishedAt = record.status === "succeeded" ? new Date().toISOString() : null;
   record.error = null;

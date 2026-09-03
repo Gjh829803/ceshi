@@ -77,18 +77,18 @@ test("creates one GPU Job for a hash-admitted closed-producer tail", () => {
   }), /valid closed-producer tail evidence/);
 });
 
-test("runs an admitted Batch as at most ten isolated indexed Case pods", () => {
+test("runs an admitted Batch with the configured isolated indexed Case concurrency", () => {
   const job = cloudGpuCaptureBatchJob({
     batchId: `gpu-capture-${"e".repeat(24)}`,
     batchManifestS3Uri: "s3://bucket/queue/batches/e/manifest.json",
     queueS3Prefix: "s3://bucket/queue",
     taskCount: 100,
-    caseConcurrency: 10,
+    caseConcurrency: 16,
     image: `registry.example/worldkit@sha256:${"f".repeat(64)}`,
   });
   assert.equal(job.spec.completionMode, "Indexed");
   assert.equal(job.spec.completions, 100);
-  assert.equal(job.spec.parallelism, 10);
+  assert.equal(job.spec.parallelism, 16);
   assert.equal(job.spec.backoffLimit, 200);
   const container = job.spec.template.spec.containers[0];
   const indexEnv = container.env.find((item) =>
@@ -102,9 +102,9 @@ test("runs an admitted Batch as at most ten isolated indexed Case pods", () => {
     batchManifestS3Uri: "s3://bucket/queue/batches/e/manifest.json",
     queueS3Prefix: "s3://bucket/queue",
     taskCount: 100,
-    caseConcurrency: 11,
+    caseConcurrency: 33,
     image: `registry.example/worldkit@sha256:${"f".repeat(64)}`,
-  }), /between 1 and 10/);
+  }), /between 1 and 32/);
 });
 
 test("admits an immediate current-Worker ready wave", () => {
@@ -115,7 +115,7 @@ test("admits an immediate current-Worker ready wave", () => {
     taskCount: 7,
     minimumBatchSize: 100,
     dispatchReason: "ready-wave",
-    caseConcurrency: 10,
+    caseConcurrency: 16,
     image: `registry.example/worldkit@sha256:${"2".repeat(64)}`,
   });
   assert.equal(job.spec.completionMode, "Indexed");

@@ -295,6 +295,157 @@ test("reattaches persisted Cloud Episodes and never cancels them on process shut
   }
 });
 
+test("local Studio readiness does not wait for remote Episode inventory", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-local-readiness-"));
+  let remoteLists = 0;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    listCloudEpisodeRecords: async () => {
+      remoteLists += 1;
+      return [];
+    },
+  });
+  try {
+    assert.equal(await service.recoverPersistedCloudEpisodes({ includeRemote: false }), 0);
+    assert.equal(remoteLists, 0);
+  } finally {
+    await service.shutdown();
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("defers Ray outages into the infrastructure retry pool without consuming a stage retry", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-infra-pool-"));
+  const episodeId = "episode-infra-pool-001";
+  const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+  await mkdir(episodeRoot, { recursive: true });
+  await writeFile(path.join(episodeRoot, "episode-record.json"), JSON.stringify({
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    sceneId: "infra-pool-scene",
+    episodeId,
+    backend: "cloud",
+    status: "remote-pending",
+    currentStage: "style-variant-plan",
+    remoteStageId: "episode-render",
+    remoteExecutionId: "exec_infra_pool",
+    createdAt: "2026-09-03T00:00:00.000Z",
+    updatedAt: "2026-09-03T00:01:00.000Z",
+    stages: [],
+  }));
+  const scheduled = [];
+  let retryCount = 0;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    recoverCloudEpisode: async () => ({
+      retryRequired: true,
+      execution: {
+        execution_id: "exec_infra_pool",
+        status: "failed",
+        error: "Ray Dashboard request timed out after 5000ms",
+        stages: [{
+          stage_id: "episode-render",
+          status: "failed",
+          diagnostics: { error: "Ray cluster unavailable" },
+        }],
+      },
+    }),
+    retryCloudEpisode: async () => { retryCount += 1; },
+    nowImplementation: () => Date.parse("2026-09-03T00:02:00.000Z"),
+    infrastructureRetryBaseMs: 1_000,
+    infrastructureRetryMaximumMs: 1_000,
+    setTimeoutImplementation: (operation, delayMs) => {
+      scheduled.push({ operation, delayMs });
+      return { unref() {} };
+    },
+    clearTimeoutImplementation: () => undefined,
+  });
+  try {
+    assert.equal(await service.recoverPersistedCloudEpisodes(), 1);
+    for (let attempt = 0; attempt < 50 && service.activeJobs.length > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const record = JSON.parse(await readFile(
+      path.join(episodeRoot, "episode-record.json"),
+      "utf8",
+    ));
+    assert.equal(retryCount, 0);
+    assert.equal(record.status, "remote-pending");
+    assert.equal(record.retryPool, "infrastructure");
+    assert.equal(record.failureClass, "CLOUD_INFRASTRUCTURE_UNAVAILABLE");
+    assert.equal(record.infrastructureRetryAttempt, 1);
+    assert.equal(scheduled.length, 1);
+    assert.ok(scheduled[0].delayMs >= 1_000 && scheduled[0].delayMs <= 1_200);
+  } finally {
+    await service.shutdown();
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("queues an infrastructure failure that happens before Cloud Execution creation", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-presubmit-pool-"));
+  const scheduled = [];
+  const sceneId = "presubmit-infra-scene";
+  let submitCalls = 0;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    ensureCloudEpisodeAvailable: async () => undefined,
+    loadEpisodeStyleVariantConfig: async () => ({ enabled: true, variantCount: 10 }),
+    resolveCloudSceneInput: async () => ({
+      sceneExecutionId: "exec_scene_presubmit",
+      sceneManifestS3Uri: "s3://bucket/scene/manifest.json",
+      sceneRecord: { id: sceneId, sceneId, status: "ready" },
+    }),
+    executeCloudEpisode: async () => {
+      submitCalls += 1;
+      throw new Error("LWDP Ray submission timed out before an execution id was returned");
+    },
+    readCloudEpisodeManifest: async () => null,
+    nowImplementation: () => Date.parse("2026-09-03T00:02:00.000Z"),
+    infrastructureRetryBaseMs: 1_000,
+    infrastructureRetryMaximumMs: 1_000,
+    setTimeoutImplementation: (operation, delayMs) => {
+      scheduled.push({ operation, delayMs });
+      return { unref() {} };
+    },
+    clearTimeoutImplementation: () => undefined,
+  });
+  const server = createServer((request, response) => {
+    void service.handleApi(request, response, new URL(request.url, "http://127.0.0.1"));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const started = await fetch(`${origin}/api/episode-workflows`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sceneId, backend: "cloud", productionScope: "full" }),
+    }).then((response) => response.json());
+    for (let attempt = 0; attempt < 50 && service.activeJobs.length > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const record = JSON.parse(await readFile(path.join(
+      repoRoot,
+      "artifacts/episodes",
+      started.episodeId,
+      "episode-record.json",
+    ), "utf8"));
+    assert.equal(submitCalls, 1);
+    assert.equal(record.remoteExecutionId, null);
+    assert.equal(record.status, "remote-pending");
+    assert.equal(record.retryPool, "infrastructure");
+    assert.equal(record.infrastructureRetryAttempt, 1);
+    assert.equal(scheduled.length, 1);
+  } finally {
+    await service.shutdown();
+    await new Promise((resolve) => server.close(resolve));
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("hydrates an S3-only Episode record before resuming a pre-submission cloud run", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-s3-recovery-"));
   const episodeId = "episode-s3-only-recovery-001";

@@ -25,6 +25,9 @@ import {
 } from
   "../lib/lwdp-codex-delivery-evidence.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
+import { GlobalCloudWorkSlotPool } from "../lib/cloud-global-work-slots.mjs";
+import { loadCloudProductionThroughputConfig } from
+  "../lib/cloud-production-throughput.mjs";
 
 const retryableFormalStages = new Set([
   "planner",
@@ -185,6 +188,8 @@ const effectiveOutputS3Prefix = cloudRequestNamespace === null
   : `${args.outputS3Prefix.replace(/\/$/, "")}/${cloudRequestNamespace}`;
 const stagingRoot = resolve(repoRoot, ".codex-tmp", "lwdp-codex", `${taskId}-${runToken}`);
 const smokeMode = process.env.WORLDKIT_LWDP_CLIENT_SMOKE === "1";
+let globalLwdpBatchLease = null;
+let cloudThroughput = null;
 await mkdir(stagingRoot, { recursive: true });
 
 try {
@@ -282,6 +287,23 @@ try {
     process.exit(0);
   }
 
+  if (cloudExecutionId && !args.dryRun) {
+    const throughput = await loadCloudProductionThroughputConfig(repoRoot);
+    cloudThroughput = throughput;
+    globalLwdpBatchLease = await new GlobalCloudWorkSlotPool({
+      namespace: "lwdp",
+      poolName: "lwdp-batch",
+      leaseNamePrefix: "worldkit-lwdp-batch-slot",
+      slotCount: throughput.submission.maxNonTerminalLwdpBatches,
+      leaseDurationSeconds: 900,
+    }).acquire(JSON.stringify({
+      cloudExecutionId,
+      cloudStageAttempt,
+      taskId,
+      requestId: baseRequestId,
+    }), { count: 1 });
+  }
+
   const config = await loadLwdpGenerationConfig(
     process.env.WORLDKIT_LWDP_TEST_ENV_CONFIG === "1" ? process.env : undefined,
   );
@@ -305,10 +327,27 @@ try {
     let jobId = null;
     let lastJob = null;
     try {
-      const submitted = await submitCodexGenerationJob(payload, { config });
-      jobId = submittedJobId(submitted);
-      if (submitted.recovered_by_request_id === true) {
-        process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+      let submissionLease = null;
+      try {
+        if (cloudThroughput !== null) {
+          submissionLease = await new GlobalCloudWorkSlotPool({
+            namespace: "lwdp",
+            poolName: "lwdp-submit",
+            leaseNamePrefix: "worldkit-lwdp-submit-slot",
+            slotCount: cloudThroughput.submission.maxConcurrentCreates,
+            leaseDurationSeconds: 120,
+          }).acquire(`${cloudExecutionId}:${requestId}`, {
+            count: 1,
+            waitTimeoutMs: 30 * 60_000,
+          });
+        }
+        const submitted = await submitCodexGenerationJob(payload, { config });
+        jobId = submittedJobId(submitted);
+        if (submitted.recovered_by_request_id === true) {
+          process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+        }
+      } finally {
+        await submissionLease?.release();
       }
       process.stdout.write(
         `WORLDKIT_LWDP_JOB ${stage} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort} requestId=${requestId} outputS3Prefix=${attemptOutputPrefix} taskAttempt=${priorTaskAttempts + taskAttempt}/${configuredTaskAttemptLimit}\n`,
@@ -411,5 +450,10 @@ try {
     process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
   }
 } finally {
+  if (globalLwdpBatchLease !== null) {
+    await globalLwdpBatchLease.release().catch((error) => {
+      process.stderr.write(`WORLDKIT_GLOBAL_SLOT_RELEASE_WARNING lwdp-batch ${error.message}\n`);
+    });
+  }
   await rm(stagingRoot, { recursive: true, force: true });
 }

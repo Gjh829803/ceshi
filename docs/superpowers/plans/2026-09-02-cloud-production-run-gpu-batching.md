@@ -1,5 +1,10 @@
 # Cloud Production Run and GPU Capture Batching
 
+> Historical design note. New full runs use the streaming checkpoint profile
+> documented in `docs/workflows/90s-playthrough-video-dataset/workflow-design.md`.
+> Existing frozen executions still use the 100-entry/closed-tail rules below;
+> do not rewrite their immutable requests during recovery.
+
 ## Decision
 
 The whitebox-world to whitebox-video to Seedance pipeline uses one durable

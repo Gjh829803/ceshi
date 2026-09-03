@@ -31,10 +31,59 @@ export const CLOUD_EPISODE_STAGE_PROFILE_V2 = Object.freeze([
   }),
 ]);
 
+export const CLOUD_EPISODE_STAGE_PROFILE_V3 = Object.freeze([
+  Object.freeze({
+    stage_id: "episode-prepare",
+    executor: "worker",
+    max_attempts: 3,
+    timeout_seconds: 21_600,
+  }),
+  Object.freeze({
+    stage_id: "whitebox-capture",
+    executor: "worker",
+    depends_on: Object.freeze(["episode-prepare"]),
+    max_attempts: 3,
+    timeout_seconds: 43_200,
+  }),
+  ...[
+    ["episode-style-plan", "whitebox-capture", "style-plan", 21_600],
+    ["episode-style-openings", "episode-style-plan", "style-openings", 21_600],
+    ["episode-style-visuals", "episode-style-openings", "style-visuals", 43_200],
+    ["episode-style-diversity", "episode-style-visuals", "style-diversity", 21_600],
+    ["episode-style-events", "episode-style-diversity", "style-events", 21_600],
+    ["episode-style-prompts", "episode-style-events", "style-prompts", 7_200],
+    ["episode-seedance", "episode-style-prompts", "seedance", 86_400],
+    ["episode-conformance", "episode-seedance", "conformance", 43_200],
+    ["episode-publication", "episode-conformance", "publication", 21_600],
+  ].map(([stage_id, dependency, _part, timeout_seconds]) => Object.freeze({
+    stage_id,
+    executor: "worker",
+    depends_on: Object.freeze([dependency]),
+    max_attempts: 3,
+    timeout_seconds,
+  })),
+]);
+
 export const CLOUD_EPISODE_PART_BY_STAGE_ID = Object.freeze({
   "episode-prepare": "prepare",
   "whitebox-capture": "capture",
   "episode-render": "render",
+  "episode-style-plan": "style-plan",
+  "episode-style-openings": "style-openings",
+  "episode-style-visuals": "style-visuals",
+  "episode-style-diversity": "style-diversity",
+  "episode-style-events": "style-events",
+  "episode-style-prompts": "style-prompts",
+  "episode-seedance": "seedance",
+  "episode-conformance": "conformance",
+  "episode-publication": "publication",
+});
+
+export const CLOUD_EPISODE_UPSTREAM_STAGE_BY_STAGE_ID = Object.freeze({
+  "whitebox-capture": "episode-prepare",
+  "episode-render": "whitebox-capture",
+  ...Object.fromEntries(CLOUD_EPISODE_STAGE_PROFILE_V3.flatMap((stage) =>
+    stage.depends_on?.length === 1 ? [[stage.stage_id, stage.depends_on[0]]] : [])),
 });
 
 function requiredString(value, label) {
@@ -293,6 +342,8 @@ export function parseCloudProviderJournal(value) {
     journal?.schemaVersion !== 3 ||
     !SCENE_ID.test(journal?.sceneId ?? "") ||
     !EPISODE_ID.test(journal?.episodeId ?? "") ||
+    (journal?.styleVariantId !== undefined &&
+      !/^style-0[0-9]$/.test(journal.styleVariantId)) ||
     !/^segment-0[0-5]$/.test(journal?.segmentId ?? "") ||
     journal?.inputIdentity == null ||
     typeof journal.inputIdentity !== "object" ||

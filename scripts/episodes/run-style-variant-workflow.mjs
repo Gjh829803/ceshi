@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync, spawn } from "node:child_process";
-import { access, readFile } from "node:fs/promises";
+import { access, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
@@ -16,6 +16,11 @@ import {
   validateStyleVariantOpeningAnchorManifest,
   writeJsonAtomic,
 } from "../lib/episode-style-variants.mjs";
+import { joinS3Uri } from "../lib/lwdp-generation-client.mjs";
+import {
+  buildCloudEpisodeArtifactManifest,
+  uploadCloudArtifactManifest,
+} from "../lib/worldkit-cloud-artifacts.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const arguments_ = process.argv.slice(2);
@@ -31,8 +36,18 @@ const sceneRoot = path.resolve(value("--scene-root"));
 const backend = value("--backend");
 const explicitOrigin = arguments_.includes("--origin") ? value("--origin") : null;
 const until = arguments_.includes("--until") ? value("--until") : "full";
-if (!["full", "visual-review"].includes(until)) {
-  throw new Error("Style Variant --until must be full or visual-review.");
+const checkpointPhases = new Set([
+  "plan",
+  "openings",
+  "visuals",
+  "diversity",
+  "events",
+  "prompts",
+  "seedance",
+  "conformance",
+]);
+if (!["full", "visual-review", ...checkpointPhases].includes(until)) {
+  throw new Error("Style Variant --until phase is invalid.");
 }
 const config = await loadEpisodeStyleVariantConfig(repoRoot);
 if (!config.enabled) throw new Error("Style Variant production is disabled.");
@@ -51,6 +66,69 @@ const videoPipeline = JSON.parse(await readFile(
 ));
 const delivery = videoPipeline.delivery;
 const finalVideoName = `final-${delivery.width}x${delivery.height}-${delivery.fps}fps-${delivery.frameCount}f.mp4`;
+const cloudExecutionId = process.env.WORLDKIT_CLOUD_EXECUTION_ID;
+const cloudStageId = process.env.WORLDKIT_CLOUD_EXECUTION_STAGE_ID;
+const cloudStageAttempt = Number(process.env.WORLDKIT_CLOUD_STAGE_ATTEMPT ?? 1);
+const cloudOutputS3Prefix = process.env.WORLDKIT_CLOUD_OUTPUT_S3_PREFIX;
+const cloudBaseManifestPath = process.env.WORLDKIT_CLOUD_BASE_MANIFEST_PATH
+  ? path.resolve(process.env.WORLDKIT_CLOUD_BASE_MANIFEST_PATH)
+  : path.join(
+      repoRoot,
+      ".codex-tmp",
+      "episode-checkpoints",
+      episodeId,
+      "latest-style-checkpoint.json",
+    );
+let cloudCheckpointSequence = 0;
+let latestCloudCheckpointManifest = await readJson(cloudBaseManifestPath);
+
+async function publishCloudCheckpoint(internalStageId) {
+  if (
+    ![
+      "render", "style-plan", "style-openings", "style-visuals",
+      "style-diversity", "style-events", "style-prompts", "seedance",
+      "conformance", "publication",
+    ].includes(process.env.WORLDKIT_CLOUD_EXECUTION_PART) ||
+    typeof cloudExecutionId !== "string" ||
+    typeof cloudStageId !== "string" ||
+    typeof cloudOutputS3Prefix !== "string" ||
+    !Number.isSafeInteger(cloudStageAttempt) || cloudStageAttempt < 1
+  ) return;
+  cloudCheckpointSequence += 1;
+  await mkdir(path.dirname(cloudBaseManifestPath), { recursive: true });
+  const checkpointS3Prefix = joinS3Uri(
+    cloudOutputS3Prefix,
+    "stages",
+    cloudStageId,
+    `attempt-${cloudStageAttempt}`,
+    "checkpoints",
+    internalStageId,
+    `revision-${String(cloudCheckpointSequence).padStart(3, "0")}`,
+  );
+  const manifest = await buildCloudEpisodeArtifactManifest({
+    sceneId,
+    episodeId,
+    executionId: cloudExecutionId,
+    stageId: cloudStageId,
+    stageOutputS3Prefix: checkpointS3Prefix,
+    episodeRoot,
+    workerImage: process.env.WORLDKIT_CLOUD_WORKER_IMAGE ?? null,
+    sourceRevision: process.env.WORLDKIT_SOURCE_REVISION ?? null,
+    requireComplete: false,
+    executionPart: "render",
+    reuseArtifacts: latestCloudCheckpointManifest?.artifacts ?? [],
+  });
+  const uploaded = await uploadCloudArtifactManifest(
+    manifest,
+    cloudBaseManifestPath,
+    { stageOutputS3Prefix: checkpointS3Prefix },
+  );
+  latestCloudCheckpointManifest = uploaded.manifest;
+  process.stdout.write(
+    `WORLDKIT_EPISODE_CLOUD_CHECKPOINT ${internalStageId} ` +
+      `${uploaded.cloudExecutionArtifacts[0].s3_uri}\n`,
+  );
+}
 
 async function exists(filePath) {
   try { await access(filePath); return true; } catch { return false; }
@@ -165,8 +243,20 @@ async function stage(id, operation) {
   await persist();
   process.stdout.write(`WORLDKIT_STYLE_VARIANT_STAGE ${id} running\n`);
   const result = await operation();
+  await publishCloudCheckpoint(id);
   process.stdout.write(`WORLDKIT_STYLE_VARIANT_STAGE ${id} complete\n`);
   return result;
+}
+
+class StyleVariantCheckpointComplete extends Error {
+  constructor(phase) {
+    super(`Style Variant checkpoint complete: ${phase}`);
+    this.phase = phase;
+  }
+}
+
+function stopAtCheckpoint(phase) {
+  if (until === phase) throw new StyleVariantCheckpointComplete(phase);
 }
 
 async function prepareCurrentPlanInput() {
@@ -308,6 +398,7 @@ try {
       "--episode-root", episodeRoot, "--plan", planPath,
     ]);
   });
+  stopAtCheckpoint("plan");
 
   await stage("style-variant-opening-anchors", async () => {
     if (await openingAnchorsAreCurrent()) return;
@@ -362,12 +453,25 @@ try {
     }
     throw new Error("Style Variant openings did not pass within the repair budget.");
   });
+  stopAtCheckpoint("openings");
 
   const alreadyPassed = [];
   const initialVisualIds = [];
+  const interruptedVisualsByAttempt = new Map();
   for (const styleVariantId of variantIds) {
     if (await reviewIsCurrent(styleVariantId)) alreadyPassed.push(styleVariantId);
-    else initialVisualIds.push(styleVariantId);
+    else {
+      const prior = record.variants.find(({ id }) => id === styleVariantId);
+      const priorAttempt = Number(prior?.visualAttempt ?? 0);
+      if (prior?.status === "running" && priorAttempt >= 1 &&
+          String(prior?.currentStage ?? "").includes("visual")) {
+        const ids = interruptedVisualsByAttempt.get(priorAttempt) ?? [];
+        ids.push(styleVariantId);
+        interruptedVisualsByAttempt.set(priorAttempt, ids);
+      } else if (priorAttempt < 1 || prior?.status === "pending") {
+        initialVisualIds.push(styleVariantId);
+      }
+    }
   }
   for (const styleVariantId of alreadyPassed) {
     await updateVariant(styleVariantId, {
@@ -441,14 +545,25 @@ try {
 
   if (initialVisualIds.length > 0) {
     await generateVisuals(initialVisualIds, 1, "style-variant-visuals");
-    const reviewIds = record.variants
-      .filter(({ id, status }) => initialVisualIds.includes(id) && status === "visuals-ready")
-      .map(({ id }) => id);
+  }
+  for (const [attempt, styleVariantIds] of interruptedVisualsByAttempt) {
+    await generateVisuals(
+      styleVariantIds,
+      attempt,
+      "style-variant-visual-resume",
+    );
+  }
+  const reviewIds = record.variants
+    .filter(({ status }) => ["visuals-ready", "visual-review-failed"].includes(status))
+    .map(({ id }) => id);
+  if (reviewIds.length > 0) {
     await reviewVisuals(reviewIds, 1, "style-variant-visual-review");
   }
   for (let attempt = 2; attempt <= config.maximumVisualAttempts; attempt += 1) {
     const repairIds = record.variants
-      .filter(({ status }) => status === "visual-needs-repair")
+      .filter(({ status, visualAttempt }) =>
+        ["visual-needs-repair", "visual-generation-failed"].includes(status) &&
+        Number(visualAttempt ?? 0) < attempt)
       .map(({ id }) => id);
     if (repairIds.length === 0) break;
     await generateVisuals(repairIds, attempt, "style-variant-visual-repair");
@@ -466,6 +581,7 @@ try {
       error: item.error ?? "Visual review did not pass within the repair budget.",
     });
   }
+  stopAtCheckpoint("visuals");
   let passedVariantIds = record.variants
     .filter(({ status }) => status === "visual-passed")
     .map(({ id }) => id);
@@ -499,8 +615,9 @@ try {
       .filter(({ status }) => status === "visual-passed")
       .map(({ id }) => id);
   }
+  stopAtCheckpoint("diversity");
 
-  if (until === "full") {
+  if (["full", "events", "prompts", "seedance", "conformance"].includes(until)) {
     await stage("style-variant-gemini-events", async () => {
     const results = await mapConcurrent(
       passedVariantIds,
@@ -527,6 +644,7 @@ try {
       });
     }
   });
+  stopAtCheckpoint("events");
   const eventReadyIds = record.variants
     .filter(({ status }) => status === "events-ready")
     .map(({ id }) => id);
@@ -558,6 +676,7 @@ try {
       });
     }
   });
+  stopAtCheckpoint("prompts");
   const promptReadyIds = record.variants
     .filter(({ status }) => status === "seedance-prompts-ready")
     .map(({ id }) => id);
@@ -587,6 +706,7 @@ try {
         : { status: "seedance-ready", error: null });
     }
   });
+  stopAtCheckpoint("seedance");
   const seedanceReadyTasks = videoTasks.filter(({ styleVariantId }) =>
     record.variants.find(({ id }) => id === styleVariantId)?.status === "seedance-ready");
 
@@ -612,6 +732,7 @@ try {
         : { status: "succeeded", currentStage: null, error: null });
     }
     });
+    stopAtCheckpoint("conformance");
   }
 
   const plan = await readJson(planPath);
@@ -688,7 +809,21 @@ try {
     `WORLDKIT_STYLE_VARIANT_WORKFLOW_READY variants=${succeededCount} until=${until}\n`,
   );
 } catch (error) {
+  if (error instanceof StyleVariantCheckpointComplete) {
+    record = {
+      ...record,
+      status: "checkpoint",
+      currentStage: null,
+      error: null,
+      checkpointPhase: error.phase,
+    };
+    await persist();
+    process.stdout.write(
+      `WORLDKIT_STYLE_VARIANT_WORKFLOW_CHECKPOINT phase=${error.phase}\n`,
+    );
+  } else {
   record = { ...record, status: "failed", currentStage: null, error: error.message };
   await persist();
   throw error;
+  }
 }

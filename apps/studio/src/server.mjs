@@ -86,6 +86,8 @@ import {
 } from "../../../scripts/lib/cloud-production-run-index.mjs";
 import { deleteCloudEpisodeWorkerJobs } from
   "../../../scripts/cloud/launch-worldkit-cloud-episode-worker-job.mjs";
+import { loadCloudProductionThroughputConfigSync } from
+  "../../../scripts/lib/cloud-production-throughput.mjs";
 
 const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const studioRoot = path.resolve(studioSourceRoot, "..");
@@ -1173,16 +1175,29 @@ export function createStudio(options = {}) {
     throw new Error("Studio readiness nonce must contain 32 to 128 lowercase hexadecimal characters.");
   }
   const autoRunJobs = options.autoRunJobs ?? true;
+  let cloudProductionThroughput = options.cloudProductionThroughput;
+  if (!cloudProductionThroughput) {
+    try {
+      cloudProductionThroughput = loadCloudProductionThroughputConfigSync(repoRoot);
+    } catch (error) {
+      if (error?.code !== "ENOENT" || repoRoot === defaultRepoRoot) throw error;
+      // Isolated Studio tests and embedded callers may point repoRoot at a
+      // fixture containing only Scene assets. The production throughput
+      // contract remains owned by this installed Studio source tree.
+      cloudProductionThroughput = loadCloudProductionThroughputConfigSync(defaultRepoRoot);
+    }
+  }
   const configuredConcurrency = Number(
-    options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ?? 20,
+    options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ??
+      cloudProductionThroughput.pools.sceneCases,
   );
   const maxConcurrentJobs = Number.isSafeInteger(configuredConcurrency) &&
-    configuredConcurrency >= 1 && configuredConcurrency <= 20
+    configuredConcurrency >= 1 && configuredConcurrency <= 100
     ? configuredConcurrency
-    : 20;
+    : cloudProductionThroughput.pools.sceneCases;
   const configuredBackendConcurrency = (value, fallback) => {
     const parsed = Number(value);
-    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 20
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 100
       ? parsed
       : fallback;
   };
@@ -5419,7 +5434,13 @@ export function createStudio(options = {}) {
       for (const testSet of await listTestSets()) await refreshTestSetIntegrity(testSet);
       if (importExistingArtifacts) await importExistingWorlds();
       const recoverPersistedRecords = async () => {
-        await episodeWorkflows.recoverPersistedCloudEpisodes();
+        // The dedicated cloud control plane must eagerly recover S3-owned Runs.
+        // A local/public Studio starts from its local cache and lets ordinary
+        // API/background reconciliation fetch remote projections after
+        // readiness, so an S3 inventory scan cannot hold both listeners closed.
+        await episodeWorkflows.recoverPersistedCloudEpisodes({
+          includeRemote: cloudControlPlane,
+        });
         const records = await listRecords();
         for (const record of records) {
           if (await recoverGeneratedStyledOutputs(record)) continue;
@@ -5549,6 +5570,7 @@ export function createStudio(options = {}) {
         activeJobs: activeJobSummaries,
         maxConcurrentJobs,
         maxConcurrentJobsByBackend,
+        cloudProductionThroughput,
         recordingActiveJobs: recordingWorkbench.activeJobs,
         recordingMaxConcurrentJobs: recordingWorkbench.maxConcurrentJobs,
         episodeActiveJobs: episodeWorkflows.activeJobs,

@@ -6,6 +6,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { loadEpisodeStyleVariantConfig } from "../../../scripts/lib/episode-style-variants.mjs";
+import {
+  classifyCloudProductionFailure,
+  cloudInfrastructureRetryDelayMs,
+} from "../../../scripts/lib/cloud-production-retry-policy.mjs";
 
 const idPattern = /^[a-z0-9][a-z0-9-]{2,119}$/;
 
@@ -16,6 +20,40 @@ export function failedEpisodeStageId(execution) {
     ["failed", "interrupted"].includes(stage.status) &&
     typeof stage.stage_id === "string" && stage.stage_id.length > 0);
   return failed?.stage_id ?? null;
+}
+
+function episodeGpuBatchStatus(execution, remoteStage, fallback = "preparing") {
+  if (execution?.current_stage_id === "whitebox-capture") {
+    return remoteStage?.status === "running" ? "capturing" : "waiting-for-batch";
+  }
+  if (execution?.current_stage_id === "episode-render" ||
+      /^episode-(?:style|seedance|conformance|publication)/
+        .test(String(execution?.current_stage_id ?? ""))) {
+    return "capture-complete";
+  }
+  return fallback;
+}
+const episodeBoundaryByRemoteStage = Object.freeze({
+  "episode-prepare": "reconnaissance",
+  "whitebox-capture": "whitebox-capture",
+  "episode-render": "style-variant-production",
+  "episode-style-plan": "style-variant-plan",
+  "episode-style-openings": "style-variant-opening-anchors",
+  "episode-style-visuals": "style-variant-visuals",
+  "episode-style-diversity": "style-variant-diversity-review",
+  "episode-style-events": "style-variant-gemini-events",
+  "episode-style-prompts": "style-variant-seedance-prompts",
+  "episode-seedance": "style-variant-seedance-generation",
+  "episode-conformance": "style-variant-conformance",
+  "episode-publication": "episode-publication",
+});
+
+function displayedEpisodeStage(record, execution, remoteStage) {
+  const reported = remoteStage?.diagnostics?.internal_stage ??
+    execution?.diagnostics?.internal_stage ?? record.currentStage;
+  return record.stages.some((stage) => stage.id === reported)
+    ? reported
+    : episodeBoundaryByRemoteStage[execution?.current_stage_id] ?? reported;
 }
 const absorbingEpisodeStatuses = new Set(["cancelled", "succeeded"]);
 
@@ -201,7 +239,17 @@ const legacyEpisodeStageDefinitions = [
 ];
 const tenStyleEpisodeStageDefinitions = [
   ...sharedEpisodeStageDefinitions,
-  ["style-variant-production", "十种风格视觉、Codex 质检、独立 Gemini 与 Seedance"],
+  ["style-variant-production", "十风格生产编排"],
+  ["style-variant-plan", "十种独立风格规划"],
+  ["style-variant-opening-anchors", "十张样式首帧与独立审核"],
+  ["style-variant-visuals", "多样首帧与三视图生成"],
+  ["style-variant-visual-review", "逐风格 Codex 视觉审核"],
+  ["style-variant-diversity-review", "十风格差异性审核"],
+  ["style-variant-gemini-events", "逐风格 Gemini 大型事件"],
+  ["style-variant-seedance-prompts", "六十条 Seedance Prompt"],
+  ["style-variant-seedance-generation", "六十段 Seedance 视频"],
+  ["style-variant-conformance", "逐段媒体一致性校验"],
+  ["episode-publication", "云端产物与 Review Bundle 发布"],
 ];
 const episodeStageDefinitionsForMode = (mode) => mode === "ten-style"
   ? tenStyleEpisodeStageDefinitions
@@ -658,6 +706,7 @@ export function createEpisodeWorkflowService(options) {
   const createReadStreamImplementation = options.createReadStreamImplementation ?? createReadStream;
   const activeChildren = new Map();
   const activeCloudExecutions = new Map();
+  const cloudRetryTimers = new Map();
   const episodePersistenceQueues = new Map();
   const listAllCache = new Map();
   const executeCloudEpisode = options.executeCloudEpisode ?? null;
@@ -677,6 +726,74 @@ export function createEpisodeWorkflowService(options) {
   const listCloudEpisodeRecords = options.listCloudEpisodeRecords ?? null;
   const loadStyleVariantConfig = options.loadEpisodeStyleVariantConfig ??
     (() => loadEpisodeStyleVariantConfig(repoRoot));
+  const scheduleTimer = options.setTimeoutImplementation ?? setTimeout;
+  const cancelTimer = options.clearTimeoutImplementation ?? clearTimeout;
+  const now = options.nowImplementation ?? (() => Date.now());
+
+  function clearCloudRetryTimer(episodeId) {
+    const timer = cloudRetryTimers.get(episodeId);
+    if (timer !== undefined) cancelTimer(timer);
+    cloudRetryTimers.delete(episodeId);
+  }
+
+  function scheduleCloudEpisodeRecovery(record, delayMs) {
+    clearCloudRetryTimer(record.episodeId);
+    const timer = scheduleTimer(() => {
+      cloudRetryTimers.delete(record.episodeId);
+      void (async () => {
+        const latest = await readEpisodeRecordById(record.episodeId);
+        if (!latest || latest.status !== "remote-pending" ||
+            activeCloudExecutions.has(record.episodeId)) return;
+        activeCloudExecutions.set(
+          record.episodeId,
+          latest.remoteExecutionId ?? "recovering",
+        );
+        if (typeof latest.remoteExecutionId === "string" && latest.remoteExecutionId) {
+          await runCloudEpisodeRecovery(latest);
+        } else {
+          await runCloudEpisode(latest.sceneId, latest.episodeId, {
+            requestId: latest.remoteRequestId ?? `${latest.episodeId}-cloud-run-1`,
+            cloudAttempt: Number(latest.cloudAttempt ?? 1),
+          });
+        }
+      })();
+    }, Math.max(0, delayMs));
+    timer?.unref?.();
+    cloudRetryTimers.set(record.episodeId, timer);
+  }
+
+  async function deferCloudEpisodeRecovery(record, failure) {
+    const classification = classifyCloudProductionFailure(failure);
+    if (!classification.retryable || classification.consumesContentAttempt) return false;
+    const infrastructureAttempt = Number(record.infrastructureRetryAttempt ?? 0) + 1;
+    const delayMs = cloudInfrastructureRetryDelayMs(infrastructureAttempt, {
+      baseMs: options.infrastructureRetryBaseMs ?? 30_000,
+      maximumMs: options.infrastructureRetryMaximumMs ?? 10 * 60_000,
+    });
+    const deferred = {
+      ...record,
+      status: "remote-pending",
+      finishedAt: null,
+      error: failure instanceof Error ? failure.message :
+        String(failure?.error ?? failure?.message ?? failure),
+      retryPool: classification.pool,
+      failureClass: classification.code,
+      infrastructureRetryAttempt: infrastructureAttempt,
+      retryNotBeforeAt: new Date(now() + delayMs).toISOString(),
+    };
+    await persistEpisodeRecord(deferred);
+    scheduleCloudEpisodeRecovery(deferred, delayMs);
+    return true;
+  }
+
+  function cloudFailureRecordFields(failure) {
+    const classification = classifyCloudProductionFailure(failure);
+    return {
+      retryPool: classification.pool,
+      failureClass: classification.code,
+      consumesContentAttempt: classification.consumesContentAttempt,
+    };
+  }
 
   async function fileMetadata(filePath) {
     try {
@@ -1123,7 +1240,12 @@ export function createEpisodeWorkflowService(options) {
     }
   }
 
-  async function listRecords({ sceneId = null, requireFinalVideo = false, latestPerScene = false } = {}) {
+  async function listRecords({
+    sceneId = null,
+    requireFinalVideo = false,
+    latestPerScene = false,
+    includeRemote = true,
+  } = {}) {
     let entries = [];
     try { entries = await readdir(episodesRoot, { withFileTypes: true }); } catch {}
     let records = (await Promise.all(entries.map(async (entry) => {
@@ -1153,7 +1275,7 @@ export function createEpisodeWorkflowService(options) {
       }))).some(Boolean);
       return hasFinalVideo ? record : null;
     }))).filter(Boolean);
-    if (typeof listCloudEpisodeRecords === "function") {
+    if (includeRemote && typeof listCloudEpisodeRecords === "function") {
       const remoteRecords = await listCloudEpisodeRecords().catch(() => []);
       const byEpisodeId = new Map(records.map((record) => [record.episodeId, record]));
       for (const remoteRecord of remoteRecords) {
@@ -1308,6 +1430,11 @@ export function createEpisodeWorkflowService(options) {
         (manifest.stageId !== "episode-render" || manifest.executionPart !== "render")) {
       throw new Error("Cloud Episode final admission requires the episode-render manifest.");
     }
+    if (record.remoteExecutionProfile === "cpu-gpu-streaming-checkpoints@1" &&
+        (manifest.stageId !== "episode-publication" ||
+          manifest.executionPart !== "publication")) {
+      throw new Error("Streaming Cloud Episode final admission requires the publication manifest.");
+    }
     if (typeof record.remoteWorkerImage !== "string" ||
         manifest.workerImage !== record.remoteWorkerImage) {
       throw new Error("Cloud Episode manifest Worker image does not match the frozen request digest.");
@@ -1421,11 +1548,21 @@ export function createEpisodeWorkflowService(options) {
     };
     await persistEpisodeRecord(record);
     await hydrateCloudEpisodeMetadata(record);
+    const completedAt = new Date().toISOString();
     record = {
       ...record,
       status: "succeeded",
       currentStage: null,
-      finishedAt: new Date().toISOString(),
+      finishedAt: completedAt,
+      retryPool: null,
+      retryNotBeforeAt: null,
+      failureClass: null,
+      stages: record.stages.map((stage) => ({
+        ...stage,
+        status: "complete",
+        startedAt: stage.startedAt ?? completedAt,
+        finishedAt: stage.finishedAt ?? completedAt,
+      })),
     };
     await persistEpisodeRecord(record);
     return record;
@@ -1452,6 +1589,9 @@ export function createEpisodeWorkflowService(options) {
         typeof resolveCloudSceneInput !== "function" ||
         typeof readCloudEpisodeManifest !== "function"
       ) throw new Error("Cloud Episode production is not configured.");
+      if (typeof ensureCloudEpisodeAvailable === "function") {
+        await ensureCloudEpisodeAvailable();
+      }
       const scene = await resolveCloudSceneInput(sceneId);
       const result = await executeCloudEpisode({
         sceneId,
@@ -1494,12 +1634,9 @@ export function createEpisodeWorkflowService(options) {
           record = await readJson(recordPath) ?? record;
           const remoteStage = execution?.stages?.find?.((stage) =>
             stage?.stage_id === execution?.current_stage_id);
-          const internalStage = remoteStage?.diagnostics?.internal_stage ??
-            execution?.diagnostics?.internal_stage ?? record.currentStage;
+          const internalStage = displayedEpisodeStage(record, execution, remoteStage);
           const stageIndex = record.stages.findIndex((stage) => stage.id === internalStage);
-          const gpuBatchStatus = execution.current_stage_id === "whitebox-capture"
-            ? remoteStage?.status === "running" ? "capturing" : "waiting-for-batch"
-            : execution.current_stage_id === "episode-render" ? "capture-complete" : "preparing";
+          const gpuBatchStatus = episodeGpuBatchStatus(execution, remoteStage);
           record = {
             ...record,
             status: "running",
@@ -1507,6 +1644,9 @@ export function createEpisodeWorkflowService(options) {
             remoteStageId: execution.current_stage_id ?? record.remoteStageId,
             gpuBatchStatus,
             cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
+            retryPool: null,
+            retryNotBeforeAt: null,
+            failureClass: null,
             stages: record.stages.map((stage, index) => ({
               ...stage,
               status: index < stageIndex
@@ -1521,11 +1661,13 @@ export function createEpisodeWorkflowService(options) {
     } catch (error) {
       record = await readJson(recordPath) ?? record;
       if (record && record.status !== "cancelled") {
+        if (await deferCloudEpisodeRecovery(record, error)) return;
         record = {
           ...record,
           status: record.remoteExecutionId ? "remote-pending" : "failed",
           error: error instanceof Error ? error.message : String(error),
           finishedAt: record.remoteExecutionId ? null : new Date().toISOString(),
+          ...cloudFailureRecordFields(error),
         };
         await persistEpisodeRecord(record);
       }
@@ -1549,6 +1691,8 @@ export function createEpisodeWorkflowService(options) {
       const prepareStageIds = new Set([
         "reconnaissance", "navigation-evidence", "playthrough-plan",
       ]);
+      const retryBoundaryIndex = record.stages.findIndex((stage) =>
+        stage.id === episodeBoundaryByRemoteStage[retryStageId]);
       record = {
         ...record,
         remoteStageId: retryStageId,
@@ -1559,11 +1703,11 @@ export function createEpisodeWorkflowService(options) {
         cloudAttempt: attempt,
         remoteArtifactAdmission: null,
         remoteArtifacts: [],
-        stages: record.stages.map((stage) => {
-          const preserve = retryStageId === "whitebox-capture"
-            ? prepareStageIds.has(stage.id)
-            : retryStageId === "episode-render"
-              ? prepareStageIds.has(stage.id) || stage.id === "whitebox-capture"
+        stages: record.stages.map((stage, index) => {
+          const preserve = retryBoundaryIndex >= 0
+            ? index < retryBoundaryIndex
+            : retryStageId === "whitebox-capture"
+              ? prepareStageIds.has(stage.id)
               : false;
           return preserve ? stage : {
             ...stage,
@@ -1586,16 +1730,19 @@ export function createEpisodeWorkflowService(options) {
           record = await readJson(recordPath) ?? record;
           const remoteStage = execution?.stages?.find?.((stage) =>
             stage?.stage_id === execution?.current_stage_id);
-          const internalStage = remoteStage?.diagnostics?.internal_stage ??
-            execution?.diagnostics?.internal_stage ?? record.currentStage;
+          const internalStage = displayedEpisodeStage(record, execution, remoteStage);
           record = {
             ...record,
             currentStage: internalStage,
             remoteStageId: execution.current_stage_id ?? record.remoteStageId,
-            gpuBatchStatus: execution.current_stage_id === "whitebox-capture"
-              ? remoteStage?.status === "running" ? "capturing" : "waiting-for-batch"
-              : execution.current_stage_id === "episode-render"
-                ? "capture-complete" : record.gpuBatchStatus,
+            gpuBatchStatus: episodeGpuBatchStatus(
+              execution,
+              remoteStage,
+              record.gpuBatchStatus,
+            ),
+            retryPool: null,
+            retryNotBeforeAt: null,
+            failureClass: null,
           };
           await persistEpisodeRecord(record);
         },
@@ -1604,11 +1751,13 @@ export function createEpisodeWorkflowService(options) {
     } catch (error) {
       record = await readJson(recordPath) ?? record;
       if (record.status !== "cancelled") {
+        if (await deferCloudEpisodeRecovery(record, error)) return;
         await persistEpisodeRecord({
           ...record,
           status: "failed",
           finishedAt: new Date().toISOString(),
           error: error instanceof Error ? error.message : String(error),
+          ...cloudFailureRecordFields(error),
         });
       }
     } finally {
@@ -1633,20 +1782,23 @@ export function createEpisodeWorkflowService(options) {
           record = await readJson(recordPath) ?? record;
           const remoteStage = execution?.stages?.find?.((stage) =>
             stage?.stage_id === execution?.current_stage_id);
-          const internalStage = remoteStage?.diagnostics?.internal_stage ??
-            execution?.diagnostics?.internal_stage ?? record.currentStage;
+          const internalStage = displayedEpisodeStage(record, execution, remoteStage);
           await persistEpisodeRecord({
             ...record,
             status: "running",
             currentStage: internalStage,
             remoteStageId: execution.current_stage_id ?? record.remoteStageId,
-            gpuBatchStatus: execution.current_stage_id === "whitebox-capture"
-              ? remoteStage?.status === "running" ? "capturing" : "waiting-for-batch"
-              : execution.current_stage_id === "episode-render"
-                ? "capture-complete" : record.gpuBatchStatus,
+            gpuBatchStatus: episodeGpuBatchStatus(
+              execution,
+              remoteStage,
+              record.gpuBatchStatus,
+            ),
             cloudLastHeartbeat: execution.last_heartbeat ?? new Date().toISOString(),
             finishedAt: null,
             error: null,
+            retryPool: null,
+            retryNotBeforeAt: null,
+            failureClass: null,
           });
         },
       });
@@ -1660,6 +1812,7 @@ export function createEpisodeWorkflowService(options) {
         return;
       }
       if (result.retryRequired) {
+        if (await deferCloudEpisodeRecovery(record, result.execution)) return;
         const retryStageId = failedEpisodeStageId(result.execution);
         const retryRecord = {
           ...(await readJson(recordPath) ?? record),
@@ -1672,11 +1825,13 @@ export function createEpisodeWorkflowService(options) {
     } catch (error) {
       record = await readJson(recordPath) ?? record;
       if (record.status !== "cancelled") {
+        if (await deferCloudEpisodeRecovery(record, error)) return;
         await persistEpisodeRecord({
           ...record,
           status: "remote-pending",
           finishedAt: null,
           error: error instanceof Error ? error.message : String(error),
+          ...cloudFailureRecordFields(error),
         });
       }
     } finally {
@@ -1722,9 +1877,6 @@ export function createEpisodeWorkflowService(options) {
     const episodeRoot = path.join(episodesRoot, episodeId);
     await mkdir(episodeRoot, { recursive: true });
     if (backend === "cloud") {
-      if (typeof ensureCloudEpisodeAvailable === "function") {
-        await ensureCloudEpisodeAvailable();
-      }
       const createdAt = new Date().toISOString();
       const styleVariantConfig = await loadStyleVariantConfig();
       const styleVariantMode = styleVariantConfig.enabled ? "ten-style" : "legacy";
@@ -1864,9 +2016,9 @@ export function createEpisodeWorkflowService(options) {
     );
   }
 
-  async function recoverPersistedCloudEpisodes() {
+  async function recoverPersistedCloudEpisodes({ includeRemote = true } = {}) {
     let recovered = 0;
-    for (const listedRecord of await listRecords()) {
+    for (const listedRecord of await listRecords({ includeRemote })) {
       const record = await readEpisodeRecordById(listedRecord.episodeId) ?? listedRecord;
       if (
         record.backend !== "cloud" ||
@@ -1874,6 +2026,11 @@ export function createEpisodeWorkflowService(options) {
         activeCloudExecutions.has(record.episodeId)
       ) continue;
       recovered += 1;
+      const retryNotBeforeMs = Date.parse(record.retryNotBeforeAt ?? "");
+      if (Number.isFinite(retryNotBeforeMs) && retryNotBeforeMs > now()) {
+        scheduleCloudEpisodeRecovery(record, retryNotBeforeMs - now());
+        continue;
+      }
       const localRecordPath = path.join(
         episodesRoot,
         record.episodeId,
@@ -2130,6 +2287,7 @@ export function createEpisodeWorkflowService(options) {
     // cancel a remote Episode.
     activeChildren.clear();
     activeCloudExecutions.clear();
+    for (const episodeId of cloudRetryTimers.keys()) clearCloudRetryTimer(episodeId);
   }
 
   return {
