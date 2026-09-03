@@ -175,6 +175,10 @@ export function evaluateRecordTransition(current, patch, {
   return { allowed: true, reason: "applied" };
 }
 
+export function applyRecordPatch(current, patch) {
+  return { ...current, ...patch };
+}
+
 export function hasRemoteCloudHostResumeInputs(record) {
   if (
     typeof record?.remoteExecutionId !== "string" ||
@@ -1992,9 +1996,9 @@ export function createStudio(options = {}) {
       if (!decision.allowed) {
         return { applied: false, reason: decision.reason, record };
       }
-      Object.assign(record, patch);
-      await writeRecordUnlocked(record);
-      return { applied: true, reason: "applied", record };
+      const updated = applyRecordPatch(record, patch);
+      await writeRecordUnlocked(updated);
+      return { applied: true, reason: "applied", record: updated };
     });
   }
 

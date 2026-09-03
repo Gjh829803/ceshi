@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { LwdpJobPendingError } from "../../../scripts/lib/lwdp-generation-client.mjs";
 
 import {
+  applyRecordPatch,
   createSceneId,
   createKeyedSerialExecutor,
   createStudio as createStudioProduction,
@@ -119,6 +120,28 @@ test("keeps ready as an absorbing lifecycle state and rejects stale remote write
     evaluateRecordTransition(ready, { plannerReview: { status: "approved" } }),
     { allowed: true, reason: "applied" },
   );
+});
+
+test("applies Cloud run-index transitions without mutating frozen records", () => {
+  const remote = Object.freeze({
+    id: "frozen-cloud-world",
+    status: "running",
+    stage: "planner",
+    recordRevision: 3,
+  });
+  const updated = applyRecordPatch(remote, { status: "ready", stage: "ready" });
+  assert.deepEqual(remote, {
+    id: "frozen-cloud-world",
+    status: "running",
+    stage: "planner",
+    recordRevision: 3,
+  });
+  assert.deepEqual(updated, {
+    id: "frozen-cloud-world",
+    status: "ready",
+    stage: "ready",
+    recordRevision: 3,
+  });
 });
 
 test("allows Cloud Host-only recovery only after the complete Builder handoff exists", () => {
