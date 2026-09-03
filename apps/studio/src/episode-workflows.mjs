@@ -22,6 +22,16 @@ export function failedEpisodeStageId(execution) {
   return failed?.stage_id ?? null;
 }
 
+export function resumedEpisodeWorkerImage(
+  resumeEpisodeManifest,
+  record,
+  useCurrentWorkerImage = false,
+) {
+  return useCurrentWorkerImage
+    ? undefined
+    : resumeEpisodeManifest?.workerImage ?? record?.remoteWorkerImage;
+}
+
 function failedEpisodeStageAttempt(execution) {
   const stages = Array.isArray(execution?.stages) ? execution.stages : [];
   const failed = stages.find((stage) =>
@@ -150,17 +160,19 @@ const artifactDefinitions = [
   ["prompts/segment-03.json", "第 4 段 Seedance 渲染 Prompt", "json", "seedance-prompts"],
   ["prompts/segment-04.json", "起点 5 Seedance 渲染 Prompt", "json", "seedance-prompts"],
   ["prompts/segment-05.json", "起点 6 Seedance 渲染 Prompt", "json", "seedance-prompts"],
-  ["video/segment-00/seedance-2.5.mp4", "起点 1 Seedance 2.5 720p", "video", "seedance-generation"],
-  ["video/segment-01/seedance-2.5.mp4", "起点 2 Seedance 2.5 720p", "video", "seedance-generation"],
-  ["video/segment-02/seedance-2.5.mp4", "起点 3 Seedance 2.5 720p", "video", "seedance-generation"],
-  ["video/segment-03/seedance-2.5.mp4", "起点 4 Seedance 2.5 720p", "video", "seedance-generation"],
-  ["video/segment-04/seedance-2.5.mp4", "起点 5 Seedance 2.5 720p", "video", "seedance-generation"],
-  ["video/segment-05/seedance-2.5.mp4", "起点 6 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-00/seedance-2.5.mp4", "历史起点 1 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-01/seedance-2.5.mp4", "历史起点 2 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-02/seedance-2.5.mp4", "历史起点 3 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-03/seedance-2.5.mp4", "历史起点 4 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-04/seedance-2.5.mp4", "历史起点 5 Seedance 2.5 720p", "video", "seedance-generation"],
+  ["video/segment-05/seedance-2.5.mp4", "历史起点 6 Seedance 2.5 720p", "video", "seedance-generation"],
   ["video/segment-00/mg-seedance-2.5-480p.mp4", "第 1 段 MG Seedance 480p", "video", "seedance-generation"],
   ["video/segment-01/mg-seedance-2.5-480p.mp4", "第 2 段 MG Seedance 480p", "video", "seedance-generation"],
   ["video/segment-02/mg-seedance-2.5-480p.mp4", "第 3 段 MG Seedance 480p", "video", "seedance-generation"],
   ["video/segment-03/mg-seedance-2.5-480p.mp4", "第 4 段 MG Seedance 480p", "video", "seedance-generation"],
-  // Historical OV + CF artifacts remain readable for already completed episodes.
+  ["video/segment-04/mg-seedance-2.5-480p.mp4", "第 5 段 MG Seedance 480p", "video", "seedance-generation"],
+  ["video/segment-05/mg-seedance-2.5-480p.mp4", "第 6 段 MG Seedance 480p", "video", "seedance-generation"],
+  // Historical OV artifacts remain readable for already completed episodes.
   ["video/segment-00/ov-seedance-2.5-720p-gz-30s.mp4", "历史第 1 段 OV 720p", "video", "seedance-generation"],
   ["video/segment-01/ov-seedance-2.5-720p-gz-30s.mp4", "历史第 2 段 OV 720p", "video", "seedance-generation"],
   ["video/segment-02/ov-seedance-2.5-720p-gz-30s.mp4", "历史第 3 段 OV 720p", "video", "seedance-generation"],
@@ -168,11 +180,12 @@ const artifactDefinitions = [
   ["video/segment-01/mediakit-enhanced-720p.mp4", "第 2 段 MediaKit 720p", "video", "mediakit-upscale"],
   ["video/segment-02/mediakit-enhanced-720p.mp4", "第 3 段 MediaKit 720p", "video", "mediakit-upscale"],
   ["video/segment-03/mediakit-enhanced-720p.mp4", "第 4 段 MediaKit 720p", "video", "mediakit-upscale"],
-  // Historical CF artifacts remain readable for already completed episodes.
-  ["video/segment-00/cf-upscaled-720p.mp4", "历史第 1 段 CF 720p", "video", "cf-upscale"],
-  ["video/segment-01/cf-upscaled-720p.mp4", "历史第 2 段 CF 720p", "video", "cf-upscale"],
-  ["video/segment-02/cf-upscaled-720p.mp4", "历史第 3 段 CF 720p", "video", "cf-upscale"],
-  ["video/segment-03/cf-upscaled-720p.mp4", "历史第 4 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-00/cf-upscaled-720p.mp4", "第 1 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-01/cf-upscaled-720p.mp4", "第 2 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-02/cf-upscaled-720p.mp4", "第 3 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-03/cf-upscaled-720p.mp4", "第 4 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-04/cf-upscaled-720p.mp4", "第 5 段 CF 720p", "video", "cf-upscale"],
+  ["video/segment-05/cf-upscaled-720p.mp4", "第 6 段 CF 720p", "video", "cf-upscale"],
   ["video/segment-00/final-1280x720-24fps-720f.mp4", "第 1 段最终视频", "video", "conformance"],
   ["video/segment-01/final-1280x720-24fps-720f.mp4", "第 2 段最终视频", "video", "conformance"],
   ["video/segment-02/final-1280x720-24fps-720f.mp4", "第 3 段最终视频", "video", "conformance"],
@@ -2008,7 +2021,7 @@ export function createEpisodeWorkflowService(options) {
     return { episodeId, reused: false, resumed };
   }
 
-  async function resume(episodeId) {
+  async function resume(episodeId, { useCurrentWorkerImage = false } = {}) {
     if (!idPattern.test(episodeId)) throw new Error("Invalid episode id.");
     if (activeChildren.has(episodeId) || activeCloudExecutions.has(episodeId)) {
       return { episodeId, reused: true, resumed: true };
@@ -2060,7 +2073,11 @@ export function createEpisodeWorkflowService(options) {
           requestId,
           resumeEpisodeManifest,
           cloudAttempt,
-          workerImage: resumeEpisodeManifest.workerImage ?? record.remoteWorkerImage,
+          workerImage: resumedEpisodeWorkerImage(
+            resumeEpisodeManifest,
+            record,
+            useCurrentWorkerImage,
+          ),
         });
         return { episodeId, reused: false, resumed: true, restartGeneration };
       }
@@ -2180,7 +2197,9 @@ export function createEpisodeWorkflowService(options) {
     }
     const resumeMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/resume$/.exec(url.pathname);
     if (request.method === "POST" && resumeMatch) {
-      sendJson(response, 202, await resume(resumeMatch[1]));
+      sendJson(response, 202, await resume(resumeMatch[1], {
+        useCurrentWorkerImage: url.searchParams.get("useCurrentWorkerImage") === "1",
+      }));
       return true;
     }
     const adoptMatch = /^\/api\/episode-workflows\/([a-z0-9-]+)\/adopt-cloud-execution$/.exec(

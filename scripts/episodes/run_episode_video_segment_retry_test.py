@@ -30,24 +30,40 @@ class Seedance25ContractTest(unittest.TestCase):
         self.assertEqual(MODULE.REPO_ROOT, MODULE_PATH.parents[2])
         self.assertTrue(MODULE.DEFAULT_CONFIG.is_file())
 
-    def test_pipeline_uses_direct_seedance_25_720p_without_upscale(self) -> None:
+    def test_pipeline_uses_mg_seedance_480p_with_cf_720p_upscale(self) -> None:
         config = json.loads(MODULE.DEFAULT_CONFIG.read_text(encoding="utf-8"))
         self.assertEqual(config["schemaVersion"], 2)
         self.assertEqual(config["captureCount"], 6)
         self.assertEqual(config["seedanceCaptureIndices"], [0, 1, 2, 3, 4, 5])
         self.assertEqual(config["eventCaptureIndices"], [0, 2, 4])
-        self.assertEqual(config["seedance"]["model"], "seedance-2.5")
-        self.assertEqual(config["seedance"]["resolution"], "720p")
+        self.assertEqual(config["seedanceProvider"]["kind"], "mg-seedance-2.5-plus-cf-upscale")
+        self.assertEqual(config["seedance"]["model"], "mg-seedance-2.5-480p")
+        self.assertEqual(config["seedance"]["resolution"], "480p")
         self.assertEqual(config["seedance"]["duration"], 30)
         self.assertTrue(config["seedance"]["generateAudio"])
-        self.assertNotIn("upscale", config)
+        self.assertEqual(config["upscale"]["model"], "cf-超分-720p-30s")
+        self.assertEqual(config["upscale"]["resolution"], "720p")
         self.assertEqual(
             config["seedanceProvider"]["credentialFile"],
-            ".codex-tmp/runtime-config/infinite-canvas.key",
+            ".codex-tmp/runtime-config/mg.key",
         )
         self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 10)
-        self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 96)
-        self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 2)
+        self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 10)
+        self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 3)
+
+    def test_mg_response_helpers_accept_nested_task_and_video_fields(self) -> None:
+        body = {
+            "data": {
+                "task": {
+                    "task_id": "mg-task-001",
+                    "status": "succeeded",
+                    "output": {"video_url": "https://assets.test/video.mp4"},
+                },
+            },
+        }
+        self.assertEqual(MODULE.find_task_id(body), "mg-task-001")
+        self.assertEqual(MODULE.find_status(body), "succeeded")
+        self.assertEqual(MODULE.find_video_url(body), "https://assets.test/video.mp4")
 
     def test_idempotency_header_is_kept_separate_from_bearer_key(self) -> None:
         headers = MODULE.api_headers("secret", idempotency_key="stable-task-key")
@@ -144,6 +160,34 @@ class Seedance25ContractTest(unittest.TestCase):
         self.assertEqual(calls[1][1]["Idempotency-Key"], "stable-task-key")
         self.assertEqual(calls[0][2], payload)
         self.assertEqual(calls[1][2], payload)
+
+    def test_mg_retryable_submit_reuses_exact_payload_and_idempotency_key(self) -> None:
+        provider = {"baseUrl": "https://provider.test", "submitPath": "/videos"}
+        payload = {"model": "mg-seedance-2.5-480p", "prompt": "fixture"}
+        responses = [
+            FakeResponse(502, {"error": "temporary"}),
+            FakeResponse(200, {"data": {"task_id": "mg-task-001"}}),
+        ]
+        calls = []
+
+        def fake_post(url, *, headers, json, timeout):
+            calls.append((url, headers, json, timeout))
+            return responses.pop(0)
+
+        with patch.object(MODULE.requests, "post", side_effect=fake_post), patch.object(
+            MODULE.time, "sleep", return_value=None
+        ):
+            task_id = MODULE.submit_mg_job(
+                provider=provider,
+                api_key="secret",
+                idempotency_key="stable-mg-key",
+                payload=payload,
+            )
+        self.assertEqual(task_id, "mg-task-001")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][1]["Idempotency-Key"], "stable-mg-key")
+        self.assertEqual(calls[1][1]["Idempotency-Key"], "stable-mg-key")
+        self.assertEqual(calls[0][2], calls[1][2])
 
     def test_only_documented_terminal_failures_are_terminal(self) -> None:
         self.assertEqual(MODULE.TERMINAL_FAILURE, {"failed", "refunded"})

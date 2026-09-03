@@ -13,8 +13,8 @@ const manifest = JSON.parse(await readFile(path.join(
 if (manifest.kind !== "worldkit-project-runtime-credentials-manifest" ||
     manifest.schemaVersion !== 1 || manifest.projectLocalOnly !== true ||
     manifest.allowEnvironmentCredentialOverrides !== false ||
-    !Array.isArray(manifest.files) || manifest.files.length !== 9 ||
-    new Set(manifest.files.map((item) => item?.id)).size !== 9) {
+    !Array.isArray(manifest.files) || manifest.files.length !== 8 ||
+    new Set(manifest.files.map((item) => item?.id)).size !== 8) {
   throw new Error("Project runtime credential manifest is invalid.");
 }
 
@@ -74,7 +74,7 @@ const videoPipeline = JSON.parse(await readFile(path.join(
   "config/episode-video-pipeline.json",
 ), "utf8"));
 const requiredBindings = [
-  [videoPipeline.seedanceProvider?.credentialFile, "infinite-canvas-seedance"],
+  [videoPipeline.seedanceProvider?.credentialFile, "mg-seedance"],
 ];
 for (const [configuredPath, id] of requiredBindings) {
   const declared = manifest.files.find((item) => item.id === id)?.path;
@@ -82,11 +82,11 @@ for (const [configuredPath, id] of requiredBindings) {
     throw new Error(`Runtime config binding drifted: ${id}`);
   }
 }
-if (videoPipeline.seedance?.model !== "seedance-2.5" ||
-    videoPipeline.seedance?.resolution !== "720p" ||
-    videoPipeline.upscale !== undefined ||
-    videoPipeline.upscaleProvider !== undefined) {
-  throw new Error("Episode video pipeline must use direct Seedance 2.5 720p without upscale.");
+if (videoPipeline.seedance?.model !== "mg-seedance-2.5-480p" ||
+    videoPipeline.seedance?.resolution !== "480p" ||
+    videoPipeline.upscale?.model !== "cf-超分-720p-30s" ||
+    videoPipeline.upscale?.resolution !== "720p") {
+  throw new Error("Episode video pipeline must use MG Seedance 2.5 480p plus CF 720p upscale.");
 }
 
 process.stdout.write(

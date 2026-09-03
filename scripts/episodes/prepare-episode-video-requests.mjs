@@ -28,8 +28,10 @@ const pipeline = JSON.parse(await readFile(
   path.join(repoRoot, "config/episode-video-pipeline.json"), "utf8",
 ));
 const model = String(pipeline.seedance?.model ?? "");
+const upscaleModel = String(pipeline.upscale?.model ?? "");
 const delivery = pipeline.delivery ?? {};
 if (!/^[a-z0-9][a-z0-9.-]+$/.test(model) ||
+    !upscaleModel ||
     !Number.isInteger(delivery.width) || !Number.isInteger(delivery.height) ||
     !Number.isInteger(delivery.fps) || !Number.isInteger(delivery.frameCount)) {
   throw new Error("Episode video pipeline output contract is invalid.");
@@ -84,6 +86,7 @@ for (const index of PLAYTHROUGH_SEEDANCE_SEGMENT_INDICES) {
       ...styledTriviews.map((relativePath) => path.join(styleRoot, relativePath)),
     ],
     rawProviderOutputPath: path.join(styleRoot, "video", segmentId, `${model}.mp4`),
+    rawUpscaleOutputPath: path.join(styleRoot, "video", segmentId, "cf-upscaled-720p.mp4"),
     outputPath: path.join(styleRoot, "video", segmentId, finalName),
   });
 }

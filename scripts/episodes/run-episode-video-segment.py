@@ -29,6 +29,8 @@ from cloud_production_slots import acquire_global_production_slot
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "episode-video-pipeline.json"
 TERMINAL_FAILURE = {"failed", "refunded"}
+MG_SUCCESS = {"succeeded", "completed", "success", "done", "finished"}
+MG_FAILURE = {"failed", "error", "cancelled", "canceled", "stopped", "rejected"}
 MAX_MATERIAL_BYTES = 50 * 1024 * 1024
 
 
@@ -181,6 +183,177 @@ def response_error(response: requests.Response) -> str:
 
 def provider_url(provider: dict[str, Any], path_value: str) -> str:
     return str(provider["baseUrl"]).rstrip("/") + path_value
+
+
+def nested_values(value: Any):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            yield key, item
+            yield from nested_values(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from nested_values(item)
+
+
+def find_task_id(body: Any) -> str:
+    if isinstance(body, dict):
+        for key in ("task_id", "taskId", "id", "video_id"):
+            value = body.get(key)
+            if isinstance(value, (str, int)) and str(value):
+                return str(value)
+        for key in ("data", "task", "result"):
+            found = find_task_id(body.get(key))
+            if found:
+                return found
+    return ""
+
+
+def find_status(body: Any) -> str:
+    if isinstance(body, dict):
+        for key in ("status", "state", "task_status"):
+            value = body.get(key)
+            if isinstance(value, str) and value:
+                return value.lower()
+        for key in ("data", "task", "result"):
+            found = find_status(body.get(key))
+            if found != "unknown":
+                return found
+    return "unknown"
+
+
+def find_video_url(body: Any) -> str:
+    for key, value in nested_values(body):
+        if key.lower() in {"video_url", "video", "url", "output_url", "download_url"}:
+            if isinstance(value, str) and value.startswith(("http://", "https://")):
+                return value
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            lowered = value.lower().split("?", 1)[0]
+            if lowered.endswith((".mp4", ".mov", ".webm")):
+                return value
+    return ""
+
+
+def upload_reference(
+    path: Path,
+    *,
+    config: dict[str, Any],
+    episode_id: str,
+    variant_id: str,
+    segment_id: str,
+) -> str:
+    upload = config["referenceUpload"]
+    digest = sha256(path)
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", path.name)[:120]
+    object_key = (
+        f"{str(upload['prefix']).strip('/')}/{episode_id}/{variant_id}/{segment_id}/"
+        f"{digest[:16]}-{safe_name}"
+    )
+    target = f"s3://{upload['bucket']}/{object_key}"
+    subprocess.run(
+        [
+            "aws", "s3", "cp", str(path), target,
+            "--region", str(upload["region"]),
+            "--content-type", mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+            "--only-show-errors",
+        ],
+        check=True,
+        timeout=900,
+    )
+    presign = subprocess.run(
+        [
+            "aws", "s3", "presign", target,
+            "--region", str(upload["region"]),
+            "--expires-in", str(upload["presignSeconds"]),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    url = presign.stdout.strip()
+    if not url.startswith(("http://", "https://")):
+        raise EpisodeVideoError(f"S3 returned no signed URL for {path.name}")
+    print(f"WORLDKIT_EPISODE_REFERENCE_READY {path.name}", flush=True)
+    return url
+
+
+def submit_mg_job(
+    *,
+    provider: dict[str, Any],
+    api_key: str,
+    idempotency_key: str,
+    payload: dict[str, Any],
+) -> str:
+    last_error = ""
+    for attempt in range(1, 4):
+        try:
+            response = requests.post(
+                provider_url(provider, str(provider["submitPath"])),
+                headers=api_headers(api_key, idempotency_key=idempotency_key),
+                json=payload,
+                timeout=180,
+            )
+        except requests.RequestException as error:
+            last_error = f"transport {type(error).__name__}"
+            if attempt < 3:
+                time.sleep(2 * attempt)
+                continue
+            raise EpisodeVideoError(f"MG submit outcome is unknown: {last_error}") from error
+        if response.ok:
+            task_id = find_task_id(response.json())
+            if task_id:
+                return task_id
+            raise EpisodeVideoError("MG submit returned no task id")
+        if (response.status_code in {408, 429} or response.status_code >= 500) and attempt < 3:
+            last_error = response_error(response)
+            time.sleep(2 * attempt)
+            continue
+        raise EpisodeVideoError(f"MG submit rejected: {response_error(response)}")
+    raise EpisodeVideoError(f"MG submit outcome is unknown: {last_error}")
+
+
+def poll_mg_job(
+    provider: dict[str, Any],
+    api_key: str,
+    task_id: str,
+    stage: str,
+) -> str:
+    interval = max(5, int(provider.get("pollIntervalSeconds") or 15))
+    deadline = time.monotonic() + max(60, int(provider.get("timeoutSeconds") or 7200))
+    last_status = ""
+    while time.monotonic() < deadline:
+        path_value = str(provider["pollPathTemplate"]).replace("{taskId}", task_id)
+        try:
+            response = requests.get(
+                provider_url(provider, path_value),
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=90,
+            )
+        except requests.RequestException as error:
+            print(
+                f"WORLDKIT_EPISODE_{stage}_POLL_WARNING TRANSPORT_{type(error).__name__}",
+                flush=True,
+            )
+            time.sleep(interval)
+            continue
+        if not response.ok:
+            print(f"WORLDKIT_EPISODE_{stage}_POLL_WARNING HTTP_{response.status_code}", flush=True)
+            time.sleep(interval)
+            continue
+        body = response.json()
+        status = find_status(body)
+        if status != last_status:
+            print(f"WORLDKIT_EPISODE_{stage}_STATUS {status}", flush=True)
+            last_status = status
+        if status in MG_SUCCESS:
+            url = find_video_url(body)
+            if url:
+                return url
+            raise EpisodeVideoError(f"successful {stage} task has no video URL")
+        if status in MG_FAILURE:
+            raise EpisodeVideoProviderTerminalError("failed", body)
+        time.sleep(interval)
+    raise EpisodeVideoError(f"{stage} task {task_id} timed out")
 
 
 def model_available(provider: dict[str, Any], api_key: str, model: str) -> None:
@@ -375,15 +548,50 @@ def raw_checkpoint_is_valid(path: Path, receipt: Any) -> bool:
     return media["durationSeconds"] >= 29.5 and media["hasAudio"] is True
 
 
-def conform(source: Path, destination: Path) -> dict[str, Any]:
+def video_checkpoint_is_valid(
+    path: Path,
+    receipt: Any,
+    *,
+    require_audio: bool,
+) -> bool:
+    if not path.is_file() or path.stat().st_size <= 0 or not isinstance(receipt, dict):
+        return False
+    if receipt.get("sha256") != sha256(path):
+        return False
+    try:
+        media = probe(path)
+    except Exception:  # noqa: BLE001 - corrupt checkpoint is recoverable
+        return False
+    return media["durationSeconds"] >= 29.5 and (
+        not require_audio or media["hasAudio"] is True
+    )
+
+
+def conform(
+    source: Path,
+    destination: Path,
+    *,
+    audio_source: Path | None = None,
+) -> dict[str, Any]:
     source_media = probe(source)
-    if source_media["durationSeconds"] < 29.5 or not source_media["hasAudio"]:
+    audio_path = audio_source or source
+    audio_media = probe(audio_path)
+    if source_media["durationSeconds"] < 29.5:
         raise EpisodeVideoError(f"Seedance source media is incomplete: {source_media}")
+    if audio_source is None and not source_media["hasAudio"]:
+        raise EpisodeVideoError(f"Seedance source media has no audio: {source_media}")
+    if audio_media["durationSeconds"] < 29.5 or not audio_media["hasAudio"]:
+        raise EpisodeVideoError(f"Seedance audio source is incomplete: {audio_media}")
+    inputs = ["-i", str(source)]
+    audio_input_index = 0
+    if audio_path != source:
+        inputs.extend(["-i", str(audio_path)])
+        audio_input_index = 1
     subprocess.run(
         [
-            "ffmpeg", "-y", "-v", "error", "-i", str(source),
+            "ffmpeg", "-y", "-v", "error", *inputs,
             "-filter_complex",
-            "[0:v]fps=24,scale=1280:720:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,trim=duration=30,setpts=N/(24*TB)[v];[0:a]aresample=48000:async=1,apad=pad_dur=30,atrim=duration=30,asetpts=N/SR/TB[a]",
+            f"[0:v]fps=24,scale=1280:720:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,trim=duration=30,setpts=N/(24*TB)[v];[{audio_input_index}:a]aresample=48000:async=1,apad=pad_dur=30,atrim=duration=30,asetpts=N/SR/TB[a]",
             "-map", "[v]", "-map", "[a]", "-frames:v", "720", "-r", "24",
             "-fps_mode", "cfr", "-enc_time_base", "1/24", "-video_track_timescale", "24000",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
@@ -397,6 +605,389 @@ def conform(source: Path, destination: Path) -> dict[str, Any]:
     if media["width"] != 1280 or media["height"] != 720 or media["fps"] != 24 or media["frameCount"] != 720 or abs(media["durationSeconds"] - 30) > 0.05 or not media["hasAudio"]:
         raise EpisodeVideoError(f"Final Seedance conformance failed: {media}")
     return media
+
+
+def run_mg_upscale_pipeline(
+    *,
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    request: dict[str, Any],
+    result_path: Path,
+    previous: dict[str, Any],
+    input_identity: dict[str, Any],
+    scene_id: str,
+    episode_id: str,
+    style_variant_id: str | None,
+    variant_id: str,
+    segment_id: str,
+    prompt: str,
+    reference_video: Path,
+    reference_images: list[Path],
+    raw_output: Path,
+    raw_upscale_output: Path,
+    final_output: Path,
+) -> None:
+    provider = config["seedanceProvider"]
+    seedance = config["seedance"]
+    upscale = config["upscale"]
+    api_key = project_local_file(provider["credentialFile"], "MG API key").read_text(
+        encoding="utf-8",
+    ).strip()
+    model_chain = [str(seedance["model"]), str(upscale["model"])]
+    maximum_attempts = max(1, int(provider.get("maxTerminalAttempts") or 3))
+    record = previous if isinstance(previous, dict) else {}
+    stage = "seedance"
+
+    def base_record(status: str) -> dict[str, Any]:
+        return {
+            "kind": "worldkit-episode-video-provider-run",
+            "schemaVersion": 3,
+            "sceneId": scene_id,
+            "episodeId": episode_id,
+            **({"styleVariantId": style_variant_id} if style_variant_id else {}),
+            "segmentId": segment_id,
+            "status": status,
+            "modelChain": model_chain,
+            "inputIdentity": input_identity,
+            "createdAt": record.get("createdAt") or utc_now(),
+            "updatedAt": utc_now(),
+        }
+
+    try:
+        raw_receipt = record.get("rawProviderOutput")
+        raw_valid = video_checkpoint_is_valid(
+            raw_output,
+            raw_receipt,
+            require_audio=True,
+        )
+        provider_attempt = max(1, int(record.get("providerAttempt") or 1))
+        provider_job_id = str(record.get("providerJobId") or "")
+        if record.get("status") == "failed" and record.get("failedStage") == "seedance":
+            if provider_attempt >= maximum_attempts:
+                raise EpisodeVideoError(
+                    f"MG Seedance terminal retry limit reached after {provider_attempt} attempts: "
+                    f"{sanitized(record.get('error'))}"
+                )
+            provider_attempt += 1
+            provider_job_id = ""
+        seedance_key = str(record.get("idempotencyKey") or "")
+        if not seedance_key or record.get("failedStage") == "seedance":
+            seedance_key = "worldkit-mg-" + sha256_text(json.dumps({
+                "episodeId": episode_id,
+                "styleVariantId": style_variant_id,
+                "segmentId": segment_id,
+                "inputIdentity": input_identity,
+                "providerAttempt": provider_attempt,
+            }, sort_keys=True, separators=(",", ":")))
+
+        if raw_output.is_file() and not raw_valid:
+            raw_output.unlink(missing_ok=True)
+        if not raw_valid:
+            if not provider_job_id:
+                image_urls = [
+                    upload_reference(
+                        image,
+                        config=config,
+                        episode_id=episode_id,
+                        variant_id=variant_id,
+                        segment_id=segment_id,
+                    )
+                    for image in reference_images
+                ]
+                video_url = upload_reference(
+                    reference_video,
+                    config=config,
+                    episode_id=episode_id,
+                    variant_id=variant_id,
+                    segment_id=segment_id,
+                )
+                payload = {
+                    "model": str(seedance["model"]),
+                    "prompt": prompt,
+                    "aspect_ratio": str(seedance["aspectRatio"]),
+                    "resolution": str(seedance["resolution"]),
+                    "size": str(seedance["size"]),
+                    "seconds": str(seedance.get("seconds") or seedance["duration"]),
+                    "reference_image_urls": image_urls,
+                    "reference_videos": [video_url],
+                    "reference_audios": [],
+                    "persist": True,
+                    "bypass_face_check": True,
+                }
+                persist_provider_record(result_path, {
+                    **base_record("seedance-submitting"),
+                    "providerJobId": None,
+                    "providerAttempt": provider_attempt,
+                    "idempotencyKey": seedance_key,
+                    "upscaleJobId": record.get("upscaleJobId"),
+                    "upscaleAttempt": int(record.get("upscaleAttempt") or 0),
+                })
+            else:
+                payload = None
+            slot = acquire_global_seedance_slot(
+                provider,
+                task_identity=json.dumps({
+                    "stage": "mg-seedance",
+                    "episodeId": episode_id,
+                    "styleVariantId": style_variant_id,
+                    "segmentId": segment_id,
+                    "inputIdentity": input_identity,
+                    "providerAttempt": provider_attempt,
+                }, sort_keys=True, separators=(",", ":")),
+            )
+            try:
+                if slot is not None:
+                    slot.__enter__()
+                if not provider_job_id:
+                    provider_job_id = submit_mg_job(
+                        provider=provider,
+                        api_key=api_key,
+                        idempotency_key=seedance_key,
+                        payload=payload,
+                    )
+                    persist_provider_record(result_path, {
+                        **base_record("seedance-submitted"),
+                        "providerJobId": provider_job_id,
+                        "providerAttempt": provider_attempt,
+                        "idempotencyKey": seedance_key,
+                        "upscaleJobId": record.get("upscaleJobId"),
+                        "upscaleAttempt": int(record.get("upscaleAttempt") or 0),
+                    })
+                    print(
+                        f"WORLDKIT_EPISODE_SEEDANCE_SUBMITTED {provider_job_id} "
+                        f"attempt={provider_attempt}/{maximum_attempts}",
+                        flush=True,
+                    )
+                result_url = poll_mg_job(
+                    provider,
+                    api_key,
+                    provider_job_id,
+                    "SEEDANCE",
+                )
+                download(result_url, raw_output)
+                raw_media = probe(raw_output)
+                if raw_media["durationSeconds"] < 29.5 or not raw_media["hasAudio"]:
+                    raw_output.unlink(missing_ok=True)
+                    raise EpisodeVideoError(f"MG Seedance source media is incomplete: {raw_media}")
+                raw_receipt = {
+                    "fileName": raw_output.name,
+                    "sha256": sha256(raw_output),
+                    "media": raw_media,
+                    "resultUrl": result_url,
+                }
+            finally:
+                if slot is not None:
+                    slot.__exit__(None, None, None)
+        seedance_ready = {
+            **record,
+            **base_record("seedance-ready"),
+            "providerJobId": provider_job_id,
+            "providerAttempt": provider_attempt,
+            "idempotencyKey": seedance_key,
+            "upscaleJobId": record.get("upscaleJobId"),
+            "upscaleAttempt": int(record.get("upscaleAttempt") or 0),
+            "rawProviderOutput": raw_receipt,
+        }
+        seedance_ready.pop("providerRequest", None)
+        persist_provider_record(result_path, seedance_ready)
+        record = seedance_ready
+        print("WORLDKIT_EPISODE_SEEDANCE_READY", flush=True)
+        if args.until == "seedance":
+            return
+
+        stage = "upscale"
+        upscale_receipt = record.get("rawUpscaleOutput")
+        upscale_valid = video_checkpoint_is_valid(
+            raw_upscale_output,
+            upscale_receipt,
+            require_audio=False,
+        )
+        upscale_attempt = max(1, int(record.get("upscaleAttempt") or 1))
+        upscale_job_id = str(record.get("upscaleJobId") or "")
+        if record.get("status") == "failed" and record.get("failedStage") == "upscale":
+            if upscale_attempt >= maximum_attempts:
+                raise EpisodeVideoError(
+                    f"CF upscale terminal retry limit reached after {upscale_attempt} attempts: "
+                    f"{sanitized(record.get('error'))}"
+                )
+            upscale_attempt += 1
+            upscale_job_id = ""
+        upscale_key = str(record.get("upscaleIdempotencyKey") or "")
+        if not upscale_key or record.get("failedStage") == "upscale":
+            upscale_key = "worldkit-cf-" + sha256_text(json.dumps({
+                "episodeId": episode_id,
+                "styleVariantId": style_variant_id,
+                "segmentId": segment_id,
+                "rawProviderOutputSha256": raw_receipt["sha256"],
+                "upscaleModel": str(upscale["model"]),
+                "upscaleAttempt": upscale_attempt,
+            }, sort_keys=True, separators=(",", ":")))
+        if raw_upscale_output.is_file() and not upscale_valid:
+            raw_upscale_output.unlink(missing_ok=True)
+        if not upscale_valid:
+            if not upscale_job_id:
+                upscale_video_url = upload_reference(
+                    raw_output,
+                    config=config,
+                    episode_id=episode_id,
+                    variant_id=variant_id,
+                    segment_id=f"{segment_id}-upscale",
+                )
+                upscale_payload = {
+                    "model": str(upscale["model"]),
+                    "prompt": (
+                        "仅进行清晰度与分辨率提升，严格保持输入视频的全部帧、时序、"
+                        "构图、内容、颜色、动作和声音，不新增或删除任何视觉与声音内容。"
+                    ),
+                    "aspect_ratio": str(upscale["aspectRatio"]),
+                    "resolution": str(upscale["resolution"]),
+                    "size": str(upscale["size"]),
+                    "seconds": str(upscale.get("seconds") or upscale["duration"]),
+                    "reference_image_urls": [],
+                    "reference_videos": [upscale_video_url],
+                    "reference_audios": [],
+                    "persist": True,
+                    "bypass_face_check": True,
+                }
+                persist_provider_record(result_path, {
+                    **record,
+                    **base_record("upscale-submitting"),
+                    "providerJobId": provider_job_id,
+                    "providerAttempt": provider_attempt,
+                    "idempotencyKey": seedance_key,
+                    "upscaleJobId": None,
+                    "upscaleAttempt": upscale_attempt,
+                    "upscaleIdempotencyKey": upscale_key,
+                    "rawProviderOutput": raw_receipt,
+                })
+            else:
+                upscale_payload = None
+            slot = acquire_global_seedance_slot(
+                provider,
+                task_identity=json.dumps({
+                    "stage": "cf-upscale",
+                    "episodeId": episode_id,
+                    "styleVariantId": style_variant_id,
+                    "segmentId": segment_id,
+                    "rawProviderOutputSha256": raw_receipt["sha256"],
+                    "upscaleAttempt": upscale_attempt,
+                }, sort_keys=True, separators=(",", ":")),
+            )
+            try:
+                if slot is not None:
+                    slot.__enter__()
+                if not upscale_job_id:
+                    upscale_job_id = submit_mg_job(
+                        provider=provider,
+                        api_key=api_key,
+                        idempotency_key=upscale_key,
+                        payload=upscale_payload,
+                    )
+                    persist_provider_record(result_path, {
+                        **record,
+                        **base_record("upscale-submitted"),
+                        "providerJobId": provider_job_id,
+                        "providerAttempt": provider_attempt,
+                        "idempotencyKey": seedance_key,
+                        "upscaleJobId": upscale_job_id,
+                        "upscaleAttempt": upscale_attempt,
+                        "upscaleIdempotencyKey": upscale_key,
+                        "rawProviderOutput": raw_receipt,
+                    })
+                    print(
+                        f"WORLDKIT_EPISODE_UPSCALE_SUBMITTED {upscale_job_id} "
+                        f"attempt={upscale_attempt}/{maximum_attempts}",
+                        flush=True,
+                    )
+                upscale_url = poll_mg_job(
+                    provider,
+                    api_key,
+                    upscale_job_id,
+                    "UPSCALE",
+                )
+                download(upscale_url, raw_upscale_output)
+                upscale_media = probe(raw_upscale_output)
+                if upscale_media["durationSeconds"] < 29.5:
+                    raw_upscale_output.unlink(missing_ok=True)
+                    raise EpisodeVideoError(f"CF upscale source media is incomplete: {upscale_media}")
+                upscale_receipt = {
+                    "fileName": raw_upscale_output.name,
+                    "sha256": sha256(raw_upscale_output),
+                    "media": upscale_media,
+                    "resultUrl": upscale_url,
+                }
+            finally:
+                if slot is not None:
+                    slot.__exit__(None, None, None)
+        upscale_ready = {
+            **record,
+            **base_record("upscale-ready"),
+            "providerJobId": provider_job_id,
+            "providerAttempt": provider_attempt,
+            "idempotencyKey": seedance_key,
+            "upscaleJobId": upscale_job_id,
+            "upscaleAttempt": upscale_attempt,
+            "upscaleIdempotencyKey": upscale_key,
+            "rawProviderOutput": raw_receipt,
+            "rawUpscaleOutput": upscale_receipt,
+        }
+        persist_provider_record(result_path, upscale_ready)
+
+        stage = "conformance"
+        conformance_slot = acquire_global_production_slot("media-conformance", {
+            "episodeId": episode_id,
+            "styleVariantId": style_variant_id or "legacy",
+            "segmentId": segment_id,
+            "inputIdentity": input_identity,
+        })
+        try:
+            if conformance_slot is not None:
+                conformance_slot.__enter__()
+            media = conform(
+                raw_upscale_output,
+                final_output,
+                audio_source=raw_output,
+            )
+        finally:
+            if conformance_slot is not None:
+                conformance_slot.__exit__(None, None, None)
+        persist_provider_record(result_path, {
+            **upscale_ready,
+            **base_record("succeeded"),
+            "providerJobId": provider_job_id,
+            "providerAttempt": provider_attempt,
+            "idempotencyKey": seedance_key,
+            "upscaleJobId": upscale_job_id,
+            "upscaleAttempt": upscale_attempt,
+            "upscaleIdempotencyKey": upscale_key,
+            "rawProviderOutput": raw_receipt,
+            "rawUpscaleOutput": upscale_receipt,
+            "error": None,
+            "output": {
+                "fileName": final_output.name,
+                "sha256": sha256(final_output),
+                "media": media,
+                "frameParity": True,
+                "deliveryResolutionConformant": True,
+                "referenceResolutionParity": True,
+            },
+        })
+        print("WORLDKIT_EPISODE_VIDEO_SEGMENT_READY", flush=True)
+    except Exception as error:  # noqa: BLE001 - persist a resumable provider boundary
+        current = read_json(result_path) if result_path.is_file() else {}
+        failed = {
+            **current,
+            **base_record("failed"),
+            "providerJobId": current.get("providerJobId"),
+            "providerAttempt": int(current.get("providerAttempt") or 1),
+            "idempotencyKey": str(current.get("idempotencyKey") or (
+                "worldkit-mg-" + sha256_text(json.dumps(input_identity, sort_keys=True))
+            )),
+            "failedStage": stage,
+            "error": sanitized(str(error)),
+        }
+        persist_provider_record(result_path, failed)
+        raise
 
 
 def main() -> None:
@@ -429,18 +1020,21 @@ def main() -> None:
     if len(reference_images) < 2 or len(reference_images) > 30:
         raise EpisodeVideoError("Seedance requires the styled opening frame plus all declared tri-views")
     raw_output = Path(str(request.get("rawProviderOutputPath") or "")).resolve()
+    raw_upscale_output = Path(str(
+        request.get("rawUpscaleOutputPath") or raw_output.with_name("cf-upscaled-720p.mp4")
+    )).resolve()
     final_output = Path(str(request.get("outputPath") or "")).resolve()
-    for output in (raw_output, final_output, result_path):
+    for output in (raw_output, raw_upscale_output, final_output, result_path):
         if REPO_ROOT not in output.parents:
             raise EpisodeVideoError(f"Episode output escaped project root: {output}")
 
     provider = config["seedanceProvider"]
-    api_key = project_local_file(provider["credentialFile"], "Infinite Canvas API key").read_text(encoding="utf-8").strip()
     model = str(seedance["model"])
     material_hashes = [sha256(reference_video), *(sha256(image) for image in reference_images)]
     input_identity = {
         "provider": str(provider["kind"]),
         "model": model,
+        **({"upscaleModel": str(config["upscale"]["model"])} if config.get("upscale") else {}),
         "promptTemplateVersion": str(config["promptTemplateVersion"]),
         "promptSha256": sha256_text(prompt),
         "referenceVideoSha256": material_hashes[0],
@@ -453,8 +1047,31 @@ def main() -> None:
         # Prompt or image update would create a false-success receipt for stale
         # pixels, so invalidate both local media checkpoints before resubmitting.
         raw_output.unlink(missing_ok=True)
+        raw_upscale_output.unlink(missing_ok=True)
         final_output.unlink(missing_ok=True)
         previous = {}
+    if provider.get("kind") == "mg-seedance-2.5-plus-cf-upscale":
+        run_mg_upscale_pipeline(
+            args=args,
+            config=config,
+            request=request,
+            result_path=result_path,
+            previous=previous,
+            input_identity=input_identity,
+            scene_id=scene_id,
+            episode_id=episode_id,
+            style_variant_id=style_variant_id,
+            variant_id=variant_id,
+            segment_id=segment_id,
+            prompt=prompt,
+            reference_video=reference_video,
+            reference_images=reference_images,
+            raw_output=raw_output,
+            raw_upscale_output=raw_upscale_output,
+            final_output=final_output,
+        )
+        return
+    api_key = project_local_file(provider["credentialFile"], "Seedance API key").read_text(encoding="utf-8").strip()
     raw_receipt = previous.get("rawProviderOutput")
     raw_valid = raw_checkpoint_is_valid(raw_output, raw_receipt)
     if previous.get("status") in TERMINAL_FAILURE:

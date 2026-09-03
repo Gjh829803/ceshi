@@ -114,6 +114,8 @@ const visualEventPromptPath = path.join(
   visualEventDirectorConfig.promptTemplatePath,
 );
 const providerModel = videoPipelineConfig.seedance?.model;
+const upscaleModel = videoPipelineConfig.upscale?.model;
+const providerKind = videoPipelineConfig.seedanceProvider?.kind;
 const seedanceConcurrency = Math.max(
   1,
   Math.min(
@@ -121,8 +123,12 @@ const seedanceConcurrency = Math.max(
     Number(videoPipelineConfig.seedanceProvider?.maxConcurrentJobs ?? 3),
   ),
 );
-if (providerModel !== "seedance-2.5") {
-  throw new Error(`Unexpected episode Seedance model: ${providerModel}`);
+if (providerModel !== "mg-seedance-2.5-480p" ||
+    upscaleModel !== "cf-超分-720p-30s" ||
+    providerKind !== "mg-seedance-2.5-plus-cf-upscale") {
+  throw new Error(
+    `Unexpected episode video chain: ${providerKind}/${providerModel}/${upscaleModel}`,
+  );
 }
 if (videoPipelineConfig.captureCount !== 6 ||
     JSON.stringify(videoPipelineConfig.seedanceCaptureIndices) !== "[0,1,2,3,4,5]" ||
@@ -138,6 +144,7 @@ if (videoPipelineConfig.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLA
 }
 const delivery = videoPipelineConfig.delivery;
 const rawProviderFileName = `${providerModel}.mp4`;
+const rawUpscaleFileName = "cf-upscaled-720p.mp4";
 const finalVideoFileName = `final-${delivery.width}x${delivery.height}-${delivery.fps}fps-${delivery.frameCount}f.mp4`;
 const recordPath = path.join(episodeRoot, "episode-record.json");
 const logPath = path.join(episodeRoot, "pipeline.log");
@@ -488,12 +495,14 @@ async function providerResultIsCurrent(
   const request = await readJsonIfPresent(path.join(segmentRoot, "request.json"));
   const result = await readJsonIfPresent(path.join(segmentRoot, "provider-run.json"));
   if (request?.schemaVersion !== 2 || result?.schemaVersion !== 3 ||
-      result?.modelChain?.length !== 1 || result.modelChain[0] !== providerModel ||
+      result?.modelChain?.length !== 2 || result.modelChain[0] !== providerModel ||
+      result.modelChain[1] !== upscaleModel ||
       typeof result.providerJobId !== "string") return false;
   const promptHash = await providerPromptHash(path.resolve(request.promptPath ?? ""));
   const referenceVideoHash = await fileHash(path.resolve(request.referenceVideoPath ?? ""));
   if (result.inputIdentity?.model !== providerModel ||
-      result.inputIdentity?.provider !== "infinite-canvas-seedance-2.5" ||
+      result.inputIdentity?.provider !== providerKind ||
+      result.inputIdentity?.upscaleModel !== upscaleModel ||
       result.inputIdentity?.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION ||
       result.inputIdentity?.promptSha256 !== promptHash?.replace(/^sha256:/, "") ||
       result.inputIdentity?.referenceVideoSha256 !== referenceVideoHash?.replace(/^sha256:/, "")) return false;
@@ -508,6 +517,11 @@ async function providerResultIsCurrent(
     return false;
   }
   if (!requireFinal) return ["seedance-ready", "succeeded"].includes(result.status);
+  if (!await exists(path.join(segmentRoot, rawUpscaleFileName))) return false;
+  const rawUpscaleHash = await fileHash(path.join(segmentRoot, rawUpscaleFileName));
+  if (result.rawUpscaleOutput?.sha256 !== rawUpscaleHash?.replace(/^sha256:/, "")) {
+    return false;
+  }
   const finalPath = path.join(segmentRoot, finalVideoFileName);
   const finalHash = await fileHash(finalPath);
   return result.status === "succeeded" && result.output?.sha256 === finalHash?.replace(/^sha256:/, "") &&

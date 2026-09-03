@@ -132,8 +132,9 @@ test("Provider Journal closes the request before and after submission", () => {
     episodeId: "episode-scene-001",
     segmentId: "segment-00",
     inputIdentity: {
-      provider: "infinite-canvas",
-      model: "seedance-2.5",
+      provider: "mg-seedance-2.5-plus-cf-upscale",
+      model: "mg-seedance-2.5-480p",
+      upscaleModel: "cf-超分-720p-30s",
       promptSha256: "a".repeat(64),
     },
     idempotencyKey: "episode-segment-attempt-1",
@@ -150,6 +151,17 @@ test("Provider Journal closes the request before and after submission", () => {
     status: "seedance-submitted",
     providerJobId: "provider-job-001",
   }).styleVariantId, "style-03");
+  assert.equal(parseCloudProviderJournal({
+    ...prepared,
+    status: "upscale-submitted",
+    providerJobId: "provider-job-001",
+    upscaleJobId: "upscale-job-001",
+  }).status, "upscale-submitted");
+  assert.equal(parseCloudProviderJournal({
+    ...prepared,
+    status: "failed",
+    failedStage: "seedance",
+  }).status, "failed");
   assert.throws(() => parseCloudProviderJournal({
     ...prepared,
     styleVariantId: "style-10",

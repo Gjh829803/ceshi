@@ -1133,7 +1133,7 @@ const episodeStageLabels = {
   "style-variant-gemini-events": "逐风格 Gemini 事件",
   "style-variant-seedance-generation": "逐风格 Seedance 生成",
   "seedance-prompts": "Seedance 渲染 Prompt",
-  "seedance-generation": "Seedance 2.5 原生 720p",
+  "seedance-generation": "MG Seedance 2.5 480p",
   "mg-seedance": "历史 MG Seedance 2.5 480p",
   "cf-upscale": "CF 超分 720p",
   "mediakit-upscale": "AI MediaKit 画质增强 720p",
@@ -1319,7 +1319,7 @@ function renderSeedanceReviewDownloads(episode) {
     ? `<a class="seedance-review-download-all" href="${escapeHtml(bundle.url)}" download>一键下载全部 ZIP</a>`
     : `<button class="seedance-review-download-all" type="button" disabled>六段成片就绪后可下载</button>`;
   return `<section class="seedance-review-downloads">
-    <header><div><small>CASE ASSETS & PORTABLE BUNDLE</small><h4>相关图片、输入记录与完整下载包</h4><p>ZIP 包含六段白膜、六段 Seedance 2.5 原生 720p 最终视频，以及六张首帧、规划图、三视图、Prompt、Provider 记录和交互时间线。</p></div>${bundleAction}</header>
+    <header><div><small>CASE ASSETS & PORTABLE BUNDLE</small><h4>相关图片、输入记录与完整下载包</h4><p>ZIP 包含六段白膜、六段 MG Seedance 480p 经 CF 超分与媒体闭合后的 720p 最终视频，以及六张首帧、规划图、三视图、Prompt、Provider 记录和交互时间线。</p></div>${bundleAction}</header>
     <section><div class="seedance-review-assets-heading"><small>RELATED IMAGES</small><h5>参考图与生成图片</h5></div>${imageGrid}</section>
     <section><div class="seedance-review-assets-heading"><small>JSON & METADATA</small><h5>输入、Prompt 与运行记录</h5></div>${fileList}</section>
   </section>`;

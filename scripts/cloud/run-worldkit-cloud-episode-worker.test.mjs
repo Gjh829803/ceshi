@@ -24,7 +24,7 @@ test("materializes Episode provider Secrets only inside the ephemeral project wo
   const secretRoot = path.join(root, "secret");
   await mkdir(secretRoot, { recursive: true });
   for (const fileName of [
-    "infinite-canvas.key",
+    "mg.key",
     "gemini.env",
     "google-service-account.json",
   ]) await writeFile(path.join(secretRoot, fileName), `fake-${fileName}\n`);
@@ -41,7 +41,7 @@ test("materializes Episode provider Secrets only inside the ephemeral project wo
     assert.equal(runtimeRoot, path.join(repoRoot, ".codex-tmp/runtime-config"));
     assert.match(await readFile(path.join(runtimeRoot, "lwdp.env"), "utf8"),
       /LWDP_GENERATION_API_TOKEN=fake-lwdp-token/);
-    assert.equal((await stat(path.join(runtimeRoot, "infinite-canvas.key"))).mode & 0o777, 0o600);
+    assert.equal((await stat(path.join(runtimeRoot, "mg.key"))).mode & 0o777, 0o600);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

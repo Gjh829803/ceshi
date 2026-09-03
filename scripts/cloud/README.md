@@ -144,7 +144,7 @@ The worker Job expects the following in namespace `lwdp`:
 - Secret `lwdp-generation-token`, key `token`.
 - Secret `worldkit-cloud-capture-signing`, key `private.pem`.
 - Episode workers additionally require Secret `worldkit-episode-runtime`, with
-  keys `infinite-canvas.key`, `gemini.env`,
+  keys `mg.key`, `gemini.env`,
   and `google-service-account.json`. Cloud S3 access uses the Kubernetes
   ServiceAccount workload identity; AWS key files are never mounted into a Pod.
 

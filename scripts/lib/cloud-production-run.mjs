@@ -344,6 +344,9 @@ export function parseCloudProviderJournal(value) {
     "seedance-submitting",
     "seedance-submitted",
     "seedance-ready",
+    "upscale-submitting",
+    "upscale-submitted",
+    "upscale-ready",
     "succeeded",
     "failed",
     "refunded",
@@ -364,7 +367,7 @@ export function parseCloudProviderJournal(value) {
     journal.idempotencyKey.length < 8 ||
     !validStatuses.has(journal?.status)
   ) throw new Error("Cloud Provider Journal identity is invalid.");
-  if (journal.status !== "seedance-submitting" &&
+  if (!new Set(["seedance-submitting", "failed"]).has(journal.status) &&
       (typeof journal.providerJobId !== "string" || journal.providerJobId.length === 0)) {
     throw new Error("Cloud Provider Journal post-submission state requires providerJobId.");
   }

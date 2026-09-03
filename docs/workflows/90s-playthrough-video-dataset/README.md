@@ -40,9 +40,9 @@ hashes.
    01/03/05 明确保持基础场景、不含 Prompt Event。每条 Prompt 都附带一段白膜视频、
    一张该段样式首帧和全部完整目标的样式三视图，并详细描述主体、空间、材质、光照、
    运动细化、镜头连续性、声音和限制。
-7. Infinite Canvas OpenAPI 直接调用 `seedance-2.5`，30 秒、16:9、原生 720p、开启
-   音效。六段按项目内 3 槽上限分批并发，避免 Provider 免费套餐把第六个同时提交的
-   Job 退回。当前流程不再调用 MG 480p，也不再调用 CF 或 AI MediaKit 超分。
+7. MG OpenAPI 调用 `mg-seedance-2.5-480p`，30 秒、16:9、开启音效；随后调用
+   `cf-超分-720p-30s` 得到 720p 画面。两段 Provider 工作都使用同一组全局 10 槽，
+   避免跨 Case 无界并发。
 8. Host 只做最终媒体闭合：1280×720、24fps、720 帧、30 秒、有音轨。白膜视频本身
    始终是 720 个真实帧；最终六段视频与对应白膜在分辨率、帧率和帧数上完全一致。
 9. 云端 Worker 将六段白膜、六段最终视频、所有图片/JSON/Prompt/日志和可移植 ZIP
@@ -61,7 +61,7 @@ Gemini 决定大型视觉事件，不把事件与跳跃、转向或任何按键�
 
 生产调用只读项目内 `.codex-tmp/runtime-config/`：
 
-- `infinite-canvas.key`：Seedance 2.5 OpenAPI Bearer Key；
+- `mg.key`：MG Seedance 2.5 与 CF 超分 OpenAPI Bearer Key；
 - `gemini.env` 与 `google-service-account.json`：Gemini Event Director；
 - `aws-credentials` 与 `aws-config`：云端制品上传。
 

@@ -11,8 +11,16 @@ import test from "node:test";
 import {
   createEpisodeWorkflowService,
   failedEpisodeStageId,
+  resumedEpisodeWorkerImage,
   resolveEpisodeRecordWrite,
 } from "./episode-workflows.mjs";
+
+test("explicit worker upgrade resumes from the same checkpoint on the current image", () => {
+  const manifest = { workerImage: `worker@sha256:${"a".repeat(64)}` };
+  const record = { remoteWorkerImage: `worker@sha256:${"b".repeat(64)}` };
+  assert.equal(resumedEpisodeWorkerImage(manifest, record), manifest.workerImage);
+  assert.equal(resumedEpisodeWorkerImage(manifest, record, true), undefined);
+});
 
 test("cancelled and succeeded Episode records reject stale lifecycle writers", () => {
   const base = {

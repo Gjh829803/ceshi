@@ -51,7 +51,7 @@ import { parseCloudEpisodeRequest } from "./submit-worldkit-cloud-episode.mjs";
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const terminalStatuses = new Set(["succeeded", "failed", "interrupted", "cancelled"]);
 const runtimeSecretFiles = [
-  "infinite-canvas.key",
+  "mg.key",
   "gemini.env",
   "google-service-account.json",
 ];
