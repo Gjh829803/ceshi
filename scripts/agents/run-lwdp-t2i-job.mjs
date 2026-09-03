@@ -46,6 +46,17 @@ function safeItemId(value) {
   return value;
 }
 
+function configuredCodexAccountIds(environment = process.env) {
+  const ids = String(environment.WORLDKIT_LWDP_CODEX_ACCOUNT_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (ids.some((id) => !/^[a-zA-Z0-9][a-zA-Z0-9_.@+-]{2,159}$/.test(id))) {
+    throw new Error("WORLDKIT_LWDP_CODEX_ACCOUNT_IDS contains an invalid account id.");
+  }
+  return [...new Set(ids)];
+}
+
 const args = parseArguments(process.argv.slice(2));
 if (!args.manifest) throw new Error("--manifest is required.");
 if (!args.outputS3Prefix) throw new Error("--output-s3-prefix is required.");
@@ -100,6 +111,7 @@ for (const rawItem of manifest.items) {
 if (items.some((item) => !item.prompt)) throw new Error("Every T2I item requires a prompt.");
 
 const runToken = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
+const codexAccountIds = configuredCodexAccountIds();
 const payload = {
   pipeline: "t2i",
   job_name: args.jobName || `worldkit images ${runToken}`,
@@ -118,6 +130,7 @@ const payload = {
       cloudThroughput?.batching.codexMaxPods || 50),
     codex_image_tool: "system_image_gen",
     max_reference_images_per_item: Number(manifest.maxReferenceImagesPerItem || 8),
+    ...(codexAccountIds.length > 0 ? { codex_account_ids: codexAccountIds } : {}),
   },
 };
 
@@ -127,7 +140,10 @@ if (submitAttempts !== 1) {
 }
 
 if (smokeMode) {
-  process.stdout.write(`WORLDKIT_LWDP_T2I_SMOKE items=${items.length} references=${uploadedByPath.size} submitAttempts=${submitAttempts}\n`);
+  process.stdout.write(
+    `WORLDKIT_LWDP_T2I_SMOKE items=${items.length} references=${uploadedByPath.size} ` +
+      `submitAttempts=${submitAttempts} accountIds=${codexAccountIds.length}\n`,
+  );
   process.exit(0);
 }
 

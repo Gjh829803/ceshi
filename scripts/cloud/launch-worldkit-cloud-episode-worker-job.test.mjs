@@ -16,6 +16,7 @@ test("creates one GPU Episode worker with project-local runtime Secret material"
     outputS3Prefix: "s3://bucket/episode",
     image: `worldkit-cloud-worker@sha256:${"a".repeat(64)}`,
     userId: "partner_codex",
+    codexAccountIds: "account-one,account-two",
     nodeSelector: { "alpha.eksctl.io/nodegroup-name": "gpu-workers" },
   });
   assert.equal(manifest.metadata.name, "worldkit-episode-exec-episode-001");
@@ -32,6 +33,9 @@ test("creates one GPU Episode worker with project-local runtime Secret material"
     item.name === "WORLDKIT_DISABLE_PLAYGROUND_SPAWN").value, "1");
   assert.equal(container.env.find((item) => item.name === "LWDP_USER_ID").value,
     "partner_codex");
+  assert.equal(container.env.find((item) =>
+    item.name === "WORLDKIT_LWDP_CODEX_ACCOUNT_IDS").value,
+  "account-one,account-two");
   assert.ok(container.volumeMounts.some((mount) =>
     mount.mountPath === "/var/run/worldkit-episode-runtime"));
   assert.equal(JSON.stringify(manifest).includes("LWDP_GENERATION_API_TOKEN\":\""), false);

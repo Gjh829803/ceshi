@@ -47,6 +47,7 @@ export function cloudEpisodeWorkerJob({
   captureSigningSecretName = "worldkit-cloud-capture-signing",
   apiBase = "https://lwdp.loopit.me",
   userId = "worldkit-studio",
+  codexAccountIds = "",
   gpuResourceName = "nvidia.com/gpu",
   gpuCount = 1,
   gpuRequired = true,
@@ -147,6 +148,10 @@ export function cloudEpisodeWorkerJob({
               { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
               { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
               { name: "WORLDKIT_CLOUD_EXECUTION_PART", value: executionPart },
+              ...(codexAccountIds ? [{
+                name: "WORLDKIT_LWDP_CODEX_ACCOUNT_IDS",
+                value: codexAccountIds,
+              }] : []),
               {
                 name: "LWDP_GENERATION_API_TOKEN",
                 valueFrom: {

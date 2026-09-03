@@ -117,6 +117,7 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     gpuResourceName: value.gpuResourceName ?? "nvidia.com/gpu",
     gpuCount: Number(value.gpuCount ?? 1),
     executionProfile: value.executionProfile,
+    codexAccountIds: String(environment.WORLDKIT_LWDP_CODEX_ACCOUNT_IDS ?? "").trim(),
     gpuBatch: Object.freeze({
       queueS3Prefix: assertS3Uri(gpuBatch.queueS3Prefix),
       minimumBatchSize: gpuBatch.minimumBatchSize,
@@ -180,6 +181,7 @@ async function launchEpisodeStageWorker({
     namespace: config.namespace,
     userId: cloudConfig.userId,
     apiBase: cloudConfig.baseUrl,
+    codexAccountIds: config.codexAccountIds,
     ...(stageId === "episode-production"
       ? {
           gpuResourceName: config.gpuResourceName,
