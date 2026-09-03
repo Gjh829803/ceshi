@@ -1,5 +1,12 @@
 export * from "./babylon-world-runtime";
 export {
+  admitBabylonNativeSurfacesV1,
+  BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1,
+  type AdmitBabylonNativeSurfacesInputV1,
+  type BabylonNativeSurfaceAdmissionDiagnosticCodeV1,
+  type BabylonNativeSurfaceAdmissionResultV1,
+} from "./babylon-native-surface-admission";
+export {
   BabylonNativeRuntimePackageErrorV1,
   prepareBabylonNativeRuntimePackageV1,
   type BabylonNativeRuntimePackageErrorCodeV1,

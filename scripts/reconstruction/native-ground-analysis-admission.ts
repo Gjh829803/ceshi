@@ -3,6 +3,7 @@ import {
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
   analyzeBabylonNativeBlockGroundV1,
   type BabylonNativeBlockCheckedEpochEvidenceV1,
+  type BabylonNativeBlockGroundFailureFactV1,
   type BabylonNativeBlockGroundAnalysisReportV1,
   type BabylonNativeBlockGroundCaseIntentV1,
   type BabylonNativeBlockGroundStandPositionV1,
@@ -32,8 +33,11 @@ import {
 import { isEqual, isNil } from "lodash-es";
 
 import {
+  admitBabylonNativeSurfacesV1,
   BABYLON_TRAVERSAL_RUNTIME_IMPLEMENTATION_IDENTITY_V1,
 } from "@whitebox-world/runtime-babylon";
+import type { WorldPackageWorldBoundsV1 } from
+  "@whitebox-world/world-package";
 import { createNativeGroundAnalysisRepairDiagnosticsV1 } from
   "./native-ground-analysis-diagnostics.js";
 
@@ -46,6 +50,7 @@ export interface AnalyzeProductionNativeBlockGroundInputV1 {
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
   readonly contribution: BabylonNativeSceneContributionV1;
+  readonly worldBounds: WorldPackageWorldBoundsV1;
   readonly checkedEpochEvidence: BabylonNativeBlockCheckedEpochEvidenceV1;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly maximumBlockCount: number;
@@ -67,6 +72,13 @@ function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function controlledSubjectV1(runtime: WorldRuntimeBootstrapV1) {
+  const subjects = runtime.subjectRuntimeDescriptors.filter(({ entityId }) =>
+    entityId === runtime.initialControlledEntityId);
+  if (subjects.length !== 1) return fail("controlled Subject is not unique");
+  return subjects[0]!;
+}
+
 function resourceEntry(
   rows: readonly WorldResourceLockEntryV1[],
   resourceRef: string,
@@ -85,10 +97,7 @@ function createControlledTraversalCapabilityEnvelopeV1(
   registryLockInput: readonly WorldResourceLockEntryV1[],
 ) {
   const registryLock = worldResourceLockEntriesV1(registryLockInput);
-  const subjects = runtime.subjectRuntimeDescriptors.filter(({ entityId }) =>
-    entityId === runtime.initialControlledEntityId);
-  if (subjects.length !== 1) return fail("controlled Subject is not unique");
-  const subject = subjects[0]!;
+  const subject = controlledSubjectV1(runtime);
   const colliderShape = {
     kind: subject.collider.kind,
     radiusMeters: subject.collider.radiusMeters,
@@ -353,11 +362,12 @@ export function analyzeProductionNativeBlockGroundV1(
     input.checkedEpochEvidence,
     traversalCapabilityEnvelopeReceipt,
   );
-  const report = analyzeBabylonNativeBlockGroundV1({
+  const caseIntent = createGroundCaseIntentV1(input);
+  const profileReport = analyzeBabylonNativeBlockGroundV1({
     groundModel: input.checkedEpochEvidence.logicalGroundModel,
     walkableTopology: input.checkedEpochEvidence.topology,
     traversalCapabilityEnvelopeReceipt,
-    caseIntent: createGroundCaseIntentV1(input),
+    caseIntent,
     worldPackageRootHash: input.worldPackageRootHash,
     measurementChunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
     budget: Object.freeze({
@@ -369,6 +379,54 @@ export function analyzeProductionNativeBlockGroundV1(
         input.maximumBlockCount * MAXIMUM_SUPPORT_TOP_CELLS_PER_BLOCK,
     }),
   });
+  const runtimeSurfaceAdmission = caseIntent.groundFailurePolicy === "block-admission"
+    ? admitBabylonNativeSurfacesV1({
+        contribution: input.contribution,
+        registryLock: input.registryLock,
+        controlledSubject: controlledSubjectV1(input.worldRuntimeBootstrap),
+        worldBounds: input.worldBounds,
+      })
+    : undefined;
+  let report = profileReport;
+  if (!isNil(runtimeSurfaceAdmission) && runtimeSurfaceAdmission.outcome === "rejected") {
+    const relatedColliderSuffix = runtimeSurfaceAdmission.relatedColliderIds.length === 0
+      ? ""
+      : ` Related frozen Collider IDs: ${
+          runtimeSurfaceAdmission.relatedColliderIds.join(", ")
+        }.`;
+    const runtimeFact: BabylonNativeBlockGroundFailureFactV1 = Object.freeze({
+      id: `ground-analysis:ground-spawn-standability:${caseIntent.spawn.id}-runtime-surface`,
+      acceptanceTargetRef: caseIntent.spawn.acceptanceTargetRef,
+      targetId: caseIntent.spawn.id,
+      metricId: "ground-spawn-standability",
+      details: Object.freeze({
+        kind: "state-mismatch" as const,
+        expectedValue: "runtime-surface-admitted",
+        actualValue: runtimeSurfaceAdmission.diagnostic.code,
+        correctionDirection: "replace" as const,
+      }),
+      evidenceRef: input.groundModelEvidenceRef,
+      affectedSourceBlockIds: Object.freeze([]),
+      message: `${runtimeSurfaceAdmission.diagnostic.message}${relatedColliderSuffix}`,
+      repairInstruction: `${runtimeSurfaceAdmission.diagnostic.repairHint}${relatedColliderSuffix} Keep the frozen Subject Capsule and Runtime admission threshold unchanged.`,
+    });
+    const failureFacts = Object.freeze([
+      ...profileReport.failureFacts,
+      runtimeFact,
+    ].sort((left, right) =>
+      stableCompare(left.metricId, right.metricId) ||
+      stableCompare(left.acceptanceTargetRef, right.acceptanceTargetRef) ||
+      stableCompare(left.targetId, right.targetId) ||
+      stableCompare(left.id, right.id)));
+    report = Object.freeze({
+      ...profileReport,
+      analysisOutcome: "failed" as const,
+      admissionOutcome: caseIntent.groundFailurePolicy === "block-admission"
+        ? "failed" as const
+        : profileReport.admissionOutcome,
+      failureFacts,
+    });
+  }
   return Object.freeze({
     report,
     repairDiagnostics: createNativeGroundAnalysisRepairDiagnosticsV1(report),

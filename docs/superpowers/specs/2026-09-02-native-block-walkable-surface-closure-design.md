@@ -405,7 +405,12 @@ rejection starts a new Attempt from immutable source/check/logical-ground/report
 Attempt owns no Package or Capture. The repaired Attempt must pass Check and Ground Analysis before it can
 create a Candidate, Package, Receipt or Capture. Exceeding the repair budget preserves the reached evidence
 for diagnosis, but Native Check, Ground Analysis, Package or Runtime-admission failure remains
-non-previewable.
+non-previewable. Prior-evidence selection never disables the rest of the frozen Case: a Ground Analysis
+repair must preserve the opening regions, anchors and depth order from `case.json`. It connects support with
+the correct ground/route group and cannot stretch a ridge, cliff, landmark, structure or background group
+toward Spawn to satisfy connectivity. Formal opening depth order remains the deterministic ordering of each
+declared visual group's complete checked-bounds center; this repair rule prevents a local support fix from
+silently turning a midground group into foreground evidence.
 
 ## 12. Budget and identity
 

@@ -59,6 +59,7 @@ export type BabylonNativeSurfaceAdmissionResultV1 =
     }>
   | Readonly<{
       readonly outcome: "rejected";
+      readonly relatedColliderIds: readonly string[];
       readonly diagnostic: NativeSceneDiagnosticV1 & Readonly<{
         readonly code: BabylonNativeSurfaceAdmissionDiagnosticCodeV1;
       }>;
@@ -87,6 +88,7 @@ interface SupportCandidateV1 extends TriangleProjectionV1 {
 function rejected(
   code: BabylonNativeSurfaceAdmissionDiagnosticCodeV1,
   positionMetersXYZ: readonly [number, number, number],
+  relatedColliderIds: readonly string[] = Object.freeze([]),
 ): BabylonNativeSurfaceAdmissionResultV1 {
   const messages: Readonly<Record<
     BabylonNativeSurfaceAdmissionDiagnosticCodeV1,
@@ -116,6 +118,9 @@ function rejected(
   const [message, repairHint] = messages[code];
   return Object.freeze({
     outcome: "rejected" as const,
+    relatedColliderIds: Object.freeze([
+      ...new Set(relatedColliderIds),
+    ].sort()),
     diagnostic: Object.freeze({
       kind: "native-scene-diagnostic" as const,
       schemaVersion: 1 as const,
@@ -459,7 +464,7 @@ function obstructsCapsule(
   input: AdmitBabylonNativeSurfacesInputV1,
   support: SupportCandidateV1,
   allTriangles: readonly TriangleProjectionV1[],
-): boolean {
+): TriangleProjectionV1 | undefined {
   const spawn = input.contribution.spawnMarker.positionMetersXYZ;
   const centerOffset =
     input.controlledSubject.collider.centerOffsetFromSubjectOriginMetersXYZ;
@@ -480,7 +485,7 @@ function obstructsCapsule(
     radius - BABYLON_NATIVE_SPAWN_SUPPORT_TOLERANCE_METERS_V1,
   );
   const obstructedRadiusSquared = obstructedRadius * obstructedRadius;
-  return allTriangles.some((triangle) => {
+  return allTriangles.find((triangle) => {
     if (
       triangle.collider.colliderSubshapeId ===
         support.collider.colliderSubshapeId &&
@@ -579,10 +584,12 @@ export function admitBabylonNativeSurfacesV1(
       spawn,
     );
   }
-  if (obstructsCapsule(input, support, allTriangles)) {
+  const obstruction = obstructsCapsule(input, support, allTriangles);
+  if (!isNil(obstruction)) {
     return rejected(
       "WORLDKIT_NATIVE_SCENE_RUNTIME_SPAWN_CAPSULE_OBSTRUCTED",
       spawn,
+      [obstruction.collider.id],
     );
   }
   const binding = support.collider.traversalBinding;

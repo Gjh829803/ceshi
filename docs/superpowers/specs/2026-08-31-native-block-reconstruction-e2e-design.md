@@ -638,7 +638,11 @@ Ground Analysis is a trusted pre-Package admission gate. A repairable Ground Ana
 checked authored source, Attempt result, logical-ground model, failed report and actionable diagnostics, but
 publishes no WorldPackage or Capture for that Attempt. Those immutable artifacts are sufficient evidence for
 the same one-repair loop; the repaired Attempt must rerun Native Check and Ground Analysis before it can
-publish a new Package. The Builder must not invent missing Capture evidence for this path.
+publish a new Package. The Builder must not invent missing Capture evidence for this path. Selecting Ground
+Analysis as the prior evidence source narrows the defect being repaired; it does not suspend any other frozen
+Case expectation. The Builder rereads the frozen opening regions, anchors and depth order from `case.json`,
+uses the correct ground or route visual group for support repair, and must not extend a ridge, cliff, landmark,
+structure or background group toward Spawn merely to connect ground.
 
 Non-repairable missing/stale evidence and deterministic Build identity diagnostics omit `repairAction`
 completely because the Builder cannot repair Host evidence, identity, or replay failures. There is no
