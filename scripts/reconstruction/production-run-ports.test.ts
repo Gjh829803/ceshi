@@ -979,6 +979,35 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     });
   });
 
+  it("preserves a typed Worldkit server start code from nested closure causes", async () => {
+    const value = await fixture();
+    const events: string[] = [];
+    const ownerPorts = {
+      ...owners(value, events),
+      capturePackage: vi.fn(async () => {
+        const startFailure = Object.assign(
+          new Error("Worldkit playground did not become ready within 30000ms."),
+          { code: "WORLDKIT_SERVER_START_TIMEOUT" },
+        );
+        throw new FormalCaptureCommandClosedErrorV1({
+          stage: "hosted-session",
+          cleanupOutcomes: {
+            hostedBrowserSession: "failed",
+            viteServer: "completed",
+          },
+          cause: startFailure,
+        });
+      }),
+    } as ProductionWorldReconstructionRunPortOwnersV1;
+    const { ports, packaged } = await generateAndPackage(value, ownerPorts);
+
+    expect(await ports.capture({ attemptIndex: 0, packaged })).toEqual({
+      outcome: "failed",
+      cameraRollbackOutcome: "completed",
+      diagnosticCodes: ["WORLDKIT_SERVER_START_TIMEOUT"],
+    });
+  });
+
   it("never allocates Browser when the verified-Package capture request writer rejects", async () => {
     const value = await fixture();
     const events: string[] = [];

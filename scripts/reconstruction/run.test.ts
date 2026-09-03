@@ -1140,6 +1140,27 @@ describe("runWorldReconstructionV1", () => {
     });
   });
 
+  it("preserves stable Hosted and Babylon capture diagnostics beside the stage code", async () => {
+    const { ports } = fakePorts({
+      captureOutcomeByAttempt: ["failed"],
+      captureDiagnosticCodesByAttempt: [[
+        "WORLDKIT_SERVER_START_TIMEOUT",
+        "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+      ]],
+    });
+
+    await expect(runWorldReconstructionV1(
+      runInput(await outputRoot()),
+      ports,
+    )).rejects.toMatchObject({
+      diagnosticCodes: [
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
+        "WORLDKIT_SERVER_START_TIMEOUT",
+        "BABYLON_FORMAL_CAPTURE_PASS_CHECKPOINT_UNMEASURED",
+      ],
+    });
+  });
+
   it("preserves allowlisted Evaluation diagnostics without provider detail", async () => {
     const { ports } = fakePorts({
       evaluationError: Object.assign(

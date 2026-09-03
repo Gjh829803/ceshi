@@ -170,6 +170,10 @@ function diagnosticCodes(error: unknown, fallback: string): readonly string[] {
   const collect = (candidate: unknown): void => {
     if (!(candidate instanceof Error) || visited.has(candidate)) return;
     visited.add(candidate);
+    if (
+      "code" in candidate &&
+      typeof candidate.code === "string"
+    ) codes.push(candidate.code);
     codes.push(...(candidate.message.match(/[A-Z][A-Z0-9_]{4,}/g) ?? []));
     collect(candidate.cause);
   };
