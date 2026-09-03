@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "enabled": true,
   "executionProfile": "cpu-gpu-streaming-checkpoints@1",
-  "workerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:85dde20dae7b3b4521ee97690d1e172efb8fbd228ce8fc1b1b4765bc1c5955ae",
+  "workerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:99edf016a05dc7cec561118fbedcccc4ae4c5628e5551dbeba8ed9ff2fe9f7d4",
   "outputS3Root": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/cloud-episodes",
   "namespace": "lwdp",
   "gpuResourceName": "nvidia.com/gpu",
