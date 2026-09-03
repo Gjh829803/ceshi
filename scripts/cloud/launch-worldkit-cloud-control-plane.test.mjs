@@ -49,7 +49,7 @@ test("cloud control plane has no durable volume, GPU, or local credential mount"
   assert.equal(monitor.env.some((item) => item.name === "LWDP_GENERATION_API_TOKEN"), false);
   assert.ok(role.rules[0].verbs.includes("create"));
   assert.ok(role.rules[0].verbs.includes("patch"));
-  assert.equal(role.rules[0].verbs.includes("delete"), false);
+  assert.equal(role.rules[0].verbs.includes("delete"), true);
   const leaseRule = role.rules.find((rule) => rule.resources.includes("leases"));
   assert.deepEqual(leaseRule.apiGroups, ["coordination.k8s.io"]);
   assert.ok(leaseRule.verbs.includes("create"));

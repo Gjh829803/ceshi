@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { selectGpuCaptureBatch } from "../lib/cloud-production-run.mjs";
+import {
+  parseGpuCaptureBatchManifest,
+  selectGpuCaptureBatch,
+} from "../lib/cloud-production-run.mjs";
 import { runGpuCaptureBatch } from "./run-worldkit-cloud-gpu-capture-batch-worker.mjs";
 
 const IMAGE = `registry.example/worldkit@sha256:${"a".repeat(64)}`;
@@ -27,6 +30,15 @@ function queueEntry(index) {
     createdAt: new Date(Date.UTC(2026, 8, 2, 0, 0, index)).toISOString(),
   };
 }
+
+test("ready-wave manifests preserve their content-addressed identity", () => {
+  const batch = selectGpuCaptureBatch(
+    Array.from({ length: 7 }, (_, index) => queueEntry(index)),
+    { immediateWorkerImages: new Set([IMAGE]) },
+  );
+  assert.equal(batch.dispatchReason, "ready-wave");
+  assert.equal(parseGpuCaptureBatchManifest(JSON.stringify(batch)).taskCount, 7);
+});
 
 test("one GPU lifecycle isolates a failed task and continues the remaining Batch", async () => {
   const batch = selectGpuCaptureBatch(
@@ -89,4 +101,89 @@ test("replayed GPU Batch skips tasks with an uploaded success receipt", async ()
   });
   assert.equal(captureCount, 99);
   assert.equal(result.succeededCount, 100);
+});
+
+test("indexed GPU worker executes only its isolated Case", async () => {
+  const batch = selectGpuCaptureBatch(
+    Array.from({ length: 100 }, (_, index) => queueEntry(index)),
+    { maximumBatchSize: 100 },
+  );
+  const captures = [];
+  const receipts = [];
+  const result = await runGpuCaptureBatch({
+    manifest: batch,
+    queueS3Prefix: "s3://bucket/queue",
+    taskLeaseSeconds: 3_600,
+    temporaryRoot: "/unused-test-root",
+    taskIndexes: [42],
+    runCaptureImplementation: async (task) => { captures.push(task.executionId); },
+    launchRenderImplementation: async () => undefined,
+    publishTaskReceiptImplementation: async (receipt, index) => {
+      receipts.push({ receipt, index });
+    },
+    deleteQueueEntryImplementation: async () => undefined,
+    writeOutput: () => undefined,
+  });
+  assert.deepEqual(captures, ["execution_042"]);
+  assert.equal(result.taskCount, 1);
+  assert.equal(result.batchTaskCount, 100);
+  assert.equal(result.succeededCount, 1);
+  assert.equal(receipts[0].index, 42);
+});
+
+test("indexed GPU replay treats every durable terminal receipt as absorbing", async () => {
+  const batch = selectGpuCaptureBatch(
+    Array.from({ length: 100 }, (_, index) => queueEntry(index)),
+    { maximumBatchSize: 100 },
+  );
+  const failed = {
+    executionId: "execution_042",
+    sceneId: "scene-042",
+    episodeId: "episode-scene-042",
+    status: "capture-failed",
+    startedAt: "2026-09-02T00:00:00.000Z",
+    finishedAt: "2026-09-02T00:03:00.000Z",
+    error: "deterministic capture failure",
+  };
+  let captureCount = 0;
+  const result = await runGpuCaptureBatch({
+    manifest: batch,
+    queueS3Prefix: "s3://bucket/queue",
+    taskLeaseSeconds: 3_600,
+    temporaryRoot: "/unused-test-root",
+    taskIndexes: [42],
+    priorReceipts: new Map([[failed.executionId, failed]]),
+    runCaptureImplementation: async () => { captureCount += 1; },
+    launchRenderImplementation: async () => undefined,
+    publishTaskReceiptImplementation: async () => undefined,
+    deleteQueueEntryImplementation: async () => undefined,
+    writeOutput: () => undefined,
+  });
+  assert.equal(captureCount, 0);
+  assert.equal(result.failedCount, 1);
+});
+
+test("queue storage cleanup cannot regress a successful capture receipt", async () => {
+  const batch = selectGpuCaptureBatch(
+    Array.from({ length: 100 }, (_, index) => queueEntry(index)),
+    { maximumBatchSize: 100 },
+  );
+  const output = [];
+  const result = await runGpuCaptureBatch({
+    manifest: batch,
+    queueS3Prefix: "s3://bucket/queue",
+    taskLeaseSeconds: 3_600,
+    temporaryRoot: "/unused-test-root",
+    taskIndexes: [42],
+    runCaptureImplementation: async () => undefined,
+    launchRenderImplementation: async () => undefined,
+    publishTaskReceiptImplementation: async () => undefined,
+    deleteQueueEntryImplementation: async () => {
+      throw new Error("AccessDenied: s3:DeleteObject");
+    },
+    writeOutput: (value) => output.push(value),
+  });
+  assert.equal(result.succeededCount, 1);
+  assert.equal(result.failedCount, 0);
+  assert.match(output.join(""), /WORLDKIT_GPU_QUEUE_CLEANUP_RETAINED execution_042/);
 });

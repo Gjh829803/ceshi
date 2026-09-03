@@ -17,6 +17,38 @@ export function failedEpisodeStageId(execution) {
     typeof stage.stage_id === "string" && stage.stage_id.length > 0);
   return failed?.stage_id ?? null;
 }
+const absorbingEpisodeStatuses = new Set(["cancelled", "succeeded"]);
+
+export function resolveEpisodeRecordWrite(current, incoming, updatedAt) {
+  if (!incoming || typeof incoming !== "object") {
+    throw new Error("Episode record write requires one record.");
+  }
+  if (current && typeof current === "object") {
+    if (absorbingEpisodeStatuses.has(current.status)) {
+      return { applied: false, reason: `absorbing-${current.status}`, record: current };
+    }
+    if (
+      current.remoteExecutionId && incoming.remoteExecutionId &&
+      current.remoteExecutionId !== incoming.remoteExecutionId
+    ) return { applied: false, reason: "execution-drift", record: current };
+    if (
+      incoming.status !== "cancelled" &&
+      Number(incoming.recordRevision ?? 0) < Number(current.recordRevision ?? 0)
+    ) return { applied: false, reason: "revision-drift", record: current };
+  }
+  return {
+    applied: true,
+    reason: "applied",
+    record: {
+      ...incoming,
+      recordRevision: Math.max(
+        Number(current?.recordRevision ?? 0),
+        Number(incoming.recordRevision ?? 0),
+      ) + 1,
+      updatedAt,
+    },
+  };
+}
 const artifactDefinitions = [
   ["planning/reconnaissance/reconnaissance-report.json", "运行时侦察报告", "json", "reconnaissance"],
   ["planning/navigation-evidence.json", "模型探索参考", "json", "navigation-evidence"],
@@ -608,6 +640,7 @@ export function createEpisodeWorkflowService(options) {
   const createReadStreamImplementation = options.createReadStreamImplementation ?? createReadStream;
   const activeChildren = new Map();
   const activeCloudExecutions = new Map();
+  const episodePersistenceQueues = new Map();
   const listAllCache = new Map();
   const executeCloudEpisode = options.executeCloudEpisode ?? null;
   const retryCloudEpisode = options.retryCloudEpisode ?? null;
@@ -615,6 +648,7 @@ export function createEpisodeWorkflowService(options) {
   const ensureCloudEpisodeAvailable = options.ensureCloudEpisodeAvailable ?? null;
   const resolveCloudSceneInput = options.resolveCloudSceneInput ?? null;
   const cancelCloudEpisode = options.cancelCloudEpisode ?? null;
+  const cancelCloudEpisodeWorkers = options.cancelCloudEpisodeWorkers ?? null;
   const readCloudEpisodeManifest = options.readCloudEpisodeManifest ?? null;
   const readVerifiedRemoteArtifact = options.readVerifiedRemoteArtifact ?? null;
   const streamRemoteArtifact = options.streamRemoteArtifact ?? null;
@@ -1148,17 +1182,31 @@ export function createEpisodeWorkflowService(options) {
   }
 
   async function persistEpisodeRecord(record) {
-    record.recordRevision = Number.isSafeInteger(record.recordRevision) && record.recordRevision >= 0
-      ? record.recordRevision + 1
-      : 1;
-    record.updatedAt = new Date().toISOString();
-    if (record.backend === "cloud" && typeof persistCloudEpisodeRecord === "function") {
-      // S3 is the durable authority for the cloud lane. Publish it before the
-      // disposable local compatibility cache so a local disk write can never
-      // make an uncommitted control-plane transition look durable.
-      await persistCloudEpisodeRecord(record);
+    const episodeId = record?.episodeId;
+    if (!idPattern.test(episodeId ?? "")) throw new Error("Episode record ID is invalid.");
+    const prior = episodePersistenceQueues.get(episodeId) ?? Promise.resolve();
+    const operation = prior.catch(() => undefined).then(async () => {
+      const current = await readJson(path.join(episodesRoot, episodeId, "episode-record.json"));
+      const decision = resolveEpisodeRecordWrite(current, record, new Date().toISOString());
+      if (!decision.applied) return decision.record;
+      Object.assign(record, decision.record);
+      if (record.backend === "cloud" && typeof persistCloudEpisodeRecord === "function") {
+        // S3 is the durable authority for the cloud lane. Publish it before the
+        // disposable local compatibility cache so a local disk write can never
+        // make an uncommitted control-plane transition look durable.
+        await persistCloudEpisodeRecord(record);
+      }
+      await writeLocalEpisodeRecordCache(record);
+      return record;
+    });
+    episodePersistenceQueues.set(episodeId, operation);
+    try {
+      return await operation;
+    } finally {
+      if (episodePersistenceQueues.get(episodeId) === operation) {
+        episodePersistenceQueues.delete(episodeId);
+      }
     }
-    await writeLocalEpisodeRecordCache(record);
   }
 
   async function readEpisodeRecordById(episodeId) {
@@ -1820,6 +1868,11 @@ export function createEpisodeWorkflowService(options) {
           finishedAt: new Date().toISOString(),
           error: "Cloud Episode was cancelled by the user.",
         });
+        if (typeof cancelCloudEpisodeWorkers === "function") {
+          await cancelCloudEpisodeWorkers(record.remoteExecutionId).catch((error) => {
+            console.error("WORLDKIT_EPISODE_WORKER_CANCEL_FAILED", error);
+          });
+        }
       }
       sendJson(response, 202, { stopped: Boolean(child) || cloudStopped });
       return true;

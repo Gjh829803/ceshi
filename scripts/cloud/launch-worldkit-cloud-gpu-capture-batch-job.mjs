@@ -47,6 +47,7 @@ export function cloudGpuCaptureBatchJob({
   taskLeaseSeconds = 3_600,
   ephemeralStorageRequest = "32Gi",
   ephemeralStorageLimit = "64Gi",
+  caseConcurrency = 1,
 }) {
   if (!/^gpu-capture-[a-f0-9]{24}$/.test(batchId ?? "")) {
     throw new Error("batchId is invalid.");
@@ -67,9 +68,11 @@ export function cloudGpuCaptureBatchJob({
     Number.isSafeInteger(taskCount) &&
     Number.isSafeInteger(minimumBatchSize) && minimumBatchSize >= 100 &&
     taskCount >= minimumBatchSize;
-  if (!thresholdAdmissionValid && !tailAdmissionValid) {
+  const readyWaveAdmissionValid = dispatchReason === "ready-wave" &&
+    Number.isSafeInteger(taskCount) && taskCount >= 1;
+  if (!thresholdAdmissionValid && !tailAdmissionValid && !readyWaveAdmissionValid) {
     throw new Error(
-      "GPU Batch Job requires the capacity threshold or valid closed-producer tail evidence.",
+      "GPU Batch Job requires the capacity threshold, ready wave, or valid closed-producer tail evidence.",
     );
   }
   required(batchManifestS3Uri, "batchManifestS3Uri");
@@ -81,6 +84,10 @@ export function cloudGpuCaptureBatchJob({
   if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900 || taskLeaseSeconds > 3_600) {
     throw new Error("taskLeaseSeconds must be between 900 and 3600.");
   }
+  if (!Number.isSafeInteger(caseConcurrency) || caseConcurrency < 1 || caseConcurrency > 10) {
+    throw new Error("caseConcurrency must be between 1 and 10.");
+  }
+  const indexed = caseConcurrency > 1 && taskCount > 1;
   const name = `worldkit-${batchId}`.slice(0, 63).replace(/-$/, "");
   return {
     apiVersion: "batch/v1",
@@ -96,7 +103,12 @@ export function cloudGpuCaptureBatchJob({
       },
     },
     spec: {
-      backoffLimit: 2,
+      backoffLimit: indexed ? taskCount * 2 : 2,
+      ...(indexed ? {
+        completionMode: "Indexed",
+        completions: taskCount,
+        parallelism: Math.min(caseConcurrency, taskCount),
+      } : {}),
       activeDeadlineSeconds: 86_400,
       ttlSecondsAfterFinished: 86_400,
       template: {
@@ -129,6 +141,15 @@ export function cloudGpuCaptureBatchJob({
               { name: "WORLDKIT_CAPTURE_HEADLESS", value: "1" },
               { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
               { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
+              ...(indexed ? [{
+                name: "WORLDKIT_GPU_BATCH_TASK_INDEX",
+                valueFrom: {
+                  fieldRef: {
+                    fieldPath:
+                      "metadata.annotations['batch.kubernetes.io/job-completion-index']",
+                  },
+                },
+              }] : []),
               {
                 name: "LWDP_GENERATION_API_TOKEN",
                 valueFrom: { secretKeyRef: { name: generationTokenSecretName, key: "token" } },
@@ -194,6 +215,7 @@ async function main() {
     gpuResourceName: options["gpu-resource-name"] ?? "nvidia.com/gpu",
     gpuCount: Number(options["gpu-count"] ?? 1),
     taskLeaseSeconds: Number(options["task-lease-seconds"] ?? 3_600),
+    caseConcurrency: Number(options["case-concurrency"] ?? 1),
     ephemeralStorageRequest: options["ephemeral-storage-request"] ?? "32Gi",
     ephemeralStorageLimit: options["ephemeral-storage-limit"] ?? "64Gi",
   });

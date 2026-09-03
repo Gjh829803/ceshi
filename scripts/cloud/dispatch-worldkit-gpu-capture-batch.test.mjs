@@ -72,6 +72,36 @@ test("dispatcher leaves the GPU off when only ninety-nine tasks are ready", asyn
   assert.equal(launched, false);
 });
 
+test("current Worker dispatches ready Cases without waiting for slow producers", async () => {
+  const entries = Array.from({ length: 7 }, (_, index) => entry(index));
+  const calls = [];
+  const result = await dispatchGpuCaptureBatch({
+    entries,
+    episodeRecords: [
+      ...entries.map((item) => episodeRecordFor(item)),
+      episodeRecordFor(entry(7), "episode-prepare"),
+    ],
+    immediateWorkerImages: new Set([IMAGE]),
+    inspectExecution: async (executionId) => executionFor(
+      entries.find((item) => item.executionId === executionId),
+    ),
+    publishManifest: async (batch) => {
+      calls.push(["publish", batch.taskCount, batch.dispatchReason]);
+      return { s3Uri: "s3://bucket/queue/batches/wave/manifest.json" };
+    },
+    launchBatch: async (batch) => {
+      calls.push(["launch", batch.taskCount, batch.dispatchReason]);
+      return { jobName: "ready-wave-job" };
+    },
+  });
+  assert.equal(result.status, "launched");
+  assert.equal(result.batch.dispatchReason, "ready-wave");
+  assert.deepEqual(calls, [
+    ["publish", 7, "ready-wave"],
+    ["launch", 7, "ready-wave"],
+  ]);
+});
+
 test("replayed prepare queue objects do not inflate the one-hundred-task floor", async () => {
   const unique = Array.from({ length: 99 }, (_, index) => entry(index));
   const replay = {

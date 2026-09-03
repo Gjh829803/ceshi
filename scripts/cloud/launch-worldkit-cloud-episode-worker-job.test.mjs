@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { cloudEpisodeWorkerJob } from "./launch-worldkit-cloud-episode-worker-job.mjs";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
+
+import {
+  cloudEpisodeWorkerJob,
+  deleteCloudEpisodeWorkerJobs,
+} from "./launch-worldkit-cloud-episode-worker-job.mjs";
 
 test("creates one GPU Episode worker with project-local runtime Secret material", () => {
   const manifest = cloudEpisodeWorkerJob({
@@ -94,4 +100,35 @@ test("creates one GPU Episode worker with project-local runtime Secret material"
     effect: "NoSchedule",
   }]);
   assert.ok(cpuContainer.args.includes("prepare"));
+});
+
+test("deletes only Worker Jobs owned by the cancelled Cloud Execution", async () => {
+  let invocation;
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  const result = deleteCloudEpisodeWorkerJobs({
+    executionId: "exec_cancel_001",
+    namespace: "lwdp",
+    spawnImplementation: (command, args, options) => {
+      invocation = { command, args, options };
+      queueMicrotask(() => {
+        child.stdout.end("job.batch/example deleted\n");
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  });
+  assert.equal(await result, "job.batch/example deleted");
+  assert.equal(invocation.command, "kubectl");
+  assert.deepEqual(invocation.args, [
+    "delete", "jobs",
+    "--namespace", "lwdp",
+    "--selector", "worldkit.seedleap.dev/execution-id=exec_cancel_001",
+    "--ignore-not-found=true",
+    "--wait=false",
+  ]);
+  assert.throws(() => deleteCloudEpisodeWorkerJobs({
+    executionId: "exec_bad,selector",
+  }), /invalid for Worker cleanup/);
 });

@@ -218,6 +218,36 @@ export async function launchCloudEpisodeWorkerJob(options) {
   return { jobName: manifest.metadata.name, namespace: manifest.metadata.namespace, output };
 }
 
+export function deleteCloudEpisodeWorkerJobs({
+  executionId,
+  namespace = "lwdp",
+  spawnImplementation = spawn,
+}) {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{2,159}$/.test(executionId ?? "")) {
+    throw new Error("execution_id is invalid for Worker cleanup.");
+  }
+  return new Promise((resolvePromise, reject) => {
+    const child = spawnImplementation("kubectl", [
+      "delete", "jobs",
+      "--namespace", namespace,
+      "--selector", `worldkit.seedleap.dev/execution-id=${executionId}`,
+      "--ignore-not-found=true",
+      "--wait=false",
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code !== 0) reject(new Error(`kubectl delete Episode Workers failed: ${stderr.trim()}`));
+      else resolvePromise(stdout.trim());
+    });
+  });
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const result = await launchCloudEpisodeWorkerJob({

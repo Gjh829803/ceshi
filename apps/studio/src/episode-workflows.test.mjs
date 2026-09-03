@@ -11,7 +11,39 @@ import test from "node:test";
 import {
   createEpisodeWorkflowService,
   failedEpisodeStageId,
+  resolveEpisodeRecordWrite,
 } from "./episode-workflows.mjs";
+
+test("cancelled and succeeded Episode records reject stale lifecycle writers", () => {
+  const base = {
+    episodeId: "episode-absorbing-001",
+    remoteExecutionId: "exec_absorbing_001",
+    recordRevision: 9,
+  };
+  for (const status of ["cancelled", "succeeded"]) {
+    const current = { ...base, status };
+    const decision = resolveEpisodeRecordWrite(current, {
+      ...base,
+      recordRevision: 8,
+      status: "running",
+      currentStage: "late-recovery",
+    }, "2026-09-03T00:00:00.000Z");
+    assert.equal(decision.applied, false);
+    assert.equal(decision.reason, `absorbing-${status}`);
+    assert.equal(decision.record.status, status);
+  }
+  const cancellation = resolveEpisodeRecordWrite({
+    ...base,
+    status: "running",
+  }, {
+    ...base,
+    recordRevision: 8,
+    status: "cancelled",
+  }, "2026-09-03T00:00:00.000Z");
+  assert.equal(cancellation.applied, true);
+  assert.equal(cancellation.record.status, "cancelled");
+  assert.equal(cancellation.record.recordRevision, 10);
+});
 
 test("retries the failed Episode stage instead of the next queued stage", () => {
   assert.equal(failedEpisodeStageId({

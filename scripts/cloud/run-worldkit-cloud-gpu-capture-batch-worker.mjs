@@ -75,19 +75,29 @@ export async function runGpuCaptureBatch({
   writeOutput = (value) => process.stdout.write(value),
   priorReceipts = new Map(),
   inspectTaskImplementation = async () => null,
+  taskIndexes = null,
 }) {
   const batch = parseGpuCaptureBatchManifest(manifest);
+  const selectedIndexes = taskIndexes === null
+    ? batch.tasks.map((_, index) => index)
+    : [...taskIndexes];
+  if (
+    selectedIndexes.length === 0 ||
+    new Set(selectedIndexes).size !== selectedIndexes.length ||
+    selectedIndexes.some((index) =>
+      !Number.isSafeInteger(index) || index < 0 || index >= batch.tasks.length)
+  ) throw new Error("GPU Batch taskIndexes are invalid.");
   const root = temporaryRoot ?? await mkdtemp(join(tmpdir(), "worldkit-gpu-capture-batch-"));
   const results = [];
   try {
-    for (let index = 0; index < batch.tasks.length; index += 1) {
+    for (const index of selectedIndexes) {
       const task = batch.tasks[index];
       const prior = priorReceipts.get(task.executionId);
-      if (prior?.status === "capture-succeeded") {
+      if (["capture-succeeded", "capture-failed", "capture-cancelled"].includes(prior?.status)) {
         results.push(prior);
         writeOutput(
           `WORLDKIT_GPU_BATCH_TASK ${batch.batchId} ${index + 1}/${batch.taskCount} ` +
-            `${task.executionId} resumed\n`,
+          `${task.executionId} resumed status=${prior.status}\n`,
         );
         continue;
       }
@@ -130,7 +140,14 @@ export async function runGpuCaptureBatch({
           };
         }
         if (task.queueEntryS3Uri && result.status !== "capture-failed") {
-          await deleteQueueEntryImplementation(task.queueEntryS3Uri);
+          try {
+            await deleteQueueEntryImplementation(task.queueEntryS3Uri);
+          } catch (error) {
+            writeOutput(
+              `WORLDKIT_GPU_QUEUE_CLEANUP_RETAINED ${task.executionId} ` +
+                `${error instanceof Error ? error.message : String(error)}\n`,
+            );
+          }
         }
       } catch (error) {
         result = {
@@ -155,7 +172,8 @@ export async function runGpuCaptureBatch({
       schemaVersion: 1,
       batchId: batch.batchId,
       batchHash: batch.batchHash,
-      taskCount: batch.taskCount,
+      taskCount: results.length,
+      batchTaskCount: batch.taskCount,
       succeededCount: results.filter((result) => result.status === "capture-succeeded").length,
       failedCount: results.filter((result) => result.status === "capture-failed").length,
       cancelledCount: results.filter((result) => result.status === "capture-cancelled").length,
@@ -173,8 +191,14 @@ async function main() {
   const batchManifestS3Uri = options["batch-manifest-s3-uri"];
   const queueS3Prefix = options["queue-s3-prefix"];
   const taskLeaseSeconds = Number(options["task-lease-seconds"] ?? 3_600);
+  const taskIndexOption = options["task-index"] ??
+    process.env.WORLDKIT_GPU_BATCH_TASK_INDEX ?? null;
+  const taskIndex = taskIndexOption === null ? null : Number(taskIndexOption);
   if (!Number.isSafeInteger(taskLeaseSeconds) || taskLeaseSeconds < 900 || taskLeaseSeconds > 3_600) {
     throw new Error("task-lease-seconds must be between 900 and 3600.");
+  }
+  if (taskIndex !== null && (!Number.isSafeInteger(taskIndex) || taskIndex < 0)) {
+    throw new Error("task-index must be a non-negative integer.");
   }
   const temporaryRoot = await mkdtemp(join(tmpdir(), "worldkit-gpu-capture-batch-main-"));
   try {
@@ -191,7 +215,13 @@ async function main() {
     });
     const batchS3Prefix = joinS3Uri(queueS3Prefix, "batches", manifest.batchId);
     const priorReceipts = new Map();
-    for (let index = 0; index < manifest.tasks.length; index += 1) {
+    const selectedIndexes = taskIndex === null
+      ? manifest.tasks.map((_, index) => index)
+      : [taskIndex];
+    if (selectedIndexes.some((index) => index >= manifest.tasks.length)) {
+      throw new Error("task-index is outside the Batch manifest.");
+    }
+    for (const index of selectedIndexes) {
       const task = manifest.tasks[index];
       const localPath = join(temporaryRoot, "prior-receipts", `${task.executionId}.json`);
       await mkdir(dirname(localPath), { recursive: true });
@@ -206,7 +236,7 @@ async function main() {
         receipt?.batchId === manifest.batchId &&
         receipt?.batchHash === manifest.batchHash &&
         receipt?.executionId === task.executionId &&
-        receipt?.status === "capture-succeeded"
+        ["capture-succeeded", "capture-failed", "capture-cancelled"].includes(receipt?.status)
       ) priorReceipts.set(task.executionId, receipt);
     }
     const publishTaskReceipt = async (result, index) => {
@@ -229,6 +259,7 @@ async function main() {
       taskLeaseSeconds,
       temporaryRoot,
       priorReceipts,
+      taskIndexes: selectedIndexes,
       inspectTaskImplementation: async (task) => cloudExecutionRecord(
         await getCloudExecution(task.executionId, { config: cloudConfig }),
       ),
@@ -299,13 +330,52 @@ async function main() {
       }),
       publishTaskReceiptImplementation: publishTaskReceipt,
     });
-    const resultPath = join(temporaryRoot, "batch-result.json");
-    await writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
-    await uploadS3File(resultPath, joinS3Uri(batchS3Prefix, "result.json"));
-    process.stdout.write(
-      `WORLDKIT_GPU_BATCH_COMPLETE ${manifest.batchId} ` +
-        `succeeded=${result.succeededCount} failed=${result.failedCount}\n`,
-    );
+    const receipts = [];
+    for (const task of manifest.tasks) {
+      const receiptPath = join(temporaryRoot, "final-receipts", `${task.executionId}.json`);
+      await mkdir(dirname(receiptPath), { recursive: true });
+      const downloaded = await downloadS3FileAtomic(
+        joinS3Uri(batchS3Prefix, "tasks", `${task.executionId}.json`),
+        receiptPath,
+      ).then(() => true).catch(() => false);
+      if (!downloaded) continue;
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+      if (
+        receipt?.kind !== "worldkit-gpu-capture-batch-task-receipt" ||
+        receipt?.batchId !== manifest.batchId ||
+        receipt?.batchHash !== manifest.batchHash ||
+        receipt?.executionId !== task.executionId ||
+        !["capture-succeeded", "capture-failed", "capture-cancelled"].includes(receipt?.status)
+      ) throw new Error(`GPU Batch task receipt is invalid: ${task.executionId}`);
+      receipts.push(receipt);
+    }
+    if (receipts.length === manifest.taskCount) {
+      const aggregate = {
+        kind: "worldkit-gpu-capture-batch-result",
+        schemaVersion: 1,
+        batchId: manifest.batchId,
+        batchHash: manifest.batchHash,
+        taskCount: manifest.taskCount,
+        succeededCount: receipts.filter((item) => item.status === "capture-succeeded").length,
+        failedCount: receipts.filter((item) => item.status === "capture-failed").length,
+        cancelledCount: receipts.filter((item) => item.status === "capture-cancelled").length,
+        finishedAt: new Date().toISOString(),
+        tasks: receipts,
+        queueS3Prefix,
+      };
+      const resultPath = join(temporaryRoot, "batch-result.json");
+      await writeFile(resultPath, `${JSON.stringify(aggregate, null, 2)}\n`, { mode: 0o600 });
+      await uploadS3File(resultPath, joinS3Uri(batchS3Prefix, "result.json"));
+      process.stdout.write(
+        `WORLDKIT_GPU_BATCH_COMPLETE ${manifest.batchId} ` +
+          `succeeded=${aggregate.succeededCount} failed=${aggregate.failedCount}\n`,
+      );
+    } else {
+      process.stdout.write(
+        `WORLDKIT_GPU_BATCH_PARTIAL ${manifest.batchId} ` +
+          `completed=${receipts.length}/${manifest.taskCount}\n`,
+      );
+    }
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }

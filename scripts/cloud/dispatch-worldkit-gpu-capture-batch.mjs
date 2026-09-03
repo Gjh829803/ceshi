@@ -119,6 +119,7 @@ export async function dispatchGpuCaptureBatch({
   inspectExecution,
   publishManifest,
   launchBatch,
+  immediateWorkerImages = new Set(),
 }) {
   const parsedCandidates = entries.map(parseGpuCaptureQueueEntry);
   // Older prepare attempts may have written attempt-scoped queue objects.
@@ -223,6 +224,7 @@ export async function dispatchGpuCaptureBatch({
       minimumBatchSize,
       maximumBatchSize,
       drainEvidenceByWorkerImage,
+      immediateWorkerImages,
     });
   } catch (error) {
     if (error?.code === "GPU_CAPTURE_BATCH_NOT_READY") {
@@ -408,6 +410,8 @@ async function main() {
         taskLeaseSeconds: config.gpuBatch.taskLeaseSeconds,
         ephemeralStorageRequest: config.gpuBatch.ephemeralStorageRequest,
         ephemeralStorageLimit: config.gpuBatch.ephemeralStorageLimit,
+        caseConcurrency: batch.workerImage === config.workerImage
+          ? config.gpuBatch.caseConcurrency : 1,
       });
       process.stdout.write(`${JSON.stringify({ status: "reconciled", batch, launched })}\n`);
       return;
@@ -432,6 +436,8 @@ async function main() {
       episodeRecords: runIndexRecords,
       defaultWorkerImage: config.workerImage,
       tailIdleSeconds: config.gpuBatch.tailFlushIdleSeconds,
+      immediateWorkerImages: config.gpuBatch.dispatchReadyImmediately
+        ? new Set([config.workerImage]) : new Set(),
       inspectExecution: (executionId) => getCloudExecution(executionId, {
         config: cloudConfig,
       }),
@@ -460,6 +466,8 @@ async function main() {
         taskLeaseSeconds: config.gpuBatch.taskLeaseSeconds,
         ephemeralStorageRequest: config.gpuBatch.ephemeralStorageRequest,
         ephemeralStorageLimit: config.gpuBatch.ephemeralStorageLimit,
+        caseConcurrency: batch.workerImage === config.workerImage
+          ? config.gpuBatch.caseConcurrency : 1,
       }),
     });
     const staleQueueCleanup = await cleanStaleQueueEntries(

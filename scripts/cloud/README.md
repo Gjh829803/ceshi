@@ -147,10 +147,13 @@ configuration without printing its values:
 pnpm cloud:episode:apply-runtime-secret -- --namespace lwdp
 ```
 
-Episode capture is scheduled on a GPU worker pool and requests
-`nvidia.com/gpu: 1` once per full 100–128 task Batch, or once for the final
-closed-producer tail after its queue has remained stable for the configured
-interval. Elapsed time alone never flushes an open producer set below 100. The image bakes a static Playground with the
+Episode capture is scheduled on a GPU worker pool. The current Worker digest
+dispatches durable ready Cases immediately as a wave; it does not wait for a
+slow Planner to close the producer set. Each wave runs as one Indexed Job with one
+isolated `nvidia.com/gpu: 1` Pod per Case and at most 10 active Case Pods.
+Additional Case indexes remain in the Kubernetes Job queue. Older frozen Worker
+digests replay serially under the historical 100-task/closed-tail admission
+rule because they do not implement indexed task isolation. The image bakes a static Playground with the
 worker-local `5297` asset origin; Studio listens only on loopback `4297` inside
 the disposable pod. Large videos and the ZIP are served to Studio through
 short-lived S3 URLs so Browser Range playback never hydrates them locally.

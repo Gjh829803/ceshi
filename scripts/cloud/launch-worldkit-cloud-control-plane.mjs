@@ -21,7 +21,7 @@ export function worldkitJobControllerRbac({
     rules: [{
       apiGroups: ["batch"],
       resources: ["jobs"],
-      verbs: ["get", "list", "watch", "create", "update", "patch"],
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"],
     }, {
       apiGroups: ["coordination.k8s.io"],
       resources: ["leases"],

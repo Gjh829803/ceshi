@@ -84,6 +84,8 @@ import {
   writeCloudSceneRunIndexRecord,
   writeCloudEpisodeRunIndexRecord,
 } from "../../../scripts/lib/cloud-production-run-index.mjs";
+import { deleteCloudEpisodeWorkerJobs } from
+  "../../../scripts/cloud/launch-worldkit-cloud-episode-worker-job.mjs";
 
 const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const studioRoot = path.resolve(studioSourceRoot, "..");
@@ -1676,6 +1678,10 @@ export function createStudio(options = {}) {
       });
       return cancelCloudExecutionImplementation(executionId, { config: lwdpConfig });
     },
+    cancelCloudEpisodeWorkers: (executionId) => deleteCloudEpisodeWorkerJobs({
+      executionId,
+      namespace: "lwdp",
+    }),
     readCloudEpisodeManifest: (manifestS3Uri, expected) =>
       readCloudArtifactManifestImplementation(manifestS3Uri, {
         repoRoot,

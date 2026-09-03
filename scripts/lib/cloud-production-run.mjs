@@ -127,6 +127,7 @@ export function selectGpuCaptureBatch(entries, {
   maximumBatchSize = 128,
   createdAt = new Date().toISOString(),
   drainEvidenceByWorkerImage = new Map(),
+  immediateWorkerImages = new Set(),
 } = {}) {
   if (!Number.isSafeInteger(minimumBatchSize) || minimumBatchSize < 100) {
     throw new Error("minimumBatchSize must be an integer of at least 100.");
@@ -161,7 +162,9 @@ export function selectGpuCaptureBatch(entries, {
       drainEvidence: drainEvidenceByWorkerImage.get(workerImage) ?? null,
     }))
     .filter((group) =>
-      group.entries.length >= minimumBatchSize || group.drainEvidence !== null)
+      group.entries.length >= minimumBatchSize ||
+      group.drainEvidence !== null ||
+      immediateWorkerImages.has(group.workerImage))
     .sort((left, right) =>
       Number(left.entries.length < minimumBatchSize) -
         Number(right.entries.length < minimumBatchSize) ||
@@ -179,7 +182,9 @@ export function selectGpuCaptureBatch(entries, {
   const selected = selectedGroup.entries.slice(0, maximumBatchSize);
   const dispatchReason = selected.length >= minimumBatchSize
     ? "capacity-threshold"
-    : "producer-drained";
+    : immediateWorkerImages.has(selectedGroup.workerImage)
+      ? "ready-wave"
+      : "producer-drained";
   if (dispatchReason === "producer-drained") {
     const evidence = selectedGroup.drainEvidence;
     if (
@@ -221,6 +226,7 @@ export function parseGpuCaptureBatchManifest(value) {
   const manifest = typeof value === "string" ? JSON.parse(value) : value;
   const dispatchReason = manifest?.dispatchReason ?? "capacity-threshold";
   const isDrainedTail = dispatchReason === "producer-drained";
+  const isReadyWave = dispatchReason === "ready-wave";
   const drainEvidence = manifest?.drainEvidence;
   if (
     manifest?.kind !== "worldkit-gpu-capture-batch-manifest" ||
@@ -233,7 +239,7 @@ export function parseGpuCaptureBatchManifest(value) {
     !Number.isSafeInteger(manifest?.taskCount) ||
     !Array.isArray(manifest?.tasks) ||
     manifest.taskCount !== manifest.tasks.length ||
-    !["capacity-threshold", "producer-drained"].includes(dispatchReason) ||
+    !["capacity-threshold", "producer-drained", "ready-wave"].includes(dispatchReason) ||
     (isDrainedTail
       ? manifest.taskCount < 1 || drainEvidence?.inFlightPrepareCount !== 0 ||
         drainEvidence?.readyRecordCount !== manifest.taskCount ||
@@ -243,7 +249,9 @@ export function parseGpuCaptureBatchManifest(value) {
         !Number.isFinite(Date.parse(drainEvidence?.newestReadyAt ?? "")) ||
         Date.parse(drainEvidence.observedAt) - Date.parse(drainEvidence.newestReadyAt) <
           drainEvidence.tailIdleSeconds * 1_000
-      : manifest.taskCount < manifest.minimumBatchSize)
+      : isReadyWave
+        ? manifest.taskCount < 1
+        : manifest.taskCount < manifest.minimumBatchSize)
   ) throw new Error("GPU capture Batch manifest identity is invalid.");
   const tasks = manifest.tasks.map(parseGpuCaptureQueueEntry);
   if (new Set(tasks.map((task) => task.executionId)).size !== tasks.length) {

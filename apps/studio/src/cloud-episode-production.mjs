@@ -71,7 +71,11 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
     gpuBatch.taskLeaseSeconds < 900 ||
     gpuBatch.taskLeaseSeconds > 3_600 ||
     !Number.isSafeInteger(gpuBatch?.dispatcherIntervalSeconds) ||
-    gpuBatch.dispatcherIntervalSeconds < 10
+    gpuBatch.dispatcherIntervalSeconds < 10 ||
+    !Number.isSafeInteger(gpuBatch?.caseConcurrency) ||
+    gpuBatch.caseConcurrency < 1 ||
+    gpuBatch.caseConcurrency > 10 ||
+    typeof gpuBatch.dispatchReadyImmediately !== "boolean"
   ) throw new Error("Cloud Episode GPU Batch config is invalid.");
   for (const key of ["ephemeralStorageRequest", "ephemeralStorageLimit"]) {
     if (typeof gpuBatch[key] !== "string" || !/^[1-9][0-9]*(?:Mi|Gi)$/.test(gpuBatch[key])) {
@@ -109,6 +113,8 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
       tailFlushIdleSeconds: gpuBatch.tailFlushIdleSeconds,
       taskLeaseSeconds: gpuBatch.taskLeaseSeconds,
       dispatcherIntervalSeconds: gpuBatch.dispatcherIntervalSeconds,
+      caseConcurrency: gpuBatch.caseConcurrency,
+      dispatchReadyImmediately: gpuBatch.dispatchReadyImmediately,
       ephemeralStorageRequest: gpuBatch.ephemeralStorageRequest,
       ephemeralStorageLimit: gpuBatch.ephemeralStorageLimit,
     }),
