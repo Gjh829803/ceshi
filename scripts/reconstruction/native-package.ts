@@ -591,7 +591,6 @@ export async function packageNativeBlockAttemptV1(
       worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
       registryLock: verified.registryLock,
       contribution: verified.nativeSceneContribution,
-      materializerMetadata,
       checkedEpochEvidence,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
       maximumBlockCount: generationRequest.budgets.maximumBlockCount,

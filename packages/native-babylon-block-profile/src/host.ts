@@ -53,6 +53,7 @@ export {
   freezeBabylonNativeBlockLogicalGroundModelV1,
 } from "./logical-ground-model.js";
 export {
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   buildBabylonNativeBlockWalkableTopologyV1,
 } from "./walkable-topology.js";
 export type {

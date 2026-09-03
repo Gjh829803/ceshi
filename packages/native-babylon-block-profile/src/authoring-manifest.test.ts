@@ -131,7 +131,27 @@ function reconstructionCaseValue() {
         colliderId: "spawn-ground",
         role: "ground",
         requiresOverlay: true,
+      }, {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/upper-t-junction@1",
+        contributionId: "upper-step-contribution",
+        colliderId: "upper-step",
+        role: "step",
+        requiresOverlay: true,
       }],
+      groundConnectivity: {
+        requireSingleReachableComponent: true,
+        requiredTraversalBands: [{
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/upper-t-junction@1",
+          id: "central-ascent-band",
+          centerlineStandPositionsXYZMeters: [
+            { xMeters: 0, yMeters: 1, zMeters: 0 },
+            { xMeters: 0, yMeters: 1, zMeters: -1 },
+          ],
+          halfWidthMeters: 1,
+        }],
+      },
       criticalTraversalChecks: [{
         acceptanceTargetRef:
           "worldkit://acceptance-target/upper-t-junction@1",
@@ -450,6 +470,15 @@ describe("Native Block authoring to checked Layout binding", () => {
           acceptanceTargetRef:
             "worldkit://acceptance-target/runtime-support@1",
         },
+        colliders: source.expected.colliders.map((collider) =>
+          collider.colliderId === source.expected.spawnSupport.supportColliderId
+            ? {
+                ...collider,
+                acceptanceTargetRef:
+                  "worldkit://acceptance-target/runtime-support@1",
+              }
+            : collider
+        ),
       },
     });
 

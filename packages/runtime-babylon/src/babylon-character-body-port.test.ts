@@ -917,6 +917,96 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it("accepts accumulated micro-correction from Babylon's four-plane simplex", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 4e-4;
+    driver.onIntegrate = () => {
+      driver.position = [0.01028878930937703, 1, 0];
+      driver.velocity = [0.6, 0, 0];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).not.toThrow();
+    port.dispose();
+  });
+
+  it("rejects a provider correction receipt beyond Babylon's four-plane bound", () => {
+    const { driver, port } = createPort();
+    driver.maximumSolverCorrectionMeters = 4.01e-4;
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(token, 1, [0.01, 0, 0], [0.6, 0, 0]),
+    })).toThrow("native collision solver correction receipt is invalid");
+    port.dispose();
+  });
+
+  it("allows only contact-derived uphill surface rise while an unsupported body lands", () => {
+    const { driver, port } = createPort();
+    const landingNormal = [-0.4472135954999579, 0.8944271909999159, 0] as Vec3;
+    driver.support = unsupportedSupport();
+    driver.contacts = [];
+    driver.onIntegrate = (request) => {
+      driver.position = [0.04, 1.002, 0];
+      driver.velocity = cloneVec3(request.driverVelocityMetersPerSecondXYZ);
+      driver.contacts = [{
+        ...groundContact(landingNormal),
+        distanceMeters: 0.09,
+      }];
+    };
+    const token = createMovementTickTokenV1();
+    expect(port.beginTick({ token, tick: 1 }).support.mode).toBe("unsupported");
+
+    const resolution = port.resolve({
+      token,
+      proposal: proposal(
+        token,
+        1,
+        [0.04, -0.036, 0],
+        [2.4, -2.16, 0],
+      ),
+    });
+
+    expect(resolution.appliedTranslationMetersXYZ[0]).toBeCloseTo(0.04, 12);
+    expect(resolution.appliedTranslationMetersXYZ[1]).toBeCloseTo(0.002, 12);
+    expect(resolution.appliedTranslationMetersXYZ[2]).toBe(0);
+    port.dispose();
+  });
+
+  it("rejects landing rise beyond the active contact slope and planar progress", () => {
+    const { driver, port } = createPort();
+    const landingNormal = [-0.4472135954999579, 0.8944271909999159, 0] as Vec3;
+    driver.support = unsupportedSupport();
+    driver.contacts = [];
+    driver.onIntegrate = (request) => {
+      driver.position = [0.04, 1.021, 0];
+      driver.velocity = cloneVec3(request.driverVelocityMetersPerSecondXYZ);
+      driver.contacts = [{
+        ...groundContact(landingNormal),
+        distanceMeters: 0.09,
+      }];
+    };
+    const token = createMovementTickTokenV1();
+    port.beginTick({ token, tick: 1 });
+
+    expect(() => port.resolve({
+      token,
+      proposal: proposal(
+        token,
+        1,
+        [0.04, -0.036, 0],
+        [2.4, -2.16, 0],
+      ),
+    })).toThrow("3C_INPUT_INVALID");
+    port.dispose();
+  });
+
   it("rejects padded step-up progress beyond the exact horizontal proposal", () => {
     const { driver, port } = createPort();
     driver.didStepUpDuringIntegrate = true;

@@ -17,7 +17,52 @@ describe("NBR-65 v2 capability parity verifier", () => {
     });
 
     expect(report.outcome).toBe("passed");
-    expect(report.rows.length).toBeGreaterThan(20);
+    expect(report.sourceEvidenceRefs).toEqual([
+      "origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05",
+      "origin/codex/block-world-main-integration@8c250b5fc2181b48947d95b12fac03333bf11e5f",
+      "origin/codex/block-world-main-integration@d69d7f821f10328bc02dac3a83218f924e754780",
+    ]);
+    expect(report.rows.map(({ capabilityId }) => capabilityId)).toEqual([
+      "block-compiler-and-hidden-foundation",
+      "block-source-subject-and-camera",
+      "block-specific-subject-occlusion-fade",
+      "block-specific-support-cache-and-mesh-inference",
+      "bounded-builder-repair",
+      "bounded-four-plane-contact-correction",
+      "chunk-addressing-batching-and-residency",
+      "clear-day-whitebox-display",
+      "continuous-native-runtime-traversal",
+      "continuous-walkable-and-solid-topology",
+      "current-only-clean-break",
+      "directed-space-transitions-and-interactions",
+      "ergonomic-block-and-grid-authoring",
+      "ground-movement-and-contact-correction",
+      "ground-only-edge-protection",
+      "metric-shapes-lattice-overlap",
+      "neutral-runtime-inspection-lighting",
+      "package-capture-and-evaluation",
+      "palette-visual-and-collider-groups",
+      "planner-lineage-and-complete-world-continuation",
+      "playthrough-episode-and-video",
+      "provider-neutral-block-manifest",
+      "reachable-space-metrics",
+      "route-course-and-semantic-pose-guidance",
+      "safe-exploration-start-and-capture-health",
+      "semantic-front-oriented-target-triview",
+      "source-block-center-and-shared-edge-adjacency",
+      "spawn-target-standability",
+      "step-adjacency-components-and-bands",
+      "styled-output-generation",
+      "subject-bound-topology-policy",
+      "subject-footprint-and-clearance",
+      "threejs-binding",
+      "v2-adjacent-walkable-height-cap",
+      "v2-asymmetric-step-thresholds",
+      "v2-one-meter-auto-smoothing",
+      "v2-smoothed-edge-count-metric",
+      "walkable-whitebox-overlay",
+      "water-flight-and-hybrid-reachability",
+    ]);
     expect(new Set(report.rows.map(({ capabilityId }) => capabilityId)).size)
       .toBe(report.rows.length);
     expect(report.rows.some(({ status }) => status === "not-applicable"))
@@ -30,6 +75,26 @@ describe("NBR-65 v2 capability parity verifier", () => {
       .toBe(true);
     expect("score" in report).toBe(false);
     expect("percentage" in report).toBe(false);
+    for (const capabilityId of [
+      "source-block-center-and-shared-edge-adjacency",
+      "subject-bound-topology-policy",
+      "continuous-native-runtime-traversal",
+      "bounded-four-plane-contact-correction",
+      "route-course-and-semantic-pose-guidance",
+    ]) {
+      expect(report.rows.find((row) => row.capabilityId === capabilityId))
+        .toMatchObject({ status: "passed", diagnostics: [] });
+    }
+    for (const capabilityId of [
+      "v2-one-meter-auto-smoothing",
+      "v2-asymmetric-step-thresholds",
+      "v2-adjacent-walkable-height-cap",
+      "v2-smoothed-edge-count-metric",
+      "semantic-front-oriented-target-triview",
+    ]) {
+      expect(report.rows.find((row) => row.capabilityId === capabilityId))
+        .toMatchObject({ status: "not-applicable", diagnostics: [] });
+    }
   });
 
   it("fails the affected capability rows when an executable gate is red", async () => {

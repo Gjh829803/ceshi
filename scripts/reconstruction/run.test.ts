@@ -238,8 +238,21 @@ function reconstructionCase() {
           requiresOverlay: true,
         },
       ],
+      groundConnectivity: {
+        requireSingleReachableComponent: true,
+        requiredTraversalBands: [{
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/central-ascent@1",
+          id: "central-ascent-band",
+          centerlineStandPositionsXYZMeters: [
+            { xMeters: 0, yMeters: 1, zMeters: 0 },
+            { xMeters: 0, yMeters: 1, zMeters: -1 },
+          ],
+          halfWidthMeters: 1,
+        }],
+      },
       criticalTraversalChecks: [{
-        acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+        acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
         id: "reach-junction",
         evidenceKind: "scripted-fixed-input" as const,
         expectation: "pass" as const,

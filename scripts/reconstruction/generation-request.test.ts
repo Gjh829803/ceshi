@@ -129,6 +129,7 @@ function input(fixtureValue: Awaited<ReturnType<typeof fixture>>) {
       openingComposition: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", targetRefs: ["worldkit://composition-target/opening@1"], regions: [{ targetRef: "worldkit://composition-target/opening@1", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 100, maxXBasisPoints: 900, maxYBasisPoints: 900 } }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", normalizedCenter: { xBasisPoints: 500, yBasisPoints: 500 } }], orderedTargetRefs: ["worldkit://composition-target/opening@1"] },
       spawnSupport: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", spawnMarkerId: "spawn", supportColliderId: "ground", expectedMedium: "ground", expectedPositionXYZMeters: { xMeters: 0, yMeters: 0, zMeters: 0 } },
       colliders: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", contributionId: "ground-contribution", colliderId: "ground", role: "ground", requiresOverlay: true }],
+      groundConnectivity: { requireSingleReachableComponent: true, requiredTraversalBands: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", id: "ground-band", centerlineStandPositionsXYZMeters: [{ xMeters: 0, yMeters: 0, zMeters: 0 }, { xMeters: 0, yMeters: 0, zMeters: -1 }], halfWidthMeters: 1 }] },
       criticalTraversalChecks: [{ acceptanceTargetRef: "worldkit://acceptance-target/gate@1", id: "walk", evidenceKind: "scripted-fixed-input", expectation: "pass", checkpointIds: ["spawn"], fixedInputSequence: [{ actions: ["move-forward"], axes: { moveYRatio: 1 }, ticks: 1 }] }],
       deterministicBuild: { acceptanceTargetRef: "worldkit://acceptance-target/gate@1", requiresCandidateReplay: true, requiresWorldPackageIdentityAgreement: true, requiresBuildIdentityAgreement: true, requiresCaptureIdentityAgreement: true },
     },
@@ -701,6 +702,15 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
       );
       expect(repairTaskInstruction).toContain(
         "Ground Analysis runs before Capture",
+      );
+      expect(repairTaskInstruction).toContain(
+        "preserve every required target's elevation, semantic silhouette, acceptanceTargetRef, and fixed pass-check meaning",
+      );
+      expect(repairTaskInstruction).toContain(
+        "Do not flatten or lower the destination merely to make it reachable",
+      );
+      expect(repairTaskInstruction).toContain(
+        "continuous face-contact support down to an existing root support",
       );
     } finally {
       await rm(value.root, { recursive: true, force: true });

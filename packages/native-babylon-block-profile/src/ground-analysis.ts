@@ -11,6 +11,9 @@ import type {
   BabylonNativeBlockLogicalSolidOccupancyCellV1,
   BabylonNativeBlockLogicalSupportTopCellV1,
 } from "./logical-ground-model.js";
+import type {
+  BabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology.js";
 import {
   babylonNativeBlockChunkAxisIndexV1,
   parseBabylonNativeBlockChunkPolicyV1,
@@ -37,7 +40,6 @@ export interface BabylonNativeBlockGroundTraversalBandV1 {
   readonly centerlineStandPositionsMetersXYZ:
     readonly BabylonNativeBlockGroundStandPositionV1[];
   readonly halfWidthMeters: number;
-  readonly isBidirectional: boolean;
 }
 
 export interface BabylonNativeBlockGroundCaseIntentV1 {
@@ -97,6 +99,7 @@ export interface BabylonNativeBlockGroundAnalysisMetricsV1 {
 
 export type BabylonNativeBlockGroundFailureMetricIdV1 =
   | "ground-support-coverage-basis-points"
+  | "ground-support-height-millimeters"
   | "ground-clearance-millimeters"
   | "ground-step-up-millimeters"
   | "ground-step-down-millimeters"
@@ -151,6 +154,7 @@ export interface BabylonNativeBlockGroundAnalysisReportV1 {
   readonly schemaVersion: 1;
   readonly identity: Readonly<{
     readonly logicalGroundModelHash: Sha256HashV1;
+    readonly walkableTopologyHash: Sha256HashV1;
     readonly traversalCapabilityEnvelopeHash: Sha256HashV1;
     readonly caseHash: Sha256HashV1;
     readonly worldPackageRootHash: Sha256HashV1;
@@ -161,11 +165,11 @@ export interface BabylonNativeBlockGroundAnalysisReportV1 {
   readonly failureFacts: readonly BabylonNativeBlockGroundFailureFactV1[];
   readonly metrics: BabylonNativeBlockGroundAnalysisMetricsV1;
   readonly standableNodes: readonly BabylonNativeBlockGroundStandableNodeV1[];
-  readonly groundAnalysisReportHash: Sha256HashV1;
 }
 
 export interface AnalyzeBabylonNativeBlockGroundInputV1 {
   readonly groundModel: BabylonNativeBlockLogicalGroundModelV1;
+  readonly walkableTopology: BabylonNativeBlockWalkableTopologyV1;
   readonly traversalCapabilityEnvelopeReceipt:
     TraversalCapabilityEnvelopeReceiptV1;
   readonly caseIntent: BabylonNativeBlockGroundCaseIntentV1;
@@ -201,6 +205,11 @@ interface CandidateEvaluation {
   readonly affectedSourceBlockIds: readonly string[];
 }
 
+interface TopologySupportSample {
+  readonly supportHeightMeters: number;
+  readonly affectedSourceBlockIds: readonly string[];
+}
+
 interface MutableNode {
   readonly id: string;
   readonly topCellKey: string;
@@ -216,6 +225,13 @@ interface BlockedStep {
   readonly toNodeId: string;
   readonly deltaMeters: number;
   readonly maximumAllowedHeightDeltaMeters: number;
+}
+
+interface SourceSurface {
+  readonly id: string;
+  readonly sourceBlockId: string;
+  readonly topCellKeys: readonly string[];
+  readonly positionMetersXYZ: BabylonNativeBlockGroundStandPositionV1;
 }
 
 type SolidOccupancyByHorizontalCell = ReadonlyMap<
@@ -348,8 +364,8 @@ function signedAxisToken(value: number): string {
   return `${value < 0 ? "n" : "p"}${Math.abs(value)}`;
 }
 
-function nodeId(topCellKey: string): string {
-  const [x, y, z] = parseCellKey(topCellKey);
+function nodeId(standPositionKey: string): string {
+  const [x, y, z] = parseCellKey(standPositionKey);
   return `ground-node-x-${signedAxisToken(x)}-y-${signedAxisToken(y)}-z-${signedAxisToken(z)}`;
 }
 
@@ -367,16 +383,204 @@ function positionFromTopCellKey(
 function positionKey(
   position: BabylonNativeBlockGroundStandPositionV1,
 ): string {
-  const x = Math.round(position[0] / GRID[0] - 0.5);
+  const standGridX = GRID[0] / 2;
+  const standGridZ = GRID[2] / 2;
+  const x = Math.round(position[0] / standGridX);
   const y = Math.round(position[1] / GRID[1]);
-  const z = Math.round(position[2] / GRID[2] - 0.5);
-  const canonical = positionFromTopCellKey(cellKey(x, y, z));
+  const z = Math.round(position[2] / standGridZ);
+  const canonical = Object.freeze([
+    x * standGridX,
+    y * GRID[1],
+    z * standGridZ,
+  ]) as BabylonNativeBlockGroundStandPositionV1;
   if (canonical.some((value, axis) =>
     Math.abs(value - position[axis]!) > EPSILON)) {
     return fail(INPUT_CODE,
-      `stand position '${position.join(",")}' must use a Profile support-cell center`);
+      `stand position '${position.join(",")}' must use the Profile stand-sample lattice`);
   }
   return cellKey(x, y, z);
+}
+
+function projectedSupportHeightMeters(
+  position: BabylonNativeBlockGroundStandPositionV1,
+  vertices: readonly [
+    BabylonNativeBlockGroundStandPositionV1,
+    BabylonNativeBlockGroundStandPositionV1,
+    BabylonNativeBlockGroundStandPositionV1,
+  ],
+): number | undefined {
+  const [first, second, third] = vertices;
+  const denominator =
+    (second[2] - third[2]) * (first[0] - third[0]) +
+    (third[0] - second[0]) * (first[2] - third[2]);
+  if (Math.abs(denominator) <= EPSILON) return undefined;
+  const firstWeight = (
+    (second[2] - third[2]) * (position[0] - third[0]) +
+    (third[0] - second[0]) * (position[2] - third[2])
+  ) / denominator;
+  const secondWeight = (
+    (third[2] - first[2]) * (position[0] - third[0]) +
+    (first[0] - third[0]) * (position[2] - third[2])
+  ) / denominator;
+  const thirdWeight = 1 - firstWeight - secondWeight;
+  if (
+    firstWeight < -EPSILON || secondWeight < -EPSILON ||
+    thirdWeight < -EPSILON || firstWeight > 1 + EPSILON ||
+    secondWeight > 1 + EPSILON || thirdWeight > 1 + EPSILON
+  ) return undefined;
+  return first[1] * firstWeight + second[1] * secondWeight +
+    third[1] * thirdWeight;
+}
+
+function topologySupportSample(
+  position: BabylonNativeBlockGroundStandPositionV1,
+  topology: BabylonNativeBlockWalkableTopologyV1,
+): TopologySupportSample | undefined {
+  const samples = topology.walkableGeometries.flatMap((geometry) => {
+    const positions = geometry.collisionPositionsMetersXYZ;
+    const rows: Array<Readonly<{
+      supportHeightMeters: number;
+      logicalColliderId: string;
+      triangleIndex: number;
+      affectedSourceBlockIds: readonly string[];
+    }>> = [];
+    for (let offset = 0; offset < geometry.triangleIndices.length; offset += 3) {
+      const vertexAt = (index: number) => Object.freeze([
+        positions[index * 3]!,
+        positions[index * 3 + 1]!,
+        positions[index * 3 + 2]!,
+      ]) as BabylonNativeBlockGroundStandPositionV1;
+      const supportHeightMeters = projectedSupportHeightMeters(
+        position,
+        Object.freeze([
+          vertexAt(geometry.triangleIndices[offset]!),
+          vertexAt(geometry.triangleIndices[offset + 1]!),
+          vertexAt(geometry.triangleIndices[offset + 2]!),
+        ] as const),
+      );
+      if (isNil(supportHeightMeters)) continue;
+      rows.push(Object.freeze({
+        supportHeightMeters,
+        logicalColliderId: geometry.logicalColliderId,
+        triangleIndex: offset / 3,
+        affectedSourceBlockIds: geometry.sourceBlockIds,
+      }));
+    }
+    return rows;
+  }).sort((left, right) =>
+    Math.abs(left.supportHeightMeters - position[1]) -
+      Math.abs(right.supportHeightMeters - position[1]) ||
+    stableCompare(left.logicalColliderId, right.logicalColliderId) ||
+    left.triangleIndex - right.triangleIndex);
+  const sample = samples[0];
+  return isNil(sample) ? undefined : Object.freeze({
+    supportHeightMeters: sample.supportHeightMeters,
+    affectedSourceBlockIds: sample.affectedSourceBlockIds,
+  });
+}
+
+function exactTopologyFailureFacts(
+  position: BabylonNativeBlockGroundStandPositionV1,
+  target: Readonly<{
+    id: string;
+    acceptanceTargetRef: string;
+    standabilityMetricId:
+      | "ground-spawn-standability"
+      | "ground-target-standability";
+  }>,
+  evidenceRef: string,
+  topology: BabylonNativeBlockWalkableTopologyV1,
+  localSourceBlockIds: readonly string[],
+): readonly BabylonNativeBlockGroundFailureFactV1[] {
+  const sample = topologySupportSample(position, topology);
+  if (isNil(sample)) {
+    return Object.freeze([stateFailureFact({
+      acceptanceTargetRef: target.acceptanceTargetRef,
+      targetId: target.id,
+      metricId: target.standabilityMetricId,
+      expectedValue: "walkable-topology-support",
+      actualValue: "missing-at-exact-position",
+      evidenceRef,
+      affectedSourceBlockIds: localSourceBlockIds,
+      message: `Ground target ${target.id} has no final walkable-topology triangle at its exact XZ position.`,
+      instruction: `Add or extend explicit static-surface Blocks beneath ${target.id}; keep the frozen target position and trusted Subject envelope unchanged.`,
+    })]);
+  }
+  const deltaMeters = sample.supportHeightMeters - position[1];
+  if (Math.abs(deltaMeters) <= EPSILON) return Object.freeze([]);
+  const expectedMillimeters = position[1] * 1_000;
+  const actualMillimeters = sample.supportHeightMeters * 1_000;
+  return Object.freeze([failureFact({
+    acceptanceTargetRef: target.acceptanceTargetRef,
+    targetId: target.id,
+    metricId: "ground-support-height-millimeters",
+    details: {
+      kind: "millimeters-threshold",
+      expectedMillimeters,
+      actualMillimeters,
+      maximumAllowedDriftMillimeters: EPSILON * 1_000,
+      exceededByMillimeters:
+        Math.abs(actualMillimeters - expectedMillimeters) - EPSILON * 1_000,
+      correctionDirection: deltaMeters > 0 ? "decrease" : "increase",
+    },
+    evidenceRef,
+    affectedSourceBlockIds: localSourceBlockIds.length > 0
+      ? localSourceBlockIds
+      : sample.affectedSourceBlockIds,
+    message: `Ground target ${target.id} expects ${expectedMillimeters}mm support height, but the final walkable topology is ${actualMillimeters}mm at that exact XZ position.`,
+    instruction: `${deltaMeters > 0 ? "Lower" : "Raise"} the explicit static-surface Blocks beneath ${target.id} until the final smoothed topology matches ${expectedMillimeters}mm; do not move the frozen target or relax Runtime support tolerance.`,
+  })]);
+}
+
+function sourceSurfaces(
+  supportCells: readonly BabylonNativeBlockLogicalSupportTopCellV1[],
+  solidCells: readonly BabylonNativeBlockLogicalSolidOccupancyCellV1[],
+): readonly SourceSurface[] {
+  const cellsBySurface = new Map<string, Array<readonly [
+    cell: BabylonNativeBlockLogicalSupportTopCellV1,
+    x: number,
+    y: number,
+    z: number,
+  ]>>();
+  for (const cell of supportCells) {
+    const [x, y, z] = parseCellKey(cell.topCellKey);
+    const surfaceKey = `${cell.sourceBlockId}\u0000${y}`;
+    const rows = cellsBySurface.get(surfaceKey) ?? [];
+    rows.push(Object.freeze([cell, x, y, z]));
+    cellsBySurface.set(surfaceKey, rows);
+  }
+  const solidCellsBySourceBlockId = new Map<string, Array<readonly [
+    x: number,
+    y: number,
+    z: number,
+  ]>>();
+  for (const solid of solidCells) {
+    const rows = solidCellsBySourceBlockId.get(solid.sourceBlockId) ?? [];
+    rows.push(parseCellKey(solid.cellKey));
+    solidCellsBySourceBlockId.set(solid.sourceBlockId, rows);
+  }
+  return Object.freeze([...cellsBySurface.entries()].map(([id, rows]) => {
+    const sourceBlockId = rows[0]![0].sourceBlockId;
+    const topY = rows[0]![2];
+    const completeTopLayer = (solidCellsBySourceBlockId.get(sourceBlockId) ?? [])
+      .filter(([, y]) => y + 1 === topY);
+    if (completeTopLayer.length === 0) {
+      return fail(INPUT_CODE,
+        `source Block '${sourceBlockId}' has no matching occupied top layer`);
+    }
+    const xs = completeTopLayer.map(([x]) => x);
+    const zs = completeTopLayer.map(([, , z]) => z);
+    return Object.freeze({
+      id,
+      sourceBlockId,
+      topCellKeys: Object.freeze(rows.map(([cell]) => cell.topCellKey).sort(stableCompare)),
+      positionMetersXYZ: Object.freeze([
+        (Math.min(...xs) + Math.max(...xs) + 1) * GRID[0] / 2,
+        rows[0]![2] * GRID[1],
+        (Math.min(...zs) + Math.max(...zs) + 1) * GRID[2] / 2,
+      ]) as BabylonNativeBlockGroundStandPositionV1,
+    });
+  }).sort((left, right) => stableCompare(left.id, right.id)));
 }
 
 function circleIntersectsOpenCell(
@@ -431,10 +635,13 @@ function evaluateCandidate(
   capsuleRadiusMeters: number,
   capsuleHeightMeters: number,
 ): CandidateEvaluation {
-  const [centerX, topY, centerZ] = parseCellKey(positionKey(position));
+  positionKey(position);
+  const topY = Math.round(position[1] / GRID[1]);
   const footprint = intersectingFootprintCells(position, capsuleRadiusMeters);
-  const supported = footprint.filter(([x, z]) =>
-    supportByTopCellKey.has(cellKey(x, topY, z)));
+  const supported = footprint.flatMap(([x, z]) => {
+    const support = supportByTopCellKey.get(cellKey(x, topY, z));
+    return isNil(support) ? [] : [support];
+  });
   let availableClearanceMeters = capsuleHeightMeters;
   const clearanceBlockerSourceBlockIds = new Set<string>();
   for (const [x, z] of footprint) {
@@ -467,10 +674,20 @@ function evaluateCandidate(
     availableClearanceMillimeters,
     isStandable: supportCoverageBasisPoints === 10_000 &&
       availableClearanceMeters + EPSILON >= capsuleHeightMeters,
-    support: supportByTopCellKey.get(cellKey(centerX, topY, centerZ)),
+    support: [...supported].sort((left, right) => {
+      const [leftX, , leftZ] = parseCellKey(left.topCellKey);
+      const [rightX, , rightZ] = parseCellKey(right.topCellKey);
+      const leftDistance =
+        ((leftX + 0.5) * GRID[0] - position[0]) ** 2 +
+        ((leftZ + 0.5) * GRID[2] - position[2]) ** 2;
+      const rightDistance =
+        ((rightX + 0.5) * GRID[0] - position[0]) ** 2 +
+        ((rightZ + 0.5) * GRID[2] - position[2]) ** 2;
+      return leftDistance - rightDistance ||
+        stableCompare(left.topCellKey, right.topCellKey);
+    })[0],
     affectedSourceBlockIds: Object.freeze([...new Set([
-      ...supported.map(([x, z]) =>
-        supportByTopCellKey.get(cellKey(x, topY, z))!.sourceBlockId),
+      ...supported.map(({ sourceBlockId }) => sourceBlockId),
       ...clearanceBlockerSourceBlockIds,
     ])].sort(stableCompare)),
   });
@@ -640,6 +857,7 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
   requireRecord(input, "input");
   requireClosedKeys(input, [
     "groundModel",
+    "walkableTopology",
     "traversalCapabilityEnvelopeReceipt",
     "caseIntent",
     "worldPackageRootHash",
@@ -647,6 +865,7 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
     "budget",
   ], [], "input");
   requireRecord(input.groundModel, "groundModel");
+  requireRecord(input.walkableTopology, "walkableTopology");
   requireRecord(input.groundModel.identity, "groundModel.identity");
   requireArray(
     input.groundModel.solidOccupancyCells,
@@ -729,6 +948,7 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
     );
   }
   requireHash(input.groundModel.logicalGroundModelHash, "logicalGroundModelHash");
+  requireHash(input.walkableTopology.topologyHash, "walkableTopologyHash");
   requireHash(input.caseIntent.caseHash, "caseIntent.caseHash");
   requireId(input.caseIntent.id, "caseIntent.id");
   requireId(input.caseIntent.spawn.id, "caseIntent.spawn.id");
@@ -755,8 +975,9 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
   if (input.caseIntent.requiredTargets.length > 256) {
     return fail(INPUT_CODE, "caseIntent supports at most 256 required targets");
   }
-  const ids = new Set<string>([input.caseIntent.spawn.id]);
+  const ids = new Set<string>();
   const positions = new Set<string>();
+  const targetRefs = new Set<string>();
   for (const [index, target] of input.caseIntent.requiredTargets.entries()) {
     requireRecord(target, `requiredTargets[${index}]`);
     requireClosedKeys(target, [
@@ -772,13 +993,17 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
       `requiredTargets[${index}].standPositionMetersXYZ`,
     );
     const key = positionKey(target.standPositionMetersXYZ);
-    if (ids.has(target.id) || positions.has(key)) {
-      return fail(INPUT_CODE, "required target IDs and positions must be unique");
+    if (ids.has(target.id) || positions.has(key) ||
+      targetRefs.has(target.acceptanceTargetRef)) {
+      return fail(INPUT_CODE,
+        "required target IDs, acceptance refs and positions must be unique");
     }
     ids.add(target.id);
     positions.add(key);
+    targetRefs.add(target.acceptanceTargetRef);
   }
   const bandIds = new Set<string>();
+  const bandTargetRefs = new Set<string>();
   for (const [index, band] of input.caseIntent.requiredTraversalBands.entries()) {
     requireRecord(band, `requiredTraversalBands[${index}]`);
     requireClosedKeys(band, [
@@ -786,7 +1011,6 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
       "acceptanceTargetRef",
       "centerlineStandPositionsMetersXYZ",
       "halfWidthMeters",
-      "isBidirectional",
     ], [], `requiredTraversalBands[${index}]`);
     requireId(band.id, `requiredTraversalBands[${index}].id`);
     requireRef(band.acceptanceTargetRef,
@@ -799,12 +1023,13 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
       `requiredTraversalBands[${index}].halfWidthMeters`);
     if (
       bandIds.has(band.id) ||
-      band.halfWidthMeters < 0 ||
-      typeof band.isBidirectional !== "boolean" ||
+      bandTargetRefs.has(band.acceptanceTargetRef) ||
+      band.halfWidthMeters <= 0 ||
       band.centerlineStandPositionsMetersXYZ.length < 2 ||
       band.centerlineStandPositionsMetersXYZ.length > 256
     ) return fail(INPUT_CODE, "traversal bands must be unique and non-empty");
     bandIds.add(band.id);
+    bandTargetRefs.add(band.acceptanceTargetRef);
     band.centerlineStandPositionsMetersXYZ.forEach((position, positionIndex) => {
       requireStandPosition(
         position,
@@ -839,6 +1064,13 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
   if (sha256CanonicalJson(groundBody) !== input.groundModel.logicalGroundModelHash) {
     return fail(IDENTITY_CODE, "logical Ground Model hash is stale");
   }
+  requireRecord(input.walkableTopology.identity, "walkableTopology.identity");
+  const { topologyHash: _topologyHash, ...topologyBody } = input.walkableTopology;
+  if (
+    input.walkableTopology.identity.logicalGroundModelHash !==
+      input.groundModel.logicalGroundModelHash ||
+    sha256CanonicalJson(topologyBody) !== input.walkableTopology.topologyHash
+  ) return fail(IDENTITY_CODE, "walkable topology identity is stale or mismatched");
 }
 
 function metricSummary(
@@ -961,20 +1193,40 @@ export function analyzeBabylonNativeBlockGroundV1(
     indexSolidOccupancyByHorizontalCell(solidOccupancyCells);
   const effectiveCapsuleRadiusMeters =
     envelope.capsuleRadiusMeters + envelope.clearanceMarginMeters;
-  const evaluations = [...supportByTopCellKey.entries()]
+  const surfaces = sourceSurfaces(
+    input.groundModel.exposedSupportTopCells,
+    solidOccupancyCells,
+  );
+  const candidatePositionByKey = new Map<string,
+    BabylonNativeBlockGroundStandPositionV1>();
+  const addCandidate = (
+    position: BabylonNativeBlockGroundStandPositionV1,
+  ): void => {
+    candidatePositionByKey.set(positionKey(position), position);
+  };
+  input.groundModel.exposedSupportTopCells.forEach((cell) =>
+    addCandidate(positionFromTopCellKey(cell.topCellKey)));
+  surfaces.forEach(({ positionMetersXYZ }) => addCandidate(positionMetersXYZ));
+  addCandidate(input.caseIntent.spawn.standPositionMetersXYZ);
+  input.caseIntent.requiredTargets.forEach(({ standPositionMetersXYZ }) =>
+    addCandidate(standPositionMetersXYZ));
+  input.caseIntent.requiredTraversalBands.forEach((band) =>
+    band.centerlineStandPositionsMetersXYZ.forEach(addCandidate));
+  const evaluations = [...candidatePositionByKey.entries()]
     .sort(([left], [right]) => stableCompare(left, right))
-    .map(([key]) => evaluateCandidate(
-      positionFromTopCellKey(key),
+    .map(([, position]) => evaluateCandidate(
+      position,
       supportByTopCellKey,
       solidOccupancyByHorizontalCell,
       effectiveCapsuleRadiusMeters,
       envelope.capsuleHeightMeters,
     ));
   const nodesById = new Map<string, MutableNode>();
-  const nodeIdByTopCellKey = new Map<string, string>();
+  const nodeIdByPositionKey = new Map<string, string>();
   for (const evaluation of evaluations) {
     if (!evaluation.isStandable || isNil(evaluation.support)) continue;
-    const id = nodeId(evaluation.support.topCellKey);
+    const key = positionKey(evaluation.positionMetersXYZ);
+    const id = nodeId(key);
     nodesById.set(id, {
       id,
       topCellKey: evaluation.support.topCellKey,
@@ -984,56 +1236,129 @@ export function analyzeBabylonNativeBlockGroundV1(
       componentId: "",
       isReachableFromSpawn: false,
     });
-    nodeIdByTopCellKey.set(evaluation.support.topCellKey, id);
+    nodeIdByPositionKey.set(key, id);
   }
 
   const blockedSteps: BlockedStep[] = [];
-  const nodesByHorizontalCell = new Map<string, MutableNode[]>();
+  const connect = (left: MutableNode, right: MutableNode): void => {
+    left.neighbors.add(right.id);
+    right.neighbors.add(left.id);
+  };
+  const nodeByStandIndices = new Map([...nodesById.values()].map((node) => [
+    positionKey(node.positionMetersXYZ),
+    node,
+  ] as const));
   for (const node of nodesById.values()) {
-    const [x, _y, z] = parseCellKey(node.topCellKey);
-    const rows = nodesByHorizontalCell.get(`${x},${z}`) ?? [];
-    rows.push(node);
-    nodesByHorizontalCell.set(`${x},${z}`, rows);
+    const [x, y, z] = parseCellKey(positionKey(node.positionMetersXYZ));
+    for (const [neighborX, neighborZ] of [
+      [x + 1, z], [x + 2, z], [x, z + 1], [x, z + 2],
+    ] as const) {
+      const other = nodeByStandIndices.get(cellKey(neighborX, y, neighborZ));
+      if (isNil(other)) continue;
+      if (
+        Math.abs(neighborX - x) === 2 || Math.abs(neighborZ - z) === 2
+      ) {
+        const midpoint = Object.freeze([
+          (node.positionMetersXYZ[0] + other.positionMetersXYZ[0]) / 2,
+          node.positionMetersXYZ[1],
+          (node.positionMetersXYZ[2] + other.positionMetersXYZ[2]) / 2,
+        ]) as BabylonNativeBlockGroundStandPositionV1;
+        if (!evaluateCandidate(
+          midpoint,
+          supportByTopCellKey,
+          solidOccupancyByHorizontalCell,
+          effectiveCapsuleRadiusMeters,
+          envelope.capsuleHeightMeters,
+        ).isStandable) continue;
+      }
+      connect(node, other);
+    }
   }
-  for (const node of nodesById.values()) {
-    const [x, _y, z] = parseCellKey(node.topCellKey);
+
+  const surfaceById = new Map(surfaces.map((surface) =>
+    [surface.id, surface] as const));
+  const surfaceIdByTopCellKey = new Map(surfaces.flatMap((surface) =>
+    surface.topCellKeys.map((topCellKey) =>
+      [topCellKey, surface.id] as const)));
+  const supportCellsByHorizontalCell = new Map<string,
+    BabylonNativeBlockLogicalSupportTopCellV1[]>();
+  for (const cell of input.groundModel.exposedSupportTopCells) {
+    const [x, , z] = parseCellKey(cell.topCellKey);
+    const rows = supportCellsByHorizontalCell.get(`${x},${z}`) ?? [];
+    rows.push(cell);
+    supportCellsByHorizontalCell.set(`${x},${z}`, rows);
+  }
+  for (const surface of surfaces) {
+    const centerNode = nodeByStandIndices.get(positionKey(
+      surface.positionMetersXYZ,
+    ));
+    if (isNil(centerNode)) continue;
+    const surfaceTopCellKeys = new Set(surface.topCellKeys);
+    for (const node of nodesById.values()) {
+      if (
+        node.id === centerNode.id ||
+        !surfaceTopCellKeys.has(node.topCellKey)
+      ) continue;
+      connect(centerNode, node);
+    }
+  }
+  const adjacentSurfacePairs = new Set<string>();
+  for (const cell of input.groundModel.exposedSupportTopCells) {
+    const [x, , z] = parseCellKey(cell.topCellKey);
+    const surfaceId = surfaceIdByTopCellKey.get(cell.topCellKey)!;
     for (const [neighborX, neighborZ] of [[x + 1, z], [x, z + 1]] as const) {
-      for (const other of nodesByHorizontalCell.get(
+      for (const neighbor of supportCellsByHorizontalCell.get(
         `${neighborX},${neighborZ}`,
       ) ?? []) {
-        const delta = other.positionMetersXYZ[1] - node.positionMetersXYZ[1];
-        const horizontalDistanceMeters = Math.hypot(
-          other.positionMetersXYZ[0] - node.positionMetersXYZ[0],
-          other.positionMetersXYZ[2] - node.positionMetersXYZ[2],
-        );
-        const maximumSlopeRiseMeters = horizontalDistanceMeters * Math.tan(
-          envelope.maxSlopeDegrees * Math.PI / 180,
-        );
-        const maximumAllowedHeightDeltaMeters = Math.min(
-          envelope.maxStepHeightMeters,
-          maximumSlopeRiseMeters,
-        );
-        if (
-          Math.abs(delta) <= maximumAllowedHeightDeltaMeters + EPSILON
-        ) {
-          node.neighbors.add(other.id);
-          other.neighbors.add(node.id);
-        } else {
-          blockedSteps.push(Object.freeze({
-            fromNodeId: node.id,
-            toNodeId: other.id,
-            deltaMeters: delta,
-            maximumAllowedHeightDeltaMeters,
-          }));
-          blockedSteps.push(Object.freeze({
-            fromNodeId: other.id,
-            toNodeId: node.id,
-            deltaMeters: -delta,
-            maximumAllowedHeightDeltaMeters,
-          }));
-        }
+        const neighborSurfaceId = surfaceIdByTopCellKey.get(
+          neighbor.topCellKey,
+        )!;
+        if (surfaceId === neighborSurfaceId) continue;
+        adjacentSurfacePairs.add(surfaceId < neighborSurfaceId
+          ? `${surfaceId}\u0001${neighborSurfaceId}`
+          : `${neighborSurfaceId}\u0001${surfaceId}`);
       }
     }
+  }
+  for (const pair of [...adjacentSurfacePairs].sort(stableCompare)) {
+    const [leftId, rightId] = pair.split("\u0001");
+    const leftSurface = surfaceById.get(leftId!)!;
+    const rightSurface = surfaceById.get(rightId!)!;
+    const leftNode = nodeByStandIndices.get(positionKey(
+      leftSurface.positionMetersXYZ,
+    ));
+    const rightNode = nodeByStandIndices.get(positionKey(
+      rightSurface.positionMetersXYZ,
+    ));
+    if (isNil(leftNode) || isNil(rightNode)) continue;
+    const delta = rightNode.positionMetersXYZ[1] -
+      leftNode.positionMetersXYZ[1];
+    const horizontalDistanceMeters = Math.hypot(
+      rightNode.positionMetersXYZ[0] - leftNode.positionMetersXYZ[0],
+      rightNode.positionMetersXYZ[2] - leftNode.positionMetersXYZ[2],
+    );
+    const maximumAllowedHeightDeltaMeters = Math.min(
+      envelope.maxStepHeightMeters,
+      horizontalDistanceMeters * Math.tan(
+        envelope.maxSlopeDegrees * Math.PI / 180,
+      ),
+    );
+    if (Math.abs(delta) <= maximumAllowedHeightDeltaMeters + EPSILON) {
+      connect(leftNode, rightNode);
+      continue;
+    }
+    blockedSteps.push(Object.freeze({
+      fromNodeId: leftNode.id,
+      toNodeId: rightNode.id,
+      deltaMeters: delta,
+      maximumAllowedHeightDeltaMeters,
+    }));
+    blockedSteps.push(Object.freeze({
+      fromNodeId: rightNode.id,
+      toNodeId: leftNode.id,
+      deltaMeters: -delta,
+      maximumAllowedHeightDeltaMeters,
+    }));
   }
 
   const componentIds: string[] = [];
@@ -1061,6 +1386,7 @@ export function analyzeBabylonNativeBlockGroundV1(
   }
 
   const failureFacts: BabylonNativeBlockGroundFailureFactV1[] = [];
+  const topologyFailurePositionKeys = new Set<string>();
   const spawnEvaluation = evaluateCandidate(
     input.caseIntent.spawn.standPositionMetersXYZ,
     supportByTopCellKey,
@@ -1075,7 +1401,25 @@ export function analyzeBabylonNativeBlockGroundV1(
     envelope.capsuleHeightMeters,
     input.caseIntent.groundModelEvidenceRef,
   ));
-  const spawnNodeId = nodeIdByTopCellKey.get(
+  const spawnTopologyFacts = !spawnEvaluation.isStandable
+    ? Object.freeze([])
+    : exactTopologyFailureFacts(
+        input.caseIntent.spawn.standPositionMetersXYZ,
+        Object.freeze({
+          ...input.caseIntent.spawn,
+          standabilityMetricId: "ground-spawn-standability" as const,
+        }),
+        input.caseIntent.groundModelEvidenceRef,
+        input.walkableTopology,
+        spawnEvaluation.affectedSourceBlockIds,
+      );
+  failureFacts.push(...spawnTopologyFacts);
+  if (spawnTopologyFacts.length > 0) {
+    topologyFailurePositionKeys.add(positionKey(
+      input.caseIntent.spawn.standPositionMetersXYZ,
+    ));
+  }
+  const spawnNodeId = nodeIdByPositionKey.get(
     positionKey(input.caseIntent.spawn.standPositionMetersXYZ),
   );
   const reachableNodeIds = new Set<string>();
@@ -1109,10 +1453,32 @@ export function analyzeBabylonNativeBlockGroundV1(
       envelope.capsuleHeightMeters,
       input.caseIntent.groundModelEvidenceRef,
     ));
-    const targetNodeId = nodeIdByTopCellKey.get(
+    const targetTopologyFacts = !evaluation.isStandable
+      ? Object.freeze([])
+      : exactTopologyFailureFacts(
+          target.standPositionMetersXYZ,
+          Object.freeze({
+            ...target,
+            standabilityMetricId: "ground-target-standability" as const,
+          }),
+          input.caseIntent.groundModelEvidenceRef,
+          input.walkableTopology,
+          evaluation.affectedSourceBlockIds,
+        );
+    failureFacts.push(...targetTopologyFacts);
+    if (targetTopologyFacts.length > 0) {
+      topologyFailurePositionKeys.add(positionKey(
+        target.standPositionMetersXYZ,
+      ));
+    }
+    const targetNodeId = nodeIdByPositionKey.get(
       positionKey(target.standPositionMetersXYZ),
     );
-    if (!isNil(targetNodeId) && reachableNodeIds.has(targetNodeId)) {
+    if (
+      targetTopologyFacts.length === 0 &&
+      !isNil(targetNodeId) &&
+      reachableNodeIds.has(targetNodeId)
+    ) {
       reachableTargetCount += 1;
       continue;
     }
@@ -1170,13 +1536,46 @@ export function analyzeBabylonNativeBlockGroundV1(
   let reachableBandCount = 0;
   for (const band of input.caseIntent.requiredTraversalBands) {
     let isReachable = true;
+    for (const [waypointIndex, waypoint] of
+      band.centerlineStandPositionsMetersXYZ.entries()) {
+      const waypointPositionKey = positionKey(waypoint);
+      if (topologyFailurePositionKeys.has(waypointPositionKey)) {
+        isReachable = false;
+        continue;
+      }
+      const waypointEvaluation = evaluateCandidate(
+        waypoint,
+        supportByTopCellKey,
+        solidOccupancyByHorizontalCell,
+        effectiveCapsuleRadiusMeters,
+        envelope.capsuleHeightMeters,
+      );
+      const waypointFacts = !waypointEvaluation.isStandable
+        ? Object.freeze([])
+        : exactTopologyFailureFacts(
+            waypoint,
+            Object.freeze({
+              id: `${band.id}-waypoint-${waypointIndex.toString().padStart(3, "0")}`,
+              acceptanceTargetRef: band.acceptanceTargetRef,
+              standabilityMetricId: "ground-target-standability" as const,
+            }),
+            input.caseIntent.groundModelEvidenceRef,
+            input.walkableTopology,
+            waypointEvaluation.affectedSourceBlockIds,
+          );
+      failureFacts.push(...waypointFacts);
+      if (waypointFacts.length > 0) {
+        topologyFailurePositionKeys.add(waypointPositionKey);
+        isReachable = false;
+      }
+    }
     for (let index = 0;
       index < band.centerlineStandPositionsMetersXYZ.length - 1;
       index += 1) {
       const start = band.centerlineStandPositionsMetersXYZ[index]!;
       const destination = band.centerlineStandPositionsMetersXYZ[index + 1]!;
-      const startNodeId = nodeIdByTopCellKey.get(positionKey(start));
-      const destinationNodeId = nodeIdByTopCellKey.get(positionKey(destination));
+      const startNodeId = nodeIdByPositionKey.get(positionKey(start));
+      const destinationNodeId = nodeIdByPositionKey.get(positionKey(destination));
       if (
         isNil(startNodeId) ||
         isNil(destinationNodeId) ||
@@ -1187,15 +1586,7 @@ export function analyzeBabylonNativeBlockGroundV1(
           destination,
           band.halfWidthMeters,
           nodesById,
-        ) ||
-        (band.isBidirectional && !canReachInsideBand(
-          destinationNodeId,
-          startNodeId,
-          destination,
-          start,
-          band.halfWidthMeters,
-          nodesById,
-        ))
+        )
       ) {
         isReachable = false;
         break;
@@ -1214,7 +1605,8 @@ export function analyzeBabylonNativeBlockGroundV1(
       evidenceRef: input.caseIntent.groundModelEvidenceRef,
       affectedSourceBlockIds: Object.freeze([...new Set(
         band.centerlineStandPositionsMetersXYZ.flatMap((position) => {
-          const support = supportByTopCellKey.get(positionKey(position));
+          const id = nodeIdByPositionKey.get(positionKey(position));
+          const support = isNil(id) ? undefined : nodesById.get(id)?.support;
           return isNil(support) ? [] : [support.sourceBlockId];
         }),
       )].sort(stableCompare)),
@@ -1288,11 +1680,12 @@ export function analyzeBabylonNativeBlockGroundV1(
       componentId: node.componentId,
       isReachableFromSpawn: node.isReachableFromSpawn,
     })));
-  const body = freeze({
+  return freeze({
     kind: "babylon-native-block-ground-analysis-report" as const,
     schemaVersion: 1 as const,
     identity: {
       logicalGroundModelHash: input.groundModel.logicalGroundModelHash,
+      walkableTopologyHash: input.walkableTopology.topologyHash,
       traversalCapabilityEnvelopeHash:
         input.traversalCapabilityEnvelopeReceipt.traversalCapabilityEnvelopeHash,
       caseHash: input.caseIntent.caseHash,
@@ -1306,9 +1699,5 @@ export function analyzeBabylonNativeBlockGroundV1(
     failureFacts: sortedFailureFacts,
     metrics,
     standableNodes,
-  });
-  return Object.freeze({
-    ...body,
-    groundAnalysisReportHash: sha256CanonicalJson(body) as Sha256HashV1,
   });
 }

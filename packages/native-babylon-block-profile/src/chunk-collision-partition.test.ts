@@ -41,7 +41,7 @@ function deckGroundModel(): BabylonNativeBlockLogicalGroundModelV1 {
       profileInventoryHash: HASH("2"),
       nativeSceneBootstrapHash: HASH("3"),
     }),
-    supportedTraversalSurfaceProfileRefs: Object.freeze([
+    declaredTraversalSurfaceProfileRefs: Object.freeze([
       STATIC_SURFACE.traversalSurfaceProfileRef,
     ]),
     colliderGroups: Object.freeze([Object.freeze({

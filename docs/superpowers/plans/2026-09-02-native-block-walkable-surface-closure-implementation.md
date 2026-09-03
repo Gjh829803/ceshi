@@ -3,7 +3,7 @@
 **Design:** [Native Block V2 Capability Migration and Walkable Surface Closure](../specs/2026-09-02-native-block-walkable-surface-closure-design.md)
 **Stable task:** `NBR-65`
 **Baseline:** `origin/main@9a4639109e4d161d92297506e9fc92192d32ff44`
-**Evidence branch:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`
+**Evidence branches:** `origin/codex/block-world-sdk-v2@3c2e9826f0c91ef39675c27a6bbdc6238e6c0b05`; supplemental production evidence at `origin/codex/block-world-main-integration@8c250b5fc2181b48947d95b12fac03333bf11e5f` and `origin/codex/block-world-main-integration@d69d7f821f10328bc02dac3a83218f924e754780`
 
 **2026-09-03 accepted execution clarification:** NBR-65C is consumed by the
 existing Native Package owner after the in-memory Package root is verified and
@@ -18,8 +18,8 @@ gate command and zero exit code; token presence alone is insufficient.
 |---|---|---|---|---|---|---|
 | NBR-65A | Freeze the complete v2 capability ledger and current-only Group API | BWB-2, BWB-4, BWB-6 | 65B..65I | Profile spec/types/Skill; v2 evidence + current contracts -> one authoring API and deletion ledger | type fixtures, docs truth, public export census | main-agent-only |
 | NBR-65B | Freeze one identity-bound logical ground model | 65A | 65C..65I | Block Profile Host seam; checked Layout + explicit Groups -> canonical occupied/support inventory | asymmetry, holes, cross-group, order and replay tests | sequential |
-| NBR-65C | Add Subject-relative standability, connectivity and exploration evidence | 65B | 65D..65I | Host analysis only; ground model + resolved Subject + Case intent -> stable report | footprint, clearance, Spawn, target, component, band and metric tests | sequential |
-| NBR-65D | Build one continuous visible/Havok walkable topology and exact solid union | 65B, 65C | 65E..65I | Profile materializer; ground model -> identity-bound topology/proxies | mixed height, seams, holes, triangle determinism and budgets | sequential |
+| NBR-65D | Build one continuous visible/Havok walkable topology and exact solid union | 65B | 65C, 65E..65I | Profile materializer; ground model -> identity-bound topology/proxies | mixed height, seams, holes, triangle determinism and budgets | sequential |
+| NBR-65C | Add Subject-relative standability, connectivity and exploration evidence over the final topology | 65B, 65D | 65E..65I | Host analysis only; ground model + final topology + resolved Subject + Case intent -> stable report | footprint, clearance, exact topology height, Spawn, target, component, band and metric tests | sequential |
 | NBR-65E | Reproduce slope/step movement and add ground-only exposed-edge protection | 65D | 65F..65I | Native contribution, Package and runtime-babylon; exact topology -> SDK-owned Havok behavior | installed-engine audit, real Havok, masks, jump, reset and cleanup | main-agent-only |
 | NBR-65F | Realize Profile batching, far visibility and bounded collision residency | 65D, 65E | 65G..65I | Profile visual adapter + existing Runtime lifecycle; BWB-6 assessment -> actual batches/Chunks | draw/resource counts, Capture identity, seam traversal, residency lifecycle | main-agent-only |
 | NBR-65G | Align whitebox lighting/materials and current Skills | 65D, 65F | 65H, 65I | Runtime light owner, Profile display adapter, live/copied Builder Skill | material/light tests, Skill parity and negative ownership census | sequential |
@@ -50,8 +50,10 @@ Focused evidence: Profile API/type/session tests, Skill source/copy tests and cl
    selections.
 2. Expand the existing occupied microcell inventory without reading Mesh/tag/material/name state.
 3. Record sorted source Block, Collider Group, visual group, traversal binding and cell identities.
-4. Derive global exposed support tops and solid occupancy once; every later ground consumer receives
-   this frozen model.
+4. Derive `declaredTraversalSurfaceProfileRefs`, global exposed support-top candidates and solid
+   occupancy from the explicit selections once; do not accept a caller-owned list that falsely
+   claims Subject support. Package/Runtime admission resolves the locked profiles and controlled
+   Subject compatibility later.
 5. Bind canonical bytes and hash to Build Epoch, checked Layout inventory, Profile inventory and
    Native Scene Bootstrap. Join the Subject traversal envelope, Case intent and Package root only in
    the later Ground Analysis Report, so source/profile topology identity has no circular Runtime or
@@ -64,19 +66,37 @@ Focused evidence: pure ground-model tests, session rollback, Host evidence hash 
 ## NBR-65C: checker and actionable diagnostics
 
 1. Port the algorithms, not the v2 package: footprint-union coverage, vertical clearance,
-   shared-edge step adjacency, BFS components, target reachability and bounded traversal bands.
-2. Resolve Capsule/Physics Body limits from the trusted current Bootstrap/Registry closure. No policy
-   number enters `scene.ts`.
-3. Publish report-only reachable bounds, XZ span, maximum distance, off-camera position/Chunk counts
+   actual source-Block top-center samples, shared-edge source-surface step adjacency, BFS
+   components, target reachability and bounded traversal bands. Retain microcell samples for dense
+   continuous surfaces, but never omit a one-meter Block center merely because it lies on a
+   microcell boundary.
+2. Evaluate the exact registered Spawn and explicit band endpoints; never choose a nearby support
+   sample or visual-group center on their behalf. Require at least one band to start at Spawn, every
+   band to bind a passing target, and a one-to-one binding between bands and ground pass targets.
+   Put traversal-to-Collider legality in the public Case parser only: require unique Collider,
+   Contribution and checkpoint IDs; bind Spawn support and its Collider to one acceptance target;
+   require `pass -> ground|step` and `block -> blocker`; delete Native-preparation shadow validation.
+3. Resolve Capsule/Physics Body limits from the trusted current Bootstrap/Registry closure. The
+   current owner exposes one symmetric `maxStepHeightMeters` plus `maxSlopeDegrees`; do not revive
+   v2's independent up/down authoring thresholds or put any policy number in `scene.ts`.
+   Remove the ineffective `isBidirectional` authoring flag: the current ground graph is undirected,
+   while one-way transitions belong to `WRC-EVT-1`.
+4. Publish report-only reachable bounds, XZ span, maximum distance, off-camera position/Chunk counts
    and component summaries.
-4. Keep ground-only blocking policy Case/Profile-owned. Non-ground movement receives measurements,
+5. Keep ground-only blocking policy Case/Profile-owned. Non-ground movement receives measurements,
    not a false rejection.
-5. Map every failure to the current actionable diagnostic DTO with actual/expected/limit/delta,
+6. Map every failure to the current actionable diagnostic DTO with actual/expected/limit/delta,
    direction, source IDs and one bounded geometry repair action.
-6. Bind the report to the same ground-model used by materialization and to the resolved Subject
-   traversal envelope, Case intent and frozen Package-root identity used by admission.
+7. Consume the identity-bound final walkable topology built by 65D. At exact Spawn, target and band
+   waypoints, sample the collision triangles and reject missing support or any height mismatch with
+   the frozen Case position; a raw support-cell pass cannot hide smoothing drift or a topology hole.
+8. Bind the report to the same ground-model and final topology used by materialization and to the
+   resolved Subject traversal envelope, Case intent and frozen Package-root identity used by
+   admission. Use the dedicated Native Block Ground Traversal Graph Builder Profile Ref; do not bind
+   Native evidence to the Heightfield-named Profile identity even while their measured limits match.
 
-Focused evidence: pure graph fixtures covering narrow footprint, low overhead, asymmetric step limits,
+Focused evidence: pure graph fixtures covering narrow footprint, low overhead, symmetric current
+step/slope limits with directional failure evidence,
 detours outside a band, disconnected islands, duplicate targets and stable diagnostic ordering.
 
 ## NBR-65D: topology, overlay and collision materialization
@@ -103,8 +123,15 @@ creation-order determinism, visual/collision byte relation, budget and throwing 
    masks and disposal before implementing engine-dependent behavior.
 2. Verify the existing SDK movement path can preserve configured ground speed along the derived slope
    using committed support contact data. Add no second support or medium owner.
+   The executable regression must use the formal Native Module -> admission -> WorldPackage ->
+   RuntimeHost -> Havok -> SDK Character path in both uphill and downhill directions; Canonical
+   slopes, topology-only tests and BodyPort doubles are insufficient on their own.
 3. Bound provider contact correction so it closes numerical error without becoming a second step or
    teleport path.
+   Verify the installed Babylon four-plane simplex bound rather than assuming one contact plane.
+   Do not port the supplemental fixed one-meter smoothing threshold or its Block-specific support
+   cache: current 0.25m top increments must remain inside the G Bot 0.3m step contract and continue
+   through the one SDK `checkSupport()` authority.
 4. Derive exposed edges globally, coalesce only contiguous collinear equal-slope segments and freeze a
    closed internal boundary role in Contribution/Package identity.
 5. Create invisible boundary proxies under existing Runtime physics ownership and apply one dedicated
@@ -191,7 +218,9 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
 - Never create `block-world`, `block-world-three` or `block-world-compiler` compatibility packages.
 - Never add a Native-specific RuntimeHost, Physics, Camera, Subject or Gameplay owner.
 - Never restore a hidden foundation, automatic Mesh/name/tag collision scan, Runtime height sampler,
-  public Chunk DSL, Batch DTO or a third Scene Source.
+  Block-specific support grace/cache, public Chunk DSL, Batch DTO or a third Scene Source.
+- Do not copy the supplemental Block-only Subject occlusion-fade switch into NBR-65; Camera behavior
+  remains assigned to `WRC-CAM-1/2` and the existing Camera Domain.
 - Do not implement v2 space transitions here. Record their behavior under `WRC-EVT-1`.
 - Do not claim product Route/Nav/`goTo`, water/flight traversal, generic events, complete BNA-6 Golden
   Corpus, BNA-8 or WRC-ACC-1.

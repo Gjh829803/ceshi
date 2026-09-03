@@ -377,6 +377,10 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
         id: "reach-ground",
         outcome: "reached",
         checkpointIds: ["approach", "gate", "threshold"],
+      }, {
+        id: "support-ground",
+        outcome: "reached",
+        checkpointIds: ["support-ground"],
       }],
     });
   });
@@ -400,6 +404,10 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
         id: "reach-ground",
         outcome: "blocked",
         checkpointIds: ["approach", "gate", "threshold"],
+      }, {
+        id: "support-ground",
+        outcome: "reached",
+        checkpointIds: ["support-ground"],
       }],
     });
   });

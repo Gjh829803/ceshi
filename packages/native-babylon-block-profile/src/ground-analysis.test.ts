@@ -1,7 +1,7 @@
 import { sha256CanonicalJson, type Sha256HashV1 } from
   "@whitebox-world/protocol";
 import {
-  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalGraphBuilderProfileV2,
   resolveTraversalLockV1,
@@ -18,6 +18,10 @@ import {
   type BabylonNativeBlockGroundAnalysisBudgetV1,
   type BabylonNativeBlockGroundCaseIntentV1,
 } from "./ground-analysis.js";
+import {
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+  buildBabylonNativeBlockWalkableTopologyV1,
+} from "./walkable-topology.js";
 import type {
   BabylonNativeBlockLogicalGroundModelV1,
   BabylonNativeBlockLogicalSolidOccupancyCellV1,
@@ -86,7 +90,7 @@ function capability(
   return createTraversalCapabilityEnvelopeV1({
     traversalLockReceipt: resolveTraversalLockV1(lock),
     graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
-      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     ),
   });
 }
@@ -94,24 +98,32 @@ function capability(
 function logicalModel(input: Readonly<{
   capability: TraversalCapabilityEnvelopeReceiptV1;
   supportTopCellKeys: readonly string[];
+  supportOccupiedCellKeys?: readonly string[];
   blockerCellKeys?: readonly string[];
+  supportSourceBlockIdByTopCellKey?: Readonly<Record<string, string>>;
 }>): BabylonNativeBlockLogicalGroundModelV1 {
   const supportTopCellKeys = [...input.supportTopCellKeys].sort();
-  const supportSolidKeys = supportTopCellKeys.map((key) => {
-    const [x, y, z] = key.split(",").map(Number);
-    return `${x},${y! - 1},${z}`;
-  });
+  const supportSolidKeys = [...(input.supportOccupiedCellKeys ??
+    supportTopCellKeys.map((key) => {
+      const [x, y, z] = key.split(",").map(Number);
+      return `${x},${y! - 1},${z}`;
+    }))].sort();
   const blockerCellKeys = [...(input.blockerCellKeys ?? [])].sort();
   const supportBinding = STATIC_SURFACE;
   const solids: BabylonNativeBlockLogicalSolidOccupancyCellV1[] = [
-    ...supportSolidKeys.map((cellKey, index) => Object.freeze({
+    ...supportSolidKeys.map((cellKey, index) => {
+      const [x, y, z] = cellKey.split(",").map(Number);
+      const topCellKey = `${x},${y! + 1},${z}`;
+      return Object.freeze({
       cellKey,
       colliderId: "ground-collider",
-      sourceBlockId: `ground-block-${index.toString().padStart(4, "0")}`,
+      sourceBlockId: input.supportSourceBlockIdByTopCellKey?.[topCellKey] ??
+        `ground-block-${index.toString().padStart(4, "0")}`,
       colliderGroupId: "ground-group",
       visualGroupId: "ground-visual",
       traversalBinding: supportBinding,
-    })),
+      });
+    }),
     ...blockerCellKeys.map((cellKey, index) => Object.freeze({
       cellKey,
       colliderId: "blocker-collider",
@@ -126,11 +138,44 @@ function logicalModel(input: Readonly<{
       topCellKey,
       sourceOccupiedCellKey: supportSolidKeys[index]!,
       colliderId: "ground-collider",
-      sourceBlockId: `ground-block-${index.toString().padStart(4, "0")}`,
+      sourceBlockId: input.supportSourceBlockIdByTopCellKey?.[topCellKey] ??
+        `ground-block-${index.toString().padStart(4, "0")}`,
       colliderGroupId: "ground-group",
       visualGroupId: "ground-visual",
       traversalBinding: supportBinding,
     }));
+  const colliderGroups = Object.freeze([
+    Object.freeze({
+      colliderId: "ground-collider",
+      colliderGeometrySource: Object.freeze({
+        kind: "block-group" as const,
+        colliderGroupId: "ground-group",
+      }),
+      sourceBlockIds: Object.freeze([...new Set(
+        solids.filter(({ colliderId }) => colliderId === "ground-collider")
+          .map(({ sourceBlockId }) => sourceBlockId),
+      )].sort()),
+      visualGroupIds: Object.freeze(["ground-visual"]),
+      traversalBinding: supportBinding,
+      exposedEdgePolicy: "none" as const,
+      occupiedMicroCellKeys: Object.freeze([...supportSolidKeys]),
+    }),
+    ...(blockerCellKeys.length === 0 ? [] : [Object.freeze({
+      colliderId: "blocker-collider",
+      colliderGeometrySource: Object.freeze({
+        kind: "block-group" as const,
+        colliderGroupId: "blocker-group",
+      }),
+      sourceBlockIds: Object.freeze([...new Set(
+        solids.filter(({ colliderId }) => colliderId === "blocker-collider")
+          .map(({ sourceBlockId }) => sourceBlockId),
+      )].sort()),
+      visualGroupIds: Object.freeze(["blocker-visual"]),
+      traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
+      exposedEdgePolicy: "none" as const,
+      occupiedMicroCellKeys: Object.freeze([...blockerCellKeys]),
+    })]),
+  ]);
   const body = Object.freeze({
     kind: "babylon-native-block-logical-ground-model" as const,
     schemaVersion: 1 as const,
@@ -140,10 +185,10 @@ function logicalModel(input: Readonly<{
       profileInventoryHash: H("2"),
       nativeSceneBootstrapHash: H("3"),
     }),
-    supportedTraversalSurfaceProfileRefs: Object.freeze([
+    declaredTraversalSurfaceProfileRefs: Object.freeze([
       STATIC_SURFACE.traversalSurfaceProfileRef,
     ]),
-    colliderGroups: Object.freeze([]),
+    colliderGroups,
     solidOccupancyCells: Object.freeze(solids),
     exposedSupportTopCells: Object.freeze(supportTops),
   });
@@ -178,19 +223,35 @@ function caseIntent(input: Partial<BabylonNativeBlockGroundCaseIntentV1> &
 
 function analyze(input: Readonly<{
   supportTopCellKeys: readonly string[];
+  supportOccupiedCellKeys?: readonly string[];
   blockerCellKeys?: readonly string[];
+  supportSourceBlockIdByTopCellKey?: Readonly<Record<string, string>>;
   capabilityOverrides?: Partial<ResolvedTraversalLockV1>;
   caseIntent: BabylonNativeBlockGroundCaseIntentV1;
   budget?: BabylonNativeBlockGroundAnalysisBudgetV1;
 }>) {
   const receipt = capability(input.capabilityOverrides);
+  const groundModel = logicalModel({
+    capability: receipt,
+    supportTopCellKeys: input.supportTopCellKeys,
+    ...(input.supportOccupiedCellKeys === undefined
+      ? {}
+      : { supportOccupiedCellKeys: input.supportOccupiedCellKeys }),
+    ...(input.blockerCellKeys === undefined
+      ? {}
+      : { blockerCellKeys: input.blockerCellKeys }),
+    ...(input.supportSourceBlockIdByTopCellKey === undefined
+      ? {}
+      : {
+          supportSourceBlockIdByTopCellKey:
+            input.supportSourceBlockIdByTopCellKey,
+        }),
+  });
   return analyzeBabylonNativeBlockGroundV1({
-    groundModel: logicalModel({
-      capability: receipt,
-      supportTopCellKeys: input.supportTopCellKeys,
-      ...(input.blockerCellKeys === undefined
-        ? {}
-        : { blockerCellKeys: input.blockerCellKeys }),
+    groundModel,
+    walkableTopology: buildBabylonNativeBlockWalkableTopologyV1({
+      groundModel,
+      policy: BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
     }),
     traversalCapabilityEnvelopeReceipt: receipt,
     caseIntent: input.caseIntent,
@@ -244,14 +305,13 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             target.standPositionMetersXYZ,
           ]),
           halfWidthMeters: 0.5,
-          isBidirectional: true,
         }]),
       }),
     });
 
+    expect(result.failureFacts).toEqual([]);
     expect(result.analysisOutcome).toBe("passed");
     expect(result.admissionOutcome).toBe("passed");
-    expect(result.failureFacts).toEqual([]);
     expect(result.metrics.reachableRequiredTargetCount).toBe(1);
     expect(result.metrics.reachableRequiredTraversalBandCount).toBe(1);
     expect(result.metrics.reachablePositionCount).toBeGreaterThan(5);
@@ -259,6 +319,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(result.metrics.reachableChunkCount).toBe(1);
     expect(result.identity).toEqual({
       logicalGroundModelHash: expect.stringMatching(/^sha256:/),
+      walkableTopologyHash: expect.stringMatching(/^sha256:/),
       traversalCapabilityEnvelopeHash: expect.stringMatching(/^sha256:/),
       caseHash: CASE_HASH,
       worldPackageRootHash: PACKAGE_HASH,
@@ -267,6 +328,111 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       ),
     });
     expect(Object.isFrozen(result.standableNodes)).toBe(true);
+  });
+
+  it("rejects a final topology bound to a different logical Ground Model", () => {
+    const receipt = capability();
+    const groundModel = logicalModel({
+      capability: receipt,
+      supportTopCellKeys: rectangle(-1, 1, -1, 1),
+    });
+    const topology = buildBabylonNativeBlockWalkableTopologyV1({
+      groundModel,
+      policy: BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+    });
+    const { topologyHash: _topologyHash, ...topologyBody } = topology;
+    const mismatchedBody = Object.freeze({
+      ...topologyBody,
+      identity: Object.freeze({
+        ...topology.identity,
+        logicalGroundModelHash: H("f"),
+      }),
+    });
+
+    expect(() => analyzeBabylonNativeBlockGroundV1({
+      groundModel,
+      walkableTopology: Object.freeze({
+        ...mismatchedBody,
+        topologyHash: sha256CanonicalJson(mismatchedBody) as Sha256HashV1,
+      }),
+      traversalCapabilityEnvelopeReceipt: receipt,
+      caseIntent: caseIntent({ spawn: SPAWN }),
+      worldPackageRootHash: PACKAGE_HASH,
+      measurementChunkPolicy: MEASUREMENT_CHUNK_POLICY,
+      budget: ANALYSIS_BUDGET,
+    })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_IDENTITY_MISMATCH");
+  });
+
+  it("ports v2 Block-center stand samples across one admitted shared-edge step", () => {
+    const lowerTopCellKeys = rectangle(-1, 0, 0, 1, 1);
+    const upperTopCellKeys = rectangle(-1, 0, -2, -1, 2);
+    const sourceByTopCellKey = Object.fromEntries([
+      ...lowerTopCellKeys.map((key) => [key, "lower-tread"] as const),
+      ...upperTopCellKeys.map((key) => [key, "upper-tread"] as const),
+    ]);
+    const spawn = Object.freeze({
+      ...SPAWN,
+      standPositionMetersXYZ: Object.freeze([0, 0.25, 0.5]) as
+        readonly [number, number, number],
+    });
+    const target = Object.freeze({
+      id: "upper-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/upper@1",
+      standPositionMetersXYZ: Object.freeze([0, 0.5, -0.5]) as
+        readonly [number, number, number],
+    });
+    const result = analyze({
+      supportTopCellKeys: [...lowerTopCellKeys, ...upperTopCellKeys],
+      supportSourceBlockIdByTopCellKey: sourceByTopCellKey,
+      caseIntent: caseIntent({
+        spawn,
+        requiredTargets: Object.freeze([target]),
+      }),
+    });
+
+    expect(result.failureFacts).toEqual([]);
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.admissionOutcome).toBe("passed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(1);
+    expect(result.standableNodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        positionMetersXYZ: [0, 0.25, 0.5],
+        isReachableFromSpawn: true,
+      }),
+      expect.objectContaining({
+        positionMetersXYZ: [0, 0.5, -0.5],
+        isReachableFromSpawn: true,
+      }),
+    ]));
+  });
+
+  it("does not shift a partially covered source Block center onto its exposed half", () => {
+    const exposedTopCellKeys = rectangle(-1, -1, -1, 0, 1);
+    const completeTopCellKeys = rectangle(-1, 0, -1, 0, 1);
+    const sourceByTopCellKey = Object.fromEntries(
+      completeTopCellKeys.map((key) => [key, "partially-covered-block"]),
+    );
+    const result = analyze({
+      supportTopCellKeys: exposedTopCellKeys,
+      supportOccupiedCellKeys: completeTopCellKeys.map((key) => {
+        const [x, y, z] = key.split(",").map(Number);
+        return `${x},${y! - 1},${z}`;
+      }),
+      blockerCellKeys: ["0,1,-1", "0,1,0"],
+      supportSourceBlockIdByTopCellKey: sourceByTopCellKey,
+      caseIntent: caseIntent({
+        spawn: Object.freeze({
+          ...SPAWN,
+          standPositionMetersXYZ: [-0.25, 0.25, -0.25] as const,
+        }),
+        requireSingleReachableComponent: false,
+      }),
+    });
+
+    expect(result.standableNodes.map(({ positionMetersXYZ }) =>
+      positionMetersXYZ)).not.toContainEqual([-0.25, 0.25, 0]);
+    expect(result.standableNodes.map(({ positionMetersXYZ }) =>
+      positionMetersXYZ)).not.toContainEqual([0, 0.25, 0]);
   });
 
   it("rejects a narrow surface using full Capsule-footprint union coverage", () => {
@@ -397,6 +563,55 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     });
   });
 
+  it("rejects an exact Spawn height that differs from the final smoothed topology", () => {
+    const target = Object.freeze({
+      id: "smoothed-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/smoothed@1",
+      standPositionMetersXYZ: position("0,2,0"),
+    });
+    const result = analyze({
+      supportTopCellKeys: [
+        ...rectangle(-2, -1, -1, 1, 1),
+        ...rectangle(0, 1, -1, 1, 2),
+      ],
+      caseIntent: caseIntent({
+        spawn: Object.freeze({
+          ...SPAWN,
+          standPositionMetersXYZ: position("-1,1,0"),
+        }),
+        requiredTargets: Object.freeze([target]),
+        requiredTraversalBands: Object.freeze([{
+          id: "smoothed-band",
+          acceptanceTargetRef: target.acceptanceTargetRef,
+          centerlineStandPositionsMetersXYZ: Object.freeze([
+            position("-1,1,0"),
+            target.standPositionMetersXYZ,
+          ]),
+          halfWidthMeters: 0.5,
+        }]),
+      }),
+    });
+
+    expect(result.admissionOutcome).toBe("failed");
+    const mismatches = result.failureFacts.filter(({ metricId }) =>
+      metricId === "ground-support-height-millimeters");
+    expect(mismatches).toHaveLength(2);
+    const mismatch = mismatches.find(({ targetId }) =>
+      targetId === "spawn-check");
+    expect(mismatch).toMatchObject({
+      targetId: "spawn-check",
+      details: {
+        kind: "millimeters-threshold",
+        expectedMillimeters: 250,
+        actualMillimeters: 312.5,
+        correctionDirection: "decrease",
+      },
+    });
+    expect(mismatch?.affectedSourceBlockIds.length).toBeGreaterThan(0);
+    expect(mismatch?.affectedSourceBlockIds.length).toBeLessThan(12);
+    expect(result.metrics.reachableRequiredTraversalBandCount).toBe(0);
+  });
+
   it("preserves directed step-down evidence from a higher Spawn", () => {
     const highSpawn = Object.freeze({
       ...SPAWN,
@@ -430,11 +645,11 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
   });
 
   it("rejects a detour that leaves the declared traversal band", () => {
-    const support = [
+    const support = [...new Set([
       ...rectangle(-1, 1, -1, 0),
       ...rectangle(-1, 3, 2, 3),
       ...rectangle(3, 4, -1, 2),
-    ];
+    ])];
     const destination = position("3,1,0");
     const result = analyze({
       supportTopCellKeys: support,
@@ -448,7 +663,6 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
             destination,
           ]),
           halfWidthMeters: 0.5,
-          isBidirectional: true,
         }]),
       }),
     });
@@ -460,7 +674,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     );
   });
 
-  it("measures disconnected islands without blocking a non-ground Case", () => {
+  it("measures disconnected islands without blocking an air-Spawn Case", () => {
     const result = analyze({
       supportTopCellKeys: [
         ...rectangle(-1, 1, -1, 1),
@@ -494,6 +708,36 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
         requiredTargets: Object.freeze([target, target]),
       }),
     })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+
+    expect(() => analyze({
+      supportTopCellKeys: rectangle(-1, 3, -1, 1),
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([
+          target,
+          Object.freeze({
+            ...target,
+            id: "same-ref-other-target",
+            standPositionMetersXYZ: position("2,1,0"),
+          }),
+        ]),
+      }),
+    })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
+  });
+
+  it("does not invent cross-domain uniqueness between Spawn and target IDs", () => {
+    expect(() => analyze({
+      supportTopCellKeys: rectangle(-1, 2, -1, 1),
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTargets: Object.freeze([Object.freeze({
+          id: SPAWN.id,
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/same-local-id-target@1",
+          standPositionMetersXYZ: position("1,1,0"),
+        })]),
+      }),
+    })).not.toThrow();
   });
 
   it("fails closed before analysis when the Host-frozen cell budget is exceeded", () => {
@@ -551,7 +795,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     });
 
     expect(second).toEqual(first);
-    expect(second.groundAnalysisReportHash).toBe(first.groundAnalysisReportHash);
+    expect(sha256CanonicalJson(second)).toBe(sha256CanonicalJson(first));
   });
 
   it("rejects accessor-bearing Host input without invoking the accessor", () => {

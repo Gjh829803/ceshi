@@ -110,8 +110,20 @@ const caseValue = () => ({
     spawnSupport: { acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", spawnMarkerId: "player-spawn", supportColliderId: "spawn-ground", expectedMedium: "ground", expectedPositionXYZMeters: { xMeters: 0, yMeters: 1, zMeters: 0 } },
     colliders: [
       { acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground", requiresOverlay: true },
-      { acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1", contributionId: "west-wall-contribution", colliderId: "west-wall", role: "blocker", requiresOverlay: true },
+      { acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1", contributionId: "upper-ground-contribution", colliderId: "upper-ground", role: "ground", requiresOverlay: true },
     ],
+    groundConnectivity: {
+      requireSingleReachableComponent: true,
+      requiredTraversalBands: [{
+        acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
+        id: "central-ascent-band",
+        centerlineStandPositionsXYZMeters: [
+          { xMeters: 0, yMeters: 1, zMeters: 0 },
+          { xMeters: 0, yMeters: 1, zMeters: -1 },
+        ],
+        halfWidthMeters: 1,
+      }],
+    },
     criticalTraversalChecks: [{
       acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1", id: "reach-junction", evidenceKind: "scripted-fixed-input", expectation: "pass", checkpointIds: ["junction", "spawn"],
       fixedInputSequence: [{ actions: ["move-forward"], axes: { moveYRatio: 1 }, ticks: 12 }, { actions: ["jump"], ticks: 1 }, { actions: ["move-forward"], ticks: 8 }],
@@ -456,12 +468,168 @@ describe("world reconstruction contracts", () => {
     })).not.toBe(hashWorldReconstructionCaseV1(caseValue()));
   });
 
+  it("keeps ground connectivity exact, positive, ordered and identity-bound", () => {
+    const parsed = parseWorldReconstructionCaseV1(caseValue());
+    expect(Object.isFrozen(parsed.expected.groundConnectivity)).toBe(true);
+    expect(Object.isFrozen(
+      parsed.expected.groundConnectivity.requiredTraversalBands[0]!
+        .centerlineStandPositionsXYZMeters,
+    )).toBe(true);
+
+    const changedBand = caseValue();
+    changedBand.expected.groundConnectivity.requiredTraversalBands[0]!
+      .halfWidthMeters = 1.25;
+    expect(hashWorldReconstructionCaseV1(changedBand)).not.toBe(
+      hashWorldReconstructionCaseV1(caseValue()),
+    );
+
+    const missing = caseValue();
+    delete (missing.expected as Partial<typeof missing.expected>)
+      .groundConnectivity;
+    expect(() => parseWorldReconstructionCaseV1(missing)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const zeroWidth = caseValue();
+    zeroWidth.expected.groundConnectivity.requiredTraversalBands[0]!
+      .halfWidthMeters = 0;
+    expect(() => parseWorldReconstructionCaseV1(zeroWidth)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const retiredDirectionFlag = caseValue();
+    Object.assign(
+      retiredDirectionFlag.expected.groundConnectivity
+        .requiredTraversalBands[0]!,
+      { isBidirectional: false },
+    );
+    expect(() => parseWorldReconstructionCaseV1(retiredDirectionFlag))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const duplicatePosition = caseValue();
+    duplicatePosition.expected.groundConnectivity.requiredTraversalBands[0]!
+      .centerlineStandPositionsXYZMeters[1] =
+        duplicatePosition.expected.groundConnectivity
+          .requiredTraversalBands[0]!
+          .centerlineStandPositionsXYZMeters[0]!;
+    expect(() => parseWorldReconstructionCaseV1(duplicatePosition)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const unsorted = caseValue();
+    unsorted.expected.groundConnectivity.requiredTraversalBands.push({
+      ...structuredClone(
+        unsorted.expected.groundConnectivity.requiredTraversalBands[0]!,
+      ),
+      id: "aaa-before-central",
+    });
+    expect(() => parseWorldReconstructionCaseV1(unsorted)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const duplicateBandTarget = caseValue();
+    duplicateBandTarget.expected.groundConnectivity.requiredTraversalBands.push({
+      ...structuredClone(
+        duplicateBandTarget.expected.groundConnectivity.requiredTraversalBands[0]!,
+      ),
+      id: "zz-duplicate-target-band",
+      centerlineStandPositionsXYZMeters: [
+        { xMeters: 0, yMeters: 1, zMeters: -1 },
+        { xMeters: 0, yMeters: 1, zMeters: -2 },
+      ],
+    });
+    expect(() => parseWorldReconstructionCaseV1(duplicateBandTarget))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const missingSpawnOrigin = caseValue();
+    missingSpawnOrigin.expected.groundConnectivity.requiredTraversalBands[0]!
+      .centerlineStandPositionsXYZMeters[0]!.zMeters = 4;
+    expect(() => parseWorldReconstructionCaseV1(missingSpawnOrigin)).toThrowError(
+      "WORLD_RECONSTRUCTION_CASE_INVALID",
+    );
+
+    const bandWithoutPassTarget = caseValue();
+    bandWithoutPassTarget.expected.criticalTraversalChecks[0]!.expectation =
+      "block";
+    expect(() => parseWorldReconstructionCaseV1(bandWithoutPassTarget))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const passTargetWithoutBand = caseValue();
+    passTargetWithoutBand.expected.criticalTraversalChecks.unshift({
+      ...structuredClone(
+        passTargetWithoutBand.expected.criticalTraversalChecks[0]!,
+      ),
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/central-ascent@1",
+      id: "reach-foreground",
+    });
+    expect(() => parseWorldReconstructionCaseV1(passTargetWithoutBand))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const groundWithoutBands = caseValue();
+    groundWithoutBands.expected.groundConnectivity.requiredTraversalBands = [];
+    expect(() => parseWorldReconstructionCaseV1(groundWithoutBands))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const airWithGroundPolicy = caseValue();
+    airWithGroundPolicy.expected.spawnSupport.expectedMedium = "air";
+    expect(() => parseWorldReconstructionCaseV1(airWithGroundPolicy))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const validAirCase = caseValue();
+    validAirCase.expected.spawnSupport.expectedMedium = "air";
+    validAirCase.expected.groundConnectivity = {
+      requireSingleReachableComponent: false,
+      requiredTraversalBands: [],
+    };
+    expect(parseWorldReconstructionCaseV1(validAirCase).expected
+      .groundConnectivity.requiredTraversalBands).toEqual([]);
+  });
+
   it("allows a text-only Native reconstruction Case with no image reference", () => {
     const parsed = parseWorldReconstructionCaseV1({
       ...caseValue(),
       referenceInputs: [],
     });
     expect(parsed.referenceInputs).toEqual([]);
+  });
+
+  it("requires traversal expectations to bind matching Collider roles", () => {
+    const passBoundOnlyToBlocker = caseValue();
+    passBoundOnlyToBlocker.expected.colliders[1]!.role = "blocker";
+    expect(() => parseWorldReconstructionCaseV1(passBoundOnlyToBlocker))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const blockBoundOnlyToGround = caseValue();
+    blockBoundOnlyToGround.expected.criticalTraversalChecks[0]!.expectation =
+      "block";
+    expect(() => parseWorldReconstructionCaseV1(blockBoundOnlyToGround))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const duplicateColliderId = caseValue();
+    duplicateColliderId.expected.colliders[1]!.colliderId =
+      duplicateColliderId.expected.colliders[0]!.colliderId;
+    expect(() => parseWorldReconstructionCaseV1(duplicateColliderId))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const duplicateCheckpointId = caseValue();
+    duplicateCheckpointId.expected.criticalTraversalChecks.push({
+      ...structuredClone(
+        duplicateCheckpointId.expected.criticalTraversalChecks[0]!,
+      ),
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/central-ascent@1",
+      id: "second-check",
+      checkpointIds: ["junction"],
+    });
+    expect(() => parseWorldReconstructionCaseV1(duplicateCheckpointId))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+
+    const mismatchedSpawnTarget = caseValue();
+    mismatchedSpawnTarget.expected.spawnSupport.acceptanceTargetRef =
+      "worldkit://acceptance-target/upper-t-junction@1";
+    expect(() => parseWorldReconstructionCaseV1(mismatchedSpawnTarget))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
   });
 
   it("requires non-empty acceptance/evidence targets and scripted fixed-input semantics", () => {
@@ -476,6 +644,24 @@ describe("world reconstruction contracts", () => {
     expect(() => parseWorldReconstructionCaseV1(routeClaim)).toThrowError(
       "WORLD_RECONSTRUCTION_CASE_INVALID",
     );
+    const unusedAcceptanceTarget = caseValue();
+    unusedAcceptanceTarget.acceptanceTargetRefs.splice(
+      1,
+      0,
+      "worldkit://acceptance-target/unused@1",
+    );
+    expect(() => parseWorldReconstructionCaseV1(unusedAcceptanceTarget))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
+    const duplicateVisualGroup = caseValue();
+    duplicateVisualGroup.expected.semanticSilhouetteTargets.push({
+      ...structuredClone(
+        duplicateVisualGroup.expected.semanticSilhouetteTargets[0]!,
+      ),
+      acceptanceTargetRef:
+        "worldkit://acceptance-target/upper-t-junction@1",
+    });
+    expect(() => parseWorldReconstructionCaseV1(duplicateVisualGroup))
+      .toThrowError("WORLD_RECONSTRUCTION_CASE_INVALID");
   });
 
   it("requires exact unique Case/Profile threshold target closure", () => {

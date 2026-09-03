@@ -1,7 +1,5 @@
 import {
-  BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1,
-} from "@whitebox-world/native-babylon-block-profile";
-import {
+  BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,
   analyzeBabylonNativeBlockGroundV1,
   type BabylonNativeBlockCheckedEpochEvidenceV1,
@@ -15,7 +13,6 @@ import {
 } from "@whitebox-world/protocol";
 import {
   worldResourceLockEntriesV1,
-  type BabylonNativeBlockMaterializerMetadataV1,
   type BabylonNativeSceneContributionV1,
   type WorldResourceLockEntryV1,
   type WorldRuntimeBootstrapV1,
@@ -24,7 +21,8 @@ import {
   createTraversalCapabilityEnvelopeV1,
   resolveTraversalGraphBuilderProfileV2,
   resolveTraversalLockV1,
-  BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  type TraversalCapabilityEnvelopeReceiptV1,
 } from "@whitebox-world/traversal";
 import {
   hashWorldReconstructionCaseV1,
@@ -41,13 +39,13 @@ import { createNativeGroundAnalysisRepairDiagnosticsV1 } from
 
 const MAXIMUM_OCCUPANCY_CELLS_PER_BLOCK = 16;
 const MAXIMUM_SUPPORT_TOP_CELLS_PER_BLOCK = 4;
+const TOPOLOGY_CAPABILITY_EPSILON = 1e-8;
 
 export interface AnalyzeProductionNativeBlockGroundInputV1 {
   readonly reconstructionCase: WorldReconstructionCaseV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
   readonly contribution: BabylonNativeSceneContributionV1;
-  readonly materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
   readonly checkedEpochEvidence: BabylonNativeBlockCheckedEpochEvidenceV1;
   readonly worldPackageRootHash: Sha256HashV1;
   readonly maximumBlockCount: number;
@@ -67,56 +65,6 @@ function fail(message: string): never {
 
 function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function canonicalSupportCellPosition(
-  positionMetersXYZ: readonly [number, number, number],
-): BabylonNativeBlockGroundStandPositionV1 {
-  const grid = BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1;
-  return Object.freeze([
-    (Math.round(positionMetersXYZ[0] / grid[0] - 0.5) + 0.5) * grid[0],
-    Math.round(positionMetersXYZ[1] / grid[1]) * grid[1],
-    (Math.round(positionMetersXYZ[2] / grid[2] - 0.5) + 0.5) * grid[2],
-  ]);
-}
-
-function supportCellPosition(
-  topCellKey: string,
-): BabylonNativeBlockGroundStandPositionV1 {
-  const coordinates = topCellKey.split(",").map(Number);
-  if (
-    coordinates.length !== 3 ||
-    coordinates.some((coordinate) => !Number.isSafeInteger(coordinate))
-  ) return fail(`invalid support top cell '${topCellKey}'`);
-  const grid = BABYLON_NATIVE_BLOCK_OCCUPANCY_GRID_METERS_XYZ_V1;
-  return Object.freeze([
-    (coordinates[0]! + 0.5) * grid[0],
-    coordinates[1]! * grid[1],
-    (coordinates[2]! + 0.5) * grid[2],
-  ]);
-}
-
-function nearestSupportPosition(
-  evidence: BabylonNativeBlockCheckedEpochEvidenceV1,
-  desiredPositionMetersXYZ: readonly [number, number, number],
-  visualGroupId?: string,
-): BabylonNativeBlockGroundStandPositionV1 {
-  const candidates = evidence.logicalGroundModel.exposedSupportTopCells
-    .filter((cell) => isNil(visualGroupId) || cell.visualGroupId === visualGroupId)
-    .map((cell) => ({
-      cell,
-      position: supportCellPosition(cell.topCellKey),
-    }))
-    .sort((left, right) => {
-      const leftDistance = left.position.reduce((sum, value, axis) =>
-        sum + (value - desiredPositionMetersXYZ[axis]!) ** 2, 0);
-      const rightDistance = right.position.reduce((sum, value, axis) =>
-        sum + (value - desiredPositionMetersXYZ[axis]!) ** 2, 0);
-      return leftDistance - rightDistance ||
-        stableCompare(left.cell.topCellKey, right.cell.topCellKey);
-    });
-  return candidates[0]?.position ??
-    canonicalSupportCellPosition(desiredPositionMetersXYZ);
 }
 
 function resourceEntry(
@@ -215,9 +163,112 @@ function createControlledTraversalCapabilityEnvelopeV1(
   return createTraversalCapabilityEnvelopeV1({
     traversalLockReceipt,
     graphBuilderProfile: resolveTraversalGraphBuilderProfileV2(
-      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
     ),
   });
+}
+
+export function assertProductionNativeBlockGroundTopologyCompatibleV1(
+  evidence: BabylonNativeBlockCheckedEpochEvidenceV1,
+  traversalCapabilityEnvelopeReceipt:
+    TraversalCapabilityEnvelopeReceiptV1,
+): void {
+  const topology = evidence.topology;
+  const groundModelHash = evidence.logicalGroundModel.logicalGroundModelHash;
+  const expectedPolicyHash = sha256CanonicalJson(
+    BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+  );
+  const { topologyHash: _topologyHash, ...topologyBody } = topology;
+  if (
+    topology.identity.logicalGroundModelHash !== groundModelHash ||
+    topology.identity.topologyPolicyHash !== expectedPolicyHash ||
+    sha256CanonicalJson(topologyBody) !== topology.topologyHash
+  ) {
+    return fail("walkable topology identity or Profile policy is stale");
+  }
+  const envelope = traversalCapabilityEnvelopeReceipt.envelope;
+  if (
+    BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1
+      .maximumAutoSmoothHeightDeltaMeters >
+        envelope.maxStepHeightMeters + TOPOLOGY_CAPABILITY_EPSILON
+  ) {
+    return fail(
+      `Block Profile auto-smooth limit ${
+        BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1
+          .maximumAutoSmoothHeightDeltaMeters
+      }m exceeds controlled Subject maxStepHeightMeters ${
+        envelope.maxStepHeightMeters
+      }m`,
+    );
+  }
+  for (const geometry of topology.walkableGeometries) {
+    const positions = geometry.collisionPositionsMetersXYZ;
+    const indices = geometry.triangleIndices;
+    if (positions.length % 3 !== 0 || indices.length % 3 !== 0) {
+      return fail(`walkable topology '${geometry.logicalColliderId}' is malformed`);
+    }
+    for (let offset = 0; offset < indices.length; offset += 3) {
+      const indexes = [indices[offset], indices[offset + 1], indices[offset + 2]];
+      if (indexes.some((index) =>
+        !Number.isSafeInteger(index) ||
+        index! < 0 ||
+        index! * 3 + 2 >= positions.length
+      )) {
+        return fail(
+          `walkable topology '${geometry.logicalColliderId}' has an invalid triangle index`,
+        );
+      }
+      const [first, second, third] = indexes.map((index) => [
+        positions[index! * 3]!,
+        positions[index! * 3 + 1]!,
+        positions[index! * 3 + 2]!,
+      ] as const);
+      const firstEdge = [
+        second![0] - first![0],
+        second![1] - first![1],
+        second![2] - first![2],
+      ] as const;
+      const secondEdge = [
+        third![0] - first![0],
+        third![1] - first![1],
+        third![2] - first![2],
+      ] as const;
+      // Match Babylon 9.23 ComputeNormals and Runtime surface admission:
+      // (p3 - p1) x (p2 - p1), not the opposite winding.
+      const normal = [
+        secondEdge[1] * firstEdge[2] - secondEdge[2] * firstEdge[1],
+        secondEdge[2] * firstEdge[0] - secondEdge[0] * firstEdge[2],
+        secondEdge[0] * firstEdge[1] - secondEdge[1] * firstEdge[0],
+      ] as const;
+      const normalLength = Math.hypot(...normal);
+      if (!(normalLength > TOPOLOGY_CAPABILITY_EPSILON)) {
+        return fail(
+          `walkable topology '${geometry.logicalColliderId}' has a degenerate triangle`,
+        );
+      }
+      if (!(normal[1] > TOPOLOGY_CAPABILITY_EPSILON)) {
+        return fail(
+          `walkable topology '${geometry.logicalColliderId}' has a downward-facing triangle`,
+        );
+      }
+      const slopeDegrees = Math.acos(Math.min(
+        1,
+        normal[1] / normalLength,
+      )) * 180 / Math.PI;
+      if (
+        slopeDegrees >
+          envelope.maxSlopeDegrees + TOPOLOGY_CAPABILITY_EPSILON
+      ) {
+        return fail(
+          `walkable topology '${geometry.logicalColliderId}' slope ${
+            slopeDegrees
+          }deg exceeds controlled Subject maxSlopeDegrees ${
+            envelope.maxSlopeDegrees
+          }deg`,
+        );
+      }
+    }
+  }
 }
 
 function createGroundCaseIntentV1(
@@ -230,32 +281,17 @@ function createGroundCaseIntentV1(
     spawn.positionMetersXYZ[1],
     spawn.positionMetersXYZ[2],
   ]) as readonly [number, number, number];
-  const groupByAcceptanceTargetRef = new Map(
-    input.materializerMetadata.visualGroups.map((group) =>
-      [group.acceptanceTargetRef, group] as const),
-  );
-  const requiredTargets = expected.criticalTraversalChecks
-    .filter(({ expectation }) => expectation === "pass")
-    .map((check) => {
-      const group = groupByAcceptanceTargetRef.get(check.acceptanceTargetRef);
-      if (isNil(group)) {
-        return fail(
-          `pass check '${check.id}' has no Package visual-group target`,
-        );
-      }
-      const desired = Object.freeze([
-        (group.minimumMetersXYZ[0] + group.maximumMetersXYZ[0]) / 2,
-        group.maximumMetersXYZ[1],
-        (group.minimumMetersXYZ[2] + group.maximumMetersXYZ[2]) / 2,
-      ]) as readonly [number, number, number];
+  const requiredTargets = expected.groundConnectivity.requiredTraversalBands
+    .map((band) => {
+      const destination = band.centerlineStandPositionsXYZMeters.at(-1)!;
       return Object.freeze({
-        id: check.id,
-        acceptanceTargetRef: check.acceptanceTargetRef,
-        standPositionMetersXYZ: nearestSupportPosition(
-          input.checkedEpochEvidence,
-          desired,
-          group.visualGroupId,
-        ),
+        id: band.id,
+        acceptanceTargetRef: band.acceptanceTargetRef,
+        standPositionMetersXYZ: Object.freeze([
+          destination.xMeters,
+          destination.yMeters,
+          destination.zMeters,
+        ]) as BabylonNativeBlockGroundStandPositionV1,
       });
     })
     .sort((left, right) => stableCompare(left.id, right.id));
@@ -272,19 +308,33 @@ function createGroundCaseIntentV1(
     spawn: Object.freeze({
       id: expected.spawnSupport.spawnMarkerId,
       acceptanceTargetRef: expected.spawnSupport.acceptanceTargetRef,
-      standPositionMetersXYZ: nearestSupportPosition(
-        input.checkedEpochEvidence,
-        spawnDesired,
-      ),
+      // Spawn is Runtime truth. Never snap it to nearby support geometry or a
+      // hole/ledge can pass analysis while the real Character falls.
+      standPositionMetersXYZ: spawnDesired,
       openingYawQuarterTurnsY: normalizedYaw as 0 | 1 | 2 | 3,
       openingFovDegrees: input.worldRuntimeBootstrap.initialCamera.fovDegrees,
     }),
     requiredTargets: Object.freeze(requiredTargets),
-    requiredTraversalBands: Object.freeze([]),
-    // The current Case contract names required targets but no all-surfaces
-    // connectedness policy. Do not invent one or turn decorative islands into
-    // a false admission failure.
-    requireSingleReachableComponent: false,
+    requiredTraversalBands: Object.freeze(
+      expected.groundConnectivity.requiredTraversalBands.map((band) =>
+        Object.freeze({
+          id: band.id,
+          acceptanceTargetRef: band.acceptanceTargetRef,
+          centerlineStandPositionsMetersXYZ: Object.freeze(
+            band.centerlineStandPositionsXYZMeters.map((position) =>
+              Object.freeze([
+                position.xMeters,
+                position.yMeters,
+                position.zMeters,
+              ]) as BabylonNativeBlockGroundStandPositionV1
+            ),
+          ),
+          halfWidthMeters: band.halfWidthMeters,
+        })
+      ),
+    ),
+    requireSingleReachableComponent:
+      expected.groundConnectivity.requireSingleReachableComponent,
   });
 }
 
@@ -294,13 +344,19 @@ export function analyzeProductionNativeBlockGroundV1(
   if (!Number.isSafeInteger(input.maximumBlockCount) || input.maximumBlockCount <= 0) {
     return fail("maximumBlockCount must be one positive safe integer");
   }
+  const traversalCapabilityEnvelopeReceipt =
+    createControlledTraversalCapabilityEnvelopeV1(
+      input.worldRuntimeBootstrap,
+      input.registryLock,
+    );
+  assertProductionNativeBlockGroundTopologyCompatibleV1(
+    input.checkedEpochEvidence,
+    traversalCapabilityEnvelopeReceipt,
+  );
   const report = analyzeBabylonNativeBlockGroundV1({
     groundModel: input.checkedEpochEvidence.logicalGroundModel,
-    traversalCapabilityEnvelopeReceipt:
-      createControlledTraversalCapabilityEnvelopeV1(
-        input.worldRuntimeBootstrap,
-        input.registryLock,
-      ),
+    walkableTopology: input.checkedEpochEvidence.topology,
+    traversalCapabilityEnvelopeReceipt,
     caseIntent: createGroundCaseIntentV1(input),
     worldPackageRootHash: input.worldPackageRootHash,
     measurementChunkPolicy: BABYLON_NATIVE_BLOCK_CURRENT_CHUNK_POLICY_V1,

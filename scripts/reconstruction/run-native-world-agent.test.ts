@@ -94,6 +94,39 @@ describe("Native-default world agent Host route", () => {
     expect(source).toContain(
       "never bind a pass check to a blocker, cliff, wall, mountain, or other non-traversable landmark",
     );
+    expect(source).toContain(
+      "The acceptanceTargetRef of every block traversal check must name a target with a blocker Collider role",
+    );
+    expect(source).toContain(
+      "Every Collider ID, contribution ID, and checkpoint ID must be globally unique",
+    );
+  });
+
+  it("gives Mapper the exact source-neutral ground-connectivity contract", () => {
+    const source = readFileSync(
+      "scripts/reconstruction/run-native-world-agent.ts",
+      "utf8",
+    );
+    expect(source).toContain(
+      "For a ground Spawn, expected.groundConnectivity is required and has exactly this shape",
+    );
+    expect(source).toContain("centerlineStandPositionsXYZMeters");
+    expect(source).toContain(
+      "The first position of at least one band must exactly equal expected.spawnSupport.expectedPositionXYZMeters",
+    );
+    expect(source).toContain(
+      "every band binds one pass target",
+    );
+    expect(source).toContain(
+      "every ground pass target has exactly one explicit band",
+    );
+    expect(source).toContain(
+      "For an air Spawn, use requireSingleReachableComponent false and an empty requiredTraversalBands array",
+    );
+    expect(source).toContain("current ground-only Traversal Envelope");
+    expect(source).toContain(
+      "do not add an isBidirectional or one-way field",
+    );
   });
 
   it("assembles Case planning and the formal reconstruction transaction", () => {

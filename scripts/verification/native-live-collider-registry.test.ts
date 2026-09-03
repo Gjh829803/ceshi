@@ -5,6 +5,10 @@ import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import {
+  parseGameplayBootstrapV1,
+  type ActiveLocomotionCapabilityStateV2,
+} from "@whitebox-world/gameplay-contracts";
+import {
   defineBabylonNativeScene,
   type BabylonNativeSceneModuleV1,
 } from "@whitebox-world/native-babylon";
@@ -18,15 +22,22 @@ import {
   takeBabylonNativeBlockCheckedEpochEvidenceV1,
   type BabylonNativeBlockCheckedEpochEvidenceV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
-import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
+import {
+  BabylonWorldRuntime,
+  type BabylonRuntimeProjectionV1,
+} from "@whitebox-world/runtime-babylon";
 import {
   bindRuntimeTestPossession,
   peekBabylonNativeLiveColliderRegistryV1,
 } from "@whitebox-world/runtime-babylon/testing";
 import {
   hashBabylonNativeSceneContributionV1,
+  hashBabylonNativeSceneBootstrapV1,
   parseBabylonNativeBlockMaterializerMetadataV1,
+  parseWorldRuntimeBootstrapV1,
+  worldResourceLockEntriesV1,
   type BabylonNativeSceneContributionV1,
+  type SemanticInputActionV1,
 } from "@whitebox-world/runtime-contracts";
 import { runtimeWorldConfigurationFromVerifiedWorldPackageV1 } from
   "@whitebox-world/runtime-host";
@@ -39,6 +50,8 @@ import { createBabylonNativeBlockWorldPackageTestInputV1 } from
   "@whitebox-world/world-package/testing";
 import { describe, expect, it } from "vitest";
 import { isNil } from "lodash-es";
+import { hashSceneAuthoringAttemptV1 } from
+  "@whitebox-world/scene-authoring-contracts";
 
 const require = createRequire(import.meta.url);
 const havokWasmBytes = await readFile(
@@ -48,15 +61,88 @@ const havokWasmBinary = havokWasmBytes.buffer.slice(
   havokWasmBytes.byteOffset,
   havokWasmBytes.byteOffset + havokWasmBytes.byteLength,
 ) as ArrayBuffer;
+const gBotSubjectAssetBytes = new Uint8Array(await readFile(new URL(
+  "../../apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb",
+  import.meta.url,
+)));
+const productionGameplayBootstrap = parseGameplayBootstrapV1(JSON.parse(
+  await readFile(new URL(
+    "../../apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json",
+    import.meta.url,
+  ), "utf8"),
+));
+const productionWorldRuntimeBootstrap = parseWorldRuntimeBootstrapV1(JSON.parse(
+  await readFile(new URL(
+    "../../apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json",
+    import.meta.url,
+  ), "utf8"),
+));
 
-function moduleFixture(): BabylonNativeSceneModuleV1 {
+function moduleFixture(
+  profile: "single-block" | "quarter-meter-ramp" = "single-block",
+): BabylonNativeSceneModuleV1 {
   return defineBabylonNativeScene({
     kind: "babylon-native-scene-module",
     id: "package-fixture-module",
     build(context): void {
       const session = createBabylonNativeBlockProfileSessionV1(context, {
-        maximumBlockCount: 1,
+        maximumBlockCount: profile === "single-block" ? 1 : 512,
       });
+      if (profile === "quarter-meter-ramp") {
+        for (let xMeters = -3; xMeters <= 13; xMeters += 1) {
+          const riseCount = xMeters < 2
+            ? 0
+            : Math.min(8, xMeters - 1);
+          for (let zMeters = -2; zMeters <= 2; zMeters += 1) {
+            session.createBlock({
+              id: `ramp-base-x${xMeters + 3}-z${zMeters + 2}`,
+              shape: "full",
+              paletteRole: "ground",
+              centerMetersXYZ: [xMeters, -0.5, zMeters],
+              colliderGroupId: "ramp-ground-group",
+            });
+            for (let riseIndex = 0; riseIndex < riseCount; riseIndex += 1) {
+              session.createBlock({
+                id: `ramp-rise-x${xMeters + 3}-z${zMeters + 2}-y${riseIndex}`,
+                shape: "step",
+                paletteRole: "ground",
+                centerMetersXYZ: [
+                  xMeters,
+                  0.125 + riseIndex * 0.25,
+                  zMeters,
+                ],
+                colliderGroupId: "ramp-ground-group",
+              });
+            }
+          }
+        }
+        session.finalize({
+          displayGapMeters: 0.04,
+          staticColliders: [{
+            id: "ground",
+            colliderGeometrySource: Object.freeze({
+              kind: "block-group" as const,
+              colliderGroupId: "ramp-ground-group",
+            }),
+            traversalBinding: {
+              kind: "static-surface",
+              surfaceEntityId: "ground-surface",
+              logicalSubshapeId: "top",
+              traversalSurfaceProfileRef:
+                "worldkit://traversal-surface-profile/ground.static@1",
+            },
+            exposedEdgePolicy: "none",
+            frictionRatio: 0.8,
+            restitutionRatio: 0,
+          }],
+        });
+        context.registration.registerSpawnMarker({
+          id: context.bootstrap.spawnMarkerId,
+          positionMetersXYZ: [0, 0, 0],
+          facingRadians: 0,
+        });
+        return;
+      }
       session.createBlock({
         id: "ground-block",
         shape: "full",
@@ -89,7 +175,9 @@ function moduleFixture(): BabylonNativeSceneModuleV1 {
   });
 }
 
-async function admittedFixture(): Promise<Readonly<{
+async function admittedFixture(
+  module: BabylonNativeSceneModuleV1 = moduleFixture(),
+): Promise<Readonly<{
   contribution: BabylonNativeSceneContributionV1;
   evidence: BabylonNativeBlockCheckedEpochEvidenceV1;
 }>> {
@@ -101,16 +189,16 @@ async function admittedFixture(): Promise<Readonly<{
       candidate: { engine, scene },
       hostDerivedStaticColliders: Object.freeze([]),
       bootstrap: packageInput.nativeSceneBootstrap,
-      module: moduleFixture(),
+      module,
       assets: Object.freeze({
         async resolve(): Promise<never> {
           throw new Error("Native live-collider fixture declares no assets.");
         },
       }),
       budget: {
-        maximumStaticColliderCount: 4,
-        maximumStaticColliderVertexCount: 128,
-        maximumStaticColliderTriangleCount: 64,
+        maximumStaticColliderCount: 512,
+        maximumStaticColliderVertexCount: 200_000,
+        maximumStaticColliderTriangleCount: 100_000,
       },
     });
     if (admission.outcome !== "passed") {
@@ -135,6 +223,48 @@ function packageFixture(
     throw new Error("Expected committed Block settlement.");
   }
   const base = createBabylonNativeBlockWorldPackageTestInputV1();
+  const nativeSceneBootstrap = Object.freeze({
+    ...base.nativeSceneBootstrap,
+    gameplayBootstrapRef: productionGameplayBootstrap.resourceRef,
+    initialControlledEntityId:
+      productionWorldRuntimeBootstrap.initialControlledEntityId,
+    initialCamera: Object.freeze({
+      mode: productionWorldRuntimeBootstrap.initialCamera.mode,
+      pitchRadians: productionWorldRuntimeBootstrap.initialCamera.pitchRadians,
+      distanceMeters: productionWorldRuntimeBootstrap.initialCamera.distanceMeters,
+      fovDegrees: productionWorldRuntimeBootstrap.initialCamera.fovDegrees,
+      targetHeightMeters:
+        productionWorldRuntimeBootstrap.initialCamera.targetHeightMeters,
+    }),
+  });
+  const sceneAuthoringAttempt = Object.freeze({
+    ...base.sceneAuthoringAttempt,
+    sourceInput: Object.freeze({
+      ...base.sceneAuthoringAttempt.sourceInput,
+      bootstrapInputHash:
+        hashBabylonNativeSceneBootstrapV1(nativeSceneBootstrap),
+    }),
+  });
+  const sceneAuthoringAttemptResult = Object.freeze({
+    ...base.sceneAuthoringAttemptResult,
+    sceneAuthoringAttemptHash:
+      hashSceneAuthoringAttemptV1(sceneAuthoringAttempt),
+  });
+  const nativeAndTraversalRows = base.registryLock.filter(({ resourceKind }) =>
+    resourceKind === "native-scene" ||
+    resourceKind === "native-scene-api" ||
+    resourceKind === "native-scene-profile" ||
+    resourceKind === "traversal-surface-profile");
+  const registryLock = worldResourceLockEntriesV1([
+    ...productionWorldRuntimeBootstrap.runtimeResourceLockEntries,
+    {
+      resourceKind: "world-runtime-bootstrap",
+      resourceRef: "worldkit://world-runtime-bootstrap/cloud-ridge@1",
+      resolvedVersion: "1",
+      contentHash: productionWorldRuntimeBootstrap.contentHash,
+    },
+    ...nativeAndTraversalRows,
+  ]);
   const metadata = base.nativeBlockMaterializerMetadata;
   if (isNil(metadata)) throw new Error("Expected Block metadata fixture.");
   const nativeBlockMaterializerMetadata =
@@ -173,10 +303,21 @@ function packageFixture(
   const verified = verifyWorldPackageDirectoryV1(
     createBabylonNativeWorldPackageV1(
       createBabylonNativeBlockWorldPackageTestInputV1({
+        nativeSceneBootstrap,
+        sceneAuthoringAttempt,
+        sceneAuthoringAttemptResult,
+        gameplayBootstrap: productionGameplayBootstrap,
+        worldRuntimeBootstrap: productionWorldRuntimeBootstrap,
+        registryLock,
+        worldBounds: {
+          centerMetersXZ: [5, 0],
+          sizeMetersXZ: [40, 20],
+          heightRangeMeters: [-5, 20],
+        },
         resourceBudget: {
-          maximumVertices: 128,
-          maximumTriangles: 64,
-          maximumColliders: 4,
+          maximumVertices: 200_000,
+          maximumTriangles: 100_000,
+          maximumColliders: 512,
         },
         nativeSceneContribution: contribution,
         nativeBlockMaterializerMetadata,
@@ -187,21 +328,28 @@ function packageFixture(
   return verified;
 }
 
-async function createVerifiedFixture(): Promise<
+async function createVerifiedFixture(
+  module: BabylonNativeSceneModuleV1 = moduleFixture(),
+): Promise<
   VerifiedBabylonNativeWorldPackageDirectoryV1
 > {
-  const admitted = await admittedFixture();
+  const admitted = await admittedFixture(module);
   return packageFixture(admitted.contribution, admitted.evidence);
 }
 
 async function createRuntime(input: Readonly<{
   engineFactory?: () => NullEngine;
   onInitializationStage?: (stage: string) => void;
+  module?: BabylonNativeSceneModuleV1;
 }> = {}): Promise<Readonly<{
   runtime: BabylonWorldRuntime;
   scene: Scene;
+  expectedWalkSpeedMetersPerSecond: number;
+  expectedCameraDistanceMeters: number;
+  controlledEntityId: string;
 }>> {
-  const verified = await createVerifiedFixture();
+  const module = input.module ?? moduleFixture();
+  const verified = await createVerifiedFixture(module);
   const configuration = runtimeWorldConfigurationFromVerifiedWorldPackageV1(
     verified,
   );
@@ -220,12 +368,20 @@ async function createRuntime(input: Readonly<{
         sceneSource: configuration.sceneSource,
       },
       verifiedWorldPackage: verified,
-      moduleLoader: Object.freeze({ load: async () => moduleFixture() }),
+      moduleLoader: Object.freeze({ load: async () => module }),
     },
     worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
     gameplayBootstrap: verified.gameplayBootstrap,
     runtimeSessionId: "runtime.native-live-collider",
     havokWasmBinary,
+    subjectAssetResolver: Object.freeze({
+      async resolveSubjectAsset() {
+        return Object.freeze({
+          bytes: new Uint8Array(gBotSubjectAssetBytes),
+          sourceLabel: "native-ramp-test-memory://g-bot.glb",
+        });
+      },
+    }),
     engineFactory: input.engineFactory ?? (() =>
       new NullEngine({
         renderWidth: 64,
@@ -239,14 +395,283 @@ async function createRuntime(input: Readonly<{
       : { onInitializationStage: input.onInitializationStage }),
   });
   const scene = (runtime as unknown as { scene: Scene }).scene;
+  const controlledSubject = verified.worldRuntimeBootstrap
+    .subjectRuntimeDescriptors.find(({ entityId }) =>
+      entityId === verified.worldRuntimeBootstrap.initialControlledEntityId);
+  if (isNil(controlledSubject)) {
+    throw new Error("Verified Package is missing its controlled Subject descriptor.");
+  }
   await bindRuntimeTestPossession(
     runtime,
     verified.worldRuntimeBootstrap.initialControlledEntityId,
   );
-  return Object.freeze({ runtime, scene });
+  return Object.freeze({
+    runtime,
+    scene,
+    controlledEntityId: controlledSubject.entityId,
+    expectedWalkSpeedMetersPerSecond:
+      controlledSubject.controlFeel.walkSpeedMetersPerSecond,
+    expectedCameraDistanceMeters:
+      verified.worldRuntimeBootstrap.initialCamera.distanceMeters,
+  });
+}
+
+async function beginSupportedJump(
+  runtime: BabylonWorldRuntime,
+  controlledEntityId: string,
+  persistentActions: readonly SemanticInputActionV1[],
+): Promise<Readonly<{
+  snapshot: BabylonRuntimeProjectionV1;
+  takeoffPhaseEntryTicks: ReadonlySet<number>;
+}>> {
+  const takeoffPhaseEntryTicks = new Set<number>();
+  let snapshot = runtime.snapshot();
+  for (let tick = 0; tick < 8; tick += 1) {
+    snapshot = await runtime.runFixedInput({
+      actions: tick === 0
+        ? [...persistentActions, "jump"]
+        : persistentActions,
+      ticks: 1,
+    });
+    const locomotion = snapshot.subjectStatesByEntityId[controlledEntityId]!
+      .locomotion;
+    if (isNil(locomotion) || locomotion.status !== "active") {
+      throw new Error(
+        "Production G Bot ramp fixture is missing active current Locomotion projection.",
+      );
+    }
+    if (locomotion.verticalPhase === "takeoff") {
+      takeoffPhaseEntryTicks.add(locomotion.phaseEnteredTick);
+    }
+    if (locomotion.mobilityMode === "airborne") {
+      return Object.freeze({ snapshot, takeoffPhaseEntryTicks });
+    }
+  }
+  throw new Error(
+    "Native ramp did not admit the SDK jump inside the bounded current Action window.",
+  );
+}
+
+function activeLocomotion(
+  snapshot: BabylonRuntimeProjectionV1,
+  controlledEntityId: string,
+): ActiveLocomotionCapabilityStateV2 {
+  const locomotion = snapshot.subjectStatesByEntityId[controlledEntityId]!
+    .locomotion;
+  if (isNil(locomotion) || locomotion.status !== "active") {
+    throw new Error(
+      "Production G Bot ramp fixture is missing active current Locomotion projection.",
+    );
+  }
+  return locomotion;
 }
 
 describe("SDK-owned Native live collider registry", () => {
+  it("preserves current movement, Action and Camera contracts across one smoothed Native Block ramp", async () => {
+    const {
+      runtime,
+      expectedWalkSpeedMetersPerSecond,
+      expectedCameraDistanceMeters,
+      controlledEntityId,
+    } = await createRuntime({
+      module: moduleFixture("quarter-meter-ramp"),
+    });
+    try {
+      let snapshot = runtime.snapshot();
+      const rampSamples = [];
+      const rampCameraSamples = [];
+      for (let tick = 0; tick < 480; tick += 1) {
+        snapshot = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        const subject = snapshot.subjectStatesByEntityId[controlledEntityId]!;
+        if (
+          subject.positionMetersXYZ[0] >= 2 &&
+          subject.positionMetersXYZ[0] <= 9
+        ) {
+          rampSamples.push(subject);
+          rampCameraSamples.push(snapshot.camera);
+        }
+        if (subject.positionMetersXYZ[0] >= 10) break;
+      }
+      expect(rampSamples.length).toBeGreaterThan(30);
+      expect(rampSamples.every(({ movementMedium }) =>
+        movementMedium === "ground")).toBe(true);
+      expect(Math.min(...rampSamples.map(({ speedMetersPerSecond }) =>
+        speedMetersPerSecond))).toBeGreaterThanOrEqual(
+          expectedWalkSpeedMetersPerSecond * 0.9,
+        );
+      expect(Math.max(...rampCameraSamples.map((camera) =>
+        (camera.requestedArmLengthMeters ?? expectedCameraDistanceMeters) -
+        (camera.effectiveArmLengthMeters ?? 0),
+      ))).toBeLessThanOrEqual(0.02);
+      expect(rampCameraSamples.every(({ decollisionPhase }) =>
+        decollisionPhase !== "emergency-inside" &&
+        decollisionPhase !== "constrained")).toBe(true);
+      expect(snapshot.subjectStatesByEntityId[controlledEntityId]!
+        .positionMetersXYZ[0])
+        .toBeGreaterThanOrEqual(10);
+      expect(snapshot.subjectStatesByEntityId[controlledEntityId]!
+        .positionMetersXYZ[1])
+        .toBeGreaterThan(1.5);
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, controlledEntityId);
+      for (let tick = 0; tick < 480; tick += 1) {
+        snapshot = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        if (snapshot.subjectStatesByEntityId[controlledEntityId]!
+          .positionMetersXYZ[0] >= 10) {
+          break;
+        }
+      }
+      const downhillSamples = [];
+      for (let tick = 0; tick < 480; tick += 1) {
+        snapshot = await runtime.runFixedInput({
+          actions: ["move-left"],
+          ticks: 1,
+        });
+        const subject = snapshot.subjectStatesByEntityId[controlledEntityId]!;
+        if (
+          subject.positionMetersXYZ[0] >= 2 &&
+          subject.positionMetersXYZ[0] <= 9
+        ) downhillSamples.push(subject);
+        if (subject.positionMetersXYZ[0] <= 1) break;
+      }
+      expect(downhillSamples.length).toBeGreaterThan(30);
+      expect(downhillSamples.every(({ movementMedium }) =>
+        movementMedium === "ground"), JSON.stringify(
+        downhillSamples.filter(({ movementMedium }) =>
+          movementMedium !== "ground").slice(0, 8),
+      )).toBe(true);
+      expect(snapshot.subjectStatesByEntityId[controlledEntityId]!
+        .positionMetersXYZ[0])
+        .toBeLessThanOrEqual(1);
+
+      for (let tick = 0; tick < 480; tick += 1) {
+        snapshot = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        if (snapshot.subjectStatesByEntityId[controlledEntityId]!
+          .positionMetersXYZ[0] >= 6) {
+          break;
+        }
+      }
+      const jumpStart = await beginSupportedJump(
+        runtime,
+        controlledEntityId,
+        ["move-right"],
+      );
+      const jumping = jumpStart.snapshot;
+      expect(jumping.subjectStatesByEntityId[controlledEntityId]).toMatchObject({
+        movementMedium: "air",
+        locomotion: {
+          status: "active",
+          mobilityMode: "airborne",
+          supportMode: "unsupported",
+        },
+      });
+      expect(["takeoff", "rising"]).toContain(
+        activeLocomotion(jumping, controlledEntityId).verticalPhase,
+      );
+      const takeoffPhaseEntryTicks = new Set(
+        jumpStart.takeoffPhaseEntryTicks,
+      );
+      let landed = jumping;
+      for (let tick = 0; tick < 180; tick += 1) {
+        landed = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        const locomotion = activeLocomotion(landed, controlledEntityId);
+        if (locomotion.verticalPhase === "takeoff") {
+          takeoffPhaseEntryTicks.add(locomotion.phaseEnteredTick);
+        }
+        if (
+          locomotion.mobilityMode === "grounded" &&
+          locomotion.verticalPhase === "none"
+        ) break;
+      }
+      expect(takeoffPhaseEntryTicks.size).toBe(1);
+      expect(landed.subjectStatesByEntityId[controlledEntityId]).toMatchObject({
+        movementMedium: "ground",
+        locomotion: {
+          status: "active",
+          mobilityMode: "grounded",
+          verticalPhase: "none",
+        },
+      });
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, controlledEntityId);
+      for (let tick = 0; tick < 480; tick += 1) {
+        snapshot = await runtime.runFixedInput({
+          actions: ["move-right", "run"],
+          ticks: 1,
+        });
+        if (snapshot.subjectStatesByEntityId[controlledEntityId]!
+          .positionMetersXYZ[0] >= 6) {
+          break;
+        }
+      }
+      const runningJumpStart = await beginSupportedJump(
+        runtime,
+        controlledEntityId,
+        ["move-right", "run"],
+      );
+      const runningJump = runningJumpStart.snapshot;
+      expect(runningJump.subjectStatesByEntityId[controlledEntityId])
+        .toMatchObject({
+        movementMedium: "air",
+        locomotion: {
+          status: "active",
+          mobilityMode: "airborne",
+          supportMode: "unsupported",
+        },
+      });
+      expect(["takeoff", "rising"]).toContain(
+        activeLocomotion(runningJump, controlledEntityId).verticalPhase,
+      );
+      const runningTakeoffPhaseEntryTicks = new Set(
+        runningJumpStart.takeoffPhaseEntryTicks,
+      );
+      let runningLanded = runningJump;
+      for (let tick = 0; tick < 180; tick += 1) {
+        runningLanded = await runtime.runFixedInput({
+          actions: ["move-right", "run"],
+          ticks: 1,
+        });
+        const locomotion = activeLocomotion(
+          runningLanded,
+          controlledEntityId,
+        );
+        if (locomotion.verticalPhase === "takeoff") {
+          runningTakeoffPhaseEntryTicks.add(locomotion.phaseEnteredTick);
+        }
+        if (
+          locomotion.mobilityMode === "grounded" &&
+          locomotion.verticalPhase === "none"
+        ) break;
+      }
+      expect(runningTakeoffPhaseEntryTicks.size).toBe(1);
+      expect(runningLanded.subjectStatesByEntityId[controlledEntityId])
+        .toMatchObject({
+        movementMedium: "ground",
+        locomotion: {
+          status: "active",
+          mobilityMode: "grounded",
+          verticalPhase: "none",
+        },
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
   it("joins verified Block metadata to live Babylon and Havok handles without Scene scanning", async () => {
     const { runtime, scene } = await createRuntime();
     const registry = peekBabylonNativeLiveColliderRegistryV1(scene);

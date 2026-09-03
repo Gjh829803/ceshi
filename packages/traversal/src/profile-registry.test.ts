@@ -5,6 +5,7 @@ import {
   BUILT_IN_GROUND_STATIC_TRAVERSAL_SURFACE_PROFILE_REF,
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+  BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   resolveTraversalSurfaceProfileV1,
@@ -289,6 +290,32 @@ describe("traversal graph builder profile registry", () => {
     ).contentHash).toBe(
       "sha256:0c716c3d733d679d8518018ec2e54d678bc26715beac98c9928218862778d4a1",
     );
+  });
+
+  it("resolves an independently identified Native Block Ground V2 profile", () => {
+    const heightfield = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+    const resolved = resolveTraversalGraphBuilderProfileV2(
+      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    );
+
+    expect(BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF)
+      .toBe(
+        "worldkit://traversal-graph-builder-profile/outdoor-humanoid.native-block-ground@1",
+      );
+    expect(resolved).toEqual({
+      resourceRef:
+        BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+      resolvedVersion: "1",
+      contentHash: sha256CanonicalJson(resolved.profile),
+      profile: CLOSED_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE,
+    });
+    expect(resolved.resourceRef).not.toBe(heightfield.resourceRef);
+    expect(resolved.profile).not.toBe(heightfield.profile);
+    expect(resolveTraversalGraphBuilderProfile(
+      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
+    )).toEqual(resolved);
   });
 
   it("resolves an independently hashed locked low-budget Heightfield R1 profile", () => {

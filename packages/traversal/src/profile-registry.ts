@@ -22,6 +22,9 @@ export const BUILT_IN_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
 export const BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
   "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1@1" as const;
 
+export const BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
+  "worldkit://traversal-graph-builder-profile/outdoor-humanoid.native-block-ground@1" as const;
+
 export const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF =
   "worldkit://traversal-graph-builder-profile/outdoor-humanoid.heightfield-r1-low-budget@1" as const;
 
@@ -136,6 +139,32 @@ const BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE: TraversalGraphBuilderProfil
   minimumEquivalentPlaneNormalDotRatio: 0.99999,
   maximumTraversalSurfaceTrianglePairTestCount: 4_000_000,
 };
+
+// Native Block currently uses the same measured graph-building limits as the
+// Heightfield lane, but it owns a separate Profile value and resource identity.
+// Keep the values explicit so tuning one Scene Source cannot silently change
+// the admission policy of the other.
+const BUILT_IN_NATIVE_BLOCK_GROUND_GRAPH_BUILDER_PROFILE:
+  TraversalGraphBuilderProfileV2 = {
+    kind: "traversal-graph-builder-profile",
+    schemaVersion: 2,
+    clearanceMarginMeters: 0.05,
+    voxelCellSizeMeters: 0.15,
+    voxelCellHeightMeters: 0.1,
+    tileSizeCells: 64,
+    maximumEdgeLengthMeters: 2.4,
+    maximumSimplificationErrorMeters: 0.15,
+    positionQuantizationMeters: 0.001,
+    slopeCostWeight: 1,
+    stepCostWeight: 1,
+    maximumNodes: 100000,
+    maximumEdges: 200000,
+    maximumTiles: 1024,
+    maximumSearchSteps: 100000,
+    maximumTraversalSurfaceCount: 61,
+    minimumEquivalentPlaneNormalDotRatio: 0.99999,
+    maximumTraversalSurfaceTrianglePairTestCount: 4_000_000,
+  };
 
 const BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_GRAPH_BUILDER_PROFILE:
   TraversalGraphBuilderProfileV2 = {
@@ -596,6 +625,11 @@ export function resolveTraversalGraphBuilderProfileV2(
     profile = structuredClone(BUILT_IN_HEIGHTFIELD_R1_GRAPH_BUILDER_PROFILE);
   } else if (
     resourceRef ===
+      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ) {
+    profile = structuredClone(BUILT_IN_NATIVE_BLOCK_GROUND_GRAPH_BUILDER_PROFILE);
+  } else if (
+    resourceRef ===
     BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
   ) {
     profile = structuredClone(
@@ -640,6 +674,10 @@ export function resolveTraversalGraphBuilderProfile(
   if (resourceRef === BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF) {
     return resolveTraversalGraphBuilderProfileV2(resourceRef);
   }
+  if (
+    resourceRef ===
+      BUILT_IN_NATIVE_BLOCK_GROUND_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF
+  ) return resolveTraversalGraphBuilderProfileV2(resourceRef);
   if (
     resourceRef ===
     BUILT_IN_HEIGHTFIELD_R1_LOW_BUDGET_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF

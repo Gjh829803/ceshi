@@ -77,38 +77,6 @@ function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
   }
 }
 
-function assertNativePassTargetsAreTraversableV1(value: unknown): void {
-  if (isNil(value) || typeof value !== "object" || Array.isArray(value)) return;
-  const expected = value as Readonly<{
-    colliders?: readonly Readonly<{
-      acceptanceTargetRef?: unknown;
-      role?: unknown;
-    }>[];
-    criticalTraversalChecks?: readonly Readonly<{
-      id?: unknown;
-      acceptanceTargetRef?: unknown;
-      expectation?: unknown;
-    }>[];
-  }>;
-  if (!Array.isArray(expected.colliders) ||
-    !Array.isArray(expected.criticalTraversalChecks)) return;
-  const traversableTargetRefs = new Set(expected.colliders.flatMap((collider) =>
-    (collider.role === "ground" || collider.role === "step") &&
-      typeof collider.acceptanceTargetRef === "string"
-      ? [collider.acceptanceTargetRef]
-      : []
-  ));
-  for (const check of expected.criticalTraversalChecks) {
-    if (check.expectation !== "pass" ||
-      typeof check.acceptanceTargetRef !== "string" ||
-      traversableTargetRefs.has(check.acceptanceTargetRef)) continue;
-    throw new TypeError(
-      "NATIVE_WORLD_CASE_PASS_TARGET_NOT_TRAVERSABLE: " +
-        (typeof check.id === "string" ? check.id : "<unknown>"),
-    );
-  }
-}
-
 async function writeCanonicalExclusive(filePath: string, value: unknown) {
   await writeFile(filePath, stringifyCanonicalJson(value), {
     encoding: "utf8",
@@ -151,7 +119,6 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     throw new TypeError("NATIVE_WORLD_CAPTURE_INTENT_IDENTITY_INVALID");
   }
   const worldBounds = parseNativeWorldCaseWorldBoundsV1(proposal.worldBounds);
-  assertNativePassTargetsAreTraversableV1(proposal.expected);
   const briefBytes = await readFile(input.sceneBriefPath);
 
   const acceptanceTargetRefs = sortBy([...new Set([
@@ -172,6 +139,13 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       .criticalTraversalChecks ?? []).map((value) =>
         (value as { acceptanceTargetRef?: unknown }).acceptanceTargetRef
       ),
+    ...((proposal.expected as {
+      groundConnectivity?: {
+        requiredTraversalBands?: unknown[];
+      };
+    }).groundConnectivity?.requiredTraversalBands ?? []).map((value) =>
+      (value as { acceptanceTargetRef?: unknown }).acceptanceTargetRef
+    ),
     (proposal.expected as { deterministicBuild?: { acceptanceTargetRef?: unknown } })
       .deterministicBuild?.acceptanceTargetRef,
   ].filter((value): value is string => typeof value === "string"))]);
@@ -293,6 +267,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       "Implement every Case visual group and every explicit required Collider contribution exactly once.",
       "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
       "Keep the Spawn supported and preserve every fixed-input pass or block check without adding undeclared input.",
+      "For a ground Case, preserve every frozen groundConnectivity band and keep the complete explicitly contributed support surface in one Spawn-reachable component.",
       "Do not create Runtime, physics, camera, input, timers, gameplay entities, Package, Capture, Receipt, or thresholds.",
       "Do not alter any frozen input. Formal Capture Intent remains Host-only.",
       "",
