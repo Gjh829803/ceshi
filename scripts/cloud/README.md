@@ -55,6 +55,41 @@ that declared manifest and its exact source execution identity. Resume checks
 content identities rather than download mtimes, so S3 hydration never causes a
 completed Gemini, Seedance, or conformance stage to rerun.
 
+## Deferred Seedance throughput change
+
+The production Batch that started on 2026-09-03 keeps its existing
+`seedanceConcurrency: 10` behavior until every admitted Episode is terminal.
+Do not change its image, configuration, queue ownership, or provider admission
+while it is running.
+
+After that Batch closes, replace per-Episode Seedance admission with one
+Host-owned global work pool:
+
+- the initial global limit is 20 non-terminal Seedance provider Jobs across all
+  Episodes, not 20 Jobs per Episode;
+- every ready `(episode, style variant, segment)` task enters the same durable
+  queue, so a completed slot is immediately filled by the next ready task and
+  no Episode reserves idle capacity;
+- image generation, Codex/Gemini work, Seedance generation, and media
+  conformance retain independent concurrency pools so congestion in one
+  provider cannot consume another provider's slots;
+- the pool counts submitted and running provider Jobs until their exact Job IDs
+  become terminal, including Jobs being recovered after Worker replacement;
+- throttling, transport failures, and provider-capacity responses use bounded
+  exponential backoff with jitter and preserve the existing idempotency/checkpoint
+  identity; authored or conformance failures are not retried as infrastructure;
+- admission automatically pauses when submitted Jobs accumulate without growth
+  in running Jobs, and resumes only after observed capacity recovers;
+- Studio exposes global ready/submitted/running/retrying/succeeded/failed counts,
+  active limit, provider latency, and per-Episode progress from the durable Run
+  Index.
+
+Rollout requires scheduler unit tests, Worker-restart recovery tests, a provider
+rate-limit test, and one real two-Episode canary proving that aggregate provider
+concurrency never exceeds 20 and that all completed artifacts remain byte- and
+contract-equivalent to the current workflow. Only after those gates pass may a
+new production Batch use the global pool.
+
 Creator Studio's `cloud` backend is this end-to-end path. It stores only the
 Cloud Execution identity and admitted remote artifact index, streams verified
 artifacts from S3 on demand, and never falls back to local Host capture. The
