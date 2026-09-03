@@ -95,6 +95,9 @@ Focused local evidence before freezing the candidate:
   the real mounted prepare-versus-commit projection regressions pass 3/3. Fresh-spawn state,
   mounted suspension, dismount placement, and transition sequencing now come from the one
   CharacterMovement owner rather than provider-authored Locomotion envelopes;
+- the first post-merge GitHub run reached the new migration gate but its default depth-1 checkout
+  could not read the parent ledger. CI now fetches exactly two history levels, and a focused
+  configuration contract locks that prerequisite instead of weakening the fail-closed verifier;
 - `pnpm typecheck`, `pnpm verify:3c-migration`,
   `pnpm verify:runtime-authority-boundaries`,
   `pnpm verify:workspace-boundaries`, `pnpm check:agent-self-check`, and
