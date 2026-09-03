@@ -1727,6 +1727,26 @@ export function createEpisodeWorkflowService(options) {
     );
   }
 
+  async function recoverPersistedCloudEpisodes() {
+    let recovered = 0;
+    for (const record of await listRecords()) {
+      if (
+        record.backend !== "cloud" ||
+        !["running", "remote-pending"].includes(record.status) ||
+        activeCloudExecutions.has(record.episodeId)
+      ) continue;
+      recovered += 1;
+      if (typeof record.remoteExecutionId === "string" && record.remoteExecutionId) {
+        activeCloudExecutions.set(record.episodeId, record.remoteExecutionId);
+        void runCloudEpisodeRecovery(record);
+      } else {
+        activeCloudExecutions.set(record.episodeId, "submitting");
+        void runCloudEpisode(record.sceneId, record.episodeId);
+      }
+    }
+    return recovered;
+  }
+
   async function handleApi(request, response, url) {
     if (request.method === "GET" && url.pathname === "/api/episode-workflows") {
       const sceneId = url.searchParams.get("sceneId") ?? "";
@@ -1944,11 +1964,10 @@ export function createEpisodeWorkflowService(options) {
 
   async function shutdown() {
     for (const child of activeChildren.values()) if (!child.killed) child.kill("SIGTERM");
-    if (typeof cancelCloudEpisode === "function") {
-      await Promise.all([...activeCloudExecutions.values()]
-        .filter((executionId) => typeof executionId === "string" && executionId !== "submitting")
-        .map((executionId) => cancelCloudEpisode(executionId).catch(() => undefined)));
-    }
+    // A Studio/control-plane process shutdown is not a user cancellation.
+    // Remote Cloud Executions continue and the next process instance reattaches
+    // through recoverPersistedCloudEpisodes(). Only the explicit /stop API may
+    // cancel a remote Episode.
     activeChildren.clear();
     activeCloudExecutions.clear();
   }
@@ -1957,6 +1976,7 @@ export function createEpisodeWorkflowService(options) {
     handleApi,
     listForScene,
     listAll,
+    recoverPersistedCloudEpisodes,
     shutdown,
     get activeJobs() {
       return [...new Set([...activeChildren.keys(), ...activeCloudExecutions.keys()])];

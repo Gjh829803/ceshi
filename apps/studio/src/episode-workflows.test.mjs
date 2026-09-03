@@ -94,6 +94,48 @@ test("destroys an artifact stream when the browser aborts a video request", asyn
   }
 });
 
+test("reattaches persisted Cloud Episodes and never cancels them on process shutdown", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-restart-"));
+  const episodeId = "episode-restart-safe-001";
+  const episodeRoot = path.join(repoRoot, "artifacts/episodes", episodeId);
+  await mkdir(episodeRoot, { recursive: true });
+  await writeFile(path.join(episodeRoot, "episode-record.json"), JSON.stringify({
+    kind: "worldkit-episode-workflow-record",
+    schemaVersion: 1,
+    sceneId: "restart-safe-scene",
+    episodeId,
+    backend: "cloud",
+    status: "running",
+    currentStage: "playthrough-plan",
+    remoteExecutionId: "exec_restart_safe",
+    createdAt: "2026-09-03T00:00:00.000Z",
+    updatedAt: "2026-09-03T00:01:00.000Z",
+    stages: [],
+  }));
+  let recoveryStarted;
+  const started = new Promise((resolve) => { recoveryStarted = resolve; });
+  let cancelCount = 0;
+  const service = createEpisodeWorkflowService({
+    repoRoot,
+    studioOrigin: () => "http://127.0.0.1:4297",
+    cancelCloudEpisode: async () => { cancelCount += 1; },
+    recoverCloudEpisode: async () => {
+      recoveryStarted();
+      return new Promise(() => undefined);
+    },
+  });
+  try {
+    assert.equal(await service.recoverPersistedCloudEpisodes(), 1);
+    await started;
+    assert.deepEqual(service.activeJobs, [episodeId]);
+    await service.shutdown();
+    assert.equal(cancelCount, 0);
+    assert.deepEqual(service.activeJobs, []);
+  } finally {
+    await rm(repoRoot, { recursive: true, force: true });
+  }
+});
+
 test("lists only the selected scene and exposes every completed stage artifact", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "worldkit-episode-service-"));
   const root = path.join(repoRoot, "artifacts/episodes/episode-demo-world-abc123");

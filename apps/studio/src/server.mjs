@@ -5362,6 +5362,7 @@ export function createStudio(options = {}) {
       for (const testSet of await listTestSets()) await refreshTestSetIntegrity(testSet);
       if (importExistingArtifacts) await importExistingWorlds();
       const recoverPersistedRecords = async () => {
+        await episodeWorkflows.recoverPersistedCloudEpisodes();
         const records = await listRecords();
         for (const record of records) {
           if (await recoverGeneratedStyledOutputs(record)) continue;
