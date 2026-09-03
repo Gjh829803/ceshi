@@ -34,7 +34,7 @@ const AUTHORING_TRUST_PROFILE_REF_PATHS = new Set([
   "packages/scene-authoring-contracts/src/scene-authoring-contracts.ts",
   "packages/world-package/src/test-fixture.ts",
   "scripts/reconstruction/generation-request.ts",
-  "scripts/reconstruction/run-native-block-generation.ts",
+  "scripts/scenes/world-generation-route.ts",
   "scripts/scenes/record-scene-authoring-attempt.ts",
 ]);
 const UNSAFE_EXECUTION_APIS = Object.freeze([
