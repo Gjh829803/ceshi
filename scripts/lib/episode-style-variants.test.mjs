@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  assertConcurrentStageSucceeded,
   createJsonAtomicWriter,
   episodeStyleVariantIds,
   validateEpisodeStyleVariantPlan,
@@ -17,6 +18,16 @@ import { validateStyleVariantDirectorOutput } from
 
 const HASH = `sha256:${"a".repeat(64)}`;
 const targetIds = ["player-subject", "primary-landmark"];
+
+test("fails a concurrent stage with the provider diagnostic intact", () => {
+  assert.doesNotThrow(() => assertConcurrentStageSucceeded([
+    { ok: true }, { ok: true },
+  ], "SEEDANCE_PROVIDER_STAGE_INCOMPLETE"));
+  assert.throws(() => assertConcurrentStageSucceeded([
+    { ok: true }, { ok: false, error: new Error("Seedance Job refunded: HTTP 521") },
+  ], "SEEDANCE_PROVIDER_STAGE_INCOMPLETE"),
+  /SEEDANCE_PROVIDER_STAGE_INCOMPLETE failed=1\/2: Seedance Job refunded: HTTP 521/);
+});
 
 test("accepts one explicitly approved immutable Segment-00 anchor per style", () => {
   const manifest = {

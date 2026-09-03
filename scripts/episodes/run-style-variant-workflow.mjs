@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 
 import {
+  assertConcurrentStageSucceeded,
   createJsonAtomicWriter,
   EPISODE_STYLE_VARIANT_SEGMENT_IDS,
   episodeStyleVariantIds,
@@ -705,6 +706,7 @@ try {
         ? { status: "seedance-failed", error: "One or more Seedance Jobs failed." }
         : { status: "seedance-ready", error: null });
     }
+    assertConcurrentStageSucceeded(results, "SEEDANCE_PROVIDER_STAGE_INCOMPLETE");
   });
   stopAtCheckpoint("seedance");
   const seedanceReadyTasks = videoTasks.filter(({ styleVariantId }) =>

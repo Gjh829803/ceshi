@@ -379,6 +379,20 @@ export function createJsonAtomicWriter(filePath) {
   };
 }
 
+export function assertConcurrentStageSucceeded(results, code) {
+  if (!Array.isArray(results) || typeof code !== "string" || !code) {
+    throw new Error("Concurrent stage assertion input is invalid.");
+  }
+  const failures = results.filter((result) => result?.ok !== true);
+  if (failures.length === 0) return;
+  const firstFailure = failures[0]?.error instanceof Error
+    ? failures[0].error.message
+    : String(failures[0]?.error ?? "unknown failure");
+  throw new Error(
+    `${code} failed=${failures.length}/${results.length}: ${firstFailure}`,
+  );
+}
+
 export async function sha256File(filePath) {
   return `sha256:${createHash("sha256").update(await readFile(filePath)).digest("hex")}`;
 }

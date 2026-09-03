@@ -20,6 +20,9 @@ test("routes cloud infrastructure failures without consuming content attempts", 
   assert.equal(classifyCloudProductionFailure(
     "worker lease expired before a terminal progress update",
   ).code, "CLOUD_INFRASTRUCTURE_UNAVAILABLE");
+  assert.equal(classifyCloudProductionFailure(
+    "Seedance Job refunded: HTTP 521",
+  ).code, "CLOUD_INFRASTRUCTURE_UNAVAILABLE");
 });
 
 test("reconciles an uncertain submission instead of creating a replacement", () => {
