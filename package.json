@@ -90,6 +90,7 @@
     "verify:bna2-clean-break": "tsx scripts/verification/verify-bna2-clean-break.ts",
     "verify:bna5-clean-break": "tsx scripts/verification/verify-bna5-clean-break.ts",
     "verify:nbr65-v2-parity": "tsx scripts/verification/verify-nbr65-v2-capability-parity.ts",
+    "verify:native-block-reconstruction-e2e": "tsx scripts/verification/run-native-block-reconstruction-e2e.ts",
     "verify:3c-migration": "tsx scripts/verification/verify-3c-migration.ts",
     "verify:runtime-authority-boundaries": "tsx scripts/verification/verify-runtime-authority-boundaries.ts",
     "verify:workspace-boundaries": "tsx scripts/testing/verify-workspace-boundaries.ts",

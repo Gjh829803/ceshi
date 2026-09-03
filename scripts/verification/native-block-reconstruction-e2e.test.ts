@@ -75,6 +75,8 @@ import {
   type NativeBlockReconstructionPlayabilityLaunchPortV1,
   type NativeBlockReconstructionPlayabilitySessionPortV1,
 } from "./verify-native-block-reconstruction-e2e.js";
+import { parseNativeBlockReconstructionVerifierArgumentsV1 } from
+  "./run-native-block-reconstruction-e2e.js";
 
 const PNG = Uint8Array.from(Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -109,6 +111,42 @@ const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
   capsuleRadiusMeters: 0.35,
   toleranceMeters: 0.05,
 }] as const;
+
+describe("Native Block reconstruction E2E verifier CLI", () => {
+  it("resolves the required Run and optional Final directories", () => {
+    expect(parseNativeBlockReconstructionVerifierArgumentsV1([
+      "--",
+      "--run",
+      "artifacts/scenes/example/runs/run-1",
+      "--final",
+      "artifacts/scenes/example/final",
+    ])).toEqual({
+      runDirectoryPath: path.resolve(
+        "artifacts/scenes/example/runs/run-1",
+      ),
+      finalDirectoryPath: path.resolve(
+        "artifacts/scenes/example/final",
+      ),
+    });
+  });
+
+  it("rejects an incomplete or ambiguous invocation", () => {
+    expect(() => parseNativeBlockReconstructionVerifierArgumentsV1([]))
+      .toThrow("--run <run-directory> is required");
+    expect(() => parseNativeBlockReconstructionVerifierArgumentsV1([
+      "--run",
+      "first",
+      "--run",
+      "second",
+    ])).toThrow("--run may appear only once");
+    expect(() => parseNativeBlockReconstructionVerifierArgumentsV1([
+      "--run",
+      "first",
+      "--unknown",
+      "second",
+    ])).toThrow("Unknown option '--unknown'");
+  });
+});
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
