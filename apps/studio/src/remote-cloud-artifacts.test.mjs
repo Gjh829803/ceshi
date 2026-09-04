@@ -124,6 +124,27 @@ test("admits Episode manifests only inside the episode namespace", () => {
   }), /unsafe/);
 });
 
+test("admits fine-grained Episode checkpoints for exact-stage resume", () => {
+  assert.doesNotThrow(() => validateCloudArtifactManifest({
+    kind: "worldkit-cloud-artifact-manifest",
+    schemaVersion: 1,
+    sceneId: "cloud-scene-001",
+    episodeId: "episode-cloud-scene-001-a1b2c3",
+    executionId: "execution-episode-001",
+    stageId: "episode-style-prompts",
+    executionPart: "style-prompts",
+    workerImage: `worker@sha256:${"b".repeat(64)}`,
+    artifacts: [{
+      path: "episode/style-variants/style-00/prompts/segment-00.json",
+      contentType: "application/json",
+      byteSize: 1024,
+      sha256: HASH,
+      s3Uri: "s3://worldkit-test/episode/style-00/segment-00.json",
+      required: true,
+    }],
+  }));
+});
+
 test("keeps Scene limits narrow while admitting bounded media-heavy Episodes", () => {
   const base = {
     kind: "worldkit-cloud-artifact-manifest",

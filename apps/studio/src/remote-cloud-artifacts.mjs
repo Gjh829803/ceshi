@@ -17,6 +17,21 @@ const MAXIMUM_SCENE_ARTIFACT_COUNT = 512;
 const MAXIMUM_SCENE_DECLARED_BYTES = 2 * 1024 * 1024 * 1024;
 const MAXIMUM_EPISODE_ARTIFACT_COUNT = 2_048;
 const MAXIMUM_EPISODE_DECLARED_BYTES = 16 * 1024 * 1024 * 1024;
+const EPISODE_EXECUTION_PARTS = new Set([
+  "full",
+  "prepare",
+  "capture",
+  "render",
+  "style-plan",
+  "style-openings",
+  "style-visuals",
+  "style-diversity",
+  "style-events",
+  "style-prompts",
+  "seedance",
+  "conformance",
+  "publication",
+]);
 
 function portableArtifactPath(value) {
   return String(value ?? "").replaceAll("\\", "/");
@@ -48,7 +63,7 @@ export function validateCloudArtifactManifest(value, {
     (expectedExecutionId !== undefined && value.executionId !== expectedExecutionId)
   ) throw new Error("Cloud artifact manifest identity is invalid.");
   if (episodeManifest && value.executionPart !== undefined &&
-      !["full", "prepare", "capture", "render"].includes(value.executionPart)) {
+      !EPISODE_EXECUTION_PARTS.has(value.executionPart)) {
     throw new Error("Cloud Episode artifact execution part is invalid.");
   }
 

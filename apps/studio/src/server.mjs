@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 
 import { createRecordingWorkbenchService } from "./recording-workbench.mjs";
 import { createEpisodeWorkflowService } from "./episode-workflows.mjs";
+import { resolveLatestCompatibleCloudEpisodeManifest } from "./cloud-episode-resume.mjs";
 import {
   StudioPreviewBootstrapError,
   assembleStudioPreviewBootstrapV1,
@@ -1703,39 +1704,11 @@ export function createStudio(options = {}) {
         ...expected,
       }),
     resolveCloudEpisodeResumeManifest: async (record) => {
-      const inherited = record.resumedFromEpisodeManifestS3Uri;
-      const attempts = Array.from(
-        { length: Math.max(1, Number(record.cloudAttempt ?? 1)) },
-        (_, index) => Math.max(1, Number(record.cloudAttempt ?? 1)) - index,
-      );
-      const candidates = [
-        ...(typeof inherited === "string" ? [inherited] : []),
-        ...attempts.map((attempt) => joinS3Uri(
-          record.remoteOutputS3Prefix,
-          "stages",
-          "whitebox-capture",
-          `attempt-${attempt}`,
-          "cloud-artifact-manifest.json",
-        )),
-      ];
-      for (const s3Uri of [...new Set(candidates)]) {
-        const manifest = await readCloudArtifactManifestImplementation(s3Uri, {
-          repoRoot,
-          expectedSceneId: record.sceneId,
-          expectedEpisodeId: record.episodeId,
-        }).catch(() => null);
-        if (
-          manifest?.stageId === "whitebox-capture" &&
-          manifest?.executionPart === "capture" &&
-          typeof manifest.executionId === "string" &&
-          typeof manifest.workerImage === "string"
-        ) return {
-          executionId: manifest.executionId,
-          s3Uri,
-          workerImage: manifest.workerImage,
-        };
-      }
-      throw new Error("Cancelled Cloud Episode has no completed whitebox-capture checkpoint.");
+      return resolveLatestCompatibleCloudEpisodeManifest({
+        record,
+        readManifest: (s3Uri, expected) =>
+          readCloudArtifactManifestImplementation(s3Uri, { repoRoot, ...expected }),
+      });
     },
     readVerifiedRemoteArtifact: (record, artifactPath) =>
       readVerifiedCloudArtifactImplementation(record, artifactPath, { repoRoot }),
