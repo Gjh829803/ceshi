@@ -33,6 +33,7 @@ test("submits one three-stage Episode DAG bound to an admitted Scene manifest", 
       productionScope: "visual-sample",
       styleVariantMode: "legacy",
       workerImage: `worker@sha256:${"d".repeat(64)}`,
+      postprocessWorkerImage: `postprocess@sha256:${"c".repeat(64)}`,
       gpuBatch: {
         queueS3Prefix: "s3://bucket/gpu-capture-queue",
         minimumBatchSize: 100,
@@ -79,6 +80,10 @@ test("submits one three-stage Episode DAG bound to an admitted Scene manifest", 
     assert.equal(request.productionScope, "visual-sample");
     assert.equal(request.styleVariantMode, "legacy");
     assert.equal(request.workerImage, `worker@sha256:${"d".repeat(64)}`);
+    assert.equal(
+      request.postprocessWorkerImage,
+      `postprocess@sha256:${"c".repeat(64)}`,
+    );
     assert.equal(request.resumeEpisodeManifest.executionId, "exec-episode-prior");
     assert.equal(requests[0].body.kind, "episode");
     assert.deepEqual(requests[0].body.stages.map((stage) => stage.stage_id), [

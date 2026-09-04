@@ -373,13 +373,16 @@ export async function reconcileCloudEpisodeCpuStages({
       continue;
     }
     const executionPart = stageId === "episode-prepare" ? "prepare" : "render";
+    const executorImage = stageId === "episode-prepare"
+      ? record.remoteWorkerImage ?? config.workerImage
+      : config.postprocessWorkerImage ?? record.remoteWorkerImage ?? config.workerImage;
     await launchWorker({
       executionId,
       stageId,
       executionPart,
       requestS3Uri: record.remoteRequestS3Uri,
       outputS3Prefix: record.remoteOutputS3Prefix,
-      image: record.remoteWorkerImage ?? config.workerImage,
+      image: executorImage,
       namespace: config.namespace,
       userId: cloudConfig.userId,
       apiBase: cloudConfig.baseUrl,
@@ -406,8 +409,18 @@ async function main() {
   if (process.env.WORLDKIT_CLOUD_WORKER_IMAGE) {
     config.workerImage = process.env.WORLDKIT_CLOUD_WORKER_IMAGE;
   }
+  if (process.env.WORLDKIT_CLOUD_POSTPROCESS_WORKER_IMAGE) {
+    config.postprocessWorkerImage =
+      process.env.WORLDKIT_CLOUD_POSTPROCESS_WORKER_IMAGE;
+  }
   if (!/^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(config.workerImage ?? "")) {
     throw new Error("GPU dispatcher requires one digest-pinned Worker image.");
+  }
+  if (config.postprocessWorkerImage !== undefined &&
+      !/^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(
+        config.postprocessWorkerImage,
+      )) {
+    throw new Error("GPU dispatcher requires one digest-pinned post-process image.");
   }
   const queueS3Prefix = config.gpuBatch.queueS3Prefix;
   const cloudConfig = await materializeCloudWorkerLwdpConfig({

@@ -30,26 +30,34 @@ class Seedance25ContractTest(unittest.TestCase):
         self.assertEqual(MODULE.REPO_ROOT, MODULE_PATH.parents[2])
         self.assertTrue(MODULE.DEFAULT_CONFIG.is_file())
 
-    def test_pipeline_uses_mg_seedance_480p_with_cf_720p_upscale(self) -> None:
+    def test_pipeline_defaults_to_direct_seedance_with_mg_cf_fallback(self) -> None:
         config = json.loads(MODULE.DEFAULT_CONFIG.read_text(encoding="utf-8"))
         self.assertEqual(config["schemaVersion"], 2)
         self.assertEqual(config["captureCount"], 6)
         self.assertEqual(config["seedanceCaptureIndices"], [0, 1, 2, 3, 4, 5])
         self.assertEqual(config["eventCaptureIndices"], [0, 2, 4])
-        self.assertEqual(config["seedanceProvider"]["kind"], "mg-seedance-2.5-plus-cf-upscale")
-        self.assertEqual(config["seedance"]["model"], "mg-seedance-2.5-480p")
-        self.assertEqual(config["seedance"]["resolution"], "480p")
+        self.assertEqual(config["seedanceProvider"]["kind"], "seedance-2.5-direct-api")
+        self.assertEqual(config["seedance"]["model"], "seedance-2.5")
+        self.assertEqual(config["seedance"]["resolution"], "720p")
         self.assertEqual(config["seedance"]["duration"], 30)
         self.assertTrue(config["seedance"]["generateAudio"])
-        self.assertEqual(config["upscale"]["model"], "cf-超分-720p-30s")
-        self.assertEqual(config["upscale"]["resolution"], "720p")
         self.assertEqual(
             config["seedanceProvider"]["credentialFile"],
-            ".codex-tmp/runtime-config/mg.key",
+            ".codex-tmp/runtime-config/infinite-canvas.key",
         )
-        self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 10)
+        self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 50)
         self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 50)
-        self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 3)
+        self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 1)
+        fallback = json.loads(
+            (MODULE.REPO_ROOT / config["fallback"]["pipelineConfigPath"]).read_text(
+                encoding="utf-8",
+            ),
+        )
+        self.assertEqual(fallback["seedanceProvider"]["kind"], "mg-seedance-2.5-plus-cf-upscale")
+        self.assertEqual(fallback["seedance"]["model"], "mg-seedance-2.5-480p")
+        self.assertEqual(fallback["seedance"]["resolution"], "480p")
+        self.assertEqual(fallback["upscale"]["model"], "cf-超分-720p-30s")
+        self.assertEqual(fallback["upscale"]["resolution"], "720p")
 
     def test_mg_response_helpers_accept_nested_task_and_video_fields(self) -> None:
         body = {

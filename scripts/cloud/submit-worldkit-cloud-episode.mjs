@@ -71,6 +71,10 @@ export function parseCloudEpisodeRequest(value) {
   if (!DIGEST_IMAGE.test(String(request.workerImage ?? ""))) {
     throw new Error("Cloud Episode workerImage must be digest-pinned.");
   }
+  if (request.postprocessWorkerImage !== undefined &&
+      !DIGEST_IMAGE.test(String(request.postprocessWorkerImage))) {
+    throw new Error("Cloud Episode postprocessWorkerImage must be digest-pinned.");
+  }
   if ([2, 3].includes(request.schemaVersion)) {
     if (
       request.executionProfile !== (request.schemaVersion === 3
@@ -115,6 +119,7 @@ export async function submitCloudEpisode({
   styleVariantMode = "legacy",
   executionProfile = "cpu-gpu-batch-cpu@1",
   workerImage,
+  postprocessWorkerImage = workerImage,
   gpuBatch,
   resumeEpisodeManifest = undefined,
   requestId,
@@ -170,6 +175,7 @@ export async function submitCloudEpisode({
     productionScope,
     styleVariantMode,
     workerImage,
+    postprocessWorkerImage,
     executionProfile: effectiveExecutionProfile,
     gpuBatch: {
       queueS3Prefix: assertS3Uri(gpuBatch?.queueS3Prefix),
@@ -230,6 +236,8 @@ export async function submitCloudEpisode({
       outputS3Prefix: resolvedOutputPrefix,
       status: existingExecution.status,
       workerImage: existingRequest.workerImage,
+      postprocessWorkerImage: existingRequest.postprocessWorkerImage ??
+        existingRequest.workerImage,
       executionProfile: existingRequest.executionProfile,
       gpuBatch: existingRequest.gpuBatch,
       productionScope: existingRequest.productionScope ?? "full",
@@ -299,6 +307,7 @@ export async function submitCloudEpisode({
     outputS3Prefix: resolvedOutputPrefix,
     status: execution.status,
     workerImage,
+    postprocessWorkerImage,
     executionProfile: request.executionProfile,
     gpuBatch: request.gpuBatch,
     productionScope: request.productionScope ?? "full",
@@ -319,6 +328,8 @@ async function main() {
     styleVariantMode: options["style-variant-mode"] ?? "legacy",
     executionProfile: options["execution-profile"] ?? "cpu-gpu-batch-cpu@1",
     workerImage: options["worker-image"],
+    postprocessWorkerImage: options["postprocess-worker-image"] ??
+      options["worker-image"],
     gpuBatch: {
       queueS3Prefix: options["gpu-batch-queue-s3-prefix"],
       minimumBatchSize: Number(options["gpu-batch-minimum-size"] ?? 100),

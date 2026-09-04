@@ -692,8 +692,8 @@ try {
     const results = await mapConcurrent(videoTasks, config.seedanceConcurrency,
       async ({ variantRoot, segmentId }) => {
         if (await providerReady(variantRoot, segmentId, false)) return;
-        await run("python3", [
-          "scripts/episodes/run-episode-video-segment.py",
+        await run("node", [
+          "scripts/episodes/run-episode-video-segment-with-fallback.mjs",
           "--request", path.join(variantRoot, "video", segmentId, "request.json"),
           "--result", path.join(variantRoot, "video", segmentId, "provider-run.json"),
           "--until", "seedance",
@@ -716,8 +716,8 @@ try {
     const results = await mapConcurrent(seedanceReadyTasks, config.seedanceConcurrency,
       async ({ variantRoot, segmentId }) => {
         if (await providerReady(variantRoot, segmentId, true)) return;
-        await run("python3", [
-          "scripts/episodes/run-episode-video-segment.py",
+        await run("node", [
+          "scripts/episodes/run-episode-video-segment-with-fallback.mjs",
           "--request", path.join(variantRoot, "video", segmentId, "request.json"),
           "--result", path.join(variantRoot, "video", segmentId, "provider-run.json"),
           "--until", "conformance",

@@ -30,10 +30,15 @@ test("resolves Seedance-conformance as the terminal streaming checkpoint", () =>
 
 test("uses the deployment-owned Worker digest over the image-baked config", async () => {
   const workerImage = `worker@sha256:${"f".repeat(64)}`;
+  const postprocessWorkerImage = `postprocess@sha256:${"e".repeat(64)}`;
   const config = await loadCloudEpisodeProductionConfig(repoRoot, {
-    environment: { WORLDKIT_CLOUD_WORKER_IMAGE: workerImage },
+    environment: {
+      WORLDKIT_CLOUD_WORKER_IMAGE: workerImage,
+      WORLDKIT_CLOUD_POSTPROCESS_WORKER_IMAGE: postprocessWorkerImage,
+    },
   });
   assert.equal(config.workerImage, workerImage);
+  assert.equal(config.postprocessWorkerImage, postprocessWorkerImage);
   assert.equal(config.executionProfile, "cpu-gpu-streaming-checkpoints@1");
 });
 
@@ -399,12 +404,14 @@ test("does not mutate an already-running Worker Job during recovery", async () =
 test("launches a missing ready CPU stage with its exact remote attempt", async () => {
   const launches = [];
   const workerImage = `worker@sha256:${"e".repeat(64)}`;
+  const postprocessWorkerImage = `postprocess@sha256:${"d".repeat(64)}`;
   await recoverStudioCloudEpisode({
     executionId: "exec-episode-ready",
     requestS3Uri: "s3://bucket/episode/request.json",
     outputS3Prefix: "s3://bucket/episode",
     workerImage,
     config: {
+      postprocessWorkerImage,
       namespace: "lwdp",
       gpuResourceName: "nvidia.com/gpu",
       gpuCount: 1,
@@ -432,7 +439,7 @@ test("launches a missing ready CPU stage with its exact remote attempt", async (
     stagesImplementation: async () => ({ stages: [] }),
   });
   assert.equal(launches.length, 1);
-  assert.equal(launches[0].image, workerImage);
+  assert.equal(launches[0].image, postprocessWorkerImage);
   assert.equal(launches[0].stageId, "episode-render");
   assert.equal(launches[0].jobSuffix, "retry-3");
 });

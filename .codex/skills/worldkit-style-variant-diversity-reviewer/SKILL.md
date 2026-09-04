@@ -30,6 +30,10 @@ shot design; this is an intelligent visual review, not pixel matching:
   identity and shape language. Ten towers with different decoration fail.
 - Each variant is recognizable at thumbnail size after labels are hidden.
 - All assets within one variant remain visually coherent with one another.
+- Every opening is deliberately exposed and readable: the Subject, playable
+  foreground and primary landmarks remain separable at thumbnail size. A dark style
+  may pass only when motivated lighting preserves those forms; crushed blacks,
+  featureless black fog, an unreadable route, or a lost Subject require repair.
 
 In opening-batch review, identity changes are expected to change exact silhouettes and
 scene morphology. Different Subject height, width, anatomy, costume, pose nuance or ground
@@ -49,6 +53,7 @@ composition unrecognizable. Describe that visible semantic mismatch. Do not requ
 FOV, exact horizon row, exact bounding boxes, exact occupancy percentages, identical limb
 pose or identical terrain silhouettes, and never invent percentages from visual estimation.
 
+Judge exposure by visual understanding, not a fixed luminance or dark-pixel cutoff.
 Do not use image hashes, pixel thresholds, keyword counting, or prose-only claims as
 evidence of visual diversity. If two variants are confusable, mark every variant that
 must be redesigned and name the conflicting variants. Prefer preserving the strongest

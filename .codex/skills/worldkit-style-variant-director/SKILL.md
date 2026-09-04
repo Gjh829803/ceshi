@@ -29,6 +29,12 @@ premise. Changing only biome, historical period, profession, weather, color, sur
 material, ornament, or rendering medium is not a new world. Do not produce ten
 versions of the source scene such as ten coasts, ten towers, or ten field travelers.
 
+Every proposal must remain presentation-bright and readable. A night, horror, cave,
+underwater or space premise may use a dark palette, but must specify enough motivated
+key, sky, practical, emissive and rim/fill light to keep the Subject, movement space
+and declared landmarks plainly visible. Never use underexposure, crushed blacks,
+black fog or broad featureless darkness as the style language.
+
 Do not copy examples from the request as a required list. Infer ten concrete,
 human-legible concepts whose semantic substitutions fit the visible whitebox masses.
 Avoid abstract filler such as particles, energy rings, generic portals, or unexplained

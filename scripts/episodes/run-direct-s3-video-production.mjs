@@ -394,8 +394,8 @@ async function worker() {
       if (!await exists(journal)) {
         await downloadS3FileAtomic(journalS3Uri, journal).catch(() => undefined);
       }
-      await run("python3", [
-        "scripts/episodes/run-episode-video-segment.py",
+      await run("node", [
+        "scripts/episodes/run-episode-video-segment-with-fallback.mjs",
         "--request", remoteRequestPath,
         "--result", journal,
         "--config", pipelineConfigPath,

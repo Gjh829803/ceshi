@@ -69,6 +69,14 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
   if (!DIGEST_IMAGE.test(String(workerImage ?? ""))) {
     throw new Error("Enabled Cloud Episode production requires a digest-pinned Worker image.");
   }
+  const postprocessWorkerImage =
+    environment.WORLDKIT_CLOUD_POSTPROCESS_WORKER_IMAGE ||
+    value.postprocessWorkerImage || workerImage;
+  if (!DIGEST_IMAGE.test(String(postprocessWorkerImage ?? ""))) {
+    throw new Error(
+      "Enabled Cloud Episode production requires a digest-pinned post-process Worker image.",
+    );
+  }
   const nodeSelector = value.nodeSelector ?? {};
   if (!validNodeSelector(nodeSelector)) {
     throw new Error("Cloud Episode nodeSelector must contain non-empty string labels.");
@@ -120,6 +128,7 @@ export async function loadCloudEpisodeProductionConfig(repoRoot, {
   }
   return Object.freeze({
     workerImage,
+    postprocessWorkerImage,
     outputS3Root: assertS3Uri(value.outputS3Root),
     namespace: value.namespace ?? "lwdp",
     gpuResourceName: value.gpuResourceName ?? "nvidia.com/gpu",
@@ -179,13 +188,17 @@ async function launchEpisodeStageWorker({
     ? "full"
     : CLOUD_EPISODE_PART_BY_STAGE_ID[stageId];
   if (!executionPart) throw new Error(`Unsupported Cloud Episode stage: ${stageId}`);
+  const runtimeRequired = ["episode-production", "episode-prepare"].includes(stageId);
+  const executorImage = runtimeRequired
+    ? workerImage
+    : config.postprocessWorkerImage ?? workerImage;
   return launchImplementation({
     executionId,
     stageId,
     executionPart,
     requestS3Uri,
     outputS3Prefix,
-    image: workerImage,
+    image: executorImage,
     namespace: config.namespace,
     userId: cloudConfig.userId,
     apiBase: cloudConfig.baseUrl,
@@ -261,6 +274,7 @@ export async function executeStudioCloudEpisode({
     resumeEpisodeManifest,
     gpuBatch: config.gpuBatch,
     workerImage: resolvedWorkerImage,
+    postprocessWorkerImage: config.postprocessWorkerImage,
     requestId,
     outputS3Prefix,
     cloudConfig,

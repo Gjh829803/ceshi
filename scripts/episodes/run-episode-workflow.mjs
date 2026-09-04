@@ -89,6 +89,12 @@ const videoPipelineConfig = JSON.parse(await readFile(
   path.join(repoRoot, "config/episode-video-pipeline.json"),
   "utf8",
 ));
+const fallbackVideoPipelineConfig = videoPipelineConfig.fallback?.pipelineConfigPath
+  ? JSON.parse(await readFile(
+      path.resolve(repoRoot, videoPipelineConfig.fallback.pipelineConfigPath),
+      "utf8",
+    ))
+  : null;
 const loadedStyleVariantConfig = await loadEpisodeStyleVariantConfig(repoRoot);
 const styleVariantEnvironmentOverride = ["0", "1"].includes(
   process.env.WORLDKIT_EPISODE_STYLE_VARIANTS ?? "",
@@ -114,8 +120,10 @@ const visualEventPromptPath = path.join(
   visualEventDirectorConfig.promptTemplatePath,
 );
 const providerModel = videoPipelineConfig.seedance?.model;
-const upscaleModel = videoPipelineConfig.upscale?.model;
 const providerKind = videoPipelineConfig.seedanceProvider?.kind;
+const fallbackProviderModel = fallbackVideoPipelineConfig?.seedance?.model;
+const fallbackUpscaleModel = fallbackVideoPipelineConfig?.upscale?.model;
+const fallbackProviderKind = fallbackVideoPipelineConfig?.seedanceProvider?.kind;
 const seedanceConcurrency = Math.max(
   1,
   Math.min(
@@ -123,11 +131,14 @@ const seedanceConcurrency = Math.max(
     Number(videoPipelineConfig.seedanceProvider?.maxConcurrentJobs ?? 3),
   ),
 );
-if (providerModel !== "mg-seedance-2.5-480p" ||
-    upscaleModel !== "cf-超分-720p-30s" ||
-    providerKind !== "mg-seedance-2.5-plus-cf-upscale") {
+if (providerModel !== "seedance-2.5" ||
+    providerKind !== "seedance-2.5-direct-api" ||
+    fallbackProviderModel !== "mg-seedance-2.5-480p" ||
+    fallbackUpscaleModel !== "cf-超分-720p-30s" ||
+    fallbackProviderKind !== "mg-seedance-2.5-plus-cf-upscale") {
   throw new Error(
-    `Unexpected episode video chain: ${providerKind}/${providerModel}/${upscaleModel}`,
+    `Unexpected episode video chain: ${providerKind}/${providerModel} -> ` +
+      `${fallbackProviderKind}/${fallbackProviderModel}/${fallbackUpscaleModel}`,
   );
 }
 if (videoPipelineConfig.captureCount !== 6 ||
@@ -144,7 +155,6 @@ if (videoPipelineConfig.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLA
 }
 const delivery = videoPipelineConfig.delivery;
 const rawProviderFileName = `${providerModel}.mp4`;
-const rawUpscaleFileName = "cf-upscaled-720p.mp4";
 const finalVideoFileName = `final-${delivery.width}x${delivery.height}-${delivery.fps}fps-${delivery.frameCount}f.mp4`;
 const recordPath = path.join(episodeRoot, "episode-record.json");
 const logPath = path.join(episodeRoot, "pipeline.log");
@@ -494,16 +504,21 @@ async function providerResultIsCurrent(
   const segmentRoot = path.join(episodeRoot, "video", segmentId);
   const request = await readJsonIfPresent(path.join(segmentRoot, "request.json"));
   const result = await readJsonIfPresent(path.join(segmentRoot, "provider-run.json"));
+  const usesPrimary = result?.inputIdentity?.provider === providerKind &&
+    result?.inputIdentity?.model === providerModel &&
+    result?.modelChain?.length === 1 && result.modelChain[0] === providerModel;
+  const usesFallback = result?.inputIdentity?.provider === fallbackProviderKind &&
+    result?.inputIdentity?.model === fallbackProviderModel &&
+    result?.inputIdentity?.upscaleModel === fallbackUpscaleModel &&
+    result?.modelChain?.length === 2 &&
+    result.modelChain[0] === fallbackProviderModel &&
+    result.modelChain[1] === fallbackUpscaleModel;
   if (request?.schemaVersion !== 2 || result?.schemaVersion !== 3 ||
-      result?.modelChain?.length !== 2 || result.modelChain[0] !== providerModel ||
-      result.modelChain[1] !== upscaleModel ||
+      (!usesPrimary && !usesFallback) ||
       typeof result.providerJobId !== "string") return false;
   const promptHash = await providerPromptHash(path.resolve(request.promptPath ?? ""));
   const referenceVideoHash = await fileHash(path.resolve(request.referenceVideoPath ?? ""));
-  if (result.inputIdentity?.model !== providerModel ||
-      result.inputIdentity?.provider !== providerKind ||
-      result.inputIdentity?.upscaleModel !== upscaleModel ||
-      result.inputIdentity?.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION ||
+  if (result.inputIdentity?.promptTemplateVersion !== EPISODE_SEEDANCE_PROMPT_TEMPLATE_VERSION ||
       result.inputIdentity?.promptSha256 !== promptHash?.replace(/^sha256:/, "") ||
       result.inputIdentity?.referenceVideoSha256 !== referenceVideoHash?.replace(/^sha256:/, "")) return false;
   for (const [imageIndex, imagePath] of (request.referenceImagePaths ?? []).entries()) {
@@ -511,16 +526,21 @@ async function providerResultIsCurrent(
     const key = `referenceImageSha256[${imageIndex}]:${path.basename(imagePath)}`;
     if (result.inputIdentity?.[key] !== imageHash?.replace(/^sha256:/, "")) return false;
   }
-  if (!await exists(path.join(segmentRoot, rawProviderFileName))) return false;
-  const rawProviderHash = await fileHash(path.join(segmentRoot, rawProviderFileName));
+  const actualRawProviderFileName = result.rawProviderOutput?.fileName ?? rawProviderFileName;
+  if (!await exists(path.join(segmentRoot, actualRawProviderFileName))) return false;
+  const rawProviderHash = await fileHash(path.join(segmentRoot, actualRawProviderFileName));
   if (result.rawProviderOutput?.sha256 !== rawProviderHash?.replace(/^sha256:/, "")) {
     return false;
   }
   if (!requireFinal) return ["seedance-ready", "succeeded"].includes(result.status);
-  if (!await exists(path.join(segmentRoot, rawUpscaleFileName))) return false;
-  const rawUpscaleHash = await fileHash(path.join(segmentRoot, rawUpscaleFileName));
-  if (result.rawUpscaleOutput?.sha256 !== rawUpscaleHash?.replace(/^sha256:/, "")) {
-    return false;
+  if (usesFallback) {
+    const rawUpscaleFileName = result.rawUpscaleOutput?.fileName ??
+      "cf-upscaled-720p.mp4";
+    if (!await exists(path.join(segmentRoot, rawUpscaleFileName))) return false;
+    const rawUpscaleHash = await fileHash(path.join(segmentRoot, rawUpscaleFileName));
+    if (result.rawUpscaleOutput?.sha256 !== rawUpscaleHash?.replace(/^sha256:/, "")) {
+      return false;
+    }
   }
   const finalPath = path.join(segmentRoot, finalVideoFileName);
   const finalHash = await fileHash(finalPath);
@@ -925,8 +945,8 @@ try {
         if (!await providerResultIsCurrent(item.index)) pending.push(item);
       }
       await runWithConcurrency(pending, seedanceConcurrency, ({ resultPath, index }) =>
-        run("python3", [
-          "scripts/episodes/run-episode-video-segment.py",
+        run("node", [
+          "scripts/episodes/run-episode-video-segment-with-fallback.mjs",
           "--request", path.join(episodeRoot, "video", `segment-0${index}`, "request.json"),
           "--result", resultPath,
           "--until", "seedance",
@@ -943,8 +963,8 @@ try {
         }
       }
       await runWithConcurrency(pending, seedanceConcurrency, ({ resultPath, index }) =>
-        run("python3", [
-          "scripts/episodes/run-episode-video-segment.py",
+        run("node", [
+          "scripts/episodes/run-episode-video-segment-with-fallback.mjs",
           "--request", path.join(episodeRoot, "video", `segment-0${index}`, "request.json"),
           "--result", resultPath, "--until", "conformance",
         ]));

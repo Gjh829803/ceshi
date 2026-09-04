@@ -19,6 +19,11 @@ const semanticActions = new Set([
   "jump", "boost", "brake", "primary-action", "secondary-action",
 ]);
 const SEGMENT_OPENING_FORWARD_SECONDS = 2;
+// Space is only the edge that starts a jump. The actual takeoff, airborne and
+// landing phases continue after that short input interval, so camera admission
+// must protect the whole gesture rather than only the key-down milliseconds.
+export const PLAYTHROUGH_CAMERA_JUMP_LEAD_SECONDS = 0.35;
+export const PLAYTHROUGH_CAMERA_JUMP_SETTLE_SECONDS = 1.75;
 
 function diagnostic(diagnostics, code, path, message) {
   diagnostics.push({ code, path, message });
@@ -85,12 +90,27 @@ export function validatePlaythroughPlanStructure(value, expected = {}) {
       "Plan must bind the Host-provided navigation context.",
     );
   }
+  if (expected.navigationEvidence && (
+    !Array.isArray(expected.navigationEvidence.safeStartViewCatalog) ||
+    expected.navigationEvidence.safeStartViewCatalog.length <
+      PLAYTHROUGH_SEGMENT_COUNT
+  )) {
+    diagnostic(
+      diagnostics,
+      "PLAYTHROUGH_START_VIEW_CATALOG_MISSING",
+      "/segmentPlans",
+      "Navigation evidence must provide at least six camera-clear start position/facing pairs.",
+    );
+  }
   if (!Array.isArray(value.segmentPlans) ||
       value.segmentPlans.length !== PLAYTHROUGH_SEGMENT_COUNT) {
     diagnostic(diagnostics, "PLAYTHROUGH_SEGMENTS_INVALID", "/segmentPlans", "Exactly six independent 30-second capture descriptions are required.");
   } else {
     const admittedStarts = Array.isArray(expected.navigationEvidence?.safeStandPositionCatalog)
       ? expected.navigationEvidence.safeStandPositionCatalog
+      : null;
+    const admittedStartViews = Array.isArray(expected.navigationEvidence?.safeStartViewCatalog)
+      ? expected.navigationEvidence.safeStartViewCatalog
       : null;
     const seenStarts = new Set();
     value.segmentPlans.forEach((segment, index) => {
@@ -118,6 +138,20 @@ export function validatePlaythroughPlanStructure(value, expected = {}) {
           "PLAYTHROUGH_START_NOT_ADMITTED",
           `/segmentPlans/${index}/initialPositionMetersXYZ`,
           "Every capture start must exactly match a Host-admitted safe stand position.",
+        );
+      }
+      if (admittedStartViews !== null &&
+          !admittedStartViews.some((startView) =>
+            samePosition(
+              startView?.initialPositionMetersXYZ,
+              segment?.initialPositionMetersXYZ,
+            ) && startView?.initialFacingYawRadians ===
+              segment?.initialFacingYawRadians)) {
+        diagnostic(
+          diagnostics,
+          "PLAYTHROUGH_START_VIEW_NOT_ADMITTED",
+          `/segmentPlans/${index}`,
+          "Every capture start must use one exact Host-admitted camera-clear position and facing pair.",
         );
       }
       const startKey = Array.isArray(segment?.initialPositionMetersXYZ)
@@ -252,14 +286,25 @@ export function validatePlaythroughPlanStructure(value, expected = {}) {
       );
       const cameraStartSeconds = event?.atSeconds;
       const cameraEndSeconds = cameraStartSeconds + gestureDurationSeconds;
-      if (jumps.some((jump) =>
-        cameraStartSeconds < jump.endSeconds &&
-        cameraEndSeconds > jump.startSeconds)) {
+      if (jumps.some((jump) => {
+        const protectedStartSeconds = Math.max(
+          Math.floor(jump.startSeconds / PLAYTHROUGH_SEGMENT_EXECUTION_SECONDS) *
+            PLAYTHROUGH_SEGMENT_EXECUTION_SECONDS,
+          jump.startSeconds - PLAYTHROUGH_CAMERA_JUMP_LEAD_SECONDS,
+        );
+        const protectedEndSeconds = Math.min(
+          (Math.floor(jump.startSeconds / PLAYTHROUGH_SEGMENT_EXECUTION_SECONDS) + 1) *
+            PLAYTHROUGH_SEGMENT_EXECUTION_SECONDS,
+          jump.endSeconds + PLAYTHROUGH_CAMERA_JUMP_SETTLE_SECONDS,
+        );
+        return cameraStartSeconds < protectedEndSeconds &&
+          cameraEndSeconds > protectedStartSeconds;
+      })) {
         diagnostic(
           diagnostics,
           "PLAYTHROUGH_JUMP_CAMERA_OVERLAP_INVALID",
           `/cameraEvents/${cameraIndex}`,
-          "Camera rotation must not overlap a Space/jump interval.",
+          "Camera rotation must stay outside the complete jump takeoff, airborne, landing and settle window.",
         );
       }
     }

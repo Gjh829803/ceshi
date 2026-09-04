@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   blockBoundsMetersV2,
@@ -22,6 +23,20 @@ interface Options {
   outputPath: string;
   reconnaissancePath: string | null;
   runtimeProbeFallback: boolean;
+}
+
+interface EpisodeCameraClearanceProfile {
+  readonly distanceMeters: number;
+  readonly pitchRadians: number;
+  readonly targetHeightMeters: number;
+  readonly collisionRadiusMeters: number;
+}
+
+export interface SafeStartViewV1 {
+  readonly initialPositionMetersXYZ: BlockPositionMetersXYZV2;
+  readonly initialFacingYawRadians: number;
+  readonly cameraTargetPositionMetersXYZ: BlockPositionMetersXYZV2;
+  readonly cameraPositionMetersXYZ: BlockPositionMetersXYZV2;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -98,6 +113,122 @@ function blockIsSupport(
 ): boolean {
   const support = resolveBlockPresetV1(block.presetRef)?.traversal.supportSurfaceMode;
   return support === "ground" || support === "cloud" && traversal.canStandOnCloud;
+}
+
+function lineIntersectsInflatedBounds(
+  start: readonly [number, number, number],
+  end: readonly [number, number, number],
+  minimum: readonly [number, number, number],
+  maximum: readonly [number, number, number],
+  inflationMeters: number,
+): boolean {
+  let minimumRatio = 0;
+  let maximumRatio = 1;
+  for (let axis = 0; axis < 3; axis += 1) {
+    const lower = minimum[axis]! - inflationMeters;
+    const upper = maximum[axis]! + inflationMeters;
+    const delta = end[axis]! - start[axis]!;
+    if (Math.abs(delta) <= 1e-10) {
+      if (start[axis]! < lower || start[axis]! > upper) return false;
+      continue;
+    }
+    const ratioA = (lower - start[axis]!) / delta;
+    const ratioB = (upper - start[axis]!) / delta;
+    minimumRatio = Math.max(minimumRatio, Math.min(ratioA, ratioB));
+    maximumRatio = Math.min(maximumRatio, Math.max(ratioA, ratioB));
+    if (minimumRatio > maximumRatio) return false;
+  }
+  return maximumRatio >= 0 && minimumRatio <= 1;
+}
+
+function pointInsideInflatedBounds(
+  point: readonly [number, number, number],
+  minimum: readonly [number, number, number],
+  maximum: readonly [number, number, number],
+  inflationMeters: number,
+): boolean {
+  return point.every((value, axis) =>
+    value >= minimum[axis]! - inflationMeters &&
+    value <= maximum[axis]! + inflationMeters);
+}
+
+/**
+ * Admit exact stand-position/facing pairs whose desired third-person camera
+ * endpoint and complete target-to-camera corridor are clear of solid blocks.
+ * This prevents a safe pair of feet from being paired with a camera inside or
+ * behind a wall after relocation.
+ */
+export function deriveSafeStartViewCatalog(
+  blocks: readonly BlockInstanceV2[],
+  safeStandPositions: readonly BlockPositionMetersXYZV2[],
+  camera: EpisodeCameraClearanceProfile,
+): readonly SafeStartViewV1[] {
+  const solidBounds = blocks.filter(blockIsSolid).map(blockBoundsMetersV2);
+  const pitch = Math.max(-1.2, Math.min(1.2, camera.pitchRadians));
+  const horizontalDistanceMeters = Math.cos(pitch) * camera.distanceMeters;
+  const verticalDistanceMeters = Math.sin(pitch) * camera.distanceMeters;
+  const clearanceInflationMeters = camera.collisionRadiusMeters + 0.15;
+  const cameraEndpointClearanceMeters = Math.max(
+    0.75,
+    camera.collisionRadiusMeters + 0.15,
+  );
+  const yawCandidates = Array.from({ length: 16 }, (_, index) =>
+    index * Math.PI / 8);
+  const admitted: SafeStartViewV1[] = [];
+  for (const stand of safeStandPositions) {
+    for (const yaw of yawCandidates) {
+      const forward = Object.freeze([
+        -Math.sin(yaw),
+        0,
+        -Math.cos(yaw),
+      ]) as BlockPositionMetersXYZV2;
+      const target = Object.freeze([
+        stand[0],
+        stand[1] + camera.targetHeightMeters,
+        stand[2],
+      ]) as BlockPositionMetersXYZV2;
+      const cameraPosition = Object.freeze([
+        target[0] - forward[0] * horizontalDistanceMeters,
+        target[1] + verticalDistanceMeters,
+        target[2] - forward[2] * horizontalDistanceMeters,
+      ]) as BlockPositionMetersXYZV2;
+      if (solidBounds.some((bounds) => pointInsideInflatedBounds(
+        cameraPosition,
+        bounds.minimumMetersXYZ,
+        bounds.maximumMetersXYZ,
+        cameraEndpointClearanceMeters,
+      ))) continue;
+      if (solidBounds.some((bounds) => lineIntersectsInflatedBounds(
+        target,
+        cameraPosition,
+        bounds.minimumMetersXYZ,
+        bounds.maximumMetersXYZ,
+        clearanceInflationMeters,
+      ))) continue;
+      admitted.push(Object.freeze({
+        initialPositionMetersXYZ: stand,
+        initialFacingYawRadians: yaw,
+        cameraTargetPositionMetersXYZ: target,
+        cameraPositionMetersXYZ: cameraPosition,
+      }));
+    }
+  }
+  return Object.freeze(admitted);
+}
+
+function episodeCameraProfile(reconnaissance: unknown): EpisodeCameraClearanceProfile {
+  const camera = (reconnaissance as any)?.initial?.camera;
+  const parameters = camera?.resolvedParameters ?? {};
+  const value = (candidate: unknown, fallback: number): number =>
+    typeof candidate === "number" && Number.isFinite(candidate)
+      ? candidate
+      : fallback;
+  return Object.freeze({
+    distanceMeters: value(parameters.distanceMeters, 3.5),
+    pitchRadians: value(parameters.pitchRadians, 0.16),
+    targetHeightMeters: value(parameters.targetHeightMeters, 1.5),
+    collisionRadiusMeters: value(parameters.collisionRadiusMeters, 0.12),
+  });
 }
 
 /**
@@ -258,12 +389,16 @@ async function main(): Promise<void> {
     : `sha256:${createHash("sha256")
       .update(await readFile(options.reconnaissancePath))
       .digest("hex")}`;
+  const reconnaissance = options.reconnaissancePath === null
+    ? null
+    : JSON.parse(await readFile(options.reconnaissancePath, "utf8"));
+  const cameraProfile = episodeCameraProfile(reconnaissance);
   if (options.runtimeProbeFallback) {
     if (options.reconnaissancePath === null) {
       throw new Error("--runtime-probe-fallback requires --reconnaissance.");
     }
     const reconnaissanceBytes = await readFile(options.reconnaissancePath);
-    const reconnaissance = JSON.parse(reconnaissanceBytes.toString("utf8")) as {
+    const fallbackReconnaissance = reconnaissance as {
       sceneId?: string;
       controlledEntityId?: string;
       initial?: { subjects?: Record<string, { positionMetersXYZ?: BlockPositionMetersXYZV2 }> };
@@ -273,16 +408,16 @@ async function main(): Promise<void> {
         movementEvidence?: Record<string, { displacementMeters?: number; blockedOrStalled?: boolean }>;
       }>;
     };
-    const entityId = reconnaissance.controlledEntityId;
-    const start = entityId ? reconnaissance.initial?.subjects?.[entityId]?.positionMetersXYZ : undefined;
-    const probe = entityId ? reconnaissance.probes?.find((candidate) => {
+    const entityId = fallbackReconnaissance.controlledEntityId;
+    const start = entityId ? fallbackReconnaissance.initial?.subjects?.[entityId]?.positionMetersXYZ : undefined;
+    const probe = entityId ? fallbackReconnaissance.probes?.find((candidate) => {
       const movement = candidate.movementEvidence?.[entityId];
       return candidate.subjects?.[entityId]?.positionMetersXYZ !== undefined &&
         movement?.blockedOrStalled === false &&
         Number(movement.displacementMeters) >= 1;
     }) : undefined;
     const end = entityId && probe ? probe.subjects?.[entityId]?.positionMetersXYZ : undefined;
-    if (reconnaissance.sceneId !== options.sceneId || !entityId || !start || !end) {
+    if (fallbackReconnaissance.sceneId !== options.sceneId || !entityId || !start || !end) {
       throw new Error("Runtime-probe fallback requires one matching non-stalled measured movement probe.");
     }
     const reachableSpan = check.metrics.reachableHorizontalSpanMetersXZ;
@@ -328,6 +463,20 @@ async function main(): Promise<void> {
         `Runtime fallback requires at least six collision-clear stand positions; found ${fallbackSafeAnchors.length}.`,
       );
     }
+    const fallbackSafeStartViews = deriveSafeStartViewCatalog(
+      loaded.extraction.manifest.blocks,
+      fallbackSafeAnchors,
+      cameraProfile,
+    );
+    const fallbackViewPositionKeys = new Set(fallbackSafeStartViews.map((item) =>
+      positionKey(item.initialPositionMetersXYZ)));
+    const fallbackCameraSafeAnchors = fallbackSafeAnchors.filter((position) =>
+      fallbackViewPositionKeys.has(positionKey(position)));
+    if (fallbackCameraSafeAnchors.length < 6) {
+      throw new Error(
+        `Runtime fallback requires at least six camera-clear start positions; found ${fallbackCameraSafeAnchors.length}.`,
+      );
+    }
     await writeJsonAtomic(options.outputPath, {
       kind: "worldkit-episode-navigation-evidence",
       schemaVersion: 1,
@@ -353,12 +502,16 @@ async function main(): Promise<void> {
         isBidirectional: true,
         centerlineStandPositionsMetersXYZ: corridorPoints,
       }],
-      safeStandPositionCatalog: fallbackSafeAnchors,
+      safeStandPositionCatalog: fallbackCameraSafeAnchors,
+      safeStartViewCatalog: fallbackSafeStartViews,
+      cameraClearanceProfile: cameraProfile,
       policy: {
         destinationDriven: true,
         requireFourSegments: true,
         avoidUnmeasuredOpenings: true,
         routeWaypointsMustUseSafeCatalog: true,
+        captureStartMustUseSafeStartViewCatalog: true,
+        cameraEndpointClearanceMeters: 0.75,
         runtimePreflightRequired: true,
         maximumAcceptedRecoveryCount: 0,
         fallbackReason: "authored-corridor-runtime-preflight-failed",
@@ -405,11 +558,20 @@ async function main(): Promise<void> {
     spawn,
     ...corridors.flatMap((corridor) => corridor.centerlineStandPositionsMetersXYZ),
   ]);
-  const safeAnchors = deriveSafeStandPositionCatalog(
+  const collisionSafeAnchors = deriveSafeStandPositionCatalog(
     loaded.extraction.manifest.blocks,
     checkInput.subjectTraversalProfile,
     declaredSafeAnchors,
   );
+  const safeStartViews = deriveSafeStartViewCatalog(
+    loaded.extraction.manifest.blocks,
+    collisionSafeAnchors,
+    cameraProfile,
+  );
+  const safeViewPositionKeys = new Set(safeStartViews.map((item) =>
+    positionKey(item.initialPositionMetersXYZ)));
+  const safeAnchors = collisionSafeAnchors.filter((position) =>
+    safeViewPositionKeys.has(positionKey(position)));
   if (safeAnchors.length < 6) {
     throw new Error(
       `Episode exploration requires at least six collision-clear stand positions; found ${safeAnchors.length}.`,
@@ -552,11 +714,15 @@ async function main(): Promise<void> {
     coreDestinationIds,
     corridors,
     safeStandPositionCatalog: safeAnchors,
+    safeStartViewCatalog: safeStartViews,
+    cameraClearanceProfile: cameraProfile,
     policy: {
       destinationDriven: true,
       requireFourSegments: true,
       avoidUnmeasuredOpenings: true,
       routeWaypointsMustUseSafeCatalog: true,
+      captureStartMustUseSafeStartViewCatalog: true,
+      cameraEndpointClearanceMeters: 0.75,
       runtimePreflightRequired: true,
       maximumAcceptedRecoveryCount: 0,
     },
@@ -566,7 +732,9 @@ async function main(): Promise<void> {
   );
 }
 
-void main().catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  void main().catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

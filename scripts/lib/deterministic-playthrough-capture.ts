@@ -56,6 +56,17 @@ export function cameraGestureDurationMs(event: {
   ));
 }
 
+export function locomotionRequiresJumpCameraSuppression(
+  locomotion: any,
+): boolean {
+  return locomotion === null || locomotion === undefined ||
+    locomotion.mobilityMode === "airborne" ||
+    locomotion.mode === "airborne" ||
+    locomotion.supportMode === "unsupported" ||
+    locomotion.verticalPhase === "rising" ||
+    locomotion.verticalPhase === "falling";
+}
+
 async function writePipeFrame(
   stream: NodeJS.WritableStream,
   bytes: Buffer,
@@ -85,6 +96,10 @@ function traceEvents(
   plan: any,
   executionStartSeconds: number,
   executionEndSeconds: number,
+  cameraExecutionById: ReadonlyMap<string, Readonly<{
+    actualSeconds: number;
+    status: "applied" | "suppressed-during-jump";
+  }>>,
 ): any[] {
   const inputEvents = plan.inputIntervals.flatMap((interval: any) => [
     {
@@ -109,18 +124,23 @@ function traceEvents(
   const cameraEvents = plan.cameraEvents
     .filter((event: any) => event.atSeconds >= executionStartSeconds &&
       event.atSeconds < executionEndSeconds)
-    .map((event: any) => ({
-      plannedSeconds: event.atSeconds,
-      actualSeconds: event.atSeconds,
-      kind: "camera",
-      id: event.id,
-      source: "planner-fixed-step",
-      cameraKeys: cameraKeysForEvent(event),
-      durationMs: cameraGestureDurationMs(event),
-      yawDeltaRadians: event.yawDeltaRadians,
-      pitchDeltaRadians: event.pitchDeltaRadians,
-      purpose: event.purpose,
-    }));
+    .map((event: any) => {
+      const execution = cameraExecutionById.get(event.id);
+      const suppressed = execution?.status === "suppressed-during-jump";
+      return {
+        plannedSeconds: event.atSeconds,
+        actualSeconds: execution?.actualSeconds ?? event.atSeconds,
+        kind: suppressed ? "camera-suppressed" : "camera",
+        id: event.id,
+        source: "planner-fixed-step",
+        cameraKeys: suppressed ? [] : cameraKeysForEvent(event),
+        durationMs: suppressed ? 0 : cameraGestureDurationMs(event),
+        yawDeltaRadians: suppressed ? 0 : event.yawDeltaRadians,
+        pitchDeltaRadians: suppressed ? 0 : event.pitchDeltaRadians,
+        ...(suppressed ? { reason: "explicit-jump-not-landed" } : {}),
+        purpose: event.purpose,
+      };
+    });
   const resetEvents = PLAYTHROUGH_CAMERA_RESET_WINDOWS
     .filter(({ startSeconds }) => startSeconds >= executionStartSeconds &&
       startSeconds < executionEndSeconds)
@@ -191,12 +211,19 @@ export async function captureDeterministicPlaythrough(
     executionStartSeconds * PLAYTHROUGH_CAPTURE_FPS,
   );
   const telemetrySamples: any[] = [];
+  const cameraExecutionById = new Map<string, Readonly<{
+    actualSeconds: number;
+    status: "applied" | "suppressed-during-jump";
+  }>>();
+  let explicitJumpNotLanded = false;
+  let groundedFramesAfterJump = 0;
 
   try {
     for (let globalFrameIndex = captureStartFrame;
       globalFrameIndex < totalEndFrame;
       globalFrameIndex += 1) {
       const executionSeconds = globalFrameIndex / PLAYTHROUGH_CAPTURE_FPS;
+      let submittedJumpThisFrame = false;
       if (globalFrameIndex > captureStartFrame) {
         const previousSeconds = (globalFrameIndex - 1) /
           PLAYTHROUGH_CAPTURE_FPS;
@@ -208,12 +235,37 @@ export async function captureDeterministicPlaythrough(
           (action: string) => action !== "jump" ||
             previousSeconds <= previousInterval.startSeconds + 1e-9,
         );
+        submittedJumpThisFrame = actions.includes("jump");
+        if (submittedJumpThisFrame) {
+          explicitJumpNotLanded = true;
+          groundedFramesAfterJump = 0;
+        }
         const ticks = globalFrameIndex % 2 === 0 ? 3 : 2;
         snapshot = await options.page.evaluate(async ({ actions, ticks }) => {
           const protocol = window.__WORLDKIT__;
           if (!protocol) throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
           return protocol.runFixedInput([{ actions, ticks }]);
         }, { actions, ticks });
+      }
+      if (explicitJumpNotLanded && !submittedJumpThisFrame) {
+        const runtimeCamera = snapshot?.view?.camera;
+        const entityId = runtimeCamera?.mode === "tracking"
+          ? runtimeCamera.targetEntityId ?? options.plan.controlledEntityId
+          : options.plan.controlledEntityId;
+        const subjectState = snapshot?.world?.subjectStatesByEntityId?.[entityId];
+        const locomotionCapability = Object.values(
+          subjectState?.capabilityStatesById ?? {},
+        ).find((candidate: any) =>
+          candidate?.kind === "locomotion-capability-state-v2" ||
+          candidate?.kind === "locomotion-capability-state");
+        const locomotion = (locomotionCapability as any)?.locomotion ??
+          locomotionCapability ?? null;
+        const airborne = locomotionRequiresJumpCameraSuppression(locomotion);
+        groundedFramesAfterJump = airborne ? 0 : groundedFramesAfterJump + 1;
+        // Require a quarter second of committed grounded frames before manual
+        // camera input can resume. A stale/early provider support bit therefore
+        // cannot produce the large post-jump camera snap seen in production.
+        if (groundedFramesAfterJump >= 6) explicitJumpNotLanded = false;
       }
       while (resetIndex < resetSeconds.length &&
           resetSeconds[resetIndex]! <= executionSeconds + 1e-9) {
@@ -223,12 +275,23 @@ export async function captureDeterministicPlaythrough(
       while (cameraIndex < cameraEvents.length &&
           cameraEvents[cameraIndex]!.atSeconds <= executionSeconds + 1e-9) {
         const event = cameraEvents[cameraIndex]!;
-        await options.page.evaluate(({ yawDeltaRadians, pitchDeltaRadians }) =>
-          window.__WORLDKIT__?.adjustCameraView({
-            yawDeltaRadians,
-            pitchDeltaRadians,
-            zoomDeltaMeters: 0,
-          }), event);
+        if (explicitJumpNotLanded) {
+          cameraExecutionById.set(event.id, {
+            actualSeconds: executionSeconds,
+            status: "suppressed-during-jump",
+          });
+        } else {
+          await options.page.evaluate(({ yawDeltaRadians, pitchDeltaRadians }) =>
+            window.__WORLDKIT__?.adjustCameraView({
+              yawDeltaRadians,
+              pitchDeltaRadians,
+              zoomDeltaMeters: 0,
+            }), event);
+          cameraExecutionById.set(event.id, {
+            actualSeconds: executionSeconds,
+            status: "applied",
+          });
+        }
         cameraIndex += 1;
       }
       if (globalFrameIndex < captureStartFrame) continue;
@@ -359,7 +422,12 @@ export async function captureDeterministicPlaythrough(
     captureFrameRate: PLAYTHROUGH_CAPTURE_FPS,
     frameCount: options.frameCount,
     telemetrySamples,
-    events: traceEvents(options.plan, executionStartSeconds, executionEndSeconds),
+    events: traceEvents(
+      options.plan,
+      executionStartSeconds,
+      executionEndSeconds,
+      cameraExecutionById,
+    ),
     finished,
   };
 }

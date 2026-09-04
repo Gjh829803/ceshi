@@ -33,6 +33,11 @@ Also require all six openings to share one coherent variant identity and to cont
 premature Prompt Event, Block World residue, technical helper, UI, label, or watermark.
 The Subject, environment and every visible declared target must clearly realize the
 selected variant rather than retain a generic or source-scene identity.
+Require presentation-readable exposure across all six openings. Dark concepts remain
+valid, but the Subject, playable foreground and primary landmarks must be separated by
+motivated key/fill/rim/practical light rather than disappearing into crushed black or
+featureless fog. Judge this intelligently from the image; do not use a fixed pixel or
+luminance threshold.
 
 ## Tri-view review
 

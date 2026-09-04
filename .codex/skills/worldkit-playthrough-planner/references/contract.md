@@ -53,8 +53,9 @@ Provide exactly six entries in Segment order. Global starts are 0, 30, 60, 90,
 }
 ```
 
-`initialPositionMetersXYZ` and every waypoint must be exact Host-admitted stand
-positions. The first route waypoint equals the initial position. Captures may start
+`initialPositionMetersXYZ` and `initialFacingYawRadians` must be copied together from
+one exact `safeStartViewCatalog` row. Every waypoint must be an exact Host-admitted
+stand position. The first route waypoint equals the initial position. Captures may start
 far apart and do not connect to the preceding capture. Use at least three distinct
 destinations overall and cover all core destinations when evidence permits.
 
@@ -72,8 +73,11 @@ gap. S remains required later in suitable captures, but never as the opening act
 
 Camera events also use the global clock. I/J/K/L are represented by pitch/yaw deltas;
 one event remains within ±1.2 yaw and ±0.6 pitch radians. Plan useful observations,
-not a mandatory end reset or identical orbit macro. A Camera Event's natural gesture
-duration must not overlap any Space/jump interval; keep the camera stable throughout
-takeoff, airborne time and landing input. Visual events are absent from this contract
+not a mandatory end reset or identical orbit macro. Camera Events may overlap
+W/A/S/D/Shift movement. They must not overlap a jump protection window: the complete
+gesture ends at least 0.35 seconds before Space starts, and the next gesture starts at
+least 1.75 seconds after the Space interval ends. Keep the camera stable throughout
+takeoff, airborne time, landing and the short settling period; never treat a jump as a
+reason to add a large camera rotation immediately afterward. Visual events are absent from this contract
 and are authored later by one Gemini call for captures 00, 02 and 04 only. All six
 captures still receive styled opening frames and Seedance outputs.

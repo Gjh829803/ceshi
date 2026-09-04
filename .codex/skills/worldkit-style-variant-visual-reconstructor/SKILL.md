@@ -55,6 +55,12 @@ an original styled image in place of the newly accepted Segment-00 anchor.
 The accepted opening and five new openings must share one variant identity. Prompt Events occur later and must
 not appear in any opening. Generate tri-views once per variant, never per Segment.
 
+Keep every generated frame presentation-bright like the accepted anchor. Preserve a
+dark concept's palette without copying crushed shadows: use motivated fill, sky,
+practical, emissive or rim light so the Subject, playable foreground and landmarks
+stay legible. Reject and regenerate your own candidate when important forms disappear
+into black, the route becomes unreadable, or darkness dominates the frame.
+
 When a prior Codex Reviewer report is attached, repair only its named failures. Keep
 all passed generated frames and targets stable. A repair may never modify Segment-00;
 if a report criticizes Segment-00, treat that as a Host contract conflict and leave the

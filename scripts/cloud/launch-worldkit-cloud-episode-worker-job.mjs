@@ -143,7 +143,10 @@ export function cloudEpisodeWorkerJob({
               { name: "PLAYWRIGHT_BROWSERS_PATH", value: "/ms-playwright" },
               { name: "NODE_OPTIONS", value: "--max-old-space-size=12288" },
               { name: "WORLDKIT_CODEX_BACKEND", value: "cloud" },
-              { name: "WORLDKIT_CAPTURE_GPU", value: "1" },
+              {
+                name: "WORLDKIT_CAPTURE_GPU",
+                value: ["full", "capture"].includes(executionPart) ? "1" : "0",
+              },
               { name: "WORLDKIT_CAPTURE_HEADLESS", value: "1" },
               { name: "WORLDKIT_DISABLE_PLAYGROUND_SPAWN", value: "1" },
               { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },

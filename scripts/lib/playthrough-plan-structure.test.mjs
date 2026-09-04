@@ -83,6 +83,10 @@ test("rejects starts outside the Host-admitted safe position catalog", () => {
   const navigationEvidence = {
     safeStandPositionCatalog: value.segmentPlans.map((segment) =>
       segment.initialPositionMetersXYZ),
+    safeStartViewCatalog: value.segmentPlans.map((segment) => ({
+      initialPositionMetersXYZ: segment.initialPositionMetersXYZ,
+      initialFacingYawRadians: segment.initialFacingYawRadians,
+    })),
   };
   value.segmentPlans[3].initialPositionMetersXYZ = [9999, 9999, 9999];
   const result = validatePlaythroughPlanStructure(value, {
@@ -96,6 +100,45 @@ test("rejects starts outside the Host-admitted safe position catalog", () => {
   assert.equal(result.ok, false);
   assert.ok(result.diagnostics.some(({ code }) =>
     code === "PLAYTHROUGH_START_NOT_ADMITTED"));
+});
+
+test("rejects legacy navigation evidence without camera-clear start views", () => {
+  const value = plan();
+  const navigationEvidence = {
+    kind: "worldkit-episode-navigation-evidence",
+    schemaVersion: 1,
+    sceneId: value.sceneId,
+    safeStandPositionCatalog: value.segmentPlans.map((segment) =>
+      segment.initialPositionMetersXYZ),
+  };
+  const result = validatePlaythroughPlanStructure(value, {
+    navigationEvidence,
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.diagnostics.some(({ code }) =>
+    code === "PLAYTHROUGH_START_VIEW_CATALOG_MISSING"));
+});
+
+test("rejects a guessed facing for a Host-admitted safe position", () => {
+  const value = plan();
+  const safeStartViewCatalog = value.segmentPlans.map((segment) => ({
+    initialPositionMetersXYZ: segment.initialPositionMetersXYZ,
+    initialFacingYawRadians: segment.initialFacingYawRadians,
+  }));
+  value.segmentPlans[2].initialFacingYawRadians += 0.1;
+  const result = validatePlaythroughPlanStructure(value, {
+    navigationEvidence: {
+      kind: "worldkit-episode-navigation-evidence",
+      schemaVersion: 1,
+      sceneId: value.sceneId,
+      safeStandPositionCatalog: safeStartViewCatalog.map((row) =>
+        row.initialPositionMetersXYZ),
+      safeStartViewCatalog,
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.diagnostics.some(({ code }) =>
+    code === "PLAYTHROUGH_START_VIEW_NOT_ADMITTED"));
 });
 
 test("rejects duplicated independent capture starts", () => {
@@ -158,4 +201,52 @@ test("rejects camera rotation that overlaps a jump", () => {
   assert.equal(result.ok, false);
   assert.ok(result.diagnostics.some(({ code }) =>
     code === "PLAYTHROUGH_JUMP_CAMERA_OVERLAP_INVALID"));
+});
+
+test("rejects a camera gesture shortly after Space while landing is still settling", () => {
+  const value = plan();
+  value.inputIntervals.splice(0, 1,
+    {
+      id: "input-00-a",
+      startSeconds: 0,
+      endSeconds: 10,
+      rawKeys: ["W"],
+      semanticActions: ["move-forward"],
+      purpose: "Walk before jump.",
+    },
+    {
+      id: "input-00-jump",
+      startSeconds: 10,
+      endSeconds: 10.2,
+      rawKeys: ["Space"],
+      semanticActions: ["jump"],
+      purpose: "Jump while camera stays stable.",
+    },
+    {
+      id: "input-00-b",
+      startSeconds: 10.2,
+      endSeconds: 28,
+      rawKeys: ["W"],
+      semanticActions: ["move-forward"],
+      purpose: "Continue after jump.",
+    },
+  );
+  value.cameraEvents[0] = {
+    ...value.cameraEvents[0],
+    atSeconds: 11.4,
+  };
+  const result = validatePlaythroughPlanStructure(value);
+  assert.equal(result.ok, false);
+  assert.ok(result.diagnostics.some(({ code }) =>
+    code === "PLAYTHROUGH_JUMP_CAMERA_OVERLAP_INVALID"));
+});
+
+test("allows camera rotation together with ordinary WASD movement", () => {
+  const value = plan();
+  value.cameraEvents[0] = {
+    ...value.cameraEvents[0],
+    atSeconds: 5,
+  };
+  const result = validatePlaythroughPlanStructure(value);
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
 });

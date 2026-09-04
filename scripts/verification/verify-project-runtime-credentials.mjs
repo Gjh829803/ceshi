@@ -10,11 +10,18 @@ const manifest = JSON.parse(await readFile(path.join(
   "config/project-runtime-credentials.json",
 ), "utf8"));
 
+const expectedCredentialIds = new Set([
+  "lwdp", "mg-seedance", "seedance25-api", "mediakit", "gemini-env",
+  "google-service-account", "aws-credentials", "aws-config", "studio-public",
+]);
 if (manifest.kind !== "worldkit-project-runtime-credentials-manifest" ||
     manifest.schemaVersion !== 1 || manifest.projectLocalOnly !== true ||
     manifest.allowEnvironmentCredentialOverrides !== false ||
-    !Array.isArray(manifest.files) || manifest.files.length !== 8 ||
-    new Set(manifest.files.map((item) => item?.id)).size !== 8) {
+    !Array.isArray(manifest.files) ||
+    manifest.files.length !== expectedCredentialIds.size ||
+    new Set(manifest.files.map((item) => item?.id)).size !==
+      expectedCredentialIds.size ||
+    manifest.files.some((item) => !expectedCredentialIds.has(item?.id))) {
   throw new Error("Project runtime credential manifest is invalid.");
 }
 
@@ -74,19 +81,31 @@ const videoPipeline = JSON.parse(await readFile(path.join(
   "config/episode-video-pipeline.json",
 ), "utf8"));
 const requiredBindings = [
-  [videoPipeline.seedanceProvider?.credentialFile, "mg-seedance"],
+  [videoPipeline.seedanceProvider?.credentialFile, "seedance25-api"],
 ];
+const fallbackVideoPipeline = JSON.parse(await readFile(path.join(
+  repoRoot,
+  videoPipeline.fallback?.pipelineConfigPath ?? "",
+), "utf8"));
+requiredBindings.push([
+  fallbackVideoPipeline.seedanceProvider?.credentialFile,
+  "mg-seedance",
+]);
 for (const [configuredPath, id] of requiredBindings) {
   const declared = manifest.files.find((item) => item.id === id)?.path;
   if (configuredPath !== declared) {
     throw new Error(`Runtime config binding drifted: ${id}`);
   }
 }
-if (videoPipeline.seedance?.model !== "mg-seedance-2.5-480p" ||
-    videoPipeline.seedance?.resolution !== "480p" ||
-    videoPipeline.upscale?.model !== "cf-超分-720p-30s" ||
-    videoPipeline.upscale?.resolution !== "720p") {
-  throw new Error("Episode video pipeline must use MG Seedance 2.5 480p plus CF 720p upscale.");
+if (videoPipeline.seedanceProvider?.kind !== "seedance-2.5-direct-api" ||
+    videoPipeline.seedance?.model !== "seedance-2.5" ||
+    videoPipeline.seedance?.resolution !== "720p" ||
+    fallbackVideoPipeline.seedanceProvider?.kind !== "mg-seedance-2.5-plus-cf-upscale" ||
+    fallbackVideoPipeline.seedance?.model !== "mg-seedance-2.5-480p" ||
+    fallbackVideoPipeline.seedance?.resolution !== "480p" ||
+    fallbackVideoPipeline.upscale?.model !== "cf-超分-720p-30s" ||
+    fallbackVideoPipeline.upscale?.resolution !== "720p") {
+  throw new Error("Episode video pipeline must default to direct Seedance 2.5 and fall back to MG 480p plus CF 720p.");
 }
 
 process.stdout.write(

@@ -17,6 +17,8 @@ test("cloud Episode worker defaults to the platform fetch implementation", async
   assert.match(source, /priorSourceReceipt\?\.workerImage \?\? request\.workerImage/);
   assert.match(source, /worldkit-gpu-capture-queue-entry/);
   assert.match(source, /worldkit-cloud-checkpoint-manifest/);
+  assert.match(source, /WORLDKIT_EPISODE_RUNTIME_SERVICES_SKIPPED/);
+  assert.match(source, /\["full", "prepare", "capture"\]/);
 });
 
 test("materializes Episode provider Secrets only inside the ephemeral project workspace", async () => {
@@ -25,9 +27,12 @@ test("materializes Episode provider Secrets only inside the ephemeral project wo
   const secretRoot = path.join(root, "secret");
   await mkdir(secretRoot, { recursive: true });
   for (const fileName of [
+    "infinite-canvas.key",
     "mg.key",
     "gemini.env",
     "google-service-account.json",
+    "aws-credentials",
+    "aws-config",
   ]) await writeFile(path.join(secretRoot, fileName), `fake-${fileName}\n`);
   try {
     const runtimeRoot = await materializeEpisodeRuntimeConfig({
@@ -43,6 +48,7 @@ test("materializes Episode provider Secrets only inside the ephemeral project wo
     assert.match(await readFile(path.join(runtimeRoot, "lwdp.env"), "utf8"),
       /LWDP_GENERATION_API_TOKEN=fake-lwdp-token/);
     assert.equal((await stat(path.join(runtimeRoot, "mg.key"))).mode & 0o777, 0o600);
+    assert.equal((await stat(path.join(runtimeRoot, "infinite-canvas.key"))).mode & 0o777, 0o600);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

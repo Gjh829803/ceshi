@@ -279,6 +279,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/cli/worldkit-route-run.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "scripts/cli/worldkit-triview-capture.integration.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process", "native-havok-or-recast"] },
   { path: "scripts/cli/worldkit.test.ts", lane: "contract" },
+  { path: "scripts/episodes/build-exploration-navigation-evidence.test.ts", lane: "contract" },
   { path: "scripts/fixtures/generate-golden-humanoid-glb.test.ts", lane: "contract" },
   { path: "scripts/lib/agent-self-check-bundle.test.ts", lane: "contract" },
   { path: "scripts/lib/ai-schema-provider-conformance.test.ts", lane: "contract" },

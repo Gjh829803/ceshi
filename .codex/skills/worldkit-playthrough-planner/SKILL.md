@@ -16,9 +16,11 @@ continuous route and do not need to connect. Together they should expose the mai
 geographic zones, landmarks, foreground/midground/background relationships and useful
 playable views of the world.
 
-Choose each `initialPositionMetersXYZ` from an exact safe stand position in navigation
-evidence. Give it an `initialFacingYawRadians` that opens on a useful third-person
-view with room to move. The local route must begin at that position. Do not place the
+Choose each `initialPositionMetersXYZ` and `initialFacingYawRadians` together from one
+exact row of the Host-provided `safeStartViewCatalog`; never combine a safe position
+with a guessed facing. Each admitted pair has a collision-clear third-person camera
+endpoint and an unobstructed target-to-camera corridor. Prefer among those exact pairs
+the one that opens on a useful view with room to move. The local route must begin at that position. Do not place the
 Subject inside geometry, at a cliff edge without ground clearance, or at a position
 that reconnaissance marked blocked or unsupported.
 
@@ -45,11 +47,15 @@ its 30 seconds:
   optimize for exact endpoint closure;
 - vary the six paths, speeds and viewpoints instead of copying one control pattern.
 
-Use I/J/K/L camera events often enough to inspect the environment while movement
-continues. A capture may include a natural look-around, but there is no mandatory
+Use I/J/K/L camera events often enough to inspect the environment. Camera rotation may
+run together with W/A/S/D/Shift movement when that produces a natural moving look.
+A capture may include a natural look-around, but there is no mandatory
 end-of-segment camera reset and no required 180–360 degree orbit. End each capture in
-a usable third-person framing. Never overlap a Camera Event with a Space/jump input;
-finish a camera gesture before jumping or start it after the jump ends.
+a usable third-person framing. A jump is never a cue to rotate the camera. Keep every
+camera gesture out of the complete jump sequence: finish it at least 0.35 seconds
+before Space, and do not start another until at least 1.75 seconds after the Space
+interval ends. Do not systematically pair jumps with a following camera event, and
+never add a large post-jump yaw/pitch change merely because a jump occurred.
 
 ## Evidence and boundaries
 

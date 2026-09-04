@@ -51,9 +51,12 @@ import { parseCloudEpisodeRequest } from "./submit-worldkit-cloud-episode.mjs";
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const terminalStatuses = new Set(["succeeded", "failed", "interrupted", "cancelled"]);
 const runtimeSecretFiles = [
+  "infinite-canvas.key",
   "mg.key",
   "gemini.env",
   "google-service-account.json",
+  "aws-credentials",
+  "aws-config",
 ];
 
 function parseArgs(argv) {
@@ -299,7 +302,12 @@ export async function runCloudEpisodeWorker({
         CLOUD_EPISODE_PART_BY_STAGE_ID[stageId] !== executionPart) {
       throw new Error("Cloud Episode request does not admit this stage execution part.");
     }
-    if (process.env.WORLDKIT_CLOUD_WORKER_IMAGE !== request.workerImage) {
+    const expectedExecutorImage = ["full", "prepare", "capture"].includes(
+      executionPart,
+    )
+      ? request.workerImage
+      : request.postprocessWorkerImage ?? request.workerImage;
+    if (process.env.WORLDKIT_CLOUD_WORKER_IMAGE !== expectedExecutorImage) {
       throw new Error(
         "Cloud Episode Worker image does not match the digest frozen into the request.",
       );
@@ -401,18 +409,28 @@ export async function runCloudEpisodeWorker({
             )
           : join(episodeRoot, "video", segmentId, "provider-run.json");
         await mkdir(dirname(destination), { recursive: true });
+        const journalS3Root = joinS3Uri(
+          outputS3Prefix,
+          "provider-journals",
+          request.episodeId,
+          ...(variantPath ? [variantPath] : []),
+          segmentId,
+        );
         const downloaded = await downloadImplementation(
-          joinS3Uri(
-            outputS3Prefix,
-            "provider-journals",
-            request.episodeId,
-            ...(variantPath ? [variantPath] : []),
-            segmentId,
-            "provider-run.json",
-          ),
+          joinS3Uri(journalS3Root, "provider-run.json"),
           destination,
           uploadOptions,
         ).then(() => true).catch(() => false);
+        for (const sidecarName of [
+          "provider-run.primary.json",
+          "provider-run.route.json",
+        ]) {
+          await downloadImplementation(
+            joinS3Uri(journalS3Root, sidecarName),
+            join(dirname(destination), sidecarName),
+            uploadOptions,
+          ).catch(() => undefined);
+        }
         if (downloaded) {
           const journal = parseCloudProviderJournal(await readFile(destination, "utf8"));
           if (
@@ -463,34 +481,44 @@ export async function runCloudEpisodeWorker({
       mode: 0o600,
     });
 
-    setStage("runtime-services");
-    const recordPath = join(studioDataRoot, "worlds", request.sceneId, "record.json");
-    await mkdir(dirname(recordPath), { recursive: true });
-    await writeFile(recordPath, `${JSON.stringify(request.sceneRecord, null, 2)}\n`, {
-      mode: 0o600,
-    });
-    playgroundChild = spawnImplementation(
-      "pnpm",
-      ["--filter", "@whitebox-world/playground", "exec", "vite", "preview",
-        "--host", "127.0.0.1", "--port", "5297", "--strictPort"],
-      { cwd: repoRoot, env: process.env, stdio: "ignore", detached: true },
+    const runtimeServicesRequired = ["full", "prepare", "capture"].includes(
+      executionPart,
     );
-    studioChild = spawnImplementation("node", ["apps/studio/src/server.mjs"], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        WORLDKIT_STUDIO_PORT: "4297",
-        WORLDKIT_STUDIO_DATA_ROOT: studioDataRoot,
-        WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN: playgroundOrigin,
-        WORLDKIT_PLAYGROUND_ORIGIN: playgroundOrigin,
-      },
-      stdio: "ignore",
-      detached: true,
-    });
-    await waitForHttp(
-      `${studioOrigin}/api/worlds/${encodeURIComponent(request.sceneId)}/preview-bootstrap`,
-      { fetchImplementation },
-    );
+    if (runtimeServicesRequired) {
+      setStage("runtime-services");
+      const recordPath = join(studioDataRoot, "worlds", request.sceneId, "record.json");
+      await mkdir(dirname(recordPath), { recursive: true });
+      await writeFile(recordPath, `${JSON.stringify(request.sceneRecord, null, 2)}\n`, {
+        mode: 0o600,
+      });
+      playgroundChild = spawnImplementation(
+        "pnpm",
+        ["--filter", "@whitebox-world/playground", "exec", "vite", "preview",
+          "--host", "127.0.0.1", "--port", "5297", "--strictPort"],
+        { cwd: repoRoot, env: process.env, stdio: "ignore", detached: true },
+      );
+      studioChild = spawnImplementation("node", ["apps/studio/src/server.mjs"], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          WORLDKIT_STUDIO_PORT: "4297",
+          WORLDKIT_STUDIO_DATA_ROOT: studioDataRoot,
+          WORLDKIT_PLAYGROUND_INTERNAL_ORIGIN: playgroundOrigin,
+          WORLDKIT_PLAYGROUND_ORIGIN: playgroundOrigin,
+        },
+        stdio: "ignore",
+        detached: true,
+      });
+      await waitForHttp(
+        `${studioOrigin}/api/worlds/${encodeURIComponent(request.sceneId)}/preview-bootstrap`,
+        { fetchImplementation },
+      );
+    } else {
+      setStage("s3-native-postprocess");
+      process.stdout.write(
+        `WORLDKIT_EPISODE_RUNTIME_SERVICES_SKIPPED part=${executionPart}\n`,
+      );
+    }
 
     heartbeat = setInterval(() => {
       void (async () => {

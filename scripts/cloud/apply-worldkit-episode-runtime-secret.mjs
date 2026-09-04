@@ -7,9 +7,12 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const runtimeRoot = path.join(repoRoot, ".codex-tmp", "runtime-config");
 const files = [
+  "infinite-canvas.key",
   "mg.key",
   "gemini.env",
   "google-service-account.json",
+  "aws-credentials",
+  "aws-config",
 ];
 
 function run(command, arguments_, { input = null } = {}) {

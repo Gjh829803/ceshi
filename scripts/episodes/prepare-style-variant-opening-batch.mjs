@@ -84,7 +84,14 @@ const items = await Promise.all(selectedVariants.map(async (variant) => {
     `describe in-world identity only and must never enlarge screen occupancy. Preserve ` +
     `the whitebox's large open sky/negative space and do not add foreground or background ` +
     `masses outside existing silhouettes. Remove all whitebox, voxel, block-seam, helper, UI, and ` +
-    `placeholder residue. Reconstruct every visible surface as one coherent final world.\n` +
+    `placeholder residue. Reconstruct every visible surface as one coherent final world. ` +
+    `LIGHTING AND EXPOSURE ARE MANDATORY: produce a bright, clearly readable frame ` +
+    `with separated foreground, Subject, route and landmarks. Preserve the style's ` +
+    `lighting premise, but add physically plausible daylight, sky fill, moonlight, ` +
+    `practical light or rim/fill separation as needed so no important region is lost. ` +
+    `Do not underexpose, crush blacks, silhouette the Subject, bury the path in black ` +
+    `fog, or make darkness the dominant screen area. Even a night, horror, cave or ` +
+    `space concept must remain presentation-bright and immediately legible.\n` +
     `WHITEBOX SCREEN-SPACE REGISTRATION:\n${spatialPrompt}\n\n` +
     `STYLE FAMILY: ${variant.styleFamily}\n` +
     `WORLD IDENTITY: ${variant.worldIdentity}\n` +
@@ -95,7 +102,9 @@ const items = await Promise.all(selectedVariants.map(async (variant) => {
       `REQUIRED REPAIR:\n${repair.repairInstructions}\n\n` : "") +
     `The Subject, environment, and every landmark must all visibly and unmistakably ` +
     `realize this variant. Preserve only whitebox spatial registration; do not retain ` +
-    `or guess any source-scene identity. No text, labels, logo, watermark, or Prompt Event.`;
+    `or guess any source-scene identity. No text, labels, logo, watermark, or Prompt Event. ` +
+    `Before accepting the image, inspect it at thumbnail size and correct exposure if ` +
+    `the Subject, traversable foreground, or primary landmark is difficult to read.`;
   return {
     id: variant.id,
     prompt,

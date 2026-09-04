@@ -28,10 +28,10 @@ const pipeline = JSON.parse(await readFile(
   path.join(repoRoot, "config/episode-video-pipeline.json"), "utf8",
 ));
 const model = String(pipeline.seedance?.model ?? "");
-const upscaleModel = String(pipeline.upscale?.model ?? "");
 const delivery = pipeline.delivery ?? {};
 if (!/^[a-z0-9][a-z0-9.-]+$/.test(model) ||
-    !upscaleModel ||
+    pipeline.seedanceProvider?.kind !== "seedance-2.5-direct-api" ||
+    typeof pipeline.fallback?.pipelineConfigPath !== "string" ||
     !Number.isInteger(delivery.width) || !Number.isInteger(delivery.height) ||
     !Number.isInteger(delivery.fps) || !Number.isInteger(delivery.frameCount)) {
   throw new Error("Episode video pipeline output contract is invalid.");
