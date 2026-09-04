@@ -621,8 +621,10 @@ def run_mg_upscale_pipeline(
     variant_id: str,
     segment_id: str,
     prompt: str,
-    reference_video: Path,
+    reference_video: Path | None,
     reference_images: list[Path],
+    reference_video_url: str | None,
+    reference_image_urls: list[str] | None,
     raw_output: Path,
     raw_upscale_output: Path,
     final_output: Path,
@@ -684,7 +686,7 @@ def run_mg_upscale_pipeline(
             raw_output.unlink(missing_ok=True)
         if not raw_valid:
             if not provider_job_id:
-                image_urls = [
+                image_urls = reference_image_urls or [
                     upload_reference(
                         image,
                         config=config,
@@ -694,7 +696,7 @@ def run_mg_upscale_pipeline(
                     )
                     for image in reference_images
                 ]
-                video_url = upload_reference(
+                video_url = reference_video_url or upload_reference(
                     reference_video,
                     config=config,
                     episode_id=episode_id,
@@ -826,13 +828,15 @@ def run_mg_upscale_pipeline(
             raw_upscale_output.unlink(missing_ok=True)
         if not upscale_valid:
             if not upscale_job_id:
-                upscale_video_url = upload_reference(
-                    raw_output,
-                    config=config,
-                    episode_id=episode_id,
-                    variant_id=variant_id,
-                    segment_id=f"{segment_id}-upscale",
-                )
+                upscale_video_url = str(raw_receipt.get("resultUrl") or "")
+                if not upscale_video_url.startswith(("http://", "https://")):
+                    upscale_video_url = upload_reference(
+                        raw_output,
+                        config=config,
+                        episode_id=episode_id,
+                        variant_id=variant_id,
+                        segment_id=f"{segment_id}-upscale",
+                    )
                 upscale_payload = {
                     "model": str(upscale["model"]),
                     "prompt": (
@@ -998,7 +1002,7 @@ def main() -> None:
     request = read_json(request_path)
     if config.get("kind") != "worldkit-episode-video-pipeline" or config.get("schemaVersion") != 2:
         raise EpisodeVideoError("Episode video pipeline config identity is invalid")
-    if request.get("kind") != "worldkit-episode-video-segment-request" or request.get("schemaVersion") != 2:
+    if request.get("kind") != "worldkit-episode-video-segment-request" or request.get("schemaVersion") not in {2, 3}:
         raise EpisodeVideoError("Episode video request identity is invalid")
     scene_id = safe_id(request.get("sceneId"), "sceneId")
     episode_id = safe_id(request.get("episodeId"), "episodeId")
@@ -1009,15 +1013,44 @@ def main() -> None:
     )
     variant_id = style_variant_id or "legacy"
     segment_id = safe_id(request.get("segmentId"), "segmentId")
-    prompt_file = existing_file(request.get("promptPath"), "Seedance prompt")
-    prompt_record = read_json(prompt_file)
-    prompt = str(prompt_record.get("prompt") or "").strip()
+    remote_input = request.get("schemaVersion") == 3
+    if remote_input:
+        prompt = str(request.get("prompt") or "").strip()
+    else:
+        prompt_file = existing_file(request.get("promptPath"), "Seedance prompt")
+        prompt_record = read_json(prompt_file)
+        prompt = str(prompt_record.get("prompt") or "").strip()
     seedance = config["seedance"]
     if not prompt or len(prompt) > int(seedance.get("maxPromptChars") or 15000):
         raise EpisodeVideoError(f"Seedance prompt length is invalid: {len(prompt)}")
-    reference_video = existing_file(request.get("referenceVideoPath"), "whitebox reference video")
-    reference_images = [existing_file(item, "styled reference image") for item in request.get("referenceImagePaths") or []]
-    if len(reference_images) < 2 or len(reference_images) > 30:
+    if remote_input:
+        remote_video = request.get("referenceVideo")
+        remote_images = request.get("referenceImages") or []
+        if not isinstance(remote_video, dict) or not str(remote_video.get("url") or "").startswith("https://"):
+            raise EpisodeVideoError("Remote Seedance reference video is invalid")
+        if not isinstance(remote_images, list) or any(
+            not isinstance(item, dict) or not str(item.get("url") or "").startswith("https://")
+            for item in remote_images
+        ):
+            raise EpisodeVideoError("Remote Seedance reference images are invalid")
+        reference_video = None
+        reference_images = []
+        reference_video_url = str(remote_video["url"])
+        reference_image_urls = [str(item["url"]) for item in remote_images]
+        material_hashes = [str(remote_video.get("sha256") or "").removeprefix("sha256:")]
+        material_hashes.extend(
+            str(item.get("sha256") or "").removeprefix("sha256:") for item in remote_images
+        )
+        material_names = [str(item.get("name") or f"image-{index}") for index, item in enumerate(remote_images)]
+    else:
+        reference_video = existing_file(request.get("referenceVideoPath"), "whitebox reference video")
+        reference_images = [existing_file(item, "styled reference image") for item in request.get("referenceImagePaths") or []]
+        reference_video_url = None
+        reference_image_urls = None
+        material_hashes = [sha256(reference_video), *(sha256(image) for image in reference_images)]
+        material_names = [image.name for image in reference_images]
+    reference_image_count = len(reference_image_urls or reference_images)
+    if reference_image_count < 2 or reference_image_count > 30:
         raise EpisodeVideoError("Seedance requires the styled opening frame plus all declared tri-views")
     raw_output = Path(str(request.get("rawProviderOutputPath") or "")).resolve()
     raw_upscale_output = Path(str(
@@ -1030,7 +1063,8 @@ def main() -> None:
 
     provider = config["seedanceProvider"]
     model = str(seedance["model"])
-    material_hashes = [sha256(reference_video), *(sha256(image) for image in reference_images)]
+    if any(not re.fullmatch(r"[a-f0-9]{64}", item) for item in material_hashes):
+        raise EpisodeVideoError("Seedance reference material hash is invalid")
     input_identity = {
         "provider": str(provider["kind"]),
         "model": model,
@@ -1038,7 +1072,7 @@ def main() -> None:
         "promptTemplateVersion": str(config["promptTemplateVersion"]),
         "promptSha256": sha256_text(prompt),
         "referenceVideoSha256": material_hashes[0],
-        **{f"referenceImageSha256[{index}]:{image.name}": material_hashes[index + 1] for index, image in enumerate(reference_images)},
+        **{f"referenceImageSha256[{index}]:{material_names[index]}": material_hashes[index + 1] for index in range(len(material_names))},
     }
     previous = read_json(result_path) if result_path.is_file() else {}
     if previous.get("inputIdentity") != input_identity:
@@ -1066,6 +1100,8 @@ def main() -> None:
             prompt=prompt,
             reference_video=reference_video,
             reference_images=reference_images,
+            reference_video_url=reference_video_url,
+            reference_image_urls=reference_image_urls,
             raw_output=raw_output,
             raw_upscale_output=raw_upscale_output,
             final_output=final_output,

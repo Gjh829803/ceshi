@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { readRemoteS3Artifact } from "../lib/cloud-s3-runtime.mjs";
 import { downloadS3FileAtomic, joinS3Uri, uploadS3File } from
@@ -24,6 +23,10 @@ if (manifests.length === 0 || !Number.isSafeInteger(concurrency) ||
 const config = JSON.parse(await readFile(
   path.join(repoRoot, "config/cloud-episode-production.json"), "utf8",
 ));
+const videoPipeline = JSON.parse(await readFile(
+  path.join(repoRoot, "config/episode-video-pipeline.json"), "utf8",
+));
+const executeFile = promisify(execFile);
 const workRoot = path.join(repoRoot, ".codex-tmp", "direct-s3-video-production");
 const statePath = path.join(workRoot, "state.json");
 await mkdir(workRoot, { recursive: true });
@@ -53,29 +56,6 @@ async function exists(filePath) {
   try { await access(filePath); return true; } catch { return false; }
 }
 
-function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = createHash("sha256");
-    const stream = createReadStream(filePath);
-    stream.on("error", reject);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("end", () => resolve(`sha256:${hash.digest("hex")}`));
-  });
-}
-
-async function mapConcurrent(items, limit, operation) {
-  let next = 0;
-  async function runner() {
-    for (;;) {
-      const index = next;
-      next += 1;
-      if (index >= items.length) return;
-      await operation(items[index], index);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => runner()));
-}
-
 async function persistState(taskId, patchValue) {
   state.tasks[taskId] = {
     ...(state.tasks[taskId] ?? {}),
@@ -91,7 +71,31 @@ async function persistState(taskId, patchValue) {
   await stateWrite;
 }
 
-async function hydrate(manifestS3Uri) {
+function episodeArtifactPath(absolutePath, episodeId) {
+  const marker = `/artifacts/episodes/${episodeId}/`;
+  const normalized = String(absolutePath ?? "").replaceAll("\\", "/");
+  const index = normalized.indexOf(marker);
+  if (index < 0) throw new Error(`Episode request path is not portable: ${absolutePath}`);
+  return `episode/${normalized.slice(index + marker.length)}`;
+}
+
+async function readS3Json(s3Uri, maximumBytes = 4 * 1024 * 1024) {
+  const bytes = await readRemoteS3Artifact(s3Uri, { repoRoot, maximumBytes });
+  return JSON.parse(bytes.toString("utf8"));
+}
+
+async function presign(s3Uri) {
+  const { stdout } = await executeFile("aws", [
+    "s3", "presign", s3Uri,
+    "--region", "us-east-2",
+    "--expires-in", "21600",
+  ], { maxBuffer: 1024 * 1024 });
+  const url = stdout.trim();
+  if (!url.startsWith("https://")) throw new Error(`S3 presign failed: ${s3Uri}`);
+  return url;
+}
+
+async function inspectManifest(manifestS3Uri) {
   const bytes = await readRemoteS3Artifact(manifestS3Uri, {
     repoRoot,
     maximumBytes: 8 * 1024 * 1024,
@@ -101,63 +105,37 @@ async function hydrate(manifestS3Uri) {
       manifest?.executionPart !== "style-prompts") {
     throw new Error(`Direct video production requires style-prompts: ${manifestS3Uri}`);
   }
-  const root = path.join(workRoot, manifest.episodeId);
-  const episodeRoot = path.join(root, "episode");
-  const manifestPath = path.join(root, "style-prompts-manifest.json");
-  await mkdir(root, { recursive: true });
-  await writeFile(manifestPath, bytes, { mode: 0o600 });
-  return { manifest, root, episodeRoot };
+  const artifactMap = new Map(manifest.artifacts.map((artifact) => [artifact.path, artifact]));
+  const requestArtifacts = manifest.artifacts.filter((artifact) =>
+    /^episode\/style-variants\/style-\d{2}\/video\/segment-\d{2}\/request\.json$/
+      .test(artifact.path));
+  if (requestArtifacts.length !== 60) {
+    throw new Error(`Direct video manifest must contain 60 requests: ${manifest.episodeId}`);
+  }
+  return { manifest, artifactMap, requestArtifacts };
 }
 
-const hydrated = await Promise.all(manifests.map(hydrate));
-const artifactDownloads = hydrated.flatMap(({ manifest, episodeRoot }) =>
-  manifest.artifacts.map((artifact) => ({ artifact, episodeRoot })));
-await mapConcurrent(artifactDownloads, 32, async ({ artifact, episodeRoot }) => {
-  const artifactPath = String(artifact?.path ?? "");
-  if (!artifactPath.startsWith("episode/") || artifactPath.split("/").includes("..")) {
-    throw new Error(`Unsafe direct video artifact path: ${artifactPath}`);
-  }
-  const localPath = path.join(episodeRoot, artifactPath.slice("episode/".length));
-  const current = await stat(localPath).catch(() => null);
-  if (current?.size === artifact.byteSize &&
-      await sha256File(localPath).catch(() => null) === artifact.sha256) return;
-  await mkdir(path.dirname(localPath), { recursive: true });
-  await downloadS3FileAtomic(artifact.s3Uri, localPath);
-  const downloaded = await stat(localPath);
-  if (downloaded.size !== artifact.byteSize || await sha256File(localPath) !== artifact.sha256) {
-    throw new Error(`Direct video artifact verification failed: ${artifactPath}`);
-  }
-});
-
-await Promise.all(hydrated.map(async ({ manifest, episodeRoot }) => {
-  for (let styleIndex = 0; styleIndex < 10; styleIndex += 1) {
-    const styleVariantId = `style-${String(styleIndex).padStart(2, "0")}`;
-    await run("node", [
-      "scripts/episodes/prepare-episode-video-requests.mjs",
-      "--scene-id", manifest.sceneId,
-      "--episode-id", manifest.episodeId,
-      "--episode-root", episodeRoot,
-      "--style-root", path.join(episodeRoot, "style-variants", styleVariantId),
-      "--style-variant-id", styleVariantId,
-    ]);
-  }
-}));
-const tasks = hydrated.flatMap(({ manifest, root, episodeRoot }) =>
-  Array.from({ length: 10 }, (_, styleIndex) => {
-    const styleVariantId = `style-${String(styleIndex).padStart(2, "0")}`;
-    const styleRoot = path.join(episodeRoot, "style-variants", styleVariantId);
-    return Array.from({ length: 6 }, (_, segmentIndex) => {
-      const segmentId = `segment-${String(segmentIndex).padStart(2, "0")}`;
-      return {
-        manifest,
-        root,
-        episodeRoot,
-        styleVariantId,
-        segmentId,
-        segmentRoot: path.join(styleRoot, "video", segmentId),
-      };
-    });
-  }).flat());
+const inspected = await Promise.all(manifests.map(inspectManifest));
+const tasks = inspected.flatMap(({ manifest, artifactMap, requestArtifacts }) =>
+  requestArtifacts.map((requestArtifact) => {
+    const match = /\/(style-\d{2})\/video\/(segment-\d{2})\/request\.json$/.exec(
+      requestArtifact.path,
+    );
+    return {
+      manifest,
+      artifactMap,
+      requestArtifact,
+      styleVariantId: match[1],
+      segmentId: match[2],
+      segmentRoot: path.join(
+        workRoot,
+        "outputs",
+        manifest.episodeId,
+        match[1],
+        match[2],
+      ),
+    };
+  }));
 
 let nextTask = 0;
 async function worker() {
@@ -180,7 +158,52 @@ async function worker() {
     );
     if (state.tasks[taskId]?.status === "succeeded") continue;
     await persistState(taskId, { status: "running", error: null });
+    let remoteRequestPath = null;
     try {
+      const sourceRequest = await readS3Json(task.requestArtifact.s3Uri);
+      const artifactFor = (absolutePath) => {
+        const artifactPath = episodeArtifactPath(absolutePath, task.manifest.episodeId);
+        const artifact = task.artifactMap.get(artifactPath);
+        if (!artifact) throw new Error(`Style Prompt manifest omitted ${artifactPath}`);
+        return artifact;
+      };
+      const promptArtifact = artifactFor(sourceRequest.promptPath);
+      const promptRecord = await readS3Json(promptArtifact.s3Uri);
+      const videoArtifact = artifactFor(sourceRequest.referenceVideoPath);
+      const imageArtifacts = sourceRequest.referenceImagePaths.map(artifactFor);
+      const [videoUrl, ...imageUrls] = await Promise.all([
+        presign(videoArtifact.s3Uri),
+        ...imageArtifacts.map((artifact) => presign(artifact.s3Uri)),
+      ]);
+      await mkdir(task.segmentRoot, { recursive: true });
+      const model = String(videoPipeline.seedance.model);
+      const delivery = videoPipeline.delivery;
+      remoteRequestPath = path.join(task.segmentRoot, "request.remote.json");
+      await writeFile(remoteRequestPath, `${JSON.stringify({
+        kind: "worldkit-episode-video-segment-request",
+        schemaVersion: 3,
+        sceneId: task.manifest.sceneId,
+        episodeId: task.manifest.episodeId,
+        styleVariantId: task.styleVariantId,
+        segmentId: task.segmentId,
+        prompt: promptRecord.prompt,
+        referenceVideo: {
+          name: path.basename(sourceRequest.referenceVideoPath),
+          sha256: videoArtifact.sha256,
+          url: videoUrl,
+        },
+        referenceImages: imageArtifacts.map((artifact, imageIndex) => ({
+          name: path.basename(sourceRequest.referenceImagePaths[imageIndex]),
+          sha256: artifact.sha256,
+          url: imageUrls[imageIndex],
+        })),
+        rawProviderOutputPath: path.join(task.segmentRoot, `${model}.mp4`),
+        rawUpscaleOutputPath: path.join(task.segmentRoot, "cf-upscaled-720p.mp4"),
+        outputPath: path.join(
+          task.segmentRoot,
+          `final-${delivery.width}x${delivery.height}-${delivery.fps}fps-${delivery.frameCount}f.mp4`,
+        ),
+      }, null, 2)}\n`, { mode: 0o600 });
       const journal = path.join(task.segmentRoot, "provider-run.json");
       const journalS3Uri = joinS3Uri(
         outputPrefix,
@@ -195,7 +218,7 @@ async function worker() {
       }
       await run("python3", [
         "scripts/episodes/run-episode-video-segment.py",
-        "--request", path.join(task.segmentRoot, "request.json"),
+        "--request", remoteRequestPath,
         "--result", journal,
         "--until", "conformance",
       ], {
@@ -208,9 +231,9 @@ async function worker() {
           ),
         },
       });
-      const files = (await import("node:fs/promises")).readdir(task.segmentRoot);
-      for (const fileName of await files) {
+      for (const fileName of await readdir(task.segmentRoot)) {
         if (!/\.(?:mp4|json)$/.test(fileName)) continue;
+        if (fileName === "request.remote.json") continue;
         await uploadS3File(
           path.join(task.segmentRoot, fileName),
           joinS3Uri(directPrefix, fileName),
@@ -220,7 +243,7 @@ async function worker() {
         status: "succeeded",
         outputS3Prefix: directPrefix,
       });
-      for (const fileName of await (await import("node:fs/promises")).readdir(task.segmentRoot)) {
+      for (const fileName of await readdir(task.segmentRoot)) {
         if (fileName.endsWith(".mp4")) {
           await rm(path.join(task.segmentRoot, fileName), { force: true });
         }
@@ -232,6 +255,8 @@ async function worker() {
         error: error instanceof Error ? error.message : String(error),
       });
       process.stderr.write(`WORLDKIT_DIRECT_VIDEO_FAILED ${taskId} ${error.message}\n`);
+    } finally {
+      if (remoteRequestPath) await rm(remoteRequestPath, { force: true });
     }
   }
 }
