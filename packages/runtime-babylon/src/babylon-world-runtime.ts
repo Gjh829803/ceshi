@@ -1854,21 +1854,6 @@ export class BabylonWorldRuntime {
     });
   }
 
-  private nextGoldenTransitionSequence(
-    locomotion: LocomotionCapabilityStateV2,
-    suspendedByRelationshipId?: string,
-  ): number {
-    if (
-      suspendedByRelationshipId !== undefined &&
-      locomotion.status === "suspended" &&
-      locomotion.suspendedByRelationshipId === suspendedByRelationshipId
-    ) return locomotion.transitionSequence;
-    if (locomotion.transitionSequence === Number.MAX_SAFE_INTEGER) {
-      throw new Error("3C_INPUT_INVALID: transition sequence exhausted.");
-    }
-    return locomotion.transitionSequence + 1;
-  }
-
   private projectMountedRider(
     rider: LiveSubjectControllerV1,
     relationship: MountedOnRelationshipStateV1,
@@ -1957,6 +1942,18 @@ export class BabylonWorldRuntime {
     const halfYawRadians = pose.facingYawRadians / 2;
     const capabilityStateId =
       `capability-state:${relationship.riderEntityId}:locomotion`;
+    const suspendedLocomotion = isGoldenHumanoidControllerV1(rider)
+      ? rider.previewSuspendedAt(
+          [
+            pose.subjectOrigin.x,
+            pose.subjectOrigin.y,
+            pose.subjectOrigin.z,
+          ],
+          pose.facingYawRadians,
+          relationship.id,
+          this.tick,
+        ).locomotion
+      : undefined;
     const suspendedCapability: GameplayCapabilityStateV1 =
       isGoldenHumanoidControllerV1(rider)
         ? Object.freeze({
@@ -1966,16 +1963,7 @@ export class BabylonWorldRuntime {
             locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
             locomotionCapabilityHash:
               riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            locomotion: Object.freeze({
-              schemaVersion: 2 as const,
-              status: "suspended" as const,
-              suspendedByRelationshipId: relationship.id,
-              committedTick: this.tick,
-              transitionSequence: this.nextGoldenTransitionSequence(
-                rider.locomotionStateV2(),
-                relationship.id,
-              ),
-            }),
+            locomotion: suspendedLocomotion!,
           })
         : Object.freeze({
             id: capabilityStateId,
@@ -2198,6 +2186,17 @@ export class BabylonWorldRuntime {
     const halfYawRadians = placement.facingYawRadians / 2;
     const capabilityStateId =
       `capability-state:${relationship.riderEntityId}:locomotion`;
+    const dismountedLocomotion = isGoldenHumanoidControllerV1(rider)
+      ? rider.previewResetAt(
+          [
+            placement.subjectOrigin.x,
+            placement.subjectOrigin.y,
+            placement.subjectOrigin.z,
+          ],
+          placement.facingYawRadians,
+          this.tick,
+        ).locomotion
+      : undefined;
     const dismountedCapability: GameplayCapabilityStateV1 =
       isGoldenHumanoidControllerV1(rider)
         ? Object.freeze({
@@ -2207,25 +2206,7 @@ export class BabylonWorldRuntime {
             locomotionCapabilityRef: riderSubject.locomotionCapabilityRef,
             locomotionCapabilityHash:
               riderSubject.locomotionCapabilityHash as `sha256:${string}`,
-            locomotion: Object.freeze({
-              schemaVersion: 2 as const,
-              status: "active" as const,
-              mobilityMode: "grounded" as const,
-              gait: "idle" as const,
-              verticalPhase: "none" as const,
-              supportMode: "supported" as const,
-              movementMedium: "ground" as const,
-              facingYawRadians: canonicalizeSignedZero(
-                placement.facingYawRadians,
-              ),
-              linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-              horizontalSpeedMetersPerSecond: 0,
-              committedTick: this.tick,
-              phaseEnteredTick: this.tick,
-              transitionSequence: this.nextGoldenTransitionSequence(
-                rider.locomotionStateV2(),
-              ),
-            }),
+            locomotion: dismountedLocomotion!,
           })
         : Object.freeze({
             id: capabilityStateId,

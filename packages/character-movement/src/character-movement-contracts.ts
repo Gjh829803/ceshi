@@ -170,6 +170,17 @@ export interface CharacterMovementSnapshotV1 extends CharacterMovementStateV1 {
   readonly stateHash: `sha256:${string}`;
 }
 
+export interface CharacterMovementSupportedPlacementV1 {
+  readonly positionMetersXYZ: MovementVec3V1;
+  readonly facingYawRadians: number;
+  readonly committedTick: number;
+}
+
+export interface CharacterMovementRelationshipSuspensionV1
+  extends CharacterMovementSupportedPlacementV1 {
+  readonly suspendedByRelationshipId: string;
+}
+
 export interface BodyBeginTickRequestV1 {
   readonly token: MovementTickTokenV1;
   readonly tick: number;
@@ -192,6 +203,22 @@ export interface CharacterMovementRuntimeV1 {
   proposeMovement(token: MovementTickTokenV1, sample: BodySampleV1): MovementProposalV1;
   reconcile(token: MovementTickTokenV1, result: BodyResolutionV1): MovementCommitV1;
   snapshot(): CharacterMovementSnapshotV1;
+  reconcileSupportAfterReset(
+    support: BodySupportSampleV1,
+    activeTickToken: MovementTickTokenV1 | undefined,
+  ): CharacterMovementSnapshotV1;
+  previewSupportedPlacement(
+    input: CharacterMovementSupportedPlacementV1,
+  ): CharacterMovementSnapshotV1;
+  resetAtSupportedPlacement(
+    input: CharacterMovementSupportedPlacementV1,
+  ): CharacterMovementSnapshotV1;
+  previewRelationshipSuspension(
+    input: CharacterMovementRelationshipSuspensionV1,
+  ): CharacterMovementSnapshotV1;
+  suspendForRelationship(
+    input: CharacterMovementRelationshipSuspensionV1,
+  ): CharacterMovementSnapshotV1;
   reset(snapshot?: CharacterMovementSnapshotV1): void;
   dispose(): void;
 }
@@ -315,6 +342,10 @@ function support(input: unknown, schemaName: string): BodySupportSampleV1 {
     normalXYZ,
     isDynamic: value.isDynamic,
   });
+}
+
+export function parseBodySupportSampleV1(input: unknown): BodySupportSampleV1 {
+  return support(input, "BodySupportSampleV1");
 }
 
 export function parseLayeredMoveV1(input: unknown): LayeredMoveV1 {

@@ -1402,6 +1402,67 @@ describe("camera preview channel stays out of Gameplay truth", () => {
     }
   });
 
+  it("snaps to a nearby replacement target instead of retaining the previous target lag", () => {
+    const executionPlan = compileRuntimeTestScenePlanV1(
+      createFlatTerrainCapabilitySpec(),
+      { subjectResourceRegistry: builtInSubjectResourceRegistry },
+    );
+    const subject = runtimeSubject(executionPlan);
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("camera.target-switch", Vector3.Zero(), scene);
+    const director = new CameraDirectorV1(initialCamera(executionPlan), camera, scene, {
+      sweepSphere: () => undefined,
+    });
+    const springArm = new SpringArmComponentV1();
+    const first: ViewTargetSampleV1 = {
+      controlledEntityId: subject.entityId,
+      entityId: subject.entityId,
+      targetPositionMetersXYZ: [0, 1, 0],
+      forwardXYZ: [0, 0, -1],
+      upXYZ: [0, 1, 0],
+      velocityMetersPerSecondXYZ: [0, 0, 0],
+      approximateRadiusMeters: 0.5,
+      socketPositionsMetersXYZById: {},
+      activeMotionKernelRef: "worldkit://motion-kernel/test@1",
+      motionTags: [],
+      movementMedium: "ground",
+      relationshipContexts: [],
+      relationshipRole: "none",
+      cameraContextTags: [],
+    };
+    const replacement: ViewTargetSampleV1 = {
+      ...first,
+      controlledEntityId: "nearby-replacement",
+      entityId: "nearby-replacement",
+      targetPositionMetersXYZ: [3, 1, 0],
+    };
+    try {
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        first,
+        1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(first, 1),
+        springArm,
+      );
+      director.update(
+        subject.capabilityAssembly.cameraContext,
+        replacement,
+        1 / 60,
+        legacyViewTargetToCommittedCameraContextV2ForTask6(replacement, 2),
+        springArm,
+      );
+
+      const snapshot = director.snapshot();
+      expect(snapshot.actualTargetPositionMetersXYZ)
+        .toEqual(snapshot.desiredTargetPositionMetersXYZ);
+      expect(snapshot.actualTargetPositionMetersXYZ?.[0]).toBeGreaterThan(2);
+    } finally {
+      director.dispose();
+      engine.dispose();
+    }
+  });
+
   it("publishes the legacy seam as explicitly unavailable with neutral semantic environment", () => {
     const executionPlan = compileRuntimeTestScenePlanV1(
       createFlatTerrainCapabilitySpec(),

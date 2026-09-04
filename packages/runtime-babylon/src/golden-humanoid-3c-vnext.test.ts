@@ -205,12 +205,13 @@ class TransactionBodyPort implements GoldenCharacterBodyTransactionPortV1 {
   resetToState(state: Readonly<{
     positionMetersXYZ: readonly [number, number, number];
     linearVelocityMetersPerSecondXYZ: readonly [number, number, number];
-  }>): void {
+  }>): BodySampleV1["support"] {
     this.position = [...state.positionMetersXYZ];
     this.velocity = [...state.linearVelocityMetersPerSecondXYZ];
     this.#before = undefined;
     this.#token = undefined;
     this.resolutionSupport = undefined;
+    return this.support;
   }
 
   dispose(): void {}
@@ -562,6 +563,16 @@ describe("Golden Humanoid 3C vNext transaction", () => {
         throw new Error("MOVEMENT_RECONCILE_FAILED");
       },
       snapshot: () => realMovement.snapshot(),
+      reconcileSupportAfterReset: (support, activeTickToken) =>
+        realMovement.reconcileSupportAfterReset(support, activeTickToken),
+      previewSupportedPlacement: (input) =>
+        realMovement.previewSupportedPlacement(input),
+      resetAtSupportedPlacement: (input) =>
+        realMovement.resetAtSupportedPlacement(input),
+      previewRelationshipSuspension: (input) =>
+        realMovement.previewRelationshipSuspension(input),
+      suspendForRelationship: (input) =>
+        realMovement.suspendForRelationship(input),
       reset: (snapshot) => realMovement.reset(snapshot),
       dispose: () => realMovement.dispose(),
     };
@@ -584,6 +595,49 @@ describe("Golden Humanoid 3C vNext transaction", () => {
       .toBe(nativeBefore);
     expect(body.resolveCalls).toBe(1);
     expect(body.abortCalls).toBe(1);
+  });
+
+  it("lets authoritative Body support correct a supported placement reset", () => {
+    const { body, movement, transaction } = createHarness();
+    body.support = UNSUPPORTED;
+
+    transaction.resetAtSupportedPlacement({
+      positionMetersXYZ: [4, 5, 6],
+      facingYawRadians: 0.2,
+      committedTick: 8,
+    });
+
+    expect(body.position).toEqual([4, 5, 6]);
+    expect(movement.snapshot()).toMatchObject({
+      tick: 8,
+      positionMetersXYZ: [4, 5, 6],
+      locomotion: {
+        status: "active",
+        mobilityMode: "airborne",
+        supportMode: "unsupported",
+        verticalPhase: "falling",
+        movementMedium: "air",
+      },
+    });
+  });
+
+  it("restores Movement and Body when placement support reconciliation fails", () => {
+    const { body, movement, transaction } = createHarness();
+    const before = movement.snapshot();
+    const bodyBefore = {
+      position: [...body.position],
+      velocity: [...body.velocity],
+    };
+    body.support = { mode: "invalid" } as unknown as BodySampleV1["support"];
+
+    expect(() => transaction.resetAtSupportedPlacement({
+      positionMetersXYZ: [4, 5, 6],
+      facingYawRadians: 0.2,
+      committedTick: 8,
+    })).toThrow("3C_INPUT_INVALID");
+
+    expect(movement.snapshot()).toEqual(before);
+    expect({ position: body.position, velocity: body.velocity }).toEqual(bodyBefore);
   });
 
   it("rejects untrusted Action/Root Motion before Body admission and invalidates the failed Tick", () => {

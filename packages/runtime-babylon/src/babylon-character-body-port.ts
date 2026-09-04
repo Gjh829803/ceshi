@@ -21,6 +21,7 @@ import {
   type BodyBeginTickRequestV1,
   type BodyResolutionV1,
   type BodySampleV1,
+  type BodySupportSampleV1,
   type CharacterBodyPortV1,
   type MovementProposalV1,
   type MovementTickTokenV1,
@@ -72,7 +73,7 @@ export interface BabylonCharacterBodyTransactionPortV1
   resetToState(state: Readonly<{
     positionMetersXYZ: MovementVec3V1;
     linearVelocityMetersPerSecondXYZ: MovementVec3V1;
-  }>): void;
+  }>): BodySupportSampleV1;
 }
 
 export interface BabylonCharacterBodyNativeAllocationV1 {
@@ -2430,10 +2431,7 @@ class BabylonCharacterBodyPortV1
       const velocity = parseVec3(
         this.driver.getLinearVelocityMetersPerSecondXYZ(),
       );
-      const rawNativeSupport = parseNativeSupport(this.driver.checkSupport(
-        this.configuration.fixedDeltaSeconds,
-        this.configuration.gravityDirectionXYZ,
-      ));
+      const rawNativeSupport = this.querySupport();
       const blockWorldSupportContinuityActive =
         this.driver.isBlockWorldSupportContinuityActive?.() === true;
       const contacts = parseNativeContacts(this.driver.readCurrentContacts());
@@ -2687,11 +2685,12 @@ class BabylonCharacterBodyPortV1
   resetToState(input: Readonly<{
     positionMetersXYZ: MovementVec3V1;
     linearVelocityMetersPerSecondXYZ: MovementVec3V1;
-  }>): void {
+  }>): BodySupportSampleV1 {
     this.assertLive();
     const positionInput = parseVec3(input.positionMetersXYZ);
     const velocityInput = parseVec3(input.linearVelocityMetersPerSecondXYZ);
     const checkpoint = this.driver.captureState();
+    let supportProjection: BeginSupportProjectionV1;
     try {
       this.driver.setPositionMetersXYZ(positionInput);
       this.driver.setLinearVelocityMetersPerSecondXYZ(velocityInput);
@@ -2707,6 +2706,15 @@ class BabylonCharacterBodyPortV1
         Math.abs(component - velocityInput[axis]!) >
           BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1
       )) invalid("native reset did not restore the requested physical snapshot.");
+      const nativeSupport = this.querySupport();
+      const contacts = parseNativeContacts(this.driver.readCurrentContacts());
+      supportProjection = this.projectBeginSupport(
+        0,
+        position,
+        velocity,
+        nativeSupport,
+        contacts,
+      );
     } catch (error) {
       this.restorePreservingPrimary(checkpoint);
       throw error;
@@ -2715,7 +2723,10 @@ class BabylonCharacterBodyPortV1
     this.serial += 1;
     this.transaction = undefined;
     this.upwardSupportDepartureActive = false;
+    // Reset has no committed Tick identity, so do not publish a fabricated
+    // Tick-scoped diagnostic. The returned support remains authoritative.
     this.latestSupportObservationDiagnostic = undefined;
+    return supportProjection.support;
   }
 
   collisionFilterMasks(): Readonly<{
@@ -2805,6 +2816,13 @@ class BabylonCharacterBodyPortV1
     this.transaction = undefined;
     this.latestSupportObservationDiagnostic = undefined;
     this.driver.dispose();
+  }
+
+  private querySupport(): BabylonCharacterBodyNativeSupportV1 {
+    return parseNativeSupport(this.driver.checkSupport(
+      this.configuration.fixedDeltaSeconds,
+      this.configuration.gravityDirectionXYZ,
+    ));
   }
 
   private projectBeginSupport(

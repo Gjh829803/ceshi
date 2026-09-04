@@ -519,6 +519,21 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it("re-samples authoritative support after a physical reset", () => {
+    const { driver, port } = createPort();
+    driver.support = unsupportedSupport();
+    driver.contacts = [];
+
+    const support = port.resetToState({
+      positionMetersXYZ: [0, 3, 0],
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+    });
+
+    expect(driver.checkSupportCalls).toBe(1);
+    expect(support).toEqual({ mode: "unsupported" });
+    port.dispose();
+  });
+
   it("allows an immediate failed-begin retry but stales it after a newer begin succeeds", () => {
     const immediate = createPort();
     const token = createMovementTickTokenV1();

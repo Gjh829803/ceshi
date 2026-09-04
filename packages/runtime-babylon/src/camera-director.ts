@@ -121,6 +121,7 @@ export interface CameraDirectorTransactionStateV1 {
     latestTelemetry: CameraDirectorV1["latestTelemetry"];
     latestCommittedTick: number | undefined;
     latestCommittedContextIdentity: string | undefined;
+    activeTargetEntityId: string | undefined;
     latestUpdateFailed: boolean;
     authoredOpeningProfileRef: string | undefined;
   }>;
@@ -544,6 +545,7 @@ function smoothstep01(value: number): number {
 export class CameraDirectorV1 {
   private latestCommittedTick: number | undefined;
   private latestCommittedContextIdentity: string | undefined;
+  private activeTargetEntityId: string | undefined;
   private latestUpdateFailed = false;
   private disposed = false;
   private initialized = false;
@@ -671,6 +673,7 @@ export class CameraDirectorV1 {
         latestTelemetry: this.latestTelemetry,
         latestCommittedTick: this.latestCommittedTick,
         latestCommittedContextIdentity: this.latestCommittedContextIdentity,
+        activeTargetEntityId: this.activeTargetEntityId,
         latestUpdateFailed: this.latestUpdateFailed,
         authoredOpeningProfileRef: this.authoredOpeningProfileRef,
       },
@@ -1018,6 +1021,9 @@ export class CameraDirectorV1 {
 
     const previousProfileRef = this.activeProfileRef;
     const nextModifierRefs = selected.modifiers.map((modifier) => modifier.resourceRef);
+    const targetIdentityChanged = this.initialized &&
+      this.activeTargetEntityId !== undefined &&
+      this.activeTargetEntityId !== sample.entityId;
     const selectionChanged = this.initialized && (
       previousProfileRef !== profile.resourceRef ||
       nextModifierRefs.join("|") !== this.activeModifierRefs.join("|")
@@ -1031,7 +1037,7 @@ export class CameraDirectorV1 {
       this.activeHeadingSource !== profile.headingSource ||
       this.activeReverseHeadingPolicy !== profile.reverseHeadingPolicy
     );
-    if (springArmBasisChanged) springArm.reset();
+    if (springArmBasisChanged || targetIdentityChanged) springArm.reset();
     if (selectionChanged) {
       this.transitionElapsedSeconds = 0;
       this.transitionStartPosition.copyFrom(this.camera.position);
@@ -1172,7 +1178,9 @@ export class CameraDirectorV1 {
       .add(
         acceleration.scale(parameters.accelerationLookAheadSecondsSquared),
       );
-    let target = this.targetWithDeadZone(rawTarget, parameters);
+    let target = targetIdentityChanged
+      ? rawTarget
+      : this.targetWithDeadZone(rawTarget, parameters);
     const firstPerson = profile.algorithmRef.endsWith("/socket-first-person@1");
     const view = this.cameraViewSolver.solve({
       algorithmRef: profile.algorithmRef,
@@ -1247,11 +1255,13 @@ export class CameraDirectorV1 {
             );
       }
     }
-    const nextTarget = new Vector3(
-      this.smoothedTarget.x + (target.x - this.smoothedTarget.x) * yawAlpha,
-      this.smoothedTarget.y + (target.y - this.smoothedTarget.y) * pitchAlpha,
-      this.smoothedTarget.z + (target.z - this.smoothedTarget.z) * yawAlpha,
-    );
+    const nextTarget = targetIdentityChanged
+      ? target.clone()
+      : new Vector3(
+          this.smoothedTarget.x + (target.x - this.smoothedTarget.x) * yawAlpha,
+          this.smoothedTarget.y + (target.y - this.smoothedTarget.y) * pitchAlpha,
+          this.smoothedTarget.z + (target.z - this.smoothedTarget.z) * yawAlpha,
+        );
     const extraFov = Math.min(
       parameters.maximumSpeedFovDegrees,
       speed * parameters.speedFovDegreesPerMeterPerSecond,
@@ -1280,11 +1290,13 @@ export class CameraDirectorV1 {
               transitionAlpha,
             ),
       );
-      this.smoothedTarget.copyFrom(Vector3.Lerp(
-        this.transitionStartTarget,
-        nextTarget,
-        transitionAlpha,
-      ));
+      this.smoothedTarget.copyFrom(targetIdentityChanged
+        ? nextTarget
+        : Vector3.Lerp(
+            this.transitionStartTarget,
+            nextTarget,
+            transitionAlpha,
+          ));
       this.camera.fov = this.transitionStartFovRadians +
         (nextFov - this.transitionStartFovRadians) * transitionAlpha;
     } else {
@@ -1296,6 +1308,7 @@ export class CameraDirectorV1 {
     this.camera.setTarget(this.smoothedTarget);
     this.initialized = true;
     this.controlInitialized = true;
+    this.activeTargetEntityId = sample.entityId;
     const isTargetSocketFallback =
       profile.preferredSocketIds.length > 0 && selectedTargetSocketId === undefined;
     this.latestTelemetry = {
@@ -1399,6 +1412,7 @@ export class CameraDirectorV1 {
     this.lastBaseTarget = undefined;
     this.latestCommittedTick = undefined;
     this.latestCommittedContextIdentity = undefined;
+    this.activeTargetEntityId = undefined;
     this.latestUpdateFailed = false;
     this.smoothedFovRadians = Math.PI / 3;
     this.activeParameters = undefined;

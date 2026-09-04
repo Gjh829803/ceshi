@@ -224,6 +224,110 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
     expect(commit.locomotion).toMatchObject({ gait, supportMode: "supported", verticalPhase: "none" });
   });
 
+  it("reconciles reset support and transition counters inside the movement owner", () => {
+    const runtime = createCharacterMovementRuntimeV1(options());
+    const airborne = runtime.reconcileSupportAfterReset(
+      { mode: "unsupported" },
+      undefined,
+    );
+    expect(airborne.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "airborne",
+      gait: "none",
+      verticalPhase: "falling",
+      supportMode: "unsupported",
+      movementMedium: "air",
+      transitionSequence: 1,
+    });
+    expect(airborne.runtimeState.coyoteTicksRemaining).toBe(0);
+
+    const supported = runtime.reconcileSupportAfterReset({
+      mode: "supported",
+      pointMetersXYZ: [0, 0, 0],
+      normalXYZ: [0, 1, 0],
+      isDynamic: false,
+    }, undefined);
+    expect(supported.locomotion).toMatchObject({
+      status: "active",
+      mobilityMode: "grounded",
+      gait: "idle",
+      verticalPhase: "none",
+      supportMode: "supported",
+      movementMedium: "ground",
+      transitionSequence: 2,
+    });
+    expect(supported.runtimeState.coyoteTicksRemaining).toBe(6);
+    expect(supported.stateHash).not.toBe(airborne.stateHash);
+  });
+
+  it("owns supported placement and relationship suspension snapshots", () => {
+    const runtime = createCharacterMovementRuntimeV1(options());
+    const beforePlacement = runtime.snapshot();
+    const placementInput = {
+      positionMetersXYZ: [2, 3, 4] as const,
+      facingYawRadians: 0.4,
+      committedTick: 7,
+    };
+    const placementPreview = runtime.previewSupportedPlacement(placementInput);
+    expect(runtime.snapshot()).toEqual(beforePlacement);
+    const placed = runtime.resetAtSupportedPlacement(placementInput);
+    expect(placed).toEqual(placementPreview);
+    expect(placed).toMatchObject({
+      tick: 7,
+      positionMetersXYZ: [2, 3, 4],
+      facingYawRadians: 0.4,
+      linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      locomotion: {
+        status: "active",
+        mobilityMode: "grounded",
+        gait: "idle",
+        supportMode: "supported",
+        movementMedium: "ground",
+        transitionSequence: 1,
+      },
+    });
+
+    const suspensionInput = {
+      positionMetersXYZ: [5, 6, 7],
+      facingYawRadians: -0.2,
+      committedTick: 8,
+      suspendedByRelationshipId: "mounted-on:test",
+    } as const;
+    const beforeSuspension = runtime.snapshot();
+    const suspensionPreview = runtime.previewRelationshipSuspension(
+      suspensionInput,
+    );
+    expect(runtime.snapshot()).toEqual(beforeSuspension);
+    const suspended = runtime.suspendForRelationship(suspensionInput);
+    expect(suspended).toEqual(suspensionPreview);
+    expect(suspended).toMatchObject({
+      tick: 8,
+      positionMetersXYZ: [5, 6, 7],
+      locomotion: {
+        status: "suspended",
+        suspendedByRelationshipId: "mounted-on:test",
+        transitionSequence: 2,
+      },
+    });
+
+    const repeated = runtime.suspendForRelationship({
+      positionMetersXYZ: [8, 9, 10],
+      facingYawRadians: 0.1,
+      committedTick: 9,
+      suspendedByRelationshipId: "mounted-on:test",
+    });
+    expect(repeated.locomotion.transitionSequence).toBe(2);
+    expect(repeated.stateHash).not.toBe(suspended.stateHash);
+
+    runtime.reset();
+    runtime.beginTick(command(1));
+    expect(() => runtime.resetAtSupportedPlacement({
+      positionMetersXYZ: [0, 1, 0],
+      facingYawRadians: 0,
+      committedTick: 0,
+    })).toThrow("3C_TICK_TOKEN_STALE");
+  });
+
   it("aligns proposed and committed facing with off-axis movement", () => {
     const runtime = createCharacterMovementRuntimeV1(options());
     const { proposal, commit } = transact(runtime, command(1, { movementInputXZ: [0.6, 0.8] }));
