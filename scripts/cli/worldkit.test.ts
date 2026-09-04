@@ -341,8 +341,22 @@ describe("worldkit CLI", () => {
     ])).toThrow("Unknown native operation 'run-cloud-ridge'.");
   });
 
-  it("resolves a relative Native Package path before Host admission", async () => {
+  it("resolves a relative Native Package into an owned copy before Host admission", async () => {
+    const directory = await createTemporaryDirectory();
+    const packageDirectoryPath = path.join(directory, "native-package");
+    await mkdir(path.join(packageDirectoryPath, "native"), { recursive: true });
+    await writeFile(
+      path.join(packageDirectoryPath, "native/scene.mjs"),
+      "export default {};\n",
+      "utf8",
+    );
+    const relativePackageDirectoryPath = path.relative(
+      process.cwd(),
+      packageDirectoryPath,
+    );
     let receivedSource: unknown;
+    let ownedPackageDirectoryPath: string | undefined;
+    let copiedSceneSource: string | undefined;
     const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
       () => true,
     );
@@ -350,13 +364,21 @@ describe("worldkit CLI", () => {
       await expect(main([
         "native",
         "run",
-        "artifacts/scenes/case-a/final/world-package",
+        relativePackageDirectoryPath,
         "--port",
         "5174",
         "--json",
       ], {
         startWorldkitServerV1: async (options) => {
           receivedSource = options.source;
+          if (options.source.kind !== "world-package") {
+            throw new Error("Expected a WorldPackage source.");
+          }
+          ownedPackageDirectoryPath = options.source.packageDirectoryPath;
+          copiedSceneSource = await readFile(
+            path.join(ownedPackageDirectoryPath, "native/scene.mjs"),
+            "utf8",
+          );
           return {
             url: "http://127.0.0.1:5174/",
             port: 5174,
@@ -371,12 +393,19 @@ describe("worldkit CLI", () => {
     } finally {
       stdoutWrite.mockRestore();
     }
+    expect(ownedPackageDirectoryPath).toBeDefined();
     expect(receivedSource).toEqual({
       kind: "world-package",
-      packageDirectoryPath: path.resolve(
-        "artifacts/scenes/case-a/final/world-package",
-      ),
+      packageDirectoryPath: ownedPackageDirectoryPath,
     });
+    expect(ownedPackageDirectoryPath).not.toBe(path.resolve(
+      relativePackageDirectoryPath,
+    ));
+    expect(copiedSceneSource).toBe("export default {};\n");
+    await expect(readFile(
+      path.join(ownedPackageDirectoryPath!, "native/scene.mjs"),
+      "utf8",
+    )).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("parses the sole reconstruction production transaction command", () => {
