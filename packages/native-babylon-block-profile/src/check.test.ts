@@ -407,6 +407,59 @@ describe("Babylon Native block profile structural check", () => {
     );
   });
 
+  it("keeps the documented stacked quarter-meter stair recipe in one structural route component", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene, "stacked-step-route"),
+        { maximumBlockCount: 5 },
+      );
+      session.createBlock({
+        id: "route-base",
+        shape: "full",
+        paletteRole: "route",
+        centerMetersXYZ: [0, -0.5, 0],
+      });
+      session.createBlock({
+        id: "route-step-lower",
+        shape: "step",
+        paletteRole: "route",
+        centerMetersXYZ: [1, 0.125, 0],
+      });
+      session.createBlock({
+        id: "route-step-middle",
+        shape: "step",
+        paletteRole: "route",
+        centerMetersXYZ: [1, 0.375, 0],
+      });
+      session.createBlock({
+        id: "route-step-upper",
+        shape: "step",
+        paletteRole: "route",
+        centerMetersXYZ: [1, 0.625, 0],
+      });
+      session.createBlock({
+        id: "route-upper-landing",
+        shape: "step",
+        paletteRole: "route",
+        centerMetersXYZ: [2, 0.625, 0],
+      });
+
+      const result = session.finalize().checkResult;
+
+      expect(result.outcome).toBe("passed");
+      expect(result.metrics.structuralRouteComponentCount).toBe(1);
+      expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
+        code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+      }));
+    } finally {
+      scene.dispose();
+      engine.dispose();
+    }
+  });
+
   it("rejects overlap, missing groups, and disconnected structural routes", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
 
