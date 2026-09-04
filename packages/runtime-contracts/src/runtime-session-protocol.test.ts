@@ -344,6 +344,11 @@ describe("Runtime Session V1 public DTOs", () => {
           actualTargetPositionMetersXYZ: [0, 1.5, 0],
           nearClipMeters: 0.05,
           farClipMeters: 1_000,
+          collisionHitNormalXYZ: [0, 0, -1],
+          decollisionPhase: "constrained",
+          startedOverlapping: false,
+          penetrationDepthMeters: 0,
+          clearHoldRemainingSeconds: 0.12,
           selectionDecision: {
             schemaVersion: 2,
             committedTick: 0,
@@ -374,6 +379,11 @@ describe("Runtime Session V1 public DTOs", () => {
       { actualTargetPositionMetersXYZ: [0, Number.NaN, 0] },
       { nearClipMeters: 0 },
       { nearClipMeters: 10, farClipMeters: 10 },
+      { collisionHitNormalXYZ: [0, Number.NaN, -1] },
+      { decollisionPhase: "blocked" },
+      { startedOverlapping: "false" },
+      { penetrationDepthMeters: -0.1 },
+      { clearHoldRemainingSeconds: -0.1 },
     ]) {
       expect(() => parseWorldRuntimeSnapshotV4({
         ...trackingSnapshot,

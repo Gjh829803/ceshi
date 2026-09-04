@@ -2,6 +2,7 @@ import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
 import type {
+  CameraGeometryQueryPortV2,
   CameraContextSampleV2,
   CameraViewPreferenceV1,
 } from "@whitebox-world/camera";
@@ -15,14 +16,10 @@ import type {
   ViewTargetSampleV1,
   WorldRuntimeInitialCameraV1,
 } from "@whitebox-world/runtime-contracts";
-import {
-  SceneComponentV1,
-  type PhysicsWorldQueryPortV1,
-} from "@whitebox-world/runtime-framework";
+import { SceneComponentV1 } from "@whitebox-world/runtime-framework";
 
 import {
   CameraDirectorV1,
-  type CameraDirectorOptionsV1,
   type CameraDirectorSnapshotV1,
   type CameraDirectorTransactionStateV1,
 } from "./camera-director";
@@ -187,16 +184,14 @@ export class CameraComponentV1 extends SceneComponentV1 {
     initialCamera: WorldRuntimeInitialCameraV1,
     private readonly camera: FreeCamera,
     scene: Scene,
-    physicsWorldQuery: PhysicsWorldQueryPortV1,
-    options: CameraDirectorOptionsV1 = {},
+    cameraGeometryQuery: CameraGeometryQueryPortV2,
   ) {
     super("camera");
     this.director = new CameraDirectorV1(
       initialCamera,
       camera,
       scene,
-      physicsWorldQuery,
-      options,
+      cameraGeometryQuery,
     );
     this.renderPoseBuffer = new CommittedCameraRenderPoseBufferV1(
       this.captureRenderPose(0),

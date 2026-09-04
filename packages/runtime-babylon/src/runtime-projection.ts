@@ -112,6 +112,11 @@ export interface BabylonRuntimeCameraProjectionV1 {
   readonly isCollisionRetracted?: boolean;
   readonly collisionHitEntityId?: string;
   readonly collisionHitPositionXYZ?: RuntimeVec3V1;
+  readonly collisionHitNormalXYZ?: RuntimeVec3V1;
+  readonly decollisionPhase?: "clear" | "constrained" | "recovering" | "emergency-inside";
+  readonly startedOverlapping?: boolean;
+  readonly penetrationDepthMeters?: number;
+  readonly clearHoldRemainingSeconds?: number;
   readonly positionLagXYZ?: RuntimeVec3V1;
   readonly rotationLagRadiansXYZ?: RuntimeVec3V1;
   readonly recenterRemainingSeconds?: number;

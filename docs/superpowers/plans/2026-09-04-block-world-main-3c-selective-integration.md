@@ -2,6 +2,11 @@
 
 **Status:** completed
 
+**Follow-up:** The later user-requested Spring Arm migration supersedes the
+Camera exclusions recorded below. See
+`2026-09-04-block-world-main-spring-arm-migration.md`; the movement/reset scope
+and evidence in this document remain unchanged.
+
 **Target branch:** `codex/block-world-main-3c-integration`
 
 **Source baseline:** `origin/main@761d854fa77c3ea17c6f60cc275974acea505733`
@@ -91,7 +96,7 @@ families, not from whole-file selection:
   the Movement owner's immutable preview instead of duplicating transition
   sequence and Locomotion construction in `BabylonWorldRuntime`.
 
-### Audited and intentionally not integrated
+### Initially audited and intentionally not integrated
 
 - **`71990623` Camera geometry/hard-decollider rewrite** — the Block World path
   uses `subject-occlusion-fade`, so it bypasses that Spring Arm collision solver.
@@ -103,6 +108,10 @@ families, not from whole-file selection:
 - **`638c72df` broad runtime-authority refactor and `17aa00a5` 3C tuning
   workbench** — useful direction, but much wider than the proven movement/reset
   invariants and coupled to main-only UI/runtime structure.
+
+The first two Camera entries were subsequently accepted when the user chose to
+replace subject fading with Main's hard-collision Spring Arm; they are retained
+here as the decision record for this earlier selective-integration phase.
 - Babylon Native authoring, reconstruction/evaluation/repair, Formal Capture,
   Scene Catalog, Project Health, and dependency/test-runner upgrades remain
   outside this Three.js Block World integration.

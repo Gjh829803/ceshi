@@ -14,7 +14,6 @@ import { groupBy } from "lodash-es";
 
 import type { WhiteboxMaterials } from "./materials.js";
 import { triangulatePolygonMetersXZV1 } from "./polygon-triangulation.js";
-import { registerBlockWorldOcclusionBatchV1 } from "./third-person-subject-occlusion-fade.js";
 
 function applyTransform(mesh: Mesh, object: CanonicalSceneObjectV1): void {
   mesh.position = new Vector3(...object.transform.positionMetersXYZ);
@@ -181,11 +180,6 @@ export function createBabylonObjectMeshesV1(
       logicalClusterCount: batch.length,
       renderedBlockCount: transforms.length,
     };
-    registerBlockWorldOcclusionBatchV1(
-      mesh,
-      first.semanticClassId,
-      transforms,
-    );
     meshes.push(mesh);
   }
   return Object.freeze(meshes);

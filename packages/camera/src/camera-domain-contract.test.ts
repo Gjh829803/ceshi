@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  parseCameraCollisionQueryResultV1,
-  parseCameraCollisionQueryRequestV1,
+  parseCameraGeometryHitV2,
+  parseCameraGeometryQueryRequestV2,
   parseCameraContextSampleV2,
   parseCameraViewPreferenceV1,
 } from "./camera-domain.js";
@@ -35,12 +35,13 @@ describe("@whitebox-world/camera public domain contract", () => {
     expect(cameraDomain.CAMERA_RIG_PARAMETER_NAMES_V1).toHaveLength(35);
   });
 
-  it("exports committed V2 context and collision-query contracts", async () => {
+  it("exports committed V2 context and geometry-query contracts", async () => {
     const cameraDomain: Record<string, unknown> = await import("./index.js");
 
     expect(cameraDomain).toMatchObject({
       parseCameraContextSampleV2: expect.any(Function),
-      parseCameraCollisionQueryResultV1: expect.any(Function),
+      parseCameraGeometryHitV2: expect.any(Function),
+      parseCameraGeometryQueryRequestV2: expect.any(Function),
       parseCameraViewPreferenceV1: expect.any(Function),
     });
   });
@@ -656,191 +657,6 @@ describe("CameraViewPreferenceV1", () => {
     });
     expect(() => parseCameraViewPreferenceV1(hostile)).toThrow(
       "closed CameraViewPreferenceV1 schema",
-    );
-  });
-});
-
-describe("CameraCollisionQueryRequestV1", () => {
-  const request = {
-    schemaVersion: 1,
-    committedTick: 41,
-    fromMetersXYZ: [0, 2, 0],
-    toMetersXYZ: [0, 2, -4],
-    radiusMeters: 0.25,
-    excludedEntityIds: ["g-bot-primary"],
-  } as const;
-
-  it("strictly parses and deeply freezes a positive-radius request", () => {
-    const parsed = parseCameraCollisionQueryRequestV1(request);
-    expect(parsed).toEqual(request);
-    expect(Object.isFrozen(parsed.fromMetersXYZ)).toBe(true);
-    expect(Object.isFrozen(parsed.excludedEntityIds)).toBe(true);
-  });
-
-  it.each([
-    ["zero radius", { ...request, radiusMeters: 0 }],
-    ["non-finite radius", { ...request, radiusMeters: Number.NaN }],
-    ["sparse vector", { ...request, fromMetersXYZ: new Array(3) }],
-    ["extra-key ids", { ...request, excludedEntityIds: Object.assign([], { provider: true }) }],
-    ["duplicate excluded ids", {
-      ...request,
-      excludedEntityIds: ["g-bot-primary", "g-bot-primary"],
-    }],
-    ["non-NFC excluded id", {
-      ...request,
-      excludedEntityIds: ["g-bot-e\u0301"],
-    }],
-    ["oversized excluded ids", {
-      ...request,
-      excludedEntityIds: Array.from({ length: 65 }, (_, index) => `entity-${index}`),
-    }],
-  ])("rejects %s", (_label, input) => {
-    expect(() => parseCameraCollisionQueryRequestV1(input)).toThrow(
-      "closed CameraCollisionQueryRequestV1 schema",
-    );
-  });
-});
-
-describe("CameraCollisionQueryResultV1", () => {
-  const request = {
-    schemaVersion: 1,
-    committedTick: 41,
-    fromMetersXYZ: [0, 0, 0],
-    toMetersXYZ: [0, 0, 4],
-    radiusMeters: 0.5,
-    excludedEntityIds: ["g-bot-primary"],
-  } as const;
-
-  it.each([
-    ["no-hit approximation", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: false,
-    }],
-    ["exact hit", {
-      schemaVersion: 1,
-      quality: "exact-sphere-sweep",
-      hit: true,
-      distanceMeters: 2.5,
-      positionMetersXYZ: [0, 1, 2.5],
-      normalXYZ: [0, 0, -1],
-      hitEntityId: "wall-primary",
-    }],
-    ["provider hit with explicitly unavailable normal", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: true,
-      distanceMeters: 2.5,
-      positionMetersXYZ: [0, 1, 2.5],
-      hitEntityId: "wall-primary",
-    }],
-  ])("parses and freezes %s", (_label, result) => {
-    const parsed = parseCameraCollisionQueryResultV1(result);
-
-    expect(parsed).toEqual(result);
-    expect(Object.isFrozen(parsed)).toBe(true);
-  });
-
-  it("validates one safe Camera-center hit against its query arm", () => {
-    const parsed = parseCameraCollisionQueryResultV1({
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: true,
-      distanceMeters: 2,
-      positionMetersXYZ: [0, 0, 2],
-      normalXYZ: [0, 0, -1],
-      hitEntityId: "wall-primary",
-    }, request);
-
-    expect(parsed).toMatchObject({
-      hit: true,
-      distanceMeters: 2,
-      positionMetersXYZ: [0, 0, 2],
-    });
-  });
-
-  it("validates the supplied request even when the provider reports no hit", () => {
-    expect(() => parseCameraCollisionQueryResultV1({
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: false,
-    }, {
-      ...request,
-      committedTick: -1,
-    })).toThrow("closed CameraCollisionQueryRequestV1 schema");
-  });
-
-  it.each([
-    ["hit details on no-hit", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: false,
-      distanceMeters: 1,
-    }],
-    ["non-finite hit", {
-      schemaVersion: 1,
-      quality: "exact-sphere-sweep",
-      hit: true,
-      distanceMeters: Number.POSITIVE_INFINITY,
-      positionMetersXYZ: [0, 0, 0],
-      normalXYZ: [0, 1, 0],
-      hitEntityId: "wall-primary",
-    }],
-    ["non-unit normal", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: true,
-      distanceMeters: 2,
-      positionMetersXYZ: [0, 0, 2],
-      normalXYZ: [0, 0, -2],
-      hitEntityId: "wall-primary",
-    }],
-    ["non-NFC hit Entity", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: true,
-      distanceMeters: 2,
-      positionMetersXYZ: [0, 0, 2],
-      normalXYZ: [0, 0, -1],
-      hitEntityId: "wa\u0301ll-primary",
-    }],
-  ])("rejects %s", (_label, result) => {
-    expect(() => parseCameraCollisionQueryResultV1(result)).toThrow(
-      "closed CameraCollisionQueryResultV1 schema",
-    );
-  });
-
-  it.each([
-    ["distance beyond arm", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: true,
-      distanceMeters: 5,
-      positionMetersXYZ: [0, 0, 5],
-      normalXYZ: [0, 0, -1],
-      hitEntityId: "wall-primary",
-    }],
-    ["longitudinal position mismatch", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: true,
-      distanceMeters: 2,
-      positionMetersXYZ: [0, 0, 1],
-      normalXYZ: [0, 0, -1],
-      hitEntityId: "wall-primary",
-    }],
-    ["position is not the safe Camera center", {
-      schemaVersion: 1,
-      quality: "ray-fan-approximation",
-      hit: true,
-      distanceMeters: 2,
-      positionMetersXYZ: [0.6, 0, 2],
-      normalXYZ: [0, 0, -1],
-      hitEntityId: "wall-primary",
-    }],
-  ])("rejects request-incoherent %s", (_label, result) => {
-    expect(() => parseCameraCollisionQueryResultV1(result, request)).toThrow(
-      "closed CameraCollisionQueryResultV1 schema",
     );
   });
 });

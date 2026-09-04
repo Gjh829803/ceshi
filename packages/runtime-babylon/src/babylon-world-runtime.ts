@@ -85,7 +85,7 @@ import { isNil } from "lodash-es";
 
 import "./babylon-shader-bootstrap";
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
-import { BabylonHavokPhysicsWorldQueryV1 } from "./babylon-physics-world-query";
+import { BabylonHavokCameraGeometryQueryV2 } from "./babylon-camera-geometry-query";
 import { CameraComponentV1 } from "./camera-component";
 import { resolveCameraViewTargetContextV1 } from "./camera-view-target-context";
 import { createWhiteboxMaterials } from "./materials";
@@ -105,7 +105,6 @@ import {
   type SubjectAssetResolverV1,
 } from "./subject-asset-cache";
 import { createSubjectVisual, type SubjectVisual } from "./subject-visual";
-import { ThirdPersonSubjectOcclusionFadeV1 } from "./third-person-subject-occlusion-fade";
 import {
   createTerrainMesh,
   sampleExecutionTerrainHeight,
@@ -785,8 +784,7 @@ export class BabylonWorldRuntime {
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
   private readonly camera: FreeCamera;
   private readonly cameraComponent: CameraComponentV1;
-  private readonly thirdPersonSubjectOcclusionFade:
-    ThirdPersonSubjectOcclusionFadeV1 | undefined;
+  private readonly cameraGeometryQuery: BabylonHavokCameraGeometryQueryV2;
   private readonly renderLoop: () => void;
   private readonly autoStartRenderLoop: boolean;
   private readonly ownedDisposers: readonly OwnedDisposer[];
@@ -822,7 +820,7 @@ export class BabylonWorldRuntime {
     subjectVisuals: readonly SubjectVisual[],
     camera: FreeCamera,
     cameraComponent: CameraComponentV1,
-    thirdPersonSubjectOcclusionFade: ThirdPersonSubjectOcclusionFadeV1 | undefined,
+    cameraGeometryQuery: BabylonHavokCameraGeometryQueryV2,
     ownedTerrainShape: PhysicsShape | undefined,
     aggregates: PhysicsAggregate[],
     staticCollisionMeshes: readonly StaticCollisionMeshEntryV1[],
@@ -853,7 +851,7 @@ export class BabylonWorldRuntime {
     );
     this.camera = camera;
     this.cameraComponent = cameraComponent;
-    this.thirdPersonSubjectOcclusionFade = thirdPersonSubjectOcclusionFade;
+    this.cameraGeometryQuery = cameraGeometryQuery;
     this.ownedTerrainShape = ownedTerrainShape;
     this.aggregates.push(...aggregates);
     this.staticCollisionMeshes = staticCollisionMeshes;
@@ -1009,16 +1007,17 @@ export class BabylonWorldRuntime {
         effectiveGravityMetersPerSecondSquaredXYZ,
         options.havokWasmBinary,
       );
-      const physicsWorldQuery = new BabylonHavokPhysicsWorldQueryV1(scene, havokPlugin);
-      ownedDisposers.push(() => physicsWorldQuery.dispose());
+      const cameraGeometryQuery = new BabylonHavokCameraGeometryQueryV2(
+        scene,
+        havokPlugin,
+      );
+      ownedDisposers.push(() => cameraGeometryQuery.dispose());
       const entityRegistry = new EntityRegistryV1();
       const materials = createWhiteboxMaterials(scene);
       const aggregates: PhysicsAggregate[] = [];
       let terrainShape: PhysicsShape | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       let blockWorldCollisionResidency: BlockWorldCollisionResidencyV1 | undefined;
-      let thirdPersonSubjectOcclusionFade:
-        ThirdPersonSubjectOcclusionFadeV1 | undefined;
       let blockWalkableSurfaceHeightAtMetersXZ:
         ReturnType<typeof createBlockWalkableSurfaceHeightSamplerV1> = () => undefined;
       const usesBlockWorldGeometry = executionPlan?.objects.some(
@@ -1078,18 +1077,12 @@ export class BabylonWorldRuntime {
           createBlockWalkableSurfaceHeightSamplerV1(
             blockWalkableSurfaceTopologies,
           );
-        const blockObjectMeshes = createBabylonObjectMeshesV1(
+        createBabylonObjectMeshesV1(
           executionPlan.objects.filter((object) =>
             !isSmoothableBlockObjectV1(object)),
           materials,
           scene,
         );
-        if (usesBlockWorldGeometry) {
-          thirdPersonSubjectOcclusionFade =
-            new ThirdPersonSubjectOcclusionFadeV1(blockObjectMeshes);
-          const fade = thirdPersonSubjectOcclusionFade;
-          ownedDisposers.push(() => fade.dispose());
-        }
         createBlockWalkableSurfaceMeshesV1(
           blockWalkableSurfaceTopologies,
           materials,
@@ -1171,10 +1164,7 @@ export class BabylonWorldRuntime {
         effectiveCamera,
         camera,
         scene,
-        physicsWorldQuery,
-        thirdPersonSubjectOcclusionFade === undefined
-          ? {}
-          : { thirdPersonOcclusionStrategy: "subject-occlusion-fade" },
+        cameraGeometryQuery,
       ));
       let runtime: BabylonWorldRuntime | undefined;
 
@@ -1322,16 +1312,13 @@ export class BabylonWorldRuntime {
                           cameraContextTags:
                             request.cameraContext.environment.cameraContextTags,
                         };
+                        runtime.synchronizeCameraGeometrySubjectQueryState();
                         cameraComponent.update(
                           subject.capabilityAssembly.cameraContext,
                           sample,
                           FIXED_TIME_STEP_SECONDS,
                           request.cameraContext,
                           runtime.characterFor(subject.entityId).springArm,
-                        );
-                        runtime.updateThirdPersonSubjectOcclusionFade(
-                          sample,
-                          FIXED_TIME_STEP_SECONDS,
                         );
                       }
                       latestGoldenCameraContextsByEntityId.set(
@@ -1404,7 +1391,7 @@ export class BabylonWorldRuntime {
         // physics-body binding, or Camera construction may still fail first.
         ownedDisposers.push(() => character.entity.dispose());
         characterEntitiesByEntityId.set(subject.entityId, character);
-        physicsWorldQuery.registerEntityPhysicsBody(
+        cameraGeometryQuery.registerEntityPhysicsBody(
           subject.entityId,
           character.movement.physicsBody,
         );
@@ -1429,7 +1416,7 @@ export class BabylonWorldRuntime {
         subjectVisuals,
         camera,
         cameraComponent,
-        thirdPersonSubjectOcclusionFade,
+        cameraGeometryQuery,
         terrainShape,
         aggregates,
         staticCollisionMeshes,
@@ -3131,6 +3118,31 @@ export class BabylonWorldRuntime {
                 cameraDirectorSnapshot.collisionHitPositionXYZ,
               ),
             }),
+        ...(cameraDirectorSnapshot.collisionHitNormalXYZ === undefined
+          ? {}
+          : {
+              collisionHitNormalXYZ: canonicalizeVec3(
+                cameraDirectorSnapshot.collisionHitNormalXYZ,
+              ),
+            }),
+        ...(cameraDirectorSnapshot.decollisionPhase === undefined
+          ? {}
+          : { decollisionPhase: cameraDirectorSnapshot.decollisionPhase }),
+        ...(cameraDirectorSnapshot.startedOverlapping === undefined
+          ? {}
+          : { startedOverlapping: cameraDirectorSnapshot.startedOverlapping }),
+        ...(cameraDirectorSnapshot.penetrationDepthMeters === undefined
+          ? {}
+          : {
+              penetrationDepthMeters:
+                cameraDirectorSnapshot.penetrationDepthMeters,
+            }),
+        ...(cameraDirectorSnapshot.clearHoldRemainingSeconds === undefined
+          ? {}
+          : {
+              clearHoldRemainingSeconds:
+                cameraDirectorSnapshot.clearHoldRemainingSeconds,
+            }),
         ...(cameraDirectorSnapshot.positionLagXYZ === undefined
           ? {}
           : {
@@ -3393,25 +3405,12 @@ export class BabylonWorldRuntime {
   ): BabylonArtifactCaptureResultV1 {
     this.assertUsable();
     this.updateCamera();
-    const suspendSubjectOcclusionFade = request.kind === "top-down" ||
-      request.kind === "entity-triview";
-    const subjectOcclusionFadeWasEnabled =
-      this.thirdPersonSubjectOcclusionFade?.snapshot().enabled === true;
-    if (suspendSubjectOcclusionFade) {
-      this.thirdPersonSubjectOcclusionFade?.setEnabled(false);
-    }
-    try {
-      return captureBabylonArtifactViewV1({
-        scene: this.scene,
-        engine: this.engine,
-        camera: this.camera,
-        request,
-      });
-    } finally {
-      if (suspendSubjectOcclusionFade && subjectOcclusionFadeWasEnabled) {
-        this.thirdPersonSubjectOcclusionFade?.setEnabled(true);
-      }
-    }
+    return captureBabylonArtifactViewV1({
+      scene: this.scene,
+      engine: this.engine,
+      camera: this.camera,
+      request,
+    });
   }
 
   async renderFrameWhenReady(): Promise<RenderReadyReceiptV1> {
@@ -3520,6 +3519,7 @@ export class BabylonWorldRuntime {
     deltaSeconds = FIXED_TIME_STEP_SECONDS,
   ): void {
     this.synchronizeCameraViewSession();
+    this.synchronizeCameraGeometrySubjectQueryState();
     const subject = this.runtimeSubjects.find(
       (candidate) => candidate.entityId === entityId,
     );
@@ -3603,7 +3603,6 @@ export class BabylonWorldRuntime {
         context,
         this.characterFor(subject.entityId).springArm,
       );
-      this.updateThirdPersonSubjectOcclusionFade(sample, deltaSeconds);
       return;
     }
     const visual = this.visualFor(subject.entityId);
@@ -3677,30 +3676,17 @@ export class BabylonWorldRuntime {
       committedCameraContext,
       this.characterFor(subject.entityId).springArm,
     );
-    this.updateThirdPersonSubjectOcclusionFade(sample, deltaSeconds);
   }
 
-  private updateThirdPersonSubjectOcclusionFade(
-    sample: ViewTargetSampleV1,
-    deltaSeconds: number,
-  ): void {
-    const fade = this.thirdPersonSubjectOcclusionFade;
-    if (fade === undefined) return;
-    const targetSubject = this.runtimeSubjects.find(
-      ({ entityId }) => entityId === sample.entityId,
-    ) ?? this.runtimeSubjects.find(
-      ({ entityId }) => entityId === sample.controlledEntityId,
-    );
-    if (targetSubject === undefined) return;
-    fade.update({
-      cameraPosition: this.camera.position,
-      subjectOriginPositionMetersXYZ: sample.targetPositionMetersXYZ,
-      colliderCenterOffsetMetersXYZ:
-        targetSubject.collider.centerOffsetFromSubjectOriginMetersXYZ,
-      colliderHeightMeters: targetSubject.collider.heightMeters,
-      colliderRadiusMeters: targetSubject.collider.radiusMeters,
-      deltaSeconds,
-    });
+  private synchronizeCameraGeometrySubjectQueryState(): void {
+    for (const runtimeSubject of this.runtimeSubjects) {
+      this.cameraGeometryQuery.setEntityQueryEnabled(
+        runtimeSubject.entityId,
+        this.gameplayPublishedState.mountedRelationshipsByRiderEntityId[
+          runtimeSubject.entityId
+        ] === undefined,
+      );
+    }
   }
 
   setCameraViewPreference(

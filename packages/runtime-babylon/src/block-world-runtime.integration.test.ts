@@ -300,10 +300,14 @@ describe("Block World Babylon integration", () => {
       ).slice(0, 8))).toBe(true);
       expect(Math.min(...rampSamples.map(({ speedMetersPerSecond }) =>
         speedMetersPerSecond))).toBeGreaterThanOrEqual(2.2);
-      expect(rampCameraSamples.every(({ isCollisionRetracted }) =>
-        isCollisionRetracted === false)).toBe(true);
-      expect(Math.min(...rampCameraSamples.map(effectiveCameraArmLength)))
-        .toBeGreaterThanOrEqual(4.9);
+      expect(rampCameraSamples.every((camera) => {
+        const safeArmLengthMeters = camera.safeArmLengthMeters;
+        return safeArmLengthMeters !== undefined &&
+          effectiveCameraArmLength(camera) <=
+            safeArmLengthMeters + 0.000001;
+      })).toBe(true);
+      expect(rampCameraSamples.every(({ decollisionPhase }) =>
+        decollisionPhase !== "emergency-inside")).toBe(true);
       expect(snapshot.subjectStatesByEntityId.player!.positionMetersXYZ[0])
         .toBeGreaterThan(12);
 
