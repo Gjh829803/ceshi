@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readRemoteS3Artifact } from "../lib/cloud-s3-runtime.mjs";
 import { downloadS3FileAtomic, joinS3Uri, uploadS3File } from
   "../lib/lwdp-generation-client.mjs";
-import { hydrateCloudEpisodeArtifactManifest } from
-  "../lib/worldkit-cloud-artifacts.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
@@ -53,6 +53,29 @@ async function exists(filePath) {
   try { await access(filePath); return true; } catch { return false; }
 }
 
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(filePath);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(`sha256:${hash.digest("hex")}`));
+  });
+}
+
+async function mapConcurrent(items, limit, operation) {
+  let next = 0;
+  async function runner() {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      await operation(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => runner()));
+}
+
 async function persistState(taskId, patchValue) {
   state.tasks[taskId] = {
     ...(state.tasks[taskId] ?? {}),
@@ -82,14 +105,31 @@ async function hydrate(manifestS3Uri) {
   const episodeRoot = path.join(root, "episode");
   const manifestPath = path.join(root, "style-prompts-manifest.json");
   await mkdir(root, { recursive: true });
-  await hydrateCloudEpisodeArtifactManifest({
-    manifestS3Uri,
-    manifestPath,
-    expectedSceneId: manifest.sceneId,
-    expectedEpisodeId: manifest.episodeId,
-    expectedExecutionId: manifest.executionId,
-    episodeRoot,
-  });
+  await writeFile(manifestPath, bytes, { mode: 0o600 });
+  return { manifest, root, episodeRoot };
+}
+
+const hydrated = await Promise.all(manifests.map(hydrate));
+const artifactDownloads = hydrated.flatMap(({ manifest, episodeRoot }) =>
+  manifest.artifacts.map((artifact) => ({ artifact, episodeRoot })));
+await mapConcurrent(artifactDownloads, 32, async ({ artifact, episodeRoot }) => {
+  const artifactPath = String(artifact?.path ?? "");
+  if (!artifactPath.startsWith("episode/") || artifactPath.split("/").includes("..")) {
+    throw new Error(`Unsafe direct video artifact path: ${artifactPath}`);
+  }
+  const localPath = path.join(episodeRoot, artifactPath.slice("episode/".length));
+  const current = await stat(localPath).catch(() => null);
+  if (current?.size === artifact.byteSize &&
+      await sha256File(localPath).catch(() => null) === artifact.sha256) return;
+  await mkdir(path.dirname(localPath), { recursive: true });
+  await downloadS3FileAtomic(artifact.s3Uri, localPath);
+  const downloaded = await stat(localPath);
+  if (downloaded.size !== artifact.byteSize || await sha256File(localPath) !== artifact.sha256) {
+    throw new Error(`Direct video artifact verification failed: ${artifactPath}`);
+  }
+});
+
+await Promise.all(hydrated.map(async ({ manifest, episodeRoot }) => {
   for (let styleIndex = 0; styleIndex < 10; styleIndex += 1) {
     const styleVariantId = `style-${String(styleIndex).padStart(2, "0")}`;
     await run("node", [
@@ -101,10 +141,7 @@ async function hydrate(manifestS3Uri) {
       "--style-variant-id", styleVariantId,
     ]);
   }
-  return { manifest, root, episodeRoot };
-}
-
-const hydrated = await Promise.all(manifests.map(hydrate));
+}));
 const tasks = hydrated.flatMap(({ manifest, root, episodeRoot }) =>
   Array.from({ length: 10 }, (_, styleIndex) => {
     const styleVariantId = `style-${String(styleIndex).padStart(2, "0")}`;
@@ -203,4 +240,3 @@ await Promise.all(Array.from({ length: concurrency }, () => worker()));
 const failed = Object.values(state.tasks).filter(({ status }) => status === "failed").length;
 process.stdout.write(`WORLDKIT_DIRECT_VIDEO_BATCH_COMPLETE tasks=${tasks.length} failed=${failed}\n`);
 if (failed > 0) process.exitCode = 1;
-
