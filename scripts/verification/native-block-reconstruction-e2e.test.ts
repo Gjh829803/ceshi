@@ -750,6 +750,23 @@ describe("Native Block reconstruction final artifact publisher integration", () 
     }
   }, 15_000);
 
+  it("publishes a statically verified Final without a fresh Browser replay", async () => {
+    const fixture = await completeRunFixture();
+    try {
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture,
+        launch: await finalLaunchFixture(fixture),
+        playability: Object.freeze({ mode: "skipped" }),
+      })).resolves.toMatchObject({ outcome: "published" });
+      await expect(readFile(path.join(
+        fixture.caseDirectoryPath,
+        "final/launch.json",
+      ))).resolves.toBeInstanceOf(Buffer);
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
   it("rejects an empty final created immediately before the final existence check", async () => {
     const fixture = await completeRunFixture();
     const playability = playabilityPort();
@@ -1451,6 +1468,22 @@ describe("Native Block reconstruction E2E verifier", () => {
       await rm(tampered.caseDirectoryPath, { recursive: true, force: true });
     }
   }, 15_000);
+
+  it("can verify immutable production identity without replaying playability", async () => {
+    const fixture = await completeRunFixture();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        playability: Object.freeze({ mode: "skipped" }),
+      })).resolves.toMatchObject({
+        outcome: "verified",
+        candidateKind: "run",
+        playability: { mode: "skipped" },
+      });
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
 
   it("recomputes the evaluator result from measured Capture evidence", async () => {
     const fixture = await completeRunFixture({ forgePassedEvaluation: true });

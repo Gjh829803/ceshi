@@ -46,9 +46,6 @@ import {
 } from "@whitebox-world/world-package";
 
 import {
-  createHostedNativePlayabilityLaunchPortV1,
-} from "./hosted-playability.js";
-import {
   NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
   NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   decideNativeBlockReconstructionRouteV1,
@@ -75,6 +72,7 @@ import {
   NativeBlockReconstructionVerificationClosedErrorV1,
   verifyNativeBlockReconstructionE2EV1,
   type NativeBlockReconstructionPlayabilityLaunchPortV1,
+  type NativeBlockReconstructionSkippedPlayabilityV1,
 } from "../verification/verify-native-block-reconstruction-e2e.js";
 
 const DEFAULT_REPOSITORY_ROOT = path.resolve(
@@ -235,7 +233,9 @@ export interface WorldReconstructionProductionOwnersV1 {
   readonly runCore: typeof runWorldReconstructionV1;
   readonly verifyRun: typeof verifyNativeBlockReconstructionE2EV1;
   readonly publishFinal: typeof publishNativeBlockReconstructionFinalV1;
-  readonly playability: NativeBlockReconstructionPlayabilityLaunchPortV1;
+  readonly playability:
+    | NativeBlockReconstructionPlayabilityLaunchPortV1
+    | NativeBlockReconstructionSkippedPlayabilityV1;
 }
 
 function defaultOwners(): WorldReconstructionProductionOwnersV1 {
@@ -245,7 +245,7 @@ function defaultOwners(): WorldReconstructionProductionOwnersV1 {
     runCore: runWorldReconstructionV1,
     verifyRun: verifyNativeBlockReconstructionE2EV1,
     publishFinal: publishNativeBlockReconstructionFinalV1,
-    playability: createHostedNativePlayabilityLaunchPortV1(),
+    playability: Object.freeze({ mode: "skipped" }),
   });
 }
 

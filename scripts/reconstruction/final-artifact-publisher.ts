@@ -42,6 +42,7 @@ import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import {
   verifyNativeBlockReconstructionE2EV1,
   type NativeBlockReconstructionPlayabilityLaunchPortV1,
+  type NativeBlockReconstructionSkippedPlayabilityV1,
 } from "../verification/verify-native-block-reconstruction-e2e.js";
 
 const FINAL_DIRECTORY_NAME = "final";
@@ -78,7 +79,9 @@ export interface PublishNativeBlockReconstructionFinalInputV1 {
   readonly caseDirectoryPath: string;
   readonly runDirectoryPath: string;
   readonly launch: NativeBlockReconstructionLaunchV1;
-  readonly playability: NativeBlockReconstructionPlayabilityLaunchPortV1;
+  readonly playability:
+    | NativeBlockReconstructionPlayabilityLaunchPortV1
+    | NativeBlockReconstructionSkippedPlayabilityV1;
 }
 
 export interface NativeBlockFinalArtifactPublicationV1 {

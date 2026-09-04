@@ -101,6 +101,18 @@ export interface NativeBlockReconstructionPlayabilityLaunchPortV1 {
   }>) => Promise<NativeBlockReconstructionPlayabilitySessionPortV1>;
 }
 
+export interface NativeBlockReconstructionSkippedPlayabilityV1 {
+  readonly mode: "skipped";
+}
+
+function isSkippedPlayability(
+  value:
+    | NativeBlockReconstructionPlayabilityLaunchPortV1
+    | NativeBlockReconstructionSkippedPlayabilityV1,
+): value is NativeBlockReconstructionSkippedPlayabilityV1 {
+  return "mode" in value && value.mode === "skipped";
+}
+
 export interface VerifyNativeBlockReconstructionE2EInputV1 {
   readonly candidate:
     | Readonly<{
@@ -112,7 +124,9 @@ export interface VerifyNativeBlockReconstructionE2EInputV1 {
       readonly runDirectoryPath: string;
       readonly finalDirectoryPath: string;
     }>;
-  readonly playability: NativeBlockReconstructionPlayabilityLaunchPortV1;
+  readonly playability:
+    | NativeBlockReconstructionPlayabilityLaunchPortV1
+    | NativeBlockReconstructionSkippedPlayabilityV1;
 }
 
 export interface NativeBlockReconstructionE2EVerificationV1 {
@@ -124,17 +138,19 @@ export interface NativeBlockReconstructionE2EVerificationV1 {
   readonly worldBuildIdentityHash: Sha256HashV1;
   readonly captureReceiptHash: Sha256HashV1;
   readonly evaluationResultHash: Sha256HashV1;
-  readonly playability: Readonly<{
-    groundedSpawn: true;
-    moved: true;
-    jumped: true;
-    reset: true;
-    scriptedTraversalChecks: readonly Readonly<{
-      id: string;
-      outcome: "passed" | "blocked";
-      checkpointIds: readonly string[];
-    }>[];
-  }>;
+  readonly playability:
+    | NativeBlockReconstructionSkippedPlayabilityV1
+    | Readonly<{
+      groundedSpawn: true;
+      moved: true;
+      jumped: true;
+      reset: true;
+      scriptedTraversalChecks: readonly Readonly<{
+        id: string;
+        outcome: "passed" | "blocked";
+        checkpointIds: readonly string[];
+      }>[];
+    }>;
 }
 
 export class NativeBlockReconstructionVerificationClosedErrorV1 extends Error {
@@ -1536,68 +1552,78 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     })
     : packageDirectoryPath;
 
-  let session: NativeBlockReconstructionPlayabilitySessionPortV1 | undefined;
-  let ownedLaunchPackage: OwnedNativePackageFixtureV1 | undefined;
-  let playability: NativeBlockReconstructionE2EVerificationV1["playability"] | undefined;
-  let failure: unknown;
-  try {
-    ownedLaunchPackage = await createOwnedNativePackageFixtureV1({
-      fixtureDirectoryPath: launchPackageDirectoryPath,
-    });
-    lifecycle.launchAttempted = true;
-    session = await input.playability.launch({
-      packageDirectoryPath: ownedLaunchPackage.packageDirectoryPath,
-      worldPackageRef: verified.receipt.worldPackageRef,
-      worldPackageRootHash: verified.receipt.worldPackageRootHash,
-      worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
-    });
-    const expectedPosition = reconstructionCase.expected.spawnSupport
-      .expectedPositionXYZMeters;
-    playability = await verifyPlayability({
-      session,
-      subjectEntityId: verified.worldRuntimeBootstrap.initialControlledEntityId,
-      spawnColliderId: reconstructionCase.expected.spawnSupport.supportColliderId,
-      expectedSpawnPosition: [
-        expectedPosition.xMeters,
-        expectedPosition.yMeters,
-        expectedPosition.zMeters,
-      ],
-      maximumPositionDriftMeters:
-        evaluationProfile.thresholds.spawnSupport.maximumPositionDriftMillimeters /
-        1_000,
-      checks: captureReceipt.formalRequest.scriptedTraversal.checks,
-      caseChecks: reconstructionCase.expected.criticalTraversalChecks,
-      traversalBands:
-        reconstructionCase.expected.groundConnectivity.requiredTraversalBands,
-      blockerColliderIds: measuredBlockerColliderIds,
-    });
-  } catch (error) {
-    failure = error;
-  } finally {
-    if (session !== undefined) {
-      try {
-        const cleanup = await session.dispose();
-        if (cleanup.outcome !== "completed") {
+  let playability:
+    | NativeBlockReconstructionE2EVerificationV1["playability"]
+    | undefined;
+  if (isSkippedPlayability(input.playability)) {
+    // Production reconstruction already measured the same Runtime package during
+    // formal Capture. Keep the immutable identity closure here, while reserving
+    // the expensive fresh Browser playability replay for the explicit verifier.
+    playability = Object.freeze({ mode: "skipped" });
+  } else {
+    let session: NativeBlockReconstructionPlayabilitySessionPortV1 | undefined;
+    let ownedLaunchPackage: OwnedNativePackageFixtureV1 | undefined;
+    let failure: unknown;
+    try {
+      ownedLaunchPackage = await createOwnedNativePackageFixtureV1({
+        fixtureDirectoryPath: launchPackageDirectoryPath,
+      });
+      lifecycle.launchAttempted = true;
+      const launchedSession = await input.playability.launch({
+        packageDirectoryPath: ownedLaunchPackage.packageDirectoryPath,
+        worldPackageRef: verified.receipt.worldPackageRef,
+        worldPackageRootHash: verified.receipt.worldPackageRootHash,
+        worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+      });
+      session = launchedSession;
+      const expectedPosition = reconstructionCase.expected.spawnSupport
+        .expectedPositionXYZMeters;
+      playability = await verifyPlayability({
+        session: launchedSession,
+        subjectEntityId: verified.worldRuntimeBootstrap.initialControlledEntityId,
+        spawnColliderId: reconstructionCase.expected.spawnSupport.supportColliderId,
+        expectedSpawnPosition: [
+          expectedPosition.xMeters,
+          expectedPosition.yMeters,
+          expectedPosition.zMeters,
+        ],
+        maximumPositionDriftMeters:
+          evaluationProfile.thresholds.spawnSupport.maximumPositionDriftMillimeters /
+          1_000,
+        checks: captureReceipt.formalRequest.scriptedTraversal.checks,
+        caseChecks: reconstructionCase.expected.criticalTraversalChecks,
+        traversalBands:
+          reconstructionCase.expected.groundConnectivity.requiredTraversalBands,
+        blockerColliderIds: measuredBlockerColliderIds,
+      });
+    } catch (error) {
+      failure = error;
+    } finally {
+      if (session !== undefined) {
+        try {
+          const cleanup = await session.dispose();
+          if (cleanup.outcome !== "completed") {
+            lifecycle.cleanupOutcome = "failed";
+            failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
+          } else {
+            lifecycle.cleanupOutcome = "completed";
+          }
+        } catch {
           lifecycle.cleanupOutcome = "failed";
           failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
-        } else {
-          lifecycle.cleanupOutcome = "completed";
         }
-      } catch {
-        lifecycle.cleanupOutcome = "failed";
-        failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
+      }
+      if (ownedLaunchPackage !== undefined) {
+        try {
+          await ownedLaunchPackage.dispose();
+        } catch {
+          lifecycle.cleanupOutcome = "failed";
+          failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
+        }
       }
     }
-    if (ownedLaunchPackage !== undefined) {
-      try {
-        await ownedLaunchPackage.dispose();
-      } catch {
-        lifecycle.cleanupOutcome = "failed";
-        failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
-      }
-    }
+    if (failure !== undefined) throw failure;
   }
-  if (failure !== undefined) throw failure;
   if (playability === undefined) fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
 
   return Object.freeze({

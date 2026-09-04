@@ -1209,7 +1209,9 @@ source-neutral Opening Composition Host Gate。
   `entry-whitebox-target.png` 作为具名哈希输入交给 Native Builder；区分硬准入与还原质量；所有
   Profile 继续执行相同检测和最多三轮修复，探索 Case 默认 `report-only`，质量未达标时保留明确
   非 GO、但可启动的 Package/Capture/诊断；正式验收使用 `required-for-publication`。该项属于
-  NBR-65 内部纠偏，不增加 WRC-1 工作包数量；
+  NBR-65 内部纠偏，不增加 WRC-1 工作包数量。交互式生产命令在正式 Capture/评测通过后只重放
+  不可变身份闭包并发布，不自动重复耗时的 fresh Browser playability；完整可玩性复验继续由显式
+  `verify:native-block-reconstruction-e2e` 与未完成的 NBR-70 验收拥有；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
 - [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
   临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；
