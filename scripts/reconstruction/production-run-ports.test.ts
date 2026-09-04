@@ -466,6 +466,37 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       axes: { moveXRatio: -1 },
       ticks: 60,
     }]);
+    expect(reconstructionCase.expected.criticalTraversalChecks.find(
+      ({ id }) => id === "gate-wall-block",
+    )?.fixedInputSequence).toEqual([{
+      actions: ["move-forward"],
+      axes: { moveYRatio: 1 },
+      ticks: 510,
+    }, {
+      actions: ["move-left"],
+      axes: { moveXRatio: -1 },
+      ticks: 75,
+    }, {
+      actions: ["move-forward"],
+      axes: { moveYRatio: 1 },
+      ticks: 40,
+    }]);
+    expect(formalCaptureIntent.checkpointSpatialCriteria.find(
+      ({ checkpointId }) => checkpointId === "gate-wall-limit",
+    )).toMatchObject({
+      axis: "z",
+      colliderId: "collider-gate-walls",
+      expectedCenterSide: "negative",
+      kind: "block-plane",
+      sourceFace: "maximum",
+    });
+    expect(reconstructionCase.expected.groundConnectivity.requiredTraversalBands
+      .find(({ id }) => id === "central-ascent-left-t-arm-band")
+      ?.centerlineStandPositionsXYZMeters).toContainEqual({
+        xMeters: -3,
+        yMeters: 0,
+        zMeters: -3.15,
+      });
     expect(await readFile(
       path.join(caseRoot, "inputs", "task-instruction.md"),
       "utf8",
@@ -477,6 +508,12 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       "utf8",
     )).toContain(
       "Do not add `supported-spawn` or any other evidence-only acceptance target to `visualGroups`",
+    );
+    expect(await readFile(
+      path.join(caseRoot, "inputs", "task-instruction.md"),
+      "utf8",
+    )).toContain(
+      "`collider-gate-walls` must select one complete `gate-mass-collider-group`",
     );
     await expect(createProductionWorldReconstructionRunPortsV1({
       ...value.input,
