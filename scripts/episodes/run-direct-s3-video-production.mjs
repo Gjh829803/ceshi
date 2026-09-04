@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
+import { createHash, createHmac } from "node:crypto";
 import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
 import { readRemoteS3Artifact } from "../lib/cloud-s3-runtime.mjs";
 import { downloadS3FileAtomic, joinS3Uri, uploadS3File } from
@@ -26,7 +26,7 @@ const config = JSON.parse(await readFile(
 const videoPipeline = JSON.parse(await readFile(
   path.join(repoRoot, "config/episode-video-pipeline.json"), "utf8",
 ));
-const executeFile = promisify(execFile);
+const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-2";
 const workRoot = path.join(repoRoot, ".codex-tmp", "direct-s3-video-production");
 const statePath = path.join(workRoot, "state.json");
 await mkdir(workRoot, { recursive: true });
@@ -84,15 +84,75 @@ async function readS3Json(s3Uri, maximumBytes = 4 * 1024 * 1024) {
   return JSON.parse(bytes.toString("utf8"));
 }
 
+function parseIni(contents, profile) {
+  let current = "";
+  const values = {};
+  for (const rawLine of contents.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+    const section = /^\[([^\]]+)\]$/.exec(line);
+    if (section) { current = section[1]; continue; }
+    if (current !== profile) continue;
+    const separator = line.indexOf("=");
+    if (separator > 0) values[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
+  }
+  return values;
+}
+
+const awsCredentials = parseIni(await readFile(
+  process.env.AWS_SHARED_CREDENTIALS_FILE ||
+    path.join(repoRoot, ".codex-tmp/runtime-config/aws-credentials"),
+  "utf8",
+), process.env.AWS_PROFILE || "default");
+if (!awsCredentials.aws_access_key_id || !awsCredentials.aws_secret_access_key) {
+  throw new Error("Direct S3 video production requires static project AWS credentials.");
+}
+
+const rfc3986 = (value) => encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
+  `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+const hex = (value) => createHash("sha256").update(value).digest("hex");
+const hmac = (key, value) => createHmac("sha256", key).update(value).digest();
+
 async function presign(s3Uri) {
-  const { stdout } = await executeFile("aws", [
-    "s3", "presign", s3Uri,
-    "--region", "us-east-2",
-    "--expires-in", "21600",
-  ], { maxBuffer: 1024 * 1024 });
-  const url = stdout.trim();
-  if (!url.startsWith("https://")) throw new Error(`S3 presign failed: ${s3Uri}`);
-  return url;
+  const parsed = new URL(s3Uri);
+  const bucket = parsed.hostname;
+  const key = parsed.pathname.slice(1);
+  const host = `${bucket}.s3.${awsRegion}.amazonaws.com`;
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const scope = `${dateStamp}/${awsRegion}/s3/aws4_request`;
+  const query = {
+    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+    "X-Amz-Credential": `${awsCredentials.aws_access_key_id}/${scope}`,
+    "X-Amz-Date": amzDate,
+    "X-Amz-Expires": "21600",
+    "X-Amz-SignedHeaders": "host",
+    ...(awsCredentials.aws_session_token
+      ? { "X-Amz-Security-Token": awsCredentials.aws_session_token }
+      : {}),
+  };
+  const canonicalQuery = Object.entries(query)
+    .map(([name, value]) => [rfc3986(name), rfc3986(value)])
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `${name}=${value}`)
+    .join("&");
+  const canonicalUri = `/${key.split("/").map(rfc3986).join("/")}`;
+  const canonicalRequest = [
+    "GET", canonicalUri, canonicalQuery, `host:${host}\n`, "host", "UNSIGNED-PAYLOAD",
+  ].join("\n");
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    scope,
+    hex(canonicalRequest),
+  ].join("\n");
+  const dateKey = hmac(`AWS4${awsCredentials.aws_secret_access_key}`, dateStamp);
+  const regionKey = hmac(dateKey, awsRegion);
+  const serviceKey = hmac(regionKey, "s3");
+  const signingKey = hmac(serviceKey, "aws4_request");
+  const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
+  return `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }
 
 async function inspectManifest(manifestS3Uri) {
