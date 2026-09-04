@@ -217,6 +217,11 @@ function structurallyAdjacent(
       GEOMETRY_EPSILON ||
     Math.abs(right.maximumMetersXYZ[2] - left.minimumMetersXYZ[2]) <=
       GEOMETRY_EPSILON;
+  const touchesY =
+    Math.abs(left.maximumMetersXYZ[1] - right.minimumMetersXYZ[1]) <=
+      GEOMETRY_EPSILON ||
+    Math.abs(right.maximumMetersXYZ[1] - left.minimumMetersXYZ[1]) <=
+      GEOMETRY_EPSILON;
   return (
     touchesX && intervalsStrictlyOverlap(
       left.minimumMetersXYZ[2],
@@ -230,6 +235,20 @@ function structurallyAdjacent(
       left.maximumMetersXYZ[0],
       right.minimumMetersXYZ[0],
       right.maximumMetersXYZ[0],
+    )
+  ) || (
+    touchesY &&
+    intervalsStrictlyOverlap(
+      left.minimumMetersXYZ[0],
+      left.maximumMetersXYZ[0],
+      right.minimumMetersXYZ[0],
+      right.maximumMetersXYZ[0],
+    ) &&
+    intervalsStrictlyOverlap(
+      left.minimumMetersXYZ[2],
+      left.maximumMetersXYZ[2],
+      right.minimumMetersXYZ[2],
+      right.maximumMetersXYZ[2],
     )
   );
 }
