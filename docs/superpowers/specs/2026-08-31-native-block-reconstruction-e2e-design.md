@@ -677,16 +677,20 @@ most three times. Those cycles create neither a Package nor a Runtime Candidate.
 Capture, evaluation and the identity-bearing external repair Attempt remain separate authorities.
 
 Each external repair consumes exactly the trusted evidence from the immediately preceding Attempt. Native
-Check, Ground Analysis, Opening Composition and Evaluation may therefore reject in successive Attempts
-without forcing an early close after the first repaired stage. Every repair produces a fresh generation
-Request, authored-source identity and—only after admission—a fresh Package, Capture and Evaluation identity.
-No Attempt mutates a frozen prior artifact or lowers a Case/Profile threshold. A rejected Native Check may
-enter this loop only when the Host projects a source-repairable owner fact; tooling, determinism, identity and
-cleanup failures remain terminal.
+Check and Ground Analysis may reject in successive Attempts for every Profile because they protect authoring
+and playable-surface admission. Opening Composition and Evaluation may allocate a following external repair
+only when `qualityGateMode` is `required-for-publication`. In `report-only`, they still execute and publish
+their stable diagnostics, but they neither reject the Capture nor allocate a new Attempt; the first admitted,
+captured and evaluated Candidate is returned as non-GO preview evidence. Every repair produces a fresh
+generation Request, authored-source identity and—only after admission—a fresh Package, Capture and Evaluation
+identity. No Attempt mutates a frozen prior artifact or lowers a Case/Profile threshold. A rejected Native
+Check may enter this loop only when the Host projects a source-repairable owner fact; tooling, determinism,
+identity and cleanup failures remain terminal.
 
 ```text
 Attempt N -> Native Check -> Ground Analysis -> Package -> Capture -> Evaluation
   -> if the current trusted boundary rejects, diagnostics are source-repairable,
+     the Profile allows that boundary to block,
      and N < maximumRepairAttemptCount:
        Repair Request(Attempt N source + exactly that boundary's evidence)
        -> Attempt N+1 -> new authored source -> replay every downstream gate
@@ -708,10 +712,10 @@ but no fabricated Package or Capture. It does not
 promote a failed Package as the runnable final world, weaken a hard Collider/Spawn/Traversal/identity gate,
 or silently lower thresholds. A later user- or queue-triggered run starts a new run identity.
 
-When a terminal failed evaluation still has a verified Package, completed Runtime Capture and completed
-cleanup, its frozen Evaluation Profile decides the non-publication disposition. A
-`required-for-publication` Case returns an identity-bound `rejected-evaluation`; a `report-only` Case whose
-failures are limited to previewable reconstruction-quality dimensions returns `preview-ready` with
+When a completed evaluation still has a verified Package, completed Runtime Capture and completed cleanup,
+its frozen Evaluation Profile decides the non-publication disposition. A `required-for-publication` Case may
+first consume its bounded quality-repair budget and then returns an identity-bound `rejected-evaluation`; a
+`report-only` Case never consumes that budget for Opening/Evaluation drift and returns `preview-ready` with
 `publicationStatus: "not-accepted"`. Both expose the admitted Package directory, opening image, Capture
 Receipt, evaluation, Run Receipt and exact evaluation diagnostic codes so a person can inspect the candidate.
 Neither outcome is publication or GO, and neither is available when Package/Runtime/Capture identity evidence

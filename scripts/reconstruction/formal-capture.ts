@@ -160,6 +160,19 @@ export interface FormalCaptureCommandResultV1 {
   readonly worldPackageRootHash: Sha256HashV1;
 }
 
+/**
+ * Report-only profiles observe opening composition without turning visual
+ * quality drift into a transport/publication failure. Structural and Runtime
+ * failures are handled before this policy boundary and remain fail-closed.
+ */
+export function openingCompositionGateBlocksPublicationV1(input: Readonly<{
+  readonly qualityGateMode: WorldReconstructionEvaluationProfileV1["qualityGateMode"];
+  readonly gateStatus: OpeningCompositionHostGateResultV1["status"];
+}>): boolean {
+  return input.qualityGateMode === "required-for-publication" &&
+    input.gateStatus === "failed";
+}
+
 /** Production reconstruction entry; the low-level transport remains independently testable. */
 export function captureProductionHostedWorldPackageV1(
   input: CaptureProductionHostedWorldPackageInputV1,
@@ -596,7 +609,10 @@ export async function captureHostedWorldPackageV1(
         openingObservation: payload.openingObservation,
         expectedCamera: joined.verifiedPackage.bootstrap.initialCamera,
       });
-      if (openingGateResult.status === "failed") {
+      if (openingCompositionGateBlocksPublicationV1({
+        qualityGateMode: input.openingGate.evaluationProfile.qualityGateMode,
+        gateStatus: openingGateResult.status,
+      })) {
         if (isNil(rejectedOutputDirectoryPath)) {
           throw new Error("FORMAL_CAPTURE_REJECTED_OUTPUT_REQUIRED");
         }

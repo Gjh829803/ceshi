@@ -47,6 +47,7 @@ vi.mock("./hosted-session-capture.js", async (importOriginal) => {
 import {
   assertFormalCaptureRequestMatchesVerifiedPackageV1,
   captureHostedWorldPackageV1,
+  openingCompositionGateBlocksPublicationV1,
   publishFormalCaptureDirectoryV1,
   publishRejectedCaptureDirectoryV1,
 } from "./formal-capture.js";
@@ -281,6 +282,21 @@ function packageAndRequest(): Readonly<{
 }
 
 describe("formal Package Capture preflight join", () => {
+  it("keeps Opening Composition advisory for report-only publication", () => {
+    expect(openingCompositionGateBlocksPublicationV1({
+      qualityGateMode: "report-only",
+      gateStatus: "failed",
+    })).toBe(false);
+    expect(openingCompositionGateBlocksPublicationV1({
+      qualityGateMode: "required-for-publication",
+      gateStatus: "failed",
+    })).toBe(true);
+    expect(openingCompositionGateBlocksPublicationV1({
+      qualityGateMode: "required-for-publication",
+      gateStatus: "passed",
+    })).toBe(false);
+  });
+
   it("reports invalid output topology as pre-launch with no Hosted cleanup", async () => {
     const startTransport = vi.fn();
 

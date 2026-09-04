@@ -1207,11 +1207,19 @@ source-neutral Opening Composition Host Gate。
 - [x] NBR-65J：恢复 `codex/block-world-main-integration` 已验证的生产反馈语义，但不恢复 Three、
   Manifest、Compiler 或 hidden foundation：把 Planner 的 `world-plan.png` 与
   `entry-whitebox-target.png` 作为具名哈希输入交给 Native Builder；区分硬准入与还原质量；所有
-  Profile 继续执行相同检测和最多三轮修复，探索 Case 默认 `report-only`，质量未达标时保留明确
+  Profile 继续执行相同检测，探索 Case 默认 `report-only`，质量未达标时保留明确
   非 GO、但可启动的 Package/Capture/诊断；正式验收使用 `required-for-publication`。该项属于
   NBR-65 内部纠偏，不增加 WRC-1 工作包数量。交互式生产命令在正式 Capture/评测通过后只重放
   不可变身份闭包并发布，不自动重复耗时的 fresh Browser playability；完整可玩性复验继续由显式
   `verify:native-block-reconstruction-e2e` 与未完成的 NBR-70 验收拥有；
+- [x] NBR-65K：把上述模式边界落实为同一正式入口的 current-only 行为，而不是增加一条宽松链路：
+  `report-only` 仍强制 Native Check、Ground Analysis、显式 Collider/Spawn/Package/Receipt、Runtime
+  与 Capture 运行成功；Check/Ground 的可修复作者错误仍可使用冻结预算。Opening Composition 与
+  Evaluation 继续计算并发布诊断，但不拒绝 Capture、不触发新的外部 Attempt，首个完成的
+  Package/Capture/Evaluation 在失败仅限可预览质量维度时即以非 GO `preview-ready` 交付人工体验；
+  Collider、Spawn/Support、身份、确定性或运行证据失败仍拒绝。只有显式
+  `required-for-publication` 才允许 Opening/Evaluation 质量失败消耗最多三次外部修复并阻断正式发布。
+  严格检测实现继续由原 Owner 保留，不能形成第二 parser、第二 CLI、fallback 或旧新双入口；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
 - [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
   临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；

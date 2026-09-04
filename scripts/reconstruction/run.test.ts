@@ -806,6 +806,53 @@ describe("runWorldReconstructionV1", () => {
     );
   });
 
+  it("publishes report-only quality diagnostics without an external repair Attempt", async () => {
+    const outputDirectoryPath = await outputRoot();
+    const reportOnlyProfile = parseWorldReconstructionEvaluationProfileV1({
+      ...profile(),
+      qualityGateMode: "report-only",
+    });
+    const reportOnlyCase = {
+      ...reconstructionCase(),
+      evaluationProfileHash:
+        hashWorldReconstructionEvaluationProfileV1(reportOnlyProfile),
+    };
+    const frozenOwnerIdentities = Object.freeze({
+      ...OWNER,
+      caseHash: hashWorldReconstructionCaseV1(reportOnlyCase),
+      evaluationProfileHash:
+        hashWorldReconstructionEvaluationProfileV1(reportOnlyProfile),
+    });
+    const failed = evaluationResult({
+      attemptIndex: 0,
+      outcome: "failed",
+      diagnostics: [openingCompositionDiagnostic()],
+    });
+    const { ports, calls } = fakePorts({
+      evaluationByAttempt: [failed],
+      rehash: async () => frozenOwnerIdentities,
+    });
+
+    const receipt = await runWorldReconstructionV1({
+      runId: "formal-20260831",
+      backend: "local",
+      outputDirectoryPath,
+      caseRef: CASE_REF,
+      reconstructionCase: reportOnlyCase,
+      evaluationProfile: reportOnlyProfile,
+      frozenOwnerIdentities,
+    }, ports);
+
+    expect(receipt.outcome).toBe("failed");
+    expect(receipt.attempts).toHaveLength(1);
+    expect(receipt.finalAttemptIndex).toBe(0);
+    expect(calls.generate).toEqual([0]);
+    expect(calls.package).toEqual([0]);
+    expect(calls.capture).toEqual([0]);
+    expect(calls.evaluate).toEqual([0]);
+    expect(calls.generateInputs[0]?.repairInstruction).toBeUndefined();
+  });
+
   it("repairs an initial Ground Analysis rejection before allocating Capture", async () => {
     const outputDirectoryPath = await outputRoot();
     const base = fakePorts({

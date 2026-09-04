@@ -1252,6 +1252,7 @@ export async function runWorldReconstructionV1(
 
       if (attempt.outcome === "completed") {
         if (
+          profile.qualityGateMode === "report-only" ||
           attempt.evaluated.outcome === "passed" ||
           !isRepairableWorldReconstructionEvaluationV1(
             attempt.evaluated.evaluation,
