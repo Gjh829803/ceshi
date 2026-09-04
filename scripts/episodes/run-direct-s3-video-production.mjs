@@ -109,9 +109,13 @@ async function inspectManifest(manifestS3Uri) {
   const requestArtifacts = manifest.artifacts.filter((artifact) =>
     /^episode\/style-variants\/style-\d{2}\/video\/segment-\d{2}\/request\.json$/
       .test(artifact.path));
-  if (requestArtifacts.length !== 60) {
-    throw new Error(`Direct video manifest must contain 60 requests: ${manifest.episodeId}`);
+  if (requestArtifacts.length < 6 || requestArtifacts.length % 6 !== 0) {
+    throw new Error(`Direct video manifest contains an incomplete approved style: ${manifest.episodeId}`);
   }
+  process.stdout.write(
+    `WORLDKIT_DIRECT_VIDEO_INPUT ${manifest.episodeId} ` +
+      `approvedStyles=${requestArtifacts.length / 6} tasks=${requestArtifacts.length}\n`,
+  );
   return { manifest, artifactMap, requestArtifacts };
 }
 
