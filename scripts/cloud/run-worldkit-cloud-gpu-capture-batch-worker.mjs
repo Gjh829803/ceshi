@@ -332,7 +332,7 @@ async function main() {
         executionPart: "render",
         requestS3Uri: task.requestS3Uri,
         outputS3Prefix: task.outputS3Prefix,
-        image: task.workerImage,
+        image: productionConfig.postprocessWorkerImage ?? task.workerImage,
         namespace: productionConfig.namespace,
         userId: process.env.LWDP_USER_ID ?? "worldkit-studio",
         gpuRequired: false,

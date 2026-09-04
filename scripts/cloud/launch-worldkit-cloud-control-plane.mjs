@@ -42,6 +42,7 @@ export function worldkitJobControllerRbac({
 
 export function cloudControlPlaneResources({
   image,
+  postprocessImage = image,
   namespace = "lwdp",
   serviceAccountName = "lwdp-be",
   generationTokenSecretName = "lwdp-generation-token",
@@ -52,6 +53,9 @@ export function cloudControlPlaneResources({
   monitorPort = 4175,
 }) {
   if (!IMAGE.test(image ?? "")) throw new Error("Control-plane image must be digest-pinned.");
+  if (!IMAGE.test(postprocessImage ?? "")) {
+    throw new Error("Post-process image must be digest-pinned.");
+  }
   const labels = { app: "worldkit-cloud-control-plane" };
   const deployment = {
     apiVersion: "apps/v1",
@@ -90,6 +94,10 @@ export function cloudControlPlaneResources({
               { name: "WORLDKIT_STUDIO_DATA_ROOT", value: "/var/run/worldkit-studio" },
               { name: "WORLDKIT_CLOUD_CONTROL_PLANE", value: "1" },
               { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
+              {
+                name: "WORLDKIT_CLOUD_POSTPROCESS_WORKER_IMAGE",
+                value: postprocessImage,
+              },
               ...(codexAccountIds ? [{
                 name: "WORLDKIT_LWDP_CODEX_ACCOUNT_IDS",
                 value: codexAccountIds,
@@ -198,6 +206,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   ]);
   launchCloudControlPlane({
     image: config.workerImage,
+    postprocessImage: config.postprocessWorkerImage ?? config.workerImage,
     namespace: config.namespace,
     apiBase: lwdpConfig.baseUrl,
     userId: lwdpConfig.userId,

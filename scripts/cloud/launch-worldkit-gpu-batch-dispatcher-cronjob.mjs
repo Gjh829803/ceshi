@@ -12,6 +12,7 @@ const IMAGE = /^[a-z0-9][a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/;
 
 export function gpuBatchDispatcherCronJob({
   image,
+  postprocessImage = image,
   namespace = "lwdp",
   serviceAccountName = "lwdp-be",
   generationTokenSecretName = "lwdp-generation-token",
@@ -20,6 +21,9 @@ export function gpuBatchDispatcherCronJob({
   schedule = "* * * * *",
 }) {
   if (!IMAGE.test(image ?? "")) throw new Error("Dispatcher image must be digest-pinned.");
+  if (!IMAGE.test(postprocessImage ?? "")) {
+    throw new Error("Post-process image must be digest-pinned.");
+  }
   return {
     apiVersion: "batch/v1",
     kind: "CronJob",
@@ -49,6 +53,10 @@ export function gpuBatchDispatcherCronJob({
                   { name: "AWS_REGION", value: "us-east-2" },
                   { name: "AWS_DEFAULT_REGION", value: "us-east-2" },
                   { name: "WORLDKIT_CLOUD_WORKER_IMAGE", value: image },
+                  {
+                    name: "WORLDKIT_CLOUD_POSTPROCESS_WORKER_IMAGE",
+                    value: postprocessImage,
+                  },
                   { name: "WORLDKIT_CLOUD_CONTROL_PLANE", value: "1" },
                   {
                     name: "LWDP_GENERATION_API_TOKEN",
@@ -97,6 +105,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   ]);
   launchGpuBatchDispatcherCronJob({
     image: config.workerImage,
+    postprocessImage: config.postprocessWorkerImage ?? config.workerImage,
     namespace: config.namespace,
     apiBase: lwdpConfig.baseUrl,
     userId: lwdpConfig.userId,
