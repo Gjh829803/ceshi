@@ -1,7 +1,13 @@
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
-import { parseBlockWorldChunkEntityIdV2 } from "@whitebox-world/block-world";
+import {
+  parseBlockWorldChunkEntityIdV2,
+  resolveBlockPresetFromSemanticClassIdV1,
+  resolveBlockSurfaceProfileV1,
+  type BlockSurfaceProfileDefinitionV1,
+  type BlockSurfaceProfileRefV1,
+} from "@whitebox-world/block-world";
 import type { CanonicalSceneObjectV1 } from "@whitebox-world/runtime-contracts";
 
 import type { WhiteboxMaterials } from "./materials.js";
@@ -15,6 +21,7 @@ interface WalkableTileV1 {
   readonly entityId: string;
   readonly chunkKey: string;
   readonly materialSemanticClassId: string;
+  readonly surfaceProfileRef: BlockSurfaceProfileRefV1;
   readonly minimumXMeters: number;
   readonly maximumXMeters: number;
   readonly minimumZMeters: number;
@@ -26,6 +33,7 @@ interface WalkableTileV1 {
 export interface BlockWalkableSurfaceTopologyV1 {
   readonly chunkKey: string;
   readonly materialSemanticClassId: string;
+  readonly surfaceProfileRef: BlockSurfaceProfileRefV1;
   readonly sourceEntityIds: readonly string[];
   readonly tileCount: number;
   readonly sharedTopVertexCount: number;
@@ -44,21 +52,26 @@ interface WalkableSurfaceTriangleV1 {
   readonly b: readonly [number, number, number];
   readonly c: readonly [number, number, number];
   readonly denominator: number;
+  readonly surfaceProfileRef: BlockSurfaceProfileRefV1;
 }
 
 export type BlockWalkableSurfaceHeightSamplerV1 = (
   positionMetersXZ: readonly [number, number],
 ) => number | undefined;
 
+export type BlockWalkableSurfaceProfileSamplerV1 = (
+  supportPointsMetersXYZ: readonly (readonly [number, number, number])[],
+) => BlockSurfaceProfileDefinitionV1 | undefined;
+
 function baseSemanticClassId(semanticClassId: string): string {
   return semanticClassId.split(".").slice(0, 2).join(".");
 }
 
 export function isSmoothableBlockObjectV1(object: CanonicalSceneObjectV1): boolean {
-  const base = baseSemanticClassId(object.semanticClassId);
+  const preset = resolveBlockPresetFromSemanticClassIdV1(object.semanticClassId);
   return parseBlockWorldChunkEntityIdV2(object.entityId) !== undefined &&
     object.primitive.kind === "box" &&
-    (base === "block.walkable" || base === "block.cloud-walkable");
+    preset !== undefined && preset.traversal.supportSurfaceMode !== "none";
 }
 
 function logicalBlockVolumes(object: CanonicalSceneObjectV1): readonly Readonly<{
@@ -114,6 +127,12 @@ function walkableTiles(objects: readonly CanonicalSceneObjectV1[]): readonly Wal
   for (const object of objects) {
     if (!isSmoothableBlockObjectV1(object) || object.primitive.kind !== "box") continue;
     const parsed = parseBlockWorldChunkEntityIdV2(object.entityId)!;
+    const surfaceProfileRef = resolveBlockPresetFromSemanticClassIdV1(
+      object.semanticClassId,
+    )?.surfaceProfileRef;
+    if (surfaceProfileRef === undefined || surfaceProfileRef === null) {
+      throw new Error(`BLOCK_WORLD_SURFACE_PROFILE_MISSING: ${object.entityId}`);
+    }
     for (const volume of logicalBlockVolumes(object)) {
       const center = volume.centerMetersXYZ;
       const baseSize = volume.sizeMetersXYZ;
@@ -141,6 +160,7 @@ function walkableTiles(objects: readonly CanonicalSceneObjectV1[]): readonly Wal
           entityId: object.entityId,
           chunkKey: `${parsed.chunkX},${parsed.chunkZ}`,
           materialSemanticClassId: baseSemanticClassId(object.semanticClassId),
+          surfaceProfileRef,
           minimumXMeters: minimumX,
           maximumXMeters: center[0] + baseSize[0] / 2,
           minimumZMeters: minimumZ,
@@ -150,16 +170,17 @@ function walkableTiles(objects: readonly CanonicalSceneObjectV1[]): readonly Wal
         }));
       } else {
         for (const [microX, microZ] of exposedMicroCells) tiles.push(Object.freeze({
-            index: tiles.length,
-            entityId: object.entityId,
-            chunkKey: `${parsed.chunkX},${parsed.chunkZ}`,
-            materialSemanticClassId: baseSemanticClassId(object.semanticClassId),
-            minimumXMeters: microX / 2,
-            maximumXMeters: (microX + 1) / 2,
-            minimumZMeters: microZ / 2,
-            maximumZMeters: (microZ + 1) / 2,
-            bottomMeters,
-            topMeters,
+          index: tiles.length,
+          entityId: object.entityId,
+          chunkKey: `${parsed.chunkX},${parsed.chunkZ}`,
+          materialSemanticClassId: baseSemanticClassId(object.semanticClassId),
+          surfaceProfileRef,
+          minimumXMeters: microX / 2,
+          maximumXMeters: (microX + 1) / 2,
+          minimumZMeters: microZ / 2,
+          maximumZMeters: (microZ + 1) / 2,
+          bottomMeters,
+          topMeters,
         }));
       }
     }
@@ -317,7 +338,7 @@ export function buildBlockWalkableSurfaceTopologiesV1(
   }
   const grouped = new Map<string, WalkableTileV1[]>();
   for (const tile of tiles) {
-    const key = `${tile.chunkKey}\u0000${tile.materialSemanticClassId}`;
+    const key = `${tile.chunkKey}\u0000${tile.materialSemanticClassId}\u0000${tile.surfaceProfileRef}`;
     const rows = grouped.get(key) ?? [];
     rows.push(tile);
     grouped.set(key, rows);
@@ -377,6 +398,7 @@ export function buildBlockWalkableSurfaceTopologiesV1(
     return Object.freeze({
       chunkKey: groupTiles[0]!.chunkKey,
       materialSemanticClassId: groupTiles[0]!.materialSemanticClassId,
+      surfaceProfileRef: groupTiles[0]!.surfaceProfileRef,
       sourceEntityIds: Object.freeze([...new Set(groupTiles.map(({ entityId }) => entityId))].sort()),
       tileCount: groupTiles.length,
       sharedTopVertexCount: topVertexIndicesByPosition.size,
@@ -395,9 +417,9 @@ export function buildBlockWalkableSurfaceTopologiesV1(
   }));
 }
 
-export function createBlockWalkableSurfaceHeightSamplerV1(
+function walkableTrianglesByMicroCell(
   topologies: readonly BlockWalkableSurfaceTopologyV1[],
-): BlockWalkableSurfaceHeightSamplerV1 {
+): ReadonlyMap<string, readonly WalkableSurfaceTriangleV1[]> {
   const trianglesByMicroCell = new Map<string, WalkableSurfaceTriangleV1[]>();
   for (const topology of topologies) {
     const position = (index: number): readonly [number, number, number] => [
@@ -417,7 +439,13 @@ export function createBlockWalkableSurfaceHeightSamplerV1(
         (b[2] - c[2]) * (a[0] - c[0]) +
         (c[0] - b[0]) * (a[2] - c[2]);
       if (Math.abs(denominator) <= EPSILON) continue;
-      const triangle = Object.freeze({ a, b, c, denominator });
+      const triangle = Object.freeze({
+        a,
+        b,
+        c,
+        denominator,
+        surfaceProfileRef: topology.surfaceProfileRef,
+      });
       const minimumMicroX = Math.floor(Math.min(a[0], b[0], c[0]) * 2);
       const maximumMicroX = Math.floor(Math.max(a[0], b[0], c[0]) * 2);
       const minimumMicroZ = Math.floor(Math.min(a[2], b[2], c[2]) * 2);
@@ -432,31 +460,89 @@ export function createBlockWalkableSurfaceHeightSamplerV1(
       }
     }
   }
+  return trianglesByMicroCell;
+}
+
+function heightOnTriangleAtMetersXZ(
+  triangle: WalkableSurfaceTriangleV1,
+  xMeters: number,
+  zMeters: number,
+): number | undefined {
+  const { a, b, c, denominator } = triangle;
+  const weightA = (
+    (b[2] - c[2]) * (xMeters - c[0]) +
+    (c[0] - b[0]) * (zMeters - c[2])
+  ) / denominator;
+  const weightB = (
+    (c[2] - a[2]) * (xMeters - c[0]) +
+    (a[0] - c[0]) * (zMeters - c[2])
+  ) / denominator;
+  const weightC = 1 - weightA - weightB;
+  if (weightA < -EPSILON || weightB < -EPSILON || weightC < -EPSILON) {
+    return undefined;
+  }
+  return weightA * a[1] + weightB * b[1] + weightC * c[1];
+}
+
+export function createBlockWalkableSurfaceHeightSamplerV1(
+  topologies: readonly BlockWalkableSurfaceTopologyV1[],
+): BlockWalkableSurfaceHeightSamplerV1 {
+  const trianglesByMicroCell = walkableTrianglesByMicroCell(topologies);
   return ([xMeters, zMeters]) => {
     const candidates = trianglesByMicroCell.get(
       `${Math.floor(xMeters * 2)},${Math.floor(zMeters * 2)}`,
     ) ?? [];
     let highest: number | undefined;
-    for (const { a, b, c, denominator } of candidates) {
-      const weightA = (
-        (b[2] - c[2]) * (xMeters - c[0]) +
-        (c[0] - b[0]) * (zMeters - c[2])
-      ) / denominator;
-      const weightB = (
-        (c[2] - a[2]) * (xMeters - c[0]) +
-        (a[0] - c[0]) * (zMeters - c[2])
-      ) / denominator;
-      const weightC = 1 - weightA - weightB;
-      if (weightA < -EPSILON || weightB < -EPSILON || weightC < -EPSILON) {
-        continue;
-      }
-      const heightMeters =
-        weightA * a[1] + weightB * b[1] + weightC * c[1];
+    for (const triangle of candidates) {
+      const heightMeters = heightOnTriangleAtMetersXZ(
+        triangle,
+        xMeters,
+        zMeters,
+      );
+      if (heightMeters === undefined) continue;
       highest = highest === undefined
         ? heightMeters
         : Math.max(highest, heightMeters);
     }
     return highest;
+  };
+}
+
+const SUPPORT_POINT_HEIGHT_TOLERANCE_METERS = 0.2;
+
+export function createBlockWalkableSurfaceProfileSamplerV1(
+  topologies: readonly BlockWalkableSurfaceTopologyV1[],
+): BlockWalkableSurfaceProfileSamplerV1 {
+  const trianglesByMicroCell = walkableTrianglesByMicroCell(topologies);
+  return (supportPointsMetersXYZ) => {
+    const matchedRefs = new Set<BlockSurfaceProfileRefV1>();
+    for (const [xMeters, yMeters, zMeters] of supportPointsMetersXYZ) {
+      const candidates = trianglesByMicroCell.get(
+        `${Math.floor(xMeters * 2)},${Math.floor(zMeters * 2)}`,
+      ) ?? [];
+      for (const triangle of candidates) {
+        const heightMeters = heightOnTriangleAtMetersXZ(
+          triangle,
+          xMeters,
+          zMeters,
+        );
+        if (heightMeters !== undefined &&
+            Math.abs(heightMeters - yMeters) <=
+              SUPPORT_POINT_HEIGHT_TOLERANCE_METERS) {
+          matchedRefs.add(triangle.surfaceProfileRef);
+        }
+      }
+    }
+    return [...matchedRefs]
+      .map((resourceRef) => resolveBlockSurfaceProfileV1(resourceRef))
+      .filter((profile): profile is BlockSurfaceProfileDefinitionV1 =>
+        profile !== undefined)
+      .sort((left, right) =>
+        left.groundedMotion.decelerationRatio -
+          right.groundedMotion.decelerationRatio ||
+        left.groundedMotion.accelerationRatio -
+          right.groundedMotion.accelerationRatio ||
+        left.resourceRef.localeCompare(right.resourceRef))[0];
   };
 }
 
@@ -492,6 +578,7 @@ export function createBlockWalkableSurfaceMeshesV1(
       worldkitEntityIds: topology.sourceEntityIds,
       blockWorldSmoothSurfaceChunkKey: topology.chunkKey,
       blockWorldSmoothSurfaceTileCount: topology.tileCount,
+      blockWorldSurfaceProfileRef: topology.surfaceProfileRef,
     };
     return mesh;
   }));

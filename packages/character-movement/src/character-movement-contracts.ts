@@ -109,6 +109,21 @@ export interface BodySampleV1 {
   readonly support: BodySupportSampleV1;
 }
 
+export interface GroundSurfaceMotionResponseV1 {
+  readonly schemaVersion: 1;
+  readonly maximumSpeedRatio: number;
+  readonly accelerationRatio: number;
+  readonly decelerationRatio: number;
+}
+
+export const STANDARD_GROUND_SURFACE_MOTION_RESPONSE_V1:
+  GroundSurfaceMotionResponseV1 = Object.freeze({
+    schemaVersion: 1,
+    maximumSpeedRatio: 1,
+    accelerationRatio: 1,
+    decelerationRatio: 1,
+  });
+
 export interface MovementProposalV1 {
   readonly schemaVersion: 1;
   readonly token: MovementTickTokenV1;
@@ -200,7 +215,11 @@ export interface CharacterBodyPortV1 {
 
 export interface CharacterMovementRuntimeV1 {
   beginTick(command: CharacterMovementCommandV1): MovementTickTokenV1;
-  proposeMovement(token: MovementTickTokenV1, sample: BodySampleV1): MovementProposalV1;
+  proposeMovement(
+    token: MovementTickTokenV1,
+    sample: BodySampleV1,
+    groundSurfaceMotionResponse?: GroundSurfaceMotionResponseV1,
+  ): MovementProposalV1;
   reconcile(token: MovementTickTokenV1, result: BodyResolutionV1): MovementCommitV1;
   snapshot(): CharacterMovementSnapshotV1;
   reconcileSupportAfterReset(
@@ -346,6 +365,32 @@ function support(input: unknown, schemaName: string): BodySupportSampleV1 {
 
 export function parseBodySupportSampleV1(input: unknown): BodySupportSampleV1 {
   return support(input, "BodySupportSampleV1");
+}
+
+export function parseGroundSurfaceMotionResponseV1(
+  input: unknown,
+): GroundSurfaceMotionResponseV1 {
+  const schemaName = "GroundSurfaceMotionResponseV1";
+  const value = record(input) ?? invalid(schemaName);
+  if (!exact(value, [
+    "schemaVersion",
+    "maximumSpeedRatio",
+    "accelerationRatio",
+    "decelerationRatio",
+  ]) || value.schemaVersion !== 1 ||
+    !finite(value.maximumSpeedRatio) || value.maximumSpeedRatio <= 0 ||
+    value.maximumSpeedRatio > 2 || !finite(value.accelerationRatio) ||
+    value.accelerationRatio <= 0 || value.accelerationRatio > 2 ||
+    !finite(value.decelerationRatio) || value.decelerationRatio <= 0 ||
+    value.decelerationRatio > 2) {
+    invalid(schemaName);
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    maximumSpeedRatio: value.maximumSpeedRatio,
+    accelerationRatio: value.accelerationRatio,
+    decelerationRatio: value.decelerationRatio,
+  });
 }
 
 export function parseLayeredMoveV1(input: unknown): LayeredMoveV1 {

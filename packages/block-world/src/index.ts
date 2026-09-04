@@ -5,4 +5,5 @@ export * from "./packs.js";
 export * from "./preset-registry.js";
 export * from "./shapes.js";
 export * from "./space-transitions.js";
+export * from "./surface-profile-registry.js";
 export * from "./types.js";

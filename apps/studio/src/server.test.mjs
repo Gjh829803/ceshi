@@ -2846,6 +2846,17 @@ test("adapts the main Registry subject catalog for the Studio UI", async () => {
       ],
     );
     assert.equal(payload.cameraPacks.length, 4);
+    assert.deepEqual(
+      payload.surfacePacks.map(({ id, whiteboxColorHex }) => ({
+        id,
+        whiteboxColorHex,
+      })),
+      [
+        { id: "normal", whiteboxColorHex: "#B7E4C7" },
+        { id: "ice", whiteboxColorHex: "#BDEBFF" },
+        { id: "mud", whiteboxColorHex: "#9C7653" },
+      ],
+    );
   } finally {
     await studio.shutdown();
   }

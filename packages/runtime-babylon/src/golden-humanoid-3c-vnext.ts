@@ -7,6 +7,7 @@ import {
   type CharacterMovementCommandV1,
   type CharacterMovementRuntimeV1,
   type CharacterMovementSnapshotV1,
+  type GroundSurfaceMotionResponseV1,
   type MovementCommitV1,
   type MovementProposalV1,
   type MovementTickTokenV1,
@@ -102,6 +103,9 @@ export interface GoldenHumanoid3CVNextTransactionOptionsV1 {
   readonly targetEntityId?: string;
   readonly projectionPorts?: readonly GoldenHumanoidProjectionPortV1[];
   readonly onStage?: (stage: GoldenHumanoidTickStageV1) => void;
+  readonly groundSurfaceMotionResponseForBodySample?: (
+    sample: BodySampleV1,
+  ) => GroundSurfaceMotionResponseV1;
 }
 
 export function goldenSubjectOriginFromColliderCenterV1(
@@ -309,7 +313,11 @@ export class GoldenHumanoid3CVNextTransactionV1 {
       }
 
       this.#stage("movement-mode");
-      const proposal = this.options.movementRuntime.proposeMovement(token, sample);
+      const proposal = this.options.movementRuntime.proposeMovement(
+        token,
+        sample,
+        this.options.groundSurfaceMotionResponseForBodySample?.(sample),
+      );
       this.#stage("movement-proposal");
 
       this.#stage("body-resolve");

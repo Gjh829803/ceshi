@@ -31,6 +31,9 @@ import {
   blockWorldGroundBoundaryCollideMaskV1,
   type BlockWorldMotionKernelImplementationIdV1,
 } from "./block-ground-boundary";
+import type { BlockWalkableSurfaceProfileSamplerV1 } from
+  "./block-walkable-surface";
+import { NORMAL_BLOCK_SURFACE_PROFILE_V1 } from "./block-surface-response";
 
 export interface MotionKernelSnapshotV1 {
   activeMotionProfileRef: string;
@@ -286,6 +289,7 @@ export class MotionKernelRuntimeV1 {
   private lastWalkableSupportNormal = Vector3.Up();
   private previousWalkableSupportNormal = Vector3.Up();
   private lastInclinedSupportNormal = Vector3.Up();
+  private activeGroundSurfaceProfile = NORMAL_BLOCK_SURFACE_PROFILE_V1;
 
   constructor(
     private readonly subject: BabylonRuntimeSubjectV1,
@@ -298,6 +302,8 @@ export class MotionKernelRuntimeV1 {
     private readonly blockWorldWalkableSurfaceHeightAtSubjectOrigin: (
       subjectOrigin: Vector3,
     ) => number | undefined = () => undefined,
+    private readonly blockWorldSurfaceProfileAtSupportPoints:
+      BlockWalkableSurfaceProfileSamplerV1 = () => undefined,
   ) {
     this.controlFeel = requireControlFeel(subject);
     if (subject.capabilityAssembly.mediumProfile.air === undefined) {
@@ -615,6 +621,10 @@ export class MotionKernelRuntimeV1 {
     return this.currentMovementMedium;
   }
 
+  get activeBlockSurfaceProfileRef(): string {
+    return this.activeGroundSurfaceProfile.resourceRef;
+  }
+
   get locomotionMode(): LocomotionModeV1 {
     return this.requireResolvedState().locomotionMode;
   }
@@ -658,6 +668,7 @@ export class MotionKernelRuntimeV1 {
     this.lastWalkableSupportNormal.copyFrom(this.up);
     this.previousWalkableSupportNormal.copyFrom(this.up);
     this.lastInclinedSupportNormal.copyFrom(this.up);
+    this.activeGroundSurfaceProfile = NORMAL_BLOCK_SURFACE_PROFILE_V1;
     this.resolvedState = undefined;
     this.retainedSupportSample = undefined;
     this.syncVisual(subjectOrigin);
@@ -672,6 +683,7 @@ export class MotionKernelRuntimeV1 {
     this.stop();
     this.physicsController.setPosition(subjectOrigin.add(this.colliderCenterOffset));
     this.yawRadians = facingYawRadians;
+    this.activeGroundSurfaceProfile = NORMAL_BLOCK_SURFACE_PROFILE_V1;
     this.retainedSupportSample = undefined;
     this.syncVisual(subjectOrigin);
   }
@@ -773,6 +785,17 @@ export class MotionKernelRuntimeV1 {
           ]) as RuntimeVec3V1,
           normalXYZ: Object.freeze([...contact.normalXYZ]) as RuntimeVec3V1,
         }));
+    this.activeGroundSurfaceProfile = supportState === "unsupported" ||
+        support.isSurfaceDynamic
+      ? NORMAL_BLOCK_SURFACE_PROFILE_V1
+      : this.blockWorldSurfaceProfileAtSupportPoints([
+          ...supportContacts.map(({ pointMetersXYZ }) => pointMetersXYZ),
+          Object.freeze([
+            sampledFoot.x,
+            sampledFoot.y,
+            sampledFoot.z,
+          ]) as RuntimeVec3V1,
+        ]) ?? NORMAL_BLOCK_SURFACE_PROFILE_V1;
     this.retainedSupportSample = Object.freeze({
       supportState,
       supportNormalWorldXYZ: Object.freeze([
@@ -883,6 +906,9 @@ export class MotionKernelRuntimeV1 {
     const unsupported =
       support.supportedState === CharacterSupportedState.UNSUPPORTED;
     const movementMedium = resolved.movementMedium;
+    const groundSurfaceMotion = movementMedium === "ground" && !unsupported
+      ? this.activeGroundSurfaceProfile.groundedMotion
+      : NORMAL_BLOCK_SURFACE_PROFILE_V1.groundedMotion;
     const jumpHeldThisTick =
       (command.kind === "planar-vector" || command.kind === "throttle-steer") &&
       command.jumpRequested;
@@ -898,9 +924,9 @@ export class MotionKernelRuntimeV1 {
         ? feel.runSpeedMetersPerSecond
         : feel.walkSpeedMetersPerSecond;
       const targetPlanarVelocity = new Vector3(
-        direction[0] * requestedSpeed,
+        direction[0] * requestedSpeed * groundSurfaceMotion.maximumSpeedRatio,
         0,
-        direction[1] * requestedSpeed,
+        direction[1] * requestedSpeed * groundSurfaceMotion.maximumSpeedRatio,
       );
       const currentVelocity = this.physicsController.getVelocity();
       const currentPlanarVelocity = new Vector3(
@@ -910,8 +936,10 @@ export class MotionKernelRuntimeV1 {
       );
       const changingSpeed = targetPlanarVelocity.lengthSquared() > 0.000001;
       const response = changingSpeed
-        ? feel.accelerationMetersPerSecondSquared
-        : feel.decelerationMetersPerSecondSquared;
+        ? feel.accelerationMetersPerSecondSquared *
+          groundSurfaceMotion.accelerationRatio
+        : feel.decelerationMetersPerSecondSquared *
+          groundSurfaceMotion.decelerationRatio;
       const airControl = movementMedium === "air" ? feel.airControlRatio : 1;
       if (targetPlanarVelocity.lengthSquared() > 0.000001 || planar?.aimRequested === true) {
         const facingDirection = planar?.aimRequested === true
@@ -956,18 +984,20 @@ export class MotionKernelRuntimeV1 {
       const throttleCommand = command.kind === "throttle-steer" ? command : undefined;
       const throttle = throttleCommand?.throttle ?? 0;
       const steering = throttleCommand?.steering ?? 0;
-      const maximumForwardSpeed = kernelScalar(
+      const baseMaximumForwardSpeed = kernelScalar(
         feel,
         implementationId === "surface-slide"
           ? "maximumSpeedMetersPerSecond"
           : "forwardSpeedMetersPerSecond",
         4,
       );
+      const maximumForwardSpeed = baseMaximumForwardSpeed *
+        groundSurfaceMotion.maximumSpeedRatio;
       const maximumReverseSpeed = kernelScalar(
         feel,
         "reverseSpeedMetersPerSecond",
-        maximumForwardSpeed * 0.4,
-      );
+        baseMaximumForwardSpeed * 0.4,
+      ) * groundSurfaceMotion.maximumSpeedRatio;
       const boostMultiplier = throttleCommand?.boostRequested === true
         ? kernelScalar(feel, "boostMultiplier", 1.2)
         : 1;
@@ -988,19 +1018,20 @@ export class MotionKernelRuntimeV1 {
           ? "driveAccelerationMetersPerSecondSquared"
           : "accelerationMetersPerSecondSquared",
         6,
-      );
+      ) * groundSurfaceMotion.accelerationRatio;
       const deceleration = kernelScalar(
         feel,
         "decelerationMetersPerSecondSquared",
         kernelScalar(feel, "brakeMetersPerSecondSquared", 9),
-      );
+      ) * groundSurfaceMotion.decelerationRatio;
       if (implementationId === "wheeled-arcade") {
         if (braking) {
           this.forwardSpeedMetersPerSecond = moveTowards(
             this.forwardSpeedMetersPerSecond,
             0,
             kernelScalar(feel, "brakeMetersPerSecondSquared", 10) *
-              brakeRatio * FIXED_TIME_STEP_SECONDS,
+              groundSurfaceMotion.decelerationRatio * brakeRatio *
+              FIXED_TIME_STEP_SECONDS,
           );
         } else if (Math.abs(throttle) > 0.000001) {
           const changingDirection =
@@ -1029,7 +1060,8 @@ export class MotionKernelRuntimeV1 {
         } else {
           this.brakeToReverseElapsedSeconds = 0;
           this.forwardSpeedMetersPerSecond *= Math.exp(
-            -kernelScalar(feel, "dragPerSecond", 0.7) * FIXED_TIME_STEP_SECONDS,
+            -kernelScalar(feel, "dragPerSecond", 0.7) *
+              groundSurfaceMotion.decelerationRatio * FIXED_TIME_STEP_SECONDS,
           );
           if (Math.abs(this.forwardSpeedMetersPerSecond) < 0.001) {
             this.forwardSpeedMetersPerSecond = 0;
@@ -1199,7 +1231,8 @@ export class MotionKernelRuntimeV1 {
           kernelScalar(feel, "driveResponsePerSecond", 1.8) * FIXED_TIME_STEP_SECONDS,
         );
         this.slideVelocity.addInPlace(drive);
-        const friction = kernelScalar(feel, "surfaceFrictionPerSecond", 0.18);
+        const friction = kernelScalar(feel, "surfaceFrictionPerSecond", 0.18) *
+          groundSurfaceMotion.decelerationRatio;
         this.slideVelocity.scaleInPlace(
           Math.max(0, 1 - friction * FIXED_TIME_STEP_SECONDS),
         );

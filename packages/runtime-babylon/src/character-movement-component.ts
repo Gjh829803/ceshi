@@ -17,6 +17,12 @@ import {
   type CharacterMovementCommandV1,
   type CharacterMovementSnapshotV1,
 } from "@whitebox-world/character-movement";
+import type { BlockWalkableSurfaceProfileSamplerV1 } from
+  "./block-walkable-surface";
+import {
+  blockGroundSurfaceMotionResponseV1,
+  NORMAL_BLOCK_SURFACE_PROFILE_V1,
+} from "./block-surface-response";
 import type {
   GameplayActionStateV1,
   LocomotionCapabilityStateV2,
@@ -92,6 +98,8 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
     blockWorldWalkableSurfaceHeightAtSubjectOrigin: (
       subjectOrigin: Vector3,
     ) => number | undefined = () => undefined,
+    blockWorldSurfaceProfileAtSupportPoints:
+      BlockWalkableSurfaceProfileSamplerV1 = () => undefined,
   ) {
     super("character-movement");
     this.motionKernel = new MotionKernelRuntimeV1(
@@ -101,6 +109,7 @@ export class CharacterMovementComponentV1 extends EntityComponentV1 {
       scene,
       waterSurfaceHeightAtSubjectOrigin,
       blockWorldWalkableSurfaceHeightAtSubjectOrigin,
+      blockWorldSurfaceProfileAtSupportPoints,
     );
     this.physicsController = this.motionKernel.physicsController;
   }
@@ -740,6 +749,8 @@ export interface CreateGoldenHumanoidSubjectControllerOptionsV1 {
   readonly scene: Scene;
   readonly actionPresentationRegistry: ActionPresentationRegistryV1;
   readonly projectionPorts?: readonly GoldenHumanoidProjectionPortV1[];
+  readonly blockWorldSurfaceProfileAtSupportPoints?:
+    BlockWalkableSurfaceProfileSamplerV1;
 }
 
 /** Allocates exactly one MovementRuntime and one Babylon BodyPort. */
@@ -845,6 +856,15 @@ export function createGoldenHumanoidSubjectControllerV1(
       movementRuntime,
       bodyPort,
       actionPresentationRegistry: options.actionPresentationRegistry,
+      groundSurfaceMotionResponseForBodySample: (sample) => {
+        const profile = sample.support.mode === "unsupported" ||
+            sample.support.isDynamic
+          ? NORMAL_BLOCK_SURFACE_PROFILE_V1
+          : options.blockWorldSurfaceProfileAtSupportPoints?.([
+              sample.support.pointMetersXYZ,
+            ]) ?? NORMAL_BLOCK_SURFACE_PROFILE_V1;
+        return blockGroundSurfaceMotionResponseV1(profile);
+      },
       ...(options.projectionPorts === undefined
         ? {}
         : { projectionPorts: options.projectionPorts }),

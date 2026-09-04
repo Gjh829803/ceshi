@@ -1,6 +1,8 @@
 export type BlockPositionMetersXYZV2 = readonly [x: number, y: number, z: number];
 export type BlockShapeKindV2 = "full" | "half" | "quarter" | "small";
 export type BlockPresetRefV1 = `worldkit://block-preset/${string}@1`;
+export type BlockSurfaceProfileRefV1 =
+  `worldkit://block-surface-profile/${string}@1`;
 export type BlockColorHexV1 = `#${string}`;
 
 export type BlockPresetFamilyV1 = "functional" | "landmark";
@@ -10,6 +12,26 @@ export type BlockSupportSurfaceModeV1 = "none" | "ground" | "cloud";
 export type BlockMediumModeV1 = "none" | "solid" | "water" | "cloud";
 export type BlockInteractionModeV1 = "none" | "solid" | "trigger";
 
+export interface BlockGroundSurfaceMotionResponseV1 {
+  readonly maximumSpeedRatio: number;
+  readonly accelerationRatio: number;
+  readonly decelerationRatio: number;
+}
+
+export interface BlockSurfaceProfileDefinitionV1 {
+  readonly resourceRef: BlockSurfaceProfileRefV1;
+  readonly physics: Readonly<{
+    frictionRatio: number;
+    restitutionRatio: number;
+  }>;
+  readonly groundedMotion: BlockGroundSurfaceMotionResponseV1;
+  readonly aiMetadata: Readonly<{
+    displayName: string;
+    description: string;
+    semanticTags: readonly string[];
+  }>;
+}
+
 export interface BlockPresetDefinitionV1 {
   readonly resourceRef: BlockPresetRefV1;
   readonly family: BlockPresetFamilyV1;
@@ -17,9 +39,8 @@ export interface BlockPresetDefinitionV1 {
   readonly physics: Readonly<{
     bodyMode: BlockBodyModeV1;
     collisionMode: BlockCollisionModeV1;
-    frictionRatio: number;
-    restitutionRatio: number;
   }>;
+  readonly surfaceProfileRef: BlockSurfaceProfileRefV1 | null;
   readonly traversal: Readonly<{
     supportSurfaceMode: BlockSupportSurfaceModeV1;
     mediumMode: BlockMediumModeV1;

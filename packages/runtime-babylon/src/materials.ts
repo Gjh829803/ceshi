@@ -12,6 +12,8 @@ import { listBlockPresetsV1 } from "@whitebox-world/block-world";
  */
 export const BLOCK_WORLD_PASTEL_DISPLAY_COLORS_V1 = Object.freeze({
   walkable: "#F4F5F2",
+  "walkable-ice": "#DDF5FF",
+  "walkable-mud": "#A98566",
   obstacle: "#D8E4EC",
   "interactive-solid": "#77C9C0",
   "interactive-trigger": "#CBE59A",

@@ -106,6 +106,8 @@ function paletteEntry(input: {
 
 const BLOCK_WHITEBOX_PALETTE = Object.freeze([
   paletteEntry({ semantic: "walkable", color: BLOCK_PRESET_COLORS_V1.walkable, isBlock: true, isTraversable: true }),
+  paletteEntry({ semantic: "walkable-ice", color: BLOCK_PRESET_COLORS_V1.walkableIce, isBlock: true, isTraversable: true }),
+  paletteEntry({ semantic: "walkable-mud", color: BLOCK_PRESET_COLORS_V1.walkableMud, isBlock: true, isTraversable: true }),
   paletteEntry({ semantic: "obstacle", color: BLOCK_PRESET_COLORS_V1.obstacle, isBlock: true }),
   paletteEntry({ semantic: "interactive-solid", color: BLOCK_PRESET_COLORS_V1.interactiveSolid, isBlock: true, isInteractive: true }),
   paletteEntry({ semantic: "interactive-trigger", color: BLOCK_PRESET_COLORS_V1.interactiveTrigger, isBlock: true, isInteractive: true }),

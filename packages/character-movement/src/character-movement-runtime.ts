@@ -17,6 +17,8 @@ import {
   parseCharacterMovementStateV1,
   parseMovementCommitV1,
   parseMovementProposalV1,
+  parseGroundSurfaceMotionResponseV1,
+  STANDARD_GROUND_SURFACE_MOTION_RESPONSE_V1,
   type BodyResolutionV1,
   type BodySampleV1,
   type BodySupportSampleV1,
@@ -31,6 +33,7 @@ import {
   type MovementProposalV1,
   type MovementTickTokenV1,
   type MovementVec3V1,
+  type GroundSurfaceMotionResponseV1,
 } from "./character-movement-contracts.js";
 import {
   composeLayeredMovesV1,
@@ -473,7 +476,12 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
     }
   }
 
-  proposeMovement(token: MovementTickTokenV1, input: BodySampleV1): MovementProposalV1 {
+  proposeMovement(
+    token: MovementTickTokenV1,
+    input: BodySampleV1,
+    groundSurfaceMotionResponse: GroundSurfaceMotionResponseV1 =
+      STANDARD_GROUND_SURFACE_MOTION_RESPONSE_V1,
+  ): MovementProposalV1 {
     const transaction = this.#transaction(token);
     if (transaction.proposal !== undefined) {
       throw diagnostic("3C_SUPPORT_SAMPLE_DUPLICATE", "support sample was already consumed for this Tick.");
@@ -491,6 +499,9 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
       throw diagnostic("3C_TICK_TOKEN_STALE", "BodySampleV1 provenance does not match the Tick token.");
     }
     assertMovementTickTokenIdentityV1(token, sample.token);
+    const surfaceResponse = sample.support.mode === "unsupported"
+      ? STANDARD_GROUND_SURFACE_MOTION_RESPONSE_V1
+      : parseGroundSurfaceMotionResponseV1(groundSurfaceMotionResponse);
 
     const command = transaction.command;
     const priorRuntime = this.#currentSnapshot.runtimeState;
@@ -522,12 +533,15 @@ class DeterministicCharacterMovementRuntimeV1 implements CharacterMovementRuntim
       : (rightZ * command.movementInputXZ[0] + forwardZ * command.movementInputXZ[1]) / inputMagnitude;
     const requestedSpeed = (command.runRequested
       ? this.#options.runSpeedMetersPerSecond
-      : this.#options.walkSpeedMetersPerSecond) * inputMagnitude;
+      : this.#options.walkSpeedMetersPerSecond) * inputMagnitude *
+        surfaceResponse.maximumSpeedRatio;
     const targetX = directionX * requestedSpeed;
     const targetZ = directionZ * requestedSpeed;
     const response = inputMagnitude > 0
-      ? this.#options.accelerationMetersPerSecondSquared
-      : this.#options.decelerationMetersPerSecondSquared;
+      ? this.#options.accelerationMetersPerSecondSquared *
+        surfaceResponse.accelerationRatio
+      : this.#options.decelerationMetersPerSecondSquared *
+        surfaceResponse.decelerationRatio;
     const airRatio = sample.support.mode === "unsupported" ? this.#options.airControlRatio : 1;
     const horizontal = moveTowardXZ(
       sample.linearVelocityMetersPerSecondXYZ[0],

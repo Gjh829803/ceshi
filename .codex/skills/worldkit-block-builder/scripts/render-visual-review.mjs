@@ -28,8 +28,73 @@ function blockWorldChunkClusterEntityIdV2(coordinate, clusterIndex) {
   }
   return `${blockWorldChunkIdV2(coordinate)}-cluster-${clusterIndex.toString(36).padStart(4, "0")}`;
 }
+const BLOCK_SURFACE_PROFILE_REFS_V1 = Object.freeze({
+  normal: "worldkit://block-surface-profile/normal@1",
+  ice: "worldkit://block-surface-profile/ice@1",
+  mud: "worldkit://block-surface-profile/mud@1"
+});
+function freezeProfile(input) {
+  return Object.freeze({
+    ...input,
+    physics: Object.freeze({ ...input.physics }),
+    groundedMotion: Object.freeze({ ...input.groundedMotion }),
+    aiMetadata: Object.freeze({
+      ...input.aiMetadata,
+      semanticTags: Object.freeze([...input.aiMetadata.semanticTags])
+    })
+  });
+}
+const BLOCK_SURFACE_PROFILES_V1 = Object.freeze([
+  freezeProfile({
+    resourceRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
+    physics: { frictionRatio: 0.75, restitutionRatio: 0 },
+    groundedMotion: {
+      maximumSpeedRatio: 1,
+      accelerationRatio: 1,
+      decelerationRatio: 1
+    },
+    aiMetadata: {
+      displayName: "Normal Ground",
+      description: "Predictable traction for ordinary walkable ground.",
+      semanticTags: ["ground", "normal", "traction"]
+    }
+  }),
+  freezeProfile({
+    resourceRef: BLOCK_SURFACE_PROFILE_REFS_V1.ice,
+    physics: { frictionRatio: 0.05, restitutionRatio: 0 },
+    groundedMotion: {
+      maximumSpeedRatio: 1,
+      accelerationRatio: 0.35,
+      decelerationRatio: 0.12
+    },
+    aiMetadata: {
+      displayName: "Slippery Ice",
+      description: "Low traction with slow acceleration and long stopping distance.",
+      semanticTags: ["ground", "ice", "slippery", "low-friction"]
+    }
+  }),
+  freezeProfile({
+    resourceRef: BLOCK_SURFACE_PROFILE_REFS_V1.mud,
+    physics: { frictionRatio: 1, restitutionRatio: 0 },
+    groundedMotion: {
+      maximumSpeedRatio: 0.55,
+      accelerationRatio: 0.6,
+      decelerationRatio: 1.25
+    },
+    aiMetadata: {
+      displayName: "Heavy Mud",
+      description: "Sticky ground with reduced travel speed and strong stopping drag.",
+      semanticTags: ["ground", "mud", "sticky", "high-drag"]
+    }
+  })
+]);
+new Map(
+  BLOCK_SURFACE_PROFILES_V1.map((profile) => [profile.resourceRef, profile])
+);
 const BLOCK_PRESET_REFS_V1 = Object.freeze({
   walkable: "worldkit://block-preset/walkable@1",
+  walkableIce: "worldkit://block-preset/walkable-ice@1",
+  walkableMud: "worldkit://block-preset/walkable-mud@1",
   obstacle: "worldkit://block-preset/obstacle@1",
   interactiveSolid: "worldkit://block-preset/interactive-solid@1",
   interactiveTrigger: "worldkit://block-preset/interactive-trigger@1",
@@ -46,6 +111,8 @@ const BLOCK_PRESET_REFS_V1 = Object.freeze({
 });
 const BLOCK_PRESET_COLORS_V1 = Object.freeze({
   walkable: "#B7E4C7",
+  walkableIce: "#BDEBFF",
+  walkableMud: "#9C7653",
   obstacle: "#5F6368",
   interactiveSolid: "#00B8A9",
   interactiveTrigger: "#B8DE6F",
@@ -85,9 +152,7 @@ function freezePreset(input) {
 }
 const STATIC_SOLID_PHYSICS = Object.freeze({
   bodyMode: "static",
-  collisionMode: "solid",
-  frictionRatio: 0.8,
-  restitutionRatio: 0
+  collisionMode: "solid"
 });
 const BLOCK_PRESETS_V1 = Object.freeze([
   freezePreset({
@@ -95,6 +160,25 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     family: "functional",
     render: { colorHex: BLOCK_PRESET_COLORS_V1.walkable, opacityRatio: 1 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
+    traversal: { supportSurfaceMode: "ground", mediumMode: "solid" },
+    interactionMode: "none"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.walkableIce,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.walkableIce, opacityRatio: 1 },
+    physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.ice,
+    traversal: { supportSurfaceMode: "ground", mediumMode: "solid" },
+    interactionMode: "none"
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.walkableMud,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.walkableMud, opacityRatio: 1 },
+    physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.mud,
     traversal: { supportSurfaceMode: "ground", mediumMode: "solid" },
     interactionMode: "none"
   }),
@@ -103,6 +187,7 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     family: "functional",
     render: { colorHex: BLOCK_PRESET_COLORS_V1.obstacle, opacityRatio: 1 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
     interactionMode: "none"
   }),
@@ -112,10 +197,9 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     render: { colorHex: BLOCK_PRESET_COLORS_V1.interactiveSolid, opacityRatio: 1 },
     physics: {
       bodyMode: "kinematic",
-      collisionMode: "solid",
-      frictionRatio: 0.8,
-      restitutionRatio: 0
+      collisionMode: "solid"
     },
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
     interactionMode: "solid"
   }),
@@ -125,10 +209,9 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     render: { colorHex: BLOCK_PRESET_COLORS_V1.interactiveTrigger, opacityRatio: 0.45 },
     physics: {
       bodyMode: "kinematic",
-      collisionMode: "trigger",
-      frictionRatio: 0,
-      restitutionRatio: 0
+      collisionMode: "trigger"
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "none" },
     interactionMode: "trigger"
   }),
@@ -138,10 +221,9 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     render: { colorHex: BLOCK_PRESET_COLORS_V1.water, opacityRatio: 0.55 },
     physics: {
       bodyMode: "none",
-      collisionMode: "trigger",
-      frictionRatio: 0,
-      restitutionRatio: 0
+      collisionMode: "trigger"
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "water" },
     interactionMode: "none"
   }),
@@ -150,6 +232,7 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     family: "functional",
     render: { colorHex: BLOCK_PRESET_COLORS_V1.cloudWalkable, opacityRatio: 0.8 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "cloud", mediumMode: "cloud" },
     interactionMode: "none"
   }),
@@ -159,10 +242,9 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     render: { colorHex: BLOCK_PRESET_COLORS_V1.cloudPassable, opacityRatio: 0.45 },
     physics: {
       bodyMode: "none",
-      collisionMode: "none",
-      frictionRatio: 0,
-      restitutionRatio: 0
+      collisionMode: "none"
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "cloud" },
     interactionMode: "none"
   }),
@@ -172,10 +254,9 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     render: { colorHex: BLOCK_PRESET_COLORS_V1.visualOnly, opacityRatio: 0.7 },
     physics: {
       bodyMode: "none",
-      collisionMode: "none",
-      frictionRatio: 0,
-      restitutionRatio: 0
+      collisionMode: "none"
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "none" },
     interactionMode: "none"
   }),
@@ -191,6 +272,7 @@ const BLOCK_PRESETS_V1 = Object.freeze([
     family: "landmark",
     render: { colorHex, opacityRatio: 1 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
     interactionMode: "none"
   }))

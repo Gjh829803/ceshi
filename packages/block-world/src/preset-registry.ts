@@ -3,9 +3,12 @@ import type {
   BlockPresetDefinitionV1,
   BlockPresetRefV1,
 } from "./types.js";
+import { BLOCK_SURFACE_PROFILE_REFS_V1 } from "./surface-profile-registry.js";
 
 export const BLOCK_PRESET_REFS_V1 = Object.freeze({
   walkable: "worldkit://block-preset/walkable@1",
+  walkableIce: "worldkit://block-preset/walkable-ice@1",
+  walkableMud: "worldkit://block-preset/walkable-mud@1",
   obstacle: "worldkit://block-preset/obstacle@1",
   interactiveSolid: "worldkit://block-preset/interactive-solid@1",
   interactiveTrigger: "worldkit://block-preset/interactive-trigger@1",
@@ -23,6 +26,8 @@ export const BLOCK_PRESET_REFS_V1 = Object.freeze({
 
 export const BLOCK_PRESET_COLORS_V1 = Object.freeze({
   walkable: "#B7E4C7",
+  walkableIce: "#BDEBFF",
+  walkableMud: "#9C7653",
   obstacle: "#5F6368",
   interactiveSolid: "#00B8A9",
   interactiveTrigger: "#B8DE6F",
@@ -79,8 +84,6 @@ function freezePreset(
 const STATIC_SOLID_PHYSICS = Object.freeze({
   bodyMode: "static" as const,
   collisionMode: "solid" as const,
-  frictionRatio: 0.8,
-  restitutionRatio: 0,
 });
 
 const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
@@ -89,6 +92,25 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     family: "functional",
     render: { colorHex: BLOCK_PRESET_COLORS_V1.walkable, opacityRatio: 1 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
+    traversal: { supportSurfaceMode: "ground", mediumMode: "solid" },
+    interactionMode: "none",
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.walkableIce,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.walkableIce, opacityRatio: 1 },
+    physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.ice,
+    traversal: { supportSurfaceMode: "ground", mediumMode: "solid" },
+    interactionMode: "none",
+  }),
+  freezePreset({
+    resourceRef: BLOCK_PRESET_REFS_V1.walkableMud,
+    family: "functional",
+    render: { colorHex: BLOCK_PRESET_COLORS_V1.walkableMud, opacityRatio: 1 },
+    physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.mud,
     traversal: { supportSurfaceMode: "ground", mediumMode: "solid" },
     interactionMode: "none",
   }),
@@ -97,6 +119,7 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     family: "functional",
     render: { colorHex: BLOCK_PRESET_COLORS_V1.obstacle, opacityRatio: 1 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
     interactionMode: "none",
   }),
@@ -107,9 +130,8 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     physics: {
       bodyMode: "kinematic",
       collisionMode: "solid",
-      frictionRatio: 0.8,
-      restitutionRatio: 0,
     },
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
     interactionMode: "solid",
   }),
@@ -120,9 +142,8 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     physics: {
       bodyMode: "kinematic",
       collisionMode: "trigger",
-      frictionRatio: 0,
-      restitutionRatio: 0,
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "none" },
     interactionMode: "trigger",
   }),
@@ -133,9 +154,8 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     physics: {
       bodyMode: "none",
       collisionMode: "trigger",
-      frictionRatio: 0,
-      restitutionRatio: 0,
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "water" },
     interactionMode: "none",
   }),
@@ -144,6 +164,7 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     family: "functional",
     render: { colorHex: BLOCK_PRESET_COLORS_V1.cloudWalkable, opacityRatio: 0.8 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "cloud", mediumMode: "cloud" },
     interactionMode: "none",
   }),
@@ -154,9 +175,8 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     physics: {
       bodyMode: "none",
       collisionMode: "none",
-      frictionRatio: 0,
-      restitutionRatio: 0,
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "cloud" },
     interactionMode: "none",
   }),
@@ -167,9 +187,8 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     physics: {
       bodyMode: "none",
       collisionMode: "none",
-      frictionRatio: 0,
-      restitutionRatio: 0,
     },
+    surfaceProfileRef: null,
     traversal: { supportSurfaceMode: "none", mediumMode: "none" },
     interactionMode: "none",
   }),
@@ -185,6 +204,7 @@ const BLOCK_PRESETS_V1: readonly BlockPresetDefinitionV1[] = Object.freeze([
     family: "landmark",
     render: { colorHex, opacityRatio: 1 },
     physics: STATIC_SOLID_PHYSICS,
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
     traversal: { supportSurfaceMode: "none", mediumMode: "solid" },
     interactionMode: "none",
   })),
@@ -202,4 +222,16 @@ export function resolveBlockPresetV1(
   resourceRef: string,
 ): BlockPresetDefinitionV1 | undefined {
   return BLOCK_PRESET_BY_REF_V1.get(resourceRef as BlockPresetRefV1);
+}
+
+export function resolveBlockPresetFromSemanticClassIdV1(
+  semanticClassId: string,
+): BlockPresetDefinitionV1 | undefined {
+  return BLOCK_PRESETS_V1.find((preset) => {
+    const presetName = preset.resourceRef
+      .slice("worldkit://block-preset/".length)
+      .replace(/@1$/, "");
+    const prefix = `block.${presetName}`;
+    return semanticClassId === prefix || semanticClassId.startsWith(`${prefix}.`);
+  });
 }

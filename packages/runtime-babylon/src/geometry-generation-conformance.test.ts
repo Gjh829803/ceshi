@@ -6,7 +6,10 @@ import type {
   CanonicalSceneWaterBoundaryV1,
   CanonicalSceneWaterV1,
 } from "@whitebox-world/runtime-contracts";
-import { BLOCK_PRESET_COLORS_V1 } from "@whitebox-world/block-world";
+import {
+  BLOCK_PRESET_COLORS_V1,
+  BLOCK_SURFACE_PROFILE_REFS_V1,
+} from "@whitebox-world/block-world";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -22,6 +25,7 @@ import {
 import {
   buildBlockWalkableSurfaceTopologiesV1,
   createBlockWalkableSurfaceHeightSamplerV1,
+  createBlockWalkableSurfaceProfileSamplerV1,
   createBlockWalkableSurfaceMeshesV1,
 } from "./block-walkable-surface.js";
 import {
@@ -170,6 +174,53 @@ describe("Babylon geometry generation conformance", () => {
       ground,
       "powered-flight",
     )).toBe(flight);
+  });
+
+  it("resolves normal, ice, and mud from authoritative support contact points", () => {
+    const block = (
+      entityId: string,
+      x: number,
+      semanticClassId: string,
+    ): CanonicalSceneObjectV1 => ({
+      entityId,
+      prototypeId: semanticClassId,
+      primitive: { kind: "box", sizeMetersXYZ: [1, 1, 1] },
+      transform: {
+        positionMetersXYZ: [x, 0, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+        scaleXYZ: [1, 1, 1],
+      },
+      collisionEnabled: true,
+      semanticClassId,
+    });
+    const topologies = buildBlockWalkableSurfaceTopologiesV1([
+      block(
+        "bw-chunk-x-p0-z-p0-cluster-0000",
+        0,
+        "block.walkable.shape.full",
+      ),
+      block(
+        "bw-chunk-x-p0-z-p0-cluster-0001",
+        1,
+        "block.walkable-ice.shape.full",
+      ),
+      block(
+        "bw-chunk-x-p0-z-p0-cluster-0002",
+        2,
+        "block.walkable-mud.shape.full",
+      ),
+    ]);
+    expect(topologies).toHaveLength(3);
+    const sampleProfile = createBlockWalkableSurfaceProfileSamplerV1(topologies);
+    expect(sampleProfile([[0, 0.5, 0]])?.resourceRef)
+      .toBe(BLOCK_SURFACE_PROFILE_REFS_V1.normal);
+    expect(sampleProfile([[1, 0.5, 0]])?.resourceRef)
+      .toBe(BLOCK_SURFACE_PROFILE_REFS_V1.ice);
+    expect(sampleProfile([[2, 0.5, 0]])?.resourceRef)
+      .toBe(BLOCK_SURFACE_PROFILE_REFS_V1.mud);
+    expect(sampleProfile([[0.5, 0.5, 0]])?.resourceRef)
+      .toBe(BLOCK_SURFACE_PROFILE_REFS_V1.ice);
+    expect(sampleProfile([[1, 2, 0]])).toBeUndefined();
   });
 
   it("does not derive a false ground boundary at a walkable chunk seam", () => {
@@ -368,6 +419,19 @@ describe("Babylon geometry generation conformance", () => {
       semanticClassId: "block.obstacle",
     }], materials, scene)[0]!;
     expect(obstacle.isVerticesDataPresent(VertexBuffer.ColorInstanceKind)).toBe(false);
+  });
+
+  it("renders normal, ice, and mud with distinct fixed surface colors", () => {
+    const colors = ["walkable", "walkable-ice", "walkable-mud"].map(
+      (name) => materials.blockBySemanticClassId.get(`block.${name}`)!
+        .diffuseColor.toHexString(),
+    );
+    expect(colors).toEqual([
+      BLOCK_WORLD_PASTEL_DISPLAY_COLORS_V1.walkable,
+      BLOCK_WORLD_PASTEL_DISPLAY_COLORS_V1["walkable-ice"],
+      BLOCK_WORLD_PASTEL_DISPLAY_COLORS_V1["walkable-mud"],
+    ]);
+    expect(new Set(colors).size).toBe(3);
   });
 
   it("expands mixed-shape clusters with their exact base dimensions", () => {

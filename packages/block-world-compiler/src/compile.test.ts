@@ -129,6 +129,41 @@ describe("Block World internal compiler", () => {
     expect(reversed.canonicalSceneExecutionPlan).toEqual(first.canonicalSceneExecutionPlan);
   });
 
+  it("keeps adjacent normal, ice, and mud supports in distinct preset clusters", () => {
+    const source = input();
+    const result = compileBlockWorldV2({
+      ...source,
+      manifest: createBlockWorldManifestV2([
+        ...source.manifest.blocks.map((block) =>
+          block.id === "ground-001"
+            ? { ...block, presetRef: BLOCK_PRESET_REFS_V1.walkableIce }
+            : block),
+        {
+          id: "ground-002",
+          presetRef: BLOCK_PRESET_REFS_V1.walkableMud,
+          shape: "full",
+          positionMetersXYZ: [2, 0, 0],
+          rotationQuarterTurnsY: 0,
+        },
+      ]),
+      requiredTargets: [{
+        id: "target-ground",
+        navigationRole: "remote",
+        standPositionMetersXYZ: [2, 0.5, 0],
+      }],
+    });
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+    if (!result.ok) return;
+    const supportSemantics = result.canonicalSceneExecutionPlan.objects
+      .map(({ semanticClassId }) => semanticClassId)
+      .filter((semanticClassId) => semanticClassId.startsWith("block.walkable"));
+    expect(supportSemantics).toEqual(expect.arrayContaining([
+      "block.walkable.shape.full",
+      "block.walkable-ice.shape.full",
+      "block.walkable-mud.shape.full",
+    ]));
+  });
+
   it("preserves half, quarter-volume, and small base geometry through Authoring transport", () => {
     const source = input();
     const result = compileBlockWorldV2({

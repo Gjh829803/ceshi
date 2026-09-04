@@ -109,6 +109,8 @@ or independent controllers.
 | Ref property | Meaning | Fixed color | Collision/support |
 | --- | --- | --- | --- |
 | `walkable` | ordinary support block | `#B7E4C7` | solid, walkable |
+| `walkableIce` | slippery ice support | `#BDEBFF` | solid, walkable, low traction |
+| `walkableMud` | sticky mud support | `#9C7653` | solid, walkable, reduced speed |
 | `obstacle` | blocking world mass | `#5F6368` | solid, not support |
 | `interactiveSolid` | stateful blocking block | `#00B8A9` | solid blocker |
 | `interactiveTrigger` | non-blocking interaction volume | `#B8DE6F` | trigger |
@@ -126,6 +128,13 @@ or independent controllers.
 Every landmark-colored block requires `visualGroupId`. One group uses one
 landmark color, and a reserved landmark color identifies only one group in the
 world. Intentionally repeated identical landmarks share the same group.
+
+`walkable`, `walkableIce`, and `walkableMud` are separate visible presets and
+use the fixed colors above in Planner images, Three.js authoring, whitebox
+Runtime, and review evidence. Select the semantic preset instead of supplying
+numeric friction: ice keeps momentum and brakes slowly, while mud limits speed
+and stops quickly. All three remain ordinary traversable support for topology
+and connectivity checks.
 
 ## Planner-image interpretation
 

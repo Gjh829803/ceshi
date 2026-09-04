@@ -275,6 +275,27 @@ pnpm verify:g-bot-subject
 `RigProfile` 和 `AnimationSet` 把这些源 Key 转成 `hand.right`、`walk` 等稳定语义
 Key。AI-facing World JSON 只引用 `worldkit://subject-definition/humanoid.g-bot@2`。
 
+### 5.6 主体手感与地表手感的交付边界
+
+同事交付的主体套餐继续负责该主体自身的基础移动手感，例如步行/奔跑速度、加减速、
+跳跃、车辆油门响应或飞行响应；这些参数进入 Subject Definition 引用的
+`control-feel-profile`、Motion/Medium Profile，而不写进 GLB。
+
+地面是另一方权威。Block World 通过不可变 Surface Pack 选择普通、冰和泥地；每个
+Surface Pack 同时锁定可识别的白盒颜色、Havok 接触摩擦以及对主体基础速度/加减速的
+倍率。最终手感按以下顺序组合：
+
+```text
+主体 Control Feel 基础值
+  × 当前权威 support contact 对应的 Surface Pack 倍率
+  = 本 Tick 的地面移动响应
+```
+
+因此汽车套餐可以交付自己的最高速度和油门手感，但“开到泥地后降速、开到冰面后
+制动距离变长”由世界地表套餐统一处理。同事不需要、也不能在主体包里复制冰面或
+泥地参数。飞行、游泳和离地阶段不应用地表倍率；世界重力仍由 World 配置拥有，
+主体的 Motion/Medium Profile 只决定如何响应或抵消它。
+
 ## 6. Character：分层状态而不是复制主体
 
 ### 6.1 权威状态层

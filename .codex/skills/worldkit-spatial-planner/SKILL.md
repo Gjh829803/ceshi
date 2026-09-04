@@ -221,7 +221,8 @@ The image contains only four information layers:
 1. a discrete-cube rendering of the reference-consistent complete world layout;
 2. one small red spawn-position token at the described initial position;
 3. exact functional block colors showing ground-motion support, collision,
-   interaction, water/cloud, and visual-only semantics that actually exist;
+   distinct normal/ice/mud ground feel, interaction, water/cloud, and
+   visual-only semantics that actually exist;
 4. the ordered colors of every selected complete non-subject visual target,
    including important people, animals, creatures, vehicles, objects, and
    repeated sets as well as environmental landmarks.

@@ -24,6 +24,8 @@ depth and vertical separation.
 | Meaning | Exact color | Use in the images |
 | --- | --- | --- |
 | ground-motion support | `#B7E4C7` | every ground, platform, road, bridge, stair, or land block used by a declared ground movement mode |
+| slippery ice support | `#BDEBFF` | visibly icy traversable ground whose low traction and long stopping distance matter to the requested experience |
+| sticky mud support | `#9C7653` | visibly muddy traversable ground whose reduced speed and strong drag matter to the requested experience |
 | solid obstacle | `#5F6368` | buildings, rocks, trees, walls, terrain masses, and other collision blockers that are not selected visual targets |
 | interactive solid | `#00B8A9` | a stateful solid object that can be operated or moved |
 | interactive trigger | `#B8DE6F` | a non-blocking trigger/interaction volume |
@@ -37,6 +39,11 @@ flight tunnel, swimming region overlay, or water-surface route. Flight and
 swimming reachability are understood from collision-free volume/medium, not a
 colored navigable area. Water remains blue as environmental medium. If no ground
 movement is declared, the image does not need a pale-green connected region.
+
+Ice and mud remain traversable support and participate in the same connected
+ground domain as ordinary support. Use their distinct fixed colors only when
+the request, reference, or intended experience actually calls for those surface
+behaviors; never use them as decorative color variants.
 
 Do not add an interaction color when the request/reference has no meaningful
 interactive object. Do not recolor an obstacle as traversable merely because a

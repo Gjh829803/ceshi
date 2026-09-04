@@ -82,6 +82,10 @@ import {
   queryStaticColliderTriangleMeshSupportHeightMetersV1,
 } from "@whitebox-world/terrain-surface";
 import { isNil } from "lodash-es";
+import {
+  resolveBlockPresetFromSemanticClassIdV1,
+  type BlockSurfaceProfileRefV1,
+} from "@whitebox-world/block-world";
 
 import "./babylon-shader-bootstrap";
 import { BabylonCharacterEntityV1 } from "./babylon-character-entity";
@@ -143,6 +147,7 @@ import {
 import {
   buildBlockWalkableSurfaceTopologiesV1,
   createBlockWalkableSurfaceHeightSamplerV1,
+  createBlockWalkableSurfaceProfileSamplerV1,
   createBlockWalkableSurfaceMeshesV1,
   isSmoothableBlockObjectV1,
 } from "./block-walkable-surface";
@@ -1074,6 +1079,9 @@ export class BabylonWorldRuntime {
       let blockWorldCollisionResidency: BlockWorldCollisionResidencyV1 | undefined;
       let blockWalkableSurfaceHeightAtMetersXZ:
         ReturnType<typeof createBlockWalkableSurfaceHeightSamplerV1> = () => undefined;
+      let blockSurfaceProfileAtSupportPoints:
+        ReturnType<typeof createBlockWalkableSurfaceProfileSamplerV1> =
+          () => undefined;
       const usesBlockWorldGeometry = executionPlan?.objects.some(
         ({ semanticClassId }) => semanticClassId.startsWith("block."),
       ) === true;
@@ -1131,6 +1139,10 @@ export class BabylonWorldRuntime {
           createBlockWalkableSurfaceHeightSamplerV1(
             blockWalkableSurfaceTopologies,
           );
+        blockSurfaceProfileAtSupportPoints =
+          createBlockWalkableSurfaceProfileSamplerV1(
+            blockWalkableSurfaceTopologies,
+          );
         createBabylonObjectMeshesV1(
           executionPlan.objects.filter((object) =>
             !isSmoothableBlockObjectV1(object)),
@@ -1145,6 +1157,18 @@ export class BabylonWorldRuntime {
         const partitionedColliders = partitionBlockWorldStaticCollidersV1(
           executionPlan.staticColliders,
         );
+        const blockSurfaceProfileRefByEntityId = new Map<
+          string,
+          BlockSurfaceProfileRefV1
+        >();
+        for (const object of executionPlan.objects) {
+          const resourceRef = resolveBlockPresetFromSemanticClassIdV1(
+            object.semanticClassId,
+          )?.surfaceProfileRef;
+          if (resourceRef !== undefined && resourceRef !== null) {
+            blockSurfaceProfileRefByEntityId.set(object.entityId, resourceRef);
+          }
+        }
         for (const collider of partitionedColliders.genericColliders) {
           const mesh = createStaticCollisionMesh(collider, scene);
           const shape = new PhysicsShapeMesh(mesh, scene);
@@ -1169,6 +1193,7 @@ export class BabylonWorldRuntime {
                 spawnSubjectOriginPositionMetersXYZ,
             ),
             walkableSurfaceTopologies: blockWalkableSurfaceTopologies,
+            surfaceProfileRefByEntityId: blockSurfaceProfileRefByEntityId,
           });
           const collisionResidency = blockWorldCollisionResidency;
           ownedDisposers.push(() => collisionResidency.dispose());
@@ -1430,6 +1455,8 @@ export class BabylonWorldRuntime {
             scene,
             actionPresentationRegistry,
             projectionPorts: [projection],
+            blockWorldSurfaceProfileAtSupportPoints:
+              blockSurfaceProfileAtSupportPoints,
           });
         } else {
           controller = new CharacterMovementComponentV1(
@@ -1445,6 +1472,7 @@ export class BabylonWorldRuntime {
               subjectOrigin.x,
               subjectOrigin.z,
             ]),
+            blockSurfaceProfileAtSupportPoints,
           );
         }
         const character = new BabylonCharacterEntityV1({
@@ -1462,6 +1490,8 @@ export class BabylonWorldRuntime {
               subjectOrigin.x,
               subjectOrigin.z,
             ]),
+          blockWorldSurfaceProfileAtSupportPoints:
+            blockSurfaceProfileAtSupportPoints,
           movement: controller,
         });
         entityRegistry.register(character.entity);

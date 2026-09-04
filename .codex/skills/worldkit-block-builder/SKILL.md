@@ -201,6 +201,10 @@ Read all three maintained references before writing the module:
   inside a target keep their functional preset but may share its
   `visualGroupId`. The checker rejects a non-subject target built with a different
   reserved color.
+- Use the immutable `walkableIce` and `walkableMud` presets when the Brief calls
+  for visibly identifiable slippery ice or sticky mud. Their fixed colors and
+  movement feel are one Host-owned semantic package; never approximate either
+  surface with ordinary `walkable` blocks or custom numeric physics values.
 - Declare one `visualTargetFacings` row for every non-subject `visualGroupId`.
   `frontYawQuarterTurnsY` uses the same exact convention as the controlled
   Subject: `0=-Z`, `1=-X`, `2=+Z`, `3=+X`. Choose the target's semantic front

@@ -6,6 +6,8 @@ import type { Scene } from "@babylonjs/core/scene.pure.js";
 import {
   BLOCK_WORLD_CHUNK_SIZE_METERS_V2,
   parseBlockWorldChunkEntityIdV2,
+  resolveBlockSurfaceProfileV1,
+  type BlockSurfaceProfileRefV1,
 } from "@whitebox-world/block-world";
 import type {
   CanonicalSceneStaticColliderV1,
@@ -23,10 +25,15 @@ import {
 
 export const BLOCK_WORLD_PHYSICS_CHUNK_RADIUS_V1 = 2;
 
-interface ActiveBlockCollisionChunkV1 {
+interface ActiveBlockCollisionGroupV1 {
+  readonly surfaceProfileRef: BlockSurfaceProfileRefV1;
   readonly mesh: Mesh;
   readonly shape: PhysicsShapeMesh;
   readonly aggregate: PhysicsAggregate;
+}
+
+interface ActiveBlockCollisionChunkV1 {
+  readonly collisionGroups: readonly ActiveBlockCollisionGroupV1[];
   readonly groundBoundary?: Readonly<{
     mesh: Mesh;
     shape: PhysicsShapeMesh;
@@ -45,6 +52,7 @@ function colliderChunkKey(collider: CanonicalSceneStaticColliderV1): string | un
 
 function createMergedChunkMesh(
   key: string,
+  surfaceProfileRef: BlockSurfaceProfileRefV1,
   colliders: readonly CanonicalSceneStaticColliderV1[],
   walkableSurfaceTopologies: readonly BlockWalkableSurfaceTopologyV1[],
   scene: Scene,
@@ -71,7 +79,13 @@ function createMergedChunkMesh(
   }
   const normals: number[] = [];
   VertexData.ComputeNormals(positions, indices, normals);
-  const mesh = new Mesh(`worldkit.block-collision-chunk.${key}`, scene);
+  const surfaceProfileName = surfaceProfileRef
+    .slice("worldkit://block-surface-profile/".length)
+    .replace(/@1$/, "");
+  const mesh = new Mesh(
+    `worldkit.block-collision-chunk.${key}.${surfaceProfileName}`,
+    scene,
+  );
   const data = new VertexData();
   data.positions = positions;
   data.indices = indices;
@@ -81,6 +95,7 @@ function createMergedChunkMesh(
     worldkitEntityId: colliders[0]!.entityId,
     worldkitEntityIds: Object.freeze(colliders.map(({ entityId }) => entityId)),
     blockWorldCollisionChunkKey: key,
+    blockWorldSurfaceProfileRef: surfaceProfileRef,
   };
   mesh.isVisible = false;
   mesh.computeWorldMatrix(true);
@@ -128,6 +143,10 @@ export class BlockWorldCollisionResidencyV1 {
   >>;
   readonly #scene: Scene;
   readonly #staticCollisionMeshes: StaticCollisionMeshEntryV1[];
+  readonly #surfaceProfileRefByEntityId: ReadonlyMap<
+    string,
+    BlockSurfaceProfileRefV1
+  >;
   readonly #radius: number;
   #disposed = false;
 
@@ -137,11 +156,13 @@ export class BlockWorldCollisionResidencyV1 {
     staticCollisionMeshes: StaticCollisionMeshEntryV1[];
     initialSubjectPositionsMetersXYZ: readonly CanonicalSceneVec3V1[];
     walkableSurfaceTopologies: readonly BlockWalkableSurfaceTopologyV1[];
+    surfaceProfileRefByEntityId: ReadonlyMap<string, BlockSurfaceProfileRefV1>;
     radius?: number;
   }>) {
     this.#scene = options.scene;
     this.#staticCollisionMeshes = options.staticCollisionMeshes;
     this.#radius = options.radius ?? BLOCK_WORLD_PHYSICS_CHUNK_RADIUS_V1;
+    this.#surfaceProfileRefByEntityId = options.surfaceProfileRefByEntityId;
     if (!Number.isSafeInteger(this.#radius) || this.#radius < 1) {
       throw new RangeError("Block World physics chunk radius must be a positive safe integer.");
     }
@@ -180,6 +201,13 @@ export class BlockWorldCollisionResidencyV1 {
     ).length;
   }
 
+  get activeCollisionGroupCount(): number {
+    return [...this.#activeByChunkKey.values()].reduce(
+      (count, chunk) => count + chunk.collisionGroups.length,
+      0,
+    );
+  }
+
   update(subjectPositionsMetersXYZ: readonly CanonicalSceneVec3V1[]): void {
     if (this.#disposed) throw new Error("BLOCK_WORLD_COLLISION_RESIDENCY_DISPOSED");
     const desired = new Set<string>();
@@ -204,25 +232,75 @@ export class BlockWorldCollisionResidencyV1 {
   #activate(key: string): void {
     const colliders = this.#collidersByChunkKey[key];
     if (colliders === undefined || colliders.length === 0) return;
-    const mesh = createMergedChunkMesh(
-      key,
-      colliders,
-      this.#walkableSurfacesByChunkKey[key] ?? [],
-      this.#scene,
-    );
-    let shape: PhysicsShapeMesh | undefined;
-    let aggregate: PhysicsAggregate | undefined;
+    const collidersBySurfaceProfileRef = groupBy(colliders, (collider) => {
+      const resourceRef = this.#surfaceProfileRefByEntityId.get(collider.entityId);
+      if (resourceRef === undefined) {
+        throw new Error(
+          `BLOCK_WORLD_SURFACE_PROFILE_MISSING: ${collider.entityId}`,
+        );
+      }
+      return resourceRef;
+    });
+    const collisionGroups: ActiveBlockCollisionGroupV1[] = [];
     let groundBoundaryMesh: Mesh | undefined;
     let groundBoundaryShape: PhysicsShapeMesh | undefined;
     let groundBoundaryAggregate: PhysicsAggregate | undefined;
     try {
-      shape = new PhysicsShapeMesh(mesh, this.#scene);
-      aggregate = new PhysicsAggregate(
-        mesh,
-        shape,
-        { mass: 0, friction: 0.75, restitution: 0 },
-        this.#scene,
-      );
+      for (const surfaceProfileRef of Object.keys(
+        collidersBySurfaceProfileRef,
+      ).sort() as BlockSurfaceProfileRefV1[]) {
+        const profile = resolveBlockSurfaceProfileV1(surfaceProfileRef);
+        if (profile === undefined) {
+          throw new Error(
+            `BLOCK_WORLD_SURFACE_PROFILE_UNKNOWN: ${surfaceProfileRef}`,
+          );
+        }
+        const groupedColliders = collidersBySurfaceProfileRef[
+          surfaceProfileRef
+        ] ?? [];
+        const groupedTopologies = (
+          this.#walkableSurfacesByChunkKey[key] ?? []
+        ).filter((topology) =>
+          topology.surfaceProfileRef === surfaceProfileRef);
+        let mesh: Mesh | undefined;
+        let shape: PhysicsShapeMesh | undefined;
+        let aggregate: PhysicsAggregate | undefined;
+        try {
+          mesh = createMergedChunkMesh(
+            key,
+            surfaceProfileRef,
+            groupedColliders,
+            groupedTopologies,
+            this.#scene,
+          );
+          shape = new PhysicsShapeMesh(mesh, this.#scene);
+          aggregate = new PhysicsAggregate(
+            mesh,
+            shape,
+            {
+              mass: 0,
+              friction: profile.physics.frictionRatio,
+              restitution: profile.physics.restitutionRatio,
+            },
+            this.#scene,
+          );
+          collisionGroups.push(Object.freeze({
+            surfaceProfileRef,
+            mesh,
+            shape,
+            aggregate,
+          }));
+        } catch (error) {
+          try { aggregate?.dispose(); } catch {}
+          try { shape?.dispose(); } catch {}
+          try { mesh?.dispose(); } catch {}
+          throw error;
+        }
+        this.#staticCollisionMeshes.push(...groupedColliders.map((collider) => ({
+          collider,
+          mesh: mesh!,
+        })));
+      }
       groundBoundaryMesh = createGroundBoundaryMesh(
         key,
         this.#walkableSurfacesByChunkKey[key] ?? [],
@@ -244,9 +322,7 @@ export class BlockWorldCollisionResidencyV1 {
         );
       }
       this.#activeByChunkKey.set(key, {
-        mesh,
-        shape,
-        aggregate,
+        collisionGroups: Object.freeze(collisionGroups),
         ...(groundBoundaryMesh === undefined ||
             groundBoundaryShape === undefined ||
             groundBoundaryAggregate === undefined
@@ -259,17 +335,21 @@ export class BlockWorldCollisionResidencyV1 {
               }),
             }),
       });
-      this.#staticCollisionMeshes.push(...colliders.map((collider) => ({
-        collider,
-        mesh,
-      })));
     } catch (error) {
       try { groundBoundaryAggregate?.dispose(); } catch {}
       try { groundBoundaryShape?.dispose(); } catch {}
       try { groundBoundaryMesh?.dispose(); } catch {}
-      try { aggregate?.dispose(); } catch {}
-      try { shape?.dispose(); } catch {}
-      try { mesh.dispose(); } catch {}
+      for (const group of [...collisionGroups].reverse()) {
+        try { group.aggregate.dispose(); } catch {}
+        try { group.shape.dispose(); } catch {}
+        try { group.mesh.dispose(); } catch {}
+      }
+      for (let index = this.#staticCollisionMeshes.length - 1; index >= 0; index -= 1) {
+        if (collisionGroups.some(({ mesh }) =>
+          this.#staticCollisionMeshes[index]!.mesh === mesh)) {
+          this.#staticCollisionMeshes.splice(index, 1);
+        }
+      }
       throw error;
     }
   }
@@ -278,8 +358,9 @@ export class BlockWorldCollisionResidencyV1 {
     const active = this.#activeByChunkKey.get(key);
     if (active === undefined) return;
     this.#activeByChunkKey.delete(key);
+    const activeMeshes = new Set(active.collisionGroups.map(({ mesh }) => mesh));
     for (let index = this.#staticCollisionMeshes.length - 1; index >= 0; index -= 1) {
-      if (this.#staticCollisionMeshes[index]!.mesh === active.mesh) {
+      if (activeMeshes.has(this.#staticCollisionMeshes[index]!.mesh)) {
         this.#staticCollisionMeshes.splice(index, 1);
       }
     }
@@ -288,9 +369,11 @@ export class BlockWorldCollisionResidencyV1 {
       () => active.groundBoundary?.aggregate.dispose(),
       () => active.groundBoundary?.shape.dispose(),
       () => active.groundBoundary?.mesh.dispose(),
-      () => active.aggregate.dispose(),
-      () => active.shape.dispose(),
-      () => active.mesh.dispose(),
+      ...[...active.collisionGroups].reverse().flatMap((group) => [
+        () => group.aggregate.dispose(),
+        () => group.shape.dispose(),
+        () => group.mesh.dispose(),
+      ]),
     ]) {
       try {
         release();

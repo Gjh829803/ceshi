@@ -6,6 +6,8 @@ import {
 } from "@whitebox-world/runtime-framework";
 import type { RuntimeVec3V1 } from "@whitebox-world/runtime-contracts";
 import type { BabylonRuntimeSubjectV1 } from "./runtime-subject";
+import type { BlockWalkableSurfaceProfileSamplerV1 } from
+  "./block-walkable-surface";
 
 import {
   CharacterMovementComponentV1,
@@ -40,6 +42,8 @@ export class BabylonCharacterEntityV1 {
     readonly scene: Scene;
     readonly waterSurfaceHeightAtSubjectOrigin: (subjectOrigin: import("@babylonjs/core/Maths/math.vector.js").Vector3) => number | undefined;
     readonly blockWorldWalkableSurfaceHeightAtSubjectOrigin?: (subjectOrigin: import("@babylonjs/core/Maths/math.vector.js").Vector3) => number | undefined;
+    readonly blockWorldSurfaceProfileAtSupportPoints?:
+      BlockWalkableSurfaceProfileSamplerV1;
     readonly movement?:
       | CharacterMovementComponentV1
       | GoldenHumanoidSubjectControllerV1;
@@ -56,6 +60,7 @@ export class BabylonCharacterEntityV1 {
         options.scene,
         options.waterSurfaceHeightAtSubjectOrigin,
         options.blockWorldWalkableSurfaceHeightAtSubjectOrigin,
+        options.blockWorldSurfaceProfileAtSupportPoints,
       ),
     );
     this.springArm = this.entity.registerComponent(new SpringArmComponentV1());

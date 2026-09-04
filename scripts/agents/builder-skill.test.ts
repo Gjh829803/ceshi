@@ -165,6 +165,14 @@ describe("Block Builder skill", () => {
       "third-person.over-shoulder",
       "third-person.standard",
     ]);
+    expect(catalog.surfacePacks.map(({ id, whiteboxColorHex }: {
+      id: string;
+      whiteboxColorHex: string;
+    }) => ({ id, whiteboxColorHex }))).toEqual([
+      { id: "normal", whiteboxColorHex: "#B7E4C7" },
+      { id: "ice", whiteboxColorHex: "#BDEBFF" },
+      { id: "mud", whiteboxColorHex: "#9C7653" },
+    ]);
     expect(catalog.subjectPacks.find(({ subjectDefinitionRef }: {
       subjectDefinitionRef: string;
     }) => subjectDefinitionRef ===

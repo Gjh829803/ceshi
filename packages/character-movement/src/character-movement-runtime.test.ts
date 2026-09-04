@@ -5,6 +5,7 @@ import type {
   BodySampleV1,
   CharacterMovementCommandV1,
   CharacterMovementRuntimeStateV1,
+  GroundSurfaceMotionResponseV1,
   MovementCommitV1,
   MovementTickTokenV1,
 } from "./character-movement-contracts.js";
@@ -149,13 +150,18 @@ function transact(
   value: CharacterMovementCommandV1,
   sampleOverrides: Partial<BodySampleV1> = {},
   resolutionOverrides: Partial<BodyResolutionV1> = {},
+  groundSurfaceMotionResponse?: GroundSurfaceMotionResponseV1,
 ) {
   const token = runtime.beginTick(value);
   const bodySample = sample(token, value.tick, {
     positionMetersXYZ: runtime.snapshot().positionMetersXYZ,
     ...sampleOverrides,
   });
-  const proposal = runtime.proposeMovement(token, bodySample);
+  const proposal = runtime.proposeMovement(
+    token,
+    bodySample,
+    groundSurfaceMotionResponse,
+  );
   const appliedTranslationMetersXYZ = resolutionOverrides.appliedTranslationMetersXYZ ??
     (resolutionOverrides.isTranslationLimited === true
       ? [0, 0, 0] as const
@@ -339,6 +345,66 @@ describe("CharacterMovementRuntime transaction and locomotion", () => {
       expect(-Math.sin(facingYawRadians)).toBeCloseTo(0.6);
       expect(-Math.cos(facingYawRadians)).toBeCloseTo(-0.8);
     }
+  });
+
+  it("applies grounded surface speed, acceleration, and stopping response", () => {
+    const ice = {
+      schemaVersion: 1,
+      maximumSpeedRatio: 1,
+      accelerationRatio: 0.35,
+      decelerationRatio: 0.12,
+    } as const;
+    const mud = {
+      schemaVersion: 1,
+      maximumSpeedRatio: 0.55,
+      accelerationRatio: 0.6,
+      decelerationRatio: 1.25,
+    } as const;
+    const moving = command(1, { movementInputXZ: [1, 0] });
+    const normalAcceleration = transact(
+      createCharacterMovementRuntimeV1(options()),
+      moving,
+    ).proposal.proposedLinearVelocityMetersPerSecondXYZ[0];
+    const iceAcceleration = transact(
+      createCharacterMovementRuntimeV1(options()),
+      moving,
+      {},
+      {},
+      ice,
+    ).proposal.proposedLinearVelocityMetersPerSecondXYZ[0];
+    const mudAcceleration = transact(
+      createCharacterMovementRuntimeV1(options()),
+      moving,
+      {},
+      {},
+      mud,
+    ).proposal.proposedLinearVelocityMetersPerSecondXYZ[0];
+    expect(iceAcceleration).toBeCloseTo(normalAcceleration * 0.35, 10);
+    expect(mudAcceleration).toBeCloseTo(normalAcceleration * 0.6, 10);
+
+    const coast = (response?: GroundSurfaceMotionResponseV1) => transact(
+      createCharacterMovementRuntimeV1(options(initialCommit({
+        linearVelocityMetersPerSecondXYZ: [2, 0, 0],
+      }))),
+      command(1),
+      { linearVelocityMetersPerSecondXYZ: [2, 0, 0] },
+      {},
+      response,
+    ).proposal.proposedLinearVelocityMetersPerSecondXYZ[0];
+    expect(coast(ice)).toBeGreaterThan(coast());
+    expect(coast(mud)).toBeLessThan(coast());
+
+    const unsupportedIce = transact(
+      createCharacterMovementRuntimeV1(options()),
+      moving,
+      { support: { mode: "unsupported" } },
+      { support: { mode: "unsupported" } },
+      ice,
+    ).proposal.proposedLinearVelocityMetersPerSecondXYZ[0];
+    expect(unsupportedIce).toBeCloseTo(
+      normalAcceleration * options().airControlRatio,
+      10,
+    );
   });
 
   it("stages jump without mutation, then commits takeoff from BodyResolution", () => {

@@ -4,7 +4,9 @@ import { createRequire } from "node:module";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import {
   BLOCK_PRESET_REFS_V1,
+  BLOCK_SURFACE_PROFILE_REFS_V1,
   createBlockWorldManifestV2,
+  type CheckBlockWorldInputV2,
 } from "@whitebox-world/block-world";
 import { compileBlockWorldV2 } from "@whitebox-world/block-world-compiler";
 import type { ActiveLocomotionCapabilityStateV2 } from "@whitebox-world/gameplay-contracts";
@@ -49,6 +51,238 @@ function effectiveCameraArmLength(
 }
 
 describe("Block World Babylon integration", () => {
+  it("keeps normal, ice, and mud distinct for registered and custom Subjects", async () => {
+    const surfaceByZ = new Map<number, string>([
+      [-3, BLOCK_PRESET_REFS_V1.walkableIce],
+      [-2, BLOCK_PRESET_REFS_V1.walkableIce],
+      [-1, BLOCK_PRESET_REFS_V1.walkable],
+      [0, BLOCK_PRESET_REFS_V1.walkable],
+      [1, BLOCK_PRESET_REFS_V1.walkableMud],
+      [2, BLOCK_PRESET_REFS_V1.walkableMud],
+    ]);
+    const blocks = [...surfaceByZ].flatMap(([z, presetRef]) =>
+      Array.from({ length: 41 }, (_, index) => ({
+        id: `surface-${z + 3}-${String(index).padStart(2, "0")}`,
+        presetRef,
+        shape: "full" as const,
+        positionMetersXYZ: [index - 20, 0, z] as const,
+        rotationQuarterTurnsY: 0,
+      })));
+    const baseInput: CheckBlockWorldInputV2 = {
+      manifest: createBlockWorldManifestV2(blocks),
+      world: { id: "block-runtime-ground-surfaces", seed: 86 },
+      controlledSubject: {
+        kind: "registered",
+        entityId: "player",
+        subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
+        visualTargetId: "visual-target-1",
+        yawQuarterTurnsY: 0,
+      },
+      camera: {
+        entityId: "camera-main",
+        pitchRadians: 0.12,
+        distanceMeters: 5,
+        targetHeightMeters: 1.25,
+        fovDegrees: 56,
+        aspectRatio: 16 / 9,
+      },
+      subjectTraversalProfile: {
+        clearanceHeightMeters: 1.8,
+        footprintRadiusMetersXZ: 0.35,
+        maximumStepUpMeters: 0.3,
+        maximumStepDownMeters: 0.3,
+        maximumAutoSmoothHeightDeltaMeters: 1,
+        maximumAdjacentWalkableHeightDeltaMeters: 2,
+        canStandOnCloud: false,
+      },
+      spawnStandPositionMetersXYZ: [0, 0.5, 0],
+      requiredTargets: [],
+      requiredGroundTraversalBands: [],
+      visualTargetFacings: [],
+      spaceTransitions: [],
+      requireSingleReachableComponent: true,
+    };
+    const compiled = compileBlockWorldV2(baseInput);
+    expect(compiled.ok, JSON.stringify(compiled.diagnostics)).toBe(true);
+    if (!compiled.ok) return;
+    const runtime = await BabylonWorldRuntime.create({
+      sceneSource: {
+        kind: "canonical-execution-plan",
+        executionPlan: compiled.canonicalSceneExecutionPlan,
+      },
+      worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+      gameplayBootstrap: compiled.gameplayBootstrap,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotBytes, sourceLabel: "surface-profile-test-memory" };
+        },
+      },
+      havokWasmBinary,
+      engineFactory: () => new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
+    });
+    try {
+      await bindRuntimeTestPossession(runtime, "player");
+      const internals = runtime as unknown as {
+        scene: {
+          meshes: readonly Readonly<{
+            metadata?: Record<string, unknown>;
+            physicsBody?: {
+              shape?: { material?: { friction?: number } };
+            };
+          }>[];
+        };
+        characterFor(entityId: string): {
+          movement: {
+            resetAt(
+              positionMetersXYZ: readonly [number, number, number],
+              facingYawRadians: number,
+            ): void;
+          };
+        };
+      };
+      const collisionFrictionByProfile = new Map<string, number>();
+      for (const mesh of internals.scene.meshes) {
+        if (typeof mesh.metadata?.blockWorldCollisionChunkKey !== "string") continue;
+        const surfaceProfileRef = mesh.metadata.blockWorldSurfaceProfileRef;
+        const friction = mesh.physicsBody?.shape?.material?.friction;
+        if (typeof surfaceProfileRef === "string" && typeof friction === "number") {
+          collisionFrictionByProfile.set(surfaceProfileRef, friction);
+        }
+      }
+      expect(collisionFrictionByProfile).toEqual(new Map([
+        [BLOCK_SURFACE_PROFILE_REFS_V1.normal, 0.75],
+        [BLOCK_SURFACE_PROFILE_REFS_V1.ice, 0.05],
+        [BLOCK_SURFACE_PROFILE_REFS_V1.mud, 1],
+      ]));
+
+      const measure = async (zMeters: number) => {
+        internals.characterFor("player").movement.resetAt(
+          [0, 0.5, zMeters],
+          0,
+        );
+        await runtime.runFixedInput({ actions: [], ticks: 1 });
+        const first = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        const firstSpeed = first.subjectStatesByEntityId.player!
+          .velocityMetersPerSecondXYZ[0];
+        const accelerated = await runtime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 29,
+        });
+        const beforeStop = accelerated.subjectStatesByEntityId.player!
+          .velocityMetersPerSecondXYZ[0];
+        const stopped = await runtime.runFixedInput({ actions: [], ticks: 1 });
+        const afterStop = stopped.subjectStatesByEntityId.player!
+          .velocityMetersPerSecondXYZ[0];
+        return { firstSpeed, beforeStop, stoppingLoss: beforeStop - afterStop };
+      };
+      const normal = await measure(0);
+      const ice = await measure(-2);
+      const mud = await measure(2);
+      expect(ice.firstSpeed).toBeCloseTo(normal.firstSpeed * 0.35, 5);
+      expect(mud.firstSpeed).toBeCloseTo(normal.firstSpeed * 0.6, 5);
+      expect(mud.beforeStop).toBeLessThan(normal.beforeStop * 0.6);
+      expect(ice.stoppingLoss).toBeCloseTo(normal.stoppingLoss * 0.12, 5);
+      expect(mud.stoppingLoss).toBeGreaterThan(normal.stoppingLoss);
+    } finally {
+      await runtime.dispose();
+    }
+
+    const customCompiled = compileBlockWorldV2({
+      ...baseInput,
+      world: { id: "block-runtime-custom-ground-surfaces", seed: 87 },
+      controlledSubject: {
+        kind: "composed",
+        entityId: "custom-player",
+        visualTargetId: "visual-target-1",
+        yawQuarterTurnsY: 0,
+        definition: {
+          id: "block-runtime-surface-proxy",
+          category: "human",
+          bodyTopology: "custom",
+          semanticClassId: "subject.custom.block-runtime-surface-proxy",
+          displayName: "Surface Proxy",
+          description: "Rigid custom Mesh path for surface response testing.",
+          visualBinding: { kind: "static" },
+          visualParts: [{
+            id: "body",
+            kind: "primitive",
+            shape: { kind: "box", sizeMetersXYZ: [0.6, 1.8, 0.4] },
+            positionMetersXYZ: [0, 0.9, 0],
+            colliderContribution: "include",
+            semanticTags: ["body", "custom"],
+          }],
+        },
+      },
+      subjectTraversalProfile: {
+        clearanceHeightMeters: 2,
+        footprintRadiusMetersXZ: 0,
+        maximumStepUpMeters: 1,
+        maximumStepDownMeters: 1,
+        maximumAutoSmoothHeightDeltaMeters: 1,
+        maximumAdjacentWalkableHeightDeltaMeters: 2,
+        canStandOnCloud: false,
+      },
+    });
+    expect(customCompiled.ok, JSON.stringify(customCompiled.diagnostics)).toBe(true);
+    if (!customCompiled.ok) return;
+    const customRuntime = await BabylonWorldRuntime.create({
+      sceneSource: {
+        kind: "canonical-execution-plan",
+        executionPlan: customCompiled.canonicalSceneExecutionPlan,
+      },
+      worldRuntimeBootstrap: customCompiled.worldRuntimeBootstrap,
+      gameplayBootstrap: customCompiled.gameplayBootstrap,
+      havokWasmBinary,
+      engineFactory: () => new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
+    });
+    try {
+      await bindRuntimeTestPossession(customRuntime, "custom-player");
+      const customInternals = customRuntime as unknown as {
+        characterFor(entityId: string): {
+          movement: {
+            resetAt(
+              positionMetersXYZ: readonly [number, number, number],
+              facingYawRadians: number,
+            ): void;
+          };
+        };
+      };
+      const firstSpeedAt = async (zMeters: number) => {
+        customInternals.characterFor("custom-player").movement.resetAt(
+          [0, 0.5, zMeters],
+          0,
+        );
+        await customRuntime.runFixedInput({ actions: [], ticks: 1 });
+        const moved = await customRuntime.runFixedInput({
+          actions: ["move-right"],
+          ticks: 1,
+        });
+        return moved.subjectStatesByEntityId["custom-player"]!
+          .velocityMetersPerSecondXYZ[0];
+      };
+      const normalFirstSpeed = await firstSpeedAt(0);
+      const iceFirstSpeed = await firstSpeedAt(-2);
+      expect(iceFirstSpeed).toBeCloseTo(normalFirstSpeed * 0.35, 5);
+    } finally {
+      await customRuntime.dispose();
+    }
+  }, 30_000);
+
   it("keeps fixed presentation independent from ground movement on a rigged base", async () => {
     const compiled = compileBlockWorldV2({
       manifest: createBlockWorldManifestV2(
@@ -152,7 +386,7 @@ describe("Block World Babylon integration", () => {
   it("moves a rigged base and rigid sword attachment as one powered-flight assembly without gait animation", async () => {
     const ground = Array.from({ length: 81 }, (_, index) => ({
       id: `flight-ground-${String(index).padStart(3, "0")}`,
-      presetRef: BLOCK_PRESET_REFS_V1.walkable,
+      presetRef: BLOCK_PRESET_REFS_V1.walkableIce,
       shape: "full" as const,
       positionMetersXYZ: [index % 9 - 4, 0, Math.floor(index / 9) - 4] as const,
       rotationQuarterTurnsY: 0,

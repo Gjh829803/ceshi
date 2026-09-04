@@ -8,14 +8,22 @@ import {
   BLOCK_WHITEBOX_SUBJECT_COLOR_V1,
   listBlockPresetsV1,
   resolveBlockPresetV1,
+  resolveBlockPresetFromSemanticClassIdV1,
 } from "./preset-registry.js";
+import {
+  BLOCK_SURFACE_PROFILE_REFS_V1,
+  listBlockSurfaceProfilesV1,
+  resolveBlockSurfaceProfileV1,
+} from "./surface-profile-registry.js";
 
 describe("Block World V1 preset registry", () => {
-  it("freezes the eight functional presets and six reserved landmark colors", () => {
+  it("freezes the ten functional presets and six reserved landmark colors", () => {
     const presets = listBlockPresetsV1();
-    expect(presets).toHaveLength(14);
+    expect(presets).toHaveLength(16);
     expect(presets.map(({ resourceRef }) => resourceRef)).toEqual([
       BLOCK_PRESET_REFS_V1.walkable,
+      BLOCK_PRESET_REFS_V1.walkableIce,
+      BLOCK_PRESET_REFS_V1.walkableMud,
       BLOCK_PRESET_REFS_V1.obstacle,
       BLOCK_PRESET_REFS_V1.interactiveSolid,
       BLOCK_PRESET_REFS_V1.interactiveTrigger,
@@ -30,12 +38,41 @@ describe("Block World V1 preset registry", () => {
       BLOCK_PRESET_REFS_V1.landmarkPurple,
       BLOCK_PRESET_REFS_V1.landmarkPink,
     ]);
-    expect(new Set(presets.map(({ render }) => render.colorHex)).size).toBe(14);
+    expect(new Set(presets.map(({ render }) => render.colorHex)).size).toBe(16);
     expect(BLOCK_PRESET_COLORS_V1.landmarkOrange).toBe("#F28E2B");
     expect(Object.isFrozen(presets)).toBe(true);
     expect(presets.every((preset) =>
       Object.isFrozen(preset) && Object.isFrozen(preset.physics) &&
       Object.isFrozen(preset.render) && Object.isFrozen(preset.traversal))).toBe(true);
+  });
+
+  it("binds ordinary, ice, and mud walkable presets to immutable Surface Profiles", () => {
+    const profiles = listBlockSurfaceProfilesV1();
+    expect(profiles.map(({ resourceRef }) => resourceRef)).toEqual([
+      BLOCK_SURFACE_PROFILE_REFS_V1.normal,
+      BLOCK_SURFACE_PROFILE_REFS_V1.ice,
+      BLOCK_SURFACE_PROFILE_REFS_V1.mud,
+    ]);
+    expect(resolveBlockPresetV1(BLOCK_PRESET_REFS_V1.walkable)?.surfaceProfileRef)
+      .toBe(BLOCK_SURFACE_PROFILE_REFS_V1.normal);
+    expect(resolveBlockPresetV1(BLOCK_PRESET_REFS_V1.walkableIce)?.surfaceProfileRef)
+      .toBe(BLOCK_SURFACE_PROFILE_REFS_V1.ice);
+    expect(resolveBlockPresetV1(BLOCK_PRESET_REFS_V1.walkableMud)?.surfaceProfileRef)
+      .toBe(BLOCK_SURFACE_PROFILE_REFS_V1.mud);
+    expect(resolveBlockSurfaceProfileV1(BLOCK_SURFACE_PROFILE_REFS_V1.ice))
+      .toMatchObject({
+        physics: { frictionRatio: 0.05, restitutionRatio: 0 },
+        groundedMotion: {
+          maximumSpeedRatio: 1,
+          accelerationRatio: 0.35,
+          decelerationRatio: 0.12,
+        },
+      });
+    expect(profiles.every((profile) =>
+      Object.isFrozen(profile) && Object.isFrozen(profile.physics) &&
+      Object.isFrozen(profile.groundedMotion) &&
+      Object.isFrozen(profile.aiMetadata) &&
+      Object.isFrozen(profile.aiMetadata.semanticTags))).toBe(true);
   });
 
   it("gives every landmark color exact obstacle physics and no support", () => {
@@ -47,6 +84,14 @@ describe("Block World V1 preset registry", () => {
       expect(landmark.interactionMode).toBe("none");
     }
     expect(resolveBlockPresetV1("worldkit://block-preset/invented@1")).toBeUndefined();
+  });
+
+  it("resolves the immutable preset from a compiled Block semantic class", () => {
+    expect(resolveBlockPresetFromSemanticClassIdV1(
+      "block.walkable-ice.shape.full.visual-group.frozen-lake",
+    )?.resourceRef).toBe(BLOCK_PRESET_REFS_V1.walkableIce);
+    expect(resolveBlockPresetFromSemanticClassIdV1("object.walkable-ice"))
+      .toBeUndefined();
   });
 
   it("shares one exact visual-target palette across planning and Block Builder", () => {

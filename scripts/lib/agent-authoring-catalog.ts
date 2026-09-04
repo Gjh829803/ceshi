@@ -1,10 +1,13 @@
 import {
   BLOCK_PRESET_REFS_V1,
+  BLOCK_PRESET_COLORS_V1,
+  BLOCK_SURFACE_PROFILE_REFS_V1,
   BLOCK_CAMERA_PACKS_V1,
   BLOCK_MOTION_PACKS_V1,
   createBlockWorldManifestV2,
   type BlockSubjectTraversalProfileV2,
   type BlockWorldControlledSubjectV2,
+  resolveBlockSurfaceProfileV1,
 } from "@whitebox-world/block-world";
 import { compileBlockWorldV2 } from "@whitebox-world/block-world-compiler";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
@@ -75,6 +78,15 @@ export interface AgentAuthoringCatalogV2 {
       "subject-local-point",
     ];
   }>[];
+  readonly surfacePacks: readonly Readonly<{
+    id: "normal" | "ice" | "mud";
+    surfaceProfileRef: string;
+    walkablePresetRef: string;
+    whiteboxColorHex: string;
+    displayName: string;
+    description: string;
+    semanticTags: readonly string[];
+  }>[];
   readonly customMeshPolicy: Readonly<{
     supportedGeometryKinds: readonly ["box", "sphere", "cylinder"];
     supportsRigging: false;
@@ -88,6 +100,27 @@ export interface AgentAuthoringCatalogV2 {
 }
 
 let cachedAgentAuthoringCatalogV2: AgentAuthoringCatalogV2 | undefined;
+
+const AGENT_SURFACE_PACK_ROWS_V1 = Object.freeze([
+  {
+    id: "normal",
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.normal,
+    walkablePresetRef: BLOCK_PRESET_REFS_V1.walkable,
+    whiteboxColorHex: BLOCK_PRESET_COLORS_V1.walkable,
+  },
+  {
+    id: "ice",
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.ice,
+    walkablePresetRef: BLOCK_PRESET_REFS_V1.walkableIce,
+    whiteboxColorHex: BLOCK_PRESET_COLORS_V1.walkableIce,
+  },
+  {
+    id: "mud",
+    surfaceProfileRef: BLOCK_SURFACE_PROFILE_REFS_V1.mud,
+    walkablePresetRef: BLOCK_PRESET_REFS_V1.walkableMud,
+    whiteboxColorHex: BLOCK_PRESET_COLORS_V1.walkableMud,
+  },
+] as const);
 
 function sizeForPrimitiveShape(shape: Record<string, unknown>): Vector3 {
   if (shape.kind === "box") return shape.sizeMetersXYZ as Vector3;
@@ -317,11 +350,19 @@ export function createAgentAuthoringCatalogV2(): AgentAuthoringCatalogV2 {
     );
   }
   const registryIdentityHash = sha256CanonicalJson(
-    registryResources.map(({ kind, resourceRef, contentHash }) => ({
-      kind,
-      resourceRef,
-      contentHash,
-    })),
+    {
+      subjectResources: registryResources.map(
+        ({ kind, resourceRef, contentHash }) => ({
+          kind,
+          resourceRef,
+          contentHash,
+        }),
+      ),
+      surfacePacks: AGENT_SURFACE_PACK_ROWS_V1.map((row) => ({
+        ...row,
+        profile: resolveBlockSurfaceProfileV1(row.surfaceProfileRef),
+      })),
+    },
   ) as `sha256:${string}`;
   const subjectPacks: AgentAuthoringSubjectPackV2[] = [];
   const unavailableSubjectPacks: Array<{
@@ -422,6 +463,15 @@ export function createAgentAuthoringCatalogV2(): AgentAuthoringCatalogV2 {
           "subject-local-point",
         ],
       })),
+    surfacePacks: AGENT_SURFACE_PACK_ROWS_V1.map((row) => {
+      const profile = resolveBlockSurfaceProfileV1(row.surfaceProfileRef)!;
+      return {
+        ...row,
+        displayName: profile.aiMetadata.displayName,
+        description: profile.aiMetadata.description,
+        semanticTags: profile.aiMetadata.semanticTags,
+      };
+    }),
     customMeshPolicy: {
       supportedGeometryKinds: ["box", "sphere", "cylinder"],
       supportsRigging: false,

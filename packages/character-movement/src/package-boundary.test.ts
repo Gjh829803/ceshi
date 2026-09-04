@@ -12,6 +12,7 @@ import {
   parseBodySampleV1,
   parseCharacterMovementCommandV1,
   parseCharacterMovementSnapshotV1,
+  parseGroundSurfaceMotionResponseV1,
   parseLayeredMoveV1,
   parseMovementCommitV1,
   parseMovementProposalV1,
@@ -588,6 +589,30 @@ describe("character movement neutral contracts", () => {
     expect(() => parseCharacterMovementSnapshotV1({ ...snapshot, stateHash: "sha256:bad" }))
       .toThrow("closed CharacterMovementSnapshotV1 schema");
     expect(Object.isFrozen(parseCharacterMovementCommandV1(command).layeredMoves)).toBe(true);
+  });
+
+  it("strictly parses a provider-neutral grounded surface response", () => {
+    const response = {
+      schemaVersion: 1,
+      maximumSpeedRatio: 0.55,
+      accelerationRatio: 0.6,
+      decelerationRatio: 1.25,
+    } as const;
+    const parsed = parseGroundSurfaceMotionResponseV1(response);
+    expect(parsed).toEqual(response);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(() => parseGroundSurfaceMotionResponseV1({
+      ...response,
+      surfaceProfileRef: "worldkit://block-surface-profile/mud@1",
+    })).toThrow("closed GroundSurfaceMotionResponseV1 schema");
+    expect(() => parseGroundSurfaceMotionResponseV1({
+      ...response,
+      accelerationRatio: 0,
+    })).toThrow("closed GroundSurfaceMotionResponseV1 schema");
+    expect(() => parseGroundSurfaceMotionResponseV1({
+      ...response,
+      decelerationRatio: -0,
+    })).toThrow("closed GroundSurfaceMotionResponseV1 schema");
   });
 
   it("exports the stable closed 3C diagnostic vocabulary", () => {

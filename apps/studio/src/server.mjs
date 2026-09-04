@@ -5600,6 +5600,7 @@ export function createStudio(options = {}) {
         presets,
         motionPacks: Array.isArray(catalog.motionPacks) ? catalog.motionPacks : [],
         cameraPacks: Array.isArray(catalog.cameraPacks) ? catalog.cameraPacks : [],
+        surfacePacks: Array.isArray(catalog.surfacePacks) ? catalog.surfacePacks : [],
         customMeshPolicy: catalog.customMeshPolicy ?? null,
         productionRefs: presets
           .filter((preset) => preset?.maturity === "recommended")

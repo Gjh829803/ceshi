@@ -251,6 +251,8 @@ function expectedReceipt(scenario: PlannerScenario): string {
         interactivePixelCount: 200,
         blockPixelCountsBySemantic: {
           walkable: 4700,
+          "walkable-ice": 0,
+          "walkable-mud": 0,
           obstacle: 400,
           "interactive-solid": 200,
           "interactive-trigger": 0,
@@ -278,6 +280,8 @@ function expectedReceipt(scenario: PlannerScenario): string {
         interactivePixelCount: 200,
         blockPixelCountsBySemantic: {
           walkable: 4700,
+          "walkable-ice": 0,
+          "walkable-mud": 0,
           obstacle: 400,
           "interactive-solid": 200,
           "interactive-trigger": 0,
