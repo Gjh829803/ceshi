@@ -68,12 +68,12 @@ completed Gemini, Seedance, or conformance stage to rerun.
 `config/cloud-production-throughput.json` is the caller-side admission contract.
 It does not change prompts, models, images, capture, Runtime, or media bytes.
 Current profile values are 24 concurrent Scene Cases, 16 isolated whitebox
-capture Cases, 20 Gemini operations, 10 Seedance Jobs per Case, 96 Seedance Jobs
+capture Cases, 20 Gemini operations, 10 Seedance Jobs per Case, 50 Seedance Jobs
 globally, and 48 media-conformance operations. Every completed Seedance request
 then enters one Host-owned global work pool:
 
-- the global limit is 96 non-terminal Seedance provider Jobs across all
-  Episodes, not 96 Jobs per Episode;
+- the global limit is 50 non-terminal Seedance provider Jobs across all
+  Episodes, not 50 Jobs per Episode;
 - every ready `(episode, style variant, segment)` task enters the same durable
   queue, so a completed slot is immediately filled by the next ready task and
   no Episode reserves idle capacity;
@@ -82,7 +82,7 @@ then enters one Host-owned global work pool:
   provider cannot consume another provider's slots;
 - the pool counts submitted and running provider Jobs until their exact Job IDs
   become terminal, including Jobs being recovered after Worker replacement;
-- cloud Episode Workers acquire one of 96 Kubernetes `Lease` objects immediately
+- cloud Episode Workers acquire one of 50 Kubernetes `Lease` objects immediately
   before Seedance submission or recovery polling and release it only after the
   provider result is downloaded; lease renewal and expiry preserve the cap
   across Worker replacement without storing media locally;
