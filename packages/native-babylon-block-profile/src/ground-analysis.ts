@@ -227,6 +227,19 @@ interface BlockedStep {
   readonly maximumAllowedHeightDeltaMeters: number;
 }
 
+type TraversalBandSegmentFailureReason =
+  | "both-endpoint-nodes-missing"
+  | "start-node-missing"
+  | "destination-node-missing"
+  | "disconnected-inside-band";
+
+interface TraversalBandSegmentFailure {
+  readonly segmentIndex: number;
+  readonly start: BabylonNativeBlockGroundStandPositionV1;
+  readonly destination: BabylonNativeBlockGroundStandPositionV1;
+  readonly reason: TraversalBandSegmentFailureReason;
+}
+
 interface SourceSurface {
   readonly id: string;
   readonly sourceBlockId: string;
@@ -399,6 +412,27 @@ function positionKey(
       `stand position '${position.join(",")}' must use the Profile stand-sample lattice`);
   }
   return cellKey(x, y, z);
+}
+
+function formatStandPosition(
+  position: BabylonNativeBlockGroundStandPositionV1,
+): string {
+  return `[${position.join(",")}]`;
+}
+
+function traversalBandFailureExplanation(
+  reason: TraversalBandSegmentFailureReason,
+): string {
+  switch (reason) {
+    case "both-endpoint-nodes-missing":
+      return "neither endpoint resolves to a standable ground node";
+    case "start-node-missing":
+      return "the segment start does not resolve to a standable ground node";
+    case "destination-node-missing":
+      return "the segment destination does not resolve to a standable ground node";
+    case "disconnected-inside-band":
+      return "both endpoint supports exist, but no connected path stays inside the band";
+  }
 }
 
 function projectedSupportHeightMeters(
@@ -1536,6 +1570,7 @@ export function analyzeBabylonNativeBlockGroundV1(
   let reachableBandCount = 0;
   for (const band of input.caseIntent.requiredTraversalBands) {
     let isReachable = true;
+    let failedSegment: TraversalBandSegmentFailure | undefined;
     for (const [waypointIndex, waypoint] of
       band.centerlineStandPositionsMetersXYZ.entries()) {
       const waypointPositionKey = positionKey(waypoint);
@@ -1576,42 +1611,82 @@ export function analyzeBabylonNativeBlockGroundV1(
       const destination = band.centerlineStandPositionsMetersXYZ[index + 1]!;
       const startNodeId = nodeIdByPositionKey.get(positionKey(start));
       const destinationNodeId = nodeIdByPositionKey.get(positionKey(destination));
-      if (
-        isNil(startNodeId) ||
-        isNil(destinationNodeId) ||
-        !canReachInsideBand(
-          startNodeId,
-          destinationNodeId,
-          start,
-          destination,
-          band.halfWidthMeters,
-          nodesById,
-        )
-      ) {
-        isReachable = false;
-        break;
-      }
+      const reason: TraversalBandSegmentFailureReason | undefined =
+        isNil(startNodeId) && isNil(destinationNodeId)
+          ? "both-endpoint-nodes-missing"
+          : isNil(startNodeId)
+            ? "start-node-missing"
+            : isNil(destinationNodeId)
+              ? "destination-node-missing"
+              : canReachInsideBand(
+                  startNodeId,
+                  destinationNodeId,
+                  start,
+                  destination,
+                  band.halfWidthMeters,
+                  nodesById,
+                )
+                ? undefined
+                : "disconnected-inside-band";
+      if (isNil(reason)) continue;
+
+      // Retain the first exact failing segment. A band-level boolean made
+      // bounded repair Agents guess at unrelated geometry and repeat the same
+      // failure without learning which local connection remained invalid.
+      failedSegment = Object.freeze({
+        segmentIndex: index,
+        start,
+        destination,
+        reason,
+      });
+      isReachable = false;
+      break;
     }
     if (isReachable) {
       reachableBandCount += 1;
       continue;
     }
+    const segmentId = isNil(failedSegment)
+      ? undefined
+      : `segment-${failedSegment.segmentIndex.toString().padStart(3, "0")}`;
+    const failureExplanation = isNil(failedSegment)
+      ? undefined
+      : traversalBandFailureExplanation(failedSegment.reason);
+    const segmentBlockIds = isNil(failedSegment)
+      ? Object.freeze([])
+      : Object.freeze([...new Set([
+          nodeIdByPositionKey.get(positionKey(failedSegment.start)),
+          nodeIdByPositionKey.get(positionKey(failedSegment.destination)),
+        ].flatMap((id) => {
+          const support = isNil(id) ? undefined : nodesById.get(id)?.support;
+          return isNil(support) ? [] : [support.sourceBlockId];
+        }))].sort(stableCompare));
+    const bandBlockIds = Object.freeze([...new Set(
+      band.centerlineStandPositionsMetersXYZ.flatMap((position) => {
+        const id = nodeIdByPositionKey.get(positionKey(position));
+        const support = isNil(id) ? undefined : nodesById.get(id)?.support;
+        return isNil(support) ? [] : [support.sourceBlockId];
+      }),
+    )].sort(stableCompare));
     failureFacts.push(stateFailureFact({
       acceptanceTargetRef: band.acceptanceTargetRef,
       targetId: band.id,
       metricId: "ground-traversal-band-reachability",
       expectedValue: "reachable-inside-declared-band",
-      actualValue: "disconnected-or-detour-outside-band",
+      actualValue: isNil(failedSegment) || isNil(segmentId)
+        ? "waypoint-topology-invalid"
+        : `${failedSegment.reason}:${segmentId}`,
       evidenceRef: input.caseIntent.groundModelEvidenceRef,
-      affectedSourceBlockIds: Object.freeze([...new Set(
-        band.centerlineStandPositionsMetersXYZ.flatMap((position) => {
-          const id = nodeIdByPositionKey.get(positionKey(position));
-          const support = isNil(id) ? undefined : nodesById.get(id)?.support;
-          return isNil(support) ? [] : [support.sourceBlockId];
-        }),
-      )].sort(stableCompare)),
-      message: `Ground traversal band ${band.id} cannot traverse every centerline segment inside its ${band.halfWidthMeters}m half-width.`,
-      instruction: `Add or move explicit static-surface Blocks inside the declared ${band.halfWidthMeters}m half-width of ${band.id}; do not widen the frozen band or add an invisible bridge.`,
+      affectedSourceBlockIds: segmentBlockIds.length > 0
+        ? segmentBlockIds
+        : bandBlockIds,
+      message: isNil(failedSegment) || isNil(segmentId) ||
+          isNil(failureExplanation)
+        ? `Ground traversal band ${band.id} has an invalid centerline waypoint in the final walkable topology.`
+        : `Ground traversal band ${band.id} fails at segment ${segmentId} from ${formatStandPosition(failedSegment.start)} to ${formatStandPosition(failedSegment.destination)}: ${failureExplanation}; the path must remain inside its ${band.halfWidthMeters}m half-width.`,
+      instruction: isNil(failedSegment) || isNil(failureExplanation)
+        ? `Repair the exact centerline waypoint reported by the accompanying standability fact for ${band.id}; do not move the frozen waypoint or add an invisible bridge.`
+        : `Add, resize, or move explicit static-surface Blocks between ${formatStandPosition(failedSegment.start)} and ${formatStandPosition(failedSegment.destination)} inside the declared ${band.halfWidthMeters}m half-width of ${band.id}; ${failureExplanation}. Keep the frozen centerline and trusted Subject envelope unchanged, and do not add an invisible bridge.`,
     }));
   }
 
