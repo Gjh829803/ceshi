@@ -1,6 +1,7 @@
 import type {
   CameraRigParameterNameV1,
   CameraRigParametersV1,
+  ControlFeelParametersV1,
   RuntimeCameraContextRuleV1,
 } from "@whitebox-world/runtime-contracts";
 import type {
@@ -95,21 +96,9 @@ export type ControlProfileFacingPolicyV1 =
   | "flight-derived"
   | "fixed";
 
-export interface ControlFeelProfileInputV1 extends CapabilityResourceBaseInputV1 {
+export interface ControlFeelProfileInputV1
+  extends CapabilityResourceBaseInputV1, ControlFeelParametersV1 {
   kind: "control-feel-profile";
-  walkSpeedMetersPerSecond: number;
-  runSpeedMetersPerSecond: number;
-  jumpSpeedMetersPerSecond: number;
-  accelerationMetersPerSecondSquared: number;
-  decelerationMetersPerSecondSquared: number;
-  turnRateRadiansPerSecond: number;
-  moveResponseExponent: number;
-  airControlRatio: number;
-  coyoteTimeSeconds: number;
-  jumpBufferSeconds: number;
-  variableJumpHoldSeconds: number;
-  jumpHoldGravityRatio: number;
-  jumpReleaseGravityRatio: number;
 }
 
 export interface MotionProfileInputV1 extends CapabilityResourceBaseInputV1 {

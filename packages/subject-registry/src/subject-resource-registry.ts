@@ -4,6 +4,7 @@ import {
   applyCameraRigParameterOverridesV1,
   CAMERA_RIG_PARAMETER_NAMES_V1,
   isCameraRigParameterNameV1,
+  isWheeledArcadeControlFeelParametersV1,
 } from "@whitebox-world/runtime-contracts";
 
 import type {
@@ -510,6 +511,12 @@ function validateControlFeelProfile(source: ControlFeelProfileInputV1): void {
       `CONTROL_FEEL_PROFILE_INVALID: jumpReleaseGravityRatio in '${source.resourceRef}'.`,
     );
   }
+  if (source.wheeledArcade !== undefined &&
+      !isWheeledArcadeControlFeelParametersV1(source.wheeledArcade)) {
+    throw new Error(
+      `CONTROL_FEEL_PROFILE_INVALID: 'wheeledArcade' in '${source.resourceRef}'.`,
+    );
+  }
 }
 
 function validateControlProfile(source: ControlProfileInputV1): void {
@@ -532,6 +539,10 @@ function validateControlProfile(source: ControlProfileInputV1): void {
         return source.inputSpace === "flight-frame" &&
           source.facingPolicy === "flight-derived" &&
           source.lateralMovementPolicy === "allowed";
+      case "throttle-steer":
+        return source.inputSpace === "subject-local" &&
+          source.facingPolicy === "steering-derived" &&
+          source.lateralMovementPolicy === "forbidden";
       case "none":
         return source.inputSpace === "none" &&
           source.facingPolicy === "fixed" &&

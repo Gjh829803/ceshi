@@ -1183,6 +1183,9 @@ function compileSubjectsV3(
           variableJumpHoldSeconds: definition.controlFeel.variableJumpHoldSeconds,
           jumpHoldGravityRatio: definition.controlFeel.jumpHoldGravityRatio,
           jumpReleaseGravityRatio: definition.controlFeel.jumpReleaseGravityRatio,
+          ...(definition.controlFeel.wheeledArcade === undefined
+            ? {}
+            : { wheeledArcade: structuredClone(definition.controlFeel.wheeledArcade) }),
         },
         availableControlFeels: definition.availableControlFeels.map((feel) => ({
           resourceRef: feel.resourceRef,
@@ -1202,6 +1205,9 @@ function compileSubjectsV3(
           variableJumpHoldSeconds: feel.variableJumpHoldSeconds,
           jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
           jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
+          ...(feel.wheeledArcade === undefined
+            ? {}
+            : { wheeledArcade: structuredClone(feel.wheeledArcade) }),
         })),
         capabilityAssembly: compileCapabilityAssemblyV1(
           definition.capabilityAssembly,

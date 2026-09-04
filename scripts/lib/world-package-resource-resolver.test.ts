@@ -543,9 +543,13 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
   });
 
   it.each([
-    "actor.humanoid.g-bot@2",
-    "xier120.biped-animal@1",
-  ])("preserves real built-in provenance for %s", async (resourceSlug) => {
+    ["actor.humanoid.g-bot@2", "loopit-private"],
+    ["xier120.biped-animal@1", "loopit-private"],
+    ["kart-control-lab.stk-kart@1", "gpl-3.0-or-later"],
+  ])("preserves real built-in provenance for %s", async (
+    resourceSlug,
+    licenseDocumentId,
+  ) => {
     const resourceRef = `worldkit://subject-asset/${resourceSlug}`;
     const manifest = builtInSubjectResourceRegistry.resolveSubjectAsset(resourceRef)!;
     const mappingRow = DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[resourceRef]!;
@@ -554,10 +558,6 @@ describe("resolveWorldPackageResourceArtifactsV1", () => {
       import.meta.url,
     )));
     const normalized = normalizedSubjectAssetFromManifest(manifest, bytes);
-    const licenseDocumentId = manifest.provenance.redistributionPolicy === "allowed"
-      ? "project-owned"
-      : "loopit-private";
-
     const result = await resolveWorldPackageResourceArtifactsV1(
       normalizedWorldIr([normalized]),
       {

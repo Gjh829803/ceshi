@@ -1,4 +1,5 @@
 import type { NormalizedWorldIRV4 } from "@whitebox-world/authoring";
+import { readFileSync } from "node:fs";
 import canonicalAuthoringSchema from "@whitebox-world/authoring/schema";
 import { hashCanonicalAuthoringSchemaV1 } from "@whitebox-world/authoring-edit";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
@@ -35,12 +36,26 @@ const LOOPIT_PRIVATE_LICENSE = Object.freeze({
   text: "Loopit company-private asset license. No external redistribution.\n",
 }) satisfies WorldPackageLicenseDocumentInputV1;
 
+const GPL_3_0_OR_LATER_LICENSE = Object.freeze({
+  id: "gpl-3.0-or-later",
+  spdxLicenseExpression: "GPL-3.0-or-later",
+  path: "LICENSES/gpl-3.0-or-later.txt",
+  text: readFileSync(
+    new URL(
+      "../../assets/licenses/kart-control-lab-stk-kart/GPL-3.0.txt",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+}) satisfies WorldPackageLicenseDocumentInputV1;
+
 const LICENSE_BY_SPDX_EXPRESSION = new Map<
   string,
   WorldPackageLicenseDocumentInputV1
 >([
   [PROJECT_OWNED_LICENSE.spdxLicenseExpression, PROJECT_OWNED_LICENSE],
   [LOOPIT_PRIVATE_LICENSE.spdxLicenseExpression, LOOPIT_PRIVATE_LICENSE],
+  [GPL_3_0_OR_LATER_LICENSE.spdxLicenseExpression, GPL_3_0_OR_LATER_LICENSE],
 ]);
 
 export async function resolveTrustedWorldPackageResourceArtifactsV1(

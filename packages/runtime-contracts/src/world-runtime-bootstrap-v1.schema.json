@@ -375,6 +375,114 @@
         "maxStepHeightMeters": { "type": "number", "minimum": 0 }
       }
     },
+    "wheeledArcadeCurvePoint": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "minimum": 0 },
+        { "type": "number", "minimum": 0 }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "wheeledArcadeDriftBoostLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strictlyGreaterThanSeconds",
+        "maximumSpeedBonusMetersPerSecond",
+        "durationSeconds",
+        "releaseImpulseMetersPerSecond"
+      ],
+      "properties": {
+        "strictlyGreaterThanSeconds": { "type": "number", "minimum": 0 },
+        "maximumSpeedBonusMetersPerSecond": { "type": "number", "minimum": 0 },
+        "durationSeconds": { "type": "number", "minimum": 0 },
+        "releaseImpulseMetersPerSecond": { "type": "number", "minimum": 0 }
+      }
+    },
+    "wheeledArcadeControlFeel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximumForwardSpeedMetersPerSecond",
+        "maximumReverseSpeedMetersPerSecond",
+        "accelerationMetersPerSecondSquared",
+        "coastDecelerationMetersPerSecondSquared",
+        "brakeInitialDecelerationMetersPerSecondSquared",
+        "brakeRampMetersPerSecondCubed",
+        "reverseAccelerationMetersPerSecondSquared",
+        "reverseToForwardRecoveryMultiplier",
+        "steeringMultiplier",
+        "steeringRiseLowSeconds",
+        "steeringRiseHighSeconds",
+        "steeringRiseSplitRatio",
+        "steeringReturnSeconds",
+        "lateralGripPerSecond",
+        "driftLateralGripPerSecond",
+        "airborneYawMultiplier",
+        "gearAccelerationCurve",
+        "speedTurnRadiusMetersCurve",
+        "drift"
+      ],
+      "properties": {
+        "maximumForwardSpeedMetersPerSecond": { "type": "number", "exclusiveMinimum": 0 },
+        "maximumReverseSpeedMetersPerSecond": { "type": "number", "minimum": 0 },
+        "accelerationMetersPerSecondSquared": { "type": "number", "exclusiveMinimum": 0 },
+        "coastDecelerationMetersPerSecondSquared": { "type": "number", "minimum": 0 },
+        "brakeInitialDecelerationMetersPerSecondSquared": { "type": "number", "minimum": 0 },
+        "brakeRampMetersPerSecondCubed": { "type": "number", "minimum": 0 },
+        "reverseAccelerationMetersPerSecondSquared": { "type": "number", "minimum": 0 },
+        "reverseToForwardRecoveryMultiplier": { "type": "number", "minimum": 1 },
+        "steeringMultiplier": { "type": "number", "minimum": 0 },
+        "steeringRiseLowSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "steeringRiseHighSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "steeringRiseSplitRatio": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+        "steeringReturnSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "lateralGripPerSecond": { "type": "number", "minimum": 0 },
+        "driftLateralGripPerSecond": { "type": "number", "minimum": 0 },
+        "airborneYawMultiplier": { "type": "number", "minimum": 0, "maximum": 1 },
+        "gearAccelerationCurve": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/wheeledArcadeCurvePoint" }
+        },
+        "speedTurnRadiusMetersCurve": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/wheeledArcadeCurvePoint" }
+        },
+        "drift": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minimumSpeedMetersPerSecond",
+            "minimumSteeringRatio",
+            "directionLocksOnEntry",
+            "turnMinimumRatio",
+            "turnMaximumRatio",
+            "boostTriggersOnRelease",
+            "levels"
+          ],
+          "properties": {
+            "minimumSpeedMetersPerSecond": { "type": "number", "minimum": 0 },
+            "minimumSteeringRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+            "directionLocksOnEntry": { "const": true },
+            "turnMinimumRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+            "turnMaximumRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+            "boostTriggersOnRelease": { "const": true },
+            "levels": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": { "$ref": "#/$defs/wheeledArcadeDriftBoostLevel" }
+            }
+          }
+        }
+      }
+    },
     "controlFeel": {
       "type": "object",
       "additionalProperties": false,
@@ -401,7 +509,8 @@
         "jumpBufferSeconds": { "type": "number" },
         "variableJumpHoldSeconds": { "type": "number" },
         "jumpHoldGravityRatio": { "type": "number" },
-        "jumpReleaseGravityRatio": { "type": "number" }
+        "jumpReleaseGravityRatio": { "type": "number" },
+        "wheeledArcade": { "$ref": "#/$defs/wheeledArcadeControlFeel" }
       }
     },
     "motionProfile": {

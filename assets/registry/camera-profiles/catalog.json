@@ -393,6 +393,61 @@
     },
     {
       "kind": "camera-rig-profile",
+      "id": "chase.kart-control-lab-stk",
+      "version": 1,
+      "resourceRef": "worldkit://camera-profile/chase.kart-control-lab-stk@1",
+      "authoringAvailability": "advanced",
+      "baseMode": "speed-chase",
+      "algorithmRef": "worldkit://camera-rig/velocity-chase@1",
+      "headingSource": "target-velocity",
+      "reverseHeadingPolicy": "preserve-target-forward",
+      "recenterMode": "forward-motion",
+      "preferredSocketIds": ["CameraTarget3D", "LookAhead"],
+      "parameters": {
+        "distanceMeters": 9.3,
+        "minimumDistanceMeters": 5.5,
+        "maximumDistanceMeters": 16,
+        "targetHeightMeters": 0.82,
+        "shoulderOffsetMeters": 0,
+        "pitchRadians": 0.42,
+        "minimumPitchRadians": 0.12,
+        "maximumPitchRadians": 1.15,
+        "positionDampingPerSecond": 11,
+        "horizontalPositionDampingPerSecond": 11,
+        "verticalPositionDampingPerSecond": 14,
+        "maximumPositionLagMeters": 3,
+        "rotationDampingPerSecond": 12,
+        "yawDampingPerSecond": 8,
+        "pitchDampingPerSecond": 10,
+        "collisionRadiusMeters": 0.3,
+        "collisionRetractionMetersPerSecond": 36,
+        "collisionRecoveryMetersPerSecond": 5,
+        "baseFovDegrees": 56,
+        "speedFovDegreesPerMeterPerSecond": 0.42,
+        "maximumSpeedFovDegrees": 11,
+        "lookAheadSeconds": 0,
+        "accelerationLookAheadSecondsSquared": 0,
+        "transitionSeconds": 0.45,
+        "minimumHeadingSpeedMetersPerSecond": 0.75,
+        "velocityHeadingDampingPerSecond": 8,
+        "fovDampingPerSecond": 6,
+        "horizontalDeadZoneRatio": 0.04,
+        "verticalDeadZoneRatio": 0.04,
+        "recenterDelaySeconds": 0,
+        "recenterDurationSeconds": 5,
+        "recenterMinimumSpeedMetersPerSecond": 0.75,
+        "teleportSnapDistanceMeters": 20,
+        "lookSensitivityXRatio": 0.85,
+        "lookSensitivityYRatio": 0.7
+      },
+      "aiMetadata": {
+        "displayName": "STK Kart Chase",
+        "description": "Speed-sensitive chase view adapted from the STK Kart Control Handoff while retaining Runtime Spring Arm collision.",
+        "semanticTags": ["arcade", "chase", "kart", "speed", "stk"]
+      }
+    },
+    {
+      "kind": "camera-rig-profile",
       "id": "follow.water-surface",
       "version": 1,
       "resourceRef": "worldkit://camera-profile/follow.water-surface@1",
@@ -1013,6 +1068,21 @@
         "displayName": "Agent giant third person",
         "description": "Locks an authored Subject Assembly to large-scale orbit framing.",
         "semanticTags": ["agent", "giant", "third-person"]
+      }
+    },
+    {
+      "kind": "camera-context-profile",
+      "id": "agent.kart-chase",
+      "version": 1,
+      "resourceRef": "worldkit://camera-context/agent.kart-chase@1",
+      "authoringAvailability": "advanced",
+      "defaultCameraRigProfileRef": "worldkit://camera-profile/chase.kart-control-lab-stk@1",
+      "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "rules": [],
+      "aiMetadata": {
+        "displayName": "Agent kart chase",
+        "description": "Locks an authored Subject Assembly to the speed-sensitive STK kart chase view.",
+        "semanticTags": ["agent", "chase", "kart", "third-person"]
       }
     },
     {

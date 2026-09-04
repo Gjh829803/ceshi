@@ -671,17 +671,22 @@ function installTuningWorkbench(
     { keyLabel: "S", title: commandKind === "flight-attitude" ? "抬头减速" : "向后", explanation: commandKind === "planar-vector" ? "按照镜头朝向后退" : "倒退或降低油门", steps: [{ actions: ["move-backward"], ticks: 18 }] },
     { keyLabel: "A / D", title: commandKind === "planar-vector" ? "横向移动" : "左右转向", explanation: commandKind === "flight-attitude" ? "偏航并带动机体倾斜" : "改变主体的移动方向", steps: [{ actions: ["move-left"], ticks: 18 }] },
     {
-      keyLabel: "Shift",
-      title: commandKind === "flight-attitude" ? "滑翔动作" : forwardSteer ? "冲刺" : commandKind === "throttle-steer" ? "增强推进" : "奔跑",
-      explanation: commandKind === "flight-attitude" ? "提交滑翔主动作请求；可继续由动作表绑定展开" : "按住时使用配置表中的加速倍率",
-      steps: [{ actions: ["move-forward", commandKind === "planar-vector" || forwardSteer ? "run" : "boost"], ticks: 30 }],
+      keyLabel: wheeled ? "松开空格" : "Shift",
+      title: wheeled ? "漂移增益" : commandKind === "flight-attitude" ? "滑翔动作" : forwardSteer ? "冲刺" : commandKind === "throttle-steer" ? "增强推进" : "奔跑",
+      explanation: wheeled ? "漂移超过一秒或三秒后松开，分别触发两档自动增益" : commandKind === "flight-attitude" ? "提交滑翔主动作请求；可继续由动作表绑定展开" : "按住时使用配置表中的加速倍率",
+      steps: wheeled
+        ? [
+            { actions: ["move-forward", "move-left", "handbrake"], ticks: 66 },
+            { actions: ["move-forward", "move-left"], ticks: 1 },
+          ]
+        : [{ actions: ["move-forward", commandKind === "planar-vector" || forwardSteer ? "run" : "boost"], ticks: 30 }],
     },
     {
       keyLabel: "空格",
-      title: commandKind === "planar-vector" || forwardSteer ? "跳跃" : gliding ? "滑翔主动作" : "制动",
-      explanation: gliding ? "提交主动作请求，不会再被误当成制动" : commandKind === "throttle-steer" && !forwardSteer ? "按住时使用独立制动，不再和技能键混用" : "支持离地宽容、预输入和长短跳",
+      title: commandKind === "planar-vector" || forwardSteer ? "跳跃" : gliding ? "滑翔主动作" : wheeled ? "漂移" : "制动",
+      explanation: gliding ? "提交主动作请求，不会再被误当成制动" : wheeled ? "按住时锁定漂移方向，蓄力后松开会触发增益" : commandKind === "throttle-steer" && !forwardSteer ? "按住时使用独立制动，不再和技能键混用" : "支持离地宽容、预输入和长短跳",
       steps: commandKind === "throttle-steer" && !forwardSteer
-        ? [{ actions: ["move-forward"], ticks: 18 }, { actions: ["brake"], ticks: 12 }]
+        ? [{ actions: ["move-forward"], ticks: 18 }, { actions: [wheeled ? "handbrake" : "brake"], ticks: 12 }]
         : [{ actions: [gliding ? "primary-action" : "jump"], ticks: 2 }],
     },
     ...(commandKind === "throttle-steer" && !forwardSteer
@@ -1942,9 +1947,18 @@ async function installCapabilityAuthoringPanel(
   const activeDefinitionRef = requestedDefinitionRef ??
     activeSubject?.entityState.entityDefinitionRef ??
     definitions[0]!.resourceRef;
-  const activeRegistryDefinition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+  const exactRegistryDefinition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
     activeDefinitionRef,
   );
+  const semanticRegistryDefinition = definitions.find((candidate) =>
+    candidate.semanticClassId === activeSubject?.entityState.semanticClassId
+  );
+  const activeRegistryDefinition = exactRegistryDefinition ??
+    (semanticRegistryDefinition === undefined
+      ? undefined
+      : builtInSubjectResourceRegistry.resolveSubjectDefinition(
+          semanticRegistryDefinition.resourceRef,
+        ));
   const activeDefinitionSummary: SubjectDefinitionSummaryV1 | undefined =
     activeRegistryDefinition !== undefined && "schemaVersion" in activeRegistryDefinition
       ? {
@@ -1959,8 +1973,10 @@ async function installCapabilityAuthoringPanel(
           cameraContextProfileRef: activeRegistryDefinition.profiles.cameraContextProfileRef,
         }
       : undefined;
+  const resolvedDefinitionRef = activeDefinitionSummary?.resourceRef ??
+    activeDefinitionRef;
   const authoringDefinitions = definitions.some(
-      (definition) => definition.resourceRef === activeDefinitionRef,
+      (definition) => definition.resourceRef === resolvedDefinitionRef,
     ) || activeDefinitionSummary === undefined
     ? definitions
     : [activeDefinitionSummary, ...definitions];
@@ -1968,30 +1984,56 @@ async function installCapabilityAuthoringPanel(
     const option = document.createElement("option");
     option.value = definition.resourceRef;
     option.textContent = `${definition.displayName} · ${definition.authoringAvailability}`;
-    option.selected = definition.resourceRef === activeDefinitionRef;
+    option.selected = definition.resourceRef === resolvedDefinitionRef;
     return option;
   }));
 
-  const definition = authoringDefinitions.find((row) => row.resourceRef === activeDefinitionRef) ??
+  const definition = authoringDefinitions.find(
+    (row) => row.resourceRef === resolvedDefinitionRef,
+  ) ??
     authoringDefinitions[0]!;
   packageSelect.value = definition.resourceRef;
   const activeMotionProfile = builtInSubjectResourceRegistry.resolveMotionProfile(
     definition.defaultMotionProfileRef,
   );
-  const activeKernel = api.listMotionKernels?.({
+  const availableKernels = api.listMotionKernels?.({
     includeExperimental: true,
     includeInternal: true,
-  }).find(
+  }) ?? [];
+  const definitionKernel = availableKernels.find(
     (kernel) => kernel.resourceRef === activeMotionProfile?.motionKernelRef,
   );
+  const activeLocomotionState = locomotionStateFromSubjectV4(activeSubject);
+  const runtimeKernelRefByLocomotionCapabilityRef: Readonly<Record<string, string>> = {
+    "worldkit://capability/locomotion.wheeled@1":
+      "worldkit://motion-kernel/wheeled-arcade@1",
+    "worldkit://capability/locomotion.surface-slide@1":
+      "worldkit://motion-kernel/surface-slide@1",
+    "worldkit://capability/locomotion.water-surface@1":
+      "worldkit://motion-kernel/water-surface@1",
+    "worldkit://capability/locomotion.unpowered-glide@1":
+      "worldkit://motion-kernel/unpowered-glide@1",
+    "worldkit://capability/locomotion.powered-flight@1":
+      "worldkit://motion-kernel/powered-flight@1",
+  };
+  const runtimeKernelRef = activeLocomotionState === undefined
+    ? undefined
+    : runtimeKernelRefByLocomotionCapabilityRef[
+        activeLocomotionState.locomotionCapabilityRef
+      ];
+  const activeKernel = availableKernels.find(
+    (kernel) => kernel.resourceRef === runtimeKernelRef,
+  ) ?? definitionKernel;
   const controls = requiredElement<HTMLDivElement>("#controls-card");
   controls.innerHTML = activeKernel?.commandKind === "throttle-steer"
     ? `
         <p>油门 / 转向</p>
         <div><kbd>W</kbd><kbd>S</kbd><span>前进 / 倒退</span></div>
         <div><kbd>A</kbd><kbd>D</kbd><span>左转 / 右转</span></div>
-        <div><kbd>⇧</kbd><span>增强推进</span><kbd>空格</kbd><span>${activeKernel.resourceRef.includes("forward-steer") ? "跳跃" : "制动"}</span></div>
-        <div><kbd>Ctrl</kbd><span>独立制动</span><kbd>Alt</kbd><span>手刹</span></div>
+        ${activeKernel.resourceRef.includes("wheeled-arcade")
+          ? '<div><kbd>空格</kbd><span>漂移（松开触发增益）</span></div>'
+          : `<div><kbd>⇧</kbd><span>增强推进</span><kbd>空格</kbd><span>${activeKernel.resourceRef.includes("forward-steer") ? "跳跃" : "制动"}</span></div>`}
+        <div><kbd>Ctrl</kbd><span>独立制动</span><kbd>Alt</kbd><span>${activeKernel.resourceRef.includes("wheeled-arcade") ? "备用手刹" : "手刹"}</span></div>
         <div><kbd>R</kbd><span>镜头回正</span><kbd>C</kbd><span>回头看</span></div>
         <div><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd><span>上下左右观察</span></div>
         <div><span>鼠标拖动 / 滚轮</span><span>旋转 / 缩放镜头</span></div>

@@ -129,6 +129,9 @@ describe("Block Builder skill", () => {
       subjectDefinitionRef: string;
     }) => subjectDefinitionRef);
     expect(refs).toContain("worldkit://subject-definition/humanoid.g-bot@2");
+    expect(refs).toContain(
+      "worldkit://subject-definition/kart-control-lab.stk-kart@1",
+    );
     expect(refs).toContain("worldkit://subject-definition/xier120.quadruped-animal@1");
     expect(refs).not.toContain(
       "worldkit://subject-definition/humanoid.rigged-golden@2",
@@ -154,14 +157,27 @@ describe("Block Builder skill", () => {
     expect(catalog.subjectPacks.every(({ compatibleMotionPackIds }: {
       compatibleMotionPackIds: readonly string[];
     }) => compatibleMotionPackIds.length > 0)).toBe(true);
+    expect(catalog.subjectPacks.find(({ id }: { id: string }) =>
+      id === "kart-control-lab.stk-kart"
+    )).toMatchObject({
+      category: "vehicle",
+      bodyTopology: "four-wheel",
+      compatibleMotionPackIds: expect.arrayContaining(["vehicle.stk-kart.arcade"]),
+      sockets: expect.arrayContaining([
+        expect.objectContaining({ id: "CameraTarget3D" }),
+        expect.objectContaining({ id: "FirstPersonView" }),
+      ]),
+    });
     expect(catalog.motionPacks.map(({ id }: { id: string }) => id)).toEqual([
       "flight.powered-standard",
       "ground.character-standard",
       "ground.root-standard",
+      "vehicle.stk-kart.arcade",
     ]);
     expect(catalog.cameraPacks.map(({ id }: { id: string }) => id)).toEqual([
       "first-person.standard",
       "third-person.giant",
+      "third-person.kart-chase",
       "third-person.over-shoulder",
       "third-person.standard",
     ]);

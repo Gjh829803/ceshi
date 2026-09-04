@@ -87,6 +87,9 @@ function projectControlFeelProfile(
     variableJumpHoldSeconds: profile.variableJumpHoldSeconds,
     jumpHoldGravityRatio: profile.jumpHoldGravityRatio,
     jumpReleaseGravityRatio: profile.jumpReleaseGravityRatio,
+    ...(profile.wheeledArcade === undefined
+      ? {}
+      : { wheeledArcade: structuredClone(profile.wheeledArcade) }),
   };
 }
 

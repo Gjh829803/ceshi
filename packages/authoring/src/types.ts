@@ -1,4 +1,6 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
+import type { WheeledArcadeControlFeelParametersV1 } from
+  "@whitebox-world/runtime-contracts";
 import type {
   AutomaticLocomotionPresentationKeyV1,
   BipedBoneIdV1,
@@ -580,6 +582,7 @@ export interface NormalizedSubjectDefinitionV2 {
     variableJumpHoldSeconds: number;
     jumpHoldGravityRatio: number;
     jumpReleaseGravityRatio: number;
+    wheeledArcade?: WheeledArcadeControlFeelParametersV1;
   };
   /**
    * First-slice Feel surfaces locked from the Registry at normalize time so the

@@ -49,5 +49,22 @@
       "description": "Maps forward/back to thrust, left/right to yaw and jump/boost to climb.",
       "semanticTags": ["camera-relative", "flight", "powered"]
     }
+  },
+  {
+    "kind": "control-profile",
+    "id": "throttle-steer.subject-local",
+    "version": 1,
+    "resourceRef": "worldkit://control-profile/throttle-steer.subject-local@1",
+    "authoringAvailability": "advanced",
+    "commandKind": "throttle-steer",
+    "inputSpace": "subject-local",
+    "facingPolicy": "steering-derived",
+    "lateralMovementPolicy": "forbidden",
+    "moveDeadzoneRatio": 0.05,
+    "aiMetadata": {
+      "displayName": "Subject-local throttle and steering",
+      "description": "Maps forward/back to throttle and left/right to steering for vehicle-style kernels.",
+      "semanticTags": ["subject-local", "throttle", "steer", "vehicle"]
+    }
   }
 ]

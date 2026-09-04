@@ -164,6 +164,16 @@ describe("createFetchSubjectAssetResolver", () => {
     });
   });
 
+  it("contains the STK kart Host and WorldPackage mappings", () => {
+    const ref = "worldkit://subject-asset/kart-control-lab.stk-kart@1";
+    expect(PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1[ref]).toBe(
+      "/subject-assets/kart-control-lab/stk-kart/v1/stk-kart.glb",
+    );
+    expect(PLAYGROUND_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1[ref]).toBe(
+      "resources/subject-assets/kart-control-lab.stk-kart.glb",
+    );
+  });
+
   it("publishes exactly nineteen creator-qualified xier120 URI and WorldPackage paths", () => {
     expect(EXPECTED_XIER120_RESOLVER_ROWS).toHaveLength(19);
     expect(XIER120_SUBJECT_ASSET_MANIFESTS).toHaveLength(19);

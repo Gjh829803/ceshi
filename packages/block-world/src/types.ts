@@ -127,13 +127,15 @@ export type BlockSubjectCategoryV2 =
 export type BlockMotionPackIdV1 =
   | "ground.character-standard"
   | "ground.root-standard"
-  | "flight.powered-standard";
+  | "flight.powered-standard"
+  | "vehicle.stk-kart.arcade";
 
 export type BlockCameraPackIdV1 =
   | "third-person.standard"
   | "third-person.over-shoulder"
   | "third-person.giant"
-  | "first-person.standard";
+  | "first-person.standard"
+  | "third-person.kart-chase";
 
 export type BlockLocomotionPresentationKeyV1 =
   | "locomotion.suspended"

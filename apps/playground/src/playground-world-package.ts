@@ -8,6 +8,8 @@ import {
   type WorldPackageLicenseDocumentInputV1,
 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
+import gpl3LicenseText from
+  "../../../assets/licenses/kart-control-lab-stk-kart/GPL-3.0.txt?raw";
 
 const CONSTRAINED_JSON_PROFILE_REF =
   "worldkit://ai-schema-projection-profile/constrained-json@1";
@@ -24,6 +26,12 @@ const LICENSE_BY_SPDX_EXPRESSION = new Map<string, WorldPackageLicenseDocumentIn
     spdxLicenseExpression: "LicenseRef-Loopit-Company-Private",
     path: "LICENSES/loopit-private.txt",
     text: "Loopit company-private asset license. No external redistribution.\n",
+  })],
+  ["GPL-3.0-or-later", Object.freeze({
+    id: "gpl-3.0-or-later",
+    spdxLicenseExpression: "GPL-3.0-or-later",
+    path: "LICENSES/gpl-3.0-or-later.txt",
+    text: gpl3LicenseText,
   })],
 ]);
 

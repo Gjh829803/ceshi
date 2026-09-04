@@ -277,6 +277,9 @@ export class PhysicalKeyboardActionTracker {
           motionKernelRef.endsWith("/free-ground@1") ||
           motionKernelRef.endsWith("/forward-steer@1")
         ) active.add("jump");
+        else if (motionKernelRef.endsWith("/wheeled-arcade@1")) {
+          active.add("handbrake");
+        }
         else if (motionKernelRef.endsWith("/unpowered-glide@1")) {
           active.add("primary-action");
         } else active.add("brake");

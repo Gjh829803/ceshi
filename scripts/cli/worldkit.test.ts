@@ -1101,6 +1101,7 @@ describe("worldkit CLI", () => {
       "worldkit://subject-definition/humanoid.g-bot@2",
       "worldkit://subject-definition/humanoid.rigged-golden@2",
       "worldkit://subject-definition/humanoid.third-person@1",
+      "worldkit://subject-definition/kart-control-lab.stk-kart@1",
       "worldkit://subject-definition/quadruped.ground-proxy@1",
       "worldkit://subject-definition/surface-craft.ice-skimmer@1",
       "worldkit://subject-definition/vehicle.four-wheel.arcade@1",

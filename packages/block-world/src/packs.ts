@@ -7,7 +7,7 @@ export interface BlockMotionPackDefinitionV1 {
   readonly id: BlockMotionPackIdV1;
   readonly displayName: string;
   readonly description: string;
-  readonly movementModes: readonly ("ground-walk" | "flight")[];
+  readonly movementModes: readonly ("ground-walk" | "ground-drive" | "flight")[];
   readonly capabilityRefs: readonly string[];
   readonly physicsBodyProfileRef: string;
   readonly locomotionProfileRef: string;
@@ -109,6 +109,33 @@ export const BLOCK_MOTION_PACKS_V1: Readonly<
     controlProfileRef: "worldkit://control-profile/flight.camera-relative@1",
     mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
   }),
+  "vehicle.stk-kart.arcade": Object.freeze({
+    id: "vehicle.stk-kart.arcade",
+    displayName: "STK arcade kart driving",
+    description:
+      "25 m/s kart driving with speed-radius steering, locked drift and release boost.",
+    movementModes: Object.freeze(["ground-drive"] as const),
+    capabilityRefs: Object.freeze([
+      "worldkit://capability/locomotion.forward-steer@1",
+      "worldkit://capability/locomotion.wheeled@1",
+    ]),
+    physicsBodyProfileRef:
+      "worldkit://physics-body-profile/character.capability-medium@1",
+    locomotionProfileRef:
+      "worldkit://locomotion-profile/ground.kart-control-lab-stk@1",
+    controlFeelProfileRef:
+      "worldkit://control-feel-profile/kart-control-lab.stk-kart@1",
+    allowedControlFeelProfileRefs: Object.freeze([
+      "worldkit://control-feel-profile/kart-control-lab.stk-kart@1",
+    ]),
+    defaultMotionProfileRef:
+      "worldkit://motion-profile/wheeled-arcade.medium@1",
+    optionalMotionProfileRefs: Object.freeze([]),
+    fallbackMotionProfileRef: "worldkit://motion-profile/safe-ground@1",
+    controlProfileRef:
+      "worldkit://control-profile/throttle-steer.subject-local@1",
+    mediumProfileRef: "worldkit://medium-profile/ground-air.standard@1",
+  }),
 });
 
 export const BLOCK_CAMERA_PACKS_V1: Readonly<
@@ -150,6 +177,21 @@ export const BLOCK_CAMERA_PACKS_V1: Readonly<
     cameraContextProfileRef: "worldkit://camera-context/agent.first-person@1",
     cameraRigProfileRef: "worldkit://camera-profile/first-person.standard@1",
     defaults: Object.freeze({ distanceMeters: 0, pitchRadians: 0, fovDegrees: 70 }),
+  }),
+  "third-person.kart-chase": Object.freeze({
+    id: "third-person.kart-chase",
+    displayName: "Kart chase",
+    description:
+      "Longer speed-sensitive kart view with forward-motion recentering and Spring Arm collision.",
+    mode: "third-person",
+    cameraContextProfileRef: "worldkit://camera-context/agent.kart-chase@1",
+    cameraRigProfileRef:
+      "worldkit://camera-profile/chase.kart-control-lab-stk@1",
+    defaults: Object.freeze({
+      distanceMeters: 9.3,
+      pitchRadians: 0.42,
+      fovDegrees: 56,
+    }),
   }),
 });
 

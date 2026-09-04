@@ -484,6 +484,18 @@ afterEach(() => {
 });
 
 describe("BabylonWorldAdapter frame loop", () => {
+  it("maps Space to the wheeled drift handbrake without changing other kernels", () => {
+    const tracker = new PhysicalKeyboardActionTracker();
+    tracker.press("Space");
+
+    expect(tracker.actions("worldkit://motion-kernel/wheeled-arcade@1"))
+      .toEqual(["handbrake"]);
+    expect(tracker.actions("worldkit://motion-kernel/free-ground@1"))
+      .toEqual(["jump"]);
+    expect(tracker.actions("worldkit://motion-kernel/water-surface@1"))
+      .toEqual(["brake"]);
+  });
+
   it("keeps grouped whitebox capture on the Adapter artifact surface", () => {
     const { adapter, runtime } = createAdapterProbe();
     const target = {

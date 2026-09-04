@@ -34,6 +34,11 @@ import {
 import type { BlockWalkableSurfaceProfileSamplerV1 } from
   "./block-walkable-surface";
 import { NORMAL_BLOCK_SURFACE_PROFILE_V1 } from "./block-surface-response";
+import {
+  STOPPED_WHEELED_ARCADE_CONTROL_STATE_V1,
+  stepWheeledArcadeControlV1,
+  type WheeledArcadeControlStateV1,
+} from "./wheeled-arcade-control";
 
 export interface MotionKernelSnapshotV1 {
   activeMotionProfileRef: string;
@@ -115,6 +120,9 @@ function copyControlFeelSurface(feel: ControlFeelSurfaceV1): ControlFeelSurfaceV
     variableJumpHoldSeconds: feel.variableJumpHoldSeconds,
     jumpHoldGravityRatio: feel.jumpHoldGravityRatio,
     jumpReleaseGravityRatio: feel.jumpReleaseGravityRatio,
+    ...(feel.wheeledArcade === undefined
+      ? {}
+      : { wheeledArcade: structuredClone(feel.wheeledArcade) }),
   };
 }
 
@@ -277,6 +285,8 @@ export class MotionKernelRuntimeV1 {
   private bodyLeanRadians = 0;
   private turnVelocityRadiansPerSecond = 0;
   private brakeToReverseElapsedSeconds = 0;
+  private wheeledArcadeState: WheeledArcadeControlStateV1 =
+    STOPPED_WHEELED_ARCADE_CONTROL_STATE_V1;
   private coyoteRemainingSeconds = 0;
   private jumpBufferRemainingSeconds = 0;
   private jumpHoldElapsedSeconds = 0;
@@ -657,6 +667,7 @@ export class MotionKernelRuntimeV1 {
     this.bodyLeanRadians = 0;
     this.turnVelocityRadiansPerSecond = 0;
     this.brakeToReverseElapsedSeconds = 0;
+    this.wheeledArcadeState = STOPPED_WHEELED_ARCADE_CONTROL_STATE_V1;
     this.coyoteRemainingSeconds = 0;
     this.jumpBufferRemainingSeconds = 0;
     this.jumpHoldElapsedSeconds = 0;
@@ -705,6 +716,7 @@ export class MotionKernelRuntimeV1 {
     this.bodyLeanRadians = 0;
     this.turnVelocityRadiansPerSecond = 0;
     this.brakeToReverseElapsedSeconds = 0;
+    this.wheeledArcadeState = STOPPED_WHEELED_ARCADE_CONTROL_STATE_V1;
     this.coyoteRemainingSeconds = 0;
     this.jumpBufferRemainingSeconds = 0;
     this.jumpHoldElapsedSeconds = 0;
@@ -984,6 +996,52 @@ export class MotionKernelRuntimeV1 {
       const throttleCommand = command.kind === "throttle-steer" ? command : undefined;
       const throttle = throttleCommand?.throttle ?? 0;
       const steering = throttleCommand?.steering ?? 0;
+      if (implementationId === "wheeled-arcade" && feel.wheeledArcade !== undefined) {
+        const configuredStep = stepWheeledArcadeControlV1(
+          this.wheeledArcadeState,
+          {
+            throttle,
+            steering,
+            brakeRatio: Math.max(
+              throttleCommand?.brakeRequested === true ? 1 : 0,
+              throttleCommand?.brakeRatio ?? 0,
+            ),
+            handbrakeRequested: throttleCommand?.handbrakeRequested === true,
+            grounded: !unsupported,
+            maximumSpeedRatio: groundSurfaceMotion.maximumSpeedRatio,
+            accelerationRatio: groundSurfaceMotion.accelerationRatio,
+            decelerationRatio: groundSurfaceMotion.decelerationRatio,
+          },
+          feel.wheeledArcade,
+          FIXED_TIME_STEP_SECONDS,
+        );
+        this.wheeledArcadeState = configuredStep.state;
+        this.forwardSpeedMetersPerSecond =
+          configuredStep.state.forwardSpeedMetersPerSecond;
+        this.steeringInput = configuredStep.state.steeringInput;
+        this.yawRadians += configuredStep.yawRateRadiansPerSecond *
+          FIXED_TIME_STEP_SECONDS;
+        this.bodyLeanRadians = moveTowards(
+          this.bodyLeanRadians,
+          0,
+          2.5 * FIXED_TIME_STEP_SECONDS,
+        );
+        desired = this.forward.scale(this.forwardSpeedMetersPerSecond);
+        const currentVelocity = this.physicsController.getVelocity();
+        const currentPlanar = new Vector3(currentVelocity.x, 0, currentVelocity.z);
+        const currentForwardSpeed = Vector3.Dot(currentPlanar, this.forward);
+        const lateral = currentPlanar.subtract(
+          this.forward.scale(currentForwardSpeed),
+        );
+        const surfaceGripRatio = movementMedium === "ground" && !unsupported
+          ? this.activeGroundSurfaceProfile.physics.frictionRatio
+          : 1;
+        lateral.scaleInPlace(Math.exp(
+          -configuredStep.lateralGripPerSecond * surfaceGripRatio *
+            FIXED_TIME_STEP_SECONDS,
+        ));
+        desired.addInPlace(lateral);
+      } else {
       const baseMaximumForwardSpeed = kernelScalar(
         feel,
         implementationId === "surface-slide"
@@ -1272,6 +1330,7 @@ export class MotionKernelRuntimeV1 {
           this.slideVelocity.normalize().scaleInPlace(maxSpeed);
         }
         desired.copyFrom(this.slideVelocity);
+      }
       }
     }
 
@@ -1578,6 +1637,7 @@ export class MotionKernelRuntimeV1 {
       this.bodyLeanRadians = 0;
       this.turnVelocityRadiansPerSecond = 0;
       this.brakeToReverseElapsedSeconds = 0;
+      this.wheeledArcadeState = STOPPED_WHEELED_ARCADE_CONTROL_STATE_V1;
       this.coyoteRemainingSeconds = 0;
       this.jumpBufferRemainingSeconds = 0;
       this.jumpHoldElapsedSeconds = 0;

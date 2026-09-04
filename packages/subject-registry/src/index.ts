@@ -15,3 +15,5 @@ export * from "./subject-preset-closure";
 export * from "./subject-registry-reference-edges";
 export * from "./xier120-resource-manifests";
 export * from "./xier120-subject-definitions";
+export * from "./kart-control-lab-resource-manifests";
+export * from "./kart-control-lab-subject-definitions";

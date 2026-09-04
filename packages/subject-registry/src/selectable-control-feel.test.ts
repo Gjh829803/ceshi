@@ -13,6 +13,8 @@ const QUADRUPED_SPECIFIC_FEEL_REF =
   "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1";
 const POWERED_FLIGHT_FEEL_REF =
   "worldkit://control-feel-profile/flight.powered-standard@1";
+const STK_KART_FEEL_REF =
+  "worldkit://control-feel-profile/kart-control-lab.stk-kart@1";
 
 describe("selectable Control Feel authority", () => {
   it("puts the default first and keeps remaining allowed refs in declaration order", () => {
@@ -65,6 +67,7 @@ describe("selectable Control Feel authority", () => {
       POWERED_FLIGHT_FEEL_REF,
       GROUND_HUMANOID_CONTROL_FEEL_HEAVY_REF,
       GROUND_HUMANOID_CONTROL_FEEL_MEDIUM_REF,
+      STK_KART_FEEL_REF,
       QUADRUPED_SPECIFIC_FEEL_REF,
     ].sort());
     expect(selectable).toEqual([
@@ -72,6 +75,7 @@ describe("selectable Control Feel authority", () => {
       GROUND_HUMANOID_CONTROL_FEEL_HEAVY_REF,
     ]);
     expect(selectable).not.toContain(POWERED_FLIGHT_FEEL_REF);
+    expect(selectable).not.toContain(STK_KART_FEEL_REF);
     expect(selectable).not.toContain(QUADRUPED_SPECIFIC_FEEL_REF);
     expect(isSelectableControlFeelProfileRefV1(
       definition.profiles,

@@ -26,3 +26,4 @@ export {
 export * from "./subject-asset-cache";
 export * from "./subject-visual";
 export * from "./world-runtime-snapshot";
+export * from "./wheeled-arcade-control";

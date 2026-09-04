@@ -223,11 +223,12 @@ Registry 与 Agent-facing 资源。
 如果 `motionFamily` 已经实现，交付者只提交闭合参数；如果不存在，importer 必须返回
 Capability Gap。任何交付都不能携带一段 JavaScript 来替代受测的 Motion Kernel。
 
-当前分支已经实现底层 `wheeled-arcade` 计算，但 Agent-facing Motion Pack 尚未暴露车辆，
-公开 `ControlFeelProfileInputV1` 也还只有人物/通用地面字段。要让上面的汽车交付真正一键
-导入，还需要先补车辆专属 Control Feel Schema、`throttle-steer` Control Profile、车辆
-Motion Pack，以及“这个 Subject Pack 允许哪些随包 Motion Pack”的兼容关系。现阶段不能
-把车辆速度塞进人物的 `walkSpeedMetersPerSecond` / `runSpeedMetersPerSecond` 冒充完成。
+当前分支已经正式暴露 `wheeled-arcade`：车辆参数写入 Control Feel 的封闭
+`wheeledArcade` 段，`throttle-steer.subject-local` 负责输入语义，Agent-facing 车辆 Motion
+Pack 负责把 Kernel、Feel、Control、Locomotion 和 Medium 组合起来。`STK Kart Control
+Handoff v1` 是第一份完整接入，使用 `vehicle.stk-kart.arcade`。车辆速度仍不得塞进人物的
+`walkSpeedMetersPerSecond` / `runSpeedMetersPerSecond` 冒充完成；这些兼容字段在车辆 Feel
+中保持为零，Runtime 只消费已验证的 `wheeledArcade` 参数段。
 
 ## 5. Static Subject Pack 交付
 
@@ -692,6 +693,11 @@ assembly: {
 ```
 
 Agent 只选择套餐，不在场景中逐项填写最高速度和刹车参数。
+
+当前 STK 卡丁车的可运行示例见
+`examples/block-world/stk-kart-world.mjs`。它选择
+`kart-control-lab.stk-kart`、`vehicle.stk-kart.arcade` 和
+`third-person.kart-chase`，并用不同颜色的 normal / ice / mud 地面验证表面手感。
 
 ## 11. 最小验收命令
 

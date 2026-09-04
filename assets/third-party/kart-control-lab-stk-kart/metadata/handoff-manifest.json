@@ -1,0 +1,22 @@
+{
+  "name": "stk-kart-control-handoff",
+  "version": 1,
+  "purpose": "engine-neutral visual and behavior handoff",
+  "entrypoints": {
+    "human": "README.md",
+    "agent": "PROMPT.md",
+    "settings": "settings/stk-settings.json",
+    "model": "assets/stk-kart.glb",
+    "modelMetadata": "assets/stk-kart.asset.json",
+    "demo": "demo/index.html",
+    "source": "reference-source/src",
+    "verification": "validation/VERIFICATION.md"
+  },
+  "runtimePolicy": {
+    "referenceSourceIsAuthoritativeRuntimeCode": false,
+    "targetEngineMustBeThreeJs": false,
+    "targetEngineMustBeBabylonJs": false,
+    "adaptToTargetArchitecture": true
+  },
+  "license": "GPL-3.0-or-later"
+}

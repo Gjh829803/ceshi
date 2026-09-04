@@ -20,6 +20,7 @@ const SUBJECT_DEFINITION_REFS = [
   "worldkit://subject-definition/humanoid.g-bot@2",
   "worldkit://subject-definition/humanoid.rigged-golden@2",
   "worldkit://subject-definition/humanoid.third-person@1",
+  "worldkit://subject-definition/kart-control-lab.stk-kart@1",
   "worldkit://subject-definition/quadruped.ground-proxy@1",
   "worldkit://subject-definition/surface-craft.ice-skimmer@1",
   "worldkit://subject-definition/vehicle.four-wheel.arcade@1",
@@ -215,7 +216,7 @@ describe("capability-driven subject registry", () => {
     expect(builtInSubjectResourceRegistry.listDiscoverableResources({
       kind: "subject-definition",
     })).toHaveLength(
-      10 + XIER120_SUBJECT_DEFINITIONS.length,
+      11 + XIER120_SUBJECT_DEFINITIONS.length,
     );
   });
 
@@ -337,9 +338,14 @@ describe("capability-driven subject registry", () => {
     const controls = builtInSubjectResourceRegistry
       .listDiscoverableResources({ kind: "control-profile" });
 
-    expect(controls).toHaveLength(3);
+    expect(controls).toHaveLength(4);
     for (const control of controls) {
-      expect(control.moveDeadzoneRatio).toBe(0.1);
+      expect(control.moveDeadzoneRatio).toBe(
+        control.resourceRef ===
+            "worldkit://control-profile/throttle-steer.subject-local@1"
+          ? 0.05
+          : 0.1,
+      );
       expect(control).not.toHaveProperty("inputTuning");
       expect(control).not.toHaveProperty("responseExponent");
     }
@@ -349,6 +355,14 @@ describe("capability-driven subject registry", () => {
       commandKind: "flight-attitude",
       inputSpace: "flight-frame",
       facingPolicy: "flight-derived",
+    });
+    expect(builtInSubjectResourceRegistry.resolveControlProfile(
+      "worldkit://control-profile/throttle-steer.subject-local@1",
+    )).toMatchObject({
+      commandKind: "throttle-steer",
+      inputSpace: "subject-local",
+      facingPolicy: "steering-derived",
+      lateralMovementPolicy: "forbidden",
     });
   });
 

@@ -35,6 +35,8 @@ import {
   type CameraRigParameterNameV1,
   type CameraRigParametersV1,
 } from "./camera-parameter-contract";
+import type { WheeledArcadeControlFeelParametersV1 } from
+  "./control-feel-parameter-contract";
 import worldRuntimeBootstrapSchema from "./world-runtime-bootstrap-v1.schema.json";
 
 export type RuntimeVec3V1 = readonly [x: number, y: number, z: number];
@@ -352,6 +354,7 @@ export interface RuntimeControlFeelV1 {
   variableJumpHoldSeconds: number;
   jumpHoldGravityRatio: number;
   jumpReleaseGravityRatio: number;
+  wheeledArcade?: WheeledArcadeControlFeelParametersV1;
 }
 
 export interface RuntimeSubjectDescriptorV1 {
