@@ -16,29 +16,15 @@ import { fileURLToPath } from "node:url";
 
 import {
   sha256Bytes,
-  sha256CanonicalJson,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
 
 import { parseWorldAgentArgumentsV1 } from "../agents/run-world-agent.js";
 import {
-  NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
-} from "./generation-request.js";
-import { prepareNativeWorldCaseV1 } from "./native-world-case-preparation.js";
-
-export function resolveNativeCaseMappingCloudOutputS3PrefixV1(input: Readonly<{
-  backend: "cloud" | "local";
-  sceneId: string;
-  mappingTaskId: string;
-  environment?: NodeJS.ProcessEnv;
-}>): string | undefined {
-  if (input.backend === "local") return undefined;
-  const environment = input.environment ?? process.env;
-  const root = (environment.WORLDKIT_LWDP_S3_ROOT ??
-    NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1).replace(/\/+$/, "");
-  return `${root}/${input.sceneId}/${input.mappingTaskId}/native-case-mapping`;
-}
+  deriveNativeWorldBaselineProposalV1,
+  prepareNativeWorldCaseV1,
+} from "./native-world-case-preparation.js";
 
 function run(
   command: string,
@@ -82,46 +68,6 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-function caseMappingInstruction(sceneId: string, prompt: string): string {
-  return `You are the WorldKit Native Reconstruction Case Mapper for '${sceneId}'.
-
-User request:
-${prompt}
-
-Read the frozen scene-brief.md created by the unified WorldKit Planner and the attached planning/reference images. Do not rewrite or reinterpret the Planner's provenance sections. Produce exactly one output, native-case-proposal.json, using this closed top-level shape:
-{
-  "kind": "native-world-case-proposal",
-  "schemaVersion": 1,
-  "sceneId": "${sceneId}",
-  "expected": <WorldReconstructionExpectedV1>,
-  "formalCaptureIntent": <FormalWorldCaptureIntentV1 with id '${sceneId}.formal-world-capture-intent'>,
-  "worldBounds": {
-    "centerMetersXZ": [<finite x meters>, <finite z meters>],
-    "sizeMetersXZ": [<positive width meters>, <positive depth meters>],
-    "heightRangeMeters": [<finite minimum y meters>, <finite maximum y meters>]
-  }
-}
-
-Use the current contracts supplied in repository context. worldBounds has exactly the three fields shown above, every tuple is a dense two-number array, both size values are greater than zero, and heightRangeMeters[0] is less than heightRangeMeters[1]. Never use minimumMetersXYZ or maximumMetersXYZ for worldBounds; those fields belong only to downstream Formal Capture spatial bounds. The proposal owns semantic topology and measurable intent, not quality thresholds or hashes. Use 3-7 complete environment or structure visual groups with stable lowercase IDs. Every visual group must have one semantic silhouette target and one Formal Capture semantic binding. Never create a semantic silhouette target, visual group, topology node, or composition target for the controlled Subject described by the Planner, including its rider, mount, avatar, character, or body parts. The Host-owned SDK Subject remains visible in Runtime Capture without a Native Block binding. Keep target, region, anchor, node, collider, checkpoint, and acceptance identities bijective and internally closed. Babylon Native static Collider contributions have one identity: every expected.colliders row must set contributionId to exactly the same string as colliderId because the admitted Native contribution exposes the static Collider id as its contribution identity. Do not invent a parallel contribution name. Every Collider ID and checkpoint ID must be globally unique. Include a ground/step Collider for Spawn support, and bind it to the same acceptanceTargetRef as expected.spawnSupport. The acceptanceTargetRef of every pass traversal check must name a target with a ground or step Collider role; never bind a pass check to a blocker, cliff, wall, mountain, or other non-traversable landmark. The acceptanceTargetRef of every block traversal check must name a target with a blocker Collider role. A landmark-foot or pass-plane checkpoint may still measure proximity to that landmark inside Formal Capture. For pass-plane and block-plane criteria, expectedCenterSide means the destination or forbidden far side reached only after crossing sourceFace; it never means the Spawn or allowed approach side. Choose sourceFace and expectedCenterSide so the Spawn center begins strictly on the opposite side outside capsule clearance and the declared fixed input approaches the plane. Every pass/block traversal check must have a physically reachable supported approach using only its declared fixed input. Formal Capture topology relations must use package-bounds or scripted-traversal exactly as the contract permits. package-bounds above means literal physical AABB separation on Y with XZ overlap. Never use above for visually higher, farther, on the horizon, or visible behind another target. Use orderedTargetRefs only for front-to-back Camera depth order. A blocks relation requires a matching block traversal check whose acceptance target and measured forbidden face identify that blocker. Use a 1280x720 capture profile. Sort every collection where the parser requires stable order.
-
-For a ground Spawn, expected.groundConnectivity is required and has exactly this shape:
-{
-  "requireSingleReachableComponent": true,
-  "requiredTraversalBands": [{
-    "acceptanceTargetRef": "<a declared pass-target acceptance ref>",
-    "id": "<stable lowercase band id>",
-    "centerlineStandPositionsXYZMeters": [
-      { "xMeters": <spawn x>, "yMeters": <spawn support y>, "zMeters": <spawn z> },
-      { "xMeters": <route waypoint x>, "yMeters": <support y>, "zMeters": <route waypoint z> }
-    ],
-    "halfWidthMeters": <positive actual usable half-width>
-  }]
-}
-The first position of at least one band must exactly equal expected.spawnSupport.expectedPositionXYZMeters. Ground traversal bands and ground pass traversal targets form a one-to-one binding by acceptanceTargetRef: every band binds one pass target, every ground pass target has exactly one explicit band, and duplicate band target refs are forbidden. Every band must contain 2-256 distinct consecutive support-top positions, and all coordinates must use the Native Block stand lattice (0.25m X/Z and 0.25m Y). Current ground surfaces and analysis are bidirectional by construction; do not add an isBidirectional or one-way field. A band follows the intended bends, junctions, switchbacks, stairs, bridges, or corridors; never inflate its width to admit a remote detour. Ground connectivity is frozen Host intent, not Route/Nav and not Builder-owned policy. For an air Spawn, use requireSingleReachableComponent false and an empty requiredTraversalBands array; this does not claim that the current ground-only Traversal Envelope supports flight or water movement.
-
-The Host will reject malformed output and will add hashes, fixed cross-case quality thresholds, resource identities, and all Runtime owners. Never copy the sample scene's geometry or target names; use it only to understand the current contract shape. Do not create or modify Scene Brief, Babylon code, physics, Package, Receipt, Runtime, Capture, or any Planner image.`;
-}
-
 async function main(): Promise<void> {
   const request = parseWorldAgentArgumentsV1(process.argv.slice(2));
   if (request.sceneSourceKind !== "babylon-native") {
@@ -129,7 +75,7 @@ async function main(): Promise<void> {
   }
   if (process.env.WORLDKIT_PROMPT_SMOKE === "1") {
     process.stdout.write(
-      "WORLDKIT_NATIVE_WORLD_SMOKE_OK unified-planning native-case-mapping native-generation native-check package runtime capture evaluation repair final-publication\n",
+      "WORLDKIT_NATIVE_WORLD_SMOKE_OK unified-planning native-generation native-check package runtime capture evaluation final-publication\n",
     );
     return;
   }
@@ -227,75 +173,25 @@ async function main(): Promise<void> {
         publicPlanRoot,
         "entry-whitebox-target.png",
       );
-      const instructionPath = path.join(taskRoot, "native-case-mapping.md");
+      const proposalPath = path.join(taskRoot, "host-derived-baseline-case.json");
       await writeFile(
-        instructionPath,
-        caseMappingInstruction(request.sceneId, request.prompt),
-        "utf8",
-      );
-      const stagedReferences = await Promise.all(references.map(
-        async ({ bytes, inputRef }) => {
-          const stagedPath = path.join(
-            taskRoot,
-            inputRef,
-          );
-          await writeFile(stagedPath, bytes, { flag: "wx" });
-          return stagedPath;
-        },
-      ));
-      const proposalPath = path.join(stagedCaseRoot, "native-case-proposal.json");
-      const identitySuffix = sha256CanonicalJson(inputIdentity).slice(-12);
-      const mappingTaskId =
-        `native-case-map-${request.sceneId.slice(0, 40)}-${identitySuffix}`;
-      const mappingOutputS3Prefix =
-        resolveNativeCaseMappingCloudOutputS3PrefixV1({
-          backend,
+        proposalPath,
+        stringifyCanonicalJson(await deriveNativeWorldBaselineProposalV1({
           sceneId: request.sceneId,
-          mappingTaskId,
-        });
-      const outputArguments = [
-        "--backend", backend,
-        "--repo-root", repositoryRoot,
-        "--task-id", mappingTaskId,
-        "--stage", "native-case-mapping",
-        "--job-name", `Native Case Mapping ${request.sceneId}`,
-        "--request-id", mappingTaskId,
-        "--execution-profile", "formal",
-        "--submit-attempts", "1",
-        "--instruction-file", instructionPath,
-        "--context", `artifacts/scenes/${request.sceneId}/scene-brief.md`,
-        "--context", "packages/validation/src/reconstruction-contracts.ts",
-        "--context", "packages/runtime-contracts/src/formal-world-capture.ts",
-        "--context", "packages/world-package/src/package-contract.ts",
-        "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/case.json",
-        "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json",
-        "--context", "artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json",
-        "--asset", `world-plan::${worldPlanPath}::image::image/png`,
-        "--asset", `entry-whitebox-target::${entryTargetPath}::image::image/png`,
-        ...stagedReferences.flatMap((referencePath, index) => [
-          "--asset",
-          `reference-${index}::${referencePath}::image::${path.extname(referencePath) === ".png" ? "image/png" : "image/jpeg"}`,
-        ]),
-        "--output", `native-case-proposal.json::${proposalPath}::application/json`,
-        ...(isNil(mappingOutputS3Prefix) ? [] : [
-          "--output-s3-prefix",
-          mappingOutputS3Prefix,
-        ]),
-      ];
-      const mappingExit = await run(
-        process.execPath,
-        ["scripts/agents/run-codex-task.mjs", ...outputArguments],
-        repositoryRoot,
+          visualIdentityPalettePath: path.join(
+            artifactRoot,
+            "visual-identity-palette.json",
+          ),
+          entryWhiteboxTargetPath: entryTargetPath,
+        })),
+        { encoding: "utf8", flag: "wx", mode: 0o600 },
       );
-      if (mappingExit !== 0) {
-        throw new Error(`NATIVE_WORLD_CASE_MAPPING_FAILED:${mappingExit}`);
-      }
       await prepareNativeWorldCaseV1({
         repositoryRoot,
         sceneId: request.sceneId,
         proposalPath,
         sceneBriefPath: briefPath,
-        referenceImagePaths: stagedReferences,
+        referenceImagePaths: references.map(({ sourcePath }) => sourcePath),
         planningImagePaths: {
           worldPlanPath,
           entryWhiteboxTargetPath: entryTargetPath,

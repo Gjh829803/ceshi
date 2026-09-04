@@ -435,12 +435,13 @@ qualityGateMode: "report-only" | "required-for-publication";
 ```
 
 This is an intentional policy mode, not legacy compatibility. Both values run
-the same Formal Capture, seven-dimension evaluation and at-most-three repair
-Attempts. `required-for-publication` retains the strict final GO behavior.
-`report-only`, which is the default for newly mapped exploratory Native Cases,
-never converts a failed or incomplete quality result into a pass; after the
-repair budget is exhausted it returns an identity-bound preview result with the
-admitted Package path, exact diagnostic codes, surviving Capture/evaluation
+the same Formal Capture and seven-dimension measurement. Only
+`required-for-publication` may allocate at most three fresh Host-created repair
+Attempts and retains the strict final GO behavior. `report-only`, which is the
+default for Host-derived exploratory Native Cases, never creates an external
+repair Attempt and never converts a failed or incomplete quality result into a
+pass; the first admitted Package is captured and returned with an identity-bound
+non-GO preview result, exact diagnostic codes, surviving Capture/evaluation
 evidence and a stable `worldkit native run` command. Automation can therefore
 distinguish accepted publication from human-inspectable output without losing
 the world.
@@ -458,6 +459,12 @@ or thrown as Capture infrastructure failure. A missing checkpoint identity,
 missing observation row or stale evidence remains non-repairable and fails
 closed. A true Browser, Runtime, screenshot or identity failure still closes
 Capture.
+
+The default route launches exactly the Unified Planner and Babylon Native Block
+Builder model tasks. The Host derives the baseline Case from Planner-owned
+artifacts without a `native-case-mapping` Agent stage. This keeps the successful
+`codex/block-world-main-integration` task topology while retaining current
+Babylon Package, Runtime, Havok and Capture owners.
 
 The existing bounded repair loop may change only Native authoring source/resources. A ground failure
 names the affected group/Block/region and the required structural change. A pre-Package Ground Analysis

@@ -1409,6 +1409,13 @@ the first Candidate as non-GO preview evidence when quality drifts. Task 13 stil
 supply NBR-20 real formal-generation evidence, real multi-Attempt evidence, final publication
 and manual launch.
 
+The default interactive entry has the same model-stage topology as
+`codex/block-world-main-integration`: Unified Planner -> Native Block Builder. The Host derives the report-only
+baseline Case deterministically after Planner delivery and before it creates the Builder Generation Request.
+No `native-case-mapping` model task, mapping prompt, mapping S3 prefix or mapping retry is part of this route.
+Explicit curated `required-for-publication` Cases continue to enter the same reconstruction runner directly;
+they do not add another default interactive stage.
+
 **Files:**
 - Modify: `packages/runtime-contracts/src/formal-world-capture.ts`
 - Modify: `packages/runtime-contracts/src/formal-world-capture.test.ts`

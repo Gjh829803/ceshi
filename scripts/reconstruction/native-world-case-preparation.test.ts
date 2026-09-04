@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 
 import {
   hashWorldReconstructionEvaluationProfileV1,
@@ -9,7 +10,10 @@ import {
 } from "@whitebox-world/validation";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { prepareNativeWorldCaseV1 } from "./native-world-case-preparation.js";
+import {
+  deriveNativeWorldBaselineProposalV1,
+  prepareNativeWorldCaseV1,
+} from "./native-world-case-preparation.js";
 
 const temporaryRoots: string[] = [];
 
@@ -20,6 +24,133 @@ afterEach(async () => {
 });
 
 describe("trusted Native world Case preparation", () => {
+  it("derives a closed report-only baseline Case without a Mapper model task", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-baseline-"));
+    temporaryRoots.push(root);
+    const palettePath = path.join(root, "visual-identity-palette.json");
+    const entryPath = path.join(root, "entry-whitebox-target.png");
+    await Promise.all([
+      writeFile(palettePath, JSON.stringify({
+        kind: "worldkit-visual-identity-palette",
+        schemaVersion: 1,
+        sceneId: "baseline-native-world",
+        sceneBriefHash: `sha256:${"a".repeat(64)}`,
+        movementMode: "ground-walk",
+        movementModeLabel: "陆地步行",
+        targets: [{
+          id: "visual-target-1",
+          visualTargetId: "visual-target-1",
+          targetKind: "subject",
+          name: "Explorer",
+          description: "controlled Subject",
+          role: "primary-subject",
+          semanticClassId: "visual.subject",
+          identityColor: "#E85D5D",
+        }, {
+          id: "visual-target-2",
+          visualTargetId: "visual-target-2",
+          targetKind: "landmark",
+          name: "Volcano",
+          description: "remote landmark",
+          role: "primary-landmark",
+          semanticClassId: "visual.landmark",
+          identityColor: "#F28E2B",
+        }],
+      })),
+      sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 4,
+          background: { r: 220, g: 220, b: 220, alpha: 1 },
+        },
+      }).composite([{
+        input: {
+          create: {
+            width: 20,
+            height: 20,
+            channels: 4,
+            background: { r: 242, g: 142, b: 43, alpha: 1 },
+          },
+        },
+        left: 40,
+        top: 10,
+      }]).png().toFile(entryPath),
+    ]);
+
+    const proposal = await deriveNativeWorldBaselineProposalV1({
+      sceneId: "baseline-native-world",
+      visualIdentityPalettePath: palettePath,
+      entryWhiteboxTargetPath: entryPath,
+    }) as {
+      expected: {
+        semanticSilhouetteTargets: readonly {
+          acceptanceTargetRef: string;
+          visualGroupId: string;
+          normalizedBounds: unknown;
+        }[];
+        criticalTraversalChecks: readonly { id: string }[];
+      };
+      formalCaptureIntent: {
+        semanticCaptureTargetBindings: readonly { acceptanceTargetRef: string }[];
+      };
+      worldBounds: unknown;
+    };
+    expect(proposal.expected.semanticSilhouetteTargets.map(
+      ({ acceptanceTargetRef }) => acceptanceTargetRef,
+    )).toEqual([
+      "worldkit://acceptance-target/entry-ground@1",
+      "worldkit://acceptance-target/remote-ground@1",
+      "worldkit://acceptance-target/visual-target-2@1",
+    ]);
+    expect(proposal.expected.semanticSilhouetteTargets.find(
+      ({ visualGroupId }) => visualGroupId === "visual-target-2-group",
+    )?.normalizedBounds).toEqual({
+      minXBasisPoints: 4000,
+      minYBasisPoints: 1000,
+      maxXBasisPoints: 6000,
+      maxYBasisPoints: 3000,
+    });
+    expect(proposal.expected.criticalTraversalChecks).toEqual([
+      expect.objectContaining({ id: "entry-to-remote-ground-pass" }),
+    ]);
+    expect(proposal.formalCaptureIntent.semanticCaptureTargetBindings)
+      .toHaveLength(3);
+    expect(proposal.worldBounds).toEqual({
+      centerMetersXZ: [0, -32],
+      sizeMetersXZ: [128, 128],
+      heightRangeMeters: [-16, 64],
+    });
+
+    const proposalPath = path.join(root, "host-derived-baseline-case.json");
+    const briefPath = path.join(root, "scene-brief.md");
+    const outputCaseRoot = path.join(root, "prepared-case");
+    await Promise.all([
+      writeFile(proposalPath, JSON.stringify(proposal)),
+      writeFile(briefPath, "# Native World\n\nA complete playable block world.\n"),
+    ]);
+    const prepared = await prepareNativeWorldCaseV1({
+      repositoryRoot: process.cwd(),
+      sceneId: "baseline-native-world",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      referenceImagePaths: [entryPath],
+      planningImagePaths: {
+        worldPlanPath: entryPath,
+        entryWhiteboxTargetPath: entryPath,
+      },
+      outputCaseRoot,
+    });
+    const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(
+      await readFile(prepared.casePath, "utf8"),
+    ));
+    expect(reconstructionCase.expected.criticalTraversalChecks[0]?.id)
+      .toBe("entry-to-remote-ground-pass");
+    expect(reconstructionCase.expected.groundConnectivity
+      .requiredTraversalBands[0]?.centerlineStandPositionsXYZMeters.at(-1))
+      .toEqual({ xMeters: 0, yMeters: 0, zMeters: -12 });
+  });
+
   it("rejects a pass check whose acceptance target is only a blocker", async () => {
     const root = await mkdtemp(path.join(
       os.tmpdir(),

@@ -18,6 +18,7 @@ import {
 } from "@whitebox-world/validation";
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 import { isNil, sortBy } from "lodash-es";
+import sharp from "sharp";
 
 const DIMENSION_IDS = Object.freeze([
   "collider",
@@ -38,6 +39,387 @@ const EVIDENCE_PROFILE_REF_BY_DIMENSION = Object.freeze({
   "spawn-support": "worldkit://evidence-profile/native-block-spawn@1",
   topology: "worldkit://evidence-profile/native-block-topology@1",
 } as const);
+
+const BASELINE_WORLD_BOUNDS = Object.freeze({
+  centerMetersXZ: Object.freeze([0, -32] as const),
+  sizeMetersXZ: Object.freeze([128, 128] as const),
+  heightRangeMeters: Object.freeze([-16, 64] as const),
+});
+
+const BASELINE_ENTRY_GROUND = Object.freeze({
+  acceptanceTargetRef: "worldkit://acceptance-target/entry-ground@1",
+  compositionTargetRef: "worldkit://composition-target/entry-ground@1",
+  visualGroupId: "entry-ground-group",
+  topologyNodeId: "entry-ground",
+  semanticLayerId: "foreground",
+  normalizedBounds: Object.freeze({
+    minXBasisPoints: 0,
+    minYBasisPoints: 6800,
+    maxXBasisPoints: 10000,
+    maxYBasisPoints: 10000,
+  }),
+  normalizedCenter: Object.freeze({ xBasisPoints: 5000, yBasisPoints: 8400 }),
+  coverageBasisPoints: 3200,
+});
+
+const BASELINE_REMOTE_GROUND = Object.freeze({
+  acceptanceTargetRef: "worldkit://acceptance-target/remote-ground@1",
+  compositionTargetRef: "worldkit://composition-target/remote-ground@1",
+  visualGroupId: "remote-ground-group",
+  topologyNodeId: "remote-ground",
+  semanticLayerId: "middle",
+  normalizedBounds: Object.freeze({
+    minXBasisPoints: 800,
+    minYBasisPoints: 3600,
+    maxXBasisPoints: 9200,
+    maxYBasisPoints: 8800,
+  }),
+  normalizedCenter: Object.freeze({ xBasisPoints: 5000, yBasisPoints: 6200 }),
+  coverageBasisPoints: 4368,
+});
+
+interface NativeWorldVisualPaletteTargetV1 {
+  readonly id: string;
+  readonly targetKind: string;
+  readonly semanticClassId: string;
+  readonly identityColor: `#${string}`;
+}
+
+interface NativeWorldBaselineVisualTargetV1 {
+  readonly acceptanceTargetRef: string;
+  readonly compositionTargetRef: string;
+  readonly visualGroupId: string;
+  readonly topologyNodeId: string;
+  readonly semanticLayerId: "foreground" | "middle" | "remote";
+  readonly normalizedBounds: Readonly<{
+    minXBasisPoints: number;
+    minYBasisPoints: number;
+    maxXBasisPoints: number;
+    maxYBasisPoints: number;
+  }>;
+  readonly normalizedCenter: Readonly<{
+    xBasisPoints: number;
+    yBasisPoints: number;
+  }>;
+  readonly coverageBasisPoints: number;
+}
+
+function parseIdentityColor(color: string): readonly [number, number, number] {
+  if (!/^#[0-9A-F]{6}$/.test(color)) {
+    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
+  }
+  return Object.freeze([
+    Number.parseInt(color.slice(1, 3), 16),
+    Number.parseInt(color.slice(3, 5), 16),
+    Number.parseInt(color.slice(5, 7), 16),
+  ]);
+}
+
+function parseVisualPaletteTargets(
+  value: unknown,
+  expectedSceneId: string,
+): readonly NativeWorldVisualPaletteTargetV1[] {
+  const palette = record(
+    value,
+    [
+      "kind",
+      "schemaVersion",
+      "sceneId",
+      "sceneBriefHash",
+      "movementMode",
+      "movementModeLabel",
+      "targets",
+    ],
+    "NATIVE_WORLD_BASELINE_PALETTE_INVALID",
+  );
+  if (
+    palette.kind !== "worldkit-visual-identity-palette" ||
+    palette.schemaVersion !== 1 ||
+    palette.sceneId !== expectedSceneId ||
+    !Array.isArray(palette.targets)
+  ) {
+    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
+  }
+  const targets = palette.targets.map((value, index) => {
+    if (isNil(value) || typeof value !== "object" || Array.isArray(value)) {
+      throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
+    }
+    const target = value as Record<string, unknown>;
+    const id = target.id;
+    const targetKind = target.targetKind;
+    const semanticClassId = target.semanticClassId;
+    const identityColor = target.identityColor;
+    if (
+      typeof id !== "string" ||
+      typeof targetKind !== "string" ||
+      typeof semanticClassId !== "string" ||
+      typeof identityColor !== "string" ||
+      !/^visual-target-[1-5]$/.test(id) ||
+      !/^#[0-9A-F]{6}$/.test(identityColor) ||
+      (index === 0 && targetKind !== "subject")
+    ) {
+      throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
+    }
+    return Object.freeze({
+      id,
+      targetKind,
+      semanticClassId,
+      identityColor: identityColor as `#${string}`,
+    });
+  });
+  if (
+    targets.filter(({ targetKind }) => targetKind === "subject").length !== 1 ||
+    new Set(targets.map(({ id }) => id)).size !== targets.length ||
+    new Set(targets.map(({ identityColor }) => identityColor)).size !== targets.length
+  ) {
+    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
+  }
+  return Object.freeze(targets);
+}
+
+function targetLayerFromCenterY(
+  yBasisPoints: number,
+): NativeWorldBaselineVisualTargetV1["semanticLayerId"] {
+  if (yBasisPoints >= 6500) return "foreground";
+  if (yBasisPoints <= 3500) return "remote";
+  return "middle";
+}
+
+async function measurePaletteTarget(
+  imagePath: string,
+  target: NativeWorldVisualPaletteTargetV1,
+): Promise<NativeWorldBaselineVisualTargetV1> {
+  const { data, info } = await sharp(imagePath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const [red, green, blue] = parseIdentityColor(target.identityColor);
+  let minimumX = info.width;
+  let minimumY = info.height;
+  let maximumX = -1;
+  let maximumY = -1;
+  let pixelCount = 0;
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const offset = (y * info.width + x) * 4;
+      if (
+        Math.abs(data[offset]! - red) > 24 ||
+        Math.abs(data[offset + 1]! - green) > 24 ||
+        Math.abs(data[offset + 2]! - blue) > 24 ||
+        data[offset + 3]! === 0
+      ) continue;
+      minimumX = Math.min(minimumX, x);
+      minimumY = Math.min(minimumY, y);
+      maximumX = Math.max(maximumX, x);
+      maximumY = Math.max(maximumY, y);
+      pixelCount += 1;
+    }
+  }
+  const hasMeasuredMask = pixelCount > 0;
+  const normalizedBounds = hasMeasuredMask
+    ? Object.freeze({
+      minXBasisPoints: Math.floor(minimumX * 10000 / info.width),
+      minYBasisPoints: Math.floor(minimumY * 10000 / info.height),
+      maxXBasisPoints: Math.ceil((maximumX + 1) * 10000 / info.width),
+      maxYBasisPoints: Math.ceil((maximumY + 1) * 10000 / info.height),
+    })
+    : Object.freeze({
+      minXBasisPoints: 2500,
+      minYBasisPoints: 1200,
+      maxXBasisPoints: 7500,
+      maxYBasisPoints: 5200,
+    });
+  const normalizedCenter = Object.freeze({
+    xBasisPoints: Math.round(
+      (normalizedBounds.minXBasisPoints + normalizedBounds.maxXBasisPoints) / 2,
+    ),
+    yBasisPoints: Math.round(
+      (normalizedBounds.minYBasisPoints + normalizedBounds.maxYBasisPoints) / 2,
+    ),
+  });
+  return Object.freeze({
+    acceptanceTargetRef: `worldkit://acceptance-target/${target.id}@1`,
+    compositionTargetRef: `worldkit://composition-target/${target.id}@1`,
+    visualGroupId: `${target.id}-group`,
+    topologyNodeId: target.id,
+    semanticLayerId: targetLayerFromCenterY(normalizedCenter.yBasisPoints),
+    normalizedBounds,
+    normalizedCenter,
+    coverageBasisPoints: hasMeasuredMask
+      ? Math.max(1, Math.round(pixelCount * 10000 / (info.width * info.height)))
+      : 2000,
+  });
+}
+
+/**
+ * Derives the deliberately small report-only Case that replaces the former
+ * model-authored Native Case Mapping stage. The Host owns this fixed frame;
+ * the Builder still owns all scene geometry inside it.
+ */
+export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
+  sceneId: string;
+  visualIdentityPalettePath: string;
+  entryWhiteboxTargetPath: string;
+}>): Promise<unknown> {
+  const palette = parseVisualPaletteTargets(
+    JSON.parse(await readFile(input.visualIdentityPalettePath, "utf8")),
+    input.sceneId,
+  );
+  const landmarkTargets = await Promise.all(
+    palette.filter(({ targetKind }) => targetKind !== "subject")
+      .map((target) => measurePaletteTarget(input.entryWhiteboxTargetPath, target)),
+  );
+  const visualTargets = sortBy([
+    BASELINE_ENTRY_GROUND,
+    BASELINE_REMOTE_GROUND,
+    ...landmarkTargets,
+  ], ({ acceptanceTargetRef }) => acceptanceTargetRef);
+  const targetRefs = visualTargets.map(({ compositionTargetRef }) =>
+    compositionTargetRef);
+  const orderedTargetRefs = [
+    BASELINE_ENTRY_GROUND,
+    BASELINE_REMOTE_GROUND,
+    ...sortBy(landmarkTargets, ({ normalizedCenter }) =>
+      -normalizedCenter.yBasisPoints),
+  ].map(({ compositionTargetRef }) => compositionTargetRef);
+  const entryAcceptanceTargetRef = BASELINE_ENTRY_GROUND.acceptanceTargetRef;
+  const remoteAcceptanceTargetRef = BASELINE_REMOTE_GROUND.acceptanceTargetRef;
+  const traversalCheckId = "entry-to-remote-ground-pass";
+  const checkpointId = "remote-ground-arrival";
+  const expected = Object.freeze({
+    topology: Object.freeze({
+      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      nodeIds: sortBy(visualTargets.map(({ topologyNodeId }) => topologyNodeId)),
+      relations: Object.freeze([Object.freeze({
+        fromNodeId: BASELINE_ENTRY_GROUND.topologyNodeId,
+        relation: "connects-to" as const,
+        toNodeId: BASELINE_REMOTE_GROUND.topologyNodeId,
+      })]),
+      layerIds: Object.freeze(["foreground", "middle", "remote"]),
+    }),
+    semanticSilhouetteTargets: Object.freeze(visualTargets.map((target) =>
+      Object.freeze({
+        acceptanceTargetRef: target.acceptanceTargetRef,
+        visualGroupId: target.visualGroupId,
+        normalizedBounds: target.normalizedBounds,
+        normalizedCenter: target.normalizedCenter,
+        coverageBasisPoints: target.coverageBasisPoints,
+      }))),
+    openingComposition: Object.freeze({
+      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      targetRefs: Object.freeze(targetRefs),
+      regions: Object.freeze(visualTargets.map((target) => Object.freeze({
+        targetRef: target.compositionTargetRef,
+        normalizedBounds: target.normalizedBounds,
+      }))),
+      anchors: Object.freeze(visualTargets.map((target) => Object.freeze({
+        targetRef: target.compositionTargetRef,
+        normalizedCenter: target.normalizedCenter,
+      }))),
+      orderedTargetRefs: Object.freeze(orderedTargetRefs),
+    }),
+    spawnSupport: Object.freeze({
+      acceptanceTargetRef: entryAcceptanceTargetRef,
+      spawnMarkerId: "entry-spawn",
+      supportColliderId: "collider-entry-ground",
+      expectedMedium: "ground" as const,
+      expectedPositionXYZMeters: Object.freeze({
+        xMeters: 0,
+        yMeters: 0,
+        zMeters: 0,
+      }),
+    }),
+    colliders: Object.freeze([
+      Object.freeze({
+        acceptanceTargetRef: entryAcceptanceTargetRef,
+        contributionId: "collider-entry-ground",
+        colliderId: "collider-entry-ground",
+        role: "ground" as const,
+        requiresOverlay: true,
+      }),
+      Object.freeze({
+        acceptanceTargetRef: remoteAcceptanceTargetRef,
+        contributionId: "collider-remote-ground",
+        colliderId: "collider-remote-ground",
+        role: "ground" as const,
+        requiresOverlay: true,
+      }),
+    ]),
+    groundConnectivity: Object.freeze({
+      requireSingleReachableComponent: true,
+      requiredTraversalBands: Object.freeze([Object.freeze({
+        acceptanceTargetRef: remoteAcceptanceTargetRef,
+        id: "entry-to-remote-ground-band",
+        centerlineStandPositionsXYZMeters: Object.freeze([
+          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: 0 }),
+          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -4 }),
+          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -8 }),
+          Object.freeze({ xMeters: 0, yMeters: 0, zMeters: -12 }),
+        ]),
+        halfWidthMeters: 1.5,
+      })]),
+    }),
+    criticalTraversalChecks: Object.freeze([Object.freeze({
+      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      id: traversalCheckId,
+      evidenceKind: "scripted-fixed-input" as const,
+      expectation: "pass" as const,
+      checkpointIds: Object.freeze([checkpointId]),
+      fixedInputSequence: Object.freeze([Object.freeze({
+        actions: Object.freeze(["move-forward"]),
+        axes: Object.freeze({ moveYRatio: 1 }),
+        ticks: 300,
+      })]),
+    })]),
+    deterministicBuild: Object.freeze({
+      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      requiresCandidateReplay: true as const,
+      requiresWorldPackageIdentityAgreement: true as const,
+      requiresBuildIdentityAgreement: true as const,
+      requiresCaptureIdentityAgreement: true as const,
+    }),
+  });
+  return Object.freeze({
+    kind: "native-world-case-proposal",
+    schemaVersion: 1,
+    sceneId: input.sceneId,
+    expected,
+    formalCaptureIntent: Object.freeze({
+      kind: "formal-world-capture-intent",
+      schemaVersion: 1,
+      id: `${input.sceneId}.formal-world-capture-intent`,
+      captureProfile: Object.freeze({
+        widthPixels: 1280,
+        heightPixels: 720,
+        devicePixelRatio: 1,
+      }),
+      semanticCaptureTargetBindings: Object.freeze(visualTargets.map((target) =>
+        Object.freeze({
+          acceptanceTargetRef: target.acceptanceTargetRef,
+          compositionTargetRef: target.compositionTargetRef,
+          topologyNodeId: target.topologyNodeId,
+          semanticLayerId: target.semanticLayerId,
+          blockVisualGroupId: target.visualGroupId,
+        }))),
+      topologyRelations: Object.freeze([Object.freeze({
+        fromNodeId: BASELINE_ENTRY_GROUND.topologyNodeId,
+        relation: "connects-to" as const,
+        toNodeId: BASELINE_REMOTE_GROUND.topologyNodeId,
+        measurementSource: "scripted-traversal" as const,
+        traversalCheckId,
+      })]),
+      checkpointSpatialCriteria: Object.freeze([Object.freeze({
+        kind: "reach-bounds" as const,
+        checkpointId,
+        expectation: "reach" as const,
+        sourceVisualGroupId: BASELINE_REMOTE_GROUND.visualGroupId,
+        capsuleRadiusMeters: 0.35,
+        toleranceMeters: 0.05,
+      })]),
+    }),
+    worldBounds: BASELINE_WORLD_BOUNDS,
+  });
+}
 
 function record(value: unknown, fields: readonly string[], code: string) {
   if (isNil(value) || typeof value !== "object" || Array.isArray(value) ||

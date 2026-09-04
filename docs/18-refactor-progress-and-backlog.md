@@ -1211,7 +1211,10 @@ source-neutral Opening Composition Host Gate。
   非 GO、但可启动的 Package/Capture/诊断；正式验收使用 `required-for-publication`。该项属于
   NBR-65 内部纠偏，不增加 WRC-1 工作包数量。交互式生产命令在正式 Capture/评测通过后只重放
   不可变身份闭包并发布，不自动重复耗时的 fresh Browser playability；完整可玩性复验继续由显式
-  `verify:native-block-reconstruction-e2e` 与未完成的 NBR-70 验收拥有；
+  `verify:native-block-reconstruction-e2e` 与未完成的 NBR-70 验收拥有。默认交互入口的模型阶段必须
+  精确为 Unified Planner → Babylon Native Block Builder；Planner 交付后由 Host 从冻结 Brief、身份色板
+  和入口图确定性派生宽松基础 Case，禁止恢复独立 `native-case-mapping` 模型任务、第三次模型调用或
+  Mapping retry。显式 curated strict Case 继续直接进入同一 reconstruction runner；
 - [x] NBR-65K：把上述模式边界落实为同一正式入口的 current-only 行为，而不是增加一条宽松链路：
   `report-only` 仍强制 Native Check、Ground Analysis、显式 Collider/Spawn/Package/Receipt、Runtime
   与 Capture 运行成功；Builder 仍可在同一任务内使用冻结的 source-only 自修复预算，但 Host 的

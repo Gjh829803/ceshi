@@ -671,9 +671,17 @@ The evaluator does not edit files, run a model, mutate Runtime, or update a Pack
 
 ### `codex/block-world-main-integration` feedback-parity baseline
 
-The default interactive Native reconstruction route preserves the successful feedback shape of
-`codex/block-world-main-integration` without restoring its Three.js implementation. The parity boundary is
-behavioral, not a second implementation:
+The default interactive Native reconstruction route preserves the successful stage topology and feedback
+shape of `codex/block-world-main-integration` without restoring its Three.js implementation. It launches
+exactly two model tasks: Unified Planner, then Babylon Native Block Builder. There is no separate Native Case
+Mapper, mapping model task, or mapping retry between them. After Planner delivery, the trusted Host derives a
+small report-only baseline Case deterministically from the frozen Scene Brief, identity palette and entry
+target: one fixed metric frame, explicit entry/remote ground groups, Spawn support, one forward traversal band,
+and the non-Subject palette targets measured from the entry image. That derived Case is frozen before the
+Builder request and never becomes another Scene Source or geometry owner. A structure test locks the two-task
+sequence and forbids the removed `native-case-mapping` stage from returning.
+
+The parity boundary is one implementation with two policy profiles:
 
 | Stage | Default interactive disposition | Reason |
 | --- | --- | --- |
@@ -684,7 +692,8 @@ behavioral, not a second implementation:
 | Opening Composition, semantic silhouette, topology, ordered-target distance and scripted quality scoring | measured and reported, never blocking in `report-only` | The baseline used comparison images as Builder feedback, not as a Host publication gate. |
 | External repair caused only by Opening/Evaluation quality drift | disabled in `report-only` | The first runnable Candidate is delivered for human inspection instead of starting another long generation Attempt. |
 
-`required-for-publication` remains an explicitly selected strict acceptance profile and may use the retained
+`required-for-publication` remains an explicitly selected strict acceptance profile for an explicitly authored
+or curated Case and may use the retained
 Host-created external repair budget for Check, Ground, Opening and Evaluation failures. It is not the default
 interactive reconstruction route. A rejected
 Capture is always an operational failure; production code must not reinterpret legacy `rejected-capture`

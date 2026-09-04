@@ -214,10 +214,11 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
    semantic asset names on initial and repair Attempts. Preserve the uploaded
    reference as a separate named input.
 2. Extend the sole current Evaluation Profile with
-   `qualityGateMode: "report-only" | "required-for-publication"`. Newly mapped
-   exploratory Native Cases use `report-only`; curated acceptance fixtures may
-   use `required-for-publication`. Do not retain an old parser or implicit
-   fallback.
+   `qualityGateMode: "report-only" | "required-for-publication"`. The default
+   interactive Host derives one deterministic baseline Case from the Planner
+   artifacts and uses `report-only`; it must not launch a Native Case Mapper or
+   any third model task. Curated acceptance fixtures may use
+   `required-for-publication`. Do not retain an old parser or implicit fallback.
 3. Keep Native Check, Ground Analysis, Package/Receipt, Runtime, Spawn/Support,
    explicit Collider, identity, determinism and cleanup failures hard in both
    modes.
@@ -228,11 +229,12 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
    Attempt before terminal disposition. Missing checkpoint rows or stale
    evidence remain non-repairable. Never synthesize success or throw
    `BABYLON_FORMAL_CAPTURE_*_CHECKPOINT_UNMEASURED` for this quality condition.
-5. Run the existing bounded quality repair loop in both modes. At exhaustion,
-   `required-for-publication` remains rejected. `report-only` returns exit zero
-   with an explicitly non-accepted preview result, admitted Package identity,
-   exact diagnostics, surviving Capture/evaluation paths and stable launch
-   command. It must not call the final accepted-artifact publisher.
+5. Run the bounded external repair loop only for
+   `required-for-publication`. `report-only` closes on a hard Host rejection and,
+   after the first admitted Capture/Evaluation, returns exit zero with an
+   explicitly non-accepted preview result, admitted Package identity, exact
+   diagnostics, surviving Capture/evaluation paths and stable launch command.
+   It must not call the final accepted-artifact publisher.
 6. Add focused RED->GREEN coverage for named Planner assets, task identity,
    incomplete evidence projection, failed/incomplete quality preview, strict
    rejection, hard-admission rejection and cleanup. Update the parity verifier
@@ -264,7 +266,7 @@ the real Case candidate is frozen.
    `rejected-evaluation`; an exhausted soft-quality `report-only` result is `preview-ready` with
    `publicationStatus: "not-accepted"`. Both expose exact diagnostic codes and immutable
    Package/Capture/evaluation/Receipt paths; neither may call the final publisher or label that candidate
-   accepted. Native Case mapping also uses one static Collider identity
+   accepted. The Host-derived baseline Case and curated strict Cases both use one static Collider identity
    (`contributionId === colliderId`), and the trusted Formal Capture binder rejects pass/block planes whose
    crossed `expectedCenterSide` is already satisfied at Spawn.
 6. Record actual draw/buffer counts, collision parts, peak active physics objects, readiness and
