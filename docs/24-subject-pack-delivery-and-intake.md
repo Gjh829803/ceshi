@@ -9,10 +9,12 @@
 1. 一个不可变版本的自包含 GLB；
 2. 明确的坐标、尺寸、正面、支点、碰撞体和许可证信息；
 3. 如果需要动画：一个确定的骨架、Bind Pose、语义骨骼表，以及绑定到同一骨架的动作；
-4. 结构检查、浏览器渲染和人工方向检查证据；
-5. 一次 Registry、Resolver、Agent Catalog 和端到端测试接入。
+4. 希望使用的移动类型、输入方式和完整移动手感参数；
+5. 默认展示策略与推荐镜头套餐/目标；
+6. 结构检查、浏览器渲染和人工方向检查证据；
+7. 一次 Registry、Resolver、Agent Catalog 和端到端测试接入。
 
-资产方不需要实现移动算法、相机算法或输入代码。主体外观、骨骼和动作属于 Subject Pack；走路、飞行等行为由 Motion Pack 选择；第一人称、第三人称、过肩和巨物视角由 Camera Pack 选择。
+同事可以一次性交付完整的可玩主体设计，包括驾驶、飞行或行走手感，但不应提交任意 Runtime 脚本。主体外观、骨骼和动作进入 Subject 资源；移动类型进入 Motion Pack；速度、加速度、刹车和转向等数值进入 Control Feel Profile；按键到油门、转向等意图的映射进入 Control Profile；第一人称、第三人称、过肩和巨物视角仍进入 Camera Pack。
 
 当前仓库还没有“复制一个目录后自动注册任意新主体”的通用命令。只有当本文“SDK 接入清单”全部完成后，这个主体才算已经直接进入系统，而不是仅仅把 GLB 放进了仓库。
 
@@ -20,8 +22,8 @@
 
 | 角色 | 负责 | 不负责 |
 | --- | --- | --- |
-| 资产制作/导出 | 最终 GLB、Rig、动作、来源、许可证、结构和视觉 QA | Motion/Camera/Input/Runtime 代码 |
-| SDK 接入 | Registry、Resolver、WorldPackage、Fixture、Verifier、Agent Catalog | 擅自修改资产字节或猜骨骼语义 |
+| 套餐制作/交付 | 最终 GLB、Rig、动作、来源、许可证、移动类型、手感参数、推荐镜头、结构和视觉 QA | 任意 Runtime 脚本或绕过已批准能力 |
+| SDK 接入 | 将一次交付拆成 Subject、Motion、Control Feel、Control、Camera 资源，并完成 Registry、Resolver、WorldPackage、Fixture、Verifier、Agent Catalog | 擅自修改资产字节、猜骨骼语义或把未知算法当参数导入 |
 | 产品评审 | 是否公开、推荐级别、视觉/交互接受结论 | 用“看起来可以”替代自动化证据 |
 
 ## 1. 先判断走哪条交付路径
@@ -34,7 +36,8 @@
 | 自绘几个 box/sphere/cylinder 就够了 | 不新增主体套餐 | 直接使用 custom Mesh base；无需资产接入 |
 | 需要新的非人形动画骨架 | Capability Gap | 当前 Runtime 只有正式 biped 语义 Rig 合同，不能伪装成人形导入 |
 | 一个主体里需要两个独立动画骨架 | Capability Gap | 当前一个 Rigged Subject 只允许一个 Skeleton；应拆为单 Rig 加刚性附件，或先实现 multi-Rig 能力 |
-| 外观看起来像车、船或飞行器，希望自动获得对应行为 | 不成立 | 外观不产生能力；接入后由已实现的 Motion Pack 决定行为 |
+| 交付一辆车，同时提供最高速度、加速、刹车和转向手感 | Playable Subject Pack | 视觉进入 Subject；驾驶算法选择 `wheeled-arcade`；数值进入独立 Control Feel；导入后绑定成一个 Agent Motion Pack |
+| 提交系统不存在的新移动算法 | Capability Gap | 可以交付需求和参数，但必须先实现、验证新的 Motion Kernel，不能靠 JSON 自动产生代码 |
 
 不要为了“更像”而新建套餐。换衣服、颜色、头发、普通手持武器等外观变化优先交给后续视觉生成；只有需要复用的完整模型、独立体型、Rig、动作集或产品级身份才值得进入 Registry。
 
@@ -88,6 +91,7 @@ Subject Pack id: acme.stone-golem
 ```text
 assets/subjects/packages/<creator-id>/<subject-id>/v<source-version>/
 ├── package.manifest.json
+├── subject-pack.delivery.json
 ├── model/
 │   ├── model.glb
 │   └── model.manifest.json
@@ -107,6 +111,12 @@ assets/subjects/packages/<creator-id>/<subject-id>/v<source-version>/
 │   └── jump/
 │       ├── clip.glb
 │       └── clip.manifest.json
+├── behavior/
+│   ├── motion.manifest.json
+│   ├── control-feel.manifest.json
+│   └── control.manifest.json
+├── camera/
+│   └── recommendation.json
 ├── evidence/
 │   ├── front.png
 │   ├── right.png
@@ -128,6 +138,96 @@ Static Subject 可以没有 `animations/`。Rigged Subject 必须交付 `model/`
 可以参考它们的目录和字段，但不要复制其二进制、ID、Hash、许可证或 G Bot 专属骨名。
 
 现有 `assets:subjects:modularize` 只负责 G Bot/Golden 的历史合并 GLB 恢复，并不会扫描和导入任意新目录。新 Rigged 来源必须增加显式 Catalog/admission 路径；在通用产品来源 provenance mode 正式实现前，不得把新资产谎报成 `derived-recovery` 或 `generated-fixture`。
+
+### 4.1 完整可玩包的外层交付清单
+
+`package.manifest.json` 继续只描述视觉源闭包。新增的
+`subject-pack.delivery.json` 描述一次完整产品交付，希望通用 importer 将它拆成哪些
+Registry 与 Agent-facing 资源。
+
+下面是一辆跑车的目标交付结构。它是待实现的一键 importer 输入合同，不是当前 Registry
+可以直接读取的资源：
+
+```json
+{
+  "kind": "subject-pack-delivery",
+  "schemaVersion": 1,
+  "id": "acme.sports-car",
+  "version": 1,
+  "sourcePackageRef": "worldkit://subject-source-package/acme.sports-car@1",
+  "subject": {
+    "category": "vehicle",
+    "bodyTopology": "four-wheel",
+    "authoringAvailability": "advanced",
+    "semanticClassId": "subject.vehicle.sports-car"
+  },
+  "movement": {
+    "motionFamily": "wheeled-arcade",
+    "motionPackId": "vehicle.acme-sports-car.default",
+    "inputMode": "throttle-steer",
+    "handling": {
+      "kind": "inline-profile",
+      "id": "acme.sports-car.default",
+      "version": 1,
+      "parameters": {
+        "forwardSpeedMetersPerSecond": 28,
+        "reverseSpeedMetersPerSecond": 8,
+        "accelerationMetersPerSecondSquared": 12,
+        "decelerationMetersPerSecondSquared": 8,
+        "brakeMetersPerSecondSquared": 20,
+        "dragPerSecond": 0.7,
+        "brakeToReverseDelaySeconds": 0.18,
+        "steeringDeadzoneRatio": 0.05,
+        "steeringInputExponent": 1.6,
+        "steeringResponsePerSecond": 4.5,
+        "steeringReturnPerSecond": 7,
+        "fullSteeringAuthoritySpeedMetersPerSecond": 2.5,
+        "lowSpeedTurnRateRadiansPerSecond": 1.15,
+        "highSpeedTurnRateRadiansPerSecond": 0.42,
+        "turnRateSpeedCurveExponent": 1.35,
+        "lateralGripPerSecond": 6,
+        "handbrakeLateralGripPerSecond": 1.5,
+        "handbrakeTurnMultiplier": 1.35
+      }
+    }
+  },
+  "presentation": {
+    "kind": "automatic"
+  },
+  "camera": {
+    "recommendedCameraPackId": "third-person.standard",
+    "recommendedTargetSocketId": "CameraTarget3D"
+  }
+}
+```
+
+每个数值字段必须带单位。禁止 `speed: 100`、`turn: 0.5` 这类依赖口头解释的字段。
+
+### 4.2 手感参数的归属
+
+一次交付可以把所有内容放在同一目录，但 importer 必须按下面的权威拆开：
+
+| 交付内容 | 导入后的资源 | 示例 |
+| --- | --- | --- |
+| 模型、Rig、动作、Socket | Subject Asset / Rig / Animation Set / Subject Definition | 车体 GLB、驾驶员动作、`CameraTarget3D` |
+| 移动类别 | Motion Kernel + Motion Profile | `wheeled-arcade` |
+| 速度、加速度、刹车、抓地力、转向曲线 | Control Feel Profile | `acme.sports-car.default@1` |
+| 按键/轴到油门、方向、手刹的映射 | Control Profile | `throttle-steer` |
+| 默认组合 | Agent Motion Pack | `vehicle.acme-sports-car.default` |
+| 镜头建议 | 已有 Camera Pack + Socket/Bounds target | `third-person.standard` + `CameraTarget3D` |
+
+同一个视觉模型可以发布多个手感，例如城市、跑车和重型；它们应复用同一 Subject Asset，
+只发布不同的 Control Feel / Motion Pack。多个车型也可以引用同一个已批准手感。改变手感
+不会强迫模型 GLB 升级版本，改变 GLB 也不会隐式改写已发布的驾驶参数。
+
+如果 `motionFamily` 已经实现，交付者只提交闭合参数；如果不存在，importer 必须返回
+Capability Gap。任何交付都不能携带一段 JavaScript 来替代受测的 Motion Kernel。
+
+当前分支已经实现底层 `wheeled-arcade` 计算，但 Agent-facing Motion Pack 尚未暴露车辆，
+公开 `ControlFeelProfileInputV1` 也还只有人物/通用地面字段。要让上面的汽车交付真正一键
+导入，还需要先补车辆专属 Control Feel Schema、`throttle-steer` Control Profile、车辆
+Motion Pack，以及“这个 Subject Pack 允许哪些随包 Motion Pack”的兼容关系。现阶段不能
+把车辆速度塞进人物的 `walkSpeedMetersPerSecond` / `runSpeedMetersPerSecond` 冒充完成。
 
 ## 5. Static Subject Pack 交付
 
@@ -472,9 +572,15 @@ packages/subject-registry/src/<creator-id>-subject-definitions.ts
 - Collider Profile；
 - Rig Profile（仅 Rigged）；
 - Animation Set（仅 Rigged）；
+- Control Feel Profile（交付包含新手感时）；
+- Control Profile / Motion Profile（交付不能完全复用现有资源时）；
 - Subject Definition。
 
 所有引用必须是精确版本 Ref，Registry 会计算资源内容 Hash 并验证完整依赖闭包。
+
+Agent-facing 的默认组合还要在 `packages/block-world/src/packs.ts` 中发布对应 Motion
+Pack。算法实现仍属于 Runtime；交付参数不得直接修改
+`packages/runtime-babylon/src/motion-kernel-runtime.ts`。
 
 ### 9.3 补齐四个 Resolver 入口
 
@@ -521,6 +627,10 @@ pnpm check:agent-self-check
 
 若它进入 `unavailableSubjectPacks`，必须修 Registry/Compiler 诊断，不能手改生成的 JSON 把它伪装成可用。
 
+对于随主体一起交付的专属手感，Catalog 还必须证明 Subject Pack 与对应 Motion Pack 的
+兼容关系。不能因为车辆 Motion Kernel 已注册，就让所有人物、动物和自定义主体默认获得
+该车辆手感。
+
 ## 10. Agent 最终如何使用新套餐
 
 接入完成后，Agent 不再碰 GLB 路径、骨名和 Registry Ref，只使用 Catalog 中的 Pack ID：
@@ -564,6 +674,25 @@ camera: {
 target: { kind: "base-subject-bounds", heightRatio: 0.65 }
 ```
 
+汽车套餐接入完成后的预期用法是：
+
+```js
+assembly: {
+  id: "sports-car-player",
+  baseSubject: {
+    kind: "subject-pack",
+    subjectPackId: "acme.sports-car",
+  },
+  attachments: [],
+  motion: {
+    motionPackId: "vehicle.acme-sports-car.default",
+  },
+  presentation: { kind: "automatic" },
+}
+```
+
+Agent 只选择套餐，不在场景中逐项填写最高速度和刹车参数。
+
 ## 11. 最小验收命令
 
 每个新主体应补自己的聚焦测试，然后至少运行：
@@ -593,6 +722,14 @@ Rigged 资产还要证明：
 - Reset 恢复 Tick 0、位置、朝向和默认动作；
 - Collider、墙碰撞和 Camera target 正常。
 
+带移动手感的交付还要证明：
+
+- Control Feel 每个字段都在对应 Motion Family 的闭合 Schema 内；
+- 最高速度、倒车、松油门、刹车、反向延迟和转向曲线达到声明值；
+- 30/60/120 Hz-like 提交节奏产生一致 fixed-tick 结果；
+- Reset、多实例和不同手感之间没有状态串扰；
+- Subject Pack 只暴露审核通过的 Motion Pack 组合。
+
 ## 12. 会被直接拒绝的交付
 
 - 只有 FBX、Blender 工程或 Unity package，没有最终自包含 GLB；
@@ -607,6 +744,8 @@ Rigged 资产还要证明：
 - 只添加 Registry，不添加 Resolver；
 - 只在 Playground 手工看到模型，没有 WorldPackage、Runtime、渲染和多实例证据；
 - 因为模型“看起来会飞/会开”就声明尚未实现的能力；
+- 把车速写进 GLB extras、Subject Asset、模型文件名或人物 `walkSpeed` 字段；
+- 用任意脚本或未知参数名绕过 Motion Kernel / Control Feel Schema；
 - 为了让 Agent 看见而手工修改生成的 Agent Catalog。
 
 ## 13. 可以直接发给同事的交付要求
@@ -618,7 +757,9 @@ Rigged 资产还要证明：
 
 Rigged Biped 还必须提供单 Skeleton Model、完整 Bind Pose、17 项语义 Bone 映射、Rig Signature，以及绑定到同一 Rig 的独立 in-place idle/walk/run/jump Clip 与动作 QA。不要实现移动、镜头、输入或 Runtime，也不要提交两个独立 Skeleton 的组合体。
 
-请使用新的 creator/subject 命名空间和不可变版本；任何字节变化都发新版本。交付时同时说明希望是 recommended、advanced 还是 experimental，以及是否需要 FirstPersonView、ThirdPersonTarget 或其他语义 Socket。
+套餐必须同时提交 subject-pack.delivery.json，声明已支持的 motionFamily、输入模式、带单位的完整手感参数、默认展示策略，以及推荐 Camera Pack/target。可以提交系统已支持移动家族的参数，但不要提交任意 Runtime 脚本；系统没有对应 Motion Kernel 时按 Capability Gap 处理。
+
+请使用新的 creator/subject 命名空间和不可变版本；模型、Rig、动作和手感分别版本化。交付时同时说明希望是 recommended、advanced 还是 experimental，以及是否需要 FirstPersonView、ThirdPersonTarget 或其他语义 Socket。
 ```
 
 ## 相关资料
