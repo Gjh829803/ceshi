@@ -8,6 +8,8 @@ import {
   deterministicCaptureBrowserLaunchOptions,
   launchChromiumWithSystemFallback,
 } from "../lib/playwright-browser-launch";
+import { savePlaywrightCanvasScreenshot } from
+  "../lib/playwright-canvas-screenshot";
 
 interface Options {
   sceneId: string;
@@ -146,13 +148,7 @@ async function main(): Promise<void> {
     const screenshots: string[] = [];
     const takeScreenshot = async (name: string): Promise<void> => {
       const target = path.join(options.output, name);
-      const dataUrl = await canvas.evaluate((element) => {
-        if (!(element instanceof HTMLCanvasElement)) throw new Error("WORLDKIT_CANVAS_MISSING");
-        return element.toDataURL("image/png");
-      });
-      const prefix = "data:image/png;base64,";
-      if (!dataUrl.startsWith(prefix)) throw new Error("WORLDKIT_CANVAS_PNG_INVALID");
-      await writeFile(target, Buffer.from(dataUrl.slice(prefix.length), "base64"));
+      await savePlaywrightCanvasScreenshot(canvas, target);
       screenshots.push(name);
     };
     await takeScreenshot("recon-00-initial.png");
