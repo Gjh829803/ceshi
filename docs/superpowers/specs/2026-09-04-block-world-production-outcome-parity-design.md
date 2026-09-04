@@ -114,6 +114,8 @@ visible and continues to fail an explicit strict NBR verifier, but cannot close 
 - publish a closed `strict-diagnostic` receipt beside the final artifacts and bind its Hash into the launch;
 - expose `productionOutcome` and `strictDiagnosticOutcome` separately in CLI/Studio;
 - do not retain an old and new outcome parser, boolean switch, environment toggle, or compatibility alias;
+- delete the superseded preview result types, Studio projection, publisher bypass, duplicate verifier call,
+  and tests whose only purpose was the removed outcome authority; retain only reusable evidence/integrity code;
 - cancellation, missing required artifacts, stale identities, unsafe paths, failed Native build/Capture, or
   failed atomic publication remain production failures.
 

@@ -4,7 +4,13 @@
 
 **Goal:** Deliver one real reference-driven Babylon Native Block world through AI generation, formal Check/Package/Runtime/Capture, dimensioned evaluation, one bounded repair, and a directly runnable final WorldPackage.
 
-**Architecture:** Keep exactly the existing Canonical JSON and Babylon Native Scene Sources. Add source-neutral generation identity and reconstruction evaluation to existing contract owners, invoke the existing Codex router for generation/repair, and reuse the admitted Native checker, WorldPackage builder, RuntimeHost, BabylonWorldRuntime, SDK Havok/Subject/Input/Action/Camera, Browser lifecycle, and Capture ports. Under explicit `required-for-publication`, hard authoring/admission failures and quality failures may create a new immutable Attempt/Package/Capture chain within budget. The default interactive `report-only` route preserves the earlier Block World feedback shape: Builder in-task self-repair remains bounded, the Host replays hard checks once and closes on rejection, and completed Opening/Evaluation drift is published as non-GO preview evidence without another Attempt. No stage edits a frozen predecessor.
+**Architecture:** Keep exactly the existing Canonical JSON and Babylon Native Scene Sources. Add source-neutral generation identity and reconstruction evaluation to existing contract owners, invoke the existing Codex router for generation/repair, and reuse the admitted Native checker, WorldPackage builder, RuntimeHost, BabylonWorldRuntime, SDK Havok/Subject/Input/Action/Camera, Browser lifecycle, and Capture ports. Under explicit `required-for-publication`, hard authoring/admission failures and quality failures may create a new immutable Attempt/Package/Capture chain within budget. The default interactive `report-only` route preserves the earlier Block World feedback shape: Builder in-task self-repair remains bounded, the Host replays hard checks once and closes on rejection, and completed Opening/Evaluation findings are published as strict diagnostics without another Attempt. Ordinary production success follows the exact historical requested-scope rules; the former `preview-ready/not-accepted` terminal branch is deleted. No stage edits a frozen predecessor.
+
+**Outcome revision:** The frozen
+[`2026-09-04-block-world-production-outcome-parity-design.md`](../specs/2026-09-04-block-world-production-outcome-parity-design.md)
+supersedes every later checklist sentence in this historical plan that treated current Evaluation or NBR-70
+as an ordinary-publication veto. Keep the checks; remove the obsolete status branch and duplicate publication
+verifier authority.
 
 **Tech Stack:** TypeScript, Vitest, pnpm workspaces, Babylon.js, Havok, Vite, Playwright, existing WorldKit CLI/RuntimeHost/WorldPackage contracts, `scripts/agents/run-codex-task.mjs`.
 
@@ -1405,7 +1411,8 @@ This originally closed the production transaction and injected one-repair proof;
 extends that same owner to a bounded three-repair chain for hard authoring/admission failures and explicit
 `required-for-publication` Check/Ground/Opening/Evaluation gates. `report-only` performs no Host-created
 external repair: a hard Host rejection closes the current run, while a completed Capture/Evaluation returns
-the first Candidate as non-GO preview evidence when quality drifts. Task 13 still owns the real Case execution that must
+the first Candidate under the historical production outcome with separate strict diagnostics when quality drifts.
+Task 13 still owns the real Case execution that must
 supply NBR-20 real formal-generation evidence, real multi-Attempt evidence, final publication
 and manual launch.
 
@@ -1567,7 +1574,7 @@ initial-evaluated(failed, repairable) -> repair-generating -> repair-packaged
 -> repair-captured -> repair-evaluated -> cleanup-joined -> completed
 ```
 
-Also test initial pass (no repair), genuinely missing/stale evidence (no repair or accepted publication), an observed-but-incomplete traversal checkpoint (source-only repair while budget remains), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback under `required-for-publication`, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure. After the NBR-65J/K policy cutover, `report-only` must stop after the first hard Host rejection without an external Attempt, or publish its first completed quality result as a non-accepted preview without an Opening/Evaluation repair Attempt; it is never an accepted publication.
+Also test initial pass (no repair), genuinely missing/stale required production evidence (no publication), an observed-but-incomplete traversal checkpoint (source-only repair while budget remains), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback under `required-for-publication`, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture failure, Camera rollback failure, and cleanup failure. Under the 2026-09-04 outcome cutover, `report-only` stops after the first hard Host rejection without an external Attempt; its first complete Package/Capture result is ordinarily published using historical success rules, with Evaluation/NBR findings in a separate strict receipt. Tests must reject any surviving `preview-ready/not-accepted` parser, result, Studio branch, or publisher bypass.
 
 - [ ] **Step 2: Write RED source-only repair tests**
 

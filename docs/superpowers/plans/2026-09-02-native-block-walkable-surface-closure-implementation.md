@@ -209,6 +209,11 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
 
 ## NBR-65J: v2 production-loop usability parity
 
+> **2026-09-04 supersession:** keep the repair-budget and evidence behavior below, but replace its final
+> `preview-ready/not-accepted` projection with the historical production-outcome contract in
+> `2026-09-04-block-world-production-outcome-parity-design.md`. Delete superseded branches; do not add a mode,
+> alias, or fallback.
+
 1. Freeze `world-plan.png` and `entry-whitebox-target.png` into the existing
    Case/Generation Request identity and pass them to the Native Builder under
    semantic asset names on initial and repair Attempts. Preserve the uploaded
@@ -231,10 +236,10 @@ clean-break census, parity verifier fixtures, Skill drift and test census.
    `BABYLON_FORMAL_CAPTURE_*_CHECKPOINT_UNMEASURED` for this quality condition.
 5. Run the bounded external repair loop only for
    `required-for-publication`. `report-only` closes on a hard Host rejection and,
-   after the first admitted Capture/Evaluation, returns exit zero with an
-   explicitly non-accepted preview result, admitted Package identity, exact
-   diagnostics, surviving Capture/evaluation paths and stable launch command.
-   It must not call the final accepted-artifact publisher.
+   after the first admitted Capture/Evaluation, projects the exact historical
+   production outcome, publishes a successful requested scope atomically, and
+   records exact Evaluation/NBR findings separately. It does not retain a
+   preview-only publisher bypass.
 6. Add focused RED->GREEN coverage for named Planner assets, task identity,
    incomplete evidence projection, failed/incomplete quality preview, strict
    rejection, hard-admission rejection and cleanup. Update the parity verifier
@@ -261,12 +266,11 @@ the real Case candidate is frozen.
 4. Verify Spawn/support, free walking, mixed heights/steps, blockers, intentional ledges, cliff
    protection, cross-Chunk movement and far silhouette visibility.
 5. Publish identity-bound Package, Receipt, opening/top/side Capture, Collider overlay, ground report,
-   parity report, evaluation and a stable preview command. A failed visual score is previewable only
-   after Package and Runtime admission pass. An exhausted `required-for-publication` result remains
-   `rejected-evaluation`; an exhausted soft-quality `report-only` result is `preview-ready` with
-   `publicationStatus: "not-accepted"`. Both expose exact diagnostic codes and immutable
-   Package/Capture/evaluation/Receipt paths; neither may call the final publisher or label that candidate
-   accepted. The Host-derived baseline Case and curated strict Cases both use one static Collider identity
+   parity report, evaluation, strict-diagnostic receipt and a stable launch command. Evaluation/NBR strict
+   failure remains visible after Package and Runtime admission but cannot override a passed historical
+   production scope. Both Host-derived and curated repair-budget Profiles use this one production outcome;
+   explicit NBR-70/NBR-90 commands own strict acceptance. The Host-derived baseline Case and curated Cases
+   both use one static Collider identity
    (`contributionId === colliderId`), and the trusted Formal Capture binder rejects pass/block planes whose
    crossed `expectedCenterSide` is already satisfied at Spawn.
 6. Record actual draw/buffer counts, collision parts, peak active physics objects, readiness and

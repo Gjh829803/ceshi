@@ -669,6 +669,13 @@ The evaluator does not edit files, run a model, mutate Runtime, or update a Pack
 
 ## 9. Bounded multi-stage repair closure
 
+> **2026-09-04 outcome-authority revision:**
+> [`2026-09-04-block-world-production-outcome-parity-design.md`](2026-09-04-block-world-production-outcome-parity-design.md)
+> supersedes this section wherever it described `preview-ready`, `not-accepted`, seven-dimension Evaluation,
+> or NBR-70 verification as the ordinary production success/publication authority. The checks and bounded
+> repair inputs remain; their terminal findings are strict diagnostics. Ordinary production uses the exact
+> historical requested-scope success/failure rules and deletes the superseded preview terminal branch.
+
 ### `codex/block-world-main-integration` feedback-parity baseline
 
 The default interactive Native reconstruction route preserves the successful stage topology and feedback
@@ -699,13 +706,13 @@ The parity boundary is one implementation with two policy profiles:
 | Opening Composition, semantic silhouette, topology, ordered-target distance and scripted quality scoring | measured and reported, never blocking in `report-only` | The baseline used comparison images as Builder feedback, not as a Host publication gate. |
 | External repair caused only by Opening/Evaluation quality drift | disabled in `report-only` | The first runnable Candidate is delivered for human inspection instead of starting another long generation Attempt. |
 
-`required-for-publication` remains an explicitly selected strict acceptance profile for an explicitly authored
-or curated Case and may use the retained
-Host-created external repair budget for Check, Ground, Opening and Evaluation failures. It is not the default
-interactive reconstruction route. A rejected
+`required-for-publication` remains an explicitly selected repair-budget profile for an explicitly authored
+or curated Case and may use the retained Host-created external repair budget for Check, Ground, Opening and
+Evaluation failures. It is not an ordinary-production publication mode; explicit NBR-70/NBR-90 verification
+owns strict acceptance after publication. A rejected
 Capture is always an operational failure; production code must not reinterpret legacy `rejected-capture`
-evidence as a report-only preview. Report-only preview delivery is available only after a normal completed
-Capture and Evaluation with intact Package and Runtime identities.
+evidence as a completed production result. An evaluated Candidate is production-eligible only after a normal
+completed Capture with intact Package and Runtime identities.
 
 The Profile fixes `maximumRepairAttemptCount: 3`. This means one initial generation plus at most three
 external diagnostic-driven repair Attempts; it is distinct from the bounded source-only self-repair performed
@@ -722,7 +729,8 @@ Host-replay behavior; only the Builder's bounded in-task source repair runs auto
 and Evaluation may allocate a following external repair only when `qualityGateMode` is
 `required-for-publication`. In `report-only`, they still execute and publish their stable diagnostics, but
 they neither reject the Capture nor allocate a new Attempt; the first admitted, captured and evaluated
-Candidate is returned as non-GO preview evidence. Every external repair produces a fresh
+Candidate proceeds under the historical production outcome and carries those findings as strict diagnostics.
+Every external repair produces a fresh
 generation Request, authored-source identity and—only after admission—a fresh Package, Capture and Evaluation
 identity. No Attempt mutates a frozen prior artifact or lowers a Case/Profile threshold. A rejected Native
 Check may enter this loop only when the Host projects a source-repairable owner fact; tooling, determinism,
@@ -754,13 +762,13 @@ promote a failed Package as the runnable final world, weaken a hard Collider/Spa
 or silently lower thresholds. A later user- or queue-triggered run starts a new run identity.
 
 When a completed evaluation still has a verified Package, completed Runtime Capture and completed cleanup,
-its frozen Evaluation Profile decides the non-publication disposition. A `required-for-publication` Case may
-first consume its bounded quality-repair budget and then returns an identity-bound `rejected-evaluation`; a
-`report-only` Case never consumes that budget for Opening/Evaluation drift and returns `preview-ready` with
-`publicationStatus: "not-accepted"`. Both expose the admitted Package directory, opening image, Capture
-Receipt, evaluation, Run Receipt and exact evaluation diagnostic codes so a person can inspect the candidate.
-Neither outcome is publication or GO, and neither is available when Package/Runtime/Capture identity evidence
-is missing or stale.
+the historical-equivalent required stages decide `productionOutcome`. A `required-for-publication` Profile may
+first consume its bounded quality-repair budget; exhaustion does not let the Evaluation or NBR verifier
+overwrite an otherwise passed ordinary production outcome. `report-only` consumes no such external quality
+budget. Both expose the admitted Package, Capture, evaluation, Run Receipt and exact diagnostic codes through
+the durable strict-diagnostic receipt. Missing or stale Package/Runtime/Capture identity remains a production
+failure. The obsolete `preview-ready/not-accepted` terminal result and its dedicated publisher bypass are
+deleted rather than retained behind a mode, alias, or fallback.
 
 Repair writes only a new task workspace and may change `scene.ts`, `native-block-authoring.json`, or
 `native-resources.json` within the frozen Case/Profile budgets. It cannot edit Package A, Capture A,
