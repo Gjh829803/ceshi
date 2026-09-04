@@ -19,7 +19,8 @@ import {
 } from "../lib/lwdp-generation-client.mjs";
 import {
   CLOUD_EPISODE_STAGE_PROFILE_V2,
-  cloudEpisodeStageProfileV3,
+  CLOUD_EPISODE_PART_BY_STAGE_ID,
+  cloudEpisodeResumeStageProfileV3,
 } from "../lib/cloud-production-run.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -95,6 +96,11 @@ export function parseCloudEpisodeRequest(value) {
   if (request.resumeEpisodeManifest !== undefined) {
     required(request.resumeEpisodeManifest?.executionId, "request.resumeEpisodeManifest.executionId");
     assertS3Uri(request.resumeEpisodeManifest?.s3Uri);
+    if (request.resumeEpisodeManifest.stageId !== undefined &&
+        CLOUD_EPISODE_PART_BY_STAGE_ID[request.resumeEpisodeManifest.stageId] !==
+          request.resumeEpisodeManifest.executionPart) {
+      throw new Error("Cloud Episode resume manifest stage identity is invalid.");
+    }
   }
   return request;
 }
@@ -147,7 +153,10 @@ export async function submitCloudEpisode({
     throw new Error("Streaming checkpoint production requires ten-style mode.");
   }
   const stageProfile = effectiveExecutionProfile === "cpu-gpu-streaming-checkpoints@1"
-    ? cloudEpisodeStageProfileV3(productionScope)
+    ? cloudEpisodeResumeStageProfileV3(
+      productionScope,
+      resumeEpisodeManifest?.stageId,
+    )
     : CLOUD_EPISODE_STAGE_PROFILE_V2;
   const resolvedOutputPrefix = assertS3Uri(outputS3Prefix);
   const request = parseCloudEpisodeRequest({
@@ -224,6 +233,7 @@ export async function submitCloudEpisode({
       executionProfile: existingRequest.executionProfile,
       gpuBatch: existingRequest.gpuBatch,
       productionScope: existingRequest.productionScope ?? "full",
+      stageIds: existingRequest.pipeline.stageIds,
       recoveredByRequestId: true,
     };
   }
@@ -292,6 +302,7 @@ export async function submitCloudEpisode({
     executionProfile: request.executionProfile,
     gpuBatch: request.gpuBatch,
     productionScope: request.productionScope ?? "full",
+    stageIds: request.pipeline.stageIds,
   };
 }
 

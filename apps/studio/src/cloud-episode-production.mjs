@@ -268,7 +268,7 @@ export async function executeStudioCloudEpisode({
   });
   await onSubmitted({ ...submitted, outputS3Prefix });
   await launchEpisodeStageWorker({
-    stageId: "episode-prepare",
+    stageId: submitted.stageIds?.[0] ?? "episode-prepare",
     executionId: submitted.executionId,
     requestS3Uri: submitted.requestS3Uri,
     outputS3Prefix,

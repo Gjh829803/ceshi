@@ -219,6 +219,61 @@ test("submits the three-stage Episode execution and launches CPU prepare only", 
   assert.equal(cloudEpisodeInternalStage({ diagnostics: { internal_stage: "whitebox-capture" } }), "whitebox-capture");
 });
 
+test("launches Seedance directly when the submitted resume DAG starts there", async () => {
+  const launches = [];
+  await executeStudioCloudEpisode({
+    sceneId: "scene-cloud-resume",
+    episodeId: "episode-scene-cloud-resume-a1b2c3",
+    sceneExecutionId: "exec-scene-resume",
+    sceneManifestS3Uri: "s3://bucket/scene/manifest.json",
+    sceneRecord: { id: "scene-cloud-resume" },
+    productionScope: "seedance-conformance",
+    styleVariantMode: "ten-style",
+    resumeEpisodeManifest: {
+      executionId: "exec-prior",
+      s3Uri: "s3://bucket/prior/style-prompts.json",
+      stageId: "episode-style-prompts",
+      executionPart: "style-prompts",
+    },
+    workerImage: `worker@sha256:${"b".repeat(64)}`,
+    requestId: "episode-direct-seedance-001",
+    config: {
+      outputS3Root: "s3://bucket/episodes",
+      workerImage: `worker@sha256:${"a".repeat(64)}`,
+      namespace: "lwdp",
+      executionProfile: "cpu-gpu-streaming-checkpoints@1",
+      gpuBatch: {
+        queueS3Prefix: "s3://bucket/gpu-queue",
+        minimumBatchSize: 100,
+        maximumBatchSize: 128,
+      },
+      cpuWorker: {},
+    },
+    cloudConfig: { userId: "partner_codex", baseUrl: "http://lwdp-internal" },
+    submitImplementation: async (input) => ({
+      executionId: "exec-direct-seedance",
+      requestS3Uri: "s3://bucket/episode/request.json",
+      workerImage: input.workerImage,
+      executionProfile: "cpu-gpu-streaming-checkpoints@1",
+      stageIds: ["episode-seedance", "episode-conformance"],
+    }),
+    launchImplementation: async (input) => { launches.push(input); },
+    pollImplementation: async () => ({
+      execution_id: "exec-direct-seedance",
+      status: "succeeded",
+      stages: [{ stage_id: "episode-conformance", status: "succeeded" }],
+    }),
+    stagesImplementation: async () => ({ stages: [{
+      stage_id: "episode-conformance",
+      diagnostics: { manifest_s3_uri: "s3://bucket/episode/conformance.json" },
+    }] }),
+  });
+  assert.equal(launches.length, 1);
+  assert.equal(launches[0].stageId, "episode-seedance");
+  assert.equal(launches[0].executionPart, "seedance");
+  assert.equal(launches[0].gpuRequired, false);
+});
+
 test("defaults a new Cloud Episode to the configured Worker image", async () => {
   const configuredWorker = `worker@sha256:${"d".repeat(64)}`;
   let submittedWorker = null;

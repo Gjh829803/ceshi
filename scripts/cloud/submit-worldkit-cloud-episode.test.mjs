@@ -225,6 +225,68 @@ test("submits the streaming ten-style DAG for a new 48-hour production run", asy
   }
 });
 
+test("submits only Seedance and conformance after a trusted style-prompt resume", async () => {
+  const root = await mkdtemp(join(tmpdir(), "worldkit-cloud-episode-direct-seedance-"));
+  const requestPath = join(root, "request.json");
+  const requests = [];
+  try {
+    const result = await submitCloudEpisode({
+      sceneId: "scene-resume-001",
+      episodeId: "episode-scene-resume-001",
+      sceneExecutionId: "exec-scene-resume",
+      sceneManifestS3Uri: "s3://bucket/scene/manifest.json",
+      sceneRecord: {
+        id: "scene-resume-001",
+        sceneId: "scene-resume-001",
+        status: "ready",
+        remoteArtifactAdmission: { status: "passed" },
+      },
+      productionScope: "seedance-conformance",
+      styleVariantMode: "ten-style",
+      executionProfile: "cpu-gpu-streaming-checkpoints@1",
+      workerImage: `worker@sha256:${"e".repeat(64)}`,
+      gpuBatch: {
+        queueS3Prefix: "s3://bucket/gpu-capture-queue",
+        minimumBatchSize: 100,
+        maximumBatchSize: 128,
+      },
+      resumeEpisodeManifest: {
+        executionId: "exec-prior",
+        s3Uri: "s3://bucket/prior/style-prompts.json",
+        stageId: "episode-style-prompts",
+        executionPart: "style-prompts",
+      },
+      requestId: "episode-scene-resume-001-run-2",
+      outputS3Prefix: "s3://bucket/episodes/episode-scene-resume-001",
+      cloudConfig: config,
+      requestPath,
+      findExistingImplementation: async () => {
+        const error = new Error("not found");
+        error.status = 404;
+        throw error;
+      },
+      uploadOptions: {
+        execFileImplementation: (_command, _args, _options, callback) =>
+          callback(null, "", ""),
+      },
+      fetchImplementation: async (url, init) => {
+        requests.push({ url, body: init.body ? JSON.parse(init.body) : null });
+        return new Response(JSON.stringify({
+          execution: { execution_id: "exec-direct-seedance", status: "running" },
+        }), { status: 201 });
+      },
+    });
+    assert.deepEqual(result.stageIds, ["episode-seedance", "episode-conformance"]);
+    assert.deepEqual(requests[0].body.stages.map(({ stage_id }) => stage_id), [
+      "episode-seedance",
+      "episode-conformance",
+    ]);
+    assert.equal(requests[0].body.stages[0].depends_on, undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("keeps visual-sample runs on the effect-preserving coarse endpoint", async () => {
   const root = await mkdtemp(join(tmpdir(), "worldkit-cloud-episode-visual-sample-"));
   const requestPath = join(root, "request.json");

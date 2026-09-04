@@ -5,6 +5,7 @@ import {
   CLOUD_EPISODE_STAGE_PROFILE_V3,
   CLOUD_EPISODE_STAGE_PROFILE_V2,
   buildGpuCaptureQueueEntry,
+  cloudEpisodeResumeStageProfileV3,
   cloudEpisodeStageProfileV3,
   parseCloudProviderJournal,
   parseGpuCaptureBatchManifest,
@@ -69,6 +70,19 @@ test("Seedance-conformance scope stops the durable DAG before publication", () =
   assert.deepEqual(stages.at(-1).depends_on, ["episode-seedance"]);
   assert.equal(stages.some(({ stage_id }) => stage_id === "episode-publication"), false);
   assert.equal(CLOUD_EPISODE_STAGE_PROFILE_V3.at(-1).stage_id, "episode-publication");
+});
+
+test("resume DAG starts immediately after the trusted completed stage", () => {
+  const stages = cloudEpisodeResumeStageProfileV3(
+    "seedance-conformance",
+    "episode-style-prompts",
+  );
+  assert.deepEqual(stages.map(({ stage_id }) => stage_id), [
+    "episode-seedance",
+    "episode-conformance",
+  ]);
+  assert.equal(stages[0].depends_on, undefined);
+  assert.deepEqual(stages[1].depends_on, ["episode-seedance"]);
 });
 
 test("GPU batch below one hundred requires closed-producer evidence", () => {

@@ -75,6 +75,22 @@ export function cloudEpisodeStageProfileV3(productionScope = "full") {
     : CLOUD_EPISODE_STAGE_PROFILE_V3;
 }
 
+export function cloudEpisodeResumeStageProfileV3(
+  productionScope = "full",
+  resumedStageId = undefined,
+) {
+  const profile = cloudEpisodeStageProfileV3(productionScope);
+  if (resumedStageId === undefined) return profile;
+  const resumedIndex = profile.findIndex((stage) => stage.stage_id === resumedStageId);
+  if (resumedIndex < 0 || resumedIndex === profile.length - 1) {
+    throw new Error(`Cloud Episode resume stage is invalid: ${resumedStageId}`);
+  }
+  return Object.freeze(profile.slice(resumedIndex + 1).map((stage, index) =>
+    Object.freeze(index === 0
+      ? Object.fromEntries(Object.entries(stage).filter(([key]) => key !== "depends_on"))
+      : { ...stage, ...(stage.depends_on ? { depends_on: Object.freeze([...stage.depends_on]) } : {}) })));
+}
+
 export const CLOUD_EPISODE_PART_BY_STAGE_ID = Object.freeze({
   "episode-prepare": "prepare",
   "whitebox-capture": "capture",
