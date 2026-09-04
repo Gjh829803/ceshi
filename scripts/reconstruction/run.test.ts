@@ -853,6 +853,72 @@ describe("runWorldReconstructionV1", () => {
     expect(calls.generateInputs[0]?.repairInstruction).toBeUndefined();
   });
 
+  it("ends report-only at the first trusted Host rejection without an external repair Attempt", async () => {
+    const outputDirectoryPath = await outputRoot();
+    const reportOnlyProfile = parseWorldReconstructionEvaluationProfileV1({
+      ...profile(),
+      qualityGateMode: "report-only",
+    });
+    const reportOnlyCase = {
+      ...reconstructionCase(),
+      evaluationProfileHash:
+        hashWorldReconstructionEvaluationProfileV1(reportOnlyProfile),
+    };
+    const frozenOwnerIdentities = Object.freeze({
+      ...OWNER,
+      caseHash: hashWorldReconstructionCaseV1(reportOnlyCase),
+      evaluationProfileHash:
+        hashWorldReconstructionEvaluationProfileV1(reportOnlyProfile),
+    });
+    const base = fakePorts({ rehash: async () => frozenOwnerIdentities });
+    const attempt0 = identities(0);
+    const ports: WorldReconstructionRunPortsV1 = {
+      ...base.ports,
+      package: async () => {
+        base.calls.package.push(0);
+        return Object.freeze({
+          outcome: "ground-analysis-rejected" as const,
+          sceneAuthoringAttemptResultRef:
+            attempt0.sceneAuthoringAttemptResultRef,
+          sceneAuthoringAttemptResultHash:
+            attempt0.sceneAuthoringAttemptResultHash,
+          authoredSourceRef: attempt0.authoredSourceRef,
+          authoredSourceHash: attempt0.authoredSourceHash,
+          groundAnalysisReportRef:
+            "artifact://run/attempts/0/ground-analysis-report.json",
+          groundAnalysisReportHash: taggedHash("ground-analysis"),
+          repairDiagnostics: Object.freeze([
+            groundStandabilityDiagnostic(),
+          ]),
+          diagnosticCodes: Object.freeze([
+            "native-ground-analysis-rejected",
+            "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+          ]),
+        });
+      },
+    };
+
+    await expect(runWorldReconstructionV1({
+      runId: "formal-20260831",
+      backend: "local",
+      outputDirectoryPath,
+      caseRef: CASE_REF,
+      reconstructionCase: reportOnlyCase,
+      evaluationProfile: reportOnlyProfile,
+      frozenOwnerIdentities,
+    }, ports)).rejects.toMatchObject({
+      diagnosticCodes: [
+        "native-ground-analysis-rejected",
+        "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
+      ],
+      cleanupOutcome: "completed",
+    });
+    expect(base.calls.generate).toEqual([0]);
+    expect(base.calls.package).toEqual([0]);
+    expect(base.calls.capture).toEqual([]);
+    expect(base.calls.generateInputs[0]?.repairInstruction).toBeUndefined();
+  });
+
   it("repairs an initial Ground Analysis rejection before allocating Capture", async () => {
     const outputDirectoryPath = await outputRoot();
     const base = fakePorts({

@@ -1214,53 +1214,6 @@ export async function runWorldReconstructionProductionV1(
   } catch (error) {
     if (error instanceof WorldReconstructionRunClosedErrorV1) {
       if (!isNil(error.rejectedCaptureEvidence)) {
-        if (
-          evaluationProfile.qualityGateMode === "report-only" &&
-          error.cleanupOutcome === "completed"
-        ) {
-          const evidence = error.rejectedCaptureEvidence;
-          try {
-            return Object.freeze({
-              kind: "world-reconstruction-production-result",
-              schemaVersion: 1,
-              caseId: reconstructionCase.id,
-              caseRef,
-              runId,
-              outcome: "preview-ready",
-              publicationStatus: "not-accepted",
-              qualityStage: "opening-composition",
-              qualityOutcome: "failed",
-              diagnosticCodes: error.diagnosticCodes,
-              cleanupOutcome: "completed",
-              previewWorldPackagePath: evidence.rejectedWorldPackagePath,
-              previewWorldPackageRef: evidence.rejectedWorldPackageRef,
-              previewWorldPackageRootHash:
-                evidence.rejectedWorldPackageRootHash,
-              previewCaptureDirectoryPath:
-                evidence.rejectedCaptureDirectoryPath,
-              previewOpeningPath: evidence.rejectedOpeningPath,
-              previewOpeningRef: evidence.rejectedOpeningRef,
-              openingGateResultPath: evidence.openingGateResultPath,
-              openingGateResultRef: evidence.openingGateResultRef,
-              openingGateResultHash: evidence.openingGateResultHash,
-              ...previewLaunch(
-                outputDirectoryPath,
-                evidence.rejectedWorldPackagePath,
-              ),
-            });
-          } catch (previewError) {
-            return Object.freeze({
-              kind: "world-reconstruction-production-result",
-              schemaVersion: 1,
-              caseId: reconstructionCase.id,
-              caseRef,
-              runId,
-              outcome: "closed",
-              diagnosticCodes: diagnosticCodesFromError(previewError),
-              cleanupOutcome: error.cleanupOutcome,
-            });
-          }
-        }
         return Object.freeze({
           kind: "world-reconstruction-production-result",
           schemaVersion: 1,

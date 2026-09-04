@@ -1271,6 +1271,21 @@ export async function runWorldReconstructionV1(
         }
       }
 
+      if (profile.qualityGateMode === "report-only") {
+        const stageCodes = attempt.outcome === "capture-rejected"
+          ? attempt.captured.diagnosticCodes
+          : attempt.packaged.diagnosticCodes;
+        await failClosed(
+          journal,
+          ports,
+          stageCodes,
+          undefined,
+          attempt.outcome === "capture-rejected"
+            ? rejectedCaptureEvidence(attempt.captured)
+            : undefined,
+        );
+      }
+
       if (attemptIndex >= profile.maximumRepairAttemptCount) {
         if (attempt.outcome === "completed") {
           return await publishCompletedReceipt(

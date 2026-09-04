@@ -669,6 +669,28 @@ The evaluator does not edit files, run a model, mutate Runtime, or update a Pack
 
 ## 9. Bounded multi-stage repair closure
 
+### `codex/block-world-main-integration` feedback-parity baseline
+
+The default interactive Native reconstruction route preserves the successful feedback shape of
+`codex/block-world-main-integration` without restoring its Three.js implementation. The parity boundary is
+behavioral, not a second implementation:
+
+| Stage | Default interactive disposition | Reason |
+| --- | --- | --- |
+| Planner Brief and PNG validity, centered entry Subject | blocking, with bounded in-task repair | The baseline Planner already required this self-check. |
+| Native Builder output shape and forbidden authority use | blocking, with bounded in-task repair | Equivalent to the baseline Builder preflight; it does not grant admission. |
+| Native Check, deterministic replay, Ground Analysis, Spawn/support and explicit Collider closure | blocking; no Host-created external Attempt in `report-only` | These replace the baseline structural Block check and are required to avoid a non-runnable or fall-through world. Like the baseline Host replay, a rejection ends the current run with diagnostics. |
+| WorldPackage identity, RuntimeHost, SDK-owned Havok/Subject/Input/Action/Camera, Capture execution and cleanup | blocking | These are the current Babylon production transport and safety boundary, not reconstruction-quality policy. |
+| Opening Composition, semantic silhouette, topology, ordered-target distance and scripted quality scoring | measured and reported, never blocking in `report-only` | The baseline used comparison images as Builder feedback, not as a Host publication gate. |
+| External repair caused only by Opening/Evaluation quality drift | disabled in `report-only` | The first runnable Candidate is delivered for human inspection instead of starting another long generation Attempt. |
+
+`required-for-publication` remains an explicitly selected strict acceptance profile and may use the retained
+Host-created external repair budget for Check, Ground, Opening and Evaluation failures. It is not the default
+interactive reconstruction route. A rejected
+Capture is always an operational failure; production code must not reinterpret legacy `rejected-capture`
+evidence as a report-only preview. Report-only preview delivery is available only after a normal completed
+Capture and Evaluation with intact Package and Runtime identities.
+
 The Profile fixes `maximumRepairAttemptCount: 3`. This means one initial generation plus at most three
 external diagnostic-driven repair Attempts; it is distinct from the bounded source-only self-repair performed
 inside the original Builder task. The current NBR profile fixes `builderSelfRepairAttemptCount: 3`: after
@@ -677,11 +699,14 @@ most three times. Those cycles create neither a Package nor a Runtime Candidate.
 Capture, evaluation and the identity-bearing external repair Attempt remain separate authorities.
 
 Each external repair consumes exactly the trusted evidence from the immediately preceding Attempt. Native
-Check and Ground Analysis may reject in successive Attempts for every Profile because they protect authoring
-and playable-surface admission. Opening Composition and Evaluation may allocate a following external repair
-only when `qualityGateMode` is `required-for-publication`. In `report-only`, they still execute and publish
-their stable diagnostics, but they neither reject the Capture nor allocate a new Attempt; the first admitted,
-captured and evaluated Candidate is returned as non-GO preview evidence. Every repair produces a fresh
+Check and Ground Analysis protect authoring and playable-surface admission in every Profile. Under
+`required-for-publication`, their actionable rejection may allocate a following external repair Attempt.
+Under `report-only`, any Host rejection ends the current run after cleanup, matching the baseline's
+Host-replay behavior; only the Builder's bounded in-task source repair runs automatically. Opening Composition
+and Evaluation may allocate a following external repair only when `qualityGateMode` is
+`required-for-publication`. In `report-only`, they still execute and publish their stable diagnostics, but
+they neither reject the Capture nor allocate a new Attempt; the first admitted, captured and evaluated
+Candidate is returned as non-GO preview evidence. Every external repair produces a fresh
 generation Request, authored-source identity and—only after admission—a fresh Package, Capture and Evaluation
 identity. No Attempt mutates a frozen prior artifact or lowers a Case/Profile threshold. A rejected Native
 Check may enter this loop only when the Host projects a source-repairable owner fact; tooling, determinism,

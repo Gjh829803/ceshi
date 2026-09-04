@@ -4,7 +4,7 @@
 
 **Goal:** Deliver one real reference-driven Babylon Native Block world through AI generation, formal Check/Package/Runtime/Capture, dimensioned evaluation, one bounded repair, and a directly runnable final WorldPackage.
 
-**Architecture:** Keep exactly the existing Canonical JSON and Babylon Native Scene Sources. Add source-neutral generation identity and reconstruction evaluation to existing contract owners, invoke the existing Codex router for generation/repair, and reuse the admitted Native checker, WorldPackage builder, RuntimeHost, BabylonWorldRuntime, SDK Havok/Subject/Input/Action/Camera, Browser lifecycle, and Capture ports. Hard authoring/admission failures and strict `required-for-publication` quality failures may create a new immutable Attempt/Package/Capture chain within budget; `report-only` Opening/Evaluation drift is published as non-GO preview evidence without another Attempt. No stage edits a frozen predecessor.
+**Architecture:** Keep exactly the existing Canonical JSON and Babylon Native Scene Sources. Add source-neutral generation identity and reconstruction evaluation to existing contract owners, invoke the existing Codex router for generation/repair, and reuse the admitted Native checker, WorldPackage builder, RuntimeHost, BabylonWorldRuntime, SDK Havok/Subject/Input/Action/Camera, Browser lifecycle, and Capture ports. Under explicit `required-for-publication`, hard authoring/admission failures and quality failures may create a new immutable Attempt/Package/Capture chain within budget. The default interactive `report-only` route preserves the earlier Block World feedback shape: Builder in-task self-repair remains bounded, the Host replays hard checks once and closes on rejection, and completed Opening/Evaluation drift is published as non-GO preview evidence without another Attempt. No stage edits a frozen predecessor.
 
 **Tech Stack:** TypeScript, Vitest, pnpm workspaces, Babylon.js, Havok, Vite, Playwright, existing WorldKit CLI/RuntimeHost/WorldPackage contracts, `scripts/agents/run-codex-task.mjs`.
 
@@ -400,7 +400,7 @@ export type WorldReconstructionMetricV1 =
   | Readonly<{ kind: "receipt-outcome"; outcome: "completed" | "failed" | "incomplete" }>;
 ```
 
-The Profile sets `maximumRepairAttemptCount: 3` and `builderSelfRepairAttemptCount: 3`. The former permits at most three fresh external Attempts driven by the immediately preceding trusted Native Check, Ground Analysis, Opening or Evaluation evidence. The latter permits at most three bounded source-only self-repair cycles inside one Builder task after its initial output; it never allocates a Package or Runtime Candidate. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
+The Profile sets `maximumRepairAttemptCount: 3` and `builderSelfRepairAttemptCount: 3`. For `required-for-publication`, the former permits at most three fresh external Attempts driven by the immediately preceding trusted Native Check, Ground Analysis, Opening or Evaluation evidence. `report-only` does not consume this Host-created external budget. The latter permits at most three bounded source-only self-repair cycles inside one Builder task after its initial output in both modes; it never allocates a Package or Runtime Candidate. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
 
 NBR-10C closes the evaluator seam before NBR-50A: Case freezes facts only, Profile owns every
 BasisPoints/Millimeters threshold, and EvidenceSet contains seven closed observed payloads with per-row
@@ -1403,8 +1403,9 @@ Request exact-identity review, close every P0/P1, merge PR F2, and refresh `orig
 **Current status:** Complete on `origin/main@04dda773deaea94c1ba9521cb3c13898fbdf8327` through PR #138.
 This originally closed the production transaction and injected one-repair proof; the current-only contract now
 extends that same owner to a bounded three-repair chain for hard authoring/admission failures and explicit
-`required-for-publication` quality gates. `report-only` still executes Capture/Evaluation but returns the first
-completed Candidate as non-GO preview evidence instead of spending external Attempts on quality drift. Task 13 still owns the real Case execution that must
+`required-for-publication` Check/Ground/Opening/Evaluation gates. `report-only` performs no Host-created
+external repair: a hard Host rejection closes the current run, while a completed Capture/Evaluation returns
+the first Candidate as non-GO preview evidence when quality drifts. Task 13 still owns the real Case execution that must
 supply NBR-20 real formal-generation evidence, real multi-Attempt evidence, final publication
 and manual launch.
 
@@ -1555,7 +1556,7 @@ initial-evaluated(failed, repairable) -> repair-generating -> repair-packaged
 -> repair-captured -> repair-evaluated -> cleanup-joined -> completed
 ```
 
-Also test initial pass (no repair), genuinely missing/stale evidence (no repair or accepted publication), an observed-but-incomplete traversal checkpoint (source-only repair while budget remains), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback under `required-for-publication`, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure. After the NBR-65J/K policy cutover, `report-only` must publish its first completed quality result as a non-accepted preview without an Opening/Evaluation repair Attempt; it is never an accepted publication.
+Also test initial pass (no repair), genuinely missing/stale evidence (no repair or accepted publication), an observed-but-incomplete traversal checkpoint (source-only repair while budget remains), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback under `required-for-publication`, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture/Evaluation failure, Camera rollback failure, and cleanup failure. After the NBR-65J/K policy cutover, `report-only` must stop after the first hard Host rejection without an external Attempt, or publish its first completed quality result as a non-accepted preview without an Opening/Evaluation repair Attempt; it is never an accepted publication.
 
 - [ ] **Step 2: Write RED source-only repair tests**
 

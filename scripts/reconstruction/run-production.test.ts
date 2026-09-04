@@ -1074,8 +1074,9 @@ describe("runWorldReconstructionProductionV1", () => {
     });
   });
 
-  it("returns human-viewable rejected Capture evidence without claiming publication", async () => {
+  it("does not reinterpret a rejected Capture as report-only quality drift", async () => {
     const value = await fixture();
+    await setQualityGateMode(value, "report-only");
     const receipt = await receiptFor(value);
     const { owners: baseOwners } = ownersFor(value, receipt);
     const rejectedCaptureDirectoryPath = path.join(
@@ -1163,95 +1164,6 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(owners.publishFinal).not.toHaveBeenCalled();
   });
 
-  it("delivers an admitted report-only Package after opening quality repair is exhausted", async () => {
-    const value = await fixture();
-    await setQualityGateMode(value, "report-only");
-    const receipt = await receiptFor(value);
-    const { owners: baseOwners } = ownersFor(value, receipt);
-    const rejectedWorldPackagePath = path.join(
-      value.outputDirectoryPath,
-      "attempts",
-      "3",
-      "world-package",
-    );
-    const rejectedCaptureDirectoryPath = path.join(
-      value.outputDirectoryPath,
-      "attempts",
-      "3",
-      "rejected-capture",
-    );
-    const rejectedOpeningPath = path.join(
-      rejectedCaptureDirectoryPath,
-      "opening.png",
-    );
-    const openingGateResultPath = path.join(
-      rejectedCaptureDirectoryPath,
-      "opening-composition-gate-result.json",
-    );
-    const rejectedOpeningRef =
-      `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/3/rejected-capture/opening.png`;
-    const openingGateResultRef =
-      `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/3/rejected-capture/` +
-      "opening-composition-gate-result.json";
-    const owners = Object.freeze({
-      ...baseOwners,
-      runCore: vi.fn(async () => {
-        throw new WorldReconstructionRunClosedErrorV1(
-          [
-            "WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED",
-            "WORLDKIT_OPENING_GATE_REGION_DRIFT",
-          ],
-          "completed",
-          undefined,
-          {
-            rejectedWorldPackagePath,
-            rejectedWorldPackageRef:
-              `package://world-package/sha256/${"8".repeat(64)}`,
-            rejectedWorldPackageRootHash: H("8"),
-            rejectedCaptureDirectoryPath,
-            rejectedOpeningPath,
-            rejectedOpeningRef,
-            openingGateResultPath,
-            openingGateResultRef,
-            openingGateResultHash: H("e"),
-          },
-        );
-      }),
-    });
-
-    await expect(run(value, owners)).resolves.toEqual({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: CASE_ID,
-      caseRef: CASE_REF,
-      runId: RUN_ID,
-      outcome: "preview-ready",
-      publicationStatus: "not-accepted",
-      qualityStage: "opening-composition",
-      qualityOutcome: "failed",
-      diagnosticCodes: [
-        "WORLD_RECONSTRUCTION_MAX_REPAIR_EXCEEDED",
-        "WORLDKIT_OPENING_GATE_REGION_DRIFT",
-      ],
-      cleanupOutcome: "completed",
-      previewWorldPackagePath: rejectedWorldPackagePath,
-      previewWorldPackageRef:
-        `package://world-package/sha256/${"8".repeat(64)}`,
-      previewWorldPackageRootHash: H("8"),
-      previewCaptureDirectoryPath: rejectedCaptureDirectoryPath,
-      previewOpeningPath: rejectedOpeningPath,
-      previewOpeningRef: rejectedOpeningRef,
-      openingGateResultPath,
-      openingGateResultRef,
-      openingGateResultHash: H("e"),
-      launchWorkingDirectoryPath: value.outputDirectoryPath,
-      launchCommand:
-        "pnpm worldkit native run attempts/3/world-package --port 5174 --json",
-    });
-    expect(owners.verifyRun).not.toHaveBeenCalled();
-    expect(owners.publishFinal).not.toHaveBeenCalled();
-  });
-
   it("returns identity-bound playable evidence and exact diagnostics for a failed evaluation", async () => {
     const value = await fixture();
     const baseReceipt = await receiptFor(value, { outcome: "failed" });
@@ -1330,7 +1242,7 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(owners.publishFinal).not.toHaveBeenCalled();
   });
 
-  it("delivers a non-accepted report-only preview after evaluation repair is exhausted", async () => {
+  it("delivers a non-accepted report-only preview after the first evaluation", async () => {
     const value = await fixture();
     await setQualityGateMode(value, "report-only");
     const baseReceipt = await receiptFor(value, { outcome: "failed" });

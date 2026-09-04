@@ -1214,12 +1214,16 @@ source-neutral Opening Composition Host Gate。
   `verify:native-block-reconstruction-e2e` 与未完成的 NBR-70 验收拥有；
 - [x] NBR-65K：把上述模式边界落实为同一正式入口的 current-only 行为，而不是增加一条宽松链路：
   `report-only` 仍强制 Native Check、Ground Analysis、显式 Collider/Spawn/Package/Receipt、Runtime
-  与 Capture 运行成功；Check/Ground 的可修复作者错误仍可使用冻结预算。Opening Composition 与
+  与 Capture 运行成功；Builder 仍可在同一任务内使用冻结的 source-only 自修复预算，但 Host 的
+  Check/Ground 拒绝和老基线一致，会带诊断结束当前 Run，不再创建外部 Attempt。Opening Composition 与
   Evaluation 继续计算并发布诊断，但不拒绝 Capture、不触发新的外部 Attempt，首个完成的
   Package/Capture/Evaluation 在失败仅限可预览质量维度时即以非 GO `preview-ready` 交付人工体验；
   Collider、Spawn/Support、身份、确定性或运行证据失败仍拒绝。只有显式
-  `required-for-publication` 才允许 Opening/Evaluation 质量失败消耗最多三次外部修复并阻断正式发布。
-  严格检测实现继续由原 Owner 保留，不能形成第二 parser、第二 CLI、fallback 或旧新双入口；
+  `required-for-publication` 才允许 Check/Ground/Opening/Evaluation 的可修复失败消耗最多三次外部
+  Attempt 并阻断正式发布。
+  严格检测实现继续由原 Owner 保留，不能形成第二 parser、第二 CLI、fallback 或旧新双入口；生产层
+  同时删除把旧式 `rejected-capture` 重解释为 `report-only` 预览的不可达兼容分支：预览只能来自
+  正常完成且身份闭合的 Capture/Evaluation；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
 - [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
   临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；
