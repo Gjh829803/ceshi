@@ -444,7 +444,11 @@ export async function runCloudEpisodeWorker({
         sceneRoot,
         "whitebox-capture-receipt.json",
       )),
-      workerImage: request.workerImage,
+      // The receipt freezes the admitted Scene inputs, not the disposable
+      // Episode executor. Preserve the original value across an explicit
+      // digest-pinned Worker upgrade; the new stage manifest independently
+      // records the actual executor image and source revision.
+      workerImage: priorSourceReceipt?.workerImage ?? request.workerImage,
       styleVariantMode: request.styleVariantMode,
       createdAt: priorSourceReceipt?.createdAt ?? new Date().toISOString(),
     };

@@ -14,6 +14,7 @@ test("cloud Episode worker defaults to the platform fetch implementation", async
   assert.match(source, /attempt-\$\{cloudStageAttempt\}/);
   assert.match(source, /--execution-part", executionPart/);
   assert.match(source, /WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX/);
+  assert.match(source, /priorSourceReceipt\?\.workerImage \?\? request\.workerImage/);
   assert.match(source, /worldkit-gpu-capture-queue-entry/);
   assert.match(source, /worldkit-cloud-checkpoint-manifest/);
 });
