@@ -4,7 +4,7 @@
 
 Close the still-actionable findings first assessed against `origin/main` at
 `af620edb307f9d43a88917c150af7ba71179858c`, integrate the later mainline Native
-gate closure through `d475c94411410105d81fdd5fd85d6aadab5e11f0`, preserve the
+and 3C/ground-gate work through `7ebd3d215c8c1cbc3a7c824a99213cc2ba4a7fdc`, preserve the
 repository's current-only contract policy, and merge only an exact-SHA verified
 candidate.
 

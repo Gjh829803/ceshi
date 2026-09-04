@@ -3,27 +3,20 @@
 ## 1. 审查元数据
 
 - 模式：B 变更审查，并对 current-only、Native repair、固定 Tick 与包边界执行定向整仓复验。
-- Diff 基线：`origin/main@d475c94411410105d81fdd5fd85d6aadab5e11f0`。
-- 实现与测试快照：`00ffebeeabecc3517fd9262389fd56e0d83d6a99`；其后的改动只更新本报告，不改变源码、依赖或测试输入。
+- Diff 基线：`origin/main@7ebd3d215c8c1cbc3a7c824a99213cc2ba4a7fdc`。
+- 实现与测试快照：`265ab28ca91311982506d64d07b77e64cac5e1eb`；其后的改动只更新计划和本报告，不改变源码、依赖或测试输入。
 - Runtime 依赖：`@babylonjs/core@9.23.0`、`@babylonjs/havok@1.3.14`，以当前 lockfile 为准。根据已安装 Babylon 源码复核 `checkSupportToRef` 行为后，本变更修正 Adapter 的支撑状态发布语义，没有修改引擎、Controller 参数或 Physics 算法。
 - 权威输入：`AGENTS.md`、`docs/18-refactor-progress-and-backlog.md`、Validation、Simulation Take、Native Lane 规格、本次实施计划、全维度审查协议和 Runtime 深审清单。
 
-冻结源码后的本地自动证据（均为 exit code 0）：
+重放到最新主线后的本地自动证据（均为 exit code 0）：
 
-- Babylon Character Body transaction：76/76。
+- Babylon Character Body、P1.5 conformance、Traversal Runtime support 与 Route Runtime probe：4 个文件、105/105。
 - Traversal Runtime Port 的 Tick phase 聚焦回归：51/51。
-- P1.5 conformance、Traversal Runtime support conformance 与 Route Runtime probe integration：3 个文件、29/29。
-- Cursor 首轮指出的四类契约断言连同 BodyPort 回归：5 个文件、113/113；其中后续只扩大 Surface identity 保留带，该受影响 BodyPort 文件又以 76/76 复验。
 - 完整 `pnpm verify:route-r1b-static-platform`：11 个 fixture oracle 全通过；重复、并发和 30/60/120 Hz-like cadence Hash 一致。
-- `pnpm verify:workspace-boundaries`：0 条登记债务，2,080 个公共符号。
-- `pnpm verify:unreleased-clean-break`：0 个禁止命中、642 个当前合同符号。
 - `pnpm verify:3c-migration`：11 条 ledger、39 个 live reference、10 条单一权威不变量。
-- `pnpm test:census`：447 个测试文件、404 个 active、43 个 resource-heavy。
-- `pnpm check:native-block-builder-skill`：26/26。
-- 最新主线 Native Package reproducer：12/12。
 - `git diff --check`。
 
-Cursor 对前一冻结候选 `befe16161e498e3bee9a5504275855a1fb163b82` 的完整门禁中，self-check、typecheck、Studio 80/80、独立 Node 42/42、独立 Site 1/1、Route、build 和 4,978 个 contract 测试均通过；resource-heavy 仅有一个旧断言仍把 begin-tick 支撑采样位置等同于 post-move 主体位置，形成历史 NO-GO。当前测试已按明确的 Tick phase 合同修正并以 51/51 聚焦复验，因此只使 typecheck 与 root aggregate 失效；其余 exact-SHA 证据的输入与行为声明未改变。Browser、rendered visual 与 manual interaction 未运行，也不据此声明已覆盖；当前行为由真实 Havok 的 Route verifier 和定向 Runtime 回归约束。最终 typecheck、root aggregate 与只读设计复核由推送后的新 exact-SHA durable gate 负责。
+重放前候选 `50d56c900053bc549d2af985b54c413c462f8f26` 的 Cursor 门禁曾给出 FINAL GO：typecheck、Studio 80/80、独立 Node 42/42、独立 Site 1/1、Route、build、4,978 个 contract 和 685 个 resource-heavy 测试通过。随后 `origin/main` 合入 3C workbench、Runtime contact shadow 与 Native ground-gate 变更，使该 exact-SHA 结论只保留为历史证据；本报告不把它当作当前候选的最终通过。Browser、rendered visual 与 manual interaction 未运行，也不据此声明已覆盖；当前交叉行为由重放后的真实 Havok Route verifier 和定向 Runtime 回归约束。最终 self-check、typecheck、Studio、独立 lane、root aggregate、build 与只读设计复核由推送后的新 exact-SHA durable gate 负责。
 
 ## 2. 旧结论复验
 
