@@ -11,8 +11,9 @@
 - Merge base: `7fa3197220ef6b8b1ad86f57fc85f8b3e248e0c3`.
 - Review question: whether every stage, parameter contract, and Skill from user input through final
   production termination is aligned in current `main`.
-- Evidence level: static source/contract/Skill comparison. No Browser, rendered-visual, manual-interaction,
-  repository-wide test, or real cloud production evidence is claimed by this review.
+- Evidence level: static source/contract/Skill comparison, plus the final-effect addendum's one local
+  exact-main Native production Case. No manual interaction, repository-wide test, or real cloud production
+  evidence is claimed by this review; the local Case does not become release acceptance evidence.
 - Installed engine reference: `@babylonjs/core@9.23.0` from the current lock/package declarations. This
   review does not infer untested Havok behavior from that version.
 
@@ -326,7 +327,76 @@ semantic rendered review of complete-world topology or reference-image fidelity.
   recoverability policy; then add replay/reset/two-session tests.
 - Revalidation: historical value and current absence confirmed; no direct-port recommendation.
 
-## 9. Dimension coverage
+## 9. Final-effect reverse audit and Case-054 addendum
+
+After the migration inventory, the review was repeated backwards from the user-visible result: final
+opening, complete explorable world, controlled Subject, cross-view identity, styled images, Episode media,
+and publication. This found additional P1 work that was not explicit in the first inventory. Every row is
+now assigned to `BWMI-CF-*`, `BWMI-PROD-*`, or an existing WRC/NBR acceptance boundary in the live backlog.
+
+### 9.1 Current-main local evidence
+
+The local Case used exactly
+`origin/main@20fe0fef60d8c73fd8c8ce2cecb541117cddd1f8` and source image
+`/Users/xiateng/Downloads/测试集/054_paper_moon_palace.png`
+(`1672x941`, SHA-256
+`080d951445bae3a8584363f0be5ef9194b5eff88e7b64da40d2a81f6a923972e`). It ran with
+`WORLDKIT_CODEX_BACKEND=local`; the local Planner and Native Builder both used
+`gpt-5.6-sol/xhigh`. Run identity was
+`paper-moon-palace-054-report-only-0904/run-20260904134439-41905`.
+
+Attempt 0 passed Planner self-check/Host replay, Builder self-check/Host replay, Native Check, Ground
+Analysis, Package, Formal Capture, scripted traversal, and all seven Evaluation dimensions. Ground reported
+one reachable component, 3,305 reachable stand positions, 72 reachable chunks, and 43.174m maximum distance;
+Package root was
+`sha256:e9b3bd16de985989e212cf0adb4bb4b1172a6c598a6bdfe2759518bcb1a0d6b7`. The Run Receipt says
+`outcome: passed`, `finalAttemptIndex: 0`, and `cleanupOutcome: completed`.
+
+That pass is not visual proof. The source/Planner intend a paper valley containing bridges, waterfalls,
+side towers, gardens, stairs, a large moon palace, off-camera branches, and a cloaked traveler. The actual
+Opening contains a fixed red G Bot on a broad straight white slab, a few wall masses, and a simplified block
+palace; world top/side show only a small mostly linear footprint. The Host WRT is always the retained Cloud
+Ridge `humanoid.g-bot@2` ground closure, while the Brief asks for a short-haired, long-cloaked traveler. The
+Native semantic map excludes the primary Subject, so Evaluation did not observe that identity mismatch.
+
+The outer production result then closed with `NBR70_BLOCKER_IDENTITY_MISMATCH` and published no Final. The
+Case and Contribution both declare `collider-visual-target-2-solid`, but the derived Formal Intent contains
+only a pass/reach-bounds traversal and therefore has no `block-plane` blocker. The final verifier requires
+the Case, Contribution, and Formal blocker sets to be identical. `playability` was explicitly skipped, so
+this is not the removed duplicate Browser replay. This is direct current evidence for `BWMI-CF-13`, while
+the visibly weak seven-dimension pass is direct evidence for `BWMI-CF-10..14`.
+
+### 9.2 Newly explicit pre-style effect gaps
+
+| Finding | Current evidence and user-visible impact | Recorded owner |
+|---|---|---|
+| Planner semantic admission and pair lineage are insufficient | `agent-planner-self-check.ts:362-405` only decodes the Native World Plan and checks the red Subject center. It does not enforce Formal-Capture aspect, every Brief target mask, minimum/connected coverage, or entry/plan orientation and geography coherence. `native-world-case-preparation.ts:233-265` silently invents bbox `2500/1200/7500/5200` and coverage `2000` for a missing landmark color. Independent, mirrored, stale, or target-incomplete images can therefore become Case truth. | `BWMI-CF-10` |
+| Complete-world intent collapses to a generic miniature Case | `native-world-case-preparation.ts:43-84,269-401` uses fixed 128x128 bounds, two generic ground groups, one 12m straight band, and 300 forward ticks for every report-only input. The detailed World Plan is an attached raster for the Builder, not a Host-measured complete-world/topology acceptance source. A model may honor the prose, but the gates cannot distinguish it from an entry-only strip. | `BWMI-CF-11` |
+| Subject and movement mode are not connected to the Host Bootstrap | The Planner supports ground glide/riding/driving, water, underwater, flight, custom movement, and a complete controlled shape. `run-production.ts:82-88,1033-1100` nevertheless reuses the fixed Cloud Ridge Host closure for every Native Case; Native Builder is correctly forbidden to create a replacement Subject. A scene can silently get G Bot ground movement even when the input asks for another body or medium. | `BWMI-CF-12` |
+| Generic landmark blocker identity cannot close | Case derivation marks every non-Subject landmark as a required blocker but derives no block-plane check. `verify-native-block-reconstruction-e2e.ts:425-464` requires exact Case/Formal/Contribution blocker equality. Case-054 proved a seven-dimension-passed Run still closes before publication. | `BWMI-CF-13` |
+| Silhouette expected/observed metrics are different quantities | Expected values use actual identity-color raster pixels (`native-world-case-preparation.ts:203-265`); observed values use the projected rectangle of the complete world AABB (`formal-world-capture-measurement.ts:495-572`). `evaluate-evidence-set.ts:683-696` writes `isSemanticTargetPresent: true` without reading visible pixels or occlusion, and the evaluator directly subtracts the incompatible coverage values. Hollow arches, concave forms, separated repeated targets, and fully occluded landmarks can pass or receive destructive enlarge/shrink advice. World-side/top-down PNGs are identity-checked artifacts but do not contribute target-shape observations. | expanded `WRC-SR-1`; `BWMI-CF-14` |
+| Structural support is prose rather than a production gate | The Native Builder contract requires a face-contact support chain for structural/playable mass, but `packages/native-babylon-block-profile/src/check.ts:367-376,422-424` emits only a warning for every unsupported Block and still passes when no error exists. No Case-owned floating/background disposition is required. Floating roofs, platforms, or thin mountain masses can therefore pass. | `BWMI-CF-15` |
+| The committed strict Case is stale against the named planning-image contract | `cloud-temple-t-gate-native-block/case.json`, its committed inputs, and its Generation Request contain only `reference-0.png`; they omit `world-plan.png` and `entry-whitebox-target.png`, although the frozen current Builder Skill requires both. Skill byte parity does not prove input closure. | `BWMI-CF-18`, blocks NBR-70/90 |
+
+### 9.3 Newly explicit styled-image, video, and publication gaps
+
+| Finding | Current/historical evidence and user-visible impact | Recorded owner |
+|---|---|---|
+| Current styled images can claim a false semantic pass | `run-gemini-visual-pipeline.py:321-332,394-462` generates opening and tri-views in parallel; tri-views consume the user frame, whitebox opening, and target whitebox, not an accepted styled opening. The two finalizers only check file signatures/Hashes and then write `status: passed`; the styled tri-view manifest nevertheless calls the opening its `appearanceSource`. The current manifest also drops fixed Front/Right/Back direction semantics. Identity/material, pose, geometry, or panel mirroring can drift while all files pass. | `BWMI-CF-16`, then `BWMI-PROD-10/30` |
+| Raw Seedance output can be normalized from severe failure into technical success | `run-seedance25-reference-video.py:266-320,494-517` accepts an audio stream, scales/pads arbitrary aspect, and uses `tpad=stop_mode=clone` to reach the requested duration before writing `status: succeeded`. A short frozen clip or large black bars can satisfy exact final frames/size/audio. | `BWMI-CF-17`, expanded `BWMI-PROD-40` |
+| CLI and Studio disagree on reference-image roles | The CLI manifest/prompt treats the raw user frame as `@图片1` and whitebox tri-views as supplements; Recording Workbench submits styled primary tri-view as `@图片1`, styled opening as `@图片2`, then other styled tri-views. The same assets can therefore drive different identity, appearance, pose, and camera interpretation. | expanded `BWMI-PROD-00/40`; `BWMI-CF-08` for the adjacent ID bug |
+| Six mechanically healthy captures need executed visual-coverage admission | Historical health checks intentionally did not judge destination, route, camera creativity, or exploration quality. Without a separate executed coverage receipt, six clips can repeat one area, face a wall, crop the Subject, or omit the landmark while passing movement/support/drop/stall checks. Per-frame Camera telemetry existed historically and must be identity-bound, not discarded. | expanded `BWMI-PROD-20` |
+| Timed events are not bound to what is actually visible | A useful Event Director must consume the executed segment, accepted styled review, and exact event marker; otherwise it can animate an off-screen target, change root motion/camera, or invent an event from the Brief. | expanded `BWMI-PROD-40` |
+| No independent semantic gate exists for final video | Current and historical runners both declare success after provider completion plus media conformance. No owner checks shooting side, crop, occlusion, perspective, identity/material, contact/sliding/intersection, event timing, hallucinated targets, music, or speech. | new `BWMI-PROD-45` independent Video Reviewer |
+| Repair immutability is too coarse | The prior ledger protected other variants, but not already-passing images inside the failing variant. Regenerating a whole variant for one bad tri-view can randomly change its accepted opening, Subject, material, and other targets. | expanded `BWMI-PROD-10/30` image-level pass ledger |
+| Historical cloud publication was not atomic or exhaustive | The old publisher sampled only a few objects, then overwrote two mutable `latest` objects independently; its release identity did not close over every media/manifest Hash. A partial upload or pointer race could expose a mixed release. | expanded `BWMI-PROD-50/90`: immutable full-object manifest plus one atomic pointer |
+
+The old branch's entry-first planning dependency, staged styled-opening admission, explicit tri-view direction,
+executed Camera dataset, event visibility rules, and image-level repair set are valuable behavioral inputs.
+They are not direct-port authority: every item above is re-owned under current Native/Runtime/presentation
+boundaries, and old provider/deployment fields remain rejected.
+
+## 10. Dimension coverage
 
 | Dimension | Status | Evidence boundary |
 |---|---|---|
@@ -337,7 +407,7 @@ semantic rendered review of complete-world topology or reference-image fidelity.
 | D5 engineering quality | checked | Determinism, stack depth, UI bounds, direct capture, failure/recovery, and Skill executability were inspected. |
 | D6 gates and evidence | checked | Every claim is labeled static/current/historical; missing Browser/visual/manual/full-test evidence is explicit. |
 
-## 10. Completion boundary
+## 11. Completion boundary
 
 This review closes documentation discovery, not implementation. It does not complete NBR-20/70/80/90,
 WRC-SR-1/2, WRC-CAM-1/2, P0.4, GPR-0/1/2, or WRC-1. The executable carry-forward graph and every
