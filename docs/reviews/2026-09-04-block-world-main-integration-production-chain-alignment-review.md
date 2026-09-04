@@ -42,7 +42,8 @@ the historical branch, and it should not: the current Babylon Native lane is a c
 replacement for the old Three.js Block Source, Manifest, Compiler, hidden foundation, preset-derived
 Physics, and Builder-owned Subject/Camera dialect.
 
-For the whitebox reconstruction boundary, current `main` is mostly a stronger semantic replacement:
+For the whitebox reconstruction boundary, current `main` has a stronger ownership and evidence skeleton,
+but the Case-054 reverse audit proves that it is not yet an effect-equivalent replacement:
 
 ```text
 user input
@@ -70,11 +71,11 @@ Execution, and GPU batch/tail/recovery control plane do not have equivalent exec
 | Stage | Current `main` disposition | Alignment verdict |
 |---|---|---|
 | Input and CLI dispatch | `scripts/agents/run-world-agent.ts` selects one closed Scene Source; Native dispatch enters `scripts/reconstruction/run-native-world-agent.ts` and hashes source inputs. | **changed contract**: stronger source selection and identity; not the old single Three.js shell. |
-| Unified Planner | `scripts/agents/run-canonical-world-agent.sh` submits one formal Planner task, receives Brief plus named plan images, permits at most three same-task self-repairs, then replays the checker once. | **semantic alignment with changed parameters**: the task boundary survives, but the current Brief has exactly one movement mode, no fixed four-times map-area rule, and different image-color responsibilities. |
+| Unified Planner | `scripts/agents/run-canonical-world-agent.sh` submits one formal Planner task, receives Brief plus named plan images, permits at most three same-task self-repairs, then replays the checker once. | **partial and effect-significant**: the task boundary survives, but current no longer enforces old `entry first -> inspect -> exact entry feeds plan` causality, discrete Block-realizable planning, target recall, or comparable image semantics. |
 | Planner input freeze | The Native wrapper initially hashes image bytes, but the Planner receives the original paths and Case preparation later rereads them. Planner Host replay also invokes the live checker rather than an immutable checker identity carried in the receipt. | **partial**: useful current flow exists, but source-byte and checker TOCTOU closure remains open. |
 | Host Case/Profile preparation | `native-world-case-preparation.ts` derives and freezes Case, Profile, Bootstrap, Capture Intent, named Planner images, reference hashes, Native API/Profile, Builder Skill, output contract, and checker. | **current-only superseding stage**: the old branch had no equivalent Case/Profile/evidence closure. |
 | Builder attempt 0 | Current formal output is exactly `scene.ts`, `native-block-authoring.json`, and `native-resources.json`. | **changed contract**: replaces old `world.mjs` plus Host-derived Three/Compiler artifacts. |
-| Builder self-check / Host replay | The Builder uses its bundled checker and bounded source-only repairs; the reconstruction Host replays the frozen checker from the Case input. | **aligned and strengthened** for Native Builder. |
+| Builder self-check / Host replay | The Builder uses its bundled checker and bounded source-only repairs; the reconstruction Host replays the frozen checker from the Case input. | **structurally stronger but visually incomplete**: current self-check validates output shape and forbidden authority only. It lacks the old Builder's mandatory entry/top-down side-by-side render, actual visual inspection, and source-only repair loop. |
 | Native Check | Native source, authoring manifest, resources, API use, IDs, shapes, lattice, budgets, visual groups, and explicit contribution declarations are checked before admission. | **semantically supersedes** the old Block checker; old package is intentionally absent. |
 | Ground Analysis | Current Host binds logical ground, Capsule footprint/clearance, Spawn, target standability, topology, traversal bands, blocked segments, and repair diagnostics to the Case/Package inputs. | **semantically supersedes and strengthens** old footprint/reachability checks. |
 | Package and Receipt | One mutually exclusive Native Scene Source is packaged with Frozen Contributions and complete identity joins. | **changed contract**: old Manifest/Block Compiler/hidden foundation must not return. |
@@ -106,6 +107,8 @@ current contracts. A later design must re-freeze any value that survives the cur
 | Builder outputs | Three `world.mjs` and derived Manifest/Authoring/implementation artifacts | exactly three Native files | intentional replacement |
 | Block profile | four old fixed shapes and create-then-position authoring | five shapes including `step`, axis-specific lattice, atomic center/rotation, deterministic grid | current contract stronger |
 | Native Host default caps | no equivalent NBR Request closure | 2,000 Blocks, 1,800 seconds, 4,000,000 output bytes plus closed request budgets | current-only authority |
+| Builder visual feedback | structural pass then deterministic Planner-vs-Builder entry/top-down comparisons, actual model inspection, up to three combined repairs, Host decoded-pixel replay | output-shape self-check only before trusted Native stages | missing effect-critical behavior; reclassified from deferred `WRC-QP-1` to `BWMI-CF-19` |
+| Representation feasibility | old compiler stress-tested 102,400 direct Blocks; no equivalent formal 2,000 cap | fixed 2,000 Blocks before source-specific complexity is measured | uncalibrated; `BWMI-CF-20` must measure and freeze, not copy 102,400 |
 | Walkable height | fixed 1 m automatic smoothing, independent up/down thresholds, global 2 m adjacent-height veto | visible 0.25 m tread decomposition validated against current 0.3 m step and 42 degree slope owners | old constants explicitly rejected |
 | Quality mode | no current NBR equivalent | `report-only` or `required-for-publication`; maximum repair count 3 | current-only authority |
 | Attempts | Builder-local repair and infrastructure retries | Attempt indexes 0..3; strict external repair only; report-only has no external repair | changed identity model |
@@ -352,6 +355,13 @@ Package root was
 `sha256:e9b3bd16de985989e212cf0adb4bb4b1172a6c598a6bdfe2759518bcb1a0d6b7`. The Run Receipt says
 `outcome: passed`, `finalAttemptIndex: 0`, and `cleanupOutcome: completed`.
 
+The generated source used 1,974 of the frozen 2,000 Blocks (98.7%): 1,141 ground, 308 background,
+and 525 structure Blocks. Its complete XZ bounds were roughly `31m x 50m`, only about 9.5% of the fixed
+`128m x 128m` Case-bounds area before accounting for vertical structure. The historical compiler's
+102,400-Block test proves only that its old batching/compiler dialect could carry that input; it is not a
+safe Native limit. Current needs measured Browser/Capture/Havok feasibility rather than either accepting
+2,000 as sufficient or blindly copying the old number.
+
 That pass is not visual proof. The source/Planner intend a paper valley containing bridges, waterfalls,
 side towers, gardens, stairs, a large moon palace, off-camera branches, and a cloaked traveler. The actual
 Opening contains a fixed red G Bot on a broad straight white slab, a few wall masses, and a simplified block
@@ -364,9 +374,29 @@ Case and Contribution both declare `collider-visual-target-2-solid`, but the der
 only a pass/reach-bounds traversal and therefore has no `block-plane` blocker. The final verifier requires
 the Case, Contribution, and Formal blocker sets to be identical. `playability` was explicitly skipped, so
 this is not the removed duplicate Browser replay. This is direct current evidence for `BWMI-CF-13`, while
-the visibly weak seven-dimension pass is direct evidence for `BWMI-CF-10..14`.
+the visibly weak seven-dimension pass is direct evidence for `BWMI-CF-10..14` and `BWMI-CF-19..22`.
 
-### 9.2 Newly explicit pre-style effect gaps
+### 9.2 Why the historical result looked better and failed less often
+
+The historical production topology was materially different; its advantage was not Three.js itself.
+
+| Historical mechanism | Effect on the visible result | Current disposition |
+|---|---|---|
+| In one Planner task, generate and inspect entry first, then attach that exact accepted entry while generating World Plan; changing entry makes the plan stale (`9e35ab53:.codex/skills/worldkit-spatial-planner/SKILL.md:14-20,34-52`). | Entry composition and complete geography start from one causal image lineage instead of two loosely related proposals. | `BWMI-CF-10` restores the behavior under the unified profile. |
+| Both planning images were visibly discrete cubes with functional/target colors, while current Native CASE-054 entry target was a highly detailed paper diorama that could not fit its Block budget (`9e35ab53:.codex/skills/worldkit-spatial-planner/SKILL.md:24-30`). | Builder received an implementation-scale target rather than an unconstrained concept image. | `BWMI-CF-20` owns representation/budget feasibility; it does not restore the old RGB/Three.js dialect. |
+| After every structural pass, old Builder rendered Planner-vs-current entry and top-down comparisons, actually opened both, repaired the largest spatial mismatch, and repeated within three cycles; Host replayed exact decoded pixels (`9e35ab53:.codex/skills/worldkit-block-builder/SKILL.md:237-273`). | The generating model saw its own geometry before submission and could correct position, direction, scale, depth, occlusion, route bends, and mass. This is the strongest direct reason old whiteboxes looked better. | Former `WRC-QP-1` was mis-prioritized; it is now the single P1 `BWMI-CF-19`. |
+| Old Builder selected Subject and authored opening Camera tuning from the complete movement/body intent (`9e35ab53:.codex/skills/worldkit-block-builder/SKILL.md:154-216`). | Inputs were not all silently rendered as the same G Bot and fixed Cloud Ridge camera. | Current ownership stays Host-side; `BWMI-CF-12` closes selection/tuning without giving Native Module those owners. |
+| Runtime whitebox success automatically fed an opening-first Visual Reconstructor; accepted opening then anchored tri-views (`9e35ab53:.codex/skills/worldkit-visual-reconstructor/SKILL.md:27-105,138-152`). | High-frequency paper/material/identity detail was reconstructed after coarse occupancy, so the final image was never merely the raw Block capture. | `BWMI-CF-16` and `BWMI-PROD-10`; CASE-054 stopped before this layer, so raw whitebox versus old styled output is not like-for-like. |
+| Six captures, per-variant reconstructors/reviewers, ten candidate styles, and a collection diversity review (`9e35ab53:scripts/episodes/run-style-variant-workflow.mjs:297-686`). | More candidates, independent visual admission, and targeted retry created survivor/selection advantage. | `BWMI-PROD-20/30/45/60`; exact historical counts remain candidates until Profile freeze. |
+
+The old lane was not uniformly safer. Geographic fidelity still depended partly on model/human inspection;
+Studio's user click was cost/UX authorization rather than a quality gate; old capture health explicitly did
+not judge exploration or camera quality; raw video admission had no independent semantic reviewer; and the
+ten-style lane intentionally allowed creative reinterpretation rather than source-faithful reconstruction.
+Current should preserve the effective feedback topology while strengthening these weak gates, not claim
+literal parity or remove the strict blocker verifier.
+
+### 9.3 Newly explicit pre-style effect gaps
 
 | Finding | Current evidence and user-visible impact | Recorded owner |
 |---|---|---|
@@ -377,8 +407,12 @@ the visibly weak seven-dimension pass is direct evidence for `BWMI-CF-10..14`.
 | Silhouette expected/observed metrics are different quantities | Expected values use actual identity-color raster pixels (`native-world-case-preparation.ts:203-265`); observed values use the projected rectangle of the complete world AABB (`formal-world-capture-measurement.ts:495-572`). `evaluate-evidence-set.ts:683-696` writes `isSemanticTargetPresent: true` without reading visible pixels or occlusion, and the evaluator directly subtracts the incompatible coverage values. Hollow arches, concave forms, separated repeated targets, and fully occluded landmarks can pass or receive destructive enlarge/shrink advice. World-side/top-down PNGs are identity-checked artifacts but do not contribute target-shape observations. | expanded `WRC-SR-1`; `BWMI-CF-14` |
 | Structural support is prose rather than a production gate | The Native Builder contract requires a face-contact support chain for structural/playable mass, but `packages/native-babylon-block-profile/src/check.ts:367-376,422-424` emits only a warning for every unsupported Block and still passes when no error exists. No Case-owned floating/background disposition is required. Floating roofs, platforms, or thin mountain masses can therefore pass. | `BWMI-CF-15` |
 | The committed strict Case is stale against the named planning-image contract | `cloud-temple-t-gate-native-block/case.json`, its committed inputs, and its Generation Request contain only `reference-0.png`; they omit `world-plan.png` and `entry-whitebox-target.png`, although the frozen current Builder Skill requires both. Skill byte parity does not prove input closure. | `BWMI-CF-18`, blocks NBR-70/90 |
+| Builder never sees a rendering of its own source | Current Native Builder Skill `:84-95` says its checker only validates output set/data shape/forbidden tokens and does not instantiate Candidate, Layout, Package, Runtime, or Capture. The old Builder's same-task side-by-side visual loop was deferred as advisory follow-up even though it acts before the expensive trusted stages. | `BWMI-CF-19`; former `WRC-QP-1` is no longer independently queued |
+| Planner complexity is not admitted against the Native representation budget | The current request fixes `maximumBlockCount: 2000` (`generation-request.ts:116-122`), while CASE-054 used 1,974 Blocks and still implemented only a small fraction of the intended world. No receipt attributes cost to world floor/support, semantic targets, or exposed detail, and no preflight can reject or simplify an infeasible plan. | `BWMI-CF-20` |
+| Non-target scene mass has no completeness/effect-density closure | CASE-054 Brief names bridges, waterfalls, side towers, gardens, stairs, trees, lanterns, mountains, and rear/side exploration, but the palette/Case retains only Subject and palace plus synthetic ground. Builder may place the other features, yet no scene-level inventory checks their presence, macro placement, density, negative space, or multi-view silhouette. | `BWMI-CF-21` |
+| Planner palette and Builder identity colors are not joined | CASE-054 Planner uses target orange `#F28E2B`; Native authoring uses `#F28A2E`. Generation Request does not freeze the palette, manifest admission checks only color syntax/uniqueness, and Evaluation compares semantic metadata derived from that same authoring rather than joining back to Planner identity. | `BWMI-CF-22` |
 
-### 9.3 Newly explicit styled-image, video, and publication gaps
+### 9.4 Newly explicit styled-image, video, and publication gaps
 
 | Finding | Current/historical evidence and user-visible impact | Recorded owner |
 |---|---|---|
@@ -387,9 +421,12 @@ the visibly weak seven-dimension pass is direct evidence for `BWMI-CF-10..14`.
 | CLI and Studio disagree on reference-image roles | The CLI manifest/prompt treats the raw user frame as `@图片1` and whitebox tri-views as supplements; Recording Workbench submits styled primary tri-view as `@图片1`, styled opening as `@图片2`, then other styled tri-views. The same assets can therefore drive different identity, appearance, pose, and camera interpretation. | expanded `BWMI-PROD-00/40`; `BWMI-CF-08` for the adjacent ID bug |
 | Six mechanically healthy captures need executed visual-coverage admission | Historical health checks intentionally did not judge destination, route, camera creativity, or exploration quality. Without a separate executed coverage receipt, six clips can repeat one area, face a wall, crop the Subject, or omit the landmark while passing movement/support/drop/stall checks. Per-frame Camera telemetry existed historically and must be identity-bound, not discarded. | expanded `BWMI-PROD-20` |
 | Timed events are not bound to what is actually visible | A useful Event Director must consume the executed segment, accepted styled review, and exact event marker; otherwise it can animate an off-screen target, change root motion/camera, or invent an event from the Brief. | expanded `BWMI-PROD-40` |
+| Event/prompt semantics are not frozen as provider-neutral inputs | The old Director coordinated event diversity across segments 0/2/4, while the old Seedance prompt explicitly constrained reference precedence, shooting side, crop/occlusion, visible-target whitelist, conditional tri-view use, movement-medium contact, event continuity, and no music/speech/new entities. Current's shorter manual prompt and request do not bind an equivalent template identity. Historical provider/model constants are not public authority. | expanded `BWMI-PROD-40`: event-set Profile plus prompt template version/hash |
 | No independent semantic gate exists for final video | Current and historical runners both declare success after provider completion plus media conformance. No owner checks shooting side, crop, occlusion, perspective, identity/material, contact/sliding/intersection, event timing, hallucinated targets, music, or speech. | new `BWMI-PROD-45` independent Video Reviewer |
 | Repair immutability is too coarse | The prior ledger protected other variants, but not already-passing images inside the failing variant. Regenerating a whole variant for one bad tri-view can randomly change its accepted opening, Subject, material, and other targets. | expanded `BWMI-PROD-10/30` image-level pass ledger |
 | Historical cloud publication was not atomic or exhaustive | The old publisher sampled only a few objects, then overwrote two mutable `latest` objects independently; its release identity did not close over every media/manifest Hash. A partial upload or pointer race could expose a mixed release. | expanded `BWMI-PROD-50/90`: immutable full-object manifest plus one atomic pointer |
+| Historical style semantics can be mistaken for faithful reconstruction | The ten-style Director intentionally consumed whitebox authority and permitted source-identity replacement. A visually attractive diversified variant is therefore not evidence that the original reference was faithfully reconstructed. | `BWMI-PROD-00` closed appearance mode plus faithful-baseline rule |
+| Per-variant Episode frame closure was underspecified | Historical output was six styled segment frames per variant: immutable Segment-00 anchor followed by five frames spatially bound to Segment-01..05, plus shared target tri-views. A generic “opening/tri-view closure” could accidentally implement only one frame per variant. | expanded `BWMI-PROD-30`: `N x 6` frame set and per-image Hash/repair ledger |
 
 The old branch's entry-first planning dependency, staged styled-opening admission, explicit tri-view direction,
 executed Camera dataset, event visibility rules, and image-level repair set are valuable behavioral inputs.
