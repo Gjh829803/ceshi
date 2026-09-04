@@ -1413,6 +1413,10 @@ The default interactive entry has the same model-stage topology as
 `codex/block-world-main-integration`: Unified Planner -> Native Block Builder. The Host derives the report-only
 baseline Case deterministically after Planner delivery and before it creates the Builder Generation Request.
 No `native-case-mapping` model task, mapping prompt, mapping S3 prefix or mapping retry is part of this route.
+The baseline's generic entry/remote ground bindings are presence/support/traversal evidence only because the
+Planner provides no identity-colored ground mask. Their report-only visual drift tolerance covers the normalized
+frame; landmark and structure targets retain entry-image-measured thresholds. Missing ground, unsupported Spawn,
+disconnected ground or failed traversal remain blocking through their owning checks.
 Explicit curated `required-for-publication` Cases continue to enter the same reconstruction runner directly;
 they do not add another default interactive stage.
 

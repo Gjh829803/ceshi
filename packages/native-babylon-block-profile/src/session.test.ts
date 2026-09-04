@@ -73,7 +73,14 @@ interface SessionModule {
         colliderGeometrySource:
           | Readonly<{ kind: "block"; blockId: string }>
           | Readonly<{ kind: "block-group"; colliderGroupId: string }>;
-        traversalBinding: Readonly<{ kind: "not-traversable" }>;
+        traversalBinding:
+          | Readonly<{ kind: "not-traversable" }>
+          | Readonly<{
+              kind: "static-surface";
+              surfaceEntityId: string;
+              logicalSubshapeId: string;
+              traversalSurfaceProfileRef: string;
+            }>;
         exposedEdgePolicy: "none" | "protect-ground-subject";
       }>[];
     }>): Readonly<{
@@ -862,6 +869,20 @@ describe("Babylon Native block profile session", () => {
     const invalidSelections = [
       Object.freeze({
         id: "ground-collider",
+        colliderGeometrySource: Object.freeze({
+          kind: "block" as const,
+          blockId: "ground-block",
+        }),
+        traversalBinding: Object.freeze({
+          kind: "static-surface" as const,
+          surfaceEntityId: "ground-surface",
+          logicalSubshapeId: "top",
+          traversalSurfaceProfileRef:
+            "worldkit://traversal-surface-profile/ground.static@1",
+        }),
+      }),
+      Object.freeze({
+        id: "ground-collider",
         blockId: "ground-block",
         traversalBinding: Object.freeze({ kind: "not-traversable" as const }),
         exposedEdgePolicy: "none" as const,
@@ -957,6 +978,45 @@ describe("Babylon Native block profile session", () => {
         traversalBinding: { kind: "not-traversable" },
       });
       expect(commitProfileSettlement).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("allows an intentional fall only through an explicit edge-policy opt-out", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene),
+        { maximumBlockCount: 1 },
+      );
+      session.createBlock({
+        id: "ledge-block",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [0, 0.5, 0],
+      });
+
+      expect(() => session.finalize({
+        staticColliders: [Object.freeze({
+          id: "ledge-collider",
+          colliderGeometrySource: Object.freeze({
+            kind: "block" as const,
+            blockId: "ledge-block",
+          }),
+          traversalBinding: Object.freeze({
+            kind: "static-surface" as const,
+            surfaceEntityId: "ledge-surface",
+            logicalSubshapeId: "top",
+            traversalSurfaceProfileRef:
+              "worldkit://traversal-surface-profile/ground.static@1",
+          }),
+          exposedEdgePolicy: "none" as const,
+        })],
+      })).not.toThrow();
+      const evidence = takeBabylonNativeBlockCheckedEpochEvidenceV1(scene);
+      expect(evidence).toHaveLength(1);
+      expect(evidence[0]?.groundBoundary.triangleCount).toBe(0);
+      expect(evidence[0]?.groundBoundaryContribution).toBeUndefined();
     });
   });
 

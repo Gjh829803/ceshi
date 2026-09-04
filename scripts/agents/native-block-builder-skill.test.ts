@@ -174,6 +174,15 @@ describe("Native Block Builder Skill", () => {
     );
     expect(skill).toContain("Before returning, verify this closure:");
     expect(skill).toContain(
+      "every non-Subject semantic target represented with `paletteRole: \"structure\"` is a solid world landmark",
+    );
+    expect(skill).toContain(
+      "This rule produces an explicit Frozen Contribution",
+    );
+    expect(outputContract).toContain(
+      "declaring one required `role: \"blocker\"` Collider for every non-Subject semantic landmark",
+    );
+    expect(skill).toContain(
       "complete playable floor groups across the whole intended exploration domain",
     );
     expect(skill).toContain(

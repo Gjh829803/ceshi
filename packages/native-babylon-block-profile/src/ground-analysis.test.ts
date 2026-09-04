@@ -563,6 +563,39 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     });
   });
 
+  it("keeps a one-meter route rise reachable through four admitted quarter-meter joins", () => {
+    const lowLanding = rectangle(-4, -3, -1, 0, 0);
+    const firstTread = rectangle(-2, -1, -1, 0, 1);
+    const secondTread = rectangle(0, 1, -1, 0, 2);
+    const thirdTread = rectangle(2, 3, -1, 0, 3);
+    const highLanding = rectangle(4, 7, -1, 0, 4);
+    const target = Object.freeze({
+      id: "high-landing-target",
+      acceptanceTargetRef: "worldkit://acceptance-target/high-landing@1",
+      standPositionMetersXYZ: position("7,4,-1"),
+    });
+    const result = analyze({
+      supportTopCellKeys: Object.freeze([
+        ...lowLanding,
+        ...firstTread,
+        ...secondTread,
+        ...thirdTread,
+        ...highLanding,
+      ]),
+      caseIntent: caseIntent({
+        spawn: Object.freeze({
+          ...SPAWN,
+          standPositionMetersXYZ: position("-4,0,-1"),
+        }),
+        requiredTargets: Object.freeze([target]),
+      }),
+    });
+
+    expect(result.analysisOutcome).toBe("passed");
+    expect(result.metrics.reachableRequiredTargetCount).toBe(1);
+    expect(result.failureFacts).toEqual([]);
+  });
+
   it("rejects an exact Spawn height that differs from the final smoothed topology", () => {
     const target = Object.freeze({
       id: "smoothed-target",

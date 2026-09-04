@@ -681,6 +681,13 @@ and the non-Subject palette targets measured from the entry image. That derived 
 Builder request and never becomes another Scene Source or geometry owner. A structure test locks the two-task
 sequence and forbids the removed `native-case-mapping` stage from returning.
 
+The entry and remote ground groups are technical presence, support and traversal bindings, not reference-image
+semantic masks. The Planner intentionally renders terrain without an identity color, so the default report-only
+Profile must not compare those groups against Host-invented screen bands. Their visual drift tolerances span the
+full normalized frame while missing bindings, support, connectivity and traversal still fail through their real
+owners. Only non-Subject identity-palette targets receive measured silhouette and Opening bounds from the entry
+image. Explicit curated `required-for-publication` Cases continue to own their authored visual thresholds.
+
 The parity boundary is one implementation with two policy profiles:
 
 | Stage | Default interactive disposition | Reason |

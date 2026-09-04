@@ -5,6 +5,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 
 import {
+  CaptureOnlyHostedExecutionContextDestroyedErrorV1,
   createCaptureOnlyHostedTransportStarterV1,
   runCaptureOnlyHostedSessionV1,
   startCaptureOnlyHostedTransportV1,
@@ -46,6 +47,7 @@ function deferred<T>() {
 function concreteHarness(options: Readonly<{
   readyFailure?: Error;
   readyPending?: boolean;
+  captureFailure?: Error;
   capturePending?: boolean;
   launchFailure?: Error;
   contextFailure?: Error;
@@ -108,6 +110,7 @@ function concreteHarness(options: Readonly<{
     },
     async evaluate(_callback: unknown, argument: Readonly<{ request: unknown }>) {
       events.push("page.capture");
+      if (options.captureFailure !== undefined) throw options.captureFailure;
       if (options.capturePending === true) await new Promise(() => undefined);
       return formalHostedPayloadFixtureV1({
         request: argument.request as typeof request,
@@ -255,6 +258,144 @@ describe("capture-only Hosted session transaction", () => {
       },
       cause: captureFailure,
     });
+  });
+
+  it("retries one admitted Capture after the typed execution-context-destroyed failure", async () => {
+    const events: string[] = [];
+    const request = Object.freeze({ id: "request.retry.001" });
+    const payload = Object.freeze({ id: "payload.retry.001" });
+    let attempt = 0;
+    const startTransport = vi.fn(async () => {
+      attempt += 1;
+      const currentAttempt = attempt;
+      events.push(`start.${currentAttempt}`);
+      return {
+        executeFormalCapture: async (received: typeof request) => {
+          events.push(`capture.${currentAttempt}`);
+          expect(received).toBe(request);
+          if (currentAttempt === 1) {
+            throw new CaptureOnlyHostedExecutionContextDestroyedErrorV1(
+              new Error(
+                "page.evaluate: Execution context was destroyed, most likely because of a navigation",
+              ),
+            );
+          }
+          return payload;
+        },
+        dispose: async () => {
+          events.push(`cleanup.${currentAttempt}`);
+          return {
+            hostedBrowserSession: "completed" as const,
+            viteServer: "completed" as const,
+          };
+        },
+      };
+    });
+
+    await expect(runCaptureOnlyHostedSessionV1({
+      request,
+      startTransport,
+    })).resolves.toBe(payload);
+    expect(startTransport).toHaveBeenCalledTimes(2);
+    expect(events).toEqual([
+      "start.1",
+      "capture.1",
+      "cleanup.1",
+      "start.2",
+      "capture.2",
+      "cleanup.2",
+    ]);
+  });
+
+  it.each([
+    new Error(
+      "page.evaluate: Execution context was destroyed, most likely because of a navigation",
+    ),
+    new Error("WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_REQUEST_IDENTITY_MISMATCH"),
+    new Error("FORMAL_CAPTURE_OPENING_COMPOSITION_GATE_FAILED"),
+  ])("never retries an untyped, identity, or semantic Capture failure", async (
+    failure,
+  ) => {
+    const startTransport = vi.fn(async () => ({
+      executeFormalCapture: async () => {
+        throw failure;
+      },
+      dispose: async () => ({
+        hostedBrowserSession: "completed" as const,
+        viteServer: "completed" as const,
+      }),
+    }));
+
+    await expect(runCaptureOnlyHostedSessionV1({
+      request: Object.freeze({ id: "request.no-retry.001" }),
+      startTransport,
+    })).rejects.toMatchObject({ cause: failure });
+    expect(startTransport).toHaveBeenCalledOnce();
+  });
+
+  it("never retries a transport-start failure even when it carries the transient code", async () => {
+    const failure = new CaptureOnlyHostedExecutionContextDestroyedErrorV1(
+      new Error("page.goto: Execution context was destroyed"),
+    );
+    const startTransport = vi.fn(async () => {
+      throw failure;
+    });
+
+    await expect(runCaptureOnlyHostedSessionV1({
+      request: Object.freeze({ id: "request.start-failed.001" }),
+      startTransport,
+    })).rejects.toMatchObject({ cause: failure });
+    expect(startTransport).toHaveBeenCalledOnce();
+  });
+
+  it("retries at most once when the replacement Capture loses its context too", async () => {
+    const startTransport = vi.fn(async () => ({
+      executeFormalCapture: async () => {
+        throw new CaptureOnlyHostedExecutionContextDestroyedErrorV1(
+          new Error("page.evaluate: Execution context was destroyed"),
+        );
+      },
+      dispose: async () => ({
+        hostedBrowserSession: "completed" as const,
+        viteServer: "completed" as const,
+      }),
+    }));
+
+    await expect(runCaptureOnlyHostedSessionV1({
+      request: Object.freeze({ id: "request.retry-limit.001" }),
+      startTransport,
+    })).rejects.toMatchObject({
+      name: "CaptureOnlyHostedSessionClosedErrorV1",
+      cause: {
+        name: "CaptureOnlyHostedExecutionContextDestroyedErrorV1",
+      },
+    });
+    expect(startTransport).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry when cleanup after the transient Capture failure is incomplete", async () => {
+    const startTransport = vi.fn(async () => ({
+      executeFormalCapture: async () => {
+        throw new CaptureOnlyHostedExecutionContextDestroyedErrorV1(
+          new Error("page.evaluate: Execution context was destroyed"),
+        );
+      },
+      dispose: async () => ({
+        hostedBrowserSession: "failed" as const,
+        viteServer: "completed" as const,
+      }),
+    }));
+
+    await expect(runCaptureOnlyHostedSessionV1({
+      request: Object.freeze({ id: "request.cleanup-failed.001" }),
+      startTransport,
+    })).rejects.toMatchObject({
+      cleanupOutcomes: {
+        hostedBrowserSession: "failed",
+        viteServer: "completed",
+      },
+    });
+    expect(startTransport).toHaveBeenCalledOnce();
   });
 });
 
@@ -429,5 +570,24 @@ describe("concrete capture-only Hosted transport", () => {
       "browser.close",
       "server.stop",
     ]);
+  });
+
+  it("normalizes only Playwright execution-context destruction to the retryable Host code", async () => {
+    const rawFailure = new Error(
+      "page.evaluate: Execution context was destroyed, most likely because of a navigation",
+    );
+    const h = concreteHarness({ captureFailure: rawFailure });
+    const transport = await startCaptureOnlyHostedTransportV1({
+      packageDirectoryPath: "/tmp/verified-world-package",
+      request: h.request,
+    }, h.ports as never);
+
+    await expect(transport.executeFormalCapture(h.request)).rejects
+      .toMatchObject({
+        name: "CaptureOnlyHostedExecutionContextDestroyedErrorV1",
+        code: "WORLDKIT_CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED",
+        cause: rawFailure,
+      });
+    await transport.dispose();
   });
 });

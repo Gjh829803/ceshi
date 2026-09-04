@@ -74,7 +74,7 @@ describe("trusted Native world Case preparation", () => {
           },
         },
         left: 40,
-        top: 10,
+        top: 40,
       }]).png().toFile(entryPath),
     ]);
 
@@ -84,6 +84,16 @@ describe("trusted Native world Case preparation", () => {
       entryWhiteboxTargetPath: entryPath,
     }) as {
       expected: {
+        topology: {
+          layerIds: readonly string[];
+        };
+        colliders: readonly {
+          acceptanceTargetRef: string;
+          contributionId: string;
+          colliderId: string;
+          role: "ground" | "blocker" | "step";
+          requiresOverlay: boolean;
+        }[];
         semanticSilhouetteTargets: readonly {
           acceptanceTargetRef: string;
           visualGroupId: string;
@@ -92,7 +102,10 @@ describe("trusted Native world Case preparation", () => {
         criticalTraversalChecks: readonly { id: string }[];
       };
       formalCaptureIntent: {
-        semanticCaptureTargetBindings: readonly { acceptanceTargetRef: string }[];
+        semanticCaptureTargetBindings: readonly {
+          acceptanceTargetRef: string;
+          semanticLayerId: string;
+        }[];
       };
       worldBounds: unknown;
     };
@@ -107,15 +120,47 @@ describe("trusted Native world Case preparation", () => {
       ({ visualGroupId }) => visualGroupId === "visual-target-2-group",
     )?.normalizedBounds).toEqual({
       minXBasisPoints: 4000,
-      minYBasisPoints: 1000,
+      minYBasisPoints: 4000,
       maxXBasisPoints: 6000,
-      maxYBasisPoints: 3000,
+      maxYBasisPoints: 6000,
     });
     expect(proposal.expected.criticalTraversalChecks).toEqual([
       expect.objectContaining({ id: "entry-to-remote-ground-pass" }),
     ]);
+    expect(proposal.expected.colliders).toEqual([
+      expect.objectContaining({
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/entry-ground@1",
+        contributionId: "collider-entry-ground",
+        colliderId: "collider-entry-ground",
+        role: "ground",
+      }),
+      expect.objectContaining({
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/remote-ground@1",
+        contributionId: "collider-remote-ground",
+        colliderId: "collider-remote-ground",
+        role: "ground",
+      }),
+      {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/visual-target-2@1",
+        contributionId: "collider-visual-target-2-solid",
+        colliderId: "collider-visual-target-2-solid",
+        role: "blocker",
+        requiresOverlay: true,
+      },
+    ]);
     expect(proposal.formalCaptureIntent.semanticCaptureTargetBindings)
       .toHaveLength(3);
+    expect(proposal.expected.topology.layerIds).toEqual([
+      "foreground",
+      "middle",
+    ]);
+    expect(proposal.expected.topology.layerIds).toEqual(
+      [...new Set(proposal.formalCaptureIntent.semanticCaptureTargetBindings
+        .map(({ semanticLayerId }) => semanticLayerId))].sort(),
+    );
     expect(proposal.worldBounds).toEqual({
       centerMetersXZ: [0, -32],
       sizeMetersXZ: [128, 128],
@@ -144,11 +189,65 @@ describe("trusted Native world Case preparation", () => {
     const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(
       await readFile(prepared.casePath, "utf8"),
     ));
+    const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(
+      JSON.parse(await readFile(prepared.evaluationProfilePath, "utf8")),
+    );
     expect(reconstructionCase.expected.criticalTraversalChecks[0]?.id)
       .toBe("entry-to-remote-ground-pass");
     expect(reconstructionCase.expected.groundConnectivity
       .requiredTraversalBands[0]?.centerlineStandPositionsXYZMeters.at(-1))
       .toEqual({ xMeters: 0, yMeters: 0, zMeters: -12 });
+    expect(evaluationProfile.thresholds.semanticSilhouetteTargets).toEqual([
+      {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/entry-ground@1",
+        maximumBoundsDriftBasisPoints: 10_000,
+        maximumCenterDriftBasisPoints: 10_000,
+        maximumCoverageDriftBasisPoints: 10_000,
+      },
+      {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/remote-ground@1",
+        maximumBoundsDriftBasisPoints: 10_000,
+        maximumCenterDriftBasisPoints: 10_000,
+        maximumCoverageDriftBasisPoints: 10_000,
+      },
+      {
+        acceptanceTargetRef:
+          "worldkit://acceptance-target/visual-target-2@1",
+        maximumBoundsDriftBasisPoints: 1600,
+        maximumCenterDriftBasisPoints: 1000,
+        maximumCoverageDriftBasisPoints: 1800,
+      },
+    ]);
+    expect(evaluationProfile.thresholds.openingComposition.regions).toEqual([
+      {
+        targetRef: "worldkit://composition-target/entry-ground@1",
+        maximumDriftBasisPoints: 10_000,
+      },
+      {
+        targetRef: "worldkit://composition-target/remote-ground@1",
+        maximumDriftBasisPoints: 10_000,
+      },
+      {
+        targetRef: "worldkit://composition-target/visual-target-2@1",
+        maximumDriftBasisPoints: 1600,
+      },
+    ]);
+    expect(evaluationProfile.thresholds.openingComposition.anchors).toEqual([
+      {
+        targetRef: "worldkit://composition-target/entry-ground@1",
+        maximumDriftBasisPoints: 10_000,
+      },
+      {
+        targetRef: "worldkit://composition-target/remote-ground@1",
+        maximumDriftBasisPoints: 10_000,
+      },
+      {
+        targetRef: "worldkit://composition-target/visual-target-2@1",
+        maximumDriftBasisPoints: 1000,
+      },
+    ]);
   });
 
   it("rejects a pass check whose acceptance target is only a blocker", async () => {

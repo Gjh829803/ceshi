@@ -52,6 +52,23 @@ export interface CaptureOnlyHostedCleanupOutcomesV1 {
   readonly viteServer: "completed" | "failed";
 }
 
+export const CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED_CODE_V1 =
+  "WORLDKIT_CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED" as const;
+
+/**
+ * Stable Host-only retry signal for the one Playwright failure that can be
+ * recovered by recreating the Browser transport around an already-admitted
+ * Package. Raw message matching never crosses the transport boundary.
+ */
+export class CaptureOnlyHostedExecutionContextDestroyedErrorV1 extends Error {
+  readonly code = CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED_CODE_V1;
+
+  constructor(cause: unknown) {
+    super(CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED_CODE_V1, { cause });
+    this.name = "CaptureOnlyHostedExecutionContextDestroyedErrorV1";
+  }
+}
+
 export class CaptureOnlyHostedSessionClosedErrorV1 extends Error {
   readonly cleanupOutcomes: CaptureOnlyHostedCleanupOutcomesV1;
 
@@ -101,6 +118,12 @@ const defaultPorts: CaptureOnlyHostedTransportPortsV1 = Object.freeze({
 
 function transportError(reason: string): Error {
   return new Error(`WORLDKIT_CAPTURE_ONLY_HOSTED_TRANSPORT_${reason}`);
+}
+
+function isPlaywrightExecutionContextDestroyed(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /(?:^|:\s)Execution context was destroyed(?:, most likely because of a navigation)?(?:\.|$)/i
+    .test(error.message);
 }
 
 async function cleanupOwnedResources(input: Readonly<{
@@ -315,6 +338,9 @@ export async function startCaptureOnlyHostedTransportV1(
         ) {
           await cleanup();
         }
+        if (isPlaywrightExecutionContextDestroyed(error)) {
+          throw new CaptureOnlyHostedExecutionContextDestroyedErrorV1(error);
+        }
         throw error;
       } finally {
         if (captureTimeoutHandle !== undefined) {
@@ -347,43 +373,62 @@ export function createCaptureOnlyHostedTransportStarterV1(
 export async function runCaptureOnlyHostedSessionV1<Payload, Request = unknown>(
   input: RunCaptureOnlyHostedSessionInputV1<Payload, Request>,
 ): Promise<Payload> {
-  let transport: CaptureOnlyHostedTransportV1<Payload, Request>;
-  try {
-    transport = await input.startTransport(input.request);
-  } catch (error) {
-    if (error instanceof CaptureOnlyHostedSessionClosedErrorV1) throw error;
-    throw new CaptureOnlyHostedSessionClosedErrorV1(error, {
-      hostedBrowserSession: "failed",
-      viteServer: "failed",
-    });
-  }
-  let payload: Payload | undefined;
-  let captureFailure: unknown;
-  try {
-    payload = await transport.executeFormalCapture(input.request);
-  } catch (error) {
-    captureFailure = error;
-  }
+  const startTransport = async (): Promise<
+    CaptureOnlyHostedTransportV1<Payload, Request>
+  > => {
+    try {
+      return await input.startTransport(input.request);
+    } catch (error) {
+      if (error instanceof CaptureOnlyHostedSessionClosedErrorV1) throw error;
+      throw new CaptureOnlyHostedSessionClosedErrorV1(error, {
+        hostedBrowserSession: "failed",
+        viteServer: "failed",
+      });
+    }
+  };
 
-  let cleanupOutcomes: CaptureOnlyHostedCleanupOutcomesV1;
-  try {
-    cleanupOutcomes = await transport.dispose();
-  } catch (error) {
-    throw new CaptureOnlyHostedSessionClosedErrorV1(
-      captureFailure ?? error,
-      { hostedBrowserSession: "failed", viteServer: "failed" },
-    );
-  }
+  // The second pass is not an Agent or Builder attempt. It recreates only the
+  // Hosted Browser transport, with the exact same frozen formal Request. A
+  // retry is legal only after the failed transport reports complete cleanup.
+  for (let transportAttempt = 0; transportAttempt < 2; transportAttempt += 1) {
+    const transport = await startTransport();
+    let payload: Payload | undefined;
+    let captureFailure: unknown;
+    try {
+      payload = await transport.executeFormalCapture(input.request);
+    } catch (error) {
+      captureFailure = error;
+    }
 
-  if (
-    captureFailure !== undefined ||
-    cleanupOutcomes.hostedBrowserSession === "failed" ||
-    cleanupOutcomes.viteServer === "failed"
-  ) {
+    let cleanupOutcomes: CaptureOnlyHostedCleanupOutcomesV1;
+    try {
+      cleanupOutcomes = await transport.dispose();
+    } catch (error) {
+      throw new CaptureOnlyHostedSessionClosedErrorV1(
+        captureFailure ?? error,
+        { hostedBrowserSession: "failed", viteServer: "failed" },
+      );
+    }
+
+    const cleanupCompleted =
+      cleanupOutcomes.hostedBrowserSession === "completed" &&
+      cleanupOutcomes.viteServer === "completed";
+    if (captureFailure === undefined && cleanupCompleted) {
+      return payload as Payload;
+    }
+    if (
+      transportAttempt === 0 &&
+      cleanupCompleted &&
+      captureFailure instanceof
+        CaptureOnlyHostedExecutionContextDestroyedErrorV1 &&
+      captureFailure.code ===
+        CAPTURE_ONLY_HOSTED_EXECUTION_CONTEXT_DESTROYED_CODE_V1
+    ) continue;
+
     throw new CaptureOnlyHostedSessionClosedErrorV1(
       captureFailure ?? transportError("CLEANUP_FAILED"),
       cleanupOutcomes,
     );
   }
-  return payload as Payload;
+  throw new Error("WORLDKIT_CAPTURE_ONLY_HOSTED_RETRY_STATE_INVALID");
 }

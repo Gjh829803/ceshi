@@ -49,6 +49,7 @@ const statusLabels = {
 };
 
 function worldStatusLabel(world) {
+  if (world.outcome === "preview-ready") return "PREVIEW READY";
   if (world.status === "ready") return "PASSED";
   return statusLabels[world.status] ?? world.status;
 }
@@ -221,6 +222,9 @@ function detailRevision(world, media) {
     stage: world.stage,
     updatedAt: world.updatedAt,
     error: world.error,
+    outcome: world.outcome,
+    publicationStatus: world.publicationStatus,
+    nativeLaunch: world.nativeLaunch,
     deliverables: (media?.deliverables ?? []).map((item) => [item.id, item.status, item.updatedAt]),
     trajectory: (media?.trajectory?.stages ?? []).map((item) => [
       item.id,
@@ -859,9 +863,13 @@ function renderHelperItem(helper) {
 const phaseTitles = {
   input: "需求输入",
   planner: "统一世界规划",
+  "native-case-planning": "Native Case 规划",
+  "native-generation": "Native 场景生成",
+  "native-package": "Native Package 与验证入口",
   "coding-agent": "白膜实现",
   "canonical-build": "Canonical 构建",
   "runtime-capture": "真实运行捕获",
+  evaluation: "重建评测",
   "entry-alignment-validation": "进入构图校验",
   "visual-prompt-synthesis": "视觉提示词合成",
   "visual-imagegen": "并发视觉生成",
@@ -986,18 +994,31 @@ function wireArtifactPreviews(root = dialogContent) {
   }
 }
 
-function renderValidation(media) {
+function renderValidation(media, world) {
   const composition = media?.composition;
   const captured = (media?.planning ?? []).some((item) => item.kind === "opening-frame" && item.available) ||
     (composition !== null && composition !== undefined);
+  const native = world?.sceneSourceKind === "babylon-native";
+  const accepted = world?.publicationStatus === "accepted";
+  const nativeEvidenceSummary = world?.nativeProductionClosure?.qualityStage === "opening-composition"
+    ? "Studio 仅展示身份绑定的 Package、Opening Capture、构图 Gate 与 BNA 验证入口；非接受预览不会进入 Canonical Viewer 或发布准入。"
+    : "Studio 仅展示身份绑定的 Package、Capture、评测与 BNA 验证入口；非接受预览不会进入 Canonical Viewer 或发布准入。";
   const metrics = [
     ["整体状态", captured ? "Runtime Captured" : "等待真实捕获"],
     ["权威来源", captured ? "Babylon Runtime" : "—"],
-    ["协议", captured ? "Authoring V4 / IR V4 / Canonical Scene Plan V1" : "—"],
+    ["协议", captured
+      ? native ? "WorldPackage / Native Source / BNA Harness" : "Authoring V4 / IR V4 / Canonical Scene Plan V1"
+      : "—"],
   ];
   return `<div class="validation-summary ${captured ? "pass" : ""}">
-      <div><small>RUNTIME CAPTURE</small><h3>${captured ? "Canonical 运行捕获已完成" : "等待 CLI 运行捕获"}</h3><p>进入首帧、确定性快照和实体 Front / Right / Back 三视图均由实际 Babylon runtime 导出，并作为评测硬门禁。</p></div>
-      <span>${captured ? "CAPTURED" : "PENDING"}</span>
+      <div><small>RUNTIME CAPTURE</small><h3>${captured
+        ? native
+          ? accepted ? "Native 生产闭包已发布" : "Native 非接受预览证据已就绪"
+          : "Canonical 运行捕获已完成"
+        : "等待 CLI 运行捕获"}</h3><p>${native
+          ? nativeEvidenceSummary
+          : "进入首帧、确定性快照和实体 Front / Right / Back 三视图均由实际 Babylon runtime 导出，并作为评测硬门禁。"}</p></div>
+      <span>${captured ? accepted || !native ? "CAPTURED" : "PREVIEW" : "PENDING"}</span>
     </div>
     <div class="metric-grid">${metrics.map(([label, value]) => `<article><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></article>`).join("")}</div>`;
 }
@@ -1221,11 +1242,17 @@ function patchHelperMedia(media) {
   }
 }
 
-function patchValidation(media) {
-  const signature = JSON.stringify([media?.composition ?? null, media?.visualQa ?? null, media?.entryVerification ?? null]);
+function patchValidation(media, world) {
+  const signature = JSON.stringify([
+    media?.composition ?? null,
+    media?.visualQa ?? null,
+    media?.entryVerification ?? null,
+    world?.sceneSourceKind ?? null,
+    world?.publicationStatus ?? null,
+  ]);
   for (const container of dialogContent.querySelectorAll("[data-live-validation]")) {
     if (container._validationSignature === signature) continue;
-    replaceContentsPreservingDetails(container, renderValidation(media));
+    replaceContentsPreservingDetails(container, renderValidation(media, world));
     container._validationSignature = signature;
   }
   for (const status of dialogContent.querySelectorAll("[data-live-composition]")) {
@@ -1349,7 +1376,7 @@ function applyIncrementalDetailUpdate(payload) {
   patchPlanningMedia(media);
   patchPrototypeMedia(media);
   patchHelperMedia(media);
-  patchValidation(media);
+  patchValidation(media, world);
   patchRuntimeLog(media, log);
   patchWorldActions(world);
   patchDetailCounts(world, media);
@@ -1426,7 +1453,7 @@ async function refreshDialog(id, suppliedPayload = null) {
         </nav>
         ${panel("overview", `
           <div class="panel-heading-large"><div><small>WORLD GENERATION OVERVIEW</small><h3>从需求到可玩白膜</h3></div>${renderCompositionStatus(media)}</div>
-          <div class="overview-grid"><section><div class="section-title"><span>CORE PIPELINE</span><h4>当前生成进度</h4></div>${renderTrajectory(media)}</section><section><div class="section-title"><span>VERIFICATION</span><h4>运行验收</h4></div><div data-live-validation>${renderValidation(media)}</div></section></div>
+          <div class="overview-grid"><section><div class="section-title"><span>CORE PIPELINE</span><h4>当前生成进度</h4></div>${renderTrajectory(media)}</section><section><div class="section-title"><span>VERIFICATION</span><h4>运行验收</h4></div><div data-live-validation>${renderValidation(media, world)}</div></section></div>
           <section class="output-section"><div class="output-heading"><div><small>KEY VISUAL OUTPUTS</small><h3>参考、规划与真实白膜</h3></div><span data-live-image-count>${media?.availableImageCount ?? 0} 张已生成</span></div><div data-live-planning>${renderPlanningMedia(media)}</div></section>
         `)}
         ${panel("trajectory", `
@@ -1446,7 +1473,7 @@ async function refreshDialog(id, suppliedPayload = null) {
         `)}
         ${panel("validation", `
           <div class="panel-heading-large"><div><small>RUNTIME VERIFICATION</small><h3>构图与进入视角验收</h3></div>${renderCompositionStatus(media)}</div>
-          <div data-live-validation>${renderValidation(media)}</div>
+          <div data-live-validation>${renderValidation(media, world)}</div>
           ${world.error ? `<section class="validation-error"><small>失败原因</small><p>${escapeHtml(world.error)}</p></section>` : ""}
         `)}
       </main>

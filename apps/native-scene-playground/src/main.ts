@@ -33,6 +33,8 @@ import {
   startHostedFormalCaptureFrameRouteV1,
   startHostedFormalCaptureShellRouteV1,
 } from "./hosted-formal-capture-route.js";
+import { consumeHostedInteractiveInputV1 } from
+  "./hosted-interactive-input.js";
 import { NativeRuntimeHostV1 } from "./native-runtime-host.js";
 import { presentPageFailureV1 } from "./page-failure.js";
 import { loadVerifiedNativeWorldPackageV1 } from
@@ -484,7 +486,7 @@ async function startHostedFrame(): Promise<void> {
   let previousTimestamp = performance.now();
   let accumulatedSeconds = 0;
   let frameRequest = 0;
-  const runLocalInput = (ticks: number): void => {
+  const runLocalInput = (input: FixedInputV1): void => {
     const requestSequence = ++localRequestSequence;
     localInputTail = localInputTail.then(async () => {
       const receipt = await entry.submit({
@@ -493,10 +495,7 @@ async function startHostedFrame(): Promise<void> {
         id: `request.browser-local-input.${requestSequence}`,
         runtimeSessionId,
         type: "fixed-input.run",
-        input: {
-          actions: semanticActionsForCodes(pressedCodes),
-          ticks,
-        },
+        input,
       });
       if (receipt.status !== "succeeded") {
         throw new Error("WORLDKIT_HOSTED_RUNTIME_LOCAL_INPUT_REJECTED");
@@ -511,18 +510,12 @@ async function startHostedFrame(): Promise<void> {
     );
     previousTimestamp = timestamp;
     accumulatedSeconds += elapsedSeconds;
-    if (pressedCodes.size > 0) {
-      const ticks = Math.min(
-        5,
-        Math.floor(accumulatedSeconds / FIXED_TIME_STEP_SECONDS),
-      );
-      if (ticks > 0) {
-        accumulatedSeconds -= ticks * FIXED_TIME_STEP_SECONDS;
-        runLocalInput(ticks);
-      }
-    } else {
-      accumulatedSeconds = 0;
-    }
+    const consumedInput = consumeHostedInteractiveInputV1({
+      accumulatedSeconds,
+      pressedCodes,
+    });
+    accumulatedSeconds = consumedInput.remainingSeconds;
+    if (consumedInput.input !== undefined) runLocalInput(consumedInput.input);
     entry.renderFrame();
     if (!hostedFrame.isDisposed()) {
       frameRequest = requestAnimationFrame(renderLoop);

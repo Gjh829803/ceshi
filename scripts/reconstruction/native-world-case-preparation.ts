@@ -78,6 +78,21 @@ const BASELINE_REMOTE_GROUND = Object.freeze({
   coverageBasisPoints: 4368,
 });
 
+// The Planner gives generic ground no identity mask. Keep its bindings for
+// presence/support/traversal, but never compare Host-invented screen bands as
+// if they were reference-image truth in the default report-only profile.
+const BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS = 10_000;
+
+function isBaselineGroundAcceptanceTargetRef(targetRef: string): boolean {
+  return targetRef === BASELINE_ENTRY_GROUND.acceptanceTargetRef ||
+    targetRef === BASELINE_REMOTE_GROUND.acceptanceTargetRef;
+}
+
+function isBaselineGroundCompositionTargetRef(targetRef: string): boolean {
+  return targetRef === BASELINE_ENTRY_GROUND.compositionTargetRef ||
+    targetRef === BASELINE_REMOTE_GROUND.compositionTargetRef;
+}
+
 interface NativeWorldVisualPaletteTargetV1 {
   readonly id: string;
   readonly targetKind: string;
@@ -276,6 +291,9 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   ], ({ acceptanceTargetRef }) => acceptanceTargetRef);
   const targetRefs = visualTargets.map(({ compositionTargetRef }) =>
     compositionTargetRef);
+  const semanticLayerIds = sortBy([
+    ...new Set(visualTargets.map(({ semanticLayerId }) => semanticLayerId)),
+  ]);
   const orderedTargetRefs = [
     BASELINE_ENTRY_GROUND,
     BASELINE_REMOTE_GROUND,
@@ -295,7 +313,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
         relation: "connects-to" as const,
         toNodeId: BASELINE_REMOTE_GROUND.topologyNodeId,
       })]),
-      layerIds: Object.freeze(["foreground", "middle", "remote"]),
+      layerIds: Object.freeze(semanticLayerIds),
     }),
     semanticSilhouetteTargets: Object.freeze(visualTargets.map((target) =>
       Object.freeze({
@@ -329,7 +347,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
         zMeters: 0,
       }),
     }),
-    colliders: Object.freeze([
+    colliders: Object.freeze(sortBy([
       Object.freeze({
         acceptanceTargetRef: entryAcceptanceTargetRef,
         contributionId: "collider-entry-ground",
@@ -344,7 +362,17 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
         role: "ground" as const,
         requiresOverlay: true,
       }),
-    ]),
+      ...landmarkTargets.map((target) => {
+        const colliderId = `collider-${target.topologyNodeId}-solid`;
+        return Object.freeze({
+          acceptanceTargetRef: target.acceptanceTargetRef,
+          contributionId: colliderId,
+          colliderId,
+          role: "blocker" as const,
+          requiresOverlay: true,
+        });
+      }),
+    ], ({ contributionId }) => contributionId)),
     groundConnectivity: Object.freeze({
       requireSingleReachableComponent: true,
       requiredTraversalBands: Object.freeze([Object.freeze({
@@ -561,18 +589,33 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     thresholds: {
       semanticSilhouetteTargets: silhouetteTargets.map(({ acceptanceTargetRef }) => ({
         acceptanceTargetRef,
-        maximumBoundsDriftBasisPoints: 1600,
-        maximumCenterDriftBasisPoints: 1000,
-        maximumCoverageDriftBasisPoints: 1800,
+        maximumBoundsDriftBasisPoints:
+          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
+            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
+            : 1600,
+        maximumCenterDriftBasisPoints:
+          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
+            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
+            : 1000,
+        maximumCoverageDriftBasisPoints:
+          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
+            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
+            : 1800,
       })),
       openingComposition: {
         regions: opening.regions.map(({ targetRef }) => ({
           targetRef,
-          maximumDriftBasisPoints: 1600,
+          maximumDriftBasisPoints:
+            isBaselineGroundCompositionTargetRef(targetRef)
+              ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
+              : 1600,
         })),
         anchors: opening.anchors.map(({ targetRef }) => ({
           targetRef,
-          maximumDriftBasisPoints: 1000,
+          maximumDriftBasisPoints:
+            isBaselineGroundCompositionTargetRef(targetRef)
+              ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
+              : 1000,
         })),
       },
       spawnSupport: {
