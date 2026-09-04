@@ -1,5 +1,10 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
+import type {
+  WorldPackageValidationProfileV1,
+  WorldPackageValidationReportV1,
+} from "./world-package-validation-types";
+
 export type ValidationReportStatusV1 = "passed" | "failed" | "incomplete";
 export type ValidationGateRequirementV1 = "blocking" | "advisory";
 export type ValidationGateStatusV1 =
@@ -54,7 +59,7 @@ export interface GateDefinitionV1 {
   readonly metricDefinitionsById: Readonly<Record<string, MetricDefinitionV1>>;
 }
 
-export interface ValidationProfileV1 {
+export interface ControlCaptureValidationProfileV1 {
   readonly kind: "worldkit-validation-profile";
   readonly schemaVersion: 1;
   readonly id: string;
@@ -163,7 +168,7 @@ export interface ValidationDiagnosticV1 {
   readonly suggestedFix: string;
 }
 
-export interface ValidationReportV1 {
+export interface ControlCaptureValidationReportV1 {
   readonly kind: "worldkit-validation-report";
   readonly schemaVersion: 1;
   readonly id: string;
@@ -178,6 +183,14 @@ export interface ValidationReportV1 {
   >;
   readonly diagnostics: readonly ValidationDiagnosticV1[];
 }
+
+export type ValidationProfileV1 =
+  | ControlCaptureValidationProfileV1
+  | WorldPackageValidationProfileV1;
+
+export type ValidationReportV1 =
+  | ControlCaptureValidationReportV1
+  | WorldPackageValidationReportV1;
 
 export type ValidationContractDiagnosticCodeV1 =
   | "VALIDATION_ARRAY_INVALID"

@@ -29,7 +29,7 @@ import type { Browser } from "playwright";
 import { isNil, uniq } from "lodash-es";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 
 import { launchChromiumWithSystemFallback } from "./playwright-browser-launch";
 import { writeWorldPackageDirectoryV1 } from "./file-world-package";

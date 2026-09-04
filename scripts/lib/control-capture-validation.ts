@@ -11,12 +11,12 @@ import {
   hashValidationReportV1,
   validateValidationReportV1,
   type BooleanAssertionMetricResultV1,
+  type ControlCaptureValidationReportV1,
   type GateDefinitionV1,
   type GateResultV1,
   type ValidationDiagnosticCodeV1,
   type ValidationDiagnosticV1,
   type ValidationMetricStatusV1,
-  type ValidationReportV1,
 } from "@whitebox-world/validation";
 import { isPlainObject, orderBy } from "lodash-es";
 
@@ -74,7 +74,7 @@ interface CaptureBundleEvidenceV1 {
 }
 
 export interface ControlCaptureValidationReportResultV1 {
-  readonly report: ValidationReportV1;
+  readonly report: ControlCaptureValidationReportV1;
   readonly reportHash: Sha256HashV1;
 }
 
@@ -468,7 +468,7 @@ export async function createControlCaptureValidationReportV1(
       diagnostics,
     ),
   };
-  const report: ValidationReportV1 = {
+  const report: ControlCaptureValidationReportV1 = {
     kind: "worldkit-validation-report",
     schemaVersion: 1,
     id: `${identity.bundleId}-validation`,

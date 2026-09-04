@@ -18,8 +18,8 @@ import type {
   ValidationContractDiagnosticV1,
   ValidationContractResultV1,
   ValidationDiagnosticV1,
-  ValidationProfileV1,
-  ValidationReportV1,
+  ControlCaptureValidationProfileV1,
+  ControlCaptureValidationReportV1,
 } from "./types";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -352,9 +352,9 @@ function validateGateDefinition(
   }
 }
 
-export function validateValidationProfileV1(
+export function validateControlCaptureValidationProfileV1(
   value: unknown,
-): ValidationContractResultV1<ValidationProfileV1> {
+): ValidationContractResultV1<ControlCaptureValidationProfileV1> {
   const diagnostics: ValidationContractDiagnosticV1[] = [];
   const record = asRecord(value, "", diagnostics);
   if (record !== undefined) {
@@ -420,7 +420,7 @@ export function validateValidationProfileV1(
     }
   }
   return diagnostics.length === 0
-    ? { ok: true, value: value as ValidationProfileV1, diagnostics: [] }
+    ? { ok: true, value: value as ControlCaptureValidationProfileV1, diagnostics: [] }
     : { ok: false, diagnostics };
 }
 
@@ -704,7 +704,7 @@ function validateReportDiagnostic(
 }
 
 function validateReportReferences(
-  report: ValidationReportV1,
+  report: ControlCaptureValidationReportV1,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
   const evidenceRefs = new Set(
@@ -897,9 +897,9 @@ function metricResultMatchesDefinition(
   return false;
 }
 
-export function validateValidationReportV1(
+export function validateControlCaptureValidationReportV1(
   value: unknown,
-): ValidationContractResultV1<ValidationReportV1> {
+): ValidationContractResultV1<ControlCaptureValidationReportV1> {
   const diagnostics: ValidationContractDiagnosticV1[] = [];
   const record = asRecord(value, "", diagnostics);
   if (record !== undefined) {
@@ -1020,7 +1020,7 @@ export function validateValidationReportV1(
   }
   if (diagnostics.length > 0) return { ok: false, diagnostics };
 
-  const report = value as ValidationReportV1;
+  const report = value as ControlCaptureValidationReportV1;
   if (
     report.validationProfileRef !==
       OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1.resourceRef ||

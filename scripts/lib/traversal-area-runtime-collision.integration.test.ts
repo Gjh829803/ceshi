@@ -31,8 +31,8 @@ import {
 import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
-import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
+import { bindRuntimeTestPossession } from "@whitebox-world/runtime-babylon/testing";
 
 const havokWasmBytes = await readFile(
   createRequire(import.meta.url).resolve(

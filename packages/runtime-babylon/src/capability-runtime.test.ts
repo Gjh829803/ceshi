@@ -11,9 +11,9 @@ import { describe, expect, it } from "vitest";
 
 // Test-only Registry access via a cross-workspace relative path (matching the
 // fixture imports below); production runtime-babylon src must not read the Registry.
-import { builtInSubjectResourceRegistry } from "../../subject-registry/src/index";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
-import { createValidAuthoringSpecV4 } from "../../authoring/src/test-fixture";
+import { createValidAuthoringSpecV4 } from "@whitebox-world/authoring/testing";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import { BABYLON_GAMEPLAY_RUNTIME_INTERNAL } from "./gameplay-runtime-internal";
 import { bindRuntimeTestPossession } from "./runtime-test-possession";

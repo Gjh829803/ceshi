@@ -34,6 +34,7 @@
   "devDependencies": {
     "@types/earcut": "3.0.0",
     "@whitebox-world/authoring": "workspace:*",
-    "@whitebox-world/compiler": "workspace:*"
+    "@whitebox-world/compiler": "workspace:*",
+    "@whitebox-world/subject-registry": "workspace:*"
   }
 }

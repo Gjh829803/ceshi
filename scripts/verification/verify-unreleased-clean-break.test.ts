@@ -172,6 +172,28 @@ describe("verify:unreleased-clean-break", () => {
     expect(report.ok).toBe(true);
   });
 
+  it("blocks a second public Validation protocol version", async () => {
+    const fixtureRoot = await createFixtureRoot("clean-break-validation-");
+    await mkdir(path.join(fixtureRoot, "packages", "validation", "src"), {
+      recursive: true,
+    });
+    const supersededReportName = token(["Validation", "Report", "V2"]);
+    await writeFile(
+      path.join(fixtureRoot, "packages", "validation", "src", "compat.ts"),
+      `export interface ${supersededReportName} { readonly schemaVersion: 2; }\n`,
+      "utf8",
+    );
+
+    const report = await scanUnreleasedCleanBreak(fixtureRoot);
+
+    expect(family(report, "superseded-compatibility-mechanisms").matchesByPath)
+      .toEqual([{
+        path: "packages/validation/src/compat.ts",
+        matches: [{ line: 1, value: supersededReportName }],
+      }]);
+    expect(report.ok).toBe(false);
+  });
+
   it("blocks superseded runtime ownership and subject registry compatibility", async () => {
     const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "clean-break-runtime-"));
     cleanupPaths.push(fixtureRoot);

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   layoutExitCodeForStatus,
   layoutExplainFile,

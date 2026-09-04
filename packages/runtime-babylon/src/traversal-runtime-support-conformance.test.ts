@@ -26,7 +26,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorld,
-} from "../../authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 import { BabylonWorldRuntime } from "./babylon-world-runtime";
 import { readCharacterMovementNativeDriverForTestingV1 } from "./babylon-character-body-port.testing";
 import type { CharacterMovementSubjectControllerV1 } from "./character-movement-component";

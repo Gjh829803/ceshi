@@ -4,7 +4,7 @@ import {
   buildTraversalGraphFromSnapshotV2,
   type RecastNavMeshAuditSnapshotV1,
   type TraversalGraphProjectionV2,
-} from "../../packages/traversal-recast/src/build-graph.js";
+} from "@whitebox-world/traversal-recast";
 
 type SurfaceCorrelationProjectionV2 = Extract<
   TraversalGraphProjectionV2,

@@ -101,6 +101,3 @@ export function deriveValidationReportStatusV1(
   }
   return "passed";
 }
-
-export const deriveValidationGateStatusV2 = deriveValidationGateStatusV1;
-export const deriveValidationReportStatusV2 = deriveValidationReportStatusV1;

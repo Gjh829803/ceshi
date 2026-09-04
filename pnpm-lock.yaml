@@ -43,6 +43,9 @@ importers:
       '@whitebox-world/gameplay-contracts':
         specifier: workspace:*
         version: link:packages/gameplay-contracts
+      '@whitebox-world/layout-solver':
+        specifier: workspace:*
+        version: link:packages/layout-solver
       '@whitebox-world/native-babylon':
         specifier: workspace:*
         version: link:packages/native-babylon
@@ -565,6 +568,9 @@ importers:
       '@whitebox-world/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../subject-registry
 
   packages/runtime-contracts:
     dependencies:

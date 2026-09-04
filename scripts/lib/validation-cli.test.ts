@@ -14,10 +14,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  createRouteValidationReportV2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+  createRouteWorldPackageValidationReportV1,
   validateValidationReportV1,
-  validateValidationReportV2,
 } from "@whitebox-world/validation";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
@@ -64,16 +63,16 @@ async function createFixture(): Promise<{
   return { parentDirectory, bundleDirectory };
 }
 
-async function createStrictValidationReportV2File(): Promise<{
+async function createStrictWorldPackageValidationReportV1File(): Promise<{
   readonly parentDirectory: string;
   readonly reportPath: string;
-  readonly report: ReturnType<typeof createRouteValidationReportV2>;
+  readonly report: ReturnType<typeof createRouteWorldPackageValidationReportV1>;
 }> {
   const parentDirectory = await mkdtemp(
     path.join(tmpdir(), "worldkit-validation-cli-v2-"),
   );
   temporaryDirectories.push(parentDirectory);
-  const report = createRouteValidationReportV2({
+  const report = createRouteWorldPackageValidationReportV1({
     reportId: "world-package-route-validation",
     subject: {
       kind: "world-package",
@@ -86,7 +85,7 @@ async function createStrictValidationReportV2File(): Promise<{
     },
     executionPlanHash: HASH_C,
     resourceLockHash: HASH_B,
-    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     requiredRoutes: [],
     rows: [],
   });
@@ -317,8 +316,8 @@ describe("Validation CLI", () => {
   });
 
   it("strictly explains a V2 world-package Gate without casting its Diagnostics to V1", async () => {
-    const { reportPath, report } = await createStrictValidationReportV2File();
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    const { reportPath, report } = await createStrictWorldPackageValidationReportV1File();
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
 
     const explanation = await explainValidationReportFileV1(
       reportPath,
@@ -329,7 +328,7 @@ describe("Validation CLI", () => {
       ok: true,
       exitCode: 0,
       kind: "worldkit-validation-gate-explanation",
-      schemaVersion: 2,
+      schemaVersion: 1,
       validationStatus: "failed",
       gate: {
         id: "route-connectivity",
@@ -358,7 +357,7 @@ describe("Validation CLI", () => {
   });
 
   it("rejects an unknown V2 Gate ID without guessing", async () => {
-    const { reportPath } = await createStrictValidationReportV2File();
+    const { reportPath } = await createStrictWorldPackageValidationReportV1File();
 
     const explanation = await explainValidationReportFileV1(
       reportPath,
@@ -384,7 +383,7 @@ describe("Validation CLI", () => {
   });
 
   it("rejects an unknown Report version without attempting a migration", async () => {
-    const { parentDirectory, report } = await createStrictValidationReportV2File();
+    const { parentDirectory, report } = await createStrictWorldPackageValidationReportV1File();
     const reportPath = path.join(parentDirectory, "unknown-version.json");
     await writeFile(
       reportPath,
@@ -412,8 +411,8 @@ describe("Validation CLI", () => {
     });
   });
 
-  it("rejects unknown V2 Report fields through the strict V2 validator", async () => {
-    const { parentDirectory, report } = await createStrictValidationReportV2File();
+  it("rejects unknown world-package Report fields through the current validator", async () => {
+    const { parentDirectory, report } = await createStrictWorldPackageValidationReportV1File();
     const reportPath = path.join(parentDirectory, "unknown-field.json");
     await writeFile(
       reportPath,
@@ -432,7 +431,7 @@ describe("Validation CLI", () => {
       diagnostics: [
         expect.objectContaining({
           code: "VALIDATION_REPORT_INVALID",
-          message: "Validation Report does not satisfy the strict V2 contract.",
+          message: "Validation Report does not satisfy the strict current V1 contract.",
           details: expect.objectContaining({
             contractDiagnostics: expect.arrayContaining([
               expect.objectContaining({

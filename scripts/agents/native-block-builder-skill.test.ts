@@ -100,7 +100,8 @@ afterEach(async () => {
 
 describe("Native Block Builder Skill", () => {
   it("states the closed outputs and keeps all product authorities with the Host", async () => {
-    const [skill, outputContract] = await Promise.all([
+    const [agentsRules, skill, outputContract] = await Promise.all([
+      readFile(path.resolve("AGENTS.md"), "utf8"),
       readFile(path.resolve(".codex/skills/worldkit-native-block-builder/SKILL.md"), "utf8"),
       readFile(path.resolve(
         ".codex/skills/worldkit-native-block-builder/references/native-block-output-contract.md",
@@ -120,6 +121,20 @@ describe("Native Block Builder Skill", () => {
     expect(skill).toContain("self-check reports only");
     expect(skill).toContain("at most three self-repair cycles");
     expect(skill).toContain("do not replace the separate Host-owned bounded external repair Attempts");
+    expect(skill).toContain(
+      "A Host-owned external repair is never another self-repair cycle",
+    );
+    expect(skill).toContain("fresh identity-bearing Native generation Attempt");
+    expect(skill).toContain("new request and task ID");
+    expect(agentsRules).toContain(
+      "Automatic Planner and Canonical Builder work runs through exactly one Codex task per stage",
+    );
+    expect(agentsRules).toContain(
+      "Each Native Attempt is itself one Codex task and may perform only its own bounded checker-driven self-repair inside that task",
+    );
+    expect(agentsRules).toContain(
+      "Never describe or implement an external Native Attempt as same-task self-repair, a hidden retry, or a fallback",
+    );
     expect(skill).toContain(
       "mounts the Host-selected task inputs directly at `context/` and `inputs/`",
     );

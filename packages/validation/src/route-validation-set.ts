@@ -8,7 +8,7 @@ import type {
   RouteValidationRequiredRouteV1,
   RouteValidationSetReceiptV1,
   RouteValidationSetRowV1,
-} from "./types-v2.js";
+} from "./world-package-validation-types.js";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;

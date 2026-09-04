@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 
-import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
+import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "@whitebox-world/playground/asset-resolver";
 
 import {
   assertProductAssetIntakeBindingsV1,

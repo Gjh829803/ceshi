@@ -33,7 +33,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createValidAuthoringSpecV4,
   createValidPackageSubjectWorldV4,
-} from "../../authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 import {
   BabylonWorldRuntime,
   isWorldRuntimeLayoutAssertionErrorV1,

@@ -6,13 +6,13 @@ import {
 } from "@whitebox-world/traversal";
 
 import {
-  deriveValidationGateStatusV2,
-  deriveValidationReportStatusV2,
+  deriveValidationGateStatusV1,
+  deriveValidationReportStatusV1,
 } from "./policy";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-} from "./profile-v2";
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+} from "./world-package-validation-profile";
 import { ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2 } from "./route";
 import { canonicalRouteValidationSetReceiptV1 } from "./route-validation-set";
 import type {
@@ -21,16 +21,16 @@ import type {
   ValidationContractResultV1,
 } from "./types";
 import type {
-  EvidenceArtifactKindV2,
-  EvidenceArtifactV2,
-  GateDefinitionV2,
-  GateResultV2,
-  MetricDefinitionV2,
-  MetricResultV2,
-  ValidationDiagnosticV2,
-  ValidationProfileV2,
-  ValidationReportV2,
-} from "./types-v2";
+  WorldPackageEvidenceArtifactKindV1,
+  WorldPackageEvidenceArtifactV1,
+  WorldPackageGateDefinitionV1,
+  WorldPackageGateResultV1,
+  WorldPackageMetricDefinitionV1,
+  WorldPackageMetricResultV1,
+  WorldPackageValidationDiagnosticV1,
+  WorldPackageValidationProfileV1,
+  WorldPackageValidationReportV1,
+} from "./world-package-validation-types";
 
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const ZERO_SHA256 = `sha256:${"0".repeat(64)}`;
@@ -58,12 +58,12 @@ const CAPTURE_DIAGNOSTIC_CODES_V1 = [
   "VALIDATION_REQUIRED_METRIC_MISSING",
 ] as const;
 
-const VALIDATION_DIAGNOSTIC_CODES_V2 = [
+const WORLD_PACKAGE_VALIDATION_DIAGNOSTIC_CODES_V1 = [
   ...CAPTURE_DIAGNOSTIC_CODES_V1,
   ...ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2,
 ];
 
-const EVIDENCE_KINDS_V2 = [
+const WORLD_PACKAGE_EVIDENCE_KINDS_V1 = [
   "route-validation-set-receipt",
   "traversal-graph",
   "route-path-receipt",
@@ -172,7 +172,7 @@ const EVIDENCE_FIELDS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
 };
 
 const REQUIRED_EVIDENCE_KINDS_BY_GATE: Readonly<
-  Record<string, ReadonlySet<EvidenceArtifactKindV2>>
+  Record<string, ReadonlySet<WorldPackageEvidenceArtifactKindV1>>
 > = {
   "route-connectivity": new Set(["traversal-graph", "route-path-receipt"]),
   "route-runtime-conformance": new Set(["route-runtime-probe-receipt"]),
@@ -549,7 +549,7 @@ function validateMetricDefinition(
       diagnostics,
       "VALIDATION_METRIC_KIND_INVALID",
       `${path}/kind`,
-      "Metric kind is not supported by V2.",
+      "Metric kind is not supported by the current V1.",
     );
     return;
   }
@@ -763,9 +763,9 @@ function validateRouteRuntimeGateThresholds(
   }
 }
 
-export function validateValidationProfileV2(
+export function validateWorldPackageValidationProfileV1(
   value: unknown,
-): ValidationContractResultV1<ValidationProfileV2> {
+): ValidationContractResultV1<WorldPackageValidationProfileV1> {
   const diagnostics: ValidationContractDiagnosticV1[] = [];
   const record = asRecord(value, "", diagnostics);
   if (record !== undefined) {
@@ -785,7 +785,7 @@ export function validateValidationProfileV2(
       diagnostics,
     );
     requireEnum(record.kind, ["worldkit-validation-profile"], "/kind", diagnostics);
-    if (record.schemaVersion !== 2) {
+    if (record.schemaVersion !== 1) {
       addDiagnostic(
         diagnostics,
         "VALIDATION_ENUM_INVALID",
@@ -823,7 +823,7 @@ export function validateValidationProfileV2(
     }
   }
   return diagnostics.length === 0
-    ? { ok: true, value: value as ValidationProfileV2, diagnostics: [] }
+    ? { ok: true, value: value as WorldPackageValidationProfileV1, diagnostics: [] }
     : { ok: false, diagnostics };
 }
 
@@ -850,7 +850,7 @@ function validateMetricResult(
       diagnostics,
       "VALIDATION_METRIC_KIND_INVALID",
       `${path}/kind`,
-      "Metric result kind is not supported by V2.",
+      "Metric result kind is not supported by the current V1.",
     );
     return;
   }
@@ -987,7 +987,7 @@ function validateGateResult(
   path: string,
   mapId: string,
   diagnostics: ValidationContractDiagnosticV1[],
-): GateResultV2 | undefined {
+): WorldPackageGateResultV1 | undefined {
   const record = asRecord(value, path, diagnostics);
   if (record === undefined) return undefined;
   rejectUnknownFields(
@@ -1023,7 +1023,7 @@ function validateGateResult(
     }
   }
   requireStringArray(record.diagnosticIds, `${path}/diagnosticIds`, diagnostics);
-  return record as unknown as GateResultV2;
+  return record as unknown as WorldPackageGateResultV1;
 }
 
 function validateEvidenceArtifact(
@@ -1039,7 +1039,7 @@ function validateEvidenceArtifact(
       diagnostics,
       "VALIDATION_ENUM_INVALID",
       `${path}/kind`,
-      "Evidence kind is not supported by V2.",
+      "Evidence kind is not supported by the current V1.",
     );
     return;
   }
@@ -1052,7 +1052,7 @@ function validateEvidenceArtifact(
       "Evidence map key and inner id must match.",
     );
   }
-  requireEnum(record.kind, EVIDENCE_KINDS_V2, `${path}/kind`, diagnostics);
+  requireEnum(record.kind, WORLD_PACKAGE_EVIDENCE_KINDS_V1, `${path}/kind`, diagnostics);
   requireString(record.artifactRef, `${path}/artifactRef`, diagnostics);
   requireString(record.mediaType, `${path}/mediaType`, diagnostics);
   requireNonNegativeInteger(record.sizeBytes, `${path}/sizeBytes`, diagnostics);
@@ -1149,7 +1149,7 @@ function validateDiagnosticDetails(
       diagnostics,
       "VALIDATION_ENUM_INVALID",
       `${path}/kind`,
-      "Diagnostic details kind is not supported by V2.",
+      "Diagnostic details kind is not supported by the current V1.",
     );
     return;
   }
@@ -1283,7 +1283,7 @@ function validateReportDiagnostic(
       requireString(record[field], `${path}/${field}`, diagnostics);
     }
   }
-  requireEnum(record.code, VALIDATION_DIAGNOSTIC_CODES_V2, `${path}/code`, diagnostics);
+  requireEnum(record.code, WORLD_PACKAGE_VALIDATION_DIAGNOSTIC_CODES_V1, `${path}/code`, diagnostics);
   requireEnum(record.severity, ["error", "warning"], `${path}/severity`, diagnostics);
   if (!isNil(record.traversalSurfaceId)) {
     requireString(record.traversalSurfaceId, `${path}/traversalSurfaceId`, diagnostics);
@@ -1370,8 +1370,8 @@ function validateReportDiagnostic(
 }
 
 function metricResultMatchesDefinition(
-  metricDefinition: MetricDefinitionV2,
-  metricResult: MetricResultV2,
+  metricDefinition: WorldPackageMetricDefinitionV1,
+  metricResult: WorldPackageMetricResultV1,
 ): boolean {
   if (
     metricResult.kind !== metricDefinition.kind ||
@@ -1439,8 +1439,8 @@ function metricResultMatchesDefinition(
 }
 
 function artifactsByRef(
-  report: ValidationReportV2,
-): ReadonlyMap<string, EvidenceArtifactV2> {
+  report: WorldPackageValidationReportV1,
+): ReadonlyMap<string, WorldPackageEvidenceArtifactV1> {
   return new Map(
     Object.values(report.evidenceArtifactsById).map((artifact) => [
       artifact.artifactRef,
@@ -1459,13 +1459,13 @@ function addReferenceInvalid(
 
 function assertEvaluatedMetricEvidenceKinds(
   gateId: string,
-  metricResult: MetricResultV2,
-  artifacts: ReadonlyMap<string, EvidenceArtifactV2>,
+  metricResult: WorldPackageMetricResultV1,
+  artifacts: ReadonlyMap<string, WorldPackageEvidenceArtifactV1>,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
   const requiredKinds =
     gateId === "route-connectivity" && metricResult.status === "failed"
-      ? new Set<EvidenceArtifactKindV2>([
+      ? new Set<WorldPackageEvidenceArtifactKindV1>([
           "traversal-graph",
           "route-path-receipt",
           "route-connectivity-failure",
@@ -1474,7 +1474,7 @@ function assertEvaluatedMetricEvidenceKinds(
   if (isNil(requiredKinds)) {
     return;
   }
-  const referencedKinds = new Set<EvidenceArtifactKindV2>(
+  const referencedKinds = new Set<WorldPackageEvidenceArtifactKindV1>(
     metricResult.evidenceArtifactRefs.flatMap((artifactRef) => {
       const artifact = artifacts.get(artifactRef);
       return isNil(artifact) ? [] : [artifact.kind];
@@ -1533,7 +1533,7 @@ function assertRegistryIdentity(
 }
 
 function assertEvidenceArtifactIdentities(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
   const receipt = report.routeValidationSetReceipt;
@@ -1748,13 +1748,13 @@ function assertEvidenceArtifactIdentities(
 }
 
 function validateReportReferences(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   diagnostics: ValidationContractDiagnosticV1[],
 ): void {
   const evidenceByRef = artifactsByRef(report);
   const evidenceRefs = new Set(evidenceByRef.keys());
   const diagnosticIds = new Set(
-    report.diagnostics.map((diagnostic: ValidationDiagnosticV2) => diagnostic.id),
+    report.diagnostics.map((diagnostic: WorldPackageValidationDiagnosticV1) => diagnostic.id),
   );
   const gateDiagnosticOwners: Array<{ diagnosticId: string; ownerId: string }> = [];
   const metricDiagnosticOwners: Array<{ diagnosticId: string; ownerId: string }> = [];
@@ -1877,9 +1877,9 @@ function validateReportReferences(
   assertEvidenceArtifactIdentities(report, diagnostics);
 }
 
-export function validateValidationReportV2(
+export function validateWorldPackageValidationReportV1(
   value: unknown,
-): ValidationContractResultV1<ValidationReportV2> {
+): ValidationContractResultV1<WorldPackageValidationReportV1> {
   const diagnostics: ValidationContractDiagnosticV1[] = [];
   const record = asRecord(value, "", diagnostics);
   if (record !== undefined) {
@@ -1904,7 +1904,7 @@ export function validateValidationReportV2(
       diagnostics,
     );
     requireEnum(record.kind, ["worldkit-validation-report"], "/kind", diagnostics);
-    if (record.schemaVersion !== 2) {
+    if (record.schemaVersion !== 1) {
       addDiagnostic(
         diagnostics,
         "VALIDATION_ENUM_INVALID",
@@ -1987,12 +1987,12 @@ export function validateValidationReportV2(
   }
   if (diagnostics.length > 0) return { ok: false, diagnostics };
 
-  const report = value as ValidationReportV2;
+  const report = value as WorldPackageValidationReportV1;
   if (
     report.validationProfileRef !==
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef ||
-    report.resolvedVersion !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version ||
-    report.validationProfileHash !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef ||
+    report.resolvedVersion !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version ||
+    report.validationProfileHash !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1
   ) {
     addDiagnostic(
       diagnostics,
@@ -2003,7 +2003,7 @@ export function validateValidationReportV2(
   }
 
   for (const [gateId, gateDefinition] of Object.entries(
-    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById,
+    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById,
   )) {
     const gateResult = report.gateResultsById[gateId];
     if (isNil(gateResult)) {
@@ -2030,8 +2030,8 @@ export function validateValidationReportV2(
           "The built-in V2 Profile does not define applicability conditions.",
         );
       }
-      const expectedGateStatus = deriveValidationGateStatusV2(
-        gateDefinition as GateDefinitionV2,
+      const expectedGateStatus = deriveValidationGateStatusV1(
+        gateDefinition as WorldPackageGateDefinitionV1,
         gateResult,
       );
       if (gateResult.status !== expectedGateStatus) {
@@ -2075,7 +2075,7 @@ export function validateValidationReportV2(
       }
       for (const metricId of Object.keys(gateResult.metricResultsById)) {
         if (
-          (gateDefinition as GateDefinitionV2).metricDefinitionsById[metricId] === undefined
+          (gateDefinition as WorldPackageGateDefinitionV1).metricDefinitionsById[metricId] === undefined
         ) {
           addDiagnostic(
             diagnostics,
@@ -2089,8 +2089,8 @@ export function validateValidationReportV2(
   }
   for (const gateId of Object.keys(report.gateResultsById)) {
     if (
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
-        gateId as keyof typeof OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById[
+        gateId as keyof typeof OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById
       ] === undefined
     ) {
       addDiagnostic(
@@ -2101,8 +2101,8 @@ export function validateValidationReportV2(
       );
     }
   }
-  const expectedStatus = deriveValidationReportStatusV2(
-    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  const expectedStatus = deriveValidationReportStatusV1(
+    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     report.gateResultsById,
   );
   if (report.status !== expectedStatus) {

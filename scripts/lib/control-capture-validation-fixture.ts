@@ -21,7 +21,7 @@ import {
 
 import {
   createControlCaptureBundleWriterV1,
-  type ControlCaptureFrameInputV1,
+  type ControlCaptureBundleFrameInputV1,
 } from "./control-capture-bundle";
 
 const WORLD_HASH = `sha256:${"a".repeat(64)}` as Sha256HashV1;
@@ -233,10 +233,8 @@ function passBytes(
 function frameInput(
   captureFrameIndex: number,
   simulationTick: number,
-): ControlCaptureFrameInputV1 {
+): ControlCaptureBundleFrameInputV1 {
   return {
-    kind: "worldkit-control-capture-frame",
-    schemaVersion: 1,
     runtimeSessionId: "validation-fixture-session",
     captureFrameIndex,
     simulationTick,

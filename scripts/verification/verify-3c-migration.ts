@@ -399,6 +399,16 @@ const SINGLE_AUTHORITY_STRUCTURE_RULES_V1 = Object.freeze([
     ]),
   }),
   Object.freeze({
+    id: "runtime-provider-single-fixed-tick-commit",
+    path: "packages/runtime-babylon/src/babylon-world-runtime.ts",
+    required: Object.freeze([
+      "private commitFixedTick(input:",
+      'cameraMode: "gameplay-target";',
+      'cameraMode: "controlled-entity";',
+    ]),
+    forbidden: Object.freeze(["commitGameplayFixedTick"]),
+  }),
+  Object.freeze({
     id: "movement-projection-discriminator",
     path: "packages/runtime-babylon/src/runtime-projection.ts",
     required: Object.freeze([

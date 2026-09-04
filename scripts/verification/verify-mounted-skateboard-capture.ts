@@ -62,7 +62,7 @@ import {
   createControlCaptureBundleWriterV1,
   inspectControlCaptureBundleV1,
   validateControlCaptureBundleV1,
-  type ControlCaptureFrameInputV1,
+  type ControlCaptureBundleFrameInputV1,
 } from "../lib/control-capture-bundle";
 import { launchChromiumWithSystemFallback } from
   "../lib/playwright-browser-launch";
@@ -622,7 +622,7 @@ async function captureFrame(
 ): Promise<Readonly<{
   runtimeFrame: RuntimeControlCaptureFrameV1;
   worldState: WorldStateSnapshotV1;
-  writerFrame: ControlCaptureFrameInputV1;
+  writerFrame: ControlCaptureBundleFrameInputV1;
 }>> {
   const captured = await page.evaluate(async ({
     captureFrameIndex,
@@ -653,9 +653,7 @@ async function captureFrame(
     heightPixels: CAPTURE_HEIGHT_PIXELS,
   });
   const { runtimeFrame, worldState } = captured;
-  const writerFrame: ControlCaptureFrameInputV1 = {
-    kind: runtimeFrame.kind,
-    schemaVersion: runtimeFrame.schemaVersion,
+  const writerFrame: ControlCaptureBundleFrameInputV1 = {
     runtimeSessionId: runtimeFrame.runtimeSessionId,
     captureFrameIndex: runtimeFrame.captureFrameIndex,
     simulationTick: runtimeFrame.simulationTick,

@@ -23,34 +23,37 @@ import {
 import { isEmpty, isNil } from "lodash-es";
 
 import {
-  deriveValidationGateStatusV2,
-  deriveValidationReportStatusV2,
+  deriveValidationGateStatusV1,
+  deriveValidationReportStatusV1,
 } from "./policy.js";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  hashValidationProfileV2,
-} from "./profile-v2.js";
-import { createRouteConnectivityValidationDiagnosticV2 } from "./route.js";
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+} from "./world-package-validation-profile.js";
+import { hashValidationProfileV1 } from "./profile.js";
+import { createRouteConnectivityWorldPackageValidationDiagnosticV1 } from "./route.js";
 import {
   canonicalRouteValidationRequiredRoutesV1,
   canonicalRouteValidationSetReceiptV1,
   hashRouteValidationRequiredRouteSetV1,
 } from "./route-validation-set.js";
 import type {
-  EvidenceArtifactV2,
-  GateDefinitionV2,
-  GateResultV2,
-  MetricDefinitionV2,
-  MetricResultV2,
-  ValidationDiagnosticV2,
-  ValidationProfileV2,
-  ValidationReportV2,
+  WorldPackageEvidenceArtifactV1,
+  WorldPackageGateDefinitionV1,
+  WorldPackageGateResultV1,
+  WorldPackageMetricDefinitionV1,
+  WorldPackageMetricResultV1,
+  WorldPackageValidationDiagnosticV1,
+  WorldPackageValidationProfileV1,
+  WorldPackageValidationReportV1,
   WorldPackageValidationSubjectV1,
   RouteValidationSetReceiptV1,
   RouteValidationRequiredRouteV1,
-} from "./types-v2.js";
-import { validateValidationProfileV2, validateValidationReportV2 } from "./validate-v2.js";
+} from "./world-package-validation-types.js";
+import {
+  validateWorldPackageValidationProfileV1,
+  validateWorldPackageValidationReportV1,
+} from "./validate-world-package.js";
 import { assertAccessorFreeDataGraph } from "./accessor-free-data.js";
 
 type Sha256Hash = `sha256:${string}`;
@@ -77,7 +80,7 @@ export interface CreateRouteValidationReportInputV2 {
   readonly executionPlanHash: Sha256Hash;
   readonly resourceLockHash: Sha256Hash;
   readonly dependencyReportRefs?: readonly string[];
-  readonly validationProfile: ValidationProfileV2;
+  readonly validationProfile: WorldPackageValidationProfileV1;
   readonly requiredRoutes: readonly RouteValidationRequiredRouteV1[];
   readonly rows: readonly RouteValidationRowInputV2[];
 }
@@ -88,11 +91,11 @@ interface EvaluateRouteValidationRowInternalInputV2 extends RouteValidationRowIn
   readonly executionPlanHash: Sha256Hash;
   readonly resourceLockHash: Sha256Hash;
   readonly dependencyReportRefs: readonly string[];
-  readonly validationProfile: ValidationProfileV2;
+  readonly validationProfile: WorldPackageValidationProfileV1;
 }
 
 export type RouteValidationRowEvaluationV2 = Omit<
-  ValidationReportV2,
+  WorldPackageValidationReportV1,
   "routeValidationSetReceipt"
 >;
 
@@ -161,7 +164,7 @@ function artifactRef(
 
 function evidenceBase(
   id: string,
-  kind: EvidenceArtifactV2["kind"],
+  kind: WorldPackageEvidenceArtifactV1["kind"],
   routeId: string,
   constraintId: string,
   filename: string,
@@ -169,7 +172,7 @@ function evidenceBase(
   bytes: Uint8Array,
 ): Readonly<{
   id: string;
-  kind: EvidenceArtifactV2["kind"];
+  kind: WorldPackageEvidenceArtifactV1["kind"];
   artifactRef: string;
   mediaType: string;
   sizeBytes: number;
@@ -190,18 +193,18 @@ function evidenceBase(
 }
 
 function canonicalProfileIdentity(
-  profile: ValidationProfileV2,
-): ValidationProfileV2 {
-  const validation = validateValidationProfileV2(profile);
+  profile: WorldPackageValidationProfileV1,
+): WorldPackageValidationProfileV1 {
+  const validation = validateWorldPackageValidationProfileV1(profile);
   if (
     validation.ok !== true ||
-    profile.resourceRef !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef ||
-    profile.version !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version ||
-    hashValidationProfileV2(profile) !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2
+    profile.resourceRef !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef ||
+    profile.version !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version ||
+    hashValidationProfileV1(profile) !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1
   ) {
     fail("ROUTE_VALIDATION_PROFILE_MISMATCH");
   }
-  return OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2;
+  return OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1;
 }
 
 function copyBytes(value: Uint8Array | undefined): Uint8Array | undefined {
@@ -349,9 +352,9 @@ interface MeasuredMetricV2 {
 }
 
 function evaluatedMetric(
-  definition: MetricDefinitionV2,
+  definition: WorldPackageMetricDefinitionV1,
   measured: MeasuredMetricV2,
-): MetricResultV2 {
+): WorldPackageMetricResultV1 {
   const shared = {
     id: definition.id,
     evaluatorProfileRef: definition.evaluatorProfileRef,
@@ -457,9 +460,9 @@ function evaluatedMetric(
 }
 
 function notEvaluatedMetric(
-  definition: MetricDefinitionV2,
+  definition: WorldPackageMetricDefinitionV1,
   diagnosticId = `route-runtime-missing-${definition.id}`,
-): MetricResultV2 {
+): WorldPackageMetricResultV1 {
   const shared = {
     id: definition.id,
     status: "not-evaluated" as const,
@@ -538,9 +541,9 @@ function notEvaluatedMetric(
 }
 
 function withLockDerivedResultBound(
-  metric: MetricResultV2,
+  metric: WorldPackageMetricResultV1,
   lock: ResolvedTraversalLockReceiptV1["lock"],
-): MetricResultV2 {
+): WorldPackageMetricResultV1 {
   if (
     metric.id === "maximum-observed-step-height-meters" &&
     metric.kind === "meters-threshold"
@@ -743,11 +746,11 @@ function failureDiagnosticContext(
 }
 
 function missingRuntimeDiagnostic(
-  definition: MetricDefinitionV2,
+  definition: WorldPackageMetricDefinitionV1,
   context: RouteDiagnosticContextV2,
   missingRef: string,
   reason: MissingRuntimeEvidenceReasonV2,
-): ValidationDiagnosticV2 {
+): WorldPackageValidationDiagnosticV1 {
   const isPathUnavailable = reason === "route-path-unavailable";
   return {
     id: `route:${context.constraintId}:runtime-missing:${definition.id}`,
@@ -784,7 +787,7 @@ function missingRuntimeDiagnostic(
 
 function runtimeFailureCode(
   failure: RouteRuntimeProbeFailureV2,
-): ValidationDiagnosticV2["code"] {
+): WorldPackageValidationDiagnosticV1["code"] {
   switch (failure.kind) {
     case "start-support-invalid":
       return "ROUTE_START_SUPPORT_INVALID";
@@ -803,8 +806,8 @@ function runtimeFailureCode(
 
 function runtimeFailureDetails(
   failure: RouteRuntimeProbeFailureV2,
-  metric: MetricResultV2,
-): ValidationDiagnosticV2["details"] {
+  metric: WorldPackageMetricResultV1,
+): WorldPackageValidationDiagnosticV1["details"] {
   if (metric.kind === "meters-threshold") {
     return {
       kind: "meters-threshold",
@@ -844,14 +847,14 @@ function runtimeFailureDetails(
 }
 
 function runtimeFailureDiagnostic(
-  metric: MetricResultV2,
+  metric: WorldPackageMetricResultV1,
   path: RoutePathReceiptV2,
   probe: Extract<
     RouteRuntimeProbeReceiptV2,
     { readonly status: "failed" }
   >,
   probeArtifactRef: string,
-): ValidationDiagnosticV2 {
+): WorldPackageValidationDiagnosticV1 {
   const surface = pathDiagnosticContext(path);
   return {
     id: `route:${path.constraintId}:runtime-failed:${metric.id}`,
@@ -880,9 +883,9 @@ function runtimeFailureDiagnostic(
 }
 
 function evaluatedGate(
-  definition: GateDefinitionV2,
+  definition: WorldPackageGateDefinitionV1,
   measurements: Readonly<Record<string, MeasuredMetricV2>>,
-): GateResultV2 {
+): WorldPackageGateResultV1 {
   const metricResultsById = Object.fromEntries(
     Object.values(definition.metricDefinitionsById).map((metricDefinition) => {
       const measured = measurements[metricDefinition.id];
@@ -901,7 +904,7 @@ function evaluatedGate(
   };
   return {
     ...gate,
-    status: deriveValidationGateStatusV2(definition, gate),
+    status: deriveValidationGateStatusV1(definition, gate),
   };
 }
 
@@ -930,7 +933,7 @@ function assertFailureCapabilityThresholds(
 }
 
 function failureMetricMeasurement(
-  definition: MetricDefinitionV2,
+  definition: WorldPackageMetricDefinitionV1,
   failure: RouteConnectivityFailureV2,
   graph: TraversalGraphV2 | undefined,
   failureArtifactRef: string,
@@ -1018,17 +1021,17 @@ function failureMetricMeasurement(
 }
 
 function createFailureConnectivityGate(
-  definition: GateDefinitionV2,
+  definition: WorldPackageGateDefinitionV1,
   failure: RouteConnectivityFailureV2,
   graph: TraversalGraphV2 | undefined,
   failureArtifactRef: string,
   graphArtifactRef: string | undefined,
   lock: ResolvedTraversalLockReceiptV1["lock"],
 ): Readonly<{
-  gate: GateResultV2;
-  diagnostics: readonly ValidationDiagnosticV2[];
+  gate: WorldPackageGateResultV1;
+  diagnostics: readonly WorldPackageValidationDiagnosticV1[];
 }> {
-  const diagnostics: ValidationDiagnosticV2[] = [];
+  const diagnostics: WorldPackageValidationDiagnosticV1[] = [];
   const metricResultsById = Object.fromEntries(
     Object.values(definition.metricDefinitionsById).map((metricDefinition) => {
       const measurement = failureMetricMeasurement(
@@ -1050,7 +1053,7 @@ function createFailureConnectivityGate(
           }
         : evaluatedMetric(metricDefinition, measurement);
       if (metric.status === "failed" || metric.status === "not-evaluated") {
-        const diagnostic = createRouteConnectivityValidationDiagnosticV2({
+        const diagnostic = createRouteConnectivityWorldPackageValidationDiagnosticV1({
           id: diagnosticId,
           metricId: metricDefinition.id,
           evidenceArtifactRef: failureArtifactRef,
@@ -1072,22 +1075,22 @@ function createFailureConnectivityGate(
   return {
     gate: {
       ...gateWithDiagnostics,
-      status: deriveValidationGateStatusV2(definition, gateWithDiagnostics),
+      status: deriveValidationGateStatusV1(definition, gateWithDiagnostics),
     },
     diagnostics,
   };
 }
 
 function createUnavailableRuntimeGate(
-  definition: GateDefinitionV2,
+  definition: WorldPackageGateDefinitionV1,
   context: RouteDiagnosticContextV2,
   missingRef: string,
   reason: MissingRuntimeEvidenceReasonV2,
 ): Readonly<{
-  gate: GateResultV2;
-  diagnostics: readonly ValidationDiagnosticV2[];
+  gate: WorldPackageGateResultV1;
+  diagnostics: readonly WorldPackageValidationDiagnosticV1[];
 }> {
-  const diagnostics: ValidationDiagnosticV2[] = [];
+  const diagnostics: WorldPackageValidationDiagnosticV1[] = [];
   const metricResultsById = Object.fromEntries(
     Object.values(definition.metricDefinitionsById).map((metricDefinition) => {
       const diagnosticId =
@@ -1109,14 +1112,14 @@ function createUnavailableRuntimeGate(
   return {
     gate: {
       ...gateWithDiagnostics,
-      status: deriveValidationGateStatusV2(definition, gateWithDiagnostics),
+      status: deriveValidationGateStatusV1(definition, gateWithDiagnostics),
     },
     diagnostics,
   };
 }
 
-function validateCompletedReport(report: ValidationReportV2): ValidationReportV2 {
-  const validation = validateValidationReportV2(report);
+function validateCompletedReport(report: WorldPackageValidationReportV1): WorldPackageValidationReportV1 {
+  const validation = validateWorldPackageValidationReportV1(report);
   if (validation.ok !== true) {
     fail(
       `ROUTE_VALIDATION_REPORT_INVALID:${JSON.stringify(validation.diagnostics)}`,
@@ -1181,7 +1184,7 @@ function createFailedConnectivityReport(
     "application/vnd.worldkit.route-connectivity-failure.v2+json",
     input.evidenceBytes.routeConnectivityFailure,
   );
-  const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
+  const evidenceArtifactsById: Record<string, WorldPackageEvidenceArtifactV1> = {
     [failureBase.id]: {
       ...failureBase,
       kind: "route-connectivity-failure",
@@ -1255,14 +1258,14 @@ function createFailedConnectivityReport(
   };
   return {
     kind: "worldkit-validation-report",
-    schemaVersion: 2,
+    schemaVersion: 1,
     id: input.reportId,
     subject: input.subject,
     dependencyReportRefs: [...(input.dependencyReportRefs ?? [])].sort(),
     validationProfileRef: profile.resourceRef,
     resolvedVersion: profile.version,
-    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-    status: deriveValidationReportStatusV2(profile, gateResultsById),
+    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+    status: deriveValidationReportStatusV1(profile, gateResultsById),
     gateResultsById,
     evidenceArtifactsById,
     diagnostics,
@@ -1338,7 +1341,7 @@ function evaluateRouteValidationRowAsReportV2(
     "application/vnd.worldkit.route-path-receipt.v2+json",
     input.evidenceBytes.routePathReceipt,
   );
-  const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
+  const evidenceArtifactsById: Record<string, WorldPackageEvidenceArtifactV1> = {
     [graphBase.id]: {
       ...graphBase,
       kind: "traversal-graph",
@@ -1394,8 +1397,8 @@ function evaluateRouteValidationRowAsReportV2(
     ),
   );
 
-  const diagnostics: ValidationDiagnosticV2[] = [];
-  let runtimeGate: GateResultV2;
+  const diagnostics: WorldPackageValidationDiagnosticV1[] = [];
+  let runtimeGate: WorldPackageGateResultV1;
   if (isNil(input.routeRuntimeProbeReceipt)) {
     if (!isNil(input.evidenceBytes.routeRuntimeProbeReceipt)) {
       fail("ROUTE_VALIDATION_PROBE_EVIDENCE_ORPHANED");
@@ -1428,7 +1431,7 @@ function evaluateRouteValidationRowAsReportV2(
     };
     runtimeGate = {
       ...incompleteGate,
-      status: deriveValidationGateStatusV2(runtimeDefinition, incompleteGate),
+      status: deriveValidationGateStatusV1(runtimeDefinition, incompleteGate),
     };
   } else {
     if (isNil(input.evidenceBytes.routeRuntimeProbeReceipt)) {
@@ -1451,7 +1454,7 @@ function evaluateRouteValidationRowAsReportV2(
       validationProfileIdentity: {
         resourceRef: profile.resourceRef,
         version: profile.version,
-        contentHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+        contentHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
       },
     });
     if (
@@ -1536,7 +1539,7 @@ function evaluateRouteValidationRowAsReportV2(
       };
       runtimeGate = {
         ...gateWithDiagnostics,
-        status: deriveValidationGateStatusV2(runtimeDefinition, gateWithDiagnostics),
+        status: deriveValidationGateStatusV1(runtimeDefinition, gateWithDiagnostics),
       };
     } else {
       runtimeGate = evaluated;
@@ -1549,14 +1552,14 @@ function evaluateRouteValidationRowAsReportV2(
   };
   const report: RouteValidationRowEvaluationV2 = {
     kind: "worldkit-validation-report",
-    schemaVersion: 2,
+    schemaVersion: 1,
     id: input.reportId,
     subject: input.subject,
     dependencyReportRefs: [...(input.dependencyReportRefs ?? [])].sort(),
     validationProfileRef: profile.resourceRef,
     resolvedVersion: profile.version,
-    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-    status: deriveValidationReportStatusV2(profile, gateResultsById),
+    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+    status: deriveValidationReportStatusV1(profile, gateResultsById),
     gateResultsById,
     evidenceArtifactsById,
     diagnostics,
@@ -1568,7 +1571,7 @@ export interface EvaluateRouteValidationRowInputV2 {
   readonly subject: WorldPackageValidationSubjectV1;
   readonly executionPlanHash: Sha256Hash;
   readonly resourceLockHash: Sha256Hash;
-  readonly validationProfile: ValidationProfileV2;
+  readonly validationProfile: WorldPackageValidationProfileV1;
   readonly row: RouteValidationRowInputV2;
 }
 
@@ -1593,7 +1596,7 @@ export function evaluateRouteValidationRowV2(
   }));
 }
 
-function metricValue(metric: MetricResultV2): number | boolean | undefined {
+function metricValue(metric: WorldPackageMetricResultV1): number | boolean | undefined {
   if (metric.kind === "boolean-assertion") return metric.value;
   if (metric.kind === "count-threshold") return metric.valueCount;
   if (metric.kind === "meters-threshold") return metric.valueMeters;
@@ -1637,13 +1640,13 @@ function aggregateNumber(metricId: string, values: readonly number[]): number {
 }
 
 function aggregateMetric(
-  definition: MetricDefinitionV2,
-  rowMetrics: readonly MetricResultV2[],
+  definition: WorldPackageMetricDefinitionV1,
+  rowMetrics: readonly WorldPackageMetricResultV1[],
   routeSetArtifactRef: string,
   directValue?: number | boolean,
   forcedStatus?: "passed" | "failed" | "not-evaluated",
   forcedDiagnosticIds: readonly string[] = [],
-): MetricResultV2 {
+): WorldPackageMetricResultV1 {
   const values = rowMetrics.flatMap((metric) => {
     const value = metricValue(metric);
     return isNil(value) ? [] : [value];
@@ -1698,7 +1701,7 @@ function aggregateMetric(
   });
 }
 
-function passingDefaultValue(definition: MetricDefinitionV2): number | boolean {
+function passingDefaultValue(definition: WorldPackageMetricDefinitionV1): number | boolean {
   if (definition.kind === "boolean-assertion") return definition.expectedValue;
   if (definition.kind === "count-threshold") {
     return definition.minimumAllowedCount ?? definition.maximumAllowedCount ?? 0;
@@ -1722,7 +1725,7 @@ function worldDiagnostic(
   gateId: string,
   metricId: string,
   reason: "required-routes-missing" | "runtime-routes-unavailable",
-): ValidationDiagnosticV2 {
+): WorldPackageValidationDiagnosticV1 {
   const isConnectivity = reason === "required-routes-missing";
   return Object.freeze({
     id: `world:${reason}:${metricId}`,
@@ -1776,11 +1779,11 @@ function rowReceipt(
 }
 
 function aggregateGate(
-  definition: GateDefinitionV2,
+  definition: WorldPackageGateDefinitionV1,
   evaluations: readonly RouteValidationRowEvaluationV2[],
   receipt: RouteValidationSetReceiptV1,
-  zeroRowDiagnostic: ValidationDiagnosticV2 | undefined,
-): GateResultV2 {
+  zeroRowDiagnostic: WorldPackageValidationDiagnosticV1 | undefined,
+): WorldPackageGateResultV1 {
   const isConnectivity = definition.id === CONNECTIVITY_GATE_ID;
   const metricResultsById = Object.fromEntries(
     Object.values(definition.metricDefinitionsById).map((metricDefinition) => {
@@ -1844,13 +1847,13 @@ function aggregateGate(
   };
   return Object.freeze({
     ...gate,
-    status: deriveValidationGateStatusV2(definition, gate),
+    status: deriveValidationGateStatusV1(definition, gate),
   });
 }
 
-export function createRouteValidationReportV2(
+export function createRouteWorldPackageValidationReportV1(
   input: CreateRouteValidationReportInputV2,
-): ValidationReportV2 {
+): WorldPackageValidationReportV1 {
   try {
     assertAccessorFreeDataGraph(input, "ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
   } catch {
@@ -1918,7 +1921,7 @@ export function createRouteValidationReportV2(
     ),
   });
   const receiptBytes = canonicalJsonBytes(receipt);
-  const evidenceArtifactsById: Record<string, EvidenceArtifactV2> = {
+  const evidenceArtifactsById: Record<string, WorldPackageEvidenceArtifactV1> = {
     [ROUTE_SET_ARTIFACT_ID]: {
       id: ROUTE_SET_ARTIFACT_ID,
       kind: "route-validation-set-receipt",
@@ -1976,15 +1979,15 @@ export function createRouteValidationReportV2(
   };
   return deepFreezeDataGraph(validateCompletedReport({
     kind: "worldkit-validation-report",
-    schemaVersion: 2,
+    schemaVersion: 1,
     id: input.reportId,
     subject: input.subject,
     dependencyReportRefs: [...(input.dependencyReportRefs ?? [])].sort(),
     validationProfileRef: profile.resourceRef,
     resolvedVersion: profile.version,
-    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
     routeValidationSetReceipt: receipt,
-    status: deriveValidationReportStatusV2(profile, gateResultsById),
+    status: deriveValidationReportStatusV1(profile, gateResultsById),
     gateResultsById,
     evidenceArtifactsById,
     diagnostics: diagnostics.sort((left, right) =>

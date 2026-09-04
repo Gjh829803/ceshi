@@ -9,7 +9,7 @@ import {
 } from "@whitebox-world/subject-registry";
 import { describe, expect, it } from "vitest";
 
-import { XIER120_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
+import { XIER120_SUBJECT_ASSET_URI_BY_REF_V1 } from "@whitebox-world/playground/asset-resolver";
 import {
   auditSubjectSourceMigration,
   serializeSubjectSourceMigrationInventory,

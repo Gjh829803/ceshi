@@ -15,7 +15,7 @@ import {
   resolveTraversalGraphBuilderProfileV2,
 } from "@whitebox-world/traversal";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
   type ValidationReportStatusV1,
 } from "@whitebox-world/validation";
 import {
@@ -213,7 +213,7 @@ const ADVERSARIAL_ROUTE_CHECKS_V1 = Object.freeze([
     checkId: "lock-mismatch",
     testFile: "packages/validation/src/route-evaluator.test.ts",
     expectedTestFullNames: Object.freeze([
-      "createRouteValidationReportV2 rejects mismatched Graph and Probe locks before evaluating either Gate",
+      "createRouteWorldPackageValidationReportV1 rejects mismatched Graph and Probe locks before evaluating either Gate",
     ]),
   }),
   Object.freeze({
@@ -248,7 +248,7 @@ const ADVERSARIAL_ROUTE_CHECKS_V1 = Object.freeze([
     checkId: "missing-probe-evidence",
     testFile: "packages/validation/src/route-evaluator.test.ts",
     expectedTestFullNames: Object.freeze([
-      "createRouteValidationReportV2 keeps the Runtime gate and Report incomplete when canonical Probe evidence is absent",
+      "createRouteWorldPackageValidationReportV1 keeps the Runtime gate and Report incomplete when canonical Probe evidence is absent",
     ]),
   }),
   Object.freeze({
@@ -670,7 +670,7 @@ export async function runRouteR1HeightfieldVerification(options: {
   readonly repositoryRoot: string;
 }): Promise<RouteR1HeightfieldVerificationResultV1> {
   assert.equal(
-    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
     "worldkit://validation-profile/outdoor-world-package-dev@1",
     "The R1 gate requires the frozen built-in Validation Profile.",
   );

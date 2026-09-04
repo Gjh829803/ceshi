@@ -24,17 +24,17 @@ import subjectDefinitionsV3 from "../../../assets/registry/subject-definitions/c
 import {
   BUILT_IN_CAPABILITY_MANIFESTS,
   BUILT_IN_CAPABILITY_RESOURCES,
-} from "../../subject-registry/src/built-in-capability-resources";
-import { BUILT_IN_SUBJECT_DEFINITIONS } from "../../subject-registry/src/built-in-subject-definitions";
-import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../subject-registry/src/built-in-resource-manifests";
-import type { RegistrySubjectDefinitionInputV3 } from "../../subject-registry/src/types-v3";
+} from "@whitebox-world/subject-registry/built-ins";
+import { BUILT_IN_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry/built-ins";
+import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "@whitebox-world/subject-registry/built-ins";
+import type { RegistrySubjectDefinitionInputV3 } from "@whitebox-world/subject-registry";
 import {
   createValidAuthoringSpecV4 as createValidAuthoringSpec,
   createValidMountedOnAuthoringSpec,
   createValidPackageSubjectWorldV4,
   createValidRiggedPackageDefinition,
   createValidRiggedPackageSubjectWorldV4,
-} from "../../authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 
 import {
   compileCanonicalWorldV1,

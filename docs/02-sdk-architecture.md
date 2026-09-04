@@ -378,7 +378,7 @@ Authoring V4 / Canonical Scene Plan V1
   → locked Capability Envelope
   → Recast Graph + Path Query
   → real Babylon/Havok NullEngine fixed-tick Probe
-  → canonical Route Evidence + ValidationReportV2
+  → canonical Route Evidence + WorldPackageValidationReportV1
   → private Host transport
   → Browser Protocol V5 read-only projection
 ```

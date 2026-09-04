@@ -77,7 +77,7 @@ export const BNA1_PLAN_SPECIFIC_EXECUTION_PLAN_HASH_FILES = Object.freeze([
   "packages/validation/src/route-runtime-probe.ts",
   "packages/validation/src/route-validation-set.test.ts",
   "packages/validation/src/route-validation-set.ts",
-  "packages/validation/src/types-v2.ts",
+  "packages/validation/src/world-package-validation-types.ts",
   "packages/validation/src/validation.test.ts",
   "packages/validation/src/world-package-validation-subject.ts",
   "packages/world-identity/src/world-build-identity.test.ts",

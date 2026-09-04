@@ -11,7 +11,7 @@ import {
   type TraversalRuntimePortV1,
 } from "@whitebox-world/traversal";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
 } from "@whitebox-world/validation";
 import type { ResolvedCanonicalWorldPackageResourceArtifactV1 } from "@whitebox-world/world-package";
 import { isNil } from "lodash-es";
@@ -450,7 +450,7 @@ describe("Route validation trusted runner", () => {
     }
 
     const failureTickCount =
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1
         .routeRuntimeGateThresholds.maximumConsecutiveUnsupportedTicks + 1;
     expect(failureTickCount).toBe(7);
     expect(receipt.ticks[0]?.runtimeEvidence.characterSupport.supportState)

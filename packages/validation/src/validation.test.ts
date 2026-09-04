@@ -13,27 +13,22 @@ import {
 import {
   OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_HASH_V1,
   OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
   deriveValidationReportStatusV1,
-  deriveValidationReportStatusV2,
   hashValidationProfileV1,
-  hashValidationProfileV2,
   hashValidationReportV1,
-  hashValidationReportV2,
   hashRouteValidationRequiredRouteSetV1,
   validateValidationProfileV1,
-  validateValidationProfileV2,
   validateValidationReportV1,
-  validateValidationReportV2,
-  type EvidenceArtifactV2,
+  type WorldPackageEvidenceArtifactV1,
   type GateResultV1,
-  type GateResultV2,
-  type MetricDefinitionV2,
-  type MetricResultV2,
+  type WorldPackageGateResultV1,
+  type WorldPackageMetricDefinitionV1,
+  type WorldPackageMetricResultV1,
   type ValidationProfileV1,
   type ValidationReportV1,
-  type ValidationReportV2,
+  type WorldPackageValidationReportV1,
   type RouteValidationSetReceiptV1,
 } from "./index";
 
@@ -742,10 +737,10 @@ describe("Validation Profile/Report V1", () => {
   });
 });
 
-function passedWorldPackageGateResults(): Record<string, GateResultV2> {
+function passedWorldPackageGateResults(): Record<string, WorldPackageGateResultV1> {
   return Object.fromEntries(
     Object.values(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById,
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById,
     ).map((gateDefinition) => [
       gateDefinition.id,
       {
@@ -780,9 +775,9 @@ function evidenceArtifactRefForGate(gateId: string): string {
 }
 
 function passedWorldPackageMetricResult(
-  metricDefinition: MetricDefinitionV2,
+  metricDefinition: WorldPackageMetricDefinitionV1,
   gateId: string,
-): MetricResultV2 {
+): WorldPackageMetricResultV1 {
   const shared = {
     id: metricDefinition.id,
     status: "passed" as const,
@@ -848,7 +843,7 @@ function passedWorldPackageMetricResult(
   throw new Error(`Unsupported metric kind '${metricDefinition.kind}'.`);
 }
 
-function typedWorldPackageEvidenceArtifacts(): Record<string, EvidenceArtifactV2> {
+function typedWorldPackageEvidenceArtifacts(): Record<string, WorldPackageEvidenceArtifactV1> {
   const graphBuilder = resolveTraversalGraphBuilderProfile(
     BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   );
@@ -907,7 +902,7 @@ function typedWorldPackageEvidenceArtifacts(): Record<string, EvidenceArtifactV2
   };
 }
 
-function routeConnectivityFailureEvidence(): EvidenceArtifactV2 {
+function routeConnectivityFailureEvidence(): WorldPackageEvidenceArtifactV1 {
   const graphBuilder = resolveTraversalGraphBuilderProfile(
     BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   );
@@ -971,11 +966,11 @@ function routeValidationSetReceipt(
 }
 
 function withRouteSetArtifact(
-  artifacts: Record<string, EvidenceArtifactV2>,
+  artifacts: Record<string, WorldPackageEvidenceArtifactV1>,
   statuses: Parameters<typeof routeValidationSetReceipt>[1] = {},
 ): Readonly<{
   receipt: RouteValidationSetReceiptV1;
-  artifacts: Record<string, EvidenceArtifactV2>;
+  artifacts: Record<string, WorldPackageEvidenceArtifactV1>;
 }> {
   const receipt = routeValidationSetReceipt(
     Object.values(artifacts).map(({ artifactRef }) => artifactRef),
@@ -1001,10 +996,10 @@ function withRouteSetArtifact(
 }
 
 function withUniformEvidence(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   artifactRef: string,
-  evidenceArtifactsById: Record<string, EvidenceArtifactV2>,
-): ValidationReportV2 {
+  evidenceArtifactsById: Record<string, WorldPackageEvidenceArtifactV1>,
+): WorldPackageValidationReportV1 {
   const routeSet = withRouteSetArtifact(evidenceArtifactsById);
   return {
     ...report,
@@ -1030,12 +1025,12 @@ function withUniformEvidence(
   };
 }
 
-function validWorldPackageReport(): ValidationReportV2 {
+function validWorldPackageReport(): WorldPackageValidationReportV1 {
   const gateResultsById = passedWorldPackageGateResults();
   const routeSet = withRouteSetArtifact(typedWorldPackageEvidenceArtifacts());
   return {
     kind: "worldkit-validation-report",
-    schemaVersion: 2,
+    schemaVersion: 1,
     id: "world-package-route-validation",
     subject: {
       kind: "world-package",
@@ -1048,12 +1043,12 @@ function validWorldPackageReport(): ValidationReportV2 {
     },
     dependencyReportRefs: [],
     validationProfileRef:
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
-    resolvedVersion: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
-    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
+    resolvedVersion: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version,
+    validationProfileHash: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
     routeValidationSetReceipt: routeSet.receipt,
-    status: deriveValidationReportStatusV2(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    status: deriveValidationReportStatusV1(
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
       gateResultsById,
     ),
     gateResultsById,
@@ -1062,7 +1057,7 @@ function validWorldPackageReport(): ValidationReportV2 {
   };
 }
 
-function graphOnlyPassedWorldPackageReport(): ValidationReportV2 {
+function graphOnlyPassedWorldPackageReport(): WorldPackageValidationReportV1 {
   const report = validWorldPackageReport();
   return withUniformEvidence(
     report,
@@ -1073,7 +1068,7 @@ function graphOnlyPassedWorldPackageReport(): ValidationReportV2 {
   );
 }
 
-function probeOnlyPassedWorldPackageReport(): ValidationReportV2 {
+function probeOnlyPassedWorldPackageReport(): WorldPackageValidationReportV1 {
   const report = validWorldPackageReport();
   return withUniformEvidence(
     report,
@@ -1085,13 +1080,13 @@ function probeOnlyPassedWorldPackageReport(): ValidationReportV2 {
   );
 }
 
-describe("Validation Profile/Report V2", () => {
+describe("world-package Validation Profile/Report V1", () => {
   it("freezes the world-package Profile without changing Capture V1", () => {
-    expect(validateValidationProfileV2(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    expect(validateValidationProfileV1(
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     )).toMatchObject({ ok: true });
-    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2).toBe(
-      hashValidationProfileV2(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2),
+    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1).toBe(
+      hashValidationProfileV1(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1),
     );
     expect(OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_HASH_V1).toBe(
       hashValidationProfileV1(OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1),
@@ -1099,13 +1094,13 @@ describe("Validation Profile/Report V2", () => {
     expect(OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1.schemaVersion).toBe(1);
     expect(
       Object.keys(
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById,
       ),
     ).toEqual(["route-connectivity", "route-runtime-conformance"]);
   });
 
   it("accepts a world-package Report and rejects Capture subjects", () => {
-    expect(validateValidationReportV2(validWorldPackageReport())).toMatchObject({
+    expect(validateValidationReportV1(validWorldPackageReport())).toMatchObject({
       ok: true,
     });
 
@@ -1116,7 +1111,7 @@ describe("Validation Profile/Report V2", () => {
         worldPackageRootHash: `sha256:${"0".repeat(64)}`,
       },
     };
-    expect(validateValidationReportV2(allZeroRoot)).toMatchObject({
+    expect(validateValidationReportV1(allZeroRoot)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -1135,7 +1130,7 @@ describe("Validation Profile/Report V2", () => {
         bundleRootHash: HASH_C,
       },
     };
-    expect(validateValidationReportV2(captureSubject)).toMatchObject({
+    expect(validateValidationReportV1(captureSubject)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_ENUM_INVALID" }),
@@ -1144,7 +1139,7 @@ describe("Validation Profile/Report V2", () => {
   });
 
   it("rejects a passed runtime gate backed only by traversal-graph evidence", () => {
-    expect(validateValidationReportV2(graphOnlyPassedWorldPackageReport())).toMatchObject({
+    expect(validateValidationReportV1(graphOnlyPassedWorldPackageReport())).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -1156,7 +1151,7 @@ describe("Validation Profile/Report V2", () => {
   });
 
   it("rejects a passed connectivity gate backed only by probe evidence", () => {
-    expect(validateValidationReportV2(probeOnlyPassedWorldPackageReport())).toMatchObject({
+    expect(validateValidationReportV1(probeOnlyPassedWorldPackageReport())).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -1176,7 +1171,7 @@ describe("Validation Profile/Report V2", () => {
       { [failure.id]: failure },
     );
 
-    expect(validateValidationReportV2(rewritten)).toMatchObject({
+    expect(validateValidationReportV1(rewritten)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -1193,7 +1188,7 @@ describe("Validation Profile/Report V2", () => {
     if (isNil(probe) || probe.kind !== "route-runtime-probe-receipt") {
       throw new Error("Expected a typed runtime probe receipt in the fixture.");
     }
-    expect(validateValidationReportV2({
+    expect(validateValidationReportV1({
       ...report,
       evidenceArtifactsById: {
         ...report.evidenceArtifactsById,
@@ -1226,7 +1221,7 @@ describe("Validation Profile/Report V2", () => {
       throw new Error("Expected a typed runtime probe receipt in the fixture.");
     }
 
-    expect(validateValidationReportV2({
+    expect(validateValidationReportV1({
       ...report,
       evidenceArtifactsById: {
         ...report.evidenceArtifactsById,
@@ -1245,7 +1240,7 @@ describe("Validation Profile/Report V2", () => {
       ]),
     });
 
-    expect(validateValidationReportV2({
+    expect(validateValidationReportV1({
       ...report,
       evidenceArtifactsById: {
         ...report.evidenceArtifactsById,
@@ -1265,24 +1260,32 @@ describe("Validation Profile/Report V2", () => {
     });
   });
 
-  it("rejects V2 Profiles that omit Route thresholds or mix Capture fields", () => {
+  it("dispatches both current Profile subjects and rejects mixed fields", () => {
     const withoutThresholds = {
-      ...OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      ...OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     } as unknown as Record<string, unknown>;
     delete withoutThresholds.routeRuntimeGateThresholds;
-    expect(validateValidationProfileV2(withoutThresholds)).toMatchObject({
+    expect(validateValidationProfileV1(withoutThresholds)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_OBJECT_INVALID" }),
       ]),
     });
 
-    expect(validateValidationProfileV2(
+    expect(validateValidationProfileV1(
       OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
     )).toMatchObject({
+      ok: true,
+      diagnostics: [],
+    });
+
+    expect(validateValidationProfileV1({
+      ...OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+      subjectKind: "control-capture-bundle",
+    })).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
-        expect.objectContaining({ code: "VALIDATION_ENUM_INVALID" }),
+        expect.objectContaining({ code: "VALIDATION_FIELD_UNKNOWN" }),
       ]),
     });
   });
@@ -1300,7 +1303,7 @@ describe("Validation Profile/Report V2", () => {
     conflictingDirectionMetrics["minimum-observed-clearance-width-meters"]!
       .maximumAllowedMeters = 2;
 
-    expect(validateValidationReportV2(conflictingDirection)).toMatchObject({
+    expect(validateValidationReportV1(conflictingDirection)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
@@ -1328,7 +1331,7 @@ describe("Validation Profile/Report V2", () => {
       id: report.id,
       schemaVersion: report.schemaVersion,
       kind: report.kind,
-    } as ValidationReportV2;
-    expect(hashValidationReportV2(reordered)).toBe(hashValidationReportV2(report));
+    } as WorldPackageValidationReportV1;
+    expect(hashValidationReportV1(reordered)).toBe(hashValidationReportV1(report));
   });
 });

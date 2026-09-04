@@ -100,6 +100,9 @@ async function singleAuthorityRepository(): Promise<string> {
         "controller.locomotionStateV2();",
         "controller.previewSuspendedAt(input);",
         "controller.previewResetAt(input);",
+        "private commitFixedTick(input:",
+        'cameraMode: "gameplay-target";',
+        'cameraMode: "controlled-entity";',
       ].join("\n"),
     ),
     writeRepositoryFile(
@@ -183,7 +186,7 @@ describe("Diversion prior-ledger reconstruction", () => {
 describe("3C migration ledger verifier", () => {
   it("accepts the fixed-input, movement, locomotion, and public-entry single-authority structure", async () => {
     const root = await singleAuthorityRepository();
-    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(9);
+    await expect(verifySingleAuthorityStructureV1(root)).resolves.toHaveLength(10);
   });
 
   it.each([

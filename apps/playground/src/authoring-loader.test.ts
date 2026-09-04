@@ -6,7 +6,7 @@ import {
   createValidAuthoringSpecV4,
   createValidPackageSubjectWorld,
   createValidPackageSubjectWorldV4,
-} from "../../../packages/authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 import {
   normalizeAuthoringSpecV4,
   type AuthoringSpecV4,

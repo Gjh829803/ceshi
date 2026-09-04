@@ -9,8 +9,8 @@ import { isNil } from "lodash-es";
 
 import type {
   RouteDiagnosticDetailsV1,
-  RouteRowValidationDiagnosticV2,
-} from "./types-v2";
+  RouteRowValidationDiagnosticV1,
+} from "./world-package-validation-types";
 
 export const ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2 = [
   ...ROUTE_CONNECTIVITY_FAILURE_CODES_V2,
@@ -225,9 +225,9 @@ function remediationForFailure(failure: RouteConnectivityFailureV2): string {
   throw new Error(`ROUTE_CONNECTIVITY_FAILURE_REASON_UNHANDLED: ${String(exhaustive)}`);
 }
 
-export function createRouteConnectivityValidationDiagnosticV2(
+export function createRouteConnectivityWorldPackageValidationDiagnosticV1(
   input: CreateRouteConnectivityValidationDiagnosticInputV2,
-): RouteRowValidationDiagnosticV2 {
+): RouteRowValidationDiagnosticV1 {
   const { failure } = input;
   return {
     id: input.id,

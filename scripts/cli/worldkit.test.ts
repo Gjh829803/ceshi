@@ -19,7 +19,7 @@ import {
   createValidAuthoringSpec,
   createValidPackageSubjectWorld,
   createValidRiggedPackageDefinition,
-} from "../../packages/authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 import type { AuthoringSpecV4 } from "@whitebox-world/authoring";
 import {
   CONTROL_TRANSITION_CAPABILITY_REF,
@@ -30,7 +30,7 @@ import { XIER120_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
 import { loadWorldkitRoutePipeline } from "../lib/worldkit-pipeline";
-import { loadAuthoringScene } from "../../apps/playground/src/authoring-loader";
+import { loadAuthoringScene } from "@whitebox-world/playground/authoring-loader";
 import {
   RouteValidationRunnerInfrastructureErrorV1,
   runTrustedRouteValidationV1,
@@ -1788,7 +1788,7 @@ describe("worldkit CLI", () => {
     });
     expect(JSON.parse(await readFile(outputPath, "utf8"))).toMatchObject({
       kind: "worldkit-validation-report",
-      schemaVersion: 2,
+      schemaVersion: 1,
       status: "failed",
       routeValidationSetReceipt: { rows: [] },
     });

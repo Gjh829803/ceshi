@@ -26,13 +26,13 @@ import {
   evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  createRouteValidationReportV2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+  createRouteWorldPackageValidationReportV1,
   createWorldPackageValidationSubjectV1,
   createWorldkitBrowserRouteEvidencePublicationV2,
-  hashValidationReportV2,
+  hashValidationReportV1,
   runRouteRuntimeProbeV2,
-  type ValidationReportV2,
+  type WorldPackageValidationReportV1,
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
 import {
@@ -45,7 +45,7 @@ import { isNil } from "lodash-es";
 
 import {
   evaluateUnavailableTraversalGraphProjectionV2,
-} from "../../packages/traversal-recast/src/evaluate-route.js";
+} from "@whitebox-world/traversal-recast";
 import {
   orchestrateRouteValidationV1,
   type RouteValidationEvidenceFileV1,
@@ -143,7 +143,7 @@ export interface TrustedRouteRenderScheduleStatsV1 {
 export interface TrustedRouteValidationResultV1 {
   readonly worldPackageBuildReceipt: WorldPackageBuildReceiptV1;
   readonly subject: WorldPackageValidationSubjectV1;
-  readonly report: ValidationReportV2;
+  readonly report: WorldPackageValidationReportV1;
   readonly validationReportHash: Hash;
   readonly evidenceFiles: readonly RouteValidationEvidenceFileV1[];
   readonly routeEvidencePublication: WorldkitBrowserRouteEvidencePublicationV2;
@@ -652,7 +652,7 @@ export async function runTrustedRouteValidationV1(
       BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
     ),
     runRuntimeProbe: (input) => runRouteRuntimeProbeV2(input),
-    createReport: (input) => createRouteValidationReportV2(input),
+    createReport: (input) => createRouteWorldPackageValidationReportV1(input),
   });
   const routeEvidencePublication =
     createWorldkitBrowserRouteEvidencePublicationV2({
@@ -666,7 +666,7 @@ export async function runTrustedRouteValidationV1(
     subject,
     report: orchestration.report,
     validationReportHash:
-      hashValidationReportV2(orchestration.report) as Hash,
+      hashValidationReportV1(orchestration.report) as Hash,
     evidenceFiles: orchestration.evidenceFiles,
     routeEvidencePublication,
     routeBuildInputReceipts: Object.freeze([...routeBuildInputReceipts]),

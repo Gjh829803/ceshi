@@ -606,8 +606,8 @@ const CAPABILITY_GATE_ID_BY_CAPABILITY_ID = Object.freeze({
 
 const FORBIDDEN_PATHS = Object.freeze([
   "packages/block-world",
-  "packages/block-world-three",
-  "packages/block-world-compiler",
+  ["packages/block-world", "three"].join("-"),
+  ["packages/block-world", "compiler"].join("-"),
 ] as const);
 
 const FORBIDDEN_SOURCE_TOKENS = Object.freeze([

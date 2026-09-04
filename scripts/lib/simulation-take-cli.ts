@@ -41,7 +41,7 @@ import {
   inspectControlCaptureBundleV1,
   validateControlCaptureBundleV1,
   type ControlCaptureBundleWriterV1,
-  type ControlCaptureFrameInputV1,
+  type ControlCaptureBundleFrameInputV1,
 } from "./control-capture-bundle";
 import {
   runCompiledSimulationTakeV1,
@@ -269,7 +269,7 @@ class PlaywrightSimulationTakeDriverV1 implements SimulationTakeBrowserDriverV1 
 function decodeRuntimeFrame(
   frame: RuntimeControlCaptureFrameV1,
   worldState: WorldStateSnapshotV1,
-): ControlCaptureFrameInputV1 {
+): ControlCaptureBundleFrameInputV1 {
   const passes = Object.fromEntries(Object.entries(frame.passesById).map(([passId, payload]) => {
     const bytes = new Uint8Array(Buffer.from(payload.bytesBase64, "base64"));
     if (
@@ -281,8 +281,6 @@ function decodeRuntimeFrame(
     return [passId, { passId: payload.passId, bytes }];
   }));
   return {
-    kind: frame.kind,
-    schemaVersion: frame.schemaVersion,
     runtimeSessionId: frame.runtimeSessionId,
     captureFrameIndex: frame.captureFrameIndex,
     simulationTick: frame.simulationTick,

@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 import {
   preflightCanonicalTraversalSurfaceOverlapsV1,
   type CanonicalTraversalSurfaceTriangleSourceV1,
-} from "../../packages/terrain-surface/src/index.js";
+} from "@whitebox-world/terrain-surface";
 
 type FixtureName = "representative" | "near-budget" | "disjoint-heavy";
 

@@ -11,9 +11,9 @@ import path from "node:path";
 
 import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  createRouteValidationReportV2,
-  type ValidationReportV2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+  createRouteWorldPackageValidationReportV1,
+  type WorldPackageValidationReportV1,
 } from "@whitebox-world/validation";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,10 +41,10 @@ const HASH_D = `sha256:${"d".repeat(64)}` as const;
 const HASH_E = `sha256:${"e".repeat(64)}` as const;
 const HASH_F = `sha256:${"f".repeat(64)}` as const;
 const PROFILE_REF =
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef;
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef;
 
-function reportWithStatus(status: ValidationReportV2["status"]): ValidationReportV2 {
-  const report = createRouteValidationReportV2({
+function reportWithStatus(status: WorldPackageValidationReportV1["status"]): WorldPackageValidationReportV1 {
+  const report = createRouteWorldPackageValidationReportV1({
     reportId: `route-report-${status}`,
     subject: {
       kind: "world-package",
@@ -57,14 +57,14 @@ function reportWithStatus(status: ValidationReportV2["status"]): ValidationRepor
     },
     executionPlanHash: HASH_D,
     resourceLockHash: HASH_E,
-    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     requiredRoutes: [],
     rows: [],
   });
   return Object.freeze({ ...report, status });
 }
 
-function runnerResult(status: ValidationReportV2["status"]): TrustedRouteValidationResultV1 {
+function runnerResult(status: WorldPackageValidationReportV1["status"]): TrustedRouteValidationResultV1 {
   const report = reportWithStatus(status);
   return {
     worldPackageBuildReceipt: {} as TrustedRouteValidationResultV1["worldPackageBuildReceipt"],

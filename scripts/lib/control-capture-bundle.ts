@@ -126,9 +126,7 @@ interface ControlCapturePassBytesV1 {
   readonly bytes: Uint8Array;
 }
 
-export interface ControlCaptureFrameInputV1 {
-  readonly kind: "worldkit-control-capture-frame";
-  readonly schemaVersion: 1;
+export interface ControlCaptureBundleFrameInputV1 {
   readonly runtimeSessionId: string;
   readonly captureFrameIndex: number;
   readonly simulationTick: number;
@@ -175,7 +173,7 @@ export interface ControlCaptureBundleByteEvidenceV1 {
 }
 
 export interface ControlCaptureBundleWriterV1 {
-  appendFrame(frame: ControlCaptureFrameInputV1): Promise<void>;
+  appendFrame(frame: ControlCaptureBundleFrameInputV1): Promise<void>;
   appendRuntimeHostJournalTransition(
     transition: ControlCaptureRuntimeHostJournalTransitionInputV1,
   ): void;
@@ -313,7 +311,7 @@ function capturedWorldStateClosureMatches(
 }
 
 function assertFrameShape(
-  frame: ControlCaptureFrameInputV1,
+  frame: ControlCaptureBundleFrameInputV1,
   options: CreateControlCaptureBundleWriterOptionsV1,
   expectedCaptureFrameIndex: number,
   previousSimulationTick: number | undefined,
@@ -742,8 +740,8 @@ export async function createControlCaptureBundleWriterV1(
           };
         }
         const frameBody = {
-          kind: frame.kind,
-          schemaVersion: frame.schemaVersion,
+          kind: "worldkit-control-capture-bundle-frame" as const,
+          schemaVersion: 1 as const,
           runtimeSessionId: frame.runtimeSessionId,
           worldPackageRootHash: options.worldPackageIdentity.worldPackageRootHash,
           takeHash: options.compiledTake.takeHash,

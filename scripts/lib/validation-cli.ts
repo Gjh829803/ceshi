@@ -14,17 +14,16 @@ import path from "node:path";
 
 import {
   hashValidationReportV1,
-  hashValidationReportV2,
   validateValidationReportV1,
-  validateValidationReportV2,
   type EvidenceArtifactV1,
-  type EvidenceArtifactV2,
-  type GateResultV2,
+  type ControlCaptureValidationReportV1,
+  type WorldPackageEvidenceArtifactV1,
+  type WorldPackageGateResultV1,
   type ValidationDiagnosticV1,
-  type ValidationDiagnosticV2,
+  type WorldPackageValidationDiagnosticV1,
   type ValidationReportStatusV1,
   type ValidationReportV1,
-  type ValidationReportV2,
+  type WorldPackageValidationReportV1,
 } from "@whitebox-world/validation";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { isNil, orderBy, uniq } from "lodash-es";
@@ -61,7 +60,7 @@ export type ValidationCommandResultV1 =
       readonly diagnostics: readonly CliDiagnostic[];
     };
 
-export interface ValidationGateExplanationV1 {
+export interface ControlCaptureValidationGateExplanationV1 {
   readonly ok: true;
   readonly exitCode: 0;
   readonly kind: "worldkit-validation-gate-explanation";
@@ -70,32 +69,32 @@ export interface ValidationGateExplanationV1 {
   readonly validationReportHash: Sha256HashV1;
   readonly validationStatus: ValidationReportStatusV1;
   readonly validationProfileRef: string;
-  readonly gate: ValidationReportV1["gateResultsById"][string];
+  readonly gate: ControlCaptureValidationReportV1["gateResultsById"][string];
   readonly evidenceArtifacts: readonly EvidenceArtifactV1[];
   readonly validationDiagnostics: readonly ValidationDiagnosticV1[];
   readonly diagnostics: readonly [];
   readonly humanReadableText: string;
 }
 
-export interface ValidationGateExplanationV2 {
+export interface WorldPackageValidationGateExplanationV1 {
   readonly ok: true;
   readonly exitCode: 0;
   readonly kind: "worldkit-validation-gate-explanation";
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 1;
   readonly validationReportId: string;
   readonly validationReportHash: Sha256HashV1;
   readonly validationStatus: ValidationReportStatusV1;
   readonly validationProfileRef: string;
-  readonly gate: GateResultV2;
-  readonly evidenceArtifacts: readonly EvidenceArtifactV2[];
-  readonly validationDiagnostics: readonly ValidationDiagnosticV2[];
+  readonly gate: WorldPackageGateResultV1;
+  readonly evidenceArtifacts: readonly WorldPackageEvidenceArtifactV1[];
+  readonly validationDiagnostics: readonly WorldPackageValidationDiagnosticV1[];
   readonly diagnostics: readonly [];
   readonly humanReadableText: string;
 }
 
 export type ValidationGateExplanationResultV1 =
-  | ValidationGateExplanationV1
-  | ValidationGateExplanationV2
+  | ControlCaptureValidationGateExplanationV1
+  | WorldPackageValidationGateExplanationV1
   | {
       readonly ok: false;
       readonly exitCode: 1;
@@ -120,6 +119,12 @@ function cliInfrastructureFailure(
       },
     ],
   };
+}
+
+function isWorldPackageValidationReportV1(
+  report: ValidationReportV1,
+): report is WorldPackageValidationReportV1 {
+  return report.subject.kind === "world-package";
 }
 
 export function validationStatusExitCodeV1(
@@ -323,13 +328,13 @@ export async function verifyControlCaptureFileV1(
   }
 }
 
-type LoadedValidationReportV1V2 =
-  | { readonly ok: true; readonly report: ValidationReportV1 | ValidationReportV2 }
+type LoadedValidationReportV1 =
+  | { readonly ok: true; readonly report: ValidationReportV1 }
   | { readonly ok: false; readonly result: ValidationGateExplanationResultV1 };
 
-async function readValidationReportFileV1V2(
+async function readValidationReportFileV1(
   inputPath: string,
-): Promise<LoadedValidationReportV1V2> {
+): Promise<LoadedValidationReportV1> {
   const absoluteInputPath = path.resolve(inputPath);
   try {
     const value: unknown = JSON.parse(await readFile(absoluteInputPath, "utf8"));
@@ -342,7 +347,7 @@ async function readValidationReportFileV1V2(
         ok: false,
         result: cliInfrastructureFailure(
           "VALIDATION_REPORT_VERSION_UNSUPPORTED",
-          "Validation Report kind and schemaVersion must identify a supported V1 or V2 contract.",
+          "Validation Report kind and schemaVersion must identify the current V1 contract.",
           { inputPath: absoluteInputPath },
         ),
       };
@@ -350,13 +355,13 @@ async function readValidationReportFileV1V2(
     const identity = value as Readonly<Record<string, unknown>>;
     if (
       identity.kind !== "worldkit-validation-report" ||
-      (identity.schemaVersion !== 1 && identity.schemaVersion !== 2)
+      identity.schemaVersion !== 1
     ) {
       return {
         ok: false,
         result: cliInfrastructureFailure(
           "VALIDATION_REPORT_VERSION_UNSUPPORTED",
-          "Validation Report kind and schemaVersion must identify a supported V1 or V2 contract.",
+          "Validation Report kind and schemaVersion must identify the current V1 contract.",
           {
             inputPath: absoluteInputPath,
             ...(isNil(identity.kind) ? {} : { kind: identity.kind }),
@@ -367,15 +372,13 @@ async function readValidationReportFileV1V2(
         ),
       };
     }
-    const validation = identity.schemaVersion === 1
-      ? validateValidationReportV1(value)
-      : validateValidationReportV2(value);
+    const validation = validateValidationReportV1(value);
     if (!validation.ok) {
       return {
         ok: false,
         result: cliInfrastructureFailure(
           "VALIDATION_REPORT_INVALID",
-          `Validation Report does not satisfy the strict V${identity.schemaVersion} contract.`,
+          "Validation Report does not satisfy the strict current V1 contract.",
           {
             inputPath: absoluteInputPath,
             contractDiagnostics: validation.diagnostics,
@@ -399,8 +402,8 @@ async function readValidationReportFileV1V2(
   }
 }
 
-function referencedEvidenceArtifactRefsV1V2(
-  gate: ValidationReportV1["gateResultsById"][string] | GateResultV2,
+function referencedEvidenceArtifactRefsV1(
+  gate: ValidationReportV1["gateResultsById"][string] | WorldPackageGateResultV1,
 ): readonly string[] {
   return uniq(
     Object.values(gate.metricResultsById).flatMap(
@@ -410,8 +413,8 @@ function referencedEvidenceArtifactRefsV1V2(
 }
 
 function formatGateExplanationV1(
-  report: ValidationReportV1,
-  gate: ValidationReportV1["gateResultsById"][string],
+  report: ControlCaptureValidationReportV1,
+  gate: ControlCaptureValidationReportV1["gateResultsById"][string],
   diagnostics: readonly ValidationDiagnosticV1[],
 ): string {
   const metricLines = orderBy(
@@ -435,8 +438,8 @@ function formatGateExplanationV1(
   ].join("\n");
 }
 
-function formatValidationDiagnosticV2(
-  diagnostic: ValidationDiagnosticV2,
+function formatWorldPackageValidationDiagnosticV1(
+  diagnostic: WorldPackageValidationDiagnosticV1,
 ): readonly string[] {
   const scope = diagnostic.scope === "world"
     ? "scope=world"
@@ -465,17 +468,17 @@ function formatValidationDiagnosticV2(
   ];
 }
 
-function formatGateExplanationV2(
-  report: ValidationReportV2,
-  gate: GateResultV2,
-  diagnostics: readonly ValidationDiagnosticV2[],
+function formatWorldPackageGateExplanationV1(
+  report: WorldPackageValidationReportV1,
+  gate: WorldPackageGateResultV1,
+  diagnostics: readonly WorldPackageValidationDiagnosticV1[],
 ): string {
   const metricLines = orderBy(
     Object.values(gate.metricResultsById),
     ["id"],
     ["asc"],
   ).map((metric) => `- ${metric.id}: ${metric.status}`);
-  const diagnosticLines = diagnostics.flatMap(formatValidationDiagnosticV2);
+  const diagnosticLines = diagnostics.flatMap(formatWorldPackageValidationDiagnosticV1);
   return [
     `Validation gate: ${gate.id}`,
     `Report status: ${report.status}`,
@@ -488,8 +491,8 @@ function formatGateExplanationV2(
   ].join("\n");
 }
 
-function explainValidationReportV1(
-  report: ValidationReportV1,
+function explainControlCaptureValidationReportV1(
+  report: ControlCaptureValidationReportV1,
   gateId: string,
 ): ValidationGateExplanationResultV1 {
   const gate = report.gateResultsById[gateId];
@@ -506,7 +509,7 @@ function explainValidationReportV1(
   const validationDiagnostics = report.diagnostics.filter(
     (diagnostic) => diagnostic.gateId === gateId,
   );
-  const artifactRefs = referencedEvidenceArtifactRefsV1V2(gate);
+  const artifactRefs = referencedEvidenceArtifactRefsV1(gate);
   const evidenceArtifacts = orderBy(
     Object.values(report.evidenceArtifactsById).filter((artifact) =>
       artifactRefs.includes(artifact.artifactRef)
@@ -535,8 +538,8 @@ function explainValidationReportV1(
   };
 }
 
-function explainValidationReportV2(
-  report: ValidationReportV2,
+function explainWorldPackageValidationReportV1(
+  report: WorldPackageValidationReportV1,
   gateId: string,
 ): ValidationGateExplanationResultV1 {
   const gate = report.gateResultsById[gateId];
@@ -556,7 +559,7 @@ function explainValidationReportV2(
     ["asc"],
   );
   const artifactRefs = uniq([
-    ...referencedEvidenceArtifactRefsV1V2(gate),
+    ...referencedEvidenceArtifactRefsV1(gate),
     ...validationDiagnostics.flatMap(
       ({ evidenceArtifactRefs }) => evidenceArtifactRefs,
     ),
@@ -572,16 +575,16 @@ function explainValidationReportV2(
     ok: true,
     exitCode: 0,
     kind: "worldkit-validation-gate-explanation",
-    schemaVersion: 2,
+    schemaVersion: 1,
     validationReportId: report.id,
-    validationReportHash: hashValidationReportV2(report),
+    validationReportHash: hashValidationReportV1(report),
     validationStatus: report.status,
     validationProfileRef: report.validationProfileRef,
     gate,
     evidenceArtifacts,
     validationDiagnostics,
     diagnostics: [],
-    humanReadableText: formatGateExplanationV2(
+    humanReadableText: formatWorldPackageGateExplanationV1(
       report,
       gate,
       validationDiagnostics,
@@ -593,9 +596,9 @@ export async function explainValidationReportFileV1(
   inputPath: string,
   gateId: string,
 ): Promise<ValidationGateExplanationResultV1> {
-  const loaded = await readValidationReportFileV1V2(inputPath);
+  const loaded = await readValidationReportFileV1(inputPath);
   if (!loaded.ok) return loaded.result;
-  return loaded.report.schemaVersion === 1
-    ? explainValidationReportV1(loaded.report, gateId)
-    : explainValidationReportV2(loaded.report, gateId);
+  return isWorldPackageValidationReportV1(loaded.report)
+    ? explainWorldPackageValidationReportV1(loaded.report, gateId)
+    : explainControlCaptureValidationReportV1(loaded.report, gateId);
 }

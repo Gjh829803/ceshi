@@ -17,7 +17,7 @@ import {
 } from "@whitebox-world/traversal";
 
 import * as validation from "./index.js";
-import type { ValidationProfileV2 } from "./types-v2.js";
+import type { WorldPackageValidationProfileV1 } from "./world-package-validation-types.js";
 
 type Vec3 = readonly [number, number, number];
 
@@ -25,7 +25,7 @@ type RunRouteRuntimeProbeV2 = (input: Readonly<{
   routePathReceipt: RoutePathReceiptV2;
   traversalDriverProfile: ReturnType<typeof resolveTraversalDriverProfileV1>;
   runtimePort: TraversalRuntimePortV1;
-  validationProfile: ValidationProfileV2;
+  validationProfile: WorldPackageValidationProfileV1;
   resolvedControlFeelProfile: Readonly<{
     readonly walkSpeedMetersPerSecond: number;
   }>;
@@ -66,7 +66,7 @@ const DRIVER = resolveTraversalDriverProfileV1(
 const BUILDER = resolveTraversalGraphBuilderProfileV2(
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
 );
-const VALIDATION_PROFILE = validation.OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2;
+const VALIDATION_PROFILE = validation.OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1;
 const THRESHOLDS = VALIDATION_PROFILE.routeRuntimeGateThresholds;
 
 function distance3d(a: Vec3, b: Vec3): number {
@@ -684,7 +684,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
           throw new Error("malicious validation getter must not leak");
         },
       },
-    ) as ValidationProfileV2;
+    ) as WorldPackageValidationProfileV1;
     if (runRouteRuntimeProbeV2 === undefined) throw new Error("runner missing");
     await expect(runRouteRuntimeProbeV2({
       routePathReceipt: path,
@@ -711,7 +711,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
       { positionMetersXYZ: [0, 0, 0] },
       [{ positionMetersXYZ: [0, 0, 0] }],
     );
-    const statefulProfile = structuredClone(VALIDATION_PROFILE) as ValidationProfileV2;
+    const statefulProfile = structuredClone(VALIDATION_PROFILE) as WorldPackageValidationProfileV1;
     const validThresholds = structuredClone(
       VALIDATION_PROFILE.routeRuntimeGateThresholds,
     );
@@ -880,7 +880,7 @@ describe.runIf(hasRunner)("runRouteRuntimeProbeV2", () => {
         return basePort.runFixedTick(request);
       },
     };
-    const mutableProfile = structuredClone(VALIDATION_PROFILE) as ValidationProfileV2;
+    const mutableProfile = structuredClone(VALIDATION_PROFILE) as WorldPackageValidationProfileV1;
     if (runRouteRuntimeProbeV2 === undefined) throw new Error("runner missing");
     const receiptPromise = runRouteRuntimeProbeV2({
       routePathReceipt: path,

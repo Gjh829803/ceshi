@@ -36,7 +36,7 @@ import {
   solveLayoutV1,
   type LayoutSolveReportV1,
   type ResolvedLayoutInputV1,
-} from "../../packages/layout-solver/src/index.js";
+} from "@whitebox-world/layout-solver";
 import {
   finalizeArtifactDirectory,
   parseArtifactPublicationMode,

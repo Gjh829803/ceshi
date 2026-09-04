@@ -20,13 +20,13 @@ import {
 import { isEqual, isNil } from "lodash-es";
 
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  hashValidationProfileV2,
-} from "./profile-v2.js";
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+} from "./world-package-validation-profile.js";
+import { hashValidationProfileV1 } from "./profile.js";
 import type { RouteRuntimeGateThresholdsV1 } from "./route.js";
-import type { ValidationProfileV2 } from "./types-v2.js";
-import { validateValidationProfileV2 } from "./validate-v2.js";
+import type { WorldPackageValidationProfileV1 } from "./world-package-validation-types.js";
+import { validateWorldPackageValidationProfileV1 } from "./validate-world-package.js";
 import { assertAccessorFreeDataGraph } from "./accessor-free-data.js";
 
 type Vec2 = readonly [number, number];
@@ -56,7 +56,7 @@ export interface RunRouteRuntimeProbeInputV2 {
   readonly routePathReceipt: RoutePathReceiptV2;
   readonly traversalDriverProfile: ResolvedTraversalDriverProfileV1;
   readonly runtimePort: TraversalRuntimePortV1;
-  readonly validationProfile: ValidationProfileV2;
+  readonly validationProfile: WorldPackageValidationProfileV1;
   readonly resolvedControlFeelProfile: Readonly<{
     readonly walkSpeedMetersPerSecond: number;
   }>;
@@ -106,7 +106,7 @@ function canonicalDriver(
 }
 
 function canonicalValidationProfile(
-  value: ValidationProfileV2,
+  value: WorldPackageValidationProfileV1,
 ): Readonly<{
   identity: Readonly<{
     resourceRef: string;
@@ -117,13 +117,13 @@ function canonicalValidationProfile(
 }> {
   try {
     assertAccessorFreeDataGraph(value, "ROUTE_RUNTIME_PROBE_INPUT_INVALID");
-    const result = validateValidationProfileV2(value);
-    const contentHash = hashValidationProfileV2(value);
+    const result = validateWorldPackageValidationProfileV1(value);
+    const contentHash = hashValidationProfileV1(value);
     if (
       !result.ok ||
-      value.resourceRef !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef ||
-      value.version !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version ||
-      contentHash !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2
+      value.resourceRef !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef ||
+      value.version !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version ||
+      contentHash !== OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1
     ) {
       fail("ROUTE_RUNTIME_PROBE_INPUT_INVALID");
     }

@@ -139,6 +139,14 @@ function textFamilyDefinitions(): readonly TextFamilyDefinition[] {
     `private\\s+${escaped(token(["update", "Legacy"]))}\\s*\\(`,
     `export\\s+function\\s+${escaped(token(["validate", "Authoring", "Spec"]))}\\s*\\(`,
     `export\\s+const\\s+${escaped(token(["compile", "World"]))}\\s*=\\s*${escaped(token(["compile", "World", "V5"]))}`,
+    ...[
+      token(["Validation", "Profile", "V2"]),
+      token(["Validation", "Report", "V2"]),
+      token(["validate", "Validation", "Profile", "V2"]),
+      token(["validate", "Validation", "Report", "V2"]),
+      token(["hash", "Validation", "Profile", "V2"]),
+      token(["hash", "Validation", "Report", "V2"]),
+    ].map(escaped),
   ];
 
   const legacyNativeSceneProfileRef = token([

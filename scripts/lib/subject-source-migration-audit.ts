@@ -10,8 +10,8 @@ import {
 import {
   PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1,
   XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
-} from "../../apps/playground/src/worldkit-asset-resolver";
-import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "../../packages/subject-registry/src/built-in-resource-manifests";
+} from "@whitebox-world/playground/asset-resolver";
+import { BUILT_IN_SUBJECT_RESOURCE_MANIFESTS } from "@whitebox-world/subject-registry/built-ins";
 import { canonicalSubjectManifestBytes } from "./modular-subject-source";
 import {
   G_BOT_MODULAR_SUBJECT_SOURCE_PACKAGE,

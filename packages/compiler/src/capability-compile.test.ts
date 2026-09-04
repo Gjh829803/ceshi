@@ -14,7 +14,7 @@ import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry
 
 import {
   createValidAuthoringSpecV4 as createValidAuthoringSpec,
-} from "../../authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 import { compileCanonicalWorldV1 } from "./index";
 
 const GAMEPLAY_BOOTSTRAP = createGameplayBootstrapV1({

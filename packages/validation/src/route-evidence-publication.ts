@@ -1,6 +1,6 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
-import { canonicalJsonBytes, sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
+import { canonicalJsonBytes, sha256Bytes } from "@whitebox-world/protocol";
 import {
   canonicalWorldkitBrowserRouteEvidencePublicationV2,
   type WorldkitBrowserRouteEvidenceProjectionV2,
@@ -20,24 +20,25 @@ import {
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 
 import {
-  createRouteValidationReportV2,
+  createRouteWorldPackageValidationReportV1,
   type RouteValidationRowInputV2,
 } from "./route-evaluator.js";
+import { hashValidationReportV1 } from "./hash.js";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-} from "./profile-v2.js";
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+} from "./world-package-validation-profile.js";
 import {
   canonicalRouteValidationSetReceiptV1,
   hashRouteValidationSetReceiptV1,
 } from "./route-validation-set.js";
 import type {
-  EvidenceArtifactKindV2,
-  EvidenceArtifactV2,
+  WorldPackageEvidenceArtifactKindV1,
+  WorldPackageEvidenceArtifactV1,
   RouteValidationSetRowV1,
-  ValidationReportV2,
+  WorldPackageValidationReportV1,
   WorldPackageValidationSubjectV1,
-} from "./types-v2.js";
+} from "./world-package-validation-types.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -74,7 +75,7 @@ export interface RouteEvidencePublicationRowInputV2 {
 
 export interface CreateWorldkitBrowserRouteEvidencePublicationInputV2 {
   readonly subject: WorldPackageValidationSubjectV1;
-  readonly validationReport: ValidationReportV2;
+  readonly validationReport: WorldPackageValidationReportV1;
   readonly rows: readonly RouteEvidencePublicationRowInputV2[];
 }
 
@@ -294,11 +295,11 @@ function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 function requireEvidenceArtifact(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   receiptRow: RouteValidationSetRowV1,
-  kind: EvidenceArtifactKindV2,
+  kind: WorldPackageEvidenceArtifactKindV1,
   bytes: Uint8Array,
-): EvidenceArtifactV2 {
+): WorldPackageEvidenceArtifactV1 {
   const matches = Object.values(report.evidenceArtifactsById).filter(
     (artifact) =>
       artifact.kind === kind &&
@@ -319,7 +320,7 @@ function requireEvidenceArtifact(
 }
 
 function requireRouteSetArtifact(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   receipt: ReturnType<typeof canonicalRouteValidationSetReceiptV1>,
 ): void {
   const matches = Object.values(report.evidenceArtifactsById).filter(
@@ -336,10 +337,6 @@ function requireRouteSetArtifact(
   ) {
     fail();
   }
-}
-
-function hashValidationReportV2(report: ValidationReportV2): Sha256HashV1 {
-  return sha256CanonicalJson(report) as Sha256HashV1;
 }
 
 function expectedOverlayV2(
@@ -365,7 +362,7 @@ function expectedOverlayV2(
 }
 
 function projectionForRowV2(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   receiptRow: RouteValidationSetRowV1,
   inputRow: RouteEvidencePublicationRowInputV2,
 ): WorldkitBrowserRouteEvidenceProjectionV2 {
@@ -514,7 +511,7 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
       }
     }
 
-    const rebuiltReport = createRouteValidationReportV2({
+    const rebuiltReport = createRouteWorldPackageValidationReportV1({
       reportId: snapshot.validationReport.id,
       subject: snapshot.subject,
       executionPlanHash:
@@ -522,16 +519,16 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
       resourceLockHash:
         snapshot.validationReport.routeValidationSetReceipt.resourceLockHash,
       dependencyReportRefs: snapshot.validationReport.dependencyReportRefs,
-      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
       requiredRoutes:
         snapshot.validationReport.routeValidationSetReceipt.requiredRoutes,
       rows: snapshot.rows.map(({ validationRow }) => validationRow),
     });
     requireEqual(snapshot.validationReport, rebuiltReport);
-    const suppliedReportHash = hashValidationReportV2(
+    const suppliedReportHash = hashValidationReportV1(
       snapshot.validationReport,
     );
-    const rebuiltReportHash = hashValidationReportV2(rebuiltReport);
+    const rebuiltReportHash = hashValidationReportV1(rebuiltReport);
     requireEqual(suppliedReportHash, rebuiltReportHash);
 
     const receipt = canonicalRouteValidationSetReceiptV1(
@@ -559,11 +556,11 @@ export function createWorldkitBrowserRouteEvidencePublicationV2(
       validationReportHash: rebuiltReportHash,
       routeValidationSetReceiptHash: hashRouteValidationSetReceiptV1(receipt),
       validationProfileRef:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
       validationProfileResolvedVersion:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version,
       validationProfileHash:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
       routes: projections,
     });
   } catch (error) {

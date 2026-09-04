@@ -14,7 +14,7 @@ import {
   hashTraversalGraphV2,
 } from "@whitebox-world/traversal";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
   type ValidationReportStatusV1,
 } from "@whitebox-world/validation";
 import { isEmpty, isEqual, isNil } from "lodash-es";
@@ -530,7 +530,7 @@ export async function runRouteR1bStaticPlatformVerification(options: {
   readonly repositoryRoot: string;
 }): Promise<RouteR1bStaticPlatformVerificationResult> {
   assert.equal(
-    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
     "worldkit://validation-profile/outdoor-world-package-dev@1",
     "The R1b gate requires the frozen built-in Validation Profile.",
   );

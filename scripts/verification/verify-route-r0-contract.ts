@@ -24,10 +24,9 @@ import {
 } from "@whitebox-world/traversal";
 import {
   OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
   ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2,
   validateValidationProfileV1,
-  validateValidationProfileV2,
 } from "@whitebox-world/validation";
 import {
   projectPlannedRouteToCanonicalRouteV1,
@@ -238,17 +237,17 @@ function checkRouteValidationVocabulary(): void {
     true,
   );
   assert.equal(
-    validateValidationProfileV2(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2).ok,
+    validateValidationProfileV1(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1).ok,
     true,
   );
   assert.ok(
     !isNil(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById["route-connectivity"],
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById["route-connectivity"],
     ),
   );
   assert.ok(
     !isNil(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById[
         "route-runtime-conformance"
       ],
     ),
@@ -269,7 +268,7 @@ function checkRouteValidationVocabulary(): void {
     false,
   );
   const connectivity =
-    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
+    OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById[
       "route-connectivity"
     ];
   assert.ok(!isNil(connectivity));

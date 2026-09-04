@@ -43,15 +43,15 @@ import {
   evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import {
-  createRouteValidationReportV2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  createRouteWorldPackageValidationReportV1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
   runRouteRuntimeProbeV2,
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
 import { isNil } from "lodash-es";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   orchestrateRouteValidationV1,
   type RouteValidationOrchestratorOperationsV1,
@@ -478,7 +478,7 @@ function operationsForFixture(
     resolveDriverProfile: () =>
       resolveTraversalDriverProfileV1(BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF),
     runRuntimeProbe: (input) => runRouteRuntimeProbeV2(input),
-    createReport: (input) => createRouteValidationReportV2(input),
+    createReport: (input) => createRouteWorldPackageValidationReportV1(input),
     ...overrides,
   };
   return operations;
@@ -741,7 +741,7 @@ describe("orchestrateRouteValidationV1", () => {
 
   it("does not convert a Route provider exception into gameplay evidence", async () => {
     const createRuntimeLease = vi.fn();
-    const createReport = vi.fn(createRouteValidationReportV2);
+    const createReport = vi.fn(createRouteWorldPackageValidationReportV1);
     await expect(orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
       worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
@@ -834,7 +834,7 @@ describe("orchestrateRouteValidationV1", () => {
     ["probe", "probe"],
     ["dispose", "dispose"],
   ] as const)("propagates a Runtime %s exception without creating a Report", async (phase, message) => {
-    const createReport = vi.fn(createRouteValidationReportV2);
+    const createReport = vi.fn(createRouteWorldPackageValidationReportV1);
     const base = operationsForFixture(complete, { createReport });
     const operations: RouteValidationOrchestratorOperationsV1 = {
       ...base,
@@ -929,7 +929,7 @@ describe("orchestrateRouteValidationV1", () => {
   }, 60_000);
 
   it("passes the exact canonical byte objects to Report validation and output inventory", async () => {
-    const createReport = vi.fn(createRouteValidationReportV2);
+    const createReport = vi.fn(createRouteWorldPackageValidationReportV1);
     const result = await orchestrateRouteValidationV1({
       executionPlan: complete.executionPlan,
       worldRuntimeBootstrap: complete.worldRuntimeBootstrap,
@@ -991,22 +991,22 @@ describe("orchestrateRouteValidationV1", () => {
   }, 60_000);
 
   it.each([
-    ["wrong-root", (report: ReturnType<typeof createRouteValidationReportV2>) => ({
+    ["wrong-root", (report: ReturnType<typeof createRouteWorldPackageValidationReportV1>) => ({
       ...report,
       subject: {
         ...report.subject,
         worldPackageRootHash: `sha256:${"e".repeat(64)}` as Hash,
       },
     })],
-    ["stale-id", (report: ReturnType<typeof createRouteValidationReportV2>) => ({
+    ["stale-id", (report: ReturnType<typeof createRouteWorldPackageValidationReportV1>) => ({
       ...report,
       id: "stale-report-id",
     })],
-    ["unknown-provider-field", (report: ReturnType<typeof createRouteValidationReportV2>) => ({
+    ["unknown-provider-field", (report: ReturnType<typeof createRouteWorldPackageValidationReportV1>) => ({
       ...report,
       providerHandle: 42,
     })],
-    ["hidden-nested-provider-field", (report: ReturnType<typeof createRouteValidationReportV2>) => {
+    ["hidden-nested-provider-field", (report: ReturnType<typeof createRouteWorldPackageValidationReportV1>) => {
       const forged = structuredClone(report);
       Object.defineProperty(forged.gateResultsById, "providerHandle", {
         value: 42,
@@ -1015,9 +1015,9 @@ describe("orchestrateRouteValidationV1", () => {
       return forged;
     }],
   ] as const)("rejects a trusted Report result with %s", async (_caseName, forge) => {
-    const createReport = vi.fn((input: Parameters<typeof createRouteValidationReportV2>[0]) =>
-      forge(createRouteValidationReportV2(input)) as ReturnType<
-        typeof createRouteValidationReportV2
+    const createReport = vi.fn((input: Parameters<typeof createRouteWorldPackageValidationReportV1>[0]) =>
+      forge(createRouteWorldPackageValidationReportV1(input)) as ReturnType<
+        typeof createRouteWorldPackageValidationReportV1
       >
     );
 

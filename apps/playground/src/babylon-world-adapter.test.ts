@@ -23,7 +23,7 @@ import { isNil } from "lodash-es";
 
 import {
   createValidAuthoringSpecV4,
-} from "../../../packages/authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 
 import {
   BabylonWorldAdapter,

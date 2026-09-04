@@ -21,64 +21,64 @@ import type {
 } from "./route";
 import type { TraversalSurfaceIdentityV1 } from "@whitebox-world/traversal";
 
-interface MetricDefinitionBaseV2 {
+interface WorldPackageMetricDefinitionBaseV1 {
   readonly id: string;
   readonly isRequired: boolean;
   readonly evaluatorProfileRef: string;
 }
 
-export interface MetersThresholdMetricDefinitionV2 extends MetricDefinitionBaseV2 {
+export interface MetersThresholdMetricDefinitionV1 extends WorldPackageMetricDefinitionBaseV1 {
   readonly kind: "meters-threshold";
   readonly minimumAllowedMeters?: number;
   readonly maximumAllowedMeters?: number;
 }
 
-export interface DegreesThresholdMetricDefinitionV2 extends MetricDefinitionBaseV2 {
+export interface DegreesThresholdMetricDefinitionV1 extends WorldPackageMetricDefinitionBaseV1 {
   readonly kind: "degrees-threshold";
   readonly minimumAllowedDegrees?: number;
   readonly maximumAllowedDegrees?: number;
 }
 
-export interface TicksThresholdMetricDefinitionV2 extends MetricDefinitionBaseV2 {
+export interface TicksThresholdMetricDefinitionV1 extends WorldPackageMetricDefinitionBaseV1 {
   readonly kind: "ticks-threshold";
   readonly minimumAllowedTicks?: number;
   readonly maximumAllowedTicks?: number;
 }
 
-export interface CostThresholdMetricDefinitionV2 extends MetricDefinitionBaseV2 {
+export interface CostThresholdMetricDefinitionV1 extends WorldPackageMetricDefinitionBaseV1 {
   readonly kind: "cost-threshold";
   readonly minimumAllowedCost?: number;
   readonly maximumAllowedCost?: number;
 }
 
-export type MetricDefinitionV2 =
+export type WorldPackageMetricDefinitionV1 =
   | BooleanAssertionMetricDefinitionV1
   | CountThresholdMetricDefinitionV1
   | SetEqualityMetricDefinitionV1
   | HashEqualityMetricDefinitionV1
-  | MetersThresholdMetricDefinitionV2
-  | DegreesThresholdMetricDefinitionV2
-  | TicksThresholdMetricDefinitionV2
-  | CostThresholdMetricDefinitionV2;
+  | MetersThresholdMetricDefinitionV1
+  | DegreesThresholdMetricDefinitionV1
+  | TicksThresholdMetricDefinitionV1
+  | CostThresholdMetricDefinitionV1;
 
-export interface GateDefinitionV2 {
+export interface WorldPackageGateDefinitionV1 {
   readonly id: string;
   readonly requirement: ValidationGateRequirementV1;
-  readonly metricDefinitionsById: Readonly<Record<string, MetricDefinitionV2>>;
+  readonly metricDefinitionsById: Readonly<Record<string, WorldPackageMetricDefinitionV1>>;
 }
 
-export interface ValidationProfileV2 {
+export interface WorldPackageValidationProfileV1 {
   readonly kind: "worldkit-validation-profile";
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 1;
   readonly id: string;
   readonly resourceRef: string;
   readonly version: string;
   readonly subjectKind: "world-package";
   readonly routeRuntimeGateThresholds: RouteRuntimeGateThresholdsV1;
-  readonly gateDefinitionsById: Readonly<Record<string, GateDefinitionV2>>;
+  readonly gateDefinitionsById: Readonly<Record<string, WorldPackageGateDefinitionV1>>;
 }
 
-interface MetricResultBaseV2 {
+interface WorldPackageMetricResultBaseV1 {
   readonly id: string;
   readonly status: ValidationMetricStatusV1;
   readonly evaluatorProfileRef: string;
@@ -86,49 +86,49 @@ interface MetricResultBaseV2 {
   readonly diagnosticIds: readonly string[];
 }
 
-export interface MetersThresholdMetricResultV2 extends MetricResultBaseV2 {
+export interface MetersThresholdMetricResultV1 extends WorldPackageMetricResultBaseV1 {
   readonly kind: "meters-threshold";
   readonly valueMeters?: number;
   readonly minimumAllowedMeters?: number;
   readonly maximumAllowedMeters?: number;
 }
 
-export interface DegreesThresholdMetricResultV2 extends MetricResultBaseV2 {
+export interface DegreesThresholdMetricResultV1 extends WorldPackageMetricResultBaseV1 {
   readonly kind: "degrees-threshold";
   readonly valueDegrees?: number;
   readonly minimumAllowedDegrees?: number;
   readonly maximumAllowedDegrees?: number;
 }
 
-export interface TicksThresholdMetricResultV2 extends MetricResultBaseV2 {
+export interface TicksThresholdMetricResultV1 extends WorldPackageMetricResultBaseV1 {
   readonly kind: "ticks-threshold";
   readonly valueTicks?: number;
   readonly minimumAllowedTicks?: number;
   readonly maximumAllowedTicks?: number;
 }
 
-export interface CostThresholdMetricResultV2 extends MetricResultBaseV2 {
+export interface CostThresholdMetricResultV1 extends WorldPackageMetricResultBaseV1 {
   readonly kind: "cost-threshold";
   readonly valueCost?: number;
   readonly minimumAllowedCost?: number;
   readonly maximumAllowedCost?: number;
 }
 
-export type MetricResultV2 =
+export type WorldPackageMetricResultV1 =
   | BooleanAssertionMetricResultV1
   | CountThresholdMetricResultV1
   | SetEqualityMetricResultV1
   | HashEqualityMetricResultV1
-  | MetersThresholdMetricResultV2
-  | DegreesThresholdMetricResultV2
-  | TicksThresholdMetricResultV2
-  | CostThresholdMetricResultV2;
+  | MetersThresholdMetricResultV1
+  | DegreesThresholdMetricResultV1
+  | TicksThresholdMetricResultV1
+  | CostThresholdMetricResultV1;
 
-export interface GateResultV2 {
+export interface WorldPackageGateResultV1 {
   readonly id: string;
   readonly requirement: ValidationGateRequirementV1;
   readonly status: ValidationGateStatusV1;
-  readonly metricResultsById: Readonly<Record<string, MetricResultV2>>;
+  readonly metricResultsById: Readonly<Record<string, WorldPackageMetricResultV1>>;
   readonly diagnosticIds: readonly string[];
 }
 
@@ -142,7 +142,7 @@ export interface WorldPackageValidationSubjectV1 {
   readonly layoutSolveReportHash: Sha256HashV1;
 }
 
-export type EvidenceArtifactKindV2 =
+export type WorldPackageEvidenceArtifactKindV1 =
   | "route-validation-set-receipt"
   | "traversal-graph"
   | "route-path-receipt"
@@ -150,9 +150,9 @@ export type EvidenceArtifactKindV2 =
   | "route-runtime-probe-receipt"
   | "route-overlay";
 
-interface EvidenceArtifactBaseV2 {
+interface WorldPackageEvidenceArtifactBaseV1 {
   readonly id: string;
-  readonly kind: EvidenceArtifactKindV2;
+  readonly kind: WorldPackageEvidenceArtifactKindV1;
   readonly artifactRef: string;
   readonly mediaType: string;
   readonly sizeBytes: number;
@@ -193,18 +193,18 @@ export interface RouteValidationSetReceiptV1 {
   readonly rows: readonly RouteValidationSetRowV1[];
 }
 
-export interface RouteValidationSetReceiptEvidenceArtifactV2
-  extends EvidenceArtifactBaseV2 {
+export interface RouteValidationSetReceiptEvidenceArtifactV1
+  extends WorldPackageEvidenceArtifactBaseV1 {
   readonly kind: "route-validation-set-receipt";
   readonly receipt: RouteValidationSetReceiptV1;
 }
 
-interface RouteEvidenceArtifactBaseV2 extends EvidenceArtifactBaseV2 {
+interface RouteWorldPackageEvidenceArtifactBaseV1 extends WorldPackageEvidenceArtifactBaseV1 {
   readonly constraintId: string;
   readonly routeId: string;
 }
 
-export interface TraversalGraphEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
+export interface TraversalGraphEvidenceArtifactV1 extends RouteWorldPackageEvidenceArtifactBaseV1 {
   readonly kind: "traversal-graph";
   readonly resolvedTraversalLockHash: Sha256HashV1;
   readonly graphBuilderProfileRef: string;
@@ -212,7 +212,7 @@ export interface TraversalGraphEvidenceArtifactV2 extends RouteEvidenceArtifactB
   readonly graphBuilderProfileHash: Sha256HashV1;
 }
 
-export interface RoutePathReceiptEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
+export interface RoutePathReceiptEvidenceArtifactV1 extends RouteWorldPackageEvidenceArtifactBaseV1 {
   readonly kind: "route-path-receipt";
   readonly resolvedTraversalLockHash: Sha256HashV1;
   readonly graphBuilderProfileRef: string;
@@ -220,8 +220,8 @@ export interface RoutePathReceiptEvidenceArtifactV2 extends RouteEvidenceArtifac
   readonly graphBuilderProfileHash: Sha256HashV1;
 }
 
-export interface RouteConnectivityFailureEvidenceArtifactV2
-  extends RouteEvidenceArtifactBaseV2 {
+export interface RouteConnectivityFailureEvidenceArtifactV1
+  extends RouteWorldPackageEvidenceArtifactBaseV1 {
   readonly kind: "route-connectivity-failure";
   readonly routeBuildInputHash: Sha256HashV1;
   readonly resolvedTraversalLockHash: Sha256HashV1;
@@ -230,7 +230,7 @@ export interface RouteConnectivityFailureEvidenceArtifactV2
   readonly graphBuilderProfileHash: Sha256HashV1;
 }
 
-export interface RouteRuntimeProbeReceiptEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
+export interface RouteRuntimeProbeReceiptEvidenceArtifactV1 extends RouteWorldPackageEvidenceArtifactBaseV1 {
   readonly kind: "route-runtime-probe-receipt";
   readonly resolvedTraversalLockHash: Sha256HashV1;
   readonly driverProfileRef: string;
@@ -244,18 +244,18 @@ export interface RouteRuntimeProbeReceiptEvidenceArtifactV2 extends RouteEvidenc
   readonly runtimeAdapterHash: Sha256HashV1;
 }
 
-export interface RouteOverlayEvidenceArtifactV2 extends RouteEvidenceArtifactBaseV2 {
+export interface RouteOverlayEvidenceArtifactV1 extends RouteWorldPackageEvidenceArtifactBaseV1 {
   readonly kind: "route-overlay";
   readonly resolvedTraversalLockHash: Sha256HashV1;
 }
 
-export type EvidenceArtifactV2 =
-  | RouteValidationSetReceiptEvidenceArtifactV2
-  | TraversalGraphEvidenceArtifactV2
-  | RoutePathReceiptEvidenceArtifactV2
-  | RouteConnectivityFailureEvidenceArtifactV2
-  | RouteRuntimeProbeReceiptEvidenceArtifactV2
-  | RouteOverlayEvidenceArtifactV2;
+export type WorldPackageEvidenceArtifactV1 =
+  | RouteValidationSetReceiptEvidenceArtifactV1
+  | TraversalGraphEvidenceArtifactV1
+  | RoutePathReceiptEvidenceArtifactV1
+  | RouteConnectivityFailureEvidenceArtifactV1
+  | RouteRuntimeProbeReceiptEvidenceArtifactV1
+  | RouteOverlayEvidenceArtifactV1;
 
 export type RouteDiagnosticDetailsV1 =
   | Readonly<{
@@ -303,13 +303,13 @@ export type RouteDiagnosticDetailsV1 =
       actualState: string;
     }>;
 
-export type ValidationDiagnosticCodeV2 =
+export type WorldPackageValidationDiagnosticCodeV1 =
   | ValidationDiagnosticCodeV1
   | RouteValidationDiagnosticCodeV2;
 
-interface ValidationDiagnosticBaseV2 {
+interface WorldPackageValidationDiagnosticBaseV1 {
   readonly id: string;
-  readonly code: ValidationDiagnosticCodeV2;
+  readonly code: WorldPackageValidationDiagnosticCodeV1;
   readonly severity: "error" | "warning";
   readonly gateId: string;
   readonly metricId: string;
@@ -319,11 +319,11 @@ interface ValidationDiagnosticBaseV2 {
   readonly suggestedFix: string;
 }
 
-export interface WorldValidationDiagnosticV2 extends ValidationDiagnosticBaseV2 {
+export interface WorldValidationDiagnosticV1 extends WorldPackageValidationDiagnosticBaseV1 {
   readonly scope: "world";
 }
 
-export interface RouteRowValidationDiagnosticV2 extends ValidationDiagnosticBaseV2 {
+export interface RouteRowValidationDiagnosticV1 extends WorldPackageValidationDiagnosticBaseV1 {
   readonly scope: "route-row";
   readonly constraintId: string;
   readonly routeId: string;
@@ -336,13 +336,13 @@ export interface RouteRowValidationDiagnosticV2 extends ValidationDiagnosticBase
   readonly positionMetersXYZ?: readonly [number, number, number];
 }
 
-export type ValidationDiagnosticV2 =
-  | WorldValidationDiagnosticV2
-  | RouteRowValidationDiagnosticV2;
+export type WorldPackageValidationDiagnosticV1 =
+  | WorldValidationDiagnosticV1
+  | RouteRowValidationDiagnosticV1;
 
-export interface ValidationReportV2 {
+export interface WorldPackageValidationReportV1 {
   readonly kind: "worldkit-validation-report";
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 1;
   readonly id: string;
   readonly subject: WorldPackageValidationSubjectV1;
   readonly dependencyReportRefs: readonly string[];
@@ -351,7 +351,7 @@ export interface ValidationReportV2 {
   readonly validationProfileHash: Sha256HashV1;
   readonly routeValidationSetReceipt: RouteValidationSetReceiptV1;
   readonly status: ValidationReportStatusV1;
-  readonly gateResultsById: Readonly<Record<string, GateResultV2>>;
-  readonly evidenceArtifactsById: Readonly<Record<string, EvidenceArtifactV2>>;
-  readonly diagnostics: readonly ValidationDiagnosticV2[];
+  readonly gateResultsById: Readonly<Record<string, WorldPackageGateResultV1>>;
+  readonly evidenceArtifactsById: Readonly<Record<string, WorldPackageEvidenceArtifactV1>>;
+  readonly diagnostics: readonly WorldPackageValidationDiagnosticV1[];
 }

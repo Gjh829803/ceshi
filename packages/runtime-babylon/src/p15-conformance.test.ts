@@ -16,7 +16,7 @@ import {
 import {
   createValidAuthoringSpecV4 as createValidAuthoringSpec,
   createValidPackageSubjectWorldV4,
-} from "../../authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 import type {
   CanonicalSceneObjectV1,
   CanonicalSceneExecutionPlanV1,

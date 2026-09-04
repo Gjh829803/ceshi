@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createRouteConnectivityValidationDiagnosticV2,
+  createRouteConnectivityWorldPackageValidationDiagnosticV1,
   OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
   ROUTE_VALIDATION_DIAGNOSTIC_CODES_V2,
   validateValidationProfileV1,
-  validateValidationProfileV2,
 } from "./index";
 import type { RouteConnectivityFailureV2 } from "@whitebox-world/traversal";
 import { ROUTE_CONNECTIVITY_FAILURE_CODES_V2 } from "@whitebox-world/traversal";
@@ -57,16 +56,16 @@ describe("Route validation vocabulary", () => {
     );
   });
 
-  it("adds Route gates only on the world-package V2 Profile", () => {
-    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById)
+  it("adds Route gates only on the world-package current Profile", () => {
+    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById)
       .toHaveProperty("route-connectivity");
-    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById)
+    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById)
       .toHaveProperty("route-runtime-conformance");
-    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.subjectKind).toBe(
+    expect(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.subjectKind).toBe(
       "world-package",
     );
     expect(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
     ).toBe("worldkit://validation-profile/outdoor-world-package-dev@1");
     expect(
       OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1.subjectKind,
@@ -74,8 +73,8 @@ describe("Route validation vocabulary", () => {
     expect(
       OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById,
     ).not.toHaveProperty("route-connectivity");
-    expect(validateValidationProfileV2(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    expect(validateValidationProfileV1(
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     )).toMatchObject({ ok: true });
     expect(validateValidationProfileV1(
       OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1,
@@ -84,7 +83,7 @@ describe("Route validation vocabulary", () => {
 
   it("keeps physical step, slope, clearance, and gap bounds off the Validation Profile", () => {
     const connectivity =
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById[
         "route-connectivity"
       ]!.metricDefinitionsById;
     expect(connectivity["maximum-observed-step-height-meters"]).not.toHaveProperty(
@@ -103,7 +102,7 @@ describe("Route validation vocabulary", () => {
       "maximumAllowedMeters",
     );
     expect(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.routeRuntimeGateThresholds,
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.routeRuntimeGateThresholds,
     ).toMatchObject({
       destinationToleranceMetersXZ: 0.5,
       maximumRouteDeviationMetersXZ: 1,
@@ -112,10 +111,10 @@ describe("Route validation vocabulary", () => {
       maximumProbeTicks: 1200,
     });
     expect(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.routeRuntimeGateThresholds,
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.routeRuntimeGateThresholds,
     ).not.toHaveProperty("destinationToleranceMeters");
     const runtimeMetrics =
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.gateDefinitionsById[
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.gateDefinitionsById[
         "route-runtime-conformance"
       ]!.metricDefinitionsById;
     expect(runtimeMetrics).toHaveProperty("maximum-route-deviation-meters-xz");
@@ -124,7 +123,7 @@ describe("Route validation vocabulary", () => {
 
   it("rejects cross-unit threshold fields and generic numeric bags", () => {
     const crossedUnits = structuredClone(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     ) as unknown as Record<string, unknown>;
     const gates = crossedUnits.gateDefinitionsById as Record<
       string,
@@ -137,7 +136,7 @@ describe("Route validation vocabulary", () => {
       maximumAllowedDegrees: 42,
     };
 
-    expect(validateValidationProfileV2(crossedUnits)).toMatchObject({
+    expect(validateValidationProfileV1(crossedUnits)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_FIELD_UNKNOWN" }),
@@ -145,7 +144,7 @@ describe("Route validation vocabulary", () => {
     });
 
     const genericBag = structuredClone(
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     ) as unknown as Record<string, unknown>;
     const genericGates = genericBag.gateDefinitionsById as Record<
       string,
@@ -160,7 +159,7 @@ describe("Route validation vocabulary", () => {
       maximum: 99,
     };
 
-    expect(validateValidationProfileV2(genericBag)).toMatchObject({
+    expect(validateValidationProfileV1(genericBag)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_FIELD_UNKNOWN" }),
@@ -184,7 +183,7 @@ describe("Route validation vocabulary", () => {
       },
     } as const satisfies RouteConnectivityFailureV2;
 
-    const diagnostic = createRouteConnectivityValidationDiagnosticV2({
+    const diagnostic = createRouteConnectivityWorldPackageValidationDiagnosticV1({
       id: "route-step-failed",
       metricId: "maximum-observed-step-height-meters",
       evidenceArtifactRef: "artifact://route-connectivity-failure",
@@ -208,7 +207,7 @@ describe("Route validation vocabulary", () => {
         terrainEntityId: "terrain-main",
       },
     } as const satisfies RouteConnectivityFailureV2;
-    expect(createRouteConnectivityValidationDiagnosticV2({
+    expect(createRouteConnectivityWorldPackageValidationDiagnosticV1({
       id: "route-unreachable",
       metricId: "unreachable-required-route-count",
       evidenceArtifactRef: "artifact://route-connectivity-failure",
@@ -229,7 +228,7 @@ describe("Route validation vocabulary", () => {
       },
     } as const satisfies RouteConnectivityFailureV2;
 
-    const diagnostic = createRouteConnectivityValidationDiagnosticV2({
+    const diagnostic = createRouteConnectivityWorldPackageValidationDiagnosticV1({
       id: "route-capacity",
       metricId: "total-traversal-graph-node-count",
       evidenceArtifactRef: "artifact://route-connectivity-failure",

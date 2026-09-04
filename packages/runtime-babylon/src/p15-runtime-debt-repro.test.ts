@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { describe, expect, it } from "vitest";
 
-import { createValidPackageSubjectWorldV4 } from "../../authoring/src/test-fixture";
+import { createValidPackageSubjectWorldV4 } from "@whitebox-world/authoring/testing";
 import type { CanonicalSceneExecutionPlanV1 } from "@whitebox-world/runtime-contracts";
 
 import { BabylonWorldRuntime } from "./babylon-world-runtime";

@@ -31,20 +31,27 @@ import {
   type TraversalRuntimePortV1,
 } from "@whitebox-world/traversal";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  validateValidationReportV2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+  validateValidationReportV1,
   type CreateRouteValidationReportInputV2,
-  type EvidenceArtifactKindV2,
+  type WorldPackageEvidenceArtifactKindV1,
   type RouteEvidencePublicationRowInputV2,
   type RouteValidationRowInputV2,
   type RunRouteRuntimeProbeInputV2,
-  type ValidationReportV2,
+  type ValidationReportV1,
+  type WorldPackageValidationReportV1,
   type WorldPackageValidationSubjectV1,
 } from "@whitebox-world/validation";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 
 type Hash = `sha256:${string}`;
+
+function isWorldPackageValidationReportV1(
+  report: ValidationReportV1,
+): report is WorldPackageValidationReportV1 {
+  return report.subject.kind === "world-package";
+}
 
 export interface RouteValidationRuntimeLeaseV1 {
   readonly runtimePort: TraversalRuntimePortV1;
@@ -95,7 +102,7 @@ export interface RouteValidationOrchestratorOperationsV1 {
   ) => Promise<RouteRuntimeProbeReceiptV2>;
   readonly createReport: (
     input: CreateRouteValidationReportInputV2,
-  ) => ValidationReportV2;
+  ) => WorldPackageValidationReportV1;
 }
 
 export interface OrchestrateRouteValidationInputV1 {
@@ -109,14 +116,14 @@ export interface OrchestrateRouteValidationInputV1 {
 }
 
 export interface RouteValidationEvidenceFileV1 {
-  readonly kind: EvidenceArtifactKindV2;
+  readonly kind: WorldPackageEvidenceArtifactKindV1;
   readonly artifactRef: string;
   readonly relativePath: string;
   readonly bytes: Readonly<Uint8Array>;
 }
 
 export interface RouteValidationOrchestrationResultV1 {
-  readonly report: ValidationReportV2;
+  readonly report: WorldPackageValidationReportV1;
   readonly evidenceFiles: readonly RouteValidationEvidenceFileV1[];
   readonly publicationRows: readonly RouteEvidencePublicationRowInputV2[];
 }
@@ -188,7 +195,7 @@ const EVIDENCE_FILENAME_BY_KIND = Object.freeze({
   "route-connectivity-failure": "03-route-connectivity-failure.json",
   "route-runtime-probe-receipt": "04-route-runtime-probe-receipt.json",
   "route-overlay": "05-route-overlay.bin",
-}) satisfies Readonly<Record<EvidenceArtifactKindV2, string>>;
+}) satisfies Readonly<Record<WorldPackageEvidenceArtifactKindV1, string>>;
 
 const ROW_EVIDENCE_KEY_BY_KIND = Object.freeze({
   "traversal-graph": "traversalGraph",
@@ -197,7 +204,7 @@ const ROW_EVIDENCE_KEY_BY_KIND = Object.freeze({
   "route-runtime-probe-receipt": "routeRuntimeProbeReceipt",
   "route-overlay": "routeOverlay",
 }) satisfies Readonly<Record<
-  Exclude<EvidenceArtifactKindV2, "route-validation-set-receipt">,
+  Exclude<WorldPackageEvidenceArtifactKindV1, "route-validation-set-receipt">,
   keyof RouteValidationRowInputV2["evidenceBytes"]
 >>;
 
@@ -664,7 +671,7 @@ async function probeCompleteRoute(
         routePathReceipt: result.routePathReceipt,
         traversalDriverProfile: operations.resolveDriverProfile(),
         runtimePort: lease.runtimePort,
-        validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+        validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
         resolvedControlFeelProfile: (() => {
           const subject = input.worldRuntimeBootstrap
             .subjectRuntimeDescriptors.find(
@@ -690,10 +697,10 @@ async function probeCompleteRoute(
 }
 
 function canonicalBoundReport(
-  rawReport: ValidationReportV2,
+  rawReport: WorldPackageValidationReportV1,
   input: CanonicalOrchestrationInputV1,
   rows: readonly RouteValidationRowInputV2[],
-): ValidationReportV2 {
+): WorldPackageValidationReportV1 {
   try {
     assertPureEnumerableDataGraph(rawReport, "ROUTE_VALIDATION_REPORT_INVALID");
     assertExactEnumerableOwnFields(
@@ -711,8 +718,11 @@ function canonicalBoundReport(
   } catch {
     return fail("ROUTE_VALIDATION_REPORT_INVALID");
   }
-  const validation = validateValidationReportV2(detached);
-  if (validation.ok !== true) {
+  const validation = validateValidationReportV1(detached);
+  if (
+    validation.ok !== true ||
+    !isWorldPackageValidationReportV1(validation.value)
+  ) {
     return fail("ROUTE_VALIDATION_REPORT_INVALID");
   }
   const report = validation.value;
@@ -722,11 +732,11 @@ function canonicalBoundReport(
     !isEqual(report.subject, input.subject) ||
     !isEqual(report.dependencyReportRefs, input.dependencyReportRefs) ||
     report.validationProfileRef !==
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef ||
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef ||
     report.resolvedVersion !==
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version ||
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version ||
     report.validationProfileHash !==
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2 ||
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1 ||
     receipt.authoringSpecHash !== input.subject.authoringSpecHash ||
     receipt.normalizedWorldIrHash !== input.subject.normalizedWorldIrHash ||
     receipt.executionPlanHash !== input.executionPlanHash ||
@@ -789,8 +799,8 @@ function evidenceBytesForResult(
 }
 
 function findArtifactRef(
-  report: ValidationReportV2,
-  kind: EvidenceArtifactKindV2,
+  report: WorldPackageValidationReportV1,
+  kind: WorldPackageEvidenceArtifactKindV1,
   constraintId?: string,
 ): string {
   const matches = Object.values(report.evidenceArtifactsById).filter((artifact) =>
@@ -805,7 +815,7 @@ function findArtifactRef(
 }
 
 function assertArtifactBytes(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   artifactRef: string,
   bytes: Readonly<Uint8Array>,
 ): void {
@@ -822,7 +832,7 @@ function assertArtifactBytes(
 }
 
 function evidenceInventory(
-  report: ValidationReportV2,
+  report: WorldPackageValidationReportV1,
   rows: readonly RowEvidenceV1[],
 ): readonly RouteValidationEvidenceFileV1[] {
   const routeSetBytes = canonicalJsonBytes(report.routeValidationSetReceipt);
@@ -841,7 +851,7 @@ function evidenceInventory(
   for (const row of rows) {
     for (const [kind, key] of Object.entries(ROW_EVIDENCE_KEY_BY_KIND) as
       readonly [
-        Exclude<EvidenceArtifactKindV2, "route-validation-set-receipt">,
+        Exclude<WorldPackageEvidenceArtifactKindV1, "route-validation-set-receipt">,
         keyof RouteValidationRowInputV2["evidenceBytes"],
       ][]) {
       const bytes = row.evidenceBytes[key];
@@ -945,7 +955,7 @@ export async function orchestrateRouteValidationV1(
       executionPlanHash: input.executionPlanHash,
       resourceLockHash: input.routeResourceLockHash,
       dependencyReportRefs: input.dependencyReportRefs,
-      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
       requiredRoutes: requirements.map((requirement) => ({
         constraintId: requirement.constraintId,
         routeId: requirement.routeId,

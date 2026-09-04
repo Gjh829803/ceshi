@@ -34,7 +34,7 @@ import {
   collectControlCaptureBundleByteEvidenceV1,
   createControlCaptureBundleWriterV1,
   inspectControlCaptureBundleV1,
-  type ControlCaptureFrameInputV1,
+  type ControlCaptureBundleFrameInputV1,
   type ControlCaptureRuntimeHostJournalTransitionInputV1,
   validateControlCaptureBundleV1,
 } from "./control-capture-bundle";
@@ -268,10 +268,8 @@ function frameInput(
   simulationTick: number,
   snapshot: WorldRuntimeSnapshotV4 = runtimeSnapshot(simulationTick),
   worldState = runtimeWorldState(simulationTick),
-): ControlCaptureFrameInputV1 {
+): ControlCaptureBundleFrameInputV1 {
   return {
-    kind: "worldkit-control-capture-frame" as const,
-    schemaVersion: 1 as const,
     runtimeSessionId: "session-test",
     captureFrameIndex,
     simulationTick,

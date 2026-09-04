@@ -9,7 +9,7 @@ import {
 } from "@whitebox-world/world-package";
 import { isEqual, isNil, isPlainObject } from "lodash-es";
 
-import type { WorldPackageValidationSubjectV1 } from "./types-v2.js";
+import type { WorldPackageValidationSubjectV1 } from "./world-package-validation-types.js";
 
 function fail(message: string): never {
   throw new Error(`WORLD_PACKAGE_VALIDATION_SUBJECT_INPUT_INVALID: ${message}`);

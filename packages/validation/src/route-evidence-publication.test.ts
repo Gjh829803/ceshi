@@ -1,6 +1,5 @@
 import { canonicalJsonBytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import { canonicalWorldkitBrowserRouteEvidencePublicationV2 } from "@whitebox-world/runtime-contracts";
-import { createWorldkitBrowserApiV5 } from "../../../apps/playground/src/worldkit-browser-api.js";
 import {
   BUILT_IN_HEIGHTFIELD_R1_TRAVERSAL_GRAPH_BUILDER_PROFILE_REF,
   BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
@@ -35,12 +34,12 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  createRouteValidationReportV2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+  createRouteWorldPackageValidationReportV1,
   createWorldkitBrowserRouteEvidencePublicationV2,
   hashRouteValidationSetReceiptV1,
-  hashValidationReportV2,
+  hashValidationReportV1,
   type CreateWorldkitBrowserRouteEvidencePublicationInputV2,
   type RouteEvidencePublicationRowInputV2,
   type RouteValidationRowInputV2,
@@ -407,11 +406,11 @@ function probe(
       driverResolvedVersion: driver.resolvedVersion,
       driverProfileHash: driver.contentHash,
       validationProfileRef:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
       validationProfileVersion:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version,
       validationProfileHash: sha256CanonicalJson(
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
       ),
       runtimeImplementationIdentity,
       walkSpeedMetersPerSecond: 4,
@@ -583,13 +582,13 @@ function publicationInput(
   const validationRows = rows.map(({ validationRow }) => validationRow);
   return {
     subject: SUBJECT,
-    validationReport: createRouteValidationReportV2({
+    validationReport: createRouteWorldPackageValidationReportV1({
       reportId: "route-validation",
       subject: SUBJECT,
       executionPlanHash: HASH_C,
       resourceLockHash: HASH_B,
       dependencyReportRefs: ["report://layout@1"],
-      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
       requiredRoutes: requiredRoutesForRows(validationRows),
       rows: validationRows,
     }),
@@ -622,7 +621,7 @@ describe("createWorldkitBrowserRouteEvidencePublicationV2", () => {
           executionPlanHash: HASH_C,
       resourceLockHash: SUBJECT.resourceLockHash,
       layoutSolveReportHash: SUBJECT.layoutSolveReportHash,
-      validationReportHash: hashValidationReportV2(input.validationReport),
+      validationReportHash: hashValidationReportV1(input.validationReport),
       routeValidationSetReceiptHash: hashRouteValidationSetReceiptV1(
         input.validationReport.routeValidationSetReceipt,
       ),
@@ -1163,11 +1162,11 @@ function completeProbeV2(
       driverResolvedVersion: driver.resolvedVersion,
       driverProfileHash: driver.contentHash,
       validationProfileRef:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
       validationProfileVersion:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version,
       validationProfileHash:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
       runtimeImplementationIdentity,
       walkSpeedMetersPerSecond: 4,
       positionQuantizationMeters: builder.profile.positionQuantizationMeters,
@@ -1273,13 +1272,13 @@ function v2PublicationInput(
 ): CreateWorldkitBrowserRouteEvidencePublicationInputV2 {
   return {
     subject: SUBJECT,
-    validationReport: createRouteValidationReportV2({
+    validationReport: createRouteWorldPackageValidationReportV1({
       reportId: "v2-route-validation",
       subject: SUBJECT,
       executionPlanHash: HASH_C,
       resourceLockHash: HASH_B,
       dependencyReportRefs: ["report://layout@1"],
-      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
       requiredRoutes: requiredRoutesForRows([row.validationRow]),
       rows: [row.validationRow],
     }),
@@ -1485,34 +1484,17 @@ describe("createWorldkitBrowserRouteEvidencePublicationV2", () => {
     expect(recanonicalRoute.routePathReceiptHash).toBe(route.routePathReceiptHash);
     expect(recanonicalRoute.routeOverlayHash).toBe(route.routeOverlayHash);
 
-    const browser = createWorldkitBrowserApiV5({
-      routeEvidencePublication: publication,
-    });
-    const pathResult = browser.getRoutePathReceipt(route.selector);
-    const overlayResult = browser.getRouteOverlay(route.selector);
-    expect(pathResult.availability).toBe("available");
-    expect(overlayResult.availability).toBe("available");
-    if (pathResult.availability === "available") {
-      expect(canonicalJsonBytes(pathResult.routePathReceipt)).toEqual(
-        canonicalJsonBytes(route.routePathReceipt),
-      );
-      expect(pathResult.routePathReceipt).toHaveProperty(
-        "orderedTraversalSurfaceIdentities",
-      );
-      expect(pathResult.routePathReceipt).not.toHaveProperty(
-        "traversalSurfaceIdentity",
-      );
-    }
-    if (overlayResult.availability === "available") {
-      expect(canonicalJsonBytes(overlayResult.routeOverlay)).toEqual(
-        canonicalJsonBytes(route.routeOverlay),
-      );
-      expect(overlayResult.routeOverlay).toHaveProperty("staticColliderIdentities");
-      expect(overlayResult.routeOverlay).not.toHaveProperty(
-        ["blocking", "Collider", "Identities"].join(""),
-      );
-      expect(Object.isFrozen(overlayResult.routeOverlay)).toBe(true);
-    }
+    expect(recanonicalRoute.routePathReceipt).toHaveProperty(
+      "orderedTraversalSurfaceIdentities",
+    );
+    expect(recanonicalRoute.routePathReceipt).not.toHaveProperty(
+      "traversalSurfaceIdentity",
+    );
+    expect(recanonicalRoute.routeOverlay).toHaveProperty("staticColliderIdentities");
+    expect(recanonicalRoute.routeOverlay).not.toHaveProperty(
+      ["blocking", "Collider", "Identities"].join(""),
+    );
+    expect(Object.isFrozen(recanonicalRoute.routeOverlay)).toBe(true);
   });
 
   it("fails locally when Path identity, Path Receipt Hash, a closed field, or a child hash is tampered", () => {

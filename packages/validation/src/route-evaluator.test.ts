@@ -35,12 +35,12 @@ import { isNil } from "lodash-es";
 import { describe, expect, it } from "vitest";
 
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  createRouteValidationReportV2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+  createRouteWorldPackageValidationReportV1,
   evaluateRouteValidationRowV2,
-  hashValidationReportV2,
-  validateValidationReportV2,
+  hashValidationReportV1,
+  validateValidationReportV1,
   type CreateRouteValidationReportInputV2,
   type RouteValidationRowInputV2,
   type WorldPackageValidationSubjectV1,
@@ -453,11 +453,11 @@ function completeProbe(
       driverResolvedVersion: driver.resolvedVersion,
       driverProfileHash: driver.contentHash,
       validationProfileRef:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
       validationProfileVersion:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version,
       validationProfileHash:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
       runtimeImplementationIdentity,
       walkSpeedMetersPerSecond: 4,
       positionQuantizationMeters: resolveTraversalGraphBuilderProfileV2(
@@ -625,7 +625,7 @@ function input(options: Parameters<typeof rowInput>[0] = {}): CreateRouteValidat
     executionPlanHash: HASH_C,
     resourceLockHash: HASH_B,
     dependencyReportRefs: [],
-    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     requiredRoutes: [requiredRouteForRow(row)],
     rows: [row],
   };
@@ -846,7 +846,7 @@ function failedConnectivityInput(
     executionPlanHash: HASH_C,
     resourceLockHash: HASH_B,
     dependencyReportRefs: [],
-    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     requiredRoutes: [requiredRouteForRow(row)],
     rows: [row],
   };
@@ -1062,28 +1062,28 @@ function expectedFailurePosition(
   return [0, 0, 0];
 }
 
-describe("createRouteValidationReportV2", () => {
+describe("createRouteWorldPackageValidationReportV1", () => {
   it("rejects missing, extra, duplicate, and mismatched-plan Required Route sets", () => {
     const first = rowInput({ constraintId: "a-route", routeId: "route-a" });
     const second = rowInput({ constraintId: "b-route", routeId: "route-b" });
     const requiredRoutes = requiredRoutesForRows([first, second]);
 
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes,
       rows: [first],
     })).toThrow("ROUTE_VALIDATION_REQUIRED_ROUTE_SET_MISMATCH");
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: [requiredRoutes[0]!],
       rows: [first, second],
     })).toThrow("ROUTE_VALIDATION_REQUIRED_ROUTE_SET_MISMATCH");
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: [requiredRoutes[0]!, requiredRoutes[0]!],
       rows: [first, first],
     })).toThrow("must be unique and sorted by constraintId then routeId");
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...input(),
       executionPlanHash: HASH_A,
       requiredRoutes: [requiredRoutes[0]!],
@@ -1092,7 +1092,7 @@ describe("createRouteValidationReportV2", () => {
   });
 
   it("publishes a real failed world Report when no required Route rows exist", () => {
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: [],
       rows: [],
@@ -1111,7 +1111,7 @@ describe("createRouteValidationReportV2", () => {
         metricId: "required-route-count",
       }),
     ]));
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("sorts Route rows and keeps artifacts unique when constraints share one routeId", () => {
@@ -1119,7 +1119,7 @@ describe("createRouteValidationReportV2", () => {
       rowInput({ constraintId: "z-route-check", routeId: "shared-route" }),
       rowInput({ constraintId: "a-route-check", routeId: "shared-route" }),
     ];
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows(rows),
       rows,
@@ -1140,7 +1140,7 @@ describe("createRouteValidationReportV2", () => {
     expect(new Set(Object.values(report.evidenceArtifactsById).map(
       ({ artifactRef }) => artifactRef,
     )).size).toBe(Object.keys(report.evidenceArtifactsById).length);
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("uses locale-independent canonical ordering for Route rows", () => {
@@ -1148,7 +1148,7 @@ describe("createRouteValidationReportV2", () => {
       rowInput({ constraintId: "ä-route", routeId: "shared-route" }),
       rowInput({ constraintId: "z-route", routeId: "shared-route" }),
     ];
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows(rows),
       rows,
@@ -1168,7 +1168,7 @@ describe("createRouteValidationReportV2", () => {
       validationProfile: baseline.validationProfile,
       row: onlyRow(baseline),
     });
-    const report = createRouteValidationReportV2(baseline);
+    const report = createRouteWorldPackageValidationReportV1(baseline);
 
     expect(Object.isFrozen(contribution)).toBe(true);
     expect(Object.isFrozen(contribution.gateResultsById)).toBe(true);
@@ -1182,7 +1182,7 @@ describe("createRouteValidationReportV2", () => {
 
   it("keeps provider IDs and handles out of the Report, Route-set index, and evidence bytes", () => {
     const baseline = input();
-    const report = createRouteValidationReportV2(baseline);
+    const report = createRouteWorldPackageValidationReportV1(baseline);
     const serializedContracts = [
       JSON.stringify(report),
       JSON.stringify(report.routeValidationSetReceipt),
@@ -1199,7 +1199,7 @@ describe("createRouteValidationReportV2", () => {
   it("binds Overlay evidence to its Route row lock and rejects orphaned failure overlays", () => {
     const baseline = input();
     const row = onlyRow(baseline);
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       ...baseline,
       rows: [{
         ...row,
@@ -1218,7 +1218,7 @@ describe("createRouteValidationReportV2", () => {
       resolvedTraversalLockHash:
         row.resolvedTraversalLockReceipt.resolvedTraversalLockHash,
     });
-    expect(validateValidationReportV2({
+    expect(validateValidationReportV1({
       ...report,
       evidenceArtifactsById: {
         ...report.evidenceArtifactsById,
@@ -1231,7 +1231,7 @@ describe("createRouteValidationReportV2", () => {
 
     const failed = failedConnectivityInput("unreachable");
     const failedRow = onlyRow(failed);
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...failed,
       rows: [{
         ...failedRow,
@@ -1253,7 +1253,7 @@ describe("createRouteValidationReportV2", () => {
         maxSlopeDegrees: 30,
       }),
     ];
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows(rows),
       rows,
@@ -1266,7 +1266,7 @@ describe("createRouteValidationReportV2", () => {
     expect(new Set(report.routeValidationSetReceipt.rows.map(
       ({ resolvedTraversalLockHash }) => resolvedTraversalLockHash,
     )).size).toBe(2);
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("aggregates world status with failed ahead of incomplete ahead of passed", () => {
@@ -1278,12 +1278,12 @@ describe("createRouteValidationReportV2", () => {
     }));
     const passed = rowInput({ constraintId: "c-passed" });
 
-    const failed = createRouteValidationReportV2({
+    const failed = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows([incomplete, unreachable]),
       rows: [incomplete, unreachable],
     });
-    const incompleteReport = createRouteValidationReportV2({
+    const incompleteReport = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows([passed, incomplete]),
       rows: [passed, incomplete],
@@ -1300,7 +1300,7 @@ describe("createRouteValidationReportV2", () => {
       routePathReceipt,
       runtimeBaseline.resolvedTraversalLockReceipt,
     );
-    const runtimeFailed = createRouteValidationReportV2({
+    const runtimeFailed = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows([
         incomplete,
@@ -1343,12 +1343,12 @@ describe("createRouteValidationReportV2", () => {
       rowInput({ constraintId: "a-route", routeId: "route-a" }),
     ];
     const requiredRoutes = requiredRoutesForRows(rows);
-    const first = createRouteValidationReportV2({
+    const first = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes,
       rows,
     });
-    const second = createRouteValidationReportV2({
+    const second = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes,
       rows: [...rows].reverse(),
@@ -1368,12 +1368,12 @@ describe("createRouteValidationReportV2", () => {
     expect(runtime["completed-required-route-count"]).toMatchObject({
       valueCount: 2,
     });
-    expect(hashValidationReportV2(second)).toBe(hashValidationReportV2(first));
+    expect(hashValidationReportV1(second)).toBe(hashValidationReportV1(first));
   });
 
   it("rejects duplicate row identity and cross-row Artifact ownership", () => {
     const duplicate = rowInput({ constraintId: "duplicate", routeId: "shared" });
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows([duplicate, duplicate]),
       rows: [duplicate, duplicate],
@@ -1383,7 +1383,7 @@ describe("createRouteValidationReportV2", () => {
       rowInput({ constraintId: "a-row", routeId: "route-a" }),
       rowInput({ constraintId: "b-row", routeId: "route-b" }),
     ];
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       ...input(),
       requiredRoutes: requiredRoutesForRows(rows),
       rows,
@@ -1400,7 +1400,7 @@ describe("createRouteValidationReportV2", () => {
         },
       },
     };
-    expect(validateValidationReportV2(forged)).toMatchObject({
+    expect(validateValidationReportV1(forged)).toMatchObject({
       ok: false,
       diagnostics: expect.arrayContaining([
         expect.objectContaining({ code: "VALIDATION_REFERENCE_INVALID" }),
@@ -1409,7 +1409,7 @@ describe("createRouteValidationReportV2", () => {
   });
 
   it("passes both blocking Route gates only when Graph, Path, and Probe evidence are present", () => {
-    const report = createRouteValidationReportV2(input());
+    const report = createRouteWorldPackageValidationReportV1(input());
 
     expect(report.status).toBe("passed");
     expect(report.gateResultsById["route-connectivity"]?.status).toBe("passed");
@@ -1427,11 +1427,11 @@ describe("createRouteValidationReportV2", () => {
         mediaType:
           "application/vnd.worldkit.route-runtime-probe-receipt.v2+json",
       });
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("publishes every ambiguous Surface identity in the route Diagnostic", () => {
-    const report = createRouteValidationReportV2(
+    const report = createRouteWorldPackageValidationReportV1(
       failedConnectivityInput("incomplete", {
         reason: {
           kind: "surface-correlation-ambiguous",
@@ -1456,11 +1456,11 @@ describe("createRouteValidationReportV2", () => {
       mediaType:
         "application/vnd.worldkit.route-connectivity-failure.v2+json",
     });
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("keeps the Runtime gate and Report incomplete when canonical Probe evidence is absent", () => {
-    const report = createRouteValidationReportV2(input({ includeProbe: false }));
+    const report = createRouteWorldPackageValidationReportV1(input({ includeProbe: false }));
 
     expect(report.status).toBe("incomplete");
     expect(report.gateResultsById["route-connectivity"]?.status).toBe("passed");
@@ -1470,11 +1470,11 @@ describe("createRouteValidationReportV2", () => {
     expect(Object.values(
       report.gateResultsById["route-runtime-conformance"]!.metricResultsById,
     ).every((metric) => metric.status === "not-evaluated")).toBe(true);
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("keeps capability bounds in row evaluation while retaining Profile-derived Runtime bounds", () => {
-    const report = createRouteValidationReportV2(input());
+    const report = createRouteWorldPackageValidationReportV1(input());
     const connectivity = report.gateResultsById["route-connectivity"]!
       .metricResultsById;
     const runtime = report.gateResultsById["route-runtime-conformance"]!
@@ -1492,18 +1492,18 @@ describe("createRouteValidationReportV2", () => {
       .not.toHaveProperty("maximumAllowedMeters");
     expect(runtime["maximum-stalled-duration-ticks"]).toMatchObject({
       maximumAllowedTicks:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1
           .routeRuntimeGateThresholds.stalledWindowTicks,
     });
     expect(runtime["maximum-route-deviation-meters-xz"]).toMatchObject({
       maximumAllowedMeters:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1
           .routeRuntimeGateThresholds.maximumRouteDeviationMetersXZ,
     });
   });
 
   it("requires each evaluated Metric to cite the evidence kind that owns its value", () => {
-    const report = createRouteValidationReportV2(input());
+    const report = createRouteWorldPackageValidationReportV1(input());
 
     for (const metric of Object.values(
       report.gateResultsById["route-connectivity"]!.metricResultsById,
@@ -1530,7 +1530,7 @@ describe("createRouteValidationReportV2", () => {
     if (traversalGraphBytes === undefined || routePathReceiptBytes === undefined) {
       throw new Error("Expected complete connectivity evidence in the fixture.");
     }
-    const report = createRouteValidationReportV2(reportInput);
+    const report = createRouteWorldPackageValidationReportV1(reportInput);
     const graphEvidence = report.evidenceArtifactsById[
       "route:player-to-goal:traversal-graph"
     ]!;
@@ -1569,7 +1569,7 @@ describe("createRouteValidationReportV2", () => {
       completePath,
       baselineRow.resolvedTraversalLockReceipt,
     );
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       ...baseline,
       rows: [{
         ...baselineRow,
@@ -1613,7 +1613,7 @@ describe("createRouteValidationReportV2", () => {
       expectedState: expect.stringContaining("1"),
       actualState: expect.stringContaining("0"),
     });
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it.each(["unmatched", "ambiguous", "resolved"] as const)(
@@ -1627,7 +1627,7 @@ describe("createRouteValidationReportV2", () => {
         baselineRow.resolvedTraversalLockReceipt,
         surfaceResolutionMode,
       );
-      const report = createRouteValidationReportV2({
+      const report = createRouteWorldPackageValidationReportV1({
         ...baseline,
         rows: [{
           ...baselineRow,
@@ -1651,7 +1651,7 @@ describe("createRouteValidationReportV2", () => {
       ).every(
         ({ code }) => code === "ROUTE_RUNTIME_SUPPORT_SURFACE_MISMATCH",
       )).toBe(true);
-      expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+      expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
     },
   );
 
@@ -1694,13 +1694,13 @@ describe("createRouteValidationReportV2", () => {
       }],
     };
 
-    expect(() => createRouteValidationReportV2(forged)).toThrow(
+    expect(() => createRouteWorldPackageValidationReportV1(forged)).toThrow(
       "ROUTE_TRAVERSAL_LOCK_MISMATCH",
     );
   });
 
   it("emits one failed Report from canonical unreachable evidence even when no Graph or Path exists", () => {
-    const report = createRouteValidationReportV2(
+    const report = createRouteWorldPackageValidationReportV1(
       failedConnectivityInput("unreachable"),
     );
 
@@ -1736,7 +1736,7 @@ describe("createRouteValidationReportV2", () => {
     expect(runtimeDiagnostics.every(({ message }) =>
       message.includes("Route Path") && !message.includes("Probe")
     )).toBe(true);
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("rejects a self-consistent graph-unavailable Failure from another World", () => {
@@ -1755,7 +1755,7 @@ describe("createRouteValidationReportV2", () => {
       },
     });
 
-    expect(() => createRouteValidationReportV2(forged)).toThrow(
+    expect(() => createRouteWorldPackageValidationReportV1(forged)).toThrow(
       "ROUTE_VALIDATION_WORLD_IDENTITY_MISMATCH",
     );
   });
@@ -1763,7 +1763,7 @@ describe("createRouteValidationReportV2", () => {
   it.each(FAILURE_VARIANTS)(
     "closes canonical failure variant: $name",
     ({ status, graphStatus, reason }) => {
-      const report = createRouteValidationReportV2(
+      const report = createRouteWorldPackageValidationReportV1(
         failedConnectivityInput(status, { graphStatus, reason }),
       );
 
@@ -1788,12 +1788,12 @@ describe("createRouteValidationReportV2", () => {
       ] !== undefined).toBe(
         graphStatus === "complete",
       );
-      expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+      expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
     },
   );
 
   it("keeps canonical budget-exhaustion evidence incomplete instead of calling it unreachable", () => {
-    const report = createRouteValidationReportV2(
+    const report = createRouteWorldPackageValidationReportV1(
       failedConnectivityInput("incomplete"),
     );
 
@@ -1812,13 +1812,13 @@ describe("createRouteValidationReportV2", () => {
         }),
       }),
     ]));
-    expect(validateValidationReportV2(report)).toMatchObject({ ok: true });
+    expect(validateValidationReportV1(report)).toMatchObject({ ok: true });
   });
 
   it("rejects bytes that do not exactly encode the admitted canonical artifact", () => {
     const baseline = input();
     const baselineRow = onlyRow(baseline);
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...baseline,
       rows: [{
         ...baselineRow,
@@ -1843,7 +1843,7 @@ describe("createRouteValidationReportV2", () => {
       },
     });
 
-    expect(() => createRouteValidationReportV2({
+    expect(() => createRouteWorldPackageValidationReportV1({
       ...baseline,
       validationProfile,
     })).toThrow("ROUTE_VALIDATION_INPUT_ACCESSOR_FORBIDDEN");
@@ -1851,10 +1851,10 @@ describe("createRouteValidationReportV2", () => {
   });
 
   it("produces the same Report hash when canonical input maps are reordered", () => {
-    const first = createRouteValidationReportV2(input({ reverseMaps: false }));
-    const second = createRouteValidationReportV2(input({ reverseMaps: true }));
+    const first = createRouteWorldPackageValidationReportV1(input({ reverseMaps: false }));
+    const second = createRouteWorldPackageValidationReportV1(input({ reverseMaps: true }));
 
-    expect(hashValidationReportV2(second)).toBe(hashValidationReportV2(first));
+    expect(hashValidationReportV1(second)).toBe(hashValidationReportV1(first));
   });
 });
 
@@ -2096,11 +2096,11 @@ function completeProbeV2(
       driverResolvedVersion: driver.resolvedVersion,
       driverProfileHash: driver.contentHash,
       validationProfileRef:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
       validationProfileVersion:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.version,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.version,
       validationProfileHash:
-        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2,
+        OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1,
       runtimeImplementationIdentity,
       walkSpeedMetersPerSecond: 4,
       positionQuantizationMeters: builder.profile.positionQuantizationMeters,
@@ -2151,19 +2151,19 @@ function v2RowInput(): RouteValidationRowInputV2 {
   };
 }
 
-describe("createRouteValidationReportV2 Path/Probe V2 rows", () => {
+describe("createRouteWorldPackageValidationReportV1 Path/Probe V2 rows", () => {
   it("accepts a complete V2 Build Input, Path, and Probe row", () => {
     const row = v2RowInput();
-    const report = createRouteValidationReportV2({
+    const report = createRouteWorldPackageValidationReportV1({
       reportId: "v2-route-validation",
       subject: SUBJECT,
       executionPlanHash: HASH_C,
       resourceLockHash: HASH_B,
-      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+      validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
       requiredRoutes: [requiredRouteForRow(row)],
       rows: [row],
     });
     expect(report.status).toBe("passed");
-    expect(validateValidationReportV2(report).ok).toBe(true);
+    expect(validateValidationReportV1(report).ok).toBe(true);
   });
 });

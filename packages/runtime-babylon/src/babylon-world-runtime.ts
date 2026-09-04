@@ -1749,7 +1749,7 @@ export class BabylonWorldRuntime {
           controller.publishSupport();
         }
       }
-      this.commitFixedTick();
+      this.commitFixedTick({ cameraMode: "controlled-entity" });
     }
     return this.snapshot();
   }
@@ -2989,7 +2989,10 @@ export class BabylonWorldRuntime {
         controller.publishSupport();
       }
     }
-    this.commitGameplayFixedTick(targetEntityId);
+    this.commitFixedTick({
+      cameraMode: "gameplay-target",
+      targetEntityId,
+    });
     return this.gameplayWorldProjection(true);
   }
 
@@ -3040,50 +3043,6 @@ export class BabylonWorldRuntime {
     return state;
   }
 
-  private commitGameplayFixedTick(
-    targetEntityId: string | undefined,
-  ): void {
-    this.updateNativeColliderResidencyBeforeTick();
-    const physicsEngine = this.scene.getPhysicsEngine();
-    if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
-    physicsEngine._step(FIXED_TIME_STEP_SECONDS);
-    this.tick += 1;
-    for (const subject of this.runtimeSubjects) {
-      const controller = this.controllerFor(subject.entityId);
-      const visual = this.visualFor(subject.entityId);
-      if (!isNil(this.gameplayPublishedState
-        .mountedRelationshipsByRiderEntityId[subject.entityId])) {
-        continue;
-      }
-      controller.synchronizeVisual();
-      if (!isCharacterMovementControllerV1(controller)) {
-        visual.stepAnimation(committedPresentationFromLocomotionMode(
-          this.tick,
-          controller.motionSnapshot().locomotionMode,
-        ));
-      }
-    }
-    for (const mounted of Object.values(
-      this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
-    ).sort((left, right) =>
-      compareCodeUnits(
-        left.relationship.riderEntityId,
-        right.relationship.riderEntityId,
-      ))) {
-      const pose = this.mountedPose(mounted.relationship);
-      const rider = this.controllerFor(mounted.relationship.riderEntityId);
-      this.projectMountedRider(rider, mounted.relationship, pose, this.tick);
-      this.visualFor(mounted.relationship.riderEntityId)
-        .stepAnimation(committedPresentationFromLocomotionMode(
-          this.tick,
-          "suspended",
-        ));
-    }
-    this.reconcileSemanticFacts();
-    if (!isNil(targetEntityId)) this.updateCameraForEntity(targetEntityId);
-    this.publishCameraProjection();
-  }
-
   /**
    * Bring the bounded Havok residency ring in line with the union of every
    * active Subject position. Visual batches are untouched: physics residency
@@ -3119,13 +3078,20 @@ export class BabylonWorldRuntime {
     this.nativeColliderRegistry = replacement;
   }
 
-  private commitFixedTick(): void {
+  private commitFixedTick(input: Readonly<
+    | {
+        cameraMode: "gameplay-target";
+        targetEntityId: string | undefined;
+      }
+    | {
+        cameraMode: "controlled-entity";
+      }
+  >): void {
     this.updateNativeColliderResidencyBeforeTick();
     const physicsEngine = this.scene.getPhysicsEngine();
     if (physicsEngine === null) throw new Error("WORLDKIT_HAVOK_ENGINE_MISSING");
     physicsEngine._step(FIXED_TIME_STEP_SECONDS);
     this.tick += 1;
-    const controlledEntityId = this.controlledEntityId();
     for (const subject of this.runtimeSubjects) {
       const controller = this.controllerFor(subject.entityId);
       const visual = this.visualFor(subject.entityId);
@@ -3158,6 +3124,14 @@ export class BabylonWorldRuntime {
         ));
     }
     this.reconcileSemanticFacts();
+    if (input.cameraMode === "gameplay-target") {
+      if (!isNil(input.targetEntityId)) {
+        this.updateCameraForEntity(input.targetEntityId);
+      }
+      this.publishCameraProjection();
+      return;
+    }
+    const controlledEntityId = this.controlledEntityId();
     if (controlledEntityId !== undefined) {
       const controlled = this.controllerFor(controlledEntityId);
       if (!isCharacterMovementControllerV1(controlled)) {
@@ -3305,7 +3279,7 @@ export class BabylonWorldRuntime {
         controller.publishSupport();
       }
     }
-    this.commitFixedTick();
+    this.commitFixedTick({ cameraMode: "controlled-entity" });
   }
 
   snapshot(): BabylonRuntimeProjectionV1 {

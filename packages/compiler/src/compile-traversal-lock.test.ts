@@ -20,7 +20,7 @@ import {
   sha256CanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
-import { createValidAuthoringSpec } from "../../authoring/src/test-fixture";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 
 import { compileResolvedTraversalLockV1, compileCanonicalWorldV1 } from "./index";
 

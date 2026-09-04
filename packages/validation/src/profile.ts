@@ -2,7 +2,10 @@ import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 
-import type { ValidationProfileV1 } from "./types";
+import type {
+  ControlCaptureValidationProfileV1,
+  ValidationProfileV1,
+} from "./types";
 
 export const OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1 = {
   kind: "worldkit-validation-profile",
@@ -64,7 +67,7 @@ export const OUTDOOR_CONTROL_VIDEO_DEV_VALIDATION_PROFILE_V1 = {
       },
     },
   },
-} as const satisfies ValidationProfileV1;
+} as const satisfies ControlCaptureValidationProfileV1;
 
 export function hashValidationProfileV1(
   profile: ValidationProfileV1,

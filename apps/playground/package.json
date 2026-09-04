@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./mounted-skateboard-s1": "./src/mounted-skateboard-s1.ts"
+    "./asset-resolver": "./src/worldkit-asset-resolver.ts",
+    "./authoring-loader": "./src/authoring-loader.ts",
+    "./mounted-skateboard-s1": "./src/mounted-skateboard-s1.ts",
+    "./scenes": "./src/scenes/index.ts"
   },
   "scripts": {
     "dev": "vite",

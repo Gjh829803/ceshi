@@ -5,8 +5,8 @@ import path from "node:path";
 
 import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
-  type ValidationDiagnosticV2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
+  type WorldPackageValidationDiagnosticV1,
   type ValidationReportStatusV1,
 } from "@whitebox-world/validation";
 import { isNil } from "lodash-es";
@@ -145,7 +145,7 @@ function escapeJsonPointerSegment(value: string): string {
 }
 
 function adaptRouteValidationDiagnostic(
-  diagnostic: ValidationDiagnosticV2,
+  diagnostic: WorldPackageValidationDiagnosticV1,
 ): CliDiagnostic {
   return {
     severity: diagnostic.severity,
@@ -203,7 +203,7 @@ export async function verifyRouteFileV1(
 ): Promise<RouteValidationCommandResultV1> {
   if (
     validationProfileRef !==
-      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef
+      OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef
   ) {
     return infrastructureFailure(
       "WORLDKIT_ROUTE_VALIDATION_PROFILE_UNSUPPORTED",
@@ -212,7 +212,7 @@ export async function verifyRouteFileV1(
       {
         actualValidationProfileRef: validationProfileRef,
         expectedValidationProfileRef:
-          OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2.resourceRef,
+          OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1.resourceRef,
       },
     );
   }

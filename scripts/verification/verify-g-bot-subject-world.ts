@@ -48,7 +48,7 @@ import {
 import { startWorldkitServer, type WorldkitServerHandle } from "../lib/worldkit-server";
 import { launchChromiumWithSystemFallback } from "../lib/playwright-browser-launch";
 import { main as worldkitMain } from "../cli/worldkit";
-import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
+import { PLAYGROUND_SUBJECT_ASSET_URI_BY_REF_V1 } from "@whitebox-world/playground/asset-resolver";
 import { requireActivePublishedLocomotionV1 } from "./locomotion-capability-state.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));

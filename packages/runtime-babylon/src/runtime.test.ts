@@ -48,7 +48,7 @@ import {
   createValidMountedOnAuthoringSpec,
   createValidPackageSubjectWorldV4,
   createValidRiggedPackageSubjectWorldV4,
-} from "../../authoring/src/test-fixture";
+} from "@whitebox-world/authoring/testing";
 import type {
   RuntimeAnimationSetV1,
   CanonicalSceneObjectV1,

@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { compileOutdoorScene, deriveWorldPlanArtifacts } from "../../packages/world/src/index.js";
+import { compileOutdoorScene, deriveWorldPlanArtifacts } from "@whitebox-world/world";
 
-import { sceneCatalog } from "../../apps/playground/src/scenes/index.js";
+import { sceneCatalog } from "@whitebox-world/playground/scenes";
 import {
   normalizeTextLineEndings,
   planLockPath,

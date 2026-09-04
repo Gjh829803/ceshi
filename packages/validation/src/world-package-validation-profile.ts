@@ -1,10 +1,7 @@
-import type { Sha256HashV1 } from "@whitebox-world/protocol";
-
-import { sha256CanonicalJson } from "@whitebox-world/protocol";
-
 import { OUTDOOR_WORLD_PACKAGE_DEV_ROUTE_RUNTIME_GATE_THRESHOLDS_V1 } from "./route";
+import { hashValidationProfileV1 } from "./profile";
 
-import type { MetricDefinitionV2, ValidationProfileV2 } from "./types-v2";
+import type { WorldPackageMetricDefinitionV1, WorldPackageValidationProfileV1 } from "./world-package-validation-types";
 
 const THRESHOLDS = OUTDOOR_WORLD_PACKAGE_DEV_ROUTE_RUNTIME_GATE_THRESHOLDS_V1;
 
@@ -15,7 +12,7 @@ function evaluatorRef(metricId: string): string {
 function booleanMetric(
   id: string,
   expectedValue: boolean,
-): MetricDefinitionV2 {
+): WorldPackageMetricDefinitionV1 {
   return {
     id,
     kind: "boolean-assertion",
@@ -31,7 +28,7 @@ function countMetric(
     readonly minimumAllowedCount?: number;
     readonly maximumAllowedCount?: number;
   },
-): MetricDefinitionV2 {
+): WorldPackageMetricDefinitionV1 {
   return {
     id,
     kind: "count-threshold",
@@ -47,7 +44,7 @@ function metersMetric(
     readonly minimumAllowedMeters?: number;
     readonly maximumAllowedMeters?: number;
   },
-): MetricDefinitionV2 {
+): WorldPackageMetricDefinitionV1 {
   return {
     id,
     kind: "meters-threshold",
@@ -63,7 +60,7 @@ function degreesMetric(
     readonly minimumAllowedDegrees?: number;
     readonly maximumAllowedDegrees?: number;
   },
-): MetricDefinitionV2 {
+): WorldPackageMetricDefinitionV1 {
   return {
     id,
     kind: "degrees-threshold",
@@ -79,7 +76,7 @@ function ticksMetric(
     readonly minimumAllowedTicks?: number;
     readonly maximumAllowedTicks?: number;
   },
-): MetricDefinitionV2 {
+): WorldPackageMetricDefinitionV1 {
   return {
     id,
     kind: "ticks-threshold",
@@ -95,7 +92,7 @@ function costMetric(
     readonly minimumAllowedCost?: number;
     readonly maximumAllowedCost?: number;
   },
-): MetricDefinitionV2 {
+): WorldPackageMetricDefinitionV1 {
   return {
     id,
     kind: "cost-threshold",
@@ -105,9 +102,9 @@ function costMetric(
   };
 }
 
-export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2 = {
+export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1 = {
   kind: "worldkit-validation-profile",
-  schemaVersion: 2,
+  schemaVersion: 1,
   id: "outdoor-world-package-dev",
   resourceRef: "worldkit://validation-profile/outdoor-world-package-dev@1",
   version: "1.0.0",
@@ -203,13 +200,8 @@ export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2 = {
       },
     },
   },
-} as const satisfies ValidationProfileV2;
+} as const satisfies WorldPackageValidationProfileV1;
 
-export function hashValidationProfileV2(
-  profile: ValidationProfileV2,
-): Sha256HashV1 {
-  return sha256CanonicalJson(profile) as Sha256HashV1;
-}
+export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V1 =
+  hashValidationProfileV1(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1);
 
-export const OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_HASH_V2 =
-  hashValidationProfileV2(OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2);

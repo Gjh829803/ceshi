@@ -30,7 +30,7 @@ import {
   sourceFbxContributorAssetInventory,
 } from "@whitebox-world/subject-registry";
 
-import { XIER120_SUBJECT_ASSET_URI_BY_REF_V1 } from "../../apps/playground/src/worldkit-asset-resolver";
+import { XIER120_SUBJECT_ASSET_URI_BY_REF_V1 } from "@whitebox-world/playground/asset-resolver";
 import { validateGlbAdmissionV1 } from "../lib/glb-admission.js";
 
 const EXPECTED_SUBJECT_COUNT = 19;

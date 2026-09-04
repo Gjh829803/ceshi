@@ -43,14 +43,14 @@ import {
   evaluateRequiredRouteV2,
 } from "@whitebox-world/traversal-recast";
 import {
-  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+  OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
   runRouteRuntimeProbeV2,
 } from "@whitebox-world/validation";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { createValidAuthoringSpec } from "../../packages/authoring/src/test-fixture.js";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import {
   bindRuntimeTestPossession,
   readCharacterMovementNativeDriverForTestingV1,
@@ -496,7 +496,7 @@ async function runProbe(
       BUILT_IN_TRAVERSAL_DRIVER_PROFILE_REF,
     ),
     runtimePort,
-    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2,
+    validationProfile: OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1,
     resolvedControlFeelProfile: { walkSpeedMetersPerSecond: 4 },
     positionQuantizationMeters:
       resolveTraversalGraphBuilderProfileV2(
@@ -578,7 +578,7 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
       expect(receipt.failure).toMatchObject({
         kind: "runtime-stalled",
         stalledDurationTicks:
-          OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2
+          OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1
             .routeRuntimeGateThresholds.stalledWindowTicks + 1,
       });
       expect(receipt.metrics.wrongSupportSurfaceCount).toBe(0);
@@ -642,7 +642,7 @@ describe("Route R1 fixed-tick probe with real Recast and Babylon/Havok", () => {
       expect(receipt.failure).toMatchObject({
         kind: "runtime-support-lost",
         consecutiveUnexpectedUnsupportedTicks:
-          OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V2
+          OUTDOOR_WORLD_PACKAGE_DEV_VALIDATION_PROFILE_V1
             .routeRuntimeGateThresholds.maximumConsecutiveUnsupportedTicks + 1,
       });
       const firstUnsupportedIndex = receipt.ticks.findIndex(

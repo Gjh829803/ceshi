@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 
-import { createValidAuthoringSpec } from "../../../packages/authoring/src/test-fixture";
+import { createValidAuthoringSpec } from "@whitebox-world/authoring/testing";
 import type {
   FixedInputOneTickV1,
   GameplayFixedTickActionProjectionV1,
@@ -20,7 +20,7 @@ import {
   type BabylonRuntimeProjectionV1,
 } from "@whitebox-world/runtime-babylon";
 import { createFakeGameplayWorldPortHarnessV1 } from
-  "../../../packages/runtime-host/src/test/fake-gameplay-world-adapter";
+  "@whitebox-world/runtime-host/testing";
 import { isNil } from "lodash-es";
 
 import { loadAuthoringScene } from "./authoring-loader";

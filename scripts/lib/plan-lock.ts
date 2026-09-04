@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import {
   validateOutdoorWorldSpec,
   type OutdoorWorldSpec,
-} from "../../packages/world/src/index.js";
+} from "@whitebox-world/world";
 
 export interface FrozenPlanFile {
   kind: "world-spec-source" | "reference-image" | "world-plan" | "opening-shot";

@@ -25,7 +25,7 @@ interface ResolvedWorldPackageResourceBytesV1 {
 import {
   XIER120_SUBJECT_ASSET_PACKAGE_PATH_BY_REF_V1,
   XIER120_SUBJECT_ASSET_URI_BY_REF_V1,
-} from "../../apps/playground/src/worldkit-asset-resolver.js";
+} from "@whitebox-world/playground/asset-resolver";
 
 export interface WorldPackageResourceMappingV1 {
   readonly publicUri: string;

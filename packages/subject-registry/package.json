@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./built-ins": "./src/built-ins.ts"
   },
   "dependencies": {
     "@whitebox-world/camera": "workspace:*",
