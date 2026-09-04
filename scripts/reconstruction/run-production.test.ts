@@ -1318,9 +1318,13 @@ describe("runWorldReconstructionProductionV1", () => {
       runReceiptRef:
         `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/run-receipt.json`,
       runReceiptHash: hashWorldReconstructionRunReceiptV1(receipt),
-      launchWorkingDirectoryPath: value.outputDirectoryPath,
-      launchCommand:
-        "pnpm worldkit native run attempts/0/world-package --port 5174 --json",
+      launchWorkingDirectoryPath: value.repositoryRoot,
+      launchCommand: `pnpm worldkit native run '${path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "world-package",
+      )}' --port 5174 --json`,
     });
     expect(owners.verifyRun).not.toHaveBeenCalled();
     expect(owners.publishFinal).not.toHaveBeenCalled();
@@ -1360,9 +1364,13 @@ describe("runWorldReconstructionProductionV1", () => {
       attemptCount: 1,
       diagnosticCodes: ["WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"],
       cleanupOutcome: "completed",
-      launchWorkingDirectoryPath: value.outputDirectoryPath,
-      launchCommand:
-        "pnpm worldkit native run attempts/0/world-package --port 5174 --json",
+      launchWorkingDirectoryPath: value.repositoryRoot,
+      launchCommand: `pnpm worldkit native run '${path.join(
+        value.outputDirectoryPath,
+        "attempts",
+        "0",
+        "world-package",
+      )}' --port 5174 --json`,
     });
     expect(result).not.toHaveProperty("finalDirectoryPath");
     expect(owners.verifyRun).not.toHaveBeenCalled();

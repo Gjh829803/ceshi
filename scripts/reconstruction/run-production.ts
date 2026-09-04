@@ -596,6 +596,7 @@ function closedDiagnosticCodes(
 }
 
 function previewLaunch(
+  repositoryRoot: string,
   outputDirectoryPath: string,
   worldPackagePath: string,
 ): Readonly<{
@@ -615,9 +616,9 @@ function previewLaunch(
     throw new TypeError("NBR_PREVIEW_WORLD_PACKAGE_PATH_INVALID");
   }
   return Object.freeze({
-    launchWorkingDirectoryPath: outputDirectoryPath,
+    launchWorkingDirectoryPath: repositoryRoot,
     launchCommand:
-      `pnpm worldkit native run ${relativePackagePath.split(path.sep).join("/")} --port 5174 --json`,
+      `pnpm worldkit native run '${worldPackagePath.replaceAll("'", "'\\''")}' --port 5174 --json`,
   });
 }
 
@@ -644,6 +645,7 @@ async function rejectedEvaluationResult(
     caseId: string;
     caseRef: string;
     runId: string;
+    repositoryRoot: string;
     outputDirectoryPath: string;
     receipt: WorldReconstructionRunReceiptV1;
     qualityGateMode: "report-only" | "required-for-publication";
@@ -821,7 +823,11 @@ async function rejectedEvaluationResult(
         input.outputDirectoryPath,
         input.receipt,
       ),
-      ...previewLaunch(input.outputDirectoryPath, rejectedWorldPackagePath),
+      ...previewLaunch(
+        input.repositoryRoot,
+        input.outputDirectoryPath,
+        rejectedWorldPackagePath,
+      ),
     });
   }
   if (evaluation.outcome !== "failed") return undefined;
@@ -1286,6 +1292,7 @@ export async function runWorldReconstructionProductionV1(
         caseId: reconstructionCase.id,
         caseRef,
         runId,
+        repositoryRoot,
         outputDirectoryPath,
         receipt,
         qualityGateMode: evaluationProfile.qualityGateMode,

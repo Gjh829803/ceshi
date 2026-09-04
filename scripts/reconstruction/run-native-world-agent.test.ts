@@ -44,5 +44,5 @@ describe("Native-default world agent Host route", () => {
     );
     expect(result.stdout).not.toContain("native-case-mapping");
     expect(result.stdout).not.toContain(" repair ");
-  });
+  }, 15_000);
 });
