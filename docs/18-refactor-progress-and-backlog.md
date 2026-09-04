@@ -1254,6 +1254,33 @@ Action/Camera、空间事件、产品 Route/Nav、BNA-8
 `CAST-R0` 是后续可检索的研究任务，不计入 WRC-1 的 33 个工作包，也不提高任何当前完成度。未完成
 该探针前，不新增正式 Observation Graph Schema、第二 Planner/Builder Job、SDF Optimizer 或生产依赖。
 
+#### WRC-QP 场景质量与性能后续队列（WRC-1 完成后，非当前关键路径）
+
+对 `codex/block-world-main-integration` 的代码级复核确认，当前主线已经真实迁入受控方块 API、暴露
+顶面/共享边可行走拓扑、`0.3m` 有界平滑、防坠 Collider Contribution、Thin Instance/Chunk、SDK-owned
+Havok residency 和多接触修正；以下不是遗漏的生产阻断能力，而是 WRC-1 验收后的质量与规模增强。
+详细 Owner、输入输出、门禁和禁止项由
+[WRC-1 总设计 §14.2](superpowers/specs/2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md#142-post-wrc-1-scene-quality-and-performance-follow-up-queue)
+约束。
+
+- [ ] `WRC-QP-1`：在同一个 Native Builder Task 内加入不产生 Package/Receipt/Capture 身份的 advisory
+  俯视/入口几何投影预检，以真实 Case 对照证明减少昂贵后置 repair；不得形成 shadow Capture/Compiler；
+- [ ] `WRC-QP-2`：冻结 Runtime-owned neutral clear-day 白模显示合同，覆盖数值光照、材质分离、远近景
+  可读性和 Capture/Preview 一致性；不得让 Native Module 自建灯光，参考光照仍只属于 styled 输出；
+- [ ] `WRC-QP-3`：对 4/8/16/32m Chunk 和准确 batch bounds 视锥裁剪做真实 Browser frame-time、draw call、
+  memory、Capture 与 Havok 峰值量测，再选择策略；不得直接恢复旧分支固定 32m 常量；
+- [ ] `WRC-QP-4`：由 BNA-7 Capture Owner 增加 source-neutral semantic-front tri-view、逐面板空白/像素健康、
+  有界重试和身份收据；不得从 Mesh 名称、tag 或 metadata 推断 Target；
+- [ ] `WRC-QP-5`：在不改变 Runtime Owner、显式 Collider 身份、多 Subject union、滞回、先激活后释放和
+  rollback 的前提下，以空间索引替换每 Tick 全量扫描，并提交规模基准；
+- [ ] `WRC-QP-6`：在 WRC-CAM-2 后由现有 Camera Domain/Director 设计有限室内遮挡淡出；只能影响展示，
+  不得削弱 SpringArm hard Decollider 或建立 Block 专用 Camera Owner。
+
+`WRC-QP-1..6` 均 `depends_on: WRC-ACC-1`（另按总设计声明各自的细化依赖），不 `blocks` NBR-1、
+BNA-6/7/8、WRC-ACC-1 或 WRC-1，不计入 33 个工作包，也不提高任何当前完成度。WRC-1 当前关于
+`NBR-65`“白模光照”的已完成声明只覆盖统一 Runtime 灯光基线和材质复用，不代表已经复刻旧分支的
+具体冷暖色温、Fog、Exposure 或 Contrast 数值；这些调优必须由 `WRC-QP-2` 重新冻结和验证。
+
 #### Unified Scene Viewer 下游开发工具关联（非 WRC 关键路径）
 
 Unified Scene Viewer 的当前设计与实施计划已进入当前树：
