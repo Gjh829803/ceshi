@@ -2,6 +2,10 @@
 
 Status: Frozen by explicit product decision on 2026-09-04.
 
+Implementation checkpoint: `codex/block-world-effect-alignment@234c1711` implements the Scene-scope
+outcome split and focused integrity closure. It is an unmerged candidate, not current `main` evidence;
+CASE-054, full Browser, repository-wide, and exact-SHA Cloud gates have not been rerun on it.
+
 ## 1. Decision
 
 The current Babylon Native implementation keeps its architecture, ownership, deterministic evidence,
@@ -57,6 +61,12 @@ If a downstream optional visual step fails, an already admitted playable whitebo
 launchable. The requested top-level scope fails until its own required artifacts close; it does not mutate
 the upstream whitebox outcome.
 
+The historical base Visual Reconstructor had same-task self-review followed by Host file/hash/role
+closure; it did not have a separate semantic Reviewer. Those same-task and Host checks remain blocking for
+a requested base-style scope. Any new independent base semantic review is a strict diagnostic only and
+cannot introduce a new ordinary-production veto. This differs from the per-variant Reviewer in the Episode
+visual-sample scope below, which was present in the old workflow and remains part of that requested scope.
+
 ### 3.2 Episode visual-sample scope
 
 The historical equivalents are blocking: reconnaissance, navigation evidence, plan, six whitebox
@@ -82,16 +92,20 @@ have one. Its finding cannot change ordinary production success.
 | Native syntax/API/Profile, explicit Block/Collider/Surface admission | blocking; required to build the architectural replacement | also recorded |
 | Ground/Package/Capture availability and identity needed to launch | blocking; historical build/capture equivalent | also recorded |
 | historical-equivalent entry validation and required artifact freshness | blocking | also recorded |
-| seven-dimension reconstruction Evaluation | diagnostic and repair input unless its failure means a required stage cannot exist | blocking only in explicit strict acceptance |
+| seven-dimension reconstruction Evaluation | verdict is diagnostic and repair input only; a missing, malformed, stale, or identity-invalid required Evaluation artifact is an integrity failure | blocking only in explicit strict acceptance |
 | NBR-70 exact Case/Formal/Contribution blocker join and optional playability replay | diagnostic in ordinary production | blocking only in explicit NBR-70/NBR-90 verification |
+| new independent base-image semantic review | diagnostic; old base path had same-task self-review plus Host file/hash/role closure only | blocking only when explicitly requested as strict visual acceptance |
 | independent final Video semantic review | diagnostic | blocking only when the caller explicitly requests strict media acceptance |
 
-The code for every strict check remains. No threshold is weakened and no compatibility fallback is added;
-only the authority that converts its result into the ordinary production terminal outcome changes.
+The code for every strict check remains. Historical ordinary-production thresholds and stage requirements
+are preserved; newer stricter thresholds are not promoted into ordinary-production vetoes. No compatibility
+fallback is added. Only the authority that converts a strict result into the ordinary production terminal
+outcome changes.
 
 ## 5. CASE-054 normative example
 
-For `paper-moon-palace-054-report-only-0904/run-20260904134439-41905`:
+For the normative projection of
+`paper-moon-palace-054-report-only-0904/run-20260904134439-41905`:
 
 ```text
 productionOutcome: passed
@@ -104,8 +118,11 @@ Studio status: ready
 Studio outcome: passed
 ```
 
-The final Package/Capture/Evaluation is atomically published and launchable. The blocker mismatch remains
-visible and continues to fail an explicit strict NBR verifier, but cannot close the production task.
+Under this contract, the final Package/Capture/Evaluation is atomically published and launchable. The
+blocker mismatch remains visible and continues to fail an explicit strict NBR verifier, but cannot close the
+production task.
+The original run was produced on `main@20fe0fef` and did not publish Final under the superseded policy;
+the values above are covered by candidate fixtures, not by a second real CASE-054 run.
 
 ## 6. Current-only contract change
 

@@ -4,7 +4,7 @@
 
 **Goal:** Deliver one real reference-driven Babylon Native Block world through AI generation, formal Check/Package/Runtime/Capture, dimensioned evaluation, one bounded repair, and a directly runnable final WorldPackage.
 
-**Architecture:** Keep exactly the existing Canonical JSON and Babylon Native Scene Sources. Add source-neutral generation identity and reconstruction evaluation to existing contract owners, invoke the existing Codex router for generation/repair, and reuse the admitted Native checker, WorldPackage builder, RuntimeHost, BabylonWorldRuntime, SDK Havok/Subject/Input/Action/Camera, Browser lifecycle, and Capture ports. Under explicit `required-for-publication`, hard authoring/admission failures and quality failures may create a new immutable Attempt/Package/Capture chain within budget. The default interactive `report-only` route preserves the earlier Block World feedback shape: Builder in-task self-repair remains bounded, the Host replays hard checks once and closes on rejection, and completed Opening/Evaluation findings are published as strict diagnostics without another Attempt. Ordinary production success follows the exact historical requested-scope rules; the former `preview-ready/not-accepted` terminal branch is deleted. No stage edits a frozen predecessor.
+**Architecture:** Keep exactly the existing Canonical JSON and Babylon Native Scene Sources. Add source-neutral generation identity and reconstruction evaluation to existing contract owners, invoke the existing Codex router for generation/repair, and reuse the admitted Native checker, WorldPackage builder, RuntimeHost, BabylonWorldRuntime, SDK Havok/Subject/Input/Action/Camera, Browser lifecycle, and Capture ports. Builder in-task self-repair remains bounded, and current-only Evaluation/NBR findings may use an additional explicit strict repair budget without becoming an ordinary-production veto. Ordinary production retry/resume and success/failure follow the exact historical requested-scope rules independent of `qualityGateMode`; the former `preview-ready/not-accepted` terminal branch is deleted. Exact external-repair parity remains `BWMI-CF-26`, so the current blanket `report-only` no-external-repair behavior is not considered final alignment. No stage edits a frozen predecessor.
 
 **Outcome revision:** The frozen
 [`2026-09-04-block-world-production-outcome-parity-design.md`](../specs/2026-09-04-block-world-production-outcome-parity-design.md)
@@ -24,6 +24,13 @@ verifier authority.
 tests, typecheck, the 425-entry test census and the BNA clean-break gate. NBR-20 real formal generation,
 NBR-70, NBR-80, NBR-90 and overall NBR-1 remain incomplete; the unchecked historical steps below must not
 be read as proof of a real Case run.
+
+**2026-09-05 candidate checkpoint:** `codex/block-world-effect-alignment@234c1711` implements the separate
+production/strict outcome, exact historical Planner hard thresholds and entry-first lineage, same-task Native
+Builder entry/top feedback, source-byte freezing, and exact palette admission for Case-present targets. It is
+not merged and has no real CASE-054, full Browser, repository-wide, or exact-SHA Cloud evidence. Planner
+checker/Skill identity (`BWMI-CF-09` remainder), per-view target disposition (`BWMI-CF-24`), WebP
+(`BWMI-CF-25`), and external-repair parity (`BWMI-CF-26`) remain open.
 
 ## Global Constraints
 
@@ -406,7 +413,7 @@ export type WorldReconstructionMetricV1 =
   | Readonly<{ kind: "receipt-outcome"; outcome: "completed" | "failed" | "incomplete" }>;
 ```
 
-The Profile sets `maximumRepairAttemptCount: 3` and `builderSelfRepairAttemptCount: 3`. For `required-for-publication`, the former permits at most three fresh external Attempts driven by the immediately preceding trusted Native Check, Ground Analysis, Opening or Evaluation evidence. `report-only` does not consume this Host-created external budget. The latter permits at most three bounded source-only self-repair cycles inside one Builder task after its initial output in both modes; it never allocates a Package or Runtime Candidate. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
+The Profile sets `maximumRepairAttemptCount: 3` and `builderSelfRepairAttemptCount: 3`. The former currently permits at most three fresh external Attempts under `required-for-publication`; current-only strict quality repair may remain profile-selected, but `BWMI-CF-26` must compare every old-equivalent failure and retry before treating `report-only` no-external-repair as aligned. The latter permits at most three bounded source-only self-repair cycles inside one Builder task after its initial output in both modes; it never allocates a Package or Runtime Candidate. The Case binds real input hashes and expected topology, normalized composition targets, Spawn/Support, required collider IDs/roles, and scripted fixed-input traversal checkpoints. The Result contains no aggregate score. Missing evidence produces `incomplete`, never a numeric zero or advisory pass.
 
 NBR-10C closes the evaluator seam before NBR-50A: Case freezes facts only, Profile owns every
 BasisPoints/Millimeters threshold, and EvidenceSet contains seven closed observed payloads with per-row
@@ -1409,9 +1416,10 @@ Request exact-identity review, close every P0/P1, merge PR F2, and refresh `orig
 **Current status:** Complete on `origin/main@04dda773deaea94c1ba9521cb3c13898fbdf8327` through PR #138.
 This originally closed the production transaction and injected one-repair proof; the current-only contract now
 extends that same owner to a bounded three-repair chain for hard authoring/admission failures and explicit
-`required-for-publication` Check/Ground/Opening/Evaluation gates. `report-only` performs no Host-created
-external repair: a hard Host rejection closes the current run, while a completed Capture/Evaluation returns
-the first Candidate under the historical production outcome with separate strict diagnostics when quality drifts.
+`required-for-publication` Check/Ground/Opening/Evaluation gates. Candidate `234c1711` separates completed
+Capture/Evaluation strict diagnostics from the ordinary production outcome, but its blanket `report-only`
+no-Host-repair behavior is not yet exact old-branch repair parity. `BWMI-CF-26` must replace mode-derived
+ordinary repair decisions with the historical condition-by-condition retry/terminal matrix.
 Task 13 still owns the real Case execution that must
 supply NBR-20 real formal-generation evidence, real multi-Attempt evidence, final publication
 and manual launch.
@@ -1422,8 +1430,11 @@ baseline Case deterministically after Planner delivery and before it creates the
 No `native-case-mapping` model task, mapping prompt, mapping S3 prefix or mapping retry is part of this route.
 The baseline's generic entry/remote ground bindings are presence/support/traversal evidence only because the
 Planner provides no identity-colored ground mask. Their report-only visual drift tolerance covers the normalized
-frame; landmark and structure targets retain entry-image-measured thresholds. Missing ground, unsupported Spawn,
-disconnected ground or failed traversal remain blocking through their owning checks.
+frame; a landmark receives an entry-image threshold only when that view has a reliable identity mask. A target
+missing from Opening must retain Case identity and receive an explicit required-view disposition under
+`BWMI-CF-24`; it must not be deleted, assigned a fabricated bbox, or made a universal Opening veto. Missing
+ground, unsupported Spawn, or failed Case-required traversal remain blocking through their owning checks;
+generic disconnected route-colored components are diagnostic only.
 Explicit curated `required-for-publication` Cases continue to enter the same reconstruction runner directly;
 they do not add another default interactive stage.
 
@@ -1574,7 +1585,7 @@ initial-evaluated(failed, repairable) -> repair-generating -> repair-packaged
 -> repair-captured -> repair-evaluated -> cleanup-joined -> completed
 ```
 
-Also test initial pass (no repair), genuinely missing/stale required production evidence (no publication), an observed-but-incomplete traversal checkpoint (source-only repair while budget remains), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback under `required-for-publication`, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture failure, Camera rollback failure, and cleanup failure. Under the 2026-09-04 outcome cutover, `report-only` stops after the first hard Host rejection without an external Attempt; its first complete Package/Capture result is ordinarily published using historical success rules, with Evaluation/NBR findings in a separate strict receipt. Tests must reject any surviving `preview-ready/not-accepted` parser, result, Studio branch, or publisher bypass.
+Also test initial pass (no repair), genuinely missing/stale required production evidence (no publication), an observed-but-incomplete traversal checkpoint (source-only repair while budget remains), the maximum three repairs, sequential Native Check/Ground/Opening/Evaluation feedback under `required-for-publication`, non-repairable diagnostics, stale Case/Profile/Gameplay/World Runtime/Bounds/derived Bootstrap before submission, same request ID/same hash attach, same ID/different hash reject, create timeout unknown/reconcile, duplicate active job reconcile, no output, empty output, Check failure, Package/Capture failure, Camera rollback failure, and cleanup failure. Under the 2026-09-04 outcome cutover, the first complete Package/Capture result is ordinarily published using historical success rules, with Evaluation/NBR findings in a separate strict receipt. Add `BWMI-CF-26` RED cases for every old-equivalent external-repair and exhausted-budget transition; `report-only` must not silently remove an old retry merely because it does not request current-only strict quality repair. Tests must reject any surviving `preview-ready/not-accepted` parser, result, Studio branch, or publisher bypass.
 
 - [ ] **Step 2: Write RED source-only repair tests**
 
@@ -1612,10 +1623,11 @@ The CLI injects only one transaction-level production port. That transaction can
 output roots; resolves and hashes the Profile and fixed Formal Capture Intent refs from the Case; freezes
 verified `runs/<run-id>/inputs/case.json`, `evaluation-profile.json` and
 `formal-world-capture-intent.json`; constructs the
-existing generation/package/capture/evaluate/rehash/cleanup ports; calls the core state machine once; and,
-only for a passed terminal Receipt, invokes the same run verifier and final-artifact publisher/verifier
-owners used by Task 13. The CLI must not know or inject the six core ports and must not build a second
-receipt/result parser.
+existing generation/package/capture/evaluate/rehash/cleanup ports and calls the core state machine once. It
+always records the strict verifier result separately, then invokes the final-artifact publisher when the one
+historical requested-scope production policy accepts the terminal evaluated Receipt; a failed strict diagnostic
+cannot overwrite that production decision. The CLI must not know or inject the six core ports and must not build
+a second receipt/result parser.
 
 The command returns Case ID/ref, run ID, outcome, Attempt count, final WorldPackage path/ref/root, final
 Capture Receipt path/hash, final Evaluation path/hash, Run Receipt path/hash, and final directory only after

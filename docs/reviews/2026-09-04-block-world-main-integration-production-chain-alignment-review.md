@@ -13,7 +13,8 @@
   production termination is aligned in current `main`.
 - Evidence level: static source/contract/Skill comparison, plus the final-effect addendum's one local
   exact-main Native production Case. No manual interaction, repository-wide test, or real cloud production
-  evidence is claimed by this review; the local Case does not become release acceptance evidence.
+  evidence is claimed by the original review; the local Case does not become release acceptance evidence.
+  The 2026-09-05 candidate update below adds focused code evidence only.
 - Installed engine reference: `@babylonjs/core@9.23.0` from the current lock/package declarations. This
   review does not infer untested Havok behavior from that version.
 
@@ -34,6 +35,35 @@ The three Native Builder `cmp` checks for `SKILL.md`,
 `references/native-block-output-contract.md`, and `scripts/self-check.mjs` exited `0`. That proves the
 representative current Case copy matches the current live Native Skill; it does not prove equivalence to
 the historical Three.js Block Builder or to the missing downstream Episode Skills.
+
+### 1.1 2026-09-05 implementation-candidate update
+
+Candidate `codex/block-world-effect-alignment@234c1711` is based on
+`origin/main@20fe0fef60d8c73fd8c8ce2cecb541117cddd1f8` and is not merged into `main`. It implements the
+Scene-scope production-outcome split, atomic publication, historical Planner hard thresholds,
+entry-first/World-Plan causality, Native Builder entry/top visual feedback, frozen source bytes, and exact
+palette admission for targets already represented by Case visual-group rows. Generic disconnected
+route-colored components now produce a deterministic warning; Case-required route connectivity remains a
+Ground/Traversal failure.
+
+Two over-strict candidate behaviors were found during old-branch review and corrected before this
+checkpoint:
+
+- the Planner no longer requires every target to be visible, large, and coherent in the entry image;
+  the old hard contract is all declared targets in World Plan, but Subject-1 only in entry;
+- generic Native Check no longer treats every disconnected route-colored component as a global error.
+
+An independent final read-only review found no remaining new P0/P1 ordinary-production veto in the
+candidate. Integrity requirements needed to prove the requested stage exists—safe paths, exact bytes and
+hashes, closed receipts, launchable Package/Capture, and atomic publication—remain blocking. Seven-dimension
+Evaluation and NBR strict verdicts cannot overwrite an otherwise passed ordinary-production result.
+
+This is not complete production-chain parity. `BWMI-CF-24` remains P1: a non-Subject target absent or
+unreliable in opening needs one stable Case identity plus an explicit per-view disposition
+(`not-required | presence-required | reference-projection-required`). The candidate also leaves WebP input,
+fixed generic Case/Subject/Camera assumptions, scene-completeness and measurement contracts, budget caps,
+and exact historical external-repair behavior open. No real CASE-054, full Browser, repository-wide, or
+exact-SHA Cloud run was performed on `234c1711`.
 
 ## 2. Executive verdict
 
@@ -74,18 +104,18 @@ Execution, and GPU batch/tail/recovery control plane do not have equivalent exec
 | Stage | Current `main` disposition | Alignment verdict |
 |---|---|---|
 | Input and CLI dispatch | `scripts/agents/run-world-agent.ts` selects one closed Scene Source; Native dispatch enters `scripts/reconstruction/run-native-world-agent.ts` and hashes source inputs. | **changed contract**: stronger source selection and identity; not the old single Three.js shell. |
-| Unified Planner | `scripts/agents/run-canonical-world-agent.sh` submits one formal Planner task, receives Brief plus named plan images, permits at most three same-task self-repairs, then replays the checker once. | **partial and effect-significant**: the task boundary survives, but current no longer enforces old `entry first -> inspect -> exact entry feeds plan` causality, discrete Block-realizable planning, target recall, or comparable image semantics. |
-| Planner input freeze | The Native wrapper initially hashes image bytes, but the Planner receives the original paths and Case preparation later rereads them. Planner Host replay also invokes the live checker rather than an immutable checker identity carried in the receipt. | **partial**: useful current flow exists, but source-byte and checker TOCTOU closure remains open. |
+| Unified Planner | Audited `main` submitted one formal Planner task but did not enforce the old image causality/admission. Candidate `234c1711` restores `entry -> inspect -> exact entry feeds World Plan`, discrete Native Block colors, all-target World Plan admission, and Subject-only entry hard admission. | **candidate-aligned for old hard semantics**; non-Subject entry scale/coherence remains advisory by design, while full effect evidence is pending. |
+| Planner input freeze | Candidate `234c1711` reads the upload once with no-follow/stable-descriptor checks, gives Planner a private read-only snapshot, and uses the same bytes/hash for identity and Case. Planner Host replay still does not fully bind immutable checker/Skill identity in Request/Receipt. | **partial**: source-byte TOCTOU closed in candidate; checker/Skill identity remains `BWMI-CF-09`. |
 | Host Case/Profile preparation | `native-world-case-preparation.ts` derives and freezes Case, Profile, Bootstrap, Capture Intent, named Planner images, reference hashes, Native API/Profile, Builder Skill, output contract, and checker. | **current-only superseding stage**: the old branch had no equivalent Case/Profile/evidence closure. |
 | Builder attempt 0 | Current formal output is exactly `scene.ts`, `native-block-authoring.json`, and `native-resources.json`. | **changed contract**: replaces old `world.mjs` plus Host-derived Three/Compiler artifacts. |
-| Builder self-check / Host replay | The Builder uses its bundled checker and bounded source-only repairs; the reconstruction Host replays the frozen checker from the Case input. | **structurally stronger but visually incomplete**: current self-check validates output shape and forbidden authority only. It lacks the old Builder's mandatory entry/top-down side-by-side render, actual visual inspection, and source-only repair loop. |
-| Native Check | Native source, authoring manifest, resources, API use, IDs, shapes, lattice, budgets, visual groups, and explicit contribution declarations are checked before admission. | **semantically supersedes** the old Block checker; old package is intentionally absent. |
+| Builder self-check / Host replay | Candidate `234c1711` adds deterministic Planner-vs-Builder entry/top-down comparisons, requires actual inspection in the same Builder task, shares the bounded source-repair count, and has Host replay exact decoded RGBA/identity. | **candidate-aligned feedback topology** under the Native owner; real rendered-effect comparison remains pending. |
+| Native Check | Native source, authoring manifest, resources, API use, IDs, shapes, lattice, budgets, visual groups, exact Case/palette joins, and explicit contribution declarations are checked before admission. Disconnected route color alone is a warning. | **semantically supersedes** the old Block checker without adding a global route-connectivity veto; Case Ground/Traversal retains required connectivity. |
 | Ground Analysis | Current Host binds logical ground, Capsule footprint/clearance, Spawn, target standability, topology, traversal bands, blocked segments, and repair diagnostics to the Case/Package inputs. | **semantically supersedes and strengthens** old footprint/reachability checks. |
 | Package and Receipt | One mutually exclusive Native Scene Source is packaged with Frozen Contributions and complete identity joins. | **changed contract**: old Manifest/Block Compiler/hidden foundation must not return. |
 | Formal Capture | Current owner produces `opening`, `world-side`, `world-top-down`, collider overlay, support/Spawn observations, and scripted traversal evidence from the admitted Package. | **stronger whitebox evidence**, but historical startup-progress watchdog and some capture UX/performance work are not present. |
 | Seven-dimension Evaluation | Current dimensions are `collider`, `critical-traversal`, `deterministic-build`, `opening-composition`, `semantic-silhouette`, `spawn-support`, and `topology`. | **new stronger contract**; the old branch had visual comparison/review, not this identity-bound evaluator. |
 | Diagnostic repair | Strict mode uses initial Attempt plus at most three new-identity external repairs; each Builder task separately has bounded source-only self-repair. Report-only stops after the first complete quality observation. | **changed contract** and intentionally not a literal port. |
-| Whitebox outcome/publication | Every historical-equivalent required Scene stage must produce the same success/failure meaning as the old branch and a successful result is atomically published. Current Evaluation/NBR findings remain separate strict diagnostics. The default production command skips only the final duplicate fresh Browser replay. | **P0 gap recorded as `BWMI-CF-23`**. CASE-054 is the normative strict-failed-but-production-passed fixture; NBR-70/80/90 remain open. |
+| Whitebox outcome/publication | Candidate `234c1711` exposes one closed `productionOutcome`, atomically publishes old-standard successes, and preserves Evaluation/NBR results in a separate strict receipt. The default production command still skips only the final duplicate fresh Browser replay. | **P0 implemented in candidate, not yet main/real-Case accepted**. CASE-054 is a fixture projection; NBR-70/80/90 remain open. |
 | Base styled opening and tri-views | Current scripts can create a styled opening and tri-views, but they are separate/manual or Canonical-oriented; finalizers mostly validate files/hashes and do not reproduce the old independent semantic visual review. | **partial, not equivalent**. Native reconstruction does not automatically execute the old Visual Reconstructor Skill. |
 | Six-start Playthrough production | No current equivalent of the old planner, plan structure, six deterministic captures, dataset, or capture-health owner. Strict NBR traversal evidence is acceptance evidence, not Episode media production. | **missing**. |
 | Episode visual reconstruction/review | No current equivalent of the old six-segment opening set, shared target tri-views, independent Episode visual generation, and review tasks. | **missing**. |
@@ -106,15 +136,15 @@ current contracts. A later design must re-freeze any value that survives the cur
 | Planner repair | at most three same-task cycles, one Host replay | same bounded topology | aligned topology |
 | Movement description | one or more modes | exactly one standard/custom mode | intentional clean break |
 | World extent | at least four times the opening area | meaningful entry/middle/remote/off-camera continuation; no fixed padding ratio | intentional clean break |
-| Planner image palette | semantic cube colors in both images | `world-plan.png` palette-free; entry target uses Host-owned identity-color order | intentional clean break |
+| Planner image palette | semantic cube colors in both images; Native-equivalent target order is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE` | candidate `234c1711` uses those five Native colors in both images; Canonical retains its separate palette | candidate-aligned without mixing Source profiles |
 | Builder outputs | Three `world.mjs` and derived Manifest/Authoring/implementation artifacts | exactly three Native files | intentional replacement |
 | Block profile | four old fixed shapes and create-then-position authoring | five shapes including `step`, axis-specific lattice, atomic center/rotation, deterministic grid | current contract stronger |
 | Native Host default caps | no equivalent NBR Request closure | 2,000 Blocks, 1,800 seconds, 4,000,000 output bytes plus closed request budgets | current-only authority |
-| Builder visual feedback | structural pass then deterministic Planner-vs-Builder entry/top-down comparisons, actual model inspection, up to three combined repairs, Host decoded-pixel replay | output-shape self-check only before trusted Native stages | missing effect-critical behavior; reclassified from deferred `WRC-QP-1` to `BWMI-CF-19` |
+| Builder visual feedback | structural pass then deterministic Planner-vs-Builder entry/top-down comparisons, actual model inspection, up to three combined repairs, Host decoded-pixel replay | candidate `234c1711` reproduces this topology with a disposable Native renderer and one shared source-repair budget | implemented in candidate; real effect/first-pass comparison pending |
 | Representation feasibility | old compiler stress-tested 102,400 direct Blocks; no equivalent formal 2,000 cap | fixed 2,000 Blocks before source-specific complexity is measured | uncalibrated; `BWMI-CF-20` must measure and freeze, not copy 102,400 |
 | Walkable height | fixed 1 m automatic smoothing, independent up/down thresholds, global 2 m adjacent-height veto | visible 0.25 m tread decomposition validated against current 0.3 m step and 42 degree slope owners | old constants explicitly rejected |
 | Quality mode | no current NBR equivalent | `report-only` or `required-for-publication`; maximum repair count 3 | current-only authority |
-| Attempts | Builder-local repair and infrastructure retries | Attempt indexes 0..3; strict external repair only; report-only has no external repair | changed identity model |
+| Attempts | Builder-local repair and infrastructure retries | Candidate preserves Builder-local repair and immutable Attempt indexes; exact old external-repair condition/terminal parity remains `BWMI-CF-26` | partially aligned; no second ordinary outcome authority |
 | Formal world views | old capture/comparison path | opening + side + top, plus collider/support/traversal evidence | current stronger |
 | Explicit traversal limits | old Episode separately enforced media capture | current formal capture allows at most 16 checks, 1,200 ticks each, 7,200 ticks total | current admission only, not Episode parity |
 | Historical Playthrough | 6 independent captures x 30 s; 60 Hz simulation; 24 fps; 720 frames each; 4,320 total | no Episode dataset owner | missing; re-freeze before implementation |
@@ -131,14 +161,15 @@ Two current semantics must not be collapsed while implementing later work:
   Ground Analysis, Package, Formal Capture, scripted traversal, and Evaluation still run.
 - `report-only` does not consume external diagnostic-repair Attempts for quality findings. Only an
   explicit `required-for-publication` Profile may do that; both modes still fail closed on structural,
-  identity, Runtime, or cleanup failures.
+  identity, Runtime, or cleanup failures. This is the candidate's current behavior, not proof of full old
+  retry parity; `BWMI-CF-26` must restore any old-equivalent repair that this mode distinction removed.
 
 ## 5. Skill alignment
 
 | Skill at historical branch | Current disposition | Verdict |
 |---|---|---|
-| `worldkit-spatial-planner` | present, materially rewritten for closed Canonical/Native profiles, exactly one movement mode, provenance separation, palette-free World Plan, and current output checks | changed contract, not byte-aligned |
-| `worldkit-block-builder` | replaced by `worldkit-native-block-builder`; Three.js, Manifest, Compiler, hidden foundation, and Builder-owned Subject/Camera are forbidden | intentionally superseded |
+| `worldkit-spatial-planner` | candidate keeps closed Canonical/Native profiles and restores the old Native entry-first generation order, exact hard image thresholds, and discrete five-color Block plan semantics | behavior-aligned where architecture permits; not byte-aligned |
+| `worldkit-block-builder` | replaced by `worldkit-native-block-builder`; candidate restores same-task entry/top visual inspection/source repair while Three.js, Manifest, Compiler, hidden foundation, and Builder-owned Subject/Camera stay forbidden | intentionally superseded architecture with aligned feedback behavior |
 | `worldkit-visual-reconstructor` | no equivalent Skill/runner; current styled scripts do not preserve its full semantic review/repair responsibilities | partial/missing |
 | `worldkit-playthrough-planner` | no current Skill, checker, or executable call path | missing |
 | `worldkit-episode-visual-reconstructor` | no current Skill or executable call path | missing |
@@ -147,13 +178,13 @@ Two current semantics must not be collapsed while implementing later work:
 | `worldkit-style-variant-visual-reviewer` | no independent current review Skill/Host finalizer | missing |
 | `worldkit-style-variant-diversity-reviewer` | no collection-level current review Skill/Host finalizer | missing |
 
-The current Native Builder Skill itself is live and wired: Case preparation freezes its Skill, output
+The candidate Native Builder Skill is live and wired: Case preparation freezes its Skill, output
 contract, and checker; Generation Request hashes them and declares only the three Native outputs; Host
-admission uses the Case-frozen checker. Its representative `cloud-temple-t-gate-native-block` copies are
-byte-identical to the current live files. This says nothing about the seven missing downstream Skills.
-Likewise, “Planner aligned” in this report means its task/output/checker call topology is wired; the current
-self-check structurally parses the Brief/PNGs and checks the entry identity marker, but does not constitute a
-semantic rendered review of complete-world topology or reference-image fidelity.
+admission uses the Case-frozen checker and exact palette join. Its representative
+`cloud-temple-t-gate-native-block` copies are byte-identical to the candidate live files. This says nothing
+about the seven missing downstream Skills. Likewise, “Planner aligned” here means exact historical hard
+image admission and causal topology; it is not evidence that complete-world topology or reference-image
+fidelity has been visually achieved.
 
 ## 6. Historical commit disposition
 
@@ -233,8 +264,9 @@ semantic rendered review of complete-world topology or reference-image fidelity.
 - Suggestion: stage the initially read source bytes and use those paths throughout; freeze and hash the
   Planner checker/Skill in the request/receipt and replay that exact copy once. Do not add another Planner
   or compatibility path.
-- Revalidation: current call and reread paths confirmed; adversarial mid-run mutation tests are not yet
-  present and the gap is recorded as `BWMI-CF-09`.
+- Revalidation: candidate `234c1711` closes source mutation with one stable no-follow read, a private
+  read-only Planner snapshot, and same-byte Case freeze, including adversarial replacement/deletion/symlink
+  tests. Request/Receipt-bound immutable Planner checker/Skill identity remains open in `BWMI-CF-09`.
 
 ### [P1] [D6] Current Seedance submission lacks the historical durable provider journal
 
@@ -379,6 +411,11 @@ the Case, Contribution, and Formal blocker sets to be identical. `playability` w
 this is not the removed duplicate Browser replay. This is direct current evidence for `BWMI-CF-13`, while
 the visibly weak seven-dimension pass is direct evidence for `BWMI-CF-10..14` and `BWMI-CF-19..22`.
 
+Candidate `234c1711` changes the normative projection of that already-recorded result to ordinary
+`passed/published` plus a failed strict diagnostic. It does not retroactively create a Final directory for
+the historical run, and no second real CASE-054 generation/Capture was executed. Palette, Planner, Builder
+feedback, and outcome behavior on the candidate are therefore supported by focused fixtures only.
+
 ### 9.2 Why the historical result looked better and failed less often
 
 The historical production topology was materially different; its advantage was not Three.js itself.
@@ -407,17 +444,20 @@ semantic success criteria. The frozen disposition is
 
 | Finding | Current evidence and user-visible impact | Recorded owner |
 |---|---|---|
-| Planner semantic admission and pair lineage are insufficient | `agent-planner-self-check.ts:362-405` only decodes the Native World Plan and checks the red Subject center. It does not enforce Formal-Capture aspect, every Brief target mask, minimum/connected coverage, or entry/plan orientation and geography coherence. `native-world-case-preparation.ts:233-265` silently invents bbox `2500/1200/7500/5200` and coverage `2000` for a missing landmark color. Independent, mirrored, stale, or target-incomplete images can therefore become Case truth. | `BWMI-CF-10` |
+| Planner semantic admission and pair lineage | Candidate `234c1711` restores old hard semantics: World Plan must contain every Brief target with at least `max(32px, 0.005%)`; entry hard-checks only Subject-1 with at least `max(64px, 0.10%)`, horizontal-center error `<=1.5%`, and 16:9 error `<=2%`. It restores entry-first exact-pixel lineage. Requiring every non-Subject in entry would itself be an over-strict migration, so their entry scale/coherence/ambiguity stays advisory. | `BWMI-CF-10` implemented in candidate; real Case pending |
 | Complete-world intent collapses to a generic miniature Case | `native-world-case-preparation.ts:43-84,269-401` uses fixed 128x128 bounds, two generic ground groups, one 12m straight band, and 300 forward ticks for every report-only input. The detailed World Plan is an attached raster for the Builder, not a Host-measured complete-world/topology acceptance source. A model may honor the prose, but the gates cannot distinguish it from an entry-only strip. | `BWMI-CF-11` |
 | Subject and movement mode are not connected to the Host Bootstrap | The Planner supports ground glide/riding/driving, water, underwater, flight, custom movement, and a complete controlled shape. `run-production.ts:82-88,1033-1100` nevertheless reuses the fixed Cloud Ridge Host closure for every Native Case; Native Builder is correctly forbidden to create a replacement Subject. A scene can silently get G Bot ground movement even when the input asks for another body or medium. | `BWMI-CF-12` |
 | Generic landmark blocker identity cannot close | Case derivation marks every non-Subject landmark as a required blocker but derives no block-plane check. `verify-native-block-reconstruction-e2e.ts:425-464` requires exact Case/Formal/Contribution blocker equality. Case-054 proved a seven-dimension-passed Run still closes before publication. | `BWMI-CF-13` |
 | Silhouette expected/observed metrics are different quantities | Expected values use actual identity-color raster pixels (`native-world-case-preparation.ts:203-265`); observed values use the projected rectangle of the complete world AABB (`formal-world-capture-measurement.ts:495-572`). `evaluate-evidence-set.ts:683-696` writes `isSemanticTargetPresent: true` without reading visible pixels or occlusion, and the evaluator directly subtracts the incompatible coverage values. Hollow arches, concave forms, separated repeated targets, and fully occluded landmarks can pass or receive destructive enlarge/shrink advice. World-side/top-down PNGs are identity-checked artifacts but do not contribute target-shape observations. | expanded `WRC-SR-1`; `BWMI-CF-14` |
 | Structural support is prose rather than a production gate | The Native Builder contract requires a face-contact support chain for structural/playable mass, but `packages/native-babylon-block-profile/src/check.ts:367-376,422-424` emits only a warning for every unsupported Block and still passes when no error exists. No Case-owned floating/background disposition is required. Floating roofs, platforms, or thin mountain masses can therefore pass. | `BWMI-CF-15` |
 | The committed strict Case is stale against the named planning-image contract | `cloud-temple-t-gate-native-block/case.json`, its committed inputs, and its Generation Request contain only `reference-0.png`; they omit `world-plan.png` and `entry-whitebox-target.png`, although the frozen current Builder Skill requires both. Skill byte parity does not prove input closure. | `BWMI-CF-18`, blocks NBR-70/90 |
-| Builder never sees a rendering of its own source | Current Native Builder Skill `:84-95` says its checker only validates output set/data shape/forbidden tokens and does not instantiate Candidate, Layout, Package, Runtime, or Capture. The old Builder's same-task side-by-side visual loop was deferred as advisory follow-up even though it acts before the expensive trusted stages. | `BWMI-CF-19`; former `WRC-QP-1` is no longer independently queued |
+| Builder source visual feedback | Candidate `234c1711` generates deterministic entry/top-down comparisons from the unadmitted Native source, requires the same Builder task to inspect them and use its shared source-repair budget, then has Host replay exact decoded RGBA and identity. It does not create another Package, Capture, Compiler, or similarity authority. | `BWMI-CF-19` implemented in candidate; real effect comparison pending |
 | Planner complexity is not admitted against the Native representation budget | The current request fixes `maximumBlockCount: 2000` (`generation-request.ts:116-122`), while CASE-054 used 1,974 Blocks and still implemented only a small fraction of the intended world. No receipt attributes cost to world floor/support, semantic targets, or exposed detail, and no preflight can reject or simplify an infeasible plan. | `BWMI-CF-20` |
 | Non-target scene mass has no completeness/effect-density closure | CASE-054 Brief names bridges, waterfalls, side towers, gardens, stairs, trees, lanterns, mountains, and rear/side exploration, but the palette/Case retains only Subject and palace plus synthetic ground. Builder may place the other features, yet no scene-level inventory checks their presence, macro placement, density, negative space, or multi-view silhouette. | `BWMI-CF-21` |
-| Planner palette and Builder identity colors are not joined | CASE-054 Planner uses target orange `#F28E2B`; Native authoring uses `#F28A2E`. Generation Request does not freeze the palette, manifest admission checks only color syntax/uniqueness, and Evaluation compares semantic metadata derived from that same authoring rather than joining back to Planner identity. | `BWMI-CF-22` |
+| Planner palette and Builder identity colors | Candidate `234c1711` freezes the Native five-color palette and hashes, performs one Host-owned exact `target -> acceptanceTargetRef -> visualGroup -> semanticClass/color` admission before Native Check/Candidate, and repeats a portable advisory join inside Builder self-check. `#F28A2E` now fails for the old `#F28E2B` target instead of passing through circular metadata. | `BWMI-CF-22` implemented for Case-present targets |
+| A target absent from opening has no stable per-view evidence disposition | Case derivation can omit a non-Subject whose opening identity mask is absent/weak, while Builder/Package require exact Case-group bijection and world-side/top-down lack target-level semantic observations. Making every target mandatory in opening would be stricter than the old branch; dropping the target loses complete-world identity. | `BWMI-CF-24`: unique Case target row plus `not-required | presence-required | reference-projection-required` per view |
+| Immutable input does not admit WebP | Candidate source freezing supports its current decoded media set but still rejects WebP; reference-image parity therefore remains incomplete even though byte identity is closed for supported formats. | `BWMI-CF-25` |
+| External repair terminal behavior is not yet proven condition-by-condition against the old branch | Candidate separates ordinary outcome from strict diagnostics and restores same-task Builder repair, but report-only versus external Attempt allocation has not been checked against the old complete failure/retry matrix. | `BWMI-CF-26`; no second ordinary outcome mode is allowed |
 
 ### 9.4 Newly explicit styled-image, video, and publication gaps
 
@@ -453,8 +493,9 @@ boundaries, and old provider/deployment fields remain rejected.
 
 ## 11. Completion boundary
 
-This review closes documentation discovery, not implementation. It does not complete NBR-20/70/80/90,
-WRC-SR-1/2, WRC-CAM-1/2, P0.4, GPR-0/1/2, or WRC-1. The executable carry-forward graph and every
-non-migration decision are recorded in the live backlog. Any later implementation must start from current
-contracts, focused RED evidence, and the exact owner listed there; the old branch is evidence, not an
-integration source of truth.
+The original review closed documentation discovery. Candidate `234c1711` implements the specifically
+identified Planner/Builder/palette/outcome subset, but it does not complete NBR-20/70/80/90, WRC-SR-1/2,
+WRC-CAM-1/2, P0.4, GPR-0/1/2, or WRC-1, and it does not close `BWMI-CF-24..26` or the downstream production
+chain. The executable carry-forward graph and every non-migration decision are recorded in the live backlog.
+Any later implementation must start from current contracts, focused RED evidence, and the exact owner listed
+there; the old branch is behavioral evidence, not a code-integration source of truth.
