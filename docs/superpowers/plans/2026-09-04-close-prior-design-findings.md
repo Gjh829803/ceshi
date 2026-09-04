@@ -80,6 +80,28 @@ candidate.
 - **Verification:** focused Runtime regressions and `pnpm verify:3c-migration`.
 - **Execution mode:** `sequential`.
 
+### DF-45 — Restore sole support publication authority
+
+- **Goal:** fix the latest-main Route regression without reintroducing a second
+  ground-support inference path.
+- **Deliverable:** Babylon Character Body publishes the one begin-tick
+  `checkSupport()` result for that Tick, uses post-integration contacts only for
+  collision facts such as ceiling contact, and retains Surface identity across
+  the configured keep-distance plus contact-tolerance band.
+- **Depends on:** DF-40.
+- **Blocks:** DF-70.
+- **Ownership:** Babylon Character Body adapter, its focused regressions, and the
+  Route R1B evidence boundary only.
+- **Input/output contract:** support mode is sampled once before movement and is
+  committed at Tick end; an explicit upward takeoff may clear it, while contact
+  correlation cannot independently change supported/sliding/unsupported state.
+- **Integration point:** `BabylonCharacterBodyPortV1.beginTick` / `resolve` /
+  `commitTick` and Route Surface evidence projection.
+- **Verification:** BodyPort transaction tests, Runtime support conformance,
+  Route Runtime probe integration, `pnpm verify:3c-migration`, and the complete
+  static-platform Route verifier.
+- **Execution mode:** `sequential`.
+
 ### DF-50 — Separate capture writer input from Runtime protocol identity
 
 - **Goal:** prevent two structurally different types from claiming the same
@@ -120,7 +142,7 @@ candidate.
   tree.
 - **Deliverable:** clean branch, focused regressions, relevant structural gates,
   then one full local gate checkpoint.
-- **Depends on:** DF-10, DF-20, DF-30, DF-40, DF-50, DF-60.
+- **Depends on:** DF-10, DF-20, DF-30, DF-40, DF-45, DF-50, DF-60.
 - **Blocks:** DF-80.
 - **Ownership:** integration only; no new feature scope.
 - **Input/output contract:** a single commit candidate whose exact SHA is pushed
