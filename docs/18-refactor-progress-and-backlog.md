@@ -1162,8 +1162,13 @@ WRC-1 共包含 33 个工作包：已有 JUMP-0..3、BNA-3..8、BWB-3..6、PHO-0
 - [ ] WRC-ACT-2：完成固定 Tick Action/Posture Reducer、Cancel/Interrupt、fall/land、声明式 fallback、
   安全 Capsule 切换和重放；
 - [ ] WRC-CAM-1：完成 Action、跳跃/落地、狭窄/室内和事件焦点的 committed Context → CameraDirector；
+  同时对 `codex/block-world-main-integration@1678960f` 的 Camera committed render-pose 历史做
+  current-owner 复验：若采用，只允许在展示时按 alpha `0/0.5/1` 采样前后两个 committed Camera pose，
+  不得改变 Snapshot、Hash、Tick、碰撞或 CameraDirector 权威；
 - [ ] WRC-CAM-2：完成第一/第三人称、碰撞、暂停/Reset/cadence/隔离 Golden Fixture 与两轮真实
-  `FeelReviewReceipt`；
+  `FeelReviewReceipt`；增加同一 Bootstrap 在交互 Preview、Formal opening Capture 和 artifact preview
+  的 position/target/FOV 构图对拍，并证明 Reset、rebind、视角切换、暂停和 rollback 会折叠 Camera
+  render history，不插值穿越离散跳变；
 - [ ] WRC-SR-1：冻结拓扑、语义轮廓、路线、Opening Composition、碰撞和通过性分维度场景还原评分；
 - [ ] WRC-SR-2：实现稳定诊断驱动、轮数受限、只修改 Authoring/Resource 的场景修复循环；
 - [ ] WRC-EVT-1：实现位置进入/退出 → committed Event/Receipt → 世界/人物变化 → Camera Context 的
@@ -1297,6 +1302,116 @@ Havok residency 和多接触修正；以下不是遗漏的生产阻断能力，�
 BNA-6/7/8、WRC-ACC-1 或 WRC-1，不计入 33 个工作包，也不提高任何当前完成度。WRC-1 当前关于
 `NBR-65`“白模光照”的已完成声明只覆盖统一 Runtime 灯光基线和材质复用，不代表已经复刻旧分支的
 具体冷暖色温、Fog、Exposure 或 Contrast 数值；这些调优必须由 `WRC-QP-2` 重新冻结和验证。
+
+#### `codex/block-world-main-integration` 全生产链对齐与承接台账（非 WRC 计数）
+
+2026-09-04 对以下两个精确引用完成了静态语义审计：
+
+- current authority：`origin/main@20fe0fef60d8c73fd8c8ce2cecb541117cddd1f8`；
+- historical branch：
+  `origin/codex/block-world-main-integration@9e35ab53c634acaef8c53a33082fff77653f7bbb`；
+- merge base：`7fa3197220ef6b8b1ad86f57fc85f8b3e248e0c3`；
+- 完整逐阶段、逐参数、逐 Skill 和逐提交处置见
+  [生产链对齐审查](reviews/2026-09-04-block-world-main-integration-production-chain-alignment-review.md)。
+
+结论不能写成“除还原生成外全部合入”。当前 `main` 已用更严格的 Babylon Native current-only
+合同语义替代白膜还原主链，但不是旧分支的字节或参数等价移植；旧分支白膜之后的独立 Visual
+Reconstructor、六段 Playthrough、Episode 视觉重建、十风格与独立 Review、Gemini 事件、六段
+Seedance、完整 Cloud Scene/Episode、S3/Studio 投影和 GPU Batch/tail/recovery 没有等价可执行 Owner。
+现有 NBR parity ledger 中“preserve under downstream owner”只表示“不归 NBR-65”，不能作为这些
+实现已经存在的证据。
+
+以下能力已等价保留或由更强 current owner 取代，不再创建重复任务：
+
+- Unified Planner → Babylon Native Block Builder 两个正式模型任务，`gpt-5.6-sol/xhigh`，具名
+  `world-plan.png`/`entry-whitebox-target.png`，同任务最多三次自修复和 Host 单次 replay；
+- current-only `scene.ts`、`native-block-authoring.json`、`native-resources.json` 三输出，原子
+  `createBlock()`、确定性 `createBlockGrid()`、五种固定形状、显式 visual/Collider/Surface Group；
+- Native Check、Capsule-aware Ground Analysis、WorldPackage/Receipt、Opening/side/top/Collider
+  Capture、七维 Evaluation、严格模式最多三次外部诊断修复与原子发布；
+- exposed-top/shared-edge topology、`0.25m` 可见踏步、当前 `0.3m` step/`42°` slope 验证、
+  ground-only edge protection、Thin Instance/Chunk、SDK-owned Havok residency 和有界多接触修正；
+- 当前 Native Builder Skill、output contract、checker 与代表性 `cloud-temple-t-gate-native-block`
+  冻结副本逐字节一致；生成 Request 实际冻结并哈希这些输入。
+
+以下旧方言已明确拒绝，后续不得以“补齐 parity”为名恢复：
+
+- Three.js Block Source、Block Manifest/Compiler、hidden runtime foundation、create-then-position
+  方言、第二 Scene Source parser、compat alias 或旧新双入口；
+- 由 preset、颜色、Mesh/tag/name/metadata 推导 Physics、Support、Collider 或 Gameplay；
+- Native Module 自建 Subject、Camera、Engine、Scene、render loop、Physics、Input、Timer、Tick 或
+  Gameplay Entity；
+- 固定四倍 Opening 面积、固定 `1m` 自动 smoothing、独立 step-up/step-down、全局 `2m`
+  adjacent-height veto、raw smoothed-edge count；
+- 旧部署镜像 digest、服务绑定、租户补丁、Provider 私有字段和旧 Kubernetes 常量直接进入公共合同。
+
+##### 可独立推进的工程承接项
+
+下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
+写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
+
+| ID / 优先级 | Goal and independently verifiable deliverable | depends_on / blocks | Exclusive owner / stable output | Required evidence | Mode |
+|---|---|---|---|---|---|
+| `BWMI-CF-01` / P1 | 把 Layout Solver 的递归 DFS 改为不消耗 JS 调用栈的等价确定性搜索；保持候选顺序、budget、preference/local cost 和 signature tie-break | depends_on: —; blocks: 大规模 Authoring 可靠性 | `packages/layout-solver`；相同输入产生相同 report/hash | 先以当前 10,000 fixed entities 复现，再跑 focused solver fixtures、确定性 Hash 与 typecheck | sequential |
+| `BWMI-CF-02` / P1 | 为正式 Browser Capture 建立唯一 progress/stall-aware startup watchdog，区分进展、停滞、终局错误和 transient navigation | depends_on: NBR-45; blocks: — | 现有 Host Capture launcher；typed/bounded/redacted startup diagnostic | 当前 slow/stall RED、hard/stall timeout、revision progress、navigation churn、throwing cleanup 与真实 Browser | sequential, main-agent-only for Browser evidence |
+| `BWMI-CF-03` / conditional P1 | 复现 Babylon/Havok `supported/sliding + zero normal`；仅当 current RED 成立时，在现有 BodyPort transaction 内按 upward departure → admitted contacts → unsupported 解析 | depends_on: current `@babylonjs/core@9.23.0` reproducer; blocks: NBR-70 only if reproduced | 唯一 Character Body/checkSupport owner；无第二 support state | fake driver、真实 Havok jump/landing、每 Tick 一次 checkSupport、Snapshot/Reset/Replay/Rollback；严禁伪造 `[0,1,0]` | sequential, main-agent-only for Runtime closure |
+| `BWMI-CF-04` / P1 | 闭合同一 Bootstrap 在 interactive Preview、Formal opening 与 artifact preview 的 Camera position/target/FOV parity，并决定 Camera committed render interpolation | depends_on: WRC-CAM-1/2; blocks: WRC-CAM-2 | 当前 Camera Domain/Director；pixels-only render pose history | 非对称 Case、alpha `0/0.5/1`、Reset/rebind/view switch/pause/rollback、Snapshot 不变和两轮 FeelReview | main-agent-only |
+| `BWMI-CF-05` / P2 | 冻结 provider-neutral Runtime/Capture flight diagnostic，而不是复制旧 provider telemetry 或 neutral-input retry | depends_on: PHO-5, WRC-CAM-2; blocks: — | 现有 Runtime/Browser diagnostic projection；bounded/redacted immutable trace | schema/parser、预算/截断、secret/provider redaction、two-session isolation、Reset/Replay 和 typed recoverability tests | sequential |
+| `BWMI-CF-06` / P2 | 对大量 Feature inspector 行做有界 window/overscan 渲染 | depends_on: Unified Scene Viewer; blocks: — | Playground inspector UI；view-only window state | 5,738/10,000 rows、滚动边界、选择/ARIA、dispose、DOM count 与交互 smoke | parallel-safe |
+| `BWMI-CF-07` / P2 | 当 Runtime canvas 与请求 raster 精确同尺寸时直接 `captureStream()`，否则保留缩放 copy fallback | depends_on: P0.2 Capture; blocks: — | `CanvasRecorder`；媒体字节与 conformance 不变 | exact/mismatch raster、24fps、cleanup、真实 Browser CPU/frame-drop 对照；不得合成或复制帧冒充 Runtime render | sequential |
+| `BWMI-CF-08` / P1 | 修复 Recording Workbench current-only `visualTargetId`/`id` 半迁移 | depends_on: —; blocks: P0.4 Provider slice | `apps/studio/src/recording-workbench.mjs`；一个 `visualTargetId` contract | 从 `resolveSceneAssets()` 到 prompt、补充 tri-view 次序、API URL、portable bundle 的集成 RED/GREEN；禁止 alias/fallback | sequential |
+| `BWMI-CF-09` / P1 | 让 Planner 长任务从首次读取到 Case freeze 使用同一冻结参考字节，并让 Host replay 使用 Request/Receipt 绑定的 checker/Skill identity | depends_on: —; blocks: NBR-20 formal evidence | Planner Host wrapper与 Native Case preparation；immutable input/checker hashes | source file 中途替换、live checker 中途替换、stale receipt、same-bytes resume、cleanup tests；正式 task 仍为一个 Planner | sequential |
+
+`BWMI-CF-08` 已由 current source 直接证实：`resolveSceneAssets()` 产出 `{visualTargetId}`，而 prompt、
+API URL 和 supplementary tri-view 消费者仍读取 `.id`，会生成 `undefined` 主体身份并丢失附加三视图。
+它是 current 回归，不依赖是否恢复旧 Episode。`BWMI-CF-03` 则只是高价值历史故障模型，在 current
+Babylon/Havok 上复现前不得写成已确认 bug，也不得先移植修复。
+
+##### 白膜之后的生产链工作图
+
+这些任务是 current architecture 的后续设计/实现台账，不计入 WRC-1 的 33 个工作包，不提高 WRC、
+NBR、BNA、P0.2 或 P0.4 完成度。它们只能消费 verified Package/Formal Capture，不得写回 Authoring、
+Runtime、Physics、Action、Camera、Event 或 Gameplay truth。
+
+| ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive owner / stable output | Required evidence | Mode |
+|---|---|---|---|---|---|---|
+| `BWMI-PROD-00` | 冻结 source-neutral post-Capture production Profile：condition bundle、identity/provenance、redaction、retry/resume、cost/deadline、no-writeback 和 Skill/Reviewer 边界；逐项决定下列历史参数 | BNA-7, NBR-70/80/90, P0.2 remaining identity/Resume | `BWMI-PROD-10..60` | 新 presentation contracts only；verified Package/Capture → immutable condition bundle | closed parser、tamper/stale/redaction tests、owner threat model、current providers/cost/licence decision | main-agent-only |
+| `BWMI-PROD-10` | 恢复一个 current-owner base styled opening/tri-view Visual Reconstructor 与独立语义 Reviewer；Reviewer diagnosis 是唯一视觉 repair brief | `BWMI-PROD-00`, WRC-SR-1 | `BWMI-PROD-30` | post-Capture visual pipeline/Skills；不产生 Package/Runtime truth | complete-target/semantic-front、near/mid/far movement space、identity-bound anchors、最多轮数、stale input、independent review 和 real visual set | sequential |
+| `BWMI-PROD-20` | 设计并实现 current Playthrough Planner、六个安全起点、六段确定性 whitebox capture、健康报告和失败恢复 | `BWMI-PROD-00`, NBR-70, P0.2 Capture/Replay | `BWMI-PROD-30`, `BWMI-PROD-60` | Simulation Take/Control Capture owner；six immutable segment bundles | 60Hz→24fps mapping、route/waypoint admission、immobility/support/drop/stall adversarial cases、reset isolation、six complete receipts | sequential, main-agent-only for Browser evidence |
+| `BWMI-PROD-30` | 生成 exactly-N style variants（N 与 retry/concurrency 由当前 Profile 冻结），逐 variant 独立 Visual Reconstructor/Reviewer，并做集合级 diversity/confusability review | `BWMI-PROD-10`, `BWMI-PROD-20` | `BWMI-PROD-40` | Style Director + per-variant visual/review Skills；共享白膜身份、独立 appearance identity | failed variant-only retry、other variants immutable、opening/tri-view closure、direction/scale/baseline、diversity review 与 resume | sequential orchestration, parallel-safe fan-out |
+| `BWMI-PROD-40` | 实现 provider-neutral timed visual events、Video Adapter、Seedance-like segment rendering、conformance 和 durable provider journal | `BWMI-PROD-20`, `BWMI-PROD-30`, P0.4 Adapter design | `BWMI-PROD-60` | Video Adapter/provider journal；input identity + idempotency → immutable media receipt | pre-POST journal、ambiguous/lost response reconcile、stale raw/final invalidation、terminal attempt cap、exact frames/audio/size/hash and no duplicate paid Job | sequential per segment, bounded parallel fan-out |
+| `BWMI-PROD-50` | 将同一 current Scene/NBR pipeline effect-preservingly封装为 digest-pinned Cloud Execution，S3 为 durable artifact authority，Studio 只投影状态 | `BWMI-PROD-00`, NBR-90, PHO-7 | `BWMI-PROD-60` | cloud orchestration/transport only；不改 Agent prompt/Skill/Host gates | request idempotency、hash-verified hydration、worker loss/cancel/retry/cleanup、one exact-SHA real Case 与 no-local-durable-media census | sequential |
+| `BWMI-PROD-60` | 建立 durable `prepare -> GPU capture -> render` Episode DAG、queue/Batch manifest、closed-producer tail、lease/heartbeat/cancel/retry、per-task receipt、provider journal 和 CPU-GPU-CPU resume | `BWMI-PROD-20`, `BWMI-PROD-40`, `BWMI-PROD-50` | `BWMI-PROD-90` | cloud production control plane and S3 Run Index；Worker fs disposable | open 99/no launch、threshold launch、stable closed tail、Pod loss、partial failure isolation、stage retry、lost provider response、Studio restart/reconcile | sequential, main-agent-only for cloud canary |
+| `BWMI-PROD-90` | 在冻结 Profile 上完成 local contract/fault gates、exact-SHA cloud canary、六段/多风格 media closure、独立深审和 release/canary disposition | `BWMI-PROD-10..60`, PHO-8 | — | release evidence only | P0/P1=0、exact SHA/image digest、artifact manifest/hash closure、cost/deadline、manual visual review、rollback/unpublish plan | main-agent-only |
+
+历史参数候选必须保持可检索，但在 `BWMI-PROD-00` 重新冻结前都不是 current 承诺：
+
+- Playthrough：`6 × 30s = 180s`、Simulation `60Hz`、Capture `24fps`、每段 `720` 帧、总计
+  `4320` 帧；历史 capture-health 包含连续静止不超过 `5s`、unsupported 不超过 `1.5s`、垂直 drop
+  不超过 `3m`、tick stall 不超过 `1s`；
+- Style：exactly `10` variants，visual/review concurrency `10`、Gemini concurrency `5`、Seedance
+  concurrency `10`、opening attempts `1..4`、visual attempts 最多 `2`；
+- Event：仅 segments `0/2/4`，事件分配 `2/2/1`，Gemini 3.5 Flash、temperature `0.8`、
+  max tokens `8192`、sampling `0.25fps`；这些 provider/model 值尤其必须重新选择；
+- Video：六段各 `30s`、`1280×720`、`24fps`、exactly `720` frames、audio required，历史 prompt
+  上限 `15000`、reference images `2..30`、poll `8s`、timeout `7200s`、terminal attempts `2`；
+- Cloud Episode：历史三阶段 timeout 为 `21600/43200/43200s`、每阶段最多 `3` attempts；
+- GPU：历史 normal Batch `100..128`、closed-producer stable tail `120s`、lease `3600s`、dispatcher
+  `60s`、GPU `1`。这些是旧基础设施 Profile 候选，绝不进入 Scene/Runtime 公共 Schema。
+
+旧 Skill 处置同样必须显式：`worldkit-block-builder` 已由 Native Builder 取代且禁止恢复；历史
+`worldkit-visual-reconstructor` 仅部分被当前 styled scripts 覆盖；
+`worldkit-playthrough-planner`、`worldkit-episode-visual-reconstructor`、
+`worldkit-style-variant-director`、`worldkit-style-variant-visual-reconstructor`、
+`worldkit-style-variant-visual-reviewer`、`worldkit-style-variant-diversity-reviewer` 均没有 current
+等价 Skill/checker/runner，分别由 `BWMI-PROD-10/20/30` 重新设计，而不是复制旧 prompt 或冻结副本。
+
+上述台账覆盖历史唯一提交组 `cdae61aa`、`6bcc51bb`、`8c250b5f`、`ae53ff9a`、`6def857d`、
+`90126d43`、`1678960f`、`c6f8318a`、`69885f3f`、`596ddd5e`、`b6391c29`、`d69d7f82`、
+`b09c5efd`、`7607089e`、`266ddf32` 及其 deployment-pin/fix commits。`d69d7f82` 的多接触修正
+已在 current Runtime 语义保留；deployment-only digest/service/tenant/health commits 只作旧环境证据，
+不单设迁移工作包。只有 `BWMI-PROD-90` 的 current exact-SHA 证据可以关闭生产链，不得复用旧分支
+Cloud/Browser/视觉证据或本次静态审计替代。
 
 #### Unified Scene Viewer 下游开发工具关联（非 WRC 关键路径）
 
