@@ -147,6 +147,17 @@ async function completedAttempt(options: Readonly<{
     readFile(path.join(caseRoot, "evaluation-profile.json"), "utf8").then(JSON.parse),
     readFile(path.join(inputDirectoryPath, "world-bounds.json"), "utf8").then(JSON.parse),
   ]);
+  // This package-owner fixture intentionally builds a compact straight route.
+  // Keep its trusted Ground Analysis band local to that geometry instead of
+  // inheriting the production Case's gate-detour samples whenever the real
+  // acceptance corpus evolves.
+  caseValue.expected.groundConnectivity.requiredTraversalBands[0]
+    .centerlineStandPositionsXYZMeters = [
+      { xMeters: 0, yMeters: 0, zMeters: 18 },
+      { xMeters: 0, yMeters: 0, zMeters: 10 },
+      { xMeters: 0, yMeters: 0, zMeters: 3 },
+    ];
+  await writeFile(casePath, `${stringifyCanonicalJson(caseValue)}\n`);
   const reconstructionCase = parseWorldReconstructionCaseV1(caseValue);
   const profile = parseWorldReconstructionEvaluationProfileV1(profileValue);
   const routeDecision = decideSceneAuthoringRouteV1({
