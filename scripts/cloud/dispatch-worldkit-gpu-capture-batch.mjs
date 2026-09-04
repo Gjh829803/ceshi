@@ -134,7 +134,8 @@ export async function unfinishedGpuBatchIsActionable(
         (item) => item?.stage_id === "whitebox-capture",
       );
       return stage?.status === "ready" || stage?.status === "running";
-    } catch {
+    } catch (error) {
+      if (error?.status === 404) return false;
       // An unknown execution must remain recoverable. Only skip a manifest
       // when every task is positively known to be stale.
       return true;
@@ -171,25 +172,32 @@ export async function dispatchGpuCaptureBatch({
     }
   }
   const parsed = [...latestByExecution.values()];
-  const inspected = await mapWithConcurrency(parsed, 16, async (entry) => ({
-    entry,
-    execution: cloudExecutionRecord(await inspectExecution(entry.executionId)),
-  }));
-  const executionById = new Map(inspected.map(({ execution }) => [
-    execution.execution_id,
-    execution,
-  ]));
+  const inspected = await mapWithConcurrency(parsed, 16, async (entry) => {
+    try {
+      return {
+        entry,
+        execution: cloudExecutionRecord(await inspectExecution(entry.executionId)),
+      };
+    } catch (error) {
+      if (error?.status !== 404) throw error;
+      return { entry, execution: null };
+    }
+  });
+  const executionById = new Map(inspected.flatMap(({ execution }) => execution
+    ? [[execution.execution_id, execution]]
+    : []));
   const recordByExecutionId = new Map(episodeRecords.flatMap((record) =>
     typeof record?.remoteExecutionId === "string"
       ? [[record.remoteExecutionId, record]]
       : []));
   const staleQueueEntryUris = inspected.flatMap(({ entry, execution }) =>
-    (["succeeded", "cancelled"].includes(execution.status) ||
+    ((execution !== null && ["succeeded", "cancelled"].includes(execution.status)) ||
       recordByExecutionId.get(entry.executionId)?.status === "cancelled") &&
       entry.queueEntryS3Uri
       ? [entry.queueEntryS3Uri]
       : []);
   const ready = inspected.flatMap(({ entry, execution }) => {
+    if (execution === null) return [];
     const stage = execution.execution_id === entry.executionId
       ? readyCaptureStage(execution)
       : null;
@@ -345,7 +353,14 @@ export async function reconcileCloudEpisodeCpuStages({
       }
     }
     if (!executionId) continue;
-    const execution = cloudExecutionRecord(await inspectExecution(executionId));
+    let execution;
+    try {
+      execution = cloudExecutionRecord(await inspectExecution(executionId));
+    } catch (error) {
+      if (error?.status !== 404) throw error;
+      outcomes.push({ episodeId: record.episodeId, status: "execution-not-found" });
+      continue;
+    }
     if (["succeeded", "failed", "interrupted", "cancelled"].includes(execution.status)) {
       outcomes.push({ episodeId: record.episodeId, status: execution.status });
       continue;

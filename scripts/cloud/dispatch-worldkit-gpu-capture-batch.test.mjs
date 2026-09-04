@@ -160,6 +160,32 @@ test("dispatcher publishes then launches exactly one Batch at one hundred ready 
   assert.deepEqual(calls, [["publish", 100], ["launch", 100]]);
 });
 
+test("dispatcher skips deleted queue executions without blocking current captures", async () => {
+  const stale = entry(0);
+  const current = entry(1);
+  const launched = [];
+  const result = await dispatchGpuCaptureBatch({
+    entries: [stale, current],
+    episodeRecords: [episodeRecordFor(current)],
+    defaultWorkerImage: IMAGE,
+    immediateWorkerImages: new Set([IMAGE]),
+    inspectExecution: async (executionId) => {
+      if (executionId === stale.executionId) {
+        const error = new Error("not found");
+        error.status = 404;
+        throw error;
+      }
+      return executionFor(current);
+    },
+    publishManifest: async () => ({ s3Uri: "s3://bucket/current/manifest.json" }),
+    launchBatch: async (batch) => { launched.push(batch); },
+  });
+  assert.equal(result.status, "launched");
+  assert.deepEqual(result.staleQueueEntryUris, []);
+  assert.equal(launched[0].taskCount, 1);
+  assert.equal(launched[0].tasks[0].executionId, current.executionId);
+});
+
 test("dispatcher drains a stable final tail after every registered producer is ready", async () => {
   const entries = Array.from({ length: 20 }, (_, index) => entry(index));
   const calls = [];
@@ -332,6 +358,18 @@ test("unfinished GPU Batch fails closed when Execution state is unavailable", as
   assert.equal(actionable, true);
 });
 
+test("unfinished GPU Batch skips an execution that is positively deleted", async () => {
+  const actionable = await unfinishedGpuBatchIsActionable(
+    { tasks: [entry(0)] },
+    async () => {
+      const error = new Error("not found");
+      error.status = 404;
+      throw error;
+    },
+  );
+  assert.equal(actionable, false);
+});
+
 test("cloud reconciler recovers a lost create response and launches CPU prepare", async () => {
   const persisted = [];
   const launched = [];
@@ -391,4 +429,52 @@ test("cloud reconciler never launches an individual GPU capture worker", async (
   });
   assert.equal(launched, false);
   assert.equal(outcomes[0].status, "waiting-for-gpu-batch");
+});
+
+test("cloud reconciler skips a deleted historical execution and continues", async () => {
+  const records = [
+    {
+      backend: "cloud",
+      sceneId: "scene-stale",
+      episodeId: "episode-scene-stale",
+      status: "remote-pending",
+      remoteExecutionId: "execution_stale",
+    },
+    {
+      backend: "cloud",
+      sceneId: "scene-current",
+      episodeId: "episode-scene-current",
+      status: "running",
+      remoteExecutionId: "execution_current",
+      remoteRequestS3Uri: "s3://bucket/current/request.json",
+      remoteOutputS3Prefix: "s3://bucket/current",
+      remoteWorkerImage: IMAGE,
+    },
+  ];
+  const launched = [];
+  const outcomes = await reconcileCloudEpisodeCpuStages({
+    records,
+    config: { outputS3Root: "s3://bucket/root", workerImage: IMAGE, namespace: "lwdp", cpuWorker: {} },
+    cloudConfig: { userId: "worldkit-control" },
+    inspectExecution: async (executionId) => {
+      if (executionId === "execution_stale") {
+        const error = new Error("not found");
+        error.status = 404;
+        throw error;
+      }
+      return {
+        execution_id: executionId,
+        status: "running",
+        current_stage_id: "episode-prepare",
+        stages: [{ stage_id: "episode-prepare", status: "ready", current_attempt: 1 }],
+      };
+    },
+    launchWorker: async (input) => { launched.push(input); },
+  });
+  assert.deepEqual(outcomes.map(({ status }) => status), [
+    "execution-not-found",
+    "cpu-worker-launched",
+  ]);
+  assert.equal(launched.length, 1);
+  assert.equal(launched[0].executionId, "execution_current");
 });
