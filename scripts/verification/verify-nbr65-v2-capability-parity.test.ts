@@ -101,6 +101,18 @@ describe("NBR-65 v2 capability parity verifier", () => {
       expect(report.rows.find((row) => row.capabilityId === capabilityId))
         .toMatchObject({ status: "not-applicable", diagnostics: [] });
     }
+
+    const reportOnlyPreview = report.rows.find((row) =>
+      row.capabilityId === "report-only-quality-preview");
+    expect(reportOnlyPreview?.evidenceRefs).toContain(
+      "scripts/reconstruction/run.test.ts",
+    );
+    expect(reportOnlyPreview?.verificationGate).toMatchObject({
+      gateId: "production-loop-usability",
+    });
+    expect(reportOnlyPreview?.verificationGate?.command).toContain(
+      "scripts/reconstruction/run.test.ts",
+    );
   });
 
   it("fails the affected capability rows when an executable gate is red", async () => {

@@ -566,6 +566,7 @@ const CAPABILITY_GATES = Object.freeze({
       "packages/runtime-babylon/src/formal-world-capture-provider.test.ts",
       "scripts/reconstruction/evaluate-evidence-set.test.ts",
       "scripts/reconstruction/run-production.test.ts",
+      "scripts/reconstruction/run.test.ts",
       "scripts/cli/worldkit.test.ts",
     ]),
   }),
