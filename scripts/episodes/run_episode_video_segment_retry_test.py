@@ -48,7 +48,7 @@ class Seedance25ContractTest(unittest.TestCase):
             ".codex-tmp/runtime-config/mg.key",
         )
         self.assertEqual(config["seedanceProvider"]["maxConcurrentJobs"], 10)
-        self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 10)
+        self.assertEqual(config["seedanceProvider"]["globalConcurrency"]["slotCount"], 50)
         self.assertEqual(config["seedanceProvider"]["maxTerminalAttempts"], 3)
 
     def test_mg_response_helpers_accept_nested_task_and_video_fields(self) -> None:

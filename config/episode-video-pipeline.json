@@ -20,7 +20,7 @@
       "enabledInCloud": true,
       "namespace": "lwdp",
       "leaseNamePrefix": "worldkit-seedance-slot",
-      "slotCount": 10,
+      "slotCount": 50,
       "leaseDurationSeconds": 900,
       "waitTimeoutSeconds": 21600,
       "pollIntervalSeconds": 5

@@ -16,8 +16,8 @@ const manifests = args.flatMap((item, index) =>
 const concurrencyIndex = args.indexOf("--concurrency");
 const concurrency = concurrencyIndex >= 0 ? Number(args[concurrencyIndex + 1]) : 10;
 if (manifests.length === 0 || !Number.isSafeInteger(concurrency) ||
-    concurrency < 1 || concurrency > 20) {
-  throw new Error("Usage: run-direct-s3-video-production.mjs --manifest <s3-uri> [--manifest ...] [--concurrency 10]");
+    concurrency < 1 || concurrency > 50) {
+  throw new Error("Usage: run-direct-s3-video-production.mjs --manifest <s3-uri> [--manifest ...] [--concurrency 50]");
 }
 
 const config = JSON.parse(await readFile(
