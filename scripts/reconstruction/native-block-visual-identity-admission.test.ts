@@ -44,7 +44,7 @@ describe("admitNativeBlockVisualIdentityBindingsV1", () => {
   it("admits Native target-3 only with the old frozen yellow", () => {
     expect(admitNativeBlockVisualIdentityBindingsV1({
       sceneId: "native-identity-admission",
-      sceneBriefHash: SCENE_BRIEF_HASH,
+      sceneBriefSemanticHash: SCENE_BRIEF_HASH,
       semanticSilhouetteTargets,
       visualIdentityPalette: palette,
       authoringManifest: manifest("#D9A514"),
@@ -61,7 +61,7 @@ describe("admitNativeBlockVisualIdentityBindingsV1", () => {
   it("rejects an otherwise unique Builder-selected replacement color", () => {
     expect(admitNativeBlockVisualIdentityBindingsV1({
       sceneId: "native-identity-admission",
-      sceneBriefHash: SCENE_BRIEF_HASH,
+      sceneBriefSemanticHash: SCENE_BRIEF_HASH,
       semanticSilhouetteTargets,
       visualIdentityPalette: palette,
       authoringManifest: manifest("#123456"),

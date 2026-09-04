@@ -1,5 +1,6 @@
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import {
   BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
@@ -898,6 +899,17 @@ export async function packageNativeBlockAttemptV1(
   const reconstructionCase = parseWorldReconstructionCaseV1(
     json(caseBytes, "case-invalid"),
   );
+  const sceneBriefBytes = await readFileNoFollow(
+    path.join(path.dirname(casePath), "inputs"),
+    reconstructionCase.sceneBriefRef,
+  ).catch((error: unknown) => fail("scene-brief-input-invalid", error));
+  if (contentHash(sceneBriefBytes) !== reconstructionCase.sceneBriefHash) {
+    return fail("scene-brief-input-invalid");
+  }
+  const sceneBrief = parseSceneBriefV1(
+    new TextDecoder().decode(sceneBriefBytes),
+  );
+  if (!sceneBrief.ok) return fail("scene-brief-input-invalid");
   const route = parseSceneAuthoringRouteDecisionV1(
     json(routeBytes, "route-invalid"),
   );
@@ -994,7 +1006,7 @@ export async function packageNativeBlockAttemptV1(
   ) return fail("native-block-visual-identity-palette-input-invalid");
   const visualIdentityAdmission = admitNativeBlockVisualIdentityBindingsV1({
     sceneId: reconstructionCase.id,
-    sceneBriefHash: reconstructionCase.sceneBriefHash,
+    sceneBriefSemanticHash: sceneBrief.sceneBriefHash as Sha256HashV1,
     semanticSilhouetteTargets:
       reconstructionCase.expected.semanticSilhouetteTargets,
     visualIdentityPalette: json(

@@ -36,6 +36,9 @@ describe("Native-default world agent Host route", () => {
     expect(source).toContain('"--scene-source"');
     expect(source).toContain('"babylon-native"');
     expect(source).toContain("deriveNativeWorldBaselineProposalV1");
+    expect(source).toContain("parseSceneBriefV1");
+    expect(source).toContain("sceneBriefSemanticHash:");
+    expect(source).toContain("sceneBrief.sceneBriefHash");
     expect(source).toContain("validateNativeWorldPlannerInputClosureV1");
     expect(source).toContain('plannerArguments.push("--image", plannerImagePath)');
     expect(source).toContain("uploadedReferenceInputs: references.map");

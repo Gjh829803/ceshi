@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import {
   hashFormalWorldCaptureIntentV1,
   parseFormalWorldCaptureIntentV1,
@@ -183,6 +184,18 @@ const BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS = 10_000;
 // reliable pixel baseline and is omitted instead of receiving invented bounds.
 const MINIMUM_RELIABLE_BASELINE_TARGET_IMAGE_COVERAGE_RATIO = 0.00005;
 
+function sceneBriefSemanticHash(
+  sceneBriefBytes: Uint8Array,
+): Sha256HashV1 {
+  const brief = parseSceneBriefV1(
+    new TextDecoder().decode(sceneBriefBytes),
+  );
+  if (!brief.ok) {
+    throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
+  }
+  return brief.sceneBriefHash as Sha256HashV1;
+}
+
 function isBaselineGroundAcceptanceTargetRef(targetRef: string): boolean {
   return targetRef === BASELINE_ENTRY_GROUND.acceptanceTargetRef ||
     targetRef === BASELINE_REMOTE_GROUND.acceptanceTargetRef;
@@ -337,7 +350,7 @@ async function measurePaletteTargets(
  */
 export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   sceneId: string;
-  sceneBriefHash: Sha256HashV1;
+  sceneBriefSemanticHash: Sha256HashV1;
   visualIdentityPalettePath: string;
   entryWhiteboxTargetPath: string;
 }>): Promise<unknown> {
@@ -346,7 +359,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     {
       sceneSourceKind: "babylon-native",
       sceneId: input.sceneId,
-      sceneBriefHash: input.sceneBriefHash,
+      sceneBriefHash: input.sceneBriefSemanticHash,
     },
   ).targets;
   const landmarkTargets = await measurePaletteTargets(
@@ -881,7 +894,7 @@ export async function validateNativeWorldPlannerInputClosureV1(
     {
       sceneSourceKind: "babylon-native",
       sceneId: reconstructionCase.id,
-      sceneBriefHash: reconstructionCase.sceneBriefHash,
+      sceneBriefHash: sceneBriefSemanticHash(sceneBriefBytes),
     },
   );
   parsePassedNativePlannerSelfCheckV4({
@@ -975,6 +988,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
   const worldBounds = parseNativeWorldCaseWorldBoundsV1(proposal.worldBounds);
   const briefBytes = await readFile(input.sceneBriefPath);
   const sceneBriefHash = sha256Bytes(briefBytes) as Sha256HashV1;
+  const sceneBriefIdentityHash = sceneBriefSemanticHash(briefBytes);
   const visualIdentityPaletteBytes = await readFile(
     input.visualIdentityPalettePath,
   );
@@ -991,7 +1005,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     {
       sceneSourceKind: "babylon-native",
       sceneId: input.sceneId,
-      sceneBriefHash,
+      sceneBriefHash: sceneBriefIdentityHash,
     },
   );
 

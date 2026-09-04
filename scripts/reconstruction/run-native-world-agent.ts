@@ -15,6 +15,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import {
   sha256Bytes,
   stringifyCanonicalJson,
@@ -302,15 +303,19 @@ async function main(): Promise<void> {
         artifactRoot,
         "visual-identity-palette.json",
       );
-      const sceneBriefHash = sha256Bytes(
-        await readFile(briefPath),
-      ) as Sha256HashV1;
+      const sceneBrief = parseSceneBriefV1(
+        await readFile(briefPath, "utf8"),
+      );
+      if (!sceneBrief.ok) {
+        throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
+      }
       const proposalPath = path.join(taskRoot, "host-derived-baseline-case.json");
       await writeFile(
         proposalPath,
         stringifyCanonicalJson(await deriveNativeWorldBaselineProposalV1({
           sceneId: request.sceneId,
-          sceneBriefHash,
+          sceneBriefSemanticHash:
+            sceneBrief.sceneBriefHash as Sha256HashV1,
           visualIdentityPalettePath,
           entryWhiteboxTargetPath: entryTargetPath,
         })),

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
@@ -279,6 +280,11 @@ async function completedAttempt(options: Readonly<{
     readFile(path.join(caseRoot, "evaluation-profile.json"), "utf8").then(JSON.parse),
     readFile(path.join(inputDirectoryPath, "world-bounds.json"), "utf8").then(JSON.parse),
   ]);
+  const sceneBrief = parseSceneBriefV1(await readFile(
+    path.join(inputDirectoryPath, caseValue.sceneBriefRef),
+    "utf8",
+  ));
+  if (!sceneBrief.ok) throw new TypeError("TEST_SCENE_BRIEF_INVALID");
   // This package-owner fixture intentionally builds a compact straight route.
   // Keep its trusted Ground Analysis band local to that geometry instead of
   // inheriting the production Case's gate-detour samples whenever the real
@@ -345,7 +351,7 @@ async function completedAttempt(options: Readonly<{
       kind: "worldkit-visual-identity-palette",
       schemaVersion: 1,
       sceneId: caseValue.id,
-      sceneBriefHash: caseValue.sceneBriefHash,
+      sceneBriefHash: sceneBrief.sceneBriefHash,
       movementMode: "ground-walk",
       movementModeLabel: "Ground walk",
       targets: [
@@ -1032,7 +1038,7 @@ describe("packageNativeBlockAttemptV1", () => {
     );
   }, 60_000);
 
-  it("reports the stable authoring/Layout binding diagnostic instead of an internal Package failure", async () => {
+  it("rejects an extra authored visual group at the visual identity boundary", async () => {
     const fixture = await completedAttempt({
       sceneSource: EXTRA_VISUAL_GROUP_SCENE_SOURCE,
       authoring: EXTRA_VISUAL_GROUP_AUTHORING,
@@ -1044,7 +1050,7 @@ describe("packageNativeBlockAttemptV1", () => {
       casePath: fixture.casePath,
       outputDirectoryPath: fixture.outputDirectoryPath,
     })).rejects.toMatchObject({
-      diagnostics: ["native-block-authoring-layout-binding-invalid"],
+      diagnostics: ["WORLDKIT_NATIVE_BLOCK_VISUAL_IDENTITY_BINDING_INVALID"],
     });
   }, 60_000);
 

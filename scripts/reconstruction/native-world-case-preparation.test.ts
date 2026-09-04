@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   hashWorldReconstructionEvaluationProfileV1,
@@ -26,6 +27,42 @@ const BABYLON_NATIVE_VISUAL_IDENTITY_COLORS = Object.freeze([
   "#4E79A7",
   "#9C6ADE",
 ] as const);
+
+const VALID_SCENE_BRIEF = `# WorldKit Scene Brief
+
+## 场景
+完整的原生方块测试世界。
+
+## 主体
+由 Host 控制的第三人称旅人。
+
+## 用户事实
+用户要求一个完整且可探索的测试世界。
+
+## 可见参考证据
+参考中可见旅人、连续地面与远端地标。
+
+## 推断的世界延伸
+画面外延续为连贯地面，此项属于工程推断。
+
+## 仅视觉层设想
+材质、纹理与光照只属于后续渲染层。
+
+## 运动模式
+陆地步行：主体自然行走和奔跑。
+
+## 空间
+前景地面连接中段与远端目的地。
+
+## 通行
+连续地面支持从入口前往远端地标。
+
+## 首帧
+标准第三人称背后视角，主体位于下方中央。
+
+## 视觉目标
+- 主体｜旅人：完整人物主体
+`;
 
 function nativeVisualIdentityPaletteText(input: Readonly<{
   sceneId: string;
@@ -59,6 +96,17 @@ function nativeVisualIdentityPaletteText(input: Readonly<{
       }),
     ),
   });
+}
+
+function sceneBriefSemanticHash(
+  sceneBriefBytes: Uint8Array,
+): Sha256HashV1 {
+  const brief = parseSceneBriefV1(
+    new TextDecoder().decode(sceneBriefBytes),
+  );
+  return brief.ok
+    ? brief.sceneBriefHash as Sha256HashV1
+    : sha256Bytes(sceneBriefBytes) as Sha256HashV1;
 }
 
 function passedNativePlannerReceipt(input: Readonly<{
@@ -191,7 +239,7 @@ async function prepareWithPassedPlannerReceipt(
   if (input.visualIdentityPalettePath === undefined) {
     await writeFile(visualIdentityPalettePath, nativeVisualIdentityPaletteText({
       sceneId: input.sceneId,
-      sceneBriefHash: sha256Bytes(sceneBriefBytes) as Sha256HashV1,
+      sceneBriefHash: sceneBriefSemanticHash(sceneBriefBytes),
     }));
   }
   const {
@@ -234,8 +282,10 @@ describe("trusted Native world Case preparation", () => {
   it("derives a closed report-only baseline Case without a Mapper model task", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-baseline-"));
     temporaryRoots.push(root);
-    const briefText = "# Native World\n\nA complete playable block world.\n";
-    const sceneBriefHash = sha256Bytes(Buffer.from(briefText)) as Sha256HashV1;
+    const briefText = VALID_SCENE_BRIEF;
+    const sceneBriefSemanticHashValue = sceneBriefSemanticHash(
+      new TextEncoder().encode(briefText),
+    );
     const palettePath = path.join(root, "visual-identity-palette.json");
     const entryPath = path.join(root, "entry-whitebox-target.png");
     await Promise.all([
@@ -243,7 +293,7 @@ describe("trusted Native world Case preparation", () => {
         kind: "worldkit-visual-identity-palette",
         schemaVersion: 1,
         sceneId: "baseline-native-world",
-        sceneBriefHash,
+        sceneBriefHash: sceneBriefSemanticHashValue,
         movementMode: "ground-walk",
         movementModeLabel: "陆地步行",
         targets: [{
@@ -300,7 +350,7 @@ describe("trusted Native world Case preparation", () => {
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "baseline-native-world",
-      sceneBriefHash,
+      sceneBriefSemanticHash: sceneBriefSemanticHashValue,
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as {
@@ -545,7 +595,7 @@ describe("trusted Native world Case preparation", () => {
     fixtureCase.expected.criticalTraversalChecks[0].acceptanceTargetRef =
       "worldkit://acceptance-target/mountain-cliff-layers@1";
     await Promise.all([
-      writeFile(briefPath, "# Native World\n"),
+      writeFile(briefPath, VALID_SCENE_BRIEF),
       writeFile(referencePath, "reference-bytes"),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
@@ -600,7 +650,7 @@ describe("trusted Native world Case preparation", () => {
       id: "cliff-evasion-band",
     });
     await Promise.all([
-      writeFile(briefPath, "# Native World\n"),
+      writeFile(briefPath, VALID_SCENE_BRIEF),
       writeFile(referencePath, "reference-bytes"),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
@@ -641,7 +691,7 @@ describe("trusted Native world Case preparation", () => {
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/formal-world-capture-intent.json", "utf8").then(JSON.parse),
     ]);
     await Promise.all([
-      writeFile(briefPath, "# Native World\n"),
+      writeFile(briefPath, VALID_SCENE_BRIEF),
       writeFile(referencePath, "reference-bytes"),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
@@ -693,7 +743,7 @@ describe("trusted Native world Case preparation", () => {
     fixtureCase.expected.colliders[0].contributionId =
       "collider-central-steps-parallel";
     await Promise.all([
-      writeFile(briefPath, "# Native World\n"),
+      writeFile(briefPath, VALID_SCENE_BRIEF),
       writeFile(referencePath, "reference-bytes"),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
@@ -738,7 +788,7 @@ describe("trusted Native world Case preparation", () => {
       readFile("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/world-bounds.json", "utf8").then(JSON.parse),
     ]);
     await Promise.all([
-      writeFile(briefPath, "# Native World\n\nA complete playable block world.\n"),
+      writeFile(briefPath, VALID_SCENE_BRIEF),
       writeFile(referencePath, "reference-bytes"),
       writeFile(proposalPath, JSON.stringify({
         kind: "native-world-case-proposal",
@@ -942,7 +992,7 @@ describe("trusted Native world Case preparation", () => {
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "missing-native-mask",
-      sceneBriefHash,
+      sceneBriefSemanticHash: sceneBriefHash,
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as {
@@ -1045,7 +1095,7 @@ describe("trusted Native world Case preparation", () => {
 
     const nativeProposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "native-palette-profile",
-      sceneBriefHash,
+      sceneBriefSemanticHash: sceneBriefHash,
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as { expected: { semanticSilhouetteTargets: readonly {
@@ -1059,7 +1109,7 @@ describe("trusted Native world Case preparation", () => {
     await writeFile(palettePath, JSON.stringify(palette));
     await expect(deriveNativeWorldBaselineProposalV1({
       sceneId: "native-palette-profile",
-      sceneBriefHash,
+      sceneBriefSemanticHash: sceneBriefHash,
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     })).rejects.toThrow("WORLDKIT_VISUAL_IDENTITY_PALETTE_INVALID");

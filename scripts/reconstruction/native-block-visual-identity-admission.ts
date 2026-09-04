@@ -100,7 +100,7 @@ function rejected(
 
 export function admitNativeBlockVisualIdentityBindingsV1(input: Readonly<{
   sceneId: string;
-  sceneBriefHash: Sha256HashV1;
+  sceneBriefSemanticHash: Sha256HashV1;
   semanticSilhouetteTargets: readonly CaseSemanticSilhouetteTargetV1[];
   visualIdentityPalette: unknown;
   authoringManifest: unknown;
@@ -139,7 +139,7 @@ export function admitNativeBlockVisualIdentityBindingsV1(input: Readonly<{
     palette = parseVisualIdentityPaletteV1(input.visualIdentityPalette, {
       sceneSourceKind: "babylon-native",
       sceneId: input.sceneId,
-      sceneBriefHash: input.sceneBriefHash,
+      sceneBriefHash: input.sceneBriefSemanticHash,
     });
   } catch (error) {
     return rejected(
