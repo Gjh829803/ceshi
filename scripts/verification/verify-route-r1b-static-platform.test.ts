@@ -10,6 +10,7 @@ import { isEmpty, isEqual, isNil } from "lodash-es";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  CURRENT_ROUTE_VALIDATION_SYMBOL_ALLOWLIST_BY_PATH,
   R1B_STATIC_PLATFORM_FIXTURE_ORACLE,
   censusLegacyRouteConsumers,
   type LegacyRouteConsumerCensus,
@@ -84,6 +85,7 @@ function adversarialInjectedSymbols(): readonly string[] {
     joinToken(["blocking", "Collider", "Identities"]),
     joinToken(["heightfield", "-tile-", "estimate"]),
     joinToken(["not-required-", "empty-", "source"]),
+    joinToken(["Route", "Path", "Receipt", "Evidence", "Artifact", "V1"]),
   ]);
 }
 
@@ -233,15 +235,23 @@ describe("verify:route-r1b-static-platform", () => {
       "docs/reviews",
       "docs/superpowers",
     ]);
+    expect(CURRENT_ROUTE_VALIDATION_SYMBOL_ALLOWLIST_BY_PATH).toEqual({
+      "packages/validation/src/world-package-validation-types.ts": [
+        joinToken(["Route", "Connectivity", "Failure", "Evidence", "Artifact", "V1"]),
+        joinToken(["Route", "Overlay", "Evidence", "Artifact", "V1"]),
+        joinToken(["Route", "Path", "Receipt", "Evidence", "Artifact", "V1"]),
+        joinToken(["Route", "Runtime", "Probe", "Receipt", "Evidence", "Artifact", "V1"]),
+      ],
+    });
     expect(census.matchCount).toBe(0);
     expect(census.matchedPaths).toEqual([]);
     expect(isEmpty(census.matchedPaths)).toBe(true);
   });
 
-  it("legacy consumer census discovers an unlisted adversarial file with exactly 19 injected symbols", async () => {
+  it("legacy consumer census discovers an unlisted adversarial file, including an allowlisted symbol outside its owner", async () => {
     const symbols = adversarialInjectedSymbols();
-    expect(symbols).toHaveLength(19);
-    expect(new Set(symbols).size).toBe(19);
+    expect(symbols).toHaveLength(20);
+    expect(new Set(symbols).size).toBe(20);
 
     injectedRelativePath = path.join(
       "scripts",
@@ -254,7 +264,7 @@ describe("verify:route-r1b-static-platform", () => {
     );
 
     const census = censusLegacyRouteConsumers({ repositoryRoot });
-    expect(census.matchCount).toBe(19);
+    expect(census.matchCount).toBe(20);
     const expectedPath = injectedRelativePath.replaceAll(path.sep, "/");
     expect(census.matchedPaths).toEqual([expectedPath]);
     expect(isEqual(census.matchedPaths, [expectedPath])).toBe(true);

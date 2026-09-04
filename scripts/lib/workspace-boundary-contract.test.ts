@@ -197,7 +197,7 @@ describe("workspace boundary evidence contract", () => {
     expect(() => parseWorkspaceBoundaryEvidenceV1(treeName)).toThrow(/closed WorkspaceBoundaryEvidenceV1/i);
   });
 
-  it("preserves all current workspace debt identities without explanatory fields", () => {
+  it("keeps the workspace debt ledger closed after public boundary migration", () => {
     const ledger = JSON.parse(readFileSync(
       new URL("../../config/workspace-boundary-debt.json", import.meta.url),
       "utf8",
@@ -211,20 +211,26 @@ describe("workspace boundary evidence contract", () => {
       }[];
     };
 
-    expect(ledger.entries).toHaveLength(48);
-    for (const entry of ledger.entries) {
-      const expected = sha256CanonicalJson({
-        importer: entry.importer,
-        specifier: entry.specifier,
-        owner: entry.owner,
-      });
-      expect(workspaceBoundaryDebtFingerprintV1(entry)).toBe(expected);
-      const mutatedIdentity = {
-        ...entry,
-        reason: `${entry.reason} changed`,
-        removalGate: `${entry.removalGate} changed`,
-      };
-      expect(workspaceBoundaryDebtFingerprintV1(mutatedIdentity)).toBe(expected);
-    }
+    expect(ledger.entries).toEqual([]);
+
+    const entry = {
+      importer: VALID_EVIDENCE.violations[0].importer,
+      specifier: VALID_EVIDENCE.violations[0].specifier,
+      owner: VALID_EVIDENCE.violations[0].owner,
+      reason: "Temporary migration debt.",
+      removalGate: VALID_EVIDENCE.violations[0].removalGate,
+    };
+    const expected = sha256CanonicalJson({
+      importer: entry.importer,
+      specifier: entry.specifier,
+      owner: entry.owner,
+    });
+    expect(workspaceBoundaryDebtFingerprintV1(entry)).toBe(expected);
+    const mutatedEntry = {
+      ...entry,
+      reason: `${entry.reason} changed`,
+      removalGate: `${entry.removalGate} changed`,
+    };
+    expect(workspaceBoundaryDebtFingerprintV1(mutatedEntry)).toBe(expected);
   });
 });

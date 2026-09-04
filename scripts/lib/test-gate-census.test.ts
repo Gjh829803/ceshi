@@ -178,7 +178,7 @@ describe("test gate configuration", () => {
 
   it("keeps the source-backed wrapper and discovered lanes exactly aligned with the manifest", async () => {
     expect(packageJson.scripts.test).toBe(
-      "pnpm verify:workspace-boundaries && pnpm verify:3c-migration && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
+      "pnpm verify:workspace-boundaries && pnpm verify:unreleased-clean-break && pnpm verify:3c-migration && pnpm test:census && pnpm test:contract && pnpm test:resource-heavy",
     );
     expect(packageJson.scripts["test:resource-heavy"]).toBe(
       "NODE_OPTIONS=--max-old-space-size=4096 vitest run --config vitest.resource-heavy.config.ts",

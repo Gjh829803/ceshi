@@ -135,6 +135,15 @@ export const LEGACY_ROUTE_CONSUMER_HISTORICAL_EXCLUSIONS = Object.freeze([
   "docs/superpowers",
 ] as const);
 
+export const CURRENT_ROUTE_VALIDATION_SYMBOL_ALLOWLIST_BY_PATH = Object.freeze({
+  "packages/validation/src/world-package-validation-types.ts": Object.freeze([
+    joinToken(["Route", "Connectivity", "Failure", "Evidence", "Artifact", "V1"]),
+    joinToken(["Route", "Overlay", "Evidence", "Artifact", "V1"]),
+    joinToken(["Route", "Path", "Receipt", "Evidence", "Artifact", "V1"]),
+    joinToken(["Route", "Runtime", "Probe", "Receipt", "Evidence", "Artifact", "V1"]),
+  ]),
+} as const);
+
 export const LEGACY_ROUTE_DELETED_FIELDS = Object.freeze([
   joinToken(["blocking", "Collider", "Identities"]),
   joinToken(["heightfield", "-tile-", "estimate"]),
@@ -321,8 +330,16 @@ export function censusLegacyRouteConsumers(options: {
     const text = readFileSync(filePath, "utf8");
     const hits = text.match(new RegExp(symbolFamilyPattern, "g"));
     if (isNil(hits) || hits.length === 0) continue;
-    matchCount += hits.length;
-    matchedPathSet.add(relativePosixPath(options.repositoryRoot, filePath));
+    const relativePath = relativePosixPath(options.repositoryRoot, filePath);
+    const currentSymbols = CURRENT_ROUTE_VALIDATION_SYMBOL_ALLOWLIST_BY_PATH[
+      relativePath as keyof typeof CURRENT_ROUTE_VALIDATION_SYMBOL_ALLOWLIST_BY_PATH
+    ] as readonly string[] | undefined;
+    const forbiddenHits = isNil(currentSymbols)
+      ? hits
+      : hits.filter((hit) => !currentSymbols.includes(hit));
+    if (forbiddenHits.length === 0) continue;
+    matchCount += forbiddenHits.length;
+    matchedPathSet.add(relativePath);
   }
   return Object.freeze({
     roots: LEGACY_ROUTE_CONSUMER_CENSUS_ROOTS,

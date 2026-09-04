@@ -601,6 +601,34 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it("retains begin-tick Surface identity across the full keep-distance contact band", () => {
+    const { driver, port } = createPort();
+    const identity = identifiedGroundContact();
+    driver.contacts = [{
+      ...identity,
+      distanceMeters: 0.15,
+    }];
+    const token = createMovementTickTokenV1();
+
+    const sample = port.beginTick({ token, tick: 1 });
+    port.resolve({
+      token,
+      proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]),
+    });
+    port.commitTick(token);
+
+    expect(sample.support).toMatchObject({ mode: "supported" });
+    expect(retainedSupport(port)?.supportContacts).toEqual([{
+      pointMetersXYZ: identity.pointMetersXYZ,
+      normalXYZ: identity.normalXYZ,
+      colliderSubshapeId: identity.colliderSubshapeId,
+      traversalSurfaceId: identity.traversalSurfaceId,
+      surfaceEntityId: identity.surfaceEntityId,
+    }]);
+    expect(driver.checkSupportCalls).toBe(1);
+    port.dispose();
+  });
+
   it("normalizes native support once and passes the same canonical normal to integrate", () => {
     const { driver, port } = createPort();
     driver.support = supportedSupport([0, 2, 0]);
@@ -1400,16 +1428,17 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
   });
 
   it.each([
-    ["takeoff", [0, 0.2, 0] as Vec3, [groundContact()], [0, 12, 0] as Vec3, "unsupported", false],
-    ["ledge", [0.4, -0.1, 0] as Vec3, [], [24, -6, 0] as Vec3, "unsupported", false],
-    ["landing", [0, -0.4, 0] as Vec3, [groundContact()], [0, 0, 0] as Vec3, "supported", false],
-    ["sliding slope", [0.2, -0.1, 0] as Vec3, [groundContact([0.8, 0.6, 0])], [12, -6, 0] as Vec3, "sliding", false],
-    ["ceiling", [0, 0.3, 0] as Vec3, [{
+    ["takeoff", supportedSupport(), [0, 0.2, 0] as Vec3, [groundContact()], [0, 12, 0] as Vec3, "unsupported", false],
+    ["ledge", supportedSupport(), [0.4, -0.1, 0] as Vec3, [], [24, -6, 0] as Vec3, "supported", false],
+    ["landing", unsupportedSupport(), [0, -0.4, 0] as Vec3, [groundContact()], [0, 0, 0] as Vec3, "unsupported", false],
+    ["sliding slope", { ...supportedSupport([0.8, 0.6, 0]), mode: "sliding" as const }, [0.2, -0.1, 0] as Vec3, [groundContact([0.8, 0.6, 0])], [12, -6, 0] as Vec3, "sliding", false],
+    ["ceiling", supportedSupport(), [0, 0.3, 0] as Vec3, [{
       ...groundContact([0, -1, 0]),
       pointMetersXYZ: [0, 1.8, 0] as Vec3,
     }], [0, 0, 0] as Vec3, "unsupported", true],
-  ])("derives post-resolution %s support/ceiling from current contacts without a second query", (
+  ])("keeps the sole begin-tick support authority for %s while deriving ceiling state from contacts", (
     _name,
+    beginSupport,
     delta,
     contacts,
     velocity,
@@ -1417,6 +1446,7 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     expectedCeiling,
   ) => {
     const { driver, port } = createPort();
+    driver.support = beginSupport;
     driver.onIntegrate = () => {
       driver.contacts = contacts;
       driver.velocity = cloneVec3(velocity);
@@ -1432,6 +1462,31 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     if (resolution.support.mode !== "unsupported") {
       expect(Math.hypot(...resolution.support.normalXYZ)).toBeCloseTo(1, 12);
     }
+    port.dispose();
+  });
+
+  it("does not turn a supported tick into airborne when the post-integrate manifold is transiently empty", () => {
+    const { driver, port } = createPort();
+    driver.support = supportedSupport([0, 1, 0]);
+    driver.contacts = [groundContact()];
+    driver.onIntegrate = () => {
+      driver.contacts = [];
+    };
+
+    const { token, sample, resolution } = beginAndResolve(
+      port,
+      1,
+      [0.04, 0, 0],
+    );
+
+    expect(sample.support.mode).toBe("supported");
+    expect(resolution.support.mode).toBe("supported");
+    expect(driver.checkSupportCalls).toBe(1);
+    port.commitTick(token);
+    expect(retainedSupport(port)).toMatchObject({
+      supportState: "supported",
+      sampledControllerCenterMetersXYZ: sample.positionMetersXYZ,
+    });
     port.dispose();
   });
 

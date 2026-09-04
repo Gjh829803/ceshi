@@ -2209,11 +2209,20 @@ class BabylonCharacterBodyPortV1
         Math.abs(component - appliedTranslation[axis]!)
       ));
       if (!finite(translationDifference)) invalid("translation difference is invalid.");
-      const post = this.projectPostContacts(
+      const post = this.projectPostCollision(
         proposal,
-        position,
         contacts,
       );
+      const support = proposalLeavesSupportUpward(
+          proposal,
+          freezeVec3(
+            this.configuration.gravityDirectionXYZ.map((value) =>
+              value === 0 ? 0 : -value
+            ),
+          ),
+        )
+        ? Object.freeze({ mode: "unsupported" as const })
+        : transaction.sample.support;
       const velocity = this.projectPersistentVelocity(
         proposal,
         driverVelocity,
@@ -2245,15 +2254,15 @@ class BabylonCharacterBodyPortV1
         positionMetersXYZ: position,
         appliedTranslationMetersXYZ: appliedTranslation,
         linearVelocityMetersPerSecondXYZ: velocity,
-        support: post.support,
+        support,
         hasCeilingContact: post.hasCeilingContact,
         isTranslationLimited:
           translationDifference > BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1,
       });
       this.stagedRetainedSupportSample = this.projectRetainedSupportSample(
         resolution.support,
-        resolution.positionMetersXYZ,
-        contacts,
+        transaction.sample.positionMetersXYZ,
+        transaction.beginSupportContacts,
       );
       for (let axis = 0; axis < 3; axis += 1) {
         const coherent = transaction.sample.positionMetersXYZ[axis]! +
@@ -2620,10 +2629,13 @@ class BabylonCharacterBodyPortV1
       nativeSupport.averageSurfaceNormalXYZ,
       "native support normal is invalid.",
     );
+    const supportContactBandMeters =
+      this.options.controller.keepDistanceMeters +
+      this.options.controller.keepContactToleranceMeters;
     const supportingContacts = contacts
       .filter((contact) =>
         dot(contact.normalXYZ, up) > 0.08 &&
-        contact.distanceMeters <= this.options.controller.keepContactToleranceMeters
+        contact.distanceMeters <= supportContactBandMeters
       );
     const point = supportingContacts.length > 0
       ? averageVec3(supportingContacts.map((contact) => contact.pointMetersXYZ))
@@ -2659,47 +2671,22 @@ class BabylonCharacterBodyPortV1
     });
   }
 
-  private projectPostContacts(
+  private projectPostCollision(
     proposal: MovementProposalV1,
-    position: MovementVec3V1,
     contacts: readonly BabylonCharacterBodyNativeContactV1[],
-  ): Pick<BodyResolutionV1, "support" | "hasCeilingContact"> {
+  ): Pick<BodyResolutionV1, "hasCeilingContact"> {
     const up = freezeVec3(
       this.configuration.gravityDirectionXYZ.map((value) => value === 0 ? 0 : -value),
     );
     const inContact = contacts.filter((contact) =>
       contact.distanceMeters <= this.options.controller.keepContactToleranceMeters
     );
-    const movingUp = proposalLeavesSupportUpward(proposal, up);
-    const supporting = movingUp
-      ? []
-      : inContact.filter((contact) => dot(contact.normalXYZ, up) > 0.08);
-    let support: BodyResolutionV1["support"] = Object.freeze({ mode: "unsupported" });
-    if (supporting.length > 0) {
-      const normal = normalized(
-        averageVec3(supporting.map((contact) => contact.normalXYZ)),
-        "post-resolution support normal is invalid.",
-      );
-      support = Object.freeze({
-        mode: dot(normal, up) >= this.configuration.maxSlopeCosine
-          ? "supported"
-          : "sliding",
-        pointMetersXYZ: averageVec3(
-          supporting.map((contact) => contact.pointMetersXYZ),
-        ),
-        normalXYZ: normal,
-        isDynamic: supporting.some((contact) => contact.motionType === "dynamic"),
-      });
-    }
     const proposedUpward = dot(proposal.translationDeltaMetersXYZ, up) >
       BODY_RESOLUTION_COHERENCE_TOLERANCE_METERS_V1;
     const hasCeilingContact = proposedUpward && inContact.some((contact) =>
       dot(contact.normalXYZ, up) <= -0.5
     );
-    // Touch position to force finite projection at this boundary even when
-    // the resolved support is unsupported.
-    parseVec3(position);
-    return Object.freeze({ support, hasCeilingContact });
+    return Object.freeze({ hasCeilingContact });
   }
 
   private projectPersistentVelocity(
