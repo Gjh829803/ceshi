@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash, createHmac } from "node:crypto";
 import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { readRemoteS3Artifact } from "../lib/cloud-s3-runtime.mjs";
 import { downloadS3FileAtomic, joinS3Uri, uploadS3File } from
@@ -15,19 +16,48 @@ const manifests = args.flatMap((item, index) =>
   item === "--manifest" && args[index + 1] ? [args[index + 1]] : []);
 const concurrencyIndex = args.indexOf("--concurrency");
 const concurrency = concurrencyIndex >= 0 ? Number(args[concurrencyIndex + 1]) : 10;
+const option = (name, fallback) => {
+  const index = args.indexOf(name);
+  return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+};
+const pipelineConfigPath = path.resolve(repoRoot, option(
+  "--pipeline-config",
+  "config/episode-video-pipeline.json",
+));
+const taskListPath = args.includes("--task-list")
+  ? path.resolve(repoRoot, option("--task-list", ""))
+  : null;
+const excludedTaskListPath = args.includes("--exclude-task-list")
+  ? path.resolve(repoRoot, option("--exclude-task-list", ""))
+  : null;
+const runId = option("--run-id", "default");
+const journalNamespace = option("--journal-namespace", "provider-journals");
+const outputNamespace = option("--output-namespace", "direct-video");
+const dryRun = args.includes("--dry-run");
 if (manifests.length === 0 || !Number.isSafeInteger(concurrency) ||
-    concurrency < 1 || concurrency > 50) {
-  throw new Error("Usage: run-direct-s3-video-production.mjs --manifest <s3-uri> [--manifest ...] [--concurrency 50]");
+    concurrency < 1 || concurrency > 50 || (taskListPath && excludedTaskListPath) ||
+    !/^[a-z0-9][a-z0-9-]{0,63}$/.test(runId) ||
+    !/^[a-z0-9][a-z0-9-]{0,63}$/.test(journalNamespace) ||
+    !/^[a-z0-9][a-z0-9-]{0,63}$/.test(outputNamespace)) {
+  throw new Error(
+    "Usage: run-direct-s3-video-production.mjs --manifest <s3-uri> " +
+    "[--manifest ...] [--concurrency 50] [--pipeline-config <json>] " +
+    "[--task-list <json> | --exclude-task-list <json>] [--run-id <id>] " +
+    "[--journal-namespace <name>] " +
+    "[--output-namespace <name>]",
+  );
 }
 
 const config = JSON.parse(await readFile(
   path.join(repoRoot, "config/cloud-episode-production.json"), "utf8",
 ));
 const videoPipeline = JSON.parse(await readFile(
-  path.join(repoRoot, "config/episode-video-pipeline.json"), "utf8",
+  pipelineConfigPath, "utf8",
 ));
-const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-2";
-const workRoot = path.join(repoRoot, ".codex-tmp", "direct-s3-video-production");
+const execFileAsync = promisify(execFile);
+const workRoot = runId === "default"
+  ? path.join(repoRoot, ".codex-tmp", "direct-s3-video-production")
+  : path.join(repoRoot, ".codex-tmp", "direct-s3-video-production", runId);
 const statePath = path.join(workRoot, "state.json");
 await mkdir(workRoot, { recursive: true });
 let state = await readFile(statePath, "utf8").then(JSON.parse).catch(() => ({
@@ -99,9 +129,10 @@ function parseIni(contents, profile) {
   return values;
 }
 
+const awsCredentialsFile = process.env.AWS_SHARED_CREDENTIALS_FILE ||
+  path.join(repoRoot, ".codex-tmp/runtime-config/aws-credentials");
 const awsCredentials = parseIni(await readFile(
-  process.env.AWS_SHARED_CREDENTIALS_FILE ||
-    path.join(repoRoot, ".codex-tmp/runtime-config/aws-credentials"),
+  awsCredentialsFile,
   "utf8",
 ), process.env.AWS_PROFILE || "default");
 if (!awsCredentials.aws_access_key_id || !awsCredentials.aws_secret_access_key) {
@@ -112,11 +143,40 @@ const rfc3986 = (value) => encodeURIComponent(value).replace(/[!'()*]/g, (charac
   `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
 const hex = (value) => createHash("sha256").update(value).digest("hex");
 const hmac = (key, value) => createHmac("sha256", key).update(value).digest();
+const bucketRegionPromises = new Map();
+
+async function regionForBucket(bucket) {
+  if (!bucketRegionPromises.has(bucket)) {
+    bucketRegionPromises.set(bucket, (async () => {
+      const { stdout } = await execFileAsync("aws", [
+        "s3api", "get-bucket-location", "--bucket", bucket,
+        "--query", "LocationConstraint", "--output", "json",
+      ], {
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          AWS_SHARED_CREDENTIALS_FILE: awsCredentialsFile,
+        },
+        timeout: 60_000,
+        maxBuffer: 1024 * 1024,
+      });
+      const location = JSON.parse(stdout);
+      if (location === null || location === "") return "us-east-1";
+      if (location === "EU") return "eu-west-1";
+      if (typeof location !== "string" || !/^[a-z]{2}(?:-gov)?-[a-z]+-\d$/.test(location)) {
+        throw new Error(`S3 returned an invalid region for ${bucket}.`);
+      }
+      return location;
+    })());
+  }
+  return bucketRegionPromises.get(bucket);
+}
 
 async function presign(s3Uri) {
   const parsed = new URL(s3Uri);
   const bucket = parsed.hostname;
   const key = parsed.pathname.slice(1);
+  const awsRegion = await regionForBucket(bucket);
   const host = `${bucket}.s3.${awsRegion}.amazonaws.com`;
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -155,6 +215,18 @@ async function presign(s3Uri) {
   return `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }
 
+async function assertProviderInputReadable(url, label) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { Range: "bytes=0-0" },
+    redirect: "manual",
+  });
+  await response.body?.cancel();
+  if (![200, 206].includes(response.status)) {
+    throw new Error(`${label} is not directly readable: HTTP ${response.status}`);
+  }
+}
+
 async function inspectManifest(manifestS3Uri) {
   const bytes = await readRemoteS3Artifact(manifestS3Uri, {
     repoRoot,
@@ -180,7 +252,26 @@ async function inspectManifest(manifestS3Uri) {
 }
 
 const inspected = await Promise.all(manifests.map(inspectManifest));
-const tasks = inspected.flatMap(({ manifest, artifactMap, requestArtifacts }) =>
+const taskListRecord = taskListPath
+  ? JSON.parse(await readFile(taskListPath, "utf8"))
+  : null;
+const excludedTaskListRecord = excludedTaskListPath
+  ? JSON.parse(await readFile(excludedTaskListPath, "utf8"))
+  : null;
+const taskIdsFromRecord = (record, label) => {
+  const values = Array.isArray(record) ? record : record?.taskIds;
+  if (!Array.isArray(values) || values.some((value) => typeof value !== "string")) {
+    throw new Error(`${label} must be a JSON array or { taskIds: string[] }.`);
+  }
+  return values;
+};
+const allowedTaskIds = taskListPath
+  ? new Set(taskIdsFromRecord(taskListRecord, "Direct video task list"))
+  : null;
+const excludedTaskIds = excludedTaskListPath
+  ? new Set(taskIdsFromRecord(excludedTaskListRecord, "Direct video exclusion list"))
+  : null;
+const allTasks = inspected.flatMap(({ manifest, artifactMap, requestArtifacts }) =>
   requestArtifacts.map((requestArtifact) => {
     const match = /\/(style-\d{2})\/video\/(segment-\d{2})\/request\.json$/.exec(
       requestArtifact.path,
@@ -200,6 +291,24 @@ const tasks = inspected.flatMap(({ manifest, artifactMap, requestArtifacts }) =>
       ),
     };
   }));
+const tasks = allTasks.filter((task) => {
+  const taskId = `${task.manifest.episodeId}/${task.styleVariantId}/${task.segmentId}`;
+  return (!allowedTaskIds || allowedTaskIds.has(taskId)) &&
+    (!excludedTaskIds || !excludedTaskIds.has(taskId));
+});
+if (allowedTaskIds) {
+  const selected = new Set(tasks.map((task) =>
+    `${task.manifest.episodeId}/${task.styleVariantId}/${task.segmentId}`));
+  const missing = [...allowedTaskIds].filter((taskId) => !selected.has(taskId));
+  if (missing.length > 0) {
+    throw new Error(`Task list includes ${missing.length} unknown task(s): ${missing.slice(0, 3).join(", ")}`);
+  }
+}
+process.stdout.write(
+  `WORLDKIT_DIRECT_VIDEO_POOL run=${runId} provider=${videoPipeline.seedanceProvider.kind} ` +
+    `selected=${tasks.length} available=${allTasks.length} concurrency=${concurrency}\n`,
+);
+if (dryRun) process.exit(0);
 
 let nextTask = 0;
 async function worker() {
@@ -216,7 +325,7 @@ async function worker() {
     );
     const directPrefix = joinS3Uri(
       outputPrefix,
-      "direct-video",
+      outputNamespace,
       task.styleVariantId,
       task.segmentId,
     );
@@ -238,6 +347,11 @@ async function worker() {
       const [videoUrl, ...imageUrls] = await Promise.all([
         presign(videoArtifact.s3Uri),
         ...imageArtifacts.map((artifact) => presign(artifact.s3Uri)),
+      ]);
+      await Promise.all([
+        assertProviderInputReadable(videoUrl, "reference video"),
+        ...imageUrls.map((url, imageIndex) =>
+          assertProviderInputReadable(url, `reference image ${imageIndex + 1}`)),
       ]);
       await mkdir(task.segmentRoot, { recursive: true });
       const model = String(videoPipeline.seedance.model);
@@ -271,7 +385,7 @@ async function worker() {
       const journal = path.join(task.segmentRoot, "provider-run.json");
       const journalS3Uri = joinS3Uri(
         outputPrefix,
-        "provider-journals",
+        journalNamespace,
         task.manifest.episodeId,
         task.styleVariantId,
         task.segmentId,
@@ -284,13 +398,14 @@ async function worker() {
         "scripts/episodes/run-episode-video-segment.py",
         "--request", remoteRequestPath,
         "--result", journal,
+        "--config", pipelineConfigPath,
         "--until", "conformance",
       ], {
         env: {
           ...process.env,
           WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX: joinS3Uri(
             outputPrefix,
-            "provider-journals",
+            journalNamespace,
           ),
         },
       });

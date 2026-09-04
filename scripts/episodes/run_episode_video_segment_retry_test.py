@@ -192,6 +192,14 @@ class Seedance25ContractTest(unittest.TestCase):
     def test_only_documented_terminal_failures_are_terminal(self) -> None:
         self.assertEqual(MODULE.TERMINAL_FAILURE, {"failed", "refunded"})
 
+    def test_material_redirect_failure_is_classified_as_infrastructure(self) -> None:
+        self.assertTrue(MODULE.is_material_redirect_failure(
+            "素材地址返回 HTTP 301，请检查对象是否存在且可公开读取"
+        ))
+        self.assertFalse(MODULE.is_material_redirect_failure(
+            "上游内容安全审核未通过"
+        ))
+
     def test_poll_exposes_provider_terminal_status_without_losing_it(self) -> None:
         provider = {
             "baseUrl": "https://provider.test",

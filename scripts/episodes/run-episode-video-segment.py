@@ -143,6 +143,11 @@ def sanitized(value: Any) -> str:
     return text[:3000]
 
 
+def is_material_redirect_failure(value: Any) -> bool:
+    """Return true only for provider fetch failures caused by an HTTP redirect."""
+    return bool(re.search(r"(?:素材地址|material).{0,80}HTTP 30[1278]", sanitized(value), re.I))
+
+
 def acquire_global_seedance_slot(
     provider: dict[str, Any],
     *,
@@ -663,14 +668,23 @@ def run_mg_upscale_pipeline(
             require_audio=True,
         )
         provider_attempt = max(1, int(record.get("providerAttempt") or 1))
+        provider_material_retry = max(0, int(record.get("providerMaterialRetry") or 0))
         provider_job_id = str(record.get("providerJobId") or "")
         if record.get("status") == "failed" and record.get("failedStage") == "seedance":
-            if provider_attempt >= maximum_attempts:
-                raise EpisodeVideoError(
-                    f"MG Seedance terminal retry limit reached after {provider_attempt} attempts: "
-                    f"{sanitized(record.get('error'))}"
-                )
-            provider_attempt += 1
+            if is_material_redirect_failure(record.get("error")):
+                if provider_material_retry >= 3:
+                    raise EpisodeVideoError(
+                        "MG material redirect retry limit reached after "
+                        f"{provider_material_retry} attempts: {sanitized(record.get('error'))}"
+                    )
+                provider_material_retry += 1
+            else:
+                if provider_attempt >= maximum_attempts:
+                    raise EpisodeVideoError(
+                        f"MG Seedance terminal retry limit reached after {provider_attempt} attempts: "
+                        f"{sanitized(record.get('error'))}"
+                    )
+                provider_attempt += 1
             provider_job_id = ""
         seedance_key = str(record.get("idempotencyKey") or "")
         if not seedance_key or record.get("failedStage") == "seedance":
@@ -680,6 +694,7 @@ def run_mg_upscale_pipeline(
                 "segmentId": segment_id,
                 "inputIdentity": input_identity,
                 "providerAttempt": provider_attempt,
+                "providerMaterialRetry": provider_material_retry,
             }, sort_keys=True, separators=(",", ":")))
 
         if raw_output.is_file() and not raw_valid:
@@ -720,6 +735,7 @@ def run_mg_upscale_pipeline(
                     **base_record("seedance-submitting"),
                     "providerJobId": None,
                     "providerAttempt": provider_attempt,
+                    "providerMaterialRetry": provider_material_retry,
                     "idempotencyKey": seedance_key,
                     "upscaleJobId": record.get("upscaleJobId"),
                     "upscaleAttempt": int(record.get("upscaleAttempt") or 0),
@@ -751,6 +767,7 @@ def run_mg_upscale_pipeline(
                         **base_record("seedance-submitted"),
                         "providerJobId": provider_job_id,
                         "providerAttempt": provider_attempt,
+                        "providerMaterialRetry": provider_material_retry,
                         "idempotencyKey": seedance_key,
                         "upscaleJobId": record.get("upscaleJobId"),
                         "upscaleAttempt": int(record.get("upscaleAttempt") or 0),
@@ -785,6 +802,7 @@ def run_mg_upscale_pipeline(
             **base_record("seedance-ready"),
             "providerJobId": provider_job_id,
             "providerAttempt": provider_attempt,
+            "providerMaterialRetry": provider_material_retry,
             "idempotencyKey": seedance_key,
             "upscaleJobId": record.get("upscaleJobId"),
             "upscaleAttempt": int(record.get("upscaleAttempt") or 0),
@@ -805,14 +823,23 @@ def run_mg_upscale_pipeline(
             require_audio=False,
         )
         upscale_attempt = max(1, int(record.get("upscaleAttempt") or 1))
+        upscale_material_retry = max(0, int(record.get("upscaleMaterialRetry") or 0))
         upscale_job_id = str(record.get("upscaleJobId") or "")
         if record.get("status") == "failed" and record.get("failedStage") == "upscale":
-            if upscale_attempt >= maximum_attempts:
-                raise EpisodeVideoError(
-                    f"CF upscale terminal retry limit reached after {upscale_attempt} attempts: "
-                    f"{sanitized(record.get('error'))}"
-                )
-            upscale_attempt += 1
+            if is_material_redirect_failure(record.get("error")):
+                if upscale_material_retry >= 3:
+                    raise EpisodeVideoError(
+                        "CF material redirect retry limit reached after "
+                        f"{upscale_material_retry} attempts: {sanitized(record.get('error'))}"
+                    )
+                upscale_material_retry += 1
+            else:
+                if upscale_attempt >= maximum_attempts:
+                    raise EpisodeVideoError(
+                        f"CF upscale terminal retry limit reached after {upscale_attempt} attempts: "
+                        f"{sanitized(record.get('error'))}"
+                    )
+                upscale_attempt += 1
             upscale_job_id = ""
         upscale_key = str(record.get("upscaleIdempotencyKey") or "")
         if not upscale_key or record.get("failedStage") == "upscale":
@@ -823,20 +850,23 @@ def run_mg_upscale_pipeline(
                 "rawProviderOutputSha256": raw_receipt["sha256"],
                 "upscaleModel": str(upscale["model"]),
                 "upscaleAttempt": upscale_attempt,
+                "upscaleMaterialRetry": upscale_material_retry,
             }, sort_keys=True, separators=(",", ":")))
         if raw_upscale_output.is_file() and not upscale_valid:
             raw_upscale_output.unlink(missing_ok=True)
         if not upscale_valid:
             if not upscale_job_id:
-                upscale_video_url = str(raw_receipt.get("resultUrl") or "")
-                if not upscale_video_url.startswith(("http://", "https://")):
-                    upscale_video_url = upload_reference(
-                        raw_output,
-                        config=config,
-                        episode_id=episode_id,
-                        variant_id=variant_id,
-                        segment_id=f"{segment_id}-upscale",
-                    )
+                # Provider result URLs may answer with an HTTP redirect. The
+                # upscale backend does not consistently follow redirects, so
+                # promote the already-probed raw video to our own signed S3
+                # object before submitting the downstream job.
+                upscale_video_url = upload_reference(
+                    raw_output,
+                    config=config,
+                    episode_id=episode_id,
+                    variant_id=variant_id,
+                    segment_id=f"{segment_id}-upscale",
+                )
                 upscale_payload = {
                     "model": str(upscale["model"]),
                     "prompt": (
@@ -861,6 +891,7 @@ def run_mg_upscale_pipeline(
                     "idempotencyKey": seedance_key,
                     "upscaleJobId": None,
                     "upscaleAttempt": upscale_attempt,
+                    "upscaleMaterialRetry": upscale_material_retry,
                     "upscaleIdempotencyKey": upscale_key,
                     "rawProviderOutput": raw_receipt,
                 })
@@ -895,6 +926,7 @@ def run_mg_upscale_pipeline(
                         "idempotencyKey": seedance_key,
                         "upscaleJobId": upscale_job_id,
                         "upscaleAttempt": upscale_attempt,
+                        "upscaleMaterialRetry": upscale_material_retry,
                         "upscaleIdempotencyKey": upscale_key,
                         "rawProviderOutput": raw_receipt,
                     })
@@ -931,6 +963,7 @@ def run_mg_upscale_pipeline(
             "idempotencyKey": seedance_key,
             "upscaleJobId": upscale_job_id,
             "upscaleAttempt": upscale_attempt,
+            "upscaleMaterialRetry": upscale_material_retry,
             "upscaleIdempotencyKey": upscale_key,
             "rawProviderOutput": raw_receipt,
             "rawUpscaleOutput": upscale_receipt,
@@ -963,6 +996,7 @@ def run_mg_upscale_pipeline(
             "idempotencyKey": seedance_key,
             "upscaleJobId": upscale_job_id,
             "upscaleAttempt": upscale_attempt,
+            "upscaleMaterialRetry": upscale_material_retry,
             "upscaleIdempotencyKey": upscale_key,
             "rawProviderOutput": raw_receipt,
             "rawUpscaleOutput": upscale_receipt,
@@ -1139,25 +1173,29 @@ def main() -> None:
                 payload = saved_payload
                 idempotency_key = saved_idempotency_key
             else:
-                video_url = upload_material(
-                    reference_video,
-                    provider=provider,
-                    api_key=api_key,
-                    episode_id=episode_id,
-                    variant_id=variant_id,
-                    segment_id=segment_id,
-                )
-                image_urls = [
-                    upload_material(
-                        image,
+                if remote_input:
+                    video_url = reference_video_url
+                    image_urls = reference_image_urls
+                else:
+                    video_url = upload_material(
+                        reference_video,
                         provider=provider,
                         api_key=api_key,
                         episode_id=episode_id,
                         variant_id=variant_id,
                         segment_id=segment_id,
                     )
-                    for image in reference_images
-                ]
+                    image_urls = [
+                        upload_material(
+                            image,
+                            provider=provider,
+                            api_key=api_key,
+                            episode_id=episode_id,
+                            variant_id=variant_id,
+                            segment_id=segment_id,
+                        )
+                        for image in reference_images
+                    ]
                 idempotency_key = "worldkit-" + sha256_text(json.dumps({
                     "episodeId": episode_id,
                     "styleVariantId": style_variant_id,
