@@ -1585,6 +1585,9 @@ describe("createBabylonTraversalRuntimePortV1", () => {
       expect(next.tick).toBe(1);
       expect(next.velocityMetersPerSecondXYZ[2]).toBeLessThan(0);
       expect(next.characterSupport.sampledFootPositionMetersXYZ[2]).toBe(
+        before.subjectPositionMetersXYZ[2],
+      );
+      expect(next.characterSupport.sampledFootPositionMetersXYZ[2]).toBeGreaterThan(
         next.subjectPositionMetersXYZ[2],
       );
       expect(next.subjectPositionMetersXYZ[2]).toBeLessThan(
