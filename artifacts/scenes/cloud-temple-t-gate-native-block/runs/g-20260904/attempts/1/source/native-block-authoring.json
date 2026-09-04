@@ -1,0 +1,38 @@
+{
+  "kind": "native-block-authoring",
+  "schemaVersion": 1,
+  "entryModulePath": "scene.ts",
+  "blockProfileRef": "worldkit://native-block-profile/whitebox.blocks@1",
+  "visualGroups": [
+    {
+      "visualGroupId": "central-ascent-group",
+      "acceptanceTargetRef": "worldkit://acceptance-target/central-ascent@1",
+      "semanticClassId": "route.stone-ascent",
+      "identityColorHex": "#E3A018"
+    },
+    {
+      "visualGroupId": "foreground-platform-group",
+      "acceptanceTargetRef": "worldkit://acceptance-target/foreground-platform@1",
+      "semanticClassId": "terrain.rock-platform",
+      "identityColorHex": "#2FB5A8"
+    },
+    {
+      "visualGroupId": "gate-mass-group",
+      "acceptanceTargetRef": "worldkit://acceptance-target/gate-mass@1",
+      "semanticClassId": "landmark.temple-gate",
+      "identityColorHex": "#E64A3B"
+    },
+    {
+      "visualGroupId": "mountain-cliff-layers-group",
+      "acceptanceTargetRef": "worldkit://acceptance-target/mountain-cliff-layers@1",
+      "semanticClassId": "terrain.mountain-cliffs",
+      "identityColorHex": "#6F7FD1"
+    },
+    {
+      "visualGroupId": "upper-t-junction-group",
+      "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1",
+      "semanticClassId": "route.upper-t-junction",
+      "identityColorHex": "#B75ED7"
+    }
+  ]
+}
