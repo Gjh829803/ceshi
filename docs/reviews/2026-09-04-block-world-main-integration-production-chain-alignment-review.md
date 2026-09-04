@@ -37,10 +37,12 @@ the historical Three.js Block Builder or to the missing downstream Episode Skill
 
 ## 2. Executive verdict
 
-The answer is **no**. Current `main` does not have byte-for-byte or parameter-for-parameter parity with
-the historical branch, and it should not: the current Babylon Native lane is a current-only clean-break
-replacement for the old Three.js Block Source, Manifest, Compiler, hidden foundation, preset-derived
-Physics, and Builder-owned Subject/Camera dialect.
+The answer is **no** at the audited tree state. Current `main` does not yet have complete behavior or
+parameter parity with the historical branch. Literal code parity is intentionally excluded because the
+Babylon Native lane is a current-only clean-break replacement for the old Three.js Block Source,
+Manifest, Compiler, hidden foundation, preset-derived Physics, and Builder-owned Subject/Camera dialect.
+All production behavior outside that architectural replacement is now required to match the historical
+workflow exactly.
 
 For the whitebox reconstruction boundary, current `main` has a stronger ownership and evidence skeleton,
 but the Case-054 reverse audit proves that it is not yet an effect-equivalent replacement:
@@ -57,7 +59,8 @@ user input
   -> Formal Capture
   -> seven-dimension Evaluation
   -> bounded diagnostic repair
-  -> preview-ready or passed publication
+  -> historical-equivalent production outcome + atomic publication
+  -> separate current strict diagnostic
 ```
 
 For the complete historical production boundary, alignment is incomplete. The old branch's base Visual
@@ -82,7 +85,7 @@ Execution, and GPU batch/tail/recovery control plane do not have equivalent exec
 | Formal Capture | Current owner produces `opening`, `world-side`, `world-top-down`, collider overlay, support/Spawn observations, and scripted traversal evidence from the admitted Package. | **stronger whitebox evidence**, but historical startup-progress watchdog and some capture UX/performance work are not present. |
 | Seven-dimension Evaluation | Current dimensions are `collider`, `critical-traversal`, `deterministic-build`, `opening-composition`, `semantic-silhouette`, `spawn-support`, and `topology`. | **new stronger contract**; the old branch had visual comparison/review, not this identity-bound evaluator. |
 | Diagnostic repair | Strict mode uses initial Attempt plus at most three new-identity external repairs; each Builder task separately has bounded source-only self-repair. Report-only stops after the first complete quality observation. | **changed contract** and intentionally not a literal port. |
-| Whitebox preview/publication | Report-only may end `preview-ready / not-accepted`; only a passed strict Run is atomically promoted. The default production command skips only the final duplicate fresh Browser replay. | **aligned intent with stronger current identity semantics**. NBR-70/80/90 remain open. |
+| Whitebox outcome/publication | Every historical-equivalent required Scene stage must produce the same success/failure meaning as the old branch and a successful result is atomically published. Current Evaluation/NBR findings remain separate strict diagnostics. The default production command skips only the final duplicate fresh Browser replay. | **P0 gap recorded as `BWMI-CF-23`**. CASE-054 is the normative strict-failed-but-production-passed fixture; NBR-70/80/90 remain open. |
 | Base styled opening and tri-views | Current scripts can create a styled opening and tri-views, but they are separate/manual or Canonical-oriented; finalizers mostly validate files/hashes and do not reproduce the old independent semantic visual review. | **partial, not equivalent**. Native reconstruction does not automatically execute the old Visual Reconstructor Skill. |
 | Six-start Playthrough production | No current equivalent of the old planner, plan structure, six deterministic captures, dataset, or capture-health owner. Strict NBR traversal evidence is acceptance evidence, not Episode media production. | **missing**. |
 | Episode visual reconstruction/review | No current equivalent of the old six-segment opening set, shared target tri-views, independent Episode visual generation, and review tasks. | **missing**. |
@@ -393,8 +396,12 @@ The old lane was not uniformly safer. Geographic fidelity still depended partly 
 Studio's user click was cost/UX authorization rather than a quality gate; old capture health explicitly did
 not judge exploration or camera quality; raw video admission had no independent semantic reviewer; and the
 ten-style lane intentionally allowed creative reinterpretation rather than source-faithful reconstruction.
-Current should preserve the effective feedback topology while strengthening these weak gates, not claim
-literal parity or remove the strict blocker verifier.
+The explicit product decision after this audit is to preserve the effective feedback topology and copy the
+historical requested-scope success/failure semantics exactly, apart from architectural replacement. Current
+strict checks remain intact as a separate diagnostic/explicit-acceptance authority; they no longer veto an
+ordinary production success. Atomic publication remains because it changes delivery safety, not the
+semantic success criteria. The frozen disposition is
+[`2026-09-04-block-world-production-outcome-parity-design.md`](../superpowers/specs/2026-09-04-block-world-production-outcome-parity-design.md).
 
 ### 9.3 Newly explicit pre-style effect gaps
 
@@ -422,7 +429,7 @@ literal parity or remove the strict blocker verifier.
 | Six mechanically healthy captures need executed visual-coverage admission | Historical health checks intentionally did not judge destination, route, camera creativity, or exploration quality. Without a separate executed coverage receipt, six clips can repeat one area, face a wall, crop the Subject, or omit the landmark while passing movement/support/drop/stall checks. Per-frame Camera telemetry existed historically and must be identity-bound, not discarded. | expanded `BWMI-PROD-20` |
 | Timed events are not bound to what is actually visible | A useful Event Director must consume the executed segment, accepted styled review, and exact event marker; otherwise it can animate an off-screen target, change root motion/camera, or invent an event from the Brief. | expanded `BWMI-PROD-40` |
 | Event/prompt semantics are not frozen as provider-neutral inputs | The old Director coordinated event diversity across segments 0/2/4, while the old Seedance prompt explicitly constrained reference precedence, shooting side, crop/occlusion, visible-target whitelist, conditional tri-view use, movement-medium contact, event continuity, and no music/speech/new entities. Current's shorter manual prompt and request do not bind an equivalent template identity. Historical provider/model constants are not public authority. | expanded `BWMI-PROD-40`: event-set Profile plus prompt template version/hash |
-| No independent semantic gate exists for final video | Current and historical runners both declare success after provider completion plus media conformance. No owner checks shooting side, crop, occlusion, perspective, identity/material, contact/sliding/intersection, event timing, hallucinated targets, music, or speech. | new `BWMI-PROD-45` independent Video Reviewer |
+| No independent semantic diagnostic exists for final video | Current and historical runners both declare success after provider completion plus media conformance. No owner checks shooting side, crop, occlusion, perspective, identity/material, contact/sliding/intersection, event timing, hallucinated targets, music, or speech. Exact old outcome parity means a new Reviewer must remain advisory/strict-only rather than adding an ordinary production veto. | `BWMI-PROD-45` independent Video diagnostic Reviewer |
 | Repair immutability is too coarse | The prior ledger protected other variants, but not already-passing images inside the failing variant. Regenerating a whole variant for one bad tri-view can randomly change its accepted opening, Subject, material, and other targets. | expanded `BWMI-PROD-10/30` image-level pass ledger |
 | Historical cloud publication was not atomic or exhaustive | The old publisher sampled only a few objects, then overwrote two mutable `latest` objects independently; its release identity did not close over every media/manifest Hash. A partial upload or pointer race could expose a mixed release. | expanded `BWMI-PROD-50/90`: immutable full-object manifest plus one atomic pointer |
 | Historical style semantics can be mistaken for faithful reconstruction | The ten-style Director intentionally consumed whitebox authority and permitted source-identity replacement. A visually attractive diversified variant is therefore not evidence that the original reference was faithfully reconstructed. | `BWMI-PROD-00` closed appearance mode plus faithful-baseline rule |
