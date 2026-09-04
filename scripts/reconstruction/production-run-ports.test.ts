@@ -493,9 +493,12 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     expect(reconstructionCase.expected.groundConnectivity.requiredTraversalBands
       .find(({ id }) => id === "central-ascent-left-t-arm-band")
       ?.centerlineStandPositionsXYZMeters).toContainEqual({
+        // Ground Analysis samples the 0.25m Profile lattice. The Runtime
+        // Capsule may later settle at z=-3.15 against the gate face, but that
+        // continuous collision coordinate is not a valid stand-sample key.
         xMeters: -3,
         yMeters: 0,
-        zMeters: -3.15,
+        zMeters: -3.25,
       });
     expect(await readFile(
       path.join(caseRoot, "inputs", "task-instruction.md"),
