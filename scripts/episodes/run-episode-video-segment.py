@@ -591,7 +591,7 @@ def conform(
         [
             "ffmpeg", "-y", "-v", "error", *inputs,
             "-filter_complex",
-            f"[0:v]fps=24,scale=1280:720:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,trim=duration=30,setpts=N/(24*TB)[v];[{audio_input_index}:a]aresample=48000:async=1,apad=pad_dur=30,atrim=duration=30,asetpts=N/SR/TB[a]",
+            f"[0:v]fps=24,scale=1280:720:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,tpad=stop_mode=clone:stop_duration=30,trim=duration=30,setpts=N/(24*TB)[v];[{audio_input_index}:a]aresample=48000:async=1,apad=pad_dur=30,atrim=duration=30,asetpts=N/SR/TB[a]",
             "-map", "[v]", "-map", "[a]", "-frames:v", "720", "-r", "24",
             "-fps_mode", "cfr", "-enc_time_base", "1/24", "-video_track_timescale", "24000",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
