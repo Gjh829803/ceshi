@@ -44,10 +44,12 @@ import {
   type FormalOpeningObservationV1,
   type FormalScriptedTraversalObservationV1,
   type FormalSpawnSupportObservationV1,
-  type FormalTraversalCheckpointSpatialCriterionV1,
   type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
+import {
+  measureFormalTraversalCheckpointV1,
+} from "@whitebox-world/runtime-babylon";
 import {
   sha256Bytes,
   sha256CanonicalJson,
@@ -72,6 +74,10 @@ import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
+import {
+  createOwnedNativePackageFixtureV1,
+  type OwnedNativePackageFixtureV1,
+} from "../native-scene/owned-native-package-fixture.js";
 import { buildWorldReconstructionEvidenceSetV1 } from
   "../reconstruction/evaluate-evidence-set.js";
 
@@ -382,39 +388,6 @@ function distance(
   return Math.hypot(left[0] - right[0], left[1] - right[1], left[2] - right[2]);
 }
 
-function coordinate(
-  positionMetersXYZ: readonly [number, number, number],
-  axis: "x" | "y" | "z",
-): number {
-  return positionMetersXYZ[axis === "x" ? 0 : axis === "y" ? 1 : 2];
-}
-
-function measureCheckpoint(
-  criterion: FormalTraversalCheckpointSpatialCriterionV1,
-  positionMetersXYZ: readonly [number, number, number],
-  isFinalTick: boolean,
-): "reached" | "passed" | "blocked" | undefined {
-  if (criterion.kind === "reach-bounds") {
-    const margin = criterion.capsuleRadiusMeters + criterion.toleranceMeters;
-    return positionMetersXYZ.every((value, axis) =>
-      value >= criterion.sourceBoundsMeters.minimumMetersXYZ[axis]! - margin &&
-      value <= criterion.sourceBoundsMeters.maximumMetersXYZ[axis]! + margin)
-      ? "reached"
-      : undefined;
-  }
-  const value = coordinate(positionMetersXYZ, criterion.axis);
-  const clearance = Math.max(
-    0,
-    criterion.capsuleRadiusMeters - criterion.toleranceMeters,
-  );
-  const crossed = criterion.expectedCenterSide === "positive"
-    ? value >= criterion.planeMeters + clearance
-    : value <= criterion.planeMeters - clearance;
-  if (criterion.kind === "pass-plane") return crossed ? "passed" : undefined;
-  if (crossed) return "passed";
-  return isFinalTick && !crossed ? "blocked" : undefined;
-}
-
 function uniqueSortedExactSet(values: readonly string[]): readonly string[] {
   const sorted = [...values].sort();
   if (new Set(sorted).size !== sorted.length) {
@@ -550,6 +523,25 @@ interface VerifiedRunAttemptArtifacts {
   readonly captureReceiptHash: Sha256HashV1;
   readonly evaluationResultHash: Sha256HashV1;
   readonly blockerColliderIds: readonly string[];
+}
+
+async function verifyCheckedOutWorldPackageV1(
+  packageDirectoryPath: string,
+): Promise<ReturnType<typeof verifyWorldPackageDirectoryV1>> {
+  const ownedPackage = await createOwnedNativePackageFixtureV1({
+    fixtureDirectoryPath: packageDirectoryPath,
+  });
+  try {
+    return verifyWorldPackageDirectoryV1(
+      await readWorldPackageDirectoryV1({
+        packageDirectoryPath: ownedPackage.packageDirectoryPath,
+        maximumTotalBytes: 512_000_000,
+        maximumFileCount: 10_000,
+      }),
+    );
+  } finally {
+    await ownedPackage.dispose();
+  }
 }
 
 async function verifyAllRunAttempts(input: Readonly<{
@@ -723,13 +715,7 @@ async function verifyAllRunAttempts(input: Readonly<{
       continue;
     }
     const packageDirectoryPath = path.join(attemptRoot, "world-package");
-    const verified = verifyWorldPackageDirectoryV1(
-      await readWorldPackageDirectoryV1({
-        packageDirectoryPath,
-        maximumTotalBytes: 512_000_000,
-        maximumFileCount: 10_000,
-      }),
-    );
+    const verified = await verifyCheckedOutWorldPackageV1(packageDirectoryPath);
     if (
       verified.kind !== "babylon-native-scene" ||
       verified.nativeBlockMaterializerMetadata === undefined
@@ -1003,12 +989,8 @@ async function verifyFinalPromotion(input: Readonly<{
     `attempts/${finalAttempt.attemptIndex}`,
   );
   const packageDirectoryPath = path.join(finalRoot, "world-package");
-  const finalVerified = verifyWorldPackageDirectoryV1(
-    await readWorldPackageDirectoryV1({
-      packageDirectoryPath,
-      maximumTotalBytes: 512_000_000,
-      maximumFileCount: 10_000,
-    }),
+  const finalVerified = await verifyCheckedOutWorldPackageV1(
+    packageDirectoryPath,
   );
   exact(finalVerified.receipt.worldPackageRef, finalAttempt.worldPackageRef);
   exact(finalVerified.receipt.worldPackageRootHash, finalAttempt.worldPackageRootHash);
@@ -1153,6 +1135,7 @@ async function verifyPlayability(input: Readonly<{
       sha256CanonicalJson(caseCheck.fixedInputSequence) !== check.fixedInputSequenceHash
     ) fail("NBR70_IDENTITY_MISMATCH");
     const reset = await resetGrounded();
+    const startPositionMetersXYZ = position(reset, input.subjectEntityId);
     const measured = new Map<string, "reached" | "passed" | "blocked">();
     const totalTicks = check.fixedInputSequence.reduce(
       (total, fixedInput) => total + fixedInput.ticks,
@@ -1178,12 +1161,16 @@ async function verifyPlayability(input: Readonly<{
         }
         for (const criterion of check.checkpointCriteria) {
           if (measured.has(criterion.checkpointId)) continue;
-          const outcome = measureCheckpoint(
+          const measurement = measureFormalTraversalCheckpointV1({
             criterion,
-            position(snapshot, input.subjectEntityId),
-            committed === totalTicks,
-          );
-          if (outcome !== undefined) measured.set(criterion.checkpointId, outcome);
+            startPositionMetersXYZ,
+            positionMetersXYZ: position(snapshot, input.subjectEntityId),
+            tick: snapshot.world.simulationTick,
+            isFinalTick: committed === totalTicks,
+          });
+          if (measurement !== undefined) {
+            measured.set(criterion.checkpointId, measurement.outcome);
+          }
         }
       }
     }
@@ -1390,12 +1377,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   }
 
   const packageDirectoryPath = path.join(attemptRoot, "world-package");
-  const packageDirectory = await readWorldPackageDirectoryV1({
-    packageDirectoryPath,
-    maximumTotalBytes: 512_000_000,
-    maximumFileCount: 10_000,
-  });
-  const verified = verifyWorldPackageDirectoryV1(packageDirectory);
+  const verified = await verifyCheckedOutWorldPackageV1(packageDirectoryPath);
   if (
     verified.kind !== "babylon-native-scene" ||
     verified.nativeBlockMaterializerMetadata === undefined
@@ -1555,12 +1537,16 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     : packageDirectoryPath;
 
   let session: NativeBlockReconstructionPlayabilitySessionPortV1 | undefined;
+  let ownedLaunchPackage: OwnedNativePackageFixtureV1 | undefined;
   let playability: NativeBlockReconstructionE2EVerificationV1["playability"] | undefined;
   let failure: unknown;
   try {
+    ownedLaunchPackage = await createOwnedNativePackageFixtureV1({
+      fixtureDirectoryPath: launchPackageDirectoryPath,
+    });
     lifecycle.launchAttempted = true;
     session = await input.playability.launch({
-      packageDirectoryPath: launchPackageDirectoryPath,
+      packageDirectoryPath: ownedLaunchPackage.packageDirectoryPath,
       worldPackageRef: verified.receipt.worldPackageRef,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
       worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
@@ -1597,6 +1583,14 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
         } else {
           lifecycle.cleanupOutcome = "completed";
         }
+      } catch {
+        lifecycle.cleanupOutcome = "failed";
+        failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
+      }
+    }
+    if (ownedLaunchPackage !== undefined) {
+      try {
+        await ownedLaunchPackage.dispose();
       } catch {
         lifecycle.cleanupOutcome = "failed";
         failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");

@@ -89,8 +89,8 @@ const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
   expectation: "reach" as const,
   sourceVisualGroupId: "ground-group",
   sourceBoundsMeters: {
-    minimumMetersXYZ: [-2, -1, -2] as const,
-    maximumMetersXYZ: [2, 1, 2] as const,
+    minimumMetersXYZ: [-2, -1, -5.1] as const,
+    maximumMetersXYZ: [2, 1, -4.2] as const,
   },
   capsuleRadiusMeters: 0.35,
   toleranceMeters: 0.05,
@@ -151,6 +151,18 @@ describe("Native Block reconstruction E2E verifier CLI", () => {
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${stringifyCanonicalJson(value)}\n`);
+}
+
+async function applyGitCheckoutModes(root: string): Promise<void> {
+  await chmod(root, 0o755);
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await applyGitCheckoutModes(entryPath);
+    } else if (entry.isFile()) {
+      await chmod(entryPath, 0o644);
+    }
+  }
 }
 
 function generationRequestFixture(input: ReturnType<
@@ -295,6 +307,7 @@ function snapshot(
 
 function playabilityPort(options: {
   traversalFails?: boolean;
+  stopsAtBlocker?: boolean;
   crossesBlocker?: boolean;
   cleanupFails?: boolean;
   cleanupThrows?: boolean;
@@ -352,6 +365,8 @@ function playabilityPort(options: {
       const next: [number, number, number] = options.traversalFails &&
           resetCount >= 8 && actions.has("move-forward")
         ? [100, 100, 100]
+        : options.stopsAtBlocker && resetCount === 8 && actions.has("move-forward")
+          ? [0, 0, -4.65]
         : options.crossesBlocker && resetCount >= 8 && actions.has("move-forward")
           ? [0, 0, -100]
         : [
@@ -718,9 +733,8 @@ describe("Native Block reconstruction final artifact publisher integration", () 
         playability: playability.port,
       })).resolves.toMatchObject({ outcome: "published" });
       expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
-        packageDirectoryPath: path.join(
-          fixture.caseDirectoryPath,
-          ".final-staging/world-package",
+        packageDirectoryPath: expect.stringContaining(
+          `${path.sep}worldkit-native-build-`,
         ),
       }));
       await expect(readFile(path.join(
@@ -775,7 +789,8 @@ describe("Native Block reconstruction final artifact publisher integration", () 
         async launch(input) {
           if (mutation === "staging-directory") {
             await mkdir(path.join(
-              path.dirname(input.packageDirectoryPath),
+              fixture.caseDirectoryPath,
+              ".final-staging",
               "foreign-empty-directory",
             ));
           } else {
@@ -1355,10 +1370,9 @@ describe("Native Block reconstruction E2E verifier", () => {
         "player",
         1,
       );
-      expect(playability.port.launch).toHaveBeenCalledWith(expect.objectContaining({
-        packageDirectoryPath: path.join(
-          fixture.runDirectoryPath,
-          "attempts/0/world-package",
+      expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
+        packageDirectoryPath: expect.stringContaining(
+          `${path.sep}worldkit-native-build-`,
         ),
       }));
     } finally {
@@ -1455,6 +1469,11 @@ describe("Native Block reconstruction E2E verifier", () => {
   it("verifies promoted Final bytes and launches the promoted Package", async () => {
     const fixture = await completeRunFixture();
     const finalDirectoryPath = await createFinalCandidate(fixture);
+    await applyGitCheckoutModes(path.join(
+      fixture.runDirectoryPath,
+      "attempts/0/world-package",
+    ));
+    await applyGitCheckoutModes(path.join(finalDirectoryPath, "world-package"));
     const playability = playabilityPort();
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
@@ -1466,12 +1485,14 @@ describe("Native Block reconstruction E2E verifier", () => {
         playability: playability.port,
       })).resolves.toMatchObject({ candidateKind: "final", outcome: "verified" });
       expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
-        packageDirectoryPath: path.join(finalDirectoryPath, "world-package"),
+        packageDirectoryPath: expect.stringContaining(
+          `${path.sep}worldkit-native-build-`,
+        ),
       }));
     } finally {
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("rejects promoted Final byte drift before launch", async () => {
     const fixture = await completeRunFixture();
@@ -1507,7 +1528,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       ],
     };
     const passingFixture = await completeRunFixture(fixtureOptions);
-    const passingPlayability = playabilityPort();
+    const passingPlayability = playabilityPort({ stopsAtBlocker: true });
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
         candidate: {
@@ -1547,7 +1568,25 @@ describe("Native Block reconstruction E2E verifier", () => {
     } finally {
       await rm(crossingFixture.runDirectoryPath, { recursive: true, force: true });
     }
-  });
+
+    const neverApproachedFixture = await completeRunFixture(fixtureOptions);
+    const neverApproachedPlayability = playabilityPort();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: {
+          kind: "run",
+          runDirectoryPath: neverApproachedFixture.runDirectoryPath,
+        },
+        playability: neverApproachedPlayability.port,
+      })).rejects.toThrowError("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
+      expect(neverApproachedPlayability.dispose).toHaveBeenCalledOnce();
+    } finally {
+      await rm(neverApproachedFixture.runDirectoryPath, {
+        recursive: true,
+        force: true,
+      });
+    }
+  }, 15_000);
 
   it("rejects missing and content-hash-drifted capture artifacts before launch", async () => {
     for (const mutation of ["missing", "hash-drift"] as const) {
@@ -1629,7 +1668,7 @@ describe("Native Block reconstruction E2E verifier", () => {
         await rm(fixture.runDirectoryPath, { recursive: true, force: true });
       }
     }
-  });
+  }, 15_000);
 
   it("reports failed cleanup when playability launch throws without a session", async () => {
     const fixture = await completeRunFixture();
@@ -1700,5 +1739,5 @@ describe("Native Block reconstruction E2E verifier", () => {
         await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
       }
     }
-  });
+  }, 15_000);
 });

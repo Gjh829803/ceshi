@@ -87,6 +87,8 @@ import {
   startWorldkitServer,
   type WorldkitServerHandle,
 } from "../lib/worldkit-server";
+import { createOwnedNativePackageFixtureV1 } from
+  "../native-scene/owned-native-package-fixture";
 import {
   inspectControlCaptureBundleFileV1,
   inspectSimulationTakeFileV1,
@@ -2374,16 +2376,23 @@ async function runNativeUntilSignal(
   startServer: StartWorldkitServerPortV1 = startWorldkitServer,
 ): Promise<number> {
   let server: WorldkitServerHandle;
+  let ownedPackage: Awaited<ReturnType<
+    typeof createOwnedNativePackageFixtureV1
+  >> | undefined;
   try {
+    ownedPackage = await createOwnedNativePackageFixtureV1({
+      fixtureDirectoryPath: path.resolve(packageDirectoryPath),
+    });
     server = await startServer({
       source: {
         kind: "world-package",
-        packageDirectoryPath: path.resolve(packageDirectoryPath),
+        packageDirectoryPath: ownedPackage.packageDirectoryPath,
       },
       ...(port === undefined ? { port: 5174 } : { port }),
       forwardOutput: !json,
     });
   } catch (error) {
+    await ownedPackage?.dispose().catch(() => undefined);
     const result = cliFailure(
       "CLI_NATIVE_SERVER_START_FAILED",
       "Unable to start the Native Package verification Harness.",
@@ -2414,8 +2423,12 @@ async function runNativeUntilSignal(
     process.once("SIGTERM", finish);
     void server.waitForExit().then(finish);
   });
-  await server.stop();
-  return 0;
+  try {
+    await server.stop();
+    return 0;
+  } finally {
+    await ownedPackage.dispose();
+  }
 }
 
 export async function loadPackageHeadless(
