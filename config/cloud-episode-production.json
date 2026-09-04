@@ -3,7 +3,7 @@
   "schemaVersion": 2,
   "enabled": true,
   "executionProfile": "cpu-gpu-streaming-checkpoints@1",
-  "workerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:da666085816f4e3c36074b5d5c5aa8b90f2429686a93763ca65765b7fa7f8d11",
+  "workerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-worker@sha256:72f327a7a6be0e1eacd09da2b5b3d6768e672943ecd503fe1ff662b8bba4b834",
   "postprocessWorkerImage": "829115578968.dkr.ecr.us-east-2.amazonaws.com/worldkit-cloud-postprocess@sha256:75b1ea2f49e9c9096717364b0591f32acac4146da576a259acadc6eecb258653",
   "outputS3Root": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/cloud-episodes",
   "namespace": "lwdp",
