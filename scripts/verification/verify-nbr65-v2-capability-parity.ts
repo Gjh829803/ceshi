@@ -342,9 +342,11 @@ const PASSED_CAPABILITIES = Object.freeze([
     owner: "native-reconstruction-production-host",
     evidence: {
       "scripts/reconstruction/run-production.test.ts": [
-        "delivers an admitted report-only Package after opening quality repair is exhausted",
-        "delivers a non-accepted report-only preview after evaluation repair is exhausted",
+        "delivers a non-accepted report-only preview after the first evaluation",
         "delivers incomplete soft evidence as a report-only preview without inventing a pass",
+      ],
+      "scripts/reconstruction/run.test.ts": [
+        "ends report-only at the first trusted Host rejection without an external repair Attempt",
       ],
       "scripts/cli/worldkit.test.ts": [
         "returns success for a non-accepted report-only preview",
