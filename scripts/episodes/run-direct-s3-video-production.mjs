@@ -228,7 +228,6 @@ async function worker() {
       ], {
         env: {
           ...process.env,
-          WORLDKIT_CLOUD_EXECUTION_ID: "direct-s3-video-production",
           WORLDKIT_PROVIDER_JOURNAL_S3_PREFIX: joinS3Uri(
             outputPrefix,
             "provider-journals",
