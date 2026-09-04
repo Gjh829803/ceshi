@@ -1010,6 +1010,27 @@ export function normalizeSubjectDefinitionV2(
       }
     });
   }
+  const presentationPolicy = structuredClone(
+    definition.presentationPolicy ?? { kind: "automatic" as const },
+  );
+  if (presentationPolicy.kind === "fixed-locomotion" &&
+      definition.visualBinding.mode === "rigged" &&
+      visualResources?.animationSetResource !== undefined &&
+      !visualResources.animationSetResource.animationBindings.some((binding) =>
+        binding.automaticPresentationKeys.includes(
+          presentationPolicy.presentationKey,
+        ))) {
+    addError(
+      diagnostics,
+      "SUBJECT_ASSET_PROFILE_INCOMPATIBLE",
+      `${instancePath}/presentationPolicy/presentationKey`,
+      `Fixed presentation '${presentationPolicy.presentationKey}' is not published by the selected Animation Set.`,
+      {
+        presentationKey: presentationPolicy.presentationKey,
+        animationSetRef: visualResources.animationSetResource.resourceRef,
+      },
+    );
+  }
 
   const normalizedCollider = resolveColliderPolicy(definition, request);
   const capabilityAssembly = normalizeCapabilityAssemblyV1(definition, request);
@@ -1077,6 +1098,9 @@ export function normalizeSubjectDefinitionV2(
     sockets,
     mountSlots,
     colliderPolicy: structuredClone(definition.colliderPolicy),
+    ...(definition.presentationPolicy === undefined
+      ? {}
+      : { presentationPolicy }),
     capabilityRefs,
     locomotionCapabilityRef: locomotionCapability.resourceRef,
     locomotionCapabilityHash: locomotionCapability.contentHash,

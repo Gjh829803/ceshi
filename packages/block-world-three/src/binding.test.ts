@@ -9,8 +9,11 @@ import { BLOCK_PRESET_REFS_V1 } from "@whitebox-world/block-world";
 
 import {
   bindWorldkitBlockV1,
+  bindWorldkitSubjectMeshV1,
   createWorldkitBlockMaterialV1,
+  createWorldkitSubjectMaterialV1,
   readWorldkitBlockBindingV1,
+  readWorldkitSubjectMeshBindingV1,
 } from "./binding.js";
 
 describe("Three.js block binding", () => {
@@ -38,6 +41,30 @@ describe("Three.js block binding", () => {
       id: "palace-block-002",
       presetRef: BLOCK_PRESET_REFS_V1.landmarkOrange,
     })).toThrow("BLOCK_BINDING_INVALID");
+  });
+
+  it("binds Agent-drawn Subject shapes separately from world blocks", () => {
+    const mesh = new Mesh(
+      new BoxGeometry(0.2, 0.08, 2.4),
+      createWorldkitSubjectMaterialV1(),
+    );
+    bindWorldkitSubjectMeshV1(mesh, {
+      id: "flying-sword",
+      semanticTags: ["attachment", "sword"],
+    });
+    expect(readWorldkitSubjectMeshBindingV1(mesh)).toEqual({
+      kind: "worldkit-three-subject-mesh-binding",
+      schemaVersion: 1,
+      id: "flying-sword",
+      colliderContribution: "exclude",
+      semanticTags: ["attachment", "sword"],
+    });
+    expect(readWorldkitBlockBindingV1(mesh)).toBeUndefined();
+    expect(mesh.userData).toEqual({});
+    expect(() => bindWorldkitBlockV1(mesh, {
+      id: "wrong-double-binding",
+      presetRef: BLOCK_PRESET_REFS_V1.walkable,
+    })).toThrow("already bound");
   });
 
   it("rejects unknown presets and materials not created for the selected preset", () => {

@@ -1,11 +1,13 @@
 import {
   BoxGeometry,
   Color,
+  CylinderGeometry,
   Euler,
   Mesh,
   MeshBasicMaterial,
   Quaternion,
   Scene,
+  SphereGeometry,
   Vector3,
 } from "three";
 
@@ -17,12 +19,15 @@ import {
   type BlockInstanceV2,
   type BlockPositionMetersXYZV2,
   type BlockShapeKindV2,
+  type BlockSubjectVisualPartV2,
   type BlockWorldDiagnosticV2,
 } from "@whitebox-world/block-world";
 
 import {
   readWorldkitBlockBindingV1,
   readWorldkitBlockMaterialPresetRefV1,
+  isWorldkitSubjectMaterialV1,
+  readWorldkitSubjectMeshBindingV1,
 } from "./binding.js";
 import type { ExtractThreeBlockWorldResultV2 } from "./types.js";
 
@@ -100,6 +105,150 @@ function validWorldScale(mesh: Mesh): boolean {
   return close(scale.x, 1) && close(scale.y, 1) && close(scale.z, 1);
 }
 
+function subjectPrimitiveShape(
+  mesh: Mesh,
+): Extract<BlockSubjectVisualPartV2, { kind: "primitive" }>["shape"] | undefined {
+  if ((mesh as Mesh & {
+        readonly isSkinnedMesh?: boolean;
+        readonly isInstancedMesh?: boolean;
+      }).isSkinnedMesh === true ||
+      (mesh as Mesh & { readonly isInstancedMesh?: boolean }).isInstancedMesh === true ||
+      Object.keys(mesh.geometry.morphAttributes).length > 0) return undefined;
+  const geometry = mesh.geometry;
+  geometry.computeBoundingBox();
+  const bounds = geometry.boundingBox;
+  if (bounds === null) return undefined;
+  if (geometry instanceof BoxGeometry) {
+    const { width, height, depth, widthSegments, heightSegments, depthSegments } =
+      geometry.parameters;
+    const expected = new BoxGeometry(
+      width,
+      height,
+      depth,
+      widthSegments,
+      heightSegments,
+      depthSegments,
+    );
+    if (![width, height, depth].every((value) =>
+      Number.isFinite(value) && value > 0) ||
+      !close(bounds.min.x, -width / 2) || !close(bounds.max.x, width / 2) ||
+      !close(bounds.min.y, -height / 2) || !close(bounds.max.y, height / 2) ||
+      !close(bounds.min.z, -depth / 2) || !close(bounds.max.z, depth / 2) ||
+      !sameIndexedPositions(geometry, expected)) {
+      expected.dispose();
+      return undefined;
+    }
+    expected.dispose();
+    return { kind: "box", sizeMetersXYZ: [width, height, depth] };
+  }
+  if (geometry instanceof SphereGeometry) {
+    const {
+      radius, widthSegments, heightSegments, phiStart, phiLength, thetaStart,
+      thetaLength,
+    } = geometry.parameters;
+    const expected = new SphereGeometry(
+      radius,
+      widthSegments,
+      heightSegments,
+      phiStart,
+      phiLength,
+      thetaStart,
+      thetaLength,
+    );
+    if (!Number.isFinite(radius) || radius <= 0 ||
+      !close(phiStart, 0) || !close(phiLength, Math.PI * 2) ||
+      !close(thetaStart, 0) || !close(thetaLength, Math.PI) ||
+      !close(bounds.min.y, -radius) || !close(bounds.max.y, radius) ||
+      bounds.min.x < -radius - EPSILON || bounds.max.x > radius + EPSILON ||
+      bounds.min.z < -radius - EPSILON || bounds.max.z > radius + EPSILON ||
+      !sameIndexedPositions(geometry, expected)) {
+      expected.dispose();
+      return undefined;
+    }
+    expected.dispose();
+    return { kind: "sphere", radiusMeters: radius };
+  }
+  if (geometry instanceof CylinderGeometry) {
+    const {
+      radiusTop, radiusBottom, height, radialSegments, heightSegments,
+      openEnded, thetaStart, thetaLength,
+    } = geometry.parameters;
+    const expected = new CylinderGeometry(
+      radiusTop,
+      radiusBottom,
+      height,
+      radialSegments,
+      heightSegments,
+      openEnded,
+      thetaStart,
+      thetaLength,
+    );
+    if (![radiusTop, radiusBottom, height].every((value) =>
+      Number.isFinite(value) && value > 0) ||
+      !close(radiusTop, radiusBottom) || openEnded || !close(thetaStart, 0) ||
+      !close(thetaLength, Math.PI * 2) ||
+      !close(bounds.min.y, -height / 2) || !close(bounds.max.y, height / 2) ||
+      bounds.min.x < -radiusTop - EPSILON || bounds.max.x > radiusTop + EPSILON ||
+      bounds.min.z < -radiusTop - EPSILON || bounds.max.z > radiusTop + EPSILON ||
+      !sameIndexedPositions(geometry, expected)) {
+      expected.dispose();
+      return undefined;
+    }
+    expected.dispose();
+    return { kind: "cylinder", radiusMeters: radiusTop, heightMeters: height };
+  }
+  return undefined;
+}
+
+function sameIndexedPositions(
+  actual: BoxGeometry | SphereGeometry | CylinderGeometry,
+  expected: BoxGeometry | SphereGeometry | CylinderGeometry,
+): boolean {
+  const actualPosition = actual.getAttribute("position");
+  const expectedPosition = expected.getAttribute("position");
+  if (actualPosition === undefined || expectedPosition === undefined ||
+      actualPosition.itemSize !== expectedPosition.itemSize ||
+      actualPosition.count !== expectedPosition.count) return false;
+  for (let index = 0; index < actualPosition.count; index += 1) {
+    if (!close(actualPosition.getX(index), expectedPosition.getX(index)) ||
+        !close(actualPosition.getY(index), expectedPosition.getY(index)) ||
+        !close(actualPosition.getZ(index), expectedPosition.getZ(index))) return false;
+  }
+  const actualIndex = actual.getIndex();
+  const expectedIndex = expected.getIndex();
+  if (actualIndex === null || expectedIndex === null) return actualIndex === expectedIndex;
+  if (actualIndex.count !== expectedIndex.count) return false;
+  for (let index = 0; index < actualIndex.count; index += 1) {
+    if (actualIndex.getX(index) !== expectedIndex.getX(index)) return false;
+  }
+  return true;
+}
+
+function subjectLocalTransform(mesh: Mesh): Readonly<{
+  positionMetersXYZ: readonly [number, number, number];
+  rotationEulerRadiansXYZ: readonly [number, number, number];
+}> | undefined {
+  if (!validWorldScale(mesh)) return undefined;
+  const position = mesh.getWorldPosition(new Vector3());
+  const quaternion = mesh.getWorldQuaternion(new Quaternion()).normalize();
+  const rotation = new Euler().setFromQuaternion(quaternion, "XYZ");
+  const values = [position.x, position.y, position.z, rotation.x, rotation.y, rotation.z];
+  if (!values.every(Number.isFinite)) return undefined;
+  const stable = (value: number) => Object.is(value, -0) || Math.abs(value) <= EPSILON ? 0 : value;
+  return {
+    positionMetersXYZ: [stable(position.x), stable(position.y), stable(position.z)],
+    rotationEulerRadiansXYZ: [stable(rotation.x), stable(rotation.y), stable(rotation.z)],
+  };
+}
+
+function validSubjectMaterial(mesh: Mesh): boolean {
+  return !Array.isArray(mesh.material) && mesh.material instanceof MeshBasicMaterial &&
+    isWorldkitSubjectMaterialV1(mesh.material) &&
+    mesh.material.color.equals(new Color("#ff334d")) &&
+    mesh.material.opacity === 1 && mesh.material.transparent === false &&
+    mesh.material.depthWrite === true && mesh.material.toneMapped === false;
+}
+
 function worldQuarterTurnsY(mesh: Mesh): number | undefined {
   const quaternion = mesh.getWorldQuaternion(new Quaternion()).normalize();
   const up = new Vector3(0, 1, 0).applyQuaternion(quaternion);
@@ -127,11 +276,67 @@ export function extractThreeBlockWorldV2(scene: Scene): ExtractThreeBlockWorldRe
   scene.updateMatrixWorld(true);
   const diagnostics: BlockWorldDiagnosticV2[] = [];
   const blocks: BlockInstanceV2[] = [];
+  const subjectMeshParts: Array<Extract<
+    BlockSubjectVisualPartV2,
+    { kind: "primitive" }
+  >> = [];
+  const subjectMeshIds = new Set<string>();
   let meshIndex = 0;
   scene.traverse((object) => {
     if (!(object instanceof Mesh)) return;
     const path = `/scene/meshes/${meshIndex}`;
     meshIndex += 1;
+    const subjectBinding = readWorldkitSubjectMeshBindingV1(object);
+    if (subjectBinding !== undefined) {
+      let admitted = true;
+      if (subjectMeshIds.has(subjectBinding.id)) {
+        diagnostics.push(diagnostic(
+          "BLOCK_WORLD_SUBJECT_MESH_BINDING_DUPLICATE",
+          `${path}/binding/id`,
+          `Subject Mesh binding '${subjectBinding.id}' is duplicated.`,
+        ));
+        admitted = false;
+      }
+      subjectMeshIds.add(subjectBinding.id);
+      const shape = subjectPrimitiveShape(object);
+      if (shape === undefined) {
+        diagnostics.push(diagnostic(
+          "BLOCK_WORLD_SUBJECT_MESH_GEOMETRY_INVALID",
+          `${path}/geometry`,
+          `Subject Mesh '${subjectBinding.id}' must use one centered, undeformed BoxGeometry, SphereGeometry, or CylinderGeometry.`,
+        ));
+        admitted = false;
+      }
+      if (!validSubjectMaterial(object)) {
+        diagnostics.push(diagnostic(
+          "BLOCK_WORLD_SUBJECT_MESH_MATERIAL_INVALID",
+          `${path}/material`,
+          `Subject Mesh '${subjectBinding.id}' material no longer matches the WorldKit Subject material.`,
+        ));
+        admitted = false;
+      }
+      const transform = subjectLocalTransform(object);
+      if (transform === undefined) {
+        diagnostics.push(diagnostic(
+          "BLOCK_WORLD_SUBJECT_MESH_TRANSFORM_INVALID",
+          `${path}/transform`,
+          `Subject Mesh '${subjectBinding.id}' requires finite position/rotation and unit world scale.`,
+        ));
+        admitted = false;
+      }
+      if (admitted && shape !== undefined && transform !== undefined) {
+        subjectMeshParts.push({
+          id: subjectBinding.id,
+          kind: "primitive",
+          shape,
+          positionMetersXYZ: transform.positionMetersXYZ,
+          rotationEulerRadiansXYZ: transform.rotationEulerRadiansXYZ,
+          colliderContribution: subjectBinding.colliderContribution,
+          semanticTags: subjectBinding.semanticTags,
+        });
+      }
+      return;
+    }
     const binding = readWorldkitBlockBindingV1(object);
     if (binding === undefined) {
       diagnostics.push(diagnostic(
@@ -223,6 +428,9 @@ export function extractThreeBlockWorldV2(scene: Scene): ExtractThreeBlockWorldRe
   });
   return Object.freeze({
     manifest: createBlockWorldManifestV2(blocks),
+    subjectMeshParts: Object.freeze(
+      subjectMeshParts.sort((left, right) => left.id.localeCompare(right.id)),
+    ),
     diagnostics: freezeDiagnostics(diagnostics),
   });
 }

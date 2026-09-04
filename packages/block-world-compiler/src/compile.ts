@@ -11,16 +11,24 @@ import {
   blockWorldSpaceTransitionDestinationAnchorEntityIdV2,
   blockWorldSpaceTransitionSemanticClassIdV2,
   checkBlockWorldV2,
+  resolveBlockCameraPackV1,
+  resolveBlockMotionPackV1,
   resolveBlockPresetV1,
   type BlockInstanceV2,
   type BlockPresetDefinitionV1,
   type BlockSubjectPrimitiveShapeV2,
+  type BlockSubjectVisualPartV2,
+  type BlockWorldPackCameraV1,
 } from "@whitebox-world/block-world";
 import { compileCanonicalWorldV1 } from "@whitebox-world/compiler";
 import { createCoreGameplayBootstrapV1 } from "@whitebox-world/gameplay";
 import type {
   SceneBriefImplementationMapDraftV1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  builtInSubjectResourceRegistry,
+  type RegistrySubjectDefinitionV3,
+} from "@whitebox-world/subject-registry";
 
 import type {
   BlockWorldCompilerDiagnosticV2,
@@ -70,13 +78,394 @@ function controlledSubjectDefinitionRef(
 ): string {
   return subject.kind === "registered"
     ? subject.subjectDefinitionRef
-    : `package://subject-definition/${subject.definition.id}@1`;
+    : `package://subject-definition/${subject.kind === "composed"
+      ? subject.definition.id
+      : subject.assembly.id}@1`;
+}
+
+const HOSTED_SUBJECT_FIXTURE_REFS = new Set([
+  "worldkit://subject-definition/humanoid.rigged-golden@2",
+  "worldkit://subject-definition/humanoid.third-person@1",
+  "worldkit://subject-definition/quadruped.ground-proxy@1",
+]);
+
+const ASSEMBLY_CAMERA_TARGET_SOCKET_ID = "AssemblyCameraTarget";
+
+interface ResolvedAssemblyV1 {
+  readonly definition: PackageSubjectDefinitionV1;
+  readonly targetSocketId: string;
+  readonly cameraDistanceMeters: number;
+  readonly cameraPitchRadians: number;
+  readonly cameraFovDegrees: number;
+}
+
+function isPackCamera(
+  camera: CompileBlockWorldInputV2["camera"],
+): camera is BlockWorldPackCameraV1 {
+  return "kind" in camera && camera.kind === "pack";
+}
+
+function packageVisualPart(
+  part: RegistrySubjectDefinitionV3["visualParts"][number] |
+    BlockSubjectVisualPartV2,
+): PackageSubjectDefinitionV1["visualParts"][number] {
+  if (part.kind === "asset") {
+    const transform = "localTransform" in part ? part.localTransform : {
+      positionMetersXYZ: part.positionMetersXYZ,
+      rotationEulerRadiansXYZ: part.rotationEulerRadiansXYZ ?? [0, 0, 0],
+      scaleXYZ: part.scaleXYZ,
+    };
+    return {
+      id: part.id,
+      kind: "asset",
+      subjectAssetRef: part.subjectAssetRef,
+      localTransform: {
+        positionMetersXYZ: stableSubjectVector(transform.positionMetersXYZ),
+        rotationEulerRadiansXYZ: stableSubjectVector(
+          transform.rotationEulerRadiansXYZ ?? [0, 0, 0],
+        ),
+        scaleXYZ: stableSubjectVector(transform.scaleXYZ),
+      },
+      appearance: { mode: "whitebox-neutral" },
+      semanticTags: [...part.semanticTags],
+    };
+  }
+  const transform = "localTransform" in part ? part.localTransform : {
+    positionMetersXYZ: part.positionMetersXYZ,
+    rotationEulerRadiansXYZ: part.rotationEulerRadiansXYZ ?? [0, 0, 0],
+  };
+  return {
+    id: part.id,
+    kind: "primitive",
+    shape: stableSubjectShape(part.shape),
+    localTransform: {
+      positionMetersXYZ: stableSubjectVector(transform.positionMetersXYZ),
+      rotationEulerRadiansXYZ: stableSubjectVector(
+        transform.rotationEulerRadiansXYZ ?? [0, 0, 0],
+      ),
+    },
+    colliderContribution: part.colliderContribution,
+    semanticTags: [...part.semanticTags],
+  };
+}
+
+function axisAlignedPartBounds(
+  part: PackageSubjectDefinitionV1["visualParts"][number],
+): Readonly<{
+  minimumMetersXYZ: readonly [number, number, number];
+  maximumMetersXYZ: readonly [number, number, number];
+}> {
+  const transform = part.localTransform;
+  const assetBounds = part.kind === "asset"
+    ? builtInSubjectResourceRegistry.resolveSubjectAsset(part.subjectAssetRef)?.bounds
+    : undefined;
+  const baseSize: readonly [number, number, number] = part.kind === "primitive"
+    ? part.shape.kind === "box"
+      ? part.shape.sizeMetersXYZ
+      : part.shape.kind === "sphere"
+        ? [part.shape.radiusMeters * 2, part.shape.radiusMeters * 2,
+            part.shape.radiusMeters * 2]
+        : [part.shape.radiusMeters * 2, part.shape.heightMeters,
+            part.shape.radiusMeters * 2]
+    : assetBounds === undefined
+      ? [0, 0, 0]
+      : [
+          assetBounds.maximumMetersXYZ[0] - assetBounds.minimumMetersXYZ[0],
+          assetBounds.maximumMetersXYZ[1] - assetBounds.minimumMetersXYZ[1],
+          assetBounds.maximumMetersXYZ[2] - assetBounds.minimumMetersXYZ[2],
+        ];
+  const sourceCenter: readonly [number, number, number] = assetBounds === undefined
+    ? [0, 0, 0]
+    : [
+        (assetBounds.minimumMetersXYZ[0] + assetBounds.maximumMetersXYZ[0]) / 2,
+        (assetBounds.minimumMetersXYZ[1] + assetBounds.maximumMetersXYZ[1]) / 2,
+        (assetBounds.minimumMetersXYZ[2] + assetBounds.maximumMetersXYZ[2]) / 2,
+      ];
+  const scale = part.kind === "asset" ? part.localTransform.scaleXYZ : [1, 1, 1] as const;
+  const rotation = transform.rotationEulerRadiansXYZ ?? [0, 0, 0];
+  const [x, y, z] = rotation;
+  const [cx, sx, cy, sy, cz, sz] = [
+    Math.cos(x), Math.sin(x), Math.cos(y), Math.sin(y), Math.cos(z), Math.sin(z),
+  ];
+  const matrix = [
+    cy * cz, sx * sy * cz - cx * sz, cx * sy * cz + sx * sz,
+    cy * sz, sx * sy * sz + cx * cz, cx * sy * sz - sx * cz,
+    -sy, sx * cy, cx * cy,
+  ];
+  const scaledSize = baseSize.map((value, axis) => value * scale[axis]!) as
+    [number, number, number];
+  const size: [number, number, number] = [
+    Math.abs(matrix[0]!) * scaledSize[0] + Math.abs(matrix[1]!) * scaledSize[1] +
+      Math.abs(matrix[2]!) * scaledSize[2],
+    Math.abs(matrix[3]!) * scaledSize[0] + Math.abs(matrix[4]!) * scaledSize[1] +
+      Math.abs(matrix[5]!) * scaledSize[2],
+    Math.abs(matrix[6]!) * scaledSize[0] + Math.abs(matrix[7]!) * scaledSize[1] +
+      Math.abs(matrix[8]!) * scaledSize[2],
+  ];
+  const scaledCenter = sourceCenter.map((value, axis) => value * scale[axis]!) as
+    [number, number, number];
+  const rotatedCenter: [number, number, number] = [
+    matrix[0]! * scaledCenter[0] + matrix[1]! * scaledCenter[1] +
+      matrix[2]! * scaledCenter[2],
+    matrix[3]! * scaledCenter[0] + matrix[4]! * scaledCenter[1] +
+      matrix[5]! * scaledCenter[2],
+    matrix[6]! * scaledCenter[0] + matrix[7]! * scaledCenter[1] +
+      matrix[8]! * scaledCenter[2],
+  ];
+  const center = transform.positionMetersXYZ.map((value, axis) =>
+    value + rotatedCenter[axis]!) as [number, number, number];
+  return {
+    minimumMetersXYZ: center.map((value, axis) => value - size[axis]! / 2) as
+      [number, number, number],
+    maximumMetersXYZ: center.map((value, axis) => value + size[axis]! / 2) as
+      [number, number, number],
+  };
+}
+
+function combinedBounds(
+  parts: readonly PackageSubjectDefinitionV1["visualParts"][number][],
+): ReturnType<typeof axisAlignedPartBounds> {
+  const bounds = parts.map(axisAlignedPartBounds);
+  return {
+    minimumMetersXYZ: [0, 1, 2].map((axis) =>
+      Math.min(...bounds.map(({ minimumMetersXYZ }) => minimumMetersXYZ[axis]!))) as
+      [number, number, number],
+    maximumMetersXYZ: [0, 1, 2].map((axis) =>
+      Math.max(...bounds.map(({ maximumMetersXYZ }) => maximumMetersXYZ[axis]!))) as
+      [number, number, number],
+  };
+}
+
+function resolveAssemblyV1(input: CompileBlockWorldInputV2):
+  | Readonly<{ ok: true; value: ResolvedAssemblyV1 }>
+  | Readonly<{ ok: false; code: BlockWorldCompilerDiagnosticV2["code"]; message: string }> {
+  const subject = input.controlledSubject;
+  if (subject.kind !== "assembly") {
+    return {
+      ok: false,
+      code: "BLOCK_WORLD_SUBJECT_ASSEMBLY_INVALID",
+      message: "Controlled Subject is not a Subject Assembly.",
+    };
+  }
+  if (!("kind" in input.camera) || input.camera.kind !== "pack") {
+    return {
+      ok: false,
+      code: "BLOCK_WORLD_CAMERA_PACK_INCOMPATIBLE",
+      message: "A Subject Assembly requires one explicit Camera Pack.",
+    };
+  }
+  const cameraPack = resolveBlockCameraPackV1(input.camera.cameraPackId);
+  const motionPack = resolveBlockMotionPackV1(subject.assembly.motion.motionPackId);
+  if (cameraPack === undefined || motionPack === undefined) {
+    return {
+      ok: false,
+      code: cameraPack === undefined
+        ? "BLOCK_WORLD_CAMERA_PACK_INCOMPATIBLE"
+        : "BLOCK_WORLD_SUBJECT_PACK_INCOMPATIBLE",
+      message: "The selected Motion or Camera Pack is unavailable.",
+    };
+  }
+  const meshPartsById = new Map(
+    (input.subjectMeshParts ?? []).map((part) => [part.id, part]),
+  );
+  const base = subject.assembly.baseSubject;
+  const availableDefinitions = builtInSubjectResourceRegistry
+    .listDiscoverableResources({ kind: "subject-definition" });
+  const baseDefinition = base.kind === "subject-pack"
+    ? (() => {
+        const exactVersioned = availableDefinitions.find((definition) =>
+          `${definition.id}.v${definition.version}` === base.subjectPackId);
+        if (exactVersioned !== undefined) return exactVersioned;
+        const unversioned = availableDefinitions.filter(({ id }) =>
+          id === base.subjectPackId);
+        return unversioned.length === 1 ? unversioned[0] : undefined;
+      })()
+    : undefined;
+  if (base.kind === "subject-pack" &&
+      (baseDefinition === undefined || HOSTED_SUBJECT_FIXTURE_REFS.has(
+        baseDefinition.resourceRef,
+      ))) {
+    return {
+      ok: false,
+      code: "BLOCK_WORLD_SUBJECT_PACK_UNKNOWN",
+      message: `Subject Pack '${base.subjectPackId}' is not admitted for Hosted authoring.`,
+    };
+  }
+  const baseMeshIds = base.kind === "custom-mesh"
+    ? base.subjectMeshBindingIds
+    : [];
+  const attachmentIds = subject.assembly.attachments.map(
+    ({ subjectMeshBindingId }) => subjectMeshBindingId,
+  );
+  const resolvedBaseParts = base.kind === "subject-pack"
+    ? baseDefinition!.visualParts.map(packageVisualPart)
+    : baseMeshIds.map((id) => packageVisualPart(meshPartsById.get(id)!));
+  const attachmentParts = attachmentIds.map((id) =>
+    packageVisualPart(meshPartsById.get(id)!));
+  const visualParts = [...resolvedBaseParts, ...attachmentParts];
+  const partIds = new Set<string>();
+  const duplicatePart = visualParts.find(({ id }) => {
+    if (partIds.has(id)) return true;
+    partIds.add(id);
+    return false;
+  });
+  if (duplicatePart !== undefined) {
+    return {
+      ok: false,
+      code: "BLOCK_WORLD_SUBJECT_MESH_BINDING_DUPLICATE",
+      message: "Subject base and attachment part IDs must be unique after assembly.",
+    };
+  }
+  if (base.kind === "custom-mesh" && !resolvedBaseParts.some((part) =>
+    part.kind === "primitive" && part.colliderContribution === "include")) {
+    return {
+      ok: false,
+      code: "BLOCK_WORLD_SUBJECT_PACK_INCOMPATIBLE",
+      message: "A custom Mesh base requires at least one collider-contributing shape.",
+    };
+  }
+  const sourceSockets: Array<PackageSubjectDefinitionV1["sockets"][number]> =
+    baseDefinition?.sockets.map((socket) => structuredClone(socket)) ?? [];
+  const target = input.camera.target;
+  let targetSocketId: string;
+  if (target.kind === "base-subject-socket") {
+    if (!sourceSockets.some(({ id }) => id === target.socketId)) {
+      return {
+        ok: false,
+        code: "BLOCK_WORLD_CAMERA_PACK_INCOMPATIBLE",
+        message: `Camera target Socket '${target.socketId}' is not published by Subject Pack '${base.kind === "subject-pack" ? base.subjectPackId : "custom-mesh"}'.`,
+      };
+    }
+    targetSocketId = target.socketId;
+  } else {
+    const bounds = target.kind === "assembly-bounds"
+      ? combinedBounds(visualParts)
+      : target.kind === "base-subject-bounds"
+        ? combinedBounds(resolvedBaseParts)
+        : undefined;
+    const position = target.kind === "subject-local-point"
+      ? target.positionMetersXYZ
+      : [
+          (bounds!.minimumMetersXYZ[0] + bounds!.maximumMetersXYZ[0]) / 2,
+          bounds!.minimumMetersXYZ[1] +
+            (bounds!.maximumMetersXYZ[1] - bounds!.minimumMetersXYZ[1]) *
+              target.heightRatio,
+          (bounds!.minimumMetersXYZ[2] + bounds!.maximumMetersXYZ[2]) / 2,
+        ] as const;
+    if (sourceSockets.some(({ id }) => id === ASSEMBLY_CAMERA_TARGET_SOCKET_ID)) {
+      return {
+        ok: false,
+        code: "BLOCK_WORLD_CAMERA_PACK_INCOMPATIBLE",
+        message: `Subject Pack reserves Camera Socket '${ASSEMBLY_CAMERA_TARGET_SOCKET_ID}'.`,
+      };
+    }
+    sourceSockets.push({
+      id: ASSEMBLY_CAMERA_TARGET_SOCKET_ID,
+      kind: "local",
+      localTransform: {
+        positionMetersXYZ: stableSubjectVector(position),
+        rotationEulerRadiansXYZ: [0, 0, 0],
+      },
+      semanticTags: ["camera", "target"],
+    });
+    targetSocketId = ASSEMBLY_CAMERA_TARGET_SOCKET_ID;
+  }
+  const source = baseDefinition;
+  const presentationPolicy = structuredClone(subject.assembly.presentation);
+  const definition: PackageSubjectDefinitionV1 = {
+    id: subject.assembly.id,
+    version: 1,
+    kind: "subject-definition",
+    authoringAvailability: "advanced",
+    category: base.kind === "subject-pack" ? source!.category : base.category,
+    bodyTopology: base.kind === "subject-pack"
+      ? source!.bodyTopology
+      : base.bodyTopology,
+    semanticClassId: base.kind === "subject-pack"
+      ? source!.semanticClassId
+      : base.semanticClassId,
+    coordinateConvention: {
+      forwardAxis: "-Z",
+      upAxis: "+Y",
+      metersPerUnit: 1,
+      pivot: "support-center",
+    },
+    visualParts,
+    visualBinding: source?.visualBinding === undefined
+      ? { mode: "static" }
+      : structuredClone(source.visualBinding),
+    sockets: sourceSockets,
+    mountSlots: [],
+    colliderPolicy: source?.colliderPolicy === undefined
+      ? {
+          kind: "derive",
+          colliderDerivationProfileRef:
+            "worldkit://collider-derivation-profile/vertical-capability-capsule@1",
+        }
+      : structuredClone(source.colliderPolicy),
+    capabilityRefs: [...motionPack.capabilityRefs],
+    profiles: {
+      physicsBodyProfileRef: motionPack.physicsBodyProfileRef,
+      locomotionProfileRef: motionPack.locomotionProfileRef,
+      controlFeelProfileRef: motionPack.controlFeelProfileRef,
+      allowedControlFeelProfileRefs: [...motionPack.allowedControlFeelProfileRefs],
+      motion: {
+        defaultMotionProfileRef: motionPack.defaultMotionProfileRef,
+        optionalMotionProfileRefs: [...motionPack.optionalMotionProfileRefs],
+        fallbackMotionProfileRef: motionPack.fallbackMotionProfileRef,
+      },
+      controlProfileRef: motionPack.controlProfileRef,
+      cameraContextProfileRef: cameraPack.cameraContextProfileRef,
+      mediumProfileRef: motionPack.mediumProfileRef,
+      harnessProfileRef: source?.profiles.harnessProfileRef ??
+        "worldkit://harness-profile/subject.standard@1",
+    },
+    relationshipCapabilityRefs: [],
+    actionOrPoseSetRef: source?.actionOrPoseSetRef ??
+      "worldkit://pose-set/static.whitebox@1",
+    renderBindingProfileRef: source?.renderBindingProfileRef ??
+      "worldkit://render-binding/subject.standard@1",
+    presentationPolicy,
+    allowedOverridePaths: [],
+    aiMetadata: {
+      displayName: base.kind === "subject-pack"
+        ? `${source!.aiMetadata.displayName} assembly`
+        : base.displayName,
+      description: base.kind === "subject-pack"
+        ? `Subject Assembly based on ${source!.aiMetadata.displayName}.`
+        : base.description,
+      semanticTags: [...new Set([
+        ...(source?.aiMetadata.semanticTags ?? [base.kind, "custom-mesh"]),
+        "subject-assembly",
+      ])].sort(),
+    },
+  };
+  return {
+    ok: true,
+    value: {
+      definition,
+      targetSocketId,
+      cameraDistanceMeters: input.camera.tuning?.distanceMeters ??
+        cameraPack.defaults.distanceMeters,
+      cameraPitchRadians: input.camera.tuning?.pitchRadians ??
+        cameraPack.defaults.pitchRadians,
+      cameraFovDegrees: input.camera.tuning?.fovDegrees ??
+        cameraPack.defaults.fovDegrees,
+    },
+  };
 }
 
 function compilePackageSubjectDefinitions(
   subject: CompileBlockWorldInputV2["controlledSubject"],
+  resolvedAssembly?: ResolvedAssemblyV1,
 ): readonly PackageSubjectDefinitionV1[] {
   if (subject.kind === "registered") return [];
+  if (subject.kind === "assembly") {
+    if (resolvedAssembly === undefined) {
+      throw new Error("BLOCK_WORLD_SUBJECT_ASSEMBLY_INVALID");
+    }
+    return [resolvedAssembly.definition];
+  }
   const source = subject.definition;
   return [{
     id: source.id,
@@ -205,7 +594,7 @@ function clusterSemanticClassId(
 }
 
 function diagnostic(
-  code: "BLOCK_WORLD_VISUAL_TARGET_CONFLICT" | "BLOCK_WORLD_INTERNAL_COMPILE_FAILED",
+  code: BlockWorldCompilerDiagnosticV2["code"],
   instancePath: string,
   message: string,
   details?: Readonly<Record<string, unknown>>,
@@ -358,6 +747,7 @@ function implementationMapDraft(
 function compileAuthoringSpec(
   input: CompileBlockWorldInputV2,
   clusters: readonly BlockWorldRuntimeClusterV2[],
+  resolvedAssembly?: ResolvedAssemblyV1,
 ): AuthoringSpecV4 {
   const bounds = boundsForBlocks(input.manifest.blocks);
   const solidClusterCount = clusters.filter((cluster) =>
@@ -370,6 +760,18 @@ function compileAuthoringSpec(
     spaceTransitionIds,
   );
   const spawn = input.spawnStandPositionMetersXYZ;
+  const packCamera = isPackCamera(input.camera);
+  const legacyCamera = packCamera ? undefined : input.camera;
+  const cameraDistanceMeters = packCamera
+    ? resolvedAssembly!.cameraDistanceMeters
+    : legacyCamera!.distanceMeters;
+  const cameraPitchRadians = packCamera
+    ? resolvedAssembly!.cameraPitchRadians
+    : legacyCamera!.pitchRadians;
+  const cameraFovDegrees = packCamera
+    ? resolvedAssembly!.cameraFovDegrees
+    : legacyCamera!.fovDegrees;
+  const cameraTargetHeightMeters = packCamera ? 1 : legacyCamera!.targetHeightMeters;
   const nodes: WorldNodeSpecV4[] = [
     {
       id: "runtime-foundation",
@@ -441,13 +843,16 @@ function compileAuthoringSpec(
           allowedRigRefs: ["worldkit://camera/third-person.standard@1"],
           target: {
             targetEntityId: input.controlledSubject.entityId,
-            targetHeightMeters: input.camera.targetHeightMeters,
+            targetHeightMeters: cameraTargetHeightMeters,
+            ...(resolvedAssembly?.targetSocketId === undefined
+              ? {}
+              : { targetSocketId: resolvedAssembly.targetSocketId }),
           },
           thirdPerson: {
-            pitchRadians: input.camera.pitchRadians,
-            distanceMeters: input.camera.distanceMeters,
-            targetHeightMeters: input.camera.targetHeightMeters,
-            fovDegrees: input.camera.fovDegrees,
+            pitchRadians: cameraPitchRadians,
+            distanceMeters: cameraDistanceMeters,
+            targetHeightMeters: cameraTargetHeightMeters,
+            fovDegrees: cameraFovDegrees,
             aspectRatio: input.camera.aspectRatio,
           },
           manualSwitchAllowed: false,
@@ -479,7 +884,10 @@ function compileAuthoringSpec(
     },
     resources: {
       prototypes,
-      subjectDefinitions: compilePackageSubjectDefinitions(input.controlledSubject),
+      subjectDefinitions: compilePackageSubjectDefinitions(
+        input.controlledSubject,
+        resolvedAssembly,
+      ),
     },
     nodes,
     relationships: [],
@@ -517,8 +925,39 @@ export function compileBlockWorldV2(
       checkReport,
     });
   }
+  if (isPackCamera(input.camera) && input.controlledSubject.kind !== "assembly") {
+    return Object.freeze({
+      ok: false,
+      diagnostics: Object.freeze([diagnostic(
+        "BLOCK_WORLD_CAMERA_PACK_INCOMPATIBLE",
+        "/camera",
+        "A Camera Pack requires the Subject Assembly contract.",
+      )]),
+      checkReport,
+    });
+  }
+  const assemblyResolution = input.controlledSubject.kind === "assembly"
+    ? resolveAssemblyV1(input)
+    : undefined;
+  if (assemblyResolution !== undefined && !assemblyResolution.ok) {
+    return Object.freeze({
+      ok: false,
+      diagnostics: Object.freeze([diagnostic(
+        assemblyResolution.code,
+        assemblyResolution.code.startsWith("BLOCK_WORLD_CAMERA")
+          ? "/camera"
+          : "/controlledSubject/assembly",
+        assemblyResolution.message,
+      )]),
+      checkReport,
+    });
+  }
   const clusters = createBlockWorldRuntimeClustersV2(input.manifest.blocks);
-  const authoringSpec = compileAuthoringSpec(input, clusters);
+  const authoringSpec = compileAuthoringSpec(
+    input,
+    clusters,
+    assemblyResolution?.ok === true ? assemblyResolution.value : undefined,
+  );
   const normalized = normalizeAuthoringSpecV4(authoringSpec);
   if (!normalized.ok || normalized.value === undefined ||
       normalized.normalizedWorldIrHash === undefined) {

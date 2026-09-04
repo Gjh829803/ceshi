@@ -200,5 +200,33 @@
         "paraglider"
       ]
     }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "powered-flight.safe-hover",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/powered-flight.safe-hover@1",
+    "authoringAvailability": "internal",
+    "motionKernelRef": "worldkit://motion-kernel/powered-flight@1",
+    "motionTags": ["air", "flight", "hover", "safe", "stopped"],
+    "aiMetadata": {
+      "displayName": "Safe powered hover",
+      "description": "Internal zero-intent powered-flight fallback that holds position.",
+      "semanticTags": ["fallback", "flight", "hover", "safe"]
+    }
+  },
+  {
+    "kind": "motion-profile",
+    "id": "powered-flight.standard",
+    "version": 1,
+    "resourceRef": "worldkit://motion-profile/powered-flight.standard@1",
+    "authoringAvailability": "recommended",
+    "motionKernelRef": "worldkit://motion-kernel/powered-flight@1",
+    "motionTags": ["air", "flight", "hover", "powered"],
+    "aiMetadata": {
+      "displayName": "Standard powered flight",
+      "description": "Hover-capable deterministic powered flight for a complete Subject Assembly.",
+      "semanticTags": ["flight", "hover", "powered", "standard"]
+    }
   }
 ]

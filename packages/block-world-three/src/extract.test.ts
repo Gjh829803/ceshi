@@ -1,9 +1,11 @@
 import {
   BoxGeometry,
+  CylinderGeometry,
   Group,
   Mesh,
   type MeshBasicMaterial,
   Scene,
+  SphereGeometry,
 } from "three";
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +13,9 @@ import { BLOCK_PRESET_REFS_V1 } from "@whitebox-world/block-world";
 
 import {
   bindWorldkitBlockV1,
+  bindWorldkitSubjectMeshV1,
   createWorldkitBlockMaterialV1,
+  createWorldkitSubjectMaterialV1,
 } from "./binding.js";
 import { extractThreeBlockWorldV2 } from "./extract.js";
 
@@ -117,5 +121,61 @@ describe("Three.js Block World extraction", () => {
       { id: "quarter-main", shape: "quarter", positionMetersXYZ: [1.25, 0.25, 0] },
       { id: "small-main", shape: "small", positionMetersXYZ: [2.25, 0.25, 0.25] },
     ]);
+  });
+
+  it("extracts rigid Subject shapes without admitting them as world blocks", () => {
+    const scene = new Scene();
+    const shapes = [
+      ["custom-body", new BoxGeometry(0.8, 0.5, 1.4), [0, 0.25, 0], "include"],
+      ["custom-head", new SphereGeometry(0.3, 16, 8), [0, 0.8, -0.5], "exclude"],
+      ["flying-sword", new CylinderGeometry(0.08, 0.08, 2.2, 12), [0, -0.12, 0], "exclude"],
+    ] as const;
+    for (const [id, geometry, position, colliderContribution] of shapes) {
+      const mesh = bindWorldkitSubjectMeshV1(
+        new Mesh(geometry, createWorldkitSubjectMaterialV1()),
+        { id, colliderContribution, semanticTags: ["subject", "shape"] },
+      );
+      mesh.position.set(position[0], position[1], position[2]);
+      scene.add(mesh);
+    }
+    const result = extractThreeBlockWorldV2(scene);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.manifest.blocks).toEqual([]);
+    expect(result.subjectMeshParts.map(({ id, kind, colliderContribution }) => ({
+      id, kind, colliderContribution,
+    }))).toEqual([
+      { id: "custom-body", kind: "primitive", colliderContribution: "include" },
+      { id: "custom-head", kind: "primitive", colliderContribution: "exclude" },
+      { id: "flying-sword", kind: "primitive", colliderContribution: "exclude" },
+    ]);
+  });
+
+  it("rejects deformed, scaled, and recolored Subject meshes", () => {
+    const scene = new Scene();
+    const deformed = bindWorldkitSubjectMeshV1(
+      new Mesh(new BoxGeometry(1, 1, 1), createWorldkitSubjectMaterialV1()),
+      { id: "deformed-subject", semanticTags: ["subject"] },
+    );
+    deformed.geometry.translate(0.25, 0, 0);
+    scene.add(deformed);
+    const scaled = bindWorldkitSubjectMeshV1(
+      new Mesh(new SphereGeometry(0.5), createWorldkitSubjectMaterialV1()),
+      { id: "scaled-subject", semanticTags: ["subject"] },
+    );
+    scaled.scale.set(2, 1, 1);
+    scene.add(scaled);
+    const recolored = bindWorldkitSubjectMeshV1(
+      new Mesh(new CylinderGeometry(0.2, 0.2, 1), createWorldkitSubjectMaterialV1()),
+      { id: "recolored-subject", semanticTags: ["subject"] },
+    );
+    recolored.material.color.set("#ffffff");
+    scene.add(recolored);
+    const result = extractThreeBlockWorldV2(scene);
+    expect(result.subjectMeshParts).toEqual([]);
+    expect(result.diagnostics.map(({ code }) => code)).toEqual(expect.arrayContaining([
+      "BLOCK_WORLD_SUBJECT_MESH_GEOMETRY_INVALID",
+      "BLOCK_WORLD_SUBJECT_MESH_TRANSFORM_INVALID",
+      "BLOCK_WORLD_SUBJECT_MESH_MATERIAL_INVALID",
+    ]));
   });
 });

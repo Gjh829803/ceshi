@@ -86,6 +86,75 @@ export type BlockSubjectVisualPartV2 =
       semanticTags: readonly string[];
     }>;
 
+export type BlockSubjectBodyTopologyV2 =
+  | "biped"
+  | "quadruped"
+  | "four-wheel"
+  | "surface-craft"
+  | "watercraft"
+  | "glider"
+  | "composite"
+  | "custom";
+
+export type BlockSubjectCategoryV2 =
+  | "human"
+  | "animal"
+  | "vehicle"
+  | "composite"
+  | "custom";
+
+export type BlockMotionPackIdV1 =
+  | "ground.character-standard"
+  | "ground.root-standard"
+  | "flight.powered-standard";
+
+export type BlockCameraPackIdV1 =
+  | "third-person.standard"
+  | "third-person.over-shoulder"
+  | "third-person.giant"
+  | "first-person.standard";
+
+export type BlockLocomotionPresentationKeyV1 =
+  | "locomotion.suspended"
+  | "locomotion.idle"
+  | "locomotion.walk"
+  | "locomotion.run"
+  | "locomotion.takeoff"
+  | "locomotion.rising"
+  | "locomotion.apex"
+  | "locomotion.falling"
+  | "locomotion.landing";
+
+export type BlockSubjectPresentationPolicyV1 =
+  | Readonly<{ kind: "automatic" }>
+  | Readonly<{
+      kind: "fixed-locomotion";
+      presentationKey: BlockLocomotionPresentationKeyV1;
+    }>;
+
+export type BlockSubjectAssemblyBaseV1 =
+  | Readonly<{
+      kind: "subject-pack";
+      subjectPackId: string;
+    }>
+  | Readonly<{
+      kind: "custom-mesh";
+      subjectMeshBindingIds: readonly string[];
+      category: BlockSubjectCategoryV2;
+      bodyTopology: BlockSubjectBodyTopologyV2;
+      semanticClassId: string;
+      displayName: string;
+      description: string;
+    }>;
+
+export interface BlockSubjectAssemblyDefinitionV1 {
+  readonly id: string;
+  readonly baseSubject: BlockSubjectAssemblyBaseV1;
+  readonly attachments: readonly Readonly<{ subjectMeshBindingId: string }>[];
+  readonly motion: Readonly<{ motionPackId: BlockMotionPackIdV1 }>;
+  readonly presentation: BlockSubjectPresentationPolicyV1;
+}
+
 export interface BlockComposedSubjectDefinitionV2 {
   readonly id: string;
   readonly category: "human" | "animal" | "custom";
@@ -118,6 +187,10 @@ export type BlockWorldControlledSubjectV2 =
   | (BlockWorldControlledSubjectBaseV2 & Readonly<{
       kind: "composed";
       definition: BlockComposedSubjectDefinitionV2;
+    }>)
+  | (BlockWorldControlledSubjectBaseV2 & Readonly<{
+      kind: "assembly";
+      assembly: BlockSubjectAssemblyDefinitionV1;
     }>);
 
 export interface BlockWorldThirdPersonCameraV2 {
@@ -128,6 +201,41 @@ export interface BlockWorldThirdPersonCameraV2 {
   readonly fovDegrees: number;
   readonly aspectRatio: number;
 }
+
+export type BlockCameraTargetBindingV1 =
+  | Readonly<{
+      kind: "base-subject-socket";
+      socketId: string;
+    }>
+  | Readonly<{
+      kind: "base-subject-bounds";
+      heightRatio: number;
+    }>
+  | Readonly<{
+      kind: "assembly-bounds";
+      heightRatio: number;
+    }>
+  | Readonly<{
+      kind: "subject-local-point";
+      positionMetersXYZ: BlockPositionMetersXYZV2;
+    }>;
+
+export interface BlockWorldPackCameraV1 {
+  readonly kind: "pack";
+  readonly entityId: string;
+  readonly cameraPackId: BlockCameraPackIdV1;
+  readonly target: BlockCameraTargetBindingV1;
+  readonly tuning?: Readonly<{
+    distanceMeters?: number;
+    pitchRadians?: number;
+    fovDegrees?: number;
+  }>;
+  readonly aspectRatio: number;
+}
+
+export type BlockWorldCameraV2 =
+  | BlockWorldThirdPersonCameraV2
+  | BlockWorldPackCameraV1;
 
 export interface BlockRequiredTargetV2 {
   readonly id: string;
@@ -191,6 +299,16 @@ export type BlockWorldDiagnosticCodeV2 =
   | "BLOCK_WORLD_NO_STANDABLE_POSITIONS"
   | "BLOCK_WORLD_SPAWN_NOT_STANDABLE"
   | "BLOCK_WORLD_SUBJECT_INVALID"
+  | "BLOCK_WORLD_SUBJECT_ASSEMBLY_INVALID"
+  | "BLOCK_WORLD_SUBJECT_MESH_BINDING_DUPLICATE"
+  | "BLOCK_WORLD_SUBJECT_MESH_BINDING_MISSING"
+  | "BLOCK_WORLD_SUBJECT_MESH_GEOMETRY_INVALID"
+  | "BLOCK_WORLD_SUBJECT_MESH_MATERIAL_INVALID"
+  | "BLOCK_WORLD_SUBJECT_MESH_TRANSFORM_INVALID"
+  | "BLOCK_WORLD_SUBJECT_PACK_UNKNOWN"
+  | "BLOCK_WORLD_SUBJECT_PACK_INCOMPATIBLE"
+  | "BLOCK_WORLD_SUBJECT_PRESENTATION_INCOMPATIBLE"
+  | "BLOCK_WORLD_CAMERA_PACK_INCOMPATIBLE"
   | "BLOCK_WORLD_SUBJECT_SCALE_INVALID"
   | "BLOCK_WORLD_TARGET_NOT_STANDABLE"
   | "BLOCK_WORLD_TARGET_UNREACHABLE"
@@ -214,7 +332,11 @@ export interface CheckBlockWorldInputV2 {
   readonly manifest: BlockWorldManifestV2;
   readonly world: BlockWorldIdentityV2;
   readonly controlledSubject: BlockWorldControlledSubjectV2;
-  readonly camera: BlockWorldThirdPersonCameraV2;
+  readonly camera: BlockWorldCameraV2;
+  readonly subjectMeshParts?: readonly Extract<
+    BlockSubjectVisualPartV2,
+    { kind: "primitive" }
+  >[];
   readonly subjectTraversalProfile: BlockSubjectTraversalProfileV2;
   readonly spawnStandPositionMetersXYZ: BlockPositionMetersXYZV2;
   readonly requiredTargets: readonly BlockRequiredTargetV2[];

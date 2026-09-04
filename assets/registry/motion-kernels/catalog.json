@@ -164,19 +164,19 @@
     "id": "K09.powered-flight",
     "version": 1,
     "resourceRef": "worldkit://motion-kernel/powered-flight@1",
-    "authoringAvailability": "internal",
+    "authoringAvailability": "recommended",
     "implementationId": "powered-flight",
     "commandKind": "flight-attitude",
     "supportedMediums": ["air"],
     "supportedBodyKinds": ["character", "rigid-body"],
-    "requiredCapabilityRefs": [],
-    "fallbackMotionProfileRef": "worldkit://motion-profile/airborne.fall@1",
+    "requiredCapabilityRefs": ["worldkit://capability/locomotion.powered-flight@1"],
+    "fallbackMotionProfileRef": "worldkit://motion-profile/powered-flight.safe-hover@1",
     "deterministic": true,
-    "runtimeStatus": "reserved",
+    "runtimeStatus": "implemented",
     "aiMetadata": {
       "displayName": "K09 Powered Flight",
-      "description": "Reserved thrust, lift, climb and hover-capable flight contract.",
-      "semanticTags": ["air", "powered", "reserved"]
+      "description": "Deterministic thrust, climb and hover-capable flight contract.",
+      "semanticTags": ["air", "flight", "hover", "powered"]
     }
   },
   {

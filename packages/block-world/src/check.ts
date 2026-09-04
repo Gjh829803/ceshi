@@ -12,7 +12,12 @@ import {
   BLOCK_WORLD_SPACE_TRANSITION_REACH_METERS_V2,
   isBlockWorldSpaceTransitionIdV2,
 } from "./space-transitions.js";
+import {
+  resolveBlockCameraPackV1,
+  resolveBlockMotionPackV1,
+} from "./packs.js";
 import type {
+  BlockSubjectAssemblyDefinitionV1,
   BlockComposedSubjectDefinitionV2,
   BlockInstanceV2,
   BlockPositionMetersXYZV2,
@@ -34,6 +39,13 @@ const VERSIONED_WORLDKIT_REF = /^worldkit:\/\/[a-z0-9-]+\/[a-z0-9][a-z0-9.-]*@[1
 const SIXTEEN_BY_NINE = 16 / 9;
 const EPSILON = 1e-8;
 const SHAPES = new Set<BlockShapeKindV2>(["full", "half", "quarter", "small"]);
+const SUBJECT_PACK_ID = /^[a-z0-9][a-z0-9.-]{2,95}$/;
+const SUBJECT_SOCKET_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
+const PRESENTATION_KEYS = new Set([
+  "locomotion.suspended", "locomotion.idle", "locomotion.walk", "locomotion.run",
+  "locomotion.takeoff", "locomotion.rising", "locomotion.apex",
+  "locomotion.falling", "locomotion.landing",
+]);
 
 interface SupportSurfaceV2 {
   readonly index: number;
@@ -116,6 +128,70 @@ function validComposedSubject(definition: BlockComposedSubjectDefinitionV2): boo
     VERSIONED_WORLDKIT_REF.test(definition.visualBinding.animationSetRef) &&
     VERSIONED_WORLDKIT_REF.test(definition.visualBinding.colliderProfileRef)
   );
+}
+
+function validSubjectAssembly(
+  definition: BlockSubjectAssemblyDefinitionV1,
+  subjectMeshParts: CheckBlockWorldInputV2["subjectMeshParts"],
+): boolean {
+  if (!ID.test(definition.id) ||
+      resolveBlockMotionPackV1(definition.motion.motionPackId) === undefined ||
+      (definition.presentation.kind === "fixed-locomotion" &&
+        !PRESENTATION_KEYS.has(definition.presentation.presentationKey))) return false;
+  const base = definition.baseSubject;
+  if (base.kind === "subject-pack") {
+    if (!SUBJECT_PACK_ID.test(base.subjectPackId)) return false;
+  } else if (!SUBJECT_PACK_ID.test(base.semanticClassId) ||
+      base.displayName.trim().length === 0 || base.description.trim().length === 0 ||
+      base.subjectMeshBindingIds.length < 1) return false;
+  const available = new Map((subjectMeshParts ?? []).map((part) => [part.id, part]));
+  if ((subjectMeshParts ?? []).length > 48 ||
+      available.size !== (subjectMeshParts ?? []).length) return false;
+  const referenced = [
+    ...(base.kind === "custom-mesh" ? base.subjectMeshBindingIds : []),
+    ...definition.attachments.map(({ subjectMeshBindingId }) => subjectMeshBindingId),
+  ];
+  return referenced.length === new Set(referenced).size &&
+    referenced.every((id) => ID.test(id) && available.has(id)) &&
+    referenced.length === available.size;
+}
+
+function isPackCamera(
+  camera: CheckBlockWorldInputV2["camera"],
+): camera is Extract<CheckBlockWorldInputV2["camera"], { kind: "pack" }> {
+  return "kind" in camera && camera.kind === "pack";
+}
+
+function cameraFovDegrees(camera: CheckBlockWorldInputV2["camera"]): number {
+  if (!isPackCamera(camera)) return camera.fovDegrees;
+  const pack = resolveBlockCameraPackV1(camera.cameraPackId);
+  return camera.tuning?.fovDegrees ?? pack?.defaults.fovDegrees ?? 58;
+}
+
+function validPackCamera(camera: Extract<
+  CheckBlockWorldInputV2["camera"],
+  { kind: "pack" }
+>): boolean {
+  const pack = resolveBlockCameraPackV1(camera.cameraPackId);
+  if (pack === undefined) return false;
+  const target = camera.target;
+  if (target.kind === "base-subject-socket" &&
+      !SUBJECT_SOCKET_ID.test(target.socketId)) return false;
+  if ((target.kind === "base-subject-bounds" || target.kind === "assembly-bounds") &&
+      (!Number.isFinite(target.heightRatio) || target.heightRatio < 0 ||
+        target.heightRatio > 1)) return false;
+  if (target.kind === "subject-local-point" &&
+      !validFiniteVector(target.positionMetersXYZ)) return false;
+  const tuning = camera.tuning ?? {};
+  const distance = tuning.distanceMeters ?? pack.defaults.distanceMeters;
+  const pitch = tuning.pitchRadians ?? pack.defaults.pitchRadians;
+  const fov = tuning.fovDegrees ?? pack.defaults.fovDegrees;
+  const distanceValid = pack.mode === "first-person"
+    ? distance === 0
+    : Number.isFinite(distance) && distance >= 0.5 && distance <= 20;
+  return distanceValid &&
+    Number.isFinite(pitch) && pitch >= -1.2 && pitch <= 1.2 &&
+    Number.isFinite(fov) && fov >= 35 && fov <= 100;
 }
 
 function primitiveHalfHeightMeters(
@@ -573,7 +649,19 @@ export function checkBlockWorldV2(input: CheckBlockWorldInputV2): BlockWorldChec
   }
   const subjectDefinitionValid = input.controlledSubject.kind === "registered"
     ? SUBJECT_DEFINITION_REF.test(input.controlledSubject.subjectDefinitionRef)
-    : validComposedSubject(input.controlledSubject.definition);
+    : input.controlledSubject.kind === "composed"
+      ? validComposedSubject(input.controlledSubject.definition)
+      : validSubjectAssembly(
+          input.controlledSubject.assembly,
+          input.subjectMeshParts,
+        );
+  if (input.controlledSubject.kind === "assembly" && !subjectDefinitionValid) {
+    diagnostics.push(diagnostic(
+      "BLOCK_WORLD_SUBJECT_ASSEMBLY_INVALID",
+      "/controlledSubject/assembly",
+      "Subject Assembly requires one valid base, unique complete Mesh bindings, a Motion Pack, and a Presentation Policy.",
+    ));
+  }
   if (!ID.test(input.controlledSubject.entityId) ||
       input.controlledSubject.entityId === "spawn-main" ||
       input.controlledSubject.entityId === "runtime-foundation" ||
@@ -609,12 +697,17 @@ export function checkBlockWorldV2(input: CheckBlockWorldInputV2): BlockWorldChec
     }
   }
   const camera = input.camera;
+  const cameraShapeValid = isPackCamera(camera)
+    ? validPackCamera(camera)
+    : Number.isFinite(camera.pitchRadians) && camera.pitchRadians >= -0.95 &&
+      camera.pitchRadians <= 0.65 && Number.isFinite(camera.distanceMeters) &&
+      camera.distanceMeters >= 1.8 && camera.distanceMeters <= 20 &&
+      Number.isFinite(camera.targetHeightMeters) && camera.targetHeightMeters >= 0.5 &&
+      camera.targetHeightMeters <= 8 && Number.isFinite(camera.fovDegrees) &&
+      camera.fovDegrees >= 35 && camera.fovDegrees <= 90;
   if (!ID.test(camera.entityId) || camera.entityId === input.controlledSubject.entityId ||
       camera.entityId === "spawn-main" || camera.entityId === "runtime-foundation" ||
-      !Number.isFinite(camera.pitchRadians) || camera.pitchRadians < -0.95 || camera.pitchRadians > 0.65 ||
-      !Number.isFinite(camera.distanceMeters) || camera.distanceMeters < 1.8 || camera.distanceMeters > 20 ||
-      !Number.isFinite(camera.targetHeightMeters) || camera.targetHeightMeters < 0.5 || camera.targetHeightMeters > 8 ||
-      !Number.isFinite(camera.fovDegrees) || camera.fovDegrees < 35 || camera.fovDegrees > 90 ||
+      !cameraShapeValid ||
       !Number.isFinite(camera.aspectRatio) || Math.abs(camera.aspectRatio - SIXTEEN_BY_NINE) > 1e-9) {
     diagnostics.push(diagnostic(
       "BLOCK_WORLD_CAMERA_INVALID",
@@ -1187,7 +1280,7 @@ export function checkBlockWorldV2(input: CheckBlockWorldInputV2): BlockWorldChec
         standableByKey,
         input.spawnStandPositionMetersXYZ,
         input.controlledSubject.yawQuarterTurnsY,
-        input.camera.fovDegrees,
+        cameraFovDegrees(input.camera),
       ),
       smoothedWalkableEdgeCount,
       spaceTransitionCount: validTransitions.length,

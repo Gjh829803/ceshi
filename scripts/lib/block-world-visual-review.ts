@@ -1,9 +1,12 @@
 import {
   BLOCK_WHITEBOX_SUBJECT_COLOR_V1,
+  resolveBlockCameraPackV1,
   resolveBlockPresetV1,
   type BlockPositionMetersXYZV2,
   type BlockWorldControlledSubjectV2,
+  type BlockWorldCameraV2,
   type BlockWorldManifestV2,
+  type BlockWorldPackCameraV1,
   type BlockWorldThirdPersonCameraV2,
 } from "@whitebox-world/block-world";
 import {
@@ -29,6 +32,10 @@ const ENTRY_PANEL_HEIGHT = 540;
 const SUBJECT_COLOR = rgbFromHex(BLOCK_WHITEBOX_SUBJECT_COLOR_V1);
 
 type Vector3 = readonly [x: number, y: number, z: number];
+
+function isPackCamera(camera: BlockWorldCameraV2): camera is BlockWorldPackCameraV1 {
+  return "kind" in camera && camera.kind === "pack";
+}
 
 interface CuboidV1 {
   readonly minimum: Vector3;
@@ -166,7 +173,7 @@ function registeredSubjectCuboids(
   spawn: Vector3,
   yawQuarterTurnsY: number,
 ): readonly CuboidV1[] {
-  const subject = agentAuthoringCatalog.subjects.find((entry) =>
+  const subject = agentAuthoringCatalog.subjectPacks.find((entry) =>
     entry.subjectDefinitionRef === subjectDefinitionRef);
   if (subject === undefined) {
     throw new Error(
@@ -205,6 +212,7 @@ function registeredSubjectCuboids(
 function subjectCuboids(
   subject: BlockWorldControlledSubjectV2,
   spawn: Vector3,
+  subjectMeshParts: readonly import("@whitebox-world/block-world").BlockSubjectVisualPartV2[] = [],
 ): readonly CuboidV1[] {
   if (subject.kind === "registered") {
     return registeredSubjectCuboids(
@@ -213,7 +221,60 @@ function subjectCuboids(
       subject.yawQuarterTurnsY,
     );
   }
-  const primitiveParts = subject.definition.visualParts.filter((part) => part.kind === "primitive");
+  if (subject.kind === "assembly") {
+    const base = subject.assembly.baseSubject;
+    const registered = base.kind === "subject-pack"
+      ? agentAuthoringCatalog.subjectPacks.find((entry) =>
+          entry.id === base.subjectPackId)
+      : undefined;
+    const registeredCuboids = registered === undefined
+      ? []
+      : registeredSubjectCuboids(
+          registered.subjectDefinitionRef,
+          spawn,
+          subject.yawQuarterTurnsY,
+        );
+    const selectedIds = new Set([
+      ...(base.kind === "custom-mesh" ? base.subjectMeshBindingIds : []),
+      ...subject.assembly.attachments.map(({ subjectMeshBindingId }) =>
+        subjectMeshBindingId),
+    ]);
+    const meshCuboids = subjectMeshParts
+      .filter((part) => part.kind === "primitive" && selectedIds.has(part.id))
+      .map((part) => {
+        if (part.kind !== "primitive") throw new Error("unreachable");
+        const center = add(
+          spawn,
+          rotateLocalXZ(part.positionMetersXYZ, subject.yawQuarterTurnsY),
+        );
+        const unrotatedSize: Vector3 = part.shape.kind === "box"
+          ? part.shape.sizeMetersXYZ
+          : part.shape.kind === "sphere"
+            ? [part.shape.radiusMeters * 2, part.shape.radiusMeters * 2,
+                part.shape.radiusMeters * 2]
+            : [part.shape.radiusMeters * 2, part.shape.heightMeters,
+                part.shape.radiusMeters * 2];
+        const size: Vector3 = subject.yawQuarterTurnsY % 2 === 0
+          ? unrotatedSize
+          : [unrotatedSize[2], unrotatedSize[1], unrotatedSize[0]];
+        return {
+          id: `subject-${part.id}`,
+          minimum: center.map((value, axis) => value - size[axis]! / 2) as
+            unknown as Vector3,
+          maximum: center.map((value, axis) => value + size[axis]! / 2) as
+            unknown as Vector3,
+          color: SUBJECT_COLOR,
+        };
+      });
+    const combined = [...registeredCuboids, ...meshCuboids];
+    if (combined.length === 0) {
+      throw new Error("BLOCK_WORLD_SUBJECT_ASSEMBLY_VISUAL_PROXY_MISSING");
+    }
+    return combined;
+  }
+  const primitiveParts = subject.definition.visualParts.filter(
+    (part) => part.kind === "primitive",
+  );
   if (primitiveParts.length === 0) {
     throw new Error("BLOCK_WORLD_COMPOSED_SUBJECT_VISUAL_PROXY_MISSING");
   }
@@ -239,8 +300,9 @@ function subjectCuboids(
 function drawEntry(
   worldCuboids: readonly CuboidV1[],
   subject: BlockWorldControlledSubjectV2,
-  camera: BlockWorldThirdPersonCameraV2,
+  camera: BlockWorldCameraV2,
   spawn: BlockPositionMetersXYZV2,
+  subjectMeshParts: readonly import("@whitebox-world/block-world").BlockSubjectVisualPartV2[],
 ): RgbaRasterV1 {
   const raster = createRgbaRasterV1(
     ENTRY_PANEL_WIDTH,
@@ -249,20 +311,46 @@ function drawEntry(
   );
   const yaw = subject.yawQuarterTurnsY * Math.PI / 2;
   const subjectForward: Vector3 = [-Math.sin(yaw), 0, -Math.cos(yaw)];
+  const packCamera = isPackCamera(camera) ? camera : undefined;
+  const cameraPack = packCamera === undefined
+    ? undefined
+    : resolveBlockCameraPackV1(packCamera.cameraPackId);
+  const pitchRadians = cameraPack === undefined
+    ? (camera as BlockWorldThirdPersonCameraV2).pitchRadians
+    : packCamera!.tuning?.pitchRadians ?? cameraPack.defaults.pitchRadians;
+  const distanceMeters = cameraPack === undefined
+    ? (camera as BlockWorldThirdPersonCameraV2).distanceMeters
+    : Math.max(0.1, packCamera!.tuning?.distanceMeters ?? cameraPack.defaults.distanceMeters);
+  const targetHeightMeters = cameraPack === undefined
+    ? (camera as BlockWorldThirdPersonCameraV2).targetHeightMeters
+    : packCamera!.target.kind === "subject-local-point"
+      ? packCamera!.target.positionMetersXYZ[1]
+      : packCamera!.target.kind === "base-subject-bounds" ||
+          packCamera!.target.kind === "assembly-bounds"
+        ? (() => {
+            const cuboids = subjectCuboids(subject, [0, 0, 0], subjectMeshParts);
+            const minimum = Math.min(...cuboids.map(({ minimum }) => minimum[1]));
+            const maximum = Math.max(...cuboids.map(({ maximum }) => maximum[1]));
+            return minimum + (maximum - minimum) * packCamera!.target.heightRatio;
+          })()
+        : packCamera!.target.socketId === "FirstPersonView" ? 1.7 : 1.25;
+  const fovDegrees = cameraPack === undefined
+    ? (camera as BlockWorldThirdPersonCameraV2).fovDegrees
+    : packCamera!.tuning?.fovDegrees ?? cameraPack.defaults.fovDegrees;
   const target: Vector3 = [
     spawn[0],
-    spawn[1] + camera.targetHeightMeters,
+    spawn[1] + targetHeightMeters,
     spawn[2],
   ];
-  const horizontalDistance = camera.distanceMeters * Math.cos(camera.pitchRadians);
+  const horizontalDistance = distanceMeters * Math.cos(pitchRadians);
   const cameraPosition = add(
     add(target, multiply(subjectForward, -horizontalDistance)),
-    [0, camera.distanceMeters * Math.sin(camera.pitchRadians), 0],
+    [0, distanceMeters * Math.sin(pitchRadians), 0],
   );
   const cameraForward = normalize(subtract(target, cameraPosition));
   const right = normalize(cross(cameraForward, [0, 1, 0]));
   const up = normalize(cross(right, cameraForward));
-  const tangent = Math.tan(camera.fovDegrees * Math.PI / 360);
+  const tangent = Math.tan(fovDegrees * Math.PI / 360);
   const project = (point: Vector3): Readonly<{ point: readonly [number, number]; depth: number }> | null => {
     const relative = subtract(point, cameraPosition);
     const depth = dot(relative, cameraForward);
@@ -289,7 +377,7 @@ function drawEntry(
   const faces: ProjectedFaceV1[] = [];
   for (const cuboid of [
     ...worldCuboids,
-    ...subjectCuboids(subject, spawn),
+    ...subjectCuboids(subject, spawn, subjectMeshParts),
   ]) {
     const { minimum: min, maximum: max } = cuboid;
     const corners: readonly Vector3[] = [
@@ -335,7 +423,8 @@ function drawEntry(
 export function createBlockWorldVisualReviewPngsV1(input: Readonly<{
   manifest: BlockWorldManifestV2;
   controlledSubject: BlockWorldControlledSubjectV2;
-  camera: BlockWorldThirdPersonCameraV2;
+  camera: BlockWorldCameraV2;
+  subjectMeshParts?: readonly import("@whitebox-world/block-world").BlockSubjectVisualPartV2[];
   spawnStandPositionMetersXYZ: BlockPositionMetersXYZV2;
   plannerWorldPlanPng: Uint8Array;
   plannerEntryWhiteboxTargetPng: Uint8Array;
@@ -351,6 +440,7 @@ export function createBlockWorldVisualReviewPngsV1(input: Readonly<{
     input.controlledSubject,
     input.camera,
     input.spawnStandPositionMetersXYZ,
+    input.subjectMeshParts ?? [],
   );
   return Object.freeze({
     topDownComparisonPng: composeHorizontalComparisonPngV1(

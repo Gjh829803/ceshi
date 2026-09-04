@@ -88,5 +88,30 @@
         "quadruped"
       ]
     }
+  },
+  {
+    "kind": "control-feel-profile",
+    "id": "flight.powered-standard",
+    "version": 1,
+    "resourceRef": "worldkit://control-feel-profile/flight.powered-standard@1",
+    "authoringAvailability": "recommended",
+    "walkSpeedMetersPerSecond": 5,
+    "runSpeedMetersPerSecond": 9,
+    "jumpSpeedMetersPerSecond": 4,
+    "accelerationMetersPerSecondSquared": 10,
+    "decelerationMetersPerSecondSquared": 12,
+    "turnRateRadiansPerSecond": 2.4,
+    "moveResponseExponent": 1.25,
+    "airControlRatio": 1,
+    "coyoteTimeSeconds": 0,
+    "jumpBufferSeconds": 0,
+    "variableJumpHoldSeconds": 0,
+    "jumpHoldGravityRatio": 1,
+    "jumpReleaseGravityRatio": 1,
+    "aiMetadata": {
+      "displayName": "Standard powered flight feel",
+      "description": "Responsive forward flight, yaw steering, climb and stable hover.",
+      "semanticTags": ["feel", "flight", "hover", "powered"]
+    }
   }
 ]

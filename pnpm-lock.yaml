@@ -351,6 +351,9 @@ importers:
       '@whitebox-world/runtime-contracts':
         specifier: workspace:*
         version: link:../runtime-contracts
+      '@whitebox-world/subject-registry':
+        specifier: workspace:*
+        version: link:../subject-registry
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1

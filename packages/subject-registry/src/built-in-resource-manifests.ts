@@ -421,6 +421,22 @@ const STANDARD_GROUND_LOCOMOTION_PROFILE: LocomotionProfileManifestInputV1 = {
   },
 };
 
+const POWERED_FLIGHT_LOCOMOTION_PROFILE: LocomotionProfileManifestInputV1 = {
+  kind: "locomotion-profile",
+  id: "flight.powered",
+  version: 1,
+  resourceRef: "worldkit://locomotion-profile/flight.powered@1",
+  requiredCapabilityRefs: ["worldkit://capability/locomotion.powered-flight@1"],
+  allowWalk: false,
+  allowRun: false,
+  allowJump: false,
+  aiMetadata: {
+    displayName: "Powered flight locomotion",
+    description: "Disables ground gait flags while the powered-flight Motion Kernel owns travel.",
+    semanticTags: ["flight", "hover", "locomotion", "powered"],
+  },
+};
+
 const CAPABILITY_CHARACTER_PHYSICS_BODY_PROFILE: PhysicsBodyProfileManifestInputV1 = {
   kind: "physics-body-profile",
   id: "character.capability-medium",
@@ -511,6 +527,7 @@ export const BUILT_IN_SUBJECT_RESOURCE_MANIFESTS = [
   MEDIUM_CHARACTER_PHYSICS_BODY_PROFILE,
   CAPABILITY_CHARACTER_PHYSICS_BODY_PROFILE,
   STANDARD_GROUND_LOCOMOTION_PROFILE,
+  POWERED_FLIGHT_LOCOMOTION_PROFILE,
   VERTICAL_CHARACTER_CAPSULE_PROFILE,
   CAPABILITY_VERTICAL_CAPSULE_PROFILE,
 ] as const satisfies readonly (

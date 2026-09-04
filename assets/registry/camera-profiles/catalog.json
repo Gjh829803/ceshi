@@ -843,6 +843,27 @@
         "description": "Moves to a tighter shoulder composition while preserving the active base rig.",
         "semanticTags": ["aim", "modifier", "shoulder"]
       }
+    },
+    {
+      "kind": "camera-modifier-profile",
+      "id": "giant-framing",
+      "version": 1,
+      "resourceRef": "worldkit://camera-modifier/giant-framing@1",
+      "authoringAvailability": "advanced",
+      "parameterOverrides": {
+        "distanceMeters": 14,
+        "maximumDistanceMeters": 40,
+        "targetHeightMeters": 5,
+        "collisionRadiusMeters": 0.45,
+        "baseFovDegrees": 62,
+        "maximumPositionLagMeters": 8,
+        "teleportSnapDistanceMeters": 40
+      },
+      "aiMetadata": {
+        "displayName": "Giant framing modifier",
+        "description": "Expands orbit distance, target height and collision radius for giant Subjects.",
+        "semanticTags": ["giant", "modifier", "scale"]
+      }
     }
   ],
   "contexts": [
@@ -933,6 +954,80 @@
         "displayName": "Quadruped Official Camera Context",
         "description": "Quadruped public default with the reviewed orbit profile as its base view.",
         "semanticTags": ["capability-driven", "official", "quadruped"]
+      }
+    },
+    {
+      "kind": "camera-context-profile",
+      "id": "agent.third-person",
+      "version": 1,
+      "resourceRef": "worldkit://camera-context/agent.third-person@1",
+      "authoringAvailability": "recommended",
+      "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1",
+      "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "rules": [],
+      "aiMetadata": {
+        "displayName": "Agent standard third person",
+        "description": "Locks an authored Subject Assembly to standard orbit framing.",
+        "semanticTags": ["agent", "orbit", "third-person"]
+      }
+    },
+    {
+      "kind": "camera-context-profile",
+      "id": "agent.over-shoulder",
+      "version": 1,
+      "resourceRef": "worldkit://camera-context/agent.over-shoulder@1",
+      "authoringAvailability": "recommended",
+      "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1",
+      "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "rules": [
+        {
+          "id": "over-shoulder",
+          "priority": 1,
+          "when": {},
+          "cameraModifierRefs": ["worldkit://camera-modifier/aim-framing@1"]
+        }
+      ],
+      "aiMetadata": {
+        "displayName": "Agent over shoulder",
+        "description": "Locks an authored Subject Assembly to offset shoulder framing.",
+        "semanticTags": ["agent", "shoulder", "third-person"]
+      }
+    },
+    {
+      "kind": "camera-context-profile",
+      "id": "agent.giant",
+      "version": 1,
+      "resourceRef": "worldkit://camera-context/agent.giant@1",
+      "authoringAvailability": "advanced",
+      "defaultCameraRigProfileRef": "worldkit://camera-profile/orbit.medium@1",
+      "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "rules": [
+        {
+          "id": "giant",
+          "priority": 1,
+          "when": {},
+          "cameraModifierRefs": ["worldkit://camera-modifier/giant-framing@1"]
+        }
+      ],
+      "aiMetadata": {
+        "displayName": "Agent giant third person",
+        "description": "Locks an authored Subject Assembly to large-scale orbit framing.",
+        "semanticTags": ["agent", "giant", "third-person"]
+      }
+    },
+    {
+      "kind": "camera-context-profile",
+      "id": "agent.first-person",
+      "version": 1,
+      "resourceRef": "worldkit://camera-context/agent.first-person@1",
+      "authoringAvailability": "recommended",
+      "defaultCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "firstPersonCameraRigProfileRef": "worldkit://camera-profile/first-person.standard@1",
+      "rules": [],
+      "aiMetadata": {
+        "displayName": "Agent first person",
+        "description": "Locks an authored Subject Assembly to its explicit first-person target.",
+        "semanticTags": ["agent", "first-person", "socket"]
       }
     }
   ]

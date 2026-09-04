@@ -96,12 +96,13 @@
         "manualSwitchAllowed"
       ],
       "properties": {
-        "mode": { "const": "third-person" },
+        "mode": { "enum": ["first-person", "third-person"] },
         "cameraEntityId": { "$ref": "#/$defs/nonEmptyString" },
         "targetEntityId": { "$ref": "#/$defs/nonEmptyString" },
+        "targetSocketId": { "$ref": "#/$defs/nonEmptyString" },
         "cameraRigProfileRef": { "$ref": "#/$defs/nonEmptyString" },
         "pitchRadians": { "type": "number" },
-        "distanceMeters": { "type": "number", "exclusiveMinimum": 0 },
+        "distanceMeters": { "type": "number", "minimum": 0 },
         "targetHeightMeters": { "type": "number" },
         "fovDegrees": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 180 },
         "manualSwitchAllowed": { "type": "boolean" }
@@ -420,7 +421,7 @@
       "required": ["resourceRef", "implementationId", "commandKind", "supportedMediums", "fallbackMotionProfileRef", "deterministic"],
       "properties": {
         "resourceRef": { "$ref": "#/$defs/nonEmptyString" },
-        "implementationId": { "enum": ["free-ground", "forward-steer", "wheeled-arcade", "surface-slide", "water-surface", "unpowered-glide"] },
+        "implementationId": { "enum": ["free-ground", "forward-steer", "wheeled-arcade", "surface-slide", "water-surface", "unpowered-glide", "powered-flight"] },
         "commandKind": { "$ref": "#/$defs/motionCommandKind" },
         "supportedMediums": {
           "type": "array",
@@ -630,6 +631,18 @@
           "oneOf": [
             { "type": "object", "additionalProperties": false, "required": ["mode"], "properties": { "mode": { "const": "static" } } },
             { "type": "object", "additionalProperties": false, "required": ["mode", "rigProfileRef", "animationSetRef"], "properties": { "mode": { "const": "rigged" }, "rigProfileRef": { "$ref": "#/$defs/nonEmptyString" }, "animationSetRef": { "$ref": "#/$defs/nonEmptyString" } } }
+          ]
+        },
+        "presentationPolicy": {
+          "oneOf": [
+            { "type": "object", "additionalProperties": false, "required": ["kind"], "properties": { "kind": { "const": "automatic" } } },
+            {
+              "type": "object", "additionalProperties": false, "required": ["kind", "presentationKey"],
+              "properties": {
+                "kind": { "const": "fixed-locomotion" },
+                "presentationKey": { "enum": ["locomotion.suspended", "locomotion.idle", "locomotion.walk", "locomotion.run", "locomotion.takeoff", "locomotion.rising", "locomotion.apex", "locomotion.falling", "locomotion.landing"] }
+              }
+            }
           ]
         },
         "sockets": { "type": "array", "items": { "$ref": "#/$defs/subjectSocket" } },

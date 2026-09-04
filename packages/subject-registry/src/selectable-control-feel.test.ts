@@ -11,6 +11,8 @@ import { resolveSubjectPresetClosureV1 } from "./subject-preset-closure";
 
 const QUADRUPED_SPECIFIC_FEEL_REF =
   "worldkit://control-feel-profile/subject.animal.quadruped.forward-steer.default@1";
+const POWERED_FLIGHT_FEEL_REF =
+  "worldkit://control-feel-profile/flight.powered-standard@1";
 
 describe("selectable Control Feel authority", () => {
   it("puts the default first and keeps remaining allowed refs in declaration order", () => {
@@ -60,6 +62,7 @@ describe("selectable Control Feel authority", () => {
       .sort();
     const selectable = selectableControlFeelProfileRefsV1(definition.profiles);
     expect(catalogFeelRefs).toEqual([
+      POWERED_FLIGHT_FEEL_REF,
       GROUND_HUMANOID_CONTROL_FEEL_HEAVY_REF,
       GROUND_HUMANOID_CONTROL_FEEL_MEDIUM_REF,
       QUADRUPED_SPECIFIC_FEEL_REF,
@@ -68,6 +71,7 @@ describe("selectable Control Feel authority", () => {
       GROUND_HUMANOID_CONTROL_FEEL_MEDIUM_REF,
       GROUND_HUMANOID_CONTROL_FEEL_HEAVY_REF,
     ]);
+    expect(selectable).not.toContain(POWERED_FLIGHT_FEEL_REF);
     expect(selectable).not.toContain(QUADRUPED_SPECIFIC_FEEL_REF);
     expect(isSelectableControlFeelProfileRefV1(
       definition.profiles,

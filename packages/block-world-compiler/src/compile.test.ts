@@ -393,4 +393,219 @@ describe("Block World internal compiler", () => {
       },
     });
   });
+
+  it("flattens an existing Subject Pack, rigid attachment, powered flight, fixed presentation, and Camera Pack", () => {
+    const source = input();
+    const result = compileBlockWorldV2({
+      ...source,
+      controlledSubject: {
+        kind: "assembly",
+        entityId: "flying-rider",
+        visualTargetId: "visual-target-1",
+        yawQuarterTurnsY: 0,
+        assembly: {
+          id: "flying-sword-rider",
+          baseSubject: {
+            kind: "subject-pack",
+            subjectPackId: "humanoid.g-bot",
+          },
+          attachments: [{ subjectMeshBindingId: "flying-sword" }],
+          motion: { motionPackId: "flight.powered-standard" },
+          presentation: {
+            kind: "fixed-locomotion",
+            presentationKey: "locomotion.idle",
+          },
+        },
+      },
+      subjectMeshParts: [{
+        id: "flying-sword",
+        kind: "primitive",
+        shape: { kind: "box", sizeMetersXYZ: [0.18, 0.08, 2.4] },
+        positionMetersXYZ: [0, -0.12, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+        colliderContribution: "exclude",
+        semanticTags: ["attachment", "sword"],
+      }],
+      camera: {
+        kind: "pack",
+        entityId: "camera-main",
+        cameraPackId: "third-person.standard",
+        target: {
+          kind: "base-subject-socket",
+          socketId: "ThirdPersonTarget",
+        },
+        aspectRatio: 16 / 9,
+      },
+      requireSingleReachableComponent: false,
+    });
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+    if (!result.ok) return;
+    const descriptor = result.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!;
+    expect(descriptor).toMatchObject({
+      entityId: "flying-rider",
+      subjectDefinitionRef:
+        "package://subject-definition/flying-sword-rider@1",
+      presentationPolicy: {
+        kind: "fixed-locomotion",
+        presentationKey: "locomotion.idle",
+      },
+      capabilityAssembly: {
+        defaultMotionProfile: {
+          resourceRef: "worldkit://motion-profile/powered-flight.standard@1",
+          motionKernelRef: "worldkit://motion-kernel/powered-flight@1",
+        },
+        controlProfile: { commandKind: "flight-attitude" },
+        cameraContext: {
+          resourceRef: "worldkit://camera-context/agent.third-person@1",
+        },
+      },
+    });
+    expect(descriptor.visualParts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "body.asset", kind: "asset" }),
+      expect.objectContaining({ id: "flying-sword", kind: "primitive" }),
+    ]));
+    expect(result.worldRuntimeBootstrap.initialCamera).toMatchObject({
+      targetSocketId: "ThirdPersonTarget",
+      distanceMeters: 5,
+      pitchRadians: 0.22,
+      fovDegrees: 58,
+    });
+  });
+
+  it("compiles a fully custom rigid Mesh base with bounds-targeted Camera", () => {
+    const source = input();
+    const result = compileBlockWorldV2({
+      ...source,
+      controlledSubject: {
+        kind: "assembly",
+        entityId: "custom-player",
+        visualTargetId: "visual-target-1",
+        yawQuarterTurnsY: 0,
+        assembly: {
+          id: "custom-hover-shape",
+          baseSubject: {
+            kind: "custom-mesh",
+            subjectMeshBindingIds: ["custom-body"],
+            category: "custom",
+            bodyTopology: "custom",
+            semanticClassId: "subject.custom.hover-shape",
+            displayName: "Custom hover shape",
+            description: "A rigid Agent-drawn controllable shape.",
+          },
+          attachments: [{ subjectMeshBindingId: "custom-fin" }],
+          motion: { motionPackId: "ground.root-standard" },
+          presentation: { kind: "automatic" },
+        },
+      },
+      subjectMeshParts: [
+        {
+          id: "custom-body",
+          kind: "primitive",
+          shape: { kind: "box", sizeMetersXYZ: [0.8, 0.8, 1.2] },
+          positionMetersXYZ: [0, 0.4, 0],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+          colliderContribution: "include",
+          semanticTags: ["body", "custom"],
+        },
+        {
+          id: "custom-fin",
+          kind: "primitive",
+          shape: { kind: "box", sizeMetersXYZ: [1.4, 0.1, 0.4] },
+          positionMetersXYZ: [0, 0.55, 0.35],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+          colliderContribution: "exclude",
+          semanticTags: ["attachment", "fin"],
+        },
+      ],
+      camera: {
+        kind: "pack",
+        entityId: "camera-main",
+        cameraPackId: "third-person.over-shoulder",
+        target: { kind: "assembly-bounds", heightRatio: 0.5 },
+        aspectRatio: 16 / 9,
+      },
+    });
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true);
+    if (!result.ok) return;
+    const descriptor = result.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!;
+    expect(descriptor.visualBinding).toEqual({ mode: "static" });
+    expect(descriptor.sockets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "AssemblyCameraTarget", kind: "local" }),
+    ]));
+    expect(result.worldRuntimeBootstrap.initialCamera.targetSocketId).toBe(
+      "AssemblyCameraTarget",
+    );
+    expect(descriptor.capabilityAssembly.cameraContext.resourceRef).toBe(
+      "worldkit://camera-context/agent.over-shoulder@1",
+    );
+  });
+
+  it("resolves all four Camera Packs onto an explicit local target Socket", () => {
+    const expected = [
+      ["third-person.standard", "worldkit://camera-context/agent.third-person@1", 5],
+      ["third-person.over-shoulder", "worldkit://camera-context/agent.over-shoulder@1", 3.2],
+      ["third-person.giant", "worldkit://camera-context/agent.giant@1", 14],
+      ["first-person.standard", "worldkit://camera-context/agent.first-person@1", 0],
+    ] as const;
+    for (const [cameraPackId, cameraContextProfileRef, distanceMeters] of expected) {
+      const source = input();
+      const result = compileBlockWorldV2({
+        ...source,
+        controlledSubject: {
+          kind: "assembly",
+          entityId: "camera-pack-player",
+          visualTargetId: "visual-target-1",
+          yawQuarterTurnsY: 0,
+          assembly: {
+            id: `camera-pack-${cameraPackId.replaceAll(".", "-")}`,
+            baseSubject: {
+              kind: "custom-mesh",
+              subjectMeshBindingIds: ["camera-pack-body"],
+              category: "custom",
+              bodyTopology: "custom",
+              semanticClassId: "subject.custom.camera-pack",
+              displayName: "Camera Pack body",
+              description: "Rigid body used to verify Camera Pack compilation.",
+            },
+            attachments: [],
+            motion: { motionPackId: "ground.root-standard" },
+            presentation: { kind: "automatic" },
+          },
+        },
+        subjectMeshParts: [{
+          id: "camera-pack-body",
+          kind: "primitive",
+          shape: { kind: "box", sizeMetersXYZ: [1, 1, 1] },
+          positionMetersXYZ: [0, 0.5, 0],
+          rotationEulerRadiansXYZ: [0, 0, 0],
+          colliderContribution: "include",
+          semanticTags: ["body", "custom"],
+        }],
+        camera: {
+          kind: "pack",
+          entityId: "camera-main",
+          cameraPackId,
+          target: {
+            kind: "subject-local-point",
+            positionMetersXYZ: [0.1, 0.7, -0.2],
+          },
+          aspectRatio: 16 / 9,
+        },
+      });
+      expect(result.ok, `${cameraPackId}: ${JSON.stringify(result.diagnostics)}`)
+        .toBe(true);
+      if (!result.ok) continue;
+      expect(result.worldRuntimeBootstrap.initialCamera).toMatchObject({
+        targetSocketId: "AssemblyCameraTarget",
+        distanceMeters,
+        mode: cameraPackId === "first-person.standard"
+          ? "first-person"
+          : "third-person",
+      });
+      expect(result.worldRuntimeBootstrap.subjectRuntimeDescriptors[0]!
+        .capabilityAssembly.cameraContext.resourceRef).toBe(
+        cameraContextProfileRef,
+      );
+    }
+  });
 });

@@ -165,6 +165,7 @@ export interface CameraNodeSpecV2 {
       target: {
         targetEntityId: string;
         targetHeightMeters?: number;
+        targetSocketId?: string;
       };
       thirdPerson: {
         pitchRadians: number;
@@ -251,8 +252,8 @@ export interface PackageSubjectDefinitionV1 {
   version: 1;
   kind: "subject-definition";
   authoringAvailability: "recommended" | "advanced" | "experimental";
-  category: "human" | "animal" | "custom";
-  bodyTopology: "biped" | "quadruped" | "custom";
+  category: "human" | "animal" | "vehicle" | "composite" | "custom";
+  bodyTopology: SubjectBodyTopologyV2;
   semanticClassId: string;
   coordinateConvention: {
     forwardAxis: "-Z";
@@ -284,6 +285,12 @@ export interface PackageSubjectDefinitionV1 {
   relationshipCapabilityRefs: readonly string[];
   actionOrPoseSetRef: string;
   renderBindingProfileRef: string;
+  presentationPolicy?:
+    | Readonly<{ kind: "automatic" }>
+    | Readonly<{
+        kind: "fixed-locomotion";
+        presentationKey: AutomaticLocomotionPresentationKeyV1;
+      }>;
   allowedOverridePaths: readonly string[];
   aiMetadata: {
     displayName: string;
@@ -514,6 +521,12 @@ export interface NormalizedSubjectDefinitionV2 {
   sockets: readonly NormalizedSubjectSocketV2[];
   mountSlots: readonly SubjectMountSlotDefinitionV1[];
   colliderPolicy: SubjectColliderPolicyV2;
+  presentationPolicy?:
+    | Readonly<{ kind: "automatic" }>
+    | Readonly<{
+        kind: "fixed-locomotion";
+        presentationKey: AutomaticLocomotionPresentationKeyV1;
+      }>;
   capabilityRefs: readonly string[];
   locomotionCapabilityRef: string;
   locomotionCapabilityHash: string;

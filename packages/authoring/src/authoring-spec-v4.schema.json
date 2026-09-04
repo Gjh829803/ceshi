@@ -484,6 +484,11 @@
                     },
                     "targetHeightMeters": {
                       "type": "number"
+                    },
+                    "targetSocketId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
                     }
                   }
                 },
@@ -505,13 +510,13 @@
                     },
                     "distanceMeters": {
                       "type": "number",
-                      "minimum": 1.8,
-                      "maximum": 8
+                      "minimum": 0,
+                      "maximum": 40
                     },
                     "targetHeightMeters": {
                       "type": "number",
                       "minimum": 0.5,
-                      "maximum": 4.5
+                      "maximum": 10
                     },
                     "fovDegrees": {
                       "type": "number",

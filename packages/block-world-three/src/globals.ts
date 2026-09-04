@@ -4,7 +4,9 @@ import { BLOCK_PRESET_REFS_V1 } from "@whitebox-world/block-world";
 
 import {
   bindWorldkitBlockV1,
+  bindWorldkitSubjectMeshV1,
   createWorldkitBlockMaterialV1,
+  createWorldkitSubjectMaterialV1,
 } from "./binding.js";
 
 export interface BlockWorldAuthoringGlobalsV1 {
@@ -12,7 +14,9 @@ export interface BlockWorldAuthoringGlobalsV1 {
   readonly WorldKitBlock: Readonly<{
     BLOCK_PRESET_REFS_V1: typeof BLOCK_PRESET_REFS_V1;
     bindWorldkitBlockV1: typeof bindWorldkitBlockV1;
+    bindWorldkitSubjectMeshV1: typeof bindWorldkitSubjectMeshV1;
     createWorldkitBlockMaterialV1: typeof createWorldkitBlockMaterialV1;
+    createWorldkitSubjectMaterialV1: typeof createWorldkitSubjectMaterialV1;
   }>;
 }
 
@@ -20,7 +24,9 @@ export function installBlockWorldAuthoringGlobalsV1(): BlockWorldAuthoringGlobal
   const worldKitBlock = Object.freeze({
     BLOCK_PRESET_REFS_V1,
     bindWorldkitBlockV1,
+    bindWorldkitSubjectMeshV1,
     createWorldkitBlockMaterialV1,
+    createWorldkitSubjectMaterialV1,
   });
   Object.defineProperty(globalThis, "THREE", {
     value: THREE,

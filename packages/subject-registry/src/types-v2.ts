@@ -167,6 +167,8 @@ export interface CapabilityManifestInputV1 extends SubjectRegistryResourceBaseIn
     | "surface-slide"
     | "water-surface-locomotion"
     | "unpowered-glide"
+    | "powered-flight"
+    | "hover"
     | "controllable"
     | "seat"
     | "tether"

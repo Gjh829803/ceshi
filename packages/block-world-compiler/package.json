@@ -13,6 +13,7 @@
     "@whitebox-world/gameplay": "workspace:*",
     "@whitebox-world/gameplay-contracts": "workspace:*",
     "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/subject-registry": "workspace:*",
     "lodash-es": "^4.18.1"
   },
   "devDependencies": {

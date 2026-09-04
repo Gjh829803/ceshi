@@ -85,6 +85,20 @@ const CAPABILITY_MANIFESTS = [
   },
   {
     kind: "capability",
+    id: "locomotion.powered-flight",
+    version: 1,
+    resourceRef: "worldkit://capability/locomotion.powered-flight@1",
+    requiredCapabilityRefs: [],
+    providedFeatures: ["powered-flight", "hover", "controllable"],
+    conflictingCapabilityRefs: [],
+    aiMetadata: {
+      displayName: "Powered Flight",
+      description: "Hover-capable three-dimensional movement for a complete Subject Assembly.",
+      semanticTags: ["flight", "hover", "locomotion", "powered"],
+    },
+  },
+  {
+    kind: "capability",
     id: "relationship.seat",
     version: 1,
     resourceRef: "worldkit://capability/relationship.seat@1",

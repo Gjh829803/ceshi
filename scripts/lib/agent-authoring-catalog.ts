@@ -1,5 +1,7 @@
 import {
   BLOCK_PRESET_REFS_V1,
+  BLOCK_CAMERA_PACKS_V1,
+  BLOCK_MOTION_PACKS_V1,
   createBlockWorldManifestV2,
   type BlockSubjectTraversalProfileV2,
   type BlockWorldControlledSubjectV2,
@@ -21,7 +23,8 @@ export interface AgentAuthoringVisualProxyCuboidV1 {
   readonly sizeMetersXYZ: Vector3;
 }
 
-export interface AgentAuthoringSubjectV1 {
+export interface AgentAuthoringSubjectPackV2 {
+  readonly id: string;
   readonly subjectDefinitionRef: string;
   readonly displayName: string;
   readonly description: string;
@@ -29,23 +32,17 @@ export interface AgentAuthoringSubjectV1 {
   readonly category: RegistrySubjectDefinitionV3["category"];
   readonly bodyTopology: RegistrySubjectDefinitionV3["bodyTopology"];
   readonly semanticTags: readonly string[];
-  readonly executableMovementModes: readonly SceneBriefMovementModeV1[];
-  readonly executableCapabilityRefs: readonly string[];
-  readonly defaultMotionProfileRef: string;
-  readonly motionKernelRef: string;
-  readonly camera: Readonly<{
-    selectionAuthority: "runtime-camera-context";
-    cameraContextProfileRef: string;
-    defaultCameraRigProfileRef: string;
-    builderOpeningCameraRigRef: "worldkit://camera/third-person.standard@1";
-    openingTuningAuthority: "builder-camera-projected-onto-runtime-selected-profile";
-    openingTuningParameters: readonly [
-      "distanceMeters",
-      "targetHeightMeters",
-      "pitchRadians",
-      "baseFovDegrees",
-    ];
+  readonly selectionPolicy: "default" | "explicit-only";
+  readonly compatibleMotionPackIds: readonly string[];
+  readonly presentation: Readonly<{
+    automatic: true;
+    fixedLocomotionPresentationKeys: readonly string[];
   }>;
+  readonly sockets: readonly Readonly<{
+    id: string;
+    kind: "local" | "bone";
+    semanticTags: readonly string[];
+  }>[];
   /** Host-derived from the admitted Runtime Subject collider. Agent must copy exactly. */
   readonly traversalEnvelope: BlockSubjectTraversalProfileV2;
   readonly visualReviewProxy: Readonly<{
@@ -55,33 +52,42 @@ export interface AgentAuthoringSubjectV1 {
   }>;
 }
 
-export interface AgentAuthoringCatalogV1 {
+export interface AgentAuthoringCatalogV2 {
   readonly kind: "worldkit-agent-authoring-catalog";
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly registryIdentityHash: `sha256:${string}`;
-  readonly subjects: readonly AgentAuthoringSubjectV1[];
-  readonly rejectedSubjects: readonly Readonly<{
+  readonly subjectPacks: readonly AgentAuthoringSubjectPackV2[];
+  readonly motionPacks: readonly Readonly<{
+    id: string;
+    displayName: string;
+    description: string;
+    movementModes: readonly SceneBriefMovementModeV1[];
+  }>[];
+  readonly cameraPacks: readonly Readonly<{
+    id: string;
+    displayName: string;
+    description: string;
+    mode: "first-person" | "third-person";
+    supportedTargetKinds: readonly [
+      "base-subject-socket",
+      "base-subject-bounds",
+      "assembly-bounds",
+      "subject-local-point",
+    ];
+  }>[];
+  readonly customMeshPolicy: Readonly<{
+    supportedGeometryKinds: readonly ["box", "sphere", "cylinder"];
+    supportsRigging: false;
+    attachmentDefaultColliderContribution: "exclude";
+    maximumMeshPartCount: 48;
+  }>;
+  readonly unavailableSubjectPacks: readonly Readonly<{
     subjectDefinitionRef: string;
     diagnostics: readonly string[];
   }>[];
 }
 
-let cachedAgentAuthoringCatalogV1: AgentAuthoringCatalogV1 | undefined;
-
-const MOVEMENT_CAPABILITIES = [
-  ["ground-walk", ["worldkit://capability/locomotion.ground@1"]],
-  ["ground-slide", ["worldkit://capability/locomotion.surface-slide@1"]],
-  ["ground-ride", [
-    "worldkit://capability/locomotion.forward-steer@1",
-    "worldkit://capability/relationship.mounted-on@1",
-  ]],
-  ["ground-drive", ["worldkit://capability/locomotion.wheeled@1"]],
-  ["water-surface", ["worldkit://capability/locomotion.water-surface@1"]],
-  ["flight", ["worldkit://capability/locomotion.unpowered-glide@1"]],
-] as const satisfies readonly (readonly [
-  SceneBriefMovementModeV1,
-  readonly string[],
-])[];
+let cachedAgentAuthoringCatalogV2: AgentAuthoringCatalogV2 | undefined;
 
 function sizeForPrimitiveShape(shape: Record<string, unknown>): Vector3 {
   if (shape.kind === "box") return shape.sizeMetersXYZ as Vector3;
@@ -130,7 +136,7 @@ function transformedAxisAlignedSize(
 
 function visualProxy(
   definition: RegistrySubjectDefinitionV3,
-): AgentAuthoringSubjectV1["visualReviewProxy"] {
+): AgentAuthoringSubjectPackV2["visualReviewProxy"] {
   const cuboids = definition.visualParts.flatMap((part) => {
     const transform = part.localTransform;
     const scale = "scaleXYZ" in transform
@@ -195,26 +201,11 @@ function visualProxy(
   };
 }
 
-function hostedAuthoringRejectionDiagnostics(
-  definition: RegistrySubjectDefinitionV3,
-): readonly string[] {
-  if (
-    definition.resourceRef ===
-      "worldkit://subject-definition/humanoid.rigged-golden@2"
-  ) {
-    return [
-      "The Golden humanoid is a deterministic SDK rig/animation fixture, not a " +
-        "production authoring Subject. Use humanoid.g-bot@2 for an ordinary walking human.",
-    ];
-  }
-  if (definition.category !== "human" || definition.bodyTopology !== "biped") return [];
-  const hasAssetVisual = definition.visualParts.some(({ kind }) => kind === "asset");
-  if (hasAssetVisual && definition.visualBinding.mode === "rigged") return [];
-  return [
-    "Hosted ordinary-human authoring requires an asset-backed rigged Subject; " +
-      "primitive humanoid proxies remain SDK test/runtime fixtures.",
-  ];
-}
+const HOSTED_SUBJECT_FIXTURE_REFS = new Set([
+  "worldkit://subject-definition/humanoid.rigged-golden@2",
+  "worldkit://subject-definition/humanoid.third-person@1",
+  "worldkit://subject-definition/quadruped.ground-proxy@1",
+]);
 
 export function traversalEnvelopeFromRuntimeColliderV1(collider: Readonly<{
   readonly radiusMeters: number;
@@ -232,13 +223,25 @@ export function traversalEnvelopeFromRuntimeColliderV1(collider: Readonly<{
   };
 }
 
-function compileProbe(subjectDefinitionRef: string) {
+function compilePackProbe(
+  definition: RegistrySubjectDefinitionV3,
+  motionPackId: keyof typeof BLOCK_MOTION_PACKS_V1,
+) {
   const controlledSubject: BlockWorldControlledSubjectV2 = {
-    kind: "registered",
+    kind: "assembly",
     entityId: "player",
-    subjectDefinitionRef,
     visualTargetId: "visual-target-1",
     yawQuarterTurnsY: 0,
+    assembly: {
+      id: `probe-${definition.id.replaceAll(".", "-")}`.slice(0, 80),
+      baseSubject: {
+        kind: "subject-pack",
+        subjectPackId: definition.id,
+      },
+      attachments: [],
+      motion: { motionPackId },
+      presentation: { kind: "automatic" },
+    },
   };
   const manifest = createBlockWorldManifestV2(
     Array.from({ length: 81 }, (_, index) => {
@@ -258,11 +261,10 @@ function compileProbe(subjectDefinitionRef: string) {
     world: { id: "agent-authoring-catalog-probe", seed: 1 },
     controlledSubject,
     camera: {
+      kind: "pack" as const,
       entityId: "camera-main",
-      pitchRadians: 0.12,
-      distanceMeters: 5,
-      targetHeightMeters: 1.25,
-      fovDegrees: 56,
+      cameraPackId: "third-person.standard" as const,
+      target: { kind: "base-subject-bounds" as const, heightRatio: 0.65 },
       aspectRatio: 16 / 9,
     },
     spawnStandPositionMetersXYZ: [0, 0.5, 0] as const,
@@ -270,7 +272,7 @@ function compileProbe(subjectDefinitionRef: string) {
     requiredGroundTraversalBands: [],
     visualTargetFacings: [],
     spaceTransitions: [],
-    requireSingleReachableComponent: true,
+    requireSingleReachableComponent: motionPackId !== "flight.powered-standard",
   };
   const provisional = compileBlockWorldV2({
     ...baseInput,
@@ -289,7 +291,7 @@ function compileProbe(subjectDefinitionRef: string) {
     ({ entityId }) => entityId === controlledSubject.entityId,
   );
   if (descriptor === undefined) {
-    throw new Error(`AGENT_AUTHORING_SUBJECT_DESCRIPTOR_MISSING: ${subjectDefinitionRef}`);
+    throw new Error(`AGENT_AUTHORING_SUBJECT_DESCRIPTOR_MISSING: ${definition.resourceRef}`);
   }
   return compileBlockWorldV2({
     ...baseInput,
@@ -297,59 +299,73 @@ function compileProbe(subjectDefinitionRef: string) {
   });
 }
 
-export function createAgentAuthoringCatalogV1(): AgentAuthoringCatalogV1 {
-  if (cachedAgentAuthoringCatalogV1 !== undefined) {
-    return cachedAgentAuthoringCatalogV1;
+export function createAgentAuthoringCatalogV2(): AgentAuthoringCatalogV2 {
+  if (cachedAgentAuthoringCatalogV2 !== undefined) {
+    return cachedAgentAuthoringCatalogV2;
   }
-  const definitions = builtInSubjectResourceRegistry
-    .listDiscoverableResources({ kind: "subject-definition" });
+  const registryResources = builtInSubjectResourceRegistry
+    .listDiscoverableResources();
+  const definitions = registryResources.filter(
+    (resource): resource is RegistrySubjectDefinitionV3 =>
+      resource.kind === "subject-definition",
+  );
+  const definitionCountById = new Map<string, number>();
+  for (const definition of definitions) {
+    definitionCountById.set(
+      definition.id,
+      (definitionCountById.get(definition.id) ?? 0) + 1,
+    );
+  }
   const registryIdentityHash = sha256CanonicalJson(
-    definitions.map(({ resourceRef, contentHash }) => ({ resourceRef, contentHash })),
+    registryResources.map(({ kind, resourceRef, contentHash }) => ({
+      kind,
+      resourceRef,
+      contentHash,
+    })),
   ) as `sha256:${string}`;
-  const subjects: AgentAuthoringSubjectV1[] = [];
-  const rejectedSubjects: Array<{
+  const subjectPacks: AgentAuthoringSubjectPackV2[] = [];
+  const unavailableSubjectPacks: Array<{
     subjectDefinitionRef: string;
     diagnostics: readonly string[];
   }> = [];
   for (const definition of definitions) {
-    const hostedDiagnostics = hostedAuthoringRejectionDiagnostics(definition);
-    if (hostedDiagnostics.length > 0) {
-      rejectedSubjects.push({
+    if (HOSTED_SUBJECT_FIXTURE_REFS.has(definition.resourceRef)) continue;
+    const subjectPackId = definitionCountById.get(definition.id) === 1
+      ? definition.id
+      : `${definition.id}.v${definition.version}`;
+    const admissions = Object.keys(BLOCK_MOTION_PACKS_V1)
+      .sort((left, right) => left.localeCompare(right))
+      .map((motionPackId) => ({
+        motionPackId: motionPackId as keyof typeof BLOCK_MOTION_PACKS_V1,
+        result: compilePackProbe(
+          { ...definition, id: subjectPackId },
+          motionPackId as keyof typeof BLOCK_MOTION_PACKS_V1,
+        ),
+      }));
+    const successfulAdmissions = admissions.filter(({ result }) => result.ok);
+    if (successfulAdmissions.length === 0) {
+      unavailableSubjectPacks.push({
         subjectDefinitionRef: definition.resourceRef,
-        diagnostics: hostedDiagnostics,
+        diagnostics: admissions.flatMap(({ motionPackId, result }) =>
+          result.diagnostics.map(({ code, message }) =>
+            `${motionPackId}: ${code}: ${message}`)),
       });
       continue;
     }
-    const admission = compileProbe(definition.resourceRef);
-    if (!admission.ok) {
-      rejectedSubjects.push({
-        subjectDefinitionRef: definition.resourceRef,
-        diagnostics: admission.diagnostics.map(({ code, message }) => `${code}: ${message}`),
-      });
-      continue;
-    }
-    const motionProfile = builtInSubjectResourceRegistry.resolveMotionProfile(
-      definition.profiles.motion.defaultMotionProfileRef,
-    );
-    const motionKernel = motionProfile === undefined
-      ? undefined
-      : builtInSubjectResourceRegistry.resolveMotionKernel(motionProfile.motionKernelRef);
-    const cameraContext = builtInSubjectResourceRegistry.resolveCameraContextProfile(
-      definition.profiles.cameraContextProfileRef,
-    );
-    if (motionProfile === undefined || motionKernel?.runtimeStatus !== "implemented" ||
-        cameraContext === undefined) {
-      rejectedSubjects.push({
-        subjectDefinitionRef: definition.resourceRef,
-        diagnostics: ["Executable motion or Camera context closure is unavailable."],
-      });
-      continue;
-    }
-    const capabilities = new Set([
-      ...definition.capabilityRefs,
-      ...definition.relationshipCapabilityRefs,
-    ]);
-    subjects.push({
+    const animationSet = definition.visualBinding.mode === "rigged"
+      ? builtInSubjectResourceRegistry.resolveAnimationSet(
+          definition.visualBinding.animationSetRef,
+        )
+      : undefined;
+    const fixedLocomotionPresentationKeys = [...new Set(
+      animationSet?.animationBindings.flatMap(
+        ({ automaticPresentationKeys }) => automaticPresentationKeys,
+      ) ?? [],
+    )].sort((left, right) => left.localeCompare(right));
+    const admission = successfulAdmissions[0]!.result;
+    if (!admission.ok) throw new Error("unreachable");
+    subjectPacks.push({
+      id: subjectPackId,
       subjectDefinitionRef: definition.resourceRef,
       displayName: definition.aiMetadata.displayName,
       description: definition.aiMetadata.description,
@@ -357,29 +373,20 @@ export function createAgentAuthoringCatalogV1(): AgentAuthoringCatalogV1 {
       category: definition.category,
       bodyTopology: definition.bodyTopology,
       semanticTags: definition.aiMetadata.semanticTags,
-      executableMovementModes: MOVEMENT_CAPABILITIES
-        .filter(([, requiredRefs]) => requiredRefs.every((ref) => capabilities.has(ref)))
-        .map(([mode]) => mode),
-      executableCapabilityRefs: [
-        ...definition.capabilityRefs,
-        ...definition.relationshipCapabilityRefs,
-      ],
-      defaultMotionProfileRef: motionProfile.resourceRef,
-      motionKernelRef: motionKernel.resourceRef,
-      camera: {
-        selectionAuthority: "runtime-camera-context",
-        cameraContextProfileRef: cameraContext.resourceRef,
-        defaultCameraRigProfileRef: cameraContext.defaultCameraRigProfileRef,
-        builderOpeningCameraRigRef: "worldkit://camera/third-person.standard@1",
-        openingTuningAuthority:
-          "builder-camera-projected-onto-runtime-selected-profile",
-        openingTuningParameters: [
-          "distanceMeters",
-          "targetHeightMeters",
-          "pitchRadians",
-          "baseFovDegrees",
-        ],
+      selectionPolicy: definition.authoringAvailability === "experimental"
+        ? "explicit-only"
+        : "default",
+      compatibleMotionPackIds: successfulAdmissions.map(({ motionPackId }) =>
+        motionPackId),
+      presentation: {
+        automatic: true,
+        fixedLocomotionPresentationKeys,
       },
+      sockets: definition.sockets.map(({ id, kind, semanticTags }) => ({
+        id,
+        kind,
+        semanticTags,
+      })),
       traversalEnvelope: traversalEnvelopeFromRuntimeColliderV1(
         admission.worldRuntimeBootstrap.subjectRuntimeDescriptors.find(
           ({ entityId }) => entityId === "player",
@@ -388,12 +395,40 @@ export function createAgentAuthoringCatalogV1(): AgentAuthoringCatalogV1 {
       visualReviewProxy: visualProxy(definition),
     });
   }
-  cachedAgentAuthoringCatalogV1 = {
+  cachedAgentAuthoringCatalogV2 = {
     kind: "worldkit-agent-authoring-catalog",
-    schemaVersion: 1,
+    schemaVersion: 2,
     registryIdentityHash,
-    subjects,
-    rejectedSubjects,
+    subjectPacks,
+    motionPacks: Object.values(BLOCK_MOTION_PACKS_V1)
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map(({ id, displayName, description, movementModes }) => ({
+        id,
+        displayName,
+        description,
+        movementModes,
+      })),
+    cameraPacks: Object.values(BLOCK_CAMERA_PACKS_V1)
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map(({ id, displayName, description, mode }) => ({
+        id,
+        displayName,
+        description,
+        mode,
+        supportedTargetKinds: [
+          "base-subject-socket",
+          "base-subject-bounds",
+          "assembly-bounds",
+          "subject-local-point",
+        ],
+      })),
+    customMeshPolicy: {
+      supportedGeometryKinds: ["box", "sphere", "cylinder"],
+      supportsRigging: false,
+      attachmentDefaultColliderContribution: "exclude",
+      maximumMeshPartCount: 48,
+    },
+    unavailableSubjectPacks,
   };
-  return cachedAgentAuthoringCatalogV1;
+  return cachedAgentAuthoringCatalogV2;
 }

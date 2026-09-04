@@ -49,6 +49,249 @@ function effectiveCameraArmLength(
 }
 
 describe("Block World Babylon integration", () => {
+  it("keeps fixed presentation independent from ground movement on a rigged base", async () => {
+    const compiled = compileBlockWorldV2({
+      manifest: createBlockWorldManifestV2(
+        Array.from({ length: 81 }, (_, index) => ({
+          id: `fixed-ground-${String(index).padStart(3, "0")}`,
+          presetRef: BLOCK_PRESET_REFS_V1.walkable,
+          shape: "full" as const,
+          positionMetersXYZ: [index % 9 - 4, 0, Math.floor(index / 9) - 4] as const,
+          rotationQuarterTurnsY: 0,
+        }))),
+      world: { id: "block-runtime-fixed-presentation", seed: 85 },
+      controlledSubject: {
+        kind: "assembly",
+        entityId: "fixed-rider",
+        visualTargetId: "visual-target-1",
+        yawQuarterTurnsY: 0,
+        assembly: {
+          id: "fixed-presentation-rider",
+          baseSubject: {
+            kind: "subject-pack",
+            subjectPackId: "humanoid.g-bot",
+          },
+          attachments: [],
+          motion: { motionPackId: "ground.character-standard" },
+          presentation: {
+            kind: "fixed-locomotion",
+            presentationKey: "locomotion.idle",
+          },
+        },
+      },
+      subjectMeshParts: [],
+      camera: {
+        kind: "pack",
+        entityId: "camera-main",
+        cameraPackId: "third-person.over-shoulder",
+        target: { kind: "base-subject-bounds", heightRatio: 0.65 },
+        aspectRatio: 16 / 9,
+      },
+      subjectTraversalProfile: {
+        clearanceHeightMeters: 1.8,
+        footprintRadiusMetersXZ: 0.35,
+        maximumStepUpMeters: 0.3,
+        maximumStepDownMeters: 0.3,
+        maximumAutoSmoothHeightDeltaMeters: 1,
+        maximumAdjacentWalkableHeightDeltaMeters: 2,
+        canStandOnCloud: false,
+      },
+      spawnStandPositionMetersXYZ: [0, 0.5, 0],
+      requiredTargets: [],
+      requiredGroundTraversalBands: [],
+      visualTargetFacings: [],
+      spaceTransitions: [],
+      requireSingleReachableComponent: true,
+    });
+    expect(compiled.ok, JSON.stringify(compiled.diagnostics)).toBe(true);
+    if (!compiled.ok) return;
+    const runtime = await BabylonWorldRuntime.create({
+      sceneSource: {
+        kind: "canonical-execution-plan",
+        executionPlan: compiled.canonicalSceneExecutionPlan,
+      },
+      worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+      gameplayBootstrap: compiled.gameplayBootstrap,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotBytes, sourceLabel: "fixed-presentation-test-memory" };
+        },
+      },
+      havokWasmBinary,
+      engineFactory: () => new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
+    });
+    try {
+      await bindRuntimeTestPossession(runtime, "fixed-rider");
+      const advanced = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 45,
+      });
+      const subject = advanced.subjectStatesByEntityId["fixed-rider"]!;
+      expect(Math.hypot(subject.positionMetersXYZ[0], subject.positionMetersXYZ[2]))
+        .toBeGreaterThan(1);
+      expect(subject.activeActionId).toBe("idle");
+      expect(advanced.camera.activeCameraModifierRefs).toContain(
+        "worldkit://camera-modifier/aim-framing@1",
+      );
+      expect(advanced.camera.resolvedParameters?.shoulderOffsetMeters).toBe(0.55);
+      expect(advanced.camera.selectedTargetSocketId).toBe("AssemblyCameraTarget");
+      expect(effectiveCameraArmLength(advanced.camera)).toBeLessThanOrEqual(
+        advanced.camera.safeArmLengthMeters! + 0.000001,
+      );
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
+  it("moves a rigged base and rigid sword attachment as one powered-flight assembly without gait animation", async () => {
+    const ground = Array.from({ length: 81 }, (_, index) => ({
+      id: `flight-ground-${String(index).padStart(3, "0")}`,
+      presetRef: BLOCK_PRESET_REFS_V1.walkable,
+      shape: "full" as const,
+      positionMetersXYZ: [index % 9 - 4, 0, Math.floor(index / 9) - 4] as const,
+      rotationQuarterTurnsY: 0,
+    }));
+    const wall = Array.from({ length: 25 }, (_, index) => ({
+      id: `flight-wall-${String(index).padStart(3, "0")}`,
+      presetRef: BLOCK_PRESET_REFS_V1.obstacle,
+      shape: "full" as const,
+      positionMetersXYZ: [index % 5 - 2, Math.floor(index / 5) + 1, -4] as const,
+      rotationQuarterTurnsY: 0,
+    }));
+    const compiled = compileBlockWorldV2({
+      manifest: createBlockWorldManifestV2([...ground, ...wall]),
+      world: { id: "block-runtime-flying-sword", seed: 84 },
+      controlledSubject: {
+        kind: "assembly",
+        entityId: "flying-rider",
+        visualTargetId: "visual-target-1",
+        yawQuarterTurnsY: 0,
+        assembly: {
+          id: "flying-sword-rider",
+          baseSubject: {
+            kind: "subject-pack",
+            subjectPackId: "humanoid.g-bot",
+          },
+          attachments: [{ subjectMeshBindingId: "flying-sword" }],
+          motion: { motionPackId: "flight.powered-standard" },
+          presentation: {
+            kind: "fixed-locomotion",
+            presentationKey: "locomotion.idle",
+          },
+        },
+      },
+      subjectMeshParts: [{
+        id: "flying-sword",
+        kind: "primitive",
+        shape: { kind: "box", sizeMetersXYZ: [0.18, 0.08, 2.4] },
+        positionMetersXYZ: [0, -0.12, 0],
+        rotationEulerRadiansXYZ: [0, 0, 0],
+        colliderContribution: "exclude",
+        semanticTags: ["attachment", "sword"],
+      }],
+      camera: {
+        kind: "pack",
+        entityId: "camera-main",
+        cameraPackId: "third-person.standard",
+        target: {
+          kind: "base-subject-socket",
+          socketId: "ThirdPersonTarget",
+        },
+        aspectRatio: 16 / 9,
+      },
+      subjectTraversalProfile: {
+        clearanceHeightMeters: 1.8,
+        footprintRadiusMetersXZ: 0.35,
+        maximumStepUpMeters: 0.3,
+        maximumStepDownMeters: 0.3,
+        maximumAutoSmoothHeightDeltaMeters: 1,
+        maximumAdjacentWalkableHeightDeltaMeters: 2,
+        canStandOnCloud: false,
+      },
+      spawnStandPositionMetersXYZ: [0, 0.5, 0],
+      requiredTargets: [],
+      requiredGroundTraversalBands: [],
+      visualTargetFacings: [],
+      spaceTransitions: [],
+      requireSingleReachableComponent: false,
+    });
+    expect(compiled.ok, JSON.stringify(compiled.diagnostics)).toBe(true);
+    if (!compiled.ok) return;
+    const runtime = await BabylonWorldRuntime.create({
+      sceneSource: {
+        kind: "canonical-execution-plan",
+        executionPlan: compiled.canonicalSceneExecutionPlan,
+      },
+      worldRuntimeBootstrap: compiled.worldRuntimeBootstrap,
+      gameplayBootstrap: compiled.gameplayBootstrap,
+      subjectAssetResolver: {
+        async resolveSubjectAsset() {
+          return { bytes: gBotBytes, sourceLabel: "flying-sword-test-memory" };
+        },
+      },
+      havokWasmBinary,
+      engineFactory: () => new NullEngine({
+        renderWidth: 640,
+        renderHeight: 360,
+        textureSize: 512,
+        deterministicLockstep: true,
+        lockstepMaxSteps: 4,
+      }),
+    });
+    try {
+      await bindRuntimeTestPossession(runtime, "flying-rider");
+      const lifted = await runtime.runFixedInput({ actions: ["jump"], ticks: 30 });
+      expect(lifted.subjectStatesByEntityId["flying-rider"]!.positionMetersXYZ[1])
+        .toBeGreaterThan(1);
+      const advanced = await runtime.runFixedInput({
+        actions: ["move-forward"],
+        ticks: 60,
+      });
+      const subject = advanced.subjectStatesByEntityId["flying-rider"]!;
+      expect(subject.positionMetersXYZ[2]).toBeLessThan(-2);
+      expect(subject.positionMetersXYZ[2]).toBeGreaterThan(-3.8);
+      expect(subject.activeActionId).toBe("idle");
+      expect(advanced.camera.selectedTargetSocketId).toBe("ThirdPersonTarget");
+      expect(advanced.camera.decollisionPhase).not.toBe("emergency-inside");
+      expect(effectiveCameraArmLength(advanced.camera)).toBeLessThanOrEqual(
+        advanced.camera.safeArmLengthMeters! + 0.000001,
+      );
+      const internals = runtime as unknown as {
+        scene: { getMeshByName(name: string): { metadata?: unknown } | null };
+      };
+      expect(internals.scene.getMeshByName("flying-rider.flying-sword")?.metadata)
+        .toMatchObject({
+          worldkitEntityId: "flying-rider",
+          subjectVisualPartId: "flying-sword",
+        });
+
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "flying-rider");
+      for (let tick = 0; tick < 30; tick += 1) {
+        await runtime.runFixedInput({ actions: ["jump"], ticks: 1 });
+      }
+      let replay = runtime.snapshot();
+      for (let tick = 0; tick < 60; tick += 1) {
+        replay = await runtime.runFixedInput({
+          actions: ["move-forward"],
+          ticks: 1,
+        });
+      }
+      expect(replay.subjectStatesByEntityId["flying-rider"]!.positionMetersXYZ)
+        .toEqual(subject.positionMetersXYZ);
+      expect(replay.subjectStatesByEntityId["flying-rider"]!.velocityMetersPerSecondXYZ)
+        .toEqual(subject.velocityMetersPerSecondXYZ);
+    } finally {
+      await runtime.dispose();
+    }
+  }, 30_000);
+
   it("starts the current main Runtime with batched Block geometry and resident collisions", async () => {
     const compiled = compileBlockWorldV2({
       manifest: createBlockWorldManifestV2([

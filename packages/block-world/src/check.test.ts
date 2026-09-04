@@ -383,6 +383,63 @@ describe("Block World V2 checker", () => {
     });
     expect(report.diagnostics.map(({ code }) => code)).toContain("BLOCK_WORLD_SUBJECT_SCALE_INVALID");
   });
+
+  it("requires a Subject Assembly to reference every extracted Mesh part exactly once", () => {
+    const base = checkInput([block("ground-full", [0, 0, 0])]);
+    const report = checkBlockWorldV2({
+      ...base,
+      controlledSubject: {
+        kind: "assembly",
+        entityId: "custom-player",
+        visualTargetId: "visual-target-1",
+        yawQuarterTurnsY: 0,
+        assembly: {
+          id: "custom-mesh-player",
+          baseSubject: {
+            kind: "custom-mesh",
+            subjectMeshBindingIds: ["custom-body"],
+            category: "custom",
+            bodyTopology: "custom",
+            semanticClassId: "subject.custom.mesh-player",
+            displayName: "Custom Mesh Player",
+            description: "A rigid custom player.",
+          },
+          attachments: [],
+          motion: { motionPackId: "ground.root-standard" },
+          presentation: { kind: "automatic" },
+        },
+      },
+      subjectMeshParts: [
+        {
+          id: "custom-body",
+          kind: "primitive",
+          shape: { kind: "box", sizeMetersXYZ: [1, 1, 1] },
+          positionMetersXYZ: [0, 0.5, 0],
+          colliderContribution: "include",
+          semanticTags: ["body", "custom"],
+        },
+        {
+          id: "unused-eye",
+          kind: "primitive",
+          shape: { kind: "sphere", radiusMeters: 0.2 },
+          positionMetersXYZ: [0, 0.7, -0.5],
+          colliderContribution: "exclude",
+          semanticTags: ["eye"],
+        },
+      ],
+      camera: {
+        kind: "pack",
+        entityId: "camera-main",
+        cameraPackId: "third-person.standard",
+        target: { kind: "assembly-bounds", heightRatio: 0.5 },
+        aspectRatio: 16 / 9,
+      },
+      requiredTargets: [],
+    });
+    expect(report.diagnostics.map(({ code }) => code)).toContain(
+      "BLOCK_WORLD_SUBJECT_ASSEMBLY_INVALID",
+    );
+  });
 });
 
 function checkInput(blocks: readonly BlockInstanceV2[]) {

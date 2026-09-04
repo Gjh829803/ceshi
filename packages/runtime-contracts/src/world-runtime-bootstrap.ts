@@ -188,7 +188,8 @@ export interface RuntimeMotionKernelDefinitionV1 {
     | "wheeled-arcade"
     | "surface-slide"
     | "water-surface"
-    | "unpowered-glide";
+    | "unpowered-glide"
+    | "powered-flight";
   commandKind: RuntimeMotionCommandKindV1;
   supportedMediums: readonly RuntimeMovementMediumV1[];
   fallbackMotionProfileRef: string;
@@ -362,6 +363,12 @@ export interface RuntimeSubjectDescriptorV1 {
   readonly forwardDirection: "-z";
   readonly visualParts: readonly RuntimeSubjectVisualPartV1[];
   readonly visualBinding: RuntimeSubjectVisualBindingV1;
+  readonly presentationPolicy?:
+    | Readonly<{ kind: "automatic" }>
+    | Readonly<{
+        kind: "fixed-locomotion";
+        presentationKey: AutomaticLocomotionPresentationKeyV1;
+      }>;
   readonly sockets: readonly RuntimeSubjectSocketV1[];
   readonly mountSlots: readonly RuntimeSubjectMountSlotV1[];
   readonly collider: RuntimeSubjectColliderV1;
@@ -396,9 +403,10 @@ export interface RuntimeActionPresentationRegistryV1 {
 }
 
 export interface WorldRuntimeInitialCameraV1 {
-  readonly mode: "third-person";
+  readonly mode: "first-person" | "third-person";
   readonly cameraEntityId: string;
   readonly targetEntityId: string;
+  readonly targetSocketId?: string;
   readonly cameraRigProfileRef: string;
   readonly pitchRadians: number;
   readonly distanceMeters: number;
@@ -577,6 +585,19 @@ function validateRuntimeVocabularies(
       (subject.visualBinding.mode === "static" && assetPartCount > 1) ||
       (subject.visualBinding.mode === "rigged" && assetPartCount !== 1)
     ) invalid();
+    const presentationPolicy = subject.presentationPolicy;
+    const visualBinding = subject.visualBinding;
+    if (presentationPolicy?.kind === "fixed-locomotion" &&
+        visualBinding.mode === "rigged") {
+      const animationSet = source.animationSets.find(({ animationSetRef }) =>
+        animationSetRef === visualBinding.animationSetRef);
+      if (animationSet === undefined || !animationSet.animationBindings.some(
+        ({ automaticPresentationKeys }) =>
+          automaticPresentationKeys.includes(
+            presentationPolicy.presentationKey,
+          ),
+      )) invalid();
+    }
     for (const modifier of subject.capabilityAssembly.cameraContext
       .cameraModifierProfiles) {
       if (
@@ -617,6 +638,12 @@ function canonicalBody(
     !subjectIds.has(source.initialControlledEntityId) ||
     !subjectIds.has(source.initialCamera.targetEntityId)
   ) invalid();
+  if (source.initialCamera.targetSocketId !== undefined) {
+    const targetSubject = subjectRuntimeDescriptors.find(({ entityId }) =>
+      entityId === source.initialCamera.targetEntityId);
+    if (targetSubject === undefined || !targetSubject.sockets.some(({ id }) =>
+      id === source.initialCamera.targetSocketId)) invalid();
+  }
 
   const runtimeResourceLockEntries = canonicalCollection(
     source.runtimeResourceLockEntries,

@@ -1650,7 +1650,10 @@ test("keeps Planner prose and direct Block Builder authority separate", async ()
   assert.match(launcher, /four admitted undeformed BoxGeometry shapes/);
   assert.match(launcher, /quarter-volume \[0\.5,0\.5,1\]/);
   assert.match(launcher, /Reproduce terrain at macro silhouette/);
-  assert.match(launcher, /ordinary composed human must be 1\.6-2\.1 meters tall/);
+  assert.match(launcher, /The base may be any admitted person, animal, vehicle, giant, or custom Mesh; human is not special/);
+  assert.match(launcher, /Agent-authored shapes never require bones/);
+  assert.match(launcher, /Declare exactly one Subject Assembly/);
+  assert.match(launcher, /Spring Arm hard collision/);
   assert.match(launcher, /no second semantic construction surface is available/);
   assert.match(launcher, /repair only world\.mjs/);
   assert.match(launcher, /Never edit the derived JSON outputs/);
@@ -1677,8 +1680,11 @@ test("keeps Planner prose and direct Block Builder authority separate", async ()
   assert.match(blockApi, /BoxGeometry\(1, 1, 1\)/);
   assert.match(blockApi, /landmarkOrange/);
   assert.match(blockApi, /visual-target-3.*landmarkYellow/);
-  assert.match(subjectCamera, /humanoid\.g-bot@2/);
-  assert.match(subjectCamera, /exact image centerline/);
+  assert.match(subjectCamera, /subjectPacks/);
+  assert.match(subjectCamera, /humanoid\.g-bot/);
+  assert.match(subjectCamera, /flight\.powered-standard/);
+  assert.match(subjectCamera, /base-subject-socket/);
+  assert.match(subjectCamera, /hard-collision Spring Arm/);
   assert.match(studioApp, /blockWhiteboxLegend/);
   assert.match(studioApp, /#00B8A9/);
   assert.match(studioApp, /规划图颜色覆盖/);
@@ -2827,8 +2833,19 @@ test("adapts the main Registry subject catalog for the Studio UI", async () => {
     assert.ok(payload.presets.every(({ ref }) => ref.startsWith("worldkit://subject-definition/")));
     assert.ok(payload.productionRefs.includes("worldkit://subject-definition/humanoid.g-bot@2"));
     assert.ok(payload.advancedRefs.includes("worldkit://subject-definition/xier120.quadruped-animal@1"));
+    assert.ok(payload.presets.some(({ packId }) =>
+      packId === "animal.quadruped.forward-steer.v1"));
     assert.ok(!payload.presets.some(({ ref }) =>
-      ref === "worldkit://subject-definition/animal.quadruped.forward-steer@1"));
+      ref === "worldkit://subject-definition/humanoid.third-person@1"));
+    assert.deepEqual(
+      payload.motionPacks.map(({ id }) => id),
+      [
+        "flight.powered-standard",
+        "ground.character-standard",
+        "ground.root-standard",
+      ],
+    );
+    assert.equal(payload.cameraPacks.length, 4);
   } finally {
     await studio.shutdown();
   }

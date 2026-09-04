@@ -140,6 +140,7 @@ describe("compileMotionCommandV1", () => {
       pitch: -1,
       yaw: 1,
       roll: 1,
+      vertical: 1,
       actionRequested: true,
     });
   });
@@ -271,6 +272,18 @@ describe("compileMotionCommandV1", () => {
         DEFAULT_VIEW_FRAME,
       ),
     ).toMatchObject({ kind: "flight-attitude", actionRequested: true });
+    expect(
+      compileMotionCommandV1(
+        profile("flight-attitude", "flight-frame"),
+        NEUTRAL_MOVE_RESPONSE_EXPONENT,
+        ["brake"],
+        DEFAULT_VIEW_FRAME,
+      ),
+    ).toMatchObject({
+      kind: "flight-attitude",
+      vertical: -1,
+      actionRequested: false,
+    });
     expect(
       compileMotionCommandV1(
         profile("planar-vector", "camera-relative"),

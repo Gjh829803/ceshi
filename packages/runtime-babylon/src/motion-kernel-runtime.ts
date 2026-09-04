@@ -211,6 +211,7 @@ function zeroIntentCommand(command: MotionCommandV1): MotionCommandV1 {
       pitch: 0,
       yaw: 0,
       roll: 0,
+      vertical: 0,
       actionRequested: false,
     };
   }
@@ -236,7 +237,8 @@ function requestedFromCommand(command: MotionCommandV1): {
   }
   if (command.kind === "flight-attitude") {
     return {
-      moveRequested: command.pitch !== 0 || command.yaw !== 0 || command.roll !== 0,
+      moveRequested: command.pitch !== 0 || command.yaw !== 0 ||
+        command.roll !== 0 || command.vertical !== 0,
       runRequested: false,
     };
   }
@@ -515,6 +517,8 @@ export class MotionKernelRuntimeV1 {
       );
       if (this.activeKernelImplementationId() === "unpowered-glide") {
         this.stepGlide(effectiveCommand, support);
+      } else if (this.activeKernelImplementationId() === "powered-flight") {
+        this.stepPoweredFlight(effectiveCommand, support);
       } else {
         this.stepActiveKernel(effectiveCommand, support, resolved);
       }
@@ -1362,7 +1366,8 @@ export class MotionKernelRuntimeV1 {
     | "wheeled-arcade"
     | "surface-slide"
     | "water-surface"
-    | "unpowered-glide" {
+    | "unpowered-glide"
+    | "powered-flight" {
     const assembly = this.subject.capabilityAssembly;
     if (assembly === undefined) return "free-ground";
     const activeMotionKernelRef = this.activeProfile.motionKernelRef;
@@ -1471,6 +1476,56 @@ export class MotionKernelRuntimeV1 {
       kernelScalar(feel, "verticalResponseMetersPerSecondSquared", 4) *
         FIXED_TIME_STEP_SECONDS,
     );
+    this.physicsController.setVelocity(velocity);
+    this.physicsController.integrate(
+      FIXED_TIME_STEP_SECONDS,
+      support,
+      Vector3.Zero(),
+    );
+  }
+
+  private stepPoweredFlight(
+    command: MotionCommandV1,
+    support: CharacterSurfaceInfo,
+  ): void {
+    this.jumpActionWasActive = false;
+    const feel = this.controlFeel;
+    const flight = command.kind === "flight-attitude" ? command : undefined;
+    const forwardInput = -(flight?.pitch ?? 0);
+    const yawInput = flight?.yaw ?? 0;
+    this.yawRadians -= yawInput * feel.turnRateRadiansPerSecond *
+      FIXED_TIME_STEP_SECONDS;
+    this.flightPitchRadians = moveTowards(
+      this.flightPitchRadians,
+      -forwardInput * 0.12,
+      feel.turnRateRadiansPerSecond * 0.5 * FIXED_TIME_STEP_SECONDS,
+    );
+    this.flightRollRadians = moveTowards(
+      this.flightRollRadians,
+      -yawInput * 0.2,
+      feel.turnRateRadiansPerSecond * 0.75 * FIXED_TIME_STEP_SECONDS,
+    );
+
+    const targetForwardSpeed = forwardInput >= 0
+      ? forwardInput * feel.runSpeedMetersPerSecond
+      : forwardInput * feel.walkSpeedMetersPerSecond;
+    this.forwardSpeedMetersPerSecond = moveTowards(
+      this.forwardSpeedMetersPerSecond,
+      targetForwardSpeed,
+      (Math.abs(targetForwardSpeed) > Math.abs(this.forwardSpeedMetersPerSecond)
+        ? feel.accelerationMetersPerSecondSquared
+        : feel.decelerationMetersPerSecondSquared) * FIXED_TIME_STEP_SECONDS,
+    );
+    const current = this.physicsController.getVelocity();
+    const targetVerticalSpeed = (flight?.vertical ?? 0) *
+      feel.jumpSpeedMetersPerSecond;
+    const verticalSpeed = moveTowards(
+      current.y,
+      targetVerticalSpeed,
+      feel.accelerationMetersPerSecondSquared * FIXED_TIME_STEP_SECONDS,
+    );
+    const velocity = this.forward.scale(this.forwardSpeedMetersPerSecond);
+    velocity.y = verticalSpeed;
     this.physicsController.setVelocity(velocity);
     this.physicsController.integrate(
       FIXED_TIME_STEP_SECONDS,

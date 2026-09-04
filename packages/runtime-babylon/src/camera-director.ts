@@ -1056,7 +1056,10 @@ export class CameraDirectorV1 {
     if (selectionChanged) this.transitionDurationSeconds = parameters.transitionSeconds;
 
     const targetPosition = new Vector3(...sample.targetPositionMetersXYZ);
-    const selectedTargetSocketId = profile.preferredSocketIds.find(
+    const requestedTargetSocketIds = this.initialCamera.targetSocketId === undefined
+      ? profile.preferredSocketIds
+      : [this.initialCamera.targetSocketId];
+    const selectedTargetSocketId = requestedTargetSocketIds.find(
       (id) => sample.socketPositionsMetersXYZById[id] !== undefined,
     );
     const socketPosition = selectedTargetSocketId === undefined
@@ -1331,7 +1334,7 @@ export class CameraDirectorV1 {
     this.controlInitialized = true;
     this.activeTargetEntityId = sample.entityId;
     const isTargetSocketFallback =
-      profile.preferredSocketIds.length > 0 && selectedTargetSocketId === undefined;
+      requestedTargetSocketIds.length > 0 && selectedTargetSocketId === undefined;
     this.latestTelemetry = {
       selectionDecision: copySelectionDecision(selectionDecisionWithSocketDiagnostic(
         selected.decision,

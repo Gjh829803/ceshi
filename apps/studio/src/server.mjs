@@ -5575,8 +5575,8 @@ export function createStudio(options = {}) {
     if (request.method === "GET" && url.pathname === "/api/subject-catalog") {
       const catalog = await readJsonIfPresent(subjectCatalogPath);
       const definitions = catalog?.kind === "worldkit-agent-authoring-catalog" &&
-          catalog.schemaVersion === 1 && Array.isArray(catalog.subjects)
-        ? catalog.subjects
+          catalog.schemaVersion === 2 && Array.isArray(catalog.subjectPacks)
+        ? catalog.subjectPacks
         : null;
       if (definitions === null) {
         sendError(response, 503, "主体目录暂不可用。");
@@ -5585,18 +5585,22 @@ export function createStudio(options = {}) {
       const presets = definitions.map((definition) => ({
         label: definition.displayName ?? definition.subjectDefinitionRef,
         maturity: definition.authoringAvailability,
+        packId: definition.id,
         ref: definition.subjectDefinitionRef,
         description: definition.description ?? definition.bodyTopology,
         planningBounds: definition.visualReviewProxy === undefined
           ? null
           : definition.visualReviewProxy.boundsMaximumMetersXYZ.map((value, axis) =>
               value - definition.visualReviewProxy.boundsMinimumMetersXYZ[axis]),
-        capabilities: definition.executableMovementModes ?? [],
+        compatibleMotionPackIds: definition.compatibleMotionPackIds ?? [],
         bodyTopology: definition.bodyTopology,
-        cameraContextProfileRef: definition.camera?.cameraContextProfileRef ?? null,
+        selectionPolicy: definition.selectionPolicy,
       }));
       sendJson(response, 200, {
         presets,
+        motionPacks: Array.isArray(catalog.motionPacks) ? catalog.motionPacks : [],
+        cameraPacks: Array.isArray(catalog.cameraPacks) ? catalog.cameraPacks : [],
+        customMeshPolicy: catalog.customMeshPolicy ?? null,
         productionRefs: presets
           .filter((preset) => preset?.maturity === "recommended")
           .map((preset) => preset.ref),

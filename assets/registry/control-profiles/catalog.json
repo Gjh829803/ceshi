@@ -32,5 +32,22 @@
       "description": "Keeps the subject aligned to the view while allowing camera-relative strafing.",
       "semanticTags": ["aim", "camera-relative", "planar", "strafe"]
     }
+  },
+  {
+    "kind": "control-profile",
+    "id": "flight.camera-relative",
+    "version": 1,
+    "resourceRef": "worldkit://control-profile/flight.camera-relative@1",
+    "authoringAvailability": "recommended",
+    "commandKind": "flight-attitude",
+    "inputSpace": "flight-frame",
+    "facingPolicy": "flight-derived",
+    "lateralMovementPolicy": "allowed",
+    "moveDeadzoneRatio": 0.1,
+    "aiMetadata": {
+      "displayName": "Camera-relative powered flight control",
+      "description": "Maps forward/back to thrust, left/right to yaw and jump/boost to climb.",
+      "semanticTags": ["camera-relative", "flight", "powered"]
+    }
   }
 ]

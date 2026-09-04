@@ -26,7 +26,7 @@ import {
   loadBlockWorldModuleV2,
 } from "../lib/block-world-module.js";
 import {
-  createAgentAuthoringCatalogV1,
+  createAgentAuthoringCatalogV2,
   traversalEnvelopeFromRuntimeColliderV1,
 } from "../lib/agent-authoring-catalog.js";
 
@@ -168,11 +168,12 @@ export async function runBlockBuilderSelfCheck(options: {
           },
         });
       }
+      const openingCamera = compiled.worldRuntimeBootstrap.initialCamera;
       const openingTuning = {
-        distanceMeters: blockWorldInput!.camera.distanceMeters,
-        targetHeightMeters: blockWorldInput!.camera.targetHeightMeters,
-        pitchRadians: blockWorldInput!.camera.pitchRadians,
-        baseFovDegrees: blockWorldInput!.camera.fovDegrees,
+        distanceMeters: openingCamera.distanceMeters,
+        targetHeightMeters: openingCamera.targetHeightMeters,
+        pitchRadians: openingCamera.pitchRadians,
+        baseFovDegrees: openingCamera.fovDegrees,
       };
       const invalidProfiles = runtimeSubject.capabilityAssembly.cameraContext
         .cameraRigProfiles
@@ -200,10 +201,17 @@ export async function runBlockBuilderSelfCheck(options: {
         });
       }
     }
-    const authoringCatalog = createAgentAuthoringCatalogV1();
+    const authoringCatalog = createAgentAuthoringCatalogV2();
     const registeredSubject = subject.kind === "registered"
-      ? authoringCatalog.subjects.find(({ subjectDefinitionRef }) =>
+      ? authoringCatalog.subjectPacks.find(({ subjectDefinitionRef }) =>
           subjectDefinitionRef === subject.subjectDefinitionRef)
+      : undefined;
+    const assemblyBase = subject.kind === "assembly"
+      ? subject.assembly.baseSubject
+      : undefined;
+    const assemblySubjectPack = assemblyBase?.kind === "subject-pack"
+      ? authoringCatalog.subjectPacks.find(({ id }) =>
+          id === assemblyBase.subjectPackId)
       : undefined;
     if (subject.kind === "registered" && registeredSubject === undefined) {
       diagnostics.push({
@@ -212,14 +220,30 @@ export async function runBlockBuilderSelfCheck(options: {
         instancePath: "/controlledSubject/subjectDefinitionRef",
         details: {
           subjectDefinitionRef: subject.subjectDefinitionRef,
-          rejectionDiagnostics: authoringCatalog.rejectedSubjects.find(({ subjectDefinitionRef }) =>
+          rejectionDiagnostics: authoringCatalog.unavailableSubjectPacks.find(({ subjectDefinitionRef }) =>
             subjectDefinitionRef === subject.subjectDefinitionRef)?.diagnostics ?? [],
         },
       });
     }
+    if (subject.kind === "assembly" &&
+        subject.assembly.baseSubject.kind === "subject-pack" &&
+        assemblySubjectPack === undefined) {
+      diagnostics.push({
+        code: "BLOCK_WORLD_SUBJECT_NOT_HOSTED_AUTHORING_ADMITTED",
+        message: "The selected base Subject Pack is not admitted for Hosted Builder authoring.",
+        instancePath: "/controlledSubject/assembly/baseSubject/subjectPackId",
+        details: { subjectPackId: subject.assembly.baseSubject.subjectPackId },
+      });
+    }
+    const selectedMotionPack = subject.kind === "assembly"
+      ? authoringCatalog.motionPacks.find(({ id }) =>
+          id === subject.assembly.motion.motionPackId)
+      : undefined;
     const executableMovementModes = subject.kind === "registered"
-      ? registeredSubject?.executableMovementModes ?? []
-      : ["ground-walk"] as const;
+      ? registeredSubject === undefined ? [] : ["ground-walk"] as const
+      : subject.kind === "assembly"
+        ? selectedMotionPack?.movementModes ?? []
+        : ["ground-walk"] as const;
     const missingMovementModes = subject.kind === "registered" && registeredSubject === undefined
       ? []
       : requestedMovementModes.filter((mode) =>
@@ -233,6 +257,13 @@ export async function runBlockBuilderSelfCheck(options: {
           subjectKind: subject.kind,
           subjectDefinitionRef: subject.kind === "registered"
             ? subject.subjectDefinitionRef
+            : null,
+          subjectPackId: subject.kind === "assembly" &&
+              subject.assembly.baseSubject.kind === "subject-pack"
+            ? subject.assembly.baseSubject.subjectPackId
+            : null,
+          motionPackId: subject.kind === "assembly"
+            ? subject.assembly.motion.motionPackId
             : null,
           requestedMovementModes,
           executableMovementModes,

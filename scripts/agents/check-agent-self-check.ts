@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { assertAgentSelfCheckBundleParity } from "../lib/agent-self-check-bundle";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
-import { createAgentAuthoringCatalogV1 } from "../lib/agent-authoring-catalog.js";
+import { createAgentAuthoringCatalogV2 } from "../lib/agent-authoring-catalog.js";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const arguments_ = process.argv.slice(2);
@@ -72,7 +72,7 @@ try {
     trackedSkillsRoot,
     "worldkit-block-builder/references/agent-authoring-catalog.json",
   );
-  const expectedCatalog = `${stringifyCanonicalJson(createAgentAuthoringCatalogV1())}\n`;
+  const expectedCatalog = `${stringifyCanonicalJson(createAgentAuthoringCatalogV2())}\n`;
   if (await readFile(catalogPath, "utf8") !== expectedCatalog) {
     throw new Error("AgentAuthoringCatalog is stale or does not match the real Registry admission probe.");
   }

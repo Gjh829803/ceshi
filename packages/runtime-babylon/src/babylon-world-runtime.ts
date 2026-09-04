@@ -171,9 +171,12 @@ import {
 function committedPresentationFromLocomotionMode(
   committedTick: number,
   locomotionMode: LocomotionModeV1 | "suspended",
+  presentationPolicy?: BabylonRuntimeSubjectV1["presentationPolicy"],
 ): ResolvedActionPresentationV1 {
   const presentationKey: LocomotionPresentationKeyV1 =
-    locomotionMode === "airborne"
+    presentationPolicy?.kind === "fixed-locomotion"
+      ? presentationPolicy.presentationKey
+      : locomotionMode === "airborne"
       ? "locomotion.falling"
       : locomotionMode === "suspended"
         ? "locomotion.suspended"
@@ -185,6 +188,57 @@ function committedPresentationFromLocomotionMode(
     presentationKey,
     layeredMoves: Object.freeze([]),
   });
+}
+
+function presentationForSubjectPolicy(
+  subject: BabylonRuntimeSubjectV1,
+  presentation: ResolvedActionPresentationV1,
+): ResolvedActionPresentationV1 {
+  if (presentation.source !== "locomotion" ||
+      subject.presentationPolicy?.kind !== "fixed-locomotion") {
+    return presentation;
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    committedTick: presentation.committedTick,
+    source: "locomotion",
+    presentationKey: subject.presentationPolicy.presentationKey,
+    layeredMoves: presentation.layeredMoves,
+  });
+}
+
+function projectedSocketPositionsV1(
+  visual: SubjectVisual,
+  subjectPositionMetersXYZ: RuntimeVec3V1,
+  facingYawRadians: number,
+): Readonly<Record<string, RuntimeVec3V1>> {
+  visual.root.computeWorldMatrix(true);
+  const inverseRoot = visual.root.getWorldMatrix().clone().invert();
+  const facing = Quaternion.FromEulerAngles(0, facingYawRadians, 0);
+  const result: Record<string, RuntimeVec3V1> = {};
+  for (const [socketId, socketNode] of visual.socketNodesById) {
+    socketNode.computeWorldMatrix(true);
+    const absolute = socketNode.getAbsolutePosition();
+    if (![absolute.x, absolute.y, absolute.z].every(Number.isFinite)) {
+      // A bone-driven Babylon node can be temporarily unavailable while its
+      // animation pose is being resampled. Omit only that socket so Camera
+      // selection takes its deterministic missing-socket fallback.
+      continue;
+    }
+    const local = Vector3.TransformCoordinates(
+      absolute,
+      inverseRoot,
+    );
+    const rotated = local.rotateByQuaternionToRef(facing, new Vector3());
+    const projected = [
+      subjectPositionMetersXYZ[0] + rotated.x,
+      subjectPositionMetersXYZ[1] + rotated.y,
+      subjectPositionMetersXYZ[2] + rotated.z,
+    ] as const;
+    if (!projected.every(Number.isFinite)) continue;
+    result[socketId] = Object.freeze(projected) as RuntimeVec3V1;
+  }
+  return Object.freeze(result);
 }
 
 export type BabylonWorldRuntimeInitializationStageV1 =
@@ -1200,7 +1254,16 @@ export class BabylonWorldRuntime {
         subjectVisuals.push(visual);
         ownedDisposers.push(() => visual.dispose());
         let controller: LiveSubjectControllerV1;
-        if (subject.visualBinding.mode === "rigged") {
+        const defaultMotionKernel = subject.capabilityAssembly.motionKernels.find(
+          ({ resourceRef }) => resourceRef ===
+            subject.capabilityAssembly.defaultMotionProfile.motionKernelRef,
+        );
+        const usesGroundHumanoidTransaction =
+          subject.visualBinding.mode === "rigged" &&
+          defaultMotionKernel?.implementationId === "free-ground" &&
+          subject.capabilityAssembly.controlProfile.commandKind ===
+            "planar-vector";
+        if (usesGroundHumanoidTransaction) {
           let latestAnimation: Readonly<{
             presentation: ResolvedActionPresentationV1;
             committedActionState?: Parameters<SubjectVisual["stepAnimation"]>[1];
@@ -1228,12 +1291,16 @@ export class BabylonWorldRuntime {
                   commit: (): void => {
                     if (state !== "prepared") return;
                     try {
-                      visual.stepAnimation(
+                      const presentation = presentationForSubjectPolicy(
+                        subject,
                         request.presentation,
+                      );
+                      visual.stepAnimation(
+                        presentation,
                         request.committedActionState,
                       );
                       latestAnimation = Object.freeze({
-                        presentation: request.presentation,
+                        presentation,
                         ...(request.committedActionState === undefined
                           ? {}
                           : { committedActionState: request.committedActionState }),
@@ -1274,18 +1341,30 @@ export class BabylonWorldRuntime {
                   commit: (): void => {
                     if (state !== "prepared") return;
                     try {
+                      const cameraContext = parseCameraContextSampleV2({
+                        ...request.cameraContext,
+                        environment: {
+                          ...request.cameraContext.environment,
+                          socketPositionsMetersXYZById:
+                            projectedSocketPositionsV1(
+                              visual,
+                              request.cameraContext.subjectPose.positionMetersXYZ,
+                              request.cameraContext.subjectPose.facingYawRadians,
+                            ),
+                        },
+                      });
                       if (runtime?.controlledEntityId() === subject.entityId) {
-                        const locomotion = request.cameraContext.locomotion;
+                        const locomotion = cameraContext.locomotion;
                         const velocity = locomotion.status === "active"
                           ? locomotion.linearVelocity
                           : { x: 0, y: 0, z: 0 };
                         const facingYawRadians =
-                          request.cameraContext.subjectPose.facingYawRadians;
+                          cameraContext.subjectPose.facingYawRadians;
                         const sample: ViewTargetSampleV1 = {
                           controlledEntityId: subject.entityId,
                           entityId: subject.entityId,
                           targetPositionMetersXYZ:
-                            request.cameraContext.subjectPose.positionMetersXYZ,
+                            cameraContext.subjectPose.positionMetersXYZ,
                           forwardXYZ: [
                             canonicalizeSignedZero(-Math.sin(facingYawRadians)),
                             0,
@@ -1299,31 +1378,31 @@ export class BabylonWorldRuntime {
                           ],
                           approximateRadiusMeters: subject.collider.radiusMeters,
                           socketPositionsMetersXYZById:
-                            request.cameraContext.environment
+                            cameraContext.environment
                               .socketPositionsMetersXYZById,
                           motionTags: [],
                           movementMedium: locomotion.status === "active"
                             ? locomotion.movementMedium
                             : "ground",
                           relationshipRole:
-                            request.cameraContext.environment.relationshipRole,
+                            cameraContext.environment.relationshipRole,
                           relationshipContexts:
-                            request.cameraContext.environment.relationshipContexts,
+                            cameraContext.environment.relationshipContexts,
                           cameraContextTags:
-                            request.cameraContext.environment.cameraContextTags,
+                            cameraContext.environment.cameraContextTags,
                         };
                         runtime.synchronizeCameraGeometrySubjectQueryState();
                         cameraComponent.update(
                           subject.capabilityAssembly.cameraContext,
                           sample,
                           FIXED_TIME_STEP_SECONDS,
-                          request.cameraContext,
+                          cameraContext,
                           runtime.characterFor(subject.entityId).springArm,
                         );
                       }
                       latestGoldenCameraContextsByEntityId.set(
                         subject.entityId,
-                        request.cameraContext,
+                        cameraContext,
                       );
                       state = "committed";
                     } catch (error) {
@@ -2729,6 +2808,7 @@ export class BabylonWorldRuntime {
         visual.stepAnimation(committedPresentationFromLocomotionMode(
           this.tick,
           controller.motionSnapshot().locomotionMode,
+          subject.presentationPolicy,
         ));
       }
     }
@@ -2745,6 +2825,8 @@ export class BabylonWorldRuntime {
         .stepAnimation(committedPresentationFromLocomotionMode(
           this.tick,
           "suspended",
+          this.runtimeSubjects.find(({ entityId }) =>
+            entityId === mounted.relationship.riderEntityId)?.presentationPolicy,
         ));
     }
     if (!isNil(targetEntityId)) this.updateCameraForEntity(targetEntityId);
@@ -2769,6 +2851,7 @@ export class BabylonWorldRuntime {
         visual.stepAnimation(committedPresentationFromLocomotionMode(
           this.tick,
           controller.motionSnapshot().locomotionMode,
+          subject.presentationPolicy,
         ));
       }
     }
@@ -2785,6 +2868,8 @@ export class BabylonWorldRuntime {
         .stepAnimation(committedPresentationFromLocomotionMode(
           this.tick,
           "suspended",
+          this.runtimeSubjects.find(({ entityId }) =>
+            entityId === mounted.relationship.riderEntityId)?.presentationPolicy,
         ));
     }
     if (controlledEntityId !== undefined) {
@@ -3537,6 +3622,10 @@ export class BabylonWorldRuntime {
       );
       if (context === undefined) {
         const committed = controller.movementSnapshot();
+        const subjectPositionMetersXYZ = goldenSubjectOriginFromColliderCenterV1(
+          committed.positionMetersXYZ,
+          subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
+        );
         context = parseCameraContextSampleV2({
           schemaVersion: 2,
           semanticAuthorityStatus: "available",
@@ -3544,10 +3633,7 @@ export class BabylonWorldRuntime {
           controlledEntityId: subject.entityId,
           targetEntityId: subject.entityId,
           subjectPose: {
-            positionMetersXYZ: goldenSubjectOriginFromColliderCenterV1(
-              committed.positionMetersXYZ,
-              subject.collider.centerOffsetFromSubjectOriginMetersXYZ,
-            ),
+            positionMetersXYZ: subjectPositionMetersXYZ,
             facingYawRadians: committed.facingYawRadians,
           },
           locomotion: committed.locomotion,
@@ -3559,7 +3645,11 @@ export class BabylonWorldRuntime {
           environment: {
             relationshipRole: "none",
             relationshipContexts: [],
-            socketPositionsMetersXYZById: {},
+            socketPositionsMetersXYZById: projectedSocketPositionsV1(
+              this.visualFor(subject.entityId),
+              subjectPositionMetersXYZ,
+              committed.facingYawRadians,
+            ),
             cameraContextTags: [],
           },
         });

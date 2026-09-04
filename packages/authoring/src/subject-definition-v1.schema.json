@@ -32,8 +32,19 @@
     "authoringAvailability": {
       "enum": ["recommended", "advanced", "experimental"]
     },
-    "category": { "enum": ["human", "animal", "custom"] },
-    "bodyTopology": { "enum": ["biped", "quadruped", "custom"] },
+    "category": { "enum": ["human", "animal", "vehicle", "composite", "custom"] },
+    "bodyTopology": {
+      "enum": [
+        "biped",
+        "quadruped",
+        "four-wheel",
+        "surface-craft",
+        "watercraft",
+        "glider",
+        "composite",
+        "custom"
+      ]
+    },
     "semanticClassId": { "$ref": "#/$defs/nonEmptyString" },
     "coordinateConvention": {
       "type": "object",
@@ -167,6 +178,37 @@
     "renderBindingProfileRef": {
       "type": "string",
       "pattern": "^worldkit://render-binding/[a-z0-9][a-z0-9.-]{0,63}@[1-9][0-9]*$"
+    },
+    "presentationPolicy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "automatic" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "presentationKey"],
+          "properties": {
+            "kind": { "const": "fixed-locomotion" },
+            "presentationKey": {
+              "enum": [
+                "locomotion.suspended",
+                "locomotion.idle",
+                "locomotion.walk",
+                "locomotion.run",
+                "locomotion.takeoff",
+                "locomotion.rising",
+                "locomotion.apex",
+                "locomotion.falling",
+                "locomotion.landing"
+              ]
+            }
+          }
+        }
+      ]
     },
     "allowedOverridePaths": {
       "type": "array",

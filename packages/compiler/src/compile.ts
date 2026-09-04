@@ -111,9 +111,11 @@ interface CompiledSubjectV1 extends RuntimeSubjectDescriptorV1 {
 }
 
 interface CompiledCameraV1 {
+  readonly mode: "first-person" | "third-person";
   readonly cameraEntityId: string;
   readonly rigRef: "worldkit://camera/third-person.standard@1";
   readonly targetEntityId: string;
+  readonly targetSocketId?: string;
   readonly pitchRadians: number;
   readonly distanceMeters: number;
   readonly targetHeightMeters: number;
@@ -772,7 +774,8 @@ function compileCapabilityAssemblyV1(
       implementationId !== "wheeled-arcade" &&
       implementationId !== "surface-slide" &&
       implementationId !== "water-surface" &&
-      implementationId !== "unpowered-glide"
+      implementationId !== "unpowered-glide" &&
+      implementationId !== "powered-flight"
     ) {
       throw new Error(
         `NormalizedWorldIR invariant violated: reserved Motion Kernel '${motionKernel.resourceRef}' cannot enter an Execution Plan.`,
@@ -1119,6 +1122,14 @@ function compileSubjectsV3(
               rigProfileRef: definition.visualBinding.rigProfileRef,
               animationSetRef: definition.visualBinding.animationSetRef,
             },
+        ...(definition.presentationPolicy === undefined ||
+            definition.presentationPolicy.kind === "automatic"
+          ? {}
+          : {
+              presentationPolicy: structuredClone(
+                definition.presentationPolicy,
+              ),
+            }),
         sockets: definition.sockets.map(compileSubjectSocketV3),
         mountSlots: definition.mountSlots.map((slot) => ({
           id: slot.id,
@@ -1338,6 +1349,15 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
     if (diagnostics.length > 0) return { ok: false, diagnostics };
 
     const rig = cameraNode.components.cameraRig;
+    const targetSubject = subjects.find(({ entityId }) =>
+      entityId === rig.target.targetEntityId);
+    const defaultCameraProfile = targetSubject?.capabilityAssembly.cameraContext
+      .cameraRigProfiles.find(({ resourceRef }) =>
+        resourceRef === targetSubject.capabilityAssembly.cameraContext
+          .defaultCameraRigProfileRef);
+    const initialCameraMode = defaultCameraProfile?.algorithmRef.endsWith(
+      "/socket-first-person@1",
+    ) ? "first-person" : "third-person";
     const components: CompiledWorldComponents = {
       id: world.id,
       seed: world.seed,
@@ -1356,9 +1376,13 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
       controlledEntityId: world.startup.controlledEntityId,
       subjects,
       camera: {
+        mode: initialCameraMode,
         cameraEntityId: cameraNode.id,
         rigRef: "worldkit://camera/third-person.standard@1",
         targetEntityId: rig.target.targetEntityId,
+        ...(rig.target.targetSocketId === undefined
+          ? {}
+          : { targetSocketId: rig.target.targetSocketId }),
         pitchRadians: rig.thirdPerson.pitchRadians,
         distanceMeters: rig.thirdPerson.distanceMeters,
         targetHeightMeters:
@@ -2138,9 +2162,15 @@ export function compileCanonicalWorldV1(
       gravityMetersPerSecondSquaredXYZ:
         componentsWithoutControlledEntity.gravityMetersPerSecondSquaredXYZ,
       initialCamera: {
-        mode: "third-person",
+        mode: componentsWithoutControlledEntity.camera.mode,
         cameraEntityId: componentsWithoutControlledEntity.camera.cameraEntityId,
         targetEntityId: componentsWithoutControlledEntity.camera.targetEntityId,
+        ...(componentsWithoutControlledEntity.camera.targetSocketId === undefined
+          ? {}
+          : {
+              targetSocketId:
+                componentsWithoutControlledEntity.camera.targetSocketId,
+            }),
         cameraRigProfileRef: componentsWithoutControlledEntity.camera.rigRef,
         pitchRadians: componentsWithoutControlledEntity.camera.pitchRadians,
         distanceMeters: componentsWithoutControlledEntity.camera.distanceMeters,

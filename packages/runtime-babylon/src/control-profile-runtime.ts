@@ -29,6 +29,7 @@ export type MotionCommandV1 =
       pitch: number;
       yaw: number;
       roll: number;
+      vertical: number;
       actionRequested: boolean;
     }
   | { kind: "none" };
@@ -178,6 +179,9 @@ export function compileMotionCommandV1(
     pitch: clampUnit(-longitudinal),
     yaw: clampUnit(lateral),
     roll: clampUnit(lateral),
+    vertical: hasAction(actions, "jump") || hasAction(actions, "boost")
+      ? 1
+      : hasAction(actions, "brake") ? -1 : 0,
     actionRequested:
       hasAction(actions, "primary-action") ||
       hasAction(actions, "secondary-action") ||

@@ -503,6 +503,10 @@ describe("WorldRuntimeBootstrapV1", () => {
     const source = bodyFixture();
     const body = {
       ...source,
+      initialCamera: {
+        ...source.initialCamera,
+        targetSocketId: "camera-target",
+      },
       runtimeResourceLockEntries: [...source.runtimeResourceLockEntries].reverse(),
     };
     const bootstrap = createWorldRuntimeBootstrapV1(body);
@@ -517,6 +521,7 @@ describe("WorldRuntimeBootstrapV1", () => {
 
     (body.gravityMetersPerSecondSquaredXYZ as unknown as number[])[1] = -1;
     expect(bootstrap.gravityMetersPerSecondSquaredXYZ[1]).toBe(-9.81);
+    expect(bootstrap.initialCamera.targetSocketId).toBe("camera-target");
   });
 
   it("rejects duplicate Subjects, absent controlled/Camera targets, and Gameplay lock mismatch", () => {
@@ -532,6 +537,10 @@ describe("WorldRuntimeBootstrapV1", () => {
     expectInvalid({
       ...valid,
       initialCamera: { ...valid.initialCamera, targetEntityId: "missing" },
+    });
+    expectInvalid({
+      ...valid,
+      initialCamera: { ...valid.initialCamera, targetSocketId: "missing" },
     });
     expect(() => createWorldRuntimeBootstrapV1({
       ...bodyFixture(),

@@ -7,11 +7,13 @@ injects the real Three.js namespace and the narrow binding surface before the
 module loads:
 
 ```ts
-const { BoxGeometry, Mesh, Scene } = globalThis.THREE;
+const { BoxGeometry, CylinderGeometry, Mesh, Scene, SphereGeometry } = globalThis.THREE;
 const {
   BLOCK_PRESET_REFS_V1,
   bindWorldkitBlockV1,
+  bindWorldkitSubjectMeshV1,
   createWorldkitBlockMaterialV1,
+  createWorldkitSubjectMaterialV1,
 } = globalThis.WorldKitBlock;
 ```
 
@@ -73,6 +75,34 @@ Do not obtain these shapes by scaling a full Mesh.
 Do not write SDK construction helpers. A local helper that performs exactly the
 four operations above for one block is allowed; higher-level semantic helpers
 are not part of this contract.
+
+## Agent-drawn Subject shapes
+
+World blocks and Subject shapes are separate bindings. To draw a rigid base or
+attachment, use a centered undeformed `BoxGeometry`, `SphereGeometry`, or
+equal-radius full `CylinderGeometry`, unit world scale, arbitrary finite
+position/rotation, and the dedicated Subject material:
+
+```js
+const sword = new Mesh(
+  new BoxGeometry(0.18, 0.08, 2.4),
+  createWorldkitSubjectMaterialV1(),
+);
+sword.position.set(0, 0.05, 0);
+bindWorldkitSubjectMeshV1(sword, {
+  id: "flying-sword",
+  semanticTags: ["attachment", "flight", "sword"],
+});
+scene.add(sword);
+```
+
+The binding ID is referenced from `controlledSubject.assembly`. The default
+`colliderContribution` is `exclude`, which is correct for a sword, wing, board,
+eye, tail, or other attachment. A custom Mesh base must explicitly mark at
+least one shape `include`, and that included shape must touch the local support
+origin plane so the Host can derive one truthful capsule. These meshes never
+become world blocks and never create bones, skinning, morphs, custom shaders,
+or independent controllers.
 
 ## Immutable presets
 

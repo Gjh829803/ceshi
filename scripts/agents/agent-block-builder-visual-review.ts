@@ -53,6 +53,7 @@ export async function renderBlockBuilderVisualReview(options: Readonly<{
     manifest: loaded.extraction.manifest,
     controlledSubject: loaded.authored.controlledSubject,
     camera: loaded.authored.camera,
+    subjectMeshParts: loaded.extraction.subjectMeshParts,
     spawnStandPositionMetersXYZ: loaded.authored.spawnStandPositionMetersXYZ,
     plannerWorldPlanPng: worldPlanPng,
     plannerEntryWhiteboxTargetPng: entryWhiteboxTargetPng,

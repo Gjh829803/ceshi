@@ -244,7 +244,7 @@ describe("capability-driven subject registry", () => {
     });
   });
 
-  it("freezes ten kernel IDs and exposes only K01, K02, K03, K04, K06 and K08 as runtime implementations", () => {
+  it("freezes ten kernel IDs and exposes powered flight as the seventh runtime implementation", () => {
     const kernels = builtInSubjectResourceRegistry
       .listDiscoverableResources({ kind: "motion-kernel" });
 
@@ -260,6 +260,7 @@ describe("capability-driven subject registry", () => {
       "K04.surface-slide",
       "K06.water-surface",
       "K08.unpowered-glide",
+      "K09.powered-flight",
       "K03.wheeled-arcade",
     ].sort());
     expect(
@@ -270,7 +271,6 @@ describe("capability-driven subject registry", () => {
     ).toEqual([
       "K05.hover",
       "K07.underwater",
-      "K09.powered-flight",
       "K10.zero-gravity-six-dof",
     ].sort());
     expect(kernels.every((kernel) => kernel.deterministic)).toBe(true);
@@ -337,12 +337,19 @@ describe("capability-driven subject registry", () => {
     const controls = builtInSubjectResourceRegistry
       .listDiscoverableResources({ kind: "control-profile" });
 
-    expect(controls).toHaveLength(2);
+    expect(controls).toHaveLength(3);
     for (const control of controls) {
       expect(control.moveDeadzoneRatio).toBe(0.1);
       expect(control).not.toHaveProperty("inputTuning");
       expect(control).not.toHaveProperty("responseExponent");
     }
+    expect(builtInSubjectResourceRegistry.resolveControlProfile(
+      "worldkit://control-profile/flight.camera-relative@1",
+    )).toMatchObject({
+      commandKind: "flight-attitude",
+      inputSpace: "flight-frame",
+      facingPolicy: "flight-derived",
+    });
   });
 
   it("publishes one implemented mountedOn profile with role-qualified sockets", () => {
@@ -472,6 +479,22 @@ describe("capability-driven subject registry", () => {
         "worldkit://camera-profile/chase.surface-fast@1",
       )?.reverseHeadingPolicy,
     ).toBe("preserve-target-forward");
+    expect(builtInSubjectResourceRegistry.resolveCameraContextProfile(
+      "worldkit://camera-context/agent.over-shoulder@1",
+    )?.rules[0]).toMatchObject({
+      when: {},
+      cameraModifierRefs: ["worldkit://camera-modifier/aim-framing@1"],
+    });
+    expect(builtInSubjectResourceRegistry.resolveCameraContextProfile(
+      "worldkit://camera-context/agent.giant@1",
+    )?.rules[0]).toMatchObject({
+      cameraModifierRefs: ["worldkit://camera-modifier/giant-framing@1"],
+    });
+    expect(builtInSubjectResourceRegistry.resolveCameraContextProfile(
+      "worldkit://camera-context/agent.first-person@1",
+    )?.defaultCameraRigProfileRef).toBe(
+      "worldkit://camera-profile/first-person.standard@1",
+    );
   });
 
   it("rejects retired Motion Kernel fields at Catalog admission", () => {

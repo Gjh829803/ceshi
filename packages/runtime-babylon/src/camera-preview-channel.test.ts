@@ -484,10 +484,10 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       expect(afterPreview.subjectStatesByEntityId).toEqual(
         beforePreview.subjectStatesByEntityId,
       );
-      expect(afterPreview.camera.selectedTargetSocketId).toBeUndefined();
-      expect(afterPreview.camera.targetSocketPositionMetersXYZ).toBeUndefined();
-      expect(afterPreview.camera.isTargetSocketFallback).toBe(true);
-      expect(afterPreview.camera.selectionDecision?.diagnostics).toContainEqual(
+      expect(afterPreview.camera.selectedTargetSocketId).toBe("FirstPersonView");
+      expect(afterPreview.camera.targetSocketPositionMetersXYZ).toBeDefined();
+      expect(afterPreview.camera.isTargetSocketFallback).toBe(false);
+      expect(afterPreview.camera.selectionDecision?.diagnostics).not.toContainEqual(
         expect.objectContaining({ code: "CAMERA_REQUIRED_SOCKET_MISSING" }),
       );
       expect(afterPreview.camera).toHaveProperty("finalFovDegrees");

@@ -1,6 +1,6 @@
 ---
 name: worldkit-block-builder
-description: Build or repair a complete WorldKit whitebox world by writing direct Three.js metric blocks, selecting one controlled Subject, configuring a centered third-person camera, and passing the Block World self-check. Use for the hosted Builder stage; do not use for planning, styling, or SDK runtime development.
+description: Build or repair a complete WorldKit whitebox world by writing direct Three.js metric blocks, assembling one controlled Subject from a reusable or custom rigid base, selecting Motion/Presentation/Camera Packs, and passing the Block World self-check. Use for the hosted Builder stage; do not use for planning, styling, or SDK runtime development.
 ---
 
 # WorldKit Block Builder
@@ -35,13 +35,13 @@ Read all three maintained references before writing the module:
 
 1. [references/block-api.md](references/block-api.md) for the exact direct-Mesh
    API, immutable presets, connectivity rules, and visual grouping.
-2. [references/subject-camera.md](references/subject-camera.md) for supported
-   controlled Subjects and strict third-person framing.
+2. [references/subject-camera.md](references/subject-camera.md) for Subject
+   Assembly, Motion/Presentation Pack, Camera Pack, and targeting rules.
 3. [references/agent-authoring-catalog.json](references/agent-authoring-catalog.json)
-   for the Host-generated exact-version list of Subjects admitted by the real
-   Block compiler, their executable movement modes, visual proxy bounds, and
-   Runtime-owned Camera context. This is the only Subject choice list; do not
-   infer support from a similarly named Registry ref.
+   for the Host-generated exact-version Subject, Motion, and Camera Packs
+   admitted by the real Block compiler, including compatible combinations,
+   fixed presentations, sockets, and visual proxy bounds. These are the only
+   Pack choices; do not infer support from a similarly named Registry ref.
 
 ## Required outcome
 
@@ -71,14 +71,12 @@ Read all three maintained references before writing the module:
   are then allowed because ground support is not the complete reachability
   authority. Add an explicit narrow ground path only when the Brief or reference
   actually contains a corridor, bridge, route, or other restricted connection.
-- The selected Subject must list every Brief movement mode in
-  `executableMovementModes` in the Agent Authoring Catalog. A vehicle-, boat-,
-  wing-, or glider-shaped visual whose entry lists only `ground-walk` remains a
-  ground Character. Never silently downgrade, visually approximate, or relabel
-  an unavailable movement mode. If no admitted Subject satisfies all modes,
-  stop with `BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED`; a composed Subject in
-  the current Hosted lane supplies only `ground-walk` and cannot invent another
-  Runtime kernel from scene code.
+- Select exactly one Motion Pack whose `movementModes` satisfy the Brief, and
+  require its ID to appear in the base Subject Pack's
+  `compatibleMotionPackIds`. Motion belongs to the complete Subject Assembly,
+  not to an attachment. Never silently downgrade, visually approximate, or
+  relabel an unavailable movement mode. If no admitted combination satisfies
+  all modes, stop with `BLOCK_WORLD_SUBJECT_MOVEMENT_UNSATISFIED`.
 - Copy the selected Catalog row's `traversalEnvelope` exactly into
   `subjectTraversalProfile`. It is derived from the real Runtime collider and
   step capability; never estimate, shrink, or widen it to influence
@@ -151,22 +149,21 @@ Read all three maintained references before writing the module:
   invisible ground-only boundary from exposed walkable edges. It follows Chunk
   residency, blocks walking/sliding/riding/driving (including a ground Subject
   while jumping), and does not block true air or water motion.
-- Choose the Subject in this order: first match the Brief's complete ordered set
-  of movement modes and body topology, then reuse the closest complete
-  registered Subject, and only
-  then consider composition. A coarse registered proxy is correct even when it
-  does not resemble the reference closely. Subject appearance fidelity is not
-  a whitebox goal; correct control behavior and Camera framing are.
-- A registered ref must appear in `agent-authoring-catalog.json.subjects`.
-  `rejectedSubjects` includes Registry fixtures that compile but are not valid
-  Hosted authoring choices; primitive human capsule proxies belong there and
-  never represent an ordinary person.
+- Choose the Subject in this order: first match the Brief's body topology, then
+  reuse the closest complete registered Subject Pack, and only then use a
+  custom Mesh base. A coarse registered proxy is correct even when it does not
+  resemble the reference closely. Subject appearance fidelity is not a
+  whitebox goal; correct Motion and Camera framing are.
+- A reusable base must appear in `agent-authoring-catalog.json.subjectPacks`.
+  Primitive capsules, Golden fixtures, and traversal proxies are omitted from
+  the Agent projection entirely. Never copy a raw Registry ref into the new
+  Assembly contract.
 - Never compose or add primitive parts merely to reproduce a face, hairstyle,
   clothing, armor, handheld or holstered weapons, backpacks, headwear,
   colors, or other appearance-only equipment. For example, a walking human
   carrying a sword is still the registered G Bot with ordinary ground movement.
   The later visual generation stage owns those appearance details.
-- Compose a controlled Subject only when no complete registered Subject can
+- Compose a controlled Subject Assembly only when no complete registered Subject can
   represent a movement-changing controlled whole, such as human-plus-board,
   rider-plus-mount, seated vehicle, boat, glider, or a materially different body
   topology. Keep only the major masses needed to communicate that locomotion;
@@ -179,14 +176,11 @@ Read all three maintained references before writing the module:
   height with full clearance. Keep the
   Subject yaw at `0` unless the requested world direction cannot be represented
   by rearranging the world; the opening must remain exactly centered and rear.
-- Builder Camera numbers (`pitchRadians`, `distanceMeters`,
-  `targetHeightMeters`, `fovDegrees`) control both the deterministic review and
-  the real Babylon opening capture. Keep the single Authoring rig
-  `worldkit://camera/third-person.standard@1`. Do not select a Registry Camera
-  Profile directly: the selected Subject's `cameraContextProfileRef` chooses
-  the opening Runtime Profile automatically, then Runtime validates and applies
-  these four authored values as its opening tuning. Context-specific Profiles
-  remain authoritative after a later context switch.
+- Select one Catalog Camera Pack: standard third person, over shoulder, giant
+  third person, or first person. Bind its target to a published base Socket,
+  base bounds, assembly bounds, or an explicit local point. Optional Pack
+  tuning may change distance, pitch, and FOV within the closed safety ranges.
+  Third-person Packs all retain the Runtime Spring Arm hard-collision path.
 - The primary Subject uses the Brief's `primary-subject` visual-target ID.
   Every other selected target is one complete `visualGroupId`. All blocks of a
   multi-block landmark or important non-controlled person, animal, creature,

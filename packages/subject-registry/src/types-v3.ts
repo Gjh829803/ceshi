@@ -3,7 +3,10 @@ import type {
   CameraRigParametersV1,
   RuntimeCameraContextRuleV1,
 } from "@whitebox-world/runtime-contracts";
-import type { SubjectBodyTopologyV2 } from "@whitebox-world/subject-contracts";
+import type {
+  AutomaticLocomotionPresentationKeyV1,
+  SubjectBodyTopologyV2,
+} from "@whitebox-world/subject-contracts";
 
 import type {
   AnimationSetManifestV1,
@@ -77,13 +80,19 @@ export interface ParameterAuthoringRangeV1 extends MotionParameterLimitV1 {
   step: number;
 }
 
-export type ControlProfileCommandKindV1 = "planar-vector" | "none";
+export type ControlProfileCommandKindV1 = MotionCommandKindV1;
 
-export type ControlProfileInputSpaceV1 = "camera-relative" | "subject-local" | "none";
+export type ControlProfileInputSpaceV1 =
+  | "camera-relative"
+  | "subject-local"
+  | "flight-frame"
+  | "none";
 
 export type ControlProfileFacingPolicyV1 =
   | "align-to-move"
   | "align-to-view"
+  | "steering-derived"
+  | "flight-derived"
   | "fixed";
 
 export interface ControlFeelProfileInputV1 extends CapabilityResourceBaseInputV1 {
@@ -293,6 +302,12 @@ export interface RegistrySubjectDefinitionInputV3 {
   visualBinding: SubjectVisualBindingV1;
   sockets: readonly SubjectSocketDefinitionV2[];
   colliderPolicy: SubjectColliderPolicyV2;
+  presentationPolicy?:
+    | Readonly<{ kind: "automatic" }>
+    | Readonly<{
+        kind: "fixed-locomotion";
+        presentationKey: AutomaticLocomotionPresentationKeyV1;
+      }>;
   capabilityRefs: readonly string[];
   profiles: {
     physicsBodyProfileRef: string;

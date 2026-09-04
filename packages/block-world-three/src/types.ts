@@ -5,12 +5,13 @@ import type {
   BlockRequiredGroundTraversalBandV2,
   BlockRequiredTargetV2,
   BlockSubjectTraversalProfileV2,
+  BlockSubjectVisualPartV2,
+  BlockWorldCameraV2,
   BlockWorldControlledSubjectV2,
   BlockWorldDiagnosticV2,
   BlockWorldIdentityV2,
   BlockWorldSpaceTransitionV2,
   BlockWorldManifestV2,
-  BlockWorldThirdPersonCameraV2,
   BlockVisualTargetFacingV2,
 } from "@whitebox-world/block-world";
 
@@ -27,8 +28,25 @@ export interface WorldkitBlockBindingV1 extends WorldkitBlockBindingInputV1 {
   readonly schemaVersion: 1;
 }
 
+export interface WorldkitSubjectMeshBindingInputV1 {
+  readonly id: string;
+  readonly colliderContribution?: "include" | "exclude";
+  readonly semanticTags: readonly string[];
+}
+
+export interface WorldkitSubjectMeshBindingV1
+  extends WorldkitSubjectMeshBindingInputV1 {
+  readonly kind: "worldkit-three-subject-mesh-binding";
+  readonly schemaVersion: 1;
+  readonly colliderContribution: "include" | "exclude";
+}
+
 export interface ExtractThreeBlockWorldResultV2 {
   readonly manifest: BlockWorldManifestV2;
+  readonly subjectMeshParts: readonly Extract<
+    BlockSubjectVisualPartV2,
+    { kind: "primitive" }
+  >[];
   readonly diagnostics: readonly BlockWorldDiagnosticV2[];
 }
 
@@ -36,7 +54,7 @@ export interface ThreeBlockWorldAuthoringResultV2 {
   readonly scene: Scene;
   readonly world: BlockWorldIdentityV2;
   readonly controlledSubject: BlockWorldControlledSubjectV2;
-  readonly camera: BlockWorldThirdPersonCameraV2;
+  readonly camera: BlockWorldCameraV2;
   readonly subjectTraversalProfile: BlockSubjectTraversalProfileV2;
   readonly spawnStandPositionMetersXYZ: BlockPositionMetersXYZV2;
   readonly requiredTargets: readonly BlockRequiredTargetV2[];

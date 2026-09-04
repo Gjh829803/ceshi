@@ -431,9 +431,15 @@ function validateLocomotionProfile(source: LocomotionProfileManifestInputV1): vo
       );
     }
   }
-  if (source.allowWalk !== true) {
+  const poweredFlight = source.requiredCapabilityRefs.includes(
+    "worldkit://capability/locomotion.powered-flight@1",
+  );
+  if ((!poweredFlight && source.allowWalk !== true) ||
+      (poweredFlight && (source.allowWalk || source.allowRun || source.allowJump))) {
     throw new Error(
-      `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}' requires allowWalk === true.`,
+      poweredFlight
+        ? `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}' powered flight cannot publish ground gait flags.`
+        : `LOCOMOTION_PROFILE_FIELD_FORBIDDEN: '${source.resourceRef}' requires allowWalk === true.`,
     );
   }
 }
@@ -522,6 +528,10 @@ function validateControlProfile(source: ControlProfileInputV1): void {
         return source.inputSpace === "camera-relative" &&
           (source.facingPolicy === "align-to-move" ||
             source.facingPolicy === "align-to-view");
+      case "flight-attitude":
+        return source.inputSpace === "flight-frame" &&
+          source.facingPolicy === "flight-derived" &&
+          source.lateralMovementPolicy === "allowed";
       case "none":
         return source.inputSpace === "none" &&
           source.facingPolicy === "fixed" &&

@@ -35,6 +35,7 @@ export function blockWorldCheckInputV2(
     world: authored.world,
     controlledSubject: authored.controlledSubject,
     camera: authored.camera,
+    subjectMeshParts: extraction.subjectMeshParts,
     subjectTraversalProfile: authored.subjectTraversalProfile,
     spawnStandPositionMetersXYZ: authored.spawnStandPositionMetersXYZ,
     requiredTargets: authored.requiredTargets,

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { runBlockBuilderSelfCheck } from "./agent-block-builder-self-check.js";
 import { verifyBlockBuilderHostResume } from "./verify-block-builder-host-resume.js";
-import { createAgentAuthoringCatalogV1 } from "../lib/agent-authoring-catalog.js";
+import { createAgentAuthoringCatalogV2 } from "../lib/agent-authoring-catalog.js";
 
 const BRIEF = `# WorldKit Scene Brief
 
@@ -124,8 +124,8 @@ describe("Block Builder skill", () => {
   it("gives Studio, Prompt, and Skill one compiler-admitted Agent Authoring Catalog", async () => {
     const catalogPath = ".codex/skills/worldkit-block-builder/references/agent-authoring-catalog.json";
     const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
-    expect(catalog).toEqual(createAgentAuthoringCatalogV1());
-    const refs = catalog.subjects.map(({ subjectDefinitionRef }: {
+    expect(catalog).toEqual(createAgentAuthoringCatalogV2());
+    const refs = catalog.subjectPacks.map(({ subjectDefinitionRef }: {
       subjectDefinitionRef: string;
     }) => subjectDefinitionRef);
     expect(refs).toContain("worldkit://subject-definition/humanoid.g-bot@2");
@@ -135,36 +135,37 @@ describe("Block Builder skill", () => {
     );
     expect(refs).not.toContain("worldkit://subject-definition/humanoid.third-person@1");
     expect(refs).not.toContain(
+      "worldkit://subject-definition/quadruped.ground-proxy@1",
+    );
+    expect(refs).toContain(
       "worldkit://subject-definition/animal.quadruped.forward-steer@1",
     );
-    expect(catalog.rejectedSubjects).toContainEqual(expect.objectContaining({
-      subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
-      diagnostics: expect.arrayContaining([
-        expect.stringContaining("primitive humanoid proxies"),
-      ]),
-    }));
-    expect(catalog.rejectedSubjects).toContainEqual(expect.objectContaining({
-      subjectDefinitionRef: "worldkit://subject-definition/humanoid.rigged-golden@2",
-      diagnostics: expect.arrayContaining([
-        expect.stringContaining("deterministic SDK rig/animation fixture"),
-      ]),
-    }));
-    expect(catalog.subjects.every(({ executableMovementModes, camera }: {
-      executableMovementModes: readonly string[];
-      camera: {
-        selectionAuthority: string;
-        builderOpeningCameraRigRef: string;
-        openingTuningAuthority: string;
-      };
-    }) =>
-      executableMovementModes.length > 0 &&
-      camera.selectionAuthority === "runtime-camera-context" &&
-      camera.builderOpeningCameraRigRef ===
-        "worldkit://camera/third-person.standard@1" &&
-      camera.openingTuningAuthority ===
-        "builder-camera-projected-onto-runtime-selected-profile"
-    )).toBe(true);
-    expect(catalog.subjects.find(({ subjectDefinitionRef }: {
+    expect(catalog.unavailableSubjectPacks).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
+      }),
+      expect.objectContaining({
+        subjectDefinitionRef: "worldkit://subject-definition/humanoid.rigged-golden@2",
+      }),
+      expect.objectContaining({
+        subjectDefinitionRef: "worldkit://subject-definition/quadruped.ground-proxy@1",
+      }),
+    ]));
+    expect(catalog.subjectPacks.every(({ compatibleMotionPackIds }: {
+      compatibleMotionPackIds: readonly string[];
+    }) => compatibleMotionPackIds.length > 0)).toBe(true);
+    expect(catalog.motionPacks.map(({ id }: { id: string }) => id)).toEqual([
+      "flight.powered-standard",
+      "ground.character-standard",
+      "ground.root-standard",
+    ]);
+    expect(catalog.cameraPacks.map(({ id }: { id: string }) => id)).toEqual([
+      "first-person.standard",
+      "third-person.giant",
+      "third-person.over-shoulder",
+      "third-person.standard",
+    ]);
+    expect(catalog.subjectPacks.find(({ subjectDefinitionRef }: {
       subjectDefinitionRef: string;
     }) => subjectDefinitionRef ===
       "worldkit://subject-definition/xier120.aerial-seated@1"
@@ -312,9 +313,7 @@ describe("Block Builder skill", () => {
       instancePath: "/controlledSubject/subjectDefinitionRef",
       details: expect.objectContaining({
         subjectDefinitionRef: "worldkit://subject-definition/humanoid.third-person@1",
-        rejectionDiagnostics: expect.arrayContaining([
-          expect.stringContaining("primitive humanoid proxies"),
-        ]),
+        rejectionDiagnostics: [],
       }),
     }));
   });
