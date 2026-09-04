@@ -991,9 +991,12 @@ Package/Receipt 检查语义；BNA-2 的交付输出始终是结构化 Diagnosti
   场景 Production capability evidence，但不撤销已独立完成的 Asset Publication；
 - Asset Admission/Publication `rejected` 或 `tool-error` 不得为该输入产生新的 Registry Resource；当前已
   发布世界和此前独立发布的资产保持不变；
-- bounded self-repair 的每一轮都创建新的 `SceneAuthoringAttemptV1` identity。Source、Asset、Lane、组合策略、Seed、
-  Profile、预算或验收目标变化会使受影响的场景 Receipt/Hash 失效，并从最早受影响 Gate 重放；未变化
-  资产的 Admission/Publication Receipt 不随场景 Attempt 失效；
+- 同一个 Native generation task 内的 checker-driven source self-repair 只修改该任务声明的输出并重跑
+  checker；这些循环不创建新的 `SceneAuthoringAttemptV1`、Package 或 Runtime Candidate。只有前一 Attempt
+  已经产生可信 Native Check、Ground Analysis、Opening 或 Evaluation 拒绝，且冻结 Profile 允许外部修复时，
+  Host 才用新的 generation Request、task ID 和紧邻的可信证据创建下一条 `SceneAuthoringAttemptV1` identity。
+  Source、Asset、Lane、组合策略、Seed、Profile、预算或验收目标变化会使受影响的场景 Receipt/Hash 失效，
+  并从最早受影响 Gate 重放；未变化资产的 Admission/Publication Receipt 不随场景 Attempt 失效；
 - Asset 格式、许可证、预算或视觉质量失败时，只能提交新的 Asset Production Request，或由资产类别
   Owner 使用新的 Build 输入/Profile 产生新的 Build Record/字节；允许的下一步是新的生成
   尝试、通过同等 Admission/Publication 的授权资产、在验收目标不变时使用 Primitive/ground-first

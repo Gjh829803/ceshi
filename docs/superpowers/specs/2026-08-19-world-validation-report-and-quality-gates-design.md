@@ -386,13 +386,15 @@ Metric `status` 关闭为 `passed | failed | not-applicable | not-evaluated`。R
 
 ### 5.4 Playability 与 Route Gate
 
-已实现的 Capture/Integrity `ValidationProfileV1` / `ValidationReportV1` 及
-`worldkit://validation-profile/outdoor-control-video-dev@1` 保持不可变。M5 R0 在同一个
-`@whitebox-world/validation` 包中增加 `ValidationProfileV2` / `ValidationReportV2` 的
-`world-package` Subject 分支，首个 Route Profile Ref 固定为
+已实现的 Capture/Integrity `ControlCaptureValidationProfileV1` /
+`ControlCaptureValidationReportV1` 及
+`worldkit://validation-profile/outdoor-control-video-dev@1` 保持不可变。当前
+`@whitebox-world/validation` 包只公开 schema-version-1 的 `ValidationProfileV1` /
+`ValidationReportV1` union；M5 R0 的 `WorldPackageValidationProfileV1` /
+`WorldPackageValidationReportV1` 由 `subjectKind` / `subject.kind: "world-package"` 判别，首个 Route Profile Ref 固定为
 `worldkit://validation-profile/outdoor-world-package-dev@1`。它复用 Gate/Metric/Evidence/
 Diagnostic/Policy 结构和 Canonical Hash 原则，不创建 Route 私有报告，也不把 Route Gate
-塞进 Capture-only V1。跨阶段结果通过明确 `dependencyReportRefs` 关联，不在一个 Report
+塞进 Control Capture Subject。跨阶段结果通过明确 `dependencyReportRefs` 关联，不在一个 Report
 混合两个 Subject。
 
 - Spawn 位于 Terrain 内且不在禁止 Water/Collider；

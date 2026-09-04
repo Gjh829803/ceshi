@@ -385,8 +385,9 @@ Runner 不根据渲染帧推进模拟，不修改 `maxStepHeightMeters`，不临
 
 ## 9. Validation Profile、Gate 与 Metric
 
-`@whitebox-world/validation` 的 `ValidationReportV2` 为 `world-package` Subject 新增两个
-Blocking Gate，不创建 Route 专用报告格式，也不修改 Capture-only `ValidationReportV1`。
+`@whitebox-world/validation` 的当前 `WorldPackageValidationReportV1` 为 `world-package`
+Subject 提供两个 Blocking Gate，不创建 Route 专用报告格式，也不修改
+`ControlCaptureValidationReportV1`。
 
 ### 9.1 `route-connectivity`
 

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -192,6 +192,26 @@ describe("verify:unreleased-clean-break", () => {
         matches: [{ line: 1, value: supersededReportName }],
       }]);
     expect(report.ok).toBe(false);
+  });
+
+  it("keeps active Validation design authorities on the current V1 family", async () => {
+    const activeDesignPaths = [
+      "docs/superpowers/specs/2026-08-19-world-validation-report-and-quality-gates-design.md",
+      "docs/superpowers/specs/2026-08-21-route-graph-and-traversability-design.md",
+      "docs/superpowers/specs/2026-08-23-route-r1b-static-platform-design.md",
+    ] as const;
+    const activeDesigns = await Promise.all(activeDesignPaths.map((relativePath) =>
+      readFile(path.join(repositoryRoot, relativePath), "utf8")
+    ));
+    const supersededProfileName = token(["Validation", "Profile", "V2"]);
+    const supersededReportName = token(["Validation", "Report", "V2"]);
+
+    for (const design of activeDesigns) {
+      expect(design).not.toContain(supersededProfileName);
+      expect(design).not.toContain(supersededReportName);
+    }
+    expect(activeDesigns.join("\n")).toContain("WorldPackageValidationReportV1");
+    expect(activeDesigns.join("\n")).toContain("ControlCaptureValidationReportV1");
   });
 
   it("blocks superseded runtime ownership and subject registry compatibility", async () => {

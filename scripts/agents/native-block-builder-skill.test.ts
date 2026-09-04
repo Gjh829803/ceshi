@@ -100,11 +100,14 @@ afterEach(async () => {
 
 describe("Native Block Builder Skill", () => {
   it("states the closed outputs and keeps all product authorities with the Host", async () => {
-    const [agentsRules, skill, outputContract] = await Promise.all([
+    const [agentsRules, skill, outputContract, nativeDesign] = await Promise.all([
       readFile(path.resolve("AGENTS.md"), "utf8"),
       readFile(path.resolve(".codex/skills/worldkit-native-block-builder/SKILL.md"), "utf8"),
       readFile(path.resolve(
         ".codex/skills/worldkit-native-block-builder/references/native-block-output-contract.md",
+      ), "utf8"),
+      readFile(path.resolve(
+        "docs/superpowers/specs/2026-08-28-ai-friendly-babylon-native-world-authoring-design.md",
       ), "utf8"),
     ]);
 
@@ -134,6 +137,15 @@ describe("Native Block Builder Skill", () => {
     );
     expect(agentsRules).toContain(
       "Never describe or implement an external Native Attempt as same-task self-repair, a hidden retry, or a fallback",
+    );
+    expect(nativeDesign).toContain(
+      "checker-driven source self-repair 只修改该任务声明的输出并重跑",
+    );
+    expect(nativeDesign).toContain(
+      "Host 才用新的 generation Request、task ID 和紧邻的可信证据创建下一条",
+    );
+    expect(nativeDesign).not.toContain(
+      "bounded self-repair 的每一轮都创建新的 `SceneAuthoringAttemptV1` identity",
     );
     expect(skill).toContain(
       "mounts the Host-selected task inputs directly at `context/` and `inputs/`",

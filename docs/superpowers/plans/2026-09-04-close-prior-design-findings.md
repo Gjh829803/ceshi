@@ -2,9 +2,11 @@
 
 ## Goal
 
-Close the still-actionable findings against `origin/main` at
-`af620edb307f9d43a88917c150af7ba71179858c`, preserve the repository's
-current-only contract policy, and merge only an exact-SHA verified candidate.
+Close the still-actionable findings first assessed against `origin/main` at
+`af620edb307f9d43a88917c150af7ba71179858c`, integrate the later mainline Native
+gate closure through `d475c94411410105d81fdd5fd85d6aadab5e11f0`, preserve the
+repository's current-only contract policy, and merge only an exact-SHA verified
+candidate.
 
 ## Work graph
 
@@ -82,8 +84,9 @@ current-only contract policy, and merge only an exact-SHA verified candidate.
 
 - **Goal:** prevent two structurally different types from claiming the same
   serialized frame identity.
-- **Deliverable:** an unversioned internal bundle-writer input; the Runtime frame
-  remains the sole `worldkit-control-capture-frame` protocol.
+- **Deliverable:** a bundle-specific writer input and serialized bundle-frame
+  identity; the Runtime frame remains the sole `worldkit-control-capture-frame`
+  protocol.
 - **Depends on:** none.
 - **Blocks:** DF-70.
 - **Ownership:** capture bundle writer, simulation-take adapter, and focused

@@ -1090,7 +1090,7 @@ render cadence 不得改变 Surface sequence、Probe receipt 或最终状态。
 
 ## 10. Validation 与诊断
 
-R1b 复用现有 `ValidationReportV2`、Route Graph Gate、Route Runtime Gate、Evidence Artifact
+R1b 复用当前 `WorldPackageValidationReportV1`、Route Graph Gate、Route Runtime Gate、Evidence Artifact
 和 Browser V5 read-only projection。CLI/Browser 不增加 Graph build、arbitrary query、调参或
 Provider API。
 
