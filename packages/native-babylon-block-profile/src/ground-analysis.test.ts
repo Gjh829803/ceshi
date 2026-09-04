@@ -718,6 +718,15 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     expect(failure?.message).toContain(
       "the segment destination does not resolve to a standable ground node",
     );
+    expect(result.failureFacts).toContainEqual(expect.objectContaining({
+      targetId: "missing-endpoint-band-waypoint-001",
+      metricId: "ground-support-coverage-basis-points",
+      details: expect.objectContaining({
+        kind: "basis-points-threshold",
+        expectedBasisPoints: 10_000,
+        actualBasisPoints: 0,
+      }),
+    }));
   });
 
   it("measures disconnected islands without blocking an air-Spawn Case", () => {

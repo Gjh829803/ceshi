@@ -1585,21 +1585,32 @@ export function analyzeBabylonNativeBlockGroundV1(
         effectiveCapsuleRadiusMeters,
         envelope.capsuleHeightMeters,
       );
+      const waypointTarget = Object.freeze({
+        id: `${band.id}-waypoint-${waypointIndex.toString().padStart(3, "0")}`,
+        acceptanceTargetRef: band.acceptanceTargetRef,
+      });
+      const waypointStandabilityFacts = failureFactsForPosition(
+        waypointEvaluation,
+        waypointTarget,
+        "ground-target-standability",
+        envelope.capsuleHeightMeters,
+        input.caseIntent.groundModelEvidenceRef,
+      );
       const waypointFacts = !waypointEvaluation.isStandable
         ? Object.freeze([])
         : exactTopologyFailureFacts(
             waypoint,
             Object.freeze({
-              id: `${band.id}-waypoint-${waypointIndex.toString().padStart(3, "0")}`,
-              acceptanceTargetRef: band.acceptanceTargetRef,
+              ...waypointTarget,
               standabilityMetricId: "ground-target-standability" as const,
             }),
             input.caseIntent.groundModelEvidenceRef,
             input.walkableTopology,
             waypointEvaluation.affectedSourceBlockIds,
           );
+      failureFacts.push(...waypointStandabilityFacts);
       failureFacts.push(...waypointFacts);
-      if (waypointFacts.length > 0) {
+      if (waypointStandabilityFacts.length > 0 || waypointFacts.length > 0) {
         topologyFailurePositionKeys.add(waypointPositionKey);
         isReachable = false;
       }
