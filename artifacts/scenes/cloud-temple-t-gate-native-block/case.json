@@ -8,7 +8,7 @@
   "evaluationProfileRef": "evaluation-profile.json",
   "evaluationProfileHash": "sha256:e489e2191db4cf6c1cef811ce6fd6ca1a9defa9a4d6b53e6294f39b4db440c22",
   "formalCaptureIntentRef": "inputs/formal-world-capture-intent.json",
-  "formalCaptureIntentHash": "sha256:037b21aba2f20d22f38611766a08c06a4ba091e0d33505e5963e0e6c50ec2be8",
+  "formalCaptureIntentHash": "sha256:39b09540822c85c6829fb290b9a07213361a0e51919a4229091674026bb1025e",
   "acceptanceTargetRefs": ["worldkit://acceptance-target/central-ascent@1", "worldkit://acceptance-target/foreground-platform@1", "worldkit://acceptance-target/gate-mass@1", "worldkit://acceptance-target/mountain-cliff-layers@1", "worldkit://acceptance-target/supported-spawn@1", "worldkit://acceptance-target/upper-t-junction@1"],
   "requiredEvidenceProfileRefs": ["worldkit://evidence-profile/native-block-collider@1", "worldkit://evidence-profile/native-block-determinism@1", "worldkit://evidence-profile/native-block-opening@1", "worldkit://evidence-profile/native-block-silhouette@1", "worldkit://evidence-profile/native-block-spawn@1", "worldkit://evidence-profile/native-block-topology@1", "worldkit://evidence-profile/native-block-traversal@1"],
   "expected": {
@@ -56,12 +56,13 @@
     "groundConnectivity": {
       "requireSingleReachableComponent": true,
       "requiredTraversalBands": [
-        { "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1", "id": "central-ascent-band", "centerlineStandPositionsXYZMeters": [{ "xMeters": 0, "yMeters": 0, "zMeters": 18 }, { "xMeters": 0, "yMeters": 0, "zMeters": 10 }, { "xMeters": 0, "yMeters": 0, "zMeters": 3 }], "halfWidthMeters": 1 }
+        { "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1", "id": "central-ascent-left-t-arm-band", "centerlineStandPositionsXYZMeters": [{ "xMeters": 0, "yMeters": 0, "zMeters": 18 }, { "xMeters": 0, "yMeters": 0, "zMeters": 10 }, { "xMeters": 0, "yMeters": 0, "zMeters": 3 }, { "xMeters": 0, "yMeters": 0, "zMeters": -12.5 }, { "xMeters": -2.25, "yMeters": 0, "zMeters": -12.5 }], "halfWidthMeters": 1 }
       ]
     },
     "criticalTraversalChecks": [
-      { "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1", "id": "central-ascent-pass", "evidenceKind": "scripted-fixed-input", "expectation": "pass", "checkpointIds": ["spawn-foreground-platform", "upper-platform"], "fixedInputSequence": [{ "actions": ["move-forward"], "axes": { "moveYRatio": 1 }, "ticks": 600 }] },
-      { "acceptanceTargetRef": "worldkit://acceptance-target/mountain-cliff-layers@1", "id": "cliff-block", "evidenceKind": "scripted-fixed-input", "expectation": "block", "checkpointIds": ["cliff-edge"], "fixedInputSequence": [{ "actions": ["move-right"], "axes": { "moveXRatio": 1 }, "ticks": 60 }] }
+      { "acceptanceTargetRef": "worldkit://acceptance-target/upper-t-junction@1", "id": "central-ascent-left-t-arm-pass", "evidenceKind": "scripted-fixed-input", "expectation": "pass", "checkpointIds": ["spawn-foreground-platform", "upper-platform"], "fixedInputSequence": [{ "actions": ["move-forward"], "axes": { "moveYRatio": 1 }, "ticks": 760 }, { "actions": ["move-left"], "axes": { "moveXRatio": -1 }, "ticks": 60 }] },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/mountain-cliff-layers@1", "id": "cliff-block", "evidenceKind": "scripted-fixed-input", "expectation": "block", "checkpointIds": ["cliff-edge"], "fixedInputSequence": [{ "actions": ["move-right"], "axes": { "moveXRatio": 1 }, "ticks": 60 }] },
+      { "acceptanceTargetRef": "worldkit://acceptance-target/gate-mass@1", "id": "gate-wall-block", "evidenceKind": "scripted-fixed-input", "expectation": "block", "checkpointIds": ["gate-wall-limit"], "fixedInputSequence": [{ "actions": ["move-forward"], "axes": { "moveYRatio": 1 }, "ticks": 565 }, { "actions": ["move-left"], "axes": { "moveXRatio": -1 }, "ticks": 60 }] }
     ],
     "deterministicBuild": { "acceptanceTargetRef": "worldkit://acceptance-target/central-ascent@1", "requiresCandidateReplay": true, "requiresWorldPackageIdentityAgreement": true, "requiresBuildIdentityAgreement": true, "requiresCaptureIdentityAgreement": true }
   }

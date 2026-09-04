@@ -208,6 +208,18 @@ async function makeTemporaryRoot(): Promise<string> {
   return root;
 }
 
+async function applyGitCheckoutModes(root: string): Promise<void> {
+  await chmod(root, 0o755);
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await applyGitCheckoutModes(entryPath);
+    } else if (entry.isFile()) {
+      await chmod(entryPath, 0o644);
+    }
+  }
+}
+
 async function ownedNativeViteCacheDirectories(): Promise<readonly string[]> {
   return (await readdir(tmpdir()))
     .filter((entry) => entry.startsWith(NATIVE_VITE_CACHE_PREFIX))
@@ -291,6 +303,7 @@ describe("worldkit native run process contract", { timeout: 180_000 }, () => {
         outputDirectoryPath: packageDirectoryPath,
         directory: packageDirectory,
       });
+      await applyGitCheckoutModes(packageDirectoryPath);
       const port = await allocateAvailablePort();
       const cacheDirectoriesBefore = await ownedNativeViteCacheDirectories();
       const run = spawnNativeRun(packageDirectoryPath, port);

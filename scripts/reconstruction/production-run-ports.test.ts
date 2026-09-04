@@ -456,11 +456,15 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       requiresOverlay: true,
     });
     expect(reconstructionCase.expected.criticalTraversalChecks.find(
-      ({ id }) => id === "central-ascent-pass",
+      ({ id }) => id === "central-ascent-left-t-arm-pass",
     )?.fixedInputSequence).toEqual([{
       actions: ["move-forward"],
       axes: { moveYRatio: 1 },
-      ticks: 600,
+      ticks: 760,
+    }, {
+      actions: ["move-left"],
+      axes: { moveXRatio: -1 },
+      ticks: 60,
     }]);
     expect(await readFile(
       path.join(caseRoot, "inputs", "task-instruction.md"),

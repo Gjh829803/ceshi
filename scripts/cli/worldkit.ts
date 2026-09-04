@@ -87,6 +87,8 @@ import {
   startWorldkitServer,
   type WorldkitServerHandle,
 } from "../lib/worldkit-server";
+import { createOwnedNativePackageFixtureV1 } from
+  "../native-scene/owned-native-package-fixture";
 import {
   inspectControlCaptureBundleFileV1,
   inspectSimulationTakeFileV1,
@@ -451,11 +453,14 @@ type RunWorldReconstructionProductionPortV1 = (
   input: Omit<WorldReconstructionProductionInputV1, "repositoryRoot">,
 ) => Promise<WorldReconstructionProductionResultV1>;
 
+type StartWorldkitServerPortV1 = typeof startWorldkitServer;
+
 export interface WorldkitMainPortsV1 {
   readonly packageNativeBlockAttemptV1?: PackageNativeBlockAttemptPortV1;
   readonly captureHostedWorldPackageV1?: CaptureHostedWorldPackagePortV1;
   readonly runWorldReconstructionProductionV1?:
     RunWorldReconstructionProductionPortV1;
+  readonly startWorldkitServerV1?: StartWorldkitServerPortV1;
 }
 
 async function loadRunWorldReconstructionProductionPortV1(): Promise<
@@ -2368,15 +2373,26 @@ async function runNativeUntilSignal(
   packageDirectoryPath: string,
   port: number | undefined,
   json: boolean,
+  startServer: StartWorldkitServerPortV1 = startWorldkitServer,
 ): Promise<number> {
   let server: WorldkitServerHandle;
+  let ownedPackage: Awaited<ReturnType<
+    typeof createOwnedNativePackageFixtureV1
+  >> | undefined;
   try {
-    server = await startWorldkitServer({
-      source: { kind: "world-package", packageDirectoryPath },
+    ownedPackage = await createOwnedNativePackageFixtureV1({
+      fixtureDirectoryPath: path.resolve(packageDirectoryPath),
+    });
+    server = await startServer({
+      source: {
+        kind: "world-package",
+        packageDirectoryPath: ownedPackage.packageDirectoryPath,
+      },
       ...(port === undefined ? { port: 5174 } : { port }),
       forwardOutput: !json,
     });
   } catch (error) {
+    await ownedPackage?.dispose().catch(() => undefined);
     const result = cliFailure(
       "CLI_NATIVE_SERVER_START_FAILED",
       "Unable to start the Native Package verification Harness.",
@@ -2407,8 +2423,12 @@ async function runNativeUntilSignal(
     process.once("SIGTERM", finish);
     void server.waitForExit().then(finish);
   });
-  await server.stop();
-  return 0;
+  try {
+    await server.stop();
+    return 0;
+  } finally {
+    await ownedPackage.dispose();
+  }
 }
 
 export async function loadPackageHeadless(
@@ -2657,6 +2677,7 @@ export async function main(
       parsed.packageDirectoryPath,
       parsed.port,
       parsed.json,
+      ports.startWorldkitServerV1,
     );
   }
   if (parsed.command === "reconstruct-run") {

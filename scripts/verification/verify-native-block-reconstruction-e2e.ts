@@ -1,5 +1,6 @@
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { isNil } from "lodash-es";
 
 import {
   parseNativeBlockAuthoringManifestV1,
@@ -43,10 +44,12 @@ import {
   type FormalOpeningObservationV1,
   type FormalScriptedTraversalObservationV1,
   type FormalSpawnSupportObservationV1,
-  type FormalTraversalCheckpointSpatialCriterionV1,
   type RuntimeSessionSubjectSupportV1,
   type WorldRuntimeSnapshotV4,
 } from "@whitebox-world/runtime-contracts";
+import {
+  measureFormalTraversalCheckpointV1,
+} from "@whitebox-world/runtime-babylon";
 import {
   sha256Bytes,
   sha256CanonicalJson,
@@ -71,6 +74,10 @@ import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
+import {
+  createOwnedNativePackageFixtureV1,
+  type OwnedNativePackageFixtureV1,
+} from "../native-scene/owned-native-package-fixture.js";
 import { buildWorldReconstructionEvidenceSetV1 } from
   "../reconstruction/evaluate-evidence-set.js";
 
@@ -381,39 +388,6 @@ function distance(
   return Math.hypot(left[0] - right[0], left[1] - right[1], left[2] - right[2]);
 }
 
-function coordinate(
-  positionMetersXYZ: readonly [number, number, number],
-  axis: "x" | "y" | "z",
-): number {
-  return positionMetersXYZ[axis === "x" ? 0 : axis === "y" ? 1 : 2];
-}
-
-function measureCheckpoint(
-  criterion: FormalTraversalCheckpointSpatialCriterionV1,
-  positionMetersXYZ: readonly [number, number, number],
-  isFinalTick: boolean,
-): "reached" | "passed" | "blocked" | undefined {
-  if (criterion.kind === "reach-bounds") {
-    const margin = criterion.capsuleRadiusMeters + criterion.toleranceMeters;
-    return positionMetersXYZ.every((value, axis) =>
-      value >= criterion.sourceBoundsMeters.minimumMetersXYZ[axis]! - margin &&
-      value <= criterion.sourceBoundsMeters.maximumMetersXYZ[axis]! + margin)
-      ? "reached"
-      : undefined;
-  }
-  const value = coordinate(positionMetersXYZ, criterion.axis);
-  const clearance = Math.max(
-    0,
-    criterion.capsuleRadiusMeters - criterion.toleranceMeters,
-  );
-  const crossed = criterion.expectedCenterSide === "positive"
-    ? value >= criterion.planeMeters + clearance
-    : value <= criterion.planeMeters - clearance;
-  if (criterion.kind === "pass-plane") return crossed ? "passed" : undefined;
-  if (crossed) return "passed";
-  return isFinalTick && !crossed ? "blocked" : undefined;
-}
-
 function uniqueSortedExactSet(values: readonly string[]): readonly string[] {
   const sorted = [...values].sort();
   if (new Set(sorted).size !== sorted.length) {
@@ -451,8 +425,8 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
         traversalBinding.kind === "not-traversable")
       .map(({ id }) => id),
   );
-  exactStringSet(formalBlockers, caseBlockers);
   exactStringSet(contributionBlockers, caseBlockers);
+  exactStringSet(formalBlockers, caseBlockers);
 
   const joinsByColliderId = new Map<string,
     typeof input.materializerMetadata.colliderJoins>();
@@ -471,7 +445,7 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
       fail("NBR70_BLOCKER_IDENTITY_MISMATCH");
     }
   }
-  return caseBlockers;
+  return formalBlockers;
 }
 
 function verifyNativeCheckReplayClosure(input: Readonly<{
@@ -487,14 +461,50 @@ function verifyNativeCheckReplayClosure(input: Readonly<{
   );
 }
 
-export const NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1 = Object.freeze({
-  verifyBlockerEvidenceClosure,
-});
-
 type ReconstructionRunReceipt = ReturnType<
   typeof parseWorldReconstructionRunReceiptV1
 >;
 type ReconstructionCase = ReturnType<typeof parseWorldReconstructionCaseV1>;
+type ReconstructionTraversalCheck =
+  ReconstructionCase["expected"]["criticalTraversalChecks"][number];
+type ReconstructionTraversalBand =
+  ReconstructionCase["expected"]["groundConnectivity"]["requiredTraversalBands"][number];
+
+function verifyGroundPassEndpointClosure(input: Readonly<{
+  checkExpectation: ReconstructionTraversalCheck["expectation"];
+  acceptanceTargetRef: string;
+  traversalBands: readonly ReconstructionTraversalBand[];
+  finalPositionMetersXYZ: readonly [number, number, number];
+  finalMovementMedium: "air" | "ground";
+}>): void {
+  if (input.checkExpectation !== "pass") return;
+  const matchingBands = input.traversalBands.filter(
+    ({ acceptanceTargetRef }) =>
+      acceptanceTargetRef === input.acceptanceTargetRef,
+  );
+  if (matchingBands.length !== 1 || input.finalMovementMedium !== "ground") {
+    fail("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
+  }
+  const band = matchingBands[0]!;
+  const endpoint = band.centerlineStandPositionsXYZMeters.at(-1);
+  if (isNil(endpoint)) {
+    fail("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
+  }
+  const distanceMeters = Math.hypot(
+    input.finalPositionMetersXYZ[0] - endpoint.xMeters,
+    input.finalPositionMetersXYZ[1] - endpoint.yMeters,
+    input.finalPositionMetersXYZ[2] - endpoint.zMeters,
+  );
+  if (distanceMeters > band.halfWidthMeters) {
+    fail("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
+  }
+}
+
+export const NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1 = Object.freeze({
+  verifyBlockerEvidenceClosure,
+  verifyGroundPassEndpointClosure,
+});
+
 type ReconstructionEvaluationProfile = ReturnType<
   typeof parseWorldReconstructionEvaluationProfileV1
 >;
@@ -513,6 +523,25 @@ interface VerifiedRunAttemptArtifacts {
   readonly captureReceiptHash: Sha256HashV1;
   readonly evaluationResultHash: Sha256HashV1;
   readonly blockerColliderIds: readonly string[];
+}
+
+async function verifyCheckedOutWorldPackageV1(
+  packageDirectoryPath: string,
+): Promise<ReturnType<typeof verifyWorldPackageDirectoryV1>> {
+  const ownedPackage = await createOwnedNativePackageFixtureV1({
+    fixtureDirectoryPath: packageDirectoryPath,
+  });
+  try {
+    return verifyWorldPackageDirectoryV1(
+      await readWorldPackageDirectoryV1({
+        packageDirectoryPath: ownedPackage.packageDirectoryPath,
+        maximumTotalBytes: 512_000_000,
+        maximumFileCount: 10_000,
+      }),
+    );
+  } finally {
+    await ownedPackage.dispose();
+  }
 }
 
 async function verifyAllRunAttempts(input: Readonly<{
@@ -686,13 +715,7 @@ async function verifyAllRunAttempts(input: Readonly<{
       continue;
     }
     const packageDirectoryPath = path.join(attemptRoot, "world-package");
-    const verified = verifyWorldPackageDirectoryV1(
-      await readWorldPackageDirectoryV1({
-        packageDirectoryPath,
-        maximumTotalBytes: 512_000_000,
-        maximumFileCount: 10_000,
-      }),
-    );
+    const verified = await verifyCheckedOutWorldPackageV1(packageDirectoryPath);
     if (
       verified.kind !== "babylon-native-scene" ||
       verified.nativeBlockMaterializerMetadata === undefined
@@ -966,12 +989,8 @@ async function verifyFinalPromotion(input: Readonly<{
     `attempts/${finalAttempt.attemptIndex}`,
   );
   const packageDirectoryPath = path.join(finalRoot, "world-package");
-  const finalVerified = verifyWorldPackageDirectoryV1(
-    await readWorldPackageDirectoryV1({
-      packageDirectoryPath,
-      maximumTotalBytes: 512_000_000,
-      maximumFileCount: 10_000,
-    }),
+  const finalVerified = await verifyCheckedOutWorldPackageV1(
+    packageDirectoryPath,
   );
   exact(finalVerified.receipt.worldPackageRef, finalAttempt.worldPackageRef);
   exact(finalVerified.receipt.worldPackageRootHash, finalAttempt.worldPackageRootHash);
@@ -1011,6 +1030,7 @@ async function verifyPlayability(input: Readonly<{
   maximumPositionDriftMeters: number;
   checks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
   caseChecks: ReturnType<typeof parseWorldReconstructionCaseV1>["expected"]["criticalTraversalChecks"];
+  traversalBands: ReturnType<typeof parseWorldReconstructionCaseV1>["expected"]["groundConnectivity"]["requiredTraversalBands"];
   blockerColliderIds: readonly string[];
 }>): Promise<NativeBlockReconstructionE2EVerificationV1["playability"]> {
   const ready = assertReadySnapshot(await input.session.awaitReady());
@@ -1115,12 +1135,14 @@ async function verifyPlayability(input: Readonly<{
       sha256CanonicalJson(caseCheck.fixedInputSequence) !== check.fixedInputSequenceHash
     ) fail("NBR70_IDENTITY_MISMATCH");
     const reset = await resetGrounded();
+    const startPositionMetersXYZ = position(reset, input.subjectEntityId);
     const measured = new Map<string, "reached" | "passed" | "blocked">();
     const totalTicks = check.fixedInputSequence.reduce(
       (total, fixedInput) => total + fixedInput.ticks,
       0,
     );
     let committed = 0;
+    let finalSnapshot: WorldRuntimeSnapshotV4 | undefined;
     for (const fixedInput of check.fixedInputSequence) {
       for (let tick = 0; tick < fixedInput.ticks; tick += 1) {
         committed += 1;
@@ -1133,17 +1155,22 @@ async function verifyPlayability(input: Readonly<{
           runtimeSessionId,
           reset.worldSessionId,
         );
+        finalSnapshot = snapshot;
         if (snapshot.world.simulationTick !== reset.world.simulationTick + committed) {
           fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
         }
         for (const criterion of check.checkpointCriteria) {
           if (measured.has(criterion.checkpointId)) continue;
-          const outcome = measureCheckpoint(
+          const measurement = measureFormalTraversalCheckpointV1({
             criterion,
-            position(snapshot, input.subjectEntityId),
-            committed === totalTicks,
-          );
-          if (outcome !== undefined) measured.set(criterion.checkpointId, outcome);
+            startPositionMetersXYZ,
+            positionMetersXYZ: position(snapshot, input.subjectEntityId),
+            tick: snapshot.world.simulationTick,
+            isFinalTick: committed === totalTicks,
+          });
+          if (measurement !== undefined) {
+            measured.set(criterion.checkpointId, measurement.outcome);
+          }
         }
       }
     }
@@ -1163,6 +1190,14 @@ async function verifyPlayability(input: Readonly<{
       checkpointIds.length !== expectedCheckpointIds.length ||
       checkpointIds.some((id, index) => id !== expectedCheckpointIds[index])
     ) fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
+    if (isNil(finalSnapshot)) fail("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
+    verifyGroundPassEndpointClosure({
+      checkExpectation: caseCheck.expectation,
+      acceptanceTargetRef: caseCheck.acceptanceTargetRef,
+      traversalBands: input.traversalBands,
+      finalPositionMetersXYZ: position(finalSnapshot, input.subjectEntityId),
+      finalMovementMedium: movementMedium(finalSnapshot, input.subjectEntityId),
+    });
     const outcome = check.checkExpectation === "block" ? "blocked" : "passed";
     results.push(Object.freeze({ id: check.id, outcome, checkpointIds }));
   }
@@ -1342,12 +1377,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   }
 
   const packageDirectoryPath = path.join(attemptRoot, "world-package");
-  const packageDirectory = await readWorldPackageDirectoryV1({
-    packageDirectoryPath,
-    maximumTotalBytes: 512_000_000,
-    maximumFileCount: 10_000,
-  });
-  const verified = verifyWorldPackageDirectoryV1(packageDirectory);
+  const verified = await verifyCheckedOutWorldPackageV1(packageDirectoryPath);
   if (
     verified.kind !== "babylon-native-scene" ||
     verified.nativeBlockMaterializerMetadata === undefined
@@ -1373,6 +1403,14 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "formal-world-capture-receipt.json",
     "NBR70_CAPTURE_ARTIFACT_MISSING",
   )));
+  const measuredBlockerColliderIds = verifyBlockerEvidenceClosure({
+    caseBlockerColliderIds: reconstructionCase.expected.colliders
+      .filter(({ role }) => role === "blocker")
+      .map(({ colliderId }) => colliderId),
+    formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
+    contribution: verified.nativeSceneContribution,
+    materializerMetadata: verified.nativeBlockMaterializerMetadata,
+  });
   const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
   exact(runAttempt.captureReceiptHash, captureReceiptHash);
   exact(captureReceipt.caseRef, runReceipt.caseRef);
@@ -1499,12 +1537,16 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     : packageDirectoryPath;
 
   let session: NativeBlockReconstructionPlayabilitySessionPortV1 | undefined;
+  let ownedLaunchPackage: OwnedNativePackageFixtureV1 | undefined;
   let playability: NativeBlockReconstructionE2EVerificationV1["playability"] | undefined;
   let failure: unknown;
   try {
+    ownedLaunchPackage = await createOwnedNativePackageFixtureV1({
+      fixtureDirectoryPath: launchPackageDirectoryPath,
+    });
     lifecycle.launchAttempted = true;
     session = await input.playability.launch({
-      packageDirectoryPath: launchPackageDirectoryPath,
+      packageDirectoryPath: ownedLaunchPackage.packageDirectoryPath,
       worldPackageRef: verified.receipt.worldPackageRef,
       worldPackageRootHash: verified.receipt.worldPackageRootHash,
       worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
@@ -1525,9 +1567,9 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
         1_000,
       checks: captureReceipt.formalRequest.scriptedTraversal.checks,
       caseChecks: reconstructionCase.expected.criticalTraversalChecks,
-      blockerColliderIds: reconstructionCase.expected.colliders
-        .filter(({ role }) => role === "blocker")
-        .map(({ colliderId }) => colliderId),
+      traversalBands:
+        reconstructionCase.expected.groundConnectivity.requiredTraversalBands,
+      blockerColliderIds: measuredBlockerColliderIds,
     });
   } catch (error) {
     failure = error;
@@ -1541,6 +1583,14 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
         } else {
           lifecycle.cleanupOutcome = "completed";
         }
+      } catch {
+        lifecycle.cleanupOutcome = "failed";
+        failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");
+      }
+    }
+    if (ownedLaunchPackage !== undefined) {
+      try {
+        await ownedLaunchPackage.dispose();
       } catch {
         lifecycle.cleanupOutcome = "failed";
         failure = new Error("NBR70_PLAYABILITY_CLEANUP_FAILED");

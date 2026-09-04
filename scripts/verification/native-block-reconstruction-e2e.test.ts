@@ -75,6 +75,8 @@ import {
   type NativeBlockReconstructionPlayabilityLaunchPortV1,
   type NativeBlockReconstructionPlayabilitySessionPortV1,
 } from "./verify-native-block-reconstruction-e2e.js";
+import { parseNativeBlockReconstructionVerifierArgumentsV1 } from
+  "./run-native-block-reconstruction-e2e.js";
 
 const PNG = Uint8Array.from(Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -87,8 +89,8 @@ const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
   expectation: "reach" as const,
   sourceVisualGroupId: "ground-group",
   sourceBoundsMeters: {
-    minimumMetersXYZ: [-2, -1, -2] as const,
-    maximumMetersXYZ: [2, 1, 2] as const,
+    minimumMetersXYZ: [-2, -1, -5.1] as const,
+    maximumMetersXYZ: [2, 1, -4.2] as const,
   },
   capsuleRadiusMeters: 0.35,
   toleranceMeters: 0.05,
@@ -110,9 +112,57 @@ const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
   toleranceMeters: 0.05,
 }] as const;
 
+describe("Native Block reconstruction E2E verifier CLI", () => {
+  it("resolves the required Run and optional Final directories", () => {
+    expect(parseNativeBlockReconstructionVerifierArgumentsV1([
+      "--",
+      "--run",
+      "artifacts/scenes/example/runs/run-1",
+      "--final",
+      "artifacts/scenes/example/final",
+    ])).toEqual({
+      runDirectoryPath: path.resolve(
+        "artifacts/scenes/example/runs/run-1",
+      ),
+      finalDirectoryPath: path.resolve(
+        "artifacts/scenes/example/final",
+      ),
+    });
+  });
+
+  it("rejects an incomplete or ambiguous invocation", () => {
+    expect(() => parseNativeBlockReconstructionVerifierArgumentsV1([]))
+      .toThrow("--run <run-directory> is required");
+    expect(() => parseNativeBlockReconstructionVerifierArgumentsV1([
+      "--run",
+      "first",
+      "--run",
+      "second",
+    ])).toThrow("--run may appear only once");
+    expect(() => parseNativeBlockReconstructionVerifierArgumentsV1([
+      "--run",
+      "first",
+      "--unknown",
+      "second",
+    ])).toThrow("Unknown option '--unknown'");
+  });
+});
+
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${stringifyCanonicalJson(value)}\n`);
+}
+
+async function applyGitCheckoutModes(root: string): Promise<void> {
+  await chmod(root, 0o755);
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      await applyGitCheckoutModes(entryPath);
+    } else if (entry.isFile()) {
+      await chmod(entryPath, 0o644);
+    }
+  }
 }
 
 function generationRequestFixture(input: ReturnType<
@@ -257,6 +307,7 @@ function snapshot(
 
 function playabilityPort(options: {
   traversalFails?: boolean;
+  stopsAtBlocker?: boolean;
   crossesBlocker?: boolean;
   cleanupFails?: boolean;
   cleanupThrows?: boolean;
@@ -314,6 +365,8 @@ function playabilityPort(options: {
       const next: [number, number, number] = options.traversalFails &&
           resetCount >= 8 && actions.has("move-forward")
         ? [100, 100, 100]
+        : options.stopsAtBlocker && resetCount === 8 && actions.has("move-forward")
+          ? [0, 0, -4.65]
         : options.crossesBlocker && resetCount >= 8 && actions.has("move-forward")
           ? [0, 0, -100]
         : [
@@ -680,9 +733,8 @@ describe("Native Block reconstruction final artifact publisher integration", () 
         playability: playability.port,
       })).resolves.toMatchObject({ outcome: "published" });
       expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
-        packageDirectoryPath: path.join(
-          fixture.caseDirectoryPath,
-          ".final-staging/world-package",
+        packageDirectoryPath: expect.stringContaining(
+          `${path.sep}worldkit-native-build-`,
         ),
       }));
       await expect(readFile(path.join(
@@ -737,7 +789,8 @@ describe("Native Block reconstruction final artifact publisher integration", () 
         async launch(input) {
           if (mutation === "staging-directory") {
             await mkdir(path.join(
-              path.dirname(input.packageDirectoryPath),
+              fixture.caseDirectoryPath,
+              ".final-staging",
               "foreign-empty-directory",
             ));
           } else {
@@ -1077,7 +1130,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
-  it("requires one exact blocker set across Case, formal criteria, Contribution, and materializer", () => {
+  it("requires exact Case-to-Contribution blockers and exact formal blocker joins", () => {
     const fixture = createEvidenceSetFixtureInputV1({
       allDimensionsPass: true,
       includePaletteTraversalDisagreement: true,
@@ -1089,15 +1142,18 @@ describe("Native Block reconstruction E2E verifier", () => {
       ],
     });
     const verified = fixture.verifiedWorldPackage;
+    const materializerMetadata = verified.kind === "babylon-native-scene"
+      ? verified.nativeBlockMaterializerMetadata
+      : undefined;
     if (verified.kind !== "babylon-native-scene" ||
-        verified.nativeBlockMaterializerMetadata === undefined) {
+        materializerMetadata === undefined) {
       throw new Error("fixture must include trusted Block metadata");
     }
     const valid = {
       caseBlockerColliderIds: ["palette-ground-blocker"],
       formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
       contribution: verified.nativeSceneContribution,
-      materializerMetadata: verified.nativeBlockMaterializerMetadata,
+      materializerMetadata,
     };
     expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
       .verifyBlockerEvidenceClosure(valid)).not.toThrow();
@@ -1173,6 +1229,84 @@ describe("Native Block reconstruction E2E verifier", () => {
     }
   });
 
+  it("rejects contributed Case blockers without a dedicated scripted block check", () => {
+    const fixture = createEvidenceSetFixtureInputV1({
+      allDimensionsPass: true,
+      includePaletteTraversalDisagreement: true,
+      traversalCheckExpectation: "block",
+      traversalCheckpointCriteria: MIXED_BLOCK_CHECKPOINT_CRITERIA,
+      traversalCheckpoints: [
+        { checkpointId: "gate-approach", outcome: "reached", observedAtTick: 1 },
+        { checkpointId: "gate-limit", outcome: "blocked", observedAtTick: 1 },
+      ],
+    });
+    const verified = fixture.verifiedWorldPackage;
+    const materializerMetadata = verified.kind === "babylon-native-scene"
+      ? verified.nativeBlockMaterializerMetadata
+      : undefined;
+    if (verified.kind !== "babylon-native-scene" ||
+        materializerMetadata === undefined) {
+      throw new Error("fixture must include trusted Block metadata");
+    }
+    const unmeasuredBlocker = createBabylonNativeStaticColliderContributionV1({
+      id: "unmeasured-case-blocker",
+      runtimeRole: "scene-static-collider",
+      worldPositionsMetersXYZ: [
+        -1, 0, -1,
+        1, 0, -1,
+        0, 1, -1,
+      ],
+      triangleIndices: [0, 1, 2],
+      frictionRatio: 0.8,
+      restitutionRatio: 0,
+      traversalBinding: { kind: "not-traversable" },
+    });
+
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosure({
+        caseBlockerColliderIds: [
+          "palette-ground-blocker",
+          "unmeasured-case-blocker",
+        ],
+        formalChecks: fixture.captureReceipt.formalRequest.scriptedTraversal.checks,
+        contribution: {
+          ...verified.nativeSceneContribution,
+          staticColliders: [
+            ...verified.nativeSceneContribution.staticColliders,
+            unmeasuredBlocker,
+          ],
+        },
+        materializerMetadata,
+      })).toThrowError("NBR70_BLOCKER_IDENTITY_MISMATCH");
+  });
+
+  it("requires a passing ground traversal to finish inside its frozen band endpoint", () => {
+    const band = {
+      acceptanceTargetRef: "worldkit://acceptance-target/upper@1",
+      id: "upper-arm-band",
+      centerlineStandPositionsXYZMeters: [
+        { xMeters: 0, yMeters: 0, zMeters: 0 },
+        { xMeters: -3, yMeters: 0, zMeters: -12 },
+      ],
+      halfWidthMeters: 1,
+    } as const;
+    const input = {
+      checkExpectation: "pass" as const,
+      acceptanceTargetRef: band.acceptanceTargetRef,
+      traversalBands: [band],
+      finalPositionMetersXYZ: [-2.5, 0, -12] as const,
+      finalMovementMedium: "ground" as const,
+    };
+
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyGroundPassEndpointClosure(input)).not.toThrow();
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyGroundPassEndpointClosure({
+        ...input,
+        finalPositionMetersXYZ: [0, 0, -5],
+      })).toThrowError("NBR70_PLAYABILITY_ROUTE_ENDPOINT_NOT_REACHED");
+  });
+
   it("rejects an empty candidate before launching playability", async () => {
     const runDirectoryPath = await realpath(
       await mkdtemp(path.join(os.tmpdir(), "nbr70-empty-")),
@@ -1236,10 +1370,9 @@ describe("Native Block reconstruction E2E verifier", () => {
         "player",
         1,
       );
-      expect(playability.port.launch).toHaveBeenCalledWith(expect.objectContaining({
-        packageDirectoryPath: path.join(
-          fixture.runDirectoryPath,
-          "attempts/0/world-package",
+      expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
+        packageDirectoryPath: expect.stringContaining(
+          `${path.sep}worldkit-native-build-`,
         ),
       }));
     } finally {
@@ -1336,6 +1469,11 @@ describe("Native Block reconstruction E2E verifier", () => {
   it("verifies promoted Final bytes and launches the promoted Package", async () => {
     const fixture = await completeRunFixture();
     const finalDirectoryPath = await createFinalCandidate(fixture);
+    await applyGitCheckoutModes(path.join(
+      fixture.runDirectoryPath,
+      "attempts/0/world-package",
+    ));
+    await applyGitCheckoutModes(path.join(finalDirectoryPath, "world-package"));
     const playability = playabilityPort();
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
@@ -1347,12 +1485,14 @@ describe("Native Block reconstruction E2E verifier", () => {
         playability: playability.port,
       })).resolves.toMatchObject({ candidateKind: "final", outcome: "verified" });
       expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
-        packageDirectoryPath: path.join(finalDirectoryPath, "world-package"),
+        packageDirectoryPath: expect.stringContaining(
+          `${path.sep}worldkit-native-build-`,
+        ),
       }));
     } finally {
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("rejects promoted Final byte drift before launch", async () => {
     const fixture = await completeRunFixture();
@@ -1388,7 +1528,7 @@ describe("Native Block reconstruction E2E verifier", () => {
       ],
     };
     const passingFixture = await completeRunFixture(fixtureOptions);
-    const passingPlayability = playabilityPort();
+    const passingPlayability = playabilityPort({ stopsAtBlocker: true });
     try {
       await expect(verifyNativeBlockReconstructionE2EV1({
         candidate: {
@@ -1428,7 +1568,25 @@ describe("Native Block reconstruction E2E verifier", () => {
     } finally {
       await rm(crossingFixture.runDirectoryPath, { recursive: true, force: true });
     }
-  });
+
+    const neverApproachedFixture = await completeRunFixture(fixtureOptions);
+    const neverApproachedPlayability = playabilityPort();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: {
+          kind: "run",
+          runDirectoryPath: neverApproachedFixture.runDirectoryPath,
+        },
+        playability: neverApproachedPlayability.port,
+      })).rejects.toThrowError("NBR70_PLAYABILITY_TRAVERSAL_FAILED");
+      expect(neverApproachedPlayability.dispose).toHaveBeenCalledOnce();
+    } finally {
+      await rm(neverApproachedFixture.runDirectoryPath, {
+        recursive: true,
+        force: true,
+      });
+    }
+  }, 15_000);
 
   it("rejects missing and content-hash-drifted capture artifacts before launch", async () => {
     for (const mutation of ["missing", "hash-drift"] as const) {
@@ -1510,7 +1668,7 @@ describe("Native Block reconstruction E2E verifier", () => {
         await rm(fixture.runDirectoryPath, { recursive: true, force: true });
       }
     }
-  });
+  }, 15_000);
 
   it("reports failed cleanup when playability launch throws without a session", async () => {
     const fixture = await completeRunFixture();
@@ -1581,5 +1739,5 @@ describe("Native Block reconstruction E2E verifier", () => {
         await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
       }
     }
-  });
+  }, 15_000);
 });
