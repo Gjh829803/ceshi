@@ -41,7 +41,9 @@ describe("Viewer bootstrap Host", () => {
     const defaultResponse = await fetch(`${origin}${VIEWER_BOOTSTRAP_ENDPOINT}`);
     expect(defaultResponse.status).toBe(200);
     const defaultText = await defaultResponse.text();
-    expect(JSON.parse(defaultText).selection.selectedSceneId).toBe("feel-flat");
+    expect(JSON.parse(defaultText).selection.selectedSceneId).toBe(
+      "whitebox-3c-test-course",
+    );
     expect(defaultText).not.toContain("authoringSpecPath");
     expect(defaultText).not.toContain(repositoryRoot);
 

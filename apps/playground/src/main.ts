@@ -144,13 +144,13 @@ interface AuthoringStartupDebugV1 {
 let authoringStartupDebug: AuthoringStartupDebugV1 | undefined;
 
 app.innerHTML = `
-  <main class="shell">
+  <main class="shell${viewerMode ? " viewer-shell" : ""}">
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div>
           <p class="eyebrow">AGENT WHITEBOX WORLD</p>
-          <h1>World Viewer <span>α</span></h1>
+          <h1>${viewerMode ? "Runtime Playground" : "World Viewer"} <span>α</span></h1>
         </div>
       </div>
       <div class="topbar-actions">
@@ -158,18 +158,65 @@ app.innerHTML = `
           <span>场景</span><select id="scene-select" aria-label="选择调试场景"></select>
         </label>
         <span class="status"><i></i><span id="adapter-name">adapter</span></span>
-        ${viewerMode ? '<button class="button button-tuning" id="open-tuning-button" type="button" hidden>打开调控台</button>' : ''}
+        ${viewerMode ? '<button class="button button-tuning" id="open-tuning-button" type="button" aria-controls="tuning-layer" aria-expanded="false" hidden>调参台</button>' : ''}
         <button class="button button-subtle" id="reset-button" type="button">重置世界</button>
         <button class="button button-record" id="record-button" type="button" aria-pressed="false" title="仅录制 3D 渲染画面，不包含界面">
           <i class="record-dot" aria-hidden="true"></i><span id="record-label">录制画面</span>
         </button>
         <button class="button button-primary" id="capture-button" type="button">保存截图</button>
+        ${viewerMode ? `
+          <div class="topbar-more">
+            <button class="button button-subtle" id="more-actions-button" type="button" aria-haspopup="menu" aria-expanded="false">更多 <span aria-hidden="true">⋮</span></button>
+            <div class="topbar-more-menu" id="more-actions-menu" role="menu" hidden>
+              <button type="button" role="menuitem" data-action-proxy="#smoke-button">固定输入 Smoke</button>
+              <button type="button" role="menuitem" data-action-proxy="#composition-button">首帧构图验收</button>
+              <button type="button" role="menuitem" data-action-proxy="#triview-button">导出白膜三视图</button>
+            </div>
+          </div>
+        ` : ""}
       </div>
     </header>
 
-    <section class="workspace">
+    ${viewerMode ? `
+      <section class="authoring-context-bar" id="authoring-context-bar" aria-label="3C 调试上下文" hidden>
+        <label class="context-subject-field">
+          <span>当前主体</span>
+          <select id="subject-package-select" aria-label="当前主体"></select>
+        </label>
+        <div class="context-divider" aria-hidden="true"></div>
+        <div class="context-camera-field">
+          <span>相机视角</span>
+          <div class="camera-mode-buttons" role="group" aria-label="相机视角">
+            <button id="camera-third-person-button" type="button" aria-pressed="true">第三人称</button>
+          </div>
+          <select id="camera-preference-select" aria-label="相机预制"></select>
+        </div>
+        <div class="context-divider" aria-hidden="true"></div>
+        <label class="context-viewport-field">
+          <span>视窗比例</span>
+          <select id="viewport-aspect-select" aria-label="视窗比例">
+            <option value="free">自由</option>
+            <option value="16:9">16:9</option>
+            <option value="16:10">16:10</option>
+            <option value="4:3">4:3</option>
+            <option value="21:9">21:9</option>
+          </select>
+        </label>
+        <div class="context-divider" aria-hidden="true"></div>
+        <div class="context-preview-field">
+          <div class="preview-mode-buttons" role="group" aria-label="预览状态">
+            <button id="preview-baseline-button" type="button" aria-pressed="false">Baseline</button>
+            <button id="preview-draft-button" type="button" aria-pressed="true">Draft</button>
+          </div>
+          <span class="draft-preview-status" id="draft-preview-status"><i aria-hidden="true"></i> Draft Preview</span>
+        </div>
+      </section>
+    ` : ""}
+
+    <section class="workspace${viewerMode ? " viewer-workspace" : ""}">
       <div class="viewport-panel">
-        <div class="viewport" id="viewport">
+        <div class="viewport-stage" id="viewport-stage">
+          <div class="viewport" id="viewport">
           <div class="scene-badge">WHITEBOX / LOCAL PREVIEW</div>
           <div class="reticle" aria-hidden="true"></div>
           <div class="hud" aria-live="polite">
@@ -191,14 +238,37 @@ app.innerHTML = `
           <div class="recording-indicator" id="recording-indicator" aria-live="polite" hidden>
             <i aria-hidden="true"></i><span>REC</span><time id="recording-time">00:00</time>
           </div>
-          <div class="recording-toast" id="recording-toast" role="status" hidden></div>
+            <div class="recording-toast" id="recording-toast" role="status" hidden></div>
+          </div>
         </div>
-        <footer class="viewport-footer">
-          <span><i class="dot terrain"></i> Terrain mesh</span>
-          <span><i class="dot surface"></i> Water surface</span>
-          <span><i class="dot collider"></i> Collider contract</span>
-          <span class="footer-note">Protocol · Subject Definition · Babylon · Havok</span>
-        </footer>
+        ${viewerMode ? `
+          <footer class="viewport-footer runtime-test-strip">
+            <div class="runtime-quick-actions" aria-label="快速手感测试">
+              <button id="quick-forward-button" type="button">前进</button>
+              <button id="quick-run-button" type="button">奔跑</button>
+              <button id="quick-turn-button" type="button">转向</button>
+              <button id="quick-jump-button" type="button">跳跃</button>
+              <button id="quick-recenter-button" type="button">相机回正</button>
+            </div>
+            <div class="runtime-telemetry" aria-live="polite">
+              <span class="runtime-essential">FPS <strong id="runtime-fps">—</strong></span>
+              <span>速度 <strong id="runtime-speed">0.0 m/s</strong></span>
+              <strong id="runtime-gait">IDLE</strong>
+              <strong id="runtime-medium">GROUND</strong>
+              <strong id="runtime-support">SUPPORTED</strong>
+              <span>FOV <strong id="runtime-fov">—</strong></span>
+              <span>DIST <strong id="runtime-distance">—</strong></span>
+              <span class="runtime-essential">VERSION <strong id="runtime-version">API —</strong></span>
+            </div>
+          </footer>
+        ` : `
+          <footer class="viewport-footer">
+            <span><i class="dot terrain"></i> Terrain mesh</span>
+            <span><i class="dot surface"></i> Water surface</span>
+            <span><i class="dot collider"></i> Collider contract</span>
+            <span class="footer-note">Protocol · Subject Definition · Babylon · Havok</span>
+          </footer>
+        `}
       </div>
 
       <aside class="inspector">
@@ -224,12 +294,12 @@ app.innerHTML = `
             <div><p>CAPABILITY AUTHORING</p><strong>主体 / 运动 / 相机</strong></div>
             <span>T0–T2</span>
           </div>
-          <label>Subject Package<select id="subject-package-select"></select></label>
+          ${viewerMode ? "" : '<label>Subject Package<select id="subject-package-select"></select></label>'}
           <div class="capability-context" id="capability-context"></div>
-          <label>Camera Preference<select id="camera-preference-select"></select></label>
+          ${viewerMode ? "" : '<label>Camera Preference<select id="camera-preference-select"></select></label>'}
           <div class="parameter-drafts" id="parameter-drafts"></div>
           <div class="capability-actions">
-            <button class="capability-open-button" id="open-tuning-panel-button" type="button">打开大尺寸调控台</button>
+            ${viewerMode ? "" : '<button class="capability-open-button" id="open-tuning-panel-button" type="button">打开大尺寸调控台</button>'}
             <button id="fallback-button" type="button">注入 Safe Fallback</button>
             <button id="harness-button" type="button">运行 H01–H09</button>
             <button id="export-package-button" type="button">导出 Candidate JSON</button>
@@ -243,71 +313,56 @@ app.innerHTML = `
     <div class="tuning-layer" id="tuning-layer" hidden>
       <aside class="tuning-workbench" aria-labelledby="tuning-title">
         <header class="tuning-header">
-          <div>
-            <p class="eyebrow">SUBJECT & CAMERA WORKBENCH</p>
-            <h2 id="tuning-title">主体与相机调控台</h2>
-            <p>选择、试跑、调整、导出都集中在这里。左侧世界画面仍然可以直接操作。</p>
-          </div>
-          <button class="tuning-close" id="close-tuning-button" type="button" aria-label="关闭调控台">×</button>
+          <h2 id="tuning-title">移动手感</h2>
+          <button class="tuning-close" id="close-tuning-button" type="button" aria-label="收起调参台">⌃</button>
         </header>
-        <nav class="tuning-nav" aria-label="调控台章节">
-          <a href="#tuning-subject">选择主体</a>
-          <a href="#tuning-input">操作测试</a>
-          <a href="#tuning-motion">运动手感</a>
-          <a href="#tuning-control">输入手感</a>
-          <a href="#tuning-camera">相机</a>
-          <a href="#tuning-versions">本地版本</a>
-          <a href="#tuning-delivery">检查与导出</a>
+        <nav class="tuning-nav" aria-label="调参类别" role="tablist">
+          <button id="tuning-tab-movement" type="button" role="tab" aria-controls="tuning-panel-movement" aria-selected="true">移动</button>
+          <button id="tuning-tab-camera" type="button" role="tab" aria-controls="tuning-panel-camera" aria-selected="false">相机</button>
         </nav>
         <div class="tuning-content">
-          <section class="tuning-section" id="tuning-subject">
-            <div class="tuning-section-heading"><span>01</span><div><h3>当前场景主体</h3><p>主体由 AuthoringSpec 固定；这里调整它的运动、输入与镜头手感。</p></div></div>
-            <label class="friendly-field">主体预制<select id="tuning-subject-select" disabled></select></label>
-            <div class="friendly-summary" id="tuning-subject-summary"></div>
+          <section class="tuning-tab-panel" id="tuning-panel-movement" role="tabpanel" aria-labelledby="tuning-tab-movement">
+            <div class="parameter-boundary" id="movement-parameter-boundary">
+              <strong>候选配置</strong>
+              <span>数值会保存到候选配置，导出并重新编译后生效；下方快捷操作体验当前 Runtime 配置。</span>
+            </div>
+            <section class="tuning-section" id="tuning-motion">
+              <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
+            </section>
+            <details class="tuning-advanced">
+              <summary>高级参数 <span>空中控制与跳跃容错</span></summary>
+              <section class="tuning-section">
+                <div class="friendly-slider-grid" id="tuning-motion-advanced-sliders"></div>
+              </section>
+            </details>
           </section>
-          <section class="tuning-section" id="tuning-input">
-            <div class="tuning-section-heading"><span>02</span><div><h3>直接试一下操作</h3><p>键盘和下面的按钮会走同一套输入链路，按钮适合快速确认配置是否正确。</p></div></div>
-            <div class="input-capability-grid" id="tuning-input-capabilities"></div>
-            <div class="tuning-inline-status" id="tuning-input-status">等待试跑</div>
-          </section>
-          <section class="tuning-section" id="tuning-motion">
-            <div class="tuning-section-heading"><span>03</span><div><h3>选择运动算法并调整手感草稿</h3><p>运动算法只切换锁定的 Motion Profile；滑杆只编辑本地 Feel 候选值，运行时继续使用已锁定的 Control Feel Ref，发布前需 promote。</p></div></div>
-            <label class="friendly-field">运动算法<select id="tuning-motion-select"></select></label>
-            <div class="friendly-slider-grid" id="tuning-motion-sliders"></div>
-          </section>
-          <section class="tuning-section" id="tuning-control">
-            <div class="tuning-section-heading"><span>04</span><div><h3>调整输入手感草稿</h3><p>候选值只描述“按键或摇杆怎样变成操作意图”，promote 为新 Control Profile 后才影响运行时。</p></div></div>
-            <div class="friendly-slider-grid" id="tuning-control-sliders"></div>
-          </section>
-          <section class="tuning-section" id="tuning-camera">
-            <div class="tuning-section-heading"><span>05</span><div><h3>选择并微调相机</h3><p>控制台只公开第一人称和第三人称自由环绕；镜头数字先作为本地草稿预览，导出 Candidate 后才进入发布流程。</p></div></div>
+          <section class="tuning-tab-panel" id="tuning-panel-camera" role="tabpanel" aria-labelledby="tuning-tab-camera" hidden>
+            <section class="tuning-section" id="tuning-camera">
+              <div class="tuning-section-heading"><div><h3>相机预览</h3><p>当前仅开放第三人称；镜头数值通过现有 Camera Preview 通道实时生效。</p></div></div>
             <div class="camera-instructions"><span>鼠标左键拖动</span>旋转 <span>滚轮</span>缩放 <button id="reset-camera-view-button" type="button">镜头回正</button></div>
             <div class="camera-card-grid" id="tuning-camera-cards"></div>
-            <section class="camera-inspector-section" id="tuning-camera-basic" aria-labelledby="tuning-camera-basic-title"><h4 id="tuning-camera-basic-title">基础 · Camera View</h4><div class="friendly-slider-grid camera-tuning-grid"></div></section>
-            <section class="camera-inspector-section" id="tuning-camera-expert" aria-labelledby="tuning-camera-expert-title"><h4 id="tuning-camera-expert-title">专家 · Follow Arm / Collision / Lag</h4><div class="camera-expert-groups"></div></section>
-            <section class="camera-inspector-section camera-runtime-diagnostics" id="tuning-camera-runtime" aria-labelledby="tuning-camera-runtime-title"><div class="camera-diagnostics-heading"><div><h4 id="tuning-camera-runtime-title">运行时诊断（只读）</h4><p>P1.5 只发布 ground / air；水面规则在当前运行时不可用。</p></div><button id="tuning-camera-overlay-toggle" type="button" aria-pressed="false">显示开发 Overlay</button></div><section aria-labelledby="tuning-camera-input-debug-title"><h5 id="tuning-camera-input-debug-title">Input Debug（只读）</h5><dl id="tuning-camera-input-debug"></dl></section><dl id="tuning-camera-diagnostics"></dl><div id="tuning-camera-overlay" hidden aria-live="polite"></div></section>
-            <section class="camera-inspector-section camera-publish-boundary" id="tuning-camera-publish" aria-labelledby="tuning-camera-publish-title"><h4 id="tuning-camera-publish-title">发布边界</h4><p>相机偏好和微调仅保存在此浏览器的本地草稿；不会直接改写 Gameplay、Input 或已锁定 Profile。使用下方“导出 Candidate”发布候选值。</p></section>
+            <section class="camera-inspector-section" id="tuning-camera-basic" aria-labelledby="tuning-camera-basic-title"><h4 id="tuning-camera-basic-title">基础 · 取景与操控</h4><div class="friendly-slider-grid camera-tuning-grid"></div></section>
+              <details class="tuning-advanced camera-advanced">
+                <summary>高级参数 <span>响应 / Follow / Collision / Lag</span></summary>
+                <section class="camera-inspector-section" id="tuning-camera-expert" aria-labelledby="tuning-camera-expert-title"><h4 id="tuning-camera-expert-title">专家 · Follow Arm / Collision / Lag</h4><div class="camera-expert-groups"></div></section>
+                <section class="camera-inspector-section camera-runtime-diagnostics" id="tuning-camera-runtime" aria-labelledby="tuning-camera-runtime-title"><div class="camera-diagnostics-heading"><div><h4 id="tuning-camera-runtime-title">运行时诊断（只读）</h4><p>P1.5 只发布 ground / air；水面规则在当前运行时不可用。</p></div><button id="tuning-camera-overlay-toggle" type="button" aria-pressed="false">显示开发 Overlay</button></div><section aria-labelledby="tuning-camera-input-debug-title"><h5 id="tuning-camera-input-debug-title">Input Debug（只读）</h5><dl id="tuning-camera-input-debug"></dl></section><dl id="tuning-camera-diagnostics"></dl><div id="tuning-camera-overlay" hidden aria-live="polite"></div></section>
+                <section class="camera-inspector-section camera-publish-boundary" id="tuning-camera-publish" aria-labelledby="tuning-camera-publish-title"><h4 id="tuning-camera-publish-title">发布边界</h4><p>相机偏好和微调保存在本地草稿；不会直接改写 Gameplay 或已锁定 Profile。</p></section>
+              </details>
+            </section>
           </section>
-          <section class="tuning-section" id="tuning-versions">
-            <div class="tuning-section-heading"><span>06</span><div><h3>保存为本地版本</h3><p>先把满意的手感保存成一个有名字的版本。它只保存在当前浏览器；设为本机默认后，下次打开这个主体会自动使用。</p></div></div>
-            <div class="local-version-editor">
-              <label>版本名称<input id="tuning-version-name" type="text" maxlength="80" placeholder="例如：四轮载具 · 稳健转向 01"></label>
-              <label>调参备注（可选）<textarea id="tuning-version-notes" rows="2" maxlength="500" placeholder="记录这版解决了什么手感问题"></textarea></label>
-              <button class="primary" id="tuning-save-version-button" type="button">保存当前版本</button>
-            </div>
-            <p class="local-version-explanation">本机默认不会修改 GitHub。要成为所有人的公共默认值，仍需导出并通过代码审核更新 main 分支。</p>
-            <div class="local-version-list" id="tuning-version-list"></div>
-          </section>
-          <section class="tuning-section" id="tuning-delivery">
-            <div class="tuning-section-heading"><span>07</span><div><h3>检查并导出</h3><p>先跑一次自动检查，再把主体、运动、输入和所有镜头配置一起导出。</p></div></div>
-            <div class="delivery-actions">
-              <button id="tuning-harness-button" type="button">运行自动检查</button>
-              <button class="primary" id="tuning-export-button" type="button">导出 Candidate JSON</button>
-            </div>
-            <pre class="friendly-result" id="tuning-result">尚未运行检查</pre>
-          </section>
+          <div class="tuning-support" hidden>
+            <button id="open-tuning-panel-button" type="button">打开调参台</button>
+            <select id="tuning-motion-select"></select>
+            <section id="tuning-subject"><select id="tuning-subject-select" disabled></select><div id="tuning-subject-summary"></div></section>
+            <section id="tuning-input"><div id="tuning-input-capabilities"></div><div id="tuning-input-status">等待试跑</div></section>
+            <section id="tuning-versions"><input id="tuning-version-name" type="text"><textarea id="tuning-version-notes"></textarea><button id="tuning-save-version-button" type="button">保存</button><div id="tuning-version-list"></div></section>
+            <section id="tuning-delivery"><button id="tuning-harness-button" type="button">运行自动检查</button><button id="tuning-export-button" type="button">导出 Candidate JSON</button><pre id="tuning-result">尚未运行检查</pre></section>
+          </div>
         </div>
-        <footer class="tuning-footer"><span id="tuning-save-status">更改会自动保存在本机草稿中</span><button id="tuning-export-footer-button" type="button">导出 Candidate JSON</button></footer>
+        <footer class="tuning-footer">
+          <span id="tuning-save-status">候选配置会自动保存 · 导出后生效</span>
+          <div><button id="tuning-reset-draft-button" type="button">重置草稿</button><button class="primary" id="tuning-export-footer-button" type="button">导出候选配置</button></div>
+        </footer>
       </aside>
     </div>
   ` : ''}
@@ -318,6 +373,89 @@ function requiredElement<T extends Element>(selector: string): T {
   if (element === null) throw new Error(`Missing required element: ${selector}`);
   return element;
 }
+
+function syncContextCameraButtons(preference: string): void {
+  if (!viewerMode) return;
+  const thirdPerson = requiredElement<HTMLButtonElement>("#camera-third-person-button");
+  thirdPerson.setAttribute(
+    "aria-pressed",
+    String(preference === CAMERA_CONSOLE_DEFAULT_PROFILE_REF),
+  );
+}
+
+function syncContextPreviewMode(mode: "baseline" | "draft"): void {
+  if (!viewerMode) return;
+  const isDraft = mode === "draft";
+  requiredElement<HTMLButtonElement>("#preview-baseline-button")
+    .setAttribute("aria-pressed", String(!isDraft));
+  requiredElement<HTMLButtonElement>("#preview-draft-button")
+    .setAttribute("aria-pressed", String(isDraft));
+  const status = requiredElement<HTMLSpanElement>("#draft-preview-status");
+  status.classList.toggle("is-baseline", !isDraft);
+  status.lastChild!.textContent = isDraft ? " Draft Preview" : " Baseline Preview";
+}
+
+function installViewerChrome(): void {
+  if (!viewerMode) return;
+  const moreButton = requiredElement<HTMLButtonElement>("#more-actions-button");
+  const menu = requiredElement<HTMLDivElement>("#more-actions-menu");
+  const setMenuOpen = (open: boolean): void => {
+    menu.hidden = !open;
+    moreButton.setAttribute("aria-expanded", String(open));
+  };
+  moreButton.addEventListener("click", () => setMenuOpen(menu.hidden));
+  menu.querySelectorAll<HTMLButtonElement>("[data-action-proxy]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const selector = button.dataset.actionProxy;
+      if (selector !== undefined) document.querySelector<HTMLButtonElement>(selector)?.click();
+      setMenuOpen(false);
+    });
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (menu.hidden || event.target instanceof Node && menu.contains(event.target)) return;
+    if (event.target instanceof Node && moreButton.contains(event.target)) return;
+    setMenuOpen(false);
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.code === "Escape") setMenuOpen(false);
+  });
+
+  const viewportStage = requiredElement<HTMLDivElement>("#viewport-stage");
+  const viewport = requiredElement<HTMLDivElement>("#viewport");
+  const aspectSelect = requiredElement<HTMLSelectElement>("#viewport-aspect-select");
+  const aspectRatios: Readonly<Record<string, number | undefined>> = {
+    free: undefined,
+    "16:9": 16 / 9,
+    "16:10": 16 / 10,
+    "4:3": 4 / 3,
+    "21:9": 21 / 9,
+  };
+  const storedAspect = readLocalDraft("worldkit.viewport-aspect-ratio");
+  if (storedAspect !== null && Object.hasOwn(aspectRatios, storedAspect)) {
+    aspectSelect.value = storedAspect;
+  }
+  const syncViewportAspect = (): void => {
+    const ratio = aspectRatios[aspectSelect.value];
+    if (ratio === undefined) {
+      viewport.style.width = "100%";
+      viewport.style.height = "100%";
+      return;
+    }
+    const availableWidth = viewportStage.clientWidth;
+    const availableHeight = viewportStage.clientHeight;
+    const width = Math.min(availableWidth, availableHeight * ratio);
+    viewport.style.width = `${width}px`;
+    viewport.style.height = `${width / ratio}px`;
+  };
+  aspectSelect.addEventListener("change", () => {
+    writeLocalDraft("worldkit.viewport-aspect-ratio", aspectSelect.value);
+    syncViewportAspect();
+  });
+  new ResizeObserver(syncViewportAspect).observe(viewportStage);
+  syncViewportAspect();
+}
+
+installViewerChrome();
 
 function escapeHtml(value: string): string {
   return value
@@ -405,20 +543,21 @@ function installViewerSceneSelector(bootstrap: ViewerBootstrapV1): void {
 }
 
 const FRIENDLY_MOTION_PARAMETERS: Readonly<Record<string, readonly [string, string]>> = {
-  walkSpeedMetersPerSecond: ["普通移动速度", "不按 Shift 时的移动速度"],
-  runSpeedMetersPerSecond: ["加速移动速度", "按住 Shift 时的移动速度"],
+  walkSpeedMetersPerSecond: ["行走速度", "不按 Shift 时的移动速度"],
+  runSpeedMetersPerSecond: ["奔跑速度", "按住 Shift 时的移动速度"],
   forwardSpeedMetersPerSecond: ["最高前进速度", "持续向前时可以达到的速度"],
   reverseSpeedMetersPerSecond: ["最高倒退速度", "持续倒退时可以达到的速度"],
   maximumSpeedMetersPerSecond: ["最高速度", "限制主体不会无限加速"],
   minimumForwardSpeedMetersPerSecond: ["最低滑翔速度", "低于它时会更容易下坠"],
   maximumForwardSpeedMetersPerSecond: ["最高滑翔速度", "滑翔过程的速度上限"],
   jumpSpeedMetersPerSecond: ["跳跃力度", "数值越高，起跳高度越高"],
-  accelerationMetersPerSecondSquared: ["起步灵敏度", "数值越高，达到目标速度越快"],
+  accelerationMetersPerSecondSquared: ["加速度", "数值越高，达到目标速度越快"],
   driveAccelerationMetersPerSecondSquared: ["推进力度", "数值越高，滑行起步越快"],
   glideAccelerationMetersPerSecondSquared: ["滑翔加速", "向前滑翔时累积速度的快慢"],
-  decelerationMetersPerSecondSquared: ["松手减速", "松开方向键后停下来的快慢"],
+  decelerationMetersPerSecondSquared: ["停止减速度", "松开方向键后停下来的快慢"],
   brakeMetersPerSecondSquared: ["制动力度", "按 Ctrl 或当前主体的制动键时停下来的快慢"],
   turnRateRadiansPerSecond: ["转向速度", "数值越高，转弯越灵敏"],
+  moveResponseExponent: ["移动输入曲线", "数值越高，斜向或小幅输入越柔和，满输入仍保持最高速度"],
   lowSpeedTurnRateRadiansPerSecond: ["低速转向", "慢速时方向盘的灵敏度"],
   highSpeedTurnRateRadiansPerSecond: ["高速转向", "高速时方向盘的灵敏度"],
   steeringResponsePerSecond: ["方向输入渐变", "数值越低，按下 A/D 后方向越慢打满"],
@@ -484,22 +623,10 @@ const FRIENDLY_CAMERA_PROFILES: Readonly<Record<string, readonly [string, string
 };
 
 const CAMERA_CONSOLE_PROFILE_REFS = [
-  "worldkit://camera-profile/first-person.standard@1",
   "worldkit://camera-profile/orbit.medium@1",
 ] as const;
 const CAMERA_CONSOLE_DEFAULT_PROFILE_REF =
   "worldkit://camera-profile/orbit.medium@1" as const;
-const FIRST_PERSON_UNSUPPORTED_CAMERA_TUNING_NAMES = new Set<string>([
-  "distanceMeters",
-  "shoulderOffsetMeters",
-  "collisionRadiusMeters",
-  "collisionRetractionMetersPerSecond",
-  "collisionRecoveryMetersPerSecond",
-  "lookAheadSeconds",
-  "accelerationLookAheadSecondsSquared",
-  "horizontalDeadZoneRatio",
-  "verticalDeadZoneRatio",
-]);
 
 function cameraParameterUnit(parameterName: CameraTuningParameterNameV1): string {
   if (parameterName === "speedFovDegreesPerMeterPerSecond") return "deg/(m/s)";
@@ -637,22 +764,54 @@ function installTuningWorkbench(
   ];
   const closeButton = requiredElement<HTMLButtonElement>("#close-tuning-button");
   const saveStatus = requiredElement<HTMLSpanElement>("#tuning-save-status");
-  const showWorkbench = (): void => {
-    layer.hidden = false;
-    document.body.classList.add("tuning-open");
-  };
-  const hideWorkbench = (): void => {
-    layer.hidden = true;
-    document.body.classList.remove("tuning-open");
+  const runtimeVersion = requiredElement<HTMLElement>("#runtime-version");
+  runtimeVersion.textContent = `API v${api.version}`;
+  runtimeVersion.title = `WorldKit Browser API v${api.version}`;
+  void loadTrustedSourceCommitV1().then((sourceCommit) => {
+    runtimeVersion.textContent = `API v${api.version} · ${sourceCommit.slice(0, 7)}`;
+    runtimeVersion.title = `WorldKit Browser API v${api.version} · Build ${sourceCommit}`;
+  }).catch(() => {
+    // The protocol version remains useful when the trusted Host build id is unavailable.
+  });
+  const primaryOpenButton = requiredElement<HTMLButtonElement>("#open-tuning-button");
+  const setWorkbenchOpen = (open: boolean): void => {
+    layer.hidden = !open;
+    document.body.classList.toggle("tuning-open", open);
+    primaryOpenButton.setAttribute("aria-expanded", String(open));
   };
   openButtons.forEach((button) => {
     button.hidden = false;
-    button.addEventListener("click", showWorkbench);
+    button.addEventListener("click", () => {
+      setWorkbenchOpen(button === primaryOpenButton ? layer.hidden : true);
+    });
   });
-  closeButton.addEventListener("click", hideWorkbench);
+  closeButton.addEventListener("click", () => setWorkbenchOpen(false));
   window.addEventListener("keydown", (event) => {
-    if (event.code === "Escape" && !layer.hidden) hideWorkbench();
+    if (event.code === "Escape" && !layer.hidden) setWorkbenchOpen(false);
   });
+
+  const tabButtons = [
+    requiredElement<HTMLButtonElement>("#tuning-tab-movement"),
+    requiredElement<HTMLButtonElement>("#tuning-tab-camera"),
+  ];
+  const tabPanels = [
+    requiredElement<HTMLElement>("#tuning-panel-movement"),
+    requiredElement<HTMLElement>("#tuning-panel-camera"),
+  ];
+  const workbenchTitle = requiredElement<HTMLHeadingElement>("#tuning-title");
+  const selectTab = (selectedIndex: number): void => {
+    workbenchTitle.textContent = selectedIndex === 0 ? "移动手感" : "相机手感";
+    tabButtons.forEach((button, index) => {
+      button.setAttribute("aria-selected", String(index === selectedIndex));
+      button.tabIndex = index === selectedIndex ? 0 : -1;
+      tabPanels[index]!.hidden = index !== selectedIndex;
+    });
+  };
+  tabButtons.forEach((button, index) => {
+    button.addEventListener("click", () => selectTab(index));
+  });
+  selectTab(0);
+  setWorkbenchOpen(true);
 
   const subjectSelect = requiredElement<HTMLSelectElement>("#tuning-subject-select");
   subjectSelect.replaceChildren(...workbenchContext.definitions.map((definition) =>
@@ -732,7 +891,9 @@ function installTuningWorkbench(
   }));
 
   const motionSliderGrid = requiredElement<HTMLDivElement>("#tuning-motion-sliders");
-  const controlSliderGrid = requiredElement<HTMLDivElement>("#tuning-control-sliders");
+  const advancedMotionSliderGrid = requiredElement<HTMLDivElement>(
+    "#tuning-motion-advanced-sliders",
+  );
   const cameraCards = requiredElement<HTMLDivElement>("#tuning-camera-cards");
   const cameraBasic = requiredElement<HTMLDivElement>("#tuning-camera-basic > div");
   const cameraExpert = requiredElement<HTMLDivElement>("#tuning-camera-expert > div");
@@ -752,16 +913,43 @@ function installTuningWorkbench(
     CAMERA_CONSOLE_PROFILE_REFS.includes(
       resourceRef as typeof CAMERA_CONSOLE_PROFILE_REFS[number],
     );
+  const recenterCameraParameterNames = new Set<CameraTuningParameterNameV1>([
+    "recenterDelaySeconds",
+    "recenterDurationSeconds",
+    "recenterMinimumSpeedMetersPerSecond",
+  ]);
+  const isCameraParameterEffective = (
+    profile: CompatibleProfileSummaryV1,
+    name: string,
+  ): boolean => {
+    if (
+      name === "targetHeightMeters" &&
+      workbenchContext.definition.resourceRef ===
+        "worldkit://subject-definition/humanoid.g-bot@2"
+    ) return false;
+    if (
+      name === "minimumHeadingSpeedMetersPerSecond" &&
+      profile.headingSource !== "target-velocity"
+    ) return false;
+    if (
+      name === "velocityHeadingDampingPerSecond" &&
+      profile.headingSource === "view"
+    ) return false;
+    if (
+      recenterCameraParameterNames.has(name as CameraTuningParameterNameV1) &&
+      profile.recenterMode === "off"
+    ) return false;
+    return true;
+  };
   const sanitizeCameraTuning = (
     profile: CompatibleProfileSummaryV1,
     values: Readonly<Record<string, number>>,
   ): CameraTuningV1 => Object.fromEntries(
     Object.entries(values).filter(([name, value]) => {
       const range = profile.authoringRanges?.[name];
-      return range !== undefined && Number.isFinite(value) &&
-        value >= range.minimum && value <= range.maximum &&
-        (profile.baseMode !== "first-person" ||
-          !FIRST_PERSON_UNSUPPORTED_CAMERA_TUNING_NAMES.has(name));
+      return isCameraParameterEffective(profile, name) &&
+        range !== undefined && Number.isFinite(value) &&
+        value >= range.minimum && value <= range.maximum;
     }),
   ) as CameraTuningV1;
 
@@ -772,16 +960,28 @@ function installTuningWorkbench(
       (entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]),
     ),
   );
+  const hiddenMotionParameterNames = workbenchContext.definition.resourceRef ===
+      "worldkit://subject-definition/humanoid.g-bot@2"
+    ? new Set(["turnRateRadiansPerSecond"])
+    : new Set<string>();
+  const editableMotionParameters = (
+    parameters: Readonly<Record<string, number | boolean>> | undefined,
+  ): Record<string, number | boolean> => Object.fromEntries(
+    Object.entries(parameters ?? {}).filter(
+      ([name]) => !hiddenMotionParameterNames.has(name),
+    ),
+  );
+  for (const name of hiddenMotionParameterNames) {
+    delete workbenchContext.parameterDraft[name];
+  }
   const controlBaseParameters = numericParameters(controlProfile?.parameters);
   let controlTuning: ControlTuningV1 = { ...controlBaseParameters };
   const cameraTuningByProfileRef: Record<string, Record<string, number>> = Object.fromEntries(
     cameraConsoleRows.map((profile) => [profile.resourceRef, {}]),
   );
-  let cameraPreference = workbenchContext.initialCameraPreference === "first-person"
-    ? CAMERA_CONSOLE_PROFILE_REFS[0]
-    : isConsoleCameraProfileRef(workbenchContext.initialCameraPreference)
-      ? workbenchContext.initialCameraPreference
-      : CAMERA_CONSOLE_DEFAULT_PROFILE_REF;
+  let cameraPreference = isConsoleCameraProfileRef(workbenchContext.initialCameraPreference)
+    ? workbenchContext.initialCameraPreference
+    : CAMERA_CONSOLE_DEFAULT_PROFILE_REF;
   if (!isConsoleCameraProfileRef(cameraPreference)) {
     cameraPreference = CAMERA_CONSOLE_DEFAULT_PROFILE_REF;
   }
@@ -858,6 +1058,7 @@ function installTuningWorkbench(
     )) {
       compactCameraSelect.value = cameraPreference;
     }
+    syncContextCameraButtons(cameraPreference);
   };
   const draftCreatedAtIso = new Date().toISOString();
   let draftIdentity = {
@@ -872,7 +1073,10 @@ function installTuningWorkbench(
     for (const name of Object.keys(workbenchContext.parameterDraft)) {
       delete workbenchContext.parameterDraft[name];
     }
-    Object.assign(workbenchContext.parameterDraft, selectedControlFeelProfile()?.parameters ?? {});
+    Object.assign(
+      workbenchContext.parameterDraft,
+      editableMotionParameters(selectedControlFeelProfile()?.parameters),
+    );
     controlTuning = { ...controlBaseParameters };
     for (const profile of cameraConsoleRows) {
       cameraTuningByProfileRef[profile.resourceRef] = {};
@@ -891,7 +1095,7 @@ function installTuningWorkbench(
       }
       Object.assign(
         workbenchContext.parameterDraft,
-        selectedControlFeelProfile()?.parameters ?? {},
+        editableMotionParameters(selectedControlFeelProfile()?.parameters),
       );
     }
     if (workbenchContext.motionProfiles.some(
@@ -907,7 +1111,10 @@ function installTuningWorkbench(
     const controlFeelValues = draft.controlFeelOverridesByProfileRef[
       selectedControlFeelProfileRef
     ]?.values ?? {};
-    Object.assign(workbenchContext.parameterDraft, controlFeelValues);
+    Object.assign(
+      workbenchContext.parameterDraft,
+      editableMotionParameters(controlFeelValues),
+    );
     const controlValues = draft.controlOverridesByProfileRef[controlProfile?.resourceRef ?? ""]?.values ?? {};
     controlTuning = { ...controlBaseParameters, ...controlValues };
     for (const profile of cameraConsoleRows) {
@@ -1093,9 +1300,36 @@ function installTuningWorkbench(
     const activeControlFeelProfile = selectedControlFeelProfile();
     if (activeControlFeelProfile?.safetyLimits === undefined) {
       motionSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的运动参数。</p>';
+      advancedMotionSliderGrid.replaceChildren();
       return;
     }
-    motionSliderGrid.replaceChildren(...Object.entries(activeControlFeelProfile.safetyLimits).flatMap(([name, safetyLimit]) => {
+    const parameterEntries = Object.entries(activeControlFeelProfile.safetyLimits)
+      .filter(([name]) => !hiddenMotionParameterNames.has(name));
+    const coreParameterNames = [
+      "walkSpeedMetersPerSecond",
+      "runSpeedMetersPerSecond",
+      "accelerationMetersPerSecondSquared",
+      "decelerationMetersPerSecondSquared",
+      "turnRateRadiansPerSecond",
+      "jumpSpeedMetersPerSecond",
+    ];
+    const coreEntries = coreParameterNames.flatMap((name) => {
+      const entry = parameterEntries.find(([candidate]) => candidate === name);
+      return entry === undefined ? [] : [entry];
+    });
+    const advancedEntries = parameterEntries.filter(
+      ([name]) => !coreParameterNames.includes(name),
+    );
+    const unitForParameter = (name: string): string => {
+      if (name.endsWith("MetersPerSecondSquared")) return "m/s²";
+      if (name.endsWith("MetersPerSecond")) return "m/s";
+      if (name.endsWith("RadiansPerSecond")) return "rad/s";
+      if (name.endsWith("Seconds")) return "s";
+      return "";
+    };
+    const createSliders = (
+      entries: typeof parameterEntries,
+    ): HTMLLabelElement[] => entries.flatMap(([name, safetyLimit]) => {
       const value = workbenchContext.parameterDraft[name];
       const range = activeControlFeelProfile.authoringRanges?.[name] ?? {
         ...safetyLimit,
@@ -1105,7 +1339,7 @@ function installTuningWorkbench(
       const [labelText, helpText] = FRIENDLY_MOTION_PARAMETERS[name] ?? [name, "安全范围内的运动参数"];
       const label = document.createElement("label");
       label.className = "friendly-slider";
-      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · 仅草稿</strong><small>${escapeHtml(helpText)}；运动手感由锁定的 Feel 配置驱动，数值袋不再即时下发</small></span>`;
+      label.innerHTML = `<span><strong>${escapeHtml(labelText)}</strong><small>${escapeHtml(helpText)}；候选值导出并重新编译后生效</small></span>`;
       const control = document.createElement("div");
       const input = document.createElement("input");
       input.type = "range";
@@ -1121,54 +1355,23 @@ function installTuningWorkbench(
         output.textContent = nextValue.toFixed(2);
         writeLocalDraft(workbenchContext.motionDraftStorageKey, JSON.stringify(workbenchContext.parameterDraft));
         persistWorkingDraft();
-        saveStatus.textContent = `“${labelText}”只保存为草稿；发布前需 promote 为新的 Feel Profile`;
+        syncContextPreviewMode("draft");
+        saveStatus.textContent = `“${labelText}”候选值已保存；导出并重新编译后生效`;
       });
       control.append(input, output);
+      const unit = unitForParameter(name);
+      if (unit !== "") {
+        control.classList.add("has-unit");
+        const unitLabel = document.createElement("span");
+        unitLabel.className = "friendly-unit";
+        unitLabel.textContent = unit;
+        control.append(unitLabel);
+      }
       label.append(control);
       return [label];
-    }));
-  };
-
-  const renderControlSliders = (): void => {
-    if (controlProfile?.safetyLimits === undefined) {
-      controlSliderGrid.innerHTML = '<p class="friendly-empty">当前主体没有开放可调的输入手感参数。</p>';
-      return;
-    }
-    const copy: Readonly<Record<string, readonly [string, string]>> = {
-      moveDeadzoneRatio: ["移动输入死区", "忽略很小的摇杆偏移；键盘操作通常感觉不明显，手柄可防止角色自己慢慢移动"],
-    };
-    controlSliderGrid.replaceChildren(...["moveDeadzoneRatio"].flatMap((name) => {
-      const value = controlTuning[name as keyof ControlTuningV1];
-      const safetyLimit = controlProfile.safetyLimits?.[name];
-      const range = controlProfile.authoringRanges?.[name] ?? (safetyLimit === undefined ? undefined : {
-        ...safetyLimit,
-        step: Math.max(0.01, (safetyLimit.maximum - safetyLimit.minimum) / 100),
-      });
-      if (typeof value !== "number" || range === undefined) return [];
-      const [labelText, helpText] = copy[name] ?? [name, "输入曲线参数"];
-      const label = document.createElement("label");
-      label.className = "friendly-slider";
-      label.innerHTML = `<span><strong>${escapeHtml(labelText)} · 仅草稿</strong><small>${escapeHtml(helpText)}；发布前需 promote 为新的 Control Profile</small></span>`;
-      const control = document.createElement("div");
-      const input = document.createElement("input");
-      input.type = "range";
-      input.min = String(range.minimum);
-      input.max = String(range.maximum);
-      input.step = String(range.step);
-      input.value = String(value);
-      const output = document.createElement("output");
-      output.textContent = value.toFixed(2);
-      input.addEventListener("input", () => {
-        const nextValue = Number(input.value);
-        controlTuning = { ...controlTuning, [name]: nextValue };
-        output.textContent = nextValue.toFixed(2);
-        persistWorkingDraft();
-        saveStatus.textContent = `“${labelText}”只保存为草稿；当前预览继续使用锁定的 Control Profile`;
-      });
-      control.append(input, output);
-      label.append(control);
-      return [label];
-    }));
+    });
+    motionSliderGrid.replaceChildren(...createSliders(coreEntries));
+    advancedMotionSliderGrid.replaceChildren(...createSliders(advancedEntries));
   };
 
   const activeTunableCameraProfile = (): CompatibleProfileSummaryV1 | undefined => {
@@ -1327,8 +1530,8 @@ function installTuningWorkbench(
       fallback: number;
     }> = [
       { key: "distanceMeters", label: "跟随距离", help: "镜头离主体有多远", step: 0.1, fallback: Number(base.distanceMeters ?? 5) },
-      { key: "targetHeightMeters", label: "观察高度", help: "没有专用相机挂点时，镜头对准主体的高度；有挂点时由资产位置决定", step: 0.05, fallback: Number(base.targetHeightMeters ?? 1.2) },
-      { key: "pitchRadians", label: "镜头俯仰角", help: "调整镜头从上方或下方观察的角度", step: 0.01, fallback: Number(base.pitchRadians ?? 0.25) },
+      { key: "targetHeightMeters", label: "环绕焦点高度", help: "镜头围绕主体上方这个焦点旋转，不是相机自身高度；主体有 Camera Target 挂点时改由挂点决定。", step: 0.05, fallback: Number(base.targetHeightMeters ?? 1.2) },
+      { key: "pitchRadians", label: "初始俯仰角", help: "决定镜头回正后的基础俯视或仰视角度；手动拖动仍可在此基础上自由环绕。", step: 0.01, fallback: Number(base.pitchRadians ?? 0.25) },
       { key: "positionDampingPerSecond", label: "整体位置阻尼", help: "未单独覆盖水平或垂直阻尼时，同时控制两个轴；轴向 Preview 值优先", step: 0.1, fallback: Number(base.positionDampingPerSecond ?? 12) },
       { key: "horizontalPositionDampingPerSecond", label: "水平跟随速度", help: "调低后主体会在画面左右/前后先行，调高后镜头更快追上", step: 0.1, fallback: Number(base.horizontalPositionDampingPerSecond ?? base.positionDampingPerSecond ?? 12) },
       { key: "verticalPositionDampingPerSecond", label: "垂直跟随速度", help: "单独控制跳跃、坡面和水面起伏时镜头上下跟随的快慢", step: 0.1, fallback: Number(base.verticalPositionDampingPerSecond ?? base.positionDampingPerSecond ?? 12) },
@@ -1336,8 +1539,8 @@ function installTuningWorkbench(
       { key: "yawDampingPerSecond", label: "水平旋转跟随", help: "越高越快跟上主体转向，越低越有电影感", step: 0.1, fallback: Number(base.yawDampingPerSecond ?? base.rotationDampingPerSecond ?? 14) },
       { key: "pitchDampingPerSecond", label: "俯仰旋转跟随", help: "单独控制镜头上下抬落的平滑速度", step: 0.1, fallback: Number(base.pitchDampingPerSecond ?? base.rotationDampingPerSecond ?? 14) },
       { key: "rotationDampingPerSecond", label: "整体旋转阻尼", help: "未单独覆盖偏航或俯仰阻尼时，同时控制两个轴；轴向 Preview 值优先", step: 0.1, fallback: Number(base.rotationDampingPerSecond ?? 14) },
-      { key: "lookSensitivityXRatio", label: "水平拖动灵敏度", help: "鼠标左右拖动的响应倍率", step: 0.05, fallback: Number(base.lookSensitivityXRatio ?? 1) },
-      { key: "lookSensitivityYRatio", label: "垂直拖动灵敏度", help: "鼠标上下拖动的响应倍率", step: 0.05, fallback: Number(base.lookSensitivityYRatio ?? 1) },
+      { key: "lookSensitivityXRatio", label: "水平拖镜灵敏度", help: "鼠标水平拖动同样距离时，镜头左右旋转的倍率。", step: 0.05, fallback: Number(base.lookSensitivityXRatio ?? 1) },
+      { key: "lookSensitivityYRatio", label: "垂直拖镜灵敏度", help: "鼠标垂直拖动同样距离时，镜头上下旋转的倍率。", step: 0.05, fallback: Number(base.lookSensitivityYRatio ?? 1) },
       { key: "collisionRadiusMeters", label: "Probe Size（球形 Sweep 半径）", help: "0 使用射线；正值使用 Havok 球形 Sweep。默认 0.12 米（12 cm），数值越大越早收臂。", step: 0.01, fallback: Number(base.collisionRadiusMeters ?? 0.12) },
       { key: "collisionRetractionMetersPerSecond", label: "遇墙缩近速度", help: "遮挡出现时镜头向主体收回的速度", step: 0.25, fallback: Number(base.collisionRetractionMetersPerSecond ?? 30) },
       { key: "collisionRecoveryMetersPerSecond", label: "离墙恢复速度", help: "遮挡消失后镜头慢慢回到原距离的速度", step: 0.25, fallback: Number(base.collisionRecoveryMetersPerSecond ?? 5) },
@@ -1345,11 +1548,11 @@ function installTuningWorkbench(
       { key: "accelerationLookAheadSecondsSquared", label: "加速预判", help: "急加速和急转时根据加速度额外预看；设为 0 关闭", step: 0.01, fallback: Number(base.accelerationLookAheadSecondsSquared ?? 0) },
       { key: "minimumHeadingSpeedMetersPerSecond", label: "速度镜头起效门槛", help: "低于该速度时保持最后稳定方向，避免停车或低速抖动", step: 0.1, fallback: Number(base.minimumHeadingSpeedMetersPerSecond ?? 0.5) },
       { key: "velocityHeadingDampingPerSecond", label: "追逐方向跟随速度", help: "速度方向改变后镜头旋转跟上的快慢", step: 0.25, fallback: Number(base.velocityHeadingDampingPerSecond ?? 10) },
-      { key: "transitionSeconds", label: "镜头切换时间", help: "切换预制时连续过渡所用的时间", step: 0.05, fallback: Number(base.transitionSeconds ?? 0.35) },
-      { key: "baseFovDegrees", label: "视野宽度", help: "越大看到的范围越广", step: 0.5, fallback: Number(base.baseFovDegrees ?? 60) },
+      { key: "transitionSeconds", label: "镜头配置过渡时长", help: "仅在 Runtime 切换 Camera Profile 或上下文镜头时控制过渡时长，不影响手动自由环绕。", step: 0.05, fallback: Number(base.transitionSeconds ?? 0.35) },
+      { key: "baseFovDegrees", label: "视野角（FOV）", help: "基础垂直视野角。数值越大，画面容纳范围越广，但边缘透视也会更强。", step: 0.5, fallback: Number(base.baseFovDegrees ?? 60) },
       { key: "speedFovDegreesPerMeterPerSecond", label: "加速时视野变宽", help: "速度越快画面越有冲刺感；设为 0 完全关闭", step: 0.05, fallback: Number(base.speedFovDegreesPerMeterPerSecond ?? 0) },
       { key: "maximumSpeedFovDegrees", label: "冲刺视野上限", help: "限制高速时最多额外增加多少视野", step: 0.5, fallback: Number(base.maximumSpeedFovDegrees ?? 0) },
-      { key: "fovDampingPerSecond", label: "视野变化平滑", help: "速度变化时视野宽度跟上的快慢", step: 0.25, fallback: Number(base.fovDampingPerSecond ?? 8) },
+      { key: "fovDampingPerSecond", label: "动态 FOV 响应速度", help: "只控制速度驱动的动态 FOV 追上目标值的快慢；越高响应越快，设为 0 时保持当前 FOV。", step: 0.25, fallback: Number(base.fovDampingPerSecond ?? 8) },
       { key: "horizontalDeadZoneRatio", label: "画面水平容忍区", help: "主体在画面中心附近移动时允许镜头暂不跟随；设为 0 关闭", step: 0.01, fallback: Number(base.horizontalDeadZoneRatio ?? 0) },
       { key: "verticalDeadZoneRatio", label: "画面垂直容忍区", help: "跳跃或起伏在小范围内时允许镜头保持稳定", step: 0.01, fallback: Number(base.verticalDeadZoneRatio ?? 0) },
       { key: "recenterDelaySeconds", label: "自动回正等待", help: "停止手动拖动后等待多久才开始自动回正", step: 0.05, fallback: Number(base.recenterDelaySeconds ?? 1.2) },
@@ -1367,28 +1570,64 @@ function installTuningWorkbench(
       "horizontalDeadZoneRatio",
       "verticalDeadZoneRatio",
     ]);
-    const groupForSetting = (key: CameraTuningParameterNameV1): "camera-view" | "follow-arm" | "collision" | "lag" =>
-      key.startsWith("collision") ? "collision"
-        : ["distanceMeters", "rotationDampingPerSecond", "yawDampingPerSecond", "pitchDampingPerSecond", "minimumHeadingSpeedMetersPerSecond", "velocityHeadingDampingPerSecond", "recenterDelaySeconds", "recenterDurationSeconds", "recenterMinimumSpeedMetersPerSecond"].includes(key) ? "follow-arm"
+    const primaryCameraKeys = new Set<CameraTuningParameterNameV1>([
+      "distanceMeters",
+      "targetHeightMeters",
+      "pitchRadians",
+      "baseFovDegrees",
+      "lookSensitivityXRatio",
+      "lookSensitivityYRatio",
+    ]);
+    const cameraResponseKeys = new Set<CameraTuningParameterNameV1>([
+      "transitionSeconds",
+      "speedFovDegreesPerMeterPerSecond",
+      "maximumSpeedFovDegrees",
+      "fovDampingPerSecond",
+    ]);
+    const groupForSetting = (key: CameraTuningParameterNameV1): "camera-view" | "camera-response" | "follow-arm" | "collision" | "lag" =>
+      primaryCameraKeys.has(key) ? "camera-view"
+        : cameraResponseKeys.has(key) ? "camera-response"
+          : key.startsWith("collision") ? "collision"
+        : ["rotationDampingPerSecond", "yawDampingPerSecond", "pitchDampingPerSecond", "minimumHeadingSpeedMetersPerSecond", "velocityHeadingDampingPerSecond", "recenterDelaySeconds", "recenterDurationSeconds", "recenterMinimumSpeedMetersPerSecond"].includes(key) ? "follow-arm"
           : ["positionDampingPerSecond", "horizontalPositionDampingPerSecond", "verticalPositionDampingPerSecond", "maximumPositionLagMeters", "lookAheadSeconds", "accelerationLookAheadSecondsSquared", "horizontalDeadZoneRatio", "verticalDeadZoneRatio", "teleportSnapDistanceMeters"].includes(key) ? "lag"
             : "camera-view";
+    const camera = cameraSnapshotForDisplay();
+    const tracking = camera?.mode === "tracking" ? camera : undefined;
     const eligibleSettings = settings.filter((setting) =>
       profile?.authoringRanges?.[setting.key] !== undefined &&
+      isCameraParameterEffective(profile, setting.key) &&
+      (setting.key !== "targetHeightMeters" || tracking?.selectedTargetSocketId === undefined) &&
       (profile.baseMode !== "first-person" || !firstPersonUnsupported.has(setting.key))
     );
-    const createSlider = (setting: typeof settings[number]): HTMLLabelElement => {
+    const createSlider = (setting: typeof settings[number]): HTMLElement => {
       const range = profile?.authoringRanges?.[setting.key];
       if (range === undefined) throw new Error("Expected authoring range for rendered camera setting.");
       const safetyLimit = profile?.safetyLimits?.[setting.key] ??
         CAMERA_TUNING_SAFETY_LIMITS_V1[setting.key];
       const value = cameraTuning[setting.key] ?? setting.fallback;
-      const label = document.createElement("label");
+      const label = document.createElement("div");
       label.className = "friendly-slider";
       label.dataset.cameraControl = setting.key;
       const summary = document.createElement("span");
+      const heading = document.createElement("span");
+      heading.className = "friendly-slider-heading";
       const title = document.createElement("strong");
       title.textContent = setting.label;
       const help = document.createElement("small");
+      help.className = "parameter-help-text";
+      help.id = `camera-parameter-help-${setting.key}`;
+      help.hidden = true;
+      const helpButton = document.createElement("button");
+      helpButton.type = "button";
+      helpButton.className = "parameter-help-button";
+      helpButton.textContent = "!";
+      helpButton.setAttribute("aria-label", `查看“${setting.label}”参数说明`);
+      helpButton.setAttribute("aria-controls", help.id);
+      helpButton.setAttribute("aria-expanded", "false");
+      helpButton.addEventListener("click", () => {
+        help.hidden = !help.hidden;
+        helpButton.setAttribute("aria-expanded", String(!help.hidden));
+      });
       const unit = cameraParameterUnit(setting.key);
       const renderProvenance = (): void => {
         const camera = cameraSnapshotForDisplay();
@@ -1413,10 +1652,12 @@ function installTuningWorkbench(
         help.textContent = `${setting.help} · 单位：${unit} · Authoring 范围 ${range.minimum}–${range.maximum}（步长 ${range.step}）· Safety 范围 ${safetyLimit.minimum}–${safetyLimit.maximum} · 锁定 Profile 默认 ${typeof profileDefault === "number" ? profileDefault : "未声明"} · 生效条件：${mode} / ${heading} / Socket ${socket} · 最终来源：${finalSource}`;
       };
       renderProvenance();
-      summary.append(title, help);
+      heading.append(title, helpButton);
+      summary.append(heading);
       const control = document.createElement("div");
       const input = document.createElement("input");
       input.type = "range";
+      input.setAttribute("aria-label", setting.label);
       input.min = String(range.minimum);
       input.max = String(range.maximum);
       input.step = String(range.step);
@@ -1433,19 +1674,24 @@ function installTuningWorkbench(
         applyCameraTuning();
         renderProvenance();
         persistWorkingDraft();
+        syncContextPreviewMode("draft");
         renderCameraDiagnostics();
         saveStatus.textContent = `“${setting.label}”已应用；这组数值只属于当前镜头`;
       });
       control.append(input, output);
-      label.append(summary, control);
+      label.append(summary, control, help);
       return label;
     };
     const appendGroup = (
       target: HTMLElement,
-      group: "camera-view" | "follow-arm" | "collision" | "lag",
+      group: "camera-view" | "camera-response" | "follow-arm" | "collision" | "lag",
       title: string,
+      showHeading = true,
     ): void => {
       const controls = eligibleSettings.filter((setting) => groupForSetting(setting.key) === group)
+        .sort((left, right) => group === "camera-view"
+          ? [...primaryCameraKeys].indexOf(left.key) - [...primaryCameraKeys].indexOf(right.key)
+          : 0)
         .map(createSlider);
       if (controls.length === 0) return;
       const section = document.createElement("section");
@@ -1455,13 +1701,14 @@ function installTuningWorkbench(
       const grid = document.createElement("div");
       grid.className = "friendly-slider-grid camera-tuning-grid";
       grid.append(...controls);
-      section.append(heading, grid);
+      section.append(...(showHeading ? [heading, grid] : [grid]));
       target.append(section);
     };
     cameraBasic.replaceChildren();
     cameraExpert.replaceChildren();
-    appendGroup(cameraBasic, "camera-view", "Camera View");
+    appendGroup(cameraBasic, "camera-view", "取景与操控", false);
     if (profile?.baseMode !== "first-person") {
+      appendGroup(cameraExpert, "camera-response", "Camera Response");
       appendGroup(cameraExpert, "follow-arm", "Follow Arm");
       appendGroup(cameraExpert, "collision", "Collision");
       appendGroup(cameraExpert, "lag", "Lag");
@@ -1495,6 +1742,7 @@ function installTuningWorkbench(
           refreshCameraCards();
           renderCameraSliders();
           persistWorkingDraft();
+          syncContextPreviewMode("draft");
           saveStatus.textContent = `已应用“${row.displayName}”，现在可以在左侧拖动体验`;
         } catch {
           saveStatus.textContent = `“${row.displayName}”未能应用，原镜头已保留`;
@@ -1545,6 +1793,7 @@ function installTuningWorkbench(
       saveStatus.textContent = "运动算法未能切换，已保留上一组锁定配置";
       return;
     }
+    syncContextPreviewMode("draft");
     saveStatus.textContent = "已选择运动算法；运行时将在下一个固定 tick 提交";
   });
 
@@ -1568,7 +1817,6 @@ function installTuningWorkbench(
   });
   renderMotionSelect();
   renderMotionSliders();
-  renderControlSliders();
 
   const versionNameInput = requiredElement<HTMLInputElement>("#tuning-version-name");
   const versionNotesInput = requiredElement<HTMLTextAreaElement>("#tuning-version-notes");
@@ -1580,14 +1828,107 @@ function installTuningWorkbench(
     renderCameraSliders();
     renderMotionSelect();
     renderMotionSliders();
-    renderControlSliders();
     const compactCameraSelect = document.querySelector<HTMLSelectElement>("#camera-preference-select");
     if (compactCameraSelect !== null && [...compactCameraSelect.options].some(
       (option) => option.value === cameraPreference,
     )) {
       compactCameraSelect.value = cameraPreference;
     }
+    syncContextCameraButtons(cameraPreference);
   };
+
+  const createRegistryBaselineDraft = (): SubjectPresetWorkingDraftV1 | undefined => {
+    if (
+      localBaseline === undefined ||
+      defaultMotion === undefined ||
+      controlFeelProfile === undefined ||
+      controlProfile === undefined
+    ) {
+      return undefined;
+    }
+    const now = new Date().toISOString();
+    return createSubjectPresetWorkbenchDraftV1({
+      baseline: localBaseline,
+      draftIdentity: {
+        draftId: `baseline-preview-${globalThis.crypto.randomUUID()}`,
+        createdAtIso: now,
+        updatedAtIso: now,
+      },
+      selectedMotionProfileRef: defaultMotion.resourceRef,
+      selectedControlFeelProfileRef: controlFeelProfile.resourceRef,
+      selectedCameraPreferenceRef: cameraConsoleRows.some(
+          (profile) => profile.resourceRef === localBaseline.defaultCameraProfileRef,
+        )
+        ? localBaseline.defaultCameraProfileRef
+        : CAMERA_CONSOLE_DEFAULT_PROFILE_REF,
+      controlFeel: {
+        baseParameters: controlFeelProfile.parameters ?? {},
+        currentValues: numericParameters(controlFeelProfile.parameters),
+        ...(controlFeelProfile.runtimeParameterNames === undefined
+          ? {}
+          : { runtimeParameterNames: controlFeelProfile.runtimeParameterNames }),
+      },
+      control: {
+        baseParameters: controlProfile.parameters ?? {},
+        currentValues: numericParameters(controlProfile.parameters),
+        ...(controlProfile.runtimeParameterNames === undefined
+          ? {}
+          : { runtimeParameterNames: controlProfile.runtimeParameterNames }),
+      },
+      cameraByProfileRef: Object.fromEntries(cameraConsoleRows.map((profile) => [
+        profile.resourceRef,
+        {
+          baseParameters: profile.parameters ?? {},
+          currentValues: numericParameters(profile.parameters),
+        },
+      ])),
+    });
+  };
+
+  const setPreviewMode = async (mode: "baseline" | "draft"): Promise<void> => {
+    let previewDraft: SubjectPresetWorkingDraftV1 | undefined;
+    try {
+      previewDraft = mode === "baseline"
+        ? createRegistryBaselineDraft()
+        : createCurrentWorkingDraft();
+    } catch {
+      saveStatus.textContent = "当前 Registry 基线无法转换为预览草稿";
+      return;
+    }
+    if (previewDraft === undefined) {
+      saveStatus.textContent = "当前主体缺少完整 Registry 基线，无法切换预览";
+      return;
+    }
+    if (!await applyWorkingDraftAtomically(previewDraft, {
+      preserveCameraForGoldenLock: true,
+    })) {
+      return;
+    }
+    syncContextPreviewMode(mode);
+    saveStatus.textContent = mode === "baseline"
+      ? "正在预览 Registry Baseline；草稿仍保存在本机"
+      : "已恢复本机 Draft Preview";
+  };
+
+  requiredElement<HTMLButtonElement>("#preview-baseline-button")
+    .addEventListener("click", () => void setPreviewMode("baseline"));
+  requiredElement<HTMLButtonElement>("#preview-draft-button")
+    .addEventListener("click", () => void setPreviewMode("draft"));
+  requiredElement<HTMLButtonElement>("#tuning-reset-draft-button")
+    .addEventListener("click", () => {
+      void (async () => {
+        resetTuningStateToRegistry();
+        const draft = persistWorkingDraft();
+        refreshWorkbenchAfterRestore();
+        if (draft !== undefined) {
+          await applyWorkingDraftAtomically(draft, {
+            preserveCameraForGoldenLock: true,
+          });
+        }
+        syncContextPreviewMode("draft");
+        saveStatus.textContent = "草稿已恢复到 Registry Baseline";
+      })();
+    });
 
   const renderLocalVersions = (): void => {
     if (localRepository === undefined || localBaseline === undefined) {
@@ -1936,6 +2277,10 @@ async function installCapabilityAuthoringPanel(
   if (definitions.length === 0) return;
   const panel = requiredElement<HTMLDivElement>("#capability-card");
   panel.hidden = false;
+  if (viewerMode) {
+    requiredElement<HTMLElement>("#authoring-context-bar").hidden = false;
+    document.body.classList.add("authoring-ready");
+  }
   const packageSelect = requiredElement<HTMLSelectElement>("#subject-package-select");
   const cameraSelect = requiredElement<HTMLSelectElement>("#camera-preference-select");
   const context = requiredElement<HTMLDivElement>("#capability-context");
@@ -1971,7 +2316,7 @@ async function installCapabilityAuthoringPanel(
   packageSelect.replaceChildren(...authoringDefinitions.map((definition) => {
     const option = document.createElement("option");
     option.value = definition.resourceRef;
-    option.textContent = `${definition.displayName} · ${definition.authoringAvailability}`;
+    option.textContent = definition.displayName;
     option.selected = definition.resourceRef === activeDefinitionRef;
     return option;
   }));
@@ -1980,6 +2325,7 @@ async function installCapabilityAuthoringPanel(
     authoringDefinitions[0]!;
   packageSelect.value = definition.resourceRef;
   packageSelect.disabled = true;
+  packageSelect.title = "当前主体由 AuthoringSpec 固定；入口保留用于显示本次 3C 调试对象";
   const activeMotionProfile = builtInSubjectResourceRegistry.resolveMotionProfile(
     definition.defaultMotionProfileRef,
   );
@@ -2072,6 +2418,7 @@ async function installCapabilityAuthoringPanel(
       }
     }
   }
+  syncContextCameraButtons(cameraSelect.value);
   const camera = snapshot.view.camera;
   context.innerHTML = `
     <div><span>当前主体</span><code>${escapeHtml(subjectFriendlyName(definition))}</code></div>
@@ -2155,6 +2502,7 @@ async function installCapabilityAuthoringPanel(
     initialCameraPreference: cameraSelect.value,
     ...(hostOverlay === undefined ? {} : { hostOverlay }),
   });
+  syncContextPreviewMode("draft");
 
   cameraSelect.addEventListener("change", async () => {
     try {
@@ -2168,10 +2516,58 @@ async function installCapabilityAuthoringPanel(
       }
       writeLocalDraft("worldkit.camera-preference", cameraSelect.value);
       tuningWorkbench.setCameraPreferenceFromCompact(cameraSelect.value);
+      syncContextCameraButtons(cameraSelect.value);
+      syncContextPreviewMode("draft");
     } catch {
       harnessOutput.textContent = authoringActionFailure();
     }
   });
+  const selectCameraPreference = (resourceRef: string): void => {
+    if (![...cameraSelect.options].some((option) => option.value === resourceRef)) return;
+    cameraSelect.value = resourceRef;
+    cameraSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  requiredElement<HTMLButtonElement>("#camera-third-person-button")
+    .addEventListener("click", () => selectCameraPreference(CAMERA_CONSOLE_DEFAULT_PROFILE_REF));
+
+  const runQuickInput = async (
+    label: string,
+    steps: readonly { actions: readonly SemanticInputActionV1[]; ticks: number }[],
+  ): Promise<void> => {
+    const buttonStatus = requiredElement<HTMLSpanElement>("#tuning-save-status");
+    buttonStatus.textContent = `正在测试“${label}”…`;
+    try {
+      await api.runFixedInput(steps);
+      buttonStatus.textContent = `“${label}”测试完成`;
+    } catch {
+      buttonStatus.textContent = `“${label}”未能执行，世界状态已保留`;
+    }
+  };
+  requiredElement<HTMLButtonElement>("#quick-forward-button")
+    .addEventListener("click", () => void runQuickInput("前进", [
+      { actions: ["move-forward"], ticks: 24 },
+    ]));
+  requiredElement<HTMLButtonElement>("#quick-run-button")
+    .addEventListener("click", () => void runQuickInput("奔跑", [
+      { actions: ["move-forward", "run"], ticks: 30 },
+    ]));
+  requiredElement<HTMLButtonElement>("#quick-turn-button")
+    .addEventListener("click", () => void runQuickInput("转向", [
+      { actions: ["move-forward", "move-left"], ticks: 18 },
+    ]));
+  requiredElement<HTMLButtonElement>("#quick-jump-button")
+    .addEventListener("click", () => void runQuickInput("跳跃", [
+      { actions: ["jump"], ticks: 2 },
+    ]));
+  requiredElement<HTMLButtonElement>("#quick-recenter-button")
+    .addEventListener("click", () => {
+      try {
+        api.resetCameraView?.();
+        requiredElement<HTMLSpanElement>("#tuning-save-status").textContent = "镜头已回到主体后方";
+      } catch {
+        requiredElement<HTMLSpanElement>("#tuning-save-status").textContent = "镜头暂时无法回正";
+      }
+    });
   requiredElement<HTMLButtonElement>("#fallback-button").addEventListener("click", async () => {
     const fallback = motionProfiles.find((row) => row.role === "fallback");
     if (fallback === undefined) return;
@@ -2657,6 +3053,7 @@ const recordingWorkbench = runtimeRoute.mode === "viewer" && !isNil(recordingWor
     })
   : undefined;
 let recordingTimer: number | null = null;
+let viewportFeedbackTimer: number | undefined;
 
 async function resetPlaygroundWorld(): Promise<void> {
   if (canvasRecorder.state !== "idle") {
@@ -2740,7 +3137,8 @@ function selectFeature(featureId: string): void {
 }
 
 function updateHud(snapshot: WorldSnapshot): void {
-  requiredElement("#fps").textContent = String(snapshot.performance.fps || "—");
+  const fpsText = String(snapshot.performance.fps || "—");
+  requiredElement("#fps").textContent = fpsText;
   requiredElement("#tick").textContent = String(snapshot.tick);
   requiredElement("#controlled-entity-label").textContent = snapshot.player.entityId;
   requiredElement("#player-action").textContent = snapshot.player.action.toUpperCase();
@@ -2750,6 +3148,45 @@ function updateHud(snapshot: WorldSnapshot): void {
   const pause = requiredElement<HTMLButtonElement>("#pause-button");
   pause.textContent = snapshot.paused ? "▶" : "Ⅱ";
   pause.setAttribute("aria-label", snapshot.paused ? "继续模拟" : "暂停模拟");
+  if (viewerMode) {
+    requiredElement("#runtime-fps").textContent = fpsText;
+    try {
+      const runtimeSnapshot = (adapter as BabylonWorldAdapter).runtimeSnapshot();
+      const controlledEntityId = controlledEntityIdFromSnapshotV4(runtimeSnapshot);
+      const capabilityStates = Object.values(
+        runtimeSnapshot.world.subjectStatesByEntityId[controlledEntityId]?.capabilityStatesById ?? {},
+      );
+      const locomotionV2 = capabilityStates.find(
+        (state) => state.kind === "locomotion-capability-state-v2",
+      );
+      const activeLocomotionV2 = locomotionV2?.kind === "locomotion-capability-state-v2" &&
+          locomotionV2.locomotion.status === "active"
+        ? locomotionV2.locomotion
+        : undefined;
+      const camera = runtimeSnapshot.view.camera.mode === "tracking"
+        ? runtimeSnapshot.view.camera
+        : undefined;
+      const speedMetersPerSecond = activeLocomotionV2?.horizontalSpeedMetersPerSecond;
+      const gait = activeLocomotionV2?.gait;
+      const movementMedium = activeLocomotionV2?.movementMedium;
+      const supportMode = activeLocomotionV2?.supportMode ??
+        (snapshot.player.grounded ? "supported" : "unsupported");
+      requiredElement("#runtime-speed").textContent = speedMetersPerSecond === undefined
+        ? "—"
+        : `${speedMetersPerSecond.toFixed(1)} m/s`;
+      requiredElement("#runtime-gait").textContent = gait?.toUpperCase() ?? "IDLE";
+      requiredElement("#runtime-medium").textContent = movementMedium?.toUpperCase() ?? "GROUND";
+      requiredElement("#runtime-support").textContent = supportMode.toUpperCase();
+      requiredElement("#runtime-fov").textContent = camera?.finalFovDegrees === undefined
+        ? "—"
+        : `${camera.finalFovDegrees.toFixed(0)}°`;
+      requiredElement("#runtime-distance").textContent = camera?.effectiveArmLengthMeters === undefined
+        ? "—"
+        : `${camera.effectiveArmLengthMeters.toFixed(1)} m`;
+    } catch {
+      // The ordinary HUD remains authoritative if Runtime telemetry is unavailable.
+    }
+  }
 }
 
 const automationApi: PlaygroundAutomationApi = {
@@ -2840,16 +3277,28 @@ function downloadRecording(blob: Blob, extension: "mp4" | "webm"): string {
   return filename;
 }
 
-function showRecordingSaved(label: string, blob: Blob, durationMs: number, persisted = true): void {
+function showViewportFeedback(message: string, persist = false): void {
   const toast = requiredElement<HTMLDivElement>("#recording-toast");
-  const megabytes = blob.size / 1_000_000;
-  toast.textContent = persisted
-    ? `已加入页面录制清单 · ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${label}`
-    : `未保存到页面，已下载本地备份 · ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${label}`;
+  if (viewportFeedbackTimer !== undefined) {
+    window.clearTimeout(viewportFeedbackTimer);
+    viewportFeedbackTimer = undefined;
+  }
+  toast.textContent = message;
+  toast.title = message;
   toast.hidden = false;
-  window.setTimeout(() => {
-    toast.hidden = true;
-  }, 5_000);
+  if (!persist) {
+    viewportFeedbackTimer = window.setTimeout(() => {
+      toast.hidden = true;
+      viewportFeedbackTimer = undefined;
+    }, 5_000);
+  }
+}
+
+function showRecordingSaved(label: string, blob: Blob, durationMs: number, persisted = true): void {
+  const megabytes = blob.size / 1_000_000;
+  showViewportFeedback(persisted
+    ? `已加入页面录制清单 · ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${label}`
+    : `未保存到页面，已下载本地备份 · ${formatRecordingTime(durationMs)} · ${megabytes.toFixed(1)} MB · ${label}`);
 }
 
 requiredElement<HTMLButtonElement>("#record-button").addEventListener("click", async () => {
@@ -2900,78 +3349,101 @@ requiredElement<HTMLButtonElement>("#record-button").addEventListener("click", a
 requiredElement<HTMLButtonElement>("#triview-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
   output.textContent = "exporting whitebox tri-views…";
+  showViewportFeedback("正在导出白膜三视图…", true);
   try {
     const paths = await adapter.exportWhiteboxTriviews();
     output.textContent = `exported ${paths.length} tri-views\n${paths.join("\n")}`;
+    showViewportFeedback(`已导出 ${paths.length} 个白膜三视图 · ${paths.join(" · ")}`);
   } catch (error) {
-    output.textContent = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    output.textContent = message;
+    showViewportFeedback(`白膜三视图导出失败 · ${message}`);
   }
 });
 
 requiredElement<HTMLButtonElement>("#smoke-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
   output.textContent = "running…";
-  await resetPlaygroundWorld();
-  // Match the real user path: establish the committed Camera profile on the
-  // first rendered frame before deterministic input starts.
-  adapter.render();
-  await adapter.runFixedInput([{ actions: [], ticks: 1 }]);
-  const before = adapter.snapshot();
-  const cameraUp = await adapter.runFixedInput([
-    { actions: ["cameraUp"], ticks: 30 },
-  ]);
-  const cameraDown = await adapter.runFixedInput([
-    { actions: ["cameraDown"], ticks: 60 },
-  ]);
-  const after = await adapter.runFixedInput([
-    { actions: ["cameraUp"], ticks: 30 },
-    { actions: ["forward", "run"], ticks: 210 },
-    { actions: ["cameraRight", "forward"], ticks: 45 },
-  ]);
-  const distance = Math.hypot(
-    after.player.position[0] - before.player.position[0],
-    after.player.position[2] - before.player.position[2],
-  );
-  const finite = after.player.position.every(Number.isFinite);
-  const cameraUpWorks = cameraUp.camera.pitch < before.camera.pitch;
-  const cameraDownWorks = cameraDown.camera.pitch > cameraUp.camera.pitch;
-  output.textContent = JSON.stringify(
-    {
-      pass: finite && distance > 1 && cameraUpWorks && cameraDownWorks,
-      ticks: after.tick - before.tick,
-      movedMeters: Number(distance.toFixed(2)),
-      finiteTransform: finite,
-      cameraPitchSamples: {
-        before: before.camera.pitch,
-        up: cameraUp.camera.pitch,
-        down: cameraDown.camera.pitch,
-        restored: after.camera.pitch,
+  showViewportFeedback("正在运行固定输入 Smoke…", true);
+  try {
+    await resetPlaygroundWorld();
+    // Match the real user path: establish the committed Camera profile on the
+    // first rendered frame before deterministic input starts.
+    adapter.render();
+    await adapter.runFixedInput([{ actions: [], ticks: 1 }]);
+    const before = adapter.snapshot();
+    const cameraUp = await adapter.runFixedInput([
+      { actions: ["cameraUp"], ticks: 30 },
+    ]);
+    const cameraDown = await adapter.runFixedInput([
+      { actions: ["cameraDown"], ticks: 60 },
+    ]);
+    const after = await adapter.runFixedInput([
+      { actions: ["cameraUp"], ticks: 30 },
+      { actions: ["forward", "run"], ticks: 210 },
+      { actions: ["cameraRight", "forward"], ticks: 45 },
+    ]);
+    const distance = Math.hypot(
+      after.player.position[0] - before.player.position[0],
+      after.player.position[2] - before.player.position[2],
+    );
+    const finite = after.player.position.every(Number.isFinite);
+    const cameraUpWorks = cameraUp.camera.pitch < before.camera.pitch;
+    const cameraDownWorks = cameraDown.camera.pitch > cameraUp.camera.pitch;
+    const pass = finite && distance > 1 && cameraUpWorks && cameraDownWorks;
+    output.textContent = JSON.stringify(
+      {
+        pass,
+        ticks: after.tick - before.tick,
+        movedMeters: Number(distance.toFixed(2)),
+        finiteTransform: finite,
+        cameraPitchSamples: {
+          before: before.camera.pitch,
+          up: cameraUp.camera.pitch,
+          down: cameraDown.camera.pitch,
+          restored: after.camera.pitch,
+        },
+        cameraUp: cameraUpWorks,
+        cameraDown: cameraDownWorks,
       },
-      cameraUp: cameraUpWorks,
-      cameraDown: cameraDownWorks,
-    },
-    null,
-    2,
-  );
+      null,
+      2,
+    );
+    showViewportFeedback(
+      `固定输入 Smoke ${pass ? "通过" : "未通过"} · 移动 ${distance.toFixed(2)} m`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    output.textContent = message;
+    showViewportFeedback(`固定输入 Smoke 失败 · ${message}`);
+  }
 });
 
 requiredElement<HTMLButtonElement>("#composition-button").addEventListener("click", async () => {
   const output = requiredElement<HTMLPreElement>("#smoke-output");
-  await resetPlaygroundWorld();
-  const report = adapter.analyzeOpeningComposition();
-  const mask = requiredElement<HTMLImageElement>("#composition-mask");
-  mask.src = adapter.captureCompositionMask();
-  mask.hidden = report === null;
-  output.textContent = report === null
-    ? "This scene has no opening composition guide."
-    : JSON.stringify(report, null, 2);
-  if (report?.pass) {
-    try {
+  showViewportFeedback("正在运行首帧构图验收…", true);
+  try {
+    await resetPlaygroundWorld();
+    const report = adapter.analyzeOpeningComposition();
+    const mask = requiredElement<HTMLImageElement>("#composition-mask");
+    mask.src = adapter.captureCompositionMask();
+    mask.hidden = report === null;
+    output.textContent = report === null
+      ? "This scene has no opening composition guide."
+      : JSON.stringify(report, null, 2);
+    if (report?.pass) {
       const path = await adapter.exportOpeningFrame(report);
       output.textContent += `\nexported: ${path}`;
-    } catch (error) {
-      output.textContent += `\nexport failed: ${error instanceof Error ? error.message : String(error)}`;
+      showViewportFeedback(`首帧构图验收通过 · 已导出 ${path}`);
+    } else {
+      showViewportFeedback(
+        report === null ? "当前场景没有首帧构图指引" : "首帧构图验收未通过",
+      );
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    output.textContent += `\nfailed: ${message}`;
+    showViewportFeedback(`首帧构图验收失败 · ${message}`);
   }
 });
 
@@ -3012,6 +3484,7 @@ installPageExitDisposal({
   target: window,
   dispose: async () => {
     if (recordingTimer !== null) window.clearInterval(recordingTimer);
+    if (viewportFeedbackTimer !== undefined) window.clearTimeout(viewportFeedbackTimer);
     canvasRecorder.dispose();
     recordingWorkbench?.dispose();
     if (disposeBrowserRuntime === undefined) adapter.dispose();

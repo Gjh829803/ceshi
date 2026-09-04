@@ -2,8 +2,17 @@
   "schemaVersion": 1,
   "kind": "scene-catalog",
   "id": "worldkit.dev-scenes",
-  "defaultSceneId": "feel-flat",
+  "defaultSceneId": "whitebox-3c-test-course",
   "entries": [
+    {
+      "id": "whitebox-3c-test-course",
+      "title": "Whitebox 3C 测试场",
+      "purpose": "traversal",
+      "source": {
+        "kind": "canonical-authoring",
+        "authoringSpecPath": "presets/whitebox-3c-test-course/world.json"
+      }
+    },
     {
       "id": "feel-flat",
       "title": "空旷手感测试",

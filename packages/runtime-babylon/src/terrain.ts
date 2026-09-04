@@ -42,6 +42,9 @@ export function createTerrainMesh(
   vertexData.applyToMesh(mesh, false);
   mesh.position = new Vector3(...topology.originMetersXYZ);
   mesh.material = material;
+  // Canonical terrain is always shadow-ready. Atmosphere policy separately
+  // decides whether a light owns a ShadowGenerator, so this flag is inert in
+  // presets such as golden-hour that do not currently publish contact shadows.
   mesh.receiveShadows = true;
   mesh.metadata = { worldkitEntityId: terrain.entityId, semanticClassId: terrain.semanticClassId };
   return mesh;

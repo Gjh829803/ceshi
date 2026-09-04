@@ -2162,6 +2162,152 @@ describe("createWorldkitBrowserApiV5", () => {
 });
 
 describe("Authoring camera console", () => {
+  it("keeps subject and camera context available while toggling the docked 3C tuning rail", async () => {
+    const port = await availableLoopbackPort();
+    const worktreeRoot = resolve(import.meta.dirname, "../../..");
+    const vite = spawn(
+      process.execPath,
+      [
+        resolve(worktreeRoot, "node_modules/vite/bin/vite.js"),
+        "--config",
+        "vite.config.mjs",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+      ],
+      {
+        cwd: resolve(worktreeRoot, "apps/playground"),
+        env: {
+          ...process.env,
+          WORLDKIT_AUTHORING_SPEC_PATH: resolve(
+            worktreeRoot,
+            "examples/authoring/g-bot-subject-world.json",
+          ),
+        },
+        stdio: "pipe",
+      },
+    );
+    expect(vite.spawnfile).toBe(process.execPath);
+    let viteOutput = "";
+    vite.stdout?.on("data", (chunk: Buffer) => {
+      viteOutput += chunk.toString();
+    });
+    vite.stderr?.on("data", (chunk: Buffer) => {
+      viteOutput += chunk.toString();
+    });
+    let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+    try {
+      browser = await chromium.launch({ headless: true });
+      const url = `http://127.0.0.1:${port}/`;
+      await waitForAuthoringPage(url);
+      const page = await browser.newPage({ viewport: { width: 1440, height: 1024 } });
+      await page.addInitScript(() => {
+        localStorage.clear();
+      });
+      await page.goto(url, { waitUntil: "domcontentloaded" });
+      await page.locator("#authoring-context-bar:not([hidden])").waitFor({ timeout: 45_000 });
+
+      for (const selector of [
+        "#open-tuning-button",
+        "#reset-button",
+        "#record-button",
+        "#capture-button",
+      ]) {
+        expect(await page.locator(selector).isVisible()).toBe(true);
+      }
+      expect(await page.locator("#open-tuning-button").textContent()).toBe("调参台");
+      expect(await page.locator("#tuning-layer").isVisible()).toBe(true);
+      expect(await page.locator("body").evaluate((body) => body.classList.contains("tuning-open")))
+        .toBe(true);
+      expect(await page.locator("#subject-package-select").isVisible()).toBe(true);
+      expect(await page.locator("#camera-first-person-button").count()).toBe(0);
+      expect(await page.locator("#camera-third-person-button").isVisible()).toBe(true);
+      expect(await page.locator("#camera-third-person-button").getAttribute("aria-pressed"))
+        .toBe("true");
+      expect(await page.locator("#camera-preference-select option").evaluateAll(
+        (options) => options.map((option) => (option as HTMLOptionElement).value),
+      )).toEqual(["worldkit://camera-profile/orbit.medium@1"]);
+      expect(await page.locator("#viewport-aspect-select").isVisible()).toBe(true);
+      expect(await page.locator("#viewport-aspect-select option").evaluateAll(
+        (options) => options.map((option) => (option as HTMLOptionElement).value),
+      )).toEqual(["free", "16:9", "16:10", "4:3", "21:9"]);
+      expect(await page.locator("#tuning-tab-movement").getAttribute("aria-selected"))
+        .toBe("true");
+      expect(await page.locator("#tuning-panel-movement").isVisible()).toBe(true);
+      expect(await page.locator("#tuning-motion-sliders").textContent()).not.toContain("仅草稿");
+      expect(await page.locator("#tuning-motion-sliders").textContent()).not.toContain("转向速度");
+      expect(await page.locator("#tuning-motion-advanced-sliders").textContent())
+        .toContain("移动输入曲线");
+      expect(await page.locator("#movement-parameter-boundary").textContent())
+        .toContain("导出并重新编译后生效");
+      expect(await page.locator("#tuning-control-sliders").count()).toBe(0);
+      expect(await page.getByText("移动输入死区").count()).toBe(0);
+      expect(await page.locator("#quick-run-button").isVisible()).toBe(true);
+      expect(await page.locator("#runtime-speed").textContent()).toBe("0.0 m/s");
+      expect(await page.locator("#runtime-gait").textContent()).toBe("IDLE");
+      expect(await page.locator("#runtime-medium").textContent()).toBe("GROUND");
+      expect(await page.locator("#runtime-support").textContent()).toBe("SUPPORTED");
+
+      await page.locator("#open-tuning-button").click();
+      expect(await page.locator("#tuning-layer").isHidden()).toBe(true);
+      expect(await page.locator("#authoring-context-bar").isVisible()).toBe(true);
+      expect(await page.locator("#subject-package-select").isVisible()).toBe(true);
+      expect(await page.locator("#open-tuning-button").getAttribute("aria-expanded"))
+        .toBe("false");
+
+      await page.locator("#viewport-aspect-select").selectOption("4:3");
+      await expect.poll(async () => {
+        const box = await page.locator("#viewport").boundingBox();
+        return box === null ? 0 : box.width / box.height;
+      }).toBeCloseTo(4 / 3, 2);
+      expect(await page.evaluate(() => localStorage.getItem("worldkit.viewport-aspect-ratio")))
+        .toBe("4:3");
+      await page.locator("#viewport-aspect-select").selectOption("free");
+      await expect.poll(async () => {
+        const [stage, viewport] = await Promise.all([
+          page.locator("#viewport-stage").boundingBox(),
+          page.locator("#viewport").boundingBox(),
+        ]);
+        return stage !== null && viewport !== null
+          ? Math.max(
+              Math.abs(stage.width - viewport.width),
+              Math.abs(stage.height - viewport.height),
+            )
+          : Number.POSITIVE_INFINITY;
+      }).toBeLessThanOrEqual(1);
+
+      await page.locator("#more-actions-button").click();
+      expect(await page.locator("#more-actions-menu").isVisible()).toBe(true);
+      await page.locator('[data-action-proxy="#smoke-button"]').click();
+      await expect.poll(
+        async () => page.locator("#recording-toast").textContent(),
+        { timeout: 30_000 },
+      ).toMatch(/^固定输入 Smoke (通过|未通过|失败)/);
+      expect(await page.locator("#recording-toast").isVisible()).toBe(true);
+
+      await page.locator("#quick-run-button").click();
+      await expect.poll(async () => page.locator("#tuning-save-status").textContent())
+        .toContain("“奔跑”测试完成");
+
+      await page.locator("#open-tuning-button").click();
+      expect(await page.locator("#tuning-layer").isVisible()).toBe(true);
+      await page.locator("#tuning-tab-camera").click();
+      expect(await page.locator("#tuning-tab-camera").getAttribute("aria-selected"))
+        .toBe("true");
+      expect(await page.locator("#tuning-panel-camera").isVisible()).toBe(true);
+      expect(await page.locator("#tuning-panel-movement").isHidden()).toBe(true);
+    } catch (error) {
+      throw new Error(
+        `AUTHORING_3C_WORKBENCH_E2E_FAILED: ${viteOutput.slice(-4_000)}`,
+        { cause: error },
+      );
+    } finally {
+      await browser?.close();
+      await stopDirectViteProcess(vite);
+    }
+  }, 120_000);
+
   it("reapplies the selected Golden camera preference after Reset when gameplay tuning is compiler-locked", async () => {
     const port = await availableLoopbackPort();
     const worktreeRoot = resolve(import.meta.dirname, "../../..");
@@ -2236,7 +2382,7 @@ describe("Authoring camera console", () => {
     }
   }, 120_000);
 
-  it("renders only the two supported types, conditionally exposes Follow Arm controls, and reads runtime telemetry", async () => {
+  it("exposes only the supported third-person workbench, Follow Arm controls, and runtime telemetry", async () => {
     const port = await availableLoopbackPort();
     const worktreeRoot = resolve(import.meta.dirname, "../../..");
     const vite = spawn(
@@ -2316,7 +2462,7 @@ describe("Authoring camera console", () => {
       expect(subjectLockDomains.runtimeRef).toBe(subjectLockDomains.registryRef);
       expect(subjectLockDomains.runtimeHash).toMatch(/^sha256:/);
       expect(subjectLockDomains.registryHash).toMatch(/^sha256:/);
-      await page.locator("#open-tuning-button").click();
+      await page.locator("#tuning-tab-camera").click();
       await page.locator("#tuning-camera-cards article").first().waitFor();
 
       const inputDebug = page.locator("#tuning-camera-input-debug");
@@ -2334,55 +2480,66 @@ describe("Authoring camera console", () => {
       const profileRefs = await page.locator("#tuning-camera-cards article")
         .evaluateAll((cards) => cards.map((card) => card.getAttribute("data-camera-profile-ref")));
       expect(profileRefs).toEqual([
-        "worldkit://camera-profile/first-person.standard@1",
         "worldkit://camera-profile/orbit.medium@1",
       ]);
 
-      await page.locator(
-        '[data-camera-profile-ref="worldkit://camera-profile/first-person.standard@1"] button',
-      ).click();
-      await expect.poll(async () => page.locator('[data-camera-group="follow-arm"]').count())
-        .toBe(0);
-      expect(await page.locator('[data-camera-control="distanceMeters"]').count()).toBe(0);
-      expect(await page.locator('[data-camera-control="collisionRadiusMeters"]').count()).toBe(0);
-      expect(await page.locator('[data-camera-control="lookAheadSeconds"]').count()).toBe(0);
-      expect(await page.locator('[data-camera-control="horizontalDeadZoneRatio"]').count()).toBe(0);
-      await page.locator('[data-camera-control="baseFovDegrees"] input').evaluate((element) => {
-        const input = element as HTMLInputElement;
-        input.value = input.max;
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-      const firstPersonPreview = await page.evaluate(() => window.__WORLDKIT__!
-        .getCameraPreviewState?.().tuningByProfileRef[
-          "worldkit://camera-profile/first-person.standard@1"
-        ]);
-      expect(firstPersonPreview).toMatchObject({ baseFovDegrees: 100 });
-      expect(firstPersonPreview).not.toHaveProperty("distanceMeters");
-      expect(firstPersonPreview).not.toHaveProperty("collisionRadiusMeters");
-      expect(firstPersonPreview).not.toHaveProperty("lookAheadSeconds");
-      expect(firstPersonPreview).not.toHaveProperty("horizontalDeadZoneRatio");
-
-      await page.locator(
-        '[data-camera-profile-ref="worldkit://camera-profile/orbit.medium@1"] button',
-      ).click();
       await expect.poll(async () => page.locator('[data-camera-group="follow-arm"]').count())
         .toBe(1);
       expect(await page.locator('[data-camera-control="shoulderOffsetMeters"]').count()).toBe(0);
       expect(await page.locator('[data-camera-control="positionDampingPerSecond"]').count()).toBe(1);
       expect(await page.locator('[data-camera-control="rotationDampingPerSecond"]').count()).toBe(1);
-      const fovProvenance = page.locator('[data-camera-control="baseFovDegrees"] small');
+      expect(await page.locator("#tuning-camera-basic [data-camera-control]").evaluateAll(
+        (controls) => controls.map((control) => control.getAttribute("data-camera-control")),
+      )).toEqual([
+        "distanceMeters",
+        "pitchRadians",
+        "baseFovDegrees",
+        "lookSensitivityXRatio",
+        "lookSensitivityYRatio",
+      ]);
+      expect(await page.locator('[data-camera-control="targetHeightMeters"]').count()).toBe(0);
+      expect(await page.locator('[data-camera-control="baseFovDegrees"] strong').textContent())
+        .toBe("视野角（FOV）");
+      expect(await page.locator("#tuning-camera-basic .parameter-help-button").count()).toBe(5);
+      for (const inactiveControl of [
+        "minimumHeadingSpeedMetersPerSecond",
+        "velocityHeadingDampingPerSecond",
+        "recenterDelaySeconds",
+        "recenterDurationSeconds",
+        "recenterMinimumSpeedMetersPerSecond",
+      ]) {
+        expect(await page.locator(`[data-camera-control="${inactiveControl}"]`).count()).toBe(0);
+      }
+      const fovProvenance = page.locator(
+        '[data-camera-control="baseFovDegrees"] .parameter-help-text',
+      );
       expect(await fovProvenance.textContent()).toContain("单位：deg");
       expect(await fovProvenance.textContent()).toContain("Authoring 范围");
       expect(await fovProvenance.textContent()).toContain("Safety 范围");
       expect(await fovProvenance.textContent()).toContain("锁定 Profile 默认");
       expect(await fovProvenance.textContent()).toContain("生效条件");
       expect(await fovProvenance.textContent()).toContain("最终来源");
-      expect(await page.evaluate(() => window.__WORLDKIT__!
-        .getCameraPreviewState?.().tuningByProfileRef[
-          "worldkit://camera-profile/first-person.standard@1"
-        ])).toMatchObject({ baseFovDegrees: 100 });
+      expect(await page.locator('#tuning-camera-expert [data-camera-control="transitionSeconds"]').count())
+        .toBe(1);
+      expect(await page.locator('#tuning-camera-expert [data-camera-control="fovDampingPerSecond"]').count())
+        .toBe(1);
+      expect(await page.locator('[data-camera-control="transitionSeconds"] strong').textContent())
+        .toBe("镜头配置过渡时长");
+      expect(await page.locator('[data-camera-control="fovDampingPerSecond"] strong').textContent())
+        .toBe("动态 FOV 响应速度");
       expect(await page.locator('[data-camera-group="collision"]').count()).toBe(1);
       expect(await page.locator('[data-camera-group="lag"]').count()).toBe(1);
+      await expect.poll(async () => page.locator("#runtime-fps").textContent()).toMatch(/^\d+$/);
+      const [runtimeFps, hudFps] = await page.evaluate(() => [
+        document.querySelector("#runtime-fps")?.textContent,
+        document.querySelector("#fps")?.textContent,
+      ]);
+      expect(runtimeFps).toMatch(/^\d+$/);
+      expect(runtimeFps).toBe(hudFps);
+      await expect.poll(async () => page.locator("#runtime-version").textContent())
+        .toMatch(/^API v5 · [a-f0-9]{7}$/);
+      expect(await page.locator("#runtime-version").getAttribute("title"))
+        .toMatch(/^WorldKit Browser API v5 · Build [a-f0-9]{40}$/);
       expect(await page.locator('[data-camera-diagnostic="active-profile"]').textContent())
         .toContain("orbit.medium");
       expect(await page.locator('[data-camera-diagnostic="socket"]').textContent()).not.toBe("");
@@ -2430,6 +2587,7 @@ describe("Authoring camera console", () => {
           camera: api.getCameraSnapshot?.(),
         };
       });
+      await page.locator(".camera-advanced > summary").click();
       await page.locator("#tuning-camera-overlay-toggle").click();
       expect(await page.locator("#tuning-camera-overlay").isVisible()).toBe(true);
       await page.locator("#tuning-camera-overlay-toggle").click();
@@ -2449,6 +2607,11 @@ describe("Authoring camera console", () => {
           ? beforeOverlay.camera.activeCameraProfileRef
           : undefined);
 
+      await page.locator('[data-camera-control="baseFovDegrees"] input').evaluate((element) => {
+        const input = element as HTMLInputElement;
+        input.value = input.max;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
       await page.evaluate(() => {
         const storageKey = "worldkit.subject-preset-local.v1";
         const repository = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
@@ -2456,18 +2619,27 @@ describe("Authoring camera console", () => {
         if (draft === undefined) throw new Error("Expected a persisted workbench draft.");
         const firstPersonRef = "worldkit://camera-profile/first-person.standard@1";
         const legacyProfileRef = "worldkit://camera-profile/follow.medium@1";
-        const firstPersonOverride = draft.cameraOverridesByProfileRef[firstPersonRef];
-        if (firstPersonOverride === undefined) throw new Error("Expected a first-person override.");
-        firstPersonOverride.values = {
-          baseFovDegrees: 100,
-          distanceMeters: 6,
-          collisionRadiusMeters: 0.3,
-          lookAheadSeconds: 0.4,
-          horizontalDeadZoneRatio: 0.2,
+        const orbitProfileRef = "worldkit://camera-profile/orbit.medium@1";
+        const orbitOverride = draft.cameraOverridesByProfileRef[orbitProfileRef] ?? {
+          schemaVersion: 1,
+          baseResourceRef: orbitProfileRef,
+          baseContentHash: "sha256:test",
+          values: {},
         };
-        draft.selectedCameraPreferenceRef = legacyProfileRef;
+        draft.cameraOverridesByProfileRef[firstPersonRef] = {
+          ...orbitOverride,
+          baseResourceRef: firstPersonRef,
+          values: {
+            baseFovDegrees: 100,
+            distanceMeters: 6,
+            collisionRadiusMeters: 0.3,
+            lookAheadSeconds: 0.4,
+            horizontalDeadZoneRatio: 0.2,
+          },
+        };
+        draft.selectedCameraPreferenceRef = firstPersonRef;
         draft.cameraOverridesByProfileRef[legacyProfileRef] = {
-          ...firstPersonOverride,
+          ...orbitOverride,
           baseResourceRef: legacyProfileRef,
           values: { distanceMeters: 8 },
         };
@@ -2475,7 +2647,7 @@ describe("Authoring camera console", () => {
       });
       await page.reload({ waitUntil: "domcontentloaded" });
       await page.locator("#open-tuning-button:not([hidden])").waitFor({ timeout: 45_000 });
-      await page.locator("#open-tuning-button").click();
+      await page.locator("#tuning-tab-camera").click();
       await expect.poll(async () => page.locator(
         '[data-camera-profile-ref="worldkit://camera-profile/orbit.medium@1"].selected',
       ).count()).toBe(1);
@@ -2487,24 +2659,15 @@ describe("Authoring camera console", () => {
       ).drafts?.[0]);
       expect(await page.locator("#tuning-save-status").textContent())
         .toContain("Golden Subject tuning is compiler-locked");
-      expect(migratedDraft.cameraOverridesByProfileRef[
-        "worldkit://camera-profile/first-person.standard@1"
-      ]?.values).toMatchObject({ baseFovDegrees: 100 });
-      expect(migratedPreview["worldkit://camera-profile/first-person.standard@1"])
-        .toMatchObject({ baseFovDegrees: 100 });
-      expect(migratedPreview["worldkit://camera-profile/first-person.standard@1"])
-        .not.toHaveProperty("distanceMeters");
-      expect(migratedPreview["worldkit://camera-profile/first-person.standard@1"])
-        .not.toHaveProperty("collisionRadiusMeters");
-      expect(migratedPreview["worldkit://camera-profile/first-person.standard@1"])
-        .not.toHaveProperty("lookAheadSeconds");
-      expect(migratedPreview["worldkit://camera-profile/first-person.standard@1"])
-        .not.toHaveProperty("horizontalDeadZoneRatio");
+      expect(migratedDraft.cameraOverridesByProfileRef)
+        .not.toHaveProperty("worldkit://camera-profile/first-person.standard@1");
+      expect(migratedPreview)
+        .not.toHaveProperty("worldkit://camera-profile/first-person.standard@1");
       expect(migratedDraft.selectedCameraPreferenceRef)
         .toBe("worldkit://camera-profile/orbit.medium@1");
-      expect(Object.keys(migratedDraft.cameraOverridesByProfileRef).sort()).toEqual([
-        "worldkit://camera-profile/first-person.standard@1",
-      ]);
+      expect(Object.keys(migratedDraft.cameraOverridesByProfileRef).every(
+        (resourceRef) => resourceRef === "worldkit://camera-profile/orbit.medium@1",
+      )).toBe(true);
     } catch (error) {
       throw new Error(
         `AUTHORING_CAMERA_CONSOLE_E2E_FAILED: ${viteOutput.slice(-4_000)}`,

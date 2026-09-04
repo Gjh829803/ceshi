@@ -1,0 +1,457 @@
+{
+  "kind": "worldkit-authoring-spec",
+  "schemaVersion": 4,
+  "id": "whitebox-3c-test-course",
+  "seed": 83104,
+  "provenance": {
+    "userPrompt": "Fixed Whitebox 3C test course for G Bot movement, traversal, jump and landing, high-speed turning, narrow-space steering, ledge behavior, and third-person camera occlusion evaluation."
+  },
+  "layout": {
+    "solverProfileRef": "worldkit://layout-solver-profile/outdoor.s1@1"
+  },
+  "spatial": {
+    "traversalAreas": [],
+    "regions": [],
+    "routes": [],
+    "screenRegions": []
+  },
+  "world": {
+    "coordinateSystem": "right-handed-y-up-minus-z-forward",
+    "bounds": {
+      "centerMetersXZ": [0, 0],
+      "sizeMetersXZ": [112, 144],
+      "heightRangeMeters": [-4, 12]
+    },
+    "gravityMetersPerSecondSquaredXYZ": [0, -9.81, 0],
+    "environment": {
+      "preset": "clear-day"
+    },
+    "resourceBudget": {
+      "maxVertices": 140000,
+      "maxTriangles": 250000,
+      "maxColliders": 64
+    }
+  },
+  "resources": {
+    "prototypes": [
+      {
+        "id": "gate-post",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [0.6, 3, 0.8],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.narrow-gate" }
+      },
+      {
+        "id": "gate-lintel",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [2.8, 0.4, 0.8],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.narrow-gate" }
+      },
+      {
+        "id": "slope-ramp",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [7, 0.5, 14],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.slope" }
+      },
+      {
+        "id": "slope-deck",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [7, 0.5, 8],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.slope" }
+      },
+      {
+        "id": "stair-tread",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [6, 0.2, 2],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.stairs" }
+      },
+      {
+        "id": "corridor-wall",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [0.5, 3, 22],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.narrow-corridor" }
+      },
+      {
+        "id": "ledge-platform",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [10, 1.6, 10],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.ledge" }
+      },
+      {
+        "id": "ledge-ramp",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [5, 0.4, 10],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.ledge" }
+      },
+      {
+        "id": "obstacle-small",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "cylinder",
+        "radiusMeters": 0.45,
+        "heightMeters": 1.2,
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.obstacle.small" }
+      },
+      {
+        "id": "obstacle-large",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [3, 3, 3],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.obstacle.large" }
+      },
+      {
+        "id": "speed-barrier",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [7, 2, 1],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.high-speed-turn" }
+      },
+      {
+        "id": "occlusion-pillar",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "cylinder",
+        "radiusMeters": 0.85,
+        "heightMeters": 4,
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.camera-occlusion" }
+      },
+      {
+        "id": "occlusion-wall",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [7, 4, 0.6],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.camera-occlusion" }
+      },
+      {
+        "id": "jump-takeoff",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [5, 0.3, 2],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.jump-takeoff" }
+      },
+      {
+        "id": "jump-landing",
+        "version": 1,
+        "kind": "primitive",
+        "primitive": "box",
+        "sizeMetersXYZ": [7, 0.2, 7],
+        "collisionEnabled": true,
+        "semantic": { "classId": "3c.jump-landing" }
+      }
+    ],
+    "subjectDefinitions": []
+  },
+  "nodes": [
+    {
+      "id": "terrain-main",
+      "kind": "terrain",
+      "components": {
+        "terrain": {
+          "source": {
+            "kind": "procedural",
+            "relief": "flat",
+            "baseHeightMeters": 0,
+            "amplitudeMeters": 0
+          },
+          "grid": {
+            "centerMetersXZ": [0, 0],
+            "sizeMetersXZ": [112, 144],
+            "resolutionCellsXZ": [57, 73]
+          },
+          "semantic": { "classId": "3c.flat-calibration" }
+        }
+      }
+    },
+    {
+      "id": "gate-west",
+      "kind": "object",
+      "prototypeRef": "package://prototype/gate-post@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-1.1, 1.5, 35] } }
+    },
+    {
+      "id": "gate-east",
+      "kind": "object",
+      "prototypeRef": "package://prototype/gate-post@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [1.1, 1.5, 35] } }
+    },
+    {
+      "id": "gate-top",
+      "kind": "object",
+      "prototypeRef": "package://prototype/gate-lintel@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 2.8, 35] } }
+    },
+    {
+      "id": "speed-turn-1",
+      "kind": "object",
+      "prototypeRef": "package://prototype/speed-barrier@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [19, 1, 44] } }
+    },
+    {
+      "id": "speed-turn-2",
+      "kind": "object",
+      "prototypeRef": "package://prototype/speed-barrier@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [29, 1, 35] } }
+    },
+    {
+      "id": "speed-turn-3",
+      "kind": "object",
+      "prototypeRef": "package://prototype/speed-barrier@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [19, 1, 26] } }
+    },
+    {
+      "id": "speed-turn-4",
+      "kind": "object",
+      "prototypeRef": "package://prototype/speed-barrier@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [29, 1, 17] } }
+    },
+    {
+      "id": "speed-turn-5",
+      "kind": "object",
+      "prototypeRef": "package://prototype/speed-barrier@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [19, 1, 8] } }
+    },
+    {
+      "id": "obstacle-small-1",
+      "kind": "object",
+      "prototypeRef": "package://prototype/obstacle-small@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-20, 0.6, 43] } }
+    },
+    {
+      "id": "obstacle-small-2",
+      "kind": "object",
+      "prototypeRef": "package://prototype/obstacle-small@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-27, 0.6, 35] } }
+    },
+    {
+      "id": "obstacle-small-3",
+      "kind": "object",
+      "prototypeRef": "package://prototype/obstacle-small@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-20, 0.6, 27] } }
+    },
+    {
+      "id": "obstacle-large-1",
+      "kind": "object",
+      "prototypeRef": "package://prototype/obstacle-large@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-27, 1.5, 22] } }
+    },
+    {
+      "id": "obstacle-large-2",
+      "kind": "object",
+      "prototypeRef": "package://prototype/obstacle-large@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-18, 1.5, 14] } }
+    },
+    {
+      "id": "stairs-1",
+      "kind": "object",
+      "prototypeRef": "package://prototype/stair-tread@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.1, 22] } }
+    },
+    {
+      "id": "stairs-2",
+      "kind": "object",
+      "prototypeRef": "package://prototype/stair-tread@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.2, 20], "scaleXYZ": [1, 2, 1] } }
+    },
+    {
+      "id": "stairs-3",
+      "kind": "object",
+      "prototypeRef": "package://prototype/stair-tread@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.3, 18], "scaleXYZ": [1, 3, 1] } }
+    },
+    {
+      "id": "stairs-4",
+      "kind": "object",
+      "prototypeRef": "package://prototype/stair-tread@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.4, 16], "scaleXYZ": [1, 4, 1] } }
+    },
+    {
+      "id": "stairs-5",
+      "kind": "object",
+      "prototypeRef": "package://prototype/stair-tread@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.5, 14], "scaleXYZ": [1, 5, 1] } }
+    },
+    {
+      "id": "stairs-6",
+      "kind": "object",
+      "prototypeRef": "package://prototype/stair-tread@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.6, 12], "scaleXYZ": [1, 6, 1] } }
+    },
+    {
+      "id": "slope-main",
+      "kind": "object",
+      "prototypeRef": "package://prototype/slope-ramp@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [12, 1.28, 13],
+          "rotationEulerRadiansXYZ": [0.22, 0, 0]
+        }
+      }
+    },
+    {
+      "id": "slope-exit-deck",
+      "kind": "object",
+      "prototypeRef": "package://prototype/slope-deck@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [12, 2.8, 2] } }
+    },
+    {
+      "id": "corridor-west",
+      "kind": "object",
+      "prototypeRef": "package://prototype/corridor-wall@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-13, 1.5, -3] } }
+    },
+    {
+      "id": "corridor-east",
+      "kind": "object",
+      "prototypeRef": "package://prototype/corridor-wall@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-11, 1.5, -3] } }
+    },
+    {
+      "id": "ledge-access",
+      "kind": "object",
+      "prototypeRef": "package://prototype/ledge-ramp@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [27, 0.6026, -6],
+          "rotationEulerRadiansXYZ": [0.1606906529519106, 0, 0]
+        }
+      }
+    },
+    {
+      "id": "ledge-main",
+      "kind": "object",
+      "prototypeRef": "package://prototype/ledge-platform@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [27, 0.8, -15] } }
+    },
+    {
+      "id": "occlusion-pillar-1",
+      "kind": "object",
+      "prototypeRef": "package://prototype/occlusion-pillar@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-31, 2, -24] } }
+    },
+    {
+      "id": "occlusion-pillar-2",
+      "kind": "object",
+      "prototypeRef": "package://prototype/occlusion-pillar@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-26, 2, -29] } }
+    },
+    {
+      "id": "occlusion-pillar-3",
+      "kind": "object",
+      "prototypeRef": "package://prototype/occlusion-pillar@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-21, 2, -24] } }
+    },
+    {
+      "id": "occlusion-corner-north",
+      "kind": "object",
+      "prototypeRef": "package://prototype/occlusion-wall@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [-27, 2, -38] } }
+    },
+    {
+      "id": "occlusion-corner-east",
+      "kind": "object",
+      "prototypeRef": "package://prototype/occlusion-wall@1",
+      "placement": {
+        "kind": "fixed",
+        "transform": {
+          "positionMetersXYZ": [-23.8, 2, -34.8],
+          "rotationEulerRadiansXYZ": [0, 1.5707963267948966, 0]
+        }
+      }
+    },
+    {
+      "id": "jump-takeoff-main",
+      "kind": "object",
+      "prototypeRef": "package://prototype/jump-takeoff@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.15, -18] } }
+    },
+    {
+      "id": "jump-landing-main",
+      "kind": "object",
+      "prototypeRef": "package://prototype/jump-landing@1",
+      "placement": { "kind": "fixed", "transform": { "positionMetersXYZ": [0, 0.1, -27] } }
+    },
+    {
+      "id": "spawn-main",
+      "kind": "anchor",
+      "semantic": { "classId": "spawn.player" },
+      "placement": {
+        "kind": "fixed",
+        "transform": { "positionMetersXYZ": [0, 0, 54] }
+      }
+    },
+    {
+      "id": "player",
+      "kind": "subject",
+      "subjectDefinitionRef": "worldkit://subject-definition/humanoid.g-bot@2",
+      "spawnAnchorEntityId": "spawn-main"
+    },
+    {
+      "id": "camera-main",
+      "kind": "camera",
+      "components": {
+        "cameraRig": {
+          "defaultRigRef": "worldkit://camera/third-person.standard@1",
+          "allowedRigRefs": ["worldkit://camera/third-person.standard@1"],
+          "target": {
+            "targetEntityId": "player",
+            "targetHeightMeters": 1.2
+          },
+          "thirdPerson": {
+            "pitchRadians": 0.2,
+            "distanceMeters": 5,
+            "targetHeightMeters": 1.2,
+            "fovDegrees": 56,
+            "aspectRatio": 1.7777777777777777
+          },
+          "manualSwitchAllowed": false
+        }
+      }
+    }
+  ],
+  "relationships": [],
+  "rules": [],
+  "startup": {
+    "spawnAnchorEntityId": "spawn-main",
+    "controlledEntityId": "player",
+    "cameraEntityId": "camera-main"
+  },
+  "constraints": {
+    "connectivity": [],
+    "placements": []
+  }
+}

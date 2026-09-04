@@ -5,6 +5,8 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight.js";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight.js";
+import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator.js";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { PhysicsAggregate } from "@babylonjs/core/Physics/v2/physicsAggregate.js";
@@ -823,7 +825,7 @@ function waterSurfaceHeightAtSubjectOrigin(
 function configureAtmosphere(
   scene: Scene,
   preset: CanonicalSceneExecutionPlanV1["atmospherePreset"],
-): void {
+): DirectionalLight {
   const colors = {
     "clear-day": new Color4(0.55, 0.78, 0.92, 1),
     "golden-hour": new Color4(0.91, 0.65, 0.42, 1),
@@ -836,6 +838,18 @@ function configureAtmosphere(
   ambient.intensity = preset === "night" ? 0.3 : 0.72;
   const sun = new DirectionalLight("worldkit.light.sun", new Vector3(-0.45, -1, 0.35), scene);
   sun.intensity = preset === "night" ? 0.22 : 1.1;
+  return sun;
+}
+
+function createCanonicalContactShadows(
+  sun: DirectionalLight,
+): ShadowGenerator {
+  const shadowGenerator = new ShadowGenerator(1024, sun);
+  shadowGenerator.usePercentageCloserFiltering = true;
+  shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_LOW;
+  shadowGenerator.bias = 0.0005;
+  shadowGenerator.normalBias = 0.02;
+  return shadowGenerator;
 }
 
 function nativeColliderMetadata(
@@ -921,6 +935,8 @@ export class BabylonWorldRuntime {
   private readonly actionPresentationRegistry: ActionPresentationRegistryV1;
   private readonly subjectVisuals: readonly SubjectVisual[];
   private readonly subjectVisualsByEntityId: ReadonlyMap<string, SubjectVisual>;
+  private readonly contactShadowGenerator: ShadowGenerator | undefined;
+  private publishedContactShadowCasterMeshes: ReadonlySet<AbstractMesh> = new Set();
   private readonly camera: FreeCamera;
   private readonly cameraComponent: CameraComponentV1;
   private readonly cameraGeometryQuery: BabylonHavokCameraGeometryQueryV2;
@@ -960,6 +976,7 @@ export class BabylonWorldRuntime {
     latestGoldenCameraContextsByEntityId: Map<string, CameraContextSampleV2>,
     actionPresentationRegistry: ActionPresentationRegistryV1,
     subjectVisuals: readonly SubjectVisual[],
+    contactShadowGenerator: ShadowGenerator | undefined,
     camera: FreeCamera,
     cameraComponent: CameraComponentV1,
     cameraGeometryQuery: BabylonHavokCameraGeometryQueryV2,
@@ -995,6 +1012,12 @@ export class BabylonWorldRuntime {
         visual,
       ]),
     );
+    this.contactShadowGenerator = contactShadowGenerator;
+    const contactShadowMap = contactShadowGenerator?.getShadowMap();
+    if (contactShadowMap !== undefined && contactShadowMap !== null) {
+      contactShadowMap.renderListPredicate = (mesh) =>
+        this.publishedContactShadowCasterMeshes.has(mesh);
+    }
     this.camera = camera;
     this.cameraComponent = cameraComponent;
     this.cameraGeometryQuery = cameraGeometryQuery;
@@ -1199,11 +1222,13 @@ export class BabylonWorldRuntime {
         BabylonNativeLiveColliderRegistryV1 | undefined;
       let runtime: BabylonWorldRuntime | undefined;
       let terrainShape: PhysicsShape | undefined;
+      let canonicalSun: DirectionalLight | undefined;
+      let contactShadowGenerator: ShadowGenerator | undefined;
       const staticCollisionMeshes: StaticCollisionMeshEntryV1[] = [];
       let terrainSampleCount = executionPlan?.terrain.heightSamplesMeters.length ?? 0;
       if (!isNil(executionPlan)) {
         options.onInitializationStage?.("terrain");
-        configureAtmosphere(scene, executionPlan.atmospherePreset);
+        canonicalSun = configureAtmosphere(scene, executionPlan.atmospherePreset);
         const terrainMesh = createTerrainMesh(
           executionPlan.terrain,
           materials.terrain,
@@ -1603,6 +1628,14 @@ export class BabylonWorldRuntime {
         );
       }
 
+      if (
+        executionPlan?.atmospherePreset === "clear-day" &&
+        !isNil(canonicalSun)
+      ) {
+        contactShadowGenerator = createCanonicalContactShadows(canonicalSun);
+        ownedDisposers.push(() => contactShadowGenerator?.dispose());
+      }
+
       entityRegistry.activateAll();
       const initiallyMountedRiderEntityIds = new Set(
         gameplayBootstrap.initialRelationshipStates.flatMap((relationship) =>
@@ -1640,6 +1673,7 @@ export class BabylonWorldRuntime {
         latestGoldenCameraContextsByEntityId,
         actionPresentationRegistry,
         subjectVisuals,
+        contactShadowGenerator,
         camera,
         cameraComponent,
         cameraGeometryQuery,
@@ -1938,6 +1972,8 @@ export class BabylonWorldRuntime {
       semanticFactsById: this.gameplayPublishedState.semanticFactsById,
       viewProjection: projectedViewStateAfter,
     });
+    const stagedContactShadowCasterMeshes =
+      this.contactShadowCasterMeshesFor(target);
     const previousControlledEntityId = this.controlledEntityId();
     const targetControlledEntityId = target.mode === "possessed"
       ? target.controlledEntityId
@@ -1979,6 +2015,7 @@ export class BabylonWorldRuntime {
         }
         lifecycle = "committed";
         this.gameplayPublishedState = stagedState;
+        this.publishedContactShadowCasterMeshes = stagedContactShadowCasterMeshes;
         if (target.mode === "unbound") {
           this.publishedCameraProjection = undefined;
         }
@@ -2240,6 +2277,8 @@ export class BabylonWorldRuntime {
       semanticFactsById: this.gameplayPublishedState.semanticFactsById,
       viewProjection: projectedViewStateAfter,
     });
+    const stagedContactShadowCasterMeshes =
+      this.contactShadowCasterMeshesFor(input.possessionTarget);
     if (this.traversalConfigurationEpoch === Number.MAX_SAFE_INTEGER) {
       throw new Error(
         "WORLDKIT_TRAVERSAL_CONFIGURATION_EPOCH_EXHAUSTED",
@@ -2272,6 +2311,7 @@ export class BabylonWorldRuntime {
           rider.setCollisionFilterMasks(0, 0);
           this.projectMountedRider(rider, relationship, pose, this.tick);
           this.gameplayPublishedState = stagedState;
+          this.publishedContactShadowCasterMeshes = stagedContactShadowCasterMeshes;
           this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
           this.activeInputActions = EMPTY_INPUT_ACTIONS;
           this.activeInputAxes = EMPTY_INPUT_AXES;
@@ -2485,6 +2525,8 @@ export class BabylonWorldRuntime {
       semanticFactsById: this.gameplayPublishedState.semanticFactsById,
       viewProjection: projectedViewStateAfter,
     });
+    const stagedContactShadowCasterMeshes =
+      this.contactShadowCasterMeshesFor(input.possessionTarget);
     if (this.traversalConfigurationEpoch === Number.MAX_SAFE_INTEGER) {
       throw new Error(
         "WORLDKIT_TRAVERSAL_CONFIGURATION_EPOCH_EXHAUSTED",
@@ -2532,6 +2574,7 @@ export class BabylonWorldRuntime {
             this.tick,
           );
           this.gameplayPublishedState = stagedState;
+          this.publishedContactShadowCasterMeshes = stagedContactShadowCasterMeshes;
           this.traversalConfigurationEpoch = traversalConfigurationEpochAfter;
           this.activeInputActions = EMPTY_INPUT_ACTIONS;
           this.activeInputAxes = EMPTY_INPUT_AXES;
@@ -2738,6 +2781,9 @@ export class BabylonWorldRuntime {
       return;
     }
     this.gameplayPublishedState = entry.publishedState;
+    this.publishedContactShadowCasterMeshes = this.contactShadowCasterMeshesFor(
+      entry.publishedState.possessionTarget,
+    );
     this.traversalConfigurationEpoch = entry.traversalConfigurationEpoch;
     this.activeInputActions = EMPTY_INPUT_ACTIONS;
     this.activeInputAxes = EMPTY_INPUT_AXES;
@@ -2821,6 +2867,9 @@ export class BabylonWorldRuntime {
       for (const visual of this.subjectVisuals) visual.resetAnimation();
       this.tick = 0;
       this.gameplayPublishedState = baseline.gameplayPublishedState;
+      this.publishedContactShadowCasterMeshes = this.contactShadowCasterMeshesFor(
+        baseline.gameplayPublishedState.possessionTarget,
+      );
       this.traversalConfigurationEpoch =
         baseline.traversalConfigurationEpoch;
       this.appliedCameraViewStateRevision =
@@ -3566,6 +3615,7 @@ export class BabylonWorldRuntime {
       semanticFactsById: Object.freeze({}),
       viewProjection: Object.freeze({ viewStateRevision: 0 }),
     });
+    this.publishedContactShadowCasterMeshes = new Set();
     this.initializeInitialMountedRelationships();
     this.reconcileSemanticFacts();
     this.appliedCameraViewStateRevision = 0;
@@ -4614,6 +4664,16 @@ export class BabylonWorldRuntime {
     return this.gameplayPublishedState.possessionTarget.mode === "possessed"
       ? this.gameplayPublishedState.possessionTarget.controlledEntityId
       : undefined;
+  }
+
+  private contactShadowCasterMeshesFor(
+    target: BabylonGameplayPossessionTargetV1,
+  ): ReadonlySet<AbstractMesh> {
+    if (this.contactShadowGenerator === undefined || target.mode === "unbound") {
+      return new Set();
+    }
+    const visual = this.subjectVisualsByEntityId.get(target.controlledEntityId);
+    return new Set(visual?.meshes ?? []);
   }
 
   private visualFor(subjectEntityId: string): SubjectVisual {

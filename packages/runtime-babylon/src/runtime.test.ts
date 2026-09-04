@@ -20,6 +20,7 @@ import {
 } from "@babylonjs/core/Physics/v2/characterController.js";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine.js";
 import { Scene } from "@babylonjs/core/scene.pure.js";
+import type { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator.js";
 import { sha256Bytes, sha256CanonicalJson } from "@whitebox-world/protocol";
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 
@@ -5593,6 +5594,91 @@ function emptyActionProjection(simulationTick: number) {
     }
   });
 
+  it("grounds the supported product G Bot's visible soles with a contact shadow", async () => {
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, "g-bot-primary");
+      const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      runtime.renderFrame(1);
+      const visual = createSubjectVisualProbe(runtime).visual("g-bot-primary");
+      const movement = (runtime as unknown as {
+        characterEntitiesByEntityId: ReadonlyMap<string, {
+          movement: {
+            renderPoseDiagnostic(interpolationAlphaRatio: number): {
+              committedSubjectOriginYMeters: number;
+              visualRootYMeters: number;
+              supportMode: string;
+            };
+          };
+        }>;
+      }).characterEntitiesByEntityId.get("g-bot-primary")!.movement;
+      const pose = movement.renderPoseDiagnostic(1);
+      for (const mesh of visual.meshes) {
+        mesh.computeWorldMatrix(true);
+        mesh.refreshBoundingInfo(true, false);
+        mesh.computeWorldMatrix(true);
+      }
+      const visibleMinimumYMeters = Math.min(
+        ...visual.meshes.map((mesh) =>
+          mesh.getBoundingInfo().boundingBox.minimumWorld.y
+        ),
+      );
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      const sun = scene.getLightByName("worldkit.light.sun");
+      const shadowMap = sun?.getShadowGenerator()?.getShadowMap();
+
+      expect(snapshot.subjectStatesByEntityId["g-bot-primary"]).toMatchObject({
+        locomotion: {
+          status: "active",
+          mobilityMode: "grounded",
+          supportMode: "supported",
+        },
+      });
+      expect(pose.supportMode).toBe("supported");
+      expect(pose.committedSubjectOriginYMeters).toBeCloseTo(0, 3);
+      expect(pose.visualRootYMeters).toBeCloseTo(0, 3);
+      expect(
+        Math.abs(visibleMinimumYMeters),
+        `visible G Bot minimum Y was ${visibleMinimumYMeters}m above the support plane`,
+      ).toBeLessThanOrEqual(0.03);
+      expect(shadowMap, "clear-day sun must provide the missing contact-shadow cue")
+        .toBeDefined();
+      expect(shadowMap?.renderList).toEqual(
+        expect.arrayContaining([...visual.meshes]),
+      );
+      expect(shadowMap?.renderList).toHaveLength(visual.meshes.length);
+      expect(scene.getMeshByName("terrain-main")?.receiveShadows).toBe(true);
+      expect(scene.getMeshByName("wall-east")?.receiveShadows).toBe(false);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it("keeps the controlled-Subject contact-shadow cue scoped to clear-day", async () => {
+    const authoringSpec = structuredClone(gBotAuthoringSpec);
+    authoringSpec.world.environment.preset = "golden-hour";
+    const runtime = await createRuntime(
+      compileRouteExecutionPlan(authoringSpec),
+      { subjectAssetResolver: createMemoryResolver(gBotSubjectAssetBytes) },
+    );
+    try {
+      runtime.renderFrame(1);
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      expect(scene.getLightByName("worldkit.light.sun")?.getShadowGenerator())
+        .toBeNull();
+      // Receiver readiness is atmosphere-independent; without a generator it
+      // does not render a shadow.
+      expect(scene.getMeshByName("terrain-main")?.receiveShadows).toBe(true);
+      expect(scene.getMeshByName("wall-east")?.receiveShadows).toBe(false);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("keeps every product G Bot Y layer within the 120-second grounded P0 budget", async () => {
     const runtime = await createRuntime(
       compileRouteExecutionPlan(structuredClone(gBotAuthoringSpec)),
@@ -7063,9 +7149,15 @@ function emptyActionProjection(simulationTick: number) {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
       const projectionBefore = runtime.snapshot();
       const viewBefore = internal.readViewProjection();
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      const shadowMap = scene.getLightByName("worldkit.light.sun")
+        ?.getShadowGenerator()?.getShadowMap();
+      const packAnimalVisual = createSubjectVisualProbe(runtime)
+        .visual("pack-animal-a");
 
       expect(internal.readPossessionTarget()).toEqual({ mode: "unbound" });
       expect(projectionBefore.possessionTarget).toEqual({ mode: "unbound" });
+      expect(shadowMap?.renderList ?? []).toHaveLength(0);
 
       const prepared = await internal.preparePossessionTarget({
         mode: "possessed",
@@ -7080,6 +7172,7 @@ function emptyActionProjection(simulationTick: number) {
       );
 
       expect(prepared.commitPrepared).not.toThrow();
+      runtime.renderFrame();
       expect(internal.readPossessionTarget()).toEqual({
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
@@ -7091,12 +7184,59 @@ function emptyActionProjection(simulationTick: number) {
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
       });
+      expect(shadowMap?.renderList).toEqual(
+        expect.arrayContaining([...packAnimalVisual.meshes]),
+      );
+      expect(shadowMap?.renderList).toHaveLength(packAnimalVisual.meshes.length);
+
+      const unbind = await internal.preparePossessionTarget({ mode: "unbound" });
+      unbind.commitPrepared();
+      runtime.renderFrame();
+      expect(shadowMap?.renderList ?? []).toHaveLength(0);
     } finally {
       await runtime.dispose();
     }
   });
 
-  it("stages and commits a mounted Rider at the asymmetric Mount slot while suspending Rider locomotion", async () => {
+  it("publishes possession with a no-throw caster pointer swap", async () => {
+    const runtime = await createRuntime(
+      createV5StaticColliderSupportExecutionPlan(),
+      {},
+      false,
+    );
+    try {
+      const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      const shadowGenerator = scene.getLightByName("worldkit.light.sun")
+        ?.getShadowGenerator() as ShadowGenerator | null | undefined;
+      if (shadowGenerator === undefined || shadowGenerator === null) {
+        throw new Error("Expected clear-day contact ShadowGenerator.");
+      }
+      vi.spyOn(shadowGenerator, "removeShadowCaster").mockImplementation(() => {
+        throw new Error("provider mutation must not run during publication");
+      });
+      vi.spyOn(shadowGenerator, "addShadowCaster").mockImplementation(() => {
+        throw new Error("provider mutation must not run during publication");
+      });
+
+      const prepared = await internal.preparePossessionTarget({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+
+      expect(prepared.commitPrepared).not.toThrow();
+      expect(internal.readPossessionTarget()).toEqual({
+        mode: "possessed",
+        controlledEntityId: "pack-animal-a",
+      });
+      expect(() => runtime.renderFrame()).not.toThrow();
+    } finally {
+      vi.restoreAllMocks();
+      await runtime.dispose();
+    }
+  });
+
+  it("stages and commits mounted Rider state, possession, and contact-shadow caster atomically", async () => {
     const spec = createValidMountedOnAuthoringSpec();
     const terrainNode = spec.nodes.find((node) => node.kind === "terrain");
     const riderAnchor = spec.nodes.find((node) =>
@@ -7143,11 +7283,22 @@ function emptyActionProjection(simulationTick: number) {
     const runtime = await createRuntime(executionPlan, {}, false);
     try {
       const internal = runtime[BABYLON_GAMEPLAY_RUNTIME_INTERNAL]();
+      const scene = (runtime as unknown as { scene: Scene }).scene;
+      const shadowMap = scene.getLightByName("worldkit.light.sun")
+        ?.getShadowGenerator()?.getShadowMap();
+      const subjectVisuals = createSubjectVisualProbe(runtime);
+      const riderVisual = subjectVisuals.visual("pack-animal-a");
+      const mountVisual = subjectVisuals.visual("pack-animal-b");
       const bind = await internal.preparePossessionTarget({
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
       });
       bind.commitPrepared();
+      runtime.renderFrame();
+      expect(shadowMap?.renderList).toEqual(
+        expect.arrayContaining([...riderVisual.meshes]),
+      );
+      expect(shadowMap?.renderList).toHaveLength(riderVisual.meshes.length);
       const relationship = {
         id: "mounted-on:runtime-test",
         type: "mountedOn" as const,
@@ -7184,11 +7335,21 @@ function emptyActionProjection(simulationTick: number) {
           },
         },
       });
+      runtime.renderFrame();
+      expect(shadowMap?.renderList).toEqual(
+        expect.arrayContaining([...riderVisual.meshes]),
+      );
+      expect(shadowMap?.renderList).toHaveLength(riderVisual.meshes.length);
       prepared.commitPrepared();
+      runtime.renderFrame();
       expect(internal.readPossessionTarget()).toEqual({
         mode: "possessed",
         controlledEntityId: "pack-animal-b",
       });
+      expect(shadowMap?.renderList).toEqual(
+        expect.arrayContaining([...mountVisual.meshes]),
+      );
+      expect(shadowMap?.renderList).toHaveLength(mountVisual.meshes.length);
       expect(internal.readWorldProjection()).toEqual(
         prepared.projectedWorldStateAfter,
       );
@@ -7240,11 +7401,21 @@ function emptyActionProjection(simulationTick: number) {
           "pack-animal-b"
         ]!.positionMetersXYZ[0],
       );
+      runtime.renderFrame();
+      expect(shadowMap?.renderList).toEqual(
+        expect.arrayContaining([...mountVisual.meshes]),
+      );
+      expect(shadowMap?.renderList).toHaveLength(mountVisual.meshes.length);
       dismount.commitPrepared();
+      runtime.renderFrame();
       expect(internal.readPossessionTarget()).toEqual({
         mode: "possessed",
         controlledEntityId: "pack-animal-a",
       });
+      expect(shadowMap?.renderList).toEqual(
+        expect.arrayContaining([...riderVisual.meshes]),
+      );
+      expect(shadowMap?.renderList).toHaveLength(riderVisual.meshes.length);
       expect(internal.readWorldProjection()).toEqual(
         dismount.projectedWorldStateAfter,
       );

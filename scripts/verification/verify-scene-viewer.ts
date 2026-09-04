@@ -21,6 +21,7 @@ const G_BOT_SUBJECT_DEFINITION_REF =
   "worldkit://subject-definition/humanoid.g-bot@2";
 
 export const SCENE_VIEWER_PRESET_IDS = [
+  "whitebox-3c-test-course",
   "feel-flat",
   "traversal-course",
   "action-lab",
@@ -160,6 +161,8 @@ export interface CuratedPresetBrowserEvidenceV1 {
   readonly initialPositionMetersXYZ: readonly [number, number, number];
   readonly movedPositionMetersXYZ: readonly [number, number, number];
   readonly movedMeters: number;
+  readonly runtimeFeatureIds: readonly string[];
+  readonly courseRunMovedMeters?: number;
   readonly jumpedMeters: number;
   readonly tuningDraftUpdated: true;
   readonly unchangedSubjectEntityIds: readonly string[];
@@ -384,6 +387,35 @@ async function verifyCuratedPreset(
     viewerIdentity.selectorSceneIds,
     [...SCENE_VIEWER_PRESET_IDS],
   );
+  const runtimeFeatureIds = await page.locator("#feature-list [data-feature-id]")
+    .evaluateAll((elements) => elements.map((element) =>
+      (element as HTMLElement).dataset.featureId ?? ""
+    ).filter((featureId) => featureId.length > 0).sort());
+  if (presetId === "whitebox-3c-test-course") {
+    for (const requiredFeatureId of [
+      "gate-west",
+      "gate-east",
+      "stairs-1",
+      "stairs-6",
+      "slope-main",
+      "corridor-west",
+      "corridor-east",
+      "ledge-main",
+      "obstacle-small-1",
+      "obstacle-large-1",
+      "speed-turn-1",
+      "speed-turn-5",
+      "occlusion-pillar-1",
+      "occlusion-corner-east",
+      "jump-takeoff-main",
+      "jump-landing-main",
+    ]) {
+      assert.ok(
+        runtimeFeatureIds.includes(requiredFeatureId),
+        `whitebox-3c-test-course: runtime feature '${requiredFeatureId}' is missing.`,
+      );
+    }
+  }
 
   const routeQuery = await page.evaluate(
     ({ presetId: currentPresetId }) => {
@@ -491,6 +523,40 @@ async function verifyCuratedPreset(
     );
   }
 
+  let courseRunMovedMeters: number | undefined;
+  if (presetId === "whitebox-3c-test-course") {
+    const courseRun = await page.evaluate(async () => {
+      const api = window.__WORLDKIT__!;
+      const before = await api.reset();
+      const after = await api.runFixedInput([
+        { actions: ["move-forward", "run"], ticks: 600 },
+      ]);
+      return { before, after };
+    });
+    const beforeCourseSubject =
+      courseRun.before.world.subjectStatesByEntityId[controlledEntityId];
+    const afterCourseSubject =
+      courseRun.after.world.subjectStatesByEntityId[controlledEntityId];
+    assert.ok(beforeCourseSubject !== undefined && afterCourseSubject !== undefined);
+    courseRunMovedMeters = Math.hypot(
+      afterCourseSubject.entityState.positionMetersXYZ[0] -
+        beforeCourseSubject.entityState.positionMetersXYZ[0],
+      afterCourseSubject.entityState.positionMetersXYZ[1] -
+        beforeCourseSubject.entityState.positionMetersXYZ[1],
+      afterCourseSubject.entityState.positionMetersXYZ[2] -
+        beforeCourseSubject.entityState.positionMetersXYZ[2],
+    );
+    assert.ok(
+      courseRunMovedMeters > 25,
+      `whitebox-3c-test-course: run input moved only ${courseRunMovedMeters}m.`,
+    );
+    assert.ok(
+      afterCourseSubject.entityState.positionMetersXYZ[2] < 25,
+      "whitebox-3c-test-course: G Bot did not pass the narrow gate and enter the stair lane.",
+    );
+    await page.evaluate(async () => window.__WORLDKIT__!.reset());
+  }
+
   const jumped = await page.evaluate(async () => {
     const api = window.__WORLDKIT__!;
     const before = api.getSnapshot();
@@ -538,8 +604,9 @@ async function verifyCuratedPreset(
     const current = Number(slider.value);
     slider.value = String(current === maximum ? minimum : maximum);
     slider.dispatchEvent(new Event("input", { bubbles: true }));
-    return document.querySelector("#tuning-save-status")?.textContent
-      ?.includes("只保存为草稿") === true;
+    const status = document.querySelector("#tuning-save-status")?.textContent ?? "";
+    return status.includes("候选值已保存") &&
+      status.includes("重新编译后生效");
   });
   assert.equal(tuningDraftUpdated, true, `${presetId}: tuning draft did not update.`);
 
@@ -566,6 +633,8 @@ async function verifyCuratedPreset(
     initialPositionMetersXYZ: initialControlled.entityState.positionMetersXYZ,
     movedPositionMetersXYZ: afterPosition,
     movedMeters,
+    runtimeFeatureIds,
+    ...(courseRunMovedMeters === undefined ? {} : { courseRunMovedMeters }),
     jumpedMeters,
     tuningDraftUpdated: true,
     unchangedSubjectEntityIds,

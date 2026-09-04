@@ -18,8 +18,9 @@ function failed<T>(message: string): VerificationResultV1<T> {
 }
 
 describe("verify:scene-viewer", () => {
-  it("locks the three current G Bot Viewer presets and separate artifact catalog", () => {
+  it("locks the four current G Bot Viewer presets and separate artifact catalog", () => {
     expect(SCENE_VIEWER_PRESET_IDS).toEqual([
+      "whitebox-3c-test-course",
       "feel-flat",
       "traversal-course",
       "action-lab",

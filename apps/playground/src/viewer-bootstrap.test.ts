@@ -24,6 +24,19 @@ async function catalogAndSources() {
   };
 }
 
+function collectSemanticClassIds(value: unknown, ids = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const child of value) collectSemanticClassIds(child, ids);
+    return ids;
+  }
+  if (typeof value !== "object" || value === null) return ids;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "classId" && typeof child === "string") ids.add(child);
+    else collectSemanticClassIds(child, ids);
+  }
+  return ids;
+}
+
 describe("Viewer bootstrap V1", () => {
   it("selects the default curated G Bot preset without exposing source paths", async () => {
     const input = await catalogAndSources();
@@ -31,11 +44,164 @@ describe("Viewer bootstrap V1", () => {
 
     expect(bootstrap.selection).toMatchObject({
       kind: "curated-preset",
-      selectedSceneId: "feel-flat",
+      selectedSceneId: "whitebox-3c-test-course",
     });
-    expect(bootstrap.authoringSpec.id).toBe("feel-flat");
+    expect(bootstrap.authoringSpec.id).toBe("whitebox-3c-test-course");
     expect(JSON.stringify(bootstrap)).not.toContain("authoringSpecPath");
     expect(Object.isFrozen(bootstrap.authoringSpec)).toBe(true);
+  });
+
+  it("exposes one default Whitebox 3C course with every required test station", async () => {
+    const input = await catalogAndSources();
+    const bootstrap = await createCuratedViewerBootstrapV1({
+      ...input,
+      selectedSceneId: "whitebox-3c-test-course",
+    });
+    if (bootstrap.selection.kind !== "curated-preset") {
+      throw new Error("expected curated selection");
+    }
+
+    expect(input.catalog.defaultSceneId).toBe("whitebox-3c-test-course");
+    expect(bootstrap.selection.entries).toContainEqual({
+      id: "whitebox-3c-test-course",
+      title: "Whitebox 3C 测试场",
+      purpose: "traversal",
+    });
+    expect(bootstrap.authoringSpec.id).toBe("whitebox-3c-test-course");
+    const controlled = bootstrap.authoringSpec.nodes.find(
+      (node) => node.id === bootstrap.authoringSpec.startup.controlledEntityId,
+    );
+    expect(controlled).toMatchObject({
+      kind: "subject",
+      subjectDefinitionRef: "worldkit://subject-definition/humanoid.g-bot@2",
+    });
+    const camera = bootstrap.authoringSpec.nodes.find(
+      (node) => node.id === bootstrap.authoringSpec.startup.cameraEntityId,
+    );
+    expect(camera).toMatchObject({
+      kind: "camera",
+      components: {
+        cameraRig: {
+          defaultRigRef: "worldkit://camera/third-person.standard@1",
+          allowedRigRefs: ["worldkit://camera/third-person.standard@1"],
+          manualSwitchAllowed: false,
+        },
+      },
+    });
+    const spawn = bootstrap.authoringSpec.nodes.find(
+      (node) => node.id === bootstrap.authoringSpec.startup.spawnAnchorEntityId,
+    );
+    expect(spawn).toMatchObject({
+      kind: "anchor",
+      placement: {
+        kind: "fixed",
+        transform: { positionMetersXYZ: [expect.any(Number), 0, expect.any(Number)] },
+      },
+    });
+    const requiredStationClassIds = [
+      "3c.flat-calibration",
+      "3c.slope",
+      "3c.stairs",
+      "3c.narrow-gate",
+      "3c.ledge",
+      "3c.obstacle.small",
+      "3c.obstacle.large",
+      "3c.narrow-corridor",
+      "3c.high-speed-turn",
+      "3c.camera-occlusion",
+      "3c.jump-takeoff",
+      "3c.jump-landing",
+    ] as const;
+    const semanticClassIds = collectSemanticClassIds(bootstrap.authoringSpec);
+    for (const classId of requiredStationClassIds) {
+      expect(semanticClassIds.has(classId), classId).toBe(true);
+    }
+
+    const objectNodes = bootstrap.authoringSpec.nodes.filter(
+      (node) => node.kind === "object",
+    );
+    const placedPrototypeRefs = new Set(
+      objectNodes.map((node) => node.prototypeRef),
+    );
+    for (const classId of requiredStationClassIds.filter(
+      (candidate) => candidate !== "3c.flat-calibration",
+    )) {
+      const matchingPrototypes = bootstrap.authoringSpec.resources.prototypes
+        .filter((prototype) => prototype.semantic?.classId === classId);
+      expect(matchingPrototypes.length, `${classId} prototype count`).toBeGreaterThan(0);
+      expect(
+        matchingPrototypes.some((prototype) =>
+          placedPrototypeRefs.has(
+            `package://prototype/${prototype.id}@${prototype.version}`,
+          )
+        ),
+        `${classId} must be instantiated in the course`,
+      ).toBe(true);
+    }
+
+    const fixedPosition = (entityId: string): readonly [number, number, number] => {
+      const node = objectNodes.find((candidate) => candidate.id === entityId);
+      if (node?.placement.kind !== "fixed") {
+        throw new Error(`Expected fixed course object '${entityId}'.`);
+      }
+      return node.placement.transform.positionMetersXYZ;
+    };
+    const prototype = (prototypeId: string) => {
+      const found = bootstrap.authoringSpec.resources.prototypes.find(
+        (candidate) => candidate.id === prototypeId,
+      );
+      if (found === undefined) throw new Error(`Missing prototype '${prototypeId}'.`);
+      return found;
+    };
+
+    const gateWidthMeters = Math.abs(fixedPosition("gate-east")[0] - fixedPosition("gate-west")[0]);
+    const gatePost = prototype("gate-post");
+    if (gatePost.kind !== "primitive" || gatePost.primitive !== "box") {
+      throw new Error("Expected box gate-post prototype.");
+    }
+    expect(gateWidthMeters - gatePost.sizeMetersXYZ[0]).toBeCloseTo(1.6, 6);
+
+    const stairTread = prototype("stair-tread");
+    if (stairTread.kind !== "primitive" || stairTread.primitive !== "box") {
+      throw new Error("Expected box stair-tread prototype.");
+    }
+    const stairTopHeights = objectNodes
+      .filter((node) => node.id.startsWith("stairs-"))
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((node) => {
+        if (node.placement.kind !== "fixed") throw new Error("Expected fixed stair.");
+        const scaleY = node.placement.transform.scaleXYZ?.[1] ?? 1;
+        return node.placement.transform.positionMetersXYZ[1] +
+          stairTread.sizeMetersXYZ[1] * scaleY / 2;
+      });
+    stairTopHeights.forEach((heightMeters, index) => {
+      expect(heightMeters).toBeCloseTo((index + 1) * 0.2, 6);
+    });
+
+    const corridorWall = prototype("corridor-wall");
+    if (corridorWall.kind !== "primitive" || corridorWall.primitive !== "box") {
+      throw new Error("Expected box corridor-wall prototype.");
+    }
+    const corridorClearanceMeters =
+      Math.abs(fixedPosition("corridor-east")[0] - fixedPosition("corridor-west")[0]) -
+      corridorWall.sizeMetersXYZ[0];
+    expect(corridorClearanceMeters).toBeCloseTo(1.5, 6);
+
+    const speedTurnPositions = objectNodes
+      .filter((node) => node.id.startsWith("speed-turn-"))
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((node) => fixedPosition(node.id));
+    expect(speedTurnPositions.map(([x]) => x)).toEqual([19, 29, 19, 29, 19]);
+    expect(speedTurnPositions.map(([, , z]) => z)).toEqual([44, 35, 26, 17, 8]);
+
+    expect(
+      Math.abs(
+        fixedPosition("jump-landing-main")[2] -
+        fixedPosition("jump-takeoff-main")[2],
+      ),
+    ).toBe(9);
+    expect(objectNodes.filter((node) => node.id.startsWith("occlusion-pillar-")))
+      .toHaveLength(3);
   });
 
   it("rejects unknown presets and curated sources whose controlled Subject is not G Bot", async () => {
