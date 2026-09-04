@@ -1700,6 +1700,12 @@ immutable and run another independently identified initial Case execution under 
 Case/Profile until a genuine repairable diagnostic occurs. Do not alter thresholds, inject fake evidence, or
 corrupt a passed Package to manufacture repair.
 
+The interactive production command does not repeat a fresh Browser playability replay after the same Package
+has already passed formal Capture and evaluation. It runs the immutable Run/Package/Capture/Evaluation identity
+closure with `playability.mode = "skipped"` and may publish the checked result for immediate human preview.
+This short path matches the accepted v2-style iteration loop; it does not satisfy the separate NBR-70
+playability acceptance below.
+
 - [ ] **Step 4: Run the artifact and playability verifier**
 
 ```bash
@@ -1715,9 +1721,9 @@ Opening/top/world-side visibly show foreground, central ascent, mountain layers,
 
 - [ ] **Step 5: Promote final artifacts atomically**
 
-Copy the verified terminal Package/Capture/Evaluation into the Case-root sibling
+Copy the checked terminal Package/Capture/Evaluation into the Case-root sibling
 `artifacts/scenes/cloud-temple-t-gate-native-block/.final-staging`, write the canonical
-`launch.json`, run the same verifier in Final mode against those copied bytes, then atomically
+`launch.json`, run the verifier's immutable Final identity mode with fresh Browser playability skipped, then atomically
 rename the staging directory to `artifacts/scenes/cloud-temple-t-gate-native-block/final`.
 Reject an existing/symlinked staging path and never mutate Attempt artifacts. `launch.json` uses
 the closed fields `kind: "native-block-reconstruction-launch"`, `schemaVersion: 1`, `caseId`,

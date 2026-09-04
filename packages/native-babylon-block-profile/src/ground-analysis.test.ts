@@ -669,9 +669,64 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
 
     expect(result.metrics.reachablePositionCount).toBeGreaterThan(1);
     expect(result.metrics.reachableRequiredTraversalBandCount).toBe(0);
-    expect(result.failureFacts.map(({ metricId }) => metricId)).toContain(
-      "ground-traversal-band-reachability",
+    const failure = result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-traversal-band-reachability");
+    expect(failure).toMatchObject({
+      details: {
+        kind: "state-mismatch",
+        actualValue: "disconnected-inside-band:segment-000",
+      },
+    });
+    expect(failure?.message).toContain(
+      "segment segment-000 from [0.25,0.25,0.25] to [1.75,0.25,0.25]",
     );
+    expect(failure?.repairInstruction).toContain(
+      "between [0.25,0.25,0.25] and [1.75,0.25,0.25]",
+    );
+    expect(failure?.repairInstruction).toContain(
+      "both endpoint supports exist, but no connected path stays inside the band",
+    );
+  });
+
+  it("identifies the exact missing endpoint in a traversal band", () => {
+    const unsupportedDestination = position("4,1,0");
+    const result = analyze({
+      supportTopCellKeys: rectangle(-1, 1, -1, 1),
+      caseIntent: caseIntent({
+        spawn: SPAWN,
+        requiredTraversalBands: Object.freeze([{
+          id: "missing-endpoint-band",
+          acceptanceTargetRef:
+            "worldkit://acceptance-target/missing-endpoint-band@1",
+          centerlineStandPositionsMetersXYZ: Object.freeze([
+            SPAWN.standPositionMetersXYZ,
+            unsupportedDestination,
+          ]),
+          halfWidthMeters: 0.5,
+        }]),
+      }),
+    });
+
+    const failure = result.failureFacts.find(({ metricId }) =>
+      metricId === "ground-traversal-band-reachability");
+    expect(failure).toMatchObject({
+      details: {
+        kind: "state-mismatch",
+        actualValue: "destination-node-missing:segment-000",
+      },
+    });
+    expect(failure?.message).toContain(
+      "the segment destination does not resolve to a standable ground node",
+    );
+    expect(result.failureFacts).toContainEqual(expect.objectContaining({
+      targetId: "missing-endpoint-band-waypoint-001",
+      metricId: "ground-support-coverage-basis-points",
+      details: expect.objectContaining({
+        kind: "basis-points-threshold",
+        expectedBasisPoints: 10_000,
+        actualBasisPoints: 0,
+      }),
+    }));
   });
 
   it("measures disconnected islands without blocking an air-Spawn Case", () => {
