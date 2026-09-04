@@ -1,16 +1,24 @@
-import { cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
-import { sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
+  createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
 import { hashBabylonNativeSceneContributionV1 } from "@whitebox-world/runtime-contracts";
 import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
-import { parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
+import {
+  hashWorldReconstructionEvaluationProfileV1,
+  parseWorldReconstructionCaseV1,
+  parseWorldReconstructionEvaluationProfileV1,
+} from "@whitebox-world/validation";
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 import { afterEach, describe, expect, it } from "vitest";
+import sharp from "sharp";
 
 import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 import { runNativeBlockGenerationV1 } from "./generation-runner.js";
@@ -34,6 +42,110 @@ const HOST_CLOSURE_ROOT = path.join(
   "apps/playground/public/world-packages/cloud-ridge",
 );
 const temporaryRoots: string[] = [];
+const execFileAsync = promisify(execFile);
+
+function plannerPaletteMeasurement(
+  visualTargetPixelCounts: readonly number[],
+): unknown {
+  return {
+    widthPixels: 1600,
+    heightPixels: 900,
+    aspectRatio: 16 / 9,
+    matchedBlockPixelCount: 72_000,
+    blockPaletteCoverageRatio: 72_000 / (1600 * 900),
+    traversablePixelCount: 64_000,
+    interactivePixelCount: 0,
+    blockPixelCountsBySemantic: {
+      walkable: 64_000,
+      obstacle: 0,
+      "interactive-solid": 0,
+      "interactive-trigger": 0,
+      water: 0,
+      "cloud-walkable": 0,
+      "cloud-passable": 0,
+      "visual-only": 0,
+      "landmark-red": 0,
+      "visual-target-2": 4_000,
+      "visual-target-3": 4_000,
+      "visual-target-4": 0,
+      "visual-target-5": 0,
+      "landmark-pink": 0,
+      "visual-target-1-subject": 32_000,
+    },
+    visualTargetPixelCounts,
+  };
+}
+
+function nativePlannerReceiptText(input: Readonly<{
+  sceneId: string;
+  sceneBriefHash: Sha256HashV1;
+  entryWhiteboxTargetHash: Sha256HashV1;
+  worldPlanHash: Sha256HashV1;
+}>): string {
+  return stringifyCanonicalJson({
+    kind: "worldkit-planner-self-check",
+    schemaVersion: 1,
+    validatorVersion: "worldkit-planner-self-check-v4",
+    sceneId: input.sceneId,
+    sceneSourceKind: "babylon-native",
+    status: "passed",
+    inputs: {
+      sceneBriefHash: input.sceneBriefHash,
+      worldPlanHash: input.worldPlanHash,
+      entryWhiteboxTargetHash: input.entryWhiteboxTargetHash,
+    },
+    imageMeasurements: {
+      widthPixels: 1600,
+      heightPixels: 900,
+      subjectMaskPixelCount: 32_000,
+      subjectCenterXRatio: 0.5,
+      subjectCenterErrorRatio: 0,
+      maximumCenterErrorRatio: 0.015,
+    },
+    nativeBlockPaletteMeasurements: {
+      worldPlan: plannerPaletteMeasurement([64, 64, 64, 0, 0]),
+      entryWhiteboxTarget: plannerPaletteMeasurement([32_000, 0, 0, 0, 0]),
+    },
+    nativeEntryIdentityMeasurements: {
+      widthPixels: 1600,
+      heightPixels: 900,
+      aspectRatio: 16 / 9,
+      aspectErrorRatio: 0,
+      requiredAspectRatio: 16 / 9,
+      maximumAspectErrorRatio: 0.02,
+      maximumIdentityRgbDistance: 40,
+      minimumIdentitySeparationRgbUnits: 12,
+      ambiguousIdentityPixelCount: 0,
+      candidateIdentityPixelCount: 32_000,
+      ambiguousIdentityRatio: 0,
+      maximumAmbiguousIdentityRatio: 0.05,
+      targets: [{
+        visualTargetId: "visual-target-1",
+        identityColorHex: "#E85D5D",
+        exclusivelyAdmittedPixelCount: 32_000,
+        imageCoverageRatio: 32_000 / (1600 * 900),
+        componentCount: 1,
+        coherentComponentCount: 1,
+        coherentPixelCount: 32_000,
+        coherentPixelRatio: 1,
+        largestComponentPixelCount: 32_000,
+        largestComponentImageCoverageRatio: 32_000 / (1600 * 900),
+        largestComponentBoundingBoxWidthPixels: 160,
+        largestComponentBoundingBoxHeightPixels: 320,
+        largestComponentBoundingBoxWidthRatio: 0.1,
+        largestComponentBoundingBoxHeightRatio: 320 / 900,
+        minimumPixelCount: 360,
+        minimumCoherentComponentPixelCount: 36,
+        minimumCoherentPixelRatio: 0.75,
+        minimumLargestComponentPixelCount: 1440,
+        minimumLargestComponentImageCoverageRatio: 0.001,
+        minimumLargestComponentBoundingBoxWidthRatio: 0.02,
+        minimumLargestComponentBoundingBoxHeightRatio: 0.04,
+      }],
+    },
+    diagnostics: [],
+  });
+}
 
 const SCENE_SOURCE = `import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
 import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
@@ -86,7 +198,25 @@ const REGENERATED_GRID_SCENE_SOURCE = SCENE_SOURCE
     `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [5, -0.5, 2] });`,
   );
 
-const DISCONNECTED_ROUTE_SCENE_SOURCE = SCENE_SOURCE.replace(
+const MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
+  `    const capturedContext = context;
+    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [capturedContext.scene === undefined ? 4 : 5, -0.5, 2] });`,
+);
+
+const MOCK_CONTEXT_GAP_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `    session.finalize({ staticColliders: [`,
+  `    const capturedContext = context;
+    session.finalize({ displayGapMeters: capturedContext.scene === undefined ? 0.04 : 0.08, staticColliders: [`,
+);
+
+const MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE = SCENE_SOURCE.replace(
+  `    context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, 18], facingRadians: 0 });`,
+  `    const spawnContext = context;
+    context.registration.registerSpawnMarker({ id: context.bootstrap.spawnMarkerId, positionMetersXYZ: [0, 0, spawnContext.scene === undefined ? 18 : 17], facingRadians: 0 });`,
+);
+
+const MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE = SCENE_SOURCE.replace(
   `    session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
   `    session.createBlock({id: "isolated-route", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", centerMetersXYZ: [20, -0.5, 20] });
     session.createBlock({id: "gate", shape: "full", paletteRole: "structure", visualGroupId: "gate-mass-group", centerMetersXYZ: [4, -0.5, 2] });`,
@@ -131,6 +261,8 @@ afterEach(async () => {
 async function completedAttempt(options: Readonly<{
   sceneSource?: string;
   authoring?: typeof AUTHORING | typeof EXTRA_VISUAL_GROUP_AUTHORING;
+  omitAdvisory?: boolean;
+  target3IdentityColorHex?: string;
 }> = {}) {
   const sceneSource = options.sceneSource ?? SCENE_SOURCE;
   const authoring = options.authoring ?? AUTHORING;
@@ -157,7 +289,134 @@ async function completedAttempt(options: Readonly<{
       { xMeters: 0, yMeters: 0, zMeters: 10 },
       { xMeters: 0, yMeters: 0, zMeters: 3 },
     ];
-  await writeFile(casePath, `${stringifyCanonicalJson(caseValue)}\n`);
+  const nativeTarget3Ref =
+    "worldkit://acceptance-target/visual-target-3@1";
+  const gateTargetRef = "worldkit://acceptance-target/gate-mass@1";
+  if (options.target3IdentityColorHex !== undefined) {
+    caseValue.acceptanceTargetRefs = caseValue.acceptanceTargetRefs
+      .map((targetRef: string) =>
+        targetRef === gateTargetRef ? nativeTarget3Ref : targetRef)
+      .sort();
+    caseValue.expected.semanticSilhouetteTargets =
+      caseValue.expected.semanticSilhouetteTargets
+        .map((target: { acceptanceTargetRef: string }) => ({
+          ...target,
+          acceptanceTargetRef: target.acceptanceTargetRef === gateTargetRef
+            ? nativeTarget3Ref
+            : target.acceptanceTargetRef,
+        }))
+        .sort((left: { acceptanceTargetRef: string }, right: {
+          acceptanceTargetRef: string;
+        }) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
+    for (const target of [
+      ...caseValue.expected.colliders,
+      ...caseValue.expected.criticalTraversalChecks,
+    ]) {
+      if (target.acceptanceTargetRef === gateTargetRef) {
+        target.acceptanceTargetRef = nativeTarget3Ref;
+      }
+    }
+    profileValue.thresholds.semanticSilhouetteTargets =
+      profileValue.thresholds.semanticSilhouetteTargets
+        .map((target: { acceptanceTargetRef: string }) => ({
+          ...target,
+          acceptanceTargetRef: target.acceptanceTargetRef === gateTargetRef
+            ? nativeTarget3Ref
+            : target.acceptanceTargetRef,
+        }))
+        .sort((left: { acceptanceTargetRef: string }, right: {
+          acceptanceTargetRef: string;
+        }) => left.acceptanceTargetRef.localeCompare(right.acceptanceTargetRef));
+    caseValue.evaluationProfileHash =
+      hashWorldReconstructionEvaluationProfileV1(
+        parseWorldReconstructionEvaluationProfileV1(profileValue),
+      );
+  }
+  const visualReviewInputBytes = await readFile(path.join(
+    inputDirectoryPath,
+    "reference-0.png",
+  ));
+  const entryWhiteboxTargetHash = sha256Bytes(
+    visualReviewInputBytes,
+  ) as Sha256HashV1;
+  const worldPlanHash = sha256Bytes(visualReviewInputBytes) as Sha256HashV1;
+  const visualIdentityPaletteBytes = new TextEncoder().encode(
+    stringifyCanonicalJson({
+      kind: "worldkit-visual-identity-palette",
+      schemaVersion: 1,
+      sceneId: caseValue.id,
+      sceneBriefHash: caseValue.sceneBriefHash,
+      movementMode: "ground-walk",
+      movementModeLabel: "Ground walk",
+      targets: [
+        { id: "visual-target-1", visualTargetId: "visual-target-1", targetKind: "subject", name: "Explorer", description: "controlled Subject", role: "primary-subject", semanticClassId: "visual.subject", identityColor: "#E85D5D" },
+        ...(options.target3IdentityColorHex === undefined ? [] : [
+          { id: "visual-target-2", visualTargetId: "visual-target-2", targetKind: "landmark", name: "Gate", description: "primary gate", role: "primary-landmark", semanticClassId: "visual.gate", identityColor: "#F28E2B" },
+          { id: "visual-target-3", visualTargetId: "visual-target-3", targetKind: "landmark", name: "Moon", description: "remote moon", role: "secondary-landmark", semanticClassId: "visual.moon", identityColor: "#D9A514" },
+        ]),
+      ],
+    }),
+  );
+  const plannerReceiptBytes = new TextEncoder().encode(
+    nativePlannerReceiptText({
+      sceneId: caseValue.id,
+      sceneBriefHash: caseValue.sceneBriefHash as Sha256HashV1,
+      entryWhiteboxTargetHash,
+      worldPlanHash,
+    }),
+  );
+  await Promise.all([
+    writeFile(
+      path.join(inputDirectoryPath, "entry-whitebox-target.png"),
+      visualReviewInputBytes,
+      { flag: "wx" },
+    ),
+    writeFile(
+      path.join(inputDirectoryPath, "world-plan.png"),
+      visualReviewInputBytes,
+      { flag: "wx" },
+    ),
+    writeFile(
+      path.join(inputDirectoryPath, "planner-self-check.json"),
+      plannerReceiptBytes,
+      { flag: "wx" },
+    ),
+    writeFile(
+      path.join(inputDirectoryPath, "visual-identity-palette.json"),
+      visualIdentityPaletteBytes,
+      { flag: "wx" },
+    ),
+  ]);
+  caseValue.referenceInputs = [
+    ...caseValue.referenceInputs,
+    {
+      inputRef: "entry-whitebox-target.png",
+      contentHash: entryWhiteboxTargetHash,
+      mediaType: "image/png",
+    },
+    {
+      inputRef: "planner-self-check.json",
+      contentHash: sha256Bytes(plannerReceiptBytes),
+      mediaType: "application/json",
+    },
+    {
+      inputRef: "visual-identity-palette.json",
+      contentHash: sha256Bytes(visualIdentityPaletteBytes),
+      mediaType: "application/json",
+    },
+    {
+      inputRef: "world-plan.png",
+      contentHash: worldPlanHash,
+      mediaType: "image/png",
+    },
+  ].sort((left, right) => left.inputRef.localeCompare(right.inputRef));
+  await Promise.all([
+    writeFile(casePath, `${stringifyCanonicalJson(caseValue)}\n`),
+    writeFile(
+      path.join(caseRoot, "evaluation-profile.json"),
+      `${stringifyCanonicalJson(profileValue)}\n`,
+    ),
+  ]);
   const reconstructionCase = parseWorldReconstructionCaseV1(caseValue);
   const profile = parseWorldReconstructionEvaluationProfileV1(profileValue);
   const routeDecision = decideSceneAuthoringRouteV1({
@@ -201,15 +460,69 @@ async function completedAttempt(options: Readonly<{
       maximumStaticColliderCount: 8,
       maximumStaticColliderVertexCount: 1024,
       maximumStaticColliderTriangleCount: 1024,
-      maximumOutputBytes: 100_000,
+      maximumOutputBytes: 4_000_000,
       timeoutSeconds: 30,
     },
   });
   await Promise.all([
     writeFile(path.join(prepared.stagingDirectoryPath, "scene.ts"), sceneSource),
-    writeFile(path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"), stringifyCanonicalJson(authoring)),
+    writeFile(
+      path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"),
+      stringifyCanonicalJson(options.target3IdentityColorHex === undefined
+        ? authoring
+        : {
+            ...authoring,
+            visualGroups: authoring.visualGroups.map((group) =>
+              group.acceptanceTargetRef !== gateTargetRef
+                ? group
+                : {
+                    ...group,
+                    acceptanceTargetRef: nativeTarget3Ref,
+                    semanticClassId: "visual.moon",
+                    identityColorHex: options.target3IdentityColorHex,
+                  }),
+          }),
+    ),
     writeFile(path.join(prepared.stagingDirectoryPath, "native-resources.json"), stringifyCanonicalJson({ kind: "native-visual-resource-list", schemaVersion: 1, resourceRefs: [] })),
   ]);
+  if (options.omitAdvisory !== true) {
+    const attemptDirectoryPath = path.dirname(prepared.stagingDirectoryPath);
+    const advisoryDirectoryPath = path.join(attemptDirectoryPath, "advisory");
+    await mkdir(advisoryDirectoryPath, { recursive: true });
+    await execFileAsync(process.execPath, [
+      path.join(
+        prepared.taskWorkspacePath,
+        "inputs/builder-skill/scripts/render-visual-review.mjs",
+      ),
+      "--workspace",
+      prepared.taskWorkspacePath,
+      "--source",
+      path.join(prepared.stagingDirectoryPath, "scene.ts"),
+      "--authoring",
+      path.join(prepared.stagingDirectoryPath, "native-block-authoring.json"),
+      "--bootstrap",
+      path.join(prepared.taskWorkspacePath, "inputs/native-scene.bootstrap.json"),
+      "--subject-visual-review-proxy",
+      path.join(
+        prepared.taskWorkspacePath,
+        "inputs/subject-visual-review-proxy.json",
+      ),
+      "--world-plan",
+      path.join(prepared.taskWorkspacePath, "inputs/world-plan.png"),
+      "--entry-target",
+      path.join(prepared.taskWorkspacePath, "inputs/entry-whitebox-target.png"),
+      "--top-down-output",
+      path.join(advisoryDirectoryPath, "builder-top-down-comparison.png"),
+      "--entry-output",
+      path.join(advisoryDirectoryPath, "builder-entry-comparison.png"),
+    ], {
+      cwd: prepared.taskWorkspacePath,
+      encoding: "utf8",
+      maxBuffer: 1_000_000,
+      shell: false,
+      timeout: 30_000,
+    });
+  }
   const generated = await runNativeBlockGenerationV1(prepared, {
     process: {
       async run() {
@@ -247,7 +560,38 @@ async function completedAttempt(options: Readonly<{
   };
 }
 
+async function expectVisualReviewRejectedBeforeGround(
+  fixture: Awaited<ReturnType<typeof completedAttempt>>,
+  diagnostic: string,
+): Promise<void> {
+  await expect(packageNativeBlockAttemptV1({
+    repositoryRoot: REPOSITORY_ROOT,
+    attemptDirectoryPath: fixture.attemptDirectoryPath,
+    casePath: fixture.casePath,
+    outputDirectoryPath: fixture.outputDirectoryPath,
+  })).rejects.toMatchObject({ diagnostics: [diagnostic] });
+  await expect(lstat(path.join(
+    fixture.attemptDirectoryPath,
+    "native-check-result.json",
+  ))).resolves.toBeDefined();
+  await expect(lstat(path.join(
+    fixture.attemptDirectoryPath,
+    "ground-analysis-report.json",
+  ))).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+  expect((await readdir(fixture.attemptDirectoryPath)).filter((name) =>
+    name.startsWith(".native-block-visual-replay-")
+  )).toEqual([]);
+}
+
 describe("packageNativeBlockAttemptV1", () => {
+  it("exposes the single materialized Profile identity authority through the Host entrypoint", () => {
+    expect(typeof createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1)
+      .toBe("function");
+  });
+
   it("fails closed when the Profile topology exceeds the controlled Subject envelope", () => {
     const evidence = (options: Readonly<{
       riseMeters?: number;
@@ -315,18 +659,25 @@ describe("packageNativeBlockAttemptV1", () => {
     )).toThrow(/topology identity or Profile policy is stale/);
   });
 
-  it("keeps Runtime as the sole light owner for Block production Modules", () => {
+  it("admits exactly the two current Native Block imports in production", () => {
     expect(() => assertNativeBlockProductionSourceImportsV1([
       "@whitebox-world/native-babylon",
       "@whitebox-world/native-babylon-block-profile",
-      "@babylonjs/core/Materials/standardMaterial.js",
     ])).not.toThrow();
     expect(() => assertNativeBlockProductionSourceImportsV1([
-      "@babylonjs/core/Lights/hemisphericLight.js",
-      "@babylonjs/core/Lights/directionalLight.js",
+      "@whitebox-world/native-babylon",
+      "@whitebox-world/native-babylon-block-profile",
+      "@babylonjs/core/Maths/math.vector.js",
     ])).toThrowError(expect.objectContaining({
       diagnostics: [
-        "production-native-light-import-forbidden:@babylonjs/core/Lights/directionalLight.js,@babylonjs/core/Lights/hemisphericLight.js",
+        "production-native-import-set-invalid:@babylonjs/core/Maths/math.vector.js,@whitebox-world/native-babylon,@whitebox-world/native-babylon-block-profile",
+      ],
+    }));
+    expect(() => assertNativeBlockProductionSourceImportsV1([
+      "@whitebox-world/native-babylon",
+    ])).toThrowError(expect.objectContaining({
+      diagnostics: [
+        "production-native-import-set-invalid:@whitebox-world/native-babylon",
       ],
     }));
   });
@@ -443,6 +794,242 @@ describe("packageNativeBlockAttemptV1", () => {
       fixture.attemptDirectoryPath,
       "scene-authoring-attempt-result.json",
     ))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await readdir(fixture.attemptDirectoryPath)).filter((name) =>
+      name.startsWith(".native-block-visual-replay-")
+    )).toEqual([]);
+  }, 60_000);
+
+  it("rejects a Builder-selected target color before Native Check", async () => {
+    const fixture = await completedAttempt({
+      target3IdentityColorHex: "#123456",
+      omitAdvisory: true,
+    });
+
+    await expect(packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    })).rejects.toMatchObject({
+      diagnostics: [
+        "WORLDKIT_NATIVE_BLOCK_VISUAL_IDENTITY_BINDING_INVALID",
+      ],
+      visualIdentityAdmissionRejection: {
+        outcome: "rejected",
+        diagnostics: [expect.objectContaining({
+          reason: "identity-color-mismatch",
+          visualTargetId: "visual-target-3",
+          expectedIdentityColorHex: "#D9A514",
+          actualIdentityColorHex: "#123456",
+        })],
+      },
+    });
+    await expect(lstat(path.join(
+      fixture.attemptDirectoryPath,
+      "native-check-result.json",
+    ))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  }, 60_000);
+
+  it("completes Package publication when route palette Blocks form multiple advisory components", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: MULTIPLE_ROUTE_COMPONENTS_SCENE_SOURCE,
+    });
+
+    const packaged = await packageNativeBlockAttemptV1({
+      repositoryRoot: REPOSITORY_ROOT,
+      attemptDirectoryPath: fixture.attemptDirectoryPath,
+      casePath: fixture.casePath,
+      outputDirectoryPath: fixture.outputDirectoryPath,
+    });
+
+    expect(packaged.outcome).toBe("completed");
+    expect(packaged.checkResult.outcome).toBe("passed");
+    expect(packaged.groundAnalysisReport.admissionOutcome).toBe("passed");
+    const routeBlocks = packaged.verifiedWorldPackage
+      .nativeBlockMaterializerMetadata?.blocks.filter(
+        ({ paletteRole }) => paletteRole === "route",
+      );
+    expect(routeBlocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        blockId: "isolated-route",
+        centerMetersXYZ: [20, -0.5, 20],
+      }),
+      expect.objectContaining({
+        blockId: "central-x0-y0-z0",
+      }),
+    ]));
+    expect(await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "native-explain.txt",
+    ), "utf8")).toBe("outcome: passed\n");
+  }, 60_000);
+
+  it("fails closed after Native Check when one Builder advisory output is missing", async () => {
+    const fixture = await completedAttempt();
+    await rm(path.join(
+      fixture.attemptDirectoryPath,
+      "advisory/builder-top-down-comparison.png",
+    ));
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-output-missing",
+    );
+  }, 60_000);
+
+  it("fails closed on a valid fixed-dimension PNG whose decoded RGBA differs from Host replay", async () => {
+    const fixture = await completedAttempt();
+    const topPath = path.join(
+      fixture.attemptDirectoryPath,
+      "advisory/builder-top-down-comparison.png",
+    );
+    const decoded = await sharp(await readFile(topPath))
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    decoded.data[0] = decoded.data[0] === 255 ? 254 : decoded.data[0]! + 1;
+    await writeFile(topPath, await sharp(decoded.data, {
+      raw: decoded.info,
+    }).png().toBuffer());
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-rgba-mismatch",
+    );
+  }, 60_000);
+
+  it("rejects advisory pixels whose mock layout differs from the checked Native Profile layout", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: MOCK_CONTEXT_LAYOUT_BRANCH_SCENE_SOURCE,
+    });
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-layout-mismatch",
+    );
+  }, 60_000);
+
+  it("joins captured displayGap through the checked Profile inventory identity", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: MOCK_CONTEXT_GAP_BRANCH_SCENE_SOURCE,
+    });
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-layout-mismatch",
+    );
+  }, 60_000);
+
+  it("joins captured Spawn exactly to the checked Native contribution", async () => {
+    const fixture = await completedAttempt({
+      sceneSource: MOCK_CONTEXT_SPAWN_BRANCH_SCENE_SOURCE,
+    });
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-layout-mismatch",
+    );
+  }, 60_000);
+
+  it("fails closed before reading advisory output bytes outside the closed budget", async () => {
+    const fixture = await completedAttempt();
+    await writeFile(path.join(
+      fixture.attemptDirectoryPath,
+      "advisory/builder-top-down-comparison.png",
+    ), Buffer.alloc(4_000_001));
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-output-budget-exceeded",
+    );
+  }, 60_000);
+
+  it("rejects a compressed PNG whose decoded pixels exceed the fixed review surface", async () => {
+    const fixture = await completedAttempt();
+    const compressedBomb = await sharp({
+      create: {
+        width: 2_048,
+        height: 2_048,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 1 },
+      },
+    }).png({ compressionLevel: 9 }).toBuffer();
+    await writeFile(path.join(
+      fixture.attemptDirectoryPath,
+      "advisory/builder-top-down-comparison.png",
+    ), compressedBomb);
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-png-invalid",
+    );
+  }, 60_000);
+
+  it("rejects a valid PNG with the wrong fixed review dimensions", async () => {
+    const fixture = await completedAttempt();
+    const entryBytes = await readFile(path.join(
+      fixture.attemptDirectoryPath,
+      "advisory/builder-entry-comparison.png",
+    ));
+    await writeFile(path.join(
+      fixture.attemptDirectoryPath,
+      "advisory/builder-top-down-comparison.png",
+    ), entryBytes);
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-png-invalid",
+    );
+  }, 60_000);
+
+  it("fails closed when the durable Builder renderer no longer closes its frozen hash", async () => {
+    const fixture = await completedAttempt();
+    const rendererPath = path.join(
+      fixture.attemptDirectoryPath,
+      "inputs/builder-skill/scripts/render-visual-review.mjs",
+    );
+    await writeFile(
+      rendererPath,
+      Buffer.concat([await readFile(rendererPath), Buffer.from("\n")]),
+    );
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-renderer-stale",
+    );
+  }, 60_000);
+
+  it("fails closed when the Host-owned Subject visual proxy bytes drift", async () => {
+    const fixture = await completedAttempt();
+    const proxyPath = path.join(
+      fixture.attemptDirectoryPath,
+      "inputs/subject-visual-review-proxy.json",
+    );
+    await writeFile(
+      proxyPath,
+      Buffer.concat([await readFile(proxyPath), Buffer.from("\n")]),
+    );
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-subject-visual-review-proxy-stale",
+    );
+  }, 60_000);
+
+  it("fails closed when a durable planning image no longer closes Case and Request identity", async () => {
+    const fixture = await completedAttempt();
+    await writeFile(path.join(
+      fixture.attemptDirectoryPath,
+      "inputs/world-plan.png",
+    ), "tampered");
+
+    await expectVisualReviewRejectedBeforeGround(
+      fixture,
+      "native-block-visual-review-input-stale",
+    );
   }, 60_000);
 
   it("reports the stable authoring/Layout binding diagnostic instead of an internal Package failure", async () => {
@@ -569,29 +1156,10 @@ describe("packageNativeBlockAttemptV1", () => {
     });
   }, 60_000);
 
-  it("rejects a generated module that still places Blocks after creation", async () => {
+  it("rejects post-creation Block placement without inventing a Builder repair", async () => {
     const fixture = await completedAttempt({
       sceneSource: REPLACED_PLACEMENT_DIALECT_SCENE_SOURCE,
-    });
-
-    await expect(packageNativeBlockAttemptV1({
-      repositoryRoot: REPOSITORY_ROOT,
-      attemptDirectoryPath: fixture.attemptDirectoryPath,
-      casePath: fixture.casePath,
-      outputDirectoryPath: fixture.outputDirectoryPath,
-    })).rejects.toMatchObject({ diagnostics: ["native-check-rejected"] });
-    expect(await readFile(path.join(
-      fixture.attemptDirectoryPath,
-      "native-check-result.json",
-    ), "utf8")).toContain("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
-    await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
-      code: "ENOENT",
-    });
-  }, 60_000);
-
-  it("preserves a trusted Block-profile owner code when Native Check rejects", async () => {
-    const fixture = await completedAttempt({
-      sceneSource: DISCONNECTED_ROUTE_SCENE_SOURCE,
+      omitAdvisory: true,
     });
 
     await expect(packageNativeBlockAttemptV1({
@@ -600,31 +1168,16 @@ describe("packageNativeBlockAttemptV1", () => {
       casePath: fixture.casePath,
       outputDirectoryPath: fixture.outputDirectoryPath,
     })).rejects.toMatchObject({
-      diagnostics: [
-        "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
-        "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
-        "native-check-rejected",
-      ],
+      diagnostics: ["native-check-rejected"],
       nativeCheckRejection: {
         kind: "native-check-rejected",
-        nativeCheckResultPath: path.join(
-          fixture.attemptDirectoryPath,
-          "native-check-result.json",
-        ),
-        repairDiagnostics: [expect.objectContaining({
-          code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
-          metricId: "ground-component-reachability",
-        })],
+        repairDiagnostics: [],
       },
     });
     expect(await readFile(path.join(
       fixture.attemptDirectoryPath,
       "native-check-result.json",
-    ), "utf8")).toContain("WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED");
-    await expect(readFile(path.join(
-      fixture.attemptDirectoryPath,
-      "attempt-result.json",
-    ), "utf8")).resolves.toContain('"outcome":"completed"');
+    ), "utf8")).toContain("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
     await expect(lstat(fixture.outputDirectoryPath)).rejects.toMatchObject({
       code: "ENOENT",
     });

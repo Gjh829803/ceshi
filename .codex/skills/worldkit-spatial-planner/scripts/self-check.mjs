@@ -13474,8 +13474,30 @@ ajv.addSchema(subjectDefinitionV1Schema);
   }
   return registeredValidator;
 })();
-const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v3";
+const BABYLON_NATIVE_VISUAL_IDENTITY_COLORS = Object.freeze([
+  "#E85D5D",
+  "#F28E2B",
+  "#D9A514",
+  "#4E79A7",
+  "#9C6ADE"
+]);
+const PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v4";
 const MAXIMUM_CENTER_ERROR_RATIO = 0.015;
+const REQUIRED_ENTRY_ASPECT_RATIO = 16 / 9;
+const MAXIMUM_ENTRY_ASPECT_ERROR_RATIO = 0.02;
+const MINIMUM_WORLD_PLAN_BLOCK_PALETTE_COVERAGE_RATIO = 0.03;
+const MINIMUM_ENTRY_BLOCK_PALETTE_COVERAGE_RATIO = 0.02;
+const MINIMUM_VISUAL_TARGET_IMAGE_COVERAGE_RATIO = 5e-5;
+const MAXIMUM_BLOCK_PALETTE_RGB_DISTANCE = 56;
+const MAXIMUM_IDENTITY_RGB_DISTANCE = 40;
+const MINIMUM_IDENTITY_SEPARATION_RGB_UNITS = 12;
+const MINIMUM_IDENTITY_IMAGE_COVERAGE_RATIO = 25e-5;
+const MINIMUM_COHERENT_COMPONENT_IMAGE_COVERAGE_RATIO = 25e-6;
+const MINIMUM_COHERENT_PIXEL_RATIO = 0.75;
+const MINIMUM_LARGEST_COMPONENT_IMAGE_COVERAGE_RATIO = 1e-3;
+const MINIMUM_LARGEST_COMPONENT_BOUNDING_BOX_WIDTH_RATIO = 0.02;
+const MINIMUM_LARGEST_COMPONENT_BOUNDING_BOX_HEIGHT_RATIO = 0.04;
+const MAXIMUM_AMBIGUOUS_IDENTITY_RATIO = 0.05;
 const MAXIMUM_TERRAIN_IMAGE_DIMENSION_PIXELS = 4096;
 const MAXIMUM_MEAN_RAMP_RESIDUAL_RGB_UNITS = 60;
 const MAXIMUM_P95_RAMP_RESIDUAL_RGB_UNITS = 90;
@@ -13486,6 +13508,18 @@ const TERRAIN_RAMP = {
   datum: [128, 128, 128],
   elevation: [224, 96, 32]
 };
+const NATIVE_PLANNER_BLOCK_COLORS = Object.freeze({
+  walkable: "#B7E4C7",
+  obstacle: "#5F6368",
+  interactiveSolid: "#00B8A9",
+  interactiveTrigger: "#B8DE6F",
+  water: "#8ECDF4",
+  cloudWalkable: "#D8D4F2",
+  cloudPassable: "#EEF6FF",
+  visualOnly: "#D6D3D1",
+  landmarkRed: "#E15759",
+  landmarkPink: "#E66AA5"
+});
 function option(arguments_, name) {
   const index = arguments_.indexOf(name);
   const value = index < 0 ? void 0 : arguments_[index + 1];
@@ -13592,19 +13626,22 @@ function rgbHueSaturation(red, green, blue) {
     brightness: maximum
   };
 }
-function centerMeasurement(bytes) {
-  const image = decodePng(bytes);
+function centerMeasurement(image, admittedTargetByPixel) {
   let xTotal = 0;
   let count = 0;
   for (let index = 0; index < image.width * image.height; index += 1) {
-    const offset = index * image.channels;
-    const color = rgbHueSaturation(
-      image.pixels[offset],
-      image.pixels[offset + 1],
-      image.pixels[offset + 2]
-    );
-    const hueDistance = Math.min(color.hue, 360 - color.hue);
-    if (hueDistance <= 12 && color.saturation >= 0.3 && color.brightness >= 0.2) {
+    let isSubjectPixel = admittedTargetByPixel?.[index] === 1;
+    {
+      const offset = index * image.channels;
+      const color = rgbHueSaturation(
+        image.pixels[offset],
+        image.pixels[offset + 1],
+        image.pixels[offset + 2]
+      );
+      const hueDistance = Math.min(color.hue, 360 - color.hue);
+      isSubjectPixel = hueDistance <= 12 && color.saturation >= 0.3 && color.brightness >= 0.2;
+    }
+    if (isSubjectPixel) {
       xTotal += index % image.width;
       count += 1;
     }
@@ -13627,6 +13664,311 @@ function centerMeasurement(bytes) {
     subjectCenterErrorRatio: Math.abs(centerXRatio - 0.5),
     maximumCenterErrorRatio: MAXIMUM_CENTER_ERROR_RATIO
   };
+}
+function rgbFromHex(value) {
+  return [
+    Number.parseInt(value.slice(1, 3), 16),
+    Number.parseInt(value.slice(3, 5), 16),
+    Number.parseInt(value.slice(5, 7), 16)
+  ];
+}
+function nativePlannerPaletteEntry(input) {
+  const [red, green, blue] = rgbFromHex(input.color);
+  return Object.freeze({
+    semantic: input.semantic,
+    red,
+    green,
+    blue,
+    isBlock: input.isBlock,
+    isTraversable: input.isTraversable ?? false,
+    isInteractive: input.isInteractive ?? false,
+    maximumRgbDistance: input.maximumRgbDistance ?? MAXIMUM_BLOCK_PALETTE_RGB_DISTANCE,
+    ...input.visualTargetIndex === void 0 ? {} : { visualTargetIndex: input.visualTargetIndex }
+  });
+}
+const NATIVE_PLANNER_BLOCK_PALETTE = Object.freeze([
+  nativePlannerPaletteEntry({ semantic: "walkable", color: NATIVE_PLANNER_BLOCK_COLORS.walkable, isBlock: true, isTraversable: true }),
+  nativePlannerPaletteEntry({ semantic: "obstacle", color: NATIVE_PLANNER_BLOCK_COLORS.obstacle, isBlock: true }),
+  nativePlannerPaletteEntry({ semantic: "interactive-solid", color: NATIVE_PLANNER_BLOCK_COLORS.interactiveSolid, isBlock: true, isInteractive: true }),
+  nativePlannerPaletteEntry({ semantic: "interactive-trigger", color: NATIVE_PLANNER_BLOCK_COLORS.interactiveTrigger, isBlock: true, isInteractive: true }),
+  nativePlannerPaletteEntry({ semantic: "water", color: NATIVE_PLANNER_BLOCK_COLORS.water, isBlock: true }),
+  nativePlannerPaletteEntry({ semantic: "cloud-walkable", color: NATIVE_PLANNER_BLOCK_COLORS.cloudWalkable, isBlock: true, isTraversable: true }),
+  nativePlannerPaletteEntry({ semantic: "cloud-passable", color: NATIVE_PLANNER_BLOCK_COLORS.cloudPassable, isBlock: true, maximumRgbDistance: 16 }),
+  nativePlannerPaletteEntry({ semantic: "visual-only", color: NATIVE_PLANNER_BLOCK_COLORS.visualOnly, isBlock: true }),
+  nativePlannerPaletteEntry({ semantic: "landmark-red", color: NATIVE_PLANNER_BLOCK_COLORS.landmarkRed, isBlock: true }),
+  ...BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.slice(1).map(
+    (color, index) => nativePlannerPaletteEntry({
+      semantic: `visual-target-${index + 2}`,
+      color,
+      isBlock: true,
+      visualTargetIndex: index + 1
+    })
+  ),
+  nativePlannerPaletteEntry({ semantic: "landmark-pink", color: NATIVE_PLANNER_BLOCK_COLORS.landmarkPink, isBlock: true }),
+  nativePlannerPaletteEntry({ semantic: "visual-target-1-subject", color: BABYLON_NATIVE_VISUAL_IDENTITY_COLORS[0], isBlock: false, visualTargetIndex: 0 })
+]);
+function nativePlannerBlockPaletteMeasurement(image) {
+  const blockPixelCountsBySemantic = Object.fromEntries(
+    NATIVE_PLANNER_BLOCK_PALETTE.map(({ semantic }) => [semantic, 0])
+  );
+  const visualTargetPixelCounts = BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.map(() => 0);
+  let matchedBlockPixelCount = 0;
+  let traversablePixelCount = 0;
+  let interactivePixelCount = 0;
+  for (let index = 0; index < image.width * image.height; index += 1) {
+    const offset = index * image.channels;
+    if (image.channels === 4 && image.pixels[offset + 3] < 128) continue;
+    const red = image.pixels[offset];
+    const green = image.pixels[offset + 1];
+    const blue = image.pixels[offset + 2];
+    let best;
+    let bestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const candidate of NATIVE_PLANNER_BLOCK_PALETTE) {
+      const distanceSquared = (red - candidate.red) ** 2 + (green - candidate.green) ** 2 + (blue - candidate.blue) ** 2;
+      if (distanceSquared < bestDistanceSquared) {
+        best = candidate;
+        bestDistanceSquared = distanceSquared;
+      }
+    }
+    if (best === void 0 || bestDistanceSquared > best.maximumRgbDistance ** 2) {
+      continue;
+    }
+    blockPixelCountsBySemantic[best.semantic] = (blockPixelCountsBySemantic[best.semantic] ?? 0) + 1;
+    if (best.isBlock) matchedBlockPixelCount += 1;
+    if (best.isTraversable) traversablePixelCount += 1;
+    if (best.isInteractive) interactivePixelCount += 1;
+    if (best.visualTargetIndex !== void 0) {
+      visualTargetPixelCounts[best.visualTargetIndex] = (visualTargetPixelCounts[best.visualTargetIndex] ?? 0) + 1;
+    }
+  }
+  const totalPixels = image.width * image.height;
+  return Object.freeze({
+    widthPixels: image.width,
+    heightPixels: image.height,
+    aspectRatio: image.width / image.height,
+    matchedBlockPixelCount,
+    blockPaletteCoverageRatio: matchedBlockPixelCount / totalPixels,
+    traversablePixelCount,
+    interactivePixelCount,
+    blockPixelCountsBySemantic: Object.freeze(blockPixelCountsBySemantic),
+    visualTargetPixelCounts: Object.freeze(visualTargetPixelCounts)
+  });
+}
+function nativePlannerBlockPaletteDiagnostics(input) {
+  const diagnostics = [];
+  if (input.measurement.blockPaletteCoverageRatio < input.minimumCoverageRatio) {
+    diagnostics.push({
+      code: `${input.label}_BLOCK_PALETTE_COVERAGE_LOW`,
+      message: `${input.label} matches Block World colors on only ${input.measurement.blockPaletteCoverageRatio.toFixed(4)} of pixels; required at least ${input.minimumCoverageRatio.toFixed(4)}. Regenerate it as a discrete-cube block-whitebox render using the fixed palette.`
+    });
+  }
+  if (input.movementMode?.startsWith("ground-") === true && input.measurement.traversablePixelCount === 0) {
+    diagnostics.push({
+      code: `${input.label}_TRAVERSABLE_COLOR_MISSING`,
+      message: `${input.label} does not contain a ground-traversable or cloud-support color even though the Scene Brief declares ground movement.`
+    });
+  }
+  const targetIndexes = input.requireAllVisualTargets ? Array.from(
+    { length: input.requiredVisualTargetCount },
+    (_, index) => index
+  ) : [0];
+  const minimumTargetPixels = Math.max(
+    32,
+    Math.round(
+      input.measurement.widthPixels * input.measurement.heightPixels * MINIMUM_VISUAL_TARGET_IMAGE_COVERAGE_RATIO
+    )
+  );
+  for (const targetIndex of targetIndexes) {
+    const pixelCount = input.measurement.visualTargetPixelCounts[targetIndex] ?? 0;
+    if (pixelCount < minimumTargetPixels) {
+      diagnostics.push({
+        code: `${input.label}_VISUAL_TARGET_COLOR_MISSING`,
+        message: `${input.label} is missing visual-target-${targetIndex + 1} in its fixed Native color ${BABYLON_NATIVE_VISUAL_IDENTITY_COLORS[targetIndex]} (${pixelCount}/${minimumTargetPixels} pixels).`
+      });
+    }
+  }
+  return diagnostics;
+}
+function connectedComponentsByTarget(image, admittedTargetByPixel, targetCount) {
+  const pixelCount = image.width * image.height;
+  const visited = new Uint8Array(pixelCount);
+  const queue = new Int32Array(pixelCount);
+  const componentsByTarget = Array.from(
+    { length: targetCount },
+    () => []
+  );
+  for (let start = 0; start < pixelCount; start += 1) {
+    const admittedTarget = admittedTargetByPixel[start];
+    if (visited[start] !== 0 || admittedTarget === 0) {
+      continue;
+    }
+    let queueStart = 0;
+    let queueEnd = 1;
+    let size = 0;
+    let minimumX = image.width;
+    let minimumY = image.height;
+    let maximumX = -1;
+    let maximumY = -1;
+    queue[0] = start;
+    visited[start] = 1;
+    while (queueStart < queueEnd) {
+      const current = queue[queueStart++];
+      size += 1;
+      const currentX = current % image.width;
+      const currentY = Math.floor(current / image.width);
+      minimumX = Math.min(minimumX, currentX);
+      minimumY = Math.min(minimumY, currentY);
+      maximumX = Math.max(maximumX, currentX);
+      maximumY = Math.max(maximumY, currentY);
+      for (let y = Math.max(0, currentY - 1); y <= Math.min(image.height - 1, currentY + 1); y += 1) {
+        for (let x = Math.max(0, currentX - 1); x <= Math.min(image.width - 1, currentX + 1); x += 1) {
+          const neighbor = y * image.width + x;
+          if (visited[neighbor] === 0 && admittedTargetByPixel[neighbor] === admittedTarget) {
+            visited[neighbor] = 1;
+            queue[queueEnd++] = neighbor;
+          }
+        }
+      }
+    }
+    componentsByTarget[admittedTarget - 1].push({
+      pixelCount: size,
+      boundingBoxWidthPixels: maximumX - minimumX + 1,
+      boundingBoxHeightPixels: maximumY - minimumY + 1
+    });
+  }
+  return componentsByTarget.map(
+    (components) => components.sort((left, right) => right.pixelCount - left.pixelCount)
+  );
+}
+function analyzeNativeEntryIdentityImageV4(image, requiredTargetCount) {
+  const colors = BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.slice(0, requiredTargetCount).map(rgbFromHex);
+  const pixelCount = image.width * image.height;
+  const admittedTargetByPixel = new Uint8Array(pixelCount);
+  let ambiguousIdentityPixelCount = 0;
+  let candidateIdentityPixelCount = 0;
+  for (let index = 0; index < pixelCount; index += 1) {
+    const offset = index * image.channels;
+    if (image.channels === 4 && image.pixels[offset + 3] < 128) continue;
+    const red = image.pixels[offset];
+    const green = image.pixels[offset + 1];
+    const blue = image.pixels[offset + 2];
+    let bestTargetIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let runnerUpDistance = Number.POSITIVE_INFINITY;
+    for (let targetIndex = 0; targetIndex < colors.length; targetIndex += 1) {
+      const color = colors[targetIndex];
+      const distance = Math.hypot(
+        red - color[0],
+        green - color[1],
+        blue - color[2]
+      );
+      if (distance < bestDistance) {
+        runnerUpDistance = bestDistance;
+        bestDistance = distance;
+        bestTargetIndex = targetIndex;
+      } else if (distance < runnerUpDistance) {
+        runnerUpDistance = distance;
+      }
+    }
+    if (bestTargetIndex < 0 || bestDistance > MAXIMUM_IDENTITY_RGB_DISTANCE) {
+      continue;
+    }
+    candidateIdentityPixelCount += 1;
+    if (runnerUpDistance - bestDistance < MINIMUM_IDENTITY_SEPARATION_RGB_UNITS) {
+      ambiguousIdentityPixelCount += 1;
+      continue;
+    }
+    admittedTargetByPixel[index] = bestTargetIndex + 1;
+  }
+  const minimumPixelCount = Math.max(
+    64,
+    Math.round(pixelCount * MINIMUM_IDENTITY_IMAGE_COVERAGE_RATIO)
+  );
+  const minimumCoherentComponentPixelCount = Math.max(
+    16,
+    Math.round(pixelCount * MINIMUM_COHERENT_COMPONENT_IMAGE_COVERAGE_RATIO)
+  );
+  const minimumLargestComponentPixelCount = Math.max(
+    32,
+    Math.ceil(pixelCount * MINIMUM_LARGEST_COMPONENT_IMAGE_COVERAGE_RATIO)
+  );
+  const componentsByTarget = connectedComponentsByTarget(
+    image,
+    admittedTargetByPixel,
+    requiredTargetCount
+  );
+  const targets = colors.map((_, targetIndex) => {
+    const admittedTarget = targetIndex + 1;
+    const components = componentsByTarget[targetIndex];
+    const exclusivelyAdmittedPixelCount = components.reduce(
+      (sum, component) => sum + component.pixelCount,
+      0
+    );
+    const coherentComponents = components.filter(
+      ({ pixelCount: componentPixelCount }) => componentPixelCount >= minimumCoherentComponentPixelCount
+    );
+    const coherentPixelCount = coherentComponents.reduce(
+      (sum, component) => sum + component.pixelCount,
+      0
+    );
+    const largestComponent = components[0];
+    const largestComponentPixelCount = largestComponent?.pixelCount ?? 0;
+    const largestComponentBoundingBoxWidthPixels = largestComponent?.boundingBoxWidthPixels ?? 0;
+    const largestComponentBoundingBoxHeightPixels = largestComponent?.boundingBoxHeightPixels ?? 0;
+    return {
+      visualTargetId: `visual-target-${admittedTarget}`,
+      identityColorHex: BABYLON_NATIVE_VISUAL_IDENTITY_COLORS[targetIndex],
+      exclusivelyAdmittedPixelCount,
+      imageCoverageRatio: exclusivelyAdmittedPixelCount / pixelCount,
+      componentCount: components.length,
+      coherentComponentCount: coherentComponents.length,
+      coherentPixelCount,
+      coherentPixelRatio: exclusivelyAdmittedPixelCount === 0 ? 0 : coherentPixelCount / exclusivelyAdmittedPixelCount,
+      largestComponentPixelCount,
+      largestComponentImageCoverageRatio: largestComponentPixelCount / pixelCount,
+      largestComponentBoundingBoxWidthPixels,
+      largestComponentBoundingBoxHeightPixels,
+      largestComponentBoundingBoxWidthRatio: largestComponentBoundingBoxWidthPixels / image.width,
+      largestComponentBoundingBoxHeightRatio: largestComponentBoundingBoxHeightPixels / image.height,
+      minimumPixelCount,
+      minimumCoherentComponentPixelCount,
+      minimumCoherentPixelRatio: MINIMUM_COHERENT_PIXEL_RATIO,
+      minimumLargestComponentPixelCount,
+      minimumLargestComponentImageCoverageRatio: MINIMUM_LARGEST_COMPONENT_IMAGE_COVERAGE_RATIO,
+      minimumLargestComponentBoundingBoxWidthRatio: MINIMUM_LARGEST_COMPONENT_BOUNDING_BOX_WIDTH_RATIO,
+      minimumLargestComponentBoundingBoxHeightRatio: MINIMUM_LARGEST_COMPONENT_BOUNDING_BOX_HEIGHT_RATIO
+    };
+  });
+  const aspectRatio = image.width / image.height;
+  const ambiguousIdentityRatio = candidateIdentityPixelCount === 0 ? 0 : ambiguousIdentityPixelCount / candidateIdentityPixelCount;
+  return {
+    admittedTargetByPixel,
+    measurement: {
+      widthPixels: image.width,
+      heightPixels: image.height,
+      aspectRatio,
+      aspectErrorRatio: Math.abs(aspectRatio - REQUIRED_ENTRY_ASPECT_RATIO) / REQUIRED_ENTRY_ASPECT_RATIO,
+      requiredAspectRatio: REQUIRED_ENTRY_ASPECT_RATIO,
+      maximumAspectErrorRatio: MAXIMUM_ENTRY_ASPECT_ERROR_RATIO,
+      maximumIdentityRgbDistance: MAXIMUM_IDENTITY_RGB_DISTANCE,
+      minimumIdentitySeparationRgbUnits: MINIMUM_IDENTITY_SEPARATION_RGB_UNITS,
+      ambiguousIdentityPixelCount,
+      candidateIdentityPixelCount,
+      ambiguousIdentityRatio,
+      maximumAmbiguousIdentityRatio: MAXIMUM_AMBIGUOUS_IDENTITY_RATIO,
+      targets
+    }
+  };
+}
+function nativeEntryIdentityDiagnostics(measurement) {
+  const diagnostics = [];
+  if (measurement.aspectErrorRatio > MAXIMUM_ENTRY_ASPECT_ERROR_RATIO) {
+    diagnostics.push({
+      code: "ENTRY_WHITEBOX_TARGET_ASPECT_RATIO_INVALID",
+      message: `Entry target aspect ratio is ${measurement.aspectRatio.toFixed(4)}; Formal opening requires 16:9 within ${(MAXIMUM_ENTRY_ASPECT_ERROR_RATIO * 100).toFixed(1)}%.`
+    });
+  }
+  return diagnostics;
 }
 function segmentProjection(rgb, start, end, startHeightRatio) {
   const delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
@@ -13723,11 +14065,51 @@ async function runPlannerSelfCheck(options) {
     readFile(options.entryPath)
   ]);
   const briefSource = briefBytes.toString("utf8");
+  const brief = parseSceneBriefV1(briefSource);
   const diagnostics = [...sceneBriefDiagnostics(briefSource)];
   let imageMeasurements = null;
+  let nativeEntryIdentityMeasurements = null;
+  let nativeBlockPaletteMeasurements = null;
   try {
-    decodePng(worldPlanBytes);
-    imageMeasurements = centerMeasurement(entryBytes);
+    const worldPlanImage = decodePng(worldPlanBytes);
+    const entryImage = decodePng(entryBytes);
+    const nativeEntryAnalysis = options.sceneSourceKind === "babylon-native" ? analyzeNativeEntryIdentityImageV4(
+      entryImage,
+      brief.ok ? brief.value.visualTargets.length : 1
+    ) : void 0;
+    if (nativeEntryAnalysis !== void 0) {
+      nativeEntryIdentityMeasurements = nativeEntryAnalysis.measurement;
+      const worldPlanPalette = nativePlannerBlockPaletteMeasurement(
+        worldPlanImage
+      );
+      const entryPalette = nativePlannerBlockPaletteMeasurement(entryImage);
+      nativeBlockPaletteMeasurements = Object.freeze({
+        worldPlan: worldPlanPalette,
+        entryWhiteboxTarget: entryPalette
+      });
+      const movementMode = brief.ok ? brief.value.movement.mode : void 0;
+      const requiredVisualTargetCount = brief.ok ? brief.value.visualTargets.length : 1;
+      diagnostics.push(
+        ...nativePlannerBlockPaletteDiagnostics({
+          label: "WORLD_PLAN",
+          measurement: worldPlanPalette,
+          minimumCoverageRatio: MINIMUM_WORLD_PLAN_BLOCK_PALETTE_COVERAGE_RATIO,
+          movementMode,
+          requiredVisualTargetCount,
+          requireAllVisualTargets: true
+        }),
+        ...nativePlannerBlockPaletteDiagnostics({
+          label: "ENTRY_WHITEBOX_TARGET",
+          measurement: entryPalette,
+          minimumCoverageRatio: MINIMUM_ENTRY_BLOCK_PALETTE_COVERAGE_RATIO,
+          movementMode,
+          requiredVisualTargetCount,
+          requireAllVisualTargets: false
+        }),
+        ...nativeEntryIdentityDiagnostics(nativeEntryIdentityMeasurements)
+      );
+    }
+    imageMeasurements = centerMeasurement(entryImage);
     if (imageMeasurements.subjectCenterErrorRatio > MAXIMUM_CENTER_ERROR_RATIO) {
       diagnostics.push({
         code: "ENTRY_SUBJECT_NOT_CENTERED",
@@ -13755,7 +14137,12 @@ async function runPlannerSelfCheck(options) {
     imageMeasurements
   };
   if (options.sceneSourceKind === "babylon-native") {
-    const report2 = { ...baseReport, diagnostics };
+    const report2 = {
+      ...baseReport,
+      nativeBlockPaletteMeasurements,
+      nativeEntryIdentityMeasurements,
+      diagnostics
+    };
     await writeFile(options.reportPath, `${JSON.stringify(report2)}
 `, "utf8");
     return { status: report2.status, diagnostics };
@@ -13838,6 +14225,7 @@ if (entryPath === fileURLToPath(import.meta.url)) {
 }
 export {
   PLANNER_SELF_CHECK_VERSION,
+  analyzeNativeEntryIdentityImageV4,
   main,
   runPlannerSelfCheck
 };

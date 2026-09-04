@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { tsImport } from "tsx/esm/api";
 
 import {
   createSceneId,
@@ -25,8 +36,62 @@ import {
   writeJsonAtomic,
 } from "./server.mjs";
 
+const {
+  createBabylonNativeWorldPackageV1,
+} = await tsImport("@whitebox-world/world-package", {
+  parentURL: import.meta.url,
+});
+const {
+  createBabylonNativeBlockWorldPackageTestInputV1,
+} = await tsImport("@whitebox-world/world-package/testing", {
+  parentURL: import.meta.url,
+});
+const {
+  hashFormalColliderOverlayObservationV1,
+  hashFormalOpeningObservationV1,
+  hashFormalScriptedTraversalObservationV1,
+  hashFormalSemanticCaptureMapV1,
+  hashFormalSpawnSupportObservationV1,
+  hashFormalWorldCaptureReceiptV1,
+  hashFormalWorldCaptureRequestV1,
+  parseFormalColliderOverlayObservationV1,
+  parseFormalOpeningObservationV1,
+  parseFormalScriptedTraversalObservationV1,
+  parseFormalSemanticCaptureMapV1,
+  parseFormalSpawnSupportObservationV1,
+  parseFormalWorldCaptureReceiptV1,
+  parseFormalWorldCaptureRequestV1,
+} = await tsImport("@whitebox-world/runtime-contracts", {
+  parentURL: import.meta.url,
+});
+const {
+  writeWorldPackageDirectoryV1,
+} = await tsImport("../../../scripts/lib/file-world-package.ts", {
+  parentURL: import.meta.url,
+});
+const {
+  createEvidenceSetFixtureInputV1,
+} = await tsImport(
+  "../../../scripts/reconstruction/evaluate-fixture.test-support.ts",
+  { parentURL: import.meta.url },
+);
+const {
+  hashEntryThirdPersonValidationResultV1,
+  validateFormalOpeningEntryThirdPersonV1,
+} = await tsImport("../../../scripts/visual/entry-third-person.ts", {
+  parentURL: import.meta.url,
+});
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const temporaryRoots = [];
+const VALID_ENTRY_OPENING_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAABOklEQVR4nO3cwQ0DMQhE0RThc86/KfpPGWnBl4is9CQXsBoBi2G+X+edc+5EeFHqXIcLsSJWv8gYkRWxElnt/o6kYcRKZCUNe0pjrGZFrERW0rD1YqRmRaxEVusppnWIWIms/v/o4CNWIitp2HoxekzN+sxcnvVPJVbESmQlDUfNSoHP31DrkNYhfVaa0tHB57qTu6GLdC7SmTpkRDPmWRn+ZVJqrJyxcmbwWViM7U5WYdkbWrJmyZqNdNb3w+sQY0hcNCxHsRzFnxUz23D+xSYZTykDbgy4cSvH2j188IEGQlgER4GjBEcJjhIcZeAowVGCo8BRgqMERwmOMnCU4CjBUeAowVGCowRHGThKcJTgKHCU4CjBUYKjDByl9afVHv8y23nOIVbESmQlDVsvRmpWxEpktZ5iN+cLuXVcj9nRAIsAAAAASUVORK5CYII=",
+  "base64",
+);
+const VALID_EMPTY_OPENING_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAABFElEQVR4nO3WsQ1CAQwDUYb4NfXtPyEr0CAH6UmZ4HR2/Hreuec7CC+knq91ASuw+kVimBVYMavtOxLDwIpZiWH/Mox1VmDFrMSweRnprMCKWc0jZjoEVszq/lnwgRWzEsPmZaSzAitmNY+Y6RBYMav7Z8EHVsxKDJuXkc4KrJjVPGKmQ2DFrO6fBR9YMSsxbF5GOiuwYlbziJkOgRWzun8WfGDFrMSweRnprMCKWc0jZjoEVszq/lnwgRWzEsPmZaSzAitmNY+Y6RBYMav7Z8EHVsxKDJuXkc4KrJjVPGKmQ2DFrO6fBR9YMSsxbF5GOiuwYlbziJkOgRWzun8WfGDFrMSweRnprMCKWc0jZjoEViuzPgVfvGS9VCQDAAAAAElFTkSuQmCC",
+  "base64",
+);
 
 test("injects one exact Studio Viewer binding into Host-served Playground HTML", () => {
   assert.equal(
@@ -75,7 +140,7 @@ function canonicalHash(value) {
 async function writeNativeProductionFixture(
   fakeRepoRoot,
   sceneId,
-  { outcome = "preview-ready", mutateResult = (value) => value } = {},
+  { strictDiagnosticOutcome = "passed", mutateResult = (value) => value } = {},
 ) {
   const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
   const runId = "run-studio-native";
@@ -84,45 +149,156 @@ async function writeNativeProductionFixture(
   const caseRef = `artifact://world-reconstruction-case/${sceneId}/case.json`;
   const attemptArtifactRoot =
     `artifact://world-reconstruction-case/${sceneId}/runs/${runId}/attempts/0`;
-  const worldPackageRef = `package://world-package/sha256/${"1".repeat(64)}`;
-  const worldPackageRootHash = `sha256:${"1".repeat(64)}`;
-  const packageReceipt = {
-    kind: "worldkit-world-package-build-receipt",
+  const reconstructionCase = {
+    kind: "world-reconstruction-case",
     schemaVersion: 1,
-    worldPackageRef,
-    worldPackageRootHash,
-    manifest: { worldId: sceneId },
+    id: sceneId,
   };
-  const captureReceipt = {
-    kind: "formal-world-capture-receipt",
-    schemaVersion: 1,
+  const caseHash = canonicalHash(reconstructionCase);
+  const packageDirectory = createBabylonNativeWorldPackageV1(
+    createBabylonNativeBlockWorldPackageTestInputV1({
+      packageId: `${sceneId}.package`,
+      worldId: sceneId,
+    }),
+  );
+  const packageReceipt = packageDirectory.receipt;
+  const worldPackageRef = packageReceipt.worldPackageRef;
+  const worldPackageRootHash = packageReceipt.worldPackageRootHash;
+  const worldBuildIdentityHash = packageReceipt.worldBuildIdentityHash;
+  const sourceCapture = createEvidenceSetFixtureInputV1({
+    allDimensionsPass: true,
+  });
+  const sourceFormalRequest = sourceCapture.captureReceipt.formalRequest;
+  const semanticCaptureMap = parseFormalSemanticCaptureMapV1({
+    ...sourceFormalRequest.semanticCaptureMap,
     caseRef,
+    caseHash,
+  });
+  const semanticCaptureMapHash =
+    hashFormalSemanticCaptureMapV1(semanticCaptureMap);
+  const nativeMaterializer = packageReceipt.manifest.sceneSource.nativeMaterializer;
+  assert.equal(nativeMaterializer.kind, "babylon-native-block");
+  const formalRequest = parseFormalWorldCaptureRequestV1({
+    ...sourceFormalRequest,
+    caseRef,
+    caseHash,
     worldPackageRef,
     worldPackageRootHash,
+    worldBuildIdentityHash,
+    worldPackageBuildReceiptHash: canonicalHash(packageReceipt),
+    semanticCaptureMap,
+    semanticCaptureMapHash,
+    nativeBlockMaterializerMetadataHash: nativeMaterializer.metadataHash,
+  });
+  const formalRequestHash = hashFormalWorldCaptureRequestV1(formalRequest);
+  const observationIdentity = {
+    worldPackageRef,
+    worldPackageRootHash,
+    worldBuildIdentityHash,
+    formalRequestRef: formalRequest.formalRequestRef,
+    formalRequest,
+    formalRequestHash,
+    semanticCaptureMapHash,
   };
-  const captureReceiptHash = canonicalHash(captureReceipt);
+  const openingObservation = parseFormalOpeningObservationV1({
+    ...sourceCapture.openingObservation,
+    ...observationIdentity,
+  });
+  const spawnSupportObservation = parseFormalSpawnSupportObservationV1({
+    ...sourceCapture.spawnSupportObservation,
+    ...observationIdentity,
+  });
+  const colliderOverlayObservation = parseFormalColliderOverlayObservationV1({
+    ...sourceCapture.colliderOverlayObservation,
+    ...observationIdentity,
+  });
+  const scriptedTraversalObservation =
+    parseFormalScriptedTraversalObservationV1({
+      ...sourceCapture.scriptedTraversalObservation,
+      ...observationIdentity,
+    });
+  const openingPngHash = `sha256:${createHash("sha256")
+    .update(VALID_ENTRY_OPENING_PNG)
+    .digest("hex")}`;
+  const supportingPngHash = `sha256:${createHash("sha256")
+    .update(VALID_EMPTY_OPENING_PNG)
+    .digest("hex")}`;
+  const captureReceipt = parseFormalWorldCaptureReceiptV1({
+    ...sourceCapture.captureReceipt,
+    formalRequestRef: formalRequest.formalRequestRef,
+    formalRequest,
+    formalRequestHash,
+    caseRef,
+    caseHash,
+    worldPackageRef,
+    worldPackageRootHash,
+    worldBuildIdentityHash,
+    worldPackageBuildReceiptHash: canonicalHash(packageReceipt),
+    semanticCaptureMapHash,
+    nativeBlockMaterializerMetadataHash: nativeMaterializer.metadataHash,
+    views: sourceCapture.captureReceipt.views.map((view) => ({
+      ...view,
+      pngContentHash: view.viewId === "opening"
+        ? openingPngHash
+        : supportingPngHash,
+    })),
+    openingObservationContentHash:
+      hashFormalOpeningObservationV1(openingObservation),
+    spawnSupportObservationContentHash:
+      hashFormalSpawnSupportObservationV1(spawnSupportObservation),
+    colliderOverlayPngContentHash: supportingPngHash,
+    colliderOverlayObservationContentHash:
+      hashFormalColliderOverlayObservationV1(colliderOverlayObservation),
+    scriptedTraversalContentHash:
+      hashFormalScriptedTraversalObservationV1(scriptedTraversalObservation),
+  });
+  const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
   const evaluation = {
     kind: "world-reconstruction-evaluation-result",
     schemaVersion: 1,
     caseRef,
+    caseHash,
     worldPackageRef,
     worldPackageRootHash,
+    worldBuildIdentityHash,
     captureReceiptHash,
-    outcome: outcome === "published" ? "passed" : "failed",
+    outcome: strictDiagnosticOutcome === "failed" ? "failed" : "passed",
   };
   const evaluationHash = canonicalHash(evaluation);
+  const groundAnalysisReport = {
+    kind: "babylon-native-block-ground-analysis-report",
+    schemaVersion: 1,
+    identity: {
+      logicalGroundModelHash: `sha256:${"4".repeat(64)}`,
+      walkableTopologyHash: `sha256:${"5".repeat(64)}`,
+      traversalCapabilityEnvelopeHash: `sha256:${"6".repeat(64)}`,
+      caseHash,
+      worldPackageRootHash,
+      measurementChunkPolicyHash: `sha256:${"7".repeat(64)}`,
+    },
+    analysisOutcome: "passed",
+    admissionOutcome: "passed",
+    failureFacts: [],
+    metrics: {},
+    standableNodes: [],
+  };
+  const groundAnalysisReportHash = canonicalHash(groundAnalysisReport);
   const runReceipt = {
     kind: "world-reconstruction-run-receipt",
     schemaVersion: 1,
     id: `${sceneId}.${runId}`,
     caseRef,
-    outcome: outcome === "published" ? "passed" : "failed",
+    caseHash,
+    outcome: evaluation.outcome,
     attempts: [{
       kind: "evaluated",
       attemptIndex: 0,
-      outcome: outcome === "published" ? "passed" : "failed",
+      outcome: evaluation.outcome,
       worldPackageRef,
       worldPackageRootHash,
+      worldBuildIdentityHash,
+      groundAnalysisReportRef: `${attemptArtifactRoot}/ground-analysis-report.json`,
+      groundAnalysisReportHash,
       captureReceiptRef: `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json`,
       captureReceiptHash,
       evaluationResultRef: `${attemptArtifactRoot}/evaluation.json`,
@@ -134,78 +310,97 @@ async function writeNativeProductionFixture(
     cleanupOutcome: "completed",
   };
   const runReceiptHash = canonicalHash(runReceipt);
-  const opening = Buffer.from("89504e470d0a1a0a00000000", "hex");
-  await Promise.all([
-    mkdir(path.join(attemptRoot, "world-package"), { recursive: true }),
-    mkdir(path.join(attemptRoot, "capture"), { recursive: true }),
-  ]);
+  await mkdir(path.join(attemptRoot, "capture"), { recursive: true });
+  await writeWorldPackageDirectoryV1({
+    outputDirectoryPath: path.join(attemptRoot, "world-package"),
+    directory: packageDirectory,
+  });
   await Promise.all([
     writeFile(path.join(artifactRoot, "native-world-input.json"), "{}"),
     writeFile(path.join(artifactRoot, "scene-brief.md"), "# Native Studio fixture\n"),
-    writeFile(path.join(artifactRoot, "case.json"), "{}"),
+    writeFile(path.join(artifactRoot, "case.json"), canonicalJson(reconstructionCase)),
     writeFile(path.join(artifactRoot, "evaluation-profile.json"), "{}"),
     writeFile(
-      path.join(attemptRoot, "world-package", "world-package-build-receipt.json"),
-      canonicalJson(packageReceipt),
+      path.join(attemptRoot, "capture", "opening.png"),
+      VALID_ENTRY_OPENING_PNG,
     ),
-    writeFile(path.join(attemptRoot, "capture", "opening.png"), opening),
+    writeFile(
+      path.join(attemptRoot, "capture", "world-side.png"),
+      VALID_EMPTY_OPENING_PNG,
+    ),
+    writeFile(
+      path.join(attemptRoot, "capture", "world-top-down.png"),
+      VALID_EMPTY_OPENING_PNG,
+    ),
+    writeFile(
+      path.join(attemptRoot, "capture", "collider-overlay.png"),
+      VALID_EMPTY_OPENING_PNG,
+    ),
+    writeFile(
+      path.join(attemptRoot, "capture", "opening-observation.json"),
+      canonicalJson(openingObservation),
+    ),
+    writeFile(
+      path.join(attemptRoot, "capture", "spawn-support-observation.json"),
+      canonicalJson(spawnSupportObservation),
+    ),
+    writeFile(
+      path.join(attemptRoot, "capture", "collider-overlay-observation.json"),
+      canonicalJson(colliderOverlayObservation),
+    ),
+    writeFile(
+      path.join(attemptRoot, "capture", "scripted-traversal.json"),
+      canonicalJson(scriptedTraversalObservation),
+    ),
     writeFile(
       path.join(attemptRoot, "capture", "formal-world-capture-receipt.json"),
       canonicalJson(captureReceipt),
     ),
     writeFile(path.join(attemptRoot, "evaluation.json"), canonicalJson(evaluation)),
+    writeFile(
+      path.join(attemptRoot, "ground-analysis-report.json"),
+      canonicalJson(groundAnalysisReport),
+    ),
     writeFile(path.join(runRoot, "run-receipt.json"), canonicalJson(runReceipt)),
   ]);
 
-  const common = {
-    kind: "world-reconstruction-production-result",
-    schemaVersion: 1,
-    caseId: sceneId,
-    caseRef,
-    runId,
-  };
-  if (outcome === "preview-ready") {
-    const packagePath = path.join(attemptRoot, "world-package");
-    return mutateResult({
-      ...common,
-      outcome: "preview-ready",
-      publicationStatus: "not-accepted",
-      qualityStage: "evaluation",
-      qualityOutcome: "failed",
-      attemptCount: 1,
-      diagnosticCodes: ["WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT"],
-      cleanupOutcome: "completed",
-      previewWorldPackagePath: packagePath,
-      previewWorldPackageRef: worldPackageRef,
-      previewWorldPackageRootHash: worldPackageRootHash,
-      previewCaptureDirectoryPath: path.join(attemptRoot, "capture"),
-      previewOpeningPath: path.join(attemptRoot, "capture", "opening.png"),
-      previewOpeningRef: `${attemptArtifactRoot}/capture/opening.png`,
-      previewCaptureReceiptPath: path.join(
-        attemptRoot,
-        "capture",
-        "formal-world-capture-receipt.json",
-      ),
-      previewCaptureReceiptHash: captureReceiptHash,
-      previewEvaluationPath: path.join(attemptRoot, "evaluation.json"),
-      previewEvaluationRef: `${attemptArtifactRoot}/evaluation.json`,
-      previewEvaluationHash: evaluationHash,
-      runReceiptPath: path.join(runRoot, "run-receipt.json"),
-      runReceiptRef:
-        `artifact://world-reconstruction-case/${sceneId}/runs/${runId}/run-receipt.json`,
-      runReceiptHash,
-      launchWorkingDirectoryPath: fakeRepoRoot,
-      launchCommand:
-        `pnpm worldkit native run '${packagePath}' --port 5174 --json`,
-    });
-  }
-
   const finalRoot = path.join(artifactRoot, "final");
   const finalPackageRoot = path.join(finalRoot, "world-package");
-  await Promise.all([
-    mkdir(finalPackageRoot, { recursive: true }),
-    mkdir(path.join(finalRoot, "capture"), { recursive: true }),
-  ]);
+  await mkdir(path.join(finalRoot, "capture"), { recursive: true });
+  await writeWorldPackageDirectoryV1({
+    outputDirectoryPath: finalPackageRoot,
+    directory: packageDirectory,
+  });
+  const strictDiagnosticCodes = strictDiagnosticOutcome === "failed"
+    ? ["NBR70_BLOCKER_IDENTITY_MISMATCH"]
+    : [];
+  const strictDiagnostic = {
+    kind: "world-reconstruction-strict-diagnostic-receipt",
+    schemaVersion: 1,
+    id: `${sceneId}.${runId}.strict`,
+    caseRef,
+    caseHash,
+    runReceiptRef:
+      `artifact://world-reconstruction-case/${sceneId}/runs/${runId}/run-receipt.json`,
+    runReceiptHash,
+    attemptIndex: 0,
+    worldPackageRef,
+    worldPackageRootHash,
+    worldBuildIdentityHash,
+    captureReceiptHash,
+    evaluationResultHash: evaluationHash,
+    outcome: strictDiagnosticOutcome,
+    diagnosticCodes: strictDiagnosticCodes,
+    cleanupOutcome: "not-started",
+  };
+  const strictDiagnosticHash = canonicalHash(strictDiagnostic);
+  const entryValidation = await validateFormalOpeningEntryThirdPersonV1({
+    openingPngBytes: VALID_ENTRY_OPENING_PNG,
+    openingObservation,
+  });
+  assert.equal(entryValidation.status, "passed");
+  const entryValidationHash =
+    hashEntryThirdPersonValidationResultV1(entryValidation);
   const launch = {
     kind: "native-block-reconstruction-launch",
     schemaVersion: 1,
@@ -220,24 +415,73 @@ async function writeNativeProductionFixture(
     captureReceiptHash,
     evaluationRelativePath: "final/evaluation.json",
     evaluationHash,
+    strictDiagnosticRelativePath: "final/strict-diagnostic.json",
+    strictDiagnosticHash,
+    entryValidationRelativePath: "final/entry-third-person-validation.json",
+    entryValidationHash,
     launchCommand: "pnpm worldkit native run final/world-package --port 5174 --json",
   };
   await Promise.all([
     writeFile(
-      path.join(finalPackageRoot, "world-package-build-receipt.json"),
-      canonicalJson(packageReceipt),
+      path.join(finalRoot, "capture", "opening.png"),
+      VALID_ENTRY_OPENING_PNG,
     ),
-    writeFile(path.join(finalRoot, "capture", "opening.png"), opening),
+    writeFile(
+      path.join(finalRoot, "capture", "world-side.png"),
+      VALID_EMPTY_OPENING_PNG,
+    ),
+    writeFile(
+      path.join(finalRoot, "capture", "world-top-down.png"),
+      VALID_EMPTY_OPENING_PNG,
+    ),
+    writeFile(
+      path.join(finalRoot, "capture", "collider-overlay.png"),
+      VALID_EMPTY_OPENING_PNG,
+    ),
+    writeFile(
+      path.join(finalRoot, "capture", "opening-observation.json"),
+      canonicalJson(openingObservation),
+    ),
+    writeFile(
+      path.join(finalRoot, "capture", "spawn-support-observation.json"),
+      canonicalJson(spawnSupportObservation),
+    ),
+    writeFile(
+      path.join(finalRoot, "capture", "collider-overlay-observation.json"),
+      canonicalJson(colliderOverlayObservation),
+    ),
+    writeFile(
+      path.join(finalRoot, "capture", "scripted-traversal.json"),
+      canonicalJson(scriptedTraversalObservation),
+    ),
     writeFile(
       path.join(finalRoot, "capture", "formal-world-capture-receipt.json"),
       canonicalJson(captureReceipt),
     ),
     writeFile(path.join(finalRoot, "evaluation.json"), canonicalJson(evaluation)),
+    writeFile(
+      path.join(finalRoot, "strict-diagnostic.json"),
+      canonicalJson(strictDiagnostic),
+    ),
+    writeFile(
+      path.join(finalRoot, "entry-third-person-validation.json"),
+      canonicalJson(entryValidation),
+    ),
     writeFile(path.join(finalRoot, "launch.json"), canonicalJson(launch)),
   ]);
   return mutateResult({
-    ...common,
-    outcome: "published",
+    kind: "world-reconstruction-production-result",
+    schemaVersion: 1,
+    caseId: sceneId,
+    caseRef,
+    runId,
+    productionOutcome: "passed",
+    publicationOutcome: "published",
+    evaluationOutcome: evaluation.outcome,
+    strictDiagnosticOutcome,
+    strictDiagnosticCodes,
+    strictDiagnosticCleanupOutcome: "not-started",
+    cleanupOutcome: "completed",
     attemptCount: 1,
     finalWorldPackagePath: finalPackageRoot,
     finalWorldPackageRef: worldPackageRef,
@@ -250,6 +494,17 @@ async function writeNativeProductionFixture(
     finalCaptureReceiptHash: captureReceiptHash,
     finalEvaluationPath: path.join(finalRoot, "evaluation.json"),
     finalEvaluationHash: evaluationHash,
+    finalStrictDiagnosticPath: path.join(finalRoot, "strict-diagnostic.json"),
+    finalStrictDiagnosticRef:
+      `artifact://world-reconstruction-case/${sceneId}/final/strict-diagnostic.json`,
+    finalStrictDiagnosticHash: strictDiagnosticHash,
+    finalEntryValidationPath: path.join(
+      finalRoot,
+      "entry-third-person-validation.json",
+    ),
+    finalEntryValidationRef:
+      `artifact://world-reconstruction-case/${sceneId}/final/entry-third-person-validation.json`,
+    finalEntryValidationHash: entryValidationHash,
     runReceiptPath: path.join(runRoot, "run-receipt.json"),
     runReceiptRef: launch.runReceiptRef,
     runReceiptHash,
@@ -365,7 +620,7 @@ async function writeTrustedWhiteboxArtifacts(
   const plannerReceipt = `${JSON.stringify({
     kind: "worldkit-planner-self-check",
     schemaVersion: 1,
-    validatorVersion: "worldkit-planner-self-check-v3",
+    validatorVersion: "worldkit-planner-self-check-v4",
     sceneId,
     sceneSourceKind: "canonical",
     status: "passed",
@@ -533,7 +788,7 @@ test.afterEach(async () => {
 });
 
 test("uses one current Native-default world-generation workflow contract", () => {
-  assert.equal(workflowPolicyVersion, 5);
+  assert.equal(workflowPolicyVersion, 6);
 });
 
 test("freezes Babylon Native by default and permits only explicit Canonical opt-in", async () => {
@@ -610,10 +865,10 @@ test("imports retained Canonical artifacts with an explicit Canonical source ide
   }
 });
 
-for (const productionOutcome of ["published", "preview-ready"]) {
-  test(`consumes the identity-bound Native ${productionOutcome} production result`, async () => {
-    const dataRoot = await temporaryRoot(`.native-${productionOutcome}-data-`);
-    const fakeRepoRoot = await temporaryRoot(`.native-${productionOutcome}-repo-`);
+for (const strictDiagnosticOutcome of ["passed", "failed"]) {
+  test(`consumes published Native production with a ${strictDiagnosticOutcome} strict diagnostic`, async () => {
+    const dataRoot = await temporaryRoot(`.native-${strictDiagnosticOutcome}-data-`);
+    const fakeRepoRoot = await temporaryRoot(`.native-${strictDiagnosticOutcome}-repo-`);
     let productionResult;
     const studio = createStudio({
       repoRoot: fakeRepoRoot,
@@ -625,7 +880,7 @@ for (const productionOutcome of ["published", "preview-ready"]) {
       lwdpConfigured: true,
       beforeWorldSpawn: async (id) => {
         productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
-          outcome: productionOutcome,
+          strictDiagnosticOutcome,
         });
       },
       worldSpawnImplementation: (_command, _arguments, options) => spawn(
@@ -639,34 +894,62 @@ for (const productionOutcome of ["published", "preview-ready"]) {
       const created = (await (await fetch(`${origin}/api/worlds`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: `Native ${productionOutcome}`, prompt: "Build a block ridge." }),
+        body: JSON.stringify({ title: `Native ${strictDiagnosticOutcome}`, prompt: "Build a block ridge." }),
       })).json()).world;
       const detail = await waitForWorldTerminal(origin, created.id);
-      assert.equal(detail.world.status, "ready");
+      assert.equal(detail.world.status, "ready", detail.world.error);
+      assert.equal(detail.world.outcome, "passed");
+      assert.equal(detail.world.productionOutcome, "passed");
+      assert.equal(detail.world.publicationOutcome, "published");
       assert.equal(
-        detail.world.outcome,
-        productionOutcome === "published" ? "passed" : "preview-ready",
+        detail.world.evaluationOutcome,
+        strictDiagnosticOutcome === "failed" ? "failed" : "passed",
       );
-      assert.equal(
-        detail.world.publicationStatus,
-        productionOutcome === "published" ? "accepted" : "not-accepted",
+      assert.equal(detail.world.whiteboxOutcome, "passed");
+      assert.equal(detail.world.strictDiagnosticOutcome, strictDiagnosticOutcome);
+      assert.deepEqual(
+        detail.world.strictDiagnosticCodes,
+        strictDiagnosticOutcome === "failed"
+          ? ["NBR70_BLOCKER_IDENTITY_MISMATCH"]
+          : [],
       );
       assert.equal(detail.world.coverUrl, `/api/worlds/${created.id}/deliverables/opening-frame`);
       assert.equal(detail.world.previewUrl, null);
-      assert.equal(detail.world.nativeLaunch.command, productionOutcome === "published"
-        ? "pnpm worldkit native run final/world-package --port 5174 --json"
-        : productionResult.launchCommand);
-      assert.equal(detail.world.nativeLaunch.accepted, productionOutcome === "published");
+      assert.equal(
+        detail.world.nativeLaunch.command,
+        "pnpm worldkit native run final/world-package --port 5174 --json",
+      );
       assert.equal(
         detail.world.nativeLaunch.workingDirectoryPath,
-        productionOutcome === "published"
-          ? path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId)
-          : fakeRepoRoot,
+        path.join(fakeRepoRoot, "artifacts/scenes", created.sceneId),
       );
       assert.ok(detail.media.deliverables.some(({ id, status }) =>
         id === "native-launch" && status === "available"));
       assert.ok(detail.media.deliverables.some(({ id, status }) =>
         id === "formal-world-capture-receipt" && status === "available"));
+      assert.ok(detail.media.deliverables.some(({ id, status }) =>
+        id === "native-strict-diagnostic" && status === "available"));
+      assert.ok(detail.media.deliverables.some(({ id, status }) =>
+        id === "entry-third-person-validation" && status === "available"));
+      const entryValidation = await fetch(
+        `${origin}/api/worlds/${created.id}/deliverables/entry-third-person-validation`,
+      ).then((response) => response.json());
+      assert.equal(entryValidation.status, "passed");
+      const evaluationReport = await fetch(
+        `${origin}/api/worlds/${created.id}/deliverables/evaluation-report`,
+      ).then((response) => response.json());
+      assert.equal(evaluationReport.outcome, "passed");
+      assert.equal(evaluationReport.productionOutcome, "passed");
+      assert.equal(evaluationReport.publicationOutcome, "published");
+      assert.equal(
+        evaluationReport.evaluationOutcome,
+        strictDiagnosticOutcome === "failed" ? "failed" : "passed",
+      );
+      assert.equal(evaluationReport.whiteboxOutcome, "passed");
+      assert.equal(
+        evaluationReport.strictDiagnosticOutcome,
+        strictDiagnosticOutcome,
+      );
       const launchResponse = await fetch(`${origin}/api/worlds/${created.id}/native-launch`);
       assert.equal(launchResponse.status, 200);
       assert.deepEqual(await launchResponse.json(), detail.world.nativeLaunch);
@@ -678,38 +961,373 @@ for (const productionOutcome of ["published", "preview-ready"]) {
         (await canonicalBootstrapResponse.json()).code,
         "STUDIO_PREVIEW_NATIVE_USE_BNA_LAUNCH",
       );
-      if (productionOutcome === "preview-ready") {
-        await assert.rejects(
-          readFile(path.join(
-            fakeRepoRoot,
-            "artifacts/scenes",
-            created.sceneId,
-            "final",
-            "launch.json",
-          )),
-          { code: "ENOENT" },
-        );
-      } else {
-        await assert.rejects(
-          readFile(path.join(
-            fakeRepoRoot,
-            "artifacts/scenes",
-            created.sceneId,
-            "runs",
-            productionResult.runId,
-            "final",
-            "launch.json",
-          )),
-          { code: "ENOENT" },
-        );
-      }
+      await assert.rejects(
+        readFile(path.join(
+          fakeRepoRoot,
+          "artifacts/scenes",
+          created.sceneId,
+          "runs",
+          productionResult.runId,
+          "final",
+          "launch.json",
+        )),
+        { code: "ENOENT" },
+      );
     } finally {
       await studio.shutdown();
     }
   });
 }
 
-test("rejects a Native production result whose Attempt path is not identity-bound", async () => {
+async function mutateNativeFinalEvidence(finalRoot, mutation) {
+  const captureRoot = path.join(finalRoot, "capture");
+  if (mutation === "package-bytes") {
+    await writeFile(
+      path.join(finalRoot, "world-package", "undeclared.bin"),
+      "tampered",
+    );
+    return;
+  }
+  if (mutation === "capture-directory-symlink") {
+    const realCaptureRoot = path.join(finalRoot, "capture-real");
+    await rename(captureRoot, realCaptureRoot);
+    await symlink("capture-real", captureRoot, "dir");
+    return;
+  }
+  if (mutation === "capture-extra-file") {
+    await writeFile(path.join(captureRoot, "undeclared.bin"), "tampered");
+    return;
+  }
+  const pngFileByMutation = {
+    "opening-png": "opening.png",
+    "world-side-png": "world-side.png",
+    "collider-overlay-png": "collider-overlay.png",
+  };
+  const pngFile = pngFileByMutation[mutation];
+  if (pngFile !== undefined) {
+    await writeFile(
+      path.join(captureRoot, pngFile),
+      pngFile === "opening.png"
+        ? VALID_EMPTY_OPENING_PNG
+        : VALID_ENTRY_OPENING_PNG,
+    );
+    return;
+  }
+  const observationFileByMutation = {
+    "opening-observation": "opening-observation.json",
+    "spawn-observation": "spawn-support-observation.json",
+    "collider-observation": "collider-overlay-observation.json",
+    "traversal-observation": "scripted-traversal.json",
+  };
+  const observationPath = path.join(
+    captureRoot,
+    observationFileByMutation[mutation],
+  );
+  const observation = JSON.parse(await readFile(observationPath, "utf8"));
+  await writeFile(observationPath, canonicalJson({
+    ...observation,
+    id: `${observation.id}.tampered`,
+  }));
+}
+
+for (const mutation of [
+  "package-bytes",
+  "opening-png",
+  "opening-observation",
+  "world-side-png",
+  "collider-overlay-png",
+  "spawn-observation",
+  "collider-observation",
+  "traversal-observation",
+  "capture-extra-file",
+  "capture-directory-symlink",
+]) {
+  test(`rejects published Native production with tampered ${mutation}`, async () => {
+    const dataRoot = await temporaryRoot(`.native-tampered-${mutation}-data-`);
+    const fakeRepoRoot = await temporaryRoot(`.native-tampered-${mutation}-repo-`);
+    let productionResult;
+    const studio = createStudio({
+      repoRoot: fakeRepoRoot,
+      dataRoot,
+      autoRunJobs: true,
+      importExistingArtifacts: false,
+      importBuiltinTestSets: false,
+      importBuiltinResults: false,
+      lwdpConfigured: true,
+      beforeWorldSpawn: async (id) => {
+        productionResult = await writeNativeProductionFixture(fakeRepoRoot, id);
+        const finalRoot = path.join(
+          fakeRepoRoot,
+          "artifacts/scenes",
+          id,
+          "final",
+        );
+        await mutateNativeFinalEvidence(finalRoot, mutation);
+      },
+      worldSpawnImplementation: (_command, _arguments, options) => spawn(
+        process.execPath,
+        ["-e", `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\n`)})`],
+        options,
+      ),
+    });
+    const origin = await listen(studio);
+    try {
+      const created = (await (await fetch(`${origin}/api/worlds`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: `Native tampered ${mutation}`,
+          prompt: "Build a block ridge.",
+        }),
+      })).json()).world;
+      const detail = await waitForWorldTerminal(origin, created.id);
+      assert.equal(detail.world.status, "failed");
+      assert.equal(detail.world.nativeLaunch, null);
+    } finally {
+      await studio.shutdown();
+    }
+  });
+}
+
+for (const mutation of [
+  "package-bytes",
+  "opening-png",
+  "opening-observation",
+  "world-side-png",
+  "capture-directory-symlink",
+]) {
+  test(`revokes Native launch after ready when ${mutation} changes`, async () => {
+    const dataRoot = await temporaryRoot(`.native-launch-${mutation}-data-`);
+    const fakeRepoRoot = await temporaryRoot(`.native-launch-${mutation}-repo-`);
+    let productionResult;
+    const studio = createStudio({
+      repoRoot: fakeRepoRoot,
+      dataRoot,
+      autoRunJobs: true,
+      importExistingArtifacts: false,
+      importBuiltinTestSets: false,
+      importBuiltinResults: false,
+      lwdpConfigured: true,
+      beforeWorldSpawn: async (id) => {
+        productionResult = await writeNativeProductionFixture(fakeRepoRoot, id);
+      },
+      worldSpawnImplementation: (_command, _arguments, options) => spawn(
+        process.execPath,
+        ["-e", `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\n`)})`],
+        options,
+      ),
+    });
+    const origin = await listen(studio);
+    try {
+      const created = (await (await fetch(`${origin}/api/worlds`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: `Native launch ${mutation} tamper`,
+          prompt: "Build a block ridge.",
+        }),
+      })).json()).world;
+      const detail = await waitForWorldTerminal(origin, created.id);
+      assert.equal(detail.world.status, "ready", detail.world.error);
+      await mutateNativeFinalEvidence(
+        path.join(
+          fakeRepoRoot,
+          "artifacts/scenes",
+          created.sceneId,
+          "final",
+        ),
+        mutation,
+      );
+      const launchResponse = await fetch(
+        `${origin}/api/worlds/${created.id}/native-launch`,
+      );
+      assert.equal(launchResponse.status, 404);
+    } finally {
+      await studio.shutdown();
+    }
+  });
+}
+
+test("preserves the one structured Native production failure despite exit code 1", async () => {
+  const dataRoot = await temporaryRoot(".native-structured-failure-data-");
+  const fakeRepoRoot = await temporaryRoot(".native-structured-failure-repo-");
+  let productionResult;
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    beforeWorldSpawn: async (id) => {
+      productionResult = {
+        kind: "world-reconstruction-production-result",
+        schemaVersion: 1,
+        caseId: id,
+        caseRef: `artifact://world-reconstruction-case/${id}/case.json`,
+        runId: "run-failed",
+        productionOutcome: "failed",
+        publicationOutcome: "not-published",
+        runOutcome: "failed",
+        evaluationOutcome: "not-run",
+        strictDiagnosticOutcome: "not-run",
+        strictDiagnosticCodes: [],
+        strictDiagnosticCleanupOutcome: "not-started",
+        attemptCount: 1,
+        diagnosticCodes: ["WORLD_RECONSTRUCTION_GROUND_ANALYSIS_FAILED"],
+        cleanupOutcome: "completed",
+      };
+    },
+    worldSpawnImplementation: (_command, _arguments, options) => spawn(
+      process.execPath,
+      [
+        "-e",
+        `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\n`)}); process.exitCode = 1`,
+      ],
+      options,
+    ),
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Native structured failure",
+        prompt: "Build a block ridge.",
+      }),
+    })).json()).world;
+    const detail = await waitForWorldTerminal(origin, created.id);
+    assert.equal(detail.world.status, "failed");
+    assert.equal(detail.world.productionOutcome, "failed");
+    assert.equal(detail.world.publicationOutcome, "not-published");
+    assert.equal(detail.world.evaluationOutcome, "not-run");
+    assert.equal(detail.world.strictDiagnosticOutcome, "not-run");
+    assert.deepEqual(detail.world.strictDiagnosticCodes, []);
+    assert.match(
+      detail.world.error,
+      /WORLD_RECONSTRUCTION_GROUND_ANALYSIS_FAILED/,
+    );
+    const evaluationReport = await fetch(
+      `${origin}/api/worlds/${created.id}/deliverables/evaluation-report`,
+    ).then((response) => response.json());
+    assert.equal(evaluationReport.productionOutcome, "failed");
+    assert.equal(evaluationReport.runOutcome, "failed");
+    assert.deepEqual(evaluationReport.diagnosticCodes, [
+      "WORLD_RECONSTRUCTION_GROUND_ANALYSIS_FAILED",
+    ]);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("preserves a Native reconstruction command failure instead of reporting a missing result", async () => {
+  const dataRoot = await temporaryRoot(".native-command-failure-data-");
+  const fakeRepoRoot = await temporaryRoot(".native-command-failure-repo-");
+  const commandFailure = {
+    kind: "worldkit-command-failure",
+    schemaVersion: 1,
+    command: "reconstruct-run",
+    ok: false,
+    exitCode: 1,
+    diagnostics: [{
+      severity: "error",
+      code: "WORLD_RECONSTRUCTION_STALE_CASE",
+      instancePath: "",
+      message:
+        "World reconstruction failed before a production result was available.",
+    }],
+  };
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    worldSpawnImplementation: (_command, _arguments, options) => spawn(
+      process.execPath,
+      [
+        "-e",
+        `process.stdout.write(${JSON.stringify(`${canonicalJson(commandFailure)}\n`)}); process.exitCode = 1`,
+      ],
+      options,
+    ),
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Native command failure",
+        prompt: "Build a block ridge.",
+      }),
+    })).json()).world;
+    const detail = await waitForWorldTerminal(origin, created.id);
+    assert.equal(detail.world.status, "failed");
+    assert.equal(detail.world.error, "WORLD_RECONSTRUCTION_STALE_CASE");
+    assert.doesNotMatch(
+      detail.world.error,
+      /STUDIO_NATIVE_PRODUCTION_RESULT_MISSING/,
+    );
+    const evaluationReport = await fetch(
+      `${origin}/api/worlds/${created.id}/deliverables/evaluation-report`,
+    ).then((response) => response.json());
+    assert.deepEqual(evaluationReport.diagnosticCodes, [
+      "WORLD_RECONSTRUCTION_STALE_CASE",
+    ]);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("rejects a passed Native production result when the child exits nonzero", async () => {
+  const dataRoot = await temporaryRoot(".native-passed-exit-one-data-");
+  const fakeRepoRoot = await temporaryRoot(".native-passed-exit-one-repo-");
+  let productionResult;
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    beforeWorldSpawn: async (id) => {
+      productionResult = await writeNativeProductionFixture(fakeRepoRoot, id);
+    },
+    worldSpawnImplementation: (_command, _arguments, options) => spawn(
+      process.execPath,
+      [
+        "-e",
+        `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\n`)}); process.exitCode = 1`,
+      ],
+      options,
+    ),
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Native passed result with failed process",
+        prompt: "Build a block ridge.",
+      }),
+    })).json()).world;
+    const detail = await waitForWorldTerminal(origin, created.id);
+    assert.equal(detail.world.status, "failed");
+    assert.equal(detail.world.nativeLaunch, null);
+    assert.match(detail.world.error, /STUDIO_NATIVE_PRODUCTION_EXIT_NONZERO/);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
+test("rejects a Native production result whose final Package path is not identity-bound", async () => {
   const dataRoot = await temporaryRoot(".native-foreign-path-data-");
   const fakeRepoRoot = await temporaryRoot(".native-foreign-path-repo-");
   let productionResult;
@@ -725,9 +1343,9 @@ test("rejects a Native production result whose Attempt path is not identity-boun
       productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
         mutateResult: (value) => ({
           ...value,
-          previewWorldPackagePath: path.join(
+          finalWorldPackagePath: path.join(
             fakeRepoRoot,
-            "artifacts/scenes/foreign/runs/run-studio-native/attempts/0/world-package",
+            "artifacts/scenes/foreign/final/world-package",
           ),
         }),
       });
@@ -756,6 +1374,52 @@ test("rejects a Native production result whose Attempt path is not identity-boun
   }
 });
 
+test("rejects extra fields in the central Native production result contract", async () => {
+  const dataRoot = await temporaryRoot(".native-extra-field-data-");
+  const fakeRepoRoot = await temporaryRoot(".native-extra-field-repo-");
+  let productionResult;
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot,
+    dataRoot,
+    autoRunJobs: true,
+    importExistingArtifacts: false,
+    importBuiltinTestSets: false,
+    importBuiltinResults: false,
+    lwdpConfigured: true,
+    beforeWorldSpawn: async (id) => {
+      productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
+        mutateResult: (value) => ({
+          ...value,
+          publicationStatus: "accepted",
+        }),
+      });
+    },
+    worldSpawnImplementation: (_command, _arguments, options) => spawn(
+      process.execPath,
+      ["-e", `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\n`)})`],
+      options,
+    ),
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Native extra field",
+        prompt: "Build a block ridge.",
+      }),
+    })).json()).world;
+    const detail = await waitForWorldTerminal(origin, created.id);
+    assert.equal(detail.world.status, "failed");
+    assert.equal(detail.world.outcome, "failed");
+    assert.match(detail.world.error, /WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID/);
+    assert.equal(detail.world.nativeLaunch, null);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
 test("rejects a Native production result whose Package identity does not match", async () => {
   const dataRoot = await temporaryRoot(".native-foreign-identity-data-");
   const fakeRepoRoot = await temporaryRoot(".native-foreign-identity-repo-");
@@ -772,7 +1436,7 @@ test("rejects a Native production result whose Package identity does not match",
       productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
         mutateResult: (value) => ({
           ...value,
-          previewWorldPackageRootHash: `sha256:${"2".repeat(64)}`,
+          finalWorldPackageRootHash: `sha256:${"4".repeat(64)}`,
         }),
       });
     },
@@ -795,12 +1459,188 @@ test("rejects a Native production result whose Package identity does not match",
     const detail = await waitForWorldTerminal(origin, created.id);
     assert.equal(detail.world.status, "failed");
     assert.equal(detail.world.outcome, "failed");
-    assert.match(detail.world.error, /STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID/);
+    assert.match(detail.world.error, /WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID/);
     assert.equal(detail.world.nativeLaunch, null);
   } finally {
     await studio.shutdown();
   }
 });
+
+for (const strictDiagnosticMutation of ["result-hash", "launch-path", "receipt-attempt"]) {
+  test(`rejects a Native production result with a stale strict diagnostic ${strictDiagnosticMutation}`, async () => {
+    const dataRoot = await temporaryRoot(`.native-strict-${strictDiagnosticMutation}-data-`);
+    const fakeRepoRoot = await temporaryRoot(`.native-strict-${strictDiagnosticMutation}-repo-`);
+    let productionResult;
+    const studio = createStudio({
+      repoRoot: fakeRepoRoot,
+      dataRoot,
+      autoRunJobs: true,
+      importExistingArtifacts: false,
+      importBuiltinTestSets: false,
+      importBuiltinResults: false,
+      lwdpConfigured: true,
+      beforeWorldSpawn: async (id) => {
+        productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
+          mutateResult: (value) => strictDiagnosticMutation === "result-hash"
+            ? { ...value, finalStrictDiagnosticHash: `sha256:${"4".repeat(64)}` }
+            : value,
+        });
+        if (strictDiagnosticMutation === "launch-path") {
+          const launchPath = path.join(
+            fakeRepoRoot,
+            "artifacts/scenes",
+            id,
+            "final",
+            "launch.json",
+          );
+          const launch = JSON.parse(await readFile(launchPath, "utf8"));
+          await writeFile(launchPath, canonicalJson({
+            ...launch,
+            strictDiagnosticRelativePath: "final/diagnostic.json",
+          }));
+        } else if (strictDiagnosticMutation === "receipt-attempt") {
+          const finalRoot = path.join(
+            fakeRepoRoot,
+            "artifacts/scenes",
+            id,
+            "final",
+          );
+          const strictDiagnosticPath = path.join(finalRoot, "strict-diagnostic.json");
+          const launchPath = path.join(finalRoot, "launch.json");
+          const strictDiagnostic = JSON.parse(
+            await readFile(strictDiagnosticPath, "utf8"),
+          );
+          const staleStrictDiagnostic = { ...strictDiagnostic, attemptIndex: 1 };
+          const staleStrictDiagnosticHash = canonicalHash(staleStrictDiagnostic);
+          const launch = JSON.parse(await readFile(launchPath, "utf8"));
+          await Promise.all([
+            writeFile(strictDiagnosticPath, canonicalJson(staleStrictDiagnostic)),
+            writeFile(launchPath, canonicalJson({
+              ...launch,
+              strictDiagnosticHash: staleStrictDiagnosticHash,
+            })),
+          ]);
+          productionResult = {
+            ...productionResult,
+            finalStrictDiagnosticHash: staleStrictDiagnosticHash,
+          };
+        }
+      },
+      worldSpawnImplementation: (_command, _arguments, options) => spawn(
+        process.execPath,
+        ["-e", `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\n`)})`],
+        options,
+      ),
+    });
+    const origin = await listen(studio);
+    try {
+      const created = (await (await fetch(`${origin}/api/worlds`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: `Native strict ${strictDiagnosticMutation}`,
+          prompt: "Build a block ridge.",
+        }),
+      })).json()).world;
+      const detail = await waitForWorldTerminal(origin, created.id);
+      assert.equal(detail.world.status, "failed");
+      assert.equal(detail.world.outcome, "failed");
+      assert.match(detail.world.error, /STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID/);
+      assert.equal(detail.world.nativeLaunch, null);
+    } finally {
+      await studio.shutdown();
+    }
+  });
+}
+
+for (const entryValidationMutation of ["result-hash", "launch-path", "receipt-status"]) {
+  test(`rejects a Native production result with a stale entry validation ${entryValidationMutation}`, async () => {
+    const dataRoot = await temporaryRoot(`.native-entry-${entryValidationMutation}-data-`);
+    const fakeRepoRoot = await temporaryRoot(`.native-entry-${entryValidationMutation}-repo-`);
+    let productionResult;
+    const studio = createStudio({
+      repoRoot: fakeRepoRoot,
+      dataRoot,
+      autoRunJobs: true,
+      importExistingArtifacts: false,
+      importBuiltinTestSets: false,
+      importBuiltinResults: false,
+      lwdpConfigured: true,
+      beforeWorldSpawn: async (id) => {
+        productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
+          mutateResult: (value) => entryValidationMutation === "result-hash"
+            ? { ...value, finalEntryValidationHash: `sha256:${"8".repeat(64)}` }
+            : value,
+        });
+        const finalRoot = path.join(
+          fakeRepoRoot,
+          "artifacts/scenes",
+          id,
+          "final",
+        );
+        const launchPath = path.join(finalRoot, "launch.json");
+        const launch = JSON.parse(await readFile(launchPath, "utf8"));
+        if (entryValidationMutation === "launch-path") {
+          await writeFile(launchPath, canonicalJson({
+            ...launch,
+            entryValidationRelativePath: "final/entry-validation.json",
+          }));
+        } else if (entryValidationMutation === "receipt-status") {
+          const entryValidationPath = path.join(
+            finalRoot,
+            "entry-third-person-validation.json",
+          );
+          const entryValidation = JSON.parse(
+            await readFile(entryValidationPath, "utf8"),
+          );
+          const staleEntryValidation = {
+            ...entryValidation,
+            status: "failed",
+            diagnostics: [{
+              code: "ENTRY_SUBJECT_NOT_CENTERED",
+              message: "stale fixture",
+            }],
+          };
+          const staleEntryValidationHash = canonicalHash(staleEntryValidation);
+          await Promise.all([
+            writeFile(entryValidationPath, canonicalJson(staleEntryValidation)),
+            writeFile(launchPath, canonicalJson({
+              ...launch,
+              entryValidationHash: staleEntryValidationHash,
+            })),
+          ]);
+          productionResult = {
+            ...productionResult,
+            finalEntryValidationHash: staleEntryValidationHash,
+          };
+        }
+      },
+      worldSpawnImplementation: (_command, _arguments, options) => spawn(
+        process.execPath,
+        ["-e", `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\n`)})`],
+        options,
+      ),
+    });
+    const origin = await listen(studio);
+    try {
+      const created = (await (await fetch(`${origin}/api/worlds`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: `Native entry ${entryValidationMutation}`,
+          prompt: "Build a block ridge.",
+        }),
+      })).json()).world;
+      const detail = await waitForWorldTerminal(origin, created.id);
+      assert.equal(detail.world.status, "failed");
+      assert.equal(detail.world.outcome, "failed");
+      assert.match(detail.world.error, /STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID/);
+      assert.equal(detail.world.nativeLaunch, null);
+    } finally {
+      await studio.shutdown();
+    }
+  });
+}
 
 test("passes the frozen backend to world jobs and records local Codex markers without provider details", async () => {
   const source = await readFile(path.join(repoRoot, "apps/studio/src/server.mjs"), "utf8");
@@ -1094,9 +1934,19 @@ test("synthesizes prompts then directly generates the opening and tri-views conc
 });
 
 test("renders current Babylon capture state without a legacy composition path", async () => {
-  const app = await readFile(path.join(repoRoot, "apps/studio/public/app.js"), "utf8");
+  const [app, server] = await Promise.all([
+    readFile(path.join(repoRoot, "apps/studio/public/app.js"), "utf8"),
+    readFile(path.join(repoRoot, "apps/studio/src/server.mjs"), "utf8"),
+  ]);
   assert.match(app, /Babylon Runtime/);
+  assert.match(app, /strictDiagnosticOutcome/);
+  assert.match(app, /严格诊断单独展示，不改变普通生产结果/);
   assert.doesNotMatch(app, /hasLegacyGuide|capture-start|verify-entry/);
+  assert.doesNotMatch(app, /preview-ready|not-accepted|publicationStatus|accepted/);
+  assert.doesNotMatch(
+    server,
+    /whiteboxOutcome:\s*closure\.(?:evaluationOutcome|strictDiagnosticOutcome)/,
+  );
 });
 
 test("normalizes input and validates image payloads", () => {

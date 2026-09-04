@@ -3,6 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "@whitebox-world/runtime-contracts": "workspace:*",
+    "@whitebox-world/validation": "workspace:*",
+    "tsx": "^4.23.12"
+  },
+  "devDependencies": {
+    "@whitebox-world/world-package": "workspace:*"
+  },
   "scripts": {
     "dev": "node src/server.mjs",
     "start": "node src/server.mjs",

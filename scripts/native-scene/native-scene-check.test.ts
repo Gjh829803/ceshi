@@ -188,28 +188,6 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
       `,
       "WORLDKIT_NATIVE_BLOCK_CREATE_INPUT_INVALID",
     ],
-    [
-      "disconnected route Finalize check",
-      `
-        const session = createBabylonNativeBlockProfileSessionV1(context, {
-          maximumBlockCount: 16,
-        });
-        session.createBlock({
-          id: "west-route",
-          shape: "full",
-          paletteRole: "route",
-          centerMetersXYZ: [0, -0.5, 0],
-        });
-        session.createBlock({
-          id: "east-route",
-          shape: "full",
-          paletteRole: "route",
-          centerMetersXYZ: [8, -0.5, 0],
-        });
-        session.finalize({ staticColliders: [] });
-      `,
-      "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
-    ],
   ] as const)(
     "maps a Block Profile %s through dual replay",
     async (_label, body, code) => {
@@ -229,6 +207,66 @@ describe("checkBabylonNativeSceneWorldDirectoryV1", () => {
     },
     30_000,
   );
+
+  it("admits route islands connected by ordinary ground without promoting Profile advice to a veto", async () => {
+    const { result } = await runSource(
+      blockSource(`
+        const session = createBabylonNativeBlockProfileSessionV1(context, {
+          maximumBlockCount: 3,
+        });
+        session.createBlock({
+          id: "west-route",
+          shape: "full",
+          paletteRole: "route",
+          visualGroupId: "west-course",
+          colliderGroupId: "walkable-course",
+          centerMetersXYZ: [0, -0.5, 0],
+        });
+        session.createBlock({
+          id: "ordinary-ground",
+          shape: "full",
+          paletteRole: "ground",
+          colliderGroupId: "walkable-course",
+          centerMetersXYZ: [1, -0.5, 0],
+        });
+        session.createBlock({
+          id: "east-route",
+          shape: "full",
+          paletteRole: "route",
+          visualGroupId: "east-course",
+          colliderGroupId: "walkable-course",
+          centerMetersXYZ: [2, -0.5, 0],
+        });
+        session.finalize({
+          staticColliders: [{
+            id: "walkable-course-collider",
+            colliderGeometrySource: {
+              kind: "block-group",
+              colliderGroupId: "walkable-course",
+            },
+            traversalBinding: {
+              kind: "static-surface",
+              surfaceEntityId: "walkable-course-surface",
+              logicalSubshapeId: "walkable-course-top",
+              traversalSurfaceProfileRef:
+                "worldkit://traversal-surface-profile/ground.static@1",
+            },
+            exposedEdgePolicy: "none",
+          }],
+        });
+        context.registration.registerSpawnMarker({
+          id: "player-spawn",
+          positionMetersXYZ: [0, 0, 0],
+          facingRadians: 0,
+        });
+      `),
+      BLOCKS_BOOTSTRAP,
+    );
+
+    expect(result.outcome).toBe("passed");
+    expect(result.diagnostics).toEqual([]);
+    expect(parseNativeSceneCheckResultV1(result)).toEqual(result);
+  }, 30_000);
 
   it("checks one multi-file workspace through bundle and dual replay", async () => {
     const root = await fixture({

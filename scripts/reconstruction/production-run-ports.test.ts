@@ -210,6 +210,12 @@ async function fixture() {
     worldPackageRootHash: H("8"),
     worldBuildIdentityHash: H("9"),
     buildReceiptHash: H("0"),
+    groundAnalysisReport: {} as never,
+    groundAnalysisReportHash: H("7"),
+    groundAnalysisReportPath: path.join(
+      attemptDirectoryPath,
+      "ground-analysis-report.json",
+    ),
     outputDirectoryPath: packageDirectoryPath,
     diagnostics: [],
   });
@@ -873,36 +879,9 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     }));
   });
 
-  it("surfaces an identity-bound repairable Native Check rejection before Candidate allocation", async () => {
+  it("surfaces an identity-bound non-repairable Native Check rejection before Candidate allocation", async () => {
     const value = await fixture();
     const baseOwners = owners(value, []);
-    const repairDiagnostic = parseWorldReconstructionDiagnosticV1({
-      kind: "world-reconstruction-diagnostic",
-      schemaVersion: 1,
-      id: "native-check-route-disconnected",
-      code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
-      dimensionId: "critical-traversal",
-      acceptanceTargetRef:
-        "worldkit://acceptance-target/upper-t-junction@1",
-      targetRef: "worldkit://acceptance-target/upper-t-junction@1",
-      targetId: "native-block-route",
-      metricId: "ground-component-reachability",
-      details: {
-        kind: "state-mismatch",
-        expectedValue: "one-edge-connected-route-component",
-        actualValue: "multiple-disconnected-route-components",
-        correctionDirection: "replace",
-      },
-      evidenceRefs: ["artifact://case/native-check-result.json"],
-      message: "Native Check found a disconnected route.",
-      repairAction: {
-        kind: "revise-native-source",
-        targetKind: "traversal-check",
-        targetId: "native-block-route",
-        operation: "adjust-traversal",
-        instruction: "Connect the explicit route Blocks.",
-      },
-    });
     const nativeCheckResultPath = path.join(
       value.attemptDirectoryPath,
       "native-check-result.json",
@@ -911,7 +890,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       throw new NativeBlockPackageErrorV1(
         [
           "native-check-rejected",
-          "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+          "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
         ],
         undefined,
         undefined,
@@ -921,7 +900,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
             value.packageResult.sceneAuthoringAttemptResult as never,
           nativeCheckResultHash: H("8"),
           nativeCheckResultPath,
-          repairDiagnostics: [repairDiagnostic],
+          repairDiagnostics: [],
         },
       );
     });
@@ -941,7 +920,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         /attempts\/0\/native-check-result\.json$/,
       ),
       nativeCheckResultHash: H("8"),
-      repairDiagnostics: [repairDiagnostic],
+      repairDiagnostics: [],
     }));
     expect(await ports.cleanup()).toEqual(expect.objectContaining({
       candidate: "completed",

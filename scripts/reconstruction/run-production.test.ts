@@ -58,8 +58,10 @@ import {
 import type { WorldReconstructionCleanupOutcomesV1 } from "./run-journal.js";
 import { NativeBlockFinalArtifactPublicationClosedErrorV1 } from
   "./final-artifact-publisher.js";
-import { NativeBlockReconstructionVerificationClosedErrorV1 } from
-  "../verification/verify-native-block-reconstruction-e2e.js";
+import {
+  hashEntryThirdPersonValidationResultV1,
+  type EntryThirdPersonValidationResultV1,
+} from "../visual/entry-third-person.js";
 import {
   decideNativeBlockReconstructionRouteV1,
   type WorldReconstructionHostRoutePolicyV1,
@@ -93,6 +95,32 @@ const SCENE_BRIEF_HASH =
 
 const H = (character: string): Sha256HashV1 =>
   `sha256:${character.repeat(64)}` as Sha256HashV1;
+
+const ENTRY_VALIDATION = Object.freeze({
+  kind: "worldkit-entry-third-person-validation" as const,
+  schemaVersion: 1 as const,
+  status: "passed" as const,
+  imageMeasurements: Object.freeze({
+    widthPixels: 1280,
+    heightPixels: 720,
+    subjectMaskPixelCount: 4096,
+    subjectCenterXRatio: 0.5,
+    subjectCenterErrorRatio: 0,
+    maximumCenterErrorRatio: 0.015,
+  }),
+  runtimeMeasurements: Object.freeze({
+    controlledEntityId: "player",
+    cameraTargetEntityId: "player",
+    cameraTargetsControlledSubject: true,
+    rearAlignmentDegrees: 0,
+    maximumRearAlignmentDegrees: 1,
+    viewYawOffsetRadians: 0,
+    maximumViewYawOffsetRadians: 1e-6,
+  }),
+  diagnostics: Object.freeze([]),
+}) satisfies EntryThirdPersonValidationResultV1;
+const ENTRY_VALIDATION_HASH =
+  hashEntryThirdPersonValidationResultV1(ENTRY_VALIDATION);
 
 const COMPLETED_CLEANUP = Object.freeze({
   providerTask: "completed",
@@ -271,6 +299,9 @@ async function receiptFor(
       worldPackageBuildReceiptHash: H("6"),
       worldBuildIdentityRef: "world-package://world-build-identity.json",
       worldBuildIdentityHash: H("7"),
+      groundAnalysisReportRef:
+        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/ground-analysis-report.json`,
+      groundAnalysisReportHash: H("a"),
       captureReceiptRef:
         `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/capture/formal-world-capture-receipt.json`,
       captureReceiptHash: H("8"),
@@ -542,6 +573,27 @@ async function publishReceipt(
   );
 }
 
+function productionIntegrityFor(
+  receipt: WorldReconstructionRunReceiptV1,
+  strictDiagnosticCodes: readonly string[] = [],
+) {
+  const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
+  return Object.freeze({
+    outcome: "verified" as const,
+    candidateKind: "run" as const,
+    attemptIndex: receipt.finalAttemptIndex,
+    worldPackageRef: terminal.worldPackageRef,
+    worldPackageRootHash: terminal.worldPackageRootHash,
+    worldBuildIdentityHash: terminal.worldBuildIdentityHash,
+    captureReceiptHash: terminal.captureReceiptHash,
+    evaluationResultHash: terminal.evaluationResultHash,
+    playability: Object.freeze({ mode: "skipped" as const }),
+    strictDiagnosticCodes: Object.freeze([...strictDiagnosticCodes]),
+    entryValidation: ENTRY_VALIDATION,
+    entryValidationHash: ENTRY_VALIDATION_HASH,
+  });
+}
+
 function ownersFor(
   value: ProductionFixtureV1,
   receipt: WorldReconstructionRunReceiptV1,
@@ -560,11 +612,6 @@ function ownersFor(
       return frozenOwnerIdentities;
     }),
     cleanup: vi.fn(async () => COMPLETED_CLEANUP),
-  });
-  const playability = Object.freeze({
-    launch: vi.fn(async () => {
-      throw new Error("test playability must be consumed by the verifier port");
-    }),
   });
   const defaultRunCore: WorldReconstructionProductionOwnersV1["runCore"] =
     async (input, actualPorts) => {
@@ -591,32 +638,13 @@ function ownersFor(
           kind: "run",
           runDirectoryPath: value.outputDirectoryPath,
         },
-        playability,
       });
-      const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
-      return Object.freeze({
-        outcome: "verified" as const,
-        candidateKind: "run" as const,
-        attemptIndex: receipt.finalAttemptIndex,
-        worldPackageRef: terminal.worldPackageRef,
-        worldPackageRootHash: terminal.worldPackageRootHash,
-        worldBuildIdentityHash: terminal.worldBuildIdentityHash,
-        captureReceiptHash: terminal.captureReceiptHash,
-        evaluationResultHash: terminal.evaluationResultHash,
-        playability: Object.freeze({
-          groundedSpawn: true as const,
-          moved: true as const,
-          jumped: true as const,
-          reset: true as const,
-          scriptedTraversalChecks: Object.freeze([]),
-        }),
-      });
+      return productionIntegrityFor(receipt);
     }),
     publishFinal: vi.fn(async (input) => {
       events.push("publish-final");
       expect(input.caseDirectoryPath).toBe(value.caseRoot);
       expect(input.runDirectoryPath).toBe(value.outputDirectoryPath);
-      expect(input.playability).toBe(playability);
       const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
       expect(input.launch).toEqual({
         kind: "native-block-reconstruction-launch",
@@ -633,6 +661,11 @@ function ownersFor(
         captureReceiptHash: terminal.captureReceiptHash,
         evaluationRelativePath: "final/evaluation.json",
         evaluationHash: terminal.evaluationResultHash,
+        strictDiagnosticRelativePath: "final/strict-diagnostic.json",
+        strictDiagnosticHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        entryValidationRelativePath:
+          "final/entry-third-person-validation.json",
+        entryValidationHash: ENTRY_VALIDATION_HASH,
         launchCommand:
           "pnpm worldkit native run final/world-package --port 5174 --json",
       });
@@ -650,9 +683,10 @@ function ownersFor(
         evaluationHash:
           getWorldReconstructionFinalEvaluatedAttemptV1(receipt)
             .evaluationResultHash,
+        strictDiagnosticHash: input.launch.strictDiagnosticHash,
+        entryValidationHash: input.launch.entryValidationHash,
       });
     }),
-    playability,
   } satisfies WorldReconstructionProductionOwnersV1;
   const { runCore: _ignoredRunCore, ...remainingOverrides } = overrides;
   return {
@@ -788,7 +822,13 @@ describe("runWorldReconstructionProductionV1", () => {
       caseId: CASE_ID,
       caseRef: CASE_REF,
       runId: RUN_ID,
-      outcome: "published",
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      evaluationOutcome: "passed",
+      strictDiagnosticOutcome: "passed",
+      strictDiagnosticCodes: [],
+      strictDiagnosticCleanupOutcome: "not-started",
+      cleanupOutcome: "completed",
       attemptCount: 1,
       finalWorldPackagePath: path.join(value.caseRoot, "final", "world-package"),
       finalWorldPackageRef: terminal.worldPackageRef,
@@ -802,6 +842,22 @@ describe("runWorldReconstructionProductionV1", () => {
       finalCaptureReceiptHash: terminal.captureReceiptHash,
       finalEvaluationPath: path.join(value.caseRoot, "final", "evaluation.json"),
       finalEvaluationHash: terminal.evaluationResultHash,
+      finalStrictDiagnosticPath: path.join(
+        value.caseRoot,
+        "final",
+        "strict-diagnostic.json",
+      ),
+      finalStrictDiagnosticRef:
+        `${CASE_ARTIFACT_ROOT}/final/strict-diagnostic.json`,
+      finalStrictDiagnosticHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      finalEntryValidationPath: path.join(
+        value.caseRoot,
+        "final",
+        "entry-third-person-validation.json",
+      ),
+      finalEntryValidationRef:
+        `${CASE_ARTIFACT_ROOT}/final/entry-third-person-validation.json`,
+      finalEntryValidationHash: ENTRY_VALIDATION_HASH,
       runReceiptPath: path.join(value.outputDirectoryPath, "run-receipt.json"),
       runReceiptRef:
         `artifact://world-reconstruction-case/${CASE_ID}/runs/${RUN_ID}/run-receipt.json`,
@@ -1062,8 +1118,16 @@ describe("runWorldReconstructionProductionV1", () => {
       caseId: CASE_ID,
       caseRef: CASE_REF,
       runId: RUN_ID,
-      outcome: "unsupported-route",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+      runOutcome: "not-run",
+      evaluationOutcome: "not-run",
+      strictDiagnosticOutcome: "not-run",
+      strictDiagnosticCodes: [],
+      strictDiagnosticCleanupOutcome: "not-started",
+      attemptCount: 0,
       diagnosticCodes: ["WORLD_RECONSTRUCTION_ROUTE_UNSUPPORTED"],
+      cleanupOutcome: "not-started",
     });
     expect(owners.createRunPorts).not.toHaveBeenCalled();
     expect(owners.runCore).not.toHaveBeenCalled();
@@ -1128,43 +1192,28 @@ describe("runWorldReconstructionProductionV1", () => {
       }),
     });
 
-    await expect(run(value, owners)).resolves.toEqual({
+    const rejectedCaptureResult = await run(value, owners);
+    expect(rejectedCaptureResult).toMatchObject({
       kind: "world-reconstruction-production-result",
       schemaVersion: 1,
       caseId: CASE_ID,
       caseRef: CASE_REF,
       runId: RUN_ID,
-      outcome: "rejected-capture",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+      runOutcome: "not-run",
+      evaluationOutcome: "not-run",
       diagnosticCodes: [
-        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
         "WORLDKIT_OPENING_GATE_REGION_DRIFT",
+        "WORLD_RECONSTRUCTION_CAPTURE_FAILED",
       ],
       cleanupOutcome: "completed",
-      rejectedWorldPackagePath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "world-package",
-      ),
-      rejectedWorldPackageRef:
-        `package://world-package/sha256/${"8".repeat(64)}`,
-      rejectedWorldPackageRootHash: H("8"),
-      rejectedCaptureDirectoryPath,
-      rejectedOpeningPath,
-      rejectedOpeningRef:
-        `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
-        "attempts/0/rejected-capture/opening.png",
-      openingGateResultPath,
-      openingGateResultRef:
-        `${CASE_REF.slice(0, -"/case.json".length)}/runs/${RUN_ID}/` +
-        "attempts/0/rejected-capture/opening-composition-gate-result.json",
-      openingGateResultHash: H("e"),
     });
     expect(owners.verifyRun).not.toHaveBeenCalled();
     expect(owners.publishFinal).not.toHaveBeenCalled();
   });
 
-  it("returns identity-bound playable evidence and exact diagnostics for a failed evaluation", async () => {
+  it("publishes CASE-054-shaped production success while preserving a failed strict diagnostic", async () => {
     const value = await fixture();
     const baseReceipt = await receiptFor(value, { outcome: "failed" });
     const failedEvaluation = await publishQualityEvaluationArtifacts(
@@ -1172,165 +1221,44 @@ describe("runWorldReconstructionProductionV1", () => {
       baseReceipt,
     );
     const { receipt } = failedEvaluation;
-    const defaultOwners = ownersFor(value, receipt).owners;
-    const owners = {
-      ...defaultOwners,
-      runCore: vi.fn(async (input, ports) => {
-        await failedEvaluation.publishArtifacts();
-        await publishReceipt(input.outputDirectoryPath, receipt);
-        return receipt;
-      }),
-    };
-    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
-
-    await expect(run(value, owners)).resolves.toEqual({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: CASE_ID,
-      caseRef: CASE_REF,
-      runId: RUN_ID,
-      outcome: "rejected-evaluation",
-      runOutcome: "failed",
-      attemptCount: 1,
-      diagnosticCodes: ["WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT"],
-      cleanupOutcome: "completed",
-      rejectedWorldPackagePath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "world-package",
-      ),
-      rejectedWorldPackageRef: terminal.worldPackageRef,
-      rejectedWorldPackageRootHash: terminal.worldPackageRootHash,
-      rejectedCaptureDirectoryPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "capture",
-      ),
-      rejectedOpeningPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "capture",
-        "opening.png",
-      ),
-      rejectedOpeningRef:
-        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/capture/opening.png`,
-      rejectedCaptureReceiptPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "capture",
-        "formal-world-capture-receipt.json",
-      ),
-      rejectedCaptureReceiptHash: terminal.captureReceiptHash,
-      rejectedEvaluationPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "evaluation.json",
-      ),
-      rejectedEvaluationRef: terminal.evaluationResultRef,
-      rejectedEvaluationHash: terminal.evaluationResultHash,
-      runReceiptPath: path.join(value.outputDirectoryPath, "run-receipt.json"),
-      runReceiptRef:
-        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/run-receipt.json`,
-      runReceiptHash: hashWorldReconstructionRunReceiptV1(receipt),
-    });
-    expect(owners.verifyRun).not.toHaveBeenCalled();
-    expect(owners.publishFinal).not.toHaveBeenCalled();
-  });
-
-  it("delivers a non-accepted report-only preview after the first evaluation", async () => {
-    const value = await fixture();
-    await setQualityGateMode(value, "report-only");
-    const baseReceipt = await receiptFor(value, { outcome: "failed" });
-    const failedEvaluation = await publishQualityEvaluationArtifacts(
-      value,
-      baseReceipt,
-    );
-    const { receipt } = failedEvaluation;
-    const defaultOwners = ownersFor(value, receipt).owners;
-    const owners = {
-      ...defaultOwners,
+    const { owners } = ownersFor(value, receipt, {
       runCore: vi.fn(async (input) => {
         await failedEvaluation.publishArtifacts();
         await publishReceipt(input.outputDirectoryPath, receipt);
         return receipt;
       }),
-    };
-    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
+      verifyRun: vi.fn(async () => productionIntegrityFor(
+        receipt,
+        ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      )),
+    });
 
-    await expect(run(value, owners)).resolves.toEqual({
+    const case054Result = await run(value, owners);
+    expect(case054Result).toMatchObject({
       kind: "world-reconstruction-production-result",
       schemaVersion: 1,
       caseId: CASE_ID,
       caseRef: CASE_REF,
       runId: RUN_ID,
-      outcome: "preview-ready",
-      publicationStatus: "not-accepted",
-      qualityStage: "evaluation",
-      qualityOutcome: "failed",
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      evaluationOutcome: "failed",
+      strictDiagnosticOutcome: "failed",
+      strictDiagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      strictDiagnosticCleanupOutcome: "not-started",
       attemptCount: 1,
-      diagnosticCodes: ["WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT"],
       cleanupOutcome: "completed",
-      previewWorldPackagePath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "world-package",
+      finalStrictDiagnosticPath: path.join(
+        value.caseRoot,
+        "final",
+        "strict-diagnostic.json",
       ),
-      previewWorldPackageRef: terminal.worldPackageRef,
-      previewWorldPackageRootHash: terminal.worldPackageRootHash,
-      previewCaptureDirectoryPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "capture",
-      ),
-      previewOpeningPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "capture",
-        "opening.png",
-      ),
-      previewOpeningRef:
-        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/attempts/0/capture/opening.png`,
-      previewCaptureReceiptPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "capture",
-        "formal-world-capture-receipt.json",
-      ),
-      previewCaptureReceiptHash: terminal.captureReceiptHash,
-      previewEvaluationPath: path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "evaluation.json",
-      ),
-      previewEvaluationRef: terminal.evaluationResultRef,
-      previewEvaluationHash: terminal.evaluationResultHash,
-      runReceiptPath: path.join(value.outputDirectoryPath, "run-receipt.json"),
-      runReceiptRef:
-        `${CASE_ARTIFACT_ROOT}/runs/${RUN_ID}/run-receipt.json`,
-      runReceiptHash: hashWorldReconstructionRunReceiptV1(receipt),
-      launchWorkingDirectoryPath: value.repositoryRoot,
-      launchCommand: `pnpm worldkit native run '${path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "world-package",
-      )}' --port 5174 --json`,
     });
-    expect(owners.verifyRun).not.toHaveBeenCalled();
-    expect(owners.publishFinal).not.toHaveBeenCalled();
+    expect(owners.verifyRun).toHaveBeenCalledOnce();
+    expect(owners.publishFinal).toHaveBeenCalledOnce();
   });
 
-  it("delivers incomplete soft evidence as a report-only preview without inventing a pass", async () => {
+  it("publishes an old-standard complete scene when a strict-only Evaluation dimension is incomplete", async () => {
     const value = await fixture();
     await setQualityGateMode(value, "report-only");
     const baseReceipt = await receiptFor(value, { outcome: "incomplete" });
@@ -1340,15 +1268,13 @@ describe("runWorldReconstructionProductionV1", () => {
       "incomplete",
     );
     const { receipt } = incompleteEvaluation;
-    const defaultOwners = ownersFor(value, receipt).owners;
-    const owners = {
-      ...defaultOwners,
+    const { owners } = ownersFor(value, receipt, {
       runCore: vi.fn(async (input) => {
         await incompleteEvaluation.publishArtifacts();
         await publishReceipt(input.outputDirectoryPath, receipt);
         return receipt;
       }),
-    };
+    });
 
     const result = await run(value, owners);
     expect(result).toMatchObject({
@@ -1357,27 +1283,17 @@ describe("runWorldReconstructionProductionV1", () => {
       caseId: CASE_ID,
       caseRef: CASE_REF,
       runId: RUN_ID,
-      outcome: "preview-ready",
-      publicationStatus: "not-accepted",
-      qualityStage: "evaluation",
-      qualityOutcome: "incomplete",
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      evaluationOutcome: "incomplete",
       attemptCount: 1,
-      diagnosticCodes: ["WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"],
       cleanupOutcome: "completed",
-      launchWorkingDirectoryPath: value.repositoryRoot,
-      launchCommand: `pnpm worldkit native run '${path.join(
-        value.outputDirectoryPath,
-        "attempts",
-        "0",
-        "world-package",
-      )}' --port 5174 --json`,
     });
-    expect(result).not.toHaveProperty("finalDirectoryPath");
-    expect(owners.verifyRun).not.toHaveBeenCalled();
-    expect(owners.publishFinal).not.toHaveBeenCalled();
+    expect(owners.verifyRun).toHaveBeenCalledOnce();
+    expect(owners.publishFinal).toHaveBeenCalledOnce();
   });
 
-  it("keeps Collider failure rejected even for a report-only Case", async () => {
+  it("keeps a Collider Evaluation finding strict-only after retained owners complete", async () => {
     const value = await fixture();
     await setQualityGateMode(value, "report-only");
     const baseReceipt = await receiptFor(value, { outcome: "failed" });
@@ -1388,57 +1304,54 @@ describe("runWorldReconstructionProductionV1", () => {
       true,
     );
     const { receipt } = failedEvaluation;
-    const defaultOwners = ownersFor(value, receipt).owners;
-    const owners = {
-      ...defaultOwners,
+    const { owners } = ownersFor(value, receipt, {
       runCore: vi.fn(async (input) => {
         await failedEvaluation.publishArtifacts();
         await publishReceipt(input.outputDirectoryPath, receipt);
         return receipt;
       }),
-    };
+      verifyRun: vi.fn(async () => productionIntegrityFor(
+        receipt,
+        ["NBR70_EVALUATION_NOT_PASSED"],
+      )),
+    });
 
     const result = await run(value, owners);
     expect(result).toMatchObject({
-      outcome: "rejected-evaluation",
-      runOutcome: "failed",
-      diagnosticCodes: ["WORLD_RECONSTRUCTION_COLLIDER_MISSING"],
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      evaluationOutcome: "failed",
+      strictDiagnosticOutcome: "failed",
+      strictDiagnosticCodes: ["NBR70_EVALUATION_NOT_PASSED"],
       cleanupOutcome: "completed",
     });
-    expect(result).not.toHaveProperty("launchCommand");
-    expect(owners.verifyRun).not.toHaveBeenCalled();
-    expect(owners.publishFinal).not.toHaveBeenCalled();
+    expect(owners.verifyRun).toHaveBeenCalledOnce();
+    expect(owners.publishFinal).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    ["failed", "completed"],
-    ["incomplete", "completed"],
-    ["passed", "failed"],
-  ] as const)(
-    "does not verify or publish a %s run with %s cleanup",
-    async (outcome, cleanupOutcome) => {
+  it("does not verify or publish a run whose cleanup failed", async () => {
       const value = await fixture();
-      const receipt = await receiptFor(value, { outcome, cleanupOutcome });
+      const receipt = await receiptFor(value, {
+        outcome: "passed",
+        cleanupOutcome: "failed",
+      });
       const { owners } = ownersFor(value, receipt);
 
       const result = await run(value, owners);
-      const diagnosticCodes = cleanupOutcome === "failed"
-        ? ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"]
-        : receipt.outcome === "failed"
-        ? ["NBR_REJECTED_EVALUATION_EVIDENCE_INVALID"]
-        : ["WORLD_RECONSTRUCTION_REQUIRED_EVIDENCE_MISSING"];
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         kind: "world-reconstruction-production-result",
         schemaVersion: 1,
         caseId: CASE_ID,
         caseRef: CASE_REF,
         runId: RUN_ID,
-        outcome: "closed",
+        productionOutcome: "failed",
+        publicationOutcome: "not-published",
         runOutcome: receipt.outcome,
+        evaluationOutcome: "not-run",
         attemptCount: 1,
-        diagnosticCodes,
-        cleanupOutcome,
+        diagnosticCodes: ["WORLD_RECONSTRUCTION_CLEANUP_FAILED"],
+        cleanupOutcome: "failed",
       });
       expect(result).not.toHaveProperty("finalDirectoryPath");
       expect(result).not.toHaveProperty("finalWorldPackagePath");
@@ -1450,8 +1363,7 @@ describe("runWorldReconstructionProductionV1", () => {
       expect(owners.publishFinal).not.toHaveBeenCalled();
       await expect(lstat(path.join(value.caseRoot, "final"))).rejects
         .toMatchObject({ code: "ENOENT" });
-    },
-  );
+  });
 
   it.each([
     ["missing", false],
@@ -1474,13 +1386,14 @@ describe("runWorldReconstructionProductionV1", () => {
       });
 
       const result = await run(value, owners);
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         kind: "world-reconstruction-production-result",
         schemaVersion: 1,
         caseId: CASE_ID,
         caseRef: CASE_REF,
         runId: RUN_ID,
-        outcome: "closed",
+        productionOutcome: "failed",
+        publicationOutcome: "not-published",
         diagnosticCodes: ["WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID"],
         cleanupOutcome: "completed",
       });
@@ -1514,7 +1427,8 @@ describe("runWorldReconstructionProductionV1", () => {
       });
 
       await expect(run(value, owners)).resolves.toMatchObject({
-        outcome: "closed",
+        productionOutcome: "failed",
+        publicationOutcome: "not-published",
         diagnosticCodes: ["WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID"],
         cleanupOutcome: "completed",
       });
@@ -1537,7 +1451,8 @@ describe("runWorldReconstructionProductionV1", () => {
     }));
 
     await expect(run(value, bundle.owners)).resolves.toMatchObject({
-      outcome: "closed",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
       diagnosticCodes: ["WORLD_RECONSTRUCTION_FROZEN_OWNER_INVALID"],
       cleanupOutcome: "completed",
     });
@@ -1554,13 +1469,14 @@ describe("runWorldReconstructionProductionV1", () => {
       }),
     });
 
-    await expect(run(value, owners)).resolves.toEqual({
+    await expect(run(value, owners)).resolves.toMatchObject({
       kind: "world-reconstruction-production-result",
       schemaVersion: 1,
       caseId: CASE_ID,
       caseRef: CASE_REF,
       runId: RUN_ID,
-      outcome: "closed",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
       diagnosticCodes: ["WORLD_RECONSTRUCTION_PRODUCTION_PORTS_FAILED"],
       cleanupOutcome: "completed",
     });
@@ -1579,13 +1495,14 @@ describe("runWorldReconstructionProductionV1", () => {
       }),
     });
 
-    await expect(run(value, owners)).resolves.toEqual({
+    await expect(run(value, owners)).resolves.toMatchObject({
       kind: "world-reconstruction-production-result",
       schemaVersion: 1,
       caseId: CASE_ID,
       caseRef: CASE_REF,
       runId: RUN_ID,
-      outcome: "closed",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
       diagnosticCodes: ["WORLD_RECONSTRUCTION_CORE_FAILED"],
       cleanupOutcome: "completed",
     });
@@ -1603,34 +1520,18 @@ describe("runWorldReconstructionProductionV1", () => {
       "formal-world-capture-intent.json",
     );
     const defaults = ownersFor(value, receipt);
-    const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
     vi.mocked(defaults.owners.verifyRun).mockImplementationOnce(async () => {
       const intent = JSON.parse(await readFile(intentPath, "utf8"));
       await writeFile(intentPath, JSON.stringify({
         ...intent,
         captureProfile: { ...intent.captureProfile, widthPixels: 1279 },
       }));
-      return Object.freeze({
-        outcome: "verified" as const,
-        candidateKind: "run" as const,
-        attemptIndex: 0,
-        worldPackageRef: terminal.worldPackageRef,
-        worldPackageRootHash: terminal.worldPackageRootHash,
-        worldBuildIdentityHash: terminal.worldBuildIdentityHash,
-        captureReceiptHash: terminal.captureReceiptHash,
-        evaluationResultHash: terminal.evaluationResultHash,
-        playability: Object.freeze({
-          groundedSpawn: true as const,
-          moved: true as const,
-          jumped: true as const,
-          reset: true as const,
-          scriptedTraversalChecks: Object.freeze([]),
-        }),
-      });
+      return productionIntegrityFor(receipt);
     });
 
     await expect(run(value, defaults.owners)).resolves.toMatchObject({
-      outcome: "closed",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
       diagnosticCodes: ["WORLD_RECONSTRUCTION_STALE_FORMAL_CAPTURE_INTENT"],
       cleanupOutcome: "completed",
     });
@@ -1657,7 +1558,8 @@ describe("runWorldReconstructionProductionV1", () => {
     });
 
     await expect(run(value, defaults.owners)).resolves.toMatchObject({
-      outcome: "closed",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
       diagnosticCodes: ["WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID"],
       cleanupOutcome: "completed",
     });
@@ -1679,12 +1581,15 @@ describe("runWorldReconstructionProductionV1", () => {
           worldPackageRootHash: H("a"),
           captureReceiptHash: H("b"),
           evaluationHash: H("c"),
+          strictDiagnosticHash: H("d"),
+          entryValidationHash: H("e"),
         });
       }),
     });
 
     await expect(run(value, defaults.owners)).resolves.toMatchObject({
-      outcome: "closed",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
       diagnosticCodes: ["NBR_FINAL_ARTIFACT_PUBLICATION_INVALID"],
       cleanupOutcome: "completed",
     });
@@ -1719,68 +1624,82 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(owners.runCore).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["run verification", "verifyRun"],
-    ["final publication", "publishFinal"],
-  ] as const)(
-    "does not expose final identity when %s fails",
-    async (_label, failingOwner) => {
-      const value = await fixture();
-      const receipt = await receiptFor(value);
-      const failure = new Error(
-        failingOwner === "verifyRun"
-          ? "NBR70_PLAYABILITY_REQUIRED_ROUTE_FAILED"
-          : "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID",
-      );
-      const { owners } = ownersFor(value, receipt, {
-        [failingOwner]: vi.fn(async () => {
-          throw failingOwner === "publishFinal"
-            ? new NativeBlockFinalArtifactPublicationClosedErrorV1(
-              [failure.message],
-              "not-started",
-              failure,
-            )
-            : new NativeBlockReconstructionVerificationClosedErrorV1(
-              [failure.message],
-              "completed",
-              failure,
-            );
-        }),
-      });
+  it("records returned strict diagnostics without vetoing production publication", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const { owners } = ownersFor(value, receipt, {
+      verifyRun: vi.fn(async () => productionIntegrityFor(
+        receipt,
+        ["NBR70_PLAYABILITY_REQUIRED_ROUTE_FAILED"],
+      )),
+    });
 
-      const result = await run(value, owners);
-      expect(result).toEqual({
-        kind: "world-reconstruction-production-result",
-        schemaVersion: 1,
-        caseId: CASE_ID,
-        caseRef: CASE_REF,
-        runId: RUN_ID,
-        outcome: "closed",
-        runOutcome: "passed",
-        attemptCount: 1,
-        diagnosticCodes: [failure.message],
-        cleanupOutcome: failingOwner === "publishFinal"
-          ? "not-started"
-          : "completed",
-      });
-      expect(owners.runCore).toHaveBeenCalledOnce();
-      if (failingOwner === "verifyRun") {
-        expect(owners.publishFinal).not.toHaveBeenCalled();
-      }
-      await expect(lstat(path.join(value.caseRoot, "final"))).rejects
-        .toMatchObject({ code: "ENOENT" });
-      expect(result).not.toHaveProperty("runReceiptPath");
-      expect(result).not.toHaveProperty("runReceiptRef");
-      expect(result).not.toHaveProperty("runReceiptHash");
-    },
-  );
+    const result = await run(value, owners);
+    expect(result).toMatchObject({
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      strictDiagnosticOutcome: "failed",
+      strictDiagnosticCodes: ["NBR70_PLAYABILITY_REQUIRED_ROUTE_FAILED"],
+      strictDiagnosticCleanupOutcome: "not-started",
+    });
+    expect(owners.publishFinal).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a production-integrity verifier failure blocking", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const { owners } = ownersFor(value, receipt, {
+      verifyRun: vi.fn(async () => {
+        throw new Error("NBR70_REQUIRED_ARTIFACT_MISSING");
+      }),
+    });
+
+    await expect(run(value, owners)).resolves.toMatchObject({
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+      diagnosticCodes: ["NBR70_REQUIRED_ARTIFACT_MISSING"],
+    });
+    expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
+  it("does not expose final identity when atomic publication fails", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const failure = new Error("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
+    const { owners } = ownersFor(value, receipt, {
+      publishFinal: vi.fn(async () => {
+        throw new NativeBlockFinalArtifactPublicationClosedErrorV1(
+          [failure.message],
+          "not-started",
+          failure,
+        );
+      }),
+    });
+
+    const result = await run(value, owners);
+    expect(result).toMatchObject({
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+      runOutcome: "passed",
+      evaluationOutcome: "passed",
+      strictDiagnosticOutcome: "passed",
+      diagnosticCodes: [failure.message],
+      cleanupOutcome: "not-started",
+    });
+    expect(result).not.toHaveProperty("finalDirectoryPath");
+    await expect(lstat(path.join(value.caseRoot, "final"))).rejects
+      .toMatchObject({ code: "ENOENT" });
+  });
 
   it("keeps every accepted path canonical after publication", async () => {
     const value = await fixture();
     const receipt = await receiptFor(value);
     const { owners } = ownersFor(value, receipt);
     const result = await run(value, owners);
-    if (result.outcome !== "published") {
+    if (
+      result.productionOutcome !== "passed" ||
+      result.publicationOutcome !== "published"
+    ) {
       throw new Error("expected a published production result");
     }
 

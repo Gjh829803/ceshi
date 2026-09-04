@@ -87,6 +87,8 @@ export interface CompletedWorldReconstructionPackagePortResultV1 {
   readonly worldPackageBuildReceiptHash: Sha256HashV1;
   readonly worldBuildIdentityRef: string;
   readonly worldBuildIdentityHash: Sha256HashV1;
+  readonly groundAnalysisReportRef: string;
+  readonly groundAnalysisReportHash: Sha256HashV1;
   readonly diagnosticCodes: readonly string[];
 }
 
@@ -643,6 +645,8 @@ function attemptReceiptRow(record: AttemptRecordV1) {
     worldPackageBuildReceiptHash: record.packaged.worldPackageBuildReceiptHash,
     worldBuildIdentityRef: record.packaged.worldBuildIdentityRef,
     worldBuildIdentityHash: record.packaged.worldBuildIdentityHash,
+    groundAnalysisReportRef: record.packaged.groundAnalysisReportRef,
+    groundAnalysisReportHash: record.packaged.groundAnalysisReportHash,
   };
   if (record.outcome === "capture-rejected") {
     return Object.freeze({

@@ -269,7 +269,21 @@ importers:
         specifier: ^7.1.2
         version: 7.3.6(@types/node@24.13.3)(tsx@4.23.12)(yaml@2.9.0)
 
-  apps/studio: {}
+  apps/studio:
+    dependencies:
+      '@whitebox-world/runtime-contracts':
+        specifier: workspace:*
+        version: link:../../packages/runtime-contracts
+      '@whitebox-world/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
+      tsx:
+        specifier: ^4.23.12
+        version: 4.23.12
+    devDependencies:
+      '@whitebox-world/world-package':
+        specifier: workspace:*
+        version: link:../../packages/world-package
 
   packages/authoring:
     dependencies:

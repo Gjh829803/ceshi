@@ -752,11 +752,15 @@ describe("Babylon Native block profile session", () => {
         });
       })).toMatch(/^WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP: /);
     });
+  });
+
+  it("finalizes multiple route components without treating palette topology as blocking", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadSession();
 
     withScene((scene) => {
       const session = createBabylonNativeBlockProfileSessionV1(
         createContext(scene),
-        { maximumBlockCount: 2 },
+        { maximumBlockCount: 3 },
       );
       session.createBlock({
         id: "west-route",
@@ -765,16 +769,19 @@ describe("Babylon Native block profile session", () => {
         centerMetersXYZ: [0, -0.5, 0],
       });
       session.createBlock({
+        id: "ordinary-ground",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [1, -0.5, 0],
+      });
+      session.createBlock({
         id: "east-route",
         shape: "full",
         paletteRole: "route",
-        centerMetersXYZ: [8, -0.5, 0],
+        centerMetersXYZ: [2, -0.5, 0],
       });
-      expect(hostPublishableFailure(() => {
-        session.finalize({ staticColliders: [] });
-      })).toMatch(
-        /^WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED: WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED$/,
-      );
+      const epoch = session.finalize({ staticColliders: [] });
+      expect(epoch.checkedLayout.checkResult.outcome).toBe("passed");
     });
   });
 

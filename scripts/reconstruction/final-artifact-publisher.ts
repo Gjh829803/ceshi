@@ -18,33 +18,41 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
+  formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
   hashFormalScriptedTraversalObservationV1,
   hashFormalSpawnSupportObservationV1,
+  hashFormalWorldCaptureIntentV1,
   hashFormalWorldCaptureReceiptV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
+  parseFormalWorldCaptureIntentV1,
   parseFormalWorldCaptureReceiptV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   hashWorldReconstructionCaseV1,
+  hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvaluationResultV1,
+  hashWorldReconstructionStrictDiagnosticReceiptV1,
   parseWorldReconstructionCaseV1,
+  parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionRunReceiptV1,
+  parseWorldReconstructionStrictDiagnosticReceiptV1,
 } from "@whitebox-world/validation";
 import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { verifyPassedGroundAnalysisReportV1 } from
+  "./passed-ground-analysis-report.js";
 import {
-  verifyNativeBlockReconstructionE2EV1,
-  type NativeBlockReconstructionPlayabilityLaunchPortV1,
-  type NativeBlockReconstructionSkippedPlayabilityV1,
-} from "../verification/verify-native-block-reconstruction-e2e.js";
-
+  entryThirdPersonValidationResultCanonicalBytesV1,
+  hashEntryThirdPersonValidationResultV1,
+  validateFormalOpeningEntryThirdPersonV1,
+} from "../visual/entry-third-person.js";
 const FINAL_DIRECTORY_NAME = "final";
 const STAGING_DIRECTORY_NAME = ".final-staging";
 const PUBLICATION_LOCK_FILE_NAME = ".final-publish.lock";
@@ -52,6 +60,9 @@ const WORLD_PACKAGE_RELATIVE_PATH = "final/world-package";
 const CAPTURE_RECEIPT_RELATIVE_PATH =
   "final/capture/formal-world-capture-receipt.json";
 const EVALUATION_RELATIVE_PATH = "final/evaluation.json";
+const STRICT_DIAGNOSTIC_RELATIVE_PATH = "final/strict-diagnostic.json";
+const ENTRY_VALIDATION_RELATIVE_PATH =
+  "final/entry-third-person-validation.json";
 const LAUNCH_COMMAND =
   "pnpm worldkit native run final/world-package --port 5174 --json";
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -72,6 +83,10 @@ export interface NativeBlockReconstructionLaunchV1 {
   readonly captureReceiptHash: Sha256HashV1;
   readonly evaluationRelativePath: typeof EVALUATION_RELATIVE_PATH;
   readonly evaluationHash: Sha256HashV1;
+  readonly strictDiagnosticRelativePath: typeof STRICT_DIAGNOSTIC_RELATIVE_PATH;
+  readonly strictDiagnosticHash: Sha256HashV1;
+  readonly entryValidationRelativePath: typeof ENTRY_VALIDATION_RELATIVE_PATH;
+  readonly entryValidationHash: Sha256HashV1;
   readonly launchCommand: typeof LAUNCH_COMMAND;
 }
 
@@ -79,9 +94,6 @@ export interface PublishNativeBlockReconstructionFinalInputV1 {
   readonly caseDirectoryPath: string;
   readonly runDirectoryPath: string;
   readonly launch: NativeBlockReconstructionLaunchV1;
-  readonly playability:
-    | NativeBlockReconstructionPlayabilityLaunchPortV1
-    | NativeBlockReconstructionSkippedPlayabilityV1;
 }
 
 export interface NativeBlockFinalArtifactPublicationV1 {
@@ -90,6 +102,8 @@ export interface NativeBlockFinalArtifactPublicationV1 {
   readonly worldPackageRootHash: Sha256HashV1;
   readonly captureReceiptHash: Sha256HashV1;
   readonly evaluationHash: Sha256HashV1;
+  readonly strictDiagnosticHash: Sha256HashV1;
+  readonly entryValidationHash: Sha256HashV1;
 }
 
 export class NativeBlockFinalArtifactPublicationClosedErrorV1 extends Error {
@@ -138,6 +152,40 @@ interface TreeSnapshotV1 {
   readonly filesByRelativePath: ReadonlyMap<string, Sha256HashV1>;
   readonly directoryPaths: readonly string[];
 }
+
+interface CaseOwnerInputSnapshotV1 {
+  readonly filesByRelativePath: ReadonlyMap<string, Sha256HashV1>;
+}
+
+const LOCAL_SCENE_BRIEF_REF = "scene-brief.md";
+const REQUIRED_LOCAL_REFERENCE_INPUTS: ReadonlyMap<
+  string,
+  "image/png" | "application/json"
+> = Object.freeze(new Map([
+  ["entry-whitebox-target.png", "image/png"],
+  ["planner-self-check.json", "application/json"],
+  ["world-plan.png", "image/png"],
+] as const));
+const LOCAL_REFERENCE_INPUT_PATTERN = /^reference-(0|[1-9][0-9]*)\.(png|jpg)$/;
+const ABSOLUTE_RESOURCE_REF_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//;
+const NON_CASE_OWNER_INPUT_PATHS = Object.freeze(new Set([
+  "block-profile.json",
+  "builder-skill/SKILL.md",
+  "builder-skill/references/native-block-output-contract.md",
+  "builder-skill/scripts/render-visual-review.mjs",
+  "builder-skill/scripts/self-check.mjs",
+  "formal-world-capture-intent.json",
+  "native-scene-api.json",
+  "native-scene-profile.json",
+  "task-instruction.md",
+  "world-bounds.json",
+]));
+const NON_CASE_OWNER_INPUT_DIRECTORIES = Object.freeze(new Set([
+  "",
+  "builder-skill",
+  "builder-skill/references",
+  "builder-skill/scripts",
+]));
 
 function invalid(detail: string, cause?: unknown): never {
   throw new Error(
@@ -220,6 +268,199 @@ async function requiredRegularFile(
   return new Uint8Array(await readFile(absolutePath));
 }
 
+function localCaseInputRelativePath(
+  ref: string,
+  label: string,
+): string | undefined {
+  if (ABSOLUTE_RESOURCE_REF_PATTERN.test(ref)) return undefined;
+  if (
+    ref.length === 0 ||
+    path.isAbsolute(ref) ||
+    ref.includes("\\") ||
+    path.posix.normalize(ref) !== ref ||
+    ref === "." ||
+    ref === ".." ||
+    ref.startsWith("../") ||
+    ref.includes("/")
+  ) invalid(`${label} is not a confined Case input ref`);
+  return ref;
+}
+
+function assertReferenceMedia(
+  bytes: Uint8Array,
+  mediaType: "image/png" | "image/jpeg" | "application/json",
+  inputRef: string,
+): void {
+  if (mediaType === "image/png") {
+    const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    if (
+      bytes.byteLength < signature.length ||
+      signature.some((value, index) => bytes[index] !== value)
+    ) invalid(`Case reference input '${inputRef}' media does not match image/png`);
+    return;
+  }
+  if (mediaType === "image/jpeg") {
+    if (
+      bytes.byteLength < 4 ||
+      bytes[0] !== 0xff ||
+      bytes[1] !== 0xd8 ||
+      bytes[bytes.byteLength - 2] !== 0xff ||
+      bytes[bytes.byteLength - 1] !== 0xd9
+    ) invalid(`Case reference input '${inputRef}' media does not match image/jpeg`);
+    return;
+  }
+  parseJson(bytes, `Case reference input '${inputRef}'`);
+}
+
+async function readVerifiedCaseOwnerInput(
+  caseInputsRoot: string,
+  relativePath: string,
+  expectedHash: Sha256HashV1,
+  mediaType?: "image/png" | "image/jpeg" | "application/json",
+): Promise<readonly [string, Sha256HashV1]> {
+  const bytes = await requiredRegularFile(caseInputsRoot, relativePath);
+  if (mediaType !== undefined) {
+    assertReferenceMedia(bytes, mediaType, relativePath);
+  }
+  const contentHash = sha256Bytes(bytes) as Sha256HashV1;
+  exact(
+    contentHash,
+    expectedHash,
+    `Case owner input '${relativePath}' differs from its Case identity`,
+  );
+  return Object.freeze([relativePath, contentHash] as const);
+}
+
+async function assertNoUndeclaredLocalCaseOwnerPaths(
+  caseInputsRoot: string,
+  declaredRelativePaths: ReadonlySet<string>,
+): Promise<void> {
+  const inventory = await snapshotTree(caseInputsRoot);
+  for (const relativePath of inventory.filesByRelativePath.keys()) {
+    if (
+      !declaredRelativePaths.has(relativePath) &&
+      !NON_CASE_OWNER_INPUT_PATHS.has(relativePath)
+    ) {
+      invalid(`undeclared Case input path '${relativePath}' is forbidden`);
+    }
+  }
+  for (const relativePath of inventory.directoryPaths) {
+    if (!NON_CASE_OWNER_INPUT_DIRECTORIES.has(relativePath)) {
+      invalid(`undeclared Case input directory '${relativePath}' is forbidden`);
+    }
+  }
+}
+
+async function verifiedCaseOwnerInputSnapshot(
+  caseInputsRoot: string,
+  reconstructionCase: ReturnType<typeof parseWorldReconstructionCaseV1>,
+): Promise<CaseOwnerInputSnapshotV1> {
+  const localSceneBriefRef = localCaseInputRelativePath(
+    reconstructionCase.sceneBriefRef,
+    "Case sceneBriefRef",
+  );
+  const localReferenceInputs = reconstructionCase.referenceInputs.map((row) => ({
+    ...row,
+    relativePath: localCaseInputRelativePath(
+      row.inputRef,
+      `Case reference input '${row.inputRef}'`,
+    ),
+  }));
+  const localReferenceCount = localReferenceInputs.filter(
+    ({ relativePath }) => relativePath !== undefined,
+  ).length;
+  if (
+    (localSceneBriefRef === undefined && localReferenceCount !== 0) ||
+    (localSceneBriefRef !== undefined &&
+      localReferenceCount !== localReferenceInputs.length)
+  ) invalid("Case owner input refs must be all local or all immutable resources");
+
+  // Immutable resource refs are not files owned by this Case directory. Their
+  // content hashes remain part of the Case identity, while no local bytes are
+  // admitted or snapshotted for them.
+  if (localSceneBriefRef === undefined) {
+    const filesByRelativePath = new Map<string, Sha256HashV1>();
+    await assertNoUndeclaredLocalCaseOwnerPaths(
+      caseInputsRoot,
+      new Set(filesByRelativePath.keys()),
+    );
+    return Object.freeze({ filesByRelativePath });
+  }
+  exact(
+    localSceneBriefRef,
+    LOCAL_SCENE_BRIEF_REF,
+    "Case sceneBriefRef is not the current local owner path",
+  );
+
+  const rowsByRef = new Map(localReferenceInputs.map((row) => [
+    row.relativePath!,
+    row,
+  ]));
+  for (const [inputRef, mediaType] of REQUIRED_LOCAL_REFERENCE_INPUTS) {
+    const row = rowsByRef.get(inputRef);
+    if (row === undefined || row.mediaType !== mediaType) {
+      invalid(`required Case reference input '${inputRef}' is missing or has stale media`);
+    }
+  }
+  const uploadedReferenceIndexes: number[] = [];
+  for (const row of localReferenceInputs) {
+    const requiredMediaType = REQUIRED_LOCAL_REFERENCE_INPUTS.get(
+      row.relativePath!,
+    );
+    if (requiredMediaType !== undefined) continue;
+    const match = LOCAL_REFERENCE_INPUT_PATTERN.exec(row.relativePath!);
+    if (match === null) {
+      invalid(`extra Case reference input '${row.relativePath}' is forbidden`);
+    }
+    const expectedMediaType = match[2] === "png" ? "image/png" : "image/jpeg";
+    exact(
+      row.mediaType,
+      expectedMediaType,
+      `Case reference input '${row.relativePath}' has stale media`,
+    );
+    uploadedReferenceIndexes.push(Number(match[1]));
+  }
+  uploadedReferenceIndexes.sort((left, right) => left - right);
+  if (uploadedReferenceIndexes.some((value, index) => value !== index)) {
+    invalid("Case uploaded reference input paths are not a contiguous inventory");
+  }
+
+  const verifiedEntries = await Promise.all([
+    readVerifiedCaseOwnerInput(
+      caseInputsRoot,
+      localSceneBriefRef,
+      reconstructionCase.sceneBriefHash,
+    ),
+    ...localReferenceInputs.map((row) => readVerifiedCaseOwnerInput(
+      caseInputsRoot,
+      row.relativePath!,
+      row.contentHash,
+      row.mediaType,
+    )),
+  ]);
+  const filesByRelativePath = new Map(verifiedEntries);
+  await assertNoUndeclaredLocalCaseOwnerPaths(
+    caseInputsRoot,
+    new Set(filesByRelativePath.keys()),
+  );
+  return Object.freeze({ filesByRelativePath });
+}
+
+function assertCaseOwnerInputSnapshotEqual(
+  actual: CaseOwnerInputSnapshotV1,
+  expected: CaseOwnerInputSnapshotV1,
+): void {
+  const actualPaths = [...actual.filesByRelativePath.keys()].sort();
+  const expectedPaths = [...expected.filesByRelativePath.keys()].sort();
+  if (
+    actualPaths.length !== expectedPaths.length ||
+    actualPaths.some((value, index) => value !== expectedPaths[index]) ||
+    actualPaths.some((value) =>
+      actual.filesByRelativePath.get(value) !==
+        expected.filesByRelativePath.get(value))
+  ) invalid("immutable Case owner-input source changed during publication");
+}
+
 function parseJson(bytes: Uint8Array, label: string): unknown {
   try {
     return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
@@ -237,7 +478,9 @@ function parseLaunch(value: unknown): NativeBlockReconstructionLaunchV1 {
     "kind", "schemaVersion", "caseId", "runReceiptRef", "runReceiptHash",
     "worldPackageRelativePath", "worldPackageRef", "worldPackageRootHash",
     "captureReceiptRelativePath", "captureReceiptHash",
-    "evaluationRelativePath", "evaluationHash", "launchCommand",
+    "evaluationRelativePath", "evaluationHash", "strictDiagnosticRelativePath",
+    "strictDiagnosticHash", "entryValidationRelativePath",
+    "entryValidationHash", "launchCommand",
   ].sort();
   const fields = Object.keys(source).sort();
   if (
@@ -247,6 +490,7 @@ function parseLaunch(value: unknown): NativeBlockReconstructionLaunchV1 {
   for (const field of [
     "caseId", "runReceiptRef", "runReceiptHash", "worldPackageRef",
     "worldPackageRootHash", "captureReceiptHash", "evaluationHash",
+    "strictDiagnosticHash", "entryValidationHash",
   ] as const) {
     if (typeof source[field] !== "string" || source[field].length === 0) {
       invalid(`launch identity '${field}' is invalid`);
@@ -254,7 +498,7 @@ function parseLaunch(value: unknown): NativeBlockReconstructionLaunchV1 {
   }
   for (const field of [
     "runReceiptHash", "worldPackageRootHash", "captureReceiptHash",
-    "evaluationHash",
+    "evaluationHash", "strictDiagnosticHash", "entryValidationHash",
   ] as const) {
     if (!SHA256_PATTERN.test(source[field] as string)) {
       invalid(`launch identity '${field}' is not a SHA-256 hash`);
@@ -268,6 +512,10 @@ function parseLaunch(value: unknown): NativeBlockReconstructionLaunchV1 {
     "launch Capture path is stale");
   exact(source.evaluationRelativePath, EVALUATION_RELATIVE_PATH,
     "launch Evaluation path is stale");
+  exact(source.strictDiagnosticRelativePath, STRICT_DIAGNOSTIC_RELATIVE_PATH,
+    "launch strict diagnostic path is stale");
+  exact(source.entryValidationRelativePath, ENTRY_VALIDATION_RELATIVE_PATH,
+    "launch entry validation path is stale");
   exact(source.launchCommand, LAUNCH_COMMAND, "launch command is stale");
   return Object.freeze(source as unknown as NativeBlockReconstructionLaunchV1);
 }
@@ -463,11 +711,29 @@ async function publish(
       await lstatOrMissing(stagingDirectoryPath) !== undefined
     ) invalid("final or staging already exists");
     const runSnapshot = await snapshotTree(runDirectoryPath);
-
+    const caseInputsRoot = await requireCanonicalDirectory(
+      path.join(caseDirectoryPath, "inputs"),
+      "Case inputs directory",
+    );
+    const caseBytes = await requiredRegularFile(caseDirectoryPath, "case.json");
+    const caseBytesHash = sha256Bytes(caseBytes) as Sha256HashV1;
     const reconstructionCase = parseWorldReconstructionCaseV1(parseJson(
-      await requiredRegularFile(caseDirectoryPath, "case.json"),
+      caseBytes,
       "Case",
     ));
+    const caseOwnerInputAdmissionBefore =
+      await verifiedCaseOwnerInputSnapshot(
+        caseInputsRoot,
+        reconstructionCase,
+      );
+    const caseInputsSnapshot = await verifiedCaseOwnerInputSnapshot(
+      caseInputsRoot,
+      reconstructionCase,
+    );
+    assertCaseOwnerInputSnapshotEqual(
+      caseInputsSnapshot,
+      caseOwnerInputAdmissionBefore,
+    );
     const runReceiptBytes = await requiredRegularFile(
       runDirectoryPath,
       "run-receipt.json",
@@ -476,8 +742,82 @@ async function publish(
       runReceiptBytes,
       "Run Receipt",
     ));
-    if (runReceipt.outcome !== "passed" || runReceipt.cleanupOutcome !== "completed") {
-      invalid("Run Receipt is not a completed passed run");
+    const frozenCaseBytes = await requiredRegularFile(
+      runDirectoryPath,
+      "inputs/case.json",
+    );
+    exact(
+      sha256Bytes(frozenCaseBytes),
+      caseBytesHash,
+      "frozen Run Case differs from the Case owner snapshot",
+    );
+    const evaluationProfileOwnerBytes = await requiredRegularFile(
+      caseDirectoryPath,
+      "evaluation-profile.json",
+    );
+    const evaluationProfile = parseWorldReconstructionEvaluationProfileV1(
+      parseJson(evaluationProfileOwnerBytes, "Evaluation Profile"),
+    );
+    const evaluationProfileOwnerBytesHash = sha256Bytes(
+      evaluationProfileOwnerBytes,
+    ) as Sha256HashV1;
+    const evaluationProfileHash =
+      hashWorldReconstructionEvaluationProfileV1(evaluationProfile);
+    exact(
+      evaluationProfileHash,
+      reconstructionCase.evaluationProfileHash,
+      "Evaluation Profile differs from the Case owner identity",
+    );
+    exact(
+      evaluationProfileHash,
+      runReceipt.evaluationProfileHash,
+      "Evaluation Profile differs from the Run owner identity",
+    );
+    exact(
+      runReceipt.evaluationProfileRef,
+      reconstructionCase.evaluationProfileRef,
+      "Run Evaluation Profile ref is foreign",
+    );
+    exact(
+      sha256Bytes(await requiredRegularFile(
+        runDirectoryPath,
+        "inputs/evaluation-profile.json",
+      )),
+      evaluationProfileOwnerBytesHash,
+      "frozen Run Evaluation Profile differs from the Case owner snapshot",
+    );
+    const formalCaptureIntentOwnerBytes = await requiredRegularFile(
+      caseDirectoryPath,
+      reconstructionCase.formalCaptureIntentRef,
+    );
+    const formalCaptureIntent = parseFormalWorldCaptureIntentV1(
+      parseJson(formalCaptureIntentOwnerBytes, "Formal Capture Intent"),
+    );
+    const formalCaptureIntentOwnerBytesHash = sha256Bytes(
+      formalCaptureIntentOwnerBytes,
+    ) as Sha256HashV1;
+    exact(
+      Buffer.from(formalCaptureIntentOwnerBytes).equals(Buffer.from(
+        formalWorldCaptureIntentCanonicalBytesV1(formalCaptureIntent),
+      )),
+      true,
+      "Formal Capture Intent is not canonical",
+    );
+    exact(
+      hashFormalWorldCaptureIntentV1(formalCaptureIntent),
+      reconstructionCase.formalCaptureIntentHash,
+      "Formal Capture Intent differs from the Case owner identity",
+    );
+    exact(
+      sha256Bytes(await requiredRegularFile(
+        runDirectoryPath,
+        reconstructionCase.formalCaptureIntentRef,
+      )),
+      formalCaptureIntentOwnerBytesHash,
+      "frozen Run Formal Capture Intent differs from the Case owner snapshot",
+    );
+    if (runReceipt.cleanupOutcome !== "completed") {
+      invalid("Run Receipt cleanup is not complete");
     }
     exact(
       runReceipt.caseRef,
@@ -487,12 +827,29 @@ async function publish(
     exact(runReceipt.caseHash, hashWorldReconstructionCaseV1(reconstructionCase),
       "Run Receipt Case identity is stale");
     const finalAttempt = runReceipt.attempts[runReceipt.finalAttemptIndex]!;
-    if (finalAttempt.outcome !== "passed") invalid("terminal Attempt did not pass");
+    if (finalAttempt.kind !== "evaluated") {
+      invalid("terminal Attempt did not reach Evaluation");
+    }
     const attemptRoot = path.join(
       runDirectoryPath,
       `attempts/${finalAttempt.attemptIndex}`,
     );
     await requireCanonicalDirectory(attemptRoot, "terminal Attempt directory");
+    const runArtifactRoot = runReceipt.caseRef.slice(0, -"/case.json".length);
+    verifyPassedGroundAnalysisReportV1({
+      reportBytes: await requiredRegularFile(
+        attemptRoot,
+        "ground-analysis-report.json",
+      ),
+      reportRef: finalAttempt.groundAnalysisReportRef,
+      expectedReportRef:
+        `${runArtifactRoot}/runs/${path.basename(runDirectoryPath)}/attempts/${
+          finalAttempt.attemptIndex
+        }/ground-analysis-report.json`,
+      reportHash: finalAttempt.groundAnalysisReportHash,
+      expectedCaseHash: runReceipt.caseHash,
+      expectedWorldPackageRootHash: finalAttempt.worldPackageRootHash,
+    });
 
     const packageRoot = await requireCanonicalDirectory(
       path.join(attemptRoot, "world-package"),
@@ -552,6 +909,20 @@ async function publish(
       captureReceipt.openingObservationContentHash,
       "Capture observation 'opening-observation.json' is stale",
     );
+    const entryValidation = await validateFormalOpeningEntryThirdPersonV1({
+      openingPngBytes: await requiredRegularFile(captureRoot, "opening.png"),
+      openingObservation,
+    });
+    if (entryValidation.status !== "passed") {
+      invalid(
+        `terminal entry validation failed: ${entryValidation.diagnostics
+          .map(({ code }) => code).join(",")}`,
+      );
+    }
+    const entryValidationBytes =
+      entryThirdPersonValidationResultCanonicalBytesV1(entryValidation);
+    const entryValidationHash =
+      hashEntryThirdPersonValidationResultV1(entryValidation);
     const spawnSupportObservation = parseFormalSpawnSupportObservationV1(parseJson(
       await requiredRegularFile(captureRoot, "spawn-support-observation.json"),
       "spawn-support-observation.json",
@@ -595,7 +966,6 @@ async function publish(
     const evaluationHash = hashWorldReconstructionEvaluationResultV1(evaluation);
     exact(evaluationHash, finalAttempt.evaluationResultHash,
       "terminal Evaluation hash is stale");
-    exact(evaluation.outcome, "passed", "terminal Evaluation did not pass");
     exact(evaluation.caseHash, runReceipt.caseHash, "Evaluation Case is foreign");
     exact(evaluation.worldPackageRef, finalAttempt.worldPackageRef,
       "Evaluation Package ref is foreign");
@@ -604,16 +974,50 @@ async function publish(
     exact(evaluation.captureReceiptHash, finalAttempt.captureReceiptHash,
       "Evaluation Capture is foreign");
 
+    const strictDiagnosticBytes = await requiredRegularFile(
+      runDirectoryPath,
+      "strict-diagnostic.json",
+    );
+    const strictDiagnostic = parseWorldReconstructionStrictDiagnosticReceiptV1(
+      parseJson(strictDiagnosticBytes, "Strict Diagnostic Receipt"),
+    );
+    const strictDiagnosticHash =
+      hashWorldReconstructionStrictDiagnosticReceiptV1(strictDiagnostic);
+    exact(strictDiagnostic.caseRef, runReceipt.caseRef,
+      "Strict Diagnostic Case is foreign");
+    exact(strictDiagnostic.caseHash, runReceipt.caseHash,
+      "Strict Diagnostic Case identity is stale");
+    exact(strictDiagnostic.runReceiptHash, sha256CanonicalJson(runReceipt),
+      "Strict Diagnostic Run Receipt is stale");
+    const caseRefSuffix = "/case.json";
+    const expectedRunReceiptRef =
+      `${runReceipt.caseRef.slice(0, -caseRefSuffix.length)}/runs/${
+        path.basename(runDirectoryPath)
+      }/run-receipt.json`;
+    exact(strictDiagnostic.runReceiptRef, expectedRunReceiptRef,
+      "Strict Diagnostic Run Receipt ref is foreign");
+    exact(strictDiagnostic.attemptIndex, finalAttempt.attemptIndex,
+      "Strict Diagnostic selected a stale Attempt");
+    exact(strictDiagnostic.worldPackageRef, finalAttempt.worldPackageRef,
+      "Strict Diagnostic Package is foreign");
+    exact(strictDiagnostic.worldPackageRootHash, finalAttempt.worldPackageRootHash,
+      "Strict Diagnostic Package Root is stale");
+    exact(strictDiagnostic.worldBuildIdentityHash,
+      finalAttempt.worldBuildIdentityHash,
+      "Strict Diagnostic World Build identity is stale");
+    exact(strictDiagnostic.captureReceiptHash, finalAttempt.captureReceiptHash,
+      "Strict Diagnostic Capture is stale");
+    exact(strictDiagnostic.evaluationResultHash,
+      finalAttempt.evaluationResultHash,
+      "Strict Diagnostic Evaluation is stale");
+
     const launch = parseLaunch(rawInput.launch);
     exact(launch.caseId, reconstructionCase.id, "launch Case is foreign");
     exact(launch.runReceiptHash, sha256CanonicalJson(runReceipt),
       "launch Run Receipt is stale");
-    const caseRefSuffix = "/case.json";
     exact(
       launch.runReceiptRef,
-      `${runReceipt.caseRef.slice(0, -caseRefSuffix.length)}/runs/${
-        path.basename(runDirectoryPath)
-      }/run-receipt.json`,
+      expectedRunReceiptRef,
       "launch Run Receipt ref is foreign",
     );
     exact(launch.worldPackageRef, finalAttempt.worldPackageRef,
@@ -624,6 +1028,10 @@ async function publish(
       "launch Capture is stale");
     exact(launch.evaluationHash, finalAttempt.evaluationResultHash,
       "launch Evaluation is stale");
+    exact(launch.strictDiagnosticHash, strictDiagnosticHash,
+      "launch Strict Diagnostic is stale");
+    exact(launch.entryValidationHash, entryValidationHash,
+      "launch entry validation is stale");
 
     await mkdir(stagingDirectoryPath, { mode: 0o700 });
     stagingOwned = true;
@@ -640,6 +1048,28 @@ async function publish(
     } finally {
       await stagedEvaluationHandle.close();
     }
+    const stagedStrictDiagnosticHandle = await open(
+      path.join(stagingDirectoryPath, "strict-diagnostic.json"),
+      "wx",
+      0o600,
+    );
+    try {
+      await stagedStrictDiagnosticHandle.writeFile(strictDiagnosticBytes);
+      await stagedStrictDiagnosticHandle.sync();
+    } finally {
+      await stagedStrictDiagnosticHandle.close();
+    }
+    const stagedEntryValidationHandle = await open(
+      path.join(stagingDirectoryPath, "entry-third-person-validation.json"),
+      "wx",
+      0o600,
+    );
+    try {
+      await stagedEntryValidationHandle.writeFile(entryValidationBytes);
+      await stagedEntryValidationHandle.sync();
+    } finally {
+      await stagedEntryValidationHandle.close();
+    }
     const launchBytes = new TextEncoder().encode(
       `${stringifyCanonicalJson(launch)}\n`,
     );
@@ -654,6 +1084,7 @@ async function publish(
     } finally {
       await launchHandle.close();
     }
+    const expectedStagingSnapshot = await snapshotTree(stagingDirectoryPath);
 
     assertTreeEqual(await snapshotTree(packageRoot), packageSnapshot,
       "terminal Package source");
@@ -675,43 +1106,27 @@ async function publish(
       "staged Evaluation bytes changed",
     );
     exact(
+      sha256Bytes(await requiredRegularFile(
+        stagingDirectoryPath,
+        "strict-diagnostic.json",
+      )),
+      sha256Bytes(strictDiagnosticBytes),
+      "staged Strict Diagnostic bytes changed",
+    );
+    exact(
+      sha256Bytes(await requiredRegularFile(
+        stagingDirectoryPath,
+        "entry-third-person-validation.json",
+      )),
+      entryValidationHash,
+      "staged entry validation bytes changed",
+    );
+    exact(
       sha256Bytes(await requiredRegularFile(runDirectoryPath, "run-receipt.json")),
       sha256Bytes(runReceiptBytes),
       "Run Receipt changed during publication",
     );
     await syncTree(stagingDirectoryPath, hooks);
-    const stagedSnapshot = await snapshotTree(stagingDirectoryPath);
-    const formalVerification = await verifyNativeBlockReconstructionE2EV1({
-      candidate: {
-        kind: "final",
-        runDirectoryPath,
-        finalDirectoryPath: stagingDirectoryPath,
-      },
-      playability: rawInput.playability,
-    });
-    exact(formalVerification.outcome, "verified",
-      "formal Final verification did not pass");
-    exact(formalVerification.candidateKind, "final",
-      "formal verifier used the wrong candidate mode");
-    exact(formalVerification.attemptIndex, finalAttempt.attemptIndex,
-      "formal verifier selected a stale Attempt");
-    exact(formalVerification.worldPackageRef, finalAttempt.worldPackageRef,
-      "formal verifier selected a foreign Package");
-    exact(formalVerification.worldPackageRootHash, finalAttempt.worldPackageRootHash,
-      "formal verifier selected a stale Package Root");
-    exact(formalVerification.worldBuildIdentityHash,
-      finalAttempt.worldBuildIdentityHash,
-      "formal verifier selected a stale World Build identity");
-    exact(formalVerification.captureReceiptHash, finalAttempt.captureReceiptHash,
-      "formal verifier selected a stale Capture");
-    exact(formalVerification.evaluationResultHash,
-      finalAttempt.evaluationResultHash,
-      "formal verifier selected a stale Evaluation");
-    assertTreeEqual(
-      await snapshotTree(stagingDirectoryPath),
-      stagedSnapshot,
-      "staged Final verifier input",
-    );
     exact(
       sha256Bytes(await requiredRegularFile(attemptRoot, "evaluation.json")),
       sha256Bytes(evaluationBytes),
@@ -727,6 +1142,44 @@ async function publish(
     if (await lstatOrMissing(finalDirectoryPath) !== undefined) {
       invalid("final appeared during publication");
     }
+    exact(
+      sha256Bytes(await requiredRegularFile(caseDirectoryPath, "case.json")),
+      caseBytesHash,
+      "Case owner snapshot changed during publication",
+    );
+    exact(
+      sha256Bytes(await requiredRegularFile(
+        caseDirectoryPath,
+        "evaluation-profile.json",
+      )),
+      evaluationProfileOwnerBytesHash,
+      "Evaluation Profile owner snapshot changed during publication",
+    );
+    exact(
+      sha256Bytes(await requiredRegularFile(
+        caseDirectoryPath,
+        reconstructionCase.formalCaptureIntentRef,
+      )),
+      formalCaptureIntentOwnerBytesHash,
+      "Formal Capture Intent owner snapshot changed during publication",
+    );
+    assertCaseOwnerInputSnapshotEqual(
+      await verifiedCaseOwnerInputSnapshot(
+        caseInputsRoot,
+        reconstructionCase,
+      ),
+      caseInputsSnapshot,
+    );
+    assertTreeEqual(
+      await snapshotTree(runDirectoryPath),
+      runSnapshot,
+      "immutable Run and owner-input source",
+    );
+    assertTreeEqual(
+      await snapshotTree(stagingDirectoryPath),
+      expectedStagingSnapshot,
+      "staged publication",
+    );
     await rename(stagingDirectoryPath, finalDirectoryPath);
     stagingOwned = false;
     finalOwned = true;
@@ -740,6 +1193,8 @@ async function publish(
       worldPackageRootHash: finalAttempt.worldPackageRootHash,
       captureReceiptHash,
       evaluationHash,
+      strictDiagnosticHash,
+      entryValidationHash,
     });
   } catch (error) {
     const cleanupErrors: unknown[] = [];

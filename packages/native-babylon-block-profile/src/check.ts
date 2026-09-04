@@ -380,11 +380,11 @@ export function createBabylonNativeBlockProfileCheckResultV1(
     pendingDiagnostics.push(Object.freeze({
       kind: "babylon-native-block-profile-diagnostic",
       schemaVersion: 1,
-      severity: "error",
+      severity: "warning",
       code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       location: Object.freeze({ kind: "none" }),
-      message: `Route-colored structural blocks form ${routeComponentCount} disconnected candidates.`,
-      repairHint: "Connect the visual route topology and validate Runtime passability separately through the SDK/Havok gate.",
+      message: `Route-colored structural blocks form ${routeComponentCount} visual components; palette-only adjacency does not establish Case-required connectivity.`,
+      repairHint: "Use Case-declared Ground Analysis and traversal gates to decide whether any required course must be connected and passable.",
     }));
   }
   const sortedPending = [...pendingDiagnostics].sort((left, right) =>

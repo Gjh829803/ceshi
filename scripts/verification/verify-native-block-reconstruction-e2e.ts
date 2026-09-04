@@ -62,12 +62,14 @@ import {
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionEvidenceSetV1,
+  hashWorldReconstructionStrictDiagnosticReceiptV1,
   getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionEvidenceSetV1,
   parseWorldReconstructionRunReceiptV1,
+  parseWorldReconstructionStrictDiagnosticReceiptV1,
   type WorldReconstructionAttemptIndexV1,
 } from "@whitebox-world/validation";
 import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
@@ -80,6 +82,15 @@ import {
 } from "../native-scene/owned-native-package-fixture.js";
 import { buildWorldReconstructionEvidenceSetV1 } from
   "../reconstruction/evaluate-evidence-set.js";
+import { verifyPassedGroundAnalysisReportV1 } from
+  "../reconstruction/passed-ground-analysis-report.js";
+import {
+  entryThirdPersonValidationResultCanonicalBytesV1,
+  hashEntryThirdPersonValidationResultV1,
+  parseEntryThirdPersonValidationResultV1,
+  validateFormalOpeningEntryThirdPersonV1,
+  type EntryThirdPersonValidationResultV1,
+} from "../visual/entry-third-person.js";
 
 export interface NativeBlockReconstructionPlayabilitySessionPortV1 {
   awaitReady(): Promise<WorldRuntimeSnapshotV4>;
@@ -151,6 +162,26 @@ export interface NativeBlockReconstructionE2EVerificationV1 {
         checkpointIds: readonly string[];
       }>[];
     }>;
+}
+
+export interface NativeBlockReconstructionProductionIntegrityV1
+  extends NativeBlockReconstructionE2EVerificationV1 {
+  readonly strictDiagnosticCodes: readonly string[];
+  readonly entryValidation: EntryThirdPersonValidationResultV1 &
+    Readonly<{ status: "passed" }>;
+  readonly entryValidationHash: Sha256HashV1;
+}
+
+interface NativeBlockReconstructionUncheckedVerificationV1
+  extends NativeBlockReconstructionE2EVerificationV1 {
+  readonly strictDiagnosticCodes: readonly string[];
+  readonly entryValidation?: EntryThirdPersonValidationResultV1 &
+    Readonly<{ status: "passed" }>;
+  readonly entryValidationHash?: Sha256HashV1;
+}
+
+export interface VerifyNativeBlockReconstructionProductionIntegrityInputV1 {
+  readonly candidate: VerifyNativeBlockReconstructionE2EInputV1["candidate"];
 }
 
 export class NativeBlockReconstructionVerificationClosedErrorV1 extends Error {
@@ -310,6 +341,30 @@ function requirePng(bytes: Uint8Array, expectedHash: Sha256HashV1): void {
   }
 }
 
+async function verifyPassedGroundAnalysisReport(input: Readonly<{
+  attemptRoot: string;
+  attemptArtifactRoot: string;
+  expectedCaseHash: Sha256HashV1;
+  expectedWorldPackageRootHash: Sha256HashV1;
+  groundAnalysisReportRef: string;
+  groundAnalysisReportHash: Sha256HashV1;
+}>): Promise<void> {
+  const bytes = await requiredFile(
+    input.attemptRoot,
+    "ground-analysis-report.json",
+    "NBR70_GROUND_ANALYSIS_ARTIFACT_MISSING",
+  );
+  verifyPassedGroundAnalysisReportV1({
+    reportBytes: bytes,
+    reportRef: input.groundAnalysisReportRef,
+    expectedReportRef:
+      `${input.attemptArtifactRoot}/ground-analysis-report.json`,
+    reportHash: input.groundAnalysisReportHash,
+    expectedCaseHash: input.expectedCaseHash,
+    expectedWorldPackageRootHash: input.expectedWorldPackageRootHash,
+  });
+}
+
 function controlledState(
   snapshot: WorldRuntimeSnapshotV4,
   subjectEntityId: string,
@@ -464,6 +519,39 @@ function verifyBlockerEvidenceClosure(input: Readonly<{
   return formalBlockers;
 }
 
+function verifyBlockerEvidenceClosureForContext(input: Readonly<{
+  caseBlockerColliderIds: readonly string[];
+  formalChecks: ReturnType<typeof parseFormalWorldCaptureReceiptV1>["formalRequest"]["scriptedTraversal"]["checks"];
+  contribution: BabylonNativeSceneContributionV1;
+  materializerMetadata: BabylonNativeBlockMaterializerMetadataV1;
+  mode: "strict-acceptance" | "production-integrity";
+  diagnosticAuthority: "historical" | "terminal";
+}>): Readonly<{
+  blockerColliderIds: readonly string[];
+  strictDiagnosticCodes: readonly string[];
+}> {
+  try {
+    return Object.freeze({
+      blockerColliderIds: verifyBlockerEvidenceClosure(input),
+      strictDiagnosticCodes: Object.freeze([]) as readonly string[],
+    });
+  } catch (error) {
+    if (
+      input.mode !== "production-integrity" ||
+      !(error instanceof Error) ||
+      error.message !== "NBR70_BLOCKER_IDENTITY_MISMATCH"
+    ) throw error;
+    return Object.freeze({
+      blockerColliderIds: Object.freeze([]) as readonly string[],
+      strictDiagnosticCodes: Object.freeze(
+        input.diagnosticAuthority === "terminal"
+          ? ["NBR70_BLOCKER_IDENTITY_MISMATCH"]
+          : [],
+      ),
+    });
+  }
+}
+
 function verifyNativeCheckReplayClosure(input: Readonly<{
   sourceCheck: ReturnType<typeof parseNativeSceneCheckResultV1>;
   replayCheck: ReturnType<typeof parseNativeSceneCheckResultV1>;
@@ -518,6 +606,7 @@ function verifyGroundPassEndpointClosure(input: Readonly<{
 
 export const NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1 = Object.freeze({
   verifyBlockerEvidenceClosure,
+  verifyBlockerEvidenceClosureForContext,
   verifyGroundPassEndpointClosure,
 });
 
@@ -565,6 +654,7 @@ async function verifyAllRunAttempts(input: Readonly<{
   runReceipt: ReconstructionRunReceipt;
   reconstructionCase: ReconstructionCase;
   evaluationProfile: ReconstructionEvaluationProfile;
+  mode: "strict-acceptance" | "production-integrity";
 }>): Promise<readonly VerifiedRunAttemptArtifacts[]> {
   let frozenRequest: ReturnType<typeof parseNativeBlockGenerationRequestV1> |
     undefined;
@@ -740,6 +830,15 @@ async function verifyAllRunAttempts(input: Readonly<{
     exact(runAttempt.worldPackageRootHash, verified.receipt.worldPackageRootHash);
     exact(runAttempt.worldPackageBuildReceiptHash, sha256CanonicalJson(verified.receipt));
     exact(runAttempt.worldBuildIdentityHash, verified.receipt.worldBuildIdentityHash);
+    await verifyPassedGroundAnalysisReport({
+      attemptRoot,
+      attemptArtifactRoot:
+        `${runArtifactRoot}/attempts/${runAttempt.attemptIndex}`,
+      expectedCaseHash: input.runReceipt.caseHash,
+      expectedWorldPackageRootHash: runAttempt.worldPackageRootHash,
+      groundAnalysisReportRef: runAttempt.groundAnalysisReportRef,
+      groundAnalysisReportHash: runAttempt.groundAnalysisReportHash,
+    });
     exact(
       hashSceneAuthoringAttemptV1(verified.sceneAuthoringAttempt),
       hashSceneAuthoringAttemptV1(attempt),
@@ -852,13 +951,17 @@ async function verifyAllRunAttempts(input: Readonly<{
       assertObservationMatchesCapture(observation, captureReceipt);
     }
     assertObservationMatchesCapture(scripted, captureReceipt);
-    const blockerColliderIds = verifyBlockerEvidenceClosure({
+    const { blockerColliderIds } = verifyBlockerEvidenceClosureForContext({
       caseBlockerColliderIds: input.reconstructionCase.expected.colliders
         .filter(({ role }) => role === "blocker")
         .map(({ colliderId }) => colliderId),
       formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
       contribution: verified.nativeSceneContribution,
       materializerMetadata: verified.nativeBlockMaterializerMetadata,
+      mode: input.mode,
+      // Historical Attempts remain immutable evidence, but the separately
+      // published strict receipt identifies the terminal Attempt only.
+      diagnosticAuthority: "historical",
     });
 
     const authoringManifest = parseNativeBlockAuthoringManifestV1(json(
@@ -935,7 +1038,11 @@ async function verifyFinalPromotion(input: Readonly<{
   finalDirectoryPath: string;
   runReceipt: ReconstructionRunReceipt;
   reconstructionCase: ReconstructionCase;
-}>): Promise<string> {
+  strictAcceptanceRequired: boolean;
+}>): Promise<Readonly<{
+  packageDirectoryPath: string;
+  strictDiagnosticCodes: readonly string[];
+}>> {
   const runParent = path.dirname(input.runRoot);
   if (path.basename(runParent) !== "runs") fail("NBR70_FINAL_DIRECTORY_INVALID");
   const caseRoot = path.dirname(runParent);
@@ -961,7 +1068,9 @@ async function verifyFinalPromotion(input: Readonly<{
     "kind", "schemaVersion", "caseId", "runReceiptRef", "runReceiptHash",
     "worldPackageRelativePath", "worldPackageRef", "worldPackageRootHash",
     "captureReceiptRelativePath", "captureReceiptHash",
-    "evaluationRelativePath", "evaluationHash", "launchCommand",
+    "evaluationRelativePath", "evaluationHash",
+    "strictDiagnosticRelativePath", "strictDiagnosticHash",
+    "entryValidationRelativePath", "entryValidationHash", "launchCommand",
   ].sort();
   const actualFields = Object.keys(launch).sort();
   if (
@@ -988,6 +1097,11 @@ async function verifyFinalPromotion(input: Readonly<{
     "final/capture/formal-world-capture-receipt.json",
   );
   exact(launch.evaluationRelativePath, "final/evaluation.json");
+  exact(launch.strictDiagnosticRelativePath, "final/strict-diagnostic.json");
+  exact(
+    launch.entryValidationRelativePath,
+    "final/entry-third-person-validation.json",
+  );
   exact(
     launch.launchCommand,
     "pnpm worldkit native run final/world-package --port 5174 --json",
@@ -1035,7 +1149,97 @@ async function verifyFinalPromotion(input: Readonly<{
     hashWorldReconstructionEvaluationResultV1(json(finalEvaluationBytes)),
     finalAttempt.evaluationResultHash,
   );
-  return packageDirectoryPath;
+  const finalStrictDiagnosticBytes = await requiredFile(
+    finalRoot,
+    "strict-diagnostic.json",
+    "NBR70_FINAL_ARTIFACT_MISSING",
+  );
+  const runStrictDiagnosticBytes = await requiredFile(
+    input.runRoot,
+    "strict-diagnostic.json",
+    "NBR70_REQUIRED_ARTIFACT_MISSING",
+  );
+  if (
+    sha256Bytes(finalStrictDiagnosticBytes) !==
+    sha256Bytes(runStrictDiagnosticBytes)
+  ) fail("NBR70_FINAL_ARTIFACT_MISMATCH");
+  const strictDiagnostic = parseWorldReconstructionStrictDiagnosticReceiptV1(
+    json(finalStrictDiagnosticBytes),
+  );
+  exact(
+    launch.strictDiagnosticHash,
+    hashWorldReconstructionStrictDiagnosticReceiptV1(strictDiagnostic),
+  );
+  exact(strictDiagnostic.caseRef, input.runReceipt.caseRef);
+  exact(strictDiagnostic.caseHash, input.runReceipt.caseHash);
+  exact(strictDiagnostic.runReceiptRef, launch.runReceiptRef);
+  exact(strictDiagnostic.runReceiptHash, launch.runReceiptHash);
+  exact(strictDiagnostic.attemptIndex, finalAttempt.attemptIndex);
+  exact(strictDiagnostic.worldPackageRef, finalAttempt.worldPackageRef);
+  exact(
+    strictDiagnostic.worldPackageRootHash,
+    finalAttempt.worldPackageRootHash,
+  );
+  exact(
+    strictDiagnostic.worldBuildIdentityHash,
+    finalAttempt.worldBuildIdentityHash,
+  );
+  exact(strictDiagnostic.captureReceiptHash, finalAttempt.captureReceiptHash);
+  exact(
+    strictDiagnostic.evaluationResultHash,
+    finalAttempt.evaluationResultHash,
+  );
+  if (input.strictAcceptanceRequired && strictDiagnostic.outcome !== "passed") {
+    fail("NBR70_FINAL_STRICT_DIAGNOSTIC_NOT_PASSED");
+  }
+  const entryValidationBytes = await requiredFile(
+    finalRoot,
+    "entry-third-person-validation.json",
+    "NBR70_FINAL_ARTIFACT_MISSING",
+  );
+  const storedEntryValidation = parseEntryThirdPersonValidationResultV1(
+    json(entryValidationBytes),
+  );
+  if (
+    sha256Bytes(entryValidationBytes) !==
+      sha256Bytes(entryThirdPersonValidationResultCanonicalBytesV1(
+        storedEntryValidation,
+      ))
+  ) fail("NBR70_FINAL_ARTIFACT_MISMATCH");
+  const finalOpeningObservation = parseFormalOpeningObservationV1(json(
+    await requiredFile(
+      path.join(finalRoot, "capture"),
+      "opening-observation.json",
+      "NBR70_FINAL_ARTIFACT_MISSING",
+    ),
+  ));
+  const recomputedEntryValidation =
+    await validateFormalOpeningEntryThirdPersonV1({
+      openingPngBytes: await requiredFile(
+        path.join(finalRoot, "capture"),
+        "opening.png",
+        "NBR70_FINAL_ARTIFACT_MISSING",
+      ),
+      openingObservation: finalOpeningObservation,
+    });
+  if (
+    recomputedEntryValidation.status !== "passed" ||
+    storedEntryValidation.status !== "passed" ||
+    hashEntryThirdPersonValidationResultV1(storedEntryValidation) !==
+      hashEntryThirdPersonValidationResultV1(recomputedEntryValidation)
+  ) fail("NBR70_FINAL_ENTRY_VALIDATION_MISMATCH");
+  exact(
+    launch.entryValidationHash,
+    hashEntryThirdPersonValidationResultV1(recomputedEntryValidation),
+  );
+  return Object.freeze({
+    packageDirectoryPath,
+    strictDiagnosticCodes: Object.freeze(
+      strictDiagnostic.outcome === "passed"
+        ? []
+        : [...strictDiagnostic.diagnosticCodes],
+    ),
+  });
 }
 
 async function verifyPlayability(input: Readonly<{
@@ -1245,7 +1449,9 @@ interface NativeBlockReconstructionVerificationLifecycleV1 {
 async function verifyNativeBlockReconstructionE2EUncheckedV1(
   input: VerifyNativeBlockReconstructionE2EInputV1,
   lifecycle: NativeBlockReconstructionVerificationLifecycleV1,
-): Promise<NativeBlockReconstructionE2EVerificationV1> {
+  mode: "strict-acceptance" | "production-integrity",
+): Promise<NativeBlockReconstructionUncheckedVerificationV1> {
+  const strictDiagnosticCodes = new Set<string>();
   const runRoot = await canonicalDirectory(
     input.candidate.runDirectoryPath,
     "NBR70_RUN_DIRECTORY_INVALID",
@@ -1256,7 +1462,10 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "NBR70_RUN_RECEIPT_MISSING",
   );
   const runReceipt = parseWorldReconstructionRunReceiptV1(json(runReceiptBytes));
-  if (runReceipt.cleanupOutcome !== "completed" || runReceipt.outcome !== "passed") {
+  if (runReceipt.cleanupOutcome !== "completed") {
+    fail("NBR70_CLEANUP_INCOMPLETE");
+  }
+  if (mode === "strict-acceptance" && runReceipt.outcome !== "passed") {
     fail("NBR70_CLEANUP_INCOMPLETE");
   }
   const reconstructionCase = parseWorldReconstructionCaseV1(json(await requiredFile(
@@ -1303,6 +1512,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     runReceipt,
     reconstructionCase,
     evaluationProfile,
+    mode,
   });
 
   const runAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(runReceipt);
@@ -1419,14 +1629,20 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     "formal-world-capture-receipt.json",
     "NBR70_CAPTURE_ARTIFACT_MISSING",
   )));
-  const measuredBlockerColliderIds = verifyBlockerEvidenceClosure({
+  const blockerClosure = verifyBlockerEvidenceClosureForContext({
     caseBlockerColliderIds: reconstructionCase.expected.colliders
       .filter(({ role }) => role === "blocker")
       .map(({ colliderId }) => colliderId),
     formalChecks: captureReceipt.formalRequest.scriptedTraversal.checks,
     contribution: verified.nativeSceneContribution,
     materializerMetadata: verified.nativeBlockMaterializerMetadata,
+    mode,
+    diagnosticAuthority: "terminal",
   });
+  const measuredBlockerColliderIds = blockerClosure.blockerColliderIds;
+  for (const code of blockerClosure.strictDiagnosticCodes) {
+    strictDiagnosticCodes.add(code);
+  }
   const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
   exact(runAttempt.captureReceiptHash, captureReceiptHash);
   exact(captureReceipt.caseRef, runReceipt.caseRef);
@@ -1512,6 +1728,31 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   }
   assertObservationMatchesCapture(scripted, captureReceipt);
 
+  let entryValidation:
+    | NativeBlockReconstructionProductionIntegrityV1["entryValidation"]
+    | undefined;
+  let entryValidationHash: Sha256HashV1 | undefined;
+  if (mode === "production-integrity") {
+    const measuredEntryValidation = await validateFormalOpeningEntryThirdPersonV1({
+      openingPngBytes: await requiredFile(
+        captureRoot,
+        "opening.png",
+        "NBR70_CAPTURE_ARTIFACT_MISSING",
+      ),
+      openingObservation: opening,
+    });
+    if (measuredEntryValidation.status !== "passed") {
+      throw new NativeBlockReconstructionVerificationClosedErrorV1(
+        measuredEntryValidation.diagnostics.map(({ code }) => code),
+        "not-started",
+      );
+    }
+    entryValidation = measuredEntryValidation as
+      NativeBlockReconstructionProductionIntegrityV1["entryValidation"];
+    entryValidationHash =
+      hashEntryThirdPersonValidationResultV1(measuredEntryValidation);
+  }
+
   const evaluation = parseWorldReconstructionEvaluationResultV1(json(
     await requiredFile(
       attemptRoot,
@@ -1535,22 +1776,33 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
   exact(evaluation.worldBuildIdentityRef, runAttempt.worldBuildIdentityRef);
   exact(evaluation.captureReceiptHash, runAttempt.captureReceiptHash);
   exact(evaluation.captureReceiptRef, runAttempt.captureReceiptRef);
-  if (
+  const evaluationDidNotPass =
     evaluation.outcome !== "passed" ||
     evaluation.dimensions.length !== WORLD_RECONSTRUCTION_DIMENSION_IDS_V1.length ||
     evaluation.dimensions.some((dimension, index) =>
       dimension.dimensionId !== WORLD_RECONSTRUCTION_DIMENSION_IDS_V1[index] ||
-      dimension.status !== "passed")
-  ) fail("NBR70_EVALUATION_NOT_PASSED");
+      dimension.status !== "passed");
+  if (evaluationDidNotPass) {
+    if (mode === "strict-acceptance") fail("NBR70_EVALUATION_NOT_PASSED");
+    strictDiagnosticCodes.add("NBR70_EVALUATION_NOT_PASSED");
+  }
 
-  const launchPackageDirectoryPath = input.candidate.kind === "final"
+  const finalPromotion = input.candidate.kind === "final"
     ? await verifyFinalPromotion({
       runRoot,
       finalDirectoryPath: input.candidate.finalDirectoryPath,
       runReceipt,
       reconstructionCase,
+      strictAcceptanceRequired: mode === "strict-acceptance",
     })
-    : packageDirectoryPath;
+    : Object.freeze({
+      packageDirectoryPath,
+      strictDiagnosticCodes: Object.freeze([]) as readonly string[],
+    });
+  for (const code of finalPromotion.strictDiagnosticCodes) {
+    strictDiagnosticCodes.add(code);
+  }
+  const launchPackageDirectoryPath = finalPromotion.packageDirectoryPath;
 
   let playability:
     | NativeBlockReconstructionE2EVerificationV1["playability"]
@@ -1636,6 +1888,10 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     captureReceiptHash,
     evaluationResultHash,
     playability,
+    strictDiagnosticCodes: Object.freeze([...strictDiagnosticCodes].sort()),
+    ...(entryValidation === undefined
+      ? {}
+      : { entryValidation, entryValidationHash: entryValidationHash! }),
   });
 }
 
@@ -1647,14 +1903,56 @@ export async function verifyNativeBlockReconstructionE2EV1(
     launchAttempted: false,
   };
   try {
-    return await verifyNativeBlockReconstructionE2EUncheckedV1(
+    const verification = await verifyNativeBlockReconstructionE2EUncheckedV1(
       input,
       lifecycle,
+      "strict-acceptance",
     );
+    const {
+      strictDiagnosticCodes: _strictDiagnosticCodes,
+      entryValidation: _entryValidation,
+      entryValidationHash: _entryValidationHash,
+      ...strictResult
+    } = verification;
+    return Object.freeze(strictResult);
   } catch (error) {
     if (lifecycle.launchAttempted && lifecycle.cleanupOutcome === "not-started") {
       lifecycle.cleanupOutcome = "failed";
     }
+    throw new NativeBlockReconstructionVerificationClosedErrorV1(
+      diagnosticCodesFromVerificationError(error),
+      lifecycle.cleanupOutcome,
+      error,
+    );
+  }
+}
+
+export async function verifyNativeBlockReconstructionProductionIntegrityV1(
+  input: VerifyNativeBlockReconstructionProductionIntegrityInputV1,
+): Promise<NativeBlockReconstructionProductionIntegrityV1> {
+  const lifecycle: NativeBlockReconstructionVerificationLifecycleV1 = {
+    cleanupOutcome: "not-started",
+    launchAttempted: false,
+  };
+  try {
+    const verification = await verifyNativeBlockReconstructionE2EUncheckedV1(
+      {
+        candidate: input.candidate,
+        playability: Object.freeze({ mode: "skipped" }),
+      },
+      lifecycle,
+      "production-integrity",
+    );
+    if (
+      verification.entryValidation === undefined ||
+      verification.entryValidationHash === undefined
+    ) fail("NBR70_ENTRY_VALIDATION_MISSING");
+    return Object.freeze({
+      ...verification,
+      entryValidation: verification.entryValidation,
+      entryValidationHash: verification.entryValidationHash,
+    });
+  } catch (error) {
     throw new NativeBlockReconstructionVerificationClosedErrorV1(
       diagnosticCodesFromVerificationError(error),
       lifecycle.cleanupOutcome,

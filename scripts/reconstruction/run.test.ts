@@ -107,6 +107,9 @@ function identities(attemptIndex: WorldReconstructionAttemptIndexV1) {
     worldBuildIdentityRef:
       `artifact://run/attempts/${attemptIndex}/world-build-identity.json`,
     worldBuildIdentityHash: taggedHash(`${prefix}bid`),
+    groundAnalysisReportRef:
+      `artifact://run/attempts/${attemptIndex}/ground-analysis-report.json`,
+    groundAnalysisReportHash: taggedHash(`${prefix}gar`),
     captureReceiptRef: `artifact://run/attempts/${attemptIndex}/capture-receipt.json`,
     captureReceiptHash: taggedHash(`${prefix}cap`),
     captureReceiptPath: `/attempts/${attemptIndex}/capture-receipt.json`,
@@ -622,6 +625,8 @@ function fakePorts(options: FakePortOptions = {}) {
         worldPackageBuildReceiptHash: ids.worldPackageBuildReceiptHash,
         worldBuildIdentityRef: ids.worldBuildIdentityRef,
         worldBuildIdentityHash: ids.worldBuildIdentityHash,
+        groundAnalysisReportRef: ids.groundAnalysisReportRef,
+        groundAnalysisReportHash: ids.groundAnalysisReportHash,
         diagnosticCodes,
       });
     },
@@ -1010,7 +1015,7 @@ describe("runWorldReconstructionV1", () => {
             nativeCheckResultHash: taggedHash("native-check-0"),
             repairDiagnostics: Object.freeze([groundStandabilityDiagnostic()]),
             diagnosticCodes: Object.freeze([
-              "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+              "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
             ]),
           });
         }
@@ -1411,7 +1416,7 @@ describe("runWorldReconstructionV1", () => {
       packageDiagnosticCodesByAttempt: [[
         "native-check-rejected",
         "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
-        "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+        "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
         "secret-provider-trace-42",
       ]],
     });
@@ -1424,7 +1429,7 @@ describe("runWorldReconstructionV1", () => {
         "WORLD_RECONSTRUCTION_CHECK_FAILED",
         "native-check-rejected",
         "WORLDKIT_NATIVE_BLOCK_PROFILE_CHECK_REJECTED",
-        "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+        "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
       ],
     });
   });

@@ -166,15 +166,45 @@ function snapshotValue() {
           primary: { id: "primary", mode: "active" },
         },
         controllerStatesById: {
-          primary: { id: "primary", participantId: "primary" },
+          "controller-primary": {
+            id: "controller-primary",
+            participantId: "primary",
+          },
         },
-        relationshipStatesById: {},
+        relationshipStatesById: {
+          possession: {
+            id: "possession",
+            type: "possessedBy",
+            schemaVersion: 1,
+            controllerEntityId: "controller-primary",
+            controlledEntityId: "player",
+            establishedSimulationTick: 0,
+          },
+        },
         activeActionStatesById: {},
         activatedGameplayFeatureRefs: [],
         lastEventSequence: 0,
       },
     },
-    view: { viewStateRevision: 0, camera: { mode: "unbound" } },
+    view: {
+      viewStateRevision: 0,
+      camera: {
+        mode: "tracking",
+        id: "camera-main",
+        targetEntityId: "player",
+        positionMetersXYZ: [0, 3, 5],
+        activeCameraProfileRef:
+          "worldkit://camera-profile/humanoid.third-person@1",
+        activeCameraRigRef:
+          "worldkit://camera-rig-profile/humanoid.third-person@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
+        fixedStepDeltaSeconds: 1 / 60,
+      },
+    },
     runtime: { phase: "ready", isPaused: false, fixedTimeStepSeconds: 1 / 60 },
     resources: {
       phase: "ready",

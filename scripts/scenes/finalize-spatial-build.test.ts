@@ -7,9 +7,9 @@ import { afterEach, expect, it } from "vitest";
 
 import {
   deriveVisualCaptureGroups,
-  deriveVisualIdentityPalette,
   finalizeSceneBuild,
 } from "./finalize-spatial-build";
+import { deriveVisualIdentityPalette } from "./visual-identity-palette.js";
 import { writeVisualIdentityPalette } from "../visual/write-visual-identity-palette";
 
 const directories: string[] = [];
@@ -139,7 +139,23 @@ it("keeps identical complete instances in one repeated visual target", () => {
     visualTargetId: "visual-target-2",
     runtimeEntityIds: ["tower-east", "tower-west"],
   });
-  expect(deriveVisualIdentityPalette(parsed.value)).toHaveLength(2);
+  expect(deriveVisualIdentityPalette(parsed.value, "canonical")).toHaveLength(2);
+});
+
+it("keeps Canonical and Babylon Native target colors in explicit non-interchangeable profiles", () => {
+  const parsed = parseSceneBriefV1(`${brief}- 标志物｜瀑布：远景中的完整瀑布地标\n`);
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+  expect(deriveVisualIdentityPalette(parsed.value, "canonical")[2])
+    .toMatchObject({
+      visualTargetId: "visual-target-3",
+      identityColor: "#8E6CCF",
+    });
+  expect(deriveVisualIdentityPalette(parsed.value, "babylon-native")[2])
+    .toMatchObject({
+      visualTargetId: "visual-target-3",
+      identityColor: "#D9A514",
+    });
 });
 
 it("rejects the retired final-kind draft and mappings field", async () => {
@@ -164,6 +180,7 @@ it("writes movement mode and complete target descriptions into the trusted palet
   const outputPath = path.join(files.directory, "visual-identity-palette.json");
   await writeVisualIdentityPalette({
     sceneId: files.sceneId,
+    sceneSourceKind: "canonical",
     briefPath: files.briefPath,
     outputPath,
   });
@@ -177,4 +194,34 @@ it("writes movement mode and complete target descriptions into the trusted palet
       { id: "visual-target-2", targetKind: "landmark", name: "塔楼" },
     ],
   });
+});
+
+it("writes the selected source profile's target colors without cross-lane fallback", async () => {
+  const files = await fixture();
+  await writeFile(
+    files.briefPath,
+    `${brief}- 标志物｜瀑布：远景中的完整瀑布地标\n`,
+  );
+  const canonicalPath = path.join(files.directory, "canonical-palette.json");
+  const nativePath = path.join(files.directory, "native-palette.json");
+  await Promise.all([
+    writeVisualIdentityPalette({
+      sceneId: files.sceneId,
+      sceneSourceKind: "canonical",
+      briefPath: files.briefPath,
+      outputPath: canonicalPath,
+    }),
+    writeVisualIdentityPalette({
+      sceneId: files.sceneId,
+      sceneSourceKind: "babylon-native",
+      briefPath: files.briefPath,
+      outputPath: nativePath,
+    }),
+  ]);
+  const [canonical, native] = await Promise.all([
+    readFile(canonicalPath, "utf8").then(JSON.parse),
+    readFile(nativePath, "utf8").then(JSON.parse),
+  ]);
+  expect(canonical.targets[2].identityColor).toBe("#8E6CCF");
+  expect(native.targets[2].identityColor).toBe("#D9A514");
 });

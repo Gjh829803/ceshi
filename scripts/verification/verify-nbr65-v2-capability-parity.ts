@@ -337,19 +337,19 @@ const PASSED_CAPABILITIES = Object.freeze([
     },
   },
   {
-    capabilityId: "report-only-quality-preview",
-    disposition: "quality gates and repairs remain active while exploratory Cases retain one explicitly non-accepted runnable preview",
+    capabilityId: "production-outcome-and-strict-diagnostic-split",
+    disposition: "one passed and published ordinary production outcome with the strict verifier retained as a separate diagnostic receipt",
     owner: "native-reconstruction-production-host",
     evidence: {
       "scripts/reconstruction/run-production.test.ts": [
-        "delivers a non-accepted report-only preview after the first evaluation",
-        "delivers incomplete soft evidence as a report-only preview without inventing a pass",
+        "publishes CASE-054-shaped production success while preserving a failed strict diagnostic",
       ],
-      "scripts/reconstruction/run.test.ts": [
-        "ends report-only at the first trusted Host rejection without an external repair Attempt",
+      "scripts/verification/native-block-reconstruction-e2e.test.ts": [
+        "reports non-passing Evaluation as strict production diagnostics",
+        "keeps the terminal #E85D5D pixel mask blocking in production integrity",
       ],
-      "scripts/cli/worldkit.test.ts": [
-        "returns success for a non-accepted report-only preview",
+      "scripts/reconstruction/final-artifact-publisher.test.ts": [
+        "atomically publishes a production-success candidate with failed strict diagnostics",
       ],
     },
   },
@@ -566,6 +566,8 @@ const CAPABILITY_GATES = Object.freeze({
       "packages/runtime-babylon/src/formal-world-capture-provider.test.ts",
       "scripts/reconstruction/evaluate-evidence-set.test.ts",
       "scripts/reconstruction/run-production.test.ts",
+      "scripts/verification/native-block-reconstruction-e2e.test.ts",
+      "scripts/reconstruction/final-artifact-publisher.test.ts",
       "scripts/reconstruction/run.test.ts",
       "scripts/cli/worldkit.test.ts",
     ]),
@@ -604,7 +606,7 @@ const CAPABILITY_GATE_ID_BY_CAPABILITY_ID = Object.freeze({
   "package-capture-and-evaluation": "reconstruction-host",
   "named-planning-image-builder-feedback": "production-loop-usability",
   "incomplete-traversal-evidence": "production-loop-usability",
-  "report-only-quality-preview": "production-loop-usability",
+  "production-outcome-and-strict-diagnostic-split": "production-loop-usability",
 } as const satisfies Readonly<Record<PassedCapabilityIdV1, CapabilityGateIdV1>>);
 
 const FORBIDDEN_PATHS = Object.freeze([

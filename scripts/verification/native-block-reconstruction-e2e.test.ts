@@ -54,9 +54,11 @@ import {
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionEvidenceSetV1,
+  hashWorldReconstructionStrictDiagnosticReceiptV1,
   getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionRunReceiptV1,
+  parseWorldReconstructionStrictDiagnosticReceiptV1,
 } from "@whitebox-world/validation";
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { buildWorldReconstructionEvidenceSetV1 } from "../reconstruction/evaluate-evidence-set.js";
@@ -67,11 +69,19 @@ import {
 } from "../reconstruction/final-artifact-publisher.js";
 import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
 import { describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
+
+import {
+  entryThirdPersonValidationResultCanonicalBytesV1,
+  hashEntryThirdPersonValidationResultV1,
+  validateFormalOpeningEntryThirdPersonV1,
+} from "../visual/entry-third-person.js";
 
 import {
   NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1,
   NativeBlockReconstructionVerificationClosedErrorV1,
   verifyNativeBlockReconstructionE2EV1,
+  verifyNativeBlockReconstructionProductionIntegrityV1,
   type NativeBlockReconstructionPlayabilityLaunchPortV1,
   type NativeBlockReconstructionPlayabilitySessionPortV1,
 } from "./verify-native-block-reconstruction-e2e.js";
@@ -83,6 +93,23 @@ const PNG = Uint8Array.from(Buffer.from(
   "base64",
 ));
 const H = (character: string) => `sha256:${character.repeat(64)}` as Sha256HashV1;
+
+async function entryPng(left = 43, right = 56): Promise<Uint8Array> {
+  const width = 100;
+  const height = 100;
+  const pixels = new Uint8Array(width * height * 3).fill(255);
+  for (let y = 25; y <= 90; y += 1) {
+    for (let x = left; x <= right; x += 1) {
+      const offset = (y * width + x) * 3;
+      pixels[offset] = 0xE8;
+      pixels[offset + 1] = 0x5D;
+      pixels[offset + 2] = 0x5D;
+    }
+  }
+  return new Uint8Array(await sharp(pixels, {
+    raw: { width, height, channels: 3 },
+  }).png().toBuffer());
+}
 const MIXED_BLOCK_CHECKPOINT_CRITERIA = [{
   kind: "reach-bounds" as const,
   checkpointId: "gate-approach",
@@ -402,11 +429,17 @@ async function completeRunFixture(
   options: Parameters<typeof createEvidenceSetFixtureInputV1>[0] & Readonly<{
     forgePassedEvaluation?: boolean;
     caseRefOverride?: string;
+    strictDiagnosticFails?: boolean;
+    evaluationPasses?: boolean;
+    entryPasses?: boolean;
   }> = {},
 ) {
   const {
     forgePassedEvaluation = false,
     caseRefOverride,
+    strictDiagnosticFails = false,
+    evaluationPasses = true,
+    entryPasses = true,
     ...evidenceOptions
   } = options;
   const caseDirectoryPath = await realpath(
@@ -416,7 +449,7 @@ async function completeRunFixture(
   await mkdir(runDirectoryPath, { recursive: true });
   const fixture = createEvidenceSetFixtureInputV1({
     ...evidenceOptions,
-    allDimensionsPass: true,
+    allDimensionsPass: evaluationPasses,
   });
   const caseRef = caseRefOverride ?? fixture.caseRef;
   const verified = fixture.verifiedWorldPackage;
@@ -496,7 +529,34 @@ async function completeRunFixture(
     outputDirectoryPath: path.join(attemptDirectoryPath, "world-package"),
     directory: verified.directory,
   });
+  const groundAnalysisReport = Object.freeze({
+    kind: "babylon-native-block-ground-analysis-report",
+    schemaVersion: 1,
+    identity: Object.freeze({
+      logicalGroundModelHash: H("1"),
+      walkableTopologyHash: H("2"),
+      traversalCapabilityEnvelopeHash: H("3"),
+      caseHash: hashWorldReconstructionCaseV1(fixture.reconstructionCase),
+      worldPackageRootHash: verified.receipt.worldPackageRootHash,
+      measurementChunkPolicyHash: H("4"),
+    }),
+    analysisOutcome: "passed",
+    admissionOutcome: "passed",
+    failureFacts: Object.freeze([]),
+    metrics: Object.freeze({}),
+    standableNodes: Object.freeze([]),
+  });
+  await writeJson(
+    path.join(attemptDirectoryPath, "ground-analysis-report.json"),
+    groundAnalysisReport,
+  );
+  const groundAnalysisReportHash = sha256CanonicalJson(groundAnalysisReport);
 
+  const openingPng = await entryPng(
+    entryPasses ? 43 : 14,
+    entryPasses ? 56 : 27,
+  );
+  const openingPngHash = sha256Bytes(openingPng) as Sha256HashV1;
   const pngHash = sha256Bytes(PNG) as Sha256HashV1;
   const semanticCaptureMap = {
     ...fixture.captureReceipt.formalRequest.semanticCaptureMap,
@@ -509,11 +569,38 @@ async function completeRunFixture(
     semanticCaptureMapHash: hashFormalSemanticCaptureMapV1(semanticCaptureMap),
   };
   const formalRequestHash = hashFormalWorldCaptureRequestV1(formalRequest);
-  const openingObservationBase = parseFormalOpeningObservationV1({
+  const rawOpeningObservation = parseFormalOpeningObservationV1({
     ...fixture.openingObservation,
     formalRequest,
     formalRequestHash,
     semanticCaptureMapHash: formalRequest.semanticCaptureMapHash,
+  });
+  const resetReadySnapshot = {
+    ...rawOpeningObservation.resetReadySnapshot,
+    view: {
+      ...rawOpeningObservation.resetReadySnapshot.view,
+      camera: {
+        mode: "tracking" as const,
+        id: "camera-main",
+        targetEntityId: "player",
+        positionMetersXYZ: [0, 3, 5] as const,
+        activeCameraProfileRef:
+          "worldkit://camera-profile/humanoid.third-person@1",
+        activeCameraRigRef:
+          "worldkit://camera-rig-profile/humanoid.third-person@1",
+        activeCameraModifierRefs: [],
+        safeFallbackActive: false,
+        viewYawOffsetRadians: 0,
+        viewPitchOffsetRadians: 0,
+        viewDistanceOffsetMeters: 0,
+        fixedStepDeltaSeconds: 1 / 60,
+      },
+    },
+  };
+  const openingObservationBase = parseFormalOpeningObservationV1({
+    ...rawOpeningObservation,
+    resetReadySnapshot,
+    resetReadySnapshotHash: sha256CanonicalJson(resetReadySnapshot),
   });
   const spawnSupportObservation = parseFormalSpawnSupportObservationV1({
     ...fixture.spawnSupportObservation,
@@ -549,7 +636,7 @@ async function completeRunFixture(
       hashFormalScriptedTraversalObservationV1(scriptedTraversalObservation),
     views: fixture.captureReceipt.views.map((view) => ({
       ...view,
-      pngContentHash: pngHash,
+      pngContentHash: view.viewId === "opening" ? openingPngHash : pngHash,
     })),
     colliderOverlayPngContentHash: pngHash,
   });
@@ -586,7 +673,8 @@ async function completeRunFixture(
         hashFormalOpeningObservationV1(openingObservation),
     })
     : originalCaptureReceipt;
-  for (const name of ["opening", "world-top-down", "world-side", "collider-overlay"] as const) {
+  await writeFile(path.join(captureDirectoryPath, "opening.png"), openingPng);
+  for (const name of ["world-top-down", "world-side", "collider-overlay"] as const) {
     await writeFile(path.join(captureDirectoryPath, `${name}.png`), PNG);
   }
   await writeJson(path.join(captureDirectoryPath, "opening-observation.json"), openingObservation);
@@ -624,8 +712,15 @@ async function completeRunFixture(
       })),
     })
     : parseWorldReconstructionEvaluationResultV1(evaluated);
-  if (!forgePassedEvaluation && evaluation.outcome !== "passed") {
+  if (
+    !forgePassedEvaluation &&
+    evaluationPasses &&
+    evaluation.outcome !== "passed"
+  ) {
     throw new Error("fixture evidence must earn a passed evaluation");
+  }
+  if (!evaluationPasses && evaluation.outcome === "passed") {
+    throw new Error("fixture evidence must retain a non-passing evaluation");
   }
   await writeJson(path.join(attemptDirectoryPath, "evidence-set.json"), evidence);
   await writeJson(path.join(attemptDirectoryPath, "evaluation.json"), evaluation);
@@ -639,8 +734,10 @@ async function completeRunFixture(
     caseHash: hashWorldReconstructionCaseV1(fixture.reconstructionCase),
     evaluationProfileRef: fixture.evaluationProfileRef,
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(fixture.evaluationProfile),
-    outcome: "passed",
-    diagnosticCodes: [],
+    outcome: evaluation.outcome,
+    diagnosticCodes: evaluation.outcome === "passed"
+      ? []
+      : [...new Set(evaluation.diagnostics.map(({ code }) => code))].sort(),
     attempts: [{
       kind: "evaluated",
       attemptIndex: 0,
@@ -658,11 +755,14 @@ async function completeRunFixture(
       worldPackageBuildReceiptHash: sha256CanonicalJson(verified.receipt),
       worldBuildIdentityRef: captureReceipt.worldBuildIdentityRef,
       worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+      groundAnalysisReportRef:
+        `${attemptArtifactRoot}/ground-analysis-report.json`,
+      groundAnalysisReportHash,
       captureReceiptRef,
       captureReceiptHash,
       evaluationResultRef: `${attemptArtifactRoot}/evaluation.json`,
       evaluationResultHash: evaluationHash,
-      outcome: "passed",
+      outcome: evaluation.outcome,
     }],
     finalAttemptIndex: 0,
     finalEvaluationResultRef: `${attemptArtifactRoot}/evaluation.json`,
@@ -670,6 +770,31 @@ async function completeRunFixture(
     cleanupOutcome: "completed",
   });
   await writeJson(path.join(runDirectoryPath, "run-receipt.json"), runReceipt);
+  const strictDiagnostic = parseWorldReconstructionStrictDiagnosticReceiptV1({
+    kind: "world-reconstruction-strict-diagnostic-receipt",
+    schemaVersion: 1,
+    id: "package-fixture.strict-diagnostic",
+    caseRef,
+    caseHash: runReceipt.caseHash,
+    runReceiptRef:
+      `${caseRef.slice(0, -"/case.json".length)}/runs/formal-fixture/run-receipt.json`,
+    runReceiptHash: sha256CanonicalJson(runReceipt),
+    attemptIndex: 0,
+    worldPackageRef: verified.receipt.worldPackageRef,
+    worldPackageRootHash: verified.receipt.worldPackageRootHash,
+    worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+    captureReceiptHash,
+    evaluationResultHash: evaluationHash,
+    outcome: strictDiagnosticFails ? "failed" : "passed",
+    diagnosticCodes: strictDiagnosticFails
+      ? ["NBR70_BLOCKER_IDENTITY_MISMATCH"]
+      : [],
+    cleanupOutcome: strictDiagnosticFails ? "not-started" : "completed",
+  });
+  await writeJson(
+    path.join(runDirectoryPath, "strict-diagnostic.json"),
+    strictDiagnostic,
+  );
   return { caseDirectoryPath, runDirectoryPath };
 }
 
@@ -681,6 +806,26 @@ async function finalLaunchFixture(input: Readonly<{
     await readFile(path.join(input.runDirectoryPath, "run-receipt.json"), "utf8"),
   ));
   const finalAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(runReceipt);
+  const strictDiagnostic = parseWorldReconstructionStrictDiagnosticReceiptV1(
+    JSON.parse(await readFile(
+      path.join(input.runDirectoryPath, "strict-diagnostic.json"),
+      "utf8",
+    )),
+  );
+  const openingPngBytes = new Uint8Array(await readFile(path.join(
+    input.runDirectoryPath,
+    `attempts/${finalAttempt.attemptIndex}/capture/opening.png`,
+  )));
+  const openingObservation = parseFormalOpeningObservationV1(JSON.parse(
+    await readFile(path.join(
+      input.runDirectoryPath,
+      `attempts/${finalAttempt.attemptIndex}/capture/opening-observation.json`,
+    ), "utf8"),
+  ));
+  const entryValidation = await validateFormalOpeningEntryThirdPersonV1({
+    openingPngBytes,
+    openingObservation,
+  });
   return {
     kind: "native-block-reconstruction-launch" as const,
     schemaVersion: 1 as const,
@@ -697,6 +842,13 @@ async function finalLaunchFixture(input: Readonly<{
     captureReceiptHash: finalAttempt.captureReceiptHash,
     evaluationRelativePath: "final/evaluation.json" as const,
     evaluationHash: finalAttempt.evaluationResultHash,
+    strictDiagnosticRelativePath: "final/strict-diagnostic.json" as const,
+    strictDiagnosticHash:
+      hashWorldReconstructionStrictDiagnosticReceiptV1(strictDiagnostic),
+    entryValidationRelativePath:
+      "final/entry-third-person-validation.json" as const,
+    entryValidationHash:
+      hashEntryThirdPersonValidationResultV1(entryValidation),
     launchCommand:
       "pnpm worldkit native run final/world-package --port 5174 --json" as const,
   };
@@ -708,38 +860,35 @@ describe("Native Block reconstruction final artifact publisher integration", () 
       caseRefOverride:
         "artifact://world-reconstruction-case/foreign.case/case.json",
     });
-    const playability = playabilityPort();
     try {
       await expect(publishNativeBlockReconstructionFinalV1({
         ...fixture,
         launch: await finalLaunchFixture(fixture),
-        playability: playability.port,
       })).rejects.toThrow(
         "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID: Run Receipt Case ref is foreign",
       );
-      expect(playability.launch).not.toHaveBeenCalled();
     } finally {
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   });
 
-  it("runs the formal Final verifier before publishing the exact staged candidate", async () => {
+  it("publishes the exact statically verified candidate and bound diagnostic", async () => {
     const fixture = await completeRunFixture();
-    const playability = playabilityPort();
     try {
       await expect(publishNativeBlockReconstructionFinalV1({
         ...fixture,
         launch: await finalLaunchFixture(fixture),
-        playability: playability.port,
-      })).resolves.toMatchObject({ outcome: "published" });
-      expect(playability.launch).toHaveBeenCalledWith(expect.objectContaining({
-        packageDirectoryPath: expect.stringContaining(
-          `${path.sep}worldkit-native-build-`,
-        ),
-      }));
+      })).resolves.toMatchObject({
+        outcome: "published",
+        strictDiagnosticHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      });
       await expect(readFile(path.join(
         fixture.caseDirectoryPath,
         "final/launch.json",
+      ))).resolves.toBeInstanceOf(Buffer);
+      await expect(readFile(path.join(
+        fixture.caseDirectoryPath,
+        "final/strict-diagnostic.json",
       ))).resolves.toBeInstanceOf(Buffer);
       await expect(readFile(path.join(
         fixture.caseDirectoryPath,
@@ -750,18 +899,23 @@ describe("Native Block reconstruction final artifact publisher integration", () 
     }
   }, 15_000);
 
-  it("publishes a statically verified Final without a fresh Browser replay", async () => {
-    const fixture = await completeRunFixture();
+  it("publishes when the separately recorded strict diagnostic failed", async () => {
+    const fixture = await completeRunFixture({ strictDiagnosticFails: true });
     try {
       await expect(publishNativeBlockReconstructionFinalV1({
         ...fixture,
         launch: await finalLaunchFixture(fixture),
-        playability: Object.freeze({ mode: "skipped" }),
       })).resolves.toMatchObject({ outcome: "published" });
-      await expect(readFile(path.join(
-        fixture.caseDirectoryPath,
-        "final/launch.json",
-      ))).resolves.toBeInstanceOf(Buffer);
+      const publishedDiagnostic = parseWorldReconstructionStrictDiagnosticReceiptV1(
+        JSON.parse(await readFile(
+          path.join(fixture.caseDirectoryPath, "final/strict-diagnostic.json"),
+          "utf8",
+        )),
+      );
+      expect(publishedDiagnostic).toMatchObject({
+        outcome: "failed",
+        diagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      });
     } finally {
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
@@ -769,7 +923,6 @@ describe("Native Block reconstruction final artifact publisher integration", () 
 
   it("rejects an empty final created immediately before the final existence check", async () => {
     const fixture = await completeRunFixture();
-    const playability = playabilityPort();
     const publish = createNativeBlockFinalArtifactPublisherTestAdapterV1({
       async beforeFinalExistenceCheck(finalDirectoryPath) {
         await mkdir(finalDirectoryPath);
@@ -779,7 +932,6 @@ describe("Native Block reconstruction final artifact publisher integration", () 
       await expect(publish({
         ...fixture,
         launch: await finalLaunchFixture(fixture),
-        playability: playability.port,
       })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
       await expect(readFile(path.join(
         fixture.caseDirectoryPath,
@@ -798,67 +950,50 @@ describe("Native Block reconstruction final artifact publisher integration", () 
     }
   }, 15_000);
 
-  it("rejects a verifier-side empty directory and Run source mutation", async () => {
-    for (const mutation of ["staging-directory", "run-source"] as const) {
-      const fixture = await completeRunFixture();
-      const playability = playabilityPort();
-      const mutatingPlayability: NativeBlockReconstructionPlayabilityLaunchPortV1 = {
-        async launch(input) {
-          if (mutation === "staging-directory") {
-            await mkdir(path.join(
-              fixture.caseDirectoryPath,
-              ".final-staging",
-              "foreign-empty-directory",
-            ));
-          } else {
-            await writeFile(
-              path.join(fixture.runDirectoryPath, "run-receipt.json"),
-              "{}\n",
-            );
-          }
-          return (playability.port as NativeBlockReconstructionPlayabilityLaunchPortV1)
-            .launch(input);
-        },
-      };
-      try {
-        await expect(publishNativeBlockReconstructionFinalV1({
-          ...fixture,
-          launch: await finalLaunchFixture(fixture),
-          playability: mutatingPlayability,
-        })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
-      } finally {
-        await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
-      }
+  it("rejects an unbound strict diagnostic before publication", async () => {
+    const fixture = await completeRunFixture();
+    const launch = await finalLaunchFixture(fixture);
+    await writeFile(
+      path.join(fixture.runDirectoryPath, "strict-diagnostic.json"),
+      "{}\n",
+    );
+    try {
+      await expect(publishNativeBlockReconstructionFinalV1({
+        ...fixture,
+        launch,
+      })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   }, 15_000);
 
   it("serializes official publishers with one Case-scoped lock", async () => {
     const fixture = await completeRunFixture();
-    const playability = playabilityPort();
-    let announceLaunch!: () => void;
-    let releaseLaunch!: () => void;
-    const launchStarted = new Promise<void>((resolve) => {
-      announceLaunch = resolve;
+    let announceSync!: () => void;
+    let releaseSync!: () => void;
+    const syncStarted = new Promise<void>((resolve) => {
+      announceSync = resolve;
     });
-    const launchReleased = new Promise<void>((resolve) => {
-      releaseLaunch = resolve;
+    const syncReleased = new Promise<void>((resolve) => {
+      releaseSync = resolve;
     });
-    const blockingPlayability: NativeBlockReconstructionPlayabilityLaunchPortV1 = {
-      async launch(input) {
-        announceLaunch();
-        await launchReleased;
-        return (playability.port as NativeBlockReconstructionPlayabilityLaunchPortV1)
-          .launch(input);
+    let hasBlocked = false;
+    const blockingPublish = createNativeBlockFinalArtifactPublisherTestAdapterV1({
+      async beforeSync(_absolutePath, phase) {
+        if (phase === "staging" && !hasBlocked) {
+          hasBlocked = true;
+          announceSync();
+          await syncReleased;
+        }
       },
-    };
+    });
     const launch = await finalLaunchFixture(fixture);
-    const firstPublication = publishNativeBlockReconstructionFinalV1({
+    const firstPublication = blockingPublish({
       ...fixture,
       launch,
-      playability: blockingPlayability,
     });
     try {
-      await launchStarted;
+      await syncStarted;
       await expect(readFile(path.join(
         fixture.caseDirectoryPath,
         ".final-publish.lock",
@@ -866,25 +1001,34 @@ describe("Native Block reconstruction final artifact publisher integration", () 
       await expect(publishNativeBlockReconstructionFinalV1({
         ...fixture,
         launch,
-        playability: playability.port,
       })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
-      releaseLaunch();
+      releaseSync();
       await expect(firstPublication).resolves.toMatchObject({ outcome: "published" });
     } finally {
-      releaseLaunch();
+      releaseSync();
       await firstPublication.catch(() => undefined);
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
     }
   }, 15_000);
 
-  it("cleans owned staging and lock when the formal Final verifier rejects", async () => {
+  it("cleans owned staging and lock when the immutable Run mutates", async () => {
     const fixture = await completeRunFixture();
-    const rejectingPlayability = playabilityPort({ jumpNeverAir: true });
+    let hasMutated = false;
+    const publish = createNativeBlockFinalArtifactPublisherTestAdapterV1({
+      async beforeSync(_absolutePath, phase) {
+        if (phase === "staging" && !hasMutated) {
+          hasMutated = true;
+          await writeFile(
+            path.join(fixture.runDirectoryPath, "run-receipt.json"),
+            "{}\n",
+          );
+        }
+      },
+    });
     try {
-      await expect(publishNativeBlockReconstructionFinalV1({
+      await expect(publish({
         ...fixture,
         launch: await finalLaunchFixture(fixture),
-        playability: rejectingPlayability.port,
       })).rejects.toThrow("NBR_FINAL_ARTIFACT_PUBLICATION_INVALID");
       for (const relativePath of [
         ".final-staging",
@@ -921,10 +1065,36 @@ async function createFinalCandidate(input: Readonly<{
     path.join(attemptRoot, "evaluation.json"),
     path.join(finalDirectoryPath, "evaluation.json"),
   );
+  await cp(
+    path.join(input.runDirectoryPath, "strict-diagnostic.json"),
+    path.join(finalDirectoryPath, "strict-diagnostic.json"),
+  );
   const runReceipt = parseWorldReconstructionRunReceiptV1(JSON.parse(
     await readFile(path.join(input.runDirectoryPath, "run-receipt.json"), "utf8"),
   ));
   const finalAttempt = getWorldReconstructionFinalEvaluatedAttemptV1(runReceipt);
+  const strictDiagnostic = parseWorldReconstructionStrictDiagnosticReceiptV1(
+    JSON.parse(await readFile(
+      path.join(input.runDirectoryPath, "strict-diagnostic.json"),
+      "utf8",
+    )),
+  );
+  const openingObservation = parseFormalOpeningObservationV1(JSON.parse(
+    await readFile(
+      path.join(attemptRoot, "capture/opening-observation.json"),
+      "utf8",
+    ),
+  ));
+  const entryValidation = await validateFormalOpeningEntryThirdPersonV1({
+    openingPngBytes: new Uint8Array(await readFile(
+      path.join(attemptRoot, "capture/opening.png"),
+    )),
+    openingObservation,
+  });
+  await writeFile(
+    path.join(finalDirectoryPath, "entry-third-person-validation.json"),
+    entryThirdPersonValidationResultCanonicalBytesV1(entryValidation),
+  );
   await writeJson(path.join(finalDirectoryPath, "launch.json"), {
     kind: "native-block-reconstruction-launch",
     schemaVersion: 1,
@@ -940,6 +1110,13 @@ async function createFinalCandidate(input: Readonly<{
     captureReceiptHash: finalAttempt.captureReceiptHash,
     evaluationRelativePath: "final/evaluation.json",
     evaluationHash: finalAttempt.evaluationResultHash,
+    strictDiagnosticRelativePath: "final/strict-diagnostic.json",
+    strictDiagnosticHash:
+      hashWorldReconstructionStrictDiagnosticReceiptV1(strictDiagnostic),
+    entryValidationRelativePath:
+      "final/entry-third-person-validation.json",
+    entryValidationHash:
+      hashEntryThirdPersonValidationResultV1(entryValidation),
     launchCommand:
       "pnpm worldkit native run final/world-package --port 5174 --json",
   });
@@ -1037,6 +1214,27 @@ async function addRepairAttempt(input: Readonly<{
     outputDirectoryPath: path.join(attemptRoot, "world-package"),
     directory: verified.directory,
   });
+  const groundAnalysisReport = Object.freeze({
+    kind: "babylon-native-block-ground-analysis-report",
+    schemaVersion: 1,
+    identity: Object.freeze({
+      logicalGroundModelHash: H("6"),
+      walkableTopologyHash: H("7"),
+      traversalCapabilityEnvelopeHash: H("8"),
+      caseHash: hashWorldReconstructionCaseV1(fixture.reconstructionCase),
+      worldPackageRootHash: verified.receipt.worldPackageRootHash,
+      measurementChunkPolicyHash: H("9"),
+    }),
+    analysisOutcome: "passed",
+    admissionOutcome: "passed",
+    failureFacts: Object.freeze([]),
+    metrics: Object.freeze({}),
+    standableNodes: Object.freeze([]),
+  });
+  await writeJson(
+    path.join(attemptRoot, "ground-analysis-report.json"),
+    groundAnalysisReport,
+  );
   const pngHash = sha256Bytes(PNG) as Sha256HashV1;
   const captureReceipt = parseFormalWorldCaptureReceiptV1({
     ...fixture.captureReceipt,
@@ -1094,6 +1292,9 @@ async function addRepairAttempt(input: Readonly<{
     worldPackageBuildReceiptHash: sha256CanonicalJson(verified.receipt),
     worldBuildIdentityRef: captureReceipt.worldBuildIdentityRef,
     worldBuildIdentityHash: verified.receipt.worldBuildIdentityHash,
+    groundAnalysisReportRef:
+      `${attemptArtifactRoot}/ground-analysis-report.json`,
+    groundAnalysisReportHash: sha256CanonicalJson(groundAnalysisReport),
     captureReceiptRef,
     captureReceiptHash: hashFormalWorldCaptureReceiptV1(captureReceipt),
     evaluationResultRef: `${attemptArtifactRoot}/evaluation.json`,
@@ -1244,6 +1445,29 @@ describe("Native Block reconstruction E2E verifier", () => {
           "NBR70_BLOCKER_IDENTITY_MISMATCH",
         );
     }
+
+    const mismatch = { ...valid, caseBlockerColliderIds: [] };
+    expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosureForContext({
+        ...mismatch,
+        mode: "production-integrity",
+        diagnosticAuthority: "historical",
+      })).toEqual({ blockerColliderIds: [], strictDiagnosticCodes: [] });
+    expect(NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosureForContext({
+        ...mismatch,
+        mode: "production-integrity",
+        diagnosticAuthority: "terminal",
+      })).toEqual({
+        blockerColliderIds: [],
+        strictDiagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      });
+    expect(() => NATIVE_BLOCK_RECONSTRUCTION_E2E_TEST_HARNESS_V1
+      .verifyBlockerEvidenceClosureForContext({
+        ...mismatch,
+        mode: "strict-acceptance",
+        diagnosticAuthority: "historical",
+      })).toThrowError("NBR70_BLOCKER_IDENTITY_MISMATCH");
   });
 
   it("rejects contributed Case blockers without a dedicated scripted block check", () => {
@@ -1485,6 +1709,109 @@ describe("Native Block reconstruction E2E verifier", () => {
     }
   });
 
+  it("reports non-passing Evaluation as strict production diagnostics", async () => {
+    const fixture = await completeRunFixture({ evaluationPasses: false });
+    try {
+      await expect(verifyNativeBlockReconstructionProductionIntegrityV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+      })).resolves.toMatchObject({
+        outcome: "verified",
+        candidateKind: "run",
+        playability: { mode: "skipped" },
+        strictDiagnosticCodes: ["NBR70_EVALUATION_NOT_PASSED"],
+        entryValidation: {
+          kind: "worldkit-entry-third-person-validation",
+          status: "passed",
+          imageMeasurements: {
+            subjectCenterXRatio: 0.5,
+          },
+          runtimeMeasurements: {
+            cameraTargetEntityId: "player",
+          },
+        },
+        entryValidationHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      });
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        playability: Object.freeze({ mode: "skipped" }),
+      })).rejects.toThrowError("NBR70_CLEANUP_INCOMPLETE");
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the terminal #E85D5D pixel mask blocking in production integrity", async () => {
+    const fixture = await completeRunFixture({ entryPasses: false });
+    try {
+      const failure = await verifyNativeBlockReconstructionProductionIntegrityV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+      }).then(() => undefined, (error: unknown) => error);
+      expect(failure).toBeInstanceOf(
+        NativeBlockReconstructionVerificationClosedErrorV1,
+      );
+      expect(failure).toMatchObject({
+        diagnosticCodes: ["ENTRY_SUBJECT_NOT_CENTERED"],
+      });
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps missing Native Check evidence blocking in production integrity", async () => {
+    const fixture = await completeRunFixture();
+    await unlink(path.join(
+      fixture.runDirectoryPath,
+      "attempts/0/native-check-result.json",
+    ));
+    try {
+      const failure = await verifyNativeBlockReconstructionProductionIntegrityV1({
+        candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+      }).then(() => undefined, (error: unknown) => error);
+      expect(failure).toBeInstanceOf(
+        NativeBlockReconstructionVerificationClosedErrorV1,
+      );
+      expect(failure).toMatchObject({
+        diagnosticCodes: ["NBR70_REQUIRED_ARTIFACT_MISSING"],
+      });
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps successful Ground Analysis receipt deletion and forgery blocking", async () => {
+    for (const mutation of ["deleted", "forged"] as const) {
+      const fixture = await completeRunFixture();
+      const reportPath = path.join(
+        fixture.runDirectoryPath,
+        "attempts/0/ground-analysis-report.json",
+      );
+      if (mutation === "deleted") {
+        await unlink(reportPath);
+      } else {
+        const report = JSON.parse(await readFile(reportPath, "utf8"));
+        await writeJson(reportPath, {
+          ...report,
+          admissionOutcome: "failed",
+        });
+      }
+      try {
+        const failure = await verifyNativeBlockReconstructionProductionIntegrityV1({
+          candidate: { kind: "run", runDirectoryPath: fixture.runDirectoryPath },
+        }).then(() => undefined, (error: unknown) => error);
+        expect(failure).toBeInstanceOf(
+          NativeBlockReconstructionVerificationClosedErrorV1,
+        );
+        expect(failure).toMatchObject({
+          diagnosticCodes: [mutation === "deleted"
+            ? "NBR70_GROUND_ANALYSIS_ARTIFACT_MISSING"
+            : "NBR70_GROUND_ANALYSIS_EVIDENCE_INVALID"],
+        });
+      } finally {
+        await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+      }
+    }
+  });
+
   it("recomputes the evaluator result from measured Capture evidence", async () => {
     const fixture = await completeRunFixture({ forgePassedEvaluation: true });
     const playability = playabilityPort();
@@ -1544,6 +1871,25 @@ describe("Native Block reconstruction E2E verifier", () => {
         },
         playability: playability.port,
       })).rejects.toThrowError("NBR70_FINAL_ARTIFACT_MISMATCH");
+      expect(playability.launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(fixture.caseDirectoryPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps an explicitly invoked Final verifier strict after diagnostic-only publication", async () => {
+    const fixture = await completeRunFixture({ strictDiagnosticFails: true });
+    const finalDirectoryPath = await createFinalCandidate(fixture);
+    const playability = playabilityPort();
+    try {
+      await expect(verifyNativeBlockReconstructionE2EV1({
+        candidate: {
+          kind: "final",
+          runDirectoryPath: fixture.runDirectoryPath,
+          finalDirectoryPath,
+        },
+        playability: playability.port,
+      })).rejects.toThrowError("NBR70_FINAL_STRICT_DIAGNOSTIC_NOT_PASSED");
       expect(playability.launch).not.toHaveBeenCalled();
     } finally {
       await rm(fixture.caseDirectoryPath, { recursive: true, force: true });

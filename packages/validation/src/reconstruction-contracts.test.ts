@@ -8,10 +8,14 @@ import {
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionEvidenceSetV1,
+  parseWorldReconstructionProductionResultV1,
   parseWorldReconstructionRunReceiptV1,
+  parseWorldReconstructionStrictDiagnosticReceiptV1,
   worldReconstructionCaseCanonicalBytesV1,
   worldReconstructionDiagnosticCanonicalBytesV1,
   worldReconstructionEvidenceProfileClosureMatchesV1,
+  worldReconstructionProductionResultCanonicalBytesV1,
+  worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1,
 } from "./reconstruction-contracts.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
@@ -1009,6 +1013,9 @@ describe("world reconstruction contracts", () => {
           worldPackageBuildReceiptHash: H("b"),
           worldBuildIdentityRef: "artifact://case/cloud-temple/attempts/0/world-build-identity.json",
           worldBuildIdentityHash: H("c"),
+          groundAnalysisReportRef:
+            "artifact://case/cloud-temple/attempts/0/ground-analysis-report.json",
+          groundAnalysisReportHash: H("a"),
           captureReceiptRef: "artifact://case/cloud-temple/attempts/0/capture-receipt.json",
           captureReceiptHash: H("c"),
           evaluationResultRef: "artifact://case/cloud-temple/attempts/0/evaluation.json",
@@ -1032,6 +1039,9 @@ describe("world reconstruction contracts", () => {
           worldPackageBuildReceiptHash: H("4"),
           worldBuildIdentityRef: "artifact://case/cloud-temple/attempts/1/world-build-identity.json",
           worldBuildIdentityHash: H("5"),
+          groundAnalysisReportRef:
+            "artifact://case/cloud-temple/attempts/1/ground-analysis-report.json",
+          groundAnalysisReportHash: H("4"),
           captureReceiptRef: "artifact://case/cloud-temple/attempts/1/capture-receipt.json",
           captureReceiptHash: H("5"),
           evaluationResultRef: "artifact://case/cloud-temple/attempts/1/evaluation.json",
@@ -1047,6 +1057,14 @@ describe("world reconstruction contracts", () => {
     const run = parseWorldReconstructionRunReceiptV1(runValue);
     expect(run.attempts).toHaveLength(2);
     expect(run.finalAttemptIndex).toBe(1);
+    const {
+      groundAnalysisReportRef: _groundAnalysisReportRef,
+      ...missingSuccessfulGroundReport
+    } = runValue.attempts[0];
+    expect(() => parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      attempts: [missingSuccessfulGroundReport, runValue.attempts[1]],
+    })).toThrowError("WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID");
     const {
       captureReceiptRef: _captureReceiptRef,
       captureReceiptHash: _captureReceiptHash,
@@ -1192,6 +1210,138 @@ describe("world reconstruction contracts", () => {
       finalEvaluationResultRef: runValue.attempts[0].evaluationResultRef,
       finalEvaluationResultHash: runValue.attempts[0].evaluationResultHash,
     })).toThrowError("WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID");
+  });
+
+  it("keeps strict diagnostic failure independent and identity-bound", () => {
+    const failed = {
+      kind: "world-reconstruction-strict-diagnostic-receipt",
+      schemaVersion: 1,
+      id: "paper-moon-palace-054.run-20260904134439-41905.strict",
+      caseRef:
+        "artifact://world-reconstruction-case/paper-moon-palace-054/case.json",
+      caseHash: H("1"),
+      runReceiptRef:
+        "artifact://world-reconstruction-case/paper-moon-palace-054/runs/run-20260904134439-41905/run-receipt.json",
+      runReceiptHash: H("2"),
+      attemptIndex: 0,
+      worldPackageRef: `package://world-package/sha256/${"3".repeat(64)}`,
+      worldPackageRootHash: H("3"),
+      worldBuildIdentityHash: H("4"),
+      captureReceiptHash: H("5"),
+      evaluationResultHash: H("6"),
+      outcome: "failed",
+      diagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      cleanupOutcome: "not-started",
+    } as const;
+    const parsed = parseWorldReconstructionStrictDiagnosticReceiptV1(failed);
+    expect(parsed.outcome).toBe("failed");
+    expect(parsed.diagnosticCodes).toEqual([
+      "NBR70_BLOCKER_IDENTITY_MISMATCH",
+    ]);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(new TextDecoder().decode(
+      worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1(failed),
+    )).toContain('"outcome":"failed"');
+
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      diagnosticCodes: [],
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      outcome: "passed",
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      outcome: "not-run",
+      diagnosticCodes: [],
+      cleanupOutcome: "completed",
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      legacyPublicationGate: true,
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+  });
+
+  it("owns one closed production-result union for CLI and Studio", () => {
+    const artifactRoot =
+      "artifact://world-reconstruction-case/paper-moon-palace-054";
+    const published = {
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: "paper-moon-palace-054",
+      caseRef: `${artifactRoot}/case.json`,
+      runId: "run-20260904134439-41905",
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      evaluationOutcome: "failed",
+      strictDiagnosticOutcome: "failed",
+      strictDiagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      strictDiagnosticCleanupOutcome: "not-started",
+      cleanupOutcome: "completed",
+      attemptCount: 1,
+      finalWorldPackagePath: "/tmp/paper-moon/final/world-package",
+      finalWorldPackageRef: `package://world-package/sha256/${"3".repeat(64)}`,
+      finalWorldPackageRootHash: H("3"),
+      finalCaptureReceiptPath: "/tmp/paper-moon/final/capture/receipt.json",
+      finalCaptureReceiptHash: H("4"),
+      finalEvaluationPath: "/tmp/paper-moon/final/evaluation.json",
+      finalEvaluationHash: H("5"),
+      finalStrictDiagnosticPath: "/tmp/paper-moon/final/strict-diagnostic.json",
+      finalStrictDiagnosticRef: `${artifactRoot}/final/strict-diagnostic.json`,
+      finalStrictDiagnosticHash: H("6"),
+      finalEntryValidationPath: "/tmp/paper-moon/final/entry-third-person-validation.json",
+      finalEntryValidationRef:
+        `${artifactRoot}/final/entry-third-person-validation.json`,
+      finalEntryValidationHash: H("7"),
+      runReceiptPath: "/tmp/paper-moon/runs/run-20260904134439-41905/run-receipt.json",
+      runReceiptRef:
+        `${artifactRoot}/runs/run-20260904134439-41905/run-receipt.json`,
+      runReceiptHash: H("8"),
+      finalDirectoryPath: "/tmp/paper-moon/final",
+    } as const;
+    expect(parseWorldReconstructionProductionResultV1(published)).toMatchObject({
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      strictDiagnosticOutcome: "failed",
+    });
+    expect(new TextDecoder().decode(
+      worldReconstructionProductionResultCanonicalBytesV1(published),
+    )).toContain('"productionOutcome":"passed"');
+    expect(() => parseWorldReconstructionProductionResultV1({
+      ...published,
+      publicationStatus: "accepted",
+    })).toThrowError("WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID");
+    expect(() => parseWorldReconstructionProductionResultV1({
+      ...published,
+      strictDiagnosticCodes: [],
+    })).toThrowError("WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID");
+
+    const failed = {
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: "paper-moon-palace-054",
+      caseRef: `${artifactRoot}/case.json`,
+      runId: "run-20260904134439-41905",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+      runOutcome: "failed",
+      evaluationOutcome: "not-run",
+      strictDiagnosticOutcome: "not-run",
+      strictDiagnosticCodes: [],
+      strictDiagnosticCleanupOutcome: "not-started",
+      attemptCount: 1,
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_GROUND_ANALYSIS_FAILED"],
+      cleanupOutcome: "completed",
+    } as const;
+    expect(parseWorldReconstructionProductionResultV1(failed)).toMatchObject({
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+    });
+    expect(() => parseWorldReconstructionProductionResultV1({
+      ...failed,
+      productionOutcome: "passed",
+    })).toThrowError("WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID");
   });
 
   it("omits repairAction from non-repairable diagnostics and their canonical bytes", () => {

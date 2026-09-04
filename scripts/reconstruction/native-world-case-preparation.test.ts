@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 
+import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   hashWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionCaseV1,
@@ -13,9 +14,215 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   deriveNativeWorldBaselineProposalV1,
   prepareNativeWorldCaseV1,
+  type FrozenNativeWorldReferenceInputV1,
 } from "./native-world-case-preparation.js";
 
 const temporaryRoots: string[] = [];
+
+const BABYLON_NATIVE_VISUAL_IDENTITY_COLORS = Object.freeze([
+  "#E85D5D",
+  "#F28E2B",
+  "#D9A514",
+  "#4E79A7",
+  "#9C6ADE",
+] as const);
+
+function nativeVisualIdentityPaletteText(input: Readonly<{
+  sceneId: string;
+  sceneBriefHash: Sha256HashV1;
+  targetCount?: number;
+}>): string {
+  const targetCount = input.targetCount ?? 1;
+  return JSON.stringify({
+    kind: "worldkit-visual-identity-palette",
+    schemaVersion: 1,
+    sceneId: input.sceneId,
+    sceneBriefHash: input.sceneBriefHash,
+    movementMode: "ground-walk",
+    movementModeLabel: "陆地步行",
+    targets: BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.slice(0, targetCount).map(
+      (identityColor, index) => ({
+        id: `visual-target-${index + 1}`,
+        visualTargetId: `visual-target-${index + 1}`,
+        targetKind: index === 0 ? "subject" : "landmark",
+        name: index === 0 ? "Explorer" : `Landmark ${index}`,
+        description: index === 0
+          ? "controlled Subject"
+          : `landmark ${index}`,
+        role: index === 0
+          ? "primary-subject"
+          : index === 1 ? "primary-landmark" : "secondary-landmark",
+        semanticClassId: index === 0
+          ? "visual.subject"
+          : "visual.landmark",
+        identityColor,
+      }),
+    ),
+  });
+}
+
+function passedNativePlannerReceipt(input: Readonly<{
+  sceneId: string;
+  sceneBriefBytes: Uint8Array;
+  worldPlanBytes: Uint8Array;
+  entryWhiteboxTargetBytes: Uint8Array;
+}>): unknown {
+  return {
+    kind: "worldkit-planner-self-check",
+    schemaVersion: 1,
+    validatorVersion: "worldkit-planner-self-check-v4",
+    sceneId: input.sceneId,
+    sceneSourceKind: "babylon-native",
+    status: "passed",
+    inputs: {
+      sceneBriefHash: sha256Bytes(input.sceneBriefBytes),
+      worldPlanHash: sha256Bytes(input.worldPlanBytes),
+      entryWhiteboxTargetHash: sha256Bytes(input.entryWhiteboxTargetBytes),
+    },
+    imageMeasurements: {
+      widthPixels: 1600,
+      heightPixels: 900,
+      subjectMaskPixelCount: 32_000,
+      subjectCenterXRatio: 0.5,
+      subjectCenterErrorRatio: 0,
+      maximumCenterErrorRatio: 0.015,
+    },
+    nativeBlockPaletteMeasurements: {
+      worldPlan: plannerPaletteMeasurement([64, 64, 64, 0, 0]),
+      entryWhiteboxTarget: plannerPaletteMeasurement([32_000, 0, 0, 0, 0]),
+    },
+    nativeEntryIdentityMeasurements: {
+      widthPixels: 1600,
+      heightPixels: 900,
+      aspectRatio: 16 / 9,
+      aspectErrorRatio: 0,
+      requiredAspectRatio: 16 / 9,
+      maximumAspectErrorRatio: 0.02,
+      maximumIdentityRgbDistance: 40,
+      minimumIdentitySeparationRgbUnits: 12,
+      ambiguousIdentityPixelCount: 0,
+      candidateIdentityPixelCount: 32_000,
+      ambiguousIdentityRatio: 0,
+      maximumAmbiguousIdentityRatio: 0.05,
+      targets: [{
+        visualTargetId: "visual-target-1",
+        identityColorHex: "#E85D5D",
+        exclusivelyAdmittedPixelCount: 32_000,
+        imageCoverageRatio: 32_000 / (1600 * 900),
+        componentCount: 1,
+        coherentComponentCount: 1,
+        coherentPixelCount: 32_000,
+        coherentPixelRatio: 1,
+        largestComponentPixelCount: 32_000,
+        largestComponentImageCoverageRatio: 32_000 / (1600 * 900),
+        largestComponentBoundingBoxWidthPixels: 160,
+        largestComponentBoundingBoxHeightPixels: 320,
+        largestComponentBoundingBoxWidthRatio: 0.1,
+        largestComponentBoundingBoxHeightRatio: 320 / 900,
+        minimumPixelCount: 360,
+        minimumCoherentComponentPixelCount: 36,
+        minimumCoherentPixelRatio: 0.75,
+        minimumLargestComponentPixelCount: 1440,
+        minimumLargestComponentImageCoverageRatio: 0.001,
+        minimumLargestComponentBoundingBoxWidthRatio: 0.02,
+        minimumLargestComponentBoundingBoxHeightRatio: 0.04,
+      }],
+    },
+    diagnostics: [],
+  };
+}
+
+function plannerPaletteMeasurement(
+  visualTargetPixelCounts: readonly number[],
+): unknown {
+  return {
+    widthPixels: 1600,
+    heightPixels: 900,
+    aspectRatio: 16 / 9,
+    matchedBlockPixelCount: 72_000,
+    blockPaletteCoverageRatio: 72_000 / (1600 * 900),
+    traversablePixelCount: 64_000,
+    interactivePixelCount: 0,
+    blockPixelCountsBySemantic: {
+      walkable: 64_000,
+      obstacle: 0,
+      "interactive-solid": 0,
+      "interactive-trigger": 0,
+      water: 0,
+      "cloud-walkable": 0,
+      "cloud-passable": 0,
+      "visual-only": 0,
+      "landmark-red": 0,
+      "visual-target-2": 4_000,
+      "visual-target-3": 4_000,
+      "visual-target-4": 0,
+      "visual-target-5": 0,
+      "landmark-pink": 0,
+      "visual-target-1-subject": 32_000,
+    },
+    visualTargetPixelCounts,
+  };
+}
+
+async function prepareWithPassedPlannerReceipt(
+  input: Omit<Parameters<typeof prepareNativeWorldCaseV1>[0],
+    | "plannerSelfCheckPath"
+    | "uploadedReferenceInputs"
+    | "visualIdentityPalettePath"> & Readonly<{
+      referenceImagePaths: readonly string[];
+      visualIdentityPalettePath?: string;
+    }>,
+) {
+  const [sceneBriefBytes, worldPlanBytes, entryWhiteboxTargetBytes] =
+    await Promise.all([
+      readFile(input.sceneBriefPath),
+      readFile(input.planningImagePaths.worldPlanPath),
+      readFile(input.planningImagePaths.entryWhiteboxTargetPath),
+    ]);
+  const plannerSelfCheckPath = `${input.outputCaseRoot}.planner-self-check.json`;
+  await writeFile(plannerSelfCheckPath, JSON.stringify(passedNativePlannerReceipt({
+    sceneId: input.sceneId,
+    sceneBriefBytes,
+    worldPlanBytes,
+    entryWhiteboxTargetBytes,
+  })));
+  const visualIdentityPalettePath = input.visualIdentityPalettePath ??
+    `${input.outputCaseRoot}.visual-identity-palette.json`;
+  if (input.visualIdentityPalettePath === undefined) {
+    await writeFile(visualIdentityPalettePath, nativeVisualIdentityPaletteText({
+      sceneId: input.sceneId,
+      sceneBriefHash: sha256Bytes(sceneBriefBytes) as Sha256HashV1,
+    }));
+  }
+  const {
+    referenceImagePaths,
+    visualIdentityPalettePath: _providedVisualIdentityPalettePath,
+    ...caseInput
+  } = input;
+  return prepareNativeWorldCaseV1({
+    ...caseInput,
+    uploadedReferenceInputs: await frozenReferenceInputs(referenceImagePaths),
+    visualIdentityPalettePath,
+    plannerSelfCheckPath,
+  });
+}
+
+async function frozenReferenceInputs(
+  referenceImagePaths: readonly string[],
+): Promise<readonly FrozenNativeWorldReferenceInputV1[]> {
+  return Promise.all(referenceImagePaths.map(async (referenceImagePath, index) => {
+    const bytes = new Uint8Array(await readFile(referenceImagePath));
+    const mediaType = path.extname(referenceImagePath).toLowerCase() === ".png"
+      ? "image/png" as const
+      : "image/jpeg" as const;
+    return Object.freeze({
+      inputRef: `reference-${index}.${mediaType === "image/png" ? "png" : "jpg"}`,
+      contentHash: sha256Bytes(bytes) as FrozenNativeWorldReferenceInputV1["contentHash"],
+      mediaType,
+      bytes,
+    });
+  }));
+}
 
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) =>
@@ -27,6 +234,8 @@ describe("trusted Native world Case preparation", () => {
   it("derives a closed report-only baseline Case without a Mapper model task", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "native-world-baseline-"));
     temporaryRoots.push(root);
+    const briefText = "# Native World\n\nA complete playable block world.\n";
+    const sceneBriefHash = sha256Bytes(Buffer.from(briefText)) as Sha256HashV1;
     const palettePath = path.join(root, "visual-identity-palette.json");
     const entryPath = path.join(root, "entry-whitebox-target.png");
     await Promise.all([
@@ -34,7 +243,7 @@ describe("trusted Native world Case preparation", () => {
         kind: "worldkit-visual-identity-palette",
         schemaVersion: 1,
         sceneId: "baseline-native-world",
-        sceneBriefHash: `sha256:${"a".repeat(64)}`,
+        sceneBriefHash,
         movementMode: "ground-walk",
         movementModeLabel: "陆地步行",
         targets: [{
@@ -67,6 +276,17 @@ describe("trusted Native world Case preparation", () => {
       }).composite([{
         input: {
           create: {
+            width: 10,
+            height: 20,
+            channels: 4,
+            background: { r: 232, g: 93, b: 93, alpha: 1 },
+          },
+        },
+        left: 45,
+        top: 70,
+      }, {
+        input: {
+          create: {
             width: 20,
             height: 20,
             channels: 4,
@@ -80,6 +300,7 @@ describe("trusted Native world Case preparation", () => {
 
     const proposal = await deriveNativeWorldBaselineProposalV1({
       sceneId: "baseline-native-world",
+      sceneBriefHash,
       visualIdentityPalettePath: palettePath,
       entryWhiteboxTargetPath: entryPath,
     }) as {
@@ -172,9 +393,9 @@ describe("trusted Native world Case preparation", () => {
     const outputCaseRoot = path.join(root, "prepared-case");
     await Promise.all([
       writeFile(proposalPath, JSON.stringify(proposal)),
-      writeFile(briefPath, "# Native World\n\nA complete playable block world.\n"),
+      writeFile(briefPath, briefText),
     ]);
-    const prepared = await prepareNativeWorldCaseV1({
+    const prepared = await prepareWithPassedPlannerReceipt({
       repositoryRoot: process.cwd(),
       sceneId: "baseline-native-world",
       proposalPath,
@@ -184,6 +405,7 @@ describe("trusted Native world Case preparation", () => {
         worldPlanPath: entryPath,
         entryWhiteboxTargetPath: entryPath,
       },
+      visualIdentityPalettePath: palettePath,
       outputCaseRoot,
     });
     const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(
@@ -248,6 +470,61 @@ describe("trusted Native world Case preparation", () => {
         maximumDriftBasisPoints: 1000,
       },
     ]);
+
+    const [sceneBriefBytes, worldPlanBytes, entryWhiteboxTargetBytes] =
+      await Promise.all([
+        readFile(briefPath),
+        readFile(entryPath),
+        readFile(entryPath),
+      ]);
+    const plannerReceipt = passedNativePlannerReceipt({
+      sceneId: "baseline-native-world",
+      sceneBriefBytes,
+      worldPlanBytes,
+      entryWhiteboxTargetBytes,
+    }) as Record<string, unknown>;
+    const staleReceiptPath = path.join(root, "stale-planner-self-check.json");
+    await writeFile(staleReceiptPath, JSON.stringify({
+      ...plannerReceipt,
+      inputs: {
+        ...(plannerReceipt.inputs as Record<string, unknown>),
+        worldPlanHash: `sha256:${"0".repeat(64)}`,
+      },
+    }));
+    await expect(prepareNativeWorldCaseV1({
+      repositoryRoot: process.cwd(),
+      sceneId: "baseline-native-world",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      uploadedReferenceInputs: await frozenReferenceInputs([entryPath]),
+      planningImagePaths: {
+        worldPlanPath: entryPath,
+        entryWhiteboxTargetPath: entryPath,
+      },
+      visualIdentityPalettePath: palettePath,
+      plannerSelfCheckPath: staleReceiptPath,
+      outputCaseRoot: path.join(root, "stale-prepared-case"),
+    })).rejects.toThrow("NATIVE_WORLD_PLANNER_RECEIPT_INPUT_MISMATCH");
+
+    const openReceiptPath = path.join(root, "open-planner-self-check.json");
+    await writeFile(openReceiptPath, JSON.stringify({
+      ...plannerReceipt,
+      legacyStatus: "passed",
+    }));
+    await expect(prepareNativeWorldCaseV1({
+      repositoryRoot: process.cwd(),
+      sceneId: "baseline-native-world",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      uploadedReferenceInputs: await frozenReferenceInputs([entryPath]),
+      planningImagePaths: {
+        worldPlanPath: entryPath,
+        entryWhiteboxTargetPath: entryPath,
+      },
+      visualIdentityPalettePath: palettePath,
+      plannerSelfCheckPath: openReceiptPath,
+      outputCaseRoot: path.join(root, "open-prepared-case"),
+    })).rejects.toThrow("NATIVE_WORLD_PLANNER_RECEIPT_INVALID");
   });
 
   it("rejects a pass check whose acceptance target is only a blocker", async () => {
@@ -283,7 +560,7 @@ describe("trusted Native world Case preparation", () => {
       })),
     ]);
 
-    await expect(prepareNativeWorldCaseV1({
+    await expect(prepareWithPassedPlannerReceipt({
       repositoryRoot: process.cwd(),
       sceneId: "invalid-native-pass-target",
       proposalPath,
@@ -338,7 +615,7 @@ describe("trusted Native world Case preparation", () => {
       })),
     ]);
 
-    await expect(prepareNativeWorldCaseV1({
+    await expect(prepareWithPassedPlannerReceipt({
       repositoryRoot: process.cwd(),
       sceneId: "invalid-native-ground-connectivity",
       proposalPath,
@@ -382,7 +659,7 @@ describe("trusted Native world Case preparation", () => {
       })),
     ]);
 
-    await expect(prepareNativeWorldCaseV1({
+    await expect(prepareWithPassedPlannerReceipt({
       repositoryRoot: process.cwd(),
       sceneId: "invalid-native-world-bounds",
       proposalPath,
@@ -431,7 +708,7 @@ describe("trusted Native world Case preparation", () => {
       })),
     ]);
 
-    await expect(prepareNativeWorldCaseV1({
+    await expect(prepareWithPassedPlannerReceipt({
       repositoryRoot: process.cwd(),
       sceneId: "invalid-native-collider-identity",
       proposalPath,
@@ -476,7 +753,7 @@ describe("trusted Native world Case preparation", () => {
       })),
     ]);
 
-    const prepared = await prepareNativeWorldCaseV1({
+    const prepared = await prepareWithPassedPlannerReceipt({
       repositoryRoot: process.cwd(),
       sceneId: "prepared-native-world",
       proposalPath,
@@ -502,7 +779,9 @@ describe("trusted Native world Case preparation", () => {
     expect(reconstructionCase.referenceInputs.map(({ inputRef }) => inputRef))
       .toEqual([
         "entry-whitebox-target.png",
+        "planner-self-check.json",
         "reference-0.png",
+        "visual-identity-palette.json",
         "world-plan.png",
       ]);
     expect(profile.qualityGateMode).toBe("report-only");
@@ -514,10 +793,275 @@ describe("trusted Native world Case preparation", () => {
       path.join(outputCaseRoot, "inputs", "entry-whitebox-target.png"),
       "utf8",
     )).resolves.toBe("reference-bytes");
+    const uploadedReferenceBytes = Buffer.from("reference-bytes");
+    expect(reconstructionCase.referenceInputs.find(
+      ({ inputRef }) => inputRef === "reference-0.png",
+    )).toEqual({
+      inputRef: "reference-0.png",
+      contentHash: sha256Bytes(uploadedReferenceBytes),
+      mediaType: "image/png",
+    });
+    await expect(readFile(path.join(
+      outputCaseRoot,
+      "inputs",
+      "reference-0.png",
+    ))).resolves.toEqual(uploadedReferenceBytes);
+    const plannerReceiptBytes = await readFile(
+      path.join(outputCaseRoot, "inputs", "planner-self-check.json"),
+    );
+    expect(reconstructionCase.referenceInputs.find(
+      ({ inputRef }) => inputRef === "planner-self-check.json",
+    )).toEqual({
+      inputRef: "planner-self-check.json",
+      contentHash: sha256Bytes(plannerReceiptBytes),
+      mediaType: "application/json",
+    });
+    await expect(readFile(path.join(outputCaseRoot, "planner-self-check.json")))
+      .resolves.toEqual(plannerReceiptBytes);
+    const paletteBytes = await readFile(path.join(
+      outputCaseRoot,
+      "inputs",
+      "visual-identity-palette.json",
+    ));
+    expect(reconstructionCase.referenceInputs.find(
+      ({ inputRef }) => inputRef === "visual-identity-palette.json",
+    )).toEqual({
+      inputRef: "visual-identity-palette.json",
+      contentHash: sha256Bytes(paletteBytes),
+      mediaType: "application/json",
+    });
     expect(reconstructionCase.requiredEvidenceProfileRefs).toHaveLength(7);
     expect(await readFile(
       path.join(outputCaseRoot, "inputs", "builder-skill", "SKILL.md"),
       "utf8",
     )).toContain("WorldKit Native Block Builder");
+    const [preparedRenderer, liveRenderer] = await Promise.all([
+      readFile(path.join(
+        outputCaseRoot,
+        "inputs",
+        "builder-skill",
+        "scripts",
+        "render-visual-review.mjs",
+      )),
+      readFile(path.resolve(
+        ".codex/skills/worldkit-native-block-builder/scripts/render-visual-review.mjs",
+      )),
+    ]);
+    expect(preparedRenderer.equals(liveRenderer)).toBe(true);
+    const taskInstruction = await readFile(path.join(
+      outputCaseRoot,
+      "inputs",
+      "task-instruction.md",
+    ), "utf8");
+    expect(taskInstruction).toContain("two Host-declared advisory comparison PNGs");
+    expect(taskInstruction).toContain("actually open both comparison PNGs");
+    expect(taskInstruction).toContain("never author a review manifest or second geometry list");
+    expect(taskInstruction).toContain(
+      "A palette target without a Case visual group is not authorization",
+    );
+
+    await expect(prepareNativeWorldCaseV1({
+      repositoryRoot: process.cwd(),
+      sceneId: "prepared-native-world",
+      proposalPath,
+      sceneBriefPath: briefPath,
+      uploadedReferenceInputs: [{
+        inputRef: "reference-0.png",
+        contentHash: sha256Bytes(Buffer.from("different-reference-bytes")) as
+          FrozenNativeWorldReferenceInputV1["contentHash"],
+        mediaType: "image/png",
+        bytes: uploadedReferenceBytes,
+      }],
+      planningImagePaths: {
+        worldPlanPath: referencePath,
+        entryWhiteboxTargetPath: referencePath,
+      },
+      visualIdentityPalettePath:
+        `${outputCaseRoot}.visual-identity-palette.json`,
+      plannerSelfCheckPath: `${outputCaseRoot}.planner-self-check.json`,
+      outputCaseRoot: path.join(root, "mismatched-reference-case"),
+    })).rejects.toThrow("NATIVE_WORLD_REFERENCE_INPUT_IDENTITY_MISMATCH");
+  });
+
+  it("omits a missing non-subject mask instead of rejecting old success or inventing bounds", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-mask-"));
+    temporaryRoots.push(root);
+    const sceneBriefHash = sha256Bytes(
+      Buffer.from("missing-native-mask-brief"),
+    ) as Sha256HashV1;
+    const palettePath = path.join(root, "visual-identity-palette.json");
+    const entryPath = path.join(root, "entry-whitebox-target.png");
+    await Promise.all([
+      writeFile(palettePath, JSON.stringify({
+        kind: "worldkit-visual-identity-palette",
+        schemaVersion: 1,
+        sceneId: "missing-native-mask",
+        sceneBriefHash,
+        movementMode: "ground-walk",
+        movementModeLabel: "陆地步行",
+        targets: [{
+          id: "visual-target-1",
+          visualTargetId: "visual-target-1",
+          targetKind: "subject",
+          name: "Explorer",
+          description: "controlled Subject",
+          role: "primary-subject",
+          semanticClassId: "visual.subject",
+          identityColor: "#E85D5D",
+        }, {
+          id: "visual-target-2",
+          visualTargetId: "visual-target-2",
+          targetKind: "landmark",
+          name: "Remote landmark",
+          description: "occluded remote landmark",
+          role: "primary-landmark",
+          semanticClassId: "visual.landmark",
+          identityColor: "#F28E2B",
+        }],
+      })),
+      sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 4,
+          background: { r: 220, g: 220, b: 220, alpha: 1 },
+        },
+      }).composite([{
+        input: {
+          create: {
+            width: 10,
+            height: 20,
+            channels: 4,
+            background: { r: 232, g: 93, b: 93, alpha: 1 },
+          },
+        },
+        left: 45,
+        top: 70,
+      }]).png().toFile(entryPath),
+    ]);
+
+    const proposal = await deriveNativeWorldBaselineProposalV1({
+      sceneId: "missing-native-mask",
+      sceneBriefHash,
+      visualIdentityPalettePath: palettePath,
+      entryWhiteboxTargetPath: entryPath,
+    }) as {
+      expected: {
+        semanticSilhouetteTargets: readonly {
+          acceptanceTargetRef: string;
+        }[];
+      };
+    };
+    expect(proposal.expected.semanticSilhouetteTargets.map(
+      ({ acceptanceTargetRef }) => acceptanceTargetRef,
+    )).toEqual([
+      "worldkit://acceptance-target/entry-ground@1",
+      "worldkit://acceptance-target/remote-ground@1",
+    ]);
+  });
+
+  it("accepts historical Native target-3 yellow and rejects the Canonical target-3 purple", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-palette-profile-"));
+    temporaryRoots.push(root);
+    const sceneBriefHash = sha256Bytes(
+      Buffer.from("native-palette-profile-brief"),
+    ) as Sha256HashV1;
+    const palettePath = path.join(root, "visual-identity-palette.json");
+    const entryPath = path.join(root, "entry-whitebox-target.png");
+    const palette = {
+      kind: "worldkit-visual-identity-palette",
+      schemaVersion: 1,
+      sceneId: "native-palette-profile",
+      sceneBriefHash,
+      movementMode: "ground-walk",
+      movementModeLabel: "陆地步行",
+      targets: [{
+        id: "visual-target-1",
+        visualTargetId: "visual-target-1",
+        targetKind: "subject",
+        name: "Explorer",
+        description: "controlled Subject",
+        role: "primary-subject",
+        semanticClassId: "visual.subject",
+        identityColor: "#E85D5D",
+      }, {
+        id: "visual-target-2",
+        visualTargetId: "visual-target-2",
+        targetKind: "landmark",
+        name: "Gate",
+        description: "primary gate",
+        role: "primary-landmark",
+        semanticClassId: "visual.landmark",
+        identityColor: "#F28E2B",
+      }, {
+        id: "visual-target-3",
+        visualTargetId: "visual-target-3",
+        targetKind: "landmark",
+        name: "Moon",
+        description: "remote moon",
+        role: "secondary-landmark",
+        semanticClassId: "visual.landmark",
+        identityColor: "#D9A514",
+      }],
+    };
+    await Promise.all([
+      writeFile(palettePath, JSON.stringify(palette)),
+      sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 4,
+          background: { r: 220, g: 220, b: 220, alpha: 1 },
+        },
+      }).composite([{
+        input: { create: {
+          width: 10,
+          height: 20,
+          channels: 4,
+          background: { r: 232, g: 93, b: 93, alpha: 1 },
+        } },
+        left: 45,
+        top: 70,
+      }, {
+        input: { create: {
+          width: 10,
+          height: 10,
+          channels: 4,
+          background: { r: 242, g: 142, b: 43, alpha: 1 },
+        } },
+        left: 20,
+        top: 30,
+      }, {
+        input: { create: {
+          width: 10,
+          height: 10,
+          channels: 4,
+          background: { r: 217, g: 165, b: 20, alpha: 1 },
+        } },
+        left: 70,
+        top: 30,
+      }]).png().toFile(entryPath),
+    ]);
+
+    const nativeProposal = await deriveNativeWorldBaselineProposalV1({
+      sceneId: "native-palette-profile",
+      sceneBriefHash,
+      visualIdentityPalettePath: palettePath,
+      entryWhiteboxTargetPath: entryPath,
+    }) as { expected: { semanticSilhouetteTargets: readonly {
+      acceptanceTargetRef: string;
+    }[] } };
+    expect(nativeProposal.expected.semanticSilhouetteTargets.map(
+      ({ acceptanceTargetRef }) => acceptanceTargetRef,
+    )).toContain("worldkit://acceptance-target/visual-target-3@1");
+
+    palette.targets[2]!.identityColor = "#8E6CCF";
+    await writeFile(palettePath, JSON.stringify(palette));
+    await expect(deriveNativeWorldBaselineProposalV1({
+      sceneId: "native-palette-profile",
+      sceneBriefHash,
+      visualIdentityPalettePath: palettePath,
+      entryWhiteboxTargetPath: entryPath,
+    })).rejects.toThrow("WORLDKIT_VISUAL_IDENTITY_PALETTE_INVALID");
   });
 });

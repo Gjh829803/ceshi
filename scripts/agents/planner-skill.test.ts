@@ -26,9 +26,12 @@ describe("Unified WorldKit Planner skill", () => {
   });
 
   it("routes Planner creation and in-job self-repair through the dedicated skill", async () => {
-    const [launcher, skill, router, cloudRunner, localRunner] = await Promise.all([
+    const [launcher, skill, blockImageContract, router, cloudRunner, localRunner] = await Promise.all([
       readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8"),
       readFile(path.resolve(".codex/skills/worldkit-spatial-planner/SKILL.md"), "utf8"),
+      readFile(path.resolve(
+        ".codex/skills/worldkit-spatial-planner/references/block-whitebox-images.md",
+      ), "utf8"),
       readFile(path.resolve("scripts/agents/run-codex-task.mjs"), "utf8"),
       readFile(path.resolve("scripts/agents/run-lwdp-codex-task.mjs"), "utf8"),
       readFile(path.resolve("scripts/agents/run-local-codex-task.mjs"), "utf8"),
@@ -53,7 +56,7 @@ describe("Unified WorldKit Planner skill", () => {
     expect(skill).toContain("Babylon Native Source");
     expect(skill).toContain("must not create Height Intent");
     expect(skill).toContain("built-in image generation tool");
-    expect(skill).toContain("The image contains only three information layers");
+    expect(skill).toContain("the image contains only three information layers");
     expect(skill).toContain("initial-subject marker");
     expect(skill).toContain("traversable domain");
     expect(skill).toContain("Remove every other overlay or annotation");
@@ -70,7 +73,36 @@ describe("Unified WorldKit Planner skill", () => {
     expect(skill).toContain("encoding-style-only");
     expect(skill).toContain("world-plan.png owns orientation and complete-world extent");
     expect(skill).toContain("Never copy the reference image's time of day");
+    expect(skill).toContain("Babylon Native causal image sequence");
+    expect(skill).toContain("actually open and inspect that exact PNG");
+    expect(skill).toContain("exact accepted entry PNG as an image input");
+    expect(skill).toContain("the existing World Plan is stale");
+    expect(skill).toMatch(/Rerunning the\s+checker alone cannot make a stale World Plan current/);
+    expect(skill).toContain("references/block-whitebox-images.md");
+    expect(skill).toContain("Block palette coverage is at least 2%");
+    expect(skill).toContain("Non-subject scale");
+    expect(skill).toContain("They never fail Planner status");
+    expect(skill).toContain("opening-absent non-subject remains valid");
+    expect(skill).toContain("16:9");
+    expect(blockImageContract).toContain("#B7E4C7");
+    expect(blockImageContract).toContain("#E85D5D");
+    expect(skill).toContain("#8E6CCF");
+    expect(skill).toContain("#D9A514");
+    expect(skill).toContain("These profiles are not interchangeable");
+    expect(blockImageContract).toContain("#D9A514");
+    expect(blockImageContract).not.toContain("#8E6CCF");
+    expect(blockImageContract).toContain("at least 3% of the image");
+    expect(blockImageContract).toContain("0.005% of the image");
+    expect(blockImageContract).toContain("advisory Builder feedback only");
+    expect(blockImageContract).toContain("never create Runtime, Physics, Collider");
     expect(plannerPrompt).toContain("same bright neutral clear daytime inspection lighting");
+    expect(launcher).toContain("finish the Brief first, read the Babylon Native block-whitebox image contract");
+    expect(launcher).toContain("exact accepted entry PNG as an image input");
+    expect(launcher).toContain("entry edit makes the existing World Plan stale");
+    expect(launcher).toContain("World Plan Block palette coverage at least 3%");
+    expect(launcher).toContain("each selected target at least max(32 pixels, 0.005%)");
+    expect(launcher).toContain("Non-subject entry scale, coherence, and ambiguity are advisory measurements only");
+    expect(launcher).toContain("may make a non-subject small, fragmented, or absent");
     expect(launcher).toContain("scripts/visual/write-visual-identity-palette.ts");
     expect(launcher).toContain("worldkit-spatial-planner/scripts/self-check.mjs");
     expect(launcher).toContain("planner-self-check.json");

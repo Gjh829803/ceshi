@@ -706,6 +706,8 @@ export type WorldReconstructionEvaluatedRunAttemptV1 = Readonly<{
   worldPackageBuildReceiptHash: Sha256HashV1;
   worldBuildIdentityRef: string;
   worldBuildIdentityHash: Sha256HashV1;
+  groundAnalysisReportRef: string;
+  groundAnalysisReportHash: Sha256HashV1;
   captureReceiptRef: string;
   captureReceiptHash: Sha256HashV1;
   evaluationResultRef: string;
@@ -730,6 +732,8 @@ export type WorldReconstructionCaptureRejectedRunAttemptV1 = Readonly<{
   worldPackageBuildReceiptHash: Sha256HashV1;
   worldBuildIdentityRef: string;
   worldBuildIdentityHash: Sha256HashV1;
+  groundAnalysisReportRef: string;
+  groundAnalysisReportHash: Sha256HashV1;
   openingGateResultRef: string;
   openingGateResultHash: Sha256HashV1;
   outcome: "failed";
@@ -794,6 +798,86 @@ export interface WorldReconstructionRunReceiptV1 {
   readonly cleanupOutcome: "completed" | "failed";
 }
 
+export type WorldReconstructionStrictDiagnosticOutcomeV1 =
+  | "passed"
+  | "failed"
+  | "incomplete"
+  | "not-run";
+
+export interface WorldReconstructionStrictDiagnosticReceiptV1 {
+  readonly kind: "world-reconstruction-strict-diagnostic-receipt";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
+  readonly caseHash: Sha256HashV1;
+  readonly runReceiptRef: string;
+  readonly runReceiptHash: Sha256HashV1;
+  readonly attemptIndex: WorldReconstructionAttemptIndexV1;
+  readonly worldPackageRef: string;
+  readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
+  readonly captureReceiptHash: Sha256HashV1;
+  readonly evaluationResultHash: Sha256HashV1;
+  readonly outcome: WorldReconstructionStrictDiagnosticOutcomeV1;
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed" | "not-started";
+}
+
+interface WorldReconstructionProductionIdentityV1 {
+  readonly kind: "world-reconstruction-production-result";
+  readonly schemaVersion: 1;
+  readonly caseId: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
+  readonly runId: string;
+}
+
+export interface WorldReconstructionProductionPublishedResultV1
+  extends WorldReconstructionProductionIdentityV1 {
+  readonly productionOutcome: "passed";
+  readonly publicationOutcome: "published";
+  readonly evaluationOutcome: WorldReconstructionOutcomeV1;
+  readonly strictDiagnosticOutcome: WorldReconstructionStrictDiagnosticOutcomeV1;
+  readonly strictDiagnosticCodes: readonly string[];
+  readonly strictDiagnosticCleanupOutcome: "completed" | "failed" | "not-started";
+  readonly cleanupOutcome: "completed";
+  readonly attemptCount: 1 | 2 | 3 | 4;
+  readonly finalWorldPackagePath: string;
+  readonly finalWorldPackageRef: string;
+  readonly finalWorldPackageRootHash: Sha256HashV1;
+  readonly finalCaptureReceiptPath: string;
+  readonly finalCaptureReceiptHash: Sha256HashV1;
+  readonly finalEvaluationPath: string;
+  readonly finalEvaluationHash: Sha256HashV1;
+  readonly finalStrictDiagnosticPath: string;
+  readonly finalStrictDiagnosticRef: string;
+  readonly finalStrictDiagnosticHash: Sha256HashV1;
+  readonly finalEntryValidationPath: string;
+  readonly finalEntryValidationRef: string;
+  readonly finalEntryValidationHash: Sha256HashV1;
+  readonly runReceiptPath: string;
+  readonly runReceiptRef: string;
+  readonly runReceiptHash: Sha256HashV1;
+  readonly finalDirectoryPath: string;
+}
+
+export interface WorldReconstructionProductionFailedResultV1
+  extends WorldReconstructionProductionIdentityV1 {
+  readonly productionOutcome: "failed";
+  readonly publicationOutcome: "not-published";
+  readonly runOutcome: WorldReconstructionOutcomeV1 | "not-run";
+  readonly evaluationOutcome: WorldReconstructionOutcomeV1 | "not-run";
+  readonly strictDiagnosticOutcome: WorldReconstructionStrictDiagnosticOutcomeV1;
+  readonly strictDiagnosticCodes: readonly string[];
+  readonly strictDiagnosticCleanupOutcome: "completed" | "failed" | "not-started";
+  readonly attemptCount: 0 | 1 | 2 | 3 | 4;
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed" | "not-started" | "unknown";
+}
+
+export type WorldReconstructionProductionResultV1 =
+  | WorldReconstructionProductionPublishedResultV1
+  | WorldReconstructionProductionFailedResultV1;
+
 export function getWorldReconstructionFinalEvaluatedAttemptV1(
   receipt: WorldReconstructionRunReceiptV1,
 ): WorldReconstructionEvaluatedRunAttemptV1 {
@@ -853,12 +937,42 @@ const RUN_FIELDS = [
   "evaluationProfileHash", "outcome", "diagnosticCodes", "attempts", "finalAttemptIndex",
   "finalEvaluationResultRef", "finalEvaluationResultHash", "cleanupOutcome",
 ] as const;
+const STRICT_DIAGNOSTIC_FIELDS = [
+  "kind", "schemaVersion", "id", "caseRef", "caseHash", "runReceiptRef",
+  "runReceiptHash", "attemptIndex", "worldPackageRef", "worldPackageRootHash",
+  "worldBuildIdentityHash", "captureReceiptHash", "evaluationResultHash",
+  "outcome", "diagnosticCodes", "cleanupOutcome",
+] as const;
+const PRODUCTION_RESULT_COMMON_FIELDS = [
+  "kind", "schemaVersion", "caseId", "caseRef", "runId",
+  "productionOutcome", "publicationOutcome",
+] as const;
+const PRODUCTION_RESULT_PUBLISHED_FIELDS = [
+  ...PRODUCTION_RESULT_COMMON_FIELDS, "evaluationOutcome",
+  "strictDiagnosticOutcome", "strictDiagnosticCodes",
+  "strictDiagnosticCleanupOutcome", "cleanupOutcome", "attemptCount",
+  "finalWorldPackagePath", "finalWorldPackageRef", "finalWorldPackageRootHash",
+  "finalCaptureReceiptPath", "finalCaptureReceiptHash", "finalEvaluationPath",
+  "finalEvaluationHash", "finalStrictDiagnosticPath",
+  "finalStrictDiagnosticRef", "finalStrictDiagnosticHash",
+  "finalEntryValidationPath", "finalEntryValidationRef",
+  "finalEntryValidationHash", "runReceiptPath", "runReceiptRef",
+  "runReceiptHash", "finalDirectoryPath",
+] as const;
+const PRODUCTION_RESULT_FAILED_FIELDS = [
+  ...PRODUCTION_RESULT_COMMON_FIELDS, "runOutcome", "evaluationOutcome",
+  "strictDiagnosticOutcome", "strictDiagnosticCodes",
+  "strictDiagnosticCleanupOutcome", "attemptCount", "diagnosticCodes",
+  "cleanupOutcome",
+] as const;
+const PRODUCTION_DIAGNOSTIC_CODE_PATTERN = /^[A-Z][A-Z0-9_]{4,}$/;
 const RUN_ATTEMPT_FIELDS = [
   "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
   "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
   "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash", "worldBuildIdentityRef", "worldBuildIdentityHash",
+  "groundAnalysisReportRef", "groundAnalysisReportHash",
   "captureReceiptRef", "captureReceiptHash", "evaluationResultRef",
   "evaluationResultHash", "outcome",
 ] as const;
@@ -868,7 +982,8 @@ const RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS = [
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
   "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash",
-  "worldBuildIdentityRef", "worldBuildIdentityHash", "openingGateResultRef",
+  "worldBuildIdentityRef", "worldBuildIdentityHash",
+  "groundAnalysisReportRef", "groundAnalysisReportHash", "openingGateResultRef",
   "openingGateResultHash", "outcome",
 ] as const;
 const RUN_REJECTED_GROUND_ANALYSIS_ATTEMPT_FIELDS = [
@@ -992,6 +1107,19 @@ function sortedStrings(value: unknown, contract: string, path: string, allowEmpt
     fail(contract, path, "must be unique and strictly sorted");
   }
   return Object.freeze(parsed);
+}
+
+function sortedDiagnosticCodes(
+  value: unknown,
+  contract: string,
+  path: string,
+  allowEmpty = false,
+): readonly string[] {
+  const parsed = sortedStrings(value, contract, path, allowEmpty);
+  if (parsed.some((code) => !PRODUCTION_DIAGNOSTIC_CODE_PATTERN.test(code))) {
+    fail(contract, path, "must contain only stable diagnostic codes");
+  }
+  return parsed;
 }
 
 function uniqueStrings(value: unknown, contract: string, path: string): readonly string[] {
@@ -2237,6 +2365,8 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       worldPackageBuildReceiptHash: hash(row.worldPackageBuildReceiptHash, contract, `${path}/worldPackageBuildReceiptHash`),
       worldBuildIdentityRef: text(row.worldBuildIdentityRef, contract, `${path}/worldBuildIdentityRef`),
       worldBuildIdentityHash: hash(row.worldBuildIdentityHash, contract, `${path}/worldBuildIdentityHash`),
+      groundAnalysisReportRef: text(row.groundAnalysisReportRef, contract, `${path}/groundAnalysisReportRef`),
+      groundAnalysisReportHash: hash(row.groundAnalysisReportHash, contract, `${path}/groundAnalysisReportHash`),
     };
     if (attemptKind === "capture-rejected") {
       if (row.outcome !== "failed") {
@@ -2273,6 +2403,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
           ? [attempt.authoredSourceRef, attempt.nativeCheckResultRef]
         : [
             attempt.worldPackageRef,
+            attempt.groundAnalysisReportRef,
             ...(attempt.kind === "evaluated"
               ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
               : [attempt.openingGateResultRef]),
@@ -2289,6 +2420,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
             attempt.worldPackageRootHash,
             attempt.worldPackageBuildReceiptHash,
             attempt.worldBuildIdentityHash,
+            attempt.groundAnalysisReportHash,
             ...(attempt.kind === "evaluated"
               ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
               : [attempt.openingGateResultHash]),
@@ -2319,6 +2451,347 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   return freeze({ kind: "world-reconstruction-run-receipt", schemaVersion: 1, id: text(source.id, contract, "id"), caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"), outcome, diagnosticCodes, attempts: Object.freeze(attempts), finalAttemptIndex, finalEvaluationResultRef, finalEvaluationResultHash, cleanupOutcome });
 }
 
+export function parseWorldReconstructionStrictDiagnosticReceiptV1(
+  value: unknown,
+): WorldReconstructionStrictDiagnosticReceiptV1 {
+  const contract = "WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID";
+  const source = begin(value, contract, STRICT_DIAGNOSTIC_FIELDS);
+  if (source.kind !== "world-reconstruction-strict-diagnostic-receipt") {
+    fail(contract, "kind", "unexpected kind");
+  }
+  exactInteger(source.schemaVersion, 1, contract, "schemaVersion");
+  const worldPackageRootHash = hash(
+    source.worldPackageRootHash,
+    contract,
+    "worldPackageRootHash",
+  );
+  const outcome = enumValue(
+    source.outcome,
+    ["passed", "failed", "incomplete", "not-run"] as const,
+    contract,
+    "outcome",
+  );
+  const diagnosticCodes = sortedStrings(
+    source.diagnosticCodes,
+    contract,
+    "diagnosticCodes",
+    outcome === "passed" || outcome === "not-run",
+  );
+  if (
+    (outcome === "passed" || outcome === "not-run") !==
+      (diagnosticCodes.length === 0)
+  ) {
+    fail(
+      contract,
+      "diagnosticCodes",
+      "must be empty exactly when the strict diagnostic passed or did not run",
+    );
+  }
+  const cleanupOutcome = enumValue(
+    source.cleanupOutcome,
+    ["completed", "failed", "not-started"] as const,
+    contract,
+    "cleanupOutcome",
+  );
+  if (outcome === "not-run" && cleanupOutcome !== "not-started") {
+    fail(contract, "cleanupOutcome", "a diagnostic that did not run has no cleanup");
+  }
+  if (outcome === "passed" && cleanupOutcome === "failed") {
+    fail(contract, "cleanupOutcome", "a passed diagnostic cannot have failed cleanup");
+  }
+  return freeze({
+    kind: "world-reconstruction-strict-diagnostic-receipt",
+    schemaVersion: 1,
+    id: text(source.id, contract, "id"),
+    caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef),
+    caseHash: hash(source.caseHash, contract, "caseHash"),
+    runReceiptRef: text(source.runReceiptRef, contract, "runReceiptRef"),
+    runReceiptHash: hash(source.runReceiptHash, contract, "runReceiptHash"),
+    attemptIndex: integer(
+      source.attemptIndex,
+      0,
+      3,
+      contract,
+      "attemptIndex",
+    ) as WorldReconstructionAttemptIndexV1,
+    worldPackageRef: formalWorldPackageRef(
+      source.worldPackageRef,
+      worldPackageRootHash,
+      contract,
+      "worldPackageRef",
+    ),
+    worldPackageRootHash,
+    worldBuildIdentityHash: hash(
+      source.worldBuildIdentityHash,
+      contract,
+      "worldBuildIdentityHash",
+    ),
+    captureReceiptHash: hash(
+      source.captureReceiptHash,
+      contract,
+      "captureReceiptHash",
+    ),
+    evaluationResultHash: hash(
+      source.evaluationResultHash,
+      contract,
+      "evaluationResultHash",
+    ),
+    outcome,
+    diagnosticCodes,
+    cleanupOutcome,
+  });
+}
+
+export function parseWorldReconstructionProductionResultV1(
+  value: unknown,
+): WorldReconstructionProductionResultV1 {
+  const contract = "WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID";
+  assertAccessorFree(value, contract);
+  const record = object(value, contract, "");
+  if (record.kind !== "world-reconstruction-production-result") {
+    fail(contract, "kind", "unexpected kind");
+  }
+  exactInteger(record.schemaVersion, 1, contract, "schemaVersion");
+  const productionOutcome = enumValue(
+    record.productionOutcome,
+    ["passed", "failed"] as const,
+    contract,
+    "productionOutcome",
+  );
+  exactFields(
+    record,
+    productionOutcome === "passed"
+      ? PRODUCTION_RESULT_PUBLISHED_FIELDS
+      : PRODUCTION_RESULT_FAILED_FIELDS,
+    contract,
+    "",
+  );
+  const caseId = text(record.caseId, contract, "caseId");
+  if (!WORLD_RECONSTRUCTION_CASE_ID_PATTERN.test(caseId)) {
+    fail(contract, "caseId", "invalid Case ID");
+  }
+  const caseRef = parseWorldReconstructionCaseArtifactRefV1(record.caseRef);
+  const expectedCaseRef =
+    `artifact://world-reconstruction-case/${caseId}/case.json`;
+  if (caseRef !== expectedCaseRef) {
+    fail(contract, "caseRef", "must identify the result Case");
+  }
+  const runId = text(record.runId, contract, "runId");
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(runId)) {
+    fail(contract, "runId", "invalid Run ID");
+  }
+  const strictDiagnosticOutcome = enumValue(
+    record.strictDiagnosticOutcome,
+    ["passed", "failed", "incomplete", "not-run"] as const,
+    contract,
+    "strictDiagnosticOutcome",
+  );
+  const strictDiagnosticCodes = sortedDiagnosticCodes(
+    record.strictDiagnosticCodes,
+    contract,
+    "strictDiagnosticCodes",
+    strictDiagnosticOutcome === "passed" ||
+      strictDiagnosticOutcome === "not-run",
+  );
+  if (
+    (strictDiagnosticOutcome === "passed" ||
+      strictDiagnosticOutcome === "not-run") !==
+      (strictDiagnosticCodes.length === 0)
+  ) {
+    fail(
+      contract,
+      "strictDiagnosticCodes",
+      "must be empty exactly when strict diagnostics passed or did not run",
+    );
+  }
+  const strictDiagnosticCleanupOutcome = enumValue(
+    record.strictDiagnosticCleanupOutcome,
+    ["completed", "failed", "not-started"] as const,
+    contract,
+    "strictDiagnosticCleanupOutcome",
+  );
+  if (
+    strictDiagnosticOutcome === "not-run" &&
+    strictDiagnosticCleanupOutcome !== "not-started"
+  ) {
+    fail(
+      contract,
+      "strictDiagnosticCleanupOutcome",
+      "a diagnostic that did not run has no cleanup",
+    );
+  }
+  if (
+    strictDiagnosticOutcome === "passed" &&
+    strictDiagnosticCleanupOutcome === "failed"
+  ) {
+    fail(
+      contract,
+      "strictDiagnosticCleanupOutcome",
+      "a passed diagnostic cannot have failed cleanup",
+    );
+  }
+  const identity = {
+    kind: "world-reconstruction-production-result" as const,
+    schemaVersion: 1 as const,
+    caseId,
+    caseRef,
+    runId,
+  };
+  if (productionOutcome === "failed") {
+    if (record.publicationOutcome !== "not-published") {
+      fail(contract, "publicationOutcome", "failed production cannot be published");
+    }
+    return freeze({
+      ...identity,
+      productionOutcome,
+      publicationOutcome: "not-published" as const,
+      runOutcome: enumValue(
+        record.runOutcome,
+        ["passed", "failed", "incomplete", "not-run"] as const,
+        contract,
+        "runOutcome",
+      ),
+      evaluationOutcome: enumValue(
+        record.evaluationOutcome,
+        ["passed", "failed", "incomplete", "not-run"] as const,
+        contract,
+        "evaluationOutcome",
+      ),
+      strictDiagnosticOutcome,
+      strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome,
+      attemptCount: integer(record.attemptCount, 0, 4, contract, "attemptCount") as
+        0 | 1 | 2 | 3 | 4,
+      diagnosticCodes: sortedDiagnosticCodes(
+        record.diagnosticCodes,
+        contract,
+        "diagnosticCodes",
+      ),
+      cleanupOutcome: enumValue(
+        record.cleanupOutcome,
+        ["completed", "failed", "not-started", "unknown"] as const,
+        contract,
+        "cleanupOutcome",
+      ),
+    });
+  }
+  if (record.publicationOutcome !== "published") {
+    fail(contract, "publicationOutcome", "passed production must be published");
+  }
+  if (record.cleanupOutcome !== "completed") {
+    fail(contract, "cleanupOutcome", "published production cleanup must be completed");
+  }
+  const finalWorldPackageRootHash = hash(
+    record.finalWorldPackageRootHash,
+    contract,
+    "finalWorldPackageRootHash",
+  );
+  const finalWorldPackageRef = formalWorldPackageRef(
+    record.finalWorldPackageRef,
+    finalWorldPackageRootHash,
+    contract,
+    "finalWorldPackageRef",
+  );
+  const artifactRoot = `artifact://world-reconstruction-case/${caseId}`;
+  const runReceiptRef = text(record.runReceiptRef, contract, "runReceiptRef");
+  if (runReceiptRef !== `${artifactRoot}/runs/${runId}/run-receipt.json`) {
+    fail(contract, "runReceiptRef", "must identify the selected Run Receipt");
+  }
+  const finalStrictDiagnosticRef = text(
+    record.finalStrictDiagnosticRef,
+    contract,
+    "finalStrictDiagnosticRef",
+  );
+  if (finalStrictDiagnosticRef !== `${artifactRoot}/final/strict-diagnostic.json`) {
+    fail(contract, "finalStrictDiagnosticRef", "must identify the final strict receipt");
+  }
+  const finalEntryValidationRef = text(
+    record.finalEntryValidationRef,
+    contract,
+    "finalEntryValidationRef",
+  );
+  if (
+    finalEntryValidationRef !==
+      `${artifactRoot}/final/entry-third-person-validation.json`
+  ) {
+    fail(contract, "finalEntryValidationRef", "must identify the final entry receipt");
+  }
+  return freeze({
+    ...identity,
+    productionOutcome,
+    publicationOutcome: "published" as const,
+    evaluationOutcome: enumValue(
+      record.evaluationOutcome,
+      ["passed", "failed", "incomplete"] as const,
+      contract,
+      "evaluationOutcome",
+    ),
+    strictDiagnosticOutcome,
+    strictDiagnosticCodes,
+    strictDiagnosticCleanupOutcome,
+    cleanupOutcome: "completed" as const,
+    attemptCount: integer(record.attemptCount, 1, 4, contract, "attemptCount") as
+      1 | 2 | 3 | 4,
+    finalWorldPackagePath: text(
+      record.finalWorldPackagePath,
+      contract,
+      "finalWorldPackagePath",
+    ),
+    finalWorldPackageRef,
+    finalWorldPackageRootHash,
+    finalCaptureReceiptPath: text(
+      record.finalCaptureReceiptPath,
+      contract,
+      "finalCaptureReceiptPath",
+    ),
+    finalCaptureReceiptHash: hash(
+      record.finalCaptureReceiptHash,
+      contract,
+      "finalCaptureReceiptHash",
+    ),
+    finalEvaluationPath: text(
+      record.finalEvaluationPath,
+      contract,
+      "finalEvaluationPath",
+    ),
+    finalEvaluationHash: hash(
+      record.finalEvaluationHash,
+      contract,
+      "finalEvaluationHash",
+    ),
+    finalStrictDiagnosticPath: text(
+      record.finalStrictDiagnosticPath,
+      contract,
+      "finalStrictDiagnosticPath",
+    ),
+    finalStrictDiagnosticRef,
+    finalStrictDiagnosticHash: hash(
+      record.finalStrictDiagnosticHash,
+      contract,
+      "finalStrictDiagnosticHash",
+    ),
+    finalEntryValidationPath: text(
+      record.finalEntryValidationPath,
+      contract,
+      "finalEntryValidationPath",
+    ),
+    finalEntryValidationRef,
+    finalEntryValidationHash: hash(
+      record.finalEntryValidationHash,
+      contract,
+      "finalEntryValidationHash",
+    ),
+    runReceiptPath: text(record.runReceiptPath, contract, "runReceiptPath"),
+    runReceiptRef,
+    runReceiptHash: hash(record.runReceiptHash, contract, "runReceiptHash"),
+    finalDirectoryPath: text(
+      record.finalDirectoryPath,
+      contract,
+      "finalDirectoryPath",
+    ),
+  });
+}
+
 type Parser<T> = (value: unknown) => T;
 const canonicalBytes = <T>(parser: Parser<T>, value: unknown): Uint8Array => canonicalJsonBytes(parser(value));
 const canonicalHash = <T>(parser: Parser<T>, value: unknown): Sha256HashV1 => sha256CanonicalJson(parser(value)) as Sha256HashV1;
@@ -2335,3 +2808,7 @@ export const worldReconstructionDiagnosticCanonicalBytesV1 = (value: unknown) =>
 export const hashWorldReconstructionDiagnosticV1 = (value: unknown) => canonicalHash(parseWorldReconstructionDiagnosticV1, value);
 export const worldReconstructionRunReceiptCanonicalBytesV1 = (value: unknown) => canonicalBytes(parseWorldReconstructionRunReceiptV1, value);
 export const hashWorldReconstructionRunReceiptV1 = (value: unknown) => canonicalHash(parseWorldReconstructionRunReceiptV1, value);
+export const worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1 = (value: unknown) => canonicalBytes(parseWorldReconstructionStrictDiagnosticReceiptV1, value);
+export const hashWorldReconstructionStrictDiagnosticReceiptV1 = (value: unknown) => canonicalHash(parseWorldReconstructionStrictDiagnosticReceiptV1, value);
+export const worldReconstructionProductionResultCanonicalBytesV1 = (value: unknown) => canonicalBytes(parseWorldReconstructionProductionResultV1, value);
+export const hashWorldReconstructionProductionResultV1 = (value: unknown) => canonicalHash(parseWorldReconstructionProductionResultV1, value);

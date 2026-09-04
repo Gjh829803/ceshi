@@ -28,6 +28,8 @@ import {
 import { GROUND_HUMANOID_ACTION_IDS_V1 } from "@whitebox-world/subject-contracts";
 import { XIER120_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import { parseWorldReconstructionProductionResultV1 } from
+  "@whitebox-world/validation";
 
 import { loadWorldkitRoutePipeline } from "../lib/worldkit-pipeline";
 import { loadAuthoringScene } from "@whitebox-world/playground/authoring-loader";
@@ -534,14 +536,22 @@ describe("worldkit CLI", () => {
         return true;
       },
     );
-    const result = Object.freeze({
+    const result = parseWorldReconstructionProductionResultV1({
       kind: "world-reconstruction-production-result",
       schemaVersion: 1,
       caseId: "cloud-temple-t-gate-native-block",
       caseRef:
         "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/case.json",
       runId: "run-a",
-      outcome: "published",
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      evaluationOutcome: "passed",
+      strictDiagnosticOutcome: "failed",
+      strictDiagnosticCodes: Object.freeze([
+        "NBR70_BLOCKER_IDENTITY_MISMATCH",
+      ]),
+      strictDiagnosticCleanupOutcome: "not-started",
+      cleanupOutcome: "completed",
       attemptCount: 2,
       finalWorldPackagePath: "/case/final/world-package",
       finalWorldPackageRef:
@@ -552,6 +562,15 @@ describe("worldkit CLI", () => {
       finalCaptureReceiptHash: `sha256:${"2".repeat(64)}`,
       finalEvaluationPath: "/case/final/evaluation.json",
       finalEvaluationHash: `sha256:${"3".repeat(64)}`,
+      finalStrictDiagnosticPath: "/case/final/strict-diagnostic.json",
+      finalStrictDiagnosticRef:
+        "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/final/strict-diagnostic.json",
+      finalStrictDiagnosticHash: `sha256:${"5".repeat(64)}`,
+      finalEntryValidationPath:
+        "/case/final/entry-third-person-validation.json",
+      finalEntryValidationRef:
+        "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/final/entry-third-person-validation.json",
+      finalEntryValidationHash: `sha256:${"6".repeat(64)}`,
       runReceiptPath: "/case/runs/run-a/run-receipt.json",
       runReceiptRef:
         "artifact://world-reconstruction-case/cloud-temple-t-gate-native-block/runs/run-a/run-receipt.json",
@@ -594,7 +613,7 @@ describe("worldkit CLI", () => {
     expect(stderr).toBe("");
   });
 
-  it("returns success for a non-accepted report-only preview", async () => {
+  it("returns failure when production did not pass and nothing was published", async () => {
     let stdout = "";
     const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(
       (chunk) => {
@@ -602,43 +621,24 @@ describe("worldkit CLI", () => {
         return true;
       },
     );
-    const result = Object.freeze({
+    const result = parseWorldReconstructionProductionResultV1({
       kind: "world-reconstruction-production-result" as const,
       schemaVersion: 1 as const,
       caseId: "case-a",
       caseRef: "artifact://world-reconstruction-case/case-a/case.json",
       runId: "run-a",
-      outcome: "preview-ready" as const,
-      publicationStatus: "not-accepted" as const,
-      qualityStage: "evaluation" as const,
-      qualityOutcome: "failed" as const,
+      productionOutcome: "failed" as const,
+      publicationOutcome: "not-published" as const,
+      runOutcome: "failed" as const,
+      evaluationOutcome: "failed" as const,
+      strictDiagnosticOutcome: "not-run" as const,
+      strictDiagnosticCodes: Object.freeze([]),
+      strictDiagnosticCleanupOutcome: "not-started" as const,
       attemptCount: 4 as const,
       diagnosticCodes: Object.freeze([
         "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
       ]),
       cleanupOutcome: "completed" as const,
-      previewWorldPackagePath: "/case/runs/run-a/attempts/3/world-package",
-      previewWorldPackageRef:
-        `package://world-package/sha256/${"1".repeat(64)}`,
-      previewWorldPackageRootHash: `sha256:${"1".repeat(64)}` as const,
-      previewCaptureDirectoryPath: "/case/runs/run-a/attempts/3/capture",
-      previewOpeningPath: "/case/runs/run-a/attempts/3/capture/opening.png",
-      previewOpeningRef:
-        "artifact://world-reconstruction-case/case-a/runs/run-a/attempts/3/capture/opening.png",
-      previewCaptureReceiptPath:
-        "/case/runs/run-a/attempts/3/capture/formal-world-capture-receipt.json",
-      previewCaptureReceiptHash: `sha256:${"2".repeat(64)}` as const,
-      previewEvaluationPath: "/case/runs/run-a/attempts/3/evaluation.json",
-      previewEvaluationRef:
-        "artifact://world-reconstruction-case/case-a/runs/run-a/attempts/3/evaluation.json",
-      previewEvaluationHash: `sha256:${"3".repeat(64)}` as const,
-      runReceiptPath: "/case/runs/run-a/run-receipt.json",
-      runReceiptRef:
-        "artifact://world-reconstruction-case/case-a/runs/run-a/run-receipt.json",
-      runReceiptHash: `sha256:${"4".repeat(64)}` as const,
-      launchWorkingDirectoryPath: "/case/runs/run-a",
-      launchCommand:
-        "pnpm worldkit native run attempts/3/world-package --port 5174 --json",
     });
     try {
       await expect(main([
@@ -650,7 +650,7 @@ describe("worldkit CLI", () => {
         "--json",
       ], {
         runWorldReconstructionProductionV1: async () => result,
-      })).resolves.toBe(0);
+      })).resolves.toBe(1);
     } finally {
       stdoutWrite.mockRestore();
     }
@@ -692,10 +692,18 @@ describe("worldkit CLI", () => {
       stderrWrite.mockRestore();
     }
     expect(JSON.parse(stdout)).toEqual({
-      kind: "world-reconstruction-production-error",
+      kind: "worldkit-command-failure",
       schemaVersion: 1,
-      outcome: "closed",
-      diagnosticCodes: ["WORLD_RECONSTRUCTION_STALE_CASE"],
+      command: "reconstruct-run",
+      ok: false,
+      exitCode: 1,
+      diagnostics: [{
+        severity: "error",
+        code: "WORLD_RECONSTRUCTION_STALE_CASE",
+        instancePath: "",
+        message:
+          "World reconstruction failed before a production result was available.",
+      }],
     });
     expect(stdout).not.toContain("/private/secret");
     expect(stderr).toBe("");
@@ -709,14 +717,19 @@ describe("worldkit CLI", () => {
         return true;
       },
     );
-    const result = Object.freeze({
+    const result = parseWorldReconstructionProductionResultV1({
       kind: "world-reconstruction-production-result" as const,
       schemaVersion: 1 as const,
       caseId: "case-a",
       caseRef: "artifact://world-reconstruction-case/case-a/case.json",
       runId: "run-a",
-      outcome: "closed" as const,
+      productionOutcome: "failed" as const,
+      publicationOutcome: "not-published" as const,
       runOutcome: "passed" as const,
+      evaluationOutcome: "passed" as const,
+      strictDiagnosticOutcome: "incomplete" as const,
+      strictDiagnosticCodes: Object.freeze(["NBR70_PLAYABILITY_CLEANUP_FAILED"]),
+      strictDiagnosticCleanupOutcome: "failed" as const,
       attemptCount: 1 as const,
       diagnosticCodes: Object.freeze(["NBR70_PLAYABILITY_CLEANUP_FAILED"]),
       cleanupOutcome: "failed" as const,

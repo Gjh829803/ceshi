@@ -14,6 +14,7 @@ const DECLARED_OUTPUT_SET = new Set(DECLARED_OUTPUT_PATHS);
 const HOST_WORKSPACE_ENTRY_SET = new Set([
   ".codex-last-message.txt",
   "attempts",
+  "context",
   "inputs",
 ]);
 const STABLE_REF = /^[a-z][a-z0-9+.-]*:\/\/[^\s]+$/;
@@ -21,6 +22,28 @@ const STABLE_ID = /^[a-z0-9][a-z0-9-]{2,79}$/;
 const SEMANTIC_CLASS_ID = /^[a-z][a-z0-9.-]{2,127}$/;
 const HOST_SUBJECT_SEMANTIC_CLASS_ID = /^subject(?:\.|$)/;
 const IDENTITY_COLOR_HEX = /^#[0-9A-F]{6}$/;
+const SHA256_HASH = /^sha256:[a-f0-9]{64}$/;
+const NATIVE_VISUAL_IDENTITY_COLORS = Object.freeze([
+  "#E85D5D",
+  "#F28E2B",
+  "#D9A514",
+  "#4E79A7",
+  "#9C6ADE",
+]);
+const SCENE_BRIEF_MOVEMENT_MODES = new Set([
+  "ground-walk", "ground-slide", "ground-ride", "ground-drive",
+  "water-surface", "underwater", "flight", "custom",
+]);
+const VISUAL_TARGET_KINDS = new Set([
+  "subject", "landmark", "repeated-landmark",
+]);
+const VISUAL_TARGET_ROLES = new Set([
+  "primary-subject", "primary-landmark", "secondary-landmark",
+]);
+const VISUAL_TARGET_ACCEPTANCE_REF =
+  /^worldkit:\/\/acceptance-target\/(visual-target-[1-5])@1$/;
+const VISUAL_TARGET_ACCEPTANCE_REF_PREFIX =
+  "worldkit://acceptance-target/visual-target-";
 const DANGEROUS_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const FORBIDDEN_JSON_FIELD_TOKENS = Object.freeze([
   "camera", "physics", "subject", "spawn", "runtime", "input", "action",
@@ -183,11 +206,136 @@ function validateAuthoring(value, diagnosticCodes) {
   }
 }
 
-export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
+async function readFrozenJson(filePath, diagnosticCodes) {
+  try {
+    if (!path.isAbsolute(filePath) || path.normalize(filePath) !== filePath) {
+      throw new TypeError("path must be canonical and absolute");
+    }
+    const stat = await lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink() || await realpath(filePath) !== filePath) {
+      throw new TypeError("input must be a regular no-follow file");
+    }
+    return parseJsonData(await readFile(filePath), diagnosticCodes);
+  } catch {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_INPUT_INVALID");
+    return undefined;
+  }
+}
+
+function validateVisualIdentityBinding(
+  caseValue,
+  paletteValue,
+  authoringValue,
+  diagnosticCodes,
+) {
+  const targets = caseValue?.expected?.semanticSilhouetteTargets;
+  const paletteTargets = paletteValue?.targets;
+  if (
+    typeof caseValue?.id !== "string" ||
+    !SHA256_HASH.test(caseValue?.sceneBriefHash ?? "") ||
+    !Array.isArray(targets) ||
+    !hasExactKeys(paletteValue, [
+      "kind", "schemaVersion", "sceneId", "sceneBriefHash", "movementMode",
+      "movementModeLabel", "targets",
+    ]) ||
+    paletteValue.kind !== "worldkit-visual-identity-palette" ||
+    paletteValue.schemaVersion !== 1 ||
+    paletteValue.sceneId !== caseValue.id ||
+    paletteValue.sceneBriefHash !== caseValue.sceneBriefHash ||
+    !SCENE_BRIEF_MOVEMENT_MODES.has(paletteValue.movementMode) ||
+    typeof paletteValue.movementModeLabel !== "string" ||
+    paletteValue.movementModeLabel.length === 0 ||
+    !Array.isArray(paletteTargets) ||
+    paletteTargets.length < 1 ||
+    paletteTargets.length > NATIVE_VISUAL_IDENTITY_COLORS.length ||
+    !Array.isArray(authoringValue?.visualGroups)
+  ) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+    return;
+  }
+  const paletteById = new Map();
+  for (let index = 0; index < paletteTargets.length; index += 1) {
+    const target = paletteTargets[index];
+    const expectedId = `visual-target-${index + 1}`;
+    if (
+      !hasExactKeys(target, [
+        "id", "visualTargetId", "targetKind", "name", "description", "role",
+        "semanticClassId", "identityColor",
+      ]) ||
+      target.id !== expectedId ||
+      target.visualTargetId !== expectedId ||
+      typeof target.name !== "string" || target.name.length === 0 ||
+      typeof target.description !== "string" || target.description.length === 0 ||
+      !VISUAL_TARGET_KINDS.has(target.targetKind) ||
+      !VISUAL_TARGET_ROLES.has(target.role) ||
+      typeof target.semanticClassId !== "string" ||
+      !SEMANTIC_CLASS_ID.test(target.semanticClassId) ||
+      target.identityColor !== NATIVE_VISUAL_IDENTITY_COLORS[index] ||
+      (index === 0 &&
+        (target.targetKind !== "subject" || target.role !== "primary-subject")) ||
+      (index > 0 &&
+        (target.targetKind === "subject" || target.role === "primary-subject"))
+    ) {
+      diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+      return;
+    }
+    paletteById.set(expectedId, target);
+  }
+  const caseTargetRefs = targets.map((target) => target?.acceptanceTargetRef);
+  const caseGroupIds = targets.map((target) => target?.visualGroupId);
+  const manifestTargetRefs = authoringValue.visualGroups.map((group) =>
+    group.acceptanceTargetRef);
+  if (
+    caseTargetRefs.some((targetRef) => typeof targetRef !== "string") ||
+    caseGroupIds.some((groupId) => typeof groupId !== "string") ||
+    new Set(caseTargetRefs).size !== caseTargetRefs.length ||
+    new Set(caseGroupIds).size !== caseGroupIds.length ||
+    [...caseTargetRefs].sort(stableCompare).some((targetRef, index) =>
+      targetRef !== [...manifestTargetRefs].sort(stableCompare)[index]) ||
+    caseTargetRefs.length !== manifestTargetRefs.length
+  ) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+    return;
+  }
+  const manifestByTargetRef = new Map(authoringValue.visualGroups.map((group) =>
+    [group.acceptanceTargetRef, group]));
+  for (const caseTarget of targets) {
+    const manifestGroup = manifestByTargetRef.get(caseTarget.acceptanceTargetRef);
+    if (manifestGroup?.visualGroupId !== caseTarget.visualGroupId) {
+      diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+      return;
+    }
+    const match = VISUAL_TARGET_ACCEPTANCE_REF.exec(caseTarget.acceptanceTargetRef);
+    if (match === null) {
+      if (caseTarget.acceptanceTargetRef.startsWith(
+        VISUAL_TARGET_ACCEPTANCE_REF_PREFIX,
+      )) {
+        diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+        return;
+      }
+      continue;
+    }
+    const paletteTarget = paletteById.get(match[1]);
+    if (
+      paletteTarget === undefined ||
+      manifestGroup.semanticClassId !== paletteTarget.semanticClassId ||
+      manifestGroup.identityColorHex !== paletteTarget.identityColor
+    ) {
+      diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_BINDING_INVALID");
+      return;
+    }
+  }
+}
+
+export async function selfCheckNativeBlockBuilderWorkspace(
+  workspacePath,
+  visualIdentityInputs,
+) {
   const diagnosticCodes = new Set();
   const outputHashes = [];
   let entries = [];
   let canonicalWorkspace;
+  let authoringValue;
   try {
     canonicalWorkspace = await realpath(workspacePath);
     const workspaceStat = await lstat(canonicalWorkspace);
@@ -250,9 +398,34 @@ export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
         if (outputPath === "native-resources.json") {
           validateResourceRefs(value, diagnosticCodes);
         } else {
+          authoringValue = value;
           validateAuthoring(value, diagnosticCodes);
         }
       }
+    }
+  }
+
+  if (visualIdentityInputs === undefined) {
+    diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_INPUT_INVALID");
+  } else {
+    const [caseValue, paletteValue] = await Promise.all([
+      readFrozenJson(visualIdentityInputs.casePath, diagnosticCodes),
+      readFrozenJson(
+        visualIdentityInputs.visualIdentityPalettePath,
+        diagnosticCodes,
+      ),
+    ]);
+    if (
+      caseValue !== undefined &&
+      paletteValue !== undefined &&
+      authoringValue !== undefined
+    ) {
+      validateVisualIdentityBinding(
+        caseValue,
+        paletteValue,
+        authoringValue,
+        diagnosticCodes,
+      );
     }
   }
 
@@ -271,6 +444,13 @@ export async function selfCheckNativeBlockBuilderWorkspace(workspacePath) {
 export async function main(arguments_ = process.argv.slice(2)) {
   const report = await selfCheckNativeBlockBuilderWorkspace(
     path.resolve(parseOption(arguments_, "--workspace")),
+    {
+      casePath: path.resolve(parseOption(arguments_, "--case")),
+      visualIdentityPalettePath: path.resolve(parseOption(
+        arguments_,
+        "--visual-identity-palette",
+      )),
+    },
   );
   process.stdout.write(`${JSON.stringify(report)}\n`);
   process.exitCode = report.ok ? 0 : 2;

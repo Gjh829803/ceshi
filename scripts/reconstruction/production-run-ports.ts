@@ -377,9 +377,21 @@ function runBuilderSelfCheckV1(
   workspacePath: string,
 ): Promise<Readonly<{ ok: boolean; diagnosticCodes: readonly string[] }>> {
   return new Promise((resolvePromise) => {
+    const attemptDirectoryPath = path.dirname(workspacePath);
     const child = spawn(
       process.execPath,
-      [checkerPath, "--workspace", workspacePath],
+      [
+        checkerPath,
+        "--workspace",
+        workspacePath,
+        "--case",
+        path.join(attemptDirectoryPath, ".task/context/case.json"),
+        "--visual-identity-palette",
+        path.join(
+          attemptDirectoryPath,
+          "inputs/visual-identity-palette.json",
+        ),
+      ],
       { shell: false, stdio: ["ignore", "pipe", "pipe"] },
     );
     let stdout = "";
@@ -638,6 +650,13 @@ export async function createProductionWorldReconstructionRunPortsV1(
           worldPackageBuildReceiptHash: packaged.buildReceiptHash,
           worldBuildIdentityRef: WORLD_BUILD_IDENTITY_REF,
           worldBuildIdentityHash: packaged.worldBuildIdentityHash,
+          groundAnalysisReportRef: caseArtifactRefForPath(
+            caseArtifactRoot,
+            caseRootPath,
+            input.generationInput.runDirectoryPath,
+            packaged.groundAnalysisReportPath,
+          ),
+          groundAnalysisReportHash: packaged.groundAnalysisReportHash,
           diagnosticCodes: Object.freeze([...packaged.diagnostics]),
         });
         state.packagedOwnerResult = packaged;

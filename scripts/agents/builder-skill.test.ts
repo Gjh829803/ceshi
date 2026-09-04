@@ -143,7 +143,9 @@ describe("Canonical Builder skill", () => {
     expect(skill).toContain("does not start a separate Builder Repair Agent");
     expect(skill).toContain("strict centered rear view");
     expect(skill).toContain("spawn at yaw `0`");
-    expect(skill).toContain("validate-entry-third-person.py");
+    expect(skill).toContain("scripts/visual/entry-third-person.ts");
+    expect(skill).toContain("receipt-bound bytes of the actual Formal Capture `opening.png`");
+    expect(skill).toContain("projected geometry is not a substitute");
     expect(skill).toContain("Map exactly the 1-5 palette targets and nothing else");
     expect(skill).toContain("Emit AuthoringSpec V4");
     expect(skill).toContain("CanonicalSceneExecutionPlanV1");
