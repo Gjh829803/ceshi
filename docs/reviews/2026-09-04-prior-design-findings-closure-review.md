@@ -4,13 +4,14 @@
 
 - 模式：B 变更审查，并对 current-only、Native repair、固定 Tick 与包边界执行定向整仓复验。
 - Diff 基线：`origin/main@d475c94411410105d81fdd5fd85d6aadab5e11f0`。
-- 实现快照：`682da631850b0857b87acf2d8ffe168773918741`；其后的改动只更新计划和本报告，不改变源码、依赖或测试输入。
+- 实现与测试快照：`00ffebeeabecc3517fd9262389fd56e0d83d6a99`；其后的改动只更新本报告，不改变源码、依赖或测试输入。
 - Runtime 依赖：`@babylonjs/core@9.23.0`、`@babylonjs/havok@1.3.14`，以当前 lockfile 为准。根据已安装 Babylon 源码复核 `checkSupportToRef` 行为后，本变更修正 Adapter 的支撑状态发布语义，没有修改引擎、Controller 参数或 Physics 算法。
 - 权威输入：`AGENTS.md`、`docs/18-refactor-progress-and-backlog.md`、Validation、Simulation Take、Native Lane 规格、本次实施计划、全维度审查协议和 Runtime 深审清单。
 
 冻结源码后的本地自动证据（均为 exit code 0）：
 
 - Babylon Character Body transaction：76/76。
+- Traversal Runtime Port 的 Tick phase 聚焦回归：51/51。
 - P1.5 conformance、Traversal Runtime support conformance 与 Route Runtime probe integration：3 个文件、29/29。
 - Cursor 首轮指出的四类契约断言连同 BodyPort 回归：5 个文件、113/113；其中后续只扩大 Surface identity 保留带，该受影响 BodyPort 文件又以 76/76 复验。
 - 完整 `pnpm verify:route-r1b-static-platform`：11 个 fixture oracle 全通过；重复、并发和 30/60/120 Hz-like cadence Hash 一致。
@@ -22,7 +23,7 @@
 - 最新主线 Native Package reproducer：12/12。
 - `git diff --check`。
 
-更早候选曾通过 Studio 80/80、独立 Node 42/42、独立 Site 1/1、resource-heavy 685/685 和 build；Runtime 修复使其中与源码相关的证据失效，因此不把它们算作最终候选证据。Browser、rendered visual 与 manual interaction 未运行，也不据此声明已覆盖；当前行为由真实 Havok 的 Route verifier 和定向 Runtime 回归约束。最终 typecheck、root aggregate、Studio、独立 lane、build 与只读设计复核由推送后的 exact-SHA durable gate 负责。
+Cursor 对前一冻结候选 `befe16161e498e3bee9a5504275855a1fb163b82` 的完整门禁中，self-check、typecheck、Studio 80/80、独立 Node 42/42、独立 Site 1/1、Route、build 和 4,978 个 contract 测试均通过；resource-heavy 仅有一个旧断言仍把 begin-tick 支撑采样位置等同于 post-move 主体位置，形成历史 NO-GO。当前测试已按明确的 Tick phase 合同修正并以 51/51 聚焦复验，因此只使 typecheck 与 root aggregate 失效；其余 exact-SHA 证据的输入与行为声明未改变。Browser、rendered visual 与 manual interaction 未运行，也不据此声明已覆盖；当前行为由真实 Havok 的 Route verifier 和定向 Runtime 回归约束。最终 typecheck、root aggregate 与只读设计复核由推送后的新 exact-SHA durable gate 负责。
 
 ## 2. 旧结论复验
 
