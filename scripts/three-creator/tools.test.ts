@@ -8,7 +8,7 @@ import ts from 'typescript';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { publicContractTopic } from './authoring-schema.js';
 import { EPISODE_SCHEMA, sha256 } from './contracts.js';
-import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
+import { ThreeCreatorTools, createClosedArchive, encodePlaytestVideo, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import { executeThreeCreatorTool } from './mcp.js';
@@ -210,6 +210,19 @@ describe('v2 command and discovery boundary', () => {
 
 
 describe('real episode and video timing boundaries', () => {
+ it.each([[720,405,720,406],[721,406,722,406],[721,405,722,406],[720,406,720,406]])('encodes %ix%i VFR frames as %ix%i without changing frame count, PTS or duration', async (width,height,outputWidth,outputHeight) => {
+  const root=await fixture(),raw=path.join(root,'source.webm'),output=path.join(root,'playtest.mp4'),execFile=promisify(execFileCallback);
+  // Four real frames with unequal timestamp gaps exercise the same WebM-to-MP4
+  // encoding path as browser captures. This is synthetic local evidence only.
+  await execFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i',`testsrc=size=${width}x${height}:rate=10:duration=0.8`,'-vf',"select='eq(n,0)+eq(n,1)+eq(n,3)+eq(n,7)'",'-vsync','0','-c:v','libvpx-vp9','-lossless','1','-pix_fmt','yuv444p',raw]);
+  const probe=async(file:string)=>JSON.parse((await execFile('ffprobe',['-v','error','-select_streams','v:0','-count_frames','-show_entries','stream=width,height,nb_read_frames,pix_fmt:frame=pts_time:format=duration','-of','json',file])).stdout);
+  const source=await probe(raw);expect([source.streams[0].width,source.streams[0].height]).toEqual([width,height]);
+  await encodePlaytestVideo(raw,output);const encoded=await probe(output);
+  expect([encoded.streams[0].width,encoded.streams[0].height]).toEqual([outputWidth,outputHeight]);expect(encoded.streams[0].pix_fmt).toBe('yuv420p');
+  expect(Number(source.streams[0].nb_read_frames)).toBe(4);expect(encoded.streams[0].nb_read_frames).toBe(source.streams[0].nb_read_frames);
+  const sourcePts=source.frames.map((frame:{pts_time:string})=>Number(frame.pts_time)),outputPts=encoded.frames.map((frame:{pts_time:string})=>Number(frame.pts_time));
+  expect(sourcePts).toEqual([0,0.1,0.3,0.7]);expect(outputPts).toEqual(sourcePts);expect(Number(encoded.format.duration)).toBe(Number(source.format.duration));
+ },20_000);
  it('reserves bounded overhead for complete episodes instead of cutting off their final steps', () => {
   const full=resolvePlaytestBudget(180,180,91); expect(full.mode).toBe('full-episode'); expect(full.executionBudgetSeconds).toBeGreaterThan(180); expect(full.executionBudgetSeconds).toBeLessThanOrEqual(300);
   expect(resolvePlaytestBudget(180,undefined,91).mode).toBe('full-episode');

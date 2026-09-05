@@ -70,6 +70,11 @@ async function command(binary: string, args: string[], cwd?: string) {
     child.stderr.on('data', data => { error = (error + data).slice(-8000); }); child.once('error', reject); child.once('close', code => code === 0 ? resolve() : reject(new Error(`THREE_PROCESS_FAILED: ${binary} ${error}`)));
   });
 }
+export async function encodePlaytestVideo(input: string, output: string): Promise<void> {
+  // yuv420p needs even dimensions. Pad only the right/bottom edge; leave frame
+  // timestamps and the existing VFR encoding path untouched.
+  await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0', '-vsync', '0', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', output]);
+}
 export async function createClosedArchive(root: string, output: string): Promise<void> {
   await assertNoSymlinks(path.join(root, 'payload')); await command('tar', ['-czf', output, '--', 'payload'], root);
 }
@@ -327,7 +332,7 @@ export class ThreeCreatorTools {
       if (!recorded?.data) throw new Error('THREE_VIDEO_MISSING');
       const raw = path.join(root, 'playtest.webm');
       await writeFile(raw, Buffer.from(recorded.data.replace(/^data:video\/webm;base64,/, ''), 'base64'));
-      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', raw, '-vsync', '0', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', videoFile]);
+      videoFile = path.join(root, 'playtest.mp4'); await encodePlaytestVideo(raw, videoFile);
       videoMetadata = await probeVideo(videoFile);
       validateCaptureTiming(trace.timing, captureTiming, videoMetadata.durationSeconds);
     } catch (error) { videoFile = null; videoFailure = errorMessage(error); failure ??= videoFailure; }
