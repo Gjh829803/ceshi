@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
 
 import { createRecordingWorkbenchService } from "./recording-workbench.mjs";
+import { createNativeRecordingPreviews } from "./native-recording-preview.mjs";
 import {
   StudioPreviewBootstrapError,
   assembleStudioPreviewBootstrapV1,
@@ -790,6 +791,7 @@ export function createStudio(options = {}) {
     });
   }
 
+  const nativeRecordingRequestContexts = new WeakMap();
   const recordingWorkbench = createRecordingWorkbenchService({
     repoRoot,
     dataRoot,
@@ -803,10 +805,28 @@ export function createStudio(options = {}) {
       if (record && effectiveSceneSourceKind(record) === "babylon-native") {
         return record.productionOutcome === "passed" && record.publicationOutcome === "published" &&
           record.nativeProductionClosure?.caseId === sceneId && await hasNativeLaunchEvidence(record)
-          ? { sceneSourceKind: "babylon-native" } : null;
+          ? { sceneSourceKind: "babylon-native", worldPackageRootHash: record.nativeProductionClosure.worldPackageRootHash } : null;
       }
       return await fileExists(path.join(repoRoot, "artifacts/scenes", sceneId, "authoring.json"))
         ? { sceneSourceKind: "canonical" } : null;
+    },
+  });
+
+  const nativeRecordingPreviews = createNativeRecordingPreviews({
+    startServer: options.nativeRecordingStartServer,
+    copyPackage: options.nativeRecordingCopyPackage,
+    studioOrigin: () => {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("NATIVE_RECORDING_STUDIO_NOT_LISTENING");
+      return `http://127.0.0.1:${address.port}`;
+    },
+    resolveWorld: async sceneId => {
+      const record = await readRecord(sceneId);
+      if (!record || effectiveSceneSourceKind(record) !== "babylon-native" ||
+          record.productionOutcome !== "passed" || record.publicationOutcome !== "published" ||
+          record.nativeProductionClosure?.caseId !== sceneId || !await hasNativeLaunchEvidence(record)) return null;
+      return { worldPackageRootHash: record.nativeProductionClosure.worldPackageRootHash,
+        packageDirectoryPath: nativeClosureArtifactPath(record, "worldPackageRelativePath") };
     },
   });
 
@@ -3875,7 +3895,7 @@ export function createStudio(options = {}) {
   }
 
   async function handleApi(request, response, url) {
-    if (await recordingWorkbench.handleApi(request, response, url)) return true;
+    if (await recordingWorkbench.handleApi(request, response, url, nativeRecordingRequestContexts.get(request))) return true;
 
     if (request.method === "PUT" && url.pathname === "/api/settings/codex-backend") {
       const body = await readJsonBody(request);
@@ -4264,6 +4284,13 @@ export function createStudio(options = {}) {
       return true;
     }
 
+    const nativeRecordingMatch = /^\/api\/worlds\/([a-z0-9][a-z0-9-]{2,79})\/recording-preview$/.exec(url.pathname);
+    if (request.method === "POST" && nativeRecordingMatch) {
+      if (shuttingDown) { sendError(response, 503, "Studio 正在关闭。"); return true; }
+      sendJson(response, 200, await nativeRecordingPreviews.open(nativeRecordingMatch[1]));
+      return true;
+    }
+
     const nativeLaunchMatch = /^\/api\/worlds\/([a-z0-9-]+)\/native-launch$/.exec(
       url.pathname,
     );
@@ -4571,7 +4598,15 @@ export function createStudio(options = {}) {
         return;
       }
 
-      if (!isAuthorizedHeader(request.headers.authorization, accessKey)) {
+      const recordingCapability = request.headers["x-worldkit-native-recording-capability"];
+      const recordingContext = recordingCapability === undefined ? null :
+        await nativeRecordingPreviews.authorize(recordingCapability, request.method, url.pathname);
+      if (recordingCapability !== undefined && !recordingContext) {
+        sendError(response, 403, "这个录制页面的世界绑定已失效或请求不在授权范围内。");
+        return;
+      }
+      if (recordingContext) nativeRecordingRequestContexts.set(request, recordingContext);
+      if (recordingCapability === undefined && !isAuthorizedHeader(request.headers.authorization, accessKey)) {
         response.writeHead(401, {
           "content-type": "text/plain; charset=utf-8",
           "cache-control": "no-store",
@@ -4639,6 +4674,7 @@ export function createStudio(options = {}) {
     }
     await Promise.all([
       recordingWorkbench.shutdown(),
+      nativeRecordingPreviews.shutdown(),
       ...[...activeJobs].map((id) => runRecordMutation(id, async () => {
         const record = await readRecord(id);
         if (!record) return;

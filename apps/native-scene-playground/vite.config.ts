@@ -16,6 +16,8 @@ import type {
 
 import { createWorldPackageBrowserTransportV1 } from
   "../../scripts/lib/world-package-browser-transport.js";
+import { parseNativeRecordingBinding } from "../../scripts/lib/native-recording-binding.js";
+import { createNativeRecordingProxy } from "../../scripts/lib/native-recording-proxy.js";
 
 const NATIVE_MODULE_ID = "virtual:worldkit-native-scene";
 const NATIVE_MODULE_SOURCE_ID = `${NATIVE_MODULE_ID}/source`;
@@ -267,7 +269,7 @@ function installHostedBrowserHeaders(
   const hostedContentSecurityPolicy =
     "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'none'; media-src 'none'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'";
   const hostedShellContentSecurityPolicy =
-    `${hostedContentSecurityPolicy}; frame-src ${input.hostedRuntimeOrigin}; frame-ancestors 'none'`;
+    `default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'none'; media-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src ${input.hostedRuntimeOrigin}; frame-ancestors 'none'`;
   const hostedRuntimeContentSecurityPolicy =
     `${hostedContentSecurityPolicy}; frame-src 'none'; frame-ancestors ${input.hostedShellOrigin}`;
   const lockedContentSecurityPolicy =
@@ -460,6 +462,15 @@ export async function createNativeScenePlaygroundViteConfigV1(
       );
     }
     const receiptBytes = await transport.readReceipt();
+    const recordingBinding = environment.WORLDKIT_STUDIO_RECORDING_BINDING === undefined ? undefined
+      : parseNativeRecordingBinding(JSON.parse(environment.WORLDKIT_STUDIO_RECORDING_BINDING));
+    if (recordingBinding !== undefined && (serverRole !== "shell" ||
+        recordingBinding.worldPackageRootHash !== transport.worldPackageRootHash)) {
+      throw new Error("NATIVE_RECORDING_BINDING_SOURCE_MISMATCH");
+    }
+    const recordingProxy = recordingBinding === undefined ? undefined : createNativeRecordingProxy({
+      binding: recordingBinding, shellOrigin: hostedShellOrigin,
+    });
     const packageEntryByPath = new Map(
       transport.fileIntegrityEntries.map((entry) => [entry.path, Object.freeze({
         contentHash: entry.contentHash,
@@ -507,6 +518,7 @@ export async function createNativeScenePlaygroundViteConfigV1(
       "src/hosted-runtime-frame.ts",
       "src/hosted-recording.ts",
       "src/hosted-recording-controls.ts",
+      "src/hosted-recording-workbench.ts",
       "src/native-runtime-host.ts",
       "src/world-package-loader.ts",
       "package.json",
@@ -592,11 +604,13 @@ export async function createNativeScenePlaygroundViteConfigV1(
       configureServer(server) {
         bindTransportDisposal(server, () => transport.dispose());
         server.middlewares.use(headerMiddleware);
+        if (recordingProxy !== undefined) server.middlewares.use(recordingProxy);
         server.middlewares.use(assetMiddleware);
       },
       configurePreviewServer(server) {
         bindTransportDisposal(server, () => transport.dispose());
         server.middlewares.use(headerMiddleware);
+        if (recordingProxy !== undefined) server.middlewares.use(recordingProxy);
         server.middlewares.use(assetMiddleware);
       },
       closeBundle() {
@@ -614,6 +628,9 @@ export async function createNativeScenePlaygroundViteConfigV1(
         serverRole,
       ),
       define: {
+        __WORLDKIT_RECORDING_CONTEXT__: JSON.stringify(recordingBinding === undefined ? null : {
+          sceneId: recordingBinding.sceneId, worldPackageRootHash: recordingBinding.worldPackageRootHash,
+        }),
         __WORLDKIT_FORMAL_CAPTURE_SDK_OWNER_IDENTITIES__:
           formalCaptureSdkOwnerIdentities,
         __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: JSON.stringify(

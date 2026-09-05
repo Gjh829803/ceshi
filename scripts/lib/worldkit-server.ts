@@ -18,6 +18,7 @@ import type { OwnedNativeViteCacheV1 } from
 import { resolveTrustedSourceCommit } from "./worldkit-source-commit";
 import { WORLDKIT_ROUTE_EVIDENCE_MAX_BYTES_V1 } from
   "./worldkit-route-evidence-transport";
+import { parseNativeRecordingBinding, type NativeRecordingBinding } from "./native-recording-binding.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PLAYGROUND_ROOT = path.join(REPOSITORY_ROOT, "apps/playground");
@@ -66,6 +67,7 @@ export interface StartWorldkitServerOptions {
   startupTimeoutMilliseconds?: number;
   stopTimeoutMilliseconds?: number;
   routeEvidence?: WorldkitServerRouteEvidenceV1;
+  recordingBinding?: NativeRecordingBinding;
   /** Trusted capture construction input; never serialized into Runtime requests. */
   formalCaptureSdkOwnerIdentities?: readonly FormalWorldCaptureSdkOwnerIdentityV1[];
 }
@@ -90,6 +92,7 @@ export function createNativeWorldkitServerChildEnvironmentV1(
     serverRole: "shell" | "runtime";
     shellOrigin: string;
     runtimeOrigin: string;
+    recordingBinding?: NativeRecordingBinding;
     formalCaptureSdkOwnerIdentities?:
       readonly FormalWorldCaptureSdkOwnerIdentityV1[];
   }>,
@@ -109,6 +112,9 @@ export function createNativeWorldkitServerChildEnvironmentV1(
     WORLDKIT_NATIVE_VERIFIER_PROBE: "disabled",
     WORLDKIT_HOSTED_SHELL_ORIGIN: input.shellOrigin,
     WORLDKIT_HOSTED_RUNTIME_ORIGIN: input.runtimeOrigin,
+    ...(input.serverRole === "shell" && input.recordingBinding !== undefined ? {
+      WORLDKIT_STUDIO_RECORDING_BINDING: JSON.stringify(parseNativeRecordingBinding(input.recordingBinding)),
+    } : {}),
     ...(input.formalCaptureSdkOwnerIdentities === undefined
       ? {}
       : {
@@ -551,6 +557,7 @@ async function startNativeOne(
   const { createWorldPackageBrowserTransportV1 } = await import(
     "./world-package-browser-transport.js"
   );
+  const recordingBinding = options.recordingBinding === undefined ? undefined : parseNativeRecordingBinding(options.recordingBinding);
   const transport = await createWorldPackageBrowserTransportV1({
     packageDirectoryPath: options.source.packageDirectoryPath,
   });
@@ -561,6 +568,10 @@ async function startNativeOne(
     );
   }
   let runtimePort: number;
+  if (recordingBinding !== undefined && recordingBinding.worldPackageRootHash !== transport.worldPackageRootHash) {
+    transport.dispose();
+    throw new Error("NATIVE_RECORDING_PACKAGE_MISMATCH");
+  }
   let ownedViteCache: OwnedNativeViteCacheV1;
   try {
     runtimePort = await allocateDistinctAvailablePort(shellPort);
@@ -596,6 +607,7 @@ async function startNativeOne(
           serverRole: port === shellPort ? "shell" : "runtime",
           shellOrigin,
           runtimeOrigin,
+          ...(options.recordingBinding === undefined ? {} : { recordingBinding: options.recordingBinding }),
           ...(options.formalCaptureSdkOwnerIdentities === undefined
             ? {}
             : {
@@ -668,6 +680,9 @@ async function startNativeOne(
 export async function startWorldkitServer(
   options: StartWorldkitServerOptions,
 ): Promise<WorldkitServerHandle> {
+  if (options.recordingBinding !== undefined && options.source.kind !== "world-package") {
+    throw new Error("NATIVE_RECORDING_SOURCE_REQUIRED");
+  }
   if (
     options.source.kind === "world-package" &&
     options.routeEvidence !== undefined

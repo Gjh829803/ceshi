@@ -1405,8 +1405,17 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
     const dataRoot = await temporaryRoot(".native-styled-data-");
     const fakeRepoRoot = await temporaryRoot(".native-styled-repo-");
     let productionResult;
+    const previewStarts = [];
+    let previewStops = 0;
     const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: true,
       importExistingArtifacts: false, importBuiltinTestSets: false, importBuiltinResults: false, lwdpConfigured: true,
+      nativeRecordingCopyPackage: async input => ({ packageDirectoryPath: input.fixtureDirectoryPath, dispose: async () => {} }),
+      nativeRecordingStartServer: async input => {
+        previewStarts.push(input);
+        return { url: "http://127.0.0.1:5000/?hosted=1", sceneSourceKind: "babylon-native-scene",
+          worldPackageRootHash: input.recordingBinding.worldPackageRootHash,
+          stop: async () => { previewStops++; }, waitForExit: () => new Promise(() => {}) };
+      },
       beforeWorldSpawn: async id => {
         productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
           strictDiagnosticOutcome: "failed", includeWhiteboxTriviews: true, withoutScriptedTraversal: true,
@@ -1436,6 +1445,14 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
       assert.ok(detail.world.nativeLaunch);
       assert.equal((await fetch(`${origin}/api/worlds/${created.id}/native-launch`)).status, 200);
       assert.equal((await fetch(`${origin}/api/recording-worlds/${created.id}/recordings`)).status, 200);
+      const previews = await Promise.all([1, 2].map(() => fetch(`${origin}/api/worlds/${created.id}/recording-preview`, { method: "POST" })));
+      assert.deepEqual(previews.map(response => response.status), [200, 200]);
+      assert.equal(previewStarts.length, 1);
+      assert.deepEqual(await previews[0].json(), { url: "http://127.0.0.1:5000/?hosted=1" });
+      const headers = { "x-worldkit-native-recording-capability": previewStarts[0].recordingBinding.capability };
+      assert.equal(previewStarts[0].recordingBinding.worldPackageRootHash, detail.world.nativeProductionClosure.worldPackageRootHash);
+      assert.equal((await fetch(`${origin}/api/recording-worlds/${created.id}/recordings`, { headers })).status, 200);
+      assert.equal((await fetch(`${origin}/api/worlds/${created.id}/retry`, { method: "POST", headers })).status, 403);
       assert.equal(detail.world.styledTriviewsRequired, true);
       assert.equal(detail.world.styledTriviewsStatus, visualMode === "passed" ? "passed" : "failed");
       assert.equal((await fetch(`${origin}/api/worlds/${created.id}/triviews/visual-target-1`)).status, 200);
@@ -1444,7 +1461,9 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
       await writeFile(path.join(root, "authoring.json"), "Canonical decoy");
       await writeFile(path.join(root, "final/capture/opening.png"), VALID_EMPTY_OPENING_PNG);
       assert.equal((await fetch(`${origin}/api/recording-worlds/${created.id}/recordings`)).status, 404);
+      assert.equal((await fetch(`${origin}/api/recording-worlds/${created.id}/recordings`, { headers })).status, 403);
     } finally { await studio.shutdown(); }
+    assert.equal(previewStops, 1);
   });
 }
 

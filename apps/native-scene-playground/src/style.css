@@ -205,6 +205,17 @@ kbd.wide {
 .recording-panel button[aria-pressed="true"] { background: #733b32; }
 .recording-panel [data-recording-status] { flex-basis: 100%; font-size: 11px; overflow-wrap: anywhere; }
 
+.native-recording-workbench {
+  right: clamp(24px, 3.1vw, 52px);
+  top: 100px;
+  bottom: 220px;
+  width: min(350px, calc(100% - 48px));
+  padding: 16px;
+  border-radius: 14px;
+  overflow: auto;
+}
+.native-recording-workbench[hidden] { display: none; }
+
 .loading {
   position: absolute;
   inset: 0;

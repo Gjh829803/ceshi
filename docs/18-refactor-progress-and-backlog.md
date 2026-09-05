@@ -2186,6 +2186,29 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   CF16-RECORDING-STUDIO-BINDING 的 Package/Studio 身份、上传/列表/生成面板、上传失败备份
   尚未接入；旧时间戳中断自动恢复、其余 CF 与最终真实生产 Case 同样保持开放。
 
+- CF16-RECORDING-STUDIO-BINDING（main-agent-only，接 `e50a20eb`）：Studio 新增显式
+  “准备录制页”入口，复用已验证 Package 的 owned copy 和既有 Native 双源服务；同场景
+  并发打开合并为一次启动，Package 替换/进程退出/Studio 关闭撤销权限并清理自有资源。
+  不修改生成的 Native launch 命令或 BNA 收据，也不伪造 Canonical Preview Source。
+  仅 shell Node 收到限定当前场景的 capability 和本地 Studio origin；浏览器只收到
+  sceneId/Package root，Runtime frame 不收到 Studio 权限。代理仅开放既有录制及素材
+  端点，剥离 Cookie/全局 Authorization；每次请求复用已有 Native 发布/launch proof，
+  不以 strict/style 成败增加白模录制 veto。shell 允许同源图片/媒体，Runtime CSP 不变。
+  shell 以 Runtime ready 的 Package root 绑定共享 workbench：停止后单次上传，失败时
+  下载原始 Blob 备份；独立 Native 启动继续本地下载。关闭页面/媒体连接会清理面板定时器，
+  不在关闭后触发延迟下载。Native 录制持久保存 Package root，上传结束、生成排队实际执行
+  和打包前避免与同场景的新 Package 混用；不改变旧归一化、Prompt 引用顺序、Seedance
+  参数/预算或普通生产标准，也不自动发起视频生成。
+  三个 Package 缺口 RED 已复现后修复，Recording workbench/preview manager 24/24；
+  新增排队期间 Package 替换回归 1/1；Studio 按四种视觉结果的真实发布夹具回归 4/4；
+  入口 fake-DOM 测试 5/5。浏览器录制适配/控件、Vite、binding/proxy 五文件当前合计
+  25 项通过（首轮 24 项后补 CSP 隔离断言；两文件复跑 15 项，不重复累加）。
+  响应头 TS 类型与测试清单排序首轮错误已修正，最终 typecheck、census
+  （474 files = 431 contract + 43 resource-heavy）、3C migration（11 entries/39 refs/10
+  invariants）和最终 Native 构建通过；保留 large-chunk warning，构建只编译已有 Package
+  fixture，不是运行新 Case。实际 Browser 编码/页面交互、
+  模型视觉/视频生成、最终本地 Case、全仓 CI 和独立复核未运行；未关闭 CF-16 或整个 CF。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

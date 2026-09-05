@@ -41,8 +41,11 @@ import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
 import "./style.css";
 import { CanvasRecorder } from "@whitebox-world/browser-recording/canvas-recorder";
-import { downloadRecording } from "@whitebox-world/browser-recording/download";
 import { installHostedRecordingControls } from "./hosted-recording-controls.js";
+import { installHostedRecordingWorkbench, type HostedRecordingContext } from "./hosted-recording-workbench.js";
+import "@whitebox-world/browser-recording/workbench.css";
+
+declare const __WORLDKIT_RECORDING_CONTEXT__: HostedRecordingContext | null;
 
 declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
@@ -398,8 +401,12 @@ async function startHostedShell(): Promise<void> {
   // Sandbox and credentialless policy must be installed before first navigation.
   viewport.append(frame);
   let recordingControls: ReturnType<typeof installHostedRecordingControls> | undefined;
+  let recordingWorkbench: ReturnType<typeof installHostedRecordingWorkbench> | undefined;
+  let disposed = false;
   window.addEventListener("beforeunload", () => {
+    disposed = true;
     recordingControls?.dispose();
+    recordingWorkbench?.dispose();
     bridge.dispose();
   }, { once: true });
   window.__WORLDKIT_HOSTED_RUNTIME__ = Object.freeze({
@@ -408,17 +415,32 @@ async function startHostedShell(): Promise<void> {
     submit: (request) => bridge.submit(request),
     frame,
   });
-  await bridge.waitUntilReady();
+  const ready = await bridge.waitUntilReady();
+  if (disposed) return;
+  if (ready.type !== "ready") throw new Error("NATIVE_RECORDING_RUNTIME_NOT_READY");
+  try {
+    recordingWorkbench = installHostedRecordingWorkbench({
+      root: requiredElement<HTMLElement>("[data-recording-workbench]"),
+      context: __WORLDKIT_RECORDING_CONTEXT__,
+      worldPackageRootHash: ready.worldPackageRootHash,
+    });
+  } catch (error) {
+    bridge.dispose();
+    throw error;
+  }
+  bridge.recording().onDisposed(() => recordingWorkbench?.dispose());
   requiredElement<HTMLElement>("[data-state]").textContent = "READY";
   recordingControls = installHostedRecordingControls({
     button: requiredElement<HTMLButtonElement>("[data-record]"),
     time: requiredElement<HTMLElement>("[data-recording-time]"),
     status: requiredElement<HTMLElement>("[data-recording-status]"),
     client: bridge.recording(),
-    save: async result => `已下载本地录屏 · ${downloadRecording(result.blob, result.extension)}`,
+    save: result => recordingWorkbench!.save(result),
     focusCanvas: () => frame.contentWindow?.focus(),
   });
   requiredElement<HTMLElement>("[data-recording-panel]").hidden = false;
+  requiredElement<HTMLElement>("[data-recording-status]").textContent = __WORLDKIT_RECORDING_CONTEXT__
+    ? "停止后保存到录制列表；上传失败会下载原始备份" : "停止后下载本地白膜录屏";
 }
 
 async function startHostedFrame(): Promise<void> {

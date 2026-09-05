@@ -436,6 +436,8 @@ export function createRecordingWorkbenchService(options = {}) {
     if (!ID_PATTERN.test(sceneId)) return null;
     if (typeof sceneContextProvider === "function") {
       const context = await sceneContextProvider(sceneId);
+      if (context?.sceneSourceKind === "babylon-native" &&
+          !/^sha256:[a-f0-9]{64}$/.test(context.worldPackageRootHash ?? "")) return null;
       return ["canonical", "babylon-native"].includes(context?.sceneSourceKind) ? context : null;
     }
     // Standalone Canonical workbench retains its existing availability behavior.
@@ -445,6 +447,15 @@ export function createRecordingWorkbenchService(options = {}) {
 
   async function sceneAvailable(sceneId) {
     return await resolveSceneContext(sceneId) !== null;
+  }
+
+  async function assertRecordingWorld(sceneId, source) {
+    const context = await resolveSceneContext(sceneId);
+    if ((source?.worldPackageRootHash !== undefined || context?.sceneSourceKind === "babylon-native") &&
+        (context?.sceneSourceKind !== "babylon-native" ||
+         source?.worldPackageRootHash !== context.worldPackageRootHash)) {
+      throw new RecordingBundleNotReadyError("录屏绑定的 Native Package 已变化，请打开当前世界重新录制。");
+    }
   }
 
   async function readRecord(sceneId, recordingId) {
@@ -748,6 +759,7 @@ export function createRecordingWorkbenchService(options = {}) {
   }
 
   async function runGeneration(sceneId, recordingId, frozenCodexBackend = null) {
+    await assertRecordingWorld(sceneId, (await readRecord(sceneId, recordingId))?.source);
     if (typeof generationRunner === "function") {
       await generationRunner({
         sceneId,
@@ -795,6 +807,7 @@ export function createRecordingWorkbenchService(options = {}) {
   }
 
   async function prepareBundle(sceneId, recordingId, record) {
+    await assertRecordingWorld(sceneId, record.source);
     const assets = await resolveSceneAssets(sceneId);
     const temporaryRoot = await mkdtemp(path.join(recordingRoot(sceneId, recordingId), ".bundle-"));
     const folderName = `${sceneId}-${recordingId}`;
@@ -965,7 +978,7 @@ export function createRecordingWorkbenchService(options = {}) {
     }
   }
 
-  async function handleApi(request, response, url) {
+  async function handleApi(request, response, url, recordingContext = null) {
     const collection = /^\/api\/recording-worlds\/([a-z0-9-]+)\/recordings$/.exec(url.pathname);
     if (collection && request.method === "GET") {
       const sceneId = collection[1];
@@ -984,10 +997,19 @@ export function createRecordingWorkbenchService(options = {}) {
 
     if (collection && request.method === "POST") {
       const sceneId = collection[1];
-      if (!await sceneAvailable(sceneId)) {
+      const sceneContext = await resolveSceneContext(sceneId);
+      if (!sceneContext) {
         sendError(response, 404, "没有找到可录制的世界。");
         return true;
       }
+      if (recordingContext && (recordingContext.sceneId !== sceneId ||
+          sceneContext.sceneSourceKind !== "babylon-native" ||
+          recordingContext.worldPackageRootHash !== sceneContext.worldPackageRootHash)) {
+        sendError(response, 409, "录制页面绑定的 Native Package 已变化，请重新打开。");
+        return true;
+      }
+      const sourceIdentity = sceneContext.sceneSourceKind === "babylon-native"
+        ? { worldPackageRootHash: sceneContext.worldPackageRootHash } : {};
       const contentType = String(request.headers["content-type"] || "").split(";", 1)[0].trim();
       const extension = contentType === "video/mp4" ? "mp4" : contentType === "video/webm" ? "webm" : null;
       if (!extension) {
@@ -1018,6 +1040,7 @@ export function createRecordingWorkbenchService(options = {}) {
           durationSeconds,
         );
         const normalizedMetadata = await stat(path.join(root, normalized.fileName));
+        await assertRecordingWorld(sceneId, sourceIdentity);
         const timestamp = now();
         const record = {
           kind: "worldkit-playground-recording",
@@ -1028,6 +1051,7 @@ export function createRecordingWorkbenchService(options = {}) {
           createdAt: timestamp,
           updatedAt: timestamp,
           source: {
+            ...sourceIdentity,
             fileName: normalized.fileName,
             extension: normalized.extension,
             mimeType: normalized.mimeType,
@@ -1085,6 +1109,8 @@ export function createRecordingWorkbenchService(options = {}) {
         sendError(response, 404, "录屏记录不存在。");
         return true;
       }
+      try { await assertRecordingWorld(sceneId, record.source); }
+      catch (error) { sendError(response, 409, error); return true; }
       const key = `${sceneId}:${recordingId}`;
       const alreadyScheduled = activeJobs.has(key) ||
         queue.some((item) => `${item.sceneId}:${item.recordingId}` === key);

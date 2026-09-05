@@ -1,3 +1,5 @@
+import { canOpenNativeRecording, wireNativeRecordingAction } from "./native-recording-action.js";
+
 const state = {
   worlds: [],
   filter: "all",
@@ -1301,6 +1303,7 @@ function renderDialogActions(world) {
   const canRetry = ["failed", "interrupted"].includes(world.status);
   const canStop = ["queued", "running", "visual-queued", "visual-running"].includes(world.status);
   return `${world.previewUrl ? `<a href="${escapeHtml(world.previewUrl)}" target="_blank" rel="noreferrer">进入白膜世界 ↗</a>` : ""}
+    ${canOpenNativeRecording(world) ? '<button type="button" data-native-recording>准备录制页</button>' : ""}
     ${canStop ? `<button type="button" class="stop-world">停止任务</button>` : ""}
     ${canRetry ? `<button type="button" id="retry-world">重新生成</button>` : ""}`;
 }
@@ -1352,11 +1355,13 @@ function wireRetryAction(id) {
 
 function patchWorldActions(world) {
   const actions = dialogContent.querySelector("[data-live-actions]");
-  if (!actions || actions.dataset.status === world.status) return;
-  actions.dataset.status = world.status;
+  const signature = JSON.stringify([world.status, world.previewUrl, canOpenNativeRecording(world), world.nativeLaunch]);
+  if (!actions || actions.dataset.status === signature) return;
+  actions.dataset.status = signature;
   actions.innerHTML = renderDialogActions(world);
   wireRetryAction(world.id);
   wireStopAction(world.id);
+  wireNativeRecordingAction(dialogContent, world.id);
 }
 
 function patchDetailCounts(world, media) {
@@ -1509,6 +1514,7 @@ async function refreshDialog(id, suppliedPayload = null) {
   });
   wireRetryAction(id);
   wireStopAction(id);
+  wireNativeRecordingAction(dialogContent, id);
   const pre = dialogContent.querySelector(".runtime-log pre");
   if (pre) pre.scrollTop = pre.scrollHeight;
   if (previousScrollTop > 0) {

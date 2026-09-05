@@ -58,7 +58,7 @@ function nativePackagePlugin(config: UserConfig): Plugin {
   return plugin;
 }
 
-async function createConfig(): Promise<UserConfig> {
+async function createConfig(overrides: Record<string, string> = {}): Promise<UserConfig> {
   return createNativeScenePlaygroundViteConfigV1({
     WORLDKIT_NATIVE_PACKAGE_PATH: packageDirectoryPath,
     WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
@@ -67,6 +67,7 @@ async function createConfig(): Promise<UserConfig> {
     WORLDKIT_NATIVE_VITE_CACHE_ROOT: testRootPath,
     WORLDKIT_HOSTED_SHELL_ORIGIN: SHELL_ORIGIN,
     WORLDKIT_HOSTED_RUNTIME_ORIGIN: RUNTIME_ORIGIN,
+    ...overrides,
   });
 }
 
@@ -90,7 +91,7 @@ function middlewareStack(config: UserConfig): readonly Connect.NextHandleFunctio
 
 async function invoke(
   stack: readonly Connect.NextHandleFunction[],
-  input: Readonly<{ method: string; url: string }>,
+  input: Readonly<{ method: string; url: string; host?: string }>,
 ): Promise<Readonly<{
   statusCode: number;
   headers: Readonly<Record<string, string | number | readonly string[]>>;
@@ -100,7 +101,7 @@ async function invoke(
   const request = Object.assign(new EventEmitter(), {
     method: input.method,
     url: input.url,
-    headers: { host: new URL(SHELL_ORIGIN).host },
+    headers: { host: input.host ?? new URL(SHELL_ORIGIN).host },
   }) as IncomingMessage;
   const chunks: Uint8Array[] = [];
   const headers: Record<string, string | number | readonly string[]> = {};
@@ -168,6 +169,22 @@ afterEach(async () => {
 });
 
 describe("Native Playground verified Package Vite seam", () => {
+  it("keeps Studio capability server-only and rejects a Runtime or mismatched Package binding", async () => {
+    const binding = { sceneId: "palace", worldPackageRootHash: packageDirectory.receipt.worldPackageRootHash,
+      studioOrigin: "http://127.0.0.1:3000", capability: "a".repeat(64) };
+    const config = await createConfig({ WORLDKIT_STUDIO_RECORDING_BINDING: JSON.stringify(binding) });
+    expect(JSON.parse(config.define!.__WORLDKIT_RECORDING_CONTEXT__)).toEqual({
+      sceneId: binding.sceneId, worldPackageRootHash: binding.worldPackageRootHash,
+    });
+    expect(JSON.stringify(config.define)).not.toContain(binding.capability);
+    expect(JSON.stringify(config.define)).not.toContain(binding.studioOrigin);
+    await expect(createConfig({ WORLDKIT_NATIVE_SERVER_ROLE: "runtime",
+      WORLDKIT_STUDIO_RECORDING_BINDING: JSON.stringify(binding) })).rejects.toThrow("BINDING_SOURCE_MISMATCH");
+    await expect(createConfig({ WORLDKIT_STUDIO_RECORDING_BINDING: JSON.stringify({ ...binding,
+      worldPackageRootHash: `sha256:${"f".repeat(64)}` }) })).rejects.toThrow("BINDING_SOURCE_MISMATCH");
+    const standalone = await createConfig();
+    expect(standalone.define!.__WORLDKIT_RECORDING_CONTEXT__).toBe("null");
+  });
   it("fails closed without an explicit Package path", async () => {
     await expect(createNativeScenePlaygroundViteConfigV1({
       WORLDKIT_AUTHORING_SERVER_NONCE: NONCE,
@@ -236,6 +253,17 @@ describe("Native Playground verified Package Vite seam", () => {
     expect(verifierConfig.define).toMatchObject({
       __WORLDKIT_NATIVE_VERIFIER_PROBE_ENABLED__: "true",
     });
+  });
+
+  it("allows Studio media only in the trusted shell and keeps Runtime media blocked", async () => {
+    const stack = middlewareStack(await createConfig());
+    const shell = await invoke(stack, { method: "GET", url: "/" });
+    const runtime = await invoke(stack, { method: "GET", url: "/", host: new URL(RUNTIME_ORIGIN).host });
+    expect(shell.headers["content-security-policy"]).toContain("media-src 'self'");
+    expect(shell.headers["content-security-policy"]).toContain("img-src 'self' data:");
+    expect(runtime.headers["content-security-policy"]).toContain("media-src 'none'");
+    expect(runtime.headers["content-security-policy"]).toContain("img-src data:");
+    expect(String(runtime.headers["content-security-policy"])).not.toContain("media-src 'self'");
   });
 
   it("injects only explicit trusted formal Capture construction identities", async () => {

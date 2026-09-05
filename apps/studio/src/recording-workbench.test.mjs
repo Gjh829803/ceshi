@@ -18,6 +18,7 @@ import {
 } from "./recording-workbench.mjs";
 
 const temporaryRoots = [];
+const nativePackageRootHash = `sha256:${"a".repeat(64)}`;
 
 test.afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -72,10 +73,10 @@ async function makeFixture(sceneSourceKind = "canonical") {
   return { repoRoot, dataRoot, sceneId };
 }
 
-async function listen(service) {
+async function listen(service, recordingContext) {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
-    void service.handleApi(request, response, url).then((handled) => {
+    void service.handleApi(request, response, url, recordingContext).then((handled) => {
       if (!handled && !response.headersSent) {
         response.writeHead(404);
         response.end();
@@ -112,6 +113,85 @@ async function uploadRecording(origin, sceneId) {
   });
   if (response.status !== 201) assert.fail(await response.text());
   return (await response.json()).recording;
+}
+
+test("Native recordings retain their exact Package and cannot generate or bundle with its replacement", async () => {
+  const fixture = await makeFixture("babylon-native");
+  let worldPackageRootHash = nativePackageRootHash;
+  let dispatched = 0;
+  const service = createRecordingWorkbenchService({ ...fixture,
+    sceneContextProvider: async () => ({ sceneSourceKind: "babylon-native", worldPackageRootHash }),
+    transcodeRecording: fakeRecordingTranscode,
+    generationRunner: async () => { dispatched++; },
+  });
+  await service.initialize();
+  const http = await listen(service);
+  try {
+    const record = await uploadRecording(http.origin, fixture.sceneId);
+    assert.equal(record.source.worldPackageRootHash, nativePackageRootHash);
+    worldPackageRootHash = `sha256:${"b".repeat(64)}`;
+    const base = `${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${record.id}`;
+    assert.equal((await fetch(`${base}/generate`, { method: "POST" })).status, 409);
+    assert.equal((await fetch(`${base}/bundle`)).status, 409);
+    assert.equal((await fetch(`${base}/source`)).status, 200);
+    assert.equal(dispatched, 0);
+  } finally { await service.shutdown(); await http.close(); }
+});
+
+test("Native generation rechecks Package when queued work actually starts", async () => {
+  const fixture = await makeFixture("babylon-native");
+  let worldPackageRootHash = nativePackageRootHash;
+  let release;
+  let started;
+  const barrier = new Promise(resolve => { release = resolve; });
+  const entered = new Promise(resolve => { started = resolve; });
+  const dispatched = [];
+  const service = createRecordingWorkbenchService({ ...fixture, maxConcurrentJobs: 1,
+    sceneContextProvider: async () => ({ sceneSourceKind: "babylon-native", worldPackageRootHash }),
+    transcodeRecording: fakeRecordingTranscode,
+    generationRunner: async ({ recordingId }) => { dispatched.push(recordingId); started(); await barrier; },
+  });
+  await service.initialize();
+  const http = await listen(service);
+  try {
+    const first = await uploadRecording(http.origin, fixture.sceneId);
+    const generate = record => fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings/${record.id}/generate`, { method: "POST" });
+    assert.equal((await generate(first)).status, 202);
+    await entered;
+    const second = await uploadRecording(http.origin, fixture.sceneId);
+    assert.equal((await generate(second)).status, 202);
+    worldPackageRootHash = `sha256:${"b".repeat(64)}`;
+    release();
+    const failed = await waitForRecording(http.origin, fixture.sceneId,
+      record => record.id === second.id && record.video.status === "failed");
+    assert.match(failed.error, /Native Package 已变化/);
+    assert.deepEqual(dispatched, [first.id]);
+  } finally { release(); await service.shutdown(); await http.close(); }
+});
+
+for (const race of ["before-upload", "during-transcode"]) {
+  test(`Native recording rejects changed Package ${race}`, async () => {
+    const fixture = await makeFixture("babylon-native");
+    let worldPackageRootHash = race === "before-upload" ? `sha256:${"b".repeat(64)}` : nativePackageRootHash;
+    const service = createRecordingWorkbenchService({ ...fixture,
+      sceneContextProvider: async () => ({ sceneSourceKind: "babylon-native", worldPackageRootHash }),
+      transcodeRecording: async input => {
+        worldPackageRootHash = `sha256:${"b".repeat(64)}`;
+        return fakeRecordingTranscode(input);
+      },
+    });
+    await service.initialize();
+    const http = await listen(service, { sceneId: fixture.sceneId, worldPackageRootHash: nativePackageRootHash });
+    try {
+      const response = await fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings`, {
+        method: "POST", headers: { "content-type": "video/mp4", "x-worldkit-recording-duration-ms": "9000" },
+        body: Buffer.concat([Buffer.from("0000001866747970", "hex"), Buffer.from("recording-body")]),
+      });
+      assert.equal(response.status, race === "before-upload" ? 409 : 400);
+      const list = await fetch(`${http.origin}/api/recording-worlds/${fixture.sceneId}/recordings`);
+      assert.equal((await list.json()).recordings.length, 0);
+    } finally { await service.shutdown(); await http.close(); }
+  });
 }
 
 async function fakeRecordingTranscode({ sourcePath, destinationPath, durationSeconds }) {
@@ -304,7 +384,7 @@ test(`${sceneSourceKind} freezes a local Codex backend at enqueue and stores onl
     dataRoot: fixture.dataRoot,
     spawnImplementation: fake.spawnImplementation,
     transcodeRecording: fakeRecordingTranscode,
-    ...(sceneSourceKind === "babylon-native" ? { sceneContextProvider: async () => ({ sceneSourceKind }) } : {}),
+    ...(sceneSourceKind === "babylon-native" ? { sceneContextProvider: async () => ({ sceneSourceKind, worldPackageRootHash: nativePackageRootHash }) } : {}),
     codexBackendProvider: () => {
       providerCalls += 1;
       return selectedBackend;
@@ -515,7 +595,7 @@ for (const mutation of ["unavailable", "unknown-source", "missing-whitebox-ref",
     let dispatchCount = 0;
     const service = createRecordingWorkbenchService({ ...fixture, transcodeRecording: fakeRecordingTranscode,
       sceneContextProvider: async () => mutation === "unavailable" ? null : {
-        sceneSourceKind: mutation === "unknown-source" ? "other" : "babylon-native" },
+        sceneSourceKind: mutation === "unknown-source" ? "other" : "babylon-native", worldPackageRootHash: nativePackageRootHash },
       generationRunner: async () => { dispatchCount++; },
     });
     await service.initialize();
@@ -540,7 +620,7 @@ test(`${sceneSourceKind} persists browser recordings, lists them, generates inde
   const service = createRecordingWorkbenchService({
     repoRoot: fixture.repoRoot,
     dataRoot: fixture.dataRoot,
-    ...(sceneSourceKind === "babylon-native" ? { sceneContextProvider: async () => ({ sceneSourceKind }) } : {}),
+    ...(sceneSourceKind === "babylon-native" ? { sceneContextProvider: async () => ({ sceneSourceKind, worldPackageRootHash: nativePackageRootHash }) } : {}),
     transcodeRecording: fakeRecordingTranscode,
     composeTriviewComparison: async ({ whiteboxPath, styledPath, destinationPath }) => {
       await writeFile(

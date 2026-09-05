@@ -965,6 +965,49 @@ CF16-RECORDING-TRANSPORT implementation contract:
   Studio identity, automatic upload, shared workbench installation and upload
   failure backup remain open. No new provider/model request is made here.
 
+#### CF16-RECORDING-STUDIO-BINDING implementation (2026-09-06)
+
+Main-agent-only, sequential; depends on the completed media transport. Studio
+owns a managed recording-preview launcher and its lifecycle. This uses the
+existing owned Package copy and Native dual-origin server, not a replacement
+Canonical Preview or a changed generated launch command/BNA receipt. Concurrent
+opens share one launch; changed Package, shutdown and server exit revoke its
+scene-scoped capability and dispose only the owned server/copy.
+
+Only the trusted shell Node process receives the explicit local Studio origin
+and capability. Runtime receives neither, browser defines contain only scene id
+and Package root. The shell middleware proxies the exact existing recording and
+scene-media endpoints, strips cookies/global authorization, and adds its private
+capability. Studio resolves the current existing published Native launch proof
+for authorization and passes the resulting identity through a private request
+context, not an untrusted header. Shell CSP allows same-origin media/images;
+Runtime CSP, credentialless/sandbox policy and deterministic protocol remain
+unchanged.
+
+The shell compares its trusted context to Runtime ready Package identity before
+installing the existing shared workbench. Stop uploads the original result once;
+upload failure retains the old original-Blob download backup, filename policy
+and 10s URL release. Standalone Native still downloads locally. Disposal stops
+the shared panel polling and suppresses late downloads. The Studio action
+explicitly prepares a page/link; opening it never submits a generation task.
+
+Native recording source metadata retains its Package root. Upload completion,
+generation admission/queue execution and bundle preparation verify that the
+recording is still paired with that Package. Historical raw video remains
+downloadable from Studio. This is the Native fixed-source identity boundary,
+not an additional visual/media quality threshold or ordinary production gate.
+Canonical normalization, prompt/reference order, provider parameters, retries
+and success predicates are unchanged.
+
+Focused evidence covers stale authorization/Package, upload/transcode races,
+queued Package replacement before generation, concurrent opens, natural exit,
+shutdown during launch, exact proxy bytes, no credential forwarding, shell-only
+media policy, original upload/download fallback and teardown. Browser action
+tests use explicit single POST and fake DOM; encoding/page interaction still
+require actual Browser acceptance. No real model/paid Case was run. CF-16's
+older-timestamp automatic visual recovery, full visual/media acceptance and
+the other CF work remain open.
+
 The latest user objective supersedes the earlier early-rerun scheduling: finish all CF
 implementation and old-branch alignment first; only then run the final local Case and
 prove the production chain completes. Do not launch a fresh production/model Case during
