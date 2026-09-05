@@ -696,7 +696,8 @@ describe("evaluateWorldReconstructionV1", () => {
         kind: "revise-native-source",
         targetKind: "visual-group",
         targetId: "central-ascent-group",
-        operation: "move",
+        operation: "adjust-geometry",
+        instruction: expect.stringContaining("occlusion"),
       }),
     }));
   });

@@ -107,6 +107,57 @@ function traversalPorts(
 }
 
 describe("formal world capture provider", () => {
+  it("colors explicit top-overlay partitions without losing mixed-group or ungrouped surfaces", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const groups = ["red", "green", undefined] as const;
+      const blocks = groups.map((visualGroupId, index) => ({ blockId: `block-${index}`,
+        runtimeEntityId: `native-block:${index}`, semanticCaptureClassId: `class-${index}`,
+        ...(visualGroupId === undefined ? {} : { visualGroupId }) }));
+      const handles = blocks.map((block) => ({ kind: "independent-mesh" as const, ...block,
+        mesh: MeshBuilder.CreateBox(block.blockId, {}, scene) }));
+      const topologyHash = `sha256:${"a".repeat(64)}` as const;
+      const overlays = blocks.map((block) => ({ logicalColliderId: "shared-ground",
+        sourceBlockIds: [block.blockId] as [string],
+        visualGroupIds: block.visualGroupId === undefined ? [] : [block.visualGroupId],
+        topologyHash, mesh: MeshBuilder.CreateBox(`top-${block.blockId}`, {}, scene) }));
+      const metadata = { blocks,
+        visualGroups: [{ visualGroupId: "red", blockIds: [blocks[0]!.blockId], identityColorHex: "#FF0000" },
+          { visualGroupId: "green", blockIds: [blocks[1]!.blockId], identityColorHex: "#00FF00" }],
+        colliderJoins: [{ colliderId: "shared-ground", sourceBlockIds: blocks.map(({ blockId }) => blockId),
+          visualGroupIds: ["green", "red"], topologyHash, proxyKind: "continuous-walkable-surface",
+          triangleCount: overlays.reduce((sum, { mesh }) => sum + mesh.getTotalIndices() / 3, 0) }],
+      } as unknown as BabylonNativeBlockMaterializerMetadataV1;
+      const registry = { kind: "babylon-native-block-live-handle-registry" as const, schemaVersion: 1 as const,
+        realization: { kind: "authoring-unbatched" as const }, blocks: handles, visualBatches: [],
+        visualGroups: metadata.visualGroups.map(({ visualGroupId }) => ({ visualGroupId,
+          blockHandles: handles.filter((handle) => handle.visualGroupId === visualGroupId) })),
+        walkableOverlays: overlays };
+      const colors = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resolveIdentityMaskColors({ scene, metadata, registry });
+      expect(overlays.map(({ mesh }) => colors.get(mesh))).toEqual(["#FF0000", "#00FF00", "#000000"]);
+      for (const mutation of ["missing", "duplicate", "topology", "source", "group", "mixed"] as const) {
+        const first = overlays[0]!;
+        const invalid = mutation === "missing" ? overlays.slice(1)
+          : mutation === "duplicate" ? [...overlays, first]
+          : [{ ...first,
+            ...(mutation === "topology" ? { topologyHash: `sha256:${"b".repeat(64)}` as const } : {}),
+            ...(mutation === "source" ? { sourceBlockIds: ["foreign-block"] as [string] } : {}),
+            ...(mutation === "group" ? { visualGroupIds: ["green"] } : {}),
+            ...(mutation === "mixed" ? { sourceBlockIds: [blocks[0]!.blockId, blocks[2]!.blockId] as [string, string] } : {}),
+          }, ...overlays.slice(1)];
+        expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resolveIdentityMaskColors({
+          scene, metadata, registry: { ...registry, walkableOverlays: invalid },
+        }), mutation).toThrow("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+      }
+      overlays[0]!.mesh.dispose();
+      expect(() => FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.resolveIdentityMaskColors({ scene, metadata, registry }))
+        .toThrow("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    } finally {
+      scene.dispose(); engine.dispose();
+    }
+  });
+
   it("fails closed on missing, extra, foreign, or disposed visual handles without reading Mesh metadata", () => {
     // This catches a fallback to Scene/Mesh name, tag, or metadata inference
     // when the trusted profile registry is incomplete.

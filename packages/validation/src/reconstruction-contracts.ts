@@ -678,11 +678,7 @@ const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
         targetKind: "visual-group",
         operation: metricId.endsWith("semantic-target-binding")
           ? "bind"
-          : metricId.endsWith("reference-projection") || metricId.endsWith("semantic-coverage-basis-points")
-          ? "adjust-geometry"
-          : metricId.includes("semantic-center-")
-          ? "move"
-          : "resize",
+          : "adjust-geometry",
       },
     ] as const),
   ),

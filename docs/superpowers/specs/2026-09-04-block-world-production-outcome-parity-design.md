@@ -382,7 +382,7 @@ uses. Quality differences remain diagnostic in ordinary production, with no new 
 Attempt, production veto or stricter success threshold. Actual Browser evidence is required
 before claiming same-camera masks, holes, repeated instances and occlusion are verified.
 
-Pixel absence and coverage drift use the existing source-repair action with the
+Pixel absence and bounds/center/coverage drift use the existing source-repair action with the
 current-only operation `adjust-geometry`, not an inferred move/enlarge/shrink.
 Its instruction requires comparing the bound identity and display pixels with
 the frozen reference and preserving intended holes, separation and occlusion.
@@ -390,6 +390,20 @@ This does not assert a geometric cause from an aggregate pixel count. The existi
 explicit evaluation-repair task receives all three identity masks, side/top display
 images and semantic observations through its frozen input allowlist; ordinary
 production still never allocates that external repair task.
+
+CF-14/R2-D binds the actual walkable top overlays, not only the original Block
+meshes. The existing topology owner records required `overlayPartitions` on each
+geometry: deterministic partitions with exact `sourceBlockIds`, `visualGroupIds`
+(empty or one group), and triangle indices into the existing overlay positions.
+Solid geometries have no overlay partitions. Each source top-cell supplies both
+triangles and their identity; the union covers the original walkable triangles
+exactly once. No Capture consumer re-derives that identity from names or bounds.
+The existing materializer emits one explicit walkableOverlay handle per partition
+and preserves the original full-surface normals, placement and collision arrays.
+Partitions participate in geometry/topology hashes but do not change physics,
+smoothing, Collider budgets or production policy. Capture validates and colors
+these explicit handles; mixed semantic and ungrouped Blocks within one Collider
+remain supported, with ungrouped partitions black rather than a new rejection.
 
 ### CF-11 source-authored ground exploration
 

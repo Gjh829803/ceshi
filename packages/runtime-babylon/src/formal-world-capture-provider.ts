@@ -250,6 +250,60 @@ export function assertFormalCaptureLiveVisualRegistryV1(input: Readonly<{
   }
 }
 
+function resolveIdentityMaskColors(input: Readonly<{
+  scene: Scene;
+  metadata: BabylonNativeBlockMaterializerMetadataV1;
+  registry: BabylonNativeBlockLiveHandleRegistryV1;
+}>): ReadonlyMap<Mesh, string> {
+  const { scene, metadata, registry } = input;
+  assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata, liveHandleRegistry: registry });
+  const colorByBlockId = new Map(metadata.visualGroups.flatMap((group) =>
+    group.blockIds.map((blockId) => [blockId, group.identityColorHex] as const)));
+  const colors = new Map<Mesh, string>();
+  for (const handle of registry.blocks) {
+    const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
+    const color = colorByBlockId.get(handle.blockId) ?? "#000000";
+    const prior = colors.get(mesh);
+    if (prior !== undefined && prior !== color) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_BATCH_COLOR_CONFLICT");
+    }
+    colors.set(mesh, color);
+  }
+  const blockById = new Map(metadata.blocks.map((block) => [block.blockId, block]));
+  const walkableById = new Map(metadata.colliderJoins
+    .filter(({ proxyKind }) => proxyKind === "continuous-walkable-surface")
+    .map((join) => [join.colliderId, join]));
+  const overlayTriangleCountByColliderId = new Map<string, number>();
+  for (const overlay of registry.walkableOverlays) {
+    const join = walkableById.get(overlay.logicalColliderId);
+    if (join === undefined || overlay.mesh.isDisposed() || overlay.mesh.getScene() !== scene ||
+      colors.has(overlay.mesh) || overlay.topologyHash !== join.topologyHash ||
+      overlay.sourceBlockIds.length === 0 ||
+      new Set(overlay.sourceBlockIds).size !== overlay.sourceBlockIds.length ||
+      overlay.sourceBlockIds.some((id) => !join.sourceBlockIds.includes(id) || !blockById.has(id))) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    }
+    const groupIds = [...new Set(overlay.sourceBlockIds.flatMap((id) => {
+      const groupId = blockById.get(id)!.visualGroupId;
+      return groupId === undefined ? [] : [groupId];
+    }))];
+    exactStringSet(groupIds, overlay.visualGroupIds, "BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    const partitionColors = new Set(overlay.sourceBlockIds.map((id) => colorByBlockId.get(id) ?? "#000000"));
+    if (groupIds.length > 1 || partitionColors.size !== 1) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    }
+    colors.set(overlay.mesh, partitionColors.values().next().value!);
+    overlayTriangleCountByColliderId.set(overlay.logicalColliderId,
+      (overlayTriangleCountByColliderId.get(overlay.logicalColliderId) ?? 0) + overlay.mesh.getTotalIndices() / 3);
+  }
+  for (const join of walkableById.values()) {
+    if (overlayTriangleCountByColliderId.get(join.colliderId) !== join.triangleCount) {
+      fail("BABYLON_FORMAL_CAPTURE_IDENTITY_OVERLAY_BINDING_INVALID");
+    }
+  }
+  return colors;
+}
+
 function coordinate(
   position: readonly [number, number, number],
   axis: "x" | "y" | "z",
@@ -991,6 +1045,7 @@ async function captureTraversal(
 
 /** @internal Package-private lifecycle seam for provider regression tests. */
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
+  resolveIdentityMaskColors,
   captureTraversal,
   assertFormalSupportContactContributionIdentityV1,
   captureTraversalChecks,
@@ -1037,20 +1092,7 @@ export async function executeFormalWorldCaptureProviderV1(
   const identityMaskColorsByMesh = (scene: Scene): ReadonlyMap<Mesh, string> => {
     const registry = peekBabylonNativeBlockLiveHandleRegistryV1(scene) ??
       fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_REGISTRY_MISSING");
-    assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata, liveHandleRegistry: registry });
-    const colorByBlockId = new Map(metadata.visualGroups.flatMap((group) =>
-      group.blockIds.map((blockId) => [blockId, group.identityColorHex] as const)));
-    const colors = new Map<Mesh, string>();
-    for (const handle of registry.blocks) {
-      const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
-      const color = colorByBlockId.get(handle.blockId) ?? "#000000";
-      const prior = colors.get(mesh);
-      if (prior !== undefined && prior !== color) {
-        fail("BABYLON_FORMAL_CAPTURE_IDENTITY_BATCH_COLOR_CONFLICT");
-      }
-      colors.set(mesh, color);
-    }
-    return colors;
+    return resolveIdentityMaskColors({ scene, metadata, registry });
   };
   const openingCapture = input.ports.captureArtifactView({ ...openingArtifactRequest(
     openingView,

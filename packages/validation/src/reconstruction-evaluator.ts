@@ -583,7 +583,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumBoundsDriftBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "resize", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference to explain the ${label} drift toward ${expectedValue} basis points. Visible bounds can change through occlusion or clipping without a size change; preserve correct holes and geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
       const centerMetrics = [
@@ -603,7 +603,7 @@ function evaluateSemanticSilhouette(
           details,
           evidenceRefs: row.evidenceRefs,
           message: `Visual group ${expected.visualGroupId} ${requirement.viewId} ${label} is ${actualValue} basis points; target ${expectedValue}, allowed drift ${threshold.maximumCenterDriftBasisPoints}.`,
-          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "move", `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} visual group ${expected.visualGroupId} ${label} toward ${expectedValue} basis points; do not edit thresholds.`),
+          repairAction: sourceRepairAction("visual-group", expected.visualGroupId, "adjust-geometry", `Compare ${requirement.viewId} identity pixels and display capture with the frozen reference to explain the ${label} drift toward ${expectedValue} basis points. A visible center can shift through occlusion or clipping without target movement; preserve correct geometry, repair only the confirmed cause, and do not edit thresholds.`),
         });
       }
       if (nextCoverageDrift > threshold.maximumCoverageDriftBasisPoints) {

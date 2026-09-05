@@ -123,13 +123,23 @@ try {
     identityProjections.push({ viewId: view.viewId, targets: [...projections].map(
       ([acceptanceTargetRef, projection]) => ({ acceptanceTargetRef, ...projection })) });
   }
+  // Preserve actual pixels even when a fixture-specific visual assertion fails.
+  await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
+  await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
+  console.log(`native-no-script-capture: inspectable evidence ${evidenceRoot}`);
+  const topDown = identityProjections.find(({ viewId }) => viewId === "world-top-down");
+  assert(topDown !== undefined);
   for (const target of receipt.formalRequest.semanticCaptureMap.bindings) {
     assert(identityProjections.some(({ targets }) => targets.some((projection) =>
       projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible")),
     `Fixture target ${target.acceptanceTargetRef} must have exact admitted identity pixels in at least one real view`);
+    // All five targets in this deterministic fixture have exposed top surfaces.
+    // This catches a black walkable overlay hiding the colored Block underneath;
+    // it is not a visibility requirement on arbitrary production scenes.
+    assert(topDown.targets.some((projection) =>
+      projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible"),
+    `Fixture target ${target.acceptanceTargetRef} must have visible top-down identity pixels`);
   }
-  await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
-  await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,
     cleanupOutcomes: capture.cleanupOutcomes, traversalChecks: 0, strictTraversalStatus: "incomplete",

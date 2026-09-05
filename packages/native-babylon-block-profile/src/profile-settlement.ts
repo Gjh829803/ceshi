@@ -3,7 +3,7 @@ import type { BabylonNativeSceneBuildContextV1 } from
 import {
   commitBabylonNativeProfileSettlementV1,
 } from "@whitebox-world/native-babylon/host";
-import { isNil } from "lodash-es";
+import { groupBy, isNil } from "lodash-es";
 
 import {
   failBabylonNativeBlockProfileBuildV1 as fail,
@@ -24,6 +24,11 @@ function stableCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function overlayElementId(overlay: BabylonNativeBlockWalkableOverlayHandleV1): string {
+  const group = overlay.visualGroupIds[0];
+  return `walkable-overlay:${overlay.logicalColliderId}:${group === undefined ? "ungrouped" : `group:${group}`}`;
+}
+
 export function settleBabylonNativeBlockProfileV1(input: Readonly<{
   context: BabylonNativeSceneBuildContextV1;
   checkedLayout: BabylonNativeBlockCheckedLayoutV1;
@@ -39,20 +44,20 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
     kind: "static-collider";
     colliderId: string;
   }>>();
-  const overlayByColliderId = new Map(input.walkableOverlays.map((overlay) =>
-    [overlay.logicalColliderId, overlay] as const));
-  if (overlayByColliderId.size !== input.walkableOverlays.length) {
+  const overlaysByColliderId = new Map(Object.entries(groupBy(input.walkableOverlays, "logicalColliderId")));
+  if (new Set(input.walkableOverlays.map(overlayElementId)).size !== input.walkableOverlays.length ||
+    new Set(input.walkableOverlays.map(({ mesh }) => mesh)).size !== input.walkableOverlays.length) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_COLLIDER_INVENTORY_MISMATCH",
-      "Walkable overlays must contain one unique entry per logical Collider.",
+      "Walkable overlays must contain unique identity partitions and Mesh handles.",
     );
   }
   const joinedBlockIds = new Set<string>();
   const joinedColliderIds = new Set<string>();
-  const colliderJoins = [...input.colliderInventory]
+  [...input.colliderInventory]
     .sort((left, right) =>
       stableCompare(left.colliderId, right.colliderId))
-    .map((collider) => {
+    .forEach((collider) => {
       const sourceBlockIds = [...collider.sourceBlockIds].sort(stableCompare);
       const visualGroupIds = [...collider.visualGroupIds].sort(stableCompare);
       if (
@@ -68,27 +73,35 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
       }
       joinedColliderIds.add(collider.colliderId);
       sourceBlockIds.forEach((blockId) => joinedBlockIds.add(blockId));
-      const overlay = overlayByColliderId.get(collider.colliderId);
+      const overlays = [...(overlaysByColliderId.get(collider.colliderId) ?? [])]
+        .sort((left, right) => stableCompare(overlayElementId(left), overlayElementId(right)));
       if (collider.proxyKind === "continuous-walkable-surface") {
+        const partitionSourceBlockIds = new Set<string>();
         if (
-          isNil(overlay) ||
-          overlay.mesh.isDisposed() ||
-          overlay.mesh.getScene() !== input.context.scene ||
-          overlay.mesh.isVisible !== true ||
-          overlay.topologyHash !== collider.topologyHash ||
-          overlay.sourceBlockIds.length !== sourceBlockIds.length ||
-          overlay.sourceBlockIds.some((blockId, index) =>
-            blockId !== sourceBlockIds[index]) ||
-          overlay.visualGroupIds.length !== visualGroupIds.length ||
-          overlay.visualGroupIds.some((groupId, index) =>
-            groupId !== visualGroupIds[index])
+          overlays.length === 0 ||
+          overlays.reduce((sum, { mesh }) => sum + mesh.getTotalIndices() / 3, 0) !== collider.triangleCount ||
+          overlays.some((overlay) => {
+            const groupId = overlay.visualGroupIds[0];
+            return overlay.mesh.isDisposed() ||
+              overlay.mesh.getScene() !== input.context.scene ||
+              overlay.mesh.isVisible !== true ||
+              overlay.topologyHash !== collider.topologyHash ||
+              overlay.sourceBlockIds.length === 0 || overlay.visualGroupIds.length > 1 ||
+              (groupId !== undefined && !visualGroupIds.includes(groupId)) ||
+              overlay.sourceBlockIds.some((blockId) => {
+                if (!sourceBlockIds.includes(blockId) || partitionSourceBlockIds.has(blockId) ||
+                  recordsById.get(blockId)?.input.visualGroupId !== groupId) return true;
+                partitionSourceBlockIds.add(blockId);
+                return false;
+              });
+          })
         ) {
           return fail(
             "WORLDKIT_NATIVE_BLOCK_COLLIDER_INVENTORY_MISMATCH",
             `Walkable overlay '${collider.colliderId}' must match its topology Collider identity.`,
           );
         }
-      } else if (!isNil(overlay)) {
+      } else if (overlays.length > 0) {
         return fail(
           "WORLDKIT_NATIVE_BLOCK_COLLIDER_INVENTORY_MISMATCH",
           `Collider '${collider.colliderId}' cannot own a walkable overlay.`,
@@ -96,7 +109,7 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
       }
       const bindingElementId = collider.proxyKind ===
           "continuous-walkable-surface"
-        ? `walkable-overlay:${collider.colliderId}`
+        ? overlayElementId(overlays[0]!)
         : sourceBlockIds[0]!;
       if (collisionBindingByElementId.has(bindingElementId)) {
         return fail(
@@ -108,16 +121,8 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
         kind: "static-collider",
         colliderId: collider.colliderId,
       }));
-      return Object.freeze({
-        colliderId: collider.colliderId,
-        proxyKind: collider.proxyKind,
-        sourceBlockIds: Object.freeze(sourceBlockIds),
-        visualGroupIds: Object.freeze(visualGroupIds),
-        topologyHash: collider.topologyHash,
-        bindingElementId,
-      });
     });
-  if ([...overlayByColliderId.keys()].some((colliderId) =>
+  if ([...overlaysByColliderId.keys()].some((colliderId) =>
     !joinedColliderIds.has(colliderId))) {
     return fail(
       "WORLDKIT_NATIVE_BLOCK_COLLIDER_INVENTORY_MISMATCH",
@@ -167,26 +172,20 @@ export function settleBabylonNativeBlockProfileV1(input: Readonly<{
       }),
       ...[...input.walkableOverlays]
         .sort((left, right) =>
-          stableCompare(left.logicalColliderId, right.logicalColliderId))
+          stableCompare(overlayElementId(left), overlayElementId(right)))
         .map((overlay) => {
-          const elementId = `walkable-overlay:${overlay.logicalColliderId}`;
+          const elementId = overlayElementId(overlay);
           const collisionBinding = collisionBindingByElementId.get(elementId);
-          if (isNil(collisionBinding)) {
-            return fail(
-              "WORLDKIT_NATIVE_BLOCK_COLLIDER_INVENTORY_MISMATCH",
-              `Walkable overlay '${overlay.logicalColliderId}' has no Collider settlement binding.`,
-            );
-          }
           return Object.freeze({
             elementId,
             mesh: overlay.mesh,
-            collisionBinding,
+            collisionBinding: collisionBinding ?? Object.freeze({ kind: "none" as const }),
           });
         }),
     ]),
   }));
   collisionBindingByElementId.clear();
-  overlayByColliderId.clear();
+  overlaysByColliderId.clear();
   joinedBlockIds.clear();
   joinedColliderIds.clear();
   recordsById.clear();

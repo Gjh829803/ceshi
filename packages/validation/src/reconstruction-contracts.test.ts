@@ -1553,13 +1553,13 @@ describe("world reconstruction contracts", () => {
         correctionDirection: "decrease",
       },
       evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"],
-      message: "Move the central ascent left in the opening frame.",
+      message: "Inspect the central ascent's visible center drift in the opening frame.",
       repairAction: {
         kind: "revise-native-source",
         targetKind: "visual-group",
         targetId: "central-ascent-group",
-        operation: "move",
-        instruction: "Decrease the central ascent screen X center toward 300 basis points.",
+        operation: "adjust-geometry",
+        instruction: "Compare the reference and capture for occlusion before revising the central ascent geometry.",
       },
     } as const;
     expect(parseWorldReconstructionDiagnosticV1(semanticCenterDiagnostic).metricId).toBe(
