@@ -264,6 +264,19 @@ export class ThreeCameraRig {
     this.camera.copy(initial.camera, false); this.camera.updateWorldMatrix(true, false);
     this.memory = copyMemory(initial.memory); this.decollider.restoreTransactionState(initial.collision); this.solveTick = initial.solveTick;
   }
+  /** Rebase a recording copy's opening and all follow memory as one rigid pose. */
+  relocateEpisodeStart(from: Vec3, to: Vec3, yawDeltaRadians: number, eye: THREE.Vector3, orientation: THREE.Quaternion): void {
+    const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawDeltaRadians);
+    const transform = (point: THREE.Vector3) => point.sub(new THREE.Vector3(...from)).applyQuaternion(rotation).add(new THREE.Vector3(...to));
+    transform(eye); orientation.premultiply(rotation);
+    transform(this.memory.transitionPosition); this.memory.transitionQuaternion.premultiply(rotation);
+    transform(this.memory.smoothedSubject); if (this.memory.resolvedTarget) transform(this.memory.resolvedTarget);
+    this.memory.yawRadians += yawDeltaRadians;
+    this.memory.safeArmDistanceMeters = undefined; this.memory.actualArmDistanceMeters = undefined;
+    this.memory.obstructionEntityId = undefined; this.memory.collisionPhase = undefined;
+    this.decollider.reset(); this.solveTick = 0;
+    this.applyWorldPose(eye, orientation);
+  }
   snapshot(): CameraRigState {
     const position = this.camera.getWorldPosition(new THREE.Vector3()), follow = this.memory.follow;
     const quaternion = this.camera.getWorldQuaternion(new THREE.Quaternion());

@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import RAPIER, { type Collider, type ColliderDesc, type KinematicCharacterController, type RigidBody, type World } from '@dimforge/rapier3d-compat';
 import type { CameraArmHit, CharacterDrive, CharacterOptions, PhysicsAudit, PhysicsCandidate, PhysicsEntityState, PhysicsOptions, PhysicsPort, RigidPhysics, Vec3 } from './engine-contracts.js';
 import { extractCollisionGeometry, finiteVector, geometryError, geometrySignature, isWorldVisible, worldPose, type GeometrySnapshot, type WorldPose } from './geometry.js';
+import type { EpisodeStartProbe } from './episode-contracts.js';
+
+export const MAXIMUM_EPISODE_START_ALIGNMENT_METERS = .35;
 
 export const DEFAULT_CHARACTER_OPTIONS: Required<CharacterOptions> = Object.freeze({
   heightMeters: 1.8, radiusMeters: .35, walkSpeedMetersPerSecond: 2.4, runSpeedMetersPerSecond: 4.8,
@@ -287,6 +290,57 @@ export class ThreePhysics implements PhysicsPort {
       if (direct && (!result || direct.timeOfImpact < result.distanceMeters)) result = { entityId: id, distanceMeters: direct.timeOfImpact, normalWorldXYZ: vec(direct.normal) };
     }
     return result;
+  }
+  characterSettings(id: string): Required<CharacterOptions> {
+    const entry = this.entry(id), character = entry.character;
+    if (!character) throw new Error('EPISODE_CONTROL_REQUIRES_CHARACTER');
+    return { ...character.settings, heightMeters: character.settings.heightMeters * character.scale.y,
+      radiusMeters: character.settings.radiusMeters * Math.max(character.scale.x, character.scale.z) };
+  }
+  /** Pure local native shape queries: no teleport, controller solve, tick or navigation scan. */
+  probeCharacterStart(id: string, positionWorldMetersXYZ: Vec3): EpisodeStartProbe {
+    const entry = this.entry(id), character = entry.character;
+    validateVec(positionWorldMetersXYZ, 'episode start');
+    if (!character) throw new Error('EPISODE_CONTROL_REQUIRES_CHARACTER');
+    const settings = this.characterSettings(id), requested = [...positionWorldMetersXYZ] as [number, number, number];
+    const invalid = (code: string, message: string, entityId?: string): EpisodeStartProbe => ({ isValid: false,
+      requestedPositionWorldMetersXYZ: requested, resolvedPositionWorldMetersXYZ: [...requested],
+      diagnostics: [{ code, message, ...(entityId ? { entityIds: [entityId] } : {}) }] });
+    const height = settings.heightMeters, skin = settings.collisionOffsetMeters, alignment = MAXIMUM_EPISODE_START_ALIGNMENT_METERS;
+    const shape = new RAPIER.Capsule((height - 2 * settings.radiusMeters) / 2, settings.radiusMeters);
+    const rotation = { x: 0, y: 0, z: 0, w: 1 }, velocity = { x: 0, y: -1, z: 0 };
+    const origin = new THREE.Vector3(...requested).add(new THREE.Vector3(0, height / 2 + alignment, 0));
+    const include = (collider: Collider): boolean => {
+      const owner = this.colliderOwners.get(collider.handle), candidate = owner ? this.entries.get(owner) : undefined;
+      return Boolean(candidate && owner !== id && candidate.enabled && candidate.body.isEnabled() && !collider.isSensor());
+    };
+    const maximumDistance = alignment * 2;
+    const hit = this.world.castShape(origin, rotation, velocity, shape, skin, maximumDistance, false,
+      RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);
+    let support = hit ? { distanceMeters: hit.time_of_impact, normal: new THREE.Vector3().copy(hit.normal1), entityId: this.colliderOwners.get(hit.collider.handle)! } : undefined;
+    // Newly created or reset colliders have not reached Rapier's broad phase yet.
+    for (const dirtyId of this.queryDirty) for (const collider of this.entries.get(dirtyId)?.colliders ?? []) if (include(collider)) {
+      const direct = collider.castShape({ x: 0, y: 0, z: 0 }, shape, origin, rotation, velocity, skin, support?.distanceMeters ?? maximumDistance, false);
+      if (direct && (!support || direct.time_of_impact < support.distanceMeters)) support = {
+        distanceMeters: direct.time_of_impact, normal: new THREE.Vector3().copy(direct.normal1).applyQuaternion(collider.rotation()), entityId: dirtyId };
+    }
+    if (!support) return invalid('EPISODE_START_UNSUPPORTED', 'No character support exists within 0.35 metres vertically of the requested start.');
+    if (this.entries.get(support.entityId)?.kind === 'character') return invalid('EPISODE_START_ACTOR_SUPPORT', 'Another actor cannot provide the start support.', support.entityId);
+    if (support.normal.y < Math.cos(settings.maximumSlopeRadians) - 1e-5) return invalid('EPISODE_START_SLOPE_OR_OBSTRUCTION', 'The local shape sweep reached a wall, ceiling or unsupported slope.', support.entityId);
+    const resolved: [number, number, number] = [requested[0], requested[1] + alignment - support.distanceMeters, requested[2]];
+    const center = new THREE.Vector3(...resolved).add(new THREE.Vector3(0, height / 2, 0));
+    let overlapping: string | undefined;
+    const inspect = (collider: Collider): boolean => {
+      if (!include(collider)) return true;
+      const contact = collider.contactShape(shape, center, rotation, 0);
+      if ((contact && contact.distance < -.001) || collider.containsPoint(center)) overlapping = this.colliderOwners.get(collider.handle)!;
+      return true;
+    };
+    this.world.intersectionsWithShape(center, rotation, shape, inspect, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);
+    this.world.intersectionsWithPoint(center, inspect, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, include);
+    for (const dirtyId of this.queryDirty) for (const collider of this.entries.get(dirtyId)?.colliders ?? []) inspect(collider);
+    if (overlapping) return invalid('EPISODE_START_BODY_OVERLAP', 'The actual character capsule overlaps geometry or another actor at the requested start.', overlapping);
+    return { isValid: true, requestedPositionWorldMetersXYZ: requested, resolvedPositionWorldMetersXYZ: resolved, diagnostics: [] };
   }
   castCameraArm(targetMetersXYZ: Vec3, desiredEyeMetersXYZ: Vec3, radiusMeters: number): CameraArmHit {
     this.live(); validateVec(targetMetersXYZ, 'camera target'); validateVec(desiredEyeMetersXYZ, 'camera eye'); validateNumber(radiusMeters, 0, 'camera radius', false);

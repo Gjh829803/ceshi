@@ -34,6 +34,23 @@ world.addCharacter({id:'player',object:player,body:{heightMeters:1.4,radiusMeter
 world.setControlledEntity('player');
 world.setCameraFollow();
 world.setCaptureTargets(['player']);
+// HTML UI is a separate layer; it never enters modelInput world pixels.
+const presentation = world.createPresentation();
+const positionHud = document.createElement('output');
+positionHud.style.cssText = 'position:absolute;left:16px;top:16px;color:white;background:#182634;padding:8px';
+presentation.ui.bind({id:'player-position',element:positionHud,clock:'presented',
+ read:()=>world.getEntityState('player').positionWorldMetersXYZ.map(value=>Math.round(value)),
+ render:position=>{positionHud.textContent='Position: '+position.join(' / ');}
+});
+const resetButton = document.createElement('button');
+resetButton.style.cssText = 'position:absolute;right:16px;top:16px';
+presentation.ui.bind({id:'reset-control',element:resetButton,clock:'live',
+ read:()=>world.getEntityState('player').positionWorldMetersXYZ.some(value=>Math.abs(value)>1),
+ render:away=>{resetButton.textContent=away?'Return to start':'Reset';}
+});
+resetButton.onclick=async()=>{await world.reset();presentation.focus();};
+// Raw-world view uses live state for both. Over model output, presented HUD uses
+// a mapped source frame, and is hidden when its correspondence is unknown.
 await world.start(); // prepares baseline and installs the real same-scene observer
 // WASD movement; arrows/drag camera; Shift run; Space jump; E interact; R reset.
 // Author pure visual child motion with onUpdate; managed root motion uses execute.

@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'observation', 'all'] as const;
+export const AUTHORING_TOPICS = ['getting-started', 'assets', 'control', 'extensions', 'presentation', 'observation', 'all'] as const;
 export type AuthoringTopic = typeof AUTHORING_TOPICS[number];
 export const COMMON_OBSERVATION = `import type * as THREE from 'three';
 export interface WorldObservation {
@@ -16,10 +16,11 @@ export interface WorldObservation {
  reset():void|Promise<void>;
 }`;
 const worldMembers: Record<Exclude<AuthoringTopic, 'all'|'observation'>, string[]> = {
- 'getting-started': ['scene','camera','cameraMode','assets','addEntity','addCharacter','setControlledEntity','setCameraFollow','useAuthoredCamera','setCaptureTargets','onUpdate','getEntityState','start','stop','reset','dispose'],
+ 'getting-started': ['scene','camera','cameraMode','assets','createPresentation','addEntity','addCharacter','setControlledEntity','setCameraFollow','useAuthoredCamera','setCaptureTargets','onUpdate','getEntityState','start','stop','reset','dispose'],
  assets: ['assets','addCharacter','registerPrototype','runTask','start'],
  control: ['state','operations','defineParameter','registerAction','setAutonomy','onInteract','execute','runTask','describe','snapshot','getEntityState'],
  extensions: ['state','registerMovement','registerGeometry','replaceGeometry','defineParameter','registerAction','execute','runTask','describe','getEntityState','onUpdate'],
+ presentation: ['createPresentation','state','execute','getEntityState','reset'],
 };
 /** Select declarations and their referenced public types from the real source AST. */
 export function publicContractTopic(source: string, topic: AuthoringTopic): string {

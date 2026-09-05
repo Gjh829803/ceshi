@@ -268,6 +268,67 @@ export interface TaskScope {
  execute(command:WorldCommand):Promise<CommandReceipt>;
 }
 export interface UpdateContext {readonly deltaSeconds:number;readonly simulationTick:number;readonly simulationSeconds:number}
+/** Identity is local to one presentation and reset epoch. A tick alone is not a frame identity. */
+export interface SourceFrameKey {readonly presentationId:string;readonly epoch:number;readonly sourceFrameId:number}
+export interface SourceFrame extends SourceFrameKey {
+ readonly simulationTick:number;readonly worldRevision:number;
+ readonly capturedAtMilliseconds:number;readonly widthPixels:number;readonly heightPixels:number;
+}
+export interface ModelInputFrame {
+ /** Clean world pixels only. The receiver owns and must close this bitmap. */
+ readonly image:ImageBitmap;readonly source:SourceFrame;
+}
+export interface PresentationOptions {
+ /** Must be the source canvas's parent. Give it an explicit size; camera/render resolution stay owned by the world. */
+ readonly container?:HTMLElement;
+ /** Maximum local UI samples retained for explicit captureFrame calls; default 240. No images are retained. */
+ readonly historyFrames?:number;
+}
+export interface PresentationStatus {
+ readonly mode:'world'|'video'|'frame';readonly synchronization:'live'|'mapped'|'unmapped';
+ readonly presentationId:string;readonly epoch:number;readonly historyFrames:number;
+ readonly sourceFrame?:SourceFrame;readonly lastError?:string;
+}
+export interface UIContext {readonly synchronization:'live'|'mapped'|'unmapped';readonly sourceFrame?:SourceFrame}
+export interface UIBinding<T extends JsonValue> {
+ readonly id:string;readonly element:HTMLElement;readonly read:()=>T;
+ readonly render:(value:DeepReadonly<T>,context:UIContext)=>void;
+ /** live for menus/input; presented for HUD tied to visible gameplay. Default presented. */
+ readonly clock?:'live'|'presented';
+}
+export interface UIAnchor {
+ readonly id:string;readonly element:HTMLElement;readonly entityId:string;
+ readonly offsetLocalMetersXYZ?:Vec3;
+ /** Projection of source geometry; not generated-image tracking or occlusion testing. */
+}
+export interface PresentationUI {
+ readonly root:HTMLElement;
+ /** Mount ordinary HTML/CSS. Cleanup restores its original location; custom interactive areas can opt in. */
+ mount(element:HTMLElement,options?:{readonly interactive?:boolean}):()=>void;
+ /** Automatically mounts; samples JSON state without owning it. Throwing callbacks are isolated from gameplay. */
+ bind<T extends JsonValue>(binding:UIBinding<T>):()=>void;
+ /** Automatically mounts; hidden behind camera, outside frame, or when model frame identity is unknown. */
+ anchor(anchor:UIAnchor):()=>void;
+}
+export interface ModelInput {
+ /** Renders without advancing simulation, freezes pure world pixels and local UI samples. */
+ captureFrame():Promise<ModelInputFrame>;
+ /** Clean canvas MediaStream. Does not promise per-frame correspondence. Close stops SDK-owned tracks. */
+ createStream(options?:{readonly framesPerSecond?:number}):{readonly stream:MediaStream;close():void};
+}
+export interface ModelOutput {
+ /** External tracks remain caller-owned. Mapping must come from the service, never a guessed fixed delay. */
+ attachStream(stream:MediaStream,options?:{readonly resolveSourceFrame?:(metadata:VideoFrameCallbackMetadata)=>SourceFrameKey|null}):void;
+ /** Draw a decoded model image of the same aspect ratio into a separate output canvas; caller retains image ownership. */
+ presentFrame(frame:{readonly image:CanvasImageSource;readonly source:SourceFrameKey}):void;
+ showWorld():void;
+}
+export interface WorldPresentation {
+ readonly ui:PresentationUI;readonly modelInput:ModelInput;readonly output:ModelOutput;
+ status():PresentationStatus;
+ focus():void;
+ dispose():void;
+}
 export interface World {
  readonly scene:THREE.Scene;
  readonly camera:THREE.Camera;
@@ -275,6 +336,8 @@ export interface World {
  readonly assets:Assets;
  readonly state:StateStore;
  readonly operations:Operations;
+ /** One browser presentation per world: pure world capture, model output and independent DOM UI. */
+ createPresentation(options?:PresentationOptions):WorldPresentation;
  addEntity(options:EntityOptions):THREE.Object3D;
  addCharacter(options:CharacterOptions):THREE.Object3D;
  setControlledEntity(entityId:string):void;
@@ -312,8 +375,11 @@ export interface World {
 
 /** Small same-scene browser observer. Tools inspect these live objects, never a display clone. */
 export interface WorldObservation {
+ readonly episode?:import('./episode-contracts.js').EpisodeRuntimePort;
  readonly ready:boolean; readonly scene:THREE.Scene; readonly camera:THREE.Camera;
  readonly renderer:THREE.WebGLRenderer; readonly player:THREE.Object3D;
+ /** Same active presentation for application transport/UI integration; absent for raw/legacy worlds. */
+ readonly presentation?:WorldPresentation|undefined;
  readonly targets:Readonly<Record<string,THREE.Object3D>>;
  readonly targetFrontYawRadiansById?:Readonly<Record<string,number>>;
  startLive():void|Promise<void>; stopLive():void|Promise<void>; reset():void|Promise<void>;

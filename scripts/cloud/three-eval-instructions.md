@@ -51,6 +51,22 @@ R and tool reset must restore the complete initial world, camera and gameplay
 state. Use the SDK's declared extension and control capabilities when required;
 do not claim an unsupported movement or geometry behavior merely by naming it.
 
+Keep all game UI (HUD, menus, prompt inputs, crosshairs and nameplates) in an
+independent HTML/CSS layer, outside the world renderer. Physical scene signs may
+remain geometry. For the SDK profile, read the presentation schema topic and use
+`world.createPresentation()` with `ui.mount`, `ui.bind` or `ui.anchor`; retain your
+own UI design. Use live bindings for immediate controls and presented bindings
+for gameplay HUD. Handlers use current SDK state/commands. Do not add a second
+simulation or put UI in the Three canvas. The presentation container must be the
+canvas's parent; give a custom stage an explicit size.
+Only the pure world canvas is model input; never feed page screenshots, UI or
+generated video back into it. Model transport is supplied by the application,
+not implemented by these SDK methods. Explicit bitmap captures carry source
+frame keys; a raw MediaStream alone cannot identify corresponding model frames.
+When displaying model output without service frame mapping, keep presented
+HUD/anchors hidden instead of guessing a delay. Source anchor projection does not guarantee exact
+position or occlusion in generated video.
+
 Use world_preview to see real browser images and world_inspect for diagnostics.
 Opening resets to the reference camera; current preserves the current page. Use
 world_preview with view=current and input to hold keys briefly, click, drag or
@@ -60,6 +76,9 @@ and exploration; fix issues you observe. After the final source change, inspect
 an opening preview and capture complete object three-views before world_submit.
 There is no required episode file, recorded self-test, video or minimum test duration.
 The exploration requirement describes world content, not recording length.
+Current preview shows the full page for UI inspection; opening and object
+three-views capture pure world pixels. Keep any derived conditioning images free
+of baked-in HUD while preserving the original uploaded reference.
 Operations return IDs: poll the same ID through operations_get, without duplicates.
 
 Preserve requested routes, real height transitions and the complete moving subject

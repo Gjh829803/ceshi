@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { WorldEngine, type WorldOptions as EngineOptions } from './engine.js';
+import { ThreePresentation } from './presentation.js';
 import { WorldAssets } from './assets-library.js';
 import { OperationLedger, StateRegistry, actionArguments, cloneJson, failure, objectSchema, requireId, runtimeError, scalarSchema, scalarValue, synchronous } from './control-support.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
 import type * as API from './contracts.js';
 import type { AssetDefinition, EntityOptions as EngineEntityOptions, CharacterOptions as EngineBody, WorldCommand as EngineCommand } from './engine-contracts.js';
+import type { EpisodeRuntimePort, EpisodeStart } from './episode-contracts.js';
+import { MAXIMUM_EPISODE_START_ALIGNMENT_METERS } from './physics.js';
 
 type Registration = {
  id:string;object:THREE.Object3D;options:API.EntityOptions|API.CharacterOptions;role:API.EntityState['role'];
@@ -53,11 +56,13 @@ export class ThreeWorld implements API.World {
  private readonly requests=new Map<string,{body:string;promise:Promise<API.CommandReceipt>}>();
  private readonly ownedResources=new Set<THREE.BufferGeometry|THREE.Material>();
  private baseline: {entries:Map<string,Registration>;prototypes:Map<string,Prototype>;geometries:Map<string,Geometry>;parameters:Map<string,Parameter>;actions:Map<string,API.ActionDefinition<API.ObjectSchema>>;movements:Map<string,API.MovementDefinition<API.JsonValue>>;autonomies:Map<string,{behavior:API.Autonomy;index:number;paused:boolean;delay:number}>;geometryById:Map<string,THREE.BufferGeometry>}|undefined;
+ private presentation:ThreePresentation|undefined;private readonly changes=new Set<()=>void>();private changeQueued=false;
  private captureIds:string[]=[];private revision=0;private epoch=0;private nextGeneration=0;private nextCommand=0;private disposed=false;private starting:Promise<void>|undefined;
  private activeWriter:string|undefined;private observer:API.WorldObservation|undefined;
+ private episodeLease:{state:'preparing'|'prepared';restoreViewport:()=>void}|undefined;
  private constructor(private readonly engine:WorldEngine,assets:WorldAssets){
   this.scene=engine.scene;this.camera=engine.camera;this.renderer=engine.renderer;this.assets=assets;
-  this.state=new StateRegistry(id=>{const owner=this.owners.get(`state:${id}`);if(owner&&owner!==this.activeWriter)throw failure('STATE_OWNED_BY_PARAMETER',`Set parameter ${owner} instead.`);});
+  this.state=new StateRegistry(id=>{const owner=this.owners.get(`state:${id}`);if(owner&&owner!==this.activeWriter)throw failure('STATE_OWNED_BY_PARAMETER',`Set parameter ${owner} instead.`);this.notifyChange();});
   engine.onUpdate(({deltaSeconds,simulationTick})=>this.beforeTick(deltaSeconds,simulationTick));
   engine.onAfterUpdate(()=>this.afterTick());
   engine.setResetHandler(()=>{void this.reset().catch(error=>this.fault(error,'reset'));});
@@ -81,7 +86,19 @@ export class ThreeWorld implements API.World {
  get simulationTick():number{return this.engine.simulationTick;}
  private alive():void{if(this.disposed)throw failure('WORLD_DISPOSED');}
  private entity(id:string):Registration{const entry=this.entries.get(id);if(!entry)throw failure('ENTITY_NOT_FOUND',`Unknown entity ${id}`,'content',[id]);return entry;}
- private touch():void{this.revision++;}
+ private touch():void{this.revision++;this.notifyChange();}
+ private notifyChange():void {
+  if(this.changeQueued||this.disposed||!this.changes.size)return;this.changeQueued=true;
+  queueMicrotask(()=>{this.changeQueued=false;if(this.disposed)return;for(const callback of this.changes)callback();});
+ }
+ createPresentation(options:API.PresentationOptions={}):API.WorldPresentation {
+  this.alive();if(this.presentation)throw failure('PRESENTATION_ALREADY_EXISTS');if(!this.renderer)throw failure('PRESENTATION_REQUIRES_RENDERER');
+  const presentation=new ThreePresentation({canvas:this.renderer.domElement,camera:this.camera,
+   render:()=>this.engine.render(),stamp:()=>({simulationTick:this.simulationTick,worldRevision:this.revision}),object:id=>this.entries.get(id)?.object,
+   onRender:callback=>this.engine.onRender(callback),onChange:callback=>{this.changes.add(callback);return()=>{this.changes.delete(callback);};},
+   bindInput:(surface,uiRoot)=>this.engine.bindInput(surface,uiRoot),focus:()=>this.engine.focusInput(),released:()=>{this.presentation=undefined;},
+  },options);this.presentation=presentation;return presentation;
+ }
  private cloneObject(object:THREE.Object3D,cloneGeometry=false):THREE.Object3D{
   const clone=cloneSkeleton(object);const materials=new Map<THREE.Material,THREE.Material>();
   clone.traverse(node=>{const mesh=node as THREE.Mesh;if(!mesh.isMesh)return;
@@ -435,6 +452,7 @@ export class ThreeWorld implements API.World {
   for(const update of this.updating)this.guarded(()=>synchronous(()=>update({deltaSeconds,simulationTick,simulationSeconds:simulationTick*this.engine.fixedTimeStepSeconds})));
  }
  private afterTick():void{
+  this.notifyChange();
   for(const [operationId,activity] of [...this.activities]){
    for(const [id,index] of activity.actorSteps){const state=this.engine.actorTaskState(id);if(state?.status==='succeeded')activity.steps[index]!.status='succeeded';if(state?.status==='failed'){activity.steps[index]!.status='failed';activity.steps[index]!.error=failure('ACTOR_TASK_FAILED',state.error??'Actor task failed','content',[id]);}}
    const failed=activity.steps.find(step=>step.status==='failed');
@@ -460,13 +478,16 @@ export class ThreeWorld implements API.World {
   this.baseline={entries:new Map([...this.entries].map(([id,entry])=>[id,this.copyEntry(entry)])),prototypes:new Map(this.prototypes),geometries:new Map(this.geometries),parameters:new Map(this.parameters),actions:new Map(this.actions),movements:new Map(this.movements),autonomies:new Map([...this.autonomies].map(([id,value])=>[id,cloneJson(value)])),geometryById:new Map([...this.entries].filter(([,entry])=>(entry.object as THREE.Mesh).isMesh).map(([id,entry])=>[id,(entry.object as THREE.Mesh).geometry]))};
  }
  async start():Promise<void>{
-  this.alive();if(this.engine.isRunning)return;if(this.starting)return this.starting;
-  const epoch=this.epoch;const start=(async()=>{await this.initialise();if(epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');this.installObserver();this.engine.start();this.engine.render();})();
+  this.alive();if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');if(this.engine.isRunning)return;if(this.starting)return this.starting;
+  const epoch=this.epoch;const start=(async()=>{await this.initialise();if(epoch!==this.epoch||this.disposed)throw failure('STALE_TASK');if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.installObserver();this.engine.start();this.engine.render();})();
   this.starting=start;try{await start;}finally{if(this.starting===start)this.starting=undefined;}
  }
  stop():void{this.engine.stop();}
  async reset():Promise<void>{
-  this.alive();this.epoch++;for(const scope of this.scopes)scope.abort();this.scopes.clear();this.operations.cancelAll();
+  if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');return this.resetState();
+ }
+ private async resetState():Promise<void>{
+  this.alive();this.epoch++;this.presentation?.reset();for(const scope of this.scopes)scope.abort();this.scopes.clear();this.operations.cancelAll();
   for(const queued of this.queued.splice(0))queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('STALE_TASK')});
   const wasRunning=this.engine.isRunning;this.engine.stop();if(!this.baseline)await this.initialise();
   const baseline=this.baseline!;
@@ -542,20 +563,69 @@ export class ThreeWorld implements API.World {
  }
  private installObserver():void{
   if(!this.renderer||!this.engine.controlledEntityId||typeof window==='undefined')return;const world=this;
-  const observer:API.WorldObservation={ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,
+  const observer:API.WorldObservation={ready:true,scene:this.scene,camera:this.camera,renderer:this.renderer,episode:this.episodePort(),
+   get presentation(){return world.presentation;},
    get player(){return world.entity(world.engine.controlledEntityId!).object;},get targets(){return Object.fromEntries([...world.entries].filter(([id])=>!world.captureIds.length||world.captureIds.includes(id)||id===world.engine.controlledEntityId).map(([id,entry])=>[id,entry.object]));},
    get targetFrontYawRadiansById(){return Object.fromEntries([...world.entries].map(([id,entry])=>[id,entry.options.frontYawRadians??0]));},
    startLive:()=>world.start(),stopLive:()=>world.stop(),reset:()=>world.reset(),snapshot:()=>world.snapshot(),inspect:()=>({snapshot:world.snapshot(),physics:world.engine.physics.audit(),inputTranscript:[...world.engine.keyboard.transcript]}),capabilities:()=>world.describe(),execute:(command,options)=>world.execute(command,options),operation:id=>world.operations.get(id)};
   const target=window as unknown as Record<string,unknown>;target.__WORLDKIT_EVAL__=observer;target.__WORLDKIT_CREATOR__=observer;this.observer=observer;
  }
+ private episodePort():EpisodeRuntimePort{
+  const world=this;
+  const controlled=()=>{world.alive();const id=world.engine.controlledEntityId;if(!id)throw failure('EPISODE_CONTROL_REQUIRED');return world.entity(id);};
+  const validateStart=(start:EpisodeStart)=>{if(!start||typeof start!=='object')throw failure('EPISODE_START_INVALID');vec(start.positionWorldMetersXYZ);if(!Number.isFinite(start.facingYawRadians))throw failure('EPISODE_START_FACING_INVALID');};
+  const requirePrepared=()=>{world.alive();if(world.engine.isRunning)throw failure('EPISODE_LIVE_CLOCK_ACTIVE');if(world.episodeLease?.state!=='prepared')throw failure('EPISODE_SEGMENT_NOT_PREPARED');};
+  const release=()=>{const lease=world.episodeLease;if(!lease)return;world.episodeLease=undefined;world.engine.stop();lease.restoreViewport();};
+  return {schemaVersion:1,
+   capabilities(){const entry=controlled(),settings=world.engine.physics.characterSettings(entry.id),bounds=new THREE.Box3();
+    for(const candidate of world.entries.values())if(candidate.role!=='decoration'){
+     bounds.union(new THREE.Box3().setFromObject(candidate.object));
+     if(candidate.body){const body=world.engine.physics.characterSettings(candidate.id),position=worldPose(candidate.object).position;bounds.expandByPoint(position.clone().add(new THREE.Vector3(-body.radiusMeters,0,-body.radiusMeters)));bounds.expandByPoint(position.clone().add(new THREE.Vector3(body.radiusMeters,body.heightMeters,body.radiusMeters)));}
+    }
+    if(bounds.isEmpty())bounds.expandByPoint(worldPose(entry.object).position);
+    return {schemaVersion:1,controlledEntityId:entry.id,fixedTimeStepSeconds:world.engine.fixedTimeStepSeconds,worldBounds:{minimumWorldMetersXYZ:tuple(bounds.min),maximumWorldMetersXYZ:tuple(bounds.max)},
+    movement:{kind:entry.movementId==='ground'?'ground':'custom',movementId:entry.movementId,walkSpeedMetersPerSecond:settings.walkSpeedMetersPerSecond,runSpeedMetersPerSecond:settings.runSpeedMetersPerSecond,jumpSpeedMetersPerSecond:settings.jumpSpeedMetersPerSecond,heightMeters:settings.heightMeters,radiusMeters:settings.radiusMeters,maximumStepHeightMeters:settings.maximumStepHeightMeters,maximumSlopeRadians:settings.maximumSlopeRadians},
+    camera:{mode:world.cameraMode,segmentInitialization:'relative-authored-pose'},maximumStartAlignmentMeters:MAXIMUM_EPISODE_START_ALIGNMENT_METERS};},
+   probeStart(start){validateStart(start);return world.engine.physics.probeCharacterStart(controlled().id,start.positionWorldMetersXYZ);},
+   async prepareSegment(start,viewport){
+    world.alive();validateStart(start);
+    if(!viewport||![viewport.widthPixels,viewport.heightPixels].every(n=>Number.isSafeInteger(n)&&n>0&&n<=8192))throw failure('EPISODE_VIEWPORT_INVALID');
+    if(world.episodeLease?.state==='preparing')throw failure('EPISODE_PREPARATION_IN_PROGRESS');
+    release();const renderer=world.renderer;if(!renderer)throw failure('EPISODE_RENDERER_REQUIRED');
+    const size=renderer.getSize(new THREE.Vector2()),pixelRatio=renderer.getPixelRatio(),camera=world.camera.clone();
+    const lease:{state:'preparing'|'prepared';restoreViewport:()=>void}={state:'preparing',restoreViewport:()=>{
+     renderer.setPixelRatio(pixelRatio);renderer.setSize(size.x,size.y,false);
+     if(world.camera instanceof THREE.PerspectiveCamera&&camera instanceof THREE.PerspectiveCamera){world.camera.aspect=camera.aspect;world.camera.updateProjectionMatrix();}
+     else if(world.camera instanceof THREE.OrthographicCamera&&camera instanceof THREE.OrthographicCamera){world.camera.left=camera.left;world.camera.right=camera.right;world.camera.top=camera.top;world.camera.bottom=camera.bottom;world.camera.updateProjectionMatrix();}
+    }};
+    world.episodeLease=lease;world.engine.stop();
+    try{
+     await world.resetState();if(world.disposed||world.episodeLease!==lease)throw failure('EPISODE_PREPARATION_CANCELLED');
+     const entry=controlled(),probe=world.engine.physics.probeCharacterStart(entry.id,start.positionWorldMetersXYZ);
+     if(!probe.isValid)throw failure(probe.diagnostics[0]!.code,probe.diagnostics[0]!.message,'content',probe.diagnostics[0]!.entityIds);
+     renderer.setPixelRatio(1);world.engine.resize(viewport.widthPixels,viewport.heightPixels);
+     world.engine.prepareEpisodeStart(probe.resolvedPositionWorldMetersXYZ,start.facingYawRadians);
+     world.engine.step({},1);world.engine.render();
+     if(world.snapshot().errors.length)throw failure('EPISODE_PREPARATION_RUNTIME_ERROR');
+     lease.state='prepared';return world.snapshot();
+    }catch(error){if(world.episodeLease===lease)release();throw error;}
+   },
+   advance(input,ticks){requirePrepared();world.engine.step(input,ticks);return world.snapshot();},
+   frame(mimeType){requirePrepared();if(mimeType!=='image/jpeg'&&mimeType!=='image/png')throw failure('EPISODE_FRAME_TYPE_INVALID');
+    world.engine.render();world.camera.updateWorldMatrix(true,false);const renderer=world.renderer!;
+    // Formal Episode pixels come only from the original world renderer, regardless of UI or model output.
+    return {captureSurface:'world-renderer-canvas',imageDataUrl:renderer.domElement.toDataURL(mimeType),snapshot:world.snapshot(),camera:{projectionMatrix:[...world.camera.projectionMatrix.elements],viewMatrix:[...world.camera.matrixWorldInverse.elements],cameraToWorldMatrix:[...world.camera.matrixWorld.elements],controlForwardWorldXYZ:world.engine.controlForwardWorldXYZ()}};
+   },release,
+  };
+ }
  /** Headless/Host verification uses the same fixed engine; no synthetic position updates. */
- step(input:API.WorldInput={},ticks=1):API.WorldSnapshot{this.engine.step(input,ticks);return this.snapshot();}
+ step(input:API.WorldInput={},ticks=1):API.WorldSnapshot{if(this.episodeLease)throw failure('EPISODE_CAPTURE_OWNS_CLOCK');this.engine.step(input,ticks);return this.snapshot();}
  render():void{this.engine.render();}
  resize(width:number,height:number):void{this.engine.resize(width,height);}
  dispose():void{
-  if(this.disposed)return;this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.operations.cancelAll();
+  if(this.disposed)return;const lease=this.episodeLease;this.episodeLease=undefined;lease?.restoreViewport();this.epoch++;this.disposed=true;for(const scope of this.scopes)scope.abort();this.operations.cancelAll();
   for(const queued of this.queued.splice(0))queued.resolve({status:'rejected',commandId:queued.commandId,worldRevision:this.revision,error:failure('WORLD_DISPOSED')});
-  this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
+  this.presentation?.dispose();this.changes.clear();this.engine.dispose();this.assets.dispose();for(const resource of this.ownedResources)try{resource.dispose();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   for(const callback of this.disposals)try{callback();}catch(error){this.errors.push(runtimeError(error,'dispose'));}
   if(typeof window!=='undefined'){const target=window as unknown as Record<string,unknown>;if(target.__WORLDKIT_EVAL__===this.observer)delete target.__WORLDKIT_EVAL__;if(target.__WORLDKIT_CREATOR__===this.observer)delete target.__WORLDKIT_CREATOR__;}
  }

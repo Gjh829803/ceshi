@@ -37,6 +37,18 @@ inspection and snapshots retain every registered entity. Raw Three exposes the
 same small `WorldObservation`; missing SDK ticks/actions/commands are explicitly
 reported as null/unsupported.
 
+For SDK UI, read `creator_get_authoring_schema` with `topic:'presentation'`.
+Use `world.createPresentation()` and its `ui.mount` / `ui.bind` / `ui.anchor` ports
+for ordinary HTML/CSS HUD, prompts, menus and nameplates. These are independent
+of the Three world bitmap; real scene signs may remain geometry. The default
+example demonstrates live controls and a presented gameplay HUD. Commands still
+use current SDK state and `world.execute`; bindings never own gameplay time.
+Model transport remains application-owned. The SDK exposes clean bitmap/stream
+input and separate output display, with explicit source-frame mapping when the
+service provides it. Over model output, missing mapping hides presented HUD/anchors, not controls;
+do not invent synchronization from elapsed time. Source anchor projection does
+not prove alignment or occlusion in generated video.
+
 Three-view semantic front defaults to object-local **-Z**. Set the SDK entity's
 `frontYawRadians` to rotate this direction about local +Y; `await world.start()` passes
 it through `targetFrontYawRadiansById`. The Host then applies the object's full
@@ -71,6 +83,12 @@ pointer drags and wheel scrolling. Each call holds input for at most 15 seconds,
 then releases all keys and pauses so the resulting frame remains inspectable.
 This uses actual Playwright input and the existing SDK clock, without teleporting
 or simulating a second world. Top-down and complete-object previews remain available.
+
+Full-page current preview is Agent feedback, not model input. Opening and
+three-view captures use the renderer's pure world canvas. Game UI must stay in a
+separate layer and model input must never capture the page, UI or generated
+output back into itself. Preserve original reference files; any conditioning
+copies should exclude baked-in HUD.
 
 `world_inspect` exposes hierarchy, camera/targets and actual state. The SDK's
 `world_execute_command` / `world_get_operation` support registered world controls.

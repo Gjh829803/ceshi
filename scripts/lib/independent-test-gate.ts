@@ -65,6 +65,9 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "scripts/lib/playthrough-dataset.test.mjs", lane: "node" },
     { path: "scripts/lib/playthrough-plan-structure.test.mjs", lane: "node" },
     { path: "scripts/lib/worldkit-cloud-episode-artifacts.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/cloud.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/outbox.test.mjs", lane: "node" },
+    { path: "scripts/three-episode/visuals.test.mjs", lane: "node" },
     { path: "scripts/visual/image-delivery.test.mjs", lane: "node" },
     { path: "scripts/visual/seedance25-media-conformance.test.mjs", lane: "node" },
     {

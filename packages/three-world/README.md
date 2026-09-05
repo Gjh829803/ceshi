@@ -26,6 +26,9 @@ Its tails, clothes and other visual descendants move with the root; keep their
 collisions out of the character body.
 
 An SDK-owned renderer fits its canvas to the stage (fullscreen for a bare canvas) and follows resize events. Pass an existing renderer to keep your own sizing policy.
+Create `world.createPresentation()` for game UI and future model-video display.
+HUD, menus and prompt controls belong in its independent HTML layer; read the
+`presentation` schema topic for mounting, bindings and clean world capture.
 
 Terrain/obstacle default to fixed collision; decoration has no collision. Use
 kinematic for a moving door/platform, dynamic for supported rigid-body impulses.
@@ -190,6 +193,89 @@ physics geometry. Async procedural geometry uses scope.replaceGeometry.
 The complete sdk-capabilities example combines these features with a reusable
 character, complete custom fox, real stairs, ramp, NPC controls and reset.
 
+<!-- topic:presentation -->
+## Independent UI, world pixels and model output
+
+Keep HUD, nameplates, menus, crosshairs, prompt inputs and other game UI out of
+the Three scene and renderer. Use ordinary HTML/CSS mounted through one
+`world.createPresentation()` per world. Actual signs and other objects that
+belong to the physical world may remain scene geometry. The SDK manages layer
+placement and input routing; you choose the UI layout, styling and behavior.
+
+```ts
+const presentation = world.createPresentation();
+const score = world.state.define('score', 0);
+const hud = document.createElement('output');
+hud.style.cssText = 'position:absolute;left:16px;top:16px;color:white';
+presentation.ui.bind({id:'score', element:hud, clock:'presented',
+  read:()=>score.value,
+  render:value=>{hud.textContent = `Score: ${value}`;}
+});
+const resetButton = document.createElement('button');
+resetButton.style.cssText = 'position:absolute;right:16px;top:16px';
+presentation.ui.bind({id:'reset', element:resetButton, clock:'live',
+  read:()=>score.value,
+  render:value=>{resetButton.textContent = value ? 'Restart game' : 'Reset';}
+});
+resetButton.onclick = async()=>{await world.reset(); presentation.focus();};
+```
+
+Bindings sample authoritative SDK state; they do not own another game state or
+clock. Update the score through its state handle in gameplay. UI event handlers
+read current state and call existing `world.execute(...)` commands, state handles
+or lifecycle methods. Never use a delayed HUD value as authority for a command.
+Binding values must be JSON data. Each binding mounts its element automatically;
+`ui.mount(element)` also accepts a freeform HUD or framework root without a binding.
+Standard HTML controls receive input. Use `ui.mount(element,{interactive:true})`
+for a custom interactive area. UI focus releases gameplay keys and camera drag;
+call `presentation.focus()` when the user resumes playing.
+
+`container`, when supplied, must already be the source canvas's parent and have
+an explicit size. The SDK places model output and UI in that stage; the world
+keeps ownership of camera/render resolution. Avoid creating a second world or
+moving its renderer into a separate video container.
+
+`modelInput.captureFrame()` returns `{image,source}`: a clean world ImageBitmap
+and a source key containing presentation ID, epoch and frame ID, plus tick,
+revision, capture time (the source browser’s monotonic performance clock) and pixel dimensions. It renders without stepping physics.
+The caller must close the bitmap after consuming it. Only pixels and source
+metadata leave this port; UI samples stay in bounded local history (default 240
+captures, configurable with `historyFrames`). `modelInput.createStream({
+framesPerSecond:24})` instead returns a clean canvas MediaStream and `close()`.
+Its frame rate does not prove source-to-output frame correspondence.
+
+The application supplies model transport. Display a returned decoded image with
+`output.presentFrame({image,source})`, using the source key returned by the
+service. Keep the source aspect ratio; mismatched decoded output is rejected.
+Alternatively, attach a caller-owned MediaStream with `output.attachStream(stream,
+{resolveSourceFrame})`. That optional resolver receives video-frame metadata and
+returns the service's source key or null. It must not guess using a fixed delay.
+These interfaces do not implement a remote model service or signaling. The
+application can obtain the same active port from the SDK's existing
+`window.__WORLDKIT_EVAL__.presentation` (also available on `__WORLDKIT_CREATOR__`);
+the getter follows presentation disposal/recreation, so reacquire it when needed.
+Raw/legacy worlds may not expose a presentation.
+
+The source world keeps running behind model output. Menus and prompt input use
+`clock:'live'`; gameplay HUD uses `clock:'presented'` (the default). With model
+output, presented bindings use the retained sample for the displayed source key.
+They are hidden if mapping is missing, stale or outside retained history; live
+controls remain available. `status()` reports `live`, `mapped` or `unmapped`.
+Video callbacks and DOM updates provide best-effort display synchronization,
+not a guarantee of atomic pixel-level composition.
+
+Use `ui.anchor({id,element,entityId,offsetLocalMetersXYZ:[0,2,0]})` to project an
+entity-local label position through the source camera. The SDK accounts for the
+displayed image rectangle and hides anchors outside the image or behind the
+camera. This is not scene-occlusion testing or tracking of generated geometry:
+the model may change where an object appears. Keep UI requiring exact output
+tracking disabled until the model service provides that capability.
+
+Reset invalidates source keys/history and returns to the world view; discard old
+model responses. `output.showWorld()` switches back explicitly. Dispose releases
+owned UI/listeners and input capture tracks, restores mounted elements, and
+detaches external output streams without stopping their caller-owned tracks.
+
 <!-- topic:observation -->
 ## Live observation and capture
 
@@ -202,6 +288,12 @@ Semantic local front is -Z; frontYawRadians rotates around local +Y. Three views
 then apply the object's complete world quaternion, including parent rotation.
 Right is front cross up. The Host captures real rendered front/right/back images.
 It does not substitute a display clone or fabricate hidden geometry.
+
+Creator `world_preview` with `view:'current'` shows the full page for Agent/UI
+inspection. Opening and three-view captures read the pure world canvas. Model
+input must use that pure canvas or `presentation.modelInput`, never a whole-page
+screenshot, presentation container or model output. Keep derived reference and
+three-view conditioning images free of baked-in HUD; preserve original inputs.
 
 Read the real exports from contracts.ts using the Creator schema tool by topic.
 Types describe the API; browser validation is still required for first-frame

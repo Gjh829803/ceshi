@@ -211,7 +211,9 @@ function createBridge() {
       // Existing gallery integrations use this small lifecycle alias for both profiles.
       const browser = window as unknown as Record<string, unknown>;
       browser.__WORLDKIT_CREATOR__ ??= { startLive: () => world.startLive(), stopLive: () => world.stopLive() };
-      world.renderer.domElement.tabIndex = 0; world.renderer.domElement.focus(); await world.startLive();
+      if (world.presentation) world.presentation.focus();
+      else { world.renderer.domElement.tabIndex = 0; world.renderer.domElement.focus(); }
+      await world.startLive();
     },
     async stop() { await observation().stopLive(); },
     beginCameraPreview() { cameraPreview?.finish(); cameraPreview = observeCameraPreview(observation()); },

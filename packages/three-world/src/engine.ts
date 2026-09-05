@@ -3,7 +3,7 @@ import { DEFAULT_CHARACTER_OPTIONS, ThreePhysics } from './physics.js';
 import { ThreeNavigation } from './navigation.js';
 import { ThreeCameraRig, type CameraRigInput } from './camera.js';
 import { ownViewport } from './viewport.js';
-import { WorldKeyboard } from './input.js';
+import { WorldKeyboard, WorldInputRouter } from './input.js';
 import { geometrySignature, isWorldVisible, setEntityBoundary, worldPose } from './geometry.js';
 import type { AssetInstance, CharacterDrive, CharacterEntityOptions, CharacterOptions, EntityOptions, EntityState, PhysicsOptions, RigidPhysics, Vec3, WorldCommand, WorldInput, WorldObservation, WorldSnapshot } from './engine-contracts.js';
 
@@ -55,7 +55,8 @@ export class WorldEngine {
   private pointerInput: CameraRigInput = {};
   private readonly jumped = new Set<string>();
   private readonly taskResults = new Map<string,{status:'running'|'succeeded'|'failed';error?:string}>();
-  private pointerAbort: AbortController | undefined;
+  private readonly inputRouter: WorldInputRouter;
+  private readonly renders = new Set<() => void>();
   private controlled: string | undefined;
   private tick = 0;
   private revision = 0;
@@ -88,7 +89,15 @@ export class WorldEngine {
     this.fixedTimeStepSeconds = options.fixedTimeStepSeconds ?? 1 / 60;
     if (!Number.isFinite(this.fixedTimeStepSeconds) || this.fixedTimeStepSeconds < 1 / 240 || this.fixedTimeStepSeconds > 1 / 20) throw new Error('WORLD_TIMESTEP_INVALID');
     this.keyboard = new WorldKeyboard(() => this.tick, () => {if(this.resetHandler)this.resetHandler();else this.reset();});
-    if (typeof window !== 'undefined' && this.renderer) { this.keyboard.attach(window); this.installPointer(this.renderer.domElement);if(this.ownsRenderer)this.releaseViewport=ownViewport(this.renderer,this.camera,this.renderer.domElement); }
+    this.inputRouter = new WorldInputRouter(this.keyboard, {
+      isRunning: () => this.running, canZoom: () => this.cameraRig.mode !== 'authored',
+      onPointer: input => { this.pointerInput = { activate: true,
+        yawDeltaRadians: (this.pointerInput.yawDeltaRadians ?? 0) + (input.yawDeltaRadians ?? 0),
+        pitchDeltaRadians: (this.pointerInput.pitchDeltaRadians ?? 0) + (input.pitchDeltaRadians ?? 0),
+        distanceDeltaMeters: (this.pointerInput.distanceDeltaMeters ?? 0) + (input.distanceDeltaMeters ?? 0) }; },
+      onRelease: () => { this.pointerInput = {}; },
+    });
+    if (typeof window !== 'undefined' && this.renderer) { this.keyboard.attach(window); this.inputRouter.bind(this.renderer.domElement);if(this.ownsRenderer)this.releaseViewport=ownViewport(this.renderer,this.camera,this.renderer.domElement); }
   }
   static async create(options: WorldOptions = {}): Promise<WorldEngine> {
     const physics = await ThreePhysics.create(options.physics);
@@ -140,15 +149,9 @@ export class WorldEngine {
     if(!targetEntityId)throw new Error('WORLD_CAMERA_TARGET_REQUIRED'); this.entity(targetEntityId);
     this.cameraRig.setFollow({...options,targetEntityId});
   }
-  private installPointer(canvas: HTMLCanvasElement): void {
-    this.pointerAbort=new AbortController();const signal=this.pointerAbort.signal;
-    let pointer:number|undefined;let x=0;let y=0;
-    canvas.addEventListener('pointerdown',e=>{if(!this.running)return;pointer=e.pointerId;x=e.clientX;y=e.clientY;canvas.setPointerCapture(pointer);canvas.focus();},{signal});
-    canvas.addEventListener('pointermove',e=>{if(pointer!==e.pointerId)return;this.pointerInput={...this.pointerInput,activate:true,yawDeltaRadians:(this.pointerInput.yawDeltaRadians??0)-(e.clientX-x)*.004,pitchDeltaRadians:(this.pointerInput.pitchDeltaRadians??0)+(e.clientY-y)*.004};x=e.clientX;y=e.clientY;},{signal});
-    const release=(e:PointerEvent)=>{if(pointer===e.pointerId){pointer=undefined;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);}};
-    canvas.addEventListener('pointerup',release,{signal});canvas.addEventListener('pointercancel',release,{signal});
-    canvas.addEventListener('wheel',e=>{if(!this.running||this.cameraRig.mode==='authored')return;e.preventDefault();this.pointerInput={...this.pointerInput,activate:true,distanceDeltaMeters:(this.pointerInput.distanceDeltaMeters??0)+e.deltaY*.005};},{signal,passive:false});
-  }
+  bindInput(surface:HTMLElement,uiRoot:HTMLElement):()=>void {return this.inputRouter.bind(surface,uiRoot);}
+  focusInput():void {this.inputRouter.focus();}
+  onRender(callback:()=>void):()=>void {this.renders.add(callback);return()=>{this.renders.delete(callback);};}
   setResetHandler(callback:()=>void):void{this.resetHandler=callback;}
   onAfterUpdate(callback:()=>void):()=>void {this.afterUpdates.add(callback);return()=>{this.afterUpdates.delete(callback);};}
   setDriveProvider(provider:NonNullable<WorldEngine['driveProvider']>):void {this.driveProvider=provider;}
@@ -198,6 +201,28 @@ export class WorldEngine {
     if (!entity.object.matrixAutoUpdate) entity.object.matrix.compose(entity.object.position, entity.object.quaternion, entity.object.scale);
     entity.object.matrixWorldNeedsUpdate = true;
   }
+  /** Shared input basis for both the fixed-step controller and Host route conversion. */
+  controlForwardWorldXYZ(): Vec3 {
+    const yaw = this.cameraRig.desiredYawRadians;
+    const forward = this.cameraRig.mode === 'authored' ? this.camera.getWorldDirection(new THREE.Vector3()) : new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    forward.y = 0; if (forward.lengthSq() < .001) forward.set(0, 0, -1);
+    return tuple(forward.normalize());
+  }
+  prepareEpisodeStart(positionWorldMetersXYZ: Vec3, facingYawRadians: number): void {
+    this.alive(); if (this.running) throw new Error('EPISODE_LIVE_CLOCK_ACTIVE');
+    if (!this.controlled) throw new Error('EPISODE_CONTROL_REQUIRED');
+    finiteVec(positionWorldMetersXYZ, 'episode start'); if (!Number.isFinite(facingYawRadians)) throw new Error('EPISODE_START_FACING_INVALID');
+    if (this.cameraRig.targetEntityId && this.cameraRig.targetEntityId !== this.controlled) throw new Error('EPISODE_CAMERA_TARGET_UNSUPPORTED');
+    const actor = this.entity(this.controlled), before = position(actor.object);
+    const front = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), actor.options.frontYawRadians ?? 0).applyQuaternion(actor.object.getWorldQuaternion(new THREE.Quaternion()));
+    const previousYaw = Math.atan2(-front.x, -front.z);
+    const eye = this.camera.getWorldPosition(new THREE.Vector3()), orientation = this.camera.getWorldQuaternion(new THREE.Quaternion());
+    this.physics.teleport(this.controlled, positionWorldMetersXYZ);
+    this.faceDirection(actor, new THREE.Vector3(-Math.sin(facingYawRadians), 0, -Math.cos(facingYawRadians)));
+    actor.object.updateWorldMatrix(true, true);
+    this.cameraRig.relocateEpisodeStart(tuple(before), positionWorldMetersXYZ, facingYawRadians - previousYaw, eye, orientation);
+    this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.pointerInput = {};
+  }
   private fixedStep(input: WorldInput): void {
     const dt = this.fixedTimeStepSeconds;
     try {
@@ -207,7 +232,7 @@ export class WorldEngine {
       const customActions=new Map<string,string>();
       let desiredDirection:Vec3=[0,0,0];
       if (this.controlled) {
-        const actor = this.entity(this.controlled); const yaw=this.cameraRig.desiredYawRadians; const forward = this.cameraRig.mode==='authored'?this.camera.getWorldDirection(new THREE.Vector3()):new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)); forward.y = 0; if (forward.lengthSq() < 0.001) forward.set(0, 0, -1); forward.normalize();
+        const actor = this.entity(this.controlled); const forward = new THREE.Vector3(...this.controlForwardWorldXYZ());
         const right = forward.clone().cross(new THREE.Vector3(0, 1, 0)); const move = right.multiplyScalar(input.moveXRatio ?? 0).addScaledVector(forward, -(input.moveZRatio ?? 0)); if (move.lengthSq() > 1) move.normalize();
         const speed = input.run ? actor.character?.runSpeedMetersPerSecond ?? 4.8 : actor.character?.walkSpeedMetersPerSecond ?? 2.4;
         drives[this.controlled] = { velocityMetersPerSecondXZ: [move.x * speed, move.z * speed], jumpPressed: input.jumpPressed ?? Boolean(input.jump && !this.previousJump) };
@@ -425,8 +450,8 @@ export class WorldEngine {
     };
     this.frameId = requestAnimationFrame(frame);
   }
-  stop(): void { this.running = false; this.pointerInput={}; this.frameGeneration += 1; this.keyboard.enabled = false; this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
-  render(): void { if (this.disposed) return; this.scene.updateMatrixWorld(true); this.renderer?.render(this.scene, this.camera); }
+  stop(): void { this.running = false; this.inputRouter.clear(); this.pointerInput={}; this.frameGeneration += 1; this.keyboard.enabled = false; this.keyboard.clear(); this.previousJump = false; this.previousInteract = false; this.accumulatorSeconds = 0; if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.frameId); this.frameId = 0; }
+  render(): void { if (this.disposed) return; this.scene.updateMatrixWorld(true); this.renderer?.render(this.scene, this.camera); for(const callback of this.renders) callback(); }
   resize(width: number, height: number): void { if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) throw new Error('WORLD_VIEWPORT_INVALID'); this.renderer?.setSize(width, height, false); if (this.camera instanceof THREE.PerspectiveCamera) { this.camera.aspect = width / height; this.camera.updateProjectionMatrix(); } }
   snapshot(): WorldSnapshot {
     const states: EntityState[] = [...this.entities].map(([id, entity]) => {
@@ -474,7 +499,7 @@ export class WorldEngine {
   }
   private recordError(code: string, error: unknown, entityId?: string): void { if (this.failures.length < 128) this.failures.push({ code, message: error instanceof Error ? error.message.slice(0, 2000) : 'Unknown failure', simulationTick: this.tick, ...(entityId ? { entityId } : {}) }); }
   dispose(): void {
-    if (this.disposed) return; this.stop(); this.disposed = true; this.keyboard.detach(); this.pointerAbort?.abort();this.releaseViewport?.();
+    if (this.disposed) return; this.stop(); this.disposed = true; this.inputRouter.dispose(); this.keyboard.detach(); this.renders.clear();this.releaseViewport?.();
     const assets = new Set([...this.entities.values(), ...this.retired].flatMap(e => e.asset ? [e.asset] : []));
     for (const entity of [...this.entities.values(), ...this.retired]) setEntityBoundary(entity.object, false);
     for (const asset of assets) try { asset.dispose(); } catch (error) { this.recordError('WORLD_DISPOSE_FAILED', error); }
