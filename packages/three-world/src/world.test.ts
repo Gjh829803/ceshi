@@ -213,7 +213,8 @@ describe('ThreeWorld', () => {
       world.camera.position.set(0, 1.3, 4); world.camera.lookAt(0, 1.3, 0);
       const obstacle = new THREE.Group(); const child = new THREE.Mesh(new THREE.BoxGeometry(2, 3, .2), new THREE.MeshBasicMaterial()); child.position.set(0, 1.5, 2); obstacle.add(child);
       world.addEntity({ id: 'Hidden wall', object: obstacle, role: 'obstacle' }); child.visible = false;
-      world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false, transitionSeconds:0 }); world.step();
+      // Isolate visibility filtering from the intentional target-follow lag.
+      world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false, transitionSeconds:0, targetHalfLifeSeconds: 0 }); world.step();
       const target = world.getObject('Player-A').getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.3, 0));
       expect(world.camera.getWorldPosition(new THREE.Vector3()).distanceTo(target)).toBeCloseTo(4, 5);
     } finally { world.dispose(); }

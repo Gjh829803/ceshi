@@ -26,6 +26,19 @@ async function fixture(runId='run-main',jobId='gen_0000000000000001',root) {
 }
 const snapshot=(...attempts)=>({kind:'three-creator-safe-live-status',schemaVersion:1,observedAt,attempts});
 
+test('shows accepted service submissions as waiting until actual CLI activity is observed',async()=>{
+ const f=await fixture();try{
+  for(const status of ['submitted','submitting']){
+   f.state.providerStatus=status;await f.saveState();
+   const result=await buildThreeRunProgress({runRoot:f.runRoot,now}),row=result.cases[0];
+   assert.equal(row.phase,'queued');assert.equal(row.stage,'queued');assert.equal(row.providerStatus,status);
+   assert.equal(row.startedAt,null);assert.equal(row.cliActivityObserved,false);assert.equal(row.queueSeconds,600);
+  }
+  const started=await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(f.live),now});
+  assert.equal(started.cases[0].phase,'running');assert.equal(started.cases[0].stage,'preview');
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
 test('real CLI activity and current MCP stage override queued API items/counters',async()=>{
  const f=await fixture();try{
   await f.saveState();await json(path.join(f.caseRoot,'job-final.json'),{job_id:f.state.jobId,request_id:f.state.requestId,status:'running',counters:{total:1,queued:1,running:0}});

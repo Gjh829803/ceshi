@@ -12,7 +12,7 @@ const toolStages = {imagegen:'planning',creator_describe_environment:'starting',
 const operationStages = {'imagegen.generate':'planning','world.validate':'authoring','world.preview':'preview','world.inspect':'preview','world.execute-command':'playtest','world.get-operation':'playtest','world.playtest':'playtest','world.capture-triviews':'capture','world.submit':'packaging'};
 const toolLabels = {imagegen:'ImageGen 生成规划图',creator_describe_environment:'读取运行环境',creator_get_authoring_schema:'读取 SDK 接口',creator_get_examples:'读取通用示例',assets_search:'搜索资产',assets_describe:'检查资产',world_validate:'编译与校验',world_preview:'查看真实预览',world_inspect:'检查世界状态',world_execute_command:'执行交互操作',world_get_operation:'检查交互任务',world_playtest:'实际操作测试',world_capture_triviews:'采集对象视图',world_submit:'整理技术交付',operations_get:'查询工具进度',operations_cancel:'取消工具操作'};
 const phaseSet = new Set(['not-started','submitted','queued','running','delivery-pending','delivered','failed','cancelled','stopped','stop-pending','remote-pending','submission-unknown','admission-blocked']);
-const statusSet = new Set(['queued','pending','starting','running','succeeded','completed','failed','submit_failed','cancelled','stopped']);
+const statusSet = new Set(['submitted','submitting','queued','pending','starting','running','succeeded','completed','failed','submit_failed','cancelled','stopped']);
 const operationStatusSet = new Set(['queued','running','succeeded','failed','cancelled']);
 // Retain old production events without re-exposing retired tools to agents.
 const knownTools = new Set([...THREE_TOOLS, 'world_playtest', 'imagegen']);
@@ -289,7 +289,7 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   else if (hostPhase === 'failed' || launcher?.status === 'failed' || ['failed','submit_failed'].includes(api.itemStatus)) { stage='failed'; phase='failed'; }
   else if (['cancelled','stopped','stop-pending'].includes(hostPhase)) { stage='unknown'; }
   else if (cliStarted) { phase='running'; stage=hostPhase === 'delivery-pending' || launcher?.status==='delivered' ? 'packaging' : summary.latestStage ?? toolStages[summary.latestTool?.name] ?? (operation ? operationStages[operation.type] : undefined) ?? 'starting'; }
-  else if (api.queued || providerStatus === 'queued' || providerStatus === 'pending') { stage='queued'; phase='queued'; }
+  else if (api.queued || ['queued','pending','submitted','submitting'].includes(providerStatus)) { stage='queued'; phase='queued'; }
   else if (launcher?.status === 'starting') { stage='starting'; phase='running'; }
   const terminal = ['failed','delivered','cancelled','stopped'].includes(phase);
   const completedAt = terminal ? recordedFinishedAt : null;
