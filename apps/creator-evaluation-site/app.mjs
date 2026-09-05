@@ -227,7 +227,8 @@ function renderTrajectory(p, c) {
   if (["delivered", "verifying"].includes(caseStatus(c, p)) || isPlayable(c))
     seen.add("delivered");
   const selected = p?.stage;
-  for (const [index, id] of phaseOrder.entries()) {
+  const visibleStages = phaseOrder.filter(id => id !== "playtest" || seen.has(id) || selected === id);
+  for (const [index, id] of visibleStages.entries()) {
     let status = selected === id && caseStatus(c, p) === "running" ? "active" : seen.has(id) ? "complete" : "pending";
     if (caseStatus(c, p) === "failed" && id === (p?.lastStage || selected))
       status = "failed";
