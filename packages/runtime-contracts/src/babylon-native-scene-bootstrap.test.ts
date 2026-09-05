@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import bootstrapSchema from "./babylon-native-scene-bootstrap-v1.schema.json";
 import {
   hashBabylonNativeSceneBootstrapV1,
+  parseBabylonNativeInitialCameraV1,
   parseBabylonNativeSceneBootstrapV1,
 } from "./babylon-native-scene-bootstrap.js";
 
@@ -36,6 +37,26 @@ function expectInvalid(input: unknown): void {
 }
 
 describe("BabylonNativeSceneBootstrapV1", () => {
+  it("uses one exact opening-camera parser for Bootstrap and Host authoring intent", () => {
+    const camera = parseBabylonNativeInitialCameraV1(VALID_BOOTSTRAP.initialCamera);
+    expect(camera).toEqual(parseBabylonNativeSceneBootstrapV1(VALID_BOOTSTRAP).initialCamera);
+    expect(Object.isFrozen(camera)).toBe(true);
+    for (const invalid of [
+      { ...camera, mode: "first-person" },
+      { ...camera, distanceMeters: 0 },
+      { ...camera, fovDegrees: 180 },
+      { ...camera, pitchRadians: Number.NaN },
+      { ...camera, targetHeightMeters: Number.POSITIVE_INFINITY },
+      { ...camera, targetEntityId: "invented-subject" },
+      { ...camera, cameraRigProfileRef: "worldkit://camera-profile/invented@1" },
+    ]) expect(() => parseBabylonNativeInitialCameraV1(invalid)).toThrow();
+    let reads = 0;
+    expect(() => parseBabylonNativeInitialCameraV1({
+      ...camera, get distanceMeters() { reads++; return 5; },
+    })).toThrow();
+    expect(reads).toBe(0);
+  });
+
   it("keeps the published JSON Schema and exact parser aligned", () => {
     const validate = new Ajv2020({ allErrors: true, strict: true }).compile(
       bootstrapSchema,

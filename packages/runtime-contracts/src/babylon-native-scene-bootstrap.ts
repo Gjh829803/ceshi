@@ -189,8 +189,8 @@ function gravityTuple(input: unknown): readonly [number, number, number] {
   ] as const);
 }
 
-function initialCamera(input: unknown): BabylonNativeInitialCameraV1 {
-  const record = exactRecord(input, INITIAL_CAMERA_FIELDS);
+export function parseBabylonNativeInitialCameraV1(input: unknown): BabylonNativeInitialCameraV1 {
+  const record = exactRecord(snapshotCanonicalData(input), INITIAL_CAMERA_FIELDS);
   if (record.mode !== "third-person") return invalidBootstrap();
   const fovDegrees = finiteNumber(record.fovDegrees);
   if (fovDegrees <= 0 || fovDegrees >= 180) return invalidBootstrap();
@@ -237,7 +237,7 @@ export function parseBabylonNativeSceneBootstrapV1(
     gravityMetersPerSecondSquaredXYZ: gravityTuple(
       record.gravityMetersPerSecondSquaredXYZ,
     ),
-    initialCamera: initialCamera(record.initialCamera),
+    initialCamera: parseBabylonNativeInitialCameraV1(record.initialCamera),
     seed: unsigned32BitInteger(record.seed),
     spawnMarkerId: nonEmptyIdentity(record.spawnMarkerId),
   });

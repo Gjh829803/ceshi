@@ -186,6 +186,32 @@ or test-shaped geometry. Completing an R1 slice does not close its parent CF tas
 
 ### When and how to rerun
 
+#### CF-12/R1 activation batch: same-task authored Camera intent
+
+This is the next implementation contract, not a claim that the current Builder
+already accepts Camera intent. Current status remains exclusively in docs/18.
+Static comparison with `9e35ab53`'s `references/subject-camera.md` establishes
+that the old Builder adjusts all four opening values inside its existing visual
+feedback loop. A Host-only image-to-camera estimate is not a replacement for
+that capability, and a fixed Bootstrap consumption fix does not complete it.
+
+All rows below are main-agent-only and sequential; integrate the complete batch
+before activating the Skill or running the next Case. Do not publish a partially
+accepted optional dialect or treat missing authored values as a fallback.
+
+| Slice | Owner and input/output contract | Integration and required evidence |
+| --- | --- | --- |
+| CF-12/R1-A | runtime-contracts owns one exact `BabylonNativeInitialCameraV1` parser; Block authoring sidecar adds required `openingCamera` using this shape. Only `mode: third-person` plus distance, target height, pitch and FOV; no Subject, Profile ref, target/entity id, shoulder/yaw offset or Camera object. | Reuse the existing parser rather than fork its shape/ranges; exact-key, finite/range, accessor rejection and immutable output tests. Update every current producer, fixture and frozen checker together when activating the field. |
+| CF-12/R1-B | Trusted Host reads the immutable Request/Bootstrap as generation input and admits sidecar intent under the existing selectable third-person Profile ranges. The already-existing authoring/layout binding and Host materializer metadata carry the admitted opening values, bound to the full authoring manifest hash. | Preserve Request, Attempt, original Bootstrap and WRT hashes byte-for-byte. Package root binds the compiled metadata. The sidecar cannot mint receipts or modify the frozen Registry/Subject closure. Test changed intent changes source/binding/metadata/Package identity; stale hashes reject without overwriting original input. |
+| CF-12/R1-C | RuntimeHost selects the effective opening values from verified Block metadata for the Block lane; generic Native/Canonical keep their own existing source contract. Camera Director remains the only state owner and retains `a78ca039`'s old-branch Profile/modifier/Preview precedence. | Interactive/Artifact/Formal consume the same admitted values. Do not reinterpret baseline `bootstrapInputHash` as a hash of the admitted override. Update opening gate expected parameters, Ground FOV consumer and every direct Capture consumer to use the same Host resolution. Non-default values, Profile switches, Reset/rollback and metadata tampering coverage. |
+| CF-12/R1-D | Same portable checker and renderer consume current sidecar intent; live/frozen Skill tells Builder to tune the four values against entry/subject framing inside the existing shared structural/visual repair budget. | Still three source files plus two PNGs, one logical task and no new reviewer or external repair. New Camera edits invalidate both comparisons. Replayed pixels must bind current source and intent. Preserve actual target-socket precedence and explicitly cover any advisory/Runtime target discrepancy; do not silently call software projection pixel parity. |
+| CF-12/R1-E | Main agent integrates A-D and updates current evidence in docs/18. | Focused contracts, Skill drift, directly affected Package/Runtime/Capture gates and typecheck; then one frozen local 054 Case. Ordinary publication policy stays unchanged. Full multi-mode CF-12 and full CF-04 pixel/render-product acceptance remain separately open. |
+
+Do not solve the hash mismatch by editing frozen `inputs/native-scene.bootstrap.json`,
+forging a new Generation Request/Receipt after the task, weakening its identity checks,
+or writing an untracked runtime-only tuning file. Accepted data is a Host-compiled
+projection of existing source bytes, not an additional authoring task or Scene Source.
+
 2026-09-05 fast-feedback amendment: the user subsequently requested "快速推进吧 弄完跑个 case".
 Run one **interim budget/feedback probe** after groups 1/2's implemented subset passes focused checks,
 without claiming that it is the full R1 readiness checkpoint below. Ground-person Camera selection is

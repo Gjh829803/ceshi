@@ -1390,6 +1390,13 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   后补首帧 query 失败及构造 Profile hint 不同的两项针对性回归通过，Snapshot 发布边界
   5/5 通过，最终 typecheck/diff check 通过（重复用例不累计）。尚未完成 Host 目标驱动
   参数选择、socket/真实像素对齐、多模式 Subject 与完整 CF-04/12，不冒充新的真实 Case 证据。
+- CF-12/R1 下一批接线已在既有生产效果实施计划的 `CF-12/R1-A–E` 锁定：恢复旧链
+  Builder 同任务看图调四参的能力，而不是用一次 Host 图片估算替代。拟由现有 sidecar
+  承载纯数据意图、现有 Host 编译元数据/Package 绑定最终取值，原 Request/Bootstrap/WRT
+  输入与哈希不变；不得覆盖冻结文件、补造 Generation Receipt 或增加模型任务。
+  当前仅已复用/导出现有 exact Camera parser（12/12 focused 通过，Schema/取值范围不变）；
+  required sidecar 字段、Host/Profile 准入、metadata、Runtime/Capture 消费和 Skill 尚未激活，
+  必须 A–D 完整接通后才允许新 Builder 产出该字段。此记录不是 CF-12 完成或效果验收。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
