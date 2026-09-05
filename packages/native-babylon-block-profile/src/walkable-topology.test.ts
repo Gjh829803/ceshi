@@ -38,9 +38,20 @@ interface GroupFixture {
   readonly traversal: "surface" | "solid";
   readonly sourceBlockIds?: readonly string[];
   readonly visualGroupIds?: readonly string[];
+  readonly visualGroupBySourceBlockId?: Readonly<Record<string, string | undefined>>;
   readonly surfaceEntityId?: string;
   readonly logicalSubshapeId?: string;
   readonly traversalSurfaceProfileRef?: string;
+}
+
+function sourceIdentity(fixture: GroupFixture, index: number) {
+  const sourceBlockId = (fixture.sourceBlockIds ?? [
+    `${fixture.colliderId}-block`,
+  ])[index % (fixture.sourceBlockIds?.length ?? 1)]!;
+  const visualGroupId = fixture.visualGroupBySourceBlockId === undefined
+    ? (fixture.visualGroupIds ?? [`${fixture.colliderId}-visual`])[0]
+    : fixture.visualGroupBySourceBlockId[sourceBlockId];
+  return { sourceBlockId, ...(visualGroupId === undefined ? {} : { visualGroupId }) };
 }
 
 function surfaceBinding(fixture: GroupFixture) {
@@ -90,13 +101,8 @@ BabylonNativeBlockLogicalGroundModelV1 {
       Object.freeze({
         cellKey,
         colliderId: fixture.colliderId,
-        sourceBlockId: (fixture.sourceBlockIds ?? [
-          `${fixture.colliderId}-block`,
-        ])[index % (fixture.sourceBlockIds?.length ?? 1)]!,
+        ...sourceIdentity(fixture, index),
         colliderGroupId: `${fixture.colliderId}-source`,
-        visualGroupId: (fixture.visualGroupIds ?? [
-          `${fixture.colliderId}-visual`,
-        ])[0]!,
         traversalBinding: fixture.traversal === "surface"
           ? surfaceBinding(fixture)
           : NOT_TRAVERSABLE,
@@ -114,13 +120,8 @@ BabylonNativeBlockLogicalGroundModelV1 {
           topCellKey,
           sourceOccupiedCellKey,
           colliderId: fixture.colliderId,
-          sourceBlockId: (fixture.sourceBlockIds ?? [
-            `${fixture.colliderId}-block`,
-          ])[index % (fixture.sourceBlockIds?.length ?? 1)]!,
+          ...sourceIdentity(fixture, index),
           colliderGroupId: `${fixture.colliderId}-source`,
-          visualGroupId: (fixture.visualGroupIds ?? [
-            `${fixture.colliderId}-visual`,
-          ])[0]!,
           traversalBinding: surfaceBinding(fixture),
         })];
       });
@@ -172,6 +173,65 @@ function verticesAtX(
 }
 
 describe("Babylon Native Block walkable topology", () => {
+  it("partitions mixed-group and ungrouped top quads without changing collision geometry", () => {
+    const groundModel = model([{
+      colliderId: "floor-collider", traversal: "surface",
+      cells: ["0,0,0", "1,1,0", "2,0,0", "3,0,0"],
+      sourceBlockIds: ["block-a", "block-b", "block-none", "block-a-two"],
+      visualGroupIds: ["group-a", "group-b"],
+      visualGroupBySourceBlockId: {
+        "block-a": "group-a", "block-b": "group-b", "block-a-two": "group-a",
+      },
+    }]);
+    const result = topology(groundModel);
+    const geometry = result.walkableGeometries[0]!;
+    expect(sha256CanonicalJson({
+      collisionPositionsMetersXYZ: geometry.collisionPositionsMetersXYZ,
+      overlayPositionsMetersXYZ: geometry.overlayPositionsMetersXYZ,
+      triangleIndices: geometry.triangleIndices,
+      vertexCount: geometry.vertexCount, triangleCount: geometry.triangleCount,
+      colliderVertexCount: result.colliderVertexCount, colliderTriangleCount: result.colliderTriangleCount,
+    })).toBe("sha256:fa8ac634670cd34b7a0d2e8c229f02dcb551c255c09a6668c8f8df8a8cc4deaf");
+    expect(geometry.overlayPartitions).toEqual([
+      { sourceBlockIds: ["block-none"], visualGroupIds: [], triangleIndices: geometry.triangleIndices.slice(12, 18) },
+      { sourceBlockIds: ["block-a", "block-a-two"], visualGroupIds: ["group-a"],
+        triangleIndices: [...geometry.triangleIndices.slice(0, 6), ...geometry.triangleIndices.slice(18, 24)] },
+      { sourceBlockIds: ["block-b"], visualGroupIds: ["group-b"], triangleIndices: geometry.triangleIndices.slice(6, 12) },
+    ]);
+    const { logicalGroundModelHash: _hash, ...body } = groundModel;
+    const reversed = {
+      ...body, exposedSupportTopCells: [...body.exposedSupportTopCells].reverse(),
+      solidOccupancyCells: [...body.solidOccupancyCells].reverse(),
+    };
+    const reordered = topology({ ...reversed, logicalGroundModelHash: sha256CanonicalJson(reversed) as Sha256HashV1 });
+    expect(reordered.walkableGeometries).toEqual(result.walkableGeometries);
+    const { geometryHash, ...geometryBody } = geometry;
+    expect(geometryHash).toBe(sha256CanonicalJson(geometryBody));
+    expect(sha256CanonicalJson({ ...geometryBody, overlayPartitions: [] })).not.toBe(geometryHash);
+    expect(Object.isFrozen(geometry.overlayPartitions[0]?.triangleIndices)).toBe(true);
+  });
+
+  it.each([{ visualGroupIds: [] }, { visualGroupIds: ["floor-visual"] }])("retains zero or one semantic group for a complete surface: $visualGroupIds", ({ visualGroupIds }) => {
+    const result = topology(model([{ colliderId: "floor-collider", traversal: "surface",
+      cells: ["0,0,0", "1,0,0"], visualGroupIds }]));
+    const geometry = result.walkableGeometries[0]!;
+    expect(geometry.overlayPartitions).toEqual([{ sourceBlockIds: ["floor-collider-block"],
+      visualGroupIds, triangleIndices: geometry.triangleIndices }]);
+  });
+
+  it("attributes only exposed source Blocks to overlay partitions", () => {
+    const result = topology(model([{
+      colliderId: "stack-collider", traversal: "surface", cells: ["0,0,0", "0,1,0"],
+      sourceBlockIds: ["buried-block", "top-block"], visualGroupIds: ["buried-group", "top-group"],
+      visualGroupBySourceBlockId: { "buried-block": "buried-group", "top-block": "top-group" },
+    }]));
+    const geometry = result.walkableGeometries[0]!;
+    expect(geometry.sourceBlockIds).toEqual(["buried-block", "top-block"]);
+    expect(geometry.overlayPartitions).toEqual([{
+      sourceBlockIds: ["top-block"], visualGroupIds: ["top-group"],
+      triangleIndices: geometry.triangleIndices,
+    }]);
+  });
   it("derives one continuous topology globally before splitting Collider groups", () => {
     const result = topology(model([
       {
@@ -275,6 +335,7 @@ describe("Babylon Native Block walkable topology", () => {
     const wall = result.solidGeometries[0]!;
 
     expect(wall.proxyKind).toBe("exact-solid-union");
+    expect(wall.overlayPartitions).toEqual([]);
     expect(wall.sourceCellCount).toBe(2);
     expect(wall.triangleCount).toBe(18);
     expect(result.removedInternalFaceCount).toBe(2);

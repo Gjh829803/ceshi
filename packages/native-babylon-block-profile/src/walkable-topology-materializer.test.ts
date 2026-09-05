@@ -1,5 +1,6 @@
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData.js";
 import { Scene } from "@babylonjs/core/scene.js";
 import type {
   BabylonNativeSceneRegistrationV1,
@@ -142,6 +143,32 @@ function topology() {
   });
 }
 
+function partitionedTopology() {
+  const { logicalGroundModelHash: _hash, ...base } = groundModel();
+  const sourceBlockIds = ["floor-a", "floor-b", "floor-none"];
+  const cells = ["0,0,0", "1,1,0", "2,0,0"];
+  const visualGroupIds = ["group-a", "group-b"];
+  const solidOccupancyCells = cells.map((cellKey, index) => ({
+    cellKey, colliderId: "floor-collider", sourceBlockId: sourceBlockIds[index]!,
+    ...(index < 2 ? { visualGroupId: visualGroupIds[index]! } : {}),
+    traversalBinding: STATIC_SURFACE,
+  }));
+  const body = {
+    ...base,
+    colliderGroups: [{ ...base.colliderGroups[0]!, sourceBlockIds, visualGroupIds,
+      occupiedMicroCellKeys: cells }],
+    solidOccupancyCells,
+    exposedSupportTopCells: solidOccupancyCells.map((cell, index) => ({
+      ...cell, sourceOccupiedCellKey: cell.cellKey,
+      topCellKey: `${index},${index === 1 ? 2 : 1},0`,
+    })),
+  };
+  return buildBabylonNativeBlockWalkableTopologyV1({
+    groundModel: { ...body, logicalGroundModelHash: sha256CanonicalJson(body) as Sha256HashV1 },
+    policy: POLICY,
+  });
+}
+
 function context(
   scene: Scene,
   registration: BabylonNativeSceneRegistrationV1,
@@ -170,6 +197,57 @@ function registeredLiveHandles(
 }
 
 describe("Babylon Native Block walkable topology materializer", () => {
+  it("keeps complete-surface normals and exact source identity across overlay partitions", () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const initialLiveHandles = registeredLiveHandles(scene);
+    try {
+      const compiled = partitionedTopology();
+      const geometry = compiled.walkableGeometries[0]!;
+      const normals: number[] = [];
+      VertexData.ComputeNormals(geometry.overlayPositionsMetersXYZ, geometry.triangleIndices, normals);
+      const materialized = materializeBabylonNativeBlockWalkableTopologyV1({
+        context: context(scene, { registerSpawnMarker() {}, registerStaticCollider() {} }),
+        topology: compiled, liveHandles: initialLiveHandles,
+      });
+      expect(materialized.collisionMeshes).toHaveLength(1);
+      expect(materialized.collisionMeshes[0]!.getIndices()).toEqual(geometry.triangleIndices);
+      expect(materialized.collisionMeshes[0]!.getVerticesData(VertexBuffer.PositionKind))
+        .toEqual(geometry.collisionPositionsMetersXYZ);
+      expect(materialized.walkableOverlays.map(({ sourceBlockIds, visualGroupIds }) => ({ sourceBlockIds, visualGroupIds })))
+        .toEqual([
+          { sourceBlockIds: ["floor-none"], visualGroupIds: [] },
+          { sourceBlockIds: ["floor-a"], visualGroupIds: ["group-a"] },
+          { sourceBlockIds: ["floor-b"], visualGroupIds: ["group-b"] },
+        ]);
+      let partitionNormalsWouldDiffer = false;
+      for (const [index, overlay] of materialized.walkableOverlays.entries()) {
+        const partition = geometry.overlayPartitions[index]!;
+        expect(overlay.logicalColliderId).toBe(geometry.logicalColliderId);
+        expect(overlay.topologyHash).toBe(compiled.topologyHash);
+        expect(overlay.mesh.getIndices()).toEqual(partition.triangleIndices);
+        expect(overlay.mesh.getVerticesData(VertexBuffer.PositionKind)).toEqual(geometry.overlayPositionsMetersXYZ);
+        const actualNormals = overlay.mesh.getVerticesData(VertexBuffer.NormalKind)!;
+        actualNormals.forEach((value, normalIndex) => expect(value).toBeCloseTo(normals[normalIndex]!, 6));
+        const partitionNormals: number[] = [];
+        VertexData.ComputeNormals(geometry.overlayPositionsMetersXYZ, partition.triangleIndices, partitionNormals);
+        if (partition.triangleIndices.some((vertexIndex) => [0, 1, 2].some((axis) =>
+          Math.abs(partitionNormals[vertexIndex * 3 + axis]! - normals[vertexIndex * 3 + axis]!) > 1e-6))) {
+          partitionNormalsWouldDiffer = true;
+        }
+        expect(overlay.mesh.material).toBeNull();
+        expect(overlay.mesh.isVisible).toBe(true);
+      }
+      expect(partitionNormalsWouldDiffer).toBe(true);
+      materialized.dispose();
+      expect(scene.meshes).toEqual([]);
+      expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(initialLiveHandles);
+    } finally {
+      unregisterBabylonNativeBlockLiveHandleRegistryV1(scene, initialLiveHandles);
+      scene.dispose(); engine.dispose();
+    }
+  });
+
   it("creates and registers collision proxies plus identity-bound overlays", () => {
     const engine = new NullEngine();
     const scene = new Scene(engine);
@@ -326,11 +404,13 @@ describe("Babylon Native Block walkable topology materializer", () => {
           registerSpawnMarker(): void {},
           registerStaticCollider(): void {},
         })),
-        topology: topology(),
+        topology: partitionedTopology(),
         liveHandles: initialLiveHandles,
       });
       const first = materialized.collisionMeshes[0]!;
-      const last = materialized.walkableOverlays[0]!.mesh;
+      expect(materialized.walkableOverlays).toHaveLength(3);
+      const firstOverlayDispose = vi.spyOn(materialized.walkableOverlays[0]!.mesh, "dispose");
+      const last = materialized.walkableOverlays[2]!.mesh;
       const firstDispose = vi.spyOn(first, "dispose");
       vi.spyOn(last, "dispose").mockImplementationOnce(() => {
         throw new Error("overlay cleanup failed");
@@ -338,6 +418,7 @@ describe("Babylon Native Block walkable topology materializer", () => {
 
       expect(() => materialized.dispose()).toThrow("overlay cleanup failed");
       expect(firstDispose).toHaveBeenCalledOnce();
+      expect(firstOverlayDispose).toHaveBeenCalledOnce();
       expect(peekBabylonNativeBlockLiveHandleRegistryV1(scene)).toBe(
         initialLiveHandles,
       );
