@@ -1506,10 +1506,26 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   重建后按失效输入补跑 source-authored、live/frozen drift、三输出、自修复类型错误和
   relocated standalone 五项 5/5；`pnpm --filter @whitebox-world/playground build` exit 0，
   仅有 chunk-size warning。分轮重复项不累加为 aggregate；未跑全仓 gates 或独立最终审查。
-  以上不是完整 WebGL provider Capture 或新的 054 模型 Case 证据：本批实际运行 provider
-  的空路线 observation 路径并接 synthetic Receipt/Evaluation/Final，完整 provider 的四视图
-  Browser Capture 尚待验证。R5 的 rendered/lifecycle 验收与 CF-11/21 父任务不勾完成；
-  两个 generic ground groups、完整要素/分区量测、严格 authored route 编译仍 open。
+  上述首轮只运行 provider 的空路线 observation 路径并接 synthetic Receipt/Evaluation/Final；
+  完整 Browser 验证已于下述收尾补齐，仍不是新的 054 模型效果证据。
+  R5 Browser 收尾（`d383cbdd`，2026-09-05）：新增显式命令
+  `pnpm verify:native-no-script-capture`，exit 0。复用原 Package-owner 夹具，生成/Planner
+  回执为测试桩，无模型调用；Native Check/Ground/Package、Babylon 9.23.0 + Havok/ThinEngine、
+  HeadlessChrome 151.0.7922.34 正式 Capture/Receipt/Evaluation 均为实际执行。
+  Package root 为 `sha256:5d5e9a67548bad4a92efbe7138b1d11bc579f6d152ff051c644fac971649e0f0`；
+  Case/Generation Request 原字节不变，四张 PNG 均 1280×720，traversal checks 为 0，观察值
+  精确绑定 Capture ready Snapshot；Browser/Vite cleanup 均 completed。Spawn support 和
+  deterministic-build passed；critical traversal 与整体 Evaluation 为 incomplete，其余质量
+  诊断未反转 production Capture publication。这个夹具不用于证明云殿或 054 的相似度。
+  证据暂存 `/var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-cM6Xsq/`，
+  包含四图、正式 Capture 收据/observations、Evaluation 与 evidence.json；生成夹具工作目录已清理，
+  保留的最新 054 Case 未改。实际打开四图复核：Opening 有 SDK Subject 与地面，top 有完整
+  测试地面和两块远端方块，overlay 有碰撞覆盖；side 地面仅占很小画幅。后者由当前 side Camera
+  使用含容器 Y 余量的 Package bounds（Y -66..16、targetY=-25）可定位，属于 CF-14/24 的
+  多视角取景/有效量测缺口，不把它升级为普通生产失败，也不删 R4 的旧等价容器余量。
+  共享夹具抽取后，原实际范围 Package 回归 1/1、新无脚本冻结输入回归 1/1、typecheck exit 0。
+  本次已补齐 R5 空脚本的实际 Capture 生命周期证据；CF-11/21 父任务仍 open：两个 generic
+  ground groups、完整要素/分区量测、严格 authored route 编译及真实参考效果尚未闭合。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
