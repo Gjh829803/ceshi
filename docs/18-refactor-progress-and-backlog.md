@@ -1656,6 +1656,44 @@ CASE-054 `paper-moon-054-cf19-local-0905/run-20260905064934-66984` 终态及后�
 - 按用户后续授权曾创建 heartbeat `054-case-main` 继续等待并条件合并；本次 Case 失败后
   已暂停。未合入 main，未启动另一付费 Case；CI/批准审查和真实 Case 成功条件仍未闭合。
 
+CASE-054 再运行（用户随后明确授权“继续跑”，2026-09-05 15:20 CST）：
+
+- 新 Case `paper-moon-054-cf29-local-0905`，启动候选为干净且已推送的
+  `01e91783165e88d0297fb2080356147ebf653bf6`；原始 054 PNG Hash 与用户 prompt 不变，
+  从 Planner 开始走本地 `agent:world`，不覆盖旧 Case。父 PID `72004`，日志
+  `/private/tmp/worldkit-054-cf29-local-yKIs27/production.log`。
+- 此处仅为启动记录，尚无本次 Generation/Native/Capture/最终生产通过证据。
+  使用本轮 CF-29 failure-evidence 实现，不扩大同任务修复预算或更改普通成功标准。
+
+该 Run 后续终态（2026-09-05）：
+
+- Builder 在既定 timeout 前完成，Generation Receipt `completed`、三份 Source 与两张
+  advisory 对比 PNG 已交付，Host self-check `ok: true`，均无生成诊断；本次不是
+  `output-missing` 或 `task-timeout`。Native Check `passed`、diagnostics 空；Ground
+  `analysisOutcome/admissionOutcome: passed`、failureFacts 空；WorldPackage 已生成，
+  `host-checkpoints/generate.json` 与 `host-checkpoints/package.json` 已保存。
+- 随后正式 Capture 阶段失败，Run journal sequence 6 保留
+  `WORLD_RECONSTRUCTION_CAPTURE_FAILED`；最终 `productionOutcome: failed`、
+  `publicationOutcome: not-published`、`evaluationOutcome: not-run`、cleanup completed。
+  当前没有正式 capture/rejected-capture 产物。现存结果仅有总括 Capture 失败码，尚不足以
+  判断是启动、Host session、截图或发布子步骤；不要归咎于 timeout、几何或质量门禁。
+- advisory entry 左右图仍能看到规划目标与源码投影在构图、山体和宫殿比例上的差异；
+  红色方块是 SDK Subject 的 advisory 代理，并非最终人物。该图不是正式 Capture，
+  不构成完整效果对齐证据，也不新增普通生产质量否决标准。
+- 未合入 main、未重新付费生成。后续 Capture 定位应优先利用已保存 Package/checkpoints，
+  保留原 Run 失败事实；能否完成 Host-only 恢复仍需单独验证，不能提前称恢复成功。
+
+Capture 根因复现（2026-09-05）：同一 Package 单独调用 production Capture，在
+`hosted-session` 启动浏览器前稳定报 `WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY`。
+当时唯一 tracked diff 是主会话在 Case 启动后追加的本进展文档，生产实现未变；
+`sdk-owner-identities.ts` 检查整个 tracked tree，因此文档改动也触发 trusted-commit 拒绝。
+这不是生成超时、场景几何或浏览器卡死。不得删掉可信源码校验来放行；先提交授权文档，
+在干净候选上复用 Package。CF-29 还需保留该明确错误码，不能再次只报 Capture 总括失败。
+后续运行期间禁止写 tracked 进展文档，阶段更新先留在会话中，待终态后再更新/提交。
+按本次落盘时间估算：Planner 约 7m18s，Builder/交付约 29m04s，Native/Ground/Package
+约 2m29s，Capture request 到失败约 4.5s；Builder 正常交付而非 timeout，但未保留的
+细分模型活动不能事后编造为确定的思考、工具或自检耗时。
+
 CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
 
 - Planner 经三轮修复通过；Generation receipt `completed`、Host Builder self-check `ok: true`，
