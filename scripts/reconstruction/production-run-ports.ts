@@ -121,6 +121,7 @@ type FrozenGenerationInputV1 = Omit<
 >;
 
 export interface ProductionWorldReconstructionRunPortsInputV1 {
+  readonly visualCaptureScope: Parameters<typeof materializeFormalWorldCaptureRequestV1>[0]["visualCaptureScope"];
   readonly hostRecoveryIndex?: number;
   readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
   readonly repositoryRoot: string;
@@ -839,7 +840,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
       let captureOwnerStarted = false;
       try {
         const materialized = await owners.materializeCaptureRequest({
-          visualCaptureScope: "world-only",
+          visualCaptureScope: input.visualCaptureScope,
           outputMode: input.hostRecoveryIndex === undefined ? "create" : "verify-or-create",
           casePath: input.casePath,
           evaluationProfilePath: input.evaluationProfilePath,

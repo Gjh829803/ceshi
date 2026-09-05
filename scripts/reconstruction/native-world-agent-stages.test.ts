@@ -39,6 +39,7 @@ async function fixture() {
       calls.push(command);
       if (command === "pnpm") {
         expect(args.slice(0, 3)).toEqual(["worldkit", "reconstruct", "run"]);
+        expect(args[args.indexOf("--visual-capture-scope") + 1]).toBe("complete-targets");
         return 0; // Only the production handoff is mocked; all plan/Case checks are real.
       }
       expect(command).toBe("bash");

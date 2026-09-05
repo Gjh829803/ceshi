@@ -411,6 +411,8 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
         outputDirectoryPath,
         "--backend",
         backend,
+        "--visual-capture-scope",
+        "complete-targets",
         "--json",
       ],
       repositoryRoot,

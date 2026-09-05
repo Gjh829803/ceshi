@@ -29,6 +29,7 @@ import {
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   sha256CanonicalJson,
+  stringifyCanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
@@ -725,6 +726,38 @@ async function runWithBackend(
 }
 
 describe("runWorldReconstructionProductionV1", () => {
+  it("freezes complete-target scope and retains it across Host recovery without another generation", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const initial = ownersFor(value, receipt, { runCore: vi.fn(async input => {
+      await createWorldReconstructionRunJournalV1({ executionPurpose: "production", runId: input.runId,
+        caseRef: input.caseRef, evaluationProfileRef: receipt.evaluationProfileRef,
+        frozenOwnerIdentities: input.frozenOwnerIdentities, outputDirectoryPath: input.outputDirectoryPath });
+      throw new WorldReconstructionRunClosedErrorV1(["WORLD_RECONSTRUCTION_CAPTURE_FAILED"], "completed");
+    }) });
+    const input = { repositoryRoot: value.repositoryRoot, casePath: value.casePath, outputDirectoryPath: value.outputDirectoryPath,
+      backend: "local" as const, routePolicy: { requiredCapabilityRefs: [], requestedSourceKind: "babylon-native" as const, nativeTrustAdmitted: true } };
+    expect(await runWorldReconstructionProductionV1({ ...input, visualCaptureScope: "complete-targets" }, initial.owners))
+      .toMatchObject({ productionOutcome: "failed" });
+    expect(initial.owners.createRunPorts).toHaveBeenCalledWith(expect.objectContaining({ visualCaptureScope: "complete-targets" }));
+    const scopePath = path.join(value.outputDirectoryPath, "inputs/visual-capture-scope.json");
+    const frozen = await readFile(scopePath);
+    expect(JSON.parse(frozen.toString())).toEqual({ kind: "world-reconstruction-capture-scope", schemaVersion: 1, visualCaptureScope: "complete-targets" });
+    const recovered = ownersFor(value, receipt, { createRunPorts: vi.fn(async () => { throw new Error("SCOPE_TEST_STOP_BEFORE_EXECUTION"); }) });
+    const resume = { ...input, executionMode: "resume-host-only" as const };
+    await expect(runWorldReconstructionProductionV1({ ...resume, visualCaptureScope: "world-only" }, recovered.owners))
+      .rejects.toThrow("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+    expect(recovered.owners.createRunPorts).not.toHaveBeenCalled();
+    expect(await runWorldReconstructionProductionV1(resume, recovered.owners)).toMatchObject({ productionOutcome: "failed", cleanupOutcome: "not-started" });
+    expect(recovered.owners.createRunPorts).toHaveBeenCalledWith(expect.objectContaining({ visualCaptureScope: "complete-targets" }));
+    expect(recovered.owners.runCore).not.toHaveBeenCalled();
+    expect(initial.owners.runCore).toHaveBeenCalledOnce();
+    expect(await readFile(scopePath)).toEqual(frozen);
+    await writeFile(scopePath, "{}");
+    await expect(runWorldReconstructionProductionV1(resume, recovered.owners)).rejects.toThrow("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+    expect(recovered.owners.createRunPorts).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ["before-final-write", "completed"], ["after-final-write", "completed"],
     ["before-final-write", "cleanup-joined"], ["before-final-write", "completed-before"],
@@ -978,6 +1011,7 @@ describe("runWorldReconstructionProductionV1", () => {
     });
 
     await expect(freeze({
+      visualCaptureScope: "world-only",
       outputDirectoryPath: value.outputDirectoryPath,
       caseBytes: new TextEncoder().encode("case"),
       profileBytes: new TextEncoder().encode("profile"),
@@ -1004,6 +1038,7 @@ describe("runWorldReconstructionProductionV1", () => {
     });
 
     await expect(freeze({
+      visualCaptureScope: "world-only",
       outputDirectoryPath: value.outputDirectoryPath,
       caseBytes: new TextEncoder().encode("case"),
       profileBytes: new TextEncoder().encode("profile"),
@@ -1611,6 +1646,22 @@ describe("runWorldReconstructionProductionV1", () => {
     expect(corePorts.cleanup).toHaveBeenCalledOnce();
     expect(owners.verifyRun).not.toHaveBeenCalled();
     expect(owners.publishFinal).not.toHaveBeenCalled();
+  });
+
+  it("rejects a changed frozen capture scope before final publication", async () => {
+    const value = await fixture();
+    const receipt = await receiptFor(value);
+    const selected = ownersFor(value, receipt);
+    vi.mocked(selected.owners.verifyRun).mockImplementationOnce(async () => {
+      const file = path.join(value.outputDirectoryPath, "inputs/visual-capture-scope.json");
+      const original = JSON.parse(await readFile(file, "utf8"));
+      expect(original.visualCaptureScope).toBe("world-only");
+      await writeFile(file, stringifyCanonicalJson({ ...original, visualCaptureScope: "complete-targets" }));
+      return productionIntegrityFor(receipt);
+    });
+    expect(await run(value, selected.owners)).toMatchObject({ productionOutcome: "failed", publicationOutcome: "not-published",
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID"] });
+    expect(selected.owners.publishFinal).not.toHaveBeenCalled();
   });
 
   it("rechecks frozen source identity after verification before final publication", async () => {

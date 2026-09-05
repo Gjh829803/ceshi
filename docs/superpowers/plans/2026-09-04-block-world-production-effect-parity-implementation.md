@@ -721,6 +721,19 @@ world-only requests; rehashed request identity on scope/pose changes. Production
 requested-scope propagation and styling/Studio remain required downstream wiring;
 do not equate the materializer capability with full Native styling completion.
 
+#### CF16-NATIVE-REQUESTED-SCOPE
+
+Main-agent-only, sequential, depends on NATIVE-HOST-TARGETS. Native full/build
+scene launch requests complete-targets through the existing reconstruct CLI,
+production transaction and capture ports. Standalone reconstruct retains its
+world-only default. Freeze the resolved scope with existing Run inputs before
+dispatch. Host-only resume without an override reads that exact frozen scope;
+an explicit changed scope is stale input, not permission to reuse/relabel the old
+Capture. Do not introduce a second Run journal or change source/provider retries.
+Focused CLI/launcher/production/port and interrupted-recovery fixtures must prove
+propagation, preservation, invalid-input rejection and no extra model dispatch.
+Native styling and Studio delivery remain required downstream work.
+
 No entire old file or historical receipt is wholesale restoration authority. Keep
 current formal capture/identity/measurement owners intact while porting these behaviors.
 

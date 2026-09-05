@@ -23,7 +23,8 @@ import {
   parseFormalWorldCaptureIntentV1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "@whitebox-world/runtime-contracts";
-import { type Sha256HashV1 } from "@whitebox-world/protocol";
+import { canonicalJsonBytes, type Sha256HashV1 } from "@whitebox-world/protocol";
+import type { MaterializeFormalWorldCaptureRequestInputV1 } from "./formal-capture-request.js";
 import {
   hashWorldReconstructionCaseV1,
   hashWorldReconstructionEvaluationProfileV1,
@@ -96,6 +97,8 @@ const NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const RUN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export interface WorldReconstructionProductionInputV1 {
+  /** Fresh omission means world-only; resume omission retains the frozen scope. */
+  readonly visualCaptureScope?: MaterializeFormalWorldCaptureRequestInputV1["visualCaptureScope"];
   readonly executionMode?: "fresh" | "resume-host-only";
   readonly repositoryRoot?: string;
   readonly casePath: string;
@@ -265,10 +268,26 @@ interface WorldReconstructionInputFreezerHooksV1 {
 }
 
 interface WorldReconstructionInputFreezeInputV1 {
+  readonly visualCaptureScope: MaterializeFormalWorldCaptureRequestInputV1["visualCaptureScope"];
   readonly outputDirectoryPath: string;
   readonly caseBytes: Uint8Array;
   readonly profileBytes: Uint8Array;
   readonly intentBytes: Uint8Array;
+}
+
+function captureScopeBytes(visualCaptureScope: WorldReconstructionInputFreezeInputV1["visualCaptureScope"]): Uint8Array {
+  return canonicalJsonBytes({ kind: "world-reconstruction-capture-scope", schemaVersion: 1, visualCaptureScope });
+}
+
+async function readFrozenCaptureScope(outputDirectoryPath: string): Promise<WorldReconstructionInputFreezeInputV1["visualCaptureScope"]> {
+  const code = "WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID";
+  const bytes = await readCanonicalRegularFile(path.join(outputDirectoryPath, "inputs/visual-capture-scope.json"), code);
+  const record = parseJson(bytes, code);
+  const scope: unknown = record !== null && typeof record === "object" ? Reflect.get(record, "visualCaptureScope") : undefined;
+  if ((scope !== "world-only" && scope !== "complete-targets") || !bytesEqual(bytes, captureScopeBytes(scope))) {
+    throw new TypeError(code);
+  }
+  return scope;
 }
 
 export class WorldReconstructionInputFreezeClosedErrorV1 extends Error {
@@ -302,6 +321,7 @@ async function freezeInputs(
       ["case.json", caseBytes],
       ["evaluation-profile.json", profileBytes],
       ["formal-world-capture-intent.json", intentBytes],
+      ["visual-capture-scope.json", captureScopeBytes(input.visualCaptureScope)],
     ] as const) {
       const handle = await open(
         path.join(inputDirectoryPath, filename),
@@ -400,12 +420,7 @@ async function assertSourceInputsUnchanged(input: Readonly<{
   }
 }
 
-async function assertFrozenInputsUnchanged(input: Readonly<{
-  outputDirectoryPath: string;
-  caseBytes: Uint8Array;
-  profileBytes: Uint8Array;
-  intentBytes: Uint8Array;
-}>): Promise<void> {
+async function assertFrozenInputsUnchanged(input: WorldReconstructionInputFreezeInputV1): Promise<void> {
   const inputDirectoryPath = path.join(input.outputDirectoryPath, "inputs");
   const actual = await Promise.all([
     readCanonicalRegularFile(
@@ -426,6 +441,9 @@ async function assertFrozenInputsUnchanged(input: Readonly<{
     !bytesEqual(actual[1], input.profileBytes) ||
     !bytesEqual(actual[2], input.intentBytes)
   ) throw new TypeError("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+  if (await readFrozenCaptureScope(input.outputDirectoryPath) !== input.visualCaptureScope) {
+    throw new TypeError("WORLD_RECONSTRUCTION_FROZEN_INPUT_INVALID");
+  }
 }
 
 async function readJoinedRunReceipt(input: Readonly<{
@@ -652,6 +670,9 @@ export async function runWorldReconstructionProductionV1(
   input: WorldReconstructionProductionInputV1,
   owners: WorldReconstructionProductionOwnersV1 = defaultOwners(),
 ): Promise<WorldReconstructionProductionResultV1> {
+  if (input.visualCaptureScope !== undefined && input.visualCaptureScope !== "world-only" && input.visualCaptureScope !== "complete-targets") {
+    throw new TypeError("WORLD_RECONSTRUCTION_CAPTURE_SCOPE_INVALID");
+  }
   if (input.executionMode !== undefined && input.executionMode !== "fresh" && input.executionMode !== "resume-host-only") {
     throw new TypeError("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
   }
@@ -716,6 +737,7 @@ async function runProduction(
     path.dirname(outputDirectoryPath) !== runsRoot ||
     !RUN_ID_PATTERN.test(runId)
   ) throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  const visualCaptureScope = input.visualCaptureScope ?? (isHostRecovery ? await readFrozenCaptureScope(outputDirectoryPath) : "world-only");
   deriveNativeBlockGenerationRouterRequestIdV1({
     caseId: reconstructionCase.id,
     runId,
@@ -934,6 +956,7 @@ async function runProduction(
     worldReconstructionEvaluationProfileCanonicalBytesV1(evaluationProfile);
   try {
     await (isHostRecovery ? assertFrozenInputsUnchanged : freezeInputs)({
+      visualCaptureScope,
       outputDirectoryPath,
       caseBytes: canonicalCaseBytes,
       profileBytes: canonicalProfileBytes,
@@ -967,6 +990,7 @@ async function runProduction(
   }
   try {
     ports = await owners.createRunPorts({
+      visualCaptureScope,
       ...(hostRecoveryIndex === undefined ? {} : { hostRecoveryIndex }),
       executionPurpose: "production",
       repositoryRoot,
@@ -1069,6 +1093,7 @@ async function runProduction(
       intentHash: reconstructionCase.formalCaptureIntentHash,
     });
     await assertFrozenInputsUnchanged({
+      visualCaptureScope,
       outputDirectoryPath,
       caseBytes: canonicalCaseBytes,
       profileBytes: canonicalProfileBytes,

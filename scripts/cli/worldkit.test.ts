@@ -413,6 +413,18 @@ describe("worldkit CLI", () => {
     )).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("parses explicit capture scope without defaulting a Host-only resume override", () => {
+    const args = ["reconstruct", "run", "case.json", "--output", "runs/original", "--json"];
+    for (const scope of ["world-only", "complete-targets"]) {
+      expect(parseWorldkitArgs([...args, "--visual-capture-scope", scope])).toMatchObject({ visualCaptureScope: scope });
+    }
+    expect(parseWorldkitArgs([...args, "--resume-host-only"])).not.toHaveProperty("visualCaptureScope");
+    expect(() => parseWorldkitArgs([...args, "--visual-capture-scope", "invented"]))
+      .toThrow("--visual-capture-scope");
+    expect(() => parseWorldkitArgs([...args, "--visual-capture-scope", "world-only", "--visual-capture-scope", "complete-targets"]))
+      .toThrow();
+  });
+
   it("parses the sole reconstruction production transaction command", () => {
     expect(parseWorldkitArgs([
       "reconstruct",
@@ -445,7 +457,7 @@ describe("worldkit CLI", () => {
       json: true,
     });
     expect(HELP).toContain(
-      "worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] [--resume-host-only] --json",
+      "worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] [--visual-capture-scope world-only|complete-targets] [--resume-host-only] --json",
     );
   });
 
@@ -529,7 +541,7 @@ describe("worldkit CLI", () => {
       command: "reconstruct-run", executionMode: "resume-host-only", outputDirectoryPath: "runs/original",
     });
   });
-  it("delegates reconstruct run once to one transaction port and prints canonical JSON", async () => {
+  it.each([undefined, "complete-targets"] as const)("delegates reconstruct run scope %s once to one transaction port and prints canonical JSON", async visualCaptureScope => {
     const calls: unknown[] = [];
     let stdout = "";
     let stderr = "";
@@ -596,6 +608,7 @@ describe("worldkit CLI", () => {
         "artifacts/scenes/case-a/runs/run-a",
         "--backend",
         "local",
+        ...(visualCaptureScope === undefined ? [] : ["--visual-capture-scope", visualCaptureScope]),
         "--json",
       ], {
         runWorldReconstructionProductionV1: async (input: unknown) => {
@@ -609,6 +622,7 @@ describe("worldkit CLI", () => {
     }
 
     expect(calls).toEqual([{
+      ...(visualCaptureScope === undefined ? {} : { visualCaptureScope }),
       casePath: "artifacts/scenes/case-a/case.json",
       outputDirectoryPath: "artifacts/scenes/case-a/runs/run-a",
       backend: "local",

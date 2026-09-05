@@ -245,6 +245,7 @@ async function fixture() {
   });
   const input = {
     executionPurpose: "strict-acceptance",
+    visualCaptureScope: "world-only",
     repositoryRoot: "/repo",
     casePath,
     caseRef:
@@ -309,7 +310,7 @@ function owners(
     materializeCaptureRequest: vi.fn(async (input) => {
       events.push("capture-request");
       expect(input.packageDirectoryPath).toBe(value.packageDirectoryPath);
-      expect(input.visualCaptureScope).toBe("world-only");
+      expect(input.visualCaptureScope).toBe(value.input.visualCaptureScope);
       return {
         request: { id: "formal-request" },
         formalRequestHash: H("a"),
@@ -931,8 +932,9 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     }));
   });
 
-  it("takes authored source identity from Package and writes the capture request before Browser allocation", async () => {
-    const value = await fixture();
+  it.each(["world-only", "complete-targets"] as const)("takes authored source identity from Package and writes %s capture request before Browser allocation", async visualCaptureScope => {
+    const base = await fixture();
+    const value = { ...base, input: { ...base.input, visualCaptureScope } };
     const events: string[] = [];
     const ownerPorts = owners(value, events);
     const { ports, packaged } = await generateAndPackage(value, ownerPorts);

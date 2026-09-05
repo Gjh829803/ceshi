@@ -192,7 +192,7 @@ describe("packageNativeBlockAttemptV1", () => {
     };
     const formalCaptureIntent = parseFormalWorldCaptureIntentV1(JSON.parse(await readFile(path.join(
       path.dirname(fixture.casePath), "inputs/formal-world-capture-intent.json"), "utf8")));
-    const input = { executionPurpose: "production" as const, hostRecoveryIndex: 1,
+    const input = { executionPurpose: "production" as const, visualCaptureScope: "world-only" as const, hostRecoveryIndex: 1,
       repositoryRoot: REPOSITORY_ROOT, casePath: fixture.casePath,
       caseRef: `artifact://world-reconstruction-case/${fixture.reconstructionCase.id}/case.json`,
       evaluationProfilePath: path.join(path.dirname(fixture.casePath), "evaluation-profile.json"),

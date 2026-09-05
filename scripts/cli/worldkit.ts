@@ -154,7 +154,7 @@ Usage:
   worldkit native explain <world-directory> [--json]
   worldkit native package <attempt-directory> --case <case.json> --json
   worldkit native run <package-directory> [--port <port>] [--json]
-  worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] [--resume-host-only] --json
+  worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] [--visual-capture-scope world-only|complete-targets] [--resume-host-only] --json
   worldkit capture <file-or-package> --output <png> [--snapshot <json>]
     [--triview-output <directory> [--implementation-map <json>]] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
@@ -202,6 +202,7 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | {
       command: "reconstruct-run";
+      visualCaptureScope?: WorldReconstructionProductionInputV1["visualCaptureScope"];
       executionMode?: "resume-host-only";
       casePath: string;
       outputDirectoryPath: string;
@@ -783,9 +784,14 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
       throw new WorldkitUsageError("reconstruct run requires --json.");
     }
     const resumeHostOnly = takeFlag(tokens, "--resume-host-only");
+    const visualCaptureScope = takeOption(tokens, "--visual-capture-scope");
+    if (visualCaptureScope !== undefined && visualCaptureScope !== "world-only" && visualCaptureScope !== "complete-targets") {
+      throw new WorldkitUsageError("reconstruct run --visual-capture-scope must be 'world-only' or 'complete-targets'.");
+    }
     rejectRemaining(tokens, "reconstruct run");
     return {
       command: "reconstruct-run",
+      ...(visualCaptureScope === undefined ? {} : { visualCaptureScope }),
       ...(resumeHostOnly ? { executionMode: "resume-host-only" as const } : {}),
       casePath,
       outputDirectoryPath,
@@ -2641,6 +2647,7 @@ export async function main(
         await loadRunWorldReconstructionProductionPortV1();
       const result = parseWorldReconstructionProductionResultV1(
         await runProduction({
+          ...(parsed.visualCaptureScope === undefined ? {} : { visualCaptureScope: parsed.visualCaptureScope }),
           ...(parsed.executionMode === undefined ? {} : { executionMode: parsed.executionMode }),
           casePath: parsed.casePath,
           outputDirectoryPath: parsed.outputDirectoryPath,

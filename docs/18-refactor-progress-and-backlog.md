@@ -1988,6 +1988,23 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   styling 输入准备与 Studio 接线仍须实施；本条完成 Host 请求生成能力，不关闭 CF-16、
   CF-12 的主体/能力选择或整体 CF。最后真实本地 Case 继续等待所有 CF 开发及旧链对齐完成。
 
+- CF16-NATIVE-REQUESTED-SCOPE（main-agent-only，接 `13c84ec7`）：Native full/build 场景
+  入口现在通过 `--visual-capture-scope complete-targets` 将完整目标请求传入唯一
+  reconstruct CLI、production transaction、ports 与正式 Request materializer，已删除
+  ports 硬编码 `world-only`。独立 reconstruct 新运行省略该选项仍为 world-only，不改变
+  原有定向世界捕获用途；Native 的 plan-only 仍不启动 Builder 或 Capture。
+  resolved scope 随原有 Run inputs 的 staging/fsync/rename 一起冻结到
+  `inputs/visual-capture-scope.json`，不是另一份运行状态机。Host-only resume 省略覆盖值时
+  读取原记录；显式换 scope 在恢复执行前被拒绝。运行中改变记录也会在发布前的原有输入
+  重查中失败；未知或缺失记录不伪造默认值。历史 runs 不补写该新字段或冒充当前恢复证据。
+  CLI 新参数先 RED 后 GREEN；CLI/ports/Native launcher/staged-flow 四文件 98/98，
+  production transaction 全文件 47/47，随后追加发布前 scope 变更一项回归通过。
+  其中 scoped freeze/恢复/清理四项及 CLI 五项是前述测试子集，不累加为独立覆盖。
+  类型与 diff 检查通过；没有模型/Browser Case、整仓 CI 或独立 exact-SHA 复核。
+  本项激活完整目标捕获请求，不代表已经运行新 Case 或交付 Native styled opening。
+  接下来仍须用正式 Native Capture/Receipt 准备视觉任务输入并接 styling/Studio，不能
+  通过虚构 Canonical map 或提前跑 Case 绕过。CF-16、其余 CF 和最终生产验收仍开放。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
