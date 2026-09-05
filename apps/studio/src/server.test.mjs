@@ -1817,7 +1817,7 @@ test("build-only accepts an empty reference-image list before validating frozen 
     assert.equal(result.status, 2, output);
     assert.match(
       output,
-      /ENOENT:.*(?:scene-brief\.md|world-plan\.png|entry-whitebox-target\.png|terrain-height-intent-prompt\.md|terrain-height-intent\.png)/,
+      /ENOENT:.*planner-execution\.json/,
     );
     assert.doesNotMatch(output, /unbound variable/);
   } finally {
@@ -1862,7 +1862,9 @@ test("keeps lightweight Planner prose and Builder implementation authority separ
     readFile(path.join(repoRoot, ".codex/skills/worldkit-canonical-builder/references/controlled-subjects.md"), "utf8"),
     readFile(path.join(repoRoot, ".codex/skills/worldkit-canonical-builder/references/terrain-and-structures.md"), "utf8"),
   ]);
-  assert.match(launcher, /worldkit brief validate/);
+  assert.match(launcher, /scripts\/agents\/planner-execution\.ts replay \\/);
+  assert.match(launcher, /scripts\/agents\/planner-execution\.ts replay-accepted \\/);
+  assert.doesNotMatch(launcher, /worldkit brief validate/);
   assert.match(launcher, /worldkit-spatial-planner\/scripts\/self-check\.mjs/);
   assert.match(launcher, /worldkit-canonical-builder\/scripts\/self-check\.mjs/);
   assert.match(launcher, /non-authoritative composition intent/);

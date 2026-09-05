@@ -1587,7 +1587,7 @@ focused 1/1（执行 Native Check/Ground/Package，不含 Browser）均通过，
   原始收据保留在上述 Run 的 `attempts/0/`，终态日志保留在上述私有路径；停止本轮 heartbeat，
   不自动重启、重交生成任务或改写失败产物。
 
-CF-19/29 本地测试前补漏（2026-09-05，主会话、未提交工作树；不代表完整 CF-19 效果结项）：
+CF-19/29 本地测试前补漏（2026-09-05，主会话；随后提交为 `5a1508ea`，不代表完整 CF-19 效果结项）：
 
 - 新增唯一共享 Native TypeScript policy/诊断格式器；Builder 便携 checker 内嵌构建时冻结的当前
   SDK/type-library 输入图与 TypeScript，不手写 API 类型、不依赖任务目录的 node_modules，也不执行
@@ -1625,6 +1625,36 @@ CF-19/29 本地测试前补漏（2026-09-05，主会话、未提交工作树；�
   `sha256:54fa68454737c5e33936362e139041245b77b0c8169c3c85e4459ddd81b0c575`
   （不含 docs、新 Case 和历史 runs）。运行期间冻结生产实现。
   原 heartbeat `054-case` 更新返回已不存在、可能已被用户删除；未擅自重建，不声称自动监控仍生效。
+
+CASE-054 `paper-moon-054-cf19-local-0905/run-20260905064934-66984` 终态及后续补漏：
+
+- 本次在提交前以对应生产代码启动，随后累计改动提交/推送为
+  `5a1508ea896befee3345207c884bd87feb40f932`；不能称为提交后重新运行。
+  Planner Host replay 完成；Native Attempt 0 的 `generation-receipt.json` 为
+  `rejected / output-missing`、`outputs: []`、`cleanupOutcome: completed`。
+  最终 `productionOutcome: failed`、`publicationOutcome: not-published`，诊断
+  `WORLD_RECONSTRUCTION_NO_OUTPUT`；未进入 Native Check、Capture 或 Evaluation。
+- 代码核对确认 **CF-29 本地交付前失败证据缺口**：local adapter 在检查五个必需输出时
+  只要任意一个缺失就拒绝整批 promotion，随后删除隔离 workspace；上层仅保留
+  `output-missing`，未保存具体文件名、未交付源码或模型最后反馈。因此不能从现存收据
+  断言缺的是源码还是 advisory PNG，更不能断言是类型、overlap 或 CF-19 修复耗尽。
+  已被清理的原始输出不能靠本轮修复补造回来，原 Run 保持失败。
+- 用户授权继续修复后，local Native dispatch 显式声明 Host-owned
+  `attempts/<index>/generation-failure`，该参数进入既有 router payload Hash；失败时在
+  cleanup 前保存 `report.json`（request/task identity、逐个声明输出的状态/尺寸、
+  bounded/redacted 的 untrusted 最终反馈）及 `outputs/` 隔离快照。只读声明输出，
+  不复制 inputs/context，不跟随软链/多硬链，不覆盖已有 evidence；快照总上限 32 MiB，
+  超限只报告尺寸和省略原因。文件权限 0600、目录 0700。成功交付不创建失败报告；
+  缺失、空文件、unsafe 输出、超时或任务失败仍失败，没有第四 Source 或成功 fallback。
+- focused 证据：部分源码已生成但两张 advisory PNG 缺失的复现、正常 delivery、
+  rejected/timeout、输出安全/限额、反馈脱敏和旧证据不可覆盖共 10/10；
+  Native local/cloud dispatch 路由及 Hash 2/2；Generation 16/16；独立测试清单 9/9；
+  typecheck 通过。这证明诊断保留修复，不证明真实模型交付或最终还原效果已解决。
+- PR #202 在 `5a1508ea` 的 CI 停于 Studio：108/110，通过前置 typecheck；两个失败分别
+  仍期望旧 `worldkit brief validate` 文本和旧缺失输出路径，实际已改为 Planner
+  receipt/replay。已更新两条断言，focused 2/2 通过；不是全 CI 通过证据。
+- 按用户后续授权曾创建 heartbeat `054-case-main` 继续等待并条件合并；本次 Case 失败后
+  已暂停。未合入 main，未启动另一付费 Case；CI/批准审查和真实 Case 成功条件仍未闭合。
 
 CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
 

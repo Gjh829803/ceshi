@@ -1187,6 +1187,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     "--stage", "coding-agent", "--job-name", `Native Block Generation ${reconstructionCase.id}`,
     "--request-id", routerRequestId, "--execution-profile", "formal", "--submit-attempts", "1",
     "--timeout-seconds", String(generationRequest.budgets.timeoutSeconds),
+    ...(input.backend === "local" ? ["--failure-evidence-root", `attempts/${input.attemptIndex}/generation-failure`] : []),
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
     "--workspace-context-root", `attempts/${input.attemptIndex}/.task`,
     ...generationReferences.flatMap((reference, index) => [

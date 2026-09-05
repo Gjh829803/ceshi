@@ -1416,6 +1416,17 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         }),
       });
       expect(prepared.routerArguments).toContain("reference-0::attempts/0/.task/inputs/reference-0.webp::image::image/webp");
+      if (backend === "local") {
+        const flag = prepared.routerArguments.indexOf("--failure-evidence-root");
+        expect(flag).toBeGreaterThan(-1);
+        expect(prepared.routerArguments[flag + 1]).toBe("attempts/0/generation-failure");
+      } else {
+        expect(prepared.routerArguments).not.toContain("--failure-evidence-root");
+      }
+      expect(prepared.routerTaskPayloadHash).toBe(sha256CanonicalJson({
+        request: prepared.generationRequest, routerRequestId: prepared.routerRequestId,
+        routerArguments: prepared.routerArguments,
+      }));
       expect(prepared.generationRequest.referenceInputs).toContainEqual({
         inputRef: "reference-0.webp", contentHash: sha256Bytes(bytes), mediaType: "image/webp",
       });

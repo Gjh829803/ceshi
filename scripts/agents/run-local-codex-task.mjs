@@ -7,9 +7,9 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rename,
   rm,
-  stat,
 } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, relative, resolve } from "node:path";
 
@@ -18,6 +18,7 @@ import {
   serializeCodexTaskOutcomeEnvelopeV1,
 } from "../lib/codex-task-outcome.mjs";
 import { resolveCodexExecutionProfile } from "../lib/lwdp-codex-profile.mjs";
+import { inspectLocalOutput, retainLocalTaskFailure } from "./local-codex-failure-evidence.mjs";
 
 function parseArguments(argv) {
   const result = { contexts: [], assets: [], outputs: [] };
@@ -134,7 +135,7 @@ async function promoteFileAtomic(source, destination) {
 }
 
 const args = parseArguments(process.argv.slice(2));
-const repoRoot = resolve(args.repoRoot || process.cwd());
+const repoRoot = await realpath(resolve(args.repoRoot || process.cwd()));
 const taskId = safeTaskId(args.taskId);
 const requestId = safeTaskId(args.requestId || taskId);
 const executionProfile = resolveCodexExecutionProfile({
@@ -149,12 +150,21 @@ const runToken = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 const stagingRoot = resolve(repoRoot, ".codex-tmp", "local-codex", `${taskId}-${runToken}`);
 const smokeMode = process.env.WORLDKIT_LOCAL_CODEX_SMOKE === "1";
 const codexBin = process.env.WORLDKIT_LOCAL_CODEX_BIN || "codex";
-await mkdir(stagingRoot, { recursive: true });
 
 let child = null;
 let timeout = null;
 let didTimeout = false;
 let outcomeEmitted = false;
+let outputSpecs = [];
+let stderrTail = "";
+let childExitCode = null;
+const failureEvidenceRoot = args.failureEvidenceRoot === undefined ? null :
+  resolve(await realpath(dirname(resolve(args.failureEvidenceRoot))), basename(args.failureEvidenceRoot));
+if (failureEvidenceRoot !== null &&
+    (!relative(repoRoot, failureEvidenceRoot) || relative(repoRoot, failureEvidenceRoot).startsWith(".."))) {
+  throw new Error("Failure evidence must be inside the Host run root.");
+}
+await mkdir(stagingRoot, { recursive: true });
 const emitOutcome = (outcome) => {
   if (outcomeEmitted) throw new Error("Codex task outcome was emitted more than once.");
   outcomeEmitted = true;
@@ -234,7 +244,7 @@ try {
     if (attachAs === "image") attachedImages.push(stagedPath);
   }
 
-  const outputSpecs = args.outputs.map((rawOutput) => {
+  outputSpecs = args.outputs.map((rawOutput) => {
     const [remotePath, localPath, contentType = "application/octet-stream"] =
       splitSpec(rawOutput, 2, "--output");
     const safePath = safeOutputPath(remotePath);
@@ -305,7 +315,6 @@ try {
     `WORLDKIT_LOCAL_CODEX_JOB ${args.stage || taskId} ${taskId} pid=${child.pid ?? 0} profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
   );
   process.stdout.write(`WORLDKIT_LOCAL_CODEX_PROGRESS ${taskId} running\n`);
-  let stderrTail = "";
   child.stdout.on("data", (chunk) => process.stdout.write(chunk));
   child.stderr.on("data", (chunk) => {
     process.stderr.write(chunk);
@@ -321,6 +330,7 @@ try {
     child.once("error", (error) => resolvePromise({ code: 1, error }));
     child.once("close", (code, signal) => resolvePromise({ code: code ?? 1, signal }));
   });
+  childExitCode = result.code;
   clearTimeout(timeout);
   timeout = null;
   if (result.error) throw result.error;
@@ -331,8 +341,8 @@ try {
     );
   }
   for (const output of outputSpecs) {
-    const metadata = await stat(output.stagedPath).catch(() => null);
-    if (metadata === null || !metadata.isFile() || metadata.size === 0) {
+    const metadata = await inspectLocalOutput(stagingRoot, output.remotePath);
+    if (metadata.status !== "present") {
       throw new Error(
         `WORLDKIT_LOCAL_CODEX_OUTPUT_MISSING: Local Codex omitted a non-empty declared output: ${output.remotePath}`,
       );
@@ -342,6 +352,20 @@ try {
     await promoteFileAtomic(output.stagedPath, output.localPath);
   }
   process.stdout.write(`WORLDKIT_LOCAL_CODEX_TASK_READY ${taskId}\n`);
+  } catch (error) {
+    if (failureEvidenceRoot !== null) {
+      try {
+        await retainLocalTaskFailure({
+          evidenceRoot: failureEvidenceRoot, stagingRoot, outputs: outputSpecs,
+          requestId, taskId, childExitCode, stderrTail,
+          outcome: error instanceof CodexTaskOutcomeError ? error.outcomeCode : "task-rejected",
+        });
+      } catch {
+        // Do not overwrite prior evidence or replace the original task failure.
+        process.stderr.write("WORLDKIT_LOCAL_CODEX_FAILURE_EVIDENCE_UNAVAILABLE\n");
+      }
+    }
+    throw error;
   } finally {
     if (timeout !== null) clearTimeout(timeout);
     stopChild("SIGTERM");

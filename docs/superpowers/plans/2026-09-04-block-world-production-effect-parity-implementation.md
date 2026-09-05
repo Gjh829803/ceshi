@@ -29,6 +29,20 @@ integration proof; each task merges only after its focused contract is green.
 
 ## 2026-09-05 candidate checkpoint
 
+### CF-29 local pre-promotion rejection evidence
+
+Main-agent-only, dependent on the existing local router and CF-31B dispatch identity. The local
+adapter owns failure evidence before workspace cleanup: exact declared-output availability,
+bounded quarantined output snapshots, and bounded/redacted untrusted final feedback. The Host
+selects its evidence destination explicitly in the hashed Native dispatch. Evidence must never
+be promoted to Source, restore a failed Generation Receipt, or buy another task. No second success
+authority is introduced. Missing/empty/unsafe outputs, task rejection/timeout, immutable evidence,
+snapshot limits, secret redaction and unchanged successful delivery require focused tests.
+
+The same batch updates Studio's two stale Planner assertions to the current receipt/replay owner;
+it does not restore the deleted validation command. Real Case root-cause certainty is limited by
+the evidence actually retained; do not infer a geometry/type failure from `output-missing` alone.
+
 ### CF-19/29 type-feedback closure before the next local Case
 
 Execution is main-agent-only; no new provider tasks or ordinary Host source-repair attempts.
