@@ -353,6 +353,62 @@ affected Request/admission/contract tests and typecheck, then freeze before one 
 Browser four-image inspection. Record exact input SHA and residual CF-14/21 work in
 docs/18. Native generated checker graph changes use temporary rebuild and byte drift.
 
+#### CF-14/R2-C formal identity evidence consumers
+
+Main-agent-only; depends on R2-A/B. Require opening/side/top identity PNG refs and hashes
+in the current Formal receipt and per-view semantic observations. Publish and validate
+the same closed file inventory in Host, Studio, strict verifier and repair inputs.
+Evaluation verifies PNG identity/dimensions/CRC and uses the shared pixel projection;
+structural AABBs remain only spatial evidence, never a silhouette substitute.
+All semantic pixel-drift repair actions use `adjust-geometry`: inspect reference,
+identity and display evidence before deciding the cause; do not infer resize/move
+from occlusion, clipping, holes or aggregate pixel counts. This does not add an ordinary
+production repair task, quality veto, model call or budget.
+
+Evidence: directly affected contracts, publication, Studio, evaluator, repair allowlist,
+typecheck and one actual Browser capture after freezing the implementation. A passing
+synthetic-generation Browser lane is not a successful model Case or full CF-14 closure.
+
+#### CF-14/R2-D exposed walkable overlay identity
+
+Main agent owns settlement/Capture integration and rendered evidence. The topology/materializer
+slice may run in its authorized isolated worker: preserve actual per-top-cell Block/group
+ownership in required triangle partitions and explicit live overlay handles. One Collider may
+contain multiple visual groups plus ungrouped Blocks. Preserve complete-surface normals,
+collision arrays, smoothing and existing Collider budgets. Buried Blocks need no exposed overlay.
+Settlement joins the one logical Collider once and retains every visual partition; Capture
+colors those handles from checked metadata, never by scanning mesh names, tags or bounds.
+
+Evidence: exact partition coverage, full-surface normals, mixed/ungrouped/buried cases,
+tampered/missing/duplicate handles, actual Package admission, typecheck and 3C migration.
+The existing no-script Browser fixture must explicitly see all five exposed target tops;
+its earlier any-view-only assertion missed black top overlays and is insufficient.
+Compare the four display PNGs with the pre-partition capture and inspect identity pixels.
+
+#### CF-14/R2-E adversarial rendered evidence
+
+Main-agent-only; depends on the R2-C/D integration. Extend the existing no-model Browser
+verification lane with deterministic geometry cases: solid versus hollow geometry with the
+same outer bounds, fully/partially occluded target, separated same-identity instances, and
+opening-equivalent geometry differing in side/top. Use existing Native Source/Package/Capture
+owners, not a new production route or test-only Runtime truth. Assert real decoded identity
+pixels and their bound Evaluation consumption; retain captures for inspection, including on
+assertion failure. Verify the original display and Runtime transaction are preserved.
+These are regression fixture requirements only, not new ordinary publication thresholds.
+Record evidence and remaining parent-task work only in docs/18.
+
+User-authorized ready work at `d9038d17` (2026-09-05):
+
+| Task / mode | Frozen input, dependency and output | Exclusive ownership / evidence |
+| --- | --- | --- |
+| CF-14/R2-E-MSAA / main-agent-only | R2-D actual pixels reveal adjacent identity colors mixed by default framebuffer MSAA; single-sample identity attachment must preserve Camera/geometry/display | Main owns artifact-capture, its tests, final Browser verifier and all Browser resources; RED adjacent-color leakage, restoration/readback tests, actual GPU evidence |
+| CF-14/R2-E-FIXTURES / parallel-safe | Existing Native fixture API at d9038d17; pure named geometry inputs for hollow/occlusion/separated/side-top differences, consumed by the main Browser verifier | cf01-stack-safe worker owns native-semantic-geometry test-support/tests and necessary native-package fixture support only; pure focused evidence, no Browser/Havok/model jobs |
+| CF-21/NEXT-COVERAGE-AUDIT / read-only parallel-safe | Legacy 9e35ab53 versus d9038d17; explicit next-batch feature coverage gap/consumer contract/RED proposal | cf29-progress-visibility worker reads Planner/Case/Builder/Capture consumers; no edits or test resources, no new live status |
+
+The main agent integrates worker commits only after inspecting their actual diffs. R2-E Browser
+closure depends on both the mask implementation and inspected geometry fixtures; neither worker
+success nor single-fixture display invariance alone closes CF-14.
+
 #### User-authorized parallel batch at 65d3c2bb (2026-09-05)
 
 The user explicitly authorized subagents while the local 054 Case runs. Two independent

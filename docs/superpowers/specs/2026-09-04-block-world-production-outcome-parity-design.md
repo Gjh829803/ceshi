@@ -73,6 +73,15 @@ The existing disposable renderer additionally reuses Profile shape/lattice/occup
 for in-task overlap feedback. It does not recreate a Scene, persistent Layout or Physics owner;
 unsupported structures remain advisory, and full Native/Ground admission remains Host-owned.
 
+CF-19 bounded overlap feedback (054 frozen replay, 2026-09-05): preserve the legacy
+ability to see several geometric conflicts in one shared repair cycle. The existing
+restricted renderer reports at most 32 distinct overlapping Block-ID pairs in
+deterministic discovery order, with one representative occupied cell per pair.
+Repeated cells must not grow the diagnostic collection; the response states when
+the bound prevents complete enumeration. Any overlap still rejects rendering and
+writes no comparison PNG. This changes feedback completeness, not legal geometry,
+the three-cycle budget, the static checker boundary or production success policy.
+
 CF-19 task-instruction/visual-completion clarification (2026-09-05, authorized legacy parity):
 old `9e35ab53:scripts/agents/run-spatial-world-agent.sh` supplied the exact Skill and checker/renderer
 commands plus the view/repair/recheck loop in the submitted instruction, not only in an attached

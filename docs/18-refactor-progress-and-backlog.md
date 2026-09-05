@@ -1367,11 +1367,12 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
 
 - PR #202 已按用户明确授权以管理员方式合并，main 为 `f35a56b2`；合并时 CI 与必需批准
   未完成，不记作通过。用户明确 CI 后续自行处理，不能将这次绕过授权推广为后续默认策略。
-- 最新真实 Case `paper-moon-054-cf19-feedback-0905` 普通生产 passed/published、cleanup
+- 最近已通过的真实 Case `paper-moon-054-cf19-feedback-0905` 普通生产 passed/published、cleanup
   completed；Evaluation/strict diagnostic failed 事实保留。真实证据属于生产实现 `e271a35c`，
   后续测试清单/文档提交不冒充新完整 Case。不得据合并或普通生产成功关闭全部 CF。
-- 仍有实质实现工作：CF-01/03/04/05/06/07/11/12/13/14/15/16/17/20/21，另有 CF-29
-  Builder 进度可见性补充缺口。CF-03 为条件复现；CF-11/20/21 有预算/提示词切片，未关闭父任务。
+- 仍有实质实现或条件复现工作：CF-03/04/05/06/07/11/12/13/14/15/16/17/20/21，共 14 个父任务。
+  CF-01 栈安全搜索与 CF-29 Builder 进度可见性补充已实现并进入隔离集成候选，尚不能冒充
+  已合入 main 或完整验收。CF-03 为条件复现；CF-11/20/21 已有多个代码切片，未关闭父任务。
   CF-15 的旧 gate 表述须服从后续普通成功标准，不得把新增质量诊断直接升级为普通阻断。
 - CF-02/08/09/10/18/19/22/23/24/25/26/27/28/30/31/32 已有实现或明确切片；其中真实媒体、
   WebP、严格 Corpus、CF-19/24 效果对照、CF-26B 实云与 CF-31C 故障矩阵仍按各任务分别验收。
@@ -1597,12 +1598,22 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   使用当前已量测的 8,000 Block 上限、同任务四参 Camera 调整、实际世界/探索意图和
   完整世界 inspection Capture；本地 Codex 登录及 LWDP 文件存在/0600 已检查，
   不记录凭据内容。准备冻结后从 Planner 开始普通生产，不重启末尾严格 replay。
-  新结果尚待；CF-21 的全要素/分区合同及实际还原效果仍未验收，旧 054 保留作对照。
+  本次结果见下文；CF-21 的全要素/分区合同及实际还原效果仍未验收，旧 054 保留作对照。
 - 上述新 054 已在冻结代码 `65d3c2bb` 启动本地普通生产：Planner task
   `planner-20260905-132647-24590` 已交付 Brief、entry、world-plan 和自检报告，
   Host 进入 `plan-ready`；Run `run-20260905133525-24571` 已创建 Attempt 0
-  `generation-dispatch.json`，进入 Builder。尚无 Builder 终态、正式 Capture 或效果结论。
-  不把 Planner 成功视为全 Case 成功；旧 Case 继续保留作对照。
+  `generation-dispatch.json`。现已终止：Builder child exit 0，但 generation receipt
+  `outcome: rejected` / `output-missing`；三份 Native Source 存在，两张必需 advisory
+  comparison PNG 缺失，未进入 Native Check、正式 Capture 或 Evaluation。
+  `attempts/0/generation-failure/report.json` 保留了源文件与最终反馈；Builder 自述
+  self-check 通过、renderer 仍报 `palace-wing-roof-4349` 与 `palace-lower-hall-2989`
+  occupancy overlap，三轮修复已用完。冻结副本在独占临时目录重放已核实：self-check
+  exit 0、无类型/结构诊断，renderer exit 2，冲突 cell `-21,32,-133`。保留 source
+  的 lower-hall `full` 中心 `[-10,8.5,-66]` 与 wing-roof `half` 中心 `[-10,8.25,-66]`
+  真实重叠；不是门禁误判。旧 `9e35ab53` self-check compile 会集中收集 overlap，
+  current renderer 首错退出，因此反馈不完整属于已有 CF-19；三轮具体修改过程未留全证据。
+  不把 child exit 0 或 Planner 成功当作生产成功，不直接增加修复预算或重跑付费 Case。
+  旧 Case 继续保留作对照；本次执行输入不含隔离候选的 CF-14 身份图改动。
 - 用户授权并发实现（2026-09-05）：隔离 worktree `cf01-stack-safe` 与
   `cf29-progress-visibility` 均从 `65d3c2bb` 开始；main 保留 Case、跨域合同和集成所有权。
   CF-01 子任务提交 `957755bd`，以迭代候选游标栈替换递归 DFS；forks 模式
@@ -1619,8 +1630,8 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   tracked tree 干净；只含两项的四个代码/测试文件，不含 Case 产物或依赖变化。
   既有 83/83 与 32/32 focused 证据输入未变，直接复用，不重复整套测试。
   这是隔离集成候选，不是正在执行的 `65d3c2bb` Case 或 `main` 的新证据；
-  待 Case 终态后再同步回主任务分支。Case 的实际 Builder PID 27107 已确认存活，
-  约 5 分钟，尚无终态；已打开 Planner entry/world-plan，看到侧支路、回折桥阶、
+  待候选集成验证后再同步回主任务分支。该次检查时 Builder PID 27107 存活，
+  约 5 分钟；现已终止，结果见上文。已打开 Planner entry/world-plan，看到侧支路、回折桥阶、
   远端宫殿与围合山体，但这些是规划输入，尚未证明 Builder 的完整世界实现。
 - CF-14/R2-A 在上述隔离集成候选落代码：提取唯一 identity-mask pixel projection，
   Case reference 消费者删除原 inline 算法；保持原像素边界、四舍五入、缺失/弱 mask
@@ -1641,7 +1652,49 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   原实现 opening 无身份结果与异常注入不生效形成 RED；初次 side/top 夹具 bounds 字段
   写错已纠正，不把夹具错误计作产品缺陷。证据为 NullEngine/契约，不是真实 GPU 像素。
   正式 provider 的 live-registry 接入、三视图身份图/Receipt Hash 闭包和 Evaluation
-  像素消费尚待，原语未启用到正在运行的 054，CF-14 继续 open。
+  像素消费尚待，原语未启用到上述 054，CF-14 继续 open。
+- CF-14/R2-C 正式消费接入已提交到隔离候选 `21711f39`：三视图身份 PNG 与 Receipt/semantic
+  observation 绑定，Host 按真实像素量测，发布、Studio、Evaluation 和严格 verifier 消费者同步。
+  直接 Capture/发布/Studio/量测/契约回归及 typecheck 已通过；各轮重复覆盖不累计为 aggregate。
+  `pnpm verify:native-no-script-capture` 已完成一次实际 Babylon/Havok Browser Capture，
+  Package root 为 `sha256:1a82304d908587029701d09acdc40a86147f38775f0e65e54c12e77be38d7326`，
+  Browser/Vite cleanup 均 completed。该命令使用合成生成输入，不是新的模型 Case。
+  人工检查发现其初版断言过弱：仅要求每个目标在任一视图出现，未发现地面顶面身份图为黑色。
+  根因是实际可见的 walkable overlay 未绑定身份色，原 Block 的侧面像素掩盖了遗漏。
+  因此此次 Browser exit 0 不作为 CF-14 完成证据，父任务继续 open。
+- CF-14/R2-D 修复已提交到集成候选 `d9038d17`：既有 topology owner 按显式
+  Block/group 身份分区 overlay 三角形，保持碰撞数组和完整面 normals；worker 提交
+  `23be0f13` 的 17 项 focused 回归通过。主进程已接入 settlement 与 Capture 消费者，
+  支持同一 Collider 的多个语义组和未分组黑色部分，不从 Mesh/name/tag 推断身份。
+  settlement/Ground/provider 三文件 32/32（含 mixed/ungrouped/buried）、真实 Package 发布
+  1/1、语义修复 operation/契约 66 项、typecheck、3C migration 和 Skill 66/66 已通过。
+  初次合并运行四文件的 threads 模式约 5 分钟无结果，已停止（exit 143），不记通过；
+  拆分为单 forks 后直接三文件 3.92 秒、Package 39.73 秒完成，未更改仓库默认测试配置。
+  补强顶面断言后的实际 Browser Capture passed，Package root 为
+  `sha256:232fd28f3efabfa3502f3328e078cdb2e384b87b9aefcd10b6f9300aff1b1652`，
+  Browser/Vite cleanup 均 completed；opening/side/top/Collider 四张显示 PNG Hash 与修复前
+  完全一致，五个顶面身份均 visible，已人工看图。像素偏差要求比较参考/display/identity 后
+  调整几何，不从 aggregate 面积或中心偏差武断推导移动/放大。
+- CF-14/R2-E 看图后继续发现并复现默认 framebuffer MSAA 串色：相邻地面身份色
+  `#AA0001` 与 `#AA0005` 的边缘平均为门体合法色 `#AA0003`，opening 中有 83 个门体
+  像素落在实际门体之外。因此 R2-D 的顶面通过不证明全部像素量测正确。
+  主进程用 Babylon 9.23 既有 single-sample RenderTarget 接入同 Camera 身份 attachment，
+  不改显示抗锯齿、不新增 npm 依赖或身份色准入门槛。三个 view 的 RED 已复现；
+  加入上下行读回、前置 output target 恢复、读回缺失/截断和异常资源清理后 17/17 passed，
+  已提交 `161a0ec5`，最终 typecheck、3C migration 和新 Browser 防串色断言通过。
+  实际 opening 门体外的错误身份像素由 83 降为 0；四张显示 PNG Hash 与 R2-D 一致，
+  WorldPackage root 未变，Browser/Vite cleanup 均 completed。修复前后证据目录分别是系统
+ 临时目录中的 `worldkit-no-script-capture-evidence-m0KP3r` 与
+  `worldkit-no-script-capture-evidence-ocUzi0`，含 identity/display PNG、正式收据和 Evaluation。
+  CF-14 的实心/空洞、遮挡、分离实例、side/top 差异对抗集仍待，父任务继续 open。
+  用户再次授权并发：`CF-14/R2-E-FIXTURES` worker 在隔离目录补纯几何对抗夹具，
+  `CF-21/NEXT-COVERAGE-AUDIT` worker 只读核查真实旧行为差异和下一批消费者合同；
+  主进程独占 Runtime、Browser、跨域合同、最终集成。完整任务图见既有生产效果实施计划。
+- CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
+  一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
+  focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，
+  代替原先只报第一对；这证明反馈改进，不证明模型修复成功。没有新增付费任务、修复预算
+  或普通生产 veto，新的完整 Case/效果证据仍待。主进程继续独占跨域合同、Browser 和最终集成。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
