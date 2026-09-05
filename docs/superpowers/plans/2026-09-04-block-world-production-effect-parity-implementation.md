@@ -29,6 +29,22 @@ integration proof; each task merges only after its focused contract is green.
 
 ## 2026-09-05 candidate checkpoint
 
+### CF-19 executable task feedback parity and integration boundaries
+
+Main-agent-only, sequential. Own case-preparation instruction + live/frozen Builder Skill;
+keep the existing five task outputs, model, three-cycle shared budget, single-task orchestration
+and Host identity replay unchanged. Explicitly route the submitted instruction to its actual
+`inputs/builder-skill/` copy and complete check/render/view/repair/review sequence. Match the old
+completion condition (structural pass + latest images reviewed), not an extra "judged aligned"
+similarity admission. Require preparation and Skill regressions, byte-identical frozen copies,
+then a fresh real generated Case for effect evidence; old source Capture cannot prove prompt impact.
+
+Integration-only CI closure, existing CF-02/27/19 owners: use the Profile's exported pure shape
+subpath instead of a private sibling source import; share the startup reporter from runtime-babylon
+instead of importing app internals; explicitly classify synthetic Browser verification fixtures as
+test-support and serve their same JSON assets through the verifier's owned asset boundary. Preserve
+budgets/behavior and delete replaced file paths; do not weaken workspace-boundaries or add debt.
+
 ### CF-31C Capture Request recovery and CF-29 owner-state diagnostics
 
 Main-agent-only, sequential: the existing materializer owns a required closed `outputMode`

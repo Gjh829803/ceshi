@@ -70,6 +70,19 @@ The existing disposable renderer additionally reuses Profile shape/lattice/occup
 for in-task overlap feedback. It does not recreate a Scene, persistent Layout or Physics owner;
 unsupported structures remain advisory, and full Native/Ground admission remains Host-owned.
 
+CF-19 task-instruction/visual-completion clarification (2026-09-05, authorized legacy parity):
+old `9e35ab53:scripts/agents/run-spatial-world-agent.sh` supplied the exact Skill and checker/renderer
+commands plus the view/repair/recheck loop in the submitted instruction, not only in an attached
+Skill. Native case preparation must do the same with the actual isolated `inputs/builder-skill/`
+paths. The old completion condition is a passing fresh structural self-check and actual inspection
+of both latest comparison PNGs, with at most the same three combined structural/visual repair
+cycles. Remove the extra Native requirement to declare the images "judged aligned" before delivery.
+Material visible differences still trigger source repair while the shared budget remains; exhausted
+visual budget alone must not withhold otherwise valid outputs or create a new task. Remaining visual
+limitations belong in the existing final response, not a new output report or Host similarity gate.
+This corrects prompt delivery and completion semantics; it is not evidence of equal image quality or
+proof that the missing instruction caused every observed 054 difference.
+
 - exactly one Canonical or Babylon Native Scene Source;
 - Native Module owns visuals and explicit Frozen Contributions only;
 - Host/SDK exclusively own Engine, Scene, Havok, Subject, Camera, Input, fixed Tick, Action, Reset,

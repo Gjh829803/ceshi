@@ -45,6 +45,13 @@ const VISUAL_REVIEW_BUILD = path.resolve(
 );
 const temporaryDirectories: string[] = [];
 
+it("keeps legacy bounded visual review completion without an extra similarity veto", async () => {
+  const skill = await readFile(path.resolve(".codex/skills/worldkit-native-block-builder/SKILL.md"), "utf8");
+  expect(skill).toContain("both latest comparison PNGs have been actually opened and visually reviewed");
+  expect(skill).toContain("Do not withhold otherwise valid declared outputs solely because visual differences remain");
+  expect(skill).not.toContain("opened and judged aligned");
+});
+
 const ONE_PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",

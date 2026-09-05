@@ -1745,9 +1745,36 @@ CF-29 documentary dirty-tree 误阻断修正（2026-09-05，用户授权，main-
   `semanticViewObservationSet`，没有放宽实际 payload parser。
 - 待在已提交实现上保留授权进度文档 diff，再执行同一 054 Package 的正式生产 Capture；
   该复验不重新购买 Planner/Builder，不覆盖旧 Run/最终发布结果。CI/review/合并分别举证。
+  实测通过：在 `70755665` 上特意保留本进度文档修改，2026-09-05T08:25:30Z–08:27:18Z
+  正式 production Capture completed/published，Browser/Vite cleanup 均 completed。
+  证据 `/private/tmp/worldkit-054-doc-diff-qYa4jr/capture`；Capture Receipt
+  `sha256:927838c85edf67fe13b256df2814aaa7a6c21c82e68dbcc89823e2051685b7f0`，
+  原 Package root `802a6e2b…` 和 Request `5e8643c0…` 未变。
+  这是原场景受影响 Capture 边界的真实重跑，不冒充新 Planner/Builder 全链 Case。
+  本次 44/44、typecheck、3C migration 均通过；PR #202 CI 的 8 项 workspace boundary
+  错误仍阻止合并，不能因这个 Capture 成功而绕过。
 - 七维 Evaluation、构图/语义轮廓阈值和 NBR strict diagnostic 是新链路诊断，并非旧分支原有。
   旧 Builder 对比图查看与最多三轮同任务结构/视觉修复仍属于必须对齐的反馈链；
   新评分不反转普通成功不等于允许忽略视觉偏差，更不等于此次效果已与旧分支等价。
+
+CF-19 看图反馈与完成语义再对齐（2026-09-05，用户要求保持旧流程/门禁）：
+
+- 对照 `9e35ab53` 实际 launcher/Skill：当前已冻结 054 instruction 只简述自检和看图，
+  没有明确完整 Skill 路径及可执行循环；Native Skill 还额外要求 `judged aligned`。
+  两者是确认的文本差异，不据此断言它们解释全部已观察视觉差异。
+- 当前 case preparation 已把真实 `inputs/builder-skill/SKILL.md`、必读 reference、自检/渲染
+  命令、左右图检查重点、最大错位优先、修复后重新检查最新两图放进实际任务指令。
+  活源与冻结 Skill 删除额外“必须判定完全对齐才能交付”的条件，恢复结构检查通过 +
+  最新两图已实际审阅；视觉差异在原共享预算内修复，预算耗尽则用原最终回复披露，
+  不因剩余相似度差异扣住其他有效输出。仍恰好五个输出、最多三轮共享预算、单个任务，
+  不增加 Reviewer、外部修复、报告文件或评分门禁。真实新生成效果待后续 Case。
+- CI 8 项模块边界错误已按原责任修复，workspace-boundaries 0 debt 通过；未关闭断言。
+  Startup reporter 从 app 私有文件迁入 runtime-babylon 唯一导出；原文件删除。
+  Profile shape helpers 通过 pure public subpath 使用，重建 renderer 后 bundle 字节未变。
+  合成 Browser fixture 明确为 test-support；原 cloud-ridge JSON 经 verifier 资产入口读取，
+  不再跨 app 导入私有源码。启动 transport/watchdog 41/41、typecheck 通过；真实 Browser
+  startup progress/stall/error 三场景通过；2000 Block 合成 Browser benchmark 完成，
+  仅证这些工程接缝，不冒充正式 Case、完整预算性能或效果验收。
 
 CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
 

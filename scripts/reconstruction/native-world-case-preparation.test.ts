@@ -902,6 +902,14 @@ describe("trusted Native world Case preparation", () => {
     ), "utf8");
     expect(taskInstruction).toContain("two Host-declared advisory comparison PNGs");
     expect(taskInstruction).toContain("actually open both comparison PNGs");
+    expect(taskInstruction).toContain("inputs/builder-skill/SKILL.md");
+    expect(taskInstruction).toContain("inputs/builder-skill/references/native-block-output-contract.md");
+    expect(taskInstruction).toContain("node inputs/builder-skill/scripts/self-check.mjs");
+    expect(taskInstruction).toContain("node inputs/builder-skill/scripts/render-visual-review.mjs");
+    expect(taskInstruction).toContain("regenerate both comparisons, and open both fresh images again");
+    expect(taskInstruction).toContain("not an automatic similarity gate");
+    expect(taskInstruction).toContain("Do not withhold otherwise valid declared outputs solely because visual differences remain");
+    expect(taskInstruction).not.toContain("judged aligned");
     expect(taskInstruction).toContain("never author a review manifest or second geometry list");
     expect(taskInstruction).toContain(
       "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group",
