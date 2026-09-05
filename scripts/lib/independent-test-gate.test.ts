@@ -1,3 +1,5 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -81,6 +83,43 @@ describe("evaluateIndependentTestGateV1", () => {
 });
 
 describe("independent test repository census", () => {
+  it("discovers deployment tests and rejects a newly added unclassified suite", async () => {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), "independent-test-discovery-"));
+    try {
+      for (const directory of ["deploy/creator-evaluation/nested", "scripts", "sites/world-sdk-blueprint/tests"]) {
+        await mkdir(path.join(repositoryRoot, directory), { recursive: true });
+      }
+      for (const filename of [
+        "deploy/creator-evaluation/gateway.test.mjs",
+        "deploy/creator-evaluation/nested/new.test.mjs",
+        "deploy/creator-evaluation/gateway.mjs",
+        "scripts/a.test.mjs",
+        "sites/world-sdk-blueprint/tests/rendered.test.mjs",
+      ]) {
+        await writeFile(path.join(repositoryRoot, filename), "");
+      }
+      const discoveredByLane = await discoverIndependentTestFilesV1(repositoryRoot);
+      expect(discoveredByLane).toEqual({
+        node: [
+          "deploy/creator-evaluation/gateway.test.mjs",
+          "deploy/creator-evaluation/nested/new.test.mjs",
+          "scripts/a.test.mjs",
+        ],
+        site: ["sites/world-sdk-blueprint/tests/rendered.test.mjs"],
+      });
+      expect(() => evaluateIndependentTestGateV1({
+        discoveredByLane,
+        manifest: [
+          { path: "deploy/creator-evaluation/gateway.test.mjs", lane: "node" },
+          { path: "scripts/a.test.mjs", lane: "node" },
+          { path: "sites/world-sdk-blueprint/tests/rendered.test.mjs", lane: "site" },
+        ],
+      })).toThrow(/UNCLASSIFIED: deploy\/creator-evaluation\/nested\/new\.test\.mjs/);
+    } finally {
+      await rm(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
   it("discovers every current Node and Site suite in the manifest", async () => {
     const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
     const discoveredByLane = await discoverIndependentTestFilesV1(repositoryRoot);
@@ -92,11 +131,14 @@ describe("independent test repository census", () => {
       }),
     ).toEqual({
       nodeTestFiles: [
+        "deploy/creator-evaluation/gateway.test.mjs",
         "scripts/agents/local-codex-task.test.mjs",
         "scripts/agents/lwdp-cloud-execution-client.test.mjs",
         "scripts/agents/lwdp-codex-profile.test.mjs",
         "scripts/agents/lwdp-generation-client.test.mjs",
         "scripts/agents/write-lwdp-t2i-manifest.test.mjs",
+        "scripts/cloud/creator-eval-diagnostics.test.mjs",
+        "scripts/cloud/creator-eval.test.mjs",
         "scripts/cloud/dispatch-worldkit-gpu-capture-batch.test.mjs",
         "scripts/cloud/launch-worldkit-cloud-control-plane.test.mjs",
         "scripts/cloud/launch-worldkit-cloud-episode-worker-job.test.mjs",

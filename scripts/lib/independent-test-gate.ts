@@ -28,11 +28,14 @@ export interface IndependentTestCommandV1 {
 
 export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntryV1[] =
   Object.freeze([
+    { path: "deploy/creator-evaluation/gateway.test.mjs", lane: "node" },
     { path: "scripts/agents/local-codex-task.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-cloud-execution-client.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-codex-profile.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-generation-client.test.mjs", lane: "node" },
     { path: "scripts/agents/write-lwdp-t2i-manifest.test.mjs", lane: "node" },
+    { path: "scripts/cloud/creator-eval-diagnostics.test.mjs", lane: "node" },
+    { path: "scripts/cloud/creator-eval.test.mjs", lane: "node" },
     { path: "scripts/cloud/dispatch-worldkit-gpu-capture-batch.test.mjs", lane: "node" },
     { path: "scripts/cloud/launch-worldkit-cloud-control-plane.test.mjs", lane: "node" },
     { path: "scripts/cloud/launch-worldkit-cloud-episode-worker-job.test.mjs", lane: "node" },
@@ -163,7 +166,12 @@ async function discoverMatchingFiles(input: {
 export async function discoverIndependentTestFilesV1(
   repositoryRoot: string,
 ): Promise<IndependentTestDiscoveryV1> {
-  const [node, site] = await Promise.all([
+  const [deployment, scripts, site] = await Promise.all([
+    discoverMatchingFiles({
+      repositoryRoot,
+      directory: "deploy",
+      matches: (filename) => filename.endsWith(".test.mjs"),
+    }),
     discoverMatchingFiles({
       repositoryRoot,
       directory: "scripts",
@@ -176,7 +184,7 @@ export async function discoverIndependentTestFilesV1(
     }),
   ]);
   return Object.freeze({
-    node: frozenPaths(node),
+    node: frozenPaths([...deployment, ...scripts].sort()),
     site: frozenPaths(site),
   });
 }
