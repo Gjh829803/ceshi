@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import {createJsonAtomicWriter, loadEpisodeStyleVariantConfig, sha256File, writeJsonAtomic} from '../lib/episode-style-variants.mjs';
 import {
   THREE_EPISODE_VISUAL_VERSION, THREE_EPISODE_STYLE_IDS, THREE_EPISODE_EVENT_SLOTS,
-  assertThreeEpisodeVisualInputs, assertThreeEpisodeStylePlan,
+  assertThreeEpisodeVisualInputs, assertThreeEpisodeStylePlan, assertThreeEpisodeAppearanceLock,
   assertThreeEpisodeVisualReview, assertThreeEpisodeDiversityReview,
   normalizeThreeEpisodeEvents, normalizeVisualHash, hashVisualInput,
   assertAnchorHashesUnchanged, buildThreeEpisodeRenderPrompt,
@@ -15,6 +15,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const CODEX_MODEL = 'gpt-6-astra';
 const CODEX_REASONING = 'xhigh';
 const REVIEW_ATTACHMENT_POLICY = 'asset-id-filenames-v1';
+const IMAGE_INPUT_POLICY = 'single-whitebox-text-appearance-v1';
 async function json(file) { try { return JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } }
 async function fileRef(file) {
   const stat = await lstat(file);
@@ -212,10 +213,10 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     // Old same-basename review inputs could overwrite one another on download.
     // Preserve those histories, but never reuse their verdicts or repair budget.
     // Original generated images keep their unchanged content recipes and cache.
-    const anchorHistoryPath = path.join(outputRoot, 'anchors', `history-${planHash}-${REVIEW_ATTACHMENT_POLICY}.json`);
+    const anchorHistoryPath = path.join(outputRoot, 'anchors', `history-${planHash}-${IMAGE_INPUT_POLICY}-${REVIEW_ATTACHMENT_POLICY}.json`);
     const previousHistory = await json(anchorHistoryPath);
     if (previousHistory && (previousHistory.planHash !== planHash || hashVisualInput(previousHistory.worldIdentity) !== hashVisualInput(worldIdentity))) throw new Error('THREE_EPISODE_ANCHOR_HISTORY_IDENTITY_MISMATCH');
-    const anchorHistory = previousHistory ?? {kind: 'worldkit-three-episode-anchor-history', schemaVersion: 1, planHash, worldIdentity, reviewAttachmentPolicy: REVIEW_ATTACHMENT_POLICY,
+    const anchorHistory = previousHistory ?? {kind: 'worldkit-three-episode-anchor-history', schemaVersion: 1, planHash, worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, reviewAttachmentPolicy: REVIEW_ATTACHMENT_POLICY,
       styles: Object.fromEntries(THREE_EPISODE_STYLE_IDS.map(id => [id, {attempts: [], currentAnchor: null, currentReview: null, pendingFeedback: '', revisionReview: null}]))};
     const saveAnchorHistory = createJsonAtomicWriter(anchorHistoryPath);
     const persistAnchorHistory = () => saveAnchorHistory(structuredClone(anchorHistory));
@@ -223,7 +224,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     async function persistAnchorLock() {
       const accepted = THREE_EPISODE_STYLE_IDS.map(id => ({id, anchor: anchorHistory.styles[id].currentAnchor, reviewHash: hashVisualInput(anchorHistory.styles[id].currentReview)}));
       if (accepted.some(item => !item.anchor || anchorHistory.styles[item.id].revisionReview)) return;
-      const value = {kind: 'worldkit-three-episode-anchor-lock', schemaVersion: 1, worldIdentity, planHash, anchors: accepted, anchorHistoryPath};
+      const value = {kind: 'worldkit-three-episode-anchor-lock', schemaVersion: 1, imageInputPolicy: IMAGE_INPUT_POLICY, worldIdentity, planHash, anchors: accepted, anchorHistoryPath};
       const lockHash = hashVisualInput(value), lockPath = path.join(outputRoot, 'anchors', `lock-${lockHash}.json`);
       const prior = await json(lockPath);
       if (prior && hashVisualInput(prior) !== hashVisualInput(value)) throw new Error('THREE_EPISODE_ANCHOR_LOCK_CHANGED');
@@ -248,9 +249,9 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
           triggeringReviewHash: entry.revisionReview ? hashVisualInput(entry.revisionReview) : null};
         entry.attempts.push(attempt); await persistAnchorHistory();
       }
-      const prompt = `${imagePrompt}\nCreate styled scene segment-00 at ${openingWhiteboxes[0].width}x${openingWhiteboxes[0].height}. Image 1 is the true whitebox scene; remaining images are complete whitebox targets in the following order: ${targetIds.join(', ')}.\nStyle: ${JSON.stringify(variant)}\n${feedback}`;
-      const image = await generateImage('opening-anchor', {id: variant.id, prompt, references: [openingWhiteboxes[0], ...targetWhiteboxes], width: openingWhiteboxes[0].width, height: openingWhiteboxes[0].height,
-        generationContext: {anchorAttempt: attempt.index, supersedesAnchorSha256: attempt.supersedesAnchorSha256, triggeringReviewHash: attempt.triggeringReviewHash}});
+      const prompt = `${imagePrompt}\nCreate styled scene segment-00 at ${openingWhiteboxes[0].width}x${openingWhiteboxes[0].height}. Edit the ONE attached actual whitebox scene directly. It is the only spatial reference. Preserve relative coordinates across native output resolutions; any pixel estimates in feedback refer to the whitebox's ${openingWhiteboxes[0].width}x${openingWhiteboxes[0].height}, not native output pixels. Use the style description for appearance only, never recompose the camera or foreground.\nStyle: ${JSON.stringify(variant)}\n${feedback}`;
+      const image = await generateImage('opening-anchor', {id: variant.id, prompt, references: [openingWhiteboxes[0]], width: openingWhiteboxes[0].width, height: openingWhiteboxes[0].height,
+        generationContext: {imageInputPolicy: IMAGE_INPUT_POLICY, anchorAttempt: attempt.index, supersedesAnchorSha256: attempt.supersedesAnchorSha256, triggeringReviewHash: attempt.triggeringReviewHash}});
       attempt.status = 'generated'; attempt.image = image; await persistAnchorHistory(); return image;
     }
     async function acceptAnchor(styleId, image, review) {
@@ -267,13 +268,22 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       if (attempt && attempt.status !== 'accepted') attempt.status = 'needs-repair';
       await reviseAnchor(styleId, feedback, review);
     }
+    async function appearanceLock(variant, anchor) {
+      const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, variant, anchor: identityRef(anchor), outputSchema: {
+        kind: 'worldkit-three-episode-appearance-lock', schemaVersion: 1, worldId: source.worldId, episodeId, inputHash: '<copy supplied identity>', styleVariantId: variant.id, anchorSha256: anchor.sha256,
+        subjectAppearance: '', environmentAppearance: '', lighting: '', palette: '', negativeConstraints: '', targetAppearances: targetIds.map(targetId => ({targetId, appearance: '', basis: 'anchor-visible | planned-hidden'})),
+      }};
+      return codexJson('appearance-lock', input, [imageAsset('accepted-style-anchor', anchor)],
+        'Inspect the actual independently accepted anchor and write its immutable APPEARANCE dictionary. Describe the subject, environment surfaces, lighting, palette and every ordered target with specific consistent material/color/detail bindings. The accepted image overrides the proposed variant wherever its actual appearance differs. For hidden targets or hidden surfaces, use the variant interpretation and mark basis planned-hidden; do not claim they are visible. Do not record camera, crop, positions, sizes or visibility as appearance constraints: each future whitebox owns those. Do not generate or edit any image. Return exactly the supplied JSON schema. This text is bound to the exact anchor hash and will be used with ONE whitebox reference for generation; later independent reviews still compare the actual images with the accepted anchor.',
+        (result, inputHash) => assertThreeEpisodeAppearanceLock(result, {worldId: source.worldId, episodeId, inputHash, styleVariantId: variant.id, anchorSha256: anchor.sha256, targetIds}));
+    }
     async function repairLockedAnchor(variant, rejectedAnchor, review) {
       const finding = review.imageReviews.find(item => item.id === 'segment-00');
       await rejectAnchor(variant.id, rejectedAnchor, `Independent review correction: ${finding.observations}\n${review.repairInstructions}`, review);
       for (;;) {
         await update('anchor-repair', variant.id, {anchorAttemptsUsed: anchorHistory.styles[variant.id].attempts.length});
         const candidate = await obtainAnchor(variant);
-        const input = {worldIdentity, variant, candidate: identityRef(candidate), whitebox: identityRef(openingWhiteboxes[0]),
+        const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, variant, candidate: identityRef(candidate), whitebox: identityRef(openingWhiteboxes[0]),
           anchorAttempt: candidate.generationContext.anchorAttempt, supersedesAnchorSha256: rejectedAnchor.sha256,
           triggeringReviewHash: hashVisualInput(review), outputSchema: reviewSchema('anchors', [variant.id], variant.id)};
         const replacementReview = await codexJson('anchor-repair-review', input, [imageAsset('whitebox-opening', openingWhiteboxes[0]), imageAsset(variant.id, candidate)], reviewPrompt,
@@ -293,7 +303,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
           await update('opening-anchor', variant.id);
           return obtainAnchor(variant);
         });
-        const input = {worldIdentity, planHash: hashVisualInput(plan), anchors: anchors.map((ref, index) => ({id: THREE_EPISODE_STYLE_IDS[index], ...identityRef(ref)})), whitebox: identityRef(openingWhiteboxes[0]), outputSchema: reviewSchema('anchors', THREE_EPISODE_STYLE_IDS)};
+        const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, variants: plan.variants, planHash: hashVisualInput(plan), anchors: anchors.map((ref, index) => ({id: THREE_EPISODE_STYLE_IDS[index], ...identityRef(ref)})), whitebox: identityRef(openingWhiteboxes[0]), outputSchema: reviewSchema('anchors', THREE_EPISODE_STYLE_IDS)};
         anchorReview = await codexJson('anchor-review', input, [imageAsset('whitebox-opening', openingWhiteboxes[0]), ...anchors.map((ref, index) => imageAsset(THREE_EPISODE_STYLE_IDS[index], ref))], reviewPrompt, (result, inputHash) => assertThreeEpisodeVisualReview(result, {worldId: source.worldId, episodeId, inputHash, mode: 'anchors', imageIds: THREE_EPISODE_STYLE_IDS}));
         for (const finding of anchorReview.imageReviews) {
           const image = anchors[THREE_EPISODE_STYLE_IDS.indexOf(finding.id)];
@@ -308,23 +318,24 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       variants = await mapConcurrent(plan.variants, config.visualConcurrency, async (variant, styleIndex) => {
         let anchor = anchors[styleIndex];
         const feedback = new Map();
-        let images, review;
+        let images, review, lockedAppearance;
         const imageIds = [...capture.segments.map(item => item.id), ...targetIds.map(id => `target-${id}`)];
         for (let attempt = 0; attempt < config.maximumVisualAttempts; attempt++) {
+          await update('appearance-lock', variant.id, {attempt});
+          lockedAppearance = await appearanceLock(variant, anchor);
           await update('style-images', variant.id, {attempt});
           images = await mapConcurrent(imageIds.slice(1), 2, async id => {
             const segmentIndex = capture.segments.findIndex(item => item.id === id);
             const targetIndex = targetIds.findIndex(targetId => `target-${targetId}` === id);
             const whitebox = segmentIndex >= 0 ? openingWhiteboxes[segmentIndex] : targetWhiteboxes[targetIndex];
             const interpretation = segmentIndex >= 0 ? null : variant.targetInterpretations[targetIndex];
-            const appearance = {id:variant.id,styleFamily:variant.styleFamily,subjectIdentity:variant.subjectIdentity,negativeConstraints:variant.negativeConstraints,
-              targetInterpretations:interpretation?[interpretation]:variant.targetInterpretations};
-            const prompt = `${imagePrompt}\nImage 1 is the ONLY composition, pose and visibility authority: the actual ${segmentIndex >= 0 ? 'whitebox scene first frame' : 'complete whitebox target tri-view'} for ${id}. Image 2 supplies APPEARANCE ONLY: palette, materials, lighting and identities.\nOutput ${whitebox.width}x${whitebox.height}. Conditional appearance dictionary: ${JSON.stringify(appearance)}\n${interpretation ? `Render ONLY the specified target in the exact supplied three-view arrangement: ${JSON.stringify(interpretation)}` : 'The dictionary is not a scene checklist. Do not insert any target that is absent from Image 1, even if it is prominent in Image 2. Do not copy the anchor camera, layout, foreground arrangement or target distance. Keep tiny distant objects tiny and distant.'}\nOmit any semantic decoration that would add geometry outside the source silhouettes, expand a footprint, or change ground contacts. Preserve the exact source pose.\n${feedback.get(id) ?? ''}`;
-            return generateImage('style-image', {id: `${variant.id}-${id}`, prompt, references: [whitebox, anchor], width: whitebox.width, height: whitebox.height});
+            const appearance = {id:variant.id, ...lockedAppearance, targetAppearances:interpretation?lockedAppearance.targetAppearances.filter(item=>item.targetId===interpretation.visualTargetId):lockedAppearance.targetAppearances};
+            const prompt = `${imagePrompt}\nImage 1 is the ONLY composition, pose and visibility authority: the actual ${segmentIndex >= 0 ? 'whitebox scene first frame' : 'complete whitebox target tri-view'} for ${id}. No other image reference is supplied. The hash-bound text appearance dictionary was extracted from the independently accepted anchor and is the appearance authority. It cannot override this whitebox camera or object visibility.\nOutput ${whitebox.width}x${whitebox.height}. Conditional appearance dictionary: ${JSON.stringify(appearance)}\n${interpretation ? `Render ONLY the specified target in the exact supplied three-view arrangement: ${JSON.stringify({visualTargetId:interpretation.visualTargetId,finalIdentity:interpretation.finalIdentity})}` : 'The dictionary is not a scene checklist. Do not insert any target that is absent from Image 1, even if it is prominent in the accepted anchor. Do not copy the anchor camera, layout, foreground arrangement or target distance. Keep tiny distant objects tiny and distant.'}\nOmit any semantic decoration that would add geometry outside the source silhouettes, expand a footprint, or change ground contacts. Preserve the exact source pose.\n${feedback.get(id) ?? ''}`;
+            return generateImage('style-image', {id: `${variant.id}-${id}`, prompt, references: [whitebox], width: whitebox.width, height: whitebox.height, generationContext: {imageInputPolicy: IMAGE_INPUT_POLICY, anchorSha256: anchor.sha256, appearanceLockHash: hashVisualInput(lockedAppearance)}});
           });
           images = [anchor, ...images];
           await update('style-review', variant.id);
-          const input = {worldIdentity, variant, anchor: identityRef(anchor), images: images.map((ref, index) => ({id: imageIds[index], ...identityRef(ref)})), whiteboxes: [...openingWhiteboxes, ...targetWhiteboxes].map(identityRef), outputSchema: reviewSchema('style', imageIds, variant.id)};
+          const input = {worldIdentity, imageInputPolicy: IMAGE_INPUT_POLICY, variant, anchor: identityRef(anchor), images: images.map((ref, index) => ({id: imageIds[index], ...identityRef(ref)})), whiteboxes: [...openingWhiteboxes, ...targetWhiteboxes].map(identityRef), outputSchema: reviewSchema('style', imageIds, variant.id)};
           review = await codexJson('style-review', input, [...openingWhiteboxes.map((ref, index) => imageAsset(`whitebox-${capture.segments[index].id}`, ref)), ...targetWhiteboxes.map((ref, index) => imageAsset(`whitebox-target-${targetIds[index]}`, ref)), ...images.map((ref, index) => imageAsset(`styled-${imageIds[index]}`, ref))], reviewPrompt, (result, inputHash) => assertThreeEpisodeVisualReview(result, {worldId: source.worldId, episodeId, inputHash, styleVariantId: variant.id, mode: 'style', imageIds}));
           if (review.verdict === 'passed') break;
           if (review.imageReviews[0].verdict !== 'passed') {
@@ -335,7 +346,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
         }
         if (review.verdict !== 'passed') throw new Error(`THREE_EPISODE_VISUAL_REPAIR_BUDGET_EXHAUSTED: ${variant.id}`);
         await update('images-ready', variant.id);
-        const result = {id: variant.id, variant, anchor, openings: images.slice(0, 6).map((ref, index) => ({...ref, segmentId: capture.segments[index].id})), styledTriviews: images.slice(6).map((ref, index) => ({...ref, targetId: targetIds[index], name: variant.targetInterpretations[index].finalIdentity})), review};
+        const result = {id: variant.id, variant, anchor, appearanceLock: lockedAppearance, imageInputPolicy: IMAGE_INPUT_POLICY, openings: images.slice(0, 6).map((ref, index) => ({...ref, segmentId: capture.segments[index].id})), styledTriviews: images.slice(6).map((ref, index) => ({...ref, targetId: targetIds[index], name: variant.targetInterpretations[index].finalIdentity})), review};
         await writeJsonAtomic(path.join(outputRoot, 'variants', variant.id, 'visual-manifest.json'), result);
         return result;
       });
@@ -365,7 +376,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       await update('pre-seedance-ready', result.id, {preparedRequestCount: requests.length});
       return {...result, events: eventResult.events, requests};
     });
-    const output = {kind: 'worldkit-three-episode-pre-seedance', schemaVersion: 1, worldIdentity, episodeId, status: 'pre-seedance-ready', stopBeforeSeedance: true, providerVideoSubmissionCount: 0, plan, anchors, anchorReview, currentAnchorLock, anchorHistoryPath, diversityReview, variants: prepared, preparedRequestCount: prepared.reduce((sum, item) => sum + item.requests.length, 0)};
+    const output = {kind: 'worldkit-three-episode-pre-seedance', schemaVersion: 1, imageInputPolicy: IMAGE_INPUT_POLICY, worldIdentity, episodeId, status: 'pre-seedance-ready', stopBeforeSeedance: true, providerVideoSubmissionCount: 0, plan, anchors, anchorReview, currentAnchorLock, anchorHistoryPath, diversityReview, variants: prepared, preparedRequestCount: prepared.reduce((sum, item) => sum + item.requests.length, 0)};
     if (output.preparedRequestCount !== 60) throw new Error('THREE_EPISODE_RENDER_REQUEST_CLOSURE_INVALID');
     await writeJsonAtomic(path.join(outputRoot, 'pre-seedance-manifest.json'), output);
     await update('pre-seedance-ready', null, {status: 'completed', preparedRequestCount: 60});

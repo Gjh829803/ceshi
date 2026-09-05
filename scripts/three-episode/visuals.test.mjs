@@ -39,6 +39,8 @@ async function fixture({ failImageOnce = false, rejectLockedAnchorOnce = false, 
       let result = { ...structuredClone(schema), inputHash: context.inputHash };
       if (schema.kind === 'worldkit-three-episode-style-plan') {
         result.variants = THREE_EPISODE_STYLE_IDS.map((id, index) => ({ id, name: `name ${index}`, styleFamily: `family ${index}`, worldIdentity: `world ${index}`, subjectIdentity: `subject ${index}`, diversityRationale: `rationale ${index}`, concept: `concept ${index}`, visualPrompt: `visual ${index}`, geminiEventPrompt: `events ${index}`, negativeConstraints: 'preserve geometry', targetInterpretations: source.targets.map(target => ({ visualTargetId: target.id, finalIdentity: `final ${index} ${target.id}`, appearance: 'fixture appearance' })) }));
+      } else if (schema.kind === 'worldkit-three-episode-appearance-lock') {
+        result = {...result, subjectAppearance:'bound subject appearance',environmentAppearance:'bound environment materials',lighting:'bright diffuse light',palette:'anchor palette',negativeConstraints:'preserve whitebox geometry',targetAppearances:schema.targetAppearances.map(item=>({...item,appearance:'bound '+item.targetId,basis:'anchor-visible'}))};
       } else if (schema.kind === 'worldkit-three-episode-visual-review') {
         result = { ...result, verdict: 'passed', summary: 'Mock review validates orchestration only, not visual quality', imageReviews: schema.imageReviews.map(image => ({ id: image.id, verdict: 'passed', observations: 'mock observation' })) };
         if (rejectLockedAnchorOnce && !calls.lockedAnchorRejected && schema.mode === 'style' && schema.styleVariantId === 'style-00') {
@@ -58,6 +60,7 @@ async function fixture({ failImageOnce = false, rejectLockedAnchorOnce = false, 
         await new Promise(resolve => setTimeout(resolve, 3));
         if (failImageOnce && !calls.failedOnce && args.items[0].prompt.includes('segment-03')) { calls.failedOnce = true; throw new Error('FIXTURE_IMAGE_PROVIDER_FAILURE'); }
         for (const item of args.items) {
+          assert.equal(item.images.length,1, 'native generation must receive only the current whitebox geometry reference');
           assert.match(item.id, /^[a-z0-9][a-z0-9-]{2,119}$/);
           const styleId = /"id":"(style-\d+)"/.exec(item.prompt)?.[1];
           calls.imageCountsByStyle[styleId] = (calls.imageCountsByStyle[styleId] ?? 0) + 1;
@@ -99,6 +102,8 @@ test('preserves all seven arbitrary SDK target IDs, produces sixty prepared requ
   for (const variant of result.variants) {
     assert.deepEqual(variant.styledTriviews.map(item => item.targetId), setup.source.targets.map(item => item.id));
     assert.equal(variant.openings.length, 6); assert.equal(variant.requests.length, 6);
+    assert.equal(variant.appearanceLock.anchorSha256,variant.anchor.sha256);
+    assert.deepEqual(variant.appearanceLock.targetAppearances.map(item=>item.targetId),setup.source.targets.map(item=>item.id));
     for (const request of variant.requests) { assert.equal(request.stopBeforeSeedance, true); assert.equal(request.providerSubmitted, false); assert.equal(request.styledTriviews.length, 7); assert.equal(request.referencePolicy.providerCapabilityStatus, 'not-submitted-not-verified'); }
   }
   const before = { codex: setup.calls.codex, images: setup.calls.images, events: setup.calls.events };
@@ -193,4 +198,15 @@ test('legacy colliding-input review histories cannot consume the corrected revie
  const bytes=JSON.stringify(legacy);await writeFile(legacyPath,bytes);await rm(result.anchorHistoryPath);
  const restored=await runThreeEpisodeVisuals(setup.options);assert.equal(restored.preparedRequestCount,60);assert.equal(setup.calls.images,images);assert.equal(await readFile(legacyPath,'utf8'),bytes);
  const history=JSON.parse(await readFile(restored.anchorHistoryPath,'utf8'));assert.equal(history.reviewAttachmentPolicy,'asset-id-filenames-v1');assert(Object.values(history.styles).every(s=>s.attempts.length===1));
+});
+
+test('appearance dictionaries are bound to the exact accepted anchor and every ordered target',async()=>{
+ const setup=await fixture();const result=await runThreeEpisodeVisuals(setup.options);const variant=result.variants[0];
+ const {assertThreeEpisodeAppearanceLock}=await import('./visual-contracts.mjs');const lock=variant.appearanceLock;
+ const expected={worldId:setup.source.worldId,episodeId:setup.options.episodeId,inputHash:lock.inputHash,styleVariantId:variant.id,anchorSha256:variant.anchor.sha256,targetIds:setup.source.targets.map(t=>t.id)};
+ assert.equal(assertThreeEpisodeAppearanceLock(lock,expected),lock);
+ assert.throws(()=>assertThreeEpisodeAppearanceLock({...lock,anchorSha256:'f'.repeat(64)},expected),/identity mismatch/);
+ assert.throws(()=>assertThreeEpisodeAppearanceLock({...lock,targetAppearances:lock.targetAppearances.slice(1)},expected),/every ordered ID/);
+ assert.throws(()=>assertThreeEpisodeAppearanceLock({...lock,lighting:''},expected),/lighting missing/);
+ assert.equal(result.imageInputPolicy,'single-whitebox-text-appearance-v1');
 });

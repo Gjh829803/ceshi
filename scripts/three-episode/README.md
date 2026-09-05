@@ -102,3 +102,10 @@ control reuse. Optional `routePlanCandidate` requires the unchanged author
 `sourceHash` and candidate `sha256`, and is re-submitted by the cloud Agent under
 the current derived world hash. Never rewrite old recording provenance to make
 it match a new runtime.
+
+Native image generation uses one current whitebox reference per image. An accepted
+anchor is converted by cloud Codex into a text appearance dictionary bound to the
+anchor SHA256 and every ordered target ID. This prevents additional image layouts
+from competing with the current camera/tri-view composition; subsequent reviewers
+still compare the actual generated images against the accepted anchor. Histories
+are namespaced by image-input policy, preserving failed earlier-policy evidence.

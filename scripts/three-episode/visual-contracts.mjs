@@ -63,6 +63,13 @@ export function assertThreeEpisodeStylePlan(plan, {worldId, episodeId, inputHash
   for (const field of ['concept', 'styleFamily', 'worldIdentity', 'subjectIdentity']) assert(new Set(plan.variants.map(style => style[field].trim().toLowerCase())).size === 10, `duplicate ${field}`);
   return plan;
 }
+export function assertThreeEpisodeAppearanceLock(lock, {worldId, episodeId, inputHash, styleVariantId, anchorSha256, targetIds}) {
+  assert(lock?.kind === 'worldkit-three-episode-appearance-lock' && lock.schemaVersion === 1 && lock.worldId === worldId && lock.episodeId === episodeId && lock.inputHash === inputHash && lock.styleVariantId === styleVariantId && lock.anchorSha256 === anchorSha256, 'appearance lock identity mismatch');
+  for (const key of ['subjectAppearance', 'environmentAppearance', 'lighting', 'palette', 'negativeConstraints']) assert(text(lock[key]), `appearance lock ${key} missing`);
+  ordered(lock.targetAppearances, targetIds, 'targetId', 'appearance lock targets');
+  for (const target of lock.targetAppearances) assert(text(target.appearance) && ['anchor-visible', 'planned-hidden'].includes(target.basis), 'appearance lock target binding missing');
+  return lock;
+}
 export function assertThreeEpisodeVisualReview(review, {worldId, episodeId, inputHash, styleVariantId, imageIds, mode}) {
   assert(review?.kind === 'worldkit-three-episode-visual-review' && review.schemaVersion === 1 && review.reviewer === 'cloud-codex' && review.worldId === worldId && review.episodeId === episodeId && review.inputHash === inputHash && review.mode === mode && review.styleVariantId === (styleVariantId ?? null), 'visual review identity mismatch');
   ordered(review.imageReviews, imageIds, 'id', 'reviewed images');
