@@ -182,10 +182,12 @@ const runtimeStageAliases = new Map([
   ["route-validation", "canonical-build"],
   ["change-requested", "coding-agent"],
   ["visual-imagegen-ready", "visual-imagegen"],
+  // Display projection only; the router retains the legacy retry-policy stage.
+  ["visual-reconstruction", "visual-imagegen"],
 ]);
 
 const agentTokenStageIds = new Set([
-  "planner", "coding-agent",
+  "planner", "coding-agent", "visual-imagegen",
 ]);
 const workflowStageIds = new Set(
   workflowStageDefinitions.map(({ id }) => id),
@@ -2756,7 +2758,7 @@ export function createStudio(options = {}) {
         ));
         continue;
       }
-      const cloudCodexJob = /^WORLDKIT_LWDP_JOB ([a-z-]+) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)$/.exec(line.trim());
+      const cloudCodexJob = /^WORLDKIT_LWDP_JOB ([a-z-]+) ([a-z0-9-]+) (gen_[a-zA-Z0-9]+)(?:\s+.*)?$/.exec(line.trim());
       if (cloudCodexJob) {
         runBackgroundTask(id, "append-codex-job", () => appendTrajectoryEvent(
           id,

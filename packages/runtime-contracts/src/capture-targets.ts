@@ -1,6 +1,9 @@
 export type WhiteboxCaptureViewV1 = "front" | "right" | "back";
 
 export const MAXIMUM_VISUAL_CAPTURE_GROUPS_V1 = 5 as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1 = "#DDE8EE" as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1 = [221, 232, 238] as const;
+export const WHITEBOX_TRIVIEW_BACKGROUND_TOLERANCE_V1 = 12 as const;
 
 export type VisualCaptureGroupRoleV1 =
   | "primary-subject"
@@ -46,6 +49,132 @@ export interface WhiteboxTriviewCaptureV1 {
   readonly runtimeEntityIds: readonly string[];
   readonly views: readonly ["front", "right", "back"];
   readonly imageDataUri: string;
+}
+
+export interface WhiteboxTriviewInspectionV1 {
+  readonly widthPixels: number;
+  readonly heightPixels: number;
+  readonly foregroundPixelCount: number;
+  readonly minimumForegroundPixelCount: number;
+  readonly foregroundBoundsPixels: Readonly<{
+    minimumPixelsXY: readonly [number, number];
+    maximumPixelsXY: readonly [number, number];
+  }> | null;
+  readonly viewInspections: readonly [
+    WhiteboxTriviewViewInspectionV1,
+    WhiteboxTriviewViewInspectionV1,
+    WhiteboxTriviewViewInspectionV1,
+  ];
+  readonly isRenderable: boolean;
+}
+
+export interface WhiteboxTriviewViewInspectionV1 {
+  readonly view: WhiteboxCaptureViewV1;
+  readonly foregroundPixelCount: number;
+  readonly minimumForegroundPixelCount: number;
+  readonly foregroundBoundsPixels: Readonly<{
+    minimumPixelsXY: readonly [number, number];
+    maximumPixelsXY: readonly [number, number];
+  }> | null;
+  readonly isRenderable: boolean;
+}
+
+/**
+ * Measures actual target coverage against the fixed review background instead
+ * of sampling a few RGB values. The fixed tolerance excludes antialiasing noise
+ * and the effectively invisible dependency meshes retained by the Babylon
+ * tri-view renderer.
+ */
+export function inspectWhiteboxTriviewPixelsV1(
+  pixelsRgba: Uint8ClampedArray,
+  widthPixels: number,
+  heightPixels: number,
+): WhiteboxTriviewInspectionV1 {
+  if (!Number.isSafeInteger(widthPixels) || widthPixels < 1 ||
+      !Number.isSafeInteger(heightPixels) || heightPixels < 1) {
+    throw new RangeError("Whitebox tri-view dimensions must be positive safe integers.");
+  }
+  const totalPixelCount = widthPixels * heightPixels;
+  if (pixelsRgba.length !== totalPixelCount * 4) {
+    throw new RangeError("Whitebox tri-view RGBA byte length does not match its dimensions.");
+  }
+  if (widthPixels % 3 !== 0) {
+    throw new RangeError("Whitebox tri-view width must contain three equal panels.");
+  }
+  const panelWidthPixels = widthPixels / 3;
+  const panelPixelCount = panelWidthPixels * heightPixels;
+  const minimumPanelForegroundPixelCount = Math.min(
+    panelPixelCount,
+    Math.max(64, Math.ceil(panelPixelCount * 0.0001)),
+  );
+  const panelForegroundPixelCounts = [0, 0, 0];
+  const panelMinimumX = [panelWidthPixels, panelWidthPixels, panelWidthPixels];
+  const panelMinimumY = [heightPixels, heightPixels, heightPixels];
+  const panelMaximumX = [-1, -1, -1];
+  const panelMaximumY = [-1, -1, -1];
+  let foregroundPixelCount = 0;
+  let minimumX = widthPixels;
+  let minimumY = heightPixels;
+  let maximumX = -1;
+  let maximumY = -1;
+  for (let pixel = 0; pixel < totalPixelCount; pixel += 1) {
+    const offset = pixel * 4;
+    if (pixelsRgba[offset + 3]! < 128) continue;
+    const differsFromBackground = Math.max(
+      Math.abs(pixelsRgba[offset]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[0]),
+      Math.abs(pixelsRgba[offset + 1]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[1]),
+      Math.abs(pixelsRgba[offset + 2]! - WHITEBOX_TRIVIEW_BACKGROUND_RGB_V1[2]),
+    ) >= WHITEBOX_TRIVIEW_BACKGROUND_TOLERANCE_V1;
+    if (!differsFromBackground) continue;
+    foregroundPixelCount += 1;
+    const x = pixel % widthPixels;
+    const y = Math.floor(pixel / widthPixels);
+    const panelIndex = Math.min(2, Math.floor(x / panelWidthPixels));
+    const panelX = x - panelIndex * panelWidthPixels;
+    panelForegroundPixelCounts[panelIndex]! += 1;
+    panelMinimumX[panelIndex] = Math.min(panelMinimumX[panelIndex]!, panelX);
+    panelMinimumY[panelIndex] = Math.min(panelMinimumY[panelIndex]!, y);
+    panelMaximumX[panelIndex] = Math.max(panelMaximumX[panelIndex]!, panelX);
+    panelMaximumY[panelIndex] = Math.max(panelMaximumY[panelIndex]!, y);
+    minimumX = Math.min(minimumX, x);
+    minimumY = Math.min(minimumY, y);
+    maximumX = Math.max(maximumX, x);
+    maximumY = Math.max(maximumY, y);
+  }
+  const inspectPanel = (
+    view: WhiteboxCaptureViewV1,
+    panelIndex: number,
+  ): WhiteboxTriviewViewInspectionV1 => ({
+    view,
+    foregroundPixelCount: panelForegroundPixelCounts[panelIndex]!,
+    minimumForegroundPixelCount: minimumPanelForegroundPixelCount,
+    foregroundBoundsPixels: panelForegroundPixelCounts[panelIndex] === 0
+      ? null
+      : {
+          minimumPixelsXY: [panelMinimumX[panelIndex]!, panelMinimumY[panelIndex]!],
+          maximumPixelsXY: [panelMaximumX[panelIndex]!, panelMaximumY[panelIndex]!],
+        },
+    isRenderable: panelForegroundPixelCounts[panelIndex]! >= minimumPanelForegroundPixelCount,
+  });
+  const viewInspections = [
+    inspectPanel("front", 0),
+    inspectPanel("right", 1),
+    inspectPanel("back", 2),
+  ] as const;
+  return {
+    widthPixels,
+    heightPixels,
+    foregroundPixelCount,
+    minimumForegroundPixelCount: minimumPanelForegroundPixelCount * 3,
+    foregroundBoundsPixels: foregroundPixelCount === 0
+      ? null
+      : {
+          minimumPixelsXY: [minimumX, minimumY],
+          maximumPixelsXY: [maximumX, maximumY],
+        },
+    viewInspections,
+    isRenderable: viewInspections.every(({ isRenderable }) => isRenderable),
+  };
 }
 
 export const WORLDKIT_AUTHORING_CAPTURE_PROTOCOL_VERSION = 1 as const;

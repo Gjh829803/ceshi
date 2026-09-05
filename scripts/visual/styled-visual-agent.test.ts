@@ -60,7 +60,7 @@ describe("single-task styled visual production", () => {
     const dispatch = vi.fn(async (args: readonly string[]) => {
       expect(argument(args, "--execution-profile")).toBe("formal");
       expect(argument(args, "--backend")).toBe("local");
-      expect(argument(args, "--stage")).toBe("visual-imagegen");
+      expect(argument(args, "--stage")).toBe("visual-reconstruction");
       expect(args.filter(x => x === "--output")).toHaveLength(4);
       const root = argument(args, "--repo-root");
       expect(root).not.toBe(input.repoRoot);
@@ -89,7 +89,7 @@ describe("single-task styled visual production", () => {
     await expect(access(path.join(taskRoot, `artifacts/scenes/${sceneId}/styled-opening-frame.png`))).rejects.toThrow();
   });
 
-  it("does not retry a failed task or replace existing accepted visuals", async () => {
+  it("does not redispatch after the router fails or replace existing accepted visuals", async () => {
     const input = await fixture();
     await writeFile(path.join(input.sceneRoot, "styled-opening-frame.png"), "prior accepted bytes");
     const dispatch = vi.fn(async () => { throw new Error("provider terminal"); });
@@ -97,6 +97,40 @@ describe("single-task styled visual production", () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(await readFile(path.join(input.sceneRoot, "styled-opening-frame.png"), "utf8")).toBe("prior accepted bytes");
     await expect(access(path.join(input.sceneRoot, "styled-opening-frame-report.json"))).rejects.toThrow();
+  });
+
+  it("preserves old Cloud retries, timeout cap, prior attempts and backoff through the actual dispatched stage", async () => {
+    const input = await fixture();
+    const dispatch = vi.fn(async (args: readonly string[]) => {
+      const stage = argument(args, "--stage");
+      // Exercise the router's actual Node ESM policy, without a model or network.
+      const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+        import { canRetryTerminalTask, resolveTerminalTaskRetryPolicy, terminalTaskRetryDelayMs }
+          from "./scripts/agents/lwdp-codex-task-retry.mjs";
+        const stage = process.argv[1];
+        const policy = resolveTerminalTaskRetryPolicy(stage, undefined, {});
+        const configured = resolveTerminalTaskRetryPolicy(stage, undefined, {
+          WORLDKIT_VISUAL_RECONSTRUCTION_MAX_ATTEMPTS: "2",
+          WORLDKIT_LWDP_VISUAL_PRIOR_ATTEMPTS: "1",
+          WORLDKIT_VISUAL_RECONSTRUCTION_RETRY_DELAY_MS: "42",
+        });
+        console.log(JSON.stringify({ maximumAttempts: policy.maximumAttempts,
+          delays: [1, 2].map(i => terminalTaskRetryDelayMs(policy, i)),
+          capacity: [1, 2, 3].map(i => canRetryTerminalTask(policy, i, "capacity")),
+          timeout: [1, 2].map(i => canRetryTerminalTask(policy, i, "task-timeout")),
+          unknown: canRetryTerminalTask(policy, 1, null), configured,
+          exhausted: canRetryTerminalTask(configured, 1, "capacity") }));
+      `, stage], { encoding: "utf8", timeout: 10_000 });
+      expect(result.status, result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toEqual({ maximumAttempts: 3,
+        delays: [30_000, 120_000], capacity: [true, true, false], timeout: [true, false],
+        unknown: false, configured: { stage, maximumAttempts: 2, priorAttempts: 1, baseDelayMs: 42 },
+        exhausted: false,
+      });
+      await deliver(args);
+    });
+    await runStyledVisualAgent({ ...input, backend: "cloud" }, dispatch);
+    expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
   it.each(["live", "snapshot"])("rejects changed %s input before replacing any visual output", async (where) => {

@@ -1685,6 +1685,36 @@ test("passes the frozen backend to world jobs and records local Codex markers wi
   assert.doesNotMatch(source, /kind: "local-job"[^\n]+(?:credential|token|CODEX_HOME)/i);
 });
 
+test("records formal Cloud dispatch markers with router metadata without copying provider details", async () => {
+  const dataRoot = await temporaryRoot(".cloud-marker-data-");
+  const fakeRepoRoot = await temporaryRoot(".cloud-marker-repo-");
+  const marker = "WORLDKIT_LWDP_JOB visual-reconstruction styled-world gen_visual123 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n";
+  const studio = createStudio({
+    repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: true,
+    importExistingArtifacts: false, importBuiltinTestSets: false,
+    importBuiltinResults: false, lwdpConfigured: true,
+    worldSpawnImplementation: (_command, _arguments, options) => spawn(
+      process.execPath, ["-e", `process.stdout.write(${JSON.stringify(marker)}); process.exitCode = 1;`], options,
+    ),
+  });
+  const origin = await listen(studio);
+  try {
+    const created = (await (await fetch(`${origin}/api/worlds`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Cloud visual marker", prompt: "Build a block world." }),
+    })).json()).world;
+    const detail = await waitForWorldTerminal(origin, created.id);
+    const event = detail.media.trajectory.events.find(({ kind }) => kind === "cloud-job");
+    assert.ok(event, "actual router marker must be recorded");
+    assert.equal(event.stage, "visual-reconstruction");
+    assert.equal(event.jobId, "gen_visual123");
+    assert.equal(event.taskId, "styled-world");
+    assert.doesNotMatch(JSON.stringify(event), /gpt-5.6|xhigh|dispatch=|profile=/);
+  } finally {
+    await studio.shutdown();
+  }
+});
+
 test("does not precreate the Native Case root before the atomic Host runner starts", async () => {
   const dataRoot = await temporaryRoot(".native-atomic-root-data-");
   const fakeRepoRoot = await temporaryRoot(".native-atomic-root-repo-");
@@ -2588,6 +2618,25 @@ test("adapts the main Registry subject catalog for the Studio UI", async () => {
   } finally {
     await studio.shutdown();
   }
+});
+
+test("projects the routed visual stage into Studio without changing its execution identity", () => {
+  for (const stage of ["visual-reconstruction", "failed", "interrupted"]) {
+    const stages = deriveWorkflowTrajectory({ record: {
+      stage, failedStage: "visual-reconstruction", styledTriviewsRequired: true,
+      styledOpeningFrameRequired: true,
+    } });
+    assert.equal(stages.find(({ id }) => id === "visual-imagegen")?.status,
+      stage === "visual-reconstruction" ? "active" : "failed");
+    assert.equal(stages.some(({ id }) => id === "visual-reconstruction"), false);
+  }
+  assert.deepEqual(parseStageTokenUsage("WORLDKIT_STAGE_USAGE visual-reconstruction 123\n"),
+    { "visual-imagegen": 123 });
+  const record = { stage: "visual-reconstruction", status: "running", styledTriviewsRequired: true };
+  const metrics = deriveWorkflowMetrics({ record, stages: deriveWorkflowTrajectory({ record }),
+    rawLog: "WORLDKIT_STAGE_USAGE visual-reconstruction 123\n" });
+  assert.equal(metrics.byStage["visual-imagegen"].tokenCount, 123);
+  assert.equal(metrics.byStage["visual-imagegen"].tokenStatus, "recorded");
 });
 
 test("derives the single current Scene Brief workflow", () => {

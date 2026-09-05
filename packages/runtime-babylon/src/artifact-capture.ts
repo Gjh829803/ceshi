@@ -12,12 +12,20 @@ import { Constants } from "@babylonjs/core/Engines/constants.js";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture.js";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh.js";
 import type { Scene } from "@babylonjs/core/scene.pure.js";
-import type { FormalWorldBoundsMetersV1 } from "@whitebox-world/runtime-contracts";
+import {
+  type FormalWorldBoundsMetersV1,
+  inspectWhiteboxTriviewPixelsV1,
+  WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1,
+} from "@whitebox-world/runtime-contracts";
 
 import {
   fitOrthographicBoundsToWorldExtentsV1,
   orientCameraAtExactPose,
 } from "./formal-world-camera.js";
+
+// Preserve the old capture's active animation dependencies without visible pixels.
+const TRIVIEW_NON_TARGET_VISIBILITY = 1e-6;
+const TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW = 8;
 
 export interface BabylonArtifactProjectedBoundsV1 {
   readonly centerRatioXY: readonly [number, number];
@@ -308,14 +316,21 @@ function renderTriview(
     );
   }
   const targetSet = new Set(targets);
-  const visibility = new Map(scene.meshes.map((mesh) => [mesh, mesh.isVisible] as const));
+  const visibility = new Map(scene.meshes.map((mesh) => [mesh, mesh.visibility] as const));
+  const activeMeshSelection = new Map(
+    targets.map((mesh) => [mesh, mesh.alwaysSelectAsActiveMesh] as const),
+  );
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
   const identityColor = Color3.FromHexString(request.identityColor);
   for (const mesh of scene.meshes) {
-    mesh.isVisible = targetSet.has(mesh);
+    mesh.visibility = targetSet.has(mesh) ? 1 : TRIVIEW_NON_TARGET_VISIBILITY;
     if (targetSet.has(mesh) && mesh.material !== null) {
       tintMaterial(mesh.material, identityColor, materialColors);
     }
+  }
+  for (const mesh of targets) {
+    mesh.alwaysSelectAsActiveMesh = true;
+    mesh.computeWorldMatrix(true);
   }
   const minimum = new Vector3(
     Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.x)),
@@ -341,22 +356,24 @@ function renderTriview(
   const panelAspect = panelWidth / request.heightPixels;
   const distance = Math.max(size.x, size.y, size.z, 1) * 3;
   const views = [
-    { direction: new Vector3(0, 0, -1), horizontalMeters: size.x },
-    { direction: new Vector3(1, 0, 0), horizontalMeters: size.z },
-    { direction: new Vector3(0, 0, 1), horizontalMeters: size.x },
+    { direction: new Vector3(0, 0, -1) },
+    { direction: new Vector3(1, 0, 0) },
+    { direction: new Vector3(0, 0, 1) },
   ];
+  // One meter-to-pixel scale across all panels, as in the frozen old capture.
+  // Independent fitting would enlarge a narrow front relative to its deep side.
+  const halfHeight = Math.max(
+    size.y * 0.58,
+    (Math.max(size.x, size.z) * 0.58) / panelAspect,
+    0.5,
+  );
   engine.setSize(panelWidth, request.heightPixels, true);
   const canvas = renderingCanvas(engine);
-  scene.clearColor = Color4.FromHexString("#F1F1EDFF");
+  scene.clearColor = Color4.FromHexString(`${WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1}FF`);
   scene.activeCamera = camera;
   try {
     for (let index = 0; index < views.length; index += 1) {
       const view = views[index]!;
-      const halfHeight = Math.max(
-        size.y * 0.58,
-        (view.horizontalMeters * 0.58) / Math.max(panelAspect, 0.01),
-        0.5,
-      );
       camera.orthoLeft = -halfHeight * panelAspect;
       camera.orthoRight = halfHeight * panelAspect;
       camera.orthoTop = halfHeight;
@@ -364,9 +381,16 @@ function renderTriview(
       camera.position.copyFrom(center.add(view.direction.scale(distance)));
       camera.upVector.copyFromFloats(0, 1, 0);
       camera.setTarget(center);
-      scene.render();
-      scene.render();
-      context.drawImage(canvas, index * panelWidth, 0, panelWidth, request.heightPixels);
+      for (let attempt = 0; attempt < TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW; attempt += 1) {
+        scene.render();
+        engine.flushFramebuffer();
+        context.drawImage(canvas, index * panelWidth, 0, panelWidth, request.heightPixels);
+        if (inspectWhiteboxTriviewPixelsV1(
+          context.getImageData(0, 0, output.width, request.heightPixels).data,
+          output.width,
+          request.heightPixels,
+        ).viewInspections[index]!.isRenderable) break;
+      }
     }
     return {
       dataUrl: output.toDataURL("image/png"),
@@ -378,7 +402,10 @@ function renderTriview(
   } finally {
     camera.dispose();
     restoreMaterialColors(materialColors);
-    for (const [mesh, isVisible] of visibility) mesh.isVisible = isVisible;
+    for (const [mesh, alwaysSelectAsActiveMesh] of activeMeshSelection) {
+      mesh.alwaysSelectAsActiveMesh = alwaysSelectAsActiveMesh;
+    }
+    for (const [mesh, value] of visibility) mesh.visibility = value;
   }
 }
 

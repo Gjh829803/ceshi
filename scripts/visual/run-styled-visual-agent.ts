@@ -128,7 +128,7 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
     await writeFile(instructionPath, instruction);
     const taskId = `visual-${Date.now()}-${path.basename(taskRoot).slice(-6).toLowerCase()}`;
     const args = ["--backend", options.backend, "--repo-root", taskRoot, "--task-id", taskId,
-      "--request-id", taskId, "--stage", "visual-imagegen", "--job-name", `WorldKit Visual Reconstructor ${options.sceneId}`,
+      "--request-id", taskId, "--stage", "visual-reconstruction", "--job-name", `WorldKit Visual Reconstructor ${options.sceneId}`,
       "--instruction-file", instructionPath, "--execution-profile", "formal", "--timeout-seconds", "1800",
       "--context", skillPath, "--context", `${relativeScene}/scene-brief.md`,
       "--context", `${relativeScene}/visual-identity-palette.json`, "--context", `${relativeScene}/${captureFile}`,

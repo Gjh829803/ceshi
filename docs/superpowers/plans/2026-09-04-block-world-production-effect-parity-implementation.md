@@ -662,7 +662,9 @@ Host finalizers/Studio consumers. It restores opening-first inspection and exact
 accepted-opening tri-view anchoring in one formal Codex task, with at most one
 image-level regeneration inside that task. Finalizers run only after complete
 delivery. Frozen inputs, request arguments and router ledgers remain available for
-reconciliation; no automatic second visual task or intermediate Host handshake.
+reconciliation; no second logical dispatch or intermediate Host handshake. The
+single router retains the old Cloud terminal-attempt policy; a single task does
+not mean deleting the old provider retries.
 Tri-views-only reruns require the accepted opening/prompt and unchanged reference
 and target image hashes. The prompt artifact does not prove semantic acceptance.
 
@@ -673,6 +675,24 @@ inputs; do not repeat full gates. This is not the final whole-candidate checkpoi
 Next, main owns Native complete-target capture and requested styling-scope wiring;
 real image self-check/repair and Browser/media acceptance remain separate work.
 The sole live status and evidence record remains `docs/18-refactor-progress-and-backlog.md`.
+
+#### CF16/26B migration deviation correction
+
+Main-agent-only, sequential, against `origin/codex/block-world-main-integration@9e35ab53`.
+The user reconfirmed two hard constraints: add no gate absent from that branch;
+preserve its chain parameters, timing and design details. Regression tests measure
+parity, not new production admission. New-architecture adaptations must keep those
+behaviors; material deviations require user confirmation, not an "optimization" label.
+
+| Stable task | Owner and contract | Dependency / evidence |
+|---|---|---|
+| CF16/26B-ROUTED-STAGE | Visual launcher supplies `visual-reconstruction` to the existing router; Studio projects that stage for display/usage only, and consumes real formal Cloud markers. No second retry policy. | Actual dispatched stage exercises old maximum/prior attempts, timeout cap and backoff. Studio real child-output ingestion and usage/status regressions. |
+| CF16-CAPTURE-DETAILS | Existing Babylon artifact capture + runtime-contracts pixel inspector; old shared scale, background, soft visibility, target activation and per-panel render/flush/inspection retry. No new pixel threshold or publication veto. | Asymmetric real Babylon camera, synthetic immediate/delayed/empty pixels, mid-copy cleanup; old inspector copied with its exact constants. |
+| CF16-SEMANTIC-FRONT | Builder declaration through existing mapping, Host capture groups, Runtime request and manifest; retain old cardinal front and Front/Right/Back derivation, plus review-only style. No fixed front inference as a substitute. | Depends on capture details; current-only producer/contract/fixture/Skill closure and direction/render-style regressions, then real rendered inspection. |
+| CF16-NATIVE-STYLING | Native declared complete-target evidence and existing post-capture styling scope. | Depends on semantic-front; restore old ordering/accepted opening anchor and downstream failure isolation without another World State or success authority. |
+
+No entire old file or historical receipt is wholesale restoration authority. Keep
+current formal capture/identity/measurement owners intact while porting these behaviors.
 
 CF-26B Cloud retries, CF-31C Host-only recovery, full CF-13/NBR strict acceptance, full multi-mode CF-12,
 general per-view CF-14/24 and full feature-scoring CF-21, inspector/performance polish, and Episode/media

@@ -1845,6 +1845,27 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
     本轮没有新增模型/付费生成、Browser/media、全仓 CI 或独立审查，不关闭 CF-16/PROD-10
     父任务。下一步先按 current Native owner 补齐目标证据与下游 scope，不新增 Runtime 真相。
 
+- 单线程迁移纠偏检查点（2026-09-06，仍在 `codex/cf-production-effect-closure`）：
+  - 用户再次明确：不新增 `origin/codex/block-world-main-integration@9e35ab53` 不存在的 gate；
+    参数、时序、设计细节尽量一致。仅为验证一致性新增回归，不把它们变成生产阻断。
+  - CF16/26B 实际视觉派发阶段从误用的 `visual-imagegen` 恢复 `visual-reconstruction`，
+    复用唯一 router 的旧 Cloud 策略：默认最多 3 次、task-timeout 最多 2 次、30s/120s
+    backoff、既有 prior-attempt 和环境覆盖、unknown 不重试。入口仍只调用 router 一次。
+    原错误实际使 visual stage 落到最多 1 次，RED 已复现；本轮未新建 retry owner。
+  - Studio 只投影该阶段到 UI，修复视觉 Token 错报 0 和 formal Cloud marker 带 metadata
+    后漏记任务事件；真实子进程固定日志复现 RED 后转绿，不把 provider metadata 复制进事件。
+  - CF16 捕获恢复三面共享比例尺、旧 `#DDE8EE` 底色、`1e-6` 非目标可见性、目标 active
+    selection、最多 8 次逐面 render/flush/read 与实际前景提前停止。像素 inspector 与旧
+    常量/算法原样一致，不新增阈值；捕获本身未新增 publication veto。安装的 Babylon
+    9.23.0 `scene.pure.js` active-mesh 条件与 `thinEngine.pure.js` framebuffer flush 已核对。
+  - 定向证据：Visual 入口 11/11；Studio 四项 4/4；capture-targets 9/9、artifact-capture
+    11/11、artifact-identity-mask 11/11，另 grouped Adapter 1/1。包含非对称共享比例、
+    立即/延迟/持续空白、逐面 copy 抛错后的可见性/相机清理。typecheck 与 diff check 通过。
+    未重复全仓 CI；合成像素/NullEngine 不计真实 GPU、模型自检或最终效果证据。
+  - 新发现仍未完成：mapping → capture request 的显式 semantic front、旧 review-only
+    render style、Native complete-target sheets 与 styling scope。下轮先闭合这些生产者/
+    消费者，不用固定世界轴或提示词补丁冒充目标方向，不关闭 CF16/PROD10 或整个 CF。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

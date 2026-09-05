@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  inspectWhiteboxTriviewPixelsV1,
   validateSceneBriefImplementationMapDraftV1,
   validateSceneBriefImplementationMapV1,
   validateVisualCaptureGroupsV1,
@@ -43,6 +44,96 @@ function finalMap(): SceneBriefImplementationMapV1 {
 }
 
 describe("hosted visual capture contracts", () => {
+  it("measures complete tri-view foreground coverage instead of sparse color samples", () => {
+    const pixels = new Uint8ClampedArray(9 * 9 * 4);
+    for (let pixel = 0; pixel < 81; pixel += 1) {
+      const offset = pixel * 4;
+      pixels.set([232, 93, 93, 255], offset);
+    }
+
+    expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toEqual({
+      widthPixels: 9,
+      heightPixels: 9,
+      foregroundPixelCount: 81,
+      minimumForegroundPixelCount: 81,
+      foregroundBoundsPixels: {
+        minimumPixelsXY: [0, 0],
+        maximumPixelsXY: [8, 8],
+      },
+      viewInspections: [
+        {
+          view: "front",
+          foregroundPixelCount: 27,
+          minimumForegroundPixelCount: 27,
+          foregroundBoundsPixels: {
+            minimumPixelsXY: [0, 0],
+            maximumPixelsXY: [2, 8],
+          },
+          isRenderable: true,
+        },
+        {
+          view: "right",
+          foregroundPixelCount: 27,
+          minimumForegroundPixelCount: 27,
+          foregroundBoundsPixels: {
+            minimumPixelsXY: [0, 0],
+            maximumPixelsXY: [2, 8],
+          },
+          isRenderable: true,
+        },
+        {
+          view: "back",
+          foregroundPixelCount: 27,
+          minimumForegroundPixelCount: 27,
+          foregroundBoundsPixels: {
+            minimumPixelsXY: [0, 0],
+            maximumPixelsXY: [2, 8],
+          },
+          isRenderable: true,
+        },
+      ],
+      isRenderable: true,
+    });
+
+    for (let y = 0; y < 9; y += 1) {
+      for (let x = 0; x < 3; x += 1) {
+        pixels.set([221, 232, 238, 255], (y * 9 + x) * 4);
+      }
+    }
+    expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toMatchObject({
+      viewInspections: [
+        { view: "front", foregroundPixelCount: 0, isRenderable: false },
+        { view: "right", foregroundPixelCount: 27, isRenderable: true },
+        { view: "back", foregroundPixelCount: 27, isRenderable: true },
+      ],
+      isRenderable: false,
+    });
+
+    for (let pixel = 0; pixel < 81; pixel += 1) {
+      pixels[pixel * 4] = 221;
+      pixels[pixel * 4 + 1] = 232;
+      pixels[pixel * 4 + 2] = 238;
+      pixels[pixel * 4 + 3] = 255;
+    }
+    expect(inspectWhiteboxTriviewPixelsV1(pixels, 9, 9)).toMatchObject({
+      foregroundPixelCount: 0,
+      foregroundBoundsPixels: null,
+      viewInspections: [
+        { view: "front", foregroundPixelCount: 0, isRenderable: false },
+        { view: "right", foregroundPixelCount: 0, isRenderable: false },
+        { view: "back", foregroundPixelCount: 0, isRenderable: false },
+      ],
+      isRenderable: false,
+    });
+    expect(() => inspectWhiteboxTriviewPixelsV1(pixels, 10, 9)).toThrow(
+      "RGBA byte length",
+    );
+    expect(() => inspectWhiteboxTriviewPixelsV1(
+      new Uint8ClampedArray(10 * 9 * 4),
+      10,
+      9,
+    )).toThrow("three equal panels");
+  });
   it("keeps draft and final implementation maps as closed distinct unions", () => {
     const draft: SceneBriefImplementationMapDraftV1 = {
       kind: "worldkit-scene-brief-implementation-map-draft",

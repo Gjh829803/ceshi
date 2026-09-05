@@ -1,5 +1,6 @@
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
 import { RegisterAbstractEngineStencil } from "@babylonjs/core/Engines/AbstractEngine/abstractEngine.stencil.pure.js";
+import { RegisterAbstractEngineStates } from "@babylonjs/core/Engines/AbstractEngine/abstractEngine.states.pure.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
@@ -31,6 +32,122 @@ describe("Babylon artifact capture", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("keeps one physical scale and baseline across asymmetric target tri-view panels", () => {
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      createElement: () => new FakeCanvasElement(),
+    });
+    RegisterAbstractEngineStencil();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("opening", new Vector3(0, 0, -8), scene);
+    scene.activeCamera = camera;
+    const target = MeshBuilder.CreateBox("asymmetric", { width: 2, height: 1, depth: 8 }, scene);
+    target.metadata = { worldkitEntityId: "complete-target" };
+    target.material = new StandardMaterial("whitebox", scene);
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(new FakeCanvasElement() as unknown as HTMLCanvasElement);
+    const projections: { top: number | null; bottom: number | null; left: number | null; right: number | null }[] = [];
+    scene.onBeforeRenderObservable.add(() => {
+      if (scene.activeCamera?.name !== "worldkit.artifact.triview") return;
+      const active = scene.activeCamera;
+      projections.push({ top: active.orthoTop, bottom: active.orthoBottom,
+        left: active.orthoLeft, right: active.orthoRight });
+    });
+    try {
+      const result = captureBabylonArtifactViewV1({ scene, engine, camera, request: {
+        kind: "entity-triview", widthPixels: 6, heightPixels: 2,
+        entityIds: ["complete-target"], identityColor: "#E85D5D",
+      } });
+      expect(result).toMatchObject({ widthPixels: 6, heightPixels: 2 });
+      // The empty synthetic framebuffer exhausts the old eight renders per panel.
+      expect(projections).toHaveLength(24);
+      for (const projection of projections) {
+        expect(projection).toEqual({ top: 8 * 0.58, bottom: -8 * 0.58,
+          left: -8 * 0.58, right: 8 * 0.58 });
+      }
+      expect(scene.activeCamera).toBe(camera);
+    } finally { scene.dispose(); engine.dispose(); }
+  });
+
+  it.each([[1, false], [3, false], [Infinity, false], [3, true]] as const)(
+    "replays old per-panel foreground retries (ready at %s, copy failure %s)", (readyAt, copyFailure) => {
+    RegisterAbstractEngineStates();
+    // Synthetic framebuffer controls readiness; real Babylon owns camera/mesh state.
+    const attempts = [0, 0, 0];
+    const pixels = new Uint8ClampedArray(6 * 2 * 4);
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      pixels.set([221, 232, 238, 255], offset);
+    }
+    class PanelCanvas extends FakeCanvasElement {
+      override getContext(): CanvasRenderingContext2D {
+        return {
+          drawImage: (_canvas: unknown, x: number) => {
+            const index = x / 2;
+            attempts[index]! += 1;
+            if (copyFailure && index === 1) throw new Error("framebuffer copy failed");
+            if (attempts[index]! < readyAt) return;
+            for (let y = 0; y < 2; y += 1) {
+              for (let dx = 0; dx < 2; dx += 1) {
+                pixels.set([232, 93, 93, 255], (y * 6 + x + dx) * 4);
+              }
+            }
+          },
+          getImageData: () => ({ data: pixels }),
+        } as unknown as CanvasRenderingContext2D;
+      }
+    }
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      createElement: () => new PanelCanvas(),
+    });
+    RegisterAbstractEngineStencil();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const camera = new FreeCamera("opening", new Vector3(0, 0, -8), scene);
+    scene.activeCamera = camera;
+    const target = MeshBuilder.CreateBox("target", {}, scene);
+    target.metadata = { worldkitEntityId: "complete-target" };
+    target.visibility = 0.7;
+    const dependency = MeshBuilder.CreateBox("dependency", {}, scene);
+    dependency.visibility = 0.4;
+    const hidden = MeshBuilder.CreateBox("hidden", {}, scene);
+    hidden.isVisible = false;
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(new FakeCanvasElement() as unknown as HTMLCanvasElement);
+    const flush = vi.spyOn(engine, "flushFramebuffer");
+    scene.onBeforeRenderObservable.add(() => {
+      if (scene.activeCamera?.name !== "worldkit.artifact.triview") return;
+      expect(scene.clearColor.toHexString()).toBe("#DDE8EEFF");
+      expect(target.alwaysSelectAsActiveMesh).toBe(true);
+      expect(target.visibility).toBe(1);
+      expect(dependency.isVisible).toBe(true);
+      expect(dependency.visibility).toBe(1e-6);
+      expect(hidden.isVisible).toBe(false);
+    });
+    try {
+      const capture = () => captureBabylonArtifactViewV1({ scene, engine, camera, request: {
+        kind: "entity-triview", widthPixels: 6, heightPixels: 2,
+        entityIds: ["complete-target"], identityColor: "#E85D5D",
+      } });
+      if (copyFailure) {
+        expect(capture).toThrow("framebuffer copy failed");
+        expect(attempts).toEqual([3, 1, 0]);
+        expect(flush).toHaveBeenCalledTimes(4);
+      } else {
+        capture();
+        expect(attempts).toEqual(Array(3).fill(Math.min(readyAt, 8)));
+        expect(flush).toHaveBeenCalledTimes(Math.min(readyAt, 8) * 3);
+      }
+      expect(target.alwaysSelectAsActiveMesh).toBe(false);
+      expect(target.visibility).toBe(0.7);
+      expect(dependency.visibility).toBe(0.4);
+      expect(dependency.isVisible).toBe(true);
+      expect(hidden.isVisible).toBe(false);
+      expect(scene.activeCamera).toBe(camera);
+    } finally { scene.dispose(); engine.dispose(); }
   });
 
   it("renders different entity mask colors when meshes share their beauty material", () => {
