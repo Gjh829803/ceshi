@@ -697,6 +697,19 @@ behaviors; material deviations require user confirmation, not an "optimization" 
 
 | CF16-NATIVE-FORMAL-DELIVERY | Existing formal Request -> Runtime provider -> hosted payload -> Receipt -> atomic Capture publication -> final publisher/verifier. Main-agent-only, sequential; depends on NATIVE-CAPTURE-ADAPTER and NATIVE-CAPTURE-IDENTITY. | Explicit requested groups bind complete Native metadata groups or the actual controlled Subject; ordered PNG bytes and hashes derive the existing tri-view manifest. Reuse the old four attempts/50ms delay, eight renders per panel, empty-panel inspection and failed-image retention. Cover empty scope, Native/Subject delivery, missing/reordered/stale artifacts and atomic publication failure. Production request preparation still emits an empty scope until Host target selection and Native styled/Studio scope are connected; this slice alone does not close CF-16. |
 
+#### CF16-NATIVE-VISUAL-INPUT
+
+CF16-NATIVE-VISUAL-INPUT (main-agent-only, sequential; depends on requested-scope):
+the existing visual task/finalizers select actual capture paths using the existing
+canonical/babylon-native discriminator. Native consumes Case-hashed Brief/Palette
+and the formal Receipt/derived manifest/PNG hashes, with the Receipt's actual
+Snapshot as context. No fabricated Canonical map, root whitebox aliases, separate
+quality authority or writes into final/capture. Styled manifests retain real
+source-relative capture paths; tri-views-only retains the exact accepted opening.
+Focused synthetic tests cover source bytes, stale captures, in-task mutation and
+failure isolation. Native scene-launcher and Studio scope integration remain the
+next required consumer work; this input path alone does not close CF-16.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal

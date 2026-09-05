@@ -5,6 +5,11 @@ import path from "node:path";
 import { PNG } from "pngjs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runStyledVisualAgent } from "./run-styled-visual-agent.js";
+import { createEvidenceSetFixtureInputV1 } from "../reconstruction/evaluate-fixture.test-support.js";
+import { deriveFormalWhiteboxTriviewManifestV1, parseFormalWorldCaptureReceiptV1 } from "@whitebox-world/runtime-contracts";
+import { sha256Bytes } from "@whitebox-world/protocol";
+import { hashWorldReconstructionCaseV1, parseWorldReconstructionCaseV1 } from "@whitebox-world/validation";
+import { hashFormalWorldCaptureRequestV1, hashFormalSemanticCaptureMapV1 } from "@whitebox-world/runtime-contracts";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -13,9 +18,9 @@ const targetIds = ["traveler", "palace"];
 const png = new PNG({ width: 2, height: 2 });
 png.data.fill(255);
 const pixels = PNG.sync.write(png);
-const bundle = () => ({ kind: "worldkit-visual-generation-prompts", schemaVersion: 2, sceneId,
+const bundle = (ids = targetIds) => ({ kind: "worldkit-visual-generation-prompts", schemaVersion: 2, sceneId,
   openingFrame: { referenceRoles: ["actual-whitebox-opening", "user-first-frame"], prompt: "o".repeat(200) },
-  styledTriviews: targetIds.map(visualTargetId => ({ visualTargetId,
+  styledTriviews: ids.map(visualTargetId => ({ visualTargetId,
     referenceRoles: ["target-whitebox-triview", "styled-opening-frame", "user-first-frame"], prompt: "t".repeat(150) })) });
 async function fixture() {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "styled-agent-test-")));
@@ -46,15 +51,124 @@ async function fixture() {
   return { repoRoot: root, sceneId, userFramePath, sceneRoot, backend: "local" as const, scope: "all" as const };
 }
 function argument(args: readonly string[], key: string) { return args[args.indexOf(key) + 1]!; }
-async function deliver(args: readonly string[]) {
+async function deliver(args: readonly string[], ids = targetIds) {
   for (let i = 0; i < args.length; i++) if (args[i] === "--output") {
     const [, local] = args[++i]!.split("::");
     await mkdir(path.dirname(local!), { recursive: true });
-    await writeFile(local!, local!.endsWith(".json") ? JSON.stringify(bundle()) : pixels);
+    await writeFile(local!, local!.endsWith(".json") ? JSON.stringify(bundle(ids)) : pixels);
   }
 }
 
+async function nativeFixture() {
+  const input = await fixture();
+  const evidence = createEvidenceSetFixtureInputV1({ includeWhiteboxTriviews: true });
+  await mkdir(path.join(input.sceneRoot, "inputs"));
+  for (const file of ["scene-brief.md", "visual-identity-palette.json"])
+    await writeFile(path.join(input.sceneRoot, "inputs", file), await readFile(path.join(input.sceneRoot, file)));
+  const reconstructionCase = parseWorldReconstructionCaseV1({ ...evidence.reconstructionCase,
+    sceneBriefRef: "scene-brief.md", sceneBriefHash: sha256Bytes(await readFile(path.join(input.sceneRoot, "scene-brief.md"))),
+    referenceInputs: [{ inputRef: "visual-identity-palette.json", mediaType: "application/json",
+      contentHash: sha256Bytes(await readFile(path.join(input.sceneRoot, "visual-identity-palette.json"))) }],
+  });
+  await writeFile(path.join(input.sceneRoot, "case.json"), JSON.stringify(reconstructionCase));
+  const caseHash = hashWorldReconstructionCaseV1(reconstructionCase);
+  const semanticCaptureMap = { ...evidence.captureReceipt.formalRequest.semanticCaptureMap, caseHash };
+  const semanticCaptureMapHash = hashFormalSemanticCaptureMapV1(semanticCaptureMap);
+  const formalRequest = { ...evidence.captureReceipt.formalRequest, caseHash, semanticCaptureMap, semanticCaptureMapHash };
+  const receipt = parseFormalWorldCaptureReceiptV1({ ...evidence.captureReceipt,
+    caseHash, semanticCaptureMapHash, formalRequest, formalRequestHash: hashFormalWorldCaptureRequestV1(formalRequest),
+    views: evidence.captureReceipt.views.map(view => ({ ...view, pngContentHash: sha256Bytes(pixels) })),
+  });
+  const manifest = deriveFormalWhiteboxTriviewManifestV1(receipt)!;
+  const captureRoot = path.join(input.sceneRoot, "final/capture");
+  await mkdir(path.join(captureRoot, "triviews"), { recursive: true });
+  await writeFile(path.join(captureRoot, "opening.png"), pixels);
+  await writeFile(path.join(captureRoot, "formal-world-capture-receipt.json"), JSON.stringify(receipt));
+  await writeFile(path.join(captureRoot, "triviews/whitebox-triview-manifest.json"), JSON.stringify(manifest));
+  for (const [index, target] of manifest.whiteboxTriviews.entries()) {
+    const file = path.join(captureRoot, "triviews", target.imageUri);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, evidence.whiteboxTriviewPngs[index]!);
+  }
+  // A Native scene has no Canonical artifacts or root whitebox aliases.
+  for (const file of ["scene-implementation-map.json", "runtime-snapshot.json", "opening-frame.png", "triviews"])
+    await rm(path.join(input.sceneRoot, file), { recursive: true });
+  return { ...input, sceneSource: "babylon-native" as const, captureRoot,
+    ids: manifest.whiteboxTriviews.map(target => target.visualTargetId) };
+}
+
 describe("single-task styled visual production", () => {
+  it("consumes Native receipt-bound captures without Canonical artifacts and keeps real paths in visual manifests", async () => {
+    const input = await nativeFixture();
+    const receiptBefore = await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"));
+    const dispatch = vi.fn(async (args: readonly string[]) => {
+      const root = argument(args, "--repo-root");
+      const scene = path.join(root, `artifacts/scenes/${sceneId}`);
+      expect(args).toContain(`artifacts/scenes/${sceneId}/final/capture/formal-world-capture-receipt.json`);
+      await expect(access(path.join(scene, "scene-implementation-map.json"))).rejects.toThrow();
+      await expect(access(path.join(scene, "runtime-snapshot.json"))).rejects.toThrow();
+      expect(await readFile(path.join(scene, "final/capture/opening.png"))).toEqual(pixels);
+      await deliver(args, input.ids);
+    });
+    await runStyledVisualAgent(input, dispatch);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const opening = JSON.parse(await readFile(path.join(input.sceneRoot, "styled-opening-frame-manifest.json"), "utf8"));
+    expect(opening.whiteboxOpeningFrame.path).toBe("final/capture/opening.png");
+    const tri = JSON.parse(await readFile(path.join(input.sceneRoot, "styled-triviews-manifest.json"), "utf8"));
+    expect(tri.targets.map((target: { visualTargetId: string }) => target.visualTargetId)).toEqual(input.ids);
+    for (const target of tri.targets) {
+      expect(target.whiteboxTriview.path).toBe(`final/capture/triviews/${target.visualTargetId}/whitebox-triview.png`);
+      expect(sha256Bytes(await readFile(path.join(input.sceneRoot, target.whiteboxTriview.path))))
+        .toBe(target.whiteboxTriview.contentHash);
+    }
+    await runStyledVisualAgent({ ...input, scope: "triviews" }, args => deliver(args, input.ids));
+    expect(await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"))).toEqual(receiptBefore);
+    await expect(access(path.join(input.sceneRoot, "opening-frame.png"))).rejects.toThrow();
+  });
+
+  it.each(["opening.png", "triviews/visual-target-1/whitebox-triview.png", "triviews/whitebox-triview-manifest.json"])(
+    "rejects stale Native %s before dispatch", async file => {
+      const input = await nativeFixture();
+      const target = path.join(input.captureRoot, file);
+      if (file.endsWith(".json")) {
+        const manifest = JSON.parse(await readFile(target, "utf8"));
+        manifest.worldBuildIdentityHash = `sha256:${"e".repeat(64)}`;
+        await writeFile(target, JSON.stringify(manifest));
+      } else await writeFile(target, Buffer.concat([await readFile(target), Buffer.from("changed")]));
+      const dispatch = vi.fn();
+      await expect(runStyledVisualAgent(input, dispatch)).rejects.toThrow("Native visual capture identity mismatch");
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+  it.each(["scene-brief.md", "visual-identity-palette.json"])("binds Native %s to the frozen Case, not root presentation copies", async file => {
+    const input = await nativeFixture();
+    await writeFile(path.join(input.sceneRoot, file), "unrelated root copy");
+    await runStyledVisualAgent(input, args => deliver(args, input.ids));
+    await writeFile(path.join(input.sceneRoot, "inputs", file), "stale frozen input");
+    const dispatch = vi.fn();
+    await expect(runStyledVisualAgent(input, dispatch)).rejects.toThrow("Native visual capture identity mismatch");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it.each(["live", "snapshot"])("rejects %s Native receipt mutation without changing accepted whitebox or styled results", async where => {
+    const input = await nativeFixture();
+    const receiptPath = path.join(input.captureRoot, "formal-world-capture-receipt.json");
+    const receiptBytes = await readFile(receiptPath);
+    const prior = path.join(input.sceneRoot, "styled-opening-frame.png");
+    await writeFile(prior, "prior accepted styling");
+    const dispatch = vi.fn(async (args: readonly string[]) => {
+      await deliver(args, input.ids);
+      const target = where === "live" ? receiptPath : path.join(argument(args, "--repo-root"),
+        `artifacts/scenes/${sceneId}/final/capture/formal-world-capture-receipt.json`);
+      await writeFile(target, Buffer.concat([receiptBytes, Buffer.from("\n")]));
+    });
+    await expect(runStyledVisualAgent(input, dispatch)).rejects.toThrow("Visual input changed during task");
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(await readFile(prior, "utf8")).toBe("prior accepted styling");
+    expect(await readFile(path.join(input.captureRoot, "opening.png"))).toEqual(pixels);
+    if (where === "snapshot") expect(await readFile(receiptPath)).toEqual(receiptBytes);
+  });
+
   it("dispatches once with frozen evidence and the opening-first Skill, then finalizes every output", async () => {
     const input = await fixture();
     const dispatch = vi.fn(async (args: readonly string[]) => {
@@ -155,7 +269,7 @@ describe("single-task styled visual production", () => {
 
   it("reuses the accepted opening exactly for tri-views-only and rejects a stale anchor before dispatch", async () => {
     const input = await fixture();
-    await runStyledVisualAgent(input, deliver);
+    await runStyledVisualAgent(input, args => deliver(args));
     const before = await readFile(path.join(input.sceneRoot, "styled-opening-frame-manifest.json"));
     const dispatch = vi.fn(async (args: readonly string[]) => {
       expect(args.filter(x => x === "--output")).toHaveLength(2);
@@ -179,10 +293,10 @@ describe("single-task styled visual production", () => {
 
   it("rejects tri-views-only when a whitebox target changed since opening acceptance", async () => {
     const input = await fixture();
-    await runStyledVisualAgent(input, deliver);
+    await runStyledVisualAgent(input, args => deliver(args));
     await writeFile(path.join(input.sceneRoot, "triviews/palace/whitebox-triview.png"),
       Buffer.concat([pixels, Buffer.from("changed target")]));
-    const dispatch = vi.fn(deliver);
+    const dispatch = vi.fn((args: readonly string[]) => deliver(args));
     await expect(runStyledVisualAgent({ ...input, scope: "triviews" }, dispatch)).rejects.toThrow("acceptance is missing or stale");
     expect(dispatch).not.toHaveBeenCalled();
   });

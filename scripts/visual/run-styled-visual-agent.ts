@@ -4,15 +4,19 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rename, writeFile } from "no
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { validateWhiteboxTriviewManifestV1, type WhiteboxTriviewManifestV1 } from "@whitebox-world/runtime-contracts";
+import { deriveFormalWhiteboxTriviewManifestV1, parseFormalWorldCaptureReceiptV1,
+  validateWhiteboxTriviewManifestV1, type WhiteboxTriviewManifestV1 } from "@whitebox-world/runtime-contracts";
+import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import type { WorldGenerationSceneSourceKindV1 } from "@whitebox-world/scene-authoring-contracts";
+import { hashWorldReconstructionCaseV1, parseWorldReconstructionCaseV1 } from "@whitebox-world/validation";
 import { finalizeStyledOpeningFrame } from "./finalize-styled-opening-frame.js";
 import { finalizeStyledTriviews } from "./finalize-styled-triviews.js";
 import { parseVisualGenerationPromptsV2 } from "./visual-generation-prompts.js";
+import { visualCapturePaths } from "./visual-capture-paths.js";
 
 const skillPath = ".codex/skills/worldkit-visual-reconstructor/SKILL.md";
 const promptFile = "visual-generation-prompts.json";
 const openingFile = "styled-opening-frame.png";
-const captureFile = "triviews/whitebox-triview-manifest.json";
 const hash = (bytes: Buffer) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 
 interface StyledVisualOptions {
@@ -21,6 +25,7 @@ interface StyledVisualOptions {
   readonly userFramePath: string;
   readonly scope: "all" | "triviews";
   readonly backend: "local" | "cloud";
+  readonly sceneSource?: WorldGenerationSceneSourceKindV1;
 }
 
 /** One routed model task, with the existing Host finalizers after delivery. */
@@ -33,6 +38,8 @@ export async function runStyledVisualAgent(
     throw new Error("Invalid styled visual scene, scope or backend.");
   }
   const repoRoot = await realpath(options.repoRoot);
+  const capturePaths = visualCapturePaths(options.sceneSource);
+  const captureFile = capturePaths.manifest;
   const relativeScene = `artifacts/scenes/${options.sceneId}`;
   const sceneRoot = await realpath(path.join(repoRoot, relativeScene));
   if (sceneRoot !== path.join(repoRoot, relativeScene)) throw new Error("Visual scene root must not be linked.");
@@ -45,18 +52,40 @@ export async function runStyledVisualAgent(
     inputs.set(relative, { source, bytes });
     return bytes;
   }
-  for (const file of ["scene-brief.md", "visual-identity-palette.json", "scene-implementation-map.json",
-    "runtime-snapshot.json", "opening-frame.png", captureFile]) {
-    await snapshot(`${relativeScene}/${file}`, path.join(sceneRoot, file));
+  for (const file of ["scene-brief.md", "visual-identity-palette.json",
+    ...(capturePaths.receipt ? [capturePaths.receipt, "case.json"] : ["scene-implementation-map.json", "runtime-snapshot.json"]),
+    capturePaths.opening, captureFile]) {
+    const inputFile = capturePaths.receipt && ["scene-brief.md", "visual-identity-palette.json"].includes(file)
+      ? `inputs/${file}` : file;
+    await snapshot(`${relativeScene}/${file}`, path.join(sceneRoot, inputFile));
   }
   const capture = JSON.parse(inputs.get(`${relativeScene}/${captureFile}`)!.bytes.toString()) as WhiteboxTriviewManifestV1;
   const errors = validateWhiteboxTriviewManifestV1(capture);
   if (errors.length) throw new Error(`Invalid whitebox tri-view manifest: ${errors.map(e => e.code).join(",")}`);
   for (const target of capture.whiteboxTriviews) {
-    const file = path.resolve(sceneRoot, "triviews", target.imageUri);
+    const file = path.resolve(sceneRoot, capturePaths.triviewRoot, target.imageUri);
     const relative = path.relative(sceneRoot, file);
     if (relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Tri-view input escaped scene root.");
     await snapshot(`${relativeScene}/${relative}`, file);
+  }
+  if (capturePaths.receipt) {
+    const receipt = parseFormalWorldCaptureReceiptV1(JSON.parse(
+      inputs.get(`${relativeScene}/${capturePaths.receipt}`)!.bytes.toString()));
+    const expected = deriveFormalWhiteboxTriviewManifestV1(receipt);
+    const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(inputs.get(`${relativeScene}/case.json`)!.bytes.toString()));
+    const paletteInput = reconstructionCase.referenceInputs.find(row => row.inputRef === "visual-identity-palette.json");
+    if (hashWorldReconstructionCaseV1(reconstructionCase) !== receipt.caseHash ||
+        reconstructionCase.sceneBriefRef !== "scene-brief.md" ||
+        reconstructionCase.sceneBriefHash !== hash(inputs.get(`${relativeScene}/scene-brief.md`)!.bytes) ||
+        paletteInput?.mediaType !== "application/json" ||
+        paletteInput.contentHash !== hash(inputs.get(`${relativeScene}/visual-identity-palette.json`)!.bytes) ||
+        !expected || stringifyCanonicalJson(expected) !== stringifyCanonicalJson(capture) ||
+        receipt.views.find(view => view.viewId === "opening")!.pngContentHash !==
+          hash(inputs.get(`${relativeScene}/${capturePaths.opening}`)!.bytes) ||
+        receipt.whiteboxTriviews.some((row, index) => row.pngContentHash !== hash(inputs.get(
+          `${relativeScene}/${capturePaths.triviewRoot}/${capture.whiteboxTriviews[index]!.imageUri}`)!.bytes))) {
+      throw new Error("Native visual capture identity mismatch.");
+    }
   }
   await snapshot(skillPath, path.join(repoRoot, skillPath));
   const userBytes = await snapshot("inputs/user-first-frame", path.resolve(options.userFramePath));
@@ -78,13 +107,13 @@ export async function runStyledVisualAgent(
     if (manifest.status !== "passed" || manifest.sceneId !== options.sceneId ||
         manifest.styledOpeningFrame?.contentHash !== hash(opening) ||
         manifest.promptBundle?.contentHash !== hash(prompt) ||
-        manifest.whiteboxOpeningFrame?.contentHash !== hash(inputs.get(`${relativeScene}/opening-frame.png`)!.bytes) ||
+        manifest.whiteboxOpeningFrame?.contentHash !== hash(inputs.get(`${relativeScene}/${capturePaths.opening}`)!.bytes) ||
         manifest.userFirstFrame?.contentHash !== hash(userBytes) ||
         !Array.isArray(manifest.supplementalTriviews) ||
         manifest.supplementalTriviews.length !== capture.whiteboxTriviews.length ||
         capture.whiteboxTriviews.some((target, index) => {
           const accepted = manifest.supplementalTriviews[index];
-          const relative = `triviews/${target.imageUri}`;
+          const relative = `${capturePaths.triviewRoot}/${target.imageUri}`;
           return accepted?.visualTargetId !== target.visualTargetId || accepted?.path !== relative ||
             accepted?.contentHash !== hash(inputs.get(`${relativeScene}/${relative}`)!.bytes);
         })) {
@@ -132,9 +161,10 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
       "--instruction-file", instructionPath, "--execution-profile", "formal", "--timeout-seconds", "1800",
       "--context", skillPath, "--context", `${relativeScene}/scene-brief.md`,
       "--context", `${relativeScene}/visual-identity-palette.json`, "--context", `${relativeScene}/${captureFile}`,
-      "--asset", `actual-whitebox-opening::${stagedScene}/opening-frame.png::image::image/png`,
+      "--asset", `actual-whitebox-opening::${stagedScene}/${capturePaths.opening}::image::image/png`,
       "--asset", `user-first-frame::${taskRoot}/${userRelative}::image::image/${userFormat === "jpg" ? "jpeg" : userFormat}`];
-    for (const [i, target] of targets.entries()) args.push("--asset", `whitebox-triview-${i + 1}::${stagedScene}/triviews/${target.imageUri}::image::image/png`);
+    if (capturePaths.receipt) args.push("--context", `${relativeScene}/${capturePaths.receipt}`);
+    for (const [i, target] of targets.entries()) args.push("--asset", `whitebox-triview-${i + 1}::${stagedScene}/${capturePaths.triviewRoot}/${target.imageUri}::image::image/png`);
     if (options.scope === "triviews") args.push("--context", `${relativeScene}/${promptFile}`,
       "--asset", `styled-opening-frame::${stagedScene}/${openingFile}::image::image/png`);
     if (options.backend === "cloud") args.push("--output-s3-prefix",
@@ -152,8 +182,9 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
     }
     if (options.scope === "all") await finalizeStyledOpeningFrame({
       sceneId: options.sceneId, sceneRoot: stagedScene, userFramePath: path.join(taskRoot, userRelative),
+      sceneSource: capturePaths.source,
     });
-    await finalizeStyledTriviews({ sceneId: options.sceneId, sceneRoot: stagedScene });
+    await finalizeStyledTriviews({ sceneId: options.sceneId, sceneRoot: stagedScene, sceneSource: capturePaths.source });
     const delivery = [...outputs, "styled-triviews-manifest.json", "styled-triviews-report.json",
       ...(options.scope === "all" ? [`user-first-frame.${userFormat}`, "styled-opening-frame-manifest.json", "styled-opening-frame-report.json"] : [])];
     // All generated files are admitted before any live result is replaced.
@@ -205,13 +236,14 @@ async function dispatchCodexTask(args: readonly string[], repoRoot: string): Pro
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = new Map<string, string>();
   for (let i = 0; i < args.length; i += 2) {
-    if (!["--scene-id", "--user-frame", "--scope", "--backend"].includes(args[i]!) || !args[i + 1]) throw new Error("Invalid styled visual option.");
+    if (!["--scene-id", "--user-frame", "--scope", "--backend", "--scene-source"].includes(args[i]!) || !args[i + 1]) throw new Error("Invalid styled visual option.");
     options.set(args[i]!, args[i + 1]!);
   }
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const sceneId = options.get("--scene-id") ?? "";
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(sceneId)) throw new Error("Invalid scene-id.");
   const scope = (options.get("--scope") ?? "all") as StyledVisualOptions["scope"];
+  const sceneSource = visualCapturePaths(options.get("--scene-source")).source;
   let userFramePath = options.get("--user-frame");
   if (!userFramePath) {
     const base = scope === "triviews" ? `artifacts/scenes/${sceneId}/user-first-frame` : `apps/playground/public/scene-plans/${sceneId}/reference-0`;
@@ -223,6 +255,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   }
   if (!userFramePath) throw new Error("A user appearance reference is required.");
   await runStyledVisualAgent({ repoRoot, sceneId, scope, userFramePath,
+    sceneSource,
     backend: (options.get("--backend") ?? process.env.WORLDKIT_CODEX_BACKEND ?? "cloud") as StyledVisualOptions["backend"] });
   process.stdout.write("WORLDKIT_STAGE visual-imagegen-ready\n");
 }

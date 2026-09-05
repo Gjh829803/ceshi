@@ -2005,6 +2005,22 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   接下来仍须用正式 Native Capture/Receipt 准备视觉任务输入并接 styling/Studio，不能
   通过虚构 Canonical map 或提前跑 Case 绕过。CF-16、其余 CF 和最终生产验收仍开放。
 
+- CF16-NATIVE-VISUAL-INPUT（main-agent-only，接 `f11c0548`）：既有单任务视觉入口与两个
+  Host finalizer 支持显式 `--scene-source babylon-native`；省略仍保留原 Canonical 输入路径。
+  Native 读取 Case 绑定的 `inputs/scene-brief.md`、Palette 与正式 `final/capture` Receipt、
+  opening、完整目标三视图，复用正式 Case/Receipt parser、派生 manifest 与既有 Hash closure。
+  不虚构 Canonical implementation map/Runtime Snapshot，不复制根目录白膜别名；输出视觉
+  manifest 直接引用 `final/capture` 原图路径。Receipt 自带真实 ready Snapshot，作为冻结
+  context 提供；原 Capture 不写回。Native 的 tri-views-only 复用已接纳 opening 的确切字节。
+  仍为一个 visual-reconstruction task、旧 opening-first/self-check 顺序、原 retry/timeout
+  及 Host finalizer；未新增语义 Reviewer、质量阈值或改变白膜 productionOutcome。
+  先复现缺少 Canonical map 的错误；视觉入口/closure 两文件 47/47，覆盖真实合同合成
+  Receipt、原图/manifest 哈希、冻结 Brief/Palette、live/staged Receipt 变更、实际输出路径、
+  opening anchor 复用与已有结果保留。最终入口 19/19 重跑、typecheck 与 diff 检查通过；
+  重跑不累加为独立覆盖。不是真实模型图片或完整发布→Studio 验收。
+  Native 场景 launcher/Studio 尚未调用这个显式 source 的 styling 路径，仍须继续接线；
+  CF-16 与其余 CF 保持开放，最后本地 Case 仍等待全部开发及旧链对齐完成。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
