@@ -649,6 +649,54 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it.each((["supported", "sliding"] as const).flatMap((mode) => [
+    { mode, name: "empty", contacts: [], hasAdmittedContact: false },
+    { mode, name: "oblique admitted", contacts: [groundContact([0.6, 0.8, 0])], hasAdmittedContact: true },
+    { mode, name: "wall", contacts: [groundContact([1, 0, 0])], hasAdmittedContact: false },
+    { mode, name: "out of band", contacts: [{ ...groundContact([0.6, 0.8, 0]), distanceMeters: 0.16 }], hasAdmittedContact: false },
+  ]))(
+    "CF03 projects $mode zero-normal support with $name contacts",
+    ({ mode, contacts, hasAdmittedContact }) => {
+      const { driver, port } = createPort();
+      driver.support = { ...supportedSupport([0, 0, 0]), mode };
+      driver.contacts = contacts;
+      const token = createMovementTickTokenV1();
+      const sample = port.beginTick({ token, tick: 1 });
+      expect(sample.support).toMatchObject(hasAdmittedContact
+        ? { mode, normalXYZ: [0.6, 0.8, 0] }
+        : { mode: "unsupported" });
+      port.resolve({ token, proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]) });
+      expect(driver.checkSupportCalls).toBe(1);
+      expect(driver.integrateCalls).toBe(1);
+      expect(driver.lastIntegrateRequest?.supportBeforeIntegrate).toMatchObject({
+        mode: hasAdmittedContact ? mode : "unsupported",
+        averageSurfaceNormalXYZ: hasAdmittedContact ? [0.6, 0.8, 0] : [0, 0, 0],
+      });
+      port.abortTick(token);
+      port.dispose();
+    },
+  );
+
+  it("CF03 discards zero-normal support during authored upward departure", () => {
+    const { driver, port } = createPort();
+    const firstToken = createMovementTickTokenV1();
+    port.beginTick({ token: firstToken, tick: 1 });
+    const resolution = port.resolve({
+      token: firstToken,
+      proposal: proposal(firstToken, 1, [0, 5.5 / 60, 0], [0, 5.5, 0]),
+    });
+    expect(resolution.support.mode).toBe("unsupported");
+    port.commitTick(firstToken);
+    driver.support = supportedSupport([0, 0, 0]);
+    const nextToken = createMovementTickTokenV1();
+    expect(port.beginTick({ token: nextToken, tick: 2 }).support.mode)
+      .toBe("unsupported");
+    expect(driver.checkSupportCalls).toBe(2);
+    expect(driver.integrateCalls).toBe(1);
+    port.abortTick(nextToken);
+    port.dispose();
+  });
+
   it("allows an immediate failed-begin retry but stales it after a newer begin succeeds", () => {
     const immediate = createPort();
     const token = createMovementTickTokenV1();

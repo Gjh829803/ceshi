@@ -87,13 +87,14 @@ function addStaticBox(
   position: Vector3,
   extents: Vector3,
   metadata?: Record<string, unknown>,
+  orientation = Quaternion.Identity(),
 ): void {
   const node = new TransformNode(name, scene);
   node.position.copyFrom(position);
   node.metadata = metadata;
   const shape = new PhysicsShapeBox(
     Vector3.ZeroReadOnly as Vector3,
-    Quaternion.Identity(),
+    orientation,
     extents,
     scene,
   );
@@ -902,6 +903,88 @@ describe("Babylon 9.23.0 / Havok 1.3.14 Character Body conformance", () => {
     expect(flightSample.linearVelocityMetersPerSecondXYZ[1]).toBeGreaterThan(5);
     expect(flightSample.support.mode).toBe("unsupported");
     port.abortTick(flightToken);
+  }, 30_000);
+
+  it.each([0, 5, 50])("CF03 observes native normals through a bounded real Havok jump and landing on a %s degree slope", async (slopeDegrees) => {
+    const { scene } = await realScene();
+    addStaticBox(scene, "cf03-floor", new Vector3(0, -0.1, 0), new Vector3(30, 0.2, 30), undefined,
+      Quaternion.RotationAxis(Vector3.Forward(), slopeDegrees * Math.PI / 180));
+    const checkSupport = vi.spyOn(PhysicsCharacterController.prototype, "checkSupport");
+    const port = createBabylonCharacterBodyPortV1(realPortOptions(scene));
+    disposals.push(() => port.dispose());
+    let didLand = false;
+    let didDescend = false;
+    for (let tick = 1; tick <= 100; tick += 1) {
+      const token = createMovementTickTokenV1();
+      const callsBefore = checkSupport.mock.calls.length;
+      let sample;
+      try {
+        sample = port.beginTick({ token, tick });
+      } catch (error) {
+        const raw = checkSupport.mock.results.at(-1)?.value;
+        throw new Error(`CF03 tick=${tick} rawMode=${raw?.supportedState} rawNormal=${raw?.averageSurfaceNormal.asArray()} cause=${String(error)}`);
+      }
+      expect(checkSupport.mock.calls.length - callsBefore).toBe(1);
+      const raw = checkSupport.mock.results.at(-1)?.value;
+      if (raw.supportedState !== CharacterSupportedState.UNSUPPORTED) {
+        expect(raw.averageSurfaceNormal.length(), `CF03 tick=${tick}`).toBeGreaterThan(0);
+      }
+      if (tick > 1 && didDescend && sample.support.mode !== "unsupported") {
+        didLand = true;
+        port.abortTick(token);
+        break;
+      }
+      const verticalSpeed = tick === 1 ? 5.5 : sample.linearVelocityMetersPerSecondXYZ[1] - 9.81 / 60;
+      didDescend ||= verticalSpeed < 0;
+      port.resolve({ token, proposal: {
+        schemaVersion: 1,
+        token,
+        tick,
+        translationDeltaMetersXYZ: [0, verticalSpeed / 60, 0],
+        proposedLinearVelocityMetersPerSecondXYZ: [0, verticalSpeed, 0],
+        proposedFacingYawRadians: 0,
+        layeredMoves: [],
+      } });
+      expect(checkSupport.mock.calls.length - callsBefore).toBe(1);
+      port.commitTick(token);
+    }
+    expect(didDescend).toBe(true);
+    expect(didLand).toBe(true);
+  }, 30_000);
+
+  it("CF03 projects real Havok sliding with zero normal on a nonpenetrating 86 degree face to unsupported", async () => {
+    const { scene } = await realScene();
+    addStaticBox(scene, "cf03-steep-face", new Vector3(0, -0.1, 0), new Vector3(30, 0.2, 30), undefined,
+      Quaternion.RotationAxis(Vector3.Forward(), 86 * Math.PI / 180));
+    const checkSupport = vi.spyOn(PhysicsCharacterController.prototype, "checkSupport");
+    const port = createBabylonCharacterBodyPortV1({
+      ...realPortOptions(scene),
+      resetState: {
+        positionMetersXYZ: [-0.45, 0.95, 0],
+        linearVelocityMetersPerSecondXYZ: [0, 0, 0],
+      },
+    });
+    disposals.push(() => port.dispose());
+    const token = createMovementTickTokenV1();
+    let sample;
+    let failure;
+    try {
+      sample = port.beginTick({ token, tick: 1 });
+    } catch (error) {
+      failure = error;
+    }
+    expect(checkSupport).toHaveBeenCalledTimes(1);
+    const raw = checkSupport.mock.results[0]?.value;
+    expect(raw.supportedState).toBe(CharacterSupportedState.SLIDING);
+    expect(raw.averageSurfaceNormal.asArray()).toEqual([0, 0, 0]);
+    const controller = checkSupport.mock.contexts[0] as GroundAwarePhysicsCharacterController;
+    const contacts = controller.readCurrentContacts();
+    expect(contacts.length).toBeGreaterThan(0);
+    expect(contacts.every((contact) => contact.distanceMeters >= 0), JSON.stringify(contacts)).toBe(true);
+    expect(contacts.every((contact) => contact.normalXYZ[1] < 0.08)).toBe(true);
+    expect(failure, JSON.stringify(contacts)).toBeUndefined();
+    expect(sample?.support.mode).toBe("unsupported");
+    port.abortTick(token);
   }, 30_000);
 
   it("does not snap an unsupported falling body through unproposed vertical distance", async () => {
