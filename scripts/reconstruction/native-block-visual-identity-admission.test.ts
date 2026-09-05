@@ -43,6 +43,18 @@ function manifest(identityColorHex: string) {
 }
 
 describe("admitNativeBlockVisualIdentityBindingsV1", () => {
+  it("admits an exact empty target set but still rejects undeclared or missing groups", () => {
+    const input = { sceneId: "native-identity-admission", sceneBriefSemanticHash: SCENE_BRIEF_HASH,
+      semanticSilhouetteTargets: [], visualIdentityPalette: { ...palette, targets: [palette.targets[0]] },
+      authoringManifest: { ...manifest("#D9A514"), visualGroups: [] } };
+    expect(admitNativeBlockVisualIdentityBindingsV1(input)).toMatchObject({ outcome: "passed", bindings: [] });
+    expect(admitNativeBlockVisualIdentityBindingsV1({ ...input, authoringManifest: manifest("#D9A514") }))
+      .toMatchObject({ outcome: "rejected", diagnostics: [{ reason: "manifest-case-bijection-mismatch" }] });
+    expect(admitNativeBlockVisualIdentityBindingsV1({ ...input, semanticSilhouetteTargets,
+      visualIdentityPalette: palette }))
+      .toMatchObject({ outcome: "rejected", diagnostics: [{ reason: "manifest-case-bijection-mismatch" }] });
+  });
+
   it("admits Native target-3 only with the old frozen yellow", () => {
     expect(admitNativeBlockVisualIdentityBindingsV1({
       sceneId: "native-identity-admission",

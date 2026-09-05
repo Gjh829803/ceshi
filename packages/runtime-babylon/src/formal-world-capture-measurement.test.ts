@@ -983,8 +983,8 @@ describe("formal world capture projection measurement", () => {
       });
   });
 
-  it("rejects an empty visual inventory", () => {
-    // An empty Package/semantic/live join used to measure as an empty success.
+  it("measures an exact empty semantic join without scanning ordinary world meshes", () => {
+    // The scene still contains real meshes; none acquires a semantic identity by scanning.
     const fixture = createFixture();
     fixture.input = {
       ...fixture.input,
@@ -1000,8 +1000,7 @@ describe("formal world capture projection measurement", () => {
       fixture.engine.dispose();
     });
 
-    expect(() => measureFormalWorldCaptureViewV1(fixture.input))
-      .toThrow(/VISUAL_INVENTORY/);
+    expect(measureFormalWorldCaptureViewV1(fixture.input).targets).toEqual([]);
   });
 
   it.each([

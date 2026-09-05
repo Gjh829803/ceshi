@@ -46,7 +46,6 @@ export default defineBabylonNativeScene({
       idPrefix: "entry-ground",
       shape: "full",
       paletteRole: "ground",
-      visualGroupId: "entry-ground-group",
       colliderGroupId: "entry-ground-collider-group",
       minimumCenterMetersXYZ: [-1, -0.5, 0],
       repeatCountXYZ: [3, 1, 1],
@@ -57,7 +56,6 @@ export default defineBabylonNativeScene({
         id: `central-step-${stepIndex}`,
         shape: "step",
         paletteRole: "route",
-        visualGroupId: "central-ascent-group",
         centerMetersXYZ: [0, 0.125 + stepIndex * 0.25, -1 - stepIndex],
       });
     }
@@ -90,7 +88,7 @@ export default defineBabylonNativeScene({
 });
 ```
 
-This is explicit visual construction with explicit visual groups, explicit Spawn registration, and explicit collider contribution. `session.finalize()` registers selected collider candidates through the Host-provided boundary; generated code never creates Havok objects.
+This is ordinary visual construction without invented identity groups, with explicit Spawn registration and explicit collider contribution. Add visual membership only for actual Case-declared semantic targets. `session.finalize()` registers selected collider candidates through the Host-provided boundary; generated code never creates Havok objects.
 
 ### Block placement
 
@@ -168,11 +166,18 @@ Construct only the forms declared by the current Case's reference, Scene Brief, 
 
 Before detailing a non-Subject semantic visual group, lock its footprint center, long axis, semantic front, and relationship to nearby routes and structures from the uploaded reference and frozen planning views. The opening Camera does not define the object's front. Do not mirror, quarter-turn, front/back reverse, or relocate a target merely because it remains recognizable from one view.
 
-Formal opening depth order is measured from the center of each declared visual group's complete checked bounds, not from its nearest visible face. Extending a midground ridge, cliff, landmark, structure, or background group toward Spawn shifts that measurement and may turn the group into foreground evidence. Ground or traversal repair must use the correct existing ground/route group and preserve every frozen opening region, anchor, and ordered target in `context/case.json.expected.openingComposition`, even when Ground Analysis produced no prior Capture.
+Formal opening depth order is measured from the center of each declared visual group's complete checked bounds, not from its nearest visible face. Extending a midground ridge, cliff, landmark, structure, or background group toward Spawn shifts that measurement and may turn the group into foreground evidence. Ground or traversal repair must use the actual support Blocks and explicit Collider Groups without inventing visual membership, and preserve every frozen opening region, anchor, and ordered target in `context/case.json.expected.openingComposition`, even when Ground Analysis produced no prior Capture.
 
 For an Opening repair, treat the target's four projected region edges, projected anchor and depth order as one coupled constraint envelope. Group all diagnostics for the same `targetId`, compare the complete frozen expectation with the complete prior `opening-observation.json`, and preserve axes already within tolerance. Values clipped at `0` or `10000` identify geometry extending beyond the frame rather than a harmless exact edge. Correct vertical clipping with a coordinated near-camera footprint/depth and height change; do not merely move the crown and trade the opposite edge or anchor into failure. Widening at a substantially nearer depth can also move the vertical projection and anchor, so add mass at comparable depth and height unless the frozen target requires a depth change.
 
 ## Semantic JSON
+
+Ordinary ground support/exploration is an acceptance obligation, not an identity
+target. Do not create entry-ground/remote-ground visual groups or an extra floor
+Collider unless the actual frozen Case explicitly requires them. With no declared
+semantic silhouette targets, the required `visualGroups` array is exactly `[]`;
+ordinary Block colors, full scene geometry, explicit Collider selection, Spawn
+and authored exploration remain required. Never substitute labels for those checks.
 
 Required `groundExploration` follows `context/case.json.expected.groundConnectivity.mode`.
 For `case-defined`, it is exactly `{ "mode": "case-defined" }`; the frozen Case's
@@ -232,7 +237,7 @@ Do not bind unrelated background/support to a target to satisfy grouping. Explic
 are separate and never inferred from visual membership. This reproduces the old distinction between
 ordinary functional presets and landmark identity colors without restoring the old Compiler.
 
-`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, `visualGroups`, required `openingCamera`, and required `groundExploration`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part from the Scene Brief or planning image, and never use a `subject` semantic class. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind that evidence to a Block in the appropriate existing semantic visual group instead. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. Apart from the closed openingCamera numeric intent and groundExploration validation coordinates, it contains no Subject, Spawn ownership, Camera objects, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
+`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, `visualGroups`, required `openingCamera`, and required `groundExploration`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part from the Scene Brief or planning image, and never use a `subject` semantic class. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind support to explicitly selected Blocks/Collider Groups; ordinary ground may have no visual group. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. Apart from the closed openingCamera numeric intent and groundExploration validation coordinates, it contains no Subject, Spawn ownership, Camera objects, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
 
 `native-resources.json` is plain JSON data with exactly `kind`, `schemaVersion`, and `resourceRefs: []`. Non-empty visual refs remain outside the current production reconstruction lane until the Host implements and freezes their Package resource closure. The model cannot mint locks, publication receipts, admission evidence, or future support by writing a well-formed ref.
 

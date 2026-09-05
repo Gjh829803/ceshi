@@ -61,31 +61,8 @@ const EVIDENCE_PROFILE_REF_BY_DIMENSION = Object.freeze({
   topology: "worldkit://evidence-profile/native-block-topology@1",
 } as const);
 
-const BASELINE_ENTRY_GROUND = Object.freeze({
-  acceptanceTargetRef: "worldkit://acceptance-target/entry-ground@1",
-  compositionTargetRef: "worldkit://composition-target/entry-ground@1",
-  visualGroupId: "entry-ground-group",
-  topologyNodeId: "entry-ground",
-  semanticLayerId: "foreground",
-  viewRequirements: Object.freeze([
-    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
-    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
-    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
-  ]),
-});
-
-const BASELINE_REMOTE_GROUND = Object.freeze({
-  acceptanceTargetRef: "worldkit://acceptance-target/remote-ground@1",
-  compositionTargetRef: "worldkit://composition-target/remote-ground@1",
-  visualGroupId: "remote-ground-group",
-  topologyNodeId: "remote-ground",
-  semanticLayerId: "middle",
-  viewRequirements: Object.freeze([
-    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
-    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
-    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
-  ]),
-});
+// A ground acceptance obligation is not a visual identity or a geographic partition.
+const BASELINE_GROUND_ACCEPTANCE_TARGET_REF = "worldkit://acceptance-target/ground@1";
 
 const NATIVE_PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v4";
 const SHA256_HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -168,10 +145,6 @@ const NATIVE_BLOCK_PALETTE_SEMANTICS = Object.freeze([
   "visual-target-1-subject",
 ] as const);
 
-// The Planner gives generic ground no identity mask. Keep its bindings for
-// presence/support/traversal, but never compare Host-invented screen bands as
-// if they were reference-image truth in the default report-only profile.
-const BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS = 10_000;
 // Match the historical 0.005% per-target palette presence floor. A smaller or
 // disconnected proposal is still a valid Planner success, but it is not a
 // reliable pixel baseline and is omitted instead of receiving invented bounds.
@@ -187,16 +160,6 @@ function sceneBriefSemanticHash(
     throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
   }
   return brief.sceneBriefHash as Sha256HashV1;
-}
-
-function isBaselineGroundAcceptanceTargetRef(targetRef: string): boolean {
-  return targetRef === BASELINE_ENTRY_GROUND.acceptanceTargetRef ||
-    targetRef === BASELINE_REMOTE_GROUND.acceptanceTargetRef;
-}
-
-function isBaselineGroundCompositionTargetRef(targetRef: string): boolean {
-  return targetRef === BASELINE_ENTRY_GROUND.compositionTargetRef ||
-    targetRef === BASELINE_REMOTE_GROUND.compositionTargetRef;
 }
 
 interface NativeWorldBaselineVisualTargetV1 {
@@ -410,11 +373,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     input.entryWhiteboxTargetPath,
     palette,
   );
-  const visualTargets = sortBy([
-    BASELINE_ENTRY_GROUND,
-    BASELINE_REMOTE_GROUND,
-    ...landmarkTargets,
-  ], ({ acceptanceTargetRef }) => acceptanceTargetRef);
+  const visualTargets = sortBy(landmarkTargets, ({ acceptanceTargetRef }) => acceptanceTargetRef);
   const openingTargets = visualTargets.flatMap((target) => {
     const requirement = target.viewRequirements[0]!;
     return requirement.mode === "reference-projection-required"
@@ -429,11 +388,10 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   const orderedTargetRefs = sortBy(openingTargets, ({ requirement }) =>
     -requirement.normalizedCenter.yBasisPoints)
     .map(({ target }) => target.compositionTargetRef);
-  const entryAcceptanceTargetRef = BASELINE_ENTRY_GROUND.acceptanceTargetRef;
-  const remoteAcceptanceTargetRef = BASELINE_REMOTE_GROUND.acceptanceTargetRef;
+  const groundAcceptanceTargetRef = BASELINE_GROUND_ACCEPTANCE_TARGET_REF;
   const expected = Object.freeze({
     topology: Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       nodeIds: sortBy(visualTargets.map(({ topologyNodeId }) => topologyNodeId)),
       relations: Object.freeze([]),
       layerIds: Object.freeze(semanticLayerIds),
@@ -445,7 +403,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
         viewRequirements: target.viewRequirements,
       }))),
     openingComposition: Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       targetRefs: Object.freeze(targetRefs),
       regions: Object.freeze(sortBy(openingTargets.map(({ target, requirement }) => Object.freeze({
         targetRef: target.compositionTargetRef,
@@ -458,7 +416,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       orderedTargetRefs: Object.freeze(orderedTargetRefs),
     }),
     spawnSupport: Object.freeze({
-      acceptanceTargetRef: entryAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       spawnMarkerId: "entry-spawn",
       supportColliderId: "collider-entry-ground",
       expectedMedium: "ground" as const,
@@ -470,16 +428,9 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     }),
     colliders: Object.freeze(sortBy([
       Object.freeze({
-        acceptanceTargetRef: entryAcceptanceTargetRef,
+        acceptanceTargetRef: groundAcceptanceTargetRef,
         contributionId: "collider-entry-ground",
         colliderId: "collider-entry-ground",
-        role: "ground" as const,
-        requiresOverlay: true,
-      }),
-      Object.freeze({
-        acceptanceTargetRef: remoteAcceptanceTargetRef,
-        contributionId: "collider-remote-ground",
-        colliderId: "collider-remote-ground",
         role: "ground" as const,
         requiresOverlay: true,
       }),
@@ -501,7 +452,7 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
     }),
     criticalTraversalChecks: Object.freeze([]),
     deterministicBuild: Object.freeze({
-      acceptanceTargetRef: remoteAcceptanceTargetRef,
+      acceptanceTargetRef: groundAcceptanceTargetRef,
       requiresCandidateReplay: true as const,
       requiresWorldPackageIdentityAgreement: true as const,
       requiresBuildIdentityAgreement: true as const,
@@ -1035,14 +986,14 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     semanticSilhouetteTargets?: readonly Readonly<{
       acceptanceTargetRef: string;
     }>[];
-  }).semanticSilhouetteTargets ?? [];
+  }).semanticSilhouetteTargets;
   const opening = (proposal.expected as {
     openingComposition?: Readonly<{
       regions: readonly Readonly<{ targetRef: string }>[];
       anchors: readonly Readonly<{ targetRef: string }>[];
     }>;
   }).openingComposition;
-  if (silhouetteTargets.length === 0 || opening === undefined) {
+  if (!Array.isArray(silhouetteTargets) || opening === undefined) {
     throw new TypeError("NATIVE_WORLD_CASE_PROPOSAL_INVALID");
   }
   const evaluationProfile = parseWorldReconstructionEvaluationProfileV1({
@@ -1056,33 +1007,18 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     thresholds: {
       semanticSilhouetteTargets: silhouetteTargets.map(({ acceptanceTargetRef }) => ({
         acceptanceTargetRef,
-        maximumBoundsDriftBasisPoints:
-          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
-            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-            : 1600,
-        maximumCenterDriftBasisPoints:
-          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
-            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-            : 1000,
-        maximumCoverageDriftBasisPoints:
-          isBaselineGroundAcceptanceTargetRef(acceptanceTargetRef)
-            ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-            : 1800,
+        maximumBoundsDriftBasisPoints: 1600,
+        maximumCenterDriftBasisPoints: 1000,
+        maximumCoverageDriftBasisPoints: 1800,
       })),
       openingComposition: {
         regions: opening.regions.map(({ targetRef }) => ({
           targetRef,
-          maximumDriftBasisPoints:
-            isBaselineGroundCompositionTargetRef(targetRef)
-              ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-              : 1600,
+          maximumDriftBasisPoints: 1600,
         })),
         anchors: opening.anchors.map(({ targetRef }) => ({
           targetRef,
-          maximumDriftBasisPoints:
-            isBaselineGroundCompositionTargetRef(targetRef)
-              ? BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS
-              : 1000,
+          maximumDriftBasisPoints: 1000,
         })),
       },
       spawnSupport: {

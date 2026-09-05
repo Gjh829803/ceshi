@@ -5,14 +5,13 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
-import { sha256Bytes, sha256CanonicalJson, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
+import { sha256Bytes, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { hashFormalWorldCaptureIntentV1, parseFormalWorldCaptureIntentV1, type NativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
-import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
 import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
 import { parseNativeSceneWorldBoundsPolicyV1, type NativeSceneWorldBoundsPolicyV1 } from "../native-scene/world-bounds-policy.js";
 import assert from "node:assert/strict";
 
-import { prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
+import { decideNativeBlockReconstructionRouteV1, prepareNativeBlockGenerationTaskV1 } from "./generation-request.js";
 import { runNativeBlockGenerationV1 } from "./generation-runner.js";
 
 // Deterministic test fixture: stubbed generation, real Host Check/Ground/Package.
@@ -240,6 +239,7 @@ export const EXTRA_VISUAL_GROUP_AUTHORING = {
 
 type NativeBlockPackageAttemptFixtureOptionsV1 = Readonly<{
   withoutScriptedTraversal?: boolean;
+  withoutSemanticTargets?: boolean;
   sceneSource?: string;
   authoring?: typeof AUTHORING | typeof EXTRA_VISUAL_GROUP_AUTHORING;
   omitAdvisory?: boolean;
@@ -264,8 +264,11 @@ export async function createNativeBlockPackageAttemptFixtureV1(
 }
 
 async function prepareFixture(root: string, options: NativeBlockPackageAttemptFixtureOptionsV1) {
-  const sceneSource = options.sceneSource ?? SCENE_SOURCE;
+  const sceneSource = options.withoutSemanticTargets === true
+    ? (options.sceneSource ?? SCENE_SOURCE).replace(/, visualGroupId: "[^"]+"/g, "")
+    : options.sceneSource ?? SCENE_SOURCE;
   const authoring = { ...(options.authoring ?? AUTHORING),
+    ...(options.withoutSemanticTargets === true ? { visualGroups: [] } : {}),
     groundExploration: options.groundExploration ?? (options.authoring ?? AUTHORING).groundExploration };
   const caseRoot = path.join(root, "case");
   await cp(CASE_SOURCE, caseRoot, { recursive: true });
@@ -307,10 +310,26 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
     const intentPath = path.join(caseRoot, caseValue.formalCaptureIntentRef);
     const intent = parseFormalWorldCaptureIntentV1({
       ...JSON.parse(await readFile(intentPath, "utf8")),
+      ...(options.withoutSemanticTargets === true ? { semanticCaptureTargetBindings: [] } : {}),
       topologyRelations: [], checkpointSpatialCriteria: [],
     });
     caseValue.formalCaptureIntentHash = hashFormalWorldCaptureIntentV1(intent);
     await writeFile(intentPath, stringifyCanonicalJson(intent));
+  }
+  if (options.withoutSemanticTargets === true) {
+    assert.equal(options.withoutScriptedTraversal, true);
+    assert.equal(options.target3IdentityColorHex, undefined);
+    caseValue.expected.semanticSilhouetteTargets = [];
+    caseValue.expected.topology.nodeIds = [];
+    caseValue.expected.topology.layerIds = [];
+    Object.assign(caseValue.expected.openingComposition, {
+      targetRefs: [], regions: [], anchors: [], orderedTargetRefs: [],
+    });
+    profileValue.thresholds.semanticSilhouetteTargets = [];
+    profileValue.thresholds.openingComposition = { regions: [], anchors: [] };
+    caseValue.evaluationProfileHash = hashWorldReconstructionEvaluationProfileV1(
+      parseWorldReconstructionEvaluationProfileV1(profileValue),
+    );
   }
   const nativeTarget3Ref =
     "worldkit://acceptance-target/visual-target-3@1";
@@ -442,16 +461,10 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
   ]);
   const reconstructionCase = parseWorldReconstructionCaseV1(caseValue);
   const profile = parseWorldReconstructionEvaluationProfileV1(profileValue);
-  const routeDecision = decideSceneAuthoringRouteV1({
-    id: `${reconstructionCase.id}-route`,
-    sceneBriefRef: reconstructionCase.sceneBriefRef,
-    sceneBriefHash: reconstructionCase.sceneBriefHash,
-    trustProfileRef: "worldkit://trust-profile/trusted-local@1",
-    trustProfileHash: sha256CanonicalJson({ id: "trusted-local", version: 1 }) as Sha256HashV1,
+  const routeDecision = decideNativeBlockReconstructionRouteV1(reconstructionCase, {
     requiredCapabilityRefs: [],
     requestedSourceKind: "babylon-native",
     nativeTrustAdmitted: true,
-    referenceDrivenDistinctiveSilhouette: true,
   });
   const runDirectoryPath = path.join(caseRoot, "runs", "test");
   await mkdir(path.dirname(runDirectoryPath), { recursive: true });

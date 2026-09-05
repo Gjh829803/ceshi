@@ -396,8 +396,6 @@ describe("trusted Native world Case preparation", () => {
     expect(proposal.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
     )).toEqual([
-      "worldkit://acceptance-target/entry-ground@1",
-      "worldkit://acceptance-target/remote-ground@1",
       "worldkit://acceptance-target/visual-target-2@1",
     ]);
     expect(proposal.expected.semanticSilhouetteTargets.find(
@@ -416,16 +414,9 @@ describe("trusted Native world Case preparation", () => {
     expect(proposal.expected.colliders).toEqual([
       expect.objectContaining({
         acceptanceTargetRef:
-          "worldkit://acceptance-target/entry-ground@1",
+          "worldkit://acceptance-target/ground@1",
         contributionId: "collider-entry-ground",
         colliderId: "collider-entry-ground",
-        role: "ground",
-      }),
-      expect.objectContaining({
-        acceptanceTargetRef:
-          "worldkit://acceptance-target/remote-ground@1",
-        contributionId: "collider-remote-ground",
-        colliderId: "collider-remote-ground",
         role: "ground",
       }),
       {
@@ -438,9 +429,8 @@ describe("trusted Native world Case preparation", () => {
       },
     ]);
     expect(proposal.formalCaptureIntent.semanticCaptureTargetBindings)
-      .toHaveLength(3);
+      .toHaveLength(1);
     expect(proposal.expected.topology.layerIds).toEqual([
-      "foreground",
       "middle",
     ]);
     expect(proposal.expected.topology.layerIds).toEqual(
@@ -483,20 +473,6 @@ describe("trusted Native world Case preparation", () => {
       requiredTraversalBands: [],
     });
     expect(evaluationProfile.thresholds.semanticSilhouetteTargets).toEqual([
-      {
-        acceptanceTargetRef:
-          "worldkit://acceptance-target/entry-ground@1",
-        maximumBoundsDriftBasisPoints: 10_000,
-        maximumCenterDriftBasisPoints: 10_000,
-        maximumCoverageDriftBasisPoints: 10_000,
-      },
-      {
-        acceptanceTargetRef:
-          "worldkit://acceptance-target/remote-ground@1",
-        maximumBoundsDriftBasisPoints: 10_000,
-        maximumCenterDriftBasisPoints: 10_000,
-        maximumCoverageDriftBasisPoints: 10_000,
-      },
       {
         acceptanceTargetRef:
           "worldkit://acceptance-target/visual-target-2@1",
@@ -572,6 +548,37 @@ describe("trusted Native world Case preparation", () => {
       plannerSelfCheckPath: openReceiptPath,
       outputCaseRoot: path.join(root, "open-prepared-case"),
     })).rejects.toThrow("NATIVE_WORLD_PLANNER_RECEIPT_INVALID");
+  });
+
+  it("prepares a Subject-only palette without inventing ground visual targets or a remote Collider", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "native-world-subject-only-"));
+    temporaryRoots.push(root);
+    const sceneId = "subject-only-ground";
+    const briefPath = path.join(root, "scene-brief.md");
+    const palettePath = path.join(root, "palette.json");
+    const imagePath = path.join(root, "entry.png");
+    await writeFile(briefPath, VALID_SCENE_BRIEF);
+    await writeFile(palettePath, nativeVisualIdentityPaletteText({ sceneId,
+      sceneBriefHash: sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF)), targetCount: 1 }));
+    await sharp({ create: { width: 100, height: 100, channels: 4, background: "#E85D5D" } }).png().toFile(imagePath);
+    const proposal = await deriveNativeWorldBaselineProposalV1({ sceneId,
+      sceneBriefSemanticHash: sceneBriefSemanticHash(new TextEncoder().encode(VALID_SCENE_BRIEF)),
+      visualIdentityPalettePath: palettePath, entryWhiteboxTargetPath: imagePath });
+    const proposalPath = path.join(root, "proposal.json");
+    await writeFile(proposalPath, JSON.stringify(proposal));
+    const prepared = await prepareWithPassedPlannerReceipt({ repositoryRoot: process.cwd(), sceneId,
+      proposalPath, sceneBriefPath: briefPath, referenceImagePaths: [imagePath],
+      planningImagePaths: { worldPlanPath: imagePath, entryWhiteboxTargetPath: imagePath },
+      visualIdentityPalettePath: palettePath, outputCaseRoot: path.join(root, "prepared") });
+    const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(await readFile(prepared.casePath, "utf8")));
+    const profile = parseWorldReconstructionEvaluationProfileV1(JSON.parse(await readFile(prepared.evaluationProfilePath, "utf8")));
+    expect(reconstructionCase.expected.semanticSilhouetteTargets).toEqual([]);
+    expect(reconstructionCase.expected.topology.nodeIds).toEqual([]);
+    expect(reconstructionCase.expected.colliders.map(row => row.colliderId)).toEqual(["collider-entry-ground"]);
+    expect(reconstructionCase.acceptanceTargetRefs).toEqual(["worldkit://acceptance-target/ground@1"]);
+    expect(profile.thresholds.semanticSilhouetteTargets).toEqual([]);
+    expect(reconstructionCase.expected.groundConnectivity).toEqual({ mode: "source-authored",
+      requireSingleReachableComponent: true, requiredTraversalBands: [] });
   });
 
   it("rejects a pass check whose acceptance target is only a blocker", async () => {
@@ -1028,8 +1035,6 @@ describe("trusted Native world Case preparation", () => {
     expect(proposal.expected.semanticSilhouetteTargets.map(
       ({ acceptanceTargetRef }) => acceptanceTargetRef,
     )).toEqual([
-      "worldkit://acceptance-target/entry-ground@1",
-      "worldkit://acceptance-target/remote-ground@1",
       "worldkit://acceptance-target/visual-target-2@1",
     ]);
     expect(proposal.expected.semanticSilhouetteTargets.find(

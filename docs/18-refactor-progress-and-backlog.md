@@ -1526,6 +1526,23 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   共享夹具抽取后，原实际范围 Package 回归 1/1、新无脚本冻结输入回归 1/1、typecheck exit 0。
   本次已补齐 R5 空脚本的实际 Capture 生命周期证据；CF-11/21 父任务仍 open：两个 generic
   ground groups、完整要素/分区量测、严格 authored route 编译及真实参考效果尚未闭合。
+- CF-11/R6 删除模板地面视觉身份（2026-09-05，`824917c9` 后候选）：普通 Case preparation
+  已删除 `entry-ground-group`、`remote-ground-group` 和必需的第二个远端地面 Collider，
+  不再为这些虚构目标生成阈值。保留唯一 ground 验收义务、真实 Spawn 支撑 Collider、
+  source-authored middle/remote anchors、真实宽度通行带和单连通组件检查；不跳过 Ground。
+  只有实际非 Subject 身份地标进入语义目标。无地标输入以显式空集合贯穿 Case/Profile/
+  Intent/metadata/live registry；Host 身份检查和 Capture 保留非空目标的精确一一绑定、
+  缺组/额外组拒绝。空语义/拓扑期望记 incomplete，不假报严格成功，不反转普通发布。
+  Builder Skill、输出合同、示例与冻结副本同步移除地面视觉分组暗示；普通方块仍保持
+  显式 Collider 选择，不反扫 Mesh。没有新增模型任务、修复轮次或生产质量门禁。
+  已有 12 个直接相关文件 316/316 通过；随后新增 Host 空集合正负向回归 3/3 通过、
+  typecheck exit 0（测试集合重叠，不相加）。无脚本夹具有/无语义目标冻结输入回归 2/2
+  通过；Native Skill 全文件检查中 58/59 通过（包含新 portable Builder 空组实源码
+  回归与生成副本 drift），唯一旧文案断言更新为当前显式身份合同后定向 1/1 通过。
+  live/frozen Skill、输出合同、checker 三组逐字节比较通过，diff check 通过。
+  实际无组 Check/Ground/Package/Browser Capture 尚待冻结提交后执行；未启动新 054
+  模型 Case、全仓 gates 或独立最终审查。完整要素/分区覆盖、严格 authored route
+  验收及真实参考效果继续由 CF-11/13/21 承接，父任务不关闭。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

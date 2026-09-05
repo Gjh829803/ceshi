@@ -732,6 +732,15 @@ describe("FormalWorldCaptureIntentV1", () => {
     })).toThrowError("FORMAL_WORLD_CAPTURE_INTENT_INVALID");
   });
 
+  it("accepts no identity targets only when their dependent criteria are also empty", () => {
+    const intent = formalCaptureIntentValue();
+    expect(parseFormalWorldCaptureIntentV1({ ...intent, semanticCaptureTargetBindings: [],
+      topologyRelations: [], checkpointSpatialCriteria: [],
+    }).semanticCaptureTargetBindings).toEqual([]);
+    expect(() => parseFormalWorldCaptureIntentV1({ ...intent, semanticCaptureTargetBindings: [],
+    })).toThrow();
+  });
+
   it("requires target identities and unique canonical collection order", () => {
     const intent = formalCaptureIntentValue();
     for (const invalid of [{

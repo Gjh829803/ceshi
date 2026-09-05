@@ -422,6 +422,20 @@ describe("evaluateWorldReconstructionV1", () => {
     );
   });
 
+  it("does not claim complete semantic or topology evidence when no targets are declared", () => {
+    const result = evaluateBound({
+      case: draft => {
+        draft.expected.semanticSilhouetteTargets = [];
+        draft.expected.topology.nodeIds = [];
+        draft.expected.topology.layerIds = [];
+        draft.expected.topology.relations = [];
+      },
+      profile: draft => { draft.thresholds.semanticSilhouetteTargets = []; },
+    });
+    expect(result.dimensions.find(row => row.dimensionId === "semantic-silhouette")?.status).toBe("incomplete");
+    expect(result.dimensions.find(row => row.dimensionId === "topology")?.status).toBe("incomplete");
+  });
+
   it("reports undeclared traversal as incomplete instead of a vacuous strict pass", () => {
     const result = evaluateBound({
       case(draft) {

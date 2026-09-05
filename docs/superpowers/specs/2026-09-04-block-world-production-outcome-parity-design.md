@@ -416,6 +416,28 @@ override. Policy changes fail existing stale-owner checks; Source changes natura
 change checked extents and Package identity. There is no compatibility input alias,
 new model task, extra repair cycle or new ordinary production veto.
 
+### CF-11 ground obligations are not visual identities
+
+Ordinary production must not create `entry-ground-group`/`remote-ground-group`
+semantic targets or require a second floor Collider merely to represent a template.
+The single `ground` acceptance obligation binds the required Spawn support Collider
+and the existing authored Ground exploration checks, not a visual group, material,
+topology node, scene feature or fixed geographic partition. Builder selects actual
+floor Blocks/Collider Groups explicitly and may contribute further required surfaces.
+All authored middle/remote anchors, honest-width bands, exact Spawn support and
+the single-component policy stay mandatory. Full Brief geography remains required.
+
+Only non-Subject identity targets selected from the actual palette become semantic
+silhouette/Intent bindings. A Subject-only palette therefore has an explicit empty
+target set, not a fabricated landmark. Required Case/Profile/Intent/metadata/live
+registry collections preserve exact empty-set equality; missing fields, undeclared
+groups and missing observations for declared targets remain invalid. Capture still
+renders the entire actual world and SDK Subject, all four images, live explicit
+Collider overlay and Spawn support. Empty semantic/topology obligations report
+incomplete evidence, not complete-world quality or strict acceptance. Ordinary
+publication and repair budgets are unchanged. Complete scene-feature/region
+coverage remains CF-11/21 and is not implied by removing the template.
+
 ### CF-11 ordinary Capture has no invented traversal script
 
 Ordinary baseline preparation does not invent a straight 12m route, 300 Tick

@@ -112,7 +112,6 @@ export function admitNativeBlockVisualIdentityBindingsV1(input: Readonly<{
     ({ visualGroupId }) => visualGroupId,
   );
   if (
-    input.semanticSilhouetteTargets.length === 0 ||
     caseTargetRefs.some((value) => typeof value !== "string" || value.length === 0) ||
     caseGroupIds.some((value) => typeof value !== "string" || value.length === 0) ||
     new Set(caseTargetRefs).size !== caseTargetRefs.length ||

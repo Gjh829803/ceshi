@@ -319,6 +319,25 @@ claim reference-image quality parity or run fresh terminal playability. It stays
 outside default Vitest and retains inspection evidence in an isolated temporary
 directory; the production fixture workspace is cleaned on exit.
 
+#### CF-11/R6 remove synthetic ground visual targets
+
+Main-agent-only/sequential after R3/R5; owner is Case preparation, with exact-set
+consumers in validation, Native semantic binding and Capture. Delete the two
+generic ground visual rows, remote floor requirement and ground-specific drift
+threshold branches. One ground acceptance obligation retains required Spawn support
+and all source-authored exploration; no new visual or Runtime authority is added.
+Only palette identity landmarks form visual targets. Subject-only scenes preserve
+explicit empty semantic/topology sets through Profile, Case, Intent, Native Package,
+live Capture and Evaluation; all declared-target bijections still apply.
+
+Evidence: producer RED/GREEN with landmark and Subject-only inputs; nonempty target
+and missing/extra group adversarial regressions; actual ungrouped floor
+Check/Ground/Package/Capture with SDK Subject and Collider observation; missing
+semantic/topology proof remains incomplete without vetoing ordinary production.
+Live/frozen Skill/checker copies and docs/18 must match. No new model stage,
+source-repair cycle, metric threshold or strict acceptance relaxation. CF-11/21
+complete feature coverage and reference-effect evidence remain open.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

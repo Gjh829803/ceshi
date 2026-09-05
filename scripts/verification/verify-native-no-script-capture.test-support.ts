@@ -21,12 +21,17 @@ import { evaluateNativeBlockAttemptV1 } from "../reconstruction/evaluate.js";
 // Reuse the Package-owner fixture: generation is synthetic, Host Check/Ground/Package,
 // Babylon/Havok Capture, observation parsing and Evaluation are actual implementations.
 const json = async (file: string): Promise<unknown> => JSON.parse(await readFile(file, "utf8"));
+const arguments_ = process.argv.slice(2);
+assert(arguments_.length === 0 || (arguments_.length === 1 && arguments_[0] === "--without-semantic-targets"),
+  "Usage: verify:native-no-script-capture [--without-semantic-targets]");
+const withoutSemanticTargets = arguments_.length === 1;
 const evidenceRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-no-script-capture-evidence-"));
 let fixture: Awaited<ReturnType<typeof createNativeBlockPackageAttemptFixtureV1>> | undefined;
 try {
   console.log("native-no-script-capture: prepare deterministic fixture");
   fixture = await createNativeBlockPackageAttemptFixtureV1({
     withoutScriptedTraversal: true,
+    withoutSemanticTargets,
     worldBoundsPolicy: { mode: "checked-block-layout" },
     groundExploration: {
       mode: "source-authored",
@@ -45,6 +50,10 @@ try {
     casePath: fixture.casePath, attemptDirectoryPath: fixture.attemptDirectoryPath,
     outputDirectoryPath: fixture.outputDirectoryPath });
   assert.equal(packaged.groundAnalysisReport.admissionOutcome, "passed");
+  if (withoutSemanticTargets) {
+    assert.deepEqual(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata?.visualGroups, []);
+    assert(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata!.blocks.length > 0);
+  }
   const caseRoot = path.dirname(fixture.casePath);
   const request = await materializeFormalWorldCaptureRequestV1({ outputMode: "create",
     casePath: fixture.casePath, evaluationProfilePath: path.join(caseRoot, "evaluation-profile.json"),
@@ -54,6 +63,7 @@ try {
     formalCaptureIntent: parseFormalWorldCaptureIntentV1(await json(path.join(caseRoot, fixture.reconstructionCase.formalCaptureIntentRef))),
   });
   assert.deepEqual(request.request.scriptedTraversal.checks, []);
+  if (withoutSemanticTargets) assert.deepEqual(request.request.semanticCaptureMap.bindings, []);
   const captureRoot = path.join(fixture.attemptDirectoryPath, "capture");
   console.log("native-no-script-capture: actual Browser Capture");
   const capture = await captureProductionHostedWorldPackageV1({
@@ -81,6 +91,14 @@ try {
     },
   });
   assert.equal(evaluation.evaluation.dimensions.find(row => row.dimensionId === "critical-traversal")?.status, "incomplete");
+  if (withoutSemanticTargets) {
+    for (const dimensionId of ["semantic-silhouette", "topology"]) {
+      assert.equal(evaluation.evaluation.dimensions.find(row => row.dimensionId === dimensionId)?.status, "incomplete");
+    }
+    const opening = parseFormalOpeningObservationV1(await json(path.join(captureRoot, "opening-observation.json")));
+    assert.deepEqual(opening.visualGroups, []);
+    assert(opening.controlledSubjectProjection.coverageBasisPoints > 0);
+  }
   assert.deepEqual(await readFile(fixture.casePath), caseBytes);
   assert.deepEqual(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json")), requestBytes);
   const images = [];
@@ -95,7 +113,8 @@ try {
   await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,
-    cleanupOutcomes: capture.cleanupOutcomes, traversalChecks: 0, strictTraversalStatus: "incomplete", images, evidenceRoot };
+    cleanupOutcomes: capture.cleanupOutcomes, traversalChecks: 0, strictTraversalStatus: "incomplete",
+    semanticTargetCount: request.request.semanticCaptureMap.bindings.length, images, evidenceRoot };
   await writeFile(path.join(evidenceRoot, "evidence.json"), stringifyCanonicalJson(result), { flag: "wx" });
   console.log(JSON.stringify(result));
 } finally {

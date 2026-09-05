@@ -52,7 +52,7 @@ async function expectVisualReviewRejectedBeforeGround(
 }
 
 describe("packageNativeBlockAttemptV1", () => {
-  it("freezes an explicit no-script fixture before generation without changing its actual ground anchors", async () => {
+  it.each([false, true])("freezes a no-script fixture with empty semantic targets=%s before generation", async (withoutSemanticTargets) => {
     const groundExploration: NativeBlockGroundExplorationV1 = {
       mode: "source-authored",
       requiredTargets: [
@@ -62,7 +62,7 @@ describe("packageNativeBlockAttemptV1", () => {
       requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]] }],
     };
-    const fixture = await completedAttempt({ withoutScriptedTraversal: true, groundExploration });
+    const fixture = await completedAttempt({ withoutScriptedTraversal: true, withoutSemanticTargets, groundExploration });
     expect(fixture.reconstructionCase.expected.criticalTraversalChecks).toEqual([]);
     expect(fixture.reconstructionCase.expected.topology.relations).toEqual([]);
     const intent = parseFormalWorldCaptureIntentV1(JSON.parse(await readFile(path.join(
@@ -74,6 +74,12 @@ describe("packageNativeBlockAttemptV1", () => {
       fixture.attemptDirectoryPath, "source/native-block-authoring.json",
     ), "utf8"));
     expect(authoring.groundExploration).toEqual(groundExploration);
+    if (withoutSemanticTargets) {
+      expect(authoring.visualGroups).toEqual([]);
+      expect(intent.semanticCaptureTargetBindings).toEqual([]);
+      expect(await readFile(path.join(fixture.attemptDirectoryPath, "source/scene.ts"), "utf8"))
+        .not.toContain("visualGroupId:");
+    }
   }, 30_000);
 
   it("exposes the single materialized Profile identity authority through the Host entrypoint", () => {

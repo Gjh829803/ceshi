@@ -579,7 +579,8 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(outputContract).toContain("@whitebox-world/native-babylon");
     expect(outputContract).toContain("@whitebox-world/native-babylon-block-profile");
     expect(outputContract).toContain("deterministic seeded construction");
-    expect(outputContract).toContain("explicit visual groups");
+    expect(outputContract).toContain("Add visual membership only for actual Case-declared semantic targets");
+    expect(outputContract).not.toContain('visualGroupId: "entry-ground-group"');
     expect(outputContract).toContain("explicit Spawn registration");
     expect(outputContract).toContain("explicit collider contribution");
     expect(outputContract).toContain(
@@ -882,6 +883,26 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       expect.objectContaining({ path: "scene.ts" }),
     ]);
     expect(first.stdout).toBe(second.stdout);
+  });
+
+  it("accepts actual ungrouped Blocks when the Case declares no semantic targets", async () => {
+    const workspace = await createVisualReviewWorkspace();
+    const casePath = path.join(workspace, "context/case.json");
+    const manifestPath = path.join(workspace, "native-block-authoring.json");
+    const sourcePath = path.join(workspace, "scene.ts");
+    const caseValue = JSON.parse(await readFile(casePath, "utf8"));
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    caseValue.expected.semanticSilhouetteTargets = [];
+    manifest.visualGroups = [];
+    await Promise.all([
+      writeFile(casePath, JSON.stringify(caseValue)),
+      writeFile(manifestPath, JSON.stringify(manifest)),
+      writeFile(sourcePath, (await readFile(sourcePath, "utf8"))
+        .replace(/^\s*visualGroupId: "(?:upper-platform|central-gate)",\n/gm, "\n")),
+    ]);
+
+    const result = await runSelfCheck(workspace);
+    expect(result).toMatchObject({ exitCode: 0, stderr: "", report: { ok: true, diagnosticCodes: [] } });
   });
 
   it("reports strict indexed tuple errors before delivery and rechecks repaired source", async () => {

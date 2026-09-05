@@ -1926,14 +1926,13 @@ export function parseFormalWorldCaptureIntentV1(
     ({ acceptanceTargetRef }) => acceptanceTargetRef,
   );
   if (
-    isEmpty(semanticCaptureTargetBindings) ||
     acceptanceTargetRefs.some((entry, index) =>
       index > 0 && acceptanceTargetRefs[index - 1]! >= entry)
   ) {
     fail(
       contract,
       "semanticCaptureTargetBindings",
-      "must be non-empty, unique, and sorted by acceptanceTargetRef",
+      "must be unique and sorted by acceptanceTargetRef",
     );
   }
   const compositionTargetRefs = semanticCaptureTargetBindings.map(
@@ -2049,7 +2048,6 @@ export function parseFormalSemanticCaptureMapV1(
       contributionHash,
     }),
   );
-  if (isEmpty(bindings)) fail(contract, "bindings", "must not be empty");
   const targetRefs = bindings.map((row) => row.acceptanceTargetRef);
   const compositionTargetRefs = bindings.map((row) => row.compositionTargetRef);
   const topologyNodeIds = bindings.map((row) => row.topologyNodeId);

@@ -125,18 +125,6 @@ function assertFiniteClose(
   }
 }
 
-function assertEmptyVisualInventory(
-  input: FormalWorldCaptureMeasurementInputV1,
-): void {
-  if (
-    input.materializerMetadata.visualGroups.length === 0 ||
-    input.semanticCaptureMap.bindings.length === 0 ||
-    input.liveHandleRegistry.visualGroups.length === 0
-  ) {
-    fail("VISUAL_INVENTORY", "visual inventory is empty");
-  }
-}
-
 function assertCameraProjection(
   view: FormalArtifactViewRequestV1,
   camera: Camera,
@@ -599,7 +587,6 @@ export function measureFormalWorldCaptureViewV1(
   input: FormalWorldCaptureMeasurementInputV1,
 ): FormalWorldCaptureViewMeasurementV1 {
   assertCameraProjection(input.view, input.camera);
-  assertEmptyVisualInventory(input);
 
   const materializedById = uniqueById(
     input.materializerMetadata.visualGroups,

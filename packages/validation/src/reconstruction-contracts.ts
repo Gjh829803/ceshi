@@ -1403,10 +1403,10 @@ function parseTopologyRelation(value: unknown, contract: string, path: string): 
   });
 }
 
-function parseTopology(value: unknown, contract: string, path: string, allowEmpty: boolean): Omit<WorldReconstructionExpectedV1["topology"], "acceptanceTargetRef"> {
+function parseTopology(value: unknown, contract: string, path: string): Omit<WorldReconstructionExpectedV1["topology"], "acceptanceTargetRef"> {
   const source = object(value, contract, path);
   exactFields(source, ["nodeIds", "relations", "layerIds"], contract, path);
-  const nodeIds = sortedStrings(source.nodeIds, contract, `${path}/nodeIds`, allowEmpty);
+  const nodeIds = sortedStrings(source.nodeIds, contract, `${path}/nodeIds`, true);
   const relations = array(source.relations, contract, `${path}/relations`).map((entry, index) =>
     parseTopologyRelation(entry, contract, `${path}/relations/${index}`)
   );
@@ -1417,7 +1417,7 @@ function parseTopology(value: unknown, contract: string, path: string, allowEmpt
   if (relations.some(({ fromNodeId, toNodeId }) => !nodeIds.includes(fromNodeId) || !nodeIds.includes(toNodeId))) {
     fail(contract, `${path}/relations`, "relation endpoints must name declared nodes");
   }
-  return Object.freeze({ nodeIds, relations: Object.freeze(relations), layerIds: sortedStrings(source.layerIds, contract, `${path}/layerIds`, allowEmpty) });
+  return Object.freeze({ nodeIds, relations: Object.freeze(relations), layerIds: sortedStrings(source.layerIds, contract, `${path}/layerIds`, true) });
 }
 
 function parseTraversalChecks(value: unknown, contract: string, path: string, declaredAcceptanceTarget: (value: unknown, path: string) => string): readonly WorldReconstructionTraversalCheckV1[] {
@@ -1650,7 +1650,7 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
   if (source.kind !== expectedKind) fail(contract, `${path}/kind`, `expected ${expectedKind}`);
   if (dimensionId === "topology") {
     exactFields(source, ["kind", "nodeIds", "relations", "layerIds"], contract, path);
-    return Object.freeze({ kind: "topology-observed", ...parseTopology({ nodeIds: source.nodeIds, relations: source.relations, layerIds: source.layerIds }, contract, path, true) });
+    return Object.freeze({ kind: "topology-observed", ...parseTopology({ nodeIds: source.nodeIds, relations: source.relations, layerIds: source.layerIds }, contract, path) });
   }
   if (dimensionId === "semantic-silhouette") {
     exactFields(source, ["kind", "views"], contract, path);
@@ -1782,7 +1782,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   };
   const topologySource = object(expectedSource.topology, contract, "expected/topology");
   exactFields(topologySource, ["acceptanceTargetRef", "nodeIds", "relations", "layerIds"], contract, "expected/topology");
-  const topology = Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(topologySource.acceptanceTargetRef, "expected/topology/acceptanceTargetRef"), ...parseTopology({ nodeIds: topologySource.nodeIds, relations: topologySource.relations, layerIds: topologySource.layerIds }, contract, "expected/topology", false) });
+  const topology = Object.freeze({ acceptanceTargetRef: declaredAcceptanceTarget(topologySource.acceptanceTargetRef, "expected/topology/acceptanceTargetRef"), ...parseTopology({ nodeIds: topologySource.nodeIds, relations: topologySource.relations, layerIds: topologySource.layerIds }, contract, "expected/topology") });
   const semanticSilhouetteTargets = array(expectedSource.semanticSilhouetteTargets, contract, "expected/semanticSilhouetteTargets").map((entry, index) => {
     const path = `expected/semanticSilhouetteTargets/${index}`;
     const row = object(entry, contract, path);
@@ -1798,7 +1798,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
       ),
     });
   });
-  if (semanticSilhouetteTargets.length === 0 || semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "expected/semanticSilhouetteTargets", "must be non-empty, unique, and sorted by acceptanceTargetRef");
+  if (semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "expected/semanticSilhouetteTargets", "must be unique and sorted by acceptanceTargetRef");
   if (new Set(semanticSilhouetteTargets.map(({ visualGroupId }) =>
     visualGroupId)).size !== semanticSilhouetteTargets.length) {
     fail(contract, "expected/semanticSilhouetteTargets", "visualGroupId values must be unique");
@@ -1985,7 +1985,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
     exactFields(row, ["acceptanceTargetRef", "maximumBoundsDriftBasisPoints", "maximumCenterDriftBasisPoints", "maximumCoverageDriftBasisPoints"], contract, path);
     return Object.freeze({ acceptanceTargetRef: text(row.acceptanceTargetRef, contract, `${path}/acceptanceTargetRef`), maximumBoundsDriftBasisPoints: basisPoints(row.maximumBoundsDriftBasisPoints, contract, `${path}/maximumBoundsDriftBasisPoints`), maximumCenterDriftBasisPoints: basisPoints(row.maximumCenterDriftBasisPoints, contract, `${path}/maximumCenterDriftBasisPoints`), maximumCoverageDriftBasisPoints: basisPoints(row.maximumCoverageDriftBasisPoints, contract, `${path}/maximumCoverageDriftBasisPoints`) });
   });
-  if (semanticSilhouetteTargets.length === 0 || semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "thresholds/semanticSilhouetteTargets", "must be non-empty, unique, and sorted by acceptanceTargetRef");
+  if (semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "thresholds/semanticSilhouetteTargets", "must be unique and sorted by acceptanceTargetRef");
   const openingThresholds = object(thresholdsSource.openingComposition, contract, "thresholds/openingComposition");
   exactFields(openingThresholds, ["regions", "anchors"], contract, "thresholds/openingComposition");
   const parseOpeningThresholds = (value: unknown, path: string) => {

@@ -366,7 +366,8 @@ function primaryAcceptanceTargetRef(
     return reconstructionCase.expected.openingComposition.acceptanceTargetRef;
   }
   if (dimensionId === "semantic-silhouette") {
-    return reconstructionCase.expected.semanticSilhouetteTargets[0]!.acceptanceTargetRef;
+    return reconstructionCase.expected.semanticSilhouetteTargets[0]?.acceptanceTargetRef
+      ?? reconstructionCase.expected.spawnSupport.acceptanceTargetRef;
   }
   if (dimensionId === "spawn-support") return reconstructionCase.expected.spawnSupport.acceptanceTargetRef;
   return reconstructionCase.expected.topology.acceptanceTargetRef;
@@ -390,6 +391,9 @@ function evaluateTopology(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expected = reconstructionCase.expected.topology;
+  if (expected.nodeIds.length === 0) {
+    return missingEvidenceDraft("topology", expected.acceptanceTargetRef, row.evidenceRefs);
+  }
   const observed = observedOfKind(row, "topology-observed");
   if (isNil(observed)) {
     return missingEvidenceDraft("topology", expected.acceptanceTargetRef, row.evidenceRefs);
@@ -468,6 +472,10 @@ function evaluateSemanticSilhouette(
   row: WorldReconstructionObservedDimensionRowV1,
 ): DimensionDraftV1 {
   const expectedTargets = reconstructionCase.expected.semanticSilhouetteTargets;
+  if (expectedTargets.length === 0) {
+    return missingEvidenceDraft("semantic-silhouette",
+      reconstructionCase.expected.spawnSupport.acceptanceTargetRef, row.evidenceRefs);
+  }
   const observed = observedOfKind(row, "semantic-silhouette-observed");
   if (isNil(observed)) {
     return missingEvidenceDraft(
