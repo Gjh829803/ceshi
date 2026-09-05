@@ -13,7 +13,7 @@ import {
   babylonNativeBlockCenterAlignsToGridV1,
   babylonNativeBlockOccupiedMicroCellKeysV1,
   effectiveBabylonNativeBlockSizeMetersXYZV1 as effectiveSize,
-} from "../../../../packages/native-babylon-block-profile/src/shapes.js";
+} from "@whitebox-world/native-babylon-block-profile/shapes";
 import {
   sha256CanonicalJson,
   stringifyCanonicalJson,

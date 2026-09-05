@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { waitForCaptureStartupV1 } from "./capture-startup-watchdog.js";
-import { createFormalCaptureStartupReporterV1 } from "../../apps/native-scene-playground/src/formal-capture-startup.js";
+import { createFormalCaptureStartupReporterV1 } from "@whitebox-world/runtime-babylon";
 
 afterEach(() => vi.useRealTimers());
 describe("CF-02 bounded progress-aware capture startup", () => {

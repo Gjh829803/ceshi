@@ -1,4 +1,4 @@
-import type { FormalCaptureStartupDiagnosticV1 } from "../../apps/native-scene-playground/src/formal-capture-startup.js";
+import type { FormalCaptureStartupDiagnosticV1 } from "@whitebox-world/runtime-babylon";
 
 export interface CaptureStartupProbeV1 {
   readonly isReady: boolean;

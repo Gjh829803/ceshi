@@ -19,8 +19,6 @@ import { createBabylonNativeWorldPackageV1, verifyWorldPackageDirectoryV1 } from
 import { createBabylonNativeBlockWorldPackageTestInputV1 } from
   "@whitebox-world/world-package/testing";
 
-import gameplayJson from "../../../apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json";
-import runtimeJson from "../../../apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json";
 import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from "../../native-scene/admission-budget.js";
 import { createBudgetWorkloadModule } from "./workload.js";
 
@@ -30,8 +28,15 @@ export async function prepareBudgetRuntimeFixture(blockCount: number) {
   const started = performance.now();
   const module = createBudgetWorkloadModule(blockCount);
   const base = createBabylonNativeBlockWorldPackageTestInputV1();
-  const gameplay = parseGameplayBootstrapV1(gameplayJson);
-  const wrt = parseWorldRuntimeBootstrapV1(runtimeJson);
+  // Fixture JSON is an asset served by this verifier, not a sibling app's
+  // private source import. Keep the exact existing cloud-ridge bytes.
+  const readFixture = async (url: string): Promise<unknown> => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Budget fixture asset unavailable: ${url}`);
+    return response.json();
+  };
+  const gameplay = parseGameplayBootstrapV1(await readFixture("/budget-gameplay-bootstrap.json"));
+  const wrt = parseWorldRuntimeBootstrapV1(await readFixture("/budget-runtime-bootstrap.json"));
   const bootstrap = {
     ...base.nativeSceneBootstrap, gameplayBootstrapRef: gameplay.resourceRef,
     initialControlledEntityId: wrt.initialControlledEntityId,

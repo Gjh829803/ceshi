@@ -1,4 +1,4 @@
-import type { BabylonWorldRuntimeInitializationStageV1 } from "@whitebox-world/runtime-babylon";
+import type { BabylonWorldRuntimeInitializationStageV1 } from "./babylon-world-runtime.js";
 
 export type FormalCaptureStartupStageV1 = "package" | "module" | "admission" |
   "bridge" | `runtime-${BabylonWorldRuntimeInitializationStageV1}`;

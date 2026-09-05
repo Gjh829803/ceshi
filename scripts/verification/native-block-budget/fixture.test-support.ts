@@ -5,7 +5,7 @@ import { bindRuntimeTestPossession } from "@whitebox-world/runtime-babylon/testi
 import { runtimeWorldConfigurationFromVerifiedWorldPackageV1 } from "@whitebox-world/runtime-host";
 import { peekBabylonNativeBlockLiveHandleRegistryV1 } from
   "@whitebox-world/native-babylon-block-profile/host";
-import { prepareBudgetRuntimeFixture } from "./package-fixture.js";
+import { prepareBudgetRuntimeFixture } from "./package-fixture.test-support.js";
 
 declare global { interface Window {
   __NATIVE_BUDGET_MEASUREMENT__?: {

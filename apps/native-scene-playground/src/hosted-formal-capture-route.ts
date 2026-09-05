@@ -1,5 +1,5 @@
 import { Engine } from "@babylonjs/core/Engines/engine.js";
-import { createFormalCaptureStartupReporterV1 } from "./formal-capture-startup.js";
+import { createFormalCaptureStartupReporterV1 } from "@whitebox-world/runtime-babylon";
 import {
   createBabylonNativeIsolatedRuntimeEntryV1,
   type FormalHostedWorldCapturePayloadV1,

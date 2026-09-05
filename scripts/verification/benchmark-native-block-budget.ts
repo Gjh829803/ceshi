@@ -29,6 +29,11 @@ async function main() {
         } else if (request.url === "/budget-g-bot.glb") {
           response.setHeader("Content-Type", "model/gltf-binary");
           response.end(await readFile("apps/playground/public/subject-assets/humanoid/g-bot/v2/g-bot.glb"));
+        } else if (request.url === "/budget-gameplay-bootstrap.json" || request.url === "/budget-runtime-bootstrap.json") {
+          response.setHeader("Content-Type", "application/json");
+          response.end(await readFile(request.url === "/budget-gameplay-bootstrap.json"
+            ? "apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json"
+            : "apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json"));
         } else next();
       });
     } }],
@@ -46,8 +51,10 @@ async function main() {
       workloadHash: sha256Bytes(await readFile("scripts/verification/native-block-budget/workload.ts")),
       measurementSourceHashes: Object.fromEntries(await Promise.all([
         "scripts/verification/benchmark-native-block-budget.ts",
-        "scripts/verification/native-block-budget/fixture.ts",
-        "scripts/verification/native-block-budget/package-fixture.ts",
+        "scripts/verification/native-block-budget/fixture.test-support.ts",
+        "scripts/verification/native-block-budget/package-fixture.test-support.ts",
+        "apps/playground/public/world-packages/cloud-ridge/gameplay/bootstrap.json",
+        "apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json",
         "scripts/verification/native-block-budget/index.html",
         "pnpm-lock.yaml",
       ].map(async (file) => [file, sha256Bytes(await readFile(file))]))),

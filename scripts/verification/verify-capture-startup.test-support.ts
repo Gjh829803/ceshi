@@ -7,7 +7,7 @@ import { formalCaptureRequestFixtureV1 } from "@whitebox-world/runtime-babylon/t
 import { startCaptureOnlyHostedTransportV1 } from "../reconstruction/hosted-session-capture.js";
 import { launchChromiumWithSystemFallback } from "../lib/playwright-browser-launch.js";
 
-// Real Browser/transport startup regression, synthetic server only. This is NOT
+// Test-only real Browser/transport startup regression, synthetic server only. This is NOT
 // a generation, Havok, WorldPackage admission, rendered-quality, or Case receipt.
 const request = formalCaptureRequestFixtureV1();
 let mode: "progress" | "stall" | "error" = "progress";
