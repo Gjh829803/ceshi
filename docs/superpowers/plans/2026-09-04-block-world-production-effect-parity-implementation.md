@@ -373,6 +373,24 @@ remove AABB-area-as-silhouette consumption. Keep structural AABB evidence for it
 Neither this extraction nor subsequent visual diagnostics adds a model task, ordinary publication
 veto or repair budget. Real occlusion/mask capture and complete CF-21 coverage remain open.
 
+#### CF-14/R2-B same-view identity capture
+
+Main-agent-only; the existing artifact-capture transaction owns a requested identity pass after
+its display capture and before restoring Camera/materials/canvas. The trusted Host supplies explicit
+live mesh handles and colors; never infer target identity from mesh names/tags. Ungrouped scenery and
+the SDK Subject still occlude but receive black, as does background. Shared materials must not share
+target tint; a thin-instance batch must have one validated target color. Use opaque unlit materials
+without changing geometry, instance transforms, camera, viewport or Runtime input/tick state.
+Retain the display PNG and expose the identity PNG/RGBA separately; do not replace the user's preview.
+Restore all resources on normal/throwing paths and test the exact opening/side/top camera transaction.
+
+Remaining integration consumes the explicit registry at each formal view, binds the three identity
+PNG hashes through the observation receipt, and measures their admitted pixels with R2-A. Evaluation
+must consume visible-pixel projection for silhouette and retain structural projection only for its
+actual spatial uses. No visible pixels means no visible evidence, not automatic geometry-missing
+or a newly blocking quality threshold. Runtime/Host schema and persistent consumers change together
+when this formal integration activates; the internal capture primitive alone does not close CF-14.
+
 #### User-authorized parallel batch at 65d3c2bb (2026-09-05)
 
 The user explicitly authorized subagents while the local 054 Case runs. Two independent
