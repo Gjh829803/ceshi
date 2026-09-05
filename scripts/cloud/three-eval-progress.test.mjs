@@ -39,6 +39,15 @@ test('shows accepted service submissions as waiting until actual CLI activity is
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
 
+test('labels cancellation cleanup explicitly without inventing a completed or running agent',async()=>{
+ const f=await fixture();try{
+  f.state.phase='stop-pending';f.state.providerStatus='cancelled';await f.saveState();
+  const result=await buildThreeRunProgress({runRoot:f.runRoot,now}),row=result.cases[0];
+  assert.equal(row.stage,'stopping');assert.equal(row.stageLabel,'等待取消完成');
+  assert.equal(row.startedAt,null);assert.equal(row.completedAt,null);assert.equal(row.cliActivityObserved,false);
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});
+
 test('real CLI activity and current MCP stage override queued API items/counters',async()=>{
  const f=await fixture();try{
   await f.saveState();await json(path.join(f.caseRoot,'job-final.json'),{job_id:f.state.jobId,request_id:f.state.requestId,status:'running',counters:{total:1,queued:1,running:0}});

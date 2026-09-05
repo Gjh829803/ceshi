@@ -7,7 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {THREE_TOOLS} from './three-eval-runtime.mjs';
 
-export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行',starting:'启动 Agent',planning:'整体地图规划',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',unknown:'等待可确认状态'});
+export const THREE_PROGRESS_STAGE_LABELS = Object.freeze({queued:'等待执行',starting:'启动 Agent',planning:'整体地图规划',authoring:'编写与校验',preview:'预览与检查',playtest:'实际操作测试',capture:'采集对象视图',packaging:'整理交付',delivered:'技术交付完成',failed:'执行失败',stopping:'等待取消完成',cancelled:'请求已取消',unknown:'等待可确认状态'});
 const toolStages = {imagegen:'planning',creator_describe_environment:'starting',creator_get_authoring_schema:'authoring',creator_get_examples:'authoring',assets_search:'authoring',assets_describe:'authoring',world_validate:'authoring',world_preview:'preview',world_inspect:'preview',world_execute_command:'playtest',world_get_operation:'playtest',world_playtest:'playtest',world_capture_triviews:'capture',world_submit:'packaging'};
 const operationStages = {'imagegen.generate':'planning','world.validate':'authoring','world.preview':'preview','world.inspect':'preview','world.execute-command':'playtest','world.get-operation':'playtest','world.playtest':'playtest','world.capture-triviews':'capture','world.submit':'packaging'};
 const toolLabels = {imagegen:'ImageGen 生成规划图',creator_describe_environment:'读取运行环境',creator_get_authoring_schema:'读取 SDK 接口',creator_get_examples:'读取通用示例',assets_search:'搜索资产',assets_describe:'检查资产',world_validate:'编译与校验',world_preview:'查看真实预览',world_inspect:'检查世界状态',world_execute_command:'执行交互操作',world_get_operation:'检查交互任务',world_playtest:'实际操作测试',world_capture_triviews:'采集对象视图',world_submit:'整理技术交付',operations_get:'查询工具进度',operations_cancel:'取消工具操作'};
@@ -287,7 +287,8 @@ async function loadAttempt(runRoot, plan, task, live, now) {
   const operation = summary.latestOperation;
   if (hostPhase === 'delivered') { stage='delivered'; phase='delivered'; }
   else if (hostPhase === 'failed' || launcher?.status === 'failed' || ['failed','submit_failed'].includes(api.itemStatus)) { stage='failed'; phase='failed'; }
-  else if (['cancelled','stopped','stop-pending'].includes(hostPhase)) { stage='unknown'; }
+  else if (hostPhase === 'stop-pending') { stage='stopping'; }
+  else if (['cancelled','stopped'].includes(hostPhase)) { stage='cancelled'; }
   else if (cliStarted) { phase='running'; stage=hostPhase === 'delivery-pending' || launcher?.status==='delivered' ? 'packaging' : summary.latestStage ?? toolStages[summary.latestTool?.name] ?? (operation ? operationStages[operation.type] : undefined) ?? 'starting'; }
   else if (api.queued || ['queued','pending','submitted','submitting'].includes(providerStatus)) { stage='queued'; phase='queued'; }
   else if (launcher?.status === 'starting') { stage='starting'; phase='running'; }
