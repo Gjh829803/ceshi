@@ -1546,6 +1546,40 @@ export function createStudio(options = {}) {
     }
   }
 
+  async function prepareNativeVisualResume(record) {
+    if (effectiveSceneSourceKind(record) !== "babylon-native" || record.referenceImage === null ||
+        (record.nativeProductionClosure == null && record.whiteboxOutcome !== "passed")) return null;
+    const closure = record.nativeProductionClosure;
+    if (record.workflowPolicyVersion !== workflowPolicyVersion ||
+        closure?.kind !== "studio-native-production-closure" || closure.schemaVersion !== 1 ||
+        closure.caseId !== record.sceneId || closure.productionOutcome !== "passed" ||
+        closure.publicationOutcome !== "published" || !await hasNativeLaunchEvidence(record)) {
+      throw new Error("STUDIO_NATIVE_VISUAL_RESUME_WHITEBOX_INVALID");
+    }
+    const root = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+    const reconstructionCase = await readNativeJsonArtifact(path.join(root, "case.json"));
+    const references = reconstructionCase.referenceInputs?.filter(row => /^reference-0\.(png|jpg|webp)$/.test(row.inputRef)) ?? [];
+    if (references.length !== 1) throw new Error("STUDIO_NATIVE_VISUAL_RESUME_REFERENCE_INVALID");
+    const userFramePath = path.join(root, "inputs", references[0].inputRef);
+    await requireNativeDirectory(path.dirname(userFramePath));
+    const hash = `sha256:${createHash("sha256").update(await readNativeBytesArtifact(userFramePath)).digest("hex")}`;
+    if (hash !== references[0].contentHash || hash !== `sha256:${record.referenceImage.contentSha256}`) {
+      throw new Error("STUDIO_NATIVE_VISUAL_RESUME_REFERENCE_INVALID");
+    }
+    return { closure, userFramePath };
+  }
+
+  function retainedNativeWhiteboxState(closure) {
+    return {
+      captureRequired: false, captureStatus: "passed", whiteboxOutcome: "passed",
+      productionOutcome: closure.productionOutcome, publicationOutcome: closure.publicationOutcome,
+      evaluationOutcome: closure.evaluationOutcome, strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+      strictDiagnosticCodes: closure.strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+      nativeProductionClosure: closure, nativeLaunch: closure.launch,
+    };
+  }
+
   function deliverableCandidates(record, id) {
     const sceneId = record.sceneId;
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", sceneId);
@@ -2921,6 +2955,7 @@ export function createStudio(options = {}) {
     if (!record || shuttingDown || stoppingJobs.has(id)) return;
     const codexBackend = effectiveCodexBackend(record);
     const sceneSourceKind = effectiveSceneSourceKind(record);
+    const visualResume = await prepareNativeVisualResume(record);
     const attempt = (record.attempt ?? 0) + 1;
     const styledOpeningFrameRequired = record.referenceImage !== null;
     const styledTriviewsRequired = record.referenceImage !== null;
@@ -2929,7 +2964,7 @@ export function createStudio(options = {}) {
     const startedAt = new Date().toISOString();
     await updateRecord(id, {
       status: "running",
-      stage: "preparing",
+      stage: visualResume ? "visual-imagegen" : "preparing",
       codexBackend,
       workflowPolicyVersion,
       attempt,
@@ -2953,11 +2988,13 @@ export function createStudio(options = {}) {
       styledOpeningFrameStatus: styledOpeningFrameRequired ? "pending" : "not-required",
       styledTriviewsRequired,
       styledTriviewsStatus: styledTriviewsRequired ? "pending" : "not-required",
+      ...(visualResume ? retainedNativeWhiteboxState(visualResume.closure) : {}),
     });
     await appendTrajectoryEvent(
       id,
-      "preparing",
-      `第 ${attempt} 次生成开始，使用${codexBackend === "cloud" ? "云端 LWDP" : "本地"} Codex，准备隔离任务环境。`,
+      visualResume ? "visual-imagegen" : "preparing",
+      visualResume ? `第 ${attempt} 次执行恢复原视觉任务；已发布白膜不重新生成。`
+        : `第 ${attempt} 次生成开始，使用${codexBackend === "cloud" ? "云端 LWDP" : "本地"} Codex，准备隔离任务环境。`,
       { kind: "started", codexBackend },
     );
 
@@ -3009,14 +3046,17 @@ export function createStudio(options = {}) {
       codexBackend,
       startedAt,
     };
-    if (sceneSourceKind === "canonical") {
+    if (sceneSourceKind === "canonical" || visualResume) {
       await writeJsonAtomic(
         path.join(artifactRoot, "evaluation-run.json"),
         evaluationRun,
       );
     }
 
-    const args = [
+    const args = visualResume ? [
+      "agent:world:first-frame", "--", "--scene-source", "babylon-native", "--scene-id", record.sceneId,
+      "--user-frame", visualResume.userFramePath, "--backend", codexBackend, "--resume",
+    ] : [
       "agent:world",
       "--",
       "--scene-source",
@@ -3024,15 +3064,19 @@ export function createStudio(options = {}) {
       "--scene-id",
       record.sceneId,
     ];
-    if (record.referenceImage) args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
-    args.push(record.prompt);
+    if (!visualResume) {
+      if (record.referenceImage) args.push("--image", path.join(worldsRoot, id, record.referenceImage.fileName));
+      args.push(record.prompt);
+    }
 
     await appendJobLog(
       id,
-      `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex through ${sceneSourceKind === "babylon-native" ? "Babylon Native Block" : "explicit Canonical Heightfield"} authoring; the trusted Host owns admission, Package, Runtime, Capture, and evidence.\n`,
+      visualResume ? "Resuming the original visual task; Planner, Builder and published whitebox are unchanged.\n"
+        : `Launching ${codexBackend === "cloud" ? "LWDP cloud" : "local"} Codex through ${sceneSourceKind === "babylon-native" ? "Babylon Native Block" : "explicit Canonical Heightfield"} authoring; the trusted Host owns admission, Package, Runtime, Capture, and evidence.\n`,
     );
     await beforeWorldSpawn(id);
     if (shuttingDown || stoppingJobs.has(id)) return;
+    if (visualResume) await prepareNativeVisualResume(record);
     const child = worldSpawnImplementation("pnpm", args, {
       cwd: repoRoot,
       env: {
@@ -3050,9 +3094,9 @@ export function createStudio(options = {}) {
       buffer: "",
       nativeProductionResults: [],
       nativeCommandFailures: [],
-      nativeVisualStarted: false,
+      nativeVisualStarted: visualResume !== null,
     };
-    if (sceneSourceKind === "babylon-native" && styledOpeningFrameRequired) {
+    if (sceneSourceKind === "babylon-native" && styledOpeningFrameRequired && !visualResume) {
       stdout.persistNativeWhitebox = async () => {
         try {
           if (stdout.nativeProductionResults.length !== 1 || stdout.nativeCommandFailures.length !== 0) return;
@@ -3123,7 +3167,23 @@ export function createStudio(options = {}) {
       let nativeFailure = null;
       let nativeFailureResult = null;
       let nativeCommandDiagnosticCodes = [];
-      if (stdout.nativeProductionResults.length !== 1) {
+      let visualProtocolError = null;
+      if (visualResume) {
+        try {
+          closure = (await prepareNativeVisualResume(record)).closure;
+          // The visual child cannot replace or manufacture the original Native result.
+          if (stdout.nativeProductionResults.length || stdout.nativeCommandFailures.length) {
+            visualProtocolError = "STUDIO_NATIVE_VISUAL_RESULT_UNEXPECTED";
+          }
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          if (await hasNativeLaunchEvidence(record)) {
+            // Appearance input failure cannot revoke the still-valid original whitebox.
+            closure = visualResume.closure;
+            visualProtocolError = reason;
+          } else nativeFailure = reason;
+        }
+      } else if (stdout.nativeProductionResults.length !== 1) {
         if (
           stdout.nativeProductionResults.length === 0 &&
           stdout.nativeCommandFailures.length === 1
@@ -3162,11 +3222,13 @@ export function createStudio(options = {}) {
       }
 
       if (closure !== null) {
-        const visualPassed = !styledOpeningFrameRequired || (exit.code === 0 &&
-          await hasNativeStyledArtifacts(record, Date.parse(startedAt) - 1_000));
-        const visualError = visualPassed ? null : exit.code !== 0
+        // --resume revalidates the original request/delivery hashes. Reused pixels
+        // need not have been generated during this new Studio queue attempt.
+        const visualPassed = !styledOpeningFrameRequired || (exit.code === 0 && !visualProtocolError &&
+          await hasNativeStyledArtifacts(record, visualResume ? 0 : Date.parse(startedAt) - 1_000));
+        const visualError = visualPassed ? null : visualProtocolError ?? (exit.code !== 0
           ? `STUDIO_NATIVE_VISUAL_FAILED: child exited with code ${exit.code}`
-          : "STUDIO_NATIVE_VISUAL_OUTPUTS_INCOMPLETE";
+          : "STUDIO_NATIVE_VISUAL_OUTPUTS_INCOMPLETE");
         await updateRecord(id, {
           status: visualPassed ? "ready" : "failed",
           stage: visualPassed ? "ready" : "failed",
@@ -3218,12 +3280,14 @@ export function createStudio(options = {}) {
         });
         await appendJobLog(
           id,
-          "\nNative production completed with an identity-bound published result.\n",
+          visualResume ? "\nOriginal identity-bound Native publication reused; no whitebox generation was run.\n"
+            : "\nNative production completed with an identity-bound published result.\n",
         );
         await appendTrajectoryEvent(
           id,
           "runtime-capture",
-          closure.strictDiagnosticOutcome === "passed"
+          visualResume ? "复用原 Native Package、Capture 与 final 发布证据；原严格诊断保持不变。"
+            : closure.strictDiagnosticOutcome === "passed"
             ? "Native Package、Capture、评测、严格诊断与 final 发布证据已绑定。"
             : "Native Package、Capture、评测与 final 发布证据已绑定；严格诊断单独记录。",
           {
@@ -3253,6 +3317,7 @@ export function createStudio(options = {}) {
         finishedAt,
         error: nativeFailure,
         captureStatus: "failed",
+        whiteboxOutcome: "failed",
         outcome: "failed",
         productionOutcome: nativeFailureResult?.productionOutcome ?? "failed",
         publicationOutcome:
@@ -3516,7 +3581,7 @@ export function createStudio(options = {}) {
               failedStage: latest?.stage ?? "preparing",
               finishedAt,
               error: error instanceof Error ? error.message : String(error),
-              captureStatus: "failed",
+              captureStatus: latest?.whiteboxOutcome === "passed" && await hasNativeLaunchEvidence(latest) ? "passed" : "failed",
               outcome: "failed",
             });
           }
@@ -4356,8 +4421,13 @@ export function createStudio(options = {}) {
         sendError(response, 409, "只有失败或中断的任务可以重试。");
         return true;
       }
-      const sceneSourceKind = effectiveSceneSourceKind(record);
       const styledOutputsRequired = record.referenceImage !== null;
+      let visualResume;
+      try { visualResume = await prepareNativeVisualResume(record); }
+      catch (error) {
+        sendError(response, 409, error instanceof Error ? error.message : String(error));
+        return true;
+      }
       await updateRecord(record.id, {
         status: "queued",
         stage: "queued",
@@ -4378,8 +4448,11 @@ export function createStudio(options = {}) {
         styledOpeningFrameStatus: styledOutputsRequired ? "pending" : "not-required",
         styledTriviewsRequired: styledOutputsRequired,
         styledTriviewsStatus: styledOutputsRequired ? "pending" : "not-required",
+        ...(visualResume ? retainedNativeWhiteboxState(visualResume.closure) : {}),
       });
-      await appendTrajectoryEvent(record.id, "queued", "用户发起重试，任务重新进入队列。", { kind: "queued" });
+      await appendTrajectoryEvent(record.id, "queued", visualResume
+        ? "用户发起视觉恢复：复用原请求与已发布白膜，不重新运行 Planner 或 Builder。"
+        : "用户发起重试，任务重新进入队列。", { kind: "queued" });
       enqueue(record.id, effectiveCodexBackend(record));
       sendJson(response, 202, { ok: true });
       return true;

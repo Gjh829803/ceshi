@@ -10,6 +10,7 @@ import {
   rename,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -143,7 +144,8 @@ function canonicalHash(value) {
 async function writeNativeProductionFixture(
   fakeRepoRoot,
   sceneId,
-  { strictDiagnosticOutcome = "passed", includeWhiteboxTriviews = false, withoutScriptedTraversal = false, mutateResult = (value) => value } = {},
+  { strictDiagnosticOutcome = "passed", includeWhiteboxTriviews = false, withoutScriptedTraversal = false,
+    withFrozenAppearanceReference = false, mutateResult = (value) => value } = {},
 ) {
   const artifactRoot = path.join(fakeRepoRoot, "artifacts/scenes", sceneId);
   const runId = "run-studio-native";
@@ -156,6 +158,8 @@ async function writeNativeProductionFixture(
     kind: "world-reconstruction-case",
     schemaVersion: 1,
     id: sceneId,
+    ...(withFrozenAppearanceReference ? { referenceInputs: [{ inputRef: "reference-0.png", mediaType: "image/png",
+      contentHash: `sha256:${createHash("sha256").update(VALID_ENTRY_OPENING_PNG).digest("hex")}` }] } : {}),
   };
   const caseHash = canonicalHash(reconstructionCase);
   const packageDirectory = createBabylonNativeWorldPackageV1(
@@ -326,6 +330,10 @@ async function writeNativeProductionFixture(
   };
   const runReceiptHash = canonicalHash(runReceipt);
   await mkdir(path.join(attemptRoot, "capture"), { recursive: true });
+  if (withFrozenAppearanceReference) {
+    await mkdir(path.join(artifactRoot, "inputs"), { recursive: true });
+    await writeFile(path.join(artifactRoot, "inputs/reference-0.png"), VALID_ENTRY_OPENING_PNG);
+  }
   for (const mask of sourceCapture.identityMaskPngs) {
     await writeFile(path.join(attemptRoot, "capture", `${mask.viewId}-identity-mask.png`), mask.bytes);
   }
@@ -1431,6 +1439,132 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
       assert.equal(detail.world.styledTriviewsStatus, visualMode === "passed" ? "passed" : "failed");
       assert.equal((await fetch(`${origin}/api/worlds/${created.id}/triviews/visual-target-1`)).status, 200);
       if (visualMode !== "passed") assert.equal(detail.world.failedStage, "visual-imagegen");
+    } finally { await studio.shutdown(); }
+  });
+}
+
+for (const retryMode of ["passed", "local-passed", "interrupted", "reused-pixels", "failed", "unexpected-production", "stale-capture", "stale-reference", "changed-before-spawn", "changed-during-child", "whitebox-changed-during-child", "spawn-failed"]) {
+  test(`Native visual retry ${retryMode} keeps the original whitebox and only resumes visuals`, async () => {
+    const dataRoot = await temporaryRoot(".native-visual-retry-data-");
+    const fakeRepoRoot = await temporaryRoot(".native-visual-retry-repo-");
+    const backend = retryMode === "local-passed" ? "local" : "cloud";
+    let productionResult;
+    const invocations = [];
+    const studio = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: true,
+      initialCodexBackend: backend, codexSpawnSync: () => ({ status: 0 }),
+      importExistingArtifacts: false, importBuiltinTestSets: false, importBuiltinResults: false, lwdpConfigured: true,
+      beforeWorldSpawn: async id => {
+        if (invocations.length === 0) {
+          productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
+            strictDiagnosticOutcome: "failed", includeWhiteboxTriviews: true, withoutScriptedTraversal: true,
+            withFrozenAppearanceReference: true,
+          });
+          if (retryMode === "reused-pixels") {
+            const root = await writeNativeStyledFixture(fakeRepoRoot, id);
+            const manifest = JSON.parse(await readFile(path.join(root, "styled-triviews-manifest.json"), "utf8"));
+            for (const file of ["styled-opening-frame.png", ...manifest.targets.map(target => target.styledTriview.path)]) {
+              await utimes(path.join(root, file), new Date(0), new Date(0));
+            }
+          }
+        } else if (retryMode === "changed-before-spawn") {
+          await writeFile(path.join(fakeRepoRoot, "artifacts/scenes", id, "inputs/reference-0.png"), VALID_EMPTY_OPENING_PNG);
+        } else if (retryMode === "spawn-failed") throw new Error("spawn preparation failed");
+        else if (["passed", "local-passed", "interrupted", "unexpected-production"].includes(retryMode)) await writeNativeStyledFixture(fakeRepoRoot, id);
+      },
+      worldSpawnImplementation: (command, args, options) => {
+        invocations.push({ command, args });
+        const first = invocations.length === 1;
+        const output = first || retryMode === "unexpected-production" ? canonicalJson(productionResult) + "\n" : "";
+        const changeInput = !first && retryMode === "changed-during-child"
+          ? `require("node:fs").writeFileSync(${JSON.stringify(args[args.indexOf("--user-frame") + 1])}, "changed during visual retry");`
+          : !first && retryMode === "whitebox-changed-during-child"
+            ? `require("node:fs").writeFileSync(${JSON.stringify(path.join(path.dirname(args[args.indexOf("--user-frame") + 1]), "../final/capture/opening.png"))}, "changed whitebox");` : "";
+        return spawn(process.execPath, ["-e", `${changeInput} process.stdout.write(${JSON.stringify(output + "WORLDKIT_STAGE visual-imagegen\n")}); ${!first && retryMode === "interrupted" ? "setInterval(() => {}, 1000)" : `process.exitCode = ${first || retryMode === "failed" ? 9 : 0}`}`], options);
+      },
+    });
+    const origin = await listen(studio);
+    try {
+      const created = (await (await fetch(`${origin}/api/worlds`, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Retry only visuals", prompt: "Build the palace", image: {
+          name: "reference.png", dataUrl: `data:image/png;base64,${VALID_ENTRY_OPENING_PNG.toString("base64")}`,
+        } }),
+      })).json()).world;
+      const first = await waitForWorldTerminal(origin, created.id);
+      assert.equal(first.world.status, "failed");
+      assert.equal(first.world.whiteboxOutcome, "passed");
+      for (let index = 0; index < 300 && studio.activeJobs.length; index++) await new Promise(resolve => setTimeout(resolve, 10));
+      const root = path.join(fakeRepoRoot, "artifacts/scenes", created.id);
+      const capturePath = path.join(root, "final/capture/formal-world-capture-receipt.json");
+      const before = await readFile(capturePath);
+      // Retry must use the frozen Case bytes, not reopen the user's upload.
+      await rm(path.join(dataRoot, "worlds", created.id, first.world.referenceImage.fileName));
+      if (retryMode === "stale-capture") await writeFile(path.join(root, "final/capture/opening.png"), VALID_EMPTY_OPENING_PNG);
+      if (retryMode === "stale-reference") await writeFile(path.join(root, "inputs/reference-0.png"), VALID_EMPTY_OPENING_PNG);
+      const retry = await fetch(`${origin}/api/worlds/${created.id}/retry`, { method: "POST" });
+      if (retryMode.startsWith("stale")) {
+        assert.equal(retry.status, 409);
+        assert.equal(invocations.length, 1);
+      } else {
+        assert.equal(retry.status, 202, await retry.text());
+        if (retryMode === "interrupted") {
+          for (let index = 0; index < 300 && invocations.length !== 2; index++) await new Promise(resolve => setTimeout(resolve, 10));
+          assert.equal(invocations.length, 2);
+          assert.equal(invocations[1].args[0], "agent:world:first-frame");
+          await studio.shutdown();
+          for (let index = 0; index < 300 && studio.activeJobs.length; index++) await new Promise(resolve => setTimeout(resolve, 10));
+          const next = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: true,
+            importExistingArtifacts: false, importBuiltinTestSets: false, importBuiltinResults: false,
+            lwdpConfigured: true, worldSpawnImplementation: () => { throw new Error("restart must not spawn"); } });
+          const nextOrigin = await listen(next);
+          try {
+            const { world } = await (await fetch(`${nextOrigin}/api/worlds/${created.id}`)).json();
+            assert.equal(world.attempt, 2);
+            assert.equal(world.status, "ready", world.error);
+            assert.deepEqual(world.nativeProductionClosure, first.world.nativeProductionClosure);
+            assert.deepEqual(await readFile(capturePath), before);
+          } finally { await next.shutdown(); }
+          return;
+        }
+        const second = await waitForWorldTerminal(origin, created.id);
+        assert.equal(second.world.attempt, 2);
+        if (retryMode === "whitebox-changed-during-child") {
+          assert.equal(second.world.status, "failed");
+          assert.equal(second.world.captureStatus, "failed");
+          assert.equal(second.world.whiteboxOutcome, "failed");
+          assert.equal(second.world.nativeLaunch, null);
+          assert.equal((await fetch(`${origin}/api/worlds/${created.id}/native-launch`)).status, 404);
+          assert.equal(invocations.length, 2);
+          assert.deepEqual(await readFile(capturePath), before);
+          return;
+        }
+        const passed = ["passed", "local-passed", "reused-pixels"].includes(retryMode);
+        const noChild = ["changed-before-spawn", "spawn-failed"].includes(retryMode);
+        assert.equal(second.world.status, passed ? "ready" : "failed", second.world.error);
+        assert.equal(second.world.whiteboxOutcome, "passed");
+        assert.equal(second.world.captureStatus, "passed");
+        assert.equal(second.world.productionOutcome, "passed");
+        assert.equal(second.world.publicationOutcome, "published");
+        assert.equal(second.world.strictDiagnosticOutcome, "failed");
+        assert.deepEqual(second.world.nativeProductionClosure, first.world.nativeProductionClosure);
+        assert.equal(invocations.length, noChild ? 1 : 2);
+        if (!noChild) assert.deepEqual(invocations[1], { command: "pnpm", args: ["agent:world:first-frame", "--",
+          "--scene-source", "babylon-native", "--scene-id", created.id,
+          "--user-frame", path.join(root, "inputs/reference-0.png"), "--backend", backend, "--resume"] });
+        assert.equal((await fetch(`${origin}/api/worlds/${created.id}/native-launch`)).status, 200);
+        if (!passed) assert.equal(second.world.failedStage, "visual-imagegen");
+        if (retryMode === "failed") {
+          for (let index = 0; index < 300 && studio.activeJobs.length; index++) await new Promise(resolve => setTimeout(resolve, 10));
+          assert.equal((await fetch(`${origin}/api/worlds/${created.id}/retry`, { method: "POST" })).status, 202);
+          const third = await waitForWorldTerminal(origin, created.id);
+          assert.equal(third.world.attempt, 3);
+          assert.equal(third.world.status, "failed");
+          assert.equal(third.world.captureStatus, "passed");
+          assert.deepEqual(third.world.nativeProductionClosure, first.world.nativeProductionClosure);
+          assert.equal(invocations.length, 3);
+          assert.deepEqual(invocations[2], invocations[1]);
+        }
+      }
+      assert.deepEqual(await readFile(capturePath), before);
     } finally { await studio.shutdown(); }
   });
 }

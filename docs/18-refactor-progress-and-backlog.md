@@ -2080,6 +2080,26 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   visual-only retry 接线及 Recording 下游继续开放。未运行真实模型 Case、Browser 看图、
   全仓 CI 或独立复核；全部 CF 实施及旧链对齐完成后再运行最后本地生产 Case。
 
+- CF16-STUDIO-VISUAL-RETRY（main-agent-only，接 `076a2f22`）：Studio 重试按钮现按已有
+  Native 发布闭包选择视觉续接，调用 `agent:world:first-frame --resume`，不再清空白膜后
+  重跑 Planner/Builder。使用原 backend 和 Case Hash 绑定的 reference-0；原上传文件删除
+  不影响恢复。排队、运行、失败均保留原 production/publication/strict diagnostic/launch，
+  Studio attempt/evaluation-run 更新不改写 Native Run/Attempt 或视觉 router 请求身份。
+  开始前、实际派发前及终态复核既有产物完整性；缺失/被改动的输入不回落成完整生成。
+  视觉子进程不再被要求重新输出 Native production result，也不能替换原结果。显式恢复
+  仍使用原视觉入口的请求/交付 Hash 和两个 finalizer，不要求复用像素拥有本轮 Studio
+  attempt 的新 mtime；完整生成及自动重启的原 freshness 行为未改。
+  补齐执行期间失败隔离：仅 appearance reference 失效时视觉失败、白膜仍 passed/published；
+  若白膜自身实际 Capture 证据失效，才撤销启动资格并清除残留的 whitebox passed 显示。
+  12 个重试场景均取得通过证据，覆盖 local/cloud、连续重试、旧像素、原上传删除、
+  异常 production 输出、派发前/执行中 mutation、启动失败及第二次执行 shutdown/restart。
+  最后仅修正启动接口既有 404 预期，单项复跑 1/1；不是新增一条验收。既有 Native styled/
+  restart/Canonical recovery/atomic-root 13/13，以及 mutation/nonzero/atomic-root/队列/
+  停止 9/9 通过，两组有重复、不累加。Node 语法与 diff 检查通过。只改 MJS 和文档，
+  未重跑此前已覆盖的 root typecheck；没有真实模型、Browser 看图、全仓 CI 或独立复核。
+  local 缺交付收据的终态核对、旧时间戳交付在中断重放后的自动恢复、Recording 下游及
+  其余 CF 仍开放；不据该入口接线关闭 CF-16，也不提前运行最后本地生产 Case。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

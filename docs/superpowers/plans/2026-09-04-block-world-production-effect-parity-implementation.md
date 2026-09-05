@@ -782,6 +782,36 @@ not silently spawn a new model; explicit local terminal recovery remains open.
 Studio visual-only retry is the next consumer, not implemented by the wrapper
 alone. All remaining CF implementation/alignment precedes the final real Case.
 
+#### CF16-STUDIO-VISUAL-RETRY
+
+Main-agent-only, sequential after VISUAL-TASK-REPLAY. The existing Studio record
+and queue own the UI attempt; the original Native Run and visual router retain
+their identities. A reference-backed Native record with retained published
+whitebox resumes only the existing visual CLI, with `--resume`, original backend
+and the Case-hashed reference-0. The upload need not still exist. Changed whitebox
+or reference bytes cannot silently select full Planner/Builder generation.
+
+Keep production/publication/strict-diagnostic and Native launch state while
+queueing, running or failing the visual retry. Write the new Studio evaluation-run
+identity before spawning so its existing restart recovery can consume completed
+visual outputs. Revalidate before dispatch and after child termination. The visual
+child does not emit or replace the original Native production result. A successful
+explicit resume uses the existing finalizer/hash closure; its reused pixels need
+not have new modification times matching the Studio retry. Ordinary full-run and
+automatic restart freshness checks remain unchanged. No new image reviewer,
+similarity threshold, source repair or provider retry budget is introduced.
+
+Required focused evidence: local/cloud CLI routing, success/failure/repeated retry,
+unexpected production result, changed Capture/reference, removed original upload,
+input change before/during execution, spawn failure, old delivered pixels, and shutdown/restart
+with complete visual delivery. Appearance-only failure preserves whitebox; changed
+whitebox evidence revokes launch and cannot retain a stale passed UI projection.
+Preserve original Capture Receipt/closure and strict
+diagnostic; queue/concurrency/stop and existing delivery/recovery behavior must hold.
+Local missing-delivery terminal reconciliation, interrupted replay of old-timestamp
+delivery under automatic restart, Recording consumers and remaining CF work remain
+open. This is synthetic HTTP/process evidence, not a real model Case.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal
