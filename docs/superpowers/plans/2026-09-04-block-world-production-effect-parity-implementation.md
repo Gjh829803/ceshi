@@ -591,6 +591,23 @@ still close complete Subject shape, actual capabilities and frozen identities
 through the existing Host/compiler owners; a silent G Bot fallback or new early
 production veto is not completion.
 
+M-C prerequisite batch (main-agent-only, sequential; baseline `66d8ebc5`):
+
+| Task | Exclusive owner and contract | Evidence / integration dependency |
+| --- | --- | --- |
+| CF-12/M-C1 | Compiler: extract the existing normalized Subject/resources-to-Runtime projection into one source-neutral implementation. Canonical compilation calls that same owner; input needs only normalized Subject/resource/placement data, not terrain, world settings, a Canonical Scene Plan or another Runtime. Preserve every field, resource lock check, diagnostic and default. This is trusted compilation, not an untrusted-input admission API. | Pre-extraction Runtime/Scene hashes for registered, package primitive and rigged Subjects; direct projection parity, deterministic ordering/input immutability, existing malformed resource/relationship/medium regressions, compiler tests/typecheck and affected portable bundle drift. No model task or added production gate. |
+| CF-12/M-C2 | Native Host Subject preparation consumes C1 together with existing Authoring normalization and Registry owners; close requested shape/modes and selected compiled capability identity. Do not create a synthetic Canonical world as Native production truth, copy the compiler, or select executable modes by name. | Depends on C1 and the explicit Native Host input/output activation; close source, Request/Attempt, proxy, Package, Capture and resume identities together. C1 alone does not replace the fixed G Bot or complete M-C. |
+
+C1 implementation checkpoint: Canonical now consumes the extracted
+`compileNormalizedSubjectResourcesV1`; the original nested copy is removed.
+Three pre-extraction WRT/Scene identities remain unchanged. Compiler/Builder
+consumer tests pass 50/50, the affected P1.5 exported-medium regression passes
+1/1, and typecheck, portable bundle drift and 3C migration pass. The extracted
+projection is byte-identical after necessary API/type renaming. Full evidence
+and exclusions are recorded in docs/18. C2 is not implemented: Native production
+still uses its existing fixed Host closure; this checkpoint does not claim
+requested shape/movement selection or real Runtime/visual parity.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

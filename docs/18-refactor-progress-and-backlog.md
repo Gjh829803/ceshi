@@ -2316,6 +2316,28 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   后续仍需完成 M-C 的 Host 主体构造/选择、完整视觉形状和能力/身份/Hash 传播，不能
   用静默 G Bot 替换、删掉请求模式或新增前置生产 veto 代替实现。
 
+- CF-12/M-C1 唯一 Subject 编译入口（2026-09-06，接 `66d8ebc5`，main-agent-only）：
+  从 Canonical compiler 提取现有 Subject/Asset/Rig/Animation/Collider/Capability 编译
+  到 `packages/compiler/src/compile-subjects.ts`，公开
+  `compileNormalizedSubjectResourcesV1`；Canonical 已消费同一入口，原内嵌副本删除。
+  输入仅需已准入的 normalized Subject 资源与节点，不要求世界、地形、Camera 或
+  Canonical Scene Plan；原输入准入、完整 resource-lock identity 和 entity ID 唯一性
+  仍由调用 Host 负责，不能把这个可信编译函数当成未可信 JSON admission 的替代品。
+  没有改动任何运动、相机、碰撞或拒绝规则，也没有接入按名称猜能力的 selector。
+  实施前在 `66d8ebc5` 固定注册主体、package primitive、package rigged 三组完整
+  WRT/Scene Hash；新入口先复现 3 个缺失函数 RED。提取后编译器首轮 48/48，
+  三组 Hash 完全不变；加强输入/输出对象完全分离、逆序稳定与直接非法资源拒绝后，
+  编译器/Builder Skill 两文件最终 50/50。Runtime P1.5 的直接 medium 入口回归
+  1/1，通过原 public export 验证保留拒绝行为，不冒充完整 P1.5 运行验收。
+  迁出函数体与原实现按必要 API/type 重命名后逐字节对拍一致。Canonical portable
+  checker 由原 producer 重建，Planner/Builder drift、Node 语法、typecheck、
+  3C migration（11 entries、39 live references、10 authority invariants）及 diff
+  检查通过。Native checker/冻结副本没有发生字节变化，不重复其未失效专项测试。
+  本批无新增测试文件；无新模型、Browser、最终本地 Case、全仓 CI 或独立审查。
+  **这只完成 C1 编译依赖，不是 Native Host Subject 选择已接通**：当前默认生产
+  仍使用原固定闭包。C2 必须继续闭合完整主体形状/真实能力及 Request、Proxy、Package、
+  Capture、resume 的精确身份，不能以本次提取或三组 Hash 一致关闭 M-C/CF-12。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
