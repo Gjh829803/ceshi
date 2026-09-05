@@ -1258,7 +1258,10 @@ describe("compileWorld", () => {
     const world = structuredClone(normalized.value!);
     mutate(world);
 
-    expect(() => compileNormalizedSubjectResourcesV1(world)).toThrow(message);
+    expect(() => compileNormalizedSubjectResourcesV1({
+      resources: world.resources,
+      nodes: world.nodes.filter((node) => node.kind === "subject" || node.kind === "anchor"),
+    })).toThrow(message);
 
     expect(compileNormalizedWorld(world)).toEqual({
       ok: false,

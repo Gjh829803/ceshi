@@ -608,6 +608,28 @@ and exclusions are recorded in docs/18. C2 is not implemented: Native production
 still uses its existing fixed Host closure; this checkpoint does not claim
 requested shape/movement selection or real Runtime/visual parity.
 
+C2 execution split (main-agent-only, sequential; input baseline `beae162b`):
+
+| Task | Owner / output contract | Evidence / remaining integration |
+| --- | --- | --- |
+| CF-12/M-C2A | `scripts/reconstruction/native-subject-host-closure.ts`: given an explicit registered ref or package Subject definition and Host-owned IDs/Camera/gravity, reuse existing Subject schema validation, normalization, resource locking, C1 compilation and core Gameplay/WRT constructors. Return one exact compiled Host closure and its Subject resource cost; no file writes, model call, semantic selection or synthetic Canonical world. | Registered, primitive-composed and rigged inputs; unchanged actual descriptor/profiles; input immutability; invalid/reserved resources and accessor rejection; actual Native generation Request/proxy preparation and changed-definition identities. This constructor does not certify requested movement support or whole-Package budgets. |
+| CF-12/M-C2B | Same Native Host owner: activate the source of explicit Subject intent and bind requested modes/primary identity to the selected compiled result; replace the fixed Cloud Ridge closure in production, including full Subject resource budgeting and immutable Request/Attempt/proxy/Package/Capture/resume propagation. | Depends on C2A; old selection/self-check timing and Native ownership must remain explicit. Do not silently select by preset name, substitute G Bot, delete unsupported requested modes, or add an early ordinary-production veto. All current producer/consumer and frozen input changes must close together. |
+
+C2A implementation checkpoint: the explicit Host constructor and shared Subject
+projection exist. Actual Native Request/proxy preparation accepts registered
+asset, registered primitive, package primitive and package rigged closures.
+The proxy's former global-Registry-only assumption is removed for package refs;
+package Definition hash/lock and all existing asset checks remain. Registry
+visual comparison uses the normalized projection, preserving existing lock and
+visual comparison roles without an added normalized-Definition-hash gate.
+C1 inputs now require only consumed Subject/Anchor data, not Canonical placement
+provenance. Compiler/Request tests pass 89/89 before the final added cases; the
+10 new/strengthened cases and original Package-owner regression 1/1 pass, with
+typecheck, portable drift and 3C migration passing. The same eight pre-existing
+workspace-boundary violations remain. Detailed non-aggregate evidence is in
+docs/18. C2B remains unimplemented: the production runner still reads the fixed
+Cloud Ridge Host closure, and no requested-movement or final Case success is claimed.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

@@ -52,6 +52,7 @@ import {
 } from "./native-block-subject-visual-review-proxy.js";
 import { validateNativeWorldPlannerInputClosureV1 } from
   "./native-world-case-preparation.js";
+import { compileNativeSubjectProjectionV1 } from "./native-subject-host-closure.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
 const BUILDER_ADVISORY_OUTPUTS = Object.freeze([
@@ -427,19 +428,31 @@ export function deriveNativeBlockSubjectVisualReviewProxyV1(input: Readonly<{
     );
   }
   const subject = subjects[0]!;
-  const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
-    subject.subjectDefinitionRef,
-  );
   const definitionLocks = runtime.runtimeResourceLockEntries.filter((entry) =>
     entry.resourceKind === "subject-definition" &&
     entry.resourceRef === subject.subjectDefinitionRef
   );
-  if (
-    definition === undefined ||
-    definitionLocks.length !== 1 ||
-    definitionLocks[0]!.contentHash !== definition.contentHash ||
-    !isEqual(definition.visualParts, subject.visualParts)
-  ) {
+  const isPackageDefinition = /^package:\/\/subject-definition\/[a-z0-9][a-z0-9.-]*@[1-9][0-9]*$/.test(subject.subjectDefinitionRef);
+  let definitionMatches = false;
+  if (definitionLocks.length === 1 && isPackageDefinition) {
+    // Package Definitions are normalized and compiled by the Host, not global
+    // Registry entries. Their lock binds the normalized Definition hash; the
+    // parsed WRT and frozen Request bind the exact compiled visual descriptor.
+    definitionMatches = definitionLocks[0]!.contentHash === subject.subjectDefinitionHash;
+  } else if (definitionLocks.length === 1) {
+    const registered = compileNativeSubjectProjectionV1({
+      controlledEntityId: subject.entityId,
+      subject: { source: "registry", subjectDefinitionRef: subject.subjectDefinitionRef },
+    });
+    if (registered.ok) {
+      const expectedLock = registered.resources.resourceLock.find((entry) =>
+        entry.resourceKind === "subject-definition" && entry.resourceRef === subject.subjectDefinitionRef);
+      const expectedSubject = registered.projection.subjects[0]!;
+      definitionMatches = expectedLock?.contentHash === definitionLocks[0]!.contentHash &&
+        isEqual(expectedSubject.visualParts, subject.visualParts);
+    }
+  }
+  if (!definitionMatches) {
     throw new TypeError(
       "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: Subject definition Registry closure failed.",
     );

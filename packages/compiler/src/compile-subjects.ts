@@ -31,8 +31,12 @@ export interface NormalizedSubjectCompileInputV1 {
   readonly resources: Pick<NormalizedWorldIRV4["resources"],
     "subjectDefinitions" | "subjectAssets" | "rigProfiles" |
     "animationSets" | "colliderProfiles" | "resourceLock">;
-  readonly nodes: readonly NormalizedWorldNodeV4[];
+  readonly nodes: readonly NormalizedSubjectCompileNodeV1[];
 }
+
+export type NormalizedSubjectCompileNodeV1 =
+  | Pick<Extract<NormalizedWorldNodeV4, { kind: "anchor" }>, "id" | "kind" | "transform">
+  | Pick<Extract<NormalizedWorldNodeV4, { kind: "subject" }>, "id" | "kind" | "subjectDefinitionRef" | "spawnAnchorEntityId">;
 
 export interface CompiledSubjectV1 extends RuntimeSubjectDescriptorV1 {
   readonly spawnAnchorEntityId: string;
@@ -464,7 +468,7 @@ export function compileNormalizedSubjectResourcesV1(
   const anchorsByEntityId = new Map(
     world.nodes
       .filter(
-        (node): node is Extract<NormalizedWorldNodeV4, { kind: "anchor" }> =>
+        (node): node is Extract<NormalizedSubjectCompileNodeV1, { kind: "anchor" }> =>
           node.kind === "anchor",
       )
       .map((anchor) => [anchor.id, anchor]),
@@ -477,7 +481,7 @@ export function compileNormalizedSubjectResourcesV1(
 
   const subjects = world.nodes
     .filter(
-      (node): node is Extract<NormalizedWorldNodeV4, { kind: "subject" }> =>
+      (node): node is Extract<NormalizedSubjectCompileNodeV1, { kind: "subject" }> =>
         node.kind === "subject",
     )
     .sort((left, right) => left.id.localeCompare(right.id))

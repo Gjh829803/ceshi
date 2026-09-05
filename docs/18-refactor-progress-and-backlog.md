@@ -2338,6 +2338,37 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   仍使用原固定闭包。C2 必须继续闭合完整主体形状/真实能力及 Request、Proxy、Package、
   Capture、resume 的精确身份，不能以本次提取或三组 Hash 一致关闭 M-C/CF-12。
 
+- CF-12/M-C2A Host Subject closure 与 Native Request 接口（2026-09-06，接
+  `beae162b`，main-agent-only）：新增 `native-subject-host-closure.ts`，输入为显式
+  Registry ref 或 package Subject definition，以及 Host 的 ID、Camera、gravity。
+  使用现有 Subject schema/normalizer、ResourceLockBuilder、C1 compiler 和 core
+  Gameplay/WRT constructors，生成精确 Runtime、Gameplay 与 Registry Lock，并返回
+  单主体资源成本。该函数不解释 Planner 文本、不猜模式、不选择近似、不写文件或启动任务；
+  整包预算与完整模式/视觉身份选择仍归 C2B，不能把 constructor 成功当成生产验收。
+  真实 `prepareNativeBlockGenerationTaskV1` 接口测试复现 package 主体在视觉代理
+  被误要求存在于全局 Registry 的拒绝。现代理按来源核对：registered 使用同一
+  Subject projection owner 的已归一化视觉部件与 Registry lock；package 使用 Host
+  编译后的 normalized Definition hash 和 WRT lock。已有资产 inventory/内容/边界
+  校验继续保留，正式调用仍先解析 WRT、冻结确切 bytes 并绑定 Request/Attempt。
+  不新增一次 WRT 预检来改变原诊断顺序，也不把 Registry 主体新增归一化 Hash 等式
+  升为普通生产门槛。原 G Bot、registered primitive、package primitive、package rigged
+  四类都已通过实际 Request/Proxy 准备；这不是模型生成或完整 Package/Capture 验收。
+  接入还纠正 C1 输入类型过宽：仅要求实际使用的 Subject/Anchor 字段，不再要求
+  Native 提供无关的 Canonical `placementProvenance`。Canonical 传入同一筛选后的
+  数据；既有三组 WRT/Scene Hash 回归继续通过，未伪造布局或另一 Scene Source。
+  证据：首次新接口模块缺失；实现后 package 两类在旧 Proxy 拒绝，修复后首组三类
+  3/3；回归发现重复 WRT 解析提前覆盖既有资产诊断，已恢复原顺序。编译器/Request
+  两文件随后 89/89。新增/加强的四类准备、未知/不可用主体、schema/accessor、
+  形状变更与错误 package lock 共 10/10；测试中带 contentHash 调用 body constructor
+  的夹具错误已修正，未修改 Runtime parser。原 Package-owner 定向回归 1/1。
+  各轮有重叠，不累计为整仓覆盖。最终 typecheck、Canonical portable checker drift、
+  Node 语法、3C migration 与 diff 检查通过；Native checker/冻结副本未变。
+  workspace-boundaries 仍失败于此前相同 8 处私有跨包引用，本批无新增；不能报告全仓通过。
+  **共享 Subject projection 已服务现有 Proxy，但 `run-production.ts` 仍读取固定
+  Cloud Ridge Host closure。** C2B 的显式主体意图来源、实际生产替换、全成本与最终
+  Package/Capture/resume 接线尚未完成。无付费任务、新真实 Browser/模型 Case、最终
+  本地 Case、全仓 CI 或独立审查；全部 CF 完成并对齐旧链后才运行最终本地生产 Case。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

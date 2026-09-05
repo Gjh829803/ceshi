@@ -538,7 +538,10 @@ function compileWorldCore(input: CompileWorldCoreInput): CompileWorldCoreResult 
       animationSets,
       colliderProfiles,
       resourceCost: subjectResourceCost,
-    } = compileNormalizedSubjectResourcesV1(world);
+    } = compileNormalizedSubjectResourcesV1({
+      resources: world.resources,
+      nodes: world.nodes.filter((node) => node.kind === "subject" || node.kind === "anchor"),
+    });
     const spawnDiagnostics = validateCompiledSpawnFootprintsV3(
       subjects,
       waters,
