@@ -1786,6 +1786,12 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   已修正计划中可能误读为“中途 Host 握手”的文字；恢复时不拆成两任务、不加独立
   reviewer 发布 veto。该条仍未实现；Native 下游 styling scope/目标证据接入另须闭合，
   不能反转已完成白模的 productionOutcome。
+- 用户要求空闲 worker 及时补位，已在 `aaae92f6` 隔离分配三条 ready 工作：
+  `CF06/INSPECTOR-WINDOW`（cf29-progress-visibility，列表窗口化及选择/ARIA），
+  `CF07/DIRECT-CANVAS`（cf01-stack-safe，同尺寸直接录制及生命周期），
+  `CF03/SUPPORT-REPRODUCER`（cf-integration-candidate，只做当前 zero-normal 条件复现，
+  不改生产 Runtime）。三条状态均为进行中，不计完成；旧分支保留。主进程保留
+  CF-16 跨域合同和最终集成，Browser/编码验证串行调度，CF-03 独占 worker Havok lane。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，

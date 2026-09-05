@@ -618,6 +618,22 @@ actual consumer map and RED proposals, not an implementation or new status autho
 the next contract freeze and final integration; no worker starts model/Browser/media jobs.
 Restoring the old complete workflow takes priority over adding an independent image scorer.
 
+#### Ready parallel work after CF-14 acceptance
+
+User explicitly requests immediate refill of idle workers. Main retains CF-16 cross-cutting
+contract/production integration; workers use separate existing worktrees based on `aaae92f6`.
+No worktree deletion or new live status authority. Read the actual current owner before editing.
+
+| Task / mode | Frozen contract and exclusive ownership | Required output / resource boundary |
+| --- | --- | --- |
+| CF06/INSPECTOR-WINDOW / parallel-safe | Playground Feature inspector, `main.ts`, relevant `style.css`, one local windowing helper/tests; same FeatureInspection data and selected feature identity; only rendered row set changes | 5,738/10,000 rows, bounded DOM/overscan, scroll edges, selection/ARIA/dispose. Pure/DOM focused tests only; main integrates Browser evidence. No Runtime/Capture/CanvasRecorder or root dependency edits without coordination. |
+| CF07/DIRECT-CANVAS / parallel-safe | `canvas-recorder.ts` and its tests; exact requested raster uses the source canvas stream, mismatched raster retains existing scale-copy implementation | Unchanged 24fps/default size/MIME/output lifecycle; direct path avoids copy timer/canvas; exact/mismatch/resize/throwing cleanup/dispose tests. No inspector/Runtime/visual generation edits or Browser/real encoder until main assigns exclusive lane. |
+| CF03/SUPPORT-REPRODUCER / parallel-safe investigation | Current Babylon/Havok checkSupport and existing BodyPort tests, isolated candidate tree; only focused test/reproducer additions, no production owner mutation | Compare old zero-normal case to installed 9.23.0 source and actual current owner. Produce reproducible fake-driver and bounded real-Havok evidence, or explain non-reproduction limits; no fabricated upward normal. Own sole worker Havok lane, no Browser/server/full gates. Runtime fix remains main-agent-owned after a proven RED and frozen correction. |
+
+Workers return exact commit, files, commands/exit codes, remaining evidence and concerns; their
+success is not integration proof. Main reuses unaffected evidence and schedules any Browser or
+media gate one at a time. Shared contract/package changes return to main before implementation.
+
 CF-26B Cloud retries, CF-31C Host-only recovery, full CF-13/NBR strict acceptance, full multi-mode CF-12,
 general per-view CF-14/24 and full feature-scoring CF-21, inspector/performance polish, and Episode/media
 remain recorded but are not unconditional first-rerun blockers. If a new 054 Planner output actually
