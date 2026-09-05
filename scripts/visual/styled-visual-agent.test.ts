@@ -35,7 +35,7 @@ async function fixture() {
     "visual-identity-palette.json": JSON.stringify({ targets: targetIds.map(visualTargetId => ({ visualTargetId })) }),
     "triviews/whitebox-triview-manifest.json": JSON.stringify({ kind: "worldkit-whitebox-triview-manifest", schemaVersion: 1,
       worldBuildIdentityHash: `sha256:${"a".repeat(64)}`, whiteboxTriviews: targetIds.map((visualTargetId, index) => ({
-        visualTargetId, runtimeEntityIds: [visualTargetId], role: index ? "primary-landmark" : "primary-subject",
+        visualTargetId, runtimeEntityIds: [visualTargetId], frontDirectionWorldXZ: [0, -1], role: index ? "primary-landmark" : "primary-subject",
         semanticClassId: index ? "landmark.palace" : "subject.traveler", identityColor: index ? "#5D9FE8" : "#E85D5D",
         views: ["front", "right", "back"], imageUri: `${visualTargetId}/whitebox-triview.png`,
       })) }),

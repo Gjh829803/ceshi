@@ -89,6 +89,7 @@ Read these files completely before writing either output:
 - Treat each palette target as one complete visual object or one intentionally identical repeated set. Prefer one coherent Prototype/Object when a primitive can carry the silhouette; otherwise use only a few major masses and keep all of them in that target's single `runtimeEntityIds` mapping.
 - Do not make roofs, columns, rings, supports, route slices, collision helpers, or repeated construction pieces independent identity elements. They remain parts of their owning complete object.
 - Use the exact `visual-target-N` ID from `visual-identity-palette.json` as `visualTargetId` in the map. Runtime entity IDs remain descriptive Canonical IDs; they do not need to copy the target ID.
+- Declare each complete target's `frontDirectionWorldXZ` in the implementation map: one of `[0,-1]`, `[-1,0]`, `[0,1]`, `[1,0]`, in world coordinates. Use its semantic front after placement, not the entry camera direction. The startup Subject faces `[0,-1]`; a landmark's front follows its own authored orientation. The Host preserves this declaration for Front/Right/Back captures.
 - The brief already selected 1-5 targets including the primary subject. Do not add generic terrain, ordinary repeated decoration, structural parts, or background filler to the map. Do not split identical repeated instances into separate visual targets.
 - Default whitebox components are neutral white. Identity colors are host-owned capture metadata and must not be encoded in Prototypes, semantic classes, or entity names.
 

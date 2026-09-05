@@ -36,11 +36,11 @@ function validInput() {
     authoringSpecHash,
     visualTargetMappings: [{
       visualTargetId: "player-subject",
-      runtimeEntityIds: ["player", "player-hat"],
+      runtimeEntityIds: ["player", "player-hat"], frontDirectionWorldXZ: [0, -1],
     }],
     visualCaptureGroups: [{
       visualTargetId: "player-subject",
-      runtimeEntityIds: ["player", "player-hat"],
+      runtimeEntityIds: ["player", "player-hat"], frontDirectionWorldXZ: [0, -1],
       role: "primary-subject",
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
@@ -155,6 +155,16 @@ test("fails closed when implementation mappings and capture groups do not close"
     implementationMap.visualCaptureGroups[0].runtimeEntityIds = ["player"];
     input.implementationMapSource = JSON.stringify(implementationMap);
   });
+});
+
+test("uses the shared mapping contract for declared front and group direction identity", () => {
+  for (const frontDirectionWorldXZ of [undefined, [0, 0], [1, 0]]) {
+    expectCode("STUDIO_PREVIEW_AUTHORITY_MISMATCH", input => {
+      const map = JSON.parse(input.implementationMapSource);
+      map.visualCaptureGroups[0].frontDirectionWorldXZ = frontDirectionWorldXZ;
+      input.implementationMapSource = JSON.stringify(map);
+    });
+  }
 });
 
 test("rejects the retired mappings field and competing capture-group id", () => {

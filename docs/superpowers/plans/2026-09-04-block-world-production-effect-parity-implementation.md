@@ -689,13 +689,21 @@ behaviors; material deviations require user confirmation, not an "optimization" 
 | CF16/26B-ROUTED-STAGE | Visual launcher supplies `visual-reconstruction` to the existing router; Studio projects that stage for display/usage only, and consumes real formal Cloud markers. No second retry policy. | Actual dispatched stage exercises old maximum/prior attempts, timeout cap and backoff. Studio real child-output ingestion and usage/status regressions. |
 | CF16-CAPTURE-DETAILS | Existing Babylon artifact capture + runtime-contracts pixel inspector; old shared scale, background, soft visibility, target activation and per-panel render/flush/inspection retry. No new pixel threshold or publication veto. | Asymmetric real Babylon camera, synthetic immediate/delayed/empty pixels, mid-copy cleanup; old inspector copied with its exact constants. |
 | CF16-SEMANTIC-FRONT | Builder declaration through existing mapping, Host capture groups, Runtime request and manifest; retain old cardinal front and Front/Right/Back derivation, plus review-only style. No fixed front inference as a substitute. | Depends on capture details; current-only producer/contract/fixture/Skill closure and direction/render-style regressions, then real rendered inspection. |
+| CF16-HOST-TRIVIEW | Existing CLI Browser callback and Host file writer; old four capture attempts with 50ms yields, Runtime pixel inspection, failed PNG/report retention, validate all targets before replacing accepted images. Studio Preview uses the sole runtime-contracts parser. | Depends on semantic-front; serialized callback tests, one missing panel, failure bytes/unchanged accepted images, final manifest direction and Studio Preview integration. No sparse-color alternative or new cutoff. |
 | CF16-NATIVE-STYLING | Native declared complete-target evidence and existing post-capture styling scope. | Depends on semantic-front; restore old ordering/accepted opening anchor and downstream failure isolation without another World State or success authority. |
 
 No entire old file or historical receipt is wholesale restoration authority. Keep
 current formal capture/identity/measurement owners intact while porting these behaviors.
 
-CF-26B Cloud retries, CF-31C Host-only recovery, full CF-13/NBR strict acceptance, full multi-mode CF-12,
-general per-view CF-14/24 and full feature-scoring CF-21, inspector/performance polish, and Episode/media
-remain recorded but are not unconditional first-rerun blockers. If a new 054 Planner output actually
-triggers omitted target identity or another one of these direct input defects, fix the demonstrated
-blocking slice before Builder; never bypass it or silently drop the target.
+The latest user objective supersedes the earlier early-rerun scheduling: finish all CF
+implementation and old-branch alignment first; only then run the final local Case and
+prove the production chain completes. Do not launch a fresh production/model Case during
+partial implementation. Focused synthetic regressions remain allowed. CF-26B/31C, full
+CF-13/NBR acceptance, multi-mode CF-12, per-view CF-14/24, feature-scoring CF-21,
+inspector/performance and Episode/media retain their full recorded scope; no smaller
+subset is redefined as completion.
+
+The Canonical CLI still needs CF-02 caller alignment: its direct 30s startup wait and
+single capture operation differ from the old progress/stall-aware startup and transient
+navigation recovery. Reuse the current startup owner, preserve the old budgets/timing,
+and test callers; do not introduce another watchdog or gate.

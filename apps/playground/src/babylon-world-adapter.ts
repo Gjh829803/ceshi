@@ -2,6 +2,7 @@ import {
   parseCanonicalSceneExecutionPlanV1,
   parseWorldRuntimeBootstrapV1,
   validateVisualCaptureGroupsV1,
+  inspectWhiteboxTriviewPixelsV1,
   type ApplyCameraPreviewRequestV1,
   type ApplySubjectPresetTuningRequestV1,
   type CameraPreviewStateV1,
@@ -871,6 +872,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     this.visualCaptureGroups = groups.map((target) => Object.freeze({
       ...target,
       runtimeEntityIds: Object.freeze([...target.runtimeEntityIds]),
+      frontDirectionWorldXZ: Object.freeze([...target.frontDirectionWorldXZ]) as readonly [number, number],
     }));
     return this.listVisualCaptureGroups();
   }
@@ -884,19 +886,23 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
     if (target === undefined) {
       throw new Error(`WORLDKIT_CAPTURE_TARGET_NOT_FOUND: ${visualTargetId}`);
     }
+    const capture = this.activeRuntime().captureArtifactView({
+      kind: "entity-triview",
+      widthPixels: Math.max(3, this.canvas.width),
+      heightPixels: Math.max(1, this.canvas.height),
+      entityIds: target.runtimeEntityIds,
+      identityColor: target.identityColor,
+      frontDirectionWorldXZ: target.frontDirectionWorldXZ,
+      renderStyle: "runtime-lit-review",
+    });
     return {
       kind: "worldkit-whitebox-triview-capture",
       schemaVersion: 1,
       visualTargetId,
       runtimeEntityIds: [...target.runtimeEntityIds],
       views: ["front", "right", "back"],
-      imageDataUri: this.activeRuntime().captureArtifactView({
-        kind: "entity-triview",
-        widthPixels: Math.max(3, this.canvas.width),
-        heightPixels: Math.max(1, this.canvas.height),
-        entityIds: target.runtimeEntityIds,
-        identityColor: target.identityColor,
-      }).dataUrl,
+      imageDataUri: capture.dataUrl,
+      inspection: inspectWhiteboxTriviewPixelsV1(capture.pixelsRgba, capture.widthPixels, capture.heightPixels),
     };
   }
 
@@ -1019,6 +1025,7 @@ export class BabylonWorldAdapter implements PlaygroundWorldAdapter {
         instance.binding.id,
       ),
       identityColor: prototype.instanceColor,
+      frontDirectionWorldXZ: [0, -1],
     }).dataUrl;
   }
 

@@ -260,10 +260,10 @@ describe("loadAuthoringScene", () => {
       sceneBriefHash: `sha256:${"b".repeat(64)}` as const,
       authoringSpecId: authoringSpec.id,
       authoringSpecHash: authoringSpecHash as `sha256:${string}`,
-      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
       visualCaptureGroups: [{
         visualTargetId: "player-subject",
-        runtimeEntityIds: ["player"],
+        runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
         role: "primary-subject",
         semanticClassId: "subject.player",
         identityColor: "#E85D5D",
@@ -291,7 +291,7 @@ describe("loadAuthoringScene", () => {
     });
     expect(preview.visualCaptureGroups).toEqual([{
       visualTargetId: "player-subject",
-      runtimeEntityIds: ["player"],
+      runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
       role: "primary-subject",
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
@@ -320,10 +320,10 @@ describe("loadAuthoringScene", () => {
         sceneBriefHash: `sha256:${"b".repeat(64)}`,
         authoringSpecId: authoringSpec.id,
         authoringSpecHash,
-        visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+        visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
         visualCaptureGroups: [{
           visualTargetId: "player-subject",
-          runtimeEntityIds: ["player"],
+          runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
           role: "primary-subject",
           semanticClassId: "subject.player",
           identityColor: "#E85D5D",

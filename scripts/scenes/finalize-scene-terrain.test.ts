@@ -69,6 +69,8 @@ describe("scene terrain finalizer", { timeout: 30_000 }, () => {
     // authoringSpecId to equal the Host scene id on this working copy.
     builderAuthoring.id = SCENE_ID;
     mapDraft.authoringSpecId = SCENE_ID;
+    // Adapt only this disposable test copy; historical receipts remain untouched.
+    for (const mapping of mapDraft.visualTargetMappings) mapping.frontDirectionWorldXZ = [0, -1];
     for (const definition of builderAuthoring.resources.subjectDefinitions) {
       definition.allowedOverridePaths = [];
     }

@@ -2029,7 +2029,7 @@ describe("installDeferredWorldkitBrowserApi", () => {
         adapter,
         visualCaptureGroups: [{
           visualTargetId: "missing-target",
-          runtimeEntityIds: ["missing"],
+          runtimeEntityIds: ["missing"], frontDirectionWorldXZ: [0, -1],
           role: "primary-subject",
           semanticClassId: "subject.missing",
           identityColor: "#E85D5D",

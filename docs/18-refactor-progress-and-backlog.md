@@ -1866,6 +1866,37 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
     render style、Native complete-target sheets 与 styling scope。下轮先闭合这些生产者/
     消费者，不用固定世界轴或提示词补丁冒充目标方向，不关闭 CF16/PROD10 或整个 CF。
 
+- semantic-front / Host 三视图纠偏检查点（2026-09-06，同一 CF 分支，未跑真实 Case）：
+  - 当前目标已按用户最新要求固定：**所有 CF 实现和老分支对齐完成之后，最后再跑本地 Case，
+    证明生产链路贯通**。不以局部测试、单一白模或部分 CF 完成代替整个目标。
+  - 恢复旧 `frontDirectionWorldXZ` 必填 cardinal 声明、mapping/group 同方向合同与完整
+    Builder → Host group → Adapter → Runtime → manifest 传递。Canonical Skill/模板与
+    portable checker 同步；不存在缺字段时默认为世界前方的兼容路径。Catalog prototype
+    捕获仍保留旧的显式 `[0,-1]`，不拿它代替有声明的 complete-target。
+  - Runtime 原样恢复旧 Front/Right/Back 投影算法，四个 cardinal 方向各覆盖两种样式：
+    semantic mask 水平正交；`runtime-lit-review` 保留原材质、仰视 10°，共享比例尺。
+    Adapter 返回真实像素 inspection，并复制冻结方向数组，避免调用方事后改写。
+  - Host 恢复旧最多 4 次、间隔 50ms 的异步编译让步；删除 tri-view 稀疏颜色抽样替代物，
+    使用旧 Runtime 逐面前景 inspection。空面保留 `.failed/<target>/whitebox-triview.png`
+    和 `capture-failure.json`；全部目标通过后才替换接受图。阈值、失败 code 与来源均来自
+    `9e35ab53`，没有新增 gate。Browser callback 与既有 Host writer 在 CLI owner 内提取，
+    实际调用只保留一个，序列化 callback 回归验证无模块闭包依赖。
+  - Studio Preview 的重复 implementation-map 校验器已删除，复用 runtime-contracts
+    单一校验器，避免方向合同再次分叉。历史生成 Case 的 map/receipt 未改写；地形测试只
+    适配临时副本。代表性 Native Case 的冻结 checker 按仓库既有要求与 live bundle 同步。
+  - 定向证据：capture-targets + artifact-capture + spatial finalizer 三文件 41/41；Adapter、
+    authoring loader/API、visual 入口/closure 五文件 95/95；CLI + terrain finalizer 56/56；
+    Browser API 两项 2/2。Studio 定向 16/16，另 Preview bootstrap 10/10、更新后的
+    Preview/三视图交付集成 2/2。这里的 Browser API 测试是 stub，不是实际浏览器验收。
+  - Builder/portable/Native Skill 三文件初次 70/71，唯一失败是 frozen checker 旧副本；
+    同步后该条 1/1 通过，其他 70 条输入不变，未重跑整套。self-check bundle drift gate
+    通过；typecheck、diff check 通过。Skill quick_validate 因无 PyYAML 未成功，已有 YAML
+    parser 的 frontmatter/6 个引用/占位符检查通过；没有安装依赖或创建新验证 gate。
+  - 仍待：Native complete-target sheets 与 styling requested scope、真实方向/材质像素及
+    任务内图像检查/修复；CF-02 的 Canonical CLI startup/transient capture caller 仍保留
+    30s direct wait/单次调用，尚未对齐旧 progress/stall-aware 时序。无新付费任务、真实本地
+    Case、全仓 CI 或独立复核；CF16/PROD10、CF02 及整个 CF 保持未完成。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

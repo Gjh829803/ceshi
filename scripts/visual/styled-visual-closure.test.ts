@@ -55,7 +55,7 @@ async function fixture() {
     worldBuildIdentityHash: `sha256:${"a".repeat(64)}`,
     whiteboxTriviews: targetIds.map((visualTargetId, index) => ({
       visualTargetId,
-      runtimeEntityIds: [visualTargetId],
+      runtimeEntityIds: [visualTargetId], frontDirectionWorldXZ: [0, -1],
       role: index === 0 ? "primary-subject" : "primary-landmark",
       semanticClassId: index === 0 ? "subject.traveler" : "landmark.palace",
       identityColor: index === 0 ? "#E85D5D" : "#5D9FE8",

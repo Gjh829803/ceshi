@@ -5241,6 +5241,11 @@ function exactKeys(value, allowedKeys, instancePath) {
 function validIdArray(value) {
   return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && ID.test(item)) && new Set(value).size === value.length;
 }
+function validFrontDirectionWorldXZ(value) {
+  return Array.isArray(value) && value.length === 2 && [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
+    ([x, z]) => value[0] === x && value[1] === z
+  );
+}
 function validateVisualTargetMappings(value, instancePath) {
   if (!Array.isArray(value)) {
     return [diagnostic$1(
@@ -5270,7 +5275,7 @@ function validateVisualTargetMappings(value, instancePath) {
       ));
       return;
     }
-    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds"], path2));
+    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds", "frontDirectionWorldXZ"], path2));
     if (typeof mapping.visualTargetId !== "string" || !ID.test(mapping.visualTargetId)) {
       diagnostics.push(diagnostic$1(
         "HOSTED_VISUAL_TARGET_ID_INVALID",
@@ -5288,6 +5293,13 @@ function validateVisualTargetMappings(value, instancePath) {
       ));
     } else {
       runtimeEntityIds.push(...mapping.runtimeEntityIds);
+    }
+    if (!validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ)) {
+      diagnostics.push(diagnostic$1(
+        "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+        `${path2}/frontDirectionWorldXZ`,
+        "frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates."
+      ));
     }
   });
   if (new Set(visualTargetIds).size !== visualTargetIds.length) {
@@ -18103,7 +18115,7 @@ function search(input, profile, constraints, domains, stopAtFirst) {
   let bestPreferenceCostRatio;
   let bestLocalCostRatio;
   let bestSignature;
-  const compareAndStore = (assignment, evaluations) => {
+  const compareAndStore = (assignment2, evaluations) => {
     if (evaluations.some(
       (evaluation) => evaluation.requirement === "required" && !evaluation.satisfied
     )) return;
@@ -18119,52 +18131,57 @@ function search(input, profile, constraints, domains, stopAtFirst) {
       profile.quantization.scoreStep
     );
     const localCost = quantizeFinite(
-      Object.values(assignment).reduce((sum2, candidate) => sum2 + candidate.localCostRatio, 0),
+      Object.values(assignment2).reduce((sum2, candidate) => sum2 + candidate.localCostRatio, 0),
       profile.quantization.scoreStep
     );
     const signature = JSON.stringify(
-      Object.fromEntries(Object.keys(assignment).sort().map((id2) => [id2, assignment[id2].id]))
+      Object.fromEntries(Object.keys(assignment2).sort().map((id2) => [id2, assignment2[id2].id]))
     );
     if (bestAssignment === void 0 || preferenceCost < bestPreferenceCostRatio || preferenceCost === bestPreferenceCostRatio && localCost < bestLocalCostRatio || preferenceCost === bestPreferenceCostRatio && localCost === bestLocalCostRatio && signature.localeCompare(bestSignature) < 0) {
-      bestAssignment = { ...assignment };
+      bestAssignment = { ...assignment2 };
       bestEvaluations = evaluations;
       bestPreferenceCostRatio = preferenceCost;
       bestLocalCostRatio = localCost;
       bestSignature = signature;
     }
   };
-  const visit2 = (index, assignment) => {
-    if (budgetExceeded || stopAtFirst && bestAssignment !== void 0) return;
-    if (index === variables.length) {
-      const evaluations = constraints.map(
-        (constraint) => evaluatePlacementConstraintV1(context, constraint, assignment)
-      );
-      compareAndStore(assignment, evaluations);
-      return;
-    }
-    const variable = variables[index];
-    for (const candidate of domains.get(variable.id) ?? []) {
-      searchNodeCount += 1;
-      if (searchNodeCount > profile.budgets.maximumSearchNodes) {
-        budgetExceeded = true;
-        return;
-      }
-      assignment[variable.id] = candidate;
-      const readyRequired = constraints.filter(
-        (constraint) => constraint.requirement === "required" && constraintEntityIds$1(constraint, input).every((id2) => assignment[id2] !== void 0)
-      );
-      const hasViolation = readyRequired.some(
-        (constraint) => !evaluatePlacementConstraintV1(context, constraint, assignment).satisfied
-      );
-      if (!hasViolation) visit2(index + 1, assignment);
-      delete assignment[variable.id];
-      if (budgetExceeded || stopAtFirst && bestAssignment !== void 0) return;
-    }
-  };
   if ([...domains.values()].some((candidates) => candidates.length === 0)) {
     return { budgetExceeded: false, searchNodeCount: 0 };
   }
-  visit2(0, {});
+  const assignment = {};
+  const nextCandidateIndices = [0];
+  while (nextCandidateIndices.length > 0 && !(stopAtFirst && bestAssignment !== void 0)) {
+    const index = nextCandidateIndices.length - 1;
+    const variable = variables[index];
+    const candidates = index === variables.length ? [] : domains.get(variable.id) ?? [];
+    if (index === variables.length || nextCandidateIndices[index] >= candidates.length) {
+      if (index === variables.length) {
+        const evaluations = constraints.map(
+          (constraint) => evaluatePlacementConstraintV1(context, constraint, assignment)
+        );
+        compareAndStore(assignment, evaluations);
+      }
+      nextCandidateIndices.pop();
+      if (index > 0) delete assignment[variables[index - 1].id];
+      continue;
+    }
+    const candidate = candidates[nextCandidateIndices[index]];
+    nextCandidateIndices[index] += 1;
+    searchNodeCount += 1;
+    if (searchNodeCount > profile.budgets.maximumSearchNodes) {
+      budgetExceeded = true;
+      break;
+    }
+    assignment[variable.id] = candidate;
+    const readyRequired = constraints.filter(
+      (constraint) => constraint.requirement === "required" && constraintEntityIds$1(constraint, input).every((id2) => assignment[id2] !== void 0)
+    );
+    const hasViolation = readyRequired.some(
+      (constraint) => !evaluatePlacementConstraintV1(context, constraint, assignment).satisfied
+    );
+    if (hasViolation) delete assignment[variable.id];
+    else nextCandidateIndices.push(0);
+  }
   return {
     ...bestAssignment === void 0 ? {} : { bestAssignment },
     ...bestEvaluations === void 0 ? {} : { bestEvaluations },

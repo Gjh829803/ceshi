@@ -34,7 +34,14 @@ describe("Babylon artifact capture", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps one physical scale and baseline across asymmetric target tri-view panels", () => {
+  it.each(([
+    { front: [0, -1], right: [1, 0] },
+    { front: [-1, 0], right: [0, -1] },
+    { front: [0, 1], right: [-1, 0] },
+    { front: [1, 0], right: [0, 1] },
+  ] as const).flatMap(directions =>
+    (["semantic-mask", "runtime-lit-review"] as const).map(renderStyle => ({ ...directions, renderStyle })),
+  ))("keeps declared front $front and shared scale in $renderStyle", ({ front, right, renderStyle }) => {
     vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
     vi.stubGlobal("document", {
       addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -43,23 +50,36 @@ describe("Babylon artifact capture", () => {
     RegisterAbstractEngineStencil();
     const engine = new NullEngine();
     const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
     const camera = new FreeCamera("opening", new Vector3(0, 0, -8), scene);
     scene.activeCamera = camera;
     const target = MeshBuilder.CreateBox("asymmetric", { width: 2, height: 1, depth: 8 }, scene);
     target.metadata = { worldkitEntityId: "complete-target" };
-    target.material = new StandardMaterial("whitebox", scene);
+    const material = new StandardMaterial("whitebox", scene);
+    target.material = material;
+    const originalDiffuse = material.diffuseColor.asArray();
+    const originalEmissive = material.emissiveColor.asArray();
     vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(new FakeCanvasElement() as unknown as HTMLCanvasElement);
     const projections: { top: number | null; bottom: number | null; left: number | null; right: number | null }[] = [];
+    const cameraDirections: number[][] = [];
     scene.onBeforeRenderObservable.add(() => {
       if (scene.activeCamera?.name !== "worldkit.artifact.triview") return;
       const active = scene.activeCamera;
       projections.push({ top: active.orthoTop, bottom: active.orthoBottom,
         left: active.orthoLeft, right: active.orthoRight });
+      cameraDirections.push(active.position.normalizeToNew().asArray());
+      if (renderStyle === "runtime-lit-review") {
+        expect((target.material as StandardMaterial).diffuseColor.asArray()).toEqual(originalDiffuse);
+        expect((target.material as StandardMaterial).emissiveColor.asArray()).toEqual(originalEmissive);
+      } else {
+        expect((target.material as StandardMaterial).emissiveColor.toHexString()).toBe("#E85D5D");
+      }
     });
     try {
       const result = captureBabylonArtifactViewV1({ scene, engine, camera, request: {
         kind: "entity-triview", widthPixels: 6, heightPixels: 2,
         entityIds: ["complete-target"], identityColor: "#E85D5D",
+        frontDirectionWorldXZ: front, renderStyle,
       } });
       expect(result).toMatchObject({ widthPixels: 6, heightPixels: 2 });
       // The empty synthetic framebuffer exhausts the old eight renders per panel.
@@ -68,6 +88,16 @@ describe("Babylon artifact capture", () => {
         expect(projection).toEqual({ top: 8 * 0.58, bottom: -8 * 0.58,
           left: -8 * 0.58, right: 8 * 0.58 });
       }
+      const elevation = renderStyle === "runtime-lit-review" ? 10 * Math.PI / 180 : 0;
+      const expectedDirections = [front, right, [-front[0], -front[1]]];
+      for (let index = 0; index < cameraDirections.length; index += 1) {
+        const expected = expectedDirections[Math.floor(index / 8)]!;
+        expect(cameraDirections[index]![0]).toBeCloseTo(expected[0]! * Math.cos(elevation));
+        expect(cameraDirections[index]![1]).toBeCloseTo(Math.sin(elevation));
+        expect(cameraDirections[index]![2]).toBeCloseTo(expected[1]! * Math.cos(elevation));
+      }
+      expect(material.diffuseColor.asArray()).toEqual(originalDiffuse);
+      expect(material.emissiveColor.asArray()).toEqual(originalEmissive);
       expect(scene.activeCamera).toBe(camera);
     } finally { scene.dispose(); engine.dispose(); }
   });
@@ -131,6 +161,7 @@ describe("Babylon artifact capture", () => {
       const capture = () => captureBabylonArtifactViewV1({ scene, engine, camera, request: {
         kind: "entity-triview", widthPixels: 6, heightPixels: 2,
         entityIds: ["complete-target"], identityColor: "#E85D5D",
+        frontDirectionWorldXZ: [0, -1],
       } });
       if (copyFailure) {
         expect(capture).toThrow("framebuffer copy failed");

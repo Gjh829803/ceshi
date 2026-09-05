@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import { inspectWhiteboxTriviewPixelsV1 } from "@whitebox-world/runtime-contracts";
 
 import { installWorldkitAuthoringCaptureApi } from "./worldkit-authoring-capture-api";
 
 const TARGET = {
   visualTargetId: "visual-target-1",
   runtimeEntityIds: ["player"],
+  frontDirectionWorldXZ: [0, -1] as const,
   role: "primary-subject" as const,
   semanticClassId: "subject.player",
   identityColor: "#E85D5D" as const,
@@ -23,6 +25,7 @@ describe("WorldKit authoring capture API", () => {
         runtimeEntityIds: TARGET.runtimeEntityIds,
         views: ["front", "right", "back"] as const,
         imageDataUri: "data:image/png;base64,AA==",
+        inspection: inspectWhiteboxTriviewPixelsV1(new Uint8ClampedArray(12), 3, 1),
       })),
     };
     const installation = installWorldkitAuthoringCaptureApi(target, adapter);

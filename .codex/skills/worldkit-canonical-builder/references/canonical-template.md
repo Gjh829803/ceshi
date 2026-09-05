@@ -232,16 +232,20 @@ Write:
   "visualTargetMappings": [
     {
       "visualTargetId": "visual-target-1",
-      "runtimeEntityIds": ["player"]
+      "runtimeEntityIds": ["player"],
+      "frontDirectionWorldXZ": [0, -1]
     },
     {
       "visualTargetId": "visual-target-2",
-      "runtimeEntityIds": ["complex-landmark-plan-id"]
+      "runtimeEntityIds": ["complex-landmark-plan-id"],
+      "frontDirectionWorldXZ": [-1, 0]
     }
   ]
 }
 ```
 
 Map every target from `visual-identity-palette.json` exactly once and map nothing else. Runtime IDs must be real Subject or Object node IDs from `authoring.json`. The trusted host adds content hashes; never invent them in the draft.
+
+`frontDirectionWorldXZ` is the complete target's semantic front after world placement, not its local unrotated axis or the opening camera direction. Declare exactly one cardinal unit direction: `[0,-1]`, `[-1,0]`, `[0,1]`, or `[1,0]`. The landmark value above illustrates a west-facing object; choose the direction of the object you actually build. The Host copies it into capture groups and manifests; Runtime derives Front/Right/Back with one shared scale.
 
 Prefer one holistic runtime Object for a named landmark. When a few additional major masses are genuinely necessary, keep all of them in the same mapping. Map all intentionally identical complete instances of a `repeated-landmark` into its one mapping. Do not create a mapping per part or per identical instance. The trusted host derives the bounded visual capture groups and their colors from the finalized mappings.

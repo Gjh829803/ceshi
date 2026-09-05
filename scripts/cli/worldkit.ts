@@ -1618,6 +1618,193 @@ export async function captureVisibleWorldWithRetries<
   throw new Error("WORLDKIT_CAPTURE_VISIBLE_WORLD_MISSING");
 }
 
+export async function captureWorldkitBrowserFrame(captureGroups: readonly VisualCaptureGroupV1[]): Promise<{
+  snapshot: WorldRuntimeSnapshotV4;
+  screenshotDataUrl: string;
+  sampledRgbColorCount: number;
+  triviews: readonly {
+    target: VisualCaptureGroupV1;
+    capture: WhiteboxTriviewCaptureV1;
+  }[];
+}> {
+  const api = window.__WORLDKIT__;
+  if (api === undefined) {
+    throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
+  }
+  const authoringCaptureApi = window.__WORLDKIT_AUTHORING_CAPTURE__;
+  api.setPaused(true);
+  const snapshot = await api.reset();
+  const configuredGroups = captureGroups.length === 0
+    ? []
+    : authoringCaptureApi?.configureVisualCaptureGroups(captureGroups) ?? (() => {
+        throw new Error("WORLDKIT_CAPTURE_TARGET_CONFIGURATION_UNAVAILABLE");
+      })();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const beforeCapture = api.getSnapshot();
+  if (
+    beforeCapture.world.simulationTick !==
+      snapshot.world.simulationTick
+  ) {
+    throw new Error("WORLDKIT_CAPTURE_TICK_MISMATCH");
+  }
+  api.captureScreenshot();
+  const screenshotDataUrl = api.captureScreenshot();
+  const screenshotImage = new Image();
+  screenshotImage.src = screenshotDataUrl;
+  await screenshotImage.decode();
+  const inspectionCanvas = document.createElement("canvas");
+  inspectionCanvas.width = screenshotImage.naturalWidth;
+  inspectionCanvas.height = screenshotImage.naturalHeight;
+  const inspectionContext = inspectionCanvas.getContext("2d", { willReadFrequently: true });
+  if (inspectionContext === null) throw new Error("WORLDKIT_CAPTURE_INSPECTION_UNAVAILABLE");
+  inspectionContext.drawImage(screenshotImage, 0, 0);
+  const screenshotPixels = inspectionContext.getImageData(
+    0,
+    0,
+    inspectionCanvas.width,
+    inspectionCanvas.height,
+  ).data;
+  const sampledRgbColors = new Set<number>();
+  for (let pixel = 0; pixel < screenshotPixels.length / 4; pixel += 16) {
+    const offset = pixel * 4;
+    sampledRgbColors.add(
+      (screenshotPixels[offset]! << 16) |
+        (screenshotPixels[offset + 1]! << 8) |
+        screenshotPixels[offset + 2]!,
+    );
+    if (sampledRgbColors.size >= 4) break;
+  }
+  const sampledRgbColorCount = sampledRgbColors.size;
+  const afterCapture = api.getSnapshot();
+  if (
+    afterCapture.world.simulationTick !==
+      snapshot.world.simulationTick
+  ) {
+    throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
+  }
+  const triviews: {
+    target: VisualCaptureGroupV1;
+    capture: WhiteboxTriviewCaptureV1;
+  }[] = [];
+  if (authoringCaptureApi !== undefined) {
+    for (const target of configuredGroups) {
+      let triviewCapture = authoringCaptureApi.captureWhiteboxTriview(
+        target.visualTargetId,
+      );
+      // The old Host yields to asynchronous shader compilation between
+      // synchronous capture attempts; do not replace it with tight redraws.
+      for (let attempt = 1; !triviewCapture.inspection.isRenderable && attempt < 4; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        triviewCapture = authoringCaptureApi.captureWhiteboxTriview(
+          target.visualTargetId,
+        );
+      }
+      triviews.push({
+        target,
+        capture: triviewCapture,
+      });
+    }
+  }
+  return {
+    snapshot,
+    screenshotDataUrl,
+    sampledRgbColorCount,
+    triviews,
+  };
+}
+
+/** Host-only old tri-view admission and failure evidence; no Runtime state writes. */
+export async function writeWhiteboxTriviewCaptures(
+  absoluteTriviewOutputPath: string,
+  captures: Awaited<ReturnType<typeof captureWorldkitBrowserFrame>>["triviews"],
+): Promise<WhiteboxTriviewManifestV1["whiteboxTriviews"]> {
+  const pngDataUrlPrefix = "data:image/png;base64,";
+  const whiteboxTriviews = [] as {
+    visualTargetId: string;
+    runtimeEntityIds: readonly string[];
+    role: VisualCaptureGroupV1["role"];
+    semanticClassId: string;
+    identityColor: `#${string}`;
+    frontDirectionWorldXZ: readonly [number, number];
+    views: readonly ["front", "right", "back"];
+    imageUri: string;
+  }[];
+  const preparedTriviews = [] as Array<{
+    target: VisualCaptureGroupV1;
+    capture: WhiteboxTriviewCaptureV1;
+    pngBytes: Buffer;
+  }>;
+  for (const triview of captures) {
+    if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(triview.target.visualTargetId)) {
+      throw new Error(`WORLDKIT_CAPTURE_TARGET_ID_INVALID: ${triview.target.visualTargetId}`);
+    }
+    if (!triview.capture.imageDataUri.startsWith(pngDataUrlPrefix)) {
+      throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_DATA_URL_INVALID: ${triview.target.visualTargetId}`);
+    }
+    const triviewPngBytes = Buffer.from(
+      triview.capture.imageDataUri.slice(pngDataUrlPrefix.length),
+      "base64",
+    );
+    if (!triview.capture.inspection.isRenderable) {
+      const failedCaptureDirectory = path.join(
+        absoluteTriviewOutputPath,
+        ".failed",
+        triview.target.visualTargetId,
+      );
+      await Promise.all([
+        writeAtomic(
+          path.join(failedCaptureDirectory, "whitebox-triview.png"),
+          triviewPngBytes,
+        ),
+        writeAtomic(
+          path.join(failedCaptureDirectory, "capture-failure.json"),
+          `${stringifyCanonicalJson({
+            kind: "worldkit-whitebox-triview-capture-failure",
+            schemaVersion: 1,
+            visualTargetId: triview.target.visualTargetId,
+            runtimeEntityIds: triview.target.runtimeEntityIds,
+            inspection: triview.capture.inspection,
+            diagnostic: {
+              code: "WORLDKIT_CAPTURE_TRIVIEW_EMPTY",
+              message: "Tri-view capture does not contain enough visible target pixels.",
+            },
+          })}\n`,
+        ),
+      ]);
+      throw new Error(
+        `WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.visualTargetId} ` +
+        `(foreground ${triview.capture.inspection.foregroundPixelCount}/` +
+        `${triview.capture.inspection.minimumForegroundPixelCount}; empty views: ` +
+        `${triview.capture.inspection.viewInspections
+          .filter(({ isRenderable }) => !isRenderable)
+          .map(({ view }) => view)
+          .join(",")})`,
+      );
+    }
+    preparedTriviews.push({
+      target: triview.target,
+      capture: triview.capture,
+      pngBytes: triviewPngBytes,
+    });
+  }
+  for (const triview of preparedTriviews) {
+    const relativeImagePath = `${triview.target.visualTargetId}/whitebox-triview.png`;
+    const imagePath = path.join(absoluteTriviewOutputPath, relativeImagePath);
+    await mkdir(path.dirname(imagePath), { recursive: true });
+    await writeFile(
+      imagePath,
+      triview.pngBytes,
+    );
+    whiteboxTriviews.push({
+      ...triview.target,
+      views: ["front", "right", "back"],
+      imageUri: relativeImagePath,
+    });
+  }
+  return whiteboxTriviews;
+}
+
 export async function captureFile(
   inputPath: string,
   outputPath: string,
@@ -1797,116 +1984,7 @@ export async function captureFile(
       );
     }
     const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
-      async (captureGroups): Promise<{
-        snapshot: WorldRuntimeSnapshotV4;
-        screenshotDataUrl: string;
-        sampledRgbColorCount: number;
-        triviews: readonly {
-          target: VisualCaptureGroupV1;
-          capture: WhiteboxTriviewCaptureV1;
-          sampledRgbColorCount: number;
-        }[];
-      }> => {
-        const api = window.__WORLDKIT__;
-        if (api === undefined) {
-          throw new Error("WORLDKIT_BROWSER_PROTOCOL_MISSING");
-        }
-        const authoringCaptureApi = window.__WORLDKIT_AUTHORING_CAPTURE__;
-        api.setPaused(true);
-        const snapshot = await api.reset();
-        const configuredGroups = captureGroups.length === 0
-          ? []
-          : authoringCaptureApi?.configureVisualCaptureGroups(captureGroups) ?? (() => {
-              throw new Error("WORLDKIT_CAPTURE_TARGET_CONFIGURATION_UNAVAILABLE");
-            })();
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        const beforeCapture = api.getSnapshot();
-        if (
-          beforeCapture.world.simulationTick !==
-            snapshot.world.simulationTick
-        ) {
-          throw new Error("WORLDKIT_CAPTURE_TICK_MISMATCH");
-        }
-        api.captureScreenshot();
-        const screenshotDataUrl = api.captureScreenshot();
-        const screenshotImage = new Image();
-        screenshotImage.src = screenshotDataUrl;
-        await screenshotImage.decode();
-        const inspectionCanvas = document.createElement("canvas");
-        inspectionCanvas.width = screenshotImage.naturalWidth;
-        inspectionCanvas.height = screenshotImage.naturalHeight;
-        const inspectionContext = inspectionCanvas.getContext("2d", { willReadFrequently: true });
-        if (inspectionContext === null) throw new Error("WORLDKIT_CAPTURE_INSPECTION_UNAVAILABLE");
-        inspectionContext.drawImage(screenshotImage, 0, 0);
-        const screenshotPixels = inspectionContext.getImageData(
-          0,
-          0,
-          inspectionCanvas.width,
-          inspectionCanvas.height,
-        ).data;
-        const sampledRgbColors = new Set<number>();
-        for (let pixel = 0; pixel < screenshotPixels.length / 4; pixel += 16) {
-          const offset = pixel * 4;
-          sampledRgbColors.add(
-            (screenshotPixels[offset]! << 16) |
-              (screenshotPixels[offset + 1]! << 8) |
-              screenshotPixels[offset + 2]!,
-          );
-          if (sampledRgbColors.size >= 4) break;
-        }
-        const sampledRgbColorCount = sampledRgbColors.size;
-        const afterCapture = api.getSnapshot();
-        if (
-          afterCapture.world.simulationTick !==
-            snapshot.world.simulationTick
-        ) {
-          throw new Error("WORLDKIT_CAPTURE_TICK_ADVANCED");
-        }
-        const triviews: {
-          target: VisualCaptureGroupV1;
-          capture: WhiteboxTriviewCaptureV1;
-          sampledRgbColorCount: number;
-        }[] = [];
-        if (authoringCaptureApi !== undefined) {
-          for (const target of configuredGroups) {
-            const triviewCapture = authoringCaptureApi.captureWhiteboxTriview(target.visualTargetId);
-            const triviewImage = new Image();
-            triviewImage.src = triviewCapture.imageDataUri;
-            await triviewImage.decode();
-            inspectionCanvas.width = triviewImage.naturalWidth;
-            inspectionCanvas.height = triviewImage.naturalHeight;
-            inspectionContext.drawImage(triviewImage, 0, 0);
-            const triviewPixels = inspectionContext.getImageData(
-              0,
-              0,
-              inspectionCanvas.width,
-              inspectionCanvas.height,
-            ).data;
-            const triviewRgbColors = new Set<number>();
-            for (let pixel = 0; pixel < triviewPixels.length / 4; pixel += 16) {
-              const offset = pixel * 4;
-              triviewRgbColors.add(
-                (triviewPixels[offset]! << 16) |
-                  (triviewPixels[offset + 1]! << 8) |
-                  triviewPixels[offset + 2]!,
-              );
-              if (triviewRgbColors.size >= 4) break;
-            }
-            triviews.push({
-              target,
-              capture: triviewCapture,
-              sampledRgbColorCount: triviewRgbColors.size,
-            });
-          }
-        }
-        return {
-          snapshot,
-          screenshotDataUrl,
-          sampledRgbColorCount,
-          triviews,
-        };
-      }, configuredCaptureGroups,
+      captureWorldkitBrowserFrame, configuredCaptureGroups,
     ));
     const pngDataUrlPrefix = "data:image/png;base64,";
     if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
@@ -1925,41 +2003,9 @@ export async function captureFile(
       );
     }
     if (absoluteTriviewOutputPath !== undefined) {
-      const whiteboxTriviews = [] as {
-        visualTargetId: string;
-        runtimeEntityIds: readonly string[];
-        role: VisualCaptureGroupV1["role"];
-        semanticClassId: string;
-        identityColor: `#${string}`;
-        views: readonly ["front", "right", "back"];
-        imageUri: string;
-      }[];
-      for (const triview of capture.triviews) {
-        if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(triview.target.visualTargetId)) {
-          throw new Error(`WORLDKIT_CAPTURE_TARGET_ID_INVALID: ${triview.target.visualTargetId}`);
-        }
-        if (!triview.capture.imageDataUri.startsWith(pngDataUrlPrefix)) {
-          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_DATA_URL_INVALID: ${triview.target.visualTargetId}`);
-        }
-        if (triview.sampledRgbColorCount < 2) {
-          throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.visualTargetId}`);
-        }
-        const relativeImagePath = `${triview.target.visualTargetId}/whitebox-triview.png`;
-        const imagePath = path.join(absoluteTriviewOutputPath, relativeImagePath);
-        await mkdir(path.dirname(imagePath), { recursive: true });
-        await writeFile(
-          imagePath,
-          Buffer.from(
-            triview.capture.imageDataUri.slice(pngDataUrlPrefix.length),
-            "base64",
-          ),
-        );
-        whiteboxTriviews.push({
-          ...triview.target,
-          views: ["front", "right", "back"],
-          imageUri: relativeImagePath,
-        });
-      }
+      const whiteboxTriviews = await writeWhiteboxTriviewCaptures(
+        absoluteTriviewOutputPath, capture.triviews,
+      );
       if (validation.worldBuildIdentityHash === undefined) {
         throw new Error("WORLDKIT_CAPTURE_WORLD_BUILD_IDENTITY_HASH_MISSING");
       }

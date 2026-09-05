@@ -21,6 +21,7 @@ function group(
   return {
     visualTargetId,
     runtimeEntityIds,
+    frontDirectionWorldXZ: [0, -1],
     role: "primary-subject",
     semanticClassId: "visual.subject",
     identityColor: "#E85D5D",
@@ -37,13 +38,39 @@ function finalMap(): SceneBriefImplementationMapV1 {
     authoringSpecHash: hash,
     visualTargetMappings: [{
       visualTargetId: "visual-target-1",
-      runtimeEntityIds: ["player"],
+      runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
     }],
     visualCaptureGroups: [group()],
   };
 }
 
 describe("hosted visual capture contracts", () => {
+  it("preserves the old declared cardinal front in mapping and capture groups", () => {
+    for (const frontDirectionWorldXZ of [[0, -1], [-1, 0], [0, 1], [1, 0]]) {
+      const map = finalMap();
+      const value = {
+        ...map,
+        visualTargetMappings: map.visualTargetMappings.map(mapping => ({ ...mapping, frontDirectionWorldXZ })),
+        visualCaptureGroups: map.visualCaptureGroups.map(group => ({ ...group, frontDirectionWorldXZ })),
+      };
+      expect(validateSceneBriefImplementationMapV1(value)).toEqual([]);
+      const mismatched = { ...value, visualCaptureGroups: value.visualCaptureGroups.map(group => ({
+        ...group, frontDirectionWorldXZ: [-frontDirectionWorldXZ[0]!, -frontDirectionWorldXZ[1]!],
+      })) };
+      expect(validateSceneBriefImplementationMapV1(mismatched)).toContainEqual(
+        expect.objectContaining({ code: "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH" }),
+      );
+    }
+  });
+
+  it.each([undefined, [0, 0], [1, 1], [0.6, 0.8], [NaN, 0], [0, -1, 0]].map(frontDirectionWorldXZ => ({ frontDirectionWorldXZ })))(
+    "retains the old front declaration validation for $frontDirectionWorldXZ", ({ frontDirectionWorldXZ }) => {
+      expect(validateVisualCaptureGroupsV1([{ ...group(), frontDirectionWorldXZ }])).toContainEqual(
+        expect.objectContaining({ code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID" }),
+      );
+    },
+  );
+
   it("measures complete tri-view foreground coverage instead of sparse color samples", () => {
     const pixels = new Uint8ClampedArray(9 * 9 * 4);
     for (let pixel = 0; pixel < 81; pixel += 1) {
@@ -142,7 +169,7 @@ describe("hosted visual capture contracts", () => {
       authoringSpecId: "paper-moon-palace-world",
       visualTargetMappings: [{
         visualTargetId: "visual-target-1",
-        runtimeEntityIds: ["player"],
+        runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
       }],
     };
     expect(validateSceneBriefImplementationMapDraftV1(draft)).toEqual([]);
@@ -198,15 +225,15 @@ describe("hosted visual capture contracts", () => {
     expect(validateSceneBriefImplementationMapV1(value)).toContainEqual(
       expect.objectContaining({
         code: "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH",
-        instancePath: "/visualCaptureGroups/0/runtimeEntityIds",
+        instancePath: "/visualCaptureGroups/0",
       }),
     );
 
     const reusedEntity: SceneBriefImplementationMapV1 = {
       ...finalMap(),
       visualTargetMappings: [
-        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-        { visualTargetId: "visual-target-2", runtimeEntityIds: ["player"] },
+        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+        { visualTargetId: "visual-target-2", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
       ],
     };
     expect(validateSceneBriefImplementationMapV1(reusedEntity)).toContainEqual(

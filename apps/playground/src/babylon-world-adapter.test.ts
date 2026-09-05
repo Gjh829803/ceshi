@@ -354,6 +354,9 @@ function createAdapterProbe(): {
       kind: "worldkit-runtime-artifact-capture",
       schemaVersion: 1,
       dataUrl: "data:image/png;base64,test",
+      widthPixels: 639,
+      heightPixels: 360,
+      pixelsRgba: new Uint8ClampedArray(639 * 360 * 4),
     })),
     snapshot: () => runtimeSnapshot(tick, cameraView),
   };
@@ -455,6 +458,7 @@ describe("BabylonWorldAdapter frame loop", () => {
       visualTargetId: "visual-target-1",
       runtimeEntityIds: ["player"],
       role: "primary-subject",
+      frontDirectionWorldXZ: [-1, 0],
       semanticClassId: "subject.player",
       identityColor: "#E85D5D",
     } as const;
@@ -477,6 +481,11 @@ describe("BabylonWorldAdapter frame loop", () => {
       heightPixels: 360,
       entityIds: ["player"],
       identityColor: "#E85D5D",
+      frontDirectionWorldXZ: [-1, 0],
+      renderStyle: "runtime-lit-review",
+    });
+    expect(adapter.captureRuntimeWhiteboxTriview(target.visualTargetId).inspection).toMatchObject({
+      widthPixels: 639, heightPixels: 360, isRenderable: false,
     });
   });
 

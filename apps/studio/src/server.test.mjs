@@ -575,7 +575,7 @@ async function writeTrustedWhiteboxArtifacts(
     schemaVersion: 1,
     sceneId,
     authoringSpecId: sceneId,
-    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
   })}\n`;
   const hash = (source) => `sha256:${createHash("sha256").update(source).digest("hex")}`;
   const terrainPrompt = "# Terrain Height Intent\n\nEncoding profile: signed-diverging-blue-gray-orange@1.\n";
@@ -593,7 +593,7 @@ async function writeTrustedWhiteboxArtifacts(
   const worldBuildIdentityHash = `sha256:${"d".repeat(64)}`;
   const visualTarget = {
     visualTargetId: "player-subject",
-    runtimeEntityIds: ["player"],
+    runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
     role: "primary-subject",
     semanticClassId: "subject.player",
     identityColor: "#E85D5D",
@@ -605,7 +605,7 @@ async function writeTrustedWhiteboxArtifacts(
     sceneBriefHash,
     authoringSpecId: sceneId,
     authoringSpecHash,
-    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+    visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
     visualCaptureGroups: [visualTarget],
   };
   const requiredRoutes = requiresRouteValidation
@@ -3201,7 +3201,7 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
       writeFile(path.join(artifactRoot, "scene-implementation-map.json"), JSON.stringify({
         visualCaptureGroups: [{
           visualTargetId: "player-subject",
-          runtimeEntityIds: ["player", "player-accessory"],
+          runtimeEntityIds: ["player", "player-accessory"], frontDirectionWorldXZ: [0, -1],
           role: "primary-subject",
           semanticClassId: "subject.player",
           identityColor: "#E85D5D",
@@ -3213,7 +3213,7 @@ test("serves Scene Brief deliverables and runtime tri-views", async () => {
       writeFile(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json"), JSON.stringify({
         whiteboxTriviews: [{
           visualTargetId: "player-subject",
-          runtimeEntityIds: ["player", "player-accessory"],
+          runtimeEntityIds: ["player", "player-accessory"], frontDirectionWorldXZ: [0, -1],
           role: "primary-subject",
           semanticClassId: "subject.player",
           identityColor: "#E85D5D",
@@ -3284,10 +3284,10 @@ test("serves one atomic Preview bootstrap and removes split Preview authority ro
       sceneBriefHash: `sha256:${"b".repeat(64)}`,
       authoringSpecId: created.sceneId,
       authoringSpecHash,
-      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"] }],
+      visualTargetMappings: [{ visualTargetId: "player-subject", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] }],
       visualCaptureGroups: [{
         visualTargetId: "player-subject",
-        runtimeEntityIds: ["player"],
+        runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
         role: "primary-subject",
         semanticClassId: "subject.player",
         identityColor: "#E85D5D",

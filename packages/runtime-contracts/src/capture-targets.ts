@@ -15,6 +15,7 @@ export type VisualCaptureGroupRoleV1 =
 export interface VisualTargetMappingV1 {
   readonly visualTargetId: string;
   readonly runtimeEntityIds: readonly string[];
+  readonly frontDirectionWorldXZ: readonly [number, number];
 }
 
 export interface VisualCaptureGroupV1 extends VisualTargetMappingV1 {
@@ -49,6 +50,7 @@ export interface WhiteboxTriviewCaptureV1 {
   readonly runtimeEntityIds: readonly string[];
   readonly views: readonly ["front", "right", "back"];
   readonly imageDataUri: string;
+  readonly inspection: WhiteboxTriviewInspectionV1;
 }
 
 export interface WhiteboxTriviewInspectionV1 {
@@ -255,6 +257,13 @@ function validIdArray(value: unknown): value is readonly string[] {
     new Set(value).size === value.length;
 }
 
+function validFrontDirectionWorldXZ(value: unknown): value is readonly [number, number] {
+  return Array.isArray(value) && value.length === 2 &&
+    [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
+      ([x, z]) => value[0] === x && value[1] === z,
+    );
+}
+
 function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
   if (left.length !== right.length) return false;
   const sortedLeft = [...left].sort();
@@ -294,7 +303,7 @@ function validateVisualTargetMappings(
       ));
       return;
     }
-    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds"], path));
+    diagnostics.push(...exactKeys(mapping, ["visualTargetId", "runtimeEntityIds", "frontDirectionWorldXZ"], path));
     if (typeof mapping.visualTargetId !== "string" || !ID.test(mapping.visualTargetId)) {
       diagnostics.push(diagnostic(
         "HOSTED_VISUAL_TARGET_ID_INVALID",
@@ -312,6 +321,13 @@ function validateVisualTargetMappings(
       ));
     } else {
       runtimeEntityIds.push(...mapping.runtimeEntityIds);
+    }
+    if (!validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ)) {
+      diagnostics.push(diagnostic(
+        "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+        `${path}/frontDirectionWorldXZ`,
+        "frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates.",
+      ));
     }
   });
   if (new Set(visualTargetIds).size !== visualTargetIds.length) {
@@ -350,6 +366,7 @@ function validateVisualCaptureGroup(
     "role",
     "semanticClassId",
     "identityColor",
+    "frontDirectionWorldXZ",
     ...allowedExtraKeys,
   ], instancePath);
   if (typeof group.visualTargetId !== "string" || !ID.test(group.visualTargetId)) {
@@ -386,6 +403,13 @@ function validateVisualCaptureGroup(
       "HOSTED_VISUAL_IDENTITY_COLOR_INVALID",
       `${instancePath}/identityColor`,
       "identityColor must be a six-digit hex color.",
+    ));
+  }
+  if (!validFrontDirectionWorldXZ(group.frontDirectionWorldXZ)) {
+    diagnostics.push(diagnostic(
+      "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
+      `${instancePath}/frontDirectionWorldXZ`,
+      "frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates.",
     ));
   }
   return diagnostics;
@@ -586,15 +610,19 @@ export function validateSceneBriefImplementationMapV1(
           !validIdArray(mapping.runtimeEntityIds)) return;
       const group = groupsByVisualTargetId.get(mapping.visualTargetId);
       if (group === undefined || !validIdArray(group.runtimeEntityIds) ||
-          !sameStringSet(mapping.runtimeEntityIds, group.runtimeEntityIds)) {
+          !sameStringSet(mapping.runtimeEntityIds, group.runtimeEntityIds) ||
+          !validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ) ||
+          !validFrontDirectionWorldXZ(group.frontDirectionWorldXZ) ||
+          mapping.frontDirectionWorldXZ[0] !== group.frontDirectionWorldXZ[0] ||
+          mapping.frontDirectionWorldXZ[1] !== group.frontDirectionWorldXZ[1]) {
         const groupIndex = groups.findIndex((candidate) =>
           candidate.visualTargetId === mapping.visualTargetId);
         diagnostics.push(diagnostic(
           "HOSTED_VISUAL_MAPPING_GROUP_MISMATCH",
           groupIndex < 0
             ? `/visualTargetMappings/${index}/visualTargetId`
-            : `/visualCaptureGroups/${groupIndex}/runtimeEntityIds`,
-          `Visual target '${mapping.visualTargetId}' mapping and capture group must contain the same runtime entities.`,
+            : `/visualCaptureGroups/${groupIndex}`,
+          `Visual target '${mapping.visualTargetId}' mapping and capture group must contain the same runtime entities and front direction.`,
         ));
       }
     });

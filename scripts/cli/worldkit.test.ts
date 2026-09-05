@@ -28,6 +28,7 @@ import {
 import { GROUND_HUMANOID_ACTION_IDS_V1 } from "@whitebox-world/subject-contracts";
 import { XIER120_SUBJECT_DEFINITIONS } from "@whitebox-world/subject-registry";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import { inspectWhiteboxTriviewPixelsV1 } from "@whitebox-world/runtime-contracts";
 import { parseWorldReconstructionProductionResultV1 } from
   "@whitebox-world/validation";
 
@@ -43,6 +44,8 @@ import {
   HELP,
   buildFile,
   captureVisibleWorldWithRetries,
+  captureWorldkitBrowserFrame,
+  writeWhiteboxTriviewCaptures,
   createRenderEnvironmentDiagnosticsV1,
   describeRegistryResource,
   inspectRenderEnvironmentV1,
@@ -901,6 +904,107 @@ describe("worldkit CLI", () => {
       code: diagnostic.code,
       diagnostics: [diagnostic],
     });
+  });
+
+  it.each([1, 3, Infinity])("preserves old Host tri-view yields and bounded attempts (ready at %s)", async readyAt => {
+    const calls: string[] = [];
+    const delays: number[] = [];
+    const snapshot = { world: { simulationTick: 0 } };
+    const target = { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"],
+      frontDirectionWorldXZ: [-1, 0] as const, role: "primary-subject" as const,
+      semanticClassId: "subject.player", identityColor: "#E85D5D" as const };
+    let attempts = 0;
+    const captureWhiteboxTriview = vi.fn(() => {
+      calls.push("tri-view");
+      attempts += 1;
+      const pixels = new Uint8ClampedArray(12);
+      if (attempts >= readyAt) pixels.fill(255);
+      return {
+        kind: "worldkit-whitebox-triview-capture", schemaVersion: 1,
+        visualTargetId: target.visualTargetId, runtimeEntityIds: target.runtimeEntityIds,
+        views: ["front", "right", "back"], imageDataUri: "data:image/png;base64,AA==",
+        inspection: inspectWhiteboxTriviewPixelsV1(pixels, 3, 1),
+      };
+    });
+    vi.stubGlobal("window", {
+      __WORLDKIT__: {
+        setPaused: () => calls.push("pause"),
+        reset: async () => { calls.push("reset"); return snapshot; },
+        getSnapshot: () => snapshot,
+        captureScreenshot: () => { calls.push("opening"); return "data:image/png;base64,AA=="; },
+      },
+      __WORLDKIT_AUTHORING_CAPTURE__: {
+        configureVisualCaptureGroups: (groups: unknown) => groups, captureWhiteboxTriview,
+      },
+    });
+    vi.stubGlobal("requestAnimationFrame", (callback: () => void) => { calls.push("raf"); callback(); });
+    vi.stubGlobal("setTimeout", (callback: () => void, milliseconds: number) => { delays.push(milliseconds); callback(); });
+    vi.stubGlobal("Image", class {
+      src = ""; naturalWidth = 64; naturalHeight = 1;
+      async decode() {}
+    });
+    const screenshotPixels = new Uint8ClampedArray(64 * 4);
+    for (let pixel = 0; pixel < 64; pixel += 1) screenshotPixels[pixel * 4] = pixel;
+    vi.stubGlobal("document", { createElement: () => ({
+      getContext: () => ({ drawImage() {}, getImageData: () => ({ data: screenshotPixels }) }),
+    }) });
+    try {
+      // Playwright serializes this callback; it must not depend on module closure.
+      const browserCallback = new Function(`return (${captureWorldkitBrowserFrame.toString()});`)() as typeof captureWorldkitBrowserFrame;
+      const result = await browserCallback([target]);
+      const expectedAttempts = Math.min(readyAt, 4);
+      expect(captureWhiteboxTriview).toHaveBeenCalledTimes(expectedAttempts);
+      expect(delays).toEqual(Array(expectedAttempts - 1).fill(50));
+      expect(calls).toEqual(["pause", "reset", "raf", "raf", "opening", "opening",
+        ...Array(expectedAttempts).fill("tri-view")]);
+      expect(result.triviews[0]!.capture.inspection.isRenderable).toBe(readyAt !== Infinity);
+      expect(result.triviews[0]!.target.frontDirectionWorldXZ).toEqual([-1, 0]);
+      expect(result.sampledRgbColorCount).toBe(4);
+      expect(result.snapshot).toBe(snapshot);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("retains the old failed-panel pixels and does not partially replace accepted tri-views", async () => {
+    const root = await createTemporaryDirectory();
+    const targets = ["visual-target-1", "visual-target-2"].map(visualTargetId => ({
+      visualTargetId, runtimeEntityIds: [visualTargetId], frontDirectionWorldXZ: [-1, 0] as const,
+      role: "primary-subject" as const, semanticClassId: "subject.player", identityColor: "#E85D5D" as const,
+    }));
+    const captures = targets.map(target => {
+      const pixels = new Uint8ClampedArray(12).fill(255);
+      return { target, capture: {
+        kind: "worldkit-whitebox-triview-capture" as const, schemaVersion: 1 as const,
+        visualTargetId: target.visualTargetId, runtimeEntityIds: target.runtimeEntityIds,
+        views: ["front", "right", "back"] as const,
+        imageDataUri: "data:image/png;base64," + Buffer.from("captured-bytes").toString("base64"),
+        inspection: inspectWhiteboxTriviewPixelsV1(pixels, 3, 1),
+      } };
+    });
+    const missingRightPanel = new Uint8ClampedArray(12).fill(255);
+    missingRightPanel.set([221, 232, 238, 255], 4);
+    captures[1]!.capture.inspection = inspectWhiteboxTriviewPixelsV1(missingRightPanel, 3, 1);
+    const acceptedPath = path.join(root, "visual-target-1", "whitebox-triview.png");
+    await mkdir(path.dirname(acceptedPath), { recursive: true });
+    await writeFile(acceptedPath, "previous-accepted");
+    await expect(writeWhiteboxTriviewCaptures(root, captures)).rejects.toThrow(
+      "WORLDKIT_CAPTURE_TRIVIEW_EMPTY: visual-target-2 (foreground 2/3; empty views: right)",
+    );
+    expect(await readFile(acceptedPath, "utf8")).toBe("previous-accepted");
+    const failureRoot = path.join(root, ".failed", "visual-target-2");
+    expect(await readFile(path.join(failureRoot, "whitebox-triview.png"), "utf8")).toBe("captured-bytes");
+    expect(JSON.parse(await readFile(path.join(failureRoot, "capture-failure.json"), "utf8"))).toMatchObject({
+      kind: "worldkit-whitebox-triview-capture-failure", schemaVersion: 1,
+      visualTargetId: "visual-target-2", runtimeEntityIds: ["visual-target-2"],
+      inspection: { isRenderable: false }, diagnostic: { code: "WORLDKIT_CAPTURE_TRIVIEW_EMPTY" },
+    });
+    await expect(readFile(path.join(root, "visual-target-2", "whitebox-triview.png"))).rejects.toThrow();
+
+    captures[1]!.capture.inspection = inspectWhiteboxTriviewPixelsV1(new Uint8ClampedArray(12).fill(255), 3, 1);
+    const manifestRows = await writeWhiteboxTriviewCaptures(root, captures);
+    expect(manifestRows.map(row => row.frontDirectionWorldXZ)).toEqual([[-1, 0], [-1, 0]]);
+    expect(manifestRows[1]!.views).toEqual(["front", "right", "back"]);
+    expect(await readFile(acceptedPath, "utf8")).toBe("captured-bytes");
+    expect(await readFile(path.join(root, "visual-target-2", "whitebox-triview.png"), "utf8")).toBe("captured-bytes");
   });
 
   it("retries background-only browser captures and stops at the first visible world", async () => {

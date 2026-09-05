@@ -153,8 +153,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
           sceneId: "self-check-scene",
           authoringSpecId: "self-check-scene",
           visualTargetMappings: [
-            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
           ],
         })),
       ]);
@@ -218,8 +218,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
           sceneId: "self-check-scene",
           authoringSpecId: "self-check-scene-authoring",
           visualTargetMappings: [
-            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+            { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+            { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
           ],
         })),
       ]);
@@ -250,8 +250,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
         sceneId: "self-check-scene",
         authoringSpecId: "self-check-scene",
         mappings: [
-          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
         ],
       }));
       const legacyReport = path.join(root, "builder-legacy-map.json");
@@ -270,8 +270,8 @@ Encoding profile: signed-diverging-blue-gray-orange@1 using RGB(32,64,208), RGB(
         sceneId: "self-check-scene",
         authoringSpecId: "self-check-scene",
         visualTargetMappings: [
-          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+          { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+          { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
         ],
       }));
 

@@ -80,8 +80,8 @@ it("finalizes a Scene Brief map and verifies visual targets against runtime enti
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
     visualTargetMappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
     ],
   }));
   const result = await finalizeSceneBuild(files);
@@ -90,13 +90,13 @@ it("finalizes a Scene Brief map and verifies visual targets against runtime enti
   expect(result.visualCaptureGroups).toEqual([
     expect.objectContaining({
       visualTargetId: "visual-target-1",
-      runtimeEntityIds: ["player"],
+      runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1],
       role: "primary-subject",
       identityColor: "#E85D5D",
     }),
     expect.objectContaining({
       visualTargetId: "visual-target-2",
-      runtimeEntityIds: ["tower"],
+      runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1],
       role: "primary-landmark",
       identityColor: "#F28E2B",
     }),
@@ -111,8 +111,8 @@ it("rejects missing visual targets, extra mappings, and invented runtime ids", a
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
     visualTargetMappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["invented-player"] },
-      { visualTargetId: "visual-target-3", runtimeEntityIds: ["tower"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["invented-player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-3", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
     ],
   }));
   await expect(finalizeSceneBuild(files)).rejects.toThrow(/Unknown runtime entity 'invented-player'/);
@@ -130,14 +130,14 @@ it("keeps identical complete instances in one repeated visual target", () => {
   const groups = deriveVisualCaptureGroups({
     brief: parsed.value,
     visualTargetMappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower-east", "tower-west"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower-east", "tower-west"], frontDirectionWorldXZ: [0, -1] },
     ],
   });
   expect(groups).toHaveLength(2);
   expect(groups[1]).toMatchObject({
     visualTargetId: "visual-target-2",
-    runtimeEntityIds: ["tower-east", "tower-west"],
+    runtimeEntityIds: ["tower-east", "tower-west"], frontDirectionWorldXZ: [0, -1],
   });
   expect(deriveVisualIdentityPalette(parsed.value, "canonical")).toHaveLength(2);
 });
@@ -166,8 +166,8 @@ it("rejects the retired final-kind draft and mappings field", async () => {
     sceneId: files.sceneId,
     authoringSpecId: "basic-world",
     mappings: [
-      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"] },
-      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"] },
+      { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], frontDirectionWorldXZ: [0, -1] },
+      { visualTargetId: "visual-target-2", runtimeEntityIds: ["tower"], frontDirectionWorldXZ: [0, -1] },
     ],
   }));
   await expect(finalizeSceneBuild(files)).rejects.toThrow(
