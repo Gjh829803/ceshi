@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { execFile as execFileCallback } from "node:child_process";
+import { writeAtomic } from "../lib/write-atomic.js";
+import { writeWhiteboxTriviewCaptures } from "../scenes/whitebox-triview-capture.js";
 import {
   mkdir,
   readFile,
@@ -1517,24 +1519,6 @@ export async function validateSceneBriefFile(
   };
 }
 
-async function writeAtomic(
-  outputPath: string,
-  bytes: string | Uint8Array,
-): Promise<void> {
-  const absoluteOutputPath = path.resolve(outputPath);
-  await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
-  const temporaryPath = path.join(
-    path.dirname(absoluteOutputPath),
-    `.${path.basename(absoluteOutputPath)}.${process.pid}.${randomUUID()}.tmp`,
-  );
-  try {
-    await writeFile(temporaryPath, bytes);
-    await rename(temporaryPath, absoluteOutputPath);
-  } catch (error) {
-    await rm(temporaryPath, { force: true });
-    throw error;
-  }
-}
 
 function packageCommandFailure(
   command: "build" | "inspect" | "load",
@@ -1715,96 +1699,6 @@ export async function captureWorldkitBrowserFrame(captureGroups: readonly Visual
   };
 }
 
-/** Host-only old tri-view admission and failure evidence; no Runtime state writes. */
-export async function writeWhiteboxTriviewCaptures(
-  absoluteTriviewOutputPath: string,
-  captures: Awaited<ReturnType<typeof captureWorldkitBrowserFrame>>["triviews"],
-): Promise<WhiteboxTriviewManifestV1["whiteboxTriviews"]> {
-  const pngDataUrlPrefix = "data:image/png;base64,";
-  const whiteboxTriviews = [] as {
-    visualTargetId: string;
-    runtimeEntityIds: readonly string[];
-    role: VisualCaptureGroupV1["role"];
-    semanticClassId: string;
-    identityColor: `#${string}`;
-    frontDirectionWorldXZ: readonly [number, number];
-    views: readonly ["front", "right", "back"];
-    imageUri: string;
-  }[];
-  const preparedTriviews = [] as Array<{
-    target: VisualCaptureGroupV1;
-    capture: WhiteboxTriviewCaptureV1;
-    pngBytes: Buffer;
-  }>;
-  for (const triview of captures) {
-    if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(triview.target.visualTargetId)) {
-      throw new Error(`WORLDKIT_CAPTURE_TARGET_ID_INVALID: ${triview.target.visualTargetId}`);
-    }
-    if (!triview.capture.imageDataUri.startsWith(pngDataUrlPrefix)) {
-      throw new Error(`WORLDKIT_CAPTURE_TRIVIEW_DATA_URL_INVALID: ${triview.target.visualTargetId}`);
-    }
-    const triviewPngBytes = Buffer.from(
-      triview.capture.imageDataUri.slice(pngDataUrlPrefix.length),
-      "base64",
-    );
-    if (!triview.capture.inspection.isRenderable) {
-      const failedCaptureDirectory = path.join(
-        absoluteTriviewOutputPath,
-        ".failed",
-        triview.target.visualTargetId,
-      );
-      await Promise.all([
-        writeAtomic(
-          path.join(failedCaptureDirectory, "whitebox-triview.png"),
-          triviewPngBytes,
-        ),
-        writeAtomic(
-          path.join(failedCaptureDirectory, "capture-failure.json"),
-          `${stringifyCanonicalJson({
-            kind: "worldkit-whitebox-triview-capture-failure",
-            schemaVersion: 1,
-            visualTargetId: triview.target.visualTargetId,
-            runtimeEntityIds: triview.target.runtimeEntityIds,
-            inspection: triview.capture.inspection,
-            diagnostic: {
-              code: "WORLDKIT_CAPTURE_TRIVIEW_EMPTY",
-              message: "Tri-view capture does not contain enough visible target pixels.",
-            },
-          })}\n`,
-        ),
-      ]);
-      throw new Error(
-        `WORLDKIT_CAPTURE_TRIVIEW_EMPTY: ${triview.target.visualTargetId} ` +
-        `(foreground ${triview.capture.inspection.foregroundPixelCount}/` +
-        `${triview.capture.inspection.minimumForegroundPixelCount}; empty views: ` +
-        `${triview.capture.inspection.viewInspections
-          .filter(({ isRenderable }) => !isRenderable)
-          .map(({ view }) => view)
-          .join(",")})`,
-      );
-    }
-    preparedTriviews.push({
-      target: triview.target,
-      capture: triview.capture,
-      pngBytes: triviewPngBytes,
-    });
-  }
-  for (const triview of preparedTriviews) {
-    const relativeImagePath = `${triview.target.visualTargetId}/whitebox-triview.png`;
-    const imagePath = path.join(absoluteTriviewOutputPath, relativeImagePath);
-    await mkdir(path.dirname(imagePath), { recursive: true });
-    await writeFile(
-      imagePath,
-      triview.pngBytes,
-    );
-    whiteboxTriviews.push({
-      ...triview.target,
-      views: ["front", "right", "back"],
-      imageUri: relativeImagePath,
-    });
-  }
-  return whiteboxTriviews;
-}
 
 export async function captureFile(
   inputPath: string,

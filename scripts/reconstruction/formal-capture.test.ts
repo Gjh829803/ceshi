@@ -3,10 +3,14 @@ import {
   hashFormalSemanticCaptureMapV1,
   hashFormalWorldCaptureRequestV1,
   parseFormalWorldCaptureRequestV1,
+  parseFormalWorldCaptureReceiptV1,
+  validateWhiteboxTriviewManifestV1,
+  type VisualCaptureGroupV1,
   type FormalWorldCaptureRequestV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   sha256CanonicalJson,
+  sha256Bytes,
   stringifyCanonicalJson,
 } from "@whitebox-world/protocol";
 import {
@@ -29,6 +33,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { PNG as PngImage } from "pngjs";
 import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -54,6 +59,7 @@ import {
   publishRejectedCaptureDirectoryV1,
 } from "./formal-capture.js";
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support.js";
 
 const temporaryRoots: string[] = [];
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -190,6 +196,7 @@ function packageAndRequest(worldBounds?: WorldPackageWorldBoundsV1): Readonly<{
   const source = verifiedPackage.manifest.sceneSource;
   const request = parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: "package-fixture.formal-capture-request",
     formalRequestRef:
@@ -531,13 +538,112 @@ describe("formal Package Capture preflight join", () => {
 });
 
 describe("formal Capture artifact publication", () => {
+  async function triviewFixture(isSecondTargetEmpty = false) {
+    const root = await mkdtemp(path.join(tmpdir(), "formal-triview-publication-"));
+    temporaryRoots.push(root);
+    const source = createEvidenceSetFixtureInputV1();
+    const base = source.captureReceipt;
+    const metadata = source.verifiedWorldPackage.nativeBlockMaterializerMetadata!;
+    const nativeGroup = metadata.visualGroups[0]!;
+    const visualCaptureGroups: VisualCaptureGroupV1[] = [{
+      visualTargetId: "visual-target-1", runtimeEntityIds: [source.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId],
+      frontDirectionWorldXZ: [0, -1], role: "primary-subject", semanticClassId: "subject.player", identityColor: "#E85D5D",
+    }, {
+      visualTargetId: "visual-target-2", runtimeEntityIds: metadata.blocks.filter(block => nativeGroup.blockIds.includes(block.blockId)).map(block => block.runtimeEntityId),
+      frontDirectionWorldXZ: nativeGroup.frontDirectionWorldXZ, role: "primary-landmark",
+      semanticClassId: nativeGroup.semanticClassId, identityColor: nativeGroup.identityColorHex,
+    }];
+    const formalRequest = parseFormalWorldCaptureRequestV1({ ...base.formalRequest, visualCaptureGroups });
+    const whiteboxTriviewPngs = visualCaptureGroups.map((_, index) => {
+      const png = new PngImage({ width: Math.floor(formalRequest.views[0].widthPixels / 3) * 3, height: formalRequest.views[0].heightPixels });
+      png.data.fill(255);
+      if (isSecondTargetEmpty && index === 1) {
+        for (let y = 0; y < png.height; y++) for (let x = png.width / 3; x < png.width * 2 / 3; x++) {
+          png.data.set([221, 232, 238, 255], (y * png.width + x) * 4);
+        }
+      }
+      return PngImage.sync.write(png);
+    });
+    const captureBase = formalRequest.formalRequestRef.replace(/formal-world-capture-request.json$/, "capture");
+    const receipt = parseFormalWorldCaptureReceiptV1({ ...base, formalRequest,
+      formalRequestHash: hashFormalWorldCaptureRequestV1(formalRequest),
+      whiteboxTriviews: visualCaptureGroups.map((group, index) => ({ visualTargetId: group.visualTargetId,
+        pngArtifactRef: `${captureBase}/triviews/${group.visualTargetId}/whitebox-triview.png`,
+        pngContentHash: sha256Bytes(whiteboxTriviewPngs[index]!),
+      })),
+    });
+    const json = new TextEncoder().encode("{}");
+    return { root, receipt, input: {
+      outputDirectoryPath: path.join(root, "capture"), receiptJson: new TextEncoder().encode(JSON.stringify(receipt)),
+      artifacts: { whiteboxTriviewPngs, openingPng: PNG, worldSidePng: PNG, worldTopDownPng: PNG,
+        openingIdentityMaskPng: PNG, worldSideIdentityMaskPng: PNG, worldTopDownIdentityMaskPng: PNG,
+        colliderOverlayPng: PNG, openingObservationJson: json, semanticViewObservationSetJson: json,
+        spawnSupportObservationJson: json, colliderOverlayObservationJson: json, scriptedTraversalJson: json },
+      budget: { maximumPngBytesPerArtifact: 1_000_000, maximumJsonBytesPerArtifact: 128_000 },
+    } };
+  }
+
+  it("publishes requested Native/Subject tri-views with exact identities and receipt last", async () => {
+    const { input, receipt } = await triviewFixture();
+    const writes: string[] = [];
+    await publishFormalCaptureDirectoryV1({ ...input, hooks: { beforeWrite: async file => { writes.push(file); } } });
+    const manifest = JSON.parse(await readFile(path.join(input.outputDirectoryPath, "triviews/whitebox-triview-manifest.json"), "utf8"));
+    expect(validateWhiteboxTriviewManifestV1(manifest)).toEqual([]);
+    expect(manifest.whiteboxTriviews.map((row: { runtimeEntityIds: string[] }) => row.runtimeEntityIds))
+      .toEqual(receipt.formalRequest.visualCaptureGroups.map(row => row.runtimeEntityIds));
+    for (const [index, row] of receipt.whiteboxTriviews.entries()) {
+      const bytes = await readFile(path.join(input.outputDirectoryPath, "triviews", row.visualTargetId, "whitebox-triview.png"));
+      expect(bytes).toEqual(input.artifacts.whiteboxTriviewPngs[index]);
+      expect(sha256Bytes(bytes)).toBe(row.pngContentHash);
+    }
+    expect(writes.at(-1)).toBe("formal-world-capture-receipt.json");
+  });
+
+  it.each(["missing", "hash", "path", "write"])("does not publish a %s tri-view delivery", async failure => {
+    const { input, receipt, root } = await triviewFixture();
+    if (failure === "missing") input.artifacts.whiteboxTriviewPngs.pop();
+    if (failure === "hash") input.artifacts.whiteboxTriviewPngs[1] = Buffer.from(PNG);
+    if (failure === "path") input.receiptJson = new TextEncoder().encode(JSON.stringify({ ...receipt,
+      whiteboxTriviews: receipt.whiteboxTriviews.map(row => ({ ...row, pngArtifactRef: `${row.pngArtifactRef}.foreign` })),
+    }));
+    await expect(publishFormalCaptureDirectoryV1({ ...input, hooks: { beforeWrite: async file => {
+      if (failure === "write" && file === "triviews/visual-target-2/whitebox-triview.png") throw new Error("write interrupted");
+    } } })).rejects.toThrow();
+    await expect(lstat(input.outputDirectoryPath)).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it("retains failed-panel PNG/report without accepted images or a formal receipt", async () => {
+    const { input } = await triviewFixture(true);
+    await expect(publishFormalCaptureDirectoryV1(input)).rejects.toThrow("WORLDKIT_CAPTURE_TRIVIEW_EMPTY");
+    const failed = path.join(input.outputDirectoryPath, "triviews/.failed/visual-target-2");
+    expect(await readFile(path.join(failed, "whitebox-triview.png"))).toEqual(input.artifacts.whiteboxTriviewPngs[1]);
+    expect(JSON.parse(await readFile(path.join(failed, "capture-failure.json"), "utf8"))).toMatchObject({
+      inspection: { isRenderable: false }, diagnostic: { code: "WORLDKIT_CAPTURE_TRIVIEW_EMPTY" },
+    });
+    await expect(lstat(path.join(input.outputDirectoryPath, "formal-world-capture-receipt.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(path.join(input.outputDirectoryPath, "triviews/visual-target-1"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("preserves requested tri-views on opening rejection without an accepted receipt", async () => {
+    const { input } = await triviewFixture(true);
+    await publishRejectedCaptureDirectoryV1({ ...input, openingGateResult: {
+      kind: "worldkit-opening-composition-host-gate", schemaVersion: 1, status: "failed", diagnostics: [],
+    } });
+    expect(await readFile(path.join(input.outputDirectoryPath, "triviews/visual-target-2/whitebox-triview.png")))
+      .toEqual(input.artifacts.whiteboxTriviewPngs[1]);
+    await expect(lstat(path.join(input.outputDirectoryPath, "formal-world-capture-receipt.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("atomically preserves a rejected Candidate without a formal receipt", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "formal-capture-test-"));
     temporaryRoots.push(root);
     const outputDirectoryPath = path.join(root, "rejected-capture");
     await publishRejectedCaptureDirectoryV1({
+      receiptJson: new TextEncoder().encode(JSON.stringify(createEvidenceSetFixtureInputV1().captureReceipt)),
       outputDirectoryPath,
       artifacts: {
+        whiteboxTriviewPngs: [],
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
@@ -566,7 +672,7 @@ describe("formal Capture artifact publication", () => {
       },
       budget: {
         maximumPngBytesPerArtifact: PNG.byteLength,
-        maximumJsonBytesPerArtifact: 1_024,
+        maximumJsonBytesPerArtifact: 128_000,
       },
     });
 
@@ -611,8 +717,10 @@ describe("formal Capture artifact publication", () => {
     temporaryRoots.push(root);
     const outputDirectoryPath = path.join(root, "rejected-capture");
     await expect(publishRejectedCaptureDirectoryV1({
+      receiptJson: new TextEncoder().encode(JSON.stringify(createEvidenceSetFixtureInputV1().captureReceipt)),
       outputDirectoryPath,
       artifacts: {
+        whiteboxTriviewPngs: [],
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
@@ -632,7 +740,7 @@ describe("formal Capture artifact publication", () => {
       },
       budget: {
         maximumPngBytesPerArtifact: PNG.byteLength,
-        maximumJsonBytesPerArtifact: 1_024,
+        maximumJsonBytesPerArtifact: 128_000,
       },
       hooks: {
         beforeWrite: async (relativePath) => {
@@ -658,6 +766,7 @@ describe("formal Capture artifact publication", () => {
     await publishFormalCaptureDirectoryV1({
       outputDirectoryPath,
       artifacts: {
+        whiteboxTriviewPngs: [],
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
@@ -669,10 +778,10 @@ describe("formal Capture artifact publication", () => {
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),
       },
-      receiptJson: new TextEncoder().encode('{"cleanupOutcome":"completed"}'),
+      receiptJson: new TextEncoder().encode(JSON.stringify(createEvidenceSetFixtureInputV1().captureReceipt)),
       budget: {
         maximumPngBytesPerArtifact: PNG.byteLength,
-        maximumJsonBytesPerArtifact: 1_024,
+        maximumJsonBytesPerArtifact: 128_000,
       },
       hooks: {
         beforeWrite: async (relativePath) => {
@@ -710,6 +819,7 @@ describe("formal Capture artifact publication", () => {
     await expect(publishFormalCaptureDirectoryV1({
       outputDirectoryPath,
       artifacts: {
+        whiteboxTriviewPngs: [],
         openingPng: PNG,
         worldSidePng: PNG,
         worldTopDownPng: PNG,
@@ -721,10 +831,10 @@ describe("formal Capture artifact publication", () => {
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),
       },
-      receiptJson: new TextEncoder().encode("{}"),
+      receiptJson: new TextEncoder().encode(JSON.stringify(createEvidenceSetFixtureInputV1().captureReceipt)),
       budget: {
         maximumPngBytesPerArtifact: PNG.byteLength,
-        maximumJsonBytesPerArtifact: 1_024,
+        maximumJsonBytesPerArtifact: 128_000,
       },
       hooks: {
         beforeWrite: async (relativePath) => {
@@ -746,6 +856,7 @@ describe("formal Capture artifact publication", () => {
     await expect(publishFormalCaptureDirectoryV1({
       outputDirectoryPath,
       artifacts: {
+        whiteboxTriviewPngs: [],
         openingPng: new Uint8Array([...PNG, 0]),
         worldSidePng: PNG,
         worldTopDownPng: PNG,
@@ -757,10 +868,10 @@ describe("formal Capture artifact publication", () => {
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),
       },
-      receiptJson: new TextEncoder().encode("{}"),
+      receiptJson: new TextEncoder().encode(JSON.stringify(createEvidenceSetFixtureInputV1().captureReceipt)),
       budget: {
         maximumPngBytesPerArtifact: PNG.byteLength,
-        maximumJsonBytesPerArtifact: 1_024,
+        maximumJsonBytesPerArtifact: 128_000,
       },
       hooks: { beforeWrite: vi.fn(async () => undefined) },
     })).rejects.toThrow("FORMAL_CAPTURE_PNG_BUDGET_EXCEEDED");

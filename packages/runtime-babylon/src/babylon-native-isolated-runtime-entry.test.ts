@@ -277,6 +277,7 @@ function formalRequestFixture(
   } as const;
   return parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: "formal.capture.request",
     formalRequestRef: "artifact://case/test/formal-world-capture-request.json",

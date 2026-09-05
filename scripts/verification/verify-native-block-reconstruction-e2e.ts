@@ -22,6 +22,7 @@ import {
 } from "@whitebox-world/scene-authoring-contracts";
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
+  deriveFormalWhiteboxTriviewManifestV1,
   formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
@@ -330,6 +331,20 @@ function json(bytes: Uint8Array): unknown {
     return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
   } catch {
     return fail("NBR70_ARTIFACT_INVALID");
+  }
+}
+
+async function verifyCaptureTriviewArtifacts(
+  captureRoot: string,
+  receipt: ReturnType<typeof parseFormalWorldCaptureReceiptV1>,
+): Promise<void> {
+  for (const row of receipt.whiteboxTriviews) {
+    requirePng(await requiredFile(captureRoot, `triviews/${row.visualTargetId}/whitebox-triview.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"), row.pngContentHash);
+  }
+  const manifest = deriveFormalWhiteboxTriviewManifestV1(receipt);
+  if (manifest !== undefined) {
+    exact(sha256CanonicalJson(json(await requiredFile(captureRoot, "triviews/whitebox-triview-manifest.json", "NBR70_CAPTURE_ARTIFACT_MISSING"))),
+      sha256CanonicalJson(manifest));
   }
 }
 
@@ -917,6 +932,7 @@ async function verifyAllRunAttempts(input: Readonly<{
       captureReceipt.cameraRollbackOutcome !== "completed" ||
       captureReceipt.resetOutcome !== "completed"
     ) fail("NBR70_CLEANUP_INCOMPLETE");
+    await verifyCaptureTriviewArtifacts(captureRoot, captureReceipt);
     for (const view of captureReceipt.views) {
       requirePng(
         await requiredFile(
@@ -1711,6 +1727,7 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
     captureReceipt.cameraRollbackOutcome !== "completed" ||
     captureReceipt.resetOutcome !== "completed"
   ) fail("NBR70_CLEANUP_INCOMPLETE");
+  await verifyCaptureTriviewArtifacts(captureRoot, captureReceipt);
   for (const view of captureReceipt.views) {
     const bytes = await requiredFile(
       captureRoot,

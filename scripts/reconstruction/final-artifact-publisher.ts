@@ -20,6 +20,8 @@ import {
 } from "@whitebox-world/protocol";
 import {
   formalWorldCaptureIntentCanonicalBytesV1,
+  deriveFormalWhiteboxTriviewManifestV1,
+  type FormalWorldCaptureReceiptV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
   hashFormalScriptedTraversalObservationV1,
@@ -574,9 +576,15 @@ function assertTreeEqual(
 
 function assertCaptureInventory(
   snapshot: TreeSnapshotV1,
-  viewIds: readonly string[],
+  receipt: FormalWorldCaptureReceiptV1,
 ): void {
+  const viewIds = receipt.views.map(row => row.viewId);
+  const triviews = receipt.whiteboxTriviews;
+  const expectedDirectories = ["", ...(triviews.length > 0 ? ["triviews", ...triviews.map(row => `triviews/${row.visualTargetId}`)] : [])].sort();
+  const actualDirectories = [...snapshot.directoryPaths].sort();
   const expected = [
+    ...triviews.map(row => `triviews/${row.visualTargetId}/whitebox-triview.png`),
+    ...(triviews.length > 0 ? ["triviews/whitebox-triview-manifest.json"] : []),
     ...viewIds.map((viewId) => `${viewId}.png`),
     ...viewIds.map((viewId) => `${viewId}-identity-mask.png`),
     "collider-overlay.png",
@@ -589,7 +597,8 @@ function assertCaptureInventory(
   ].sort();
   const actual = [...snapshot.filesByRelativePath.keys()].sort();
   if (
-    snapshot.directoryPaths.length !== 1 ||
+    actualDirectories.length !== expectedDirectories.length ||
+    actualDirectories.some((value, index) => value !== expectedDirectories[index]) ||
     actual.length !== expected.length ||
     actual.some((value, index) => value !== expected[index])
   ) invalid("Capture artifact inventory is partial or foreign");
@@ -881,7 +890,16 @@ async function publish(
       ),
       "Capture Receipt",
     ));
-    assertCaptureInventory(captureSnapshot, captureReceipt.views.map(({ viewId }) => viewId));
+    assertCaptureInventory(captureSnapshot, captureReceipt);
+    for (const triview of captureReceipt.whiteboxTriviews) {
+      exact(sha256Bytes(await requiredRegularFile(captureRoot, `triviews/${triview.visualTargetId}/whitebox-triview.png`)),
+        triview.pngContentHash, `Capture tri-view '${triview.visualTargetId}' is stale`);
+    }
+    const triviewManifest = deriveFormalWhiteboxTriviewManifestV1(captureReceipt);
+    if (triviewManifest !== undefined) {
+      exact(sha256CanonicalJson(parseJson(await requiredRegularFile(captureRoot, "triviews/whitebox-triview-manifest.json"), "whitebox tri-view manifest")),
+        sha256CanonicalJson(triviewManifest), "Capture tri-view manifest is stale");
+    }
     const captureReceiptHash = hashFormalWorldCaptureReceiptV1(captureReceipt);
     exact(captureReceiptHash, finalAttempt.captureReceiptHash,
       "terminal Capture Receipt hash is stale");

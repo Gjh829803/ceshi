@@ -14,6 +14,7 @@ import path from "node:path";
 
 import {
   formalWorldCaptureIntentCanonicalBytesV1,
+  deriveFormalWhiteboxTriviewManifestV1,
   hashFormalOpeningObservationV1,
   hashFormalSemanticViewObservationSetV1,
   hashFormalWorldCaptureReceiptV1,
@@ -199,6 +200,7 @@ function generationRequestFixture(input: ReturnType<
 
 async function createRunFixture(
   options: Readonly<{
+    includeWhiteboxTriviews?: boolean;
     evaluationPasses?: boolean;
     entryPasses?: boolean;
   }> = {},
@@ -212,6 +214,7 @@ async function createRunFixture(
   const captureRoot = path.join(attemptRoot, "capture");
   await mkdir(captureRoot, { recursive: true });
   const fixture = createEvidenceSetFixtureInputV1({
+    includeWhiteboxTriviews: options.includeWhiteboxTriviews ?? false,
     allDimensionsPass: evaluationPasses,
   });
   const verified = fixture.verifiedWorldPackage;
@@ -382,6 +385,15 @@ async function createRunFixture(
     fixture.scriptedTraversalObservation);
   await writeJson(path.join(captureRoot, "formal-world-capture-receipt.json"),
     captureReceipt);
+  const triviewManifest = deriveFormalWhiteboxTriviewManifestV1(captureReceipt);
+  if (triviewManifest !== undefined) {
+    for (const [index, row] of triviewManifest.whiteboxTriviews.entries()) {
+      const file = path.join(captureRoot, "triviews", row.imageUri);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, fixture.whiteboxTriviewPngs[index]!);
+    }
+    await writeJson(path.join(captureRoot, "triviews/whitebox-triview-manifest.json"), triviewManifest);
+  }
   const evidence = buildWorldReconstructionEvidenceSetV1({
     ...fixture,
     semanticViewObservationSet,
@@ -637,8 +649,8 @@ describe("Native reconstruction final artifact publisher", () => {
     }
   });
 
-  it("publishes a fully verified candidate regardless of Evaluation outcome", async () => {
-    const fixture = await createRunFixture({ evaluationPasses: false });
+  it.each([false, true])("publishes a fully verified candidate regardless of Evaluation outcome (tri-views %s)", async includeWhiteboxTriviews => {
+    const fixture = await createRunFixture({ evaluationPasses: false, includeWhiteboxTriviews });
     try {
       await expect(publishNativeBlockReconstructionFinalV1({
         caseDirectoryPath: fixture.caseDirectoryPath,
@@ -651,6 +663,25 @@ describe("Native reconstruction final artifact publisher", () => {
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
     }
+  });
+
+  it.each(["png", "manifest", "foreign-file"])("rejects tampered requested tri-view %s before final publication", async failure => {
+    const fixture = await createRunFixture({ includeWhiteboxTriviews: true });
+    try {
+      const capture = path.join(fixture.attemptRoot, "capture");
+      if (failure === "png") await writeFile(path.join(capture, "triviews/visual-target-2/whitebox-triview.png"), PNG);
+      if (failure === "manifest") {
+        const file = path.join(capture, "triviews/whitebox-triview-manifest.json");
+        const value = JSON.parse(await readFile(file, "utf8"));
+        value.whiteboxTriviews.reverse();
+        await writeJson(file, value);
+      }
+      if (failure === "foreign-file") await writeFile(path.join(capture, "triviews/extra.png"), PNG);
+      await expect(publishNativeBlockReconstructionFinalV1({ caseDirectoryPath: fixture.caseDirectoryPath,
+        runDirectoryPath: fixture.runDirectoryPath, launch: fixture.launch,
+      })).rejects.toThrow(failure === "foreign-file" ? "Capture artifact inventory" : "Capture tri-view");
+      expect(await missing(path.join(fixture.caseDirectoryPath, "final"))).toBe(true);
+    } finally { await rm(fixture.root, { recursive: true, force: true }); }
   });
 
   it("cannot bless a failed terminal #E85D5D mask through launch identity", async () => {

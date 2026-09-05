@@ -95,6 +95,7 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
   } as const;
   return parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: "fixture.formal-capture-request",
     formalRequestRef:
@@ -187,6 +188,7 @@ export function formalHostedPayloadFixtureV1(input: Readonly<{
   const png = () => new Uint8Array(input.pngBytes ?? 8);
   return {
     openingPng: png(),
+    whiteboxTriviewPngs: input.request.visualCaptureGroups.map(() => png()),
     worldSidePng: png(),
     worldTopDownPng: png(),
     openingIdentityMaskPng: png(),

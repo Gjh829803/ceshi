@@ -29,6 +29,7 @@ import {
   parseFormalWorldCaptureIntentV1,
   parseWorldRuntimeSnapshotV4,
   type FormalWorldCaptureIntentV1,
+  type VisualCaptureGroupV1,
   type FormalOpeningObservationV1,
   type FormalSemanticViewObservationSetV1,
   type FormalWorldCaptureReceiptV1,
@@ -126,6 +127,7 @@ export function createSemanticViewObservationSetFixtureV1(
 }
 
 export interface EvidenceSetFixtureOptionsV1 {
+  readonly includeWhiteboxTriviews?: boolean;
   readonly withoutScriptedTraversal?: boolean;
   readonly allDimensionsPass?: boolean;
   readonly allOpeningNotRequired?: boolean;
@@ -290,6 +292,7 @@ export function createEvidenceSetFixtureInputV1(
   options: EvidenceSetFixtureOptionsV1 = {},
 ): BuildWorldReconstructionEvidenceSetInputV1 & Readonly<{
   formalCaptureIntent: FormalWorldCaptureIntentV1;
+  whiteboxTriviewPngs: readonly Uint8Array[];
 }> {
   const allDimensionsPass = options.allDimensionsPass === true;
   const withoutScriptedTraversal = options.withoutScriptedTraversal === true;
@@ -947,6 +950,14 @@ export function createEvidenceSetFixtureInputV1(
     `artifact://case/package-fixture/attempts/${attemptIndex}/formal-world-capture-request.json`;
   const formalRequest = {
     kind: "formal-world-capture-request" as const,
+    visualCaptureGroups: (options.includeWhiteboxTriviews ? [{
+      visualTargetId: "visual-target-1", runtimeEntityIds: [verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId],
+      frontDirectionWorldXZ: [0, -1], role: "primary-subject", semanticClassId: "subject.player", identityColor: "#E85D5D",
+    }, ...metadata.visualGroups.map((group, index) => ({
+      visualTargetId: `visual-target-${index + 2}`, runtimeEntityIds: metadata.blocks.filter(block => group.blockIds.includes(block.blockId)).map(block => block.runtimeEntityId),
+      frontDirectionWorldXZ: group.frontDirectionWorldXZ, role: "primary-landmark",
+      semanticClassId: group.semanticClassId, identityColor: group.identityColorHex,
+    }))] : []) as readonly VisualCaptureGroupV1[],
     schemaVersion: 1 as const,
     id: "package-fixture.formal-capture-request",
     formalRequestRef,
@@ -1209,8 +1220,18 @@ export function createEvidenceSetFixtureInputV1(
       openingObservation,
       viewRecords,
     );
+  const whiteboxTriviewPngs = formalRequest.visualCaptureGroups.map(() => {
+    const image = new PNG({ width: Math.floor(formalRequest.views[0]!.widthPixels / 3) * 3, height: formalRequest.views[0]!.heightPixels });
+    image.data.fill(255);
+    return PNG.sync.write(image);
+  });
   const captureReceipt = parseFormalWorldCaptureReceiptV1({
     kind: "formal-world-capture-receipt",
+    whiteboxTriviews: formalRequest.visualCaptureGroups.map((group, index) => ({
+      visualTargetId: group.visualTargetId,
+      pngArtifactRef: `${formalRequestRef.replace(/formal-world-capture-request.json$/, "capture")}/triviews/${group.visualTargetId}/whitebox-triview.png`,
+      pngContentHash: sha256Bytes(whiteboxTriviewPngs[index]!),
+    })),
     schemaVersion: 1,
     id: "package-fixture.formal-capture",
     formalRequestRef,
@@ -1275,6 +1296,7 @@ export function createEvidenceSetFixtureInputV1(
   });
   return {
     id: `package-fixture.attempt-${attemptIndex}.evidence`,
+    whiteboxTriviewPngs,
     caseRef: CASE_REF,
     reconstructionCase,
     formalCaptureIntent,

@@ -16,6 +16,42 @@ import {
   type FormalWorldCaptureProviderPortsV1,
 } from "./formal-world-capture-provider.js";
 
+it.each([1, 3, Infinity])("uses legacy tri-view retry/yield timing and preserves final pixels (ready at %s)", async readyAt => {
+  vi.useFakeTimers();
+  try {
+    const groups = ["player", "native-block:palace"].map((id, index) => ({
+      visualTargetId: `visual-target-${index + 1}`, runtimeEntityIds: [id],
+      frontDirectionWorldXZ: [1, 0], identityColor: "#E85D5D", role: index === 0 ? "primary-subject" : "primary-landmark",
+      semanticClassId: "fixture",
+    }));
+    const calls = [0, 0];
+    const started = Date.now();
+    const elapsed: number[] = [];
+    const captureArtifactView = vi.fn((request) => {
+      elapsed.push(Date.now() - started);
+      const index = request.entityIds[0] === "player" ? 0 : 1;
+      calls[index]! += 1;
+      const rgba = calls[index]! >= readyAt ? [255, 255, 255, 255] : [221, 232, 238, 255];
+      return { dataUrl: `data:image/png;base64,${Buffer.from([index, calls[index]!]).toString("base64")}`,
+        widthPixels: 3, heightPixels: 1, pixelsRgba: new Uint8ClampedArray([...rgba, ...rgba, ...rgba]),
+        projectedBoundsByEntityId: {} };
+    });
+    const promise = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.captureWhiteboxTriviewPngs({
+      visualCaptureGroups: groups, views: [{ widthPixels: 3, heightPixels: 1 }],
+    } as unknown as FormalWorldCaptureRequestV1, { captureArtifactView });
+    await vi.runAllTimersAsync();
+    const actual = await promise;
+    expect(calls).toEqual([Math.min(readyAt, 4), Math.min(readyAt, 4)]);
+    const attempts = Math.min(readyAt, 4);
+    expect(elapsed).toEqual([0, 1].flatMap(target => Array.from({ length: attempts }, (_, attempt) =>
+      (target * (attempts - 1) + attempt) * 50)));
+    expect(actual.map(bytes => [...bytes])).toEqual([[0, calls[0]], [1, calls[1]]]);
+    expect(captureArtifactView).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "entity-triview", frontDirectionWorldXZ: [1, 0], renderStyle: "runtime-lit-review",
+    }));
+  } finally { vi.useRealTimers(); }
+});
+
 function traversalSnapshot(
   runtimeSessionId: string,
   worldSessionId: string,
@@ -46,6 +82,31 @@ function traversalSnapshot(
     },
   } as unknown as WorldRuntimeSnapshotV4;
 }
+
+it("joins complete tri-view groups to checked Native metadata and the real controlled Subject", () => {
+  const metadata = { blocks: ["first", "second"].map(blockId => ({
+    blockId, runtimeEntityId: `native-block:${blockId}`, visualGroupId: "palace",
+  })), visualGroups: [{ visualGroupId: "palace", blockIds: ["first", "second"], identityColorHex: "#F28E2B",
+    semanticClassId: "visual.palace", frontDirectionWorldXZ: [1, 0] }],
+  } as unknown as BabylonNativeBlockMaterializerMetadataV1;
+  const groups: FormalWorldCaptureRequestV1["visualCaptureGroups"] = [{
+    visualTargetId: "visual-target-1", runtimeEntityIds: ["player"], role: "primary-subject",
+    identityColor: "#E85D5D", semanticClassId: "visual.subject", frontDirectionWorldXZ: [0, -1],
+  }, { visualTargetId: "visual-target-2", runtimeEntityIds: ["native-block:first", "native-block:second"],
+    role: "primary-landmark", identityColor: "#F28E2B", semanticClassId: "visual.palace", frontDirectionWorldXZ: [1, 0],
+  }];
+  const check = FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1.assertTriviewTargets;
+  expect(() => check(groups, metadata, "player")).not.toThrow();
+  expect(() => check([], metadata, "player")).not.toThrow();
+  expect(() => check(groups, metadata, "another-subject")).toThrow("SUBJECT_TARGET_MISMATCH");
+  for (const change of [{ runtimeEntityIds: ["native-block:first"] },
+    { runtimeEntityIds: ["native-block:first", "native-block:foreign"] },
+    { identityColor: "#AABBCC" as const }, { semanticClassId: "foreign" },
+    { frontDirectionWorldXZ: [0, -1] as const }]) {
+    expect(() => check([groups[0]!, { ...groups[1]!, ...change }], metadata, "player"))
+      .toThrow("TRIVIEW_TARGET_MISMATCH");
+  }
+});
 
 function traversalRequestFixture() {
   const criterion = {

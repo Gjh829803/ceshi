@@ -1951,6 +1951,23 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   **这仍不是 Formal Request/payload/receipt/publication 已接通**；也未生成新图片、
   启动付费任务或最后本地 Case。Native Subject/目标绑定及完整 styled scope 继续开放。
 
+- CF16-NATIVE-FORMAL-DELIVERY（同一 CF 分支，main-agent-only）：显式对象捕获请求现已贯穿
+  Runtime provider、hosted payload、Receipt、Capture 原子发布与最终 publisher/verifier。
+  请求使用既有 source-neutral groups；非主体必须精确连接完整 Native metadata group，
+  主体使用真实 controlled Subject ID。按请求顺序绑定 PNG Hash，由 Receipt 派生既有三视图
+  manifest，不再建立目标清单权威。旧 CLI writer 提取为共享 Host owner，保留四次捕获、
+  50ms 间隔、每面八次渲染、原空面阈值与 `.failed` 原图/报告；先检查全部目标，再交付
+  accepted images，Receipt 最后写入。Opening 严格诊断拒绝时保留实际三视图但不发布 receipt。
+  无对象请求仍保留原文件清单；未新增质量阈值、付费任务或另一个 Runtime 状态。
+  定向证据：正式合同最终 65/65，provider 最终 22/22，Native Skill 67/67；Bridge/frame/route
+  与严格 verifier 四文件 72/72；最终 publisher 的空/非空 scope 两项与 PNG/manifest/额外文件
+  篡改三项通过，旧 CLI 三视图失败保留四项通过。此前五文件 91/91 与 publisher/provider
+  43/43 包含重跑，不累加成全仓数字。生成 checker 与代表性冻结副本已同步，typecheck、
+  checker drift 通过；无新的真实 Browser/模型 Case、全仓 CI 或独立 exact-SHA review。
+  **普通 Request producer 仍显式使用 `visualCaptureGroups: []`**。Host 的 Native 完整目标/
+  Subject 选择、styling 输入准备和 Studio requested scope 尚未接通；当前代码证明显式请求
+  的交付能力，不证明默认生产已生成对象三视图，不关闭 CF-16/PROD-10 或整个 CF。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

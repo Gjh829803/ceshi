@@ -8,6 +8,7 @@ import {
   type WorldReconstructionCaseArtifactRefV1,
 } from "@whitebox-world/world-identity";
 import { isEmpty, isNil } from "lodash-es";
+import { validateVisualCaptureGroupsV1, type VisualCaptureGroupV1, type WhiteboxTriviewManifestV1 } from "./capture-targets.js";
 
 import { parseWorldRuntimeSnapshotV4 } from "./runtime-session-protocol.js";
 import {
@@ -292,6 +293,8 @@ export interface FormalScriptedTraversalRequestV1 {
 }
 
 export interface FormalWorldCaptureRequestV1 {
+  /** Empty only when this capture scope does not request object tri-views. */
+  readonly visualCaptureGroups: readonly VisualCaptureGroupV1[];
   readonly kind: "formal-world-capture-request";
   readonly schemaVersion: 1;
   readonly id: string;
@@ -503,6 +506,7 @@ export interface FormalScriptedTraversalObservationV1
 }
 
 export interface FormalWorldCaptureReceiptV1 {
+  readonly whiteboxTriviews: readonly FormalWhiteboxTriviewRecordV1[];
   readonly kind: "formal-world-capture-receipt";
   readonly schemaVersion: 1;
   readonly id: string;
@@ -554,6 +558,12 @@ export interface FormalWorldCaptureReceiptV1 {
   readonly cameraRollbackOutcome: "completed";
   readonly resetOutcome: "completed";
   readonly cleanupOutcome: "completed";
+}
+
+export interface FormalWhiteboxTriviewRecordV1 {
+  readonly visualTargetId: string;
+  readonly pngArtifactRef: string;
+  readonly pngContentHash: Sha256HashV1;
 }
 
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -702,6 +712,7 @@ const INTENT_BLOCK_PLANE_CRITERION_FIELDS = [
   "colliderId",
 ] as const;
 const FORMAL_REQUEST_FIELDS = [
+  "visualCaptureGroups",
   "kind",
   "schemaVersion",
   "id",
@@ -751,6 +762,7 @@ const SCRIPTED_TRAVERSAL_CHECK_FIELDS = [
   "checkpointCriteria",
 ] as const;
 const RECEIPT_FIELDS = [
+  "whiteboxTriviews",
   "kind",
   "schemaVersion",
   "id",
@@ -2403,6 +2415,10 @@ export function parseFormalWorldCaptureRequestV1(
 ): FormalWorldCaptureRequestV1 {
   const contract = "FORMAL_WORLD_CAPTURE_REQUEST_INVALID";
   const source = begin(value, contract, FORMAL_REQUEST_FIELDS);
+  const visualCaptureGroups = array(source.visualCaptureGroups, contract, "visualCaptureGroups");
+  if (visualCaptureGroups.length > 0 && validateVisualCaptureGroupsV1(visualCaptureGroups).length > 0) {
+    fail(contract, "visualCaptureGroups", "must use the closed source-neutral visual capture group contract");
+  }
   if (source.kind !== "formal-world-capture-request" || source.schemaVersion !== 1) {
     fail(contract, "", "unexpected kind or schemaVersion");
   }
@@ -2580,6 +2596,7 @@ export function parseFormalWorldCaptureRequestV1(
       contract,
       "nativeBlockMaterializerMetadataHash",
     ),
+    visualCaptureGroups: structuredClone(visualCaptureGroups) as unknown as readonly VisualCaptureGroupV1[],
     views: parseFormalRequestViews(source.views, contract),
     colliderOverlay,
     scriptedTraversal,
@@ -3970,8 +3987,22 @@ export function parseFormalWorldCaptureReceiptV1(
   for (const [actual, expected, path] of repeatedIdentityJoins) {
     if (actual !== expected) fail(contract, path, "must match the embedded formal Request");
   }
+  const whiteboxTriviews = array(source.whiteboxTriviews, contract, "whiteboxTriviews");
+  if (whiteboxTriviews.length !== formalRequest.visualCaptureGroups.length) {
+    fail(contract, "whiteboxTriviews", "must contain exactly the requested tri-views in order");
+  }
+  const parsedTriviews = whiteboxTriviews.map((value, index) => {
+    const row = begin(value, contract, ["visualTargetId", "pngArtifactRef", "pngContentHash"]);
+    const visualTargetId = formalRequest.visualCaptureGroups[index]!.visualTargetId;
+    const pngArtifactRef = `${formalRequestRef.slice(0, -"formal-world-capture-request.json".length)}capture/triviews/${visualTargetId}/whitebox-triview.png`;
+    if (row.visualTargetId !== visualTargetId || row.pngArtifactRef !== pngArtifactRef) {
+      fail(contract, `whiteboxTriviews/${index}`, "must bind the requested target and its exact artifact path");
+    }
+    return { visualTargetId, pngArtifactRef, pngContentHash: hash(row.pngContentHash, contract, `whiteboxTriviews/${index}/pngContentHash`) };
+  });
   return freeze({
     kind: "formal-world-capture-receipt",
+    whiteboxTriviews: parsedTriviews,
     schemaVersion: 1,
     id: text(source.id, contract, "id"),
     formalRequestRef,
@@ -4022,6 +4053,21 @@ export function formalWorldCaptureReceiptCanonicalBytesV1(
 
 export function hashFormalWorldCaptureReceiptV1(value: unknown): Sha256HashV1 {
   return sha256CanonicalJson(parseFormalWorldCaptureReceiptV1(value)) as Sha256HashV1;
+}
+
+/** Projection of the parsed receipt, never an independent target authority. */
+export function deriveFormalWhiteboxTriviewManifestV1(
+  receipt: FormalWorldCaptureReceiptV1,
+): WhiteboxTriviewManifestV1 | undefined {
+  if (receipt.formalRequest.visualCaptureGroups.length === 0) return undefined;
+  return freeze({
+    kind: "worldkit-whitebox-triview-manifest", schemaVersion: 1,
+    worldBuildIdentityHash: receipt.worldBuildIdentityHash,
+    whiteboxTriviews: receipt.formalRequest.visualCaptureGroups.map(group => ({ ...group,
+      views: ["front", "right", "back"] as const,
+      imageUri: `${group.visualTargetId}/whitebox-triview.png`,
+    })),
+  });
 }
 
 export function assertFormalSemanticViewObservationSetMatchesReceiptV1(

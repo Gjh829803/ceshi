@@ -40,12 +40,12 @@ import {
 } from "../lib/route-validation-runner";
 
 import { explainSubjectFile } from "../lib/subject-explain";
+import { writeWhiteboxTriviewCaptures } from "../scenes/whitebox-triview-capture.js";
 import {
   HELP,
   buildFile,
   captureVisibleWorldWithRetries,
   captureWorldkitBrowserFrame,
-  writeWhiteboxTriviewCaptures,
   createRenderEnvironmentDiagnosticsV1,
   describeRegistryResource,
   inspectRenderEnvironmentV1,

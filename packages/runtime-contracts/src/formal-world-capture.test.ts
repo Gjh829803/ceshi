@@ -14,6 +14,7 @@ import {
   formalWorldCaptureIntentCanonicalBytesV1,
   formalWorldCaptureRequestCanonicalBytesV1,
   formalWorldCaptureReceiptCanonicalBytesV1,
+  deriveFormalWhiteboxTriviewManifestV1,
   assertFormalSemanticViewObservationSetMatchesReceiptV1,
   hashFormalArtifactViewRequestV1,
   hashFormalColliderOverlayRequestV1,
@@ -497,6 +498,7 @@ function formalRequestValue() {
   } as const;
   return {
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: "cloud-temple.attempt-0.formal-capture-request",
     formalRequestRef:
@@ -562,6 +564,7 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
   const formalRequest = formalRequestValue();
   return {
     kind: "formal-world-capture-receipt",
+    whiteboxTriviews: [],
     schemaVersion: 1,
     id: "cloud-temple.attempt-0.formal-capture",
     formalRequestRef:
@@ -798,6 +801,15 @@ describe("FormalWorldCaptureIntentV1", () => {
 });
 
 describe("FormalWorldCaptureRequestV1", () => {
+  it("binds the requested source-neutral tri-view groups into the request hash", () => {
+    const groups = [{ visualTargetId: "visual-target-1", runtimeEntityIds: ["player"],
+      frontDirectionWorldXZ: [0, -1], role: "primary-subject", semanticClassId: "subject.player", identityColor: "#E85D5D" }];
+    const value = { ...formalRequestValue(), visualCaptureGroups: groups };
+    const parsed = parseFormalWorldCaptureRequestV1(value);
+    expect(parsed).toMatchObject({ visualCaptureGroups: groups });
+    expect(hashFormalWorldCaptureRequestV1(value)).not.toBe(hashFormalWorldCaptureRequestV1({ ...value, visualCaptureGroups: [] }));
+    expect(Object.isFrozen(Reflect.get(parsed, "visualCaptureGroups"))).toBe(true);
+  });
   it("rejects old Case Ref dialects", () => {
     for (const caseRef of [
       "artifact://case/cloud-temple.case/case.json",
@@ -1639,6 +1651,39 @@ describe("formal measured observation documents", () => {
 });
 
 describe("FormalWorldCaptureReceiptV1", () => {
+  it("binds tri-view count, order, exact paths and hashes to the request without a second manifest authority", () => {
+    const base = receiptValue();
+    const formalRequest = parseFormalWorldCaptureRequestV1({ ...base.formalRequest,
+      visualCaptureGroups: [
+        { visualTargetId: "visual-target-1", runtimeEntityIds: ["player"],
+          frontDirectionWorldXZ: [0, -1], role: "primary-subject", semanticClassId: "subject.player", identityColor: "#E85D5D" },
+        { visualTargetId: "visual-target-2", runtimeEntityIds: ["native-block:tower"],
+          frontDirectionWorldXZ: [1, 0], role: "primary-landmark", semanticClassId: "landmark.tower", identityColor: "#F28E2B" },
+      ],
+    });
+    const whiteboxTriviews = formalRequest.visualCaptureGroups.map(group => ({
+      visualTargetId: group.visualTargetId,
+      pngArtifactRef: `artifact://case/cloud-temple/attempts/0/capture/triviews/${group.visualTargetId}/whitebox-triview.png`,
+      pngContentHash: H("a"),
+    }));
+    const value = { ...base, formalRequest, formalRequestHash: hashFormalWorldCaptureRequestV1(formalRequest), whiteboxTriviews };
+    const receipt = parseFormalWorldCaptureReceiptV1(value);
+    const manifest = deriveFormalWhiteboxTriviewManifestV1(receipt)!;
+    expect(manifest.whiteboxTriviews).toEqual(formalRequest.visualCaptureGroups.map(group => ({
+      ...group, views: ["front", "right", "back"], imageUri: `${group.visualTargetId}/whitebox-triview.png`,
+    })));
+    expect(Object.isFrozen(manifest.whiteboxTriviews[1]!.runtimeEntityIds)).toBe(true);
+    expect(deriveFormalWhiteboxTriviewManifestV1(parseFormalWorldCaptureReceiptV1(base))).toBeUndefined();
+    for (const rows of [undefined, [], whiteboxTriviews.slice(0, 1), [...whiteboxTriviews, whiteboxTriviews[0]],
+      [...whiteboxTriviews].reverse(),
+      [{ ...whiteboxTriviews[0], pngArtifactRef: "artifact://case/other/triview.png" }, whiteboxTriviews[1]],
+      [{ ...whiteboxTriviews[0], pngContentHash: "not-a-hash" }, whiteboxTriviews[1]],
+    ]) {
+      expect(() => parseFormalWorldCaptureReceiptV1({ ...value, whiteboxTriviews: rows }))
+        .toThrowError("FORMAL_WORLD_CAPTURE_RECEIPT_INVALID");
+    }
+  });
+
   it("requires Package, Attempt, Runtime, and SDK owner identities with the three formal views", () => {
     const runtimeSnapshot = snapshotFixture();
     const receipt = parseFormalWorldCaptureReceiptV1(receiptValue(runtimeSnapshot));

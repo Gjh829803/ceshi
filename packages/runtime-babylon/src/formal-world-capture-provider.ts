@@ -21,6 +21,7 @@ import {
   hashFormalSemanticCaptureMapV1,
   hashFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureRequestV1,
+  inspectWhiteboxTriviewPixelsV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
   parseFormalSemanticViewObservationSetV1,
@@ -75,6 +76,7 @@ import {
 } from "./runtime-session-subject-support.js";
 
 export interface FormalHostedWorldCapturePayloadV1 {
+  readonly whiteboxTriviewPngs: readonly Uint8Array[];
   readonly openingPng: Uint8Array;
   readonly worldSidePng: Uint8Array;
   readonly worldTopDownPng: Uint8Array;
@@ -1045,6 +1047,8 @@ async function captureTraversal(
 
 /** @internal Package-private lifecycle seam for provider regression tests. */
 export const FORMAL_WORLD_CAPTURE_PROVIDER_TEST_HARNESS_V1 = Object.freeze({
+  assertTriviewTargets,
+  captureWhiteboxTriviewPngs,
   resolveIdentityMaskColors,
   captureTraversal,
   assertFormalSupportContactContributionIdentityV1,
@@ -1065,17 +1069,63 @@ function captureRefBase(request: FormalWorldCaptureRequestV1): string {
   return `${request.formalRequestRef.slice(0, -suffix.length)}/capture`;
 }
 
+async function captureWhiteboxTriviewPngs(
+  request: FormalWorldCaptureRequestV1,
+  ports: Pick<FormalWorldCaptureProviderPortsV1, "captureArtifactView">,
+): Promise<readonly Uint8Array[]> {
+  const pngs: Uint8Array[] = [];
+  for (const group of request.visualCaptureGroups) {
+    let captured: BabylonArtifactCaptureResultV1 | undefined;
+    // Same outer four attempts / 50ms yields as the old Host capture callback.
+    // The shared renderer owns the eight per-panel renders inside each attempt.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (attempt > 0) await new Promise<void>(resolve => setTimeout(resolve, 50));
+      captured = ports.captureArtifactView({
+        kind: "entity-triview", widthPixels: request.views[0].widthPixels,
+        heightPixels: request.views[0].heightPixels, entityIds: group.runtimeEntityIds,
+        identityColor: group.identityColor, frontDirectionWorldXZ: group.frontDirectionWorldXZ,
+        renderStyle: "runtime-lit-review",
+      });
+      if (inspectWhiteboxTriviewPixelsV1(captured.pixelsRgba, captured.widthPixels, captured.heightPixels).isRenderable) break;
+    }
+    // Preserve the last actual bytes even when panels remain empty. The Host
+    // owns publication/failed-image retention; this is not a second quality veto.
+    pngs.push(pngBytes(captured!));
+  }
+  return Object.freeze(pngs);
+}
+
+function assertTriviewTargets(
+  groups: FormalWorldCaptureRequestV1["visualCaptureGroups"],
+  metadata: BabylonNativeBlockMaterializerMetadataV1,
+  subjectId: string,
+): void {
+  const blockByEntityId = new Map(metadata.blocks.map(block => [block.runtimeEntityId, block]));
+  for (const group of groups) {
+    if (group.role === "primary-subject") {
+      exactStringSet([subjectId], group.runtimeEntityIds, "BABYLON_FORMAL_CAPTURE_SUBJECT_TARGET_MISMATCH");
+      continue;
+    }
+    const groupIds = new Set(group.runtimeEntityIds.map(id => blockByEntityId.get(id)?.visualGroupId));
+    const metadataGroup = metadata.visualGroups.find(row => groupIds.size === 1 && groupIds.has(row.visualGroupId));
+    if (metadataGroup === undefined || group.identityColor.toUpperCase() !== metadataGroup.identityColorHex ||
+      group.semanticClassId !== metadataGroup.semanticClassId ||
+      group.frontDirectionWorldXZ.some((value, index) => value !== metadataGroup.frontDirectionWorldXZ[index])) {
+      fail("BABYLON_FORMAL_CAPTURE_TRIVIEW_TARGET_MISMATCH");
+    }
+    exactStringSet(metadata.blocks.filter(block => block.visualGroupId === metadataGroup.visualGroupId).map(block => block.runtimeEntityId),
+      group.runtimeEntityIds, "BABYLON_FORMAL_CAPTURE_TRIVIEW_TARGET_MISMATCH");
+  }
+}
+
 export async function executeFormalWorldCaptureProviderV1(
   input: ExecuteFormalWorldCaptureProviderInputV1,
 ): Promise<FormalHostedWorldCapturePayloadV1> {
   const request = parseFormalWorldCaptureRequestV1(input.request);
-  const sdkOwnerIdentities = freezeFormalWorldCaptureSdkOwnerIdentitiesV1(
-    input.sdkOwnerIdentities,
-  );
-  const metadata = assertRequestPackageIdentity(
-    request,
-    input.verifiedWorldPackage,
-  );
+  const sdkOwnerIdentities = freezeFormalWorldCaptureSdkOwnerIdentitiesV1(input.sdkOwnerIdentities);
+  const metadata = assertRequestPackageIdentity(request, input.verifiedWorldPackage);
+  assertTriviewTargets(request.visualCaptureGroups, metadata,
+    input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId);
   const initialReadySnapshot = await resetAndSettle(
     input.runtimeSessionId,
     input.ports,
@@ -1301,6 +1351,10 @@ export async function executeFormalWorldCaptureProviderV1(
       colliderRows,
     ),
   });
+  const whiteboxTriviewPngs = await captureWhiteboxTriviewPngs(request, input.ports);
+  if (sha256CanonicalJson(input.ports.snapshot().view.camera) !== cameraStateBefore) {
+    fail("BABYLON_FORMAL_CAPTURE_CAMERA_ROLLBACK_FAILED");
+  }
   const scriptedTraversal = await captureTraversal(
     request,
     initialReadySnapshot,
@@ -1358,6 +1412,11 @@ export async function executeFormalWorldCaptureProviderV1(
   const receiptWithoutCleanup: Omit<FormalWorldCaptureReceiptV1, "cleanupOutcome"> =
     Object.freeze({
       kind: "formal-world-capture-receipt",
+      whiteboxTriviews: Object.freeze(request.visualCaptureGroups.map((group, index) => Object.freeze({
+        visualTargetId: group.visualTargetId,
+        pngArtifactRef: `${captureBase}/triviews/${group.visualTargetId}/whitebox-triview.png`,
+        pngContentHash: sha256Bytes(whiteboxTriviewPngs[index]!) as Sha256HashV1,
+      }))),
       schemaVersion: 1,
       id: `${request.id}.receipt`,
       formalRequestRef: request.formalRequestRef,
@@ -1440,6 +1499,7 @@ export async function executeFormalWorldCaptureProviderV1(
 
   return Object.freeze({
     openingPng,
+    whiteboxTriviewPngs,
     worldSidePng,
     worldTopDownPng,
     openingIdentityMaskPng,

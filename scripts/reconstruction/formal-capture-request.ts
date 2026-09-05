@@ -545,6 +545,7 @@ export async function materializeFormalWorldCaptureRequestV1(
     `artifact://world-reconstruction-case/${reconstructionCase.id}`;
   const request = parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
+    visualCaptureGroups: [],
     schemaVersion: 1,
     id: `${reconstructionCase.id}.formal-capture-request`,
     formalRequestRef: `${artifactBase}/${relativeOutput}`,
