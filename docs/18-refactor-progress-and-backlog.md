@@ -1613,6 +1613,15 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   main 已复核两项代码及测试 diff；当前只接受为待集成提交，未进入主任务分支，
   不提前关闭 CF。待本次 Case 释放冻结执行输入后集成并进行受影响的验证；
   不为了进度诊断重启本次 Case，也没有运行全仓 gates。
+- CF-01/29 合并候选验证（2026-09-05）：main 为避免等待 Case，使用独立
+  `cf-integration-candidate` worktree，基于 `0811ccf7` 接纳上述两项为
+  `6a2eb0fc`、`c3f66bfd`。合并后 `pnpm typecheck` exit 0、diff check exit 0，
+  tracked tree 干净；只含两项的四个代码/测试文件，不含 Case 产物或依赖变化。
+  既有 83/83 与 32/32 focused 证据输入未变，直接复用，不重复整套测试。
+  这是隔离集成候选，不是正在执行的 `65d3c2bb` Case 或 `main` 的新证据；
+  待 Case 终态后再同步回主任务分支。Case 的实际 Builder PID 27107 已确认存活，
+  约 5 分钟，尚无终态；已打开 Planner entry/world-plan，看到侧支路、回折桥阶、
+  远端宫殿与围合山体，但这些是规划输入，尚未证明 Builder 的完整世界实现。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
