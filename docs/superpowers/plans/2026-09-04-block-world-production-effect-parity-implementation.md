@@ -710,6 +710,31 @@ Focused synthetic tests cover source bytes, stale captures, in-task mutation and
 failure isolation. Native scene-launcher and Studio scope integration remain the
 next required consumer work; this input path alone does not close CF-16.
 
+#### CF16-NATIVE-SCENE-STUDIO
+
+Main-agent-only, sequential; depends on NATIVE-VISUAL-INPUT. Preserve the pinned
+legacy scene launch condition: after successful whitebox production, use the
+frozen reference-0, if present, to run the single opening-first visual task.
+Plan-only never starts Builder/Capture/styling; build-only never reopens the upload.
+No image means no visual task; a whitebox failure never starts styling, and a
+visual failure never implicitly reruns Planner/Builder or revokes published whitebox.
+
+Studio projects required styling for reference-backed Native scenes using its
+existing fields. It accepts the exact Receipt-derived tri-view directory inventory,
+verifies the existing PNG/manifest hashes, serves the original capture paths and
+the common styled deliverables, and supports valid zero-script Capture observations
+without requiring a fabricated route. Visual failure is a failed overall task with
+whitebox production/publishing preserved; Native launch still verifies that closure.
+The existing Host finalizer reports/file/hash closure determines visual delivery,
+not a new semantic reviewer, similarity cutoff or strict diagnostic veto.
+
+Required evidence: real-parser synthetic stage handoff, no-reference/plan-only/
+build-only/failed-child controls; Studio published receipt + actual finalizers,
+styled success/failure/missing/stale images, strict diagnostic failure independent,
+zero-script Capture and complete-target inventory mutation. These are local
+contract tests, not a model/image acceptance run. Interrupted visual recovery,
+downstream Recording consumers and the final real Case remain separate open work.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal

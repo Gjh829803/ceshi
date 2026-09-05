@@ -43,6 +43,14 @@ async function fixture() {
         return 0; // Only the production handoff is mocked; all plan/Case checks are real.
       }
       expect(command).toBe("bash");
+      if (args[0]?.endsWith("run-styled-opening-frame-agent.sh")) {
+        expect(args[args.indexOf("--scene-source") + 1]).toBe("babylon-native");
+        expect(args[args.indexOf("--backend") + 1]).toBe("local");
+        const userFrame = args[args.indexOf("--user-frame") + 1]!;
+        expect(userFrame).toBe(path.join(root, "artifacts/scenes/staged-palace/inputs/reference-0.png"));
+        expect((await readFile(userFrame)).length).toBeGreaterThan(8);
+        return 0;
+      }
       const sceneId = args[args.indexOf("--scene-id") + 1]!;
       const artifactRoot = path.join(root, "artifacts/scenes", sceneId);
       const publicPlanRoot = path.join(root, "apps/playground/public/scene-plans", sceneId);
@@ -82,6 +90,13 @@ async function fixture() {
 }
 
 describe("Native staged world production", () => {
+  it("full production without a user appearance image does not start a visual task", async () => {
+    const { calls, options, request } = await fixture();
+    const result = await runNativeWorldAgentV1({ ...request, mode: "full", imagePaths: [] }, options);
+    expect(result.exitCode).toBe(0);
+    expect(calls).toEqual(["bash", "pnpm"]);
+  });
+
   it("plan-only freezes a valid Case without Builder, then build-only consumes it without the uploaded path", async () => {
     const { root, reference, calls, options, request } = await fixture();
     const plan = await runNativeWorldAgentV1(request, options);
@@ -95,8 +110,36 @@ describe("Native staged world production", () => {
       "--scene-id", "staged-palace", "--build-only",
     ]), options);
     expect(built.kind).toBe("native-world-agent-result");
-    expect(calls).toEqual(["bash", "pnpm"]);
+    expect(calls).toEqual(["bash", "pnpm", "bash"]);
     expect(sha256Bytes(await readFile(plan.casePath))).toBe(caseHash);
+  });
+
+  it("does not start styling after a failed whitebox production", async () => {
+    const { calls, options, request } = await fixture();
+    await runNativeWorldAgentV1(request, options);
+    const result = await runNativeWorldAgentV1(parseWorldAgentArgumentsV1([
+      "--scene-id", "staged-palace", "--build-only",
+    ]), { ...options, runProcess: async (...args) => {
+      const exitCode = await options.runProcess(...args);
+      return args[0] === "pnpm" ? 7 : exitCode;
+    } });
+    expect(result.exitCode).toBe(7);
+    expect(calls).toEqual(["bash", "pnpm"]);
+  });
+
+  it("propagates the visual child failure without resubmitting Builder or Planner", async () => {
+    const { root, calls, options, request } = await fixture();
+    await runNativeWorldAgentV1(request, options);
+    const before = await readFile(path.join(root, "artifacts/scenes/staged-palace/case.json"));
+    const result = await runNativeWorldAgentV1(parseWorldAgentArgumentsV1([
+      "--scene-id", "staged-palace", "--build-only",
+    ]), { ...options, runProcess: async (...args) => {
+      const exitCode = await options.runProcess(...args);
+      return args[1][0]?.endsWith("run-styled-opening-frame-agent.sh") ? 9 : exitCode;
+    } });
+    expect(result.exitCode).toBe(9);
+    expect(calls).toEqual(["bash", "pnpm", "bash"]);
+    expect(await readFile(path.join(root, "artifacts/scenes/staged-palace/case.json"))).toEqual(before);
   });
 
   it("build-only without an admitted plan does not pay for planning or create partial Case output", async () => {

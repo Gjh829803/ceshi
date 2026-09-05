@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { parseWorldReconstructionCaseV1 } from "@whitebox-world/validation";
 import {
   sha256Bytes,
   stringifyCanonicalJson,
@@ -385,8 +386,9 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
       plannerSelfCheckPath: path.join(artifactRoot, "inputs/planner-self-check.json"),
       requiredNativeProductionContext: NATIVE_BLOCK_PLANNER_BUDGET_CONTEXT_V1,
     });
+    const reconstructionCase = parseWorldReconstructionCaseV1(JSON.parse(await readFile(casePath, "utf8")));
     await validateNativeWorldPlannerInputClosureV1({
-      reconstructionCase: JSON.parse(await readFile(casePath, "utf8")),
+      reconstructionCase,
       inputDirectoryPath: path.join(artifactRoot, "inputs"),
     });
 
@@ -400,7 +402,7 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
 
     const runId = `run-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}-${process.pid}`;
     const outputDirectoryPath = path.join(artifactRoot, "runs", runId);
-    const exitCode = await runProcess(
+    let exitCode = await runProcess(
       "pnpm",
       [
         "worldkit",
@@ -417,6 +419,20 @@ export async function runNativeWorldAgentV1(request: WorldAgentRequestV1, option
       ],
       repositoryRoot,
     );
+    const primaryReference = reconstructionCase.referenceInputs.find(input =>
+      /^reference-0\.(png|jpg|webp)$/.test(input.inputRef));
+    if (exitCode === 0 && primaryReference !== undefined) {
+      // Like the old scene chain, styling follows accepted whitebox capture only
+      // when a user appearance reference exists. Build-only uses frozen Case bytes.
+      process.stdout.write("WORLDKIT_STAGE visual-imagegen\n");
+      exitCode = await runProcess("bash", [
+        path.join(repositoryRoot, "scripts/visual/run-styled-opening-frame-agent.sh"),
+        "--scene-source", "babylon-native", "--scene-id", request.sceneId,
+        "--user-frame", path.join(artifactRoot, "inputs", primaryReference.inputRef),
+        "--backend", backend,
+      ], repositoryRoot);
+    }
+    if (exitCode === 0) process.stdout.write("WORLDKIT_STAGE ready\n");
     return Object.freeze({
       kind: "native-world-agent-result",
       schemaVersion: 1,

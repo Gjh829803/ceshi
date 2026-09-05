@@ -2021,6 +2021,30 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   Native 场景 launcher/Studio 尚未调用这个显式 source 的 styling 路径，仍须继续接线；
   CF-16 与其余 CF 保持开放，最后本地 Case 仍等待全部开发及旧链对齐完成。
 
+- CF16-NATIVE-SCENE-STUDIO（main-agent-only，接 `b558ba6b`）：已按固定旧基线
+  `9e35ab53:run-spatial-world-agent.sh` 的启动条件接通 Native 场景风格化：白膜生产 exit 0
+  后，只有 Case 存在首张用户参考才调用已有单任务 opening/tri-views 入口，显式传 Native
+  Source/backend；build-only 使用 `inputs/reference-0` 冻结字节，不重新打开原上传路径。
+  plan-only、无用户图、白膜失败均不启动视觉任务；视觉失败不重跑 Planner/Builder。
+  Studio 新建、运行与重试继续使用既有 styled Required/Status 字段；Native 参考图任务不再
+  被硬编码成 not-required。正式 Capture 的对象目录清单由原 Receipt 精确派生，继续检查
+  PNG/manifest Hash、目录和链接；不把合法三视图当作额外文件。媒体清单、白膜 PNG API
+  与 deliverables 使用真实 `final/capture` 路径，没有根目录白膜 aliases。
+  视觉完成只复核既有 Host finalizer 的 file/hash closure，没有第二个语义 Reviewer 或新
+  质量阈值。已进入视觉阶段后失败/缺文件/改图会令整体任务 failed，但保留 passed 白膜、
+  published 产物与已绑定 Native launch；该入口仍复核原 Package/Capture 身份。没有进入
+  视觉阶段的异常 nonzero 仍按原失败规则处理。严格诊断 failed 不否决普通生产或 styling。
+  同时迁移 Studio 的旧固定 traversal 消费者：正式 parser 允许空请求/空观测时，使用
+  Capture ready Snapshot 的原身份核对，不再强求不存在的 firstCheck 或恢复虚构路线。
+  先复现 Native 阶段缺少视觉调用/吞掉视觉失败，以及 Studio 拒绝合法对象目录；入口与
+  阶段控制三文件 22/22、Studio Native/媒体/队列定向 46/46 通过。覆盖正向 finalizer、
+  无脚本 Capture、严格诊断失败、视觉失败隔离、PNG/manifest/额外目录 mutation，以及
+  既有 Package/Capture 篡改拒绝与启动资格撤销。先前 4/4、9/9 与 6/6 是重跑子集，不累加。
+  最终 typecheck 与 diff 检查通过。本项是本地合成合同和实际 HTTP 入口证据，
+  不是真实模型图、Browser 看图或全仓验收。
+  视觉阶段中断恢复、下游 Recording 消费者、其余 CF 与最终真实 Case 继续开放；保持所有
+  CF 开发及旧链对齐完成后，才运行最后本地生产 Case。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
