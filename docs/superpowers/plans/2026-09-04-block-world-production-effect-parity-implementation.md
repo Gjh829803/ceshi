@@ -40,8 +40,13 @@ creation, and real same-Package recovery with no Planner/Builder dispatch.
 
 CF-29 preserves the two existing SDK-owner source dirty/unavailable codes through the Run allowlist.
 It does not bypass source-commit verification or make untrusted error text an admission authority.
-Real Capture must run from a clean committed tree; tracked status documentation is written only
-after execution reaches a terminal state. No source regeneration or stricter quality gate is added.
+Real Capture must use unchanged committed implementation inputs. The later authorized CF-29
+correction excludes only the progress document and documentary Markdown in specs/plans/reviews;
+these edits cannot invalidate SDK identity. Code/config/resource/Skill inputs remain checked.
+Required focused evidence: unstaged and staged documentary edits retain identities; mixed source
+edits, source deletion/rename into docs, live/frozen Skills and lockfile edits still reject.
+Verify a real same-Package production Capture while an authorized progress-document diff exists.
+No source regeneration or stricter quality gate is added.
 
 Real recovery evidence: clean `dc643d55`, 054 `run-20260905072747-72050`, Host epoch 2,
 ordinary production passed/published and cleanup completed with unchanged Source, generation

@@ -194,6 +194,7 @@ export function formalHostedPayloadFixtureV1(input: Readonly<{
     worldTopDownPng: png(),
     colliderOverlayPng: png(),
     openingObservation: { ...identity },
+    semanticViewObservationSet: { ...identity },
     spawnSupportObservation: { ...identity },
     colliderOverlayObservation: { ...identity },
     scriptedTraversal: { ...identity },

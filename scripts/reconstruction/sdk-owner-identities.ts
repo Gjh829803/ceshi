@@ -17,6 +17,18 @@ import { resolveTrustedSourceCommit } from "../lib/worldkit-source-commit";
 
 const execFile = promisify(execFileCallback);
 
+// These repository-owned documents are not Capture execution inputs. Do not use
+// a global *.md exclusion: live/frozen Skills and other authored resources still
+// participate in the trusted implementation/input boundary. Everything not
+// explicitly excluded remains checked, including new execution file types.
+const SDK_IMPLEMENTATION_STATUS_PATHS = Object.freeze([
+  ".",
+  ":(top,exclude,literal)docs/18-refactor-progress-and-backlog.md",
+  ":(top,exclude,glob)docs/superpowers/specs/**/*.md",
+  ":(top,exclude,glob)docs/superpowers/plans/**/*.md",
+  ":(top,exclude,glob)docs/reviews/**/*.md",
+]);
+
 const SDK_OWNER_IMPLEMENTATION_REF_BY_ID = Object.freeze({
   action: "worldkit://sdk-owner/subject-actions@1",
   camera: "worldkit://sdk-owner/camera@1",
@@ -39,6 +51,8 @@ async function readRepositoryStatus(repositoryRoot: string): Promise<string> {
     "status",
     "--porcelain=v1",
     "--untracked-files=no",
+    "--",
+    ...SDK_IMPLEMENTATION_STATUS_PATHS,
   ]);
   return stdout;
 }
@@ -58,7 +72,7 @@ export async function resolveFormalWorldCaptureSdkOwnerIdentitiesV1(
   }
   if (!isEmpty(repositoryStatus.trim())) {
     throw new Error(
-      "WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY: tracked repository contents differ from the trusted commit.",
+      "WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY: tracked SDK implementation or execution inputs differ from the trusted commit.",
     );
   }
 

@@ -32,6 +32,19 @@ NBR-70/NBR-90 or strict acceptance workflow, but it cannot block ordinary produc
 
 ## 2. Boundaries retained from current architecture
 
+CF-29 Capture provenance clarification (2026-09-05, authorized legacy-parity correction):
+legacy `9e35ab53` scene Capture did not reject documentary worktree edits. Current Capture must
+not turn edits to the live progress document or Markdown specifications, plans and reviews into
+ordinary-production failures. The SDK owner implementation remains identified by trusted commit;
+its source-state check excludes only `docs/18-refactor-progress-and-backlog.md` and Markdown under
+`docs/superpowers/specs/`, `docs/superpowers/plans/`, and `docs/reviews/`, which are not execution
+inputs of this Capture path. All other tracked inputs remain checked, including SDK code, build
+configuration, lockfiles, resources, live Skills and frozen Skill copies. This is a narrow correction
+to an over-broad check, not a new dependency scanner, global Markdown exemption, provenance bypass,
+quality threshold or generation retry. Renaming an implementation file into documentary scope
+must still expose the original source deletion. Any future execution dependency on these documents
+must update this boundary, not silently consume excluded mutable input.
+
 CF-22/19 clarification (2026-09-05, authorized legacy-parity correction): old
 `9e35ab53:packages/block-world/src/check.ts:706-718` requires a visual group only for landmark
 identity presets, not all ordinary functional scenery. Native `structure`, `hazard`,

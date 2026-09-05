@@ -1689,7 +1689,8 @@ Capture 根因复现（2026-09-05）：同一 Package 单独调用 production Ca
 `sdk-owner-identities.ts` 检查整个 tracked tree，因此文档改动也触发 trusted-commit 拒绝。
 这不是生成超时、场景几何或浏览器卡死。不得删掉可信源码校验来放行；先提交授权文档，
 在干净候选上复用 Package。CF-29 还需保留该明确错误码，不能再次只报 Capture 总括失败。
-后续运行期间禁止写 tracked 进展文档，阶段更新先留在会话中，待终态后再更新/提交。
+当时临时规避方式是运行期间不写 tracked 进展文档；下述用户授权的 CF-29 收窄修复替代
+这项临时限制，普通文档变化不应被当成 SDK 实现变化。
 按本次落盘时间估算：Planner 约 7m18s，Builder/交付约 29m04s，Native/Ground/Package
 约 2m29s，Capture request 到失败约 4.5s；Builder 正常交付而非 timeout，但未保留的
 细分模型活动不能事后编造为确定的思考、工具或自检耗时。
@@ -1730,6 +1731,23 @@ Host-only 恢复终态（2026-09-05，干净 `dc643d556fa55c0a9f0a1032abbc7a9a83
 - 本次解决的是脏工作树 Capture 阻断、CF-31C 已有 Request 恢复缺口和 CF-29 错误码丢失；
   不是“全部旧分支效果已对齐”。112/112 focused、typecheck、3C migration 已通过；
   尚未合 main，既有 workspace-boundaries CI 失败和独立 review 要求仍需解决。
+
+CF-29 documentary dirty-tree 误阻断修正（2026-09-05，用户授权，main-agent-only）：
+
+- 源码对照确认：旧 `9e35ab53` 场景 Capture 只解析 source commit，不做全仓干净检查；
+  类似检查属于 Subject Preset 晋升而非 Capture。当前普通生产不应因无关进度文档失败。
+- SDK owner 原 Git 检查收窄排除唯一进度文档和 specs/plans/reviews 目录下的 Markdown；
+  不全局忽略 Markdown，不排除可执行文件、SDK、配置、资源、活源 Skill 或冻结 Skill。
+  trusted commit 和实现 Hash 算法不变；无新增相似度门禁、重生成或隐式重试。
+- 新增真实 Git fixture：文档 unstaged/staged 修改身份不变；源码与文档混合修改、删除、
+  source→docs rename、Skill/冻结副本/lockfile 修改仍拒绝。原 RED 精确复现文档误拒绝；
+  修复后 owner/Host transport 44/44 通过。联动补齐已有 transport fixture 遗漏的
+  `semanticViewObservationSet`，没有放宽实际 payload parser。
+- 待在已提交实现上保留授权进度文档 diff，再执行同一 054 Package 的正式生产 Capture；
+  该复验不重新购买 Planner/Builder，不覆盖旧 Run/最终发布结果。CI/review/合并分别举证。
+- 七维 Evaluation、构图/语义轮廓阈值和 NBR strict diagnostic 是新链路诊断，并非旧分支原有。
+  旧 Builder 对比图查看与最多三轮同任务结构/视觉修复仍属于必须对齐的反馈链；
+  新评分不反转普通成功不等于允许忽略视觉偏差，更不等于此次效果已与旧分支等价。
 
 CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
 
