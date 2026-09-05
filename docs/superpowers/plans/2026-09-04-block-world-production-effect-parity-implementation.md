@@ -757,6 +757,31 @@ This covers recovery of already delivered outputs. Explicit visual-only retry
 for incomplete delivery and downstream Recording consumers remain separate work;
 the complete CF goal and final real Case are not closed by this checkpoint.
 
+#### CF16-VISUAL-TASK-REPLAY
+
+Main-agent-only, sequential; depends on NATIVE-VISUAL-RECOVERY. The visual wrapper
+records its original task-root/request reference before dispatch, outside model
+context. Explicit `--resume` must reuse that exact scope, backend, input bytes,
+instruction, arguments and Cloud output prefix. It calls the existing Cloud router
+with the original request ID; only that router reconciles unknown requests and
+owns the original confirmed-terminal retry ledger/budget. No new retry policy,
+quality threshold or independent reviewer is introduced.
+
+After router delivery, retain a Host receipt of the exact declared output bytes.
+Resume with this receipt replays the existing finalizers without another model
+invocation. A previously promoted output may be restored to staging only from its
+exact receipt-hashed live bytes. Changed/malformed references, inputs, instructions,
+delivery receipts or outputs cannot become fresh dispatch or accepted residual
+files. Native Capture/Package and accepted tri-only opening remain unchanged.
+
+Focused evidence covers unknown Cloud same-request/same-arguments recovery,
+changed environment prefix, local Host-only finalization replay after interruption,
+post-promotion replay, Native full/tri-only delivery and corruption controls.
+Local execution without a delivery receipt is not remotely reconcilable and must
+not silently spawn a new model; explicit local terminal recovery remains open.
+Studio visual-only retry is the next consumer, not implemented by the wrapper
+alone. All remaining CF implementation/alignment precedes the final real Case.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal

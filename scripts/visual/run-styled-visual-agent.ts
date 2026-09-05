@@ -13,6 +13,7 @@ import { finalizeStyledOpeningFrame } from "./finalize-styled-opening-frame.js";
 import { finalizeStyledTriviews } from "./finalize-styled-triviews.js";
 import { parseVisualGenerationPromptsV2 } from "./visual-generation-prompts.js";
 import { visualCapturePaths } from "./visual-capture-paths.js";
+import { writeAtomic } from "../lib/write-atomic.js";
 
 const skillPath = ".codex/skills/worldkit-visual-reconstructor/SKILL.md";
 const promptFile = "visual-generation-prompts.json";
@@ -26,6 +27,29 @@ interface StyledVisualOptions {
   readonly scope: "all" | "triviews";
   readonly backend: "local" | "cloud";
   readonly sceneSource?: WorldGenerationSceneSourceKindV1;
+  readonly resume?: boolean;
+}
+
+async function readVisualFile(source: string, label: string): Promise<Buffer> {
+  const info = await lstat(source);
+  if (!info.isFile() || info.isSymbolicLink() || info.size === 0 || info.size > 20 * 1024 * 1024 ||
+      await realpath(source) !== path.resolve(source)) throw new Error(`Unsafe visual input: ${label}`);
+  return readFile(source);
+}
+
+interface VisualTaskReference {
+  readonly kind: "worldkit-visual-task-reference";
+  readonly schemaVersion: 1;
+  readonly sceneId: string;
+  readonly sceneSource: WorldGenerationSceneSourceKindV1;
+  readonly scope: StyledVisualOptions["scope"];
+  readonly backend: StyledVisualOptions["backend"];
+  readonly taskRootRelative: string;
+  readonly requestId: string;
+  readonly outputS3Prefix: string | null;
+  readonly instructionHash: string;
+  readonly argumentsHash: string;
+  readonly inputHashes: readonly { readonly path: string; readonly contentHash: string }[];
 }
 
 /** One routed model task, with the existing Host finalizers after delivery. */
@@ -43,12 +67,16 @@ export async function runStyledVisualAgent(
   const relativeScene = `artifacts/scenes/${options.sceneId}`;
   const sceneRoot = await realpath(path.join(repoRoot, relativeScene));
   if (sceneRoot !== path.join(repoRoot, relativeScene)) throw new Error("Visual scene root must not be linked.");
+  const referencePath = path.join(sceneRoot, "visual-task.json");
+  const prior = options.resume ? JSON.parse((await readVisualFile(referencePath, "visual-task.json")).toString()) as VisualTaskReference : undefined;
+  if (options.resume && !prior) throw new Error("Visual task reference identity mismatch.");
+  if (prior && (prior.kind !== "worldkit-visual-task-reference" || prior.schemaVersion !== 1 ||
+      prior.sceneId !== options.sceneId || prior.sceneSource !== capturePaths.source || prior.scope !== options.scope ||
+      prior.backend !== options.backend || !/^\.codex-tmp\/visual-reconstructor-[A-Za-z0-9]{6}$/.test(prior.taskRootRelative) ||
+      !/^visual-[0-9]+-[a-z0-9]{6}$/.test(prior.requestId))) throw new Error("Visual task reference identity mismatch.");
   const inputs = new Map<string, { source: string; bytes: Buffer }>();
   async function snapshot(relative: string, source: string): Promise<Buffer> {
-    const info = await lstat(source);
-    if (!info.isFile() || info.isSymbolicLink() || info.size === 0 || info.size > 20 * 1024 * 1024 ||
-        await realpath(source) !== path.resolve(source)) throw new Error(`Unsafe visual input: ${relative}`);
-    const bytes = await readFile(source);
+    const bytes = await readVisualFile(source, relative);
     inputs.set(relative, { source, bytes });
     return bytes;
   }
@@ -123,7 +151,8 @@ export async function runStyledVisualAgent(
 
   const temporaryParent = path.join(repoRoot, ".codex-tmp");
   await mkdir(temporaryParent, { recursive: true });
-  const taskRoot = await mkdtemp(path.join(temporaryParent, "visual-reconstructor-"));
+  const taskRoot = prior ? path.join(repoRoot, prior.taskRootRelative) : await mkdtemp(path.join(temporaryParent, "visual-reconstructor-"));
+  if (await realpath(taskRoot) !== taskRoot) throw new Error("Linked visual task root.");
   const stagedScene = path.join(taskRoot, relativeScene);
   const targets = capture.whiteboxTriviews;
   const outputs = [
@@ -133,8 +162,12 @@ export async function runStyledVisualAgent(
   try {
     for (const [relative, input] of inputs) {
       const destination = path.join(taskRoot, relative);
-      await mkdir(path.dirname(destination), { recursive: true });
-      await writeFile(destination, input.bytes);
+      if (prior) {
+        if (!(await readVisualFile(destination, relative)).equals(input.bytes)) throw new Error(`Visual resume input changed: ${relative}`);
+      } else {
+        await mkdir(path.dirname(destination), { recursive: true });
+        await writeFile(destination, input.bytes);
+      }
     }
     const instruction = `Use ${skillPath} for scene ${options.sceneId}.
 This is one ${options.scope === "all" ? "complete opening-and-tri-views" : "tri-views-only"} visual reconstruction task.
@@ -154,8 +187,10 @@ The prompt artifact uses schemaVersion 2, no provider field, roles [actual-white
 Host file/hash/role finalization runs after this task returns; do not claim it yourself. If an image still fails after its allowed regeneration, report the failure rather than deliver it as accepted.
 `;
     const instructionPath = path.join(taskRoot, "instruction.txt");
-    await writeFile(instructionPath, instruction);
-    const taskId = `visual-${Date.now()}-${path.basename(taskRoot).slice(-6).toLowerCase()}`;
+    if (!prior) await writeFile(instructionPath, instruction);
+    const taskId = prior?.requestId ?? `visual-${Date.now()}-${path.basename(taskRoot).slice(-6).toLowerCase()}`;
+    const outputS3Prefix = options.backend === "cloud" ? prior?.outputS3Prefix ??
+      `${(process.env.WORLDKIT_LWDP_S3_ROOT || "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk").replace(/\/$/, "")}/${options.sceneId}/${taskId}` : null;
     const args = ["--backend", options.backend, "--repo-root", taskRoot, "--task-id", taskId,
       "--request-id", taskId, "--stage", "visual-reconstruction", "--job-name", `WorldKit Visual Reconstructor ${options.sceneId}`,
       "--instruction-file", instructionPath, "--execution-profile", "formal", "--timeout-seconds", "1800",
@@ -167,18 +202,76 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
     for (const [i, target] of targets.entries()) args.push("--asset", `whitebox-triview-${i + 1}::${stagedScene}/${capturePaths.triviewRoot}/${target.imageUri}::image::image/png`);
     if (options.scope === "triviews") args.push("--context", `${relativeScene}/${promptFile}`,
       "--asset", `styled-opening-frame::${stagedScene}/${openingFile}::image::image/png`);
-    if (options.backend === "cloud") args.push("--output-s3-prefix",
-      `${(process.env.WORLDKIT_LWDP_S3_ROOT || "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk").replace(/\/$/, "")}/${options.sceneId}/${taskId}`);
+    if (outputS3Prefix !== null) args.push("--output-s3-prefix", outputS3Prefix);
     else args.push("--failure-evidence-root", path.join(taskRoot, "local-failure"));
     for (const file of outputs) args.push("--output", `${relativeScene}/${file}::${stagedScene}/${file}::${file.endsWith(".png") ? "image/png" : "application/json"}`);
     // Host-only recovery data, never included in selected task context or assets.
-    await writeFile(path.join(taskRoot, "dispatch-args.json"), `${JSON.stringify(args, null, 2)}\n`);
+    const argumentBytes = Buffer.from(`${JSON.stringify(args, null, 2)}\n`);
+    const reference: VisualTaskReference = { kind: "worldkit-visual-task-reference", schemaVersion: 1,
+      sceneId: options.sceneId, sceneSource: capturePaths.source, scope: options.scope, backend: options.backend,
+      taskRootRelative: path.relative(repoRoot, taskRoot), requestId: taskId, outputS3Prefix,
+      instructionHash: hash(Buffer.from(instruction)), argumentsHash: hash(argumentBytes),
+      inputHashes: [...inputs].map(([path, input]) => ({ path, contentHash: hash(input.bytes) })),
+    };
+    if (prior) {
+      if (stringifyCanonicalJson(prior) !== stringifyCanonicalJson(reference) ||
+          !(await readVisualFile(path.join(taskRoot, "dispatch-args.json"), "dispatch args")).equals(argumentBytes) ||
+          !(await readVisualFile(instructionPath, "instruction")).equals(Buffer.from(instruction))) {
+        throw new Error("Visual task reference identity mismatch.");
+      }
+    } else {
+      await writeFile(path.join(taskRoot, "dispatch-args.json"), argumentBytes);
+      await writeAtomic(referencePath, `${stringifyCanonicalJson(reference)}\n`);
+    }
+    process.stdout.write(`WORLDKIT_VISUAL_TASK_EVIDENCE ${taskRoot}\n`);
     // Submit once. The router alone owns confirmed-terminal retry and unknown-request reconciliation.
     process.stdout.write("WORLDKIT_STAGE visual-imagegen\n");
-    await dispatch(args, repoRoot);
+    const deliveryPath = path.join(taskRoot, "dispatch-delivery.json");
+    let delivered: { kind: string; schemaVersion: number; requestId: string; argumentsHash: string;
+      outputs: { path: string; contentHash: string }[] } | undefined;
+    if (prior) {
+      try {
+        delivered = JSON.parse((await readVisualFile(deliveryPath, "dispatch delivery")).toString());
+        if (!delivered) throw new Error("Visual task delivery identity mismatch.");
+      }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    }
+    if (delivered) {
+      if (delivered.kind !== "worldkit-visual-task-delivery" || delivered.schemaVersion !== 1 ||
+          delivered.requestId !== taskId || delivered.argumentsHash !== reference.argumentsHash ||
+          !Array.isArray(delivered.outputs) || delivered.outputs.length !== outputs.length ||
+          delivered.outputs.some((row, index) => row.path !== outputs[index])) throw new Error("Visual task delivery identity mismatch.");
+      for (const row of delivered.outputs) {
+        const staged = path.join(stagedScene, row.path);
+        try {
+          if (hash(await readVisualFile(staged, row.path)) !== row.contentHash) throw new Error("Visual delivered output changed.");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          const live = path.join(sceneRoot, row.path);
+          const bytes = await readVisualFile(live, row.path);
+          if (hash(bytes) !== row.contentHash) throw new Error("Visual delivered output changed.");
+          await mkdir(path.dirname(staged), { recursive: true });
+          await writeFile(staged, bytes);
+        }
+      }
+    } else {
+      // Local execution has no same-request remote reconciliation. Unknown local
+      // execution must not silently become another model invocation.
+      if (prior && options.backend === "local") throw new Error("LOCAL_VISUAL_TASK_NOT_DELIVERED: reconcile the original local task before retrying.");
+      await dispatch(args, repoRoot);
+      delivered = { kind: "worldkit-visual-task-delivery", schemaVersion: 1,
+        requestId: taskId, argumentsHash: reference.argumentsHash,
+        outputs: await Promise.all(outputs.map(async file => ({ path: file,
+          contentHash: hash(await readVisualFile(path.join(stagedScene, file), file)) }))),
+      };
+      await writeAtomic(deliveryPath, `${stringifyCanonicalJson(delivered)}\n`);
+    }
     for (const [relative, input] of inputs) {
       if (!(await readFile(path.join(taskRoot, relative))).equals(input.bytes) ||
           !(await readFile(input.source)).equals(input.bytes)) throw new Error(`Visual input changed during task: ${relative}`);
+    }
+    if ((await readVisualFile(referencePath, "visual-task.json")).toString() !== `${stringifyCanonicalJson(reference)}\n`) {
+      throw new Error("Visual task reference changed during task.");
     }
     if (options.scope === "all") await finalizeStyledOpeningFrame({
       sceneId: options.sceneId, sceneRoot: stagedScene, userFramePath: path.join(taskRoot, userRelative),
@@ -198,7 +291,6 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
     for (const file of delivery) await rename(path.join(stagedScene, file), path.join(sceneRoot, file));
     // Keep the router's attempt ledger and frozen request even on success.
     // These are execution evidence, not another visual acceptance authority.
-    process.stdout.write(`WORLDKIT_VISUAL_TASK_EVIDENCE ${taskRoot}\n`);
   } catch (error) {
     // Preserve isolated task input/output evidence, without resubmission or altering the whitebox outcome.
     process.stderr.write(`Visual task evidence retained at ${taskRoot}\n`);
@@ -235,9 +327,12 @@ async function dispatchCodexTask(args: readonly string[], repoRoot: string): Pro
 
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const options = new Map<string, string>();
-  for (let i = 0; i < args.length; i += 2) {
+  let resume = false;
+  for (let i = 0; i < args.length;) {
+    if (args[i] === "--resume") { resume = true; i += 1; continue; }
     if (!["--scene-id", "--user-frame", "--scope", "--backend", "--scene-source"].includes(args[i]!) || !args[i + 1]) throw new Error("Invalid styled visual option.");
     options.set(args[i]!, args[i + 1]!);
+    i += 2;
   }
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const sceneId = options.get("--scene-id") ?? "";
@@ -255,7 +350,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   }
   if (!userFramePath) throw new Error("A user appearance reference is required.");
   await runStyledVisualAgent({ repoRoot, sceneId, scope, userFramePath,
-    sceneSource,
+    sceneSource, resume,
     backend: (options.get("--backend") ?? process.env.WORLDKIT_CODEX_BACKEND ?? "cloud") as StyledVisualOptions["backend"] });
   process.stdout.write("WORLDKIT_STAGE visual-imagegen-ready\n");
 }

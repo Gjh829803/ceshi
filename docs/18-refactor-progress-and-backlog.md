@@ -2064,6 +2064,22 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   下游与其余 CF 仍待推进。没有新模型 Case、Browser 看图、全仓门禁或独立复核；最后
   本地生产 Case 继续等待全部 CF 开发及旧链对齐完成。
 
+- CF16-VISUAL-TASK-REPLAY（main-agent-only，接 `66b4da8e`）：视觉入口现支持显式
+  `--resume`，首次派发前原子写入 scene 的 `visual-task.json`，绑定原 task root/request id、
+  Source/scope/backend、冻结输入、instruction/arguments Hash 与 Cloud output prefix。
+  该引用不进入模型上下文。Cloud 恢复向既有 router 重放完全相同的参数与 request id，
+  unknown 核对、terminal retry 次数及退避继续只归原 router，不重置预算或新建请求。
+  router 交付后另存精确输出字节收据；Host finalizer/发布中断或已经发布后，恢复只重放
+  原有 finalizer，不再调用模型。已移出 staging 的文件只能从收据 Hash 一致的 live 输出
+  恢复；引用、输入、instruction、收据或输出变更均不静默转成重新生成/残留图通过。
+  Native 全量/仅三视图恢复保留原 Capture Receipt 和已接纳 opening；未改变图像自检、
+  模型、prompt、成功标准或生产 gate。定向入口测试 36/36、typecheck、diff 检查通过；
+  先前 26/26 是其子集，不累加。测试使用合成图片/派发替身及既有 router 无模型 smoke，
+  不是真实 Cloud unknown 请求或生成效果证明。
+  本地缺少完整交付收据仍不能安全推出任务成功/可重提，显式 local terminal 恢复、Studio
+  visual-only retry 接线及 Recording 下游继续开放。未运行真实模型 Case、Browser 看图、
+  全仓 CI 或独立复核；全部 CF 实施及旧链对齐完成后再运行最后本地生产 Case。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

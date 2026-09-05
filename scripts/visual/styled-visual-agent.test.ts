@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PNG } from "pngjs";
@@ -98,6 +98,145 @@ async function nativeFixture() {
 }
 
 describe("single-task styled visual production", () => {
+  it("resumes an unknown Cloud task with the same frozen request, task root, arguments and output prefix", async () => {
+    const input = { ...await fixture(), backend: "cloud" as const };
+    let firstArgs: readonly string[] = [];
+    await expect(runStyledVisualAgent(input, async args => {
+      firstArgs = [...args];
+      const reference = JSON.parse(await readFile(path.join(input.sceneRoot, "visual-task.json"), "utf8"));
+      expect(reference.requestId).toBe(argument(args, "--request-id"));
+      expect(path.join(input.repoRoot, reference.taskRootRelative)).toBe(argument(args, "--repo-root"));
+      throw new Error("creation-outcome-unknown");
+    })).rejects.toThrow("creation-outcome-unknown");
+    const previousPrefix = process.env.WORLDKIT_LWDP_S3_ROOT;
+    process.env.WORLDKIT_LWDP_S3_ROOT = "s3://different/ignored-on-resume";
+    try {
+      const dispatch = vi.fn(async (args: readonly string[]) => {
+        expect(args).toEqual(firstArgs);
+        await deliver(args);
+      });
+      await runStyledVisualAgent({ ...input, resume: true }, dispatch);
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(await readFile(path.join(input.sceneRoot, "styled-opening-frame.png"))).toEqual(pixels);
+    } finally {
+      if (previousPrefix === undefined) delete process.env.WORLDKIT_LWDP_S3_ROOT;
+      else process.env.WORLDKIT_LWDP_S3_ROOT = previousPrefix;
+    }
+  });
+
+  it("replays completed local delivery and Host finalizers without another model invocation", async () => {
+    const input = await fixture();
+    const output = path.join(input.sceneRoot, "styled-opening-frame.png");
+    await symlink(input.userFramePath, output);
+    const dispatch = vi.fn((args: readonly string[]) => deliver(args));
+    await expect(runStyledVisualAgent(input, dispatch)).rejects.toThrow("Linked visual output");
+    await rm(output);
+    await runStyledVisualAgent({ ...input, resume: true }, dispatch);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    // Successful delivery moved the staging outputs; replay restores only exact
+    // receipt-hashed live copies, never arbitrary residual images.
+    await runStyledVisualAgent({ ...input, resume: true }, dispatch);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(await readFile(output)).toEqual(pixels);
+  });
+
+  it("does not turn unknown local execution into another model invocation", async () => {
+    const input = await fixture();
+    await expect(runStyledVisualAgent(input, async () => { throw new Error("interrupted"); })).rejects.toThrow("interrupted");
+    const dispatch = vi.fn();
+    await expect(runStyledVisualAgent({ ...input, resume: true }, dispatch)).rejects.toThrow("LOCAL_VISUAL_TASK_NOT_DELIVERED");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it.each(["instruction.txt", "dispatch-args.json", "reference"])("rejects changed %s without resetting the original request", async file => {
+    const input = { ...await fixture(), backend: "cloud" as const };
+    let taskRoot = "";
+    await expect(runStyledVisualAgent(input, async args => {
+      taskRoot = argument(args, "--repo-root");
+      throw new Error("interrupted");
+    })).rejects.toThrow("interrupted");
+    if (file === "reference") {
+      const referencePath = path.join(input.sceneRoot, "visual-task.json");
+      const reference = JSON.parse(await readFile(referencePath, "utf8"));
+      await writeFile(referencePath, JSON.stringify({ ...reference, argumentsHash: `sha256:${"0".repeat(64)}` }));
+    } else await writeFile(path.join(taskRoot, file), "changed");
+    const dispatch = vi.fn();
+    await expect(runStyledVisualAgent({ ...input, resume: true }, dispatch)).rejects.toThrow("Visual task reference identity mismatch");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it.each(["receipt-null", "receipt-request", "receipt-output-path", "live-output", "staged-output"])(
+    "rejects delivered %s corruption instead of dispatching or accepting residual files", async mutation => {
+      const input = { ...await fixture(), backend: "cloud" as const };
+      const dispatch = vi.fn((args: readonly string[]) => deliver(args));
+      await runStyledVisualAgent(input, dispatch);
+      const taskRoot = argument(dispatch.mock.calls[0]![0], "--repo-root");
+      const receiptPath = path.join(taskRoot, "dispatch-delivery.json");
+      if (mutation.startsWith("receipt")) {
+        const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+        if (mutation === "receipt-request") receipt.requestId = "visual-1-abcdef";
+        if (mutation === "receipt-output-path") receipt.outputs[0].path = "../../outside.png";
+        await writeFile(receiptPath, JSON.stringify(mutation === "receipt-null" ? null : receipt));
+      } else {
+        const root = mutation === "live-output" ? input.sceneRoot : path.join(taskRoot, `artifacts/scenes/${sceneId}`);
+        await writeFile(path.join(root, "styled-opening-frame.png"), "unrelated image");
+      }
+      dispatch.mockClear();
+      await expect(runStyledVisualAgent({ ...input, resume: true }, dispatch)).rejects.toThrow(
+        mutation.startsWith("receipt") ? "Visual task delivery identity mismatch" : "Visual delivered output changed");
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+  it("rejects a replaced task reference before finalizing or promoting the original delivery", async () => {
+    const input = await fixture();
+    await expect(runStyledVisualAgent(input, async args => {
+      await deliver(args);
+      await writeFile(path.join(input.sceneRoot, "visual-task.json"), "{}");
+    })).rejects.toThrow("Visual task reference changed during task");
+    await expect(access(path.join(input.sceneRoot, "styled-opening-frame.png"))).rejects.toThrow();
+    await expect(access(path.join(input.sceneRoot, "styled-opening-frame-report.json"))).rejects.toThrow();
+  });
+
+  it("replays Native full and tri-only deliveries without changing the accepted opening or Capture", async () => {
+    const input = await nativeFixture();
+    const receiptPath = path.join(input.captureRoot, "formal-world-capture-receipt.json");
+    const receiptBefore = await readFile(receiptPath);
+    const dispatch = vi.fn((args: readonly string[]) => deliver(args, input.ids));
+    await runStyledVisualAgent(input, dispatch);
+    await runStyledVisualAgent({ ...input, resume: true }, dispatch);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    const openingBefore = await readFile(path.join(input.sceneRoot, "styled-opening-frame-manifest.json"));
+    await runStyledVisualAgent({ ...input, scope: "triviews" }, dispatch);
+    await runStyledVisualAgent({ ...input, scope: "triviews", resume: true }, dispatch);
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(await readFile(path.join(input.sceneRoot, "styled-opening-frame-manifest.json"))).toEqual(openingBefore);
+    expect(await readFile(receiptPath)).toEqual(receiptBefore);
+  });
+
+  it.each(["live", "snapshot"])("rejects %s input drift on resume before invoking the router", async where => {
+    const input = { ...await fixture(), backend: "cloud" as const };
+    let taskRoot = "";
+    await expect(runStyledVisualAgent(input, async args => {
+      taskRoot = argument(args, "--repo-root");
+      throw new Error("interrupted");
+    })).rejects.toThrow("interrupted");
+    const file = path.join(where === "live" ? input.repoRoot : taskRoot, `artifacts/scenes/${sceneId}/scene-brief.md`);
+    await writeFile(file, "changed brief");
+    const dispatch = vi.fn();
+    await expect(runStyledVisualAgent({ ...input, resume: true }, dispatch)).rejects.toThrow("Visual resume input changed");
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it.each([null, { kind: "worldkit-visual-task-reference", schemaVersion: 1,
+    sceneId, scope: "all", sceneSource: "canonical", backend: "cloud", taskRootRelative: "../foreign", requestId: "visual-1-abcdef" }])(
+    "rejects invalid resume references without falling back to a fresh task", async reference => {
+      const input = { ...await fixture(), backend: "cloud" as const };
+      await writeFile(path.join(input.sceneRoot, "visual-task.json"), JSON.stringify(reference));
+      const dispatch = vi.fn();
+      await expect(runStyledVisualAgent({ ...input, resume: true }, dispatch)).rejects.toThrow("Visual task reference identity mismatch");
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
   it("consumes Native receipt-bound captures without Canonical artifacts and keeps real paths in visual manifests", async () => {
     const input = await nativeFixture();
     const receiptBefore = await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"));
