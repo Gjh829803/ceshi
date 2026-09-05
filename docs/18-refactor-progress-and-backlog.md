@@ -1622,6 +1622,14 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   待 Case 终态后再同步回主任务分支。Case 的实际 Builder PID 27107 已确认存活，
   约 5 分钟，尚无终态；已打开 Planner entry/world-plan，看到侧支路、回折桥阶、
   远端宫殿与围合山体，但这些是规划输入，尚未证明 Builder 的完整世界实现。
+- CF-14/R2-A 在上述隔离集成候选落代码：提取唯一 identity-mask pixel projection，
+  Case reference 消费者删除原 inline 算法；保持原像素边界、四舍五入、缺失/弱 mask
+  策略与 Case 数值不变。新增同 bounds 实心/拱门、分离实例的负空间、缺失 mask、
+  非方形边界与 tiny-mask 回归，projection + Case preparation 20/20、typecheck exit 0。
+  首次测试因尚无实现模块 RED；不是已经复现并修好了 Formal 像素问题的证据。
+  当前 Formal whitebox 材质仍带光照，不能直接按精确身份色解析其显示 PNG。
+  实际 per-view identity mask 与 Capture Hash 绑定、Evaluation 删除 AABB 面积消费
+  仍是 CF-14 后续工作；本步不新增生产门禁、不关闭 CF-14/21、不改运行中的 Case。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
