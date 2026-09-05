@@ -16,11 +16,20 @@ creative request, catalog assets, budget and browser evidence tools. Search asse
 by exact identity and inspect their limitations; diagnostic samples are not proof
 of faithful subject appearance. Do not install dependencies or change supplied tools.
 
+For the SDK world, WASD moves the character and the arrow keys rotate the camera;
+Shift stays held to run and each new Space press jumps once. Keep the verified
+ordinary jump animation continuous, then return to idle/walk/run on landing.
+R and tool reset must restore the complete initial world, camera and gameplay
+state. Use the SDK's declared extension and control capabilities when required;
+do not claim an unsupported movement or geometry behavior merely by naming it.
+
 Use real world_preview images and world_inspect diagnostics, then repair this same
 world. After the final world-source change, request an opening preview and inspect
 the returned image. An episode-only edit does not invalidate that world image.
 Use short real keyboard episodes to debug, then record a full 180–300-second
-episode and complete object three-views before world_submit. Long operations return
+episode with at least 180 seconds of active play and complete object three-views
+before world_submit. Paused, loading and reset time cannot count as active play.
+Long operations return
 operation IDs: poll the same operation through operations_get; do not launch duplicates.
 
 External acceptance goals cannot be weakened by deleting waypoints, replacing
