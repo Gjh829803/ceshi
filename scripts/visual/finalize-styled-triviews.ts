@@ -8,6 +8,7 @@ import {
   validateWhiteboxTriviewManifestV1,
   type WhiteboxTriviewManifestV1,
 } from "@whitebox-world/runtime-contracts";
+import { parseVisualGenerationPromptsV2 } from "./visual-generation-prompts.js";
 
 function option(arguments_: readonly string[], name: string): string {
   const index = arguments_.indexOf(name);
@@ -58,6 +59,12 @@ export async function finalizeStyledTriviews(options: {
     throw new Error(captureErrors.map(({ code, instancePath, message }) =>
       `${code} ${instancePath}: ${message}`).join("\n"));
   }
+  parseVisualGenerationPromptsV2(JSON.parse(await readFile(
+    path.join(sceneRoot, "visual-generation-prompts.json"), "utf8",
+  )), {
+    sceneId: options.sceneId,
+    visualTargetIds: captureManifest.whiteboxTriviews.map(({ visualTargetId }) => visualTargetId),
+  });
 
   const targets = [];
   for (const target of captureManifest.whiteboxTriviews) {
@@ -69,6 +76,7 @@ export async function finalizeStyledTriviews(options: {
       runtimeEntityIds: [...target.runtimeEntityIds],
       role: target.role,
       semanticClassId: target.semanticClassId,
+      views: [...target.views],
       whiteboxTriview: {
         path: canonicalRelativePath(sceneRoot, whiteboxPath),
         contentHash: await hash(whiteboxPath),

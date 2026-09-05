@@ -125,6 +125,16 @@ for (const finalizer of finalizers) {
       expect(report.manifestHash).toBe(`sha256:${createHash("sha256").update(manifestBytes.toString("utf8").trim()).digest("hex")}`);
       const targets = finalizer.name === "opening" ? manifest.supplementalTriviews : manifest.targets;
       expect(targets.map((target: { visualTargetId: string }) => target.visualTargetId)).toEqual(targetIds);
+      if (finalizer.name === "opening") {
+        expect(manifest.promptBundle).toEqual({
+          path: promptBundleFile,
+          contentHash: `sha256:${createHash("sha256").update(await readFile(path.join(input.sceneRoot, promptBundleFile))).digest("hex")}`,
+        });
+      } else {
+        expect(targets.map((target: { views: string[] }) => target.views)).toEqual([
+          ["front", "right", "back"], ["front", "right", "back"],
+        ]);
+      }
     });
 
     async function rejectsWithoutPublishing(input: Awaited<ReturnType<typeof fixture>>) {

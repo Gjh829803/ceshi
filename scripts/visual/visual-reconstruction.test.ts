@@ -99,6 +99,20 @@ it("binds a manual whitebox recording, reconstructs the styled frame, and render
   expect(draft.supplementalTriviews[0]?.token).toBe("@图片3");
 
   await copyFile(userFramePath, path.join(sceneRoot, "styled-opening-frame.png"));
+  await writeFile(path.join(sceneRoot, "visual-generation-prompts.json"), JSON.stringify({
+    kind: "worldkit-visual-generation-prompts",
+    schemaVersion: 2,
+    sceneId: "paper-moon-palace",
+    openingFrame: {
+      referenceRoles: ["actual-whitebox-opening", "user-first-frame"],
+      prompt: "opening prompt ".repeat(20),
+    },
+    styledTriviews: [{
+      visualTargetId: "traveler",
+      referenceRoles: ["target-whitebox-triview", "styled-opening-frame", "user-first-frame"],
+      prompt: "tri-view prompt ".repeat(20),
+    }],
+  }));
   await finalizeStyledOpeningFrame({
     sceneId: "paper-moon-palace",
     sceneRoot,
