@@ -87,23 +87,29 @@ export class CanvasRecorder {
         ? MediaRecorder.isTypeSupported(candidate)
         : false,
     );
-    this.captureCanvas = this.canvas.ownerDocument.createElement("canvas");
-    this.captureCanvas.width = this.width;
-    this.captureCanvas.height = this.height;
-    this.captureContext = this.captureCanvas.getContext("2d", { alpha: false });
-    if (this.captureContext === null) {
-      this.finish();
-      throw new Error("无法建立 1280×720 白膜录制画布。");
-    }
-    this.drawCaptureFrame();
-    this.drawTimer = window.setInterval(
-      () => this.drawCaptureFrame(),
-      1_000 / this.frameRate,
-    );
-    this.stream = this.captureCanvas.captureStream(this.frameRate);
-    this.chunks = [];
-    this.stopPromise = null;
     try {
+      // Match the legacy start-time raster decision, not CSS dimensions. A
+      // later Runtime resize does not replace the stream or alter its canvas;
+      // direct capture does not promise a fixed encoded raster after resizing.
+      if (this.canvas.width === this.width && this.canvas.height === this.height) {
+        this.stream = this.canvas.captureStream(this.frameRate);
+      } else {
+        this.captureCanvas = this.canvas.ownerDocument.createElement("canvas");
+        this.captureCanvas.width = this.width;
+        this.captureCanvas.height = this.height;
+        this.captureContext = this.captureCanvas.getContext("2d", { alpha: false });
+        if (this.captureContext === null) {
+          throw new Error("无法建立 1280×720 白膜录制画布。");
+        }
+        this.drawCaptureFrame();
+        this.drawTimer = window.setInterval(
+          () => this.drawCaptureFrame(),
+          1_000 / this.frameRate,
+        );
+        this.stream = this.captureCanvas.captureStream(this.frameRate);
+      }
+      this.chunks = [];
+      this.stopPromise = null;
       this.mediaRecorder = new MediaRecorder(this.stream, {
         ...(mimeType === "" ? {} : { mimeType }),
         videoBitsPerSecond: this.videoBitsPerSecond,
@@ -153,8 +159,11 @@ export class CanvasRecorder {
   }
 
   dispose(): void {
-    if (this.mediaRecorder?.state !== "inactive") this.mediaRecorder?.stop();
-    this.finish();
+    try {
+      if (this.mediaRecorder?.state !== "inactive") this.mediaRecorder?.stop();
+    } finally {
+      this.finish();
+    }
   }
 
   private readonly handleDataAvailable = (event: BlobEvent): void => {
