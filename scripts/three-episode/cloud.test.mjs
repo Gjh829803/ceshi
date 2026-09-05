@@ -189,3 +189,14 @@ test('artifact IO is bounded and concurrent while identical uploads share one tr
  const manifest=await client.publishDirectory(input,'s3://bucket/parallel');assert.equal(manifest.files.length,12);assert.equal(counts.get(manifest.files[0].s3Uri),1);
  await client.hydrateDirectory('s3://bucket/parallel',path.join(root,'output'));assert(maximum>1&&maximum<=8);for(let i=0;i<12;i++)assert.equal(await readFile(path.join(root,'output',i+'.txt'),'utf8'),'identical bytes');
 });
+
+test('cloud reviewer pool recovery retains failed evidence and cannot duplicate live or delivered work',async t=>{
+ const behavior={failed:true};const f=await fixture(t,behavior);
+ await assert.rejects(f.client.runCodex(f.args),/TERMINAL_FAILED/);const original=f.payload().request_id;
+ behavior.failed=false;f.runtime.codexAccountIds=['existing-account-a','existing-account-b'];await f.client.runCodex(f.args);
+ assert.notEqual(original,f.payload().request_id);assert.equal(f.payload().options.codex_account_ids.length,1);
+ await f.client.runCodex(f.args);assert.equal(f.calls.filter(c=>c.method==='POST').length,2);
+ f.runtime.codexRetryAttempts={[f.args.taskId]:1};await assert.rejects(f.client.runCodex(f.args),/REQUIRES_TERMINAL_FAILED/);
+ const pending=await fixture(t,{pollError:new Error('pending')});await assert.rejects(pending.client.runCodex(pending.args),/REMOTE_PENDING/);
+ pending.runtime.codexAccountIds=['existing-account-a'];await assert.rejects(pending.client.runCodex(pending.args),/REQUIRES_TERMINAL_FAILED/);assert.equal(pending.calls.filter(c=>c.method==='POST').length,1);
+});
