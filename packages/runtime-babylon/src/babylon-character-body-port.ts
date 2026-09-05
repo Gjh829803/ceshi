@@ -1062,14 +1062,6 @@ function compareOptionalString(
   return left < right ? -1 : 1;
 }
 
-function canonicalSupportNormal(
-  mode: BabylonCharacterBodyNativeSupportV1["mode"],
-  input: MovementVec3V1,
-): MovementVec3V1 {
-  if (mode === "unsupported") return freezeVec3([0, 0, 0]);
-  return normalized(input, "support normal must be nonzero.");
-}
-
 function canonicalContact(
   value: Record<string, unknown>,
 ): BabylonCharacterBodyNativeContactV1 {
@@ -1385,13 +1377,9 @@ function parseNativeSupport(input: unknown): BabylonCharacterBodyNativeSupportV1
     value.mode !== "unsupported") || typeof value.isSurfaceDynamic !== "boolean") {
     invalid("native support output is outside the closed driver surface.");
   }
-  const normal = canonicalSupportNormal(
-    value.mode,
-    parseVec3(value.averageSurfaceNormalXYZ),
-  );
   return Object.freeze({
     mode: value.mode,
-    averageSurfaceNormalXYZ: normal,
+    averageSurfaceNormalXYZ: parseVec3(value.averageSurfaceNormalXYZ),
     isSurfaceDynamic: value.isSurfaceDynamic,
     averageSurfaceVelocityMetersPerSecondXYZ:
       value.averageSurfaceVelocityMetersPerSecondXYZ === undefined
@@ -2128,7 +2116,15 @@ class BabylonCharacterBodyPortV1
         tick: value.tick,
         serial,
         sample,
-        nativeSupport,
+        nativeSupport: Object.freeze(sample.support.mode === "unsupported"
+          ? {
+              mode: "unsupported",
+              averageSurfaceNormalXYZ: freezeVec3([0, 0, 0]),
+              isSurfaceDynamic: false,
+              averageSurfaceVelocityMetersPerSecondXYZ: freezeVec3([0, 0, 0]),
+              averageAngularSurfaceVelocityRadiansPerSecondXYZ: freezeVec3([0, 0, 0]),
+            }
+          : { ...nativeSupport, averageSurfaceNormalXYZ: sample.support.normalXYZ }),
         beginSupportContacts: supportProjection.contacts,
         beginCheckpoint: checkpoint,
         upwardSupportDepartureActive: this.upwardSupportDepartureActive,
@@ -2625,10 +2621,6 @@ class BabylonCharacterBodyPortV1
         contacts: Object.freeze([]),
       });
     }
-    const normal = normalized(
-      nativeSupport.averageSurfaceNormalXYZ,
-      "native support normal is invalid.",
-    );
     const supportContactBandMeters =
       this.options.controller.keepDistanceMeters +
       this.options.controller.keepContactToleranceMeters;
@@ -2637,6 +2629,21 @@ class BabylonCharacterBodyPortV1
         dot(contact.normalXYZ, up) > 0.08 &&
         contact.distanceMeters <= supportContactBandMeters
       );
+    // Babylon can classify support before finding any normals to average.
+    // Resolve that finite degenerate result from this query's admitted manifold,
+    // never by manufacturing an upward normal or running another support query.
+    const normalInput = Math.hypot(...nativeSupport.averageSurfaceNormalXYZ) <= 1e-12
+      ? supportingContacts.length === 0
+        ? freezeVec3([0, 0, 0])
+        : averageVec3(supportingContacts.map((contact) => contact.normalXYZ))
+      : nativeSupport.averageSurfaceNormalXYZ;
+    if (Math.hypot(...normalInput) <= 1e-12) {
+      return Object.freeze({
+        support: Object.freeze({ mode: "unsupported" }),
+        contacts: Object.freeze([]),
+      });
+    }
+    const normal = normalized(normalInput, "native support normal is invalid.");
     const point = supportingContacts.length > 0
       ? averageVec3(supportingContacts.map((contact) => contact.pointMetersXYZ))
       : addScaled(position, up, -this.options.capsule.heightMeters / 2);

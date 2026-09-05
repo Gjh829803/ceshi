@@ -697,6 +697,76 @@ describe("BabylonCharacterBodyPortV1 transaction", () => {
     port.dispose();
   });
 
+  it("CF03 never promotes native unsupported and clears its integration surface data", () => {
+    const { driver, port } = createPort();
+    driver.support = {
+      ...unsupportedSupport(),
+      averageSurfaceNormalXYZ: [0, 4, 0],
+      isSurfaceDynamic: true,
+      averageSurfaceVelocityMetersPerSecondXYZ: [1, 2, 3],
+      averageAngularSurfaceVelocityRadiansPerSecondXYZ: [3, 2, 1],
+    };
+    const token = createMovementTickTokenV1();
+    expect(port.beginTick({ token, tick: 1 }).support.mode).toBe("unsupported");
+    port.resolve({ token, proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]) });
+    expect(driver.lastIntegrateRequest?.supportBeforeIntegrate).toEqual({
+      mode: "unsupported", averageSurfaceNormalXYZ: [0, 0, 0], isSurfaceDynamic: false,
+      averageSurfaceVelocityMetersPerSecondXYZ: [0, 0, 0],
+      averageAngularSurfaceVelocityRadiansPerSecondXYZ: [0, 0, 0],
+    });
+    port.commitTick(token);
+    expect(port.readCommittedSupportEvidence()).toMatchObject({
+      support: { mode: "unsupported" }, contacts: [],
+    });
+    port.dispose();
+  });
+
+  it("CF03 averages only admitted contacts and preserves commit, abort and reset ownership", () => {
+    const { driver, port } = createPort();
+    driver.support = { ...supportedSupport([0, 0, 0]), mode: "sliding" };
+    driver.contacts = [groundContact([0.6, 0.8, 0]), groundContact([-0.6, 0.8, 0]),
+      groundContact([0, -1, 0]), groundContact([1, 0, 0]),
+      { ...groundContact([0, 0.6, 0.8]), distanceMeters: 0.16 }];
+    const token = createMovementTickTokenV1();
+    expect(port.beginTick({ token, tick: 1 }).support).toMatchObject({ mode: "sliding", normalXYZ: [0, 1, 0] });
+    port.resolve({ token, proposal: proposal(token, 1, [0, 0, 0], [0, 0, 0]) });
+    port.commitTick(token);
+    const evidence = port.readCommittedSupportEvidence();
+    expect(evidence).toMatchObject({ support: { mode: "sliding", normalXYZ: [0, 1, 0] } });
+    expect(evidence?.contacts).toHaveLength(2);
+    driver.contacts = [];
+    const next = createMovementTickTokenV1();
+    expect(port.beginTick({ token: next, tick: 2 }).support.mode).toBe("unsupported");
+    port.abortTick(next);
+    expect(port.readCommittedSupportEvidence()).toBe(evidence);
+    expect(driver.checkSupportCalls).toBe(2);
+    expect(port.resetToState({ positionMetersXYZ: [0, 1, 0], linearVelocityMetersPerSecondXYZ: [0, 0, 0] }))
+      .toEqual({ mode: "unsupported" });
+    expect(port.readCommittedSupportEvidence()).toBeUndefined();
+    driver.contacts = [groundContact([0.6, 0.8, 0])];
+    expect(port.resetToState({ positionMetersXYZ: [0, 1, 0], linearVelocityMetersPerSecondXYZ: [0, 0, 0] }))
+      .toMatchObject({ mode: "sliding", normalXYZ: [0.6, 0.8, 0] });
+    port.dispose();
+  });
+
+  it.each([Number.NaN, Infinity])("CF03 rejects non-finite support even with admitted contacts: %s", (bad) => {
+    const { driver, port } = createPort();
+    driver.support = supportedSupport([bad, 0, 0]);
+    expect(() => port.beginTick({ token: createMovementTickTokenV1(), tick: 1 })).toThrow("3C_INPUT_INVALID");
+    expect(driver.integrateCalls).toBe(0);
+    expect(driver.restoreCalls).toBe(1);
+    port.dispose();
+  });
+
+  it("CF03 rejects accessor-backed support without reading its getter", () => {
+    const { driver, port } = createPort();
+    let reads = 0;
+    Object.defineProperty(driver.support, "averageSurfaceNormalXYZ", { enumerable: true, get() { reads += 1; return [0, 0, 0]; } });
+    expect(() => port.beginTick({ token: createMovementTickTokenV1(), tick: 1 })).toThrow("3C_INPUT_INVALID");
+    expect(reads).toBe(0);
+    port.dispose();
+  });
+
   it("allows an immediate failed-begin retry but stales it after a newer begin succeeds", () => {
     const immediate = createPort();
     const token = createMovementTickTokenV1();
