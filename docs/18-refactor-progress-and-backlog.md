@@ -1630,6 +1630,18 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   当前 Formal whitebox 材质仍带光照，不能直接按精确身份色解析其显示 PNG。
   实际 per-view identity mask 与 Capture Hash 绑定、Evaluation 删除 AABB 面积消费
   仍是 CF-14 后续工作；本步不新增生产门禁、不关闭 CF-14/21、不改运行中的 Case。
+- CF-14/R2-B 内部 Capture 原语已在 `cf-integration-candidate` 实现：现有 display
+  capture 之后、同一 Camera transaction 内可请求独立身份 PNG/RGBA；显式 Mesh handles
+  赋身份色，未标记几何为黑色且保留遮挡，共享材质不串色。临时 unlit/opaque 材质
+  禁用 fog/image processing/postprocess，结束或异常时恢复原材质、相机、canvas 状态。
+  对照安装 Babylon 9.23 `Scene.render(false,true)`，身份 pass 不额外推进相机输入/动画。
+  opening/side/top、共享材质、thin-instance transforms、非法/foreign/disposed handle、
+  throwing-render cleanup 共 8 项新回归，连同原 artifact capture 为 14/14；
+  typecheck exit 0、`verify:3c-migration` exit 0（11 ledger entries / 10 authority invariants）。
+  原实现 opening 无身份结果与异常注入不生效形成 RED；初次 side/top 夹具 bounds 字段
+  写错已纠正，不把夹具错误计作产品缺陷。证据为 NullEngine/契约，不是真实 GPU 像素。
+  正式 provider 的 live-registry 接入、三视图身份图/Receipt Hash 闭包和 Evaluation
+  像素消费尚待，原语未启用到正在运行的 054，CF-14 继续 open。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
