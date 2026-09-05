@@ -20,15 +20,20 @@ for (let index = 0; index < args.length; index += 2) {
 }
 const mode = options["--mode"] ?? "prepare";
 if (!["prepare", "run", "resume", "stats"].includes(mode)) throw new Error("--mode must be prepare, run, resume, or stats");
-const manifestPath = path.resolve(options["--manifest"] ?? path.join(repo, ".codex-tmp/gpt6-five-case-eval/selected-cases.json"));
-const sourceManifest = JSON.parse(await readFile(manifestPath, "utf8"));
-if (sourceManifest.cases?.length !== 5 || new Set(sourceManifest.cases.map(item => item.id)).size !== 5) throw new Error("Five unique fixed cases are required.");
 const runId = options["--run-id"];
 if (!runId) throw new Error("Choose an explicit Three experiment --run-id");
 if (!/^[a-z0-9][a-z0-9-]{2,99}$/.test(runId)) throw new Error("Invalid --run-id");
 const outputRoot = path.resolve(options["--output-root"] ?? path.join(repo, ".codex-tmp/three-creator-eval/runs", runId));
 await mkdir(outputRoot, {recursive: true});
 const previousPlan = await optionalJson(path.join(outputRoot, "evaluation-plan.json"));
+const selectedManifest = options["--manifest"] ?? previousPlan?.manifestPath;
+if (!selectedManifest) throw new Error("A new run requires an explicit --manifest; resume uses its saved plan manifest.");
+const manifestPath = path.resolve(selectedManifest);
+if (previousPlan?.manifestPath && path.resolve(previousPlan.manifestPath) !== manifestPath) throw new Error("Case manifest changed; use a deliberate new run ID.");
+const manifestBytes = await readFile(manifestPath), manifestSha256 = sha256(manifestBytes);
+if (previousPlan?.manifestSha256 && previousPlan.manifestSha256 !== manifestSha256) throw new Error("Frozen case manifest bytes changed.");
+const sourceManifest = JSON.parse(manifestBytes);
+if (sourceManifest.cases?.length !== 5 || new Set(sourceManifest.cases.map(item => item.id)).size !== 5) throw new Error("Five unique fixed cases are required.");
 const previousSuite = previousPlan && (previousPlan.suite ?? "paired");
 const suite = options["--suite"] ?? previousSuite ?? "sdk-only";
 if (!["sdk-only", "paired"].includes(suite)) throw new Error("--suite must be sdk-only or paired");
@@ -74,7 +79,10 @@ if (typeof lock.launcherPath !== "string" || !/^\/fsx\/pipeline\/worldkit-three-
 const s3Root = (options["--output-s3-root"] ?? previousPlan?.outputS3Root ?? `s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/${suite === "sdk-only" ? "sdk-eval" : "paired-eval"}`).replace(/\/$/, "");
 if (!s3Root.startsWith("s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/")) throw new Error("Evaluation S3 prefix must stay within the project's Three artifact root.");
 const commonInstructions = await readFile(path.join(repo, "scripts/cloud/three-eval-instructions.md"), "utf8");
-const acceptancePolicy = suite === "sdk-only" ? {revision: 2, documents: await Promise.all(["docs/evaluations/gpt6-three/acceptance-plan.md", "docs/evaluations/gpt6-three/acceptance-plan-v2.md"].map(async relativePath => ({path: relativePath, sha256: await fileSha256(path.join(repo, relativePath))})))} : null;
+if (sourceManifest.genericInstructionsSha256 && sourceManifest.genericInstructionsSha256 !== sha256(commonInstructions)) throw new Error("Frozen generic instructions hash mismatch.");
+const evaluationPolicyPath = sourceManifest.evaluationPolicyPath ? path.resolve(repo, sourceManifest.evaluationPolicyPath) : null;
+if (evaluationPolicyPath && !evaluationPolicyPath.startsWith(`${repo}${path.sep}`)) throw new Error("Host evaluation policy must stay in this checkout.");
+const acceptancePolicy = evaluationPolicyPath ? {scope: "host-only", documents: [{path: path.relative(repo, evaluationPolicyPath), sha256: await fileSha256(evaluationPolicyPath)}]} : null;
 const plans = [];
 for (const item of manifest.cases) {
   if (!/^[a-z0-9][a-z0-9-]{2,99}$/.test(item.id)) throw new Error("Invalid case id");
@@ -85,7 +93,7 @@ for (const item of manifest.cases) {
   const originalEffectivePrompt = (await readFile(promptPath, "utf8")).trimEnd();
   const effectivePrompt = creativePromptFromSource(originalEffectivePrompt);
   if (originalEffectivePrompt !== item.effectiveUserPrompt.trimEnd()) throw new Error(`Effective prompt mismatch: ${item.id}`);
-  const caseInput = {schemaVersion: 1, kind: "three-creator-case-input", caseId: item.baseCaseId, taskId: item.id, profile: item.profile, engine: "three@0.185.1", title: item.title, sourceTestSetId: item.sourceTestSetId, sourceCaseId: item.sourceCaseId, referenceImageSha256: item.referenceImage.contentSha256, sourceEffectivePromptSha256: item.effectiveUserPromptFile.contentSha256, effectivePromptSha256: sha256(effectivePrompt), creatorInstructionsSha256: sha256(commonInstructions), sourceUserPromptSha256: sha256(item.sourceUserPrompt ?? ""), supersededSourcePolicyStoredInManifest: true, effectiveUserPrompt: effectivePrompt, expectedSubjectCategory: item.expectedSubjectCategory, acceptanceFocus: item.acceptanceFocus, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort: "xhigh", ...(suite === "sdk-only" ? {experimentRevision, acceptancePolicy} : {})};
+  const caseInput = {schemaVersion: 1, kind: "three-creator-case-input", caseId: item.baseCaseId, taskId: item.id, profile: item.profile, engine: "three@0.185.1", sourceTestSetId: item.sourceTestSetId, sourceCaseId: item.sourceCaseId, referenceImageSha256: item.referenceImage.contentSha256, sourceEffectivePromptSha256: item.effectiveUserPromptFile.contentSha256, effectivePromptSha256: sha256(effectivePrompt), creatorInstructionsSha256: sha256(commonInstructions), sourceUserPromptSha256: sha256(item.sourceUserPrompt ?? ""), supersededSourcePolicyStoredInManifest: true, effectiveUserPrompt: effectivePrompt, runtimeHash: lock.runtimeHash, model: "gpt-6-astra", reasoningEffort: "xhigh", ...(suite === "sdk-only" ? {experimentRevision} : {})};
   const caseHash = sha256(JSON.stringify(caseInput));
   const requestId = `wk3-${sha256(`${runId}:${caseHash}`).slice(0, 16)}-${item.id}-a1`;
   const outputS3Prefix = `${s3Root}/${runId}/${item.id}/${caseHash.slice(0, 16)}`;
@@ -93,7 +101,7 @@ for (const item of manifest.cases) {
   const inputFile = path.join(caseRoot, "case-input.json");
   const inputS3Uri = `${outputS3Prefix}/inputs/case-input.json`;
   const imageS3Uri = `${outputS3Prefix}/inputs/reference-${item.referenceImage.contentSha256}.png`;
-  const instruction = `${commonInstructions}\n\nCase ID: ${item.baseCaseId}. Task ID: ${item.id}. Profile: ${item.profile}. Read the selected MCP environment and examples for this profile.\n\nUser requirements:\n${effectivePrompt}\n\nHost acceptance focus:\n${item.acceptanceFocus.join("\n")}\n\nThe attached case-input.json records immutable source and runtime identity. The original reference image is attached directly.\n`;
+  const instruction = `${commonInstructions}\n\nCase ID: ${item.baseCaseId}. Task ID: ${item.id}. Profile: ${item.profile}. Read the selected MCP environment and examples for this profile.\n\nUser requirements:\n${effectivePrompt}\n\nThe attached case-input.json records immutable source and runtime identity. The original reference image is attached directly.\n`;
   const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: "xhigh", sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
   const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix};
   const intent = await optionalJson(path.join(caseRoot, "submission-intent.json"));
@@ -103,7 +111,7 @@ for (const item of manifest.cases) {
 }
 const selectedBaseIds = requestedCaseId ? [requestedCaseId] : sourceManifest.cases.slice(0, caseLimit).map(item => item.id);
 const executionPlans = plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
-await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix}))});
+await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
 if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=5 profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
 // Force the existing S3 client to use this checkout's closed credential files.
 for (const key of ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"]) delete process.env[key];
