@@ -11,6 +11,48 @@ function templateFrom(markdown: string): string {
 }
 
 describe("Unified WorldKit Planner skill", () => {
+  it.each([
+    "SKILL.md",
+    "references/block-whitebox-images.md",
+  ])("delivers legacy geographic coverage intent in %s without another gate", async (relativePath) => {
+    const instruction = (await readFile(path.resolve(
+      ".codex/skills/worldkit-spatial-planner", relativePath,
+    ), "utf8")).replace(/\s+/g, " ");
+    // Small semantic groups protect dispatch guidance, not one paragraph's wording.
+    for (const semantic of [
+      /(?:at least|>=) (?:four|4) times .*?(?:reference-visible|visible in the .*?reference).*?area/i,
+      /(?:twice|two times).*?width.*?(?:twice|two times).*?depth/i,
+      /one continuous .*?world/i,
+      /side.*?rear.*?remote/i,
+      /empty padding.*?(?:does not|never) count/i,
+      /(?:not|never)[^.]*?(?:area|similarity)[^.]*?gate/i,
+    ]) expect(semantic.test(instruction), `${relativePath}: ${semantic}`).toBe(true);
+  });
+
+  it("keeps legacy coverage in inferred continuation, not user facts or visible evidence", async () => {
+    const template = await readFile(path.resolve(
+      ".codex/skills/worldkit-spatial-planner/references/scene-brief-template.md",
+    ), "utf8");
+    const parsed = parseSceneBriefV1(templateFrom(template));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.inferredContinuation).toMatch(/(?:四|4)倍/);
+    expect(parsed.value.inferredContinuation).toMatch(/宽.*?(?:两|2)倍.*?深.*?(?:两|2)倍/);
+    expect(parsed.value.userFacts).not.toMatch(/四倍|4倍|两倍|2倍/);
+    expect(parsed.value.visibleReferenceEvidence).not.toMatch(/四倍|4倍|两倍|2倍/);
+    expect(parsed.value.space).toMatch(/侧.*?后.*?远/);
+  });
+
+  it("preserves overfull non-subject priority without promoting ordinary decoration", async () => {
+    const skill = (await readFile(path.resolve(
+      ".codex/skills/worldkit-spatial-planner/SKILL.md",
+    ), "utf8")).replace(/\s+/g, " ");
+    expect(skill).toMatch(/more .*? than .*?four non-subject slots.*?prioritize.*?(?:person|animal).*?important object.*?primary architectural or natural landmark.*?secondary or repeated formation/i);
+    expect(skill).toMatch(/(?:fox|guardian|astronaut).*?标志物/);
+    expect(skill).toMatch(/ordinary trees.*?not targets unless/);
+    expect(skill).toMatch(/first and only .*?主体.*?counts toward five/);
+  });
+
   it("pins task context and replays the dispatched checker instead of the live checkout", async () => {
     const launcher = await readFile(path.resolve("scripts/agents/run-canonical-world-agent.sh"), "utf8");
     expect(launcher).not.toContain('node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs"');

@@ -144,7 +144,17 @@ Movement-changing equipment belongs to the complete subject description. Clothin
 
 Describe navigation in prose, not a graph.
 
-The opening composition is only the world's entry slice, never the map boundary. Extend the reference-consistent world through an entry area, at least one middle area, and meaningful off-camera exploration areas or remote destinations appropriate to the request. Do not infer quality from a fixed duration or perimeter and do not satisfy completeness with empty padding.
+The opening composition is only the world's entry slice, never the map boundary. Plan one continuous
+geographic world whose complete explorable top-down footprint covers at least four times the
+reference-visible area, normally about twice its visible width and twice its visible depth. The
+reference-visible slice occupies at most roughly one quarter of `world-plan.png`. Extend through an
+entry area, a middle area, meaningful side and rear off-camera exploration areas, and a remote area or destination. Continue
+visible geography conservatively without rotating or contradicting its ordering; empty padding does
+not count toward the four-times area. Do not split the world into panels, separate scenes, portals,
+teleports, or hidden destination spaces. Describe unseen continuation in `推断的世界延伸`, not as
+`用户事实` or `可见参考证据`. This is generation intent, not an area or similarity admission gate.
+Do not infer quality from a fixed duration or perimeter. Keep the existing resource budget and repair
+budget; simplify ornament before reducing meaningful geography.
 
 - Ordinary land scenes are open by default: the whole collision-free playable ground is traversable. Do not invent a road or preferred route.
 - Flying and underwater scenes use the whole bounded free volume outside solid collisions. Do not invent rails or waypoint tunnels.
@@ -170,10 +180,20 @@ generic filler into a target just to reach five entries.
 
 Use `标志物` for one distinctive whole. Use `重复标志物` when several complete instances intentionally share the same appearance; define the identical set once, not one target per instance. Repeated generic decoration, ordinary trees, rocks, walls, terrain patches, background mountains, and construction pieces are not targets unless the complete repeated formation is itself a defining visual landmark.
 
+When more identity-critical wholes are visible than the four non-subject slots, prioritize: a
+scene-defining non-controlled person/animal/creature or other important object; the primary
+architectural or natural landmark; then a secondary or repeated formation. Do not spend a slot on a
+generic background building while omitting the signature person, animal, vehicle, or object.
+Background crowds, herds, flocks, traffic, and ordinary props remain unselected unless their shared
+formation is itself distinctive and important. Selection does not make another controllable or
+animated Runtime Subject.
+
 Examples:
 
 - one palace complex with a unified identity → one `标志物`;
 - two matching gate towers → one `重复标志物`;
+- one prominent non-controlled fox, guardian, astronaut, boat, or signature machine → one `标志物`;
+- several identical important animals or guards forming one recognizable set → one `重复标志物`;
 - twelve identical ordinary lamps → normally no visual target;
 - palace roof, columns, stairs, and foundation → parts of the palace, never four targets;
 - no distinctive landmark → output only the subject target.

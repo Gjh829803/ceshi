@@ -102,6 +102,15 @@ Legacy container margins are not required empty ground and do not authorize a
 hidden foundation. In `fixed` mode, honor the declared `worldBounds`. Never edit
 the policy or emit final bounds; the existing Block and Collider budgets still apply.
 
+Implement the frozen Brief/World Plan's legacy complete-world intent: one continuous geographic
+world with an explorable top-down footprint at least four times the reference-visible area, normally
+about twice its visible width and twice its visible depth. Preserve real middle, side, rear, and
+remote geography; empty padding does not count. Do not split it into separate scenes, panels,
+portals, teleports, or hidden destinations. This is generation intent, not a new area or similarity
+gate. The frozen Brief/World Plan remains authoritative: if this intent conflicts with frozen inputs
+or cannot fit the existing budget, report the conflict through the existing change-request boundary;
+never silently expand or rewrite the frozen plan. Do not add an output, model task, or repair cycle.
+
 Before authoring, make one internal construction-and-budget inventory from the complete Brief,
 uploaded reference and both planning views. Include important non-target scenery as well as the
 selected visual targets: for each complete form or repeated formation, retain its geographic region,

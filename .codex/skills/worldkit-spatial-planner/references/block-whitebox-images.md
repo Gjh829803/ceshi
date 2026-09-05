@@ -74,6 +74,15 @@ down discrete-cube map of the complete intended playable footprint. Preserve
 the entry slice without mirroring or rearrangement, then add only the Brief's
 conservative inferred continuation.
 
+Apply the Brief's complete-world generation intent: one continuous geographic world with an
+explorable top-down footprint at least four times the reference-visible area, normally about twice
+its visible width and twice its visible depth. The visible entry slice occupies at most roughly one
+quarter of the plan. Include real middle, side, rear, and remote geography; empty padding does not
+count. Never split that continuation into separate scenes, panels, portals, or hidden destinations.
+Keep the continuation explicitly inferred in the Brief, not user facts or observed evidence. This
+is not an area or similarity gate and does not change the existing image checks, resource budget,
+or shared repair budget.
+
 Show stacked block relief, visible top/side faces, and shallow inspection
 shadows where needed to retain elevation levels, bridge thickness, stair runs,
 cliff rims, valleys, and platforms. Include exactly these information layers:

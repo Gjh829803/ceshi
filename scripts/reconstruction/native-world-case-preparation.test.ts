@@ -912,6 +912,25 @@ describe("trusted Native world Case preparation", () => {
       "inputs",
       "task-instruction.md",
     ), "utf8");
+    const preparedSkill = await readFile(path.join(
+      outputCaseRoot, "inputs", "builder-skill", "SKILL.md",
+    ), "utf8");
+    expect(preparedSkill).toBe(await readFile(path.resolve(
+      ".codex/skills/worldkit-native-block-builder/SKILL.md",
+    ), "utf8"));
+    for (const [name, text] of [["frozen Skill", preparedSkill], ["task instruction", taskInstruction]] as const) {
+      const instruction = text.replace(/\s+/g, " ");
+      for (const semantic of [
+        /at least (?:four|4) times .*?reference-visible area/i,
+        /twice.*?width.*?twice.*?depth/i,
+        /one continuous .*?world/i,
+        /side.*?rear.*?remote/i,
+        /empty padding.*?(?:does not|never) count/i,
+        /(?:not|never)[^.]*?(?:area|similarity)[^.]*?gate/i,
+        /conflict[^.]*?change.request/i,
+        /(?:never|do not)[^.]*?silently[^.]*?(?:expand|rewrite|extend)[^.]*?frozen/i,
+      ]) expect(semantic.test(instruction), `${name}: ${semantic}`).toBe(true);
+    }
     expect(taskInstruction).toContain("two Host-declared advisory comparison PNGs");
     expect(taskInstruction).toContain("Author middle/remote exploration anchors and honest-width bands from the actual Brief geography");
     expect(taskInstruction).not.toContain("generic Case entry/remote checks");
