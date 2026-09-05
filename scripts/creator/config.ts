@@ -263,7 +263,8 @@ export function createCreatorBootstraps(input: CreatorSceneConfigV1, inputHash: 
   for (const asset of runtimeBootstrap.subjectAssets) {
     const mapping = DEFAULT_WORLD_PACKAGE_RESOURCE_MAPPING_BY_REF_V1[asset.subjectAssetRef];
     if (mapping === undefined || !mapping.publicUri.startsWith("/subject-assets/")) invalid(`subject asset has no same-origin mapping: ${asset.subjectAssetRef}`);
-    assetUrls[asset.subjectAssetRef] = mapping.publicUri;
+    // Standalone Creator builds can be hosted below any case-specific URL.
+    assetUrls[asset.subjectAssetRef] = `.${mapping.publicUri}`;
   }
   return Object.freeze({ runtimeBootstrap, gameplayBootstrap, nativeBootstrap, assetUrls: Object.freeze(assetUrls),
     creatorConfig: Object.freeze({ sceneId: config.id, inputHash, worldBounds: config.worldBounds }),

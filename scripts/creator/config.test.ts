@@ -132,8 +132,10 @@ describe("experimental Creator Host configuration", () => {
     expect(output.creatorConfig).toEqual({ sceneId: config.id, inputHash, worldBounds: config.worldBounds });
     const asset = output.runtimeBootstrap.subjectAssets[0]!;
     const assetUri = output.assetUrls[asset.subjectAssetRef]!;
-    expect(assetUri).toBe("/subject-assets/humanoid/g-bot/v2/g-bot.glb");
-    const bytes = readFileSync(new URL(`../../apps/playground/public${assetUri}`, import.meta.url));
+    expect(assetUri).toBe("./subject-assets/humanoid/g-bot/v2/g-bot.glb");
+    expect(new URL(assetUri, "http://example.test/creator-evals/cases/coast/hash/playable/index.html").pathname)
+      .toBe("/creator-evals/cases/coast/hash/playable/subject-assets/humanoid/g-bot/v2/g-bot.glb");
+    const bytes = readFileSync(new URL(`../../apps/playground/public/${assetUri}`, import.meta.url));
     expect(bytes.byteLength).toBe(asset.byteLength);
     expect(`sha256:${createHash("sha256").update(bytes).digest("hex")}`).toBe(asset.artifactContentHash);
     expect(() => parseWorldRuntimeBootstrapV1({ ...output.runtimeBootstrap, initialCamera: { ...output.runtimeBootstrap.initialCamera, distanceMeters: 15 } })).toThrow();
