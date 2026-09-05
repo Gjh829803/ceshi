@@ -2,7 +2,7 @@
 """Stage an independent Three gallery locally; never upload or execute a delivery.
 
 Inputs: --selection selected-cases.json --plan evaluation-plan.json
---inputs-root INPUTS --evaluation-root PAIRED_RUN --verified-root HOST_VERIFIED
+--inputs-root INPUTS --evaluation-root EVALUATION_RUN --verified-root HOST_VERIFIED
 --publication PUBLICATION --output NEW_DIRECTORY. The output mounts at
 /creator-evals/three/ and copies the shared gallery UI without modifying it.
 
@@ -18,6 +18,12 @@ referenceImageSha256, status, browserPlayable, referenceCompared,
 externalGoalsReviewed, pageErrors and runtimeErrors. Ready requires passed,
 playable, both review flags and no errors. Issues requires explicit Host permission
 and issue notes; neither status changes the recorded semantic acceptance result.
+
+Plans admit either legacy three-creator-paired-plan (suite omitted or paired),
+or three-creator-sdk-plan (suite sdk-only, only three-sdk tasks). Both require
+explicit selectedTaskIds. SDK-only and SDK 0.2+ deliveries require matching
+180s+ active/input recordings and 180s+ video. Older paired artifacts remain
+readable without inventing active time that their original evidence did not record.
 """
 import argparse
 import hashlib
@@ -33,6 +39,8 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 PROFILES = ('three-raw', 'three-sdk')
+PLAN_SUITES = {'three-creator-paired-plan': 'paired', 'three-creator-sdk-plan': 'sdk-only'}
+EVIDENCE_SCOPES = {'paired': 'paired-cloud-evaluation', 'sdk-only': 'sdk-only-cloud-evaluation'}
 STATUSES = ('queued', 'running', 'verifying', 'issues', 'ready', 'failed')
 HASH = re.compile(r'[a-f0-9]{64}\Z')
 ID = re.compile(r'[a-z0-9][a-z0-9-]{1,159}\Z')
@@ -136,7 +144,36 @@ def finite_number(value, label, minimum=0):
     return value
 
 
-def verified_payload(directory, profile, lock_hash):
+def requires_active_play(delivery, sdk_only=False):
+    if sdk_only:
+        return True
+    if delivery.get('profile') != 'three-sdk':
+        return False
+    if delivery.get('browserObservationContract') == 'WorldObservation-v2':
+        return True
+    for field in ('sdkVersion', 'toolVersion'):
+        value = delivery.get(field)
+        if value is None:
+            continue
+        match = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(?:[-+][A-Za-z0-9.+-]+)?', value) if isinstance(value, str) else None
+        require(match is not None, f'Invalid SDK delivery version: {field}')
+        if tuple(map(int, match.groups())) >= (0, 2, 0):
+            return True
+    return False
+
+
+def validate_recorded_timing(played, delivery, active_required):
+    for field, label in (('activePlaySeconds', 'active duration'), ('inputWallSeconds', 'input duration')):
+        if active_required or field in played:
+            seconds = finite_number(played.get(field), field, 180 if active_required else 0)
+            require(seconds < 3600, f'Invalid recorded {label}: {field}')
+            if active_required or field in delivery:
+                require(seconds == delivery.get(field), f'Recorded {label} mismatch')
+        else:
+            require(field not in delivery, f'Delivery {field} has no recorded evidence')
+
+
+def verified_payload(directory, profile, lock_hash, sdk_only=False):
     """Recheck the actual regular-file closure instead of trusting a stale report."""
     report = read_json(within(directory, 'host-artifact-verification.json'))
     require(report.get('kind') == 'three-creator-host-artifact-verification' and report.get('schemaVersion') == 1 and report.get('status') == 'passed', 'Missing passing Three Host artifact verification')
@@ -180,6 +217,7 @@ def verified_payload(directory, profile, lock_hash):
     require(played.get('status') == 'passed' and played.get('isCompleteEpisode') is True and played.get('capturedInput') is True, 'No complete passing recorded episode')
     seconds = finite_number(played.get('actualWallSeconds'), 'actualWallSeconds', 180)
     require(seconds < 3600 and seconds == delivery.get('actualWallSeconds'), 'Recorded wall duration mismatch')
+    validate_recorded_timing(played, delivery, requires_active_play(delivery, sdk_only))
     require(played.get('pageErrors') == [] and played.get('runtimeErrors') == [] and played.get('blockedNetworkRequests') == [] and captures.get('pageErrors') == [], 'Recorded browser errors')
     require(isinstance(played.get('targetResults'), list) and played['targetResults'] == delivery.get('targetResults'), 'Target measurement mismatch')
     return payload, actual, report, delivery, played, captures
@@ -226,9 +264,9 @@ def validate_public_assets(payload, selected, actual):
         require(regular(payload / name).st_size == asset.get('byteLength'), 'Public asset length mismatch')
 
 
-def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file):
+def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file, sdk_only=False):
     directory = checked_root(within(verified_root, entry.get('verifiedDirectory', row['id'])))
-    payload, actual, report, delivery, played, captures = verified_payload(directory, row['profile'], lock_hash)
+    payload, actual, report, delivery, played, captures = verified_payload(directory, row['profile'], lock_hash, sdk_only)
     review = read_json(within(evaluation_root, entry.get('browserReview')))
     require(review.get('kind') == 'three-creator-independent-browser-review' and review.get('schemaVersion') == 1, 'Missing independent browser review')
     same(review, expected, ('runId', 'caseId', 'taskId', 'profile', 'referenceImageSha256'), 'Browser review')
@@ -276,7 +314,7 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
     for name in sorted(set(selected)):
         add_file(prefix + '/' + name, payload / name, actual[name])
     metadata = played.get('videoMetadata', {})
-    video_seconds = finite_number(metadata.get('durationSeconds'), 'video duration', .001)
+    video_seconds = finite_number(metadata.get('durationSeconds'), 'video duration', 180 if requires_active_play(delivery, sdk_only) else .001)
     frame_count = finite_number(metadata.get('frameCount'), 'video frames', 1)
     targets = played['targetResults']
     require(all(isinstance(target, dict) and type(target.get('reached')) is bool for target in targets), 'Invalid target result')
@@ -286,6 +324,8 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
     row.update({'sourceHash': delivery['sourceHash'], 'worldBuildHash': delivery['worldBuildHash'], 'archiveSha256': report['archiveSha256'],
                 'opening': opening, 'video': prefix + '/' + video, 'playable': prefix + '/playable/index.html', 'triviews': triviews,
                 'metrics': {'simulationSeconds': round(played['actualWallSeconds'], 2), 'actualWallSeconds': played['actualWallSeconds'], 'timeDomain': 'wall-clock',
+                            **{field: played[field] for field in ('activePlaySeconds', 'inputWallSeconds') if field in played},
+                            'videoDurationSeconds': video_seconds,
                             'visitedTargets': sum(target['reached'] for target in targets), 'targetCount': len(targets),
                             'travelledMeters': finite_number(played.get('travelledMeters'), 'travelledMeters'),
                             'captureFps': round(frame_count / video_seconds, 3), 'captureFpsSource': 'measured-video-frames-per-duration', 'generationMinutes': generation_minutes},
@@ -297,7 +337,10 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
     inputs_root, evaluation_root, verified_root = map(checked_root, (inputs_root, evaluation_root, verified_root))
     selection, plan, publication = map(read_json, (Path(selection_path), Path(plan_path), Path(publication_path)))
     require(selection.get('schemaVersion') == 1 and isinstance(selection.get('cases'), list), 'Invalid selected cases')
-    require(plan.get('schemaVersion') == 1 and plan.get('kind') == 'three-creator-paired-plan' and plan.get('engine') == 'three@0.185.1', 'Not a Three paired plan')
+    require(plan.get('schemaVersion') == 1 and plan.get('kind') in PLAN_SUITES and plan.get('engine') == 'three@0.185.1', 'Not a supported Three evaluation plan')
+    suite = PLAN_SUITES[plan['kind']]
+    require(plan.get('suite', 'paired') == suite, 'Three plan kind/suite mismatch')
+    sdk_only = suite == 'sdk-only'
     run_id = checked_id(plan.get('runId'), 'runId')
     require(re.fullmatch(r'[a-z0-9][a-z0-9-]{2,99}', run_id), 'Three evaluation id must contain 3–100 lowercase letters, digits or hyphens')
     local_fixture = plan.get('evidenceScope') == 'local-fixture'
@@ -312,21 +355,23 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
         require(case_id not in base_cases, 'Duplicate selected case')
         base_cases[case_id] = item
     tasks = {}
-    for item in plan.get('cases', []):
+    require(isinstance(plan.get('cases'), list) and plan['cases'], 'Invalid planned task selection')
+    for item in plan['cases']:
+        require(isinstance(item, dict), 'Invalid planned task selection')
         task_id = checked_id(item.get('taskId'), 'taskId')
-        require(item.get('caseId') in base_cases and item.get('profile') in PROFILES and task_id == item['caseId'] + '--' + item['profile'] and task_id not in tasks, 'Plan task/profile selection mismatch')
+        require(item.get('caseId') in base_cases and item.get('profile') in (('three-sdk',) if sdk_only else PROFILES) and task_id == item['caseId'] + '--' + item['profile'] and task_id not in tasks, 'Plan task/profile selection mismatch')
         checked_hash(item.get('caseHash'), 'caseHash')
         tasks[task_id] = item
     selected_ids = plan.get('selectedTaskIds')
-    require(isinstance(selected_ids, list) and 1 <= len(selected_ids) <= 10 and len(set(selected_ids)) == len(selected_ids) and all(task_id in tasks for task_id in selected_ids), 'Invalid explicit planned task selection')
+    require(isinstance(selected_ids, list) and 1 <= len(selected_ids) <= (5 if sdk_only else 10) and all(isinstance(task_id, str) for task_id in selected_ids) and len(set(selected_ids)) == len(selected_ids) and all(task_id in tasks for task_id in selected_ids), 'Invalid explicit planned task selection')
     require(all(task_id in selected_ids for task_id in publication['cases']), 'Publication contains an unselected task')
-    title = publication.get('title', 'Three Creator · 原生 Three 与薄 SDK 对照评测')
+    title = publication.get('title', 'Three Creator · SDK 独立评测' if sdk_only else 'Three Creator · 原生 Three 与薄 SDK 对照评测')
     description = publication.get('description', '独立 Three 实验；参考还原、外部任务目标和可玩性由 Host 分别审查。')
     storage_key = publication.get('reviewStorageKey', 'worldkit-three-review-' + run_id)
     require(all(isinstance(value, str) and 0 < len(value) <= 1000 for value in (title, description, storage_key)), 'Invalid public gallery text')
-    result = {'schemaVersion': 1, 'kind': 'three-creator-evaluation-gallery', 'id': run_id, 'engine': 'three@0.185.1',
+    result = {'schemaVersion': 1, 'kind': 'three-creator-evaluation-gallery', 'id': run_id, 'engine': 'three@0.185.1', 'suite': suite,
               'title': ('LOCAL FIXTURE · ' if local_fixture else '') + title, 'description': description, 'reviewStorageKey': storage_key,
-              'evidenceScope': 'local-fixture' if local_fixture else 'paired-cloud-evaluation',
+              'evidenceScope': 'local-fixture' if local_fixture else EVIDENCE_SCOPES[suite],
               'updatedAt': datetime.now(timezone.utc).isoformat(), 'cases': []}
     files = {}
     def add_file(relative, source, expected_hash):
@@ -361,12 +406,12 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
         require(case_input.get('sourceEffectivePromptSha256') == case.get('effectiveUserPromptFile', {}).get('contentSha256'), 'Original prompt identity mismatch')
         reference_relative = 'references/' + task['caseId'] + '.png'
         add_file(reference_relative, reference, reference_hash)
-        note = entry.get('note', '已列入本轮对照评测；生成和独立验证完成后开放试玩。')
+        note = entry.get('note', '已列入本轮 SDK 独立评测；生成和独立验证完成后开放试玩。' if sdk_only else '已列入本轮对照评测；生成和独立验证完成后开放试玩。')
         require(isinstance(note, str) and len(note) <= 10000 and isinstance(case.get('title'), str) and isinstance(case.get('selectionTags'), list), 'Invalid case presentation text')
         row = {'id': task_id, 'baseCaseId': task['caseId'], 'profile': task['profile'], 'title': case['title'] + (' · 原生 Three' if task['profile'] == 'three-raw' else ' · Three＋SDK'),
                'status': status, 'tags': case['selectionTags'] + [task['profile']], 'reference': reference_relative, 'referenceImageSha256': reference_hash, 'prompt': prompt, 'note': note}
         if status in ('ready', 'issues'):
-            add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file)
+            add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file, sdk_only)
         result['cases'].append(row)
     output = Path(output).absolute()
     require(not output.exists() and not output.is_symlink(), 'Use a new independent output directory; existing Native/Three sites are never overwritten')

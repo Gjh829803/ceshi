@@ -43,6 +43,7 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "scripts/cloud/launch-worldkit-cloud-gpu-capture-batch-job.test.mjs", lane: "node" },
     { path: "scripts/cloud/launch-worldkit-cloud-worker-job.test.mjs", lane: "node" },
     { path: "scripts/cloud/launch-worldkit-gpu-batch-dispatcher-cronjob.test.mjs", lane: "node" },
+    { path: "scripts/cloud/prepare-three-evaluation-site.test.mjs", lane: "node" },
     { path: "scripts/cloud/run-worldkit-cloud-episode-worker.test.mjs", lane: "node" },
     { path: "scripts/cloud/run-worldkit-cloud-gpu-capture-batch-worker.test.mjs", lane: "node" },
     { path: "scripts/cloud/run-worldkit-cloud-scene-batch.test.mjs", lane: "node" },

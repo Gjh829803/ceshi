@@ -146,6 +146,7 @@ describe("independent test repository census", () => {
         "scripts/cloud/launch-worldkit-cloud-gpu-capture-batch-job.test.mjs",
         "scripts/cloud/launch-worldkit-cloud-worker-job.test.mjs",
         "scripts/cloud/launch-worldkit-gpu-batch-dispatcher-cronjob.test.mjs",
+        "scripts/cloud/prepare-three-evaluation-site.test.mjs",
         "scripts/cloud/run-worldkit-cloud-episode-worker.test.mjs",
         "scripts/cloud/run-worldkit-cloud-gpu-capture-batch-worker.test.mjs",
         "scripts/cloud/run-worldkit-cloud-scene-batch.test.mjs",

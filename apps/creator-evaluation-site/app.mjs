@@ -29,8 +29,10 @@ function select(id) {
   $('opening-container').replaceChildren(c.opening ? picture(c.opening, c.title + '白模首帧') : el('span', '场景完成并通过验证后展示'));
   $('ready-content').hidden = !isPlayable(c); $('player').replaceChildren(); $('video').pause(); $('video').removeAttribute('src'); $('video').load();
   if (isPlayable(c)) {
-    if (c.profile) $('play-controls').textContent = '点击「加载场景」后开始探索。WASD / 方向键移动 · Shift 跑步 · Space 跳跃 · 拖动转镜头 · 滚轮缩放 · R 重置。具体玩法以场景说明为准。';
-    $('metrics').replaceChildren(...[[`${c.metrics.simulationSeconds} 秒`, c.metrics.timeDomain === 'wall-clock' ? '真实操作录制' : '连续探索记录'], [`${c.metrics.visitedTargets} / ${c.metrics.targetCount}`, '路线目标到达'], [`${Math.round(c.metrics.travelledMeters)} m`, '记录行进距离'], [c.metrics.generationMinutes ? `${c.metrics.generationMinutes} 分钟` : '—', '云端生成耗时']].map(([value, label]) => { const n = el('div', undefined, 'metric'); n.append(el('strong', value), el('span', label)); return n; }));
+    if (c.profile) $('play-controls').textContent = c.profile === 'three-sdk' ? '点击「加载场景」后开始探索。WASD 移动 · 方向键 / 拖动转镜头 · Shift 跑步 · Space 跳跃 · 滚轮缩放 · R 重置。' : '点击「加载场景」后开始探索。WASD / 方向键移动 · Shift 跑步 · Space 跳跃 · 拖动转镜头 · 滚轮缩放 · R 重置。具体玩法以场景说明为准。';
+    const hasActiveTime = Number.isFinite(c.metrics.activePlaySeconds);
+    const recordedSeconds = hasActiveTime ? Math.round(c.metrics.activePlaySeconds * 10) / 10 : c.metrics.simulationSeconds;
+    $('metrics').replaceChildren(...[[`${recordedSeconds} 秒`, hasActiveTime ? '主动游玩' : c.metrics.timeDomain === 'wall-clock' ? '真实操作录制' : '连续探索记录'], [`${c.metrics.visitedTargets} / ${c.metrics.targetCount}`, '路线目标到达'], [`${Math.round(c.metrics.travelledMeters)} m`, '记录行进距离'], [c.metrics.generationMinutes ? `${c.metrics.generationMinutes} 分钟` : '—', '云端生成耗时']].map(([value, label]) => { const n = el('div', undefined, 'metric'); n.append(el('strong', value), el('span', label)); return n; }));
     const playUrl = sourceUrl(c.playable) + '?play=1'; $('open-play').href = playUrl;
     const launch = el('button', '▶  加载场景，开始试玩'); launch.type = 'button'; launch.onclick = () => { const frame = el('iframe'); frame.title = c.title + '交互白模'; frame.allow = 'fullscreen'; frame.src = playUrl; $('player').replaceChildren(frame); frame.onload = () => { frame.focus(); if (activeTab !== 'play') { try { frame.contentWindow.__WORLDKIT_CREATOR__?.stopLive(); } catch {} } }; };
     $('player').append(picture(c.opening, '', 'play-cover'), launch);
