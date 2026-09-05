@@ -97,7 +97,7 @@ test('launcher enforces layout and captures real subprocess transport without mo
   const temp = await mkdtemp(path.join(tmpdir(), 'episode-launcher-')); const root = await (await import('node:fs/promises')).realpath(temp); t.after(() => rm(root, { recursive: true, force: true }));
   const workspace = path.join(root, 'unit-task'); const outputs = path.join(workspace, 'outputs'); await mkdir(outputs, { recursive: true }); await mkdir(path.join(workspace, 'inputs'));
   await writeFile(path.join(workspace, 'inputs/episode-launch-input.json'), JSON.stringify({ kind: 'three-episode-launch-input', schemaVersion: 1, taskId: 'unit-task', episodeSourceManifest: null }));
-  const binary = path.join(root, 'fake-codex'); const script = `#!${process.execPath}\nprocess.stdout.write(JSON.stringify({type:'turn.completed'})+'\\n');\n`;
+  const binary = path.join(root, 'fake-codex'); const script = `#!${process.execPath}\nconst fs=require('node:fs'); for(const name of ['episode-events.jsonl','episode-stderr.log','episode-launcher-report.json'])fs.writeFileSync('outputs/'+name,'model-generated placeholder'); process.stdout.write(JSON.stringify({type:'turn.completed'})+'\\n');\n`;
   await writeFile(binary, script); await chmod(binary, 0o755);
   const runtime = { codexBinary: binary, codexBinarySha256: createHash('sha256').update(script).digest('hex'), nodeBinary: process.execPath, maximumTaskSeconds: 5 };
   const runtimeFile = path.join(root, 'episode-runtime.json'); await writeFile(runtimeFile, JSON.stringify(runtime));
@@ -108,6 +108,10 @@ test('launcher enforces layout and captures real subprocess transport without mo
   try { const report = await launch(argv, runtimeFile); assert.equal(report.status, 'delivered'); assert.equal(report.eventsSha256, report.eventsTransportSha256); assert.equal(report.nativeImageGenerationEnabled, true); }
   finally { if (previous === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previous; }
   assert.match(await readFile(path.join(outputs, 'episode-stderr.log'), 'utf8'), /process starting/);
+  assert.equal(await readFile(path.join(outputs, 'episode-events.jsonl'), 'utf8'), JSON.stringify({type:'turn.completed'})+'\n');
+  const receipt=JSON.parse(await readFile(path.join(outputs,'episode-launcher-report.json'),'utf8'));
+  assert.equal(receipt.diagnosticsOwnership,'host-private-until-process-exit');
+  assert.deepEqual(receipt.discardedModelDiagnosticPaths,['episode-events.jsonl','episode-stderr.log','episode-launcher-report.json']);
 });
 test('publication hydrates exact content hashes and rejects changed remote bytes', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'episode-artifacts-')); t.after(() => rm(root, { recursive: true, force: true }));

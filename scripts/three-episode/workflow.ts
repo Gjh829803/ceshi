@@ -82,7 +82,13 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
     if(options.until==='plan'){await update('planned',{status:'paused-before-capture'});return state;}
     const capture=options.capture??createCaptureDispatcher({runtimeConfig:conf,cloud,onProgress:(event:any)=>process.stdout.write(JSON.stringify({kind:'episode-capture-cloud',...event})+'\n')}).run;
     let summary:CaptureSummary; let segmentIds:string[]|undefined;
-    for(;;){
+    const admittedCapture = state.segments?.length===6 && state.segments.every((segment:any)=>segment.status==='completed')
+      ? await json(path.join(output,'capture','capture-summary.local.json')) as CaptureSummary|null : null;
+    if(admittedCapture){
+      await normalizeCaptureForVisuals(admittedCapture,{worldBuildHash:source.worldBuildHash,runtimeHash:source.runtimeHash});
+      summary=admittedCapture;
+      await update('whitebox-capture',{status:'running',segments:summary.segments,captureReused:true});
+    }else for(;;){
       await update('whitebox-capture',{status:'running'});
       summary=await capture({sourceManifestPath:path.resolve(options.sourceManifestPath),planPath,outputRoot:path.join(output,'capture'),worldBuildHash:source.worldBuildHash,...(segmentIds?{segmentIds}:{})});
       await update('whitebox-capture',{segments:summary.segments});
@@ -103,7 +109,8 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
     if(options.until==='capture'){await update('whitebox-completed',{status:'paused-before-visuals'});return state;}
     await update('style-planning');
     const visuals=await runThreeEpisodeVisuals({source,capture:captureInput,episodeId,outputRoot:path.join(output,'visuals'),cloud,stopBeforeSeedance:true,
-      onProgress:async(visualState:any)=>{await update(visualState.stage,{visualState});}});
+      ...(conf?.stylePlanCandidate?{stylePlanCandidate:conf.stylePlanCandidate}:{}),
+      onProgress:async(visualState:any)=>{await update(visualState.stage==='planning'?'style-planning':visualState.stage,{visualState});}});
     if(visuals.status!=='pre-seedance-ready'||visuals.preparedRequestCount!==60||visuals.providerVideoSubmissionCount!==0)throw new Error('EPISODE_PRE_SEEDANCE_CLOSURE_INVALID');
     await update('pre-seedance-ready',{status:'prepared',preparedRequestCount:60,visualManifestPath:path.join(output,'visuals/pre-seedance-manifest.json'),finishedAt:new Date().toISOString()});
     return state;

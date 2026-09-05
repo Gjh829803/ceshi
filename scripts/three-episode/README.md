@@ -85,3 +85,11 @@ pnpm test:census
 Tests include actual stdio MCP and Chromium; cloud transport/image fixtures
 verify contracts but are not real cloud generation evidence. See the dated
 continuation plan and `.codex-tmp/three-episode-evidence/` for this run's evidence.
+
+Resume a failed cloud attempt with `scripts/three-episode/resume.ts`, passing
+`--checkpoint-s3`, `--source-manifest`, `--output-root`, `--publish-s3`, and
+`--stop-before-seedance`. Use the same absolute output root in the new isolated
+Host. Closed six-clip captures are hash-verified before reuse. A Host-selected
+`stylePlanCandidate` in the private runtime configuration is only an untrusted
+draft for a fresh cloud task; it never bypasses independent delivery validation.
+Launcher transport logs live outside the Agent workspace while the model runs.

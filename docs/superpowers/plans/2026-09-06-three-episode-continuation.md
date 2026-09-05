@@ -30,3 +30,13 @@ Do not call mocks cloud evidence. Do not silently advance to Seedance. The curre
 Cloud progress: planner gen_9ce6e7edbf1abfe1 succeeded. Its receipt shows four successful observations, six successful start probes, and one successful plan submission. GPU Job three-episode-capture-32f63ef6772b8b4e7b0ed692 recorded all six segments to 720 frames on the first plan; no route repair was needed. Publication/admission and visual stages are still pending at this checkpoint.
 
 All six cloud recordings were admitted. Local downloaded report media passed SHA256 checks and ffprobe: every file is silent H264, 1280x720, 24/1 FPS, 720 decoded frames and 30.000000 seconds. Real browser report playback passed (six video elements, first clip progressed past one second with no media error). Report: .codex-tmp/three-episode-results/r2/report, served on http://127.0.0.1:53746/. Style Director job gen_5536e94dcc91ed6f is running.
+
+## Style transport failure and recovery
+
+Style job gen_5536e94dcc91ed6f produced an 87,510-byte plan but failed EPISODE_EVENTS_CHANGED. The Agent had rewritten the three transport filenames advertised by the provider, including truncating the live event stream (98,172 zero bytes); the launcher correctly rejected its hash mismatch. This result is not admitted.
+
+The launcher now writes diagnostics in a private sibling directory outside the model workspace and promotes authoritative files only after terminating the process group. It explicitly marks these filenames Host-owned in the prompt and records discarded model placeholders. The reproduction deliberately writes fake versions of all three files; final events must still equal actual subprocess transport bytes.
+
+A failed plan can be passed as a hash-locked untrusted recovery candidate to a fresh cloud planner, whose input hash and task ID differ. Six completed captures are independently revalidated and reused across postprocessing-only resumes. New resume.ts requires a stopped predecessor checkpoint and the same output root. Relevant verification: 26 Episode Vitest and 24 Node tests passed, plus typecheck; tests cover candidate identity/tampering, genuine capture reuse with zero planner/GPU calls, and corrupted-media rejection.
+
+Frozen recovery release-r3: source archive 2d23a739f9303633e950959b57af1687a4b14e63f40384131bbe04b68e5aa49f; source world/runtime remain unchanged. Candidate SHA256 f8d90f393ea2092882104958109e7a956e6600f3ba089a5f54268464208ec107. It resumes the terminal failed host-r2 S3 manifest, preserves all failed-stage journals and all six recordings, and will publish under gvs2-pre-seedance-20260905-r3/host-r3.

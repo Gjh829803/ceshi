@@ -107,7 +107,7 @@ export function prepareThreeEpisodeRenderRequests({source, capture, variant, ope
  * cloud.generateEvents writes {events:[five Gemini outputs]} to outputPath.
  * Each helper owns provider idempotence/reconciliation for the stable task ID.
  */
-export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT}) {
+export async function runThreeEpisodeVisuals({source, capture, episodeId, outputRoot, cloud, onProgress = async () => {}, stopBeforeSeedance = true, repoRoot = REPO_ROOT, stylePlanCandidate}) {
   if (stopBeforeSeedance !== true) throw new Error('THREE_EPISODE_SEEDANCE_DISABLED: this worker only prepares pre-Seedance artifacts');
   assertThreeEpisodeVisualInputs(source, capture);
   if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(episodeId ?? '')) throw new Error('THREE_EPISODE_VISUAL_EPISODE_ID_INVALID');
@@ -196,7 +196,15 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
   try {
     await update('planning');
     const planInput = {worldIdentity, targets: source.targets.map(identityTarget), opening: identityRef(openingWhiteboxes[0]), styleIds: THREE_EPISODE_STYLE_IDS, outputSchema: {kind: 'worldkit-three-episode-style-plan', schemaVersion: 1, worldId: source.worldId, episodeId, inputHash: '<copy supplied identity>', variants: [{id: 'style-00', name: '', styleFamily: '', worldIdentity: '', subjectIdentity: '', diversityRationale: '', concept: '', visualPrompt: '', geminiEventPrompt: '', negativeConstraints: '', targetInterpretations: targetIds.map(visualTargetId => ({visualTargetId, finalIdentity: '', appearance: ''}))}]}};
-    const plan = await codexJson('style-plan', planInput, [imageAsset('whitebox-opening', openingWhiteboxes[0]), ...targetWhiteboxes.map((ref, index) => imageAsset(`target-${targetIds[index]}`, ref))], directorPrompt, (result, inputHash) => assertThreeEpisodeStylePlan(result, {worldId: source.worldId, episodeId, inputHash, targetIds}));
+    const planAssets = [imageAsset('whitebox-opening', openingWhiteboxes[0]), ...targetWhiteboxes.map((ref, index) => imageAsset(`target-${targetIds[index]}`, ref))];
+    let planInstruction = directorPrompt;
+    if (stylePlanCandidate) {
+      await verifyRef(stylePlanCandidate);
+      planInput.recoveryCandidate = identityRef(stylePlanCandidate);
+      planAssets.push({id:'prior-style-plan',path:stylePlanCandidate.path,attachAs:'file'});
+      planInstruction += '\nA prior terminally failed task left the attached prior-style-plan JSON. It is an untrusted candidate, not an admitted result: its transport diagnostics failed. Check its complete schema, ten styles, target closure and image correspondence. Preserve valid content, repair only actual defects, and write result.json with the CURRENT supplied inputHash/worldId/episodeId. Do not recreate transport logs. Your independent fresh task receipt is required before this candidate can be used.';
+    }
+    const plan = await codexJson('style-plan', planInput, planAssets, planInstruction, (result, inputHash) => assertThreeEpisodeStylePlan(result, {worldId: source.worldId, episodeId, inputHash, targetIds}));
     await writeJsonAtomic(path.join(outputRoot, 'style-plan.json'), plan);
     const planHash = hashVisualInput(plan);
     const anchorHistoryPath = path.join(outputRoot, 'anchors', `history-${planHash}.json`);

@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { lstat, mkdir, readFile, readdir, realpath, writeFile, copyFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, writeFile, copyFile, rename, rm } from 'node:fs/promises';
 import { finished } from 'node:stream/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +54,11 @@ export async function launch(argv, runtimePath = path.join(here, 'episode-runtim
   const runtime = await json(await regular(runtimePath));
   const layout = await parseEpisodeCloudLayout(argv);
   const { workspace, outputs, input } = layout;
-  const reportFile = path.join(outputs, 'episode-launcher-report.json');
+  // The provider advertises transport outputs in its task prompt. Keep their
+  // authoritative writers outside the model's writable workspace until exit.
+  const diagnosticsRoot = await mkdtemp(path.join(path.dirname(workspace), '.episode-host-diagnostics-'));
+  const diagnosticNames = ['episode-events.jsonl', 'episode-stderr.log', 'episode-launcher-report.json'];
+  const reportFile = path.join(diagnosticsRoot, 'episode-launcher-report.json');
   const report = { kind: 'three-episode-launcher-report', schemaVersion: 1, taskId: input.taskId, model: 'gpt-6-astra', reasoningEffort: 'xhigh', runtimeHash: hash(await readFile(runtimePath)), startedAt: new Date().toISOString(), status: 'starting', mcpTools: input.episodeSourceManifest ? toolNames : [], nativeImageGenerationEnabled: true, mcpAuthenticationEnvironmentPassed: false };
   try {
     const binaryHash = hash(await readFile(await regular(runtime.codexBinary)));
@@ -87,11 +91,14 @@ export async function launch(argv, runtimePath = path.join(here, 'episode-runtim
     } else overrides.push('mcp_servers={}');
     const env = modelEnvironment(runtime, workspace, process.env, { authentication: true });
     await mkdir(env.HOME, { recursive: true }); await mkdir(env.TMPDIR, { recursive: true });
-    const effective = [...argv.slice(0, -1), '--ignore-user-config', '--ignore-rules', '--json', ...overrides.flatMap(v => ['-c', v]), argv.at(-1)];
-    const eventsFile = path.join(outputs, 'episode-events.jsonl'); const stderrFile = path.join(outputs, 'episode-stderr.log');
+    let prompt = argv.at(-1);
+    if (prompt === '-') { const chunks = []; for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk)); prompt = Buffer.concat(chunks).toString('utf8'); }
+    prompt += `\n\nHost-owned transport output boundary: ${diagnosticNames.join(', ')} are produced by the launcher AFTER you exit. Do not create, rewrite, truncate or delete them, even if the provider lists them among expected outputs. Write only the requested task result/plan files; these transport diagnostics are not Agent deliverables.`;
+    const effective = [...argv.slice(0, -1), '--ignore-user-config', '--ignore-rules', '--json', ...overrides.flatMap(v => ['-c', v]), prompt];
+    const eventsFile = path.join(diagnosticsRoot, 'episode-events.jsonl'); const stderrFile = path.join(diagnosticsRoot, 'episode-stderr.log');
     const eventStream = createWriteStream(eventsFile, { flags: 'wx' }); const errors = createWriteStream(stderrFile, { flags: 'wx' });
     errors.write('Three Episode launcher: Codex process starting.\n');
-    const child = spawn(runtime.codexBinary, effective, { cwd: workspace, env, stdio: ['inherit', 'pipe', 'pipe'], detached: true });
+    const child = spawn(runtime.codexBinary, effective, { cwd: workspace, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     const stop = signal => { try { process.kill(-child.pid, signal); } catch {} };
     const transportHash = createHash('sha256'); child.stdout.on('data', chunk => transportHash.update(chunk)); child.stdout.pipe(eventStream); child.stderr.pipe(errors);
     report.status = 'running'; await writeFile(reportFile, JSON.stringify(report, null, 2));
@@ -100,7 +107,7 @@ export async function launch(argv, runtimePath = path.join(here, 'episode-runtim
     const onSignal = () => stop('SIGTERM'); process.on('SIGTERM', onSignal); process.on('SIGINT', onSignal);
     let exit;
     try { exit = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', (code, signal) => resolve({ code, signal })); }); await Promise.all([finished(eventStream), finished(errors)]); }
-    finally { clearTimeout(timeout); clearTimeout(forceTimer); process.off('SIGTERM', onSignal); process.off('SIGINT', onSignal); stop('SIGTERM'); }
+    finally { clearTimeout(timeout); clearTimeout(forceTimer); process.off('SIGTERM', onSignal); process.off('SIGINT', onSignal); stop('SIGKILL'); }
     Object.assign(report, { childExitCode: exit.code, timedOut, eventsSha256: hash(await readFile(eventsFile)), eventsTransportSha256: transportHash.digest('hex') });
     if (report.eventsSha256 !== report.eventsTransportSha256) throw new Error('EPISODE_EVENTS_CHANGED');
     if (timedOut || exit.code !== 0) throw new Error(timedOut ? 'EPISODE_TASK_TIMEOUT' : 'EPISODE_CODEX_FAILED');
@@ -109,7 +116,16 @@ export async function launch(argv, runtimePath = path.join(here, 'episode-runtim
     }
     report.status = 'delivered'; return report;
   } catch (error) { report.status = 'failed'; report.error = String(error.message); throw error; }
-  finally { report.finishedAt = new Date().toISOString(); await writeFile(reportFile, JSON.stringify(report, null, 2)); }
+  finally {
+    report.finishedAt = new Date().toISOString();
+    if (await realpath(outputs) !== outputs) throw new Error('EPISODE_OUTPUT_ROOT_CHANGED');
+    report.diagnosticsOwnership = 'host-private-until-process-exit';
+    report.discardedModelDiagnosticPaths = [];
+    for (const name of diagnosticNames) { try { await lstat(path.join(outputs, name)); report.discardedModelDiagnosticPaths.push(name); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
+    await writeFile(reportFile, JSON.stringify(report, null, 2));
+    for (const name of diagnosticNames) { try { await rename(path.join(diagnosticsRoot, name), path.join(outputs, name)); } catch (error) { if (error.code !== 'ENOENT') throw error; } }
+    await rm(diagnosticsRoot, { recursive: true, force: true });
+  }
 }
 
 async function bridge(argv) {

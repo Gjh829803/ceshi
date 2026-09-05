@@ -163,3 +163,20 @@ test('persists the per-style anchor attempt budget and never bypasses failed ind
   assert.deepEqual(history.styles['style-00'].attempts.map(item => item.status), ['accepted', 'needs-repair', 'needs-repair', 'needs-repair']);
   assert.ok(history.styles['style-00'].revisionReview);
 });
+
+test('recovery candidates get a new cloud planning identity and are never admitted directly', async () => {
+  const setup=await fixture(); const planCalls=[]; const original=setup.options.cloud.runCodex;
+  setup.options.cloud.runCodex=async args=>{if(args.taskId.startsWith('three-episode-style-plan-'))planCalls.push(args);return original(args);};
+  await runThreeEpisodeVisuals(setup.options);
+  const candidate=path.join(setup.root,'unadmitted-candidate.json');await copyFile(path.join(setup.options.outputRoot,'style-plan.json'),candidate);
+  const stylePlanCandidate=await ref(candidate);
+  await runThreeEpisodeVisuals({...setup.options,stylePlanCandidate});
+  assert.equal(planCalls.length,2);assert.notEqual(planCalls[0].taskId,planCalls[1].taskId);
+  assert.equal(planCalls[1].assets.find(a=>a.id==='prior-style-plan').path,candidate);
+  assert.match(planCalls[1].instruction,/untrusted candidate/);
+  const context=JSON.parse(await readFile(planCalls[1].assets.find(a=>a.id==='context').path,'utf8'));
+  assert.deepEqual(context.recoveryCandidate,{sha256:stylePlanCandidate.sha256});
+  await writeFile(candidate,'changed candidate');
+  await assert.rejects(runThreeEpisodeVisuals({...setup.options,stylePlanCandidate}),/STALE_INPUT/);
+  assert.equal(planCalls.length,2);assert.equal(setup.calls.videos,0);
+});

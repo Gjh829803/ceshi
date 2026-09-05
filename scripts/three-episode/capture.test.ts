@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -126,4 +126,23 @@ describe('Three episode deterministic production capture', () => {
       expect(await inspectRenderedVideo(outputPath)).toMatchObject({ widthPixels: 96, heightPixels: 64, frameCount: 3, frameRate: '24/1', durationSeconds: 0.125, hasAudio: false, codec: 'h264' });
     } catch (error) { await encoder.abort(); throw error; }
   });
+});
+
+it('resumes an admitted six-clip boundary without a planner or GPU job and rejects corrupted media',async()=>{
+ const setup=await fixture(),runtimeHash='b'.repeat(64),{canonicalHash,PRE_SEEDANCE_PROFILE}=await import('./contracts.js');
+ const {runEpisodeWorkflow}=await import('./workflow.js'),{saveEpisodeSource}=await import('./source.js'),{hashTree}=await import('../three-creator/compiler.js');
+ const {createHash}=await import('node:crypto');const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
+ setup.root=await realpath(setup.root);setup.options.playableRoot=await realpath(setup.options.playableRoot);setup.options.outputRoot=path.join(setup.root,'capture');
+ const summary=await runCaptureSegments({...setup.options,runtimeHash});
+ const sourceRoot=path.join(setup.root,'source');await mkdir(sourceRoot);await writeFile(path.join(sourceRoot,'main.ts'),'fixture source');
+ const opening=path.join(setup.root,'opening.png');await writeFile(opening,'fixture opening');const image={path:opening,sha256:hash('fixture opening')};
+ const source={kind:'three-episode-source' as const,schemaVersion:1 as const,worldId:'fixture-world',sourceHash:'c'.repeat(64),worldBuildHash:setup.plan.worldBuildHash,runtimeHash,sourceWorldBuildHash:setup.plan.worldBuildHash,sourceRuntimeHash:runtimeHash,sourceDeliveryManifestSha256:'d'.repeat(64),sourceRoot,playableRoot:setup.options.playableRoot,sourceFiles:await hashTree(sourceRoot),playableFiles:await hashTree(setup.options.playableRoot),opening:image,targets:[{id:'actor',name:'actor',role:'primary-subject',whiteboxTriview:image}]};
+ const sourceManifestPath=path.join(setup.root,'source.json'),planPath=path.join(setup.root,'plan.json');await saveEpisodeSource(sourceManifestPath,source);await writeFile(planPath,JSON.stringify(setup.plan));
+ await writeFile(path.join(setup.root,'capture/capture-summary.local.json'),JSON.stringify(summary));
+ await writeFile(path.join(setup.root,'episode.json'),JSON.stringify({episodeId:'fixture-episode',worldBuildHash:source.worldBuildHash,worldId:source.worldId,profile:PRE_SEEDANCE_PROFILE,planPath,planHash:canonicalHash(setup.plan),segments:summary.segments,status:'failed',stage:'style-planning',planRepairsBySegment:{}}));
+ const capture=vi.fn(async()=>{throw new Error('unexpected GPU dispatch');}),runCodex=vi.fn(async()=>{throw new Error('unexpected planner');});
+ const options={sourceManifestPath,outputRoot:setup.root,episodeId:'fixture-episode',stopBeforeSeedance:true as const,until:'capture' as const,runtimeConfig:{},capture,cloud:{runCodex} as any};
+ expect((await runEpisodeWorkflow(options)).status).toBe('paused-before-visuals');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
+ await writeFile(path.join(summary.segments[2]!.outputRoot,'video.mp4'),'corrupted');
+ await expect(runEpisodeWorkflow(options)).rejects.toThrow('RECEIPT_INVALID');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
 });
