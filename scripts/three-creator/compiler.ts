@@ -11,6 +11,9 @@ export const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.me
 const require = createRequire(import.meta.url);
 const checkProject = new Ajv({ allErrors: true, strict: false, strictNumbers: true }).compile(PROJECT_SCHEMA);
 const EXCLUDED = new Set(['.git', '.three-creator', 'node_modules', 'outputs', 'inputs', 'dist', '.codex', '.codex-tmp']);
+// LWDP owns task-root scratch (Codex sessions, tool wrappers and changing logs).
+// Exclude it before any filesystem access; nested author directories keep their meaning.
+const HOST_OWNED_ROOTS = new Set(['scratch']);
 const SOURCE_EXTENSIONS = new Set(['.html', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.glb', '.gltf', '.bin', '.wasm', '.woff', '.woff2', '.mp3', '.ogg', '.wav']);
 export type AssetCatalogEntry = Record<string, any> & { id: string; uri: string; sha256: string; byteLength: number; sourcePath: string };
 export type Candidate = { id: string; profile: CreatorProfile; worldBuildHash: string; sourceHash: string; runtimeHash: string; root: string; sourceRoot: string; playableRoot: string; files: Record<string, string>; project: Project; compiledAt: string; runtimeCacheHit: boolean; candidateCacheHit: boolean };
@@ -66,7 +69,7 @@ export class ThreeCompiler {
     const root = await realpath(this.workspace), result = new Map<string, Buffer>(); let size = 0;
     const walk = async (dir: string) => {
       for (const name of (await readdir(dir)).sort()) {
-        if (EXCLUDED.has(name) || name.startsWith('.')) continue;
+        if (EXCLUDED.has(name) || name.startsWith('.') || (dir === root && HOST_OWNED_ROOTS.has(name))) continue;
         const file = path.join(dir, name), stat = await lstat(file);
         if (stat.isSymbolicLink()) throw new Error(`THREE_SOURCE_SYMLINK: ${path.relative(root, file)}`);
         if (stat.isDirectory()) await walk(file);

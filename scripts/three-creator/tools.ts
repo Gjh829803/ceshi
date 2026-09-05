@@ -43,6 +43,20 @@ export function validateCaptureTiming(inputTiming: any, captureTiming: any, vide
 export function hasMinimumRecordedPlay(report: { actualWallSeconds?: number; inputWallSeconds?: number; activePlaySeconds?: number; videoMetadata?: { durationSeconds?: number } | null }): boolean {
   return [report.actualWallSeconds, report.inputWallSeconds, report.activePlaySeconds, report.videoMetadata?.durationSeconds].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 180);
 }
+export function playtestSubmissionReadiness(report: any, current: { worldBuildHash: string; episodeHash: string }) {
+  const issues: Array<{ code: string; field?: string; actual?: unknown; required?: unknown }> = [];
+  if (!report) return { eligible: false, issues: [{ code: 'NO_PLAYTEST_IN_THIS_SERVICE_SESSION' }] };
+  if (report.status !== 'passed') issues.push({ code: 'PLAYTEST_DID_NOT_PASS', actual: report.status ?? null, required: 'passed' });
+  if (report.isCompleteEpisode !== true) issues.push({ code: 'INCOMPLETE_EPISODE', actual: report.isCompleteEpisode ?? null, required: true });
+  if (report.capturedInput !== true) issues.push({ code: 'TRUSTED_KEYBOARD_INPUT_MISSING', actual: report.capturedInput ?? null, required: true });
+  for (const field of ['actualWallSeconds', 'inputWallSeconds', 'activePlaySeconds', 'videoDurationSeconds']) {
+    const actual = field === 'videoDurationSeconds' ? report.videoMetadata?.durationSeconds : report[field];
+    if (typeof actual !== 'number' || !Number.isFinite(actual) || actual < 180) issues.push({ code: 'RECORDED_DURATION_INSUFFICIENT', field, actual: actual ?? null, required: 180 });
+  }
+  if (report.worldBuildHash !== current.worldBuildHash) issues.push({ code: 'WORLD_SOURCE_CHANGED_AFTER_PLAYTEST', actual: report.worldBuildHash ?? null, required: current.worldBuildHash });
+  if (report.episodeHash !== current.episodeHash) issues.push({ code: 'EPISODE_CHANGED_AFTER_PLAYTEST', actual: report.episodeHash ?? null, required: current.episodeHash });
+  return { eligible: issues.length === 0, issues };
+}
 export function assertSdkPlaytestRunning(profile: CreatorProfile, state: { isRunning?: boolean | null; simulationTick?: number | null; errors?: unknown[] }): void {
   if (profile === 'three-sdk' && state.isRunning === false) throw new Error(`THREE_PLAYTEST_RUNTIME_STOPPED: ${JSON.stringify({ simulationTick: state.simulationTick ?? null, errors: state.errors ?? [] })}`);
 }
@@ -332,7 +346,8 @@ export class ThreeCreatorTools {
   }
   async submit() {
     const candidate = await this.compiler.prepare(), episode = await this.episode(), played = this.playtestEvidence;
-    if (!played || played.report.status !== 'passed' || !hasMinimumRecordedPlay(played.report) || !played.report.isCompleteEpisode || !played.report.capturedInput || played.report.worldBuildHash !== candidate.worldBuildHash || played.report.episodeHash !== episode.hash) throw new Error('THREE_SUBMIT_PLAYTEST_REQUIRED: complete a current-source, current-episode real 180s+ keyboard/video playtest in this same service session');
+    const readiness = playtestSubmissionReadiness(played?.report, { worldBuildHash: candidate.worldBuildHash, episodeHash: episode.hash });
+    if (!played || !readiness.eligible) throw new Error(`THREE_SUBMIT_PLAYTEST_REQUIRED: ${JSON.stringify(readiness)}. Keep this MCP session; resolve the listed source/episode or recording issue before submitting again.`);
     await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files);
     if (this.captureEvidence?.report.worldBuildHash !== candidate.worldBuildHash) await this.triviews();
     const captures = this.captureEvidence!; await verifyFiles(captures.root, captures.files);

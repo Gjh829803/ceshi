@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Native Linux integration doctor: actual required MCP, compilation, WebGL,
 // keyboard/video and cache reuse, with no Codex/model call and no auth environment.
-import {readFile,writeFile,mkdir,mkdtemp} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,mkdtemp,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
@@ -38,6 +38,11 @@ try{
    const environment=(await call('creator_describe_environment')).value;assert.equal(environment.profile,profile);assert.equal(environment.engine,'three@0.185.1');assert.equal(environment.version,THREE_TOOL_VERSION);assert.equal(environment.sdkVersion,profile==='three-sdk'?THREE_TOOL_VERSION:null);assert.equal(environment.browserObservationContract,profile==='three-sdk'?'WorldObservation-v2':'WorldObservation-v1');entry.environment=environment;
    await call('creator_get_authoring_schema');const examples=(await call('creator_get_examples')).value;
    for(const name of ['index.html','main.ts','project.json']){assert.equal(typeof examples.files[name],'string');await writeFile(path.join(workspace,name),examples.files[name]);}
+   // Model LWDP's task-root scratch using synthetic files only. This must be
+   // excluded before traversal; no real platform account directory is inspected.
+   const platformScratch=path.join(workspace,'scratch');await mkdir(platformScratch);
+   await writeJson(path.join(platformScratch,'session.json'),{syntheticHostSession:true,revision:1});
+   await symlink('session.json',path.join(platformScratch,'helper'));
    const steps=[];let remaining=durationSeconds-1,previousKey=null,index=0;
    while(remaining>0){const key=index++%2?'s':'w',seconds=Math.min(2,remaining);steps.push({keysDown:[key],...(previousKey?{keysUp:[previousKey]}:{}),durationSeconds:seconds});previousKey=key;remaining-=seconds;}
    steps.push({keysUp:[previousKey],durationSeconds:1});
@@ -55,6 +60,10 @@ try{
     }
    }
    const played=(await operation('world_playtest',{framesPerSecond:1})).value.result;entry.playtest=played;assert.equal(played.status,'passed');assert.equal(played.capturedInput,true);assert.equal(played.isCompleteEpisode,true);assert.deepEqual(played.pageErrors,[]);assert.deepEqual(played.runtimeErrors,[]);assert.deepEqual(played.blockedNetworkRequests,[]);assert.equal(played.worldBuildHash,validation.worldBuildHash);assert.equal(played.videoMetadata.widthPixels,HOST_VIEWPORT_PIXELS.width);assert.equal(played.videoMetadata.heightPixels,HOST_VIEWPORT_PIXELS.height);assert(Number.isFinite(played.inputWallSeconds)&&played.inputWallSeconds>=durationSeconds);assert(played.videoMetadata.durationSeconds>=durationSeconds);
+   await writeJson(path.join(platformScratch,'session.json'),{syntheticHostSession:true,revision:2});
+   const sourceAfterHostMutation=(await operation('world_validate')).value.result;
+   assert.equal(sourceAfterHostMutation.sourceHash,validation.sourceHash);assert.equal(sourceAfterHostMutation.worldBuildHash,validation.worldBuildHash);assert.equal(sourceAfterHostMutation.candidateCacheHit,true);
+   entry.platformScratchIsolation={syntheticFixture:true,rootSymlinkNotTraversed:true,hostJsonMutationKeepsSourceHash:true,hostJsonMutationKeepsWorldBuildHash:true};
    if(durationSeconds>=180){await operation('world_capture_triviews');const submitted=(await operation('world_submit')).value.result;assert(isPassingDelivery(submitted,profile));assert.equal(submitted.creatorRuntimeLockHash,lock.runtimeHash);assert.equal(submitted.runtimeHash,lock.prebuiltRuntimes[profile].runtimeHash);assert.equal(submitted.archivePath,path.join(workspace,'creator-delivery.tar.gz'));assert.equal(await fileSha256(submitted.archivePath),submitted.archiveSha256);assert.deepEqual(JSON.parse(await readFile(path.join(workspace,'creator-result.json'),'utf8')),submitted);entry.delivery=submitted;}
    episode.steps[0].durationSeconds+=1;await writeJson(path.join(workspace,'episode.json'),episode);
    const after=(await operation('world_validate')).value.result;assert.equal(after.worldBuildHash,validation.worldBuildHash);assert.equal(after.candidateCacheHit,true);assert.equal(after.runtimeCacheHit,true);entry.episodeOnlyWorldReuse=true;

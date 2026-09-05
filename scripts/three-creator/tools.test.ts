@@ -8,7 +8,7 @@ import ts from 'typescript';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { publicContractTopic } from './authoring-schema.js';
 import { EPISODE_SCHEMA, sha256 } from './contracts.js';
-import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline } from './tools.js';
+import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline, playtestSubmissionReadiness } from './tools.js';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import { executeThreeCreatorTool } from './mcp.js';
@@ -94,6 +94,20 @@ describe('Three browser candidate identity and admission', () => {
   });
 });
 describe('Three tool operations and truthful submission', () => {
+  it('identifies source drift separately from a passing complete recording instead of suggesting another identical long test', () => {
+    const report = { status: 'passed', isCompleteEpisode: true, capturedInput: true, actualWallSeconds: 184, inputWallSeconds: 180.008, activePlaySeconds: 180.004, videoMetadata: { durationSeconds: 183.367 }, worldBuildHash: 'recorded-world', episodeHash: 'unchanged-episode' };
+    expect(playtestSubmissionReadiness(report, { worldBuildHash: 'recorded-world', episodeHash: 'unchanged-episode' })).toEqual({ eligible: true, issues: [] });
+    expect(playtestSubmissionReadiness(report, { worldBuildHash: 'changed-world', episodeHash: 'unchanged-episode' })).toEqual({ eligible: false, issues: [{ code: 'WORLD_SOURCE_CHANGED_AFTER_PLAYTEST', actual: 'recorded-world', required: 'changed-world' }] });
+    const changedEpisode = playtestSubmissionReadiness(report, { worldBuildHash: 'recorded-world', episodeHash: 'changed-episode' });
+    expect(changedEpisode.issues.map(issue => issue.code)).toEqual(['EPISODE_CHANGED_AFTER_PLAYTEST']);
+  });
+  it('keeps actual short, missing and incomplete playtests ineligible and reports the precise missing evidence', () => {
+    const current = { worldBuildHash: 'world', episodeHash: 'episode' };
+    expect(playtestSubmissionReadiness(undefined, current).issues).toEqual([{ code: 'NO_PLAYTEST_IN_THIS_SERVICE_SESSION' }]);
+    const result = playtestSubmissionReadiness({ status: 'passed', isCompleteEpisode: false, capturedInput: true, actualWallSeconds: 183, inputWallSeconds: 181, activePlaySeconds: 179.999, videoMetadata: { durationSeconds: 182 }, ...current }, current);
+    expect(result.eligible).toBe(false);
+    expect(result.issues).toEqual([{ code: 'INCOMPLETE_EPISODE', actual: false, required: true }, { code: 'RECORDED_DURATION_INSUFFICIENT', field: 'activePlaySeconds', actual: 179.999, required: 180 }]);
+  });
   it('fails fast when the real SDK snapshot says stopped and retains its original runtime errors', () => {
     expect(() => assertSdkPlaytestRunning('three-sdk', { isRunning: false, simulationTick: 0, errors: [{ code: 'WORLD_FRAME_FAILED', message: 'original clock failure' }] })).toThrow(/THREE_PLAYTEST_RUNTIME_STOPPED.*WORLD_FRAME_FAILED.*original clock failure/);
     expect(() => assertSdkPlaytestRunning('three-sdk', { isRunning: true, simulationTick: 12, errors: [] })).not.toThrow();
