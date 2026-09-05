@@ -9,7 +9,7 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js"
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import { createBabylonNativeHostRandomV1, defineBabylonNativeScene, type BabylonNativeSceneModuleV1 } from "@whitebox-world/native-babylon";
-import { buildBabylonNativeSceneCandidateV1 } from "../../packages/native-babylon/src/host.js";
+import { buildBabylonNativeSceneCandidateV1 } from "@whitebox-world/native-babylon/host";
 import { parseBabylonNativeSceneBootstrapV1 } from "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { admitCreatorSources, creatorSceneWrapperSource, creatorSteeringYawDelta, CreatorTools, parseCreatorAuthoringDiagnostic, sanitizeCreatorAuthoringFailure, sha256 } from "./tools.js";

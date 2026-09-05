@@ -141,3 +141,32 @@ it("fails closed for unregistered, stale, wildcard, and incomplete debt", () => 
     expect.stringContaining("WORKSPACE_BOUNDARY_DEBT_INVALID"),
   ]));
 });
+
+it("does not treat repository-root capsule scratch as root-package source", async () => {
+  const root = await fixture({ source: 'import "@fixture/b";\n' });
+  const copied = path.join(root, ".codex-tmp/gpt6-toolkit-capsule/export/toolkit/sdk/packages/a/src/copied.ts");
+  await mkdir(path.dirname(copied), { recursive: true });
+  await writeFile(copied, 'import "@fixture/b";\n');
+  await expect(scanWorkspaceBoundaries(root)).resolves.toEqual([
+    expect.objectContaining({
+      code: "WORKSPACE_DIRECT_DEPENDENCY_MISSING",
+      importer: "packages/a/src/consumer.ts",
+      owner: "@fixture/b",
+    }),
+  ]);
+});
+
+it("still checks maintained hidden source and package-local directories named like scratch", async () => {
+  const root = await fixture({});
+  for (const relative of [".maintained/source.ts", "scratch/source.ts", "packages/a/.codex-tmp/consumer.ts"]) {
+    const filename = path.join(root, relative);
+    await mkdir(path.dirname(filename), { recursive: true });
+    await writeFile(filename, 'import "@fixture/b";\n');
+  }
+  const violations = await scanWorkspaceBoundaries(root);
+  expect(violations).toHaveLength(3);
+  expect(violations.map(entry => entry.importer).sort()).toEqual([
+    ".maintained/source.ts", "packages/a/.codex-tmp/consumer.ts", "scratch/source.ts",
+  ]);
+  expect(violations.every(entry => entry.code === "WORKSPACE_DIRECT_DEPENDENCY_MISSING")).toBe(true);
+});

@@ -114,6 +114,12 @@ async function sourceFiles(root: string): Promise<readonly string[]> {
   async function visit(directory: string): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (["node_modules", ".git", "dist", "coverage", "artifacts"].includes(entry.name)) continue;
+      // This repository-owned temporary root holds copied SDK capsules and local
+      // experiments. It is outside pnpm's packages/* and apps/* workspaces and
+      // must not inherit the root package's dependency ownership. Keep this exact
+      // root-only exclusion: maintained hidden source and package-local folders
+      // with the same name still receive all normal boundary checks.
+      if (directory === root && entry.name === ".codex-tmp") continue;
       const target = path.join(directory, entry.name);
       if (entry.isDirectory()) await visit(target);
       else if (entry.isFile() && SOURCE.test(entry.name)) result.push(target);

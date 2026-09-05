@@ -1,0 +1,26 @@
+import path from 'node:path';
+import { createInterface } from 'node:readline';
+import { readFile } from 'node:fs/promises';
+import { ThreeCreatorTools } from './tools.js';
+import { executeThreeCreatorTool } from './mcp.js';
+import { profileFrom, errorMessage } from './contracts.js';
+
+const args = process.argv.slice(2), value = (name: string) => { const index = args.indexOf(name); return index < 0 ? undefined : args[index + 1]; };
+const service = new ThreeCreatorTools(path.resolve(value('--workspace') ?? process.cwd()), profileFrom(value('--profile')));
+try {
+  if (args.includes('--session')) {
+    // JSON-lines mode keeps operation/evidence authority in this one process, just like MCP.
+    for await (const line of createInterface({ input: process.stdin, terminal: false })) {
+      if (!line.trim()) continue;
+      try { const request = JSON.parse(line); const result = await executeThreeCreatorTool(service, request.name, request.arguments ?? {}); process.stdout.write(`${JSON.stringify({ id: request.id ?? null, result })}\n`); }
+      catch (error) { process.stdout.write(`${JSON.stringify({ error: errorMessage(error) })}\n`); }
+    }
+  } else {
+    const name = value('--tool') ?? 'creator_describe_environment'; const file = value('--arguments-file');
+    const input = file ? JSON.parse(await readFile(file, 'utf8')) : JSON.parse(value('--arguments') ?? '{}');
+    let result: any = await executeThreeCreatorTool(service, name, input);
+    if (result.operationId) { do { result = await service.getOperation(result.operationId ?? result.id, 25); } while (['queued', 'running'].includes(result.status)); }
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); if (result.status === 'failed' || result.status === 'cancelled') process.exitCode = 1;
+  }
+} catch (error) { process.stderr.write(`${errorMessage(error)}\n`); process.exitCode = 1; }
+finally { await service.close(); }

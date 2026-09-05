@@ -132,6 +132,7 @@ describe("independent test repository census", () => {
     ).toEqual({
       nodeTestFiles: [
         "deploy/creator-evaluation/gateway.test.mjs",
+        "deploy/three-creator-runtime/capsule.test.mjs",
         "scripts/agents/local-codex-task.test.mjs",
         "scripts/agents/lwdp-cloud-execution-client.test.mjs",
         "scripts/agents/lwdp-codex-profile.test.mjs",
@@ -151,6 +152,7 @@ describe("independent test repository census", () => {
         "scripts/cloud/run-worldkit-cloud-scene-worker.test.mjs",
         "scripts/cloud/submit-worldkit-cloud-episode.test.mjs",
         "scripts/cloud/submit-worldkit-cloud-scene.test.mjs",
+        "scripts/cloud/three-eval.test.mjs",
         "scripts/episodes/gemini-visual-event-director.test.mjs",
         "scripts/lib/cloud-global-work-slots.test.mjs",
         "scripts/lib/cloud-production-retry-policy.test.mjs",

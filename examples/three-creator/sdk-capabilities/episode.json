@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "steps": [
+    {"durationSeconds": 0.5},
+    {"keysDown": ["e"], "durationSeconds": 0.1},
+    {"keysUp": ["e"], "keysDown": ["w"], "durationSeconds": 1.5},
+    {"keysDown": ["Shift"], "durationSeconds": 1.5},
+    {"keysUp": ["w", "Shift"], "keysDown": ["ArrowRight"], "durationSeconds": 1.5},
+    {"keysUp": ["ArrowRight"], "keysDown": ["Space"], "durationSeconds": 0.2},
+    {"keysUp": ["Space"], "durationSeconds": 1.2},
+    {"keysDown": ["s"], "durationSeconds": 2},
+    {"keysUp": ["s"], "keysDown": ["a"], "durationSeconds": 1.5},
+    {"keysUp": ["a"], "durationSeconds": 1}
+  ],
+  "targets": []
+}

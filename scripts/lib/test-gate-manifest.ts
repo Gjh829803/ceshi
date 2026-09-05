@@ -3,6 +3,7 @@ export type TestLaneV1 = "contract" | "resource-heavy";
 export type ResourceHeavyReasonCodeV1 =
   | "browser-or-server-process"
   | "native-havok-or-recast"
+  | "native-rapier"
   | "measured-duration"
   | "measured-memory"
   | "measured-contention";
@@ -216,6 +217,10 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "packages/terrain-surface/src/triangle-heightfield.test.ts", lane: "contract" },
   { path: "packages/terrain-surface/src/triangle-xz-broadphase.test.ts", lane: "contract" },
   { path: "packages/testkit/src/testkit.test.ts", lane: "contract" },
+  { path: "packages/three-world/src/assets.test.ts", lane: "contract" },
+  { path: "packages/three-world/src/navigation.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
+  { path: "packages/three-world/src/physics.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier"] },
+  { path: "packages/three-world/src/world.test.ts", lane: "resource-heavy", reasonCodes: ["native-rapier", "native-havok-or-recast"] },
   { path: "packages/traversal-recast/src/adapter-identity.test.ts", lane: "contract" },
   { path: "packages/traversal-recast/src/build-graph.test.ts", lane: "contract" },
   { path: "packages/traversal-recast/src/build-rejection-graph.test.ts", lane: "contract" },
@@ -347,6 +352,7 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/scenes/record-scene-authoring-attempt.test.ts", lane: "contract" },
   { path: "scripts/testing/repository-layout.test.ts", lane: "contract" },
   { path: "scripts/testing/workspace-boundary.test.ts", lane: "contract" },
+  { path: "scripts/three-creator/tools.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process"] },
   { path: "scripts/verification/locomotion-capability-state.test.ts", lane: "contract" },
   { path: "scripts/verification/verification-browser-launch.test.ts", lane: "contract" },
   { path: "scripts/verification/verify-3c-migration.test.ts", lane: "contract" },

@@ -2,6 +2,21 @@
 
 ## GPT-6 Creator reconstruction branch — 2026-09-05
 
+### Authorized Three Creator SDK refactor
+
+The user subsequently authorized verifying native Three.js creation with a thin
+SDK and refactoring the SDK. For this new implementation, the current authority
+is [Three Creator SDK refactor](docs/superpowers/specs/2026-09-05-three-creator-sdk-refactor.md)
+and its [work graph](docs/superpowers/plans/2026-09-05-three-creator-sdk-refactor.md).
+This explicitly supersedes the Native-only D01 and old Three import restrictions
+for `packages/three-world`, its Creator tools/apps and authored experimental
+worlds. Normal Three scene graphs, cameras and sanctioned update/interaction
+hooks are intended. Use one Three scene and one verified physics world; do not
+bridge through a second Babylon world or fake ground with ray/AABB checks.
+Preserve existing production guards, old V3 artifacts, credentials isolation,
+single state ownership and truthful evidence. This user authorization does not
+require another approval solely because old documents prescribe Babylon.
+
 The user explicitly authorized a new branch and a complete Agent redesign for
 reference-faithful playable low-poly worlds, cloud Codex tools/plugins, reusable
 subjects/actions, and clear low-latency world/NPC control. This branch is

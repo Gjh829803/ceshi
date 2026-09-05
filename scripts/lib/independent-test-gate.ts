@@ -29,6 +29,7 @@ export interface IndependentTestCommandV1 {
 export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntryV1[] =
   Object.freeze([
     { path: "deploy/creator-evaluation/gateway.test.mjs", lane: "node" },
+    { path: "deploy/three-creator-runtime/capsule.test.mjs", lane: "node" },
     { path: "scripts/agents/local-codex-task.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-cloud-execution-client.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-codex-profile.test.mjs", lane: "node" },
@@ -48,6 +49,7 @@ export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntry
     { path: "scripts/cloud/run-worldkit-cloud-scene-worker.test.mjs", lane: "node" },
     { path: "scripts/cloud/submit-worldkit-cloud-episode.test.mjs", lane: "node" },
     { path: "scripts/cloud/submit-worldkit-cloud-scene.test.mjs", lane: "node" },
+    { path: "scripts/cloud/three-eval.test.mjs", lane: "node" },
     { path: "scripts/episodes/gemini-visual-event-director.test.mjs", lane: "node" },
     { path: "scripts/lib/cloud-global-work-slots.test.mjs", lane: "node" },
     { path: "scripts/lib/cloud-production-retry-policy.test.mjs", lane: "node" },

@@ -10,7 +10,7 @@ import { parseGameplayBootstrapV1 } from "@whitebox-world/gameplay-contracts";
 import { parseWorldRuntimeBootstrapV1, validateCameraTuningV1 } from "@whitebox-world/runtime-contracts";
 import { BabylonWorldRuntime } from "@whitebox-world/runtime-babylon";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
-import { bindRuntimeTestPossession } from "../../packages/runtime-babylon/src/runtime-test-possession.js";
+import { bindRuntimeTestPossession } from "@whitebox-world/runtime-babylon/testing";
 import { describe, expect, it, vi } from "vitest";
 import { registerEntity } from "./authoring.js";
 import { createCreatorBootstraps, parseCreatorSceneConfig, type CreatorSceneConfigV1 } from "./config.js";
