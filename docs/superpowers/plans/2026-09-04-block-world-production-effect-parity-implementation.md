@@ -338,6 +338,21 @@ Live/frozen Skill/checker copies and docs/18 must match. No new model stage,
 source-repair cycle, metric threshold or strict acceptance relaxation. CF-11/21
 complete feature coverage and reference-effect evidence remain open.
 
+#### CF-14/24/R1 complete-world inspection bounds
+
+Main-agent-only after CF-11/R4-R6. Replace duplicate container-bound derivations
+in formal-capture-request and formal-capture admission with one checked-metadata
+inspection-bound owner. Keep minimum spans in the existing Runtime contract owner.
+Inputs: every verified Block's center/effective size. Output: one immutable world
+inspection bounds value consumed by both side/top and their identity replay.
+No new Source, model call, visible-pixel score, or ordinary rejection threshold.
+
+RED/GREEN covers excess container Y margins, asymmetric/off-camera ungrouped Blocks,
+inventory order independence, and stale cropped bounds on either view. Verify directly
+affected Request/admission/contract tests and typecheck, then freeze before one actual
+Browser four-image inspection. Record exact input SHA and residual CF-14/21 work in
+docs/18. Native generated checker graph changes use temporary rebuild and byte drift.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

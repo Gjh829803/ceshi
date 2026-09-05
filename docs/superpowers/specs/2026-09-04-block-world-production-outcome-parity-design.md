@@ -416,6 +416,25 @@ override. Policy changes fail existing stale-owner checks; Source changes natura
 change checked extents and Package identity. There is no compatibility input alias,
 new model task, extra repair cycle or new ordinary production veto.
 
+### CF-14/24 whole-world inspection framing
+
+Formal side/top inspection frames the complete checked Block inventory, including
+ungrouped visual-only and off-camera scenery. Package container margins are not
+visible-world extents: keep CF-11's legacy-equivalent container bounds unchanged.
+One Host derivation supplies both Request creation and Package/Request admission;
+its inputs are verified materializer Block centers and effective axis-aligned sizes,
+not mesh-name/tag scans, semantic groups or Collider selections. Preserve the existing
+minimum inspection spans (8m X/Z, 4m Y), centered on the actual Block union. This is
+camera framing only, never required world geometry or a new production quality gate.
+Opening Camera, Subject owner, render fitting, output count, retries and ordinary
+publication criteria are unchanged. Request/Receipt hashes bind the new framing.
+
+The frozen legacy artifact-capture uses actual renderable target extents rather
+than compiler container margins (9e35ab53, artifact-capture.ts:315-340). The Native
+adaptation obtains extents from trusted checked metadata instead of entity/Mesh
+discovery. This fixes whole-world inspection, not legacy per-object tri-view parity,
+visible-pixel completeness, or Subject/Camera multi-mode acceptance.
+
 ### CF-11 ground obligations are not visual identities
 
 Ordinary production must not create `entry-ground-group`/`remote-ground-group`

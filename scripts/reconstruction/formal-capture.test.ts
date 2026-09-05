@@ -29,6 +29,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { createDefaultTransportStarter } = vi.hoisted(() => ({
@@ -176,19 +177,11 @@ function packageAndRequest(worldBounds?: WorldPackageWorldBoundsV1): Readonly<{
       checkpointCriteria,
     }],
   } as const;
-  const manifestBounds = verifiedPackage.manifest.worldBounds;
-  const minimumMetersXYZ = [
-    manifestBounds.centerMetersXZ[0] - manifestBounds.sizeMetersXZ[0] / 2,
-    manifestBounds.heightRangeMeters[0],
-    manifestBounds.centerMetersXZ[1] - manifestBounds.sizeMetersXZ[1] / 2,
-  ] as const;
-  const maximumMetersXYZ = [
-    manifestBounds.centerMetersXZ[0] + manifestBounds.sizeMetersXZ[0] / 2,
-    manifestBounds.heightRangeMeters[1],
-    manifestBounds.centerMetersXZ[1] + manifestBounds.sizeMetersXZ[1] / 2,
-  ] as const;
-  const worldBoundsMeters = { minimumMetersXYZ, maximumMetersXYZ } as const;
+  const worldBoundsMeters = deriveNativeFormalWorldCaptureBoundsV1(metadata);
+  const { minimumMetersXYZ, maximumMetersXYZ } = worldBoundsMeters;
+  const centerX = (minimumMetersXYZ[0] + maximumMetersXYZ[0]) / 2;
   const centerY = (minimumMetersXYZ[1] + maximumMetersXYZ[1]) / 2;
+  const centerZ = (minimumMetersXYZ[2] + maximumMetersXYZ[2]) / 2;
   const viewport = {
     widthPixels: 320,
     heightPixels: 180,
@@ -246,8 +239,8 @@ function packageAndRequest(worldBounds?: WorldPackageWorldBoundsV1): Readonly<{
       projection: "orthographic",
       ...viewport,
       worldBoundsMeters,
-      cameraPositionMetersXYZ: [maximumMetersXYZ[0] + 20, centerY, 0],
-      targetMetersXYZ: [0, centerY, 0],
+      cameraPositionMetersXYZ: [maximumMetersXYZ[0] + 20, centerY, centerZ],
+      targetMetersXYZ: [centerX, centerY, centerZ],
     }, {
       kind: "formal-artifact-view-request",
       schemaVersion: 1,
@@ -255,8 +248,8 @@ function packageAndRequest(worldBounds?: WorldPackageWorldBoundsV1): Readonly<{
       projection: "orthographic",
       ...viewport,
       worldBoundsMeters,
-      cameraPositionMetersXYZ: [0, maximumMetersXYZ[1] + 20, 0],
-      targetMetersXYZ: [0, centerY, 0],
+      cameraPositionMetersXYZ: [centerX, maximumMetersXYZ[1] + 20, centerZ],
+      targetMetersXYZ: [centerX, centerY, centerZ],
     }],
     colliderOverlay: {
       kind: "formal-collider-overlay-request",
@@ -337,7 +330,7 @@ describe("formal Package Capture preflight join", () => {
     });
   });
 
-  it("binds both top and side Capture to non-template Package bounds", () => {
+  it("binds both top and side Capture to checked visuals, not Package container margins", () => {
     const { verifiedPackage, request } = packageAndRequest({
       centerMetersXZ: [97.5, 20], sizeMetersXZ: [215, 130], heightRangeMeters: [-66, 50],
     });

@@ -1557,6 +1557,21 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   R6 模板删除与空集合实际 Capture 闭环已完成；未启动新 054 模型 Case、全仓 gates
   或独立最终审查。完整要素/分区覆盖、严格 authored route
   验收及真实参考效果继续由 CF-11/13/21 承接，父任务不关闭。
+- CF-14/24/R1 全世界检查取景（2026-09-05，`ab25cc23` 后候选）：R5/R6 的实际 side 图
+  已复现大量 Package 空白 Y 余量导致场景缩小且偏上。新增 RED 在 Request 中得到
+  targetY=7.5，而实际 Block union 中心为 0.5。生成与 admission 两个重复的容器范围推导
+  已删除，统一消费 Host `formal-capture-bounds.ts` 的全部 checked metadata Block 范围，
+  包含无 visual/collider group 的远端景物，使用已旋转的有效尺寸，不反扫 Mesh。
+  现有最小取景 span [8,4,8]m 仍由 Runtime contract 唯一声明，围绕实际内容中心扩展；
+  Package/Runtime world bounds、opening Camera、四图数量、repair 和成功标准均未改变。
+  冻结旧 `9e35ab53` artifact-capture.ts:315-340 同样从实际可渲染目标范围构图；
+  此处适配为 Native verified metadata，不能声称已复刻旧 per-object 三视图或像素评分。
+  Request/contract 两文件 78/78 通过，Capture fixture 迁移后 15/15 通过；
+  非对称无组方块测试按 exactOptionalPropertyTypes 修正后定向 1/1、typecheck exit 0。
+  Native checker 临时重建后仅 Native 副本改变，Planner/Canonical 字节不变；
+  受影响 Skill 定向 6/6 通过（其余 53 项未重复），live/frozen checker 字节比较通过。
+  当前仅是 scoped Request/admission 修复，实际 Browser 取景验证待冻结提交后执行，
+  未跑新模型 Case、全仓 gates 或独立最终审查。CF-14 visible pixels、CF-21 全要素覆盖仍 open。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

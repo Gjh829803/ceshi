@@ -559,8 +559,8 @@ const WORLD_PACKAGE_REF_PATTERN =
 const ZERO_HASH = `sha256:${"0".repeat(64)}`;
 const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
 const MAXIMUM_CAPTURE_DIMENSION_PIXELS = 16_384;
-const MINIMUM_WORLD_SPAN_XZ_METERS = 8;
-const MINIMUM_WORLD_SPAN_Y_METERS = 4;
+export const FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1 =
+  Object.freeze([8, 4, 8] as const);
 const LOOK_AXIS_EPSILON = 1e-9;
 
 const OPENING_REQUEST_FIELDS = [
@@ -1127,9 +1127,9 @@ function parseWorldBounds(
   const spanY = parsed.maximumMetersXYZ[1] - parsed.minimumMetersXYZ[1];
   const spanZ = parsed.maximumMetersXYZ[2] - parsed.minimumMetersXYZ[2];
   if (
-    spanX < MINIMUM_WORLD_SPAN_XZ_METERS ||
-    spanZ < MINIMUM_WORLD_SPAN_XZ_METERS ||
-    spanY < MINIMUM_WORLD_SPAN_Y_METERS
+    spanX < FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1[0] ||
+    spanZ < FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1[2] ||
+    spanY < FORMAL_WORLD_CAPTURE_MINIMUM_SPAN_METERS_XYZ_V1[1]
   ) {
     fail(contract, path, "world-side and world-top-down require world-scale bounds");
   }

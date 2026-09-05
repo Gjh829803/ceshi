@@ -51,6 +51,7 @@ import {
 import path from "node:path";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
 
 export const FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1 =
   "formal-world-capture-request.json" as const;
@@ -278,27 +279,6 @@ function parseCanonicalJson(bytes: Uint8Array, role: string): unknown {
   }
 }
 
-function worldBounds(
-  verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
-): Readonly<{
-  minimumMetersXYZ: readonly [number, number, number];
-  maximumMetersXYZ: readonly [number, number, number];
-}> {
-  const bounds = verifiedPackage.manifest.worldBounds;
-  return Object.freeze({
-    minimumMetersXYZ: Object.freeze([
-      bounds.centerMetersXZ[0] - bounds.sizeMetersXZ[0] / 2,
-      bounds.heightRangeMeters[0],
-      bounds.centerMetersXZ[1] - bounds.sizeMetersXZ[1] / 2,
-    ] as const),
-    maximumMetersXYZ: Object.freeze([
-      bounds.centerMetersXZ[0] + bounds.sizeMetersXZ[0] / 2,
-      bounds.heightRangeMeters[1],
-      bounds.centerMetersXZ[1] + bounds.sizeMetersXZ[1] / 2,
-    ] as const),
-  });
-}
-
 function joinCaseProfile(
   reconstructionCase: WorldReconstructionCaseV1,
   profile: WorldReconstructionEvaluationProfileV1,
@@ -385,7 +365,7 @@ function deriveViews(
   captureProfile: FormalWorldCaptureIntentV1["captureProfile"],
   verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
 ): FormalWorldCaptureRequestV1["views"] {
-  const bounds = worldBounds(verifiedPackage);
+  const bounds = deriveNativeFormalWorldCaptureBoundsV1(verifiedPackage.nativeBlockMaterializerMetadata!);
   const [minX, minY, minZ] = bounds.minimumMetersXYZ;
   const [maxX, maxY, maxZ] = bounds.maximumMetersXYZ;
   const centerX = (minX + maxX) / 2;

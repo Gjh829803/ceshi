@@ -1,4 +1,5 @@
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import { omit } from "lodash-es";
 import {
   formalWorldCaptureRequestCanonicalBytesV1,
   hashBabylonNativeSceneContributionV1,
@@ -41,6 +42,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
 import {
   assertFormalCaptureRequestMatchesVerifiedPackageV1,
 } from "./formal-capture.js";
@@ -417,6 +419,36 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
 }
 
 describe("materializeFormalWorldCaptureRequestV1", () => {
+  it("includes asymmetric ungrouped off-camera Blocks and ignores inventory order", async () => {
+    const { verifiedPackage } = await fixture();
+    const original = verifiedPackage.nativeBlockMaterializerMetadata!.blocks;
+    const blocks = [...original, {
+      ...omit(original[0]!, ["visualGroupId", "colliderGroupId"]),
+      centerMetersXYZ: [100, -7, -80] as const, sizeMetersXYZ: [1, 1, 2] as const,
+      rotationQuarterTurnsY: 1 as const,
+    }];
+    const bounds = deriveNativeFormalWorldCaptureBoundsV1({ blocks });
+    expect(bounds.minimumMetersXYZ[1]).toBe(-7.5);
+    expect(bounds.minimumMetersXYZ[2]).toBe(-81);
+    expect(bounds.maximumMetersXYZ[0]).toBe(100.5);
+    expect(deriveNativeFormalWorldCaptureBoundsV1({ blocks: [...blocks].reverse() })).toEqual(bounds);
+    expect(() => deriveNativeFormalWorldCaptureBoundsV1({ blocks: [] })).toThrow("FORMAL_CAPTURE_VISUAL_BOUNDS_INVALID");
+  });
+
+  it("frames checked world geometry instead of invisible Package container margins", async () => {
+    const { input, verifiedPackage } = await fixture();
+    const { request } = await materializeFormalWorldCaptureRequestV1(input);
+    const blocks = verifiedPackage.nativeBlockMaterializerMetadata!.blocks;
+    const minY = Math.min(...blocks.map(block => block.centerMetersXYZ[1] - block.sizeMetersXYZ[1] / 2));
+    const maxY = Math.max(...blocks.map(block => block.centerMetersXYZ[1] + block.sizeMetersXYZ[1] / 2));
+    for (const view of [request.views[1], request.views[2]]) {
+      expect(view.targetMetersXYZ[1]).toBe((minY + maxY) / 2);
+      expect(view.worldBoundsMeters.maximumMetersXYZ[1] - view.worldBoundsMeters.minimumMetersXYZ[1])
+        .toBe(Math.max(4, maxY - minY));
+    }
+    expect(() => assertFormalCaptureRequestMatchesVerifiedPackageV1({ verifiedPackage, request })).not.toThrow();
+  });
+
   it("materializes and rereads exact empty traversal sets without rewriting the frozen Case", async () => {
     const { input } = await fixture(true);
     const caseBytes = await readFile(input.casePath);

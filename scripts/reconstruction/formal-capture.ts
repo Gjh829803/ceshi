@@ -54,6 +54,7 @@ import path from "node:path";
 import { isEqual, isNil } from "lodash-es";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
 import {
   parseWorldReconstructionExecutionPurposeV1,
   type WorldReconstructionExecutionPurposeV1,
@@ -248,27 +249,6 @@ function mismatch(pathName: string): never {
   throw new Error(`FORMAL_CAPTURE_PACKAGE_REQUEST_MISMATCH: ${pathName}`);
 }
 
-function worldBounds(
-  verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1,
-): Readonly<{
-  minimumMetersXYZ: readonly [number, number, number];
-  maximumMetersXYZ: readonly [number, number, number];
-}> {
-  const bounds = verifiedPackage.manifest.worldBounds;
-  return Object.freeze({
-    minimumMetersXYZ: Object.freeze([
-      bounds.centerMetersXZ[0] - bounds.sizeMetersXZ[0] / 2,
-      bounds.heightRangeMeters[0],
-      bounds.centerMetersXZ[1] - bounds.sizeMetersXZ[1] / 2,
-    ] as const),
-    maximumMetersXYZ: Object.freeze([
-      bounds.centerMetersXZ[0] + bounds.sizeMetersXZ[0] / 2,
-      bounds.heightRangeMeters[1],
-      bounds.centerMetersXZ[1] + bounds.sizeMetersXZ[1] / 2,
-    ] as const),
-  });
-}
-
 export function assertFormalCaptureRequestMatchesVerifiedPackageV1(
   input: Readonly<{
     verifiedPackage: VerifiedBabylonNativeWorldPackageDirectoryV1;
@@ -336,7 +316,7 @@ export function assertFormalCaptureRequestMatchesVerifiedPackageV1(
     return mismatch("semanticCaptureMap/bindings");
   }
 
-  const expectedWorldBounds = worldBounds(verifiedPackage);
+  const expectedWorldBounds = deriveNativeFormalWorldCaptureBoundsV1(metadata);
   const [opening, worldSide, worldTopDown] = request.views;
   if (
     !isEqual(worldSide.worldBoundsMeters, expectedWorldBounds) ||
