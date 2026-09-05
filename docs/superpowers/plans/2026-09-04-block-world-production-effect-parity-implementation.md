@@ -541,6 +541,36 @@ Return packet: changed files, RED/GREEN commands, result counts, assumptions and
 Main reviews actual changes and integrates only after the current Case releases its frozen code inputs;
 worker commits alone are not parent-task completion or integrated evidence.
 
+#### CF-12/M ordered movement intent and Host selection
+
+Main-agent-only, sequential. Pinned behavior is `9e35ab53`: preserve 1-8 ordered
+movement rows, including standard labels with parenthesized equipment and custom
+labels. Never collapse the request to the first mode or claim that parsing a mode
+implements its Runtime capability. The current-only break replaces singular
+Brief/Palette/CLI fields and the single-line template together; no dual parser,
+alias or default single-mode fallback. Historical generated run receipts remain
+evidence of their recorded inputs, not newly verified current-contract evidence.
+
+| Task | Owner, dependencies and contract | Required evidence |
+| --- | --- | --- |
+| CF-12/M-A | Authoring Brief parser, Host Palette writer/parser, CLI and Planner checker; no dependency on new Runtime work. Restore old ordered list and mixed-ground semantics; preserve existing target/provenance contracts and thresholds. | Single/multiple/custom/annotated labels, count/duplicate/removed syntax, order-bound Hash, mixed modes with ground not first, source/bundle parity, direct consumers and typecheck. |
+| CF-12/M-B | Planner Skill/template and all current fixtures consume M-A. Regenerate portable checker bundles and frozen copies from their existing producer. Native Subject/Physics/Camera remain exclusively Host-owned; Canonical retains its own authoring contract. | Template parsed by actual parser, no conflicting single-mode instruction, live/frozen drift checks. No model task or extra quality gate. |
+| CF-12/M-C | Existing Host generation preparation and Registry/Bootstrap selection, depends on M-A/B. Bind complete requested modes and primary visual identity to honest supported Subject/capability selection, without another Planner/Mapper task or silent fixed G Bot substitution. | Old-to-current capability mapping, unsupported/approximation disposition where genuinely necessary, complete identity/Hash propagation and focused real Runtime consumers. This remains required after M-A/B. |
+
+Real model/visual/playable acceptance follows completion of all CF development,
+not merely M-A/B. CF-04 Camera pixel/interpolation work remains separate.
+
+M-A/B implementation checkpoint (2026-09-06): parser, Palette, CLI, mixed-mode
+Planner checks and Skill/template are connected, with source-generated portable
+tools and the current strict Corpus Brief/Case raw Hash updated together. The
+historical Canonical scenes and `runs/` remain unchanged; current test inputs use
+the maintained template. Direct contract tests, a serial rerun of the one
+30-second drift-test timeout, Native Skill 67/67, CLI/Package-owner smoke,
+bundle drift and typecheck pass; detailed non-aggregate evidence is in docs/18.
+The optional Skill Python validator lacked PyYAML; existing Node YAML validation
+and actual source/bundle behavior tests cover the checked replacement scope.
+M-C is still unimplemented, not reduced to a parser capability claim.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

@@ -24,7 +24,7 @@ Keep every section short. The file is the unified Planner's natural-language aut
 月光、材质、雾、纹理和服装细节只属于后续视觉生成，不转化为碰撞几何。
 
 ## 运动模式
-陆地步行：主体在连续地面上自然行走和奔跑。
+- 陆地步行：主体在连续地面上自然行走和奔跑。
 
 ## 空间
 首帧前景平台只是世界入口，中段谷地向左右展开；镜头外的侧方、后方与远端宫殿外围都有连贯、可探索的地形变化，而不是用空白边界填大地图。完整世界不拆成独立场景、面板、传送门或隐藏目的地。
@@ -42,7 +42,7 @@ Keep every section short. The file is the unified Planner's natural-language aut
 
 Delete unused visual-target example lines. Keep 1-5 total; never pad the list.
 When several complete instances intentionally share one appearance, replace the landmark line with `- 重复标志物｜名称：共同外观说明` and keep them as one target.
-The seven common movement labels are examples. A custom line such as `磁力墙面行走：主体可吸附墙面并沿连续墙体移动。` is valid when it better matches the request.
+List 1-8 movement rows in requested order; the first is the initial mode. The seven common labels are examples. A custom row such as `- 磁力墙面行走：主体可吸附墙面并沿连续墙体移动。` is valid when it better matches the request. Standard labels may include equipment in parentheses. Preserve all requested modes without repeating an identical label; do not invent additional modes to fill the list.
 The `用户事实`, `可见参考证据`, `推断的世界延伸`, and `仅视觉层设想` sections keep provenance explicit. Never present an inferred continuation or a visual-only idea as observed geometry.
 The `空间` section must identify an entry slice, middle area, and meaningful off-camera/remote exploration appropriate to the request. Do not add dimensions or coordinates; the Builder derives and validates them against the current resource budget and traversability contracts.
 Keep the four-times coverage intent in inferred continuation, never in user facts or visible evidence. It is not a new area or similarity admission gate and does not increase the resource or repair budget.

@@ -1433,7 +1433,7 @@ describe("worldkit CLI", () => {
 水面反光、材质和天空风格只属于渲染层。
 
 ## 运动模式
-陆地滑行：主体依靠滑板连续滑行并保留惯性。
+- 陆地滑行：主体依靠滑板连续滑行并保留惯性。
 
 ## 空间
 前景平台连接中景海湾，远景保留完整城市天际线。
@@ -1450,8 +1450,8 @@ describe("worldkit CLI", () => {
     const result = await validateSceneBriefFile(inputPath);
     expect(result).toMatchObject({
       ok: true,
-      movementMode: "ground-slide",
-      movementModeLabel: "陆地滑行",
+      movementModes: ["ground-slide"],
+      movementModeLabels: ["陆地滑行"],
       visualTargetCount: 1,
     });
     expect(result.sceneBriefHash).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -1460,8 +1460,13 @@ describe("worldkit CLI", () => {
     await writeFile(inputPath, customSource, "utf8");
     await expect(validateSceneBriefFile(inputPath)).resolves.toMatchObject({
       ok: true,
-      movementMode: "custom",
-      movementModeLabel: "磁力墙面行走",
+      movementModes: ["custom"],
+      movementModeLabels: ["磁力墙面行走"],
+    });
+    await writeFile(inputPath, customSource.replace(/(## 运动模式\n[^\n]+)/,
+      "$1\n- 空中飞行（滑翔翼）：从高台进入滑翔。"), "utf8");
+    await expect(validateSceneBriefFile(inputPath)).resolves.toMatchObject({
+      ok: true, movementModes: ["custom", "flight"], movementModeLabels: ["磁力墙面行走", "空中飞行（滑翔翼）"],
     });
   });
 

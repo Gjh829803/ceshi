@@ -68,8 +68,8 @@ describe("Unified WorldKit Planner skill", () => {
     const parsed = parseSceneBriefV1(templateFrom(template));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.value.movement.mode).toBe("ground-walk");
-    expect(parsed.value.movement.label).toBe("陆地步行");
+    expect(parsed.value.movementModes[0]?.mode).toBe("ground-walk");
+    expect(parsed.value.movementModes[0]?.label).toBe("陆地步行");
     expect(parsed.value.visualTargets).toHaveLength(2);
     expect(parsed.value.visualTargets[0]?.kind).toBe("subject");
     expect(parsed.value.navigation).toContain("不设计道路或首选路线");

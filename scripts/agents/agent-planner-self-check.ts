@@ -408,7 +408,7 @@ function nativePlannerBlockPaletteDiagnostics(input: Readonly<{
   label: "WORLD_PLAN" | "ENTRY_WHITEBOX_TARGET";
   measurement: NativePlannerBlockPaletteMeasurement;
   minimumCoverageRatio: number;
-  movementMode: string | undefined;
+  movementModes: readonly string[] | undefined;
   requiredVisualTargetCount: number;
   requireAllVisualTargets: boolean;
 }>): PlannerSelfCheckDiagnostic[] {
@@ -420,7 +420,7 @@ function nativePlannerBlockPaletteDiagnostics(input: Readonly<{
     });
   }
   if (
-    input.movementMode?.startsWith("ground-") === true &&
+    input.movementModes?.some(mode => mode.startsWith("ground-")) === true &&
     input.measurement.traversablePixelCount === 0
   ) {
     diagnostics.push({
@@ -814,7 +814,7 @@ export async function runPlannerSelfCheck(options: PlannerSelfCheckOptions): Pro
         worldPlan: worldPlanPalette,
         entryWhiteboxTarget: entryPalette,
       });
-      const movementMode = brief.ok ? brief.value.movement.mode : undefined;
+      const movementModes = brief.ok ? brief.value.movementModes.map(({ mode }) => mode) : undefined;
       const requiredVisualTargetCount = brief.ok
         ? brief.value.visualTargets.length
         : 1;
@@ -824,7 +824,7 @@ export async function runPlannerSelfCheck(options: PlannerSelfCheckOptions): Pro
           measurement: worldPlanPalette,
           minimumCoverageRatio:
             MINIMUM_WORLD_PLAN_BLOCK_PALETTE_COVERAGE_RATIO,
-          movementMode,
+          movementModes,
           requiredVisualTargetCount,
           requireAllVisualTargets: true,
         }),
@@ -832,7 +832,7 @@ export async function runPlannerSelfCheck(options: PlannerSelfCheckOptions): Pro
           label: "ENTRY_WHITEBOX_TARGET",
           measurement: entryPalette,
           minimumCoverageRatio: MINIMUM_ENTRY_BLOCK_PALETTE_COVERAGE_RATIO,
-          movementMode,
+          movementModes,
           requiredVisualTargetCount,
           requireAllVisualTargets: false,
         }),

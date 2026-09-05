@@ -41,8 +41,8 @@ export interface VisualIdentityPaletteV1 {
   readonly schemaVersion: 1;
   readonly sceneId: string;
   readonly sceneBriefHash: Sha256HashV1;
-  readonly movementMode: SceneBriefV1["movement"]["mode"];
-  readonly movementModeLabel: string;
+  readonly movementModes: readonly SceneBriefV1["movementModes"][number]["mode"][];
+  readonly movementModeLabels: readonly string[];
   readonly targets: readonly VisualIdentityPaletteTargetV1[];
 }
 
@@ -51,8 +51,8 @@ const PALETTE_FIELDS = Object.freeze([
   "schemaVersion",
   "sceneId",
   "sceneBriefHash",
-  "movementMode",
-  "movementModeLabel",
+  "movementModes",
+  "movementModeLabels",
   "targets",
 ] as const);
 const TARGET_FIELDS = Object.freeze([
@@ -144,20 +144,20 @@ export function parseVisualIdentityPaletteV1(
     source.sceneBriefHash,
     "palette/sceneBriefHash",
   );
-  const movementMode = nonEmptyText(source.movementMode, "palette/movementMode");
-  const movementModeLabel = nonEmptyText(
-    source.movementModeLabel,
-    "palette/movementModeLabel",
-  );
+  if (!Array.isArray(source.movementModes) || source.movementModes.length < 1 || source.movementModes.length > 8 ||
+      !Array.isArray(source.movementModeLabels) || source.movementModeLabels.length !== source.movementModes.length)
+    return invalid("palette movement modes and labels must contain 1-8 ordered pairs");
+  const movementModes = source.movementModes.map((mode, index) => nonEmptyText(mode, `palette/movementModes/${index}`));
+  const movementModeLabels = source.movementModeLabels.map((label, index) => nonEmptyText(label, `palette/movementModeLabels/${index}`));
   if (
     source.kind !== "worldkit-visual-identity-palette" ||
     source.schemaVersion !== 1 ||
     sceneId !== expected.sceneId ||
     !SHA256_HASH.test(sceneBriefHash) ||
     sceneBriefHash !== expected.sceneBriefHash ||
-    !SCENE_BRIEF_MOVEMENT_MODES_V1.includes(
-      movementMode as SceneBriefV1["movement"]["mode"],
-    ) ||
+    movementModes.some(mode => !SCENE_BRIEF_MOVEMENT_MODES_V1.includes(
+      mode as SceneBriefV1["movementModes"][number]["mode"],
+    )) ||
     !Array.isArray(source.targets) ||
     source.targets.length < 1 ||
     source.targets.length > BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.length
@@ -226,8 +226,8 @@ export function parseVisualIdentityPaletteV1(
     schemaVersion: 1,
     sceneId,
     sceneBriefHash: sceneBriefHash as Sha256HashV1,
-    movementMode: movementMode as SceneBriefV1["movement"]["mode"],
-    movementModeLabel,
+    movementModes: Object.freeze(movementModes as SceneBriefV1["movementModes"][number]["mode"][]),
+    movementModeLabels: Object.freeze(movementModeLabels),
     targets: Object.freeze(targets),
   });
 }

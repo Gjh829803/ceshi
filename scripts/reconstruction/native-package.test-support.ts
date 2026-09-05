@@ -434,8 +434,8 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
       schemaVersion: 1,
       sceneId: caseValue.id,
       sceneBriefHash: sceneBrief.sceneBriefHash,
-      movementMode: "ground-walk",
-      movementModeLabel: "Ground walk",
+      movementModes: ["ground-walk"],
+      movementModeLabels: ["Ground walk"],
       targets: [
         { id: "visual-target-1", visualTargetId: "visual-target-1", targetKind: "subject", name: "Explorer", description: "controlled Subject", role: "primary-subject", semanticClassId: "visual.subject", identityColor: "#E85D5D" },
         ...(options.target3IdentityColorHex === undefined ? [] : [

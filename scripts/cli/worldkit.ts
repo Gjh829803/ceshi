@@ -395,8 +395,8 @@ export interface WorldkitCommandResult {
   worldBuildIdentityHash?: string;
   executionPlanHash?: string;
   sceneBriefHash?: string;
-  movementMode?: string;
-  movementModeLabel?: string;
+  movementModes?: readonly string[];
+  movementModeLabels?: readonly string[];
   visualTargetCount?: number;
   validationReportHash?: string;
   validationStatus?: string;
@@ -1519,8 +1519,8 @@ export async function validateSceneBriefFile(
     exitCode: 0,
     diagnostics: [],
     sceneBriefHash: validated.sceneBriefHash,
-    movementMode: validated.value.movement.mode,
-    movementModeLabel: validated.value.movement.label,
+    movementModes: validated.value.movementModes.map(({ mode }) => mode),
+    movementModeLabels: validated.value.movementModes.map(({ label }) => label),
     visualTargetCount: validated.value.visualTargets.length,
   };
 }

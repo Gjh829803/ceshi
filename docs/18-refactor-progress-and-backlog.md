@@ -2269,6 +2269,31 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   本地 Case、全仓 CI 或独立审查。未新增测试文件，无需变更测试清单。
   代码接线不等于实云或模型验收；CF-16、其余 CF 和最终本地生产 Case 仍开放。
 
+- CF-12/M-A/B 有序运动意图接线（2026-09-06，main-agent-only；接 `aedf9403`）：
+  旧 `9e35ab53` Scene Brief 支持 1–8 条有序 `- 模式：说明`，首行为初始模式；
+  当前单行 parser 会拒绝合法“飞行后步行”。已先以该输入复现 RED，再恢复
+  `movementModes`，包含旧括号装备标签分类、自定义标签、重复 label 与数量限制。
+  Host Palette writer/parser、CLI 改为同序 `movementModes`/`movementModeLabels`，
+  删除单数公开字段和单行输入格式，不保留 alias/fallback。Planner 支撑色检查与
+  旧链一致：任意位置有地面 mode 即执行原检查；纯飞行不被新增地面要求拦截。
+  其余图像阈值、目标数量/身份、规划顺序、修复预算和模型参数均未改变。
+  Planner Skill/template 同步，并区分 Canonical Builder 的主体组装与 Native Host
+  的主体/Physics/Camera 权威。四个 portable 工具由现有 producer 重建，Native
+  冻结副本同源更新；当前 strict Corpus Brief 及 Case 的 raw-byte Hash 一起更新。
+  历史三套 Canonical 生成产物和所有 `runs/` 收据保持原字节，不将旧 Hash 改造成
+  新验证结果；Canonical authoring-attempt 测试改用当前 Planner 模板作为输入。
+  证据：8 个直接消费者文件初轮 99/100，唯一失败为 builder drift-negative 测试
+  超过原 30s 时限；其他工作结束后单独重跑 1/1（26.66s）通过，未增大时限。
+  Native Builder Skill 67/67，CLI/真实 Package-owner 恢复 smoke 2/2，Planner/Builder
+  bundle drift gate 通过。后续 record/Palette 两文件 6/6、最终 typecheck 与 diff
+  检查通过；各轮存在重叠，不累加为完整 gate。测试文件未新增，清单不变。
+  Skill 标准 quick validator 因环境无 PyYAML 未成功运行；使用既有 Node YAML parser
+  检查 frontmatter 与占位符，模板和行为由实际 parser/source/bundle 测试覆盖。
+  这只关闭 M-A/B 的数据链实现，不是完整 CF-12：M-C 的完整 Host Subject/能力选择、
+  primary visual target 到 Runtime Subject 的身份绑定、真实多模式与构图验收仍须
+  实施。没有真实模型/Browser/最终本地 Case、全仓 CI 或独立审查；全部 CF 写完并
+  完成旧链对齐后才运行最终本地生产 Case。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

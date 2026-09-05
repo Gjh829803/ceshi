@@ -36,11 +36,11 @@ export interface SceneBriefV1 {
   readonly visibleReferenceEvidence: string;
   readonly inferredContinuation: string;
   readonly renderLayerIdeas: string;
-  readonly movement: {
+  readonly movementModes: readonly {
     readonly mode: SceneBriefMovementModeV1;
     readonly label: string;
     readonly description: string;
-  };
+  }[];
   readonly space: string;
   readonly navigation: string;
   readonly openingShot: string;
@@ -86,6 +86,21 @@ const MOVEMENT_LABELS = new Map<string, SceneBriefMovementModeV1>([
   ["水下游动", "underwater"],
   ["空中飞行", "flight"],
 ]);
+
+function movementModeForLabel(label: string): SceneBriefMovementModeV1 {
+  const exact = MOVEMENT_LABELS.get(label);
+  if (exact !== undefined) return exact;
+  for (const [standardLabel, mode] of MOVEMENT_LABELS) {
+    const suffix = label.slice(standardLabel.length).trimStart();
+    if (
+      label.startsWith(standardLabel) &&
+      ((suffix.startsWith("（") && suffix.endsWith("）")) ||
+        (suffix.startsWith("(") && suffix.endsWith(")"))) &&
+      suffix.length >= 3 && suffix.length <= 26
+    ) return mode;
+  }
+  return "custom";
+}
 
 const TARGET_KIND_LABELS = new Map<string, SceneBriefVisualTargetKindV1>([
   ["主体", "subject"],
@@ -136,22 +151,27 @@ function splitSections(source: string):
   return new Map([...sections].map(([key, value]) => [key, value[0]!]));
 }
 
-function parseMovement(value: string):
-  | SceneBriefV1["movement"]
+function parseMovementModes(value: string):
+  | SceneBriefV1["movementModes"]
   | SceneBriefValidationFailureV1 {
-  const match = /^([^：:\n]+)[：:]\s*([^\n]+)$/.exec(value.trim());
-  if (match === null) {
-    return fail("SCENE_BRIEF_MOVEMENT_INVALID: use '<运动模式>：<一句自然语言说明>'.");
+  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 1 || lines.length > 8) {
+    return fail("SCENE_BRIEF_MOVEMENT_COUNT: movement modes must contain 1-8 entries.");
   }
-  const label = match[1]!.trim();
-  if (label.length > 48) {
-    return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+  const labels = new Set<string>();
+  const movementModes: SceneBriefV1["movementModes"][number][] = [];
+  for (const [index, line] of lines.entries()) {
+    const match = /^-\s*([^：:\n]+)[：:]\s*([^\n]+)$/.exec(line);
+    if (match === null) return fail(
+      `SCENE_BRIEF_MOVEMENT_INVALID: entry ${index + 1} must use '- <运动模式>：<一句自然语言说明>'.`,
+    );
+    const label = match[1]!.trim();
+    if (label.length > 48) return fail("SCENE_BRIEF_MOVEMENT_LABEL_TOO_LONG: movement label must be at most 48 characters.");
+    if (labels.has(label)) return fail(`SCENE_BRIEF_MOVEMENT_DUPLICATE: '${label}'.`);
+    labels.add(label);
+    movementModes.push({ mode: movementModeForLabel(label), label, description: match[2]!.trim() });
   }
-  return {
-    mode: MOVEMENT_LABELS.get(label) ?? "custom",
-    label,
-    description: match[2]!.trim(),
-  };
+  return Object.freeze(movementModes);
 }
 
 function parseVisualTargets(value: string):
@@ -203,8 +223,8 @@ function parseVisualTargets(value: string):
 export function parseSceneBriefV1(source: string): SceneBriefValidationResultV1 {
   const sections = splitSections(source);
   if ("ok" in sections) return sections;
-  const movement = parseMovement(sections.get("运动模式")!);
-  if ("ok" in movement) return movement;
+  const movementModes = parseMovementModes(sections.get("运动模式")!);
+  if ("ok" in movementModes) return movementModes;
   const visualTargets = parseVisualTargets(sections.get("视觉目标")!);
   if ("ok" in visualTargets) return visualTargets;
   const value: SceneBriefV1 = {
@@ -216,7 +236,7 @@ export function parseSceneBriefV1(source: string): SceneBriefValidationResultV1 
     visibleReferenceEvidence: sections.get("可见参考证据")!,
     inferredContinuation: sections.get("推断的世界延伸")!,
     renderLayerIdeas: sections.get("仅视觉层设想")!,
-    movement,
+    movementModes,
     space: sections.get("空间")!,
     navigation: sections.get("通行")!,
     openingShot: sections.get("首帧")!,

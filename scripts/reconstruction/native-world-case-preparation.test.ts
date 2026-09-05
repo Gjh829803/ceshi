@@ -54,7 +54,7 @@ const VALID_SCENE_BRIEF = `# WorldKit Scene Brief
 材质、纹理与光照只属于后续渲染层。
 
 ## 运动模式
-陆地步行：主体自然行走和奔跑。
+- 陆地步行：主体自然行走和奔跑。
 
 ## 空间
 前景地面连接中段与远端目的地。
@@ -80,8 +80,8 @@ function nativeVisualIdentityPaletteText(input: Readonly<{
     schemaVersion: 1,
     sceneId: input.sceneId,
     sceneBriefHash: input.sceneBriefHash,
-    movementMode: "ground-walk",
-    movementModeLabel: "陆地步行",
+    movementModes: ["ground-walk"],
+    movementModeLabels: ["陆地步行"],
     targets: BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.slice(0, targetCount).map(
       (identityColor, index) => ({
         id: `visual-target-${index + 1}`,
@@ -297,8 +297,8 @@ describe("trusted Native world Case preparation", () => {
         schemaVersion: 1,
         sceneId: "baseline-native-world",
         sceneBriefHash: sceneBriefSemanticHashValue,
-        movementMode: "ground-walk",
-        movementModeLabel: "陆地步行",
+        movementModes: ["ground-walk"],
+        movementModeLabels: ["陆地步行"],
         targets: [{
           id: "visual-target-1",
           visualTargetId: "visual-target-1",
@@ -985,8 +985,8 @@ describe("trusted Native world Case preparation", () => {
         schemaVersion: 1,
         sceneId: "missing-native-mask",
         sceneBriefHash,
-        movementMode: "ground-walk",
-        movementModeLabel: "陆地步行",
+        movementModes: ["ground-walk"],
+        movementModeLabels: ["陆地步行"],
         targets: [{
           id: "visual-target-1",
           visualTargetId: "visual-target-1",
@@ -1116,8 +1116,8 @@ describe("trusted Native world Case preparation", () => {
       schemaVersion: 1,
       sceneId: "native-palette-profile",
       sceneBriefHash,
-      movementMode: "ground-walk",
-      movementModeLabel: "陆地步行",
+      movementModes: ["ground-walk"],
+      movementModeLabels: ["陆地步行"],
       targets: [{
         id: "visual-target-1",
         visualTargetId: "visual-target-1",

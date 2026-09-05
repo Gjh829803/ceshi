@@ -60,8 +60,8 @@ function nativeVisualIdentityPaletteText(
     schemaVersion: 1,
     sceneId: "cloud-temple-t-gate-native-block",
     sceneBriefHash,
-    movementMode: "ground-walk",
-    movementModeLabel: "陆地步行",
+    movementModes: ["ground-walk"],
+    movementModeLabels: ["陆地步行"],
     targets: BABYLON_NATIVE_VISUAL_IDENTITY_COLORS.map(
       (identityColor, index) => ({
         id: `visual-target-${index + 1}`,

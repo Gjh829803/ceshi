@@ -35,7 +35,7 @@ const brief = `# WorldKit Scene Brief
 草地纹理、塔楼材质和天空颜色只属于渲染层。
 
 ## 运动模式
-陆地步行：主体自然行走和奔跑。
+- 陆地步行：主体自然行走和奔跑。
 
 ## 空间
 前景草地向远景塔楼展开，侧后方保持完整可探索空间。
@@ -175,8 +175,10 @@ it("rejects the retired final-kind draft and mappings field", async () => {
   );
 });
 
-it("writes movement mode and complete target descriptions into the trusted palette", async () => {
+it("writes every ordered movement mode and complete target description into the trusted palette", async () => {
   const files = await fixture();
+  await writeFile(files.briefPath, brief.replace(/(## 运动模式\n[^\n]+)/,
+    "$1\n- 空中飞行（滑翔翼）：从高台滑翔。"));
   const outputPath = path.join(files.directory, "visual-identity-palette.json");
   await writeVisualIdentityPalette({
     sceneId: files.sceneId,
@@ -187,8 +189,8 @@ it("writes movement mode and complete target descriptions into the trusted palet
   const palette = JSON.parse(await readFile(outputPath, "utf8"));
   expect(palette).toMatchObject({
     sceneId: files.sceneId,
-    movementMode: "ground-walk",
-    movementModeLabel: "陆地步行",
+    movementModes: ["ground-walk", "flight"],
+    movementModeLabels: ["陆地步行", "空中飞行（滑翔翼）"],
     targets: [
       { id: "visual-target-1", targetKind: "subject", name: "旅人" },
       { id: "visual-target-2", targetKind: "landmark", name: "塔楼" },

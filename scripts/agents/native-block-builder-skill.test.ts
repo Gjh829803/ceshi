@@ -168,8 +168,8 @@ export default defineBabylonNativeScene({
         schemaVersion: 1,
         sceneId: "valid-native-block-world",
         sceneBriefHash: `sha256:${"a".repeat(64)}`,
-        movementMode: "ground-walk",
-        movementModeLabel: "Ground walk",
+        movementModes: ["ground-walk"],
+        movementModeLabels: ["Ground walk"],
         targets: [{
           id: "visual-target-1",
           visualTargetId: "visual-target-1",
@@ -1545,8 +1545,8 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       schemaVersion: 1,
       sceneId: "valid-native-block-world",
       sceneBriefHash: parsed.sceneBriefHash,
-      movementMode: "ground-walk",
-      movementModeLabel: "Ground walk",
+      movementModes: ["ground-walk"],
+      movementModeLabels: ["Ground walk"],
       targets: [
         { id: "visual-target-1", visualTargetId: "visual-target-1", targetKind: "subject", name: "Explorer", description: "controlled Subject", role: "primary-subject", semanticClassId: "visual.subject", identityColor: "#E85D5D" },
         { id: "visual-target-2", visualTargetId: "visual-target-2", targetKind: "landmark", name: "Gate", description: "primary gate", role: "primary-landmark", semanticClassId: "visual.gate", identityColor: "#F28E2B" },

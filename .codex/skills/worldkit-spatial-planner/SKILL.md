@@ -124,9 +124,9 @@ Pure RGB drift does not need another image-generation call. These edits stay ins
 three self-repair cycles; they do not grant more retries. Never edit the frozen Host palette, alter
 checker thresholds, or use this operation on Canonical Height Intent.
 
-### Movement mode
+### Movement modes
 
-Name exactly one movement mode and explain it in one sentence. These common modes are references, not a closed list:
+List 1-8 movement modes in user-requested order, one `- 模式：说明` row per mode. The first row is the initial mode; retain later transitions or combined capabilities rather than collapsing them into one label. Explain each in one sentence. These common modes are references, not a closed list:
 
 - `陆地步行` — walking/running humanoids or animals whose support changes through ordinary steps;
 - `陆地滑行` — skateboards, snowboards, skis, sleds, hoverboards, or another inertia-led ground glide;
@@ -136,7 +136,9 @@ Name exactly one movement mode and explain it in one sentence. These common mode
 - `水下游动` — free motion through an underwater volume;
 - `空中飞行` — free motion through an air volume.
 
-When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Preserve a user-specified custom mode instead of coercing it to the nearest reference mode. The Builder owns implementation: it may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. A missing named Subject preset is not a reason to revise or reject the plan; the Agent does not add SDK motion bases.
+When none fits, write a concise custom movement label followed by its real support, inertia, steering, and free-space behavior in plain language. Standard labels may name equipment in parentheses, such as `陆地滑行（滑板）` or `空中飞行(滑翔翼)`; keep different requested descriptions and their order. Do not repeat an identical label or coerce a user-specified custom mode into the nearest reference mode.
+
+For Canonical Source, Builder may assemble a package-local controlled Subject and bind the closest honest current motion closure independently of shape. For Babylon Native Source, Host alone selects and creates the controlled Subject and its movement capabilities; Native Builder authors environment geometry, never Subject/Physics/Camera. A missing named preset is not a reason for Planner to revise or reject user intent, and listing modes does not claim Runtime support. Neither Planner nor per-scene Builder adds SDK motion bases.
 
 Movement-changing equipment belongs to the complete subject description. Clothing, weapons, armor, and backpacks that do not change locomotion remain appearance details and do not create another subject.
 
