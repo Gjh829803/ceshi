@@ -2294,6 +2294,28 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   实施。没有真实模型/Browser/最终本地 Case、全仓 CI 或独立审查；全部 CF 写完并
   完成旧链对齐后才运行最终本地生产 Case。
 
+- CF-12/M-B 实际派发指令补漏（2026-09-06，接 `043f21e3`，main-agent-only）：
+  复查发现统一 Planner shell launcher 仍含 `exactly one standard or custom movement mode`，
+  因此上一批 Skill/template 与 parser 的多模式实现尚不足以证明实际派发一致。
+  已将该指令改为 1–8 条有序运动模式、首行为初始模式、后续为同一主体真实可用的
+  替代模式，保留用户请求顺序；不改变 Subject 选择权威、图像阈值、模型参数或修复预算。
+  回归先复现旧指令 RED，再取得 7/7 GREEN；随后测试执行两种 Source Profile 的完整
+  prompt 赋值块，而非仅搜索第一段赋值，证明实际展开的 Canonical/Native 指令都保留
+  用户意图、模式顺序、原三轮自修复与 Host 单次 replay，最终该文件 9/9。
+  shell 语法及 diff 检查通过；无 Skill/bundle/Runtime 修改，不重跑未失效的重型 gates。
+  没有模型、Browser 或最终本地 Case，不关闭完整 CF-12。
+  M-C 当前能力核查：使用现有 `normalizeAuthoringSpecV4`、Gameplay Bootstrap producer
+  与 `compileCanonicalWorldV1`，逐个替换现有有效测试世界的 Subject ref，探查当前
+  Registry 的全部 30 个 discoverable Subject。24 个编译成功，实际默认 Motion Profile
+  均为 `free-ground.humanoid-medium@1`、Kernel 为 `free-ground`、能力为 ground；
+  两版 forward-steer animal、paraglider、ice-skimmer、four-wheel arcade 和 kayak 共
+  6 个在现有 normalization 处报 `SUBJECT_CAPABILITY_UNSATISFIED`，其中部分还引用
+  未开放的关系能力。此证据是当前编译准入，不是 Browser 运动验收或旧树运行证据。
+  旧 `9e35ab53` 的 `scripts/lib/agent-authoring-catalog.ts` 同样先做真实编译探查，
+  再派生可执行模式；不能只照 current Registry 的名称/标签宣称飞行、驾驶或水面能力。
+  后续仍需完成 M-C 的 Host 主体构造/选择、完整视觉形状和能力/身份/Hash 传播，不能
+  用静默 G Bot 替换、删掉请求模式或新增前置生产 veto 代替实现。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

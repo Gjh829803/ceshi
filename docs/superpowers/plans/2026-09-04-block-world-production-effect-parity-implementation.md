@@ -571,6 +571,26 @@ The optional Skill Python validator lacked PyYAML; existing Node YAML validation
 and actual source/bundle behavior tests cover the checked replacement scope.
 M-C is still unimplemented, not reduced to a parser capability claim.
 
+M-B dispatch correction (2026-09-06, after `043f21e3`): the shell launcher's
+actual Planner prompt still required exactly one mode despite the changed Skill.
+That conflict is now removed. The regression executes the complete prompt
+assignment block for both Source Profiles, including later appended instructions,
+and preserves the original three self-repair cycles and one Host replay. The
+Planner test file passes 9/9; no model task, new production gate or Skill change.
+
+M-C input evidence at this checkpoint: all 30 current discoverable Subject refs
+were probed through the existing Authoring normalizer and Canonical compiler in
+the existing valid test world. The 24 successful Runtime descriptors expose only
+the ground capability and free-ground default/kernel; six other catalog entries
+fail existing capability normalization. These counts describe current compiled
+closures, not Browser acceptance or a pinned-old execution. The old authoring
+catalog also uses a compile probe before exposing executable movement modes.
+Do not implement a name-based flight/vehicle/water selector or treat declared
+Kernel `supportedMediums` alone as an executable locomotion capability. M-C must
+still close complete Subject shape, actual capabilities and frozen identities
+through the existing Host/compiler owners; a silent G Bot fallback or new early
+production veto is not completion.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,
