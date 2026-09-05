@@ -14,6 +14,7 @@ import { finalizeStyledTriviews } from "./finalize-styled-triviews.js";
 import { parseVisualGenerationPromptsV2 } from "./visual-generation-prompts.js";
 import { visualCapturePaths } from "./visual-capture-paths.js";
 import { writeAtomic } from "../lib/write-atomic.js";
+import { hashLocalTaskArguments, readLocalTaskDelivery } from "../agents/local-codex-delivery-evidence.mjs";
 
 const skillPath = ".codex/skills/worldkit-visual-reconstructor/SKILL.md";
 const promptFile = "visual-generation-prompts.json";
@@ -203,7 +204,8 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
     if (options.scope === "triviews") args.push("--context", `${relativeScene}/${promptFile}`,
       "--asset", `styled-opening-frame::${stagedScene}/${openingFile}::image::image/png`);
     if (outputS3Prefix !== null) args.push("--output-s3-prefix", outputS3Prefix);
-    else args.push("--failure-evidence-root", path.join(taskRoot, "local-failure"));
+    else args.push("--failure-evidence-root", path.join(taskRoot, "local-failure"),
+      "--delivery-evidence-root", path.join(taskRoot, "local-delivery"));
     for (const file of outputs) args.push("--output", `${relativeScene}/${file}::${stagedScene}/${file}::${file.endsWith(".png") ? "image/png" : "application/json"}`);
     // Host-only recovery data, never included in selected task context or assets.
     const argumentBytes = Buffer.from(`${JSON.stringify(args, null, 2)}\n`);
@@ -257,8 +259,25 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
     } else {
       // Local execution has no same-request remote reconciliation. Unknown local
       // execution must not silently become another model invocation.
-      if (prior && options.backend === "local") throw new Error("LOCAL_VISUAL_TASK_NOT_DELIVERED: reconcile the original local task before retrying.");
-      await dispatch(args, repoRoot);
+      if (prior && options.backend === "local") {
+        const delivery = await readLocalTaskDelivery({ evidenceRoot: path.join(taskRoot, "local-delivery"),
+          // The first pair in our constructed args selects the router backend;
+          // all following arguments are forwarded unchanged to the local adapter.
+          requestId: taskId, taskId, argumentsHash: hashLocalTaskArguments(args.slice(2)),
+          outputPaths: outputs.map(file => `${relativeScene}/${file}`) });
+        if (!delivery) throw new Error("LOCAL_VISUAL_TASK_NOT_DELIVERED: reconcile the original local task before retrying.");
+        for (const row of delivery) {
+          const destination = path.join(taskRoot, row.path);
+          await mkdir(path.dirname(destination), { recursive: true });
+          if (await realpath(path.dirname(destination)) !== path.dirname(destination)) throw new Error("Linked visual delivery destination.");
+          try {
+            const metadata = await lstat(destination);
+            if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.nlink !== 1) throw new Error("Unsafe visual delivery destination.");
+          } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+          // Restore the exact router snapshot, not arbitrary residual/partial outputs.
+          await writeAtomic(destination, row.bytes);
+        }
+      } else await dispatch(args, repoRoot);
       delivered = { kind: "worldkit-visual-task-delivery", schemaVersion: 1,
         requestId: taskId, argumentsHash: reference.argumentsHash,
         outputs: await Promise.all(outputs.map(async file => ({ path: file,

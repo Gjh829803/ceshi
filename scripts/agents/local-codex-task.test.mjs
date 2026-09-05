@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { hashLocalTaskArguments, readLocalTaskDelivery, retainLocalTaskDelivery } from "./local-codex-delivery-evidence.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const routerPath = path.join(repositoryRoot, "scripts", "agents", "run-codex-task.mjs");
@@ -24,12 +25,91 @@ function baseArguments(root, outputPath) {
 }
 
 async function createFixture() {
-  const root = await mkdtemp(path.join(tmpdir(), "worldkit-local-codex-"));
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "worldkit-local-codex-")));
   await mkdir(path.join(root, "context"), { recursive: true });
   await writeFile(path.join(root, "context", "guide.txt"), "selected context\n");
   await writeFile(path.join(root, "instruction.txt"), "write the declared result\n");
   await writeFile(path.join(root, "reference.png"), Buffer.from("fake-image"));
   return root;
+}
+
+test("an oversized optional delivery snapshot never commits a successful report", async () => {
+  const root = await createFixture();
+  const large = await open(path.join(root, "context/large.bin"), "w");
+  await large.truncate(129 * 1024 * 1024);
+  await large.close();
+  const input = { evidenceRoot: path.join(root, "delivery"), stagingRoot: path.join(root, "context"),
+    requestId: "local-codex-test", taskId: "local-codex-test", argumentsHash: "test-hash",
+    childExitCode: 0, outputs: [{ remotePath: "large.bin" }] };
+  await assert.rejects(retainLocalTaskDelivery(input), /snapshot is incomplete/);
+  assert.equal(await readLocalTaskDelivery({ ...input, outputPaths: ["large.bin"] }), null);
+  await assert.rejects(readFile(path.join(input.evidenceRoot, "outputs/large.bin")), /ENOENT/);
+});
+
+for (const mode of ["passed", "promotion-failed", "snapshot-unavailable", "child-rejected", "output-missing"]) {
+  test(`local delivery evidence ${mode} preserves original execution semantics`, async () => {
+    const root = await createFixture();
+    const outputPath = path.join(root, "delivered/result.txt");
+    const evidenceRoot = path.join(root, "delivery-evidence");
+    const fakeCodexPath = path.join(root, "fake-delivery-codex.mjs");
+    await writeFile(fakeCodexPath, `#!/usr/bin/env node
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+const args = process.argv.slice(2);
+if (args.includes("--version")) process.exit(0);
+process.stdin.resume();
+process.stdin.on("end", () => {
+  const root = args[args.indexOf("--cd") + 1];
+  mkdirSync(path.join(root, "artifacts"), { recursive: true });
+  ${mode === "output-missing" ? "" : 'writeFileSync(path.join(root, "artifacts/result.txt"), "original model bytes");'}
+  process.exitCode = ${mode === "child-rejected" ? 7 : 0};
+});
+`);
+    await chmod(fakeCodexPath, 0o755);
+    if (mode === "promotion-failed") await mkdir(outputPath, { recursive: true });
+    if (mode === "snapshot-unavailable") {
+      await mkdir(evidenceRoot);
+      await writeFile(path.join(evidenceRoot, "report.json"), "prior evidence");
+    }
+    const args = ["--backend", "local", ...baseArguments(root, outputPath),
+      "--delivery-evidence-root", evidenceRoot, "--failure-evidence-root", path.join(root, "failure-evidence")];
+    const result = spawnSync(process.execPath, [routerPath, ...args], {
+      cwd: repositoryRoot, encoding: "utf8", env: { ...process.env, WORLDKIT_LOCAL_CODEX_BIN: fakeCodexPath },
+    });
+    assert.equal(result.status, ["passed", "snapshot-unavailable"].includes(mode) ? 0 : 1, result.stderr);
+    assert.deepEqual(await readdir(path.join(root, ".codex-tmp/local-codex")), []);
+    if (mode === "snapshot-unavailable") {
+      assert.match(result.stderr, /WORLDKIT_LOCAL_CODEX_DELIVERY_EVIDENCE_UNAVAILABLE/);
+      assert.equal(await readFile(path.join(evidenceRoot, "report.json"), "utf8"), "prior evidence");
+      assert.equal(await readFile(outputPath, "utf8"), "original model bytes");
+      return;
+    }
+    const input = { evidenceRoot, requestId: "local-codex-test", taskId: "local-codex-test",
+      argumentsHash: hashLocalTaskArguments(args.slice(2)), outputPaths: ["artifacts/result.txt"] };
+    const delivered = await readLocalTaskDelivery(input);
+    if (["child-rejected", "output-missing"].includes(mode)) {
+      assert.equal(delivered, null);
+      return;
+    }
+    assert.equal(delivered[0].bytes.toString(), "original model bytes");
+    const report = JSON.parse(await readFile(path.join(evidenceRoot, "report.json"), "utf8"));
+    assert.equal(report.childExitCode, 0);
+    assert.equal(report.argumentsHash, hashLocalTaskArguments(args.slice(2)));
+    if (mode === "promotion-failed") {
+      const failure = JSON.parse(await readFile(path.join(root, "failure-evidence/report.json"), "utf8"));
+      assert.equal(failure.outcome, "task-rejected", "the original Host promotion failure remains recorded");
+      assert.equal(failure.childExitCode, 0);
+    }
+    await assert.rejects(readLocalTaskDelivery({ ...input, requestId: "other-request" }), /identity mismatch/);
+    await assert.rejects(readLocalTaskDelivery({ ...input, argumentsHash: "changed" }), /identity mismatch/);
+    await assert.rejects(readLocalTaskDelivery({ ...input, outputPaths: ["other.txt"] }), /identity mismatch/);
+    const snapshot = path.join(evidenceRoot, report.outputs[0].snapshotPath);
+    await writeFile(snapshot, "changed bytes");
+    await assert.rejects(readLocalTaskDelivery(input), /changed or missing/);
+    await rm(snapshot);
+    await symlink(path.join(root, "instruction.txt"), snapshot);
+    await assert.rejects(readLocalTaskDelivery(input), /changed or missing/);
+  });
 }
 
 test("routes an explicitly selected local backend without touching LWDP", async () => {

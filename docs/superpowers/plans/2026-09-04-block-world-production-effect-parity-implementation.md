@@ -852,6 +852,30 @@ Native styling and Studio delivery remain required downstream work.
 No entire old file or historical receipt is wholesale restoration authority. Keep
 current formal capture/identity/measurement owners intact while porting these behaviors.
 
+#### CF16-LOCAL-DELIVERY
+
+Main-agent-only, sequential after STUDIO-VISUAL-RETRY. The existing local Codex
+adapter owns an opt-in Host delivery snapshot, after successful child exit and
+all declared outputs have passed the existing file checks, before promotion.
+Bind request/task IDs, exact router-forwarded argument hash and ordered output
+byte hashes. Keep snapshots outside the model workspace; the last atomic report
+rename is the commit marker. Never overwrite original evidence or erase the
+original promotion failure. Reuse the existing safe output reader and bounded
+snapshots (128 MiB total); unavailable/oversized snapshot evidence logs a diagnostic
+but does not add a production veto or change the old local single-task behavior.
+
+The visual wrapper opts in and, if its own delivery receipt was not recorded,
+can restore this complete request-bound local snapshot without invoking the router
+or model again, then run the existing finalizers. Foreign arguments/request,
+missing/partial report, changed/linked snapshots or linked destinations cannot
+become accepted residual files. Rejected/unknown/incomplete children never acquire
+a successful delivery record; no implicit new local attempt or retry budget.
+Required evidence: actual adapter + fake child success/promotion failure/snapshot
+failure/child rejection/missing output, retained failure history, same request hash,
+safe path/corruption controls, Native visual full/partial restoration and repeated
+Host-only replay preserving Capture/whitebox. This does not claim model evidence,
+power-loss durability or success recovery when no complete snapshot exists.
+
 The latest user objective supersedes the earlier early-rerun scheduling: finish all CF
 implementation and old-branch alignment first; only then run the final local Case and
 prove the production chain completes. Do not launch a fresh production/model Case during

@@ -1,10 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PNG } from "pngjs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runStyledVisualAgent } from "./run-styled-visual-agent.js";
+import { hashLocalTaskArguments, retainLocalTaskDelivery } from "../agents/local-codex-delivery-evidence.mjs";
 import { createEvidenceSetFixtureInputV1 } from "../reconstruction/evaluate-fixture.test-support.js";
 import { deriveFormalWhiteboxTriviewManifestV1, parseFormalWorldCaptureReceiptV1 } from "@whitebox-world/runtime-contracts";
 import { sha256Bytes } from "@whitebox-world/protocol";
@@ -98,6 +99,61 @@ async function nativeFixture() {
 }
 
 describe("single-task styled visual production", () => {
+  it.each(["all", "partial-promotion", "changed-snapshot", "foreign-request", "linked-destination", "partial-receipt"])("restores or rejects local %s delivery without invoking a model again", async mode => {
+    const input = await nativeFixture();
+    const captureBefore = await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"));
+    let taskRoot = "";
+    await expect(runStyledVisualAgent(input, async args => {
+      taskRoot = argument(args, "--repo-root");
+      await deliver(args, input.ids);
+      const outputs = args.flatMap((value, index) => value === "--output" ? [{ remotePath: args[index + 1]!.split("::")[0]! }] : []);
+      const stagingRoot = path.join(taskRoot, "local-child");
+      for (const row of outputs) {
+        await mkdir(path.dirname(path.join(stagingRoot, row.remotePath)), { recursive: true });
+        await copyFile(path.join(taskRoot, row.remotePath), path.join(stagingRoot, row.remotePath));
+      }
+      await retainLocalTaskDelivery({ stagingRoot, evidenceRoot: argument(args, "--delivery-evidence-root"),
+        childExitCode: 0, requestId: argument(args, "--request-id"), taskId: argument(args, "--task-id"),
+        argumentsHash: hashLocalTaskArguments(args.slice(2)), outputs });
+      await rm(stagingRoot, { recursive: true });
+      const evidenceRoot = argument(args, "--delivery-evidence-root");
+      if (mode === "changed-snapshot") await writeFile(path.join(evidenceRoot, "outputs", outputs[0]!.remotePath), "changed snapshot");
+      if (mode === "foreign-request") {
+        const report = JSON.parse(await readFile(path.join(evidenceRoot, "report.json"), "utf8"));
+        await writeFile(path.join(evidenceRoot, "report.json"), JSON.stringify({ ...report, requestId: "foreign-request" }));
+      }
+      if (mode === "linked-destination") {
+        const destination = path.join(taskRoot, outputs[0]!.remotePath);
+        await rm(destination);
+        await symlink(input.userFramePath, destination);
+      }
+      if (mode === "partial-receipt") await rm(path.join(evidenceRoot, "report.json"));
+      if (mode === "partial-promotion") {
+        for (const row of outputs.slice(1)) await rm(path.join(taskRoot, row.remotePath));
+      }
+      throw new Error("wrapper interrupted before recording delivery");
+    })).rejects.toThrow("wrapper interrupted");
+    await expect(access(path.join(taskRoot, "dispatch-delivery.json"))).rejects.toThrow();
+    const dispatch = vi.fn();
+    const expectedFailure = { "changed-snapshot": "Local delivered output changed or missing",
+      "foreign-request": "Local delivery identity mismatch", "linked-destination": "Unsafe visual delivery destination",
+      "partial-receipt": "LOCAL_VISUAL_TASK_NOT_DELIVERED" }[mode];
+    if (expectedFailure) {
+      await expect(runStyledVisualAgent({ ...input, resume: true }, dispatch)).rejects.toThrow(expectedFailure);
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(await readFile(input.userFramePath)).toEqual(pixels);
+      expect(await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"))).toEqual(captureBefore);
+      await expect(access(path.join(input.sceneRoot, "styled-opening-frame.png"))).rejects.toThrow();
+      return;
+    }
+    await runStyledVisualAgent({ ...input, resume: true }, dispatch);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(await readFile(path.join(input.sceneRoot, "styled-opening-frame.png"))).toEqual(pixels);
+    expect(await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"))).toEqual(captureBefore);
+    await runStyledVisualAgent({ ...input, resume: true }, dispatch);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("resumes an unknown Cloud task with the same frozen request, task root, arguments and output prefix", async () => {
     const input = { ...await fixture(), backend: "cloud" as const };
     let firstArgs: readonly string[] = [];

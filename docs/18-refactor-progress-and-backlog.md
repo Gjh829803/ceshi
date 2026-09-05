@@ -2100,6 +2100,25 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   local 缺交付收据的终态核对、旧时间戳交付在中断重放后的自动恢复、Recording 下游及
   其余 CF 仍开放；不据该入口接线关闭 CF-16，也不提前运行最后本地生产 Case。
 
+- CF16-LOCAL-DELIVERY（main-agent-only，接 `0cc4dad2`）：本地 adapter 增加可选 Host
+  交付证据。只在原子任务 exit=0 且所有声明输出满足原有文件检查后、Host 搬运前，保存
+  request/task id、原 router 实际转发 arguments Hash、逐输出字节/Hash 和最后原子提交的
+  report。快照不进入模型工作区，不包含原始参数/凭据；复用既有安全文件读取器，整体
+  有界 128 MiB。快照失败/超限只输出 evidence unavailable，不改变原成功/失败判定、
+  模型、prompt、超时或本地单次任务策略，也不覆盖旧失败记录。
+  视觉入口显式启用该证据；若上层尚未来得及记录 `dispatch-delivery.json`，`--resume`
+  可从原请求的完整 adapter 快照原子恢复输出，再走原 finalizer，无额外 router/model 调用。
+  覆盖完整/部分搬运、原 staging 清理后恢复及再次恢复；外来 request/arguments、变更
+  快照、符号链接或缺少 commit report 均不能变成通过。缺图、未知/拒绝的子任务没有
+  成功交付证据，继续拒绝盲目重提，不把“不知道是否成功”当可重试终态。
+  本地 adapter + failure evidence 两文件 16/16，视觉入口 42/42 通过；最后原子恢复写入
+  及实转发 arguments Hash 的直接六项复跑 6/6，是前述子集。Planner execution/Skill 直接
+  消费者两文件 21/21、typecheck、Node 语法与 diff 检查通过。测试使用
+  实际本地 adapter/router + fake Codex 子进程、合成 Native/图片及恢复派发替身；没有
+  真实模型/Cloud、Browser 看图、全仓 CI 或独立复核，不声称断电持久性或无证据恢复成功。
+  旧时间戳交付在重放中断后的自动恢复、Recording 下游及其余 CF 继续推进；所有 CF
+  实施及旧链对齐完成后才运行最后本地生产 Case。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
