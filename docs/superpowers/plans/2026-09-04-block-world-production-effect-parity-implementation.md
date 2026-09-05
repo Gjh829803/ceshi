@@ -812,6 +812,44 @@ Local missing-delivery terminal reconciliation, interrupted replay of old-timest
 delivery under automatic restart, Recording consumers and remaining CF work remain
 open. This is synthetic HTTP/process evidence, not a real model Case.
 
+#### CF16-STUDIO-INTERRUPTED-VISUAL-DELIVERY
+
+Main-agent-only, sequential; depends on CF16-STUDIO-VISUAL-RETRY and
+CF16-LOCAL-DELIVERY. Studio records visual-only resume in its existing
+evaluation-run. On restart, preserve the ordinary old freshness path. Only an
+interrupted explicit visual resume may use the existing visual owner to replay
+an already delivered task when that path is insufficient. The replay must
+validate the original request, frozen input/Skill bytes and delivered outputs,
+run the same Host finalizers, and never dispatch a model or Cloud reconciliation.
+Unknown/undelivered work stays interrupted for explicit reconciliation.
+
+No second parser, finalizer, quality reviewer, new task or production gate.
+Native whitebox closure, Run/Attempt and passing pixels remain unchanged.
+Required evidence: complete old-timestamp delivery, partial promotion, local and
+Cloud completed delivery, absent/foreign/mutated delivery, changed input, repeated
+restart, original whitebox hashes, no dispatch; ordinary stale placeholders and
+explicit failures remain rejected. Real Case remains deferred until all CF work.
+
+Implementation checkpoint: Studio writes `executionMode: visual-resume` to the
+existing evaluation-run. If ordinary fresh-output recovery fails, only that
+interrupted mode can call `replayDeliveredStyledVisualAgent`. This reuses the
+original owner with a dispatch callback that always rejects; local retained
+delivery may be restored, while an unknown Cloud task cannot be reconciled or
+submitted automatically. Original receipt/hash checks and finalizers remain
+the owners. Focused visual entry 46/46 and Studio recovery 13/13 passed;
+typecheck/syntax/diff passed, no real model generation.
+
+Remaining CF16 recovery parity: pinned `9e35ab53` Studio also classifies late
+visual delivery after particular terminal failures and Host finalization shell
+errors (`recoverGeneratedStyledOutputs` and
+`isRecoverableVisualFinalizationFailure`). Its recovery call sites extend beyond
+startup. Current Studio's recovery is startup-only and broadly rejects failed
+records. Before closing CF16, compare the exact failure classes and invocation
+timing, map them to the current typed owner without restoring old error aliases,
+and prove that completed delivery is recovered without new POST while explicit
+visual/alignment failure remains failure. This is existing CF16 work, not a new
+production gate or a new main CF task.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal

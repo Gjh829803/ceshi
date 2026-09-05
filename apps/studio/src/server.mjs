@@ -3069,6 +3069,7 @@ export function createStudio(options = {}) {
       workflowPolicyVersion,
       sourceRevision,
       attempt,
+      executionMode: visualResume ? "visual-resume" : "full",
       origin: record.origin,
       testSetId: record.testSetId ?? null,
       testSetImageId: record.testSetImageId ?? null,
@@ -3745,7 +3746,25 @@ export function createStudio(options = {}) {
       if (record.referenceImage === null || closure?.kind !== "studio-native-production-closure" ||
           closure.caseId !== record.sceneId || closure.productionOutcome !== "passed" ||
           closure.publicationOutcome !== "published" ||
-          !await hasNativeLaunchEvidence(record) || !await hasNativeStyledArtifacts(record, freshnessFloor)) return false;
+          !await hasNativeLaunchEvidence(record)) return false;
+      if (!await hasNativeStyledArtifacts(record, freshnessFloor)) {
+        // Ordinary generations retain the old freshness rule. An interrupted
+        // explicit resume may reuse original pixels only through the same
+        // request/delivery owner, with model dispatch disabled.
+        if (evaluationRun.executionMode !== "visual-resume") return false;
+        try {
+          const resume = await prepareNativeVisualResume(record);
+          if (!resume) return false;
+          const replay = options.nativeVisualRecoveryImplementation ??
+            (await tsImport("../../../scripts/visual/run-styled-visual-agent.ts", { parentURL: import.meta.url })).replayDeliveredStyledVisualAgent;
+          await replay({ repoRoot, sceneId: record.sceneId, sceneSource: "babylon-native",
+            userFramePath: resume.userFramePath, backend: effectiveCodexBackend(record), scope: "all" });
+          if (!await hasNativeLaunchEvidence(record) || !await hasNativeStyledArtifacts(record, 0)) return false;
+        } catch (error) {
+          await appendJobLog(record.id, `\nNative visual delivery replay remains interrupted: ${error instanceof Error ? error.message : String(error)}\n`);
+          return false;
+        }
+      }
       const finishedAt = new Date().toISOString();
       await updateRecord(record.id, {
         status: "ready", stage: "ready", failedStage: null, finishedAt, error: null,

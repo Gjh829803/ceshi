@@ -2209,6 +2209,22 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   fixture，不是运行新 Case。实际 Browser 编码/页面交互、
   模型视觉/视频生成、最终本地 Case、全仓 CI 和独立复核未运行；未关闭 CF-16 或整个 CF。
 
+- CF16-STUDIO-INTERRUPTED-VISUAL-DELIVERY（main-agent-only，接 `0028c87b`）：新增
+  RED 复现“显式视觉恢复再次中断后，有效旧像素被本轮 mtime 拒绝”。现有 evaluation-run
+  记录 visual-resume；普通任务仍保留旧 freshness 行为，仅该中断恢复模式可调用既有
+  visual owner 重放已交付结果。重放复用原请求、冻结输入/Skill、交付 Hash 和两个 Host
+  finalizer，派发回调固定拒绝；不会向本地/Cloud 再投任务或对未知 Cloud 请求发起对账。
+  支持已搬运/部分搬运、旧像素和重复重放；未交付、输入变更仍 interrupted，原 Native
+  Package/Capture/production/publication/strict diagnostic 不变。不是删除所有时间检查。
+  视觉入口 46/46（含真实冻结请求/交付文件与 Host finalizer，模型为 stand-in），Studio
+  重试/重启恢复 12/12，加普通 Native 完整但旧像素不误恢复 1/1；typecheck、Node 语法、
+  diff 检查通过。初次新增测试漏导入 rename 已修，随后重现四项缺少重放入口 RED，并
+  取得上述 GREEN。Studio 恢复端口测试使用注入回调，视觉入口另以真实恢复 owner 验证；
+  不据此冒充完整真实生产链、Browser 或效果验收。
+  对拍还确认后续差异：旧 `9e35ab53` Studio 对特定任务终态失败后的迟到视觉交付、
+  Host 收尾错误具有恢复分类，且不只在启动时恢复；current 主要在启动时恢复并统一
+  排除 failed。该范围继续归 CF-16，需逐条件对齐，不把本批局部恢复当作整个 CF-16 完成。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

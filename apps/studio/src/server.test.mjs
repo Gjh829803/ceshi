@@ -1467,7 +1467,7 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
   });
 }
 
-for (const retryMode of ["passed", "local-passed", "interrupted", "reused-pixels", "failed", "unexpected-production", "stale-capture", "stale-reference", "changed-before-spawn", "changed-during-child", "whitebox-changed-during-child", "spawn-failed"]) {
+for (const retryMode of ["passed", "local-passed", "interrupted", "interrupted-reused-pixels", "interrupted-undelivered", "interrupted-stale-input", "reused-pixels", "failed", "unexpected-production", "stale-capture", "stale-reference", "changed-before-spawn", "changed-during-child", "whitebox-changed-during-child", "spawn-failed"]) {
   test(`Native visual retry ${retryMode} keeps the original whitebox and only resumes visuals`, async () => {
     const dataRoot = await temporaryRoot(".native-visual-retry-data-");
     const fakeRepoRoot = await temporaryRoot(".native-visual-retry-repo-");
@@ -1483,7 +1483,7 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "reused-pixels
             strictDiagnosticOutcome: "failed", includeWhiteboxTriviews: true, withoutScriptedTraversal: true,
             withFrozenAppearanceReference: true,
           });
-          if (retryMode === "reused-pixels") {
+          if (retryMode === "reused-pixels" || retryMode.startsWith("interrupted-")) {
             const root = await writeNativeStyledFixture(fakeRepoRoot, id);
             const manifest = JSON.parse(await readFile(path.join(root, "styled-triviews-manifest.json"), "utf8"));
             for (const file of ["styled-opening-frame.png", ...manifest.targets.map(target => target.styledTriview.path)]) {
@@ -1503,7 +1503,7 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "reused-pixels
           ? `require("node:fs").writeFileSync(${JSON.stringify(args[args.indexOf("--user-frame") + 1])}, "changed during visual retry");`
           : !first && retryMode === "whitebox-changed-during-child"
             ? `require("node:fs").writeFileSync(${JSON.stringify(path.join(path.dirname(args[args.indexOf("--user-frame") + 1]), "../final/capture/opening.png"))}, "changed whitebox");` : "";
-        return spawn(process.execPath, ["-e", `${changeInput} process.stdout.write(${JSON.stringify(output + "WORLDKIT_STAGE visual-imagegen\n")}); ${!first && retryMode === "interrupted" ? "setInterval(() => {}, 1000)" : `process.exitCode = ${first || retryMode === "failed" ? 9 : 0}`}`], options);
+        return spawn(process.execPath, ["-e", `${changeInput} process.stdout.write(${JSON.stringify(output + "WORLDKIT_STAGE visual-imagegen\n")}); ${!first && retryMode.startsWith("interrupted") ? "setInterval(() => {}, 1000)" : `process.exitCode = ${first || retryMode === "failed" ? 9 : 0}`}`], options);
       },
     });
     const origin = await listen(studio);
@@ -1530,20 +1530,29 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "reused-pixels
         assert.equal(invocations.length, 1);
       } else {
         assert.equal(retry.status, 202, await retry.text());
-        if (retryMode === "interrupted") {
+        if (retryMode.startsWith("interrupted")) {
           for (let index = 0; index < 300 && invocations.length !== 2; index++) await new Promise(resolve => setTimeout(resolve, 10));
           assert.equal(invocations.length, 2);
           assert.equal(invocations[1].args[0], "agent:world:first-frame");
           await studio.shutdown();
           for (let index = 0; index < 300 && studio.activeJobs.length; index++) await new Promise(resolve => setTimeout(resolve, 10));
+          if (retryMode === "interrupted-stale-input") await writeFile(path.join(root, "inputs/reference-0.png"), VALID_EMPTY_OPENING_PNG);
+          let replayCount = 0;
           const next = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: true,
             importExistingArtifacts: false, importBuiltinTestSets: false, importBuiltinResults: false,
+            nativeVisualRecoveryImplementation: async input => {
+              replayCount++;
+              assert.deepEqual(input, { repoRoot: fakeRepoRoot, sceneId: created.id, sceneSource: "babylon-native",
+                userFramePath: path.join(root, "inputs/reference-0.png"), backend, scope: "all" });
+              if (retryMode === "interrupted-undelivered") throw new Error("VISUAL_TASK_NOT_DELIVERED");
+            },
             lwdpConfigured: true, worldSpawnImplementation: () => { throw new Error("restart must not spawn"); } });
           const nextOrigin = await listen(next);
           try {
             const { world } = await (await fetch(`${nextOrigin}/api/worlds/${created.id}`)).json();
             assert.equal(world.attempt, 2);
-            assert.equal(world.status, "ready", world.error);
+            assert.equal(world.status, ["interrupted-undelivered", "interrupted-stale-input"].includes(retryMode) ? "interrupted" : "ready", world.error);
+            assert.equal(replayCount, ["interrupted-reused-pixels", "interrupted-undelivered"].includes(retryMode) ? 1 : 0);
             assert.deepEqual(world.nativeProductionClosure, first.world.nativeProductionClosure);
             assert.deepEqual(await readFile(capturePath), before);
           } finally { await next.shutdown(); }
@@ -1593,7 +1602,7 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "reused-pixels
   });
 }
 
-for (const recoveryMode of ["complete", "missing-image", "stale-run", "stale-capture", "explicit-failure"]) {
+for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-run", "stale-capture", "explicit-failure"]) {
   test(`Native visual restart ${recoveryMode} uses retained whitebox without launching tasks`, async () => {
     const dataRoot = await temporaryRoot(".native-restart-data-");
     const fakeRepoRoot = await temporaryRoot(".native-restart-repo-");
@@ -1643,6 +1652,11 @@ for (const recoveryMode of ["complete", "missing-image", "stale-run", "stale-cap
     const stopped = JSON.parse(await readFile(recordPath, "utf8"));
     assert.equal(stopped.failedStage, "visual-imagegen");
     assert.equal(stopped.captureStatus, "passed");
+    if (recoveryMode === "old-pixels") {
+      const manifest = JSON.parse(await readFile(path.join(root, "styled-triviews-manifest.json"), "utf8"));
+      for (const file of ["styled-opening-frame.png", ...manifest.targets.map(target => target.styledTriview.path)])
+        await utimes(path.join(root, file), new Date(0), new Date(0));
+    }
     if (recoveryMode === "missing-image") await rm(path.join(root, "triviews/visual-target-1/styled-triview.png"));
     if (recoveryMode === "stale-run") {
       const file = path.join(root, "evaluation-run.json");

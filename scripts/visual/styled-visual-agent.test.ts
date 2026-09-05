@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { access, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PNG } from "pngjs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runStyledVisualAgent } from "./run-styled-visual-agent.js";
+import { runStyledVisualAgent, replayDeliveredStyledVisualAgent } from "./run-styled-visual-agent.js";
 import { hashLocalTaskArguments, retainLocalTaskDelivery } from "../agents/local-codex-delivery-evidence.mjs";
 import { createEvidenceSetFixtureInputV1 } from "../reconstruction/evaluate-fixture.test-support.js";
 import { deriveFormalWhiteboxTriviewManifestV1, parseFormalWorldCaptureReceiptV1 } from "@whitebox-world/runtime-contracts";
@@ -99,6 +99,34 @@ async function nativeFixture() {
 }
 
 describe("single-task styled visual production", () => {
+  it.each(["local", "cloud"] as const)("replays completed %s delivery after old-pixel or partial promotion without dispatch", async backend => {
+    const input = { ...await nativeFixture(), backend };
+    const captureBefore = await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"));
+    await runStyledVisualAgent(input, args => deliver(args, input.ids));
+    const reference = JSON.parse(await readFile(path.join(input.sceneRoot, "visual-task.json"), "utf8"));
+    const root = path.join(input.repoRoot, reference.taskRootRelative);
+    const delivery = JSON.parse(await readFile(path.join(root, "dispatch-delivery.json"), "utf8"));
+    for (const row of delivery.outputs) await utimes(path.join(input.sceneRoot, row.path), new Date(0), new Date(0));
+    // Restore one promoted output to its retained task location: interrupted promotion.
+    const file = delivery.outputs.at(-1).path;
+    await mkdir(path.dirname(path.join(root, "artifacts/scenes", sceneId, file)), { recursive: true });
+    await rename(path.join(input.sceneRoot, file), path.join(root, "artifacts/scenes", sceneId, file));
+    await replayDeliveredStyledVisualAgent(input);
+    expect(await readFile(path.join(input.sceneRoot, file))).toEqual(pixels);
+    await replayDeliveredStyledVisualAgent(input);
+    expect(await readFile(path.join(input.sceneRoot, "visual-task.json"), "utf8")).toContain(reference.requestId);
+    expect(await readFile(path.join(root, "dispatch-delivery.json"), "utf8")).toContain(reference.argumentsHash);
+    expect(await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"))).toEqual(captureBefore);
+  });
+
+  it.each(["local", "cloud"] as const)("does not dispatch an undelivered %s task during automatic replay", async backend => {
+    const input = { ...await nativeFixture(), backend };
+    await expect(runStyledVisualAgent(input, async () => { throw new Error("not delivered"); })).rejects.toThrow("not delivered");
+    await expect(replayDeliveredStyledVisualAgent(input)).rejects.toThrow(
+      backend === "local" ? "LOCAL_VISUAL_TASK_NOT_DELIVERED" : "VISUAL_TASK_NOT_DELIVERED");
+    await expect(access(path.join(input.sceneRoot, "styled-opening-frame.png"))).rejects.toThrow();
+  });
+
   it.each(["all", "partial-promotion", "changed-snapshot", "foreign-request", "linked-destination", "partial-receipt"])("restores or rejects local %s delivery without invoking a model again", async mode => {
     const input = await nativeFixture();
     const captureBefore = await readFile(path.join(input.captureRoot, "formal-world-capture-receipt.json"));

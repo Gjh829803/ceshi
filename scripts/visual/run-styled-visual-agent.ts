@@ -317,6 +317,16 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
   }
 }
 
+/** Automatic restart may replay delivered bytes, never reconcile/submit a model
+ * task. Keep all request/input/delivery checks and finalization in the one owner. */
+export async function replayDeliveredStyledVisualAgent(
+  options: Omit<StyledVisualOptions, "resume">,
+): Promise<void> {
+  await runStyledVisualAgent({ ...options, resume: true }, async () => {
+    throw new Error("VISUAL_TASK_NOT_DELIVERED: automatic recovery cannot dispatch a model task.");
+  });
+}
+
 function imageFormat(bytes: Buffer): "png" | "jpg" | "webp" {
   if (bytes.subarray(0, 8).toString("hex") === "89504e470d0a1a0a") return "png";
   if (bytes.subarray(0, 3).toString("hex") === "ffd8ff") return "jpg";
