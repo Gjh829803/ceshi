@@ -30,6 +30,7 @@ const WIDTH_ENTRY = 960;
 const HEIGHT_ENTRY = 540;
 const COMPARISON_SEPARATOR = 8;
 const MAXIMUM_CAPTURED_BLOCK_COUNT = 100_000;
+const MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT = 32;
 const BUILD_TIMEOUT_MILLISECONDS = 10_000;
 const DEFAULT_DISPLAY_GAP_METERS = 0.04;
 const MAXIMUM_PLANNING_PNG_ENCODED_BYTES = 16 * 1024 * 1024;
@@ -421,7 +422,23 @@ function captureSource(
   const blocks: CapturedBlock[] = [];
   const blockIds = new Set<string>();
   let maximumBlockCount: number | undefined;
-  const blockIdByMicroCellKey = new Map<string, string>();
+  const blockIndexesByMicroCellKey = new Map<string, number[]>();
+  const overlapPairKeys = new Set<string>();
+  const overlapDiagnostics: string[] = [];
+  let hasOmittedOverlapPairs = false;
+  const diagnosticBlockId = (id: string): string => {
+    const label = id.length <= 80 ? id : `${id.slice(0, 80)}...[${hash(id)}]`;
+    return JSON.stringify(label).slice(1, -1).replace(
+      /['\u007f-\u009f\u2028\u2029]/g,
+      (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+    );
+  };
+  const rejectOverlaps = (hasOmittedPairs: boolean): never => fail(
+    "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
+    [...overlapDiagnostics, ...(hasOmittedPairs
+      ? [`additional overlapping Block pairs omitted (limit ${MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT})`]
+      : [])].join("; "),
+  );
   let displayGapMeters = DEFAULT_DISPLAY_GAP_METERS;
   let finalized = false;
   let sessionCreated = false;
@@ -471,12 +488,25 @@ function captureSource(
     // second bounds/intersection approximation or a Runtime collision inference.
     const keys = babylonNativeBlockOccupiedMicroCellKeysV1(placement);
     for (const key of keys) {
-      const occupant = blockIdByMicroCellKey.get(key);
-      if (occupant !== undefined) {
-        return fail("WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP", `block '${id}' overlaps '${occupant}' at cell ${key}`);
+      for (const occupantIndex of blockIndexesByMicroCellKey.get(key) ?? []) {
+        // Block IDs are unique; their insertion indexes bound deduplication keys
+        // independently of malformed ID length. Store only 32 pairs, not cells.
+        const pairKey = `${blocks.length},${occupantIndex}`;
+        if (overlapPairKeys.has(pairKey)) continue;
+        if (overlapDiagnostics.length === MAXIMUM_OVERLAP_PAIR_DIAGNOSTIC_COUNT) {
+          hasOmittedOverlapPairs = true;
+          return rejectOverlaps(true);
+        }
+        overlapPairKeys.add(pairKey);
+        const occupant = blocks[occupantIndex]!.id;
+        overlapDiagnostics.push(`block '${diagnosticBlockId(id)}' overlaps '${diagnosticBlockId(occupant)}' at cell ${key}`);
       }
     }
-    for (const key of keys) blockIdByMicroCellKey.set(key, id);
+    for (const key of keys) {
+      const occupants = blockIndexesByMicroCellKey.get(key);
+      if (occupants === undefined) blockIndexesByMicroCellKey.set(key, [blocks.length]);
+      else occupants.push(blocks.length);
+    }
     blockIds.add(id);
     blocks.push(Object.freeze({
       id,
@@ -643,9 +673,15 @@ function captureSource(
     "module.exports.default.build(__worldkitBuildContext)",
     { filename: `${sourcePath}#build` },
   );
-  const buildResult = buildScript.runInContext(context, {
-    timeout: BUILD_TIMEOUT_MILLISECONDS,
-  });
+  let buildResult: unknown;
+  try {
+    buildResult = buildScript.runInContext(context, {
+      timeout: BUILD_TIMEOUT_MILLISECONDS,
+    });
+  } finally {
+    // A later malformed call or a source catch cannot hide known overlaps.
+    if (overlapDiagnostics.length > 0) rejectOverlaps(hasOmittedOverlapPairs);
+  }
   if (buildResult !== undefined) {
     return fail("NATIVE_BLOCK_VISUAL_REVIEW_CAPTURE_INVALID", "Native build must complete synchronously without a return value");
   }

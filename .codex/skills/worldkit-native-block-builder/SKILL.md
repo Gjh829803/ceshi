@@ -183,7 +183,10 @@ The renderer performs a source-only restricted mock capture of the Block Profile
 
 Before emitting comparisons, it uses the Profile's shared shape-size, lattice and occupied-microcell
 functions to reject off-grid or overlapping Blocks. Its error names both overlapping Block IDs and
-the occupied cell. Repair that geometry inside this task using the same shared repair counter;
+one representative occupied cell for each of at most 32 distinct pairs, in deterministic discovery
+order. Repeated cells for the same pair appear once; a truncation notice means more pairs remain.
+Read all reported pairs together and repair their shared geometric cause within one existing cycle,
+rather than repairing only the first pair. Repair that geometry inside this task using the same shared repair counter;
 do not ignore a renderer failure or return stale PNGs. This is disposable authoring feedback, not
 full Native admission, support/Collider validation or a Runtime collision owner.
 
