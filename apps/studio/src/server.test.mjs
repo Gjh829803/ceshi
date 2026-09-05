@@ -1567,9 +1567,14 @@ for (const retryMode of ["passed", "local-passed", "interrupted", "interrupted-r
           const next = createStudio({ repoRoot: fakeRepoRoot, dataRoot, autoRunJobs: true,
             autoRecoverVisualDeliveries: false,
             importExistingArtifacts: false, importBuiltinTestSets: false, importBuiltinResults: false,
-            nativeVisualRecoveryImplementation: async input => {
+            nativeVisualRecoveryImplementation: async (input, reconcile) => {
               replayCount++;
-              assert.deepEqual(input, { repoRoot: fakeRepoRoot, sceneId: created.id, sceneSource: "babylon-native",
+              const { signal, ...frozenInput } = input;
+              assert.ok(signal instanceof AbortSignal);
+              assert.equal(signal.aborted, false);
+              assert.equal(typeof reconcile, "function");
+              await assert.rejects(reconcile(), /remote delivery recovery is disabled/);
+              assert.deepEqual(frozenInput, { repoRoot: fakeRepoRoot, sceneId: created.id, sceneSource: "babylon-native",
                 userFramePath: path.join(root, "inputs/reference-0.png"), backend, scope: "all" });
               if (retryMode === "interrupted-undelivered") throw new Error("VISUAL_TASK_NOT_DELIVERED");
             },
@@ -1716,7 +1721,13 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
       nativeVisualRecoveryImplementation: async input => {
         replayCount++;
         if (!allowDelivery) throw new Error("VISUAL_TASK_NOT_DELIVERED");
-        if (recoveryMode.startsWith("late-poll")) { entered(); await releaseReplay; }
+        if (recoveryMode === "late-poll-shutdown") {
+          assert.ok(input.signal instanceof AbortSignal);
+          assert.equal(input.signal.aborted, false);
+          entered();
+          await new Promise(resolve => input.signal.addEventListener("abort", resolve, { once: true }));
+          input.signal.throwIfAborted();
+        } else if (recoveryMode.startsWith("late-poll")) { entered(); await releaseReplay; }
         assert.equal(input.sceneId, created.id);
         await writeNativeStyledFixture(fakeRepoRoot, created.id);
       },
@@ -1731,7 +1742,6 @@ for (const recoveryMode of ["complete", "old-pixels", "missing-image", "stale-ru
         assert.equal(second.reconcileVisualDeliveries(), sweep, "sweeps must not overlap");
         if (recoveryMode === "late-poll-shutdown") {
           const shutdown = second.shutdown();
-          release();
           await shutdown;
           assert.equal(JSON.parse(await readFile(recordPath, "utf8")).status, "failed");
           assert.equal(dispatchCount, 0);

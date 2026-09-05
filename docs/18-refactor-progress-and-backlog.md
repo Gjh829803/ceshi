@@ -2245,6 +2245,30 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   owner 且不创建替代 POST；下一步须核对精确参数/台账以及 pending/shutdown 取消后
   接入，而不是把本地产物恢复冒充完整 Cloud parity。CF-16 与整个 CF 保持开放。
 
+- CF16-CLOUD-RECONCILE-ONLY（2026-09-06，main-agent-only，承接上述本地恢复）：
+  已接入同一 visual owner → 正式 `run-codex-task` router → 原 request/attempt
+  `--reconcile-only` 远端下载。先验证冻结输入、Skill、原始参数与身份，再执行同一
+  Host finalizer/promotion；不从日志猜 job、不复制 provider 认证、不创建替代模型 POST。
+  同时对拍发现默认 same-id recovery 会等待远端任务结束，不能直接作为旧 Studio
+  的每轮迟到交付检查。因此增加仅与 reconcile-only 配对的 `--reconcile-no-wait`：
+  pending 只查一次并保留 pending，下轮再查；不记录终态失败、不改变模型 timeout、
+  任务预算、普通成功标准或冻结 dispatch Hash。普通显式恢复默认等待行为不变。
+  自动恢复关闭时，重启仍能完成本地产物收尾，但不启动远端对账。
+  Studio 关闭先 abort 对账，再等待退出；visual 调用复用从 Studio 原样移至
+  `scripts/lib/owned-process.mjs` 的唯一进程树 owner，原 public-server 消费者一起
+  更新。TERM grace/KILL 参数不变，父进程先退、子孙忽略 TERM 仍可清理；关闭后
+  不发布 ready，原白模与历史运行记录不改。没有新增质量 gate。
+  定向证据：视觉入口首轮 49/49；no-wait 后两项关键回归与新增实际 router→模拟
+  adapter→真实 finalizer 桥接回归通过（新增夹具最初误读 report.outcome，改用
+  现有 report.status 后通过）。Cloud retry/same-id 两文件 44/44，包含 pending
+  只查一次、零新增 POST、完成后同请求下载、缺失 journal、原等待模式及失败矩阵。
+  Studio 轮询/重试/重启 31/31；原进程 owner/public-server 首轮含子测试 12 项
+  通过，追加“父已退、子孙存活”后 owner 3/3。各轮有重复，不累计成 aggregate。
+  最终 typecheck、Node 语法及 diff 检查通过；移动前后 owner SHA256 完全一致。
+  远端服务和下载 adapter 仍为测试夹具，没有真实模型/实云、Browser/media、最终
+  本地 Case、全仓 CI 或独立审查。未新增测试文件，无需变更测试清单。
+  代码接线不等于实云或模型验收；CF-16、其余 CF 和最终本地生产 Case 仍开放。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

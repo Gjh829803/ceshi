@@ -688,6 +688,7 @@ export function createStudio(options = {}) {
   const visualRecoveryTimers = options.visualRecoveryTimers ?? { setInterval, clearInterval };
   let visualRecoveryTimer = null;
   let visualRecoveryPromise = null;
+  const visualRecoveryController = new AbortController();
   const visualRecoveryLogKeys = new Map();
   const configuredConcurrency = Number(
     options.maxConcurrentJobs ?? process.env.WORLDKIT_STUDIO_MAX_CONCURRENT_JOBS ?? 4,
@@ -3786,9 +3787,13 @@ export function createStudio(options = {}) {
           const replay = options.nativeVisualRecoveryImplementation ??
             (await tsImport("../../../scripts/visual/run-styled-visual-agent.ts", { parentURL: import.meta.url })).replayDeliveredStyledVisualAgent;
           await replay({ repoRoot, sceneId: record.sceneId, sceneSource: "babylon-native",
-            userFramePath: resume.userFramePath, backend: effectiveCodexBackend(record), scope: "all" });
+            userFramePath: resume.userFramePath, backend: effectiveCodexBackend(record), scope: "all",
+            signal: visualRecoveryController.signal }, autoRecoverVisualDeliveries ? undefined : async () => {
+              throw new Error("VISUAL_TASK_NOT_DELIVERED: remote delivery recovery is disabled.");
+            });
           if (!await hasNativeLaunchEvidence(record) || !await hasNativeStyledArtifacts(record, 0)) return false;
         } catch (error) {
+          if (shuttingDown) return false;
           const message = error instanceof Error ? error.message : String(error);
           const key = `${record.attempt}:${record.startedAt}:${message}`;
           if (visualRecoveryLogKeys.get(record.id) !== key) {
@@ -4748,6 +4753,7 @@ export function createStudio(options = {}) {
 
   async function shutdown() {
     shuttingDown = true;
+    visualRecoveryController.abort();
     if (visualRecoveryTimer !== null) {
       visualRecoveryTimers.clearInterval(visualRecoveryTimer);
       visualRecoveryTimer = null;

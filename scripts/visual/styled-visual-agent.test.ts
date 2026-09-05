@@ -122,9 +122,103 @@ describe("single-task styled visual production", () => {
   it.each(["local", "cloud"] as const)("does not dispatch an undelivered %s task during automatic replay", async backend => {
     const input = { ...await nativeFixture(), backend };
     await expect(runStyledVisualAgent(input, async () => { throw new Error("not delivered"); })).rejects.toThrow("not delivered");
-    await expect(replayDeliveredStyledVisualAgent(input)).rejects.toThrow(
+    const reconcile = vi.fn(async () => { throw new Error("VISUAL_TASK_NOT_DELIVERED"); });
+    await expect(replayDeliveredStyledVisualAgent(input, reconcile)).rejects.toThrow(
       backend === "local" ? "LOCAL_VISUAL_TASK_NOT_DELIVERED" : "VISUAL_TASK_NOT_DELIVERED");
+    expect(reconcile).toHaveBeenCalledTimes(backend === "local" ? 0 : 1);
     await expect(access(path.join(input.sceneRoot, "styled-opening-frame.png"))).rejects.toThrow();
+  });
+
+  it("reconciles Cloud delivery with the original frozen arguments and only administrative switches", async () => {
+    const input = { ...await nativeFixture(), backend: "cloud" as const };
+    let original: readonly string[] = [];
+    await expect(runStyledVisualAgent(input, async args => {
+      original = [...args]; throw new Error("response lost");
+    })).rejects.toThrow("response lost");
+    const referenceBefore = await readFile(path.join(input.sceneRoot, "visual-task.json"));
+    const reconcile = vi.fn(async (args: readonly string[], repoRoot: string) => {
+      expect(args).toEqual([...original, "--reconcile-only", "--reconcile-no-wait"]);
+      expect(repoRoot).toBe(input.repoRoot);
+      await deliver(args, input.ids);
+    });
+    await replayDeliveredStyledVisualAgent(input, reconcile);
+    await replayDeliveredStyledVisualAgent(input, reconcile);
+    expect(reconcile).toHaveBeenCalledTimes(1);
+    expect(await readFile(path.join(input.sceneRoot, "styled-opening-frame.png"))).toEqual(pixels);
+    expect(await readFile(path.join(input.sceneRoot, "visual-task.json"))).toEqual(referenceBefore);
+  });
+
+  it("does not reconcile stale Cloud inputs or publish a delivery cancelled in flight", async () => {
+    const input = { ...await nativeFixture(), backend: "cloud" as const };
+    await expect(runStyledVisualAgent(input, async () => { throw new Error("pending"); })).rejects.toThrow("pending");
+    const original = await readFile(input.userFramePath);
+    await writeFile(input.userFramePath, Buffer.concat([original, Buffer.from("changed")]));
+    const reconcile = vi.fn(async () => {});
+    await expect(replayDeliveredStyledVisualAgent(input, reconcile)).rejects.toThrow();
+    expect(reconcile).not.toHaveBeenCalled();
+    await writeFile(input.userFramePath, original);
+    const controller = new AbortController();
+    let deliveries = 0;
+    await expect(replayDeliveredStyledVisualAgent({ ...input, signal: controller.signal }, async args => {
+      deliveries++;
+      await deliver(args, input.ids); controller.abort();
+    })).rejects.toThrow();
+    expect(deliveries).toBe(1);
+    await expect(access(path.join(input.sceneRoot, "styled-opening-frame.png"))).rejects.toThrow();
+    await expect(replayDeliveredStyledVisualAgent({ ...input, signal: controller.signal }, reconcile)).rejects.toThrow();
+    expect(reconcile).not.toHaveBeenCalled();
+  });
+
+  it("cancels the actual reconciliation child even when it ignores SIGTERM", async () => {
+    const input = { ...await nativeFixture(), backend: "cloud" as const };
+    await expect(runStyledVisualAgent(input, async () => { throw new Error("pending"); })).rejects.toThrow("pending");
+    const script = path.join(input.repoRoot, "scripts/agents/run-codex-task.mjs");
+    const ready = path.join(input.repoRoot, "reconcile-ready.json");
+    await mkdir(path.dirname(script), { recursive: true });
+    await writeFile(script, `import { writeFileSync } from 'node:fs';
+      process.on('SIGTERM', () => {});
+      writeFileSync(${JSON.stringify(ready)}, JSON.stringify({ pid: process.pid, args: process.argv.slice(2) }));
+      setInterval(() => {}, 1000);`);
+    const controller = new AbortController();
+    const operation = replayDeliveredStyledVisualAgent({ ...input, signal: controller.signal });
+    const outcome = operation.then(() => null, error => error);
+    try {
+      await vi.waitFor(async () => { await access(ready); });
+      const running = JSON.parse(await readFile(ready, "utf8"));
+      expect(running.args.slice(-2)).toEqual(["--reconcile-only", "--reconcile-no-wait"]);
+      controller.abort();
+      expect((await outcome)?.name).toBe("AbortError");
+      expect(() => process.kill(running.pid, 0)).toThrow();
+      await expect(access(path.join(input.sceneRoot, "styled-opening-frame.png"))).rejects.toThrow();
+    } finally { controller.abort(); await outcome; }
+  }, 10_000);
+
+  it("forwards no-submit and no-wait through the real router before finalizing downloaded Cloud outputs", async () => {
+    const input = { ...await nativeFixture(), backend: "cloud" as const };
+    await expect(runStyledVisualAgent(input, async () => { throw new Error("pending"); })).rejects.toThrow("pending");
+    const scripts = path.join(input.repoRoot, "scripts/agents");
+    const calls = path.join(input.repoRoot, "download-calls.txt");
+    await mkdir(scripts, { recursive: true });
+    await copyFile(path.resolve("scripts/agents/run-codex-task.mjs"), path.join(scripts, "run-codex-task.mjs"));
+    // Only the remote adapter is a local fixture. The production router, owned
+    // process, frozen input checks, finalizers and output promotion all execute.
+    await writeFile(path.join(scripts, "run-lwdp-codex-task.mjs"), `
+      import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
+      import path from 'node:path';
+      const args = process.argv.slice(2);
+      if (!args.includes('--reconcile-only') || !args.includes('--reconcile-no-wait')) throw new Error('unexpected submission');
+      appendFileSync(${JSON.stringify(calls)}, 'download\\n');
+      for (let i = 0; i < args.length; i++) if (args[i] === '--output') {
+        const [, local] = args[++i].split('::');
+        mkdirSync(path.dirname(local), {recursive: true});
+        writeFileSync(local, local.endsWith('.json') ? ${JSON.stringify(JSON.stringify(bundle(input.ids)))}
+          : Buffer.from(${JSON.stringify(pixels.toString("base64"))}, 'base64'));
+      }`);
+    await replayDeliveredStyledVisualAgent(input);
+    await replayDeliveredStyledVisualAgent(input);
+    expect(await readFile(calls, "utf8")).toBe("download\n");
+    expect(await readFile(path.join(input.sceneRoot, "styled-opening-frame.png"))).toEqual(pixels);
+    expect(JSON.parse(await readFile(path.join(input.sceneRoot, "styled-triviews-report.json"), "utf8")).status).toBe("passed");
   });
 
   it.each(["all", "partial-promotion", "changed-snapshot", "foreign-request", "linked-destination", "partial-receipt"])("restores or rejects local %s delivery without invoking a model again", async mode => {

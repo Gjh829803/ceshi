@@ -46,8 +46,8 @@ function parseArguments(argv) {
       if (value === undefined) throw new Error(`Missing value after ${key}.`);
       result[key.slice(2) + "s"].push(value);
       index += 1;
-    } else if (key === "--dry-run" || key === "--reconcile-only") {
-      result[key === "--dry-run" ? "dryRun" : "reconcileOnly"] = true;
+    } else if (["--dry-run", "--reconcile-only", "--reconcile-no-wait"].includes(key)) {
+      result[key.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = true;
     } else if (key?.startsWith("--")) {
       if (value === undefined) throw new Error(`Missing value after ${key}.`);
       result[key.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
@@ -103,6 +103,7 @@ function execFilePromise(command, args, cwd) {
 }
 
 const args = parseArguments(process.argv.slice(2));
+if (args.reconcileNoWait && !args.reconcileOnly) throw new Error("--reconcile-no-wait requires --reconcile-only.");
 const repoRoot = resolve(args.repoRoot || process.cwd());
 const taskId = safeTaskId(args.taskId);
 const runToken = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
@@ -340,6 +341,7 @@ try {
         config,
         onCompleted,
         allowExistingMatchingOutputs: true,
+        waitForCompletion: !args.reconcileNoWait,
       });
       successfulJobId = recovered.jobId;
       return;

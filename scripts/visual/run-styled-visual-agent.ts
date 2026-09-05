@@ -14,6 +14,7 @@ import { finalizeStyledTriviews } from "./finalize-styled-triviews.js";
 import { parseVisualGenerationPromptsV2 } from "./visual-generation-prompts.js";
 import { visualCapturePaths } from "./visual-capture-paths.js";
 import { writeAtomic } from "../lib/write-atomic.js";
+import { spawnOwnedProcess } from "../lib/owned-process.mjs";
 import { hashLocalTaskArguments, readLocalTaskDelivery } from "../agents/local-codex-delivery-evidence.mjs";
 
 const skillPath = ".codex/skills/worldkit-visual-reconstructor/SKILL.md";
@@ -29,6 +30,7 @@ interface StyledVisualOptions {
   readonly backend: "local" | "cloud";
   readonly sceneSource?: WorldGenerationSceneSourceKindV1;
   readonly resume?: boolean;
+  readonly signal?: AbortSignal;
 }
 
 async function readVisualFile(source: string, label: string): Promise<Buffer> {
@@ -58,6 +60,7 @@ export async function runStyledVisualAgent(
   options: StyledVisualOptions,
   dispatch: (args: readonly string[], repoRoot: string) => Promise<void> = dispatchCodexTask,
 ): Promise<void> {
+  options.signal?.throwIfAborted();
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(options.sceneId) ||
       !["all", "triviews"].includes(options.scope) || !["local", "cloud"].includes(options.backend)) {
     throw new Error("Invalid styled visual scene, scope or backend.");
@@ -277,7 +280,11 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
           // Restore the exact router snapshot, not arbitrary residual/partial outputs.
           await writeAtomic(destination, row.bytes);
         }
-      } else await dispatch(args, repoRoot);
+      } else {
+        options.signal?.throwIfAborted();
+        await dispatch(args, repoRoot);
+      }
+      options.signal?.throwIfAborted();
       delivered = { kind: "worldkit-visual-task-delivery", schemaVersion: 1,
         requestId: taskId, argumentsHash: reference.argumentsHash,
         outputs: await Promise.all(outputs.map(async file => ({ path: file,
@@ -292,6 +299,7 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
     if ((await readVisualFile(referencePath, "visual-task.json")).toString() !== `${stringifyCanonicalJson(reference)}\n`) {
       throw new Error("Visual task reference changed during task.");
     }
+    options.signal?.throwIfAborted();
     if (options.scope === "all") await finalizeStyledOpeningFrame({
       sceneId: options.sceneId, sceneRoot: stagedScene, userFramePath: path.join(taskRoot, userRelative),
       sceneSource: capturePaths.source,
@@ -307,6 +315,7 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
       try { if ((await lstat(target)).isSymbolicLink()) throw new Error("Linked visual output."); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
     }
+    options.signal?.throwIfAborted();
     for (const file of delivery) await rename(path.join(stagedScene, file), path.join(sceneRoot, file));
     // Keep the router's attempt ledger and frozen request even on success.
     // These are execution evidence, not another visual acceptance authority.
@@ -317,14 +326,39 @@ Host file/hash/role finalization runs after this task returns; do not claim it y
   }
 }
 
-/** Automatic restart may replay delivered bytes, never reconcile/submit a model
- * task. Keep all request/input/delivery checks and finalization in the one owner. */
+/** Recover the original delivery, never submit a new model task. Cloud download
+ * belongs to the existing router's reconcile-only request/attempt owner. */
 export async function replayDeliveredStyledVisualAgent(
   options: Omit<StyledVisualOptions, "resume">,
+  reconcile: (args: readonly string[], repoRoot: string, signal?: AbortSignal) => Promise<void> = reconcileCodexTask,
 ): Promise<void> {
-  await runStyledVisualAgent({ ...options, resume: true }, async () => {
-    throw new Error("VISUAL_TASK_NOT_DELIVERED: automatic recovery cannot dispatch a model task.");
+  await runStyledVisualAgent({ ...options, resume: true }, async (args, repoRoot) => {
+    // Administrative switches only: leave frozen dispatch bytes and identities
+    // unchanged. Local recovery uses its immutable delivery snapshot above.
+    if (options.backend !== "cloud") throw new Error("LOCAL_VISUAL_TASK_NOT_DELIVERED");
+    await reconcile([...args, "--reconcile-only", "--reconcile-no-wait"], repoRoot, options.signal);
   });
+}
+
+async function reconcileCodexTask(args: readonly string[], repoRoot: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  const owned = spawnOwnedProcess(process.execPath,
+    [path.join(repoRoot, "scripts/agents/run-codex-task.mjs"), ...args],
+    { cwd: repoRoot, env: process.env, stdio: "inherit" });
+  const onAbort = () => { void owned.terminate().catch(() => {}); };
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    if (signal?.aborted) onAbort();
+    const result = await owned.exited;
+    signal?.throwIfAborted();
+    if (result.error) throw result.error;
+    if (result.code !== 0 || result.signal !== null) throw new Error(`Visual Codex reconciliation failed (${result.signal ?? result.code}).`);
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+    // Also reap surviving descendants when their immediate parent already exited.
+    // The shared owner preserves the existing TERM grace and KILL escalation.
+    await owned.terminate();
+  }
 }
 
 function imageFormat(bytes: Buffer): "png" | "jpg" | "webp" {

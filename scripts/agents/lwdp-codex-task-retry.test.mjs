@@ -78,9 +78,10 @@ function collect(argv, env) {
 async function fixture(t, outcomes, { deterministicStop = false } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "lwdp-terminal-retry-"));
   const taskId = "fixture-builder", requestId = "fixture-root-request", outputPrefix = "s3://bucket/run";
-  const posts = [], jobs = new Map();
+  const posts = [], jobs = new Map(), requests = [];
   let currentOutcomes = outcomes;
   const server = createServer(async (request, response) => {
+    requests.push({ method: request.method, url: request.url });
     response.setHeader("content-type", "application/json");
     if (request.method === "POST") {
       let text = "";
@@ -126,7 +127,7 @@ async function fixture(t, outcomes, { deterministicStop = false } = {}) {
     LWDP_API_BASE: `http://127.0.0.1:${server.address().port}`, LWDP_GENERATION_API_TOKEN: "test-only-token", LWDP_USER_ID: "test",
     WORLDKIT_LWDP_STAGE_RETRY_BASE_DELAY_MS: "0", WORLDKIT_LWDP_BUILDER_PRIOR_ATTEMPTS: "0", WORLDKIT_LWDP_BUILDER_MAX_ATTEMPTS: "3",
     WORLDKIT_LWDP_JOB_TIMEOUT_MS: "1", WORLDKIT_LWDP_QUEUE_TIMEOUT_MS: "1" };
-  return { root, posts, jobs, destination, requestId, outputPrefix,
+  return { root, posts, jobs, requests, destination, requestId, outputPrefix,
     ledgerDirectory: path.join(root, ".codex-tmp/lwdp-codex/task-attempts", requestId),
     run: (extra = [], envPatch = {}) => collect([...argv, ...extra], { ...env, ...envPatch }),
     setOutcomes: (next) => { currentOutcomes = next; },
@@ -155,6 +156,36 @@ test("terminal retry produces new physical IDs/prefixes and stable logical outco
   await writeFile(f.destination, "tampered");
   const drift = await f.run(); assert.notEqual(drift.code, 0); assert.match(drift.stderr, /Hash drifted/);
   assert.equal(f.posts.length, 2);
+});
+
+test("background reconcile checks pending once, then downloads the same completed job without polling or POST", async (t) => {
+  const f = await fixture(t, [{ status: "running" }]);
+  assert.notEqual((await f.run()).code, 0);
+  const requestCount = f.requests.length;
+  const pending = await f.run(["--reconcile-only", "--reconcile-no-wait"]);
+  assert.notEqual(pending.code, 0);
+  assert.match(pending.stderr, /task is still pending/);
+  assert.equal(f.posts.length, 1);
+  const nextRequests = f.requests.slice(requestCount);
+  assert.equal(nextRequests.length, 1);
+  assert.match(nextRequests[0].url, /by-request-id/);
+  assert.equal((await readdir(f.ledgerDirectory)).filter(file => file.endsWith("-terminal.json")).length, 0);
+  Object.assign(f.jobs.get(f.requestId), { status: "succeeded" });
+  const completed = await f.run(["--reconcile-only", "--reconcile-no-wait"]);
+  assert.equal(completed.code, 0, completed.stderr);
+  assert.equal(f.posts.length, 1);
+  assert.equal(await readFile(f.destination, "utf8"), '{"ok":true}\n');
+});
+
+test("background reconciliation without an original journal or without no-submit cannot create a job", async (t) => {
+  const f = await fixture(t, [{ status: "succeeded" }]);
+  const invalid = await f.run(["--reconcile-no-wait"]);
+  assert.notEqual(invalid.code, 0);
+  assert.match(invalid.stderr, /requires --reconcile-only/);
+  const absent = await f.run(["--reconcile-only", "--reconcile-no-wait"]);
+  assert.notEqual(absent.code, 0);
+  assert.match(absent.stderr, /pending journal is missing/);
+  assert.equal(f.posts.length, 0);
 });
 
 test("default exhaustion persists all three terminal failures and process restart cannot reset budget", async (t) => {

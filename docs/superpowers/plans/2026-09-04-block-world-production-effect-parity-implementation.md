@@ -869,6 +869,38 @@ Required evidence: complete/incomplete late delivery, finalizer replay,
 alignment and cancellation rejection, normal exit classification, unchanged
 whitebox, timer no-overlap/cleanup, active/queued isolation, recovery/retry race.
 
+CF16-CLOUD-RECONCILE-ONLY (main-agent-only, sequential; depends on the local
+late-delivery slice) now connects the same visual owner to the generic router.
+The owner verifies the original visual request, inputs, Skill and frozen dispatch
+arguments before invoking the retained Cloud request with `--reconcile-only
+--reconcile-no-wait`. The additional switches are administrative, not new model
+parameters, attempt identities or production gates. The router alone resolves
+the exact request/attempt and verifies/downloads declared outputs; Studio does
+not parse provider IDs, copy credentials or issue model POSTs.
+
+The existing same-id helper defaults to its original wait behavior. The paired
+no-wait switch only makes a background sweep return on a nonterminal lookup,
+without a terminal failure receipt or replacement submission. This preserves the
+old Studio's repeated completed-delivery checks instead of blocking a sweep for
+the ordinary one-hour task poll. Missing original journals never submit a task.
+Disabling automatic recovery still permits already-local restart finalization,
+but disables remote reconciliation. Original input/dispatch Hashes, finalizers,
+whitebox publication, retry budgets and model timeout settings are unchanged.
+
+Studio shutdown aborts the active recovery before waiting. The visual owner
+reuses the existing owned-process implementation, moved byte-for-byte from
+`apps/studio/src/owned-process.mjs` to `scripts/lib/owned-process.mjs`; the public
+server now imports that same owner. Its TERM grace and KILL escalation are
+unchanged, including cleanup of descendants after their immediate parent exits.
+There is no app-private implementation import from the visual script, duplicate
+process owner or compatibility re-export. Abort is checked before dispatch,
+finalization and promotion; Studio cannot publish a ready record after shutdown.
+
+Evidence must distinguish real local child/router/finalizer execution with fake
+remote service/adapter fixtures from actual Cloud/model or rendered acceptance.
+Those latter acceptance layers remain open until all CF implementation and
+old-branch alignment finish, followed by the final local production Case.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal

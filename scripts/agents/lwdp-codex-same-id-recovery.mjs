@@ -729,6 +729,7 @@ export async function reconcileLwdpCodexSameRequestId({
   timeoutMs = Number(process.env.WORLDKIT_LWDP_JOB_TIMEOUT_MS || 3_600_000),
   onCompleted,
   allowExistingMatchingOutputs = false,
+  waitForCompletion = true,
 } = {}) {
   const fs = asFileSystem(fileSystem);
   const parsedCurrent = parsePendingJournal(current);
@@ -785,6 +786,9 @@ export async function reconcileLwdpCodexSameRequestId({
 
   let job = attached;
   if (!TERMINAL_STATUSES.has(String(job?.status))) {
+    // Background delivery sweeps inspect once; they neither wait for a model nor
+    // classify an observation of pending as a confirmed terminal failure.
+    if (!waitForCompletion) fail("LWDP same-request-id recovery task is still pending.");
     job = await pollImplementation(jobId, {
       config,
       fetchImplementation,
