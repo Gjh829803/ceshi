@@ -16,6 +16,7 @@ import { packageNativeBlockAttemptV1 } from "../reconstruction/native-package.js
 import { materializeFormalWorldCaptureRequestV1 } from "../reconstruction/formal-capture-request.js";
 import { captureProductionHostedWorldPackageV1 } from "../reconstruction/formal-capture.js";
 import { evaluateNativeBlockAttemptV1 } from "../reconstruction/evaluate.js";
+import { measureFormalIdentityMaskV1 } from "../reconstruction/formal-identity-mask-measurement.js";
 
 // Explicit Browser lane, not part of default Vitest. No model/provider task is submitted.
 // Reuse the Package-owner fixture: generation is synthetic, Host Check/Ground/Package,
@@ -84,6 +85,9 @@ try {
       authoringManifest: parseNativeBlockAuthoringManifestV1(await json(path.join(fixture.attemptDirectoryPath, "source/native-block-authoring.json"))),
       captureReceiptRef: `${receipt.formalRequestRef.slice(0, -"formal-world-capture-request.json".length)}capture/formal-world-capture-receipt.json`,
       captureReceipt: receipt, scriptedTraversalObservation: traversal,
+      identityMaskPngs: await Promise.all(receipt.views.map(async ({ viewId }) => ({
+        viewId, bytes: new Uint8Array(await readFile(path.join(captureRoot, `${viewId}-identity-mask.png`))),
+      }))),
       openingObservation: parseFormalOpeningObservationV1(await json(path.join(captureRoot, "opening-observation.json"))),
       semanticViewObservationSet: parseFormalSemanticViewObservationSetV1(await json(path.join(captureRoot, "semantic-view-observation-set.json"))),
       spawnSupportObservation: parseFormalSpawnSupportObservationV1(await json(path.join(captureRoot, "spawn-support-observation.json"))),
@@ -102,19 +106,34 @@ try {
   assert.deepEqual(await readFile(fixture.casePath), caseBytes);
   assert.deepEqual(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json")), requestBytes);
   const images = [];
-  for (const name of ["opening.png", "world-side.png", "world-top-down.png", "collider-overlay.png"]) {
+  for (const name of ["opening.png", "world-side.png", "world-top-down.png", "collider-overlay.png",
+    "opening-identity-mask.png", "world-side-identity-mask.png", "world-top-down-identity-mask.png"]) {
     const bytes = await readFile(path.join(captureRoot, name));
     const metadata = await sharp(bytes).metadata();
     assert.equal(metadata.width, receipt.formalRequest.views[0].widthPixels);
     assert.equal(metadata.height, receipt.formalRequest.views[0].heightPixels);
     images.push({ name, widthPixels: metadata.width, heightPixels: metadata.height, contentHash: sha256Bytes(bytes) });
   }
+  const identityProjections = [];
+  for (const view of receipt.views) {
+    const projections = measureFormalIdentityMaskV1({
+      view, pngBytes: await readFile(path.join(captureRoot, `${view.viewId}-identity-mask.png`)),
+      targets: receipt.formalRequest.semanticCaptureMap.bindings,
+    });
+    identityProjections.push({ viewId: view.viewId, targets: [...projections].map(
+      ([acceptanceTargetRef, projection]) => ({ acceptanceTargetRef, ...projection })) });
+  }
+  for (const target of receipt.formalRequest.semanticCaptureMap.bindings) {
+    assert(identityProjections.some(({ targets }) => targets.some((projection) =>
+      projection.acceptanceTargetRef === target.acceptanceTargetRef && projection.outcome === "visible")),
+    `Fixture target ${target.acceptanceTargetRef} must have exact admitted identity pixels in at least one real view`);
+  }
   await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
   await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,
     cleanupOutcomes: capture.cleanupOutcomes, traversalChecks: 0, strictTraversalStatus: "incomplete",
-    semanticTargetCount: request.request.semanticCaptureMap.bindings.length, images, evidenceRoot };
+    semanticTargetCount: request.request.semanticCaptureMap.bindings.length, images, identityProjections, evidenceRoot };
   await writeFile(path.join(evidenceRoot, "evidence.json"), stringifyCanonicalJson(result), { flag: "wx" });
   console.log(JSON.stringify(result));
 } finally {

@@ -365,6 +365,9 @@ async function createRunFixture(
     colliderOverlayPngContentHash: pngHash,
   });
   await writeFile(path.join(captureRoot, "opening.png"), openingPng);
+  for (const mask of fixture.identityMaskPngs) {
+    await writeFile(path.join(captureRoot, `${mask.viewId}-identity-mask.png`), mask.bytes);
+  }
   for (const name of ["world-top-down", "world-side", "collider-overlay"] as const) {
     await writeFile(path.join(captureRoot, `${name}.png`), PNG);
   }

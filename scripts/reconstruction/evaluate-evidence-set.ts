@@ -34,6 +34,7 @@ import {
   hashSceneAuthoringAttemptV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { isNil } from "lodash-es";
+import { measureFormalIdentityMaskV1 } from "./formal-identity-mask-measurement.js";
 import {
   hashNativeBlockAuthoringManifestV1,
   parseNativeBlockAuthoringManifestV1,
@@ -66,6 +67,7 @@ export interface BuildWorldReconstructionEvidenceSetInputV1 {
   readonly captureReceipt: FormalWorldCaptureReceiptV1;
   readonly openingObservation: FormalOpeningObservationV1;
   readonly semanticViewObservationSet: FormalSemanticViewObservationSetV1;
+  readonly identityMaskPngs: readonly Readonly<{ viewId: string; bytes: Uint8Array }>[];
   readonly spawnSupportObservation: FormalSpawnSupportObservationV1;
   readonly colliderOverlayObservation: FormalColliderOverlayObservationV1;
   readonly scriptedTraversalObservation: FormalScriptedTraversalObservationV1;
@@ -649,6 +651,15 @@ export function buildWorldReconstructionEvidenceSetV1(
     return relation;
   });
 
+  if (rawInput.identityMaskPngs.length !== captureReceipt.views.length ||
+    rawInput.identityMaskPngs.some((mask, index) => mask.viewId !== captureReceipt.views[index]!.viewId)) {
+    stale("identity mask view inventory does not match Capture");
+  }
+  const pixelProjectionsByView = new Map(captureReceipt.views.map((view, index) => [
+    view.viewId, measureFormalIdentityMaskV1({ view, pngBytes: rawInput.identityMaskPngs[index]!.bytes,
+      targets: semanticMap.bindings.map(({ acceptanceTargetRef, identityColor }) => ({ acceptanceTargetRef, identityColor })) }),
+  ] as const));
+
   return parseWorldReconstructionEvidenceSetV1({
     kind: "world-reconstruction-evidence-set",
     schemaVersion: 1,
@@ -719,7 +730,8 @@ export function buildWorldReconstructionEvidenceSetV1(
       },
       {
         dimensionId: "semantic-silhouette",
-        evidenceRefs: [captureReceipt.semanticViewObservationSetArtifactRef],
+        evidenceRefs: uniqueSorted([captureReceipt.semanticViewObservationSetArtifactRef,
+          ...captureReceipt.views.map(({ identityMaskPngArtifactRef }) => identityMaskPngArtifactRef)]),
         observed: {
           kind: "semantic-silhouette-observed",
           views: semanticViewObservationSet.views.map((view) => ({
@@ -727,15 +739,7 @@ export function buildWorldReconstructionEvidenceSetV1(
             targets: view.targets.map((target) => ({
               acceptanceTargetRef: target.acceptanceTargetRef,
               visualGroupId: target.blockVisualGroupId,
-              structuralProjection: target.structuralProjection.outcome === "projected"
-                ? {
-                    outcome: target.structuralProjection.outcome,
-                    normalizedBounds: target.structuralProjection.normalizedBounds,
-                    normalizedCenter: target.structuralProjection.normalizedCenter,
-                    coverageBasisPoints:
-                      target.structuralProjection.coverageBasisPoints,
-                  }
-                : { outcome: target.structuralProjection.outcome },
+              visiblePixelProjection: pixelProjectionsByView.get(view.viewId)!.get(target.acceptanceTargetRef)!,
             })),
           })),
         },

@@ -63,6 +63,7 @@ import {
 import type {
   BabylonArtifactCaptureRequestV1,
   BabylonArtifactCaptureResultV1,
+  BabylonArtifactCapturedPixelsV1,
 } from "./artifact-capture.js";
 import {
   measureFormalWorldCaptureViewV1,
@@ -77,6 +78,9 @@ export interface FormalHostedWorldCapturePayloadV1 {
   readonly openingPng: Uint8Array;
   readonly worldSidePng: Uint8Array;
   readonly worldTopDownPng: Uint8Array;
+  readonly openingIdentityMaskPng: Uint8Array;
+  readonly worldSideIdentityMaskPng: Uint8Array;
+  readonly worldTopDownIdentityMaskPng: Uint8Array;
   readonly colliderOverlayPng: Uint8Array;
   readonly openingObservation: FormalOpeningObservationV1;
   readonly semanticViewObservationSet: FormalSemanticViewObservationSetV1;
@@ -486,7 +490,7 @@ function worldArtifactRequest(
   } as BabylonArtifactCaptureRequestV1;
 }
 
-function pngBytes(result: BabylonArtifactCaptureResultV1): Uint8Array {
+function pngBytes(result: BabylonArtifactCapturedPixelsV1): Uint8Array {
   const match = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(
     result.dataUrl,
   );
@@ -1030,7 +1034,25 @@ export async function executeFormalWorldCaptureProviderV1(
   const openingView = request.views[0];
   const subjectEntityId =
     input.verifiedWorldPackage.worldRuntimeBootstrap.initialControlledEntityId;
-  const openingCapture = input.ports.captureArtifactView(openingArtifactRequest(
+  const identityMaskColorsByMesh = (scene: Scene): ReadonlyMap<Mesh, string> => {
+    const registry = peekBabylonNativeBlockLiveHandleRegistryV1(scene) ??
+      fail("BABYLON_FORMAL_CAPTURE_LIVE_VISUAL_REGISTRY_MISSING");
+    assertFormalCaptureLiveVisualRegistryV1({ scene, materializerMetadata: metadata, liveHandleRegistry: registry });
+    const colorByBlockId = new Map(metadata.visualGroups.flatMap((group) =>
+      group.blockIds.map((blockId) => [blockId, group.identityColorHex] as const)));
+    const colors = new Map<Mesh, string>();
+    for (const handle of registry.blocks) {
+      const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
+      const color = colorByBlockId.get(handle.blockId) ?? "#000000";
+      const prior = colors.get(mesh);
+      if (prior !== undefined && prior !== color) {
+        fail("BABYLON_FORMAL_CAPTURE_IDENTITY_BATCH_COLOR_CONFLICT");
+      }
+      colors.set(mesh, color);
+    }
+    return colors;
+  };
+  const openingCapture = input.ports.captureArtifactView({ ...openingArtifactRequest(
     openingView,
     subjectEntityId,
     ({ camera, engine, scene }) => {
@@ -1056,7 +1078,7 @@ export async function executeFormalWorldCaptureProviderV1(
         liveHandleRegistry: visualRegistry,
       });
     },
-  ));
+  ), identityMaskColorsByMesh });
   if (
     visualRegistry === undefined ||
     colliderRegistry === undefined ||
@@ -1081,10 +1103,10 @@ export async function executeFormalWorldCaptureProviderV1(
       liveHandleRegistry: visualRegistry!,
     });
   const worldSideCapture = input.ports.captureArtifactView(
-    worldArtifactRequest(request.views[1], measureWorldView(request.views[1])),
+    { ...worldArtifactRequest(request.views[1], measureWorldView(request.views[1])), identityMaskColorsByMesh },
   );
   const worldTopDownCapture = input.ports.captureArtifactView(
-    worldArtifactRequest(request.views[2], measureWorldView(request.views[2])),
+    { ...worldArtifactRequest(request.views[2], measureWorldView(request.views[2])), identityMaskColorsByMesh },
   );
   if (
     worldSideCapture.measurement === undefined ||
@@ -1250,6 +1272,12 @@ export async function executeFormalWorldCaptureProviderV1(
   const worldSidePng = pngBytes(worldSideCapture);
   const worldTopDownPng = pngBytes(worldTopDownCapture);
   const colliderOverlayPng = pngBytes(colliderOverlayCapture);
+  const openingIdentityMaskPng = pngBytes(openingCapture.identityMask ?? fail("BABYLON_FORMAL_CAPTURE_IDENTITY_MASK_MISSING"));
+  const worldSideIdentityMaskPng = pngBytes(worldSideCapture.identityMask ?? fail("BABYLON_FORMAL_CAPTURE_IDENTITY_MASK_MISSING"));
+  const worldTopDownIdentityMaskPng = pngBytes(worldTopDownCapture.identityMask ?? fail("BABYLON_FORMAL_CAPTURE_IDENTITY_MASK_MISSING"));
+  const identityMaskPngById = new Map([
+    ["opening", openingIdentityMaskPng], ["world-side", worldSideIdentityMaskPng], ["world-top-down", worldTopDownIdentityMaskPng],
+  ] as const);
   const captureBase = captureRefBase(request);
   const viewPngById = new Map([
     ["opening", openingPng],
@@ -1281,6 +1309,7 @@ export async function executeFormalWorldCaptureProviderV1(
             viewPngById.get(typedView.viewId)!,
           ) as Sha256HashV1,
           targets: typedMeasurement.targets,
+          identityMaskPngContentHash: sha256Bytes(identityMaskPngById.get(typedView.viewId)!) as Sha256HashV1,
         });
       }),
     });
@@ -1329,6 +1358,8 @@ export async function executeFormalWorldCaptureProviderV1(
         request: view,
         requestHash: hashFormalArtifactViewRequestV1(view),
         pngArtifactRef: `${captureBase}/${view.viewId}.png`,
+        identityMaskPngArtifactRef: `${captureBase}/${view.viewId}-identity-mask.png`,
+        identityMaskPngContentHash: sha256Bytes(identityMaskPngById.get(view.viewId)!) as Sha256HashV1,
         pngContentHash:
           sha256Bytes(viewPngById.get(view.viewId)!) as Sha256HashV1,
       }))),
@@ -1369,6 +1400,9 @@ export async function executeFormalWorldCaptureProviderV1(
     openingPng,
     worldSidePng,
     worldTopDownPng,
+    openingIdentityMaskPng,
+    worldSideIdentityMaskPng,
+    worldTopDownIdentityMaskPng,
     colliderOverlayPng,
     openingObservation,
     semanticViewObservationSet,

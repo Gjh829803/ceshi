@@ -209,8 +209,8 @@ const evidenceValue = () => ({
           targets: [{
             acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
             visualGroupId: "central-ascent-group",
-            structuralProjection: {
-              outcome: "projected",
+            visiblePixelProjection: {
+              outcome: "visible",
               normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
               normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
               coverageBasisPoints: 2_400,

@@ -45,6 +45,9 @@ const PAYLOAD_FIELDS = Object.freeze([
   "openingPng",
   "worldSidePng",
   "worldTopDownPng",
+  "openingIdentityMaskPng",
+  "worldSideIdentityMaskPng",
+  "worldTopDownIdentityMaskPng",
   "colliderOverlayPng",
   "openingObservation",
   "semanticViewObservationSet",
@@ -58,6 +61,9 @@ const PNG_FIELDS = Object.freeze([
   "openingPng",
   "worldSidePng",
   "worldTopDownPng",
+  "openingIdentityMaskPng",
+  "worldSideIdentityMaskPng",
+  "worldTopDownIdentityMaskPng",
   "colliderOverlayPng",
 ] as const);
 

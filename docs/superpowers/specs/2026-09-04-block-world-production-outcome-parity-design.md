@@ -73,6 +73,15 @@ The existing disposable renderer additionally reuses Profile shape/lattice/occup
 for in-task overlap feedback. It does not recreate a Scene, persistent Layout or Physics owner;
 unsupported structures remain advisory, and full Native/Ground admission remains Host-owned.
 
+CF-19 bounded overlap feedback (054 frozen replay, 2026-09-05): preserve the legacy
+ability to see several geometric conflicts in one shared repair cycle. The existing
+restricted renderer reports at most 32 distinct overlapping Block-ID pairs in
+deterministic discovery order, with one representative occupied cell per pair.
+Repeated cells must not grow the diagnostic collection; the response states when
+the bound prevents complete enumeration. Any overlap still rejects rendering and
+writes no comparison PNG. This changes feedback completeness, not legal geometry,
+the three-cycle budget, the static checker boundary or production success policy.
+
 CF-19 task-instruction/visual-completion clarification (2026-09-05, authorized legacy parity):
 old `9e35ab53:scripts/agents/run-spatial-world-agent.sh` supplied the exact Skill and checker/renderer
 commands plus the view/repair/recheck loop in the submitted instruction, not only in an attached
@@ -354,8 +363,33 @@ Presence checks confirm the Package/live target identity, not that a target must
 images. Only reference-projection requirements compare normalized bounds. Outside-view results are
 observations, not Host execution failures. Malformed identity/camera/hash linkage still fails integrity;
 new semantic quality diagnostics remain report-only in ordinary production and never allocate repair
-tasks or veto publication. CF-14 visible-pixel measurement and CF-12 camera calibration are separate
-obligations, not implied by this structural evidence.
+tasks or veto publication. CF-12 camera calibration remains a separate obligation.
+
+CF-14 visible-pixel activation is a current-only extension of this same Capture, not a new
+model/review stage. Each existing opening/side/top transaction also returns an opaque unlit
+identity PNG from the same explicit live geometry and Camera, with ungrouped geometry/Subject
+as black occluders. Display PNGs remain unchanged outputs. Each view record requires distinct
+`identityMaskPngArtifactRef` and `identityMaskPngContentHash`; its semantic observation repeats
+that exact content hash. Hash joins, publication and recovery verify all three identity images.
+Missing/stale bytes are integrity errors, never a fabricated mask or AABB fallback.
+
+The Host decodes the bound identity PNGs and measures admitted target pixels using the same
+pixel bounds/count/rounding owner as reference preparation. Semantic Evaluation consumes
+`visiblePixelProjection`, with `visible` or `not-visible` outcomes, rather than rectangular
+`structuralProjection` area. No pixels alone distinguish neither absence nor occlusion; do not
+invent that causal label. Structural observations remain available for their genuine spatial
+uses. Quality differences remain diagnostic in ordinary production, with no new source-repair
+Attempt, production veto or stricter success threshold. Actual Browser evidence is required
+before claiming same-camera masks, holes, repeated instances and occlusion are verified.
+
+Pixel absence and coverage drift use the existing source-repair action with the
+current-only operation `adjust-geometry`, not an inferred move/enlarge/shrink.
+Its instruction requires comparing the bound identity and display pixels with
+the frozen reference and preserving intended holes, separation and occlusion.
+This does not assert a geometric cause from an aggregate pixel count. The existing
+explicit evaluation-repair task receives all three identity masks, side/top display
+images and semantic observations through its frozen input allowlist; ordinary
+production still never allocates that external repair task.
 
 ### CF-11 source-authored ground exploration
 

@@ -926,6 +926,8 @@ async function verifyAllRunAttempts(input: Readonly<{
         ),
         view.pngContentHash,
       );
+      requirePng(await requiredFile(captureRoot, `${view.viewId}-identity-mask.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"),
+        view.identityMaskPngContentHash);
     }
     requirePng(
       await requiredFile(
@@ -1005,6 +1007,9 @@ async function verifyAllRunAttempts(input: Readonly<{
       captureReceipt,
       openingObservation: opening,
       semanticViewObservationSet,
+      identityMaskPngs: await Promise.all(captureReceipt.views.map(async ({ viewId }) => ({
+        viewId, bytes: await requiredFile(captureRoot, `${viewId}-identity-mask.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"),
+      }))),
       spawnSupportObservation: spawn,
       colliderOverlayObservation: overlay,
       scriptedTraversalObservation: scripted,
@@ -1713,6 +1718,8 @@ async function verifyNativeBlockReconstructionE2EUncheckedV1(
       "NBR70_CAPTURE_ARTIFACT_MISSING",
     );
     requirePng(bytes, view.pngContentHash);
+    requirePng(await requiredFile(captureRoot, `${view.viewId}-identity-mask.png`, "NBR70_CAPTURE_ARTIFACT_MISSING"),
+      view.identityMaskPngContentHash);
   }
   requirePng(
     await requiredFile(

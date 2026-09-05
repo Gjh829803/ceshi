@@ -163,8 +163,8 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       "world-top-down",
     ]);
     expect(silhouette.observed.views[0]!.targets.map(
-      ({ structuralProjection }) => structuralProjection.outcome,
-    )).toEqual(["outside-viewport", "outside-viewport"]);
+      ({ visiblePixelProjection }) => visiblePixelProjection.outcome,
+    )).toEqual(["not-visible", "not-visible"]);
 
     const result = evaluateWorldReconstructionV1({
       case: fixture.reconstructionCase,
@@ -328,8 +328,8 @@ describe("buildWorldReconstructionEvidenceSetV1", () => {
       { dimensionId: "opening-composition", observed: { orderedTargetRefs: ["worldkit://composition-target/package-fixture-opening@1", "worldkit://composition-target/package-fixture-upper@1"], distances: [{ distanceBasisPoints: 300 }] } },
       { dimensionId: "semantic-silhouette", observed: { views: [
         { viewId: "opening", targets: [
-          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group", structuralProjection: { outcome: "projected" } },
-          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group", structuralProjection: { outcome: "projected" } },
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group", visiblePixelProjection: { outcome: "visible" } },
+          { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-upper@1", visualGroupId: "upper-group", visiblePixelProjection: { outcome: "visible" } },
         ] },
         { viewId: "world-side", targets: [
           { acceptanceTargetRef: "worldkit://acceptance-target/package-fixture-opening@1", visualGroupId: "ground-group" },

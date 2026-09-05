@@ -88,6 +88,9 @@ export interface FormalCaptureArtifactBytesV1 {
   readonly openingPng: Uint8Array;
   readonly worldSidePng: Uint8Array;
   readonly worldTopDownPng: Uint8Array;
+  readonly openingIdentityMaskPng: Uint8Array;
+  readonly worldSideIdentityMaskPng: Uint8Array;
+  readonly worldTopDownIdentityMaskPng: Uint8Array;
   readonly colliderOverlayPng: Uint8Array;
   readonly openingObservationJson: Uint8Array;
   readonly semanticViewObservationSetJson: Uint8Array;
@@ -411,6 +414,16 @@ function assertPayloadArtifactHashes(
       mismatch(`views/${view.viewId}/pngContentHash`);
     }
   }
+  const identityHashes = new Map([
+    ["opening", sha256Bytes(payload.openingIdentityMaskPng)],
+    ["world-side", sha256Bytes(payload.worldSideIdentityMaskPng)],
+    ["world-top-down", sha256Bytes(payload.worldTopDownIdentityMaskPng)],
+  ]);
+  for (const view of receipt.views) {
+    if (identityHashes.get(view.viewId) !== view.identityMaskPngContentHash) {
+      mismatch(`views/${view.viewId}/identityMaskPngContentHash`);
+    }
+  }
   if (
     sha256Bytes(payload.colliderOverlayPng) !==
       receipt.colliderOverlayPngContentHash ||
@@ -474,6 +487,9 @@ function validateHostedPayload(
       openingPng: new Uint8Array(payload.openingPng),
       worldSidePng: new Uint8Array(payload.worldSidePng),
       worldTopDownPng: new Uint8Array(payload.worldTopDownPng),
+      openingIdentityMaskPng: new Uint8Array(payload.openingIdentityMaskPng),
+      worldSideIdentityMaskPng: new Uint8Array(payload.worldSideIdentityMaskPng),
+      worldTopDownIdentityMaskPng: new Uint8Array(payload.worldTopDownIdentityMaskPng),
       colliderOverlayPng: new Uint8Array(payload.colliderOverlayPng),
       openingObservationJson: canonicalJsonBytes(openingObservation),
       semanticViewObservationSetJson:
@@ -727,6 +743,9 @@ export async function publishRejectedCaptureDirectoryV1(
     ["opening.png", input.artifacts.openingPng, "png"],
     ["world-side.png", input.artifacts.worldSidePng, "png"],
     ["world-top-down.png", input.artifacts.worldTopDownPng, "png"],
+    ["opening-identity-mask.png", input.artifacts.openingIdentityMaskPng, "png"],
+    ["world-side-identity-mask.png", input.artifacts.worldSideIdentityMaskPng, "png"],
+    ["world-top-down-identity-mask.png", input.artifacts.worldTopDownIdentityMaskPng, "png"],
     ["collider-overlay.png", input.artifacts.colliderOverlayPng, "png"],
     ["opening-observation.json", input.artifacts.openingObservationJson, "json"],
     ["semantic-view-observation-set.json", input.artifacts.semanticViewObservationSetJson, "json"],
@@ -798,6 +817,9 @@ export async function publishFormalCaptureDirectoryV1(
     ["opening.png", input.artifacts.openingPng, "png"],
     ["world-side.png", input.artifacts.worldSidePng, "png"],
     ["world-top-down.png", input.artifacts.worldTopDownPng, "png"],
+    ["opening-identity-mask.png", input.artifacts.openingIdentityMaskPng, "png"],
+    ["world-side-identity-mask.png", input.artifacts.worldSideIdentityMaskPng, "png"],
+    ["world-top-down-identity-mask.png", input.artifacts.worldTopDownIdentityMaskPng, "png"],
     ["collider-overlay.png", input.artifacts.colliderOverlayPng, "png"],
     ["opening-observation.json", input.artifacts.openingObservationJson, "json"],
     ["semantic-view-observation-set.json", input.artifacts.semanticViewObservationSetJson, "json"],

@@ -1376,6 +1376,8 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
           path.join(value.captureDirectoryPath, name as string),
           `${stringifyCanonicalJson(artifact)}\n`,
         )));
+        await Promise.all(evidence.identityMaskPngs.map(({ viewId, bytes }) =>
+          writeFile(path.join(value.captureDirectoryPath, `${viewId}-identity-mask.png`), bytes)));
         return {
           outcome: "completed" as const,
           stage: "published" as const,
