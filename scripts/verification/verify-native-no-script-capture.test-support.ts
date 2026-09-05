@@ -18,18 +18,21 @@ import { captureProductionHostedWorldPackageV1 } from "../reconstruction/formal-
 import { evaluateNativeBlockAttemptV1 } from "../reconstruction/evaluate.js";
 import { measureFormalIdentityMaskV1 } from "../reconstruction/formal-identity-mask-measurement.js";
 import { NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 } from "../reconstruction/native-semantic-geometry.test-support.js";
+import {
+  assertNativeSemanticReferenceConsumptionV1, loadNativeSemanticReferenceV1,
+  nativeSemanticReferenceMetricIdsV1, parseNativeNoScriptCaptureArgsV1,
+} from "./native-semantic-reference.test-support.js";
 
 // Explicit Browser lane, not part of default Vitest. No model/provider task is submitted.
 // Reuse the Package-owner fixture: generation is synthetic, Host Check/Ground/Package,
 // Babylon/Havok Capture, observation parsing and Evaluation are actual implementations.
 const json = async (file: string): Promise<unknown> => JSON.parse(await readFile(file, "utf8"));
-const arguments_ = process.argv.slice(2);
-const withoutSemanticTargets = arguments_.length === 1 && arguments_[0] === "--without-semantic-targets";
-const hasGeometryFixture = arguments_.length === 2 && arguments_[0] === "--semantic-geometry" &&
-  Object.hasOwn(NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1, arguments_[1]!);
-assert(arguments_.length === 0 || withoutSemanticTargets || hasGeometryFixture,
-  "Usage: verify:native-no-script-capture [--without-semantic-targets | --semantic-geometry <fixture-id>]");
-const geometryFixtureId = hasGeometryFixture ? arguments_[1] as keyof typeof NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 : undefined;
+const args = parseNativeNoScriptCaptureArgsV1(process.argv.slice(2), Object.keys(NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1));
+const withoutSemanticTargets = args.mode === "without-semantic-targets";
+const geometryFixtureId = "geometryFixtureId" in args
+  ? args.geometryFixtureId as keyof typeof NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1 : undefined;
+const semanticReference = args.mode === "semantic-geometry-reference"
+  ? await loadNativeSemanticReferenceV1(args.baselineEvidenceRoot) : undefined;
 const evidenceRoot = await mkdtemp(path.join(os.tmpdir(), "worldkit-no-script-capture-evidence-"));
 let fixture: Awaited<ReturnType<typeof createNativeBlockPackageAttemptFixtureV1>> | undefined;
 try {
@@ -47,7 +50,9 @@ try {
       requiredTraversalBands: [{ id: "entry-middle", halfWidthMeters: 1,
         centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 10]] }],
     },
-  } : NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1[geometryFixtureId].options);
+  } : { ...NATIVE_SEMANTIC_GEOMETRY_FIXTURES_V1[geometryFixtureId].options,
+    ...(semanticReference === undefined ? {} : { semanticReferenceProjections: semanticReference.semanticReferenceProjections }),
+  });
   const caseBytes = await readFile(fixture.casePath);
   const requestBytes = await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"));
   console.log("native-no-script-capture: real Native Check/Ground/Package");
@@ -81,6 +86,9 @@ try {
   const traversal = parseFormalScriptedTraversalObservationV1(await json(path.join(captureRoot, "scripted-traversal.json")));
   assert.deepEqual(traversal.checks, []);
   assert.equal(traversal.resetReadySnapshotHash, receipt.readySnapshotHash);
+  const identityMaskPngs = await Promise.all(receipt.views.map(async ({ viewId }) => ({
+    viewId, bytes: new Uint8Array(await readFile(path.join(captureRoot, `${viewId}-identity-mask.png`))),
+  })));
   const evaluation = await evaluateNativeBlockAttemptV1({ attemptDirectoryPath: fixture.attemptDirectoryPath,
     evidenceInput: {
       id: `${fixture.reconstructionCase.id}.no-script-evidence`, caseRef: receipt.caseRef,
@@ -89,15 +97,28 @@ try {
       authoringManifest: parseNativeBlockAuthoringManifestV1(await json(path.join(fixture.attemptDirectoryPath, "source/native-block-authoring.json"))),
       captureReceiptRef: `${receipt.formalRequestRef.slice(0, -"formal-world-capture-request.json".length)}capture/formal-world-capture-receipt.json`,
       captureReceipt: receipt, scriptedTraversalObservation: traversal,
-      identityMaskPngs: await Promise.all(receipt.views.map(async ({ viewId }) => ({
-        viewId, bytes: new Uint8Array(await readFile(path.join(captureRoot, `${viewId}-identity-mask.png`))),
-      }))),
+      identityMaskPngs,
       openingObservation: parseFormalOpeningObservationV1(await json(path.join(captureRoot, "opening-observation.json"))),
       semanticViewObservationSet: parseFormalSemanticViewObservationSetV1(await json(path.join(captureRoot, "semantic-view-observation-set.json"))),
       spawnSupportObservation: parseFormalSpawnSupportObservationV1(await json(path.join(captureRoot, "spawn-support-observation.json"))),
       colliderOverlayObservation: parseFormalColliderOverlayObservationV1(await json(path.join(captureRoot, "collider-overlay-observation.json"))),
     },
   });
+  // Retain both consumer stages and actual pixels before regression assertions.
+  await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
+  await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
+  await cp(evaluation.evidenceSetPath, path.join(evidenceRoot, "evidence-set.json"));
+  console.log(`native-no-script-capture: inspectable evidence ${evidenceRoot}`);
+  const semanticReferenceReport = semanticReference === undefined ? undefined : {
+    mode: "semantic-geometry-reference", baseline: semanticReference.source,
+    semanticMetricIdsByView: nativeSemanticReferenceMetricIdsV1(evaluation.evaluation),
+  };
+  if (semanticReference !== undefined) {
+    await cp(fixture.casePath, path.join(evidenceRoot, "case.json"));
+    await writeFile(path.join(evidenceRoot, "semantic-reference.json"), stringifyCanonicalJson(semanticReferenceReport), { flag: "wx" });
+    assertNativeSemanticReferenceConsumptionV1({ reference: semanticReference, receipt,
+      identityMaskPngs, evidence: evaluation.evidenceSet, evaluation: evaluation.evaluation });
+  }
   assert.equal(evaluation.evaluation.dimensions.find(row => row.dimensionId === "critical-traversal")?.status, "incomplete");
   if (withoutSemanticTargets) {
     for (const dimensionId of ["semantic-silhouette", "topology"]) {
@@ -127,10 +148,6 @@ try {
     identityProjections.push({ viewId: view.viewId, targets: [...projections].map(
       ([acceptanceTargetRef, projection]) => ({ acceptanceTargetRef, ...projection })) });
   }
-  // Preserve actual pixels even when a fixture-specific visual assertion fails.
-  await cp(captureRoot, path.join(evidenceRoot, "capture"), { recursive: true });
-  await cp(evaluation.evaluationPath, path.join(evidenceRoot, "evaluation.json"));
-  console.log(`native-no-script-capture: inspectable evidence ${evidenceRoot}`);
   const topDown = identityProjections.find(({ viewId }) => viewId === "world-top-down");
   assert(topDown !== undefined);
   const openingPixels = identityProjections.find(({ viewId }) => viewId === "opening")!;
@@ -164,6 +181,7 @@ try {
   }
   const result = { kind: "native-no-script-capture-browser-regression", outcome: "passed",
     ...(geometryFixtureId === undefined ? {} : { geometryFixtureId }),
+    ...(semanticReferenceReport === undefined ? {} : { semanticReference: semanticReferenceReport }),
     scope: "stubbed-generation-real-native-package-browser-capture", worldPackageRootHash: packaged.worldPackageRootHash,
     cleanupOutcomes: capture.cleanupOutcomes, traversalChecks: 0, strictTraversalStatus: "incomplete",
     semanticTargetCount: request.request.semanticCaptureMap.bindings.length, images, identityProjections, evidenceRoot };

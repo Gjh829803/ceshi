@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import { sha256Bytes, stringifyCanonicalJson, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { hashFormalWorldCaptureIntentV1, parseFormalWorldCaptureIntentV1, type NativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
-import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1 } from "@whitebox-world/validation";
+import { hashWorldReconstructionEvaluationProfileV1, parseWorldReconstructionCaseV1, parseWorldReconstructionEvaluationProfileV1, type WorldReconstructionCaseV1, type WorldReconstructionViewRequirementV1 } from "@whitebox-world/validation";
 import { parseNativeSceneWorldBoundsPolicyV1, type NativeSceneWorldBoundsPolicyV1 } from "../native-scene/world-bounds-policy.js";
 import assert from "node:assert/strict";
 
@@ -247,7 +247,33 @@ type NativeBlockPackageAttemptFixtureOptionsV1 = Readonly<{
   groundExploration?: NativeBlockGroundExplorationV1;
   maximumBlockCount?: number;
   worldBoundsPolicy?: NativeSceneWorldBoundsPolicyV1;
+  semanticReferenceProjections?: readonly Readonly<{
+    acceptanceTargetRef: string;
+    viewRequirements: readonly WorldReconstructionViewRequirementV1[];
+  }>[];
 }>;
+
+// Test-only Case input override, before normal preparation/hashing. Neither the
+// profile thresholds nor unrelated targets/presence requirements are changed.
+export function withNativeSemanticReferenceProjectionsV1(
+  reconstructionCase: WorldReconstructionCaseV1,
+  references: NonNullable<NativeBlockPackageAttemptFixtureOptionsV1["semanticReferenceProjections"]>,
+): WorldReconstructionCaseV1 {
+  const byTarget = new Map(references.map((entry) => [entry.acceptanceTargetRef, entry]));
+  assert.equal(byTarget.size, references.length, "duplicate semantic reference target");
+  for (const targetRef of byTarget.keys()) {
+    assert(reconstructionCase.expected.semanticSilhouetteTargets.some(
+      ({ acceptanceTargetRef }) => acceptanceTargetRef === targetRef), "unknown semantic reference target");
+  }
+  return parseWorldReconstructionCaseV1({ ...reconstructionCase,
+    expected: { ...reconstructionCase.expected,
+      semanticSilhouetteTargets: reconstructionCase.expected.semanticSilhouetteTargets.map((target) => {
+        const reference = byTarget.get(target.acceptanceTargetRef);
+        return reference === undefined ? target : { ...target, viewRequirements: reference.viewRequirements };
+      }),
+    },
+  });
+}
 
 export async function createNativeBlockPackageAttemptFixtureV1(
   options: NativeBlockPackageAttemptFixtureOptionsV1 = {},
@@ -452,6 +478,11 @@ async function prepareFixture(root: string, options: NativeBlockPackageAttemptFi
       mediaType: "image/png",
     },
   ].sort((left, right) => left.inputRef.localeCompare(right.inputRef));
+  if (options.semanticReferenceProjections !== undefined) {
+    caseValue.expected.semanticSilhouetteTargets = withNativeSemanticReferenceProjectionsV1(
+      parseWorldReconstructionCaseV1(caseValue), options.semanticReferenceProjections,
+    ).expected.semanticSilhouetteTargets;
+  }
   await Promise.all([
     writeFile(casePath, `${stringifyCanonicalJson(caseValue)}\n`),
     writeFile(
