@@ -1684,7 +1684,7 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   已提交 `161a0ec5`，最终 typecheck、3C migration 和新 Browser 防串色断言通过。
   实际 opening 门体外的错误身份像素由 83 降为 0；四张显示 PNG Hash 与 R2-D 一致，
   WorldPackage root 未变，Browser/Vite cleanup 均 completed。修复前后证据目录分别是系统
- 临时目录中的 `worldkit-no-script-capture-evidence-m0KP3r` 与
+  临时目录中的 `worldkit-no-script-capture-evidence-m0KP3r` 与
   `worldkit-no-script-capture-evidence-ocUzi0`，含 identity/display PNG、正式收据和 Evaluation。
   CF-14 的实心/空洞、遮挡、分离实例、side/top 差异对抗集仍待，父任务继续 open。
   用户再次授权并发：`CF-14/R2-E-FIXTURES` worker 在隔离目录补纯几何对抗夹具，
@@ -1700,8 +1700,31 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   主集成候选复验 12/12 和 typecheck 通过，实际六变体 Package/Browser 对拍尚待。
   CF-21 只读审查确认两处真实旧生成指令缺失：至少四倍 reference-visible 地理覆盖；
   超四个非 Subject 候选时的签名人/动物/物件→主地标→次要/重复群组优先级。
-  已冻结并交 worker 恢复实际 Planner/Builder 指令及 Skill，不新增面积门禁或目标数量。
+  worker 恢复提交 `ffb6129e` 已逐项对照 `9e35ab53`，以 `914f8620` 纳入主会话分支：
+  实际 Planner/Builder 指令、Planner 图片合同/Brief 模板及 frozen Builder Skill 同步；
+  不新增面积门禁、目标数量、模型任务或修复预算。新增指令交付 RED 后 Planner/真实
+  Case preparation 17/17、既有 Brief parser 4/4、Skill drift/check 66/66 通过；
+  Skill Creator 的 Python metadata quick_validate 因本机缺 PyYAML 未完成，未安装依赖，
+  frontmatter 与基线未改且 frozen/live Skill SHA256 一致。不是新模型效果验收。
   完整普通 feature inventory 是另一个 CF-21 诊断建设，不冒充旧字段漏搬或效果已提升。
+  CF-14 对抗集已完成实体墙与中空墙的实际 Package/Browser：候选 `6a9b1d1a`，
+  系统临时 evidence 目录后缀 `TrzYAA` / `ZfONyc`，两者 Browser/Vite cleanup completed。
+  中空墙开场 bounds 与实墙相同，像素 coverage 为 294 / 315 basis points；严格
+  逐像素七关系断言及其余四变体仍在执行，不把单个 Capture passed 当整组通过。
+  随后六变体全部实际 Package/Capture passed；其余四组 evidence 后缀为 `4Aen3a`、
+  `x5qpD0`、`NbrGzb`、`NtNtV6`，Browser/Vite cleanup 均 completed。七项真实 PNG
+  关系在 `/tmp/worldkit-semantic-claims-sa6MB5/report.json` passed：同相机/尺寸，
+  洞面积排除、完全/部分遮挡、两个四连通分量、opening 逐 bit 相同但 side/top 增大。
+  测试 oracle `0ab9cdb4`（worker `5286f130`）主集成复验 37/37，CLI typecheck
+  首次误用 Hash export 后改为已有 sha256CanonicalJson，最终 exit 0。CLI 复用既有 sharp
+  与正式身份图 decoder，不新增依赖或生产 gate。报告绑定 PNG/Receipt/Package Hash；
+  连通分量不冒充逻辑实例数，同 bounds/count 也不证明任意形状等价。
+  只读闭包复核确认另一实际缺口：opening regions/anchors 的 reference 是像素，Host
+  gate/Evaluation 仍消费 structural AABB 并给出 add/resize/move；其 rejected repair
+  allowlist 还未交付三张 identity PNG/semantic observation。已列入同一 CF-14 的
+  `R2-F-OPENING` 主进程闭包；没有另立任务状态权威。默认 side/top presence-required
+  仅证明 live identity，是现行正确边界；不将其改成必须可见门禁。显式 reference-projection
+  的三视图已有代码，仍需 bound Evidence/Evaluation 的实际 metric 断言。CF-14 继续 open。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，

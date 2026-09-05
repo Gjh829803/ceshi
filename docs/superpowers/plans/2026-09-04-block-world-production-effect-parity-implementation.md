@@ -447,6 +447,40 @@ The main agent integrates worker commits only after inspecting their actual diff
 closure depends on both the mask implementation and inspected geometry fixtures; neither worker
 success nor single-fixture display invariance alone closes CF-14.
 
+R2-E follow-up at `6a9b1d1a`: `CF-14/R2-E-PIXEL-CLAIMS` is parallel-safe after
+the six geometry fixtures are integrated. The worker owns only
+`scripts/verification/native-semantic-pixel-claims.test-support.ts` and its test;
+input is the frozen seven `NATIVE_SEMANTIC_GEOMETRY_PIXEL_CLAIMS_V1` relations
+and decoded target-only masks (width, height, binary occupancy, same-view Camera
+signature). Output is a pure fail-closed assertion consumer with focused positive
+and adversarial tests. Reuse existing pixel measurement and dependencies where
+appropriate; no production parser, threshold, fixture or capture changes. The
+main agent separately owns serial Browser captures and CLI orchestration, PNG
+decoding and receipt-to-mask binding. No worker Browser/Havok/model jobs. Pair
+dimensions and Camera inputs must agree before comparing masks; this test-only
+oracle does not alter ordinary production success. Integration depends on both
+the inspected consumer and real six-fixture evidence, not synthetic mask tests.
+
+`CF-14/R2-CLOSURE-AUDIT` is a separate read-only worker lane at `6a9b1d1a`:
+trace reference/observed semantics and actual Evaluation consumers without any
+test, Browser or file mutation. The identified Opening branch must remain an
+explicit parent-task gap until a main-agent-owned `CF-14/R2-F-OPENING` closure:
+reference pixel regions/anchors currently meet structural AABB observations in
+both Evaluation and the explicit strict Host gate, with add/resize/move repair
+operations. Reproduce identical visible masks plus wider/offset structural bounds;
+derive visual regions/anchors from the existing hash-bound identity decoder,
+preserve structural depth/order/distance for spatial use, align the two repair
+consumers and their closed operation contract, and deliver rejected identity
+images/semantic observation through the existing opening-repair input allowlist.
+Freeze the precise consumer contract before implementation. No new stage, retry
+budget, ordinary veto, compulsory side/top visibility or causal inference from
+missing pixels. Existing side/top presence-required means live identity; explicit
+reference-projection-required already supports pixel comparison in each view.
+Bound Browser-to-Evidence-to-Evaluation metric assertions remain required. Mask
+components are not logical instance IDs, and aggregate metrics do not prove
+general shape equivalence; stronger instance/shape contracts cannot be inferred
+from these six fixtures.
+
 #### CF-11/21 legacy generation guidance restoration
 
 Ready parallel-safe implementation after CF-21/NEXT-COVERAGE-AUDIT. Frozen legacy reference:
