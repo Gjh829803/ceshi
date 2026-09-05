@@ -7,6 +7,7 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "verify:capture-startup": "tsx scripts/verification/verify-capture-startup.test-support.ts",
+    "verify:native-no-script-capture": "tsx scripts/verification/verify-native-no-script-capture.test-support.ts",
     "dev": "pnpm --filter @whitebox-world/playground dev",
     "dev:refresh": "pnpm --filter @whitebox-world/playground exec vite --force",
     "generate:golden-humanoid": "tsx scripts/fixtures/generate-golden-humanoid-glb.ts --write",

@@ -310,6 +310,15 @@ strict no-script rejection and existing fixed-script controls. Update live/froze
 Skill, consumer contracts and docs/18. Full scene-feature/ground-group coverage
 and authored strict route compilation remain CF-11/13/21, not implied complete.
 
+The explicit `pnpm verify:native-no-script-capture` Browser lane reuses the
+Package-owner deterministic fixture (stubbed generation, real Native admission,
+Ground, Package, Babylon/Havok Capture and Evaluation). It binds zero requested
+checks to the Capture ready Snapshot, checks all four PNGs and completed cleanup,
+and preserves incomplete traversal diagnostics. It does not submit a model task,
+claim reference-image quality parity or run fresh terminal playability. It stays
+outside default Vitest and retains inspection evidence in an isolated temporary
+directory; the production fixture workspace is cleaned on exit.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,
