@@ -88,6 +88,25 @@ Prepare without any upload or model call:
 node scripts/cloud/run-creator-five-case-eval.mjs --mode prepare
 ```
 
+For the executed September 5 experiment, the passing immutable lock is
+`.codex-tmp/gpt6-five-case-eval/runtime-lock-v3.json`. The unversioned lock is
+retained as evidence of the older failed setup, not an alias for V3. Always
+pass the intended lock explicitly for a real run. A future four-way experiment
+must also select both coordinator and account concurrency; for example, prepare
+a new plan (this command submits nothing):
+
+```sh
+node scripts/cloud/run-creator-five-case-eval.mjs --mode prepare \
+  --runtime-lock .codex-tmp/gpt6-five-case-eval/runtime-lock-v3.json \
+  --run-id gpt6-five-case-followup-20260905 \
+  --max-concurrency 4 --account-concurrency 4
+```
+
+Using V3 reproduces its original SDK, including known quality/authoring limits;
+later local source improvements require a separately built and hashed capsule.
+When deliberately executing a prepared plan, retain the same explicit lock,
+run ID and account-concurrency arguments for `run` and `resume`.
+
 After the runtime's real cloud CLI preview smoke passes and the lock is frozen,
 run only the first case to verify actual MCP/event protocol behavior:
 
