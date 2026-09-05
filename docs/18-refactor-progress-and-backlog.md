@@ -1893,9 +1893,21 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
     通过；typecheck、diff check 通过。Skill quick_validate 因无 PyYAML 未成功，已有 YAML
     parser 的 frontmatter/6 个引用/占位符检查通过；没有安装依赖或创建新验证 gate。
   - 仍待：Native complete-target sheets 与 styling requested scope、真实方向/材质像素及
-    任务内图像检查/修复；CF-02 的 Canonical CLI startup/transient capture caller 仍保留
-    30s direct wait/单次调用，尚未对齐旧 progress/stall-aware 时序。无新付费任务、真实本地
-    Case、全仓 CI 或独立复核；CF16/PROD10、CF02 及整个 CF 保持未完成。
+    任务内图像检查/修复。无新付费任务、真实本地 Case、全仓 CI 或独立复核；CF16/PROD10、
+    CF02 及整个 CF 保持未完成；CF02 后续 caller 对齐见下一项。
+- CF-02 后续旧时序对齐（main-agent-only）：以 `9e35ab53` 实际代码为依据，Canonical CLI
+  删除固定 30s API wait，复用 Native 同一 startup watchdog；180s hard / 45s stall /
+  250ms poll、导航视为进展、stage 变化或 revision 增长均续停滞预算，以及捕获的单次
+  transient navigation 外层重试已恢复。删除 revision <=12 限制与 reporter 的重复阶段
+  抑制；保留当前 Host 断连取消、挂起 probe 截止和脱敏错误，不增质量 gate。
+  Canonical page 在现有 reporter 发布 module/source/runtime/adapter 进展，page setup
+  成功才发布 ready，失败发布 error；不恢复第二个全局诊断 owner。goto 仍为旧链原有
+  domcontentloaded/30s，开场可见性重试和三视图重试规则不变。
+  定向 startup/hosted transport/CLI/page lifecycle 四文件 108/108、Browser API Adapter
+  ownership 1/1、typecheck 与 Planner/Canonical self-check drift 检查通过；均非真实 Browser。
+  随后补充 error-phase 优先与恢复启动失败不得再 capture 两项回归，startup + Native route
+  + Browser API pause 顺序定向 28/28 通过（含前述 startup 重跑，不累加为独立覆盖数）。
+  CF02 的真实启动/Capture 验收仍开放，最后本地 Case 仍须等待全部 CF 实施完成。
 
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。

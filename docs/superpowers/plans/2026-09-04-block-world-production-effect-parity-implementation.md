@@ -703,7 +703,13 @@ CF-13/NBR acceptance, multi-mode CF-12, per-view CF-14/24, feature-scoring CF-21
 inspector/performance and Episode/media retain their full recorded scope; no smaller
 subset is redefined as completion.
 
-The Canonical CLI still needs CF-02 caller alignment: its direct 30s startup wait and
-single capture operation differ from the old progress/stall-aware startup and transient
-navigation recovery. Reuse the current startup owner, preserve the old budgets/timing,
-and test callers; do not introduce another watchdog or gate.
+CF-02 caller alignment uses the existing `capture-startup-watchdog` and existing
+runtime-babylon advisory reporter for both Canonical and Native. The Canonical CLI
+replaces its direct 30s API wait with the old 180s hard / 45s stall / 250ms poll
+budgets, then retains the old single transient-navigation capture retry. Navigation,
+stage changes and increasing revisions count as progress; no arbitrary revision
+ceiling or suppression of revisited stages. Current Host cancellation and sanitized
+failure ownership remain, without another diagnostic global or production gate.
+The original `goto` domcontentloaded/30s timeout is unchanged, as in the old branch.
+Focused regressions are not real Browser or final production Case acceptance; those
+remain after all CF implementation, in the order above.

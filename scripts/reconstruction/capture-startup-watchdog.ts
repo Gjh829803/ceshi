@@ -1,4 +1,5 @@
 import type { FormalCaptureStartupDiagnosticV1 } from "@whitebox-world/runtime-babylon";
+import type { Page } from "playwright";
 
 export interface CaptureStartupProbeV1 {
   readonly isReady: boolean;
@@ -15,6 +16,44 @@ export const CAPTURE_STARTUP_BUDGET_V1: CaptureStartupBudgetV1 = Object.freeze({
   hardTimeoutMilliseconds: 180_000, stallTimeoutMilliseconds: 45_000, pollIntervalMilliseconds: 250,
 });
 
+/** Legacy capture navigation recovery; actual Host transport closure still aborts its signal. */
+export function isTransientCaptureNavigationError(error: unknown): boolean {
+  return /Execution context was destroyed|most likely because of a navigation|Target page, context or browser has been closed/i
+    .test(error instanceof Error ? error.message : String(error));
+}
+
+/** Canonical CLI uses the same startup owner as the Native Host. */
+export async function waitForWorldkitCaptureStartupV1(
+  page: Pick<Page, "evaluate">,
+  budget?: CaptureStartupBudgetV1,
+): Promise<void> {
+  await waitForCaptureStartupV1({
+    signal: new AbortController().signal,
+    ...(budget === undefined ? {} : { budget }),
+    probe: () => page.evaluate(() => {
+      const runtime = window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__;
+      return {
+        isReady: window.__WORLDKIT__ !== undefined && runtime?.phase === "ready",
+        isTerminal: runtime?.phase === "error",
+        ...(runtime === undefined ? {} : { runtime }),
+      };
+    }),
+  });
+}
+
+/** One outer navigation retry, distinct from the existing visible-frame retries. */
+export async function captureWithNavigationRetryV1<T>(
+  capture: () => Promise<T>,
+  waitForStartup: () => Promise<void>,
+): Promise<T> {
+  try { return await capture(); }
+  catch (error) {
+    if (!isTransientCaptureNavigationError(error)) throw error;
+    await waitForStartup();
+    return capture();
+  }
+}
+
 /** No raw provider messages, URLs, paths, or arbitrary stage strings in diagnostics. */
 export async function waitForCaptureStartupV1(input: {
   readonly probe: () => Promise<CaptureStartupProbeV1>;
@@ -26,6 +65,7 @@ export async function waitForCaptureStartupV1(input: {
     throw new Error("WORLDKIT_CAPTURE_STARTUP_BUDGET_INVALID");
   }
   let lastRevision = -1;
+  let lastStage: FormalCaptureStartupDiagnosticV1["stage"] | undefined;
   let hardTimer: ReturnType<typeof setTimeout> | undefined;
   let stallTimer: ReturnType<typeof setTimeout> | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -46,19 +86,18 @@ export async function waitForCaptureStartupV1(input: {
       let probe: CaptureStartupProbeV1;
       try { probe = await Promise.race([input.probe(), deadline]); }
       catch (error) {
-        // A context replaced during bootstrap is transient, but never progress.
-        // Closed Browser/page errors remain terminal and are NOT retried.
-        if (!(error instanceof Error) || !/(?:^|:\s)Execution context was destroyed(?:, most likely because of a navigation)?(?:\.|$)/i.test(error.message)) throw error;
+        if (!isTransientCaptureNavigationError(error)) throw error;
+        resetStall();
         await Promise.race([new Promise<void>((resolve) => { pollTimer = setTimeout(resolve, budget.pollIntervalMilliseconds); }), deadline]);
         continue;
       }
       if (probe.isTerminal || probe.runtime?.phase === "error") throw new Error("WORLDKIT_CAPTURE_STARTUP_FAILED");
       if (probe.isReady) return;
-      const revision = probe.runtime?.revision;
-      if (Number.isSafeInteger(revision) && revision! >= 0 && revision! <= 12 && revision! > lastRevision) {
-        lastRevision = revision!;
-        resetStall();
-      }
+      const revision = Number.isSafeInteger(probe.runtime?.revision) ? probe.runtime!.revision : lastRevision;
+      const stage = probe.runtime?.stage ?? lastStage;
+      if (revision > lastRevision || stage !== lastStage) resetStall();
+      lastRevision = Math.max(lastRevision, revision);
+      lastStage = stage;
       await Promise.race([new Promise<void>((resolve) => { pollTimer = setTimeout(resolve, budget.pollIntervalMilliseconds); }), deadline]);
     }
   } finally {

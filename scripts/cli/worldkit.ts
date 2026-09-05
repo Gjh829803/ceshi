@@ -44,6 +44,7 @@ import {
 } from "@whitebox-world/authoring-edit";
 import { isNil } from "lodash-es";
 import { Logger } from "@babylonjs/core/Misc/logger.js";
+import { captureWithNavigationRetryV1, waitForWorldkitCaptureStartupV1 } from "../reconstruction/capture-startup-watchdog.js";
 import {
   parseNativeSceneCheckResultV1,
   parseNativeSceneDiagnosticV1,
@@ -1927,11 +1928,7 @@ export async function captureFile(
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
-    await page.waitForFunction(
-      () => window.__WORLDKIT__ !== undefined,
-      undefined,
-      { timeout: 30_000 },
-    );
+    await waitForWorldkitCaptureStartupV1(page);
     await page.evaluate(async () => {
       const api = window.__WORLDKIT__;
       if (api === undefined) {
@@ -1983,9 +1980,12 @@ export async function captureFile(
         { timeout: 30_000 },
       );
     }
-    const capture = await captureVisibleWorldWithRetries(() => page.evaluate(
-      captureWorldkitBrowserFrame, configuredCaptureGroups,
-    ));
+    const capture = await captureWithNavigationRetryV1(
+      () => captureVisibleWorldWithRetries(() => page.evaluate(
+        captureWorldkitBrowserFrame, configuredCaptureGroups,
+      )),
+      () => waitForWorldkitCaptureStartupV1(page),
+    );
     const pngDataUrlPrefix = "data:image/png;base64,";
     if (!capture.screenshotDataUrl.startsWith(pngDataUrlPrefix)) {
       throw new Error("WORLDKIT_CAPTURE_PNG_DATA_URL_INVALID");

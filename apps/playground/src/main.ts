@@ -1,4 +1,5 @@
 import "./style.css";
+import { createFormalCaptureStartupReporterV1, type FormalCaptureStartupStageV1 } from "@whitebox-world/runtime-babylon";
 
 import { createSubjectPresetCandidateFromSelectionsV1 } from "@whitebox-world/authoring";
 import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
@@ -2772,6 +2773,7 @@ function setupArtifactPlayground(
 
 if (runtimeRoute.mode === "unknown") {
   delete window.__WORLDKIT__;
+  delete window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__;
   delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
   document.documentElement.dataset.worldkitStatus = "error";
   requiredElement("#adapter-name").textContent = "route-error";
@@ -2783,6 +2785,14 @@ if (runtimeRoute.mode === "unknown") {
   let createdAdapter: BabylonWorldAdapter | null = null;
   let createdHostOverlay: CapabilityDemoHostOverlayV1 | undefined;
   let startupStage = "host-resolver";
+  const startupReporter = createFormalCaptureStartupReporterV1(
+    (value) => { window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__ = value; },
+    "host-resolver",
+  );
+  const advanceStartupStage = (stage: FormalCaptureStartupStageV1) => {
+    startupStage = stage;
+    startupReporter.progress(stage);
+  };
   let preparationError: unknown;
   let prepared: Readonly<{
     loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
@@ -2790,14 +2800,14 @@ if (runtimeRoute.mode === "unknown") {
     BabylonWorldAdapter: typeof import("./babylon-world-adapter.js")["BabylonWorldAdapter"];
   }> | undefined;
   try {
-    startupStage = "module-import";
+    advanceStartupStage("module-import");
     const { BabylonWorldAdapter } = await import("./babylon-world-adapter.js");
     const { loadAuthoringScene, loadStudioAuthoringPreviewV1 } = await import(
       "./authoring-loader.js"
     );
     let loaded: Awaited<ReturnType<typeof import("./authoring-loader.js")["loadAuthoringScene"]>>;
     let visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
-    startupStage = "viewer-source-load";
+    advanceStartupStage("viewer-source-load");
     if (runtimeRoute.studioWorldId === undefined) {
       const bootstrapUrl = new URL(
         "/__worldkit/viewer-bootstrap",
@@ -2883,7 +2893,7 @@ if (runtimeRoute.mode === "unknown") {
         const subjectAssetResolver = createFetchSubjectAssetResolver(
           PLAYGROUND_CAPABILITY_SUBJECT_ASSET_URI_BY_REF_V1,
         );
-        startupStage = "runtime-create";
+        advanceStartupStage("runtime-create");
         const adapter = await BabylonWorldAdapter.create(
           loaded.runtimeWorldConfiguration,
           {
@@ -2895,7 +2905,7 @@ if (runtimeRoute.mode === "unknown") {
                     loaded.gameplayActionRequestResolver,
                 }),
             onInitializationStage(stage) {
-              startupStage = `runtime:${stage}`;
+              advanceStartupStage(`runtime-${stage}`);
             },
           },
         );
@@ -2906,11 +2916,12 @@ if (runtimeRoute.mode === "unknown") {
           viewport,
           trackAdapter,
           setStartupStage(stage) {
-            startupStage = stage;
+            advanceStartupStage(stage);
           },
         });
         return createdAdapter;
       } catch (error) {
+        startupReporter.finish("error");
         captureAuthoringStartupFailure(startupStage, error);
         throw error;
       }
@@ -2988,9 +2999,15 @@ if (runtimeRoute.mode === "unknown") {
   let pageSetupSucceeded = false;
   try {
     pageSetupSucceeded = await pageLifecycle.completeSetup();
-    if (pageSetupSucceeded) resolvePageSetupReady();
-    else rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
+    if (pageSetupSucceeded) {
+      startupReporter.finish("ready", "page-setup");
+      resolvePageSetupReady();
+    } else {
+      startupReporter.finish("error", "page-setup");
+      rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
+    }
   } catch (error) {
+    startupReporter.finish("error", "page-setup");
     rejectPageSetupReady(new Error("WORLDKIT_PAGE_SETUP_FAILED"));
     captureAuthoringStartupFailure("page-setup", error);
     document.documentElement.dataset.worldkitStatus = "error";
@@ -3001,6 +3018,7 @@ if (runtimeRoute.mode === "unknown") {
   }
 } else {
   delete window.__WORLDKIT__;
+  delete window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__;
   delete (window as { __WHITEBOX_PLAYGROUND__?: unknown }).__WHITEBOX_PLAYGROUND__;
   delete document.documentElement.dataset.worldkitStatus;
   const { BabylonArtifactRenderer } = await import("./babylon-artifact-renderer.js");
