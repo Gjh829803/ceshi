@@ -37,6 +37,16 @@ export function installFeatureListWindow(input: Readonly<{
   let previousStart = -1;
   let previousEnd = -1;
 
+  function reveal(index: number): void {
+    if (index < 0) return;
+    const top = index * FEATURE_ROW_HEIGHT_PIXELS;
+    const height = root.clientHeight || FEATURE_LIST_MAX_HEIGHT_PIXELS;
+    if (top < root.scrollTop) root.scrollTop = top;
+    else if (top + FEATURE_ROW_HEIGHT_PIXELS > root.scrollTop + height) {
+      root.scrollTop = top + FEATURE_ROW_HEIGHT_PIXELS - height;
+    }
+  }
+
   function select(index: number): void {
     if (disposed) return;
     const feature = features[index];
@@ -103,7 +113,12 @@ export function installFeatureListWindow(input: Readonly<{
       default: return;
     }
     event.preventDefault();
+    // Gameplay/Camera window listeners do not use defaultPrevented. Isolate
+    // only consumed keydown; keyup must still release any already-held input.
+    event.stopPropagation();
+    reveal(next);
     select(next);
+    render();
   };
   root.addEventListener("scroll", onScroll, { passive: true });
   root.addEventListener("keydown", onKeyDown);
@@ -119,15 +134,7 @@ export function installFeatureListWindow(input: Readonly<{
       root.style.height = `${Math.min(features.length * FEATURE_ROW_HEIGHT_PIXELS, FEATURE_LIST_MAX_HEIGHT_PIXELS)}px`;
       track.style.height = `${features.length * FEATURE_ROW_HEIGHT_PIXELS}px`;
       if (selectionChanged) {
-        const index = features.findIndex(({ id }) => id === selectedFeatureId);
-        if (index >= 0) {
-          const top = index * FEATURE_ROW_HEIGHT_PIXELS;
-          const height = root.clientHeight || FEATURE_LIST_MAX_HEIGHT_PIXELS;
-          if (top < root.scrollTop) root.scrollTop = top;
-          else if (top + FEATURE_ROW_HEIGHT_PIXELS > root.scrollTop + height) {
-            root.scrollTop = top + FEATURE_ROW_HEIGHT_PIXELS - height;
-          }
-        }
+        reveal(features.findIndex(({ id }) => id === selectedFeatureId));
       }
       render(true);
     },

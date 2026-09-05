@@ -31,11 +31,11 @@ class DocumentDouble {
   defaultView;
   constructor() {
     const document = this;
-    this.defaultView = { ResizeObserver: class {
+    this.defaultView = Object.assign(new EventTarget(), { ResizeObserver: class {
       constructor(callback: () => void) { document.resize = callback; }
       observe() {}
       disconnect() { document.disconnect(); }
-    } };
+    } });
   }
   createElement(tagName: string) { return new ElementDouble(this, tagName); }
 }
@@ -52,11 +52,20 @@ function setup(count: number) {
     selected.push(id);
     view.update(data, id);
   } });
+  // Node's EventTarget has no DOM ancestry. This last same-target listener
+  // models the bubble step to the window EventTarget while cancelBubble is live.
+  for (const type of ["keydown", "keyup"]) root.addEventListener(type, (event) => {
+    if (event.bubbles && !event.cancelBubble) {
+      const bubbled = new Event(type, { cancelable: true, bubbles: true });
+      Object.defineProperty(bubbled, "key", { value: (event as KeyboardEvent).key });
+      document.defaultView.dispatchEvent(bubbled);
+    }
+  });
   view.update(data, data[0]?.id ?? null);
   const rows = () => root.children.flatMap((child) => child.children).filter((child) => child.dataset.featureId !== undefined);
   const scroll = (top: number) => { root.scrollTop = top; root.dispatchEvent(new Event("scroll")); };
-  const key = (key: string) => {
-    const event = new Event("keydown", { cancelable: true });
+  const key = (key: string, type = "keydown") => {
+    const event = new Event(type, { cancelable: true, bubbles: true });
     Object.defineProperty(event, "key", { value: key });
     root.dispatchEvent(event);
     return event;
@@ -190,5 +199,42 @@ describe("bounded Feature inspector window", () => {
     expect(first.selected).toEqual(["feature-5737", "feature-1"]);
     replacement.dispose();
     expect(first.document.disconnect).toHaveBeenCalledTimes(2);
+  });
+
+  it("isolates consumed keydown from window gameplay but preserves keyup and unrelated keys", () => {
+    const value = setup(10000);
+    const gameplayKeyDown = vi.fn();
+    const gameplayKeyUp = vi.fn();
+    value.document.defaultView.addEventListener("keydown", gameplayKeyDown);
+    value.document.defaultView.addEventListener("keyup", gameplayKeyUp);
+    for (const key of ["ArrowUp", "ArrowDown", "Home", "End", "Enter", " "]) {
+      expect(value.key(key).defaultPrevented).toBe(true);
+      value.key(key, "keyup");
+    }
+    expect(gameplayKeyDown).not.toHaveBeenCalled();
+    expect(gameplayKeyUp).toHaveBeenCalledTimes(6);
+    expect(value.key("Tab").defaultPrevented).toBe(false);
+    expect(value.key("w").defaultPrevented).toBe(false);
+    expect(gameplayKeyDown).toHaveBeenCalledTimes(2);
+  });
+
+  it("reveals keyboard Home/End even when identity is unchanged, but not ordinary refresh", () => {
+    const value = setup(10000);
+    value.scroll(10000 * FEATURE_ROW_HEIGHT_PIXELS);
+    const bottom = value.root.scrollTop;
+    value.view.update(value.data, "feature-0");
+    expect(value.root.scrollTop).toBe(bottom);
+    expect(value.rows().some((row) => row.dataset.featureId === "feature-0")).toBe(false);
+    value.key("Home");
+    expect(value.selected.at(-1)).toBe("feature-0");
+    expect(value.root.scrollTop).toBe(0);
+    expect(value.rows()[0]!.getAttribute("aria-selected")).toBe("true");
+    value.key("End");
+    value.scroll(0);
+    value.view.update(value.data, "feature-9999");
+    expect(value.root.scrollTop).toBe(0);
+    value.key("End");
+    expect(value.root.scrollTop).toBe(bottom);
+    expect(value.rows().at(-1)!.getAttribute("aria-selected")).toBe("true");
   });
 });
