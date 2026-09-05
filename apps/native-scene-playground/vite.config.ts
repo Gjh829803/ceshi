@@ -505,11 +505,16 @@ export async function createNativeScenePlaygroundViteConfigV1(
       "src/hosted-formal-capture-route.ts",
       "src/hosted-runtime-bridge.ts",
       "src/hosted-runtime-frame.ts",
+      "src/hosted-recording.ts",
+      "src/hosted-recording-controls.ts",
       "src/native-runtime-host.ts",
       "src/world-package-loader.ts",
       "package.json",
       "vite.config.ts",
       "../../packages/runtime-babylon/src/hosted-formal-capture-protocol.ts",
+      "../../packages/browser-recording/src/canvas-recorder.ts",
+      "../../packages/browser-recording/src/download-recording.ts",
+      "../../packages/browser-recording/src/recording-workbench.ts",
     ] as const);
     const hostedBrowserRunnerDigest = `sha256:${hostedBrowserRunnerSourcePaths
       .reduce((hash, relativePath) => {

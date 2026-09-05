@@ -8,6 +8,7 @@ import {
   type RuntimeSessionRequestV1,
 } from "@whitebox-world/runtime-contracts";
 import { isNil } from "lodash-es";
+import { createHostedRecordingClient, type HostedRecordingClient } from "./hosted-recording.js";
 
 const FRAME_READY_FIELDS = Object.freeze([
   "kind",
@@ -38,12 +39,14 @@ export interface CreateHostedRuntimeBridgeInputV1 {
   readonly runtimeSessionId: string;
   readonly sessionNonce: string;
   readonly protocolBudget: ProtocolBudgetV1;
+  readonly recordingEnabled?: boolean;
 }
 
 export interface HostedRuntimeBridgeV1 {
   phase(): BridgePhaseV1;
   waitUntilReady(): Promise<RuntimeSessionEventV1>;
   submit(request: RuntimeSessionRequestV1): Promise<RuntimeSessionReceiptV1>;
+  recording(): HostedRecordingClient;
   dispose(): void;
 }
 
@@ -80,6 +83,7 @@ function parseFrameReady(
 class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
   #phase: BridgePhaseV1 = "bootstrapping";
   #port: MessagePort | undefined;
+  #recording: HostedRecordingClient | undefined;
   #nextOutboundSequence = 1;
   #nextInboundSequence = 2;
   #hasObservedInitialLoad = false;
@@ -141,6 +145,10 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
       this.terminate("IDENTITY_MISMATCH");
       throw this.error("IDENTITY_MISMATCH");
     }
+    if (request.type === "session.reset" && this.#recording !== undefined &&
+        !["idle", "disposed"].includes(this.#recording.state)) {
+      throw new Error("WORLDKIT_RECORDING_RESET_CONFLICT");
+    }
     const envelope = Object.freeze({
       kind: "native-isolation-transport-envelope" as const,
       schemaVersion: 1 as const,
@@ -160,6 +168,15 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
     });
     this.#port.postMessage(parsed);
     return response;
+  }
+
+  recording(): HostedRecordingClient {
+    if (this.#phase !== "ready" || this.#recording === undefined) throw this.error("RECORDING_NOT_READY");
+    if (!this.input.frame.isConnected) {
+      this.terminate("FRAME_REMOVED");
+      throw this.error("FRAME_REMOVED");
+    }
+    return this.#recording;
   }
 
   dispose(): void {
@@ -195,13 +212,19 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
     channel.port1.addEventListener("message", this.onPortMessage);
     channel.port1.start();
     window.removeEventListener("message", this.onBootstrapMessage);
-    this.input.frame.contentWindow?.postMessage(Object.freeze({
+    const mediaChannel = this.input.recordingEnabled === true ? new MessageChannel() : undefined;
+    if (mediaChannel !== undefined) this.#recording = createHostedRecordingClient(mediaChannel.port1);
+    try { this.input.frame.contentWindow?.postMessage(Object.freeze({
       kind: "worldkit-hosted-runtime-port-transfer" as const,
       schemaVersion: 1 as const,
       runtimeSessionId: this.input.runtimeSessionId,
       sessionNonce: this.input.sessionNonce,
       messageSequence: 1 as const,
-    }), this.input.runtimeOrigin, [channel.port2]);
+    }), this.input.runtimeOrigin, mediaChannel === undefined ? [channel.port2] : [channel.port2, mediaChannel.port2]); }
+    catch {
+      channel.port2.close(); mediaChannel?.port2.close();
+      this.terminate("PORT_TRANSFER_FAILED");
+    }
   };
 
   private readonly onFrameNavigation = (): void => {
@@ -278,6 +301,7 @@ class HostedRuntimeBridge implements HostedRuntimeBridgeV1 {
     this.input.frame.removeEventListener("load", this.onFrameNavigation);
     this.#port?.removeEventListener("message", this.onPortMessage);
     this.#port?.close();
+    this.#recording?.dispose();
     const error = this.error(reason);
     for (const waiter of this.#readyWaiters.splice(0)) waiter.reject(error);
     for (const pending of this.#pending.values()) pending.reject(error);

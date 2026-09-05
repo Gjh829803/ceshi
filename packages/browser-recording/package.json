@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./canvas-recorder": "./src/canvas-recorder.ts",
+    "./download": "./src/download-recording.ts",
     "./workbench": "./src/recording-workbench.ts",
     "./workbench.css": "./src/recording-workbench.css"
   }

@@ -181,6 +181,30 @@ kbd.wide {
   cursor: pointer;
 }
 
+.recording-panel {
+  right: clamp(24px, 3.1vw, 52px);
+  bottom: 110px;
+  max-width: min(340px, calc(100% - 48px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+}
+.recording-panel[hidden] { display: none; }
+.recording-panel button {
+  color: #eef3ed;
+  background: #253b32;
+  border: 1px solid #699f83;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.recording-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.recording-panel button[aria-pressed="true"] { background: #733b32; }
+.recording-panel [data-recording-status] { flex-basis: 100%; font-size: 11px; overflow-wrap: anywhere; }
+
 .loading {
   position: absolute;
   inset: 0;

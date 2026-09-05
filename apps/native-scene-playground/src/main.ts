@@ -40,6 +40,9 @@ import { presentPageFailureV1 } from "./page-failure.js";
 import { loadVerifiedNativeWorldPackageV1 } from
   "./world-package-loader.js";
 import "./style.css";
+import { CanvasRecorder } from "@whitebox-world/browser-recording/canvas-recorder";
+import { downloadRecording } from "@whitebox-world/browser-recording/download";
+import { installHostedRecordingControls } from "./hosted-recording-controls.js";
 
 declare const __WORLDKIT_HOSTED_BROWSER_RUNNER_DIGEST__: `sha256:${string}`;
 declare const __WORLDKIT_HOSTED_BROWSER_POLICY_HASH__: `sha256:${string}`;
@@ -390,9 +393,15 @@ async function startHostedShell(): Promise<void> {
     runtimeSessionId,
     sessionNonce,
     protocolBudget: browserProtocolBudget().protocol,
+    recordingEnabled: true,
   });
   // Sandbox and credentialless policy must be installed before first navigation.
   viewport.append(frame);
+  let recordingControls: ReturnType<typeof installHostedRecordingControls> | undefined;
+  window.addEventListener("beforeunload", () => {
+    recordingControls?.dispose();
+    bridge.dispose();
+  }, { once: true });
   window.__WORLDKIT_HOSTED_RUNTIME__ = Object.freeze({
     phase: () => bridge.phase(),
     waitUntilReady: () => bridge.waitUntilReady(),
@@ -401,7 +410,15 @@ async function startHostedShell(): Promise<void> {
   });
   await bridge.waitUntilReady();
   requiredElement<HTMLElement>("[data-state]").textContent = "READY";
-  window.addEventListener("beforeunload", () => bridge.dispose(), { once: true });
+  recordingControls = installHostedRecordingControls({
+    button: requiredElement<HTMLButtonElement>("[data-record]"),
+    time: requiredElement<HTMLElement>("[data-recording-time]"),
+    status: requiredElement<HTMLElement>("[data-recording-status]"),
+    client: bridge.recording(),
+    save: async result => `已下载本地录屏 · ${downloadRecording(result.blob, result.extension)}`,
+    focusCanvas: () => frame.contentWindow?.focus(),
+  });
+  requiredElement<HTMLElement>("[data-recording-panel]").hidden = false;
 }
 
 async function startHostedFrame(): Promise<void> {
@@ -475,6 +492,7 @@ async function startHostedFrame(): Promise<void> {
     runtimeSessionId,
     sessionNonce,
     protocolBudget: requestBody.effectiveBudget.protocol,
+    createRecorder: () => new CanvasRecorder(canvas),
   });
   const pressedCodes = new Set<string>();
   const contextualCodes = new Set([

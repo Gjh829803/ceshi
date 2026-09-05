@@ -2161,6 +2161,31 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   交付、录制控件、失败备份和完整生命周期；本次未改变 Native bridge/CSP/Runtime，
   不宣称 Native Viewer 录制已可用。不运行真实模型 Case；仍等待全部 CF 开发和旧链对齐。
 
+- CF16-RECORDING-TRANSPORT（main-agent-only，接 `8f91939d`）：Native interactive shell/frame
+  在原 origin/source/session/nonce 握手中交付独立媒体 port；原 Runtime port、Envelope、
+  Request/Receipt 与预算不变。正式 Capture/probe 不安装媒体 port 或控件，不开放 Runtime
+  CSP/网络访问。仅实际 hosted Canvas 延迟创建共享 CanvasRecorder，保留原尺寸、fps、
+  bitrate、MIME、编码与 stop duration；不新增录制时长或整段大小 gate。外层在 stop 后按
+  精确 offset 拉取最多 64 KiB 的单个原始字节块，不把视频塞入 Runtime JSON。整段 Blob
+  仍沿用旧链内存保存方式；本项不声称整体内存有界、视频质量已验收或生产结果已通过。
+  Native shell 现有录制按钮/计时和停止后的本地下载实现，下载复用从 Canonical 迁出的
+  原函数（相同文件名规则、Blob 与 10 秒 URL 释放），不是以本地下载代替后续 Studio 上传。
+  重复请求、坏 metadata/offset/字节块、导航与两端关闭均有处理；媒体关闭会拒绝 pending
+  操作、清理计时器，Runtime close 先释放录制器。录制中 reset conflict 已回读确认与
+  `9e35ab53:apps/playground/src/main.ts:2815` 一致。媒体失败不修改已发布白膜/生产判定。
+  Browser runner digest 增加新媒体/控件/共享源码，Native 声明直接 workspace 依赖；没有
+  外部依赖升级或生成任务。最终八文件 68/68（涵盖实际 MessageChannel + recorder/UI 替身、
+  原 CanvasRecorder 和 Canonical 消费者）通过；早期六文件 54/54 是其子集，不累加。
+  frame 握手五项曾因夹具仅声明 session.close 而失败，修为原完整 Runtime 请求清单后 5/5，
+  已纳入最终 68 项；未放宽生产 parser。Native Vite/Package 与正式 Capture route/bridge/frame
+  五文件 50/50、最终 typecheck、3C migration ledger、census（471 files，428 contract +
+  43 resource-heavy）及 diff 检查通过。Native 和 Playground 最终生产构建均通过，保留
+  large-chunk warning；Native build 只编译现有 Cloud Ridge Package fixture，不是运行 Case。
+  workspace-boundaries 再跑仍报上段相同 8 个既有私有导入，无新增项，不记该门禁通过。
+  当前证据未包含实际浏览器编码、跨源页面交互/截图、模型生成、全仓 CI 或独立复核。
+  CF16-RECORDING-STUDIO-BINDING 的 Package/Studio 身份、上传/列表/生成面板、上传失败备份
+  尚未接入；旧时间戳中断自动恢复、其余 CF 与最终真实生产 Case 同样保持开放。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 

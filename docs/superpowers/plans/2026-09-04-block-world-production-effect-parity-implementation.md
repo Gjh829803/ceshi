@@ -936,6 +936,35 @@ Package/Studio destination, and no controls on formal Capture/probe routes.
 Synthetic protocol/UI tests are development evidence; real browser recording
 and the final production Case remain separate acceptance layers.
 
+CF16-RECORDING-TRANSPORT implementation contract:
+
+- The existing origin/source/session/nonce bootstrap transfers Runtime port 0
+  unchanged plus media port 1 only when both interactive endpoints enable
+  recording. Formal Capture and verifier routes do not install the media port
+  or controls. No extra global-message listener or Runtime schema alternative.
+- The Native browser adapter creates the shared CanvasRecorder lazily against
+  the actual hosted Runtime Canvas. Shell owns the controls, save callback and
+  download; no Studio id, API URI, credential or generated scene instruction
+  crosses the media channel. Runtime snapshots and deterministic requests are
+  not media metadata or truth sources.
+- Closed start/stop requests use increasing request ids. After stop, preserve
+  the original Blob, duration and MIME; shell pulls one exact-offset chunk of
+  at most 64 KiB at a time, and frame releases the Blob after the last chunk.
+  This bounds each transfer and in-flight chunk count, not whole-clip retained
+  memory. Whole recording remains in memory as in the old recorder; no new
+  duration/size gate is added. Existing Studio upload size policy remains its
+  owner and will still require the original local-download failure path.
+- The media channel is tied to bridge/frame disposal and navigation. Invalid
+  media packets close recording without changing ordinary production outcome;
+  explicit Runtime close disposes media before Runtime. Preserve old
+  `9e35ab53:apps/playground/src/main.ts` recording-reset conflict behavior.
+  Closing the channel rejects pending operations and stops shell timers.
+- Standalone Native shell currently downloads via the same extracted download
+  implementation as Canonical (filename policy, original Blob, 10s URL release).
+  This is not a replacement for CF16-RECORDING-STUDIO-BINDING: exact Package/
+  Studio identity, automatic upload, shared workbench installation and upload
+  failure backup remain open. No new provider/model request is made here.
+
 The latest user objective supersedes the earlier early-rerun scheduling: finish all CF
 implementation and old-branch alignment first; only then run the final local Case and
 prove the production chain completes. Do not launch a fresh production/model Case during

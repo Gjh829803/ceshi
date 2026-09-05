@@ -21,6 +21,7 @@ import { CAMERA_TUNING_SAFETY_LIMITS_V1 } from "@whitebox-world/runtime-contract
 import { isNil } from "lodash-es";
 
 import { CanvasRecorder } from "@whitebox-world/browser-recording/canvas-recorder";
+import { downloadRecording } from "@whitebox-world/browser-recording/download";
 import { installFeatureListWindow } from "./feature-list-window.js";
 import { installRecordingWorkbench } from "@whitebox-world/browser-recording/workbench";
 import { recordingWorkbenchSceneId } from "./recording-workbench-route.js";
@@ -3257,21 +3258,6 @@ function updateRecordingUi(recording: boolean): void {
   if (!recording) requiredElement("#recording-time").textContent = "00:00";
 }
 
-function downloadRecording(blob: Blob, extension: "mp4" | "webm"): string {
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  const sceneId = adapter.getWorldSpec()?.id ?? "whitebox-world";
-  const filename = `${sceneId}-gameplay-${new Date().toISOString().replaceAll(":", "-")}.${extension}`;
-  link.download = filename;
-  link.href = url;
-  link.hidden = true;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return filename;
-}
-
 function showViewportFeedback(message: string, persist = false): void {
   const toast = requiredElement<HTMLDivElement>("#recording-toast");
   if (viewportFeedbackTimer !== undefined) {
@@ -3318,14 +3304,14 @@ requiredElement<HTMLButtonElement>("#record-button").addEventListener("click", a
   try {
     const result = await canvasRecorder.stop();
     if (recordingWorkbench === undefined) {
-      const filename = downloadRecording(result.blob, result.extension);
+      const filename = downloadRecording(result.blob, result.extension, adapter.getWorldSpec()?.id);
       showRecordingSaved(filename, result.blob, result.durationMs);
     } else {
       try {
         const recording = await recordingWorkbench.uploadRecording(result);
         showRecordingSaved(recording.title, result.blob, result.durationMs);
       } catch (error) {
-        const filename = downloadRecording(result.blob, result.extension);
+        const filename = downloadRecording(result.blob, result.extension, adapter.getWorldSpec()?.id);
         showRecordingSaved(filename, result.blob, result.durationMs, false);
         window.alert(error instanceof Error ? error.message : String(error));
       }

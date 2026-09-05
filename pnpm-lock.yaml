@@ -161,6 +161,9 @@ importers:
       '@babylonjs/core':
         specifier: 9.23.0
         version: 9.23.0
+      '@whitebox-world/browser-recording':
+        specifier: workspace:*
+        version: link:../../packages/browser-recording
       '@whitebox-world/gameplay':
         specifier: workspace:*
         version: link:../../packages/gameplay
