@@ -93,3 +93,12 @@ Host. Closed six-clip captures are hash-verified before reuse. A Host-selected
 `stylePlanCandidate` in the private runtime configuration is only an untrusted
 draft for a fresh cloud task; it never bypasses independent delivery validation.
 Launcher transport logs live outside the Agent workspace while the model runs.
+
+When the SDK runtime changes, use `scripts/three-episode/rerun-runtime.ts` with
+those same arguments plus a fresh `--episode-id`. Its predecessor must be a
+closed failed checkpoint. It creates fresh planning, capture and review state;
+only completed image recipes are staged, and exact input/file hashes still
+control reuse. Optional `routePlanCandidate` requires the unchanged author
+`sourceHash` and candidate `sha256`, and is re-submitted by the cloud Agent under
+the current derived world hash. Never rewrite old recording provenance to make
+it match a new runtime.

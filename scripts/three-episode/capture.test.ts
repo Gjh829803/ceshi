@@ -146,3 +146,17 @@ it('resumes an admitted six-clip boundary without a planner or GPU job and rejec
  await writeFile(path.join(summary.segments[2]!.outputRoot,'video.mp4'),'corrupted');
  await expect(runEpisodeWorkflow(options)).rejects.toThrow('RECEIPT_INVALID');expect(capture).not.toHaveBeenCalled();expect(runCodex).not.toHaveBeenCalled();
 });
+
+it('rejects a prior-route candidate from another source before dispatching the cloud Agent',async()=>{
+ const setup=await fixture(),{runEpisodeWorkflow}=await import('./workflow.js'),{saveEpisodeSource}=await import('./source.js'),{hashTree}=await import('../three-creator/compiler.js'),{createHash}=await import('node:crypto');
+ const hash=(value:string)=>createHash('sha256').update(value).digest('hex');setup.root=await realpath(setup.root);setup.options.playableRoot=await realpath(setup.options.playableRoot);
+ const sourceRoot=path.join(setup.root,'source');await mkdir(sourceRoot);await writeFile(path.join(sourceRoot,'main.ts'),'unchanged author source');
+ const opening=path.join(setup.root,'opening.png');await writeFile(opening,'fixture opening');const image={path:opening,sha256:hash('fixture opening')};
+ const sourceManifestPath=path.join(setup.root,'source.json');await saveEpisodeSource(sourceManifestPath,{kind:'three-episode-source',schemaVersion:1,worldId:'fixture-world',sourceHash:'c'.repeat(64),worldBuildHash:setup.plan.worldBuildHash,runtimeHash:'b'.repeat(64),sourceWorldBuildHash:setup.plan.worldBuildHash,sourceRuntimeHash:'b'.repeat(64),sourceDeliveryManifestSha256:'d'.repeat(64),sourceRoot,playableRoot:setup.options.playableRoot,sourceFiles:await hashTree(sourceRoot),playableFiles:await hashTree(setup.options.playableRoot),opening:image,targets:[{id:'actor',name:'actor',role:'primary-subject',whiteboxTriview:image}]});
+ const candidatePath=path.join(setup.root,'prior-route.json'),candidate=JSON.stringify(setup.plan);await writeFile(candidatePath,candidate);
+ const runCodex=vi.fn(async()=>{throw new Error('unexpected cloud dispatch');}),capture=vi.fn(async()=>{throw new Error('unexpected capture');});
+ const options={sourceManifestPath,outputRoot:path.join(setup.root,'new-runtime'),episodeId:'fixture-rerun',stopBeforeSeedance:true as const,until:'plan' as const,capture,cloud:{runCodex} as any,runtimeConfig:{routePlanCandidate:{path:candidatePath,sha256:hash(candidate),sourceHash:'e'.repeat(64)}}};
+ await expect(runEpisodeWorkflow(options)).rejects.toThrow('EPISODE_ROUTE_CANDIDATE_SOURCE_MISMATCH');expect(runCodex).not.toHaveBeenCalled();expect(capture).not.toHaveBeenCalled();
+ options.runtimeConfig.routePlanCandidate.sourceHash='c'.repeat(64);await writeFile(candidatePath,'tampered route');
+ await expect(runEpisodeWorkflow(options)).rejects.toThrow('EPISODE_ROUTE_CANDIDATE_SOURCE_MISMATCH');expect(runCodex).not.toHaveBeenCalled();expect(capture).not.toHaveBeenCalled();
+});
