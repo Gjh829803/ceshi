@@ -353,6 +353,24 @@ affected Request/admission/contract tests and typecheck, then freeze before one 
 Browser four-image inspection. Record exact input SHA and residual CF-14/21 work in
 docs/18. Native generated checker graph changes use temporary rebuild and byte drift.
 
+#### User-authorized parallel batch at 65d3c2bb (2026-09-05)
+
+The user explicitly authorized subagents while the local 054 Case runs. Two independent
+mutation tasks are ready; only these implementation slices become parallel-safe.
+Architecture, cross-owner contracts, case execution and final integration stay main-agent-owned.
+Workers use separate worktrees and dependency/cache roots; no Browser/Havok/cloud/model jobs.
+Neither worker edits live docs, the main Case checkout, artifacts, root dependencies or public schemas.
+
+| Task | Frozen contract / deliverable | Exclusive ownership | Verification / integration |
+|---|---|---|---|
+| CF-01 stack-safe search | Existing solver input/output, ordering, preference/local costs, tie-break, budget and report Hash remain unchanged; replace recursive DFS with deterministic iterative search | `packages/layout-solver/src/solve.ts` and solver tests, worktree `cf01-stack-safe`; no ready dependency | Reproduce 10k fixed entities, adversarial backtracking/budget/tie fixtures and focused solver tests; return commit/diff to main |
+| CF-29 progress visibility | Existing Codex process run/result and submission/retry/timeout contracts remain unchanged. Emit Host-derived, requestId-bound elapsed/output-byte/activity telemetry; never raw model/provider text or inferred semantic stages. Bounded/throttled diagnostics are not a business outcome, and sink errors cannot veto production | `scripts/reconstruction/codex-task-process-port.ts` and its focused tests, worktree `cf29-progress-visibility`; earlier CF-23/28 failure contracts already present at base | Synthetic child/fake timer tests for pre-close progress, split output, silence, cleanup, secret non-disclosure, sink failure and unchanged terminal outcome; return commit/diff to main |
+
+Each worker starts at exact `65d3c2bbdfb1784efca7231f7b6b7d81aa01a4f6`.
+Return packet: changed files, RED/GREEN commands, result counts, assumptions and remaining risks.
+Main reviews actual changes and integrates only after the current Case releases its frozen code inputs;
+worker commits alone are not parent-task completion or integrated evidence.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,

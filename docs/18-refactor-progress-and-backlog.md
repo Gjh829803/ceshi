@@ -1598,6 +1598,21 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   完整世界 inspection Capture；本地 Codex 登录及 LWDP 文件存在/0600 已检查，
   不记录凭据内容。准备冻结后从 Planner 开始普通生产，不重启末尾严格 replay。
   新结果尚待；CF-21 的全要素/分区合同及实际还原效果仍未验收，旧 054 保留作对照。
+- 上述新 054 已在冻结代码 `65d3c2bb` 启动本地普通生产：Planner task
+  `planner-20260905-132647-24590` 已交付 Brief、entry、world-plan 和自检报告，
+  Host 进入 `plan-ready`；Run `run-20260905133525-24571` 已创建 Attempt 0
+  `generation-dispatch.json`，进入 Builder。尚无 Builder 终态、正式 Capture 或效果结论。
+  不把 Planner 成功视为全 Case 成功；旧 Case 继续保留作对照。
+- 用户授权并发实现（2026-09-05）：隔离 worktree `cf01-stack-safe` 与
+  `cf29-progress-visibility` 均从 `65d3c2bb` 开始；main 保留 Case、跨域合同和集成所有权。
+  CF-01 子任务提交 `957755bd`，以迭代候选游标栈替换递归 DFS；forks 模式
+  10k/30k entities RED→GREEN，solver 6 文件 83/83，11 个旧实现 report Hash 保持一致。
+  CF-29 进度子任务提交 `891d3232`，增加绑定 requestId 的 Host 启动/15 秒心跳/终止诊断，
+  仅含耗时、输出字节和活动间隔，不透传 child 文本、不改变 outcome/reconcile/重试；
+  port 与 generation-runner 32/32。两项定向严格 typecheck、diff check 均通过。
+  main 已复核两项代码及测试 diff；当前只接受为待集成提交，未进入主任务分支，
+  不提前关闭 CF。待本次 Case 释放冻结执行输入后集成并进行受影响的验证；
+  不为了进度诊断重启本次 Case，也没有运行全仓 gates。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径
