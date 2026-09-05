@@ -839,6 +839,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
       let captureOwnerStarted = false;
       try {
         const materialized = await owners.materializeCaptureRequest({
+          visualCaptureScope: "world-only",
           outputMode: input.hostRecoveryIndex === undefined ? "create" : "verify-or-create",
           casePath: input.casePath,
           evaluationProfilePath: input.evaluationProfilePath,

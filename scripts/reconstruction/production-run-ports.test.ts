@@ -309,6 +309,7 @@ function owners(
     materializeCaptureRequest: vi.fn(async (input) => {
       events.push("capture-request");
       expect(input.packageDirectoryPath).toBe(value.packageDirectoryPath);
+      expect(input.visualCaptureScope).toBe("world-only");
       return {
         request: { id: "formal-request" },
         formalRequestHash: H("a"),

@@ -411,11 +411,17 @@ function validateVisualCaptureGroup(
       "identityColor must be a six-digit hex color.",
     ));
   }
-  if (!isValidVisualTargetFrontDirectionWorldXZV1(group.frontDirectionWorldXZ)) {
+  // Native Subjects are Host-owned and may spawn at arbitrary yaw. Authored
+  // object fronts and Canonical implementation maps retain cardinal declarations.
+  const front = group.frontDirectionWorldXZ;
+  const isSubjectUnitFront = group.role === "primary-subject" && Array.isArray(front) &&
+    front.length === 2 && front.every(value => typeof value === "number" && Number.isFinite(value)) &&
+    Math.abs(front[0] * front[0] + front[1] * front[1] - 1) <= 1e-9;
+  if (!isSubjectUnitFront && !isValidVisualTargetFrontDirectionWorldXZV1(front)) {
     diagnostics.push(diagnostic(
       "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
       `${instancePath}/frontDirectionWorldXZ`,
-      "frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates.",
+      "frontDirectionWorldXZ must be cardinal for authored objects, or the Host Subject's unit world XZ direction.",
     ));
   }
   return diagnostics;

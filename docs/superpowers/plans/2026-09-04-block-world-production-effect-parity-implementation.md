@@ -697,6 +697,30 @@ behaviors; material deviations require user confirmation, not an "optimization" 
 
 | CF16-NATIVE-FORMAL-DELIVERY | Existing formal Request -> Runtime provider -> hosted payload -> Receipt -> atomic Capture publication -> final publisher/verifier. Main-agent-only, sequential; depends on NATIVE-CAPTURE-ADAPTER and NATIVE-CAPTURE-IDENTITY. | Explicit requested groups bind complete Native metadata groups or the actual controlled Subject; ordered PNG bytes and hashes derive the existing tri-view manifest. Reuse the old four attempts/50ms delay, eight renders per panel, empty-panel inspection and failed-image retention. Cover empty scope, Native/Subject delivery, missing/reordered/stale artifacts and atomic publication failure. Production request preparation still emits an empty scope until Host target selection and Native styled/Studio scope are connected; this slice alone does not close CF-16. |
 
+#### CF16-NATIVE-HOST-TARGETS
+
+Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal
+Request materializer owns selection from the Case-hashed Native palette, checked
+complete metadata groups and Bootstrap controlled Subject. Its explicit capture
+scope distinguishes world-only from complete-targets; no missing-file fallback and
+no invented Canonical implementation map. Group order/role/class/color come from
+the frozen palette, membership/front from checked Native metadata. The Subject
+uses the actual Host-owned descriptor and Spawn yaw, never a Builder block proxy.
+
+Necessary Native adaptation: authored Canonical/Native target declarations retain
+the old four cardinal fronts. A Host capture group for the controlled Subject may
+carry its actual unit world-XZ front: Native Spawn already permits arbitrary yaw,
+and the existing tri-view renderer already supports unit directions. Do not reject
+a valid Spawn, quantize its yaw, or rotate the Runtime to satisfy an authoring-only
+restriction. Canonical map validation remains cardinal. This is capture projection
+of existing pose, not a new state owner or a new production gate.
+
+Required focused evidence: nonzero/non-cardinal Subject yaw; complete multi-block
+targets in palette order; stale palette bytes, missing/foreign group and unchanged
+world-only requests; rehashed request identity on scope/pose changes. Production
+requested-scope propagation and styling/Studio remain required downstream wiring;
+do not equate the materializer capability with full Native styling completion.
+
 No entire old file or historical receipt is wholesale restoration authority. Keep
 current formal capture/identity/measurement owners intact while porting these behaviors.
 

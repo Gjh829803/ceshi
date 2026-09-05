@@ -101,7 +101,22 @@ describe("hosted visual capture contracts", () => {
     }
   });
 
-  it.each([undefined, [0, 0], [1, 1], [0.6, 0.8], [NaN, 0], [0, -1, 0]].map(frontDirectionWorldXZ => ({ frontDirectionWorldXZ })))(
+  it("preserves actual Host Subject yaw without relaxing authored target declarations", () => {
+    const subject = { ...group(), frontDirectionWorldXZ: [0.6, -0.8] as const };
+    expect(validateVisualCaptureGroupsV1([subject])).toEqual([]);
+    expect(validateWhiteboxTriviewManifestV1({ kind: "worldkit-whitebox-triview-manifest", schemaVersion: 1,
+      worldBuildIdentityHash: hash, whiteboxTriviews: [{ ...subject, views: ["front", "right", "back"],
+        imageUri: `${subject.visualTargetId}/whitebox-triview.png` }] })).toEqual([]);
+    expect(validateVisualCaptureGroupsV1([group(), { ...subject, visualTargetId: "visual-target-2",
+      runtimeEntityIds: ["native-block:palace"], role: "primary-landmark", identityColor: "#F28E2B" }]))
+      .toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID" }));
+    const map = finalMap();
+    expect(validateSceneBriefImplementationMapV1({ ...map,
+      visualTargetMappings: map.visualTargetMappings.map(row => ({ ...row, frontDirectionWorldXZ: subject.frontDirectionWorldXZ })),
+      visualCaptureGroups: [subject] })).toContainEqual(expect.objectContaining({ code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID" }));
+  });
+
+  it.each([undefined, [0, 0], [1, 1], [NaN, 0], [Infinity, 0], [0, -1, 0]].map(frontDirectionWorldXZ => ({ frontDirectionWorldXZ })))(
     "retains the old front declaration validation for $frontDirectionWorldXZ", ({ frontDirectionWorldXZ }) => {
       expect(validateVisualCaptureGroupsV1([{ ...group(), frontDirectionWorldXZ }])).toContainEqual(
         expect.objectContaining({ code: "HOSTED_VISUAL_FRONT_DIRECTION_INVALID" }),

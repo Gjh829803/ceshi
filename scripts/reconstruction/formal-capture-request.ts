@@ -1,3 +1,4 @@
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import {
   bindBlockMaterializerMetadataToSemanticCaptureTargetsV1,
 } from "@whitebox-world/native-babylon-block-profile";
@@ -17,6 +18,7 @@ import {
   parseFormalWorldCaptureRequestV1,
   type FormalWorldCaptureIntentV1,
   type FormalWorldCaptureRequestV1,
+  type VisualCaptureGroupV1,
 } from "@whitebox-world/runtime-contracts";
 import {
   hashSceneAuthoringAttemptV1,
@@ -52,6 +54,8 @@ import path from "node:path";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
+import { deriveNativeVisualCaptureGroupsV1 } from "./native-visual-capture-groups.js";
+import { parseVisualIdentityPaletteV1 } from "../scenes/visual-identity-palette.js";
 
 export const FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1 =
   "formal-world-capture-request.json" as const;
@@ -68,6 +72,7 @@ const WRITE_INVALID = "FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID";
 const IDENTITY_MISMATCH = "FORMAL_WORLD_CAPTURE_REQUEST_IDENTITY_MISMATCH";
 
 const INPUT_FIELDS = [
+  "visualCaptureScope",
   "outputMode",
   "casePath",
   "evaluationProfilePath",
@@ -78,6 +83,7 @@ const INPUT_FIELDS = [
 ] as const;
 
 export interface MaterializeFormalWorldCaptureRequestInputV1 {
+  readonly visualCaptureScope: "world-only" | "complete-targets";
   readonly outputMode: "create" | "verify-or-create";
   readonly casePath: string;
   readonly evaluationProfilePath: string;
@@ -421,6 +427,9 @@ export async function materializeFormalWorldCaptureRequestV1(
 ): Promise<MaterializedFormalWorldCaptureRequestV1> {
   assertAccessorFree(input, "input");
   const source = exactPlainRecord(input, INPUT_FIELDS, "input");
+  if (source.visualCaptureScope !== "world-only" && source.visualCaptureScope !== "complete-targets") {
+    writeInvalid("visualCaptureScope");
+  }
   if (source.outputMode !== "create" && source.outputMode !== "verify-or-create") {
     writeInvalid("outputMode");
   }
@@ -532,6 +541,29 @@ export async function materializeFormalWorldCaptureRequestV1(
   const packageIdentity = joinCasePackage(reconstructionCase, verified);
   joinAttemptPackage(attempt, verified);
 
+  let visualCaptureGroups: readonly VisualCaptureGroupV1[] = [];
+  if (source.visualCaptureScope === "complete-targets") {
+    const paletteRef = reconstructionCase.referenceInputs.find(row => row.inputRef === "visual-identity-palette.json");
+    if (paletteRef?.mediaType !== "application/json" || reconstructionCase.sceneBriefRef !== "scene-brief.md") {
+      identityMismatch("visual capture planner inputs");
+    }
+    const inputRoot = await canonicalDirectory(path.join(caseRoot.requestedPath, "inputs"), "planner inputs");
+    const briefBytes = await freezeRegularFile(inputRoot, path.join(inputRoot.requestedPath, "scene-brief.md"), "scene-brief.md");
+    const paletteBytes = await freezeRegularFile(inputRoot, path.join(inputRoot.requestedPath, paletteRef.inputRef), paletteRef.inputRef);
+    if (sha256Bytes(briefBytes) !== reconstructionCase.sceneBriefHash || sha256Bytes(paletteBytes) !== paletteRef.contentHash) {
+      identityMismatch("visual capture planner input bytes");
+    }
+    const brief = parseSceneBriefV1(new TextDecoder("utf-8", { fatal: true }).decode(briefBytes));
+    if (!brief.ok) identityMismatch("visual capture scene brief");
+    const palette = parseVisualIdentityPaletteV1(parseCanonicalJson(paletteBytes, paletteRef.inputRef), {
+      sceneSourceKind: "babylon-native", sceneId: reconstructionCase.id,
+      sceneBriefHash: brief.sceneBriefHash as Sha256HashV1,
+    });
+    visualCaptureGroups = deriveNativeVisualCaptureGroupsV1({ palette,
+      metadata: verified.nativeBlockMaterializerMetadata!, runtimeBootstrap: verified.worldRuntimeBootstrap,
+      spawnMarker: verified.nativeSceneContribution.spawnMarker });
+  }
+
   const semanticCaptureMap = bindBlockMaterializerMetadataToSemanticCaptureTargetsV1({
     case: reconstructionCase,
     materializerMetadata: verified.nativeBlockMaterializerMetadata,
@@ -545,7 +577,7 @@ export async function materializeFormalWorldCaptureRequestV1(
     `artifact://world-reconstruction-case/${reconstructionCase.id}`;
   const request = parseFormalWorldCaptureRequestV1({
     kind: "formal-world-capture-request",
-    visualCaptureGroups: [],
+    visualCaptureGroups,
     schemaVersion: 1,
     id: `${reconstructionCase.id}.formal-capture-request`,
     formalRequestRef: `${artifactBase}/${relativeOutput}`,

@@ -65,7 +65,7 @@ try {
     assert(packaged.verifiedWorldPackage.nativeBlockMaterializerMetadata!.blocks.length > 0);
   }
   const caseRoot = path.dirname(fixture.casePath);
-  const request = await materializeFormalWorldCaptureRequestV1({ outputMode: "create",
+  const request = await materializeFormalWorldCaptureRequestV1({ outputMode: "create", visualCaptureScope: "world-only",
     casePath: fixture.casePath, evaluationProfilePath: path.join(caseRoot, "evaluation-profile.json"),
     sceneAuthoringAttemptPath: path.join(fixture.attemptDirectoryPath, "attempt.json"),
     packageDirectoryPath: fixture.outputDirectoryPath,

@@ -1,4 +1,4 @@
-import { stringifyCanonicalJson } from "@whitebox-world/protocol";
+import { sha256Bytes, stringifyCanonicalJson } from "@whitebox-world/protocol";
 import { omit } from "lodash-es";
 import {
   formalWorldCaptureRequestCanonicalBytesV1,
@@ -10,6 +10,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import {
   hashSceneAuthoringAttemptV1,
+  hashSceneAuthoringRouteDecisionV1,
   parseSceneAuthoringAttemptV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import {
@@ -42,6 +43,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { writeWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { writeVisualIdentityPalette } from "../visual/write-visual-identity-palette.js";
+import type { VisualIdentityPaletteV1 } from "../scenes/visual-identity-palette.js";
+import { deriveNativeVisualCaptureGroupsV1 } from "./native-visual-capture-groups.js";
 import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
 import {
   assertFormalCaptureRequestMatchesVerifiedPackageV1,
@@ -67,7 +71,10 @@ const OPENING_COMPOSITION =
 const SECONDARY_COMPOSITION =
   "worldkit://composition-target/package-fixture-secondary@1";
 
-function profileValue() {
+function profileValue(
+  OPENING_TARGET = "worldkit://acceptance-target/package-fixture-opening@1",
+  SECONDARY_TARGET = "worldkit://acceptance-target/package-fixture-secondary@1",
+) {
   const dimensionIds = [
     "collider",
     "critical-traversal",
@@ -125,7 +132,7 @@ function profileValue() {
   });
 }
 
-async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
+async function fixture(withoutScriptedTraversal = false, completeTargets = false, facingRadians = 0): Promise<Readonly<{
   caseRoot: string;
   input: MaterializeFormalWorldCaptureRequestInputV1;
   verifiedPackage: Extract<
@@ -143,13 +150,28 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
     attemptDirectoryPath,
     FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1,
   );
-  const profile = profileValue();
+  const OPENING_TARGET = completeTargets ? "worldkit://acceptance-target/visual-target-2@1" : "worldkit://acceptance-target/package-fixture-opening@1";
+  const SECONDARY_TARGET = completeTargets ? "worldkit://acceptance-target/visual-target-3@1" : "worldkit://acceptance-target/package-fixture-secondary@1";
+  const profile = profileValue(OPENING_TARGET, SECONDARY_TARGET);
   const requiredEvidenceProfileRefs = profile.requiredEvidenceByDimension
     .flatMap((entry) => entry.evidenceProfileRefs)
     .slice()
     .sort();
   const baseInput = createBabylonNativeBlockWorldPackageTestInputV1();
   const baseMetadata = baseInput.nativeBlockMaterializerMetadata!;
+  let plannerInputs: { briefBytes: Buffer; paletteBytes: Buffer; palette: VisualIdentityPaletteV1 } | undefined;
+  if (completeTargets) {
+    const inputRoot = path.join(caseRoot, "inputs");
+    await mkdir(inputRoot, { recursive: true });
+    const briefBytes = await readFile(path.resolve("artifacts/scenes/cloud-temple-t-gate-native-block/inputs/scene-brief.md"));
+    const briefPath = path.join(inputRoot, "scene-brief.md");
+    const palettePath = path.join(inputRoot, "visual-identity-palette.json");
+    await writeFile(briefPath, briefBytes);
+    await writeVisualIdentityPalette({ sceneId: "package-fixture.case", sceneSourceKind: "babylon-native",
+      briefPath, outputPath: palettePath });
+    const paletteBytes = await readFile(palettePath);
+    plannerInputs = { briefBytes, paletteBytes, palette: JSON.parse(paletteBytes.toString()) as VisualIdentityPaletteV1 };
+  }
   const formalCaptureIntent = parseFormalWorldCaptureIntentV1({
     kind: "formal-world-capture-intent",
     schemaVersion: 1,
@@ -192,6 +214,7 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
   });
   const nativeSceneContribution = {
     ...baseInput.nativeSceneContribution,
+    spawnMarker: { ...baseInput.nativeSceneContribution.spawnMarker, facingRadians },
     profileSettlement: {
       ...baseInput.nativeSceneContribution.profileSettlement,
       targetCount: 3,
@@ -201,13 +224,14 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
     kind: "world-reconstruction-case",
     schemaVersion: 1,
     id: "package-fixture.case",
-    sceneBriefRef: baseInput.sceneAuthoringAttempt.sceneBriefRef,
-    sceneBriefHash: baseInput.sceneAuthoringAttempt.sceneBriefHash,
+    sceneBriefRef: completeTargets ? "scene-brief.md" : baseInput.sceneAuthoringAttempt.sceneBriefRef,
+    sceneBriefHash: plannerInputs ? sha256Bytes(plannerInputs.briefBytes) : baseInput.sceneAuthoringAttempt.sceneBriefHash,
     referenceInputs: [{
       inputRef: "artifact://case/package-fixture/reference.png",
       contentHash: `sha256:${"e".repeat(64)}`,
       mediaType: "image/png",
-    }],
+    }, ...(plannerInputs ? [{ inputRef: "visual-identity-palette.json",
+      contentHash: sha256Bytes(plannerInputs.paletteBytes), mediaType: "application/json" }] : [])],
     evaluationProfileRef: "evaluation-profile.json",
     evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(profile),
     formalCaptureIntentRef: "inputs/formal-world-capture-intent.json",
@@ -327,8 +351,13 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
     },
   });
   const caseHash = hashWorldReconstructionCaseV1(reconstructionCase);
+  const sceneAuthoringRouteDecision = { ...baseInput.sceneAuthoringRouteDecision,
+    sceneBriefRef: reconstructionCase.sceneBriefRef, sceneBriefHash: reconstructionCase.sceneBriefHash };
   const sceneAuthoringAttempt = parseSceneAuthoringAttemptV1({
     ...baseInput.sceneAuthoringAttempt,
+    sceneBriefRef: reconstructionCase.sceneBriefRef,
+    sceneBriefHash: reconstructionCase.sceneBriefHash,
+    sceneAuthoringRouteDecisionHash: hashSceneAuthoringRouteDecisionV1(sceneAuthoringRouteDecision),
     acceptanceTargetRefs: reconstructionCase.acceptanceTargetRefs,
     requiredEvidenceProfileRefs: reconstructionCase.requiredEvidenceProfileRefs,
   });
@@ -371,8 +400,16 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
       maximumMetersXYZ: [1, 2, 5] as const,
     }],
   };
+  if (plannerInputs) {
+    nativeBlockMaterializerMetadata.visualGroups = nativeBlockMaterializerMetadata.visualGroups.map((group, index) => {
+      const target = plannerInputs.palette.targets[index + 1]!;
+      return { ...group, acceptanceTargetRef: index === 0 ? OPENING_TARGET : SECONDARY_TARGET,
+        semanticClassId: target.semanticClassId, identityColorHex: target.identityColor };
+    });
+  }
   const directory = createBabylonNativeWorldPackageV1({
     ...baseInput,
+    sceneAuthoringRouteDecision,
     sceneAuthoringAttempt,
     sceneAuthoringAttemptResult,
     nativeSceneContribution,
@@ -407,6 +444,7 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
     caseRoot,
     verifiedPackage,
     input: Object.freeze({
+      visualCaptureScope: completeTargets ? "complete-targets" : "world-only",
       outputMode: "create",
       casePath: path.join(caseRoot, "case.json"),
       evaluationProfilePath: path.join(caseRoot, "evaluation-profile.json"),
@@ -419,6 +457,73 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
 }
 
 describe("materializeFormalWorldCaptureRequestV1", () => {
+  it.each([0, Math.PI / 2, Math.PI / 4])("selects every complete Native target and the true Subject at yaw %s", async facingRadians => {
+    const { input, verifiedPackage } = await fixture(false, true, facingRadians);
+    const result = await materializeFormalWorldCaptureRequestV1(input);
+    const groups = result.request.visualCaptureGroups;
+    expect(groups.map(row => row.visualTargetId)).toEqual(["visual-target-1", "visual-target-2", "visual-target-3"]);
+    expect(groups[0]!.runtimeEntityIds).toEqual([verifiedPackage.worldRuntimeBootstrap.initialControlledEntityId]);
+    expect(groups[0]!.frontDirectionWorldXZ[0]).toBeCloseTo(-Math.sin(facingRadians), 12);
+    expect(groups[0]!.frontDirectionWorldXZ[1]).toBeCloseTo(-Math.cos(facingRadians), 12);
+    for (const [index, metadataGroup] of verifiedPackage.nativeBlockMaterializerMetadata!.visualGroups.entries()) {
+      expect(groups[index + 1]).toMatchObject({ semanticClassId: metadataGroup.semanticClassId,
+        identityColor: metadataGroup.identityColorHex, frontDirectionWorldXZ: metadataGroup.frontDirectionWorldXZ,
+        runtimeEntityIds: verifiedPackage.nativeBlockMaterializerMetadata!.blocks
+          .filter(block => block.visualGroupId === metadataGroup.visualGroupId).map(block => block.runtimeEntityId).sort() });
+    }
+    expect(Object.isFrozen(groups[0]!.frontDirectionWorldXZ)).toBe(true);
+    expect(result.formalRequestHash).not.toBe(hashFormalWorldCaptureRequestV1({ ...result.request, visualCaptureGroups: [] }));
+    const replay = await materializeFormalWorldCaptureRequestV1({ ...input, outputMode: "verify-or-create" });
+    expect(replay.requestBytes).toEqual(result.requestBytes);
+    await expect(materializeFormalWorldCaptureRequestV1({ ...input, outputMode: "verify-or-create", visualCaptureScope: "world-only" }))
+      .rejects.toThrow("existing request bytes");
+  });
+
+  it.each(["scene-brief.md", "visual-identity-palette.json"])("rejects changed frozen %s bytes before writing the capture request", async name => {
+    const { input, caseRoot } = await fixture(false, true);
+    const file = path.join(caseRoot, "inputs", name);
+    await writeFile(file, Buffer.concat([await readFile(file), Buffer.from("\n")]));
+    await expect(materializeFormalWorldCaptureRequestV1(input)).rejects.toThrow("visual capture planner input bytes");
+    await expect(lstat(input.outputPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not omit a missing complete target or use a Native block as the controlled Subject", async () => {
+    const { input, caseRoot, verifiedPackage } = await fixture(false, true);
+    const palette = JSON.parse(await readFile(path.join(caseRoot, "inputs", "visual-identity-palette.json"), "utf8")) as VisualIdentityPaletteV1;
+    const source = { palette, metadata: verifiedPackage.nativeBlockMaterializerMetadata!,
+      runtimeBootstrap: verifiedPackage.worldRuntimeBootstrap, spawnMarker: verifiedPackage.nativeSceneContribution.spawnMarker };
+    const expected = deriveNativeVisualCaptureGroupsV1(source);
+    expect(deriveNativeVisualCaptureGroupsV1({ ...source, metadata: { ...source.metadata,
+      blocks: [...source.metadata.blocks].reverse(), visualGroups: [...source.metadata.visualGroups].reverse() } })).toEqual(expected);
+    const member = source.metadata.blocks.find(block => block.visualGroupId === source.metadata.visualGroups[0]!.visualGroupId)!;
+    const extended = deriveNativeVisualCaptureGroupsV1({ ...source, metadata: { ...source.metadata,
+      blocks: [...source.metadata.blocks, { ...member, blockId: "extension", runtimeEntityId: "native-block:extension" }] } });
+    expect(extended[1]!.runtimeEntityIds).toEqual([...expected[1]!.runtimeEntityIds, "native-block:extension"].sort());
+    expect(extended[0]).toEqual(expected[0]);
+    expect(extended[2]).toEqual(expected[2]);
+    expect(() => deriveNativeVisualCaptureGroupsV1({ ...source, metadata: { ...source.metadata, visualGroups: source.metadata.visualGroups.slice(1) } }))
+      .toThrow("NATIVE_VISUAL_CAPTURE_TARGET_MISMATCH");
+    expect(() => deriveNativeVisualCaptureGroupsV1({ ...source,
+      runtimeBootstrap: { ...source.runtimeBootstrap, initialControlledEntityId: "native-block:ground" } }))
+      .toThrow("NATIVE_VISUAL_CAPTURE_SUBJECT_INVALID");
+    for (const changed of [{ identityColorHex: "#FFFFFF" as const }, { semanticClassId: "visual.foreign" }]) {
+      expect(() => deriveNativeVisualCaptureGroupsV1({ ...source, metadata: { ...source.metadata,
+        visualGroups: source.metadata.visualGroups.map((row, index) => index === 0 ? { ...row, ...changed } : row) } }))
+        .toThrow("NATIVE_VISUAL_CAPTURE_TARGET_MISMATCH");
+    }
+    await materializeFormalWorldCaptureRequestV1(input);
+  });
+
+  it("requires an explicit capture scope and never falls back when selected target inputs are absent", async () => {
+    const { input } = await fixture();
+    await expect(materializeFormalWorldCaptureRequestV1({ ...input, visualCaptureScope: "complete-targets" }))
+      .rejects.toThrow("visual capture planner inputs");
+    await expect(materializeFormalWorldCaptureRequestV1(omit(input, "visualCaptureScope") as MaterializeFormalWorldCaptureRequestInputV1))
+      .rejects.toThrow("unknown or missing field");
+    const result = await materializeFormalWorldCaptureRequestV1(input);
+    expect(result.request.visualCaptureGroups).toEqual([]);
+  });
+
   it("includes asymmetric ungrouped off-camera Blocks and ignores inventory order", async () => {
     const { verifiedPackage } = await fixture();
     const original = verifiedPackage.nativeBlockMaterializerMetadata!.blocks;

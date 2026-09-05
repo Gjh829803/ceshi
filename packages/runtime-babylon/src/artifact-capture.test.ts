@@ -155,13 +155,14 @@ describe("Babylon artifact capture", () => {
   });
 
   it.each(([
-    { front: [0, -1], right: [1, 0] },
-    { front: [-1, 0], right: [0, -1] },
-    { front: [0, 1], right: [-1, 0] },
-    { front: [1, 0], right: [0, 1] },
+    { front: [0, -1], right: [1, 0], span: 8 },
+    { front: [-1, 0], right: [0, -1], span: 8 },
+    { front: [0, 1], right: [-1, 0], span: 8 },
+    { front: [1, 0], right: [0, 1], span: 8 },
+    { front: [0.6, -0.8], right: [0.8, 0.6], span: 7.6 },
   ] as const).flatMap(directions =>
     (["semantic-mask", "runtime-lit-review"] as const).map(renderStyle => ({ ...directions, renderStyle })),
-  ))("keeps declared front $front and shared scale in $renderStyle", ({ front, right, renderStyle }) => {
+  ))("keeps declared front $front and shared scale in $renderStyle", ({ front, right, span, renderStyle }) => {
     vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
     vi.stubGlobal("document", {
       addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -205,8 +206,15 @@ describe("Babylon artifact capture", () => {
       // The empty synthetic framebuffer exhausts the old eight renders per panel.
       expect(projections).toHaveLength(24);
       for (const projection of projections) {
-        expect(projection).toEqual({ top: 8 * 0.58, bottom: -8 * 0.58,
-          left: -8 * 0.58, right: 8 * 0.58 });
+        if (span === 8) {
+          expect(projection).toEqual({ top: 8 * 0.58, bottom: -8 * 0.58,
+            left: -8 * 0.58, right: 8 * 0.58 });
+          continue;
+        }
+        expect(projection.top).toBeCloseTo(span * 0.58, 12);
+        expect(projection.bottom).toBeCloseTo(-span * 0.58, 12);
+        expect(projection.left).toBeCloseTo(-span * 0.58, 12);
+        expect(projection.right).toBeCloseTo(span * 0.58, 12);
       }
       const elevation = renderStyle === "runtime-lit-review" ? 10 * Math.PI / 180 : 0;
       const expectedDirections = [front, right, [-front[0], -front[1]]];

@@ -1968,6 +1968,26 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   Subject 选择、styling 输入准备和 Studio requested scope 尚未接通；当前代码证明显式请求
   的交付能力，不证明默认生产已生成对象三视图，不关闭 CF-16/PROD-10 或整个 CF。
 
+- CF16-NATIVE-HOST-TARGETS（main-agent-only，接 `fa5e9761`）：正式 Request materializer
+  已支持显式 `world-only | complete-targets`。完整目标模式从 Case 哈希绑定的
+  `inputs/scene-brief.md` 和 Palette 读取一次字节，沿用 Brief 正式 parser 区分原始字节 Hash
+  与 Palette 的语义 Hash；按 Palette 顺序连接 checked Native 完整组和 Bootstrap 的真实
+  controlled Subject。不生成 Canonical implementation map、虚构实体或遗漏目标 fallback。
+  Native Subject 的既有 Spawn yaw 允许任意角度；因此 source-neutral capture group 中的
+  Subject front 可携带真实单位方向，仍由原 renderer 派生 Front/Right/Back。Canonical
+  draft/final mapping 与 Native Builder 对象声明仍使用旧 cardinal 四方向，未放宽它们；
+  不把新架构的合法 Spawn 限制为四方向、不取整 yaw、不旋转世界或主体。使用 Babylon
+  Quaternion 直接旋转并归一化，避免矩阵 Float32 中间值误触原 renderer 的单位向量检查。
+  先复现合法 Subject front 被拒绝，再以真实 Package 夹具验证 0/90/45 度、全部目标、
+  scope/hash/replay、冻结 Brief/Palette 字节变更。三个文件 72/72；取景/production ports
+  两文件另 72/72；后补 inventory 顺序、多成员、缺组、错色/语义、真实 Subject、显式 scope
+  与相机方向共 12/12（含前项重跑，不累加）。Native Skill 67/67、checker drift 与 typecheck
+  通过；live/frozen checker 同步，历史 runs 未改。以上是合成/Package/NullEngine 证据，
+  没有真实 Browser 看图、模型 Case、全仓门禁或独立复核。
+  **生产 ports 目前仍显式传 `world-only`**。上层 requested scope 的传递、完整 Native
+  styling 输入准备与 Studio 接线仍须实施；本条完成 Host 请求生成能力，不关闭 CF-16、
+  CF-12 的主体/能力选择或整体 CF。最后真实本地 Case 继续等待所有 CF 开发及旧链对齐完成。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
