@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -28,7 +28,7 @@ writeFileSync(args['--report'], JSON.stringify(report));
 `;
 
 async function fixture(sceneSourceKind: "canonical" | "babylon-native" = "babylon-native") {
-  const root = await mkdtemp(path.join(os.tmpdir(), "worldkit-planner-execution-"));
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "worldkit-planner-execution-")));
   roots.push(root);
   await mkdir(path.join(root, SKILL, "scripts"), { recursive: true });
   await mkdir(path.join(root, SKILL, "references"));

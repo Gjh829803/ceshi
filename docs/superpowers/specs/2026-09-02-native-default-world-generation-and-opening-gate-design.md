@@ -14,6 +14,13 @@ checking, packaging, Runtime admission, Capture, evaluation, and repair. The WRC
 specification continues to own the product capability graph. This document owns
 only the atomic public-entry cutover and the Opening Composition Host Gate.
 
+Current production policy is owned by the later
+[production outcome parity design](2026-09-04-block-world-production-outcome-parity-design.md).
+Its Host-derived Case preparation and purpose-separated success rules supersede
+the original Mapper-task and unconditional quality-rejection design. The clauses
+below reflect that cutover; live implementation/evidence status belongs only to
+[the progress ledger](../../18-refactor-progress-and-backlog.md).
+
 ## 1. Decision
 
 Every newly created world-generation job defaults to `babylon-native`. Canonical
@@ -62,15 +69,16 @@ a Height Intent prompt/raster because block geometry—not a Heightfield—is th
 terrain representation. The mutually exclusive `canonical` Planner profile retains
 its Height Intent outputs and compiler path. The receipt binds `sceneSourceKind`, and
 the Canonical terrain finalizer rejects a Native receipt. Native preparation never
-invokes the Canonical Builder or Height Intent Compiler. A following Native Case Mapper
-task may propose only the closed semantic Case fields from those frozen Planner
-outputs. A trusted Host adapter derives and validates one Case, evaluation profile,
+invokes the Canonical Builder or Height Intent Compiler. The trusted Host derives
+the closed baseline proposal from the frozen Planner outputs and visual identity
+palette; there is no additional Native Case Mapper model task. The Host adapter
+derives and validates one Case, evaluation profile,
 Capture intent, Gameplay Bootstrap, World Runtime Bootstrap, Bounds, and Native
 Bootstrap closure, then calls the existing
 `runWorldReconstructionProductionV1()` transaction. Model output cannot mint these
 trusted identities.
 
-The Native Case proposal may describe semantic targets, topology, composition,
+The Host-derived Native Case proposal describes semantic targets, topology, composition,
 Spawn/support, required blockers and scripted pass/block intent. The Host parses
 the closed proposal, resolves stable IDs and profiles, binds fixed SDK Subject and
 Runtime resources, hashes every input, and rejects incomplete or unsupported
@@ -96,9 +104,15 @@ not the public default and is reachable only after an explicit Canonical Route.
 
 ## 4. Opening Composition Host Gate
 
-Every Canonical or Native opening image is first a Candidate Capture. The Host
-publishes the formal Capture Receipt only after the same Capture transaction passes
-one source-neutral `OpeningCompositionGateV1`.
+Every Canonical or Native opening image is first a Candidate Capture. The same
+Capture transaction computes an identity-bound, source-neutral
+`OpeningCompositionGateV1`; computing the gate is not an unconditional requirement
+that all quality diagnostics pass. In ordinary `production`, those diagnostics do
+not prevent a formal Receipt or reverse production success. Quality failure blocks
+publication only for explicit `strict-acceptance` together with
+`qualityGateMode: "required-for-publication"`. Payload, identity, transport and
+cleanup failures remain failures, and the retained legacy-equivalent third-person
+entry validation is not removed or replaced by the new quality measurements.
 
 The gate consumes identity-bound data, not best-effort image heuristics:
 
@@ -126,8 +140,11 @@ occlusion measurement may extend this same formal Observation, but cannot become
 second post-Capture authority. Landmark checks use materializer identities and
 semantic capture classes, never Mesh names or tags.
 
-Any blocking diagnostic rejects the Candidate Capture before formal Receipt
-publication. After the Hosted payload and identity join have both succeeded, the
+Under that explicit strict-acceptance policy, a failed quality gate rejects the
+Candidate Capture before formal Receipt publication. Ordinary production retains
+the quality result alongside its accepted Capture instead; it does not start an
+external source-repair task because of that result. After the Hosted payload and
+identity join have both succeeded, the
 Host preserves a rejected Candidate atomically under a separate
 `rejected-capture/` directory. That directory contains the opening, side,
 top-down, and collider-overlay PNGs, their observation JSON, and the exact
@@ -166,12 +183,16 @@ geometry, or become a second Camera controller.
 - invalid Case proposal or identity mismatch: no generation task;
 - Native Check failure: no Package Candidate;
 - Package/admission failure: no Runtime Candidate;
-- Opening gate failure: no formal Capture Receipt and no ready world;
-- validated Opening gate rejection: preserve a separate immutable rejected-Capture
+- ordinary-production Opening quality failure: retain diagnostics without vetoing
+  an otherwise valid Capture, publication or production success;
+- explicit strict-acceptance required-gate failure: no formal Capture Receipt;
+- validated strict Opening gate rejection: preserve a separate immutable rejected-Capture
   bundle and surface its human-viewable opening and diagnostic paths;
 - provider timeout/unknown outcome: reconcile the existing request identity; never
   submit a duplicate task immediately;
-- retry/repair: same frozen Scene Source and owner inputs, new Attempt identity.
+- retry/repair: preserve the frozen Scene Source and existing owner-specific
+  budgets; Builder visual repair stays inside the same task. Ordinary quality
+  diagnostics do not dispatch an additional source-generation task.
 
 There is no automatic fallback to Canonical at any failure point.
 
@@ -201,8 +222,9 @@ provider report camera shrink, semantic visibility and near-field obstruction.
 
 ### OCG-2: Admission and Studio integration
 
-Evaluate inside the Capture transaction, publish Receipt only after GO, and make
-Studio consume the same result rather than reinterpreting it.
+Evaluate inside the Capture transaction and apply the explicit execution-purpose
+publication policy. Studio consumes that result rather than promoting quality
+diagnostics into an ordinary-production veto.
 
 ### NDG/OCG-90: Clean break and evidence
 
@@ -221,7 +243,8 @@ The change is complete only when:
   Capture, evaluation and repair transaction;
 - explicit Canonical selection still runs only the retained Canonical transaction;
 - every Route/Attempt/Package/Receipt agrees on the frozen source identity;
-- unsafe Subject framing, camera shrink and missing/out-of-region landmarks reject
-  formal Capture publication;
+- retained third-person entry validation is enforced; additional framing, camera
+  shrink and landmark quality diagnostics reject formal Capture only under the
+  explicit strict-acceptance required-gate policy;
 - no public alias, duplicate entry, fallback, third Scene Source, shadow Plan, or
   duplicate Runtime/Camera/Physics owner remains.

@@ -1776,6 +1776,64 @@ CF-19 看图反馈与完成语义再对齐（2026-09-05，用户要求保持旧�
   startup progress/stall/error 三场景通过；2000 Block 合成 Browser benchmark 完成，
   仅证这些工程接缝，不冒充正式 Case、完整预算性能或效果验收。
 
+CF-19 新 Case / 文档一致性检查点（2026-09-05，`e271a35c`）：
+
+- CF-29 文档误阻断修复、工程边界修复、CF-19 指令/完成语义修复已分别提交并推送为
+  `70755665`、`ee09d376`、`e271a35c`。preparation + Builder Skill 两文件 66/66 通过，
+  包含 Skill drift 检查，活源/冻结 Skill 字节一致；这是 focused 证据，不是新 Case 终态。
+- 新本地 Case `paper-moon-054-cf19-feedback-0905` 从干净 `e271a35c` 启动，使用同一
+  `054_paper_moon_palace.png` 原图，完整重新执行 Planner → Builder → 生产交付链，
+  不复用上一轮生成 Source。Planner task `planner-20260905-083424-82873`；截至本检查点
+  仍在 Planner 阶段，尚无正式 Run 终态，不能提前记 passed、效果对齐或合并。
+- exact-head CI run `33955618615` 已失败：workspace boundary 已通过（0 debt），
+  后续 test census 报 `UNCLASSIFIED: scripts/agents/agent-planner-palette-authoring.test.ts`。
+  这是测试清单登记缺口，不是当前 Case 的生成失败；尚待修复、CI 通过及独立审查，
+  PR #202 未合并。运行期间不修改生产实现以免污染 Capture 输入。
+- 针对本次实际变更复核设计与计划，发现 2026-09-02 Native-default 规格及计划仍保留
+  已被取代的额外 Mapper task / 无条件构图拒绝。现同步为 Host baseline 派生、普通生产
+  保留质量诊断、显式 strict-acceptance + required-for-publication 才以新质量 gate 阻断；
+  同步已删除 Python entry validator 的当前 TypeScript 路径。2026-09-04 对齐规格明确
+  `234c1711` 只是历史检查点，避免把旧状态误认成实时状态。
+- 文档校正不增加门禁、任务、重试或修复循环；历史失败证据保留，不改写成通过。
+  本次文档修改只做 diff/link/代码条款核对，不重跑整仓或完整 E2E。
+
+该新 Case 跟进（2026-09-05 16:53 CST）：Planner 已交付，Host 自检 passed、无诊断；
+Run `run-20260905084340-82854` 已进入 Attempt 0 `initial-generating`，本地 Builder
+约运行 9 分钟，尚无源码/比较图及终态。不能由进程存活推断内部正常推进或已通过。
+CF-29 补充待办：`scripts/reconstruction/codex-task-process-port.ts` 的 `runProcess`
+持续消费 stdout/stderr，但只在 child close 后返回内存字符串，不向总日志发布实时阶段。
+因此总日志静默不是 stderr 管道未消费造成的已证实卡死，也不是无模型活动的证据。
+后续需提供有界、脱敏、绑定 requestId 的可信进度可见性，避免透传原始 provider/模型日志；
+保留现有 timeout、单次提交和成功标准，不增加重试。运行期间仅记录，不修改执行输入。
+
+16:58 CST 跟进纠正：直接检查该 Run 隔离 Builder workspace，`scene.ts`（31,896 bytes）
+及两份声明已于 16:55 落盘，entry/top-down 两张 advisory comparison PNG 也已存在。
+此前 `rg --files --hidden` 仍遵循 ignore，漏掉隔离目录，不能把“搜索无结果”写成“无源码”；
+监控改用精确 workspace 的直接检查或 `--no-ignore`，避免误报停滞。
+这些仍是任务内中间产物，不是 Host 自检、Native admission 或正式 Capture 通过证据。
+
+该新 Case 最终交付（2026-09-05，生产实现 `e271a35c`，运行期间只有上述文档 diff）：
+
+- `paper-moon-054-cf19-feedback-0905/run-20260905084340-82854` 已退出 0；完整新 Planner、
+  Builder、Host 自检、Native Check、Ground Analysis、WorldPackage、正式四视图 Capture、
+  Evaluation 与发布结束。`productionOutcome: passed`、`publicationOutcome: published`、
+  `cleanupOutcome: completed`，Attempt count 1，第三人称入口验证 passed、无诊断。
+- Package root `sha256:3d12e87a6cbde8244480385d386a0915b2ccd880e0b3f881d516c87fd5b4c8d1`；
+  Capture Receipt `sha256:16f4338d361d665797e99f71546a792aefc32db6165cc9529d477bb22ad0e33a`；
+  Run Receipt `sha256:d3aacfb3585e3983ba266421adfb682bc71a54f8556e0407cafbeda758c3c480`。
+  正式发布目录 `artifacts/scenes/paper-moon-054-cf19-feedback-0905/final/`，
+  开场图 `final/capture/opening.png`。Builder 约 19 分钟，无 timeout；没有 Host 重生成。
+- Evaluation 仍 failed，包含 opening-composition / semantic-silhouette drift；strict diagnostic
+  仍为 `NBR70_BLOCKER_IDENTITY_MISMATCH`、`NBR70_EVALUATION_NOT_PASSED`，cleanup not-started。
+  Run Receipt 的 evaluation outcome 仍 failed，不改写历史字节；普通生产结果按已冻结政策
+  独立为 passed。不能宣称效果等价、NBR-70/90 或全部 CF 已完成。
+- 用户随后授权合并 #202。合并前修复 CI census：一次性发现并登记 9 个漏列测试到 contract
+  lane，不删除测试或修改 gate；census 通过（456 文件：413 contract / 43 resource-heavy）。
+  10 文件 focused 首轮 71/72，失败定位为 Planner execution fixture 的 macOS `/var` 别名与
+  canonical root 不一致；fixture 改用 `realpath(mkdtemp(...))`，生产路径检查不变。
+  修正后仅重跑受影响 Planner execution 文件，14/14 通过；其余九文件首轮已通过，
+  不重复跑整仓。推送后 CI 和必需独立批准仍待取得；此处不提前声称合并完成。
+
 CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
 
 - Planner 经三轮修复通过；Generation receipt `completed`、Host Builder self-check `ok: true`，

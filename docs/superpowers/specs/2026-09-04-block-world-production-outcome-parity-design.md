@@ -2,9 +2,12 @@
 
 Status: Frozen by explicit product decision on 2026-09-04.
 
-Implementation checkpoint: `codex/block-world-effect-alignment@234c1711` implements the Scene-scope
+Historical implementation checkpoint: `codex/block-world-effect-alignment@234c1711` implements the Scene-scope
 outcome split and focused integrity closure. It is an unmerged candidate, not current `main` evidence;
 CASE-054, full Browser, repository-wide, and exact-SHA Cloud gates have not been rerun on it.
+This statement records that checkpoint only, not the latest branch status. Current
+commits, Case outcomes and outstanding CI/review evidence are recorded exclusively
+in [the progress ledger](../../18-refactor-progress-and-backlog.md).
 
 ## 1. Decision
 
