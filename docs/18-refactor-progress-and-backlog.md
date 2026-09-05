@@ -1775,6 +1775,17 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   软件 renderer 的 spawn+targetHeight 与 Runtime Socket 优先差异旧分支也存在，归 CF-04/12，
   不能作为本次新增普通失败门禁。继续按既定优先级推进 CF-16 最终视觉闭包；这些 CF-12
   缺口仍保留，不因先做 CF-16 被视为已完成。
+- CF-16 下一批代码对拍已确认不是“仅差真实效果验收”：current
+  `run-styled-opening-frame-agent.sh` 先 prompt-only，再 `generate-only --only all`；
+  Python 将 opening 与 tri-view 全部并发，tri-view references 不含 styled opening，
+  但 `finalize-styled-triviews.ts` 事后把当前 opening Hash 写为 appearanceSource。
+  Opening finalizer 也缺旧 prompt bundle 的角色/目标覆盖校验与 manifest prompt Hash。
+  对照 `9e35ab53` 的 Visual Reconstructor Skill 和 launcher，旧逻辑是**一个 Codex task**
+  内先生成/看图接受 opening，再使用该 opening 生成/检查 tri-views；opening 与每张失败
+  tri-view 各最多重生成一次，Host 两个 finalizer 在全部任务输出交付之后才执行。
+  已修正计划中可能误读为“中途 Host 握手”的文字；恢复时不拆成两任务、不加独立
+  reviewer 发布 veto。该条仍未实现；Native 下游 styling scope/目标证据接入另须闭合，
+  不能反转已完成白模的 productionOutcome。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，

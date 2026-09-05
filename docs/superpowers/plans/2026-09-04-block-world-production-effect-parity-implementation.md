@@ -603,10 +603,20 @@ quantitative old/new A/B result.
 ### Second effect checkpoint and deferred work
 
 After a usable R1 whitebox, `BWMI-CF-16` plus `BWMI-PROD-10` adds one base styled opening and its declared
-target tri-views: same-task opening self-review/Host closure first, then tri-views consuming that exact
-accepted styled opening and semantic directions. This is the checkpoint for paper/material/appearance
+target tri-views: opening generation and self-review first **inside the same Codex task**, then
+tri-views consuming that exact accepted styled opening and semantic directions; Host file/hash/role
+closure runs after the complete task delivery. The old `9e35ab53` launcher invokes both finalizers
+only after its one task returns. Do not turn this into two model tasks or invent a mid-task Host
+approval checkpoint. This is the checkpoint for paper/material/appearance
 comparison. A raw Block capture must never be compared as though it were the old styled final image.
 It does not require ten variants, six videos per variant, or the full Episode.
+
+`CF16/NEXT-VISUAL-CLOSURE-AUDIT` is a read-only, parallel-safe task against `c52f12b8` and
+the frozen old `9e35ab53`: trace the automatic visual entry, same-task Skill, declared assets,
+opening-to-tri-view dependency, finalizers and Native requested scope. Its deliverable is the
+actual consumer map and RED proposals, not an implementation or new status authority. Main owns
+the next contract freeze and final integration; no worker starts model/Browser/media jobs.
+Restoring the old complete workflow takes priority over adding an independent image scorer.
 
 CF-26B Cloud retries, CF-31C Host-only recovery, full CF-13/NBR strict acceptance, full multi-mode CF-12,
 general per-view CF-14/24 and full feature-scoring CF-21, inspector/performance polish, and Episode/media
