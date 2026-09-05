@@ -51,7 +51,9 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
   const plannerBase = { worldId: source.worldId, worldBuildHash: source.worldBuildHash, sourceHash: source.sourceHash, runtimeHash: source.runtimeHash,
     sourceFiles: Object.keys(source.sourceFiles), targets: source.targets.map(t => ({id:t.id,name:t.name,role:t.role,appearancePrompt:t.appearancePrompt??null})), profile: PRE_SEEDANCE_PROFILE };
   async function planWorld(repair?: {previousPlan:EpisodePlan;failedSegmentIds:string[];failures:any[]}) {
-    const input = {...plannerBase,promptHash:digest(plannerPrompt),repair:repair??null}, inputHash=canonicalHash(input);
+    const routeCandidate = !repair ? conf?.routePlanCandidate : null;
+    if(routeCandidate && (routeCandidate.sourceHash!==source.sourceHash || digest(await readFile(routeCandidate.path))!==routeCandidate.sha256))throw new Error('EPISODE_ROUTE_CANDIDATE_SOURCE_MISMATCH');
+    const input = {...plannerBase,promptHash:digest(plannerPrompt),repair:repair??null,...(routeCandidate?{routeCandidate:{sha256:routeCandidate.sha256,sourceHash:routeCandidate.sourceHash}}:{})}, inputHash=canonicalHash(input);
     const taskRoot=path.join(output,'planner',inputHash), planPath=path.join(taskRoot,'plan.json'), evidencePath=path.join(taskRoot,'planner-tool-evidence.json');
     await mkdir(taskRoot,{recursive:true}); await save(path.join(taskRoot,'context.json'),input);
     const previous=await json(path.join(taskRoot,'result.json'));
@@ -59,13 +61,14 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
     const planningManifest=conf?.planningSourceManifest ?? path.resolve(options.sourceManifestPath);
     const planningManifestSha256=conf?.planningSourceManifestSha256 ?? digest(await readFile(options.sourceManifestPath));
     const assets:any[]=[{id:'episode-context',path:path.join(taskRoot,'context.json'),attachAs:'file'},{id:'world-opening',path:source.opening.path,attachAs:'image'}];
+    if(routeCandidate)assets.push({id:'prior-route-plan',path:routeCandidate.path,attachAs:'file'});
     for(const [relative,hash]of Object.entries(source.sourceFiles))if(/\.(ts|js|mjs|html|json|css)$/i.test(relative))assets.push({id:`source-${canonicalHash({relative,hash}).slice(0,20)}`,path:path.join(source.sourceRoot,relative),attachAs:'file'});
     if(source.worldPlan)assets.push({id:'world-plan',path:source.worldPlan.path,attachAs:'image'});
     let repairPath:string|undefined,remoteRepairPath:string|undefined,remoteRepairHash:string|undefined;
     if(repair){repairPath=path.join(taskRoot,'repair-input.json');await save(repairPath,repair);assets.push({id:'repair-input',path:repairPath,attachAs:'file'});
       // The launcher can resolve this declared task asset without shared writable FSx.
       remoteRepairPath='task-asset:repair-input';remoteRepairHash=digest(await readFile(repairPath));}
-    const provider=await cloud.runCodex({taskId:`ep-plan-${inputHash.slice(0,32)}`,instruction:`${plannerPrompt}\n\nFrozen task context is attached. Exact worldBuildHash: ${source.worldBuildHash}. Deliver plan.json and planner-tool-evidence.json through episode_submit_plan.`,assets,
+    const provider=await cloud.runCodex({taskId:`ep-plan-${inputHash.slice(0,32)}`,instruction:`${plannerPrompt}\n\nFrozen task context is attached. Exact worldBuildHash: ${source.worldBuildHash}. Deliver plan.json and planner-tool-evidence.json through episode_submit_plan.${routeCandidate?' A prior cloud Agent route plan is attached. The author source is byte-identical; the SDK was revised to fix animation reset. Reuse those route intentions when supported, validate against this runtime as needed, and submit through the real tool with the CURRENT worldBuildHash. The prior world hash is not valid for this new runtime.':''}`,assets,
       outputs:[{path:planPath,required:true,contentType:'application/json'},{path:evidencePath,required:true,contentType:'application/json'}],model:'gpt-6-astra',reasoningEffort:'xhigh',outputRoot:taskRoot,
       episodeSourceManifest:planningManifest,episodeSourceManifestSha256:planningManifestSha256,
       ...(remoteRepairPath?{episodeRepairInput:remoteRepairPath,episodeRepairInputSha256:remoteRepairHash}:{}),});

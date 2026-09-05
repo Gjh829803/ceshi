@@ -178,3 +178,14 @@ test('an explicit single-image retry preserves the failed journal and cannot rep
  const g=await fixture(t,{pollError:new Error('still running'),runtime:{imageAccountIds:['existing-account']}});const pending={...args,outputRoot:g.root,items:[{...args.items[0],outputPath:path.join(g.root,'image.png')}]};
  await assert.rejects(g.client.generateImages(pending),/REMOTE_PENDING/);g.runtime.imageRetryAttempts={'failed-image':1};await assert.rejects(g.client.generateImages(pending),/REQUIRES_TERMINAL_FAILED/);assert.equal(g.calls.filter(c=>c.method==='POST').length,1);
 });
+
+test('artifact IO is bounded and concurrent while identical uploads share one transfer',async t=>{
+ const root=await mkdtemp(path.join(tmpdir(),'episode-io-'));t.after(()=>rm(root,{recursive:true,force:true}));const store=new Map(),counts=new Map();let active=0,maximum=0;
+ const client=createCloudClient({repoRoot:root,transfer:async(source,destination)=>{
+  if(source.startsWith('s3://')){active++;maximum=Math.max(maximum,active);try{await new Promise(r=>setTimeout(r,5));await mkdir(path.dirname(destination),{recursive:true});await writeFile(destination,store.get(source));}finally{active--;}}
+  else {counts.set(destination,(counts.get(destination)??0)+1);await new Promise(r=>setTimeout(r,5));store.set(destination,await readFile(source));}
+ }});
+ const input=path.join(root,'input');await mkdir(input);for(let i=0;i<12;i++)await writeFile(path.join(input,i+'.txt'),'identical bytes');
+ const manifest=await client.publishDirectory(input,'s3://bucket/parallel');assert.equal(manifest.files.length,12);assert.equal(counts.get(manifest.files[0].s3Uri),1);
+ await client.hydrateDirectory('s3://bucket/parallel',path.join(root,'output'));assert(maximum>1&&maximum<=8);for(let i=0;i<12;i++)assert.equal(await readFile(path.join(root,'output',i+'.txt'),'utf8'),'identical bytes');
+});

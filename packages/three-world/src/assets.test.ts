@@ -29,6 +29,21 @@ const pose = (asset: AssetInstance) => {
 afterEach(() => { for (const instance of instances.splice(0)) instance.dispose(); });
 
 describe('Three asset loader against original project GLBs', () => {
+  it('restores the exact idle pose immediately after stopping a different locomotion clip',async()=>{
+    const instance=await load();instance.play('idle');instance.update(0);const expected=pose(instance).clone();
+    for(const action of ['walk','run','walk','run','walk']){
+      instance.play(action);instance.update(.5);instance.mixer.stopAllAction();instance.play('idle');instance.update(0);
+      const current=pose(instance);expect(current.min.distanceTo(expected.min)).toBeLessThan(1e-7);expect(current.max.distanceTo(expected.max)).toBeLessThan(1e-7);
+    }
+  });
+  it('still blends from a scheduled clamped one-shot final pose',async()=>{
+    const instance=await load();instance.play('jump',{playback:'once'});const jump=instance.mixer.clipAction(instance.clips.find(c=>c.name===instance.currentClipName)!);instance.update(3);
+    expect(jump.isScheduled()).toBe(true);expect(jump.isRunning()).toBe(false);
+    instance.play('idle');instance.update(0);const idle=instance.mixer.clipAction(instance.clips.find(c=>c.name===instance.currentClipName)!);
+    expect(idle.getEffectiveWeight()).toBe(0);expect(jump.getEffectiveWeight()).toBeGreaterThan(0);
+    instance.update(.5);expect(idle.getEffectiveWeight()).toBe(1);
+  });
+
   it('binds all 25 original clips and drives real bones in metric coordinates', async () => {
     const instance = await load();
     expect(meshes(instance)).toHaveLength(2);

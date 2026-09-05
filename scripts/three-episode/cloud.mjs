@@ -21,12 +21,23 @@ async function bytes(file) { const stat = await lstat(file); if (!stat.isFile() 
 function jobValue(value) { return value?.job ?? value?.data?.job ?? value?.data ?? value; }
 function s3(prefix, ...parts) { if (!/^s3:\/\/[a-z0-9.-]+\/.+/.test(prefix ?? '')) throw new Error('EPISODE_S3_ROOT_INVALID'); return `${prefix.replace(/\/$/, '')}/${parts.join('/')}`; }
 function cloudError(code, state, cause) { const error = new Error(code, { cause }); Object.assign(error, { code, state }); return error; }
+// Bounded immutable artifact IO; wait for every active transfer before failing.
+async function transferPool(items, operation) {
+  let next = 0;
+  const results = await Promise.allSettled(Array.from({length: Math.min(8, items.length)}, async () => {
+    while (next < items.length) await operation(items[next++]);
+  }));
+  const errors = results.filter(result => result.status === 'rejected').map(result => result.reason);
+  if (errors.length === 1) throw errors[0];
+  if (errors.length) throw new AggregateError(errors, `EPISODE_ARTIFACT_TRANSFER_FAILED: ${errors[0].message}`);
+}
 
 /** Provider files remain in the trusted Host. The model receives only selected assets. */
 export function createCloudClient(overrides = {}) {
   const root = overrides.repoRoot ?? repoRoot;
   let configuration;
   let runtime;
+  const pendingUploads = new Map();
   const request = overrides.request ?? lwdpRequest;
   const poll = overrides.poll ?? pollGenerationJob;
   async function config() { return configuration ??= overrides.config ?? await loadLwdpGenerationConfig(); }
@@ -45,10 +56,15 @@ export function createCloudClient(overrides = {}) {
     const body = await bytes(file);
     const sha256 = digest(body);
     const uri = s3(prefix, 'inputs', `${sha256}${path.extname(file).toLowerCase()}`);
+    if (pendingUploads.has(uri)) return pendingUploads.get(uri);
     const cacheFile = path.join(root, '.codex-tmp/three-episode-upload-cache', digest(uri));
-    const cache = await optionalJson(cacheFile);
-    if (cache?.sha256 !== sha256) { await transfer(file, uri); await save(cacheFile, { sha256, s3Uri: uri }); }
-    return uri;
+    const pending = (async () => {
+      const cache = await optionalJson(cacheFile);
+      if (cache?.sha256 !== sha256) { await transfer(file, uri); await save(cacheFile, { sha256, s3Uri: uri }); }
+      return uri;
+    })();
+    pendingUploads.set(uri, pending);
+    try { return await pending; } finally { pendingUploads.delete(uri); }
   }
   async function download(uri, destination) {
     await mkdir(path.dirname(destination), { recursive: true });
@@ -227,16 +243,19 @@ export function createCloudClient(overrides = {}) {
   async function uploadArtifact(localPath, s3Uri) { await bytes(localPath); await transfer(localPath, s3Uri); return { s3Uri, sha256: digest(await bytes(localPath)) }; }
   async function publishDirectory(localRoot, s3Prefix) {
     const files = [];
+    const candidates = [];
     async function visit(directory) {
       for (const entry of await readdir(directory, { withFileTypes: true })) {
         const file = path.join(directory, entry.name); const relative = inside(localRoot, file);
         if (relative === 'artifact-manifest.json' || entry.name.endsWith('.part')) continue;
         if (entry.isSymbolicLink()) throw new Error('EPISODE_PUBLICATION_SYMLINK');
         if (entry.isDirectory()) await visit(file);
-        else if (entry.isFile()) { const body = await bytes(file); const sha256 = digest(body); const s3Uri = await upload(file, s3Prefix); files.push({ path: relative, sha256, byteLength: body.length, s3Uri }); }
+        else if (entry.isFile()) candidates.push({file, relative});
       }
     }
-    await visit(localRoot); files.sort((a, b) => a.path.localeCompare(b.path));
+    await visit(localRoot);
+    await transferPool(candidates, async ({file, relative}) => { const body = await bytes(file); const sha256 = digest(body); const s3Uri = await upload(file, s3Prefix); files.push({ path: relative, sha256, byteLength: body.length, s3Uri }); });
+    files.sort((a, b) => a.path.localeCompare(b.path));
     if (!files.length) throw new Error('EPISODE_PUBLICATION_EMPTY');
     const manifest = { kind: 'three-episode-artifact-manifest', schemaVersion: 1, files };
     const manifestPath = path.join(localRoot, 'artifact-manifest.json'); await save(manifestPath, manifest);
@@ -250,10 +269,13 @@ export function createCloudClient(overrides = {}) {
     for (const file of manifest.files) {
       const destination = path.resolve(localRoot, file.path); inside(localRoot, destination);
       if (seen.has(file.path) || !/^[a-f0-9]{64}$/.test(file.sha256) || !file.s3Uri.startsWith(`${s3Prefix.replace(/\/$/, '')}/`)) throw new Error('EPISODE_REMOTE_MANIFEST_ENTRY_INVALID'); seen.add(file.path);
+    }
+    await transferPool(manifest.files, async file => {
+      const destination = path.resolve(localRoot, file.path);
       let reusable = false; try { reusable = digest(await bytes(destination)) === file.sha256; } catch (error) { if (error.code !== 'ENOENT') throw error; }
       if (!reusable) await download(file.s3Uri, destination);
       const body = await bytes(destination); if (digest(body) !== file.sha256 || body.length !== file.byteLength) throw new Error('EPISODE_REMOTE_ARTIFACT_HASH_MISMATCH');
-    }
+    });
     return manifest;
   }
   return { runCodex, generateImages, generateEvents, uploadArtifact, downloadArtifact: download, publishDirectory, hydrateDirectory };

@@ -89,7 +89,10 @@ function createInstance(
       next.clampWhenFinished = !loop;
       next.setEffectiveTimeScale(binding.timeScale).setEffectiveWeight(1).play();
       if (activeAction && activeAction !== next) {
-        if (binding.blendSeconds > 0) next.crossFadeFrom(activeAction, binding.blendSeconds, false);
+        // stopAllAction() removes the old action from the mixer. Fading from it
+        // would give the new idle pose zero weight and expose the bind pose.
+        // A clamped one-shot remains scheduled and must still blend normally.
+        if (binding.blendSeconds > 0 && activeAction.isScheduled()) next.crossFadeFrom(activeAction, binding.blendSeconds, false);
         else activeAction.stop();
       }
       activeAction = next; activeActionId = actionId; activeLoop = loop; completed = false;

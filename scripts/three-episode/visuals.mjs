@@ -204,7 +204,7 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
       await verifyRef(stylePlanCandidate);
       planInput.recoveryCandidate = identityRef(stylePlanCandidate);
       planAssets.push({id:'prior-style-plan',path:stylePlanCandidate.path,attachAs:'file'});
-      planInstruction += '\nA prior terminally failed task left the attached prior-style-plan JSON. It is an untrusted candidate, not an admitted result: its transport diagnostics failed. Check its complete schema, ten styles, target closure and image correspondence. Preserve valid content, repair only actual defects, and write result.json with the CURRENT supplied inputHash/worldId/episodeId. Do not recreate transport logs. Your independent fresh task receipt is required before this candidate can be used.';
+      planInstruction += '\nA previous run left the attached prior-style-plan JSON. It is an untrusted candidate for this exact run, not an automatically admitted result. Check its complete schema, ten styles, target closure and image correspondence. Preserve valid variant definitions, repair only actual defects, and write result.json with the CURRENT supplied inputHash/worldId/episodeId. Do not recreate transport logs. Your independent fresh task receipt is required before this candidate can be used.';
     }
     const plan = await codexJson('style-plan', planInput, planAssets, planInstruction, (result, inputHash) => assertThreeEpisodeStylePlan(result, {worldId: source.worldId, episodeId, inputHash, targetIds}));
     await writeJsonAtomic(path.join(outputRoot, 'style-plan.json'), plan);
@@ -317,7 +317,9 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
             const targetIndex = targetIds.findIndex(targetId => `target-${targetId}` === id);
             const whitebox = segmentIndex >= 0 ? openingWhiteboxes[segmentIndex] : targetWhiteboxes[targetIndex];
             const interpretation = segmentIndex >= 0 ? null : variant.targetInterpretations[targetIndex];
-            const prompt = `${imagePrompt}\nImage 1 is the actual ${segmentIndex >= 0 ? 'whitebox scene first frame' : 'complete whitebox target tri-view'} for ${id}. Image 2 is the accepted segment-00 APPEARANCE anchor.\nOutput ${whitebox.width}x${whitebox.height}. Style: ${JSON.stringify(variant)}\n${interpretation ? `Target to render: ${JSON.stringify(interpretation)}` : 'Do not copy the anchor camera or layout.'}\n${feedback.get(id) ?? ''}`;
+            const appearance = {id:variant.id,styleFamily:variant.styleFamily,subjectIdentity:variant.subjectIdentity,negativeConstraints:variant.negativeConstraints,
+              targetInterpretations:interpretation?[interpretation]:variant.targetInterpretations};
+            const prompt = `${imagePrompt}\nImage 1 is the ONLY composition, pose and visibility authority: the actual ${segmentIndex >= 0 ? 'whitebox scene first frame' : 'complete whitebox target tri-view'} for ${id}. Image 2 supplies APPEARANCE ONLY: palette, materials, lighting and identities.\nOutput ${whitebox.width}x${whitebox.height}. Conditional appearance dictionary: ${JSON.stringify(appearance)}\n${interpretation ? `Render ONLY the specified target in the exact supplied three-view arrangement: ${JSON.stringify(interpretation)}` : 'The dictionary is not a scene checklist. Do not insert any target that is absent from Image 1, even if it is prominent in Image 2. Do not copy the anchor camera, layout, foreground arrangement or target distance. Keep tiny distant objects tiny and distant.'}\nOmit any semantic decoration that would add geometry outside the source silhouettes, expand a footprint, or change ground contacts. Preserve the exact source pose.\n${feedback.get(id) ?? ''}`;
             return generateImage('style-image', {id: `${variant.id}-${id}`, prompt, references: [whitebox, anchor], width: whitebox.width, height: whitebox.height});
           });
           images = [anchor, ...images];
