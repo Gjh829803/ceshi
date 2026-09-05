@@ -33,12 +33,12 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 PROFILES = ('three-raw', 'three-sdk')
-STATUSES = ('queued', 'running', 'verifying', 'issues', 'ready')
+STATUSES = ('queued', 'running', 'verifying', 'issues', 'ready', 'failed')
 HASH = re.compile(r'[a-f0-9]{64}\Z')
 ID = re.compile(r'[a-z0-9][a-z0-9-]{1,159}\Z')
 MAX_FILE = 256 * 1024 * 1024
 MAX_PAYLOAD = 512 * 1024 * 1024
-PUBLIC_MEDIA = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.glb', '.wasm',
+PUBLIC_MEDIA = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.glb', '.gltf', '.bin', '.wasm',
                 '.woff', '.woff2', '.ttf', '.otf', '.mp3', '.ogg', '.wav'}
 PRIVATE_NAME = re.compile(r'(?:^|[-_.])(?:config|events?|trace|credentials?|secrets?|auth|prompt|project|case-input)(?:[-_.]|$)', re.I)
 

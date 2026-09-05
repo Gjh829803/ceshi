@@ -15,7 +15,7 @@ Verification on the affected tree:
 
 | Command / evidence | Result | Scope |
 | --- | --- | --- |
-| `pnpm test` | exit 0; 354 files, 3843 assertions/tests passed, 3 skipped | boundary/census, 310 contract and 44 resource suites; includes new SDK 59 tests and tools 20 tests |
+| `pnpm test` | exit 0; 354 files, 3843 tests passed, 3 skipped | boundary/census, 310 contract and 44 resource suites; includes new SDK 59 tests and tools 20 tests |
 | `pnpm typecheck` | exit 0 | complete TypeScript tree after final frame-clock and reset changes |
 | `pnpm test:independent` | Node 201 passed; command exit 1 at Site due to missing local `vinext` | initial environment failure, not reported as a passing aggregate |
 | `npm ci --prefix sites/world-sdk-blueprint`, then `pnpm test:independent:site` | both exit 0; Site 1 passed | installed its existing lock without source changes; closes remaining independent lane without rerunning Node |
