@@ -159,3 +159,11 @@ test('image routing uses existing pool IDs with a stable request and rejects swi
  const g=await fixture(t,{runtime:{imageAccountIds:pool},pollError:new Error('pending')});const pending={...args,outputRoot:g.root,items:[{...args.items[0],outputPath:path.join(g.root,'image.png')}]};
  await assert.rejects(g.client.generateImages(pending),/REMOTE_PENDING/);g.runtime.imageAccountIds=['different-existing-account'];await assert.rejects(g.client.generateImages(pending),/REQUIRES_TERMINAL_FAILED/);assert.equal(g.calls.filter(c=>c.method==='POST').length,1);
 });
+
+test('distinct same-basename assets cannot overwrite each other in the cloud input directory',async t=>{
+ const f=await fixture(t);const assets=[];
+ for(const [index,content]of ['first distinct image','second distinct image'].entries()){const dir=path.join(f.root,String(index));await mkdir(dir);const file=path.join(dir,'image.png');await writeFile(file,content);assets.push({id:`view-${index}`,path:file,attachAs:'image'});}
+ await f.client.runCodex({...f.args,assets});const uploaded=f.payload().tasks[0].assets.slice(0,2);
+ assert.equal(new Set(uploaded.map(a=>a.s3_uri)).size,2);assert.equal(new Set(uploaded.map(a=>a.name)).size,2);
+ assert.deepEqual(uploaded.map(a=>a.name),['view-0.png','view-1.png']);
+});

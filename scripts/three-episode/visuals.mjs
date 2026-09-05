@@ -14,6 +14,7 @@ import {
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CODEX_MODEL = 'gpt-6-astra';
 const CODEX_REASONING = 'xhigh';
+const REVIEW_ATTACHMENT_POLICY = 'asset-id-filenames-v1';
 async function json(file) { try { return JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } }
 async function fileRef(file) {
   const stat = await lstat(file);
@@ -164,7 +165,8 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     }
   }
   async function codexJson(kind, input, assets, instruction, validate) {
-    const attachedImages = assets.map(asset => ({ assetId: asset.id, logicalImageId: asset.logicalImageId ?? asset.id }));
+    const attachedImages = assets.map(asset => ({ assetId: asset.id, logicalImageId: asset.logicalImageId ?? asset.id,
+      ...(kind.includes('review') ? { name: `${asset.id}${path.extname(asset.path).toLowerCase()}`, attachmentPolicy: REVIEW_ATTACHMENT_POLICY } : {}) }));
     return stage(kind, {...input, attachedImages, instruction, model: CODEX_MODEL, reasoningEffort: CODEX_REASONING}, async ({root, inputHash, taskId}) => {
       const outputPath = path.join(root, 'result.json');
       const context = {...input, attachedImages, inputHash, worldId: source.worldId, episodeId};
@@ -207,10 +209,13 @@ export async function runThreeEpisodeVisuals({source, capture, episodeId, output
     const plan = await codexJson('style-plan', planInput, planAssets, planInstruction, (result, inputHash) => assertThreeEpisodeStylePlan(result, {worldId: source.worldId, episodeId, inputHash, targetIds}));
     await writeJsonAtomic(path.join(outputRoot, 'style-plan.json'), plan);
     const planHash = hashVisualInput(plan);
-    const anchorHistoryPath = path.join(outputRoot, 'anchors', `history-${planHash}.json`);
+    // Old same-basename review inputs could overwrite one another on download.
+    // Preserve those histories, but never reuse their verdicts or repair budget.
+    // Original generated images keep their unchanged content recipes and cache.
+    const anchorHistoryPath = path.join(outputRoot, 'anchors', `history-${planHash}-${REVIEW_ATTACHMENT_POLICY}.json`);
     const previousHistory = await json(anchorHistoryPath);
     if (previousHistory && (previousHistory.planHash !== planHash || hashVisualInput(previousHistory.worldIdentity) !== hashVisualInput(worldIdentity))) throw new Error('THREE_EPISODE_ANCHOR_HISTORY_IDENTITY_MISMATCH');
-    const anchorHistory = previousHistory ?? {kind: 'worldkit-three-episode-anchor-history', schemaVersion: 1, planHash, worldIdentity,
+    const anchorHistory = previousHistory ?? {kind: 'worldkit-three-episode-anchor-history', schemaVersion: 1, planHash, worldIdentity, reviewAttachmentPolicy: REVIEW_ATTACHMENT_POLICY,
       styles: Object.fromEntries(THREE_EPISODE_STYLE_IDS.map(id => [id, {attempts: [], currentAnchor: null, currentReview: null, pendingFeedback: '', revisionReview: null}]))};
     const saveAnchorHistory = createJsonAtomicWriter(anchorHistoryPath);
     const persistAnchorHistory = () => saveAnchorHistory(structuredClone(anchorHistory));

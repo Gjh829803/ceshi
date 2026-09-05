@@ -59,7 +59,7 @@ export async function runEpisodeWorkflow(options: EpisodeWorkflowOptions) {
     const planningManifest=conf?.planningSourceManifest ?? path.resolve(options.sourceManifestPath);
     const planningManifestSha256=conf?.planningSourceManifestSha256 ?? digest(await readFile(options.sourceManifestPath));
     const assets:any[]=[{id:'episode-context',path:path.join(taskRoot,'context.json'),attachAs:'file'},{id:'world-opening',path:source.opening.path,attachAs:'image'}];
-    for(const [relative,hash]of Object.entries(source.sourceFiles))if(/\.(ts|js|mjs|html|json|css)$/i.test(relative))assets.push({id:`source-${hash.slice(0,20)}`,path:path.join(source.sourceRoot,relative),attachAs:'file'});
+    for(const [relative,hash]of Object.entries(source.sourceFiles))if(/\.(ts|js|mjs|html|json|css)$/i.test(relative))assets.push({id:`source-${canonicalHash({relative,hash}).slice(0,20)}`,path:path.join(source.sourceRoot,relative),attachAs:'file'});
     if(source.worldPlan)assets.push({id:'world-plan',path:source.worldPlan.path,attachAs:'image'});
     let repairPath:string|undefined,remoteRepairPath:string|undefined,remoteRepairHash:string|undefined;
     if(repair){repairPath=path.join(taskRoot,'repair-input.json');await save(repairPath,repair);assets.push({id:'repair-input',path:repairPath,attachAs:'file'});

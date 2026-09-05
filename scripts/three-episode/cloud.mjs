@@ -138,9 +138,11 @@ export function createCloudClient(overrides = {}) {
   async function runCodex(args) {
     if ((args.model ?? MODEL) !== MODEL || (args.reasoningEffort ?? EFFORT) !== EFFORT) throw new Error('EPISODE_REQUIRES_GPT6_XHIGH');
     const conf = await settings(); const taskId = id(args.taskId); const outputRoot = path.resolve(args.outputRoot);
+    const assetIds = (args.assets ?? []).map(asset => id(asset.id));
+    if (new Set(assetIds).size !== assetIds.length || assetIds.includes('episode-launch-input')) throw new Error('EPISODE_CLOUD_ASSET_ID_COLLISION');
     if (!path.isAbsolute(conf.launcherPath ?? '')) throw new Error('EPISODE_CLOUD_LAUNCHER_REQUIRED');
     const prefix = s3(conf.outputS3Root, taskId); const assets = [];
-    for (const input of args.assets ?? []) assets.push({ id: id(input.id), name: path.basename(input.path), s3_uri: await upload(input.path, conf.outputS3Root), media_type: input.contentType ?? (/\.png$/i.test(input.path) ? 'image/png' : 'application/octet-stream'), attach_as: input.attachAs ?? 'file' });
+    for (const input of args.assets ?? []) assets.push({ id: id(input.id), name: `${id(input.id)}${path.extname(input.path).toLowerCase()}`, s3_uri: await upload(input.path, conf.outputS3Root), media_type: input.contentType ?? (/\.png$/i.test(input.path) ? 'image/png' : 'application/octet-stream'), attach_as: input.attachAs ?? 'file' });
     const outputs = args.outputs.map(output => ({ ...output, path: path.resolve(output.path), remotePath: inside(outputRoot, output.path) }));
     async function frozenInputHash(file, suppliedHash) {
       if (!file) return null;
@@ -185,7 +187,7 @@ export function createCloudClient(overrides = {}) {
     const items = [];
     for (const item of args.items) {
       inside(outputRoot, item.outputPath); const references = [];
-      for (const image of item.images ?? []) references.push({ s3_uri: await upload(image, conf.outputS3Root), role: 'reference', name: path.basename(image) });
+      for (const image of item.images ?? []) references.push({ s3_uri: await upload(image, conf.outputS3Root), role: 'reference', name: `reference-${references.length}${path.extname(image).toLowerCase()}` });
       items.push({ id: id(item.id), prompt: item.prompt, short_prompt: item.prompt.slice(0, 500), orientation: '横图', width: item.width ?? 1536, height: item.height ?? 1024, reference_images: references });
     }
     const execArgs = ['exec', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--sandbox', 'workspace-write', '--model', MODEL, '-c', `model_reasoning_effort="${EFFORT}"`, '-c', 'approval_policy="never"', '-c', 'features.image_generation=true', '-c', 'features.apps=false', '-c', 'features.plugins=false', '-c', 'skills.bundled.enabled=false', '-c', 'skills.include_instructions=false', '-c', 'shell_environment_policy.inherit="core"', '-c', 'allow_login_shell=false', '-c', 'notify=[]'];

@@ -31,6 +31,11 @@ async function fixture({ failImageOnce = false, rejectLockedAnchorOnce = false, 
       for (const asset of args.assets) assert.match(asset.id, /^[a-z0-9][a-z0-9-]{2,119}$/);
       const context = JSON.parse(await readFile(args.assets.find(asset => asset.id === 'context').path, 'utf8'));
       const schema = context.outputSchema;
+      if(schema.kind.includes('review')){
+        const names=context.attachedImages.map(image=>image.name);
+        assert.equal(new Set(names).size,names.length);
+        assert.deepEqual(names,args.assets.filter(asset=>asset.id!=='context').map(asset=>asset.id+path.extname(asset.path).toLowerCase()));
+      }
       let result = { ...structuredClone(schema), inputHash: context.inputHash };
       if (schema.kind === 'worldkit-three-episode-style-plan') {
         result.variants = THREE_EPISODE_STYLE_IDS.map((id, index) => ({ id, name: `name ${index}`, styleFamily: `family ${index}`, worldIdentity: `world ${index}`, subjectIdentity: `subject ${index}`, diversityRationale: `rationale ${index}`, concept: `concept ${index}`, visualPrompt: `visual ${index}`, geminiEventPrompt: `events ${index}`, negativeConstraints: 'preserve geometry', targetInterpretations: source.targets.map(target => ({ visualTargetId: target.id, finalIdentity: `final ${index} ${target.id}`, appearance: 'fixture appearance' })) }));
@@ -179,4 +184,13 @@ test('recovery candidates get a new cloud planning identity and are never admitt
   await writeFile(candidate,'changed candidate');
   await assert.rejects(runThreeEpisodeVisuals({...setup.options,stylePlanCandidate}),/STALE_INPUT/);
   assert.equal(planCalls.length,2);assert.equal(setup.calls.videos,0);
+});
+
+test('legacy colliding-input review histories cannot consume the corrected review repair budget',async()=>{
+ const setup=await fixture();const result=await runThreeEpisodeVisuals(setup.options);const images=setup.calls.images;
+ const {hashVisualInput}=await import('./visual-contracts.mjs');const legacyPath=path.join(setup.options.outputRoot,'anchors',`history-${hashVisualInput(result.plan)}.json`);
+ const legacy={kind:'legacy-host-collision-evidence',styles:Object.fromEntries(THREE_EPISODE_STYLE_IDS.map(id=>[id,{attempts:Array(4).fill({status:'needs-repair'}),pendingFeedback:'invalid same-filename review'}]))};
+ const bytes=JSON.stringify(legacy);await writeFile(legacyPath,bytes);await rm(result.anchorHistoryPath);
+ const restored=await runThreeEpisodeVisuals(setup.options);assert.equal(restored.preparedRequestCount,60);assert.equal(setup.calls.images,images);assert.equal(await readFile(legacyPath,'utf8'),bytes);
+ const history=JSON.parse(await readFile(restored.anchorHistoryPath,'utf8'));assert.equal(history.reviewAttachmentPolicy,'asset-id-filenames-v1');assert(Object.values(history.styles).every(s=>s.attempts.length===1));
 });
