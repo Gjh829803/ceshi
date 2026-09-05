@@ -1,3 +1,12 @@
+## Current preview-first Creator authorization
+
+The user explicitly requested removing Agent self-test recording and its mandatory
+180-second submission gate. For new Creator deliveries, use the preview-first
+contract in `docs/superpowers/plans/2026-09-05-preview-only-creator.md`.
+`world_preview` provides actual images and optional real browser input; no episode
+or video is required. Preserve truthful v1 history and independent gameplay review.
+This supersedes older recording requirements in this file and historical plans.
+
 # Agent Whitebox World authoring rules
 
 ## GPT-6 Creator reconstruction branch — 2026-09-05

@@ -155,6 +155,33 @@ class EvaluationSiteTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_preview_v2_stages_without_video_or_invented_play_metrics(self):
+        fixture = Fixture(self.root)
+        task = fixture.plan['selectedTaskIds'][0]
+        directory = fixture.verified / task; payload = directory / 'payload'
+        delivery = json.loads((payload / 'delivery.json').read_text())
+        for file in (payload / 'playtest').iterdir(): file.unlink()
+        (payload / 'playtest').rmdir(); (payload / 'episode.json').unlink()
+        image = png(); (payload / 'preview').mkdir(); (payload / 'preview/opening.png').write_bytes(image)
+        preview = {'schemaVersion': 1, 'kind': 'three-creator-browser-preview', 'view': 'opening',
+                   **{key: delivery[key] for key in ('profile', 'sourceHash', 'worldBuildHash')},
+                   'pageErrors': [], 'runtimeErrors': [], 'blockedNetworkRequests': [],
+                   'image': {'path': '/LOCAL-FIXTURE/opening.png', 'sha256': sha(image), 'byteLength': len(image)}}
+        write_json(payload / 'preview/preview.json', preview)
+        for key in ('episodeHash', 'actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds', 'targetResults'):
+            delivery.pop(key, None)
+        delivery.update(schemaVersion=2, validationMode='interactive-preview', toolVersion='0.3.0-experimental', sdkVersion='0.3.0-experimental', previewEvidenceSha256=sha((payload / 'preview/preview.json').read_bytes()))
+        write_json(payload / 'delivery.json', delivery)
+        report = json.loads((directory / 'host-artifact-verification.json').read_text()); report['validationMode'] = 'interactive-preview'
+        write_json(directory / 'host-artifact-verification.json', report); fixture.reclose(task)
+        _, result = fixture.stage(); row = result['cases'][0]
+        self.assertEqual(row['validationMode'], 'interactive-preview'); self.assertNotIn('video', row)
+        self.assertEqual(row['metrics'], {'generationMinutes': None}); self.assertTrue(row['playable']); self.assertTrue(row['triviews'])
+        preview['runtimeErrors'] = ['LOCAL FIXTURE error']; write_json(payload / 'preview/preview.json', preview)
+        delivery = json.loads((payload / 'delivery.json').read_text()); delivery['previewEvidenceSha256'] = sha((payload / 'preview/preview.json').read_bytes()); write_json(payload / 'delivery.json', delivery); fixture.reclose(task)
+        with self.assertRaisesRegex(ValueError, 'Preview browser errors'):
+            fixture.stage('reject-errors')
+
     def test_five_sdk_only_cases_stage_with_truthful_labels_and_metrics(self):
         fixture = Fixture(self.root, count=5)
         report, result = fixture.stage()

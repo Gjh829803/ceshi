@@ -10,6 +10,14 @@ import {parseCloudLayout,resolveCreatorSubmission,CODEX_BINARY_SHA256,verifyInst
 import {withAdmissionDirectoryLock} from './three-eval-admission.mjs';
 import {creativePromptFromSource,terminalJobHasStopped,assessOwnedJob,effectiveConfigMatches} from './three-eval-policy.mjs';
 import {stopOwnedThreeJob} from './three-eval-stop.mjs';
+
+test('Explicit account routing must be preserved in the effective service config',()=>{
+  const payload={request_id:'route-proof',options:{codex_bin:'/isolated/launcher',codex_account_ids:['successful-one','successful-two']},defaults:{model:'gpt-6-astra',reasoning_effort:'xhigh',sandbox:'workspace-write',timeout_seconds:2820,account_concurrency:5,pod_concurrency:1}};
+  const config={request_id:payload.request_id,options:{...payload.defaults,...payload.options}};
+  assert.equal(effectiveConfigMatches(config,payload),true);
+  assert.equal(effectiveConfigMatches({...config,options:{...config.options,codex_account_ids:undefined}},payload),false);
+  assert.equal(effectiveConfigMatches({...config,options:{...config.options,codex_account_ids:['different-account']}},payload),false);
+});
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const blank='0'.repeat(64), workspace='/fsx/task/gpt6-eval-forest-lookout--three-sdk';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlX8AAAAASUVORK5CYII=','base64');
@@ -96,4 +104,12 @@ export async function cancelGenerationJob(){throw Error('unexpected cancel');}
   const sixth=spawnSync(process.execPath,['scripts/cloud/three-eval-runner.mjs','--mode','run','--runtime-lock',readyPath,'--manifest',isolatedManifest,'--run-id','mock-sixth-raw','--suite','paired','--profile','three-raw'],{cwd:isolated,env:{...process.env,THREE_TEST_CALLS:callsFile},encoding:'utf8',timeout:15000});assert.equal(sixth.status,1);assert.equal(await readFile(callsFile,'utf8'),logBefore,'global admission must reject a sixth in-flight request');assert.match(sixth.stdout,/admission/);
 
  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+// v2 removes the recorded-episode gate explicitly, without weakening archived v1.
+test('preview v2 delivery requires its own evidence and cannot claim recorded timing',()=>{
+ const f=fixture(),value={...f.result,schemaVersion:2,validationMode:'interactive-preview',toolVersion:'0.3.0-experimental',sdkVersion:'0.3.0-experimental',previewEvidenceSha256:'d'.repeat(64)};
+ for(const key of ['episodeHash','actualWallSeconds','inputWallSeconds','activePlaySeconds','videoMetadata','captureTiming'])delete value[key];
+ assert.equal(isPassingDelivery(value,'three-sdk'),true);
+ for(const change of [{previewEvidenceSha256:undefined},{validationMode:'recorded-episode'},{schemaVersion:1},{activePlaySeconds:180},{videoMetadata:{durationSeconds:180}}])assert.equal(isPassingDelivery({...value,...change},'three-sdk'),false);
 });

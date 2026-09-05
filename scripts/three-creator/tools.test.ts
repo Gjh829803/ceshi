@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, readdir, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { ThreeCompiler, hashTree } from './compiler.js';
@@ -151,7 +151,7 @@ describe('Three tool operations and truthful submission', () => {
   it('refuses fabricated disk playtest receipts in a fresh service', async () => {
     const root = await fixture(); await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 180 }], targets: [] }));
     const service = new ThreeCreatorTools(root, 'three-raw'); await mkdir(service.evidenceRoot, { recursive: true }); await writeFile(path.join(service.evidenceRoot, 'playtest.json'), '{"status":"passed","actualWallSeconds":180,"capturedInput":true}');
-    await expect(service.submit()).rejects.toThrow(/THREE_SUBMIT_PLAYTEST_REQUIRED/); await service.close();
+    await expect(service.submit()).rejects.toThrow(/THREE_SUBMIT_PREVIEW_REQUIRED/); await service.close();
   });
 });
 
@@ -257,5 +257,43 @@ describe('recording callback deadlines', () => {
  it('clears its timeout after successful recording setup/finalization', async () => {
   const close=vi.fn(async()=>{}); expect(await withStageDeadline(async()=>42,5,'timeout',close)).toBe(42);
   await new Promise(resolve=>setTimeout(resolve,10));expect(close).not.toHaveBeenCalled();
+ });
+});
+
+describe('interactive preview delivery without recording', () => {
+ it('moves the actual page, returns PNGs, releases input and submits a closed v2 archive without an episode or video', async () => {
+  const root=await fixture(), service=new ThreeCreatorTools(root,'three-sdk');
+  vi.stubEnv('WORLDKIT_CREATOR_RUNTIME_HASH','a'.repeat(64));
+  try {
+   const example=await service.examples();
+   expect(example.files).not.toHaveProperty('episode.json');
+   for(const [name,source] of Object.entries(example.files)) await writeFile(path.join(root,name),source);
+   await expect(executeThreeCreatorTool(service,'world_playtest',{})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
+   await expect(service.submit()).rejects.toThrow('THREE_SUBMIT_PREVIEW_REQUIRED');
+   const opening=await service.preview('opening');
+   expect(opening.pageErrors).toEqual([]);expect(opening.runtimeErrors).toEqual([]);
+   const current=await service.preview('current',[],undefined,{keys:['w'],durationSeconds:0.8});
+   expect(current.observation.positionMetersXYZ[2]).toBeLessThan(opening.observation.positionMetersXYZ[2]-0.1);
+   expect(current.observation.isRunning).toBe(false);
+   expect((await readFile(current.image.path)).subarray(0,8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+   const released=await service.preview('current',[],undefined,{durationSeconds:0.3});
+   expect(Math.abs(released.observation.positionMetersXYZ[2]-current.observation.positionMetersXYZ[2])).toBeLessThan(0.2);
+   const reset=await service.preview('opening');
+   expect(reset.observation.positionMetersXYZ).toEqual(opening.observation.positionMetersXYZ);
+   const receipt=await service.submit();
+   expect(receipt.schemaVersion).toBe(2);expect(receipt.validationMode).toBe('interactive-preview');
+   for(const key of ['episodeHash','actualWallSeconds','activePlaySeconds','inputWallSeconds','videoMetadata','captureTiming']) expect(receipt).not.toHaveProperty(key);
+   const files=Object.keys(receipt.files);expect(files).toContain('preview/preview.json');expect(files.some(name=>name.startsWith('playtest/')||name==='episode.json'||name.endsWith('.mp4')||name.endsWith('.webm'))).toBe(false);
+   const execFile=promisify(execFileCallback),verified=path.join(await realpath(root),'.host-verification');
+   await execFile('python3',['scripts/cloud/three-eval-unpack.py','--archive',receipt.archivePath,'--receipt',path.join(root,'creator-result.json'),'--output',verified],{cwd:process.cwd()});
+   expect(JSON.parse(await readFile(path.join(verified,'host-artifact-verification.json'),'utf8')).validationMode).toBe('interactive-preview');
+   await writeFile(path.join(root,'main.ts'),example.files['main.ts']+'\n// author change\n');
+   await expect(service.submit()).rejects.toThrow('THREE_SUBMIT_PREVIEW_REQUIRED');
+  } finally { await service.close(); }
+ },120_000);
+ it('rejects unbounded or incompatible current-page input before opening a browser', async () => {
+  const root=await fixture(),service=new ThreeCreatorTools(root,'three-sdk');
+  for(const input of [{keys:['w'],durationSeconds:16},{durationSeconds:NaN},{click:{xPixels:2000,yPixels:20}}]) await expect(executeThreeCreatorTool(service,'world_preview',{view:'current',input})).rejects.toThrow('THREE_TOOL_INPUT_INVALID');
+  await expect(service.preview('opening',[],undefined,{keys:['w']})).rejects.toThrow('THREE_PREVIEW_INPUT_INVALID');await service.close();
  });
 });

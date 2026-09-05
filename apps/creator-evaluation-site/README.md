@@ -70,3 +70,8 @@ scrolling, connection failure/recovery and 360/390px layouts. Public deployment 
 also checked in a real browser. See `.codex-tmp/evaluation-center-ui-qa/` and
 `.codex-tmp/three-sdk-v2-holdout/published-ui-check.json` for this implementation's
 actual evidence; fixtures are not model-generated scene results.
+
+New `interactive-preview` deliveries have no video or recorded-play metrics.
+The gallery hides the video requirement and displays preview checks plus the
+independent gameplay-review status. Archived recorded-episode cases retain their
+actual video and timing.

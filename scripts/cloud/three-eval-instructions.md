@@ -23,14 +23,15 @@ R and tool reset must restore the complete initial world, camera and gameplay
 state. Use the SDK's declared extension and control capabilities when required;
 do not claim an unsupported movement or geometry behavior merely by naming it.
 
-Use real world_preview images and world_inspect diagnostics, then repair this same
-world. After the final world-source change, request an opening preview and inspect
-the returned image. An episode-only edit does not invalidate that world image.
-Use short real keyboard episodes to debug, then record a full 180–300-second
-episode with at least 180 seconds of active play and complete object three-views
-before world_submit. Paused, loading and reset time cannot count as active play.
-Long operations return
-operation IDs: poll the same operation through operations_get; do not launch duplicates.
+Use world_preview to see real browser images and world_inspect for diagnostics.
+Opening resets to the reference camera; current preserves the current page. Use
+world_preview with view=current and input to hold keys briefly, click, drag or
+scroll, then inspect the returned screenshot and state. Choose your own checks
+and exploration; fix issues you observe. After the final source change, inspect
+an opening preview and capture complete object three-views before world_submit.
+There is no required episode file, recorded self-test, video or minimum test duration.
+The desired 3–5 minutes of exploration describes world content, not recording length.
+Operations return IDs: poll the same ID through operations_get, without duplicates.
 
 External acceptance goals cannot be weakened by deleting waypoints, replacing
 stairs with nonphysical decorations, or detaching the required moving subject's
@@ -38,7 +39,7 @@ parts. Preserve those goals while fixing the world. Report unsupported behavior
 and failed goals truthfully. A technical delivery is ready for independent visual
 and gameplay review; it does not establish semantic acceptance or zero defects.
 
-Run world_playtest and world_submit in the same MCP service session. Do not write
+Run world_preview and world_submit in the same MCP service session. Do not write
 delivery files, traces, receipts or tool reports manually. Submit using world_submit,
 poll until it succeeds, and leave creator-result.json and creator-delivery.tar.gz
 unchanged. Keep the original reference and failed attempts; do not replace this

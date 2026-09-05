@@ -1,3 +1,22 @@
+# Preview-first Creator (current)
+
+New Creator 0.3 deliveries use schemaVersion 2 / `interactive-preview`.
+`world_playtest` is removed from the Agent's MCP tool list. `world_preview`
+returns actual images; `view: current` preserves the page and accepts optional
+real keyboard/click/drag/wheel input, releases input, and pauses on the resulting
+frame. Opening preview resets to the reference camera. No episode.json, recording,
+minimum play duration, ffmpeg output or route declaration is needed for submit.
+
+Submission still binds the current-source opening PNG, complete object views and
+closed playable files. The Host checks source/image/transport/archive identity and
+independently reviews gameplay. It does not label a preview as a completed long test.
+The installed doctor now uses a short real interactive preview and submits without
+recording; its normal 4-second action is sufficient. The historical recorded-v1
+protocol remains readable for previously generated artifacts.
+
+The detailed notes below describe the older recorded-v1 protocol where indicated;
+its 180-second requirements do not apply to new schemaVersion 2 deliveries.
+
 # Three Creator cloud experiment
 
 This is a new experimental lane. The Native V3 SDK, locks, jobs, gallery results
@@ -82,7 +101,7 @@ installation or cloud capabilities. Use a fresh task-owned FSx prefix under
 Codex/browser binaries without overwriting them. Stage the four launcher modules
 alongside `runtime-lock.json`. Stage the doctor separately when needed.
 
-The launcher loads only `worldkit_three_creator`, with exactly 15 declared tools
+The launcher loads only `worldkit_three_creator`, with exactly 14 declared tools
 and per-tool approval. Global `never` plus `workspace-write` remains unchanged.
 The MCP child receives no authentication variables. The Codex process receives
 only the platform-provided CODEX_HOME in addition to the task environment; no

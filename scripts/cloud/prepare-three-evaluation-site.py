@@ -202,13 +202,24 @@ def verified_payload(directory, profile, lock_hash, sdk_only=False):
     require({k: v for k, v in actual.items() if k != 'artifact-hashes.json'} == inventory['files'], 'Artifact file closure or SHA256 changed after Host verification')
     require(report.get('fileCount') == len(actual) and report.get('uncompressedBytes') == total, 'Host verification file census changed')
     delivery = read_json(payload / 'delivery.json')
-    require(delivery.get('kind') == 'three-creator-delivery' and delivery.get('schemaVersion') == 1 and delivery.get('status') == 'ready-for-independent-review' and delivery.get('technicalStatus') == 'passed', 'Invalid Three delivery')
+    require(delivery.get('kind') == 'three-creator-delivery' and delivery.get('schemaVersion') in (1, 2) and delivery.get('status') == 'ready-for-independent-review' and delivery.get('technicalStatus') == 'passed', 'Invalid Three delivery')
     same(delivery, report, ('profile', 'engine', 'sourceHash', 'worldBuildHash', 'creatorRuntimeLockHash'), 'Delivery')
     require(delivery.get('files') == {k: v for k, v in actual.items() if k not in ('artifact-hashes.json', 'delivery.json')}, 'Delivery manifest file closure changed')
-    for field in ('runtimeHash', 'episodeHash'):
+    for field in (('runtimeHash', 'episodeHash') if delivery['schemaVersion'] == 1 else ('runtimeHash', 'previewEvidenceSha256')):
         checked_hash(delivery.get(field), field)
     build_identity = {key: delivery[key] for key in ('sourceHash', 'runtimeHash', 'profile')}
     require(digest(json.dumps(build_identity, separators=(',', ':')).encode()) == delivery['worldBuildHash'], 'worldBuildHash is inconsistent')
+    if delivery['schemaVersion'] == 2:
+        require(delivery.get('validationMode') == 'interactive-preview' and report.get('validationMode') == 'interactive-preview', 'Wrong preview delivery mode')
+        require(all(key not in delivery for key in ('episodeHash', 'actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds', 'videoMetadata', 'captureTiming')), 'Preview delivery cannot claim recorded play')
+        require(actual.get('preview/preview.json') == delivery['previewEvidenceSha256'], 'Preview identity changed')
+        preview = read_json(payload / 'preview/preview.json'); captures = read_json(payload / 'captures/captures.json')
+        same(preview, delivery, ('profile', 'sourceHash', 'worldBuildHash'), 'Opening preview')
+        same(captures, delivery, ('profile', 'sourceHash', 'worldBuildHash'), 'Capture manifest')
+        require(preview.get('kind') == 'three-creator-browser-preview' and preview.get('view') == 'opening', 'Actual opening preview required')
+        require(preview.get('pageErrors') == preview.get('runtimeErrors') == preview.get('blockedNetworkRequests') == captures.get('pageErrors') == [], 'Preview browser errors')
+        require(actual.get('preview/' + PurePosixPath(preview['image']['path']).name) == preview['image']['sha256'], 'Preview image changed')
+        return payload, actual, report, delivery, None, captures
     require(actual.get('episode.json') == delivery['episodeHash'], 'Episode identity changed')
     played = read_json(payload / 'playtest/playtest.json')
     captures = read_json(payload / 'captures/captures.json')
@@ -306,31 +317,38 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
             triviews.append({'name': ' / '.join(ids), 'entityIds': ids, 'image': prefix + '/' + relative})
         selected.append(relative)
     require(opening is not None and any('player' in view['entityIds'] for view in triviews), 'Opening and whole-player three-view required')
-    video_path = played.get('videoPath')
-    require(isinstance(video_path, str) and '\\' not in video_path, 'Missing recorded video path')
-    video = 'playtest/' + PurePosixPath(video_path).name
-    require(video in ('playtest/playtest.mp4', 'playtest/playtest.webm') and video in actual, 'Recorded video missing from closure')
-    selected.append(video)
+    video = None
+    if played is not None:
+        video_path = played.get('videoPath')
+        require(isinstance(video_path, str) and '\\' not in video_path, 'Missing recorded video path')
+        video = 'playtest/' + PurePosixPath(video_path).name
+        require(video in ('playtest/playtest.mp4', 'playtest/playtest.webm') and video in actual, 'Recorded video missing from closure')
+        selected.append(video)
+        metadata = played.get('videoMetadata', {})
+        video_seconds = finite_number(metadata.get('durationSeconds'), 'video duration', 180 if requires_active_play(delivery, sdk_only) else .001)
+        frame_count = finite_number(metadata.get('frameCount'), 'video frames', 1)
+        targets = played['targetResults']
+        require(all(isinstance(target, dict) and type(target.get('reached')) is bool for target in targets), 'Invalid target result')
     for name in sorted(set(selected)):
         add_file(prefix + '/' + name, payload / name, actual[name])
-    metadata = played.get('videoMetadata', {})
-    video_seconds = finite_number(metadata.get('durationSeconds'), 'video duration', 180 if requires_active_play(delivery, sdk_only) else .001)
-    frame_count = finite_number(metadata.get('frameCount'), 'video frames', 1)
-    targets = played['targetResults']
-    require(all(isinstance(target, dict) and type(target.get('reached')) is bool for target in targets), 'Invalid target result')
     generation_minutes = entry.get('generationMinutes')
     if generation_minutes is not None:
         finite_number(generation_minutes, 'generationMinutes')
+    metrics = {'generationMinutes': generation_minutes}
+    if played is not None:
+        metrics.update({'simulationSeconds': round(played['actualWallSeconds'], 2), 'actualWallSeconds': played['actualWallSeconds'], 'timeDomain': 'wall-clock',
+                        **{field: played[field] for field in ('activePlaySeconds', 'inputWallSeconds') if field in played},
+                        'videoDurationSeconds': video_seconds, 'visitedTargets': sum(target['reached'] for target in targets), 'targetCount': len(targets),
+                        'travelledMeters': finite_number(played.get('travelledMeters'), 'travelledMeters'),
+                        'captureFps': round(frame_count / video_seconds, 3), 'captureFpsSource': 'measured-video-frames-per-duration'})
     row.update({'sourceHash': delivery['sourceHash'], 'worldBuildHash': delivery['worldBuildHash'], 'archiveSha256': report['archiveSha256'],
-                'opening': opening, 'video': prefix + '/' + video, 'playable': prefix + '/playable/index.html', 'triviews': triviews,
-                'metrics': {'simulationSeconds': round(played['actualWallSeconds'], 2), 'actualWallSeconds': played['actualWallSeconds'], 'timeDomain': 'wall-clock',
-                            **{field: played[field] for field in ('activePlaySeconds', 'inputWallSeconds') if field in played},
-                            'videoDurationSeconds': video_seconds,
-                            'visitedTargets': sum(target['reached'] for target in targets), 'targetCount': len(targets),
-                            'travelledMeters': finite_number(played.get('travelledMeters'), 'travelledMeters'),
-                            'captureFps': round(frame_count / video_seconds, 3), 'captureFpsSource': 'measured-video-frames-per-duration', 'generationMinutes': generation_minutes},
+                'opening': opening, 'playable': prefix + '/playable/index.html', 'triviews': triviews, 'metrics': metrics,
+                'validationMode': delivery.get('validationMode', 'recorded-episode'),
                 'review': {key: review[key] for key in ('status', 'browserPlayable', 'referenceCompared', 'externalGoalsReviewed')},
                 'semanticStatus': 'independently-reviewed' if row['status'] == 'ready' else 'known-issues'})
+    if video is not None:
+        row['video'] = prefix + '/' + video
+
 
 
 def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verified_root, publication_path, output, allow_local_fixture=False):

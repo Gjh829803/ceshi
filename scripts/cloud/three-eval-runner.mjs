@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, writeFile, stat, rmdir, readdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, stat, rmdir, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { downloadS3FileAtomic, fetchGenerationItems, findGenerationJobByRequestId, lwdpRequest, loadLwdpGenerationConfig, pollGenerationJob, submitCodexGenerationJob, submittedJobId, uploadS3File } from "../lib/lwdp-generation-client.mjs";
@@ -16,7 +16,7 @@ const args = process.argv.slice(2);
 const options = {};
 for (let index = 0; index < args.length; index += 2) {
   const key = args[index];
-  if (!["--mode", "--manifest", "--runtime-lock", "--run-id", "--output-root", "--max-concurrency", "--account-concurrency", "--case-limit", "--case-id", "--profile", "--suite", "--experiment-revision", "--output-s3-root"].includes(key) || !args[index + 1] || options[key] !== undefined) throw new Error(`Invalid argument: ${key}`);
+  if (!["--mode", "--manifest", "--runtime-lock", "--run-id", "--output-root", "--max-concurrency", "--account-concurrency", "--case-limit", "--case-id", "--profile", "--suite", "--experiment-revision", "--output-s3-root", "--account-routing-file"].includes(key) || !args[index + 1] || options[key] !== undefined) throw new Error(`Invalid argument: ${key}`);
   options[key] = args[index + 1];
 }
 const mode = options["--mode"] ?? "prepare";
@@ -76,6 +76,28 @@ async function saveSummary() {
 if (mode === "stats") { const summary = await saveSummary(); console.log(JSON.stringify({summary: path.join(outputRoot, "summary.json"), delivered: summary.deliveredCount, failed: summary.failedCount, pending: summary.pendingCount})); process.exit(0); }
 const lockPath = path.resolve(options["--runtime-lock"] ?? path.join(repo, ".codex-tmp/three-creator-eval/runtime-lock.json"));
 const lock = await readRuntimeLock(lockPath, {requireReady: mode !== "prepare"});
+const accountRoutingFile = options["--account-routing-file"] ? path.resolve(options["--account-routing-file"]) : previousPlan?.accountRoutingFile ?? null;
+if (previousPlan && (previousPlan.accountRoutingFile ?? null) !== accountRoutingFile) throw new Error("Account routing changed; use a deliberate new run ID.");
+let accountRouting = null, routedAccountIds = [];
+if (accountRoutingFile) {
+  if (!accountRoutingFile.startsWith(path.join(repo, ".codex-tmp") + path.sep) || await realpath(accountRoutingFile) !== accountRoutingFile) throw new Error("Use a plain Host-owned account routing document.");
+  const routingBytes = await readFile(accountRoutingFile), routing = JSON.parse(routingBytes);
+  if (routing.kind !== "three-successful-account-routing" || routing.schemaVersion !== 1 || !Array.isArray(routing.successfulCaseRoots) || routing.successfulCaseRoots.length < 1 || routing.successfulCaseRoots.length > 5) throw new Error("Invalid successful-account routing document.");
+  const sources = [];
+  for (const inputRoot of routing.successfulCaseRoots) {
+    const sourceRoot = path.resolve(inputRoot);
+    if (!sourceRoot.startsWith(path.join(repo, ".codex-tmp/three-creator-eval/runs") + path.sep) || await realpath(sourceRoot) !== sourceRoot) throw new Error("Account routing source must be a prior Host case directory.");
+    const values = await Promise.all(["state.json", "items.json", "config-echo.json"].map(async name => { const file = path.join(sourceRoot, name); if (await realpath(file) !== file) throw new Error("Account routing metadata cannot be a symlink."); return JSON.parse(await readFile(file, "utf8")); }));
+    const [state, items, echo] = values, item = items.items?.find(value => value.item_id === state.taskId), effective = echo.config?.options;
+    if (state.phase !== "delivered" || state.runtimeHash !== lock.runtimeHash || item?.status !== "succeeded" || effective?.model !== "gpt-6-astra" || effective?.reasoning_effort !== "xhigh") throw new Error("Account routing requires a delivered same-runtime GPT-6 xhigh case.");
+    const id = item.metadata?.codex_account_id;
+    if (typeof id !== "string" || !id || id.length > 256 || id === "." || id === ".." || /[\\/\x00-\x1f]/.test(id)) throw new Error("Invalid public account metadata identifier.");
+    if (!routedAccountIds.includes(id)) routedAccountIds.push(id);
+    sources.push({caseRoot: sourceRoot, jobId: state.jobId, accountIdSha256: sha256(id)});
+  }
+  accountRouting = {scope: "host-service-only", sourceFileSha256: sha256(routingBytes), strategy: "explicit-successful-account-ids-with-provider-health-filter", sources};
+  if (previousPlan?.accountRouting?.sourceFileSha256 && previousPlan.accountRouting.sourceFileSha256 !== accountRouting.sourceFileSha256) throw new Error("Frozen account routing document changed.");
+}
 if (typeof lock.launcherPath !== "string" || !/^\/fsx\/pipeline\/worldkit-three-creator-experiments\/.+\/three-eval-launcher\.mjs$/.test(lock.launcherPath)) throw new Error("runtime-lock.launcherPath must identify the isolated cloud launcher.");
 const s3Root = (options["--output-s3-root"] ?? previousPlan?.outputS3Root ?? `s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/${suite === "sdk-only" ? "sdk-eval" : "paired-eval"}`).replace(/\/$/, "");
 if (!s3Root.startsWith("s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/three-creator/")) throw new Error("Evaluation S3 prefix must stay within the project's Three artifact root.");
@@ -103,7 +125,7 @@ for (const item of manifest.cases) {
   const inputS3Uri = `${outputS3Prefix}/inputs/case-input.json`;
   const imageS3Uri = `${outputS3Prefix}/inputs/reference-${item.referenceImage.contentSha256}.png`;
   const instruction = `${commonInstructions}\n\nCase ID: ${item.baseCaseId}. Task ID: ${item.id}. Profile: ${item.profile}. Read the selected MCP environment and examples for this profile.\n\nUser requirements:\n${effectivePrompt}\n\nThe attached case-input.json records immutable source and runtime identity. The original reference image is attached directly.\n`;
-  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: "xhigh", sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
+  const payload = {job_name: `GPT-6 Three ${item.profile} · ${item.title}`, request_id: requestId, output_s3_prefix: outputS3Prefix, defaults: {model: "gpt-6-astra", reasoning_effort: "xhigh", sandbox: "workspace-write", timeout_seconds: lock.maximumTaskSeconds + 120, account_concurrency: accountConcurrency, pod_concurrency: 1}, options: {codex_bin: lock.launcherPath, ...(routedAccountIds.length ? {codex_account_ids: routedAccountIds} : {})}, tasks: [{id: item.id, instruction, assets: [{id: "reference", name: "reference.png", s3_uri: imageS3Uri, media_type: "image/png", attach_as: "image"}, {id: "case-input", name: "case-input.json", s3_uri: inputS3Uri, media_type: "application/json", attach_as: "file"}], outputs}]};
   const plan = {item, caseRoot, imagePath, inputFile, imageS3Uri, inputS3Uri, payload, payloadHash: sha256(JSON.stringify(payload)), caseHash, requestId, outputS3Prefix};
   const intent = await optionalJson(path.join(caseRoot, "submission-intent.json"));
   if (intent && intent.payloadHash !== plan.payloadHash) throw new Error(`Submission payload changed for ${item.id}; use a deliberate new run ID.`);
@@ -112,7 +134,7 @@ for (const item of manifest.cases) {
 }
 const selectedBaseIds = requestedCaseId ? [requestedCaseId] : sourceManifest.cases.slice(0, caseLimit).map(item => item.id);
 const executionPlans = plans.filter(plan => selectedBaseIds.includes(plan.item.baseCaseId) && (!requestedProfile || plan.item.profile === requestedProfile));
-await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, engine: "three@0.185.1", runId, runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
+await writeJson(path.join(outputRoot, "evaluation-plan.json"), {schemaVersion: 1, kind: suite === "sdk-only" ? "three-creator-sdk-plan" : "three-creator-paired-plan", suite, experimentRevision, acceptancePolicy, accountRoutingFile, accountRouting, engine: "three@0.185.1", runId, runtimeHash: lock.runtimeHash, launcherPath: lock.launcherPath, maxConcurrency, accountConcurrency, outputS3Root: s3Root, safetyPolicy: {maximumQueueSeconds: MAXIMUM_QUEUE_SECONDS, maximumModelSeconds: lock.maximumTaskSeconds, maximumTotalWallSeconds: MAXIMUM_QUEUE_SECONDS + lock.maximumTaskSeconds + STOP_DRAIN_SECONDS, automaticResubmissions: 0, monetaryAccounting: "Provider does not expose a per-job bill; wall time and raw token counters are recorded, not converted to invented charges."}, manifestPath, manifestSha256, selectedTaskIds: executionPlans.map(plan => plan.item.id), cases: plans.map(plan => ({caseId: plan.item.baseCaseId, taskId: plan.item.id, profile: plan.item.profile, caseHash: plan.caseHash, requestId: plan.requestId, payloadHash: plan.payloadHash, outputS3Prefix: plan.outputS3Prefix, hostReview: {acceptanceFocus: plan.item.acceptanceFocus ?? [], expectedSubjectCategory: plan.item.expectedSubjectCategory ?? null}}))});
 if (mode === "prepare") { console.log(`THREE_EVAL_PREPARED ${outputRoot} cases=5 profiles=${profiles.length} tasks=${plans.length} cloudSubmissions=0`); process.exit(0); }
 // Force the existing S3 client to use this checkout's closed credential files.
 for (const key of ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"]) delete process.env[key];

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Native Linux integration doctor: actual required MCP, compilation, WebGL,
-// keyboard/video and cache reuse, with no Codex/model call and no auth environment.
+// interactive preview and cache reuse, with no Codex/model call and no auth environment.
 import {readFile,writeFile,mkdir,mkdtemp,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -16,7 +16,7 @@ const lock=await readRuntimeLock(path.resolve(options['--runtime-lock']),{requir
 const profiles=options['--profile']?[options['--profile']]:THREE_PROFILES;
 if(profiles.some(profile=>!THREE_PROFILES.includes(profile)))throw new Error('Invalid profile');
 const durationSeconds=Number(options['--duration-seconds']??4);
-if(!Number.isFinite(durationSeconds)||durationSeconds<3||durationSeconds>300)throw new Error('Doctor duration must be within [3,300]');
+if(!Number.isFinite(durationSeconds)||durationSeconds<3||durationSeconds>15)throw new Error('Doctor duration must be within [3,15]');
 const outputRoot=path.resolve(options['--output-root']);
 if(outputRoot===lock.toolkitRoot||outputRoot.startsWith(lock.toolkitRoot+path.sep))throw new Error('Doctor workspace must be external to SDK');
 await mkdir(outputRoot,{recursive:true});
@@ -43,10 +43,6 @@ try{
    const platformScratch=path.join(workspace,'scratch');await mkdir(platformScratch);
    await writeJson(path.join(platformScratch,'session.json'),{syntheticHostSession:true,revision:1});
    await symlink('session.json',path.join(platformScratch,'helper'));
-   const steps=[];let remaining=durationSeconds-1,previousKey=null,index=0;
-   while(remaining>0){const key=index++%2?'s':'w',seconds=Math.min(2,remaining);steps.push({keysDown:[key],...(previousKey?{keysUp:[previousKey]}:{}),durationSeconds:seconds});previousKey=key;remaining-=seconds;}
-   steps.push({keysUp:[previousKey],durationSeconds:1});
-   const episode={schemaVersion:1,steps,targets:[]};await writeJson(path.join(workspace,'episode.json'),episode);
    const validation=(await operation('world_validate')).value.result;assert.equal(validation.profile,profile);assert.equal(validation.runtimeCacheHit,true);assert.equal(validation.runtimeHash,lock.prebuiltRuntimes[profile].runtimeHash);entry.validation=validation;
    const preview=await operation('world_preview',{view:'opening'});const image=preview.response.content.find(block=>block.type==='image');assert(image&&image.mimeType==='image/png');const bytes=Buffer.from(image.data,'base64');assert.equal(sha256(bytes),preview.value.result.image.sha256);assert(bytes.length>=24&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));entry.opening={path:path.join(workspace,'.host-doctor/opening.png'),sha256:sha256(bytes),widthPixels:bytes.readUInt32BE(16),heightPixels:bytes.readUInt32BE(20)};assert.equal(entry.opening.widthPixels,HOST_VIEWPORT_PIXELS.width,'Host opening must fill the pinned viewport width');assert.equal(entry.opening.heightPixels,HOST_VIEWPORT_PIXELS.height,'Host opening must fill the pinned viewport height');
    // Evidence stays under hidden Host storage so it never changes authored sourceHash.
@@ -59,14 +55,17 @@ try{
      assert.equal(command.worldCommandReceipt.status,'applied');assert.equal(typeof command.worldCommandReceipt.commandId,'string');assert(command.worldCommandReceipt.commandId.length>0);assert.equal(command.sourceHash,validation.sourceHash);assert.equal(command.worldBuildHash,validation.worldBuildHash);assert.equal(command.after.isRunning,false);assert.equal(command.after.simulationTick,initial.simulationTick);assert.equal(command.after.entities.find(entity=>entity.id===entityId).isVisibleLocal,isVisible);entry.commandChecks.push(command);
     }
    }
-   const played=(await operation('world_playtest',{framesPerSecond:1})).value.result;entry.playtest=played;assert.equal(played.status,'passed');assert.equal(played.capturedInput,true);assert.equal(played.isCompleteEpisode,true);assert.deepEqual(played.pageErrors,[]);assert.deepEqual(played.runtimeErrors,[]);assert.deepEqual(played.blockedNetworkRequests,[]);assert.equal(played.worldBuildHash,validation.worldBuildHash);assert.equal(played.videoMetadata.widthPixels,HOST_VIEWPORT_PIXELS.width);assert.equal(played.videoMetadata.heightPixels,HOST_VIEWPORT_PIXELS.height);assert(Number.isFinite(played.inputWallSeconds)&&played.inputWallSeconds>=durationSeconds);assert(played.videoMetadata.durationSeconds>=durationSeconds);
+   const before=(await operation('world_preview',{view:'current'})).value.result;
+   const moved=await operation('world_preview',{view:'current',input:{keys:['w'],durationSeconds}});
+   entry.previewInput=moved.value.result;assert(moved.response.content.some(block=>block.type==='image'));assert.deepEqual(entry.previewInput.pageErrors,[]);assert.deepEqual(entry.previewInput.runtimeErrors,[]);assert.deepEqual(entry.previewInput.blockedNetworkRequests,[]);
+   assert(Math.hypot(...entry.previewInput.observation.positionMetersXYZ.map((value,index)=>value-before.observation.positionMetersXYZ[index]))>0.1);
+   assert.equal(entry.previewInput.observation.isRunning,false);
    await writeJson(path.join(platformScratch,'session.json'),{syntheticHostSession:true,revision:2});
    const sourceAfterHostMutation=(await operation('world_validate')).value.result;
    assert.equal(sourceAfterHostMutation.sourceHash,validation.sourceHash);assert.equal(sourceAfterHostMutation.worldBuildHash,validation.worldBuildHash);assert.equal(sourceAfterHostMutation.candidateCacheHit,true);
    entry.platformScratchIsolation={syntheticFixture:true,rootSymlinkNotTraversed:true,hostJsonMutationKeepsSourceHash:true,hostJsonMutationKeepsWorldBuildHash:true};
-   if(durationSeconds>=180){await operation('world_capture_triviews');const submitted=(await operation('world_submit')).value.result;assert(isPassingDelivery(submitted,profile));assert.equal(submitted.creatorRuntimeLockHash,lock.runtimeHash);assert.equal(submitted.runtimeHash,lock.prebuiltRuntimes[profile].runtimeHash);assert.equal(submitted.archivePath,path.join(workspace,'creator-delivery.tar.gz'));assert.equal(await fileSha256(submitted.archivePath),submitted.archiveSha256);assert.deepEqual(JSON.parse(await readFile(path.join(workspace,'creator-result.json'),'utf8')),submitted);entry.delivery=submitted;}
-   episode.steps[0].durationSeconds+=1;await writeJson(path.join(workspace,'episode.json'),episode);
-   const after=(await operation('world_validate')).value.result;assert.equal(after.worldBuildHash,validation.worldBuildHash);assert.equal(after.candidateCacheHit,true);assert.equal(after.runtimeCacheHit,true);entry.episodeOnlyWorldReuse=true;
+   await operation('world_preview',{view:'opening'});
+   await operation('world_capture_triviews');const submitted=(await operation('world_submit')).value.result;assert(isPassingDelivery(submitted,profile));assert.equal(submitted.schemaVersion,2);assert.equal(submitted.validationMode,'interactive-preview');assert.equal(submitted.creatorRuntimeLockHash,lock.runtimeHash);assert.equal(submitted.runtimeHash,lock.prebuiltRuntimes[profile].runtimeHash);assert.equal(submitted.archivePath,path.join(workspace,'creator-delivery.tar.gz'));assert.equal(await fileSha256(submitted.archivePath),submitted.archiveSha256);assert.deepEqual(JSON.parse(await readFile(path.join(workspace,'creator-result.json'),'utf8')),submitted);entry.delivery=submitted;
    entry.status='passed';
   }catch(error){entry.status='failed';entry.error=error.stack??String(error);throw error;}
   finally{await client.close().catch(()=>{});await writeFile(path.join(workspace,'.host-doctor-stderr.log'),stderr);await writeJson(path.join(workspace,'.host-doctor-evidence.json'),entry);delete entry.toolResponses;}

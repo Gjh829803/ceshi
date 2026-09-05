@@ -12,12 +12,14 @@ rows=json.loads(sys.argv[1]); results=[]
 def safe_error(value):
     text=str(value or '')
     if 'at capacity' in text.lower(): return 'Selected model is at capacity.'
+    if 'model is not supported when using Codex with a ChatGPT account' in text: return 'Selected model is not supported for this Codex account.'
     import re
     match=re.search(r'\b(?:THREE|CREATOR|LWDP)_[A-Z0-9_]+\b',text)
     return match.group(0) if match else ('Private diagnostics retained.' if text else None)
 def failure_facts(value):
     text=str(value or ''); facts=[]
     if 'at capacity' in text.lower(): facts.append({'layer':'model-service','code':'MODEL_CAPACITY'})
+    if 'model is not supported when using Codex with a ChatGPT account' in text: facts.append({'layer':'model-service','code':'MODEL_NOT_SUPPORTED_FOR_ACCOUNT'})
     if 'THREE_SOURCE_SYMLINK' in text and ('scratch/' in text or 'codex_home' in text): facts.append({'layer':'host-integration','code':'PLATFORM_SCRATCH_SCANNED_AS_SOURCE'})
     if 'PHYSICS_BOX_DEGENERATE' in text: facts.append({'layer':'author-geometry','code':'PHYSICS_BOX_DEGENERATE'})
     if 'THREE_BROWSER_STARTUP_FAILED' in text and 'PHYSICS_BOX_DEGENERATE' not in text: facts.append({'layer':'browser-startup','code':'THREE_BROWSER_STARTUP_FAILED','cause':'not-identified'})

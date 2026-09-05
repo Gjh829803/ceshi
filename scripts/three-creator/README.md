@@ -13,7 +13,7 @@ Start the persistent MCP service:
 pnpm exec tsx scripts/three-creator/mcp.ts --workspace /absolute/author-project --profile three-sdk
 ```
 
-Server name: `worldkit_three_creator`. List its 15 tools, then read environment,
+Server name: `worldkit_three_creator`. List its 14 tools, then read environment,
 schema and examples. CLI uses the exact same service:
 
 ```sh
@@ -23,11 +23,10 @@ pnpm exec tsx scripts/three-creator/cli.ts --workspace /absolute/author-project 
 
 The persistent CLI accepts one JSON request per line, for example
 `{"id":1,"name":"world_validate","arguments":{}}`. It returns an operationId;
-poll `operations_get`. Keep one MCP/CLI session through playtest and submit.
-An unrelated fresh process cannot trust a model-written saved playtest receipt.
+poll `operations_get`. Keep one MCP/CLI session through preview and submit. An unrelated fresh process cannot trust a
+model-written saved preview receipt.
 
-`creator_get_examples` returns runnable minimal HTML/main.ts, project.json and an
-input episode. The examples demonstrate integration, not a completed playable
+`creator_get_examples` returns runnable minimal HTML/main.ts and project.json. The examples demonstrate integration, not a completed playable
 world. With the SDK, compose any Three camera first and call
 `world.setCameraFollow({activateOnInput:true,...})` to preserve the reference
 opening and follow during play. Use `world.onUpdate`, `world.onInteract` and
@@ -52,114 +51,48 @@ asset definitions appear in `asset-definitions.json`; SDK `world.assets.load(id)
 loads the selected asset and owns its animation. The URI resolves relative
 to the playable page. Host-only sourcePath never enters this file or tool output.
 
-`episode.json` is independent of rendering/source build identity:
+## Interactive page preview
+
+`world_playtest` is no longer an Agent tool. There is no mandatory recording,
+episode file, route declaration or minimum test duration. The Agent chooses its
+checks and uses actual browser images as feedback:
 
 ```json
-{"schemaVersion":1,"steps":[
-  {"keysDown":["w"],"durationSeconds":2},
-  {"keysDown":["w","Shift"],"durationSeconds":2},
-  {"keysUp":["w","Shift"],"durationSeconds":1}
-],"targets":[{"id":"tower-top","positionMetersXYZ":[10,12,5],"toleranceMeters":2}]}
+{"name":"world_preview","arguments":{"view":"opening"}}
+{"name":"world_preview","arguments":{"view":"current","input":{"keys":["w","Shift"],"durationSeconds":2}}}
+{"name":"world_preview","arguments":{"view":"current","input":{"keys":["ArrowLeft"],"durationSeconds":0.5}}}
+{"name":"world_preview","arguments":{"view":"current","input":{"pointerDrag":{"deltaXPixels":100,"deltaYPixels":-20}}}}
 ```
 
-Keys remain down until released; a second keydown produces real browser repeat.
-WASD, arrows, Shift, Space, E, R and pointer drags are supported by the input
-tool. Actual gameplay support belongs to the authored world/SDK, and must be
-verified. Full episodes run every step for its real wall-clock duration. A
-`durationSeconds` smaller than the plan selects a bounded debug run. Omit it, or
-use a duration at least as long as the plan, to execute the full episode. Full
-episodes reserve bounded overhead for real key delivery, snapshots and screenshots
-without truncating their final steps. Targets measure XYZ
-proximity without teleportation or steering; external task goals must stay fixed.
-Changing an episode reuses the same compiled candidate, browser and renderer.
-Each playtest starts a new native canvas MediaRecorder stream; its real frame
-timestamps and image frames bind that video to the run without rebuilding.
+Poll each operation ID before continuing. `opening` resets to the authored camera.
+`current` keeps the same live world and returns the whole page PNG, bounded visible
+page text, current state and errors. Optional input supports key holds, clicks,
+pointer drags and wheel scrolling. Each call holds input for at most 15 seconds,
+then releases all keys and pauses so the resulting frame remains inspectable.
+This uses actual Playwright input and the existing SDK clock, without teleporting
+or simulating a second world. Top-down and complete-object previews remain available.
 
-Fixed runtime prebuild for a Host-owned cloud capsule:
+`world_inspect` exposes hierarchy, camera/targets and actual state. The SDK's
+`world_execute_command` / `world_get_operation` support registered world controls.
+Creator operation IDs and accepted World command operation IDs are distinct.
 
-```sh
-pnpm exec tsx scripts/three-creator/prebuild.ts --profile three-sdk --output /host/prebuilt/three-sdk
-```
+## Preview-based delivery
 
-Pin the returned manifest SHA in the launcher, then set
-`WORLDKIT_THREE_PREBUILT_RUNTIME_ROOT=/host/prebuilt/three-sdk` and
-`WORLDKIT_THREE_PREBUILT_RUNTIME_MANIFEST_SHA256=<plain64hex>` in the MCP process.
-The Host checks compiler/source/dependency identity, the pinned manifest and all
-runtime bytes; it never accepts an author-provided cache receipt. Without these
-variables, the service builds the fixed runtime once and retains a sealed memory
-cache. Candidate edits compile only author modules. Additional Three addons are
-bundled independently and share the same Three module.
+After the final source change, inspect its opening PNG and call `world_submit`
+in the same service session. The service checks the current source, actual startup
+and observed errors, captures full player/target three views, and writes a closed
+playable archive. SchemaVersion 2 has `validationMode: interactive-preview` and
+`previewEvidenceSha256`. It contains source, playable, preview, captures and closed
+manifests. It does not contain an episode, playtest, invented duration or video.
+A source change requires another opening preview. An image path alone is not proof:
+the cloud transport also checks that the actual PNG reached the model.
 
-The cloud capsule's separate plain-hex `WORLDKIT_CREATOR_RUNTIME_HASH` is echoed
-as `creatorRuntimeLockHash`; it is not the fixed rendering runtime's `runtimeHash`.
-`sourceHash` binds author files and selected public assets. `runtimeHash` binds
-actual fixed browser bundle bytes. `worldBuildHash` is SHA256 of
-`JSON.stringify({sourceHash,runtimeHash,profile})`. `episodeHash` hashes the exact
-episode bytes. A changed episode does not invalidate an unchanged-world preview,
-but requires a new episode playtest before submit.
+A successful submission means ready for independent reference/gameplay review.
+It does not claim that all routes are reachable, that there are no bugs, or that
+three minutes of meaningful exploration were proven. The 3–5 minute exploration
+request concerns authored world content.
 
-Submit requires a same-session current-world/current-episode successful real
-180-second input/video recording and opening/player/target three-view captures.
-It atomically writes `creator-delivery.tar.gz` then `creator-result.json` at the
-workspace root. The tar has one `payload/` containing source, playable, playtest,
-captures, episode.json, delivery.json and artifact-hashes.json. All regular files
-are hash-closed and symlinks are rejected. The operation result equals the final
-JSON receipt and contains archivePath, archiveSha256 and archiveByteLength.
-
-Delivery kind is `three-creator-delivery`, schemaVersion 1, engine
-`three@0.185.1`, profile `three-raw` or `three-sdk`. Its status is
-`ready-for-independent-review`, technicalStatus `passed`, semanticStatus
-`unreviewed`. This is not a Native delivery or a visual/task acceptance claim.
-The evaluator must separately compare the original reference, the real playable
-and fixed external goals. A route or input transcript alone cannot establish
-scene quality.
-
-SDK v2 discovery is topic-based: `creator_get_authoring_schema({topic})` accepts
-getting-started (default), assets, control, extensions, observation or all. The
-returned declarations are an AST-selected dependency closure of actual public
-contracts; private engine files are not authoring APIs. `creator_get_examples`
-accepts getting-started or extensions; raw only uses its own minimal observer.
-
-`world_execute_command({command})` executes a closed v2 command in the real SDK
-browser. Its Creator operation result contains worldCommandReceipt. An accepted
-receipt contains a separate World operation ID: pass it to
-`world_get_operation({worldOperationId,waitSeconds})`, then poll the returned
-Creator operation using operations_get. Never resubmit a command to poll it.
-While paused, instant commands apply at the pause boundary; ongoing work returns
-accepted and stays pending until explicit start. Commands do not auto-start or
-step a paused world. `world_inspect({query,entityIds})`
-returns current description, command availability and actual state.
-
-Episode schemaVersion 2 adds optional `commands:[...]` and
-`lifecycle:"start"|"pause"|"reset"` to a step. Keys still use actual browser input.
-Lifecycle transitions release held keys; pause/reset time does not count toward
-minimum activePlaySeconds=180 at submission. Episode v1 keeps its original key
-shape. Short episodes may exercise commands and reset; external exploration
-quality still requires independent 3–5 minute route/reference review.
-
-SDK deliveries declare sdkVersion `0.2.0-experimental` and
-browserObservationContract `WorldObservation-v2`; raw declares sdkVersion null
-and the minimal `WorldObservation-v1`. The outer delivery remains schemaVersion 1.
-
-The Host assigns commandId from the Creator operation identity (and episode
-step/command index). The model cannot supply command IDs or priorities. The
-bridge verifies that the SDK echoes the same commandId. These tools currently
-attach no expectedWorldRevision: their fresh snapshot is diagnostic context, not
-a revision already observed by the model. Do not claim stale-context protection
-from the Host-generated ID alone.
-
-Recording timing uses the browser performance clock: inputWallSeconds spans the
-actual input trace, while actualWallSeconds retains Host time through evidence
-recovery. captureTiming records initial/final actual-canvas frame requests and
-recorder stop/flush times on the same browser clock. Initial and final samples are
-rendered from the current scene without stepping the SDK, then flushed before
-trace/video transfer. MP4 encoding preserves the source video frame timestamps
-without FPS padding or synthesized duplicate frames. Submission requires actual
-video duration >=180 seconds as well as >=180 active/input seconds and every
-episode step completed; FPS quantization is never used to accept a 179s video.
-
-Recording keeps one real capture interval of stopped-canvas postroll, followed
-by native encoder flush. captureTiming.postrollSeconds reports this separately;
-it is excluded from inputWallSeconds and activePlaySeconds. This guarantees a
-real terminal sample at low capture rates without changing SDK time or padding
-the encoded movie.
+Archived v1 deliveries retain their recorded-play evidence and old validation.
+Legacy recording helpers are Host-only compatibility code, absent from MCP and
+new submission. Browser network remains same-origin; author Node/build scripts,
+private platform scratch, credentials and symlinks do not enter authored artifacts.

@@ -18,20 +18,23 @@ export function failureClass(message) {
 }
 export function isPassingDelivery(result, expectedProfile = result?.profile) {
   if (!['three-raw', 'three-sdk'].includes(expectedProfile) || result?.profile !== expectedProfile || result?.engine !== 'three@0.185.1' ||
-    result?.kind !== 'three-creator-delivery' || result.schemaVersion !== 1 || result.status !== 'ready-for-independent-review' ||
-    result.technicalStatus !== 'passed' || result.semanticStatus !== 'unreviewed' || result.toolVersion !== THREE_TOOL_VERSION ||
-    result.sdkVersion !== (expectedProfile === 'three-sdk' ? THREE_TOOL_VERSION : null) ||
+    result?.kind !== 'three-creator-delivery' || ![1,2].includes(result.schemaVersion) || result.status !== 'ready-for-independent-review' ||
+    result.technicalStatus !== 'passed' || result.semanticStatus !== 'unreviewed' || result.toolVersion !== (result.schemaVersion === 1 ? '0.2.0-experimental' : THREE_TOOL_VERSION) ||
+    result.sdkVersion !== (expectedProfile === 'three-sdk' ? result.toolVersion : null) ||
     result.browserObservationContract !== (expectedProfile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1') ||
-    !finiteAtLeast(result.actualWallSeconds, 180) || !finiteAtLeast(result.inputWallSeconds, 180) || !finiteAtLeast(result.activePlaySeconds, 180) || !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
-    !['sourceHash', 'worldBuildHash', 'runtimeHash', 'creatorRuntimeLockHash', 'episodeHash', 'archiveSha256', 'deliveryManifestSha256'].every(key => hashPattern.test(result[key] ?? ''))) return false;
+    !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
+    !['sourceHash', 'worldBuildHash', 'runtimeHash', 'creatorRuntimeLockHash', 'archiveSha256', 'deliveryManifestSha256'].every(key => hashPattern.test(result[key] ?? ''))) return false;
+  const worldHash = createHash('sha256').update(JSON.stringify({sourceHash: result.sourceHash, runtimeHash: result.runtimeHash, profile: result.profile})).digest('hex');
+  if (result.worldBuildHash !== worldHash) return false;
+  if (result.schemaVersion === 2) return result.validationMode === 'interactive-preview' && hashPattern.test(result.previewEvidenceSha256 ?? '') && ['episodeHash','actualWallSeconds','activePlaySeconds','inputWallSeconds','videoMetadata','captureTiming'].every(key => !(key in result));
+  if (!hashPattern.test(result.episodeHash ?? '') || !finiteAtLeast(result.actualWallSeconds,180) || !finiteAtLeast(result.inputWallSeconds,180) || !finiteAtLeast(result.activePlaySeconds,180)) return false;
   const video = result.videoMetadata, capture = result.captureTiming;
   if (!finiteAtLeast(video?.durationSeconds, 180) || !['frameCount','widthPixels','heightPixels'].every(key=>Number.isSafeInteger(video?.[key])&&video[key]>0) ||
     capture?.clock !== 'browser-performance' || !['initialFrameRequestedAtMilliseconds','finalFrameRequestedAtMilliseconds','recorderStoppedAtMilliseconds','framePeriodSeconds','postrollSeconds'].every(key=>finiteAtLeast(capture?.[key],0)) ||
     capture.framePeriodSeconds <= 0 || capture.framePeriodSeconds > 1 || !Number.isSafeInteger(capture.requestedFrames) || capture.requestedFrames < 2 ||
     capture.finalFrameRequestedAtMilliseconds < capture.initialFrameRequestedAtMilliseconds || capture.recorderStoppedAtMilliseconds < capture.finalFrameRequestedAtMilliseconds ||
     video.durationSeconds < result.inputWallSeconds - Math.max(1, 2*capture.framePeriodSeconds)) return false;
-  const worldHash = createHash('sha256').update(JSON.stringify({sourceHash: result.sourceHash, runtimeHash: result.runtimeHash, profile: result.profile})).digest('hex');
-  return result.worldBuildHash === worldHash;
+  return true;
 }
 
 // Only actual completed transport events count. Shell output and assistant prose

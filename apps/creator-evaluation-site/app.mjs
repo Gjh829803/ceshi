@@ -9,7 +9,7 @@ function operationDetail(p) {
   if (p?.failure?.message)
     return p.failure.message;
   if (op?.progress && finite(op.progress.elapsedSeconds) && finite(op.progress.requestedSeconds))
-    return `${op.progress.elapsedSeconds.toFixed(1)} / ${op.progress.requestedSeconds} 秒 · 第 ${(op.progress.stepIndex ?? 0) + 1} 步`;
+    return `${op.progress.elapsedSeconds.toFixed(1)} / ${op.progress.requestedSeconds.toFixed(1)} 秒 · 第 ${(op.progress.stepIndex ?? 0) + 1} 步`;
   if (op?.type)
     return `${op.type} · ${toolStatusLabels[op.status] || op.status || "已观测"}`;
   return p?.toolSummary?.latestTool || (p?.lastObservedAt ? `观测于 ${formatTime(p.lastObservedAt)}` : "等待观测记录");
@@ -279,7 +279,7 @@ function renderProcess() {
 }
 function renderDeliverables(c) {
   const p = currentProgress(c.id), playable = isPlayable(c);
-  const rows = [["reference", "用户参考图", true, c.reference, "原始上传图片"], ["opening", "白模首帧", Boolean(c.opening), c.opening, "同一个可玩世界的首帧"], ["playable", "可玩世界", playable, c.playable, "保留 Agent 原始交付"], ["video", "真实试玩录像", Boolean(c.video), c.video, "实际按键操作与浏览器录制"], ["views", "完整对象三视图", Boolean(c.triviews?.length), null, `${c.triviews?.length || 0} 组完整对象`]];
+  const rows = [["reference", "用户参考图", true, c.reference, "原始上传图片"], ["opening", "白模首帧", Boolean(c.opening), c.opening, "同一个可玩世界的首帧"], ["playable", "可玩世界", playable, c.playable, "保留 Agent 原始交付"], ["video", "真实试玩录像", Boolean(c.video), c.video, "实际按键操作与浏览器录制"], ["views", "完整对象三视图", Boolean(c.triviews?.length), null, `${c.triviews?.length || 0} 组完整对象`]].filter(([kind]) => kind !== "video" || c.validationMode !== "interactive-preview");
   $("deliverables").replaceChildren(...rows.map(([id, title, ready, url, detail]) => {
     const row = el("div", void 0, `deliverable-row ${ready ? "" : "pending"}`);
     row.append(el("span", ready ? "✓" : "○", "deliverable-icon"));
@@ -345,6 +345,7 @@ function mountArtifacts(c) {
     f.append(el("figcaption", v.name), picture(v.image, v.name + "三视图"));
     return f;
   }));
+  $("video").closest("details").hidden = !c.video;
   if (c.video) {
     $("video").src = sourceUrl(c.video);
     if (c.opening)
@@ -373,7 +374,8 @@ function mountArtifacts(c) {
     };
     $("player").append(launch);
     const m = c.metrics || {};
-    metrics($("metrics"), [[finite(m.activePlaySeconds) ? `${m.activePlaySeconds.toFixed(1)} 秒` : finite(m.simulationSeconds) ? `${m.simulationSeconds} 秒` : "—", finite(m.activePlaySeconds) ? "主动游玩" : "录制时长"], [`${m.visitedTargets ?? "—"} / ${m.targetCount ?? "—"}`, "作者路线目标"], [finite(m.travelledMeters) ? `${Math.round(m.travelledMeters)} m` : "—", "记录行进距离"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
+    if (c.validationMode === "interactive-preview") metrics($("metrics"), [["实时预览", "生成检查方式"], ["待独立试玩确认", "路线与探索"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
+    else metrics($("metrics"), [[finite(m.activePlaySeconds) ? `${m.activePlaySeconds.toFixed(1)} 秒` : finite(m.simulationSeconds) ? `${m.simulationSeconds} 秒` : "—", finite(m.activePlaySeconds) ? "主动游玩" : "录制时长"], [`${m.visitedTargets ?? "—"} / ${m.targetCount ?? "—"}`, "作者路线目标"], [finite(m.travelledMeters) ? `${Math.round(m.travelledMeters)} m` : "—", "记录行进距离"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
     $("play-controls").textContent = c.profile === "three-sdk" ? "WASD 移动 · 方向键 / 拖动转镜头 · Shift 跑步 · Space 跳跃 · 滚轮缩放 · R 重置。点击场景后操作。" : "WASD 移动 · Shift 跑步 · Space 跳跃 · 拖动转镜头 · 滚轮缩放 · R 重置。具体操作以场景说明为准。";
   }
 }
