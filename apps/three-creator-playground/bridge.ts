@@ -8,6 +8,40 @@ declare global {
   }
 }
 const position = (object: THREE.Object3D) => object.getWorldPosition(new THREE.Vector3()).toArray();
+/** Projection of cached geometry bounds, not a pixel mask or an occlusion test. */
+export function projectedPlayerBounds(player: THREE.Object3D, camera: THREE.Camera) {
+  player.updateWorldMatrix(true, true); camera.updateWorldMatrix(true, false);
+  const bounds = new THREE.Box3().setFromObject(player);
+  if (bounds.isEmpty()) return null;
+  const points: THREE.Vector3[] = [];
+  for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) points.push(new THREE.Vector3(x, y, z));
+  const near = (camera as THREE.PerspectiveCamera).near ?? 0;
+  const isFullyInFrontOfCamera = points.every(point => point.clone().applyMatrix4(camera.matrixWorldInverse).z < -near);
+  const projected = isFullyInFrontOfCamera ? points.map(point => point.project(camera)) : [];
+  const minimumUv = projected.length ? [Math.min(...projected.map(point => (point.x + 1) / 2)), Math.min(...projected.map(point => (1 - point.y) / 2))] : null;
+  const maximumUv = projected.length ? [Math.max(...projected.map(point => (point.x + 1) / 2)), Math.max(...projected.map(point => (1 - point.y) / 2))] : null;
+  return { minimumMetersXYZ: bounds.min.toArray(), maximumMetersXYZ: bounds.max.toArray(), minimumUv, maximumUv, isFullyInFrontOfCamera,
+    isFullyInsideViewport: !!minimumUv && !!maximumUv && minimumUv.every(value => value >= 0) && maximumUv.every(value => value <= 1) };
+}
+export type CameraPreviewSample = {
+  renderIndex: number; wallSeconds: number; positionWorldMetersXYZ: number[]; orientationWorldQuaternionXYZW: number[];
+  playerBounds: ReturnType<typeof projectedPlayerBounds>;
+};
+export const CAMERA_PREVIEW_THRESHOLDS = { angularStepRadians: Math.PI / 36, angularSpeedRadiansPerSecond: Math.PI,
+  positionStepMeters: 0.35, positionSpeedMetersPerSecond: 20 } as const;
+export function cameraPreviewDelta(before: CameraPreviewSample, after: CameraPreviewSample) {
+  const elapsedSeconds = after.wallSeconds - before.wallSeconds;
+  const angularStepRadians = new THREE.Quaternion().fromArray(before.orientationWorldQuaternionXYZW).angleTo(new THREE.Quaternion().fromArray(after.orientationWorldQuaternionXYZW));
+  const positionStepMeters = new THREE.Vector3().fromArray(before.positionWorldMetersXYZ).distanceTo(new THREE.Vector3().fromArray(after.positionWorldMetersXYZ));
+  const angularSpeedRadiansPerSecond = elapsedSeconds > 0 ? angularStepRadians / elapsedSeconds : null;
+  const positionSpeedMetersPerSecond = elapsedSeconds > 0 ? positionStepMeters / elapsedSeconds : null;
+  const signals: string[] = [];
+  if (angularStepRadians > CAMERA_PREVIEW_THRESHOLDS.angularStepRadians && angularSpeedRadiansPerSecond !== null && angularSpeedRadiansPerSecond > CAMERA_PREVIEW_THRESHOLDS.angularSpeedRadiansPerSecond) signals.push('large-angular-step');
+  if (positionStepMeters > CAMERA_PREVIEW_THRESHOLDS.positionStepMeters && positionSpeedMetersPerSecond !== null && positionSpeedMetersPerSecond > CAMERA_PREVIEW_THRESHOLDS.positionSpeedMetersPerSecond) signals.push('large-position-step');
+  if (before.playerBounds?.isFullyInsideViewport && after.playerBounds && !after.playerBounds.isFullyInsideViewport) signals.push('player-bounds-left-viewport');
+  return { fromRenderIndex: before.renderIndex, toRenderIndex: after.renderIndex, wallSeconds: after.wallSeconds, elapsedSeconds,
+    angularStepRadians, angularSpeedRadiansPerSecond, positionStepMeters, positionSpeedMetersPerSecond, signals };
+}
 /** Semantic local front is -Z; preserve the entire parent/object orientation. */
 export function targetTriviewBasis(object: THREE.Object3D, frontYawRadians = 0) {
   if (!Number.isFinite(frontYawRadians)) throw new Error('THREE_TARGET_FRONT_YAW_INVALID');
@@ -34,7 +68,67 @@ export function filterDescription(value: WorldDescription | null, query?: { quer
   const words = query.query?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
   return { ...value, entities: value.entities.filter(entity => (!query.entityIds?.length || query.entityIds.includes(entity.state.id)) && words.every(word => JSON.stringify(entity).toLowerCase().includes(word))) };
 }
+/** Observes the real renderer temporarily; never advances the world clock. */
+export function observeCameraPreview(world: WorldObservation) {
+  const startedAt = performance.now(), renderer = world.renderer, originalRender = renderer.render;
+  const samples: CameraPreviewSample[] = [], events: Array<{ delta: ReturnType<typeof cameraPreviewDelta>; before: CameraPreviewSample; after: CameraPreviewSample }> = [];
+  const keyframes: Array<{ reason: string; renderIndex: number; wallSeconds: number; captureSurface: 'world-canvas'; image: string }> = [];
+  const sdkCameraSamples: Array<{ reason: string; renderIndex: number; wallSeconds: number; simulationTick: number | null; simulationSeconds: number | null; camera: unknown }> = [];
+  const warnings: string[] = [];
+  const maxima: Record<string, { value: number; fromRenderIndex: number; toRenderIndex: number; elapsedSeconds: number }> = {};
+  let previous: CameraPreviewSample | undefined, renderCount = 0, droppedSamples = 0, captureAttempts = 0, isObserving = true, isBeforeInput = true;
+  const warn = (error: unknown) => { if (warnings.length < 4) warnings.push(String(error)); };
+  function sdkSample(reason: string, sample: CameraPreviewSample) {
+    try { const snapshot = world.snapshot?.(); sdkCameraSamples.push({ reason, renderIndex: sample.renderIndex, wallSeconds: (performance.now() - startedAt) / 1000,
+      simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, camera: snapshot?.camera ?? null }); } catch (error) { warn(error); }
+  }
+  function capture(reason: string, sample: CameraPreviewSample) {
+    captureAttempts++;
+    try { keyframes.push({ reason, renderIndex: sample.renderIndex, wallSeconds: sample.wallSeconds, captureSurface: 'world-canvas', image: renderer.domElement.toDataURL('image/png') }); } catch (error) { warn(error); }
+    sdkSample(reason, sample);
+  }
+  function observeRenderedFrame() {
+    const current: CameraPreviewSample = { renderIndex: renderCount++, wallSeconds: (performance.now() - startedAt) / 1000,
+      positionWorldMetersXYZ: position(world.camera), orientationWorldQuaternionXYZW: world.camera.getWorldQuaternion(new THREE.Quaternion()).toArray(),
+      playerBounds: projectedPlayerBounds(world.player, world.camera) };
+    if (samples.length < 4096) samples.push(current); else droppedSamples++;
+    if (!previous) capture(isBeforeInput ? 'before-input' : 'first-observed-render', current);
+    else {
+      const delta = cameraPreviewDelta(previous, current);
+      for (const name of ['angularStepRadians', 'angularSpeedRadiansPerSecond', 'positionStepMeters', 'positionSpeedMetersPerSecond'] as const) {
+        const value = delta[name]; if (value !== null && (!maxima[name] || value > maxima[name].value)) maxima[name] = { value, fromRenderIndex: delta.fromRenderIndex, toRenderIndex: delta.toRenderIndex, elapsedSeconds: delta.elapsedSeconds };
+      }
+      if (delta.signals.length) {
+        if (events.length < 8) events.push({ delta, before: previous, after: current });
+        if (captureAttempts < 2) capture('first-heuristic-transition', current);
+      }
+    }
+    previous = current;
+  }
+  const wrappedRender: typeof renderer.render = function (...args) {
+    originalRender.apply(renderer, args);
+    if (isObserving && args[0] === world.scene && args[1] === world.camera && renderer.getRenderTarget?.() == null) {
+      try { observeRenderedFrame(); } catch (error) { warn(error); }
+    }
+  };
+  renderer.render = wrappedRender;
+  try { renderer.render(world.scene, world.camera); }
+  catch (error) { renderer.render = originalRender; throw error; }
+  isBeforeInput = false;
+  return { finish() {
+    isObserving = false;
+    if (renderer.render === wrappedRender) renderer.render = originalRender;
+    if (previous) sdkSample('after-input', previous);
+    else warn('No direct main-scene canvas renders observed; camera continuity is unavailable.');
+    return { kind: 'three-camera-preview-diagnostics', schemaVersion: 1, informationalOnly: true,
+      evidence: { poseSampling: 'after-actual-main-scene-render', rateClock: 'browser-performance-wall-seconds', playerBounds: 'cached-geometry-world-aabb-projection',
+        limitation: 'Observes direct main-scene canvas renders; offscreen/postprocessing passes are excluded. Bounds are approximate (including cached animated-mesh bounds), not a visible-pixel or occlusion test. Large steps are heuristics; intentional orbit, camera cuts and input can trigger them. Rates include actual browser stalls and capture overhead. SDK arm/obstruction/ticks are sampled only at the labeled points, not every render.' },
+      durationSeconds: (performance.now() - startedAt) / 1000, observedRenderCount: renderCount, storedSampleCount: samples.length, droppedSampleCount: droppedSamples,
+      heuristicThresholds: CAMERA_PREVIEW_THRESHOLDS, maxima, events, sdkCameraSamples, warnings, keyframes, samples };
+  } };
+}
 function createBridge() {
+  let cameraPreview: ReturnType<typeof observeCameraPreview> | undefined;
   let trace: any[] = [], events: any[] = [], frameCount = 0, active = false, startedAt = 0, previousFrameAt = 0, lastSampleAt = 0;
   let recorder: MediaRecorder | undefined, recordedChunks: Blob[] = [], stream: MediaStream | undefined;
   let captureIntervalMilliseconds = 1000 / 3, lastCapturedAt = -Infinity;
@@ -120,6 +214,8 @@ function createBridge() {
       world.renderer.domElement.tabIndex = 0; world.renderer.domElement.focus(); await world.startLive();
     },
     async stop() { await observation().stopLive(); },
+    beginCameraPreview() { cameraPreview?.finish(); cameraPreview = observeCameraPreview(observation()); },
+    endCameraPreview() { const current = cameraPreview; cameraPreview = undefined; return current?.finish() ?? null; },
     beginTrace() { trace = []; events = []; frames.length = 0; frameCount = 0; active = true; startedAt = performance.now(); previousFrameAt = 0; lastSampleAt = 0; trace.push(sample(0)); requestAnimationFrame(frame); },
     endTrace: finishTrace,
     async finishRun() {

@@ -108,7 +108,7 @@ export class ThreeCreatorTools {
       authoring: 'Ordinary index.html and main.ts/js. Native Three, browser APIs, local modules and Three addons are allowed. The Host compiles browser modules without executing author JavaScript/configuration in Node. One shared prebuilt Three; the SDK profile adds the fixed SDK runtime.',
       project: 'Optional project.json selects catalog assetIds. Exact definitions are written to asset-definitions.json. No episode.json is required.',
       observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
-      feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_preview with view=current accepts real keyboard, click, drag and wheel input and returns the resulting page screenshot and observable state. Keys are released at the end; the page is paused between observations. No video is recorded. Raw worlds without snapshot report those fields as null.',
+      feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_preview with view=current accepts real keyboard, click, drag and wheel input, observes camera continuity and projected player bounds on actual renders, and returns the resulting page plus at most two real canvas keyframes. Camera signals are informational heuristics, not delivery gates or occlusion proof. Keys are released at the end; the page is paused between observations. No video is recorded. Raw worlds without snapshot report those fields as null.',
       delivery: 'Versioned three-creator-delivery, experimental. Requires an opening preview of the current source, no observed browser/SDK errors, and real player/target front-right-back captures. No recorded episode or minimum duration is required. Preview evidence does not prove route or semantic acceptance.',
       operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Use world_preview(view=current,input={keys:["w","Shift"],durationSeconds:2}) to move and inspect the resulting image. Choose your own actions and checks.',
       limitations: ['Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.', 'No Node APIs or execution of author build/config scripts.', 'The tools report observable runtime facts and do not score visual fidelity or gameplay quality.'],
@@ -238,7 +238,10 @@ export class ThreeCreatorTools {
     if (view === 'opening') await this.bridge(session, 'reset');
     const before = await this.bridge(session, 'read'), held: string[] = [];
     const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `preview-${randomUUID()}`);
+    let cameraDiagnostics: any;
     if (input) {
+      try { await this.bridge(session, 'beginCameraPreview'); }
+      catch (error) { cameraDiagnostics = { informationalOnly: true, warnings: [errorMessage(error)] }; }
       try {
         await this.bridge(session, 'start');
         if (input.click) await session.page.mouse.click(input.click.xPixels, input.click.yPixels);
@@ -254,6 +257,18 @@ export class ThreeCreatorTools {
       } finally {
         for (const key of held.reverse()) await session.page.keyboard.up(key).catch(() => {});
         await this.bridge(session, 'stop').catch(() => {});
+        try { cameraDiagnostics = await this.bridge(session, 'endCameraPreview') ?? cameraDiagnostics; }
+        catch (error) { cameraDiagnostics = { informationalOnly: true, warnings: [errorMessage(error)] }; }
+      }
+    }
+    if (cameraDiagnostics?.samples) {
+      const samples = cameraDiagnostics.samples; delete cameraDiagnostics.samples;
+      const file = path.join(root, 'camera-samples.json'); await json(file, { schemaVersion: 1, evidence: cameraDiagnostics.evidence, samples });
+      const bytes = await readFile(file); cameraDiagnostics.samples = { path: file, sha256: sha256(bytes), byteLength: bytes.length };
+      for (const [index, keyframe] of (cameraDiagnostics.keyframes ?? []).entries()) {
+        const bytes = Buffer.from(keyframe.image.replace(/^data:image\/png;base64,/, ''), 'base64');
+        const file = path.join(root, `camera-keyframe-${index}.png`); await writeFile(file, bytes);
+        keyframe.image = { path: file, sha256: sha256(bytes), byteLength: bytes.length };
       }
     }
     const observation = await this.bridge(session, 'read');
@@ -263,7 +278,7 @@ export class ThreeCreatorTools {
       const bytes = await session.page.screenshot({ path: file });
       captured = { view, image: { path: file, sha256: sha256(bytes), byteLength: bytes.length }, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, profile: this.profile };
     } else captured = await this.capture(session, root, view, entityIds, frontYawRadians);
-    const report = { ...captured, kind: 'three-creator-browser-preview', schemaVersion: 1, before, observation, input: input ?? null, pageText: (await session.page.locator('body').innerText()).slice(0, 4000), pageErrors: [...session.errors], runtimeErrors: observation.errors ?? [], blockedNetworkRequests: [...session.networkErrors] };
+    const report = { ...captured, kind: 'three-creator-browser-preview', schemaVersion: 1, before, observation, input: input ?? null, ...(cameraDiagnostics ? { cameraDiagnostics } : {}), pageText: (await session.page.locator('body').innerText()).slice(0, 4000), pageErrors: [...session.errors], runtimeErrors: observation.errors ?? [], blockedNetworkRequests: [...session.networkErrors] };
     await json(path.join(root, 'preview.json'), report);
     if (view === 'opening') this.openingEvidence = { root, files: await hashTree(root), report };
     return report;

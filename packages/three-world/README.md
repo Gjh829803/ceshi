@@ -14,7 +14,7 @@ world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
 const hero = await world.assets.load('humanoid.g-bot');
 world.addCharacter({id:'hero', asset:hero});
 world.setControlledEntity('hero');
-world.setCameraFollow({distanceMeters:5});
+world.setCameraFollow(); // adopt the camera pose/composition you already authored
 world.setCaptureTargets(['hero','tower']); // register tower first
 await world.start();
 ```
@@ -31,12 +31,29 @@ Terrain/obstacle default to fixed collision; decoration has no collision. Use
 kinematic for a moving door/platform, dynamic for supported rigid-body impulses.
 Register small visual stones as decoration when they should not impede walking.
 
-The camera remains at the authored first-frame pose until movement or camera
-input activates follow. WASD moves, arrows/drag rotate camera, Shift runs,
-Space jumps, E interacts, R resets. `setCameraFollow` accepts transitionSeconds,
-collisionRadiusMeters and recoveryHalfLifeSeconds when tuning is necessary.
-`useAuthoredCamera()` explicitly returns camera control for a cutscene;
-`setCameraFollow()` takes it back from the current pose.
+Set your reference camera first, then call `setCameraFollow()` to inherit its
+position, orientation, FOV and off-center composition. It follows the controlled
+entity by default; `targetEntityId` chooses another target. The exact opening pose
+is held until movement or camera input. WASD moves, arrows/drag rotate the camera,
+Shift runs, Space jumps, E interacts, R resets.
+
+If you want a different gameplay orbit, explicitly supply distanceMeters,
+pitchRadians or targetHeightMeters; the SDK blends into that view. `framingMode`
+can explicitly select `preserve-opening` or `target`. The default is
+`preserve-opening` when all three orbit values are omitted, and `target` otherwise.
+You do not need to calculate a second orbit merely to start playing.
+
+The SDK derives collision/subject anchors from the registered character body,
+damps target movement, retracts immediately to avoid solids, maintains the
+subject's angular framing during contraction, and restores distance with a speed
+limit. `maximumRecoveryMetersPerSecond` (default 3), `recoveryHalfLifeSeconds`
+(default .24), `targetHalfLifeSeconds` (default .1; 0 disables target damping),
+`collisionRadiusMeters` and `transitionSeconds` are optional tuning controls.
+Physical clearance can require an immediate correction; extreme confinement may
+prevent a full-body view. Camera snapshots expose the actual collision pivot,
+arm length, obstruction, phase and transition progress for debugging.
+`useAuthoredCamera()` gives camera control back for an authored scene or cutscene;
+calling `setCameraFollow()` resumes from the current pose. Keep one camera writer.
 
 `start()` awaits preparation and publishes `window.__WORLDKIT_EVAL__` automatically.
 Use `stop()` to pause and `await reset()` to restore the baseline. Do not call the

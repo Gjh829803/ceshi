@@ -17,7 +17,7 @@ export const THREE_CREATOR_TOOLS = [
   { name: 'assets_search', description: 'Search verified reusable GLB assets, exact actions and limitations. Does not expose private Host source paths.', inputSchema: objectSchema({ query: string }) },
   { name: 'assets_describe', description: 'Describe a catalog asset and exact animation mapping. Select its id in project.json assetIds; SDK world.assets.load(id) loads the packaged verified resource.', inputSchema: objectSchema({ assetId: string }, ['assetId']) },
   { name: 'world_validate', description: 'Compile a browser candidate without executing author code/config on the Host. Cached fixed Three/SDK is reused. Episode-only changes do not rebuild the world. Returns operationId; compilation alone is not runtime acceptance.', inputSchema: objectSchema({}) },
-  { name: 'world_preview', description: 'See an actual browser screenshot. opening resets to the reference camera; current preserves the live page. With current, optional input holds keys for up to 15 seconds, clicks, drags or scrolls, then releases keys and returns the resulting image plus state/errors. Repeat to explore; no episode or video. top-down and entity-triview inspect geometry.', inputSchema: objectSchema({ view: { enum: ['opening', 'current', 'top-down', 'entity-triview'] }, input: PREVIEW_INPUT_SCHEMA, entityIds: { type: 'array', items: string, maxItems: 16 }, frontYawRadians: { type: 'number' } }) },
+  { name: 'world_preview', description: 'See actual browser images. opening resets to the reference camera; current preserves the live page. Current input holds keys up to 15 seconds, clicks, drags or scrolls, then releases keys and returns state/errors, camera continuity and approximate projected-player-bounds diagnostics, plus at most 3 actual images: before input, first heuristic transition if detected, and final page. Signals are informational, can reflect intentional input, and never block delivery. No episode or video. top-down and entity-triview inspect geometry.', inputSchema: objectSchema({ view: { enum: ['opening', 'current', 'top-down', 'entity-triview'] }, input: PREVIEW_INPUT_SCHEMA, entityIds: { type: 'array', items: string, maxItems: 16 }, frontYawRadians: { type: 'number' } }) },
   { name: 'world_inspect', description: 'Inspect actual browser object hierarchy, player/camera/targets/bounds and optional SDK physics/animation state, plus v2 capability descriptions and browser errors. Returns Creator operationId.', inputSchema: objectSchema({ query: string, entityIds: { type: 'array', items: string, maxItems: 64 } }) },
   { name: 'world_execute_command', description: 'Execute one closed SDK v2 command in the actual current browser. Returns Creator operationId; its result.worldCommandReceipt is applied, accepted with a distinct World operationId, or rejected. Use world_get_operation for accepted work. Does not auto-start, rebuild, teleport for testing, or imply task completion. Raw profile is unsupported.', inputSchema: objectSchema({ command: WORLD_COMMAND_SCHEMA }, ['command']) },
   { name: 'world_get_operation', description: 'Read an actual World operation from an accepted command, distinct from the Creator operationId returned by tools. Returns Creator operationId; result.worldOperation contains the live SDK status. Does not submit the command again or start the world.', inputSchema: objectSchema({ worldOperationId: string, waitSeconds: { type: 'number', minimum: 0, maximum: 25 } }, ['worldOperationId']) },
@@ -51,10 +51,16 @@ export async function executeThreeCreatorTool(service: ThreeCreatorTools, name: 
 }
 export async function toolContent(service: ThreeCreatorTools, result: any) {
   const content: any[] = [{ type: 'text', text: JSON.stringify(result) }];
-  const image = result?.status === 'succeeded' ? result.result?.image : result?.image;
-  if (image && path.resolve(image.path).startsWith(`${service.evidenceRoot}${path.sep}`)) {
-    const bytes = await readFile(image.path); if (sha256(bytes) !== image.sha256) throw new Error('THREE_IMAGE_CHANGED');
-    content.push({ type: 'image', mimeType: 'image/png', data: bytes.toString('base64') });
+  const value = result?.status === 'succeeded' ? result.result : result;
+  const images = [...(value?.cameraDiagnostics?.keyframes ?? []).slice(0, 2).map((frame: any) => ({ image: frame.image,
+    label: `Actual world canvas: ${frame.reason}; render ${frame.renderIndex}; ${frame.wallSeconds.toFixed(3)} browser wall seconds.` })),
+    ...(value?.image ? [{ image: value.image, label: value?.cameraDiagnostics ? 'Actual final browser page after input; paused.' : null }] : [])];
+  for (const { image, label } of images) {
+    if (image && path.resolve(image.path).startsWith(`${service.evidenceRoot}${path.sep}`)) {
+      const bytes = await readFile(image.path); if (sha256(bytes) !== image.sha256) throw new Error('THREE_IMAGE_CHANGED');
+      if (label) content.push({ type: 'text', text: label });
+      content.push({ type: 'image', mimeType: 'image/png', data: bytes.toString('base64') });
+    }
   }
   return content;
 }

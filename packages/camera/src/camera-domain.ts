@@ -1,3 +1,5 @@
+import type { CameraGeometryHitV2 } from "@whitebox-world/camera-collision";
+export type { CameraGeometryHitV2 } from "@whitebox-world/camera-collision";
 import {
   parseLocomotionCapabilityStateV2,
   type GaitV2,
@@ -85,18 +87,7 @@ export interface CameraGeometryQueryRequestV2 {
   readonly maximumHitCount: 1;
 }
 
-export interface CameraGeometryHitV2 {
-  readonly schemaVersion: 2;
-  readonly travelDistanceMeters: number;
-  readonly travelFraction: number;
-  readonly hitPointMetersXYZ: readonly [number, number, number];
-  /** For start overlap, the unit direction that moves the probe out of geometry. */
-  readonly hitNormalXYZ: readonly [number, number, number];
-  readonly hitEntityId?: string;
-  readonly startedOverlapping: boolean;
-  readonly penetrationDepthMeters: number;
-  readonly obstructionClass: "hard";
-}
+
 
 export interface CameraGeometryQueryCapabilityV2 {
   readonly shape: "sphere";

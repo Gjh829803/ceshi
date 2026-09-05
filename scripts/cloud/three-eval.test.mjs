@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {isPassingDelivery,eventStatistics,validateDeliveryEvidence} from './three-eval-statistics.mjs';
 import {parseCloudLayout,resolveCreatorSubmission,CODEX_BINARY_SHA256,verifyInstalledClosure,prepareBrowserRegistry} from './three-eval-runtime.mjs';
-import {withAdmissionDirectoryLock} from './three-eval-admission.mjs';
+import {withAdmissionDirectoryLock,validateSuccessfulAccountRoutingEvidence} from './three-eval-admission.mjs';
 import {creativePromptFromSource,terminalJobHasStopped,assessOwnedJob,effectiveConfigMatches} from './three-eval-policy.mjs';
 import {stopOwnedThreeJob} from './three-eval-stop.mjs';
 
@@ -19,6 +19,51 @@ test('Explicit account routing must be preserved in the effective service config
   assert.equal(effectiveConfigMatches({...config,options:{...config.options,codex_account_ids:['different-account']}},payload),false);
 });
 const hash=x=>createHash('sha256').update(x).digest('hex');
+function accountRoutingFixture() {
+  const state={phase:'delivered',providerStatus:'completed',jobId:'gen_0123456789abcdef',requestId:'wk3-routing-source',caseId:'gpt6-source-case',taskId:'gpt6-source-case--three-sdk',profile:'three-sdk',runtimeHash:hash('previous-sdk-runtime'),model:'gpt-6-astra',reasoningEffort:'xhigh'};
+  return {state,items:{items:[{item_id:state.taskId,status:'succeeded',metadata:{model:state.model,reasoning_effort:state.reasoningEffort,codex_account_id:'synthetic-account'}}]},configEcho:{job_id:state.jobId,config:{job_id:state.jobId,request_id:state.requestId,pipeline:'codex',options:{model:state.model,reasoning_effort:state.reasoningEffort},items:[{id:state.taskId,task_id:'',model:'',reasoning_effort:''}]}},launcherReport:{kind:'three-creator-launcher-report',status:'delivered',caseId:state.caseId,taskId:state.taskId,profile:state.profile,runtimeHash:state.runtimeHash,model:state.model,reasoningEffort:state.reasoningEffort,codexBinarySha256:CODEX_BINARY_SHA256}};
+}
+const routingPin={expectedCodexBinarySha256:CODEX_BINARY_SHA256};
+test('Successful model/account evidence carries its original runtime across SDK releases',()=>{
+  const source=accountRoutingFixture(),newRuntimeHash=hash('new-camera-sdk-runtime');
+  const evidence=validateSuccessfulAccountRoutingEvidence(source,routingPin);
+  assert.notEqual(evidence.sourceRuntimeHash,newRuntimeHash);
+  assert.equal(evidence.sourceRuntimeHash,source.state.runtimeHash);
+  assert.equal(evidence.accountId,'synthetic-account');
+  assert.equal(evidence.codexBinarySha256,CODEX_BINARY_SHA256);
+});
+test('Account routing rejects wrong model or effort in every independent source of evidence',()=>{
+  for(const change of [
+    x=>x.state.model='gpt-5.5',x=>x.state.reasoningEffort='low',
+    x=>x.configEcho.config.options.model='gpt-5.5',x=>x.configEcho.config.options.reasoning_effort='low',
+    x=>x.configEcho.config.items[0].model='gpt-5.5',x=>x.configEcho.config.items[0].reasoning_effort='low',
+    x=>x.items.items[0].metadata.model='gpt-5.5',x=>x.items.items[0].metadata.reasoning_effort='low',
+    x=>x.launcherReport.model='gpt-5.5',x=>x.launcherReport.reasoningEffort='low',
+  ]){const source=accountRoutingFixture();change(source);assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/MODEL|model-or-effort/i);}
+});
+test('Failed or incomplete account evidence and invalid metadata IDs cannot authorize routing',()=>{
+  for(const change of [
+    x=>x.state.phase='failed',x=>x.state.providerStatus='running',x=>x.items.items[0].status='failed',
+    x=>delete x.items.items[0].metadata,x=>delete x.items.items[0].metadata.codex_account_id,
+    ...['',' ','..','../synthetic','synthetic/account','synthetic\naccount','a'.repeat(257)].map(id=>x=>x.items.items[0].metadata.codex_account_id=id),
+    x=>delete x.launcherReport,
+  ]){const source=accountRoutingFixture();change(source);assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/THREE_ACCOUNT_ROUTING_INVALID_EVIDENCE/);}
+});
+test('Account routing binds job, task and source runtime and refuses swapped or duplicate metadata',()=>{
+  for(const change of [
+    x=>x.configEcho.job_id='gen_other',x=>x.configEcho.config.job_id='gen_other',x=>x.configEcho.config.request_id='other',
+    x=>x.configEcho.config.items[0].id='other',x=>x.configEcho.config.items[0].task_id='other',
+    x=>x.items.items[0].item_id='other',x=>x.items.items.push(structuredClone(x.items.items[0])),
+    x=>x.state.taskId='different--three-sdk',x=>x.launcherReport.taskId='different--three-sdk',
+    x=>x.launcherReport.runtimeHash=hash('swapped source runtime'),x=>x.state.runtimeHash='missing',
+  ]){const source=accountRoutingFixture();change(source);assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/THREE_ACCOUNT_ROUTING_INVALID_EVIDENCE/);}
+});
+test('Account routing requires the same pinned Codex binary, independent of SDK version',()=>{
+  const source=accountRoutingFixture();
+  assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,{expectedCodexBinarySha256:hash('other codex binary')}),/pinned-codex-binary/);
+  delete source.launcherReport.codexBinarySha256;
+  assert.throws(()=>validateSuccessfulAccountRoutingEvidence(source,routingPin),/pinned-codex-binary/);
+});
 const blank='0'.repeat(64), workspace='/fsx/task/gpt6-eval-forest-lookout--three-sdk';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlX8AAAAASUVORK5CYII=','base64');
 test('Python closed-archive regressions run through the Node census and propagate failures',()=>{const result=spawnSync('python3',['scripts/cloud/three-eval-unpack.test.py'],{encoding:'utf8'});if(result.error)throw result.error;assert.equal(result.status,0,result.stderr||result.stdout);});

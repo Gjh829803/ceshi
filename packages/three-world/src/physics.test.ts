@@ -326,6 +326,21 @@ describe('simultaneous character collisions', () => {
 });
 
 describe('camera arm physical shape probes', () => {
+  it('returns world-space contact normals and verified separation for rotated dirty and committed walls', async () => {
+    const physics = await ThreePhysics.create(); const wall = new THREE.Mesh(new THREE.BoxGeometry(2, 4, .2));
+    wall.rotation.y = .4; wall.position.set(0, 1.3, 3); physics.addRigid('wall', wall, { kind: 'fixed', shape: 'box' });
+    try {
+      for (const committed of [false, true]) {
+        if (committed) physics.step(1 / 60, {});
+        const hit = physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], .2);
+        expect(hit.normalWorldXYZ![0]).toBeCloseTo(-Math.sin(.4), 3); expect(hit.normalWorldXYZ![2]).toBeCloseTo(-Math.cos(.4), 3);
+        const overlap = physics.castCameraArm([0, 1.3, 3], [0, 1.3, 6], .2);
+        expect(overlap.startedOverlapping).toBe(true); expect(overlap.penetrationDepthMeters).toBeCloseTo(.3, 4);
+        const separated = new THREE.Vector3(0, 1.3, 3).addScaledVector(new THREE.Vector3(...overlap.normalWorldXYZ!), overlap.penetrationDepthMeters! + .02);
+        expect(physics.castCameraArm(separated.toArray() as [number, number, number], separated.toArray() as [number, number, number], .2).startedOverlapping).not.toBe(true);
+      }
+    } finally { physics.dispose(); wall.geometry.dispose(); }
+  });
   it('uses each collider source mesh visibility for box, hull, triangle and instanced obstacles without disabling physics', async () => {
     for (const shape of ['box', 'convex-hull', 'trimesh'] as const) {
       const physics = await create(), root = new THREE.Group(), hidden = box(0, 1, 2, 4, 4, .2), visible = box(0, 1, 5, 4, 4, .2); root.add(hidden, visible);
@@ -345,7 +360,7 @@ describe('camera arm physical shape probes', () => {
   it('casts a sphere against actual solids, excludes characters and hidden bodies, and returns zero for initial overlap', async () => {
     const physics = await create(); const wall = box(0, 1.3, 3, 4, 4, .2); physics.addRigid('wall', wall, { kind: 'fixed', shape: 'box' }); physics.addCharacter('npc', actor(0, 1)); physics.step(dt, {});
     const hit = physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], .2); expect(hit.colliderEntityId).toBe('wall'); expect(hit.distanceMeters).toBeCloseTo(2.7, 4);
-    expect(physics.castCameraArm([0, 1.3, 3], [0, 1.3, 6], .2)).toEqual({ distanceMeters: 0, colliderEntityId: 'wall' });
+    expect(physics.castCameraArm([0, 1.3, 3], [0, 1.3, 6], .2)).toMatchObject({ distanceMeters: 0, colliderEntityId: 'wall', startedOverlapping: true });
     physics.setEnabled('wall', false); expect(physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], .2)).toEqual({ distanceMeters: 6 });
     physics.setEnabled('wall', true); const reverse = physics.castCameraArm([0, 1.3, 6], [0, 1.3, 0], .2); expect(reverse.colliderEntityId).toBe('wall'); expect(reverse.distanceMeters).toBeCloseTo(2.7, 4);
     expect(() => physics.castCameraArm([0, 1.3, 0], [0, 1.3, 6], 0)).toThrow('PHYSICS_OPTION_INVALID');
@@ -408,7 +423,7 @@ describe('movement extension intent adapter', () => {
     physics.teleport('wall', [0, 1, 9]); query(9); expect(step).not.toHaveBeenCalled();
     physics.step(dt, {}); expect(step).toHaveBeenCalledTimes(1);
     physics.teleport('wall', [0, 1, 1]); query(1);
-    expect(physics.castCameraArm([0, 1, 1], [0, 1, 5], .2)).toEqual({ distanceMeters: 0, colliderEntityId: 'wall' });
+    expect(physics.castCameraArm([0, 1, 1], [0, 1, 5], .2)).toMatchObject({ distanceMeters: 0, colliderEntityId: 'wall', startedOverlapping: true });
     wall.scale.z = 3; physics.refresh('wall'); expect(physics.probe([0, 1, 0], [0, 0, 1], 20)?.distanceMeters).toBeCloseTo(.7, 4);
     physics.setEnabled('wall', false); expect(physics.probe([0, 1, 0], [0, 0, 1], 20)).toBeNull(); physics.step(dt, {});
     physics.setEnabled('wall', true); expect(physics.castCameraArm([0, 1, 0], [0, 1, 20], .2).distanceMeters).toBeCloseTo(.5, 3);

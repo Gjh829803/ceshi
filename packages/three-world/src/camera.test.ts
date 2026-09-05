@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ThreeCameraRig } from './camera.js';
 import { ThreePhysics } from './physics.js';
+import { createWorld } from './world.js';
 import type { Vec3 } from './engine-contracts.js';
 
 const distance = (a: Vec3, b: Vec3) => new THREE.Vector3(...a).distanceTo(new THREE.Vector3(...b));
@@ -14,6 +15,115 @@ function fixture() {
 }
 
 describe('ThreeCameraRig', () => {
+  it('inherits the final authored pose when camera composition changes while follow is pending', () => {
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 3, 8); camera.lookAt(0, 1.3, 0);
+    const rig = new ThreeCameraRig(camera, unobstructed, () => [0, 0, 0]); rig.setFollow({ targetEntityId: 'hero' });
+    camera.position.set(12, 4, 6); camera.lookAt(-3, 7, -12); const opening = camera.clone();
+    rig.updateDesired({ activate: true }, 1 / 60); for (let i = 0; i < 120; i++) rig.update(1 / 60);
+    expect(camera.position.distanceTo(opening.position)).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+  });
+
+  it('keeps running after a legal short teleport across close parallel walls', async () => {
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(-.8, 1.3, 8); camera.lookAt(-.8, 1.3, 0);
+    const world = await createWorld({ scene: new THREE.Scene(), camera });
+    try {
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(10, .2, 10)); floor.position.y = -.1;
+      world.addEntity({ id: 'floor', object: floor, role: 'terrain', physics: { kind: 'fixed', shape: 'box' } });
+      for (const [id, x] of [['west', -.19], ['east', .19]] as const) {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(.2, 4, 5)); wall.position.set(x, 2, 0);
+        world.addEntity({ id, object: wall, role: 'obstacle', physics: { kind: 'fixed', shape: 'box' } });
+      }
+      const player = new THREE.Group(); player.position.set(-.8, .04, 0);
+      world.addCharacter({ id: 'player', object: player, body: { heightMeters: 1.8, radiusMeters: .35 } });
+      world.setControlledEntity('player'); world.setCameraFollow({ activateOnInput: false, transitionSeconds: 0 }); world.step({}, 20);
+      const result = await world.execute({ type: 'entity.set-position', entityId: 'player', positionWorldMetersXYZ: [.8, .04, 0] });
+      expect(result.status).toBe('applied');
+      expect(() => world.step({}, 120)).not.toThrow();
+      expect(world.snapshot().errors).toEqual([]);
+      expect(world.snapshot().camera.positionWorldMetersXYZ.every(Number.isFinite)).toBe(true);
+    } finally { world.dispose(); }
+  });
+
+  it('adopts an off-center opening pose without requiring a second orbit configuration', () => {
+    const camera = new THREE.PerspectiveCamera(39, 1.8, .1, 2000);
+    camera.position.set(17, 28, 210); camera.lookAt(-60, 74, -120);
+    const opening = camera.clone(); let target: Vec3 = [0, 0, 0];
+    const rig = new ThreeCameraRig(camera, unobstructed, () => target, () => ({ heightMeters: 2.4, radiusMeters: .4 }));
+    rig.setFollow({ targetEntityId: 'hero' });
+    rig.updateDesired({ activate: true }, 1 / 60);
+    for (let i = 0; i < 60; i++) rig.update(1 / 60);
+    expect(camera.position.distanceTo(opening.position)).toBeLessThan(1e-8);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    expect(rig.snapshot().framingMode).toBe('preserve-opening');
+    target = [0, 0, -1]; for (let i = 0; i < 180; i++) rig.update(1 / 60);
+    expect(camera.position.distanceTo(opening.position.clone().add(new THREE.Vector3(0, 0, -1)))).toBeLessThan(1e-7);
+    expect(camera.quaternion.angleTo(opening.quaternion)).toBeLessThan(1e-7);
+    expect(camera.fov).toBe(39);
+  });
+
+  it('keeps the subject framing when a tall visual target is retracted by real scenery', async () => {
+    const physics = await ThreePhysics.create();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(8, 8, .3)); wall.position.set(0, 3, 8);
+    const camera = new THREE.PerspectiveCamera(52, 1.8, .1, 200);
+    camera.position.set(0, 4.2, 16); camera.lookAt(0, 5, 0);
+    const rig = new ThreeCameraRig(camera, physics.castCameraArm.bind(physics), () => [0, 0, 0], () => ({ heightMeters: 1.8, radiusMeters: .35 }));
+    rig.setFollow({ targetEntityId: 'hero', distanceMeters: 16, targetHeightMeters: 5, pitchRadians: -.05, activateOnInput: false, transitionSeconds: 0 });
+    try {
+      rig.update(1 / 60); const centerBefore = new THREE.Vector3(0, .9, 0).project(camera);
+      physics.addRigid('wall', wall, { kind: 'fixed', shape: 'box' }); physics.step(1 / 60, {}); rig.update(1 / 60);
+      const state = rig.snapshot(), centerAfter = new THREE.Vector3(0, .9, 0).project(camera);
+      expect(state.obstructionEntityId).toBe('wall'); expect(state.actualArmDistanceMeters).toBeLessThan(9);
+      expect(centerAfter.x).toBeCloseTo(centerBefore.x, 6); expect(centerAfter.y).toBeCloseTo(centerBefore.y, 6);
+      expect(new THREE.Vector3(0, 0, 0).project(camera).y).toBeGreaterThan(-1);
+      expect(new THREE.Vector3(0, 1.8, 0).project(camera).y).toBeLessThan(1);
+      const safe = physics.castCameraArm(state.targetPositionWorldMetersXYZ!, state.positionWorldMetersXYZ, .2);
+      expect(safe.startedOverlapping).not.toBe(true); expect(safe.distanceMeters).toBeCloseTo(state.actualArmDistanceMeters!, 5);
+    } finally { physics.dispose(); wall.geometry.dispose(); }
+  });
+
+  it('uses separate smoothing memory per rig and restores it on reset', () => {
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 3, 8); camera.lookAt(0, 1, 0);
+    let target: Vec3 = [0, 0, 0]; const rig = new ThreeCameraRig(camera, unobstructed, () => target);
+    rig.setFollow({ targetEntityId: 'hero', activateOnInput: false, transitionSeconds: 0 }); rig.sealInitialState();
+    target = [0, 1, 0]; rig.update(1 / 60);
+    expect(camera.position.y).toBeGreaterThan(3); expect(camera.position.y).toBeLessThan(3.2);
+    const moved = rig.snapshot(); target = [0, 0, 0]; rig.reset(); target = [0, 1, 0]; rig.update(1 / 60);
+    expect(rig.snapshot()).toEqual(moved);
+  });
+
+  it('rotates throughout an authored handoff instead of snapping on the final tick', () => {
+    const camera = new THREE.PerspectiveCamera(52, 1.8, .1, 650);
+    camera.position.set(0, 3.35, 18); camera.lookAt(-1, 27, -85);
+    const opening = camera.quaternion.clone(), previous = opening.clone();
+    const rig = new ThreeCameraRig(camera, unobstructed, () => [0, .22, 0]);
+    rig.setFollow({ targetEntityId: 'hero', distanceMeters: 16, targetHeightMeters: 5, pitchRadians: -.05, transitionSeconds: 1.6 });
+    rig.updateDesired({ activate: true }, 1 / 60);
+    let maximumAngle = 0, midpointAngle = 0;
+    for (let tick = 1; tick <= 100; tick++) {
+      rig.update(1 / 60); maximumAngle = Math.max(maximumAngle, previous.angleTo(camera.quaternion));
+      if (tick === 48) midpointAngle = opening.angleTo(camera.quaternion);
+      previous.copy(camera.quaternion);
+    }
+    expect(midpointAngle).toBeGreaterThan(.01);
+    expect(maximumAngle).toBeLessThan(.02);
+  });
+
+  it('bounds a long camera arm recovery in meters per second', () => {
+    let blocked = true;
+    const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 1.3, 16); camera.lookAt(0, 1.3, 0);
+    const rig = new ThreeCameraRig(camera, (target, eye) => blocked && distance(target, eye) > 2
+      ? { distanceMeters: 2, colliderEntityId: 'wall' } : unobstructed(target, eye), () => [0, 0, 0]);
+    rig.setFollow({ targetEntityId: 'hero', distanceMeters: 16, pitchRadians: 0, activateOnInput: false, transitionSeconds: 0 });
+    rig.update(1 / 60); blocked = false;
+    let previous = rig.snapshot().actualArmDistanceMeters!;
+    for (let i = 0; i < 120; i++) {
+      rig.update(1 / 60); const actual = rig.snapshot().actualArmDistanceMeters!;
+      expect((actual - previous) * 60).toBeLessThanOrEqual(3 + 1e-8); previous = actual;
+    }
+    expect(previous).toBeGreaterThan(6);
+  });
+
   it('preserves the exact authored opening until first input and transitions on that same camera', () => {
     const { camera, rig } = fixture(); const opening = camera.clone();
     rig.setFollow({ targetEntityId: 'hero', distanceMeters: 4, pitchRadians: .25, transitionSeconds: .4 });
@@ -31,11 +141,11 @@ describe('ThreeCameraRig', () => {
   it('updates the desired movement basis before changing the rendered pose', () => {
     const { camera, rig } = fixture(); const before = camera.quaternion.clone();
     rig.setFollow({ targetEntityId: 'hero', rotationSpeedRadiansPerSecond: 2 });
-    const yaw = rig.desiredYawRadians;
+    const yaw = rig.desiredYawRadians, initialPitch = rig.snapshot().desiredPitchRadians;
     rig.updateDesired({ cameraYawRatio: 1, cameraPitchRatio: -.5, yawDeltaRadians: .1 }, .25);
     expect(rig.desiredYawRadians).toBeCloseTo(yaw + .6, 10);
     expect(camera.quaternion.equals(before)).toBe(true);
-    expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(0, 10);
+    expect(rig.snapshot().desiredPitchRadians).toBeCloseTo(initialPitch - .25, 10);
   });
 
   it('does not consume orbit or zoom in authored mode and reacquires from the current pose', () => {
@@ -63,7 +173,10 @@ describe('ThreeCameraRig', () => {
       const safe = physics.castCameraArm([1.1, 1.3, 0], state.positionWorldMetersXYZ, .2);
       expect(safe.distanceMeters).toBeCloseTo(state.actualArmDistanceMeters!, 5);
       physics.teleport('wall', [0, 1.3, 0]); physics.step(1 / 60, {}); rig.update(1 / 60);
-      expect(rig.snapshot().safeArmDistanceMeters).toBe(0); expect(rig.snapshot().actualArmDistanceMeters).toBe(0);
+      const escaped = rig.snapshot();
+      expect(escaped.collisionPhase).toBe('emergency-inside'); expect(escaped.actualArmDistanceMeters).toBeGreaterThan(0);
+      const escapeProbe = physics.castCameraArm(escaped.targetPositionWorldMetersXYZ!, escaped.positionWorldMetersXYZ, .2);
+      expect(escapeProbe.startedOverlapping).not.toBe(true); expect(escapeProbe.distanceMeters).toBeCloseTo(escaped.actualArmDistanceMeters!, 5);
     } finally { physics.dispose(); wall.geometry.dispose(); }
   });
 
@@ -89,7 +202,7 @@ describe('ThreeCameraRig', () => {
     clearance = Infinity; rig.update(1 / 60); const firstClear = rig.snapshot().actualArmDistanceMeters!;
     expect(firstClear).toBeLessThan(3);
     let previous = firstClear;
-    for (let i = 0; i < 120; i++) { rig.update(1 / 60); const actual = rig.snapshot().actualArmDistanceMeters!; expect(actual).toBeGreaterThanOrEqual(previous); expect(actual - previous).toBeLessThan(.3); previous = actual; }
+    for (let i = 0; i < 150; i++) { rig.update(1 / 60); const actual = rig.snapshot().actualArmDistanceMeters!; expect(actual).toBeGreaterThanOrEqual(previous); expect(actual - previous).toBeLessThan(.3); previous = actual; }
     expect(previous).toBeGreaterThan(5.98);
   });
 

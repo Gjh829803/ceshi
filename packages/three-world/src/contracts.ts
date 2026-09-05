@@ -54,6 +54,8 @@ export type CharacterOptions = EntityMetadata & {readonly movement?:GroundMoveme
 );
 export interface CameraFollowOptions {
  readonly targetEntityId?:string;
+ /** Omit orbit values to inherit the authored pose. Explicit orbit values default to target framing. */
+ readonly framingMode?:'preserve-opening'|'target';
  readonly distanceMeters?:number;
  readonly targetHeightMeters?:number;
  readonly pitchRadians?:number;
@@ -62,6 +64,8 @@ export interface CameraFollowOptions {
  readonly rotationSpeedRadiansPerSecond?:number;
  readonly collisionRadiusMeters?:number;
  readonly recoveryHalfLifeSeconds?:number;
+ readonly maximumRecoveryMetersPerSecond?:number;
+ readonly targetHalfLifeSeconds?:number;
 }
 type WithoutId<T> = T extends unknown ? Omit<T,'id'> : never;
 export type SpawnTemplate =
@@ -228,6 +232,7 @@ export interface WorldDescription {
 export interface CameraState {
  readonly mode:'authored'|'follow-pending'|'follow';
  readonly positionWorldMetersXYZ:Vec3;
+ readonly orientationWorldQuaternionXYZW:readonly [number,number,number,number];
  readonly desiredPositionWorldMetersXYZ:Vec3;
  readonly desiredYawRadians:number;
  readonly desiredPitchRadians:number;
@@ -235,6 +240,11 @@ export interface CameraState {
  readonly safeArmDistanceMeters?:number;
  readonly actualArmDistanceMeters?:number;
  readonly obstructionEntityId?:string;
+ readonly collisionPhase?:'clear'|'constrained'|'recovering'|'emergency-inside';
+ readonly targetPositionWorldMetersXYZ?:Vec3;
+ readonly subjectPositionWorldMetersXYZ?:Vec3;
+ readonly transitionProgressRatio?:number;
+ readonly framingMode?:'preserve-opening'|'target';
 }
 export interface WorldSnapshot {
  readonly schemaVersion:2;

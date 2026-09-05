@@ -46,6 +46,14 @@ export type PhysicsAudit = Readonly<{
   diagnostics: readonly Readonly<{ code: string; entityId?: string; message: string }>[];
 }>;
 export type PhysicsCandidate = Readonly<{kind:'rigid';id:string;object:THREE.Object3D;options:RigidPhysics}>|Readonly<{kind:'character';id:string;object:THREE.Object3D;options?:CharacterOptions}>;
+export type CameraArmHit = Readonly<{
+  distanceMeters: number;
+  colliderEntityId?: string;
+  normalWorldXYZ?: Vec3;
+  hitPositionWorldMetersXYZ?: Vec3;
+  startedOverlapping?: boolean;
+  penetrationDepthMeters?: number;
+}>;
 export interface PhysicsPort {
   validateBatch(candidates:readonly PhysicsCandidate[],removedEntityIds?:readonly string[]):void;
   addRigid(id: string, object: THREE.Object3D, options: RigidPhysics): void;
@@ -58,7 +66,7 @@ export interface PhysicsPort {
   applyImpulse(id: string, impulseNewtonSecondsXYZ: Vec3): void;
   step(deltaSeconds: number, drives: Readonly<Record<string, CharacterDrive>>): void;
   state(id: string): PhysicsEntityState | undefined;
-  castCameraArm(targetMetersXYZ: Vec3, desiredEyeMetersXYZ: Vec3, radiusMeters: number): { distanceMeters: number; colliderEntityId?: string };
+  castCameraArm(targetMetersXYZ: Vec3, desiredEyeMetersXYZ: Vec3, radiusMeters: number): CameraArmHit;
   probe(originMetersXYZ: Vec3, directionWorldXYZ: Vec3, maximumDistanceMeters: number, excludeEntityId?: string): { entityId: string; distanceMeters: number; normalWorldXYZ: Vec3 } | null;
   audit(): PhysicsAudit;
   reset(): void;

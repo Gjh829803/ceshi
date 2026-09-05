@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 export const NODE_SOURCE_IMAGE = 'node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0';
 const ROOT_DEPENDENCIES = { dependencies: ['@worldkit/three', 'three', 'sharp'], devDependencies: ['@modelcontextprotocol/sdk', 'ajv', 'esbuild', 'playwright', 'tsx', 'typescript'] };
-const SOURCE_TREES = ['packages/three-world', 'scripts/three-creator', 'apps/three-creator-playground'];
+const SOURCE_TREES = ['packages/three-world', 'packages/camera-collision', 'scripts/three-creator', 'apps/three-creator-playground'];
 const DENIED = new Set(['node_modules', '.git', '.codex', '.codex-tmp', '.env', 'auth.json', 'credentials', '.aws', '.npmrc', '.pnpmfile.cjs', 'config.toml', 'dist', 'coverage', 'test-results']);
 const SOURCE_EXTENSIONS = new Set(['.ts', '.mts', '.js', '.mjs', '.json', '.wasm', '.md', '.html', '.css', '.svg', '.txt']);
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -46,6 +46,8 @@ export function projectLock(original, rootManifest) {
     }
   }
   projected += `\n  packages/three-world:\n${sdk.trimEnd()}\n`;
+  assert(original.includes('\n  packages/camera-collision: {}\n'), 'Review changed shared camera collision dependencies');
+  projected += '\n  packages/camera-collision: {}\n';
   return original.slice(0, start) + '\nimporters:\n\n' + projected + original.slice(end);
 }
 
@@ -95,8 +97,9 @@ export function stageContext(repositoryRoot, outputRoot) {
   assert(originalWorkspace.toString().includes('\nallowBuilds:\n  esbuild: true\n\npatchedDependencies:\n'), 'Review changed workspace lifecycle/patch settings');
   const patches = originalWorkspace.toString().slice(originalWorkspace.toString().indexOf('patchedDependencies:\n'));
   assert(/^patchedDependencies:\n(?:  '@recast-navigation\/(?:core|generators)@0\.43\.1': patches\/@recast-navigation__(?:core|generators)@0\.43\.1\.patch\n?){2}$/.test(patches.trimEnd() + '\n'), 'Review changed patch allowlist');
-  put('pnpm-workspace.yaml', Buffer.from('packages:\n  - "packages/three-world"\n\nallowBuilds:\n  esbuild: true\n\n' + patches), true);
+  put('pnpm-workspace.yaml', Buffer.from('packages:\n  - "packages/three-world"\n  - "packages/camera-collision"\n\nallowBuilds:\n  esbuild: true\n\n' + patches), true);
   source('packages/three-world/package.json', true);
+  source('packages/camera-collision/package.json', true);
   source('patches/@recast-navigation__core@0.43.1.patch', true);
   source('patches/@recast-navigation__generators@0.43.1.patch', true);
   // Tool execution gets a small standalone tsconfig, without Native workspace globals.

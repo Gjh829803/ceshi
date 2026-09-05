@@ -80,7 +80,11 @@ export class WorldEngine {
     this.renderer = options.renderer ?? (options.canvas ? new THREE.WebGLRenderer({ canvas: options.canvas, antialias: true, preserveDrawingBuffer: true }) : undefined);
     this.ownsRenderer = options.renderer === undefined;
     this.physics = physics; this.navigation = navigation;
-    this.cameraRig = new ThreeCameraRig(this.camera, (target, eye, radius) => this.physics.castCameraArm(target,eye,radius), id => this.entities.has(id) ? tuple(position(this.entity(id).object)) : undefined);
+    this.cameraRig = new ThreeCameraRig(this.camera, (target, eye, radius) => this.physics.castCameraArm(target,eye,radius),
+      id => this.entities.has(id) ? tuple(position(this.entity(id).object)) : undefined,
+      id => { const entity = this.entities.get(id); if (!entity?.character) return undefined;
+        const scale = entity.object.getWorldScale(new THREE.Vector3());
+        return { heightMeters: (entity.character.heightMeters ?? 1.8) * Math.abs(scale.y), radiusMeters: (entity.character.radiusMeters ?? .35) * Math.max(Math.abs(scale.x), Math.abs(scale.z)) }; });
     this.fixedTimeStepSeconds = options.fixedTimeStepSeconds ?? 1 / 60;
     if (!Number.isFinite(this.fixedTimeStepSeconds) || this.fixedTimeStepSeconds < 1 / 240 || this.fixedTimeStepSeconds > 1 / 20) throw new Error('WORLD_TIMESTEP_INVALID');
     this.keyboard = new WorldKeyboard(() => this.tick, () => {if(this.resetHandler)this.resetHandler();else this.reset();});

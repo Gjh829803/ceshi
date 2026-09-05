@@ -41,6 +41,10 @@ mandatory preference. Search assets by identity and inspect their limitations;
 diagnostic samples are not proof of faithful subject appearance. Do not install dependencies or change supplied tools.
 
 For the SDK world, WASD moves the character and the arrow keys rotate the camera;
+after composing the reference camera, `world.setCameraFollow()` can inherit that
+exact view for play. Explicit orbit settings remain available for a different
+gameplay view. The SDK owns continuous handoff, collision recovery and subject
+framing; use its controls before adding a custom camera writer.
 Shift stays held to run and each new Space press jumps once. Keep the verified
 ordinary jump animation continuous, then return to idle/walk/run on landing.
 R and tool reset must restore the complete initial world, camera and gameplay
@@ -50,7 +54,8 @@ do not claim an unsupported movement or geometry behavior merely by naming it.
 Use world_preview to see real browser images and world_inspect for diagnostics.
 Opening resets to the reference camera; current preserves the current page. Use
 world_preview with view=current and input to hold keys briefly, click, drag or
-scroll, then inspect the returned screenshot and state. Choose your own checks
+scroll, then inspect the returned screenshot, camera keyframes and state. Camera
+diagnostics describe actual short interactions and are informational. Choose your own checks
 and exploration; fix issues you observe. After the final source change, inspect
 an opening preview and capture complete object three-views before world_submit.
 There is no required episode file, recorded self-test, video or minimum test duration.

@@ -7,7 +7,7 @@ import { fileSha256, readRuntimeLock, resolveCreatorSubmission, sha256, writeJso
 import { eventStatistics, failureClass, validateDeliveryEvidence } from "./three-eval-statistics.mjs";
 import { recoverFailedCreatorDiagnostics } from "./creator-eval-diagnostics.mjs";
 import { creativePromptFromSource, terminalJobHasStopped, assessOwnedJob, effectiveConfigMatches, reportedTokenUsage, MAXIMUM_QUEUE_SECONDS, STOP_DRAIN_SECONDS } from "./three-eval-policy.mjs";
-import { withAdmissionDirectoryLock } from "./three-eval-admission.mjs";
+import { withAdmissionDirectoryLock, validateSuccessfulAccountRoutingEvidence } from "./three-eval-admission.mjs";
 import { stopOwnedThreeJob } from "./three-eval-stop.mjs";
 import { readThreeLiveStatus } from "./three-eval-live.mjs";
 
@@ -87,13 +87,12 @@ if (accountRoutingFile) {
   for (const inputRoot of routing.successfulCaseRoots) {
     const sourceRoot = path.resolve(inputRoot);
     if (!sourceRoot.startsWith(path.join(repo, ".codex-tmp/three-creator-eval/runs") + path.sep) || await realpath(sourceRoot) !== sourceRoot) throw new Error("Account routing source must be a prior Host case directory.");
-    const values = await Promise.all(["state.json", "items.json", "config-echo.json"].map(async name => { const file = path.join(sourceRoot, name); if (await realpath(file) !== file) throw new Error("Account routing metadata cannot be a symlink."); return JSON.parse(await readFile(file, "utf8")); }));
-    const [state, items, echo] = values, item = items.items?.find(value => value.item_id === state.taskId), effective = echo.config?.options;
-    if (state.phase !== "delivered" || state.runtimeHash !== lock.runtimeHash || item?.status !== "succeeded" || effective?.model !== "gpt-6-astra" || effective?.reasoning_effort !== "xhigh") throw new Error("Account routing requires a delivered same-runtime GPT-6 xhigh case.");
-    const id = item.metadata?.codex_account_id;
-    if (typeof id !== "string" || !id || id.length > 256 || id === "." || id === ".." || /[\\/\x00-\x1f]/.test(id)) throw new Error("Invalid public account metadata identifier.");
-    if (!routedAccountIds.includes(id)) routedAccountIds.push(id);
-    sources.push({caseRoot: sourceRoot, jobId: state.jobId, accountIdSha256: sha256(id)});
+    const values = await Promise.all(["state.json", "items.json", "config-echo.json", "creator-launcher-report.json"].map(async name => { const file = path.join(sourceRoot, name); if (await realpath(file) !== file) throw new Error("Account routing metadata cannot be a symlink."); return JSON.parse(await readFile(file, "utf8")); }));
+    const [state, items, configEcho, launcherReport] = values;
+    if (path.basename(sourceRoot) !== state.taskId) throw new Error("Account routing source directory must match its task identity.");
+    const evidence = validateSuccessfulAccountRoutingEvidence({state, items, configEcho, launcherReport}, {expectedCodexBinarySha256: lock.codexBinarySha256});
+    if (!routedAccountIds.includes(evidence.accountId)) routedAccountIds.push(evidence.accountId);
+    sources.push({caseRoot: sourceRoot, jobId: evidence.jobId, taskId: evidence.taskId, sourceRuntimeHash: evidence.sourceRuntimeHash, codexBinarySha256: evidence.codexBinarySha256, accountIdSha256: sha256(evidence.accountId)});
   }
   accountRouting = {scope: "host-service-only", sourceFileSha256: sha256(routingBytes), strategy: "explicit-successful-account-ids-with-provider-health-filter", sources};
   if (previousPlan?.accountRouting?.sourceFileSha256 && previousPlan.accountRouting.sourceFileSha256 !== accountRouting.sourceFileSha256) throw new Error("Frozen account routing document changed.");
