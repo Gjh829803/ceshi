@@ -1,7 +1,7 @@
 import { PNG } from "pngjs";
 import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
 import { describe, expect, it } from "vitest";
-import { measureFormalIdentityMaskV1 } from "./formal-identity-mask-measurement.js";
+import { measureFormalIdentityMaskV1, projectOpeningCompositionPixelsV1 } from "./formal-identity-mask-measurement.js";
 
 function input(labels: readonly number[], width = 3) {
   const png = new PNG({ width, height: labels.length / width });
@@ -18,6 +18,26 @@ function input(labels: readonly number[], width = 3) {
 }
 
 describe("receipt-bound formal identity pixels", () => {
+  it("joins Opening regions and anchors from decoded visible targets without an AABB fallback", () => {
+    const projections = measureFormalIdentityMaskV1(input([0,1,0]));
+    const bindings = [{ acceptanceTargetRef: "target-red", compositionTargetRef: "red-region" },
+      { acceptanceTargetRef: "target-green", compositionTargetRef: "green-region" }];
+    expect(projectOpeningCompositionPixelsV1({ projections, bindings })).toEqual({
+      regions: [{ targetRef: "red-region", normalizedBounds: { minXBasisPoints: 3333, minYBasisPoints: 0, maxXBasisPoints: 6667, maxYBasisPoints: 10000 } }],
+      anchors: [{ targetRef: "red-region", normalizedCenter: { xBasisPoints: 5000, yBasisPoints: 5000 } }],
+    });
+    expect(() => projectOpeningCompositionPixelsV1({ bindings, projections: new Map() }))
+      .toThrow("missing opening target");
+    expect(projectOpeningCompositionPixelsV1({ bindings: [], projections })).toEqual({ regions: [], anchors: [] });
+    const bothVisible = measureFormalIdentityMaskV1(input([1,0,2]));
+    const reordered = projectOpeningCompositionPixelsV1({ projections: bothVisible, bindings: [
+      { acceptanceTargetRef: "target-red", compositionTargetRef: "z-last" },
+      { acceptanceTargetRef: "target-green", compositionTargetRef: "a-first" },
+    ] });
+    expect(reordered.regions.map(({ targetRef }) => targetRef)).toEqual(["a-first", "z-last"]);
+    expect(reordered.anchors.map(({ targetRef }) => targetRef)).toEqual(["a-first", "z-last"]);
+  });
+
   it("measures actual holes and visible occluding targets instead of rectangle area", () => {
     const solid = measureFormalIdentityMaskV1(input([1,1,1,1,1,1,1,1,1]));
     const arch = measureFormalIdentityMaskV1(input([1,1,1,1,2,1,1,0,1]));

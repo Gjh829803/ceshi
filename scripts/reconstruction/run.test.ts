@@ -391,7 +391,7 @@ function openingCompositionDiagnostic(): WorldReconstructionDiagnosticV1 {
       kind: "revise-native-source",
       targetKind: "composition-target",
       targetId: "mountain-spire",
-      operation: "resize",
+      operation: "adjust-geometry",
       instruction:
         "Decrease the minimum X bound of the mountain-spire Blocks toward 2000.",
     },

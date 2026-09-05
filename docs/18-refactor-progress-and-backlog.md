@@ -1725,6 +1725,19 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   `R2-F-OPENING` 主进程闭包；没有另立任务状态权威。默认 side/top presence-required
   仅证明 live identity，是现行正确边界；不将其改成必须可见门禁。显式 reference-projection
   的三视图已有代码，仍需 bound Evidence/Evaluation 的实际 metric 断言。CF-14 继续 open。
+- CF-14/R2-F Opening 消费闭包已在主会话工作树实现：Host 从 Hash 绑定的身份 PNG
+  派生唯一 pixel regions/anchors，Opening Host gate 和 Evaluation 都消费它；原结构
+  observation 仅保留 depth/order/distance 与 Subject/Camera 用途。像素缺失/偏差改为
+  adjust-geometry，不武断要求 add/resize/move；同步 operation 合同、两个消费者、
+  rejected repair 的三张 identity PNG/semantic observation allowlist、任务指令和
+  Builder Skill/live-frozen 副本，未改普通成功策略、阈值、stage 或 repair budget。
+  两个 Host gate RED 复现后四文件 83/83；消费链首次暴露 evidenceRefs 排序遗漏，
+  已用既有 uniqueSorted 修正，EvidenceSet 24/24 通过。新增相同像素/结构偏移的
+  Evidence→Evaluation 回归、缺失身份图拒绝及恢复后四文件逐字/Hash 冻结均通过；
+  generation-request 38/38、相关 Run 4/4、像素 join 9/9、operation 拒绝旧值回归通过。
+  tsc 首次暴露只读投影类型，改为冻结只读输出后最终 exit 0。Skill drift gate 66/66
+  通过，live/frozen 副本一致。最终三视图真实 Evaluation 验收尚待；不是 CF-14
+  已正式完成或新 054 模型 Case 成功。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，

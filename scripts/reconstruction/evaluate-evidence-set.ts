@@ -34,7 +34,7 @@ import {
   hashSceneAuthoringAttemptV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { isNil } from "lodash-es";
-import { measureFormalIdentityMaskV1 } from "./formal-identity-mask-measurement.js";
+import { measureFormalIdentityMaskV1, projectOpeningCompositionPixelsV1 } from "./formal-identity-mask-measurement.js";
 import {
   hashNativeBlockAuthoringManifestV1,
   parseNativeBlockAuthoringManifestV1,
@@ -659,6 +659,10 @@ export function buildWorldReconstructionEvidenceSetV1(
     view.viewId, measureFormalIdentityMaskV1({ view, pngBytes: rawInput.identityMaskPngs[index]!.bytes,
       targets: semanticMap.bindings.map(({ acceptanceTargetRef, identityColor }) => ({ acceptanceTargetRef, identityColor })) }),
   ] as const));
+  const openingPixelComposition = projectOpeningCompositionPixelsV1({
+    bindings: semanticMap.bindings.filter(({ compositionTargetRef }) => openingTargetRefs.has(compositionTargetRef)),
+    projections: pixelProjectionsByView.get("opening")!,
+  });
 
   return parseWorldReconstructionEvidenceSetV1({
     kind: "world-reconstruction-evidence-set",
@@ -719,11 +723,11 @@ export function buildWorldReconstructionEvidenceSetV1(
       },
       {
         dimensionId: "opening-composition",
-        evidenceRefs: [captureReceipt.openingObservationArtifactRef],
+        evidenceRefs: uniqueSorted([captureReceipt.openingObservationArtifactRef,
+          captureReceipt.views.find(({ viewId }) => viewId === "opening")!.identityMaskPngArtifactRef]),
         observed: {
           kind: "opening-composition-observed",
-          regions: openingGroups.map((group) => ({ targetRef: group.compositionTargetRef, normalizedBounds: group.normalizedBounds })),
-          anchors: openingGroups.map((group) => ({ targetRef: group.compositionTargetRef, normalizedCenter: group.normalizedCenter })),
+          ...openingPixelComposition,
           orderedTargetRefs: depthOrderedGroups.map(({ compositionTargetRef }) => compositionTargetRef),
           distances,
         },

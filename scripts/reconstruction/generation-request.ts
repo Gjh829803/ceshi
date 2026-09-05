@@ -98,6 +98,10 @@ function repairContextPaths(
       `${root}/rejected-capture/opening-observation.json`,
       `${root}/rejected-capture/world-side.png`,
       `${root}/rejected-capture/world-top-down.png`,
+      `${root}/rejected-capture/opening-identity-mask.png`,
+      `${root}/rejected-capture/world-side-identity-mask.png`,
+      `${root}/rejected-capture/world-top-down-identity-mask.png`,
+      `${root}/rejected-capture/semantic-view-observation-set.json`,
       `${root}/rejected-capture/collider-overlay.png`,
       `${root}/rejected-capture/collider-overlay-observation.json`,
       `${root}/rejected-capture/spawn-support-observation.json`,
@@ -135,8 +139,8 @@ function repairTaskProtocol(priorAttemptIndex: 0 | 1 | 2): string {
 - If the smallest repair for one diagnostic would violate another frozen Case requirement, choose a geometry change that satisfies both. Do not trade a Package/Ground gate failure for a predictable Capture/evaluation failure.
 - Every Block added by a Ground Analysis repair must itself have continuous face-contact support down to an existing root support. Do not leave floating steps, unsupported columns, hidden foundations, invisible floors, or air walls.
 - A visual repair must produce a visible geometry change in the evidence view named by the diagnostic. Move, add, or remove actual Blocks in the declared target while preserving its semantic identity; a metadata-only change is not a repair.
-- Group opening-composition diagnostics by targetId before editing. Build one constraint table per target from the complete expected region bounds, anchor, and depth order in context/case.json plus the complete observed normalizedBounds, normalizedCenter, and depth order in ${root}/rejected-capture/opening-observation.json. Solve every reported axis together and preserve axes already inside tolerance; never stop after fixing only the largest drift row.
-- Screen projection is perspective-coupled. A target edge clipped at 0 or 10000 means the target extends beyond the captured frame. For vertical clipping, adjust the target's near-camera footprint/depth and height together instead of only raising or lowering its crown. When widening a target, add mass at comparable camera depth and height so a horizontal repair does not create a new vertical or anchor failure.
+- Group opening-composition diagnostics by targetId before editing. Build one constraint table per target from the complete expected region bounds and anchor in context/case.json plus the measured pixel values in the diagnostics. Compare the frozen reference with opening-identity-mask.png, opening.png, side/top identity and display PNGs in the selected Capture directory. The semantic-view-observation-set.json binds per-view identities; opening-observation.json contains structural bounds/depth, not visible pixel regions or anchors. Solve every reported axis together and preserve axes already inside tolerance; never stop after fixing only the largest drift row.
+- Pixel drift uses adjust-geometry, not an assumed resize or move. Preserve intended holes, separated forms and occlusion. No visible pixels alone do not prove missing geometry, and a boundary at 0 or 10000 alone does not prove clipping; inspect the reference, identity and display together before selecting a geometric change. Keep the existing structural depth order and perspective coupling while repairing the visible silhouette.
 - Do not reassign an existing Block's visualGroupId merely to change measured group bounds, ordering, or coverage. Keep prior group membership stable unless the diagnostic explicitly reports a missing or incorrect semantic binding; names, group ids, identity colors, and bindings are not substitutes for visible geometry.
 - Do not change the Case, Profile, or acceptance thresholds. The diagnostic expected value, actual value, allowed threshold, exceeded amount, and correction direction are frozen evidence, not authoring suggestions.
 - Write a complete revised replacement only to the three declared output paths. Never mutate the prior source, evidence, frozen owners, or thresholds.`;

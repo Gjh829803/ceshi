@@ -2,6 +2,7 @@ import { canonicalJsonBytes } from "@whitebox-world/protocol";
 import {
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalWorldCaptureRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
@@ -19,7 +20,7 @@ import {
   projectColliderEvidenceRoleV1,
   projectMeasuredTraversalCheck,
 } from "./evaluate-evidence-set.js";
-import { createEvidenceSetFixtureInputV1 } from "./evaluate-fixture.test-support.js";
+import { createEvidenceSetFixtureInputV1, createSemanticViewObservationSetFixtureV1 } from "./evaluate-fixture.test-support.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
 
@@ -95,6 +96,33 @@ function observed<
 }
 
 describe("buildWorldReconstructionEvidenceSetV1", () => {
+  it("keeps Opening pixel evidence unchanged when structural projection shifts but bound pixels do not", () => {
+    const fixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true });
+    const before = buildWorldReconstructionEvidenceSetV1(fixture);
+    const openingObservation = parseFormalOpeningObservationV1({
+      ...fixture.openingObservation,
+      visualGroups: fixture.openingObservation.visualGroups.map((group) => ({
+        ...group,
+        normalizedBounds: { ...group.normalizedBounds,
+          minXBasisPoints: group.normalizedBounds.minXBasisPoints + 1000,
+          maxXBasisPoints: group.normalizedBounds.maxXBasisPoints + 1000 },
+        normalizedCenter: { ...group.normalizedCenter, xBasisPoints: group.normalizedCenter.xBasisPoints + 1000 },
+      })),
+    });
+    const semanticViewObservationSet = createSemanticViewObservationSetFixtureV1(openingObservation, fixture.captureReceipt.views);
+    const captureReceipt = parseFormalWorldCaptureReceiptV1({ ...fixture.captureReceipt,
+      openingObservationContentHash: hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash: hashFormalSemanticViewObservationSetV1(semanticViewObservationSet),
+    });
+    const after = buildWorldReconstructionEvidenceSetV1({ ...fixture, openingObservation, semanticViewObservationSet, captureReceipt });
+    const beforeOpening = before.observedDimensions.find((row) => row.dimensionId === "opening-composition")!;
+    const afterOpening = after.observedDimensions.find((row) => row.dimensionId === "opening-composition")!;
+    expect(afterOpening.observed).toEqual(beforeOpening.observed);
+    expect(afterOpening.evidenceRefs).toContain(fixture.captureReceipt.views[0]!.identityMaskPngArtifactRef);
+    const result = evaluateWorldReconstructionV1({ case: fixture.reconstructionCase, profile: fixture.evaluationProfile, evidence: after });
+    expect(result.dimensions.find((row) => row.dimensionId === "opening-composition")?.status).toBe("passed");
+  });
+
   it("binds a no-script Capture to its ready Snapshot and reports traversal incomplete", async () => {
     const fixture = createEvidenceSetFixtureInputV1({ allDimensionsPass: true, withoutScriptedTraversal: true });
     const ports = {

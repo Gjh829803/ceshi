@@ -1,7 +1,25 @@
 import { PNG } from "pngjs";
+import { sortBy } from "lodash-es";
 import { sha256Bytes } from "@whitebox-world/protocol";
 import type { FormalWorldCaptureViewRecordV1 } from "@whitebox-world/runtime-contracts";
+import type { WorldReconstructionVisiblePixelProjectionV1 } from "@whitebox-world/validation";
 import { measureIdentityMaskProjectionsV1 } from "../scenes/identity-mask-projection.js";
+
+/** The sole visual region/anchor join; structural depth/order is not changed. */
+export function projectOpeningCompositionPixelsV1(input: Readonly<{
+  bindings: readonly Readonly<{ acceptanceTargetRef: string; compositionTargetRef: string }>[];
+  projections: ReadonlyMap<string, WorldReconstructionVisiblePixelProjectionV1>;
+}>) {
+  const visible = sortBy(input.bindings.flatMap((binding) => {
+    const projection = input.projections.get(binding.acceptanceTargetRef);
+    if (projection === undefined) throw new TypeError("WORLD_RECONSTRUCTION_IDENTITY_MASK_INVALID: missing opening target");
+    return projection.outcome === "visible" ? [{ ...binding, projection }] : [];
+  }), "compositionTargetRef");
+  return Object.freeze({
+    regions: Object.freeze(visible.map(({ compositionTargetRef: targetRef, projection }) => ({ targetRef, normalizedBounds: projection.normalizedBounds }))),
+    anchors: Object.freeze(visible.map(({ compositionTargetRef: targetRef, projection }) => ({ targetRef, normalizedCenter: projection.normalizedCenter }))),
+  });
+}
 
 /** Decode only the exact receipt-bound image. Zero is background/unclassified. */
 export function measureFormalIdentityMaskV1(input: Readonly<{

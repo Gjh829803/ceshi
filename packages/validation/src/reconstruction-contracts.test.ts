@@ -1565,6 +1565,21 @@ describe("world reconstruction contracts", () => {
     expect(parseWorldReconstructionDiagnosticV1(semanticCenterDiagnostic).metricId).toBe(
       "opening-semantic-center-x-basis-points",
     );
+    for (const [metricId, retiredOperation] of [
+      ["opening-region-min-x-basis-points", "resize"],
+      ["opening-anchor-x-basis-points", "move"],
+    ] as const) {
+      const openingDiagnostic = {
+        ...semanticCenterDiagnostic, metricId,
+        code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT",
+        dimensionId: "opening-composition",
+        repairAction: { ...semanticCenterDiagnostic.repairAction, targetKind: "composition-target" },
+      };
+      expect(parseWorldReconstructionDiagnosticV1(openingDiagnostic).metricId).toBe(metricId);
+      expect(() => parseWorldReconstructionDiagnosticV1({ ...openingDiagnostic,
+        repairAction: { ...openingDiagnostic.repairAction, operation: retiredOperation },
+      })).toThrowError("WORLD_RECONSTRUCTION_DIAGNOSTIC_INVALID");
+    }
     expect(() => parseWorldReconstructionDiagnosticV1({
       ...semanticCenterDiagnostic,
       details: { ...semanticCenterDiagnostic.details, exceededByBasisPoints: 99 },

@@ -403,7 +403,7 @@ async function publishQualityEvaluationArtifacts(
     message: "Opening target is outside the accepted region.",
     repairAction: {
       kind: "revise-native-source",
-      operation: "resize",
+      operation: "adjust-geometry",
       targetKind: "composition-target",
       targetId: "opening-target",
       instruction: "Resize the opening target.",

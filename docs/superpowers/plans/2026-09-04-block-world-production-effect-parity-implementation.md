@@ -481,6 +481,19 @@ components are not logical instance IDs, and aggregate metrics do not prove
 general shape equivalence; stronger instance/shape contracts cannot be inferred
 from these six fixtures.
 
+`CF-14/R2-E-VIEW-CONSUMPTION` can run parallel-safe against `5cbe2925` while the
+main agent implements R2-F: worker owns the Native Package fixture's test-only
+`semanticReferenceProjections` option and the existing no-script Browser verifier,
+not Opening/Runtime/production consumers. An explicit
+`--semantic-geometry-reference rear-depth-wall <solid-wall-evidence-root>` mode
+uses the retained receipt-bound gate-mass PNG projections as three-view Case
+references, through the ordinary Case parser/hash chain. Default presence policy
+and all thresholds remain untouched. Save EvidenceSet before assertions; require
+same Camera inputs and dimensions, per-view decoded projection equality through
+Evidence, opening semantic match and side/top semantic drift. Worker runs only
+pure input tests/typecheck in an isolated tree; main owns the single real Browser
+verification after integration. No new model stage or ordinary success veto.
+
 #### CF-11/21 legacy generation guidance restoration
 
 Ready parallel-safe implementation after CF-21/NEXT-COVERAGE-AUDIT. Frozen legacy reference:

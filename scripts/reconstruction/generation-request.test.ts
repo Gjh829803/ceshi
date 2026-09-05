@@ -1,4 +1,5 @@
 import {
+  cp,
   lstat,
   mkdir,
   mkdtemp,
@@ -901,10 +902,10 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
         "never stop after fixing only the largest drift row",
       );
       expect(repairTaskInstruction).toContain(
-        "A target edge clipped at 0 or 10000 means the target extends beyond the captured frame",
+        "a boundary at 0 or 10000 alone does not prove clipping",
       );
       expect(repairTaskInstruction).toContain(
-        "add mass at comparable camera depth and height",
+        "Pixel drift uses adjust-geometry, not an assumed resize or move",
       );
       expect(sha256Bytes(new TextEncoder().encode(repairTaskInstruction))).toBe(
         attempt1.generationRequest.taskInstructionHash,
@@ -930,6 +931,62 @@ describe("prepareNativeBlockGenerationTaskV1", () => {
     } finally {
       await rm(value.root, { recursive: true, force: true });
     }
+  });
+
+  it("freezes rejected identity pixels for Opening repair and rejects a missing mask", async () => {
+    const value = await fixture();
+    try {
+      const runId = "opening-pixel-repair";
+      const runDirectoryPath = path.join(value.root, "runs", runId);
+      const initial = await prepareNativeBlockGenerationTaskV1({ ...input(value), runId, runDirectoryPath });
+      const priorAttemptRoot = path.join(runDirectoryPath, "attempts", "0");
+      const priorSourceRef = "artifact://run/attempts/0/source";
+      const priorSourceHash = hash("d");
+      await writePriorRepairContext(priorAttemptRoot, {
+        sceneAuthoringAttemptRef: `worldkit://scene-authoring-attempt/${initial.attempt.id}@1`,
+        sceneAuthoringAttemptHash: initial.attemptHash, priorSourceRef, priorSourceHash, evaluationText: "{}",
+      });
+      const rejectedRoot = path.join(priorAttemptRoot, "rejected-capture");
+      await cp(path.join(priorAttemptRoot, "capture"), rejectedRoot, { recursive: true });
+      const gate = { kind: "worldkit-opening-composition-host-gate", schemaVersion: 1, status: "failed", diagnostics: [] };
+      await writeFile(path.join(rejectedRoot, "opening-composition-gate-result.json"), stringifyCanonicalJson(gate));
+      const repairInstruction = createNativeBlockRepairInstructionV1({
+        priorAttemptIndex: 0, nextAttemptIndex: 1, priorSourceRef, priorSourceHash,
+        diagnostics: [parseWorldReconstructionDiagnosticV1({
+          kind: "world-reconstruction-diagnostic", schemaVersion: 1, id: "opening-pixel-drift",
+          code: "WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT", dimensionId: "opening-composition",
+          acceptanceTargetRef: "worldkit://acceptance-target/gate@1", targetRef: "worldkit://composition-target/opening@1",
+          targetId: "gate-group", metricId: "opening-region-min-x-basis-points",
+          details: { kind: "basis-points-threshold", expectedBasisPoints: 100, actualBasisPoints: 500,
+            maximumAllowedDriftBasisPoints: 100, exceededByBasisPoints: 300, correctionDirection: "decrease" },
+          evidenceRefs: ["artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json"],
+          message: "Opening visible pixels drift from reference.",
+          repairAction: { kind: "revise-native-source", targetKind: "composition-target", targetId: "gate-group",
+            operation: "adjust-geometry", instruction: "Compare identity and display pixels; preserve holes and occlusion." },
+        })],
+        priorEvidence: { kind: "opening-composition-gate-result",
+          resultRef: "artifact://run/attempts/0/rejected-capture/opening-composition-gate-result.json",
+          resultHash: sha256CanonicalJson(gate) as Sha256HashV1 },
+        priorGenerationRequestRef: "artifact://run/attempts/0/generation-request.json",
+        priorGenerationRequestHash: initial.generationRequestHash, frozenOwnerIdentities: initial.frozenOwnerIdentities,
+      });
+      const removedPath = path.join(rejectedRoot, "opening-identity-mask.png");
+      const maskBytes = await readFile(removedPath);
+      await rm(removedPath);
+      const nextInput = { ...input(value), runId, runDirectoryPath, attemptIndex: 1 as const, repairInstruction };
+      await expect(prepareNativeBlockGenerationTaskV1(nextInput)).rejects.toThrow();
+      await writeFile(removedPath, maskBytes);
+      const repaired = await prepareNativeBlockGenerationTaskV1(nextInput);
+      for (const name of ["opening-identity-mask.png", "world-side-identity-mask.png",
+        "world-top-down-identity-mask.png", "semantic-view-observation-set.json"]) {
+        const inputRef = `inputs/attempts/0/rejected-capture/${name}`;
+        const context = repaired.generationRequest.contextInputs.find((entry) => entry.inputRef === inputRef);
+        expect(context).toBeDefined();
+        const frozenBytes = await readFile(path.join(repaired.taskWorkspacePath, inputRef));
+        expect(frozenBytes).toEqual(await readFile(path.join(rejectedRoot, name)));
+        expect(sha256Bytes(frozenBytes)).toBe(context?.contentHash);
+      }
+    } finally { await rm(value.root, { recursive: true, force: true }); }
   });
 
   it("freezes Ground Analysis evidence without inventing Capture inputs for Attempt 1", async () => {

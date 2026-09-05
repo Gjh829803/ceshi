@@ -55,6 +55,7 @@ import { isEqual, isNil } from "lodash-es";
 
 import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
 import { deriveNativeFormalWorldCaptureBoundsV1 } from "./formal-capture-bounds.js";
+import { measureFormalIdentityMaskV1, projectOpeningCompositionPixelsV1 } from "./formal-identity-mask-measurement.js";
 import {
   parseWorldReconstructionExecutionPurposeV1,
   type WorldReconstructionExecutionPurposeV1,
@@ -631,6 +632,14 @@ export async function captureHostedWorldPackageV1(
         reconstructionCase: input.openingGate.reconstructionCase,
         evaluationProfile: input.openingGate.evaluationProfile,
         openingObservation: payload.openingObservation,
+        openingPixelComposition: projectOpeningCompositionPixelsV1({
+          bindings: joined.request.semanticCaptureMap.bindings,
+          projections: measureFormalIdentityMaskV1({
+            view: validated.receipt.views.find(({ viewId }) => viewId === "opening")!,
+            pngBytes: payload.openingIdentityMaskPng,
+            targets: joined.request.semanticCaptureMap.bindings,
+          }),
+        }),
         expectedCamera: joined.verifiedPackage.nativeBlockMaterializerMetadata!.openingCamera,
       });
       if (openingCompositionGateBlocksPublicationV1({

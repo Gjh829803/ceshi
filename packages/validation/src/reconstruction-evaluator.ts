@@ -683,8 +683,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           region.targetRef,
-          "add",
-          `Add or restore the Native visual group bound to opening region ${region.targetRef}; do not edit the Case or thresholds.`,
+          "adjust-geometry",
+          `Inspect reference, identity and display pixels for opening region ${region.targetRef}; no pixels alone do not prove missing geometry. Check framing and occlusion, preserve intended holes and separation, and do not edit the Case or thresholds.`,
         ),
       });
       continue;
@@ -716,8 +716,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           region.targetRef,
-          "resize",
-          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} the Native visual group bound to opening region ${region.targetRef} at its ${label} toward ${expectedValue} basis points; do not edit thresholds.`,
+          "adjust-geometry",
+          `Compare reference, identity and display pixels for opening region ${region.targetRef} before adjusting geometry: ${label} is ${actualValue}, expected ${expectedValue} basis points. Preserve intended holes, separation and occlusion; pixel bounds alone do not imply resizing. Do not edit thresholds.`,
         ),
       });
     }
@@ -743,8 +743,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           anchor.targetRef,
-          "add",
-          `Add or restore the Native visual group bound to opening anchor ${anchor.targetRef}; do not edit the Case or thresholds.`,
+          "adjust-geometry",
+          `Inspect reference, identity and display pixels for opening anchor ${anchor.targetRef}; no pixels alone do not prove missing geometry. Check framing and occlusion, preserve intended holes and separation, and do not edit the Case or thresholds.`,
         ),
       });
       continue;
@@ -774,8 +774,8 @@ function evaluateOpeningComposition(
         repairAction: sourceRepairAction(
           "composition-target",
           anchor.targetRef,
-          "move",
-          `${details.correctionDirection === "increase" ? "Increase" : "Decrease"} the Native visual group bound to opening anchor ${anchor.targetRef} ${label} toward ${expectedValue} basis points; do not edit thresholds.`,
+          "adjust-geometry",
+          `Compare reference, identity and display pixels for opening anchor ${anchor.targetRef} before adjusting geometry: ${label} is ${actualValue}, expected ${expectedValue} basis points. Preserve intended holes, separation and occlusion; a pixel center alone does not imply moving the group. Do not edit thresholds.`,
         ),
       });
     }

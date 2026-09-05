@@ -391,6 +391,24 @@ explicit evaluation-repair task receives all three identity masks, side/top disp
 images and semantic observations through its frozen input allowlist; ordinary
 production still never allocates that external repair task.
 
+CF-14/R2-F closes the separate Opening visual consumer. The Host derives one
+opening pixel-composition projection (regions and anchors keyed by the existing
+composition target) from the admitted opening identity PNG and semantic-map
+bindings. Both the explicit Opening Host gate and Evaluation require this pixel
+projection for visual bounds/centers. There is no structural-AABB fallback.
+`FormalOpeningObservation.visualGroups` remains the structural spatial evidence:
+its depth/order and distance consumers are unchanged, as are Subject and Camera
+checks. A target with no admitted pixels is omitted from visual regions/anchors,
+not mislabeled as missing Source geometry. Pixel-region/anchor absence and drift
+use `adjust-geometry`, preserving holes and considering occlusion before repair;
+the strict gate's existing unsupported diagnostic/repair allocation policy stays
+unchanged. Its existing rejected-capture repair snapshot now also includes all
+three identity PNGs and the semantic observation, already retained by Capture.
+No new stage, quality threshold, ordinary veto, repair cycle or side/top visibility
+requirement is introduced. Required evidence is identical visible pixels with
+different structural bounds, actual pixel drift, absence, unchanged depth/order,
+and repair-input/operation closure through both consumers.
+
 CF-14/R2-D binds the actual walkable top overlays, not only the original Block
 meshes. The existing topology owner records required `overlayPartitions` on each
 geometry: deterministic partitions with exact `sourceBlockIds`, `visualGroupIds`

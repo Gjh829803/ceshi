@@ -92,12 +92,51 @@ function expectedCamera() {
 }
 
 describe("identity-bound Opening Composition Host Gate", () => {
+  it("does not turn matching visible pixels into drift when occluded structure has different bounds", () => {
+    const { fixture, openingObservation } = trackingObservation();
+    const result = evaluateOpeningCompositionHostGateV1({
+      reconstructionCase: fixture.reconstructionCase,
+      evaluationProfile: fixture.evaluationProfile,
+      expectedCamera: expectedCamera(),
+      openingPixelComposition: fixture.reconstructionCase.expected.openingComposition,
+      openingObservation: parseFormalOpeningObservationV1({
+        ...openingObservation,
+        visualGroups: openingObservation.visualGroups.map((group) => ({
+          ...group,
+          normalizedBounds: { minXBasisPoints: 0, minYBasisPoints: 0, maxXBasisPoints: 10000, maxYBasisPoints: 10000 },
+          normalizedCenter: { xBasisPoints: 5000, yBasisPoints: 5000 },
+        })),
+      }),
+    });
+    expect(result).toMatchObject({ status: "passed", diagnostics: [] });
+  });
+
+  it("reports absent visible pixels even when the target structural bounds match", () => {
+    const { fixture, openingObservation } = trackingObservation();
+    const result = evaluateOpeningCompositionHostGateV1({
+      reconstructionCase: fixture.reconstructionCase,
+      evaluationProfile: fixture.evaluationProfile,
+      expectedCamera: expectedCamera(), openingObservation,
+      openingPixelComposition: { regions: [], anchors: [] },
+    });
+    expect(result.status).toBe("failed");
+    const diagnostics = createOpeningCompositionRepairDiagnosticsV1({
+      priorAttemptIndex: 0, gateResult: result, reconstructionCase: fixture.reconstructionCase,
+      evidenceRef: "artifact://case/package-fixture/attempts/0/rejected-capture/opening-composition-gate-result.json",
+      semanticCaptureTargetBindings: fixture.formalCaptureIntent.semanticCaptureTargetBindings,
+    });
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics.every((diagnostic) => "repairAction" in diagnostic &&
+      diagnostic.repairAction.operation === "adjust-geometry")).toBe(true);
+  });
+
   it("accepts the fixed Case regions and an unretracted SDK camera", () => {
     const { fixture, openingObservation } = trackingObservation();
     expect(evaluateOpeningCompositionHostGateV1({
       reconstructionCase: fixture.reconstructionCase,
       evaluationProfile: fixture.evaluationProfile,
       openingObservation,
+      openingPixelComposition: fixture.reconstructionCase.expected.openingComposition,
       expectedCamera: expectedCamera(),
     })).toMatchObject({ status: "passed", diagnostics: [] });
   });
@@ -108,6 +147,7 @@ describe("identity-bound Opening Composition Host Gate", () => {
       reconstructionCase: fixture.reconstructionCase,
       evaluationProfile: fixture.evaluationProfile,
       openingObservation,
+      openingPixelComposition: fixture.reconstructionCase.expected.openingComposition,
       expectedCamera: {
         ...expectedCamera(),
         distanceMeters: 7,
@@ -145,6 +185,7 @@ describe("identity-bound Opening Composition Host Gate", () => {
     const failed = evaluateOpeningCompositionHostGateV1({
       reconstructionCase: fixture.reconstructionCase,
       evaluationProfile: fixture.evaluationProfile,
+      openingPixelComposition: fixture.reconstructionCase.expected.openingComposition,
       expectedCamera: expectedCamera(),
       openingObservation: parseFormalOpeningObservationV1({
         ...openingObservation,
@@ -176,6 +217,7 @@ describe("identity-bound Opening Composition Host Gate", () => {
     const failed = evaluateOpeningCompositionHostGateV1({
       reconstructionCase: fixture.reconstructionCase,
       evaluationProfile: fixture.evaluationProfile,
+      openingPixelComposition: fixture.reconstructionCase.expected.openingComposition,
       expectedCamera: expectedCamera(),
       openingObservation: parseFormalOpeningObservationV1({
         ...openingObservation,
@@ -194,6 +236,7 @@ describe("identity-bound Opening Composition Host Gate", () => {
     expect(evaluateOpeningCompositionHostGateV1({
       reconstructionCase: fixture.reconstructionCase,
       evaluationProfile: fixture.evaluationProfile,
+      openingPixelComposition: fixture.reconstructionCase.expected.openingComposition,
       expectedCamera: expectedCamera(),
       openingObservation: parseFormalOpeningObservationV1({
         ...openingObservation,
@@ -226,6 +269,14 @@ describe("identity-bound Opening Composition Host Gate", () => {
     const failed = evaluateOpeningCompositionHostGateV1({
       reconstructionCase: fixture.reconstructionCase,
       evaluationProfile: fixture.evaluationProfile,
+      openingPixelComposition: {
+        regions: fixture.reconstructionCase.expected.openingComposition.regions.map((region, index) => index === 0 ? {
+          ...region, normalizedBounds: { minXBasisPoints: 0, minYBasisPoints: 0, maxXBasisPoints: 100, maxYBasisPoints: 100 },
+        } : region),
+        anchors: fixture.reconstructionCase.expected.openingComposition.anchors.map((anchor, index) => index === 0 ? {
+          ...anchor, normalizedCenter: { xBasisPoints: 50, yBasisPoints: 50 },
+        } : anchor),
+      },
       expectedCamera: expectedCamera(),
       openingObservation: parseFormalOpeningObservationV1({
         ...openingObservation,
@@ -323,6 +374,10 @@ describe("identity-bound Opening Composition Host Gate", () => {
       reconstructionCase: fixture.reconstructionCase,
       evaluationProfile: fixture.evaluationProfile,
       openingObservation: shifted,
+      openingPixelComposition: {
+        regions: shifted.visualGroups.map((group) => ({ targetRef: group.compositionTargetRef, normalizedBounds: group.normalizedBounds })),
+        anchors: shifted.visualGroups.map((group) => ({ targetRef: group.compositionTargetRef, normalizedCenter: group.normalizedCenter })),
+      },
       expectedCamera: expectedCamera(),
     });
 
