@@ -1,10 +1,20 @@
 import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import ts from "typescript";
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { Scene } from "@babylonjs/core/scene.pure.js";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
+import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { createBabylonNativeHostRandomV1, defineBabylonNativeScene, type BabylonNativeSceneModuleV1 } from "@whitebox-world/native-babylon";
+import { buildBabylonNativeSceneCandidateV1 } from "../../packages/native-babylon/src/host.js";
+import { parseBabylonNativeSceneBootstrapV1 } from "@whitebox-world/runtime-contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { admitCreatorSources, creatorSteeringYawDelta, CreatorTools, sha256 } from "./tools.js";
-import { executeCreatorTool } from "./mcp.js";
+import { admitCreatorSources, creatorSceneWrapperSource, creatorSteeringYawDelta, CreatorTools, parseCreatorAuthoringDiagnostic, sanitizeCreatorAuthoringFailure, sha256 } from "./tools.js";
+import { CREATOR_MINIMAL_SCENE_SOURCE, executeCreatorTool } from "./mcp.js";
+import { registerEntity } from "./authoring.js";
 
 // These are Host boundary tests. Real browser, Havok and visual evidence have a
 // separate integration lane; mocks below must never count as a playtest.
@@ -51,6 +61,102 @@ describe("Creator source admission", () => {
     await symlink(outside, path.join(directory, "linked"), "dir");
     await writeFile(path.join(directory, "scene.ts"), "export { external } from './linked/helper.js';\n");
     await expect(admitCreatorSources(directory)).rejects.toThrow(/CREATOR_/);
+  });
+});
+
+describe("Creator private authoring diagnostics", () => {
+  const identity = { id: "1122334455667788", sourceHash: sha256("creator diagnostic fixture") };
+  const bootstrap = parseBabylonNativeSceneBootstrapV1({
+    kind: "babylon-native-scene-bootstrap", schemaVersion: 1, id: "creator-minimal-world",
+    sceneModuleRef: "worldkit://native-scene/creator-minimal-world@1",
+    nativeSceneApiRef: "worldkit://native-scene-api/babylon@1",
+    nativeSceneProfileRef: "worldkit://native-scene-profile/trusted-local@1",
+    gameplayBootstrapRef: "worldkit://gameplay-bootstrap/g-bot@1", initialControlledEntityId: "player",
+    gravityMetersPerSecondSquaredXYZ: [0, -9.81, 0],
+    initialCamera: { mode: "third-person", pitchRadians: 0.1, distanceMeters: 5, fovDegrees: 55, targetHeightMeters: 1.2 },
+    seed: 7301, spawnMarkerId: "player-spawn",
+  });
+  // Evaluate only the Host-owned example/fixtures, using actual named exports.
+  // This is not an execution path for user-authored source or a browser playtest.
+  function fixtureModule(source: string, imports: Record<string, unknown>, messages: string[]) {
+    const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+    const module = { exports: {} as { default: BabylonNativeSceneModuleV1 } };
+    new Function("require", "module", "exports", "console", output)((name: string) => {
+      if (!Object.hasOwn(imports, name)) throw new Error(`Unknown fixture import: ${name}`);
+      return imports[name];
+    }, module, module.exports, { info: (message: string) => messages.push(message) });
+    return module.exports.default;
+  }
+  async function buildExample(source = CREATOR_MINIMAL_SCENE_SOURCE) {
+    const messages: string[] = [];
+    const authored = fixtureModule(source, {
+      "@whitebox-world/native-babylon": { defineBabylonNativeScene },
+      "@worldkit/creator": { registerEntity },
+      "@babylonjs/core/Meshes/meshBuilder.js": { MeshBuilder },
+      "@babylonjs/core/Materials/standardMaterial.js": { StandardMaterial },
+      "@babylonjs/core/Maths/math.color.js": { Color3 },
+    }, messages);
+    const module = fixtureModule(creatorSceneWrapperSource({ authoredPath: "./scene.ts", ...identity, sceneId: bootstrap.id,
+      spawn: { positionMetersXYZ: [0, 0, 0], facingRadians: 0 } }), { "./scene.ts": { __esModule: true, default: authored } }, messages);
+    const engine = new NullEngine({ renderWidth: 64, renderHeight: 64, textureSize: 64, deterministicLockstep: true, lockstepMaxSteps: 1 });
+    const scene = new Scene(engine);
+    try {
+      const result = await buildBabylonNativeSceneCandidateV1({ scene, bootstrap, module,
+        random: createBabylonNativeHostRandomV1(bootstrap.seed), assets: { async resolve() { throw new Error("No fixture asset"); } },
+        budget: { maximumStaticColliderCount: 4, maximumStaticColliderVertexCount: 256, maximumStaticColliderTriangleCount: 64 },
+      });
+      return { result, messages, diagnostics: messages.map(message => parseCreatorAuthoringDiagnostic(message, identity)) };
+    } finally { scene.dispose(); engine.dispose(); }
+  }
+
+  it("executes the documented imports, Material assignment and transformed ground through the real NativeHost", async () => {
+    const directory = await workspace();
+    await writeFile(path.join(directory, "scene.ts"), CREATOR_MINIMAL_SCENE_SOURCE);
+    expect((await admitCreatorSources(directory)).get("scene.ts")).toBe(CREATOR_MINIMAL_SCENE_SOURCE);
+    const { result, messages } = await buildExample();
+    expect(result.outcome).toBe("passed");
+    expect(messages).toEqual([]);
+  });
+
+  it.each([
+    ["uppercase forest entity id", "{ id: 'ground', physics: 'solid', traversable: true }", "{ id: 'ladder-rail-L', physics: 'solid', traversable: true }"],
+    ["nonphysical traversable decoration", "{ id: 'ground', physics: 'solid', traversable: true }", "{ id: 'ground', physics: 'none', traversable: true }"],
+  ])("returns actionable private diagnostics for %s while preserving NativeHost rejection", async (_name, from, to) => {
+    const { result, diagnostics } = await buildExample(CREATOR_MINIMAL_SCENE_SOURCE.replace(from, to));
+    expect(result.outcome).toBe("rejected");
+    expect(JSON.stringify(result)).toContain("WORLDKIT_NATIVE_SCENE_MODULE_BUILD_FAILED");
+    expect(JSON.stringify(result)).not.toContain("CREATOR_ENTITY_INVALID");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({ kind: "experimental-creator-authoring-diagnostic", stage: "build", candidateId: identity.id, sourceHash: identity.sourceHash, errorName: "TypeError", code: "CREATOR_ENTITY_INVALID" });
+    expect(diagnostics[0]?.hint).toContain("^[a-z0-9]");
+    expect(diagnostics[0]?.hint).toContain("physics:none");
+  });
+
+  it("bounds and sanitizes exceptions without invoking accessors or exposing stacks, paths or credentials", () => {
+    const getter = vi.fn(() => { throw new Error("getter must not run"); });
+    const hostile = Object.defineProperty({}, "message", { get: getter });
+    expect(sanitizeCreatorAuthoringFailure(hostile).code).toBe("CREATOR_AUTHORING_BUILD_EXCEPTION");
+    expect(getter).not.toHaveBeenCalled();
+    const privateError = new TypeError("failed at /fsx/private/task/scene.ts token=sk-private-value https://private.invalid?key=secret\nstack trace" + "x".repeat(10000));
+    const safe = sanitizeCreatorAuthoringFailure(privateError);
+    expect(JSON.stringify(safe)).not.toMatch(/\/fsx|sk-private|private\.invalid|stack trace|token=/);
+    expect(JSON.stringify(safe).length).toBeLessThan(1024);
+    expect(sanitizeCreatorAuthoringFailure(new TypeError("material.getEffect is not a function"))).toMatchObject({ code: "CREATOR_AUTHORING_METHOD_NOT_CALLABLE", message: "getEffect is not a function." });
+    expect(sanitizeCreatorAuthoringFailure(new ReferenceError("defineBabylonNativeScene is not defined"))).toMatchObject({ code: "CREATOR_AUTHORING_REFERENCE_UNDEFINED", message: "defineBabylonNativeScene is not defined." });
+    expect(sanitizeCreatorAuthoringFailure(new ReferenceError("secretToken is not defined")).code).toBe("CREATOR_AUTHORING_BUILD_EXCEPTION");
+  });
+
+  it("rejects stale, oversized and forged browser details before attaching operation evidence", async () => {
+    const { messages } = await buildExample(CREATOR_MINIMAL_SCENE_SOURCE.replace("id: 'ground', physics", "id: 'ladder-rail-L', physics"));
+    const text = messages[0]!;
+    expect(parseCreatorAuthoringDiagnostic(text, { ...identity, sourceHash: sha256("different source") })).toBeUndefined();
+    expect(parseCreatorAuthoringDiagnostic(text + "x".repeat(4096), identity)).toBeUndefined();
+    const prefix = "WORLDKIT_CREATOR_AUTHORING_DIAGNOSTIC:";
+    const forged = JSON.parse(text.slice(prefix.length));
+    forged.message = "/private/provider/path secret=sk-private"; forged.hint = "Bearer private"; forged.stack = "/fsx/private";
+    const safe = parseCreatorAuthoringDiagnostic(prefix + JSON.stringify(forged), identity);
+    expect(safe?.code).toBe("CREATOR_ENTITY_INVALID");
+    expect(JSON.stringify(safe)).not.toMatch(/private|Bearer|sk-/);
   });
 });
 

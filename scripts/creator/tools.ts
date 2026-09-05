@@ -14,6 +14,92 @@ const execFileAsync = promisify(execFile);
 export const CREATOR_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const sha256 = (value: string | Uint8Array) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
 export const CREATOR_TOOL_VERSION = "0.1.0-experimental";
+const CREATOR_AUTHORING_DIAGNOSTIC_PREFIX = "WORLDKIT_CREATOR_AUTHORING_DIAGNOSTIC:";
+
+/** Self-contained: the Host copies this function into its browser wrapper. Never serialize a stack or arbitrary error properties. */
+export function sanitizeCreatorAuthoringFailure(error: unknown): { errorName: string; code: string; message: string; hint: string } {
+  let message = "";
+  let errorName = "Error";
+  try {
+    if (typeof error === "object" && error !== null) {
+      const own = Object.getOwnPropertyDescriptors(error);
+      const prototype = Object.getPrototypeOf(error);
+      const name = own.name?.value ?? (prototype && Object.getOwnPropertyDescriptor(prototype, "name")?.value);
+      if (["Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError"].includes(name)) errorName = name;
+      if (typeof own.message?.value === "string") message = own.message.value.slice(0, 512).split(/[\r\n]/, 1)[0]!;
+    }
+  } catch { /* Proxies and accessors are not diagnostic data. */ }
+  const known: Record<string, [string, string]> = {
+    CREATOR_ENTITY_INVALID: ["Entity registration is invalid.", "Use an id matching ^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$ with at most 64 characters; physics is solid or none. With physics:none, traversable must be omitted or false. Only id, physics and traversable are accepted."],
+    CREATOR_ENTITY_ALREADY_REGISTERED: ["An entity id or mesh was registered more than once.", "Register each mesh and stable entity id once. Merge static parts of a compound visual target before registering it."],
+    CREATOR_ENTITY_SCENE_MISMATCH: ["The mesh is disposed or belongs to another scene.", "Create the mesh in context.scene and register it before disposing it."],
+    CREATOR_SOLID_MESH_MUST_BE_VISIBLE: ["A solid collider mesh is hidden or disabled.", "The exact visible enabled mesh must supply its solid collision geometry."],
+  };
+  const code = /^([A-Z][A-Z0-9_]{2,95})(?::|$)/.exec(message)?.[1];
+  if (code && Object.hasOwn(known, code)) return { errorName, code, message: known[code]![0], hint: known[code]![1] };
+  // Keep only narrowly recognized JavaScript syntax. Unknown free text may contain paths, URLs or credentials.
+  const missing = /^([A-Za-z_$][A-Za-z0-9_$]{0,63}) is not defined$/.exec(message);
+  const method = /^(?:[A-Za-z_$][A-Za-z0-9_$]{0,63}\.){0,8}([A-Za-z_$][A-Za-z0-9_$]{0,63}) is not a function$/.exec(message);
+  const property = /^Cannot read properties of (undefined|null) \(reading ['"]([A-Za-z_$][A-Za-z0-9_$]{0,63})['"]\)$/.exec(message);
+  const identifier = missing?.[1] ?? method?.[1] ?? property?.[2];
+  if (identifier && !/(token|secret|password|authorization|bearer|api_?key)/i.test(identifier)) {
+    if (missing) return { errorName, code: "CREATOR_AUTHORING_REFERENCE_UNDEFINED", message: `${identifier} is not defined.`, hint: "Check the exact named exports and imports in creator_get_authoring_schema." };
+    if (method) return { errorName, code: "CREATOR_AUTHORING_METHOD_NOT_CALLABLE", message: `${identifier} is not a function.`, hint: "Check the receiver's SDK type and method. A mesh material must be a Material such as StandardMaterial; Color3 is assigned to material.diffuseColor, not mesh.material." };
+    return { errorName, code: "CREATOR_AUTHORING_VALUE_MISSING", message: `Cannot read ${identifier} from ${property![1]}.`, hint: "Check that the referenced value exists before using it; consult the exact SDK API source paths from creator_describe_environment." };
+  }
+  if (errorName === "RangeError" && message === "Maximum call stack size exceeded") return { errorName, code: "CREATOR_AUTHORING_STACK_EXHAUSTED", message, hint: "Check authored helper recursion and terminate recursive construction." };
+  return { errorName, code: "CREATOR_AUTHORING_BUILD_EXCEPTION", message: "Authored build() threw an exception; unrecognized free text was withheld.", hint: "Check the authored build and its helpers. Use the exact imports, Material types and registration rules in creator_get_authoring_schema. Stack, paths and provider objects are not exposed." };
+}
+
+export interface CreatorAuthoringDiagnostic {
+  kind: "experimental-creator-authoring-diagnostic";
+  schemaVersion: 1;
+  stage: "build";
+  candidateId: string;
+  sourceHash: string;
+  errorName: string;
+  code: string;
+  message: string;
+  hint: string;
+}
+
+/** This Creator-only channel is advisory. It never changes NativeHost admission. */
+export function parseCreatorAuthoringDiagnostic(text: string, identity: { id: string; sourceHash: string }): CreatorAuthoringDiagnostic | undefined {
+  if (!text.startsWith(CREATOR_AUTHORING_DIAGNOSTIC_PREFIX) || text.length > 4096) return undefined;
+  try {
+    const value = JSON.parse(text.slice(CREATOR_AUTHORING_DIAGNOSTIC_PREFIX.length));
+    if (value?.kind !== "experimental-creator-authoring-diagnostic" || value.schemaVersion !== 1 || value.stage !== "build" ||
+      value.candidateId !== identity.id || value.sourceHash !== identity.sourceHash ||
+      typeof value.errorName !== "string" || typeof value.code !== "string" || typeof value.message !== "string") return undefined;
+    // Reconstruct the small recognized error grammar; never trust arbitrary browser-provided message/hint fields.
+    let originalMessage = `${value.code}:`;
+    if (value.code === "CREATOR_AUTHORING_REFERENCE_UNDEFINED" || value.code === "CREATOR_AUTHORING_METHOD_NOT_CALLABLE") originalMessage = value.message.replace(/\.$/, "");
+    else if (value.code === "CREATOR_AUTHORING_VALUE_MISSING") {
+      const match = /^Cannot read ([A-Za-z_$][A-Za-z0-9_$]{0,63}) from (undefined|null)\.$/.exec(value.message);
+      if (match) originalMessage = `Cannot read properties of ${match[2]} (reading '${match[1]}')`;
+    } else if (value.code === "CREATOR_AUTHORING_STACK_EXHAUSTED") originalMessage = value.message;
+    const safe = sanitizeCreatorAuthoringFailure({ name: value.errorName, message: originalMessage });
+    if (safe.code !== value.code) return undefined;
+    return { kind: "experimental-creator-authoring-diagnostic", schemaVersion: 1, stage: "build", candidateId: identity.id, sourceHash: identity.sourceHash, ...safe };
+  } catch { return undefined; }
+}
+
+export function creatorSceneWrapperSource(input: { authoredPath: string; id: string; sourceHash: string; sceneId: string; spawn: { positionMetersXYZ: readonly number[]; facingRadians: number } }): string {
+  return `import authored from ${JSON.stringify(input.authoredPath)};
+const sanitizeAuthoringFailure = ${sanitizeCreatorAuthoringFailure.toString()};
+export default {kind:"babylon-native-scene-module",id:${JSON.stringify(input.sceneId)},async build(context){
+  context.registration.registerSpawnMarker({id:"player-spawn",positionMetersXYZ:${JSON.stringify(input.spawn.positionMetersXYZ)},facingRadians:${input.spawn.facingRadians}});
+  try { await authored.build(context); }
+  catch(error) {
+    try { console.info(${JSON.stringify(CREATOR_AUTHORING_DIAGNOSTIC_PREFIX)} + JSON.stringify({kind:"experimental-creator-authoring-diagnostic",schemaVersion:1,stage:"build",candidateId:${JSON.stringify(input.id)},sourceHash:${JSON.stringify(input.sourceHash)},...sanitizeAuthoringFailure(error)})); } catch {}
+    throw error;
+  }
+}};`;
+}
+
+class CreatorRuntimeFailure extends Error {
+  constructor(message: string, readonly authoringDiagnostics: readonly CreatorAuthoringDiagnostic[]) { super(message); }
+}
 export function creatorSteeringYawDelta(forwardXYZ: readonly number[], targetDeltaXZ: readonly number[]): number {
   const currentHeading = Math.atan2(forwardXYZ[0]!, -forwardXYZ[2]!);
   const targetHeading = Math.atan2(targetDeltaXZ[0]!, -targetDeltaXZ[1]!);
@@ -82,6 +168,7 @@ interface Session { candidate: Candidate; server: HttpServer; browser: Browser; 
 export interface CreatorOperation {
   id: string; type: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   createdAt: string; updatedAt: string; progress?: unknown; result?: unknown; error?: string;
+  authoringDiagnostics?: readonly CreatorAuthoringDiagnostic[];
 }
 
 export class CreatorTools {
@@ -105,6 +192,7 @@ export class CreatorTools {
     const catalog = JSON.parse(await readFile(path.join(CREATOR_ROOT, ".codex/skills/worldkit-block-builder/references/agent-authoring-catalog.json"), "utf8"));
     return { kind: "experimental-native-creator-environment", toolVersion: CREATOR_TOOL_VERSION, sessionId: this.sessionId, nodeVersion: process.version, workspace: this.workspace,
       readOnlyAuthoringReferences: ["packages/native-babylon/src/module.ts", "packages/native-babylon/src/random.ts", "scripts/creator/authoring.ts"].map(relative => path.join(CREATOR_ROOT, relative)),
+      authoringDiagnostics: "A failed build may include bounded private authoringDiagnostics in its failed operation. Read code/message/hint before repairing the same scene; the formal NativeHost error and admission result stay unchanged. Call creator_get_authoring_schema for an executable minimal scene and exact imports.",
       capabilities: ["native-mesh-authoring", "real-babylon-havok-preview", "registered-subjects-and-actions", "controller-playtest", "runtime-triviews", "static-playable-export"],
       notImplemented: ["formal-native-worldpackage-publication", "npc-hot-edit", "realtime-video-provider"],
       subjectPackCount: catalog.subjectPacks.length, browserExecutable: process.env.WORLDKIT_CHROMIUM_EXECUTABLE ?? "playwright-managed",
@@ -152,7 +240,7 @@ export class CreatorTools {
       plugins: [{ name: "worldkit-creator-inputs", resolveId(id) { if (id === "virtual:creator-scene") return virtualScene; if (id === "virtual:creator-config") return virtualConfig; },
         load(id) {
           if (id === virtualConfig) return Object.entries(bootstraps).map(([key, value]) => `export const ${key} = ${JSON.stringify(value)};`).join("\n");
-          if (id === virtualScene) return `import authored from ${JSON.stringify(path.join(sourceRoot, "scene.ts"))};\nexport default {kind:"babylon-native-scene-module",id:${JSON.stringify(config.id)},async build(context){context.registration.registerSpawnMarker({id:"player-spawn",positionMetersXYZ:${JSON.stringify(config.spawn.positionMetersXYZ)},facingRadians:${config.spawn.facingRadians}});await authored.build(context);}};`;
+          if (id === virtualScene) return creatorSceneWrapperSource({ authoredPath: path.join(sourceRoot, "scene.ts"), id: sourceHash.slice(7, 23), sourceHash, sceneId: config.id, spawn: config.spawn });
         } }],
       build: { outDir: publicRoot, emptyOutDir: true, sourcemap: false, minify: "esbuild", target: "es2022", chunkSizeWarningLimit: 15000 },
     });
@@ -191,6 +279,7 @@ export class CreatorTools {
     const address = server.address(); if (!address || typeof address === "string") throw new Error("CREATOR_SERVER_FAILED");
     const url = `http://127.0.0.1:${address.port}/`;
     let browser: Browser | undefined;
+    const authoringDiagnostics: CreatorAuthoringDiagnostic[] = [];
     try {
       const env: Record<string, string> = {};
       for (const key of ["PATH", "TMPDIR", "LANG", "DISPLAY", "LD_LIBRARY_PATH", "FONTCONFIG_PATH", "FONTCONFIG_FILE"]) if (process.env[key]) env[key] = process.env[key]!;
@@ -203,7 +292,12 @@ export class CreatorTools {
       void startupFailure.catch(() => {});
       page.on("pageerror", error => errors.push(error.message));
       page.once("pageerror", error => rejectStartup(new Error(`CREATOR_BROWSER_STARTUP_ERROR: ${error.message}`)));
-      page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+      page.on("console", message => {
+        const text = message.text();
+        const diagnostic = parseCreatorAuthoringDiagnostic(text, candidate);
+        if (diagnostic && authoringDiagnostics.length < 4) authoringDiagnostics.push(diagnostic);
+        if (message.type() === "error") errors.push(text);
+      });
       await page.route("**/*", async route => {
         const requested = route.request().url();
         if (requested.startsWith(url) || requested.startsWith("data:") || requested.startsWith("blob:")) await route.continue(); else await route.abort("blockedbyclient");
@@ -214,7 +308,11 @@ export class CreatorTools {
       if (status?.phase === "failed") throw new Error(`CREATOR_RUNTIME_FAILED: ${status.errors.join("; ")}`);
       this.session = { candidate, server, browser, page, url, errors };
       return this.session;
-    } catch (error) { await browser?.close().catch(() => {}); server.close(); throw error; }
+    } catch (error) {
+      await browser?.close().catch(() => {}); server.close();
+      if (authoringDiagnostics.length) throw new CreatorRuntimeFailure(error instanceof Error ? error.message : "CREATOR_RUNTIME_FAILED", authoringDiagnostics);
+      throw error;
+    }
   }
 
   private async hashTree(root: string, relative: string): Promise<Record<string, string>> {
@@ -385,7 +483,11 @@ export class CreatorTools {
       operation.status = "running"; await this.saveOperation(operation);
       this.activeOperationId = id;
       try { operation.result = await work(id); operation.status = this.cancelled.has(id) ? "cancelled" : "succeeded"; }
-      catch (error) { operation.error = error instanceof Error ? error.message : String(error); operation.status = this.cancelled.has(id) ? "cancelled" : "failed"; }
+      catch (error) {
+        operation.error = error instanceof Error ? error.message : String(error);
+        if (error instanceof CreatorRuntimeFailure) operation.authoringDiagnostics = error.authoringDiagnostics;
+        operation.status = this.cancelled.has(id) ? "cancelled" : "failed";
+      }
       this.activeOperationId = undefined;
       operation.updatedAt = new Date().toISOString(); await this.saveOperation(operation);
     });
