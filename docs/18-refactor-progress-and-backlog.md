@@ -1,5 +1,13 @@
 # SDK 重构总进度与 Backlog
 
+> 2026-09-05 GPT-6 Creator 新分支：用户已授权全面重构 Agent、云端插件/工具、自由低模创作和实时世界/NPC 控制。
+> 详细方案见[主规格](superpowers/specs/2026-09-05-gpt6-controllable-world-agent-design.md)、
+> [云端规格](superpowers/specs/2026-09-05-gpt6-cloud-creator-runtime-design.md)和
+> [17 个工作包的实施图](superpowers/plans/2026-09-05-gpt6-world-agent-implementation-plan.md)。
+> 当前是设计阶段，分支 `codex/gpt6-world-agent-refactor`，继承源码基线 `50a1e14a`；未提升下述任何完成百分比，
+> 未声称 Native 可控实体、增量发布、NPC 或新云端 profile 已实现。旧阶段范围不阻止此项已授权工作，
+> 但具体能力必须按新图获得实际 Runtime/云端证据后才能更新为已交付。
+
 - 状态：Active，重构执行进度与剩余工作的唯一跟踪入口。
 - 能力进度基准日期：2026-08-26（本次未重算百分比）。
 - 架构状态更新至：2026-08-29。

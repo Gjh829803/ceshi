@@ -1,5 +1,34 @@
 # Agent Whitebox World authoring rules
 
+## GPT-6 Creator reconstruction branch — 2026-09-05
+
+The user explicitly authorized a new branch and a complete Agent redesign for
+reference-faithful playable low-poly worlds, cloud Codex tools/plugins, reusable
+subjects/actions, and clear low-latency world/NPC control. This branch is
+`codex/gpt6-world-agent-refactor`; its inherited source baseline is `50a1e14a`.
+
+The current design authority for that work is
+[`2026-09-05-gpt6-controllable-world-agent-design.md`](docs/superpowers/specs/2026-09-05-gpt6-controllable-world-agent-design.md),
+with its [implementation graph](docs/superpowers/plans/2026-09-05-gpt6-world-agent-implementation-plan.md)
+and [cloud Runtime specification](docs/superpowers/specs/2026-09-05-gpt6-cloud-creator-runtime-design.md).
+These are design documents, not claims that their proposed APIs or deployment
+already exist.
+
+For the new Creator, the old mandatory Planner/Builder split, two planning
+images, four block shapes, five visual target slots, centered-rear opening and
+`gpt-5.6-sol` lock below describe the inherited workflow; do not copy them into
+the new Creator contract. The new design targets `gpt-6-astra / xhigh`, Native
+authoring, real Runtime feedback, and explicit SDK-owned control. The user has
+already authorized changing those old constraints; do not request permission
+again solely because an inherited document contains them.
+
+Keep naming rules, exact resource identity, physics/movement/camera/tick
+ownership, credential isolation, truthful validation and dependency-aware
+integration. Existing production paths remain governed by their implemented
+contracts until the explicit cutover gate. Do not silently bypass a validator,
+declare an unimplemented capability, import the whole donor branch, expose
+production credentials to generated code, or call a local/mock run cloud GO.
+
 ## Goal
 
 Create playable outdoor whitebox scenes through a gated multi-agent workflow. Planning, whitebox implementation, and visual styling are separate responsibilities; never collapse their authority by improvising geometry or editing SDK internals.
