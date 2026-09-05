@@ -1370,7 +1370,9 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
 - 最近已通过的真实 Case `paper-moon-054-cf19-feedback-0905` 普通生产 passed/published、cleanup
   completed；Evaluation/strict diagnostic failed 事实保留。真实证据属于生产实现 `e271a35c`，
   后续测试清单/文档提交不冒充新完整 Case。不得据合并或普通生产成功关闭全部 CF。
-- 仍有实质实现或条件复现工作：CF-03/04/05/06/07/11/12/13/14/15/16/17/20/21，共 14 个父任务。
+- 任务分支 `c52f12b8` 的 CF-14 实现与专项真实像素/消费验收已完成，详见下方收尾证据，
+  尚未合入 main。仍有实质实现或条件复现工作：CF-03/04/05/06/07/11/12/13/15/16/17/20/21，
+  共 13 个父任务；不包含下述已有实现但待专项/实云/模型效果验收的项目。
   CF-01 栈安全搜索与 CF-29 Builder 进度可见性补充已实现并进入隔离集成候选，尚不能冒充
   已合入 main 或完整验收。CF-03 为条件复现；CF-11/20/21 已有多个代码切片，未关闭父任务。
   CF-15 的旧 gate 表述须服从后续普通成功标准，不得把新增质量诊断直接升级为普通阻断。
@@ -1746,6 +1748,33 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   前完成，其他目标、depth/order、Profile 与阈值不变；修复后 16/16 通过。
   最终实际三视图消费验收仍待。`010c0420` 的独立静态审查未发现生产 R2-F 问题，
   但未覆盖上述真实 fixture 失败；工具修复需补充复核，不作整项通过声明。
+- **CF-14 专项实现与验收已完成（任务分支 `c52f12b8`，尚未合入 main）**：
+  R2-F Opening 像素消费与修复输入为 `85fa2c9b`；三视图工具修复 `c52f12b8`
+  RED→GREEN 16/16、`pnpm typecheck` exit 0，独立补充静态审查无 P0/P1。
+  `pnpm verify:native-no-script-capture --semantic-geometry-reference rear-depth-wall
+  /var/folders/xh/89vqy8ts02b11h7tddrr0m7h0000gn/T/worldkit-no-script-capture-evidence-TrzYAA`
+  实际 exit 0，产物位于同一临时父目录的 `worldkit-no-script-capture-evidence-DcqMS1`。
+  Package root `sha256:b25cbd379b212af1d64c83c2bc4ce346286a81e002235c5faa15b6566e991bfb`；
+  Receipt、三张 identity PNG、EvidenceSet、Evaluation、Case、reference/metric 报告留存。
+  同相机 opening gate-mass 无 semantic drift，side 产生
+  `world-side-semantic-bounds-max-x-basis-points`，top 产生
+  `world-top-down-semantic-bounds-min-y-basis-points`，均 `adjust-geometry`；逐视图
+  Evidence 与 Receipt-bound PNG 解码一致。Browser/Vite cleanup completed，侧视 display
+  与侧/顶 identity 已人工看图；四张 display 和三张 identity Hash 与先前同几何 `NtNtV6`
+  全部一致。复用此前六个实际几何变体及七项 pixel claims，覆盖同 bounds 的空洞、
+  完全/部分遮挡、分离同身份结构和 opening 相同但 side/top 不同，未新增生产阈值、
+  stage、source repair、模型任务或普通发布 veto。独立审查范围是 R2-F 与新增工具，
+  不冒充整个候选分支的最终全维度审查；全仓/Cloud exact-SHA gates 未跑。
+  此完成结论仅为 CF-14 既定量测/消费任务，不证明任意形状 IoU、逻辑实例计数或总体
+  生成效果等价，不关闭 CF-19/21、NBR-20/70/90 或 WRC-1，未启动新 054 模型 Case。
+- CF-12 后续只读复核已确认：四参 Camera intent→Host admission→Package→Director
+  已有代码与非默认值回归，不重复实现。最新失败 054 虽有 openingCamera，但无正式
+  Capture；旧已发布 054 无此字段，两者均不能证明 R1 实际构图效果。剩余高影响实现为
+  旧 `9e35ab53` 的有序 1–8 movementModes、Host Subject/能力选择和 primary visual target
+  到 Runtime Subject 的显式身份绑定；当前单行 parser 与固定 Cloud Ridge G Bot 仍待替换。
+  软件 renderer 的 spawn+targetHeight 与 Runtime Socket 优先差异旧分支也存在，归 CF-04/12，
+  不能作为本次新增普通失败门禁。继续按既定优先级推进 CF-16 最终视觉闭包；这些 CF-12
+  缺口仍保留，不因先做 CF-16 被视为已完成。
 - CF-19/MULTI-OVERLAP worker 提交 `bbb1ef9b` 已以 `cba4054b` 进入集成候选：renderer
   一次输出至多 32 个去重 Block-ID pair，仍拒绝重叠且不生成假 PNG，Skill/frozen 副本同步，
   focused Skill 66 项通过。在不修改失败 054 Source 的隔离复放中输出 23 对实际冲突，
@@ -1779,7 +1808,7 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
 | `BWMI-CF-11` / P1 | 让 Host-derived Case 对完整世界与真实通行结构足够：从冻结 Brief/World Plan 形成可审计的 bounds、entry/middle/remote/off-camera coverage、受约束桥/阶梯/门洞/分支和到达检查，不再让固定 `128m` 世界、`12m` 直线与两个 ground group 代表任意场景；reach 必须绑定冻结的局部 endpoint/stand region，禁止用跨越多区的整组 AABB 让靠近起点也算到达 | depends_on: BWMI-CF-10, WRC-SR-1; blocks: NBR-20/70 formal evidence | source-neutral Case preparation owner；Host-checkable complete-world/route coverage receipt | 开放地面、曲线路线、分支、阶梯、有限室内、远端/侧后区、空 padding、只造入口和巨大跨区 group AABB 负向 Case；不增加第三个模型任务，不让 Planner 写 Runtime 坐标 | main-agent-only |
 | `BWMI-CF-12` / P1 | 闭合 Planner 主体/运动语义到 Host Bootstrap：保留旧链有序多个 movement mode 的用户语义，由唯一 Host owner 选择并哈希兼容 Subject/Capability/WRT，或以 typed unsupported/approximation 明示；把 primary visual target 绑定到 Runtime Subject 的 Capture/后续视觉身份，并由同一 Host 选择产生 target-driven opening Camera tuning；禁止所有输入静默复用固定 Cloud Ridge G Bot 地面闭包。统一 Planner Skill 必须按 Source Profile 明写：Canonical Builder 可组装受控 Subject，Native Builder 绝不拥有 Subject/Physics/Camera；当前单 mode parser/Skill 的 clean break 在此项同步实施，不把计划当作已支持 | depends_on: Subject Registry/P1.2/P1.5, WRC-CAM-1/2; blocks: NBR-20, BWMI-PROD-10/20 | Host Subject/Bootstrap/Camera selection receipt；Native Module 仍不拥有 Subject/Physics/Camera | 步行旅人、骑乘、驾驶、水面/水下、飞行与无兼容资源；主体 silhouette/identity、movement capability、主体占屏/目标 framing、Camera target、Spawn/ground/free-volume gates | main-agent-only |
 | `BWMI-CF-13` / P1 | 对齐通用 Case 的 blocker 身份闭包与严格 verifier：Case blocker、Contribution blocker、formal `block-plane` criteria 必须可由同一冻结意图精确连接；不能给每个 landmark 自动声明 blocker 却只派生 pass/reach 检查，也不能删除或削弱 NBR-70 严格检查 | depends_on: BWMI-CF-11; blocks: NBR-70/90 strict acceptance，不 blocks 旧标准 `productionOutcome` | Case/Intent derivation + strict verifier；一份 blocker evidence closure | 无 landmark、单/多 blocker、不可接近背景、门洞、远端实体、重复组；production passed 与 strict diagnostic failed 可并存，explicit NBR verifier 仍须 RED/GREEN | sequential |
-| `BWMI-CF-14` / P1 | 修正场景还原视觉量测等价性并使用真实多视角证据：expected/observed silhouette 均采用同一定义，区分可见像素、遮挡、空洞与重复实例，world-side/top-down 不能只是签名/Hash 附件 | depends_on: BWMI-CF-10, WRC-SR-1; blocks: BWMI-PROD-10 | Capture measurement + reconstruction evaluator；per-view target observation/metric definition | 实心/中空拱门、完全遮挡、部分遮挡、分离重复组、相同 AABB 不同内部结构、Opening 相同但 top/side 不同；诊断不得把正确空洞误修为 enlarge/shrink | sequential, main-agent-only for rendered evidence |
+| `BWMI-CF-14` / P1 | 修正场景还原视觉量测等价性并使用真实多视角证据：expected/observed silhouette 均采用同一定义，区分可见像素、遮挡、空洞与重复实例，world-side/top-down 不能只是签名/Hash 附件 | depends_on: BWMI-CF-10, WRC-SR-1; blocks: BWMI-PROD-10 | Capture measurement + reconstruction evaluator；per-view target observation/metric definition | 实心/中空拱门、完全遮挡、部分遮挡、分离重复组、相同 AABB 不同内部结构、Opening 相同但 top/side 不同；诊断不得把正确空洞误修为 enlarge/shrink | sequential；任务分支 `c52f12b8` 实现/专项验收完成，main 集成与整分支最终 gates 未完成；不代表总体模型效果等价 |
 | `BWMI-CF-15` / P1 | 让 Builder Skill 的可见结构支撑承诺成为显式 Case policy/gate：非 root 的 structural/playable Block 必须有到 root stratum 的 face-contact 支撑，只有声明并获准的 floating/background intent 可保留 | depends_on: Native Block Profile; blocks: WRC-SR-1 | Native Check/Ground policy；typed support disposition，不从 Mesh/tag/name 反推 | 浮空门顶、山体、平台、悬浮装饰、合法悬空背景、repair 后 support chain；warning 不得在无 disposition 时静默成为 passed | sequential |
 | `BWMI-CF-16` / P1 | 修复 current styled-image 假通过，同时保持旧成功标准：base Visual Reconstructor 在同一任务内完成 opening 自检，再由 Host 做历史等价的 file/hash/role closure，随后 tri-view 必须消费该 opening 的确切像素/Hash；新增独立 base semantic Reviewer 只能写 strict diagnostic，不能成为普通生产 veto。保留 Front/Right/Back 与 semantic-front 方向；纯签名/Hash 完整性只能标记 generated，不能单独伪造任务内 visual pass | depends_on: P0.2 Capture; blocks: BWMI-PROD-10/30, Recording Workbench | `scripts/visual` launcher/generator/finalizer；same-task self-check + Host closure + accepted-opening receipt；可选独立 diagnostic ledger | opening identity/geometry drift、tri-view 跨图身份/材质漂移、Front/Right/Back 调换/镜像、单图失败修复且其余 pass Hash 不变、independent diagnostic 不改判 ordinary outcome | sequential |
 | `BWMI-CF-17` / P1 | 为 current 单段 Seedance runner 增加 raw-media admission，禁止用任意 letterbox 和 `tpad=clone` 把短片/冻结尾“修成”exact frames；技术 conformance 保留 raw/final 双 Hash，但不冒充语义通过 | depends_on: P0.4 Adapter; blocks: BWMI-PROD-40 | Video Adapter raw admission；duration/aspect/active-frame/freeze/black-bar/audio measurements | 几秒短片、长冻结尾、错误宽高比、全黑边、静音/无效音频、近似 fps 可有界 resample；严重残缺不得进入转码成功态 | sequential |
