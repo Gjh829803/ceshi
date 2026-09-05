@@ -12,7 +12,7 @@ import { createCaptureDispatcher } from './capture-cloud.mjs';
 async function fixture(t, behavior = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'episode-cloud-')); t.after(() => rm(root, { recursive: true, force: true }));
   const calls = []; let payload;
-  const runtime = { launcherPath: '/fsx/pinned/cloud-launcher.mjs', codexBinary: '/fsx/pinned/codex', outputS3Root: 's3://test-bucket/three-episode' };
+  const runtime = { launcherPath: '/fsx/pinned/cloud-launcher.mjs', codexBinary: '/fsx/pinned/codex', outputS3Root: 's3://test-bucket/three-episode', ...behavior.runtime };
   const client = createCloudClient({ repoRoot: root, runtime, config: { baseUrl: 'https://unit.invalid', token: 'never-log-synthetic', userId: 'unit' }, request: async (url, options) => {
     calls.push({ url, method: options.method ?? 'GET' });
     if (options.method === 'POST') { payload = options.body; if (behavior.postError) throw behavior.postError; return { job: { job_id: 'gen_abc123' } }; }
@@ -26,7 +26,7 @@ async function fixture(t, behavior = {}) {
     await writeFile(destination, source.includes('episode-launcher-report') ? JSON.stringify({ status: 'delivered', model: 'gpt-6-astra', reasoningEffort: 'xhigh' }) : '{"ok":true}');
   } });
   const args = { taskId: 'test-route', instruction: 'Read and plan', assets: [], outputs: [{ path: path.join(root, 'plan.json'), required: true, contentType: 'application/json' }], model: 'gpt-6-astra', reasoningEffort: 'xhigh', outputRoot: root };
-  return { root, calls, client, args, payload: () => payload };
+  return { root, calls, client, args, runtime, payload: () => payload };
 }
 test('cloud GPT-6 outputs have durable identity and repeated calls use exact cached delivery', async t => {
   const f = await fixture(t); const first = await f.client.runCodex(f.args); const second = await f.client.runCodex(f.args);
@@ -148,4 +148,14 @@ test('unknown K8s create resolves exact name and never creates a duplicate on re
   const dispatcher = createCaptureDispatcher({ runtimeConfig: { workerImage: `registry/image@sha256:${'c'.repeat(64)}`, sourceArchiveS3Uri: 's3://bucket/frozen.tar.gz', captureS3Root: 's3://bucket/captures' }, kube: async args => { if (args[0] === 'create') creates++; throw new Error('transport unavailable'); }, cloud: { uploadArtifact: async () => {} } });
   const args = { sourceManifestPath: path.join(root, 'source.json'), planPath: path.join(root, 'plan.json'), outputRoot: path.join(root, 'capture'), worldBuildHash };
   await assert.rejects(dispatcher.run(args), /transport/); await assert.rejects(dispatcher.run(args), /transport/); assert.equal(creates, 1);
+});
+
+test('image routing uses existing pool IDs with a stable request and rejects switching a live attempt',async t=>{
+ const pool=['existing-account-one','existing-account-two'];const f=await fixture(t,{runtime:{imageAccountIds:pool}});
+ const args={batchId:'test-image-pool',outputRoot:f.root,items:[{id:'image-one',prompt:'test image',outputPath:path.join(f.root,'image.png'),images:[]}]};
+ await f.client.generateImages(args);const request=f.payload().request_id;assert.equal(f.payload().options.codex_account_ids.length,1);assert(pool.includes(f.payload().options.codex_account_ids[0]));
+ await f.client.generateImages(args);assert.equal(f.payload().request_id,request);assert.equal(f.calls.filter(c=>c.method==='POST').length,1);
+ f.runtime.imageAccountIds=['different-existing-account'];await assert.rejects(f.client.generateImages(args),/REQUIRES_TERMINAL_FAILED/);
+ const g=await fixture(t,{runtime:{imageAccountIds:pool},pollError:new Error('pending')});const pending={...args,outputRoot:g.root,items:[{...args.items[0],outputPath:path.join(g.root,'image.png')}]};
+ await assert.rejects(g.client.generateImages(pending),/REMOTE_PENDING/);g.runtime.imageAccountIds=['different-existing-account'];await assert.rejects(g.client.generateImages(pending),/REQUIRES_TERMINAL_FAILED/);assert.equal(g.calls.filter(c=>c.method==='POST').length,1);
 });
