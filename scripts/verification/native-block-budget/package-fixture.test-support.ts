@@ -77,7 +77,7 @@ export async function prepareBudgetRuntimeFixture(blockCount: number) {
         checkedLayoutInventoryHash, contributionHash: hashBabylonNativeSceneContributionV1(contribution),
         visualGroups: evidence.checkedLayout.checkResult.visualGroups.map((group, index) => ({
           acceptanceTargetRef: `worldkit://acceptance-target/${group.id}@1`,
-          visualGroupId: group.id, semanticClassId: `budget.${group.id}`,
+          frontDirectionWorldXZ: [0, -1] as const, visualGroupId: group.id, semanticClassId: `budget.${group.id}`,
           identityColorHex: ["#808080", "#F28E2B", "#D9A514", "#4E79A7", "#9C6ADE"][index]! as `#${string}`,
           blockIds: group.blockIds, paletteRoles: group.paletteRoles,
           minimumMetersXYZ: group.minimumMetersXYZ, maximumMetersXYZ: group.maximumMetersXYZ,

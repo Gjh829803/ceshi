@@ -110,6 +110,7 @@ function metadataValue() {
         acceptanceTargetRef: "worldkit://acceptance-target/route@1",
         semanticClassId: "route.primary",
         identityColorHex: "#AA0001",
+        frontDirectionWorldXZ: [1, 0] as const,
         blockIds: ["bridge"],
         paletteRoles: ["route"],
         minimumMetersXYZ: [-1, -0.5, -1],
@@ -120,6 +121,7 @@ function metadataValue() {
         acceptanceTargetRef: "worldkit://acceptance-target/wall@1",
         semanticClassId: "structure.wall",
         identityColorHex: "#AA0002",
+        frontDirectionWorldXZ: [0, -1] as const,
         blockIds: ["wall"],
         paletteRoles: ["structure"],
         minimumMetersXYZ: [1.5, -0.5, -1],
@@ -154,6 +156,14 @@ function metadataValue() {
 }
 
 describe("BabylonNativeBlockMaterializerMetadataV1", () => {
+  it("preserves declared semantic front in immutable Package identity", () => {
+    const value = metadataValue();
+    const parsed = parseBabylonNativeBlockMaterializerMetadataV1(value);
+    expect(parsed.visualGroups[0]).toMatchObject({ frontDirectionWorldXZ: [1, 0] });
+    expect(Object.isFrozen(Reflect.get(parsed.visualGroups[0]!, "frontDirectionWorldXZ"))).toBe(true);
+    const turned = { ...value, visualGroups: value.visualGroups.map((group) => ({ ...group, frontDirectionWorldXZ: [-1, 0] })) };
+    expect(hashBabylonNativeBlockMaterializerMetadataV1(turned)).not.toBe(hashBabylonNativeBlockMaterializerMetadataV1(value));
+  });
   it("parses, freezes and hashes the complete trusted materializer inventory", () => {
     const parsed = parseBabylonNativeBlockMaterializerMetadataV1(
       metadataValue(),

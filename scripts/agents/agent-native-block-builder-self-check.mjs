@@ -5,6 +5,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { isValidVisualTargetFrontDirectionWorldXZV1 } from "@whitebox-world/runtime-contracts";
 import { admitBabylonNativeOpeningCameraV1, parseBabylonNativeInitialCameraV1, parseWorldRuntimeBootstrapV1, parseNativeBlockGroundExplorationV1, admitNativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
 import { parseVisualIdentityPaletteV1 } from "../scenes/visual-identity-palette.ts";
 import { typecheckNativeBuilderSource } from "./native-builder-typecheck.mjs";
@@ -162,11 +163,12 @@ function validateAuthoring(value, diagnosticCodes) {
   let hasSubjectVisualGroup = false;
   for (const visualGroup of value.visualGroups) {
     if (!hasExactKeys(visualGroup, [
-      "visualGroupId", "acceptanceTargetRef", "semanticClassId", "identityColorHex",
+      "visualGroupId", "acceptanceTargetRef", "semanticClassId", "identityColorHex", "frontDirectionWorldXZ",
     ]) || !STABLE_ID.test(visualGroup.visualGroupId) ||
         !STABLE_REF.test(visualGroup.acceptanceTargetRef) ||
         !SEMANTIC_CLASS_ID.test(visualGroup.semanticClassId) ||
-        !IDENTITY_COLOR_HEX.test(visualGroup.identityColorHex)) {
+        !IDENTITY_COLOR_HEX.test(visualGroup.identityColorHex) ||
+        !isValidVisualTargetFrontDirectionWorldXZV1(visualGroup.frontDirectionWorldXZ)) {
       rowsAreValid = false;
     }
     if (typeof visualGroup.semanticClassId === "string" &&

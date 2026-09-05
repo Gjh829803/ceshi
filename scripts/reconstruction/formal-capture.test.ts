@@ -97,7 +97,7 @@ function packageAndRequest(worldBounds?: WorldPackageWorldBoundsV1): Readonly<{
       sizeMetersXYZ: [2, 2, 2] as const,
     }],
     visualGroups: [...baseMetadata.visualGroups, {
-      visualGroupId: "ridge-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "ridge-group",
       acceptanceTargetRef:
         "worldkit://acceptance-target/package-fixture-secondary@1",
       semanticClassId: "structure.fixture",

@@ -128,12 +128,12 @@ export default defineBabylonNativeScene({
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: [{
-        visualGroupId: "central-gate",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "central-gate",
         acceptanceTargetRef: "worldkit://acceptance-target/central-gate@1",
         semanticClassId: "worldkit.native-block.group.central-gate",
         identityColorHex: "#123456",
       }, {
-        visualGroupId: "upper-platform",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "upper-platform",
         acceptanceTargetRef: "worldkit://acceptance-target/upper-platform@1",
         semanticClassId: "worldkit.native-block.group.upper-platform",
         identityColorHex: "#ABCDEF",
@@ -905,6 +905,23 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(result).toMatchObject({ exitCode: 0, stderr: "", report: { ok: true, diagnosticCodes: [] } });
   });
 
+  it("checks the legacy declared cardinal front and binds its source bytes without inferring a default", async () => {
+    const workspace = await createWorkspace();
+    const manifestPath = path.join(workspace, "native-block-authoring.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.visualGroups[0].frontDirectionWorldXZ = [1, 0];
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    const accepted = await runSelfCheck(workspace);
+    expect(accepted.exitCode).toBe(0);
+    delete manifest.visualGroups[0].frontDirectionWorldXZ;
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    const missing = await runSelfCheck(workspace);
+    expect(missing.report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+    manifest.visualGroups[0].frontDirectionWorldXZ = [1, 1];
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    expect((await runSelfCheck(workspace)).report.diagnosticCodes).toContain("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+  });
+
   it("reports strict indexed tuple errors before delivery and rechecks repaired source", async () => {
     const workspace = await createWorkspace();
     const original = await readFile(path.join(workspace, "scene.ts"), "utf8");
@@ -1399,7 +1416,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: [{
-        visualGroupId: "central-gate",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "central-gate",
         acceptanceTargetRef: "worldkit://acceptance-target/central-gate@1",
         semanticClassId: "worldkit.native-block.group.central-gate",
         identityColorHex: "#AEB8C4",
@@ -1414,7 +1431,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: [{
-        visualGroupId: "rider-mount-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "rider-mount-group",
         acceptanceTargetRef: "worldkit://acceptance-target/rider-mount@1",
         semanticClassId: "subject.rider-mount",
         identityColorHex: "#AEB8C4",
@@ -1428,12 +1445,12 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: [{
-        visualGroupId: "z-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "z-group",
         acceptanceTargetRef: "worldkit://acceptance-target/z@1",
         semanticClassId: "worldkit.native-block.group.z",
         identityColorHex: "#AEB8C4",
       }, {
-        visualGroupId: "a-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "a-group",
         acceptanceTargetRef: "worldkit://acceptance-target/a@1",
         semanticClassId: "worldkit.native-block.group.a",
         identityColorHex: "#C9A96B",
@@ -1447,12 +1464,12 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: [{
-        visualGroupId: "same-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "same-group",
         acceptanceTargetRef: "worldkit://acceptance-target/a@1",
         semanticClassId: "worldkit.native-block.group.a",
         identityColorHex: "#AEB8C4",
       }, {
-        visualGroupId: "same-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "same-group",
         acceptanceTargetRef: "worldkit://acceptance-target/b@1",
         semanticClassId: "worldkit.native-block.group.b",
         identityColorHex: "#C9A96B",
@@ -1486,12 +1503,12 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: [{
-        visualGroupId: "central-gate",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "central-gate",
         acceptanceTargetRef: "worldkit://acceptance-target/central-gate@1",
         semanticClassId: "worldkit.native-block.group.central-gate",
         identityColorHex: "#AEB8C4",
       }, {
-        visualGroupId: "upper-platform",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "upper-platform",
         acceptanceTargetRef: "worldkit://acceptance-target/upper-platform@1",
         semanticClassId: "worldkit.native-block.group.upper-platform",
         identityColorHex: "#AEB8C4",
@@ -1544,7 +1561,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: [{
-        visualGroupId: "moon-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "moon-group",
         acceptanceTargetRef:
           "worldkit://acceptance-target/visual-target-3@1",
         semanticClassId: "visual.moon",

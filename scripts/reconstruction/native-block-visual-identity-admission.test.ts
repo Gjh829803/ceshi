@@ -34,7 +34,7 @@ function manifest(identityColorHex: string) {
     entryModulePath: "scene.ts",
     blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
     visualGroups: [{
-      visualGroupId: "moon-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "moon-group",
       acceptanceTargetRef: "worldkit://acceptance-target/visual-target-3@1",
       semanticClassId: "visual.moon",
       identityColorHex,

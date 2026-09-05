@@ -193,7 +193,7 @@ function verifiedPackage(
             (group, index) => Object.freeze({
               acceptanceTargetRef:
                 `worldkit://acceptance-target/bwb5-${group.id}@1`,
-              visualGroupId: group.id,
+              frontDirectionWorldXZ: [0, -1] as const, visualGroupId: group.id,
               semanticClassId: `worldkit.native-block.group.${group.id}`,
               identityColorHex:
                 `#${(index + 1).toString(16).padStart(6, "0").toUpperCase()}` as `#${string}`,

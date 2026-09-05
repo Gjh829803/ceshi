@@ -1908,6 +1908,20 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   随后补充 error-phase 优先与恢复启动失败不得再 capture 两项回归，startup + Native route
   + Browser API pause 顺序定向 28/28 通过（含前述 startup 重跑，不累加为独立覆盖数）。
   CF02 的真实启动/Capture 验收仍开放，最后本地 Case 仍须等待全部 CF 实施完成。
+- CF16-NATIVE-FRONT（同一 CF 分支，main-agent-only）：旧 `9e35ab53` 的必填 cardinal
+  `frontDirectionWorldXZ` 已接入现有 Native visualGroups 声明、checked layout binding 与
+  materializer metadata，不从 Camera、最长轴、Mesh 名称或固定世界方向猜测。Canonical、
+  Native Host 与便携 checker 共用原有四方向判定；没有增加相似度、面积或质量 gate。
+  方向数组复制冻结，修改声明会改变既有 manifest/metadata Hash；此数据不旋转世界、
+  Subject 或 Camera，不创建第二个 Runtime 状态。
+  Native Skill/输出合同、生成 checker 和代表性 Case 的冻结 Skill 副本同步；当前测试
+  样例显式补字段，历史 runs 下的生成 Source/Receipt 不改写。两个方向传递 RED 复现后，
+  声明/metadata/capture identity/request/measurement/Package 等八文件 148/148；捕获
+  provider/publisher/corpus 三文件 39/39；Native Skill 67/67；补充 binding 冻结/非默认
+  方向断言 1/1；typecheck、Planner/Canonical bundle drift 与 diff check 通过。
+  上述数量有重跑交集，不累加为全仓覆盖；仍无真实 Browser、付费任务、最终本地 Case、
+  全仓 CI 或独立复核。**这里只完成声明到元数据，Native complete-target 三视图尚未消费，
+  Native styling 和 Studio requested scope 尚未接通**；CF16/PROD10 与整个 CF 保持开放。
 
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。

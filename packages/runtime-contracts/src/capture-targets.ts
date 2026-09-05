@@ -257,7 +257,7 @@ function validIdArray(value: unknown): value is readonly string[] {
     new Set(value).size === value.length;
 }
 
-function validFrontDirectionWorldXZ(value: unknown): value is readonly [number, number] {
+export function isValidVisualTargetFrontDirectionWorldXZV1(value: unknown): value is readonly [number, number] {
   return Array.isArray(value) && value.length === 2 &&
     [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
       ([x, z]) => value[0] === x && value[1] === z,
@@ -322,7 +322,7 @@ function validateVisualTargetMappings(
     } else {
       runtimeEntityIds.push(...mapping.runtimeEntityIds);
     }
-    if (!validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ)) {
+    if (!isValidVisualTargetFrontDirectionWorldXZV1(mapping.frontDirectionWorldXZ)) {
       diagnostics.push(diagnostic(
         "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
         `${path}/frontDirectionWorldXZ`,
@@ -405,7 +405,7 @@ function validateVisualCaptureGroup(
       "identityColor must be a six-digit hex color.",
     ));
   }
-  if (!validFrontDirectionWorldXZ(group.frontDirectionWorldXZ)) {
+  if (!isValidVisualTargetFrontDirectionWorldXZV1(group.frontDirectionWorldXZ)) {
     diagnostics.push(diagnostic(
       "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
       `${instancePath}/frontDirectionWorldXZ`,
@@ -611,8 +611,8 @@ export function validateSceneBriefImplementationMapV1(
       const group = groupsByVisualTargetId.get(mapping.visualTargetId);
       if (group === undefined || !validIdArray(group.runtimeEntityIds) ||
           !sameStringSet(mapping.runtimeEntityIds, group.runtimeEntityIds) ||
-          !validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ) ||
-          !validFrontDirectionWorldXZ(group.frontDirectionWorldXZ) ||
+          !isValidVisualTargetFrontDirectionWorldXZV1(mapping.frontDirectionWorldXZ) ||
+          !isValidVisualTargetFrontDirectionWorldXZV1(group.frontDirectionWorldXZ) ||
           mapping.frontDirectionWorldXZ[0] !== group.frontDirectionWorldXZ[0] ||
           mapping.frontDirectionWorldXZ[1] !== group.frontDirectionWorldXZ[1]) {
         const groupIndex = groups.findIndex((candidate) =>

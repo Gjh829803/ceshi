@@ -411,7 +411,7 @@ function createBabylonNativeWorldPackageTestInputForProfileV1(
         sizeMetersXYZ: [10, 1, 10],
       }],
       visualGroups: [{
-        visualGroupId: "ground-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "ground-group",
         acceptanceTargetRef:
           "worldkit://acceptance-target/package-fixture-opening@1",
         semanticClassId: "ground.fixture",

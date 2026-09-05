@@ -5241,7 +5241,7 @@ function exactKeys(value, allowedKeys, instancePath) {
 function validIdArray(value) {
   return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && ID.test(item)) && new Set(value).size === value.length;
 }
-function validFrontDirectionWorldXZ(value) {
+function isValidVisualTargetFrontDirectionWorldXZV1(value) {
   return Array.isArray(value) && value.length === 2 && [[0, -1], [-1, 0], [0, 1], [1, 0]].some(
     ([x, z]) => value[0] === x && value[1] === z
   );
@@ -5294,7 +5294,7 @@ function validateVisualTargetMappings(value, instancePath) {
     } else {
       runtimeEntityIds.push(...mapping.runtimeEntityIds);
     }
-    if (!validFrontDirectionWorldXZ(mapping.frontDirectionWorldXZ)) {
+    if (!isValidVisualTargetFrontDirectionWorldXZV1(mapping.frontDirectionWorldXZ)) {
       diagnostics.push(diagnostic$1(
         "HOSTED_VISUAL_FRONT_DIRECTION_INVALID",
         `${path2}/frontDirectionWorldXZ`,

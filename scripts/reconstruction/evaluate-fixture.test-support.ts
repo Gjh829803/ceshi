@@ -612,12 +612,12 @@ export function createEvidenceSetFixtureInputV1(
     entryModulePath: "scene.ts",
     blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
     visualGroups: [{
-      visualGroupId: "ground-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "ground-group",
       acceptanceTargetRef: ACCEPTANCE_TARGET_REF,
       semanticClassId: "ground.fixture",
       identityColorHex: "#AA0001",
     }, {
-      visualGroupId: "upper-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "upper-group",
       acceptanceTargetRef: UPPER_TARGET_REF,
       semanticClassId: "upper.fixture",
       identityColorHex: "#AA0002",
@@ -762,7 +762,7 @@ export function createEvidenceSetFixtureInputV1(
           }
           : group),
       {
-        visualGroupId: "upper-group",
+        frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "upper-group",
         acceptanceTargetRef: UPPER_TARGET_REF,
         semanticClassId: "upper.fixture",
         identityColorHex: "#AA0002",

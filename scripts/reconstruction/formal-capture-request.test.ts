@@ -361,7 +361,7 @@ async function fixture(withoutScriptedTraversal = false): Promise<Readonly<{
       sizeMetersXYZ: [2, 2, 2] as const,
     }],
     visualGroups: [...baseMetadata.visualGroups, {
-      visualGroupId: "ridge-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "ridge-group",
       acceptanceTargetRef: SECONDARY_TARGET,
       semanticClassId: "structure.fixture",
       identityColorHex: "#AA0002" as const,

@@ -3,6 +3,7 @@ import type { Sha256HashV1 } from "@whitebox-world/protocol";
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import {
   admitNativeBlockGroundExplorationV1,
+  isValidVisualTargetFrontDirectionWorldXZV1,
   parseBabylonNativeInitialCameraV1,
   parseNativeBlockGroundExplorationV1,
   type BabylonNativeInitialCameraV1,
@@ -33,6 +34,7 @@ export interface NativeBlockAuthoringVisualGroupV1 {
   readonly acceptanceTargetRef: string;
   readonly semanticClassId: string;
   readonly identityColorHex: `#${string}`;
+  readonly frontDirectionWorldXZ: readonly [number, number];
 }
 
 export interface NativeBlockAuthoringManifestV1 {
@@ -66,6 +68,7 @@ export interface NativeBlockAuthoringLayoutBindingV1 {
     visualGroupId: string;
     semanticClassId: string;
     identityColorHex: `#${string}`;
+    frontDirectionWorldXZ: readonly [number, number];
     blockIds: readonly string[];
     paletteRoles: BabylonNativeBlockVisualGroupInventoryV1["paletteRoles"];
     minimumMetersXYZ: BabylonNativeBlockVisualGroupInventoryV1["minimumMetersXYZ"];
@@ -269,6 +272,7 @@ export function parseNativeBlockAuthoringManifestV1(
       "acceptanceTargetRef",
       "semanticClassId",
       "identityColorHex",
+      "frontDirectionWorldXZ",
     ], code, path);
     const visualGroupId = text(row.visualGroupId, code, `${path}/visualGroupId`);
     const semanticClassId = text(row.semanticClassId, code, `${path}/semanticClassId`);
@@ -285,6 +289,9 @@ export function parseNativeBlockAuthoringManifestV1(
     if (!IDENTITY_COLOR_HEX.test(identityColorHex)) {
       return fail(code, `${path}/identityColorHex must be uppercase #RRGGBB`);
     }
+    if (!isValidVisualTargetFrontDirectionWorldXZV1(row.frontDirectionWorldXZ)) {
+      return fail(code, `${path}/frontDirectionWorldXZ must be one cardinal unit direction in world XZ coordinates`);
+    }
     return Object.freeze({
       visualGroupId,
       acceptanceTargetRef: stableRef(
@@ -294,6 +301,7 @@ export function parseNativeBlockAuthoringManifestV1(
       ),
       semanticClassId,
       identityColorHex: identityColorHex as `#${string}`,
+      frontDirectionWorldXZ: Object.freeze([...row.frontDirectionWorldXZ]) as readonly [number, number],
     });
   });
   requireStrictlySortedUnique(
@@ -571,6 +579,7 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
         visualGroupId: row.visualGroupId,
         semanticClassId: row.semanticClassId,
         identityColorHex: row.identityColorHex,
+        frontDirectionWorldXZ: row.frontDirectionWorldXZ,
         blockIds: Object.freeze([...checkedGroup.blockIds]),
         paletteRoles: Object.freeze([...checkedGroup.paletteRoles]),
         minimumMetersXYZ: Object.freeze([...checkedGroup.minimumMetersXYZ]) as

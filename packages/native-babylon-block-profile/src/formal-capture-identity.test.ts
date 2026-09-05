@@ -221,13 +221,13 @@ function authoringManifestValue() {
     entryModulePath: "scene.ts",
     blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
     visualGroups: [{
-      visualGroupId: "central-ascent-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "central-ascent-group",
       acceptanceTargetRef:
         "worldkit://acceptance-target/central-ascent@1",
       semanticClassId: "worldkit.native-block.group.central-ascent",
       identityColorHex: "#AEB8C4",
     }, {
-      visualGroupId: "upper-t-junction-group",
+      frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "upper-t-junction-group",
       acceptanceTargetRef:
         "worldkit://acceptance-target/upper-t-junction@1",
       semanticClassId: "worldkit.native-block.group.upper-t-junction",

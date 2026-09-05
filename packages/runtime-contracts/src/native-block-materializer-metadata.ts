@@ -3,6 +3,7 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
+import { isValidVisualTargetFrontDirectionWorldXZV1 } from "./capture-targets.js";
 import { parseBabylonNativeInitialCameraV1, type BabylonNativeInitialCameraV1 } from "./babylon-native-scene-bootstrap.js";
 
 import { BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 } from
@@ -44,6 +45,7 @@ export interface BabylonNativeBlockMaterializerVisualGroupV1 {
   readonly acceptanceTargetRef: string;
   readonly semanticClassId: string;
   readonly identityColorHex: `#${string}`;
+  readonly frontDirectionWorldXZ: readonly [number, number];
   readonly blockIds: readonly string[];
   readonly paletteRoles:
     readonly BabylonNativeBlockMaterializerPaletteRoleV1[];
@@ -350,7 +352,7 @@ function parseVisualGroup(
   const path = `visualGroups/${index}`;
   const row = exactRecord(value, [
     "visualGroupId", "acceptanceTargetRef", "semanticClassId",
-    "identityColorHex", "blockIds", "paletteRoles", "minimumMetersXYZ",
+    "identityColorHex", "frontDirectionWorldXZ", "blockIds", "paletteRoles", "minimumMetersXYZ",
     "maximumMetersXYZ",
   ], [], path);
   const blockIds = exactArray(row.blockIds, `${path}/blockIds`).map(
@@ -391,11 +393,15 @@ function parseVisualGroup(
   if (!IDENTITY_COLOR.test(identityColorHex)) {
     fail(`${path}/identityColorHex`, "must be one uppercase identity color");
   }
+  if (!isValidVisualTargetFrontDirectionWorldXZV1(row.frontDirectionWorldXZ)) {
+    fail(`${path}/frontDirectionWorldXZ`, "must be one cardinal unit direction in world XZ coordinates");
+  }
   return Object.freeze({
     visualGroupId: stableId(row.visualGroupId, `${path}/visualGroupId`),
     acceptanceTargetRef,
     semanticClassId,
     identityColorHex: identityColorHex as `#${string}`,
+    frontDirectionWorldXZ: Object.freeze([...row.frontDirectionWorldXZ]) as readonly [number, number],
     blockIds: Object.freeze(blockIds),
     paletteRoles: Object.freeze(paletteRoles),
     minimumMetersXYZ: tuple3(

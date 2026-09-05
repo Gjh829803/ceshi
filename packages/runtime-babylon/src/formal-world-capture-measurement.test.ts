@@ -43,7 +43,7 @@ const HASH_B = `sha256:${"b".repeat(64)}` as const;
 const HASH_C = `sha256:${"c".repeat(64)}` as const;
 
 const alphaGroup = Object.freeze({
-  visualGroupId: "alpha-group",
+  frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "alpha-group",
   acceptanceTargetRef: "worldkit://acceptance-target/alpha@1",
   semanticClassId: "worldkit.native-block.group.alpha-group",
   identityColorHex: "#112233",
@@ -54,7 +54,7 @@ const alphaGroup = Object.freeze({
 } satisfies BabylonNativeBlockMaterializerVisualGroupV1);
 
 const zetaGroup = Object.freeze({
-  visualGroupId: "zeta-group",
+  frontDirectionWorldXZ: [0, -1] as const, visualGroupId: "zeta-group",
   acceptanceTargetRef: "worldkit://acceptance-target/zeta@1",
   semanticClassId: "worldkit.native-block.group.zeta-group",
   identityColorHex: "#445566",

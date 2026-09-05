@@ -29,14 +29,32 @@ function manifestValue() {
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
       semanticClassId: "worldkit.native-block.group.central-ascent",
       identityColorHex: "#AEB8C4",
+      frontDirectionWorldXZ: [1, 0] as const,
     }, {
       visualGroupId: "upper-t-junction-group",
       acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
       semanticClassId: "worldkit.native-block.group.upper-t-junction",
       identityColorHex: "#C9A96B",
+      frontDirectionWorldXZ: [0, -1] as const,
     }],
   };
 }
+
+describe("Native declared semantic front", () => {
+  it("retains and hashes each authored front without camera or mesh inference", () => {
+    const value = manifestValue();
+    const parsed = parseNativeBlockAuthoringManifestV1(value);
+    expect(parsed.visualGroups[0]).toMatchObject({ frontDirectionWorldXZ: [1, 0] });
+    expect(Object.isFrozen(Reflect.get(parsed.visualGroups[0]!, "frontDirectionWorldXZ"))).toBe(true);
+    const turned = { ...value, visualGroups: value.visualGroups.map((group) => ({ ...group, frontDirectionWorldXZ: [-1, 0] })) };
+    expect(hashNativeBlockAuthoringManifestV1(turned)).not.toBe(hashNativeBlockAuthoringManifestV1(value));
+  });
+  it.each([undefined, [0, 0], [1, 1], [0.5, 0], [0, -1, 0]])("rejects an absent or non-cardinal front: %j", (front) => {
+    const value = manifestValue();
+    const invalid = { ...value, visualGroups: value.visualGroups.map((group) => ({ ...group, frontDirectionWorldXZ: front })) };
+    expect(() => parseNativeBlockAuthoringManifestV1(invalid)).toThrow();
+  });
+});
 
 function reconstructionCaseValue() {
   return {
@@ -474,6 +492,7 @@ describe("Native Block authoring to checked Layout binding", () => {
       "upper-t-junction-group",
     ]);
     expect(result.visualGroups[0]).toMatchObject({
+      frontDirectionWorldXZ: [1, 0],
       blockIds: ["central-ascent-block"],
       paletteRoles: ["route"],
       minimumMetersXYZ: [-0.5, 0, -1.5],
@@ -482,6 +501,7 @@ describe("Native Block authoring to checked Layout binding", () => {
     expect(JSON.stringify(result)).not.toMatch(/mesh|tag|name/i);
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.visualGroups)).toBe(true);
+    expect(Object.isFrozen(result.visualGroups[0]?.frontDirectionWorldXZ)).toBe(true);
   });
 
   it("rejects a Manifest that swaps Case-owned target-to-group mappings", () => {
