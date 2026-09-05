@@ -1,3 +1,9 @@
+When a delivered playable contains `planning/world-plan.png`, its original overall
+plan is exposed as a production artifact. Native ImageGen activity is a production
+stage; its prompt, raw image bytes and private saved path are not copied into the
+public event feed. The original image file is published through the closed artifact
+path, without assistant content review.
+
 # Production-only gallery (current)
 
 The gallery opens delivered playables without assistant review. `ready` means

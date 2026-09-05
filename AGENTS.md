@@ -1,3 +1,13 @@
+## Current world planning requirements
+
+The user requires a relatively generic colored whitebox with simplified detail,
+but the opening composition and viewpoint must match the uploaded reference.
+Before building, the Agent must use native ImageGen to plan an overall top-down
+world with more than five minutes of meaningful traversable exploration. Enclosed
+references must extend into coherent connected spaces beyond the opening view.
+This is a content requirement, never a recording or minimum execution duration.
+G-bot is optional and has no mandatory preference over custom subjects.
+
 ## No assistant review in production
 
 The user explicitly rejected assistant review as a production stage or playability

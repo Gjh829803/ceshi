@@ -185,3 +185,28 @@ test('separates call execution from checks and never calls short or under-durati
   }
  }finally{await rm(f.container,{recursive:true,force:true});}
 });
+
+
+test('quota termination and SDK budgets stay distinct production failures', async()=>{
+ const f=await fixture();
+ try {
+  f.state.phase='failed';f.state.failure={message:'CREATOR_CODEX_EXIT_1'};await f.saveState();
+  f.live.launcher.status='failed';f.live.launcher.finishedAt=observedAt;
+  f.live.failureFacts=[{layer:'sdk-physics',code:'PHYSICS_TRIANGLE_BUDGET_EXCEEDED'},{layer:'sdk-physics',code:'PHYSICS_COLLIDER_BUDGET_EXCEEDED'},{layer:'model-service',code:'MODEL_USAGE_LIMIT'}];
+  const output=await buildThreeRunProgress({runRoot:f.runRoot,liveStatus:snapshot(f.live),now});
+  const row=output.cases[0];assert.equal(row.phase,'failed');assert.equal(row.failure.category,'account-usage');assert.equal(row.failure.code,'MODEL_USAGE_LIMIT');
+  assert.equal(row.failureFacts.length,3);assert(row.failureFacts.some(x=>x.code==='PHYSICS_TRIANGLE_BUDGET_EXCEEDED'));
+ } finally {await rm(f.container,{recursive:true,force:true});}
+});
+
+
+test('native ImageGen planning appears without exposing the prompt, image bytes or saved path',async()=>{
+ const f=await fixture();try{
+  f.state.startedAt=startedAt;await f.saveState();
+  await json(path.join(f.caseRoot,'creator-launcher-report.json'),f.launcher);
+  await writeFile(path.join(f.caseRoot,'creator-events.jsonl'),JSON.stringify({type:'item.completed',item:{type:'image_generation',id:'image-one',status:'completed',result:'PRIVATE_IMAGE_BYTES',revised_prompt:'PRIVATE_PROMPT',savedPath:'/private/PRIVATE_PATH.png'}})+'\n');
+  const output=await buildThreeRunProgress({runRoot:f.runRoot,now});const row=output.cases[0];
+  assert.equal(row.stage,'planning');assert.equal(row.toolSummary.counts.imagegen,1);assert(row.events.some(x=>x.tool==='imagegen'));
+  assert(!JSON.stringify(output).includes('PRIVATE_'));
+ }finally{await rm(f.container,{recursive:true,force:true});}
+});

@@ -11,6 +11,7 @@ const python = String.raw`import pathlib,json,os,stat,datetime,sys,math,re
 rows=json.loads(sys.argv[1]); results=[]
 def safe_error(value):
     text=str(value or '')
+    if 'hit your usage limit' in text.lower(): return 'Selected account has reached its usage limit.'
     if 'at capacity' in text.lower(): return 'Selected model is at capacity.'
     if 'model is not supported when using Codex with a ChatGPT account' in text: return 'Selected model is not supported for this Codex account.'
     import re
@@ -18,6 +19,9 @@ def safe_error(value):
     return match.group(0) if match else ('Private diagnostics retained.' if text else None)
 def failure_facts(value):
     text=str(value or ''); facts=[]
+    if 'hit your usage limit' in text.lower(): facts.append({'layer':'model-service','code':'MODEL_USAGE_LIMIT'})
+    if 'PHYSICS_TRIANGLE_BUDGET_EXCEEDED' in text: facts.append({'layer':'sdk-physics','code':'PHYSICS_TRIANGLE_BUDGET_EXCEEDED'})
+    if 'PHYSICS_COLLIDER_BUDGET_EXCEEDED' in text: facts.append({'layer':'sdk-physics','code':'PHYSICS_COLLIDER_BUDGET_EXCEEDED'})
     if 'at capacity' in text.lower(): facts.append({'layer':'model-service','code':'MODEL_CAPACITY'})
     if 'model is not supported when using Codex with a ChatGPT account' in text: facts.append({'layer':'model-service','code':'MODEL_NOT_SUPPORTED_FOR_ACCOUNT'})
     if 'THREE_SOURCE_SYMLINK' in text and ('scratch/' in text or 'codex_home' in text): facts.append({'layer':'host-integration','code':'PLATFORM_SCRATCH_SCANNED_AS_SOURCE'})
@@ -67,6 +71,12 @@ for row in rows:
                 kinds={}; tools={}; latest_operation=None; latest_tool=None; image_responses=0; facts=[]; operations={}
                 for event in events:
                     kind=event.get('type'); kinds[kind]=kinds.get(kind,0)+1; item=event.get('item',{})
+                    if item.get('type') in ['image_generation','imageGeneration','image_generation_call'] and kind in ['item.started','item.completed']:
+                        status='running' if kind=='item.started' else ('failed' if item.get('failure') or item.get('status') in ['failed','error'] else 'succeeded')
+                        latest_tool={'name':'imagegen','status':'completed' if status=='succeeded' else status,'timestamp':None}
+                        operation_id='imagegen:'+str(item.get('id') or len(operations))
+                        latest_operation={'id':operation_id,'type':'imagegen.generate','status':status,'createdAt':None,'updatedAt':None}
+                        operations[operation_id]=latest_operation
                     if item.get('type')=='mcp_tool_call': latest_tool={'name':item.get('tool'),'status':item.get('status') or ('running' if kind=='item.started' else None),'timestamp':None}
                     if event.get('type')=='item.completed' and item.get('type')=='mcp_tool_call':
                         tool=item.get('tool'); tools[tool]=tools.get(tool,0)+1

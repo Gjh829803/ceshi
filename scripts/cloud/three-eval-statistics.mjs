@@ -9,6 +9,7 @@ const finiteAtLeast = (value, minimum) => typeof value === 'number' && Number.is
 export function failureClass(message) {
   const text = String(message);
   return [
+    ['account-usage', /hit your usage limit|account has reached its usage limit/i],
     ['model-cli-version', /requires a newer version/i], ['model-capacity', /at capacity|No available agent/i],
     ['mcp-startup', /MCP.*(?:start|initial|fail)|CREATOR_MCP/i], ['runtime-browser', /browser|chromium|shared libraries/i],
     ['event-evidence', /EVENT_|RECEIPT_|TRANSPORT_|IDENTITY_/], ['world-validation', /THREE_(?:SOURCE|IMPORT|ENTRY|PROJECT|SUBMIT|DELIVERY|BUILD)/],

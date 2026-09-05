@@ -2,7 +2,7 @@
 // result readiness, active playback and human feedback retain separate owners.
 const $ = (id) => document.getElementById(id);
 const labels = { ready: "可试玩", issues: "可试玩 · 有问题", running: "运行中", queued: "排队中", submitted: "已提交", starting: "启动中", verifying: "产物同步中", delivered: "产物同步中", failed: "失败", unknown: "待确认" };
-const stages = { queued: "等待执行", starting: "启动 Agent", authoring: "编写与校验", preview: "预览与检查", playtest: "实际操作测试", capture: "采集对象视图", packaging: "整理交付", delivered: "技术交付完成", failed: "执行失败", unknown: "等待可确认状态" };
+const stages = { queued: "等待执行", starting: "启动 Agent", planning: "整体地图规划", authoring: "编写与校验", preview: "预览与检查", playtest: "实际操作测试", capture: "采集对象视图", packaging: "整理交付", delivered: "技术交付完成", failed: "执行失败", unknown: "等待可确认状态" };
 const toolStatusLabels = { succeeded: "调用完成", failed: "未通过", running: "进行中", queued: "等待中", completed: "已返回" };
 function operationDetail(p) {
   const op = p?.toolSummary?.latestOperation;
@@ -14,7 +14,7 @@ function operationDetail(p) {
     return `${op.type} · ${toolStatusLabels[op.status] || op.status || "已观测"}`;
   return p?.toolSummary?.latestTool || (p?.lastObservedAt ? `观测于 ${formatTime(p.lastObservedAt)}` : "等待观测记录");
 }
-const phaseOrder = ["starting", "authoring", "preview", "playtest", "capture", "packaging", "delivered"];
+const phaseOrder = ["starting", "planning", "authoring", "preview", "playtest", "capture", "packaging", "delivered"];
 let data, progress, selectedId, activeTab = "process", storageKey = "worldkit-evaluation-reviews", reviews = {}, artifactKey = "", pendingRefresh = false, lastFetchAt = null, progressUnavailable = false, lastRefreshFailed = false;
 let resumePlayerOnReturn = false;
 const isPlayable = (c) => ["ready", "issues"].includes(c?.status) && Boolean(c.playable);
@@ -227,7 +227,7 @@ function renderTrajectory(p, c) {
   if (["delivered", "verifying"].includes(caseStatus(c, p)) || isPlayable(c))
     seen.add("delivered");
   const selected = p?.stage;
-  const visibleStages = phaseOrder.filter(id => id !== "playtest" || seen.has(id) || selected === id);
+  const visibleStages = phaseOrder.filter(id => !(["playtest", "planning"].includes(id)) || seen.has(id) || selected === id);
   for (const [index, id] of visibleStages.entries()) {
     let status = selected === id && caseStatus(c, p) === "running" ? "active" : seen.has(id) ? "complete" : "pending";
     if (caseStatus(c, p) === "failed" && id === (p?.lastStage || selected))
@@ -280,7 +280,7 @@ function renderProcess() {
 }
 function renderDeliverables(c) {
   const p = currentProgress(c.id), playable = isPlayable(c);
-  const rows = [["reference", "用户参考图", true, c.reference, "原始上传图片"], ["opening", "白模首帧", Boolean(c.opening), c.opening, "同一个可玩世界的首帧"], ["playable", "可玩世界", playable, c.playable, "保留 Agent 原始交付"], ["video", "真实试玩录像", Boolean(c.video), c.video, "实际按键操作与浏览器录制"], ["views", "完整对象三视图", Boolean(c.triviews?.length), null, `${c.triviews?.length || 0} 组完整对象`]].filter(([kind]) => kind !== "video" || c.validationMode !== "interactive-preview");
+  const rows = [["reference", "用户参考图", true, c.reference, "原始上传图片"], ["worldPlan", "整体俯视规划图", Boolean(c.worldPlan), c.worldPlan, "随生成产物交付的整体地图规划"], ["opening", "白模首帧", Boolean(c.opening), c.opening, "同一个可玩世界的首帧"], ["playable", "可玩世界", playable, c.playable, "保留 Agent 原始交付"], ["video", "真实试玩录像", Boolean(c.video), c.video, "实际按键操作与浏览器录制"], ["views", "完整对象三视图", Boolean(c.triviews?.length), null, `${c.triviews?.length || 0} 组完整对象`]].filter(([kind]) => (kind !== "video" || c.validationMode !== "interactive-preview") && (kind !== "worldPlan" || c.worldPlan));
   $("deliverables").replaceChildren(...rows.map(([id, title, ready, url, detail]) => {
     const row = el("div", void 0, `deliverable-row ${ready ? "" : "pending"}`);
     row.append(el("span", ready ? "✓" : "○", "deliverable-icon"));

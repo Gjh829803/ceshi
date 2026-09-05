@@ -280,6 +280,9 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
     prefix = f"cases/{row['id']}/{delivery['worldBuildHash']}"
     selected = curated_playable(actual, entry.get('publicPlayableFiles', []))
     validate_public_assets(payload, selected, actual)
+    if 'playable/planning/world-plan.png' in selected:
+        png_size(payload / 'playable/planning/world-plan.png')
+        row['worldPlan'] = prefix + '/playable/planning/world-plan.png'
     images = captures.get('images')
     require(isinstance(images, list) and 1 <= len(images) <= 101, 'Invalid capture list')
     opening = None
