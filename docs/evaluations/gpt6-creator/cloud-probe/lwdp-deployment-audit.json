@@ -1,0 +1,6 @@
+{
+  "name": "lwdp-pipeline-api",
+  "images": [
+    "829115578968.dkr.ecr.us-east-2.amazonaws.com/lwdp-pipeline-api:c730fd0"
+  ]
+}

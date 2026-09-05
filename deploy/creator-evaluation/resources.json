@@ -1,0 +1,201 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "worldkit-cloud-monitor-upstream",
+        "namespace": "lwdp",
+        "labels": {
+          "worldkit-owner": "creator-evaluation"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "selector": {
+          "app": "worldkit-cloud-control-plane"
+        },
+        "ports": [
+          {
+            "name": "monitor",
+            "port": 4175,
+            "targetPort": "monitor"
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "worldkit-creator-evaluation",
+        "namespace": "lwdp",
+        "labels": {
+          "worldkit-owner": "creator-evaluation"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "selector": {
+          "app": "worldkit-creator-evaluation"
+        },
+        "ports": [
+          {
+            "name": "monitor",
+            "port": 4175,
+            "targetPort": "monitor"
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "worldkit-creator-evaluation",
+        "namespace": "lwdp",
+        "labels": {
+          "worldkit-owner": "creator-evaluation"
+        }
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "worldkit-creator-evaluation"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "worldkit-creator-evaluation",
+              "worldkit-owner": "creator-evaluation"
+            },
+            "annotations": {
+              "worldkit.io/gateway-version": "http-uuid-and-gallery-subject-alias-v2",
+              "instrumentation.opentelemetry.io/inject-nodejs": "false",
+              "instrumentation.opentelemetry.io/inject-python": "false",
+              "instrumentation.opentelemetry.io/inject-java": "false",
+              "instrumentation.opentelemetry.io/inject-dotnet": "false"
+            }
+          },
+          "spec": {
+            "automountServiceAccountToken": false,
+            "nodeSelector": {
+              "kubernetes.io/arch": "amd64"
+            },
+            "terminationGracePeriodSeconds": 10,
+            "containers": [
+              {
+                "name": "read-only-evaluation",
+                "image": "node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0",
+                "imagePullPolicy": "IfNotPresent",
+                "command": [
+                  "node",
+                  "/app/gateway.mjs"
+                ],
+                "ports": [
+                  {
+                    "name": "monitor",
+                    "containerPort": 4175
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "PORT",
+                    "value": "4175"
+                  },
+                  {
+                    "name": "CREATOR_EVALUATION_ROOT",
+                    "value": "/srv/creator-evals"
+                  },
+                  {
+                    "name": "CREATOR_EVALUATION_UPSTREAM",
+                    "value": "http://worldkit-cloud-monitor-upstream.lwdp.svc.cluster.local:4175"
+                  }
+                ],
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "readOnlyRootFilesystem": true,
+                  "runAsNonRoot": true,
+                  "runAsUser": 1000,
+                  "runAsGroup": 1000,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  }
+                },
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "1",
+                    "memory": "256Mi"
+                  }
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/__creator_eval_health",
+                    "port": "monitor"
+                  },
+                  "periodSeconds": 3,
+                  "timeoutSeconds": 2
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/__creator_eval_live",
+                    "port": "monitor"
+                  },
+                  "initialDelaySeconds": 5,
+                  "periodSeconds": 10,
+                  "timeoutSeconds": 2
+                },
+                "volumeMounts": [
+                  {
+                    "name": "gateway-code",
+                    "mountPath": "/app/gateway.mjs",
+                    "subPath": "gateway.mjs",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "gateway-code",
+                    "mountPath": "/app/host-compat.mjs",
+                    "subPath": "host-compat.mjs",
+                    "readOnly": true
+                  },
+                  {
+                    "name": "evaluation-data",
+                    "mountPath": "/srv/creator-evals",
+                    "subPath": "pipeline/worldkit-creator-experiments/gpt6-five-case-20260905/evaluation-static",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "name": "gateway-code",
+                "configMap": {
+                  "name": "worldkit-creator-evaluation-code",
+                  "defaultMode": 292
+                }
+              },
+              {
+                "name": "evaluation-data",
+                "persistentVolumeClaim": {
+                  "claimName": "fsx-public-output-p125-pvc",
+                  "readOnly": true
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -5,6 +5,26 @@ This experiment uses `codex/gpt6-world-agent-refactor`, inherited source snapsho
 Native Creator path. Existing production Block and Native admission paths are
 not silently changed.
 
+## Play the submitted worlds
+
+The read-only experiment gallery is available on the existing evaluation host:
+
+[GPT-6 playable evaluation gallery](http://k8s-lwdp-worldkit-1b0222fb6d-f0f26ee23663e783.elb.us-east-2.amazonaws.com/creator-evals/).
+
+It shows each original reference beside the delivered opening, an interactive
+standalone build, recorded exploration and object tri-views. Scores and notes
+are stored in that browser and can be exported as JSON; they are not submitted
+to a shared evaluation database. Pending cases do not expose a playable link.
+Delivered cases with independently confirmed content/physics problems remain
+available with an explicit **可试玩 · 有问题** label. Availability is not a
+quality-pass claim.
+
+The deployed V3 runtime is immutable. Its model configuration remains
+`gpt-6-astra / xhigh`; later local SDK fixes are not retroactively applied to
+the five original cloud outputs. See the [deployment record and rollback](../../../deploy/creator-evaluation/README.md)
+for the isolated gateway, HTTP compatibility transformations, and preservation
+of the original archive/file hashes.
+
 ## Fixed sample
 
 The five original images and their original/effective prompts are frozen in

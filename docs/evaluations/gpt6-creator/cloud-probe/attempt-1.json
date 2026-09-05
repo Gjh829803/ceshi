@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "creator-cloud-probe-attempt",
+  "attempt": 1,
+  "jobId": "gen_c356c2f62481a6a2",
+  "requestId": "gpt6-creator-probe-20260905-a1-c83fd126",
+  "outputS3Prefix": "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk/gpt6-creator/cloud-probe/20260905-a1-c83fd126",
+  "apiBuildCommit": "c730fd0",
+  "jobStatus": "completed",
+  "counters": {
+    "total": 1,
+    "queued": 0,
+    "running": 0,
+    "succeeded": 0,
+    "failed": 1,
+    "skipped": 0,
+    "rejected": 0
+  },
+  "timing": {
+    "available": true,
+    "unavailable_reason": "",
+    "driver_started_at": "2026-09-05T02:43:40.085911Z",
+    "processing_started_at": "2026-09-05T02:43:40.264072Z",
+    "first_item_started_at": "2026-09-05T02:43:40.466500Z",
+    "last_item_finished_at": "2026-09-05T02:43:46.297993Z",
+    "worker_finished_at": "2026-09-05T02:43:46.682461Z",
+    "queue_seconds": 157.99,
+    "startup_seconds": 0.178,
+    "remote_run_seconds_excluding_queue": 6.418,
+    "stage_timings": [
+      {
+        "stage": "codex",
+        "attempt": 1,
+        "scope": "",
+        "started_at": "2026-09-05T02:43:40.264072Z",
+        "finished_at": "2026-09-05T02:43:46.682461Z",
+        "duration_seconds": 6.418
+      },
+      {
+        "stage": "done",
+        "attempt": 1,
+        "scope": "",
+        "started_at": "2026-09-05T02:43:46.682461Z",
+        "finished_at": "2026-09-05T02:43:46.682461Z",
+        "duration_seconds": 0
+      }
+    ]
+  },
+  "requestedModel": "gpt-6-astra",
+  "requestedReasoningEffort": "xhigh",
+  "actualCodexVersion": "0.144.2",
+  "invocationPrefix": [
+    "codex",
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "--sandbox",
+    "workspace-write",
+    "--model",
+    "gpt-6-astra",
+    "-c",
+    "model_reasoning_effort=\"xhigh\"",
+    "-c",
+    "notify=[]"
+  ],
+  "itemStatus": "failed",
+  "error": "codex exit=1; stdout=; stderr= not found. Defaulting to fallback metadata; this can degrade performance and cause issues.\nERROR: {\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.\"}}\nERROR: {\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.\"}}\n",
+  "modelStarted": false,
+  "shellImageMcpProbe": "not_run_model_rejected_before_start",
+  "rawLogSha256": "f7bd2661a823a7cba9ac3a41714c2d6bb2eff6e0396cc5e90f949b5f93763cb6"
+}

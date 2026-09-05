@@ -1,0 +1,24 @@
+{
+  "codeRoot": "/fsx/pipeline/codex_code/leap_world_data_deployed_c730fd0",
+  "buildCommit": "c730fd0",
+  "files": {
+    "ray_pipeline/generation/codex_runner.py": {
+      "sha256": "830931be9e2e80912271713decf7afe3b16a39f3c57e7deb5834606300bd9a99",
+      "runtimeProfileTokenPresent": false,
+      "mcpServersTokenPresent": false,
+      "ignoreUserConfigTokenPresent": false
+    },
+    "ray_pipeline/generation/codex_job.py": {
+      "sha256": "fa0e3a93e13adcd7046eaf7c4a377e2aeedf07ca0f78dbd68177561dadfb82a2",
+      "runtimeProfileTokenPresent": false,
+      "mcpServersTokenPresent": false,
+      "ignoreUserConfigTokenPresent": false
+    },
+    "ray_pipeline/generation/t2i.py": {
+      "sha256": "cb7f7d49e28ef1b0127d02719dc608255188b1bd5e4ff5f0a87ef420560e12a4",
+      "runtimeProfileTokenPresent": false,
+      "mcpServersTokenPresent": false,
+      "ignoreUserConfigTokenPresent": false
+    }
+  }
+}

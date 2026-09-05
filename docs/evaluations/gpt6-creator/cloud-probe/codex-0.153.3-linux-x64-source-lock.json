@@ -1,0 +1,33 @@
+{
+  "package": "@openai/codex",
+  "version": "0.153.3-linux-x64",
+  "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.153.3-linux-x64.tgz",
+  "npmIntegrity": "sha512-CyLvuM9Ij7sQuNtnHrzHtF+DtNISaauZZakyhy+MoFS1XxKTGv3FN4/qh6c94YZtLStZ7aUmfYQz59V3PV4zng==",
+  "tarballSha256": "50592d52d1694615f9ccf3ca50432bb4521a97cbc93aa2c39768fa659db815b5",
+  "bundleFiles": {
+    "codex-package.json": {
+      "bytes": 205,
+      "sha256": "9f92ca466886351ee7481dab7c3e4d4144fb6dd0499990e559084b90ad4db26b"
+    },
+    "codex-path/rg": {
+      "bytes": 5408904,
+      "sha256": "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849"
+    },
+    "bin/codex": {
+      "bytes": 258638944,
+      "sha256": "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6"
+    },
+    "bin/codex-code-mode-host": {
+      "bytes": 69423168,
+      "sha256": "2a613d25c052bf570e19cdb2589857b0ba5429a2325e397e7ddba4ae36338faa"
+    },
+    "codex-resources/bwrap": {
+      "bytes": 529776,
+      "sha256": "77360cb751ccedc5971391444ac86a8a33c15b04d6b4a6fe45f5d25496e62c4c"
+    },
+    "codex-resources/zsh/bin/zsh": {
+      "bytes": 898480,
+      "sha256": "67faaaa89242c4a332e16e508a1977cffc24bf7fca31d4411cdfd101f3831ef3"
+    }
+  }
+}

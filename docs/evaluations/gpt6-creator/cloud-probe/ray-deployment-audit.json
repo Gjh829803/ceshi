@@ -1,0 +1,151 @@
+{
+  "name": "ray-cluster",
+  "namespace": "ray",
+  "headImages": [
+    "829115578968.dkr.ecr.us-east-2.amazonaws.com/ray-pipeline:active-job-index-20260903-r2",
+    "busybox:1.36"
+  ],
+  "workerGroups": [
+    {
+      "name": "driver-workers",
+      "replicas": 3,
+      "images": [
+        "829115578968.dkr.ecr.us-east-2.amazonaws.com/ray-pipeline@sha256:ee68f89610eaedc87fd70d199c43ada5235922ac02f527bd336ebf75a3b62412",
+        "busybox:1.36"
+      ],
+      "resources": [
+        {
+          "limits": {
+            "cpu": "8",
+            "memory": "32Gi"
+          },
+          "requests": {
+            "cpu": "7",
+            "memory": "28Gi"
+          }
+        },
+        {
+          "limits": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cpu-workers",
+      "replicas": 32,
+      "images": [
+        "829115578968.dkr.ecr.us-east-2.amazonaws.com/ray-pipeline@sha256:ee68f89610eaedc87fd70d199c43ada5235922ac02f527bd336ebf75a3b62412",
+        "busybox:1.36"
+      ],
+      "resources": [
+        {
+          "limits": {
+            "cpu": "8",
+            "memory": "32Gi"
+          },
+          "requests": {
+            "cpu": "7",
+            "memory": "28Gi"
+          }
+        },
+        {
+          "limits": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpu-workers",
+      "replicas": 0,
+      "images": [
+        "829115578968.dkr.ecr.us-east-2.amazonaws.com/ray-pipeline:gpu-20260509-215258"
+      ],
+      "resources": [
+        {
+          "limits": {
+            "cpu": "8",
+            "memory": "30Gi",
+            "nvidia.com/gpu": "1"
+          },
+          "requests": {
+            "cpu": "4",
+            "memory": "24Gi",
+            "nvidia.com/gpu": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "codex-short-workers",
+      "replicas": 0,
+      "images": [
+        "829115578968.dkr.ecr.us-east-2.amazonaws.com/ray-pipeline@sha256:ee68f89610eaedc87fd70d199c43ada5235922ac02f527bd336ebf75a3b62412",
+        "busybox:1.36"
+      ],
+      "resources": [
+        {
+          "limits": {
+            "cpu": "4",
+            "memory": "12Gi"
+          },
+          "requests": {
+            "cpu": "4",
+            "memory": "10Gi"
+          }
+        },
+        {
+          "limits": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        }
+      ]
+    },
+    {
+      "name": "generation-light-workers",
+      "replicas": 5,
+      "images": [
+        "829115578968.dkr.ecr.us-east-2.amazonaws.com/ray-pipeline@sha256:ee68f89610eaedc87fd70d199c43ada5235922ac02f527bd336ebf75a3b62412",
+        "busybox:1.36"
+      ],
+      "resources": [
+        {
+          "limits": {
+            "cpu": "4",
+            "memory": "16Gi"
+          },
+          "requests": {
+            "cpu": "2",
+            "memory": "8Gi"
+          }
+        },
+        {
+          "limits": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        }
+      ]
+    }
+  ]
+}
