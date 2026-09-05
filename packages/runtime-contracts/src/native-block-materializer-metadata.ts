@@ -65,6 +65,7 @@ export interface BabylonNativeBlockMaterializerColliderJoinV1 {
 
 export interface BabylonNativeBlockMaterializerMetadataV1 {
   readonly openingCamera: BabylonNativeInitialCameraV1;
+  readonly groundExploration: NativeBlockGroundExplorationV1;
   readonly kind: "babylon-native-block-materializer-metadata";
   readonly schemaVersion: 1;
   readonly nativeSceneProfileRef:
@@ -80,6 +81,90 @@ export interface BabylonNativeBlockMaterializerMetadataV1 {
     readonly BabylonNativeBlockMaterializerVisualGroupV1[];
   readonly colliderJoins:
     readonly BabylonNativeBlockMaterializerColliderJoinV1[];
+}
+
+/** Authoring intent only; the Host Ground analyzer proves actual connectivity. */
+export type NativeBlockGroundExplorationV1 =
+  | Readonly<{ mode: "case-defined" }>
+  | Readonly<{
+      mode: "source-authored";
+      requiredTargets: readonly Readonly<{
+        id: string;
+        region: "middle" | "remote";
+        standPositionMetersXYZ: readonly [number, number, number];
+      }>[];
+      requiredTraversalBands: readonly Readonly<{
+        id: string;
+        centerlineStandPositionsMetersXYZ: readonly (readonly [number, number, number])[];
+        halfWidthMeters: number;
+      }>[];
+    }>;
+
+export function parseNativeBlockGroundExplorationV1(input: unknown): NativeBlockGroundExplorationV1 {
+  assertAccessorFree(input);
+  const probe = exactRecord(input, ["mode"], ["requiredTargets", "requiredTraversalBands"], "groundExploration");
+  if (probe.mode === "case-defined") {
+    exactRecord(input, ["mode"], [], "groundExploration");
+    return Object.freeze({ mode: "case-defined" });
+  }
+  if (probe.mode !== "source-authored") fail("groundExploration/mode", "must select case-defined or source-authored");
+  exactRecord(input, ["mode", "requiredTargets", "requiredTraversalBands"], [], "groundExploration");
+  const requiredTargets = exactArray(probe.requiredTargets, "requiredTargets").map((entry, index) => {
+    const itemPath = `requiredTargets/${index}`;
+    const row = exactRecord(entry, ["id", "region", "standPositionMetersXYZ"], [], itemPath);
+    if (row.region !== "middle" && row.region !== "remote") fail(itemPath, "region must be middle or remote");
+    return Object.freeze({
+      id: stableId(row.id, `${itemPath}/id`),
+      region: row.region as "middle" | "remote",
+      standPositionMetersXYZ: tuple3(row.standPositionMetersXYZ, `${itemPath}/standPositionMetersXYZ`),
+    });
+  });
+  sortedUnique(requiredTargets.map(({ id }) => id), "requiredTargets/id");
+  if (requiredTargets.length > 256 || !requiredTargets.some(({ region }) => region === "middle") ||
+      !requiredTargets.some(({ region }) => region === "remote") ||
+      new Set(requiredTargets.map(({ standPositionMetersXYZ }) => JSON.stringify(standPositionMetersXYZ))).size !== requiredTargets.length) {
+    fail("requiredTargets", "must contain sorted unique IDs, distinct positions, and both middle and remote anchors");
+  }
+  const requiredTraversalBands = exactArray(probe.requiredTraversalBands, "requiredTraversalBands").map((entry, index) => {
+    const itemPath = `requiredTraversalBands/${index}`;
+    const row = exactRecord(entry, ["id", "centerlineStandPositionsMetersXYZ", "halfWidthMeters"], [], itemPath);
+    const points = exactArray(row.centerlineStandPositionsMetersXYZ, `${itemPath}/centerlineStandPositionsMetersXYZ`)
+      .map((point, pointIndex) => tuple3(point, `${itemPath}/centerlineStandPositionsMetersXYZ/${pointIndex}`));
+    if (points.length < 2 || points.length > 256 || points.some((point, pointIndex) => pointIndex > 0 && isEqual(point, points[pointIndex - 1]))) {
+      fail(itemPath, "must contain 2-256 distinct consecutive waypoints");
+    }
+    if (typeof row.halfWidthMeters !== "number" || !Number.isFinite(row.halfWidthMeters) || row.halfWidthMeters <= 0) fail(itemPath, "halfWidthMeters must be positive and finite");
+    return Object.freeze({
+      id: stableId(row.id, `${itemPath}/id`),
+      centerlineStandPositionsMetersXYZ: Object.freeze(points),
+      halfWidthMeters: row.halfWidthMeters as number,
+    });
+  });
+  sortedUnique(requiredTraversalBands.map(({ id }) => id), "requiredTraversalBands/id");
+  if (requiredTraversalBands.length === 0) {
+    fail("requiredTraversalBands", "must contain at least one band");
+  }
+  return Object.freeze({ mode: "source-authored", requiredTargets: Object.freeze(requiredTargets), requiredTraversalBands: Object.freeze(requiredTraversalBands) });
+}
+
+export function admitNativeBlockGroundExplorationV1(
+  input: unknown,
+  mode: NativeBlockGroundExplorationV1["mode"],
+  spawnPositionMetersXYZ: readonly [number, number, number],
+): NativeBlockGroundExplorationV1 {
+  const intent = parseNativeBlockGroundExplorationV1(input);
+  if (intent.mode !== mode) fail("groundExploration/mode", "must match the frozen Case policy");
+  if (intent.mode === "case-defined") return intent;
+  if (intent.requiredTargets.some(({ standPositionMetersXYZ }) => isEqual(standPositionMetersXYZ, spawnPositionMetersXYZ))) {
+    fail("requiredTargets", "exploration anchors must not duplicate Spawn");
+  }
+  if (!intent.requiredTraversalBands.some((band) =>
+    isEqual(band.centerlineStandPositionsMetersXYZ[0], spawnPositionMetersXYZ) &&
+    intent.requiredTargets.some((target) => target.region === "middle" &&
+      isEqual(target.standPositionMetersXYZ, band.centerlineStandPositionsMetersXYZ.at(-1))))) {
+    fail("requiredTraversalBands", "at least one band must start at exact Spawn and end at a middle anchor");
+  }
+  return intent;
 }
 
 const ERROR = "BABYLON_NATIVE_BLOCK_MATERIALIZER_METADATA_INVALID";
@@ -394,6 +479,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     "contributionHash", "profileInventoryHash", "settledVisualHash",
     "blocks", "visualGroups", "colliderJoins",
     "openingCamera",
+    "groundExploration",
   ], [], "value");
   if (
     source.kind !== "babylon-native-block-materializer-metadata" ||
@@ -486,6 +572,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
   return Object.freeze({
     kind: "babylon-native-block-materializer-metadata",
     openingCamera: parseBabylonNativeInitialCameraV1(source.openingCamera),
+    groundExploration: parseNativeBlockGroundExplorationV1(source.groundExploration),
     schemaVersion: 1,
     nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     caseHash: source.caseHash as Sha256HashV1,

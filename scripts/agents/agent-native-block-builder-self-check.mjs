@@ -5,7 +5,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
-import { admitBabylonNativeOpeningCameraV1, parseBabylonNativeInitialCameraV1, parseWorldRuntimeBootstrapV1 } from "@whitebox-world/runtime-contracts";
+import { admitBabylonNativeOpeningCameraV1, parseBabylonNativeInitialCameraV1, parseWorldRuntimeBootstrapV1, parseNativeBlockGroundExplorationV1, admitNativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
 import { parseVisualIdentityPaletteV1 } from "../scenes/visual-identity-palette.ts";
 import { typecheckNativeBuilderSource } from "./native-builder-typecheck.mjs";
 
@@ -145,7 +145,7 @@ function validateResourceRefs(value, diagnosticCodes) {
 
 function validateAuthoring(value, diagnosticCodes) {
   if (!hasExactKeys(value, [
-    "kind", "schemaVersion", "entryModulePath", "blockProfileRef", "visualGroups", "openingCamera",
+    "kind", "schemaVersion", "entryModulePath", "blockProfileRef", "visualGroups", "openingCamera", "groundExploration",
   ]) ||
       value.kind !== "native-block-authoring" || value.schemaVersion !== 1 ||
       value.entryModulePath !== "scene.ts" ||
@@ -155,6 +155,8 @@ function validateAuthoring(value, diagnosticCodes) {
     return;
   }
   try { parseBabylonNativeInitialCameraV1(value.openingCamera); }
+  catch { diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"); }
+  try { parseNativeBlockGroundExplorationV1(value.groundExploration); }
   catch { diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"); }
   let rowsAreValid = true;
   let hasSubjectVisualGroup = false;
@@ -411,6 +413,14 @@ export async function selfCheckNativeBlockBuilderWorkspace(
       sceneBriefBytes !== undefined &&
       authoringValue !== undefined
     ) {
+      try {
+        const spawn = caseValue.expected.spawnSupport.expectedPositionXYZMeters;
+        admitNativeBlockGroundExplorationV1(authoringValue.groundExploration,
+          caseValue.expected.groundConnectivity.mode,
+          [spawn.xMeters, spawn.yMeters, spawn.zMeters]);
+      } catch {
+        diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+      }
       validateVisualIdentityBinding(
         caseValue,
         paletteValue,

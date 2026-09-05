@@ -295,7 +295,7 @@ async function fixture(): Promise<Readonly<{
         role: "ground",
         requiresOverlay: true,
       }],
-      groundConnectivity: {
+      groundConnectivity: { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef: OPENING_TARGET,

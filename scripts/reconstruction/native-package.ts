@@ -23,6 +23,7 @@ import {
 import {
   hashBabylonNativeSceneBootstrapV1,
   admitBabylonNativeOpeningCameraV1,
+  admitNativeBlockGroundExplorationV1,
   parseBabylonNativeSceneBootstrapV1,
   parseWorldRuntimeBootstrapV1,
   worldResourceLockEntriesV1,
@@ -1036,6 +1037,14 @@ export async function packageNativeBlockAttemptV1(
   } catch (error) {
     return fail("native-block-opening-camera-invalid", error);
   }
+  try {
+    const spawn = reconstructionCase.expected.spawnSupport.expectedPositionXYZMeters;
+    admitNativeBlockGroundExplorationV1(authoringManifest.groundExploration,
+      reconstructionCase.expected.groundConnectivity.mode,
+      [spawn.xMeters, spawn.yMeters, spawn.zMeters]);
+  } catch (error) {
+    return fail("native-block-ground-exploration-invalid", error);
+  }
   if (
     blockProfile.resourceRef !== BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1 ||
     authoringManifest.blockProfileRef !== blockProfile.resourceRef ||
@@ -1266,6 +1275,7 @@ export async function packageNativeBlockAttemptV1(
     const groundModelEvidenceRef =
       `artifact://world-reconstruction-case/${reconstructionCase.id}/${attempt.id}/logical-ground-model.json`;
     const analyzedGround = analyzeProductionNativeBlockGroundV1({
+      groundExploration: materializerMetadata.groundExploration,
       openingCamera: verified.nativeBlockMaterializerMetadata!.openingCamera,
       reconstructionCase,
       worldRuntimeBootstrap: verified.worldRuntimeBootstrap,

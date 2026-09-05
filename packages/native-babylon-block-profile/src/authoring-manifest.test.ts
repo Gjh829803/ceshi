@@ -19,6 +19,7 @@ const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 function manifestValue() {
   return {
     kind: "native-block-authoring",
+    groundExploration: { mode: "case-defined" as const },
     openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     entryModulePath: "scene.ts",
@@ -146,7 +147,7 @@ function reconstructionCaseValue() {
         role: "step",
         requiresOverlay: true,
       }],
-      groundConnectivity: {
+      groundConnectivity: { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef:
@@ -364,6 +365,7 @@ describe("Native Block authoring manifest", () => {
     ["extra top-level field", { ...manifestValue(), camera: { mode: "third-person" } }],
     ["missing entry module", {
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -425,6 +427,31 @@ describe("Native Block authoring manifest", () => {
 });
 
 describe("Native Block authoring to checked Layout binding", () => {
+  it("binds source-authored exploration identity and cannot override a case-defined route", () => {
+    const base = bindingInput();
+    const spawn = base.reconstructionCase.expected.spawnSupport.expectedPositionXYZMeters;
+    const groundExploration = { mode: "source-authored", requiredTargets: [
+      { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
+      { id: "remote-garden", region: "remote", standPositionMetersXYZ: [8, 0, -5] },
+    ], requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1,
+      centerlineStandPositionsMetersXYZ: [[spawn.xMeters, spawn.yMeters, spawn.zMeters], [4, 0, 0], [4, 0, -3]] }] };
+    const authoringManifest = parseNativeBlockAuthoringManifestV1({ ...manifestValue(), groundExploration });
+    const authoringManifestHash = hashNativeBlockAuthoringManifestV1(authoringManifest);
+    expect(authoringManifestHash).not.toBe(base.authoringManifestHash);
+    const reconstructionCase = parseWorldReconstructionCaseV1({
+      ...base.reconstructionCase, expected: { ...base.reconstructionCase.expected,
+        groundConnectivity: { mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [] } },
+    });
+    const input = { ...base, authoringManifest, authoringManifestHash, reconstructionCase };
+    const bound = bindNativeBlockAuthoringManifestToCheckedLayoutV1(input);
+    expect(bound.groundExploration).toEqual(groundExploration);
+    expect(bound.authoringManifestHash).toBe(authoringManifestHash);
+    expect(() => bindNativeBlockAuthoringManifestToCheckedLayoutV1({ ...input,
+      reconstructionCase: base.reconstructionCase })).toThrow();
+    expect(() => bindNativeBlockAuthoringManifestToCheckedLayoutV1({ ...input,
+      authoringManifestHash: base.authoringManifestHash })).toThrow(/identity is stale/);
+  });
+
   it("binds every Case target to exactly one checked visual group without Mesh discovery", () => {
     const result = bindNativeBlockAuthoringManifestToCheckedLayoutV1(bindingInput());
 

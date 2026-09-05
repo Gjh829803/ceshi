@@ -21,7 +21,7 @@ JSON/Case/Scene Brief owns identity, intent, Subject, Spawn target, budgets, and
 
 scene.ts owns Babylon Native Block visual construction and explicit registration calls only.
 
-The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation. The sidecar owns only the closed openingCamera numeric intent described below; scene.ts cannot create or operate a Camera.
+The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation. The sidecar owns only the closed openingCamera numeric intent and groundExploration validation intent described below; scene.ts cannot create or operate a Camera or Runtime route.
 
 The Formal Capture Intent remains Capture-only Host input and is not part of the generation context or any Builder output. Do not predict `sourceBoundsMeters` or `planeMeters`; after Package verification, the Host resolves those values from checked visual-group bounds or exact frozen Collider geometry.
 
@@ -49,6 +49,39 @@ These PNGs are temporary task feedback, not a fourth Scene Source, geometry mani
 The top-down comparison is exactly `1544x768`; the entry comparison is exactly `1928x540`. Their encoded bytes count together with the three Native Source outputs against `budgets.maximumOutputBytes`.
 
 ## Reconstruction method
+
+### Ground exploration ownership
+
+Read `context/case.json.expected.groundConnectivity.mode` first. Write required
+`groundExploration` in the existing `native-block-authoring.json` using that exact
+mode; it is pure validation intent, not a new Source, Route/Nav product, visible
+object, Collider, success report or executable behavior.
+
+For `source-authored`, choose metric anchors from the Brief's actual exploration
+regions while constructing the world. Declare at least one `middle` and one
+`remote` required target at distinct real stand positions, neither equal to Spawn.
+Use stable sorted unique IDs. Declare ordered `requiredTraversalBands` with honest
+`halfWidthMeters`, preserving actual bends and elevations. At least one band starts
+at the exact registered Spawn and ends at a middle anchor. Add bands for Brief-required
+bridges, corridors, staircase courses, narrow saddles and other restricted connections.
+The current admitted ground graph is bidirectional; do not add one-way fields.
+There are no minimum meter spans or chunk counts: do not add empty ground, stretch
+a road or erase a planned region to influence those measurements. Never invent a
+path in open scenery or widen a band to admit a distant detour. A failed anchor or
+band means repairing the real support/clearance/course, not moving the validation
+point to hide missing ground. These invisible anchors do not need visual groups.
+
+For `case-defined`, write exactly `groundExploration: { "mode": "case-defined" }`.
+The frozen Case owns its metric bands and scripted constraints; do not duplicate
+or override them in the sidecar. The fixed-waypoint/fixed-input instructions below
+apply to this mode. For `source-authored`, Ground consumes the authored anchors and
+bands instead; the remaining generic fixed-input Capture template is strict
+diagnostic only and must not force a straight replacement for the Brief's geography.
+Both modes keep the Case's single-component policy and exact registered Spawn.
+Only the existing Host Ground analyzer proves support and connectivity; the task
+self-check checks syntax and the Spawn/middle/remote policy join, not geometry.
+
+### Construction priorities
 
 Before authoring, make one internal construction-and-budget inventory from the complete Brief,
 uploaded reference and both planning views. Include important non-target scenery as well as the
@@ -91,10 +124,10 @@ and geography. This does not relax overlap, explicit Collider, support, lattice 
 8. Select every static collider explicitly during Block Profile finalization. Include the Spawn support, continuous playable corridor, required Case IDs, and necessary blocker walls, but do not register every visual Block. Keep the final selection below the frozen Generation Request Collider budget. Never infer collision from mesh names, tags, materials, or a later scene scan.
    Preserve the validated block-world solid-landmark behavior at this explicit authoring boundary: every non-Subject semantic target represented with `paletteRole: "structure"` is a solid world landmark. Put every solid Block of that target in one stable `colliderGroupId`, and bind that complete group to the target's required `role: "blocker"` Case Collider using exactly `{ kind: "not-traversable" }` and `exposedEdgePolicy: "none"`. A doorway remains passable by leaving its opening empty, not by making the surrounding pillars visual-only. If a mass is intentionally non-colliding or unreachable scenery, classify it as `background-mass` or another honest visual-only role instead of `structure`. This rule produces an explicit Frozen Contribution; it never authorizes the Host or Runtime to infer physics from palette color.
    For every `static-surface` selection, explicitly write `exposedEdgePolicy: "protect-ground-subject"` by default. Use `"none"` only when the Scene Brief or visible reference explicitly requires an intentional fall from every exposed edge owned by that selection. If one playable area contains both protected edges and an intentional drop, partition it into honest Collider Groups instead of disabling protection for the whole floor. This is a Builder authoring default, not a parser fallback: `exposedEdgePolicy` remains a required exact field, and the Host must preserve the authored value.
-   `context/case.json.expected.groundConnectivity` is frozen Host intent, not Builder-owned policy. For a ground Spawn, make every declared traversal-band waypoint a real stand position and keep each consecutive segment traversable inside its honest `halfWidthMeters`. Current ground surfaces are bidirectional by construction; do not add an `isBidirectional` or one-way field. At least one band begins at the exact registered Spawn support position, and bands form a one-to-one binding with ground pass targets by `acceptanceTargetRef`. When `requireSingleReachableComponent` is `true`, every explicitly contributed standable floor must belong to the Spawn-reachable component; do not hide a disconnected island by relabeling it visual-only or blocker. Do not move, widen, omit, duplicate, or invent bands to make the checker pass. For an air Spawn, an empty band list and `false` single-component policy make ground analysis measurement-only; they do not authorize claiming flight/water reachability from the current ground-only Traversal Envelope.
+   `context/case.json.expected.groundConnectivity` is frozen Host intent, not Builder-owned policy. For a `case-defined` ground Spawn, make every declared traversal-band waypoint a real stand position and keep each consecutive segment traversable inside its honest `halfWidthMeters`. Current ground surfaces are bidirectional by construction; do not add an `isBidirectional` or one-way field. At least one band begins at the exact registered Spawn support position, and bands form a one-to-one binding with ground pass targets by `acceptanceTargetRef`. When `requireSingleReachableComponent` is `true`, every explicitly contributed standable floor must belong to the Spawn-reachable component; do not hide a disconnected island by relabeling it visual-only or blocker. Do not move, widen, omit, duplicate, or invent bands to make the checker pass. For an air Spawn, an empty band list and `false` single-component policy make ground analysis measurement-only; they do not authorize claiming flight/water reachability from the current ground-only Traversal Envelope.
    The checker samples the final smoothed collision triangles, not only raw Block tops. Put the exact Spawn, every pass target, and every declared band waypoint on a flat landing with full Capsule-footprint support plus at least one surrounding Profile microcell at the same top height; place stair and slope transitions outside that landing. If smoothing changes the final triangle height at a frozen point, repair the nearby explicit surface Blocks—never move the point or relax the threshold.
    Preserve the old block-world ability to cross an intended walkable rise of up to one meter by authoring it through the current Profile contract, not by restoring the old one-meter smoothing constant. Decompose the total rise into four or fewer face-connected, visibly supported `0.25m` tread transitions with flat endpoint landings. The trusted topology may smooth each quarter-meter join, while Ground Analysis still validates the resulting surface against the Subject's `0.3m` step and `42°` slope authorities. Never join two walkable levels `0.5m`–`1m` apart directly and assume smoothing will make them traversable.
-   Every scripted fixed-input check must remain supported for its complete declared approach unless the Case explicitly expects a ledge departure. Before placing its geometry, read the exact actions, axes, and Tick count from `context/case.json`, then resolve the controlled Subject's forward direction, walk/run speeds, acceleration, Capsule, step, and slope limits from `inputs/world-runtime-bootstrap.json`. The formal Runtime advances at exactly 60 fixed Ticks per second. Treat `speed * ticks / 60` only as a theoretical flat-ground ceiling: leave material reserve for acceleration, stairs, slopes, support contacts, and Capsule entry into the Host-resolved checkpoint bounds. A pass check's `acceptanceTargetRef` must bind a declared ground/step Collider and must enter its final checkpoint before the last Tick using only its declared inputs; if the sequence has no turn, lateral, jump, or run action, the route must not require one. A block check's `acceptanceTargetRef` must bind a declared blocker Collider, and the supported approach must let the Capsule reach that blocker; falling from a visual-only platform edge is not evidence that the blocker works.
+   In `case-defined` mode every scripted fixed-input check must remain supported for its complete declared approach unless the Case explicitly expects a ledge departure. Before placing its geometry, read the exact actions, axes, and Tick count from `context/case.json`, then resolve the controlled Subject's forward direction, walk/run speeds, acceleration, Capsule, step, and slope limits from `inputs/world-runtime-bootstrap.json`. The formal Runtime advances at exactly 60 fixed Ticks per second. Treat `speed * ticks / 60` only as a theoretical flat-ground ceiling: leave material reserve for acceleration, stairs, slopes, support contacts, and Capsule entry into the Host-resolved checkpoint bounds. A pass check's `acceptanceTargetRef` must bind a declared ground/step Collider and must enter its final checkpoint before the last Tick using only its declared inputs; if the sequence has no turn, lateral, jump, or run action, the route must not require one. A block check's `acceptanceTargetRef` must bind a declared blocker Collider, and the supported approach must let the Capsule reach that blocker; falling from a visual-only platform edge is not evidence that the blocker works.
 9. Ground-connectivity and fixed-input checks are structural admission evidence, not a Route/Nav product claim. Static traversal intent is only an explicit collider contribution where admitted; do not emit product Route, NavMesh, `goTo`, or reachability evidence.
 
 ## Mandatory visual feedback

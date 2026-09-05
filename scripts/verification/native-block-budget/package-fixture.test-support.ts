@@ -71,6 +71,7 @@ export async function prepareBudgetRuntimeFixture(blockCount: number) {
       profileInventoryHash: evidence.profileInventoryHash, contribution,
       authoringLayoutBinding: {
         kind: "native-block-authoring-layout-binding", schemaVersion: 1,
+        groundExploration: { mode: "case-defined" as const },
         openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
         caseHash: fixtureIdentity, authoringManifestHash: fixtureIdentity,
         checkedLayoutInventoryHash, contributionHash: hashBabylonNativeSceneContributionV1(contribution),

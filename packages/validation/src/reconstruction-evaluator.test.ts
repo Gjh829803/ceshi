@@ -96,7 +96,7 @@ const caseValue = () => ({
       { acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF, contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground" as const, requiresOverlay: true },
       { acceptanceTargetRef: WEST_GATE_BLOCKER_TARGET_REF, contributionId: "west-wall-contribution", colliderId: "west-wall", role: "blocker" as const, requiresOverlay: true },
     ],
-    groundConnectivity: {
+    groundConnectivity: { mode: "case-defined" as const,
       requireSingleReachableComponent: true,
       requiredTraversalBands: [{
         acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,

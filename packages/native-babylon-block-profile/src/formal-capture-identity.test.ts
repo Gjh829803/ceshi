@@ -174,7 +174,7 @@ function caseValue() {
         role: "step",
         requiresOverlay: true,
       }],
-      groundConnectivity: {
+      groundConnectivity: { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef:
@@ -215,6 +215,7 @@ function caseValue() {
 function authoringManifestValue() {
   return {
     kind: "native-block-authoring",
+    groundExploration: { mode: "case-defined" as const },
     openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     entryModulePath: "scene.ts",
@@ -477,6 +478,7 @@ function bindInput(overrides: Record<string, unknown> = {}) {
   const materializerMetadata =
     parseBabylonNativeBlockMaterializerMetadataV1({
       kind: "babylon-native-block-materializer-metadata",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       nativeSceneProfileRef:

@@ -122,6 +122,7 @@ export default defineBabylonNativeScene({
 `.trimStart()),
     writeFile(path.join(workspace, "native-block-authoring.json"), `${JSON.stringify({
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -147,6 +148,8 @@ export default defineBabylonNativeScene({
       id: "valid-native-block-world",
       sceneBriefHash: `sha256:${"a".repeat(64)}`,
       expected: {
+        groundConnectivity: { mode: "case-defined" },
+        spawnSupport: { expectedPositionXYZMeters: { xMeters: 0, yMeters: 0, zMeters: 0 } },
         semanticSilhouetteTargets: [{
           acceptanceTargetRef:
             "worldkit://acceptance-target/central-gate@1",
@@ -403,6 +406,36 @@ afterEach(async () => {
 
 // This suite now runs a real semantic compiler (often twice per repair fixture).
 describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
+  it("checks source-authored exploration with the same Host parser and no fixed corridor", async () => {
+    const workspace = await createWorkspace();
+    const casePath = path.join(workspace, "context/case.json");
+    const sourceCase = JSON.parse(await readFile(casePath, "utf8"));
+    sourceCase.expected.groundConnectivity = {
+      mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [],
+    };
+    await writeFile(casePath, JSON.stringify(sourceCase));
+    const manifestPath = path.join(workspace, "native-block-authoring.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    // The old frozen-case declaration cannot bypass new source-authored intent.
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: false,
+      diagnosticCodes: expect.arrayContaining(["NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"]) });
+    manifest.groundExploration = {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [8, 0, -5] },
+      ],
+      requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 0], [4, 0, 0], [4, 0, -3]] }],
+    };
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: true, diagnosticCodes: [] });
+    manifest.groundExploration.requiredTargets.pop();
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    expect((await runSelfCheck(workspace)).report).toMatchObject({ ok: false,
+      diagnosticCodes: expect.arrayContaining(["NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"]) });
+  });
+
   it("states the closed outputs and keeps all product authorities with the Host", async () => {
     const [agentsRules, skill, outputContract, nativeDesign] = await Promise.all([
       readFile(path.resolve("AGENTS.md"), "utf8"),
@@ -1230,6 +1263,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
   it.each([
     ["authoring top-level field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -1245,6 +1279,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID"],
     ["visual-group authority field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -1259,6 +1294,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"],
     ["controlled Subject semantic class", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -1272,6 +1308,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_SUBJECT_VISUAL_GROUP_FORBIDDEN"],
     ["unsorted visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -1290,6 +1327,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_UNSORTED"],
     ["duplicate visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -1308,6 +1346,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE"],
     ["forbidden nested gameplay field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -1327,6 +1366,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const workspace = await createWorkspace();
     await writeFile(path.join(workspace, "native-block-authoring.json"), JSON.stringify({
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
@@ -1360,7 +1400,10 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const caseValue = {
       id: "valid-native-block-world",
       sceneBriefHash: sha256Bytes(Buffer.from(brief)),
-      expected: { semanticSilhouetteTargets: [{
+      expected: {
+        groundConnectivity: { mode: "case-defined" },
+        spawnSupport: { expectedPositionXYZMeters: { xMeters: 0, yMeters: 0, zMeters: 0 } },
+        semanticSilhouetteTargets: [{
         acceptanceTargetRef:
           "worldkit://acceptance-target/visual-target-3@1",
         visualGroupId: "moon-group",
@@ -1381,6 +1424,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     };
     const authoring = (identityColorHex: string) => ({
       kind: "native-block-authoring",
+      groundExploration: { mode: "case-defined" as const },
       openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",

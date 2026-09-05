@@ -14,6 +14,8 @@ import {
 } from "@whitebox-world/protocol";
 import {
   worldResourceLockEntriesV1,
+  admitNativeBlockGroundExplorationV1,
+  type NativeBlockGroundExplorationV1,
   type BabylonNativeInitialCameraV1,
   type BabylonNativeSceneContributionV1,
   type WorldResourceLockEntryV1,
@@ -47,6 +49,7 @@ const MAXIMUM_SUPPORT_TOP_CELLS_PER_BLOCK = 4;
 const TOPOLOGY_CAPABILITY_EPSILON = 1e-8;
 
 export interface AnalyzeProductionNativeBlockGroundInputV1 {
+  readonly groundExploration: NativeBlockGroundExplorationV1;
   readonly openingCamera: BabylonNativeInitialCameraV1;
   readonly reconstructionCase: WorldReconstructionCaseV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
@@ -306,6 +309,10 @@ function createGroundCaseIntentV1(
       });
     })
     .sort((left, right) => stableCompare(left.id, right.id));
+  const exploration = admitNativeBlockGroundExplorationV1(
+    input.groundExploration, expected.groundConnectivity.mode, spawnDesired,
+  );
+  const groundAcceptanceTargetRef = expected.topology.acceptanceTargetRef;
   const normalizedYaw = ((Math.round(spawn.facingRadians / (Math.PI / 2)) % 4) + 4) % 4;
   return Object.freeze({
     kind: "babylon-native-block-ground-case-intent",
@@ -325,8 +332,18 @@ function createGroundCaseIntentV1(
       openingYawQuarterTurnsY: normalizedYaw as 0 | 1 | 2 | 3,
       openingFovDegrees: input.openingCamera.fovDegrees,
     }),
-    requiredTargets: Object.freeze(requiredTargets),
-    requiredTraversalBands: Object.freeze(
+    requiredTargets: exploration.mode === "source-authored"
+      ? Object.freeze(exploration.requiredTargets.map((target) => Object.freeze({
+          id: target.id,
+          acceptanceTargetRef: groundAcceptanceTargetRef,
+          standPositionMetersXYZ: target.standPositionMetersXYZ,
+        })))
+      : Object.freeze(requiredTargets),
+    requiredTraversalBands: exploration.mode === "source-authored"
+      ? Object.freeze(exploration.requiredTraversalBands.map((band) => Object.freeze({
+          ...band, acceptanceTargetRef: groundAcceptanceTargetRef,
+        })))
+      : Object.freeze(
       expected.groundConnectivity.requiredTraversalBands.map((band) =>
         Object.freeze({
           id: band.id,

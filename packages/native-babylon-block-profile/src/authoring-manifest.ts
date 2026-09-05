@@ -1,7 +1,13 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
-import { parseBabylonNativeInitialCameraV1, type BabylonNativeInitialCameraV1 } from "@whitebox-world/runtime-contracts";
+import {
+  admitNativeBlockGroundExplorationV1,
+  parseBabylonNativeInitialCameraV1,
+  parseNativeBlockGroundExplorationV1,
+  type BabylonNativeInitialCameraV1,
+  type NativeBlockGroundExplorationV1,
+} from "@whitebox-world/runtime-contracts";
 import {
   hashWorldReconstructionCaseV1,
   parseWorldReconstructionCaseV1,
@@ -37,6 +43,7 @@ export interface NativeBlockAuthoringManifestV1 {
     typeof BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1;
   readonly visualGroups: readonly NativeBlockAuthoringVisualGroupV1[];
   readonly openingCamera: BabylonNativeInitialCameraV1;
+  readonly groundExploration: NativeBlockGroundExplorationV1;
 }
 
 export interface NativeBlockVisualResourceListV1 {
@@ -47,6 +54,7 @@ export interface NativeBlockVisualResourceListV1 {
 
 export interface NativeBlockAuthoringLayoutBindingV1 {
   readonly openingCamera: BabylonNativeInitialCameraV1;
+  readonly groundExploration: NativeBlockGroundExplorationV1;
   readonly kind: "native-block-authoring-layout-binding";
   readonly schemaVersion: 1;
   readonly caseHash: Sha256HashV1;
@@ -238,6 +246,7 @@ export function parseNativeBlockAuthoringManifestV1(
     "blockProfileRef",
     "visualGroups",
     "openingCamera",
+    "groundExploration",
   ], code, "manifest");
   const { openingCamera: cameraIntent, ...declarations } = source;
   if (containsAuthorityField(declarations)) {
@@ -308,6 +317,7 @@ export function parseNativeBlockAuthoringManifestV1(
     entryModulePath: "scene.ts",
     blockProfileRef: BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
     openingCamera,
+    groundExploration: parseNativeBlockGroundExplorationV1(source.groundExploration),
     visualGroups: Object.freeze(visualGroups),
   });
 }
@@ -470,6 +480,12 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   }
   const semanticTargetRefs = reconstructionCase.expected.semanticSilhouetteTargets
     .map(({ acceptanceTargetRef }) => acceptanceTargetRef);
+  const expectedSpawn = reconstructionCase.expected.spawnSupport.expectedPositionXYZMeters;
+  const groundExploration = admitNativeBlockGroundExplorationV1(
+    authoringManifest.groundExploration,
+    reconstructionCase.expected.groundConnectivity.mode,
+    [expectedSpawn.xMeters, expectedSpawn.yMeters, expectedSpawn.zMeters],
+  );
   const caseHash = hashWorldReconstructionCaseV1(
     reconstructionCase,
   ) as Sha256HashV1;
@@ -566,6 +582,7 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
   return Object.freeze({
     kind: "native-block-authoring-layout-binding",
     openingCamera: authoringManifest.openingCamera,
+    groundExploration,
     schemaVersion: 1,
     caseHash,
     authoringManifestHash,

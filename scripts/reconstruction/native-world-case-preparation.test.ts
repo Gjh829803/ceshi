@@ -484,9 +484,10 @@ describe("trusted Native world Case preparation", () => {
     );
     expect(reconstructionCase.expected.criticalTraversalChecks[0]?.id)
       .toBe("entry-to-remote-ground-pass");
-    expect(reconstructionCase.expected.groundConnectivity
-      .requiredTraversalBands[0]?.centerlineStandPositionsXYZMeters.at(-1))
-      .toEqual({ xMeters: 0, yMeters: 0, zMeters: -12 });
+    expect(reconstructionCase.expected.groundConnectivity).toEqual({
+      mode: "source-authored", requireSingleReachableComponent: true,
+      requiredTraversalBands: [],
+    });
     expect(evaluationProfile.thresholds.semanticSilhouetteTargets).toEqual([
       {
         acceptanceTargetRef:

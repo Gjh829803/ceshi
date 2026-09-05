@@ -1011,7 +1011,6 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
   }
   const ids = new Set<string>();
   const positions = new Set<string>();
-  const targetRefs = new Set<string>();
   for (const [index, target] of input.caseIntent.requiredTargets.entries()) {
     requireRecord(target, `requiredTargets[${index}]`);
     requireClosedKeys(target, [
@@ -1027,17 +1026,17 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
       `requiredTargets[${index}].standPositionMetersXYZ`,
     );
     const key = positionKey(target.standPositionMetersXYZ);
-    if (ids.has(target.id) || positions.has(key) ||
-      targetRefs.has(target.acceptanceTargetRef)) {
+    // Several invisible exploration anchors may diagnose one Case ground
+    // obligation. Their local IDs and positions, not a new visual identity,
+    // distinguish them. Case-defined band/ref bijections are checked by Case.
+    if (ids.has(target.id) || positions.has(key)) {
       return fail(INPUT_CODE,
-        "required target IDs, acceptance refs and positions must be unique");
+        "required target IDs and positions must be unique");
     }
     ids.add(target.id);
     positions.add(key);
-    targetRefs.add(target.acceptanceTargetRef);
   }
   const bandIds = new Set<string>();
-  const bandTargetRefs = new Set<string>();
   for (const [index, band] of input.caseIntent.requiredTraversalBands.entries()) {
     requireRecord(band, `requiredTraversalBands[${index}]`);
     requireClosedKeys(band, [
@@ -1057,13 +1056,11 @@ function verifyInput(input: AnalyzeBabylonNativeBlockGroundInputV1): void {
       `requiredTraversalBands[${index}].halfWidthMeters`);
     if (
       bandIds.has(band.id) ||
-      bandTargetRefs.has(band.acceptanceTargetRef) ||
       band.halfWidthMeters <= 0 ||
       band.centerlineStandPositionsMetersXYZ.length < 2 ||
       band.centerlineStandPositionsMetersXYZ.length > 256
     ) return fail(INPUT_CODE, "traversal bands must be unique and non-empty");
     bandIds.add(band.id);
-    bandTargetRefs.add(band.acceptanceTargetRef);
     band.centerlineStandPositionsMetersXYZ.forEach((position, positionIndex) => {
       requireStandPosition(
         position,

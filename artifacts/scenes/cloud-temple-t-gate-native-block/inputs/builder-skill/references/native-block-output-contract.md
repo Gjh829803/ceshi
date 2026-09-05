@@ -11,7 +11,7 @@ Reference inputs have stable semantic filenames. Read `world-plan.png` for compl
 Write only:
 
 1. `scene.ts`: the Babylon Native Scene Module.
-2. `native-block-authoring.json`: entry-module, semantic visual-group declarations, and closed openingCamera numeric intent only.
+2. `native-block-authoring.json`: entry-module, semantic visual-group declarations, closed openingCamera numeric intent and groundExploration validation intent only.
 3. `native-resources.json`: the closed, currently asset-free Native visual resource list.
 
 Those remain the only Native Source files. The task-level files
@@ -138,7 +138,7 @@ The Profile deterministically reports the number of edge-adjacent `route`-palett
 
 When two intended walkable levels differ by at most one meter, preserve the old block-world user-visible continuity by expressing that rise with the current Profile: use four or fewer face-connected, visibly supported `0.25m` tread transitions and flat endpoint landings. Do not restore or assume a fixed one-meter auto-smoothing threshold. The current topology may smooth each quarter-meter join, and Ground Analysis must still accept the final surface under the Subject-owned `0.3m` step and `42°` slope limits. A direct `0.5m`–`1m` high/low join is a discontinuity, not a shortcut.
 
-`context/case.json.expected.groundConnectivity` is the source-neutral, frozen Host constraint for ground admission. It is not a field in either Native output. For every declared `requiredTraversalBand`, build actual contributed support beneath each `centerlineStandPositionsXYZMeters` waypoint and a connected course between consecutive waypoints inside the declared `halfWidthMeters`. Current ground surfaces and the checked graph are bidirectional by construction; `isBidirectional` and one-way fields are invalid, and directed transitions remain owned by `WRC-EVT-1`. At least one ground band begins at the exact registered Spawn support position, and bands form a one-to-one binding with ground pass targets by `acceptanceTargetRef`. The analyzer evaluates that exact Spawn and each band endpoint; it never snaps either to a nearby Block or visual-group center. When `requireSingleReachableComponent` is `true`, all explicitly contributed standable support belongs to one Spawn-reachable component. Never move, widen, delete, replace, duplicate, or invent a band, and never relabel unreachable intended ground as visual-only or blocker to evade the check.
+`context/case.json.expected.groundConnectivity` is the source-neutral, frozen Host constraint for ground admission. It is not duplicated in either Native output. The rest of this paragraph describes `case-defined` metric bands; for `source-authored`, use the required groundExploration contract below. For every declared `requiredTraversalBand`, build actual contributed support beneath each `centerlineStandPositionsXYZMeters` waypoint and a connected course between consecutive waypoints inside the declared `halfWidthMeters`. Current ground surfaces and the checked graph are bidirectional by construction; `isBidirectional` and one-way fields are invalid, and directed transitions remain owned by `WRC-EVT-1`. At least one ground band begins at the exact registered Spawn support position, and bands form a one-to-one binding with ground pass targets by `acceptanceTargetRef`. The analyzer evaluates that exact Spawn and each band endpoint; it never snaps either to a nearby Block or visual-group center. When `requireSingleReachableComponent` is `true`, all explicitly contributed standable support belongs to one Spawn-reachable component. Never move, widen, delete, replace, duplicate, or invent a band, and never relabel unreachable intended ground as visual-only or blocker to evade the check.
 
 Ground Analysis samples the final smoothed collision triangles at the exact Spawn, pass targets, and every band waypoint. Give each frozen point a flat landing with full Capsule-footprint support plus at least one surrounding `0.5m` Profile microcell at the same top height, and place stairs/slopes outside that landing. A raw Block top is insufficient when neighboring-height smoothing changes the triangle height at the exact point. Repair the local explicit surface Blocks; never move the frozen point or relax the trusted tolerance.
 
@@ -150,9 +150,9 @@ Each `staticColliders` row uses the exact required fields `id`, `colliderGeometr
 
 `traversalBinding` is one exact discriminated union. A blocker is exactly `{ kind: "not-traversable" }` and has no `surfaceEntityId`, `logicalSubshapeId`, or `traversalSurfaceProfileRef`. A walkable selection is exactly `{ kind: "static-surface", surfaceEntityId, logicalSubshapeId, traversalSurfaceProfileRef }`. Never mix fields from the two branches.
 
-Scripted traversal is a metric authoring constraint, not a promise that the Host will adapt the test to the generated layout. Read every check's exact fixed-input segments from `context/case.json` and the controlled Subject descriptor selected by `initialControlledEntityId` from `inputs/world-runtime-bootstrap.json`. The formal Runtime uses 60 fixed Ticks per second. For each segment, its declared action set selects walk or run speed; missing turn, lateral, jump, or run actions cannot be invented. Compute the flat-ground travel ceiling from the declared Tick count and selected speed, then shorten the authored route enough to absorb acceleration, elevation, contact, and Capsule-entry costs. A pass target's Host-resolved bounds must begin inside that conservative envelope along the declared movement axis. Keep the complete approach continuously supported by explicit Collider rows. For a blocker check, place the Collider face beyond the Spawn but inside the input envelope so the Capsule can actually reach and stop at it.
+In `case-defined` mode, scripted traversal is a metric authoring constraint, not a promise that the Host will adapt the test to the generated layout. Read every check's exact fixed-input segments from `context/case.json` and the controlled Subject descriptor selected by `initialControlledEntityId` from `inputs/world-runtime-bootstrap.json`. The formal Runtime uses 60 fixed Ticks per second. For each segment, its declared action set selects walk or run speed; missing turn, lateral, jump, or run actions cannot be invented. Compute the flat-ground travel ceiling from the declared Tick count and selected speed, then shorten the authored route enough to absorb acceleration, elevation, contact, and Capsule-entry costs. A pass target's Host-resolved bounds must begin inside that conservative envelope along the declared movement axis. Keep the complete approach continuously supported by explicit Collider rows. For a blocker check, place the Collider face beyond the Spawn but inside the input envelope so the Capsule can actually reach and stop at it.
 
-The Case-bound Formal Capture Intent is Capture-only Host input, not generation context and not a Builder output. Do not predict or write `sourceBoundsMeters` or `planeMeters`. The trusted Host resolves reach/pass criteria from verified visual-group bounds and resolves block planes from exact frozen Collider geometry after the collider-to-Block-to-visual-group join closes.
+The Case-bound Formal Capture Intent is Capture-only Host input, not generation context and not a Builder output. Do not predict or write `sourceBoundsMeters` or `planeMeters`. The trusted Host preserves exact frozen reach-position endpoints, resolves pass planes from checked group bounds, and resolves block planes from exact frozen Collider geometry after the collider-to-Block-to-visual-group join closes.
 
 Use deterministic seeded construction. Iterate arrays in explicit stable order, sort semantic inventories before emission, and use `context.random` for any allowed variation. Do not call `Math.random`, `Date.now`, timers, locale-sensitive sort, or remote services.
 
@@ -173,6 +173,42 @@ Formal opening depth order is measured from the center of each declared visual g
 For an Opening repair, treat the target's four projected region edges, projected anchor and depth order as one coupled constraint envelope. Group all diagnostics for the same `targetId`, compare the complete frozen expectation with the complete prior `opening-observation.json`, and preserve axes already within tolerance. Values clipped at `0` or `10000` identify geometry extending beyond the frame rather than a harmless exact edge. Correct vertical clipping with a coordinated near-camera footprint/depth and height change; do not merely move the crown and trade the opposite edge or anchor into failure. Widening at a substantially nearer depth can also move the vertical projection and anchor, so add mass at comparable depth and height unless the frozen target requires a depth change.
 
 ## Semantic JSON
+
+Required `groundExploration` follows `context/case.json.expected.groundConnectivity.mode`.
+For `case-defined`, it is exactly `{ "mode": "case-defined" }`; the frozen Case's
+metric bands and scripted traversal instructions apply unchanged. For `source-authored`,
+the exact shape is:
+
+```json
+{
+  "mode": "source-authored",
+  "requiredTargets": [
+    { "id": "middle-court", "region": "middle", "standPositionMetersXYZ": [4, 0, -3] },
+    { "id": "remote-garden", "region": "remote", "standPositionMetersXYZ": [8, 0, -5] }
+  ],
+  "requiredTraversalBands": [
+    { "id": "entry-court", "centerlineStandPositionsMetersXYZ": [[0, 0, 0], [4, 0, 0], [4, 0, -3]], "halfWidthMeters": 1 }
+  ]
+}
+```
+
+These coordinates illustrate the shape, not a preset. Use the actual Brief/World Plan
+regions and real support positions. IDs are stable, sorted and unique within each list.
+At least one middle and one remote anchor must be distinct from
+each other and the registered Spawn. At least one band begins at exact Spawn and ends
+at a middle anchor; add honest-width bands for explicitly required restricted courses.
+All waypoints and width describe the authored world, never an invented straight test
+corridor. The current ground graph is bidirectional. The Host validates this pure intent
+against its checked explicit support, not visual groups, labels, mesh names or an Agent BFS.
+Multiple anchors/bands can diagnose the same Case ground obligation; do not create new
+acceptance refs or visual groups for them. No distance or chunk minimum is imposed.
+
+In source-authored mode the Case freezes policy and has an empty metric band list;
+the following sidecar supplies the actual validation coordinates. The generic fixed-input
+Capture template remains a strict diagnostic, not a world-design constraint. In case-defined
+mode the fixed-band/fixed-input sections above remain mandatory. Never write accepted intent
+back to the Case, Bootstrap or Generation Request. Any source intent edit requires fresh
+self-check and both comparison PNGs in the same shared repair budget.
 
 `openingCamera` uses the same exact third-person numeric shape as the frozen
 Bootstrap's `initialCamera`: `{ "mode": "third-person", "distanceMeters": 5,
@@ -195,7 +231,7 @@ Do not bind unrelated background/support to a target to satisfy grouping. Explic
 are separate and never inferred from visual membership. This reproduces the old distinction between
 ordinary functional presets and landmark identity colors without restoring the old Compiler.
 
-`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, `visualGroups`, and required `openingCamera`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part from the Scene Brief or planning image, and never use a `subject` semantic class. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind that evidence to a Block in the appropriate existing semantic visual group instead. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. Apart from the closed openingCamera numeric intent, it contains no Subject, Spawn, Camera, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
+`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, `visualGroups`, required `openingCamera`, and required `groundExploration`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part from the Scene Brief or planning image, and never use a `subject` semantic class. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind that evidence to a Block in the appropriate existing semantic visual group instead. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. Apart from the closed openingCamera numeric intent and groundExploration validation coordinates, it contains no Subject, Spawn ownership, Camera objects, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
 
 `native-resources.json` is plain JSON data with exactly `kind`, `schemaVersion`, and `resourceRefs: []`. Non-empty visual refs remain outside the current production reconstruction lane until the Host implements and freezes their Package resource closure. The model cannot mint locks, publication receipts, admission evidence, or future support by writing a well-formed ref.
 

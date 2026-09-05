@@ -150,6 +150,7 @@ export interface WorldReconstructionExpectedV1 {
     readonly requiresOverlay: boolean;
   }>[];
   readonly groundConnectivity: Readonly<{
+    readonly mode: "case-defined" | "source-authored";
     readonly requireSingleReachableComponent: boolean;
     readonly requiredTraversalBands:
       readonly WorldReconstructionGroundTraversalBandV1[];
@@ -1459,9 +1460,13 @@ function parseGroundConnectivity(
 ): WorldReconstructionExpectedV1["groundConnectivity"] {
   const source = object(value, contract, path);
   exactFields(source, [
+    "mode",
     "requireSingleReachableComponent",
     "requiredTraversalBands",
   ], contract, path);
+  if (source.mode !== "case-defined" && source.mode !== "source-authored") {
+    fail(contract, `${path}/mode`, "must select case-defined or source-authored");
+  }
   const requiredTraversalBands = array(
     source.requiredTraversalBands,
     contract,
@@ -1534,6 +1539,7 @@ function parseGroundConnectivity(
     );
   }
   return Object.freeze({
+    mode: source.mode as "case-defined" | "source-authored",
     requireSingleReachableComponent: boolean(
       source.requireSingleReachableComponent,
       contract,
@@ -1550,6 +1556,12 @@ function assertGroundConnectivityMatchesExpectedRuntimeV1(
   contract: string,
 ): void {
   const bands = groundConnectivity.requiredTraversalBands;
+  if (groundConnectivity.mode === "source-authored") {
+    if (spawnSupport.expectedMedium !== "ground" || !groundConnectivity.requireSingleReachableComponent || bands.length !== 0) {
+      fail(contract, "expected/groundConnectivity", "source-authored policy requires ground Spawn, one component and no pre-invented metric bands");
+    }
+    return;
+  }
   if (spawnSupport.expectedMedium === "air") {
     if (groundConnectivity.requireSingleReachableComponent || bands.length > 0) {
       fail(

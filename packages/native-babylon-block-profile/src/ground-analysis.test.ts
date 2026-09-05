@@ -783,7 +783,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
     );
   });
 
-  it("rejects duplicate targets before analysis", () => {
+  it("rejects duplicate anchor IDs or positions, but permits a shared Case obligation", () => {
     const target = Object.freeze({
       id: "same-target",
       acceptanceTargetRef: "worldkit://acceptance-target/same@1",
@@ -797,7 +797,7 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
       }),
     })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
 
-    expect(() => analyze({
+    const sharedObligation = analyze({
       supportTopCellKeys: rectangle(-1, 3, -1, 1),
       caseIntent: caseIntent({
         spawn: SPAWN,
@@ -810,6 +810,14 @@ describe("Babylon Native Block Subject-relative ground analysis", () => {
           }),
         ]),
       }),
+    });
+    expect(sharedObligation.metrics.requiredTargetCount).toBe(2);
+    expect(sharedObligation.metrics.reachableRequiredTargetCount).toBe(2);
+    expect(() => analyze({
+      supportTopCellKeys: rectangle(-1, 3, -1, 1),
+      caseIntent: caseIntent({ spawn: SPAWN, requiredTargets: [
+        target, { ...target, id: "same-position-other-id" },
+      ] }),
     })).toThrow("WORLDKIT_NATIVE_BLOCK_GROUND_ANALYSIS_INPUT_INVALID");
   });
 

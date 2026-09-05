@@ -246,7 +246,7 @@ function reconstructionCase() {
           requiresOverlay: true,
         },
       ],
-      groundConnectivity: {
+      groundConnectivity: { mode: "case-defined" as const,
         requireSingleReachableComponent: true,
         requiredTraversalBands: [{
           acceptanceTargetRef:
@@ -1495,6 +1495,7 @@ describe("runWorldReconstructionV1", () => {
 
   it.each([
     "native-block-opening-camera-invalid",
+    "native-block-ground-exploration-invalid",
     "native-block-subject-visual-review-proxy-stale",
     "native-block-visual-identity-palette-input-invalid",
     "native-block-visual-review-input-stale",

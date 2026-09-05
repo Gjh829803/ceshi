@@ -357,6 +357,40 @@ new semantic quality diagnostics remain report-only in ordinary production and n
 tasks or veto publication. CF-14 visible-pixel measurement and CF-12 camera calibration are separate
 obligations, not implied by this structural evidence.
 
+### CF-11 source-authored ground exploration
+
+Legacy `9e35ab53` Block Builder Skill requires real middle/remote exploration
+anchors and a spawn-to-middle honest-width band, authored in the same Builder
+task from the frozen Brief and World Plan. Current Native restores this as pure
+`groundExploration` data in the existing authoring sidecar, not a third Source,
+Planner Runtime coordinates, new model task or product Route/Nav authority.
+
+The required Case `groundConnectivity.mode` selects `case-defined` or
+`source-authored`. Case-defined keeps immutable metric bands and their existing
+strict bindings. Source-authored requires ground Spawn, one reachable component
+and no pre-invented metric bands; the required sidecar selects the same mode and
+declares distinct sorted middle/remote stand anchors and honest-width waypoint
+bands. At least one band starts at exact Spawn and ends at a middle anchor.
+Current ground is bidirectional; directed transitions are not activated here.
+There are no new distance, area or chunk minima and no image-quality veto.
+
+One shared parser/admission checks syntax and policy in the portable Builder
+self-check and Host. Host binds the complete source intent through the existing
+authoring/layout binding, materializer metadata and Package root, then the existing
+Ground analyzer evaluates exact support, clearance and connectivity against explicit
+Frozen Contributions. Ground anchors/bands have independent local IDs but may
+diagnose the same Case ground obligation; they do not create visual-target rows.
+The original Case/Request/Bootstrap bytes and hashes are never rewritten after
+generation. Case-defined source cannot override fixed routes; source-authored source
+cannot downgrade to empty exploration or measurement-only ground.
+
+This changes ordinary Ground input ownership to the old-equivalent declaration
+pattern, not the production success authority or repair budget. Generic fixed-input
+Capture diagnostics remain strict/report-only and must not constrain source-authored
+world design. Removal of their generic topology/script template, fixed 128m bounds,
+full region/feature measurements and multi-medium selection remain CF-11/13/21/12;
+the declaration slice alone does not prove complete parity or a new real Case.
+
 ### CF-11 local arrival evidence
 
 The frozen Formal Capture intent declares `reach-position` with an exact
@@ -370,7 +404,7 @@ inside the local endpoint plus/minus the existing radius-and-tolerance margin.
 
 This is a current-only replacement of `reach-bounds`, not an alias or optional
 fallback. Endpoint bytes participate in the existing Intent/Case/Request Hash
-chain. Generated baseline Ground and Capture use one endpoint definition; the
+chain. Case-defined Ground and Capture preserve frozen endpoint identity; the
 committed strict Case input binds its spawn and upper-platform checkpoints to
 its frozen stand positions. Historical run receipts remain unchanged. Accurate
 arrival diagnostics do not reverse ordinary production success or enable a

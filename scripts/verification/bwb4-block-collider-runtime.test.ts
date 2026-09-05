@@ -380,6 +380,7 @@ function verifiedPackage(
     createBabylonNativeBlockMaterializerMetadataV1({
       authoringLayoutBinding: Object.freeze({
         kind: "native-block-authoring-layout-binding",
+        groundExploration: { mode: "case-defined" as const },
         openingCamera,
         schemaVersion: 1,
         caseHash: templateMetadata.caseHash,

@@ -514,13 +514,9 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       }),
     ], ({ contributionId }) => contributionId)),
     groundConnectivity: Object.freeze({
+      mode: "source-authored" as const,
       requireSingleReachableComponent: true,
-      requiredTraversalBands: Object.freeze([Object.freeze({
-        acceptanceTargetRef: remoteAcceptanceTargetRef,
-        id: "entry-to-remote-ground-band",
-        centerlineStandPositionsXYZMeters: entryToRemoteStandPositions,
-        halfWidthMeters: 1.5,
-      })]),
+      requiredTraversalBands: Object.freeze([]),
     }),
     criticalTraversalChecks: Object.freeze([Object.freeze({
       acceptanceTargetRef: remoteAcceptanceTargetRef,
@@ -1316,8 +1312,8 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       "Implement every Case visual group and every explicit required Collider contribution exactly once.",
       "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group and copy that target's exact semanticClassId and Native identityColor. A not-required Opening view does not authorize deleting the group or inventing Opening bounds.",
       "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
-      "Keep the Spawn supported and preserve every fixed-input pass or block check without adding undeclared input.",
-      "For a ground Case, preserve every frozen groundConnectivity band and keep the complete explicitly contributed support surface in one Spawn-reachable component.",
+      "Keep the Spawn supported. For case-defined ground policy preserve every fixed-input pass or block check without adding undeclared input; source-authored ground policy follows the Brief's actual course, not a generic strict diagnostic template.",
+      "Read groundConnectivity.mode. For source-authored, declare required groundExploration middle/remote stand anchors and honest spawn-to-middle/Brief-required bands in native-block-authoring.json; Host Ground consumes these, not the generic fixed-input diagnostic course. For case-defined, write groundExploration: { mode: 'case-defined' } and preserve the frozen metric bands. Keep all intended explicitly contributed ground Spawn-reachable. Do not invent geometry for a source-authored Case's fixed-input diagnostic template.",
       "Do not create Runtime, physics, camera, input, timers, gameplay entities, Package, Capture, Receipt, or thresholds.",
       "Do not alter any frozen input. Formal Capture Intent remains Host-only.",
       "",

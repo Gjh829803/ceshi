@@ -1,15 +1,75 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   hashBabylonNativeBlockMaterializerMetadataV1,
   parseBabylonNativeBlockMaterializerMetadataV1,
+  parseNativeBlockGroundExplorationV1,
+  admitNativeBlockGroundExplorationV1,
 } from "./native-block-materializer-metadata.js";
+
+function explorationValue() {
+  return {
+    mode: "source-authored" as const,
+    requiredTargets: [
+      { id: "middle-court", region: "middle", standPositionMetersXYZ: [4, 0, -3] },
+      { id: "remote-garden", region: "remote", standPositionMetersXYZ: [8, 1, -5] },
+    ],
+    requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1,
+      centerlineStandPositionsMetersXYZ: [[0, 0, 0], [4, 0, 0], [4, 0, -3]] }],
+  };
+}
+
+describe("Native ground exploration intent", () => {
+  it("preserves curved coordinates and joins the exact spawn-to-middle course", () => {
+    const value = explorationValue();
+    const parsed = admitNativeBlockGroundExplorationV1(value, "source-authored", [0, 0, 0]);
+    expect(parsed).toEqual(value);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    const baseline = metadataValue();
+    const authored = { ...baseline, groundExploration: parsed };
+    expect(parseBabylonNativeBlockMaterializerMetadataV1(authored).groundExploration).toEqual(value);
+    const moved = explorationValue(); moved.requiredTargets[1]!.standPositionMetersXYZ[0] = 9;
+    expect(hashBabylonNativeBlockMaterializerMetadataV1({ ...baseline, groundExploration: moved }))
+      .not.toBe(hashBabylonNativeBlockMaterializerMetadataV1(authored));
+    expect(() => admitNativeBlockGroundExplorationV1(value, "case-defined", [0, 0, 0])).toThrow();
+    expect(() => admitNativeBlockGroundExplorationV1({ mode: "case-defined" }, "source-authored", [0, 0, 0])).toThrow();
+  });
+  it("rejects missing, duplicate, or spawn anchors and an entry band to the wrong endpoint", () => {
+    const missing = explorationValue(); missing.requiredTargets.pop();
+    expect(() => parseNativeBlockGroundExplorationV1(missing)).toThrow();
+    const duplicate = explorationValue();
+    duplicate.requiredTargets[1]!.standPositionMetersXYZ = [4, 0, -3];
+    expect(() => parseNativeBlockGroundExplorationV1(duplicate)).toThrow();
+    const spawn = explorationValue(); spawn.requiredTargets[1]!.standPositionMetersXYZ = [0, 0, 0];
+    expect(() => admitNativeBlockGroundExplorationV1(spawn, "source-authored", [0, 0, 0])).toThrow();
+    expect(() => admitNativeBlockGroundExplorationV1(explorationValue(), "source-authored", [1, 0, 0])).toThrow();
+    const endpoint = explorationValue(); endpoint.requiredTraversalBands[0]!.centerlineStandPositionsMetersXYZ[2] = [8, 1, -5];
+    expect(() => admitNativeBlockGroundExplorationV1(endpoint, "source-authored", [0, 0, 0])).toThrow();
+  });
+  it("has no missing-mode fallback, authority extras, accessor reads or geometric minima", () => {
+    expect(() => parseNativeBlockGroundExplorationV1(undefined)).toThrow();
+    expect(() => parseNativeBlockGroundExplorationV1({ mode: "case-defined", requiredTargets: [] })).toThrow();
+    const value = explorationValue();
+    const getter = vi.fn(() => "source-authored");
+    Object.defineProperty(value, "mode", { get: getter });
+    expect(() => parseNativeBlockGroundExplorationV1(value)).toThrow();
+    expect(getter).not.toHaveBeenCalled();
+    const small = explorationValue();
+    small.requiredTargets[0]!.standPositionMetersXYZ = [0.5, 0, 0];
+    small.requiredTargets[1]!.standPositionMetersXYZ = [1, 0, 0];
+    small.requiredTraversalBands[0]!.centerlineStandPositionsMetersXYZ = [[0, 0, 0], [0.5, 0, 0]];
+    expect(() => admitNativeBlockGroundExplorationV1(small, "source-authored", [0, 0, 0])).not.toThrow();
+    small.requiredTraversalBands[0]!.id = small.requiredTargets[0]!.id;
+    expect(() => admitNativeBlockGroundExplorationV1(small, "source-authored", [0, 0, 0])).not.toThrow();
+  });
+});
 
 const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 
 function metadataValue() {
   return {
     kind: "babylon-native-block-materializer-metadata",
+    groundExploration: { mode: "case-defined" as const },
     openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     nativeSceneProfileRef:

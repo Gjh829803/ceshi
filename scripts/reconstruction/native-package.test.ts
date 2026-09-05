@@ -10,7 +10,7 @@ import {
   BABYLON_NATIVE_BLOCK_CURRENT_WALKABLE_TOPOLOGY_POLICY_V1,
   createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1,
 } from "@whitebox-world/native-babylon-block-profile/host";
-import { hashBabylonNativeSceneContributionV1, parseFormalWorldCaptureIntentV1 } from "@whitebox-world/runtime-contracts";
+import { hashBabylonNativeSceneContributionV1, parseFormalWorldCaptureIntentV1, type NativeBlockGroundExplorationV1 } from "@whitebox-world/runtime-contracts";
 import { decideSceneAuthoringRouteV1 } from "@whitebox-world/scene-authoring-contracts";
 import {
   hashWorldReconstructionEvaluationProfileV1,
@@ -176,6 +176,7 @@ export default defineBabylonNativeScene({
 
 const AUTHORING = {
   kind: "native-block-authoring",
+  groundExploration: { mode: "case-defined" as const },
   openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
   schemaVersion: 1,
   entryModulePath: "scene.ts",
@@ -266,9 +267,12 @@ async function completedAttempt(options: Readonly<{
   authoring?: typeof AUTHORING | typeof EXTRA_VISUAL_GROUP_AUTHORING;
   omitAdvisory?: boolean;
   target3IdentityColorHex?: string;
+  groundExploration?: NativeBlockGroundExplorationV1;
+  maximumBlockCount?: number;
 }> = {}) {
   const sceneSource = options.sceneSource ?? SCENE_SOURCE;
-  const authoring = options.authoring ?? AUTHORING;
+  const authoring = { ...(options.authoring ?? AUTHORING),
+    groundExploration: options.groundExploration ?? (options.authoring ?? AUTHORING).groundExploration };
   const root = await realpath(await mkdtemp(
     path.join(os.tmpdir(), "worldkit-native-package-"),
   ));
@@ -297,6 +301,11 @@ async function completedAttempt(options: Readonly<{
       { xMeters: 0, yMeters: 0, zMeters: 10 },
       { xMeters: 0, yMeters: 0, zMeters: 3 },
     ];
+  if (authoring.groundExploration.mode === "source-authored") {
+    caseValue.expected.groundConnectivity = {
+      mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [],
+    };
+  }
   const nativeTarget3Ref =
     "worldkit://acceptance-target/visual-target-3@1";
   const gateTargetRef = "worldkit://acceptance-target/gate-mass@1";
@@ -464,7 +473,7 @@ async function completedAttempt(options: Readonly<{
     sceneModuleRef: `worldkit://native-scene/${reconstructionCase.id}@1`,
     seed: 19,
     budgets: {
-      maximumBlockCount: 64,
+      maximumBlockCount: options.maximumBlockCount ?? 64,
       maximumStaticColliderCount: 8,
       maximumStaticColliderVertexCount: 1024,
       maximumStaticColliderTriangleCount: 1024,
@@ -758,6 +767,61 @@ describe("packageNativeBlockAttemptV1", () => {
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-receipt.json"))).toEqual(originalReceipt);
     expect(await readFile(path.join(fixture.attemptDirectoryPath, "source/scene.ts"))).toEqual(originalSource);
   }, 60_000);
+
+  it("admits source-authored curved exploration and rejects unsupported or disconnected remote anchors", async () => {
+    const groundExploration: NativeBlockGroundExplorationV1 = {
+      mode: "source-authored",
+      requiredTargets: [
+        { id: "middle-court", region: "middle", standPositionMetersXYZ: [6, 0, 7] },
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [6, 0, 2] },
+      ],
+      requiredTraversalBands: [{ id: "entry-court", halfWidthMeters: 1,
+        centerlineStandPositionsMetersXYZ: [[0, 0, 18], [0, 0, 11], [6, 0, 11], [6, 0, 7]] },
+      { id: "middle-garden", halfWidthMeters: 1,
+        centerlineStandPositionsMetersXYZ: [[6, 0, 7], [6, 0, 2]] }],
+    };
+    const curvedSource = SCENE_SOURCE
+      .replace("maximumBlockCount: 64", "maximumBlockCount: 128")
+      .replace('minimumCenterMetersXYZ: [-1, -0.5, 4], repeatCountXYZ: [3, 1, 7]',
+        'minimumCenterMetersXYZ: [5, -0.5, 4], repeatCountXYZ: [3, 1, 6]')
+      .replace('minimumCenterMetersXYZ: [-1, -0.5, 1], repeatCountXYZ: [3, 1, 3]',
+        'minimumCenterMetersXYZ: [5, -0.5, 1], repeatCountXYZ: [3, 1, 3]')
+      .replace('    session.finalize({',
+        '    session.createBlockGrid({idPrefix: "bend", shape: "full", paletteRole: "route", visualGroupId: "central-ascent-group", colliderGroupId: "central-ground-group", minimumCenterMetersXYZ: [2, -0.5, 10], repeatCountXYZ: [6, 1, 3] });\n    session.finalize({');
+    const fixture = await completedAttempt({ sceneSource: curvedSource, groundExploration, maximumBlockCount: 128 });
+    const originalCase = await readFile(fixture.casePath);
+    const originalRequest = await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"));
+    const packaged = await packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: fixture.casePath, attemptDirectoryPath: fixture.attemptDirectoryPath,
+      outputDirectoryPath: path.join(fixture.attemptDirectoryPath, "world-package") });
+    expect(packaged.groundAnalysisReport).toMatchObject({ admissionOutcome: "passed",
+      metrics: { requiredTargetCount: 2, reachableRequiredTargetCount: 2,
+        requiredTraversalBandCount: 2, reachableRequiredTraversalBandCount: 2 } });
+    expect(await readFile(fixture.casePath)).toEqual(originalCase);
+    expect(await readFile(path.join(fixture.attemptDirectoryPath, "generation-request.json"))).toEqual(originalRequest);
+    const failedFixture = await completedAttempt({ sceneSource: curvedSource, maximumBlockCount: 128,
+      groundExploration: { ...groundExploration, requiredTargets: [groundExploration.requiredTargets[0]!,
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] }] } });
+    await expect(packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: failedFixture.casePath, attemptDirectoryPath: failedFixture.attemptDirectoryPath,
+      outputDirectoryPath: path.join(failedFixture.attemptDirectoryPath, "world-package") })).rejects.toThrow();
+    const failure = JSON.parse(await readFile(path.join(failedFixture.attemptDirectoryPath, "ground-analysis-report.json"), "utf8"));
+    expect(failure.admissionOutcome).toBe("failed");
+    expect(failure.identity.worldPackageRootHash).not.toBe(packaged.worldPackageRootHash);
+    expect(failure.failureFacts).toContainEqual(expect.objectContaining({ targetId: "remote-garden" }));
+    const islandFixture = await completedAttempt({ maximumBlockCount: 128,
+      sceneSource: curvedSource.replace('    session.finalize({',
+        '    session.createBlockGrid({idPrefix: "remote-island", shape: "full", paletteRole: "ground", visualGroupId: "upper-t-junction-group", colliderGroupId: "upper-ground-group", minimumCenterMetersXYZ: [29, -0.5, 1], repeatCountXYZ: [3, 1, 3] });\n    session.finalize({'),
+      groundExploration: { ...groundExploration, requiredTargets: [groundExploration.requiredTargets[0]!,
+        { id: "remote-garden", region: "remote", standPositionMetersXYZ: [30, 0, 2] }] } });
+    await expect(packageNativeBlockAttemptV1({ repositoryRoot: REPOSITORY_ROOT,
+      casePath: islandFixture.casePath, attemptDirectoryPath: islandFixture.attemptDirectoryPath,
+      outputDirectoryPath: path.join(islandFixture.attemptDirectoryPath, "world-package") })).rejects.toThrow();
+    const disconnected = JSON.parse(await readFile(path.join(islandFixture.attemptDirectoryPath, "ground-analysis-report.json"), "utf8"));
+    expect(disconnected.failureFacts).toContainEqual(expect.objectContaining({
+      targetId: "remote-garden", metricId: "ground-target-reachability",
+    }));
+  }, 120_000);
 
   it("checks and binds the generated Layout before atomically publishing one verified Package", async () => {
     const fixture = await completedAttempt();

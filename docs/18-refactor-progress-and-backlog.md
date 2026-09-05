@@ -1439,6 +1439,32 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   blocker 回归 4/4（非真实 Browser E2E）；typecheck。端点变化改变 Hash、错误高度/远离端点
   拒绝、扩大组不改变端点、容差边界不过严均有回归。生成的三套 portable checker 与 Native
   冻结副本已同源刷新，renderer 重建字节未变；Native Builder Skill 最终 gate 57/57。
+- CF-11/R3 探索意图接线（2026-09-05，承接 R2，当前候选）：对照旧 `9e35ab53` Builder
+  Skill 的 middle/remote anchors 与 spawn-to-middle band，普通生成 Case 的 Ground policy
+  改为显式 `source-authored`，不再预置阻断性的 12m 直线 Ground waypoints。既有严格 Case
+  使用 `case-defined`，保留原固定路线及其一对一验收绑定；缺少 mode 没有旧路径 fallback。
+  required `native-block-authoring.json.groundExploration` 通过共享 parser/准入、authoring/layout
+  binding、materializer metadata 和 Package root，最终进入原 Ground analyzer。源意图只能声明
+  真实 middle/remote 站立锚点及有真实宽度的路点带；至少一条从精确 Spawn 到 middle。
+  Host 不反写 Case、Request、Bootstrap，不推断 Mesh Collider，不新建 Route/Nav 或模型任务。
+  多个锚点/路线可以诊断同一个 Case 地面义务，以局部 ID 区分，不制造新的 visual target；
+  重复锚点位置/ID 仍拒绝，固定 Case 的 band/ref 约束不删除。不增加距离、面积、chunk
+  数值门槛，不改变 `productionOutcome` / strict diagnostic 分离或共享修复预算。
+  真实调用的任务指令、live/frozen Skill、便携自检及当前严格 fixture 同步；自检提前暴露
+  缺失远端/错误模式/缺失 Spawn→middle 等声明问题，实际支持和连通性仍由 Host Ground 检查。
+  Package→Ground 合成集成已证明：弯折地面、两个同义务路带可通过；无支撑远端与有支撑但
+  断开的远端孤岛均失败，并保留 `remote-garden` 诊断位置。原 Case/Generation Request bytes
+  不变；已有固定 Case Package 仍通过。新增元数据/manifest 身份、源策略 parser、Case preparation、
+  Ground、Capture/Generation/visual identity/Evaluation 的 focused 回归已运行；Native Skill
+  最终 58/58、普通生产/Native 反馈原因 35/35 和 typecheck 通过（分轮有重复，不累计总数）。
+  收尾验证：最终弯路/无支撑/孤岛/Package 身份集成 1/1（约 93 秒）；固定 Case Package
+  回归另通过。manifest 源意图绑定/过期 Hash、严格 synthetic Run 的 immutable Attempt/Final、
+  skipped playability 与普通成功但严格诊断失败的发布共 6/6，均 exit 0；不是实际 Browser 回放。
+  未运行新的 054 模型 Case、Browser 全链、全仓 gates 或独立最终审查。本批不是 CF-11/21 完成：
+  固定 128m bounds、两个 generic ground groups 和 generic strict Capture topology/300-tick/12m
+  模板仍待删除/替换，后者不得继续约束 source-authored Builder 的实际地理。显式 NBR verifier
+  仍要求固定 Capture/Ground endpoint 对拍，尚不能把 source-authored 的新探索意图算作已完成
+  严格路线验收；该消费者迁移继续由 CF-11/13 承接。真实要素/分区量测、跨模式与效果证据仍 open。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

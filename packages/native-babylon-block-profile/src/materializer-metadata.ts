@@ -95,6 +95,7 @@ export function createBabylonNativeBlockMaterializerMetadataV1(
   return parseBabylonNativeBlockMaterializerMetadataV1({
     kind: "babylon-native-block-materializer-metadata",
     openingCamera: input.authoringLayoutBinding.openingCamera,
+    groundExploration: input.authoringLayoutBinding.groundExploration,
     schemaVersion: 1,
     nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     caseHash: input.authoringLayoutBinding.caseHash,

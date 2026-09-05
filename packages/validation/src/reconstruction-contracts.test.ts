@@ -127,7 +127,7 @@ const caseValue = () => ({
       { acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", contributionId: "spawn-ground-contribution", colliderId: "spawn-ground", role: "ground", requiresOverlay: true },
       { acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1", contributionId: "upper-ground-contribution", colliderId: "upper-ground", role: "ground", requiresOverlay: true },
     ],
-    groundConnectivity: {
+    groundConnectivity: { mode: "case-defined" as const,
       requireSingleReachableComponent: true,
       requiredTraversalBands: [{
         acceptanceTargetRef: "worldkit://acceptance-target/upper-t-junction@1",
@@ -564,6 +564,24 @@ describe("world reconstruction contracts", () => {
     })).not.toBe(hashWorldReconstructionCaseV1(caseValue()));
   });
 
+  it("binds source-authored ground policy without inventing metric bands or allowing an air downgrade", () => {
+    const value = caseValue();
+    const expected = { ...value.expected, groundConnectivity: {
+      mode: "source-authored", requireSingleReachableComponent: true, requiredTraversalBands: [],
+    } };
+    const parsed = parseWorldReconstructionCaseV1({ ...value, expected });
+    expect(parsed.expected.groundConnectivity).toEqual(expected.groundConnectivity);
+    expect(hashWorldReconstructionCaseV1(parsed)).not.toBe(hashWorldReconstructionCaseV1(value));
+    for (const groundConnectivity of [
+      { ...expected.groundConnectivity, mode: undefined },
+      { ...expected.groundConnectivity, requireSingleReachableComponent: false },
+      { ...expected.groundConnectivity, requiredTraversalBands: value.expected.groundConnectivity.requiredTraversalBands },
+    ]) expect(() => parseWorldReconstructionCaseV1({ ...value, expected: { ...expected, groundConnectivity } })).toThrow();
+    expect(() => parseWorldReconstructionCaseV1({ ...value, expected: {
+      ...expected, spawnSupport: { ...expected.spawnSupport, expectedMedium: "air" },
+    } })).toThrow();
+  });
+
   it("keeps ground connectivity exact, positive, ordered and identity-bound", () => {
     const parsed = parseWorldReconstructionCaseV1(caseValue());
     expect(Object.isFrozen(parsed.expected.groundConnectivity)).toBe(true);
@@ -674,7 +692,7 @@ describe("world reconstruction contracts", () => {
 
     const validAirCase = caseValue();
     validAirCase.expected.spawnSupport.expectedMedium = "air";
-    validAirCase.expected.groundConnectivity = {
+    validAirCase.expected.groundConnectivity = { mode: "case-defined" as const,
       requireSingleReachableComponent: false,
       requiredTraversalBands: [],
     };

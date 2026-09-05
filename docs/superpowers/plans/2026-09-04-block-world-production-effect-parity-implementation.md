@@ -211,6 +211,42 @@ ordinary/strict outcome separation remain unchanged. This closes the endpoint
 slice only. Full Builder-authored geography, non-fixed bounds/routes, region
 coverage and CF-21 salient-feature closure remain open under their parent tasks.
 
+#### CF-11/R3 source-authored ground exploration
+
+Main-agent-only and sequential, dependent on R2. Legacy `9e35ab53` Builder
+Skill declares distinct middle/remote stand anchors and an honest spawn-to-middle
+band; it does not obtain these coordinates from a fixed Host template. Restore
+this through required `groundExploration` pure data in the existing authoring
+sidecar, checked layout binding and materializer metadata. No extra file, model
+task, Runtime route owner, inferred Collider or new repair counter is introduced.
+
+The Case ground policy explicitly selects `case-defined` (existing immutable
+metric bands, including strict fixtures and air measurement) or `source-authored`
+(ground only, one reachable component, no pre-invented metric bands). The sidecar
+must select the same mode. Source-authored intent supplies stable, distinct
+middle/remote anchors and ordered-width bands; at least one band starts at the
+exact Spawn and ends at a middle anchor. No numeric distance/chunk minima or
+semantic image veto are added. The current ground graph is bidirectional; this
+batch does not invent one-way Runtime transitions. Pure syntax and policy joins
+run in the same portable self-check; actual support, clearance and connectivity
+remain the existing trusted Ground analyzer's responsibility.
+
+Ground consumes the Package-bound intent, never writes back to the frozen Case,
+and reports the exact authored anchor/band IDs under the existing Case ground
+acceptance target. Changed source intent changes manifest/metadata/Package hashes.
+Case-defined intent cannot silently override frozen routes, and source-authored
+intent cannot omit the old middle/remote or entry-band requirements. Existing
+Formal fixed-input diagnostics remain separate and do not dictate generated
+geometry in source-authored mode; replacing the generic strict topology/script
+template, fixed world bounds and full scene-feature measurement remain CF-11/13/21.
+This intermediate boundary is not a second success standard or full CF closure.
+
+Required evidence: missing/duplicate/spawn anchors, missing entry-to-middle band,
+wrong mode, extra authority fields, stale identity; a curved real support course
+with no straight 12m corridor passes Ground, while unsupported or disconnected
+remote anchors fail. Verify immutable input bytes, metadata hash changes, ordinary
+outcome separation, direct Package consumers, Skill copies and typecheck.
+
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
 This is the implementation contract; current completion and remaining target-socket,
