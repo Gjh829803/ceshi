@@ -188,8 +188,8 @@ or test-shaped geometry. Completing an R1 slice does not close its parent CF tas
 
 #### CF-12/R1 activation batch: same-task authored Camera intent
 
-This is the next implementation contract, not a claim that the current Builder
-already accepts Camera intent. Current status remains exclusively in docs/18.
+This is the implementation contract; current completion and remaining target-socket,
+rendered and real-Case evidence remain exclusively in docs/18.
 Static comparison with `9e35ab53`'s `references/subject-camera.md` establishes
 that the old Builder adjusts all four opening values inside its existing visual
 feedback loop. A Host-only image-to-camera estimate is not a replacement for

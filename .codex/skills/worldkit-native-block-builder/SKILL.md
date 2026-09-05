@@ -21,7 +21,7 @@ JSON/Case/Scene Brief owns identity, intent, Subject, Spawn target, budgets, and
 
 scene.ts owns Babylon Native Block visual construction and explicit registration calls only.
 
-The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation.
+The Host owns Check, Package, Receipt, Runtime Candidate, Havok, Character, Input, Action, Camera, Reset, Capture, and evaluation. The sidecar owns only the closed openingCamera numeric intent described below; scene.ts cannot create or operate a Camera.
 
 The Formal Capture Intent remains Capture-only Host input and is not part of the generation context or any Builder output. Do not predict `sourceBoundsMeters` or `planeMeters`; after Package verification, the Host resolves those values from checked visual-group bounds or exact frozen Collider geometry.
 
@@ -99,6 +99,25 @@ and geography. This does not relax overlap, explicit Collider, support, lattice 
 
 ## Mandatory visual feedback
 
+### Opening Camera intent inside this task
+
+Write required `openingCamera` in `native-block-authoring.json` with exactly
+`mode: "third-person"`, `distanceMeters`, `targetHeightMeters`, `pitchRadians`,
+and `fovDegrees`. Start from the frozen Bootstrap's numeric values, then tune
+these four values against the reference and Entry Whitebox Target in the same
+check/render/view/repair loop. Do not scale the SDK Subject to fill the frame.
+Keep the rear-view centerline and 16:9 frame; do not add entity IDs, Profile refs,
+shoulder/lateral/yaw offsets, or a second Bootstrap. The existing selectable
+third-person Profile ranges in `inputs/world-runtime-bootstrap.json` apply.
+
+The Host independently validates this data and binds it through the existing
+authoring manifest, compiled metadata and Package hashes. The frozen Request,
+Bootstrap, WRT and Registry files remain untouched. Camera-only repairs use the
+same shared repair counter and invalidate both comparison PNGs; they do not
+allocate another task, output, or external repair attempt. Runtime target sockets
+and Context Modifiers retain their existing precedence; do not claim an advisory
+projection proves exact Runtime pixels or override Subject sockets from source.
+
 After the structural self-check passes for the current source, resolve `scripts/render-visual-review.mjs` relative to this exact `SKILL.md` copy and run:
 
 ```bash
@@ -131,7 +150,7 @@ front/course first, then footprint and scale, then depth order and occlusion. Me
 not alignment. Before each source repair, recount its Block cost and remove low-value ornament if
 needed; never erase a major region or flatten a required rise to free budget.
 
-If either comparison is materially wrong, repair only `scene.ts`, `native-block-authoring.json`, or `native-resources.json`; do not edit the frozen inputs, Bootstrap, Case, Planner images, thresholds, renderer, or task protocol. Then rerun both the structural self-check and both comparisons and inspect the fresh pixels again. A source edit invalidates both prior reports.
+If either comparison is materially wrong, repair only `scene.ts`, `native-block-authoring.json`, or `native-resources.json`; do not edit the frozen inputs, Bootstrap, Case, Planner images, thresholds, renderer, or task protocol. Then rerun both the structural self-check and both comparisons and inspect the fresh pixels again. A source or openingCamera edit invalidates both prior reports.
 
 Host TypeScript checking is strict. Coordinate rows must be fixed tuples (`as const` on a literal table, or `readonly [number, number]` rows); destructuring an inferred `number[][]` does not prove its members exist. Never silence diagnostics with `any`, `@ts-ignore`, `@ts-nocheck`, or unchecked non-null assertions. When an `as const` tuple supplies a mutable numeric loop bound, explicitly widen the loop variable to `number`; otherwise literal-union inference can make later valid numeric comparisons fail admission.
 

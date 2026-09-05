@@ -179,6 +179,7 @@ function verifiedPackage(
     createBabylonNativeBlockMaterializerMetadataV1({
       authoringLayoutBinding: Object.freeze({
         kind: "native-block-authoring-layout-binding",
+        openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
         schemaVersion: 1,
         caseHash: templateMetadata.caseHash,
         authoringManifestHash: templateMetadata.authoringManifestHash,

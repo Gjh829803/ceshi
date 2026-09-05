@@ -8,6 +8,7 @@ import vm from "node:vm";
 import { deflateSync, inflateSync } from "node:zlib";
 
 import ts from "typescript";
+import { parseBabylonNativeInitialCameraV1 } from "@whitebox-world/runtime-contracts";
 import {
   BABYLON_NATIVE_BLOCK_SIZE_METERS_XYZ_BY_SHAPE_V1 as SHAPE_SIZE_BY_KIND,
   babylonNativeBlockCenterAlignsToGridV1,
@@ -1344,7 +1345,7 @@ export async function renderNativeBlockVisualReview(options: Readonly<{
     geometry,
     subjectCuboids,
     captured.spawn,
-    bootstrap.initialCamera,
+    parseBabylonNativeInitialCameraV1(authoring.openingCamera),
   );
   const topDownComparison = comparison(
     decodePng(worldPlanBytes),

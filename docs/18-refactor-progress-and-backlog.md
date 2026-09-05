@@ -1394,9 +1394,37 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   Builder 同任务看图调四参的能力，而不是用一次 Host 图片估算替代。拟由现有 sidecar
   承载纯数据意图、现有 Host 编译元数据/Package 绑定最终取值，原 Request/Bootstrap/WRT
   输入与哈希不变；不得覆盖冻结文件、补造 Generation Receipt 或增加模型任务。
-  当前仅已复用/导出现有 exact Camera parser（12/12 focused 通过，Schema/取值范围不变）；
-  required sidecar 字段、Host/Profile 准入、metadata、Runtime/Capture 消费和 Skill 尚未激活，
-  必须 A–D 完整接通后才允许新 Builder 产出该字段。此记录不是 CF-12 完成或效果验收。
+  初始 `77b6ba17` 仅复用/导出现有 exact Camera parser（12/12 focused 通过，Schema/取值范围
+  不变）；下述接线更新替代当时“尚未激活”的状态。此记录不是 CF-12 完成或效果验收。
+- CF-12/R1 接线更新（2026-09-05）：required `native-block-authoring.json.openingCamera`
+  已贯穿 exact parser、authoring/layout binding、Host/Profile 准入、materializer metadata、
+  Package root、Runtime、Formal opening expected Camera 和 Ground FOV。Bootstrap/WRT 原始
+  输入及 Hash 不变，不能以生成意图覆盖冻结输入。Builder 的同一个 portable checker、软件
+  renderer、真实任务指令及 live/frozen Skill 均消费该字段；仍为同任务、五个输出、共用原修复
+  预算。沿用旧 `9e35ab53` 全部可选第三人称 Profile 的安全取值准入，不新增质量 veto。
+  非法 Camera 意图经 Package/Run 保留 `native-block-opening-camera-invalid` 原因。
+  验证：authoring manifest + Native Package 63/63（约 603 秒）；完整 Builder Skill 57/57；
+  Bootstrap/manifest/Package identity 58/58；真实 Babylon/Havok 非默认 Camera 消费 1/1；
+  后补仅改 Camera 的 PNG 回归 1/1（entry 改变、top 与冻结 Bootstrap 不变）；Capture 发布、
+  普通成功政策和 Native 反馈原因针对性回归 31/31。各轮有重复用例，不累计成总数。
+  本批未跑新的 054 模型 Case，旧 Case 仍只证明旧实现；CF-12/04 父任务保持 open。
+  尚须处理软件预览的数值 target height 与 Runtime 优先 Camera Socket 的实际目标点差异，
+  并补实际构图证据；当前 resolved parameters 正确不等于 target/pixels 已一致。多 movement
+  mode/Subject 选择和完整 CF-04 render/interpolation 验收仍按原合同推进。
+  旧代码复核：`9e35ab53` 的 Block Builder `render-visual-review.mjs:14222` 同样用
+  `spawn + targetHeightMeters`，旧 `camera-director.ts:1056` 同样优先 preferred Socket；
+  这是共享的旧差异，不是本次迁移漏掉的新行为。保留 CF-04 完整像素一致性工作，不把修复
+  该旧差异升级为下一次普通 Case 的额外前置，也不擅自改变 Runtime Socket 权威。
+- CF-04/12 首次绑定坐标修复（同批）：实际 Babylon/Havok pose 断言发现 Golden Character
+  initial/rebind Camera 路径直接使用 body-center Snapshot，正常 fixed transaction 已转换为
+  Subject origin。无 Socket 的非默认测试中 target 相对角色原点为 `2.06m`，不是意图 `1.1m`；
+  旧 `9e35ab53` Runtime 使用 `controller.subjectOrigin`。现 initial/rebind 复用现有
+  `cameraContextWithLockedLocalSocketsV1`，删除该路径重复的 Socket 投影，保证恰好转换一次。
+  最终实际 Runtime 回归 1/1：首个 committed Tick 高度正确，Reset/rebind 后同 Tick Camera
+  完全一致；Director 的有/无 Socket 参数、modifier/Preview、失败回滚与 Reset 针对性 2/2，
+  其余本批匹配的 Camera Reset 回归通过。未提交 possession 不提供 pose telemetry，不能以
+  该时点的物理 Camera 残留值冒充 committed opening 证据。最终 Skill 57/57、3C migration
+  和 typecheck 通过；没有跑全仓 gate 或独立审查，不关闭完整 CF-04/12。
 - 用户授权 worktree/Case 清理已执行：移除 6 个 merged、无 tracked diff、无活动 cwd 的历史
   worktree（production-closure、report-only-baseline、usability-baseline、nbr-actionable-diagnostics、
   nbr65i-real-case、paper-moon-palace-054-test）；保留其 Git 分支。71 个历史 Case/辅助产物路径

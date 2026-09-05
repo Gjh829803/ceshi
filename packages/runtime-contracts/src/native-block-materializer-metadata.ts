@@ -3,6 +3,7 @@ import {
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import { isEqual, isNil } from "lodash-es";
+import { parseBabylonNativeInitialCameraV1, type BabylonNativeInitialCameraV1 } from "./babylon-native-scene-bootstrap.js";
 
 import { BABYLON_NATIVE_BLOCK_PROFILE_REF_V1 } from
   "./native-scene-contribution.js";
@@ -63,6 +64,7 @@ export interface BabylonNativeBlockMaterializerColliderJoinV1 {
 }
 
 export interface BabylonNativeBlockMaterializerMetadataV1 {
+  readonly openingCamera: BabylonNativeInitialCameraV1;
   readonly kind: "babylon-native-block-materializer-metadata";
   readonly schemaVersion: 1;
   readonly nativeSceneProfileRef:
@@ -391,6 +393,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
     "authoringManifestHash", "checkedLayoutInventoryHash",
     "contributionHash", "profileInventoryHash", "settledVisualHash",
     "blocks", "visualGroups", "colliderJoins",
+    "openingCamera",
   ], [], "value");
   if (
     source.kind !== "babylon-native-block-materializer-metadata" ||
@@ -482,6 +485,7 @@ export function parseBabylonNativeBlockMaterializerMetadataV1(
   ) fail("colliderJoins", "must partition known source Blocks and visual groups");
   return Object.freeze({
     kind: "babylon-native-block-materializer-metadata",
+    openingCamera: parseBabylonNativeInitialCameraV1(source.openingCamera),
     schemaVersion: 1,
     nativeSceneProfileRef: BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
     caseHash: source.caseHash as Sha256HashV1,

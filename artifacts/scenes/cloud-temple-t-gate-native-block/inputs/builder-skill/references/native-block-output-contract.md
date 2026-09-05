@@ -11,7 +11,7 @@ Reference inputs have stable semantic filenames. Read `world-plan.png` for compl
 Write only:
 
 1. `scene.ts`: the Babylon Native Scene Module.
-2. `native-block-authoring.json`: entry-module and semantic visual-group declarations only.
+2. `native-block-authoring.json`: entry-module, semantic visual-group declarations, and closed openingCamera numeric intent only.
 3. `native-resources.json`: the closed, currently asset-free Native visual resource list.
 
 Those remain the only Native Source files. The task-level files
@@ -174,6 +174,19 @@ For an Opening repair, treat the target's four projected region edges, projected
 
 ## Semantic JSON
 
+`openingCamera` uses the same exact third-person numeric shape as the frozen
+Bootstrap's `initialCamera`: `{ "mode": "third-person", "distanceMeters": 5,
+"targetHeightMeters": 1.2, "pitchRadians": 0.18, "fovDegrees": 56 }` is a shape
+example, not a fixed composition preset. Always write the field explicitly;
+missing intent has no legacy/default fallback. Tune it in the existing Builder
+visual feedback loop without editing any frozen input. The Host accepts only
+values inside the current selectable third-person Profile ranges, then binds
+the intent in the existing materializer metadata and Package identity. No
+resource refs, target IDs, extra axes, Subject resizing or executable Camera
+authority are permitted. Runtime target sockets and Context Modifiers continue
+to apply; the software comparison is advisory, not an exact socket/collision
+simulation or an additional similarity gate.
+
 Functional palette roles do not create semantic identity. Ordinary non-target `structure`, `hazard`,
 `water-like-visual` and `background-mass` Blocks may omit `visualGroupId`, just like ordinary ground
 and route Blocks. Their default Profile colors remain unchanged. Every actual identity target must
@@ -182,7 +195,7 @@ Do not bind unrelated background/support to a target to satisfy grouping. Explic
 are separate and never inferred from visual membership. This reproduces the old distinction between
 ordinary functional presets and landmark identity colors without restoring the old Compiler.
 
-`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, and `visualGroups`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part from the Scene Brief or planning image, and never use a `subject` semantic class. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind that evidence to a Block in the appropriate existing semantic visual group instead. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. It contains no Subject, Spawn, Camera, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
+`native-block-authoring.json` is plain JSON data. Its exact top-level fields are `kind`, `schemaVersion`, `entryModulePath`, `blockProfileRef`, `visualGroups`, and required `openingCamera`. `visualGroups` must be an exact bijection with `context/case.json.expected.semanticSilhouetteTargets`: copy every row's declared `acceptanceTargetRef` and `visualGroupId` exactly once, and do not omit, invent, merge, split, or rename a target/group. When a Case `acceptanceTargetRef` identifies `visual-target-N`, its row must also copy that target's exact `semanticClassId` and Native fixed `identityColor` from `inputs/visual-identity-palette.json`; the Native sequence is `#E85D5D`, `#F28E2B`, `#D9A514`, `#4E79A7`, `#9C6ADE`. A palette target that has no Case semantic silhouette row remains available to the Scene Brief, World Plan, and Builder reasoning, but is not authorization to add a visual group or invent opening bounds. The controlled Subject is never one of these groups: do not reproduce a rider, mount, avatar, character, or body part from the Scene Brief or planning image, and never use a `subject` semantic class. RuntimeHost creates the SDK Subject and Capture observes it separately. Do not create a visual group for an acceptance target that appears only in Spawn support, Collider, traversal, topology, or deterministic evidence; bind that evidence to a Block in the appropriate existing semantic visual group instead. Every `visualGroups` row has exactly `visualGroupId`, `acceptanceTargetRef`, `semanticClassId`, and `identityColorHex`; rows are sorted by stable unique `visualGroupId`. Every `identityColorHex` must also be unique. It names `scene.ts`, the exact Block Profile ref, and the complete semantic visual groups expected by the Case. Apart from the closed openingCamera numeric intent, it contains no Subject, Spawn, Camera, Physics, Runtime, Input, Action, Gameplay, Package, Receipt, or admission state.
 
 `native-resources.json` is plain JSON data with exactly `kind`, `schemaVersion`, and `resourceRefs: []`. Non-empty visual refs remain outside the current production reconstruction lane until the Host implements and freezes their Package resource closure. The model cannot mint locks, publication receipts, admission evidence, or future support by writing a well-formed ref.
 

@@ -2,6 +2,8 @@ import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
 import { isNil } from "lodash-es";
+import { validateCameraTuningV1 } from "./camera-parameter-contract.js";
+import type { WorldRuntimeBootstrapV1 } from "./world-runtime-bootstrap.js";
 
 export interface BabylonNativeInitialCameraV1 {
   readonly mode: "third-person";
@@ -201,6 +203,35 @@ export function parseBabylonNativeInitialCameraV1(input: unknown): BabylonNative
     fovDegrees,
     targetHeightMeters: finiteNumber(record.targetHeightMeters),
   });
+}
+
+export function admitBabylonNativeOpeningCameraV1(
+  input: unknown,
+  runtime: WorldRuntimeBootstrapV1,
+): BabylonNativeInitialCameraV1 {
+  const camera = parseBabylonNativeInitialCameraV1(input);
+  const subjects = runtime.subjectRuntimeDescriptors.filter(({ entityId }) =>
+    entityId === runtime.initialControlledEntityId
+  );
+  if (subjects.length !== 1) return invalidBootstrap();
+  const profiles = subjects[0]!.capabilityAssembly.cameraContext.cameraRigProfiles
+    .filter(({ algorithmRef }) => !algorithmRef.endsWith("/socket-first-person@1"));
+  if (profiles.length === 0) return invalidBootstrap();
+  const tuning = {
+    distanceMeters: camera.distanceMeters,
+    targetHeightMeters: camera.targetHeightMeters,
+    pitchRadians: camera.pitchRadians,
+    baseFovDegrees: camera.fovDegrees,
+  };
+  for (const profile of profiles) {
+    const result = validateCameraTuningV1(profile, tuning);
+    if (!result.ok) {
+      throw new TypeError(
+        `WORLDKIT_RUNTIME_CAMERA_OPENING_TUNING_INVALID: ${result.message}`,
+      );
+    }
+  }
+  return camera;
 }
 
 export function parseBabylonNativeSceneBootstrapV1(

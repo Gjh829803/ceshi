@@ -1,6 +1,7 @@
 import type { Sha256HashV1 } from "@whitebox-world/protocol";
 
 import { sha256CanonicalJson } from "@whitebox-world/protocol";
+import { parseBabylonNativeInitialCameraV1, type BabylonNativeInitialCameraV1 } from "@whitebox-world/runtime-contracts";
 import {
   hashWorldReconstructionCaseV1,
   parseWorldReconstructionCaseV1,
@@ -35,6 +36,7 @@ export interface NativeBlockAuthoringManifestV1 {
   readonly blockProfileRef:
     typeof BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1;
   readonly visualGroups: readonly NativeBlockAuthoringVisualGroupV1[];
+  readonly openingCamera: BabylonNativeInitialCameraV1;
 }
 
 export interface NativeBlockVisualResourceListV1 {
@@ -44,6 +46,7 @@ export interface NativeBlockVisualResourceListV1 {
 }
 
 export interface NativeBlockAuthoringLayoutBindingV1 {
+  readonly openingCamera: BabylonNativeInitialCameraV1;
   readonly kind: "native-block-authoring-layout-binding";
   readonly schemaVersion: 1;
   readonly caseHash: Sha256HashV1;
@@ -228,16 +231,21 @@ export function parseNativeBlockAuthoringManifestV1(
 ): NativeBlockAuthoringManifestV1 {
   const code = "WORLDKIT_NATIVE_BLOCK_AUTHORING_MANIFEST_INVALID";
   assertPlainData(input, code);
-  if (containsAuthorityField(input)) {
-    return fail(code, "Subject, Camera, Physics, Runtime and Gameplay authority fields are forbidden");
-  }
   const source = exactRecord(input, [
     "kind",
     "schemaVersion",
     "entryModulePath",
     "blockProfileRef",
     "visualGroups",
+    "openingCamera",
   ], code, "manifest");
+  const { openingCamera: cameraIntent, ...declarations } = source;
+  if (containsAuthorityField(declarations)) {
+    return fail(code, "Subject, Camera, Physics, Runtime and Gameplay authority fields are forbidden");
+  }
+  let openingCamera: BabylonNativeInitialCameraV1;
+  try { openingCamera = parseBabylonNativeInitialCameraV1(cameraIntent); }
+  catch { return fail(code, "openingCamera must contain only the closed third-person numeric intent"); }
   if (
     source.kind !== "native-block-authoring" ||
     source.schemaVersion !== 1 ||
@@ -299,6 +307,7 @@ export function parseNativeBlockAuthoringManifestV1(
     schemaVersion: 1,
     entryModulePath: "scene.ts",
     blockProfileRef: BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1,
+    openingCamera,
     visualGroups: Object.freeze(visualGroups),
   });
 }
@@ -556,6 +565,7 @@ export function bindNativeBlockAuthoringManifestToCheckedLayoutV1(
     });
   return Object.freeze({
     kind: "native-block-authoring-layout-binding",
+    openingCamera: authoringManifest.openingCamera,
     schemaVersion: 1,
     caseHash,
     authoringManifestHash,

@@ -22,6 +22,7 @@ import {
 } from "@whitebox-world/protocol";
 import {
   hashBabylonNativeSceneBootstrapV1,
+  admitBabylonNativeOpeningCameraV1,
   parseBabylonNativeSceneBootstrapV1,
   parseWorldRuntimeBootstrapV1,
   worldResourceLockEntriesV1,
@@ -1030,6 +1031,11 @@ export async function packageNativeBlockAttemptV1(
   const authoringManifest = parseNativeBlockAuthoringManifestV1(
     authoringManifestValue,
   );
+  try {
+    admitBabylonNativeOpeningCameraV1(authoringManifest.openingCamera, runtime);
+  } catch (error) {
+    return fail("native-block-opening-camera-invalid", error);
+  }
   if (
     blockProfile.resourceRef !== BABYLON_NATIVE_BLOCK_AUTHORING_PROFILE_REF_V1 ||
     authoringManifest.blockProfileRef !== blockProfile.resourceRef ||
@@ -1260,6 +1266,7 @@ export async function packageNativeBlockAttemptV1(
     const groundModelEvidenceRef =
       `artifact://world-reconstruction-case/${reconstructionCase.id}/${attempt.id}/logical-ground-model.json`;
     const analyzedGround = analyzeProductionNativeBlockGroundV1({
+      openingCamera: verified.nativeBlockMaterializerMetadata!.openingCamera,
       reconstructionCase,
       worldRuntimeBootstrap: verified.worldRuntimeBootstrap,
       registryLock: verified.registryLock,

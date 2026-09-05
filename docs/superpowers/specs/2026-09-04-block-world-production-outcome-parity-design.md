@@ -359,9 +359,18 @@ obligations, not implied by this structural evidence.
 
 ### CF-04/12 authored opening Camera consumption
 
-The Host-frozen Runtime Bootstrap's four opening values (`distanceMeters`,
-`targetHeightMeters`, `pitchRadians`, and `fovDegrees`) must reach the actual
-Camera Director, not just the Native Bootstrap and Builder software review.
+The four opening values (`distanceMeters`, `targetHeightMeters`, `pitchRadians`,
+and `fovDegrees`) must reach the actual Camera Director, not just the Builder
+software review. For Native Block, required `openingCamera` in the existing
+authoring sidecar expresses pure numeric intent using the exact
+`BabylonNativeInitialCameraV1` shape. The Host checks the existing selectable
+third-person Profile ranges, binds the values in the authoring/layout binding
+and materializer metadata, and hashes that metadata into the Package. Runtime
+uses these verified values; Formal opening diagnostics and Ground FOV consume
+the same admitted data. Other Scene Source contracts retain their own Bootstrap.
+The immutable generation Bootstrap/WRT remain the input baseline; they are not
+rewritten or re-hashed to masquerade as the authored result. Native Module code
+still cannot create, mutate, or own a Camera. There is no missing-field fallback.
 As in `9e35ab53`, the first selected non-first-person Profile receives that
 authored baseline. The constructor's Profile hint does not override Camera
 Context selection. Resolution order is Profile parameters, authored opening,
@@ -371,10 +380,20 @@ baseline. Existing socket targeting and locked control-heading behavior remain
 unchanged. Validation uses the existing Profile-safe tuning ranges, not a new
 image-quality threshold or production gate.
 
+The Golden Character movement Snapshot stores body-center coordinates. Both
+fixed-transaction Camera publication and initial/rebind view publication use the
+same Host projection to Subject origin and locked local sockets, exactly once.
+No path may treat body center as Subject origin and add the capsule offset to
+the opening target. This preserves the old Subject-origin camera basis without
+changing movement state, socket precedence, or the ordinary completion policy.
+
 The Director owns the opening Profile binding. Its `authoredOpeningProfileRef`
 is included in the Camera transaction and published view Snapshot (absent before
 a successful third-person bind), restored on abort/rollback, and cleared by
-Runtime Reset. The four values remain in the hashed Bootstrap; authored tuning
-is never copied into the mutable Preview override map. This consumption repair
-does not itself select target-driven tuning, provide multi-mode Subjects, prove
-pixel parity, or close CF-04/12.
+Runtime Reset. Native Block's admitted values remain in hashed Package metadata;
+authored tuning is never copied into the mutable Preview override map. Builder
+tunes the data in the existing check/render/view/repair loop, with the same three
+source files, two PNGs, shared repair budget and ordinary completion policy.
+This does not provide multi-mode Subjects, prove target-socket/pixel parity, or
+close CF-04/12. Historical Case artifacts retain their original bytes and evidence
+scope; the current-only parser does not add a bridge for older metadata shapes.

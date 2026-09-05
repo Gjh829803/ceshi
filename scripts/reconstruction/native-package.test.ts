@@ -176,6 +176,7 @@ export default defineBabylonNativeScene({
 
 const AUTHORING = {
   kind: "native-block-authoring",
+  openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
   schemaVersion: 1,
   entryModulePath: "scene.ts",
   blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",

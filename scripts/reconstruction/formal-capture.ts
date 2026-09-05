@@ -635,7 +635,7 @@ export async function captureHostedWorldPackageV1(
         reconstructionCase: input.openingGate.reconstructionCase,
         evaluationProfile: input.openingGate.evaluationProfile,
         openingObservation: payload.openingObservation,
-        expectedCamera: joined.verifiedPackage.bootstrap.initialCamera,
+        expectedCamera: joined.verifiedPackage.nativeBlockMaterializerMetadata!.openingCamera,
       });
       if (openingCompositionGateBlocksPublicationV1({
         executionPurpose: input.openingGate.executionPurpose,

@@ -120,6 +120,20 @@ describe("createBabylonNativeWorldPackageV1", () => {
     expect(changed.receipt.worldBuildIdentityHash).not.toBe(
       first.receipt.worldBuildIdentityHash,
     );
+    const retuned = createBabylonNativeWorldPackageV1({
+      ...input,
+      nativeBlockMaterializerMetadata: { ...metadata,
+        openingCamera: { ...metadata.openingCamera, distanceMeters: 5.5, fovDegrees: 54 } },
+    });
+    expect(retuned.receipt.worldPackageRootHash).not.toBe(first.receipt.worldPackageRootHash);
+    const verifiedRetuned = verifyWorldPackageDirectoryV1(retuned);
+    expect(verifiedRetuned.kind).toBe("babylon-native-scene");
+    if (verifiedRetuned.kind !== "babylon-native-scene") throw new Error("unreachable");
+    expect(verifiedRetuned.bootstrap).toEqual(input.nativeSceneBootstrap);
+    expect(verifiedRetuned.worldRuntimeBootstrap).toEqual(input.worldRuntimeBootstrap);
+    expect(verifiedRetuned.nativeBlockMaterializerMetadata?.openingCamera).toMatchObject({
+      distanceMeters: 5.5, fovDegrees: 54,
+    });
   });
 
   it("closes the Bootstrap, Bundle, and Contribution Profile identity", () => {

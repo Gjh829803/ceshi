@@ -19,6 +19,7 @@ const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 function manifestValue() {
   return {
     kind: "native-block-authoring",
+    openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     entryModulePath: "scene.ts",
     blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -76,6 +77,7 @@ function reconstructionCaseValue() {
         acceptanceTargetRef:
           "worldkit://acceptance-target/central-ascent@1",
         visualGroupId: "central-ascent-group",
+        viewRequirements: [{ viewId: "opening", mode: "reference-projection-required",
         normalizedBounds: {
           minXBasisPoints: 100,
           minYBasisPoints: 200,
@@ -84,10 +86,13 @@ function reconstructionCaseValue() {
         },
         normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
         coverageBasisPoints: 2_400,
+        }, { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" }],
       }, {
         acceptanceTargetRef:
           "worldkit://acceptance-target/upper-t-junction@1",
         visualGroupId: "upper-t-junction-group",
+        viewRequirements: [{ viewId: "opening", mode: "reference-projection-required",
         normalizedBounds: {
           minXBasisPoints: 600,
           minYBasisPoints: 100,
@@ -96,6 +101,8 @@ function reconstructionCaseValue() {
         },
         normalizedCenter: { xBasisPoints: 750, yBasisPoints: 250 },
         coverageBasisPoints: 900,
+        }, { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" }],
       }],
       openingComposition: {
         acceptanceTargetRef:
@@ -286,6 +293,24 @@ type MutableCheckedLayout = {
 };
 
 describe("Native Block authoring manifest", () => {
+  it("binds required data-only opening tuning into authoring identity without admitting Camera ownership", () => {
+    const openingCamera = { mode: "third-person", distanceMeters: 5.5,
+      targetHeightMeters: 1.1, pitchRadians: 0.12, fovDegrees: 56 };
+    const source = { ...manifestValue(), openingCamera };
+    const parsed = parseNativeBlockAuthoringManifestV1(source);
+    expect(parsed.openingCamera).toEqual(openingCamera);
+    expect(Object.isFrozen(parsed.openingCamera)).toBe(true);
+    expect(hashNativeBlockAuthoringManifestV1(source)).not.toBe(
+      hashNativeBlockAuthoringManifestV1({ ...source,
+        openingCamera: { ...openingCamera, distanceMeters: 6 } }),
+    );
+    for (const invalid of [undefined, { ...openingCamera, targetEntityId: "player" },
+      { ...openingCamera, fovDegrees: 180 }, { ...openingCamera, distanceMeters: 0 }]) {
+      expect(() => parseNativeBlockAuthoringManifestV1({ ...source, openingCamera: invalid })).toThrow();
+    }
+    expect(() => parseNativeBlockAuthoringManifestV1({ ...source, camera: openingCamera })).toThrow();
+  });
+
   it("parses and freezes the one current authoring contract", () => {
     const parsed = parseNativeBlockAuthoringManifestV1(manifestValue());
 
@@ -339,6 +364,7 @@ describe("Native Block authoring manifest", () => {
     ["extra top-level field", { ...manifestValue(), camera: { mode: "third-person" } }],
     ["missing entry module", {
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
       visualGroups: manifestValue().visualGroups,
@@ -404,6 +430,7 @@ describe("Native Block authoring to checked Layout binding", () => {
 
     expect(result).toMatchObject({
       kind: "native-block-authoring-layout-binding",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       caseHash: hashWorldReconstructionCaseV1(
         bindingInput().reconstructionCase,

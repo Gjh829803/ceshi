@@ -363,6 +363,7 @@ const STABLE_LOWERCASE_OWNER_DIAGNOSTIC_CODES = new Set([
   "input-file-invalid",
   "input-path-escaped",
   "native-block-ground-evidence-missing",
+  "native-block-opening-camera-invalid",
   "native-block-subject-visual-review-proxy-stale",
   "native-block-visual-identity-palette-input-invalid",
   "native-block-visual-review-input-stale",

@@ -1494,6 +1494,7 @@ describe("runWorldReconstructionV1", () => {
   });
 
   it.each([
+    "native-block-opening-camera-invalid",
     "native-block-subject-visual-review-proxy-stale",
     "native-block-visual-identity-palette-input-invalid",
     "native-block-visual-review-input-stale",

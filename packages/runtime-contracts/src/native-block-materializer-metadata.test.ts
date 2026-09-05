@@ -10,6 +10,7 @@ const H = (digit: string) => `sha256:${digit.repeat(64)}` as const;
 function metadataValue() {
   return {
     kind: "babylon-native-block-materializer-metadata",
+    openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
     schemaVersion: 1,
     nativeSceneProfileRef:
       "worldkit://native-scene-profile/whitebox.blocks@1",

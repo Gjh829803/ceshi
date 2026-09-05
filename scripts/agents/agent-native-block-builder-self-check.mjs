@@ -5,6 +5,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSceneBriefV1 } from "@whitebox-world/authoring";
+import { admitBabylonNativeOpeningCameraV1, parseBabylonNativeInitialCameraV1, parseWorldRuntimeBootstrapV1 } from "@whitebox-world/runtime-contracts";
 import { parseVisualIdentityPaletteV1 } from "../scenes/visual-identity-palette.ts";
 import { typecheckNativeBuilderSource } from "./native-builder-typecheck.mjs";
 
@@ -144,7 +145,7 @@ function validateResourceRefs(value, diagnosticCodes) {
 
 function validateAuthoring(value, diagnosticCodes) {
   if (!hasExactKeys(value, [
-    "kind", "schemaVersion", "entryModulePath", "blockProfileRef", "visualGroups",
+    "kind", "schemaVersion", "entryModulePath", "blockProfileRef", "visualGroups", "openingCamera",
   ]) ||
       value.kind !== "native-block-authoring" || value.schemaVersion !== 1 ||
       value.entryModulePath !== "scene.ts" ||
@@ -153,6 +154,8 @@ function validateAuthoring(value, diagnosticCodes) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
     return;
   }
+  try { parseBabylonNativeInitialCameraV1(value.openingCamera); }
+  catch { diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"); }
   let rowsAreValid = true;
   let hasSubjectVisualGroup = false;
   for (const visualGroup of value.visualGroups) {
@@ -356,7 +359,10 @@ export async function selfCheckNativeBlockBuilderWorkspace(
     } else {
       const value = parseJsonData(bytes, diagnosticCodes);
       if (value !== undefined) {
-        if (hasForbiddenAuthorityField(value)) {
+        const authorityValue = outputPath === "native-block-authoring.json"
+          ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== "openingCamera"))
+          : value;
+        if (hasForbiddenAuthorityField(authorityValue)) {
           diagnosticCodes.add("NATIVE_BLOCK_BUILDER_JSON_AUTHORITY_FIELD_FORBIDDEN");
         }
         if (outputPath === "native-resources.json") {
@@ -369,6 +375,15 @@ export async function selfCheckNativeBlockBuilderWorkspace(
     }
   }
 
+  if (authoringValue !== undefined) {
+    try {
+      const runtime = parseWorldRuntimeBootstrapV1(JSON.parse(await readFile(
+        path.join(canonicalWorkspace, "inputs/world-runtime-bootstrap.json"), "utf8")));
+      admitBabylonNativeOpeningCameraV1(authoringValue.openingCamera, runtime);
+    } catch {
+      diagnosticCodes.add("NATIVE_BLOCK_BUILDER_AUTHORING_INVALID");
+    }
+  }
   if (visualIdentityInputs === undefined) {
     diagnosticCodes.add("NATIVE_BLOCK_BUILDER_VISUAL_IDENTITY_INPUT_INVALID");
   } else {

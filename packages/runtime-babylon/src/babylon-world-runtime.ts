@@ -35,6 +35,7 @@ import type {
   MountedOnRelationshipStateV1,
   SpatialEntityStateV1,
 } from "@whitebox-world/gameplay-contracts";
+import { admitBabylonNativeOpeningCameraV1 } from "@whitebox-world/runtime-contracts";
 import type { RuntimeWorldAdapterDescriptorV1 } from
   "@whitebox-world/runtime-host";
 import type {
@@ -1175,6 +1176,11 @@ export class BabylonWorldRuntime {
           );
         }
         const admittedNativeContribution = nativeContribution;
+        const blockMetadata = preparedNativeScene.verifiedWorldPackage.nativeBlockMaterializerMetadata;
+        if (!isNil(blockMetadata)) {
+          effectiveCamera = { ...effectiveCamera,
+            ...admitBabylonNativeOpeningCameraV1(blockMetadata.openingCamera, options.worldRuntimeBootstrap) };
+        }
         runtimeSubjects = resolveBabylonNativeRuntimeSubjectsV1(
           options.worldRuntimeBootstrap,
           admittedNativeContribution.spawnMarker,
@@ -4029,7 +4035,10 @@ export class BabylonWorldRuntime {
             this.gameplayPublishedState.mountedRelationshipsByRiderEntityId,
           ).map((projection) => projection.relationship),
         });
-        context = parseCameraContextSampleV2({
+        // Rebind/initial view reads the same body-center Snapshot as the fixed
+        // transaction. Reuse its subject-origin projection before the Director
+        // consumes it; otherwise the first pose includes the capsule offset.
+        context = cameraContextWithLockedLocalSocketsV1(subject, parseCameraContextSampleV2({
           schemaVersion: 2,
           semanticAuthorityStatus: "available",
           committedTick: committed.tick,
@@ -4048,14 +4057,10 @@ export class BabylonWorldRuntime {
           environment: {
             relationshipContexts:
               cameraViewTargetContext.relationshipContexts,
-            socketPositionsMetersXYZById: projectLockedLocalCameraSocketsV1(
-              subject,
-              committed.positionMetersXYZ,
-              committed.facingYawRadians,
-            ),
+            socketPositionsMetersXYZById: {},
             cameraContextTags: [],
           },
-        });
+        }));
         this.latestGoldenCameraContextsByEntityId.set(subject.entityId, context);
       }
       const locomotion = context.locomotion;

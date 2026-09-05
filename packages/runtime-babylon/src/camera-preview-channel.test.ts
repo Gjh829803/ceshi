@@ -391,7 +391,7 @@ function expectTargetAndFovRemainTransitioning(
 }
 
 describe("camera preview channel stays out of Gameplay truth", () => {
-  it("projects all four authored opening values onto the selected Profile before modifiers and Preview", () => {
+  it.each([false, true])("projects all four authored opening values onto the selected Profile before modifiers and Preview (Socket available: %s)", (hasTargetSocket) => {
     const plan = compileRuntimeTestScenePlanV1(createFlatTerrainCapabilitySpec(), {
       subjectResourceRegistry: builtInSubjectResourceRegistry,
     });
@@ -418,7 +418,9 @@ describe("camera preview channel stays out of Gameplay truth", () => {
       controlledEntityId: subject.entityId, entityId: subject.entityId,
       targetPositionMetersXYZ: [3, 2, -7], forwardXYZ: [0, 0, -1], upXYZ: [0, 1, 0],
       velocityMetersPerSecondXYZ: [0, 0, 0], approximateRadiusMeters: 0.5,
-      socketPositionsMetersXYZById: {}, movementMedium: "ground",
+      socketPositionsMetersXYZById: hasTargetSocket
+        ? { ThirdPersonTarget: [3, 3.25, -7] }
+        : {}, movementMedium: "ground",
       relationshipContexts: [], cameraContextTags: [],
     };
     let tick = 0;
@@ -438,9 +440,11 @@ describe("camera preview channel stays out of Gameplay truth", () => {
         distanceMeters: 5.5, targetHeightMeters: 1.1, pitchRadians: 0.12, baseFovDegrees: 56,
       });
       expect(camera.fov).toBeCloseTo(56 * Math.PI / 180, 8);
-      expect(opening.desiredTargetPositionMetersXYZ).toEqual([3, 3.1, -7]);
+      const expectedTargetHeightMeters = hasTargetSocket ? 3.25 : 3.1;
+      expect(opening.selectedTargetSocketId).toBe(hasTargetSocket ? "ThirdPersonTarget" : undefined);
+      expect(opening.desiredTargetPositionMetersXYZ).toEqual([3, expectedTargetHeightMeters, -7]);
       expect(opening.desiredPositionMetersXYZ![0]).toBeCloseTo(3, 8);
-      expect(opening.desiredPositionMetersXYZ![1]).toBeCloseTo(3.1 + 5.5 * Math.sin(0.12), 8);
+      expect(opening.desiredPositionMetersXYZ![1]).toBeCloseTo(expectedTargetHeightMeters + 5.5 * Math.sin(0.12), 8);
       expect(opening.desiredPositionMetersXYZ![2]).toBeCloseTo(-7 + 5.5 * Math.cos(0.12), 8);
       expect(opening.authoredOpeningProfileRef).toBe(openingRef);
       expect(director.previewState().tuningByProfileRef).toEqual({});

@@ -103,6 +103,8 @@ async function createWorkspace(): Promise<string> {
     mkdir(path.join(workspace, "inputs"), { recursive: true }),
   ]);
   await Promise.all([
+    writeFile(path.join(workspace, "inputs/world-runtime-bootstrap.json"), await readFile(
+      "apps/playground/public/world-packages/cloud-ridge/runtime/world-runtime-bootstrap.json")),
     writeFile(path.join(workspace, "scene.ts"), `
 import { defineBabylonNativeScene } from "@whitebox-world/native-babylon";
 import { createBabylonNativeBlockProfileSessionV1 } from "@whitebox-world/native-babylon-block-profile";
@@ -120,6 +122,7 @@ export default defineBabylonNativeScene({
 `.trimStart()),
     writeFile(path.join(workspace, "native-block-authoring.json"), `${JSON.stringify({
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -950,6 +953,16 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     expect(second.stdout).toBe(first.stdout);
     expect(secondTop).toEqual(firstTop);
     expect(secondEntry).toEqual(firstEntry);
+    const originalBootstrapBytes = await readFile(path.join(workspace, "inputs/native-scene.bootstrap.json"));
+    const authoringPath = path.join(workspace, "native-block-authoring.json");
+    const authoring = JSON.parse(await readFile(authoringPath, "utf8"));
+    await writeFile(authoringPath, JSON.stringify({ ...authoring,
+      openingCamera: { ...authoring.openingCamera, fovDegrees: 44, distanceMeters: 5.5 } }));
+    const retuned = await runVisualReview(workspace);
+    expect(retuned.exitCode).toBe(0);
+    expect(await readFile(topPath)).toEqual(firstTop);
+    expect(await readFile(entryPath)).not.toEqual(firstEntry);
+    expect(await readFile(path.join(workspace, "inputs/native-scene.bootstrap.json"))).toEqual(originalBootstrapBytes);
 
     const rendererSource = await readFile(path.resolve(
       ".codex/skills/worldkit-native-block-builder/scripts/render-visual-review.source.ts",
@@ -1217,6 +1230,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
   it.each([
     ["authoring top-level field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -1231,6 +1245,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_RESOURCE_REFS_INVALID"],
     ["visual-group authority field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -1244,6 +1259,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_AUTHORING_INVALID"],
     ["controlled Subject semantic class", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -1256,6 +1272,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_SUBJECT_VISUAL_GROUP_FORBIDDEN"],
     ["unsorted visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -1273,6 +1290,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_UNSORTED"],
     ["duplicate visual-group IDs", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -1290,6 +1308,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     }, "NATIVE_BLOCK_BUILDER_VISUAL_GROUPS_DUPLICATE"],
     ["forbidden nested gameplay field", "native-block-authoring.json", {
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -1308,6 +1327,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     const workspace = await createWorkspace();
     await writeFile(path.join(workspace, "native-block-authoring.json"), JSON.stringify({
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",
@@ -1361,6 +1381,7 @@ describe("Native Block Builder Skill", { timeout: 20_000 }, () => {
     };
     const authoring = (identityColorHex: string) => ({
       kind: "native-block-authoring",
+      openingCamera: { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
       schemaVersion: 1,
       entryModulePath: "scene.ts",
       blockProfileRef: "worldkit://native-block-profile/whitebox.blocks@1",

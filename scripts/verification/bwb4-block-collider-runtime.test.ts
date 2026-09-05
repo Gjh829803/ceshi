@@ -361,6 +361,7 @@ async function auditedAdmission(
 
 function verifiedPackage(
   candidate: Awaited<ReturnType<typeof auditedAdmission>>,
+  openingCamera = { mode: "third-person" as const, distanceMeters: 5, targetHeightMeters: 1.2, pitchRadians: 0.18, fovDegrees: 56 },
 ): VerifiedBabylonNativeWorldPackageDirectoryV1 {
   const packageInput = createBabylonNativeBlockWorldPackageTestInputV1({
     resourceBudget: RESOURCE_BUDGET,
@@ -379,6 +380,7 @@ function verifiedPackage(
     createBabylonNativeBlockMaterializerMetadataV1({
       authoringLayoutBinding: Object.freeze({
         kind: "native-block-authoring-layout-binding",
+        openingCamera,
         schemaVersion: 1,
         caseHash: templateMetadata.caseHash,
         authoringManifestHash: templateMetadata.authoringManifestHash,
@@ -407,6 +409,7 @@ function verifiedPackage(
 }
 
 async function createRuntime(input: Readonly<{
+  openingCamera?: Parameters<typeof verifiedPackage>[1];
   packageModule?: BabylonNativeSceneModuleV1;
   runtimeModule?: BabylonNativeSceneModuleV1;
   engineFactory?: () => NullEngine;
@@ -422,7 +425,7 @@ async function createRuntime(input: Readonly<{
     ? packageModule
     : input.runtimeModule;
   const packageAdmission = await auditedAdmission(packageModule);
-  const verified = verifiedPackage(packageAdmission);
+  const verified = verifiedPackage(packageAdmission, input.openingCamera);
   const configuration = runtimeWorldConfigurationFromVerifiedWorldPackageV1(
     verified,
   );
@@ -467,6 +470,37 @@ async function createRuntime(input: Readonly<{
 }
 
 describe("BWB-4 Block Profile Collider Runtime", () => {
+  it("consumes non-default opening Camera from the verified Block Package without mutating Bootstrap", async () => {
+    const openingCamera = { mode: "third-person" as const, distanceMeters: 5.5,
+      targetHeightMeters: 1.1, pitchRadians: 0.12, fovDegrees: 54 };
+    const { runtime, verified } = await createRuntime({ openingCamera });
+    const before = JSON.stringify(verified.bootstrap);
+    try {
+      const initial = runtime.snapshot();
+      const controlledEntityId = verified.worldRuntimeBootstrap.initialControlledEntityId;
+      // Possession is staged here; pose evidence begins at its committed Tick.
+      expect(initial.camera.desiredTargetPositionMetersXYZ).toBeUndefined();
+      const snapshot = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(snapshot.camera.resolvedParameters).toMatchObject({ distanceMeters: 5.5,
+        targetHeightMeters: 1.1, pitchRadians: 0.12, baseFovDegrees: 54 });
+      // This primitive runtime fixture has no preferred Camera Socket; verify
+      // the numeric target height reaches the actual desired pose as well.
+      expect(snapshot.camera.selectedTargetSocketId).toBeUndefined();
+      const subject = snapshot.subjectStatesByEntityId[
+        verified.worldRuntimeBootstrap.initialControlledEntityId
+      ]!;
+      expect(snapshot.camera.desiredTargetPositionMetersXYZ![1] -
+        subject.positionMetersXYZ[1]).toBeCloseTo(openingCamera.targetHeightMeters);
+      expect(JSON.stringify(verified.bootstrap)).toBe(before);
+      expect(verified.bootstrap.initialCamera).not.toEqual(openingCamera);
+      runtime.reset();
+      await bindRuntimeTestPossession(runtime, controlledEntityId);
+      expect(runtime.snapshot().camera.desiredTargetPositionMetersXYZ).toBeUndefined();
+      const replay = await runtime.runFixedInput({ actions: [], ticks: 1 });
+      expect(replay.camera).toEqual(snapshot.camera);
+    } finally { await runtime.dispose(); }
+  });
+
   it("replays identical Contributions, hashes, and verified Packages from two disposed Candidates", async () => {
     const first = await auditedAdmission(
       createBabylonNativeBlockColliderRuntimeFixtureModuleV1(),

@@ -14,6 +14,7 @@ import {
 } from "@whitebox-world/protocol";
 import {
   worldResourceLockEntriesV1,
+  type BabylonNativeInitialCameraV1,
   type BabylonNativeSceneContributionV1,
   type WorldResourceLockEntryV1,
   type WorldRuntimeBootstrapV1,
@@ -46,6 +47,7 @@ const MAXIMUM_SUPPORT_TOP_CELLS_PER_BLOCK = 4;
 const TOPOLOGY_CAPABILITY_EPSILON = 1e-8;
 
 export interface AnalyzeProductionNativeBlockGroundInputV1 {
+  readonly openingCamera: BabylonNativeInitialCameraV1;
   readonly reconstructionCase: WorldReconstructionCaseV1;
   readonly worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
   readonly registryLock: readonly WorldResourceLockEntryV1[];
@@ -321,7 +323,7 @@ function createGroundCaseIntentV1(
       // hole/ledge can pass analysis while the real Character falls.
       standPositionMetersXYZ: spawnDesired,
       openingYawQuarterTurnsY: normalizedYaw as 0 | 1 | 2 | 3,
-      openingFovDegrees: input.worldRuntimeBootstrap.initialCamera.fovDegrees,
+      openingFovDegrees: input.openingCamera.fovDegrees,
     }),
     requiredTargets: Object.freeze(requiredTargets),
     requiredTraversalBands: Object.freeze(
