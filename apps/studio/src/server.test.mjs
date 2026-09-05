@@ -1334,6 +1334,29 @@ test("preserves a Native reconstruction command failure instead of reporting a m
   }
 });
 
+async function writeNativeStyledFixture(fakeRepoRoot, id) {
+  const root = path.join(fakeRepoRoot, "artifacts/scenes", id);
+  const capture = JSON.parse(await readFile(path.join(root, "final/capture/triviews/whitebox-triview-manifest.json"), "utf8"));
+  await writeFile(path.join(root, "visual-generation-prompts.json"), JSON.stringify({
+    kind: "worldkit-visual-generation-prompts", schemaVersion: 2, sceneId: id,
+    openingFrame: { referenceRoles: ["actual-whitebox-opening", "user-first-frame"], prompt: "o".repeat(200) },
+    styledTriviews: capture.whiteboxTriviews.map(target => ({ visualTargetId: target.visualTargetId,
+      referenceRoles: ["target-whitebox-triview", "styled-opening-frame", "user-first-frame"], prompt: "t".repeat(150) })),
+  }));
+  await writeFile(path.join(root, "styled-opening-frame.png"), VALID_ENTRY_OPENING_PNG);
+  for (const target of capture.whiteboxTriviews) {
+    const file = path.join(root, "triviews", target.visualTargetId, "styled-triview.png");
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, VALID_ENTRY_OPENING_PNG);
+  }
+  const { finalizeStyledOpeningFrame } = await tsImport("../../../scripts/visual/finalize-styled-opening-frame.ts", { parentURL: import.meta.url });
+  const { finalizeStyledTriviews } = await tsImport("../../../scripts/visual/finalize-styled-triviews.ts", { parentURL: import.meta.url });
+  await finalizeStyledOpeningFrame({ sceneId: id, sceneRoot: root, sceneSource: "babylon-native",
+    userFramePath: path.join(root, "final/capture/opening.png") });
+  await finalizeStyledTriviews({ sceneId: id, sceneRoot: root, sceneSource: "babylon-native" });
+  return root;
+}
+
 for (const mutation of ["png", "manifest", "extra-directory"]) {
   test(`rejects Native complete-target capture ${mutation} mutation`, async () => {
     const dataRoot = await temporaryRoot(".native-target-tamper-data-");
@@ -1381,25 +1404,7 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
           strictDiagnosticOutcome: "failed", includeWhiteboxTriviews: true, withoutScriptedTraversal: true,
         });
         if (visualMode === "passed" || visualMode === "tampered") {
-          const root = path.join(fakeRepoRoot, "artifacts/scenes", id);
-          const capture = JSON.parse(await readFile(path.join(root, "final/capture/triviews/whitebox-triview-manifest.json"), "utf8"));
-          await writeFile(path.join(root, "visual-generation-prompts.json"), JSON.stringify({
-            kind: "worldkit-visual-generation-prompts", schemaVersion: 2, sceneId: id,
-            openingFrame: { referenceRoles: ["actual-whitebox-opening", "user-first-frame"], prompt: "o".repeat(200) },
-            styledTriviews: capture.whiteboxTriviews.map(target => ({ visualTargetId: target.visualTargetId,
-              referenceRoles: ["target-whitebox-triview", "styled-opening-frame", "user-first-frame"], prompt: "t".repeat(150) })),
-          }));
-          await writeFile(path.join(root, "styled-opening-frame.png"), VALID_ENTRY_OPENING_PNG);
-          for (const target of capture.whiteboxTriviews) {
-            const file = path.join(root, "triviews", target.visualTargetId, "styled-triview.png");
-            await mkdir(path.dirname(file), { recursive: true });
-            await writeFile(file, VALID_ENTRY_OPENING_PNG);
-          }
-          const { finalizeStyledOpeningFrame } = await tsImport("../../../scripts/visual/finalize-styled-opening-frame.ts", { parentURL: import.meta.url });
-          const { finalizeStyledTriviews } = await tsImport("../../../scripts/visual/finalize-styled-triviews.ts", { parentURL: import.meta.url });
-          await finalizeStyledOpeningFrame({ sceneId: id, sceneRoot: root, sceneSource: "babylon-native",
-            userFramePath: path.join(root, "final/capture/opening.png") });
-          await finalizeStyledTriviews({ sceneId: id, sceneRoot: root, sceneSource: "babylon-native" });
+          const root = await writeNativeStyledFixture(fakeRepoRoot, id);
           if (visualMode === "tampered") await writeFile(path.join(root, "styled-opening-frame.png"), VALID_EMPTY_OPENING_PNG);
         }
       },
@@ -1427,6 +1432,83 @@ for (const visualMode of ["passed", "failed", "missing", "tampered"]) {
       assert.equal((await fetch(`${origin}/api/worlds/${created.id}/triviews/visual-target-1`)).status, 200);
       if (visualMode !== "passed") assert.equal(detail.world.failedStage, "visual-imagegen");
     } finally { await studio.shutdown(); }
+  });
+}
+
+for (const recoveryMode of ["complete", "missing-image", "stale-run", "stale-capture", "explicit-failure"]) {
+  test(`Native visual restart ${recoveryMode} uses retained whitebox without launching tasks`, async () => {
+    const dataRoot = await temporaryRoot(".native-restart-data-");
+    const fakeRepoRoot = await temporaryRoot(".native-restart-repo-");
+    const config = { repoRoot: fakeRepoRoot, dataRoot, importExistingArtifacts: false,
+      importBuiltinTestSets: false, importBuiltinResults: false, lwdpConfigured: true };
+    let productionResult;
+    let child;
+    const first = createStudio({ ...config, autoRunJobs: true,
+      beforeWorldSpawn: async id => {
+        productionResult = await writeNativeProductionFixture(fakeRepoRoot, id, {
+          strictDiagnosticOutcome: "failed", includeWhiteboxTriviews: true, withoutScriptedTraversal: true,
+        });
+        await writeNativeStyledFixture(fakeRepoRoot, id);
+      },
+      worldSpawnImplementation: (_command, _args, options) => {
+        child = spawn(process.execPath, ["-e",
+          `process.stdout.write(${JSON.stringify(`${canonicalJson(productionResult)}\nWORLDKIT_STAGE visual-imagegen\n`)}); setInterval(() => {}, 1000);`,
+        ], options);
+        return child;
+      },
+    });
+    const origin = await listen(first);
+    let created;
+    try {
+      created = (await (await fetch(`${origin}/api/worlds`, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Interrupted Native visuals", prompt: "Build the palace", image: {
+          name: "reference.png", dataUrl: `data:image/png;base64,${VALID_ENTRY_OPENING_PNG.toString("base64")}`,
+        } }),
+      })).json()).world;
+      let current;
+      for (let index = 0; index < 300; index++) {
+        current = JSON.parse(await readFile(path.join(dataRoot, "worlds", created.id, "record.json"), "utf8"));
+        if (current.nativeProductionClosure) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      assert.equal(child?.exitCode, null, "the model stand-in has not exited");
+      assert.equal(current.status, "running");
+      assert.equal(current.whiteboxOutcome, "passed");
+      assert.equal(current.nativeProductionClosure.productionOutcome, "passed");
+    } finally {
+      await first.shutdown();
+      for (let index = 0; index < 300 && first.activeJobs.length; index++) await new Promise(resolve => setTimeout(resolve, 25));
+      assert.equal(first.activeJobs.length, 0);
+    }
+    const root = path.join(fakeRepoRoot, "artifacts/scenes", created.id);
+    const recordPath = path.join(dataRoot, "worlds", created.id, "record.json");
+    const stopped = JSON.parse(await readFile(recordPath, "utf8"));
+    assert.equal(stopped.failedStage, "visual-imagegen");
+    assert.equal(stopped.captureStatus, "passed");
+    if (recoveryMode === "missing-image") await rm(path.join(root, "triviews/visual-target-1/styled-triview.png"));
+    if (recoveryMode === "stale-run") {
+      const file = path.join(root, "evaluation-run.json");
+      const run = JSON.parse(await readFile(file, "utf8"));
+      await writeFile(file, JSON.stringify({ ...run, attempt: run.attempt + 1 }));
+    }
+    if (recoveryMode === "stale-capture") await writeFile(path.join(root, "final/capture/opening.png"), VALID_EMPTY_OPENING_PNG);
+    if (recoveryMode === "explicit-failure") await writeFile(recordPath, JSON.stringify({ ...stopped,
+      status: "failed", stage: "failed", error: "visual generation failed", failedStage: "visual-imagegen" }));
+    const receiptPath = path.join(root, "final/capture/formal-world-capture-receipt.json");
+    const receiptBefore = await readFile(receiptPath);
+    let dispatchCount = 0;
+    const second = createStudio({ ...config, autoRunJobs: true,
+      worldSpawnImplementation: () => { dispatchCount++; throw new Error("recovery must not launch a task"); } });
+    const nextOrigin = await listen(second);
+    try {
+      const { world } = await (await fetch(`${nextOrigin}/api/worlds/${created.id}`)).json();
+      assert.equal(world.status, recoveryMode === "complete" ? "ready" : recoveryMode === "explicit-failure" ? "failed" : "interrupted", world.error);
+      assert.equal(world.productionOutcome, "passed");
+      assert.equal(world.strictDiagnosticOutcome, "failed");
+      assert.equal(dispatchCount, 0);
+      assert.equal(world.attempt, 1);
+      assert.deepEqual(await readFile(receiptPath), receiptBefore);
+    } finally { await second.shutdown(); }
   });
 }
 
@@ -3211,6 +3293,7 @@ test("recovers fresh visual outputs only when current trusted receipts are passe
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       title: "Recover Fresh Visuals",
+      sceneSourceKind: "canonical",
       prompt: "Create a playable third-person world.",
       image: { name: "reference.png", dataUrl: `data:image/png;base64,${png.toString("base64")}` },
     }),

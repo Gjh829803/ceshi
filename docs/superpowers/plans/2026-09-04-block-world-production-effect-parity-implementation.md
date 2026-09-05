@@ -735,6 +735,28 @@ zero-script Capture and complete-target inventory mutation. These are local
 contract tests, not a model/image acceptance run. Interrupted visual recovery,
 downstream Recording consumers and the final real Case remain separate open work.
 
+#### CF16-NATIVE-VISUAL-RECOVERY
+
+Main-agent-only, sequential; depends on NATIVE-SCENE-STUDIO. Before the visual
+child finishes, the Studio observes the Host's visual-stage boundary, validates
+the existing single production result and publication artifacts, and preserves
+the whitebox closure in its existing record plus evaluation-run identity. No new
+Run/Attempt journal or model job is introduced. The write is serialized and tied
+to the active Studio attempt/start time; ambiguous production results are not
+retained as an accepted checkpoint.
+
+On restart, an interrupted/running visual task can become ready only from its
+same-attempt record, verified Native launch evidence and the existing complete
+styled file/hash closure. Missing/stale images, changed Capture, stale evaluation
+run and explicit failure remain non-successful, without dispatch. Shutdown keeps
+the original failed stage and a published whitebox's passed capture status.
+Canonical recovery stays on Canonical evidence; its positive fixture explicitly
+selects Canonical rather than wrapping Canonical artifacts in a Native record.
+
+This covers recovery of already delivered outputs. Explicit visual-only retry
+for incomplete delivery and downstream Recording consumers remain separate work;
+the complete CF goal and final real Case are not closed by this checkpoint.
+
 #### CF16-NATIVE-HOST-TARGETS
 
 Main-agent-only, sequential; depends on NATIVE-FORMAL-DELIVERY. The existing formal

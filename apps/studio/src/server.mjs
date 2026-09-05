@@ -2792,7 +2792,14 @@ export function createStudio(options = {}) {
     if (source !== "stdout" || typeof state.nativeProductionResults === "undefined") {
       return;
     }
-    if (line.trim() === "WORLDKIT_STAGE visual-imagegen") state.nativeVisualStarted = true;
+    if (line.trim() === "WORLDKIT_STAGE visual-imagegen") {
+      state.nativeVisualStarted = true;
+      // Keep the accepted whitebox independently of a later interrupted image
+      // task. This is a Studio projection of the existing publisher evidence.
+      if (state.persistNativeWhitebox && !state.nativeWhiteboxCheckpointPromise) {
+        state.nativeWhiteboxCheckpointPromise = Promise.resolve().then(state.persistNativeWhitebox);
+      }
+    }
     try {
       const value = JSON.parse(line.trim());
       if (
@@ -3045,6 +3052,35 @@ export function createStudio(options = {}) {
       nativeCommandFailures: [],
       nativeVisualStarted: false,
     };
+    if (sceneSourceKind === "babylon-native" && styledOpeningFrameRequired) {
+      stdout.persistNativeWhitebox = async () => {
+        try {
+          if (stdout.nativeProductionResults.length !== 1 || stdout.nativeCommandFailures.length !== 0) return;
+          const result = parseWorldReconstructionProductionResultV1(stdout.nativeProductionResults[0]);
+          if (result.productionOutcome !== "passed") return;
+          const closure = await validateNativeProductionResult(record, result);
+          await runRecordMutation(id, async () => {
+            const current = await readRecord(id);
+            if (current?.attempt !== attempt || current.startedAt !== startedAt ||
+                !["running", "interrupted"].includes(current.status) ||
+                stdout.nativeProductionResults.length !== 1 || stdout.nativeCommandFailures.length !== 0) return;
+            await writeJsonAtomic(path.join(artifactRoot, "evaluation-run.json"), evaluationRun);
+            await writeRecordUnlocked({ ...current,
+              productionOutcome: closure.productionOutcome,
+              publicationOutcome: closure.publicationOutcome,
+              evaluationOutcome: closure.evaluationOutcome,
+              strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+              strictDiagnosticCodes: closure.strictDiagnosticCodes,
+              strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+              nativeProductionClosure: closure, nativeLaunch: closure.launch,
+              whiteboxOutcome: "passed", captureStatus: "passed", captureRequired: false,
+            });
+          });
+        } catch (error) {
+          await appendJobLog(id, `\nNative whitebox checkpoint unavailable: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+      };
+    }
     const stderr = { buffer: "" };
     child.stdout.on("data", (chunk) => consumeOutput(id, "stdout", chunk, stdout));
     child.stderr.on("data", (chunk) => consumeOutput(id, "stderr", chunk, stderr));
@@ -3057,6 +3093,7 @@ export function createStudio(options = {}) {
     if (stdout.buffer) captureNativeProductionMessage("stdout", stdout.buffer, stdout);
     if (stdout.buffer) await appendJobLog(id, `[stdout] ${stdout.buffer}\n`);
     if (stderr.buffer) await appendJobLog(id, `[stderr] ${stderr.buffer}\n`);
+    await stdout.nativeWhiteboxCheckpointPromise;
 
     if (stoppingJobs.has(id)) return;
 
@@ -3065,10 +3102,10 @@ export function createStudio(options = {}) {
       await updateRecord(id, {
         status: "interrupted",
         stage: "interrupted",
-        failedStage: latestRecord?.stage ?? "preparing",
+        failedStage: latestRecord?.failedStage ?? latestRecord?.stage ?? "preparing",
         finishedAt: new Date().toISOString(),
         error: "Creator Studio stopped while this world was being generated.",
-        captureStatus: "not-run",
+        captureStatus: latestRecord?.whiteboxOutcome === "passed" ? "passed" : "not-run",
         outcome: "failed",
       });
       await appendTrajectoryEvent(id, "interrupted", "Creator Studio 停止，运行中的任务被标记为中断。", { kind: "failed" });
@@ -3601,6 +3638,46 @@ export function createStudio(options = {}) {
     const startedAtMs = Date.parse(record.startedAt ?? "");
     if (!Number.isFinite(startedAtMs)) return false;
     const freshnessFloor = startedAtMs - 1_000;
+    const evaluationRun = await readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json"));
+    if (
+      evaluationRun?.kind !== "worldkit-evaluation-run" || evaluationRun.schemaVersion !== 1 ||
+      evaluationRun.caseId !== record.id || evaluationRun.sceneId !== record.sceneId ||
+      evaluationRun.workflowPolicyVersion !== workflowPolicyVersion ||
+      evaluationRun.attempt !== record.attempt || evaluationRun.startedAt !== record.startedAt
+    ) return false;
+    if (effectiveSceneSourceKind(record) === "babylon-native") {
+      const closure = record.nativeProductionClosure;
+      if (record.referenceImage === null || closure?.kind !== "studio-native-production-closure" ||
+          closure.caseId !== record.sceneId || closure.productionOutcome !== "passed" ||
+          closure.publicationOutcome !== "published" ||
+          !await hasNativeLaunchEvidence(record) || !await hasNativeStyledArtifacts(record, freshnessFloor)) return false;
+      const finishedAt = new Date().toISOString();
+      await updateRecord(record.id, {
+        status: "ready", stage: "ready", failedStage: null, finishedAt, error: null,
+        outcome: "passed", whiteboxOutcome: "passed", captureStatus: "passed", captureRequired: false,
+        productionOutcome: closure.productionOutcome, publicationOutcome: closure.publicationOutcome,
+        evaluationOutcome: closure.evaluationOutcome, strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+        strictDiagnosticCodes: closure.strictDiagnosticCodes,
+        strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+        nativeLaunch: closure.launch, styledOpeningFrameStatus: "passed", styledTriviewsStatus: "passed",
+      });
+      await writeJsonAtomic(path.join(artifactRoot, "evaluation-report.json"), {
+        kind: "worldkit-evaluation-report", schemaVersion: 1, caseId: record.id,
+        caseHash: evaluationRun.caseHash, workflowPolicyVersion, attempt: record.attempt,
+        codexBackend: effectiveCodexBackend(record), outcome: "passed", whiteboxOutcome: "passed",
+        productionOutcome: closure.productionOutcome, publicationOutcome: closure.publicationOutcome,
+        evaluationOutcome: closure.evaluationOutcome, strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+        strictDiagnosticCodes: closure.strictDiagnosticCodes,
+        strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+        nativeProduction: { caseId: closure.caseId, runId: closure.runId,
+          strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+          strictDiagnosticCodes: closure.strictDiagnosticCodes, strictDiagnosticHash: closure.strictDiagnosticHash },
+        finishedAt,
+      });
+      await appendTrajectoryEvent(record.id, "visual-imagegen",
+        "已恢复 Native 已发布白膜与完整视觉产物；未重新提交模型任务。", { kind: "completed" });
+      return true;
+    }
     if (!await hasTrustedWhiteboxArtifacts(artifactRoot, record.sceneId, freshnessFloor)) return false;
     const required = [
       "visual-generation-prompts.json",
@@ -3628,18 +3705,11 @@ export function createStudio(options = {}) {
     ])));
     if (!Object.values(gates).every(Boolean)) return false;
     if (!await pngArtifact(path.join(artifactRoot, "styled-opening-frame.png"), freshnessFloor)) return false;
-    const [evaluationRun, openingReport, triViewReport, captureManifest] = await Promise.all([
-      readJsonIfPresent(path.join(artifactRoot, "evaluation-run.json")),
+    const [openingReport, triViewReport, captureManifest] = await Promise.all([
       readJsonIfPresent(path.join(artifactRoot, "styled-opening-frame-report.json")),
       readJsonIfPresent(path.join(artifactRoot, "styled-triviews-report.json")),
       readJsonIfPresent(path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")),
     ]);
-    if (
-      evaluationRun?.kind !== "worldkit-evaluation-run" || evaluationRun.schemaVersion !== 1 ||
-      evaluationRun.caseId !== record.id || evaluationRun.sceneId !== record.sceneId ||
-      evaluationRun.workflowPolicyVersion !== workflowPolicyVersion ||
-      evaluationRun.attempt !== record.attempt || evaluationRun.startedAt !== record.startedAt
-    ) return false;
     if (record.referenceImage !== null) {
       if (
         openingReport?.kind !== "worldkit-styled-opening-frame-report" || openingReport.schemaVersion !== 1 ||
@@ -4486,12 +4556,13 @@ export function createStudio(options = {}) {
     }
     await Promise.all([
       recordingWorkbench.shutdown(),
-      ...[...activeJobs].map((id) => updateRecord(id, {
-          status: "interrupted",
-          stage: "interrupted",
-          finishedAt: new Date().toISOString(),
-          error: "Creator Studio stopped while this world was being generated.",
-        })),
+      ...[...activeJobs].map((id) => runRecordMutation(id, async () => {
+        const record = await readRecord(id);
+        if (!record) return;
+        await writeRecordUnlocked({ ...record, status: "interrupted", stage: "interrupted",
+          failedStage: record.failedStage ?? record.stage, finishedAt: new Date().toISOString(),
+          error: "Creator Studio stopped while this world was being generated." });
+      })),
     ]);
     await new Promise((resolve) => server.close(resolve));
   }

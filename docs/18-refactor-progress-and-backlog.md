@@ -2045,6 +2045,25 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   视觉阶段中断恢复、下游 Recording 消费者、其余 CF 与最终真实 Case 继续开放；保持所有
   CF 开发及旧链对齐完成后，才运行最后本地生产 Case。
 
+- CF16-NATIVE-VISUAL-RECOVERY（main-agent-only，接 `69a4fbdd`）：进入 Native 视觉阶段时，
+  Studio 已将原生产结果及发布证据验证后保存到既有 record 的 whitebox closure 和
+  `evaluation-run.json`，不再等长时间图片任务退出才记录已通过白膜。写入沿用单记录
+  串行 owner，核对当前 attempt/startedAt；多结果或 command failure 不成为 checkpoint。
+  没有创建另一套 Run/Attempt 状态或模型任务。子进程结束时等待该写入，最终普通结果
+  仍走原验证路径；Capture/Package/历史 Run 不修改。
+  重启只在同一 Studio 运行身份、Native launch 证据和完整 styled file/hash closure
+  同时成立时恢复 ready。缺图、stale run、改过白膜、明确 failed 均不恢复成功，也不启动
+  Planner/Builder/视觉任务。修复实际停机回归：记录原 visual failedStage，并保留已发布
+  白膜的 captureStatus=passed，不再改成 not-run。严格诊断失败仍单列。
+  真实进程 stand-in 保持存活，验证 checkpoint 已先持久化，再 shutdown/restart；
+  五种重启条件 5/5、既有 Native styled/Canonical recovery 回归 7/7 通过。Canonical
+  正向夹具改为显式 Canonical Source，不能让 Native 记录靠 Canonical 文件恢复成功。
+  单记录并发、停止、队列生命周期定向 4/4 通过；最后重启/失败两项复跑通过，
+  是前述子集，不累加。Node 语法与 diff 检查通过。
+  本项只恢复已完成交付的视觉结果；不完整交付的显式 visual-only retry、Recording
+  下游与其余 CF 仍待推进。没有新模型 Case、Browser 看图、全仓门禁或独立复核；最后
+  本地生产 Case 继续等待全部 CF 开发及旧链对齐完成。
+
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
 
