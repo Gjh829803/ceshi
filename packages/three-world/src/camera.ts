@@ -1,0 +1,273 @@
+import * as THREE from 'three';
+import type { PhysicsPort, Vec3 } from './engine-contracts.js';
+
+export type CameraRigFollowOptions = Readonly<{
+  targetEntityId: string;
+  distanceMeters?: number;
+  targetHeightMeters?: number;
+  pitchRadians?: number;
+  activateOnInput?: boolean;
+  transitionSeconds?: number;
+  rotationSpeedRadiansPerSecond?: number;
+  collisionRadiusMeters?: number;
+  recoveryHalfLifeSeconds?: number;
+}>;
+export type CameraRigInput = Readonly<{
+  cameraYawRatio?: number;
+  cameraPitchRatio?: number;
+  yawDeltaRadians?: number;
+  pitchDeltaRadians?: number;
+  distanceDeltaMeters?: number;
+  activate?: boolean;
+}>;
+export type CameraRigState = Readonly<{
+  mode: 'authored' | 'follow-pending' | 'follow';
+  positionWorldMetersXYZ: Vec3;
+  desiredPositionWorldMetersXYZ: Vec3;
+  desiredYawRadians: number;
+  desiredPitchRadians: number;
+  desiredArmDistanceMeters?: number;
+  safeArmDistanceMeters?: number;
+  actualArmDistanceMeters?: number;
+  obstructionEntityId?: string;
+}>;
+
+type Follow = { -readonly [Key in keyof CameraRigFollowOptions]-?: CameraRigFollowOptions[Key] };
+type RigMemory = {
+  mode: CameraRigState['mode'];
+  follow: Follow | undefined;
+  yawRadians: number;
+  armDistanceMeters: number;
+  safeArmDistanceMeters: number | undefined;
+  actualArmDistanceMeters: number | undefined;
+  obstructionEntityId: string | undefined;
+  recoveryDelaySeconds: number;
+  distanceChanged: boolean;
+  transitionElapsedSeconds: number;
+  transitionPosition: THREE.Vector3;
+  transitionQuaternion: THREE.Quaternion;
+};
+const MIN_PITCH_RADIANS = -1.3;
+const MAX_PITCH_RADIANS = 1.4;
+const CONTACT_MARGIN_METERS = .02;
+const RELEASE_DELAY_SECONDS = .12;
+const RELEASE_DEADBAND_METERS = .03;
+const tuple = (value: THREE.Vector3): Vec3 => [value.x, value.y, value.z];
+const exponential = (from: number, to: number, deltaSeconds: number, halfLifeSeconds: number) => to + (from - to) * Math.pow(.5, deltaSeconds / halfLifeSeconds);
+const smoothstep = (ratio: number) => ratio * ratio * (3 - 2 * ratio);
+
+function bounded(value: number, minimum: number, maximum: number, label: string): number {
+  if (!Number.isFinite(value) || value < minimum || value > maximum) throw new Error(`WORLD_CAMERA_OPTION_INVALID: ${label}`);
+  return value;
+}
+function validDeltaSeconds(deltaSeconds: number): void {
+  if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0 || deltaSeconds > 10) throw new Error('WORLD_CAMERA_TIMESTEP_INVALID');
+}
+function copyMemory(memory: RigMemory): RigMemory {
+  return { ...memory, follow: memory.follow ? { ...memory.follow } : undefined, transitionPosition: memory.transitionPosition.clone(), transitionQuaternion: memory.transitionQuaternion.clone() };
+}
+
+/** One optional writer for the supplied camera. The World owns input collection and time. */
+export class ThreeCameraRig {
+  get targetEntityId():string|undefined{return this.memory.follow?.targetEntityId;}
+  private memory: RigMemory = {
+    mode: 'authored', follow: undefined, yawRadians: 0, armDistanceMeters: 0,
+    safeArmDistanceMeters: undefined, actualArmDistanceMeters: undefined, obstructionEntityId: undefined,
+    recoveryDelaySeconds: 0, distanceChanged: false, transitionElapsedSeconds: 0,
+    transitionPosition: new THREE.Vector3(), transitionQuaternion: new THREE.Quaternion(),
+  };
+  private initial: { camera: THREE.Camera; parent: THREE.Object3D | null; memory: RigMemory } | undefined;
+
+  constructor(
+    private readonly camera: THREE.Camera,
+    private readonly castCameraArm: PhysicsPort['castCameraArm'],
+    private readonly targetPosition: (entityId: string) => Vec3 | undefined,
+  ) {}
+
+  get mode(): CameraRigState['mode'] { return this.memory.mode; }
+  get desiredYawRadians(): number {
+    if (this.memory.mode !== 'authored') return this.memory.yawRadians;
+    const direction = this.camera.getWorldDirection(new THREE.Vector3());
+    return Math.atan2(-direction.x, -direction.z);
+  }
+
+  setFollow(options: CameraRigFollowOptions): void {
+    if (!options || typeof options.targetEntityId !== 'string' || !options.targetEntityId.trim()) throw new Error('WORLD_CAMERA_TARGET_REQUIRED');
+    const follow: Follow = {
+      targetEntityId: options.targetEntityId,
+      distanceMeters: bounded(options.distanceMeters ?? 4, .05, 100, 'distanceMeters'),
+      targetHeightMeters: bounded(options.targetHeightMeters ?? 1.3, -10_000, 10_000, 'targetHeightMeters'),
+      pitchRadians: bounded(options.pitchRadians ?? .25, MIN_PITCH_RADIANS, MAX_PITCH_RADIANS, 'pitchRadians'),
+      activateOnInput: options.activateOnInput ?? true,
+      transitionSeconds: bounded(options.transitionSeconds ?? .35, 0, 10, 'transitionSeconds'),
+      rotationSpeedRadiansPerSecond: bounded(options.rotationSpeedRadiansPerSecond ?? 1.8, .001, 100, 'rotationSpeedRadiansPerSecond'),
+      collisionRadiusMeters: bounded(options.collisionRadiusMeters ?? .2, .001, 10, 'collisionRadiusMeters'),
+      recoveryHalfLifeSeconds: bounded(options.recoveryHalfLifeSeconds ?? .18, .001, 10, 'recoveryHalfLifeSeconds'),
+    };
+    if (typeof follow.activateOnInput !== 'boolean') throw new Error('WORLD_CAMERA_OPTION_INVALID: activateOnInput');
+    this.target(follow);
+    const direction = this.camera.getWorldDirection(new THREE.Vector3());
+    this.memory = {
+      mode: follow.activateOnInput ? 'follow-pending' : 'follow', follow,
+      yawRadians: Math.atan2(-direction.x, -direction.z), armDistanceMeters: follow.distanceMeters,
+      safeArmDistanceMeters: undefined, actualArmDistanceMeters: undefined, obstructionEntityId: undefined,
+      recoveryDelaySeconds: 0, distanceChanged: false, transitionElapsedSeconds: 0,
+      transitionPosition: this.camera.getWorldPosition(new THREE.Vector3()),
+      transitionQuaternion: this.camera.getWorldQuaternion(new THREE.Quaternion()),
+    };
+  }
+
+  /** Call before computing the player's camera-relative movement direction. */
+  updateDesired(input: CameraRigInput, deltaSeconds: number): void {
+    validDeltaSeconds(deltaSeconds);
+    if (!input || typeof input !== 'object') throw new Error('WORLD_CAMERA_INPUT_INVALID');
+    for (const key of ['cameraYawRatio', 'cameraPitchRatio', 'yawDeltaRadians', 'pitchDeltaRadians', 'distanceDeltaMeters'] as const) {
+      const value = input[key];
+      if (value !== undefined && (!Number.isFinite(value) || Math.abs(value) > (key.endsWith('Ratio') ? 1 : 100_000))) throw new Error(`WORLD_CAMERA_INPUT_INVALID: ${key}`);
+    }
+    if (input.activate !== undefined && typeof input.activate !== 'boolean') throw new Error('WORLD_CAMERA_INPUT_INVALID: activate');
+    const follow = this.memory.follow;
+    if (!follow || this.mode === 'authored') return;
+    const yaw = (input.cameraYawRatio ?? 0) * follow.rotationSpeedRadiansPerSecond * deltaSeconds + (input.yawDeltaRadians ?? 0);
+    const pitch = (input.cameraPitchRatio ?? 0) * follow.rotationSpeedRadiansPerSecond * deltaSeconds + (input.pitchDeltaRadians ?? 0);
+    const zoom = input.distanceDeltaMeters ?? 0;
+    if (this.mode === 'follow-pending' && (input.activate || yaw !== 0 || pitch !== 0 || zoom !== 0)) {
+      this.memory.mode = 'follow'; this.memory.transitionElapsedSeconds = 0;
+      this.camera.getWorldPosition(this.memory.transitionPosition); this.camera.getWorldQuaternion(this.memory.transitionQuaternion);
+    }
+    this.memory.yawRadians += yaw;
+    follow.pitchRadians = THREE.MathUtils.clamp(follow.pitchRadians + pitch, MIN_PITCH_RADIANS, MAX_PITCH_RADIANS);
+    const distanceMeters = THREE.MathUtils.clamp(follow.distanceMeters + zoom, .05, 100);
+    if (distanceMeters !== follow.distanceMeters) this.memory.distanceChanged = true;
+    follow.distanceMeters = distanceMeters;
+  }
+
+  /** Call once after the shared physics step; never advances physics or renders. */
+  update(deltaSeconds: number): void {
+    validDeltaSeconds(deltaSeconds);
+    const follow = this.memory.follow;
+    if (!follow || this.mode !== 'follow') return;
+    const target = this.target(follow);
+    const direction = this.armDirection(follow);
+    const desiredEye = target.clone().addScaledVector(direction, follow.distanceMeters);
+    const requested = this.probe(target, desiredEye, follow.collisionRadiusMeters);
+    const desiredDistance = Math.min(follow.distanceMeters, requested.safeDistanceMeters);
+    const hadObstruction = this.memory.obstructionEntityId !== undefined;
+    const changedDistance = this.memory.distanceChanged;
+    let armDistance = this.memory.armDistanceMeters;
+
+    if (requested.obstructionEntityId !== undefined && requested.safeDistanceMeters < armDistance) {
+      // A newly unsafe pose is corrected immediately, including zero clearance.
+      armDistance = requested.safeDistanceMeters;
+      this.memory.recoveryDelaySeconds = RELEASE_DELAY_SECONDS;
+    } else if (desiredDistance < armDistance || changedDistance) {
+      // A user zoom is a parameter transition; it does not impersonate a collision.
+      armDistance = exponential(armDistance, desiredDistance, deltaSeconds, follow.recoveryHalfLifeSeconds);
+    } else {
+      if (hadObstruction && requested.obstructionEntityId === undefined) this.memory.recoveryDelaySeconds = RELEASE_DELAY_SECONDS;
+      const delay = Math.min(deltaSeconds, this.memory.recoveryDelaySeconds);
+      this.memory.recoveryDelaySeconds -= delay;
+      if (requested.obstructionEntityId === undefined || desiredDistance - armDistance > RELEASE_DEADBAND_METERS) {
+        armDistance = exponential(armDistance, desiredDistance, deltaSeconds - delay, follow.recoveryHalfLifeSeconds);
+      }
+    }
+    this.memory.distanceChanged = false;
+    this.memory.armDistanceMeters = armDistance;
+    this.memory.transitionElapsedSeconds += deltaSeconds;
+    const transitionRatio = follow.transitionSeconds === 0 ? 1 : Math.min(1, this.memory.transitionElapsedSeconds / follow.transitionSeconds);
+    const blend = smoothstep(transitionRatio);
+    const eye = target.clone().addScaledVector(direction, armDistance);
+    if (blend < 1) eye.lerpVectors(this.memory.transitionPosition, eye, blend);
+
+    // Transition chords and a smoothing zoom can be outside the requested arm.
+    // Probe their actual volume too; a safe destination alone is insufficient.
+    const actualProbe = this.probe(target, eye, follow.collisionRadiusMeters);
+    const offset = eye.clone().sub(target);
+    const candidateDistance = offset.length();
+    if (actualProbe.safeDistanceMeters < candidateDistance) {
+      eye.copy(target).addScaledVector(offset, candidateDistance === 0 ? 0 : actualProbe.safeDistanceMeters / candidateDistance);
+      this.memory.recoveryDelaySeconds = RELEASE_DELAY_SECONDS;
+      if (blend === 1) this.memory.armDistanceMeters = actualProbe.safeDistanceMeters;
+    }
+    this.memory.actualArmDistanceMeters = eye.distanceTo(target);
+    this.memory.safeArmDistanceMeters = blend < 1 || candidateDistance > follow.distanceMeters
+      ? actualProbe.safeDistanceMeters : requested.safeDistanceMeters;
+    this.memory.obstructionEntityId = actualProbe.obstructionEntityId ?? requested.obstructionEntityId;
+    const lookingEye = eye.distanceToSquared(target) > 1e-12 ? eye : desiredEye;
+    const rotation = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(lookingEye, target, this.camera.up));
+    if (blend < 1) rotation.slerpQuaternions(this.memory.transitionQuaternion, rotation, blend);
+    this.applyWorldPose(eye, rotation);
+  }
+
+  useAuthoredCamera(): THREE.Camera {
+    this.memory.mode = 'authored'; this.memory.follow = undefined;
+    this.memory.safeArmDistanceMeters = undefined; this.memory.actualArmDistanceMeters = undefined;
+    this.memory.obstructionEntityId = undefined; this.memory.recoveryDelaySeconds = 0;
+    this.memory.distanceChanged = false; this.memory.transitionElapsedSeconds = 0;
+    return this.camera;
+  }
+
+  sealInitialState(): void {
+    if (this.initial) return;
+    this.camera.updateWorldMatrix(true, false);
+    this.initial = { camera: this.camera.clone(), parent: this.camera.parent, memory: copyMemory(this.memory) };
+  }
+
+  reset(): void {
+    this.sealInitialState();
+    const initial = this.initial!;
+    if (initial.parent) initial.parent.add(this.camera); else this.camera.removeFromParent();
+    this.camera.copy(initial.camera, false);
+    this.camera.updateWorldMatrix(true, false);
+    this.memory = copyMemory(initial.memory);
+  }
+
+  snapshot(): CameraRigState {
+    const position = this.camera.getWorldPosition(new THREE.Vector3());
+    const follow = this.memory.follow;
+    const direction = this.camera.getWorldDirection(new THREE.Vector3());
+    return {
+      mode: this.mode,
+      positionWorldMetersXYZ: tuple(position),
+      desiredPositionWorldMetersXYZ: tuple(follow ? this.target(follow).addScaledVector(this.armDirection(follow), follow.distanceMeters) : position),
+      desiredYawRadians: this.desiredYawRadians,
+      desiredPitchRadians: follow?.pitchRadians ?? Math.asin(THREE.MathUtils.clamp(-direction.y, -1, 1)),
+      ...(follow ? { desiredArmDistanceMeters: follow.distanceMeters } : {}),
+      ...(this.memory.safeArmDistanceMeters === undefined ? {} : { safeArmDistanceMeters: this.memory.safeArmDistanceMeters }),
+      ...(this.memory.actualArmDistanceMeters === undefined ? {} : { actualArmDistanceMeters: this.memory.actualArmDistanceMeters }),
+      ...(this.memory.obstructionEntityId === undefined ? {} : { obstructionEntityId: this.memory.obstructionEntityId }),
+    };
+  }
+
+  private target(follow: Follow): THREE.Vector3 {
+    const position = this.targetPosition(follow.targetEntityId);
+    if (!position || position.length !== 3 || !position.every(Number.isFinite)) throw new Error(`WORLD_CAMERA_TARGET_INVALID: ${follow.targetEntityId}`);
+    return new THREE.Vector3(...position).add(new THREE.Vector3(0, follow.targetHeightMeters, 0));
+  }
+
+  private armDirection(follow: Follow): THREE.Vector3 {
+    const cosine = Math.cos(follow.pitchRadians);
+    return new THREE.Vector3(Math.sin(this.memory.yawRadians) * cosine, Math.sin(follow.pitchRadians), Math.cos(this.memory.yawRadians) * cosine);
+  }
+
+  private probe(target: THREE.Vector3, eye: THREE.Vector3, radiusMeters: number): { safeDistanceMeters: number; obstructionEntityId?: string } {
+    const length = target.distanceTo(eye);
+    const hit = this.castCameraArm(tuple(target), tuple(eye), radiusMeters);
+    if (!Number.isFinite(hit.distanceMeters) || hit.distanceMeters < 0) throw new Error('WORLD_CAMERA_PROBE_INVALID');
+    const hasObstruction = hit.colliderEntityId !== undefined || hit.distanceMeters < length - 1e-8;
+    return {
+      safeDistanceMeters: Math.max(0, Math.min(length, hit.distanceMeters) - (hasObstruction ? CONTACT_MARGIN_METERS : 0)),
+      ...(hit.colliderEntityId === undefined ? {} : { obstructionEntityId: hit.colliderEntityId }),
+    };
+  }
+
+  private applyWorldPose(position: THREE.Vector3, quaternion: THREE.Quaternion): void {
+    const parent = this.camera.parent;
+    if (parent) {
+      parent.updateWorldMatrix(true, false);
+      this.camera.position.copy(parent.worldToLocal(position.clone()));
+      this.camera.quaternion.copy(parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(quaternion));
+    } else { this.camera.position.copy(position); this.camera.quaternion.copy(quaternion); }
+    this.camera.updateMatrix(); this.camera.updateWorldMatrix(true, false);
+  }
+}

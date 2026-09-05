@@ -79,7 +79,7 @@ describe('ThreeNavigation with real Recast and native mesh geometry', () => {
     expect(nav.findPath([0, 0, 0], [4, 0, 0]).status).toBe('unreachable');
     group.visible = false;
     nav.rebuild([group]);
-    expect(nav.findPath([40, 0, -30], [44, 0, -30]).status).toBe('unreachable');
+    expect(nav.findPath([40, 0, -30], [44, 0, -30]).status).toBe('success'); // v2 visibility is visual-only; collision/navigation remain.
   });
 
   it('never invents routes for empty geometry, off-mesh endpoints or a rejected rebuild', async () => {
@@ -122,6 +122,8 @@ describe('ThreeNavigation with real Recast and native mesh geometry', () => {
     nav.rebuild([parent, ground, ground]);
     expect(nav.findPath([16, 0, -10], [24, 0, -10]).status).toBe('success');
     ground.visible = false; nav.rebuild([parent, ground]);
+    expect(nav.findPath([16, 0, -10], [24, 0, -10]).status).toBe('success');
+    nav.rebuild([]); // Removing physical sources, not hiding them, removes navigation.
     expect(nav.findPath([16, 0, -10], [24, 0, -10]).reason).toBe('NAVIGATION_EMPTY');
   });
 

@@ -1,9 +1,19 @@
 {
   "name": "@worldkit/three",
-  "version": "0.1.0-experimental",
+  "version": "0.2.0-experimental",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./physics": "./src/physics.ts", "./assets": "./src/assets.ts" },
-  "dependencies": { "three": "0.185.1", "@dimforge/rapier3d-compat": "0.20.0", "@noble/hashes": "1.8.0", "@recast-navigation/core": "0.43.1", "@recast-navigation/generators": "0.43.1" },
-  "devDependencies": { "@types/three": "0.185.4" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "three": "0.185.1",
+    "@dimforge/rapier3d-compat": "0.20.0",
+    "@noble/hashes": "1.8.0",
+    "@recast-navigation/core": "0.43.1",
+    "@recast-navigation/generators": "0.43.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.185.4"
+  }
 }

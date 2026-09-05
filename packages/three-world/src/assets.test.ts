@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Box3, LoopOnce, LoopRepeat, Vector3, type Mesh, type MeshStandardMaterial, type SkinnedMesh } from 'three';
 import catalog from '../../../scripts/three-creator/asset-catalog.json';
 import { loadAsset } from './assets';
-import type { AssetDefinition, AssetInstance } from './contracts';
+import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
 const assets = catalog.assets as unknown as readonly (AssetDefinition & { sourcePath: string })[];
 const humanoid = assets.find((asset) => asset.id === 'humanoid.g-bot')!;
@@ -103,6 +103,26 @@ describe('Three asset loader against original project GLBs', () => {
     expect(salute.clampWhenFinished).toBe(true);
     expect(salute.paused).toBe(true);
     expect(salute.time).toBeCloseTo(salute.getClip().duration);
+  });
+
+  it('honors an explicit playback change while the same clip is already running', async () => {
+    const instance = await load(); instance.play('walk'); instance.update(.3);
+    instance.play('walk', { playback: 'once' });
+    const action = instance.mixer.existingAction(instance.clips.find(clip => clip.name === 'walk')!)!;
+    expect(action.loop).toBe(LoopOnce); expect(instance.timeSeconds).toBe(0);
+    instance.update(2); expect(instance.isActionComplete).toBe(true);
+    instance.play('walk', { playback: 'loop' }); instance.update(2);
+    expect(action.loop).toBe(LoopRepeat); expect(instance.isActionComplete).toBe(false);
+  });
+
+  it('reports real one-shot completion rather than interpreting a pause as completion', async () => {
+    const instance = await load(); expect(instance.isActionComplete).toBe(false);
+    instance.play('emote.salute'); instance.update(.2);
+    const action = instance.mixer.existingAction(instance.clips.find(clip => clip.name === 'emote.salute')!)!;
+    action.paused = true; instance.update(1); expect(instance.isActionComplete).toBe(false);
+    action.paused = false; instance.update(10); expect(instance.isActionComplete).toBe(true);
+    instance.play('idle'); instance.mixer.stopAllAction(); expect(instance.isActionComplete).toBe(false);
+    expect(() => instance.play('idle', { playback: 'invalid' } as never)).toThrow('ASSET_PLAYBACK_INVALID');
   });
 
   it('selects exactly one six-mesh quadruped without modifying the source GLB', async () => {

@@ -2,12 +2,12 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import {
   AnimationMixer, Group, LoopOnce, LoopRepeat,
-  type AnimationAction, type BufferGeometry, type Material,
+  type AnimationAction, type AnimationClip, type BufferGeometry, type Material,
   type Mesh, type Object3D, type Skeleton, type SkinnedMesh, type Texture,
 } from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import type { AssetDefinition, AssetInstance } from './contracts';
+import type { AssetDefinition, AssetInstance } from './engine-contracts';
 
 type LoadOptions = {
   baseUri?: string;
@@ -15,12 +15,13 @@ type LoadOptions = {
 };
 type CacheEntry = { promise: Promise<GLTF>; references: number };
 const cache = new Map<string, CacheEntry>();
+const cloneFactories = new WeakMap<AssetInstance, () => AssetInstance>();
 
 function fail(code: string, id: string): never {
   throw new Error(`${code}: ${id}`);
 }
 
-function validateDefinition(definition: AssetDefinition): void {
+export function validateAssetDefinition(definition: AssetDefinition): void {
   const transform = definition.rootTransform;
   if (!definition.id || !definition.uri ||
       !/^[a-f0-9]{64}$/.test(definition.sha256) ||
@@ -42,6 +43,130 @@ function validateDefinition(definition: AssetDefinition): void {
       fail('ASSET_ACTION_DEFINITION_INVALID', definition.id);
     }
   }
+}
+
+type OwnedResources = {
+  materials: Set<Material>; skeletons: Set<Skeleton>;
+  geometries: Set<BufferGeometry>; textures: Set<Texture>;
+};
+const resourceCleanups = (owned: OwnedResources) => [
+  ...[...owned.skeletons].map(value => () => value.dispose()),
+  ...[...owned.geometries].map(value => () => value.dispose()),
+  ...[...owned.materials].map(value => () => value.dispose()),
+  ...[...owned.textures].map(value => () => value.dispose()),
+];
+
+function createInstance(
+  definition: AssetDefinition, object: Group, visual: Object3D, clips: readonly AnimationClip[],
+  key: string, lease: CacheEntry, gltf: GLTF, owned: OwnedResources,
+): AssetInstance {
+  const mixer = new AnimationMixer(visual);
+  let activeAction: AnimationAction | undefined;
+  let activeActionId: string | undefined;
+  let activeLoop: boolean | undefined;
+  let completed = false;
+  let disposed = false;
+  const ensureAlive = () => { if (disposed) fail('ASSET_DISPOSED', definition.id); };
+  const onFinished = (event: { action: AnimationAction }) => { if (event.action === activeAction) completed = true; };
+  mixer.addEventListener('finished', onFinished);
+  const instance: AssetInstance = {
+    object, clips, mixer, actionIds: Object.freeze(Object.keys(definition.actions)),
+    get isActionComplete() { return completed; },
+    get timeSeconds() { return activeAction?.time ?? 0; },
+    get currentActionId() { return activeActionId; },
+    get currentClipName() { return activeAction?.getClip().name; },
+    play(actionId, options) {
+      ensureAlive();
+      if (!Object.hasOwn(definition.actions, actionId)) fail('ASSET_ACTION_UNAVAILABLE', `${definition.id}/${actionId}`);
+      if (options !== undefined && (!options || !['once', 'loop'].includes(options.playback))) fail('ASSET_PLAYBACK_INVALID', definition.id);
+      const binding = definition.actions[actionId]!;
+      const loop = options ? options.playback === 'loop' : binding.loop;
+      const clip = clips.find(candidate => candidate.name === binding.clipName)!;
+      const next = mixer.clipAction(clip);
+      // An explicit playback change is a new request, not repeated locomotion selection.
+      if (next === activeAction && actionId === activeActionId && loop === activeLoop && next.isRunning()) return;
+      next.reset().setLoop(loop ? LoopRepeat : LoopOnce, loop ? Infinity : 1);
+      next.clampWhenFinished = !loop;
+      next.setEffectiveTimeScale(binding.timeScale).setEffectiveWeight(1).play();
+      if (activeAction && activeAction !== next) {
+        if (binding.blendSeconds > 0) next.crossFadeFrom(activeAction, binding.blendSeconds, false);
+        else activeAction.stop();
+      }
+      activeAction = next; activeActionId = actionId; activeLoop = loop; completed = false;
+    },
+    update(deltaSeconds) {
+      ensureAlive();
+      if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) fail('ASSET_DELTA_INVALID', definition.id);
+      mixer.update(deltaSeconds);
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      runCleanup([
+        () => mixer.removeEventListener('finished', onFinished),
+        () => mixer.stopAllAction(), () => mixer.uncacheRoot(visual),
+        () => object.removeFromParent(), ...resourceCleanups(owned),
+        () => release(key, lease, gltf),
+      ]);
+    },
+  };
+  cloneFactories.set(instance, () => {
+    ensureAlive();
+    // Retain the verified GLB before cloning. Disposing the source must not retire
+    // immutable geometry/textures that its new sibling still borrows.
+    lease.references += 1;
+    const nextOwned: OwnedResources = { materials: new Set(), skeletons: new Set(), geometries: new Set(), textures: new Set() };
+    try {
+      const copied = cloneSkeleton(object) as Group;
+      const originalNodes: Object3D[] = [], copiedNodes: Object3D[] = [];
+      object.traverse(node => originalNodes.push(node)); copied.traverse(node => copiedNodes.push(node));
+      const copiedVisual = copiedNodes[originalNodes.indexOf(visual)];
+      if (!copiedVisual) fail('ASSET_ANIMATION_ROOT_MISSING', definition.id);
+      const templateGeometries = new Set<BufferGeometry>(), templateTextures = new Set<Texture>();
+      for (const scene of gltf.scenes) scene.traverse(node => {
+        const mesh = node as Mesh; if (!mesh.isMesh) return;
+        templateGeometries.add(mesh.geometry);
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) for (const texture of texturesOf(material)) templateTextures.add(texture);
+      });
+      const materialCopies = new Map<Material, Material>(), geometryCopies = new Map<BufferGeometry, BufferGeometry>(), textureCopies = new Map<Texture, Texture>();
+      const copyMaterial = (source: Material): Material => {
+        let material = materialCopies.get(source);
+        if (material) return material;
+        material = source.clone(); materialCopies.set(source, material); nextOwned.materials.add(material);
+        for (const [name, value] of Object.entries(material)) {
+          if (!value || typeof value !== 'object' || value.isTexture !== true || templateTextures.has(value)) continue;
+          let texture = textureCopies.get(value as Texture);
+          if (!texture) { texture = (value as Texture).clone(); textureCopies.set(value as Texture, texture); nextOwned.textures.add(texture); }
+          (material as unknown as Record<string, unknown>)[name] = texture;
+        }
+        return material;
+      };
+      copied.traverse(node => {
+        const mesh = node as Mesh; if (!mesh.isMesh) return;
+        if ((mesh as SkinnedMesh).isSkinnedMesh) nextOwned.skeletons.add((mesh as SkinnedMesh).skeleton);
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(copyMaterial) : copyMaterial(mesh.material);
+        // Author-added attachments or replaced geometry are outside the GLB lease.
+        // Own a copy, so releasing either source cannot invalidate the other.
+        if (!templateGeometries.has(mesh.geometry)) {
+          let geometry = geometryCopies.get(mesh.geometry);
+          if (!geometry) { geometry = mesh.geometry.clone(); geometryCopies.set(mesh.geometry, geometry); nextOwned.geometries.add(geometry); }
+          mesh.geometry = geometry;
+        }
+      });
+      return createInstance(definition, copied, copiedVisual, clips.map(clip => clip.clone()), key, lease, gltf, nextOwned);
+    } catch (error) {
+      try { runCleanup([...resourceCleanups(nextOwned), () => release(key, lease, gltf)]); } catch { /* Preserve clone failure. */ }
+      throw error;
+    }
+  });
+  return instance;
+}
+
+/** Internal clone preserves authored instance edits, with independent mutable resources. */
+export function cloneAsset(instance: AssetInstance): AssetInstance {
+  const factory = cloneFactories.get(instance);
+  if (!factory) fail('ASSET_INSTANCE_UNKNOWN', instance?.object?.name ?? 'unknown');
+  return factory();
 }
 
 async function fetchAssetBytes(uri: string): Promise<Uint8Array> {
@@ -144,7 +269,7 @@ function selectNodes(gltf: GLTF, clone: Object3D, definition: AssetDefinition): 
  * textures directly: dispose the AssetInstance when the entity is removed.
  */
 export async function loadAsset(definition: AssetDefinition, options: LoadOptions = {}): Promise<AssetInstance> {
-  validateDefinition(definition);
+  validateAssetDefinition(definition);
   const uri = options.baseUri ? new URL(definition.uri, options.baseUri).href : definition.uri;
   const key = JSON.stringify([uri, definition.sha256, definition.byteLength]);
   let entry = cache.get(key);
@@ -206,52 +331,9 @@ export async function loadAsset(definition: AssetDefinition, options: LoadOption
     correction.add(visual);
     object.add(correction);
     const clips = gltf.animations.map((clip) => clip.clone());
-    const mixer = new AnimationMixer(visual);
-    let activeAction: AnimationAction | undefined;
-    let activeActionId: string | undefined;
-    let disposed = false;
-    const ensureAlive = () => { if (disposed) fail('ASSET_DISPOSED', definition.id); };
-    const loaded = gltf;
-    return {
-      object, clips, mixer,
-      get currentActionId() { return activeActionId; },
-      get currentClipName() { return activeAction?.getClip().name; },
-      play(actionId) {
-        ensureAlive();
-        if (!Object.hasOwn(definition.actions, actionId)) fail('ASSET_ACTION_UNAVAILABLE', `${definition.id}/${actionId}`);
-        const binding = definition.actions[actionId]!;
-        const clip = clips.find((candidate) => candidate.name === binding.clipName)!;
-        const next = mixer.clipAction(clip);
-        // Repeated locomotion selection must not restart the same running clip.
-        if (next === activeAction && next.isRunning()) return;
-        next.reset().setLoop(binding.loop ? LoopRepeat : LoopOnce, binding.loop ? Infinity : 1);
-        next.clampWhenFinished = !binding.loop;
-        next.setEffectiveTimeScale(binding.timeScale).setEffectiveWeight(1).play();
-        if (activeAction && activeAction !== next) {
-          if (binding.blendSeconds > 0) next.crossFadeFrom(activeAction, binding.blendSeconds, false);
-          else activeAction.stop();
-        }
-        activeAction = next;
-        activeActionId = actionId;
-      },
-      update(deltaSeconds) {
-        ensureAlive();
-        if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) fail('ASSET_DELTA_INVALID', definition.id);
-        mixer.update(deltaSeconds);
-      },
-      dispose() {
-        if (disposed) return;
-        disposed = true;
-        runCleanup([
-          () => mixer.stopAllAction(),
-          () => mixer.uncacheRoot(visual!),
-          () => object.removeFromParent(),
-          ...[...ownedSkeletons].map((value) => () => value.dispose()),
-          ...[...ownedMaterials].map((value) => () => value.dispose()),
-          () => release(key, lease, loaded),
-        ]);
-      },
-    };
+    return createInstance(definition, object, visual, clips, key, lease, gltf, {
+      materials: ownedMaterials, skeletons: ownedSkeletons, geometries: new Set(), textures: new Set(),
+    });
   } catch (error) {
     try {
       runCleanup([

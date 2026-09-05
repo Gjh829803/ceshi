@@ -3,8 +3,12 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, readdir } from 'node:
 import os from 'node:os';
 import path from 'node:path';
 import { ThreeCompiler, hashTree } from './compiler.js';
-import { sha256 } from './contracts.js';
-import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning } from './tools.js';
+import Ajv from 'ajv';
+import ts from 'typescript';
+import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
+import { publicContractTopic } from './authoring-schema.js';
+import { EPISODE_SCHEMA, sha256 } from './contracts.js';
+import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion } from './tools.js';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import { executeThreeCreatorTool } from './mcp.js';
@@ -107,7 +111,8 @@ describe('Three tool operations and truthful submission', () => {
   it('adds the actual SDK public guide and contracts only to the SDK profile', async () => {
     const root = await fixture(), raw = new ThreeCreatorTools(root, 'three-raw'), sdk = new ThreeCreatorTools(root, 'three-sdk');
     const rawSchema = await raw.schema(), sdkSchema = await sdk.schema();
-    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('world.registerPrototype'); expect(sdkSchema.sdkGuide).toContain('targetEntityIds'); expect(sdkSchema.sdkGuide).toContain("'./asset-definitions.json'"); expect(sdkSchema.sdkContracts).toContain('WorldCommand'); expect(sdkSchema.sdkContracts).toContain('CharacterEntityOptions');
+    expect(sdkSchema.observation).toBe(rawSchema.observation); expect(sdkSchema.sdkGuide).toContain('createWorld'); expect(sdkSchema.sdkGuide).toContain('setCaptureTargets'); expect(sdkSchema.sdkGuide).toContain("'./asset-definitions.json'"); expect(sdkSchema.sdkContracts).toContain('CharacterOptions'); expect(sdkSchema.sdkContracts).not.toContain('WorldEngine');
+    const extensions = await sdk.schema('extensions'); expect(extensions.sdkContracts).toContain('registerMovement'); expect(extensions.sdkGuide).toContain('flight navigation'); expect(extensions.sdkContracts).toContain('GeometryDefinition'); expect(sdkSchema.sdkContracts).not.toContain('MovementDefinition');
     await raw.close(); await sdk.close();
   });
   it('archives only payload files, excluding macOS AppleDouble metadata and symlinks', async () => {
@@ -133,5 +138,58 @@ describe('Three tool operations and truthful submission', () => {
     const root = await fixture(); await writeFile(path.join(root, 'episode.json'), JSON.stringify({ schemaVersion: 1, steps: [{ keysDown: ['w'], durationSeconds: 180 }], targets: [] }));
     const service = new ThreeCreatorTools(root, 'three-raw'); await mkdir(service.evidenceRoot, { recursive: true }); await writeFile(path.join(service.evidenceRoot, 'playtest.json'), '{"status":"passed","actualWallSeconds":180,"capturedInput":true}');
     await expect(service.submit()).rejects.toThrow(/THREE_SUBMIT_PLAYTEST_REQUIRED/); await service.close();
+  });
+});
+
+
+describe('v2 command and discovery boundary', () => {
+  it('does not label a legacy or missing SDK snapshot as v2, while raw remains minimal', () => {
+    expect(() => assertSdkObservationVersion('three-sdk', 2)).not.toThrow();
+    expect(() => assertSdkObservationVersion('three-sdk', 1)).toThrow('THREE_SDK_OBSERVATION_VERSION_MISMATCH');
+    expect(() => assertSdkObservationVersion('three-sdk', null)).toThrow('THREE_SDK_OBSERVATION_VERSION_MISMATCH');
+    expect(() => assertSdkObservationVersion('three-raw', null)).not.toThrow();
+  });
+  it('covers every declared World command discriminator and rejects old dialect/extra authority/NaN', async () => {
+    const source = await readFile('packages/three-world/src/contracts.ts', 'utf8');
+    const file = ts.createSourceFile('contracts.ts', source, ts.ScriptTarget.Latest, true);
+    const types: string[] = [];
+    const visit = (node: ts.Node) => { if (ts.isPropertySignature(node) && node.name.getText(file) === 'type' && node.type && ts.isLiteralTypeNode(node.type) && ts.isStringLiteral(node.type.literal)) types.push(node.type.literal.text); ts.forEachChild(node, visit); };
+    for (const node of file.statements) if (ts.isTypeAliasDeclaration(node) && ['PrimitiveCommand','ParameterCommand','WorldCommand'].includes(node.name.text)) visit(node);
+    expect(WORLD_COMMAND_SCHEMA.oneOf.map(schema => (schema.properties.type as {const:string}).const).sort()).toEqual(types.sort());
+    const check = new Ajv({ strict:false, strictNumbers:true }).compile(WORLD_COMMAND_SCHEMA);
+    for (const command of [
+      {type:'entity.set-visible',entityId:'a',visible:false},
+      {type:'entity.set-scale',entityId:'a',scaleLocalXYZ:[1,NaN,1]},
+      {type:'actor.stop',entityId:'a',priority:100},
+      {type:'action.invoke',actionId:'x',arguments:{callback:{eval:'evil'}}},
+    ]) expect(check(command)).toBe(false);
+    expect(check({type:'parameter.set',parameterId:'sky.mode',value:'aurora'})).toBe(true);
+    expect(check({type:'entity.set-geometry',entityId:'bridge',geometryId:'long'})).toBe(true);
+  });
+  it('keeps input v1 unchanged and permits closed v2 lifecycle/command steps', () => {
+    const check=new Ajv({strict:false,strictNumbers:true}).compile(EPISODE_SCHEMA);
+    const episode={schemaVersion:2,steps:[{lifecycle:'pause',durationSeconds:.5},{lifecycle:'start',commands:[{type:'actor.stop',entityId:'npc'}],keysDown:['w'],durationSeconds:1}],targets:[]};
+    expect(check(episode)).toBe(true); expect(check({...episode,schemaVersion:1})).toBe(false);
+    expect(check({...episode,steps:[{commands:[{type:'eval',source:'anything'}],durationSeconds:1}]})).toBe(false);
+  });
+  it('keeps caller command receipt and World operation ID distinct from Creator operations', async () => {
+    const root=await fixture(), service=new ThreeCreatorTools(root,'three-sdk');
+    const execute=vi.spyOn(service,'executeCommand').mockResolvedValue({worldCommandReceipt:{status:'accepted',commandId:'command-1',worldRevision:4,operationId:'world-op-1'}});
+    const get=vi.spyOn(service,'worldOperation').mockResolvedValue({sourceHash:'s',worldBuildHash:'w',worldOperation:{id:'world-op-1',status:'succeeded',phase:'reached'}});
+    const started=await executeThreeCreatorTool(service,'world_execute_command',{command:{type:'actor.stop',entityId:'npc'}}) as {operationId:string};
+    expect(started.operationId).not.toBe('world-op-1');
+    const done=await service.getOperation(started.operationId,1); expect(done.result.worldCommandReceipt.operationId).toBe('world-op-1');
+    const query=await executeThreeCreatorTool(service,'world_get_operation',{worldOperationId:'world-op-1'}) as {operationId:string};
+    const queried=await service.getOperation(query.operationId,1); expect(queried.result.worldOperation.id).toBe('world-op-1'); expect(execute).toHaveBeenCalledTimes(1); expect(execute).toHaveBeenCalledWith({type:'actor.stop',entityId:'npc'},started.operationId); expect(get).toHaveBeenCalledWith('world-op-1',0);
+    await expect(executeThreeCreatorTool(service,'world_get_operation',{operationId:'world-op-1'})).rejects.toThrow('THREE_TOOL_INPUT_INVALID'); await service.close();
+  });
+  it('fails closed for raw SDK commands before opening a browser', async () => {
+    const root=await fixture(), service=new ThreeCreatorTools(root,'three-raw');
+    await expect(service.executeCommand({type:'actor.stop',entityId:'npc'})).rejects.toThrow('THREE_WORLD_COMMANDS_UNSUPPORTED');
+    await expect(service.worldOperation('invented')).rejects.toThrow('THREE_WORLD_OPERATIONS_UNSUPPORTED'); await service.close();
+  });
+  it('extracts public declaration dependencies with an AST despite multiline methods and nested types', () => {
+    const output=publicContractTopic(`export type Vec3=readonly [number,number,number]; export interface Shape { value:Vec3 } export interface World { scene:Shape; registerMovement():void; start():Promise<void> } export interface PrivateUnused { secret:string }`, 'getting-started');
+    expect(output).toContain('interface Shape'); expect(output).toContain('type Vec3'); expect(output).not.toContain('PrivateUnused'); expect(output).not.toContain('registerMovement');
   });
 });

@@ -1,4 +1,4 @@
-import type { WorldInput } from './contracts.js';
+import type { WorldInput } from './engine-contracts.js';
 
 export const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'Space', 'KeyE']);
 export class WorldKeyboard {
@@ -38,8 +38,10 @@ export class WorldKeyboard {
   sample(): WorldInput {
     const has = (...codes: string[]) => codes.some(code => this.held.has(code));
     const result: WorldInput = {
-      moveXRatio: Number(has('KeyD', 'ArrowRight')) - Number(has('KeyA', 'ArrowLeft')),
-      moveZRatio: Number(has('KeyS', 'ArrowDown')) - Number(has('KeyW', 'ArrowUp')),
+      moveXRatio: Number(has('KeyD')) - Number(has('KeyA')),
+      moveZRatio: Number(has('KeyS')) - Number(has('KeyW')),
+      cameraYawRatio:Number(has('ArrowLeft'))-Number(has('ArrowRight')),
+      cameraPitchRatio:Number(has('ArrowDown'))-Number(has('ArrowUp')),
       run: has('ShiftLeft', 'ShiftRight'),
       jump: this.jumpQueued || has('Space'),
       jumpPressed: this.jumpQueued,

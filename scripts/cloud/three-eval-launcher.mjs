@@ -28,7 +28,7 @@ try {
   const overrides = ["approval_policy=\"never\"", "features.apps=false", "features.hooks=false", "features.plugins=false", "features.remote_plugin=false", "features.skill_mcp_dependency_install=false", "skills.bundled.enabled=false", "skills.include_instructions=false", "tools.view_image=true", "allow_login_shell=false", "features.shell_snapshot=false", "shell_environment_policy.inherit=\"core\"", mcpConfiguration];
   const args = [...originalArgs.slice(0, -1), "--ignore-user-config", "--ignore-rules", "--json", ...overrides.flatMap(value => ["-c", value]), originalArgs.at(-1)];
   const env = executionEnvironment(lock, layout.workspace, {includeAuthentication: true, profile: layout.profile});
-  await prepareSessionDirectories(env);
+  await prepareSessionDirectories(env, lock);
   Object.assign(report, {status: "running", appliedConfiguration: overrides, modelEnvironmentKeys: Object.keys(env).sort(), mcpAuthenticationEnvironmentPassed: false});
   await writeJson(reportFile, report);
   const events = createWriteStream(eventsFile, {flags: "wx"});

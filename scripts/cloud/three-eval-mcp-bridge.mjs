@@ -14,7 +14,7 @@ const workspace = path.resolve(valueAfter(args, "--workspace"));
 const env = executionEnvironment(lock, workspace, {profile});
 env.TSX_DISABLE_CACHE = "1";
 env.TSX_TSCONFIG_PATH = path.join(lock.toolkitRoot, "tsconfig.json");
-await prepareSessionDirectories(env);
+await prepareSessionDirectories(env, lock);
 // A separate child is essential: Codex's MCP configuration may augment its
 // inherited environment. The actual WorldKit server receives only this map.
 // The tsx CLI cache produced logical pnpm module paths with an FSx TMPDIR.

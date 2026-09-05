@@ -81,6 +81,8 @@ def main():
     assert played['status'] == 'passed' and played['isCompleteEpisode'] is True and played['capturedInput'] is True
     assert isinstance(played['actualWallSeconds'], (int, float)) and 180 <= played['actualWallSeconds'] < 3600
     assert played['actualWallSeconds'] == manifest['actualWallSeconds']
+    assert isinstance(played['activePlaySeconds'], (int, float)) and 180 <= played['activePlaySeconds'] < 3600
+    assert played['activePlaySeconds'] == manifest['activePlaySeconds']
     assert played['pageErrors'] == [] and played['runtimeErrors'] == [] and played['blockedNetworkRequests'] == []
     assert played['targetResults'] == manifest['targetResults']
     assert captures['profile'] == manifest['profile'] and captures['worldBuildHash'] == manifest['worldBuildHash']
@@ -91,6 +93,9 @@ def main():
     assert any(i.get('view') == 'entity-triview' and 'player' in i.get('entityIds', []) for i in captures['images'])
     report = {'kind': 'three-creator-host-artifact-verification', 'schemaVersion': 1, 'status': 'passed',
               'profile': manifest['profile'], 'engine': manifest['engine'], 'sourceHash': manifest['sourceHash'],
+              'toolVersion': manifest.get('toolVersion'), 'sdkVersion': manifest.get('sdkVersion'),
+              'browserObservationContract': manifest.get('browserObservationContract'),
+              'actualWallSeconds': played['actualWallSeconds'], 'activePlaySeconds': played['activePlaySeconds'],
               'worldBuildHash': manifest['worldBuildHash'], 'creatorRuntimeLockHash': manifest['creatorRuntimeLockHash'],
               'archiveSha256': receipt['archiveSha256'], 'fileCount': len(actual), 'uncompressedBytes': total,
               'payloadPath': str(payload), 'semanticStatus': 'unreviewed', 'browserReplay': 'not-run',

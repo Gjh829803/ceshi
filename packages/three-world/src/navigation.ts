@@ -67,7 +67,7 @@ export class ThreeNavigation {
     const sources: ReturnType<typeof extractWorldTriangles>[] = [];
     let triangleCount = 0;
     const seen = new Set<Object3D>();
-    const visibleObjects = objects.filter(isWorldVisible);
+    const visibleObjects = objects;
     // Registered entity boundaries exclude independent child subtrees from parents.
     // Keep each supplied root, including nested ones; remove only repeated identities.
     const roots = visibleObjects.filter((object) => {

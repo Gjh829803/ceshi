@@ -13,7 +13,7 @@ Start the persistent MCP service:
 pnpm exec tsx scripts/three-creator/mcp.ts --workspace /absolute/author-project --profile three-sdk
 ```
 
-Server name: `worldkit_three_creator`. List its 13 tools, then read environment,
+Server name: `worldkit_three_creator`. List its 15 tools, then read environment,
 schema and examples. CLI uses the exact same service:
 
 ```sh
@@ -31,14 +31,15 @@ input episode. The examples demonstrate integration, not a completed playable
 world. With the SDK, compose any Three camera first and call
 `world.setCameraFollow({activateOnInput:true,...})` to preserve the reference
 opening and follow during play. Use `world.onUpdate`, `world.onInteract` and
-`world.execute` for gameplay and live changes. `world.expose({targetEntityIds:
-['player','tower','bridge']})` selects complete target groups for three views;
+`world.execute` for gameplay and live changes. `world.setCaptureTargets(
+['player','tower','bridge'])` selects complete target groups for three views;
+`await world.start()` prepares the SDK and publishes the observer automatically;
 inspection and snapshots retain every registered entity. Raw Three exposes the
 same small `WorldObservation`; missing SDK ticks/actions/commands are explicitly
 reported as null/unsupported.
 
 Three-view semantic front defaults to object-local **-Z**. Set the SDK entity's
-`frontYawRadians` to rotate this direction about local +Y; `world.expose()` passes
+`frontYawRadians` to rotate this direction about local +Y; `await world.start()` passes
 it through `targetFrontYawRadiansById`. The Host then applies the object's full
 world quaternion, including parent rotations. Up is transformed local +Y; right
 is front × up (local +X at zero front yaw). Front/right/back cameras therefore
@@ -47,7 +48,8 @@ map. A `world_preview` frontYawRadians argument overrides that local semantic ya
 for the first selected target; it is not an absolute world-space camera angle.
 
 `project.json` optionally selects `{schemaVersion:1,assetIds:[...]}`. Exact public
-asset definitions appear in `asset-definitions.json`; their URI resolves relative
+asset definitions appear in `asset-definitions.json`; SDK `world.assets.load(id)`
+loads the selected asset and owns its animation. The URI resolves relative
 to the playable page. Host-only sourcePath never enters this file or tool output.
 
 `episode.json` is independent of rendering/source build identity:
@@ -108,3 +110,37 @@ Delivery kind is `three-creator-delivery`, schemaVersion 1, engine
 The evaluator must separately compare the original reference, the real playable
 and fixed external goals. A route or input transcript alone cannot establish
 scene quality.
+
+SDK v2 discovery is topic-based: `creator_get_authoring_schema({topic})` accepts
+getting-started (default), assets, control, extensions, observation or all. The
+returned declarations are an AST-selected dependency closure of actual public
+contracts; private engine files are not authoring APIs. `creator_get_examples`
+accepts getting-started or extensions; raw only uses its own minimal observer.
+
+`world_execute_command({command})` executes a closed v2 command in the real SDK
+browser. Its Creator operation result contains worldCommandReceipt. An accepted
+receipt contains a separate World operation ID: pass it to
+`world_get_operation({worldOperationId,waitSeconds})`, then poll the returned
+Creator operation using operations_get. Never resubmit a command to poll it.
+While paused, instant commands apply at the pause boundary; ongoing work returns
+accepted and stays pending until explicit start. Commands do not auto-start or
+step a paused world. `world_inspect({query,entityIds})`
+returns current description, command availability and actual state.
+
+Episode schemaVersion 2 adds optional `commands:[...]` and
+`lifecycle:"start"|"pause"|"reset"` to a step. Keys still use actual browser input.
+Lifecycle transitions release held keys; pause/reset time does not count toward
+minimum activePlaySeconds=180 at submission. Episode v1 keeps its original key
+shape. Short episodes may exercise commands and reset; external exploration
+quality still requires independent 3–5 minute route/reference review.
+
+SDK deliveries declare sdkVersion `0.2.0-experimental` and
+browserObservationContract `WorldObservation-v2`; raw declares sdkVersion null
+and the minimal `WorldObservation-v1`. The outer delivery remains schemaVersion 1.
+
+The Host assigns commandId from the Creator operation identity (and episode
+step/command index). The model cannot supply command IDs or priorities. The
+bridge verifies that the SDK echoes the same commandId. These tools currently
+attach no expectedWorldRevision: their fresh snapshot is diagnostic context, not
+a revision already observed by the model. Do not claim stale-context protection
+from the Host-generated ID alone.

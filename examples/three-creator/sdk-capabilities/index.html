@@ -21,10 +21,15 @@
     <div class="divider"></div><div class="label">NPC · 橙色伙伴</div>
     <div class="row"><button id="move">前往远端圆环</button><button id="follow">跟随 G Bot</button></div>
     <div class="row"><button id="stop">停止行动</button><button id="overview">总览 / 跟随</button></div>
+    <div class="row"><button id="resume">恢复自主巡逻</button><button id="sky">白天 / 极光天空</button></div>
+    <div class="divider"></div><div class="label">运动与几何</div>
+    <p>悬浮由玩家控制，按住 Space 上升、松开下降；不提供空中自动寻路。</p>
+    <div class="row"><button id="flight">切换悬浮</button><button id="ground">回到地面模式</button></div>
+    <div class="row"><button id="bridge-long">延长桥梁</button><button id="bridge-short">恢复短桥</button></div>
     <div id="status" class="status" aria-live="polite">准备中</div>
   </aside>
   <div class="badge">CAPABILITY FIXTURE · EXPERIMENTAL</div>
-  <div class="hint">WASD / 方向键移动　Shift 跑步　Space 跳跃　拖动画面转向　滚轮缩放　R 重置</div>
+  <div class="hint">WASD 移动　方向键 / 拖动转镜头　Shift 跑步　Space 跳跃 / 悬浮升高　R 重置</div>
   <script type="module" src="./main.ts"></script>
 </body>
 </html>

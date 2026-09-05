@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 export type WorldPose = Readonly<{ position: THREE.Vector3; rotation: THREE.Quaternion; scale: THREE.Vector3 }>;
 export type TriangleGeometry = Readonly<{ vertices: Float32Array; indices: Uint32Array; triangleCount: number }>;
-export type GeometrySnapshot = Readonly<{ geometries: readonly TriangleGeometry[]; signature: string; pose: WorldPose }>;
+export type CollisionTriangleGeometry = TriangleGeometry & Readonly<{sourceObject:THREE.Mesh}>;
+export type GeometrySnapshot = Readonly<{ geometries: readonly CollisionTriangleGeometry[]; signature: string; pose: WorldPose }>;
 const MAXIMUM_PHYSICS_EDGE_METERS = 4;
 const entityBoundaries = new WeakSet<THREE.Object3D>();
 /** Registry-owned extraction boundary; never derive collision ownership from author userData. */
@@ -48,7 +49,7 @@ export function geometryAttributeVersion(attribute: THREE.BufferAttribute | THRE
 function visibleMeshes(root: THREE.Object3D, visit: (mesh: THREE.Mesh) => void): void {
   function walk(object: THREE.Object3D, isRoot: boolean): void {
     // Keep a hidden root's shape so showing it restores collision immediately.
-    if (!isRoot && (!object.visible || entityBoundaries.has(object))) return;
+    if (!isRoot && entityBoundaries.has(object)) return;
     if ((object as THREE.SkinnedMesh).isSkinnedMesh) geometryError('PHYSICS_SKINNED_MESH_UNSUPPORTED', 'Use addCharacter for a skinned actor; rigid collision cannot silently use its unskinned bind pose.');
     if ((object as THREE.Mesh).isMesh) visit(object as THREE.Mesh);
     for (const child of object.children) walk(child, false);
@@ -105,7 +106,7 @@ export function subdivideTriangles(vertices: Float32Array, indices: Uint32Array,
 
 export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders: number, maximumTriangles: number, subdivide = true, allowEmpty = false): GeometrySnapshot {
   const pose = worldPose(root), inverseFrame = new THREE.Matrix4().compose(pose.position, pose.rotation, new THREE.Vector3(1, 1, 1)).invert();
-  const geometries: TriangleGeometry[] = [];
+  const geometries: CollisionTriangleGeometry[] = [];
   let triangles = 0;
   visibleMeshes(root, mesh => {
     const geometry = mesh.geometry, position = geometry.getAttribute('position'), index = geometry.getIndex();
@@ -143,7 +144,7 @@ export function extractCollisionGeometry(root: THREE.Object3D, maximumColliders:
       const shape = subdivide ? subdivideTriangles(vertices, indices, maximumTriangles - triangles) : { vertices, indices, triangleCount: indices.length / 3 };
       triangles += shape.triangleCount;
       if (triangles > maximumTriangles) geometryError('PHYSICS_TRIANGLE_BUDGET_EXCEEDED', 'The visible hierarchy exceeds the triangle budget.');
-      geometries.push(shape);
+      geometries.push({...shape,sourceObject:mesh});
     }
   });
   if (!geometries.length && !allowEmpty) geometryError('PHYSICS_GEOMETRY_EMPTY', 'The hierarchy contains no visible rigid mesh geometry.');

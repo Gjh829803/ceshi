@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, mkdir, readFile, realpath, rename, writeFile, readdir, readlink } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, rename, writeFile, readdir, readlink, symlink } from "node:fs/promises";
 import path from "node:path";
 
 export const CODEX_BINARY_SHA256 = "f9d4eab23d0e0726340e084ed22d668885c1dcabeb29ec508b8962e5e29b8dc6";
 export const THREE_PROFILES = ["three-raw", "three-sdk"];
 export const THREE_ENGINE = "three@0.185.1";
-export const THREE_TOOLS = ["creator_describe_environment", "creator_get_authoring_schema", "creator_get_examples", "assets_search", "assets_describe", "world_validate", "world_preview", "world_inspect", "world_playtest", "world_capture_triviews", "world_submit", "operations_get", "operations_cancel"];
-export const RUNTIME_LOCK_KEYS = new Set(["kind", "schemaVersion", "status", "engine", "profiles", "sourceCommit", "createdAt", "launcherPath", "launcherFilesSha256", "toolkitRoot", "nodeBinary", "toolkitContentSha256", "toolkitArchiveSha256", "toolkitSourceHash", "browserRoot", "browserContentSha256", "browserArchiveSha256", "browserRevision", "codexBinary", "codexBinarySha256", "maximumTaskSeconds", "browserEnvironment", "prebuiltRuntimes", "note", "changeReason", "previousRuntimeLockHash"]);
+export const THREE_TOOL_VERSION = "0.2.0-experimental";
+export const THREE_TOOLS = ["creator_describe_environment", "creator_get_authoring_schema", "creator_get_examples", "assets_search", "assets_describe", "world_validate", "world_preview", "world_inspect", "world_execute_command", "world_get_operation", "world_playtest", "world_capture_triviews", "world_submit", "operations_get", "operations_cancel"];
+export const RUNTIME_LOCK_KEYS = new Set(["kind", "schemaVersion", "status", "engine", "profiles", "sourceCommit", "createdAt", "launcherPath", "launcherFilesSha256", "toolkitRoot", "nodeBinary", "toolkitContentSha256", "toolkitArchiveSha256", "toolkitSourceHash", "browserRoot", "browserContentSha256", "browserArchiveSha256", "browserRevision", "codexBinary", "codexBinarySha256", "maximumTaskSeconds", "browserEnvironment", "prebuiltRuntimes", "hostCacheRoot", "note", "changeReason", "previousRuntimeLockHash"]);
 export const BROWSER_ENV_KEYS = new Set(["PLAYWRIGHT_BROWSERS_PATH", "WORLDKIT_CHROMIUM_EXECUTABLE", "LD_LIBRARY_PATH", "FONTCONFIG_PATH", "FONTCONFIG_FILE", "LANG"]);
 export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 export async function fileSha256(file) {
@@ -58,6 +59,7 @@ export async function readRuntimeLock(file, {requireReady = true, checkInstalled
   for (const key of ["toolkitRoot", "browserRoot", "codexBinary"]) {
     if (typeof lock[key] !== "string" || !path.isAbsolute(lock[key]) || lock[key].includes("\0")) throw new Error(`CREATOR_RUNTIME_LOCK_PATH_INVALID: ${key}`);
   }
+  if (lock.hostCacheRoot !== path.join(path.dirname(path.dirname(lock.toolkitRoot)), "host-cache")) throw new Error("THREE_HOST_CACHE_ROOT_INVALID");
   if (lock.codexBinarySha256 !== CODEX_BINARY_SHA256) throw new Error("CREATOR_RUNTIME_CODEX_HASH_NOT_APPROVED");
   if (lock.nodeBinary !== undefined && (!path.isAbsolute(lock.nodeBinary) || lock.nodeBinary.includes("\0"))) throw new Error("CREATOR_NODE_BINARY_INVALID");
   for (const [key, value] of Object.entries(lock.browserEnvironment ?? {})) {
@@ -145,6 +147,9 @@ export function executionEnvironment(lock, workspace, {includeAuthentication = f
     WORLDKIT_THREE_PREBUILT_RUNTIME_ROOT: lock.prebuiltRuntimes[profile].root,
     WORLDKIT_THREE_PREBUILT_RUNTIME_MANIFEST_SHA256: lock.prebuiltRuntimes[profile].manifestSha256,
     ...lock.browserEnvironment,
+    // Playwright writes validation markers to its registry. Keep those outside
+    // both immutable capsule files and the model-writable author workspace.
+    PLAYWRIGHT_BROWSERS_PATH: path.join(lock.hostCacheRoot, sha256(workspace), "browser-registry"),
   };
   if (includeAuthentication) {
     if (!inherited.CODEX_HOME) throw new Error("CREATOR_PLATFORM_AUTH_HOME_MISSING");
@@ -152,8 +157,27 @@ export function executionEnvironment(lock, workspace, {includeAuthentication = f
   }
   return env;
 }
-export async function prepareSessionDirectories(env) {
+export async function prepareBrowserRegistry(browserRoot, registryRoot) {
+  await mkdir(registryRoot, {recursive:true,mode:0o700});
+  if (await realpath(registryRoot) !== registryRoot) throw new Error("THREE_BROWSER_REGISTRY_REDIRECTED");
+  const products = (await readdir(path.join(browserRoot, "browsers"), {withFileTypes:true})).filter(entry => entry.isDirectory() && /^(chromium|chromium_headless_shell)-1234$/.test(entry.name));
+  if (!products.length) throw new Error("THREE_BROWSER_REGISTRY_EMPTY");
+  for (const product of products) {
+    const source = path.join(browserRoot, "browsers", product.name), target = path.join(registryRoot, product.name);
+    await mkdir(target,{recursive:true,mode:0o700});
+    if (await realpath(target) !== target) throw new Error("THREE_BROWSER_REGISTRY_REDIRECTED");
+    for (const entry of await readdir(source,{withFileTypes:true})) {
+      if (entry.name === "DEPENDENCIES_VALIDATED") continue;
+      const from = path.join(source,entry.name), to = path.join(target,entry.name);
+      try { await symlink(from,to,entry.isDirectory()?"dir":"file"); }
+      catch(error) { if(error.code!=="EEXIST")throw error; }
+      if (!(await lstat(to)).isSymbolicLink() || await readlink(to)!==from || await realpath(to)!==await realpath(from)) throw new Error("THREE_BROWSER_REGISTRY_ENTRY_CHANGED");
+    }
+  }
+}
+export async function prepareSessionDirectories(env, lock) {
   await mkdir(env.HOME, {recursive: true}); await mkdir(env.TMPDIR, {recursive: true});
+  await prepareBrowserRegistry(lock.browserRoot, env.PLAYWRIGHT_BROWSERS_PATH);
 }
 
 export async function resolveCreatorSubmission({existingJobId, hasDurableIntent, mode, findExisting, createIntentAndSubmit}) {

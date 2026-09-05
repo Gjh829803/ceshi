@@ -1,175 +1,189 @@
-# @worldkit/three — experimental Creator SDK
+# Three World SDK 0.2 experimental
 
-Author normal Three.js meshes, groups, geometry, materials and cameras. Register
-only the objects that need stable world identity, physics, interaction or runtime
-control. Three.js 0.185.1 renders the same scene that the tools inspect. Rapier
-0.20.0 owns collision and character support; Recast 0.43.1 supplies ground routes.
-This package is experimental and is separate from the existing Native pipeline.
+Create ordinary Three.js geometry and compose the reference camera freely. Import
+`three` and `createWorld` from `@worldkit/three`. The SDK owns one fixed clock,
+physics world, controlled character, animation, follow camera and command state.
+This is the public v2 API; old engine transports are private.
 
+<!-- topic:getting-started -->
 ## Start a world
 
 ```ts
-import * as THREE from 'three';
-import { createWorld, loadAsset } from '@worldkit/three';
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .05, 1000);
-// Choose the actual reference composition here, including an off-center subject.
-camera.position.set(7, 5, 10);
-camera.lookAt(0, 1, 0);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(innerWidth, innerHeight);
-document.body.append(renderer.domElement);
-const world = await createWorld({ scene, camera, renderer });
-
-const ground = new THREE.Mesh(new THREE.BoxGeometry(80, .5, 80),
-  new THREE.MeshStandardMaterial({ color: '#729456' }));
-ground.position.y = -.25;
-world.addEntity({ id: 'ground', object: ground, role: 'terrain' });
-// Add ordinary light, landmarks and a complete actor, then:
-// world.addCharacter({id:'hero',object:hero,character:{heightMeters:1.8,radiusMeters:.35}});
-// world.setControlledEntity('hero');
-// world.setCameraFollow({distanceMeters:5,pitchRadians:.3,activateOnInput:true});
-// world.expose({targetEntityIds:['hero','lighthouse','bridge']});
-// world.render(); world.start();
+const world = await createWorld({scene, camera, canvas});
+world.addEntity({id:'ground', object:groundMesh, role:'terrain'});
+const hero = await world.assets.load('humanoid.g-bot');
+world.addCharacter({id:'hero', asset:hero});
+world.setControlledEntity('hero');
+world.setCameraFollow({distanceMeters:5});
+world.setCaptureTargets(['hero','tower']); // register tower first
+await world.start();
 ```
 
-`createWorld` is async and initially stopped. Finish async asset loading and world
-construction before the first `start`, `step` or `advance`: that first call seals
-the reset baseline. `scene`, `camera`, `renderer` are optional; a `canvas` creates
-an SDK-owned renderer. `navigation:false` explicitly disables NPC routing.
-`fixedTimeStepSeconds` defaults to 1/60. `physics` accepts the `PhysicsOptions`
-contract returned by the schema tool. Never start a second physics clock.
+Asset IDs must be selected in project.json. `createWorld` reads the Host-provided
+same-origin './asset-definitions.json'. A custom complete character is an ordinary
+Group passed as `addCharacter({id,object,body:{heightMeters,radiusMeters}})`.
+Its tails, clothes and other visual descendants move with the root; keep their
+collisions out of the character body.
 
-## Register geometry and actors
+Terrain/obstacle default to fixed collision; decoration has no collision. Use
+kinematic for a moving door/platform, dynamic for supported rigid-body impulses.
+Register small visual stones as decoration when they should not impede walking.
 
-- `world.addEntity(options: EntityOptions): THREE.Object3D` registers a unique ID
-  and object. IDs may contain spaces or Unicode. Terrain/obstacles default to
-  fixed collision; decorations default to no collision. Small pebbles, grass and
-  surface detail should be decorations when they are not intended obstacles.
-  A terrain entity cannot opt out of collision.
-- `world.addCharacter(options: CharacterEntityOptions): THREE.Object3D` registers
-  a complete actor with a Rapier capsule. Its origin is at the feet, Y is up and
-  local -Z is the default front. The defaults are 1.8m height, .35m radius,
-  2.4m/s walk, 4.8m/s run, .3m maximum step and 45° maximum slope. Choose dimensions
-  fitting the visible actor; hiding oversized collision does not solve a route.
-- `world.setControlledEntity(id)` assigns keyboard movement to one character.
-  WASD and arrows move relative to the camera, Shift stays held to run, Space is
-  an edge-triggered jump, E interacts within 3m and R resets. Blur clears input.
-- Fixed/kinematic collision extracts actual Mesh/Group/InstancedMesh geometry.
-  Dynamic bodies use an explicit convex-hull or box shape; dynamic triangle meshes
-  are unsupported. Animated skinned subjects use character capsules, not bind-pose
-  rigid meshes. Invalid transforms and excessive budgets produce diagnostics.
-- Each independently registered descendant is a collision boundary. A registered
-  decorative hat or tail stays attached visually without becoming parent collision.
-  Unregistered meshes inside a physical group contribute to that group's shape.
-- Normal Three transforms and buffer edits are supported. Mark changed vertex or
-  instance buffers `needsUpdate=true`, as in Three. World commands synchronously
-  refresh affected collision; direct edits are consumed at the next physics tick.
-  Character roots require a valid upright capsule transform; unsupported scaling
-  is rejected. Keep decorative sway on children instead of tilting a character body.
-- `frontYawRadians` specifies local semantic front by rotating -Z around +Y.
-  Movement facing and front/right/back capture respect it and parent rotation.
-  Group an entire fox with its tails under its actor root; capture that complete
-  root, not a detached body or individual tail.
+The camera remains at the authored first-frame pose until movement or camera
+input activates follow. WASD moves, arrows/drag rotate camera, Shift runs,
+Space jumps, E interacts, R resets. `setCameraFollow` accepts transitionSeconds,
+collisionRadiusMeters and recoveryHalfLifeSeconds when tuning is necessary.
+`useAuthoredCamera()` explicitly returns camera control for a cutscene;
+`setCameraFollow()` takes it back from the current pose.
 
-## Reuse animation assets
+`start()` awaits preparation and publishes `window.__WORLDKIT_EVAL__` automatically.
+Use `stop()` to pause and `await reset()` to restore the baseline. Do not call the
+old expose/render/step methods or create another simulation timer. Query actual
+motion/animation through `getEntityState(id)` and camera state through `snapshot()`.
 
-Select exact IDs with `assets_search`, write them to `project.json`, then load the
-Host-produced definitions. The catalog labels reusable and diagnostic assets;
-the multi-animal quadruped fixture is a diagnostic sample, not a finished fox.
+<!-- topic:assets -->
+## Verified assets and lifetime
+
+Use Creator assets_search/assets_describe, then select IDs in
+`project.json: {schemaVersion:1,assetIds:[...]}`. The compiler copies verified GLBs
+and public metadata to the playable. `world.assets.search(query)` describes the
+packaged selection; `world.assets.load(assetId)` creates an independent instance.
+The SDK initializes available idle pose and owns animation after addCharacter.
+No manual AnimationMixer/update(0), hash entry, retargeting or private file path is
+needed. An actionId in an asset is an animation, not a physical movement ability.
+
+For asynchronous changes in a running world:
 
 ```ts
-const { assets } = await fetch('./asset-definitions.json').then(r => r.json());
-const definition = assets.find((item: {id:string}) => item.id === 'YOUR_EXACT_ASSET_ID');
-if (!definition) throw new Error('Selected asset missing');
-const instance = await loadAsset(definition);
-if (definition.actions.idle) { instance.play('idle'); instance.update(0); } // Evaluate the chosen opening pose.
-instance.object.position.set(0, .05, 0);
-world.addCharacter({id:'hero',object:instance.object,asset:instance,
-  character:{heightMeters:1.8,radiusMeters:.35}});
+await world.runTask(async scope => {
+  const asset = await scope.assets.load('humanoid.g-bot');
+  scope.addCharacter({id:'guide',asset});
+});
 ```
 
-Definitions pin original GLB SHA256, byte length, normalization and exact action
-names. Do not reapply internal skeleton/unit corrections. Each load has its own
-skeleton, mixer and materials. SDK-owned actor instances automatically select
-available idle/walk/run/jump/fall actions and advance once per fixed tick.
-`entity.play-action` explicitly takes over the action until reset; action IDs are
-listed in `capabilities()`. For a custom non-actor animated decoration, register
-an `onUpdate` callback for its mixer and `onDispose` for its asset instance.
+A reset/dispose invalidates the scope. Use its assets/register/execute/setState
+methods after await; do not allow an old Promise to mutate a new world epoch.
+Loading again creates another instance; one AssetInstance cannot drive two live
+characters. Body recommendations and locomotion bindings come from verified
+metadata. If missing, author an explicit body or report the limitation.
 
-## Gameplay and runtime control
+`await world.registerPrototype({id,description,template:{kind:'character',
+options:{asset}}})` prepares a reusable template; options has no instance ID.
+Spawn through entity.spawn. entity.attach supports a nonphysical child subtree,
+with positionLocalMetersXYZ; physical grabbing/riding is a separate capability.
 
-`world.onUpdate(({world,deltaSeconds,simulationTick}) => { ... })` runs synchronous
-author gameplay before each physics step; returned promises are rejected. Use it
-for doors, rigid moving platforms, procedural tails, environment and game rules.
-`world.onInteract(entityId, ({world,entityId,actorEntityId}) => { ... })` registers
-an interaction; `world.interact(entityId)` triggers the same hook explicitly.
-Both return an unsubscribe function. `onReset` restores custom counters and child
-animations; `onDispose` releases authored resources. World reset restores registered
-objects and the camera, not arbitrary variables or unregistered child transforms.
-
-`world.getObject(id)` returns the actual Three object. `world.snapshot()` reports
-current entities, positions, actions, collision contacts, ticks and errors;
-`world.inspect()` adds physics counts, input transcript, prototypes and capabilities.
-`world.capabilities()` lists supported commands/action IDs per entity. A small LLM
-should select IDs from this list and emit one typed `WorldCommand`; do not eval
-model-written JavaScript during play.
+<!-- topic:control -->
+## One state for gameplay and text commands
 
 ```ts
-world.execute({type:'entity.set-visible',entityId:'dragon',visible:false});
-world.execute({type:'entity.set-scale',entityId:'dragon',scaleXYZ:[2,2,2]});
-world.execute({type:'actor.move-to',entityId:'guide',targetPositionMetersXYZ:[8,0,-5],run:true});
-world.execute({type:'actor.follow',entityId:'guide',targetEntityId:'hero',distanceMeters:2});
-world.execute({type:'actor.stop',entityId:'guide'});
-world.execute({type:'entity.attach',childEntityId:'lantern',parentEntityId:'hero',positionMetersXYZ:[.4,1,0]});
+const open = world.defineParameter({
+ id:'gate.open',description:'Open the gate',schema:{type:'boolean'},initialValue:false,
+ writes:[{kind:'entity',entityId:'gate',channels:['rotation']}],
+ plan:value=>[{type:'entity.set-rotation',entityId:'gate',
+   rotationLocalRadiansXYZ:[0,value?Math.PI/2:0,0],durationSeconds:.35}]
+});
+world.onInteract('gate',()=>({type:'parameter.set',parameterId:open.id,value:!open.value}));
 ```
 
-Position commands and spawn use world coordinates; attachment position is local
-to the new parent. Scale is local scale. Commands are closed discriminated unions
-in the schema. They return `{status:'applied'|'rejected',revision,error?}`; callers
-must handle rejection. The controlled character remains owned by user input.
-Ground NPC movement uses a complete Recast path plus real capsule movement;
-no-path and stuck states report errors. Flight, swimming and crowd avoidance are
-not supplied. Author these as explicit gameplay capabilities when required.
+The gate is your hinge Group registered as kinematic. Parameter.value is the
+committed desired state, status reports transition/interruption, and actual
+transforms are queryable. A property plan only returns persistent property
+commands. A registerAction plan composes built-in commands/parameters and declares
+its writes. Neither plan may mutate scene objects, perform IO or return a Promise.
+Use `world.state.define(id, initialValue)` for resettable private game data.
 
-`world.registerPrototype(prototypeId, () => EntityOptions | CharacterEntityOptions)`
-registers a synchronous factory returning a **new** object per spawn. The command
-`entity.spawn` supplies prototypeId/entityId/positionMetersXYZ; the command ID
-replaces the factory's template ID. Include a `character:{...}` property to spawn
-a character. Prepare async assets beforehand. `entity.despawn` removes an entity
-and its registered descendants; the player and its ancestors cannot despawn.
-Scene-dependent commands can invalidate routes; test geometry changes around
-occupied paths instead of assuming that every prompt is physically achievable.
+`describe({query,entityIds})` returns actual capabilities, schemas, current state,
+prototypes, geometry choices, movement definitions, parameters and unavailable
+reasons. Positions use positionWorldMetersXYZ; attachment offsets use
+positionLocalMetersXYZ; scale and rotation explicitly use Local fields.
 
-## Camera, lifecycle and ownership
+```ts
+const receipt = await world.execute({type:'actor.move-to',entityId:'guide',
+ targetPositionWorldMetersXYZ:[5,0,3]});
+if (receipt.status==='rejected') throw receipt.error;
+if (receipt.status==='accepted') {
+ const result = await world.operations.wait(receipt.operationId);
+ // Inspect succeeded / failed / cancelled; accepted did not mean reached.
+}
+```
 
-`setCameraFollow({targetEntityId?,distanceMeters?,pitchRadians?,targetHeightMeters?,
-activateOnInput?})` is optional. Its default activates only when movement or orbit
-input begins, preserving the opening camera. Drag or scroll adjusts orbit/distance;
-camera obstruction uses actual visible geometry. Supply your own camera and omit
-follow if gameplay needs another camera behavior.
+While paused, instant commands apply at the pause boundary; ongoing operations
+return accepted and wait for explicit start. Wait observes state events and does
+not start the world. Reset/dispose cancel
+operations and wake waiters; AbortSignal only aborts that wait. Use operations.cancel
+to cancel the operation itself. World operation IDs are distinct from Creator tool
+operation IDs. Asynchronous follow-up writes belong in world.runTask(scope).
 
-`start/stop/reset/render/resize(width,height)/dispose` manage the world lifecycle.
-`step(input?,ticks=1)` and `advance(deltaSeconds,input?)` are deterministic headless
-helpers, not substitutes for the browser playtest. `expose({targetEntityIds?})`
-installs the shared live observation/execute API used by tools and the evaluator.
-Targets are complete registered groups and always include the controlled actor.
+NPC move/follow takes over autonomy; stop keeps it paused until resume-autonomy.
+Player input owns the controlled actor. Single animations return to locomotion;
+loop playback requires stop-action. set-visible only affects rendering; despawn
+removes the entity/collision/tasks. Capability rejection is not SDK success.
 
-World owns its keyboard/pointer listeners, Rapier/Recast resources and asset
-instances passed to addCharacter. It disposes a renderer only when it created it.
-Authored geometry, materials, custom mixers and a supplied renderer remain author
-owned: use `onDispose` to release them, especially for repeated world mounting.
-Despawn retains registered baseline resources for reset until world disposal.
-Reset restores original registrations, parent relationships, TRS/manual matrices,
-visibility, controlled actor and full camera projection. User-authored lifecycle
-hooks remain responsible for custom gameplay state.
+<!-- topic:extensions -->
+## Small authored extensions
 
-## Verification
+Movement returns intent; the SDK still performs the actual KCC collision step:
 
-Use `world_preview` for actual opening and full-target views, short
-`world_playtest` episodes while iterating, then a real 180–300s episode. Inspect
-heights, route results, original errors and captured images. Compilation, duration
-or a passing route alone does not prove reference fidelity or interesting play.
-The cloud comparison measures the whole auxiliary SDK workflow against raw Three;
-it does not isolate API shape from the benefits of prewritten physics/navigation.
+```ts
+world.registerMovement({id:'hover',version:1,description:'Player-controlled hover',
+ initialState:{elapsedSeconds:0},
+ update:({input,desiredDirectionWorldXYZ,deltaSeconds,state})=>({
+  state:{elapsedSeconds:state.elapsedSeconds+deltaSeconds},
+  velocityWorldMetersPerSecondXYZ:[desiredDirectionWorldXYZ[0]*4,
+    input.jump?2:-.5,desiredDirectionWorldXYZ[2]*4],applyGravity:false
+ })
+});
+await world.execute({type:'actor.set-movement',entityId:'hero',movementId:'hover'});
+```
+
+This is controlled motion, not flight navigation. Do not promise NPC aerial
+pathfinding from a movement callback. Query registered movements and entity
+commands; switching back uses the registered ground movement ID from describe.
+The callback is synchronous and pure, uses SDK input/time/body/probes, and returns
+velocity/state. It must not move Three roots, create physical bodies or own a timer.
+
+A visual/state parameter may use an effect instead of a property plan:
+
+```ts
+world.defineParameter({id:'sky.mode',description:'Choose the sky',
+ schema:{type:'string',enum:['day','aurora']},initialValue:'day',
+ writes:[{kind:'visual',channelId:'scene.sky'}],
+ effect:value=>{scene.background=new THREE.Color(value==='aurora'?'#102d53':'#acd0d9');}
+});
+```
+
+Effects may synchronously change declared visual/state channels. They cannot
+mutate managed entity roots, colliders or camera, do IO, or return a Promise.
+Keep physical gameplay in commands; changing a sky color does not change gravity.
+
+```ts
+await world.registerGeometry({id:'bridge.long',description:'Longer bridge deck',
+ geometry:new THREE.BoxGeometry(3,.3,8)});
+await world.execute({type:'entity.set-geometry',entityId:'bridge',geometryId:'bridge.long'});
+```
+
+Named geometry applies to a registered non-skinned Mesh. The SDK prepares and
+validates replacement collision/navigation before commit; keep the original
+geometry registered under another ID to restore it. Do not mutate a published
+geometry template. Geometry IDs are discoverable; an effect cannot secretly edit
+physics geometry. Async procedural geometry uses scope.replaceGeometry.
+
+The complete sdk-capabilities example combines these features with a reusable
+character, complete custom fox, real stairs, ramp, NPC controls and reset.
+
+<!-- topic:observation -->
+## Live observation and capture
+
+SDK `await start()` installs WorldObservation-v2 on the actual scene/camera and
+renderer, plus the gallery lifecycle alias. `setCaptureTargets` selects complete
+registered objects. Snapshots retain all entities, actual motion/animation,
+worldRevision, tick, camera and structured errors; describe is the controller view.
+
+Semantic local front is -Z; frontYawRadians rotates around local +Y. Three views
+then apply the object's complete world quaternion, including parent rotation.
+Right is front cross up. The Host captures real rendered front/right/back images.
+It does not substitute a display clone or fabricate hidden geometry.
+
+Read the real exports from contracts.ts using the Creator schema tool by topic.
+Types describe the API; browser validation is still required for first-frame
+fidelity, route support, continuous input, physical changes and 3–5 minute play.

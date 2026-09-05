@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { WorldObservation } from '@worldkit/three';
+import type { WorldCommand, WorldDescription, WorldObservation } from '@worldkit/three';
 
 declare global {
   interface Window {
@@ -29,28 +29,47 @@ function describe(object: THREE.Object3D) {
   const box = new THREE.Box3().setFromObject(object, true);
   return { uuid: object.uuid, name: object.name, type: object.type, parentUuid: object.parent?.uuid ?? null, positionMetersXYZ: position(object), visible: object.visible, childCount: object.children.length, bounds: box.isEmpty() ? null : { minimumMetersXYZ: box.min.toArray(), maximumMetersXYZ: box.max.toArray() } };
 }
+export function filterDescription(value: WorldDescription | null, query?: { query?: string; entityIds?: string[] }): WorldDescription | null {
+  if (!value || !query) return value;
+  const words = query.query?.toLowerCase().split(/\s+/).filter(Boolean) ?? [];
+  return { ...value, entities: value.entities.filter(entity => (!query.entityIds?.length || query.entityIds.includes(entity.state.id)) && words.every(word => JSON.stringify(entity).toLowerCase().includes(word))) };
+}
 function createBridge() {
   let trace: any[] = [], events: any[] = [], frameCount = 0, active = false, startedAt = 0, previousFrameAt = 0, lastSampleAt = 0;
   let recorder: MediaRecorder | undefined, recordedChunks: Blob[] = [], stream: MediaStream | undefined;
+  let captureIntervalMilliseconds = 1000 / 3, lastCapturedAt = -Infinity;
+  const requestRecordedFrame = () => { const track = stream?.getVideoTracks()[0]; if (track && 'requestFrame' in track) (track as CanvasCaptureMediaStreamTrack).requestFrame(); };
   const keyListener = (event: KeyboardEvent) => { if (active) events.push({ type: event.type, key: event.key, code: event.code, repeat: event.repeat, isTrusted: event.isTrusted, timeSeconds: (performance.now() - startedAt) / 1000, frame: frameCount }); };
   window.addEventListener('keydown', keyListener, true); window.addEventListener('keyup', keyListener, true);
   function sample(deltaSeconds: number) {
     const world = observation(), snapshot = world.snapshot?.(), entity = snapshot?.entities.find(e => e.id === snapshot.controlledEntityId);
-    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.player), velocityMetersPerSecondXYZ: entity?.physics?.velocityMetersPerSecondXYZ ?? null, isGrounded: entity?.physics?.isGrounded ?? null, collisionEntityIds: entity?.physics?.collisionEntityIds ?? null, actionId: entity?.actionId ?? null, clipName: entity?.clipName ?? null, errors: snapshot?.errors ?? [] };
+    return { wallSeconds: (performance.now() - startedAt) / 1000, browserFrame: frameCount, frameDeltaSeconds: deltaSeconds, snapshotSchemaVersion: snapshot?.schemaVersion ?? null, simulationTick: snapshot?.simulationTick ?? null, simulationSeconds: snapshot?.simulationSeconds ?? null, isRunning: snapshot?.isRunning ?? null, positionMetersXYZ: position(world.player), velocityMetersPerSecondXYZ: entity?.motion?.velocityWorldMetersPerSecondXYZ ?? null, isGrounded: entity?.motion?.isGrounded ?? null, collisionEntityIds: entity?.motion?.collisionEntityIds ?? null, actionId: entity?.animation?.actionId ?? null, clipName: entity?.animation?.clipName ?? null, animationTimeSeconds: entity?.animation?.timeSeconds ?? null, movementId: entity?.movementId ?? null, worldRevision: snapshot?.worldRevision ?? null, camera: snapshot?.camera ?? null, errors: snapshot?.errors ?? [] };
   }
   const frames: number[] = [];
   function frame(now: number) {
     if (!active) return;
+    if (recorder?.state === 'recording' && now-lastCapturedAt >= captureIntervalMilliseconds) { requestRecordedFrame(); lastCapturedAt = now; }
     frameCount++; const dt = previousFrameAt ? (now - previousFrameAt) / 1000 : 0; previousFrameAt = now; frames.push(dt);
     if (now - lastSampleAt >= 90) { try { trace.push(sample(dt)); } catch (error) { trace.push({ wallSeconds: (now - startedAt) / 1000, observationError: String(error) }); } lastSampleAt = now; }
     requestAnimationFrame(frame);
   }
   return {
     ready() { try { observation(); return true; } catch { return false; } },
-    inspect() {
+    inspect(query?: { query?: string; entityIds?: string[] }) {
       const world = observation(); world.scene.updateMatrixWorld(true);
       const objects: ReturnType<typeof describe>[] = []; world.scene.traverse(object => { if (objects.length < 1000) objects.push(describe(object)); });
-      return { player: describe(world.player), camera: { ...describe(world.camera), projectionMatrix: world.camera.projectionMatrix.toArray() }, targets: Object.fromEntries(Object.entries(world.targets).map(([id, object]) => [id, describe(object)])), snapshot: world.snapshot?.() ?? null, capabilities: world.capabilities?.() ?? null, commandsSupported: typeof world.execute === 'function', diagnostics: world.inspect?.() ?? null, objects, renderer: { widthPixels: world.renderer.domElement.width, heightPixels: world.renderer.domElement.height, memory: { ...world.renderer.info.memory }, render: { ...world.renderer.info.render } } };
+      return { player: describe(world.player), camera: { ...describe(world.camera), projectionMatrix: world.camera.projectionMatrix.toArray() }, targets: Object.fromEntries(Object.entries(world.targets).map(([id, object]) => [id, describe(object)])), snapshot: world.snapshot?.() ?? null, description: filterDescription(world.capabilities?.() ?? null, query), commandsSupported: typeof world.execute === 'function', diagnostics: world.inspect?.() ?? null, objects, renderer: { widthPixels: world.renderer.domElement.width, heightPixels: world.renderer.domElement.height, memory: { ...world.renderer.info.memory }, render: { ...world.renderer.info.render } } };
+    },
+    async executeCommand(command: WorldCommand, commandId: string) {
+      const world = observation(); if (!world.execute) throw new Error('THREE_WORLD_COMMANDS_UNSUPPORTED');
+      const before = world.snapshot?.() ?? null;
+      const worldCommandReceipt = await world.execute(command, { commandId });
+      if (worldCommandReceipt.commandId !== commandId) throw new Error('THREE_WORLD_COMMAND_ID_MISMATCH');
+      return { worldCommandReceipt, before, after: world.snapshot?.() ?? null };
+    },
+    worldOperation(worldOperationId: string) {
+      const world = observation(); if (!world.operation) throw new Error('THREE_WORLD_OPERATIONS_UNSUPPORTED');
+      return world.operation(worldOperationId);
     },
     async reset() { const world = observation(); await world.stopLive(); await world.reset(); world.renderer.render(world.scene, world.camera); },
     async start() {
@@ -67,12 +86,16 @@ function createBridge() {
     latestSample() { return trace.at(-1) ?? sample(0); },
     beginRecording(framesPerSecond: number) {
       if (recorder) throw new Error('THREE_RECORDING_ALREADY_ACTIVE');
-      recordedChunks = []; stream = observation().renderer.domElement.captureStream(framesPerSecond);
+      recordedChunks = []; captureIntervalMilliseconds = 1000 / framesPerSecond; lastCapturedAt = -Infinity;
+      // Capture the actual canvas at wall-clock times, including a deliberately paused scene.
+      // requestFrame does not advance simulation or render a substitute frame.
+      stream = observation().renderer.domElement.captureStream(0);
       recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 1_500_000 });
-      recorder.addEventListener('dataavailable', event => { if (event.data.size) recordedChunks.push(event.data); }); recorder.start(1000);
+      recorder.addEventListener('dataavailable', event => { if (event.data.size) recordedChunks.push(event.data); }); recorder.start(1000); requestRecordedFrame();
     },
     async endRecording() {
       const current = recorder; if (!current) throw new Error('THREE_RECORDING_NOT_ACTIVE');
+      requestRecordedFrame(); await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
       await new Promise<void>((resolve, reject) => { current.addEventListener('stop', () => resolve(), { once: true }); current.addEventListener('error', event => reject(event), { once: true }); current.stop(); });
       stream?.getTracks().forEach(track => track.stop()); recorder = undefined; stream = undefined;
       const blob = new Blob(recordedChunks, { type: 'video/webm' }); recordedChunks = [];

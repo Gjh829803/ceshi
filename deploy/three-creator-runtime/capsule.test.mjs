@@ -16,12 +16,14 @@ test('minimal importer projection preserves exact package resolutions and integr
   assert.deepEqual([...importers.matchAll(/^  (\S+):$/gm)].map(match => match[1]), ['.', 'packages/three-world']);
   assert(!importers.includes('@babylonjs')); assert(!importers.includes('@whitebox-world'));
   assert(importers.includes("'@worldkit/three'")); assert(importers.includes("'@modelcontextprotocol/sdk'"));
+  assert(importers.includes('      typescript:\n'), 'Runtime authoring schema requires the pinned TypeScript compiler API');
   assert.equal(projected.slice(projected.indexOf('\npackages:\n')), lock.slice(lock.indexOf('\npackages:\n')));
   assert.equal(projected.slice(0, projected.indexOf('\nimporters:\n')), lock.slice(0, lock.indexOf('\nimporters:\n')));
 });
 
 test('projection rejects changed dependency versions and unknown lock formats', () => {
   assert.throws(() => projectLock(lock, { ...rootManifest, dependencies: { ...rootManifest.dependencies, three: '99.0.0' } }), /Root\/lock mismatch/);
+  assert.throws(() => projectLock(lock, { ...rootManifest, devDependencies: { ...rootManifest.devDependencies, typescript: '99.0.0' } }), /Root\/lock mismatch/);
   assert.throws(() => projectLock(lock.replace("lockfileVersion: '9.0'", "lockfileVersion: '10.0'"), rootManifest), /lock layout/);
   assert.throws(() => projectLock(lock.replace('  packages/three-world:', '  packages/not-three:'), rootManifest), /workspace importer/);
 });

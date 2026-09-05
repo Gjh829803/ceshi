@@ -2,6 +2,20 @@
 
 ## GPT-6 Creator reconstruction branch — 2026-09-05
 
+### SDK v2 extension and cloud five-case authorization
+
+The user has now authorized implementing the aligned SDK v2 and its movement,
+state/environment and prepared-geometry extensions, followed by five concurrent
+cloud cases. The D0-only implementation pause is lifted. Current integration
+work graph: [SDK v2 extension and cloud five](docs/superpowers/plans/2026-09-05-sdk-v2-extension-and-cloud-five.md).
+The public implemented contract is `packages/three-world/src/contracts.ts`;
+`engine.ts` / `engine-contracts.ts` are private adapters for the same single
+Three scene, renderer, Rapier world and clock, not a second public dialect.
+Cloud tasks use gpt-6-astra/xhigh, one frozen SDK/tool capsule and up to five
+actual concurrent SDK-only cases. Preserve the older design-only review and
+failed evidence as history; do not call new API typechecks runtime/cloud proof.
+
+
 ### Authorized Three Creator SDK refactor
 
 The user subsequently authorized verifying native Three.js creation with a thin

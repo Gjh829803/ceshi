@@ -13,7 +13,10 @@ const versions = JSON.parse(readFileSync(path.join(sdkRoot, 'package.json')));
 assert.equal(versions.dependencies.three, '0.185.1');
 assert.equal(require('three').REVISION, '185');
 assert.equal(JSON.parse(readFileSync(path.join(sdkRoot, 'packages/three-world/node_modules/@dimforge/rapier3d-compat/package.json'))).version, '0.20.0');
-for (const dependency of ['@modelcontextprotocol/sdk/server/index.js', 'playwright', 'tsx', 'ajv', 'esbuild']) require.resolve(dependency);
+for (const dependency of ['@modelcontextprotocol/sdk/server/index.js', 'playwright', 'tsx', 'ajv', 'esbuild', 'typescript']) require.resolve(dependency);
+const ts = require('typescript');
+const sourceSchema = ts.createSourceFile('schema.ts', 'export interface Example { id: string }', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+assert.equal(sourceSchema.statements.length, 1); assert(ts.isInterfaceDeclaration(sourceSchema.statements[0]));
 assert(require('sharp').versions.vips, 'Sharp/libvips must load for the included tri-view validation helper');
 for (const dependency of ['@noble/hashes/sha256', '@recast-navigation/core', '@recast-navigation/generators']) sdkRequire.resolve(dependency);
 const transformed = require('esbuild').transformSync('const value: number = 6', { loader: 'ts' });
@@ -21,7 +24,7 @@ assert(transformed.code.includes('6'));
 // MCP resolution checks peers too; V3 found a real peer-resolution failure here.
 const importDoctor = `await import(${JSON.stringify(require.resolve('@modelcontextprotocol/sdk/server/index.js'))}); await import(${JSON.stringify(require.resolve('playwright'))}); console.log('passed')`;
 assert.equal(execFileSync(process.execPath, ['--input-type=module', '-e', importDoctor], { cwd: sdkRoot, encoding: 'utf8', timeout: 90000 }).trim(), 'passed');
-const report = { kind: 'worldkit-three-capsule-doctor', schemaVersion: 1, status: 'passed', node: process.version, platform: process.platform, architecture: process.arch, three: '0.185.1', rapier: '0.20.0', esbuild: 'transform-passed', sharpLibvips: 'load-passed', mcpPeerResolution: 'passed', playwrightImport: 'passed', browser: 'deferred-to-cloud', sourceFrozen: false };
+const report = { kind: 'worldkit-three-capsule-doctor', schemaVersion: 1, status: 'passed', node: process.version, platform: process.platform, architecture: process.arch, three: '0.185.1', rapier: '0.20.0', esbuild: 'transform-passed', typescriptCompilerApi: {version: ts.version, status: 'parse-passed'}, sharpLibvips: 'load-passed', mcpPeerResolution: 'passed', playwrightImport: 'passed', browser: 'deferred-to-cloud', sourceFrozen: false };
 if (args.includes('--compile')) {
   const workspace = mkdtempSync('/tmp/three-capsule-compile-');
   try {

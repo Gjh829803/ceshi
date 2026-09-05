@@ -1,3 +1,2 @@
 export * from './contracts.js';
-export * from './world.js';
-export * from './assets.js';
+export { ThreeWorld, createWorld, type WorldOptions } from './world.js';

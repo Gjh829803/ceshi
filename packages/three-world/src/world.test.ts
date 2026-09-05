@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { createWorld } from './world.js';
+import { createWorld } from './engine.js';
 import { WorldKeyboard } from './input.js';
 
 function ground(): THREE.Mesh {
@@ -17,6 +17,22 @@ async function fixture(navigation = false) {
 const point = (world: Awaited<ReturnType<typeof fixture>>, id = 'Player-A') => world.snapshot().entities.find(e => e.id === id)!.positionMetersXYZ;
 
 describe('ThreeWorld', () => {
+  it('uses held arrow keys to orbit the camera without driving the character', async () => {
+    const world = await fixture();
+    try {
+      world.setCameraFollow({ distanceMeters: 6, pitchRadians: .3, activateOnInput: true }); world.step({}, 30);
+      const playerBefore = point(world); const cameraBefore = world.camera.quaternion.clone();
+      world.keyboard.enabled = true; world.keyboard.keyDown('ArrowRight');
+      for (let i = 0; i < 60; i++) world.advance(1 / 60);
+      expect(point(world)[0]).toBeCloseTo(playerBefore[0], 4); expect(point(world)[2]).toBeCloseTo(playerBefore[2], 4);
+      expect(world.camera.quaternion.angleTo(cameraBefore)).toBeGreaterThan(.5);
+      world.keyboard.keyUp('ArrowRight'); const stopped = world.camera.quaternion.clone();
+      for (let i = 0; i < 30; i++) world.advance(1 / 60);
+      expect(world.camera.quaternion.angleTo(stopped)).toBeLessThan(.01);
+      world.keyboard.keyDown('ArrowUp'); for (let i = 0; i < 30; i++) world.advance(1 / 60);
+      expect(world.camera.quaternion.angleTo(stopped)).toBeGreaterThan(.2);
+    } finally { world.dispose(); }
+  });
   it('accepts a first animation-frame timestamp earlier than start time and records frame failures', async () => {
     const callbacks: FrameRequestCallback[] = [];
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callbacks.push(callback); return callbacks.length; });
@@ -36,7 +52,7 @@ describe('ThreeWorld', () => {
       const object = actor(); object.position.x = 8; const joint = new THREE.Object3D(); joint.name = 'joint'; object.add(joint);
       const clip = new THREE.AnimationClip('idle', 1, [new THREE.NumberKeyframeTrack('joint.position[y]', [0, 1], [.4, .6])]);
       const mixer = new THREE.AnimationMixer(object); const action = mixer.clipAction(clip);
-      const asset = { object, clips: [clip], mixer, play: () => { action.reset().play(); }, update: (dt: number) => { mixer.update(dt); }, dispose: () => { mixer.stopAllAction(); } };
+      const asset = { object, clips: [clip], mixer, actionIds:['idle'],isActionComplete:false,timeSeconds:0, play: () => { action.reset().play(); }, update: (dt: number) => { mixer.update(dt); }, dispose: () => { mixer.stopAllAction(); } };
       world.addCharacter({ id: 'Animated', object, asset }); world.step({}, 15); expect(joint.position.y).toBeGreaterThan(.4);
       world.reset(); expect(world.simulationTick).toBe(0); expect(joint.position.y).toBeCloseTo(.4);
     } finally { world.dispose(); }
@@ -57,7 +73,7 @@ describe('ThreeWorld', () => {
   it('faces the movement direction using semantic front under a rotated parent', async () => {
     const world = await fixture();
     try {
-      const parent = new THREE.Group(); parent.rotation.y = Math.PI / 2; world.scene.add(parent);
+      const parent = new THREE.Group(); parent.position.x=5; parent.rotation.y = Math.PI / 2; world.scene.add(parent);
       const child = actor(); parent.add(child); world.addCharacter({ id: 'Parented actor', object: child, frontYawRadians: Math.PI / 2 });
       world.setControlledEntity('Parented actor'); world.camera.position.set(0, 3, 7); world.camera.lookAt(0, 1, 0);
       world.step({ moveZRatio: -1 }, 60);
@@ -159,7 +175,7 @@ describe('ThreeWorld', () => {
   it('prevalidates scale changes affecting a child character before applying a command', async () => {
     const world = await fixture();
     try {
-      const group = new THREE.Group(); world.addEntity({ id: 'Container', object: group });
+      const group = new THREE.Group(); group.position.x=5; world.addEntity({ id: 'Container', object: group });
       const npc = actor(); group.add(npc); world.addCharacter({ id: 'Child actor', object: npc }); world.step({}, 30);
       const before = world.snapshot(); const result = world.execute({ type: 'entity.set-scale', entityId: 'Container', scaleXYZ: [4, 1, 4] });
       expect(result.status).toBe('rejected'); expect(world.snapshot()).toEqual(before); expect(() => world.step()).not.toThrow();
@@ -178,7 +194,7 @@ describe('ThreeWorld', () => {
     const camera = new THREE.PerspectiveCamera(); rig.add(camera); camera.position.set(-12, 2, 4); camera.lookAt(0, 1, 0);
     const world = await createWorld({ scene, camera, navigation: false });
     try {
-      world.addCharacter({ id: 'hero', object: actor() }); world.setControlledEntity('hero'); world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false }); world.step();
+      world.addCharacter({ id: 'hero', object: actor() }); world.setControlledEntity('hero'); world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false, transitionSeconds:0 }); world.step();
       const target = world.getObject('hero').getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.3, 0));
       expect(camera.getWorldPosition(new THREE.Vector3()).distanceTo(target)).toBeCloseTo(4, 5);
     } finally { world.dispose(); }
@@ -197,7 +213,7 @@ describe('ThreeWorld', () => {
       world.camera.position.set(0, 1.3, 4); world.camera.lookAt(0, 1.3, 0);
       const obstacle = new THREE.Group(); const child = new THREE.Mesh(new THREE.BoxGeometry(2, 3, .2), new THREE.MeshBasicMaterial()); child.position.set(0, 1.5, 2); obstacle.add(child);
       world.addEntity({ id: 'Hidden wall', object: obstacle, role: 'obstacle' }); child.visible = false;
-      world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false }); world.step();
+      world.setCameraFollow({ distanceMeters: 4, pitchRadians: 0, targetHeightMeters: 1.3, activateOnInput: false, transitionSeconds:0 }); world.step();
       const target = world.getObject('Player-A').getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.3, 0));
       expect(world.camera.getWorldPosition(new THREE.Vector3()).distanceTo(target)).toBeCloseTo(4, 5);
     } finally { world.dispose(); }
@@ -216,10 +232,10 @@ describe('ThreeWorld', () => {
   });
 });
 
-it('treats arrows/WASD as equivalent held directions and Shift repeat never toggles run', () => {
+it('separates arrow orbit from WASD movement and Shift repeat never toggles run', () => {
   const keyboard = new WorldKeyboard(() => 10, () => {}); keyboard.enabled = true;
   keyboard.keyDown('ArrowUp'); keyboard.keyDown('ShiftLeft');
-  for (let i = 0; i < 200; i++) { keyboard.keyDown('ShiftLeft', true); expect(keyboard.sample()).toMatchObject({ moveZRatio: -1, run: true }); }
+  for (let i = 0; i < 200; i++) { keyboard.keyDown('ShiftLeft', true); expect(keyboard.sample()).toMatchObject({ moveZRatio: 0, cameraPitchRatio: -1, run: true }); }
   keyboard.keyDown('KeyW'); keyboard.keyUp('ArrowUp'); expect(keyboard.sample().moveZRatio).toBe(-1);
   keyboard.keyUp('ShiftLeft'); expect(keyboard.sample().run).toBe(false); keyboard.keyUp('KeyW'); expect(keyboard.sample().moveZRatio).toBe(0);
   keyboard.keyDown('Space'); keyboard.keyUp('Space'); expect(keyboard.sample().jump).toBe(true); expect(keyboard.sample().jump).toBe(false); keyboard.clear();

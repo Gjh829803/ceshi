@@ -13,6 +13,13 @@
         "humanoid character",
         "human motion proxy"
       ],
+      "recommendedBody": {
+        "heightMeters": 1.8,
+        "radiusMeters": 0.35
+      },
+      "locomotionBindingIds": [
+        "ground.standard"
+      ],
       "rootTransform": {
         "positionMetersXYZ": [
           0,
@@ -201,6 +208,8 @@
       "recommendedFor": [
         "static asset loading diagnostic"
       ],
+      "recommendedBody": null,
+      "locomotionBindingIds": [],
       "selectedNodeIndices": [
         2,
         7,

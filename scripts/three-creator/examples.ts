@@ -20,20 +20,22 @@ window.__WORLDKIT_EVAL__={ready:true,scene,camera,renderer,player,targets:{playe
 export const SDK_EXAMPLE = `import * as THREE from 'three';
 import {createWorld} from '@worldkit/three';
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#92bad0');
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 1000);camera.position.set(7,6,10);camera.lookAt(0,0.7,0);
-const renderer = new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);document.body.append(renderer.domElement);
-const world=await createWorld({scene,camera,renderer});scene.add(new THREE.HemisphereLight(0xffffff,0x476035,2));
-const ground=new THREE.Mesh(new THREE.BoxGeometry(60,0.2,60),new THREE.MeshStandardMaterial({color:0x759955}));ground.position.y=-0.1;
-world.addEntity({id:'ground',object:ground,role:'terrain',physics:{kind:'fixed'}});
-const player=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshStandardMaterial({color:0xe87836}));body.position.y=0.7;player.add(body);player.position.y=0.05;
-world.addCharacter({id:'player',object:player,character:{heightMeters:1.4,radiusMeters:0.35}});world.setControlledEntity('player');
-// Preserve the reference camera until input, then follow during play.
-world.setCameraFollow({targetEntityId:'player',distanceMeters:8,pitchRadians:0.4,targetHeightMeters:1,activateOnInput:true});
-world.expose({targetEntityIds:['player']});world.render();world.start();
-// world.onUpdate(({deltaSeconds,simulationTick})=>{...}) supplies the SDK tick for
-// author animation/gameplay; do not run a second physics timer.
-// world.onInteract('object-id',()=>{...}) registers actual nearby interaction.
-// world.execute({type:'entity.set-visible',entityId:'object-id',visible:false})
-// and actor.move-to / actor.follow / entity.attach operate registered identities.
-// A minimal SDK integration example, not a completed reference reconstruction.
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(7,6,10); camera.lookAt(0,0.7,0);
+const canvas = document.createElement('canvas'); document.body.append(canvas);
+const world = await createWorld({scene,camera,canvas});
+scene.add(new THREE.HemisphereLight(0xffffff,0x476035,2));
+const ground = new THREE.Mesh(new THREE.BoxGeometry(60,0.2,60),new THREE.MeshStandardMaterial({color:0x759955}));
+ground.position.y=-0.1; world.addEntity({id:'ground',object:ground,role:'terrain'});
+const player = new THREE.Group();
+const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.4,0.8),new THREE.MeshStandardMaterial({color:0xe87836}));
+body.position.y=0.7; player.add(body);
+world.addCharacter({id:'player',object:player,body:{heightMeters:1.4,radiusMeters:0.35}});
+world.setControlledEntity('player');
+world.setCameraFollow({distanceMeters:8,activateOnInput:true});
+world.setCaptureTargets(['player']);
+await world.start(); // prepares baseline and installs the real same-scene observer
+// WASD movement; arrows/drag camera; Shift run; Space jump; E interact; R reset.
+// Author pure visual child motion with onUpdate; managed root motion uses execute.
+// This is a minimal integration example, not a completed reference reconstruction.
 `;

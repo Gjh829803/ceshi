@@ -2,6 +2,7 @@ import {createReadStream} from 'node:fs';
 import {createInterface} from 'node:readline';
 import {isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
+import {THREE_TOOL_VERSION} from './three-eval-runtime.mjs';
 
 export const hashPattern = /^[a-f0-9]{64}$/;
 const finiteAtLeast = (value, minimum) => typeof value === 'number' && Number.isFinite(value) && value >= minimum;
@@ -18,8 +19,10 @@ export function failureClass(message) {
 export function isPassingDelivery(result, expectedProfile = result?.profile) {
   if (!['three-raw', 'three-sdk'].includes(expectedProfile) || result?.profile !== expectedProfile || result?.engine !== 'three@0.185.1' ||
     result?.kind !== 'three-creator-delivery' || result.schemaVersion !== 1 || result.status !== 'ready-for-independent-review' ||
-    result.technicalStatus !== 'passed' || result.semanticStatus !== 'unreviewed' || result.browserObservationContract !== 'WorldObservation-v1' ||
-    !finiteAtLeast(result.actualWallSeconds, 180) || !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
+    result.technicalStatus !== 'passed' || result.semanticStatus !== 'unreviewed' || result.toolVersion !== THREE_TOOL_VERSION ||
+    result.sdkVersion !== (expectedProfile === 'three-sdk' ? THREE_TOOL_VERSION : null) ||
+    result.browserObservationContract !== (expectedProfile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1') ||
+    !finiteAtLeast(result.actualWallSeconds, 180) || !finiteAtLeast(result.activePlaySeconds, 180) || !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
     !['sourceHash', 'worldBuildHash', 'runtimeHash', 'creatorRuntimeLockHash', 'episodeHash', 'archiveSha256', 'deliveryManifestSha256'].every(key => hashPattern.test(result[key] ?? ''))) return false;
   const worldHash = createHash('sha256').update(JSON.stringify({sourceHash: result.sourceHash, runtimeHash: result.runtimeHash, profile: result.profile})).digest('hex');
   return result.worldBuildHash === worldHash;
