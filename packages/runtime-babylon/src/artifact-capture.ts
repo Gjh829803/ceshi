@@ -1,5 +1,8 @@
 import { Camera } from "@babylonjs/core/Cameras/camera.js";
 import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera.js";
+import { BoundingInfo } from "@babylonjs/core/Culling/boundingInfo.js";
+import { VertexBuffer } from "@babylonjs/core/Buffers/buffer.js";
+import { extractMinAndMax } from "@babylonjs/core/Maths/math.functions.js";
 import type { AbstractEngine } from "@babylonjs/core/Engines/abstractEngine.js";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color.js";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
@@ -17,6 +20,12 @@ import {
   inspectWhiteboxTriviewPixelsV1,
   WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1,
 } from "@whitebox-world/runtime-contracts";
+import {
+  applyBabylonNativeBlockCaptureIsolationV1,
+  babylonNativeBlockLiveVisualHandleMeshV1,
+  babylonNativeBlockLiveVisualHandleWorldMatrixV1,
+  peekBabylonNativeBlockLiveHandleRegistryV1,
+} from "@whitebox-world/native-babylon-block-profile/host";
 
 import {
   fitOrthographicBoundsToWorldExtentsV1,
@@ -373,12 +382,47 @@ function renderTriview(
   scene: Scene,
   engine: AbstractEngine,
   request: Extract<BabylonArtifactCaptureRequestV1, { kind: "entity-triview" }>,
+  restoreSteps: Array<() => void>,
 ): BabylonArtifactCaptureResultV1 {
-  const targets = request.entityIds.flatMap((entityId) => meshesForEntity(scene, entityId));
+  const nativeRegistry = peekBabylonNativeBlockLiveHandleRegistryV1(scene);
+  const nativeByEntityId = new Map(nativeRegistry?.blocks.map(handle => [handle.runtimeEntityId, handle]));
+  const nativeHandles = [...new Set(request.entityIds.flatMap(entityId => {
+    const handle = nativeByEntityId.get(entityId);
+    return handle === undefined ? [] : [handle];
+  }))];
+  const entityMeshes = request.entityIds.filter(entityId => !nativeByEntityId.has(entityId))
+    .flatMap(entityId => meshesForEntity(scene, entityId));
+  const targets = [...new Set([...entityMeshes, ...nativeHandles.map(babylonNativeBlockLiveVisualHandleMeshV1)])];
   if (targets.length === 0) {
     throw new Error(
       `BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE: ${request.entityIds.join(",")}`,
     );
+  }
+  // Batch bounds include unrelated instances. Measure each selected logical
+  // Block from its real local vertices and the registry's authoritative pose,
+  // before the existing isolation owner temporarily masks other instances.
+  const localBoundsByMesh = new Map<AbstractMesh, ReturnType<typeof extractMinAndMax>>();
+  const bounds = [
+    ...entityMeshes.map(mesh => mesh.getHierarchyBoundingVectors(true)),
+    ...nativeHandles.map(handle => {
+      const mesh = babylonNativeBlockLiveVisualHandleMeshV1(handle);
+      let local = localBoundsByMesh.get(mesh);
+      if (local === undefined) {
+        const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+        if (positions === null || positions.length === 0) throw new Error("BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE");
+        local = extractMinAndMax(positions, 0, positions.length / 3);
+        localBoundsByMesh.set(mesh, local);
+      }
+      const box = new BoundingInfo(local.minimum, local.maximum,
+        babylonNativeBlockLiveVisualHandleWorldMatrixV1(handle)).boundingBox;
+      return { min: box.minimumWorld, max: box.maximumWorld };
+    }),
+  ];
+  if (nativeRegistry !== undefined && nativeHandles.length > 0) {
+    const isolation = applyBabylonNativeBlockCaptureIsolationV1({
+      registry: nativeRegistry, targetBlockIds: nativeHandles.map(handle => handle.blockId),
+    });
+    restoreSteps.push(() => isolation.restore());
   }
   const targetSet = new Set(targets);
   const visibility = new Map(scene.meshes.map((mesh) => [mesh, mesh.visibility] as const));
@@ -386,6 +430,9 @@ function renderTriview(
     targets.map((mesh) => [mesh, mesh.alwaysSelectAsActiveMesh] as const),
   );
   const materialColors = new Map<Material, MaterialColorSnapshotV1>();
+  restoreSteps.push(() => restoreMaterialColors(materialColors));
+  for (const [mesh, value] of visibility) restoreSteps.push(() => { mesh.visibility = value; });
+  for (const [mesh, value] of activeMeshSelection) restoreSteps.push(() => { mesh.alwaysSelectAsActiveMesh = value; });
   const identityColor = Color3.FromHexString(request.identityColor);
   const isRuntimeLitReview = request.renderStyle === "runtime-lit-review";
   for (const mesh of scene.meshes) {
@@ -399,14 +446,14 @@ function renderTriview(
     mesh.computeWorldMatrix(true);
   }
   const minimum = new Vector3(
-    Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.x)),
-    Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.y)),
-    Math.min(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).min.z)),
+    Math.min(...bounds.map(({ min }) => min.x)),
+    Math.min(...bounds.map(({ min }) => min.y)),
+    Math.min(...bounds.map(({ min }) => min.z)),
   );
   const maximum = new Vector3(
-    Math.max(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).max.x)),
-    Math.max(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).max.y)),
-    Math.max(...targets.map((mesh) => mesh.getHierarchyBoundingVectors(true).max.z)),
+    Math.max(...bounds.map(({ max }) => max.x)),
+    Math.max(...bounds.map(({ max }) => max.y)),
+    Math.max(...bounds.map(({ max }) => max.z)),
   );
   const center = minimum.add(maximum).scale(0.5);
   const size = maximum.subtract(minimum);
@@ -417,6 +464,7 @@ function renderTriview(
   const context = output.getContext("2d");
   if (context === null) throw new Error("BABYLON_ARTIFACT_2D_CANVAS_UNAVAILABLE");
   const camera = new FreeCamera("worldkit.artifact.triview", Vector3.Zero(), scene);
+  restoreSteps.push(() => camera.dispose());
   camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
   camera.minZ = 0.01;
   const panelAspect = panelWidth / request.heightPixels;
@@ -433,63 +481,54 @@ function renderTriview(
   const canvas = renderingCanvas(engine);
   scene.clearColor = Color4.FromHexString(`${WHITEBOX_TRIVIEW_BACKGROUND_COLOR_V1}FF`);
   scene.activeCamera = camera;
-  try {
-    for (let index = 0; index < views.length; index += 1) {
-      const canonicalViewDirection = views[index]!;
-      // A strict horizontal orthographic view intentionally removes depth.
-      // The review-only capture keeps the same Front/Right/Back azimuth while
-      // revealing a small amount of the top faces so voxel scale and volume
-      // remain legible to a human reviewer.
-      const viewDirection = isRuntimeLitReview
-        ? new Vector3(
-            canonicalViewDirection.x * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
-            Math.sin(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
-            canonicalViewDirection.z * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
-          )
-        : canonicalViewDirection;
-      const halfHeight = projection.halfHeightMeters;
-      camera.orthoLeft = -halfHeight * panelAspect;
-      camera.orthoRight = halfHeight * panelAspect;
-      camera.orthoTop = halfHeight;
-      camera.orthoBottom = -halfHeight;
-      camera.position.copyFrom(center.add(viewDirection.scale(distance)));
-      camera.upVector.copyFromFloats(0, 1, 0);
-      camera.setTarget(center);
-      // Rigged assets can require multiple renders to refresh skinning and
-      // active-mesh state after the capture camera replaces the gameplay camera.
-      // Retry the actual panel, not just the scene call, so a blank first frame
-      // can never silently become a successful three-view artifact.
-      for (
-        let attempt = 0;
-        attempt < TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW;
-        attempt += 1
-      ) {
-        scene.render();
-        engine.flushFramebuffer();
-        context.drawImage(canvas, index * panelWidth, 0, panelWidth, request.heightPixels);
-        if (panelHasRenderableForeground(
-          context,
-          output.width,
-          request.heightPixels,
-          index,
-        )) break;
-      }
+  for (let index = 0; index < views.length; index += 1) {
+    const canonicalViewDirection = views[index]!;
+    // A strict horizontal orthographic view intentionally removes depth.
+    // The review-only capture keeps the same Front/Right/Back azimuth while
+    // revealing a small amount of the top faces so voxel scale and volume
+    // remain legible to a human reviewer.
+    const viewDirection = isRuntimeLitReview
+      ? new Vector3(
+          canonicalViewDirection.x * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+          Math.sin(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+          canonicalViewDirection.z * Math.cos(REVIEW_TRIVIEW_ELEVATION_RADIANS_V1),
+        )
+      : canonicalViewDirection;
+    const halfHeight = projection.halfHeightMeters;
+    camera.orthoLeft = -halfHeight * panelAspect;
+    camera.orthoRight = halfHeight * panelAspect;
+    camera.orthoTop = halfHeight;
+    camera.orthoBottom = -halfHeight;
+    camera.position.copyFrom(center.add(viewDirection.scale(distance)));
+    camera.upVector.copyFromFloats(0, 1, 0);
+    camera.setTarget(center);
+    // Rigged assets can require multiple renders to refresh skinning and
+    // active-mesh state after the capture camera replaces the gameplay camera.
+    // Retry the actual panel, not just the scene call, so a blank first frame
+    // can never silently become a successful three-view artifact.
+    for (
+      let attempt = 0;
+      attempt < TRIVIEW_MAXIMUM_RENDER_ATTEMPTS_PER_VIEW;
+      attempt += 1
+    ) {
+      scene.render();
+      engine.flushFramebuffer();
+      context.drawImage(canvas, index * panelWidth, 0, panelWidth, request.heightPixels);
+      if (panelHasRenderableForeground(
+        context,
+        output.width,
+        request.heightPixels,
+        index,
+      )) break;
     }
-    return {
-      dataUrl: output.toDataURL("image/png"),
-      widthPixels: output.width,
-      heightPixels: output.height,
-      pixelsRgba: context.getImageData(0, 0, output.width, output.height).data,
-      projectedBoundsByEntityId: {},
-    };
-  } finally {
-    camera.dispose();
-    restoreMaterialColors(materialColors);
-    for (const [mesh, alwaysSelectAsActiveMesh] of activeMeshSelection) {
-      mesh.alwaysSelectAsActiveMesh = alwaysSelectAsActiveMesh;
-    }
-    for (const [mesh, value] of visibility) mesh.visibility = value;
   }
+  return {
+    dataUrl: output.toDataURL("image/png"),
+    widthPixels: output.width,
+    heightPixels: output.height,
+    pixelsRgba: context.getImageData(0, 0, output.width, output.height).data,
+    projectedBoundsByEntityId: {},
+  };
 }
 
 export function captureBabylonArtifactViewV1(options: Readonly<{
@@ -513,6 +552,7 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
     material: Material | null;
   }>>();
   let temporaryCamera: FreeCamera | undefined;
+  const triviewRestoreSteps: Array<() => void> = [];
   let primaryError: unknown;
   try {
     try {
@@ -522,7 +562,7 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
       throw new Error("BABYLON_ARTIFACT_IDENTITY_VIEW_INVALID");
     }
     if (request.kind === "entity-triview") {
-      return renderTriview(scene, engine, request);
+      return renderTriview(scene, engine, request, triviewRestoreSteps);
     }
     engine.setSize(request.widthPixels, request.heightPixels, true);
     if (
@@ -765,6 +805,7 @@ export function captureBabylonArtifactViewV1(options: Readonly<{
         cleanupErrors.push(error);
       }
     };
+    for (const restore of triviewRestoreSteps.reverse()) cleanup(restore);
     cleanup(() => temporaryCamera?.dispose());
     for (const [mesh, state] of overlayState) cleanup(() => {
       mesh.material = state.material;

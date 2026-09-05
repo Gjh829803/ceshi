@@ -3,7 +3,9 @@ import { RegisterAbstractEngineStencil } from "@babylonjs/core/Engines/AbstractE
 import { RegisterAbstractEngineStates } from "@babylonjs/core/Engines/AbstractEngine/abstractEngine.states.pure.js";
 import { NullEngine } from "@babylonjs/core/Engines/nullEngine.pure.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import "@babylonjs/core/Meshes/thinInstanceMesh.js";
+import * as nativeCapture from "@whitebox-world/native-babylon-block-profile/host";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial.js";
 import { RawTexture } from "@babylonjs/core/Materials/Textures/rawTexture.js";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder.js";
@@ -32,6 +34,124 @@ describe("Babylon artifact capture", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it.each((["success", "canvas", "render", "copy", "cleanup", "copy-and-cleanup"] as const).flatMap(failure =>
+    (["runtime-lit-review", "semantic-mask"] as const).flatMap(renderStyle =>
+      (["thin-instance", "independent-mesh"] as const).map(realization => ({ failure, renderStyle, realization }))),
+  ))("captures Native $realization targets without contamination and restores $failure in $renderStyle", ({ failure, renderStyle, realization }) => {
+    RegisterAbstractEngineStencil();
+    RegisterAbstractEngineStates();
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
+    const camera = new FreeCamera("opening", new Vector3(0, 0, -8), scene);
+    scene.activeCamera = camera;
+    const batch = MeshBuilder.CreateBox("opaque-batch-name", {}, scene);
+    const material = new StandardMaterial("original", scene);
+    batch.material = material;
+    const originalDiffuse = material.diffuseColor.asArray();
+    const originalEmissive = material.emissiveColor.asArray();
+    batch.visibility = 0.7;
+    const originalMatrices = new Float32Array([
+      ...Matrix.Translation(20, 0, 30).asArray(),
+      ...Matrix.Translation(20, 0, 34).asArray(),
+      ...Matrix.Translation(120, 0, 30).asArray(),
+    ]);
+    const independentMeshes = realization === "independent-mesh"
+      ? [batch, MeshBuilder.CreateBox("opaque-second", {}, scene), MeshBuilder.CreateBox("opaque-decoy", {}, scene)]
+      : [];
+    independentMeshes.forEach((mesh, index) => {
+      mesh.position.copyFromFloats(originalMatrices[index * 16 + 12]!, 0, originalMatrices[index * 16 + 14]!);
+      mesh.material = material;
+    });
+    if (realization === "thin-instance") batch.thinInstanceSetBuffer("matrix", originalMatrices.slice(), 16, true);
+    const overlay = MeshBuilder.CreateBox("overlay", {}, scene);
+    const blocks = ["front-block", "rear-block", "other-block"].map((blockId, instanceIndex) => {
+      const identity = { blockId, runtimeEntityId: `native-block:${blockId}`, semanticCaptureClassId: "landmark.fixture" };
+      return realization === "thin-instance"
+        ? { ...identity, kind: "thin-instance" as const, batchId: "batch", batchMesh: batch, instanceIndex }
+        : { ...identity, kind: "independent-mesh" as const, mesh: independentMeshes[instanceIndex]! };
+    });
+    const registry: nativeCapture.BabylonNativeBlockLiveHandleRegistryV1 = {
+      kind: "babylon-native-block-live-handle-registry", schemaVersion: 1,
+      realization: realization === "thin-instance" ? { kind: "host-chunk-batched", chunkPolicyHash: `sha256:${"a".repeat(64)}`,
+        batchPlanHash: `sha256:${"b".repeat(64)}` } : { kind: "authoring-unbatched" }, blocks,
+      visualBatches: realization === "independent-mesh" ? [] : [{ batchId: "batch", residencyGroupId: "chunk", shape: "full", paletteRole: "structure",
+        semanticCaptureClassId: "landmark.fixture", blockIds: blocks.map(b => b.blockId), mesh: batch }],
+      visualGroups: [], walkableOverlays: [{ logicalColliderId: "ground", sourceBlockIds: ["front-block"],
+        visualGroupIds: [], topologyHash: `sha256:${"a".repeat(64)}`, mesh: overlay }],
+    };
+    vi.spyOn(nativeCapture, "peekBabylonNativeBlockLiveHandleRegistryV1").mockReturnValue(registry);
+    class NativeCanvas extends FakeCanvasElement {
+      override getContext(): CanvasRenderingContext2D {
+        if (failure === "canvas") return null as unknown as CanvasRenderingContext2D;
+        const context = super.getContext();
+        if (failure.includes("copy")) context.drawImage = () => { throw new Error("native copy failed"); };
+        return context;
+      }
+    }
+    vi.stubGlobal("HTMLCanvasElement", FakeCanvasElement);
+    vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn(), createElement: () => new NativeCanvas() });
+    vi.spyOn(engine, "getRenderingCanvas").mockReturnValue(new FakeCanvasElement() as unknown as HTMLCanvasElement);
+    const dispose = FreeCamera.prototype.dispose;
+    if (failure.includes("cleanup")) vi.spyOn(FreeCamera.prototype, "dispose").mockImplementation(function (this: FreeCamera, ...args) {
+      dispose.apply(this, args);
+      if (this.name === "worldkit.artifact.triview") throw new Error("native camera cleanup failed");
+    });
+    let renders = 0;
+    scene.onBeforeRenderObservable.add(() => {
+      if (scene.activeCamera?.name !== "worldkit.artifact.triview") return;
+      renders++;
+      const viewCamera = scene.activeCamera;
+      expect(viewCamera.orthoTop).toBeCloseTo(5 * 0.58);
+      expect(viewCamera.orthoBottom).toBeCloseTo(-5 * 0.58);
+      if (renders <= 8) {
+        expect(viewCamera.position.x).toBeGreaterThan(20);
+        expect(viewCamera.position.z).toBeCloseTo(32);
+      }
+      if (realization === "thin-instance") expect(batch.thinInstanceGetWorldMatrices()[2]!.m[0]).toBe(0);
+      else expect(independentMeshes[2]!.isVisible).toBe(false);
+      expect(overlay.isVisible).toBe(false);
+      expect(batch.material).toBe(material);
+      if (renderStyle === "semantic-mask") expect(material.emissiveColor.toHexString()).toBe("#E85D5D");
+      else expect(material.emissiveColor.asArray()).toEqual(originalEmissive);
+      if (failure === "render" && renders === 9) throw new Error("native render failed");
+    });
+    try {
+      const capture = () => captureBabylonArtifactViewV1({ scene, engine, camera, request: {
+        kind: "entity-triview", widthPixels: 6, heightPixels: 2,
+        entityIds: blocks.slice(0, 2).map(b => b.runtimeEntityId), identityColor: "#E85D5D",
+        frontDirectionWorldXZ: [1, 0], renderStyle,
+      } });
+      if (failure === "success") expect(capture()).toMatchObject({ widthPixels: 6, heightPixels: 2 });
+      else if (failure === "copy-and-cleanup") {
+        try { capture(); expect.fail("capture must fail"); }
+        catch (error) {
+          expect(error).toBeInstanceOf(AggregateError);
+          expect((error as AggregateError).errors.map((cause: Error) => cause.message)).toEqual([
+            "native copy failed", "native camera cleanup failed",
+          ]);
+        }
+      } else expect(capture).toThrow(failure === "canvas" ? "2D_CANVAS_UNAVAILABLE" : failure === "copy" ? "native copy failed" : failure === "render" ? "native render failed" : "CLEANUP");
+      if (realization === "thin-instance") {
+        expect(batch.thinInstanceGetWorldMatrices().flatMap(m => [...m.asArray()])).toEqual([...originalMatrices]);
+      } else {
+        for (const [index, mesh] of independentMeshes.entries()) {
+          expect(mesh.isVisible).toBe(true);
+          expect([...mesh.computeWorldMatrix(true).asArray()]).toEqual([...originalMatrices.slice(index * 16, (index + 1) * 16)]);
+        }
+      }
+      expect(batch.visibility).toBe(0.7);
+      expect(batch.alwaysSelectAsActiveMesh).toBe(false);
+      expect(batch.material).toBe(material);
+      expect(material.diffuseColor.asArray()).toEqual(originalDiffuse);
+      expect(material.emissiveColor.asArray()).toEqual(originalEmissive);
+      expect(overlay.isVisible).toBe(true);
+      expect(scene.activeCamera).toBe(camera);
+      expect(scene.cameras).toEqual([camera]);
+      if (failure === "success") expect(renders).toBe(24);
+    } finally { scene.dispose(); engine.dispose(); }
   });
 
   it.each(([

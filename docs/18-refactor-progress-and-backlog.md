@@ -1920,8 +1920,23 @@ CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充�
   provider/publisher/corpus 三文件 39/39；Native Skill 67/67；补充 binding 冻结/非默认
   方向断言 1/1；typecheck、Planner/Canonical bundle drift 与 diff check 通过。
   上述数量有重跑交集，不累加为全仓覆盖；仍无真实 Browser、付费任务、最终本地 Case、
-  全仓 CI 或独立复核。**这里只完成声明到元数据，Native complete-target 三视图尚未消费，
-  Native styling 和 Studio requested scope 尚未接通**；CF16/PROD10 与整个 CF 保持开放。
+  全仓 CI 或独立复核。**该检查点只完成声明到元数据**；下项继续接入捕获 Adapter，
+  Native styling 和 Studio requested scope 尚未接通，CF16/PROD10 与整个 CF 保持开放。
+- CF16-NATIVE-CAPTURE-ADAPTER（同一 CF 分支，main-agent-only）：现有 entity tri-view
+  已通过 Native live registry 解析正式 runtime Entity ID，复用既有独立 Mesh/Thin Instance
+  隔离 owner；目标范围来自实际局部顶点及该 owner 的世界矩阵，不把同批远处非目标实例
+  算入完整对象范围，也不从 Mesh 名称或自造 Entity ID 建立身份。保留旧 Front/Right/Back、
+  共享尺度、review 原材质/10° 仰角、semantic tint、背景色及每面最多八次实际渲染。
+  临时 Camera、材质、可见性与实例恢复并入既有外层清理栈；早期 canvas、第二面 render、
+  copy 或 Camera disposal 抛错都继续恢复，其余清理失败不吞掉原捕获错误。
+  初始 Native runtime IDs RED 为 `BABYLON_ARTIFACT_ENTITY_NOT_RENDERABLE`；实现后
+  artifact/isolation/formal-provider 三文件 50/50。随后扩展独立 Mesh、非原点目标和
+  render 故障，artifact 文件最终 42/42（含前次重跑，不累计成全仓数量）；最终 typecheck
+  与 diff check 通过。
+  本项只是现有捕获 Adapter 的实现和合成像素回归，**Formal payload/receipt/publication
+  尚未交付这些对象三视图，Native styling 与 Studio requested scope 仍待接线**。
+  没有增加普通生产 gate、另一个 Runtime 状态或付费任务；无新真实 Browser/模型 Case，
+  最后本地 Case 仍须等待全部 CF 实现及旧分支对齐完成。
 
 下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
 写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
