@@ -1,6 +1,15 @@
-import { constants, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  constants,
+  copyFile,
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 
+import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import {
   hashFormalWorldCaptureIntentV1,
   parseFormalWorldCaptureIntentV1,
@@ -19,6 +28,18 @@ import {
 import { parseWorldPackageWorldBoundsV1 } from "@whitebox-world/world-package";
 import { isNil, sortBy } from "lodash-es";
 import sharp from "sharp";
+import {
+  nativeWorldReferenceInputRefV1,
+  nativeWorldReferenceMediaTypeV1,
+  validateNativeWorldReferenceImageV1,
+} from "./native-world-reference-media.js";
+
+import { analyzeNativeEntryIdentityImageV4 } from
+  "../agents/agent-planner-self-check.js";
+import {
+  parseVisualIdentityPaletteV1,
+  type VisualIdentityPaletteTargetV1,
+} from "../scenes/visual-identity-palette.js";
 
 const DIMENSION_IDS = Object.freeze([
   "collider",
@@ -52,14 +73,11 @@ const BASELINE_ENTRY_GROUND = Object.freeze({
   visualGroupId: "entry-ground-group",
   topologyNodeId: "entry-ground",
   semanticLayerId: "foreground",
-  normalizedBounds: Object.freeze({
-    minXBasisPoints: 0,
-    minYBasisPoints: 6800,
-    maxXBasisPoints: 10000,
-    maxYBasisPoints: 10000,
-  }),
-  normalizedCenter: Object.freeze({ xBasisPoints: 5000, yBasisPoints: 8400 }),
-  coverageBasisPoints: 3200,
+  viewRequirements: Object.freeze([
+    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
+    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
+    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
+  ]),
 });
 
 const BASELINE_REMOTE_GROUND = Object.freeze({
@@ -68,20 +86,114 @@ const BASELINE_REMOTE_GROUND = Object.freeze({
   visualGroupId: "remote-ground-group",
   topologyNodeId: "remote-ground",
   semanticLayerId: "middle",
-  normalizedBounds: Object.freeze({
-    minXBasisPoints: 800,
-    minYBasisPoints: 3600,
-    maxXBasisPoints: 9200,
-    maxYBasisPoints: 8800,
-  }),
-  normalizedCenter: Object.freeze({ xBasisPoints: 5000, yBasisPoints: 6200 }),
-  coverageBasisPoints: 4368,
+  viewRequirements: Object.freeze([
+    Object.freeze({ viewId: "opening" as const, mode: "not-required" as const }),
+    Object.freeze({ viewId: "world-side" as const, mode: "presence-required" as const }),
+    Object.freeze({ viewId: "world-top-down" as const, mode: "presence-required" as const }),
+  ]),
 });
+
+const NATIVE_PLANNER_SELF_CHECK_VERSION = "worldkit-planner-self-check-v4";
+const SHA256_HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const PLANNER_IMAGE_MEASUREMENT_FIELDS = Object.freeze([
+  "widthPixels",
+  "heightPixels",
+  "subjectMaskPixelCount",
+  "subjectCenterXRatio",
+  "subjectCenterErrorRatio",
+  "maximumCenterErrorRatio",
+] as const);
+const NATIVE_ENTRY_IDENTITY_MEASUREMENT_FIELDS = Object.freeze([
+  "widthPixels",
+  "heightPixels",
+  "aspectRatio",
+  "aspectErrorRatio",
+  "requiredAspectRatio",
+  "maximumAspectErrorRatio",
+  "maximumIdentityRgbDistance",
+  "minimumIdentitySeparationRgbUnits",
+  "ambiguousIdentityPixelCount",
+  "candidateIdentityPixelCount",
+  "ambiguousIdentityRatio",
+  "maximumAmbiguousIdentityRatio",
+  "targets",
+] as const);
+const NATIVE_ENTRY_IDENTITY_TARGET_MEASUREMENT_FIELDS = Object.freeze([
+  "visualTargetId",
+  "identityColorHex",
+  "exclusivelyAdmittedPixelCount",
+  "imageCoverageRatio",
+  "componentCount",
+  "coherentComponentCount",
+  "coherentPixelCount",
+  "coherentPixelRatio",
+  "largestComponentPixelCount",
+  "largestComponentImageCoverageRatio",
+  "largestComponentBoundingBoxWidthPixels",
+  "largestComponentBoundingBoxHeightPixels",
+  "largestComponentBoundingBoxWidthRatio",
+  "largestComponentBoundingBoxHeightRatio",
+  "minimumPixelCount",
+  "minimumCoherentComponentPixelCount",
+  "minimumCoherentPixelRatio",
+  "minimumLargestComponentPixelCount",
+  "minimumLargestComponentImageCoverageRatio",
+  "minimumLargestComponentBoundingBoxWidthRatio",
+  "minimumLargestComponentBoundingBoxHeightRatio",
+] as const);
+const NATIVE_BLOCK_PALETTE_MEASUREMENTS_FIELDS = Object.freeze([
+  "worldPlan",
+  "entryWhiteboxTarget",
+] as const);
+const NATIVE_BLOCK_PALETTE_MEASUREMENT_FIELDS = Object.freeze([
+  "widthPixels",
+  "heightPixels",
+  "aspectRatio",
+  "matchedBlockPixelCount",
+  "blockPaletteCoverageRatio",
+  "traversablePixelCount",
+  "interactivePixelCount",
+  "blockPixelCountsBySemantic",
+  "visualTargetPixelCounts",
+] as const);
+const NATIVE_BLOCK_PALETTE_SEMANTICS = Object.freeze([
+  "walkable",
+  "obstacle",
+  "interactive-solid",
+  "interactive-trigger",
+  "water",
+  "cloud-walkable",
+  "cloud-passable",
+  "visual-only",
+  "landmark-red",
+  "visual-target-2",
+  "visual-target-3",
+  "visual-target-4",
+  "visual-target-5",
+  "landmark-pink",
+  "visual-target-1-subject",
+] as const);
 
 // The Planner gives generic ground no identity mask. Keep its bindings for
 // presence/support/traversal, but never compare Host-invented screen bands as
 // if they were reference-image truth in the default report-only profile.
 const BASELINE_PRESENCE_ONLY_DRIFT_BASIS_POINTS = 10_000;
+// Match the historical 0.005% per-target palette presence floor. A smaller or
+// disconnected proposal is still a valid Planner success, but it is not a
+// reliable pixel baseline and is omitted instead of receiving invented bounds.
+const MINIMUM_RELIABLE_BASELINE_TARGET_IMAGE_COVERAGE_RATIO = 0.00005;
+
+function sceneBriefSemanticHash(
+  sceneBriefBytes: Uint8Array,
+): Sha256HashV1 {
+  const brief = parseSceneBriefV1(
+    new TextDecoder().decode(sceneBriefBytes),
+  );
+  if (!brief.ok) {
+    throw new TypeError("NATIVE_WORLD_SCENE_BRIEF_INVALID");
+  }
+  return brief.sceneBriefHash as Sha256HashV1;
+}
 
 function isBaselineGroundAcceptanceTargetRef(targetRef: string): boolean {
   return targetRef === BASELINE_ENTRY_GROUND.acceptanceTargetRef ||
@@ -93,103 +205,33 @@ function isBaselineGroundCompositionTargetRef(targetRef: string): boolean {
     targetRef === BASELINE_REMOTE_GROUND.compositionTargetRef;
 }
 
-interface NativeWorldVisualPaletteTargetV1 {
-  readonly id: string;
-  readonly targetKind: string;
-  readonly semanticClassId: string;
-  readonly identityColor: `#${string}`;
-}
-
 interface NativeWorldBaselineVisualTargetV1 {
   readonly acceptanceTargetRef: string;
   readonly compositionTargetRef: string;
   readonly visualGroupId: string;
   readonly topologyNodeId: string;
   readonly semanticLayerId: "foreground" | "middle" | "remote";
-  readonly normalizedBounds: Readonly<{
-    minXBasisPoints: number;
-    minYBasisPoints: number;
-    maxXBasisPoints: number;
-    maxYBasisPoints: number;
-  }>;
-  readonly normalizedCenter: Readonly<{
-    xBasisPoints: number;
-    yBasisPoints: number;
-  }>;
-  readonly coverageBasisPoints: number;
-}
-
-function parseIdentityColor(color: string): readonly [number, number, number] {
-  if (!/^#[0-9A-F]{6}$/.test(color)) {
-    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
-  }
-  return Object.freeze([
-    Number.parseInt(color.slice(1, 3), 16),
-    Number.parseInt(color.slice(3, 5), 16),
-    Number.parseInt(color.slice(5, 7), 16),
-  ]);
-}
-
-function parseVisualPaletteTargets(
-  value: unknown,
-  expectedSceneId: string,
-): readonly NativeWorldVisualPaletteTargetV1[] {
-  const palette = record(
-    value,
-    [
-      "kind",
-      "schemaVersion",
-      "sceneId",
-      "sceneBriefHash",
-      "movementMode",
-      "movementModeLabel",
-      "targets",
-    ],
-    "NATIVE_WORLD_BASELINE_PALETTE_INVALID",
-  );
-  if (
-    palette.kind !== "worldkit-visual-identity-palette" ||
-    palette.schemaVersion !== 1 ||
-    palette.sceneId !== expectedSceneId ||
-    !Array.isArray(palette.targets)
-  ) {
-    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
-  }
-  const targets = palette.targets.map((value, index) => {
-    if (isNil(value) || typeof value !== "object" || Array.isArray(value)) {
-      throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
-    }
-    const target = value as Record<string, unknown>;
-    const id = target.id;
-    const targetKind = target.targetKind;
-    const semanticClassId = target.semanticClassId;
-    const identityColor = target.identityColor;
-    if (
-      typeof id !== "string" ||
-      typeof targetKind !== "string" ||
-      typeof semanticClassId !== "string" ||
-      typeof identityColor !== "string" ||
-      !/^visual-target-[1-5]$/.test(id) ||
-      !/^#[0-9A-F]{6}$/.test(identityColor) ||
-      (index === 0 && targetKind !== "subject")
-    ) {
-      throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
-    }
-    return Object.freeze({
-      id,
-      targetKind,
-      semanticClassId,
-      identityColor: identityColor as `#${string}`,
-    });
-  });
-  if (
-    targets.filter(({ targetKind }) => targetKind === "subject").length !== 1 ||
-    new Set(targets.map(({ id }) => id)).size !== targets.length ||
-    new Set(targets.map(({ identityColor }) => identityColor)).size !== targets.length
-  ) {
-    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
-  }
-  return Object.freeze(targets);
+  readonly viewRequirements: readonly (
+    | Readonly<{
+        viewId: "opening" | "world-side" | "world-top-down";
+        mode: "not-required" | "presence-required";
+      }>
+    | Readonly<{
+        viewId: "opening" | "world-side" | "world-top-down";
+        mode: "reference-projection-required";
+        normalizedBounds: Readonly<{
+          minXBasisPoints: number;
+          minYBasisPoints: number;
+          maxXBasisPoints: number;
+          maxYBasisPoints: number;
+        }>;
+        normalizedCenter: Readonly<{
+          xBasisPoints: number;
+          yBasisPoints: number;
+        }>;
+        coverageBasisPoints: number;
+      }>
+  )[];
 }
 
 function targetLayerFromCenterY(
@@ -200,70 +242,155 @@ function targetLayerFromCenterY(
   return "middle";
 }
 
-async function measurePaletteTarget(
+function targetViewRequirements(
+  openingProjection?: Readonly<{
+    normalizedBounds: Readonly<{
+      minXBasisPoints: number;
+      minYBasisPoints: number;
+      maxXBasisPoints: number;
+      maxYBasisPoints: number;
+    }>;
+    normalizedCenter: Readonly<{
+      xBasisPoints: number;
+      yBasisPoints: number;
+    }>;
+    coverageBasisPoints: number;
+  }>,
+): NativeWorldBaselineVisualTargetV1["viewRequirements"] {
+  return Object.freeze([
+    Object.freeze(openingProjection === undefined
+      ? { viewId: "opening" as const, mode: "not-required" as const }
+      : {
+          viewId: "opening" as const,
+          mode: "reference-projection-required" as const,
+          ...openingProjection,
+        }),
+    Object.freeze({
+      viewId: "world-side" as const,
+      mode: "presence-required" as const,
+    }),
+    Object.freeze({
+      viewId: "world-top-down" as const,
+      mode: "presence-required" as const,
+    }),
+  ]);
+}
+
+async function measurePaletteTargets(
   imagePath: string,
-  target: NativeWorldVisualPaletteTargetV1,
-): Promise<NativeWorldBaselineVisualTargetV1> {
+  targets: readonly VisualIdentityPaletteTargetV1[],
+): Promise<readonly NativeWorldBaselineVisualTargetV1[]> {
   const { data, info } = await sharp(imagePath)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const [red, green, blue] = parseIdentityColor(target.identityColor);
-  let minimumX = info.width;
-  let minimumY = info.height;
-  let maximumX = -1;
-  let maximumY = -1;
-  let pixelCount = 0;
-  for (let y = 0; y < info.height; y += 1) {
-    for (let x = 0; x < info.width; x += 1) {
-      const offset = (y * info.width + x) * 4;
-      if (
-        Math.abs(data[offset]! - red) > 24 ||
-        Math.abs(data[offset + 1]! - green) > 24 ||
-        Math.abs(data[offset + 2]! - blue) > 24 ||
-        data[offset + 3]! === 0
-      ) continue;
-      minimumX = Math.min(minimumX, x);
-      minimumY = Math.min(minimumY, y);
-      maximumX = Math.max(maximumX, x);
-      maximumY = Math.max(maximumY, y);
-      pixelCount += 1;
-    }
+  const analysis = analyzeNativeEntryIdentityImageV4({
+    width: info.width,
+    height: info.height,
+    channels: info.channels,
+    pixels: data,
+  }, targets.length);
+  const measuredTargets = analysis.measurement.targets;
+  if (
+    measuredTargets.length !== targets.length ||
+    targets.some((target, index) =>
+      target.id !== measuredTargets[index]!.visualTargetId ||
+      target.identityColor !== measuredTargets[index]!.identityColorHex
+    )
+  ) {
+    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
   }
-  const hasMeasuredMask = pixelCount > 0;
-  const normalizedBounds = hasMeasuredMask
-    ? Object.freeze({
+  const landmarkTargets: NativeWorldBaselineVisualTargetV1[] = [];
+  for (let targetIndex = 0; targetIndex < targets.length; targetIndex += 1) {
+    const target = targets[targetIndex]!;
+    let minimumX = info.width;
+    let minimumY = info.height;
+    let maximumX = -1;
+    let maximumY = -1;
+    let pixelCount = 0;
+    const admittedTarget = targetIndex + 1;
+    for (let y = 0; y < info.height; y += 1) {
+      for (let x = 0; x < info.width; x += 1) {
+        const pixelIndex = y * info.width + x;
+        if (analysis.admittedTargetByPixel[pixelIndex] !== admittedTarget) {
+          continue;
+        }
+        minimumX = Math.min(minimumX, x);
+        minimumY = Math.min(minimumY, y);
+        maximumX = Math.max(maximumX, x);
+        maximumY = Math.max(maximumY, y);
+        pixelCount += 1;
+      }
+    }
+    if (target.targetKind === "subject") {
+      if (pixelCount === 0) {
+        throw new TypeError(
+          `NATIVE_WORLD_BASELINE_TARGET_MASK_MISSING:${target.id}`,
+        );
+      }
+      continue;
+    }
+    const minimumReliableComponentPixelCount = Math.max(
+      32,
+      Math.round(
+        info.width * info.height *
+          MINIMUM_RELIABLE_BASELINE_TARGET_IMAGE_COVERAGE_RATIO,
+      ),
+    );
+    const measuredTarget = measuredTargets[targetIndex]!;
+    if (
+      pixelCount === 0 ||
+      measuredTarget.largestComponentPixelCount <
+        minimumReliableComponentPixelCount
+    ) {
+      landmarkTargets.push(Object.freeze({
+        acceptanceTargetRef: `worldkit://acceptance-target/${target.id}@1`,
+        compositionTargetRef: `worldkit://composition-target/${target.id}@1`,
+        visualGroupId: `${target.id}-group`,
+        topologyNodeId: target.id,
+        semanticLayerId: "middle",
+        viewRequirements: targetViewRequirements(),
+      }));
+      continue;
+    }
+    if (pixelCount !== measuredTarget.exclusivelyAdmittedPixelCount) {
+      throw new TypeError(
+        "NATIVE_WORLD_BASELINE_PALETTE_INVALID",
+      );
+    }
+    const normalizedBounds = Object.freeze({
       minXBasisPoints: Math.floor(minimumX * 10000 / info.width),
       minYBasisPoints: Math.floor(minimumY * 10000 / info.height),
       maxXBasisPoints: Math.ceil((maximumX + 1) * 10000 / info.width),
       maxYBasisPoints: Math.ceil((maximumY + 1) * 10000 / info.height),
-    })
-    : Object.freeze({
-      minXBasisPoints: 2500,
-      minYBasisPoints: 1200,
-      maxXBasisPoints: 7500,
-      maxYBasisPoints: 5200,
     });
-  const normalizedCenter = Object.freeze({
-    xBasisPoints: Math.round(
-      (normalizedBounds.minXBasisPoints + normalizedBounds.maxXBasisPoints) / 2,
-    ),
-    yBasisPoints: Math.round(
-      (normalizedBounds.minYBasisPoints + normalizedBounds.maxYBasisPoints) / 2,
-    ),
-  });
-  return Object.freeze({
-    acceptanceTargetRef: `worldkit://acceptance-target/${target.id}@1`,
-    compositionTargetRef: `worldkit://composition-target/${target.id}@1`,
-    visualGroupId: `${target.id}-group`,
-    topologyNodeId: target.id,
-    semanticLayerId: targetLayerFromCenterY(normalizedCenter.yBasisPoints),
-    normalizedBounds,
-    normalizedCenter,
-    coverageBasisPoints: hasMeasuredMask
-      ? Math.max(1, Math.round(pixelCount * 10000 / (info.width * info.height)))
-      : 2000,
-  });
+    const normalizedCenter = Object.freeze({
+      xBasisPoints: Math.round(
+        (normalizedBounds.minXBasisPoints + normalizedBounds.maxXBasisPoints) /
+          2,
+      ),
+      yBasisPoints: Math.round(
+        (normalizedBounds.minYBasisPoints + normalizedBounds.maxYBasisPoints) /
+          2,
+      ),
+    });
+    landmarkTargets.push(Object.freeze({
+      acceptanceTargetRef: `worldkit://acceptance-target/${target.id}@1`,
+      compositionTargetRef: `worldkit://composition-target/${target.id}@1`,
+      visualGroupId: `${target.id}-group`,
+      topologyNodeId: target.id,
+      semanticLayerId: targetLayerFromCenterY(normalizedCenter.yBasisPoints),
+      viewRequirements: targetViewRequirements({
+        normalizedBounds,
+        normalizedCenter,
+        coverageBasisPoints: Math.max(
+          1,
+          Math.round(pixelCount * 10000 / (info.width * info.height)),
+        ),
+      }),
+    }));
+  }
+  return Object.freeze(landmarkTargets);
 }
 
 /**
@@ -273,33 +400,41 @@ async function measurePaletteTarget(
  */
 export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
   sceneId: string;
+  sceneBriefSemanticHash: Sha256HashV1;
   visualIdentityPalettePath: string;
   entryWhiteboxTargetPath: string;
 }>): Promise<unknown> {
-  const palette = parseVisualPaletteTargets(
+  const palette = parseVisualIdentityPaletteV1(
     JSON.parse(await readFile(input.visualIdentityPalettePath, "utf8")),
-    input.sceneId,
-  );
-  const landmarkTargets = await Promise.all(
-    palette.filter(({ targetKind }) => targetKind !== "subject")
-      .map((target) => measurePaletteTarget(input.entryWhiteboxTargetPath, target)),
+    {
+      sceneSourceKind: "babylon-native",
+      sceneId: input.sceneId,
+      sceneBriefHash: input.sceneBriefSemanticHash,
+    },
+  ).targets;
+  const landmarkTargets = await measurePaletteTargets(
+    input.entryWhiteboxTargetPath,
+    palette,
   );
   const visualTargets = sortBy([
     BASELINE_ENTRY_GROUND,
     BASELINE_REMOTE_GROUND,
     ...landmarkTargets,
   ], ({ acceptanceTargetRef }) => acceptanceTargetRef);
-  const targetRefs = visualTargets.map(({ compositionTargetRef }) =>
-    compositionTargetRef);
+  const openingTargets = visualTargets.flatMap((target) => {
+    const requirement = target.viewRequirements[0]!;
+    return requirement.mode === "reference-projection-required"
+      ? [Object.freeze({ target, requirement })]
+      : [];
+  });
+  const targetRefs = sortBy(openingTargets.map(({ target }) =>
+    target.compositionTargetRef));
   const semanticLayerIds = sortBy([
     ...new Set(visualTargets.map(({ semanticLayerId }) => semanticLayerId)),
   ]);
-  const orderedTargetRefs = [
-    BASELINE_ENTRY_GROUND,
-    BASELINE_REMOTE_GROUND,
-    ...sortBy(landmarkTargets, ({ normalizedCenter }) =>
-      -normalizedCenter.yBasisPoints),
-  ].map(({ compositionTargetRef }) => compositionTargetRef);
+  const orderedTargetRefs = sortBy(openingTargets, ({ requirement }) =>
+    -requirement.normalizedCenter.yBasisPoints)
+    .map(({ target }) => target.compositionTargetRef);
   const entryAcceptanceTargetRef = BASELINE_ENTRY_GROUND.acceptanceTargetRef;
   const remoteAcceptanceTargetRef = BASELINE_REMOTE_GROUND.acceptanceTargetRef;
   const traversalCheckId = "entry-to-remote-ground-pass";
@@ -319,21 +454,19 @@ export async function deriveNativeWorldBaselineProposalV1(input: Readonly<{
       Object.freeze({
         acceptanceTargetRef: target.acceptanceTargetRef,
         visualGroupId: target.visualGroupId,
-        normalizedBounds: target.normalizedBounds,
-        normalizedCenter: target.normalizedCenter,
-        coverageBasisPoints: target.coverageBasisPoints,
+        viewRequirements: target.viewRequirements,
       }))),
     openingComposition: Object.freeze({
       acceptanceTargetRef: remoteAcceptanceTargetRef,
       targetRefs: Object.freeze(targetRefs),
-      regions: Object.freeze(visualTargets.map((target) => Object.freeze({
+      regions: Object.freeze(sortBy(openingTargets.map(({ target, requirement }) => Object.freeze({
         targetRef: target.compositionTargetRef,
-        normalizedBounds: target.normalizedBounds,
-      }))),
-      anchors: Object.freeze(visualTargets.map((target) => Object.freeze({
+        normalizedBounds: requirement.normalizedBounds,
+      })), ({ targetRef }) => targetRef)),
+      anchors: Object.freeze(sortBy(openingTargets.map(({ target, requirement }) => Object.freeze({
         targetRef: target.compositionTargetRef,
-        normalizedCenter: target.normalizedCenter,
-      }))),
+        normalizedCenter: requirement.normalizedCenter,
+      })), ({ targetRef }) => targetRef)),
       orderedTargetRefs: Object.freeze(orderedTargetRefs),
     }),
     spawnSupport: Object.freeze({
@@ -462,11 +595,360 @@ function record(value: unknown, fields: readonly string[], code: string) {
   return input;
 }
 
-function mediaType(filePath: string): "image/png" | "image/jpeg" {
-  const extension = path.extname(filePath).toLowerCase();
-  if (extension === ".png") return "image/png";
-  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-  throw new TypeError("NATIVE_WORLD_REFERENCE_MEDIA_TYPE_INVALID");
+function finiteNumberField(
+  input: Record<string, unknown>,
+  field: string,
+  code: string,
+): number {
+  const value = input[field];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new TypeError(code);
+  }
+  return value;
+}
+
+function nonNegativeIntegerField(
+  input: Record<string, unknown>,
+  field: string,
+  code: string,
+): number {
+  const value = finiteNumberField(input, field, code);
+  if (!Number.isInteger(value)) throw new TypeError(code);
+  return value;
+}
+
+function parsePassedNativePlannerSelfCheckV4(input: Readonly<{
+  value: unknown;
+  sceneId: string;
+  sceneBriefHash: Sha256HashV1;
+  worldPlanHash: Sha256HashV1;
+  entryWhiteboxTargetHash: Sha256HashV1;
+}>): unknown {
+  const code = "NATIVE_WORLD_PLANNER_RECEIPT_INVALID";
+  const report = record(input.value, [
+    "kind",
+    "schemaVersion",
+    "validatorVersion",
+    "sceneId",
+    "sceneSourceKind",
+    "status",
+    "inputs",
+    "imageMeasurements",
+    "nativeBlockPaletteMeasurements",
+    "nativeEntryIdentityMeasurements",
+    "diagnostics",
+  ], code);
+  if (
+    report.kind !== "worldkit-planner-self-check" ||
+    report.schemaVersion !== 1 ||
+    report.validatorVersion !== NATIVE_PLANNER_SELF_CHECK_VERSION ||
+    report.sceneId !== input.sceneId ||
+    report.sceneSourceKind !== "babylon-native" ||
+    report.status !== "passed"
+  ) {
+    throw new TypeError(code);
+  }
+  const inputs = record(report.inputs, [
+    "sceneBriefHash",
+    "worldPlanHash",
+    "entryWhiteboxTargetHash",
+  ], code);
+  for (const value of Object.values(inputs)) {
+    if (typeof value !== "string" || !SHA256_HASH_PATTERN.test(value)) {
+      throw new TypeError(code);
+    }
+  }
+  if (
+    inputs.sceneBriefHash !== input.sceneBriefHash ||
+    inputs.worldPlanHash !== input.worldPlanHash ||
+    inputs.entryWhiteboxTargetHash !== input.entryWhiteboxTargetHash
+  ) {
+    throw new TypeError("NATIVE_WORLD_PLANNER_RECEIPT_INPUT_MISMATCH");
+  }
+  const image = record(
+    report.imageMeasurements,
+    PLANNER_IMAGE_MEASUREMENT_FIELDS,
+    code,
+  );
+  const nativeEntry = record(
+    report.nativeEntryIdentityMeasurements,
+    NATIVE_ENTRY_IDENTITY_MEASUREMENT_FIELDS,
+    code,
+  );
+  const nativePalettes = record(
+    report.nativeBlockPaletteMeasurements,
+    NATIVE_BLOCK_PALETTE_MEASUREMENTS_FIELDS,
+    code,
+  );
+  const worldPlanPalette = record(
+    nativePalettes.worldPlan,
+    NATIVE_BLOCK_PALETTE_MEASUREMENT_FIELDS,
+    code,
+  );
+  const entryPalette = record(
+    nativePalettes.entryWhiteboxTarget,
+    NATIVE_BLOCK_PALETTE_MEASUREMENT_FIELDS,
+    code,
+  );
+  for (const field of PLANNER_IMAGE_MEASUREMENT_FIELDS) {
+    if (field.endsWith("Pixels") || field.endsWith("PixelCount")) {
+      nonNegativeIntegerField(image, field, code);
+    } else {
+      finiteNumberField(image, field, code);
+    }
+  }
+  for (const field of NATIVE_ENTRY_IDENTITY_MEASUREMENT_FIELDS) {
+    if (field === "targets") continue;
+    if (field.endsWith("Pixels") || field.endsWith("PixelCount")) {
+      nonNegativeIntegerField(nativeEntry, field, code);
+    } else {
+      finiteNumberField(nativeEntry, field, code);
+    }
+  }
+  for (const palette of [worldPlanPalette, entryPalette]) {
+    for (const field of NATIVE_BLOCK_PALETTE_MEASUREMENT_FIELDS) {
+      if (field === "blockPixelCountsBySemantic" ||
+        field === "visualTargetPixelCounts") continue;
+      if (field.endsWith("Pixels") || field.endsWith("PixelCount")) {
+        nonNegativeIntegerField(palette, field, code);
+      } else {
+        finiteNumberField(palette, field, code);
+      }
+    }
+    const counts = record(
+      palette.blockPixelCountsBySemantic,
+      NATIVE_BLOCK_PALETTE_SEMANTICS,
+      code,
+    );
+    for (const semantic of NATIVE_BLOCK_PALETTE_SEMANTICS) {
+      nonNegativeIntegerField(counts, semantic, code);
+    }
+    if (!Array.isArray(palette.visualTargetPixelCounts) ||
+      palette.visualTargetPixelCounts.length !== 5) {
+      throw new TypeError(code);
+    }
+    for (const count of palette.visualTargetPixelCounts) {
+      if (typeof count !== "number" || !Number.isInteger(count) || count < 0) {
+        throw new TypeError(code);
+      }
+    }
+    const widthPixels = nonNegativeIntegerField(
+      palette,
+      "widthPixels",
+      code,
+    );
+    const heightPixels = nonNegativeIntegerField(
+      palette,
+      "heightPixels",
+      code,
+    );
+    const aspectRatio = finiteNumberField(palette, "aspectRatio", code);
+    const matchedBlockPixelCount = nonNegativeIntegerField(
+      palette,
+      "matchedBlockPixelCount",
+      code,
+    );
+    const blockPaletteCoverageRatio = finiteNumberField(
+      palette,
+      "blockPaletteCoverageRatio",
+      code,
+    );
+    if (
+      aspectRatio !== widthPixels / heightPixels ||
+      blockPaletteCoverageRatio !== matchedBlockPixelCount /
+        (widthPixels * heightPixels)
+    ) {
+      throw new TypeError(code);
+    }
+  }
+  if (
+    image.widthPixels !== nativeEntry.widthPixels ||
+    image.heightPixels !== nativeEntry.heightPixels ||
+    image.widthPixels !== entryPalette.widthPixels ||
+    image.heightPixels !== entryPalette.heightPixels ||
+    image.maximumCenterErrorRatio !== 0.015 ||
+    nativeEntry.requiredAspectRatio !== 16 / 9 ||
+    nativeEntry.maximumAspectErrorRatio !== 0.02 ||
+    nativeEntry.maximumIdentityRgbDistance !== 40 ||
+    nativeEntry.minimumIdentitySeparationRgbUnits !== 12 ||
+    nativeEntry.maximumAmbiguousIdentityRatio !== 0.05
+  ) {
+    throw new TypeError(code);
+  }
+  if (!Array.isArray(nativeEntry.targets) || nativeEntry.targets.length === 0) {
+    throw new TypeError(code);
+  }
+  const targetIds = new Set<string>();
+  for (const value of nativeEntry.targets) {
+    const target = record(
+      value,
+      NATIVE_ENTRY_IDENTITY_TARGET_MEASUREMENT_FIELDS,
+      code,
+    );
+    if (
+      typeof target.visualTargetId !== "string" ||
+      !/^visual-target-[1-5]$/.test(target.visualTargetId) ||
+      targetIds.has(target.visualTargetId) ||
+      typeof target.identityColorHex !== "string" ||
+      !/^#[0-9A-F]{6}$/.test(target.identityColorHex)
+    ) {
+      throw new TypeError(code);
+    }
+    targetIds.add(target.visualTargetId);
+    for (const field of NATIVE_ENTRY_IDENTITY_TARGET_MEASUREMENT_FIELDS) {
+      if (field === "visualTargetId" || field === "identityColorHex") continue;
+      if (
+        field.endsWith("Pixels") || field.endsWith("PixelCount") ||
+        field === "componentCount" || field === "coherentComponentCount"
+      ) {
+        nonNegativeIntegerField(target, field, code);
+      } else {
+        finiteNumberField(target, field, code);
+      }
+    }
+    if (
+      target.minimumCoherentPixelRatio !== 0.75 ||
+      target.minimumLargestComponentImageCoverageRatio !== 0.001 ||
+      target.minimumLargestComponentBoundingBoxWidthRatio !== 0.02 ||
+      target.minimumLargestComponentBoundingBoxHeightRatio !== 0.04
+    ) {
+      throw new TypeError(code);
+    }
+  }
+  if (!Array.isArray(report.diagnostics) || report.diagnostics.length !== 0) {
+    throw new TypeError(code);
+  }
+  return report;
+}
+
+async function readClosedPlannerInput(
+  inputRoot: string,
+  relativePath: string,
+): Promise<Uint8Array> {
+  if (
+    path.isAbsolute(relativePath) ||
+    relativePath === "" ||
+    relativePath === "." ||
+    relativePath === ".." ||
+    relativePath.includes("/") ||
+    relativePath.includes("\\")
+  ) {
+    throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
+  }
+  const root = path.resolve(inputRoot);
+  const filePath = path.join(root, relativePath);
+  const realRoot = await realpath(root);
+  let metadata;
+  try {
+    metadata = await lstat(filePath);
+  } catch {
+    throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
+  }
+  if (
+    metadata.isSymbolicLink() ||
+    !metadata.isFile() ||
+    await realpath(filePath) !== path.join(realRoot, relativePath)
+  ) {
+    throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
+  }
+  return readFile(filePath);
+}
+
+export const NATIVE_WORLD_PLANNER_REFERENCE_INPUTS_V1 = Object.freeze([
+  { inputRef: "entry-whitebox-target.png", mediaType: "image/png" },
+  { inputRef: "planner-self-check.json", mediaType: "application/json" },
+  { inputRef: "visual-identity-palette.json", mediaType: "application/json" },
+  { inputRef: "world-plan.png", mediaType: "image/png" },
+] as const);
+
+export async function validateNativeWorldPlannerInputClosureV1(
+  input: Readonly<{
+    reconstructionCase: unknown;
+    inputDirectoryPath: string;
+  }>,
+): Promise<void> {
+  const reconstructionCase = parseWorldReconstructionCaseV1(
+    input.reconstructionCase,
+  );
+  if (reconstructionCase.sceneBriefRef !== "scene-brief.md") {
+    throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
+  }
+  const jsonRows = reconstructionCase.referenceInputs.filter(
+    ({ mediaType }) => mediaType === "application/json",
+  );
+  const rows = NATIVE_WORLD_PLANNER_REFERENCE_INPUTS_V1.map(({ inputRef, mediaType }) => {
+    const matches = reconstructionCase.referenceInputs.filter((row) =>
+      row.inputRef === inputRef && row.mediaType === mediaType
+    );
+    if (matches.length !== 1) {
+      throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
+    }
+    return matches[0]!;
+  });
+  if (
+    jsonRows.length !== 2 ||
+    jsonRows[0]!.inputRef !== "planner-self-check.json" ||
+    jsonRows[1]!.inputRef !== "visual-identity-palette.json"
+  ) {
+    throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
+  }
+  const [
+    sceneBriefBytes,
+    entryBytes,
+    plannerReceiptBytes,
+    visualIdentityPaletteBytes,
+    worldPlanBytes,
+  ] =
+    await Promise.all([
+      readClosedPlannerInput(
+        input.inputDirectoryPath,
+        reconstructionCase.sceneBriefRef,
+      ),
+      readClosedPlannerInput(input.inputDirectoryPath, rows[0]!.inputRef),
+      readClosedPlannerInput(input.inputDirectoryPath, rows[1]!.inputRef),
+      readClosedPlannerInput(input.inputDirectoryPath, rows[2]!.inputRef),
+      readClosedPlannerInput(input.inputDirectoryPath, rows[3]!.inputRef),
+    ]);
+  if (
+    sha256Bytes(sceneBriefBytes) !== reconstructionCase.sceneBriefHash ||
+    sha256Bytes(entryBytes) !== rows[0]!.contentHash ||
+    sha256Bytes(plannerReceiptBytes) !== rows[1]!.contentHash ||
+    sha256Bytes(visualIdentityPaletteBytes) !== rows[2]!.contentHash ||
+    sha256Bytes(worldPlanBytes) !== rows[3]!.contentHash
+  ) {
+    throw new TypeError("NATIVE_WORLD_PLANNER_INPUT_CLOSURE_INVALID");
+  }
+  let plannerReceiptValue: unknown;
+  try {
+    plannerReceiptValue = JSON.parse(
+      new TextDecoder().decode(plannerReceiptBytes),
+    );
+  } catch {
+    throw new TypeError("NATIVE_WORLD_PLANNER_RECEIPT_INVALID");
+  }
+  let visualIdentityPaletteValue: unknown;
+  try {
+    visualIdentityPaletteValue = JSON.parse(
+      new TextDecoder().decode(visualIdentityPaletteBytes),
+    );
+  } catch {
+    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
+  }
+  parseVisualIdentityPaletteV1(
+    visualIdentityPaletteValue,
+    {
+      sceneSourceKind: "babylon-native",
+      sceneId: reconstructionCase.id,
+      sceneBriefHash: sceneBriefSemanticHash(sceneBriefBytes),
+    },
+  );
+  parsePassedNativePlannerSelfCheckV4({
+    value: plannerReceiptValue,
+    sceneId: reconstructionCase.id,
+    sceneBriefHash: reconstructionCase.sceneBriefHash,
+    worldPlanHash: rows[3]!.contentHash,
+    entryWhiteboxTargetHash: rows[0]!.contentHash,
+  });
 }
 
 function parseNativeWorldCaseWorldBoundsV1(value: unknown) {
@@ -501,16 +983,25 @@ export interface PreparedNativeWorldCaseV1 {
   readonly formalCaptureIntentPath: string;
 }
 
+export interface FrozenNativeWorldReferenceInputV1 {
+  readonly inputRef: string;
+  readonly contentHash: Sha256HashV1;
+  readonly mediaType: "image/png" | "image/jpeg" | "image/webp";
+  readonly bytes: Uint8Array;
+}
+
 export async function prepareNativeWorldCaseV1(input: Readonly<{
   repositoryRoot: string;
   sceneId: string;
   proposalPath: string;
   sceneBriefPath: string;
-  referenceImagePaths: readonly string[];
+  uploadedReferenceInputs: readonly FrozenNativeWorldReferenceInputV1[];
   planningImagePaths: Readonly<{
     worldPlanPath: string;
     entryWhiteboxTargetPath: string;
   }>;
+  visualIdentityPalettePath: string;
+  plannerSelfCheckPath: string;
   outputCaseRoot: string;
 }>): Promise<PreparedNativeWorldCaseV1> {
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/.test(input.sceneId)) {
@@ -534,6 +1025,27 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
   }
   const worldBounds = parseNativeWorldCaseWorldBoundsV1(proposal.worldBounds);
   const briefBytes = await readFile(input.sceneBriefPath);
+  const sceneBriefHash = sha256Bytes(briefBytes) as Sha256HashV1;
+  const sceneBriefIdentityHash = sceneBriefSemanticHash(briefBytes);
+  const visualIdentityPaletteBytes = await readFile(
+    input.visualIdentityPalettePath,
+  );
+  let visualIdentityPaletteValue: unknown;
+  try {
+    visualIdentityPaletteValue = JSON.parse(
+      visualIdentityPaletteBytes.toString("utf8"),
+    );
+  } catch {
+    throw new TypeError("NATIVE_WORLD_BASELINE_PALETTE_INVALID");
+  }
+  parseVisualIdentityPaletteV1(
+    visualIdentityPaletteValue,
+    {
+      sceneSourceKind: "babylon-native",
+      sceneId: input.sceneId,
+      sceneBriefHash: sceneBriefIdentityHash,
+    },
+  );
 
   const acceptanceTargetRefs = sortBy([...new Set([
     (proposal.expected as { topology?: { acceptanceTargetRef?: unknown } })
@@ -628,17 +1140,30 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       evidenceProfileRefs: [EVIDENCE_PROFILE_REF_BY_DIMENSION[dimensionId]],
     })),
   });
-  const uploadedReferenceInputs = await Promise.all(input.referenceImagePaths.map(
-    async (sourcePath, index) => {
-      const bytes = await readFile(sourcePath);
-      const type = mediaType(sourcePath);
+  const uploadedReferenceInputs = await Promise.all(input.uploadedReferenceInputs.map(
+    async (reference, index) => {
+      if (
+        reference.mediaType !== "image/png" &&
+        reference.mediaType !== "image/jpeg" && reference.mediaType !== "image/webp"
+      ) {
+        throw new TypeError("NATIVE_WORLD_REFERENCE_INPUT_IDENTITY_MISMATCH");
+      }
+      const expectedInputRef = nativeWorldReferenceInputRefV1(index, reference.mediaType);
+      if (
+        !(reference.bytes instanceof Uint8Array) ||
+        reference.inputRef !== expectedInputRef ||
+        sha256Bytes(reference.bytes) !== reference.contentHash
+      ) {
+        throw new TypeError("NATIVE_WORLD_REFERENCE_INPUT_IDENTITY_MISMATCH");
+      }
+      const bytes = new Uint8Array(reference.bytes);
+      await validateNativeWorldReferenceImageV1(bytes, reference.mediaType);
       return Object.freeze({
-        sourcePath,
         bytes,
         row: Object.freeze({
-          inputRef: `reference-${index}.${type === "image/png" ? "png" : "jpg"}`,
-          contentHash: sha256Bytes(bytes) as Sha256HashV1,
-          mediaType: type,
+          inputRef: reference.inputRef,
+          contentHash: reference.contentHash,
+          mediaType: reference.mediaType,
         }),
       });
     },
@@ -650,12 +1175,11 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     sourcePath: input.planningImagePaths.worldPlanPath,
     inputRef: "world-plan.png",
   }].map(async ({ sourcePath, inputRef }) => {
-    if (mediaType(sourcePath) !== "image/png") {
+    if (nativeWorldReferenceMediaTypeV1(sourcePath) !== "image/png") {
       throw new TypeError("NATIVE_WORLD_PLANNING_IMAGE_MEDIA_TYPE_INVALID");
     }
     const bytes = await readFile(sourcePath);
     return Object.freeze({
-      sourcePath,
       bytes,
       row: Object.freeze({
         inputRef,
@@ -664,8 +1188,47 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       }),
     });
   }));
+  const plannerSelfCheckBytes = await readFile(input.plannerSelfCheckPath);
+  let plannerSelfCheckValue: unknown;
+  try {
+    plannerSelfCheckValue = JSON.parse(plannerSelfCheckBytes.toString("utf8"));
+  } catch {
+    throw new TypeError("NATIVE_WORLD_PLANNER_RECEIPT_INVALID");
+  }
+  parsePassedNativePlannerSelfCheckV4({
+    value: plannerSelfCheckValue,
+    sceneId: input.sceneId,
+    sceneBriefHash,
+    worldPlanHash: planningReferenceInputs.find(
+      ({ row }) => row.inputRef === "world-plan.png",
+    )!.row.contentHash,
+    entryWhiteboxTargetHash: planningReferenceInputs.find(
+      ({ row }) => row.inputRef === "entry-whitebox-target.png",
+    )!.row.contentHash,
+  });
+  const plannerSelfCheckInput = Object.freeze({
+    bytes: plannerSelfCheckBytes,
+    row: Object.freeze({
+      inputRef: "planner-self-check.json",
+      contentHash: sha256Bytes(plannerSelfCheckBytes) as Sha256HashV1,
+      mediaType: "application/json" as const,
+    }),
+  });
+  const visualIdentityPaletteInput = Object.freeze({
+    bytes: visualIdentityPaletteBytes,
+    row: Object.freeze({
+      inputRef: "visual-identity-palette.json",
+      contentHash: sha256Bytes(visualIdentityPaletteBytes) as Sha256HashV1,
+      mediaType: "application/json" as const,
+    }),
+  });
   const referenceInputs = sortBy(
-    [...uploadedReferenceInputs, ...planningReferenceInputs],
+    [
+      ...uploadedReferenceInputs,
+      ...planningReferenceInputs,
+      plannerSelfCheckInput,
+      visualIdentityPaletteInput,
+    ],
     ({ row }) => row.inputRef,
   );
   const requiredEvidenceProfileRefs = sortBy(
@@ -676,7 +1239,7 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     schemaVersion: 1,
     id: input.sceneId,
     sceneBriefRef: "scene-brief.md",
-    sceneBriefHash: sha256Bytes(briefBytes),
+    sceneBriefHash,
     referenceInputs: referenceInputs.map(({ row }) => row),
     evaluationProfileRef: "evaluation-profile.json",
     evaluationProfileHash:
@@ -724,12 +1287,28 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
     writeCanonicalExclusive(formalCaptureIntentPath, formalCaptureIntent),
     writeCanonicalExclusive(path.join(inputRoot, "world-bounds.json"), worldBounds),
     writeFile(path.join(inputRoot, "scene-brief.md"), briefBytes, { flag: "wx" }),
+    writeFile(
+      path.join(input.outputCaseRoot, "planner-self-check.json"),
+      plannerSelfCheckBytes,
+      { flag: "wx", mode: 0o600 },
+    ),
     writeFile(path.join(inputRoot, "task-instruction.md"), [
       "# Native Block generation request",
       "",
-      "Build the complete playable world described by the frozen Scene Brief, uploaded references, world-plan.png, entry-whitebox-target.png, and Host Bootstrap.",
-      "Write exactly scene.ts, native-block-authoring.json, and native-resources.json.",
+      "Read inputs/builder-skill/SKILL.md and its required inputs/builder-skill/references/native-block-output-contract.md completely before authoring. Use this frozen Skill copy as the complete Builder guide; do not search the parent checkout for another Skill.",
+      "Build the complete playable world described by the frozen Scene Brief, visual-identity-palette.json, uploaded references, world-plan.png, entry-whitebox-target.png, and Host Bootstrap.",
+      "Before detail, follow the Skill construction-and-budget inventory: allocate the actual Request budget across complete floor/support, terrain, landmarks and real connecting courses; do not reuse a remembered 2,000-Block cap or sacrifice major geography for ornament.",
+      "The generic Case entry/remote checks are evidence anchors, not the world design. Preserve all significant reference/Brief formations, actual bridge and staircase courses, elevation changes, negative space and meaningful side/rear/remote continuation in both visual comparisons.",
+      "Write exactly scene.ts, native-block-authoring.json, and native-resources.json as the Native Source, plus the two Host-declared advisory comparison PNGs under attempts/advisory/; write no other outputs.",
+      "Run the frozen Builder self-check and visual-review renderer, actually open both comparison PNGs, and keep structural and visual repairs inside the one shared three-cycle Builder budget.",
+      "Before finishing, run: node inputs/builder-skill/scripts/self-check.mjs --workspace . --case context/case.json --scene-brief inputs/scene-brief.md --visual-identity-palette inputs/visual-identity-palette.json",
+      "After each passing structural check, run: node inputs/builder-skill/scripts/render-visual-review.mjs --workspace . --top-down-output attempts/advisory/builder-top-down-comparison.png --entry-output attempts/advisory/builder-entry-comparison.png",
+      "Open both resulting PNGs with the image-viewing tool. Planner intent is on the left and current source projection on the right. Compare full-world geography, spawn, route bends and rises, landmarks and elevation in the top-down view; compare centered rear framing, landmark position/front/scale, depth order, stair/bridge rise, thickness and occlusion in the entry view. Target presence alone is not spatial alignment.",
+      "If a comparison is materially wrong and repair budget remains, repair only the three Native Source files, rerun the structural check, regenerate both comparisons, and open both fresh images again. Fix the largest geographic mismatch before ornament: complete landmark position and front/course, footprint and scale, then depth order and occlusion.",
+      "Use at most the frozen builderSelfRepairAttemptCount combined type/structural/visual source-repair cycles; never allocate another counter or external repair task. Finish after a fresh structural check passes and both latest comparisons have been visually reviewed. Rendering success or PNG hashes do not prove visual review, and the comparison is not an automatic similarity gate. Do not withhold otherwise valid declared outputs solely because visual differences remain when the shared budget is exhausted; disclose remaining differences in the normal final response without claiming perfect alignment or writing another report file.",
+      "Derive advisory pixels only from scene.ts and frozen inputs; never author a review manifest or second geometry list.",
       "Implement every Case visual group and every explicit required Collider contribution exactly once.",
+      "For every non-Subject target in visual-identity-palette.json, implement its one Case visual group and copy that target's exact semanticClassId and Native identityColor. A not-required Opening view does not authorize deleting the group or inventing Opening bounds.",
       "Never reconstruct the controlled Subject, rider, mount, avatar, character, or body parts as Native Block geometry; RuntimeHost creates the SDK Subject separately.",
       "Keep the Spawn supported and preserve every fixed-input pass or block check without adding undeclared input.",
       "For a ground Case, preserve every frozen groundConnectivity band and keep the complete explicitly contributed support surface in one Spawn-reachable component.",
@@ -758,10 +1337,15 @@ export async function prepareNativeWorldCaseV1(input: Readonly<{
       path.join(skillRoot, "scripts/self-check.mjs"),
       constants.COPYFILE_EXCL,
     ),
-    ...referenceInputs.map(({ sourcePath, row }) => copyFile(
-      sourcePath,
-      path.join(inputRoot, row.inputRef),
+    copyFile(
+      path.join(input.repositoryRoot, ".codex/skills/worldkit-native-block-builder/scripts/render-visual-review.mjs"),
+      path.join(skillRoot, "scripts/render-visual-review.mjs"),
       constants.COPYFILE_EXCL,
+    ),
+    ...referenceInputs.map(({ bytes, row }) => writeFile(
+      path.join(inputRoot, row.inputRef),
+      bytes,
+      { flag: "wx", mode: 0o600 },
     )),
   ]);
   return Object.freeze({

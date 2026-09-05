@@ -1,6 +1,7 @@
 import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import {
   decideSceneAuthoringRouteV1,
   hashNativeBlockGenerationRequestV1,
@@ -9,6 +10,7 @@ import {
   parseSceneAuthoringRouteDecisionV1,
   parseSceneAuthoringAttemptResultV1,
   type NativeBlockGenerationBudgetV1,
+  type NativeBlockGenerationReferenceInputV1,
   type NativeBlockGenerationRequestV1,
   type SceneAuthoringAttemptV1,
   type SceneAuthoringRouteDecisionV1,
@@ -27,7 +29,10 @@ import {
   worldRuntimeBootstrapCanonicalBytesV1,
   worldResourceLockEntriesV1,
   type BabylonNativeSceneBootstrapV1,
+  type RuntimeSubjectVisualPartV1,
+  type WorldRuntimeBootstrapV1,
 } from "@whitebox-world/runtime-contracts";
+import { builtInSubjectResourceRegistry } from "@whitebox-world/subject-registry";
 import {
   hashWorldPackageWorldBoundsV1,
   parseWorldPackageWorldBoundsV1,
@@ -39,10 +44,28 @@ import {
   parseNativeBlockRepairInstructionV1,
   type NativeBlockRepairInstructionV1,
 } from "./repair-request.js";
-import { BNA2_WHITEBOX_ADMISSION_BUDGET_V1 } from
-  "../native-scene/admission-budget.js";
+import {
+  createNativeBlockSubjectVisualReviewProxyV1,
+  type NativeBlockSubjectVisualReviewProxyCuboidV1,
+  type NativeBlockSubjectVisualReviewProxyV1,
+  type NativeBlockSubjectVisualReviewVec3V1,
+} from "./native-block-subject-visual-review-proxy.js";
+import { validateNativeWorldPlannerInputClosureV1 } from
+  "./native-world-case-preparation.js";
 
 const OUTPUTS = ["scene.ts", "native-block-authoring.json", "native-resources.json"] as const;
+const BUILDER_ADVISORY_OUTPUTS = Object.freeze([
+  "builder-top-down-comparison.png",
+  "builder-entry-comparison.png",
+] as const);
+const BUILDER_VISUAL_REVIEW_RENDERER_PATH =
+  "builder-skill/scripts/render-visual-review.mjs";
+const SUBJECT_VISUAL_REVIEW_PROXY_PATH =
+  "subject-visual-review-proxy.json";
+const BUILDER_VISUAL_REVIEW_REFERENCE_PATHS = Object.freeze([
+  "entry-whitebox-target.png",
+  "world-plan.png",
+] as const);
 function repairContextPaths(
   priorAttemptIndex: 0 | 1 | 2,
   evidenceKind: NativeBlockRepairInstructionV1["priorEvidence"]["kind"],
@@ -113,13 +136,6 @@ function repairTaskProtocol(priorAttemptIndex: 0 | 1 | 2): string {
 - Write a complete revised replacement only to the three declared output paths. Never mutate the prior source, evidence, frozen owners, or thresholds.`;
 }
 
-export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1 = 1_800;
-export const NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 = Object.freeze({
-  maximumBlockCount: 2_000,
-  ...BNA2_WHITEBOX_ADMISSION_BUDGET_V1,
-  maximumOutputBytes: 4_000_000,
-  timeoutSeconds: NATIVE_BLOCK_RECONSTRUCTION_FORMAL_TIMEOUT_SECONDS_V1,
-} satisfies NativeBlockGenerationBudgetV1);
 export const NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1 =
   "s3://leap-world-us-east-2/world-model/platform/agent-whitebox-world-sdk";
 
@@ -230,6 +246,8 @@ export interface PreparedNativeBlockGenerationTaskV1 {
   readonly bootstrapBytes: Uint8Array;
   readonly gameplayBootstrapBytes: Uint8Array;
   readonly worldRuntimeBootstrapBytes: Uint8Array;
+  readonly subjectVisualReviewProxy: NativeBlockSubjectVisualReviewProxyV1;
+  readonly subjectVisualReviewProxyBytes: Uint8Array;
   readonly worldBoundsBytes: Uint8Array;
   readonly hostClosure: NativeBlockGenerationHostClosureV1;
   readonly hostClosureBytes: Uint8Array;
@@ -288,6 +306,185 @@ export function resolveWorldReconstructionFrozenOwnerIdentitiesV1(input: Readonl
     worldRuntimeBootstrapHash: worldRuntimeBootstrap.contentHash,
     worldBoundsHash: hashWorldPackageWorldBoundsV1(worldBounds),
     bootstrapInputHash: hashBabylonNativeSceneBootstrapV1(bootstrap),
+  });
+}
+
+function codePointCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function subjectVisualPartBoundsV1(
+  part: RuntimeSubjectVisualPartV1,
+): Readonly<{
+  minimumMetersXYZ: NativeBlockSubjectVisualReviewVec3V1;
+  maximumMetersXYZ: NativeBlockSubjectVisualReviewVec3V1;
+  scaleXYZ: NativeBlockSubjectVisualReviewVec3V1;
+}> {
+  if (part.kind === "asset") {
+    const assetManifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
+      part.subjectAssetRef,
+    );
+    if (assetManifest === undefined) {
+      throw new TypeError(
+        `NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: unresolved Subject Asset '${part.subjectAssetRef}'.`,
+      );
+    }
+    return Object.freeze({
+      minimumMetersXYZ: assetManifest.bounds.minimumMetersXYZ,
+      maximumMetersXYZ: assetManifest.bounds.maximumMetersXYZ,
+      scaleXYZ: part.localTransform.scaleXYZ,
+    });
+  }
+  const shape = part.shape;
+  const sizeMetersXYZ: NativeBlockSubjectVisualReviewVec3V1 =
+    shape.kind === "box"
+      ? shape.sizeMetersXYZ
+      : shape.kind === "sphere"
+        ? [
+            shape.radiusMeters * 2,
+            shape.radiusMeters * 2,
+            shape.radiusMeters * 2,
+          ]
+        : [
+            shape.radiusMeters * 2,
+            shape.heightMeters,
+            shape.radiusMeters * 2,
+          ];
+  return Object.freeze({
+    minimumMetersXYZ: Object.freeze(sizeMetersXYZ.map((value) =>
+      -value / 2)) as NativeBlockSubjectVisualReviewVec3V1,
+    maximumMetersXYZ: Object.freeze(sizeMetersXYZ.map((value) =>
+      value / 2)) as NativeBlockSubjectVisualReviewVec3V1,
+    scaleXYZ: Object.freeze([1, 1, 1]) as NativeBlockSubjectVisualReviewVec3V1,
+  });
+}
+
+function transformedSubjectVisualPartBoundsV1(
+  part: RuntimeSubjectVisualPartV1,
+): NativeBlockSubjectVisualReviewProxyCuboidV1 {
+  const bounds = subjectVisualPartBoundsV1(part);
+  const transform = Matrix.Compose(
+    new Vector3(...bounds.scaleXYZ),
+    Quaternion.FromEulerAngles(...part.localTransform.rotationEulerRadiansXYZ),
+    new Vector3(...part.localTransform.positionMetersXYZ),
+  );
+  const transformedCorners: Vector3[] = [];
+  for (const x of [bounds.minimumMetersXYZ[0], bounds.maximumMetersXYZ[0]]) {
+    for (const y of [bounds.minimumMetersXYZ[1], bounds.maximumMetersXYZ[1]]) {
+      for (const z of [bounds.minimumMetersXYZ[2], bounds.maximumMetersXYZ[2]]) {
+        transformedCorners.push(Vector3.TransformCoordinates(
+          new Vector3(x, y, z),
+          transform,
+        ));
+      }
+    }
+  }
+  const finiteCoordinate = (value: number): number => {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(
+        "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: transformed Subject bounds are not finite.",
+      );
+    }
+    return Object.is(value, -0) ? 0 : value;
+  };
+  return Object.freeze({
+    id: part.id,
+    minimumMetersXYZ: Object.freeze([
+      finiteCoordinate(Math.min(...transformedCorners.map(({ x }) => x))),
+      finiteCoordinate(Math.min(...transformedCorners.map(({ y }) => y))),
+      finiteCoordinate(Math.min(...transformedCorners.map(({ z }) => z))),
+    ]) as NativeBlockSubjectVisualReviewVec3V1,
+    maximumMetersXYZ: Object.freeze([
+      finiteCoordinate(Math.max(...transformedCorners.map(({ x }) => x))),
+      finiteCoordinate(Math.max(...transformedCorners.map(({ y }) => y))),
+      finiteCoordinate(Math.max(...transformedCorners.map(({ z }) => z))),
+    ]) as NativeBlockSubjectVisualReviewVec3V1,
+  });
+}
+
+export function deriveNativeBlockSubjectVisualReviewProxyV1(input: Readonly<{
+  worldRuntimeBootstrap: WorldRuntimeBootstrapV1;
+  worldRuntimeBootstrapRef: string;
+  worldRuntimeBootstrapBytesHash: Sha256HashV1;
+}>): NativeBlockSubjectVisualReviewProxyV1 {
+  const runtime = input.worldRuntimeBootstrap;
+  const subjects = runtime.subjectRuntimeDescriptors.filter(({ entityId }) =>
+    entityId === runtime.initialControlledEntityId
+  );
+  if (subjects.length !== 1 || subjects[0]!.visualParts.length === 0) {
+    throw new TypeError(
+      "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: controlled Subject visual descriptor is missing.",
+    );
+  }
+  const subject = subjects[0]!;
+  const definition = builtInSubjectResourceRegistry.resolveSubjectDefinition(
+    subject.subjectDefinitionRef,
+  );
+  const definitionLocks = runtime.runtimeResourceLockEntries.filter((entry) =>
+    entry.resourceKind === "subject-definition" &&
+    entry.resourceRef === subject.subjectDefinitionRef
+  );
+  if (
+    definition === undefined ||
+    definitionLocks.length !== 1 ||
+    definitionLocks[0]!.contentHash !== definition.contentHash ||
+    !isEqual(definition.visualParts, subject.visualParts)
+  ) {
+    throw new TypeError(
+      "NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: Subject definition Registry closure failed.",
+    );
+  }
+  for (const part of subject.visualParts) {
+    if (part.kind !== "asset") continue;
+    const assetManifest = builtInSubjectResourceRegistry.resolveSubjectAsset(
+      part.subjectAssetRef,
+    );
+    const runtimeAssets = runtime.subjectAssets.filter(({ subjectAssetRef }) =>
+      subjectAssetRef === part.subjectAssetRef
+    );
+    const assetLocks = runtime.runtimeResourceLockEntries.filter((entry) =>
+      entry.resourceKind === "subject-asset" &&
+      entry.resourceRef === part.subjectAssetRef
+    );
+    const runtimeAsset = runtimeAssets[0];
+    if (
+      assetManifest === undefined ||
+      runtimeAssets.length !== 1 ||
+      runtimeAsset === undefined ||
+      assetLocks.length !== 1 ||
+      assetLocks[0]!.contentHash !== assetManifest.contentHash ||
+      runtimeAsset.artifactContentHash !== assetManifest.artifact.contentHash ||
+      runtimeAsset.byteLength !== assetManifest.artifact.byteLength ||
+      runtimeAsset.mediaType !== assetManifest.artifact.mediaType ||
+      runtimeAsset.format !== assetManifest.format ||
+      runtimeAsset.inventory.meshCount !== assetManifest.inventory.meshCount ||
+      runtimeAsset.inventory.vertexCount !== assetManifest.inventory.vertexCount ||
+      runtimeAsset.inventory.triangleCount !== assetManifest.inventory.triangleCount ||
+      runtimeAsset.inventory.skeletonCount !== assetManifest.inventory.skeletonCount ||
+      runtimeAsset.inventory.boneCount !== assetManifest.inventory.boneCount ||
+      !isEqual(
+        runtimeAsset.inventory.animationClipNames,
+        assetManifest.inventory.animationClipNames,
+      )
+    ) {
+      throw new TypeError(
+        `NATIVE_BLOCK_SUBJECT_VISUAL_REVIEW_PROXY_INVALID: Subject Asset Registry closure failed for '${part.subjectAssetRef}'.`,
+      );
+    }
+  }
+  const cuboids = subject.visualParts
+    .map(transformedSubjectVisualPartBoundsV1)
+    .sort((left, right) => codePointCompare(left.id, right.id));
+  return createNativeBlockSubjectVisualReviewProxyV1({
+    initialControlledEntityId: runtime.initialControlledEntityId,
+    subjectDefinitionRef: subject.subjectDefinitionRef,
+    subjectDefinitionHash: subject.subjectDefinitionHash,
+    subjectRuntimeDescriptorHash:
+      sha256CanonicalJson(subject) as Sha256HashV1,
+    worldRuntimeBootstrapRef: input.worldRuntimeBootstrapRef,
+    worldRuntimeBootstrapContentHash: runtime.contentHash,
+    worldRuntimeBootstrapBytesHash: input.worldRuntimeBootstrapBytesHash,
+    cuboids,
   });
 }
 
@@ -611,7 +808,10 @@ export async function prepareNativeBlockGenerationTaskV1(
   if (!worldReconstructionEvidenceProfileClosureMatchesV1(reconstructionCase, profile)) {
     throw new TypeError("Case/Evaluation Profile required Evidence Profile closure failed.");
   }
-  if (reconstructionCase.referenceInputs.some((reference) => reference.mediaType === "application/json")) throw new TypeError("Native generation references must be images.");
+  await validateNativeWorldPlannerInputClosureV1({
+    reconstructionCase,
+    inputDirectoryPath: input.inputDirectoryPath,
+  });
   if (
     input.attemptIndex !== 0 && input.attemptIndex !== 1 &&
     input.attemptIndex !== 2 && input.attemptIndex !== 3
@@ -731,7 +931,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       );
     }
   }
-  const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, gameplaySource, runtimeSource, registryLockSource, ...references] = await Promise.all([
+  const [sceneBrief, taskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, gameplaySource, runtimeSource, registryLockSource, ...caseReferenceFiles] = await Promise.all([
     freezeFile(inputRoot, path.resolve(inputRoot.requestedPath, reconstructionCase.sceneBriefRef)),
     freezeFile(inputRoot, input.taskInstructionPath),
     freezeFile(inputRoot, input.builderSkillPath),
@@ -822,6 +1022,15 @@ export async function prepareNativeBlockGenerationTaskV1(
     "world-runtime-bootstrap.json",
     worldRuntimeBootstrapCanonicalBytesV1(worldRuntimeBootstrap),
   );
+  const subjectVisualReviewProxy = deriveNativeBlockSubjectVisualReviewProxyV1({
+    worldRuntimeBootstrap,
+    worldRuntimeBootstrapRef: input.worldRuntimeBootstrapRef,
+    worldRuntimeBootstrapBytesHash: runtime.hash,
+  });
+  const subjectVisualReviewProxyFile = frozenCanonicalFile(
+    SUBJECT_VISUAL_REVIEW_PROXY_PATH,
+    new TextEncoder().encode(stringifyCanonicalJson(subjectVisualReviewProxy)),
+  );
   const worldBounds = frozenCanonicalFile(
     "world-bounds.json",
     new TextEncoder().encode(stringifyCanonicalJson(derived.worldBounds)),
@@ -860,14 +1069,58 @@ export async function prepareNativeBlockGenerationTaskV1(
       "WORLD_RECONSTRUCTION_REPAIR_IDENTITY_MISMATCH: frozen owner identity closure failed.",
     );
   }
-  for (let index = 0; index < references.length; index += 1) {
-    if (references[index]!.hash !== reconstructionCase.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");
+  for (let index = 0; index < caseReferenceFiles.length; index += 1) {
+    if (caseReferenceFiles[index]!.hash !== reconstructionCase.referenceInputs[index]!.contentHash) throw new TypeError("Frozen reference bytes do not match the Case hash.");
   }
-  const builderBundle = builderSkill.relativePath.endsWith("builder-skill/SKILL.md") ? await Promise.all([
+  const generationReferenceRows:
+    readonly NativeBlockGenerationReferenceInputV1[] =
+      reconstructionCase.referenceInputs.flatMap((reference) => {
+        const mediaType = reference.mediaType;
+        return mediaType === "application/json"
+          ? []
+          : [Object.freeze({
+            inputRef: reference.inputRef,
+            contentHash: reference.contentHash,
+            mediaType,
+          })];
+      });
+  const generationReferences = caseReferenceFiles.filter((_, index) =>
+    reconstructionCase.referenceInputs[index]!.mediaType !== "application/json"
+  );
+  const caseContextReferenceFiles = caseReferenceFiles.filter((_, index) =>
+    reconstructionCase.referenceInputs[index]!.mediaType === "application/json"
+  );
+  const builderBundle = await Promise.all([
     freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "references/native-block-output-contract.md")),
     freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "scripts/self-check.mjs")),
-  ]) : [];
-  const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, ...builderBundle, ...references, ...repairContextFiles];
+    freezeFile(inputRoot, path.join(path.dirname(input.builderSkillPath), "scripts/render-visual-review.mjs")),
+  ]);
+  const visualReviewRenderer = builderBundle.find(({ relativePath }) =>
+    relativePath === BUILDER_VISUAL_REVIEW_RENDERER_PATH
+  );
+  if (visualReviewRenderer === undefined) {
+    throw new TypeError(
+      "NATIVE_BLOCK_VISUAL_REVIEW_RENDERER_MISSING: the exact frozen Builder renderer is required.",
+    );
+  }
+  BUILDER_VISUAL_REVIEW_REFERENCE_PATHS.forEach(
+    (relativePath) => {
+      const matches = generationReferences.filter((reference) =>
+        reference.relativePath === relativePath
+      );
+      const caseMatches = reconstructionCase.referenceInputs.filter(
+        (reference) =>
+          reference.inputRef === relativePath &&
+          reference.mediaType === "image/png",
+      );
+      if (matches.length !== 1 || caseMatches.length !== 1) {
+        throw new TypeError(
+          `NATIVE_BLOCK_VISUAL_REVIEW_INPUT_MISSING: ${relativePath} must be one exact PNG Case reference.`,
+        );
+      }
+    },
+  );
+  const taskInputFiles = [sceneBrief, effectiveTaskInstruction, builderSkill, nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBounds, hostClosureFile, ...builderBundle, ...caseReferenceFiles, ...repairContextFiles];
   const routeDecisionHash = hashSceneAuthoringRouteDecisionV1(routeDecision);
   const repairInstructionFile = repairInstruction === undefined
     ? undefined
@@ -875,7 +1128,7 @@ export async function prepareNativeBlockGenerationTaskV1(
       "repair-instruction.json",
       new TextEncoder().encode(stringifyCanonicalJson(repairInstruction)),
     );
-  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, worldBounds, hostClosureFile, builderSkill, ...builderBundle, ...repairContextFiles]
+  const contextInputs = sortBy([nativeSceneApi, nativeSceneProfile, blockProfile, registryLockSource, bootstrap, gameplay, runtime, subjectVisualReviewProxyFile, worldBounds, hostClosureFile, builderSkill, ...builderBundle, ...caseContextReferenceFiles, ...repairContextFiles]
     .map((file) => ({ inputRef: asRef(file.relativePath), contentHash: file.hash }))
     .concat([
       { inputRef: "context/case.json", contentHash: sha256CanonicalJson(reconstructionCase) as Sha256HashV1 },
@@ -892,7 +1145,7 @@ export async function prepareNativeBlockGenerationTaskV1(
     id: `${reconstructionCase.id}.${input.runId}.attempt-${input.attemptIndex}`,
     routeDecisionRef: `worldkit://scene-authoring-route-decision/${routeDecision.id}@1`, routeDecisionHash,
     sceneBriefRef: reconstructionCase.sceneBriefRef, sceneBriefHash: reconstructionCase.sceneBriefHash,
-    referenceInputs: reconstructionCase.referenceInputs.map((reference) => ({ ...reference })) as NativeBlockGenerationRequestV1["referenceInputs"],
+    referenceInputs: generationReferenceRows.map((reference) => ({ ...reference })),
     codexExecutionProfileRef: "worldkit://codex-execution-profile/formal@1",
     codexExecutionProfileHash: sha256CanonicalJson({ resourceRef: "worldkit://codex-execution-profile/formal@1", model: "gpt-5.6-sol", reasoningEffort: "xhigh" }) as Sha256HashV1,
     taskInstructionRef: asRef(effectiveTaskInstruction.relativePath), taskInstructionHash: effectiveTaskInstruction.hash,
@@ -931,18 +1184,23 @@ export async function prepareNativeBlockGenerationTaskV1(
   });
   const routerArguments = [
     "--backend", input.backend, "--repo-root", ".", "--task-id", routerRequestId,
-    "--stage", "native-block-generation", "--job-name", `Native Block Generation ${reconstructionCase.id}`,
+    "--stage", "coding-agent", "--job-name", `Native Block Generation ${reconstructionCase.id}`,
     "--request-id", routerRequestId, "--execution-profile", "formal", "--submit-attempts", "1",
     "--timeout-seconds", String(generationRequest.budgets.timeoutSeconds),
+    ...(input.backend === "local" ? ["--failure-evidence-root", `attempts/${input.attemptIndex}/generation-failure`] : []),
     "--instruction-file", `attempts/${input.attemptIndex}/.task/inputs/${taskInstruction.relativePath}`,
     "--workspace-context-root", `attempts/${input.attemptIndex}/.task`,
-    ...references.flatMap((reference, index) => [
+    ...generationReferences.flatMap((reference, index) => [
       "--asset",
-      `${path.basename(reference.relativePath, path.extname(reference.relativePath))}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::image::${reconstructionCase.referenceInputs[index]!.mediaType}`,
+      `${path.basename(reference.relativePath, path.extname(reference.relativePath))}::attempts/${input.attemptIndex}/.task/inputs/${reference.relativePath}::image::${generationReferenceRows[index]!.mediaType}`,
     ]),
     "--output", `scene.ts::attempts/${input.attemptIndex}/.staging/scene.ts::text/typescript`,
     "--output", `native-block-authoring.json::attempts/${input.attemptIndex}/.staging/native-block-authoring.json::application/json`,
     "--output", `native-resources.json::attempts/${input.attemptIndex}/.staging/native-resources.json::application/json`,
+    ...BUILDER_ADVISORY_OUTPUTS.flatMap((fileName) => [
+      "--output",
+      `attempts/advisory/${fileName}::attempts/${input.attemptIndex}/advisory/${fileName}::image/png`,
+    ]),
     ...(input.backend === "cloud" ? ["--output-s3-prefix", `${cloudOutputS3Root}/${reconstructionCase.id}/${input.runId}/attempt-${input.attemptIndex}`] : []),
   ];
   const routerTaskPayloadHash = sha256CanonicalJson({ request: generationRequest, routerRequestId, routerArguments }) as Sha256HashV1;
@@ -970,20 +1228,16 @@ export async function prepareNativeBlockGenerationTaskV1(
         throw new TypeError(`Frozen context hash mismatch: ${name}`);
       }
     }));
-    const durableInputs = [
-      nativeSceneApi,
-      nativeSceneProfile,
-      blockProfile,
-      registryLockSource,
-      bootstrap,
-      gameplay,
-      runtime,
-      worldBounds,
-      hostClosureFile,
-    ];
-    await Promise.all(durableInputs.map((file) => writeFrozenFileExclusive(
+    // The disposable task and durable replay record use the same complete byte
+    // snapshot. Cleanup must not discard the Brief, instruction, checker, or
+    // prior-attempt repair evidence needed to replay this exact dispatch.
+    await Promise.all(taskInputFiles.map((file) => writeFrozenFileExclusive(
       path.join(publicationStagingPath, "inputs"),
       file,
+    )));
+    await Promise.all(contextFiles.map(([name, value]) => writeFrozenFileExclusive(
+      path.join(publicationStagingPath, "context"),
+      frozenCanonicalFile(name, new TextEncoder().encode(stringifyCanonicalJson(value))),
     )));
     await Promise.all([
       writeFrozenFileExclusive(publicationStagingPath, frozenCanonicalFile(
@@ -997,6 +1251,16 @@ export async function prepareNativeBlockGenerationTaskV1(
       writeFrozenFileExclusive(publicationStagingPath, frozenCanonicalFile(
         "attempt.json",
         new TextEncoder().encode(stringifyCanonicalJson(attempt)),
+      )),
+      writeFrozenFileExclusive(publicationStagingPath, frozenCanonicalFile(
+        "generation-dispatch.json",
+        new TextEncoder().encode(stringifyCanonicalJson({
+          kind: "native-block-generation-dispatch", schemaVersion: 1,
+          backend: input.backend, generationRequestHash,
+          attemptHash: hashSceneAuthoringAttemptV1(attempt),
+          routerRequestId, routerTaskPayloadHash, routerArguments,
+          frozenOwnerIdentities,
+        })),
       )),
     ]);
     if (await pathExists(attemptRoot)) {
@@ -1028,6 +1292,8 @@ export async function prepareNativeBlockGenerationTaskV1(
     bootstrapBytes,
     gameplayBootstrapBytes: gameplay.bytes,
     worldRuntimeBootstrapBytes: runtime.bytes,
+    subjectVisualReviewProxy,
+    subjectVisualReviewProxyBytes: subjectVisualReviewProxyFile.bytes,
     worldBoundsBytes: worldBounds.bytes,
     hostClosure,
     hostClosureBytes: hostClosureFile.bytes,

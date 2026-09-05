@@ -1,4 +1,5 @@
 import { Engine } from "@babylonjs/core/Engines/engine.js";
+import { createFormalCaptureStartupReporterV1 } from "@whitebox-world/runtime-babylon";
 import {
   createBabylonNativeIsolatedRuntimeEntryV1,
   type FormalHostedWorldCapturePayloadV1,
@@ -194,6 +195,23 @@ export async function startHostedFormalCaptureFrameRouteV1(input: Readonly<{
   viewport: HTMLElement;
   search: string;
 }>): Promise<void> {
+  const reporter = createFormalCaptureStartupReporterV1((value) => {
+    window.__WORLDKIT_FORMAL_CAPTURE_STARTUP__ = value;
+  });
+  try {
+    await initializeFormalCaptureFrameV1(input, reporter);
+    reporter.finish("ready");
+  } catch (error) {
+    reporter.finish("error");
+    throw error;
+  }
+}
+
+async function initializeFormalCaptureFrameV1(input: Readonly<{
+  constants: HostedFormalCaptureRouteConstantsV1;
+  viewport: HTMLElement;
+  search: string;
+}>, reporter: ReturnType<typeof createFormalCaptureStartupReporterV1>): Promise<void> {
   const runtimeOrigin = exactOrigin(input.constants.runtimeOrigin, "RUNTIME");
   const shellOrigin = exactOrigin(input.constants.shellOrigin, "SHELL");
   if (runtimeOrigin === shellOrigin || location.origin !== runtimeOrigin) {
@@ -206,7 +224,9 @@ export async function startHostedFormalCaptureFrameRouteV1(input: Readonly<{
   const verified = await loadVerifiedNativeWorldPackageV1(
     new URL("/__worldkit/native-package/", location.origin),
   );
+  reporter.progress("module");
   const moduleImport = await import("virtual:worldkit-native-scene");
+  reporter.progress("admission");
   const executionBudgetCap = captureExecutionBudget(
     verified.manifest.resourceBudget,
   );
@@ -240,8 +260,10 @@ export async function startHostedFormalCaptureFrameRouteV1(input: Readonly<{
     ),
     subjectAssetResolver: nativeSceneSubjectAssetResolver,
     sdkOwnerIdentities: input.constants.sdkOwnerIdentities,
+    onInitializationStage: (stage) => reporter.progress(`runtime-${stage}`),
   });
   const captureEntry = captureOnlyEntryPort(entry);
+  reporter.progress("bridge");
   const hostedFrame = startHostedFormalCaptureFrameV1({
     entry: captureEntry,
     shellOrigin,

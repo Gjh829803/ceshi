@@ -1162,9 +1162,18 @@ WRC-1 共包含 33 个工作包：已有 JUMP-0..3、BNA-3..8、BWB-3..6、PHO-0
 - [ ] WRC-ACT-2：完成固定 Tick Action/Posture Reducer、Cancel/Interrupt、fall/land、声明式 fallback、
   安全 Capsule 切换和重放；
 - [ ] WRC-CAM-1：完成 Action、跳跃/落地、狭窄/室内和事件焦点的 committed Context → CameraDirector；
+  同时对 `codex/block-world-main-integration@1678960f` 的 Camera committed render-pose 历史做
+  current-owner 复验：若采用，只允许在展示时按 alpha `0/0.5/1` 采样前后两个 committed Camera pose，
+  不得改变 Snapshot、Hash、Tick、碰撞或 CameraDirector 权威；
 - [ ] WRC-CAM-2：完成第一/第三人称、碰撞、暂停/Reset/cadence/隔离 Golden Fixture 与两轮真实
-  `FeelReviewReceipt`；
+  `FeelReviewReceipt`；增加同一 Bootstrap 在交互 Preview、Formal opening Capture 和 artifact preview
+  的 position/target/FOV 构图对拍，并证明 Reset、rebind、视角切换、暂停和 rollback 会折叠 Camera
+  render history，不插值穿越离散跳变；
 - [ ] WRC-SR-1：冻结拓扑、语义轮廓、路线、Opening Composition、碰撞和通过性分维度场景还原评分；
+  expected/observed 必须使用同一种可解释量测，不能把入口身份色真实像素面积与世界 AABB 投影矩形面积
+  直接相减；`present` 必须来自真实可见/遮挡观测而不是只要投影 AABB 在视口内就写 `true`。Opening、
+  world-side、world-top-down 和必要的内部结构/完整世界覆盖必须各有明确评分或明确非评分处置，不能只保存
+  两张全景图却让 Opening bbox/center/coverage 代表全部视觉还原；
 - [ ] WRC-SR-2：实现稳定诊断驱动、轮数受限、只修改 Authoring/Resource 的场景修复循环；
 - [ ] WRC-EVT-1：实现位置进入/退出 → committed Event/Receipt → 世界/人物变化 → Camera Context 的
   可重放纵向切片；
@@ -1207,26 +1216,32 @@ source-neutral Opening Composition Host Gate。
 - [x] NBR-65J：恢复 `codex/block-world-main-integration` 已验证的生产反馈语义，但不恢复 Three、
   Manifest、Compiler 或 hidden foundation：把 Planner 的 `world-plan.png` 与
   `entry-whitebox-target.png` 作为具名哈希输入交给 Native Builder；区分硬准入与还原质量；所有
-  Profile 继续执行相同检测，探索 Case 默认 `report-only`，质量未达标时保留明确
-  非 GO、但可启动的 Package/Capture/诊断；正式验收使用 `required-for-publication`。该项属于
-  NBR-65 内部纠偏，不增加 WRC-1 工作包数量。交互式生产命令在正式 Capture/评测通过后只重放
-  不可变身份闭包并发布，不自动重复耗时的 fresh Browser playability；完整可玩性复验继续由显式
+  Profile 继续执行相同检测；质量未达标时保留明确 strict diagnostic，但普通生产是否成功完全按
+  老分支 requested scope 的成功/失败标准判断，达到该标准的 Package/Capture 必须原子发布并返回
+  `productionOutcome: passed`。`required-for-publication` 只决定是否在预算内继续做外部质量修复，不是
+  另一套普通生产终态；NBR-70/90 正式验收继续由显式严格命令拥有。该项属于
+  NBR-65 内部纠偏，不增加 WRC-1 工作包数量。交互式生产命令在正式 Capture 与 Evaluation 产物完整、
+  身份有效且老分支所需阶段闭合后发布；Evaluation verdict 本身不必通过。它不自动重复耗时的 fresh
+  Browser playability；完整可玩性复验继续由显式
   `verify:native-block-reconstruction-e2e` 与未完成的 NBR-70 验收拥有。默认交互入口的模型阶段必须
   精确为 Unified Planner → Babylon Native Block Builder；Planner 交付后由 Host 从冻结 Brief、身份色板
   和入口图确定性派生宽松基础 Case，禁止恢复独立 `native-case-mapping` 模型任务、第三次模型调用或
   Mapping retry。显式 curated strict Case 继续直接进入同一 reconstruction runner；
 - [x] NBR-65K：把上述模式边界落实为同一正式入口的 current-only 行为，而不是增加一条宽松链路：
   `report-only` 仍强制 Native Check、Ground Analysis、显式 Collider/Spawn/Package/Receipt、Runtime
-  与 Capture 运行成功；Builder 仍可在同一任务内使用冻结的 source-only 自修复预算，但 Host 的
-  Check/Ground 拒绝和老基线一致，会带诊断结束当前 Run，不再创建外部 Attempt。Opening Composition 与
-  Evaluation 继续计算并发布诊断，但不拒绝 Capture、不触发新的外部 Attempt，首个完成的
-  Package/Capture/Evaluation 在失败仅限可预览质量维度时即以非 GO `preview-ready` 交付人工体验；
-  Collider、Spawn/Support、身份、确定性或运行证据失败仍拒绝。只有显式
-  `required-for-publication` 才允许 Check/Ground/Opening/Evaluation 的可修复失败消耗最多三次外部
-  Attempt 并阻断正式发布。
+  与 Capture 运行成功；Builder 仍可在同一任务内使用冻结的 source-only 自修复预算。候选当前会让
+  `report-only` 的 Host Check/Ground 拒绝带诊断结束 Run、不创建外部 Attempt；这只是当前实现事实，
+  不能宣称已和老分支一致，`BWMI-CF-26` 仍须逐条件恢复旧 retry/terminal 矩阵。Opening Composition 与
+  Evaluation 继续计算并发布诊断；current-only quality drift 不拒绝 Capture、也不触发新的外部 Attempt；首个完成的
+  Package/Capture/Evaluation 若只剩老分支不否决的还原质量/严格验收问题，即按同一产品合同返回
+  `passed/published`，同时保留独立 strict diagnostic。无法形成老标准所需可运行 Stage，或路径、Hash、
+  Receipt、Package/Capture 身份与原子发布完整性失败时仍拒绝；NBR blocker join 等 strict verdict 不在此列。
+  显式 `required-for-publication` 可让 Check/Ground/Opening/Evaluation 的可修复失败
+  消耗最多三次外部 Attempt，但预算耗尽后仍由同一老分支产品标准决定普通发布，不产生第二终态。
   严格检测实现继续由原 Owner 保留，不能形成第二 parser、第二 CLI、fallback 或旧新双入口；生产层
-  同时删除把旧式 `rejected-capture` 重解释为 `report-only` 预览的不可达兼容分支：预览只能来自
-  正常完成且身份闭合的 Capture/Evaluation；
+  直接删除 `preview-ready/not-accepted`、旧式 `rejected-capture` 预览重解释、publisher bypass 和重复
+  verifier 发布门，不以 mode、alias 或 fallback 保留。CASE-054 是首个规范回归样例；原子发布、路径
+  安全、Hash、fsync 和不可变身份闭包继续保留；
 - [ ] NBR-70：真实 `cloud-temple-t-gate-native-block` Case 可本地启动、接地、移动、挡墙和通过；
 - [ ] NBR-80：删除已替代/重复的生产路径、production-root Corpus exports、固定 Native Case loader、
   临时命令和旧 Capture Intent 调用形状，并通过 clean-break census；
@@ -1271,17 +1286,19 @@ Action/Camera、空间事件、产品 Route/Nav、BNA-8
 `CAST-R0` 是后续可检索的研究任务，不计入 WRC-1 的 33 个工作包，也不提高任何当前完成度。未完成
 该探针前，不新增正式 Observation Graph Schema、第二 Planner/Builder Job、SDF Optimizer 或生产依赖。
 
-#### WRC-QP 场景质量与性能后续队列（WRC-1 完成后，非当前关键路径）
+#### WRC-QP 场景质量与性能后续队列（`QP-2..6` 在 WRC-1 后；`QP-1` 已前移）
 
 对 `codex/block-world-main-integration` 的代码级复核确认，当前主线已经真实迁入受控方块 API、暴露
 顶面/共享边可行走拓扑、`0.3m` 有界平滑、防坠 Collider Contribution、Thin Instance/Chunk、SDK-owned
-Havok residency 和多接触修正；以下不是遗漏的生产阻断能力，而是 WRC-1 验收后的质量与规模增强。
+Havok residency 和多接触修正。`paper-moon-palace-054` 真实 Case 随后证明原列于此处的
+`WRC-QP-1` 会直接决定首次白膜效果和昂贵后置 repair 数量，不能继续按 WRC-1 后非阻断优化处理；
+它已唯一重分类为下文 `BWMI-CF-19`。其余 `WRC-QP-2..6` 仍是 WRC-1 验收后的质量与规模增强。
 详细 Owner、输入输出、门禁和禁止项由
-[WRC-1 总设计 §14.2](superpowers/specs/2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md#142-post-wrc-1-scene-quality-and-performance-follow-up-queue)
+[WRC-1 总设计 §14.2](superpowers/specs/2026-08-30-wrc1-world-reconstruction-and-control-milestone-design.md#142-scene-quality-and-performance-follow-up-disposition)
 约束。
 
-- [ ] `WRC-QP-1`：在同一个 Native Builder Task 内加入不产生 Package/Receipt/Capture 身份的 advisory
-  俯视/入口几何投影预检，以真实 Case 对照证明减少昂贵后置 repair；不得形成 shadow Capture/Compiler；
+- `WRC-QP-1`（已重分类，不表示实现完成）：advisory 俯视/入口几何投影预检的唯一活动 Owner 为
+  `BWMI-CF-19`，此处不再保留第二个排队工作项；
 - [ ] `WRC-QP-2`：冻结 Runtime-owned neutral clear-day 白模显示合同，覆盖数值光照、材质分离、远近景
   可读性和 Capture/Preview 一致性；不得让 Native Module 自建灯光，参考光照仍只属于 styled 输出；
 - [ ] `WRC-QP-3`：对 4/8/16/32m Chunk 和准确 batch bounds 视锥裁剪做真实 Browser frame-time、draw call、
@@ -1293,10 +1310,751 @@ Havok residency 和多接触修正；以下不是遗漏的生产阻断能力，�
 - [ ] `WRC-QP-6`：在 WRC-CAM-2 后由现有 Camera Domain/Director 设计有限室内遮挡淡出；只能影响展示，
   不得削弱 SpringArm hard Decollider 或建立 Block 专用 Camera Owner。
 
-`WRC-QP-1..6` 均 `depends_on: WRC-ACC-1`（另按总设计声明各自的细化依赖），不 `blocks` NBR-1、
-BNA-6/7/8、WRC-ACC-1 或 WRC-1，不计入 33 个工作包，也不提高任何当前完成度。WRC-1 当前关于
+`WRC-QP-2..6` 均 `depends_on: WRC-ACC-1`（另按总设计声明各自的细化依赖），不 `blocks` NBR-1、
+BNA-6/7/8、WRC-ACC-1 或 WRC-1；`BWMI-CF-19` 则在 NBR-20/正式 Native 生产证据前完成。
+这些任务都不计入 33 个工作包，也不提高任何当前完成度。WRC-1 当前关于
 `NBR-65`“白模光照”的已完成声明只覆盖统一 Runtime 灯光基线和材质复用，不代表已经复刻旧分支的
 具体冷暖色温、Fog、Exposure 或 Contrast 数值；这些调优必须由 `WRC-QP-2` 重新冻结和验证。
+
+#### `codex/block-world-main-integration` 全生产链对齐与承接台账（非 WRC 计数）
+
+2026-09-04 对以下两个精确引用完成了静态语义审计：
+
+- current authority：`origin/main@20fe0fef60d8c73fd8c8ce2cecb541117cddd1f8`；
+- historical branch：
+  `origin/codex/block-world-main-integration@9e35ab53c634acaef8c53a33082fff77653f7bbb`；
+- merge base：`7fa3197220ef6b8b1ad86f57fc85f8b3e248e0c3`；
+- 完整逐阶段、逐参数、逐 Skill 和逐提交处置见
+  [生产链对齐审查](reviews/2026-09-04-block-world-main-integration-production-chain-alignment-review.md)。
+
+结论不能写成“除还原生成外全部合入”。当前 `main` 已用更严格的 Babylon Native current-only
+合同语义替代白膜还原主链，但不是旧分支的字节或参数等价移植；旧分支白膜之后的独立 Visual
+Reconstructor、六段 Playthrough、Episode 视觉重建、十风格与独立 Review、Gemini 事件、六段
+Seedance、完整 Cloud Scene/Episode、S3/Studio 投影和 GPU Batch/tail/recovery 没有等价可执行 Owner。
+现有 NBR parity ledger 中“preserve under downstream owner”只表示“不归 NBR-65”，不能作为这些
+实现已经存在的证据。
+
+以下能力已等价保留或由更强 current owner 取代，不再创建重复任务：
+
+- Unified Planner → Babylon Native Block Builder 两个正式模型任务，`gpt-5.6-sol/xhigh`，具名
+  `world-plan.png`/`entry-whitebox-target.png`，同任务最多三次自修复和 Host 单次 replay；
+- current-only `scene.ts`、`native-block-authoring.json`、`native-resources.json` 三输出，原子
+  `createBlock()`、确定性 `createBlockGrid()`、五种固定形状、显式 visual/Collider/Surface Group；
+- Native Check、Capsule-aware Ground Analysis、WorldPackage/Receipt、Opening/side/top/Collider
+  Capture、七维 Evaluation、严格模式最多三次外部诊断修复与原子发布；
+- exposed-top/shared-edge topology、`0.25m` 可见踏步、当前 `0.3m` step/`42°` slope 验证、
+  ground-only edge protection、Thin Instance/Chunk、SDK-owned Havok residency 和有界多接触修正；
+- 当前 Native Builder Skill、output contract、checker 与代表性 `cloud-temple-t-gate-native-block`
+  冻结副本逐字节一致；生成 Request 实际冻结并哈希这些输入。
+
+以下旧方言已明确拒绝，后续不得以“补齐 parity”为名恢复：
+
+- Three.js Block Source、Block Manifest/Compiler、hidden runtime foundation、create-then-position
+  方言、第二 Scene Source parser、compat alias 或旧新双入口；
+- 由 preset、颜色、Mesh/tag/name/metadata 推导 Physics、Support、Collider 或 Gameplay；
+- Native Module 自建 Subject、Camera、Engine、Scene、render loop、Physics、Input、Timer、Tick 或
+  Gameplay Entity；
+- 固定 `1m` 自动 smoothing、独立 step-up/step-down、全局 `2m`
+  adjacent-height veto、raw smoothed-edge count；
+- 旧部署镜像 digest、服务绑定、租户补丁、Provider 私有字段和旧 Kubernetes 常量直接进入公共合同。
+
+旧链完整世界与四倍 reference-visible coverage 的用户语义不属于上述架构豁免，仍由
+CF-11/21 在当前 Owner 承接；不得用无探索内容的空 padding 冒充覆盖。
+
+##### 可独立推进的工程承接项
+
+下表记录旧分支中仍有价值、但不能证明已在 current `main` 闭合的工程行为。每项先从 current tree
+写 RED 或量测；历史实现只是线索，不是 cherry-pick 授权。
+
+| ID / 优先级 | Goal and independently verifiable deliverable | depends_on / blocks | Exclusive owner / stable output | Required evidence | Mode |
+|---|---|---|---|---|---|
+| `BWMI-CF-01` / P1 | 把 Layout Solver 的递归 DFS 改为不消耗 JS 调用栈的等价确定性搜索；保持候选顺序、budget、preference/local cost 和 signature tie-break | depends_on: —; blocks: 大规模 Authoring 可靠性 | `packages/layout-solver`；相同输入产生相同 report/hash | 先以当前 10,000 fixed entities 复现，再跑 focused solver fixtures、确定性 Hash 与 typecheck | sequential |
+| `BWMI-CF-02` / P1 | 为正式 Browser Capture 建立唯一 progress/stall-aware startup watchdog，区分进展、停滞、终局错误和 transient navigation | depends_on: NBR-45; blocks: — | 现有 Host Capture launcher；typed/bounded/redacted startup diagnostic | 当前 slow/stall RED、hard/stall timeout、revision progress、navigation churn、throwing cleanup 与真实 Browser | sequential, main-agent-only for Browser evidence |
+| `BWMI-CF-03` / conditional P1 | 复现 Babylon/Havok `supported/sliding + zero normal`；仅当 current RED 成立时，在现有 BodyPort transaction 内按 upward departure → admitted contacts → unsupported 解析 | depends_on: current `@babylonjs/core@9.23.0` reproducer; blocks: NBR-70 only if reproduced | 唯一 Character Body/checkSupport owner；无第二 support state | fake driver、真实 Havok jump/landing、每 Tick 一次 checkSupport、Snapshot/Reset/Replay/Rollback；严禁伪造 `[0,1,0]` | sequential, main-agent-only for Runtime closure |
+| `BWMI-CF-04` / P1 | 闭合同一 Bootstrap 在 interactive Preview、Formal opening 与 artifact preview 的 Camera position/target/FOV parity，并决定 Camera committed render interpolation | depends_on: WRC-CAM-1/2; blocks: WRC-CAM-2 | 当前 Camera Domain/Director；pixels-only render pose history | 非对称 Case、alpha `0/0.5/1`、Reset/rebind/view switch/pause/rollback、Snapshot 不变和两轮 FeelReview | main-agent-only |
+| `BWMI-CF-05` / P2 | 冻结 provider-neutral Runtime/Capture flight diagnostic，而不是复制旧 provider telemetry 或 neutral-input retry | depends_on: PHO-5, WRC-CAM-2; blocks: — | 现有 Runtime/Browser diagnostic projection；bounded/redacted immutable trace | schema/parser、预算/截断、secret/provider redaction、two-session isolation、Reset/Replay 和 typed recoverability tests | sequential |
+| `BWMI-CF-06` / P2 | 对大量 Feature inspector 行做有界 window/overscan 渲染 | depends_on: Unified Scene Viewer; blocks: — | Playground inspector UI；view-only window state | 5,738/10,000 rows、滚动边界、选择/ARIA、dispose、DOM count 与交互 smoke | parallel-safe |
+| `BWMI-CF-07` / P2 | 当 Runtime canvas 与请求 raster 精确同尺寸时直接 `captureStream()`，否则保留缩放 copy fallback | depends_on: P0.2 Capture; blocks: — | `CanvasRecorder`；媒体字节与 conformance 不变 | exact/mismatch raster、24fps、cleanup、真实 Browser CPU/frame-drop 对照；不得合成或复制帧冒充 Runtime render | sequential |
+| `BWMI-CF-08` / P1 | 修复 Recording Workbench current-only `visualTargetId`/`id` 半迁移 | depends_on: —; blocks: P0.4 Provider slice | `apps/studio/src/recording-workbench.mjs`；一个 `visualTargetId` contract | 从 `resolveSceneAssets()` 到 prompt、补充 tri-view 次序、API URL、portable bundle 的集成 RED/GREEN；禁止 alias/fallback | sequential；工作树 code + focused 已实现，Studio 9/9 与 Playground 4/4；最终集成/真实媒体 pending |
+| `BWMI-CF-09` / P1 | 让 Planner 长任务从首次读取到 Case freeze 使用同一冻结参考字节，并让 Host replay 使用 Request/Receipt 绑定的 checker/Skill identity | depends_on: —; blocks: NBR-20 formal evidence | Planner Host wrapper与 Native Case preparation；immutable input/checker hashes | source file 中途替换、live checker 中途替换、stale receipt、same-bytes resume、cleanup tests；正式 task 仍为一个 Planner | sequential；工作树 source bytes + frozen execution Request/Receipt 已实现，focused passed；真实 Planner/Cloud pending；CF-31 的完整阶段恢复仍 open |
+| `BWMI-CF-10` / P1 | 按旧分支闭合 Planner 两张图的生成顺序、语义准入与相互依赖：先生成/实际检查 entry，再以该确切已接纳像素生成 World Plan；两图使用离散 Block 身份色。World Plan 对 Brief 声明的 1--5 个目标全部硬检查，单目标至少 `max(32px, 0.005%)`；entry 只对 Subject-1 硬检查，至少 `max(64px, 0.10%)`、水平中心误差不超过 `1.5%`、16:9 误差不超过 `2%`。非主体在 entry 的尺度、相干性与歧义只作 advisory，不得成为旧分支没有的普通生产 veto。任一已接纳 entry 像素变化使 World Plan/Receipt stale | depends_on: Unified Planner; blocks: NBR-20, WRC-SR-1 | Planner Skill/checker + Host replay；target-selection ledger、旧阈值 mask measurements、pair-dependency hashes | 漏掉身份关键完整对象、把部件/普通装饰误升 target、World Plan 缺色/单像素/散点/串色、Subject entry 错误宽高比/中心/面积、空白 plan、镜像/旋转、独立或先 plan 后 entry 生成、entry-after-plan mutation；非主体 opening 缺失不得触发全局硬失败 | sequential；候选 `58e7ebd5` implemented，真实 Case/exact-SHA pending |
+| `BWMI-CF-11` / P1 | 让 Host-derived Case 对完整世界与真实通行结构足够：从冻结 Brief/World Plan 形成可审计的 bounds、entry/middle/remote/off-camera coverage、受约束桥/阶梯/门洞/分支和到达检查，不再让固定 `128m` 世界、`12m` 直线与两个 ground group 代表任意场景；reach 必须绑定冻结的局部 endpoint/stand region，禁止用跨越多区的整组 AABB 让靠近起点也算到达 | depends_on: BWMI-CF-10, WRC-SR-1; blocks: NBR-20/70 formal evidence | source-neutral Case preparation owner；Host-checkable complete-world/route coverage receipt | 开放地面、曲线路线、分支、阶梯、有限室内、远端/侧后区、空 padding、只造入口和巨大跨区 group AABB 负向 Case；不增加第三个模型任务，不让 Planner 写 Runtime 坐标 | main-agent-only |
+| `BWMI-CF-12` / P1 | 闭合 Planner 主体/运动语义到 Host Bootstrap：保留旧链有序多个 movement mode 的用户语义，由唯一 Host owner 选择并哈希兼容 Subject/Capability/WRT，或以 typed unsupported/approximation 明示；把 primary visual target 绑定到 Runtime Subject 的 Capture/后续视觉身份，并由同一 Host 选择产生 target-driven opening Camera tuning；禁止所有输入静默复用固定 Cloud Ridge G Bot 地面闭包。统一 Planner Skill 必须按 Source Profile 明写：Canonical Builder 可组装受控 Subject，Native Builder 绝不拥有 Subject/Physics/Camera；当前单 mode parser/Skill 的 clean break 在此项同步实施，不把计划当作已支持 | depends_on: Subject Registry/P1.2/P1.5, WRC-CAM-1/2; blocks: NBR-20, BWMI-PROD-10/20 | Host Subject/Bootstrap/Camera selection receipt；Native Module 仍不拥有 Subject/Physics/Camera | 步行旅人、骑乘、驾驶、水面/水下、飞行与无兼容资源；主体 silhouette/identity、movement capability、主体占屏/目标 framing、Camera target、Spawn/ground/free-volume gates | main-agent-only |
+| `BWMI-CF-13` / P1 | 对齐通用 Case 的 blocker 身份闭包与严格 verifier：Case blocker、Contribution blocker、formal `block-plane` criteria 必须可由同一冻结意图精确连接；不能给每个 landmark 自动声明 blocker 却只派生 pass/reach 检查，也不能删除或削弱 NBR-70 严格检查 | depends_on: BWMI-CF-11; blocks: NBR-70/90 strict acceptance，不 blocks 旧标准 `productionOutcome` | Case/Intent derivation + strict verifier；一份 blocker evidence closure | 无 landmark、单/多 blocker、不可接近背景、门洞、远端实体、重复组；production passed 与 strict diagnostic failed 可并存，explicit NBR verifier 仍须 RED/GREEN | sequential |
+| `BWMI-CF-14` / P1 | 修正场景还原视觉量测等价性并使用真实多视角证据：expected/observed silhouette 均采用同一定义，区分可见像素、遮挡、空洞与重复实例，world-side/top-down 不能只是签名/Hash 附件 | depends_on: BWMI-CF-10, WRC-SR-1; blocks: BWMI-PROD-10 | Capture measurement + reconstruction evaluator；per-view target observation/metric definition | 实心/中空拱门、完全遮挡、部分遮挡、分离重复组、相同 AABB 不同内部结构、Opening 相同但 top/side 不同；诊断不得把正确空洞误修为 enlarge/shrink | sequential, main-agent-only for rendered evidence |
+| `BWMI-CF-15` / P1 | 让 Builder Skill 的可见结构支撑承诺成为显式 Case policy/gate：非 root 的 structural/playable Block 必须有到 root stratum 的 face-contact 支撑，只有声明并获准的 floating/background intent 可保留 | depends_on: Native Block Profile; blocks: WRC-SR-1 | Native Check/Ground policy；typed support disposition，不从 Mesh/tag/name 反推 | 浮空门顶、山体、平台、悬浮装饰、合法悬空背景、repair 后 support chain；warning 不得在无 disposition 时静默成为 passed | sequential |
+| `BWMI-CF-16` / P1 | 修复 current styled-image 假通过，同时保持旧成功标准：base Visual Reconstructor 在同一任务内完成 opening 自检，再由 Host 做历史等价的 file/hash/role closure，随后 tri-view 必须消费该 opening 的确切像素/Hash；新增独立 base semantic Reviewer 只能写 strict diagnostic，不能成为普通生产 veto。保留 Front/Right/Back 与 semantic-front 方向；纯签名/Hash 完整性只能标记 generated，不能单独伪造任务内 visual pass | depends_on: P0.2 Capture; blocks: BWMI-PROD-10/30, Recording Workbench | `scripts/visual` launcher/generator/finalizer；same-task self-check + Host closure + accepted-opening receipt；可选独立 diagnostic ledger | opening identity/geometry drift、tri-view 跨图身份/材质漂移、Front/Right/Back 调换/镜像、单图失败修复且其余 pass Hash 不变、independent diagnostic 不改判 ordinary outcome | sequential |
+| `BWMI-CF-17` / P1 | 为 current 单段 Seedance runner 增加 raw-media admission，禁止用任意 letterbox 和 `tpad=clone` 把短片/冻结尾“修成”exact frames；技术 conformance 保留 raw/final 双 Hash，但不冒充语义通过 | depends_on: P0.4 Adapter; blocks: BWMI-PROD-40 | Video Adapter raw admission；duration/aspect/active-frame/freeze/black-bar/audio measurements | 几秒短片、长冻结尾、错误宽高比、全黑边、静音/无效音频、近似 fps 可有界 resample；严重残缺不得进入转码成功态 | sequential |
+| `BWMI-CF-18` / P1 | 把 committed strict NBR Case 补齐到 current named Planner-input 合同并按语义角色准入：`world-plan.png`、`entry-whitebox-target.png`、Brief、用户参考和各自 Hash 必须同时存在，Builder 不得被要求读取一个 Request 未提供的文件 | depends_on: BWMI-CF-09/10; blocks: NBR-70/90 | strict Corpus Case/Generation Request；typed reference roles | missing/duplicate/wrong-role/stale plan image、Skill/Request disagreement、exact-SHA Case replay；旧 Case 证据不继承 | sequential |
+| `BWMI-CF-19` / P1 | 把旧 Builder 最有效的反馈行为按 current Owner 重建：在同一个 Native Builder Task 内，从尚未准入的三份 source 输出生成一次性 entry/top-down advisory 投影，与冻结 Planner intent 做左右对照，要求 Builder 实际视觉检查并只修 source，最多使用同一 `builderSelfRepairAttemptCount`；Host 仅复算投影像素/身份，绝不自动判相似度或产生第二个 Capture/Compiler | depends_on: BWMI-CF-09/10; blocks: NBR-20、默认 Native 正式生产 | Native Builder Skill/authoring workspace only；disposable comparison images + self-check ledger，无 Package/Receipt/Capture truth | 非对称 geography、镜像/旋转、目标位置/朝向/尺度、route bend、前中后景/遮挡/厚度；stale input、修复后重投影、Host decoded-RGBA replay、首次通过率与后置 repair/cost 的真实 Case 对照 | sequential；候选 `58e7ebd5` implemented，真实效果对照 pending |
+| `BWMI-CF-20` / P1 | 在 Planner→Case→Builder 之间冻结 Block 表示/复杂度/预算可实现性合同：Planner 目标必须能在形状、lattice、显式支撑、Collider 和量测过的 Native Browser/Havok 预算内表达；输出按世界/地面支撑/语义目标/细节分区的 budget-pressure receipt，超预算时由 Planner/Case 有界降复杂度或 typed reject，不能让 Builder 静默删掉世界 | depends_on: BWMI-CF-10/11, WRC-QP-3; blocks: NBR-20、默认 Native 正式生产 | Native Profile budget admission + Planner/Case feasibility receipt；不让 Planner 写 Block 坐标 | CASE-054 `1974/2000` 饱和基线、4/8/16/32m Chunk 与 2k/更高候选的 Browser frame/draw/memory/Capture/Havok sweep、宏观世界优先级、细节饥饿/支撑开销、typed over-budget；旧 `102400` 只作历史压力基准，不直接移植 | main-agent-only for measured budget selection |
+| `BWMI-CF-21` / P1 | 冻结 source-neutral 全场景显著要素与宏观构图覆盖，不把非 visual-target 的桥、瀑布、侧塔、庭院、山岭、树林、路径围护和负空间静默塞进 generic ground/background 后失去 presence/completeness/placement 证据；保持 visual target 仍只表示少量身份关键完整对象 | depends_on: BWMI-CF-10/11/14; blocks: NBR-20, WRC-SR-1 | Planner/Case scene-feature inventory + Capture/Evaluation scene-level coverage receipt；不增加 Gameplay/Collider 身份 | CASE-054 全要素清单、entry/middle/side/rear/remote 分布、宏观 silhouette/密度/负空间/遮挡、重复普通装饰的有界统计、只保留 palace/直线地面负向 Case；不得把每棵树/每盏灯升级成 visual target | sequential, main-agent-only for rendered evidence |
+| `BWMI-CF-22` / P1 | 闭合 Planner identity palette 到 Case、Generation Request、Builder authoring 与 Capture semantic map 的精确映射：冻结 palette/hash 与每个 `visualTargetId -> visualGroupId -> color` join，Builder 使用不同 RGB 必须在 Native Check 前失败，禁止仅比较由同一错误 metadata 派生的两份结果形成循环自洽 | depends_on: BWMI-CF-09/10; blocks: NBR-20, WRC-SR-1 | Host-owned palette input/receipt + Native Check identity join | CASE-054 `#F28E2B` vs `#F28A2E` RED、missing/stale/wrong-target/duplicate color、大小写/编码规范化、repair 后 Hash 更新、Capture segmentation 与 expected palette 同源 | sequential；候选 `58e7ebd5` 关闭已有 Case visual-group rows，目标纳入与 per-view 证据由 CF-24 承接 |
+| `BWMI-CF-23` / P0 | 按旧分支精确成功/失败语义建立唯一 current `productionOutcome`：requested scope 的 Planner、Builder visual self-review/Host replay、可信 Native build/ground/package、Babylon Capture、entry validation 及该 scope 必需的 visual/Episode/media 产物全部闭合即 `passed`；当前七维/NBR-70 等超出旧链的严格检查只写独立 `strictDiagnosticOutcome`，不得把已通过生产改成失败。CASE-054 必须投影为 `productionOutcome: passed`、原子 `published`、`strictDiagnosticOutcome: failed` + `NBR70_BLOCKER_IDENTITY_MISMATCH` | depends_on: current production runner/publisher; blocks: 所有 BWMI production outcome/publication | current-only production outcome contract + strict diagnostic receipt；一个业务终态、一个独立严格诊断；直接删除 `preview-ready/not-accepted` 类型、Studio 投影、publisher bypass、重复 verifier 发布门及仅服务旧权威的测试/帮助函数，不加 mode/alias/fallback | 旧 Scene/Episode 状态机逐条件 fixtures；strict pass/fail/incomplete/not-run；下游失败不撤销已接纳 whitebox；cancel/resume/stale/partial；Publisher 保留 Hash、路径安全、fsync、atomic rename，strict verifier 仍可显式运行；clean-break census 归零 | main-agent-only；候选 `58e7ebd5` implemented，真实 CASE-054/exact-SHA pending |
+| `BWMI-CF-24` / P1 | 为每个非主体目标冻结 source-neutral per-view 证据处置，同时保持唯一 Case 身份行：`not-required | presence-required | reference-projection-required`。opening 无可靠 mask 时不得删除目标或凭空造 bbox，也不得因旧分支未要求它出现在 opening 而全局失败；可要求 top-down/side 的真实 Host Runtime observation | depends_on: BWMI-CF-10/14/22; blocks: NBR-20, WRC-SR-1 | Case target identity + Formal Capture semantic observation；每视角一个 closed disposition | opening 缺失/弱 mask、top-only/side-only 目标、遮挡目标、required view 缺失、真实 PNG 与结构观测同源；禁止伪造 target bbox | main-agent-only |
+| `BWMI-CF-25` / P1 | 让不可变参考输入正式支持 WebP，保持一次读取、媒体签名/解码/Hash 与 Planner/Case 同字节闭包；不得靠扩展名或转成另一张未绑定图片绕过 | depends_on: BWMI-CF-09; blocks: NBR-20 input coverage | reference media admission/decoder | lossless/lossy WebP、动画/畸形/扩展名错配、TOCTOU、Planner/Case hash 一致 | sequential；工作树已贯穿 snapshot/Case/Request/Publisher，focused passed；真实完整 Case pending |
+| `BWMI-CF-26` / P1 | 对照旧分支逐条件冻结 source repair 与 provider terminal retry：Host 诊断失败不隐式重建；旧 Cloud 已明确失败的任务按分类/原预算重试，pending/unknown 只 reconcile；保留一个 `productionOutcome`，Profile 不得选择更严的普通成功标准 | depends_on: BWMI-CF-19/23; blocks: 默认 Native production parity | production runner/journal + 唯一 task router/recovery owner；分别记录 source Attempt 和 provider Task Attempt | 旧 failure matrix、repairable/non-repairable、0/1/3 source repairs；Cloud terminal task 最多 3、task-timeout 最多 2；unknown 不重 POST，passing artifact Hash 不变 | main-agent-only/sequential；26A code/focused passed，26B provider terminal retry open，不结项 |
+| `BWMI-CF-27` / P1 | 消除 Planner 对固定身份色的概率性命中：保留旧 World Plan 全目标与 entry Subject-1 门禁，但让 Planner 以可验证的结构/遮罩或等价确定性机制产生 palette-critical 标记，禁止 Host 在目标缺失时盲目补色伪造 presence | depends_on: BWMI-CF-10/22; blocks: 默认 Native production 的稳定成本与首次通过率 | Planner output contract/self-check；身份标记的语义来源与像素生成必须同一闭包 | CASE-054 主体 `#E85D5D` 从 0/79 经多轮仅到 1-4/79、最终同周期补偿通过；不同光照/抗锯齿/压缩、真正缺失目标、标记位置漂移、修复预算耗尽；门禁不得放宽 | sequential |
+| `BWMI-CF-28` / P1 | 消除便携 Native Builder checker 的第二套 Brief/Palette 合同；Case/Request 校验原始 Brief bytes，Palette 校验同一正式 parser 的语义 Hash，不能直接比较两种 Hash | depends_on: CF-09/22; blocks: Builder 到 Native Check 的真实输入闭包 | `scripts/agents/agent-native-block-builder-self-check.mjs` + shared bundle builder；Skill、Host CLI 与冻结副本同源 | 真实 Brief 正向、raw/semantic 错绑、Brief 改字节/符号链接、生成 bundle drift、真实 Case；删除手写 Palette schema 副本 | main-agent-only；`66dff3a2` 后工作树已修，focused passed，真实 Case pending |
+| `BWMI-CF-29` / P1 | 保留跨 Generation→Run→Production 的真实失败原因及拒绝产物，不能被 uppercase-only result parser、漏项 allowlist、清理或阻塞的 stderr 管道覆盖 | depends_on: CF-23/28; blocks: 可诊断性、低成本修复 | Production result parser、run allowlist、generation runner/ports；不可变 `builder-self-check.host.json` + 隔离 `rejected-source/`，均不得作为已准入 Source | `self-check-failed/task-timeout/output-missing`、13 种 Native 反馈码、provider 文本脱敏、stderr 大输出、已存在证据不覆盖、cleanup failure 保留原因；不改变成功阈值 | main-agent-only；`66dff3a2` 后工作树已修，focused 40/40 passed，真实 Case pending |
+| `BWMI-CF-30` / P1 | 删除闭合 traversal union 早检中的语法误拒绝：合法 `not-traversable` 对象尾逗号/注释不能被当作另一分支字段 | depends_on: CF-28; blocks: 合法 Builder 输出稳定性 | 同一个便携 checker；Native Check 仍是正式 union admission | 合法无逗号/尾逗号/两类注释与非法 `surfaceEntityId` 分支污染 RED→GREEN | main-agent-only；`66dff3a2` 后工作树已修，focused passed |
+| `BWMI-CF-31` / P1 | 恢复 Native 的分阶段入口与 Host-only resume：旧链支持 plan/build/host replay；工作树已恢复 plan-only/build-only，但 build-only 仍启动新 Builder Run，尚不能复用已完成的付费 Builder | depends_on: CF-09/23/26/29; blocks: 普通生产失败恢复与成本对齐 | `run-world-agent`、Native launcher 与唯一持久 Run/Attempt owner；输入/Skill/Source/receipt 精确身份绑定 | plan-only、build-only、Host replay、已完成阶段不重投、unknown POST 只 reconcile、stale source/checker、passing artifact Hash 不变；拒绝产物不能未经准入直接发布 | main-agent-only；A/B code + focused，C/真实恢复 open；子项见下 |
+| `BWMI-CF-32` / P1 | 关闭输入清单在最终 Publisher 的断链：前面必需的 `visual-identity-palette.json` 不能在发布端被误判为额外输入 | depends_on: CF-22/23/25; blocks: 普通生产最终发布 | Case/Generation 与 Publisher 共用唯一 `NATIVE_WORLD_PLANNER_REFERENCE_INPUTS_V1`，所有输入仍严格 Hash/路径/媒体准入 | 完整 PNG/WebP Case 输入、Palette 缺失/stale、额外文件、直接 `prepareNativeWorldCaseV1` 到 Publisher input snapshot，不能只测无本地输入的 Package fixture | main-agent-only；工作树已修，新增 2 个 RED 后 Publisher/contracts 128/128；最终真实发布 pending |
+
+当前工作树补充证据（2026-09-05，仍未提交/合并）：CF-08 的 3 个 RED 已转绿，Studio recording
+全文件 9/9、Playground 4/4；CF-25/32 的媒体冻结/Case 首轮 17/17，Publisher + Generation Request +
+两类 shared contracts 128/128；随后补充 PNG/WebP Case preparation→Publisher 输入快照、local/cloud
+Generation Request 同字节附件后，Case/Generation 两文件 46/46。CF-28/30 最终 Skill 42/42、
+Run 52/52；CF-29 Generation/Ports 最终 40/40。不同轮次存在重复用例，不累加成总测试数。
+这些只是当前输入上的 focused/contract 证据；没有新的真实生成/Capture/视觉对照、整仓 CI 或
+exact-SHA Cloud。CF-25 统一真实媒体解码后同时删除 Publisher 独立 PNG/JPEG 签名检查副本，
+不转码替换原始参考图、不改变 image Hash，也不增加视觉质量 veto。
+
+CF-09 工作树补充（2026-09-05）：`scripts/agents/planner-execution.ts` 是唯一 Planner 上下文
+冻结/重放 owner。生成前冻结实际 instruction、完整 Planner Skill/checker/refs，以及仅 Canonical
+需要的 terrain exemplars；Host Request 绑定 scene/source/task/router request 和逐文件 Hash。
+同一个 `run-codex-task` 接收冻结目录，Host 从该目录重放一次，精确比较 Agent/Host report 后
+才写 accepted execution receipt。删除 launcher 对 live checker 和另一 live Brief validator 的重放。
+Native Case staging/promotion 保留该记录，已有 Case 校验其同一 planner-self-check Hash；Canonical
+build-only 也重放原冻结 checker。原语义阈值、自修复预算和 formal model 均未修改。
+Native launcher 失败时保留 Planner 交付与 execution 记录，不再整目录清除；partial 产物仍不是
+已准入 Case，现有 partial guard 拒绝静默覆盖，显式阶段恢复继续由 CF-31 实施。
+
+证据：launcher live-checker 断言先 RED；增加真实 local router + fake Codex child 的隔离交付测试后，
+Planner execution/Skill + Native input + public entry 四文件最终 28/28（execution 13/13）；最新
+typecheck、shell syntax、diff check 通过，生成 bundle 对照 1/1（覆盖 Native/Planner/Canonical）。
+测试覆盖两种 Source、live Skill/checker/instruction 变化、冻结文件增改/符号链接、stale
+Request/Receipt、Host report mismatch 留存、同任务不覆盖、Case 目录替换后身份仍可验证。
+这里没有真实模型/图片生成或 Cloud receipt，不关闭 NBR-20、CF-31 或整体生产效果验收。
+旧 `9e35ab53:run-spatial-world-agent.sh:178-185,207-214` 同样读取 live checker，故该项是当前
+迁移的输入身份安全修正，不是声称旧链已有冻结机制，更不是新增视觉门禁。
+
+CF-26 工作树分步记录（2026-09-05，仍未提交/合并）：
+
+- `BWMI-CF-26A`：Run/Capture 的业务层调度已经不再仅由 Profile 决定。唯一公开 production
+  transaction 固定传 `executionPurpose: production`；journal 每行持久化该闭合用途，拒绝用途
+  改绑和普通 Run 的外部 source-repair Attempt。严格 Profile 不能让普通 Run 重买 Builder，
+  也不能把新增 Opening 质量量测升级为普通 Capture 发布 veto；原 Native/Ground/Package、
+  Runtime、入口及输入/产物完整性检查保留。显式 strict-acceptance 保留原 bounded source repair。
+  owner：run/journal + production ports/formal capture；依赖 CF-19/23；main-agent-only。
+- `BWMI-CF-26B`：旧 Cloud router 与本地不同：`9e35ab53:run-lwdp-codex-task.mjs:29-105,
+  237-242,290-396` 对 formal Scene 的已明确失败任务默认最多 3 次，`task-timeout` 最多 2 次，
+  默认退避 30s/120s；auth、account/model compatibility、capacity、output omission、
+  infrastructure/transport 有旧分类，deterministic capability stop 与 pending 不重建。
+  每个 request id 仍只 POST 一次，不能把 unknown 当 failed。current router 已有 same-id recovery，
+  但缺 terminal task-attempt loop 及完整 typed 分类/预算账本；这部分仍 open。owner：唯一 generic
+  task router/same-id recovery；依赖 26A 和现有 request journal；main-agent-only。后续必须同步
+  single-task 原则，明确 provider Task Attempt 与 source repair、自修复的不同计数，不能靠改名掩盖重试。
+
+26A 证据：严格 Profile 触发额外 Builder 和 journal 缺用途记录的 3 个 RED 转绿；Run/journal/
+Production/ports/Formal Capture 五文件 150/150、Native Builder Skill 42/42、typecheck 通过。
+矩阵覆盖 unknown/missing/empty/timeout/self-check、Native/Package/Capture/Camera rollback、
+无效 Evaluation 终态、两种 Profile 的普通诊断处置、显式严格修复 0/1/3 与耗尽。Skill 和冻结
+副本同步区分 provider retry 与 in-task/source repair；旧 `before any Candidate` 错误描述同时改为
+Native Check 自己拥有隔离 Candidate，Host advisory replay 在 Package publication 前完成。
+这不是新的真实 Case/Cloud 或效果验收；26B 没有实现，不能因 26A 测试通过而把 CF-26 勾完。
+
+截至本批，32 个 CF 主任务中 11 个有实现/局部证据，26/31 两个部分实现，19 个仍待实现或
+条件复现；因此仍有 21 个主任务含开发工作。已实现项的真实效果和最终验收另计。26B 是 CF-26
+原有 retry matrix 范围的子项，不新增主任务，也不把 provider 失败错误归为“不应重试的 Host 诊断”。
+
+CF-31 工作树分步记录（2026-09-05，仍未提交/合并）：
+
+| 子项 | 依赖 / 独占 owner / 模式 | 实现与边界 | 当前证据 / 状态 |
+|---|---|---|---|
+| `BWMI-CF-31A`：Native 阶段入口 | CF-09；`run-world-agent` + Native launcher；main-agent-only/sequential | `agent:world --plan-only` 完成 Planner、既有 Case freeze 后返回 `plan-ready`，不运行 Builder；`--build-only` 读取已准入 Case/Planner receipt，不重跑 Planner，也不读取原上传路径。缺少计划直接报告 `NATIVE_WORLD_PLAN_REQUIRED`，不偷偷启动付费规划 | public/Native entry + real Planner checker/Case 合同的 synthetic staged-flow 回归通过；code/focused，不是模型或完整生产证据 |
+| `BWMI-CF-31B`：Builder 清理后保留完整输入 | CF-31A、CF-29；`generation-request.ts`；main-agent-only/sequential | durable `attempt/inputs` 与 `.task/inputs` 从同一份完整字节快照写出，包含 Brief、instruction、Skill/checker、全部参考及 prior-attempt repair evidence；持久化相同 `context/` 与 `generation-dispatch.json`（backend、原 Request/Attempt Hash、router id/payload Hash/arguments、frozen owner identities）。不保存 token，不改 Source/Generation Receipt 或成功标准 | `.task` 清理后的普通与 repair Attempt 逐文件 Hash、dispatch 身份回归；code/focused，不代表恢复调度器已经接入 |
+| `BWMI-CF-31C`：显式 Host-only 恢复 | CF-31B、CF-23/26/29；唯一 Production/Run/Attempt/journal + ports owner；main-agent-only/sequential | 当前工作树已接入原 Run/Attempt 的显式恢复、no-submit generation restore、immutable checkpoint、独立 Host output epoch、verifier/publisher 引用解析及追加式恢复记录；仍禁止伪造生成 receipt、提升 rejected-source 或覆盖历史失败产物 | code/focused + `dc643d55` 上 054 同 Package 真实恢复 published；最新证据见下方执行更新。丢失 checkpoint 与多次中断/已发布响应丢失的完整故障矩阵仍须闭合，完整效果验收未完成；`--build-only` 仍不是此恢复入口 |
+
+本批改变的是 CLI 阶段控制与 durable input inventory，未改变模型、prompt、质量门禁、修复预算、
+Runtime 或发布成功标准。首轮 public/Native entry + Generation Request + staged-flow 四文件 56/56；
+typecheck 通过。staged-flow 使用合成图片、真实 Planner checker 子进程/Case freeze，只有 Planner
+交付和生产 handoff 是测试替身；它不是新的 CASE-054、真实 Builder 或视觉效果验收。后续补充
+repair cleanup focused 1/1（含完整 prior source/diagnostic Hash）与真实 Native Package 直接消费者
+focused 1/1（执行 Native Check/Ground/Package，不含 Browser）均通过，不与上述重复用例累加。
+
+2026-09-05 当前执行更新（下方 R1 优先级讨论保留为历史，不再表示当前暂停项）：
+
+- 用户最新明确顺序为 `CF-27 → CF-02 → CF-31C → CF-24 → CF-26B`，五项均要求实施后再跑新 Case。
+  CF-31C/26B 不再暂停；仍由主智能体顺序集成，不新增外部任务或放宽普通成功门禁。
+- CF-27：工作树已接入 Planner 显式选区 palette authoring、`pngjs@7.0.0`、共享 PNG codec，
+  删除 checker 手写 PNG 解码器；Skill 指导先确认已有目标再配色，Host 不自动补目标。原阈值不变。
+  Planner/checker/Skill/bundle 四文件 41/41；随后补齐隔离 CLI 与冻结分发，四文件 33/33（有重复，
+  不累加）；typecheck 通过。尚无修复后真实 Planner/效果证据，不将真实首次通过率视作已验收。
+- CF-02：工作树已用唯一 watchdog 取代固定 30s ready wait；旧 180s hard / 45s stall 参数、
+  Host 初始化阶段 revision、context navigation 不延长 deadline、挂起 probe 取消与资源清理。
+  startup/transport/route 三文件 46/46；真实 Chromium 合成服务器回归：持续进展 35,418ms ready，
+  stall 1,833ms、terminal error 336ms 按预期失败，context 全清理。入口 `pnpm verify:capture-startup`。
+  该证据不是真实 Native 场景、完整 Case 或最终效果验收；page-error/crash 监听已补针对性回归。
+- 用户已授权子智能体：CF-26B 独占 router/retry owner 并行实现，CF-24 在主会话冻结逐视图
+  合同后独占 Case/Capture/Evaluation 链实现；主会话完成 CF-31C 与所有共享消费者集成。
+  CF-24/26B 尚未获得集成完成证据，不能由 worker 单测通过推导五项完成。
+- CF-31C 当前工作树新增显式 `--resume-host-only`、no-submit `restoreGenerated`、四阶段 immutable
+  checkpoint 与 Hash inventory、原 Run journal 追加恢复边界。未通过阶段的新产物写入原 Attempt
+  的 `host-recoveries/<index>`，旧失败文件及已通过产物不覆盖；verifier/publisher 已改为解析收据中的
+  本 Run/Attempt 具名产物路径。已完成生成的 Request/Receipt/dispatch/context/source 验证后复用；
+  原任务未知时只协调原 id，不准备或提交新的付费任务。完整 Run Receipt 已存在时复验并继续发布。
+  四组 checkpoint/ports/journal/Run 回归 104/104；真实 WorldPackage 的恢复路径 verifier+publisher
+  focused 1/1 通过（保留历史失败文件）。后续补的丢失 checkpoint 读取、publication 续接及路径对抗
+  仍在验证；真实 Native Check/Ground/Package 新回归 1/1 通过，38.36s，原 Generation Receipt、
+  Source 和历史失败 Check 字节不变。首轮误用 30s 测试预算超时，已对齐同文件既有 60s 测试预算，
+  未改生产 timeout。最新 typecheck 通过；这不是新的模型 Case/完整 E2E 证据。
+  最新 checkpoint/ports/journal 三文件 40/40（覆盖前述 104 中部分用例，不累加）；Host recovery
+  factory failure 保留原 Run/锁冲突及 CLI 显式模式 focused 2/2；丢失 checkpoint 的原 Receipt 重建与
+  已发布同身份 final 的只读验证分支已接入，完整多次中断矩阵尚未验收。无新模型任务、Case、提交或合并。
+
+  本次并行推进补充：Run/checkpoint 74/74，覆盖 Native Check、Package、Capture、Evaluation 执行失败
+  及每条路径的再次 Host 中断，仍为同 Run/Attempt/request，不调用 paid generation；新增 owner-receipt
+  丢失 Host checkpoint 重建 1/1（真实 prepare/generation receipt，模拟任务输出，无模型），同时拒绝
+  changed source/context/request/owner Hash。publication 两个 RED 暴露已存在 strict diagnostic 被误拒；
+  现只在显式 resume 时按 exact bytes 复用，不覆盖 drifted receipt，发布前中断/发布成功响应丢失两项
+  回归 2/2 通过。四项真实 publisher/verifier 直接回归 4/4 通过（foreign Case、预存在空 final、发布锁、
+  缺失/Hash drift Capture）；具名恢复路径额外后缀对抗和四类 checkpoint 合计 6/6。上述测试部分重叠，
+  不累加为 aggregate；CF-24 合同正在变更，最终集成 typecheck 和消费者回归尚待其完成。
+  CF-26B 集成同时把 Native router 阶段改为旧 `coding-agent`，Request/Receipt 身份不改；Planner 仍为
+  `planner`。Generation Request/runner 两文件 53/53，确保旧 Cloud retry 策略确实被 Native 调用端选中。
+
+  2026-09-05 13:14 集成续报（仍为 `66dff3a2` 加当前未提交候选）：
+  CF-31C Run/journal/checkpoint 三文件 85/85，补齐 publication 六类中断、半行 journal 尾部恢复，
+  已存在 strict diagnostic 只允许 exact-byte resume；同一 Run/Attempt 不提交新生成任务。
+  CF-26B router/retry 三个 Node 文件 47/47，覆盖真实子进程 SIGKILL 后同 request 恢复且无新 POST；
+  这是模拟 provider 的进程级证据，不是实云 retry 验收。
+  CF-24 已接入三视图 observation、Receipt Hash、publisher、strict verifier、Studio；主侧
+  ports/run-production 73/73（包含 opening not-required 仍保留 side/top 目标身份），
+  publisher/verifier selected 3/3（包含 Evaluation failed 仍可 ordinary publish），
+  Studio Native production/launch focused 30/30（含新 observation 篡改拒绝）。
+  静态 cloud-temple Case 已 current-only 迁移，历史 Run 未修改；原 generation owner receipt 恢复
+  在新 Case 合同下 focused 1/1。三视图 owner 回归与最终集成 typecheck 尚在收口，尚未启动新 054 Case；
+  不把这些重叠 focused 数字累加为 aggregate，也不声明 CF-24 最终效果已验收。
+
+  随后集成 typecheck 已通过；`verify:3c-migration` 初次发现两个新增便携工具从 Authoring barrel
+  带入无用 legacy 初始化。仅在这两个工具的构建中对已核对的纯 re-export barrel 启用无副作用
+  tree-shaking，未新增别名/parser，未改迁移 ceiling 或结构断言；旧 Planner/Canonical bundle 不变。
+  重建并同步冻结 Native checker 后，该 gate 通过（11 entries / 39 live references / 10 invariants）。
+  Native Skill 与 palette 回归 61/61，包含隔离 CLI、拒绝 stale PNG、冻结副本和删去无用 legacy 字段；
+  单任务原则的文本断言同步为已批准的 logical task / provider Task Attempts 分离。发布器与 verifier
+  两个直接受影响测试文件全量 64/64 通过（102.74s，模拟 playability port，未启动真实 Browser）；
+  CF-24 专门对抗回归、只读集成复核、新 Case 尚待。
+
+  CF-24 集成只读复核在 Case 前定位两项具体缺口，仍归该任务、不新增状态体系：
+  （1）全部 target opening not-required 时，Case/observed opening 列表仍隐式拒绝空集合；
+  主侧 ports `one/all` 回归已复现 all 分支 RED。修复应只允许 opening 空集合并保持 exact-empty
+  closure，不能虚构 bbox 或强留一个目标。（2）semantic set 的 camera domainOwnerIdentity 尚未
+  与 Receipt SDK camera owner 精确相等，替换 ref/hash 并重算 set hash 可绕过；修复集中于共享
+  Receipt binding assertion，保持普通质量 report-only，不把质量差异升级为 owner 身份错误。
+  两项修复已落盘：只对三个 opening 列表允许空集合，共享 assertion 绑定 semantic/opening Camera
+  owner 和 opening 内容 Hash。主侧 `one/all` 与 publisher/verifier selected 5/5 GREEN（15.47s），
+  其中 all 分支由上述 RED 转绿；owner 专门对抗回归及独立复核尚待，两项不以代码落盘代替验收。
+  新 Case 尚未启动。
+
+  CF-24 owner 现已冻结：10 个直接受影响文件 236/236 通过；最后仅修测试 union narrowing 后，
+  Runtime contracts 58/58 再次通过；主侧最终 `pnpm typecheck` exit 0。全部 opening not-required 的
+  Case→Evidence→Evaluator、side/top presence-required + outside-viewport、不一致 Camera owner
+  ref/hash（攻击者重算 set Hash）和 opening/set 共源篡改均有专门回归。
+  当前运行候选为 `66dff3a2313d5ee35b2801cdf610d5afb2f6c233` 加未提交实现输入，1,237 个实现文件
+  内容指纹 `sha256:ae3dd9180aaeacdfa60cb82383d862df58463a21724573cc2504ca5ce1dcf801`
+  （packages/scripts/skills/app-src/固定 world-packages/config/根构建配置/当前静态 Case；不含 live docs
+  和历史 Case Run）。新 Case ID 预检 `paper-moon-054-cf5plus2-local-0905` 尚未使用；本地 Codex 登录
+  有效。独立 CF-24 Mode B scoped 只读复核已确认两项 P1 关闭，指定十个生产文件内无剩余 P0/P1，
+  scoped diff Hash `121b9924402133c5d417877d8fdb27bbc2a4902902718ac256e12764d2da3fa4`。
+  这不是全旧分支 parity/完整 WRC-1 验收。随后已发起上述新 Case：`WORLDKIT_CODEX_BACKEND=local`
+  + `pnpm agent:world --scene-source babylon-native`，原始 054 PNG Hash
+  `080d951445bae3a8584363f0be5ef9194b5eff88e7b64da40d2a81f6a923972e`，完整普通生产入口从 Planner
+  开始，不复用历史失败 Run、不启用末尾重复 playability replay；真实结果尚待，未跑最终 full gate。
+  13:34 CST 已确认本地 Planner 实际启动：`planner-20260905-053444-53398`，PID `53439`，
+  formal / `gpt-5.6-sol` / `xhigh`，不是云端任务，也不是 dry-run。
+  13:37 检查发现该轮执行句柄丢失，Planner/父进程均已退出，只有冻结 Request/Instruction，
+  没有 Planner 输出或终态收据，退出原因未确认；不得归因为 CF-24/Native Check 失败。
+  保留该轮全部文件，不把重跑伪装为同 task 恢复。随后以独立 Case
+  `paper-moon-054-cf5plus2-local-r2-0905` 再跑相同本地完整入口；实现输入指纹不变。
+  本地独立进程 PID `54554`，完整日志 `/private/tmp/worldkit-054-cf5plus2-local-wbWhAt/production.log`
+  （文件 0600、临时目录私有），不依赖会话执行句柄保留输出。尚无成功或效果结论。
+  13:49 跟进：Planner task outcome `completed`，portable self-check 与 Host replay 均
+  `status: passed` / `diagnostics: []`，已进入 `plan-ready`；新生产 Run
+  `run-20260905054743-54589` 已创建，journal 为 Attempt 0 `initial-generating/before`，
+  `executionPurpose: production`。这证明 Planner 交付已通过，不是 Native Check/Package/Capture
+  或最终效果通过；本地生产入口仍在运行，继续跟进后续终态，不重复提交。
+  14:04 CST 终态复核：本地父进程与 Builder 均已退出，普通生产结果为
+  `productionOutcome: failed` / `publicationOutcome: not-published` / `cleanupOutcome: completed`，
+  `evaluationOutcome: not-run`；日志诊断为 `WORLD_RECONSTRUCTION_CHECK_FAILED`、
+  `native-check-rejected`。Attempt 0 generation receipt 为 `completed`，Host Builder self-check
+  为 `ok: true` / `diagnosticCodes: []`，已交付 `source/scene.ts` 与入口、俯视 advisory 对比图；
+  随后 Native Check 因 4 个 `WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED` 拒绝，位置为
+  `scene.ts` 324:32、324:48、325:27、327:27（偏移数组解构后的运算）。尚未进入正式
+  Ground/Package/Capture/Evaluation，不能评价最终还原效果或宣称 CF-24 真实验收通过。
+  此次证据重新暴露 CF-19 的 Builder 自检通过但 Host Native admission 拒绝缺口；具体为何
+  未在任务内修复仍待代码核对，不归因为已修复的 CF-22 visualGroup 错误，也不先定性为门禁过严。
+  原始收据保留在上述 Run 的 `attempts/0/`，终态日志保留在上述私有路径；停止本轮 heartbeat，
+  不自动重启、重交生成任务或改写失败产物。
+
+CF-19/29 本地测试前补漏（2026-09-05，主会话；随后提交为 `5a1508ea`，不代表完整 CF-19 效果结项）：
+
+- 新增唯一共享 Native TypeScript policy/诊断格式器；Builder 便携 checker 内嵌构建时冻结的当前
+  SDK/type-library 输入图与 TypeScript，不手写 API 类型、不依赖任务目录的 node_modules，也不执行
+  SDK/Candidate。Host 仍独立准入。旧 `noUncheckedIndexedAccess/strict` 参数没有放宽。
+- 原 r2 Attempt 0 `source/scene.ts` 原始 SHA256
+  `d904f3ebbe01556ebcff9b0fec70e823ff068224410ab74f26b4618816a50f9c` 在新 checker 中约 2.7s
+  精确报出四个 TS18048，位置与原 Host 报告一致；固定元组的 focused RED→GREEN 通过。
+  任务内具体类型错误、结构反馈和视觉修复共用既有预算，每次改源码都须重新检查/出图。
+- CF-29 保留有界、脱敏的 TS code、原因和相对位置；Host Native Check 不再只发笼统类型失败文案。
+  失败时明细进入不可变 `builder-self-check.host.json`，Run 保留 allowlisted 类型失败码；
+  Generation Receipt 仍保留其原有阶段结果合同，不另建成功权威。
+- 仅在 `/private/tmp/worldkit-cf19-native-check-fKBPPd` 临时副本添加元组声明后，真实 Native Check
+  已越过类型阶段，但发现 `WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP`：
+  `central-lower-left-0-base` 与 `lower-branch-west-x9-z2`，cell `-7,-4,-27`。
+  原始 Run/Source 未修改，此临时副本不是成功生产产物。
+- 因此 CF-19 同时补齐现有一次性 renderer 的 lattice/occupancy 反馈：复用 Profile 的 shape-size、
+  lattice、occupied-microcell 函数，删除 renderer 手写 shape-size/rotation 副本，不增加 Scene、
+  Physics 或持久 Layout。新 renderer 在该临时副本约 0.3s 给出与 Host 相同的块对和 cell。
+  不提升 support warning，不改变普通质量成功标准，不承诺已覆盖全部 Native/Ground admission。
+- 证据：原 Skill 文件 54 项中 52 通过、两项为文案断言及临时路径 canonicalization；修正后相关
+  3 项通过。随后 renderer overlap/off-grid 两项先 RED 再 GREEN，包含正常像素、renderer 重建和
+  frozen-copy 的受影响 6 项通过；类型/API/strict-options/移出仓库单文件运行已有 focused 证据。
+  checker 全量便携重建/字节漂移 1/1，Host 诊断/脱敏 3/3；Run/ports/checkpoint 受影响 20/20，
+  最后具体类型反馈保存/传播 1/1；最终 typecheck 通过，3C migration 通过。测试存在重叠，不累加
+  成 aggregate/full gate。实际语义编译增加测试耗时，只有对应测试预算调整，生产 timeout 未改。
+- CF-26A 验证类型预检失败仍只调用一次付费生成，无 Host 隐式 source repair；CF-31C 已有
+  no-submit/unchanged-source/append-only recovery 受影响回归通过。恢复不能直接放行原始错误源码。
+  下一轮真实模型是否按新反馈完成同任务修复、全链发布及效果仍待新 Case；不关闭整个 CF-19、
+  WRC-SR/NBR-70/90 或 WRC-1，也没有运行新的完整 Browser playability replay。
+- 14:41 CST 已启动新本地 Case `paper-moon-054-cf19-local-0905`，原始 054 PNG 和用户 prompt
+  不变，从 Planner 开始，不复用旧失败 Source/Receipt。父进程 PID `66955`，私有日志
+  `/private/tmp/worldkit-054-cf19-local-xHR4Nu/production.log`；启动复核时进程存活、Planner 运行中，
+  尚无 Planner/Builder 通过或最终结果。运行候选仍为 `66dff3a2313d5ee35b2801cdf610d5afb2f6c233`
+  加未提交改动，1,254 个实现/测试/Skill/静态输入文件的指纹为
+  `sha256:54fa68454737c5e33936362e139041245b77b0c8169c3c85e4459ddd81b0c575`
+  （不含 docs、新 Case 和历史 runs）。运行期间冻结生产实现。
+  原 heartbeat `054-case` 更新返回已不存在、可能已被用户删除；未擅自重建，不声称自动监控仍生效。
+
+CASE-054 `paper-moon-054-cf19-local-0905/run-20260905064934-66984` 终态及后续补漏：
+
+- 本次在提交前以对应生产代码启动，随后累计改动提交/推送为
+  `5a1508ea896befee3345207c884bd87feb40f932`；不能称为提交后重新运行。
+  Planner Host replay 完成；Native Attempt 0 的 `generation-receipt.json` 为
+  `rejected / output-missing`、`outputs: []`、`cleanupOutcome: completed`。
+  最终 `productionOutcome: failed`、`publicationOutcome: not-published`，诊断
+  `WORLD_RECONSTRUCTION_NO_OUTPUT`；未进入 Native Check、Capture 或 Evaluation。
+- 代码核对确认 **CF-29 本地交付前失败证据缺口**：local adapter 在检查五个必需输出时
+  只要任意一个缺失就拒绝整批 promotion，随后删除隔离 workspace；上层仅保留
+  `output-missing`，未保存具体文件名、未交付源码或模型最后反馈。因此不能从现存收据
+  断言缺的是源码还是 advisory PNG，更不能断言是类型、overlap 或 CF-19 修复耗尽。
+  已被清理的原始输出不能靠本轮修复补造回来，原 Run 保持失败。
+- 用户授权继续修复后，local Native dispatch 显式声明 Host-owned
+  `attempts/<index>/generation-failure`，该参数进入既有 router payload Hash；失败时在
+  cleanup 前保存 `report.json`（request/task identity、逐个声明输出的状态/尺寸、
+  bounded/redacted 的 untrusted 最终反馈）及 `outputs/` 隔离快照。只读声明输出，
+  不复制 inputs/context，不跟随软链/多硬链，不覆盖已有 evidence；快照总上限 32 MiB，
+  超限只报告尺寸和省略原因。文件权限 0600、目录 0700。成功交付不创建失败报告；
+  缺失、空文件、unsafe 输出、超时或任务失败仍失败，没有第四 Source 或成功 fallback。
+- focused 证据：部分源码已生成但两张 advisory PNG 缺失的复现、正常 delivery、
+  rejected/timeout、输出安全/限额、反馈脱敏和旧证据不可覆盖共 10/10；
+  Native local/cloud dispatch 路由及 Hash 2/2；Generation 16/16；独立测试清单 9/9；
+  typecheck 通过。这证明诊断保留修复，不证明真实模型交付或最终还原效果已解决。
+- PR #202 在 `5a1508ea` 的 CI 停于 Studio：108/110，通过前置 typecheck；两个失败分别
+  仍期望旧 `worldkit brief validate` 文本和旧缺失输出路径，实际已改为 Planner
+  receipt/replay。已更新两条断言，focused 2/2 通过；不是全 CI 通过证据。
+- 按用户后续授权曾创建 heartbeat `054-case-main` 继续等待并条件合并；本次 Case 失败后
+  已暂停。未合入 main，未启动另一付费 Case；CI/批准审查和真实 Case 成功条件仍未闭合。
+
+CASE-054 再运行（用户随后明确授权“继续跑”，2026-09-05 15:20 CST）：
+
+- 新 Case `paper-moon-054-cf29-local-0905`，启动候选为干净且已推送的
+  `01e91783165e88d0297fb2080356147ebf653bf6`；原始 054 PNG Hash 与用户 prompt 不变，
+  从 Planner 开始走本地 `agent:world`，不覆盖旧 Case。父 PID `72004`，日志
+  `/private/tmp/worldkit-054-cf29-local-yKIs27/production.log`。
+- 此处仅为启动记录，尚无本次 Generation/Native/Capture/最终生产通过证据。
+  使用本轮 CF-29 failure-evidence 实现，不扩大同任务修复预算或更改普通成功标准。
+
+该 Run 后续终态（2026-09-05）：
+
+- Builder 在既定 timeout 前完成，Generation Receipt `completed`、三份 Source 与两张
+  advisory 对比 PNG 已交付，Host self-check `ok: true`，均无生成诊断；本次不是
+  `output-missing` 或 `task-timeout`。Native Check `passed`、diagnostics 空；Ground
+  `analysisOutcome/admissionOutcome: passed`、failureFacts 空；WorldPackage 已生成，
+  `host-checkpoints/generate.json` 与 `host-checkpoints/package.json` 已保存。
+- 随后正式 Capture 阶段失败，Run journal sequence 6 保留
+  `WORLD_RECONSTRUCTION_CAPTURE_FAILED`；最终 `productionOutcome: failed`、
+  `publicationOutcome: not-published`、`evaluationOutcome: not-run`、cleanup completed。
+  当前没有正式 capture/rejected-capture 产物。现存结果仅有总括 Capture 失败码，尚不足以
+  判断是启动、Host session、截图或发布子步骤；不要归咎于 timeout、几何或质量门禁。
+- advisory entry 左右图仍能看到规划目标与源码投影在构图、山体和宫殿比例上的差异；
+  红色方块是 SDK Subject 的 advisory 代理，并非最终人物。该图不是正式 Capture，
+  不构成完整效果对齐证据，也不新增普通生产质量否决标准。
+- 未合入 main、未重新付费生成。后续 Capture 定位应优先利用已保存 Package/checkpoints，
+  保留原 Run 失败事实；能否完成 Host-only 恢复仍需单独验证，不能提前称恢复成功。
+
+Capture 根因复现（2026-09-05）：同一 Package 单独调用 production Capture，在
+`hosted-session` 启动浏览器前稳定报 `WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY`。
+当时唯一 tracked diff 是主会话在 Case 启动后追加的本进展文档，生产实现未变；
+`sdk-owner-identities.ts` 检查整个 tracked tree，因此文档改动也触发 trusted-commit 拒绝。
+这不是生成超时、场景几何或浏览器卡死。不得删掉可信源码校验来放行；先提交授权文档，
+在干净候选上复用 Package。CF-29 还需保留该明确错误码，不能再次只报 Capture 总括失败。
+当时临时规避方式是运行期间不写 tracked 进展文档；下述用户授权的 CF-29 收窄修复替代
+这项临时限制，普通文档变化不应被当成 SDK 实现变化。
+按本次落盘时间估算：Planner 约 7m18s，Builder/交付约 29m04s，Native/Ground/Package
+约 2m29s，Capture request 到失败约 4.5s；Builder 正常交付而非 timeout，但未保留的
+细分模型活动不能事后编造为确定的思考、工具或自检耗时。
+
+清除 dirty-tree 后，同一未修改 Package 的独立 production Capture 已成功，全部清理 completed，
+证据 `/private/tmp/worldkit-cf29-capture-F2wWjE/capture`，Package root
+`sha256:802a6e2be3915164e5d67aa1456276f7c2a63c14afe698f313205793aeddf028`。
+这证明 Capture 本身可执行，不等同原 Run 已发布。
+第一次 Host-only 恢复又暴露 CF-31C 缺口：materializer 对原 Attempt 已存在的 Capture Request
+再次新建，报 `FORMAL_WORLD_CAPTURE_REQUEST_WRITE_INVALID`。现已在唯一 materializer 接入
+required `outputMode`：fresh 用 `create`，Host recovery 用 `verify-or-create`；重算全部冻结
+identity 后只复用字节完全相同的 canonical regular Request，不覆盖、不接受漂移。
+CF-29 Run allowlist 同步保留 SDK owner dirty/unavailable 原因，未放松 source-commit 校验。
+受影响 request/Run/production ports 112/112、typecheck、3C migration 通过；其中修复了该
+request fixture 尚未同步 CF-24 viewRequirements 的旧输入。下一步从干净提交恢复原 Run，
+不重新调用 Planner/Builder；恢复结果待真实执行，不预先勾选。
+
+Host-only 恢复终态（2026-09-05，干净 `dc643d556fa55c0a9f0a1032abbc7a9a83050743`）：
+
+- 同一 `paper-moon-054-cf29-local-0905/run-20260905072747-72050`，恢复输出在
+  `attempts/0/host-recoveries/2`；正式 Capture、Evaluation、发布和清理均已执行结束。
+  `productionOutcome: passed`、`publicationOutcome: published`、`cleanupOutcome: completed`，
+  第三人称入口验证 passed。Run receipt 落盘 `2026-09-05T08:18:30.683Z`；本次恢复约 2 分钟，
+  没有新的 Planner/Builder 调用，Attempt count 仍为 1，恢复锁已释放。
+- 原三份 Source、Generation Request/Dispatch/Receipt、Package integrity 和 Capture Request
+  的 SHA256 全部与恢复前一致；Package root 仍为上述 `802a6e2b…`，Capture Request
+  `5e8643c0…`。原失败 journal 保留，恢复与发布追加到 sequence 19–36；未覆盖失败事实。
+- 正式 Capture Receipt hash
+  `sha256:e42b990cc5efbb396d8be5d3b4d2125e715b5b1a87449cc8625de6834ff9c464`；
+  Run Receipt hash `sha256:b05f11eac3cb3ca2cc106e898e98e9ce33b274cde1670f99870acdd7aea36bd4`。
+  正式产物位于 Case 的 `final/`，Opening 为 `final/capture/opening.png`。
+- **普通生产通过不等于效果/严格验收通过**：Evaluation failed，5 个 opening-composition
+  和 7 个 semantic-silhouette drift；其余五维在该 Evaluation 中 passed，并非完整 NBR-70 证明。
+  strict diagnostic failed，代码 `NBR70_BLOCKER_IDENTITY_MISMATCH`、`NBR70_EVALUATION_NOT_PASSED`，
+  strict cleanup not-started。这些不反转普通生产成功，也不触发隐式新生成。
+  构图/语义组比例偏差继续归现有 CF-24 效果证据；strict identity 原因待 CF-13/NBR-70
+  独立核查，不在本次恢复中伪装消除，不新增普通生产门禁。
+- 本次解决的是脏工作树 Capture 阻断、CF-31C 已有 Request 恢复缺口和 CF-29 错误码丢失；
+  不是“全部旧分支效果已对齐”。112/112 focused、typecheck、3C migration 已通过；
+  尚未合 main，既有 workspace-boundaries CI 失败和独立 review 要求仍需解决。
+
+CF-29 documentary dirty-tree 误阻断修正（2026-09-05，用户授权，main-agent-only）：
+
+- 源码对照确认：旧 `9e35ab53` 场景 Capture 只解析 source commit，不做全仓干净检查；
+  类似检查属于 Subject Preset 晋升而非 Capture。当前普通生产不应因无关进度文档失败。
+- SDK owner 原 Git 检查收窄排除唯一进度文档和 specs/plans/reviews 目录下的 Markdown；
+  不全局忽略 Markdown，不排除可执行文件、SDK、配置、资源、活源 Skill 或冻结 Skill。
+  trusted commit 和实现 Hash 算法不变；无新增相似度门禁、重生成或隐式重试。
+- 新增真实 Git fixture：文档 unstaged/staged 修改身份不变；源码与文档混合修改、删除、
+  source→docs rename、Skill/冻结副本/lockfile 修改仍拒绝。原 RED 精确复现文档误拒绝；
+  修复后 owner/Host transport 44/44 通过。联动补齐已有 transport fixture 遗漏的
+  `semanticViewObservationSet`，没有放宽实际 payload parser。
+- 待在已提交实现上保留授权进度文档 diff，再执行同一 054 Package 的正式生产 Capture；
+  该复验不重新购买 Planner/Builder，不覆盖旧 Run/最终发布结果。CI/review/合并分别举证。
+  实测通过：在 `70755665` 上特意保留本进度文档修改，2026-09-05T08:25:30Z–08:27:18Z
+  正式 production Capture completed/published，Browser/Vite cleanup 均 completed。
+  证据 `/private/tmp/worldkit-054-doc-diff-qYa4jr/capture`；Capture Receipt
+  `sha256:927838c85edf67fe13b256df2814aaa7a6c21c82e68dbcc89823e2051685b7f0`，
+  原 Package root `802a6e2b…` 和 Request `5e8643c0…` 未变。
+  这是原场景受影响 Capture 边界的真实重跑，不冒充新 Planner/Builder 全链 Case。
+  本次 44/44、typecheck、3C migration 均通过；PR #202 CI 的 8 项 workspace boundary
+  错误仍阻止合并，不能因这个 Capture 成功而绕过。
+- 七维 Evaluation、构图/语义轮廓阈值和 NBR strict diagnostic 是新链路诊断，并非旧分支原有。
+  旧 Builder 对比图查看与最多三轮同任务结构/视觉修复仍属于必须对齐的反馈链；
+  新评分不反转普通成功不等于允许忽略视觉偏差，更不等于此次效果已与旧分支等价。
+
+CF-19 看图反馈与完成语义再对齐（2026-09-05，用户要求保持旧流程/门禁）：
+
+- 对照 `9e35ab53` 实际 launcher/Skill：当前已冻结 054 instruction 只简述自检和看图，
+  没有明确完整 Skill 路径及可执行循环；Native Skill 还额外要求 `judged aligned`。
+  两者是确认的文本差异，不据此断言它们解释全部已观察视觉差异。
+- 当前 case preparation 已把真实 `inputs/builder-skill/SKILL.md`、必读 reference、自检/渲染
+  命令、左右图检查重点、最大错位优先、修复后重新检查最新两图放进实际任务指令。
+  活源与冻结 Skill 删除额外“必须判定完全对齐才能交付”的条件，恢复结构检查通过 +
+  最新两图已实际审阅；视觉差异在原共享预算内修复，预算耗尽则用原最终回复披露，
+  不因剩余相似度差异扣住其他有效输出。仍恰好五个输出、最多三轮共享预算、单个任务，
+  不增加 Reviewer、外部修复、报告文件或评分门禁。真实新生成效果待后续 Case。
+- CI 8 项模块边界错误已按原责任修复，workspace-boundaries 0 debt 通过；未关闭断言。
+  Startup reporter 从 app 私有文件迁入 runtime-babylon 唯一导出；原文件删除。
+  Profile shape helpers 通过 pure public subpath 使用，重建 renderer 后 bundle 字节未变。
+  合成 Browser fixture 明确为 test-support；原 cloud-ridge JSON 经 verifier 资产入口读取，
+  不再跨 app 导入私有源码。启动 transport/watchdog 41/41、typecheck 通过；真实 Browser
+  startup progress/stall/error 三场景通过；2000 Block 合成 Browser benchmark 完成，
+  仅证这些工程接缝，不冒充正式 Case、完整预算性能或效果验收。
+
+CF-19 新 Case / 文档一致性检查点（2026-09-05，`e271a35c`）：
+
+- CF-29 文档误阻断修复、工程边界修复、CF-19 指令/完成语义修复已分别提交并推送为
+  `70755665`、`ee09d376`、`e271a35c`。preparation + Builder Skill 两文件 66/66 通过，
+  包含 Skill drift 检查，活源/冻结 Skill 字节一致；这是 focused 证据，不是新 Case 终态。
+- 新本地 Case `paper-moon-054-cf19-feedback-0905` 从干净 `e271a35c` 启动，使用同一
+  `054_paper_moon_palace.png` 原图，完整重新执行 Planner → Builder → 生产交付链，
+  不复用上一轮生成 Source。Planner task `planner-20260905-083424-82873`；截至本检查点
+  仍在 Planner 阶段，尚无正式 Run 终态，不能提前记 passed、效果对齐或合并。
+- exact-head CI run `33955618615` 已失败：workspace boundary 已通过（0 debt），
+  后续 test census 报 `UNCLASSIFIED: scripts/agents/agent-planner-palette-authoring.test.ts`。
+  这是测试清单登记缺口，不是当前 Case 的生成失败；尚待修复、CI 通过及独立审查，
+  PR #202 未合并。运行期间不修改生产实现以免污染 Capture 输入。
+- 针对本次实际变更复核设计与计划，发现 2026-09-02 Native-default 规格及计划仍保留
+  已被取代的额外 Mapper task / 无条件构图拒绝。现同步为 Host baseline 派生、普通生产
+  保留质量诊断、显式 strict-acceptance + required-for-publication 才以新质量 gate 阻断；
+  同步已删除 Python entry validator 的当前 TypeScript 路径。2026-09-04 对齐规格明确
+  `234c1711` 只是历史检查点，避免把旧状态误认成实时状态。
+- 文档校正不增加门禁、任务、重试或修复循环；历史失败证据保留，不改写成通过。
+  本次文档修改只做 diff/link/代码条款核对，不重跑整仓或完整 E2E。
+
+该新 Case 跟进（2026-09-05 16:53 CST）：Planner 已交付，Host 自检 passed、无诊断；
+Run `run-20260905084340-82854` 已进入 Attempt 0 `initial-generating`，本地 Builder
+约运行 9 分钟，尚无源码/比较图及终态。不能由进程存活推断内部正常推进或已通过。
+CF-29 补充待办：`scripts/reconstruction/codex-task-process-port.ts` 的 `runProcess`
+持续消费 stdout/stderr，但只在 child close 后返回内存字符串，不向总日志发布实时阶段。
+因此总日志静默不是 stderr 管道未消费造成的已证实卡死，也不是无模型活动的证据。
+后续需提供有界、脱敏、绑定 requestId 的可信进度可见性，避免透传原始 provider/模型日志；
+保留现有 timeout、单次提交和成功标准，不增加重试。运行期间仅记录，不修改执行输入。
+
+16:58 CST 跟进纠正：直接检查该 Run 隔离 Builder workspace，`scene.ts`（31,896 bytes）
+及两份声明已于 16:55 落盘，entry/top-down 两张 advisory comparison PNG 也已存在。
+此前 `rg --files --hidden` 仍遵循 ignore，漏掉隔离目录，不能把“搜索无结果”写成“无源码”；
+监控改用精确 workspace 的直接检查或 `--no-ignore`，避免误报停滞。
+这些仍是任务内中间产物，不是 Host 自检、Native admission 或正式 Capture 通过证据。
+
+该新 Case 最终交付（2026-09-05，生产实现 `e271a35c`，运行期间只有上述文档 diff）：
+
+- `paper-moon-054-cf19-feedback-0905/run-20260905084340-82854` 已退出 0；完整新 Planner、
+  Builder、Host 自检、Native Check、Ground Analysis、WorldPackage、正式四视图 Capture、
+  Evaluation 与发布结束。`productionOutcome: passed`、`publicationOutcome: published`、
+  `cleanupOutcome: completed`，Attempt count 1，第三人称入口验证 passed、无诊断。
+- Package root `sha256:3d12e87a6cbde8244480385d386a0915b2ccd880e0b3f881d516c87fd5b4c8d1`；
+  Capture Receipt `sha256:16f4338d361d665797e99f71546a792aefc32db6165cc9529d477bb22ad0e33a`；
+  Run Receipt `sha256:d3aacfb3585e3983ba266421adfb682bc71a54f8556e0407cafbeda758c3c480`。
+  正式发布目录 `artifacts/scenes/paper-moon-054-cf19-feedback-0905/final/`，
+  开场图 `final/capture/opening.png`。Builder 约 19 分钟，无 timeout；没有 Host 重生成。
+- Evaluation 仍 failed，包含 opening-composition / semantic-silhouette drift；strict diagnostic
+  仍为 `NBR70_BLOCKER_IDENTITY_MISMATCH`、`NBR70_EVALUATION_NOT_PASSED`，cleanup not-started。
+  Run Receipt 的 evaluation outcome 仍 failed，不改写历史字节；普通生产结果按已冻结政策
+  独立为 passed。不能宣称效果等价、NBR-70/90 或全部 CF 已完成。
+- 用户随后授权合并 #202。合并前修复 CI census：一次性发现并登记 9 个漏列测试到 contract
+  lane，不删除测试或修改 gate；census 通过（456 文件：413 contract / 43 resource-heavy）。
+  10 文件 focused 首轮 71/72，失败定位为 Planner execution fixture 的 macOS `/var` 别名与
+  canonical root 不一致；fixture 改用 `realpath(mkdtemp(...))`，生产路径检查不变。
+  修正后仅重跑受影响 Planner execution 文件，14/14 通过；其余九文件首轮已通过，
+  不重复跑整仓。推送后 CI 和必需独立批准仍待取得；此处不提前声称合并完成。
+
+CASE-054 `paper-moon-054-r1-probe-0905/run-20260905032218-28080` 终态更新：
+
+- Planner 经三轮修复通过；Generation receipt `completed`、Host Builder self-check `ok: true`，
+  随后 Native Check rejected，production failed / not-published，cleanup completed；无 Capture/Evaluation。
+  这不是上述 CF-27/02 修复后的新 Case。
+- **真正阻断是 4,856 个 `WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED`**：生成的 `createPlainBlock`
+  未传 `visualGroupId`，而 Profile 对 `structure/hazard/water-like-visual/background-mass` 要求组。
+  `ROUTE_DISCONNECTED`（1）和 `STRUCTURAL_SUPPORT_MISSING`（305）在 Profile 中都是 warning，
+  不能因为 rejection 的聚合消息包含它们就声称这两项单独导致此次失败或把它们改为硬门禁。
+- 归入 **CF-22 的 Block 实例 → visualGroup 绑定缺口**，联动 **CF-19 的同任务自检覆盖**：
+  已实现的 Case/manifest/palette 行级 bijection 并未覆盖每个实际创建的 Block；此次 portable self-check
+  通过不能证明 Native admission。它是新确认的具体漏检证据，不伪称此前逐条件回归已经覆盖。
+  非 target 背景/支撑如何保持独立语义与可分组空间还涉及 CF-21，必须核对旧分支行为后确定修法；
+  不允许把全部背景偷偷塞入宫殿等身份组来消除错误。以下进一步根因核对与修复取代本段初步归因。
+  证据位于该 Attempt 的 `source/scene.ts`、
+  `builder-self-check.host.json`、`native-check-result.json`、`generation-receipt.json`。
+
+CF-22/19 此次阻断的修复闭包（2026-09-05，未提交工作树）：
+
+- 旧 `9e35ab53:packages/block-world/src/check.ts:706-718` 仅要求 landmark identity preset 分组，
+  普通 functional preset 可以不分组。Native 却将普通结构/背景/水/危险角色全部强制分组，
+  与 Case 禁止新增身份组及任务 renderer 接受普通非 target Block 的规则冲突。此次主要根因是
+  **Host 额外加严**，不是应让 Builder 将所有背景绑进身份目标，也不能据此新增一个更严的自检。
+- 删除 Profile 的 role-wide 分组 veto 及废弃诊断码；保留 exact Case/manifest/实际组 bijection、
+  未声明/空目标组拒绝、Palette、geometry、显式 Collider 和 Native authority 检查。Skill 与冻结
+  reference 同步解释普通非 target 无组语义，冻结规格追加旧基线依据。
+- 新正向 RED 原先 rejected，修后 passed；Profile/authoring binding 两文件 50/50；Builder Skill
+  48/48，含四种普通无组角色与缺失/未声明实际组负例；typecheck 通过。CF-19 的现有 renderer
+  本来已允许普通无组块，本次通过对拍回归闭合这个具体分歧，没有引入 Host 执行未准入 source 的旁路。
+- 对真实 054 **同字节** `scene.ts` / authoring / resources / bootstrap，在独立临时目录
+  `/private/tmp/worldkit-cf22-check-UWQi7r` 运行 `pnpm worldkit native check <directory> --json`，
+  exit 0，`outcome: passed`、`diagnostics: []`。旧 source SHA-256
+  `f5b68ee9e963db7ca973c78cded8ab881052c9ad48750ac756b357ba313d414a` 未变；未修改原 Run 任何产物。
+  这是当前检查器对旧生成结果的 Native Check 复验，不是恢复 Run，不是新模型 Case，不含 Ground/
+  Package/Capture/Evaluation。原 Run 仍为 failed；完整效果与其余 CF 未完成项不被该复验关闭。
+
+用户已授权侧会话修改 `docs/reviews/full-dimension-review-protocol.md`；主会话只复核其 diff 与直接
+冻结合同，未发现冲突，`git diff --check -- <file>` 与 4 个链接检查 exit 0，保留并纳入后续正常提交。
+未因该文档审查运行整仓测试或 E2E，未覆盖侧会话内容。
+
+2026-09-05 用户将当前执行范围明确扩大为完成全部未完成的 `BWMI-CF`，同时保证流程和效果，
+不是只完成审计或记录。执行以该表为唯一状态 authority，旧比较文档只是证据。
+用户随后明确优先“与旧分支不一致且补齐后能直接、较快提升生成效果”，不再按恢复/重试优先施工。
+下一批按 [CASE-054 / R1 最小重跑计划](superpowers/plans/2026-09-04-block-world-production-effect-parity-implementation.md#first-effect-rerun-case-054--r1)
+推进：`CF-20/R1 表示与可用预算 → CF-11/21/R1 完整地理与显著要素 → CF-12/19/R1 构图与有效反馈`
+三个有界切片，focused 闭合后冻结候选并跑一次本地 054 普通 Scene；不等待剩余 21 个主任务全部完成。
+这些切片当前是计划、尚未实现；不新增 CF 主任务、不勾选 parent CF 完成，也不预先承诺新 Case 的效果。
+原已修输入/Palette/反馈/业务成功标准及 CF-28/29/30/32 保留，不重复计作本批新完成量。
+R1 后以 `CF-16 + BWMI-PROD-10` 的一套 base styled opening/tri-views 检查纸雕等最终视觉，
+不能把原始 Block 图与旧 styled 成品跨阶段比较。CF-26B/31C 先暂停，严格 NBR、完整多运动模式、
+通用 per-view/scene-feature 评分和 Episode/media 后续继续，仍在本表保留。
+
+本轮重新核实：`66dff3a2` 本地 054 的 Case 包含全部非主体 `visual-target-2..5`，所以 CF-24
+opening 缺 mask 删除身份虽是通用缺口，却不是该次稀疏输出的已知原因；不无条件阻塞 R1。
+旧 Builder 明确接受普通步行人物使用 registered G Bot，把服装外观交给视觉层；不将“没有披风方块”
+本身列为 R1 的迁移缺陷。2k Budget 压力、完整世界意图与输出落差、固定 Camera 是优先核对/修复领域，
+仍须按计划给出各自证据；大红色 advisory cuboid 不是 Native 生成的受控人物。
+上述优先级讨论阶段仅更新计划；随后 2026-09-05 开始下列预算/反馈实现，不能继续把当前批次
+描述成 docs-only。CF 主任务数量不变，CF-20/11/21/12 的完整合同仍未完成。
+
+2026-09-05 快速效果 probe（`66dff3a2` 基础上的未提交工作树，尚未合并）：
+
+- `CF-20/R1` 子集：新增可复现 `pnpm benchmark:native-block-budget`，2k/8k 合成 Native
+  Package 在真实 Babylon Runtime、Host chunk batching、Havok、1280×720 软件 Chromium 上运行。
+  8k 为 6,400 floor + 1,600 landmark Blocks、3 Colliders、14,721 collision vertices /
+  28,480 triangles，0 unsupported Blocks；Runtime 初始化约 12.7s，90 tick 后人物仍接地；
+  后 60 tick 的 physics p50/p95 约 2.0/2.3ms，render + GPU finish 22.8/24.0ms。
+  2k 对照为 2.2/2.5ms 与 7.5/8.5ms。观察到的 JS heap 约 323MB/1.107GB，包含同页
+  Package fixture 准备，不是生产峰值 RSS 或硬件 GPU 帧率承诺。16k 页崩溃，未启用。
+  记录在 `output/playwright/native-block-budget-1788576224777/2000.json` 与
+  `output/playwright/native-block-budget-1788576365020/{8000.json,16000-failed.json}`；
+  8k opening 已人工查看，确有场景与真实 G Bot。该合成 fixture 不是正式 Source/Generation
+  Receipt/Case，也不证明 ground connectivity、全部视图或任意 8k Collider 布局均可承载。
+- 当前生产预算从未校准 2k 改为测量后的 8k 候选；同一 owner 提供 Native Planner 冻结
+  `context/native-block-production-budget.json` 与 Generation Request。Canonical 不注入该文件。
+  Native 已接受计划重用必须核对当前预算内容；不同预算的旧计划不能悄悄继续。
+  8k 合成场景有 8,492 nodes，故 interactive/formal Host 的独立 4,096 node / 1GB caps
+  同步改为 16,384 / 2GB；Collider 256、vertices 65,536、triangles 131,072、输出 4MB、
+  1,800s Builder timeout 及 physics/protocol 其余限制不变。未复制旧 102,400 cap。
+- `CF-11/21` 的意图/反馈子集：Planner 按实际可表示预算规划；Builder Skill、冻结副本和
+  Case instruction 增加完整 geography/formation 与预算清单，先保留主要体量、路线走向和起伏、
+  支撑厚度、侧后方区域，再做装饰；两张同任务对照按位置/朝向/尺度/遮挡检查，不以 target
+  存在替代对齐。未增加额外模型任务或普通发布 veto，也没有实现新的 per-view/endpoint 合同。
+- 按用户后续要求尽快本地跑 Case，这次先跑 **budget/feedback interim probe**，不是三组已齐的
+  R1 验收。`CF-12` Host Camera 构图选择尚未实现，仍使用现有相机；它作为已知效果干扰项
+  保留，不能把本轮说成与旧分支全部参数一致。完整 R1 与 styled 第二检查点仍按计划推进。
+- 已得本批 focused 证据：Planner receipt/budget、Host execution budget、Generation Request、
+  Case preparation 4 文件 63/63；Native Builder/Planner Skill、Native 入口、staged-flow 与
+  workload accounting 5 文件 67/67（其中 Native Skill 42/42），typecheck 通过，diff check 干净。
+  不是 exact-SHA Cloud/full-gate、整个 CF 或 WRC/NBR 正式验收。
+- 11:03 CST 已启动新的 `paper-moon-054-r1-probe-0905`，本地 formal `gpt-5.6-sol/xhigh`，
+  Planner Task `planner-20260905-030317-28093`，没有使用 Cloud 或子智能体。输入原图 Hash
+  `080d951445bae3a8584363f0be5ef9194b5eff88e7b64da40d2a81f6a923972e`。
+  `artifacts/scenes/paper-moon-054-r1-probe-0905.candidate.json` 记录 HEAD 与 55 个已改/新增
+  代码及冻结 Skill 文件的逐文件 Hash；跑 Case 后冻结这些输入，不将 docs-only 进度更新伪装成
+  代码变更。当前仅确认 Planner 已启动，不能提前记为生成、Capture 或发布成功。
+
+架构、跨域合同和最终集成均由主智能体处理；未获新的并行授权，
+不把 case 子智能体的旧许可扩张为本批并行开发。每项区分 code/focused、真实视觉与最终验收，
+CF-03 先复现再决定是否有 Runtime bug，不能为勾选任务而制造修复。
+
+非架构差异不得再标为“有意 clean break”后消失：多 movement mode 的用户语义与完整世界面积/
+四倍 reference-visible coverage 由 CF-11/12 保留并在当前 Owner 实现；Native 模块不接管 Subject、
+Camera、Physics。CF-16 与 WRC-QP-4 还必须闭合 non-Subject semantic-front 到 Front/Right/Back
+实际 Capture/后续视觉的方向传递，单靠 Skill prose 不算实现。
+
+新增本地失败证据：`paper-moon-palace-054-local-alignment-0905/runs/run-20260904194606-56806`
+确实运行于 `66dff3a2`，Planner 通过，Builder 返回后 Host self-check 失败，尚未进入 Native Check、
+Package/Capture/Evaluation/Final。冻结 checker 把 Case raw Brief Hash
+`4906d4e79c17a1ded1445ce349ea1bb4ef58c437bf0aceeedaf5dbed66820078`
+直接与 Palette semantic Hash `34b97df765e0f5cedebe97f8998ff65d2726f0cf137bd69c3b80ca45cd1b9be4`
+比较，因此即使输出正确也会被拒绝；CF-28 修这个确定性缺陷。该次 Source 已被旧清理逻辑删除，
+不能反推 Builder 实际用了几轮修复。留下的两张稀疏 advisory 对照图不是 Runtime Capture；
+其中红色长方体是 Host Subject bounds proxy，不能据此归罪于 Builder 的人物生成。2k budget
+与稀疏效果有关联风险，但该次没有 source/block-count 证据，不能写成已证明的唯一根因。
+旧分支也会在 Host replay 失败时终止；“旧分支自动追加三轮外部修复”不是事实。以上修复不会
+把该失败 Run 改写成 passed，也不会冒充在当前工作树上重跑了真实 Case。
+
+2026-09-05 候选检查点为
+`codex/block-world-effect-alignment@58e7ebd5`，尚未合入 `main`。该候选已实现：`BWMI-CF-23`
+Scene-scope outcome/atomic publication；`BWMI-CF-10` 的旧阈值与 entry-first 因果链；`BWMI-CF-19`
+同任务 entry/top 对照与 Host decoded-RGBA 重放；`BWMI-CF-22` 对已有 Case visual group 的精确
+palette join；以及 `BWMI-CF-09` 的一次读取、私有快照和 Planner/Case 同字节部分。Native Check 中
+全局 route-colored component 断连只写确定性 warning；具体 Case 要求的路线连通仍由 Ground/Traversal
+阻断，因此没有把非路线 Case 提升为旧分支没有的失败。
+
+该候选没有关闭 `BWMI-CF-11/12/14/15/20/21/24/25/26/27`，也没有在修复后的精确 SHA 上跑完
+真实 CASE-054、完整 Browser、整仓或 exact-SHA Cloud。聚焦证据为 Publisher `27/27`、Studio `108/108`、CLI `49/49`、
+Planner/Case/Generation/Native runner `70/70`、input freeze `11/11`、route/profile `53/53`、
+palette/admission `46/46`、production ports `22/22`、Native Builder Skill `35/35`，以及最终
+`pnpm typecheck`、agent self-check、diff check 通过。哈希修复的新增证据为 Case preparation/runner/
+identity admission `14/14`、Package 主路径 `1/1`，以及 Package 全文件一次 `24/25` 后将唯一旧夹具
+修正为在 visual identity 边界验证额外未声明组并单独 `1/1`；没有把这组合并写成一次全文件绿色运行。
+这些证据不替代 NBR-20/70/90 或 WRC-SR-1/2。
+
+同日真实本地 Case `paper-moon-palace-054-alignment-0905` 在候选前一 SHA `88c7844c` 上运行。Planner
+以 `gpt-5.6-sol/xhigh` 完成 Scene Brief、entry 和 World Plan；entry 通过，但 World Plan 主体固定色
+`#E85D5D` 连续出现 `0/79 -> 3/79 -> 4/79 -> 1/79`，最终在最后一个修复周期的同目标颜色补偿后
+通过。Host 随后在 `plan-ready` 以 `WORLDKIT_VISUAL_IDENTITY_PALETTE_INVALID` 终止，尚未进入 Native
+Builder。根因是 Palette 沿用旧链的 Scene Brief 规范化语义 Hash，而新增 Native Case/Receipt 闭包
+使用原始 Markdown 字节 Hash，却误把两者当成同一值。`58e7ebd5` 已按各自 Owner 分离用途，并在
+最终 Package identity admission 从冻结 Brief 重新派生语义 Hash；未删除 Palette、Receipt 或路径
+闭包，也未放宽任何效果阈值。失败运行清理了未发布 staged Case，因此没有 Package/Capture/Final
+产物可继承；必须在 `58e7ebd5` 或其后续精确 SHA 重新运行。
+
+`BWMI-CF-08` 已由 current source 直接证实：`resolveSceneAssets()` 产出 `{visualTargetId}`，而 prompt、
+API URL 和 supplementary tri-view 消费者仍读取 `.id`，会生成 `undefined` 主体身份并丢失附加三视图。
+它是 current 回归，不依赖是否恢复旧 Episode。`BWMI-CF-03` 则只是高价值历史故障模型，在 current
+Babylon/Havok 上复现前不得写成已确认 bug，也不得先移植修复。
+
+`BWMI-CF-10..22` 来自最终效果反向审计及同一 current `main@20fe0fef` 的本地真实
+`paper-moon-palace-054-report-only-0904/run-20260904134439-41905`。该 Run 的 Attempt 0 从本地
+Planner/Builder 到 Native Check、Ground、Package、Capture 和七维 Evaluation 全部通过，但 Opening 只剩
+固定 G Bot、直线白地、少量山墙和简化宫殿；world top/side 也显示大部分 Planner 完整世界未实现。
+随后通用 production final verifier 因 Case 有 `collider-visual-target-2-solid` blocker、Formal Intent 却没有
+任何 `block-plane` criterion 而以 `NBR70_BLOCKER_IDENTITY_MISMATCH` 关闭，未发布 Final。这个结果同时证明：
+七维 `passed` 不能替代完整世界/主体/多视角视觉还原，且通用 landmark Case 当前无法闭合最终 blocker
+identity。它不是 fresh Browser playability 失败；该 replay 明确为 skipped。
+
+静态量测进一步确认：Host 对缺失 landmark 色块会写入通用 bbox/coverage；Planner checker 只校验 PNG 可
+解码与红色主体居中；expected coverage 来自身份色真实像素，而 observed coverage 来自完整 visual-group
+world AABB 八角投影矩形，且只要投影在视口内就把 target 写成 present，不读真实遮挡像素。当前 committed
+strict Cloud Temple Case 的 `referenceInputs`/`inputs/` 又只有 `reference-0.png`，没有 current Skill 强制读取的
+两张具名 Planner 图。CASE-054 的 source 实际使用 `1974/2000` Blocks；Planner palace 色为 `#F28E2B`，
+Builder authoring 却写成 `#F28A2E` 而仍全链通过。非 target 的桥、瀑布、侧塔、庭院和山体也没有逐项
+presence/placement closure。上述事实分别由 `BWMI-CF-10/14/18/19/20/21/22` 承接，不能靠放宽阈值、
+伪造 mask、盲增 Block 上限或复用旧证据解决。
+
+候选 `58e7ebd5` 已关闭上述旧色 `#F28A2E` 的循环自洽路径，并把 Planner/Builder 反馈拓扑恢复到旧
+硬门禁语义；它没有重跑该真实 Case，因此不得把历史 Opening、Package 或 outer result 重新标成候选
+证据。特别是 opening 中缺失/不可靠的非主体目标目前仍可能没有 Case visual row，随后又受精确
+Case/manifest 双射约束；这不是靠把所有 entry target 设为硬门禁解决的问题，而是 `BWMI-CF-24`
+必须提供的 per-view evidence disposition。
+
+##### 白膜之后的生产链工作图
+
+这些任务是 current architecture 的后续设计/实现台账，不计入 WRC-1 的 33 个工作包，不提高 WRC、
+NBR、BNA、P0.2 或 P0.4 完成度。它们只能消费 verified Package/Formal Capture，不得写回 Authoring、
+Runtime、Physics、Action、Camera、Event 或 Gameplay truth。
+
+| ID | Goal and independently verifiable deliverable | depends_on | blocks | Exclusive owner / stable output | Required evidence | Mode |
+|---|---|---|---|---|---|---|
+| `BWMI-PROD-00` | 冻结 source-neutral post-Capture production Profile：condition bundle、identity/provenance、redaction、retry/resume、cost/deadline、no-writeback、唯一有序 reference-role table 和 Skill/Reviewer 边界；Profile 必须显式选择 `reference-faithful reconstruction` 或 `creative reinterpretation`，冻结原始用户图在各模式中的角色及是否必须保留一个 faithful baseline；只有 `productionOutcome: passed` 才进入后续视觉/视频生产，strict diagnostic failure 只告警且不撤销该资格；人工点击只是成本/UX 授权而非质量通过证据 | BWMI-CF-23, BNA-7, P0.2 remaining identity/Resume | `BWMI-PROD-10..60` | 新 presentation contracts only；production-passed Package/Capture → immutable condition bundle | closed parser、role/order/hash parity、模式/faithful-baseline、tamper/stale/redaction、production-vs-strict 状态混淆、owner threat model、current providers/cost/licence decision | main-agent-only |
+| `BWMI-PROD-10` | 恢复 current-owner base styled opening/tri-view Visual Reconstructor：沿用旧链同一任务内的 visual self-check 与 Host file/hash/role closure，opening 先通过再作为 tri-view appearance anchor；若增加独立语义 Reviewer，其 diagnosis 只进入 strict diagnostic，不能覆盖普通生产成功或成为唯一 repair authority | `BWMI-PROD-00`, WRC-SR-1, BWMI-CF-16 | `BWMI-PROD-30` | post-Capture visual pipeline/Skills；same-task self-check、accepted-opening receipt、semantic-front/panel direction、历史等价 Host closure；不产生 Package/Runtime truth | complete-target/semantic-front、near/mid/far movement space、identity-bound anchors、Front/Right/Back、最多轮数、stale input、单图 repair immutability、可选 independent diagnostic 和 real visual set | sequential |
+| `BWMI-PROD-20` | 设计并实现 current Playthrough Planner、六个安全起点、六段确定性 whitebox capture、机械健康、执行后画面覆盖准入和失败恢复 | `BWMI-PROD-00`, NBR-70, P0.2 Capture/Replay | `BWMI-PROD-30`, `BWMI-PROD-60` | Simulation Take/Control Capture owner；six immutable segment bundles + per-frame Camera telemetry/coverage receipt | 60Hz→24fps、route/waypoint、immobility/support/drop/stall、distinct zone/landmark/start/destination coverage、主体占屏/结束构图/Camera motion、reset isolation、six complete receipts | sequential, main-agent-only for Browser evidence |
+| `BWMI-PROD-30` | 生成 exactly-N style variants（N 与 retry/concurrency 由当前 Profile 冻结），逐 variant 独立 Visual Reconstructor/Reviewer，并做集合级 diversity/confusability review；每个 variant 先冻结 immutable Segment-00 appearance anchor，再分别以 Segment-01..05 白膜首帧为空间权威闭合其余五张 styled frame 与共享 tri-view | `BWMI-PROD-10`, `BWMI-PROD-20` | `BWMI-PROD-40` | Style Director + per-variant visual/review Skills；共享白膜身份、独立 appearance identity；`N × 6` segment-frame set + shared target tri-view；pass ledger 细到单张 frame/target | failed image-only retry、同 variant 其余 pass Hash 与其他 variants 均 immutable、显式 cross-image conflict 才可撤销 pass、六段 frame/tri-view closure、direction/scale/baseline、diversity review 与 resume | sequential orchestration, parallel-safe fan-out |
+| `BWMI-PROD-40` | 实现 provider-neutral timed visual events、Video Adapter、Seedance-like segment rendering、raw admission/conformance 和 durable provider journal；Event 必须绑定 executed marker、真实可见 segment 与已通过视觉 review，并在全 Episode 做事件去重/强度/范围 Profile；冻结版本化视频 prompt 语义：reference precedence、拍摄侧、裁切/遮挡、visible-target whitelist、conditional tri-view、运动介质接触、Event continuity、no music/speech/new entities | `BWMI-PROD-20`, `BWMI-PROD-30`, P0.4 Adapter design, BWMI-CF-17 | `BWMI-PROD-45`, `BWMI-PROD-60` | Video Adapter/provider journal；统一 ordered reference roles + prompt template version/hash + input identity + idempotency → immutable raw/final media receipt | pre-POST journal、ambiguous/lost response reconcile、集合级事件重复/冲突、目标可见性/动作独立/no-event baseline、stale raw/final invalidation、terminal attempt cap、raw duration/aspect/progress/audio、exact final frames/audio/size/hash and no duplicate paid Job | sequential per segment, bounded parallel fan-out |
+| `BWMI-PROD-45` | 为每个 `segment × variant` 增加独立 Video **诊断** Reviewer：对白膜视频、逐帧 Camera telemetry、accepted styled refs、Event Plan、Prompt 与成片做语义 verdict，并输出 repair brief；因旧链没有该阻断门，结果不覆盖 `productionOutcome`，只供显式严格验收或后续人工重做选择 | `BWMI-PROD-40` | —（advisory/strict diagnostic only） | independent review Skill/receipt；不拥有 Runtime/Event truth 或旧标准最终成功 | 拍摄侧/裁切/遮挡/透视、身份/材质、自然接触/滑步/穿模、事件时序、幻生目标、音乐/人声；默认只记录失败，不自动重跑或改判；显式 strict workflow 可只重跑失败 media，passing media Hash immutable | sequential per media, bounded parallel review |
+| `BWMI-PROD-50` | 将同一 current Scene/NBR pipeline effect-preservingly封装为 digest-pinned Cloud Execution，S3 为 durable artifact authority，Studio 只投影状态；所有对象先写 content-addressed prefix，完整校验后只原子切换一个 release pointer | `BWMI-PROD-00`, NBR-90, PHO-7 | `BWMI-PROD-60` | cloud orchestration/transport + immutable release manifest only；不改 Agent prompt/Skill/Host gates | request idempotency、hash-verified hydration、逐对象 size/hash/content-type/decode、partial upload、pointer race/rollback、worker loss/cancel/retry/cleanup、one exact-SHA real Case 与 no-local-durable-media census | sequential |
+| `BWMI-PROD-60` | 建立 durable `prepare -> GPU capture -> render` Episode DAG、queue/Batch manifest、closed-producer tail、lease/heartbeat/cancel/retry、per-task receipt、provider journal 和 CPU-GPU-CPU resume；`BWMI-PROD-45` Reviewer 可旁路消费已完成媒体，但不是生产 DAG 的阻断 Stage | `BWMI-PROD-20`, `BWMI-PROD-40`, `BWMI-PROD-50` | `BWMI-PROD-90` | cloud production control plane and S3 Run Index；Worker fs disposable | open 99/no launch、threshold launch、stable closed tail、Pod loss、partial failure isolation、stage/media-only retry、lost provider response、Studio restart/reconcile | sequential, main-agent-only for cloud canary |
+| `BWMI-PROD-90` | 在冻结旧标准 Profile 上完成 local contract/fault gates、exact-SHA cloud canary、六段/多风格 media closure、独立深审和 release/canary disposition；strict diagnostics 与人工视觉意见单列，不能把旧标准已成功的 Case 改判失败 | `BWMI-CF-23`, `BWMI-PROD-10/20/30/40/50/60`, PHO-8 | — | release evidence only | exact old-stage success matrix、exact SHA/image digest、全对象 immutable release manifest/hash closure、单 pointer identity、cost/deadline、manual visual review advisory、rollback/unpublish plan | main-agent-only |
+
+历史参数候选必须保持可检索，但在 `BWMI-PROD-00` 重新冻结前都不是 current 承诺：
+
+- Playthrough：`6 × 30s = 180s`、Simulation `60Hz`、Capture `24fps`、每段 `720` 帧、总计
+  `4320` 帧；历史 capture-health 包含连续静止不超过 `5s`、unsupported 不超过 `1.5s`、垂直 drop
+  不超过 `3m`、tick stall 不超过 `1s`；
+- Style：exactly `10` variants，visual/review concurrency `10`、Gemini concurrency `5`、Seedance
+  concurrency `10`、opening attempts `1..4`、visual attempts 最多 `2`；
+- Event：仅 segments `0/2/4`，事件分配 `2/2/1`，Gemini 3.5 Flash、temperature `0.8`、
+  max tokens `8192`、sampling `0.25fps`；这些 provider/model 值尤其必须重新选择；
+- Video：六段各 `30s`、`1280×720`、`24fps`、exactly `720` frames、audio required，历史 prompt
+  上限 `15000`、reference images `2..30`、poll `8s`、timeout `7200s`、terminal attempts `2`；历史 raw
+  duration admission 为至少 `29.5s`，只作 current Profile 候选，绝不授权 clone-tail 补全严重短片；
+- Cloud Episode：历史三阶段 timeout 为 `21600/43200/43200s`、每阶段最多 `3` attempts；
+- GPU：历史 normal Batch `100..128`、closed-producer stable tail `120s`、lease `3600s`、dispatcher
+  `60s`、GPU `1`。这些是旧基础设施 Profile 候选，绝不进入 Scene/Runtime 公共 Schema。
+
+旧 Skill 处置同样必须显式：`worldkit-block-builder` 已由 Native Builder 取代且禁止恢复；历史
+`worldkit-visual-reconstructor` 仅部分被当前 styled scripts 覆盖；
+`worldkit-playthrough-planner`、`worldkit-episode-visual-reconstructor`、
+`worldkit-style-variant-director`、`worldkit-style-variant-visual-reconstructor`、
+`worldkit-style-variant-visual-reviewer`、`worldkit-style-variant-diversity-reviewer` 均没有 current
+等价 Skill/checker/runner，分别由 `BWMI-PROD-10/20/30` 重新设计，而不是复制旧 prompt 或冻结副本。
+
+上述台账覆盖历史唯一提交组 `cdae61aa`、`6bcc51bb`、`8c250b5f`、`ae53ff9a`、`6def857d`、
+`90126d43`、`1678960f`、`c6f8318a`、`69885f3f`、`596ddd5e`、`b6391c29`、`d69d7f82`、
+`b09c5efd`、`7607089e`、`266ddf32` 及其 deployment-pin/fix commits。`d69d7f82` 的多接触修正
+已在 current Runtime 语义保留；deployment-only digest/service/tenant/health commits 只作旧环境证据，
+不单设迁移工作包。只有 `BWMI-PROD-90` 的 current exact-SHA 证据可以关闭生产链，不得复用旧分支
+Cloud/Browser/视觉证据或本次静态审计替代。
 
 #### Unified Scene Viewer 下游开发工具关联（非 WRC 关键路径）
 

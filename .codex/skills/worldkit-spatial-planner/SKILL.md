@@ -18,8 +18,8 @@ The Host selects exactly one closed output profile. Never infer, combine, or ext
 **Babylon Native Source** creates exactly three semantic output files:
 
 - `artifacts/scenes/<scene-id>/scene-brief.md`
-- `apps/playground/public/scene-plans/<scene-id>/world-plan.png`
 - `apps/playground/public/scene-plans/<scene-id>/entry-whitebox-target.png`
+- `apps/playground/public/scene-plans/<scene-id>/world-plan.png`
 
 The Babylon Native profile must not create Height Intent, a Height Intent prompt, terrain samples,
 or another terrain proposal. Native block geometry is a later Builder responsibility. Both profiles
@@ -44,7 +44,85 @@ the nearest-looking one.
 
 Keep the four provenance sections required by current main strictly separate: `用户事实` contains only explicit user requirements, `可见参考证据` only directly visible image evidence, `推断的世界延伸` only conservative playable continuation beyond that evidence, and `仅视觉层设想` only styling/material/lighting ideas for later rendering. Never present an inferred continuation as observed geography. Planner does not select Subject Definitions, registered Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources; it describes the complete controlled shape and movement behavior in plain language for Builder.
 
+For Babylon Native, read
+[references/block-whitebox-images.md](references/block-whitebox-images.md)
+before generating either PNG. It is the image-only Block World palette,
+volumetric rendering, and ordinary-success admission contract shared by this
+Skill and its portable checker. The images remain untrusted Builder proposals;
+their colors never create Runtime, Physics, Collider, Support, or Gameplay
+truth.
+
+For Native production, also read the Host-frozen
+`context/native-block-production-budget.json` before making either image. It contains the actual
+generation limits and shape dimensions from the same owners used by Native Builder; it is read-only
+implementation feasibility context, not permission to write metric coordinates or another output.
+Plan a complete coarse Block world inside that capacity: preserve large structural masses, important
+routes and level changes, support depth, meaningful side/rear areas and remote destinations before small
+decorative pieces. Do not draw an unbounded high-detail concept diorama and assume Builder can discard
+most of the world later. Simplify repeated ornament and exposed micro-detail first, keeping visible
+geography, complete landmarks and negative space. Restore paper/material/clothing detail only in the
+later visual stage. The ceiling is neither a target count nor a new image-similarity gate; historical
+Planner hard thresholds and the one-task repair budget are unchanged.
+
+## Babylon Native causal image sequence
+
+For the Babylon Native Source, the two planning images are one causal proposal and must be made in
+this exact order inside this single Planner task:
+
+1. Finish the Scene Brief before generating either image.
+2. Generate the 16:9 `entry-whitebox-target.png` from the Brief and uploaded references, then
+   actually open and inspect that exact PNG with the available image-viewing tool. Check the strict
+   rear Subject, visible selected-target identity, visible geographic order, depth, ordinary
+   perspective/occlusion, and clear-day readability. Do not enlarge, move, or unocclude a distant,
+   repeated, or off-camera non-subject merely to satisfy an entry metric. Repair and reinspect the
+   image until it is the accepted entry.
+3. Generate `world-plan.png` only after that acceptance. Supply the uploaded references, completed
+   Brief, and exact accepted entry PNG as an image input to the same generation call. The World Plan
+   projects and completes the accepted entry space; it is never an independent redesign.
+4. Actually open and inspect the accepted entry and World Plan together. Confirm that visible
+   left/right/front/depth relationships, target placement, traversable extent, and inferred hidden
+   continuation describe one world.
+
+If the accepted entry is edited or regenerated for any reason, the existing World Plan is stale and
+must be regenerated from the new exact entry before the pair is inspected again. Rerunning the
+checker alone cannot make a stale World Plan current. Do not satisfy this sequence with filenames,
+text claims, or an earlier generated image: inspect and pass the exact files that will be delivered.
+This Native sequence does not introduce another model task, Planning authority, Runtime Capture,
+Compiler, or Physics authority. Its Block World colors are image-only Builder intent.
+
 ## Required decisions
+
+### Native deterministic palette authoring
+
+For Babylon Native only, use the bundled `scripts/author-palette.mjs` after inspecting each
+generated PNG and before accepting it. If inspection confirms an existing selected target but its
+lighting/shading produced the wrong RGB, select a tight image-pixel rectangle around that target's
+existing non-functional colored silhouette. This is explicit Planner image authoring, never Host
+auto-repair. It recolors only opaque, saturated pixels in the target's hue family within that
+selection; it cannot add, move, enlarge, or unocclude geometry. Do not select an unrelated same-hue
+object or use a functional surface as a substitute for a missing target. A missing or undersized
+target requires real image regeneration, not a painted marker to force a checker pass.
+
+Compute SHA-256 from the exact current PNG. Invoke the portable helper in the same task:
+
+```bash
+node .codex/skills/worldkit-spatial-planner/scripts/author-palette.mjs \
+  --image apps/playground/public/scene-plans/<scene-id>/world-plan.png \
+  --image-hash sha256:<exact-current-png-sha256> \
+  --brief artifacts/scenes/<scene-id>/scene-brief.md \
+  --target visual-target-1 \
+  --region-pixels <left,top,width,height>
+```
+
+The rectangle is integer image-pixel authoring input, not metric world coordinates or a Scene Brief
+field. The helper edits only the named existing PNG and prints source/result hashes and changed
+pixel counts; it does not create a new semantic output, acceptance receipt, or Runtime evidence.
+Inspect the result, then run the unchanged self-check. Apply the same operation to other selected
+targets only where actually visible; never require opening-absent landmarks to appear. If the entry
+changes, regenerate the dependent World Plan from that exact accepted entry as required above.
+Pure RGB drift does not need another image-generation call. These edits stay inside the existing
+three self-repair cycles; they do not grant more retries. Never edit the frozen Host palette, alter
+checker thresholds, or use this operation on Canonical Height Intent.
 
 ### Movement mode
 
@@ -84,6 +162,12 @@ A landmark qualifies only when all are true:
 3. it is important enough that losing its identity would materially change the scene;
 4. it can be named as one target without promoting its roof, columns, supports, facade pieces, route slices, or decorations into separate targets.
 
+Recall is more important than object category. An important non-controlled person, animal, creature,
+vehicle, machine, sculpture, or distinctive prop is a complete visual target when losing it would
+materially change the reference. Do not omit it merely because it is organic, movable, smaller than
+the architecture, difficult to build, or not a registered SDK asset. Conversely, do not promote
+generic filler into a target just to reach five entries.
+
 Use `标志物` for one distinctive whole. Use `重复标志物` when several complete instances intentionally share the same appearance; define the identical set once, not one target per instance. Repeated generic decoration, ordinary trees, rocks, walls, terrain patches, background mountains, and construction pieces are not targets unless the complete repeated formation is itself a defining visual landmark.
 
 Examples:
@@ -104,7 +188,7 @@ Describe foreground, middle ground, background, scale, left/right relationships,
 
 ## Deterministic visual identity order
 
-The trusted Host derives the palette JSON after delivery, but both Planner images must already follow the same fixed target order. The Brief parser assigns `visual-target-1` through `visual-target-5` in listed order, using these exact identity colors:
+The trusted Host derives the palette JSON after delivery. The Brief parser assigns `visual-target-1` through `visual-target-5` in listed order. Canonical Source keeps the current Canonical colors:
 
 1. `visual-target-1` → `#E85D5D`
 2. `visual-target-2` → `#F28E2B`
@@ -112,23 +196,51 @@ The trusted Host derives the palette JSON after delivery, but both Planner image
 4. `visual-target-4` → `#D45087`
 5. `visual-target-5` → `#D6B84C`
 
-Do not write `visual-identity-palette.json`; the Host owns it. Use these colors only in `entry-whitebox-target.png`. `world-plan.png` remains palette-free.
+Babylon Native Source reproduces the historical Block World colors:
+
+1. `visual-target-1` → `#E85D5D`
+2. `visual-target-2` → `#F28E2B`
+3. `visual-target-3` → `#D9A514`
+4. `visual-target-4` → `#4E79A7`
+5. `visual-target-5` → `#9C6ADE`
+
+These profiles are not interchangeable. Do not write
+`visual-identity-palette.json`; the Host owns it. Canonical Source uses its
+colors only in the entry target. Babylon Native uses its historical colors in
+both planning images: in the World Plan,
+target 1 is one small red spawn token and every selected non-subject target uses
+its ordered color. In the entry image, target 1 is the complete red controlled
+Subject and visible non-subject targets use their ordered colors. Perspective,
+distance, repetition, partial occlusion, or being outside the opening frame may
+make a non-subject small, fragmented, or absent there; never distort the world
+to expose it. Keep the target in the Brief, World Plan, and Builder intent.
 
 ## Top-down world plan
 
-Generate one clean orthographic top-down navigation image. The uploaded reference is absolute authority for world geography: preserve visible relative direction, adjacency, containment, ordering, separation, connection, shoreline, cliff, building, terrain mass, and route relationships. Infer unseen space conservatively.
+Generate one clean orthographic or near-top-down navigation image. The uploaded reference is absolute authority for world geography: preserve visible relative direction, adjacency, containment, ordering, separation, connection, shoreline, cliff, building, terrain mass, and route relationships. Infer unseen space conservatively.
 
-The image contains only three information layers:
+For Canonical Source, the image contains only three information layers:
 
 1. a simple neutral rendering of the reference-consistent world layout;
 2. one unmistakable initial-subject marker at the described spawn position;
 3. the traversable domain appropriate to the movement mode.
 
+For Babylon Native Source, use discrete cubes and exactly four information layers:
+
+1. a discrete-cube rendering of the reference-consistent complete world layout;
+2. one small red spawn-position token at the described initial position;
+3. the exact functional Block World colors from the image contract for semantics actually present;
+4. every selected non-subject target in its ordered identity color at its geographic location.
+
 Show the complete intended playable footprint, not a crop matching the entry frame. The spawn marker may occupy a small entry portion of the plan, while middle, side/rear, and remote off-camera areas remain visibly available for exploration.
 
-For open ground, shade the entire collision-free walkable area instead of inventing a preferred lane. For a real constrained connection, show only the actual continuous path. For flight, underwater, or a custom mode, show the top-down projection of its genuinely traversable domain without rails or ground paths.
+For open ground, shade the entire collision-free walkable area instead of inventing a preferred lane. For a real constrained connection, show only the actual continuous path. Canonical flight, underwater, or custom free-space planning may show the top-down projection of its genuinely traversable domain without rails or ground paths. Babylon Native follows its exact image contract instead: flight, swimming, and water-surface modes receive no navigable-area overlay. Canonical remains a neutral planning image.
 
-Remove every other overlay or annotation: no identity colors, target highlighting, labels, title, legend, scale, elevation values, dimensions, coordinates, grid, camera cone, route nodes, arrows, callouts, UI, logo, or watermark.
+Keep raised routes, stair runs, cliff rims, valleys, terraces, and platform
+thickness visibly volumetric through block stacking and visible top/side faces.
+Remove every other overlay or annotation: no labels, title, in-image legend,
+scale, elevation values, dimensions, coordinates, grid, camera cone, route
+nodes, arrows, callouts, UI, logo, or watermark.
 
 ## Canonical Source Terrain Height Intent
 
@@ -155,11 +267,28 @@ PNG inside the Planner task.
 
 ## Entry composition intent target
 
-Generate one geometry-readable entry composition intent target using the reference images and the completed Brief. Despite the historical file name `entry-whitebox-target.png`, this image is not runtime evidence and must never be presented as the actual whitebox. Preserve complete-subject silhouette, landmark scale, navigation openness or real constrained connection, depth order, occlusion, and the strict centered third-person rear composition. The actual whitebox is captured only from the verified Babylon Runtime.
+Generate one geometry-readable 16:9 entry composition intent target using the reference images and the completed Brief. Despite the historical file name `entry-whitebox-target.png`, this image is not runtime evidence and must never be presented as the actual whitebox. Preserve complete-subject silhouette, landmark scale, navigation openness or real constrained connection, depth order, occlusion, and the strict centered third-person rear composition. The actual whitebox is captured only from the verified Babylon Runtime.
 
 Use the same neutral clear daytime inspection lighting for every entry whitebox target, regardless of whether the uploaded reference depicts night, sunset, backlight, fog, space, an interior, or another dark condition. Use a bright neutral sky/fill, a consistent daylight key, readable midtones, and soft shallow shadows so every terrain and structure silhouette is visible. Never copy the reference image's time of day, exposure, darkness, colored illumination, or dramatic contrast into the whitebox target. This rule applies only to the whitebox planning/capture stage; the later styled first frame may restore the user's reference lighting and style.
 
-All terrain, support surfaces, structures, and unselected components are neutral white or light gray. Color only the 1–5 complete Brief targets using the fixed target-order colors above. One multi-part target uses one color across the whole object; one repeated target uses the same color for every identical complete instance. Do not color generic terrain, ordinary decoration, helper geometry, or unselected objects. Include no labels, UI, logo, watermark, or alternate view.
+For Canonical Source, terrain, support surfaces, structures, and unselected
+components remain neutral white or light gray; color only selected complete
+targets. For Babylon Native Source, use discrete cubes in the exact functional
+colors from the image contract. Color selected targets in their ordered colors
+where they are visible. One multi-part target uses one color across its
+non-functional silhouette; one repeated target uses the same color for its
+actual instances. Functional walkable, interaction, water, and cloud blocks
+keep their functional color. Include no labels, UI, logo, watermark, or
+alternate view.
+
+The Babylon Native ordinary hard gate intentionally matches the successful historical
+production chain: entry Block palette coverage is at least 2%; a ground mode
+has support color; the red target-1 Subject mask covers at least 0.10% of the
+frame; its horizontal center error is at most 1.5%; and the image is 16:9 within
+2%. Non-subject scale, connected-component coherence, exclusive-color
+admission, and ambiguity remain receipt measurements and Builder feedback only.
+They never fail Planner status. A distant, small, repeated, partially occluded,
+or opening-absent non-subject remains valid when these hard conditions pass.
 
 ## Completion
 
@@ -192,6 +321,6 @@ node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs \
   --report artifacts/scenes/<scene-id>/planner-self-check.json
 ```
 
-If it fails, read the JSON diagnostics, repair the selected profile's outputs, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes every semantic output in the selected closed profile, so any edit after a passing check requires another check. Inspect the entry target as well: the primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
+If it fails, read the JSON diagnostics, repair the selected profile's outputs, and regenerate the affected PNGs inside this same task, then rerun the checker. Use at most three self-repair cycles and never finish with a failed or stale receipt. The receipt hashes every semantic output in the selected closed profile, so any edit after a passing check requires another check. For Babylon Native, a changed entry always invalidates and requires regeneration of the dependent World Plan before this check. Inspect the exact delivered pair again after repair. The primary Subject must be exactly centered and seen straight from behind; “approximately centered” is a failure.
 
 The trusted Host replays this same checker and the canonical Brief parser once after delivery. It never starts a separate Planner Repair Agent. The Builder owns all subsequent technical spatialization.

@@ -16,7 +16,9 @@ import { parseSceneBriefV1 } from "@whitebox-world/authoring";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
-const PLANNER_VERSION = "worldkit-planner-self-check-v3";
+import { runPlannerSelfCheck } from "./agent-planner-self-check.js";
+
+const PLANNER_VERSION = "worldkit-planner-self-check-v4";
 const FIXED_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGN8ERvLgA0wYRUdtBIASu4BsuOW+LcAAAAASUVORK5CYII=",
   "base64",
@@ -54,6 +56,131 @@ async function terrainIntentPng(
   return sharp(pixels, { raw: { width: 8, height: 8, channels: 3 } })
     .png()
     .toBuffer();
+}
+
+const IDENTITY_COLORS = [
+  "#E85D5D",
+  "#F28E2B",
+  "#D9A514",
+  "#4E79A7",
+  "#9C6ADE",
+] as const;
+
+async function nativeEntryPng(options: {
+  readonly width?: number;
+  readonly height?: number;
+  readonly targetCount?: number;
+  readonly boxes?: readonly (readonly [number, number, number, number])[];
+  readonly microTargetIndex?: number;
+  readonly scatteredTargetIndex?: number;
+  readonly ambiguousPatch?: boolean;
+  readonly includeTraversable?: boolean;
+  readonly functionalCoverageRatio?: number;
+} = {}): Promise<Buffer> {
+  const width = options.width ?? 160;
+  const height = options.height ?? 90;
+  const targetCount = options.targetCount ?? 3;
+  const pixels = new Uint8Array(width * height * 3).fill(255);
+  const setPixel = (x: number, y: number, color: string) => {
+    const offset = (y * width + x) * 3;
+    pixels[offset] = Number.parseInt(color.slice(1, 3), 16);
+    pixels[offset + 1] = Number.parseInt(color.slice(3, 5), 16);
+    pixels[offset + 2] = Number.parseInt(color.slice(5, 7), 16);
+  };
+  const fill = (
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    color: string,
+  ) => {
+    for (let y = top; y <= bottom; y += 1) {
+      for (let x = left; x <= right; x += 1) setPixel(x, y, color);
+    }
+  };
+  const boxes = options.boxes ?? [
+    [Math.floor(width / 2) - 4, 50, Math.floor(width / 2) + 3, 79],
+    [20, 20, 39, 39],
+    [110, 20, 129, 39],
+    [20, 48, 39, 67],
+    [110, 48, 129, 67],
+  ] as const;
+  // Old production required at least 2% image-wide Block palette coverage and
+  // a real support color for a ground movement mode. This is independent of
+  // whether any non-subject visual target is visible in the opening frame.
+  const functionalPixelCount = Math.ceil(
+    width * height * (options.functionalCoverageRatio ?? 0.04),
+  );
+  const functionalColor = options.includeTraversable === false
+    ? "#5F6368"
+    : "#B7E4C7";
+  for (let index = 0; index < functionalPixelCount; index += 1) {
+    setPixel(index % width, Math.floor(index / width), functionalColor);
+  }
+  for (let targetIndex = 0; targetIndex < targetCount; targetIndex += 1) {
+    const color = IDENTITY_COLORS[targetIndex]!;
+    const box = boxes[targetIndex]!;
+    if (options.microTargetIndex === targetIndex) {
+      fill(box[0], box[1], box[0] + 3, box[1] + 3, color);
+    } else if (options.scatteredTargetIndex === targetIndex) {
+      for (let y = 10; y < Math.min(height - 1, 40); y += 3) {
+        for (let x = 100; x < Math.min(width - 1, 130); x += 3) {
+          setPixel(x, y, color);
+        }
+      }
+    } else {
+      fill(box[0], box[1], box[2], box[3], color);
+    }
+  }
+  if (options.ambiguousPatch) {
+    // Near the midpoint between Native target-2 orange and target-3 yellow.
+    fill(55, 15, 74, 34, "#E69A20");
+  }
+  return sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer();
+}
+
+async function nativeWorldPlanPng(options: {
+  readonly width?: number;
+  readonly height?: number;
+  readonly targetCount?: number;
+  readonly omitTargetIndex?: number;
+  readonly includeTraversable?: boolean;
+  readonly functionalCoverageRatio?: number;
+} = {}): Promise<Buffer> {
+  const width = options.width ?? 160;
+  const height = options.height ?? 90;
+  const pixels = new Uint8Array(width * height * 3).fill(255);
+  const setPixel = (x: number, y: number, color: string) => {
+    const offset = (y * width + x) * 3;
+    pixels[offset] = Number.parseInt(color.slice(1, 3), 16);
+    pixels[offset + 1] = Number.parseInt(color.slice(3, 5), 16);
+    pixels[offset + 2] = Number.parseInt(color.slice(5, 7), 16);
+  };
+  const totalPixels = width * height;
+  const functionalPixelCount = Math.ceil(
+    totalPixels * (options.functionalCoverageRatio ?? 0.04),
+  );
+  const functionalColor = options.includeTraversable === false
+    ? "#5F6368"
+    : "#B7E4C7";
+  for (let index = 0; index < functionalPixelCount; index += 1) {
+    setPixel(index % width, Math.floor(index / width), functionalColor);
+  }
+  const targetCount = options.targetCount ?? 3;
+  const minimumTargetPixels = Math.max(
+    32,
+    Math.round(totalPixels * 0.00005),
+  );
+  for (let targetIndex = 0; targetIndex < targetCount; targetIndex += 1) {
+    if (targetIndex === options.omitTargetIndex) continue;
+    const color = IDENTITY_COLORS[targetIndex]!;
+    const startX = 10 + targetIndex * 12;
+    const startY = Math.floor(height / 2);
+    for (let pixel = 0; pixel < minimumTargetPixels; pixel += 1) {
+      setPixel(startX + pixel % 8, startY + Math.floor(pixel / 8), color);
+    }
+  }
+  return sharp(pixels, { raw: { width, height, channels: 3 } }).png().toBuffer();
 }
 
 const VALID_BRIEF = `# WorldKit Scene Brief
@@ -286,6 +413,12 @@ describe("source-generated Planner self-check parity", { timeout: 30_000 }, () =
     const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-parity-"));
     try {
       const inputs = await writePlannerInputs(root, VALID_BRIEF);
+      const entryBytes = await nativeEntryPng();
+      const worldPlanBytes = await nativeWorldPlanPng();
+      await Promise.all([
+        writeFile(inputs.entryPath, entryBytes),
+        writeFile(inputs.worldPlanPath, worldPlanBytes),
+      ]);
       await rm(inputs.terrainPromptPath);
       await rm(inputs.terrainIntentPath);
       const sourceReportPath = path.join(root, "source-report.json");
@@ -313,19 +446,425 @@ describe("source-generated Planner self-check parity", { timeout: 30_000 }, () =
         status: "passed",
         inputs: {
           sceneBriefHash: hash(VALID_BRIEF),
-          worldPlanHash: FIXED_PNG_HASH,
-          entryWhiteboxTargetHash: FIXED_PNG_HASH,
+          worldPlanHash: hash(worldPlanBytes),
+          entryWhiteboxTargetHash: hash(entryBytes),
         },
         imageMeasurements: {
-          widthPixels: 8,
-          heightPixels: 8,
-          subjectMaskPixelCount: 64,
+          widthPixels: 160,
+          heightPixels: 90,
+          subjectMaskPixelCount: 240,
           subjectCenterXRatio: 0.5,
           subjectCenterErrorRatio: 0,
           maximumCenterErrorRatio: 0.015,
         },
+        nativeBlockPaletteMeasurements: {
+          worldPlan: {
+            widthPixels: 160,
+            heightPixels: 90,
+            aspectRatio: 16 / 9,
+            matchedBlockPixelCount: 640,
+            blockPaletteCoverageRatio: 640 / 14400,
+            traversablePixelCount: 576,
+            interactivePixelCount: 0,
+            blockPixelCountsBySemantic: {
+              walkable: 576,
+              obstacle: 0,
+              "interactive-solid": 0,
+              "interactive-trigger": 0,
+              water: 0,
+              "cloud-walkable": 0,
+              "cloud-passable": 0,
+              "visual-only": 0,
+              "landmark-red": 0,
+              "visual-target-2": 32,
+              "visual-target-3": 32,
+              "visual-target-4": 0,
+              "visual-target-5": 0,
+              "landmark-pink": 0,
+              "visual-target-1-subject": 32,
+            },
+            visualTargetPixelCounts: [32, 32, 32, 0, 0],
+          },
+          entryWhiteboxTarget: {
+            widthPixels: 160,
+            heightPixels: 90,
+            aspectRatio: 16 / 9,
+            matchedBlockPixelCount: 1376,
+            blockPaletteCoverageRatio: 1376 / 14400,
+            traversablePixelCount: 576,
+            interactivePixelCount: 0,
+            blockPixelCountsBySemantic: {
+              walkable: 576,
+              obstacle: 0,
+              "interactive-solid": 0,
+              "interactive-trigger": 0,
+              water: 0,
+              "cloud-walkable": 0,
+              "cloud-passable": 0,
+              "visual-only": 0,
+              "landmark-red": 0,
+              "visual-target-2": 400,
+              "visual-target-3": 400,
+              "visual-target-4": 0,
+              "visual-target-5": 0,
+              "landmark-pink": 0,
+              "visual-target-1-subject": 240,
+            },
+            visualTargetPixelCounts: [240, 400, 400, 0, 0],
+          },
+        },
+        nativeEntryIdentityMeasurements: {
+          widthPixels: 160,
+          heightPixels: 90,
+          aspectRatio: 16 / 9,
+          aspectErrorRatio: 0,
+          requiredAspectRatio: 16 / 9,
+          maximumAspectErrorRatio: 0.02,
+          maximumIdentityRgbDistance: 40,
+          minimumIdentitySeparationRgbUnits: 12,
+          ambiguousIdentityPixelCount: 0,
+          candidateIdentityPixelCount: 1040,
+          ambiguousIdentityRatio: 0,
+          maximumAmbiguousIdentityRatio: 0.05,
+          targets: [
+            {
+              visualTargetId: "visual-target-1",
+              identityColorHex: "#E85D5D",
+              exclusivelyAdmittedPixelCount: 240,
+              imageCoverageRatio: 240 / 14400,
+              componentCount: 1,
+              coherentComponentCount: 1,
+              coherentPixelCount: 240,
+              coherentPixelRatio: 1,
+              largestComponentPixelCount: 240,
+              largestComponentImageCoverageRatio: 240 / 14400,
+              largestComponentBoundingBoxWidthPixels: 8,
+              largestComponentBoundingBoxHeightPixels: 30,
+              largestComponentBoundingBoxWidthRatio: 8 / 160,
+              largestComponentBoundingBoxHeightRatio: 30 / 90,
+              minimumPixelCount: 64,
+              minimumCoherentComponentPixelCount: 16,
+              minimumCoherentPixelRatio: 0.75,
+              minimumLargestComponentPixelCount: 32,
+              minimumLargestComponentImageCoverageRatio: 0.001,
+              minimumLargestComponentBoundingBoxWidthRatio: 0.02,
+              minimumLargestComponentBoundingBoxHeightRatio: 0.04,
+            },
+            ...[2, 3].map((targetNumber) => ({
+              visualTargetId: `visual-target-${targetNumber}`,
+              identityColorHex: IDENTITY_COLORS[targetNumber - 1],
+              exclusivelyAdmittedPixelCount: 400,
+              imageCoverageRatio: 400 / 14400,
+              componentCount: 1,
+              coherentComponentCount: 1,
+              coherentPixelCount: 400,
+              coherentPixelRatio: 1,
+              largestComponentPixelCount: 400,
+              largestComponentImageCoverageRatio: 400 / 14400,
+              largestComponentBoundingBoxWidthPixels: 20,
+              largestComponentBoundingBoxHeightPixels: 20,
+              largestComponentBoundingBoxWidthRatio: 20 / 160,
+              largestComponentBoundingBoxHeightRatio: 20 / 90,
+              minimumPixelCount: 64,
+              minimumCoherentComponentPixelCount: 16,
+              minimumCoherentPixelRatio: 0.75,
+              minimumLargestComponentPixelCount: 32,
+              minimumLargestComponentImageCoverageRatio: 0.001,
+              minimumLargestComponentBoundingBoxWidthRatio: 0.02,
+              minimumLargestComponentBoundingBoxHeightRatio: 0.04,
+            })),
+          ],
+        },
         diagnostics: [],
       });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts an old-success distant 19x18 non-subject and retains its advisory scale measurement", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-scale-"));
+    const boundaryBoxes = [
+      [753, 600, 783, 642],
+      [100, 100, 130, 142],
+      [1_300, 100, 1_330, 142],
+    ] as const;
+    try {
+      const inputs = await writePlannerInputs(root, VALID_BRIEF);
+      await writeFile(inputs.worldPlanPath, await nativeWorldPlanPng({
+        width: 1_536,
+        height: 864,
+      }));
+      const reportPath = path.join(root, "report.json");
+      await writeFile(inputs.entryPath, await nativeEntryPng({
+        width: 1_536,
+        height: 864,
+        boxes: [
+          boundaryBoxes[0],
+          boundaryBoxes[1],
+          [1_300, 100, 1_318, 117],
+        ],
+      }));
+      const distantTarget = await runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-scale-contract",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath,
+      });
+      expect(distantTarget).toEqual({ status: "passed", diagnostics: [] });
+      const distantReceipt = JSON.parse(await readFile(reportPath, "utf8"));
+      expect(distantReceipt.nativeEntryIdentityMeasurements.targets[2])
+        .toMatchObject({
+          exclusivelyAdmittedPixelCount: 342,
+          minimumPixelCount: 332,
+          largestComponentPixelCount: 342,
+          largestComponentBoundingBoxWidthPixels: 19,
+          largestComponentBoundingBoxHeightPixels: 18,
+          minimumLargestComponentPixelCount: 1_328,
+        });
+
+      await writeFile(inputs.entryPath, await nativeEntryPng({
+        width: 1_536,
+        height: 864,
+        boxes: boundaryBoxes,
+      }));
+      const largerTarget = await runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-scale-contract",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath,
+      });
+      expect(largerTarget).toEqual({ status: "passed", diagnostics: [] });
+      const receipt = JSON.parse(await readFile(reportPath, "utf8"));
+      expect(receipt.nativeEntryIdentityMeasurements.targets[2]).toMatchObject({
+        largestComponentPixelCount: 1_333,
+        largestComponentBoundingBoxWidthPixels: 31,
+        largestComponentBoundingBoxHeightPixels: 43,
+        minimumLargestComponentPixelCount: 1_328,
+        minimumLargestComponentImageCoverageRatio: 0.001,
+        minimumLargestComponentBoundingBoxWidthRatio: 0.02,
+        minimumLargestComponentBoundingBoxHeightRatio: 0.04,
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    {
+      name: "an old-success microscopic distant non-subject",
+      image: () => nativeEntryPng({ microTargetIndex: 2 }),
+    },
+    {
+      name: "an old-success scattered repeated non-subject",
+      image: () => nativeEntryPng({ scatteredTargetIndex: 2 }),
+    },
+    {
+      name: "an old-success entry with non-subject targets fully occluded or off-camera",
+      image: () => nativeEntryPng({ targetCount: 1 }),
+    },
+  ])("accepts $name", async ({ image }) => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-image-"));
+    try {
+      const inputs = await writePlannerInputs(root, VALID_BRIEF);
+      await Promise.all([
+        writeFile(inputs.entryPath, await image()),
+        writeFile(inputs.worldPlanPath, await nativeWorldPlanPng()),
+      ]);
+      const result = await runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-image-contract",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath: path.join(root, "report.json"),
+      });
+      expect(result).toEqual({ status: "passed", diagnostics: [] });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    {
+      name: "world-plan aggregate palette coverage below 3%",
+      worldPlan: () => nativeWorldPlanPng({ functionalCoverageRatio: 0.01 }),
+      entry: () => nativeEntryPng(),
+      code: "WORLD_PLAN_BLOCK_PALETTE_COVERAGE_LOW",
+    },
+    {
+      name: "world-plan ground support color is absent",
+      worldPlan: () => nativeWorldPlanPng({ includeTraversable: false }),
+      entry: () => nativeEntryPng(),
+      code: "WORLD_PLAN_TRAVERSABLE_COLOR_MISSING",
+    },
+    {
+      name: "world-plan selected target is below the historical 0.005% presence floor",
+      worldPlan: () => nativeWorldPlanPng({ omitTargetIndex: 2 }),
+      entry: () => nativeEntryPng(),
+      code: "WORLD_PLAN_VISUAL_TARGET_COLOR_MISSING",
+    },
+    {
+      name: "entry aggregate palette coverage below 2%",
+      worldPlan: () => nativeWorldPlanPng(),
+      entry: () => nativeEntryPng({
+        targetCount: 1,
+        functionalCoverageRatio: 0.005,
+      }),
+      code: "ENTRY_WHITEBOX_TARGET_BLOCK_PALETTE_COVERAGE_LOW",
+    },
+    {
+      name: "entry ground support color is absent",
+      worldPlan: () => nativeWorldPlanPng(),
+      entry: () => nativeEntryPng({ includeTraversable: false }),
+      code: "ENTRY_WHITEBOX_TARGET_TRAVERSABLE_COLOR_MISSING",
+    },
+  ])("retains the historical hard gate when $name", async ({
+    worldPlan,
+    entry,
+    code,
+  }) => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-old-gate-"));
+    try {
+      const inputs = await writePlannerInputs(root, VALID_BRIEF);
+      await Promise.all([
+        writeFile(inputs.worldPlanPath, await worldPlan()),
+        writeFile(inputs.entryPath, await entry()),
+      ]);
+      const result = await runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-old-hard-gate",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath: path.join(root, "report.json"),
+      });
+      expect(result.status).toBe("failed");
+      expect(result.diagnostics.map(({ code: actual }) => actual)).toContain(code);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("retains ambiguous identity pixels as advisory measurements without vetoing old success", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-color-"));
+    try {
+      const brief = `${VALID_BRIEF}- 标志物｜月门：独立完整的粉色月门\n`;
+      const inputs = await writePlannerInputs(root, brief);
+      await Promise.all([
+        writeFile(
+          inputs.entryPath,
+          await nativeEntryPng({ targetCount: 4, ambiguousPatch: true }),
+        ),
+        writeFile(inputs.worldPlanPath, await nativeWorldPlanPng({
+          targetCount: 4,
+        })),
+      ]);
+      const result = await runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-color-contract",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath: path.join(root, "report.json"),
+      });
+      expect(result).toEqual({ status: "passed", diagnostics: [] });
+      const receipt = JSON.parse(await readFile(
+        path.join(root, "report.json"),
+        "utf8",
+      ));
+      expect(receipt.nativeEntryIdentityMeasurements.ambiguousIdentityPixelCount)
+        .toBeGreaterThan(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts the historical Native target-3 color and rejects the Canonical target-3 color in the Native lane", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-profile-color-"));
+    try {
+      const inputs = await writePlannerInputs(root, VALID_BRIEF);
+      await Promise.all([
+        writeFile(inputs.entryPath, await nativeEntryPng()),
+        writeFile(inputs.worldPlanPath, await nativeWorldPlanPng()),
+      ]);
+      await expect(runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-profile-color",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath: path.join(root, "native-report.json"),
+      })).resolves.toEqual({ status: "passed", diagnostics: [] });
+
+      const canonicalTargetThree = await nativeWorldPlanPng();
+      const { data, info } = await sharp(canonicalTargetThree)
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const old = [0xD9, 0xA5, 0x14] as const;
+      const current = [0x8E, 0x6C, 0xCF] as const;
+      for (let offset = 0; offset < data.length; offset += info.channels) {
+        if (data[offset] === old[0] && data[offset + 1] === old[1] &&
+          data[offset + 2] === old[2]) {
+          data[offset] = current[0];
+          data[offset + 1] = current[1];
+          data[offset + 2] = current[2];
+        }
+      }
+      await writeFile(inputs.worldPlanPath, await sharp(data, {
+        raw: info,
+      }).png().toBuffer());
+      const crossed = await runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-profile-color",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath: path.join(root, "crossed-report.json"),
+      });
+      expect(crossed.status).toBe("failed");
+      expect(crossed.diagnostics).toContainEqual(expect.objectContaining({
+        code: "WORLD_PLAN_VISUAL_TARGET_COLOR_MISSING",
+        message: expect.stringContaining("visual-target-3"),
+      }));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    {
+      name: "a microscopic primary Subject",
+      image: () => nativeEntryPng({ microTargetIndex: 0 }),
+      code: "PLANNER_IMAGE_INVALID",
+    },
+    {
+      name: "a non-16:9 formal opening target",
+      image: () => nativeEntryPng({ width: 100, height: 100 }),
+      code: "ENTRY_WHITEBOX_TARGET_ASPECT_RATIO_INVALID",
+    },
+  ])("still rejects $name", async ({ image, code }) => {
+    const root = await mkdtemp(path.join(tmpdir(), "worldkit-native-planner-hard-gate-"));
+    try {
+      const inputs = await writePlannerInputs(root, VALID_BRIEF);
+      await Promise.all([
+        writeFile(inputs.entryPath, await image()),
+        writeFile(inputs.worldPlanPath, await nativeWorldPlanPng()),
+      ]);
+      const result = await runPlannerSelfCheck({
+        sceneSourceKind: "babylon-native",
+        sceneId: "planner-native-hard-gate",
+        briefPath: inputs.briefPath,
+        worldPlanPath: inputs.worldPlanPath,
+        entryPath: inputs.entryPath,
+        reportPath: path.join(root, "report.json"),
+      });
+      expect(result.status).toBe("failed");
+      expect(result.diagnostics.map(({ code: actual }) => actual)).toContain(code);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

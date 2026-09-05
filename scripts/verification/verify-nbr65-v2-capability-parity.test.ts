@@ -1,3 +1,4 @@
+import { access } from "node:fs/promises";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -46,9 +47,9 @@ describe("NBR-65 v2 capability parity verifier", () => {
       "palette-visual-and-collider-groups",
       "planner-lineage-and-complete-world-continuation",
       "playthrough-episode-and-video",
+      "production-outcome-and-strict-diagnostic-split",
       "provider-neutral-block-manifest",
       "reachable-space-metrics",
-      "report-only-quality-preview",
       "route-course-and-semantic-pose-guidance",
       "safe-exploration-start-and-capture-health",
       "semantic-front-oriented-target-triview",
@@ -86,7 +87,7 @@ describe("NBR-65 v2 capability parity verifier", () => {
       "route-course-and-semantic-pose-guidance",
       "named-planning-image-builder-feedback",
       "incomplete-traversal-evidence",
-      "report-only-quality-preview",
+      "production-outcome-and-strict-diagnostic-split",
     ]) {
       expect(report.rows.find((row) => row.capabilityId === capabilityId))
         .toMatchObject({ status: "passed", diagnostics: [] });
@@ -102,17 +103,34 @@ describe("NBR-65 v2 capability parity verifier", () => {
         .toMatchObject({ status: "not-applicable", diagnostics: [] });
     }
 
-    const reportOnlyPreview = report.rows.find((row) =>
-      row.capabilityId === "report-only-quality-preview");
-    expect(reportOnlyPreview?.evidenceRefs).toContain(
-      "scripts/reconstruction/run.test.ts",
-    );
-    expect(reportOnlyPreview?.verificationGate).toMatchObject({
+    const productionOutcomeSplit = report.rows.find((row) =>
+      row.capabilityId === "production-outcome-and-strict-diagnostic-split");
+    expect(productionOutcomeSplit?.evidenceRefs).toEqual(expect.arrayContaining([
+      "scripts/reconstruction/run-production.test.ts",
+      "scripts/verification/native-block-reconstruction-e2e.test.ts",
+      "scripts/reconstruction/final-artifact-publisher.test.ts",
+    ]));
+    expect(productionOutcomeSplit?.verificationGate).toMatchObject({
       gateId: "production-loop-usability",
     });
-    expect(reportOnlyPreview?.verificationGate?.command).toContain(
-      "scripts/reconstruction/run.test.ts",
+    expect(productionOutcomeSplit?.verificationGate?.command).toEqual(
+      expect.arrayContaining([
+        "scripts/reconstruction/run-production.test.ts",
+        "scripts/verification/native-block-reconstruction-e2e.test.ts",
+        "scripts/reconstruction/final-artifact-publisher.test.ts",
+      ]),
     );
+    expect(productionOutcomeSplit?.verificationGate?.command).not.toContain(
+      "scripts/reconstruction/production-outcome.test.ts",
+    );
+    await expect(access(path.join(
+      repositoryRoot,
+      "scripts/reconstruction/production-outcome.ts",
+    ))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(access(path.join(
+      repositoryRoot,
+      "scripts/reconstruction/production-outcome.test.ts",
+    ))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("fails the affected capability rows when an executable gate is red", async () => {

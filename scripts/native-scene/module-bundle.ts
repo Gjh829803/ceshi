@@ -35,6 +35,7 @@ import {
 } from "@whitebox-world/runtime-contracts";
 import { isEqual, isNil, orderBy } from "lodash-es";
 import ts from "typescript";
+import { nativeSourceTypecheckMessage } from "./source-typecheck.js";
 import { build as viteBuild } from "vite";
 
 import { createNativeWorkspaceDiagnosticV1 } from "./authoring-workspace.js";
@@ -194,7 +195,7 @@ function typecheckDiagnostics(
     const stable = diagnostic(
       "WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED",
       "typecheck",
-      "Native source failed strict Host TypeScript checking.",
+      nativeSourceTypecheckMessage(entry),
       "Repair the typed source at the reported location and rerun the check.",
       location,
     );

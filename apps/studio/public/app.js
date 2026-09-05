@@ -49,7 +49,6 @@ const statusLabels = {
 };
 
 function worldStatusLabel(world) {
-  if (world.outcome === "preview-ready") return "PREVIEW READY";
   if (world.status === "ready") return "PASSED";
   return statusLabels[world.status] ?? world.status;
 }
@@ -223,7 +222,11 @@ function detailRevision(world, media) {
     updatedAt: world.updatedAt,
     error: world.error,
     outcome: world.outcome,
-    publicationStatus: world.publicationStatus,
+    productionOutcome: world.productionOutcome,
+    publicationOutcome: world.publicationOutcome,
+    strictDiagnosticOutcome: world.strictDiagnosticOutcome,
+    strictDiagnosticCodes: world.strictDiagnosticCodes,
+    strictDiagnosticHash: world.nativeProductionClosure?.strictDiagnosticHash,
     nativeLaunch: world.nativeLaunch,
     deliverables: (media?.deliverables ?? []).map((item) => [item.id, item.status, item.updatedAt]),
     trajectory: (media?.trajectory?.stages ?? []).map((item) => [
@@ -999,26 +1002,35 @@ function renderValidation(media, world) {
   const captured = (media?.planning ?? []).some((item) => item.kind === "opening-frame" && item.available) ||
     (composition !== null && composition !== undefined);
   const native = world?.sceneSourceKind === "babylon-native";
-  const accepted = world?.publicationStatus === "accepted";
-  const nativeEvidenceSummary = world?.nativeProductionClosure?.qualityStage === "opening-composition"
-    ? "Studio 仅展示身份绑定的 Package、Opening Capture、构图 Gate 与 BNA 验证入口；非接受预览不会进入 Canonical Viewer 或发布准入。"
-    : "Studio 仅展示身份绑定的 Package、Capture、评测与 BNA 验证入口；非接受预览不会进入 Canonical Viewer 或发布准入。";
+  const strictDiagnosticCodes = world?.strictDiagnosticCodes ?? [];
+  const strictDiagnosticSummary = world?.strictDiagnosticOutcome === "passed"
+    ? "通过"
+    : world?.strictDiagnosticOutcome
+      ? `${world.strictDiagnosticOutcome}${strictDiagnosticCodes.length ? ` · ${strictDiagnosticCodes.join(", ")}` : ""}`
+      : "—";
+  const nativeEvidenceSummary = "Studio 校验身份绑定的 Package、Capture、Evaluation、严格诊断收据与 final 发布工件；严格诊断单独展示，不改变普通生产结果。";
   const metrics = [
     ["整体状态", captured ? "Runtime Captured" : "等待真实捕获"],
     ["权威来源", captured ? "Babylon Runtime" : "—"],
     ["协议", captured
       ? native ? "WorldPackage / Native Source / BNA Harness" : "Authoring V4 / IR V4 / Canonical Scene Plan V1"
       : "—"],
+    ...(native ? [
+      ["普通生产", world?.productionOutcome ?? "—"],
+      ["发布", world?.publicationOutcome ?? "—"],
+      ["严格诊断", strictDiagnosticSummary],
+      ["严格诊断 Hash", world?.nativeProductionClosure?.strictDiagnosticHash ?? "—"],
+    ] : []),
   ];
   return `<div class="validation-summary ${captured ? "pass" : ""}">
       <div><small>RUNTIME CAPTURE</small><h3>${captured
         ? native
-          ? accepted ? "Native 生产闭包已发布" : "Native 非接受预览证据已就绪"
+          ? "Native 生产闭包已发布"
           : "Canonical 运行捕获已完成"
         : "等待 CLI 运行捕获"}</h3><p>${native
           ? nativeEvidenceSummary
           : "进入首帧、确定性快照和实体 Front / Right / Back 三视图均由实际 Babylon runtime 导出，并作为评测硬门禁。"}</p></div>
-      <span>${captured ? accepted || !native ? "CAPTURED" : "PREVIEW" : "PENDING"}</span>
+      <span>${captured ? "CAPTURED" : "PENDING"}</span>
     </div>
     <div class="metric-grid">${metrics.map(([label, value]) => `<article><small>${escapeHtml(label)}</small><b>${escapeHtml(value)}</b></article>`).join("")}</div>`;
 }
@@ -1248,7 +1260,11 @@ function patchValidation(media, world) {
     media?.visualQa ?? null,
     media?.entryVerification ?? null,
     world?.sceneSourceKind ?? null,
-    world?.publicationStatus ?? null,
+    world?.productionOutcome ?? null,
+    world?.publicationOutcome ?? null,
+    world?.strictDiagnosticOutcome ?? null,
+    world?.strictDiagnosticCodes ?? null,
+    world?.nativeProductionClosure?.strictDiagnosticHash ?? null,
   ]);
   for (const container of dialogContent.querySelectorAll("[data-live-validation]")) {
     if (container._validationSignature === signature) continue;

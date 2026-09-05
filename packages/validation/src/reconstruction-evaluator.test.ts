@@ -64,9 +64,19 @@ const caseValue = () => ({
     semanticSilhouetteTargets: [{
       acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
       visualGroupId: "central-ascent-group",
-      normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
-      normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
-      coverageBasisPoints: 2_400,
+      viewRequirements: [{
+        viewId: "opening" as const,
+        mode: "reference-projection-required" as const,
+        normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
+        normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+        coverageBasisPoints: 2_400,
+      }, {
+        viewId: "world-side" as const,
+        mode: "presence-required" as const,
+      }, {
+        viewId: "world-top-down" as const,
+        mode: "presence-required" as const,
+      }],
     }],
     openingComposition: {
       acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
@@ -225,14 +235,19 @@ const evidenceValue = () => ({
       evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"],
       observed: {
         kind: "semantic-silhouette-observed" as const,
-        targets: [{
-          acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
-          visualGroupId: "central-ascent-group",
-          isSemanticTargetPresent: true,
-          normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
-          normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
-          coverageBasisPoints: 2_400,
-        }],
+        views: ["opening", "world-side", "world-top-down"].map((viewId) => ({
+          viewId,
+          targets: [{
+            acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
+            visualGroupId: "central-ascent-group",
+            structuralProjection: {
+              outcome: "projected" as const,
+              normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
+              normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+              coverageBasisPoints: 2_400,
+            },
+          }],
+        })),
       },
     },
     {
@@ -407,6 +422,100 @@ describe("evaluateWorldReconstructionV1", () => {
     );
   });
 
+  it("accepts an outside-viewport structural row for a presence-required view", () => {
+    const result = evaluateBound({
+      evidence: (draft) => {
+        const silhouette = observedRow(draft, "semantic-silhouette");
+        if (silhouette.observed.kind !== "semantic-silhouette-observed") {
+          throw new Error("silhouette observed");
+        }
+        Reflect.set(
+          silhouette.observed.views[1]!.targets[0]!,
+          "structuralProjection",
+          { outcome: "outside-viewport" },
+        );
+      },
+    });
+
+    expect(result.outcome).toBe("passed");
+    expect(dimension(result, "semantic-silhouette").status).toBe("passed");
+  });
+
+  it("passes an exact empty Opening subset when every target is not-required there", () => {
+    const result = evaluateBound({
+      case: (draft) => {
+        Reflect.set(
+          draft.expected.semanticSilhouetteTargets[0]!,
+          "viewRequirements",
+          [{ viewId: "opening", mode: "not-required" }, {
+            viewId: "world-side",
+            mode: "presence-required",
+          }, {
+            viewId: "world-top-down",
+            mode: "presence-required",
+          }],
+        );
+        for (const field of [
+          "targetRefs",
+          "regions",
+          "anchors",
+          "orderedTargetRefs",
+        ] as const) {
+          Reflect.set(draft.expected.openingComposition, field, []);
+        }
+      },
+      profile: (draft) => {
+        draft.thresholds.openingComposition.regions = [];
+        draft.thresholds.openingComposition.anchors = [];
+      },
+      evidence: (draft) => {
+        const opening = observedRow(draft, "opening-composition");
+        if (opening.observed.kind !== "opening-composition-observed") {
+          throw new Error("opening observed");
+        }
+        opening.observed.regions = [];
+        opening.observed.anchors = [];
+        opening.observed.orderedTargetRefs = [];
+        opening.observed.distances = [];
+        const silhouette = observedRow(draft, "semantic-silhouette");
+        if (silhouette.observed.kind !== "semantic-silhouette-observed") {
+          throw new Error("silhouette observed");
+        }
+        Reflect.set(
+          silhouette.observed.views[0]!.targets[0]!,
+          "structuralProjection",
+          { outcome: "outside-viewport" },
+        );
+      },
+    });
+
+    expect(result.outcome).toBe("passed");
+    expect(dimension(result, "opening-composition").status).toBe("passed");
+    expect(dimension(result, "semantic-silhouette").status).toBe("passed");
+  });
+
+  it("fails a reference-projection-required view that is outside the viewport", () => {
+    const result = evaluateBound({
+      evidence: (draft) => {
+        const silhouette = observedRow(draft, "semantic-silhouette");
+        if (silhouette.observed.kind !== "semantic-silhouette-observed") {
+          throw new Error("silhouette observed");
+        }
+        Reflect.set(
+          silhouette.observed.views[0]!.targets[0]!,
+          "structuralProjection",
+          { outcome: "outside-viewport" },
+        );
+      },
+    });
+
+    expectIndependentFailure(result, "semantic-silhouette");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      metricId: "opening-reference-projection",
+      targetId: "central-ascent-group",
+    }));
+  });
+
   it("fails only the missing west-gate collider without masking other dimensions", () => {
     const result = evaluateBound({
       evidence: (draft) => {
@@ -478,7 +587,8 @@ describe("evaluateWorldReconstructionV1", () => {
       evidence: (draft) => {
         const silhouette = observedRow(draft, "semantic-silhouette");
         if (silhouette.observed.kind !== "semantic-silhouette-observed") throw new Error("silhouette observed");
-        silhouette.observed.targets[0]!.normalizedCenter = { xBasisPoints: 500, yBasisPoints: 500 };
+        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+          .normalizedCenter = { xBasisPoints: 500, yBasisPoints: 500 };
       },
     });
     expectIndependentFailure(result, "semantic-silhouette");
@@ -495,7 +605,8 @@ describe("evaluateWorldReconstructionV1", () => {
       evidence: (draft) => {
         const silhouette = observedRow(draft, "semantic-silhouette");
         if (silhouette.observed.kind !== "semantic-silhouette-observed") throw new Error("silhouette observed");
-        silhouette.observed.targets[0]!.coverageBasisPoints = 2_700;
+        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+          .coverageBasisPoints = 2_700;
       },
     });
     expectIndependentFailure(result, "semantic-silhouette");
@@ -511,11 +622,13 @@ describe("evaluateWorldReconstructionV1", () => {
         if (silhouette.observed.kind !== "semantic-silhouette-observed") {
           throw new Error("silhouette observed");
         }
-        silhouette.observed.targets[0]!.normalizedCenter = {
+        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+          .normalizedCenter = {
           xBasisPoints: 500,
           yBasisPoints: 250,
         };
-        silhouette.observed.targets[0]!.coverageBasisPoints = 2_700;
+        silhouette.observed.views[0]!.targets[0]!.structuralProjection
+          .coverageBasisPoints = 2_700;
       },
     });
 
@@ -523,14 +636,14 @@ describe("evaluateWorldReconstructionV1", () => {
     expect(result.diagnostics.map((diagnostic) =>
       Reflect.get(diagnostic, "metricId")
     )).toEqual([
-      "semantic-center-x-basis-points",
-      "semantic-center-y-basis-points",
-      "semantic-coverage-basis-points",
+      "opening-semantic-center-x-basis-points",
+      "opening-semantic-center-y-basis-points",
+      "opening-semantic-coverage-basis-points",
     ]);
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       acceptanceTargetRef: CENTRAL_ASCENT_TARGET_REF,
       targetRef: CENTRAL_ASCENT_TARGET_REF,
-      metricId: "semantic-center-x-basis-points",
+      metricId: "opening-semantic-center-x-basis-points",
       details: {
         kind: "basis-points-threshold",
         expectedBasisPoints: 300,

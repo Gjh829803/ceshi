@@ -22,44 +22,11 @@ import {
 } from "@whitebox-world/runtime-contracts";
 
 import { loadWorldkitRoutePipeline } from "../lib/worldkit-pipeline";
+import { deriveVisualIdentityPalette } from "./visual-identity-palette.js";
 
 function formatHostedDiagnostic(diagnostic: HostedVisualContractDiagnosticV1): string {
   const location = diagnostic.instancePath ? ` at ${diagnostic.instancePath}` : "";
   return `${diagnostic.code}${location}: ${diagnostic.message}`;
-}
-
-export const VISUAL_IDENTITY_COLORS = [
-  "#E85D5D",
-  "#F28E2B",
-  "#8E6CCF",
-  "#D45087",
-  "#D6B84C",
-] as const;
-
-export interface VisualIdentityPaletteTargetV1 {
-  id: string;
-  visualTargetId: string;
-  targetKind: SceneBriefV1["visualTargets"][number]["kind"];
-  name: string;
-  description: string;
-  role: VisualCaptureGroupV1["role"];
-  semanticClassId: string;
-  identityColor: `#${string}`;
-}
-
-export function deriveVisualIdentityPalette(
-  brief: SceneBriefV1,
-): readonly VisualIdentityPaletteTargetV1[] {
-  return brief.visualTargets.map((target, index) => ({
-    id: target.id,
-    visualTargetId: target.id,
-    targetKind: target.kind,
-    name: target.name,
-    description: target.description,
-    role: target.role,
-    semanticClassId: target.semanticClassId,
-    identityColor: VISUAL_IDENTITY_COLORS[index]!,
-  }));
 }
 
 export function deriveVisualCaptureGroups(options: {
@@ -69,7 +36,7 @@ export function deriveVisualCaptureGroups(options: {
   const mappingByVisualTargetId = new Map(
     options.visualTargetMappings.map((mapping) => [mapping.visualTargetId, mapping] as const),
   );
-  return deriveVisualIdentityPalette(options.brief).flatMap((target) => {
+  return deriveVisualIdentityPalette(options.brief, "canonical").flatMap((target) => {
     const mapping = mappingByVisualTargetId.get(target.visualTargetId);
     return mapping === undefined
       ? []
@@ -139,7 +106,10 @@ export async function finalizeSceneBuild(options: {
   )) {
     errors.push("The primary subject visual group must contain the startup-controlled Subject.");
   }
-  const selectedVisualTargets = deriveVisualIdentityPalette(briefResult.value);
+  const selectedVisualTargets = deriveVisualIdentityPalette(
+    briefResult.value,
+    "canonical",
+  );
   const mappedVisualTargetIds = new Set(value.visualCaptureGroups.map(({ visualTargetId }) => visualTargetId));
   for (const target of selectedVisualTargets) {
     if (!mappedVisualTargetIds.has(target.visualTargetId)) {

@@ -125,10 +125,12 @@ import { runRuntimeSessionNdjsonV1 } from "../lib/runtime-session-ndjson";
 import { explainNativeSceneCheckResultV1 } from "../native-scene/explain.js";
 import { checkBabylonNativeSceneWorldDirectoryV1 } from
   "../native-scene/native-scene-check.js";
-import type {
-  WorldReconstructionProductionInputV1,
-  WorldReconstructionProductionResultV1,
-} from "../reconstruction/run-production.js";
+import type { WorldReconstructionProductionInputV1 } from
+  "../reconstruction/run-production.js";
+import {
+  parseWorldReconstructionProductionResultV1,
+  type WorldReconstructionProductionResultV1,
+} from "@whitebox-world/validation";
 
 const execFile = promisify(execFileCallback);
 const REPOSITORY_ROOT = path.resolve(
@@ -149,7 +151,7 @@ Usage:
   worldkit native explain <world-directory> [--json]
   worldkit native package <attempt-directory> --case <case.json> --json
   worldkit native run <package-directory> [--port <port>] [--json]
-  worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] --json
+  worldkit reconstruct run <case.json> --output <run-directory> [--backend cloud|local] [--resume-host-only] --json
   worldkit capture <file-or-package> --output <png> [--snapshot <json>]
     [--triview-output <directory> [--implementation-map <json>]] [--port <port>] [--json]
   worldkit registry list --kind <resource-kind> [--json]
@@ -197,6 +199,7 @@ export type WorldkitArgs =
   | { command: "help"; json: false }
   | {
       command: "reconstruct-run";
+      executionMode?: "resume-host-only";
       casePath: string;
       outputDirectoryPath: string;
       backend: "cloud" | "local";
@@ -480,15 +483,25 @@ async function loadRunWorldReconstructionProductionPortV1(): Promise<
     RunWorldReconstructionProductionPortV1;
 }
 
-function reconstructionProductionFailureV1(error: unknown) {
+function reconstructionCommandFailureV1(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  const diagnosticCodes = message.match(/[A-Z][A-Z0-9_]{4,}/g) ??
-    ["WORLD_RECONSTRUCTION_PRODUCTION_FAILED"];
+  const diagnosticCodes = [...new Set(
+    message.match(/[A-Z][A-Z0-9_]{4,}/g) ??
+      ["WORLD_RECONSTRUCTION_PRODUCTION_FAILED"],
+  )].sort();
   return Object.freeze({
-    kind: "world-reconstruction-production-error",
+    kind: "worldkit-command-failure",
     schemaVersion: 1,
-    outcome: "closed",
-    diagnosticCodes: Object.freeze([...new Set(diagnosticCodes)].sort()),
+    command: "reconstruct-run",
+    ok: false as const,
+    exitCode: 1 as const,
+    diagnostics: Object.freeze(diagnosticCodes.map((code) => Object.freeze({
+      severity: "error" as const,
+      code,
+      instancePath: "",
+      message:
+        "World reconstruction failed before a production result was available.",
+    }))),
   });
 }
 
@@ -766,9 +779,11 @@ export function parseWorldkitArgs(arguments_: readonly string[]): WorldkitArgs {
     if (!json) {
       throw new WorldkitUsageError("reconstruct run requires --json.");
     }
+    const resumeHostOnly = takeFlag(tokens, "--resume-host-only");
     rejectRemaining(tokens, "reconstruct run");
     return {
       command: "reconstruct-run",
+      ...(resumeHostOnly ? { executionMode: "resume-host-only" as const } : {}),
       casePath,
       outputDirectoryPath,
       backend,
@@ -2684,25 +2699,28 @@ export async function main(
     try {
       const runProduction = ports.runWorldReconstructionProductionV1 ??
         await loadRunWorldReconstructionProductionPortV1();
-      const result = await runProduction({
-        casePath: parsed.casePath,
-        outputDirectoryPath: parsed.outputDirectoryPath,
-        backend: parsed.backend,
-        routePolicy: Object.freeze({
-          requiredCapabilityRefs: Object.freeze([]),
-          requestedSourceKind: "babylon-native",
-          nativeTrustAdmitted: true,
+      const result = parseWorldReconstructionProductionResultV1(
+        await runProduction({
+          ...(parsed.executionMode === undefined ? {} : { executionMode: parsed.executionMode }),
+          casePath: parsed.casePath,
+          outputDirectoryPath: parsed.outputDirectoryPath,
+          backend: parsed.backend,
+          routePolicy: Object.freeze({
+            requiredCapabilityRefs: Object.freeze([]),
+            requestedSourceKind: "babylon-native",
+            nativeTrustAdmitted: true,
+          }),
         }),
-      });
+      );
       process.stdout.write(`${stringifyCanonicalJson(result)}\n`);
-      return result.outcome === "published" || result.outcome === "preview-ready"
+      return result.productionOutcome === "passed" &&
+          result.publicationOutcome === "published"
         ? 0
         : 1;
     } catch (error) {
-      process.stdout.write(
-        `${stringifyCanonicalJson(reconstructionProductionFailureV1(error))}\n`,
-      );
-      return 1;
+      const failure = reconstructionCommandFailureV1(error);
+      printResult(failure, true);
+      return failure.exitCode;
     }
   }
   if (parsed.command === "run-browser") {

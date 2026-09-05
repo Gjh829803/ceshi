@@ -343,6 +343,8 @@ describe("Babylon Native deterministic Module bundle", () => {
     expect(result.outcome).toBe("rejected");
     if (result.outcome === "passed") return;
     expect(result.diagnostics).not.toHaveLength(0);
+    expect(result.diagnostics[0]?.message).toContain("TS2322:");
+    expect(result.diagnostics[0]?.message).toContain("not assignable");
     expect(result.diagnostics.every((diagnostic) =>
       diagnostic.code === "WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED" &&
       diagnostic.stage === "typecheck" &&

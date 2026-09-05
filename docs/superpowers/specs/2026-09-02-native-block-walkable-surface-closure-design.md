@@ -9,6 +9,12 @@
 
 ## Implementation revision record
 
+- **2026-09-04 — historical production-outcome parity correction:** ordinary production now uses the exact
+  successful `codex/block-world-main-integration` requested-scope success/failure rules. Seven-dimension
+  Evaluation and NBR-70 remain executable strict diagnostics but no longer own ordinary publication.
+  `preview-ready/not-accepted` is removed as a terminal authority rather than retained as a compatibility
+  branch. Required Native/ground/package/capture integrity and atomic publication remain hard.
+
 - **2026-09-04 — v2 production-loop usability parity correction:** the previous
   adaptation preserved v2 geometry/runtime behavior but did not preserve its
   causal Builder feedback loop. The Native Builder was told to use the frozen
@@ -434,17 +440,15 @@ Quality enforcement is frozen by one required Evaluation Profile field:
 qualityGateMode: "report-only" | "required-for-publication";
 ```
 
-This is an intentional policy mode, not legacy compatibility. Both values run
-the same Formal Capture and seven-dimension measurement. Only
-`required-for-publication` may allocate at most three fresh Host-created repair
-Attempts and retains the strict final GO behavior. `report-only`, which is the
-default for Host-derived exploratory Native Cases, never creates an external
-repair Attempt and never converts a failed or incomplete quality result into a
-pass; the first admitted Package is captured and returned with an identity-bound
-non-GO preview result, exact diagnostic codes, surviving Capture/evaluation
-evidence and a stable `worldkit native run` command. Automation can therefore
-distinguish accepted publication from human-inspectable output without losing
-the world.
+This is a repair-budget policy, not a second final-outcome authority. Both values
+run the same Formal Capture and seven-dimension measurement. Only
+`required-for-publication` may allocate at most three fresh Host-created quality-repair
+Attempts. `report-only`, which is the default for Host-derived exploratory Native
+Cases, never creates an external quality-repair Attempt. Once the historical-equivalent
+required production stages close, either mode may publish; failed or incomplete current
+quality findings remain exact, identity-bound strict diagnostics. Automation reads
+`productionOutcome` separately from `strictDiagnosticOutcome`; it does not infer
+acceptance from the removed `preview-ready/not-accepted` branch.
 
 The following remain hard, mode-independent admission failures: Native source
 or authority audit, deterministic replay, budget, Ground Analysis, Package or

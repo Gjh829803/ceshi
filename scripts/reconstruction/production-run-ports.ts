@@ -11,14 +11,26 @@ import {
   unlink,
 } from "node:fs/promises";
 import path from "node:path";
+import { parseNativeSourceTypecheckDiagnostics } from "../native-scene/source-typecheck.js";
+import { verifyWorldPackageDirectoryV1 } from "@whitebox-world/world-package";
+import { readWorldPackageDirectoryV1 } from "../lib/file-world-package.js";
+import { readHostCheckpointV1, writeHostCheckpointV1 } from "./host-checkpoint.js";
 
 import {
   sha256CanonicalJson,
+  sha256Bytes,
   stringifyCanonicalJson,
   type Sha256HashV1,
 } from "@whitebox-world/protocol";
 import {
   hashNativeBlockGenerationReceiptV1,
+  hashNativeBlockGenerationRequestV1,
+  hashSceneAuthoringAttemptV1,
+  parseNativeBlockGenerationReceiptV1,
+  parseNativeBlockGenerationRequestV1,
+  parseSceneAuthoringAttemptV1,
+  assertNativeBlockGenerationReceiptMatchesRequestV1,
+  assertNativeBlockGenerationRequestMatchesAttemptV1,
   hashSceneAuthoringAttemptResultV1,
 } from "@whitebox-world/scene-authoring-contracts";
 import { parseWorldReconstructionCaseArtifactRefV1 } from
@@ -29,6 +41,7 @@ import {
   formalWorldCaptureIntentCanonicalBytesV1,
   hashFormalWorldCaptureIntentV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
   parseFormalScriptedTraversalObservationV1,
   parseFormalSpawnSupportObservationV1,
   hashFormalWorldCaptureReceiptV1,
@@ -82,7 +95,9 @@ import { createOpeningCompositionRepairDiagnosticsV1 } from
 import type {
   WorldReconstructionCleanupOutcomesV1,
   WorldReconstructionCleanupOwnerOutcomeV1,
+  WorldReconstructionExecutionPurposeV1,
 } from "./run-journal.js";
+import { parseWorldReconstructionExecutionPurposeV1 } from "./run-journal.js";
 import {
   type WorldReconstructionGenerateOutcomeV1,
   type WorldReconstructionGeneratePortResultV1,
@@ -106,6 +121,8 @@ type FrozenGenerationInputV1 = Omit<
 >;
 
 export interface ProductionWorldReconstructionRunPortsInputV1 {
+  readonly hostRecoveryIndex?: number;
+  readonly executionPurpose: WorldReconstructionExecutionPurposeV1;
   readonly repositoryRoot: string;
   readonly casePath: string;
   readonly caseRef: string;
@@ -116,6 +133,12 @@ export interface ProductionWorldReconstructionRunPortsInputV1 {
   readonly formalCaptureIntent: FormalWorldCaptureIntentV1;
 }
 
+interface BuilderSelfCheckResult {
+  readonly ok: boolean;
+  readonly diagnosticCodes: readonly string[];
+  readonly typecheckDiagnostics?: readonly import("../native-scene/source-typecheck.js").NativeSourceTypecheckDiagnostic[];
+}
+
 export interface ProductionWorldReconstructionRunPortOwnersV1 {
   readonly prepareGeneration: typeof prepareNativeBlockGenerationTaskV1;
   readonly runGeneration: typeof runNativeBlockGenerationV1;
@@ -124,7 +147,8 @@ export interface ProductionWorldReconstructionRunPortOwnersV1 {
   readonly runSelfCheck: (
     checkerPath: string,
     workspacePath: string,
-  ) => Promise<Readonly<{ ok: boolean; diagnosticCodes: readonly string[] }>>;
+    sceneBriefPath: string,
+  ) => Promise<BuilderSelfCheckResult>;
   readonly packageAttempt: typeof packageNativeBlockAttemptV1;
   readonly materializeCaptureRequest:
     typeof materializeFormalWorldCaptureRequestV1;
@@ -136,11 +160,12 @@ export interface ProductionWorldReconstructionRunPortOwnersV1 {
 
 interface AttemptCheckpointV1 {
   prepared?: PreparedNativeBlockGenerationTaskV1;
+  frozenOwnerIdentities?: WorldReconstructionFrozenOwnerIdentitiesV1;
   generated?: WorldReconstructionGeneratePortResultV1;
   packaged?: Extract<WorldReconstructionPackagePortResultV1, {
     readonly outcome: "completed";
   }>;
-  packagedOwnerResult?: PackagedNativeBlockAttemptV1;
+  verifiedWorldPackage?: PackagedNativeBlockAttemptV1["verifiedWorldPackage"];
   captureDirectoryPath?: string;
 }
 
@@ -324,6 +349,9 @@ async function verifyCaseBoundFormalCaptureIntentV1(
     !isEqual(parsed, input.formalCaptureIntent)
   ) throw new TypeError("WORLD_RECONSTRUCTION_FORMAL_CAPTURE_INTENT_INVALID");
   const bindings = parsed.semanticCaptureTargetBindings;
+  const openingReferenceTargetRefs = new Set(input.reconstructionCase.expected.semanticSilhouetteTargets
+    .filter((target) => target.viewRequirements.some((requirement) => requirement.viewId === "opening" &&
+      requirement.mode === "reference-projection-required")).map((target) => target.acceptanceTargetRef));
   const checkpointIds = parsed.checkpointSpatialCriteria
     .map(({ checkpointId }) => checkpointId)
     .slice()
@@ -340,7 +368,8 @@ async function verifyCaseBoundFormalCaptureIntentV1(
         .map(({ acceptanceTargetRef }) => acceptanceTargetRef),
     ) ||
     !isEqual(
-      bindings.map(({ compositionTargetRef }) => compositionTargetRef).sort(),
+      bindings.filter(({ acceptanceTargetRef }) => openingReferenceTargetRefs.has(acceptanceTargetRef))
+        .map(({ compositionTargetRef }) => compositionTargetRef).sort(),
       [...input.reconstructionCase.expected.openingComposition.targetRefs].sort(),
     ) ||
     !isEqual(
@@ -372,17 +401,35 @@ async function readJsonNoFollow(filePath: string): Promise<unknown> {
   return JSON.parse((await readFile(filePath)).toString("utf8"));
 }
 
-function runBuilderSelfCheckV1(
+export function runBuilderSelfCheckV1(
   checkerPath: string,
   workspacePath: string,
-): Promise<Readonly<{ ok: boolean; diagnosticCodes: readonly string[] }>> {
+  sceneBriefPath: string,
+): Promise<BuilderSelfCheckResult> {
   return new Promise((resolvePromise) => {
+    const attemptDirectoryPath = path.dirname(workspacePath);
     const child = spawn(
       process.execPath,
-      [checkerPath, "--workspace", workspacePath],
+      [
+        checkerPath,
+        "--workspace",
+        workspacePath,
+        "--case",
+        path.join(attemptDirectoryPath, ".task/context/case.json"),
+        "--scene-brief",
+        sceneBriefPath,
+        "--visual-identity-palette",
+        path.join(
+          attemptDirectoryPath,
+          "inputs/visual-identity-palette.json",
+        ),
+      ],
       { shell: false, stdio: ["ignore", "pipe", "pipe"] },
     );
     let stdout = "";
+    // Drain without logging untrusted stderr; otherwise a full pipe can block
+    // even a checker that eventually writes a valid JSON report.
+    child.stderr.resume();
     child.stdout.on("data", (chunk) => {
       stdout += String(chunk);
     });
@@ -399,6 +446,9 @@ function runBuilderSelfCheckV1(
         resolvePromise(Object.freeze({
           ok: exitCode === 0 && report.ok === true,
           diagnosticCodes: Object.freeze(codes),
+          ...(codes.includes("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED") ? {
+            typecheckDiagnostics: parseNativeSourceTypecheckDiagnostics(report.typecheckDiagnostics),
+          } : {}),
         }));
       } catch {
         resolvePromise({ ok: false, diagnosticCodes: ["self-check-failed"] });
@@ -411,6 +461,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
   input: ProductionWorldReconstructionRunPortsInputV1,
   owners: ProductionWorldReconstructionRunPortOwnersV1 = defaultOwners(),
 ): Promise<WorldReconstructionRunPortsV1> {
+  const executionPurpose = parseWorldReconstructionExecutionPurposeV1(input.executionPurpose);
   const caseArtifactRoot = canonicalCaseArtifactRoot(
     input.caseRef,
     input.reconstructionCase.id,
@@ -427,6 +478,21 @@ export async function createProductionWorldReconstructionRunPortsV1(
   ) throw new TypeError("WORLD_RECONSTRUCTION_RUN_DIRECTORY_INVALID");
   const formalCaptureIntent = await verifyCaseBoundFormalCaptureIntentV1(input);
   const checkpoints = new Map<WorldReconstructionAttemptIndexV1, AttemptCheckpointV1>();
+  if (input.hostRecoveryIndex !== undefined &&
+    (!Number.isSafeInteger(input.hostRecoveryIndex) || input.hostRecoveryIndex < 1 || executionPurpose !== "production")) {
+    throw new TypeError("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+  }
+  const attemptPath = (index: WorldReconstructionAttemptIndexV1) =>
+    path.join(input.generationInput.runDirectoryPath, "attempts", String(index));
+  const hostOutputPath = (index: WorldReconstructionAttemptIndexV1) => input.hostRecoveryIndex === undefined
+    ? attemptPath(index) : path.join(attemptPath(index), "host-recoveries", String(input.hostRecoveryIndex));
+  const ensureHostOutputPath = async (index: WorldReconstructionAttemptIndexV1) => {
+    const root = hostOutputPath(index);
+    await mkdir(root, { recursive: true, mode: 0o700 });
+    if (await realpath(root) !== root || !(await lstat(root)).isDirectory()) {
+      throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+    }
+  };
   const cleanupState: Record<CleanupKeyV1, WorldReconstructionCleanupOwnerOutcomeV1> = {
     providerTask: "pending",
     candidate: "pending",
@@ -462,6 +528,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
 
   const ports: WorldReconstructionRunPortsV1 = {
     generate: async (stageInput) => {
+      const selfCheckDiagnosticCodes = new Set<string>();
       const state = checkpoint(stageInput.attemptIndex);
       if (state.prepared !== undefined || state.generated !== undefined) {
         throw new Error("WORLD_RECONSTRUCTION_DUPLICATE_REQUEST_MISMATCH");
@@ -478,6 +545,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           : { repairInstruction: stageInput.repairInstruction }),
       });
       state.prepared = prepared;
+      state.frozenOwnerIdentities = prepared.frozenOwnerIdentities;
       setCleanup(["providerTask", "temporaryDirectories"], "failed");
       if (
         prepared.routerRequestId !== stageInput.requestId ||
@@ -487,16 +555,30 @@ export async function createProductionWorldReconstructionRunPortsV1(
       }
       const generationRunPorts: NativeBlockGenerationRunPortsV1 = {
         process: owners.createProcessPort(),
-        selfCheck: async (workspacePath) => owners.runSelfCheck(
-          path.join(
-            prepared.taskWorkspacePath,
-            "inputs",
-            "builder-skill",
-            "scripts",
-            "self-check.mjs",
-          ),
-          workspacePath,
-        ),
+        selfCheck: async (workspacePath) => {
+          const result = await owners.runSelfCheck(
+            path.join(prepared.taskWorkspacePath, "inputs/builder-skill/scripts/self-check.mjs"),
+            workspacePath,
+            path.join(prepared.taskWorkspacePath, "inputs", prepared.generationRequest.sceneBriefRef),
+          );
+          if (!result.ok && result.typecheckDiagnostics?.length) {
+            selfCheckDiagnosticCodes.add("WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED");
+          }
+          await publishCanonicalJsonImmutable(
+            path.join(path.dirname(workspacePath), "builder-self-check.host.json"),
+            {
+              kind: "native-block-builder-host-self-check",
+              schemaVersion: 1,
+              generationRequestHash: prepared.generationRequestHash,
+              builderSkillHash: prepared.generationRequest.builderSkillHash,
+              routerRequestId: prepared.routerRequestId,
+              ok: result.ok,
+              diagnosticCodes: [...new Set(result.diagnosticCodes)].sort(),
+              ...(result.typecheckDiagnostics === undefined ? {} : { typecheckDiagnostics: result.typecheckDiagnostics }),
+            },
+          );
+          return result;
+        },
         reconcile: async (requestId, requestHash) => {
           const reconciliation = await owners.reconcileGeneration({
             executablePath: prepared.routerExecutablePath,
@@ -575,7 +657,8 @@ export async function createProductionWorldReconstructionRunPortsV1(
           ),
         ),
         sceneAuthoringAttemptHash: prepared.attemptHash,
-        diagnosticCodes: Object.freeze([...generation.receipt.diagnosticCodes]),
+        diagnosticCodes: Object.freeze([...new Set([...generation.receipt.diagnosticCodes,
+          ...(outcome === "completed" ? [] : selfCheckDiagnosticCodes)])].sort()),
       });
       state.generated = result;
       return result;
@@ -584,19 +667,15 @@ export async function createProductionWorldReconstructionRunPortsV1(
     package: async (stageInput) => {
       const state = checkpoint(stageInput.attemptIndex);
       if (
-        state.prepared === undefined ||
+        state.frozenOwnerIdentities === undefined ||
         state.generated === undefined ||
         state.packaged !== undefined ||
         !isEqual(stageInput.generate, state.generated) ||
-        !isEqual(stageInput.frozenOwnerIdentities, state.prepared.frozenOwnerIdentities)
+        !isEqual(stageInput.frozenOwnerIdentities, state.frozenOwnerIdentities)
       ) throw new Error("WORLD_RECONSTRUCTION_PACKAGE_STAGE_INVALID");
       cleanupState.candidate = "failed";
-      const outputDirectoryPath = path.join(
-        input.generationInput.runDirectoryPath,
-        "attempts",
-        String(stageInput.attemptIndex),
-        "world-package",
-      );
+      const hostOutputRoot = hostOutputPath(stageInput.attemptIndex);
+      const outputDirectoryPath = path.join(hostOutputRoot, "world-package");
       try {
         const packaged = await owners.packageAttempt({
           repositoryRoot: input.repositoryRoot,
@@ -616,12 +695,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
             caseArtifactRoot,
             caseRootPath,
             input.generationInput.runDirectoryPath,
-            path.join(
-              input.generationInput.runDirectoryPath,
-              "attempts",
-              String(stageInput.attemptIndex),
-              "attempt-result.json",
-            ),
+            path.join(hostOutputRoot, "attempt-result.json"),
           ),
           sceneAuthoringAttemptResultHash:
             hashSceneAuthoringAttemptResultV1(
@@ -638,9 +712,16 @@ export async function createProductionWorldReconstructionRunPortsV1(
           worldPackageBuildReceiptHash: packaged.buildReceiptHash,
           worldBuildIdentityRef: WORLD_BUILD_IDENTITY_REF,
           worldBuildIdentityHash: packaged.worldBuildIdentityHash,
+          groundAnalysisReportRef: caseArtifactRefForPath(
+            caseArtifactRoot,
+            caseRootPath,
+            input.generationInput.runDirectoryPath,
+            packaged.groundAnalysisReportPath,
+          ),
+          groundAnalysisReportHash: packaged.groundAnalysisReportHash,
           diagnosticCodes: Object.freeze([...packaged.diagnostics]),
         });
-        state.packagedOwnerResult = packaged;
+        state.verifiedWorldPackage = packaged.verifiedWorldPackage;
         state.packaged = completed;
         return completed;
       } catch (error) {
@@ -652,11 +733,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
         if (!isNil(packageError) && !isNil(nativeCheckRejection)) {
           cleanupState.candidate = "completed";
           cleanupState.outputPromotion = "completed";
-          const attemptDirectoryPath = path.join(
-            input.generationInput.runDirectoryPath,
-            "attempts",
-            String(stageInput.attemptIndex),
-          );
+          const attemptDirectoryPath = hostOutputRoot;
           return Object.freeze({
             outcome: "native-check-rejected" as const,
             sceneAuthoringAttemptResultRef: caseArtifactRefForPath(
@@ -688,11 +765,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
         if (!isNil(packageError) && !isNil(groundAnalysisRejection)) {
           cleanupState.candidate = "completed";
           cleanupState.outputPromotion = "completed";
-          const attemptDirectoryPath = path.join(
-            input.generationInput.runDirectoryPath,
-            "attempts",
-            String(stageInput.attemptIndex),
-          );
+          const attemptDirectoryPath = hostOutputRoot;
           return Object.freeze({
             outcome: "ground-analysis-rejected" as const,
             sceneAuthoringAttemptResultRef: caseArtifactRefForPath(
@@ -741,7 +814,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
       const state = checkpoint(stageInput.attemptIndex);
       if (
         state.packaged === undefined ||
-        state.packagedOwnerResult === undefined ||
+        state.verifiedWorldPackage === undefined ||
         !isEqual(state.packaged, stageInput.packaged) ||
         state.captureDirectoryPath !== undefined
       ) throw new Error("WORLD_RECONSTRUCTION_CAPTURE_STAGE_INVALID");
@@ -754,14 +827,15 @@ export async function createProductionWorldReconstructionRunPortsV1(
         path.dirname(state.packaged.worldPackagePath),
         FORMAL_WORLD_CAPTURE_REQUEST_FILE_NAME_V1,
       );
-      const captureDirectoryPath = path.join(attemptDirectoryPath, "capture");
+      const captureDirectoryPath = path.join(hostOutputPath(stageInput.attemptIndex), "capture");
       const rejectedCaptureDirectoryPath = path.join(
-        attemptDirectoryPath,
+        hostOutputPath(stageInput.attemptIndex),
         "rejected-capture",
       );
       let captureOwnerStarted = false;
       try {
         const materialized = await owners.materializeCaptureRequest({
+          outputMode: input.hostRecoveryIndex === undefined ? "create" : "verify-or-create",
           casePath: input.casePath,
           evaluationProfilePath: input.evaluationProfilePath,
           sceneAuthoringAttemptPath: path.join(attemptDirectoryPath, "attempt.json"),
@@ -776,6 +850,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           triviewOutputPath: captureDirectoryPath,
           rejectedOutputDirectoryPath: rejectedCaptureDirectoryPath,
           openingGate: {
+            executionPurpose,
             reconstructionCase: input.reconstructionCase,
             evaluationProfile: input.evaluationProfile,
           },
@@ -905,7 +980,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
       const state = checkpoint(stageInput.attemptIndex);
       if (
         state.packaged === undefined ||
-        state.packagedOwnerResult === undefined ||
+        state.verifiedWorldPackage === undefined ||
         state.captureDirectoryPath === undefined ||
         stageInput.packaged.outcome !== "completed" ||
         stageInput.captured.outcome !== "completed" ||
@@ -917,6 +992,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           authoringManifest,
           captureReceipt,
           openingObservation,
+          semanticViewObservationSet,
           spawnSupportObservation,
           colliderOverlayObservation,
           scriptedTraversalObservation,
@@ -932,6 +1008,8 @@ export async function createProductionWorldReconstructionRunPortsV1(
             .then(parseFormalWorldCaptureReceiptV1),
           readJsonNoFollow(path.join(captureDirectoryPath, "opening-observation.json"))
             .then(parseFormalOpeningObservationV1),
+          readJsonNoFollow(path.join(captureDirectoryPath, "semantic-view-observation-set.json"))
+            .then(parseFormalSemanticViewObservationSetV1),
           readJsonNoFollow(path.join(captureDirectoryPath, "spawn-support-observation.json"))
             .then(parseFormalSpawnSupportObservationV1),
           readJsonNoFollow(path.join(captureDirectoryPath, "collider-overlay-observation.json"))
@@ -947,11 +1025,7 @@ export async function createProductionWorldReconstructionRunPortsV1(
           throw new Error("WORLD_RECONSTRUCTION_CAPTURE_IDENTITY_MISMATCH");
         }
         const published = await owners.evaluateAttempt({
-          attemptDirectoryPath: path.join(
-            input.generationInput.runDirectoryPath,
-            "attempts",
-            String(stageInput.attemptIndex),
-          ),
+          attemptDirectoryPath: hostOutputPath(stageInput.attemptIndex),
           evidenceInput: {
             id: `${input.reconstructionCase.id}.attempt-${stageInput.attemptIndex}.evidence`,
             caseRef: input.caseRef,
@@ -959,10 +1033,11 @@ export async function createProductionWorldReconstructionRunPortsV1(
             evaluationProfileRef: captureReceipt.evaluationProfileRef,
             evaluationProfile: input.evaluationProfile,
             authoringManifest,
-            verifiedWorldPackage: state.packagedOwnerResult.verifiedWorldPackage,
+            verifiedWorldPackage: state.verifiedWorldPackage,
             captureReceiptRef: stageInput.captured.captureReceiptRef,
             captureReceipt,
             openingObservation,
+            semanticViewObservationSet,
             spawnSupportObservation,
             colliderOverlayObservation,
             scriptedTraversalObservation,
@@ -1028,5 +1103,153 @@ export async function createProductionWorldReconstructionRunPortsV1(
       ]),
     )) as unknown as WorldReconstructionCleanupOutcomesV1,
   };
-  return Object.freeze(ports);
+  const saved = async <K extends "generate" | "package" | "capture" | "evaluate">(
+    stage: K, stageInput: Parameters<WorldReconstructionRunPortsV1[K]>[0],
+  ): Promise<Awaited<ReturnType<WorldReconstructionRunPortsV1[K]>> | undefined> => {
+    if (input.hostRecoveryIndex === undefined) return undefined;
+    return await readHostCheckpointV1({ attemptRoot: attemptPath(stageInput.attemptIndex), stage,
+      inputIdentity: stageInput }) as Awaited<ReturnType<WorldReconstructionRunPortsV1[K]>> | undefined;
+  };
+  const commit = async (stage: "generate" | "package" | "capture" | "evaluate", stageInput: { attemptIndex: WorldReconstructionAttemptIndexV1 }, result: unknown, paths: readonly string[]) => {
+    // Host-only continuation is a production workflow, not an external strict repair Attempt.
+    if (executionPurpose !== "production") return;
+    const root = attemptPath(stageInput.attemptIndex);
+    await writeHostCheckpointV1({ attemptRoot: root, stage, inputIdentity: stageInput, result,
+      artifactRoots: paths.map((file) => path.relative(root, file).split(path.sep).join("/")) });
+  };
+  const generatedArtifactPaths = (index: WorldReconstructionAttemptIndexV1) =>
+    ["source", "inputs", "context", "advisory", "attempt.json", "generation-request.json", "generation-receipt.json",
+      "scene-authoring-route-decision.json", "generation-dispatch.json"]
+      .map((file) => path.join(attemptPath(index), file));
+  // Reconstruct from the original owner receipts if the process died before the Host checkpoint commit.
+  // This reads the same Run/Attempt, never synthesizes a Generation Receipt or prepares another task.
+  const recoverGenerated = async (stageInput: Parameters<WorldReconstructionRunPortsV1["generate"]>[0]): Promise<WorldReconstructionGeneratePortResultV1 | undefined> => {
+    const root = attemptPath(stageInput.attemptIndex);
+    let receiptValue: unknown;
+    try { receiptValue = await readJsonNoFollow(path.join(root, "generation-receipt.json")); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+    const receipt = parseNativeBlockGenerationReceiptV1(receiptValue);
+    if (receipt.outcome !== "completed" || receipt.cleanupOutcome !== "completed") return undefined;
+    const request = parseNativeBlockGenerationRequestV1(await readJsonNoFollow(path.join(root, "generation-request.json")));
+    const attempt = parseSceneAuthoringAttemptV1(await readJsonNoFollow(path.join(root, "attempt.json")));
+    const dispatch = await readJsonNoFollow(path.join(root, "generation-dispatch.json")) as Record<string, unknown>;
+    assertNativeBlockGenerationReceiptMatchesRequestV1(request, receipt);
+    if (attempt.sourceInput.kind !== "babylon-native") throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+    assertNativeBlockGenerationRequestMatchesAttemptV1(attempt.sourceInput.generationRequestRef, request, attempt);
+    if (dispatch.kind !== "native-block-generation-dispatch" || dispatch.schemaVersion !== 1 ||
+      dispatch.backend !== stageInput.backend || receipt.backend !== stageInput.backend ||
+      dispatch.routerRequestId !== stageInput.requestId || receipt.routerRequestId !== stageInput.requestId ||
+      dispatch.routerTaskPayloadHash !== receipt.routerTaskPayloadHash ||
+      dispatch.generationRequestHash !== hashNativeBlockGenerationRequestV1(request) ||
+      dispatch.attemptHash !== hashSceneAuthoringAttemptV1(attempt) ||
+      !isEqual(dispatch.frozenOwnerIdentities, stageInput.frozenOwnerIdentities)) {
+      throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+    }
+    for (const file of [
+      ...request.contextInputs.map((item) => ({ relative: item.inputRef, hash: item.contentHash })),
+      ...receipt.outputs.map((item) => ({ relative: `source/${item.path}`, hash: item.contentHash })),
+    ]) {
+      const target = path.resolve(root, file.relative);
+      if (!target.startsWith(`${root}${path.sep}`) || await realpath(target) !== target ||
+        !(await lstat(target)).isFile() || sha256Bytes(await readFile(target)) !== file.hash) {
+        throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+      }
+    }
+    const ref = (file: string) => caseArtifactRefForPath(caseArtifactRoot, caseRootPath,
+      input.generationInput.runDirectoryPath, path.join(root, file));
+    const result: WorldReconstructionGeneratePortResultV1 = Object.freeze({
+      outcome: "completed", requestId: receipt.routerRequestId, requestHash: receipt.routerTaskPayloadHash,
+      generationRequestRef: ref("generation-request.json"), generationRequestHash: receipt.generationRequestHash,
+      generationReceiptRef: ref("generation-receipt.json"), generationReceiptHash: hashNativeBlockGenerationReceiptV1(receipt),
+      sceneAuthoringAttemptRef: ref("attempt.json"), sceneAuthoringAttemptHash: hashSceneAuthoringAttemptV1(attempt),
+      diagnosticCodes: receipt.diagnosticCodes,
+    });
+    await commit("generate", stageInput, result, generatedArtifactPaths(stageInput.attemptIndex));
+    return result;
+  };
+  const durablePorts = {
+    ...ports,
+    generate: async (stageInput) => {
+      const cached = await saved("generate", stageInput) ??
+        (input.hostRecoveryIndex === undefined ? undefined : await recoverGenerated(stageInput));
+      if (cached !== undefined) {
+        if (cached.outcome !== "completed") throw new Error("WORLD_RECONSTRUCTION_HOST_RECOVERY_GENERATION_INCOMPLETE");
+        const state = checkpoint(stageInput.attemptIndex);
+        state.generated = cached;
+        state.frozenOwnerIdentities = stageInput.frozenOwnerIdentities;
+        setCleanup(["providerTask", "temporaryDirectories", "outputPromotion"], "completed");
+        return cached;
+      }
+      // Missing/unknown/rejected generation is not a license to POST another task.
+      if (input.hostRecoveryIndex !== undefined) {
+        let dispatch: Record<string, unknown> | undefined;
+        try { dispatch = await readJsonNoFollow(path.join(attemptPath(stageInput.attemptIndex), "generation-dispatch.json")) as Record<string, unknown>; }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+        if (dispatch !== undefined) {
+          if (dispatch.kind !== "native-block-generation-dispatch" || dispatch.schemaVersion !== 1 ||
+            dispatch.routerRequestId !== stageInput.requestId || dispatch.backend !== stageInput.backend ||
+            !isEqual(dispatch.frozenOwnerIdentities, stageInput.frozenOwnerIdentities)) {
+            throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+          }
+          await owners.reconcileGeneration({ executablePath: path.join(input.repositoryRoot, "scripts/agents/run-codex-task.mjs"),
+            backend: stageInput.backend, requestId: stageInput.requestId, cwd: input.generationInput.runDirectoryPath });
+        }
+        throw new Error("WORLD_RECONSTRUCTION_HOST_RECOVERY_GENERATION_INCOMPLETE");
+      }
+      const result = await ports.generate(stageInput);
+      if (result.outcome === "completed") {
+        await commit("generate", stageInput, result, generatedArtifactPaths(stageInput.attemptIndex));
+      }
+      return result;
+    },
+    package: async (stageInput) => {
+      const cached = await saved("package", stageInput);
+      if (cached !== undefined) {
+        if (cached.outcome !== "completed") throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+        const verified = verifyWorldPackageDirectoryV1(await readWorldPackageDirectoryV1({
+          packageDirectoryPath: cached.worldPackagePath, maximumTotalBytes: 512_000_000, maximumFileCount: 4096,
+        }));
+        if (verified.kind !== "babylon-native-scene" || verified.receipt.worldPackageRootHash !== cached.worldPackageRootHash) {
+          throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+        }
+        const state = checkpoint(stageInput.attemptIndex);
+        state.packaged = cached;
+        // The verified capability is reconstructed by its owner, never deserialized from JSON.
+        state.verifiedWorldPackage = verified;
+        setCleanup(["candidate", "outputPromotion"], "completed");
+        return cached;
+      }
+      await ensureHostOutputPath(stageInput.attemptIndex);
+      const result = await ports.package(stageInput);
+      if (result.outcome === "completed") await commit("package", stageInput, result,
+        ["world-package", "attempt-result.json", "native-check-result.json", "native-explain.txt",
+          "ground-analysis-report.json", "logical-ground-model.json", "ground-analysis-diagnostics.json"]
+          .map((file) => path.join(hostOutputPath(stageInput.attemptIndex), file)));
+      return result;
+    },
+    capture: async (stageInput) => {
+      const cached = await saved("capture", stageInput);
+      if (cached !== undefined) {
+        if (cached.outcome !== "completed") throw new Error("WORLD_RECONSTRUCTION_HOST_CHECKPOINT_INVALID");
+        checkpoint(stageInput.attemptIndex).captureDirectoryPath = path.dirname(cached.captureReceiptPath);
+        setCleanup(["hostedBrowserSession", "viteServer", "outputPromotion"], "completed");
+        return cached;
+      }
+      await ensureHostOutputPath(stageInput.attemptIndex);
+      const result = await ports.capture(stageInput);
+      if (result.outcome === "completed") await commit("capture", stageInput, result, [path.dirname(result.captureReceiptPath)]);
+      return result;
+    },
+    evaluate: async (stageInput) => {
+      const cached = await saved("evaluate", stageInput);
+      if (cached !== undefined) return cached;
+      await ensureHostOutputPath(stageInput.attemptIndex);
+      const result = await ports.evaluate(stageInput);
+      await commit("evaluate", stageInput, result, [result.evaluationPath, path.join(path.dirname(result.evaluationPath), "evidence-set.json")]);
+      return result;
+    },
+  } satisfies WorldReconstructionRunPortsV1;
+  return Object.freeze({ ...durablePorts,
+    ...(input.hostRecoveryIndex === undefined ? {} : { restoreGenerated: durablePorts.generate }),
+  });
 }

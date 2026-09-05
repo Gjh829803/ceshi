@@ -28,6 +28,71 @@ async function createCommittedRepository(): Promise<Readonly<{
 }
 
 describe("trusted formal Capture SDK owner identities", () => {
+  it("does not treat documentary edits as SDK implementation changes", async () => {
+    const repository = await createCommittedRepository();
+    const documentPaths = [
+      "docs/18-refactor-progress-and-backlog.md",
+      "docs/superpowers/specs/capture-design.md",
+      "docs/superpowers/plans/capture-plan.md",
+      "docs/reviews/capture-review.md",
+    ];
+    try {
+      for (const relative of documentPaths) {
+        await mkdir(path.dirname(path.join(repository.root, relative)), { recursive: true });
+        await writeFile(path.join(repository.root, relative), "initial\n");
+      }
+      await execFile("git", ["-C", repository.root, "add", "docs"]);
+      await execFile("git", ["-C", repository.root, "commit", "--quiet", "-m", "documents"]);
+      const before = await resolveFormalWorldCaptureSdkOwnerIdentitiesV1({ repositoryRoot: repository.root });
+      for (const relative of documentPaths) await writeFile(path.join(repository.root, relative), "progress\n");
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({ repositoryRoot: repository.root }))
+        .resolves.toEqual(before);
+      await execFile("git", ["-C", repository.root, "add", "docs"]);
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({ repositoryRoot: repository.root }))
+        .resolves.toEqual(before);
+      // A dirty implementation must still fail even alongside staged documentary edits.
+      await writeFile(repository.trackedPath, "changed implementation\n");
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({ repositoryRoot: repository.root }))
+        .rejects.toThrow("WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY");
+    } finally {
+      await rm(repository.root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ".codex/skills/worldkit-native-block-builder/SKILL.md",
+    "docs/superpowers/skills/worldkit-native-block-builder/SKILL.md",
+    "docs/superpowers/specs/executable.ts",
+    "apps/native-scene-playground/vite.config.ts",
+    "pnpm-lock.yaml",
+  ])("still rejects modified execution or frozen input %s", async (relative) => {
+    const repository = await createCommittedRepository();
+    try {
+      const file = path.join(repository.root, relative);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, "initial\n");
+      await execFile("git", ["-C", repository.root, "add", relative]);
+      await execFile("git", ["-C", repository.root, "commit", "--quiet", "-m", "input"]);
+      await writeFile(file, "changed\n");
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({ repositoryRoot: repository.root }))
+        .rejects.toThrow("WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY");
+    } finally {
+      await rm(repository.root, { recursive: true, force: true });
+    }
+  });
+
+  it("cannot hide a source deletion by renaming it into the document scope", async () => {
+    const repository = await createCommittedRepository();
+    try {
+      await mkdir(path.join(repository.root, "docs/reviews"), { recursive: true });
+      await execFile("git", ["-C", repository.root, "mv", "runtime-source.ts", "docs/reviews/hidden.md"]);
+      await expect(resolveFormalWorldCaptureSdkOwnerIdentitiesV1({ repositoryRoot: repository.root }))
+        .rejects.toThrow("WORLDKIT_SDK_OWNER_IDENTITY_SOURCE_DIRTY");
+    } finally {
+      await rm(repository.root, { recursive: true, force: true });
+    }
+  });
+
   it("publishes the five SDK owners in contract order from the root SDK version and exact source commit", async () => {
     const identities = await resolveFormalWorldCaptureSdkOwnerIdentitiesV1({
       envCommit: SOURCE_COMMIT_A,

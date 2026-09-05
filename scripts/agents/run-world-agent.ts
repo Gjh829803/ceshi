@@ -82,7 +82,6 @@ export function parseWorldAgentArgumentsV1(
   } catch {
     failArguments();
   }
-  if (sceneSourceKind === "babylon-native" && mode !== "full") failArguments();
   if (mode === "build" && imagePaths.length > 0) failArguments();
   if (mode !== "build" && promptParts.length === 0) failArguments();
 
@@ -113,6 +112,7 @@ export function resolveWorldAgentInvocationV1(
         "exec",
         "tsx",
         "scripts/reconstruction/run-native-world-agent.ts",
+        ...(request.mode === "plan" ? ["--plan-only"] : request.mode === "build" ? ["--build-only"] : []),
         ...commonArguments,
       ]),
     });

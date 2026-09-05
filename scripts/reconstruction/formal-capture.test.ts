@@ -152,10 +152,10 @@ function packageAndRequest(): Readonly<{
       semanticClassId: visualGroup.semanticClassId,
       identityColor: visualGroup.identityColorHex,
       projectedBoundsSource: "checked-layout-visual-group" as const,
-      requiredWorldViewIds: [
-        "opening",
-        "world-side",
-        "world-top-down",
+      viewRequirements: [
+        { viewId: "opening", mode: "reference-projection-required" },
+        { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" },
       ] as const,
       authoringManifestHash: metadata.authoringManifestHash,
       layoutInventoryHash: metadata.checkedLayoutInventoryHash,
@@ -284,17 +284,28 @@ function packageAndRequest(): Readonly<{
 describe("formal Package Capture preflight join", () => {
   it("keeps Opening Composition advisory for report-only publication", () => {
     expect(openingCompositionGateBlocksPublicationV1({
+      executionPurpose: "strict-acceptance",
       qualityGateMode: "report-only",
       gateStatus: "failed",
     })).toBe(false);
     expect(openingCompositionGateBlocksPublicationV1({
+      executionPurpose: "strict-acceptance",
       qualityGateMode: "required-for-publication",
       gateStatus: "failed",
     })).toBe(true);
     expect(openingCompositionGateBlocksPublicationV1({
+      executionPurpose: "strict-acceptance",
       qualityGateMode: "required-for-publication",
       gateStatus: "passed",
     })).toBe(false);
+  });
+
+  it.each(["report-only", "required-for-publication"] as const)("ordinary Capture cannot be made stricter by a %s Profile", (qualityGateMode) => {
+    for (const gateStatus of ["passed", "failed"] as const) {
+      expect(openingCompositionGateBlocksPublicationV1({
+        executionPurpose: "production", qualityGateMode, gateStatus,
+      })).toBe(false);
+    }
   });
 
   it("reports invalid output topology as pre-launch with no Hosted cleanup", async () => {
@@ -522,6 +533,7 @@ describe("formal Capture artifact publication", () => {
         worldTopDownPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
+        semanticViewObservationSetJson: new TextEncoder().encode("{}"),
         spawnSupportObservationJson: new TextEncoder().encode("{}"),
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),
@@ -554,6 +566,7 @@ describe("formal Capture artifact publication", () => {
       "opening-observation.json",
       "opening.png",
       "scripted-traversal.json",
+      "semantic-view-observation-set.json",
       "spawn-support-observation.json",
       "world-side.png",
       "world-top-down.png",
@@ -591,6 +604,7 @@ describe("formal Capture artifact publication", () => {
         worldTopDownPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
+        semanticViewObservationSetJson: new TextEncoder().encode("{}"),
         spawnSupportObservationJson: new TextEncoder().encode("{}"),
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),
@@ -621,7 +635,7 @@ describe("formal Capture artifact publication", () => {
     )).toEqual([]);
   });
 
-  it("publishes all nine artifacts with the receipt written last", async () => {
+  it("publishes all ten artifacts with the receipt written last", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "formal-capture-test-"));
     temporaryRoots.push(root);
     const outputDirectoryPath = path.join(root, "capture");
@@ -634,6 +648,7 @@ describe("formal Capture artifact publication", () => {
         worldTopDownPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
+        semanticViewObservationSetJson: new TextEncoder().encode("{}"),
         spawnSupportObservationJson: new TextEncoder().encode("{}"),
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),
@@ -658,6 +673,7 @@ describe("formal Capture artifact publication", () => {
       "opening-observation.json",
       "opening.png",
       "scripted-traversal.json",
+      "semantic-view-observation-set.json",
       "spawn-support-observation.json",
       "world-side.png",
       "world-top-down.png",
@@ -680,6 +696,7 @@ describe("formal Capture artifact publication", () => {
         worldTopDownPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
+        semanticViewObservationSetJson: new TextEncoder().encode("{}"),
         spawnSupportObservationJson: new TextEncoder().encode("{}"),
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),
@@ -714,6 +731,7 @@ describe("formal Capture artifact publication", () => {
         worldTopDownPng: PNG,
         colliderOverlayPng: PNG,
         openingObservationJson: new TextEncoder().encode("{}"),
+        semanticViewObservationSetJson: new TextEncoder().encode("{}"),
         spawnSupportObservationJson: new TextEncoder().encode("{}"),
         colliderOverlayObservationJson: new TextEncoder().encode("{}"),
         scriptedTraversalJson: new TextEncoder().encode("{}"),

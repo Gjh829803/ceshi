@@ -67,26 +67,46 @@ function caseValue() {
         acceptanceTargetRef:
           "worldkit://acceptance-target/central-ascent@1",
         visualGroupId: "central-ascent-group",
-        normalizedBounds: {
-          minXBasisPoints: 100,
-          minYBasisPoints: 200,
-          maxXBasisPoints: 500,
-          maxYBasisPoints: 800,
-        },
-        normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
-        coverageBasisPoints: 2_400,
+        viewRequirements: [{
+          viewId: "opening",
+          mode: "reference-projection-required",
+          normalizedBounds: {
+            minXBasisPoints: 100,
+            minYBasisPoints: 200,
+            maxXBasisPoints: 500,
+            maxYBasisPoints: 800,
+          },
+          normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+          coverageBasisPoints: 2_400,
+        }, {
+          viewId: "world-side",
+          mode: "presence-required",
+        }, {
+          viewId: "world-top-down",
+          mode: "presence-required",
+        }],
       }, {
         acceptanceTargetRef:
           "worldkit://acceptance-target/upper-t-junction@1",
         visualGroupId: "upper-t-junction-group",
-        normalizedBounds: {
-          minXBasisPoints: 600,
-          minYBasisPoints: 100,
-          maxXBasisPoints: 900,
-          maxYBasisPoints: 400,
-        },
-        normalizedCenter: { xBasisPoints: 750, yBasisPoints: 250 },
-        coverageBasisPoints: 900,
+        viewRequirements: [{
+          viewId: "opening",
+          mode: "reference-projection-required",
+          normalizedBounds: {
+            minXBasisPoints: 600,
+            minYBasisPoints: 100,
+            maxXBasisPoints: 900,
+            maxYBasisPoints: 400,
+          },
+          normalizedCenter: { xBasisPoints: 750, yBasisPoints: 250 },
+          coverageBasisPoints: 900,
+        }, {
+          viewId: "world-side",
+          mode: "presence-required",
+        }, {
+          viewId: "world-top-down",
+          mode: "presence-required",
+        }],
       }],
       openingComposition: {
         acceptanceTargetRef:

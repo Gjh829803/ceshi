@@ -26,11 +26,11 @@ export const BABYLON_NATIVE_BLOCK_RECONSTRUCTION_CORPUS_CASE_IDS_V1 =
     "ordinary-and-blocked-steps",
     "building-exterior",
     "limited-interior",
+    "route-islands-on-ground",
     "overlap-occupancy",
     "out-of-budget",
     "invalid-traversal-binding",
     "unsupported-spawn",
-    "disconnected-route",
     "cleanup-throw-partial",
   ] as const);
 
@@ -47,6 +47,7 @@ export type BabylonNativeBlockReconstructionCorpusFamilyV1 =
   | "steps"
   | "building"
   | "limited-interior"
+  | "route-islands"
   | "negative";
 
 export interface BabylonNativeBlockReconstructionCorpusCaseV1 {
@@ -404,20 +405,22 @@ const UNSUPPORTED_SPAWN = record({
   ]),
 });
 
-const DISCONNECTED_ROUTE = record({
-  id: "disconnected-route",
+const ROUTE_ISLANDS_ON_GROUND = record({
+  id: "route-islands-on-ground",
   seed: 202608325,
-  polarity: "negative",
-  family: "negative",
-  maximumBlockCount: 2,
+  polarity: "positive",
+  family: "route-islands",
+  maximumBlockCount: 5,
   colliderMode: "layout",
   notTraversableBlockIds: Object.freeze([]),
-  expectedFailureCode: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
   spawn: SUPPORTED_SPAWN,
   opening: DEFAULT_OPENING,
   blocks: Object.freeze([
-    block("west-route", "full", "route", [0, -0.5, 0], "split-route"),
-    block("east-route", "full", "route", [4, -0.5, 0], "split-route"),
+    block("west-route", "full", "route", [0, -0.5, 0], "west-course"),
+    block("ordinary-ground-one", "full", "ground", [1, -0.5, 0]),
+    block("ordinary-ground-two", "full", "ground", [2, -0.5, 0]),
+    block("ordinary-ground-three", "full", "ground", [3, -0.5, 0]),
+    block("east-route", "full", "route", [4, -0.5, 0], "east-course"),
   ]),
 });
 
@@ -444,11 +447,11 @@ const RECORDS = Object.freeze([
   ORDINARY_AND_BLOCKED_STEPS,
   BUILDING_EXTERIOR,
   LIMITED_INTERIOR,
+  ROUTE_ISLANDS_ON_GROUND,
   OVERLAP_OCCUPANCY,
   OUT_OF_BUDGET,
   INVALID_TRAVERSAL_BINDING,
   UNSUPPORTED_SPAWN,
-  DISCONNECTED_ROUTE,
   CLEANUP_THROW_PARTIAL,
 ]);
 

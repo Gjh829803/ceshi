@@ -20,6 +20,7 @@ import { createServer, request as createHttpRequest } from "node:http";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { tsImport } from "tsx/esm/api";
 
 import { createRecordingWorkbenchService } from "./recording-workbench.mjs";
 import {
@@ -32,18 +33,53 @@ import {
   loadLwdpGenerationConfig,
 } from "../../../scripts/lib/lwdp-generation-client.mjs";
 
+const {
+  hashFormalColliderOverlayObservationV1,
+  hashFormalOpeningObservationV1,
+  hashFormalScriptedTraversalObservationV1,
+  hashFormalSpawnSupportObservationV1,
+  hashFormalWorldCaptureReceiptV1,
+  parseFormalColliderOverlayObservationV1,
+  parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
+  assertFormalSemanticViewObservationSetMatchesReceiptV1,
+  parseFormalScriptedTraversalObservationV1,
+  parseFormalSpawnSupportObservationV1,
+  parseFormalWorldCaptureReceiptV1,
+} = await tsImport(
+  "@whitebox-world/runtime-contracts",
+  { parentURL: import.meta.url },
+);
+const {
+  parseWorldReconstructionProductionResultV1,
+} = await tsImport(
+  "@whitebox-world/validation/reconstruction-contracts",
+  { parentURL: import.meta.url },
+);
+const { readWorldPackageDirectoryV1 } = await tsImport(
+  "../../../scripts/lib/file-world-package.ts",
+  { parentURL: import.meta.url },
+);
+const {
+  hashEntryThirdPersonValidationResultV1,
+  parseEntryThirdPersonValidationResultV1,
+  validateFormalOpeningEntryThirdPersonV1,
+} = await tsImport(
+  "../../../scripts/visual/entry-third-person.ts",
+  { parentURL: import.meta.url },
+);
+
 const studioSourceRoot = path.dirname(fileURLToPath(import.meta.url));
 const studioRoot = path.resolve(studioSourceRoot, "..");
 const defaultRepoRoot = path.resolve(studioRoot, "../..");
 const defaultDataRoot = path.join(studioRoot, "data");
 const publicRoot = path.join(studioRoot, "public");
 const idPattern = /^[a-z0-9][a-z0-9-]{2,79}$/;
-const nativeRunIdPattern = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const sha256Pattern = /^sha256:[a-f0-9]{64}$/;
 // The Studio workflow is unreleased and intentionally has one current contract.
 // Bump this only when the persisted Studio record shape changes; do not keep
 // parallel historical workflow implementations in the runtime.
-export const workflowPolicyVersion = 5;
+export const workflowPolicyVersion = 6;
 const codexBackendValues = new Set(["cloud", "local"]);
 const sceneSourceKindValues = new Set(["babylon-native", "canonical"]);
 const trustedTerrainCompilerVersions = new Set([
@@ -851,14 +887,17 @@ export function createStudio(options = {}) {
     }
   }
 
-  async function requireNativeOpening(filePath) {
-    let metadata;
+  async function readNativeBytesArtifact(filePath) {
     try {
-      metadata = await lstat(filePath);
-    } catch {
-      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
-    }
-    if (metadata.isSymbolicLink() || !metadata.isFile() || !await pngArtifact(filePath)) {
+      const metadata = await lstat(filePath);
+      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size === 0) {
+        nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
+      }
+      return new Uint8Array(await readFile(filePath));
+    } catch (error) {
+      if (error?.message === "STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID") {
+        throw error;
+      }
       nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
     }
   }
@@ -918,6 +957,7 @@ export function createStudio(options = {}) {
       outcome: expectedOutcome,
       cleanupOutcome: "completed",
     });
+    requireNativeHash(runReceipt.caseHash);
     if (hashCanonicalJson(runReceipt) !== result.runReceiptHash) {
       nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     }
@@ -928,12 +968,36 @@ export function createStudio(options = {}) {
       kind: "evaluated",
       worldPackageRef,
       worldPackageRootHash,
+      groundAnalysisReportRef:
+        `artifact://world-reconstruction-case/${result.caseId}/runs/${result.runId}/attempts/${attemptIndex}/ground-analysis-report.json`,
       captureReceiptRef,
       captureReceiptHash,
       evaluationResultRef: evaluationRef,
       evaluationResultHash: evaluationHash,
       outcome: expectedOutcome,
     });
+    requireNativeHash(attempt.worldBuildIdentityHash);
+    requireNativeHash(attempt.groundAnalysisReportHash);
+    const groundAnalysisReport = await readNativeJsonArtifact(path.join(
+      runRoot,
+      "attempts",
+      String(attemptIndex),
+      "ground-analysis-report.json",
+    ));
+    requireNativeIdentityFields(groundAnalysisReport, {
+      kind: "babylon-native-block-ground-analysis-report",
+      schemaVersion: 1,
+      analysisOutcome: "passed",
+      admissionOutcome: "passed",
+    });
+    requireNativeIdentityFields(groundAnalysisReport.identity, {
+      caseHash: runReceipt.caseHash,
+      worldPackageRootHash,
+    });
+    if (hashCanonicalJson(groundAnalysisReport) !== attempt.groundAnalysisReportHash) {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    }
+    return { runReceipt, attempt };
   }
 
   async function validateNativePackageIdentity(
@@ -944,10 +1008,17 @@ export function createStudio(options = {}) {
   ) {
     await requireNativeDirectory(packageRoot);
     requireNativeHash(worldPackageRootHash);
-    const receipt = await readNativeJsonArtifact(path.join(
-      packageRoot,
-      "world-package-build-receipt.json",
-    ));
+    let directory;
+    try {
+      directory = await readWorldPackageDirectoryV1({
+        packageDirectoryPath: packageRoot,
+        maximumTotalBytes: 512_000_000,
+        maximumFileCount: 10_000,
+      });
+    } catch {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    }
+    const receipt = directory.receipt;
     requireNativeIdentityFields(receipt, {
       kind: "worldkit-world-package-build-receipt",
       schemaVersion: 1,
@@ -957,326 +1028,417 @@ export function createStudio(options = {}) {
     if (receipt?.manifest?.worldId !== caseId) {
       nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     }
+    requireNativeHash(receipt.worldBuildIdentityHash);
+    return receipt;
   }
 
-  async function validateNativeCaptureAndEvaluation({
-    result,
+  function requireNativePngHash(bytes, expectedHash) {
+    requireNativeHash(expectedHash);
+    if (
+      bytes.length <= 8 ||
+      Buffer.from(bytes.subarray(0, 8)).toString("hex") !==
+        "89504e470d0a1a0a" ||
+      `sha256:${createHash("sha256").update(bytes).digest("hex")}` !==
+        expectedHash
+    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+  }
+
+  async function requireNativeCaptureInventory(captureRoot, viewIds) {
+    await requireNativeDirectory(captureRoot);
+    const expectedNames = [
+      ...viewIds.map((viewId) => `${viewId}.png`),
+      "collider-overlay.png",
+      "opening-observation.json",
+      "semantic-view-observation-set.json",
+      "spawn-support-observation.json",
+      "collider-overlay-observation.json",
+      "scripted-traversal.json",
+      "formal-world-capture-receipt.json",
+    ].sort();
+    let entries;
+    try {
+      entries = await readdir(captureRoot, { withFileTypes: true });
+    } catch {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
+    }
+    const actualNames = entries.map(({ name }) => name).sort();
+    if (
+      entries.some((entry) => !entry.isFile() || entry.isSymbolicLink()) ||
+      actualNames.length !== expectedNames.length ||
+      actualNames.some((name, index) => name !== expectedNames[index])
+    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
+  }
+
+  function validateNativeObservationIdentity(observation, captureReceipt) {
+    requireNativeIdentityFields(observation, {
+      worldPackageRef: captureReceipt.worldPackageRef,
+      worldPackageRootHash: captureReceipt.worldPackageRootHash,
+      worldBuildIdentityRef: captureReceipt.worldBuildIdentityRef,
+      worldBuildIdentityHash: captureReceipt.worldBuildIdentityHash,
+      formalRequestRef: captureReceipt.formalRequestRef,
+      formalRequestHash: captureReceipt.formalRequestHash,
+      semanticCaptureMapHash: captureReceipt.semanticCaptureMapHash,
+      runtimeSessionId: captureReceipt.runtimeSessionId,
+    });
+    if (observation.kind === "formal-scripted-traversal-observation") {
+      const firstCheck = observation.checks[0];
+      if (
+        firstCheck === undefined ||
+        observation.resetReadySnapshotHash !== firstCheck.resetReadySnapshotHash
+      ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    } else if (
+      observation.resetReadySnapshotHash !== captureReceipt.readySnapshotHash
+    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    const owner = captureReceipt.sdkOwnerIdentities.find(
+      ({ ownerId }) => ownerId === observation.domainOwnerIdentity.ownerId,
+    );
+    requireNativeIdentityFields(observation.domainOwnerIdentity, {
+      implementationRef: owner?.implementationRef,
+      implementationHash: owner?.implementationHash,
+    });
+  }
+
+  async function validateNativeCaptureClosure({
+    captureRoot,
     captureReceiptPath,
     captureReceiptHash,
-    evaluationPath,
-    evaluationHash,
-    worldPackageRef,
-    worldPackageRootHash,
-    expectedEvaluationOutcome,
+    expectedIdentity,
+    entryValidationPath,
+    entryValidationHash,
   }) {
     requireNativeHash(captureReceiptHash);
-    requireNativeHash(evaluationHash);
-    const [captureReceipt, evaluation] = await Promise.all([
-      readNativeJsonArtifact(captureReceiptPath),
-      readNativeJsonArtifact(evaluationPath),
-    ]);
+    requireNativeHash(entryValidationHash);
+    let captureReceipt;
+    try {
+      captureReceipt = parseFormalWorldCaptureReceiptV1(
+        await readNativeJsonArtifact(captureReceiptPath),
+      );
+    } catch {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    }
     requireNativeIdentityFields(captureReceipt, {
       kind: "formal-world-capture-receipt",
       schemaVersion: 1,
-      caseRef: result.caseRef,
-      worldPackageRef,
-      worldPackageRootHash,
+      ...expectedIdentity,
     });
+    if (
+      hashFormalWorldCaptureReceiptV1(captureReceipt) !== captureReceiptHash
+    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    await requireNativeCaptureInventory(
+      captureRoot,
+      captureReceipt.views.map(({ viewId }) => viewId),
+    );
+
+    let openingPngBytes;
+    for (const view of captureReceipt.views) {
+      const bytes = await readNativeBytesArtifact(path.join(
+        captureRoot,
+        `${view.viewId}.png`,
+      ));
+      requireNativePngHash(bytes, view.pngContentHash);
+      if (view.viewId === "opening") openingPngBytes = bytes;
+    }
+    if (openingPngBytes === undefined) {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_EVIDENCE_INVALID");
+    }
+    requireNativePngHash(
+      await readNativeBytesArtifact(path.join(captureRoot, "collider-overlay.png")),
+      captureReceipt.colliderOverlayPngContentHash,
+    );
+
+    let openingObservation;
+    let semanticViewObservationSet;
+    let spawnSupportObservation;
+    let colliderOverlayObservation;
+    let scriptedTraversalObservation;
+    try {
+      [
+        openingObservation,
+        semanticViewObservationSet,
+        spawnSupportObservation,
+        colliderOverlayObservation,
+        scriptedTraversalObservation,
+      ] = await Promise.all([
+        readNativeJsonArtifact(path.join(
+          captureRoot,
+          "opening-observation.json",
+        )).then(parseFormalOpeningObservationV1),
+        readNativeJsonArtifact(path.join(captureRoot, "semantic-view-observation-set.json"))
+          .then(parseFormalSemanticViewObservationSetV1),
+        readNativeJsonArtifact(path.join(
+          captureRoot,
+          "spawn-support-observation.json",
+        )).then(parseFormalSpawnSupportObservationV1),
+        readNativeJsonArtifact(path.join(
+          captureRoot,
+          "collider-overlay-observation.json",
+        )).then(parseFormalColliderOverlayObservationV1),
+        readNativeJsonArtifact(path.join(
+          captureRoot,
+          "scripted-traversal.json",
+        )).then(parseFormalScriptedTraversalObservationV1),
+      ]);
+      assertFormalSemanticViewObservationSetMatchesReceiptV1({ observationSet: semanticViewObservationSet,
+        receipt: captureReceipt, openingObservation });
+    } catch {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    }
+    if (
+      hashFormalOpeningObservationV1(openingObservation) !==
+        captureReceipt.openingObservationContentHash ||
+      hashFormalSpawnSupportObservationV1(spawnSupportObservation) !==
+        captureReceipt.spawnSupportObservationContentHash ||
+      hashFormalColliderOverlayObservationV1(colliderOverlayObservation) !==
+        captureReceipt.colliderOverlayObservationContentHash ||
+      hashFormalScriptedTraversalObservationV1(scriptedTraversalObservation) !==
+        captureReceipt.scriptedTraversalContentHash
+    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    for (const observation of [
+      openingObservation,
+      spawnSupportObservation,
+      colliderOverlayObservation,
+      scriptedTraversalObservation,
+    ]) validateNativeObservationIdentity(observation, captureReceipt);
+
+    let storedEntryValidation;
+    try {
+      storedEntryValidation = parseEntryThirdPersonValidationResultV1(
+        await readNativeJsonArtifact(entryValidationPath),
+      );
+    } catch {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    }
+    const measuredEntryValidation =
+      await validateFormalOpeningEntryThirdPersonV1({
+        openingPngBytes,
+        openingObservation,
+      });
+    if (
+      storedEntryValidation.status !== "passed" ||
+      measuredEntryValidation.status !== "passed" ||
+      hashEntryThirdPersonValidationResultV1(storedEntryValidation) !==
+        entryValidationHash ||
+      hashEntryThirdPersonValidationResultV1(measuredEntryValidation) !==
+        entryValidationHash
+    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    return captureReceipt;
+  }
+
+  async function validateNativeEvaluation({
+    result,
+    evaluationPath,
+    evaluationHash,
+    captureReceiptHash,
+    worldPackageRef,
+    worldPackageRootHash,
+    caseHash,
+    worldBuildIdentityHash,
+    expectedEvaluationOutcome,
+  }) {
+    requireNativeHash(evaluationHash);
+    const evaluation = await readNativeJsonArtifact(evaluationPath);
     requireNativeIdentityFields(evaluation, {
       kind: "world-reconstruction-evaluation-result",
       schemaVersion: 1,
       caseRef: result.caseRef,
+      caseHash,
       worldPackageRef,
       worldPackageRootHash,
+      worldBuildIdentityHash,
       captureReceiptHash,
       outcome: expectedEvaluationOutcome,
     });
-    if (
-      hashCanonicalJson(captureReceipt) !== captureReceiptHash ||
-      hashCanonicalJson(evaluation) !== evaluationHash
-    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
-  }
-
-  function nativePreviewCommand(packageRoot) {
-    return `pnpm worldkit native run '${packageRoot.replaceAll("'", "'\\''")}' --port 5174 --json`;
+    if (hashCanonicalJson(evaluation) !== evaluationHash) {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
+    }
   }
 
   async function validateNativeProductionResult(record, result) {
     const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
     if (
-      result?.kind !== "world-reconstruction-production-result" ||
-      result.schemaVersion !== 1 ||
+      result.productionOutcome !== "passed" ||
+      result.publicationOutcome !== "published" ||
       result.caseId !== record.sceneId ||
       result.caseRef !==
-        `artifact://world-reconstruction-case/${record.sceneId}/case.json` ||
-      !nativeRunIdPattern.test(result.runId ?? "") ||
-      !["published", "preview-ready"].includes(result.outcome)
+        `artifact://world-reconstruction-case/${record.sceneId}/case.json`
     ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     const runRoot = path.join(artifactRoot, "runs", result.runId);
     await requireNativeDirectory(runRoot);
-
-    if (result.outcome === "published") {
-      if (
-        !Number.isSafeInteger(result.attemptCount) ||
-        result.attemptCount < 1 ||
-        result.attemptCount > 4
-      ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
-      const attemptIndex = result.attemptCount - 1;
-      const finalRoot = path.join(artifactRoot, "final");
-      const worldPackagePath = path.join(finalRoot, "world-package");
-      const captureReceiptPath = path.join(
-        finalRoot,
-        "capture",
-        "formal-world-capture-receipt.json",
-      );
-      const evaluationPath = path.join(finalRoot, "evaluation.json");
-      const openingPath = path.join(finalRoot, "capture", "opening.png");
-      const launchPath = path.join(finalRoot, "launch.json");
-      requireNativeProductionPath(result.finalDirectoryPath, finalRoot);
-      requireNativeProductionPath(result.finalWorldPackagePath, worldPackagePath);
-      requireNativeProductionPath(result.finalCaptureReceiptPath, captureReceiptPath);
-      requireNativeProductionPath(result.finalEvaluationPath, evaluationPath);
-      await requireNativeDirectory(finalRoot);
-      await validateNativePackageIdentity(
-        worldPackagePath,
-        result.caseId,
-        result.finalWorldPackageRef,
-        result.finalWorldPackageRootHash,
-      );
-      await requireNativeOpening(openingPath);
-      await validateNativeCaptureAndEvaluation({
-        result,
-        captureReceiptPath,
-        captureReceiptHash: result.finalCaptureReceiptHash,
-        evaluationPath,
-        evaluationHash: result.finalEvaluationHash,
-        worldPackageRef: result.finalWorldPackageRef,
-        worldPackageRootHash: result.finalWorldPackageRootHash,
-        expectedEvaluationOutcome: "passed",
-      });
-      const launch = await readNativeJsonArtifact(launchPath);
-      requireNativeIdentityFields(launch, {
-        kind: "native-block-reconstruction-launch",
-        schemaVersion: 1,
-        caseId: result.caseId,
-        runReceiptRef: result.runReceiptRef,
-        runReceiptHash: result.runReceiptHash,
-        worldPackageRelativePath: "final/world-package",
-        worldPackageRef: result.finalWorldPackageRef,
-        worldPackageRootHash: result.finalWorldPackageRootHash,
-        captureReceiptRelativePath:
-          "final/capture/formal-world-capture-receipt.json",
-        captureReceiptHash: result.finalCaptureReceiptHash,
-        evaluationRelativePath: "final/evaluation.json",
-        evaluationHash: result.finalEvaluationHash,
-        launchCommand:
-          "pnpm worldkit native run final/world-package --port 5174 --json",
-      });
-      const attemptArtifactRoot =
-        `artifact://world-reconstruction-case/${result.caseId}/runs/${result.runId}/attempts/${attemptIndex}`;
-      await validateNativeRunReceipt({
-        result,
-        runRoot,
-        attemptIndex,
-        worldPackageRef: result.finalWorldPackageRef,
-        worldPackageRootHash: result.finalWorldPackageRootHash,
-        captureReceiptRef:
-          `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json`,
-        captureReceiptHash: result.finalCaptureReceiptHash,
-        evaluationRef: `${attemptArtifactRoot}/evaluation.json`,
-        evaluationHash: result.finalEvaluationHash,
-        expectedOutcome: "passed",
-      });
-      return {
-        kind: "studio-native-production-closure",
-        schemaVersion: 1,
-        outcome: "published",
-        publicationStatus: "accepted",
-        caseId: result.caseId,
-        runId: result.runId,
-        diagnosticCodes: [],
-        qualityStage: "evaluation",
-        qualityOutcome: "passed",
-        worldPackageRef: result.finalWorldPackageRef,
-        worldPackageRootHash: result.finalWorldPackageRootHash,
-        captureReceiptHash: result.finalCaptureReceiptHash,
-        evaluationHash: result.finalEvaluationHash,
-        runReceiptRef: result.runReceiptRef,
-        runReceiptHash: result.runReceiptHash,
-        worldPackageRelativePath:
-          nativeArtifactRelativePath(artifactRoot, worldPackagePath),
-        openingRelativePath:
-          nativeArtifactRelativePath(artifactRoot, openingPath),
-        captureReceiptRelativePath:
-          nativeArtifactRelativePath(artifactRoot, captureReceiptPath),
-        evaluationRelativePath:
-          nativeArtifactRelativePath(artifactRoot, evaluationPath),
-        launchEntryRelativePath:
-          nativeArtifactRelativePath(artifactRoot, launchPath),
-        launch: {
-          kind: "studio-native-launch",
-          schemaVersion: 1,
-          accepted: true,
-          workingDirectoryPath: artifactRoot,
-          command: launch.launchCommand,
-        },
-      };
-    }
-
-    if (
-      result.publicationStatus !== "not-accepted" ||
-      result.cleanupOutcome !== "completed" ||
-      !Array.isArray(result.diagnosticCodes) ||
-      result.diagnosticCodes.length === 0 ||
-      result.diagnosticCodes.some((code) =>
-        typeof code !== "string" || !/^[A-Z][A-Z0-9_]{4,}$/.test(code))
-    ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
-    const relativePackagePath = path.relative(runRoot, result.previewWorldPackagePath ?? "");
-    const packageMatch = /^attempts[/\\]([0-3])[/\\]world-package$/.exec(
-      relativePackagePath,
+    const attemptIndex = result.attemptCount - 1;
+    const finalRoot = path.join(artifactRoot, "final");
+    const worldPackagePath = path.join(finalRoot, "world-package");
+    const captureReceiptPath = path.join(
+      finalRoot,
+      "capture",
+      "formal-world-capture-receipt.json",
     );
-    if (packageMatch === null) {
-      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_PATH_INVALID");
+    const captureRoot = path.dirname(captureReceiptPath);
+    const evaluationPath = path.join(finalRoot, "evaluation.json");
+    const strictDiagnosticPath = path.join(finalRoot, "strict-diagnostic.json");
+    const entryValidationPath = path.join(
+      finalRoot,
+      "entry-third-person-validation.json",
+    );
+    const openingPath = path.join(finalRoot, "capture", "opening.png");
+    const launchPath = path.join(finalRoot, "launch.json");
+    requireNativeProductionPath(result.finalDirectoryPath, finalRoot);
+    requireNativeProductionPath(result.finalWorldPackagePath, worldPackagePath);
+    requireNativeProductionPath(result.finalCaptureReceiptPath, captureReceiptPath);
+    requireNativeProductionPath(result.finalEvaluationPath, evaluationPath);
+    requireNativeProductionPath(
+      result.finalStrictDiagnosticPath,
+      strictDiagnosticPath,
+    );
+    requireNativeProductionPath(result.finalEntryValidationPath, entryValidationPath);
+    requireNativeIdentityFields(result, {
+      finalStrictDiagnosticRef:
+        `artifact://world-reconstruction-case/${result.caseId}/final/strict-diagnostic.json`,
+      finalEntryValidationRef:
+        `artifact://world-reconstruction-case/${result.caseId}/final/entry-third-person-validation.json`,
+    });
+    await requireNativeDirectory(finalRoot);
+    const attemptArtifactRoot =
+      `artifact://world-reconstruction-case/${result.caseId}/runs/${result.runId}/attempts/${attemptIndex}`;
+    const { runReceipt, attempt } = await validateNativeRunReceipt({
+      result,
+      runRoot,
+      attemptIndex,
+      worldPackageRef: result.finalWorldPackageRef,
+      worldPackageRootHash: result.finalWorldPackageRootHash,
+      captureReceiptRef:
+        `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json`,
+      captureReceiptHash: result.finalCaptureReceiptHash,
+      evaluationRef: `${attemptArtifactRoot}/evaluation.json`,
+      evaluationHash: result.finalEvaluationHash,
+      expectedOutcome: result.evaluationOutcome,
+    });
+    const reconstructionCase = await readNativeJsonArtifact(
+      path.join(artifactRoot, "case.json"),
+    );
+    if (hashCanonicalJson(reconstructionCase) !== runReceipt.caseHash) {
+      nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     }
-    const attemptIndex = Number(packageMatch[1]);
-    const attemptRoot = path.join(runRoot, "attempts", String(attemptIndex));
-    const worldPackagePath = path.join(attemptRoot, "world-package");
-    requireNativeProductionPath(result.previewWorldPackagePath, worldPackagePath);
-    await validateNativePackageIdentity(
+    const packageReceipt = await validateNativePackageIdentity(
       worldPackagePath,
       result.caseId,
-      result.previewWorldPackageRef,
-      result.previewWorldPackageRootHash,
+      result.finalWorldPackageRef,
+      result.finalWorldPackageRootHash,
     );
-    if (result.launchWorkingDirectoryPath !== repoRoot ||
-        result.launchCommand !== nativePreviewCommand(worldPackagePath)) {
+    if (packageReceipt.worldBuildIdentityHash !== attempt.worldBuildIdentityHash) {
       nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     }
-
-    let captureDirectoryPath;
-    let openingPath;
-    let captureReceiptPath = null;
-    let evaluationPath = null;
-    if (result.qualityStage === "evaluation") {
-      if (
-        !Number.isSafeInteger(result.attemptCount) ||
-        result.attemptCount !== attemptIndex + 1 ||
-        !["failed", "incomplete"].includes(result.qualityOutcome)
-      ) nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
-      captureDirectoryPath = path.join(attemptRoot, "capture");
-      openingPath = path.join(captureDirectoryPath, "opening.png");
-      captureReceiptPath = path.join(
-        captureDirectoryPath,
-        "formal-world-capture-receipt.json",
-      );
-      evaluationPath = path.join(attemptRoot, "evaluation.json");
-      requireNativeProductionPath(
-        result.previewCaptureDirectoryPath,
-        captureDirectoryPath,
-      );
-      requireNativeProductionPath(result.previewOpeningPath, openingPath);
-      requireNativeProductionPath(
-        result.previewCaptureReceiptPath,
-        captureReceiptPath,
-      );
-      requireNativeProductionPath(result.previewEvaluationPath, evaluationPath);
-      const attemptArtifactRoot =
-        `artifact://world-reconstruction-case/${result.caseId}/runs/${result.runId}/attempts/${attemptIndex}`;
-      requireNativeIdentityFields(result, {
-        previewOpeningRef: `${attemptArtifactRoot}/capture/opening.png`,
-        previewEvaluationRef: `${attemptArtifactRoot}/evaluation.json`,
-      });
-      await requireNativeDirectory(captureDirectoryPath);
-      await requireNativeOpening(openingPath);
-      await validateNativeCaptureAndEvaluation({
-        result,
-        captureReceiptPath,
-        captureReceiptHash: result.previewCaptureReceiptHash,
-        evaluationPath,
-        evaluationHash: result.previewEvaluationHash,
-        worldPackageRef: result.previewWorldPackageRef,
-        worldPackageRootHash: result.previewWorldPackageRootHash,
-        expectedEvaluationOutcome: result.qualityOutcome,
-      });
-      await validateNativeRunReceipt({
-        result,
-        runRoot,
-        attemptIndex,
-        worldPackageRef: result.previewWorldPackageRef,
-        worldPackageRootHash: result.previewWorldPackageRootHash,
-        captureReceiptRef:
-          `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json`,
-        captureReceiptHash: result.previewCaptureReceiptHash,
-        evaluationRef: `${attemptArtifactRoot}/evaluation.json`,
-        evaluationHash: result.previewEvaluationHash,
-        expectedOutcome: result.qualityOutcome,
-      });
-    } else if (
-      result.qualityStage === "opening-composition" &&
-      result.qualityOutcome === "failed"
+    await validateNativeCaptureClosure({
+      captureRoot,
+      captureReceiptPath,
+      captureReceiptHash: result.finalCaptureReceiptHash,
+      expectedIdentity: {
+        caseRef: result.caseRef,
+        caseHash: runReceipt.caseHash,
+        worldPackageRef: result.finalWorldPackageRef,
+        worldPackageRootHash: result.finalWorldPackageRootHash,
+        worldBuildIdentityHash: attempt.worldBuildIdentityHash,
+      },
+      entryValidationPath,
+      entryValidationHash: result.finalEntryValidationHash,
+    });
+    await validateNativeEvaluation({
+      result,
+      evaluationPath,
+      evaluationHash: result.finalEvaluationHash,
+      captureReceiptHash: result.finalCaptureReceiptHash,
+      worldPackageRef: result.finalWorldPackageRef,
+      worldPackageRootHash: result.finalWorldPackageRootHash,
+      caseHash: runReceipt.caseHash,
+      worldBuildIdentityHash: attempt.worldBuildIdentityHash,
+      expectedEvaluationOutcome: result.evaluationOutcome,
+    });
+    requireNativeHash(result.finalStrictDiagnosticHash);
+    const strictDiagnostic = await readNativeJsonArtifact(strictDiagnosticPath);
+    requireNativeIdentityFields(strictDiagnostic, {
+      kind: "world-reconstruction-strict-diagnostic-receipt",
+      schemaVersion: 1,
+      id: `${runReceipt.id}.strict`,
+      caseRef: result.caseRef,
+      caseHash: runReceipt.caseHash,
+      runReceiptRef: result.runReceiptRef,
+      runReceiptHash: result.runReceiptHash,
+      attemptIndex,
+      worldPackageRef: result.finalWorldPackageRef,
+      worldPackageRootHash: result.finalWorldPackageRootHash,
+      worldBuildIdentityHash: attempt.worldBuildIdentityHash,
+      captureReceiptHash: result.finalCaptureReceiptHash,
+      evaluationResultHash: result.finalEvaluationHash,
+      outcome: result.strictDiagnosticOutcome,
+      cleanupOutcome: result.strictDiagnosticCleanupOutcome,
+    });
+    if (
+      canonicalJson(strictDiagnostic.diagnosticCodes) !==
+        canonicalJson(result.strictDiagnosticCodes) ||
+      hashCanonicalJson(strictDiagnostic) !== result.finalStrictDiagnosticHash
     ) {
-      captureDirectoryPath = path.join(attemptRoot, "rejected-capture");
-      openingPath = path.join(captureDirectoryPath, "opening.png");
-      const gatePath = path.join(
-        captureDirectoryPath,
-        "opening-composition-gate-result.json",
-      );
-      requireNativeProductionPath(
-        result.previewCaptureDirectoryPath,
-        captureDirectoryPath,
-      );
-      requireNativeProductionPath(result.previewOpeningPath, openingPath);
-      requireNativeProductionPath(result.openingGateResultPath, gatePath);
-      const attemptArtifactRoot =
-        `artifact://world-reconstruction-case/${result.caseId}/runs/${result.runId}/attempts/${attemptIndex}`;
-      requireNativeIdentityFields(result, {
-        previewOpeningRef: `${attemptArtifactRoot}/rejected-capture/opening.png`,
-        openingGateResultRef:
-          `${attemptArtifactRoot}/rejected-capture/opening-composition-gate-result.json`,
-      });
-      requireNativeHash(result.openingGateResultHash);
-      await requireNativeDirectory(captureDirectoryPath);
-      await requireNativeOpening(openingPath);
-      const gate = await readNativeJsonArtifact(gatePath);
-      if (hashCanonicalJson(gate) !== result.openingGateResultHash) {
-        nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
-      }
-    } else {
       nativeProductionInvalid("STUDIO_NATIVE_PRODUCTION_IDENTITY_INVALID");
     }
+    requireNativeHash(result.finalEntryValidationHash);
+    const launch = await readNativeJsonArtifact(launchPath);
+    requireNativeIdentityFields(launch, {
+      kind: "native-block-reconstruction-launch",
+      schemaVersion: 1,
+      caseId: result.caseId,
+      runReceiptRef: result.runReceiptRef,
+      runReceiptHash: result.runReceiptHash,
+      worldPackageRelativePath: "final/world-package",
+      worldPackageRef: result.finalWorldPackageRef,
+      worldPackageRootHash: result.finalWorldPackageRootHash,
+      captureReceiptRelativePath:
+        "final/capture/formal-world-capture-receipt.json",
+      captureReceiptHash: result.finalCaptureReceiptHash,
+      evaluationRelativePath: "final/evaluation.json",
+      evaluationHash: result.finalEvaluationHash,
+      strictDiagnosticRelativePath: "final/strict-diagnostic.json",
+      strictDiagnosticHash: result.finalStrictDiagnosticHash,
+      entryValidationRelativePath: "final/entry-third-person-validation.json",
+      entryValidationHash: result.finalEntryValidationHash,
+      launchCommand:
+        "pnpm worldkit native run final/world-package --port 5174 --json",
+    });
     return {
       kind: "studio-native-production-closure",
       schemaVersion: 1,
-      outcome: "preview-ready",
-      publicationStatus: "not-accepted",
+      productionOutcome: "passed",
+      publicationOutcome: "published",
       caseId: result.caseId,
       runId: result.runId,
-      diagnosticCodes: [...result.diagnosticCodes],
-      qualityStage: result.qualityStage,
-      qualityOutcome: result.qualityOutcome,
-      worldPackageRef: result.previewWorldPackageRef,
-      worldPackageRootHash: result.previewWorldPackageRootHash,
-      captureReceiptHash: result.previewCaptureReceiptHash ?? null,
-      evaluationHash: result.previewEvaluationHash ?? null,
-      runReceiptRef: result.runReceiptRef ?? null,
-      runReceiptHash: result.runReceiptHash ?? null,
+      evaluationOutcome: result.evaluationOutcome,
+      strictDiagnosticOutcome: result.strictDiagnosticOutcome,
+      strictDiagnosticCodes: [...result.strictDiagnosticCodes],
+      strictDiagnosticCleanupOutcome: result.strictDiagnosticCleanupOutcome,
+      worldPackageRef: result.finalWorldPackageRef,
+      worldPackageRootHash: result.finalWorldPackageRootHash,
+      captureReceiptHash: result.finalCaptureReceiptHash,
+      evaluationHash: result.finalEvaluationHash,
+      strictDiagnosticHash: result.finalStrictDiagnosticHash,
+      entryValidationHash: result.finalEntryValidationHash,
+      runReceiptRef: result.runReceiptRef,
+      runReceiptHash: result.runReceiptHash,
       worldPackageRelativePath:
         nativeArtifactRelativePath(artifactRoot, worldPackagePath),
       openingRelativePath:
         nativeArtifactRelativePath(artifactRoot, openingPath),
-      captureReceiptRelativePath: captureReceiptPath === null
-        ? null
-        : nativeArtifactRelativePath(artifactRoot, captureReceiptPath),
-      evaluationRelativePath: evaluationPath === null
-        ? null
-        : nativeArtifactRelativePath(artifactRoot, evaluationPath),
-      launchEntryRelativePath: null,
+      captureReceiptRelativePath:
+        nativeArtifactRelativePath(artifactRoot, captureReceiptPath),
+      evaluationRelativePath:
+        nativeArtifactRelativePath(artifactRoot, evaluationPath),
+      strictDiagnosticRelativePath:
+        nativeArtifactRelativePath(artifactRoot, strictDiagnosticPath),
+      entryValidationRelativePath:
+        nativeArtifactRelativePath(artifactRoot, entryValidationPath),
+      launchEntryRelativePath:
+        nativeArtifactRelativePath(artifactRoot, launchPath),
       launch: {
         kind: "studio-native-launch",
         schemaVersion: 1,
-        accepted: false,
-        workingDirectoryPath: result.launchWorkingDirectoryPath,
-        command: result.launchCommand,
+        workingDirectoryPath: artifactRoot,
+        command: launch.launchCommand,
       },
     };
   }
@@ -1300,18 +1462,49 @@ export function createStudio(options = {}) {
       record,
       "worldPackageRelativePath",
     );
-    if (packageRoot === null) return false;
+    const captureReceiptPath = nativeClosureArtifactPath(
+      record,
+      "captureReceiptRelativePath",
+    );
+    const entryValidationPath = nativeClosureArtifactPath(
+      record,
+      "entryValidationRelativePath",
+    );
+    if (
+      packageRoot === null ||
+      captureReceiptPath === null ||
+      entryValidationPath === null
+    ) return false;
     try {
-      await requireNativeDirectory(packageRoot);
-      const receipt = await readNativeJsonArtifact(path.join(
+      const packageReceipt = await validateNativePackageIdentity(
         packageRoot,
-        "world-package-build-receipt.json",
+        record.sceneId,
+        record.nativeProductionClosure?.worldPackageRef,
+        record.nativeProductionClosure?.worldPackageRootHash,
+      );
+      const artifactRoot = path.join(repoRoot, "artifacts/scenes", record.sceneId);
+      const reconstructionCase = await readNativeJsonArtifact(path.join(
+        artifactRoot,
+        "case.json",
       ));
-      return receipt.worldPackageRef ===
-          record.nativeProductionClosure?.worldPackageRef &&
-        receipt.worldPackageRootHash ===
-          record.nativeProductionClosure?.worldPackageRootHash &&
-        receipt.manifest?.worldId === record.sceneId;
+      await validateNativeCaptureClosure({
+        captureRoot: path.dirname(captureReceiptPath),
+        captureReceiptPath,
+        captureReceiptHash: record.nativeProductionClosure?.captureReceiptHash,
+        expectedIdentity: {
+          caseRef:
+            `artifact://world-reconstruction-case/${record.sceneId}/case.json`,
+          caseHash: hashCanonicalJson(reconstructionCase),
+          worldPackageRef: record.nativeProductionClosure?.worldPackageRef,
+          worldPackageRootHash:
+            record.nativeProductionClosure?.worldPackageRootHash,
+          worldBuildIdentityHash: packageReceipt.worldBuildIdentityHash,
+        },
+        entryValidationPath,
+        entryValidationHash:
+          record.nativeProductionClosure?.entryValidationHash,
+      });
+      return true;
     } catch {
       return false;
     }
@@ -1354,12 +1547,17 @@ export function createStudio(options = {}) {
       "native-evaluation": [
         nativeClosureArtifactPath(record, "evaluationRelativePath"),
       ].filter(Boolean),
+      "native-strict-diagnostic": [
+        nativeClosureArtifactPath(record, "strictDiagnosticRelativePath"),
+      ].filter(Boolean),
       "native-launch": [
         nativeClosureArtifactPath(record, "launchEntryRelativePath"),
       ].filter(Boolean),
       "runtime-snapshot": [path.join(artifactRoot, "runtime-snapshot.json")],
       "whitebox-triview-manifest": [path.join(artifactRoot, "triviews", "whitebox-triview-manifest.json")],
-      "entry-third-person-validation": [path.join(artifactRoot, "entry-third-person-validation.json")],
+      "entry-third-person-validation": effectiveSceneSourceKind(record) === "babylon-native"
+        ? [nativeClosureArtifactPath(record, "entryValidationRelativePath")].filter(Boolean)
+        : [path.join(artifactRoot, "entry-third-person-validation.json")],
       "visual-generation-prompts": [path.join(artifactRoot, "visual-generation-prompts.json")],
       "styled-opening-frame": [path.join(artifactRoot, "styled-opening-frame.png")],
       "styled-opening-frame-manifest": [path.join(artifactRoot, "styled-opening-frame-manifest.json")],
@@ -1832,7 +2030,7 @@ export function createStudio(options = {}) {
     if (
       typeof brief !== "string" || !brief.startsWith("# WorldKit Scene Brief") ||
       plannerCheck?.kind !== "worldkit-planner-self-check" || plannerCheck.schemaVersion !== 1 ||
-      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v3" ||
+      plannerCheck.validatorVersion !== "worldkit-planner-self-check-v4" ||
       plannerCheck.sceneSourceKind !== "canonical" ||
       plannerCheck.sceneId !== sceneId || plannerCheck.status !== "passed" ||
       plannerCheck.inputs?.sceneBriefHash !== briefHash ||
@@ -2019,7 +2217,6 @@ export function createStudio(options = {}) {
       whiteboxOpeningFrameUrl: whiteboxOpeningFrameAvailable
         ? `/scene-assets/${record.sceneId}/whitebox-opening-frame.png`
         : null,
-      publicationStatus: record.publicationStatus ?? null,
       nativeLaunch: sceneSourceKind === "babylon-native"
         ? record.nativeLaunch ?? null
         : null,
@@ -2104,13 +2301,21 @@ export function createStudio(options = {}) {
         id: "formal-world-capture-receipt", phase: "runtime-capture", title: "Formal Capture Receipt",
         description: "仅在 Opening Composition Host Gate 通过后发布。",
         owner: "Trusted Host", format: "JSON",
-        optional: record.nativeProductionClosure?.qualityStage === "opening-composition",
+      },
+      {
+        id: "entry-third-person-validation", phase: "entry-alignment-validation", title: "进入构图校验报告",
+        description: "绑定 final Opening Capture 与已闭合 Runtime camera snapshot 的可信进入构图校验收据。",
+        owner: "Trusted Host", format: "JSON",
       },
       {
         id: "native-evaluation", phase: "evaluation", title: "七维场景评测",
         description: "拓扑、轮廓、构图、Spawn、Collider、通过性和确定性诊断。",
         owner: "Trusted Host", format: "JSON",
-        optional: record.nativeProductionClosure?.qualityStage === "opening-composition",
+      },
+      {
+        id: "native-strict-diagnostic", phase: "evaluation", title: "严格诊断收据",
+        description: "单独记录严格诊断结果、诊断码与已发布 final 身份链，不改变普通生产结果。",
+        owner: "Trusted Host", format: "JSON",
       },
       {
         id: "native-launch", phase: "native-package", title: "BNA 验证启动入口",
@@ -2369,7 +2574,7 @@ export function createStudio(options = {}) {
           ? "Native Formal Capture 首帧"
           : title,
         description: kind === "opening-frame" && sceneSourceKind === "babylon-native"
-          ? "身份绑定的 BNA Capture 证据；preview-ready 不代表发布接受。"
+          ? "身份绑定的 BNA Capture 证据；严格诊断结果与普通生产发布结果分别展示。"
           : description,
         prompt: null,
         url: available ? url : null,
@@ -2456,7 +2661,47 @@ export function createStudio(options = {}) {
     await appendFile(logPath(id), text, "utf8");
   }
 
-  function captureNativeProductionResult(source, line, state) {
+  function parseNativeReconstructionCommandFailure(value) {
+    if (
+      value === null || typeof value !== "object" || Array.isArray(value) ||
+      value.kind !== "worldkit-command-failure" ||
+      value.schemaVersion !== 1 || value.command !== "reconstruct-run" ||
+      value.ok !== false || value.exitCode !== 1 ||
+      canonicalJson(Object.keys(value).sort()) !== canonicalJson([
+        "command",
+        "diagnostics",
+        "exitCode",
+        "kind",
+        "ok",
+        "schemaVersion",
+      ]) ||
+      !Array.isArray(value.diagnostics) || value.diagnostics.length === 0
+    ) return null;
+    const diagnosticCodes = [];
+    for (const diagnostic of value.diagnostics) {
+      if (
+        diagnostic === null || typeof diagnostic !== "object" ||
+        Array.isArray(diagnostic) ||
+        canonicalJson(Object.keys(diagnostic).sort()) !== canonicalJson([
+          "code",
+          "instancePath",
+          "message",
+          "severity",
+        ]) ||
+        diagnostic.severity !== "error" || diagnostic.instancePath !== "" ||
+        typeof diagnostic.message !== "string" ||
+        !/^[A-Z][A-Z0-9_]{4,}$/.test(diagnostic.code)
+      ) return null;
+      diagnosticCodes.push(diagnostic.code);
+    }
+    const sortedUniqueCodes = [...new Set(diagnosticCodes)].sort();
+    if (canonicalJson(diagnosticCodes) !== canonicalJson(sortedUniqueCodes)) {
+      return null;
+    }
+    return Object.freeze(sortedUniqueCodes);
+  }
+
+  function captureNativeProductionMessage(source, line, state) {
     if (source !== "stdout" || typeof state.nativeProductionResults === "undefined") {
       return;
     }
@@ -2465,7 +2710,14 @@ export function createStudio(options = {}) {
       if (
         value?.kind === "world-reconstruction-production-result" &&
         value.schemaVersion === 1
-      ) state.nativeProductionResults.push(value);
+      ) {
+        state.nativeProductionResults.push(value);
+        return;
+      }
+      const commandFailure = parseNativeReconstructionCommandFailure(value);
+      if (commandFailure !== null) {
+        state.nativeCommandFailures.push(commandFailure);
+      }
     } catch {}
   }
 
@@ -2476,7 +2728,7 @@ export function createStudio(options = {}) {
     const lines = state.buffer.split(/\r?\n/);
     state.buffer = lines.pop() ?? "";
     for (const line of lines) {
-      captureNativeProductionResult(source, line, state);
+      captureNativeProductionMessage(source, line, state);
       const match = /^WORLDKIT_STAGE ([a-z-]+)$/.exec(line.trim());
       if (match) {
         const persistedStage = canonicalWorkflowStage(match[1], {
@@ -2626,7 +2878,12 @@ export function createStudio(options = {}) {
       captureError: null,
       captureStatus: "pending",
       outcome: null,
-      publicationStatus: null,
+      productionOutcome: null,
+      publicationOutcome: null,
+      evaluationOutcome: null,
+      strictDiagnosticOutcome: null,
+      strictDiagnosticCodes: [],
+      strictDiagnosticCleanupOutcome: null,
       nativeProductionClosure: null,
       nativeLaunch: null,
       styledOpeningFrameRequired,
@@ -2726,7 +2983,11 @@ export function createStudio(options = {}) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     activeChildren.set(id, child);
-    const stdout = { buffer: "", nativeProductionResults: [] };
+    const stdout = {
+      buffer: "",
+      nativeProductionResults: [],
+      nativeCommandFailures: [],
+    };
     const stderr = { buffer: "" };
     child.stdout.on("data", (chunk) => consumeOutput(id, "stdout", chunk, stdout));
     child.stderr.on("data", (chunk) => consumeOutput(id, "stderr", chunk, stderr));
@@ -2736,7 +2997,7 @@ export function createStudio(options = {}) {
       child.once("close", (code, signal) => resolve({ code: code ?? -1, signal }));
     });
     activeChildren.delete(id);
-    if (stdout.buffer) captureNativeProductionResult("stdout", stdout.buffer, stdout);
+    if (stdout.buffer) captureNativeProductionMessage("stdout", stdout.buffer, stdout);
     if (stdout.buffer) await appendJobLog(id, `[stdout] ${stdout.buffer}\n`);
     if (stderr.buffer) await appendJobLog(id, `[stderr] ${stderr.buffer}\n`);
 
@@ -2766,27 +3027,47 @@ export function createStudio(options = {}) {
       const finishedAt = new Date().toISOString();
       let closure = null;
       let nativeFailure = null;
-      if (exit.code !== 0) {
-        nativeFailure = exit.error instanceof Error
-          ? exit.error.message
-          : `World generation exited with code ${exit.code}${exit.signal ? ` (${exit.signal})` : ""}.`;
-      } else if (stdout.nativeProductionResults.length !== 1) {
-        nativeFailure = stdout.nativeProductionResults.length === 0
-          ? "STUDIO_NATIVE_PRODUCTION_RESULT_MISSING"
-          : "STUDIO_NATIVE_PRODUCTION_RESULT_AMBIGUOUS";
+      let nativeFailureResult = null;
+      let nativeCommandDiagnosticCodes = [];
+      if (stdout.nativeProductionResults.length !== 1) {
+        if (
+          stdout.nativeProductionResults.length === 0 &&
+          stdout.nativeCommandFailures.length === 1
+        ) {
+          nativeCommandDiagnosticCodes = stdout.nativeCommandFailures[0];
+          nativeFailure = nativeCommandDiagnosticCodes.join(", ");
+        } else {
+          nativeFailure = stdout.nativeProductionResults.length === 0 &&
+              stdout.nativeCommandFailures.length === 0
+            ? exit.error instanceof Error
+              ? exit.error.message
+              : "STUDIO_NATIVE_PRODUCTION_RESULT_MISSING"
+            : "STUDIO_NATIVE_PRODUCTION_RESULT_AMBIGUOUS";
+        }
+      } else if (stdout.nativeCommandFailures.length !== 0) {
+        nativeFailure = "STUDIO_NATIVE_PRODUCTION_RESULT_AMBIGUOUS";
       } else {
         try {
-          closure = await validateNativeProductionResult(
-            record,
+          const productionResult = parseWorldReconstructionProductionResultV1(
             stdout.nativeProductionResults[0],
           );
+          if (productionResult.productionOutcome === "passed") {
+            if (exit.code !== 0) {
+              nativeFailure =
+                `STUDIO_NATIVE_PRODUCTION_EXIT_NONZERO: child exited with code ${exit.code}`;
+            } else {
+              closure = await validateNativeProductionResult(record, productionResult);
+            }
+          } else {
+            nativeFailureResult = productionResult;
+            nativeFailure = productionResult.diagnosticCodes.join(", ");
+          }
         } catch (error) {
           nativeFailure = error instanceof Error ? error.message : String(error);
         }
       }
 
       if (closure !== null) {
-        const previewReady = closure.outcome === "preview-ready";
         await updateRecord(id, {
           status: "ready",
           stage: "ready",
@@ -2794,17 +3075,20 @@ export function createStudio(options = {}) {
           runtimeCaptureAttempts: 0,
           captureError: null,
           captureStatus: "passed",
-          outcome: previewReady ? "preview-ready" : "passed",
-          publicationStatus: closure.publicationStatus,
+          outcome: "passed",
+          productionOutcome: closure.productionOutcome,
+          publicationOutcome: closure.publicationOutcome,
+          evaluationOutcome: closure.evaluationOutcome,
+          strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+          strictDiagnosticCodes: closure.strictDiagnosticCodes,
+          strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
           nativeProductionClosure: closure,
           nativeLaunch: closure.launch,
-          whiteboxOutcome: closure.qualityOutcome,
+          whiteboxOutcome: "passed",
           styledOpeningFrameStatus: "not-required",
           styledTriviewsStatus: "not-required",
           finishedAt,
-          error: previewReady
-            ? `Native preview is not accepted: ${closure.diagnosticCodes.join(", ") || closure.qualityOutcome}.`
-            : null,
+          error: null,
         });
         await writeJsonAtomic(path.join(artifactRoot, "evaluation-report.json"), {
           kind: "worldkit-evaluation-report",
@@ -2814,46 +3098,68 @@ export function createStudio(options = {}) {
           workflowPolicyVersion,
           attempt,
           codexBackend,
-          outcome: previewReady ? "preview-ready" : "passed",
-          publicationStatus: closure.publicationStatus,
-          whiteboxOutcome: closure.qualityOutcome,
+          outcome: "passed",
+          productionOutcome: closure.productionOutcome,
+          publicationOutcome: closure.publicationOutcome,
+          evaluationOutcome: closure.evaluationOutcome,
+          strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+          strictDiagnosticCodes: closure.strictDiagnosticCodes,
+          strictDiagnosticCleanupOutcome: closure.strictDiagnosticCleanupOutcome,
+          whiteboxOutcome: "passed",
           nativeProduction: {
             caseId: closure.caseId,
             runId: closure.runId,
-            qualityStage: closure.qualityStage,
-            diagnosticCodes: closure.diagnosticCodes,
+            strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+            strictDiagnosticCodes: closure.strictDiagnosticCodes,
+            strictDiagnosticHash: closure.strictDiagnosticHash,
           },
           finishedAt,
         });
         await appendJobLog(
           id,
-          previewReady
-            ? "\nNative production completed with an identity-bound, non-accepted preview.\n"
-            : "\nNative production completed with an identity-bound published result.\n",
+          "\nNative production completed with an identity-bound published result.\n",
         );
         await appendTrajectoryEvent(
           id,
           "runtime-capture",
-          previewReady
-            ? closure.qualityStage === "evaluation"
-              ? "Native Package、Capture 与评测证据已绑定；结果仅可预览，尚未接受发布。"
-              : "Native Package、Opening Capture 与构图 Gate 证据已绑定；结果仅可预览，尚未接受发布。"
-            : "Native Package、Capture、评测与 final 发布证据已绑定。",
-          { kind: "completed", publicationStatus: closure.publicationStatus },
+          closure.strictDiagnosticOutcome === "passed"
+            ? "Native Package、Capture、评测、严格诊断与 final 发布证据已绑定。"
+            : "Native Package、Capture、评测与 final 发布证据已绑定；严格诊断单独记录。",
+          {
+            kind: "completed",
+            productionOutcome: closure.productionOutcome,
+            publicationOutcome: closure.publicationOutcome,
+            strictDiagnosticOutcome: closure.strictDiagnosticOutcome,
+          },
         );
         return;
       }
 
       const latestRecord = await readRecord(id);
+      const nativeFailureStage = nativeFailureResult === null &&
+          stdout.nativeProductionResults.length === 0 &&
+          stdout.nativeCommandFailures.length === 0 && exit.code === 3
+        ? "change-requested"
+        : "failed";
       await updateRecord(id, {
         status: "failed",
-        stage: exit.code === 3 ? "change-requested" : "failed",
+        stage: nativeFailureStage,
         failedStage: latestRecord?.stage ?? "preparing",
         finishedAt,
         error: nativeFailure,
         captureStatus: "failed",
         outcome: "failed",
-        publicationStatus: null,
+        productionOutcome: nativeFailureResult?.productionOutcome ?? "failed",
+        publicationOutcome:
+          nativeFailureResult?.publicationOutcome ?? "not-published",
+        evaluationOutcome: nativeFailureResult?.evaluationOutcome ?? null,
+        strictDiagnosticOutcome:
+          nativeFailureResult?.strictDiagnosticOutcome ?? null,
+        strictDiagnosticCodes: nativeFailureResult === null
+          ? []
+          : [...nativeFailureResult.strictDiagnosticCodes],
+        strictDiagnosticCleanupOutcome:
+          nativeFailureResult?.strictDiagnosticCleanupOutcome ?? null,
         nativeProductionClosure: null,
         nativeLaunch: null,
       });
@@ -2866,13 +3172,31 @@ export function createStudio(options = {}) {
         attempt,
         codexBackend,
         outcome: "failed",
+        ...(nativeFailureResult === null
+          ? nativeCommandDiagnosticCodes.length === 0
+            ? {}
+            : { diagnosticCodes: [...nativeCommandDiagnosticCodes] }
+          : {
+              productionOutcome: nativeFailureResult.productionOutcome,
+              publicationOutcome: nativeFailureResult.publicationOutcome,
+              runOutcome: nativeFailureResult.runOutcome,
+              evaluationOutcome: nativeFailureResult.evaluationOutcome,
+              strictDiagnosticOutcome:
+                nativeFailureResult.strictDiagnosticOutcome,
+              strictDiagnosticCodes:
+                [...nativeFailureResult.strictDiagnosticCodes],
+              strictDiagnosticCleanupOutcome:
+                nativeFailureResult.strictDiagnosticCleanupOutcome,
+              diagnosticCodes: [...nativeFailureResult.diagnosticCodes],
+              cleanupOutcome: nativeFailureResult.cleanupOutcome,
+            }),
         error: nativeFailure,
         finishedAt,
       });
       await appendJobLog(id, `\n${nativeFailure}\n`);
       await appendTrajectoryEvent(
         id,
-        exit.code === 3 ? "change-requested" : "failed",
+        nativeFailureStage,
         nativeFailure,
         { kind: "failed" },
       );
@@ -3905,7 +4229,12 @@ export function createStudio(options = {}) {
         captureRequired: true,
         captureStatus: "pending",
         outcome: null,
-        publicationStatus: null,
+        productionOutcome: null,
+        publicationOutcome: null,
+        evaluationOutcome: null,
+        strictDiagnosticOutcome: null,
+        strictDiagnosticCodes: [],
+        strictDiagnosticCleanupOutcome: null,
         nativeProductionClosure: null,
         nativeLaunch: null,
         styledOpeningFrameRequired: styledOutputsRequired,

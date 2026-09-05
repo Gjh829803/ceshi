@@ -24,6 +24,7 @@ import {
   parseFormalWorldCaptureIntentV1,
 } from "@whitebox-world/runtime-contracts";
 import {
+  hashWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionCaseV1,
   parseWorldReconstructionDiagnosticV1,
   parseWorldReconstructionEvaluationProfileV1,
@@ -32,6 +33,7 @@ import { hashWorldBuildIdentityV1 } from "@whitebox-world/world-identity";
 
 import {
   createProductionWorldReconstructionRunPortsV1,
+  runBuilderSelfCheckV1,
   type ProductionWorldReconstructionRunPortOwnersV1,
   type ProductionWorldReconstructionRunPortsInputV1,
 } from "./production-run-ports.js";
@@ -50,6 +52,21 @@ const H = (character: string): Sha256HashV1 =>
 const RUN_ID = "f-20260901";
 
 const temporaryDirectories: string[] = [];
+
+it("drains checker stderr without persisting provider text or blocking a valid report", async () => {
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "nbr-host-checker-")));
+  temporaryDirectories.push(root);
+  const checkerPath = path.join(root, "checker.mjs");
+  await writeFile(checkerPath, `
+const guard = setTimeout(() => process.exit(9), 2000);
+process.stderr.write("untrusted diagnostic".repeat(131072), () => {
+  clearTimeout(guard);
+  process.stdout.write(JSON.stringify({ ok: true, diagnosticCodes: [] }));
+});
+`);
+  expect(await runBuilderSelfCheckV1(checkerPath, root, path.join(root, "scene-brief.md")))
+    .toEqual({ ok: true, diagnosticCodes: [] });
+});
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directoryPath) =>
@@ -117,7 +134,11 @@ async function fixture() {
     bootstrapInputHash: H("6"),
   });
   const prepared = Object.freeze({
-    generationRequest: { id: "case.attempt-0.generation" },
+    generationRequest: {
+      id: "case.attempt-0.generation",
+      sceneBriefRef: "scene-brief.md",
+      builderSkillHash: H("e"),
+    },
     generationRequestHash: H("a"),
     attempt: { id: "case.attempt-0" },
     attemptHash: H("b"),
@@ -210,10 +231,17 @@ async function fixture() {
     worldPackageRootHash: H("8"),
     worldBuildIdentityHash: H("9"),
     buildReceiptHash: H("0"),
+    groundAnalysisReport: {} as never,
+    groundAnalysisReportHash: H("7"),
+    groundAnalysisReportPath: path.join(
+      attemptDirectoryPath,
+      "ground-analysis-report.json",
+    ),
     outputDirectoryPath: packageDirectoryPath,
     diagnostics: [],
   });
   const input = {
+    executionPurpose: "strict-acceptance",
     repositoryRoot: "/repo",
     casePath,
     caseRef:
@@ -288,6 +316,7 @@ function owners(
     capturePackage: vi.fn(async (input) => {
       events.push("capture-browser");
       expect(input.openingGate).toEqual({
+        executionPurpose: value.input.executionPurpose,
         reconstructionCase: value.input.reconstructionCase,
         evaluationProfile: value.input.evaluationProfile,
       });
@@ -336,6 +365,82 @@ async function generateAndPackage(
 }
 
 describe("createProductionWorldReconstructionRunPortsV1", () => {
+  it("restores a completed production generation after process restart without preparing or dispatching another paid task", async () => {
+    const value = await fixture();
+    const input = { ...value.input, executionPurpose: "production" as const };
+    for (const file of ["source/scene.ts", "inputs/context.json", "context/case.json", "advisory/top-down.png", "attempt.json",
+      "generation-request.json", "scene-authoring-route-decision.json", "generation-dispatch.json"]) {
+      const target = path.join(value.attemptDirectoryPath, file);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, "frozen-test-owner-artifact");
+    }
+    const stageInput = { attemptIndex: 0 as const, backend: "local" as const, runId: RUN_ID,
+      requestId: value.prepared.routerRequestId, frozenOwnerIdentities: value.frozenOwnerIdentities };
+    const firstOwners = owners(value, []);
+    const first = await createProductionWorldReconstructionRunPortsV1(input, firstOwners);
+    const generated = await first.generate(stageInput);
+    const sourceBefore = await readFile(path.join(value.attemptDirectoryPath, "source/scene.ts"));
+    const resumedOwners = owners(value, []);
+    const resumed = await createProductionWorldReconstructionRunPortsV1({ ...input, hostRecoveryIndex: 1 }, resumedOwners);
+    expect(await resumed.generate(stageInput)).toEqual(generated);
+    expect(resumedOwners.prepareGeneration).not.toHaveBeenCalled();
+    expect(resumedOwners.runGeneration).not.toHaveBeenCalled();
+    expect(resumedOwners.reconcileGeneration).not.toHaveBeenCalled();
+    expect(await readFile(path.join(value.attemptDirectoryPath, "source/scene.ts"))).toEqual(sourceBefore);
+    await writeFile(path.join(value.attemptDirectoryPath, "source/scene.ts"), "changed-source");
+    await expect(resumed.generate(stageInput)).rejects.toThrow("HOST_CHECKPOINT_INVALID");
+    expect(resumedOwners.runGeneration).not.toHaveBeenCalled();
+  });
+  it("never turns missing or unknown generation into a new task on Host-only recovery", async () => {
+    const value = await fixture();
+    const ownerPorts = owners(value, []);
+    const ports = await createProductionWorldReconstructionRunPortsV1({ ...value.input,
+      executionPurpose: "production", hostRecoveryIndex: 1 }, ownerPorts);
+    await expect(ports.generate({ attemptIndex: 0, backend: "local", runId: RUN_ID,
+      requestId: value.prepared.routerRequestId, frozenOwnerIdentities: value.frozenOwnerIdentities }))
+      .rejects.toThrow("HOST_RECOVERY_GENERATION_INCOMPLETE");
+    expect(ownerPorts.prepareGeneration).not.toHaveBeenCalled();
+    expect(ownerPorts.runGeneration).not.toHaveBeenCalled();
+  });
+  it("persists exact Builder diagnostics before cleaning the task workspace", async () => {
+    const value = await fixture();
+    const ownerPorts: ProductionWorldReconstructionRunPortOwnersV1 = {
+      ...owners(value, []),
+      runSelfCheck: vi.fn(async () => ({
+      ok: false,
+      diagnosticCodes: ["WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED"],
+      typecheckDiagnostics: [{ code: "WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED" as const, typescriptCode: 18048,
+        sourcePath: "scene.ts" as const, lineNumber: 324, columnNumber: 32,
+        message: "TS18048: 'xOffset' is possibly 'undefined'." }],
+      })),
+      runGeneration: vi.fn(async (_prepared, runPorts) => {
+      await runPorts.selfCheck(value.prepared.stagingDirectoryPath);
+      await runPorts.cleanup();
+      return { receipt: { ...value.generationReceipt, outcome: "rejected", diagnosticCodes: ["self-check-failed"] } as never };
+      }),
+    };
+    const ports = await createProductionWorldReconstructionRunPortsV1(value.input, ownerPorts);
+    const generated = await ports.generate({
+      attemptIndex: 0, backend: "local", runId: RUN_ID,
+      requestId: value.prepared.routerRequestId,
+      frozenOwnerIdentities: value.frozenOwnerIdentities,
+    });
+    expect(generated.diagnosticCodes).toEqual(["WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED", "self-check-failed"]);
+    expect(ownerPorts.runSelfCheck).toHaveBeenCalledWith(
+      path.join(value.prepared.taskWorkspacePath, "inputs/builder-skill/scripts/self-check.mjs"),
+      value.prepared.stagingDirectoryPath,
+      path.join(value.prepared.taskWorkspacePath, "inputs/scene-brief.md"),
+    );
+    expect(JSON.parse(await readFile(path.join(value.attemptDirectoryPath,
+      "builder-self-check.host.json"), "utf8"))).toMatchObject({
+      generationRequestHash: H("a"),
+      ok: false,
+      diagnosticCodes: ["WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED"],
+      typecheckDiagnostics: [{ code: "WORLDKIT_NATIVE_SCENE_TYPECHECK_FAILED", typescriptCode: 18048,
+        sourcePath: "scene.ts", lineNumber: 324, columnNumber: 32,
+        message: "TS18048: 'xOffset' is possibly 'undefined'." }],
+    });
+  });
   it("no-follow rehashes the three Host owner files and re-derives one frozen identity set", async () => {
     const value = await fixture();
     const ownerPorts = {
@@ -533,6 +638,56 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         runDirectoryPath: path.join(caseRoot, "runs", RUN_ID),
       },
     })).resolves.toBeDefined();
+  });
+
+  it.each(["one", "all"] as const)("retains %s side/top targets without imposing an opening composition requirement", async (mode) => {
+    const value = await fixture();
+    const original = value.input.reconstructionCase;
+    const targetRefs = new Set((mode === "all" ? original.expected.semanticSilhouetteTargets
+      : [original.expected.semanticSilhouetteTargets[1]!]).map((target) => target.acceptanceTargetRef));
+    const compositionTargetRefs = new Set(value.input.formalCaptureIntent.semanticCaptureTargetBindings
+      .filter((binding) => targetRefs.has(binding.acceptanceTargetRef)).map((binding) => binding.compositionTargetRef));
+    const opening = original.expected.openingComposition;
+    const profile = value.input.evaluationProfile;
+    const evaluationProfile = parseWorldReconstructionEvaluationProfileV1({
+      ...profile,
+      thresholds: {
+        ...profile.thresholds,
+        openingComposition: {
+          regions: profile.thresholds.openingComposition.regions.filter((row) => !compositionTargetRefs.has(row.targetRef)),
+          anchors: profile.thresholds.openingComposition.anchors.filter((row) => !compositionTargetRefs.has(row.targetRef)),
+        },
+      },
+    });
+    const reconstructionCase = parseWorldReconstructionCaseV1({
+      ...original,
+      evaluationProfileHash: hashWorldReconstructionEvaluationProfileV1(evaluationProfile),
+      expected: {
+        ...original.expected,
+        semanticSilhouetteTargets: original.expected.semanticSilhouetteTargets.map((row) =>
+          !targetRefs.has(row.acceptanceTargetRef) ? row : {
+            ...row,
+            viewRequirements: row.viewRequirements.map((requirement) =>
+              requirement.viewId === "opening" ? { viewId: "opening", mode: "not-required" } : requirement),
+          }),
+        openingComposition: {
+          ...opening,
+          targetRefs: opening.targetRefs.filter((ref) => !compositionTargetRefs.has(ref)),
+          regions: opening.regions.filter((row) => !compositionTargetRefs.has(row.targetRef)),
+          anchors: opening.anchors.filter((row) => !compositionTargetRefs.has(row.targetRef)),
+          orderedTargetRefs: opening.orderedTargetRefs.filter((ref) => !compositionTargetRefs.has(ref)),
+        },
+      },
+    });
+    await writeFile(value.input.casePath, stringifyCanonicalJson(reconstructionCase));
+    await expect(createProductionWorldReconstructionRunPortsV1({
+      ...value.input,
+      reconstructionCase,
+      evaluationProfile,
+    }, owners(value, []))).resolves.toBeDefined();
+    expect(reconstructionCase.expected.semanticSilhouetteTargets).toHaveLength(2);
+    expect(value.input.formalCaptureIntent.semanticCaptureTargetBindings).toHaveLength(2);
+    expect(reconstructionCase.expected.openingComposition.targetRefs).toHaveLength(mode === "all" ? 0 : 1);
   });
 
   it("rejects a non-canonical Case artifact ref before exposing ports", async () => {
@@ -873,36 +1028,9 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
     }));
   });
 
-  it("surfaces an identity-bound repairable Native Check rejection before Candidate allocation", async () => {
+  it("surfaces an identity-bound non-repairable Native Check rejection before Candidate allocation", async () => {
     const value = await fixture();
     const baseOwners = owners(value, []);
-    const repairDiagnostic = parseWorldReconstructionDiagnosticV1({
-      kind: "world-reconstruction-diagnostic",
-      schemaVersion: 1,
-      id: "native-check-route-disconnected",
-      code: "WORLD_RECONSTRUCTION_REQUIRED_TRAVERSAL_BLOCKED",
-      dimensionId: "critical-traversal",
-      acceptanceTargetRef:
-        "worldkit://acceptance-target/upper-t-junction@1",
-      targetRef: "worldkit://acceptance-target/upper-t-junction@1",
-      targetId: "native-block-route",
-      metricId: "ground-component-reachability",
-      details: {
-        kind: "state-mismatch",
-        expectedValue: "one-edge-connected-route-component",
-        actualValue: "multiple-disconnected-route-components",
-        correctionDirection: "replace",
-      },
-      evidenceRefs: ["artifact://case/native-check-result.json"],
-      message: "Native Check found a disconnected route.",
-      repairAction: {
-        kind: "revise-native-source",
-        targetKind: "traversal-check",
-        targetId: "native-block-route",
-        operation: "adjust-traversal",
-        instruction: "Connect the explicit route Blocks.",
-      },
-    });
     const nativeCheckResultPath = path.join(
       value.attemptDirectoryPath,
       "native-check-result.json",
@@ -911,7 +1039,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
       throw new NativeBlockPackageErrorV1(
         [
           "native-check-rejected",
-          "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+          "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
         ],
         undefined,
         undefined,
@@ -921,7 +1049,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
             value.packageResult.sceneAuthoringAttemptResult as never,
           nativeCheckResultHash: H("8"),
           nativeCheckResultPath,
-          repairDiagnostics: [repairDiagnostic],
+          repairDiagnostics: [],
         },
       );
     });
@@ -941,7 +1069,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         /attempts\/0\/native-check-result\.json$/,
       ),
       nativeCheckResultHash: H("8"),
-      repairDiagnostics: [repairDiagnostic],
+      repairDiagnostics: [],
     }));
     expect(await ports.cleanup()).toEqual(expect.objectContaining({
       candidate: "completed",
@@ -1232,6 +1360,7 @@ describe("createProductionWorldReconstructionRunPortsV1", () => {
         await Promise.all([
           ["formal-world-capture-receipt.json", evidence.captureReceipt],
           ["opening-observation.json", evidence.openingObservation],
+          ["semantic-view-observation-set.json", evidence.semanticViewObservationSet],
           ["spawn-support-observation.json", evidence.spawnSupportObservation],
           ["collider-overlay-observation.json", evidence.colliderOverlayObservation],
           ["scripted-traversal.json", evidence.scriptedTraversalObservation],

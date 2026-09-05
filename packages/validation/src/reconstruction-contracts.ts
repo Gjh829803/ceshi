@@ -14,8 +14,10 @@ import {
   sha256CanonicalJson,
 } from "@whitebox-world/protocol";
 import {
+  FORMAL_WORLD_CAPTURE_VIEW_IDS_V1,
   parseFixedInputV1,
   type FixedInputV1,
+  type FormalWorldCaptureViewIdV1,
 } from "@whitebox-world/runtime-contracts";
 import { isEqual, isNil, isPlainObject, sortBy, uniq } from "lodash-es";
 
@@ -97,7 +99,7 @@ export interface WorldReconstructionCaseV1 {
   readonly referenceInputs: readonly Readonly<{
     inputRef: string;
     contentHash: Sha256HashV1;
-    mediaType: "image/png" | "image/jpeg" | "application/json";
+    mediaType: "image/png" | "image/jpeg" | "image/webp" | "application/json";
   }>[];
   readonly evaluationProfileRef: string;
   readonly evaluationProfileHash: Sha256HashV1;
@@ -118,9 +120,7 @@ export interface WorldReconstructionExpectedV1 {
   readonly semanticSilhouetteTargets: readonly Readonly<{
     readonly acceptanceTargetRef: string;
     readonly visualGroupId: string;
-    readonly normalizedBounds: WorldReconstructionNormalizedBoundsV1;
-    readonly normalizedCenter: WorldReconstructionNormalizedCenterV1;
-    readonly coverageBasisPoints: number;
+    readonly viewRequirements: readonly WorldReconstructionViewRequirementV1[];
   }>[];
   readonly openingComposition: Readonly<{
     readonly acceptanceTargetRef: string;
@@ -163,6 +163,28 @@ export interface WorldReconstructionExpectedV1 {
     readonly requiresCaptureIdentityAgreement: true;
   }>;
 }
+
+export type WorldReconstructionViewRequirementV1 =
+  | Readonly<{
+      viewId: FormalWorldCaptureViewIdV1;
+      mode: "not-required" | "presence-required";
+    }>
+  | Readonly<{
+      viewId: FormalWorldCaptureViewIdV1;
+      mode: "reference-projection-required";
+      normalizedBounds: WorldReconstructionNormalizedBoundsV1;
+      normalizedCenter: WorldReconstructionNormalizedCenterV1;
+      coverageBasisPoints: number;
+    }>;
+
+export type WorldReconstructionStructuralProjectionV1 =
+  | Readonly<{ outcome: "outside-viewport" | "outside-depth-range" }>
+  | Readonly<{
+      outcome: "projected";
+      normalizedBounds: WorldReconstructionNormalizedBoundsV1;
+      normalizedCenter: WorldReconstructionNormalizedCenterV1;
+      coverageBasisPoints: number;
+    }>;
 
 export interface WorldReconstructionEvaluationProfileV1 {
   readonly kind: "world-reconstruction-evaluation-profile";
@@ -242,13 +264,13 @@ export type WorldReconstructionObservedDimensionV1 =
     }>
   | Readonly<{
       kind: "semantic-silhouette-observed";
-      targets: readonly Readonly<{
-        acceptanceTargetRef: string;
-        visualGroupId: string;
-        isSemanticTargetPresent: boolean;
-        normalizedBounds: WorldReconstructionNormalizedBoundsV1;
-        normalizedCenter: WorldReconstructionNormalizedCenterV1;
-        coverageBasisPoints: number;
+      views: readonly Readonly<{
+        viewId: FormalWorldCaptureViewIdV1;
+        targets: readonly Readonly<{
+          acceptanceTargetRef: string;
+          visualGroupId: string;
+          structuralProjection: WorldReconstructionStructuralProjectionV1;
+        }>[];
       }>[];
     }>
   | Readonly<{
@@ -372,11 +394,9 @@ export type WorldReconstructionDiagnosticCodeV1 =
   | WorldReconstructionRepairableDiagnosticCodeV1
   | WorldReconstructionNonRepairableDiagnosticCodeV1;
 
-export const WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1 = Object.freeze([
-  "topology-node-presence",
-  "topology-layer-presence",
-  "topology-relation-presence",
+const WORLD_RECONSTRUCTION_SEMANTIC_DIAGNOSTIC_METRIC_SUFFIXES_V1 = Object.freeze([
   "semantic-target-binding",
+  "reference-projection",
   "semantic-bounds-min-x-basis-points",
   "semantic-bounds-min-y-basis-points",
   "semantic-bounds-max-x-basis-points",
@@ -384,6 +404,26 @@ export const WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1 = Object.freeze([
   "semantic-center-x-basis-points",
   "semantic-center-y-basis-points",
   "semantic-coverage-basis-points",
+] as const);
+
+export type WorldReconstructionSemanticDiagnosticMetricIdV1 =
+  `${FormalWorldCaptureViewIdV1}-${
+    (typeof WORLD_RECONSTRUCTION_SEMANTIC_DIAGNOSTIC_METRIC_SUFFIXES_V1)[number]
+  }`;
+
+export const WORLD_RECONSTRUCTION_SEMANTIC_DIAGNOSTIC_METRIC_IDS_V1 =
+  Object.freeze(FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.flatMap((viewId) =>
+    WORLD_RECONSTRUCTION_SEMANTIC_DIAGNOSTIC_METRIC_SUFFIXES_V1.map(
+      (suffix): WorldReconstructionSemanticDiagnosticMetricIdV1 =>
+        `${viewId}-${suffix}`,
+    )
+  ));
+
+export const WORLD_RECONSTRUCTION_DIAGNOSTIC_METRIC_IDS_V1 = Object.freeze([
+  "topology-node-presence",
+  "topology-layer-presence",
+  "topology-relation-presence",
+  ...WORLD_RECONSTRUCTION_SEMANTIC_DIAGNOSTIC_METRIC_IDS_V1,
   "opening-region-presence",
   "opening-region-min-x-basis-points",
   "opening-region-min-y-basis-points",
@@ -492,14 +532,33 @@ const DIAGNOSTIC_DETAIL_KIND_BY_METRIC_ID: Readonly<
   "topology-node-presence": "presence-mismatch",
   "topology-layer-presence": "presence-mismatch",
   "topology-relation-presence": "presence-mismatch",
-  "semantic-target-binding": "state-mismatch",
-  "semantic-bounds-min-x-basis-points": "basis-points-threshold",
-  "semantic-bounds-min-y-basis-points": "basis-points-threshold",
-  "semantic-bounds-max-x-basis-points": "basis-points-threshold",
-  "semantic-bounds-max-y-basis-points": "basis-points-threshold",
-  "semantic-center-x-basis-points": "basis-points-threshold",
-  "semantic-center-y-basis-points": "basis-points-threshold",
-  "semantic-coverage-basis-points": "basis-points-threshold",
+  "opening-semantic-target-binding": "state-mismatch",
+  "opening-reference-projection": "state-mismatch",
+  "opening-semantic-bounds-min-x-basis-points": "basis-points-threshold",
+  "opening-semantic-bounds-min-y-basis-points": "basis-points-threshold",
+  "opening-semantic-bounds-max-x-basis-points": "basis-points-threshold",
+  "opening-semantic-bounds-max-y-basis-points": "basis-points-threshold",
+  "opening-semantic-center-x-basis-points": "basis-points-threshold",
+  "opening-semantic-center-y-basis-points": "basis-points-threshold",
+  "opening-semantic-coverage-basis-points": "basis-points-threshold",
+  "world-side-semantic-target-binding": "state-mismatch",
+  "world-side-reference-projection": "state-mismatch",
+  "world-side-semantic-bounds-min-x-basis-points": "basis-points-threshold",
+  "world-side-semantic-bounds-min-y-basis-points": "basis-points-threshold",
+  "world-side-semantic-bounds-max-x-basis-points": "basis-points-threshold",
+  "world-side-semantic-bounds-max-y-basis-points": "basis-points-threshold",
+  "world-side-semantic-center-x-basis-points": "basis-points-threshold",
+  "world-side-semantic-center-y-basis-points": "basis-points-threshold",
+  "world-side-semantic-coverage-basis-points": "basis-points-threshold",
+  "world-top-down-semantic-target-binding": "state-mismatch",
+  "world-top-down-reference-projection": "state-mismatch",
+  "world-top-down-semantic-bounds-min-x-basis-points": "basis-points-threshold",
+  "world-top-down-semantic-bounds-min-y-basis-points": "basis-points-threshold",
+  "world-top-down-semantic-bounds-max-x-basis-points": "basis-points-threshold",
+  "world-top-down-semantic-bounds-max-y-basis-points": "basis-points-threshold",
+  "world-top-down-semantic-center-x-basis-points": "basis-points-threshold",
+  "world-top-down-semantic-center-y-basis-points": "basis-points-threshold",
+  "world-top-down-semantic-coverage-basis-points": "basis-points-threshold",
   "opening-region-presence": "presence-mismatch",
   "opening-region-min-x-basis-points": "basis-points-threshold",
   "opening-region-min-y-basis-points": "basis-points-threshold",
@@ -547,16 +606,8 @@ const DIAGNOSTIC_METRIC_IDS_BY_CODE: Readonly<
     "topology-layer-presence",
   ],
   WORLD_RECONSTRUCTION_TOPOLOGY_RELATION_MISSING: ["topology-relation-presence"],
-  WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT: [
-    "semantic-target-binding",
-    "semantic-bounds-min-x-basis-points",
-    "semantic-bounds-min-y-basis-points",
-    "semantic-bounds-max-x-basis-points",
-    "semantic-bounds-max-y-basis-points",
-    "semantic-center-x-basis-points",
-    "semantic-center-y-basis-points",
-    "semantic-coverage-basis-points",
-  ],
+  WORLD_RECONSTRUCTION_SEMANTIC_SILHOUETTE_DRIFT:
+    WORLD_RECONSTRUCTION_SEMANTIC_DIAGNOSTIC_METRIC_IDS_V1,
   WORLD_RECONSTRUCTION_OPENING_COMPOSITION_DRIFT: [
     "opening-region-presence",
     "opening-region-min-x-basis-points",
@@ -618,14 +669,20 @@ const REPAIR_ACTION_SHAPE_BY_METRIC_ID: Readonly<Partial<Record<
   "topology-node-presence": { targetKind: "topology-node", operation: "add" },
   "topology-layer-presence": { targetKind: "topology-layer", operation: "add" },
   "topology-relation-presence": { targetKind: "topology-relation", operation: "add" },
-  "semantic-target-binding": { targetKind: "visual-group", operation: "bind" },
-  "semantic-bounds-min-x-basis-points": { targetKind: "visual-group", operation: "resize" },
-  "semantic-bounds-min-y-basis-points": { targetKind: "visual-group", operation: "resize" },
-  "semantic-bounds-max-x-basis-points": { targetKind: "visual-group", operation: "resize" },
-  "semantic-bounds-max-y-basis-points": { targetKind: "visual-group", operation: "resize" },
-  "semantic-center-x-basis-points": { targetKind: "visual-group", operation: "move" },
-  "semantic-center-y-basis-points": { targetKind: "visual-group", operation: "move" },
-  "semantic-coverage-basis-points": { targetKind: "visual-group", operation: "resize" },
+  ...Object.fromEntries(
+    WORLD_RECONSTRUCTION_SEMANTIC_DIAGNOSTIC_METRIC_IDS_V1.map((metricId) => [
+      metricId,
+      {
+        targetKind: "visual-group",
+        operation: metricId.endsWith("semantic-target-binding")
+          ? "bind"
+          : metricId.endsWith("reference-projection") ||
+              metricId.includes("semantic-center-")
+          ? "move"
+          : "resize",
+      },
+    ] as const),
+  ),
   "opening-region-presence": { targetKind: "composition-target", operation: "add" },
   "opening-region-min-x-basis-points": { targetKind: "composition-target", operation: "resize" },
   "opening-region-min-y-basis-points": { targetKind: "composition-target", operation: "resize" },
@@ -706,6 +763,8 @@ export type WorldReconstructionEvaluatedRunAttemptV1 = Readonly<{
   worldPackageBuildReceiptHash: Sha256HashV1;
   worldBuildIdentityRef: string;
   worldBuildIdentityHash: Sha256HashV1;
+  groundAnalysisReportRef: string;
+  groundAnalysisReportHash: Sha256HashV1;
   captureReceiptRef: string;
   captureReceiptHash: Sha256HashV1;
   evaluationResultRef: string;
@@ -730,6 +789,8 @@ export type WorldReconstructionCaptureRejectedRunAttemptV1 = Readonly<{
   worldPackageBuildReceiptHash: Sha256HashV1;
   worldBuildIdentityRef: string;
   worldBuildIdentityHash: Sha256HashV1;
+  groundAnalysisReportRef: string;
+  groundAnalysisReportHash: Sha256HashV1;
   openingGateResultRef: string;
   openingGateResultHash: Sha256HashV1;
   outcome: "failed";
@@ -794,6 +855,86 @@ export interface WorldReconstructionRunReceiptV1 {
   readonly cleanupOutcome: "completed" | "failed";
 }
 
+export type WorldReconstructionStrictDiagnosticOutcomeV1 =
+  | "passed"
+  | "failed"
+  | "incomplete"
+  | "not-run";
+
+export interface WorldReconstructionStrictDiagnosticReceiptV1 {
+  readonly kind: "world-reconstruction-strict-diagnostic-receipt";
+  readonly schemaVersion: 1;
+  readonly id: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
+  readonly caseHash: Sha256HashV1;
+  readonly runReceiptRef: string;
+  readonly runReceiptHash: Sha256HashV1;
+  readonly attemptIndex: WorldReconstructionAttemptIndexV1;
+  readonly worldPackageRef: string;
+  readonly worldPackageRootHash: Sha256HashV1;
+  readonly worldBuildIdentityHash: Sha256HashV1;
+  readonly captureReceiptHash: Sha256HashV1;
+  readonly evaluationResultHash: Sha256HashV1;
+  readonly outcome: WorldReconstructionStrictDiagnosticOutcomeV1;
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed" | "not-started";
+}
+
+interface WorldReconstructionProductionIdentityV1 {
+  readonly kind: "world-reconstruction-production-result";
+  readonly schemaVersion: 1;
+  readonly caseId: string;
+  readonly caseRef: WorldReconstructionCaseArtifactRefV1;
+  readonly runId: string;
+}
+
+export interface WorldReconstructionProductionPublishedResultV1
+  extends WorldReconstructionProductionIdentityV1 {
+  readonly productionOutcome: "passed";
+  readonly publicationOutcome: "published";
+  readonly evaluationOutcome: WorldReconstructionOutcomeV1;
+  readonly strictDiagnosticOutcome: WorldReconstructionStrictDiagnosticOutcomeV1;
+  readonly strictDiagnosticCodes: readonly string[];
+  readonly strictDiagnosticCleanupOutcome: "completed" | "failed" | "not-started";
+  readonly cleanupOutcome: "completed";
+  readonly attemptCount: 1 | 2 | 3 | 4;
+  readonly finalWorldPackagePath: string;
+  readonly finalWorldPackageRef: string;
+  readonly finalWorldPackageRootHash: Sha256HashV1;
+  readonly finalCaptureReceiptPath: string;
+  readonly finalCaptureReceiptHash: Sha256HashV1;
+  readonly finalEvaluationPath: string;
+  readonly finalEvaluationHash: Sha256HashV1;
+  readonly finalStrictDiagnosticPath: string;
+  readonly finalStrictDiagnosticRef: string;
+  readonly finalStrictDiagnosticHash: Sha256HashV1;
+  readonly finalEntryValidationPath: string;
+  readonly finalEntryValidationRef: string;
+  readonly finalEntryValidationHash: Sha256HashV1;
+  readonly runReceiptPath: string;
+  readonly runReceiptRef: string;
+  readonly runReceiptHash: Sha256HashV1;
+  readonly finalDirectoryPath: string;
+}
+
+export interface WorldReconstructionProductionFailedResultV1
+  extends WorldReconstructionProductionIdentityV1 {
+  readonly productionOutcome: "failed";
+  readonly publicationOutcome: "not-published";
+  readonly runOutcome: WorldReconstructionOutcomeV1 | "not-run";
+  readonly evaluationOutcome: WorldReconstructionOutcomeV1 | "not-run";
+  readonly strictDiagnosticOutcome: WorldReconstructionStrictDiagnosticOutcomeV1;
+  readonly strictDiagnosticCodes: readonly string[];
+  readonly strictDiagnosticCleanupOutcome: "completed" | "failed" | "not-started";
+  readonly attemptCount: 0 | 1 | 2 | 3 | 4;
+  readonly diagnosticCodes: readonly string[];
+  readonly cleanupOutcome: "completed" | "failed" | "not-started" | "unknown";
+}
+
+export type WorldReconstructionProductionResultV1 =
+  | WorldReconstructionProductionPublishedResultV1
+  | WorldReconstructionProductionFailedResultV1;
+
 export function getWorldReconstructionFinalEvaluatedAttemptV1(
   receipt: WorldReconstructionRunReceiptV1,
 ): WorldReconstructionEvaluatedRunAttemptV1 {
@@ -853,12 +994,42 @@ const RUN_FIELDS = [
   "evaluationProfileHash", "outcome", "diagnosticCodes", "attempts", "finalAttemptIndex",
   "finalEvaluationResultRef", "finalEvaluationResultHash", "cleanupOutcome",
 ] as const;
+const STRICT_DIAGNOSTIC_FIELDS = [
+  "kind", "schemaVersion", "id", "caseRef", "caseHash", "runReceiptRef",
+  "runReceiptHash", "attemptIndex", "worldPackageRef", "worldPackageRootHash",
+  "worldBuildIdentityHash", "captureReceiptHash", "evaluationResultHash",
+  "outcome", "diagnosticCodes", "cleanupOutcome",
+] as const;
+const PRODUCTION_RESULT_COMMON_FIELDS = [
+  "kind", "schemaVersion", "caseId", "caseRef", "runId",
+  "productionOutcome", "publicationOutcome",
+] as const;
+const PRODUCTION_RESULT_PUBLISHED_FIELDS = [
+  ...PRODUCTION_RESULT_COMMON_FIELDS, "evaluationOutcome",
+  "strictDiagnosticOutcome", "strictDiagnosticCodes",
+  "strictDiagnosticCleanupOutcome", "cleanupOutcome", "attemptCount",
+  "finalWorldPackagePath", "finalWorldPackageRef", "finalWorldPackageRootHash",
+  "finalCaptureReceiptPath", "finalCaptureReceiptHash", "finalEvaluationPath",
+  "finalEvaluationHash", "finalStrictDiagnosticPath",
+  "finalStrictDiagnosticRef", "finalStrictDiagnosticHash",
+  "finalEntryValidationPath", "finalEntryValidationRef",
+  "finalEntryValidationHash", "runReceiptPath", "runReceiptRef",
+  "runReceiptHash", "finalDirectoryPath",
+] as const;
+const PRODUCTION_RESULT_FAILED_FIELDS = [
+  ...PRODUCTION_RESULT_COMMON_FIELDS, "runOutcome", "evaluationOutcome",
+  "strictDiagnosticOutcome", "strictDiagnosticCodes",
+  "strictDiagnosticCleanupOutcome", "attemptCount", "diagnosticCodes",
+  "cleanupOutcome",
+] as const;
+const PRODUCTION_DIAGNOSTIC_CODE_PATTERN = /^(?:[A-Z][A-Z0-9_]{4,}|[a-z][a-z0-9]*(?:-[a-z0-9]+)+)$/;
 const RUN_ATTEMPT_FIELDS = [
   "kind", "attemptIndex", "generationRequestRef", "generationRequestHash",
   "generationReceiptRef", "generationReceiptHash", "sceneAuthoringAttemptRef",
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
   "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash", "worldBuildIdentityRef", "worldBuildIdentityHash",
+  "groundAnalysisReportRef", "groundAnalysisReportHash",
   "captureReceiptRef", "captureReceiptHash", "evaluationResultRef",
   "evaluationResultHash", "outcome",
 ] as const;
@@ -868,7 +1039,8 @@ const RUN_REJECTED_CAPTURE_ATTEMPT_FIELDS = [
   "sceneAuthoringAttemptHash", "sceneAuthoringAttemptResultRef",
   "sceneAuthoringAttemptResultHash", "worldPackageRef", "worldPackageRootHash",
   "worldPackageBuildReceiptRef", "worldPackageBuildReceiptHash",
-  "worldBuildIdentityRef", "worldBuildIdentityHash", "openingGateResultRef",
+  "worldBuildIdentityRef", "worldBuildIdentityHash",
+  "groundAnalysisReportRef", "groundAnalysisReportHash", "openingGateResultRef",
   "openingGateResultHash", "outcome",
 ] as const;
 const RUN_REJECTED_GROUND_ANALYSIS_ATTEMPT_FIELDS = [
@@ -994,11 +1166,31 @@ function sortedStrings(value: unknown, contract: string, path: string, allowEmpt
   return Object.freeze(parsed);
 }
 
-function uniqueStrings(value: unknown, contract: string, path: string): readonly string[] {
+function sortedDiagnosticCodes(
+  value: unknown,
+  contract: string,
+  path: string,
+  allowEmpty = false,
+): readonly string[] {
+  const parsed = sortedStrings(value, contract, path, allowEmpty);
+  if (parsed.some((code) => !PRODUCTION_DIAGNOSTIC_CODE_PATTERN.test(code))) {
+    fail(contract, path, "must contain only stable diagnostic codes");
+  }
+  return parsed;
+}
+
+function uniqueStrings(
+  value: unknown,
+  contract: string,
+  path: string,
+  allowEmpty = false,
+): readonly string[] {
   const parsed = array(value, contract, path).map((entry, index) =>
     text(entry, contract, `${path}/${index}`)
   );
-  if (parsed.length === 0) fail(contract, path, "must not be empty");
+  if (!allowEmpty && parsed.length === 0) {
+    fail(contract, path, "must not be empty");
+  }
   if (new Set(parsed).size !== parsed.length) fail(contract, path, "must be unique");
   return Object.freeze(parsed);
 }
@@ -1087,6 +1279,106 @@ function parseNormalizedCenter(value: unknown, contract: string, path: string): 
   return Object.freeze({
     xBasisPoints: basisPoints(source.xBasisPoints, contract, `${path}/xBasisPoints`),
     yBasisPoints: basisPoints(source.yBasisPoints, contract, `${path}/yBasisPoints`),
+  });
+}
+
+function parseViewRequirements(
+  value: unknown,
+  contract: string,
+  path: string,
+): readonly WorldReconstructionViewRequirementV1[] {
+  const rows = array(value, contract, path);
+  if (
+    rows.length !== FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.length
+  ) fail(contract, path, "must contain exactly one requirement for every formal view");
+  return Object.freeze(FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.map((viewId, index) => {
+    const rowPath = `${path}/${index}`;
+    const source = object(rows[index], contract, rowPath);
+    if (source.viewId !== viewId) {
+      fail(contract, `${rowPath}/viewId`, `expected ${viewId}`);
+    }
+    const mode = enumValue(
+      source.mode,
+      [
+        "not-required",
+        "presence-required",
+        "reference-projection-required",
+      ] as const,
+      contract,
+      `${rowPath}/mode`,
+    );
+    if (mode !== "reference-projection-required") {
+      exactFields(source, ["viewId", "mode"], contract, rowPath);
+      return Object.freeze({ viewId, mode });
+    }
+    exactFields(source, [
+      "viewId",
+      "mode",
+      "normalizedBounds",
+      "normalizedCenter",
+      "coverageBasisPoints",
+    ], contract, rowPath);
+    return Object.freeze({
+      viewId,
+      mode,
+      normalizedBounds: parseNormalizedBounds(
+        source.normalizedBounds,
+        contract,
+        `${rowPath}/normalizedBounds`,
+      ),
+      normalizedCenter: parseNormalizedCenter(
+        source.normalizedCenter,
+        contract,
+        `${rowPath}/normalizedCenter`,
+      ),
+      coverageBasisPoints: basisPoints(
+        source.coverageBasisPoints,
+        contract,
+        `${rowPath}/coverageBasisPoints`,
+      ),
+    });
+  }));
+}
+
+function parseStructuralProjection(
+  value: unknown,
+  contract: string,
+  path: string,
+): WorldReconstructionStructuralProjectionV1 {
+  const source = object(value, contract, path);
+  const outcome = enumValue(
+    source.outcome,
+    ["projected", "outside-viewport", "outside-depth-range"] as const,
+    contract,
+    `${path}/outcome`,
+  );
+  if (outcome !== "projected") {
+    exactFields(source, ["outcome"], contract, path);
+    return Object.freeze({ outcome });
+  }
+  exactFields(source, [
+    "outcome",
+    "normalizedBounds",
+    "normalizedCenter",
+    "coverageBasisPoints",
+  ], contract, path);
+  return Object.freeze({
+    outcome,
+    normalizedBounds: parseNormalizedBounds(
+      source.normalizedBounds,
+      contract,
+      `${path}/normalizedBounds`,
+    ),
+    normalizedCenter: parseNormalizedCenter(
+      source.normalizedCenter,
+      contract,
+      `${path}/normalizedCenter`,
+    ),
+    coverageBasisPoints: basisPoints(
+      source.coverageBasisPoints,
+      contract,
+      `${path}/coverageBasisPoints`,
+    ),
   });
 }
 
@@ -1349,15 +1641,55 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
     return Object.freeze({ kind: "topology-observed", ...parseTopology({ nodeIds: source.nodeIds, relations: source.relations, layerIds: source.layerIds }, contract, path, true) });
   }
   if (dimensionId === "semantic-silhouette") {
-    exactFields(source, ["kind", "targets"], contract, path);
-    const targets = array(source.targets, contract, `${path}/targets`).map((entry, index) => {
-      const itemPath = `${path}/targets/${index}`;
-      const row = object(entry, contract, itemPath);
-      exactFields(row, ["acceptanceTargetRef", "visualGroupId", "isSemanticTargetPresent", "normalizedBounds", "normalizedCenter", "coverageBasisPoints"], contract, itemPath);
-      return Object.freeze({ acceptanceTargetRef: text(row.acceptanceTargetRef, contract, `${itemPath}/acceptanceTargetRef`), visualGroupId: text(row.visualGroupId, contract, `${itemPath}/visualGroupId`), isSemanticTargetPresent: boolean(row.isSemanticTargetPresent, contract, `${itemPath}/isSemanticTargetPresent`), normalizedBounds: parseNormalizedBounds(row.normalizedBounds, contract, `${itemPath}/normalizedBounds`), normalizedCenter: parseNormalizedCenter(row.normalizedCenter, contract, `${itemPath}/normalizedCenter`), coverageBasisPoints: basisPoints(row.coverageBasisPoints, contract, `${itemPath}/coverageBasisPoints`) });
+    exactFields(source, ["kind", "views"], contract, path);
+    const rawViews = array(source.views, contract, `${path}/views`);
+    if (rawViews.length !== FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.length) {
+      fail(contract, `${path}/views`, "must contain exactly one row for every formal view");
+    }
+    const views = FORMAL_WORLD_CAPTURE_VIEW_IDS_V1.map((viewId, viewIndex) => {
+      const viewPath = `${path}/views/${viewIndex}`;
+      const viewSource = object(rawViews[viewIndex], contract, viewPath);
+      exactFields(viewSource, ["viewId", "targets"], contract, viewPath);
+      if (viewSource.viewId !== viewId) {
+        fail(contract, `${viewPath}/viewId`, `expected ${viewId}`);
+      }
+      const targets = array(viewSource.targets, contract, `${viewPath}/targets`)
+        .map((entry, targetIndex) => {
+          const itemPath = `${viewPath}/targets/${targetIndex}`;
+          const row = object(entry, contract, itemPath);
+          exactFields(row, [
+            "acceptanceTargetRef",
+            "visualGroupId",
+            "structuralProjection",
+          ], contract, itemPath);
+          return Object.freeze({
+            acceptanceTargetRef: text(
+              row.acceptanceTargetRef,
+              contract,
+              `${itemPath}/acceptanceTargetRef`,
+            ),
+            visualGroupId: text(
+              row.visualGroupId,
+              contract,
+              `${itemPath}/visualGroupId`,
+            ),
+            structuralProjection: parseStructuralProjection(
+              row.structuralProjection,
+              contract,
+              `${itemPath}/structuralProjection`,
+            ),
+          });
+        });
+      if (targets.some((row, index) =>
+        index > 0 &&
+        targets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef
+      )) fail(contract, `${viewPath}/targets`, "must be unique and strictly sorted by acceptanceTargetRef");
+      return Object.freeze({ viewId, targets: Object.freeze(targets) });
     });
-    if (targets.some((row, index) => index > 0 && targets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, `${path}/targets`, "must be unique and strictly sorted by acceptanceTargetRef");
-    return Object.freeze({ kind: "semantic-silhouette-observed", targets: Object.freeze(targets) });
+    return Object.freeze({
+      kind: "semantic-silhouette-observed",
+      views: Object.freeze(views),
+    });
   }
   if (dimensionId === "opening-composition") {
     exactFields(source, ["kind", "regions", "anchors", "orderedTargetRefs", "distances"], contract, path);
@@ -1376,7 +1708,7 @@ function parseObservedDimension(value: unknown, dimensionId: WorldReconstruction
     if (regions.some((row, index) => index > 0 && regions[index - 1]!.targetRef >= row.targetRef) || anchors.some((row, index) => index > 0 && anchors[index - 1]!.targetRef >= row.targetRef)) fail(contract, path, "regions and anchors must be unique and strictly sorted by targetRef");
     const distances = array(source.distances, contract, `${path}/distances`).map((entry, index) => { const itemPath = `${path}/distances/${index}`; const row = object(entry, contract, itemPath); exactFields(row, ["fromTargetRef", "toTargetRef", "distanceBasisPoints"], contract, itemPath); const fromTargetRef = text(row.fromTargetRef, contract, `${itemPath}/fromTargetRef`); const toTargetRef = text(row.toTargetRef, contract, `${itemPath}/toTargetRef`); if (fromTargetRef >= toTargetRef) fail(contract, itemPath, "distance pair must be canonical"); return Object.freeze({ fromTargetRef, toTargetRef, distanceBasisPoints: basisPoints(row.distanceBasisPoints, contract, `${itemPath}/distanceBasisPoints`) }); });
     if (distances.some((row, index) => index > 0 && `${distances[index - 1]!.fromTargetRef}\0${distances[index - 1]!.toTargetRef}` >= `${row.fromTargetRef}\0${row.toTargetRef}`)) fail(contract, `${path}/distances`, "must be unique and sorted target pairs");
-    return Object.freeze({ kind: "opening-composition-observed", regions: Object.freeze(regions), anchors: Object.freeze(anchors), orderedTargetRefs: uniqueStrings(source.orderedTargetRefs, contract, `${path}/orderedTargetRefs`), distances: Object.freeze(distances) });
+    return Object.freeze({ kind: "opening-composition-observed", regions: Object.freeze(regions), anchors: Object.freeze(anchors), orderedTargetRefs: uniqueStrings(source.orderedTargetRefs, contract, `${path}/orderedTargetRefs`, true), distances: Object.freeze(distances) });
   }
   if (dimensionId === "spawn-support") {
     exactFields(source, ["kind", "spawnMarkerId", "supportColliderId", "medium", "positionXYZMeters", "supportGapMillimeters"], contract, path);
@@ -1421,7 +1753,7 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
     return Object.freeze({
       inputRef: text(row.inputRef, contract, `${path}/inputRef`),
       contentHash: hash(row.contentHash, contract, `${path}/contentHash`),
-      mediaType: enumValue(row.mediaType, ["image/png", "image/jpeg", "application/json"] as const, contract, `${path}/mediaType`),
+      mediaType: enumValue(row.mediaType, ["image/png", "image/jpeg", "image/webp", "application/json"] as const, contract, `${path}/mediaType`),
     });
   });
   if (referenceInputs.some((row, index) => index > 0 && referenceInputs[index - 1]!.inputRef >= row.inputRef)) {
@@ -1442,14 +1774,16 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   const semanticSilhouetteTargets = array(expectedSource.semanticSilhouetteTargets, contract, "expected/semanticSilhouetteTargets").map((entry, index) => {
     const path = `expected/semanticSilhouetteTargets/${index}`;
     const row = object(entry, contract, path);
-    exactFields(row, ["acceptanceTargetRef", "visualGroupId", "normalizedBounds", "normalizedCenter", "coverageBasisPoints"], contract, path);
+    exactFields(row, ["acceptanceTargetRef", "visualGroupId", "viewRequirements"], contract, path);
     const acceptanceTargetRef = declaredAcceptanceTarget(row.acceptanceTargetRef, `${path}/acceptanceTargetRef`);
     return Object.freeze({
       acceptanceTargetRef,
       visualGroupId: text(row.visualGroupId, contract, `${path}/visualGroupId`),
-      normalizedBounds: parseNormalizedBounds(row.normalizedBounds, contract, `${path}/normalizedBounds`),
-      normalizedCenter: parseNormalizedCenter(row.normalizedCenter, contract, `${path}/normalizedCenter`),
-      coverageBasisPoints: basisPoints(row.coverageBasisPoints, contract, `${path}/coverageBasisPoints`),
+      viewRequirements: parseViewRequirements(
+        row.viewRequirements,
+        contract,
+        `${path}/viewRequirements`,
+      ),
     });
   });
   if (semanticSilhouetteTargets.length === 0 || semanticSilhouetteTargets.some((row, index) => index > 0 && semanticSilhouetteTargets[index - 1]!.acceptanceTargetRef >= row.acceptanceTargetRef)) fail(contract, "expected/semanticSilhouetteTargets", "must be non-empty, unique, and sorted by acceptanceTargetRef");
@@ -1460,7 +1794,12 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
   const openingSource = object(expectedSource.openingComposition, contract, "expected/openingComposition");
   exactFields(openingSource, ["acceptanceTargetRef", "targetRefs", "regions", "anchors", "orderedTargetRefs"], contract, "expected/openingComposition");
   const openingAcceptanceTargetRef = declaredAcceptanceTarget(openingSource.acceptanceTargetRef, "expected/openingComposition/acceptanceTargetRef");
-  const targetRefs = sortedStrings(openingSource.targetRefs, contract, "expected/openingComposition/targetRefs");
+  const targetRefs = sortedStrings(
+    openingSource.targetRefs,
+    contract,
+    "expected/openingComposition/targetRefs",
+    true,
+  );
   const regions = array(openingSource.regions, contract, "expected/openingComposition/regions").map((entry, index) => {
     const path = `expected/openingComposition/regions/${index}`;
     const row = object(entry, contract, path);
@@ -1477,8 +1816,17 @@ export function parseWorldReconstructionCaseV1(value: unknown): WorldReconstruct
     if (!targetRefs.includes(targetRef)) fail(contract, `${path}/targetRef`, "must be declared by targetRefs");
     return Object.freeze({ targetRef, normalizedCenter: parseNormalizedCenter(row.normalizedCenter, contract, `${path}/normalizedCenter`) });
   });
-  if (regions.length === 0 || anchors.length === 0 || regions.some((row, index) => index > 0 && regions[index - 1]!.targetRef >= row.targetRef) || anchors.some((row, index) => index > 0 && anchors[index - 1]!.targetRef >= row.targetRef)) fail(contract, "expected/openingComposition", "regions and anchors must be non-empty, unique, and sorted by targetRef");
-  const orderedTargetRefs = uniqueStrings(openingSource.orderedTargetRefs, contract, "expected/openingComposition/orderedTargetRefs");
+  if (regions.some((row, index) => index > 0 && regions[index - 1]!.targetRef >= row.targetRef) || anchors.some((row, index) => index > 0 && anchors[index - 1]!.targetRef >= row.targetRef)) fail(contract, "expected/openingComposition", "regions and anchors must be unique and sorted by targetRef");
+  if (
+    !isEqual(regions.map(({ targetRef }) => targetRef), targetRefs) ||
+    !isEqual(anchors.map(({ targetRef }) => targetRef), targetRefs)
+  ) fail(contract, "expected/openingComposition", "regions and anchors must cover every targetRef exactly once");
+  const orderedTargetRefs = uniqueStrings(
+    openingSource.orderedTargetRefs,
+    contract,
+    "expected/openingComposition/orderedTargetRefs",
+    true,
+  );
   if (orderedTargetRefs.length !== targetRefs.length || orderedTargetRefs.some((targetRef) => !targetRefs.includes(targetRef))) fail(contract, "expected/openingComposition/orderedTargetRefs", "must contain every declared targetRef exactly once");
   const spawnSource = object(expectedSource.spawnSupport, contract, "expected/spawnSupport");
   exactFields(spawnSource, ["acceptanceTargetRef", "spawnMarkerId", "supportColliderId", "expectedMedium", "expectedPositionXYZMeters"], contract, "expected/spawnSupport");
@@ -1635,7 +1983,7 @@ export function parseWorldReconstructionEvaluationProfileV1(value: unknown): Wor
       exactFields(row, ["targetRef", "maximumDriftBasisPoints"], contract, itemPath);
       return Object.freeze({ targetRef: text(row.targetRef, contract, `${itemPath}/targetRef`), maximumDriftBasisPoints: basisPoints(row.maximumDriftBasisPoints, contract, `${itemPath}/maximumDriftBasisPoints`) });
     });
-    if (rows.length === 0 || rows.some((row, index) => index > 0 && rows[index - 1]!.targetRef >= row.targetRef)) fail(contract, path, "must be non-empty, unique, and sorted by targetRef");
+    if (rows.some((row, index) => index > 0 && rows[index - 1]!.targetRef >= row.targetRef)) fail(contract, path, "must be unique and sorted by targetRef");
     return Object.freeze(rows);
   };
   const spawnThresholds = object(thresholdsSource.spawnSupport, contract, "thresholds/spawnSupport");
@@ -2237,6 +2585,8 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
       worldPackageBuildReceiptHash: hash(row.worldPackageBuildReceiptHash, contract, `${path}/worldPackageBuildReceiptHash`),
       worldBuildIdentityRef: text(row.worldBuildIdentityRef, contract, `${path}/worldBuildIdentityRef`),
       worldBuildIdentityHash: hash(row.worldBuildIdentityHash, contract, `${path}/worldBuildIdentityHash`),
+      groundAnalysisReportRef: text(row.groundAnalysisReportRef, contract, `${path}/groundAnalysisReportRef`),
+      groundAnalysisReportHash: hash(row.groundAnalysisReportHash, contract, `${path}/groundAnalysisReportHash`),
     };
     if (attemptKind === "capture-rejected") {
       if (row.outcome !== "failed") {
@@ -2273,6 +2623,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
           ? [attempt.authoredSourceRef, attempt.nativeCheckResultRef]
         : [
             attempt.worldPackageRef,
+            attempt.groundAnalysisReportRef,
             ...(attempt.kind === "evaluated"
               ? [attempt.captureReceiptRef, attempt.evaluationResultRef]
               : [attempt.openingGateResultRef]),
@@ -2289,6 +2640,7 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
             attempt.worldPackageRootHash,
             attempt.worldPackageBuildReceiptHash,
             attempt.worldBuildIdentityHash,
+            attempt.groundAnalysisReportHash,
             ...(attempt.kind === "evaluated"
               ? [attempt.captureReceiptHash, attempt.evaluationResultHash]
               : [attempt.openingGateResultHash]),
@@ -2319,6 +2671,347 @@ export function parseWorldReconstructionRunReceiptV1(value: unknown): WorldRecon
   return freeze({ kind: "world-reconstruction-run-receipt", schemaVersion: 1, id: text(source.id, contract, "id"), caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef), caseHash: hash(source.caseHash, contract, "caseHash"), evaluationProfileRef: text(source.evaluationProfileRef, contract, "evaluationProfileRef"), evaluationProfileHash: hash(source.evaluationProfileHash, contract, "evaluationProfileHash"), outcome, diagnosticCodes, attempts: Object.freeze(attempts), finalAttemptIndex, finalEvaluationResultRef, finalEvaluationResultHash, cleanupOutcome });
 }
 
+export function parseWorldReconstructionStrictDiagnosticReceiptV1(
+  value: unknown,
+): WorldReconstructionStrictDiagnosticReceiptV1 {
+  const contract = "WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID";
+  const source = begin(value, contract, STRICT_DIAGNOSTIC_FIELDS);
+  if (source.kind !== "world-reconstruction-strict-diagnostic-receipt") {
+    fail(contract, "kind", "unexpected kind");
+  }
+  exactInteger(source.schemaVersion, 1, contract, "schemaVersion");
+  const worldPackageRootHash = hash(
+    source.worldPackageRootHash,
+    contract,
+    "worldPackageRootHash",
+  );
+  const outcome = enumValue(
+    source.outcome,
+    ["passed", "failed", "incomplete", "not-run"] as const,
+    contract,
+    "outcome",
+  );
+  const diagnosticCodes = sortedStrings(
+    source.diagnosticCodes,
+    contract,
+    "diagnosticCodes",
+    outcome === "passed" || outcome === "not-run",
+  );
+  if (
+    (outcome === "passed" || outcome === "not-run") !==
+      (diagnosticCodes.length === 0)
+  ) {
+    fail(
+      contract,
+      "diagnosticCodes",
+      "must be empty exactly when the strict diagnostic passed or did not run",
+    );
+  }
+  const cleanupOutcome = enumValue(
+    source.cleanupOutcome,
+    ["completed", "failed", "not-started"] as const,
+    contract,
+    "cleanupOutcome",
+  );
+  if (outcome === "not-run" && cleanupOutcome !== "not-started") {
+    fail(contract, "cleanupOutcome", "a diagnostic that did not run has no cleanup");
+  }
+  if (outcome === "passed" && cleanupOutcome === "failed") {
+    fail(contract, "cleanupOutcome", "a passed diagnostic cannot have failed cleanup");
+  }
+  return freeze({
+    kind: "world-reconstruction-strict-diagnostic-receipt",
+    schemaVersion: 1,
+    id: text(source.id, contract, "id"),
+    caseRef: parseWorldReconstructionCaseArtifactRefV1(source.caseRef),
+    caseHash: hash(source.caseHash, contract, "caseHash"),
+    runReceiptRef: text(source.runReceiptRef, contract, "runReceiptRef"),
+    runReceiptHash: hash(source.runReceiptHash, contract, "runReceiptHash"),
+    attemptIndex: integer(
+      source.attemptIndex,
+      0,
+      3,
+      contract,
+      "attemptIndex",
+    ) as WorldReconstructionAttemptIndexV1,
+    worldPackageRef: formalWorldPackageRef(
+      source.worldPackageRef,
+      worldPackageRootHash,
+      contract,
+      "worldPackageRef",
+    ),
+    worldPackageRootHash,
+    worldBuildIdentityHash: hash(
+      source.worldBuildIdentityHash,
+      contract,
+      "worldBuildIdentityHash",
+    ),
+    captureReceiptHash: hash(
+      source.captureReceiptHash,
+      contract,
+      "captureReceiptHash",
+    ),
+    evaluationResultHash: hash(
+      source.evaluationResultHash,
+      contract,
+      "evaluationResultHash",
+    ),
+    outcome,
+    diagnosticCodes,
+    cleanupOutcome,
+  });
+}
+
+export function parseWorldReconstructionProductionResultV1(
+  value: unknown,
+): WorldReconstructionProductionResultV1 {
+  const contract = "WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID";
+  assertAccessorFree(value, contract);
+  const record = object(value, contract, "");
+  if (record.kind !== "world-reconstruction-production-result") {
+    fail(contract, "kind", "unexpected kind");
+  }
+  exactInteger(record.schemaVersion, 1, contract, "schemaVersion");
+  const productionOutcome = enumValue(
+    record.productionOutcome,
+    ["passed", "failed"] as const,
+    contract,
+    "productionOutcome",
+  );
+  exactFields(
+    record,
+    productionOutcome === "passed"
+      ? PRODUCTION_RESULT_PUBLISHED_FIELDS
+      : PRODUCTION_RESULT_FAILED_FIELDS,
+    contract,
+    "",
+  );
+  const caseId = text(record.caseId, contract, "caseId");
+  if (!WORLD_RECONSTRUCTION_CASE_ID_PATTERN.test(caseId)) {
+    fail(contract, "caseId", "invalid Case ID");
+  }
+  const caseRef = parseWorldReconstructionCaseArtifactRefV1(record.caseRef);
+  const expectedCaseRef =
+    `artifact://world-reconstruction-case/${caseId}/case.json`;
+  if (caseRef !== expectedCaseRef) {
+    fail(contract, "caseRef", "must identify the result Case");
+  }
+  const runId = text(record.runId, contract, "runId");
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(runId)) {
+    fail(contract, "runId", "invalid Run ID");
+  }
+  const strictDiagnosticOutcome = enumValue(
+    record.strictDiagnosticOutcome,
+    ["passed", "failed", "incomplete", "not-run"] as const,
+    contract,
+    "strictDiagnosticOutcome",
+  );
+  const strictDiagnosticCodes = sortedDiagnosticCodes(
+    record.strictDiagnosticCodes,
+    contract,
+    "strictDiagnosticCodes",
+    strictDiagnosticOutcome === "passed" ||
+      strictDiagnosticOutcome === "not-run",
+  );
+  if (
+    (strictDiagnosticOutcome === "passed" ||
+      strictDiagnosticOutcome === "not-run") !==
+      (strictDiagnosticCodes.length === 0)
+  ) {
+    fail(
+      contract,
+      "strictDiagnosticCodes",
+      "must be empty exactly when strict diagnostics passed or did not run",
+    );
+  }
+  const strictDiagnosticCleanupOutcome = enumValue(
+    record.strictDiagnosticCleanupOutcome,
+    ["completed", "failed", "not-started"] as const,
+    contract,
+    "strictDiagnosticCleanupOutcome",
+  );
+  if (
+    strictDiagnosticOutcome === "not-run" &&
+    strictDiagnosticCleanupOutcome !== "not-started"
+  ) {
+    fail(
+      contract,
+      "strictDiagnosticCleanupOutcome",
+      "a diagnostic that did not run has no cleanup",
+    );
+  }
+  if (
+    strictDiagnosticOutcome === "passed" &&
+    strictDiagnosticCleanupOutcome === "failed"
+  ) {
+    fail(
+      contract,
+      "strictDiagnosticCleanupOutcome",
+      "a passed diagnostic cannot have failed cleanup",
+    );
+  }
+  const identity = {
+    kind: "world-reconstruction-production-result" as const,
+    schemaVersion: 1 as const,
+    caseId,
+    caseRef,
+    runId,
+  };
+  if (productionOutcome === "failed") {
+    if (record.publicationOutcome !== "not-published") {
+      fail(contract, "publicationOutcome", "failed production cannot be published");
+    }
+    return freeze({
+      ...identity,
+      productionOutcome,
+      publicationOutcome: "not-published" as const,
+      runOutcome: enumValue(
+        record.runOutcome,
+        ["passed", "failed", "incomplete", "not-run"] as const,
+        contract,
+        "runOutcome",
+      ),
+      evaluationOutcome: enumValue(
+        record.evaluationOutcome,
+        ["passed", "failed", "incomplete", "not-run"] as const,
+        contract,
+        "evaluationOutcome",
+      ),
+      strictDiagnosticOutcome,
+      strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome,
+      attemptCount: integer(record.attemptCount, 0, 4, contract, "attemptCount") as
+        0 | 1 | 2 | 3 | 4,
+      diagnosticCodes: sortedDiagnosticCodes(
+        record.diagnosticCodes,
+        contract,
+        "diagnosticCodes",
+      ),
+      cleanupOutcome: enumValue(
+        record.cleanupOutcome,
+        ["completed", "failed", "not-started", "unknown"] as const,
+        contract,
+        "cleanupOutcome",
+      ),
+    });
+  }
+  if (record.publicationOutcome !== "published") {
+    fail(contract, "publicationOutcome", "passed production must be published");
+  }
+  if (record.cleanupOutcome !== "completed") {
+    fail(contract, "cleanupOutcome", "published production cleanup must be completed");
+  }
+  const finalWorldPackageRootHash = hash(
+    record.finalWorldPackageRootHash,
+    contract,
+    "finalWorldPackageRootHash",
+  );
+  const finalWorldPackageRef = formalWorldPackageRef(
+    record.finalWorldPackageRef,
+    finalWorldPackageRootHash,
+    contract,
+    "finalWorldPackageRef",
+  );
+  const artifactRoot = `artifact://world-reconstruction-case/${caseId}`;
+  const runReceiptRef = text(record.runReceiptRef, contract, "runReceiptRef");
+  if (runReceiptRef !== `${artifactRoot}/runs/${runId}/run-receipt.json`) {
+    fail(contract, "runReceiptRef", "must identify the selected Run Receipt");
+  }
+  const finalStrictDiagnosticRef = text(
+    record.finalStrictDiagnosticRef,
+    contract,
+    "finalStrictDiagnosticRef",
+  );
+  if (finalStrictDiagnosticRef !== `${artifactRoot}/final/strict-diagnostic.json`) {
+    fail(contract, "finalStrictDiagnosticRef", "must identify the final strict receipt");
+  }
+  const finalEntryValidationRef = text(
+    record.finalEntryValidationRef,
+    contract,
+    "finalEntryValidationRef",
+  );
+  if (
+    finalEntryValidationRef !==
+      `${artifactRoot}/final/entry-third-person-validation.json`
+  ) {
+    fail(contract, "finalEntryValidationRef", "must identify the final entry receipt");
+  }
+  return freeze({
+    ...identity,
+    productionOutcome,
+    publicationOutcome: "published" as const,
+    evaluationOutcome: enumValue(
+      record.evaluationOutcome,
+      ["passed", "failed", "incomplete"] as const,
+      contract,
+      "evaluationOutcome",
+    ),
+    strictDiagnosticOutcome,
+    strictDiagnosticCodes,
+    strictDiagnosticCleanupOutcome,
+    cleanupOutcome: "completed" as const,
+    attemptCount: integer(record.attemptCount, 1, 4, contract, "attemptCount") as
+      1 | 2 | 3 | 4,
+    finalWorldPackagePath: text(
+      record.finalWorldPackagePath,
+      contract,
+      "finalWorldPackagePath",
+    ),
+    finalWorldPackageRef,
+    finalWorldPackageRootHash,
+    finalCaptureReceiptPath: text(
+      record.finalCaptureReceiptPath,
+      contract,
+      "finalCaptureReceiptPath",
+    ),
+    finalCaptureReceiptHash: hash(
+      record.finalCaptureReceiptHash,
+      contract,
+      "finalCaptureReceiptHash",
+    ),
+    finalEvaluationPath: text(
+      record.finalEvaluationPath,
+      contract,
+      "finalEvaluationPath",
+    ),
+    finalEvaluationHash: hash(
+      record.finalEvaluationHash,
+      contract,
+      "finalEvaluationHash",
+    ),
+    finalStrictDiagnosticPath: text(
+      record.finalStrictDiagnosticPath,
+      contract,
+      "finalStrictDiagnosticPath",
+    ),
+    finalStrictDiagnosticRef,
+    finalStrictDiagnosticHash: hash(
+      record.finalStrictDiagnosticHash,
+      contract,
+      "finalStrictDiagnosticHash",
+    ),
+    finalEntryValidationPath: text(
+      record.finalEntryValidationPath,
+      contract,
+      "finalEntryValidationPath",
+    ),
+    finalEntryValidationRef,
+    finalEntryValidationHash: hash(
+      record.finalEntryValidationHash,
+      contract,
+      "finalEntryValidationHash",
+    ),
+    runReceiptPath: text(record.runReceiptPath, contract, "runReceiptPath"),
+    runReceiptRef,
+    runReceiptHash: hash(record.runReceiptHash, contract, "runReceiptHash"),
+    finalDirectoryPath: text(
+      record.finalDirectoryPath,
+      contract,
+      "finalDirectoryPath",
+    ),
+  });
+}
+
 type Parser<T> = (value: unknown) => T;
 const canonicalBytes = <T>(parser: Parser<T>, value: unknown): Uint8Array => canonicalJsonBytes(parser(value));
 const canonicalHash = <T>(parser: Parser<T>, value: unknown): Sha256HashV1 => sha256CanonicalJson(parser(value)) as Sha256HashV1;
@@ -2335,3 +3028,7 @@ export const worldReconstructionDiagnosticCanonicalBytesV1 = (value: unknown) =>
 export const hashWorldReconstructionDiagnosticV1 = (value: unknown) => canonicalHash(parseWorldReconstructionDiagnosticV1, value);
 export const worldReconstructionRunReceiptCanonicalBytesV1 = (value: unknown) => canonicalBytes(parseWorldReconstructionRunReceiptV1, value);
 export const hashWorldReconstructionRunReceiptV1 = (value: unknown) => canonicalHash(parseWorldReconstructionRunReceiptV1, value);
+export const worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1 = (value: unknown) => canonicalBytes(parseWorldReconstructionStrictDiagnosticReceiptV1, value);
+export const hashWorldReconstructionStrictDiagnosticReceiptV1 = (value: unknown) => canonicalHash(parseWorldReconstructionStrictDiagnosticReceiptV1, value);
+export const worldReconstructionProductionResultCanonicalBytesV1 = (value: unknown) => canonicalBytes(parseWorldReconstructionProductionResultV1, value);
+export const hashWorldReconstructionProductionResultV1 = (value: unknown) => canonicalHash(parseWorldReconstructionProductionResultV1, value);

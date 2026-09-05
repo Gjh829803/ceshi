@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, readdir, rename } from "node:fs/promises";
 import path from "node:path";
 
 import { sha256Bytes, type Sha256HashV1 } from "@whitebox-world/protocol";
@@ -40,8 +40,8 @@ function hasTrustedRouterMarker(stdout: string, backend: "cloud" | "local", requ
   const lines = stdout.split(/\r?\n/).filter((line) => line.startsWith(`${marker} `));
   if (lines.length !== 1) return false;
   const expression = backend === "cloud"
-    ? /^WORLDKIT_LWDP_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) ([a-zA-Z0-9][a-zA-Z0-9_-]*) dispatch=[a-z0-9-]+ profile=formal model=gpt-5\.6-sol reasoning=xhigh$/
-    : /^WORLDKIT_LOCAL_CODEX_JOB native-block-generation ([a-z0-9][a-z0-9-]{2,79}) pid=[1-9][0-9]* profile=formal model=gpt-5\.6-sol reasoning=xhigh$/;
+    ? /^WORLDKIT_LWDP_JOB coding-agent ([a-z0-9][a-z0-9-]{2,79}) ([a-zA-Z0-9][a-zA-Z0-9_-]*) dispatch=[a-z0-9-]+ profile=formal model=gpt-5\.6-sol reasoning=xhigh$/
+    : /^WORLDKIT_LOCAL_CODEX_JOB coding-agent ([a-z0-9][a-z0-9-]{2,79}) pid=[1-9][0-9]* profile=formal model=gpt-5\.6-sol reasoning=xhigh$/;
   const match = expression.exec(lines[0]!);
   return match !== null && match[1] === requestId;
 }
@@ -178,7 +178,24 @@ export async function runNativeBlockGenerationV1(input: PreparedInput, ports: Na
     }
   }
   if (outcome !== "completed") {
-    await rm(input.stagingDirectoryPath, { recursive: true, force: true });
+    // Preserve unadmitted output for diagnosis. Only source/ is promotable.
+    const rejectedSourcePath = path.join(path.dirname(input.stagingDirectoryPath), "rejected-source");
+    try {
+      try {
+        await lstat(rejectedSourcePath);
+        throw new TypeError("rejected-source-exists");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      await rename(input.stagingDirectoryPath, rejectedSourcePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        // Retention must not overwrite prior evidence or erase the root cause.
+        cleanupOutcome = "failed";
+        outcome = "tool-error";
+        diagnostics = appendDiagnostic(diagnostics, "cleanup-failed");
+      }
+    }
   }
   return Object.freeze({ receipt: parseNativeBlockGenerationReceiptV1(receipt(input, outcome, diagnostics, outcome === "completed" ? outputs : [], cleanupOutcome)), ...(outcome === "completed" ? { sourceDirectoryPath: input.sourceDirectoryPath } : {}) });
 }

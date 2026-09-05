@@ -28,8 +28,10 @@ export interface IndependentTestCommandV1 {
 
 export const INDEPENDENT_TEST_MANIFEST_V1: readonly IndependentTestManifestEntryV1[] =
   Object.freeze([
+    { path: "scripts/agents/local-codex-failure-evidence.test.mjs", lane: "node" },
     { path: "scripts/agents/local-codex-task.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-codex-profile.test.mjs", lane: "node" },
+    { path: "scripts/agents/lwdp-codex-task-retry.test.mjs", lane: "node" },
     { path: "scripts/agents/lwdp-generation-client.test.mjs", lane: "node" },
     { path: "scripts/agents/write-lwdp-t2i-manifest.test.mjs", lane: "node" },
     { path: "scripts/visual/image-delivery.test.mjs", lane: "node" },

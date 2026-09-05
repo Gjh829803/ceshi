@@ -98,7 +98,7 @@ describe("scene terrain finalizer", { timeout: 30_000 }, () => {
     await writeFile(plannerReceiptPath, `${stringifyCanonicalJson({
       kind: "worldkit-planner-self-check",
       schemaVersion: 1,
-      validatorVersion: "worldkit-planner-self-check-v3",
+      validatorVersion: "worldkit-planner-self-check-v4",
       sceneId: SCENE_ID,
       sceneSourceKind: "canonical",
       status: "passed",

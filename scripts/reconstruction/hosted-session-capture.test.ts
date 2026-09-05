@@ -103,12 +103,14 @@ function concreteHarness(options: Readonly<{
     async goto(url: string) {
       events.push(`page.goto:${url}`);
     },
-    async waitForFunction() {
-      events.push("page.ready");
-      if (options.readyFailure !== undefined) throw options.readyFailure;
-      if (options.readyPending === true) await new Promise(() => undefined);
-    },
-    async evaluate(_callback: unknown, argument: Readonly<{ request: unknown }>) {
+    frames: () => [],
+    async evaluate(_callback: unknown, argument?: Readonly<{ request: unknown }>) {
+      if (argument === undefined) {
+        events.push("page.ready");
+        if (options.readyFailure !== undefined) throw options.readyFailure;
+        if (options.readyPending === true) await new Promise(() => undefined);
+        return "ready";
+      }
       events.push("page.capture");
       if (options.captureFailure !== undefined) throw options.captureFailure;
       if (options.capturePending === true) await new Promise(() => undefined);
@@ -476,6 +478,10 @@ describe("concrete capture-only Hosted transport", () => {
       h.browser.emit("disconnected")],
     ["server", (h: ReturnType<typeof concreteHarness>) =>
       h.serverExit.resolve(1)],
+    ["page error", (h: ReturnType<typeof concreteHarness>) =>
+      h.page.emit("pageerror", new Error("private provider detail"))],
+    ["page crash", (h: ReturnType<typeof concreteHarness>) =>
+      h.page.emit("crash")],
   ])("interrupts a pending ready wait after %s exit", async (_label, exit) => {
     const h = concreteHarness({ readyPending: true });
     const started = startCaptureOnlyHostedTransportV1({

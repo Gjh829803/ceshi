@@ -1,5 +1,9 @@
 import {
+  randomUUID,
+} from "node:crypto";
+import {
   lstat,
+  link,
   mkdir,
   mkdtemp,
   open,
@@ -7,39 +11,41 @@ import {
   realpath,
   rename,
   rm,
+  unlink,
 } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { isEmpty, isNil } from "lodash-es";
+import { isEqual } from "lodash-es";
 
 import {
-  formalWorldCaptureReceiptCanonicalBytesV1,
   formalWorldCaptureIntentCanonicalBytesV1,
-  hashFormalWorldCaptureReceiptV1,
   hashFormalWorldCaptureIntentV1,
-  parseFormalWorldCaptureReceiptV1,
   parseFormalWorldCaptureIntentV1,
   BABYLON_NATIVE_BLOCK_PROFILE_REF_V1,
 } from "@whitebox-world/runtime-contracts";
-import {
-  type Sha256HashV1,
-} from "@whitebox-world/protocol";
+import { type Sha256HashV1 } from "@whitebox-world/protocol";
 import {
   hashWorldReconstructionCaseV1,
-  hashWorldReconstructionEvaluationResultV1,
   hashWorldReconstructionEvaluationProfileV1,
   hashWorldReconstructionRunReceiptV1,
+  hashWorldReconstructionStrictDiagnosticReceiptV1,
   getWorldReconstructionFinalEvaluatedAttemptV1,
   parseWorldReconstructionCaseV1,
-  parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionEvaluationProfileV1,
+  parseWorldReconstructionProductionResultV1,
   parseWorldReconstructionRunReceiptV1,
+  parseWorldReconstructionStrictDiagnosticReceiptV1,
   worldReconstructionCaseCanonicalBytesV1,
   worldReconstructionEvaluationProfileCanonicalBytesV1,
-  worldReconstructionEvaluationResultCanonicalBytesV1,
   worldReconstructionEvidenceProfileClosureMatchesV1,
   worldReconstructionRunReceiptCanonicalBytesV1,
+  worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1,
+  type WorldReconstructionOutcomeV1,
+  type WorldReconstructionProductionFailedResultV1,
+  type WorldReconstructionProductionResultV1,
   type WorldReconstructionRunReceiptV1,
+  type WorldReconstructionStrictDiagnosticOutcomeV1,
+  type WorldReconstructionStrictDiagnosticReceiptV1,
 } from "@whitebox-world/validation";
 import {
   parseWorldPackageWorldBoundsV1,
@@ -47,7 +53,6 @@ import {
 
 import {
   NATIVE_BLOCK_RECONSTRUCTION_DEFAULT_CLOUD_S3_ROOT_V1,
-  NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1,
   decideNativeBlockReconstructionRouteV1,
   deriveNativeBlockGenerationRouterRequestIdV1,
   deriveNativeBlockGenerationBootstrapV1,
@@ -55,6 +60,7 @@ import {
   type WorldReconstructionHostRoutePolicyV1,
   type WorldReconstructionFrozenOwnerIdentitiesV1,
 } from "./generation-request.js";
+import { NATIVE_BLOCK_RECONSTRUCTION_FORMAL_BUDGETS_V1 } from "./native-block-production-budget.js";
 import {
   createProductionWorldReconstructionRunPortsV1,
 } from "./production-run-ports.js";
@@ -63,17 +69,17 @@ import {
   runWorldReconstructionV1,
   type WorldReconstructionRunPortsV1,
 } from "./run.js";
+import { createWorldReconstructionRunJournalV1 } from "./run-journal.js";
 import {
   NativeBlockFinalArtifactPublicationClosedErrorV1,
   publishNativeBlockReconstructionFinalV1,
   type NativeBlockReconstructionLaunchV1,
 } from "./final-artifact-publisher.js";
 import {
-  NativeBlockReconstructionVerificationClosedErrorV1,
-  verifyNativeBlockReconstructionE2EV1,
-  type NativeBlockReconstructionPlayabilityLaunchPortV1,
-  type NativeBlockReconstructionSkippedPlayabilityV1,
+  verifyNativeBlockReconstructionProductionIntegrityV1,
 } from "../verification/verify-native-block-reconstruction-e2e.js";
+import { hashEntryThirdPersonValidationResultV1 } from
+  "../visual/entry-third-person.js";
 
 const DEFAULT_REPOSITORY_ROOT = path.resolve(
   fileURLToPath(new URL("../../", import.meta.url)),
@@ -90,6 +96,7 @@ const NATIVE_SCENE_API_REF = "worldkit://native-scene-api/babylon@1";
 const RUN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export interface WorldReconstructionProductionInputV1 {
+  readonly executionMode?: "fresh" | "resume-host-only";
   readonly repositoryRoot?: string;
   readonly casePath: string;
   readonly outputDirectoryPath: string;
@@ -105,137 +112,14 @@ interface WorldReconstructionProductionIdentityV1 {
   readonly runId: string;
 }
 
-export interface WorldReconstructionProductionPublishedResultV1
-  extends WorldReconstructionProductionIdentityV1 {
-  readonly outcome: "published";
-  readonly attemptCount: 1 | 2 | 3 | 4;
-  readonly finalWorldPackagePath: string;
-  readonly finalWorldPackageRef: string;
-  readonly finalWorldPackageRootHash: Sha256HashV1;
-  readonly finalCaptureReceiptPath: string;
-  readonly finalCaptureReceiptHash: Sha256HashV1;
-  readonly finalEvaluationPath: string;
-  readonly finalEvaluationHash: Sha256HashV1;
-  readonly runReceiptPath: string;
-  readonly runReceiptRef: string;
-  readonly runReceiptHash: Sha256HashV1;
-  readonly finalDirectoryPath: string;
-}
-
-export interface WorldReconstructionProductionClosedResultV1
-  extends WorldReconstructionProductionIdentityV1 {
-  readonly outcome: "closed";
-  readonly runOutcome?: "passed" | "failed" | "incomplete";
-  readonly attemptCount?: 1 | 2 | 3 | 4;
-  readonly diagnosticCodes: readonly string[];
-  readonly cleanupOutcome: "completed" | "failed" | "not-started" | "unknown";
-}
-
-export interface WorldReconstructionProductionRejectedCaptureResultV1
-  extends WorldReconstructionProductionIdentityV1 {
-  readonly outcome: "rejected-capture";
-  readonly diagnosticCodes: readonly string[];
-  readonly cleanupOutcome: "completed" | "failed";
-  readonly rejectedWorldPackagePath: string;
-  readonly rejectedWorldPackageRef: string;
-  readonly rejectedWorldPackageRootHash: Sha256HashV1;
-  readonly rejectedCaptureDirectoryPath: string;
-  readonly rejectedOpeningPath: string;
-  readonly rejectedOpeningRef: string;
-  readonly openingGateResultPath: string;
-  readonly openingGateResultRef: string;
-  readonly openingGateResultHash: Sha256HashV1;
-}
-
-export interface WorldReconstructionProductionRejectedEvaluationResultV1
-  extends WorldReconstructionProductionIdentityV1 {
-  readonly outcome: "rejected-evaluation";
-  readonly runOutcome: "failed";
-  readonly attemptCount: 1 | 2 | 3 | 4;
-  readonly diagnosticCodes: readonly string[];
-  readonly cleanupOutcome: "completed";
-  readonly rejectedWorldPackagePath: string;
-  readonly rejectedWorldPackageRef: string;
-  readonly rejectedWorldPackageRootHash: Sha256HashV1;
-  readonly rejectedCaptureDirectoryPath: string;
-  readonly rejectedOpeningPath: string;
-  readonly rejectedOpeningRef: string;
-  readonly rejectedCaptureReceiptPath: string;
-  readonly rejectedCaptureReceiptHash: Sha256HashV1;
-  readonly rejectedEvaluationPath: string;
-  readonly rejectedEvaluationRef: string;
-  readonly rejectedEvaluationHash: Sha256HashV1;
-  readonly runReceiptPath: string;
-  readonly runReceiptRef: string;
-  readonly runReceiptHash: Sha256HashV1;
-}
-
-interface WorldReconstructionProductionPreviewReadyIdentityV1
-  extends WorldReconstructionProductionIdentityV1 {
-  readonly outcome: "preview-ready";
-  readonly publicationStatus: "not-accepted";
-  readonly diagnosticCodes: readonly string[];
-  readonly cleanupOutcome: "completed";
-  readonly previewWorldPackagePath: string;
-  readonly previewWorldPackageRef: string;
-  readonly previewWorldPackageRootHash: Sha256HashV1;
-  readonly previewOpeningPath: string;
-  readonly previewOpeningRef: string;
-  readonly launchWorkingDirectoryPath: string;
-  readonly launchCommand: string;
-}
-
-export interface WorldReconstructionProductionPreviewReadyCaptureResultV1
-  extends WorldReconstructionProductionPreviewReadyIdentityV1 {
-  readonly qualityStage: "opening-composition";
-  readonly qualityOutcome: "failed";
-  readonly previewCaptureDirectoryPath: string;
-  readonly openingGateResultPath: string;
-  readonly openingGateResultRef: string;
-  readonly openingGateResultHash: Sha256HashV1;
-}
-
-export interface WorldReconstructionProductionPreviewReadyEvaluationResultV1
-  extends WorldReconstructionProductionPreviewReadyIdentityV1 {
-  readonly qualityStage: "evaluation";
-  readonly qualityOutcome: "failed" | "incomplete";
-  readonly attemptCount: 1 | 2 | 3 | 4;
-  readonly previewCaptureDirectoryPath: string;
-  readonly previewCaptureReceiptPath: string;
-  readonly previewCaptureReceiptHash: Sha256HashV1;
-  readonly previewEvaluationPath: string;
-  readonly previewEvaluationRef: string;
-  readonly previewEvaluationHash: Sha256HashV1;
-  readonly runReceiptPath: string;
-  readonly runReceiptRef: string;
-  readonly runReceiptHash: Sha256HashV1;
-}
-
-export interface WorldReconstructionProductionUnsupportedResultV1
-  extends WorldReconstructionProductionIdentityV1 {
-  readonly outcome: "unsupported-route";
-  readonly diagnosticCodes: readonly ["WORLD_RECONSTRUCTION_ROUTE_UNSUPPORTED"];
-}
-
-export type WorldReconstructionProductionResultV1 =
-  | WorldReconstructionProductionPublishedResultV1
-  | WorldReconstructionProductionPreviewReadyCaptureResultV1
-  | WorldReconstructionProductionPreviewReadyEvaluationResultV1
-  | WorldReconstructionProductionRejectedCaptureResultV1
-  | WorldReconstructionProductionRejectedEvaluationResultV1
-  | WorldReconstructionProductionClosedResultV1
-  | WorldReconstructionProductionUnsupportedResultV1;
-
 export interface WorldReconstructionProductionOwnersV1 {
   readonly decideReconstructionRoute:
     typeof decideNativeBlockReconstructionRouteV1;
   readonly createRunPorts: typeof createProductionWorldReconstructionRunPortsV1;
   readonly runCore: typeof runWorldReconstructionV1;
-  readonly verifyRun: typeof verifyNativeBlockReconstructionE2EV1;
+  readonly verifyRun:
+    typeof verifyNativeBlockReconstructionProductionIntegrityV1;
   readonly publishFinal: typeof publishNativeBlockReconstructionFinalV1;
-  readonly playability:
-    | NativeBlockReconstructionPlayabilityLaunchPortV1
-    | NativeBlockReconstructionSkippedPlayabilityV1;
 }
 
 function defaultOwners(): WorldReconstructionProductionOwnersV1 {
@@ -243,9 +127,8 @@ function defaultOwners(): WorldReconstructionProductionOwnersV1 {
     decideReconstructionRoute: decideNativeBlockReconstructionRouteV1,
     createRunPorts: createProductionWorldReconstructionRunPortsV1,
     runCore: runWorldReconstructionV1,
-    verifyRun: verifyNativeBlockReconstructionE2EV1,
+    verifyRun: verifyNativeBlockReconstructionProductionIntegrityV1,
     publishFinal: publishNativeBlockReconstructionFinalV1,
-    playability: Object.freeze({ mode: "skipped" }),
   });
 }
 
@@ -595,260 +478,131 @@ function closedDiagnosticCodes(
   return receipt.diagnosticCodes;
 }
 
-function previewLaunch(
-  repositoryRoot: string,
-  outputDirectoryPath: string,
-  worldPackagePath: string,
-): Readonly<{
-  launchWorkingDirectoryPath: string;
-  launchCommand: string;
-}> {
-  const relativePackagePath = path.relative(
-    outputDirectoryPath,
-    worldPackagePath,
-  );
-  if (
-    isEmpty(relativePackagePath) ||
-    path.isAbsolute(relativePackagePath) ||
-    relativePackagePath === ".." ||
-    relativePackagePath.startsWith(`..${path.sep}`)
-  ) {
-    throw new TypeError("NBR_PREVIEW_WORLD_PACKAGE_PATH_INVALID");
-  }
-  return Object.freeze({
-    launchWorkingDirectoryPath: repositoryRoot,
-    launchCommand:
-      `pnpm worldkit native run '${worldPackagePath.replaceAll("'", "'\\''")}' --port 5174 --json`,
-  });
-}
-
-const PREVIEWABLE_QUALITY_DIMENSION_IDS = new Set([
-  "critical-traversal",
-  "opening-composition",
-  "semantic-silhouette",
-  "topology",
-]);
-
-function isPreviewableQualityEvaluation(
-  evaluation: ReturnType<typeof parseWorldReconstructionEvaluationResultV1>,
-): boolean {
-  const nonPassingDimensions = evaluation.dimensions.filter(
-    ({ status }) => status !== "passed",
-  );
-  return !isEmpty(nonPassingDimensions) && nonPassingDimensions.every(
-    ({ dimensionId }) => PREVIEWABLE_QUALITY_DIMENSION_IDS.has(dimensionId),
-  );
-}
-
-async function rejectedEvaluationResult(
-  input: Readonly<{
-    caseId: string;
-    caseRef: string;
-    runId: string;
-    repositoryRoot: string;
-    outputDirectoryPath: string;
-    receipt: WorldReconstructionRunReceiptV1;
-    qualityGateMode: "report-only" | "required-for-publication";
-  }>,
-): Promise<
-  | WorldReconstructionProductionPreviewReadyEvaluationResultV1
-  | WorldReconstructionProductionRejectedEvaluationResultV1
-  | undefined
-> {
-  const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(input.receipt);
-  const caseArtifactRoot = input.caseRef.slice(0, -"/case.json".length);
-  const attemptArtifactRoot =
-    `${caseArtifactRoot}/runs/${input.runId}/attempts/${terminal.attemptIndex}`;
-  const attemptDirectoryPath = path.join(
-    input.outputDirectoryPath,
-    "attempts",
-    String(terminal.attemptIndex),
-  );
-  const rejectedWorldPackagePath = await canonicalDirectory(
-    path.join(attemptDirectoryPath, "world-package"),
-    "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
-  );
-  const rejectedCaptureDirectoryPath = await canonicalDirectory(
-    path.join(attemptDirectoryPath, "capture"),
-    "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
-  );
-  const rejectedOpeningPath = path.join(
-    rejectedCaptureDirectoryPath,
-    "opening.png",
-  );
-  await readCanonicalRegularFile(
-    rejectedOpeningPath,
-    "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
-  );
-  const rejectedCaptureReceiptPath = path.join(
-    rejectedCaptureDirectoryPath,
-    "formal-world-capture-receipt.json",
-  );
-  const captureReceiptBytes = await readCanonicalRegularFile(
-    rejectedCaptureReceiptPath,
-    "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
-  );
-  let captureReceipt;
-  try {
-    captureReceipt = parseFormalWorldCaptureReceiptV1(parseJson(
-      captureReceiptBytes,
-      "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
-    ));
-  } catch (error) {
-    throw new TypeError("NBR_REJECTED_EVALUATION_EVIDENCE_INVALID", {
-      cause: error,
-    });
-  }
-  const rejectedEvaluationPath = path.join(attemptDirectoryPath, "evaluation.json");
-  const evaluationBytes = await readCanonicalRegularFile(
-    rejectedEvaluationPath,
-    "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
-  );
-  let evaluation;
-  try {
-    evaluation = parseWorldReconstructionEvaluationResultV1(parseJson(
-      evaluationBytes,
-      "NBR_REJECTED_EVALUATION_EVIDENCE_INVALID",
-    ));
-  } catch (error) {
-    throw new TypeError("NBR_REJECTED_EVALUATION_EVIDENCE_INVALID", {
-      cause: error,
-    });
-  }
-  if (
-    !bytesEqual(
-      captureReceiptBytes,
-      formalWorldCaptureReceiptCanonicalBytesV1(captureReceipt),
-    ) ||
-    hashFormalWorldCaptureReceiptV1(captureReceipt) !==
-      terminal.captureReceiptHash ||
-    captureReceipt.caseRef !== input.receipt.caseRef ||
-    captureReceipt.caseHash !== input.receipt.caseHash ||
-    captureReceipt.evaluationProfileRef !== input.receipt.evaluationProfileRef ||
-    captureReceipt.evaluationProfileHash !== input.receipt.evaluationProfileHash ||
-    captureReceipt.sceneAuthoringAttemptHash !==
-      terminal.sceneAuthoringAttemptHash ||
-    captureReceipt.sceneAuthoringAttemptResultHash !==
-      terminal.sceneAuthoringAttemptResultHash ||
-    captureReceipt.worldPackageRef !== terminal.worldPackageRef ||
-    captureReceipt.worldPackageRootHash !== terminal.worldPackageRootHash ||
-    captureReceipt.worldPackageBuildReceiptRef !==
-      terminal.worldPackageBuildReceiptRef ||
-    captureReceipt.worldPackageBuildReceiptHash !==
-      terminal.worldPackageBuildReceiptHash ||
-    captureReceipt.worldBuildIdentityRef !== terminal.worldBuildIdentityRef ||
-    captureReceipt.worldBuildIdentityHash !== terminal.worldBuildIdentityHash ||
-    !bytesEqual(
-      evaluationBytes,
-      worldReconstructionEvaluationResultCanonicalBytesV1(evaluation),
-    ) ||
-    evaluation.outcome === "passed" ||
-    evaluation.caseRef !== input.receipt.caseRef ||
-    evaluation.caseHash !== input.receipt.caseHash ||
-    evaluation.evaluationProfileRef !== input.receipt.evaluationProfileRef ||
-    evaluation.evaluationProfileHash !== input.receipt.evaluationProfileHash ||
-    evaluation.attemptRef !== captureReceipt.sceneAuthoringAttemptRef ||
-    evaluation.attemptHash !== captureReceipt.sceneAuthoringAttemptHash ||
-    evaluation.worldPackageRef !== terminal.worldPackageRef ||
-    evaluation.worldPackageRootHash !== terminal.worldPackageRootHash ||
-    evaluation.worldBuildIdentityRef !== terminal.worldBuildIdentityRef ||
-    evaluation.worldBuildIdentityHash !== terminal.worldBuildIdentityHash ||
-    evaluation.captureReceiptRef !== terminal.captureReceiptRef ||
-    evaluation.captureReceiptHash !== terminal.captureReceiptHash ||
-    terminal.evaluationResultRef !==
-      `${attemptArtifactRoot}/evaluation.json` ||
-    terminal.captureReceiptRef !==
-      `${attemptArtifactRoot}/capture/formal-world-capture-receipt.json` ||
-    hashWorldReconstructionEvaluationResultV1(evaluation) !==
-      terminal.evaluationResultHash
-  ) {
-    throw new TypeError("NBR_REJECTED_EVALUATION_EVIDENCE_INVALID");
-  }
-  const diagnosticCodes = Object.freeze([
-    ...new Set(evaluation.diagnostics.map(({ code }) => code)),
-  ].sort());
-  const evidence = Object.freeze({
-    attemptCount: input.receipt.attempts.length as 1 | 2 | 3 | 4,
-    diagnosticCodes,
-    cleanupOutcome: "completed" as const,
-    rejectedWorldPackagePath,
-    rejectedWorldPackageRef: terminal.worldPackageRef,
-    rejectedWorldPackageRootHash: terminal.worldPackageRootHash,
-    rejectedCaptureDirectoryPath,
-    rejectedOpeningPath,
-    rejectedOpeningRef: `${attemptArtifactRoot}/capture/opening.png`,
-    rejectedCaptureReceiptPath,
-    rejectedCaptureReceiptHash: terminal.captureReceiptHash,
-    rejectedEvaluationPath,
-    rejectedEvaluationRef: terminal.evaluationResultRef,
-    rejectedEvaluationHash: terminal.evaluationResultHash,
-    ...runReceiptIdentity(
-      input.caseRef,
-      input.runId,
-      input.outputDirectoryPath,
-      input.receipt,
-    ),
-  });
-  if (
-    input.qualityGateMode === "report-only" &&
-    isPreviewableQualityEvaluation(evaluation)
-  ) {
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: input.caseId,
-      caseRef: input.caseRef,
-      runId: input.runId,
-      outcome: "preview-ready",
-      publicationStatus: "not-accepted",
-      qualityStage: "evaluation",
-      qualityOutcome: evaluation.outcome,
-      attemptCount: input.receipt.attempts.length as 1 | 2 | 3 | 4,
-      diagnosticCodes,
-      cleanupOutcome: "completed",
-      previewWorldPackagePath: rejectedWorldPackagePath,
-      previewWorldPackageRef: terminal.worldPackageRef,
-      previewWorldPackageRootHash: terminal.worldPackageRootHash,
-      previewCaptureDirectoryPath: rejectedCaptureDirectoryPath,
-      previewOpeningPath: rejectedOpeningPath,
-      previewOpeningRef: `${attemptArtifactRoot}/capture/opening.png`,
-      previewCaptureReceiptPath: rejectedCaptureReceiptPath,
-      previewCaptureReceiptHash: terminal.captureReceiptHash,
-      previewEvaluationPath: rejectedEvaluationPath,
-      previewEvaluationRef: terminal.evaluationResultRef,
-      previewEvaluationHash: terminal.evaluationResultHash,
-      ...runReceiptIdentity(
-        input.caseRef,
-        input.runId,
-        input.outputDirectoryPath,
-        input.receipt,
-      ),
-      ...previewLaunch(
-        input.repositoryRoot,
-        input.outputDirectoryPath,
-        rejectedWorldPackagePath,
-      ),
-    });
-  }
-  if (evaluation.outcome !== "failed") return undefined;
-  return Object.freeze({
-    kind: "world-reconstruction-production-result",
-    schemaVersion: 1,
-    caseId: input.caseId,
-    caseRef: input.caseRef,
-    runId: input.runId,
-    outcome: "rejected-evaluation",
-    runOutcome: "failed",
-    ...evidence,
-  });
-}
-
 function diagnosticCodesFromError(error: unknown): readonly string[] {
   const message = error instanceof Error ? error.message : String(error);
   const codes = message.match(/[A-Z][A-Z0-9_]{4,}/g) ?? [
     "WORLD_RECONSTRUCTION_PRODUCTION_FAILED",
   ];
   return Object.freeze([...new Set(codes)].sort());
+}
+
+function failedProductionResult(
+  identity: WorldReconstructionProductionIdentityV1,
+  input: Readonly<{
+    diagnosticCodes: readonly string[];
+    cleanupOutcome: "completed" | "failed" | "not-started" | "unknown";
+    runOutcome?: WorldReconstructionOutcomeV1 | "not-run";
+    evaluationOutcome?: WorldReconstructionOutcomeV1 | "not-run";
+    attemptCount?: 0 | 1 | 2 | 3 | 4;
+    strictDiagnosticOutcome?: WorldReconstructionStrictDiagnosticOutcomeV1;
+    strictDiagnosticCodes?: readonly string[];
+    strictDiagnosticCleanupOutcome?: "completed" | "failed" | "not-started";
+  }>,
+): WorldReconstructionProductionFailedResultV1 {
+  return parseWorldReconstructionProductionResultV1({
+    ...identity,
+    productionOutcome: "failed",
+    publicationOutcome: "not-published",
+    runOutcome: input.runOutcome ?? "not-run",
+    evaluationOutcome: input.evaluationOutcome ?? "not-run",
+    strictDiagnosticOutcome: input.strictDiagnosticOutcome ?? "not-run",
+    strictDiagnosticCodes: [...new Set(input.strictDiagnosticCodes ?? [])].sort(),
+    strictDiagnosticCleanupOutcome:
+      input.strictDiagnosticCleanupOutcome ?? "not-started",
+    attemptCount: input.attemptCount ?? 0,
+    diagnosticCodes: [...new Set(input.diagnosticCodes)].sort(),
+    cleanupOutcome: input.cleanupOutcome,
+  }) as WorldReconstructionProductionFailedResultV1;
+}
+
+function createStrictDiagnosticReceipt(input: Readonly<{
+  receipt: WorldReconstructionRunReceiptV1;
+  runReceiptRef: string;
+  runReceiptHash: Sha256HashV1;
+  outcome: WorldReconstructionStrictDiagnosticOutcomeV1;
+  diagnosticCodes: readonly string[];
+  cleanupOutcome: "completed" | "failed" | "not-started";
+}>): WorldReconstructionStrictDiagnosticReceiptV1 {
+  const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(input.receipt);
+  return parseWorldReconstructionStrictDiagnosticReceiptV1({
+    kind: "world-reconstruction-strict-diagnostic-receipt",
+    schemaVersion: 1,
+    id: `${input.receipt.id}.strict`,
+    caseRef: input.receipt.caseRef,
+    caseHash: input.receipt.caseHash,
+    runReceiptRef: input.runReceiptRef,
+    runReceiptHash: input.runReceiptHash,
+    attemptIndex: terminal.attemptIndex,
+    worldPackageRef: terminal.worldPackageRef,
+    worldPackageRootHash: terminal.worldPackageRootHash,
+    worldBuildIdentityHash: terminal.worldBuildIdentityHash,
+    captureReceiptHash: terminal.captureReceiptHash,
+    evaluationResultHash: terminal.evaluationResultHash,
+    outcome: input.outcome,
+    diagnosticCodes: [...new Set(input.diagnosticCodes)].sort(),
+    cleanupOutcome: input.cleanupOutcome,
+  });
+}
+
+async function publishStrictDiagnosticReceipt(
+  outputDirectoryPath: string,
+  receipt: WorldReconstructionStrictDiagnosticReceiptV1,
+  executionMode: "fresh" | "resume-host-only",
+): Promise<Readonly<{
+  path: string;
+  hash: Sha256HashV1;
+}>> {
+  const parsed = parseWorldReconstructionStrictDiagnosticReceiptV1(receipt);
+  const bytes = worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1(parsed);
+  const outputPath = path.join(outputDirectoryPath, "strict-diagnostic.json");
+  const temporaryPath = path.join(
+    outputDirectoryPath,
+    `.strict-diagnostic.${randomUUID()}.tmp`,
+  );
+  if (await lstatOrMissing(outputPath) !== undefined) {
+    if (executionMode === "resume-host-only") {
+      const existing = await readCanonicalRegularFile(outputPath,
+        "WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_INVALID");
+      if (bytesEqual(bytes, existing)) return Object.freeze({
+        path: outputPath, hash: hashWorldReconstructionStrictDiagnosticReceiptV1(parsed),
+      });
+    }
+    throw new TypeError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_ALREADY_EXISTS");
+  }
+  const handle = await open(temporaryPath, "wx", 0o600);
+  try {
+    await handle.writeFile(bytes);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  let linked = false;
+  try {
+    await link(temporaryPath, outputPath);
+    linked = true;
+    await unlink(temporaryPath);
+    const directoryHandle = await open(outputDirectoryPath, "r");
+    try {
+      await directoryHandle.sync();
+    } finally {
+      await directoryHandle.close();
+    }
+    const publishedBytes = await readCanonicalRegularFile(
+      outputPath,
+      "WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_INVALID",
+    );
+    if (!bytesEqual(bytes, publishedBytes)) {
+      throw new TypeError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_INVALID");
+    }
+  } catch (error) {
+    await unlink(temporaryPath).catch(() => undefined);
+    if (linked) await unlink(outputPath).catch(() => undefined);
+    throw error;
+  }
+  return Object.freeze({
+    path: outputPath,
+    hash: hashWorldReconstructionStrictDiagnosticReceiptV1(parsed),
+  });
 }
 
 async function removeFreshRunDirectory(
@@ -898,6 +652,27 @@ export async function runWorldReconstructionProductionV1(
   input: WorldReconstructionProductionInputV1,
   owners: WorldReconstructionProductionOwnersV1 = defaultOwners(),
 ): Promise<WorldReconstructionProductionResultV1> {
+  if (input.executionMode !== undefined && input.executionMode !== "fresh" && input.executionMode !== "resume-host-only") {
+    throw new TypeError("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+  }
+  if (input.executionMode !== "resume-host-only") return runProduction(input, owners);
+  const runRoot = await canonicalDirectory(path.resolve(input.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT, input.outputDirectoryPath),
+    "WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  const caseRoot = path.dirname(path.resolve(input.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT, input.casePath));
+  if (path.dirname(runRoot) !== path.join(caseRoot, "runs") || !RUN_ID_PATTERN.test(path.basename(runRoot))) {
+    throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID");
+  }
+  const lockPath = path.join(runRoot, ".host-recovery.lock");
+  const lock = await open(lockPath, "wx", 0o600);
+  try { return await runProduction(input, owners); }
+  finally { await lock.close(); await unlink(lockPath); }
+}
+
+async function runProduction(
+  input: WorldReconstructionProductionInputV1,
+  owners: WorldReconstructionProductionOwnersV1,
+): Promise<WorldReconstructionProductionResultV1> {
+  const isHostRecovery = input.executionMode === "resume-host-only";
   const repositoryRoot = await canonicalDirectory(
     input.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT,
     "WORLD_RECONSTRUCTION_REPOSITORY_ROOT_INVALID",
@@ -946,7 +721,7 @@ export async function runWorldReconstructionProductionV1(
     runId,
     attemptIndex: 1,
   });
-  if (await lstatOrMissing(outputDirectoryPath) !== undefined) {
+  if (!isHostRecovery && await lstatOrMissing(outputDirectoryPath) !== undefined) {
     throw new TypeError("WORLD_RECONSTRUCTION_OUTPUT_ALREADY_EXISTS");
   }
   for (const reservedPath of [
@@ -954,6 +729,7 @@ export async function runWorldReconstructionProductionV1(
     path.join(caseRoot, ".final-staging"),
     path.join(caseRoot, ".final-publish.lock"),
   ]) {
+    if (isHostRecovery && reservedPath === path.join(caseRoot, "final")) continue;
     if (await lstatOrMissing(reservedPath) !== undefined) {
       throw new TypeError("WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
     }
@@ -998,21 +774,23 @@ export async function runWorldReconstructionProductionV1(
 
   const caseRef =
     `artifact://world-reconstruction-case/${reconstructionCase.id}/case.json`;
+  const resultIdentity = Object.freeze({
+    kind: "world-reconstruction-production-result" as const,
+    schemaVersion: 1 as const,
+    caseId: reconstructionCase.id,
+    caseRef,
+    runId,
+  });
   const routeDecision = owners.decideReconstructionRoute(
     reconstructionCase,
     input.routePolicy,
   );
   if (routeDecision.decision.kind !== "babylon-native") {
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "unsupported-route",
+    return failedProductionResult(resultIdentity, {
       diagnosticCodes: Object.freeze([
         "WORLD_RECONSTRUCTION_ROUTE_UNSUPPORTED",
       ] as const),
+      cleanupOutcome: "not-started",
     });
   }
 
@@ -1155,7 +933,7 @@ export async function runWorldReconstructionProductionV1(
   const canonicalProfileBytes =
     worldReconstructionEvaluationProfileCanonicalBytesV1(evaluationProfile);
   try {
-    await freezeInputs({
+    await (isHostRecovery ? assertFrozenInputsUnchanged : freezeInputs)({
       outputDirectoryPath,
       caseBytes: canonicalCaseBytes,
       profileBytes: canonicalProfileBytes,
@@ -1163,13 +941,7 @@ export async function runWorldReconstructionProductionV1(
     });
   } catch (error) {
     if (error instanceof WorldReconstructionInputFreezeClosedErrorV1) {
-      return Object.freeze({
-        kind: "world-reconstruction-production-result",
-        schemaVersion: 1,
-        caseId: reconstructionCase.id,
-        caseRef,
-        runId,
-        outcome: "closed",
+      return failedProductionResult(resultIdentity, {
         diagnosticCodes: diagnosticCodesFromError(error),
         cleanupOutcome: error.cleanupOutcome,
       });
@@ -1181,8 +953,22 @@ export async function runWorldReconstructionProductionV1(
     "WORLD_RECONSTRUCTION_OUTPUT_PATH_INVALID",
   );
   let ports: Awaited<ReturnType<typeof owners.createRunPorts>>;
+  let hostRecoveryIndex: number | undefined;
+  if (isHostRecovery) {
+    const journalMetadata = await lstatOrMissing(path.join(outputDirectoryPath, "journal.jsonl"));
+    if (journalMetadata === undefined || !journalMetadata.isFile() || journalMetadata.isSymbolicLink()) {
+      throw new Error("WORLD_RECONSTRUCTION_HOST_RECOVERY_INVALID");
+    }
+    // Journal decoding and interrupted-tail recovery belong to the journal owner alone.
+    const journal = await createWorldReconstructionRunJournalV1({ executionPurpose: "production",
+      runId, caseRef, evaluationProfileRef: reconstructionCase.evaluationProfileRef,
+      frozenOwnerIdentities, outputDirectoryPath });
+    hostRecoveryIndex = 1 + journal.rows().filter((row) => row.state === "host-recovering" && row.boundary === "after").length;
+  }
   try {
     ports = await owners.createRunPorts({
+      ...(hostRecoveryIndex === undefined ? {} : { hostRecoveryIndex }),
+      executionPurpose: "production",
       repositoryRoot,
       casePath: requestedCasePath,
       caseRef,
@@ -1193,14 +979,8 @@ export async function runWorldReconstructionProductionV1(
       formalCaptureIntent,
     });
   } catch (error) {
-    const cleanupOutcome = await removeFreshRunDirectory(outputDirectoryPath);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    const cleanupOutcome = isHostRecovery ? "not-started" as const : await removeFreshRunDirectory(outputDirectoryPath);
+    return failedProductionResult(resultIdentity, {
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
     });
@@ -1208,7 +988,13 @@ export async function runWorldReconstructionProductionV1(
 
   let receipt: WorldReconstructionRunReceiptV1;
   try {
-    receipt = await owners.runCore({
+    const existingReceiptPath = path.join(outputDirectoryPath, "run-receipt.json");
+    receipt = isHostRecovery && await lstatOrMissing(existingReceiptPath) !== undefined
+      ? parseWorldReconstructionRunReceiptV1(parseJson(await readCanonicalRegularFile(existingReceiptPath,
+        "WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID"), "WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID"))
+      : await owners.runCore({
+      ...(isHostRecovery ? { executionMode: "resume-host-only" as const } : {}),
+      executionPurpose: "production",
       runId,
       backend: input.backend,
       outputDirectoryPath,
@@ -1219,38 +1005,13 @@ export async function runWorldReconstructionProductionV1(
     }, ports);
   } catch (error) {
     if (error instanceof WorldReconstructionRunClosedErrorV1) {
-      if (!isNil(error.rejectedCaptureEvidence)) {
-        return Object.freeze({
-          kind: "world-reconstruction-production-result",
-          schemaVersion: 1,
-          caseId: reconstructionCase.id,
-          caseRef,
-          runId,
-          outcome: "rejected-capture",
-          diagnosticCodes: error.diagnosticCodes,
-          cleanupOutcome: error.cleanupOutcome,
-          ...error.rejectedCaptureEvidence,
-        });
-      }
-      return Object.freeze({
-        kind: "world-reconstruction-production-result",
-        schemaVersion: 1,
-        caseId: reconstructionCase.id,
-        caseRef,
-        runId,
-        outcome: "closed",
+      return failedProductionResult(resultIdentity, {
         diagnosticCodes: error.diagnosticCodes,
         cleanupOutcome: error.cleanupOutcome,
       });
     }
     const cleanupOutcome = await cleanupRunPorts(ports);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    return failedProductionResult(resultIdentity, {
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
     });
@@ -1264,13 +1025,7 @@ export async function runWorldReconstructionProductionV1(
     });
   } catch (error) {
     const cleanupOutcome = await cleanupRunPorts(ports);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    return failedProductionResult(resultIdentity, {
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
     });
@@ -1281,52 +1036,28 @@ export async function runWorldReconstructionProductionV1(
     outputDirectoryPath,
     receipt,
   );
-  if (
-    (receipt.outcome === "failed" ||
-      (receipt.outcome === "incomplete" &&
-        evaluationProfile.qualityGateMode === "report-only")) &&
-    receipt.cleanupOutcome === "completed"
-  ) {
-    try {
-      const qualityResult = await rejectedEvaluationResult({
-        caseId: reconstructionCase.id,
-        caseRef,
-        runId,
-        repositoryRoot,
-        outputDirectoryPath,
-        receipt,
-        qualityGateMode: evaluationProfile.qualityGateMode,
-      });
-      if (!isNil(qualityResult)) return qualityResult;
-    } catch (error) {
-      return Object.freeze({
-        kind: "world-reconstruction-production-result",
-        schemaVersion: 1,
-        caseId: reconstructionCase.id,
-        caseRef,
-        runId,
-        outcome: "closed",
-        runOutcome: receipt.outcome,
-        attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
-        diagnosticCodes: diagnosticCodesFromError(error),
-        cleanupOutcome: receipt.cleanupOutcome,
-      });
-    }
-  }
-  if (receipt.outcome !== "passed" || receipt.cleanupOutcome !== "completed") {
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+  if (receipt.cleanupOutcome !== "completed") {
+    return failedProductionResult(resultIdentity, {
       runOutcome: receipt.outcome,
       attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: closedDiagnosticCodes(receipt),
       cleanupOutcome: receipt.cleanupOutcome,
     });
   }
+  let terminal: ReturnType<typeof getWorldReconstructionFinalEvaluatedAttemptV1>;
+  try {
+    terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
+  } catch (error) {
+    return failedProductionResult(resultIdentity, {
+      runOutcome: receipt.outcome,
+      attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
+      diagnosticCodes: closedDiagnosticCodes(receipt).length === 0
+        ? diagnosticCodesFromError(error)
+        : closedDiagnosticCodes(receipt),
+      cleanupOutcome: receipt.cleanupOutcome,
+    });
+  }
+  const evaluationOutcome = terminal.outcome;
 
   const assertFreshTransactionIdentity = async (): Promise<void> => {
     await assertSourceInputsUnchanged({
@@ -1359,14 +1090,9 @@ export async function runWorldReconstructionProductionV1(
     await assertFreshTransactionIdentity();
   } catch (error) {
     const cleanupOutcome = await cleanupRunPorts(ports);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    return failedProductionResult(resultIdentity, {
       runOutcome: receipt.outcome,
+      evaluationOutcome,
       attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
@@ -1377,50 +1103,66 @@ export async function runWorldReconstructionProductionV1(
   try {
     verification = await owners.verifyRun({
       candidate: { kind: "run", runDirectoryPath: outputDirectoryPath },
-      playability: owners.playability,
     });
+    if (
+      verification.attemptIndex !== receipt.finalAttemptIndex ||
+      verification.worldPackageRef !== terminal.worldPackageRef ||
+      verification.worldPackageRootHash !== terminal.worldPackageRootHash ||
+      verification.worldBuildIdentityHash !== terminal.worldBuildIdentityHash ||
+      verification.captureReceiptHash !== terminal.captureReceiptHash ||
+      verification.evaluationResultHash !== terminal.evaluationResultHash ||
+      verification.entryValidation.status !== "passed" ||
+      hashEntryThirdPersonValidationResultV1(
+        verification.entryValidation,
+      ) !== verification.entryValidationHash
+    ) {
+      throw new TypeError("NBR70_PRODUCTION_IDENTITY_MISMATCH");
+    }
   } catch (error) {
-    const cleanupOutcome =
-      error instanceof NativeBlockReconstructionVerificationClosedErrorV1
-        ? error.cleanupOutcome
-        : "unknown";
-    const diagnosticCodes =
-      error instanceof NativeBlockReconstructionVerificationClosedErrorV1
-        ? error.diagnosticCodes
-        : diagnosticCodesFromError(error);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    const cleanupOutcome = await cleanupRunPorts(ports);
+    return failedProductionResult(resultIdentity, {
       runOutcome: receipt.outcome,
+      evaluationOutcome,
       attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
-      diagnosticCodes,
+      diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
     });
   }
-  const terminal = getWorldReconstructionFinalEvaluatedAttemptV1(receipt);
-  if (
-    verification.attemptIndex !== receipt.finalAttemptIndex ||
-    verification.worldPackageRef !== terminal.worldPackageRef ||
-    verification.worldPackageRootHash !== terminal.worldPackageRootHash ||
-    verification.worldBuildIdentityHash !== terminal.worldBuildIdentityHash ||
-    verification.captureReceiptHash !== terminal.captureReceiptHash ||
-    verification.evaluationResultHash !== terminal.evaluationResultHash
-  ) {
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+  const strictDiagnosticCodes = Object.freeze([
+    ...new Set(verification.strictDiagnosticCodes),
+  ].sort());
+  const strictDiagnosticOutcome: WorldReconstructionStrictDiagnosticOutcomeV1 =
+    strictDiagnosticCodes.length === 0 ? "passed" : "failed";
+  const strictDiagnosticCleanupOutcome = "not-started" as const;
+  const entryValidationHash = verification.entryValidationHash;
+
+  const strictDiagnosticReceipt = createStrictDiagnosticReceipt({
+    receipt,
+    runReceiptRef: receiptIdentity.runReceiptRef,
+    runReceiptHash: receiptIdentity.runReceiptHash,
+    outcome: strictDiagnosticOutcome,
+    diagnosticCodes: strictDiagnosticCodes,
+    cleanupOutcome: strictDiagnosticCleanupOutcome,
+  });
+  let strictDiagnosticIdentity: Awaited<
+    ReturnType<typeof publishStrictDiagnosticReceipt>
+  >;
+  try {
+    strictDiagnosticIdentity = await publishStrictDiagnosticReceipt(
+      outputDirectoryPath,
+      strictDiagnosticReceipt,
+      isHostRecovery ? "resume-host-only" : "fresh",
+    );
+  } catch (error) {
+    return failedProductionResult(resultIdentity, {
       runOutcome: receipt.outcome,
+      evaluationOutcome,
       attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
-      diagnosticCodes: Object.freeze(["NBR70_PRODUCTION_IDENTITY_MISMATCH"]),
-      cleanupOutcome: "completed",
+      diagnosticCodes: diagnosticCodesFromError(error),
+      cleanupOutcome: "unknown",
+      strictDiagnosticOutcome,
+      strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome,
     });
   }
 
@@ -1428,17 +1170,15 @@ export async function runWorldReconstructionProductionV1(
     await assertFreshTransactionIdentity();
   } catch (error) {
     const cleanupOutcome = await cleanupRunPorts(ports);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    return failedProductionResult(resultIdentity, {
       runOutcome: receipt.outcome,
+      evaluationOutcome,
       attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: diagnosticCodesFromError(error),
       cleanupOutcome,
+      strictDiagnosticOutcome,
+      strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome,
     });
   }
 
@@ -1456,18 +1196,42 @@ export async function runWorldReconstructionProductionV1(
     captureReceiptHash: terminal.captureReceiptHash,
     evaluationRelativePath: "final/evaluation.json",
     evaluationHash: terminal.evaluationResultHash,
+    strictDiagnosticRelativePath: "final/strict-diagnostic.json",
+    strictDiagnosticHash: strictDiagnosticIdentity.hash,
+    entryValidationRelativePath: "final/entry-third-person-validation.json",
+    entryValidationHash,
     launchCommand:
       "pnpm worldkit native run final/world-package --port 5174 --json",
   });
   let publication: Awaited<ReturnType<typeof owners.publishFinal>>;
+  const existingFinal = isHostRecovery && await lstatOrMissing(path.join(caseRoot, "final")) !== undefined;
+  const publicationJournal = !isHostRecovery ? undefined : await createWorldReconstructionRunJournalV1({
+    executionPurpose: "production", runId, caseRef, evaluationProfileRef: reconstructionCase.evaluationProfileRef,
+    frozenOwnerIdentities, outputDirectoryPath,
+  });
+  await publicationJournal?.completePublishedReceiptBoundaries();
+  if (!existingFinal) await publicationJournal?.recordBoundary({ state: "publication-recovering", boundary: "before", operation: "resume-publication-only" });
+  let publicationDiagnosticCodes: readonly string[] = [];
   try {
-    publication = await owners.publishFinal({
+    if (existingFinal) {
+      const finalDirectoryPath = await canonicalDirectory(path.join(caseRoot, "final"), "WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
+      const existingLaunch = parseJson(await readCanonicalRegularFile(path.join(finalDirectoryPath, "launch.json"),
+        "WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS"), "WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
+      if (!isEqual(existingLaunch, launch)) {
+        throw new Error("WORLD_RECONSTRUCTION_FINAL_ALREADY_EXISTS");
+      }
+      await owners.verifyRun({ candidate: { kind: "final", runDirectoryPath: outputDirectoryPath, finalDirectoryPath } });
+      // Project only verified existing publication, without invoking a writer or replacing any Receipt.
+      publication = { outcome: "published", finalDirectoryPath, worldPackageRootHash: terminal.worldPackageRootHash,
+        captureReceiptHash: terminal.captureReceiptHash, evaluationHash: terminal.evaluationResultHash,
+        strictDiagnosticHash: strictDiagnosticIdentity.hash, entryValidationHash };
+    } else publication = await owners.publishFinal({
       caseDirectoryPath: caseRoot,
       runDirectoryPath: outputDirectoryPath,
       launch,
-      playability: owners.playability,
     });
   } catch (error) {
+    publicationDiagnosticCodes = diagnosticCodesFromError(error);
     const cleanupOutcome =
       error instanceof NativeBlockFinalArtifactPublicationClosedErrorV1
         ? error.cleanupOutcome
@@ -1476,18 +1240,24 @@ export async function runWorldReconstructionProductionV1(
       error instanceof NativeBlockFinalArtifactPublicationClosedErrorV1
         ? error.diagnosticCodes
         : diagnosticCodesFromError(error);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    return failedProductionResult(resultIdentity, {
       runOutcome: receipt.outcome,
+      evaluationOutcome,
       attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes,
       cleanupOutcome,
+      strictDiagnosticOutcome,
+      strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome,
     });
+  } finally {
+    if (publicationJournal !== undefined && !existingFinal) {
+      await publicationJournal.recordBoundary({ state: "publication-recovering", boundary: "after", operation: "resume-publication-only",
+        diagnosticCodes: publicationDiagnosticCodes });
+      for (const boundary of ["before", "after"] as const) await publicationJournal.recordBoundary({
+        state: "completed", boundary, operation: "resume-publication-completed", diagnosticCodes: publicationDiagnosticCodes,
+      });
+    }
   }
   const finalDirectoryPath = path.join(caseRoot, "final");
   let publicationJoined = false;
@@ -1497,35 +1267,37 @@ export async function runWorldReconstructionProductionV1(
       publication.worldPackageRootHash === terminal.worldPackageRootHash &&
       publication.captureReceiptHash === terminal.captureReceiptHash &&
       publication.evaluationHash === terminal.evaluationResultHash &&
+      publication.strictDiagnosticHash === strictDiagnosticIdentity.hash &&
+      publication.entryValidationHash === entryValidationHash &&
       await realpath(finalDirectoryPath) === finalDirectoryPath;
   } catch {
     publicationJoined = false;
   }
   if (!publicationJoined) {
     const cleanupOutcome = await removeFreshRunDirectory(finalDirectoryPath);
-    return Object.freeze({
-      kind: "world-reconstruction-production-result",
-      schemaVersion: 1,
-      caseId: reconstructionCase.id,
-      caseRef,
-      runId,
-      outcome: "closed",
+    return failedProductionResult(resultIdentity, {
       runOutcome: receipt.outcome,
+      evaluationOutcome,
       attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
       diagnosticCodes: Object.freeze([
         "NBR_FINAL_ARTIFACT_PUBLICATION_INVALID",
       ]),
       cleanupOutcome,
+      strictDiagnosticOutcome,
+      strictDiagnosticCodes,
+      strictDiagnosticCleanupOutcome,
     });
   }
 
-  return Object.freeze({
-    kind: "world-reconstruction-production-result",
-    schemaVersion: 1,
-    caseId: reconstructionCase.id,
-    caseRef,
-    runId,
-    outcome: "published",
+  return parseWorldReconstructionProductionResultV1({
+    ...resultIdentity,
+    productionOutcome: "passed",
+    publicationOutcome: "published",
+    evaluationOutcome,
+    strictDiagnosticOutcome,
+    strictDiagnosticCodes,
+    strictDiagnosticCleanupOutcome,
+    cleanupOutcome: "completed",
     attemptCount: receipt.attempts.length as 1 | 2 | 3 | 4,
     finalWorldPackagePath: path.join(finalDirectoryPath, "world-package"),
     finalWorldPackageRef: terminal.worldPackageRef,
@@ -1538,6 +1310,20 @@ export async function runWorldReconstructionProductionV1(
     finalCaptureReceiptHash: terminal.captureReceiptHash,
     finalEvaluationPath: path.join(finalDirectoryPath, "evaluation.json"),
     finalEvaluationHash: terminal.evaluationResultHash,
+    finalStrictDiagnosticPath: path.join(
+      finalDirectoryPath,
+      "strict-diagnostic.json",
+    ),
+    finalStrictDiagnosticRef:
+      `${caseRef.slice(0, -"/case.json".length)}/final/strict-diagnostic.json`,
+    finalStrictDiagnosticHash: strictDiagnosticIdentity.hash,
+    finalEntryValidationPath: path.join(
+      finalDirectoryPath,
+      "entry-third-person-validation.json",
+    ),
+    finalEntryValidationRef:
+      `${caseRef.slice(0, -"/case.json".length)}/final/entry-third-person-validation.json`,
+    finalEntryValidationHash: entryValidationHash,
     ...receiptIdentity,
     finalDirectoryPath,
   });

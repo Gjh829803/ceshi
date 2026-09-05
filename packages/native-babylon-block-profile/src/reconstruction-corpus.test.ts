@@ -27,6 +27,7 @@ const POSITIVE_IDS = Object.freeze([
   "ordinary-and-blocked-steps",
   "building-exterior",
   "limited-interior",
+  "route-islands-on-ground",
 ] as const satisfies readonly BabylonNativeBlockReconstructionCorpusCaseIdV1[]);
 
 const NEGATIVE_IDS = Object.freeze([
@@ -34,7 +35,6 @@ const NEGATIVE_IDS = Object.freeze([
   "out-of-budget",
   "invalid-traversal-binding",
   "unsupported-spawn",
-  "disconnected-route",
   "cleanup-throw-partial",
 ] as const satisfies readonly BabylonNativeBlockReconstructionCorpusCaseIdV1[]);
 
@@ -44,11 +44,11 @@ const EXPECTED_SEEDS = Object.freeze({
   "ordinary-and-blocked-steps": 202608313,
   "building-exterior": 202608314,
   "limited-interior": 202608315,
+  "route-islands-on-ground": 202608325,
   "overlap-occupancy": 202608321,
   "out-of-budget": 202608322,
   "invalid-traversal-binding": 202608323,
   "unsupported-spawn": 202608324,
-  "disconnected-route": 202608325,
   "cleanup-throw-partial": 202608326,
 } as const);
 
@@ -56,7 +56,6 @@ const EXPECTED_NEGATIVE_CODES = Object.freeze({
   "overlap-occupancy": "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
   "out-of-budget": "WORLDKIT_NATIVE_BLOCK_COUNT_EXCEEDED",
   "invalid-traversal-binding": "WORLDKIT_NATIVE_BLOCK_COLLIDER_SELECTION_INVALID",
-  "disconnected-route": "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
   "cleanup-throw-partial": "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
 } as const);
 
@@ -253,6 +252,16 @@ describe("BWB-5 reconstruction corpus contract", () => {
         });
         expect(index.checkResult?.outcome).toBe("passed");
         expect(index.colliderInventory).toEqual(epoch.colliderInventory);
+        if (caseId === "route-islands-on-ground") {
+          expect(epoch.checkedLayout.checkResult.metrics
+            .structuralRouteComponentCount).toBe(2);
+          expect(epoch.checkedLayout.checkResult.diagnostics).toContainEqual(
+            expect.objectContaining({
+              code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+              severity: "warning",
+            }),
+          );
+        }
       } finally {
         scene.dispose();
         engine.dispose();

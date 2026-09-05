@@ -92,8 +92,10 @@ describe("independent test repository census", () => {
       }),
     ).toEqual({
       nodeTestFiles: [
+        "scripts/agents/local-codex-failure-evidence.test.mjs",
         "scripts/agents/local-codex-task.test.mjs",
         "scripts/agents/lwdp-codex-profile.test.mjs",
+        "scripts/agents/lwdp-codex-task-retry.test.mjs",
         "scripts/agents/lwdp-generation-client.test.mjs",
         "scripts/agents/write-lwdp-t2i-manifest.test.mjs",
         "scripts/visual/image-delivery.test.mjs",

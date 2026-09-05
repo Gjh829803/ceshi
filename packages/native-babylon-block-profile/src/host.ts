@@ -5,6 +5,9 @@ export type {
   BabylonNativeBlockCheckedEpochEvidenceV1,
 } from "./host-evidence.js";
 export {
+  createBabylonNativeBlockProfileInventoryIdentityFromMaterializedV1,
+} from "./profile-inventory.js";
+export {
   createBabylonNativeBlockMaterializerMetadataV1,
 } from "./materializer-metadata.js";
 export type {

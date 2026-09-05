@@ -317,7 +317,7 @@ test("assembles cloud Codex and T2I tasks without local credentials in smoke mod
       "--repo-root", root,
       "--task-id", "codex-mounted-smoke",
       "--request-id", "codex-mounted-smoke-request",
-      "--stage", "native-block-generation",
+      "--stage", "coding-agent",
       "--output-s3-prefix", "s3://bucket/worldkit/mounted-smoke",
       "--instruction-file", instruction,
       "--workspace-context-root", "task-workspace",

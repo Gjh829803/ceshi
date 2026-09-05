@@ -669,6 +669,13 @@ The evaluator does not edit files, run a model, mutate Runtime, or update a Pack
 
 ## 9. Bounded multi-stage repair closure
 
+> **2026-09-04 outcome-authority revision:**
+> [`2026-09-04-block-world-production-outcome-parity-design.md`](2026-09-04-block-world-production-outcome-parity-design.md)
+> supersedes this section wherever it described `preview-ready`, `not-accepted`, seven-dimension Evaluation,
+> or NBR-70 verification as the ordinary production success/publication authority. The checks and bounded
+> repair inputs remain; their terminal findings are strict diagnostics. Ordinary production uses the exact
+> historical requested-scope success/failure rules and deletes the superseded preview terminal branch.
+
 ### `codex/block-world-main-integration` feedback-parity baseline
 
 The default interactive Native reconstruction route preserves the successful stage topology and feedback
@@ -677,35 +684,45 @@ exactly two model tasks: Unified Planner, then Babylon Native Block Builder. The
 Mapper, mapping model task, or mapping retry between them. After Planner delivery, the trusted Host derives a
 small report-only baseline Case deterministically from the frozen Scene Brief, identity palette and entry
 target: one fixed metric frame, explicit entry/remote ground groups, Spawn support, one forward traversal band,
-and the non-Subject palette targets measured from the entry image. That derived Case is frozen before the
+and the non-Subject palette targets that have reliable entry measurements. That derived Case is frozen before the
 Builder request and never becomes another Scene Source or geometry owner. A structure test locks the two-task
 sequence and forbids the removed `native-case-mapping` stage from returning.
+
+Candidate `codex/block-world-effect-alignment@234c1711` implements the historical Planner hard thresholds,
+same-task Builder entry/top visual feedback, exact Host palette admission for Case-present targets, source-byte
+freezing, and the separate production/strict outcome. It intentionally makes generic disconnected route-color
+components diagnostic while leaving Case-required Ground/Traversal connectivity blocking. This candidate is
+not merged and has no real CASE-054, full Browser, repository-wide, or exact-SHA Cloud evidence.
 
 The entry and remote ground groups are technical presence, support and traversal bindings, not reference-image
 semantic masks. The Planner intentionally renders terrain without an identity color, so the default report-only
 Profile must not compare those groups against Host-invented screen bands. Their visual drift tolerances span the
 full normalized frame while missing bindings, support, connectivity and traversal still fail through their real
-owners. Only non-Subject identity-palette targets receive measured silhouette and Opening bounds from the entry
-image. Explicit curated `required-for-publication` Cases continue to own their authored visual thresholds.
+owners. A non-Subject target receives measured Opening bounds only when the entry image contains a reliable
+identity mask. Making every non-Subject mandatory in Opening would be stricter than the historical Planner. The
+remaining target must still retain one Case identity and an explicit per-view evidence disposition; that
+`BWMI-CF-24` contract is open and the Host must neither delete the target nor fabricate an Opening bbox.
+Explicit curated strict Cases continue to own their authored visual thresholds.
 
 The parity boundary is one implementation with two policy profiles:
 
 | Stage | Default interactive disposition | Reason |
 | --- | --- | --- |
-| Planner Brief and PNG validity, centered entry Subject | blocking, with bounded in-task repair | The baseline Planner already required this self-check. |
+| Planner Brief and PNG validity; all declared targets in World Plan; centered/sized entry Subject | blocking, with bounded in-task repair | The historical Planner hard-checked every target in World Plan, but only Subject-1 in entry. Non-Subject entry scale/coherence remains advisory. |
 | Native Builder output shape and forbidden authority use | blocking, with bounded in-task repair | Equivalent to the baseline Builder preflight; it does not grant admission. |
-| Native Check, deterministic replay, Ground Analysis, Spawn/support and explicit Collider closure | blocking; no Host-created external Attempt in `report-only` | These replace the baseline structural Block check and are required to avoid a non-runnable or fall-through world. Like the baseline Host replay, a rejection ends the current run with diagnostics. |
+| Native Check, deterministic replay, Ground Analysis, Spawn/support and explicit Collider closure | blocking; retry versus terminal must follow the old-equivalent failure matrix, not `qualityGateMode` | These replace the baseline structural Block check and are required to avoid a non-runnable or fall-through world. Candidate still closes a `report-only` rejection without a Host-created Attempt; `BWMI-CF-26` must prove or correct that behavior against the old branch. |
 | WorldPackage identity, RuntimeHost, SDK-owned Havok/Subject/Input/Action/Camera, Capture execution and cleanup | blocking | These are the current Babylon production transport and safety boundary, not reconstruction-quality policy. |
 | Opening Composition, semantic silhouette, topology, ordered-target distance and scripted quality scoring | measured and reported, never blocking in `report-only` | The baseline used comparison images as Builder feedback, not as a Host publication gate. |
-| External repair caused only by Opening/Evaluation quality drift | disabled in `report-only` | The first runnable Candidate is delivered for human inspection instead of starting another long generation Attempt. |
+| External repair | historical-equivalent Builder/production failures follow the old retry/terminal matrix; current-only Evaluation/NBR drift may use an explicit strict repair budget but never changes ordinary success | A blanket `report-only` no-repair principle is not parity. Exact condition-by-condition migration remains `BWMI-CF-26`. |
 
-`required-for-publication` remains an explicitly selected strict acceptance profile for an explicitly authored
-or curated Case and may use the retained
-Host-created external repair budget for Check, Ground, Opening and Evaluation failures. It is not the default
-interactive reconstruction route. A rejected
+`required-for-publication` remains an explicitly selected additional strict-repair budget for an explicitly
+authored or curated Case and may use the retained Host-created external repair budget for current-only
+Check/Ground/Opening/Evaluation findings. It is not an ordinary-production publication mode and cannot remove
+an old-equivalent retry or introduce a new ordinary veto; explicit NBR-70/NBR-90 verification owns strict
+acceptance after publication. A rejected
 Capture is always an operational failure; production code must not reinterpret legacy `rejected-capture`
-evidence as a report-only preview. Report-only preview delivery is available only after a normal completed
-Capture and Evaluation with intact Package and Runtime identities.
+evidence as a completed production result. An evaluated Candidate is production-eligible only after a normal
+completed Capture with intact Package and Runtime identities.
 
 The Profile fixes `maximumRepairAttemptCount: 3`. This means one initial generation plus at most three
 external diagnostic-driven repair Attempts; it is distinct from the bounded source-only self-repair performed
@@ -715,14 +732,13 @@ most three times. Those cycles create neither a Package nor a Runtime Candidate.
 Capture, evaluation and the identity-bearing external repair Attempt remain separate authorities.
 
 Each external repair consumes exactly the trusted evidence from the immediately preceding Attempt. Native
-Check and Ground Analysis protect authoring and playable-surface admission in every Profile. Under
-`required-for-publication`, their actionable rejection may allocate a following external repair Attempt.
-Under `report-only`, any Host rejection ends the current run after cleanup, matching the baseline's
-Host-replay behavior; only the Builder's bounded in-task source repair runs automatically. Opening Composition
-and Evaluation may allocate a following external repair only when `qualityGateMode` is
-`required-for-publication`. In `report-only`, they still execute and publish their stable diagnostics, but
-they neither reject the Capture nor allocate a new Attempt; the first admitted, captured and evaluated
-Candidate is returned as non-GO preview evidence. Every external repair produces a fresh
+Check and Ground Analysis protect authoring and playable-surface admission in every Profile. The final parity
+contract must classify their old-equivalent failures and retry limits from the historical workflow rather than
+deriving them from `qualityGateMode`; candidate `234c1711` has not completed that `BWMI-CF-26` migration.
+Opening Composition and Evaluation still execute and publish stable diagnostics. Current-only findings may
+allocate an additional strict repair only when `qualityGateMode` is `required-for-publication`; otherwise they
+neither reject Capture nor overwrite the historical production outcome.
+Every external repair produces a fresh
 generation Request, authored-source identity and—only after admission—a fresh Package, Capture and Evaluation
 identity. No Attempt mutates a frozen prior artifact or lowers a Case/Profile threshold. A rejected Native
 Check may enter this loop only when the Host projects a source-repairable owner fact; tooling, determinism,
@@ -754,18 +770,21 @@ promote a failed Package as the runnable final world, weaken a hard Collider/Spa
 or silently lower thresholds. A later user- or queue-triggered run starts a new run identity.
 
 When a completed evaluation still has a verified Package, completed Runtime Capture and completed cleanup,
-its frozen Evaluation Profile decides the non-publication disposition. A `required-for-publication` Case may
-first consume its bounded quality-repair budget and then returns an identity-bound `rejected-evaluation`; a
-`report-only` Case never consumes that budget for Opening/Evaluation drift and returns `preview-ready` with
-`publicationStatus: "not-accepted"`. Both expose the admitted Package directory, opening image, Capture
-Receipt, evaluation, Run Receipt and exact evaluation diagnostic codes so a person can inspect the candidate.
-Neither outcome is publication or GO, and neither is available when Package/Runtime/Capture identity evidence
-is missing or stale.
+the historical-equivalent required stages decide `productionOutcome`. A `required-for-publication` Profile may
+first consume its bounded quality-repair budget; exhaustion does not let the Evaluation or NBR verifier
+overwrite an otherwise passed ordinary production outcome. The absence of current-only strict quality repair
+in `report-only` does not imply that old-equivalent retries are disabled. Both expose the admitted Package,
+Capture, evaluation, Run Receipt and exact diagnostic codes through
+the durable strict-diagnostic receipt. Missing or stale Package/Runtime/Capture identity remains a production
+failure. The obsolete `preview-ready/not-accepted` terminal result and its dedicated publisher bypass are
+deleted rather than retained behind a mode, alias, or fallback.
 
 Repair writes only a new task workspace and may change `scene.ts`, `native-block-authoring.json`, or
 `native-resources.json` within the frozen Case/Profile budgets. It cannot edit Package A, Capture A,
 Runtime, Physics, Camera, Evaluator, Case, Profile, Host-owned evidence/identity, or acceptance thresholds.
-Package B is promoted only after every gate passes.
+Package B is promoted only after every production-required stage passes the single historical requested-scope
+policy. Non-blocking Evaluation/NBR findings remain exact strict diagnostics and never become a second
+publication veto.
 
 The run journal is content-addressed and fail-closed:
 

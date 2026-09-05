@@ -123,12 +123,17 @@ Parallelize only independent ready work; worker success is not integration proof
   `test:scenes`, `typecheck`, `build`, `plan:scene`, `plan:scene:check` -> SDK
   capture -> `visual:finalize`/`visual:check`. Do not edit Runtime, physics, camera,
   or rendering internals merely to create a scene.
-- Automatic Planner and Canonical Builder work runs through exactly one Codex task per stage.
+- Automatic Planner and Canonical Builder work has one logical Codex task per stage.
   Hosted Planner and Canonical Builder each perform bounded checker-driven repair inside that
   task. The Host replays each checker once and does not create hidden repair jobs. Their Skills
   own output schemas, provenance, terrain, subject, framing, and self-check details.
-  Each Native Attempt is itself one Codex task and may perform only its own bounded checker-driven self-repair inside that task.
+  Each Native Attempt has one logical Codex task and may perform only its own bounded checker-driven self-repair inside that task.
   Never describe or implement an external Native Attempt as same-task self-repair, a hidden retry, or a fallback.
+  The sole Cloud router may retry a confirmed terminal provider failure under the frozen old policy
+  (default at most three provider Task Attempts, task timeout at most two); each physical request is
+  submitted once and recorded in its durable attempt ledger. Unknown/pending creation is reconciled
+  by the same request ID, never retried as a new task. Local execution remains one physical task.
+  Provider Task Attempts do not allocate Native source-repair Attempts or extra in-task repair cycles.
 - Formal generic Codex stages route through `scripts/agents/run-codex-task.mjs`, use
   `gpt-5.6-sol` with `xhigh`, and reject downgrade. Treat job-creation POSTs as
   non-idempotent: submit once and reconcile unknown outcomes by `request_id`. Never

@@ -7,7 +7,10 @@ import {
 } from "@whitebox-world/authoring";
 import { stringifyCanonicalJson } from "@whitebox-world/protocol";
 
-import { deriveVisualIdentityPalette } from "../scenes/finalize-spatial-build";
+import { deriveVisualIdentityPalette } from
+  "../scenes/visual-identity-palette.js";
+import type { VisualIdentityPaletteSceneSourceKindV1 } from
+  "../scenes/visual-identity-palette.js";
 
 function option(arguments_: readonly string[], name: string): string {
   const index = arguments_.indexOf(name);
@@ -18,6 +21,7 @@ function option(arguments_: readonly string[], name: string): string {
 
 export async function writeVisualIdentityPalette(options: {
   sceneId: string;
+  sceneSourceKind: VisualIdentityPaletteSceneSourceKindV1;
   briefPath: string;
   outputPath: string;
 }): Promise<void> {
@@ -32,7 +36,10 @@ export async function writeVisualIdentityPalette(options: {
     sceneBriefHash: briefResult.sceneBriefHash,
     movementMode: briefResult.value.movement.mode,
     movementModeLabel: briefResult.value.movement.label,
-    targets: deriveVisualIdentityPalette(briefResult.value),
+    targets: deriveVisualIdentityPalette(
+      briefResult.value,
+      options.sceneSourceKind,
+    ),
   } as const;
   const outputPath = path.resolve(options.outputPath);
   const temporaryPath = `${outputPath}.${process.pid}.tmp`;
@@ -45,6 +52,13 @@ const entryPath = process.argv[1] === undefined ? "" : path.resolve(process.argv
 if (entryPath === fileURLToPath(import.meta.url)) {
   writeVisualIdentityPalette({
     sceneId: option(process.argv.slice(2), "--scene-id"),
+    sceneSourceKind: (() => {
+      const value = option(process.argv.slice(2), "--scene-source");
+      if (value !== "canonical" && value !== "babylon-native") {
+        throw new Error("--scene-source must be canonical or babylon-native.");
+      }
+      return value;
+    })(),
     briefPath: path.resolve(option(process.argv.slice(2), "--brief")),
     outputPath: path.resolve(option(process.argv.slice(2), "--output")),
   }).catch((error) => {

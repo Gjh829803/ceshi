@@ -47,6 +47,7 @@ const PAYLOAD_FIELDS = Object.freeze([
   "worldTopDownPng",
   "colliderOverlayPng",
   "openingObservation",
+  "semanticViewObservationSet",
   "spawnSupportObservation",
   "colliderOverlayObservation",
   "scriptedTraversal",
@@ -208,6 +209,7 @@ export function parseHostedFormalCapturePayloadV1(input: Readonly<{
   }
   for (const field of [
     "openingObservation",
+    "semanticViewObservationSet",
     "spawnSupportObservation",
     "colliderOverlayObservation",
     "scriptedTraversal",

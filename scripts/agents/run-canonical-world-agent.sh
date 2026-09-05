@@ -133,7 +133,7 @@ run_codex() {
 
 planner_prompt="$user_prompt
 
-You are the unified WorldKit Planner for world '$scene_id'. The Host selected the '$scene_source' closed output profile. Use .codex/skills/worldkit-spatial-planner/SKILL.md as the hosted preview-planning guide. Keep user facts, visible reference evidence, inferred continuation, and render-only ideas in the four separate provenance sections required by current main. Name exactly one standard or custom movement mode, but describe the complete controlled shape and movement behavior only in plain language: Planner does not select Subject Definitions, Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources. Treat the opening frame only as an entry slice and describe entry, middle, remote, and off-camera exploration areas appropriate to the request without empty map padding; do not use a fixed play-time or perimeter target. Define 1-5 visual targets as whole targets beginning with the complete controlled subject; never pad or split targets. The top-down image must show the complete reference-consistent world geography, the initial-subject marker, and the traversable domain/path, not merely the entry-frame crop. The entry target is non-authoritative composition intent, not runtime whitebox evidence. The complete red primary Subject, its main body/pilot, and visual mass center are exactly on the 50% image-width vertical centerline. Near-center, any slight left/right bias, diagonal rear, three-quarter rear, shoulder, or side composition is invalid. Use the same bright neutral clear daytime inspection lighting for every case and neutralize everything except the skill's fixed target-order identity colors. Do not delegate to another Image Planner or external API. Do not create JSON, coordinates, dimensions, geometry, route graphs, or AuthoringSpec."
+You are the unified WorldKit Planner for world '$scene_id'. The Host selected the '$scene_source' closed output profile. Use .codex/skills/worldkit-spatial-planner/SKILL.md as the hosted preview-planning guide. Keep user facts, visible reference evidence, inferred continuation, and render-only ideas in the four separate provenance sections required by current main. Name exactly one standard or custom movement mode, but describe the complete controlled shape and movement behavior only in plain language: Planner does not select Subject Definitions, Subject Assets, Runtime Bundles, rigs, clips, colliders, or motion resources. Treat the opening frame only as an entry slice and describe entry, middle, remote, and off-camera exploration areas appropriate to the request without empty map padding; do not use a fixed play-time or perimeter target. Define 1-5 visual targets as whole targets beginning with the complete controlled subject; never pad or split targets. The top-down image must show the complete reference-consistent world geography, the initial-subject marker, and the traversable domain/path, not merely the entry-frame crop. The entry target is non-authoritative composition intent, not runtime whitebox evidence. The complete red primary Subject, its main body/pilot, and visual mass center are exactly on the 50% image-width vertical centerline. Near-center, any slight left/right bias, diagonal rear, three-quarter rear, shoulder, or side composition is invalid. Use the same bright neutral clear daytime inspection lighting for every case and follow the selected profile's exact image-color contract: Canonical keeps unselected geometry neutral, while Babylon Native uses the Skill's functional Block World palette. Do not delegate to another Image Planner or external API. Do not create JSON, coordinates, dimensions, geometry, route graphs, or AuthoringSpec."
 
 if [[ "$scene_source" == "canonical" ]]; then
   planner_prompt="$planner_prompt
@@ -146,7 +146,7 @@ If it exits nonzero, read its JSON diagnostics, repair the five semantic Planner
 else
   planner_prompt="$planner_prompt
 
-Create exactly three semantic outputs: artifacts/scenes/$scene_id/scene-brief.md, apps/playground/public/scene-plans/$scene_id/world-plan.png, and apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png. Write the Brief and World Plan first, then use Codex's built-in image generation tool to generate the two PNGs from those same decisions and the attached user reference images. This Babylon Native Source profile must not create Height Intent, a Height Intent prompt, terrain samples, or another terrain proposal; the Native Builder owns block geometry after planning.
+Create exactly three semantic outputs: artifacts/scenes/$scene_id/scene-brief.md, apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png, and apps/playground/public/scene-plans/$scene_id/world-plan.png. Follow one causal sequence in this same task: finish the Brief first, read the Babylon Native block-whitebox image contract from the Planner Skill, generate and actually inspect the 16:9 entry target second, then generate the World Plan with the attached user references, completed Brief, and exact accepted entry PNG as an image input. Actually inspect the final pair together as one volumetric Block World. The World Plan projects and completes the accepted entry space rather than independently redesigning it. Any entry edit makes the existing World Plan stale: regenerate it from the new exact entry and inspect the pair again; rerunning self-check alone cannot bless a stale plan. Preserve every important reference-defining complete person, animal, creature, vehicle, machine, sculpture, prop or landmark in the Brief rather than omitting it because of category, distance, occlusion, motion or implementation difficulty. Use the exact image-only functional colors and ordered target colors in both images. The World Plan must contain every selected target at its true geographic location; in the entry target, ordinary perspective, distance, repetition, partial occlusion, or being outside the opening frame may make a non-subject small, fragmented, or absent, and you must not move or enlarge it merely to satisfy a metric. The ordinary hard checker matches the historical production gate: World Plan Block palette coverage at least 3%, ground support color when applicable, and each selected target at least max(32 pixels, 0.005%); entry Block palette coverage at least 2%, ground support color when applicable, red target-1 Subject mask at least max(64 pixels, 0.10%), Subject center error at most 1.5%, and 16:9 aspect error at most 2%. Non-subject entry scale, coherence, and ambiguity are advisory measurements only. These planning pixels remain untrusted and never create Runtime, Physics, Collider, Support, or Gameplay truth. This Babylon Native Source profile must not create Height Intent, a Height Intent prompt, terrain samples, or another terrain proposal; the Native Builder owns block geometry after planning.
 
 Before finishing, run this bundled self-check from the extracted workspace:
 node .codex/skills/worldkit-spatial-planner/scripts/self-check.mjs --scene-source babylon-native --scene-id '$scene_id' --brief artifacts/scenes/$scene_id/scene-brief.md --world-plan apps/playground/public/scene-plans/$scene_id/world-plan.png --entry apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png --report artifacts/scenes/$scene_id/planner-self-check.json
@@ -174,15 +174,21 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
   planner_prompt_file="$task_tmp/planner.prompt.txt"
   printf '%s\n' "$planner_prompt" > "$planner_prompt_file"
   planner_task_id="planner-$codex_run_nonce"
-  planner_context_args=(--context ".codex/skills/worldkit-spatial-planner")
+  planner_request_id="$scene_id-planner-$codex_run_nonce"
+  planner_execution_root="$artifact_root/planner-executions/$planner_task_id"
+  planner_request_hash="$("$pnpm_bin" exec tsx scripts/agents/planner-execution.ts prepare \
+    --repository-root "$project_root" \
+    --artifact-root "$artifact_root" \
+    --scene-source "$scene_source" --scene-id "$scene_id" \
+    --task-id "$planner_task_id" --request-id "$planner_request_id" \
+    --instruction "$planner_prompt_file")"
   planner_output_args=(
     --output "artifacts/scenes/$scene_id/scene-brief.md::$artifact_root/scene-brief.md::text/markdown"
     --output "artifacts/scenes/$scene_id/planner-self-check.json::$artifact_root/planner-self-check.json::application/json"
-    --output "apps/playground/public/scene-plans/$scene_id/world-plan.png::$public_plan_root/world-plan.png::image/png"
     --output "apps/playground/public/scene-plans/$scene_id/entry-whitebox-target.png::$public_plan_root/entry-whitebox-target.png::image/png"
+    --output "apps/playground/public/scene-plans/$scene_id/world-plan.png::$public_plan_root/world-plan.png::image/png"
   )
   if [[ "$scene_source" == "canonical" ]]; then
-    planner_context_args+=(--context "assets/terrain-height-intent")
     planner_output_args+=(
       --output "artifacts/scenes/$scene_id/terrain-height-intent-prompt.md::$artifact_root/terrain-height-intent-prompt.md::text/markdown"
       --output "apps/playground/public/scene-plans/$scene_id/terrain-height-intent.png::$public_plan_root/terrain-height-intent.png::image/png"
@@ -192,37 +198,21 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
     --task-id "$planner_task_id" \
     --stage planner \
     --job-name "WorldKit Planner · $scene_id" \
-    --request-id "$scene_id-planner-$codex_run_nonce" \
+    --request-id "$planner_request_id" \
     --output-s3-prefix "$codex_output_prefix/planner" \
-    --instruction-file "$planner_prompt_file" \
-    "${planner_context_args[@]}" \
+    --instruction-file "$planner_execution_root/instruction.md" \
+    --workspace-context-root "$planner_execution_root/workspace" \
     "${reference_asset_args[@]+"${reference_asset_args[@]}"}" \
     "${planner_output_args[@]}" \
     2>&1 | /usr/bin/tee "$planner_log"
-  "$pnpm_bin" worldkit brief validate "$artifact_root/scene-brief.md" --json
-  planner_host_receipt="$task_tmp/planner-self-check.host.json"
-  planner_check_args=(
-    --scene-source "$scene_source"
-    --scene-id "$scene_id"
-    --brief "$artifact_root/scene-brief.md"
-    --world-plan "$public_plan_root/world-plan.png"
-    --entry "$public_plan_root/entry-whitebox-target.png"
-    --report "$planner_host_receipt"
-  )
-  if [[ "$scene_source" == "canonical" ]]; then
-    planner_check_args+=(
-      --terrain-prompt "$artifact_root/terrain-height-intent-prompt.md"
-      --terrain-intent "$public_plan_root/terrain-height-intent.png"
-    )
-  fi
-  node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs" "${planner_check_args[@]}"
-  /usr/bin/cmp -s "$planner_host_receipt" "$artifact_root/planner-self-check.json" || {
-    echo "Planner self-check receipt does not match trusted Host replay." >&2
-    exit 2
-  }
+  "$pnpm_bin" exec tsx scripts/agents/planner-execution.ts replay \
+    --artifact-root "$artifact_root" --public-plan-root "$public_plan_root" \
+    --scene-source "$scene_source" --scene-id "$scene_id" \
+    --task-id "$planner_task_id" --request-hash "$planner_request_hash"
 
   visual_identity_palette="$artifact_root/visual-identity-palette.json"
   "$pnpm_bin" exec tsx scripts/visual/write-visual-identity-palette.ts \
+    --scene-source "$scene_source" \
     --scene-id "$scene_id" \
     --brief "$artifact_root/scene-brief.md" \
     --output "$visual_identity_palette"
@@ -241,20 +231,9 @@ if [[ "$mode" == "full" || "$mode" == "plan" ]]; then
 fi
 
 if [[ "$mode" == "build" ]]; then
-  planner_host_receipt="$task_tmp/planner-self-check.host.json"
-  node "$project_root/.codex/skills/worldkit-spatial-planner/scripts/self-check.mjs" \
-    --scene-source canonical \
-    --scene-id "$scene_id" \
-    --brief "$artifact_root/scene-brief.md" \
-    --world-plan "$public_plan_root/world-plan.png" \
-    --entry "$public_plan_root/entry-whitebox-target.png" \
-    --terrain-prompt "$artifact_root/terrain-height-intent-prompt.md" \
-    --terrain-intent "$public_plan_root/terrain-height-intent.png" \
-    --report "$planner_host_receipt"
-  /usr/bin/cmp -s "$planner_host_receipt" "$artifact_root/planner-self-check.json" || {
-    echo "Planner self-check receipt does not match trusted Host replay." >&2
-    exit 2
-  }
+  "$pnpm_bin" exec tsx scripts/agents/planner-execution.ts replay-accepted \
+    --artifact-root "$artifact_root" --public-plan-root "$public_plan_root" \
+    --scene-source canonical --scene-id "$scene_id"
 fi
 
 authoring_attempt_root="$artifact_root/scene-authoring-attempts/$codex_run_nonce"
@@ -381,7 +360,7 @@ run_builder_gates() {
     --snapshot "$artifact_root/runtime-snapshot.json" \
     --triview-output "$artifact_root/triviews" \
     --implementation-map "$artifact_root/scene-implementation-map.json" --json &&
-  python3 "$project_root/scripts/visual/validate-entry-third-person.py" \
+  "$pnpm_bin" exec tsx "$project_root/scripts/visual/entry-third-person.ts" \
     --image "$artifact_root/opening-frame.png" \
     --snapshot "$artifact_root/runtime-snapshot.json" \
     --output "$artifact_root/entry-third-person-validation.json"

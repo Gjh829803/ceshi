@@ -29,6 +29,13 @@ import {
   transitionPendingJournal,
   validateDeclaredOutputDestinations,
 } from "./lwdp-codex-same-id-recovery.mjs";
+import { openCloudTaskAttemptLedger } from "./lwdp-codex-task-attempt-ledger.mjs";
+import {
+  canRetryTerminalTask,
+  resolveTerminalTaskRetryPolicy,
+  terminalTaskFailureEvidence,
+  terminalTaskRetryDelayMs,
+} from "./lwdp-codex-task-retry.mjs";
 
 function parseArguments(argv) {
   const result = { contexts: [], assets: [], outputs: [] };
@@ -100,6 +107,7 @@ const repoRoot = resolve(args.repoRoot || process.cwd());
 const taskId = safeTaskId(args.taskId);
 const runToken = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 const requestId = safeTaskId(args.requestId || `${taskId}-${runToken}`);
+const retryPolicy = resolveTerminalTaskRetryPolicy(args.stage || taskId, args.taskAttempts);
 const executionProfile = resolveCodexExecutionProfile({
   executionProfile: args.executionProfile || "formal",
   model: args.model,
@@ -181,9 +189,6 @@ try {
   const inputContents = [];
   if (args.workspaceContextRoot && args.contexts.length > 0) {
     throw new Error("--workspace-context-root and --context are mutually exclusive.");
-  }
-  if (!smokeMode) {
-    await validateDeclaredOutputDestinations(repoRoot, outputSpecs);
   }
   const hasWorkspaceContext = Boolean(
     args.workspaceContextRoot || args.contexts.length > 0,
@@ -306,83 +311,135 @@ try {
   }
 
   const config = await loadLwdpGenerationConfig();
-  const ownership = await createPendingJournal(pendingJournal, { repoRoot });
-  if (!ownership.created || args.reconcileOnly) {
-    if (ownership.created && args.reconcileOnly) {
-      await removePendingJournal(repoRoot, requestId);
-      throw new Error("LWDP same-request-id recovery pending journal is missing.");
-    }
-    await reconcileLwdpCodexSameRequestId({
-      repoRoot,
-      current: pendingJournal,
-      config,
-    });
-    process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
-    await cleanupStaging();
-    emitOutcome("completed");
-    process.exit(0);
-  }
-
-  try {
-    for (const upload of pendingUploads) {
-      await uploadS3File(upload.localPath, upload.s3Uri);
-    }
-  } catch (error) {
-    await removePendingJournal(repoRoot, requestId);
-    throw error;
-  }
-
-  let submissionUnknownJournal;
-  try {
-    submissionUnknownJournal = await transitionPendingJournal(
-      { ...pendingJournal, phase: "submission-unknown" },
-      {
+  const ledger = args.dryRun ? null : await openCloudTaskAttemptLedger({
+    repoRoot, requestId, taskId, outputS3Prefix: args.outputS3Prefix,
+    requestArgumentFingerprint: pendingJournal.requestArgumentFingerprint, policy: retryPolicy,
+  });
+  const maximumAttempts = Math.max(1, retryPolicy.maximumAttempts - retryPolicy.priorAttempts);
+  let successfulJobId;
+  async function executeAttempt(attempt, attemptIdentity) {
+    const attemptPayload = { ...payload, request_id: attemptIdentity.requestId,
+      output_s3_prefix: attemptIdentity.outputS3Prefix,
+      job_name: attempt === 1 ? payload.job_name : `${payload.job_name} · retry ${attempt}` };
+    const attemptJournal = { ...pendingJournal, requestId: attemptIdentity.requestId,
+      outputS3Prefix: attemptIdentity.outputS3Prefix,
+      declaredOutputUris: declaredOutputUris(attemptIdentity.outputS3Prefix, taskId, outputSpecs),
+      requestArgumentFingerprint: lwdpCodexRequestArgumentFingerprint({
+        payload: attemptPayload, localOutputs: outputSpecs, inputContents,
+      }) };
+    const onCompleted = ledger ? (result) => ledger.recordSuccess(attempt, result) : undefined;
+    const ownership = await createPendingJournal(attemptJournal, { repoRoot });
+    if (!ownership.created || args.reconcileOnly) {
+      if (ownership.created && args.reconcileOnly) {
+        await removePendingJournal(repoRoot, attemptIdentity.requestId);
+        throw new Error("LWDP same-request-id recovery pending journal is missing.");
+      }
+      const recovered = await reconcileLwdpCodexSameRequestId({
         repoRoot,
-        expectedPhase: "prepared",
-        expectedOwnerToken: ownerToken,
-      },
-    );
-  } catch (error) {
-    await removePendingJournal(repoRoot, requestId);
-    throw error;
-  }
+        current: attemptJournal,
+        config,
+        onCompleted,
+        allowExistingMatchingOutputs: true,
+      });
+      successfulJobId = recovered.jobId;
+      return;
+    }
 
-  try {
-    // The durable unknown phase is intentionally the final local operation before the one POST.
-    const submitted = await submitCodexGenerationJob(payload, { config });
-    const jobId = submittedJobId(submitted);
-    await transitionPendingJournal(
-      { ...submissionUnknownJournal, phase: "attached", jobId },
-      {
-        repoRoot,
-        expectedPhase: "submission-unknown",
-        expectedOwnerToken: ownerToken,
-      },
-    );
-    if (submitted.recovered_by_request_id === true) {
-      process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
-    }
-    process.stdout.write(
-      `WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${jobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
-    );
-    if (args.dryRun) {
-      process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
-      await removePendingJournal(repoRoot, requestId);
-      await cleanupStaging();
-      emitOutcome("completed");
-      process.exit(0);
-    }
-  } catch (error) {
-    if (!(error instanceof CodexTaskOutcomeError) || error.outcomeCode !== "creation-outcome-unknown") {
+    try {
+      await validateDeclaredOutputDestinations(repoRoot, outputSpecs);
+      for (const upload of pendingUploads) {
+        await uploadS3File(upload.localPath, upload.s3Uri);
+      }
+    } catch (error) {
+      await removePendingJournal(repoRoot, attemptIdentity.requestId);
       throw error;
     }
-  }
 
-  await reconcileLwdpCodexSameRequestId({
-    repoRoot,
-    current: pendingJournal,
-    config,
-  });
+    let submissionUnknownJournal;
+    try {
+      submissionUnknownJournal = await transitionPendingJournal(
+        { ...attemptJournal, phase: "submission-unknown" },
+        { repoRoot, expectedPhase: "prepared", expectedOwnerToken: ownerToken },
+      );
+    } catch (error) {
+      await removePendingJournal(repoRoot, attemptIdentity.requestId);
+      throw error;
+    }
+
+    try {
+      // The durable unknown phase is intentionally the final local operation before the one POST.
+      const submitted = await submitCodexGenerationJob(attemptPayload, { config });
+      const jobId = submittedJobId(submitted);
+      await transitionPendingJournal(
+        { ...submissionUnknownJournal, phase: "attached", jobId },
+        { repoRoot, expectedPhase: "submission-unknown", expectedOwnerToken: ownerToken },
+      );
+      if (submitted.recovered_by_request_id === true) {
+        process.stdout.write(`WORLDKIT_LWDP_RECOVERED_BY_REQUEST_ID ${taskId} ${jobId}\n`);
+      }
+      process.stdout.write(
+        `WORLDKIT_LWDP_TASK_ATTEMPT_JOB ${args.stage || taskId} ${taskId} ${jobId} requestId=${attemptIdentity.requestId} taskAttempt=${attempt} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`,
+      );
+      if (args.dryRun) {
+        process.stdout.write(`WORLDKIT_LWDP_DRY_RUN ${taskId} ${jobId}\n`);
+        await removePendingJournal(repoRoot, attemptIdentity.requestId);
+        successfulJobId = jobId;
+        return;
+      }
+    } catch (error) {
+      if (!(error instanceof CodexTaskOutcomeError) || error.outcomeCode !== "creation-outcome-unknown") {
+        throw error;
+      }
+    }
+
+    const recovered = await reconcileLwdpCodexSameRequestId({
+      repoRoot,
+      current: attemptJournal,
+      config,
+      onCompleted,
+    });
+    successfulJobId = recovered.jobId;
+  }
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    const attemptIdentity = ledger?.identity(attempt) ?? { requestId, outputS3Prefix: args.outputS3Prefix };
+    const previous = await ledger?.readTerminal(attempt);
+    if (previous?.outcome === "completed") {
+      await ledger.verifySuccess(previous, outputSpecs.map((output) => ({
+        localPath: output.localPath,
+        s3Uri: joinS3Uri(attemptIdentity.outputS3Prefix, "tasks", taskId, output.remotePath),
+      })));
+      successfulJobId = previous.evidence.jobId;
+      break;
+    }
+    let failure = previous?.evidence ?? null;
+    if (!failure) {
+      await ledger?.prepare(attempt);
+      try {
+        await executeAttempt(attempt, attemptIdentity);
+        break;
+      } catch (error) {
+        failure = terminalTaskFailureEvidence(error);
+        if (!failure) throw error;
+        await ledger.recordFailure(attempt, failure);
+      }
+    }
+    if (!canRetryTerminalTask(retryPolicy, attempt, failure.retryClass)) {
+      throw new CodexTaskOutcomeError(failure.outcomeCode,
+        `LWDP Cloud task ended after terminal attempt ${attempt}; reason=${failure.retryClass ?? "non-retryable"}.`);
+    }
+    if (args.reconcileOnly) {
+      // Explicit recovery may finish an already-submitted later attempt, but it
+      // never creates a replacement task. Normal invocation continues the ledger.
+      const next = ledger.identity(attempt + 1);
+      process.stdout.write(`WORLDKIT_LWDP_RECONCILE_NEXT ${taskId} ${next.requestId}\n`);
+    } else {
+      const delayMs = terminalTaskRetryDelayMs(retryPolicy, attempt);
+      process.stdout.write(`WORLDKIT_LWDP_STAGE_RETRY ${retryPolicy.stage} ${retryPolicy.priorAttempts + attempt + 1} ${failure.retryClass === "task-timeout" ? 2 : retryPolicy.maximumAttempts} reason=${failure.retryClass} previousJob=${failure.jobId} delayMs=${delayMs}\n`);
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, delayMs));
+    }
+  }
+  if (!successfulJobId) throw new Error("Cloud Codex task ended without verified successful task evidence.");
+  process.stdout.write(`WORLDKIT_LWDP_JOB ${args.stage || taskId} ${taskId} ${successfulJobId} dispatch=single-task-fast-path profile=${executionProfile.name} model=${executionProfile.model} reasoning=${executionProfile.reasoningEffort}\n`);
   process.stdout.write(`WORLDKIT_LWDP_TASK_READY ${taskId}\n`);
   await cleanupStaging();
   emitOutcome("completed");

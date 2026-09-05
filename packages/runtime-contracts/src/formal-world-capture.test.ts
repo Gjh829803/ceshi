@@ -14,10 +14,12 @@ import {
   formalWorldCaptureIntentCanonicalBytesV1,
   formalWorldCaptureRequestCanonicalBytesV1,
   formalWorldCaptureReceiptCanonicalBytesV1,
+  assertFormalSemanticViewObservationSetMatchesReceiptV1,
   hashFormalArtifactViewRequestV1,
   hashFormalColliderOverlayRequestV1,
   hashFormalColliderOverlayObservationV1,
   hashFormalOpeningObservationV1,
+  hashFormalSemanticViewObservationSetV1,
   hashFormalSemanticCaptureMapV1,
   hashFormalScriptedTraversalRequestV1,
   hashFormalScriptedTraversalObservationV1,
@@ -28,6 +30,7 @@ import {
   parseFormalArtifactViewRequestV1,
   parseFormalColliderOverlayObservationV1,
   parseFormalOpeningObservationV1,
+  parseFormalSemanticViewObservationSetV1,
   parseFormalSemanticCaptureMapV1,
   parseFormalScriptedTraversalRequestV1,
   parseFormalScriptedTraversalObservationV1,
@@ -365,7 +368,11 @@ function semanticMapValue() {
         semanticClassId: "worldkit.native-block.group.central-ascent-group",
         identityColor: "#C9A96B",
         projectedBoundsSource: "checked-layout-visual-group",
-        requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
+        viewRequirements: [
+          { viewId: "opening", mode: "reference-projection-required" },
+          { viewId: "world-side", mode: "presence-required" },
+          { viewId: "world-top-down", mode: "presence-required" },
+        ],
         authoringManifestHash: H("d"),
         layoutInventoryHash: H("e"),
         contributionHash: H("f"),
@@ -379,7 +386,11 @@ function semanticMapValue() {
         semanticClassId: "worldkit.native-block.group.upper-t-junction-group",
         identityColor: "#AEB8C4",
         projectedBoundsSource: "checked-layout-visual-group",
-        requiredWorldViewIds: ["opening", "world-side", "world-top-down"],
+        viewRequirements: [
+          { viewId: "opening", mode: "not-required" },
+          { viewId: "world-side", mode: "presence-required" },
+          { viewId: "world-top-down", mode: "presence-required" },
+        ],
         authoringManifestHash: H("d"),
         layoutInventoryHash: H("e"),
         contributionHash: H("f"),
@@ -594,6 +605,9 @@ function receiptValue(runtimeSnapshot = snapshotFixture()) {
     openingObservationArtifactRef:
       "artifact://case/cloud-temple/capture/opening-observation.json",
     openingObservationContentHash: Hx("d4"),
+    semanticViewObservationSetArtifactRef:
+      "artifact://case/cloud-temple/capture/semantic-view-observation-set.json",
+    semanticViewObservationSetContentHash: Hx("d5"),
     spawnSupportObservationArtifactRef:
       "artifact://case/cloud-temple/capture/spawn-support-observation.json",
     spawnSupportObservationContentHash: Hx("e5"),
@@ -1178,6 +1192,60 @@ function openingObservationVisualGroups() {
   }];
 }
 
+function openingObservationValue() {
+  return {
+    ...observationIdentity("formal-opening-observation", "camera"),
+    controlledSubjectProjection: {
+      subjectEntityId: "player",
+      centerXBasisPoints: 5_000,
+      centerYBasisPoints: 5_000,
+      widthBasisPoints: 1_500,
+      heightBasisPoints: 4_000,
+      coverageBasisPoints: 600,
+    },
+    visualGroups: openingObservationVisualGroups(),
+    observedTopologyRelations: [],
+  };
+}
+
+function semanticViewObservationSetValue() {
+  const identity = observationIdentity(
+    "formal-semantic-view-observation-set",
+    "camera",
+  );
+  const receipt = receiptValue();
+  const openingGroups = openingObservationVisualGroups();
+  return {
+    ...identity,
+    views: receipt.views.map((view, viewIndex) => ({
+      viewId: view.viewId,
+      viewRequestHash: view.requestHash,
+      pngContentHash: view.pngContentHash,
+      targets: identity.formalRequest.semanticCaptureMap.bindings.map(
+        (binding, targetIndex) => {
+          const group = openingGroups[targetIndex]!;
+          return {
+            acceptanceTargetRef: binding.acceptanceTargetRef,
+            blockVisualGroupId: binding.blockVisualGroupId,
+            mode: binding.viewRequirements[viewIndex]!.mode,
+            sourceBoundsMeters: group.sourceBoundsMeters,
+            structuralProjection: view.viewId === "opening"
+              ? {
+                outcome: "projected",
+                normalizedBounds: group.normalizedBounds,
+                normalizedCenter: group.normalizedCenter,
+                coverageBasisPoints: group.coverageBasisPoints,
+                cameraDepthMeters: group.cameraDepthMeters,
+                depthOrder: group.depthOrder,
+              }
+              : { outcome: "outside-viewport" },
+          };
+        },
+      ),
+    })),
+  };
+}
+
 describe("formal measured observation documents", () => {
   it("parses and hashes opening projection measurements without Case expected pixels", () => {
     const value = {
@@ -1204,6 +1272,120 @@ describe("formal measured observation documents", () => {
         toNodeId: "upper-t-junction",
       }],
     })).toThrowError("FORMAL_OPENING_OBSERVATION_INVALID");
+  });
+
+  it("binds one three-view structural observation set to the Receipt and same Opening measurement", () => {
+    const openingObservation = parseFormalOpeningObservationV1(
+      openingObservationValue(),
+    );
+    const observationSet = parseFormalSemanticViewObservationSetV1(
+      semanticViewObservationSetValue(),
+    );
+    const receipt = parseFormalWorldCaptureReceiptV1({
+      ...receiptValue(),
+      openingObservationContentHash:
+        hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash:
+        hashFormalSemanticViewObservationSetV1(observationSet),
+    });
+
+    expect(observationSet.views.map(({ viewId }) => viewId)).toEqual([
+      "opening",
+      "world-side",
+      "world-top-down",
+    ]);
+    expect(observationSet.views[1]?.targets.map(
+      ({ structuralProjection }) => structuralProjection.outcome,
+    )).toEqual(["outside-viewport", "outside-viewport"]);
+    expect(() => assertFormalSemanticViewObservationSetMatchesReceiptV1({
+      observationSet,
+      receipt,
+      openingObservation,
+    })).not.toThrow();
+  });
+
+  it("rejects semantic view evidence that is rehashed after drifting from Opening or its PNG", () => {
+    const openingObservation = parseFormalOpeningObservationV1(
+      openingObservationValue(),
+    );
+    const driftedOpeningValue = structuredClone(
+      semanticViewObservationSetValue(),
+    );
+    const openingProjection = driftedOpeningValue.views[0]!.targets[0]!
+      .structuralProjection;
+    if (
+      openingProjection.outcome !== "projected" ||
+      openingProjection.normalizedCenter === undefined
+    ) {
+      throw new Error("expected projected opening fixture");
+    }
+    openingProjection.normalizedCenter.xBasisPoints += 1;
+    const driftedOpeningSet = parseFormalSemanticViewObservationSetV1(
+      driftedOpeningValue,
+    );
+    const driftedOpeningReceipt = parseFormalWorldCaptureReceiptV1({
+      ...receiptValue(),
+      openingObservationContentHash:
+        hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash:
+        hashFormalSemanticViewObservationSetV1(driftedOpeningSet),
+    });
+    expect(() => assertFormalSemanticViewObservationSetMatchesReceiptV1({
+      observationSet: driftedOpeningSet,
+      receipt: driftedOpeningReceipt,
+      openingObservation,
+    })).toThrowError("FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID");
+
+    const driftedPngValue = structuredClone(
+      semanticViewObservationSetValue(),
+    );
+    driftedPngValue.views[1]!.pngContentHash = H("9");
+    const driftedPngSet = parseFormalSemanticViewObservationSetV1(
+      driftedPngValue,
+    );
+    const driftedPngReceipt = parseFormalWorldCaptureReceiptV1({
+      ...receiptValue(),
+      openingObservationContentHash:
+        hashFormalOpeningObservationV1(openingObservation),
+      semanticViewObservationSetContentHash:
+        hashFormalSemanticViewObservationSetV1(driftedPngSet),
+    });
+    expect(() => assertFormalSemanticViewObservationSetMatchesReceiptV1({
+      observationSet: driftedPngSet,
+      receipt: driftedPngReceipt,
+      openingObservation,
+    })).toThrowError("FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID");
+  });
+
+  it("rejects a rehashed semantic view set with a forged camera owner identity", () => {
+    const openingObservation = parseFormalOpeningObservationV1(
+      openingObservationValue(),
+    );
+    for (const forgedOwner of [{
+      ...sdkOwnerIdentities()[1]!,
+      implementationRef: "worldkit://sdk-owner/forged-camera@1",
+    }, {
+      ...sdkOwnerIdentities()[1]!,
+      implementationHash: H("9"),
+    }]) {
+      const forgedSet = parseFormalSemanticViewObservationSetV1({
+        ...semanticViewObservationSetValue(),
+        domainOwnerIdentity: forgedOwner,
+      });
+      const rehashedReceipt = parseFormalWorldCaptureReceiptV1({
+        ...receiptValue(),
+        openingObservationContentHash:
+          hashFormalOpeningObservationV1(openingObservation),
+        semanticViewObservationSetContentHash:
+          hashFormalSemanticViewObservationSetV1(forgedSet),
+      });
+
+      expect(() => assertFormalSemanticViewObservationSetMatchesReceiptV1({
+        observationSet: forgedSet,
+        receipt: rehashedReceipt,
+        openingObservation,
+      })).toThrowError("FORMAL_SEMANTIC_VIEW_OBSERVATION_BINDING_INVALID");
+    }
   });
 
   it("parses measured support and rejects a stale reset Snapshot join", () => {

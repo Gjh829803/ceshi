@@ -390,6 +390,14 @@ describe("Native Block generation identity", () => {
     expect(receipt.outputs).toEqual([]);
   });
 
+  it("binds original WebP references through the current generation request", () => {
+    const request = parseNativeBlockGenerationRequestV1({
+      ...generationRequest(),
+      referenceInputs: [{ inputRef: "reference-0.webp", contentHash: HASH_A, mediaType: "image/webp" }],
+    });
+    expect(request.referenceInputs).toEqual([{ inputRef: "reference-0.webp", contentHash: HASH_A, mediaType: "image/webp" }]);
+  });
+
   it("retains task-timeout when cleanup also fails", () => {
     const request = generationRequest();
     const receipt = parseNativeBlockGenerationReceiptV1({

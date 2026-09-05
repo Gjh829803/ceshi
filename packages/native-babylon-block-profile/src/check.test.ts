@@ -198,6 +198,19 @@ function withScene(run: (scene: Scene) => void): void {
 }
 
 describe("Babylon Native block profile structural check", () => {
+  it("allows ordinary functional scenery without inventing semantic identity groups (legacy parity)", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(createContext(scene), { maximumBlockCount: 4 });
+      for (const [index, paletteRole] of (["structure", "hazard", "water-like-visual", "background-mass"] as const).entries()) {
+        session.createBlock({ id: `ordinary-scenery-${index}`, shape: "full", paletteRole, centerMetersXYZ: [index, 0.5, 0] });
+      }
+      const checked = session.finalize().checkResult;
+      expect(checked.outcome).toBe("passed");
+      expect(checked.diagnostics).toEqual([]);
+      expect(checked.visualGroups).toEqual([]);
+    });
+  });
   it("publishes one closed diagnostic-code vocabulary", async () => {
     const profile = await loadProfile();
 
@@ -209,7 +222,6 @@ describe("Babylon Native block profile structural check", () => {
       "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
       "WORLDKIT_NATIVE_BLOCK_SCENE_MISMATCH",
       "WORLDKIT_NATIVE_BLOCK_STRUCTURAL_SUPPORT_MISSING",
-      "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
       "WORLDKIT_NATIVE_BLOCK_WORLD_TRANSFORM_INVALID",
     ]);
     expect(Object.isFrozen(
@@ -359,7 +371,7 @@ describe("Babylon Native block profile structural check", () => {
     expect(forward).toEqual(reversed);
   });
 
-  it("connects only route blocks within one quarter-meter structural step", async () => {
+  it("reports the deterministic route-component metric without using it as an admission gate", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
 
     const build = (upperY: number) => {
@@ -395,16 +407,56 @@ describe("Babylon Native block profile structural check", () => {
     expect(oneStep.outcome).toBe("passed");
     expect(oneStep.metrics.structuralRouteComponentCount).toBe(1);
     expect(oneStep.metrics.structuralStepTransitionCount).toBe(2);
-    expect(twoSteps.outcome).toBe("rejected");
+    expect(twoSteps.outcome).toBe("passed");
     expect(twoSteps.metrics.structuralRouteComponentCount).toBe(2);
     expect(twoSteps.diagnostics).toContainEqual(expect.objectContaining({
       code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
-      severity: "error",
+      severity: "warning",
     }));
     expect(twoSteps.diagnostics.find(({ code }) =>
       code === "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED")?.repairHint).toBe(
-      "Connect the visual route topology and validate Runtime passability separately through the SDK/Havok gate.",
+      "Use Case-declared Ground Analysis and traversal gates to decide whether any required course must be connected and passable.",
     );
+  });
+
+  it("admits multiple route islands joined by ordinary ground while preserving the advisory metric", async () => {
+    const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
+
+    withScene((scene) => {
+      const session = createBabylonNativeBlockProfileSessionV1(
+        createContext(scene, "route-islands-on-ground"),
+        { maximumBlockCount: 3 },
+      );
+      session.createBlock({
+        id: "west-route",
+        shape: "full",
+        paletteRole: "route",
+        visualGroupId: "west-course",
+        centerMetersXYZ: [0, -0.5, 0],
+      });
+      session.createBlock({
+        id: "ordinary-ground",
+        shape: "full",
+        paletteRole: "ground",
+        centerMetersXYZ: [1, -0.5, 0],
+      });
+      session.createBlock({
+        id: "east-route",
+        shape: "full",
+        paletteRole: "route",
+        visualGroupId: "east-course",
+        centerMetersXYZ: [2, -0.5, 0],
+      });
+
+      const result = session.finalize().checkResult;
+
+      expect(result.outcome).toBe("passed");
+      expect(result.metrics.structuralRouteComponentCount).toBe(2);
+      expect(result.diagnostics).toContainEqual(expect.objectContaining({
+        code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
+        severity: "warning",
+      }));
+    });
   });
 
   it("keeps the documented stacked quarter-meter stair recipe in one structural route component", async () => {
@@ -460,7 +512,7 @@ describe("Babylon Native block profile structural check", () => {
     }
   });
 
-  it("rejects overlap, missing groups, and disconnected structural routes", async () => {
+  it("rejects overlap and missing groups while retaining route-component advice", async () => {
     const { createBabylonNativeBlockProfileSessionV1 } = await loadProfile();
 
     withScene((scene) => {
@@ -508,7 +560,7 @@ describe("Babylon Native block profile structural check", () => {
         location,
       }))).toEqual([
         {
-          severity: "error",
+          severity: "warning",
           code: "WORLDKIT_NATIVE_BLOCK_ROUTE_DISCONNECTED",
           location: { kind: "none" },
         },
@@ -516,11 +568,6 @@ describe("Babylon Native block profile structural check", () => {
           severity: "error",
           code: "WORLDKIT_NATIVE_BLOCK_OCCUPANCY_OVERLAP",
           location: { kind: "block", blockId: "overlap-first" },
-        },
-        {
-          severity: "error",
-          code: "WORLDKIT_NATIVE_BLOCK_VISUAL_GROUP_REQUIRED",
-          location: { kind: "block", blockId: "ungrouped-structure" },
         },
       ]);
       expect(result.metrics.structuralRouteComponentCount).toBe(2);

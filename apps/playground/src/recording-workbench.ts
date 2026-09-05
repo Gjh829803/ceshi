@@ -2,7 +2,7 @@ import type { CanvasRecordingResult } from "./canvas-recorder.js";
 import type { PlaygroundRuntimeRouteV1 } from "./playground-runtime-route.js";
 
 interface StyledTriviewAsset {
-  id: string;
+  visualTargetId: string;
   role: string;
   semanticClassId: string | null;
   url: string;
@@ -120,17 +120,17 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-function renderAssetStrip(assets: RecordingArtifactState): string {
+export function renderAssetStrip(assets: RecordingArtifactState): string {
   const images = [
     ...(assets.styledOpeningFrameUrl
-      ? [{ id: "styled-opening-frame", role: "最终首帧", url: assets.styledOpeningFrameUrl }]
+      ? [{ label: "styled-opening-frame", role: "最终首帧", url: assets.styledOpeningFrameUrl }]
       : []),
-    ...assets.styledTriviews.map((item) => ({ id: item.id, role: item.role, url: item.url })),
+    ...assets.styledTriviews.map((item) => ({ label: item.visualTargetId, role: item.role, url: item.url })),
   ];
   if (images.length === 0) return '<p class="recording-assets-empty">最终首帧和渲染后三视图尚未准备完成。</p>';
   return `<div class="recording-assets-strip">${images.map((image) => `
-    <a href="${escapeHtml(image.url)}" download title="下载 ${escapeHtml(image.id)}">
-      <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.id)}" loading="lazy" />
+    <a href="${escapeHtml(image.url)}" download title="下载 ${escapeHtml(image.label)}">
+      <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.label)}" loading="lazy" />
       <span>${escapeHtml(image.role)}</span>
     </a>
   `).join("")}</div>`;

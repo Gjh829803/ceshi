@@ -496,7 +496,7 @@ into three future packages so implementation cannot smuggle model concerns into 
 critical path. A later milestone must approve their detailed design, dependencies, privacy model,
 budgets, model/provider locks, and exact verification thresholds before code is added.
 
-### 14.2 Post-WRC-1 scene quality and performance follow-up queue
+### 14.2 Scene quality and performance follow-up disposition
 
 The `codex/block-world-main-integration` comparison establishes that the current Babylon Native Block
 lane already contains the production-critical mechanics worth retaining: the controlled Block API,
@@ -506,21 +506,26 @@ bounded multi-contact correction. The comparison does not authorize restoring it
 Manifest/Compiler path, hidden foundation, Mesh-name inference, second support owner or Native-owned
 lighting, Camera, Physics, Input or Tick.
 
-After WRC-1 reaches its own acceptance disposition, the following quality and scale work may proceed
-as a separate `WRC-QP` follow-up queue. These items are not additional WRC-1 work packages, do not
-change the 33-package count, do not block `WRC-ACC-1`, and cannot be cited as completed WRC-1 evidence.
+After this design was frozen, the exact-main `paper-moon-palace-054` Case proved that the former
+`WRC-QP-1` advisory Builder projection directly affects first-pass whitebox fidelity and expensive
+post-Capture repair. The live backlog therefore reclassifies that work under the single active ID
+`BWMI-CF-19`, before NBR-20/formal Native production evidence. It remains advisory-only and does not
+become a Capture, Package, Compiler, or Runtime owner. `WRC-QP-2..6` remain a separate post-WRC-1
+quality/scale queue. None are additional WRC-1 work packages or completed WRC-1 evidence.
 
 | ID | Goal | depends_on | Exclusive owner / stable output | Required evidence | Mode |
 |---|---|---|---|---|---|
-| WRC-QP-1 | Add a low-cost advisory geometry projection inside the existing Native Builder task so obvious top-down/entry composition drift can be repaired before Package/Runtime/Capture | NBR-1, WRC-ACC-1 | Native Builder Skill/authoring workspace only; unadmitted source -> disposable advisory projection and self-check result | asymmetric projection fixtures, stale-input rejection, real-case first-attempt comparison, proof that no Package/Receipt/Capture identity is issued | sequential |
+| WRC-QP-1 | **Reclassified; no independent active work item.** The behavior is owned only by `BWMI-CF-19` in the live backlog; this row preserves design provenance and does not mean implementation is complete. | `BWMI-CF-19` | Native Builder Skill/authoring workspace only; unadmitted source -> disposable advisory projection and self-check result | asymmetric projection fixtures, stale-input rejection, real-case first-attempt comparison, proof that no Package/Receipt/Capture identity is issued | sequential |
 | WRC-QP-2 | Freeze a neutral clear-day whitebox display contract for readable depth and material separation without importing reference lighting | WRC-ACC-1 | Runtime lighting/display profile and Native visual adapter only; admitted scene + fixed display profile -> deterministic inspection image | exact numeric behavior tests, near/far target screenshots, Capture/preview parity, no Native-created light census | sequential |
 | WRC-QP-3 | Measure Block batching in a real Browser and select Chunk/culling policy from frame-time, draw-call, memory and Capture evidence | WRC-ACC-1, PHO-5 | Native profile batching/culling realization only; identical logical layout -> semantically equivalent measured render plan | 4/8/16/32m candidates, real Browser CPU/GPU/frame evidence, Capture identity/visibility, Havok peak and rollback checks | sequential |
 | WRC-QP-4 | Add source-neutral semantic-front tri-view plus per-panel blank/pixel-health diagnosis | WRC-ACC-1, BNA-7 | BNA-7 Capture contracts/implementation only; explicit target identity and semantic front -> identity-bound tri-view health receipt | rotated/asymmetric targets, Thin Instance isolation, blank retry bounds, stale identity and cleanup tests | sequential, main-agent-only |
 | WRC-QP-5 | Replace per-Tick all-part Collider-residency scans with a measured spatial index while preserving the current Runtime owner and state semantics | WRC-QP-3, BNA-4 | Runtime Babylon residency internals only; frozen Collider inventory + committed Subjects -> identical active-set transaction | multi-Subject union, hysteresis, activate-before-release, rollback, Snapshot/Reset/Replay parity and scale benchmark | sequential, main-agent-only |
 | WRC-QP-6 | Design camera-owned near-subject occluder fading for limited interiors without weakening hard Camera collision | WRC-CAM-2, WRC-ACC-1 | current Camera Domain/Director and live handle registry only; committed pose + explicit render handles -> presentation-only fade | hard-Decollider adversarial fixtures, reset/two-session/cadence tests and human interior FeelReview | main-agent-only |
 
-`WRC-QP-1` is advisory-only: the trusted Host still performs Native Check, Package admission, Runtime
-execution and formal Capture, and the projection must never become a shadow Capture or Compiler.
+The behavior reclassified from `WRC-QP-1` remains advisory-only: the trusted Host still performs Native
+Check, Package admission, Runtime execution and formal Capture, and the projection must never become a
+shadow Capture or Compiler. Its current priority, dependencies, and acceptance evidence are authoritative
+only in live-backlog `BWMI-CF-19`.
 `WRC-QP-2` owns inspection lighting centrally; reference time, weather and exposure remain styling
 inputs rather than whitebox geometry or Native Module authority. `WRC-QP-3` must measure before changing
 the current 4m policy: the old branch's fixed 32m choice is only a benchmark candidate. `WRC-QP-4`

@@ -80,7 +80,8 @@ console.log("fake local codex completed");
 `);
   await chmod(fakeCodexPath, 0o755);
 
-  const result = spawnSync(process.execPath, [localRunnerPath, ...baseArguments(root, outputPath)], {
+  const result = spawnSync(process.execPath, [localRunnerPath, ...baseArguments(root, outputPath),
+    "--failure-evidence-root", path.join(root, "failure-evidence")], {
     cwd: repositoryRoot,
     encoding: "utf8",
     env: {
@@ -96,6 +97,7 @@ console.log("fake local codex completed");
     /WORLDKIT_LOCAL_CODEX_JOB planner local-codex-test pid=[0-9]+ profile=formal model=gpt-5\.6-sol reasoning=xhigh/,
   );
   assert.match(result.stdout, /WORLDKIT_LOCAL_CODEX_TASK_READY local-codex-test/);
+  await assert.rejects(readFile(path.join(root, "failure-evidence/report.json")), /ENOENT/);
   const delivered = JSON.parse(await readFile(outputPath, "utf8"));
   assert.deepEqual(delivered, {
     model: "gpt-5.6-sol",
@@ -176,6 +178,8 @@ process.stdin.on("end", () => {
   const firstOutputIndex = args.indexOf("--output") + 1;
   args[firstOutputIndex] = `artifacts/first.txt::${firstDestination}::text/plain`;
   args.push("--output", `artifacts/second.txt::${secondDestination}::text/plain`);
+  const evidenceRoot = path.join(root, "failure-evidence");
+  args.push("--failure-evidence-root", evidenceRoot);
   const result = spawnSync(process.execPath, [localRunnerPath, ...args], {
     cwd: repositoryRoot,
     encoding: "utf8",
@@ -185,6 +189,16 @@ process.stdin.on("end", () => {
   assert.match(result.stderr, /omitted a non-empty declared output: artifacts\/second\.txt/);
   assert.equal(await readFile(firstDestination, "utf8"), "previous-result\n");
   await assert.rejects(readFile(secondDestination, "utf8"), /ENOENT/);
+  const evidence = JSON.parse(await readFile(path.join(evidenceRoot, "report.json"), "utf8"));
+  assert.equal(evidence.requestId, "local-codex-test");
+  assert.equal(evidence.outcome, "task-rejected");
+  assert.deepEqual(evidence.outputs.map(({ path, status }) => ({ path, status })), [
+    { path: "artifacts/first.txt", status: "present" },
+    { path: "artifacts/second.txt", status: "missing" },
+  ]);
+  assert.equal(await readFile(path.join(evidenceRoot, "outputs/artifacts/first.txt"), "utf8"), "new-result\n");
+  assert.equal(evidence.finalMessage, "done\n");
+  assert.deepEqual(await readdir(path.join(root, ".codex-tmp/local-codex")), []);
 });
 
 test("emits one request-bound machine-readable timeout outcome from the real local adapter", async () => {
@@ -202,6 +216,7 @@ setInterval(() => undefined, 1000);
     ...baseArguments(root, outputPath),
     "--request-id", "local-codex-timeout-request",
     "--timeout-seconds", "1",
+    "--failure-evidence-root", path.join(root, "failure-evidence"),
   ], {
     cwd: repositoryRoot,
     encoding: "utf8",
@@ -218,4 +233,44 @@ setInterval(() => undefined, 1000);
     requestId: "local-codex-timeout-request",
     outcome: "task-timeout",
   });
+  const evidence = JSON.parse(await readFile(path.join(root, "failure-evidence/report.json"), "utf8"));
+  assert.equal(evidence.outcome, "task-timeout");
+  assert.equal(evidence.requestId, "local-codex-timeout-request");
+  assert.equal(evidence.outputs[0].status, "missing");
+});
+
+test("retains failed-task feedback without promoting output or changing the rejected outcome", async () => {
+  const root = await createFixture();
+  const outputPath = path.join(root, "delivered/result.txt");
+  const fake = path.join(root, "fake-rejected.mjs");
+  await writeFile(fake, `#!/usr/bin/env node
+import {mkdirSync, writeFileSync} from "node:fs";
+import path from "node:path";
+const args = process.argv.slice(2);
+if (args.includes("--version")) process.exit(0);
+const root = args[args.indexOf("--cd") + 1];
+process.stdin.resume();
+process.stdin.on("end", () => {
+  mkdirSync(path.join(root, "artifacts"), { recursive: true });
+  writeFileSync(path.join(root, "artifacts/result.txt"), "unadmitted");
+  writeFileSync(args[args.indexOf("--output-last-message") + 1], "TS18048 x is possibly undefined");
+  console.error('apiKey="private-value"');
+  process.exit(7);
+});
+`);
+  await chmod(fake, 0o755);
+  const result = spawnSync(process.execPath, [localRunnerPath, ...baseArguments(root, outputPath),
+    "--failure-evidence-root", path.join(root, "failure-evidence")], {
+    cwd: repositoryRoot, encoding: "utf8", env: { ...process.env, WORLDKIT_LOCAL_CODEX_BIN: fake },
+  });
+  assert.notEqual(result.status, 0);
+  assert.doesNotMatch(result.stdout, /WORLDKIT_LOCAL_CODEX_TASK_READY/);
+  const bytes = await readFile(path.join(root, "failure-evidence/report.json"), "utf8");
+  const report = JSON.parse(bytes);
+  assert.equal(report.childExitCode, 7);
+  assert.equal(report.outcome, "task-rejected");
+  assert.match(report.finalMessage, /TS18048/);
+  assert.doesNotMatch(bytes, /private-value/);
+  await assert.rejects(readFile(outputPath), /ENOENT/);
+  assert.deepEqual(await readdir(path.join(root, ".codex-tmp/local-codex")), []);
 });

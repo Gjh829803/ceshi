@@ -104,7 +104,7 @@ process.exit(1);
   it("promotes exactly three non-empty outputs only after successful router and self-check", async () => {
     const prepared = await preparedFixture();
     const calls: unknown[] = [];
-    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial gen_cd640a435a24fae0 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "", taskOutcome: completedTaskOutcome }; } };
+    const port: CodexTaskProcessPortV1 = { run: async (runInput) => { calls.push(runInput); await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB coding-agent native-block-generation-cloud-temple-initial gen_cd640a435a24fae0 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "", taskOutcome: completedTaskOutcome }; } };
     try {
       const result = await runNativeBlockGenerationV1(prepared, {
         process: port,
@@ -134,6 +134,30 @@ process.exit(1);
       });
       expect(result.receipt.outcome).not.toBe("completed");
       await expect(readFile(path.join(prepared.sourceDirectoryPath, "scene.ts"), "utf8")).rejects.toThrow();
+    } finally { await rm(prepared.root, { recursive: true, force: true }); }
+  });
+
+  it("retains both prior evidence and the root diagnostic when rejected-source already exists", async () => {
+    const prepared = await preparedFixture();
+    const rejectedSourcePath = path.join(path.dirname(prepared.stagingDirectoryPath), "rejected-source");
+    try {
+      await mkdir(rejectedSourcePath);
+      await writeFile(path.join(rejectedSourcePath, "scene.ts"), "prior evidence");
+      const result = await runNativeBlockGenerationV1(prepared, {
+        process: { run: async () => {
+          await writeOutputs(prepared.stagingDirectoryPath);
+          return { exitCode: 0, stdout: "WORLDKIT_LWDP_JOB coding-agent native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n", stderr: "", taskOutcome: completedTaskOutcome };
+        } },
+        selfCheck: async () => ({ ok: false, diagnosticCodes: ["self-check-failed"] }),
+        reconcile: async () => ({ outcome: "missing" }),
+        cleanup: async () => ({ outcome: "completed" }),
+      });
+      expect(result.receipt.diagnosticCodes).toEqual(["cleanup-failed", "self-check-failed"]);
+      expect(result.receipt.cleanupOutcome).toBe("failed");
+      expect(result.receipt.outputs).toEqual([]);
+      expect(result.sourceDirectoryPath).toBeUndefined();
+      expect(await readFile(path.join(rejectedSourcePath, "scene.ts"), "utf8")).toBe("prior evidence");
+      expect(await readFile(path.join(prepared.stagingDirectoryPath, "scene.ts"), "utf8")).toBe("scene.ts\n");
     } finally { await rm(prepared.root, { recursive: true, force: true }); }
   });
 
@@ -167,7 +191,7 @@ process.exit(1);
         process: {
           run: async () => ({
             exitCode: 1,
-            stdout: "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n",
+            stdout: "WORLDKIT_LWDP_JOB coding-agent native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n",
             stderr: privateProviderDetail,
             taskOutcome: {
               kind: "worldkit-codex-task-outcome",
@@ -269,7 +293,7 @@ process.exit(1);
             return {
               exitCode: 0,
               stdout:
-                "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n",
+                "WORLDKIT_LWDP_JOB coding-agent native-block-generation-cloud-temple-initial job-1 dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\n",
               stderr: "",
               taskOutcome: completedTaskOutcome,
             };
@@ -289,6 +313,10 @@ process.exit(1);
         "cleanup-failed",
         "self-check-failed",
       ]);
+      await expect(readFile(path.join(prepared.root, "attempts/0/rejected-source/scene.ts"), "utf8"))
+        .resolves.toBe("scene.ts\n");
+      await expect(readFile(path.join(prepared.sourceDirectoryPath, "scene.ts")))
+        .rejects.toMatchObject({ code: "ENOENT" });
     } finally {
       await rm(prepared.root, { recursive: true, force: true });
     }
@@ -390,7 +418,7 @@ process.exit(1);
   });
 
   it("rejects a missing or duplicate router completion marker", async () => {
-    for (const stdout of ["", "WORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial a dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\nWORLDKIT_LWDP_JOB native-block-generation native-block-generation-cloud-temple-initial b dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh"]) {
+    for (const stdout of ["", "WORLDKIT_LWDP_JOB coding-agent native-block-generation-cloud-temple-initial a dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh\nWORLDKIT_LWDP_JOB coding-agent native-block-generation-cloud-temple-initial b dispatch=single-task-fast-path profile=formal model=gpt-5.6-sol reasoning=xhigh"]) {
       const prepared = await preparedFixture();
       try {
         const result = await runNativeBlockGenerationV1(prepared, { process: { run: async () => { await writeOutputs(prepared.stagingDirectoryPath); return { exitCode: 0, stdout, stderr: "", taskOutcome: completedTaskOutcome }; } }, selfCheck: async () => ({ ok: true, diagnosticCodes: [] }), reconcile: async () => ({ outcome: "missing" }), cleanup: async () => ({ outcome: "completed" }) });

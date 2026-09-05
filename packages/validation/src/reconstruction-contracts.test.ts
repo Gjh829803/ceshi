@@ -8,10 +8,14 @@ import {
   parseWorldReconstructionEvaluationProfileV1,
   parseWorldReconstructionEvaluationResultV1,
   parseWorldReconstructionEvidenceSetV1,
+  parseWorldReconstructionProductionResultV1,
   parseWorldReconstructionRunReceiptV1,
+  parseWorldReconstructionStrictDiagnosticReceiptV1,
   worldReconstructionCaseCanonicalBytesV1,
   worldReconstructionDiagnosticCanonicalBytesV1,
   worldReconstructionEvidenceProfileClosureMatchesV1,
+  worldReconstructionProductionResultCanonicalBytesV1,
+  worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1,
 } from "./reconstruction-contracts.js";
 
 const H = (character: string) => `sha256:${character.repeat(64)}` as const;
@@ -97,8 +101,19 @@ const caseValue = () => ({
     semanticSilhouetteTargets: [{
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
       visualGroupId: "central-ascent-group",
-      normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
-      normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 }, coverageBasisPoints: 2_400,
+      viewRequirements: [{
+        viewId: "opening",
+        mode: "reference-projection-required",
+        normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
+        normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+        coverageBasisPoints: 2_400,
+      }, {
+        viewId: "world-side",
+        mode: "presence-required",
+      }, {
+        viewId: "world-top-down",
+        mode: "presence-required",
+      }],
     }],
     openingComposition: {
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
@@ -184,7 +199,26 @@ const evidenceValue = () => ({
     { dimensionId: "critical-traversal", evidenceRefs: ["artifact://case/cloud-temple/evidence/critical-traversal.json"], observed: { kind: "critical-traversal-observed", checks: [{ id: "reach-junction", outcome: "reached", checkpointIds: ["junction", "spawn"] }] } },
     { dimensionId: "deterministic-build", evidenceRefs: ["artifact://case/cloud-temple/evidence/deterministic-build.json"], observed: { kind: "deterministic-build-observed", candidateReplayOutcome: "completed", worldPackageIdentityMatches: true, buildIdentityMatches: true, captureIdentityMatches: true } },
     { dimensionId: "opening-composition", evidenceRefs: ["artifact://case/cloud-temple/evidence/opening-composition.json"], observed: { kind: "opening-composition-observed", regions: [{ targetRef: "worldkit://composition-target/opening@1", normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 } }], anchors: [{ targetRef: "worldkit://composition-target/opening@1", normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 } }], orderedTargetRefs: ["worldkit://composition-target/opening@1"], distances: [] } },
-    { dimensionId: "semantic-silhouette", evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"], observed: { kind: "semantic-silhouette-observed", targets: [{ acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1", visualGroupId: "central-ascent-group", isSemanticTargetPresent: true, normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 }, normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 }, coverageBasisPoints: 2_400 }] } },
+    {
+      dimensionId: "semantic-silhouette",
+      evidenceRefs: ["artifact://case/cloud-temple/evidence/semantic-silhouette.json"],
+      observed: {
+        kind: "semantic-silhouette-observed",
+        views: ["opening", "world-side", "world-top-down"].map((viewId) => ({
+          viewId,
+          targets: [{
+            acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
+            visualGroupId: "central-ascent-group",
+            structuralProjection: {
+              outcome: "projected",
+              normalizedBounds: { minXBasisPoints: 100, minYBasisPoints: 200, maxXBasisPoints: 500, maxYBasisPoints: 800 },
+              normalizedCenter: { xBasisPoints: 300, yBasisPoints: 500 },
+              coverageBasisPoints: 2_400,
+            },
+          }],
+        })),
+      },
+    },
     { dimensionId: "spawn-support", evidenceRefs: ["artifact://case/cloud-temple/evidence/spawn-support.json"], observed: { kind: "spawn-support-observed", spawnMarkerId: "player-spawn", supportColliderId: "spawn-ground", medium: "ground", positionXYZMeters: { xMeters: 0, yMeters: 1, zMeters: 0 }, supportGapMillimeters: 0 } },
     { dimensionId: "topology", evidenceRefs: ["artifact://case/cloud-temple/evidence/topology.json"], observed: { kind: "topology-observed", nodeIds: ["central-ascent", "upper-t-junction"], relations: [{ fromNodeId: "central-ascent", relation: "connects-to", toNodeId: "upper-t-junction" }], layerIds: ["ground", "upper"] } },
   ],
@@ -433,6 +467,67 @@ describe("world reconstruction contracts", () => {
     });
   });
 
+  it("admits an exact empty Opening subset while retaining non-Opening target identity", () => {
+    const caseDraft = caseValue();
+    Reflect.set(
+      caseDraft.expected.semanticSilhouetteTargets[0]!,
+      "viewRequirements",
+      [{ viewId: "opening", mode: "not-required" }, {
+        viewId: "world-side",
+        mode: "presence-required",
+      }, {
+        viewId: "world-top-down",
+        mode: "presence-required",
+      }],
+    );
+    for (const field of [
+      "targetRefs",
+      "regions",
+      "anchors",
+      "orderedTargetRefs",
+    ] as const) {
+      Reflect.set(caseDraft.expected.openingComposition, field, []);
+    }
+    caseDraft.requiredEvidenceProfileRefs = DIMENSIONS.map(
+      (dimensionId) => `worldkit://evidence-profile/${dimensionId}@1`,
+    );
+    const reconstructionCase = parseWorldReconstructionCaseV1(caseDraft);
+
+    const profileDraft = profileValue();
+    profileDraft.thresholds.openingComposition.regions = [];
+    profileDraft.thresholds.openingComposition.anchors = [];
+    const profile = parseWorldReconstructionEvaluationProfileV1(profileDraft);
+
+    const evidenceDraft = evidenceValue();
+    const openingRow = evidenceDraft.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "opening-composition",
+    );
+    if (openingRow?.observed.kind !== "opening-composition-observed") {
+      throw new Error("opening fixture missing");
+    }
+    openingRow.observed.regions = [];
+    openingRow.observed.anchors = [];
+    openingRow.observed.orderedTargetRefs = [];
+    openingRow.observed.distances = [];
+    const evidence = parseWorldReconstructionEvidenceSetV1(evidenceDraft);
+
+    expect(reconstructionCase.expected.openingComposition.targetRefs).toEqual([]);
+    expect(profile.thresholds.openingComposition.regions).toEqual([]);
+    expect(worldReconstructionEvidenceProfileClosureMatchesV1(
+      reconstructionCase,
+      profile,
+    )).toBe(true);
+    expect(evidence.observedDimensions.find(
+      ({ dimensionId }) => dimensionId === "opening-composition",
+    )?.observed).toMatchObject({
+      kind: "opening-composition-observed",
+      regions: [],
+      anchors: [],
+      orderedTargetRefs: [],
+      distances: [],
+    });
+  });
+
   it("parses, freezes, canonicalizes, and hashes a closed Case", () => {
     const parsed = parseWorldReconstructionCaseV1(caseValue());
     expect(Object.isFrozen(parsed)).toBe(true);
@@ -593,6 +688,12 @@ describe("world reconstruction contracts", () => {
       referenceInputs: [],
     });
     expect(parsed.referenceInputs).toEqual([]);
+  });
+
+  it("preserves a WebP reference without changing its bytes hash or media type", () => {
+    const input = caseValue();
+    input.referenceInputs[0] = { inputRef: "reference-0.webp", contentHash: H("b"), mediaType: "image/webp" };
+    expect(parseWorldReconstructionCaseV1(input).referenceInputs).toEqual(input.referenceInputs);
   });
 
   it("requires traversal expectations to bind matching Collider roles", () => {
@@ -1009,6 +1110,9 @@ describe("world reconstruction contracts", () => {
           worldPackageBuildReceiptHash: H("b"),
           worldBuildIdentityRef: "artifact://case/cloud-temple/attempts/0/world-build-identity.json",
           worldBuildIdentityHash: H("c"),
+          groundAnalysisReportRef:
+            "artifact://case/cloud-temple/attempts/0/ground-analysis-report.json",
+          groundAnalysisReportHash: H("a"),
           captureReceiptRef: "artifact://case/cloud-temple/attempts/0/capture-receipt.json",
           captureReceiptHash: H("c"),
           evaluationResultRef: "artifact://case/cloud-temple/attempts/0/evaluation.json",
@@ -1032,6 +1136,9 @@ describe("world reconstruction contracts", () => {
           worldPackageBuildReceiptHash: H("4"),
           worldBuildIdentityRef: "artifact://case/cloud-temple/attempts/1/world-build-identity.json",
           worldBuildIdentityHash: H("5"),
+          groundAnalysisReportRef:
+            "artifact://case/cloud-temple/attempts/1/ground-analysis-report.json",
+          groundAnalysisReportHash: H("4"),
           captureReceiptRef: "artifact://case/cloud-temple/attempts/1/capture-receipt.json",
           captureReceiptHash: H("5"),
           evaluationResultRef: "artifact://case/cloud-temple/attempts/1/evaluation.json",
@@ -1047,6 +1154,14 @@ describe("world reconstruction contracts", () => {
     const run = parseWorldReconstructionRunReceiptV1(runValue);
     expect(run.attempts).toHaveLength(2);
     expect(run.finalAttemptIndex).toBe(1);
+    const {
+      groundAnalysisReportRef: _groundAnalysisReportRef,
+      ...missingSuccessfulGroundReport
+    } = runValue.attempts[0];
+    expect(() => parseWorldReconstructionRunReceiptV1({
+      ...runValue,
+      attempts: [missingSuccessfulGroundReport, runValue.attempts[1]],
+    })).toThrowError("WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID");
     const {
       captureReceiptRef: _captureReceiptRef,
       captureReceiptHash: _captureReceiptHash,
@@ -1194,6 +1309,138 @@ describe("world reconstruction contracts", () => {
     })).toThrowError("WORLD_RECONSTRUCTION_RUN_RECEIPT_INVALID");
   });
 
+  it("keeps strict diagnostic failure independent and identity-bound", () => {
+    const failed = {
+      kind: "world-reconstruction-strict-diagnostic-receipt",
+      schemaVersion: 1,
+      id: "paper-moon-palace-054.run-20260904134439-41905.strict",
+      caseRef:
+        "artifact://world-reconstruction-case/paper-moon-palace-054/case.json",
+      caseHash: H("1"),
+      runReceiptRef:
+        "artifact://world-reconstruction-case/paper-moon-palace-054/runs/run-20260904134439-41905/run-receipt.json",
+      runReceiptHash: H("2"),
+      attemptIndex: 0,
+      worldPackageRef: `package://world-package/sha256/${"3".repeat(64)}`,
+      worldPackageRootHash: H("3"),
+      worldBuildIdentityHash: H("4"),
+      captureReceiptHash: H("5"),
+      evaluationResultHash: H("6"),
+      outcome: "failed",
+      diagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      cleanupOutcome: "not-started",
+    } as const;
+    const parsed = parseWorldReconstructionStrictDiagnosticReceiptV1(failed);
+    expect(parsed.outcome).toBe("failed");
+    expect(parsed.diagnosticCodes).toEqual([
+      "NBR70_BLOCKER_IDENTITY_MISMATCH",
+    ]);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(new TextDecoder().decode(
+      worldReconstructionStrictDiagnosticReceiptCanonicalBytesV1(failed),
+    )).toContain('"outcome":"failed"');
+
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      diagnosticCodes: [],
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      outcome: "passed",
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      outcome: "not-run",
+      diagnosticCodes: [],
+      cleanupOutcome: "completed",
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+    expect(() => parseWorldReconstructionStrictDiagnosticReceiptV1({
+      ...failed,
+      legacyPublicationGate: true,
+    })).toThrowError("WORLD_RECONSTRUCTION_STRICT_DIAGNOSTIC_RECEIPT_INVALID");
+  });
+
+  it("owns one closed production-result union for CLI and Studio", () => {
+    const artifactRoot =
+      "artifact://world-reconstruction-case/paper-moon-palace-054";
+    const published = {
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: "paper-moon-palace-054",
+      caseRef: `${artifactRoot}/case.json`,
+      runId: "run-20260904134439-41905",
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      evaluationOutcome: "failed",
+      strictDiagnosticOutcome: "failed",
+      strictDiagnosticCodes: ["NBR70_BLOCKER_IDENTITY_MISMATCH"],
+      strictDiagnosticCleanupOutcome: "not-started",
+      cleanupOutcome: "completed",
+      attemptCount: 1,
+      finalWorldPackagePath: "/tmp/paper-moon/final/world-package",
+      finalWorldPackageRef: `package://world-package/sha256/${"3".repeat(64)}`,
+      finalWorldPackageRootHash: H("3"),
+      finalCaptureReceiptPath: "/tmp/paper-moon/final/capture/receipt.json",
+      finalCaptureReceiptHash: H("4"),
+      finalEvaluationPath: "/tmp/paper-moon/final/evaluation.json",
+      finalEvaluationHash: H("5"),
+      finalStrictDiagnosticPath: "/tmp/paper-moon/final/strict-diagnostic.json",
+      finalStrictDiagnosticRef: `${artifactRoot}/final/strict-diagnostic.json`,
+      finalStrictDiagnosticHash: H("6"),
+      finalEntryValidationPath: "/tmp/paper-moon/final/entry-third-person-validation.json",
+      finalEntryValidationRef:
+        `${artifactRoot}/final/entry-third-person-validation.json`,
+      finalEntryValidationHash: H("7"),
+      runReceiptPath: "/tmp/paper-moon/runs/run-20260904134439-41905/run-receipt.json",
+      runReceiptRef:
+        `${artifactRoot}/runs/run-20260904134439-41905/run-receipt.json`,
+      runReceiptHash: H("8"),
+      finalDirectoryPath: "/tmp/paper-moon/final",
+    } as const;
+    expect(parseWorldReconstructionProductionResultV1(published)).toMatchObject({
+      productionOutcome: "passed",
+      publicationOutcome: "published",
+      strictDiagnosticOutcome: "failed",
+    });
+    expect(new TextDecoder().decode(
+      worldReconstructionProductionResultCanonicalBytesV1(published),
+    )).toContain('"productionOutcome":"passed"');
+    expect(() => parseWorldReconstructionProductionResultV1({
+      ...published,
+      publicationStatus: "accepted",
+    })).toThrowError("WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID");
+    expect(() => parseWorldReconstructionProductionResultV1({
+      ...published,
+      strictDiagnosticCodes: [],
+    })).toThrowError("WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID");
+
+    const failed = {
+      kind: "world-reconstruction-production-result",
+      schemaVersion: 1,
+      caseId: "paper-moon-palace-054",
+      caseRef: `${artifactRoot}/case.json`,
+      runId: "run-20260904134439-41905",
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+      runOutcome: "failed",
+      evaluationOutcome: "not-run",
+      strictDiagnosticOutcome: "not-run",
+      strictDiagnosticCodes: [],
+      strictDiagnosticCleanupOutcome: "not-started",
+      attemptCount: 1,
+      diagnosticCodes: ["WORLD_RECONSTRUCTION_GROUND_ANALYSIS_FAILED"],
+      cleanupOutcome: "completed",
+    } as const;
+    expect(parseWorldReconstructionProductionResultV1(failed)).toMatchObject({
+      productionOutcome: "failed",
+      publicationOutcome: "not-published",
+    });
+    expect(() => parseWorldReconstructionProductionResultV1({
+      ...failed,
+      productionOutcome: "passed",
+    })).toThrowError("WORLD_RECONSTRUCTION_PRODUCTION_RESULT_INVALID");
+  });
+
   it("omits repairAction from non-repairable diagnostics and their canonical bytes", () => {
     for (const code of [
       "WORLD_RECONSTRUCTION_EVIDENCE_STALE",
@@ -1278,7 +1525,7 @@ describe("world reconstruction contracts", () => {
       acceptanceTargetRef: "worldkit://acceptance-target/central-ascent@1",
       targetRef: "worldkit://acceptance-target/central-ascent@1",
       targetId: "central-ascent-group",
-      metricId: "semantic-center-x-basis-points",
+      metricId: "opening-semantic-center-x-basis-points",
       details: {
         kind: "basis-points-threshold",
         expectedBasisPoints: 300,
@@ -1298,7 +1545,7 @@ describe("world reconstruction contracts", () => {
       },
     } as const;
     expect(parseWorldReconstructionDiagnosticV1(semanticCenterDiagnostic).metricId).toBe(
-      "semantic-center-x-basis-points",
+      "opening-semantic-center-x-basis-points",
     );
     expect(() => parseWorldReconstructionDiagnosticV1({
       ...semanticCenterDiagnostic,

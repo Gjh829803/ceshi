@@ -46,10 +46,10 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
       semanticClassId: "fixture.structure",
       identityColor: "#AABBCC",
       projectedBoundsSource: "checked-layout-visual-group",
-      requiredWorldViewIds: [
-        "opening",
-        "world-side",
-        "world-top-down",
+      viewRequirements: [
+        { viewId: "opening", mode: "reference-projection-required" },
+        { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" },
       ],
       authoringManifestHash: hash("b"),
       layoutInventoryHash: hash("c"),
@@ -63,10 +63,10 @@ export function formalCaptureRequestFixtureV1(): FormalWorldCaptureRequestV1 {
       semanticClassId: "fixture.structure.upper",
       identityColor: "#DDEEFF",
       projectedBoundsSource: "checked-layout-visual-group",
-      requiredWorldViewIds: [
-        "opening",
-        "world-side",
-        "world-top-down",
+      viewRequirements: [
+        { viewId: "opening", mode: "not-required" },
+        { viewId: "world-side", mode: "presence-required" },
+        { viewId: "world-top-down", mode: "presence-required" },
       ],
       authoringManifestHash: hash("b"),
       layoutInventoryHash: hash("c"),
@@ -194,6 +194,7 @@ export function formalHostedPayloadFixtureV1(input: Readonly<{
     worldTopDownPng: png(),
     colliderOverlayPng: png(),
     openingObservation: { ...identity },
+    semanticViewObservationSet: { ...identity },
     spawnSupportObservation: { ...identity },
     colliderOverlayObservation: { ...identity },
     scriptedTraversal: { ...identity },
