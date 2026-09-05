@@ -172,16 +172,22 @@ export function createCloudClient(overrides = {}) {
   async function generateImages(args) {
     const conf = await settings(); const logicalTaskId = id(args.batchId); const outputRoot = path.resolve(args.outputRoot);
     const pool = conf.imageAccountIds;
+    const retryAttempt = conf.imageRetryAttempts?.[logicalTaskId] ?? 0;
+    if (!Number.isInteger(retryAttempt) || retryAttempt < 0 || retryAttempt > 2) throw new Error('EPISODE_IMAGE_RETRY_ATTEMPT_INVALID');
     if (pool !== undefined && (!Array.isArray(pool) || !pool.length || pool.length > 100 || new Set(pool).size !== pool.length || pool.some(value => !/^[a-zA-Z0-9_-]{1,128}$/.test(value)))) throw new Error('EPISODE_IMAGE_ACCOUNT_POOL_INVALID');
-    const routingPrefix = `${logicalTaskId.slice(0, 86)}-${digest(logicalTaskId).slice(0, 8)}-pool-`;
-    const taskId = pool ? id(`${routingPrefix}${digest(JSON.stringify(pool)).slice(0, 12)}`) : logicalTaskId;
+    const routingPrefix = `${logicalTaskId.slice(0, 84)}-${digest(logicalTaskId).slice(0, 8)}-pool-`;
+    const baseTaskId = pool ? `${routingPrefix}${digest(JSON.stringify(pool)).slice(0, 12)}` : logicalTaskId;
+    const taskId = id(`${baseTaskId}${retryAttempt ? `-retry-${retryAttempt}` : ''}`);
     const accountIds = pool ? [pool[parseInt(digest(logicalTaskId).slice(0, 8), 16) % pool.length]] : undefined;
-    if (pool) {
+    if (pool || retryAttempt) {
       const entries = await readdir(path.join(outputRoot, '.cloud')).catch(error => { if (error.code === 'ENOENT') return []; throw error; });
-      for (const entry of entries.filter(name => name !== taskId && (name === logicalTaskId || name.startsWith(routingPrefix)))) {
+      let hasFailedPredecessor = false;
+      for (const entry of entries.filter(name => name !== taskId && (name === logicalTaskId || name.startsWith(routingPrefix) || name.startsWith(`${logicalTaskId}-retry-`)))) {
         const previous = await optionalJson(path.join(outputRoot, '.cloud', entry, 'state.json'));
         if (previous && (!previous.isTerminal || !['failed', 'completed', 'submit_failed'].includes(previous.status))) throw new Error('EPISODE_IMAGE_ROUTING_REQUIRES_TERMINAL_FAILED_ATTEMPT');
+        if (previous) hasFailedPredecessor = true;
       }
+      if (retryAttempt && !hasFailedPredecessor) throw new Error('EPISODE_IMAGE_RETRY_REQUIRES_TERMINAL_FAILED_PREDECESSOR');
     }
     if (!args.items?.length || args.items.length > 1000) throw new Error('EPISODE_IMAGE_BATCH_INVALID');
     const items = [];
@@ -194,7 +200,7 @@ export function createCloudClient(overrides = {}) {
     // Deployed T2I reads these supported non-secret variables; it ignores options.model/codex_bin.
     const runtime_env = { env_vars: { LWDP_CODEX_BIN: conf.codexBinary, LWDP_CODEX_EXEC_ARGS: execArgs.map(value => `'${value.replaceAll("'", "'\\''")}'`).join(' ') } };
     if (!path.isAbsolute(conf.codexBinary ?? '')) throw new Error('EPISODE_IMAGE_CODEX_BINARY_REQUIRED');
-    const identity = digest(JSON.stringify({ items, runtime_env, ...(accountIds ? { accountIds } : {}) })).slice(0, 24);
+    const identity = digest(JSON.stringify({ items, runtime_env, ...(accountIds ? { accountIds } : {}), ...(retryAttempt ? { retryAttempt } : {}) })).slice(0, 24);
     const payload = { pipeline: 't2i', job_name: `Three Episode Images ${taskId}`, request_id: `three-images-${taskId.slice(0, 70)}-${identity}`, output_s3_prefix: s3(conf.outputS3Root, taskId, identity), generate_video: false, items, runtime_env, options: { codex_image_tool: 'system_image_gen', codex_timeout_seconds: conf.imageTimeoutSeconds ?? 1200, max_reference_images_per_item: Math.max(4, ...items.map(item => item.reference_images.length)), account_concurrency: 5, pod_concurrency: 8, max_pods: 5, ...(accountIds ? { codex_account_ids: accountIds } : {}) } };
     return executeJob({ pipeline: 't2i', taskId, payload, outputRoot, downloads: [...args.items.map(item => ({ path: item.outputPath, required: true, s3Uri: s3(payload.output_s3_prefix, 'images', `${item.id}.png`) })), { path: path.join(outputRoot, '.cloud', taskId, 't2i-delivery-report.json'), required: true, s3Uri: s3(payload.output_s3_prefix, 'reports/t2i_delivery_report.json') }] });
   }

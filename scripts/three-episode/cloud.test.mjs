@@ -167,3 +167,14 @@ test('distinct same-basename assets cannot overwrite each other in the cloud inp
  assert.equal(new Set(uploaded.map(a=>a.s3_uri)).size,2);assert.equal(new Set(uploaded.map(a=>a.name)).size,2);
  assert.deepEqual(uploaded.map(a=>a.name),['view-0.png','view-1.png']);
 });
+
+test('an explicit single-image retry preserves the failed journal and cannot repeat a live request',async t=>{
+ const behavior={failed:true,runtime:{imageAccountIds:['existing-account']}};const f=await fixture(t,behavior);
+ const args={batchId:'failed-image',outputRoot:f.root,items:[{id:'one-image',prompt:'same immutable image content',outputPath:path.join(f.root,'image.png'),images:[]}]};
+ await assert.rejects(f.client.generateImages(args),/TERMINAL_FAILED/);const first=f.payload().request_id;
+ behavior.failed=false;f.runtime.imageRetryAttempts={'failed-image':1};await f.client.generateImages(args);const second=f.payload().request_id;
+ assert.notEqual(first,second);await f.client.generateImages(args);assert.equal(f.calls.filter(c=>c.method==='POST').length,2);
+ const states=await(await import('node:fs/promises')).readdir(path.join(f.root,'.cloud'));assert(states.some(s=>s.endsWith('-retry-1')));assert.equal(states.length,2);
+ const g=await fixture(t,{pollError:new Error('still running'),runtime:{imageAccountIds:['existing-account']}});const pending={...args,outputRoot:g.root,items:[{...args.items[0],outputPath:path.join(g.root,'image.png')}]};
+ await assert.rejects(g.client.generateImages(pending),/REMOTE_PENDING/);g.runtime.imageRetryAttempts={'failed-image':1};await assert.rejects(g.client.generateImages(pending),/REQUIRES_TERMINAL_FAILED/);assert.equal(g.calls.filter(c=>c.method==='POST').length,1);
+});
