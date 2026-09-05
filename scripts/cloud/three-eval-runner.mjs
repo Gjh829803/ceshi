@@ -218,7 +218,10 @@ async function execute(plan) {
     const result = await optionalJson(path.join(plan.caseRoot, "creator-result.json"));
     state.launcherStatus = launcher?.status;
     state.actualWallSeconds = result?.actualWallSeconds;
+    state.inputWallSeconds = result?.inputWallSeconds;
     state.activePlaySeconds = result?.activePlaySeconds;
+    state.videoMetadata = result?.videoMetadata;
+    state.captureTiming = result?.captureTiming;
     state.targetResults = result?.targetResults;
     state.worldBuildHash = result?.worldBuildHash;
     state.episodeHash = result?.episodeHash;

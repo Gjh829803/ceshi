@@ -3,7 +3,9 @@
 import argparse
 import hashlib
 import json
+import math
 import os
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 import tarfile
@@ -15,6 +17,10 @@ def digest(file):
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             h.update(chunk)
     return h.hexdigest()
+
+
+def finite_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def main():
@@ -83,6 +89,30 @@ def main():
     assert played['actualWallSeconds'] == manifest['actualWallSeconds']
     assert isinstance(played['activePlaySeconds'], (int, float)) and 180 <= played['activePlaySeconds'] < 3600
     assert played['activePlaySeconds'] == manifest['activePlaySeconds']
+    assert finite_number(played['inputWallSeconds']) and 180 <= played['inputWallSeconds'] < 3600
+    assert played['inputWallSeconds'] == manifest['inputWallSeconds']
+    capture = played['captureTiming']
+    video = played['videoMetadata']
+    assert capture == manifest['captureTiming'] and video == manifest['videoMetadata']
+    assert capture['clock'] == 'browser-performance'
+    assert all(finite_number(capture[k]) and capture[k] >= 0 for k in ['initialFrameRequestedAtMilliseconds', 'finalFrameRequestedAtMilliseconds', 'recorderStoppedAtMilliseconds', 'framePeriodSeconds', 'postrollSeconds'])
+    assert 0 < capture['framePeriodSeconds'] <= 1
+    assert capture['recorderStoppedAtMilliseconds'] >= capture['finalFrameRequestedAtMilliseconds']
+    assert isinstance(capture['requestedFrames'], int) and capture['requestedFrames'] >= 2
+    timing = json.loads((payload / 'playtest/trace.json').read_text())['timing']
+    assert timing['clock'] == 'browser-performance'
+    assert all(finite_number(timing[k]) for k in ['startedAtMilliseconds', 'endedAtMilliseconds', 'durationSeconds'])
+    assert abs(timing['durationSeconds'] - (timing['endedAtMilliseconds'] - timing['startedAtMilliseconds']) / 1000) <= .001
+    assert timing['durationSeconds'] == played['inputWallSeconds']
+    assert capture['initialFrameRequestedAtMilliseconds'] <= timing['startedAtMilliseconds'] <= timing['endedAtMilliseconds'] <= capture['finalFrameRequestedAtMilliseconds']
+    assert finite_number(video['durationSeconds']) and video['durationSeconds'] >= 180
+    assert video['durationSeconds'] >= played['inputWallSeconds'] - max(1, 2 * capture['framePeriodSeconds'])
+    # Probe encoded bytes independently; VFR rate is not forced to the requested
+    # canvas sampling rate, and recovery/postroll wall time is not input time.
+    probe = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=width,height,nb_read_frames:format=duration', '-of', 'json', str(payload / 'playtest/playtest.mp4')], timeout=60))
+    stream = probe['streams'][0]
+    actual_video = {'durationSeconds': float(probe['format']['duration']), 'frameCount': int(stream['nb_read_frames']), 'widthPixels': int(stream['width']), 'heightPixels': int(stream['height'])}
+    assert actual_video == video and actual_video['durationSeconds'] >= 180
     assert played['pageErrors'] == [] and played['runtimeErrors'] == [] and played['blockedNetworkRequests'] == []
     assert played['targetResults'] == manifest['targetResults']
     assert captures['profile'] == manifest['profile'] and captures['worldBuildHash'] == manifest['worldBuildHash']
@@ -95,7 +125,8 @@ def main():
               'profile': manifest['profile'], 'engine': manifest['engine'], 'sourceHash': manifest['sourceHash'],
               'toolVersion': manifest.get('toolVersion'), 'sdkVersion': manifest.get('sdkVersion'),
               'browserObservationContract': manifest.get('browserObservationContract'),
-              'actualWallSeconds': played['actualWallSeconds'], 'activePlaySeconds': played['activePlaySeconds'],
+              'actualWallSeconds': played['actualWallSeconds'], 'inputWallSeconds': played['inputWallSeconds'], 'activePlaySeconds': played['activePlaySeconds'],
+              'actualVideoMetadata': actual_video, 'captureTiming': capture,
               'worldBuildHash': manifest['worldBuildHash'], 'creatorRuntimeLockHash': manifest['creatorRuntimeLockHash'],
               'archiveSha256': receipt['archiveSha256'], 'fileCount': len(actual), 'uncompressedBytes': total,
               'payloadPath': str(payload), 'semanticStatus': 'unreviewed', 'browserReplay': 'not-run',

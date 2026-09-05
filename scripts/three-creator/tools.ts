@@ -19,6 +19,30 @@ const json = async (file: string, value: unknown) => { await mkdir(path.dirname(
 export type Operation = { id: string; type: string; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'; createdAt: string; updatedAt: string; result?: any; error?: string; progress?: unknown };
 type Session = { candidate: Candidate; browser: Browser; context: BrowserContext; page: Page; server: Server; errors: string[]; networkErrors: string[]; close: () => Promise<void> };
 type Evidence = { root: string; files: Record<string, string>; report: any };
+export async function withStageDeadline<T>(work: () => Promise<T>, milliseconds: number, errorCode: string, onTimeout: () => Promise<void>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([Promise.resolve().then(work), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => { reject(new Error(errorCode)); void onTimeout().catch(() => {}); }, milliseconds);
+    })]);
+  } finally { if (timer !== undefined) clearTimeout(timer); }
+}
+export function resolvePlaytestBudget(plannedSeconds: number, durationSeconds: number | undefined, stepCount: number) {
+  const requestedSeconds = durationSeconds ?? plannedSeconds;
+  if (!Number.isFinite(plannedSeconds) || plannedSeconds <= 0 || !Number.isFinite(requestedSeconds) || requestedSeconds <= 0 || requestedSeconds > 600 || !Number.isInteger(stepCount) || stepCount < 1) throw new Error('THREE_PLAYTEST_DURATION_INVALID');
+  const mode = durationSeconds !== undefined && durationSeconds < plannedSeconds - 1e-7 ? 'debug' : 'full-episode';
+  const overheadAllowanceSeconds = Math.min(120, Math.max(15, requestedSeconds * .2, stepCount * .04));
+  return { mode, requestedSeconds, executionBudgetSeconds: requestedSeconds + overheadAllowanceSeconds, overheadAllowanceSeconds };
+}
+export function validateCaptureTiming(inputTiming: any, captureTiming: any, videoDurationSeconds: number): void {
+  const values = [inputTiming?.startedAtMilliseconds, inputTiming?.endedAtMilliseconds, inputTiming?.durationSeconds, captureTiming?.initialFrameRequestedAtMilliseconds, captureTiming?.finalFrameRequestedAtMilliseconds, captureTiming?.framePeriodSeconds, videoDurationSeconds];
+  if (inputTiming?.clock !== 'browser-performance' || captureTiming?.clock !== 'browser-performance' || !values.every(Number.isFinite) || inputTiming.durationSeconds <= 0 || captureTiming.framePeriodSeconds <= 0 || videoDurationSeconds <= 0 || inputTiming.endedAtMilliseconds < inputTiming.startedAtMilliseconds || captureTiming.initialFrameRequestedAtMilliseconds > inputTiming.startedAtMilliseconds || captureTiming.finalFrameRequestedAtMilliseconds < inputTiming.endedAtMilliseconds) throw new Error('THREE_VIDEO_BOUNDARY_INVALID');
+  if (Math.abs(inputTiming.durationSeconds - (inputTiming.endedAtMilliseconds-inputTiming.startedAtMilliseconds)/1000) > .001) throw new Error('THREE_INPUT_CLOCK_INVALID');
+  if (videoDurationSeconds < inputTiming.durationSeconds - Math.max(1, 2*captureTiming.framePeriodSeconds)) throw new Error('THREE_VIDEO_DURATION_MISMATCH: real recording ended before the browser input episode');
+}
+export function hasMinimumRecordedPlay(report: { actualWallSeconds?: number; inputWallSeconds?: number; activePlaySeconds?: number; videoMetadata?: { durationSeconds?: number } | null }): boolean {
+  return [report.actualWallSeconds, report.inputWallSeconds, report.activePlaySeconds, report.videoMetadata?.durationSeconds].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 180);
+}
 export function assertSdkPlaytestRunning(profile: CreatorProfile, state: { isRunning?: boolean | null; simulationTick?: number | null; errors?: unknown[] }): void {
   if (profile === 'three-sdk' && state.isRunning === false) throw new Error(`THREE_PLAYTEST_RUNTIME_STOPPED: ${JSON.stringify({ simulationTick: state.simulationTick ?? null, errors: state.errors ?? [] })}`);
 }
@@ -66,7 +90,7 @@ export class ThreeCreatorTools {
       observation: 'Expose window.__WORLDKIT_EVAL__: {ready,scene,camera,renderer,player,targets,startLive,stopLive,reset,snapshot?,inspect?}. SDK await world.start() installs this automatically after preparation; setCaptureTargets selects whole objects. Raw Three provides this small observer itself. targets map IDs to complete THREE.Object3D groups.',
       feedback: 'world_validate compiles only; world_preview and world_inspect start an actual browser. world_playtest sends real Playwright keydown/keyup and pointer drags; captures actual wall time, player transforms, DOM keyboard events, optional SDK ticks/physics/actions and video. Raw worlds without snapshot report those fields as null.',
       delivery: 'Versioned three-creator-delivery, experimental. Requires current source and current episode, a completed real 180s+ episode with captured keydown and keyup and no browser/SDK errors, and real player/target front-right-back captures. Route success is a measurement, not semantic or visual acceptance.',
-      operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Debug with a short playtest before the full episode.',
+      operations: 'Long operations are serialized. Poll their Creator operationId with operations_get. world_execute_command returns a World command receipt inside result; accepted contains a separate World operationId for world_get_operation. Never invent evidence or replace an unknown operation. Omit durationSeconds for the full episode; only a value below planned duration selects truncated debug. Full episodes have a bounded overhead allowance. Debug with a short playtest before the full episode.',
       limitations: ['Browser network is same-origin only; dependencies are fixed Three/addons and the selected SDK.', 'No Node APIs or execution of author build/config scripts.', 'The Host does not independently guarantee visual fidelity or task semantics; final reference/task review remains separate.'],
     };
   }
@@ -210,13 +234,16 @@ export class ThreeCreatorTools {
   }
   async playtest(operationId: string, durationSeconds?: number, framesPerSecond = 3) {
     const candidate = await this.compiler.prepare(), input = await this.episode(), plannedSeconds = input.episode.steps.reduce((sum, step) => sum + step.durationSeconds, 0);
-    const requestedSeconds = durationSeconds ?? plannedSeconds;
-    const limitSeconds = durationSeconds === undefined ? Infinity : requestedSeconds;
+    const budget = resolvePlaytestBudget(plannedSeconds, durationSeconds, input.episode.steps.length);
+    const requestedSeconds = budget.requestedSeconds;
+    const limitSeconds = budget.mode === 'full-episode' ? Infinity : requestedSeconds;
     if (!Number.isFinite(requestedSeconds) || requestedSeconds <= 0 || requestedSeconds > 600 || ![1, 2, 3, 6].includes(framesPerSecond)) throw new Error('THREE_PLAYTEST_DURATION_INVALID');
     const root = path.join(this.evidenceRoot, candidate.worldBuildHash, `playtest-${operationId}`); await mkdir(root, { recursive: true });
     const session = await this.open(candidate);
-    const hostEvents: any[] = [], keyframes: any[] = [], held = new Set<string>(), worldOperations = new Map<string, any>(); let trace: any; let failure: string | null = null; let completedSteps = 0; let expectedRunning = true; let activePlaySeconds = 0;
-    await this.bridge(session, 'reset'); await this.bridge(session, 'beginRecording', [framesPerSecond]); await this.bridge(session, 'start'); await this.bridge(session, 'beginTrace'); const started = performance.now();
+    const hostEvents: any[] = [], keyframes: any[] = [], held = new Set<string>(), worldOperations = new Map<string, any>(); let trace: any; let recorded: any; let finalizationTimedOut = false; let failure: string | null = null; let completedSteps = 0; let expectedRunning = true; let activePlaySeconds = 0;
+    await this.bridge(session, 'reset'); await withStageDeadline(() => this.bridge(session, 'beginRecording', [framesPerSecond]), 15_000, 'THREE_RECORDING_START_TIMEOUT', () => this.closeSession()); await this.bridge(session, 'start'); await this.bridge(session, 'beginTrace'); const started = performance.now();
+    let budgetExceeded = false;
+    const budgetTimer = setTimeout(() => { budgetExceeded = true; if (this.session === session) void this.closeSession(); }, budget.executionBudgetSeconds * 1000);
     let accountedAt = performance.now();
     const accountPlay = () => { const now = performance.now(); if (expectedRunning) activePlaySeconds += (now-accountedAt)/1000; accountedAt=now; };
     const elapsed = () => (performance.now() - started) / 1000; let nextKeyframe = 0;
@@ -270,38 +297,42 @@ export class ThreeCreatorTools {
       }
       while (elapsed() < requestedSeconds) { this.assertActive(operationId); if (expectedRunning) assertSdkPlaytestRunning(this.profile, await this.bridge(session, 'read')); await observeWorldOperations(); await sleep(Math.min(200, (requestedSeconds - elapsed()) * 1000)); }
       await observeWorldOperations();
-    } catch (error) { failure = errorMessage(error); }
+    } catch (error) { failure = budgetExceeded ? 'THREE_EPISODE_BUDGET_EXCEEDED' : errorMessage(error); }
     finally {
-      accountPlay();
+      clearTimeout(budgetTimer);
       for (const key of [...held]) await send('keyup', key, true).catch(error => { failure ??= errorMessage(error); });
-      trace = await this.bridge(session, 'endTrace').catch(error => { failure ??= errorMessage(error); return { samples: [], keyboardEvents: [], browserFrameDeltasSeconds: [] }; });
-      await this.bridge(session, 'stop').catch(() => {});
+      accountPlay();
+      const finished = await withStageDeadline(() => this.bridge(session, 'finishRun'), 15_000, 'THREE_RECORDING_FINALIZATION_TIMEOUT', async () => { finalizationTimedOut = true; await this.closeSession(); }).catch(error => { failure ??= errorMessage(error); return { trace: { samples: [], keyboardEvents: [], browserFrameDeltasSeconds: [] }, recording: null }; });
+      trace = finished.trace; recorded = finished.recording;
+      if (!recorded && !finalizationTimedOut) await this.closeSession();
     }
-    const actualWallSeconds = elapsed(), lastObservation = await this.bridge(session, 'inspect').catch(() => null);
+    const actualWallSeconds = elapsed(), inputWallSeconds = trace.timing?.durationSeconds ?? null, captureTiming = recorded?.timing ?? null, lastObservation = finalizationTimedOut || !recorded ? null : await this.bridge(session, 'inspect').catch(() => null);
     let videoFile: string | null = null; let videoFailure: string | null = null;
     let videoMetadata: Awaited<ReturnType<typeof probeVideo>> | null = null;
     try {
-      const recorded = await this.bridge(session, 'endRecording'); const raw = path.join(root, 'playtest.webm');
-      await writeFile(raw, Buffer.from(recorded.replace(/^data:video\/webm;base64,/, ''), 'base64'));
-      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', raw, '-vf', `fps=${framesPerSecond}`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', videoFile]);
+      if (!recorded?.data) throw new Error('THREE_VIDEO_MISSING');
+      const raw = path.join(root, 'playtest.webm');
+      await writeFile(raw, Buffer.from(recorded.data.replace(/^data:video\/webm;base64,/, ''), 'base64'));
+      videoFile = path.join(root, 'playtest.mp4'); await command('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', raw, '-vsync', '0', '-c:v', 'libx264', '-enc_time_base', '1:1000', '-bf', '0', '-preset', 'veryfast', '-crf', '25', '-pix_fmt', 'yuv420p', videoFile]);
       videoMetadata = await probeVideo(videoFile);
-      if (videoMetadata.durationSeconds < actualWallSeconds - Math.max(1, 2 / framesPerSecond)) throw new Error('THREE_VIDEO_DURATION_MISMATCH: real recording ended before the input episode');
+      validateCaptureTiming(trace.timing, captureTiming, videoMetadata.durationSeconds);
     } catch (error) { videoFile = null; videoFailure = errorMessage(error); failure ??= videoFailure; }
     const samples = trace.samples as any[], errors = samples.flatMap(sample => sample.errors ?? []); const validSamples = samples.filter(sample => Array.isArray(sample.positionMetersXYZ) && sample.positionMetersXYZ.length === 3 && sample.positionMetersXYZ.every((value: unknown) => typeof value === 'number' && Number.isFinite(value)));
     if (samples.length !== validSamples.length) failure ??= 'THREE_PLAYTEST_OBSERVATION_INVALID: missing or nonfinite actual player position';
     let travelledMeters = 0; for (let i = 1; i < validSamples.length; i++) { const a = validSamples[i - 1]!.positionMetersXYZ, b = validSamples[i]!.positionMetersXYZ; travelledMeters += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]); }
     const targetResults = input.episode.targets.map(target => { const nearestDistanceMeters = Math.min(...validSamples.map(sample => Math.hypot(...target.positionMetersXYZ.map((value, index) => value - sample.positionMetersXYZ[index])))); return { ...target, nearestDistanceMeters: Number.isFinite(nearestDistanceMeters) ? nearestDistanceMeters : null, reached: nearestDistanceMeters <= target.toleranceMeters }; });
     const capturedInput = trace.keyboardEvents.some((event: any) => event.type === 'keydown' && event.isTrusted) && trace.keyboardEvents.some((event: any) => event.type === 'keyup' && event.isTrusted);
-    const isCompleteEpisode = completedSteps === input.episode.steps.length && requestedSeconds >= plannedSeconds;
+    const isCompleteEpisode = completedSteps === input.episode.steps.length && budget.mode === 'full-episode';
+    if (budget.mode === 'full-episode' && !isCompleteEpisode) failure ??= 'THREE_EPISODE_INCOMPLETE';
     if (session.networkErrors.length) failure ??= 'THREE_BLOCKED_NETWORK_REQUESTS: bundle local assets/dependencies for this same-origin world';
-    const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && actualWallSeconds >= requestedSeconds - 0.05;
-    const report = { kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, actualWallSeconds, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
+    const passed = !failure && session.errors.length === 0 && errors.length === 0 && capturedInput && validSamples.length > 0 && videoFile !== null && typeof inputWallSeconds === 'number' && inputWallSeconds >= requestedSeconds - 0.05;
+    const report = { kind: 'three-creator-browser-playtest', schemaVersion: 1, status: passed ? 'passed' : 'failed', profile: this.profile, sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: input.hash, requestedSeconds, plannedSeconds, executionMode: budget.mode, executionBudgetSeconds: budget.executionBudgetSeconds, actualWallSeconds, inputWallSeconds, captureTiming, activePlaySeconds, completedSteps, isCompleteEpisode, capturedInput, travelledMeters, targetResults, semanticStatus: 'unreviewed', failure, pageErrors: session.errors, runtimeErrors: errors, blockedNetworkRequests: session.networkErrors, videoPath: videoFile, videoMetadata, videoFailure, keyframes, hostKeyboardEvents: hostEvents.filter(event => event.type === 'keydown' || event.type === 'keyup'), hostActionEvents: hostEvents, worldOperations: [...worldOperations.values()], browserKeyboardEvents: trace.keyboardEvents, lastObservation, frameTiming: { frameCount: trace.browserFrameDeltasSeconds.length, maximumFrameDeltaSeconds: Math.max(0, ...trace.browserFrameDeltasSeconds) } };
     await json(path.join(root, 'trace.json'), trace); await json(path.join(root, 'playtest.json'), report); await writeFile(path.join(root, 'episode.json'), input.bytes);
     this.playtestEvidence = { root, files: await hashTree(root), report }; return report;
   }
   async submit() {
     const candidate = await this.compiler.prepare(), episode = await this.episode(), played = this.playtestEvidence;
-    if (!played || played.report.status !== 'passed' || played.report.actualWallSeconds < 180 || played.report.activePlaySeconds < 180 || !played.report.isCompleteEpisode || !played.report.capturedInput || played.report.worldBuildHash !== candidate.worldBuildHash || played.report.episodeHash !== episode.hash) throw new Error('THREE_SUBMIT_PLAYTEST_REQUIRED: complete a current-source, current-episode real 180s+ keyboard/video playtest in this same service session');
+    if (!played || played.report.status !== 'passed' || !hasMinimumRecordedPlay(played.report) || !played.report.isCompleteEpisode || !played.report.capturedInput || played.report.worldBuildHash !== candidate.worldBuildHash || played.report.episodeHash !== episode.hash) throw new Error('THREE_SUBMIT_PLAYTEST_REQUIRED: complete a current-source, current-episode real 180s+ keyboard/video playtest in this same service session');
     await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files);
     if (this.captureEvidence?.report.worldBuildHash !== candidate.worldBuildHash) await this.triviews();
     const captures = this.captureEvidence!; await verifyFiles(captures.root, captures.files);
@@ -310,7 +341,7 @@ export class ThreeCreatorTools {
     await copyClosed(candidate.sourceRoot, path.join(payload, 'source')); await copyClosed(candidate.playableRoot, path.join(payload, 'playable')); await copyClosed(played.root, path.join(payload, 'playtest')); await copyClosed(captures.root, path.join(payload, 'captures')); await writeFile(path.join(payload, 'episode.json'), episode.bytes);
     for (const prefix of ['source', 'playable']) await verifyFiles(path.join(payload, prefix), Object.fromEntries(Object.entries(candidate.files).filter(([name]) => name.startsWith(`${prefix}/`)).map(([name, hash]) => [name.slice(prefix.length + 1), hash])));
     await verifyFiles(path.join(payload, 'playtest'), played.files); await verifyFiles(path.join(payload, 'captures'), captures.files);
-    const manifest = { kind: 'three-creator-delivery', schemaVersion: 1, toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready-for-independent-review', technicalStatus: 'passed', semanticStatus: 'unreviewed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: episode.hash, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', actualWallSeconds: played.report.actualWallSeconds, activePlaySeconds: played.report.activePlaySeconds, targetResults: played.report.targetResults, deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
+    const manifest = { kind: 'three-creator-delivery', schemaVersion: 1, toolVersion: THREE_CREATOR_VERSION, engine: 'three@0.185.1', creatorRuntimeLockHash: process.env.WORLDKIT_CREATOR_RUNTIME_HASH ?? null, profile: this.profile, status: 'ready-for-independent-review', technicalStatus: 'passed', semanticStatus: 'unreviewed', sourceHash: candidate.sourceHash, worldBuildHash: candidate.worldBuildHash, runtimeHash: candidate.runtimeHash, episodeHash: episode.hash, sdkVersion: this.profile === 'three-sdk' ? THREE_CREATOR_VERSION : null, browserObservationContract: this.profile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1', actualWallSeconds: played.report.actualWallSeconds, inputWallSeconds: played.report.inputWallSeconds, videoMetadata: played.report.videoMetadata, captureTiming: played.report.captureTiming, activePlaySeconds: played.report.activePlaySeconds, targetResults: played.report.targetResults, deliveredAt: new Date().toISOString(), files: await hashTree(payload) };
     await json(path.join(payload, 'delivery.json'), manifest); const hashes = await hashTree(payload); await json(path.join(payload, 'artifact-hashes.json'), { schemaVersion: 1, files: hashes });
     const temporary = path.join(root, 'creator-delivery.tar.gz'); await createClosedArchive(root, temporary);
     await verifyFiles(candidate.root, candidate.files); await verifyFiles(played.root, played.files); await verifyFiles(captures.root, captures.files);

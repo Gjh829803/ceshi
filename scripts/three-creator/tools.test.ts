@@ -8,7 +8,7 @@ import ts from 'typescript';
 import { WORLD_COMMAND_SCHEMA } from './command-schema.js';
 import { publicContractTopic } from './authoring-schema.js';
 import { EPISODE_SCHEMA, sha256 } from './contracts.js';
-import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion } from './tools.js';
+import { ThreeCreatorTools, createClosedArchive, assertSdkPlaytestRunning, assertSdkObservationVersion, resolvePlaytestBudget, validateCaptureTiming, hasMinimumRecordedPlay, withStageDeadline } from './tools.js';
 import { execFile as execFileCallback } from 'node:child_process';
 import { promisify } from 'node:util';
 import { executeThreeCreatorTool } from './mcp.js';
@@ -192,4 +192,43 @@ describe('v2 command and discovery boundary', () => {
     const output=publicContractTopic(`export type Vec3=readonly [number,number,number]; export interface Shape { value:Vec3 } export interface World { scene:Shape; registerMovement():void; start():Promise<void> } export interface PrivateUnused { secret:string }`, 'getting-started');
     expect(output).toContain('interface Shape'); expect(output).toContain('type Vec3'); expect(output).not.toContain('PrivateUnused'); expect(output).not.toContain('registerMovement');
   });
+});
+
+
+describe('real episode and video timing boundaries', () => {
+ it('reserves bounded overhead for complete episodes instead of cutting off their final steps', () => {
+  const full=resolvePlaytestBudget(180,180,91); expect(full.mode).toBe('full-episode'); expect(full.executionBudgetSeconds).toBeGreaterThan(180); expect(full.executionBudgetSeconds).toBeLessThanOrEqual(300);
+  expect(resolvePlaytestBudget(180,undefined,91).mode).toBe('full-episode');
+  expect(resolvePlaytestBudget(180,6,91).mode).toBe('debug');
+  expect(resolvePlaytestBudget(6.00000000000001,6,121).mode).toBe('full-episode');
+  expect(()=>resolvePlaytestBudget(180,NaN,91)).toThrow('THREE_PLAYTEST_DURATION_INVALID');
+ });
+ it('checks the browser input clock and actual capture boundaries, independent of report transfer time', () => {
+  const input={clock:'browser-performance',startedAtMilliseconds:1000,endedAtMilliseconds:181000,durationSeconds:180};
+  const capture={clock:'browser-performance',initialFrameRequestedAtMilliseconds:900,finalFrameRequestedAtMilliseconds:181100,framePeriodSeconds:1};
+  expect(()=>validateCaptureTiming(input,capture,180.1)).not.toThrow();
+  expect(()=>validateCaptureTiming(input,{...capture,finalFrameRequestedAtMilliseconds:180999},180.1)).toThrow('THREE_VIDEO_BOUNDARY_INVALID');
+  expect(()=>validateCaptureTiming({...input,durationSeconds:185},capture,180.1)).toThrow('THREE_INPUT_CLOCK_INVALID');
+  expect(()=>validateCaptureTiming(input,capture,177)).toThrow('THREE_VIDEO_DURATION_MISMATCH');
+ });
+ it('never accepts 179 seconds of real video or paused-only time for a full submission', () => {
+  const report={actualWallSeconds:183,inputWallSeconds:181,activePlaySeconds:180.2,videoMetadata:{durationSeconds:180}};
+  expect(hasMinimumRecordedPlay(report)).toBe(true);
+  expect(hasMinimumRecordedPlay({...report,videoMetadata:{durationSeconds:179}})).toBe(false);
+  expect(hasMinimumRecordedPlay({...report,activePlaySeconds:179})).toBe(false);
+  expect(hasMinimumRecordedPlay({...report,inputWallSeconds:NaN})).toBe(false);
+ });
+});
+
+
+describe('recording callback deadlines', () => {
+ it('fails a stalled native callback and closes its session instead of hanging after the input timer', async () => {
+  const close=vi.fn(async()=>{});
+  await expect(withStageDeadline(()=>new Promise<void>(()=>{}),5,'THREE_RECORDING_FINALIZATION_TIMEOUT',close)).rejects.toThrow('THREE_RECORDING_FINALIZATION_TIMEOUT');
+  expect(close).toHaveBeenCalledTimes(1);
+ });
+ it('clears its timeout after successful recording setup/finalization', async () => {
+  const close=vi.fn(async()=>{}); expect(await withStageDeadline(async()=>42,5,'timeout',close)).toBe(42);
+  await new Promise(resolve=>setTimeout(resolve,10));expect(close).not.toHaveBeenCalled();
+ });
 });

@@ -66,7 +66,10 @@ Keys remain down until released; a second keydown produces real browser repeat.
 WASD, arrows, Shift, Space, E, R and pointer drags are supported by the input
 tool. Actual gameplay support belongs to the authored world/SDK, and must be
 verified. Full episodes run every step for its real wall-clock duration. A
-`durationSeconds` tool override is a bounded debug run. Targets measure XYZ
+`durationSeconds` smaller than the plan selects a bounded debug run. Omit it, or
+use a duration at least as long as the plan, to execute the full episode. Full
+episodes reserve bounded overhead for real key delivery, snapshots and screenshots
+without truncating their final steps. Targets measure XYZ
 proximity without teleportation or steering; external task goals must stay fixed.
 Changing an episode reuses the same compiled candidate, browser and renderer.
 Each playtest starts a new native canvas MediaRecorder stream; its real frame
@@ -144,3 +147,19 @@ bridge verifies that the SDK echoes the same commandId. These tools currently
 attach no expectedWorldRevision: their fresh snapshot is diagnostic context, not
 a revision already observed by the model. Do not claim stale-context protection
 from the Host-generated ID alone.
+
+Recording timing uses the browser performance clock: inputWallSeconds spans the
+actual input trace, while actualWallSeconds retains Host time through evidence
+recovery. captureTiming records initial/final actual-canvas frame requests and
+recorder stop/flush times on the same browser clock. Initial and final samples are
+rendered from the current scene without stepping the SDK, then flushed before
+trace/video transfer. MP4 encoding preserves the source video frame timestamps
+without FPS padding or synthesized duplicate frames. Submission requires actual
+video duration >=180 seconds as well as >=180 active/input seconds and every
+episode step completed; FPS quantization is never used to accept a 179s video.
+
+Recording keeps one real capture interval of stopped-canvas postroll, followed
+by native encoder flush. captureTiming.postrollSeconds reports this separately;
+it is excluded from inputWallSeconds and activePlaySeconds. This guarantees a
+real terminal sample at low capture rates without changing SDK time or padding
+the encoded movie.

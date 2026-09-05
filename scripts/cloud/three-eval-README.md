@@ -168,9 +168,15 @@ an actual world_submit operation followed by its successful operations_get;
 matching engine/profile/lock/fixed-runtime/world/episode identities; complete
 receipt equality; and raw transport hashes matching the downloaded result/tar.
 Episode-only edits require a new episode, not an unnecessary new world image.
-Both wall duration and active play duration must reach 180 seconds, and the
-active duration must match the recorded playtest. Paused/reset time does not
-qualify as active play. Episode schema v1 remains compatible; v2 can include
+Host wall duration, browser input duration, active play duration and actual
+encoded video duration must each reach 180 seconds and match the sealed
+playtest. The video is compared with browser input time, not evidence-transfer
+or encoder recovery time. Actual-canvas capture endpoints use that browser
+clock; stopped-canvas postroll is recorded separately and never counted as
+input or active play. VFR output is allowed and its average frame rate is not
+forced to equal the requested sampling rate. The independent extractor uses
+`ffprobe` to compare actual MP4 duration, frame count and dimensions with the
+MCP-bound metadata. Episode schema v1 remains compatible; v2 can include
 structured commands and explicit lifecycle steps.
 
 Then independently verify and extract without executing author files:

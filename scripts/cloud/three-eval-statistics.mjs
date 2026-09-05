@@ -22,8 +22,14 @@ export function isPassingDelivery(result, expectedProfile = result?.profile) {
     result.technicalStatus !== 'passed' || result.semanticStatus !== 'unreviewed' || result.toolVersion !== THREE_TOOL_VERSION ||
     result.sdkVersion !== (expectedProfile === 'three-sdk' ? THREE_TOOL_VERSION : null) ||
     result.browserObservationContract !== (expectedProfile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1') ||
-    !finiteAtLeast(result.actualWallSeconds, 180) || !finiteAtLeast(result.activePlaySeconds, 180) || !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
+    !finiteAtLeast(result.actualWallSeconds, 180) || !finiteAtLeast(result.inputWallSeconds, 180) || !finiteAtLeast(result.activePlaySeconds, 180) || !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||
     !['sourceHash', 'worldBuildHash', 'runtimeHash', 'creatorRuntimeLockHash', 'episodeHash', 'archiveSha256', 'deliveryManifestSha256'].every(key => hashPattern.test(result[key] ?? ''))) return false;
+  const video = result.videoMetadata, capture = result.captureTiming;
+  if (!finiteAtLeast(video?.durationSeconds, 180) || !['frameCount','widthPixels','heightPixels'].every(key=>Number.isSafeInteger(video?.[key])&&video[key]>0) ||
+    capture?.clock !== 'browser-performance' || !['initialFrameRequestedAtMilliseconds','finalFrameRequestedAtMilliseconds','recorderStoppedAtMilliseconds','framePeriodSeconds','postrollSeconds'].every(key=>finiteAtLeast(capture?.[key],0)) ||
+    capture.framePeriodSeconds <= 0 || capture.framePeriodSeconds > 1 || !Number.isSafeInteger(capture.requestedFrames) || capture.requestedFrames < 2 ||
+    capture.finalFrameRequestedAtMilliseconds < capture.initialFrameRequestedAtMilliseconds || capture.recorderStoppedAtMilliseconds < capture.finalFrameRequestedAtMilliseconds ||
+    video.durationSeconds < result.inputWallSeconds - Math.max(1, 2*capture.framePeriodSeconds)) return false;
   const worldHash = createHash('sha256').update(JSON.stringify({sourceHash: result.sourceHash, runtimeHash: result.runtimeHash, profile: result.profile})).digest('hex');
   return result.worldBuildHash === worldHash;
 }

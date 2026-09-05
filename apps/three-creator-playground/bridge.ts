@@ -38,7 +38,47 @@ function createBridge() {
   let trace: any[] = [], events: any[] = [], frameCount = 0, active = false, startedAt = 0, previousFrameAt = 0, lastSampleAt = 0;
   let recorder: MediaRecorder | undefined, recordedChunks: Blob[] = [], stream: MediaStream | undefined;
   let captureIntervalMilliseconds = 1000 / 3, lastCapturedAt = -Infinity;
-  const requestRecordedFrame = () => { const track = stream?.getVideoTracks()[0]; if (track && 'requestFrame' in track) (track as CanvasCaptureMediaStreamTrack).requestFrame(); };
+  let recordingStartedAt = 0, initialFrameRequestedAt = 0, finalFrameRequestedAt = 0, requestedFrames = 0;
+  const requestRecordedFrame = () => { const track = stream?.getVideoTracks()[0]; if (track && 'requestFrame' in track) { (track as CanvasCaptureMediaStreamTrack).requestFrame(); requestedFrames++; } };
+  const afterPaint = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  async function flushCurrentCanvas(current: MediaRecorder): Promise<number> {
+    // One actual render of the same current scene, without advancing its clock.
+    const world = observation();
+    const requestedAt = performance.now(); requestRecordedFrame();
+    world.renderer.render(world.scene, world.camera); await afterPaint();
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => { current.removeEventListener('dataavailable', flushed); reject(new Error('THREE_VIDEO_FLUSH_TIMEOUT')); }, 5000);
+      const flushed = () => { clearTimeout(timeout); resolve(); };
+      current.addEventListener('dataavailable', flushed, { once: true }); current.requestData();
+    });
+    return requestedAt;
+  }
+  async function finishRecording(inputEndedAt = performance.now()) {
+    const current = recorder; if (!current) throw new Error('THREE_RECORDING_NOT_ACTIVE');
+    const postrollStartedAt = performance.now();
+    await flushCurrentCanvas(current);
+    // Keep recording the real stopped canvas for one sampling interval. This is
+    // explicit postroll, outside input/active-play time, never synthesized padding.
+    await new Promise(resolve => setTimeout(resolve, captureIntervalMilliseconds));
+    finalFrameRequestedAt = await flushCurrentCanvas(current);
+    // Allow the native capture/encoder queue to receive that endpoint before stop.
+    await new Promise(resolve => setTimeout(resolve, Math.max(100, Math.min(250, captureIntervalMilliseconds / 2))));
+    const stopRequestedAt = performance.now();
+    await new Promise<void>((resolve, reject) => { current.addEventListener('stop', () => resolve(), { once: true }); current.addEventListener('error', event => reject(event), { once: true }); current.stop(); });
+    const recorderStoppedAt = performance.now();
+    stream?.getTracks().forEach(track => track.stop()); recorder = undefined; stream = undefined;
+    const blob = new Blob(recordedChunks, { type: 'video/webm' }); recordedChunks = [];
+    const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
+    return { data, timing: { clock: 'browser-performance', recordingStartedAtMilliseconds: recordingStartedAt,
+      initialFrameRequestedAtMilliseconds: initialFrameRequestedAt, finalFrameRequestedAtMilliseconds: finalFrameRequestedAt,
+      stopRequestedAtMilliseconds: stopRequestedAt, recorderStoppedAtMilliseconds: recorderStoppedAt,
+      framePeriodSeconds: captureIntervalMilliseconds / 1000, requestedFrames, postrollStartedAtMilliseconds: postrollStartedAt, postrollSeconds: (recorderStoppedAt-inputEndedAt)/1000 } };
+  }
+  function finishTrace() {
+    const endedAt = performance.now(); trace.push(sample(0)); active = false;
+    return { samples: trace, keyboardEvents: events, browserFrameDeltasSeconds: frames,
+      timing: { clock: 'browser-performance', startedAtMilliseconds: startedAt, endedAtMilliseconds: endedAt, durationSeconds: (endedAt-startedAt)/1000 } };
+  }
   const keyListener = (event: KeyboardEvent) => { if (active) events.push({ type: event.type, key: event.key, code: event.code, repeat: event.repeat, isTrusted: event.isTrusted, timeSeconds: (performance.now() - startedAt) / 1000, frame: frameCount }); };
   window.addEventListener('keydown', keyListener, true); window.addEventListener('keyup', keyListener, true);
   function sample(deltaSeconds: number) {
@@ -81,26 +121,31 @@ function createBridge() {
     },
     async stop() { await observation().stopLive(); },
     beginTrace() { trace = []; events = []; frames.length = 0; frameCount = 0; active = true; startedAt = performance.now(); previousFrameAt = 0; lastSampleAt = 0; trace.push(sample(0)); requestAnimationFrame(frame); },
-    endTrace() { active = false; trace.push(sample(0)); return { samples: trace, keyboardEvents: events, browserFrameDeltasSeconds: frames }; },
+    endTrace: finishTrace,
+    async finishRun() {
+      const traceResult = finishTrace(); await observation().stopLive();
+      // Stop and flush recording before serializing the potentially large trace.
+      return { trace: traceResult, recording: await finishRecording(traceResult.timing.endedAtMilliseconds) };
+    },
     read() { return sample(0); },
     latestSample() { return trace.at(-1) ?? sample(0); },
-    beginRecording(framesPerSecond: number) {
+    async beginRecording(framesPerSecond: number) {
       if (recorder) throw new Error('THREE_RECORDING_ALREADY_ACTIVE');
-      recordedChunks = []; captureIntervalMilliseconds = 1000 / framesPerSecond; lastCapturedAt = -Infinity;
+      recordedChunks = []; requestedFrames = 0; captureIntervalMilliseconds = 1000 / framesPerSecond; lastCapturedAt = -Infinity;
       // Capture the actual canvas at wall-clock times, including a deliberately paused scene.
       // requestFrame does not advance simulation or render a substitute frame.
       stream = observation().renderer.domElement.captureStream(0);
       recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 1_500_000 });
-      recorder.addEventListener('dataavailable', event => { if (event.data.size) recordedChunks.push(event.data); }); recorder.start(1000); requestRecordedFrame();
+      recorder.addEventListener('dataavailable', event => { if (event.data.size) recordedChunks.push(event.data); });
+      const current = recorder;
+      const started = new Promise<void>((resolve, reject) => { current.addEventListener('start', () => resolve(), { once: true }); current.addEventListener('error', event => reject(event), { once: true }); });
+      recordingStartedAt = performance.now(); current.start(1000);
+      // A zero-rate stream needs an actual frame before some browsers emit start.
+      initialFrameRequestedAt = performance.now(); requestRecordedFrame();
+      const world = observation(); world.renderer.render(world.scene, world.camera);
+      await started; await flushCurrentCanvas(current);
     },
-    async endRecording() {
-      const current = recorder; if (!current) throw new Error('THREE_RECORDING_NOT_ACTIVE');
-      requestRecordedFrame(); await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-      await new Promise<void>((resolve, reject) => { current.addEventListener('stop', () => resolve(), { once: true }); current.addEventListener('error', event => reject(event), { once: true }); current.stop(); });
-      stream?.getTracks().forEach(track => track.stop()); recorder = undefined; stream = undefined;
-      const blob = new Blob(recordedChunks, { type: 'video/webm' }); recordedChunks = [];
-      return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob); });
-    },
+    endRecording: finishRecording,
     capture(view: 'opening' | 'top-down' | 'entity-triview', entityIds: string[] = [], frontYawRadians: number | null = null) {
       const world = observation(), { scene, renderer } = world;
       scene.updateMatrixWorld(true);
