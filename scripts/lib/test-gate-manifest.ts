@@ -14,6 +14,8 @@ export interface TestGateManifestEntryV1 {
 }
 
 export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.freeze([
+  { path: "apps/creator-playground/src/browser-contract.test.ts", lane: "contract" },
+  { path: "apps/creator-playground/src/browser-harness.integration.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process", "native-havok-or-recast"] },
   { path: "apps/native-scene-playground/src/cloud-ridge-scene.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-package-migration.test.ts", lane: "contract" },
   { path: "apps/native-scene-playground/src/native-scene-source-clean-break.test.ts", lane: "contract" },
@@ -281,6 +283,8 @@ export const TEST_GATE_MANIFEST_V1: readonly TestGateManifestEntryV1[] = Object.
   { path: "scripts/cli/worldkit-route-run.integration.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
   { path: "scripts/cli/worldkit-triview-capture.integration.test.ts", lane: "resource-heavy", reasonCodes: ["browser-or-server-process", "native-havok-or-recast"] },
   { path: "scripts/cli/worldkit.test.ts", lane: "contract" },
+  { path: "scripts/creator/config.test.ts", lane: "resource-heavy", reasonCodes: ["native-havok-or-recast"] },
+  { path: "scripts/creator/tools.test.ts", lane: "contract" },
   { path: "scripts/episodes/build-exploration-navigation-evidence.test.ts", lane: "contract" },
   { path: "scripts/fixtures/generate-golden-humanoid-glb.test.ts", lane: "contract" },
   { path: "scripts/lib/agent-self-check-bundle.test.ts", lane: "contract" },
