@@ -1,7 +1,7 @@
 // Read-only evaluation center. Studio-style trajectories use actual Host events;
 // result readiness, active playback and human feedback retain separate owners.
 const $ = (id) => document.getElementById(id);
-const labels = { ready: "可试玩", issues: "可试玩 · 有问题", running: "运行中", queued: "排队中", submitted: "已提交", starting: "启动中", verifying: "待评审", delivered: "待评审", failed: "失败", unknown: "待确认" };
+const labels = { ready: "可试玩", issues: "可试玩 · 有问题", running: "运行中", queued: "排队中", submitted: "已提交", starting: "启动中", verifying: "产物同步中", delivered: "产物同步中", failed: "失败", unknown: "待确认" };
 const stages = { queued: "等待执行", starting: "启动 Agent", authoring: "编写与校验", preview: "预览与检查", playtest: "实际操作测试", capture: "采集对象视图", packaging: "整理交付", delivered: "技术交付完成", failed: "执行失败", unknown: "等待可确认状态" };
 const toolStatusLabels = { succeeded: "调用完成", failed: "未通过", running: "进行中", queued: "等待中", completed: "已返回" };
 function operationDetail(p) {
@@ -79,7 +79,7 @@ function activeElapsed(p) {
 }
 function activity(p, c) {
   if (isPlayable(c))
-    return "交付与评审已完成";
+    return "产物已就绪";
   if (!p)
     return c.status === "failed" ? "查看已记录的问题" : "等待过程状态";
   return p.stageLabel || stages[p.stage] || labels[p.phase] || "等待可确认状态";
@@ -117,7 +117,7 @@ function drawSummary() {
   if (!data)
     return;
   const rows = data.cases.map((c) => caseStatus(c));
-  const values = [[data.cases.length, "本轮任务", ""], [rows.filter((s) => ["running", "starting"].includes(s)).length, "运行中", "running"], [rows.filter((s) => ["queued", "submitted", "unknown"].includes(s)).length, "排队 / 待确认", ""], [rows.filter((s) => s === "verifying").length, "待评审", ""], [data.cases.filter(isPlayable).length, "可试玩", "ready"], [rows.filter((s) => ["failed", "issues"].includes(s)).length, "异常 / 有问题", "failed"]];
+  const values = [[data.cases.length, "本轮任务", ""], [rows.filter((s) => ["running", "starting"].includes(s)).length, "运行中", "running"], [rows.filter((s) => ["queued", "submitted", "unknown"].includes(s)).length, "排队 / 待确认", ""], [rows.filter((s) => s === "verifying").length, "产物同步中", ""], [data.cases.filter(isPlayable).length, "可试玩", "ready"], [rows.filter((s) => ["failed", "issues"].includes(s)).length, "生产异常", "failed"]];
   $("run-stats").replaceChildren(...values.map(([n, label, kind]) => {
     const card = el("div", void 0, `stat ${kind}`);
     card.append(el("strong", n), el("span", label));
@@ -159,7 +159,7 @@ function drawCards() {
     const current = el("td");
     current.append(el("span", activity(p, c), "activity-title"), el("span", operationDetail(p), "activity-detail"));
     const timing = el("td", duration(elapsed(p)), "duration"), attempt = el("td", `${attemptCount(p)} 次`), artifacts = el("td");
-    artifacts.append(el("span", isPlayable(c) ? "试玩 / 录像 / 三视图" : s === "verifying" ? "已交付 · 待评审" : "等待交付", `artifact-count ${isPlayable(c) ? "available" : ""}`));
+    artifacts.append(el("span", isPlayable(c) ? (c.video ? "试玩 / 录像 / 三视图" : "试玩 / 三视图") : s === "verifying" ? "已交付 · 同步产物" : "等待交付", `artifact-count ${isPlayable(c) ? "available" : ""}`));
     tr.append(name, state, current, timing, attempt, artifacts);
     tr.onclick = () => select(c.id, true);
     tr.onkeydown = (e) => {
@@ -234,7 +234,7 @@ function renderTrajectory(p, c) {
     const li = el("li");
     li.dataset.status = status;
     const marker = el("div", status === "complete" ? "✓" : String(index + 1).padStart(2, "0"), "trajectory-marker"), copy = el("div", void 0, "trajectory-copy");
-    copy.append(el("strong", stages[id]), el("small", id === "delivered" ? isPlayable(c) ? "内容评审已记录" : "生成与技术交付，随后独立评审" : status === "active" ? "当前可观察活动" : status === "complete" ? "已有实际执行记录" : "尚无执行记录"));
+    copy.append(el("strong", stages[id]), el("small", id === "delivered" ? isPlayable(c) ? "可直接试玩" : "正在同步生成产物" : status === "active" ? "当前可观察活动" : status === "complete" ? "已有实际执行记录" : "尚无执行记录"));
     li.append(marker, copy, el("span", { active: "进行中", complete: "已记录", pending: "待执行", failed: "失败" }[status], "stage-state"));
     list.append(li);
   }
@@ -265,7 +265,7 @@ function renderProcess() {
     return;
   const p = currentProgress(c.id), s = caseStatus(c, p);
   $("case-status").replaceWith(Object.assign(badge(s), { id: "case-status" }));
-  $("case-note").textContent = isPlayable(c) ? c.note || "" : p?.phase === "failed" ? "任务已结束，原始错误与每次尝试均保留在下方。" : p?.phase === "delivered" ? "云端已交付，等待独立审阅原始结果。" : p?.phase === "running" ? "Agent 正在自主完成场景与工具检查，以下过程来自实际运行事件。" : c.note || "";
+  $("case-note").textContent = isPlayable(c) ? c.note || "" : p?.phase === "failed" ? "任务已结束，原始错误与每次尝试均保留在下方。" : p?.phase === "delivered" ? "云端已交付，正在自动同步产物。" : p?.phase === "running" ? "Agent 正在自主完成场景与工具检查，以下过程来自实际运行事件。" : c.note || "";
   const message = sourceFailure(p);
   $("failure-banner").hidden = !message;
   if (message) {
@@ -374,7 +374,7 @@ function mountArtifacts(c) {
     };
     $("player").append(launch);
     const m = c.metrics || {};
-    if (c.validationMode === "interactive-preview") metrics($("metrics"), [["实时预览", "生成检查方式"], ["待独立试玩确认", "路线与探索"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
+    if (c.validationMode === "interactive-preview") metrics($("metrics"), [["实时预览", "生成检查方式"], ["可直接体验", "路线与探索"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
     else metrics($("metrics"), [[finite(m.activePlaySeconds) ? `${m.activePlaySeconds.toFixed(1)} 秒` : finite(m.simulationSeconds) ? `${m.simulationSeconds} 秒` : "—", finite(m.activePlaySeconds) ? "主动游玩" : "录制时长"], [`${m.visitedTargets ?? "—"} / ${m.targetCount ?? "—"}`, "作者路线目标"], [finite(m.travelledMeters) ? `${Math.round(m.travelledMeters)} m` : "—", "记录行进距离"], [finite(m.generationMinutes) ? `${m.generationMinutes} 分钟` : "—", "生成耗时"]]);
     $("play-controls").textContent = c.profile === "three-sdk" ? "WASD 移动 · 方向键 / 拖动转镜头 · Shift 跑步 · Space 跳跃 · 滚轮缩放 · R 重置。点击场景后操作。" : "WASD 移动 · Shift 跑步 · Space 跳跃 · 拖动转镜头 · 滚轮缩放 · R 重置。具体操作以场景说明为准。";
   }

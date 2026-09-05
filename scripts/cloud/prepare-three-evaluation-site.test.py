@@ -170,7 +170,7 @@ class EvaluationSiteTests(unittest.TestCase):
         write_json(payload / 'preview/preview.json', preview)
         for key in ('episodeHash', 'actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds', 'targetResults'):
             delivery.pop(key, None)
-        delivery.update(schemaVersion=2, validationMode='interactive-preview', toolVersion='0.3.0-experimental', sdkVersion='0.3.0-experimental', previewEvidenceSha256=sha((payload / 'preview/preview.json').read_bytes()))
+        delivery.update(schemaVersion=2, status='ready', validationMode='interactive-preview', toolVersion='0.3.0-experimental', sdkVersion='0.3.0-experimental', previewEvidenceSha256=sha((payload / 'preview/preview.json').read_bytes()))
         write_json(payload / 'delivery.json', delivery)
         report = json.loads((directory / 'host-artifact-verification.json').read_text()); report['validationMode'] = 'interactive-preview'
         write_json(directory / 'host-artifact-verification.json', report); fixture.reclose(task)
@@ -284,15 +284,15 @@ class EvaluationSiteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'video duration'):
             fixture.stage()
 
-    def test_local_fixture_opt_in_and_existing_review_identity_gates_stay_required(self):
+    def test_local_fixture_requires_opt_in_but_no_manual_review_file(self):
         fixture = Fixture(self.root)
         with self.assertRaisesRegex(ValueError, 'Local fixtures require'):
             fixture.stage(allow=False)
-        task = fixture.plan['selectedTaskIds'][0]; review_path = fixture.run / fixture.publication['cases'][task]['browserReview']
-        review = json.loads(review_path.read_text()); review['worldBuildHash'] = '0' * 64; write_json(review_path, review)
-        with self.assertRaisesRegex(ValueError, 'Browser review identity mismatch'):
-            fixture.stage()
-        self.assertFalse((self.root / 'staged').exists())
+        task = fixture.plan['selectedTaskIds'][0]
+        (fixture.run / fixture.publication['cases'][task].pop('browserReview')).unlink()
+        _, result = fixture.stage()
+        self.assertEqual(result['cases'][0]['status'], 'ready')
+        self.assertNotIn('review', result['cases'][0])
 
     def test_sdk_only_cannot_downgrade_timing_gate_by_omitting_version_metadata(self):
         fixture = Fixture(self.root, version=None)
@@ -311,20 +311,43 @@ class EvaluationSiteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Case input engine/runtime mismatch'):
             fixture.stage()
 
-    def test_ready_still_needs_independent_pass_and_issues_need_explicit_host_notes(self):
+    def test_old_host_review_cannot_block_play_or_leak_into_production_status(self):
         fixture = Fixture(self.root); task = fixture.plan['selectedTaskIds'][0]
         publication = fixture.publication['cases'][task]
-        review_path = fixture.run / publication['browserReview']; review = json.loads(review_path.read_text())
-        review['status'] = 'issues'; write_json(review_path, review)
-        with self.assertRaisesRegex(ValueError, 'Ready requires passing independent'):
-            fixture.stage()
-        publication.update(status='issues', browserPlayable=True)
-        with self.assertRaisesRegex(ValueError, 'Issues requires explicit Host'):
-            fixture.stage()
-        publication['note'] = 'LOCAL FIXTURE issue: no actual model or gameplay evidence.'
-        _, result = fixture.stage()
-        self.assertEqual(result['cases'][0]['semanticStatus'], 'known-issues')
-        self.assertEqual(result['cases'][0]['status'], 'issues')
+        review_path = fixture.run / publication['browserReview']; review_path.write_text('not valid JSON; never read')
+        publication.update(status='issues', note='Old manual judgment must not appear')
+        _, result = fixture.stage(); row = result['cases'][0]
+        self.assertEqual(row['status'], 'ready')
+        self.assertNotIn('review', row); self.assertNotIn('semanticStatus', row)
+        self.assertNotIn('manual judgment', row['note'])
+
+
+class ProductionSyncTests(unittest.TestCase):
+    def test_delivered_files_publish_without_a_review_and_repeat_is_a_noop(self):
+        import shutil
+        spec = importlib.util.spec_from_file_location('three_sync', Path(__file__).with_name('sync-three-evaluation-site.py'))
+        syncer = importlib.util.module_from_spec(spec); spec.loader.exec_module(syncer)
+        with tempfile.TemporaryDirectory(prefix='three-production-fixture-') as temporary:
+            root = Path(temporary).resolve(); fixture = Fixture(root)
+            fixture.plan['manifestPath'] = str(root / 'selection.json'); fixture.write_inputs()
+            write_json(fixture.run / 'evaluation-plan.json', fixture.plan)
+            task = fixture.plan['selectedTaskIds'][0]
+            (fixture.run / fixture.publication['cases'][task]['browserReview']).unlink()
+            shutil.copytree(fixture.verified / task, fixture.run / task / 'host-verified')
+            write_json(fixture.run / task / 'state.json', {'phase': 'delivered', 'caseHash': fixture.plan['cases'][0]['caseHash'], 'submittedAt': '2026-09-05T00:00:00Z'})
+            output_temp = tempfile.TemporaryDirectory(prefix='three-production-output-'); self.addCleanup(output_temp.cleanup)
+            gallery = Path(output_temp.name).resolve() / 'gallery'
+            result = syncer.sync(fixture.run, [], fixture.inputs, gallery, stage_only=True)
+            self.assertTrue(result['changed']); self.assertEqual(result['playableCases'], 1)
+            manifest = read_json_for_test(gallery / 'results.json')
+            self.assertEqual(manifest['cases'][0]['status'], 'ready'); self.assertNotIn('review', manifest['cases'][0])
+            # One presentation normalization may happen on first load; stable runs do no I/O publication.
+            syncer.sync(fixture.run, [], fixture.inputs, gallery, stage_only=True)
+            self.assertFalse(syncer.sync(fixture.run, [], fixture.inputs, gallery, stage_only=True)['changed'])
+
+
+def read_json_for_test(file):
+    return json.loads(file.read_text())
 
 
 class PublisherManifestTests(unittest.TestCase):

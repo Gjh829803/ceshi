@@ -12,12 +12,9 @@ Host publication: {schemaVersion:1, kind:'three-creator-host-publication', runId
  publicPlayableFiles?:['data/public.json']}}}. Paths are relative to verified-root
 or evaluation-root respectively. Never use an author-supplied publication/review.
 
-A browserReview binds schemaVersion, kind='three-creator-independent-browser-review',
-runId, caseId, taskId, profile, sourceHash, worldBuildHash, archiveSha256,
-referenceImageSha256, status, browserPlayable, referenceCompared,
-externalGoalsReviewed, pageErrors and runtimeErrors. Ready requires passed,
-playable, both review flags and no errors. Issues requires explicit Host permission
-and issue notes; neither status changes the recorded semantic acceptance result.
+Technical artifact verification is the publication boundary. No browser review,
+Host approval, semantic score or manual playability confirmation is required.
+Production deliveries open for play when their files are ready.
 
 Plans admit either legacy three-creator-paired-plan (suite omitted or paired),
 or three-creator-sdk-plan (suite sdk-only, only three-sdk tasks). Both require
@@ -202,7 +199,7 @@ def verified_payload(directory, profile, lock_hash, sdk_only=False):
     require({k: v for k, v in actual.items() if k != 'artifact-hashes.json'} == inventory['files'], 'Artifact file closure or SHA256 changed after Host verification')
     require(report.get('fileCount') == len(actual) and report.get('uncompressedBytes') == total, 'Host verification file census changed')
     delivery = read_json(payload / 'delivery.json')
-    require(delivery.get('kind') == 'three-creator-delivery' and delivery.get('schemaVersion') in (1, 2) and delivery.get('status') == 'ready-for-independent-review' and delivery.get('technicalStatus') == 'passed', 'Invalid Three delivery')
+    require(delivery.get('kind') == 'three-creator-delivery' and delivery.get('schemaVersion') in (1, 2) and delivery.get('status') == ('ready' if delivery.get('schemaVersion') == 2 else 'ready-for-independent-review') and delivery.get('technicalStatus') == 'passed', 'Invalid Three delivery')
     same(delivery, report, ('profile', 'engine', 'sourceHash', 'worldBuildHash', 'creatorRuntimeLockHash'), 'Delivery')
     require(delivery.get('files') == {k: v for k, v in actual.items() if k not in ('artifact-hashes.json', 'delivery.json')}, 'Delivery manifest file closure changed')
     for field in (('runtimeHash', 'episodeHash') if delivery['schemaVersion'] == 1 else ('runtimeHash', 'previewEvidenceSha256')):
@@ -278,16 +275,8 @@ def validate_public_assets(payload, selected, actual):
 def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash, add_file, sdk_only=False):
     directory = checked_root(within(verified_root, entry.get('verifiedDirectory', row['id'])))
     payload, actual, report, delivery, played, captures = verified_payload(directory, row['profile'], lock_hash, sdk_only)
-    review = read_json(within(evaluation_root, entry.get('browserReview')))
-    require(review.get('kind') == 'three-creator-independent-browser-review' and review.get('schemaVersion') == 1, 'Missing independent browser review')
-    same(review, expected, ('runId', 'caseId', 'taskId', 'profile', 'referenceImageSha256'), 'Browser review')
-    same(review, report, ('sourceHash', 'worldBuildHash', 'archiveSha256'), 'Browser review')
-    require(review.get('status') in ('passed', 'issues', 'failed') and type(review.get('browserPlayable')) is bool and type(review.get('referenceCompared')) is bool and type(review.get('externalGoalsReviewed')) is bool, 'Incomplete independent review')
-    require(isinstance(review.get('pageErrors'), list) and isinstance(review.get('runtimeErrors'), list), 'Missing independent error observations')
-    if row['status'] == 'ready':
-        require(review['status'] == 'passed' and review['browserPlayable'] and review['referenceCompared'] and review['externalGoalsReviewed'] and review['pageErrors'] == [] and review['runtimeErrors'] == [], 'Ready requires passing independent browser, reference and external-goal review')
-    else:
-        require(entry.get('browserPlayable') is True and review['browserPlayable'] is True and bool(entry.get('note', '').strip()), 'Issues requires explicit Host playability confirmation and issue notes')
+    row['status'] = 'ready'
+    row['note'] = '生成产物已就绪，可以直接试玩。'
     prefix = f"cases/{row['id']}/{delivery['worldBuildHash']}"
     selected = curated_playable(actual, entry.get('publicPlayableFiles', []))
     validate_public_assets(payload, selected, actual)
@@ -344,8 +333,7 @@ def add_delivery(row, entry, expected, verified_root, evaluation_root, lock_hash
     row.update({'sourceHash': delivery['sourceHash'], 'worldBuildHash': delivery['worldBuildHash'], 'archiveSha256': report['archiveSha256'],
                 'opening': opening, 'playable': prefix + '/playable/index.html', 'triviews': triviews, 'metrics': metrics,
                 'validationMode': delivery.get('validationMode', 'recorded-episode'),
-                'review': {key: review[key] for key in ('status', 'browserPlayable', 'referenceCompared', 'externalGoalsReviewed')},
-                'semanticStatus': 'independently-reviewed' if row['status'] == 'ready' else 'known-issues'})
+                'deliveryStatus': 'ready'})
     if video is not None:
         row['video'] = prefix + '/' + video
 
@@ -433,7 +421,7 @@ def prepare_site(selection_path, plan_path, inputs_root, evaluation_root, verifi
         require(case_input.get('sourceEffectivePromptSha256') == case.get('effectiveUserPromptFile', {}).get('contentSha256'), 'Original prompt identity mismatch')
         reference_relative = 'references/' + task['caseId'] + '.png'
         add_file(reference_relative, reference, reference_hash)
-        note = entry.get('note', '已列入本轮 SDK 独立评测；生成和独立验证完成后开放试玩。' if sdk_only else '已列入本轮对照评测；生成和独立验证完成后开放试玩。')
+        note = entry.get('note', '已列入本轮 SDK 独立评测；生成交付后开放试玩。' if sdk_only else '已列入本轮对照评测；生成交付后开放试玩。')
         require(isinstance(note, str) and len(note) <= 10000 and isinstance(case.get('title'), str) and isinstance(case.get('selectionTags'), list), 'Invalid case presentation text')
         display_title = entry.get('displayTitle', case['title'] + (' · 原生 Three' if task['profile'] == 'three-raw' else ' · Three＋SDK'))
         require(isinstance(display_title, str) and 0 < len(display_title) <= 240, 'Invalid public display title')

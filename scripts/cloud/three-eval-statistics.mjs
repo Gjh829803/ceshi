@@ -18,8 +18,8 @@ export function failureClass(message) {
 }
 export function isPassingDelivery(result, expectedProfile = result?.profile) {
   if (!['three-raw', 'three-sdk'].includes(expectedProfile) || result?.profile !== expectedProfile || result?.engine !== 'three@0.185.1' ||
-    result?.kind !== 'three-creator-delivery' || ![1,2].includes(result.schemaVersion) || result.status !== 'ready-for-independent-review' ||
-    result.technicalStatus !== 'passed' || result.semanticStatus !== 'unreviewed' || result.toolVersion !== (result.schemaVersion === 1 ? '0.2.0-experimental' : THREE_TOOL_VERSION) ||
+    result?.kind !== 'three-creator-delivery' || ![1,2].includes(result.schemaVersion) || result.status !== (result.schemaVersion === 1 ? 'ready-for-independent-review' : 'ready') ||
+    result.technicalStatus !== 'passed' || (result.schemaVersion === 1 ? result.semanticStatus !== 'unreviewed' : 'semanticStatus' in result) || result.toolVersion !== (result.schemaVersion === 1 ? '0.2.0-experimental' : THREE_TOOL_VERSION) ||
     result.sdkVersion !== (expectedProfile === 'three-sdk' ? result.toolVersion : null) ||
     result.browserObservationContract !== (expectedProfile === 'three-sdk' ? 'WorldObservation-v2' : 'WorldObservation-v1') ||
     !Number.isSafeInteger(result.archiveByteLength) || result.archiveByteLength < 1 ||

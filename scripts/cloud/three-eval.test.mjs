@@ -108,8 +108,8 @@ export async function cancelGenerationJob(){throw Error('unexpected cancel');}
 
 // v2 removes the recorded-episode gate explicitly, without weakening archived v1.
 test('preview v2 delivery requires its own evidence and cannot claim recorded timing',()=>{
- const f=fixture(),value={...f.result,schemaVersion:2,validationMode:'interactive-preview',toolVersion:'0.3.0-experimental',sdkVersion:'0.3.0-experimental',previewEvidenceSha256:'d'.repeat(64)};
- for(const key of ['episodeHash','actualWallSeconds','inputWallSeconds','activePlaySeconds','videoMetadata','captureTiming'])delete value[key];
+ const f=fixture(),value={...f.result,schemaVersion:2,status:'ready',validationMode:'interactive-preview',toolVersion:'0.3.0-experimental',sdkVersion:'0.3.0-experimental',previewEvidenceSha256:'d'.repeat(64)};
+ for(const key of ['semanticStatus','episodeHash','actualWallSeconds','inputWallSeconds','activePlaySeconds','videoMetadata','captureTiming'])delete value[key];
  assert.equal(isPassingDelivery(value,'three-sdk'),true);
  for(const change of [{previewEvidenceSha256:undefined},{validationMode:'recorded-episode'},{schemaVersion:1},{activePlaySeconds:180},{videoMetadata:{durationSeconds:180}}])assert.equal(isPassingDelivery({...value,...change},'three-sdk'),false);
 });

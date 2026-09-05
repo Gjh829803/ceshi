@@ -17,4 +17,6 @@ physics and camera runtime. The tool applies genuine browser input in the same
 live page, returns a screenshot plus observable errors/state, and releases keys
 at the end of each bounded action. No teleport, prescribed route, invented quality
 score, minimum play duration or required episode file. Submission binds reviewed
-opening and current source; independent semantic review remains separate.
+opening and current source; there is no assistant or human review gate. Evaluate generated-world quality only
+when the user explicitly requests it. Production syncing automatically exposes the
+completed playable and never reads host-review records.

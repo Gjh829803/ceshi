@@ -36,8 +36,8 @@ Operations return IDs: poll the same ID through operations_get, without duplicat
 External acceptance goals cannot be weakened by deleting waypoints, replacing
 stairs with nonphysical decorations, or detaching the required moving subject's
 parts. Preserve those goals while fixing the world. Report unsupported behavior
-and failed goals truthfully. A technical delivery is ready for independent visual
-and gameplay review; it does not establish semantic acceptance or zero defects.
+and failed goals truthfully. Submit the playable directly when it is ready. There is no Host or human review
+stage and no approval to wait for. Report observed failures truthfully.
 
 Run world_preview and world_submit in the same MCP service session. Do not write
 delivery files, traces, receipts or tool reports manually. Submit using world_submit,

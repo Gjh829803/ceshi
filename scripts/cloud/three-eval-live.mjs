@@ -28,7 +28,7 @@ def failure_facts(value):
 def result_summary(value):
     if not isinstance(value,dict): return None
     summary={}
-    if value.get('status') in ['passed','failed','ready-for-independent-review']: summary['status']=value['status']
+    if value.get('status') in ['passed','failed','ready','ready-for-independent-review']: summary['status']=value['status']
     for key in ['isCompleteEpisode','capturedInput']:
         if isinstance(value.get(key),bool): summary[key]=value[key]
     for key in ['plannedSeconds','requestedSeconds','actualWallSeconds','inputWallSeconds','activePlaySeconds','completedSteps']:

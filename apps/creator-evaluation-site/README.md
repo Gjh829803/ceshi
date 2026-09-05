@@ -1,3 +1,17 @@
+# Production-only gallery (current)
+
+The gallery opens delivered playables without assistant review. `ready` means
+production files are available; it is not a manual quality judgment. The publication
+script does not read review files or require a browser-review document. Existing
+assistant notes/ratings are not part of the public result. "My feedback" is optional
+user-owned local feedback and does not affect access.
+
+`sync-three-evaluation-site.py` automatically turns delivered run/attempt records
+into gallery files and publication. Combine it with the safe progress bridge; only
+one publication worker should write the site. No scene code runs during syncing.
+
+Historical implementation notes below describe superseded review gates.
+
 # WorldKit evaluation center
 
 The read-only evaluation UI combines the existing Studio's task-list,

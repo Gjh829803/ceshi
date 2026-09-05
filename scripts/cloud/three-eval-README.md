@@ -1,3 +1,15 @@
+# Production publication (current)
+
+Completed artifacts become playable immediately after automatic file preparation.
+No assistant review, review document, quality score or manual approval is required.
+Use `sync-three-evaluation-site.py --run-root RUN --attempt-run-root RETRY
+--inputs-root INPUTS --gallery-root SITE --pod RAY_HEAD --watch` to automatically
+unpack delivered files and update the site. It selects matching-runtime attempts,
+retains production failures, and never reads host-review files or executes a scene.
+The frontend shows production stages and optional user-owned feedback only.
+
+The historical review requirements below are superseded for the current Creator.
+
 # Preview-first Creator (current)
 
 New Creator 0.3 deliveries use schemaVersion 2 / `interactive-preview`.
@@ -9,7 +21,8 @@ minimum play duration, ffmpeg output or route declaration is needed for submit.
 
 Submission still binds the current-source opening PNG, complete object views and
 closed playable files. The Host checks source/image/transport/archive identity and
-independently reviews gameplay. It does not label a preview as a completed long test.
+publishes the playable directly. There is no assistant or human review gate.
+It does not label a preview as a completed long test.
 The installed doctor now uses a short real interactive preview and submits without
 recording; its normal 4-second action is sufficient. The historical recorded-v1
 protocol remains readable for previously generated artifacts.

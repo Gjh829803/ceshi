@@ -99,6 +99,7 @@ def main():
     assert {k: v for k, v in actual.items() if k not in ('artifact-hashes.json', 'delivery.json')} == manifest['files']
     if manifest.get('schemaVersion') == 2:
         assert manifest.get('validationMode') == 'interactive-preview'
+        assert manifest.get('status') == 'ready' and manifest.get('technicalStatus') == 'passed' and 'semanticStatus' not in manifest
         assert all(key not in manifest for key in ['episodeHash', 'actualWallSeconds', 'activePlaySeconds', 'inputWallSeconds', 'videoMetadata', 'captureTiming'])
         assert actual['preview/preview.json'] == manifest['previewEvidenceSha256']
         preview = json.loads((payload / 'preview/preview.json').read_text())
@@ -116,7 +117,7 @@ def main():
                   **{key: manifest[key] for key in ['validationMode', 'profile', 'engine', 'sourceHash', 'worldBuildHash', 'toolVersion', 'sdkVersion', 'browserObservationContract', 'creatorRuntimeLockHash', 'previewEvidenceSha256']},
                   'archiveSha256': receipt['archiveSha256'], 'fileCount': len(actual), 'uncompressedBytes': total,
                   'platformPathPreflight': 'passed', 'payloadPath': str(payload), 'semanticStatus': 'unreviewed', 'browserReplay': 'not-run',
-                  'qualification': 'Hash closure and opening-preview evidence only; no recorded playtest. Independent runtime and visual review required.'}
+                  'qualification': 'Hash closure and opening-preview evidence only; no recorded playtest. Ready for direct publication.'}
         (output / 'host-artifact-verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
         print(json.dumps(report)); return
     assert manifest.get('schemaVersion') == 1

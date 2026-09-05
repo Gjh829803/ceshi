@@ -87,8 +87,9 @@ manifests. It does not contain an episode, playtest, invented duration or video.
 A source change requires another opening preview. An image path alone is not proof:
 the cloud transport also checks that the actual PNG reached the model.
 
-A successful submission means ready for independent reference/gameplay review.
-It does not claim that all routes are reachable, that there are no bugs, or that
+A successful submission is ready for direct publication and play. No assistant or
+human review is a production stage or publication gate.
+Production status does not claim that all routes are reachable, that there are no bugs, or that
 three minutes of meaningful exploration were proven. The 3–5 minute exploration
 request concerns authored world content.
 

@@ -1,3 +1,11 @@
+## No assistant review in production
+
+The user explicitly rejected assistant review as a production stage or playability
+gate. Publish completed technical deliveries automatically and open them for play.
+The page must contain production states, not assistant review status, scores or
+judgments. Do not inspect or evaluate generated-world quality unless the user asks.
+This supersedes review requirements in older plans and instructions for this Creator.
+
 ## Current preview-first Creator authorization
 
 The user explicitly requested removing Agent self-test recording and its mandatory

@@ -14,7 +14,8 @@ const toolLabels = {creator_describe_environment:'读取运行环境',creator_ge
 const phaseSet = new Set(['not-started','submitted','queued','running','delivery-pending','delivered','failed','cancelled','stopped','stop-pending','remote-pending','submission-unknown','admission-blocked']);
 const statusSet = new Set(['queued','pending','starting','running','succeeded','completed','failed','submit_failed','cancelled','stopped']);
 const operationStatusSet = new Set(['queued','running','succeeded','failed','cancelled']);
-const knownTools = new Set(THREE_TOOLS);
+// Retain old production events without re-exposing retired tools to agents.
+const knownTools = new Set([...THREE_TOOLS, 'world_playtest']);
 const slug = /^[a-z0-9][a-z0-9-]{1,159}$/;
 const requestPattern = /^[a-z0-9][a-z0-9-]{2,239}$/;
 const jobPattern = /^gen_[a-f0-9]{8,64}$/;
@@ -112,7 +113,7 @@ function cleanProgress(value) {
 function cleanResultSummary(value) {
   if(!isObject(value))return null;
   const summary={};
-  if(['passed','failed','ready-for-independent-review','unreviewed'].includes(value.status))summary.status=value.status;
+  if(['passed','failed','ready','ready-for-independent-review','unreviewed'].includes(value.status))summary.status=value.status;
   for(const field of ['isCompleteEpisode','capturedInput'])if(typeof value[field]==='boolean')summary[field]=value[field];
   for(const field of ['activePlaySeconds','inputWallSeconds','actualWallSeconds','requestedSeconds','plannedSeconds','completedSteps'])if(numeric(value[field])!==null)summary[field]=value[field];
   const videoMetadata={};
